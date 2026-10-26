@@ -401,9 +401,11 @@ export const PLAYER_APP_HTML = `
       </div>
     </div>
     <!--
-      Help modal. Two tabs:
+      Help modal. Three tabs:
       - Usage: drag-drop instructions, keyboard shortcuts,
-        gameplay keys, options.
+        gameplay keys and the result screen.
+      - Options: the Debug Menu, every control in it, play
+        options and recording.
       - Open source: the acknowledgement list the build writes
         (one card per third-party package in the bundle, with
         its license text; scripts/acknowledgements.ts).
@@ -441,6 +443,17 @@ export const PLAYER_APP_HTML = `
             data-pane="usage"
           >
             Usage
+          </button>
+          <button
+            class="btn help-modal-tab" data-size="sm" data-variant="ghost"
+            id="help-tab-options"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="help-pane-options"
+            data-pane="options"
+          >
+            Options
           </button>
           <button
             class="btn help-modal-tab" data-size="sm" data-variant="ghost"
@@ -619,279 +632,6 @@ export const PLAYER_APP_HTML = `
               <li><kbd>R</kbd> plays the same chart again right away with the same options.</li>
             </ul>
 
-            <h3 class="help-section-title">Debug Menu</h3>
-            <ul class="help-list">
-              <li>
-                Click <strong>Debug Menu</strong> at the top right to open the settings panel. Everyday folders start
-                open; rarely used ones start closed, and each remembers whether you left it open.
-              </li>
-              <li>
-                Every setting is remembered in this browser and restored on your next visit.
-                <strong>Developer → Reset settings and reload</strong> returns them all to their defaults (your best
-                records stay).
-              </li>
-              <li>
-                Settings that shape a play (lane options, gauge, modifiers, judgment windows) are locked while it runs
-                and apply from the next chart; hi-speed, volume and a few view settings change live.
-              </li>
-            </ul>
-            <details class="help-menu-folder">
-              <summary>Top</summary>
-              <p class="help-menu-note">Above the folders.</p>
-              <dl class="help-menu-items">
-                <dt>Status</dt>
-                <dd>What the player is doing now (read-only).</dd>
-                <dt>Open folder</dt>
-                <dd>Picks a folder of charts and / or skins; handled like a drop.</dd>
-                <dt>Open files (ZIP / replay)</dt>
-                <dd>Picks chart ZIP archives, or a replay (<code>*.bmplay.json</code>, or a course's <code>*.bmcourse.json</code>) to watch.</dd>
-              </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Play options</summary>
-              <p class="help-menu-note">Locked during a play unless noted. Options that only change the chart or the view (marked LR2, beatoraja or AC) work under every ruleset and run their source's algorithm; the judge rules come from Developer → Judgment windows. Items marked “Shown with …” say when they appear.</p>
-              <dl class="help-menu-items">
-                <dt>Auto play</dt>
-                <dd>Plays the chart automatically. An AUTO play saves no record.</dd>
-                <dt>Gauge</dt>
-                <dd>The gauge you play on. The choices follow the rules picked in Developer → Judgment windows.</dd>
-                <dt>Judge algorithm</dt>
-                <dd>With beatoraja rules, which note a press is judged against when several are in reach: Combo (default), Duration or Lowest.</dd>
-                <dt>Random 1P / Random 2P</dt>
-                <dd>The lane option for each side. RANDOM and S-RANDOM run the rules' own algorithm; options from one source (R-RANDOM, SPIRAL, H-RANDOM, SCATTER and more) are offered under every ruleset and run that source's. CONVERGE follows the rules.</dd>
-                <dt>H-RANDOM threshold BPM (beatoraja)</dt>
-                <dd>The BPM whose 16th note counts as a too-fast repeat for H-RANDOM, ALL-SCR and the 7-to-9 scratch.</dd>
-                <dt>Fixed key 1P / 2P (LR2; 0=default)</dt>
-                <dd>The lane LR2 CONVERGE gathers notes on. 0 picks the mode default.</dd>
-                <dt>Seed 1P / 2P (-1=random)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Fixes the seed of the lane random; -1 draws a new one each play.</dd>
-                <dt>7-to-9 (beatoraja)</dt>
-                <dd>Plays a 7KEY chart on nine lanes, in the chosen layout.</dd>
-                <dt>7-to-9 scratch</dt>
-                <dd>Where 7-to-9 puts scratch notes: Fixed, Avoid repeated hits or Alternate.</dd>
-                <dt>Reuse previous arrangement</dt>
-                <dd>Plays the same chart again with the last play's exact lanes, when that play had the same judge rules.</dd>
-                <dt>New arrangement</dt>
-                <dd>Drops the reused arrangement and resets both seeds to -1.</dd>
-                <dt>Gauge auto-shift (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> What happens when the gauge would fail: NONE, CONTINUE, SURVIVAL TO GROOVE, BEST CLEAR or SELECT TO UNDER.</dd>
-                <dt>Lowest auto-shift gauge</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to.</dd>
-                <dt>Scroll (beatoraja)</dt>
-                <dd>REMOVE draws the chart without its BPM and scroll changes; ADD adds random scroll changes. Judgment is unchanged.</dd>
-                <dt>Scroll section lines / Scroll rate</dt>
-                <dd><em class="help-menu-when">Shown with Scroll set to ADD.</em> For scroll ADD: how many bar lines each change lasts, and how strong it is.</dd>
-                <dt>Mines (beatoraja)</dt>
-                <dd>REMOVE takes the mines out; ADD RANDOM, ADD NEAR and ADD ALL add mines.</dd>
-                <dt>DP flip</dt>
-                <dd>Swaps the 1P and 2P sides of a double-play chart.</dd>
-                <dt>Auto scratch 1P / 2P</dt>
-                <dd>Plays that side's scratch notes for you.</dd>
-                <dt>Long notes</dt>
-                <dd>LEGACY NOTE turns charge notes into normal notes, LN REMOVE turns every long note into its head, and ADD LN / CN / HCN / ALL (beatoraja) make long notes.</dd>
-                <dt>Battle</dt>
-                <dd>Battle and conversion modes. BATTLE follows the rules (two-player play under LR2, one player on both sides under beatoraja and ????), ???? adds 2P PLAY, and BATTLE AS (beatoraja), D-BATTLE and SP TO DP (LR2) are offered under every ruleset.</dd>
-                <dt>Gauge 2P</dt>
-                <dd><em class="help-menu-when">Shown with Battle set to BATTLE (LR2) or 2P PLAY (????).</em> The second player's gauge.</dd>
-                <dt>M-RAN 1P / 2P</dt>
-                <dd><em class="help-menu-when">Shown with two-player play: Battle set to BATTLE (LR2) or 2P PLAY (????).</em> Mirrors that player's side after a RANDOM-type option.</dd>
-                <dt>D-BATTLE scratch (LR2)</dt>
-                <dd><em class="help-menu-when">Shown with Battle set to D-BATTLE.</em> Keeps scratch notes playable instead of turning them into background sound.</dd>
-                <dt>EXTRA MODE (LR2)</dt>
-                <dd>Turns background keysounds into extra notes, as LR2's EXTRA MODE does.</dd>
-                <dt>EXTRA minimum level (LR2)</dt>
-                <dd><em class="help-menu-when">Shown with EXTRA MODE (LR2) on.</em> How dense EXTRA MODE may get at least: LEVEL 1 to 3.</dd>
-                <dt>LN MODE (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> How a chart that leaves its long-note type open plays: LN, CN or HCN.</dd>
-                <dt>CUSTOM JUDGE (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Scales the judgment windows with the rates below.</dd>
-                <dt>Key / Scratch PGREAT, GREAT, GOOD % · LN margin %</dt>
-                <dd><em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of each window for keys and scratches, and the long-note release margin.</dd>
-                <dt>PRACTICE (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Plays a range of the chart again and again until Esc. A practice play saves no replay and no record.</dd>
-                <dt>START TIME ms / END TIME ms</dt>
-                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The range to practise, in chart milliseconds; 0 as the end means the chart's end.</dd>
-                <dt>GAUGE TYPE / GAUGE CATEGORY / GAUGE VALUE</dt>
-                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The gauge, its category and its starting value.</dd>
-                <dt>JUDGERANK / TOTAL</dt>
-                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The judge rank and TOTAL to practise with; 0 keeps the chart's.</dd>
-                <dt>EXTRA depth (beatoraja) / EXTRA scratch</dt>
-                <dd>beatoraja EXTRA: how many background keysounds per row become notes (0 is off), and whether scratch lanes get them.</dd>
-                <dt>Long-note add rate (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules and an ADD choice in Long notes.</em> How many of the notes become long notes, 0 to 1.</dd>
-                <dt>A-SCR &amp; LEGACY NOTE (AC 34)</dt>
-                <dd>One button for both Auto scratch sides and LEGACY NOTE.</dd>
-                <dt>Sort / Key filter / Difficulty filter</dt>
-                <dd>How the built-in and LR2 select screens order and filter the list.</dd>
-                <dt>HS-FIX</dt>
-                <dd><em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> Keeps the scroll speed steady against a BPM: MAXBPM, MINBPM, AVERAGE, STARTBPM, or CONSTANT (LR2, offered under every ruleset).</dd>
-                <dt>Display area info</dt>
-                <dd>Keeps showing the cover length and green number at the cover edges: OFF, ON, SUDDEN+ ONLY or HID+/LIFT ONLY.</dd>
-                <dt>Effect 1P / 2P</dt>
-                <dd>The lane covers for each side: OFF, HIDDEN, SUDDEN or HID+SUD.</dd>
-                <dt>Lane cover / Cover height</dt>
-                <dd>LR2's lane cover, and how much of the lane it covers.</dd>
-                <dt>BPM GUIDE (beatoraja)</dt>
-                <dd>Shows upcoming BPM changes on the lanes.</dd>
-                <dt>BPM change warning (AC)</dt>
-                <dd>Shows <code>current » next</code> BPM in a box on the lanes for 2 seconds before each BPM change: blue when it speeds up, red when it slows down.</dd>
-                <dt>LIFT 1P / 2P (beatoraja) · LIFT height</dt>
-                <dd>Raises that side's judge line, and by how much. Changes live.</dd>
-                <dt>Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)</dt>
-                <dd>Shows notes only for their last N ms before the judge line, with a fade at their edge.</dd>
-                <dt>Auto judge timing</dt>
-                <dd>Moves Judge timing by itself from your hits in a manual play: beatoraja's way after every hit, or LR2's by 1 ms every ten hits. LR2 SILENT also plays without the chart's sounds and BGA and hides the judgment.</dd>
-                <dt>Judge timing (ms)</dt>
-                <dd>Shifts when the notes are drawn, −500 to 500 ms. Input, audio and judgment stay as they are.</dd>
-                <dt>Normal HI-SPEED (AC 32 measured) · Normal HS level</dt>
-                <dd><em class="help-menu-when">The level shows with Normal HI-SPEED on.</em> Picks the speed from twenty levels measured on AC, instead of the Hi-speed slider.</dd>
-                <dt>CLASSIC HI-SPEED · Classic speed</dt>
-                <dd><em class="help-menu-when">The speed shows with CLASSIC HI-SPEED on.</em> Picks the speed from AC's eleven CLASSIC steps, 1.0 to 4.0.</dd>
-                <dt>FLOATING HI-SPEED (AC 32 measured) · Floating speed</dt>
-                <dd><em class="help-menu-when">The speed shows with FLOATING HI-SPEED on.</em> Keeps the green number while the covers move; Numpad 0 switches it during play.</dd>
-                <dt>Fixed display area (AC 34)</dt>
-                <dd>Ignores cover and LIFT changes during play; Enter twice restores the floating green number.</dd>
-                <dt>Hi-speed</dt>
-                <dd><em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> The scroll speed. Changes live, like ↑ / ↓ during play.</dd>
-              </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Replay / ghost</summary>
-              <p class="help-menu-note">Inside Play options.</p>
-              <dl class="help-menu-items">
-                <dt>Tempo · Hi-speed · SUDDEN+ / HIDDEN+ · LIFT</dt>
-                <dd>When on, a replay uses what the recorded player had; when off, your own settings.</dd>
-              </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Tempo</summary>
-              <dl class="help-menu-items">
-                <dt>Enabled</dt>
-                <dd>Turns the play tempo on.</dd>
-                <dt>Tempo (%)</dt>
-                <dd>How much faster or slower the chart plays. With the pitch following the tempo it changes live.</dd>
-                <dt>Pitch</dt>
-                <dd>Whether the pitch follows the tempo (as in LR2) or stays.</dd>
-                <dt>Keep-pitch stretcher</dt>
-                <dd>How the pitch is kept: WSOLA or Signalsmith Stretch.</dd>
-              </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Course</summary>
-              <dl class="help-menu-items">
-                <dt>Skip stage results</dt>
-                <dd>Skips the result screen after each course stage.</dd>
-                <dt>My courses…</dt>
-                <dd>Renames, deletes and exports the courses you made.</dd>
-                <dt>NONSTOP placement</dt>
-                <dd>Stitches NONSTOP courses as intended, or exactly as LR2 does, quirks included.</dd>
-                <dt>Table URL · Import table courses</dt>
-                <dd>Imports the courses of a difficulty table from its URL; it is imported again on later visits.</dd>
-              </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Skin &amp; display</summary>
-              <dl class="help-menu-items">
-                <dt>Skin system</dt>
-                <dd>Draws with the built-in, LR2 or beatoraja skin. Asks for a drop when none is loaded. Can change during a play.</dd>
-                <dt>Built-in skin · Skin effects</dt>
-                <dd>(Built-in tab) Synesthesia, Plain or Native, and how much animation they draw: Full, Reduced or Off.</dd>
-                <dt>Skin settings</dt>
-                <dd>(Built-in tab) The selected skin's own settings, with Reset to defaults.</dd>
-                <dt>Load LR2 skin… · LR2 theme</dt>
-                <dd>(LR2 tab) Loads an LR2 theme, and picks among the themes loaded.</dd>
-                <dt>Load beatoraja skin… · Beatoraja skins</dt>
-                <dd>(beatoraja tab) Loads beatoraja skins, and picks one per screen and key mode.</dd>
-                <dt>Render resolution · Auto-detect resolution</dt>
-                <dd>How sharply the canvas draws; lower it if the frame rate drops.</dd>
-                <dt>Play layout</dt>
-                <dd>Auto, Desktop or Touch (on-screen lanes and buttons).</dd>
-                <dt>Judged notes</dt>
-                <dd>Whether a judged note keeps scrolling until its time (as in LR2) or disappears.</dd>
-                <dt>Toggle fullscreen</dt>
-                <dd>Enters or leaves fullscreen.</dd>
-              </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Audio</summary>
-              <dl class="help-menu-items">
-                <dt>Mute · Master / Key sound / BGM (%)</dt>
-                <dd>Silences the player, and sets each volume.</dd>
-                <dt>Play in silent mode</dt>
-                <dd>Plays sound with an iPhone's silent switch on (where the browser allows it).</dd>
-                <dt>Peak gain (next play)</dt>
-                <dd>From the next play, raises the volume so the loudest peak is near −3 dBFS.</dd>
-                <dt>Compressor</dt>
-                <dd>Evens out loud keysounds and BGM: turn it on, pick the stages, and tune each compressor (with a reset).</dd>
-              </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Library &amp; records</summary>
-              <dl class="help-menu-items">
-                <dt>Music ZIP URL · Skin ZIP URL · Load from URLs</dt>
-                <dd>Loads a chart or skin ZIP from a URL, as <code>?music=</code> / <code>?skin=</code> do.</dd>
-                <dt>Auto-save replays</dt>
-                <dd>Downloads each finished play's replay.</dd>
-                <dt>Clear best records</dt>
-                <dd>Deletes the best records kept in this browser (asks first).</dd>
-                <dt>Local data…</dt>
-                <dd>Shows what the player keeps in this browser: its localStorage keys, its IndexedDB databases (your courses, the replay slots) and how much space they use. It only reads; clear data from its own controls.</dd>
-                <dt>BGA video transcode</dt>
-                <dd>Whether BGA videos are converted with WebCodecs, and the size they are reduced to.</dd>
-              </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Capture</summary>
-              <dl class="help-menu-items">
-                <dt>● Record gameplay video · Video format</dt>
-                <dd>Records the next play as a video to download, in the chosen format (MP4 · H.264 by default).</dd>
-                <dt>📸 Screenshot</dt>
-                <dd>Saves the screen as a PNG.</dd>
-              </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Leaderboard</summary>
-              <dl class="help-menu-items">
-                <dt>Submit to Leaderboard</dt>
-                <dd>Sends each finished play to the Leaderboard (off by default).</dd>
-                <dt>Account · Create passkey · Sign in with passkey · Sign out</dt>
-                <dd>Shows who is signed in, keeps the account with a passkey, and signs in or out.</dd>
-              </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Developer</summary>
-              <dl class="help-menu-items">
-                <dt>CPU workers</dt>
-                <dd>How many workers load charts and stretch audio in parallel.</dd>
-                <dt>Judgment windows</dt>
-                <dd>The rules every play follows: LR2, beatoraja or ????. It decides the windows, gauges, options offered, and which best records the select screen shows.</dd>
-                <dt>Auto pause on blur</dt>
-                <dd>Pauses the play when the page loses focus.</dd>
-                <dt>Show invisible notes</dt>
-                <dd>Shows hidden keysound objects. Changes live; judgment is unchanged.</dd>
-                <dt>FPS</dt>
-                <dd>The frame rate graph.</dd>
-                <dt>Reset settings and reload</dt>
-                <dd>Returns every setting to its default and reloads; best records stay.</dd>
-              </dl>
-            </details>
-
-            <h3 class="help-section-title">Options &amp; recording</h3>
-            <ul class="help-list">
-              <li>
-                <strong>Play options</strong> hold the lane options (RANDOM, S-RANDOM, SCATTER and more), gauges, battle
-                modes, chart modifiers, HS-FIX and lane covers, following LR2 or beatoraja as
-                <strong>Developer → Judgment windows</strong> picks. A replay records the options it was played with.
-              </li>
-              <li>
-                Click <strong>Record gameplay video</strong> to capture the next play as a downloadable video (MP4 · H.264 unless <strong>Video format</strong> says otherwise) (requires
-                MediaRecorder support — see Open source / browser checks).
-              </li>
-              <li>
-                The active skin's <strong>PLAY OPTION</strong> panel in chart select sets the same options (Random /
-                Mirror / Auto-scratch / gauge / hi-speed and more).
-              </li>
-            </ul>
           </div>
           <div class="help-lang" data-lang="ja" hidden>
             <section class="help-about">
@@ -1002,6 +742,306 @@ export const PLAYER_APP_HTML = `
               <li><kbd>R</kbd> で同じオプションのまま同じ譜面をすぐにもう一度プレイします。</li>
             </ul>
 
+          </div>
+        </section>
+        <section
+          class="help-modal-pane"
+          id="help-pane-options"
+          role="tabpanel"
+          aria-labelledby="help-tab-options"
+          tabindex="0"
+          hidden
+        >
+          <!-- The language switch follows the Usage one: every \`.help-lang-toggle\` and \`.help-lang\` share one state. -->
+          <div class="help-lang-switch" role="group" aria-label="Language">
+            <button
+              class="btn help-lang-toggle is-active" data-size="sm" data-variant="ghost"
+              type="button"
+              data-lang="en"
+              aria-pressed="true"
+            >
+              English
+            </button>
+            <button class="btn help-lang-toggle" data-size="sm" data-variant="ghost" type="button" data-lang="ja" aria-pressed="false">
+              日本語
+            </button>
+          </div>
+          <div class="help-lang is-active" data-lang="en">
+            <h3 class="help-section-title">Debug Menu</h3>
+            <ul class="help-list">
+              <li>
+                Click <strong>Debug Menu</strong> at the top right to open the settings panel. Everyday folders start
+                open; rarely used ones start closed, and each remembers whether you left it open.
+              </li>
+              <li>
+                Every setting is remembered in this browser and restored on your next visit.
+                <strong>Developer → Reset settings and reload</strong> returns them all to their defaults (your best
+                records stay).
+              </li>
+              <li>
+                Settings that shape a play (lane options, gauge, modifiers, judgment windows) are locked while it runs
+                and apply from the next chart; hi-speed, volume and a few view settings change live.
+              </li>
+            </ul>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Top</h4>
+              <p class="help-menu-note">Above the folders.</p>
+              <dl class="help-menu-items">
+                <dt>Status</dt>
+                <dd>What the player is doing now (read-only).</dd>
+                <dt>Open folder</dt>
+                <dd>Picks a folder of charts and / or skins; handled like a drop.</dd>
+                <dt>Open files (ZIP / replay)</dt>
+                <dd>Picks chart ZIP archives, or a replay (<code>*.bmplay.json</code>, or a course's <code>*.bmcourse.json</code>) to watch.</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Play options</h4>
+              <p class="help-menu-note">Locked during a play unless noted. Options that only change the chart or the view (marked LR2, beatoraja or AC) work under every ruleset and run their source's algorithm; the judge rules come from Developer → Judgment windows. Items marked “Shown with …” say when they appear.</p>
+              <dl class="help-menu-items">
+                <dt>Auto play</dt>
+                <dd>Plays the chart automatically. An AUTO play saves no record.</dd>
+                <dt>Gauge</dt>
+                <dd>The gauge you play on. The choices follow the rules picked in Developer → Judgment windows.</dd>
+                <dt>Judge algorithm</dt>
+                <dd>With beatoraja rules, which note a press is judged against when several are in reach: Combo (default), Duration or Lowest.</dd>
+                <dt>Random 1P / Random 2P</dt>
+                <dd>The lane option for each side. RANDOM and S-RANDOM run the rules' own algorithm; options from one source (R-RANDOM, SPIRAL, H-RANDOM, SCATTER and more) are offered under every ruleset and run that source's. CONVERGE follows the rules.</dd>
+                <dt>H-RANDOM threshold BPM (beatoraja)</dt>
+                <dd>The BPM whose 16th note counts as a too-fast repeat for H-RANDOM, ALL-SCR and the 7-to-9 scratch.</dd>
+                <dt>Fixed key 1P / 2P (LR2; 0=default)</dt>
+                <dd>The lane LR2 CONVERGE gathers notes on. 0 picks the mode default.</dd>
+                <dt>Seed 1P / 2P (-1=random)</dt>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Fixes the seed of the lane random; -1 draws a new one each play.</dd>
+                <dt>7-to-9 (beatoraja)</dt>
+                <dd>Plays a 7KEY chart on nine lanes, in the chosen layout.</dd>
+                <dt>7-to-9 scratch</dt>
+                <dd>Where 7-to-9 puts scratch notes: Fixed, Avoid repeated hits or Alternate.</dd>
+                <dt>Reuse previous arrangement</dt>
+                <dd>Plays the same chart again with the last play's exact lanes, when that play had the same judge rules.</dd>
+                <dt>New arrangement</dt>
+                <dd>Drops the reused arrangement and resets both seeds to -1.</dd>
+                <dt>Gauge auto-shift (beatoraja)</dt>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> What happens when the gauge would fail: NONE, CONTINUE, SURVIVAL TO GROOVE, BEST CLEAR or SELECT TO UNDER.</dd>
+                <dt>Lowest auto-shift gauge</dt>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to.</dd>
+                <dt>Scroll (beatoraja)</dt>
+                <dd>REMOVE draws the chart without its BPM and scroll changes; ADD adds random scroll changes. Judgment is unchanged.</dd>
+                <dt>Scroll section lines / Scroll rate</dt>
+                <dd><em class="help-menu-when">Shown with Scroll set to ADD.</em> For scroll ADD: how many bar lines each change lasts, and how strong it is.</dd>
+                <dt>Mines (beatoraja)</dt>
+                <dd>REMOVE takes the mines out; ADD RANDOM, ADD NEAR and ADD ALL add mines.</dd>
+                <dt>DP flip</dt>
+                <dd>Swaps the 1P and 2P sides of a double-play chart.</dd>
+                <dt>Auto scratch 1P / 2P</dt>
+                <dd>Plays that side's scratch notes for you.</dd>
+                <dt>Long notes</dt>
+                <dd>LEGACY NOTE turns charge notes into normal notes, LN REMOVE turns every long note into its head, and ADD LN / CN / HCN / ALL (beatoraja) make long notes.</dd>
+                <dt>Battle</dt>
+                <dd>Battle and conversion modes. BATTLE follows the rules (two-player play under LR2, one player on both sides under beatoraja and ????), ???? adds 2P PLAY, and BATTLE AS (beatoraja), D-BATTLE and SP TO DP (LR2) are offered under every ruleset.</dd>
+                <dt>Gauge 2P</dt>
+                <dd><em class="help-menu-when">Shown with Battle set to BATTLE (LR2) or 2P PLAY (????).</em> The second player's gauge.</dd>
+                <dt>M-RAN 1P / 2P</dt>
+                <dd><em class="help-menu-when">Shown with two-player play: Battle set to BATTLE (LR2) or 2P PLAY (????).</em> Mirrors that player's side after a RANDOM-type option.</dd>
+                <dt>D-BATTLE scratch (LR2)</dt>
+                <dd><em class="help-menu-when">Shown with Battle set to D-BATTLE.</em> Keeps scratch notes playable instead of turning them into background sound.</dd>
+                <dt>EXTRA MODE (LR2)</dt>
+                <dd>Turns background keysounds into extra notes, as LR2's EXTRA MODE does.</dd>
+                <dt>EXTRA minimum level (LR2)</dt>
+                <dd><em class="help-menu-when">Shown with EXTRA MODE (LR2) on.</em> How dense EXTRA MODE may get at least: LEVEL 1 to 3.</dd>
+                <dt>LN MODE (beatoraja)</dt>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> How a chart that leaves its long-note type open plays: LN, CN or HCN.</dd>
+                <dt>CUSTOM JUDGE (beatoraja)</dt>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Scales the judgment windows with the rates below.</dd>
+                <dt>Key / Scratch PGREAT, GREAT, GOOD % · LN margin %</dt>
+                <dd><em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of each window for keys and scratches, and the long-note release margin.</dd>
+                <dt>PRACTICE (beatoraja)</dt>
+                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Plays a range of the chart again and again until Esc. A practice play saves no replay and no record.</dd>
+                <dt>START TIME ms / END TIME ms</dt>
+                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The range to practise, in chart milliseconds; 0 as the end means the chart's end.</dd>
+                <dt>GAUGE TYPE / GAUGE CATEGORY / GAUGE VALUE</dt>
+                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The gauge, its category and its starting value.</dd>
+                <dt>JUDGERANK / TOTAL</dt>
+                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The judge rank and TOTAL to practise with; 0 keeps the chart's.</dd>
+                <dt>EXTRA depth (beatoraja) / EXTRA scratch</dt>
+                <dd>beatoraja EXTRA: how many background keysounds per row become notes (0 is off), and whether scratch lanes get them.</dd>
+                <dt>Long-note add rate (beatoraja)</dt>
+                <dd><em class="help-menu-when">Shown with beatoraja rules and an ADD choice in Long notes.</em> How many of the notes become long notes, 0 to 1.</dd>
+                <dt>A-SCR &amp; LEGACY NOTE (AC 34)</dt>
+                <dd>One button for both Auto scratch sides and LEGACY NOTE.</dd>
+                <dt>Sort / Key filter / Difficulty filter</dt>
+                <dd>How the built-in and LR2 select screens order and filter the list.</dd>
+                <dt>HS-FIX</dt>
+                <dd><em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> Keeps the scroll speed steady against a BPM: MAXBPM, MINBPM, AVERAGE, STARTBPM, or CONSTANT (LR2, offered under every ruleset).</dd>
+                <dt>Display area info</dt>
+                <dd>Keeps showing the cover length and green number at the cover edges: OFF, ON, SUDDEN+ ONLY or HID+/LIFT ONLY.</dd>
+                <dt>Effect 1P / 2P</dt>
+                <dd>The lane covers for each side: OFF, HIDDEN, SUDDEN or HID+SUD.</dd>
+                <dt>Lane cover / Cover height</dt>
+                <dd>LR2's lane cover, and how much of the lane it covers.</dd>
+                <dt>BPM GUIDE (beatoraja)</dt>
+                <dd>Shows upcoming BPM changes on the lanes.</dd>
+                <dt>BPM change warning (AC)</dt>
+                <dd>Shows <code>current » next</code> BPM in a box on the lanes for 2 seconds before each BPM change: blue when it speeds up, red when it slows down.</dd>
+                <dt>LIFT 1P / 2P (beatoraja) · LIFT height</dt>
+                <dd>Raises that side's judge line, and by how much. Changes live.</dd>
+                <dt>Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)</dt>
+                <dd>Shows notes only for their last N ms before the judge line, with a fade at their edge.</dd>
+                <dt>Auto judge timing</dt>
+                <dd>Moves Judge timing by itself from your hits in a manual play: beatoraja's way after every hit, or LR2's by 1 ms every ten hits. LR2 SILENT also plays without the chart's sounds and BGA and hides the judgment.</dd>
+                <dt>Judge timing (ms)</dt>
+                <dd>Shifts when the notes are drawn, −500 to 500 ms. Input, audio and judgment stay as they are.</dd>
+                <dt>Normal HI-SPEED (AC 32 measured) · Normal HS level</dt>
+                <dd><em class="help-menu-when">The level shows with Normal HI-SPEED on.</em> Picks the speed from twenty levels measured on AC, instead of the Hi-speed slider.</dd>
+                <dt>CLASSIC HI-SPEED · Classic speed</dt>
+                <dd><em class="help-menu-when">The speed shows with CLASSIC HI-SPEED on.</em> Picks the speed from AC's eleven CLASSIC steps, 1.0 to 4.0.</dd>
+                <dt>FLOATING HI-SPEED (AC 32 measured) · Floating speed</dt>
+                <dd><em class="help-menu-when">The speed shows with FLOATING HI-SPEED on.</em> Keeps the green number while the covers move; Numpad 0 switches it during play.</dd>
+                <dt>Fixed display area (AC 34)</dt>
+                <dd>Ignores cover and LIFT changes during play; Enter twice restores the floating green number.</dd>
+                <dt>Hi-speed</dt>
+                <dd><em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> The scroll speed. Changes live, like ↑ / ↓ during play.</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Replay / ghost</h4>
+              <p class="help-menu-note">Inside Play options.</p>
+              <dl class="help-menu-items">
+                <dt>Tempo · Hi-speed · SUDDEN+ / HIDDEN+ · LIFT</dt>
+                <dd>When on, a replay uses what the recorded player had; when off, your own settings.</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Tempo</h4>
+              <dl class="help-menu-items">
+                <dt>Enabled</dt>
+                <dd>Turns the play tempo on.</dd>
+                <dt>Tempo (%)</dt>
+                <dd>How much faster or slower the chart plays. With the pitch following the tempo it changes live.</dd>
+                <dt>Pitch</dt>
+                <dd>Whether the pitch follows the tempo (as in LR2) or stays.</dd>
+                <dt>Keep-pitch stretcher</dt>
+                <dd>How the pitch is kept: WSOLA or Signalsmith Stretch.</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Course</h4>
+              <dl class="help-menu-items">
+                <dt>Skip stage results</dt>
+                <dd>Skips the result screen after each course stage.</dd>
+                <dt>My courses…</dt>
+                <dd>Renames, deletes and exports the courses you made.</dd>
+                <dt>NONSTOP placement</dt>
+                <dd>Stitches NONSTOP courses as intended, or exactly as LR2 does, quirks included.</dd>
+                <dt>Table URL · Import table courses</dt>
+                <dd>Imports the courses of a difficulty table from its URL; it is imported again on later visits.</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Skin &amp; display</h4>
+              <dl class="help-menu-items">
+                <dt>Skin system</dt>
+                <dd>Draws with the built-in, LR2 or beatoraja skin. Asks for a drop when none is loaded. Can change during a play.</dd>
+                <dt>Built-in skin · Skin effects</dt>
+                <dd>(Built-in tab) Synesthesia, Plain or Native, and how much animation they draw: Full, Reduced or Off.</dd>
+                <dt>Skin settings</dt>
+                <dd>(Built-in tab) The selected skin's own settings, with Reset to defaults.</dd>
+                <dt>Load LR2 skin… · LR2 theme</dt>
+                <dd>(LR2 tab) Loads an LR2 theme, and picks among the themes loaded.</dd>
+                <dt>Load beatoraja skin… · Beatoraja skins</dt>
+                <dd>(beatoraja tab) Loads beatoraja skins, and picks one per screen and key mode.</dd>
+                <dt>Render resolution · Auto-detect resolution</dt>
+                <dd>How sharply the canvas draws; lower it if the frame rate drops.</dd>
+                <dt>Play layout</dt>
+                <dd>Auto, Desktop or Touch (on-screen lanes and buttons).</dd>
+                <dt>Judged notes</dt>
+                <dd>Whether a judged note keeps scrolling until its time (as in LR2) or disappears.</dd>
+                <dt>Toggle fullscreen</dt>
+                <dd>Enters or leaves fullscreen.</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Audio</h4>
+              <dl class="help-menu-items">
+                <dt>Mute · Master / Key sound / BGM (%)</dt>
+                <dd>Silences the player, and sets each volume.</dd>
+                <dt>Play in silent mode</dt>
+                <dd>Plays sound with an iPhone's silent switch on (where the browser allows it).</dd>
+                <dt>Peak gain (next play)</dt>
+                <dd>From the next play, raises the volume so the loudest peak is near −3 dBFS.</dd>
+                <dt>Compressor</dt>
+                <dd>Evens out loud keysounds and BGM: turn it on, pick the stages, and tune each compressor (with a reset).</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Library &amp; records</h4>
+              <dl class="help-menu-items">
+                <dt>Music ZIP URL · Skin ZIP URL · Load from URLs</dt>
+                <dd>Loads a chart or skin ZIP from a URL, as <code>?music=</code> / <code>?skin=</code> do.</dd>
+                <dt>Auto-save replays</dt>
+                <dd>Downloads each finished play's replay.</dd>
+                <dt>Clear best records</dt>
+                <dd>Deletes the best records kept in this browser (asks first).</dd>
+                <dt>Local data…</dt>
+                <dd>Shows what the player keeps in this browser: its localStorage keys, its IndexedDB databases (your courses, the replay slots) and how much space they use. It only reads; clear data from its own controls.</dd>
+                <dt>BGA video transcode</dt>
+                <dd>Whether BGA videos are converted with WebCodecs, and the size they are reduced to.</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Capture</h4>
+              <dl class="help-menu-items">
+                <dt>● Record gameplay video · Video format</dt>
+                <dd>Records the next play as a video to download, in the chosen format (MP4 · H.264 by default).</dd>
+                <dt>📸 Screenshot</dt>
+                <dd>Saves the screen as a PNG.</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Leaderboard</h4>
+              <dl class="help-menu-items">
+                <dt>Submit to Leaderboard</dt>
+                <dd>Sends each finished play to the Leaderboard (off by default).</dd>
+                <dt>Account · Create passkey · Sign in with passkey · Sign out</dt>
+                <dd>Shows who is signed in, keeps the account with a passkey, and signs in or out.</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Developer</h4>
+              <dl class="help-menu-items">
+                <dt>CPU workers</dt>
+                <dd>How many workers load charts and stretch audio in parallel.</dd>
+                <dt>Judgment windows</dt>
+                <dd>The rules every play follows: LR2, beatoraja or ????. It decides the windows, gauges, options offered, and which best records the select screen shows.</dd>
+                <dt>Auto pause on blur</dt>
+                <dd>Pauses the play when the page loses focus.</dd>
+                <dt>Show invisible notes</dt>
+                <dd>Shows hidden keysound objects. Changes live; judgment is unchanged.</dd>
+                <dt>FPS</dt>
+                <dd>The frame rate graph.</dd>
+                <dt>Reset settings and reload</dt>
+                <dd>Returns every setting to its default and reloads; best records stay.</dd>
+              </dl>
+            </section>
+
+            <h3 class="help-section-title">Options &amp; recording</h3>
+            <ul class="help-list">
+              <li>
+                <strong>Play options</strong> hold the lane options (RANDOM, S-RANDOM, SCATTER and more), gauges, battle
+                modes, chart modifiers, HS-FIX and lane covers, following LR2 or beatoraja as
+                <strong>Developer → Judgment windows</strong> picks. A replay records the options it was played with.
+              </li>
+              <li>
+                Click <strong>Record gameplay video</strong> to capture the next play as a downloadable video (MP4 · H.264 unless <strong>Video format</strong> says otherwise) (requires
+                MediaRecorder support — see Open source / browser checks).
+              </li>
+              <li>
+                The active skin's <strong>PLAY OPTION</strong> panel in chart select sets the same options (Random /
+                Mirror / Auto-scratch / gauge / hi-speed and more).
+              </li>
+            </ul>
+          </div>
+          <div class="help-lang" data-lang="ja" hidden>
             <h3 class="help-section-title">Debug Menu</h3>
             <ul class="help-list">
               <li>
@@ -1014,8 +1054,8 @@ export const PLAYER_APP_HTML = `
                 プレイの内容を決める設定 (レーンのオプション、ゲージ、譜面の変更、判定) はプレイ中は変えられず、次の譜面から反映されます。ハイスピード、音量、一部の表示設定はプレイ中にも変えられます。
               </li>
             </ul>
-            <details class="help-menu-folder">
-              <summary>最上部</summary>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">最上部</h4>
               <p class="help-menu-note">フォルダの上。</p>
               <dl class="help-menu-items">
                 <dt>Status</dt>
@@ -1025,9 +1065,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Open files (ZIP / replay)</dt>
                 <dd>譜面の ZIP アーカイブ、または再生するリプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>) を選びます。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Play options</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Play options</h4>
               <p class="help-menu-note">特に書かない限りプレイ中は変えられません。譜面や表示を変えるだけのオプション (LR2・beatoraja・AC と付いたもの) はどのルールでも使え、その出典のアルゴリズムで動きます。判定のルールは Developer → Judgment windows で決まります。「…のときに表示」とある項目は、その条件で表示されます。</p>
               <dl class="help-menu-items">
                 <dt>Auto play</dt>
@@ -1133,17 +1173,17 @@ export const PLAYER_APP_HTML = `
                 <dt>Hi-speed</dt>
                 <dd><em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em> スクロールの速さ。プレイ中の ↑ / ↓ と同じく、すぐ反映されます。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Replay / ghost</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Replay / ghost</h4>
               <p class="help-menu-note">Play options の中。</p>
               <dl class="help-menu-items">
                 <dt>Tempo · Hi-speed · SUDDEN+ / HIDDEN+ · LIFT</dt>
                 <dd>オンならリプレイは録画したプレイヤーの設定で、オフなら自分の設定で再生します。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Tempo</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Tempo</h4>
               <dl class="help-menu-items">
                 <dt>Enabled</dt>
                 <dd>再生速度の変更を有効にします。</dd>
@@ -1154,9 +1194,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Keep-pitch stretcher</dt>
                 <dd>ピッチを保つ方法。WSOLA か Signalsmith Stretch。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Course</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Course</h4>
               <dl class="help-menu-items">
                 <dt>Skip stage results</dt>
                 <dd>コースのステージごとのリザルト画面を飛ばします。</dd>
@@ -1167,9 +1207,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Table URL · Import table courses</dt>
                 <dd>難易度表の URL からコースを読み込みます。次に開いたときにも読み込みます。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Skin &amp; display</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Skin &amp; display</h4>
               <dl class="help-menu-items">
                 <dt>Skin system</dt>
                 <dd>内蔵、LR2、beatoraja のどのスキンで描くか。読み込んでいなければドロップを求めます。プレイ中にも変えられます。</dd>
@@ -1190,9 +1230,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Toggle fullscreen</dt>
                 <dd>フルスクリーンに入る / 出る。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Audio</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Audio</h4>
               <dl class="help-menu-items">
                 <dt>Mute · Master / Key sound / BGM (%)</dt>
                 <dd>音を消します。また、それぞれの音量を決めます。</dd>
@@ -1203,9 +1243,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Compressor</dt>
                 <dd>キー音と BGM の音量差をならします。オンにして段を選び、それぞれのコンプレッサーを調整できます (リセットあり)。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Library &amp; records</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Library &amp; records</h4>
               <dl class="help-menu-items">
                 <dt>Music ZIP URL · Skin ZIP URL · Load from URLs</dt>
                 <dd><code>?music=</code> / <code>?skin=</code> と同じく、URL から譜面やスキンの ZIP を読み込みます。</dd>
@@ -1218,27 +1258,27 @@ export const PLAYER_APP_HTML = `
                 <dt>BGA video transcode</dt>
                 <dd>BGA の動画を WebCodecs で変換するかと、縮小するサイズ。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Capture</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Capture</h4>
               <dl class="help-menu-items">
                 <dt>● Record gameplay video · Video format</dt>
                 <dd>次のプレイを動画として録画してダウンロードします。形式は選べます (既定は MP4 · H.264)。</dd>
                 <dt>📸 Screenshot</dt>
                 <dd>画面を PNG で保存します。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Leaderboard</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Leaderboard</h4>
               <dl class="help-menu-items">
                 <dt>Submit to Leaderboard</dt>
                 <dd>プレイが終わるたびに Leaderboard へ送ります (既定はオフ)。</dd>
                 <dt>Account · Create passkey · Sign in with passkey · Sign out</dt>
                 <dd>サインイン中のアカウントの表示、パスキーでのアカウントの保存、サインインとサインアウト。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Developer</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Developer</h4>
               <dl class="help-menu-items">
                 <dt>CPU workers</dt>
                 <dd>譜面の読み込みや音の伸縮を並列で行うワーカーの数。</dd>
@@ -1253,7 +1293,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Reset settings and reload</dt>
                 <dd>すべての設定を既定値に戻して再読み込みします。ベスト記録は残ります。</dd>
               </dl>
-            </details>
+            </section>
 
             <h3 class="help-section-title">オプションと録画</h3>
             <ul class="help-list">
@@ -1279,8 +1319,8 @@ export const PLAYER_APP_HTML = `
         >
           <p class="help-pane-intro">
             This player is built on the open source libraries listed below: every third-party package
-            this build includes. Each entry shows the copyright / license text the package ships, or its
-            upstream text where the package ships none.
+            this build includes. Each entry keeps the copyright / license text the package ships, or its
+            upstream text where the package ships none; open it to read.
           </p>
           <ol class="help-oss-list" id="help-oss-list"></ol>
         </section>
