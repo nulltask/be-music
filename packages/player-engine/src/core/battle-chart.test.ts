@@ -44,7 +44,9 @@ test('BATTLE availability follows each source', () => {
   expect(resolveEffectiveBattleMode('BATTLE', '____', '7', false)).toBe('BATTLE');
   expect(resolveEffectiveBattleMode('BATTLE', '____', '5', false)).toBe('OFF');
   expect(() => resolveEffectiveBattleMode('BATTLE', 'lr2', '7', false)).toThrow(RangeError);
-  expect(() => resolveEffectiveBattleMode('SP-TO-DP', 'beatoraja', '7', false)).toThrow(RangeError);
+  // The chart constructions are offered under every ruleset (#774); BATTLE keeps its LR2 meaning (TWO-PLAYER).
+  expect(resolveEffectiveBattleMode('SP-TO-DP', 'beatoraja', '7', false)).toBe('SP-TO-DP');
+  expect(resolveEffectiveBattleMode('SP-TO-DP', '____', '14', false)).toBe('SP-TO-DP');
   expect(resolveEffectiveBattleMode('SP-TO-DP', 'lr2', '7', true)).toBe('OFF');
 });
 
@@ -108,12 +110,15 @@ test('a held D-BATTLE scratch keeps scratch objects on both sides', () => {
   expect(prepared.notes.map((note) => note.channel)).toEqual(['11', '12', '16', '21', '22', '26']);
 });
 
-test('D-BATTLE availability follows LR2', () => {
+test('D-BATTLE and BATTLE AS keep their source chart support under every ruleset', () => {
   expect(resolveEffectiveBattleMode('D-BATTLE', 'lr2', '7', true)).toBe('D-BATTLE');
   expect(resolveEffectiveBattleMode('D-BATTLE', 'lr2', '9', false)).toBe('OFF');
   expect(resolveEffectiveBattleMode('D-BATTLE', 'lr2', '14', false)).toBe('OFF');
-  expect(() => resolveEffectiveBattleMode('D-BATTLE', 'beatoraja', '7', false)).toThrow(RangeError);
-  expect(() => resolveEffectiveBattleMode('BATTLE-AS', '____', '7', false)).toThrow(RangeError);
+  expect(resolveEffectiveBattleMode('D-BATTLE', 'beatoraja', '7', false)).toBe('D-BATTLE');
+  expect(resolveEffectiveBattleMode('D-BATTLE', '____', '9', false)).toBe('OFF');
+  expect(resolveEffectiveBattleMode('BATTLE-AS', '____', '7', false)).toBe('BATTLE-AS');
+  expect(resolveEffectiveBattleMode('BATTLE-AS', 'lr2', '24', false)).toBe('BATTLE-AS');
+  expect(resolveEffectiveBattleMode('BATTLE-AS', 'lr2', '9', false)).toBe('OFF');
 });
 
 test('two-player play copies the chart for the second player, with mines under That-Which-Must-Not-Be-Named only', () => {

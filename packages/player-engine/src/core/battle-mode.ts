@@ -27,8 +27,9 @@ export function resolveEffectiveBattleMode(
   course: boolean,
 ): BattleMode {
   if (selected === 'OFF') return 'OFF';
+  // SP TO DP, D-BATTLE (LR2) and BATTLE AS (beatoraja) build a chart and judge nothing themselves, so every judge ruleset
+  // offers them (#774), each with its source's chart support.
   if (selected === 'SP-TO-DP' || selected === 'D-BATTLE') {
-    if (ruleset !== 'lr2') throw new RangeError(`${selected} requires LR2 judgment rules.`);
     // SP TO DP is skipped in a course (isCourse) and LR2 has no keyboard modes; D-BATTLE copies 1x cells at parse
     // time for 5/7KEY sources.
     if (selected === 'SP-TO-DP') return course || sourceVariant === '24' || sourceVariant === '48' ? 'OFF' : selected;
@@ -41,10 +42,10 @@ export function resolveEffectiveBattleMode(
     const variants = ruleset === 'lr2' ? ['5', '7', '10', '14'] : ['5', '7'];
     return !course && variants.includes(sourceVariant) ? selected : 'OFF';
   }
-  if (selected === 'BATTLE' || selected === 'BATTLE-AS') {
+  if (selected === 'BATTLE-AS') return ['5', '7', '24'].includes(sourceVariant) ? selected : 'OFF';
+  if (selected === 'BATTLE') {
+    // LR2's BATTLE is two-player play (TWO-PLAYER); the one-player copy keeps its beatoraja / That-Which-Must-Not-Be-Named name.
     if (ruleset === 'lr2') throw new RangeError('LR2 BATTLE is two-player play (TWO-PLAYER).');
-    if (selected === 'BATTLE-AS' && ruleset !== 'beatoraja')
-      throw new RangeError('BATTLE AS requires beatoraja judgment rules.');
     const supported = ruleset === 'beatoraja' ? ['5', '7', '24'] : ['7'];
     return supported.includes(sourceVariant) ? selected : 'OFF';
   }

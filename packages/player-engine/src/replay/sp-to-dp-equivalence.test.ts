@@ -73,10 +73,11 @@ test('AUTO keeps the source scratch configuration for layout reproduction indepe
   });
 });
 
-test('source-only battle modes and mismatched prepared layouts fail before judging', async () => {
+test('SP TO DP plays under every judge ruleset, and mismatched prepared layouts fail before judging', async () => {
   const json = chart();
   const preparedChart = preparePlaybackChart(resolveChart(json, { playVariant: '7' }), { battleMode: 'SP-TO-DP' });
-  await expect(runRecordedPlay(json, [], 'beatoraja', { preparedChart })).rejects.toThrow(/requires LR2/);
+  const played = await runRecordedPlay(json, [], 'beatoraja', { preparedChart });
+  expect(played.replay.play).toMatchObject({ judgeRuleset: 'beatoraja', battleMode: 'SP-TO-DP' });
   await expect(runRecordedPlay(json, [], 'lr2', { preparedChart, battleMode: 'OFF' })).rejects.toThrow(
     /shared prepared chart/,
   );
