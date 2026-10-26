@@ -216,6 +216,48 @@ Browser replays can seek through `PlayScene.seek(seconds)` or ← / → (five se
 
 Manual seeking requires `PlaySceneOptions.allowSeek: 'practice'`. The first seek discards the replay recorder. Notes with heads before the target, including their long-note tails, are consumed without scoring; score, combo and gauge reset to their play-start values. A paused play stays paused. The result carries `practice: true` and cannot be saved as a best record, submitted to the Leaderboard or auto-saved as a replay. The player enables manual seeking for single charts and course stages. Course progression uses live stage outcomes independently of replay recording.
 
+## Replay slots
+
+The browser player keeps up to four replays per chart and four per course in the browser, as beatoraja keeps four
+replay files per chart and per course (`PlayDataAccessor`). A result screen saves its play into a slot; the select
+screen replays one. A replay played from a slot plays as a dropped one does: no record is kept and nothing is ranked.
+
+```mermaid
+flowchart LR
+  result[Result screen] -->|"keys 1-4 · replay buttons · card · auto-save rules"| store[(IndexedDB)]
+  store -->|"slot states"| select[Select screen]
+  select -->|"V · replay buttons · card"| replay[Replay]
+```
+
+- **What a slot holds.** A chart's slots are keyed by its chart fingerprint (`chart.chartFingerprint`; `sha256:<file
+  hash>` for a chart that cannot be fingerprinted), a course's by its course fingerprint
+  (`computeCourseReplayFingerprint`; a NONSTOP course's includes its connections and placement). A slot holds the
+  replay as its `.bmplay.json` / `.bmcourse.json` text, gzip-compressed, in the `replaySlotData` store of the `be-music`
+  IndexedDB database, next to a small record in `replaySlots` (the title, the EX score and rate, the lamp, the size and
+  when it was saved), so the screens list the slots without reading a replay. Saving into a slot replaces what it held.
+- **What can be saved.** As beatoraja's `MusicResult` / `CourseResult` save only a PLAY whose score may be kept: a live
+  play (not AUTO, not a replay, not practice) whose best record counts, or a course run (EXPERT, GRADE or NONSTOP) that
+  keeps a course record. A course stage's own result saves nothing: the course is saved as one run. A result that
+  cannot be saved still shows which slots hold a replay.
+- **Saving by hand.** Keys 1-4 on the result screen (beatoraja's `ControlKeys.NUM1`-`NUM4`), a beatoraja result skin's
+  replay buttons (19, 316-318) or the replay-slot card save into slot 1-4, once input is open and before the screen
+  starts to leave. Each slot takes one save per result (beatoraja's `ReplayStatus.SAVED`).
+- **Auto-save rules.** Debug Menu → Library & records → **Replay slots** gives each slot a rule, applied as the result
+  opens against the best record as it was before the play (beatoraja's `ReplayAutoSaveConstraint`): never (the
+  default), a better (or equal) EX score, fewer (or as few) BP, a better (or equal) max combo, a better (or equal) clear
+  lamp, any of these better, or always. A first play counts as an update of each kind, as beatoraja reads an empty
+  score. The "Auto-save play history" download is separate and unchanged.
+- **Size limit.** Every slot shares a budget of 500 MB of compressed replays. A save past it removes the replays with
+  the lowest EX rate (EX score over its maximum) first, the older save first on a tie; a replay that would itself be the
+  lowest left over the budget is not saved, and the status line says so. A write the browser refuses (its quota,
+  blocked storage) leaves every slot as it was and says so too.
+- **Replaying.** On a beatoraja select skin the cursor picks the first slot holding a replay of the bar (beatoraja's
+  `RESET_REPLAY`); 4 or the 6th lane key (F) step to the next one (`NEXT_REPLAY`), the 7th lane key (V) replays it
+  (`REPLAY`, which plays the bar normally when no slot holds a replay), and the skin's replay buttons replay their own
+  slot. On the other families the replay-slot card lists the bar's replays with Replay, Download and Delete.
+- **Sounds.** Neither LR2 nor beatoraja plays a sound for saving a replay, so a save plays none. A beatoraja theme's
+  `resultclose` / `course_close` sound plays as a result starts to fade out ([player-web.md](./player-web.md#the-result-screen)).
+
 ## What the player saw
 
 `play.view` and `play.viewChanges` record the view, apart from what was judged, in units every scene shares:
