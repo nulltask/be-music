@@ -237,8 +237,19 @@ export type JudgeCoreEffect =
   | { kind: 'poor-bga'; action: 'trigger' | 'clear'; seconds: number }
   /** The no-TUI trace's POOR BGA marker at this point of the output. */
   | { kind: 'poor-trace'; action: 'trigger' | 'clear'; seconds: number }
-  /** The judge readout: what the UI's judge / combo display shows. */
-  | { kind: 'judge-combo'; seconds?: number; judge: string; combo: number; channel?: string; signedDeltaMs?: number }
+  /**
+   * The judge readout: what the UI's judge / combo display shows. `longNote` marks a judgment of a long note (its head
+   * in a charge mode, or the whole note), which LR2's automatic judge timing does not sample.
+   */
+  | {
+      kind: 'judge-combo';
+      seconds?: number;
+      judge: string;
+      combo: number;
+      channel?: string;
+      signedDeltaMs?: number;
+      longNote?: boolean;
+    }
   /** A no-TUI trace line. */
   | { kind: 'trace'; name: string; seconds: number; fields: readonly JudgeTraceField[] }
   /** The play state changed outside a frame tick: republish the frame (at `beat`, or the beat of `seconds`). */

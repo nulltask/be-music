@@ -89,7 +89,7 @@ export interface LaneGeometryContext {
 /** What the skinless chrome's runtime is made from each frame: a play view's members of these names. */
 export interface PlayChromeContext {
   readonly play: PlayfieldRuntime;
-  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects'>>;
+  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects' | 'judgeTimingAutoAdjust'>>;
   readonly audioFrame: AudioFeatures | undefined;
 }
 
@@ -140,7 +140,8 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
       continue;
     }
     const state = ctx.play.judgeSideState[side];
-    if (state.judge && seconds <= state.until) {
+    // LR2's SILENT automatic judge timing shows no judgment or combo.
+    if (state.judge && seconds <= state.until && ctx.options.judgeTimingAutoAdjust !== 'LR2-SILENT') {
       judgeSides.push({ side, judge: state.judge, combo: state.combo });
     }
   }

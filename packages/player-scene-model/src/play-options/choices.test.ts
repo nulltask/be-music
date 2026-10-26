@@ -58,6 +58,16 @@ describe('resolvePlayOptionValue', () => {
     expect(resolvePlayOptionValue('sort', 'ARTIST')).toBeUndefined();
   });
 
+  test('reads the automatic judge-timing modes, and the boolean stored before them', () => {
+    for (const mode of ['OFF', 'BEATORAJA', 'LR2-ON', 'LR2-SILENT'])
+      expect(resolvePlayOptionValue('judgeTimingAutoAdjust', mode)).toBe(mode);
+    expect(resolvePlayOptionValue('judgeTimingAutoAdjust', true)).toBe('BEATORAJA');
+    expect(resolvePlayOptionValue('judgeTimingAutoAdjust', false)).toBe('OFF');
+    expect(resolvePlayOptionValue('judgeTimingAutoAdjust', 'ON')).toBeUndefined();
+    expect(resolvePlayOptions({ judgeTimingAutoAdjust: true }).judgeTimingAutoAdjust).toBe('BEATORAJA');
+    expect(resolvePlayOptions().judgeTimingAutoAdjust).toBe('OFF');
+  });
+
   test('clamps the numeric options and rejects non-finite or non-numeric values', () => {
     expect(resolvePlayOptionValue('hiSpeed', 99)).toBe(HISPEED_MAX);
     expect(resolvePlayOptionValue('hiSpeed', 2.5)).toBe(2.5);

@@ -131,7 +131,7 @@ describe('captureDebugMenuSettings', () => {
       dpFlip: true,
       bpmGuide: true,
       judgeTimingMs: 0,
-      judgeTimingAutoAdjust: false,
+      judgeTimingAutoAdjust: 'OFF',
       visualConstant: false,
       noteDurationMs: 500,
       lift1P: 0.1,
@@ -311,14 +311,18 @@ test('ADD LN and its generation probability persist independently of the origina
   ).toMatchObject(settings);
 });
 
-test('persists the beatoraja automatic display-timing toggle without coercing invalid values', () => {
+test('persists the automatic judge-timing mode, migrating the earlier beatoraja switch, without coercing invalid values', () => {
   const read = (value: unknown) =>
     parseDebugMenuSettingsDocument(
       JSON.stringify({ version: 1, updatedAt: 1, settings: { judgeTimingAutoAdjust: value } }),
     )?.settings;
-  expect(read(true)).toMatchObject({ judgeTimingAutoAdjust: true });
-  expect(read(false)).toMatchObject({ judgeTimingAutoAdjust: false });
+  for (const mode of ['OFF', 'BEATORAJA', 'LR2-ON', 'LR2-SILENT'])
+    expect(read(mode)).toMatchObject({ judgeTimingAutoAdjust: mode });
+  // A document saved before the modes holds beatoraja's on / off switch.
+  expect(read(true)).toMatchObject({ judgeTimingAutoAdjust: 'BEATORAJA' });
+  expect(read(false)).toMatchObject({ judgeTimingAutoAdjust: 'OFF' });
   expect(read('true')).not.toHaveProperty('judgeTimingAutoAdjust');
+  expect(read('SILENT')).not.toHaveProperty('judgeTimingAutoAdjust');
 });
 
 test('persists the source SURVIVAL TO GROOVE policy', () => {

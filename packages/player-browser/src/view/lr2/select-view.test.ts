@@ -69,6 +69,38 @@ describe('LR2SelectView buttons', () => {
     ]);
   });
 
+  it('steps the judge timing (74) by 1 ms within ±99, by plusOnly or the half clicked', () => {
+    const step = (judgeTimingMs: number, button: { type: number; plusOnly?: number }, direction: 1 | -1) => {
+      const { view, intents } = createView({ playOptions: { judgeTimingMs } as SelectFrame['playOptions'] });
+      view.dispatchButtonClick(button, direction);
+      return intents;
+    };
+    expect(step(5, { type: 74, plusOnly: 0 }, 1)).toEqual([
+      { type: 'set-play-option', key: 'judgeTimingMs', value: 6 },
+    ]);
+    expect(step(5, { type: 74, plusOnly: 0 }, -1)).toEqual([
+      { type: 'set-play-option', key: 'judgeTimingMs', value: 4 },
+    ]);
+    expect(step(5, { type: 74, plusOnly: -1 }, 1)).toEqual([
+      { type: 'set-play-option', key: 'judgeTimingMs', value: 4 },
+    ]);
+    // At the end of the range a click changes nothing.
+    expect(step(99, { type: 74, plusOnly: 1 }, 1)).toEqual([]);
+  });
+
+  it('cycles the automatic judge timing (75) through LR2’s OFF, ON and SILENT by the half clicked', () => {
+    const step = (judgeTimingAutoAdjust: string, direction: 1 | -1) => {
+      const { view, intents } = createView({ playOptions: { judgeTimingAutoAdjust } as SelectFrame['playOptions'] });
+      view.dispatchButtonClick({ type: 75 }, direction);
+      return intents;
+    };
+    expect(step('OFF', 1)).toEqual([{ type: 'set-play-option', key: 'judgeTimingAutoAdjust', value: 'LR2-ON' }]);
+    expect(step('LR2-SILENT', 1)).toEqual([{ type: 'set-play-option', key: 'judgeTimingAutoAdjust', value: 'OFF' }]);
+    expect(step('OFF', -1)).toEqual([{ type: 'set-play-option', key: 'judgeTimingAutoAdjust', value: 'LR2-SILENT' }]);
+    // beatoraja's calibration is not on LR2's cycle: the button starts it over at OFF.
+    expect(step('BEATORAJA', 1)).toEqual([{ type: 'set-play-option', key: 'judgeTimingAutoAdjust', value: 'OFF' }]);
+  });
+
   it('runs the course maker’s buttons only while the player makes courses, stepping by the half clicked', () => {
     const { view, intents } = createView({ courseMaker: { defaultConnection: 'FADE' as never } });
     view.dispatchButtonClick({ type: 230 }, 1);
