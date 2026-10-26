@@ -25,6 +25,7 @@ import type {
   PlayResult,
   PlaySide,
   PlayState,
+  ReplaySlotState,
   ResultPresentation,
 } from '@be-music/player-scene-model';
 import type { Container, Sprite, Texture } from 'pixi.js';
@@ -460,14 +461,23 @@ export interface ResultFrame {
   readonly graphShownAtMs?: number;
   /** When the player pressed on to the record update, on the clock (LR2's timer 152). Absent until then. */
   readonly updateShownAtMs?: number;
+  /**
+   * Each replay slot of the chart (or the course) as this result sees it (beatoraja's ops 196-198 and 1196-1204), when
+   * the host keeps replay slots.
+   */
+  readonly replaySlots?: readonly ReplaySlotState[];
   readonly leaving?: SceneLeaving<'continue' | 'retry'>;
 }
 
 /**
  * What the player asks of the result screen: `continue` presses on, as Enter does (skip the graphs, show the record
- * update, then leave), and `retry` plays the chart again, as R does.
+ * update, then leave), `retry` plays the chart again, as R does, and `saveReplay` saves the play into a replay slot, as
+ * keys 1-4 and a beatoraja skin's replay buttons do.
  */
-export type ResultIntent = { readonly type: 'continue' } | { readonly type: 'retry' };
+export type ResultIntent =
+  | { readonly type: 'continue' }
+  | { readonly type: 'retry' }
+  | { readonly type: 'saveReplay'; readonly slot: number };
 
 /** When the result screen takes input and how it leaves, as its skin authors it. */
 export interface ResultViewTiming extends SceneViewTiming {
