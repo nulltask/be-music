@@ -75,7 +75,8 @@ for (const hasCurrentCourses of [false, true]) {
       const currentCourses = { ...oldCourses, defaultConnection: 'blank1' };
       const write = (name: string, value: unknown) =>
         new Promise<void>((resolve, reject) => {
-          const request = indexedDB.open(name, 1);
+          // At the version it has: the player has opened `be-music` at its own version already.
+          const request = indexedDB.open(name);
           request.onupgradeneeded = () => request.result.createObjectStore('courses');
           request.onerror = () => reject(request.error);
           request.onsuccess = () => {
