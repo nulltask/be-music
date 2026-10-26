@@ -443,7 +443,8 @@ export function drawPointCloud(
 export function drawSchool(
   graphics: Graphics,
   flock: Flock,
-  project: (point: Vec3) => Projected,
+  /** Projects `point` into `out` and returns it. */
+  project: (out: Projected, point: Vec3) => Projected,
   style: {
     alpha: number;
     palette?: 'ember' | 'blue' | 'magenta';
@@ -474,7 +475,7 @@ export function drawSchool(
     at.x = p[index * 3]!;
     at.y = p[index * 3 + 1]!;
     at.z = p[index * 3 + 2]!;
-    const center = project(at);
+    const center = project(SCHOOL_CENTER, at);
     if (!center.visible) continue;
     if (style.skip?.(center.x, center.y)) continue;
     heading.x = v[index * 3]!;
@@ -482,11 +483,11 @@ export function drawSchool(
     heading.z = v[index * 3 + 2]!;
     // Each manta beats its wings out of step with the rest of the school.
     const shape = mantaShapeInto(SCHOOL_MANTA, at, heading, seconds, hash01(index * 7 + 1) * Math.PI * 2, swell);
-    const nose = project(shape.nose);
-    const leftTip = project(shape.leftTip);
-    const rightTip = project(shape.rightTip);
-    const tailRoot = project(shape.tailRoot);
-    const tailEnd = project(shape.tailEnd);
+    const nose = project(SCHOOL_NOSE, shape.nose);
+    const leftTip = project(SCHOOL_LEFT_TIP, shape.leftTip);
+    const rightTip = project(SCHOOL_RIGHT_TIP, shape.rightTip);
+    const tailRoot = project(SCHOOL_TAIL_ROOT, shape.tailRoot);
+    const tailEnd = project(SCHOOL_TAIL_END, shape.tailEnd);
     if (!nose.visible || !leftTip.visible || !rightTip.visible || !tailRoot.visible) continue;
     const nearness = Math.min(1, center.scale * 2.4);
     const heat = hash01(index * 5 + 3);
@@ -540,6 +541,12 @@ export function drawSchool(
 const SCHOOL_SCRATCH_POSITION: Vec3 = { x: 0, y: 0, z: 0 };
 const SCHOOL_SCRATCH_VELOCITY: Vec3 = { x: 0, y: 0, z: 0 };
 const SCHOOL_MANTA = createMantaShape();
+const SCHOOL_CENTER = scratchProjected();
+const SCHOOL_NOSE = scratchProjected();
+const SCHOOL_LEFT_TIP = scratchProjected();
+const SCHOOL_RIGHT_TIP = scratchProjected();
+const SCHOOL_TAIL_ROOT = scratchProjected();
+const SCHOOL_TAIL_END = scratchProjected();
 
 /** `from` blended toward `to` by `t` (0..1), per RGB channel. */
 function mixColor(from: number, to: number, t: number): number {
