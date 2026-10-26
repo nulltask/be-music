@@ -356,11 +356,12 @@ const CYCLE_BUTTONS: Readonly<Record<number, LR2CycledOption>> = {
   [LR2_BUTTON.SCORE_GRAPH]: 'scoreGraph',
   [LR2_BUTTON.BGA]: 'bga',
   [LR2_BUTTON.BGA_SIZE]: 'bgaSize',
+  [LR2_BUTTON.JUDGE_AUTO_ADJUST]: 'judgeTimingAutoAdjust',
 };
 
 /**
  * What an LR2 select button does (`#SRC_BUTTON` `type`): toggle a panel (1-9), step a hi-speed (57 / 58), cycle a play
- * option (10-12, 40-46, 50, 51, 54, 55, 70, 72, 73), set the difficulty filter (91-96), or play, play with AUTOPLAY,
+ * option (10-12, 40-46, 50, 51, 54, 55, 70, 72, 73, 75), set the difficulty filter (91-96), or play, play with AUTOPLAY,
  * show the text file, replay, or open the key config or skin select (15, 16, 17, 19, 13, 14). `undefined` for any other
  * button, the course maker's included (`resolveLR2CourseMakerAction`).
  */

@@ -81,6 +81,8 @@ export const LR2_BUTTON = {
   BGA: 72,
   /** Toggles the BGA size (NORMAL / EXTEND). */
   BGA_SIZE: 73,
+  /** Cycles the automatic judge timing (OFF / ON / SILENT; OpenLR2 L10625). */
+  JUDGE_AUTO_ADJUST: 75,
   /** Sets the difficulty filter to ALL. Buttons 91-96 set ALL, BEGINNER … INSANE. */
   DIFFICULTY_FILTER_ALL: 91,
   /** Sets the difficulty filter to BEGINNER. */
