@@ -2,4 +2,4 @@
 '@be-music/player-browser': patch
 ---
 
-Synesthesia projects its point clouds and bomb grains without allocating per point: the rotation bases are computed once per cloud or bomb and each point is written into a reused result, cutting the projection time by about a quarter to a third and the garbage the play loop produces each frame.
+Synesthesia projects its point clouds, bomb grains, light rivers and manta schools without allocating per point: rotation bases are computed once per object or frame and each point is written into a reused result, so the play loop spends less time per frame and produces far less garbage.
