@@ -6,7 +6,7 @@ The Debug Menu's **Play options** folder and the select screen share the same ef
 
 ## Options and judge rules
 
-**Judgment windows** in Debug Menu's Developer folder picks the judge rules: judgment windows, gauges, note selection, long-note style, mine trigger and score. Options that only transform the chart or the view are offered under every ruleset. Each runs its own source's algorithm whatever the judge rules, is kept when the ruleset changes, and keeps its source's chart-type limits. These are HS-FIX CONSTANT, CLASSIC and normal HI-SPEED, FLOATING HI-SPEED and the fixed display area, automatic judge timing adjustment, the lane options R-RANDOM, SPIRAL, H-RANDOM, ALL-SCR, RANDOM-EX, S-RANDOM-EX, RANDOM_PLAYABLE, S_RANDOM_PLAYABLE and both SCATTERs, SYNCHRONIZE RANDOM, SYMMETRY RANDOM and M-RAN, the mine and scroll modifiers, EXTRA and LR2 EXTRA MODE, SP TO DP, 7 TO 9, BATTLE AS and D-BATTLE. Without beatoraja rules, the beatoraja lane options draw from the browser's random source; the seeds stay with beatoraja rules.
+**Judgment windows** in Debug Menu's Developer folder picks the judge rules: judgment windows, gauges, note selection, long-note style, mine trigger and score. Options that only transform the chart or the view are offered under every ruleset. Each runs its own source's algorithm whatever the judge rules, is kept when the ruleset changes, and keeps its source's chart-type limits. These are HS-FIX CONSTANT, CLASSIC and normal HI-SPEED, FLOATING HI-SPEED and the fixed display area, the BPM-change warning, automatic judge timing adjustment, the lane options R-RANDOM, SPIRAL, H-RANDOM, ALL-SCR, RANDOM-EX, S-RANDOM-EX, RANDOM_PLAYABLE, S_RANDOM_PLAYABLE and both SCATTERs, SYNCHRONIZE RANDOM, SYMMETRY RANDOM and M-RAN, the mine and scroll modifiers, EXTRA and LR2 EXTRA MODE, SP TO DP, 7 TO 9, BATTLE AS and D-BATTLE. Without beatoraja rules, the beatoraja lane options draw from the browser's random source; the seeds stay with beatoraja rules.
 
 The rest stays with the ruleset. Judge rules are what the ruleset is. RANDOM, S-RANDOM, CONVERGE and BATTLE name different algorithms in each source, so the ruleset decides which one runs. ADD LN / CN / HCN / ALL, LN MODE, PRACTICE, CUSTOM JUDGE, gauge auto-shift, the gauge types and the judgment algorithm also remain ruleset-bound for now. How records treat a play that mixes sources is decided in [#602](https://github.com/nulltask/be-music/issues/602). Tracked in [#774](https://github.com/nulltask/be-music/issues/774).
 
@@ -85,6 +85,21 @@ Turn on **BPM GUIDE (beatoraja)** in Debug Menu; it is off by default. Upcoming 
 The built-in and LR2 playfields draw a line and a label per play side. A beatoraja skin draws its own BPM and STOP marker images, which now appear only while the option is on, with the labels added above them. Replays store `play.options.bpmGuide` with the chart's header BPM (`chart.headerBPM`) and resolved BPM range (`chart.bpmRange`), the facts beatoraja's light-assist rule uses: it applies only to a chart whose BPM changes. Score policy remains the Leaderboard's.
 
 Sources: beatoraja 0.8.9 [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/LaneRenderer.java) and [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java). Tracked in [#745](https://github.com/nulltask/be-music/issues/745).
+
+## BPM-change warning
+
+Turn on **BPM change warning (AC)** in Debug Menu; it is off by default. Before each BPM change, `<current> » <next>` appears in a framed box on the lanes and stays until the change happens: blue when the tempo rises, red when it falls, in whole BPMs. It appears 2 s of chart time before the change, so it comes more beats ahead on a fast section than on a slow one.
+
+```mermaid
+timeline
+  title 138 → 200 BPM at 44.28 s
+  42.28 s : 138 » 200 appears
+  44.28 s : BPM changes, warning goes
+```
+
+The built-in (Canvas and DOM skins), LR2 and beatoraja play screens centre the box on each side's lanes, half-way down them. AC 34's introduction shows it just above the judgment and combo; skins put their judgment anywhere from about 40 % to 65 % down the lanes, so half-way keeps the box clear of it on the built-in skins. Changes at the same instant merge into one, and a change back to the same BPM is none. A change that comes less than 2 s after another is warned as soon as the first has happened. STOPs are not warned. It only draws, and is offered under every ruleset.
+
+The look follows AC 34's [introduction of the option](https://p.eagate.573.jp/game/2dx/34/howto/new/bpm_option.html); the timing comes from play footage (the measurements are on [#746](https://github.com/nulltask/be-music/issues/746)), in which every BPM change was warned about 2.0 s ahead and the warning left on the change. The source's TYPE A–D variants, whether its lead runs on real time or chart time, and its behavior with STOPs, close changes or very small changes are not known yet. Tracked in [#746](https://github.com/nulltask/be-music/issues/746).
 
 ## Judge timing and automatic adjustment
 

@@ -733,6 +733,8 @@ export const PLAYER_APP_HTML = `
                 <dd>LR2's lane cover, and how much of the lane it covers.</dd>
                 <dt>BPM GUIDE (beatoraja)</dt>
                 <dd>Shows upcoming BPM changes on the lanes.</dd>
+                <dt>BPM change warning (AC)</dt>
+                <dd>Shows <code>current » next</code> BPM in a box on the lanes for 2 seconds before each BPM change: blue when it speeds up, red when it slows down.</dd>
                 <dt>LIFT 1P / 2P (beatoraja) · LIFT height</dt>
                 <dd>Raises that side's judge line, and by how much. Changes live.</dd>
                 <dt>Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)</dt>
@@ -1108,6 +1110,8 @@ export const PLAYER_APP_HTML = `
                 <dd>LR2 のレーンカバーと、その高さ。</dd>
                 <dt>BPM GUIDE (beatoraja)</dt>
                 <dd>これから来る BPM の変化をレーン上に表示します。</dd>
+                <dt>BPM change warning (AC)</dt>
+                <dd>BPM が変わる 2 秒前から、レーン上の箱に <code>今の BPM » 次の BPM</code> を表示します。速くなるときは青、遅くなるときは赤です。</dd>
                 <dt>LIFT 1P / 2P (beatoraja) · LIFT height</dt>
                 <dd>そのサイドの判定ラインを上げます。高さはプレイ中にも変えられます。</dd>
                 <dt>Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)</dt>

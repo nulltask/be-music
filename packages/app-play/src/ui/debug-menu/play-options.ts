@@ -450,6 +450,11 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
+  trackPlayOption(
+    folder
+      .addBinding(this.guiState, 'bpmChangeWarning', { label: 'BPM change warning (AC)' })
+      .on('change', ({ value }) => this.setPlayOptions({ bpmChangeWarning: value })),
+  );
   for (const side of ['1P', '2P'] as const) {
     const heightKey = side === '1P' ? 'lift1P' : 'lift2P';
     const enabledKey = side === '1P' ? 'liftOn1P' : 'liftOn2P';

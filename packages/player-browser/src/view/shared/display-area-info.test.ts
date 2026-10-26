@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { resolveDisplayAreaLabels, type DisplayAreaLane } from './display-area-info.ts';
+import { measureLayer, resolveDisplayAreaLabels, type DisplayAreaLane } from './display-area-info.ts';
 
 const lanes: DisplayAreaLane[] = [
   { side: '1P', x: 10, w: 20, top: 20, bottom: 420 },
@@ -84,4 +84,16 @@ test('Canvas readouts update, hide and release with the view', async () => {
   overlay.dispose();
   expect(layer.destroyed).toBe(true);
   root.destroy();
+});
+
+describe('DOM overlay layer size', () => {
+  test("uses the layer's own CSS box, not the renderer's screen", () => {
+    const layer = { clientWidth: 855, clientHeight: 924 } as HTMLElement;
+    expect(measureLayer(layer, { width: 800, height: 828 })).toEqual({ width: 855, height: 924 });
+  });
+
+  test('falls back to the screen before the layer is laid out', () => {
+    const layer = { clientWidth: 0, clientHeight: 0 } as HTMLElement;
+    expect(measureLayer(layer, { width: 800, height: 828 })).toEqual({ width: 800, height: 828 });
+  });
 });
