@@ -112,6 +112,14 @@ describe('pickBeatorajaThemeBGMPaths', () => {
       result: 'sound/result.wav',
       courseClear: 'sound/course_clear.wav',
       courseFail: 'sound/course_fail.ogg',
+      resultClose: 'sound/resultclose.wav',
+    });
+  });
+
+  it('takes the close sounds of a result and a course result', () => {
+    expect(pickBeatorajaThemeBGMPaths(['sound/course_close.wav', 'sound/resultclose.ogg'])).toEqual({
+      resultClose: 'sound/resultclose.ogg',
+      courseClose: 'sound/course_close.wav',
     });
   });
 
@@ -139,6 +147,11 @@ describe('pickBeatorajaThemeBGMPaths', () => {
   });
 
   it('does not reuse one file for two slots', () => {
-    expect(pickBeatorajaThemeBGMPaths(['sound/resultclose.wav'])).toEqual({ result: 'sound/resultclose.wav' });
+    // `resultclose` is the close sound; it is never taken loosely for the generic result jingle too.
+    expect(pickBeatorajaThemeBGMPaths(['sound/resultclose.wav'])).toEqual({ resultClose: 'sound/resultclose.wav' });
+    expect(pickBeatorajaThemeBGMPaths(['sound/result_loop.wav', 'sound/course_close.wav'])).toEqual({
+      result: 'sound/result_loop.wav',
+      courseClose: 'sound/course_close.wav',
+    });
   });
 });

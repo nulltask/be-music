@@ -121,6 +121,8 @@ describe('resolveBeatorajaSelectBarOps', () => {
     BEATORAJA_OP.NO_SAVE_CLEAR,
     BEATORAJA_OP.BGA_ON,
   ];
+  /** Every replay slot empty (196, 1196, 1199, 1202). */
+  const NO_REPLAYS = [196, 1196, 1199, 1202];
 
   it('lights a chart bar with its key mode, traits, difficulty, judge rank and lamp', () => {
     expect(resolveBeatorajaSelectBarOps(input(SONG_BAR, { lampOp: BEATORAJA_OP.CLEAR_LAMP_HARD }))).toEqual([
@@ -138,8 +140,16 @@ describe('resolveBeatorajaSelectBarOps', () => {
       BEATORAJA_OP.DIFFICULTY_HYPER,
       BEATORAJA_OP.JUDGE_HARD,
       BEATORAJA_OP.CLEAR_LAMP_HARD,
+      ...NO_REPLAYS,
     ]);
-    expect(resolveBeatorajaSelectBarOps(input(SONG_BAR)).at(-1)).toBe(BEATORAJA_OP.CLEAR_LAMP_NOPLAY);
+    expect(resolveBeatorajaSelectBarOps(input(SONG_BAR)).at(-5)).toBe(BEATORAJA_OP.CLEAR_LAMP_NOPLAY);
+  });
+
+  it('lights the replay slots of a chart or course bar, and the slot REPLAY plays', () => {
+    const slots = { replaySlots: [false, true, false, true], selectedReplaySlot: 1 };
+    expect(resolveBeatorajaSelectBarOps(input(SONG_BAR, slots)).slice(-5)).toEqual([196, 1197, 1199, 1203, 1206]);
+    expect(resolveBeatorajaSelectBarOps(input(COURSE_BAR, slots)).slice(-5)).toEqual([196, 1197, 1199, 1203, 1206]);
+    expect(resolveBeatorajaSelectBarOps(input(FOLDER_BAR, slots))).not.toContain(196);
   });
 
   it('lights a folder bar and a course bar', () => {
@@ -149,6 +159,7 @@ describe('resolveBeatorajaSelectBarOps', () => {
       BEATORAJA_OP.GRADEBAR,
       BEATORAJA_OP.GRADEBAR_MIRROR,
       BEATORAJA_OP.CLEAR_LAMP_NOPLAY,
+      ...NO_REPLAYS,
     ]);
     expect(resolveBeatorajaSelectBarOps(input(undefined))).toEqual([]);
   });

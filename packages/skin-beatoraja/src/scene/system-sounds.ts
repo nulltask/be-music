@@ -118,13 +118,29 @@ export function discoverBeatorajaSelectBGMPath(files: ReadonlyMap<string, Beator
   return undefined;
 }
 
-/** A jingle a beatoraja theme can ship: the decide splash and the result and course-result ones. */
-export type BeatorajaThemeJingle = 'decide' | 'clear' | 'fail' | 'result' | 'courseClear' | 'courseFail';
+/**
+ * A jingle a beatoraja theme can ship: the decide splash, the result and course-result ones, and the sounds a result and
+ * a course result close with (`SystemSoundManager.RESULT_CLOSE` / `COURSE_CLOSE`).
+ */
+export type BeatorajaThemeJingle =
+  | 'decide'
+  | 'clear'
+  | 'fail'
+  | 'result'
+  | 'courseClear'
+  | 'courseFail'
+  | 'resultClose'
+  | 'courseClose';
 
 const JINGLE_AUDIO_EXTENSIONS = ['.wav', '.ogg', '.mp3', '.flac'] as const;
 
-/** Each jingle's file stem; the course ones are beatoraja's `course_clear` / `course_fail`. */
+/**
+ * Each jingle's file stem; the course ones are beatoraja's `course_clear` / `course_fail` / `course_close`, the close one
+ * `resultclose`. The close stems come first so `resultclose.wav` is never taken loosely for the generic result jingle.
+ */
 const JINGLE_STEMS: Readonly<Record<BeatorajaThemeJingle, string>> = {
+  resultClose: 'resultclose',
+  courseClose: 'course_close',
   decide: 'decide',
   clear: 'clear',
   fail: 'fail',
