@@ -269,6 +269,8 @@ stateDiagram-v2
 - `playSeconds` adds up the stages' play time, a stage given up up to where it was left (`resolveGivenUpPlaySeconds`). `stageExtras` keeps what the host kept of each stage, such as its result graphs.
 - `buildReplay` writes the course replay: the stages played, then every stage never reached with its chart facts, its file hashes and its chart fingerprint.
 
+A course replay plays back through the same run: the browser player rebuilds the course from the log and the charts found (`courseFromReplay`), and each stage plays its recorded replay and records it on the run in place of the live play's, which records none. The run stops where the recorded run stopped, and nothing is kept. See [Replay — Playing a course replay back](./replay.md#playing-a-course-replay-back).
+
 ### The course result
 
 The course result sums the stages (see [Replay — Course replays](./replay.md#course-replays)), then:
