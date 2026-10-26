@@ -230,6 +230,7 @@ export class BuiltInPlayView
     if (!frame.shown) this.displayInfo.hide();
     if (!frame.shown) this.bpmChangeWarning.hide();
     if (!frame.shown) return;
+    this.perf.beginTick();
     this.chromeRuntime = undefined;
     render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined);
     // A skin drawing through the player's renderer or on its DOM screen draws the frame just collected now.
@@ -283,6 +284,12 @@ export class BuiltInPlayView
       replay: frame.replay,
       seekable: frame.seekable,
     });
+    // `?perf`: the per-second section summary, as the LR2 play view reports it.
+    const report = this.perf.endFrame(() => ({
+      note: this.noteLayer.children.length,
+      notesTotal: this.play.notes.length,
+    }));
+    if (report) log.debug('perf', report);
   }
 
   private resolveChromeRuntime(): SkinlessGameplayChromeRuntime {
