@@ -175,7 +175,10 @@ export function courseFlowTests(setup: FamilyCase): void {
           return seconds !== undefined && (code === 'ArrowRight' ? seconds > before + 4 : seconds < before - 4);
         }, what);
       };
-      for (let i = 0; i < 3; i++) await seekBy('ArrowRight', 'the next forward seek');
+      // Forward until past 15 s, across a stage seam: from wherever Space paused, so a late pause needs fewer seeks
+      // (and three from a late pause would run into the end of the run).
+      for (let i = 0; i < 6 && ((await player.state()).play?.seconds ?? 0) <= 15; i++)
+        await seekBy('ArrowRight', 'the next forward seek');
       await player.waitFor((state) => (state.play?.seconds ?? 0) > 15, 'NONSTOP sought across a stage seam');
       for (let i = 0; i < 3; i++) await seekBy('ArrowLeft', 'the next backward seek');
       await player.key('Space');
