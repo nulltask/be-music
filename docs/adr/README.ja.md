@@ -33,3 +33,5 @@
 - [混在する NONSTOP は bmson の IR に元の単位を保持する](./0017-bmson-nonstop.ja.md)
 
 - [0018: リプレイのオプション時系列](./0018-replay-option-timeline.ja.md)
+
+- [0019: オプションの値に参照元を持たせる](./0019-source-qualified-option-values.ja.md)
