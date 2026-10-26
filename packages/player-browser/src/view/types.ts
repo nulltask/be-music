@@ -104,6 +104,11 @@ export interface SceneViewTiming {
 export interface SelectRecords {
   chart(chart: LibraryChart): BeMusicChartBestRecord | undefined;
   course(course: LibraryCourse): BeMusicCourseBestRecord | undefined;
+  /**
+   * Which of a chart's or course's replay slots hold a replay (`REPLAY_SLOT_COUNT` of them), when the host keeps replay
+   * slots: the screen picks one for REPLAY, and a beatoraja skin lights their ops.
+   */
+  replaySlots?(entry: Exclude<LibraryEntry, { kind: 'folder' }>): readonly boolean[];
 }
 
 /**
@@ -170,6 +175,11 @@ export interface SelectFrame {
   readonly readText?: { readonly chart: LibraryChart; readonly text: string };
   /** The course maker, when the player makes courses (LR2's course-maker ops, texts and buttons). */
   readonly courseMaker?: SelectCourseMakerState;
+  /**
+   * The replay slots of the chart or course under the cursor, when the host keeps replay slots: which hold a replay,
+   * and the one REPLAY plays (−1 for none), as beatoraja's select screen picks it.
+   */
+  readonly replaySlots?: { readonly exists: readonly boolean[]; readonly selected: number };
   /** The screen's music (BGM and chart preview), analysed for audio-reactive skins. */
   readonly audio: BeMusicAudioFrame;
 }
@@ -182,6 +192,13 @@ export type SelectIntent =
   | { readonly type: 'activate' }
   /** Play the chart or course under the cursor (in AUTO with `autoPlay`): a skin's PLAY and AUTO buttons. */
   | { readonly type: 'start'; readonly autoPlay?: boolean }
+  /**
+   * Replay the chart or course under the cursor from replay slot `slot` (a skin's replay buttons), or from the slot
+   * picked when no slot is named (the REPLAY key); a slot that holds no replay starts nothing.
+   */
+  | { readonly type: 'replay'; readonly slot?: number }
+  /** Pick the next (`step` 1) or previous (−1) replay slot holding a replay (beatoraja's NEXT / PREV_REPLAY). */
+  | { readonly type: 'replay-slot'; readonly step: 1 | -1 }
   /** Step a play option through its choices (`cyclePlayOptionValue`), or the hi-speed by its step. */
   | { readonly type: 'play-option'; readonly key: keyof PlayOptions; readonly step: number }
   /** Set a play option; a value outside its choices (or range) is ignored (`resolvePlayOptionValue`). */
