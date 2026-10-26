@@ -6,6 +6,7 @@ export * from './table.ts';
 export * from './table-url.ts';
 export { decodeCourseText } from './text.ts';
 export * from './filter.ts';
+export * from './filter-score.ts';
 export * from './random.ts';
 export * from './nonstop/plan.ts';
 export * from './nonstop/stage.ts';

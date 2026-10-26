@@ -493,6 +493,19 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         for (const chartEntry of benchCharts) courseAPI.evaluateCourseChartFilter(benchFilter.filter, chartEntry);
     },
   });
+  define('player-engine.course.beatorajaClearType', {
+    run: () => {
+      courseAPI.beatorajaClearType('HARD');
+    },
+  });
+  define('player-engine.course.createCourseChartScore', {
+    run: () => {
+      courseAPI.createCourseChartScore(
+        { lamp: 'HARD', exScore: 2000, maxCombo: 800, missCount: 4, playCount: 3 },
+        1200,
+      );
+    },
+  });
   define('player-engine.course.selectCourseCharts', {
     run: () => {
       if (benchFilter.ok) courseAPI.selectCourseCharts(benchFilter.query, benchCharts, (chartEntry) => chartEntry);
