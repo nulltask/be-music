@@ -88,7 +88,7 @@ Sources: beatoraja 0.8.9 [`LaneRenderer`](https://github.com/exch-bms2/beatoraja
 
 ## Judge timing and automatic adjustment
 
-**Judge timing (ms)** in Debug Menu sets the display timing beatoraja and LR2 both have: an integer from −500 to 500 ms, 0 by default. As in both, it shifts only the clock the notes are drawn with; a positive value runs that clock ahead. Input, audio and judgment times stay unchanged, so recorded inputs are never shifted. Every skin family applies it, and a beatoraja skin's BPM readout reads the same adjusted clock. The slider stays enabled during play and applies at once. A beatoraja select skin's JUDGE TIMING button (74) steps it by 1 ms, and number 12 of a beatoraja or an LR2 skin shows it.
+**Judge timing (ms)** in Debug Menu sets the display timing beatoraja and LR2 both have: an integer from −500 to 500 ms, 0 by default. As in both, it shifts only the clock the notes are drawn with; a positive value runs that clock ahead. Input, audio and judgment times stay unchanged, so recorded inputs are never shifted. Every skin family applies it, and a beatoraja skin's BPM readout reads the same adjusted clock. The slider stays enabled during play and applies at once. A beatoraja select skin's JUDGE TIMING button (74) steps it by 1 ms within ±500 ms, an LR2 select skin's (74) by 1 ms within ±99 ms as LR2 does, and number 12 of a beatoraja or an LR2 skin shows it.
 
 Under every ruleset, **Auto judge timing** picks how a manual play moves the timing by itself: **OFF** (the default), **beatoraja**, **LR2 ON** or **LR2 SILENT**. Auto play and replays never adjust.
 
