@@ -2,6 +2,7 @@ import { selectBinding } from '../../pane-controls.ts';
 // The Debug Menu's Library & records folder. It is built with the menu as `this` (`DebugMenu`).
 import type { FolderApi } from 'tweakpane';
 import { storeChartBestRecords } from '../../chart-best-records.ts';
+import { LocalDataPanel } from '../../local-data-panel.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
 import type { ReplayAutoSaveRule } from '../../services/replay-slots.ts';
 import { DEBUG_MENU_FOLDERS, type DebugMenuFolder } from './folders.ts';
@@ -80,6 +81,9 @@ export function buildLibraryFolder(
     storeChartBestRecords(this.records.chartBestRecords);
     this.setStatus('Best records cleared');
   });
+  // What the player keeps in this browser, read-only; built on first use.
+  let localData: LocalDataPanel | undefined;
+  library.addButton({ title: 'Local data…' }).on('click', () => (localData ??= new LocalDataPanel()).open());
   // BGA video transcode controls. Both settings are seeded into the next play scene's settings (see
   // `preloadGameplay` / `playChart` for the wiring), so changing them mid-session takes effect on the next chart mount
   // — no need to rebuild gameplay if the user is between songs. We don't push live into the running gameplay because
