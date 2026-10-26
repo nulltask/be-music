@@ -232,8 +232,8 @@ flowchart LR
 - **What a slot holds.** A chart's slots are keyed by its chart fingerprint (`chart.chartFingerprint`; `sha256:<file
   hash>` for a chart that cannot be fingerprinted), a course's by its course fingerprint
   (`computeCourseReplayFingerprint`; a NONSTOP course's includes its connections and placement). A slot holds the
-  replay as its `.bmplay.json` / `.bmcourse.json` text, gzip-compressed, in the `replaySlotData` store of the `be-music`
-  IndexedDB database, next to a small record in `replaySlots` (the title, the EX score and rate, the lamp, the size and
+  replay as its `.bmplay.json` / `.bmcourse.json` text, gzip-compressed, in the `replaySlotData` store of the
+  `be-music-replays` IndexedDB database (apart from the player's `be-music` one), next to a small record in `replaySlots` (the title, the EX score and rate, the lamp, the size and
   when it was saved), so the screens list the slots without reading a replay. Saving into a slot replaces what it held.
 - **What can be saved.** As beatoraja's `MusicResult` / `CourseResult` save only a PLAY whose score may be kept: a live
   play (not AUTO, not a replay, not practice) whose best record counts, or a course run (EXPERT, GRADE or NONSTOP) that
@@ -243,10 +243,12 @@ flowchart LR
   replay buttons (19, 316-318) or the replay-slot card save into slot 1-4, once input is open and before the screen
   starts to leave. Each slot takes one save per result (beatoraja's `ReplayStatus.SAVED`).
 - **Auto-save rules.** Debug Menu → Library & records → **Replay slots** gives each slot a rule, applied as the result
-  opens against the best record as it was before the play (beatoraja's `ReplayAutoSaveConstraint`): never (the
-  default), a better (or equal) EX score, fewer (or as few) BP, a better (or equal) max combo, a better (or equal) clear
-  lamp, any of these better, or always. A first play counts as an update of each kind, as beatoraja reads an empty
-  score. The "Auto-save play history" download is separate and unchanged.
+  opens against the best record as it was before the play (beatoraja's `ReplayAutoSaveConstraint`): never, a better (or
+  equal) EX score, fewer (or as few) BP, a better (or equal) max combo, a better (or equal) clear lamp, any of these
+  better, or always. A first play counts as an update of each kind, as beatoraja reads an empty score. beatoraja ships
+  every slot as never; be-music saves by default so every slot keeps something by itself: slot 1 on a better EX score,
+  slot 2 on a better clear lamp, slot 3 on fewer BP and slot 4 always (the latest play). The "Auto-save play history"
+  download is separate and unchanged.
 - **Size limit.** Every slot shares a budget of 500 MB of compressed replays. A save past it removes the replays with
   the lowest EX rate (EX score over its maximum) first, the older save first on a tie; a replay that would itself be the
   lowest left over the budget is not saved, and the status line says so. A write the browser refuses (its quota,

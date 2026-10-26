@@ -5,6 +5,7 @@ import {
   chartReplaySlotTarget,
   compressReplayText,
   createMemoryReplaySlotBackend,
+  DEFAULT_REPLAY_AUTO_SAVE_RULES,
   decompressReplayText,
   normalizeReplayAutoSaveRules,
   parseReplaySlotRecord,
@@ -123,9 +124,14 @@ describe('auto-save rules', () => {
     ]);
   });
 
-  test('reads stored rules back as four, an unknown one as never', () => {
-    expect(normalizeReplayAutoSaveRules(['always', 'bogus'])).toEqual(['always', 'never', 'never', 'never']);
-    expect(normalizeReplayAutoSaveRules(undefined)).toEqual(['never', 'never', 'never', 'never']);
+  test("reads stored rules back as four, an unknown one as the slot's default", () => {
+    expect(normalizeReplayAutoSaveRules(['always', 'bogus'])).toEqual([
+      'always',
+      'clear-update',
+      'miss-count-update',
+      'always',
+    ]);
+    expect(normalizeReplayAutoSaveRules(undefined)).toEqual(DEFAULT_REPLAY_AUTO_SAVE_RULES);
   });
 });
 

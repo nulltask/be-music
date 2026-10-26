@@ -31,16 +31,19 @@ test('a play saved to a slot on the built-in result replays from the card on the
   await playFixtureA(player);
   const card = player.page.locator('.replay-slots-card');
   await expect(card).toHaveAttribute('data-mode', 'result');
-  await expect(card.locator('button[data-slot="2"]')).toHaveText('Save');
-  await saveOnResult(player, 'Digit2', 2);
-  await expect(card.locator('button[data-slot="2"]')).toHaveText('Saved');
+  // The default rules: a first play (failed, with no key pressed) updates the lamp and the BP (slots 2 and 3), and
+  // slot 4 keeps every play; slot 1 waits for a better EX score.
+  for (const slot of ['2', '3', '4']) await expect(card.locator(`button[data-slot="${slot}"]`)).toHaveText('Saved');
+  await expect(card.locator('button[data-slot="1"]')).toHaveText('Save');
+  await saveOnResult(player, 'Digit1', 1);
+  await expect(card.locator('button[data-slot="1"]')).toHaveText('Saved');
   // A slot takes one save per result.
-  await expect(card.locator('button[data-slot="2"]')).toBeDisabled();
+  await expect(card.locator('button[data-slot="1"]')).toBeDisabled();
 
   await player.leaveResult();
   await player.waitFor((state) => state.scene.kind === 'select', 'the select screen');
   await expect(card).toHaveAttribute('data-mode', 'select');
-  await expect(card.locator('.replay-slots-row')).toHaveCount(1);
+  await expect(card.locator('.replay-slots-row')).toHaveCount(4);
   await card.locator('button[data-slot="2"]').click();
   const state = await player.waitFor(
     (current) => current.scene.kind === 'play' && current.play?.replay === true,
@@ -65,17 +68,17 @@ test('a beatoraja skin saves into a slot on 1-4 and replays the slot picked on V
   expect((await player.state()).scene.family).toBe('beatoraja');
   // The skin draws its own slots: no card.
   await expect(player.page.locator('.replay-slots-card')).toBeHidden();
-  await saveOnResult(player, 'Digit3', 3);
+  await saveOnResult(player, 'Digit1', 1);
   await player.leaveResult();
   await player.waitFor((state) => state.scene.kind === 'select', 'the select screen');
   await expect(player.page.locator('.replay-slots-card')).toBeHidden();
-  // The cursor is back on Fixture A, whose only replay (slot 3) is picked.
+  // The cursor is back on Fixture A, whose first slot holding a replay (slot 1) is picked.
   await player.key('KeyV');
   const state = await player.waitFor(
     (current) => current.scene.kind === 'play' && current.play?.replay === true,
     'the replay to start',
   );
   // The route names the slot, then the play screen its own replay line.
-  expect(state.statusLog).toContain('Replaying slot 3: Fixture A');
+  expect(state.statusLog).toContain('Replaying slot 1: Fixture A');
   expect(state.status).toMatch(/^Replaying.*: Fixture A$/);
 });

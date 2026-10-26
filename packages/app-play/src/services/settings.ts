@@ -14,6 +14,7 @@ import {
   renderResolutionSteps,
 } from '../render-resolution.ts';
 import { readStoredReplayView } from '../replay-view-settings.ts';
+import { DEFAULT_REPLAY_AUTO_SAVE_RULES } from './replay-slots.ts';
 import { overlayDebugMenuSettings, readStoredDebugMenuSettings } from '../debug-menu-settings.ts';
 import { readPlayInSilentMode } from '../silent-mode-playback.ts';
 import type { PlayerGUIState } from '../types.ts';
@@ -221,11 +222,12 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     // replay (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
     // scene mounts.
     autoSaveReplay: false,
-    // No replay slot saves by itself, as beatoraja ships its `autosavereplay` rules.
-    replaySlotAutoSave1: 'never',
-    replaySlotAutoSave2: 'never',
-    replaySlotAutoSave3: 'never',
-    replaySlotAutoSave4: 'never',
+    // Every replay slot saves by itself until the player picks otherwise (`DEFAULT_REPLAY_AUTO_SAVE_RULES`): the best EX
+    // score, the best lamp, the fewest BP and the latest play.
+    replaySlotAutoSave1: DEFAULT_REPLAY_AUTO_SAVE_RULES[0]!,
+    replaySlotAutoSave2: DEFAULT_REPLAY_AUTO_SAVE_RULES[1]!,
+    replaySlotAutoSave3: DEFAULT_REPLAY_AUTO_SAVE_RULES[2]!,
+    replaySlotAutoSave4: DEFAULT_REPLAY_AUTO_SAVE_RULES[3]!,
     courseAutoAdvance: false,
     nonstopPlacement: 'intended',
     // The play tempo, its pitch handling and the keep-pitch stretcher, remembered from the last visit.
