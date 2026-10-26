@@ -1,4 +1,5 @@
 export * from './course.ts';
+export * from './course-playback.ts';
 export * from './course-eligibility.ts';
 export * from './course-ruleset.ts';
 export * from './course-fingerprint.ts';
