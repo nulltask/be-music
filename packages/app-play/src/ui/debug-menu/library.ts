@@ -3,8 +3,24 @@ import { selectBinding } from '../../pane-controls.ts';
 import type { FolderApi } from 'tweakpane';
 import { storeChartBestRecords } from '../../chart-best-records.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
+import type { ReplayAutoSaveRule } from '../../services/replay-slots.ts';
 import { DEBUG_MENU_FOLDERS, type DebugMenuFolder } from './folders.ts';
 import type { DebugMenu } from './index.ts';
+/** Each replay slot auto-save rule, as beatoraja's launcher names it. */
+const REPLAY_AUTO_SAVE_LABELS: Record<string, ReplayAutoSaveRule> = {
+  'Never (save by hand)': 'never',
+  'Better EX score': 'score-update',
+  'Better or equal EX score': 'score-update-or-equal',
+  'Fewer BP': 'miss-count-update',
+  'Fewer or equal BP': 'miss-count-update-or-equal',
+  'Better max combo': 'max-combo-update',
+  'Better or equal max combo': 'max-combo-update-or-equal',
+  'Better clear lamp': 'clear-update',
+  'Better or equal clear lamp': 'clear-update-or-equal',
+  'Any of them better': 'any-update',
+  Always: 'always',
+};
+
 /**
  * Loading from URLs (the same path as the `?music=` / `?skin=` parameters), the play-history and best-record stores,
  * and the BGA transcode settings that apply while charts load.
@@ -41,6 +57,12 @@ export function buildLibraryFolder(
     .on('change', ({ value }) => {
       this.guiState.autoSaveReplay = value;
     });
+  // The replay slots' auto-save rules (beatoraja's `autosavereplay`): a result saves into each slot whose rule its play
+  // meets against the best record before it. Saving by hand (keys 1-4, the replay-slot card) works whatever they say.
+  const slots = addFolder(library, DEBUG_MENU_FOLDERS.replaySlots);
+  for (const slot of [1, 2, 3, 4] as const) {
+    selectBinding(slots, this.guiState, `replaySlotAutoSave${slot}`, `Slot ${slot} auto-save`, REPLAY_AUTO_SAVE_LABELS);
+  }
   library.addButton({ title: 'Clear best records' }).on('click', () => {
     if (this.records.chartBestRecords.size === 0) {
       this.setStatus('No best records to clear');

@@ -551,6 +551,16 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolveResultJingle({ clear: { bytes: BENCH_BYTES } }, true);
     },
   });
+  define('player-scene-model.firstReplaySlot', {
+    run: () => {
+      sceneModelAPI.firstReplaySlot([false, false, true, true]);
+    },
+  });
+  define('player-scene-model.stepReplaySlot', {
+    run: () => {
+      sceneModelAPI.stepReplaySlot([true, false, true, false], 2, 1);
+    },
+  });
   define('player-scene-model.browseSystemSound', {
     run: () => {
       sceneModelAPI.browseSystemSound({ type: 'move', delta: 1 }, { kind: 'cursor', from: 0, to: 1, delta: 1 });

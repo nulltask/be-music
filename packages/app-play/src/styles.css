@@ -2259,6 +2259,61 @@ html.touch-first .search-input.search-inline:focus {
   gap: 6px;
 }
 
+/* Replay slots (replay-slots-panel.ts): a result's slots to save into, and the select bar's replays. */
+.replay-slots-card {
+  position: fixed;
+  right: 16px;
+  bottom: 64px;
+  z-index: 40;
+  width: min(360px, calc(100vw - 32px));
+  font-size: 13px;
+}
+.replay-slots-card[hidden] {
+  display: none;
+}
+.replay-slots-card h2 {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.replay-slots-card header p {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+.replay-slots-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.replay-slots-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+}
+.replay-slots-name {
+  font-weight: 600;
+}
+.replay-slots-detail {
+  min-width: 0;
+  color: #aab4c2;
+  overflow-wrap: anywhere;
+}
+.replay-slots-actions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.replay-slots-row > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* The help overlay keeps its build line at the bottom of the overlay, under the dialog card. */
 .help-modal .service-build-footer {
   position: absolute;

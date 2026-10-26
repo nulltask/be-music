@@ -34,6 +34,8 @@ import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { ReplayAutoSave } from '../../services/replays.ts';
 import type { RecordsService } from '../../services/records.ts';
+import type { ResultReplaySlots } from '../../services/replay-slot-service.ts';
+import type { ResultRoute } from './result.ts';
 import type { FamilyKits } from '../family-kits.ts';
 
 /** A course run's replay and native result, as its course result screen reports them. */
@@ -76,15 +78,24 @@ export interface CourseRouteDeps {
     chartEntry: LibraryChart,
     overrides: { courseStage: CourseStagePlay; autoPlay?: boolean },
   ) => Promise<void>;
+  /** The course run's replay slots (`ResultRoute.courseReplaySlots`). */
+  readonly courseReplaySlots: ResultRoute['courseReplaySlots'];
   /** Shows the course result on the LR2 or built-in result screen. */
-  readonly showResult: (data: PlayResult, mode: { course: CourseView; courseLog?: CourseResultLog }) => Promise<void>;
+  readonly showResult: (
+    data: PlayResult,
+    mode: { course: CourseView; courseLog?: CourseResultLog; replaySlots?: ResultReplaySlots },
+  ) => Promise<void>;
   /**
    * Shows the course result on the beatoraja theme's course-result (or result) skin. Resolves `false` when the theme has
    * neither or it failed to load.
    */
   readonly showBeatorajaResult: (
     data: PlayResult,
-    options: { run: 'course'; course: { info: CourseView; result?: CourseResultLog } },
+    options: {
+      run: 'course';
+      course: { info: CourseView; result?: CourseResultLog };
+      replaySlots?: ResultReplaySlots;
+    },
   ) => Promise<boolean>;
   /** Re-enables the options a play latched, once its result shows. */
   readonly unlockReplayOptions: () => void;
@@ -107,6 +118,7 @@ export class CourseRoute {
   private readonly showDecide: CourseRouteDeps['showDecide'];
   private readonly playChart: CourseRouteDeps['playChart'];
   private readonly showResult: CourseRouteDeps['showResult'];
+  private readonly courseReplaySlots: CourseRouteDeps['courseReplaySlots'];
   private readonly showBeatorajaResult: CourseRouteDeps['showBeatorajaResult'];
   private readonly unlockReplayOptions: CourseRouteDeps['unlockReplayOptions'];
 
@@ -126,6 +138,7 @@ export class CourseRoute {
     this.showDecide = deps.showDecide;
     this.playChart = deps.playChart;
     this.showResult = deps.showResult;
+    this.courseReplaySlots = deps.courseReplaySlots;
     this.showBeatorajaResult = deps.showBeatorajaResult;
     this.unlockReplayOptions = deps.unlockReplayOptions;
   }
@@ -243,8 +256,16 @@ export class CourseRoute {
       await this.showSelect();
       return;
     }
+    let replaySlots: ResultReplaySlots | undefined;
     if (courseLog !== undefined) {
-      this.records.recordCourseResult(resolveCourseBestRecordUpdate(courseLog, result, courseBestRecordKey(course)));
+      const update = resolveCourseBestRecordUpdate(courseLog, result, courseBestRecordKey(course));
+      const kept = this.records.recordCourseResult(update);
+      // The run saves into its course's replay slots only when it kept a record, as beatoraja's `CourseResult` does.
+      replaySlots = this.courseReplaySlots(
+        courseLog,
+        result,
+        update !== undefined && kept !== undefined ? { play: update.play, previous: kept.previous } : undefined,
+      );
       this.replayAutoSave.saveCourse(courseLog);
       // The course is ranked as one run; a practice run has no replay and never reaches these writers.
       this.leaderboard.maybeSubmitCourse(courseLog, run.stages);
@@ -270,6 +291,7 @@ export class CourseRoute {
           info: courseInfo,
           ...(courseLog !== undefined ? { result: { log: courseLog, native: result } } : {}),
         },
+        ...(replaySlots !== undefined ? { replaySlots } : {}),
       });
       if (mounted) {
         this.unlockReplayOptions();
@@ -283,6 +305,7 @@ export class CourseRoute {
       {
         course: courseInfo,
         ...(courseLog !== undefined ? { courseLog: { log: courseLog, native: result } } : {}),
+        ...(replaySlots !== undefined ? { replaySlots } : {}),
       },
     );
   }

@@ -16,10 +16,9 @@ import {
 } from '@be-music/player-engine/replay';
 import { clearLampRank, type ClearLamp } from '@be-music/player-engine/ruleset';
 import type { BestRecord, RecordPlay } from '@be-music/player-engine/records';
-import type { LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
+import { REPLAY_SLOT_COUNT, type LibraryChart, type LibraryCourse } from '@be-music/player-scene-model';
 
-/** How many slots a chart, or a course, has (beatoraja's `REPLAY_SIZE`). */
-export const REPLAY_SLOT_COUNT = 4;
+export { REPLAY_SLOT_COUNT };
 
 /** The budget every slot shares, in compressed bytes: past it, the worst-scoring replays are removed. */
 export const REPLAY_SLOT_BUDGET_BYTES = 500 * 1024 * 1024;
@@ -35,9 +34,6 @@ export interface ReplaySlotTarget {
   readonly kind: 'chart' | 'course';
   readonly id: string;
 }
-
-/** A slot's state on a result screen, as beatoraja's `ReplayStatus`: empty, holding a replay, or saved by this result. */
-export type ReplaySlotStatus = 'none' | 'exists' | 'saved';
 
 /** What a slot holds, kept apart from the replay itself so the slots can be listed without reading any replay. */
 export interface ReplaySlotRecord {
@@ -449,13 +445,21 @@ export class ReplaySlotStore {
     return result;
   }
 
-  /** The replay `slot` of `target` holds, or `undefined` when it is empty or cannot be read. */
-  public async read(target: ReplaySlotTarget, slot: number): Promise<ReplaySlotPayload | undefined> {
+  /**
+   * The replay `slot` of `target` holds, as the `.bmplay.json` / `.bmcourse.json` text it was saved as, or `undefined`
+   * when the slot is empty.
+   */
+  public async readText(target: ReplaySlotTarget, slot: number): Promise<string | undefined> {
     const key = replaySlotKey(target, slot);
     if (!this.records.has(key)) return undefined;
     const data = await this.backend.readData(key);
-    if (data === undefined) return undefined;
-    const text = await decompressReplayText(data);
+    return data !== undefined ? decompressReplayText(data) : undefined;
+  }
+
+  /** The replay `slot` of `target` holds, parsed, or `undefined` when it is empty. Throws on a replay it cannot read. */
+  public async read(target: ReplaySlotTarget, slot: number): Promise<ReplaySlotPayload | undefined> {
+    const text = await this.readText(target, slot);
+    if (text === undefined) return undefined;
     return target.kind === 'chart'
       ? { kind: 'chart', replay: parseReplay(text) }
       : { kind: 'course', replay: parseCourseReplay(text) };

@@ -12,8 +12,18 @@ import {
   type ResultSceneKit,
   type SelectScene,
 } from '@be-music/player-browser/host';
-import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player-engine/replay';
-import { courseStageRecordPlayFromResult, recordPlayFromResult } from '@be-music/player-engine/records';
+import {
+  computeCourseReplayFingerprint,
+  type BeMusicCourseReplay,
+  type BeMusicReplay,
+  type ReplayCourseResult,
+} from '@be-music/player-engine/replay';
+import {
+  courseStageRecordPlayFromResult,
+  recordPlayFromResult,
+  type BestRecord,
+  type RecordPlay,
+} from '@be-music/player-engine/records';
 import {
   resolveResultJingle,
   resolveResultJingles,
@@ -22,6 +32,7 @@ import {
   type LibraryChart,
   type PlayResult,
   type PlayRunKind,
+  type ReplaySlotState,
 } from '@be-music/player-scene-model';
 import { activeCourseInfo, resolveResultRetry, type ActiveCourse } from '../../course-flow.ts';
 import { resolveResultPresentation } from '../../course-result.ts';
@@ -31,6 +42,13 @@ import { resolveResultSoundSet, resolveResultViewJingles } from '../../result-ji
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { ReplayAutoSave } from '../../services/replays.ts';
+import {
+  replaySlotTargetOfReplay,
+  type ReplayAutoSaveRule,
+  type ReplaySlotStore,
+} from '../../services/replay-slots.ts';
+import { ResultReplaySlots } from '../../services/replay-slot-service.ts';
+import type { ReplaySlotsPanel } from '../../replay-slots-panel.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
@@ -50,6 +68,17 @@ export interface ResultRouteDeps {
   readonly router: Pick<SceneRouter<PlayerScene, PlayScene, SelectScene>, 'show' | 'leave'>;
   /** The library: the chart's asset source. */
   readonly library: Pick<LibraryService, 'collection'>;
+  /**
+   * The replay slots a result saves into: the store, the rule each slot auto-saves by, and the card that shows them on
+   * the skins without a replay-slot UI of their own.
+   */
+  readonly replaySlots: {
+    readonly store: ReplaySlotStore;
+    readonly rules: () => readonly ReplayAutoSaveRule[];
+    readonly panel: Pick<ReplaySlotsPanel, 'showResult'>;
+  };
+  /** Reports a replay slot save. */
+  readonly setStatus: (text: string) => void;
   /** The best records the play, or the course stage, is kept in. */
   readonly records: Pick<RecordsService, 'recordActivePlay' | 'recordActiveCourseStage'>;
   /** The course run in progress: a stage's result records the stage on it. */
@@ -119,8 +148,12 @@ export class ResultRoute {
   private readonly showSelect: ResultRouteDeps['showSelect'];
   private readonly playChart: ResultRouteDeps['playChart'];
   private readonly unlockReplayOptions: ResultRouteDeps['unlockReplayOptions'];
+  private readonly replaySlots: ResultRouteDeps['replaySlots'];
+  private readonly setStatus: ResultRouteDeps['setStatus'];
 
   public constructor(deps: ResultRouteDeps) {
+    this.replaySlots = deps.replaySlots;
+    this.setStatus = deps.setStatus;
     this.router = deps.router;
     this.library = deps.library;
     this.records = deps.records;
@@ -158,6 +191,62 @@ export class ResultRoute {
   }
 
   /**
+   * A single play's replay slots: the slots of its chart, which a live play whose record counts (`kept`, the record it
+   * had before) can be saved into, as beatoraja's `MusicResult` saves only a PLAY whose score may be kept. A replay's
+   * result shows the slots of the chart it replays, and saves nothing.
+   */
+  private playReplaySlots(data: PlayResult, kept: { previous: BestRecord | undefined } | undefined): ResultReplaySlots {
+    const replay = data.replay ?? this.lastPlay()?.overrides.replay;
+    const target = replay !== undefined ? replaySlotTargetOfReplay(replay) : undefined;
+    const save =
+      kept !== undefined && data.replay !== undefined && data.practice !== true
+        ? {
+            payload: { kind: 'chart' as const, replay: data.replay },
+            score: {
+              ...recordPlayFromResult(data),
+              noteCount: data.replay.results?.native?.noteCount ?? data.score.total,
+            },
+            title: data.chart.title,
+            previous: kept.previous,
+          }
+        : undefined;
+    return this.openReplaySlots(target, save);
+  }
+
+  /**
+   * A course run's replay slots (an EXPERT / GRADE course or a NONSTOP run): the slots of its course, by its course
+   * fingerprint, which the run can be saved into when it kept a record (`kept`: what it recorded, and the record before).
+   */
+  public courseReplaySlots(
+    courseLog: BeMusicCourseReplay,
+    native: ReplayCourseResult,
+    kept: { play: RecordPlay; previous: BestRecord | undefined } | undefined,
+  ): ResultReplaySlots {
+    const fingerprint = computeCourseReplayFingerprint(courseLog);
+    const target = fingerprint !== undefined ? { kind: 'course' as const, id: fingerprint } : undefined;
+    const save =
+      kept !== undefined
+        ? {
+            payload: { kind: 'course' as const, replay: courseLog },
+            score: { ...kept.play, noteCount: native.noteCount },
+            title: courseLog.course.name,
+            previous: kept.previous,
+          }
+        : undefined;
+    return this.openReplaySlots(target, save);
+  }
+
+  /** A result's replay slots, saved into at once by each slot's auto-save rule. */
+  private openReplaySlots(
+    target: ResultReplaySlots['target'],
+    save: ConstructorParameters<typeof ResultReplaySlots>[0]['save'],
+  ): ResultReplaySlots {
+    const slots = new ResultReplaySlots({ store: this.replaySlots.store, target, save, report: this.setStatus });
+    void slots.autoSave(this.replaySlots.rules());
+    return slots;
+  }
+
+  /**
    * The result of a play on the beatoraja play screen, on the theme's result skin: a course stage is recorded on the run
    * (its result shown unless the theme has no result skin, when the course goes straight on), a single play keeps its
    * record, saves its replay and goes to the Leaderboard. Without a result skin a single play goes back to select.
@@ -178,8 +267,11 @@ export class ResultRoute {
     }
     // LR2 saves no score from two-player BATTLE: its replay is kept, its record and ranking are not.
     const recorded = !data.practice && data.secondPlayer === undefined;
-    if (recorded) this.records.recordActivePlay(recordPlayFromResult(data));
-    const mounted = await this.showBeatorajaResult(data, { run: 'single' });
+    const kept = recorded ? this.records.recordActivePlay(recordPlayFromResult(data)) : undefined;
+    const mounted = await this.showBeatorajaResult(data, {
+      run: 'single',
+      replaySlots: this.playReplaySlots(data, kept),
+    });
     if (!mounted) await this.showSelect();
     // Auto-save fires even when the theme ships no result skin, so going back to select costs no replay file.
     if (!data.practice) this.replayAutoSave.savePlay(data.replay);
@@ -204,6 +296,8 @@ export class ResultRoute {
       course?: { info: CourseView; result?: { log: BeMusicCourseReplay; native: ReplayCourseResult } };
       nonstopRetry?: () => void;
       playChart?: ResolvedPlayChart['chart'];
+      /** The run's replay slots, which the skin shows and its keys and buttons save into; a course stage has none. */
+      replaySlots?: ResultReplaySlots;
     },
   ): Promise<boolean> {
     const chartEntry = data.chart;
@@ -267,7 +361,12 @@ export class ResultRoute {
       ...(playChart !== undefined ? { playChart } : {}),
       sounds,
       audio: this.audio,
-      on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
+      ...resultSceneReplaySlots(options.replaySlots),
+      on: {
+        continue: onContinue,
+        ...(onRetry !== undefined ? { retry: onRetry } : {}),
+        ...resultSaveReplay(options.replaySlots),
+      },
     });
     // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`). The play
     // or the course asked for its result, so it carries the run on.
@@ -300,6 +399,8 @@ export class ResultRoute {
       /** The course result's replay and native result (what the test hook reports of it). */
       courseLog?: { log: BeMusicCourseReplay; native: ReplayCourseResult };
       nonstop?: { info: CourseView; retry: () => void };
+      /** A course run's replay slots ({@link courseReplaySlots}); a single play's are made here. */
+      replaySlots?: ResultReplaySlots;
     } = {},
   ): Promise<void> {
     // A stage of a running course: its replay carries the course on, and dismissing its result plays the next stage.
@@ -372,6 +473,11 @@ export class ResultRoute {
             // Straight back into the chart, skipping select and decide: the result screen (and its jingle) goes first.
             void this.leaveThen(retry);
           };
+    // LR2 saves no score from two-player BATTLE: its replay is kept, its record and ranking are not.
+    const recorded = !data.practice && data.secondPlayer === undefined;
+    const kept = recorded ? this.records.recordActivePlay(recordPlayFromResult(data)) : undefined;
+    // A single play's slots, or the course run's; a course stage has none (beatoraja saves the course as one run).
+    const replaySlots = run === 'single' ? this.playReplaySlots(data, kept) : mode.replaySlots;
     const kit: ResultSceneKit =
       lr2ResultSkin !== undefined ? { family: 'lr2', skin: lr2ResultSkin } : this.builtIn.builtInKit;
     const resultScene = createResultScene(kit, {
@@ -381,7 +487,12 @@ export class ResultRoute {
       source: resolveChartSource(this.library.collection, data.chart),
       sounds: resolveResultSoundSet(resultFamily, themeJingles),
       audio: this.audio,
-      on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
+      ...resultSceneReplaySlots(replaySlots),
+      on: {
+        continue: onContinue,
+        ...(onRetry !== undefined ? { retry: onRetry } : {}),
+        ...resultSaveReplay(replaySlots),
+      },
     });
     // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`). The play
     // or the course asked for its result, so it carries the run on.
@@ -391,7 +502,11 @@ export class ResultRoute {
       continuesRun: true,
     });
     // A newer navigation that took the stage first keeps its own status; the play is still kept, saved and ranked.
-    if (shown) this.setPlayStatus(`Result: ${data.chart.title}`);
+    if (shown) {
+      this.setPlayStatus(`Result: ${data.chart.title}`);
+      // The built-in, Native and LR2 skins have no replay-slot UI: the card stands in for one.
+      if (replaySlots !== undefined) this.replaySlots.panel.showResult(replaySlots);
+    }
     if (this.testHook !== undefined) {
       if (mode.course === undefined) this.testHook.recordReplay(data.replay);
       const family = lr2ResultSkin !== undefined ? 'lr2' : 'built-in';
@@ -408,9 +523,6 @@ export class ResultRoute {
         );
       }
     }
-    // LR2 saves no score from two-player BATTLE: its replay is kept, its record and ranking are not.
-    const recorded = !data.practice && data.secondPlayer === undefined;
-    if (recorded) this.records.recordActivePlay(recordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
     if (!data.practice && presentation.quickRetry && mode.nonstop === undefined) {
       this.replayAutoSave.savePlay(data.replay);
@@ -418,4 +530,14 @@ export class ResultRoute {
     }
     this.unlockReplayOptions();
   }
+}
+
+/** The result scene's replay slot states, when the run has slots. */
+function resultSceneReplaySlots(slots: ResultReplaySlots | undefined): { replaySlots?: () => ReplaySlotState[] } {
+  return slots !== undefined ? { replaySlots: () => slots.states() } : {};
+}
+
+/** The result scene's save into a replay slot (keys 1-4, a beatoraja skin's buttons), when the run has slots. */
+function resultSaveReplay(slots: ResultReplaySlots | undefined): { saveReplay?: (slot: number) => void } {
+  return slots !== undefined ? { saveReplay: (slot) => void slots.save(slot) } : {};
 }
