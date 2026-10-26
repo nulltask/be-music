@@ -33,3 +33,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [Mixed NONSTOP courses retain source units in the bmson IR](./0017-bmson-nonstop.md)
 
 - [0018: Replay option timeline](./0018-replay-option-timeline.md)
+
+- [0019: Option values name their source](./0019-source-qualified-option-values.md)
