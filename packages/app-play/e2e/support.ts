@@ -19,6 +19,12 @@ const KEY_OF_CODE: Readonly<Record<string, string>> = {
   KeyZ: 'z',
   KeyS: 's',
   KeyX: 'x',
+  KeyF: 'f',
+  KeyV: 'v',
+  Digit1: '1',
+  Digit2: '2',
+  Digit3: '3',
+  Digit4: '4',
   Space: ' ',
 };
 

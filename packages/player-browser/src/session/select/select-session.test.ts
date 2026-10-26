@@ -8,7 +8,7 @@ import {
 } from '@be-music/player-scene-model';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import { SILENT_AUDIO } from '../../runtime/audio-analysis.ts';
-import type { SelectFrame, SelectIntent } from '../../view/types.ts';
+import type { SelectFrame, SelectIntent, SelectRecords } from '../../view/types.ts';
 import type { SessionKeyEvent } from '../session-scene.ts';
 import { SELECT_POLICIES } from './select-policy.ts';
 import { SelectSession, type SelectSessionEvents, type SelectSessionOptions } from './select-session.ts';
@@ -668,5 +668,86 @@ describe('SelectSession on the beatoraja family', () => {
     expect(titles(advance(10))).toEqual(['alpha', 'beta', 'Beta', 'Charlie']);
     intent({ type: 'browse', command: { type: 'list', options: { sort: 'LEVEL' } } });
     expect(titles(advance(10))).toEqual(['beta', 'Beta', 'Charlie', 'alpha']);
+  });
+});
+
+describe('SelectSession replay slots', () => {
+  /** A session in the `pack` folder (on chart a) whose charts' replay slots `slots` gives, by title. */
+  function createSlotSession(slots: Record<string, boolean[]>, policy = SELECT_POLICIES.beatoraja) {
+    const starts: Array<{ entry: string; replaySlot: number | undefined }> = [];
+    const focus: Array<string | undefined> = [];
+    const records: SelectRecords = {
+      chart: () => undefined,
+      course: () => undefined,
+      replaySlots: (entry) => slots[entry.kind === 'chart' ? entry.chart.title : 'course'] ?? [],
+    };
+    const created = createSession({
+      policy,
+      records,
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      on: {
+        start: (entry, { replaySlot }) => {
+          starts.push({ entry: entry.kind === 'chart' ? entry.chart.title : entry.course.definition.name, replaySlot });
+        },
+        focus: (entry) => focus.push(entry?.kind === 'chart' ? entry.chart.title : entry?.kind),
+      },
+    });
+    return { ...created, starts, focus };
+  }
+
+  it('picks the first slot holding a replay, steps round the others on 4 or F, and resets on another bar', () => {
+    const { key, advance, frame } = createSlotSession({
+      a: [false, true, false, true],
+      b: [true, false, false, false],
+    });
+    expect(frame().replaySlots).toEqual({ exists: [false, true, false, true], selected: 1 });
+    key('Digit4', '4');
+    expect(advance(10).replaySlots?.selected).toBe(3);
+    key('KeyF', 'f');
+    expect(advance(10).replaySlots?.selected).toBe(1);
+    key('ArrowDown');
+    expect(advance(10).replaySlots).toEqual({ exists: [true, false, false, false], selected: 0 });
+    key('ArrowUp');
+    expect(advance(10).replaySlots?.selected).toBe(1);
+  });
+
+  it('replays the slot picked on V, or plays the bar when no slot holds a replay', () => {
+    const { key, advance, starts } = createSlotSession({ a: [false, false, true, false] });
+    key('KeyV', 'v');
+    advance(10);
+    expect(starts).toEqual([{ entry: 'a', replaySlot: 2 }]);
+    const empty = createSlotSession({});
+    empty.key('KeyV', 'v');
+    expect(empty.starts).toEqual([{ entry: 'a', replaySlot: undefined }]);
+  });
+
+  it("replays the slot a skin's button names, and starts nothing from an empty one", () => {
+    const { intent, starts, cues } = createSlotSession({ a: [true, false, false, true] });
+    intent({ type: 'replay', slot: 1 });
+    expect(starts).toEqual([]);
+    intent({ type: 'replay', slot: 3 });
+    expect(starts).toEqual([{ entry: 'a', replaySlot: 3 }]);
+    expect(cues()).toContain('decide');
+  });
+
+  it('keeps the LR2 keys free of the replay keys, and frames no slots without the host keeping them', () => {
+    const lr2 = createSlotSession({ a: [true, false, false, false] }, SELECT_POLICIES.lr2);
+    expect(lr2.key('KeyV', 'v')).toBe(false);
+    expect(lr2.frame().replaySlots?.selected).toBe(0);
+    const none = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
+    expect(none.frame()).not.toHaveProperty('replaySlots');
+  });
+
+  it('reports the bar under the cursor to the host as it changes, and again when the screen comes back', () => {
+    const { session, key, advance, focus } = createSlotSession({});
+    expect(focus).toEqual(['a']);
+    advance(10);
+    key('ArrowDown');
+    advance(10);
+    expect(focus).toEqual(['a', 'b']);
+    session.exit();
+    session.enter(100);
+    session.frame(100);
+    expect(focus).toEqual(['a', 'b', 'b']);
   });
 });

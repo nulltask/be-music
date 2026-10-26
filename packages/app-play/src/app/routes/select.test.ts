@@ -191,6 +191,9 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     unlockReplayOptions: vi.fn<SelectRouteDeps['unlockReplayOptions']>(),
     rememberHiSpeed: vi.fn<SelectRouteDeps['rememberHiSpeed']>(),
     showDecide: vi.fn<SelectRouteDeps['showDecide']>(async () => {}),
+    replaySlots: { exists: vi.fn(() => [false, false, false, false]) },
+    replaySlotsPanel: { showSelect: vi.fn() },
+    startReplayFromSlot: vi.fn<SelectRouteDeps['startReplayFromSlot']>(() => true),
   };
   const route = new SelectRoute({
     ...deps,

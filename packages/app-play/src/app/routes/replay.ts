@@ -1,6 +1,7 @@
-// The replay route: a replay dropped or picked (`*.bmplay.json`) played back on the play screen of the gameplay
-// family, whichever family recorded it, once the chart it was recorded on is found in the library; and a course replay
-// (`*.bmcourse.json`) played back as its course, once every stage's chart is.
+// The replay route: a replay dropped or picked (`*.bmplay.json`), or kept in a replay slot, played back on the play
+// screen of the gameplay family, whichever family recorded it, once the chart it was recorded on is found in the
+// library; and a course replay (`*.bmcourse.json`, dropped or kept in a course's replay slot) played back as its course,
+// once every stage's chart is.
 
 import { computeChartFingerprint } from '@be-music/chart-model';
 import { logger } from '@be-music/player-browser';
@@ -12,8 +13,9 @@ import {
   type BeMusicCourseReplay,
   type BeMusicReplay,
 } from '@be-music/player-engine/replay';
-import type { LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
+import type { LibraryChart, LibraryCourse, LibraryEntry } from '@be-music/player-scene-model';
 import { courseFromReplay, describeCourseReplayStage, matchCourseReplayCharts } from '../../course-flow.ts';
+import type { ReplaySlotService } from '../../services/replay-slot-service.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { RecordsService } from '../../services/records.ts';
 
@@ -34,6 +36,8 @@ export interface ReplayRouteDeps {
     overrides: { autoPlay: boolean; replay: BeMusicReplay },
   ) => Promise<void>;
   readonly showSelect: () => Promise<void>;
+  /** The replay slots a replay is played from. */
+  readonly replaySlots: Pick<ReplaySlotService, 'store' | 'targetOf'>;
   /** Plays an EXPERT / GRADE course replay back (`CourseRoute.startCourseReplay`). */
   readonly startCourseReplay: (course: LibraryCourse, courseLog: BeMusicCourseReplay) => Promise<void>;
   /** Plays a NONSTOP course replay back (`NonstopRoute.startNonstopCourse`). */
@@ -56,11 +60,13 @@ export class ReplayRoute {
   private readonly setPlayStatus: ReplayRouteDeps['setPlayStatus'];
   private readonly playChart: ReplayRouteDeps['playChart'];
   private readonly showSelect: ReplayRouteDeps['showSelect'];
+  private readonly replaySlots: ReplayRouteDeps['replaySlots'];
   private readonly startCourseReplay: ReplayRouteDeps['startCourseReplay'];
   private readonly startNonstopCourse: ReplayRouteDeps['startNonstopCourse'];
   private readonly showMissingReplayCharts: ReplayRouteDeps['showMissingReplayCharts'];
 
   public constructor(deps: ReplayRouteDeps) {
+    this.replaySlots = deps.replaySlots;
     this.library = deps.library;
     this.records = deps.records;
     this.setStatus = deps.setStatus;
@@ -112,6 +118,43 @@ export class ReplayRoute {
       this.setStatus(`Replay failed: ${(error as Error).message}`);
       await this.showSelect();
     }
+  }
+
+  /**
+   * Plays the replay kept in `slot` of a chart or course bar (the select screen's REPLAY), as a dropped one plays:
+   * no record is kept and nothing is ranked. Returns whether a play starts, so the select screen plays the decide sound
+   * only then; a slot that cannot be read says why on the status line.
+   */
+  public startReplayFromSlot(entry: Exclude<LibraryEntry, { kind: 'folder' }>, slot: number): boolean {
+    const target = this.replaySlots.targetOf(entry);
+    if (target === undefined || this.replaySlots.store.exists(target)[slot] !== true) return false;
+    void (async () => {
+      let payload;
+      try {
+        payload = await this.replaySlots.store.read(target, slot);
+      } catch (error) {
+        gamereplay.warn('replay slot read failed', error);
+      }
+      if (payload === undefined) {
+        this.setStatus(`Replay slot ${slot + 1} could not be read`);
+        await this.showSelect();
+        return;
+      }
+      try {
+        if (payload.kind === 'chart' && entry.kind === 'chart') {
+          this.setPlayStatus(`Replaying slot ${slot + 1}: ${entry.chart.title}`);
+          await this.playChart(entry.chart, { autoPlay: payload.replay.play.mode === 'auto', replay: payload.replay });
+        } else if (payload.kind === 'course' && entry.kind === 'course') {
+          // As a dropped course replay plays: every stage's chart found, a NONSTOP course stitched again.
+          await this.startCourseReplayFromLog(payload.replay);
+        }
+      } catch (error) {
+        gamereplay.warn('replay slot replay failed', error);
+        this.setStatus(`Replay failed: ${(error as Error).message}`);
+        await this.showSelect();
+      }
+    })();
+    return true;
   }
 
   /**

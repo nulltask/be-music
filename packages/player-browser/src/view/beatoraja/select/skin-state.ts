@@ -50,6 +50,8 @@ export interface BeatorajaSelectSkinStateContext {
   currentFolderLabel(): string;
   /** The best clear lamp of a chart or course bar, as its op (`beatorajaClearLampOp`); `undefined` for none. */
   lampOpOf(entry: LibraryEntry): number | undefined;
+  /** The focused bar's replay slots and the one picked (`SelectFrame.replaySlots`), when the host keeps them. */
+  readonly replaySlots?: { readonly exists: readonly boolean[]; readonly selected: number };
   /** The clock a button press is timed on, in ms. */
   nowMs(): number;
 }
@@ -119,7 +121,7 @@ export class BeatorajaSelectSkinState {
   /**
    * What the skin reads of the screen (`@be-music/skin-beatoraja/scene`): the focused bar and its chart's facts, the
    * folder, the search, the list's key-mode filter and sort, the player's LN MODE, the skin, the judge timing, the bar's
-   * best lamp and the clock. Built once per frame by the view's draw; read through it for every value, text and image
+   * best lamp, its replay slots and the clock. Built once per frame by the view's draw; read through it for every value, text and image
    * of the frame.
    */
   selectInput(): BeatorajaSelectInput {
@@ -145,6 +147,9 @@ export class BeatorajaSelectSkinState {
       skin: { name: this.ctx.options.skin.name, author: this.ctx.options.skin.author },
       judgeTiming: typeof offset === 'number' && Number.isFinite(offset) ? offset : 0,
       ...(lampOp !== undefined ? { lampOp } : {}),
+      ...(this.ctx.replaySlots !== undefined
+        ? { replaySlots: this.ctx.replaySlots.exists, selectedReplaySlot: this.ctx.replaySlots.selected }
+        : {}),
       wallClock: beatorajaWallClockOf(new Date()),
     };
   }

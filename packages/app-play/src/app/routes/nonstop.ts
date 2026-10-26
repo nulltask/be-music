@@ -23,6 +23,8 @@ import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { ReplayAutoSave } from '../../services/replays.ts';
 import type { RecordsService } from '../../services/records.ts';
+import type { ResultReplaySlots } from '../../services/replay-slot-service.ts';
+import type { ResultRoute } from './result.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
 import type { PlayerGUIState } from '../../types.ts';
 import type { FamilyKits } from '../family-kits.ts';
@@ -71,7 +73,12 @@ export interface NonstopRouteDeps {
    * Shows the result on the LR2 or built-in result screen: the run's (`mode.nonstop`), or the play's own when the
    * stitched play left no course log.
    */
-  readonly showResult: (data: PlayResult, mode?: { nonstop: { info: CourseView; retry: () => void } }) => Promise<void>;
+  readonly showResult: (
+    data: PlayResult,
+    mode?: { nonstop: { info: CourseView; retry: () => void }; replaySlots?: ResultReplaySlots },
+  ) => Promise<void>;
+  /** The run's replay slots (`ResultRoute.courseReplaySlots`). */
+  readonly courseReplaySlots: ResultRoute['courseReplaySlots'];
   /** Shows the run's result on the beatoraja theme's result skin; `false` when the theme has none or it failed to load. */
   readonly showBeatorajaResult: (
     data: PlayResult,
@@ -80,6 +87,7 @@ export interface NonstopRouteDeps {
       course: { info: CourseView };
       nonstopRetry: () => void;
       playChart?: ResolvedPlayChart['chart'];
+      replaySlots?: ResultReplaySlots;
     },
   ) => Promise<boolean>;
   /** Re-enables the options a play latched, once its result shows. */
@@ -102,6 +110,7 @@ export class NonstopRoute {
   private readonly showDecide: NonstopRouteDeps['showDecide'];
   private readonly playChart: NonstopRouteDeps['playChart'];
   private readonly showResult: NonstopRouteDeps['showResult'];
+  private readonly courseReplaySlots: NonstopRouteDeps['courseReplaySlots'];
   private readonly showBeatorajaResult: NonstopRouteDeps['showBeatorajaResult'];
   private readonly unlockReplayOptions: NonstopRouteDeps['unlockReplayOptions'];
 
@@ -120,6 +129,7 @@ export class NonstopRoute {
     this.showDecide = deps.showDecide;
     this.playChart = deps.playChart;
     this.showResult = deps.showResult;
+    this.courseReplaySlots = deps.courseReplaySlots;
     this.showBeatorajaResult = deps.showBeatorajaResult;
     this.unlockReplayOptions = deps.unlockReplayOptions;
   }
@@ -237,12 +247,17 @@ export class NonstopRoute {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
-    this.records.recordCourseResult(
-      resolveCourseBestRecordUpdate(
-        courseLog,
-        native,
-        courseBestRecordKey(nonstop.course, nonstop.prepared.stitched.placement),
-      ),
+    const update = resolveCourseBestRecordUpdate(
+      courseLog,
+      native,
+      courseBestRecordKey(nonstop.course, nonstop.prepared.stitched.placement),
+    );
+    const kept = this.records.recordCourseResult(update);
+    // Saved into the course's replay slots only when the run kept a record, as beatoraja's `CourseResult` does.
+    const replaySlots = this.courseReplaySlots(
+      courseLog,
+      native,
+      update !== undefined && kept !== undefined ? { play: update.play, previous: kept.previous } : undefined,
     );
     this.replayAutoSave.saveCourse(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
@@ -261,13 +276,14 @@ export class NonstopRoute {
         course: { info },
         nonstopRetry: retry,
         ...(resolved !== undefined ? { playChart: resolved.chart } : {}),
+        replaySlots,
       });
       if (mounted) {
         this.unlockReplayOptions();
         return;
       }
     }
-    await this.showResult(result, { nonstop: { info, retry } });
+    await this.showResult(result, { nonstop: { info, retry }, replaySlots });
   }
 
   /**

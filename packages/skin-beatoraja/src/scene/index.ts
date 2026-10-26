@@ -17,6 +17,7 @@
  * - Select: {@link resolveBeatorajaSelectBarOps}, {@link resolveBeatorajaSelectNumber},
  *   {@link resolveBeatorajaSelectText}, {@link resolveBeatorajaSelectRefValue}, from the focused library entry.
  * - Course: the course bar, stage and text ids from a `CourseView` / `LibraryCourse`.
+ * - Replay slots: the slot ops of the select and result screens and the replay buttons.
  * - System sounds: the cue, select BGM and jingle files of a theme.
  */
 export * from './inputs.ts';
@@ -33,6 +34,7 @@ export * from './select.ts';
 export * from './course.ts';
 export * from './clear-lamp.ts';
 export * from './system-sounds.ts';
+export * from './replay-slots.ts';
 export * from './option-buttons.ts';
 export * from './option-index.ts';
 export * from './animation-timers.ts';
