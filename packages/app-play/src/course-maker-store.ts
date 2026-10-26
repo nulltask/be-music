@@ -10,12 +10,10 @@ import {
   type CourseDefinition,
   type NonstopConnection,
 } from '@be-music/player-engine/course';
+import { COURSES_STORE as STORE_NAME, openPlayerDatabase } from './player-database.ts';
 
 /** Bumped when the stored shape changes; a record with another version is ignored. */
 const STORE_VERSION = 1;
-const DB_NAME = 'be-music';
-const DB_VERSION = 1;
-const STORE_NAME = 'courses';
 const RECORD_KEY = 'made';
 
 /** What the course maker keeps across reloads. */
@@ -81,24 +79,15 @@ export function parseMadeCourses(value: unknown): MadeCourses {
   return { courses, defaultConnection };
 }
 
-function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME);
-    };
-    request.onsuccess = () => {
-      const db = request.result;
-      void migrateLegacyCourses(db).then(
-        () => resolve(db),
-        (error) => {
-          db.close();
-          reject(error);
-        },
-      );
-    };
-    request.onerror = () => reject(request.error ?? new Error('indexedDB open failed'));
-  });
+async function openDatabase(): Promise<IDBDatabase> {
+  const db = await openPlayerDatabase();
+  try {
+    await migrateLegacyCourses(db);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+  return db;
 }
 
 /** Move the old database's course record without overwriting courses already saved under the current name. */
