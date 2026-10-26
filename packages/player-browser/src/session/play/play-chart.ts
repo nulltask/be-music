@@ -9,7 +9,12 @@
 
 import { applySevenToNine } from '@be-music/player-engine/lanes';
 
-import { resolveRandomModes, normalizeFloatingLaneCover, type RandomMode } from '@be-music/player-scene-model';
+import {
+  isDuplicatedBattleChoice,
+  resolveRandomModes,
+  normalizeFloatingLaneCover,
+  type RandomMode,
+} from '@be-music/player-scene-model';
 import {
   resolvePoorBGAMode,
   PLAY_MODE_LAYOUTS,
@@ -223,46 +228,11 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     sevenToNineType: arrangement ? (arrangement.play.sevenToNineType ?? 0) : ctx.options.sevenToNineType,
     hRandomThresholdBPM: arrangement ? arrangement.play.sevenToNineThresholdBPM : ctx.options.hRandomThresholdBPM,
   };
-  if (!arrangement && (sevenToNine.sevenToNinePattern ?? 0) > 0 && ctx.options.judgeRuleset !== 'beatoraja')
-    throw new RangeError('7-to-9 conversion is available only for beatoraja.');
-  if (
-    ctx.options.hsFix === 'CONSTANT' &&
-    (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset ?? 'lr2') !== 'lr2'
-  )
-    throw new RangeError('HS-FIX CONSTANT is an LR2 option; beatoraja visual CONSTANT is a separate setting.');
-  if (
-    !arrangement &&
-    ctx.options.scrollModifier !== undefined &&
-    ctx.options.scrollModifier !== 'OFF' &&
-    ctx.options.judgeRuleset !== 'beatoraja'
-  )
-    throw new RangeError('Scroll modification is available only for beatoraja.');
-  if (
-    !arrangement &&
-    (ctx.options.battleMode === 'SP-TO-DP' || ctx.options.battleMode === 'D-BATTLE') &&
-    (ctx.options.judgeRuleset ?? 'lr2') !== 'lr2'
-  )
-    throw new RangeError(`${ctx.options.battleMode} requires LR2 judgment rules.`);
-  if (!arrangement && ctx.options.lr2ExtraMode && (ctx.options.judgeRuleset ?? 'lr2') !== 'lr2')
-    throw new RangeError('LR2 EXTRA requires LR2 judgment rules.');
-  if (!arrangement && (ctx.options.extraNoteDepth ?? 0) > 0 && ctx.options.judgeRuleset !== 'beatoraja')
-    throw new RangeError('EXTRA note depth is available only for beatoraja.');
   if (!arrangement && ctx.options.longNoteModifier?.startsWith('ADD_') && ctx.options.judgeRuleset !== 'beatoraja')
     throw new RangeError('Long-note addition is available only for beatoraja.');
-  if (ctx.options.fixedDisplayArea && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
-    throw new RangeError('Fixed display area is available only for its source ruleset.');
-  if (ctx.options.floatingHiSpeed && (ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset) !== '____')
-    throw new RangeError('AC measured floating HI-SPEED requires its source ruleset.');
-  if (
-    arrangement === undefined &&
-    ctx.options.mineModifier !== undefined &&
-    ctx.options.mineModifier !== 'OFF' &&
-    ctx.options.judgeRuleset !== 'beatoraja'
-  )
-    throw new RangeError('Mine modification is available only for beatoraja.');
   if (ctx.options.fixedArrangement !== undefined && ctx.options.replay === undefined) {
-    if ((ctx.options.judgeRuleset ?? 'lr2') !== 'beatoraja')
-      throw new RangeError('Previous arrangement reuse requires beatoraja rules.');
+    if ((ctx.options.judgeRuleset ?? 'lr2') !== (ctx.options.fixedArrangement.play.judgeRuleset ?? 'lr2'))
+      throw new RangeError('The previous arrangement was played under other judgment rules.');
     const recorded = ctx.options.fixedArrangement.chart;
     if (
       (recorded.sha256 && ctx.options.chartSHA256 && recorded.sha256 !== ctx.options.chartSHA256) ||
@@ -273,7 +243,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   if (ctx.options.replay === undefined) {
     const ruleset = ctx.options.judgeRuleset ?? 'lr2';
     for (const [mode, modes] of [
-      [ctx.options.random1P, resolveRandomModes(ruleset, ctx.options.battleMode === 'BATTLE')],
+      [ctx.options.random1P, resolveRandomModes(ruleset, isDuplicatedBattleChoice(ctx.options.battleMode))],
       [ctx.options.random2P, resolveRandomModes(ruleset)],
     ] as const) {
       if (mode !== undefined && !modes.includes(mode))
@@ -571,20 +541,20 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     );
     if (twoPlayer) {
       for (const [second, first] of twins ?? []) second.channel = `2${first.channel.slice(1)}`;
-      if (ctx.options.judgeRuleset === '____')
-        for (const side of ['1P', '2P'] as const) {
-          const mode = side === '1P' ? ctx.options.random1P : ctx.options.random2P;
-          if ((side === '1P' ? ctx.options.mRan1P : ctx.options.mRan2P) && M_RAN_RANDOM_MODES.has(mode ?? 'OFF'))
-            applyRandomMode(
-              ctx.notes as Array<{ channel: string }>,
-              resolveLaneOptionChannels(side, playVariant, prepared.laneBindings),
-              'MIRROR',
-              Math.random,
-              {},
-              ctx.mineNotes as Array<{ channel: string }>,
-              ctx.invisibleNotes as Array<{ channel: string }>,
-            );
-        }
+      // M-RAN mirrors a player's side after its RANDOM-type option, under every ruleset with two-player play (#774).
+      for (const side of ['1P', '2P'] as const) {
+        const mode = side === '1P' ? ctx.options.random1P : ctx.options.random2P;
+        if ((side === '1P' ? ctx.options.mRan1P : ctx.options.mRan2P) && M_RAN_RANDOM_MODES.has(mode ?? 'OFF'))
+          applyRandomMode(
+            ctx.notes as Array<{ channel: string }>,
+            resolveLaneOptionChannels(side, playVariant, prepared.laneBindings),
+            'MIRROR',
+            Math.random,
+            {},
+            ctx.mineNotes as Array<{ channel: string }>,
+            ctx.invisibleNotes as Array<{ channel: string }>,
+          );
+      }
     }
   }
   if (!arrangement) applySevenToNine(prepared, sevenToNine);
@@ -814,8 +784,7 @@ function resolveStartingCovers(ctx: PlayChartContext): LaneCoverState[] {
     },
     sides,
   );
-  return ctx.options.judgeRuleset === '____' &&
-    (ctx.options.floatingHiSpeed || ctx.options.classicHiSpeed || (ctx.options.normalHiSpeedLevel ?? 0) > 0)
+  return ctx.options.floatingHiSpeed || ctx.options.classicHiSpeed || (ctx.options.normalHiSpeedLevel ?? 0) > 0
     ? covers.map(normalizeFloatingLaneCover)
     : covers;
 }
@@ -908,8 +877,6 @@ export function applyRandomMode(
   // S-RANDOM applies the active ruleset's policy for each event kind.
   ...secondary: Array<Array<{ channel: string }>>
 ): void {
-  if ((mode === 'SCATTER' || mode === 'SCATTER-CORRECTED') && (options.ruleset ?? 'lr2') !== 'lr2')
-    throw new RangeError('SCATTER is available only for LR2.');
   if (
     (mode === 'SCATTER' || mode === 'SCATTER-CORRECTED') &&
     options.playVariant &&
@@ -918,19 +885,6 @@ export function applyRandomMode(
     throw new RangeError('LR2 SCATTER requires a five-, seven- or nine-key domain.');
   if (mode === 'SCATTER-CORRECTED' && options.playVariant !== '9')
     throw new RangeError('Corrected SCATTER is a nine-key arrangement.');
-  if (mode === 'R-RANDOM' && options.ruleset !== 'beatoraja' && options.ruleset !== '____')
-    throw new RangeError('R-RANDOM is unavailable for LR2.');
-  if (
-    (mode === 'SPIRAL' ||
-      mode === 'H-RANDOM' ||
-      mode === 'ALL-SCR' ||
-      mode === 'RANDOM-EX' ||
-      mode === 'S-RANDOM-EX' ||
-      mode === 'RANDOM_PLAYABLE' ||
-      mode === 'S_RANDOM_PLAYABLE') &&
-    options.ruleset !== 'beatoraja'
-  )
-    throw new RangeError(`${mode} is available only for beatoraja.`);
   if (mode === 'CONVERGE' && options.ruleset === '____')
     throw new RangeError('CONVERGE is unavailable for this ruleset.');
   if (mode === 'CONVERGE' && options.ruleset === 'beatoraja' && options.playVariant !== '9')
@@ -1077,7 +1031,8 @@ export function applyRandomMode(
   }
 
   if (mode === 'RANDOM' || mode === 'RANDOM-EX') {
-    if (options.ruleset === 'beatoraja') {
+    // RANDOM-EX is beatoraja's whatever the judge rules: only beatoraja defines a scratch-inclusive shuffle.
+    if (options.ruleset === 'beatoraja' || mode === 'RANDOM-EX') {
       const available = [...domainLanes];
       const map = new Map<string, string>();
       for (const target of domainLanes) {

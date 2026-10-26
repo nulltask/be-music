@@ -1,5 +1,3 @@
-import type { LibraryChart } from '@be-music/player-scene-model';
-
 import { resolveChart, type ChartPlayVariant } from '@be-music/chart-model';
 import { parseChart } from '@be-music/chart-parser';
 import { preparePlaybackChart } from '@be-music/player-engine';
@@ -16,8 +14,6 @@ import {
   extractChartExtension,
   flipDPChannel,
   shuffleArray,
-  prepareChart,
-  type PlayChartContext,
 } from './play-chart.ts';
 
 /** A seeded random (mulberry32), so every draw is the same on every run. */
@@ -104,9 +100,8 @@ describe('applyRandomMode', () => {
     expect(expected).not.toEqual(KEYS_7);
   });
 
-  test('SCATTER rejects an incompatible ruleset before mutating notes or drawing RANDOM', () => {
+  test('SCATTER, an LR2 arrangement, arranges the notes under beatoraja rules too', () => {
     const notes = [{ channel: '11', beat: 0, endBeat: 2 }, ...notesOn(KEYS_7.slice(1), 1)];
-    const original = structuredClone(notes);
     let draws = 0;
     expect(() =>
       applyRandomMode(
@@ -119,9 +114,10 @@ describe('applyRandomMode', () => {
         },
         { ruleset: 'beatoraja' },
       ),
-    ).toThrow(/SCATTER.*LR2/);
-    expect(notes).toEqual(original);
-    expect(draws).toBe(0);
+    ).not.toThrow();
+    // LR2's SCATTER runs under beatoraja rules too (#774): it draws, and keeps every note on a key lane.
+    expect(draws).toBeGreaterThan(0);
+    expect(notes.every((note) => KEYS_1P.includes(note.channel))).toBe(true);
   });
 
   test('S-RANDOM selects the active judge ruleset instead of the drawing family', () => {
@@ -212,16 +208,6 @@ describe('shuffleArray', () => {
   });
 });
 
-test.each(['random1P', 'random2P'] as const)(
-  'fresh %s SCATTER rejects a different ruleset before resolving or mutating a chart',
-  (side) => {
-    const context = {
-      options: { [side]: 'SCATTER', dpFlip: true, judgeRuleset: 'beatoraja' },
-    } as unknown as PlayChartContext;
-    expect(() => prepareChart(context, {} as LibraryChart)).toThrow(/SCATTER.*unavailable/);
-  },
-);
-
 test.each([
   ['5', '1P', '11', '15'],
   ['7', '1P', '12', '18'],
@@ -306,14 +292,13 @@ test.each([5, 7, 9])('R-RANDOM has exactly 2(N-1) distinct rotations for %s keys
   expect(layouts.size).toBe(2 * (count - 1));
 });
 
-test('R-RANDOM rejects LR2 before drawing randomness or mutating the chart', () => {
+test('R-RANDOM rotates the lanes under LR2 rules too', () => {
   const notes = notesOn(KEYS_7);
-  expect(() =>
-    applyRandomMode(notes, KEYS_7, 'R-RANDOM', () => {
-      throw new Error('draw');
-    }),
-  ).toThrow(/unavailable/);
-  expect(channelsOf(notes)).toEqual(KEYS_7);
+  applyRandomMode(notes, KEYS_7, 'R-RANDOM', () => 0, { ruleset: 'lr2' });
+  // A rotation: every lane stays used once, and the order is neither the original nor its mirror.
+  expect([...channelsOf(notes)].sort()).toEqual([...KEYS_7].sort());
+  expect(channelsOf(notes)).not.toEqual(KEYS_7);
+  expect(channelsOf(notes)).not.toEqual([...KEYS_7].reverse());
 });
 
 test('R-RANDOM keeps LN ends, both DP sides and recorded arrangements stable', () => {
@@ -358,10 +343,16 @@ test('SPIRAL applies one row permutation to notes, mines and hidden notes, leavi
   expect(channelsOf(mines)).toEqual(['13']);
   expect(channelsOf(hidden)).toEqual(['11']);
   expect(notes[0]!.endSeconds).toBe(1);
-  expect(() => applyRandomMode([], [], 'SPIRAL', () => 0, { ruleset: '____' })).toThrow(/only for beatoraja/);
+  // beatoraja's SPIRAL runs the same way under the other rulesets (#774).
+  const acNotes = [
+    { channel: '11', seconds: 0 },
+    { channel: '11', seconds: 1 },
+  ];
+  applyRandomMode(acNotes, ['11', '12', '13'], 'SPIRAL', () => 0, { ruleset: '____' });
+  expect(channelsOf(acNotes)).toEqual(['12', '13']);
 });
 
-test('H-RANDOM applies its configured source threshold and rejects other rulesets', () => {
+test('H-RANDOM applies its configured source threshold under every ruleset', () => {
   const prepare = () => [
     { channel: '11', seconds: 0 },
     { channel: '11', seconds: 0.1 },
@@ -372,7 +363,9 @@ test('H-RANDOM applies its configured source threshold and rejects other ruleset
   applyRandomMode(fast, ['11', '12'], 'H-RANDOM', () => 0, { ruleset: 'beatoraja', hRandomThresholdBPM: 300 });
   expect(channelsOf(slow)).toEqual(['11', '12']);
   expect(channelsOf(fast)).toEqual(['11', '11']);
-  expect(() => applyRandomMode([], [], 'H-RANDOM', () => 0, { ruleset: '____' })).toThrow(/only for beatoraja/);
+  const ac = prepare();
+  applyRandomMode(ac, ['11', '12'], 'H-RANDOM', () => 0, { ruleset: '____', hRandomThresholdBPM: 120 });
+  expect(channelsOf(ac)).toEqual(channelsOf(slow));
 });
 
 test.each(['1P', '2P'] as const)('LR2 CONVERGE selects the %s scratch or explicit key', (side) => {
@@ -446,9 +439,14 @@ test('RANDOM-EX includes both wheel directions and preserves LN timing', () => {
   applyRandomMode(notes, keys, 'RANDOM-EX', () => 0.99, { ruleset: 'beatoraja', scratchLanes: ['1P', '1Q'] });
   expect(channelsOf(notes)).toEqual(['1Q', keys[1], keys[0]]);
   expect(notes[0]!.endSeconds).toBe(2);
-  expect(() => applyRandomMode([], keys, 'RANDOM-EX', () => 0.99, { ruleset: 'lr2', scratchLanes: ['16'] })).toThrow(
-    /only for beatoraja/,
-  );
+  // Under LR2 rules RANDOM-EX still runs beatoraja's scratch-inclusive shuffle, with the same draws.
+  const lr2Notes = [
+    { channel: keys[0]!, seconds: 0, endSeconds: 2 },
+    { channel: '1P', seconds: 3 },
+    { channel: '1Q', seconds: 4 },
+  ];
+  applyRandomMode(lr2Notes, keys, 'RANDOM-EX', () => 0.99, { ruleset: 'lr2', scratchLanes: ['1P', '1Q'] });
+  expect(channelsOf(lr2Notes)).toEqual(channelsOf(notes));
   expect(() => applyRandomMode([], keys, 'RANDOM-EX', () => 0.99, { ruleset: 'beatoraja' })).toThrow(
     /requires scratch/,
   );
@@ -536,9 +534,13 @@ test('S-RANDOM-EX includes both wheel directions and uses 40ms rather than H-RAN
     hRandomThresholdBPM: 1000,
   });
   expect(channelsOf(notes)).toEqual(['1Q', '1P']);
-  expect(() =>
-    applyRandomMode([], keys, 'S-RANDOM-EX', () => 0, { ruleset: 'lr2', scratchLanes: ['1P', '1Q'] }),
-  ).toThrow(/only for beatoraja/);
+  const lr2Notes = [0, 0.001].map((seconds) => ({ channel: keys[0]!, seconds }));
+  applyRandomMode(lr2Notes, keys, 'S-RANDOM-EX', () => 0.99, {
+    ruleset: 'lr2',
+    scratchLanes: ['1P', '1Q'],
+    hRandomThresholdBPM: 1000,
+  });
+  expect(channelsOf(lr2Notes)).toEqual(['1Q', '1P']);
 });
 
 test('LR2 RANDOM fixed-key selection pins the original key-1 axis, while nine-key RANDOM ignores it', () => {
@@ -570,10 +572,10 @@ test('SCATTER modes distinguish original outside-PMS placement from corrected ni
   }
 });
 
-test('corrected SCATTER rejects other rulesets and modes before consuming randomness or mutating notes', () => {
+test('corrected SCATTER rejects charts other than nine-key ones before consuming randomness or mutating notes', () => {
   for (const options of [
     { ruleset: 'lr2', playVariant: '7' },
-    { ruleset: 'beatoraja', playVariant: '9' },
+    { ruleset: 'beatoraja', playVariant: '7' },
   ] as const) {
     const notes = [{ channel: '11', seconds: 1 }];
     let draws = 0;
