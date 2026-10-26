@@ -40,7 +40,14 @@ export const PLAYER_APP_HTML = `
     <input id="songs" type="file" webkitdirectory multiple class="hidden-file-input" />
     <!-- The "Open files" button's picker: ZIP archives and replays (\`*.bmplay.json\`). -->
     <input id="files" type="file" multiple accept=".zip,.json" class="hidden-file-input" />
-    <input id="search" class="input search-input" type="search" placeholder="Search title / artist / genre..." />
+    <input
+      id="search"
+      class="input search-input"
+      type="search"
+      placeholder="Search title / artist / genre... (? for a filter)"
+      aria-describedby="search-error"
+    />
+    <p id="search-error" class="search-error" role="status" hidden></p>
     <div class="stage" id="stage">
       <!--
         Drop hint. Visible whenever the shell carries the
