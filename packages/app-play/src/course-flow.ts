@@ -1,7 +1,19 @@
-import { CourseRun, type CourseRunStagePlan, type RandomCourseDrawFailure } from '@be-music/player-engine/course';
 import {
+  CourseRun,
+  type CourseConstraint,
+  type CourseDefinition,
+  type CourseRunStagePlan,
+  type RandomCourseDrawFailure,
+} from '@be-music/player-engine/course';
+import {
+  listCourseReplayStageCharts,
+  matchesCourseReplayStageChart,
+  planCourseReplayPlayback,
   resolveCoursePlayedRuleset,
   type BeMusicCourseReplay,
+  type BeMusicReplay,
+  type CourseReplayStageChart,
+  type CourseReplayStagePlayback,
   type ReplayCourseResult,
 } from '@be-music/player-engine/replay';
 import {
@@ -9,6 +21,7 @@ import {
   type CourseView,
   type LibraryChart,
   type LibraryCourse,
+  type PlayResult,
 } from '@be-music/player-scene-model';
 import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
 import type { NonstopPlayFailure } from './nonstop-course.ts';
@@ -44,28 +57,153 @@ export function planCourseStart(entry: LibraryCourse): CourseStartPlan {
 export interface ActiveCourse {
   course: LibraryCourse;
   run: CourseRun<LibraryChart, CourseStageHistory>;
+  /** Set when the run plays a course replay back: the log, and the stage replays it plays up to where it stopped. */
+  replay?: ActiveCourseReplay;
+}
+
+/** A course replay being played back as a course run. */
+export interface ActiveCourseReplay {
+  log: BeMusicCourseReplay;
+  stages: CourseReplayStagePlayback[];
 }
 
 /** A stage of a running course as the player plays it: the run's plan, with the course as the skins show it there. */
 export interface CourseStagePlay extends CourseRunStagePlan<LibraryChart> {
   courseInfo: CourseView;
+  /** The stage's recorded replay, when the run plays a course replay back: it plays with the state it carried in. */
+  replay?: BeMusicReplay;
 }
 
-/** Starts a run of a course whose stages are all in the collection (`CourseRun` refuses one with a stage missing). */
-export function startCourseRun(course: LibraryCourse): ActiveCourse {
+/**
+ * Starts a run of a course whose stages are all in the collection (`CourseRun` refuses one with a stage missing), or,
+ * with `replay`, a run that plays that course replay back ({@link planCourseReplayPlayback}).
+ */
+export function startCourseRun(course: LibraryCourse, replay?: BeMusicCourseReplay): ActiveCourse {
   return {
     course,
     run: new CourseRun(
       course.definition,
       course.stages.map((stage) => stage.chart),
     ),
+    ...(replay !== undefined ? { replay: { log: replay, stages: planCourseReplayPlayback(replay) } } : {}),
   };
 }
 
-/** The next stage of a running course, with the course as the skins show it there; `undefined` once the run is over. */
+/**
+ * The next stage of a running course, with the course as the skins show it there; `undefined` once the run is over. A
+ * course replay's run is over once its recorded stages have played, and each stage plays its own replay.
+ */
 export function nextCourseStagePlay(active: ActiveCourse): CourseStagePlay | undefined {
   const plan = active.run.nextStage();
-  return plan === undefined ? undefined : { ...plan, courseInfo: resolveCourseView(active.course, plan.index) };
+  if (plan === undefined) return undefined;
+  const courseInfo = resolveCourseView(active.course, plan.index);
+  if (active.replay === undefined) return { ...plan, courseInfo };
+  const recorded = active.replay.stages[plan.index];
+  return recorded === undefined ? undefined : { ...plan, courseInfo, replay: recorded.replay };
+}
+
+/**
+ * Records a finished stage on the run. A course replay's stage records its recorded replay (the replay played back
+ * records none), and a stage the recorded run gave up ends the run as given up, as it did.
+ */
+export function recordCourseStage(active: ActiveCourse, result: PlayResult): void {
+  const recorded = active.replay?.stages[active.run.stagesPlayed];
+  if (recorded === undefined) {
+    active.run.recordStage(result.replay, result);
+    return;
+  }
+  if (recorded.end === 'given-up') active.run.giveUp(recorded.replay, result);
+  else active.run.recordStage(recorded.replay, result);
+}
+
+/** Whether the run goes on after this stage ({@link recordCourseStage} leaving it unfinished). */
+export function courseGoesOnAfter(active: ActiveCourse, result: PlayResult): boolean {
+  const recorded = active.replay?.stages[active.run.stagesPlayed];
+  if (recorded === undefined) return active.run.goesOnAfter(result.replay, result.stageOutcome);
+  return recorded.end === 'next' && active.run.goesOnAfter(recorded.replay, result.stageOutcome);
+}
+
+/** Whether the stage just played is one the recorded run gave up: the run ends there with no stage result, as it did. */
+export function courseReplayStageGivenUp(active: ActiveCourse | undefined): boolean {
+  return active?.replay?.stages[active.run.stagesPlayed]?.end === 'given-up';
+}
+
+/**
+ * A course replay's stages matched against the library: each stage's chart, or `undefined` when no loaded chart is the
+ * stage's. `keysOf` gives a loaded chart's hashes and, when a stage is named by its fingerprint alone, its chart
+ * fingerprint.
+ */
+export async function matchCourseReplayCharts(
+  courseLog: Pick<BeMusicCourseReplay, 'stages'>,
+  charts: readonly LibraryChart[],
+  keysOf: (
+    chartEntry: LibraryChart,
+    needFingerprint: boolean,
+  ) => Promise<{ sha256?: string; md5?: string; chartFingerprint?: string } | undefined>,
+): Promise<Array<{ stage: CourseReplayStageChart; chart?: LibraryChart }>> {
+  const stages = listCourseReplayStageCharts(courseLog);
+  const needFingerprint = stages.some(
+    (stage) => stage.sha256 === undefined && stage.md5 === undefined && stage.chartFingerprint !== undefined,
+  );
+  const found = new Map<number, LibraryChart>();
+  for (const chartEntry of charts) {
+    if (found.size === stages.length) break;
+    const pending = stages.filter((stage) => !found.has(stage.index));
+    const keys = await keysOf(chartEntry, needFingerprint);
+    if (keys === undefined) continue;
+    for (const stage of pending) {
+      if (matchesCourseReplayStageChart(stage, keys)) found.set(stage.index, chartEntry);
+    }
+  }
+  return stages.map((stage) => {
+    const chart = found.get(stage.index);
+    return chart !== undefined ? { stage, chart } : { stage };
+  });
+}
+
+/** How the missing-chart dialog names a stage: its title, else the hash it was looked for by. */
+export function describeCourseReplayStage(stage: CourseReplayStageChart): string {
+  const name = stage.title ?? stage.sha256 ?? stage.md5 ?? stage.chartFingerprint ?? 'unknown chart';
+  return `Stage ${stage.index + 1}: ${name}${stage.title !== undefined && stage.artist !== undefined ? ` / ${stage.artist}` : ''}`;
+}
+
+/**
+ * The course a course replay was played on, rebuilt from the log and its stages' charts as found in the library: its
+ * name, kind, constraints and trophies as recorded, a NONSTOP run's connections, and each stage by its hashes. No course
+ * file stands behind it, so it reads as a beatoraja course (no LR2 GRADE resets: the stage replays carry their setup).
+ * `charts` lists each stage's chart by stage index; a course with one missing is not playable.
+ */
+export function courseFromReplay(
+  courseLog: BeMusicCourseReplay,
+  charts: ReadonlyArray<LibraryChart | undefined>,
+): LibraryCourse {
+  const stages = listCourseReplayStageCharts(courseLog);
+  const definition: CourseDefinition = {
+    name: courseLog.course.name,
+    kind: courseLog.course.kind,
+    stages: stages.map((stage) => ({
+      ...(stage.sha256 !== undefined ? { sha256: stage.sha256 } : {}),
+      ...(stage.md5 !== undefined ? { md5: stage.md5 } : {}),
+      ...(charts[stage.index]?.title !== undefined ? { title: charts[stage.index]!.title } : {}),
+    })),
+    constraints: courseLog.course.constraints as CourseConstraint[],
+    trophies: courseLog.course.trophies.map((trophy) => ({ ...trophy })),
+    release: courseLog.course.release !== false,
+    ...(courseLog.nonstop !== undefined ? { connections: [...courseLog.nonstop.connections] } : {}),
+    source: { format: 'beatoraja-json' },
+  };
+  return {
+    id: `replay:${courseLog.course.name}`,
+    definition,
+    stages: stages.map((stage) => {
+      const chart = charts[stage.index];
+      return {
+        title: chart?.title ?? stage.title ?? `Stage ${stage.index + 1}`,
+        ...(chart !== undefined ? { chart } : {}),
+      };
+    }),
+    playable: charts.length === stages.length && charts.every((chart) => chart !== undefined),
+  };
 }
 
 /** The course as the skins show it at the stage last played (none before the first one). */

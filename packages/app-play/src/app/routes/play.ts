@@ -13,7 +13,10 @@ import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/
 import { courseStageRecordPlayFromResult } from '@be-music/player-engine/records';
 import { snapHiSpeed, type LibraryChart, type PlayOptions, type PlayResult } from '@be-music/player-scene-model';
 import {
+  courseGoesOnAfter,
+  courseReplayStageGivenUp,
   playAgainOverrides,
+  recordCourseStage,
   resolveGameplayExit,
   resolveGameplayRestart,
   type ActiveCourse,
@@ -316,6 +319,12 @@ export class PlayRoute {
         // recorded once the engine hands its replay over.
         const view = this.gameplayView;
         const active = courseStage !== undefined ? this.activeCourse : undefined;
+        // ESC stops a course replay where it is, as it stops a dropped replay: back to the select screen, no result.
+        if (active?.replay !== undefined || nonstop?.replay !== undefined) {
+          this.courses.abandonRun();
+          void this.showSelect();
+          return;
+        }
         const exit = resolveGameplayExit({ courseStage: active !== undefined, nonstop: nonstop !== undefined });
         if (exit === 'give-up-course') {
           void (async () => {
@@ -355,19 +364,21 @@ export class PlayRoute {
           return;
         }
         // A course stage with stage results skipped (or an auto-played one the course goes on after, as LR2 skips it)
-        // goes straight on to the next stage (or the course result).
+        // goes straight on to the next stage (or the course result). So does the stage a course replay's run gave up,
+        // as the run did.
         if (
           courseStage !== undefined &&
           this.activeCourse !== undefined &&
-          skipsCourseStageResult({
-            skipStageResults: this.guiState.courseAutoAdvance,
-            autoPlay,
-            courseGoesOn: this.activeCourse.run.goesOnAfter(result.replay, result.stageOutcome),
-          })
+          (courseReplayStageGivenUp(this.activeCourse) ||
+            skipsCourseStageResult({
+              skipStageResults: this.guiState.courseAutoAdvance,
+              autoPlay,
+              courseGoesOn: courseGoesOnAfter(this.activeCourse, result),
+            }))
         ) {
           void (async () => {
             this.testHook?.recordReplay(result.replay);
-            this.activeCourse?.run.recordStage(result.replay, result);
+            if (this.activeCourse !== undefined) recordCourseStage(this.activeCourse, result);
             if (!result.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             // No screen comes between the stages: the play leaves the stage, its last samples ringing out, and the next
             // stage (or the course result) shows.
@@ -393,7 +404,11 @@ export class PlayRoute {
           nonstop: nonstop !== undefined,
         });
         if (restart === 'restitch') {
-          void this.nonstopRoute.startNonstopCourse(nonstop!.course);
+          // A NONSTOP replay plays its recorded run again.
+          void this.nonstopRoute.startNonstopCourse(
+            nonstop!.course,
+            nonstop!.replay !== undefined ? { replay: nonstop!.replay } : {},
+          );
           return;
         }
         if (restart === 'abandon-course') {

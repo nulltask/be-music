@@ -266,3 +266,67 @@ describe('NonstopRoute: the run’s result', () => {
     expect(h.deps.replayAutoSave.saveCourse).not.toHaveBeenCalled();
   });
 });
+
+describe('NonstopRoute: a NONSTOP course replay', () => {
+  /** The course replay of a NONSTOP run: stitched with LR2 placement, the second stage's draws recorded. */
+  function recordedRun(): BeMusicCourseReplay {
+    const log = nonstopLog();
+    log.nonstop = {
+      connections: ['cut'],
+      placement: 'intended',
+      stitch: 1,
+      replay: { play: { mode: 'auto' } } as unknown as BeMusicReplay,
+      stages: [
+        { offsetUs: 0, windowStartUs: 0, rate: 1 },
+        { offsetUs: 1, windowStartUs: 1, rate: 1, randomDraws: [{ kind: 'random', max: 2, value: 2 }] },
+      ],
+      noteStages: [],
+    } as unknown as BeMusicCourseReplay['nonstop'];
+    return log;
+  }
+
+  test('stitches the course as the run recorded it and plays its stitched replay as one chart', async () => {
+    const h = harness();
+    const log = recordedRun();
+    await h.route.startNonstopCourse(nonstopCourse(), { decide: true, replay: log });
+    const stitchOptions = vi.mocked(prepareNonstopPlay).mock.calls[0]![1];
+    // The run's placement, not the Debug Menu's, its stitching rules and each stage's draws.
+    expect(stitchOptions).toMatchObject({
+      placement: 'intended',
+      stitch: 1,
+      stageDraws: [undefined, [{ kind: 'random', max: 2, value: 2 }]],
+    });
+    await h.deps.showDecide.mock.calls[0]![2].start();
+    const play = h.deps.playChart.mock.calls[0]![1];
+    expect(play.replay).toBe(log.nonstop!.replay);
+    expect(play.autoPlay).toBe(true);
+    expect(play.nonstop.replay).toBe(log);
+  });
+
+  test('shows the recorded run’s course result, keeping nothing, and R replays it again', async () => {
+    const h = harness();
+    const log = recordedRun();
+    await h.route.startNonstopCourse(nonstopCourse(), { replay: log });
+    const nonstop = h.deps.playChart.mock.calls.at(-1)![1].nonstop;
+    // A replay played back records none.
+    await h.route.showNonstopCourseResult(nonstop, undefined);
+    expect(buildNonstopCourseReplay).not.toHaveBeenCalled();
+    expect(h.deps.records.recordCourseResult).not.toHaveBeenCalled();
+    expect(h.deps.replayAutoSave.saveCourse).not.toHaveBeenCalled();
+    expect(h.deps.leaderboard.maybeSubmitCourse).not.toHaveBeenCalled();
+    const [data, mode] = h.deps.showResult.mock.calls[0]!;
+    expect(data).toMatchObject({ run: 'nonstop', chart: { title: 'Nonstop' }, fromReplay: true });
+    mode!.nonstop.retry();
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledTimes(2));
+    expect(h.deps.playChart.mock.calls[1]![1].replay).toBe(log.nonstop!.replay);
+  });
+
+  test('a course replay without its NONSTOP run plays nothing', async () => {
+    const h = harness();
+    const log = nonstopLog();
+    delete log.nonstop;
+    await h.route.startNonstopCourse(nonstopCourse(), { replay: log });
+    expect(prepareNonstopPlay).not.toHaveBeenCalled();
+    expect(h.deps.setStatus).toHaveBeenCalledWith('Nonstop: the course replay has no NONSTOP run to play');
+  });
+});
