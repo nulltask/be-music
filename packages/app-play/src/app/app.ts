@@ -31,6 +31,10 @@ import { BE_MUSIC_SKINS } from '../services/built-in-skins.ts';
 import { SilentModeSetting } from '../services/silent-mode.ts';
 import { playOptionsFromGUI, PlayOptionsService } from '../services/play-options.ts';
 import { REPLAY_RECORDER, ReplayAutoSave } from '../services/replays.ts';
+import { ReplaySlotStore } from '../services/replay-slots.ts';
+import { createIndexedDBReplaySlotBackend } from '../services/replay-slot-database.ts';
+import { ReplaySlotService } from '../services/replay-slot-service.ts';
+import { ReplaySlotsPanel } from '../replay-slots-panel.ts';
 import { RecordingService } from '../services/recording.ts';
 import { StatusLine } from '../services/status.ts';
 import { CourseMakerService } from '../services/course-maker.ts';
@@ -86,6 +90,9 @@ export class PlayerWebApp {
       setScene: async (scene) => {
         await this.mountStage();
         await this.sceneHost.setScene(scene);
+        // The replay slots' card belongs to the screen that shows it: the select screen shows it again for its bar, the
+        // result route for its run.
+        this.replaySlotsPanel.hide();
       },
     },
     recorder: { finalize: () => finalizeRecordingIfActive(this.recording.deps()) },
@@ -211,6 +218,21 @@ export class PlayerWebApp {
   private readonly replayAutoSave = new ReplayAutoSave({
     download: downloadBlob,
     warn: (message, error) => gamereplay.warn(message, error),
+  });
+  /**
+   * The replay slots: four replays per chart and per course kept in IndexedDB, saved into from a result and played from
+   * the select screen.
+   */
+  private readonly replaySlots = new ReplaySlotService({
+    store: new ReplaySlotStore({ backend: createIndexedDBReplaySlotBackend() }),
+    // Read on use: `guiState` is initialized after this field.
+    nonstopPlacement: () => this.guiState.nonstopPlacement,
+  });
+  /** The replay slots' card, on the skins without a replay-slot UI of their own (`replay-slots-panel.ts`). */
+  private readonly replaySlotsPanel = new ReplaySlotsPanel({
+    service: this.replaySlots,
+    replay: (slot) => this.selectView?.replay(slot),
+    setStatus: (text) => this.status.set(text),
   });
   /** The Capture folder's video recording and screenshots: the record armed, the next file name, the format. */
   private readonly recording: RecordingService;
@@ -347,6 +369,7 @@ export class PlayerWebApp {
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showResult: (data, mode) => this.resultRoute.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
+      courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
       unlockReplayOptions: () => this.unlockReplayOptions(),
     });
     this.courseRoute = new CourseRoute({
@@ -366,6 +389,7 @@ export class PlayerWebApp {
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showResult: (data, mode) => this.resultRoute.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
+      courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
       unlockReplayOptions: () => this.unlockReplayOptions(),
     });
     this.debugMenu = new DebugMenu(this.debugMenuDeps());
@@ -393,6 +417,9 @@ export class PlayerWebApp {
       unlockReplayOptions: () => this.unlockReplayOptions(),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       showDecide: (chartEntry, overrides) => this.decideRoute.showDecide(chartEntry, overrides),
+      replaySlots: this.replaySlots,
+      replaySlotsPanel: this.replaySlotsPanel,
+      startReplayFromSlot: (entry, slot) => this.replayRoute.startReplayFromSlot(entry, slot),
     });
     this.decideRoute = new DecideRoute({
       router: this.router,
@@ -437,6 +464,17 @@ export class PlayerWebApp {
       showSelect: () => this.showSelect(),
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       unlockReplayOptions: () => this.unlockReplayOptions(),
+      replaySlots: {
+        store: this.replaySlots.store,
+        rules: () => [
+          this.guiState.replaySlotAutoSave1,
+          this.guiState.replaySlotAutoSave2,
+          this.guiState.replaySlotAutoSave3,
+          this.guiState.replaySlotAutoSave4,
+        ],
+        panel: this.replaySlotsPanel,
+      },
+      setStatus: (text) => this.status.set(text),
     });
     this.playRoute = new PlayRoute({
       router: this.router,
@@ -478,6 +516,7 @@ export class PlayerWebApp {
       startCourseReplay: (course, courseLog) => this.courseRoute.startCourseReplay(course, courseLog),
       startNonstopCourse: (course, options) => this.nonstopRoute.startNonstopCourse(course, options),
       showMissingReplayCharts,
+      replaySlots: this.replaySlots,
     });
     this.shell = new PlayerShell({
       sceneHost: this.sceneHost,
@@ -570,6 +609,9 @@ export class PlayerWebApp {
   public start(): void {
     this.debugMenu.buildGUI();
     this.courseMaker.start();
+    // The replay slots load once; the select screen draws them again whenever they change.
+    void this.replaySlots.store.load();
+    this.replaySlots.store.subscribe(() => this.selectView?.refreshRecords());
     // The first scene shown mounts the Pixi host (`mountStage`). Keep its promise so URL auto-load (below) drives its own
     // `showSelect` only once the first select screen is up.
     const initialSelectReady = this.showSelect();

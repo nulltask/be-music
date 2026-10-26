@@ -30,6 +30,7 @@ import {
   PLAY_IN_SILENT_MODE_STORAGE_KEY,
   serializePlayInSilentMode,
 } from './silent-mode-playback.ts';
+import { REPLAY_AUTO_SAVE_RULES, type ReplayAutoSaveRule } from './services/replay-slots.ts';
 import type { PlayerGUIState, SkinFamilyOverride } from './types.ts';
 import { DEBUG_MENU_FOLDERS_STORAGE_KEY, parseFolderOpenStates, type FolderOpenStates } from './debug-menu-storage.ts';
 import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
@@ -57,6 +58,10 @@ export interface DebugMenuSettings {
   showInvisibleNotes: boolean;
   judgedNoteDisplay: PlayerGUIState['judgedNoteDisplay'];
   autoSaveReplay: boolean;
+  replaySlotAutoSave1: ReplayAutoSaveRule;
+  replaySlotAutoSave2: ReplayAutoSaveRule;
+  replaySlotAutoSave3: ReplayAutoSaveRule;
+  replaySlotAutoSave4: ReplayAutoSaveRule;
   courseAutoAdvance: boolean;
   nonstopPlacement: PlayerGUIState['nonstopPlacement'];
   submitToLeaderboard: boolean;
@@ -252,6 +257,10 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'compressorMaster', booleanOf(raw.compressorMaster));
   assign(settings, 'showInvisibleNotes', booleanOf(raw.showInvisibleNotes));
   assign(settings, 'autoSaveReplay', booleanOf(raw.autoSaveReplay));
+  assign(settings, 'replaySlotAutoSave1', oneOf(raw.replaySlotAutoSave1, REPLAY_AUTO_SAVE_RULES));
+  assign(settings, 'replaySlotAutoSave2', oneOf(raw.replaySlotAutoSave2, REPLAY_AUTO_SAVE_RULES));
+  assign(settings, 'replaySlotAutoSave3', oneOf(raw.replaySlotAutoSave3, REPLAY_AUTO_SAVE_RULES));
+  assign(settings, 'replaySlotAutoSave4', oneOf(raw.replaySlotAutoSave4, REPLAY_AUTO_SAVE_RULES));
   assign(settings, 'courseAutoAdvance', booleanOf(raw.courseAutoAdvance));
   assign(settings, 'submitToLeaderboard', booleanOf(raw.submitToLeaderboard));
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
@@ -510,6 +519,10 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('showInvisibleNotes');
   assignState('judgedNoteDisplay');
   assignState('autoSaveReplay');
+  assignState('replaySlotAutoSave1');
+  assignState('replaySlotAutoSave2');
+  assignState('replaySlotAutoSave3');
+  assignState('replaySlotAutoSave4');
   assignState('courseAutoAdvance');
   assignState('nonstopPlacement');
   assignState('submitToLeaderboard');
@@ -630,6 +643,10 @@ export function captureDebugMenuSettings(
     showInvisibleNotes: state.showInvisibleNotes,
     judgedNoteDisplay: state.judgedNoteDisplay,
     autoSaveReplay: state.autoSaveReplay,
+    replaySlotAutoSave1: state.replaySlotAutoSave1,
+    replaySlotAutoSave2: state.replaySlotAutoSave2,
+    replaySlotAutoSave3: state.replaySlotAutoSave3,
+    replaySlotAutoSave4: state.replaySlotAutoSave4,
     courseAutoAdvance: state.courseAutoAdvance,
     nonstopPlacement: state.nonstopPlacement,
     submitToLeaderboard: state.submitToLeaderboard,

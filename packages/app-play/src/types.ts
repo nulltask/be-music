@@ -4,6 +4,7 @@ import type { ReplayPlaybackOptions } from '@be-music/player-engine/replay';
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter, HSFix, PlayOptions } from '@be-music/player-scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
+import type { ReplayAutoSaveRule } from './services/replay-slots.ts';
 
 /** Every screen the player shows, each made by its `create*Scene`. */
 export type PlayerScene = SelectScene | DecideScene | PlayScene | ResultScene;
@@ -150,6 +151,15 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * beatoraja result paths. Toggled from the Debug Menu's "Auto-save replays" checkbox.
    */
   autoSaveReplay: boolean;
+  /**
+   * Each replay slot's auto-save rule (beatoraja's `autosavereplay`), applied as a result opens against the best record
+   * before the play (`DEFAULT_REPLAY_AUTO_SAVE_RULES` until the player picks others); `never` leaves the slot to be
+   * saved by hand.
+   */
+  replaySlotAutoSave1: ReplayAutoSaveRule;
+  replaySlotAutoSave2: ReplayAutoSaveRule;
+  replaySlotAutoSave3: ReplayAutoSaveRule;
+  replaySlotAutoSave4: ReplayAutoSaveRule;
   /**
    * In a course, go straight on to the next stage instead of showing each stage's result (the course result still
    * shows at the end). False (the default) shows every stage's result, as LR2 and beatoraja do.

@@ -28,6 +28,7 @@ import {
   BEATORAJA_SORTS,
   beatorajaClearLampOp,
   beatorajaKeysFilterIndex,
+  beatorajaReplayButtonSlot,
   beatorajaSortIndex,
   resolveBeatorajaOptionButton,
   resolveBeatorajaSelectSliderValue,
@@ -411,6 +412,13 @@ export class BeatorajaSelectView implements SelectView {
       case BEATORAJA_BUTTON.OPEN_IR_WEBSITE:
         openIRWebsite();
         return;
+      // beatoraja's replay1-4 buttons replay the bar from their slot (`getReplayEventConsumer`).
+      case BEATORAJA_BUTTON.REPLAY:
+      case BEATORAJA_BUTTON.REPLAY2:
+      case BEATORAJA_BUTTON.REPLAY3:
+      case BEATORAJA_BUTTON.REPLAY4:
+        emit({ type: 'replay', slot: beatorajaReplayButtonSlot(act)! });
+        return;
       default: {
         const changed = resolveBeatorajaOptionButton(act, frame.playOptions, back);
         if (changed !== undefined) {
@@ -418,7 +426,7 @@ export class BeatorajaSelectView implements SelectView {
             emit({ type: 'set-play-option', key: key as keyof PlayOptions, value });
           return;
         }
-        // The replay slots, key config, skin select and the community extensions (GdbG's volume, 900) do nothing yet.
+        // The key config, skin select and the community extensions (GdbG's volume, 900) do nothing yet.
         log.debug('button not implemented', { act });
         return;
       }
@@ -502,6 +510,9 @@ export class BeatorajaSelectView implements SelectView {
               ? records.course(entry.course)
               : undefined;
         return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
+      },
+      get replaySlots() {
+        return view.frame?.replaySlots;
       },
       nowMs: () => view.frame?.clock.nowMs ?? 0,
       get decodeChartImages() {

@@ -1,3 +1,4 @@
+import type { ReplaySlotStore } from '../../services/replay-slots.ts';
 import { createEmptyJSON } from '@be-music/chart-source';
 import type { BrowserDroppedFile, BrowserChartCollection } from '@be-music/player-browser/collection';
 import {
@@ -72,6 +73,14 @@ function harness() {
     setPlayStatus: vi.fn<ReplayRouteDeps['setPlayStatus']>(),
     playChart: vi.fn<ReplayRouteDeps['playChart']>(async () => {}),
     showSelect: vi.fn<ReplayRouteDeps['showSelect']>(async () => {}),
+    // Slot 2 of chart `a` holds a replay; the store is a fake, as the replay module is mocked here.
+    replaySlots: {
+      targetOf: vi.fn((entry: { kind: string }) => ({ kind: entry.kind as 'chart' | 'course', id: 'bmfp0:a' })),
+      store: {
+        exists: vi.fn(() => [false, true, false, false]),
+        read: vi.fn<ReplaySlotStore['read']>(async () => ({ kind: 'chart', replay: replay({}, 'manual') })),
+      } as unknown as ReplaySlotStore,
+    },
     startCourseReplay: vi.fn<ReplayRouteDeps['startCourseReplay']>(async () => {}),
     startNonstopCourse: vi.fn<ReplayRouteDeps['startNonstopCourse']>(async () => {}),
     showMissingReplayCharts: vi.fn<ReplayRouteDeps['showMissingReplayCharts']>(),
@@ -154,6 +163,23 @@ describe('ReplayRoute', () => {
     expect(h.deps.setStatus).toHaveBeenCalledWith('Replay failed: arrangement differs');
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
   });
+
+  test('a replay slot plays back on its chart, as a dropped replay does', async () => {
+    const h = harness();
+    expect(h.route.startReplayFromSlot({ kind: 'chart', chart: h.charts[0]! }, 1)).toBe(true);
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledOnce());
+    expect(h.deps.playChart).toHaveBeenCalledWith(h.charts[0], { autoPlay: false, replay: replay({}, 'manual') });
+    expect(h.deps.setPlayStatus).toHaveBeenCalledWith('Replaying slot 2: a');
+  });
+
+  test('an empty slot starts nothing, and a slot that cannot be read says so', async () => {
+    const h = harness();
+    expect(h.route.startReplayFromSlot({ kind: 'chart', chart: h.charts[0]! }, 0)).toBe(false);
+    vi.mocked(h.deps.replaySlots.store.read).mockRejectedValueOnce(new Error('broken'));
+    expect(h.route.startReplayFromSlot({ kind: 'chart', chart: h.charts[0]! }, 1)).toBe(true);
+    await vi.waitFor(() => expect(h.deps.setStatus).toHaveBeenCalledWith('Replay slot 2 could not be read'));
+    expect(h.deps.playChart).not.toHaveBeenCalled();
+  });
 });
 
 const COURSE_FILE = { name: 'Dan-20260101.bmcourse.json', text: async () => '{}' } as unknown as BrowserDroppedFile;
@@ -231,5 +257,21 @@ describe('ReplayRoute course replays', () => {
     expect(h.deps.setStatus).toHaveBeenCalledWith('Course replay: invalid course replay (not a course replay)');
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
     expect(h.deps.startCourseReplay).not.toHaveBeenCalled();
+  });
+
+  test("a course's replay slot plays back as a dropped course replay does, a NONSTOP one stitched again", async () => {
+    const h = harness();
+    const course = { kind: 'course', course: {} } as unknown as Parameters<typeof h.route.startReplayFromSlot>[0];
+    const grade = courseReplay('grade', [{ sha256: 'sha-a' }, { sha256: 'sha-b' }]);
+    vi.mocked(h.deps.replaySlots.store.read).mockResolvedValueOnce({ kind: 'course', replay: grade });
+    expect(h.route.startReplayFromSlot(course, 1)).toBe(true);
+    await vi.waitFor(() => expect(h.deps.startCourseReplay).toHaveBeenCalledOnce());
+    expect(h.deps.startCourseReplay.mock.calls[0]![1]).toBe(grade);
+    expect(h.deps.setPlayStatus).toHaveBeenCalledWith('Replaying course: Dan');
+    const nonstop = courseReplay('nonstop', [{ sha256: 'sha-a' }, { sha256: 'sha-b' }]);
+    vi.mocked(h.deps.replaySlots.store.read).mockResolvedValueOnce({ kind: 'course', replay: nonstop });
+    h.route.startReplayFromSlot(course, 1);
+    await vi.waitFor(() => expect(h.deps.startNonstopCourse).toHaveBeenCalledOnce());
+    expect(h.deps.startNonstopCourse.mock.calls[0]![1]).toEqual({ decide: true, replay: nonstop });
   });
 });
