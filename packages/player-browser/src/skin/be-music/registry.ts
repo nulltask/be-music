@@ -11,7 +11,7 @@ export interface BeMusicSkinRegistry {
   /** The skin with `id`, or the first registered skin when `id` is unknown / undefined. */
   resolve(id: string | undefined): BeMusicSkin;
   /**
-   * Registers another skin — a third-party one, or an optional built-in such as `latticeSkin`. The skin is validated
+   * Registers another skin — a third-party one, or one a host adds on request. The skin is validated
    * like the initial ones (see `validateBeMusicSkin`); a skin with an id already registered replaces that one (handy
    * when reloading a skin under development). Returns the problems that kept the skin out, empty when it was added.
    */

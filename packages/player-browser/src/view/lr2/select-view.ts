@@ -8,7 +8,7 @@
  * this view: the session sees intents.
  */
 
-import { resolveBeMusicSelectLayout, type BeMusicSelectLayout } from '@be-music/player-skin-sdk';
+import type { BeMusicSelectLayout } from '@be-music/player-skin-sdk';
 import { Color, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type {
   LR2ButtonElement,
@@ -52,7 +52,6 @@ import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { PerfTracker } from '../shared/perf.ts';
 import { disposeChildren } from '../../stage/pixi-utils.ts';
 import type { LR2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
-import { resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import {
   applyDestinationToSprite,
@@ -72,12 +71,17 @@ import {
   LR2SkinTextureStore,
   resolveSolidSpecialGraphicTexture,
 } from '../../skin/lr2/scene-textures.ts';
-import { phantomSkin } from '../../skins/phantom/index.ts';
 import { renderEmptyStateHint } from '../built-in/select-empty-hint.ts';
 import { SelectReadTextOverlay } from '../built-in/select-readtext.ts';
 import { SelectPointer, type SelectDesignSize, type SelectPointerContext } from '../shared/select-pointer.ts';
 import type { IntentSink, SelectFrame, SelectIntent, SelectView } from '../types.ts';
 import { clampSlot, renderLR2SelectBars, wrapIndex, type LR2SelectBarsContext } from './select-bars.ts';
+
+/**
+ * The song-list window a pulled list settles by: the geometry of the built-in select list the LR2 select has always
+ * used (on the 16:9 stage). The skin's own slots still place the bars.
+ */
+const LR2_SELECT_LIST_LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 60, listBottomInset: 26, rowHeight: 28 };
 
 const log = logger('select');
 
@@ -733,12 +737,7 @@ export class LR2SelectView implements SelectView {
       // A list pulled part of a row settles by the built-in skin's list window, as the LR2 select always did; the
       // skin's slots place the bars.
       get beMusicSelectLayout(): BeMusicSelectLayout {
-        const screen = view.host?.app.screen;
-        const stage = resolveBeMusicSkinStage(
-          phantomSkin,
-          screen !== undefined && screen.width > 0 && screen.height > 0 ? screen : undefined,
-        );
-        return resolveBeMusicSelectLayout(phantomSkin.select, { width: stage.width, height: stage.height });
+        return LR2_SELECT_LIST_LAYOUT;
       },
       get selectedIndex(): number {
         return view.cursor;
