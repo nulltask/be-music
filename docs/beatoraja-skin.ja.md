@@ -211,6 +211,8 @@ sequenceDiagram
 - result は max combo を combo（104）としても読み、75 は 0（LR2 の自己ベストの max combo）とします。play は 75 で max combo を読みます。
 - play 中の 1P のランクの op（200-207）とその「now」の値（340-347）は、それまでに判定した note に対する EX score のランクです。最初の note の前は 100 % なので、play は AAA から始まります。beatoraja の `createNowRank` が `ScoreDataProperty.nowrate` を読むとおりで、note のない譜面ではどれも点きません（#430）。
 - 汎用のランクの op（220-227）は、全 note に対する EX score が届いたランクをすべて点けます（`beatorajaGenericRankOps`）。beatoraja の `BooleanPropertyFactory` が `ScoreDataProperty.qualifyRank`（`rate >= border / 27`）を読むとおりで、AAA なら 8 つすべて、どの score でも F が点き、note のない譜面ではどれも点きません。`computeGenericRankOp` はそのうち最も高いランクを 1 つ返します。
+- リプレイスロット（[replay.ja.md](./replay.ja.md#リプレイスロット)）：選曲画面では op 196 / 197（スロット 1 が空 / リプレイあり）、1196 / 1197、1199 / 1200、1202 / 1203（スロット 2-4）がカーソルの下のバーに従い、1205-1208 が選んだスロットを示し、リプレイボタン（19、316-318）がそのスロットを再生します。リザルト画面では各スロットが none・exists・saved の op（196-198、1196-1204）のどれかを点け、リプレイボタンがそのスロットに保存します（`resolveBeatorajaSelectReplayOps`、`resolveBeatorajaResultReplayOps`、`beatorajaReplayButtonSlot`）。beatoraja の `createReplayProperty` と `getReplayEventConsumer` と同じです。リザルトのスキンのボタンをタップすると、そのボタンだけが働き、画面は先へ進みません。
+- テーマの `resultclose` と `course_close`（`pickBeatorajaThemeBGMPaths` の `resultClose` / `courseClose`）は、リザルトとコースのリザルトを閉じる音です。beatoraja にはリプレイを保存したときの音はありません。
 - beatoraja にとって別の意味を持つ LR2 の番号がいくつかあります（`IntegerPropertyFactory`、`BooleanPropertyFactory`、`StringPropertyFactory`）。number 92 はメイン BPM（LR2 ではインターネットランキングの順位）、op 400 は CONSTANT のオプション（LR2 ではキーコンフィグのページ）です。beatoraja には number 38-41・93-94、text 17-29、op 34 がないので、何も読みません（result と decide の画面では 0）（#430）。
 
 ### 既知の未対応

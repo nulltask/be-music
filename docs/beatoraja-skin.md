@@ -241,6 +241,14 @@ sequenceDiagram
 - The generic rank ops (220-227) light every rank the EX score reaches over the chart's notes (`beatorajaGenericRankOps`),
   as beatoraja's `BooleanPropertyFactory` asks `ScoreDataProperty.qualifyRank` (`rate >= border / 27`): an AAA lights
   all eight, any score lights F, and a chart without notes lights none. `computeGenericRankOp` names the highest one.
+- The replay slots ([replay.md](./replay.md#replay-slots)): on the select screen ops 196 / 197 (slot 1 empty / holding a
+  replay), 1196 / 1197, 1199 / 1200 and 1202 / 1203 (slots 2-4) follow the bar under the cursor and 1205-1208 the slot
+  picked, and the replay buttons (19, 316-318) replay their slot; on a result screen each slot lights its none, exists or
+  saved op (196-198, 1196-1204) and the replay buttons save into it (`resolveBeatorajaSelectReplayOps`,
+  `resolveBeatorajaResultReplayOps`, `beatorajaReplayButtonSlot`), as beatoraja's `createReplayProperty` and
+  `getReplayEventConsumer` do. A tap on a result skin's button acts on it and does not also press on.
+- A theme's `resultclose` and `course_close` sounds (`pickBeatorajaThemeBGMPaths`'s `resultClose` / `courseClose`) close
+  a result and a course result. beatoraja has no sound for saving a replay.
 - A few LR2 ids mean something else to beatoraja (`IntegerPropertyFactory`, `BooleanPropertyFactory`,
   `StringPropertyFactory`): number 92 is the main BPM (LR2's internet-ranking place), op 400 the CONSTANT option (LR2's
   key-config page), and beatoraja defines no numbers 38-41 or 93-94, no texts 17-29 and no op 34, so they read nothing
