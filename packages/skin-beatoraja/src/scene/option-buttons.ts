@@ -6,8 +6,8 @@ import { nextChoice, type PlayOptions } from '@be-music/player-scene-model';
  * so its index is the label's image index.
  */
 const CYCLE_BUTTONS: Readonly<Record<number, { key: keyof PlayOptions; choices: readonly unknown[] }>> = {
-  /** `notesdisplaytimingautoadjust`. */
-  75: { key: 'judgeTimingAutoAdjust', choices: [false, true] },
+  /** `notesdisplaytimingautoadjust`: off, or beatoraja's calibration (LR2's modes read as off). */
+  75: { key: 'judgeTimingAutoAdjust', choices: ['OFF', 'BEATORAJA'] },
   /** `gaugeautoshift`: NONE, CONTINUE, SURVIVAL TO GROOVE, BEST CLEAR, SELECT TO UNDER. */
   78: { key: 'gaugeAutoShift', choices: ['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER'] },
   /** `lnmode`: the mode of a chart that leaves its long notes undefined. */

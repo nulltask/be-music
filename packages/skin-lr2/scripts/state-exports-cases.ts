@@ -218,6 +218,12 @@ export function registerLR2SkinStateExportsCases(define: DefineBenchmarkCase): v
       lr2StateAPI.resolveLR2SelectButton(93);
     },
   });
+  define('skin-lr2.state.stepLR2JudgeTiming', {
+    run: () => {
+      lr2StateAPI.stepLR2JudgeTiming(98, 1);
+      lr2StateAPI.stepLR2JudgeTiming(-99, -1);
+    },
+  });
   define('skin-lr2.state.resolveLR2SelectState', {
     run: () => {
       const state = lr2StateAPI.resolveLR2SelectState({

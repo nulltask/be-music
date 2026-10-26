@@ -34,8 +34,13 @@ describe('beatoraja option buttons', () => {
 
   test('steps each option in beatoraja’s numbering, which its label image follows', () => {
     expect(resolveBeatorajaOptionButton(308, { longNoteMode: 'HCN' }, false)).toEqual({ longNoteMode: 'LN' });
-    expect(resolveBeatorajaOptionButton(75, { judgeTimingAutoAdjust: false }, false)).toEqual({
-      judgeTimingAutoAdjust: true,
+    expect(resolveBeatorajaOptionButton(75, { judgeTimingAutoAdjust: 'OFF' }, false)).toEqual({
+      judgeTimingAutoAdjust: 'BEATORAJA',
+    });
+    // beatoraja's switch reads LR2's modes as off, and turns them off.
+    expect(resolveBeatorajaPlayOptionIndex(75, { judgeTimingAutoAdjust: 'LR2-SILENT' })).toBe(0);
+    expect(resolveBeatorajaOptionButton(75, { judgeTimingAutoAdjust: 'LR2-ON' }, false)).toEqual({
+      judgeTimingAutoAdjust: 'OFF',
     });
     expect(resolveBeatorajaOptionButton(78, { gaugeAutoShift: 'NONE' }, true)).toEqual({
       gaugeAutoShift: 'SELECT_TO_UNDER',

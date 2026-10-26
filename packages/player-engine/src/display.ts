@@ -50,4 +50,10 @@ export {
   type ImageResizeAlgorithm,
 } from './image-resize-algorithm.ts';
 
-export { adjustBeatorajaJudgeTiming } from './core/judge-timing.ts';
+export {
+  adjustBeatorajaJudgeTiming,
+  isLR2JudgeTimingAutoAdjust,
+  JUDGE_TIMING_AUTO_ADJUST_MODES,
+  resolveJudgeTimingAutoAdjust,
+  type JudgeTimingAutoAdjust,
+} from './core/judge-timing.ts';

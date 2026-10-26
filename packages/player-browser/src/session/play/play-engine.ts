@@ -648,7 +648,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         ctx.options.replay !== undefined ? ctx.options.replay.play.gaugeAutoShift : ctx.options.gaugeAutoShift,
       judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,
       customJudge: ctx.options.replay ? ctx.options.replay.play.customJudge : ctx.options.customJudge,
-      judgeTimingAutoAdjust: ctx.options.replay === undefined && ctx.options.judgeTimingAutoAdjust === true,
+      judgeTimingAutoAdjust: ctx.options.replay === undefined ? (ctx.options.judgeTimingAutoAdjust ?? 'OFF') : 'OFF',
       judgeTimingMs: ctx.options.judgeTimingMs,
       battleMode: ctx.options.replay
         ? (ctx.options.replay.play.battleMode ?? 'OFF')

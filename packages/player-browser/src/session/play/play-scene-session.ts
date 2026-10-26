@@ -150,7 +150,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
         ...recorded,
       });
       if (
-        recorded.judgeTimingAutoAdjust === true &&
+        playOptions.judgeTimingAutoAdjust !== 'OFF' &&
         typeof recorded.judgeTimingMs === 'number' &&
         Number.isSafeInteger(recorded.judgeTimingMs)
       ) {
@@ -178,7 +178,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       const current: ReplayOptionState = { ...liveOptions };
       const change = diffReplayOptions(this.recordedOptions ?? { ...playOptions }, current);
       // Calibration is recorded synchronously by the engine; do not echo a stale rendered value back to it.
-      if (change && play.options.judgeTimingAutoAdjust) delete change.judgeTimingMs;
+      if (change && (play.options.judgeTimingAutoAdjust ?? 'OFF') !== 'OFF') delete change.judgeTimingMs;
       if (change && Object.keys(change).length > 0)
         play.sharedEngineInputSignals.pushCommand({ kind: 'options', values: change });
       this.recordedOptions = current;

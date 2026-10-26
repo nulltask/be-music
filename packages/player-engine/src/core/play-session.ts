@@ -34,6 +34,7 @@ import {
 } from './engine-audio.ts';
 import { createAudioPlaybackClockSource, type PlaybackClock, type PlaybackClockSource } from './engine-clock.ts';
 import { createJudgeEffectHandler } from './engine-effects.ts';
+import { isLR2JudgeTimingAutoAdjust } from './judge-timing.ts';
 import { createTempoClock, type TempoClock } from './tempo-clock.ts';
 import {
   collectRealtimeAudioVolumeEvents,
@@ -123,6 +124,8 @@ export interface PlaySession {
   readHCNLanes?: (seconds: number) => readonly PlayerHCNLaneState[];
   /** Maps the judge's effects onto audio, the UI buses, the replay and the trace. */
   readonly applyJudgeEffect: JudgeCoreEffectSink;
+  /** Ends a judging pass of a manual play: LR2's automatic judge timing steps here (`JudgeEffectHandler`). */
+  readonly settleJudgeTiming: () => void;
   /** The chart's volume changes (`#97` / `#98`), queued against the audio write head. */
   readonly volumeChanges: RealtimeAudioCursor<TimedChartSound>;
   /** The chart's background sounds, queued against the audio write head. */
@@ -394,7 +397,7 @@ export async function createPlaySession(
                 ? {
                     options: {
                       ...hostPlaySettings.options,
-                      judgeTimingAutoAdjust: options.judgeTimingAutoAdjust ?? false,
+                      judgeTimingAutoAdjust: options.judgeTimingAutoAdjust ?? 'OFF',
                       judgeTimingMs: options.judgeTimingMs ?? 0,
                     },
                   }
@@ -587,11 +590,13 @@ export async function createPlaySession(
   });
   const applyJudgeEffect = createJudgeEffectHandler({
     judgeTiming: {
-      enabled:
-        mode === 'manual' &&
-        options.replayInputs === undefined &&
-        ruleset.rulesetId === 'beatoraja' &&
-        options.judgeTimingAutoAdjust === true,
+      // Manual play only, under any judge rules; LR2 skips its own adjustment in a two-player BATTLE (`battle` 1).
+      mode:
+        mode !== 'manual' ||
+        options.replayInputs !== undefined ||
+        (twoPlayer && isLR2JudgeTimingAutoAdjust(options.judgeTimingAutoAdjust))
+          ? 'OFF'
+          : (options.judgeTimingAutoAdjust ?? 'OFF'),
       currentSeconds: () => (session?.clock ? tempoClock.chartSecondsAt(session.clock.nowMs()) : 0),
       get value() {
         return options.judgeTimingMs ?? 0;
@@ -666,6 +671,7 @@ export async function createPlaySession(
     stateLogger,
     publishUIFrame,
     applyJudgeEffect,
+    settleJudgeTiming: () => applyJudgeEffect.settleJudgeTiming(),
     volumeChanges,
     backgroundAudio,
     clockSource,

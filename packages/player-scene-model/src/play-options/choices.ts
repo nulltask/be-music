@@ -4,6 +4,7 @@ import { clampFloatingHiSpeed } from './floating-hi-speed.ts';
 import { clampLongNoteRate, clampHRandomThresholdBPM, parseLaneRandomSeed } from '@be-music/player-engine/lanes';
 import { resolveConstantVisibility } from './constant-visibility.ts';
 import { clampJudgeTimingMs } from './judge-timing.ts';
+import { JUDGE_TIMING_AUTO_ADJUST_MODES } from '@be-music/player-engine/display';
 import { clamp } from '@be-music/shared-utils/core';
 import {
   BEATORAJA_PRACTICE_GAUGE_TYPES,
@@ -130,7 +131,7 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   noteDurationMs: 500,
   constantFadeMs: 100,
   bpmGuide: false,
-  judgeTimingAutoAdjust: false,
+  judgeTimingAutoAdjust: 'OFF',
   autoPlay: false,
   bga: 'ON',
   // BGA renders at LR2's `#DST_BGA,...,30` rect (NORMAL) at `'NORMAL'` — a 256×256 window squeezed in beside the lane
@@ -232,7 +233,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   floatingHiSpeed: BOOLEAN_CYCLE,
   fixedDisplayArea: BOOLEAN_CYCLE,
   bpmGuide: BOOLEAN_CYCLE,
-  judgeTimingAutoAdjust: BOOLEAN_CYCLE,
+  judgeTimingAutoAdjust: JUDGE_TIMING_AUTO_ADJUST_MODES,
   visualConstant: BOOLEAN_CYCLE,
   extraNoteScratch: BOOLEAN_CYCLE,
   sevenToNinePattern: [0, 1, 2, 3, 4, 5, 6],
@@ -319,6 +320,9 @@ export function resolvePlayOptionValue<K extends keyof PlayOptions>(
   if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
   if (key === 'randomSeed1P' || key === 'randomSeed2P') return parseLaneRandomSeed(value) as PlayOptions[K] | undefined;
   if (key === 'gauge1P' || key === 'gauge2P') return isGaugeType(value) ? (value as PlayOptions[K]) : undefined;
+  // Settings and replays from before the modes store beatoraja's switch as a boolean.
+  if (key === 'judgeTimingAutoAdjust' && typeof value === 'boolean')
+    return (value ? 'BEATORAJA' : 'OFF') as PlayOptions[K];
   const choices = PLAY_OPTION_CHOICES[key] as readonly unknown[] | undefined;
   if (choices) return choices.includes(value) ? (value as PlayOptions[K]) : undefined;
   const clamp = NUMERIC_PLAY_OPTION_CLAMPS[key];

@@ -128,6 +128,9 @@ describe('resolveLR2PlayState numbers', () => {
     );
     expect(state.number(LR2_NUM.HISPEED_1P)).toBe(250);
     expect(state.number(LR2_NUM.FPS)).toBe(60);
+    // The judge timing reads 0 until the frame carries the live value an automatic adjustment moves.
+    expect(state.number(LR2_NUM.JUDGE_TIMING)).toBe(0);
+    expect(resolveLR2PlayState(SETUP, frame({ judgeTimingMs: 7 })).number(LR2_NUM.JUDGE_TIMING)).toBe(7);
     expect(state.number(LR2_NUM.SCORE)).toBe(120000);
     expect(state.number(LR2_NUM.EXSCORE)).toBe(110);
     expect(state.number(LR2_NUM.COMBO)).toBe(12);

@@ -1,6 +1,7 @@
 import type { BattleMode, LR2ExtraLevel } from '@be-music/player-engine/lanes';
 import type { MineModifier, LongNoteModifier, ScrollModifier } from '@be-music/player-engine/lanes';
 import type { GaugeType, GaugeAutoShift } from '@be-music/player-engine/ruleset';
+import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 
 /**
@@ -32,8 +33,13 @@ export interface PlayOptions {
   constantFadeMs: number;
   /** beatoraja BPM GUIDE shows BPM-change and STOP markers on the lane. */
   bpmGuide: boolean;
-  /** beatoraja 0.8.9 display-only calibration on PG/GR/GD; disabled during autoplay and replay. */
-  judgeTimingAutoAdjust: boolean;
+  /**
+   * The automatic judge-timing adjustment of a manual play: beatoraja 0.8.9's calibration on PG/GR/GD, or LR2's ON /
+   * SILENT (`autojudge` 1 / 2: a 1 ms step per ten hits; SILENT also loads no keysounds, BGM or BGA and hides the judge
+   * display). Display-only; AUTO and replays never adjust. Stored settings and replays from before the modes hold a
+   * boolean, read as `'BEATORAJA'` / `'OFF'`.
+   */
+  judgeTimingAutoAdjust: JudgeTimingAutoAdjust;
   /**
    * When `true`, every note auto-judges as PERFECT at its scheduled time. Mirrors the LR2 AUTOPLAY skin button
    * (`#SRC_BUTTON type=16`). Starting a chart in AUTO from the select screen (its `start` with `autoPlay`, such as a
