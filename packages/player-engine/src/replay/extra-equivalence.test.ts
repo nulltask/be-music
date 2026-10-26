@@ -34,10 +34,13 @@ for (const extraNoteScratch of [false, true]) {
   });
 }
 
-test('EXTRA rejects an incompatible source ruleset, including a host-prepared chart', async () => {
+test('EXTRA plays and records under every judge ruleset, including a host-prepared chart', async () => {
   const json = parseChart('#BPM 240\n#00101:01', 'bms');
-  const preparedChart = preparePlaybackChart(resolveChart(json), { extraNoteDepth: 1 });
-  await expect(runRecordedPlay(json, [], 'lr2', { preparedChart })).rejects.toThrow(/only for beatoraja/);
+  for (const ruleset of ['lr2', '____'] as const) {
+    const preparedChart = preparePlaybackChart(resolveChart(json), { extraNoteDepth: 1 });
+    const played = await runRecordedPlay(json, [], ruleset, { preparedChart });
+    expect(played.replay.play).toMatchObject({ judgeRuleset: ruleset, extraNoteDepth: 1, extraNoteChangeCount: 1 });
+  }
 });
 
 test('host-prepared EXTRA is recorded even when the host omits the duplicated engine selection', async () => {

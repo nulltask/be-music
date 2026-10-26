@@ -34,10 +34,15 @@ test('scroll REMOVE records selection without claiming a change on a constant ch
   });
 });
 
-test('scroll REMOVE rejects incompatible source rulesets', async () => {
-  await expect(runRecordedPlay(parseChart(variable, 'bms'), [], 'lr2', { scrollModifier: 'REMOVE' })).rejects.toThrow(
-    /only for beatoraja/,
-  );
+test('scroll REMOVE plays and records under every judge ruleset', async () => {
+  for (const ruleset of ['lr2', '____'] as const) {
+    const run = await runRecordedPlay(parseChart(variable, 'bms'), [], ruleset, { scrollModifier: 'REMOVE' });
+    expect(run.replay.play).toMatchObject({
+      judgeRuleset: ruleset,
+      scrollModifier: 'REMOVE',
+      scrollModifierChanged: true,
+    });
+  }
 });
 
 test('a shared scroll ADD chart records the effective curve and preserves live/replay judging', async () => {
