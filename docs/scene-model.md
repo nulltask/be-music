@@ -93,7 +93,19 @@ are LR2's (`OFF`, `LEVEL`, `TITLE`, `CLEAR`) and beatoraja's (`ARTIST`, `GENRE`,
 sort by label, courses keep their order, and the sort is stable. `CLEAR` sorts by title and `LASTPLAY` keeps the
 library's order until records feed the sort.
 
-The list is kept per open path while the library, the search and the list options stay the same, so a select screen
+A search that starts with `?` is a chart filter expression instead (`parseBrowseSearch`): the text after the `?` is
+the SQL `WHERE` clause beatoraja's random courses use, with an optional `ORDER BY` / `LIMIT`
+([course.md](course.md#beatoraja-random-courses)), so `?level >= 12 AND score.clear < 5` lists the level-12-and-up
+charts not yet cleared on HARD. It is only trimmed, so its string literals keep their case. Like a text search it lists
+the charts of every folder at the root and filters the open folder below it; it lists no folder or course bar. Each
+chart is read through `library.chartFilterRecord` (the song columns, the best record for `score.*`, the song
+information for `information.*`), else through `libraryChartFilterRecord`, which knows only the library entry. An
+`ORDER BY` of its own orders the list instead of the sort; `ORDER BY RANDOM()` is refused, as the list has no random
+source. An expression that does not parse filters nothing, and `browseSearchError` gives the reason for the screen to
+show; `?` alone is an expression still being typed and filters nothing either.
+
+The list is kept per open path while the library (its `chartFilterRecord` included), the search and the list options
+stay the same, so a select screen
 can read it every frame.
 
 ### Commands
