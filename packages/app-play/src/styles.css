@@ -1367,37 +1367,12 @@ textarea {
   color: #d2d9e4;
 }
 
-.help-menu-folder > summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.help-menu-folder-title {
+  margin: 0;
   padding: 6px 10px;
-  cursor: pointer;
-  font-weight: 600;
-  list-style: none;
-}
-
-.help-menu-folder > summary::-webkit-details-marker {
-  display: none;
-}
-
-.help-menu-folder > summary::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform 120ms ease;
-  opacity: 0.7;
-}
-
-.help-menu-folder[open] > summary::before {
-  transform: rotate(45deg);
-}
-
-.help-menu-folder[open] > summary {
   border-bottom: 1px solid rgb(151 163 179 / 0.18);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .help-menu-note {
@@ -1839,6 +1814,10 @@ textarea {
   font-size: 11px;
   color: rgb(151 163 179 / 0.9);
   list-style: none;
+}
+/* The card has no bottom padding (the license panel runs to its edge); folded, the summary matches the space above the name. */
+.ack-card-license-details:not([open]) > summary {
+  padding-bottom: 10px;
 }
 .ack-card-license-details > summary::-webkit-details-marker {
   display: none;

@@ -783,8 +783,8 @@ export const PLAYER_APP_HTML = `
                 and apply from the next chart; hi-speed, volume and a few view settings change live.
               </li>
             </ul>
-            <details class="help-menu-folder">
-              <summary>Top</summary>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Top</h4>
               <p class="help-menu-note">Above the folders.</p>
               <dl class="help-menu-items">
                 <dt>Status</dt>
@@ -794,9 +794,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Open files (ZIP / replay)</dt>
                 <dd>Picks chart ZIP archives, or a replay (<code>*.bmplay.json</code>, or a course's <code>*.bmcourse.json</code>) to watch.</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Play options</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Play options</h4>
               <p class="help-menu-note">Locked during a play unless noted. Options that only change the chart or the view (marked LR2, beatoraja or AC) work under every ruleset and run their source's algorithm; the judge rules come from Developer → Judgment windows. Items marked “Shown with …” say when they appear.</p>
               <dl class="help-menu-items">
                 <dt>Auto play</dt>
@@ -902,17 +902,17 @@ export const PLAYER_APP_HTML = `
                 <dt>Hi-speed</dt>
                 <dd><em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> The scroll speed. Changes live, like ↑ / ↓ during play.</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Replay / ghost</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Replay / ghost</h4>
               <p class="help-menu-note">Inside Play options.</p>
               <dl class="help-menu-items">
                 <dt>Tempo · Hi-speed · SUDDEN+ / HIDDEN+ · LIFT</dt>
                 <dd>When on, a replay uses what the recorded player had; when off, your own settings.</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Tempo</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Tempo</h4>
               <dl class="help-menu-items">
                 <dt>Enabled</dt>
                 <dd>Turns the play tempo on.</dd>
@@ -923,9 +923,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Keep-pitch stretcher</dt>
                 <dd>How the pitch is kept: WSOLA or Signalsmith Stretch.</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Course</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Course</h4>
               <dl class="help-menu-items">
                 <dt>Skip stage results</dt>
                 <dd>Skips the result screen after each course stage.</dd>
@@ -936,9 +936,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Table URL · Import table courses</dt>
                 <dd>Imports the courses of a difficulty table from its URL; it is imported again on later visits.</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Skin &amp; display</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Skin &amp; display</h4>
               <dl class="help-menu-items">
                 <dt>Skin system</dt>
                 <dd>Draws with the built-in, LR2 or beatoraja skin. Asks for a drop when none is loaded. Can change during a play.</dd>
@@ -959,9 +959,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Toggle fullscreen</dt>
                 <dd>Enters or leaves fullscreen.</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Audio</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Audio</h4>
               <dl class="help-menu-items">
                 <dt>Mute · Master / Key sound / BGM (%)</dt>
                 <dd>Silences the player, and sets each volume.</dd>
@@ -972,9 +972,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Compressor</dt>
                 <dd>Evens out loud keysounds and BGM: turn it on, pick the stages, and tune each compressor (with a reset).</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Library &amp; records</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Library &amp; records</h4>
               <dl class="help-menu-items">
                 <dt>Music ZIP URL · Skin ZIP URL · Load from URLs</dt>
                 <dd>Loads a chart or skin ZIP from a URL, as <code>?music=</code> / <code>?skin=</code> do.</dd>
@@ -985,27 +985,27 @@ export const PLAYER_APP_HTML = `
                 <dt>BGA video transcode</dt>
                 <dd>Whether BGA videos are converted with WebCodecs, and the size they are reduced to.</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Capture</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Capture</h4>
               <dl class="help-menu-items">
                 <dt>● Record gameplay video · Video format</dt>
                 <dd>Records the next play as a video to download, in the chosen format (MP4 · H.264 by default).</dd>
                 <dt>📸 Screenshot</dt>
                 <dd>Saves the screen as a PNG.</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Leaderboard</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Leaderboard</h4>
               <dl class="help-menu-items">
                 <dt>Submit to Leaderboard</dt>
                 <dd>Sends each finished play to the Leaderboard (off by default).</dd>
                 <dt>Account · Create passkey · Sign in with passkey · Sign out</dt>
                 <dd>Shows who is signed in, keeps the account with a passkey, and signs in or out.</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Developer</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Developer</h4>
               <dl class="help-menu-items">
                 <dt>CPU workers</dt>
                 <dd>How many workers load charts and stretch audio in parallel.</dd>
@@ -1020,7 +1020,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Reset settings and reload</dt>
                 <dd>Returns every setting to its default and reloads; best records stay.</dd>
               </dl>
-            </details>
+            </section>
 
             <h3 class="help-section-title">Options &amp; recording</h3>
             <ul class="help-list">
@@ -1052,8 +1052,8 @@ export const PLAYER_APP_HTML = `
                 プレイの内容を決める設定 (レーンのオプション、ゲージ、譜面の変更、判定) はプレイ中は変えられず、次の譜面から反映されます。ハイスピード、音量、一部の表示設定はプレイ中にも変えられます。
               </li>
             </ul>
-            <details class="help-menu-folder">
-              <summary>最上部</summary>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">最上部</h4>
               <p class="help-menu-note">フォルダの上。</p>
               <dl class="help-menu-items">
                 <dt>Status</dt>
@@ -1063,9 +1063,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Open files (ZIP / replay)</dt>
                 <dd>譜面の ZIP アーカイブ、または再生するリプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>) を選びます。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Play options</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Play options</h4>
               <p class="help-menu-note">特に書かない限りプレイ中は変えられません。譜面や表示を変えるだけのオプション (LR2・beatoraja・AC と付いたもの) はどのルールでも使え、その出典のアルゴリズムで動きます。判定のルールは Developer → Judgment windows で決まります。「…のときに表示」とある項目は、その条件で表示されます。</p>
               <dl class="help-menu-items">
                 <dt>Auto play</dt>
@@ -1171,17 +1171,17 @@ export const PLAYER_APP_HTML = `
                 <dt>Hi-speed</dt>
                 <dd><em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em> スクロールの速さ。プレイ中の ↑ / ↓ と同じく、すぐ反映されます。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Replay / ghost</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Replay / ghost</h4>
               <p class="help-menu-note">Play options の中。</p>
               <dl class="help-menu-items">
                 <dt>Tempo · Hi-speed · SUDDEN+ / HIDDEN+ · LIFT</dt>
                 <dd>オンならリプレイは録画したプレイヤーの設定で、オフなら自分の設定で再生します。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Tempo</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Tempo</h4>
               <dl class="help-menu-items">
                 <dt>Enabled</dt>
                 <dd>再生速度の変更を有効にします。</dd>
@@ -1192,9 +1192,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Keep-pitch stretcher</dt>
                 <dd>ピッチを保つ方法。WSOLA か Signalsmith Stretch。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Course</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Course</h4>
               <dl class="help-menu-items">
                 <dt>Skip stage results</dt>
                 <dd>コースのステージごとのリザルト画面を飛ばします。</dd>
@@ -1205,9 +1205,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Table URL · Import table courses</dt>
                 <dd>難易度表の URL からコースを読み込みます。次に開いたときにも読み込みます。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Skin &amp; display</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Skin &amp; display</h4>
               <dl class="help-menu-items">
                 <dt>Skin system</dt>
                 <dd>内蔵、LR2、beatoraja のどのスキンで描くか。読み込んでいなければドロップを求めます。プレイ中にも変えられます。</dd>
@@ -1228,9 +1228,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Toggle fullscreen</dt>
                 <dd>フルスクリーンに入る / 出る。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Audio</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Audio</h4>
               <dl class="help-menu-items">
                 <dt>Mute · Master / Key sound / BGM (%)</dt>
                 <dd>音を消します。また、それぞれの音量を決めます。</dd>
@@ -1241,9 +1241,9 @@ export const PLAYER_APP_HTML = `
                 <dt>Compressor</dt>
                 <dd>キー音と BGM の音量差をならします。オンにして段を選び、それぞれのコンプレッサーを調整できます (リセットあり)。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Library &amp; records</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Library &amp; records</h4>
               <dl class="help-menu-items">
                 <dt>Music ZIP URL · Skin ZIP URL · Load from URLs</dt>
                 <dd><code>?music=</code> / <code>?skin=</code> と同じく、URL から譜面やスキンの ZIP を読み込みます。</dd>
@@ -1254,27 +1254,27 @@ export const PLAYER_APP_HTML = `
                 <dt>BGA video transcode</dt>
                 <dd>BGA の動画を WebCodecs で変換するかと、縮小するサイズ。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Capture</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Capture</h4>
               <dl class="help-menu-items">
                 <dt>● Record gameplay video · Video format</dt>
                 <dd>次のプレイを動画として録画してダウンロードします。形式は選べます (既定は MP4 · H.264)。</dd>
                 <dt>📸 Screenshot</dt>
                 <dd>画面を PNG で保存します。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Leaderboard</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Leaderboard</h4>
               <dl class="help-menu-items">
                 <dt>Submit to Leaderboard</dt>
                 <dd>プレイが終わるたびに Leaderboard へ送ります (既定はオフ)。</dd>
                 <dt>Account · Create passkey · Sign in with passkey · Sign out</dt>
                 <dd>サインイン中のアカウントの表示、パスキーでのアカウントの保存、サインインとサインアウト。</dd>
               </dl>
-            </details>
-            <details class="help-menu-folder">
-              <summary>Developer</summary>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Developer</h4>
               <dl class="help-menu-items">
                 <dt>CPU workers</dt>
                 <dd>譜面の読み込みや音の伸縮を並列で行うワーカーの数。</dd>
@@ -1289,7 +1289,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Reset settings and reload</dt>
                 <dd>すべての設定を既定値に戻して再読み込みします。ベスト記録は残ります。</dd>
               </dl>
-            </details>
+            </section>
 
             <h3 class="help-section-title">オプションと録画</h3>
             <ul class="help-list">
