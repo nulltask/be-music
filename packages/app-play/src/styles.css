@@ -2392,3 +2392,76 @@ html.touch-first .search-input.search-inline:focus {
 .shell.native-search .search-input {
   display: none;
 }
+
+/* The local data viewer (`local-data-panel.ts`): what the player keeps in this browser, read-only. */
+.local-data-dialog > * {
+  max-width: min(760px, calc(100% - 2rem));
+  max-height: min(85vh, 900px);
+  overflow-y: auto;
+}
+.local-data-section {
+  display: grid;
+  gap: 4px;
+}
+.local-data-section h3 {
+  margin: 8px 0 2px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.local-data-entry {
+  border-top: 1px solid #ffffff14;
+  padding: 4px 0;
+}
+.local-data-entry .local-data-entry {
+  margin-inline-start: 14px;
+}
+.local-data-entry > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  list-style: none;
+}
+.local-data-entry > summary::-webkit-details-marker {
+  display: none;
+}
+/* A flex summary drops the native marker; draw one. */
+.local-data-entry > summary::before {
+  content: '▸';
+  width: 0.8em;
+  color: #aab4c2;
+}
+.local-data-entry[open] > summary::before {
+  content: '▾';
+}
+.local-data-name {
+  overflow-wrap: anywhere;
+}
+.local-data-size,
+.local-data-description,
+.local-data-note,
+.local-data-usage {
+  color: #aab4c2;
+  font-size: 0.75rem;
+}
+.local-data-value {
+  margin: 6px 0;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 4px;
+  background: #0006;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.local-data-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 8px;
+}
