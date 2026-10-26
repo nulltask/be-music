@@ -84,25 +84,38 @@ export function formatGaugeLabel(id: string | undefined): string | undefined {
  */
 export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM'];
 
-/** Available lane options for the selected reference ruleset; LR2's sprite cycle stays separate. */
-export function resolveRandomModes(ruleset: RulesetId, battle1P = false): readonly RandomMode[] {
-  if (ruleset === 'lr2') return [...RANDOM_CYCLE, 'SCATTER', 'SCATTER-CORRECTED', 'CONVERGE'];
-  const ordinary: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
-  return ruleset === 'beatoraja'
-    ? [
-        ...ordinary,
-        'SPIRAL',
-        'H-RANDOM',
-        'ALL-SCR',
-        'RANDOM-EX',
-        'S-RANDOM-EX',
-        'CONVERGE',
-        'RANDOM_PLAYABLE',
-        'S_RANDOM_PLAYABLE',
-      ]
-    : battle1P && ruleset === '____'
-      ? [...ordinary, 'SYNCHRONIZE-RANDOM', 'SYMMETRY-RANDOM']
-      : ordinary;
+/**
+ * Available lane options under `ruleset`; LR2's sprite cycle stays separate. An option only one source defines (R-RANDOM,
+ * SPIRAL, H-RANDOM, ALL-SCR, RANDOM-EX, S-RANDOM-EX and the PMS arrangements from beatoraja, SCATTER from LR2) is offered
+ * under every ruleset and runs that source's algorithm (#774). RANDOM and S-RANDOM run the ruleset's own algorithm, and
+ * CONVERGE names LR2's concentration and beatoraja's PMS arrangement, so it stays with those two rulesets.
+ * `duplicatedBattle1P` is the 1P side of a chart copied onto both sides (BATTLE, BATTLE AS, D-BATTLE), which also takes
+ * SYNCHRONIZE RANDOM and SYMMETRY RANDOM.
+ */
+export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = false): readonly RandomMode[] {
+  return [
+    'OFF',
+    'MIRROR',
+    'RANDOM',
+    'R-RANDOM',
+    'S-RANDOM',
+    'SPIRAL',
+    'H-RANDOM',
+    'ALL-SCR',
+    'RANDOM-EX',
+    'S-RANDOM-EX',
+    'RANDOM_PLAYABLE',
+    'S_RANDOM_PLAYABLE',
+    'SCATTER',
+    'SCATTER-CORRECTED',
+    ...(ruleset === '____' ? [] : (['CONVERGE'] as const)),
+    ...(duplicatedBattle1P ? (['SYNCHRONIZE-RANDOM', 'SYMMETRY-RANDOM'] as const) : []),
+  ];
+}
+
+/** The battle modes that copy one SP chart onto both sides, whose 1P side takes the battle arrangements. */
+export function isDuplicatedBattleChoice(mode: PlayOptions['battleMode'] | undefined): boolean {
+  return mode === 'BATTLE' || mode === 'BATTLE-AS' || mode === 'D-BATTLE';
 }
 
 /** The play options a player starts with. */
@@ -238,10 +251,8 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,
-  random1P: [
-    ...new Set([...resolveRandomModes('beatoraja'), ...resolveRandomModes('lr2'), ...resolveRandomModes('____', true)]),
-  ],
-  random2P: [...new Set([...resolveRandomModes('beatoraja'), ...resolveRandomModes('lr2')])],
+  random1P: resolveRandomModes('lr2', true),
+  random2P: resolveRandomModes('lr2'),
   gauge1P: LR2_GAUGE_TYPES,
   gauge2P: LR2_GAUGE_TYPES,
 };

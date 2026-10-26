@@ -222,6 +222,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolveRandomModes('beatoraja');
     },
   });
+  define('player-scene-model.isDuplicatedBattleChoice', {
+    run: () => {
+      sceneModelAPI.isDuplicatedBattleChoice('BATTLE-AS');
+    },
+  });
 
   // Play options
   define('player-scene-model.clampHiSpeed', {

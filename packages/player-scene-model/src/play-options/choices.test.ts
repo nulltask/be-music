@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   resolveRandomModes,
+  isDuplicatedBattleChoice,
   formatGaugeLabel,
   RANDOM_CYCLE,
   clampHiSpeed,
@@ -154,9 +155,9 @@ test('offers the three confirmed beatoraja launcher algorithms only', () => {
   expect(resolvePlayOptionValue('judgeAlgorithm', 'score')).toBeUndefined();
 });
 
-test('R-RANDOM is a source choice without changing LR2 button indices', () => {
+test('R-RANDOM is offered under every ruleset without changing LR2 button indices', () => {
   expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM']);
-  expect(resolveRandomModes('lr2')).not.toContain('R-RANDOM');
+  expect(resolveRandomModes('lr2')).toContain('R-RANDOM');
   for (const source of ['beatoraja', '____'] as const) expect(resolveRandomModes(source)).toContain('R-RANDOM');
   expect(resolvePlayOptions({ random1P: 'R-RANDOM', random2P: 'R-RANDOM' })).toMatchObject({
     random1P: 'R-RANDOM',
@@ -164,17 +165,17 @@ test('R-RANDOM is a source choice without changing LR2 button indices', () => {
   });
 });
 
-test('SPIRAL is a beatoraja choice only', () => {
+test('SPIRAL, a beatoraja arrangement, is offered under every ruleset', () => {
   expect(resolveRandomModes('beatoraja')).toContain('SPIRAL');
-  expect(resolveRandomModes('____')).not.toContain('SPIRAL');
-  expect(resolveRandomModes('lr2')).not.toContain('SPIRAL');
+  expect(resolveRandomModes('____')).toContain('SPIRAL');
+  expect(resolveRandomModes('lr2')).toContain('SPIRAL');
   expect(resolvePlayOptionValue('random1P', 'SPIRAL')).toBe('SPIRAL');
 });
 
-test('H-RANDOM is beatoraja-only and the source threshold is validated', () => {
+test('H-RANDOM is offered under every ruleset and the source threshold is validated', () => {
   expect(resolveRandomModes('beatoraja')).toContain('H-RANDOM');
-  expect(resolveRandomModes('lr2')).not.toContain('H-RANDOM');
-  expect(resolveRandomModes('____')).not.toContain('H-RANDOM');
+  expect(resolveRandomModes('lr2')).toContain('H-RANDOM');
+  expect(resolveRandomModes('____')).toContain('H-RANDOM');
   expect(resolvePlayOptionValue('hRandomThresholdBPM', 0)).toBe(1);
   expect(resolvePlayOptionValue('hRandomThresholdBPM', 2000)).toBe(1000);
   expect(DEFAULT_PLAY_OPTIONS.hRandomThresholdBPM).toBe(120);
@@ -195,41 +196,41 @@ test('LR2 CONVERGE and fixed-lane source settings are selectable and validated',
   expect(resolvePlayOptionValue('randomFixedLane2P', Number.NaN)).toBeUndefined();
 });
 
-test('ALL-SCR is selectable only for the beatoraja reference', () => {
+test('ALL-SCR, a beatoraja arrangement, is selectable under every ruleset', () => {
   expect(resolveRandomModes('beatoraja')).toContain('ALL-SCR');
-  expect(resolveRandomModes('lr2')).not.toContain('ALL-SCR');
-  expect(resolveRandomModes('____')).not.toContain('ALL-SCR');
+  expect(resolveRandomModes('lr2')).toContain('ALL-SCR');
+  expect(resolveRandomModes('____')).toContain('ALL-SCR');
   expect(resolvePlayOptions({ random1P: 'ALL-SCR', random2P: 'ALL-SCR' })).toMatchObject({
     random1P: 'ALL-SCR',
     random2P: 'ALL-SCR',
   });
 });
 
-test('RANDOM-EX is a separate beatoraja option', () => {
+test('RANDOM-EX is a separate beatoraja option offered under every ruleset', () => {
   expect(resolveRandomModes('beatoraja')).toContain('RANDOM-EX');
-  expect(resolveRandomModes('lr2')).not.toContain('RANDOM-EX');
-  expect(resolveRandomModes('____')).not.toContain('RANDOM-EX');
+  expect(resolveRandomModes('lr2')).toContain('RANDOM-EX');
+  expect(resolveRandomModes('____')).toContain('RANDOM-EX');
   expect(resolvePlayOptionValue('random1P', 'RANDOM-EX')).toBe('RANDOM-EX');
 });
 
-test('PMS RANDOM_PLAYABLE uses the source option name and survives validation', () => {
+test('PMS RANDOM_PLAYABLE uses the source option name under every ruleset and survives validation', () => {
   expect(resolveRandomModes('beatoraja')).toContain('RANDOM_PLAYABLE');
-  expect(resolveRandomModes('lr2')).not.toContain('RANDOM_PLAYABLE');
-  expect(resolveRandomModes('____')).not.toContain('RANDOM_PLAYABLE');
+  expect(resolveRandomModes('lr2')).toContain('RANDOM_PLAYABLE');
+  expect(resolveRandomModes('____')).toContain('RANDOM_PLAYABLE');
   expect(resolvePlayOptionValue('random1P', 'RANDOM_PLAYABLE')).toBe('RANDOM_PLAYABLE');
 });
 
-test('PMS S_RANDOM_PLAYABLE preserves the source option name', () => {
+test('PMS S_RANDOM_PLAYABLE preserves the source option name under every ruleset', () => {
   expect(resolveRandomModes('beatoraja')).toContain('S_RANDOM_PLAYABLE');
-  expect(resolveRandomModes('lr2')).not.toContain('S_RANDOM_PLAYABLE');
-  expect(resolveRandomModes('____')).not.toContain('S_RANDOM_PLAYABLE');
+  expect(resolveRandomModes('lr2')).toContain('S_RANDOM_PLAYABLE');
+  expect(resolveRandomModes('____')).toContain('S_RANDOM_PLAYABLE');
   expect(resolvePlayOptionValue('random1P', 'S_RANDOM_PLAYABLE')).toBe('S_RANDOM_PLAYABLE');
 });
 
-test('S-RANDOM-EX is a separate beatoraja option', () => {
+test('S-RANDOM-EX is a separate beatoraja option offered under every ruleset', () => {
   expect(resolveRandomModes('beatoraja')).toContain('S-RANDOM-EX');
-  expect(resolveRandomModes('lr2')).not.toContain('S-RANDOM-EX');
-  expect(resolveRandomModes('____')).not.toContain('S-RANDOM-EX');
+  expect(resolveRandomModes('lr2')).toContain('S-RANDOM-EX');
+  expect(resolveRandomModes('____')).toContain('S-RANDOM-EX');
   expect(resolvePlayOptionValue('random1P', 'S-RANDOM-EX')).toBe('S-RANDOM-EX');
 });
 
@@ -285,17 +286,17 @@ test('mixed long notes use ADD_ALL rather than the mine ADD_BLANK identifier', (
   expect(resolvePlayOptionValue('longNoteModifier', 'ADD_BLANK')).toBeUndefined();
 });
 
-test('SCATTER is offered only by the LR2 reference ruleset', () => {
+test('SCATTER, an LR2 arrangement, is offered under every ruleset', () => {
   expect(resolveRandomModes('lr2')).toContain('SCATTER');
-  expect(resolveRandomModes('beatoraja')).not.toContain('SCATTER');
-  expect(resolveRandomModes('____')).not.toContain('SCATTER');
+  expect(resolveRandomModes('beatoraja')).toContain('SCATTER');
+  expect(resolveRandomModes('____')).toContain('SCATTER');
 });
 
-test('the separately selected corrected SCATTER mode persists and remains LR2-only', () => {
+test('the separately selected corrected SCATTER mode persists under every ruleset', () => {
   expect(resolvePlayOptions({ random1P: 'SCATTER-CORRECTED' }).random1P).toBe('SCATTER-CORRECTED');
   expect(resolveRandomModes('lr2')).toContain('SCATTER-CORRECTED');
-  expect(resolveRandomModes('beatoraja')).not.toContain('SCATTER-CORRECTED');
-  expect(resolveRandomModes('____')).not.toContain('SCATTER-CORRECTED');
+  expect(resolveRandomModes('beatoraja')).toContain('SCATTER-CORRECTED');
+  expect(resolveRandomModes('____')).toContain('SCATTER-CORRECTED');
 });
 
 test('scroll REMOVE defaults off and remains separate from visual CONSTANT', () => {
@@ -375,4 +376,18 @@ test('7-to-9 accepts only the source six patterns and three scratch types', () =
   for (const value of [-1, 1.5, 7, '3', true])
     expect(resolvePlayOptionValue('sevenToNinePattern', value)).toBeUndefined();
   expect(resolvePlayOptionValue('sevenToNineType', 3)).toBeUndefined();
+});
+
+test('battle arrangements follow a chart copied onto both sides, and CONVERGE stays with LR2 and beatoraja', () => {
+  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    expect(resolveRandomModes(ruleset)).not.toContain('SYNCHRONIZE-RANDOM');
+    expect(resolveRandomModes(ruleset, true)).toEqual(
+      expect.arrayContaining(['SYNCHRONIZE-RANDOM', 'SYMMETRY-RANDOM']),
+    );
+  }
+  for (const mode of ['BATTLE', 'BATTLE-AS', 'D-BATTLE'] as const) expect(isDuplicatedBattleChoice(mode)).toBe(true);
+  for (const mode of ['OFF', 'TWO-PLAYER', 'SP-TO-DP', undefined] as const)
+    expect(isDuplicatedBattleChoice(mode)).toBe(false);
+  // CONVERGE names LR2's concentration and beatoraja's PMS arrangement, so it is not offered across rulesets.
+  expect(resolveRandomModes('____')).not.toContain('CONVERGE');
 });
