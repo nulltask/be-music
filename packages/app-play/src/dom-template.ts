@@ -404,9 +404,9 @@ export const PLAYER_APP_HTML = `
       Help modal. Two tabs:
       - Usage: drag-drop instructions, keyboard shortcuts,
         gameplay keys, options.
-      - Open source: build-time-resolved acknowledgement list
-        (one card per npm dependency that ships in the runtime
-        bundle, with verbatim LICENSE text).
+      - Open source: the acknowledgement list the build writes
+        (one card per third-party package in the bundle, with
+        its license text; scripts/acknowledgements.ts).
       Hidden by default; toggled via the \`.visible\` class on
       the overlay.
     -->
@@ -1278,8 +1278,9 @@ export const PLAYER_APP_HTML = `
           hidden
         >
           <p class="help-pane-intro">
-            This player is built on the open source libraries listed below. Each entry shows the
-            verbatim copyright / license text shipped with the package.
+            This player is built on the open source libraries listed below: every third-party package
+            this build includes. Each entry shows the copyright / license text the package ships, or its
+            upstream text where the package ships none.
           </p>
           <ol class="help-oss-list" id="help-oss-list"></ol>
         </section>

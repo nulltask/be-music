@@ -233,7 +233,7 @@ export default defineConfig({
         extends: true as const,
         test: {
           name: '@be-music/app-play',
-          include: ['packages/app-play/src/**/*.test.ts'],
+          include: ['packages/app-play/src/**/*.test.ts', 'packages/app-play/scripts/**/*.test.ts'],
         },
       },
       {
