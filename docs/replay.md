@@ -189,7 +189,8 @@ and That-Which-Must-Not-Be-Named has no HAZARD so `DEATH` folds onto `EX-HARD`).
 Dropping a `*.bmplay.json` file onto the browser player starts replay playback when the matching chart is loaded
 (dropping the chart folder together with the log works too — the charts load first). Matching prefers the chart-file
 hash (`chart.sha256` — stable across sessions and file moves), then the recorded `play.native.chartPath`, then a
-title + artist fallback for older logs.
+title + artist fallback for older logs. When no loaded chart matches, the select screen comes back and a dialog names the
+chart to load.
 
 Replay re-drives the recorded input stream deterministically inside the shared engine
 (`PlayerOptions.replayInputs`): every event fires at its exact chart-relative microsecond timestamp, live lane
