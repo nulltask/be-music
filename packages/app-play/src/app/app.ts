@@ -128,6 +128,7 @@ export class PlayerWebApp {
    */
   private readonly search = new InlineSearch({
     input: document.querySelector<HTMLInputElement>('#search')!,
+    error: document.querySelector<HTMLElement>('#search-error') ?? undefined,
     shell: document.querySelector<HTMLElement>('.shell')!,
     canvas: () => this.sceneHost?.app.canvas,
     fieldRect: () => this.selectView?.searchFieldRect(),
@@ -140,6 +141,7 @@ export class PlayerWebApp {
           }
         : undefined,
     setQuery: (query) => this.selectView?.setSearch(query),
+    searchError: () => this.selectView?.searchError(),
     setEditing: (editing) => this.selectView?.setSearchEditing(editing),
     touch: () => document.documentElement.classList.contains('touch-first'),
   });

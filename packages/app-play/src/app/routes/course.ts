@@ -48,7 +48,7 @@ export interface CourseRouteDeps {
   /** The library: the charts a random course draws its stages from. */
   readonly library: Pick<LibraryService, 'collection' | 'prepareDrawnCourse'>;
   /** The chart hashes a random course's stage filters match, and the course's best record. */
-  readonly records: Pick<RecordsService, 'resolveChartHashes' | 'recordCourseResult'>;
+  readonly records: Pick<RecordsService, 'resolveChartHashes' | 'peekChartBestRecord' | 'recordCourseResult'>;
   /** The course maker, which a NEW COURSE bar starts. */
   readonly courseMaker: { readonly maker: Pick<CourseMaker, 'start'> };
   /** The course replay's auto-save, by the setting latched at the last stage's start. */
@@ -159,7 +159,10 @@ export class CourseRoute {
           ...(await this.records.resolveChartHashes(chartEntry)),
         })),
       );
-      const drawn = drawBrowserRandomCourse(entry, candidates, Math.random);
+      // The candidates are hashed by now, so each one's best record is found by its hash.
+      const drawn = drawBrowserRandomCourse(entry, candidates, Math.random, (chartEntry) =>
+        this.records.peekChartBestRecord(chartEntry),
+      );
       if (!drawn.ok) {
         this.setStatus(describeRandomCourseDrawFailure(entry.definition.name, drawn));
         return;

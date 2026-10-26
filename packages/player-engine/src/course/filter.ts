@@ -3,7 +3,8 @@
  * record. beatoraja runs each stage's clause against its song database (`SQLiteSongDatabaseAccessor.getSongDatas`),
  * appending it to `... WHERE ` over `song` joined with the player's `score` and `scorelog` (and `information` when song
  * information is on); be-music has no database, so the clause is evaluated per candidate with SQLite's comparison
- * rules, and a trailing `ORDER BY … LIMIT …` orders and cuts the selection ({@link selectCourseCharts}).
+ * rules over the candidate's song columns, its best record (`score`) and its song information (`information`), and a
+ * trailing `ORDER BY … LIMIT …` orders and cuts the selection ({@link selectCourseCharts}).
  *
  * Anything outside the subset — an unknown column, a column the joined tables make ambiguous, a function call, a
  * sub-query — is a parse error, so a stage with such a filter selects nothing (beatoraja's query fails and returns no
@@ -12,7 +13,8 @@
 
 /**
  * One chart as a random-course filter sees it: the `song` table columns of beatoraja's song database that be-music
- * can supply. A missing text column reads as `''` and a missing integer column as `0`, the values beatoraja's
+ * can supply, and the rows beatoraja joins to it, `score` (the player's best record) and `information` (the chart's
+ * song information). A missing text column reads as `''` and a missing integer column as `0`, the values beatoraja's
  * `SongData` stores for a chart that leaves them unset.
  */
 export interface CourseChartRecord {
@@ -43,7 +45,54 @@ export interface CourseChartRecord {
   feature?: number;
   /** beatoraja's `SongData.CONTENT_*` bits (text 1, BGA 2, preview 4, no key sound 128). */
   content?: number;
+  /**
+   * The `score` row: the player's best record on the chart. Absent for a chart never played, so every `score.*` column
+   * reads as NULL, as beatoraja's `LEFT OUTER JOIN` gives.
+   */
+  score?: CourseChartScore;
+  /** The `information` row: the chart's song information. Absent, every `information.*` column reads as NULL. */
+  information?: CourseChartInformation;
 }
+
+/**
+ * The `score` columns be-music keeps (beatoraja's `ScoreDatabaseAccessor` table). A field left out reads as NULL.
+ * `exscore` is be-music's own: beatoraja keeps the judgment counts instead (`epg`, `lpg`, …), which be-music does not.
+ */
+export interface CourseChartScore {
+  /** The clear lamp as beatoraja's `ClearType.id`: 0 NO PLAY, 1 FAILED, 3 ASSIST EASY … 10 MAX. */
+  clear?: number;
+  exscore?: number;
+  /** The max combo. */
+  combo?: number;
+  /** The fewest BP. */
+  minbp?: number;
+  playcount?: number;
+  /** The chart's note count. */
+  notes?: number;
+}
+
+/** The `information` columns (beatoraja's `SongInformation`). A field left out reads as NULL. */
+export interface CourseChartInformation {
+  /** Taps on the keys. */
+  n?: number;
+  /** Long notes on the keys (a CN / HCN counts its end too). */
+  ln?: number;
+  /** Taps on the scratch. */
+  s?: number;
+  /** Long notes on the scratch. */
+  ls?: number;
+  total?: number;
+  /** Notes per second over the busy seconds. */
+  density?: number;
+  /** The busiest second. */
+  peakdensity?: number;
+  /** The busiest 5-second average from the TOTAL border on. */
+  enddensity?: number;
+  mainbpm?: number;
+}
+
+/** A table a filter column belongs to. */
+export type CourseChartTable = 'song' | 'score' | 'information';
 
 type CourseChartTextColumn =
   | 'md5'
@@ -55,12 +104,15 @@ type CourseChartTextColumn =
   | 'genre'
   | 'tag'
   | 'path';
-type CourseChartIntegerColumn = Exclude<keyof CourseChartRecord, CourseChartTextColumn>;
+type CourseChartSongColumn = Exclude<keyof CourseChartRecord, 'score' | 'information'>;
+type CourseChartIntegerColumn = Exclude<CourseChartSongColumn, CourseChartTextColumn>;
 
-/** A column a filter can read: one of the {@link CourseChartRecord} fields. */
-export type CourseChartColumn = keyof CourseChartRecord;
+/** A column a filter can read: a `song` column ({@link CourseChartRecord}), a `score` or an `information` one. */
+export type CourseChartColumn = CourseChartSongColumn | keyof CourseChartScore | keyof CourseChartInformation;
 
-const COLUMN_TYPES: Readonly<Record<CourseChartColumn, 'text' | 'integer'>> = {
+type ColumnType = 'text' | 'integer' | 'real';
+
+const SONG_COLUMN_TYPES: Readonly<Record<CourseChartSongColumn, ColumnType>> = {
   md5: 'text',
   sha256: 'text',
   title: 'text',
@@ -82,23 +134,141 @@ const COLUMN_TYPES: Readonly<Record<CourseChartColumn, 'text' | 'integer'>> = {
   content: 'integer',
 } satisfies Record<CourseChartTextColumn, 'text'> & Record<CourseChartIntegerColumn, 'integer'>;
 
+/** `score.sha256` / `information.sha256` read the song's hash on a row that exists. */
+const SCORE_COLUMN_TYPES: Readonly<Record<keyof CourseChartScore | 'sha256', ColumnType>> = {
+  sha256: 'text',
+  clear: 'integer',
+  exscore: 'integer',
+  combo: 'integer',
+  minbp: 'integer',
+  playcount: 'integer',
+  notes: 'integer',
+};
+
+const INFORMATION_COLUMN_TYPES: Readonly<Record<keyof CourseChartInformation | 'sha256', ColumnType>> = {
+  sha256: 'text',
+  n: 'integer',
+  ln: 'integer',
+  s: 'integer',
+  ls: 'integer',
+  total: 'real',
+  density: 'real',
+  peakdensity: 'real',
+  enddensity: 'real',
+  mainbpm: 'real',
+};
+
+const COLUMN_TYPES: Readonly<Record<CourseChartTable, Readonly<Record<string, ColumnType>>>> = {
+  song: SONG_COLUMN_TYPES,
+  score: SCORE_COLUMN_TYPES,
+  information: INFORMATION_COLUMN_TYPES,
+};
+
 /**
- * The columns that more than one of the tables beatoraja joins has (`song`, `score`, `scorelog`, `information`), so
- * SQLite refuses them unqualified (`ambiguous column name`) and the stage selects nothing: write `song.mode`, not
- * `mode`. `song` / `score` share `sha256`, `mode`, `notes` and `date`; `score` / `scorelog` share `sha256`, `mode`,
- * `clear`, `combo`, `minbp`, `avgjudge` and `date`; `information` has `sha256` too (`SQLiteSongDatabaseAccessor`,
- * `ScoreDatabaseAccessor`, `ScoreLogDatabaseAccessor`, `SongInformationAccessor` at beatoraja 8320241d).
+ * Every column of the tables beatoraja joins (`SQLiteSongDatabaseAccessor`, `ScoreDatabaseAccessor`,
+ * `ScoreLogDatabaseAccessor`, `SongInformationAccessor` at beatoraja 83574048), whether be-music supplies it or not,
+ * plus be-music's `score.exscore`. An unqualified column resolves to the one table that has it, as SQLite does; one
+ * that more than one table has is refused (`ambiguous column name`), so the stage selects nothing as in beatoraja:
+ * write `song.mode`, not `mode`. A column be-music has no source for (`song.date`, `score.epg`, every `scorelog`
+ * column, …) is an unknown column rather than a made-up value.
  */
-const AMBIGUOUS_COLUMNS: ReadonlySet<string> = new Set([
-  'sha256',
-  'mode',
-  'notes',
-  'date',
-  'clear',
-  'combo',
-  'minbp',
-  'avgjudge',
-]);
+const BEATORAJA_COLUMNS: Readonly<Record<CourseChartTable | 'scorelog', readonly string[]>> = {
+  song: [
+    'md5',
+    'sha256',
+    'title',
+    'subtitle',
+    'genre',
+    'artist',
+    'subartist',
+    'tag',
+    'path',
+    'folder',
+    'stagefile',
+    'banner',
+    'backbmp',
+    'preview',
+    'parent',
+    'level',
+    'difficulty',
+    'maxbpm',
+    'minbpm',
+    'length',
+    'mode',
+    'judge',
+    'feature',
+    'content',
+    'date',
+    'favorite',
+    'adddate',
+    'notes',
+    'charthash',
+  ],
+  score: [
+    'sha256',
+    'mode',
+    'clear',
+    'epg',
+    'lpg',
+    'egr',
+    'lgr',
+    'egd',
+    'lgd',
+    'ebd',
+    'lbd',
+    'epr',
+    'lpr',
+    'ems',
+    'lms',
+    'notes',
+    'combo',
+    'minbp',
+    'avgjudge',
+    'playcount',
+    'clearcount',
+    'trophy',
+    'ghost',
+    'option',
+    'seed',
+    'random',
+    'date',
+    'state',
+    'scorehash',
+    'exscore',
+  ],
+  scorelog: [
+    'sha256',
+    'mode',
+    'clear',
+    'oldclear',
+    'score',
+    'oldscore',
+    'combo',
+    'oldcombo',
+    'minbp',
+    'oldminbp',
+    'avgjudge',
+    'oldavgjudge',
+    'date',
+  ],
+  information: [
+    'sha256',
+    'n',
+    'ln',
+    's',
+    'ls',
+    'total',
+    'density',
+    'peakdensity',
+    'enddensity',
+    'mainbpm',
+    'distribution',
+    'speedchange',
+    'lanenotes',
+  ],
+};
+
+const TABLE_NAMES = Object.keys(BEATORAJA_COLUMNS) as ReadonlyArray<CourseChartTable | 'scorelog'>;
 
 /** An SQL value: SQLite's INTEGER / REAL (`number`), TEXT (`string`) or NULL. */
 export type CourseSQLValue = number | string | null;
@@ -110,7 +280,7 @@ export type CourseChartFilterExpr =
       value: CourseSQLValue;
       /** A number written with a `.` or an exponent: SQLite REAL. */ real?: true;
     }
-  | { type: 'column'; column: CourseChartColumn }
+  | { type: 'column'; table: CourseChartTable; column: CourseChartColumn }
   | { type: 'unary'; op: '-' | '+' | 'not'; operand: CourseChartFilterExpr }
   | {
       type: 'binary';
@@ -512,11 +682,10 @@ class Parser {
         throw new FilterSyntaxError(`unexpected ${token.value.toUpperCase()} at ${token.at}`);
       }
       let name = token.value;
-      let qualified = false;
+      let table: string | undefined;
       if (this.acceptOp('.') !== undefined) {
-        qualified = true;
-        // Only the `song` table is modelled; `score.clear`, `scorelog.*` and `information.*` are not.
-        if (name.toLowerCase() !== 'song') throw new FilterSyntaxError(`unsupported table '${name}'`);
+        table = name.toLowerCase();
+        if (!(TABLE_NAMES as readonly string[]).includes(table)) throw new FilterSyntaxError(`no such table: ${name}`);
         const column = this.next();
         if (column.kind !== 'word' && column.kind !== 'quoted') {
           throw new FilterSyntaxError(`expected a column name at ${column.at}`);
@@ -526,13 +695,29 @@ class Parser {
       if (this.peek().kind === 'op' && (this.peek() as { value: string }).value === '(') {
         throw new FilterSyntaxError(`functions are not supported: ${name}`);
       }
-      const column = name.toLowerCase();
-      if (!qualified && AMBIGUOUS_COLUMNS.has(column)) throw new FilterSyntaxError(`ambiguous column name: ${name}`);
-      if (!Object.hasOwn(COLUMN_TYPES, column)) throw new FilterSyntaxError(`unknown column '${name}'`);
-      return { type: 'column', column: column as CourseChartColumn };
+      return resolveColumn(table, name);
     }
     throw new FilterSyntaxError(`unexpected ${describe(token)} at ${token.at}`);
   }
+}
+
+/**
+ * The column `table.name` (or `name` alone) names, resolved as SQLite resolves it over beatoraja's joined tables:
+ * unqualified, it must belong to exactly one of them. A column be-music has no source for is an unknown column.
+ */
+function resolveColumn(table: string | undefined, name: string): CourseChartFilterExpr {
+  const column = name.toLowerCase();
+  let owner = table;
+  if (owner === undefined) {
+    const owners = TABLE_NAMES.filter((candidate) => BEATORAJA_COLUMNS[candidate].includes(column));
+    if (owners.length > 1) throw new FilterSyntaxError(`ambiguous column name: ${name}`);
+    owner = owners[0] ?? 'song';
+  }
+  const label = table === undefined ? name : `${table}.${name}`;
+  if (owner === 'scorelog' || !Object.hasOwn(COLUMN_TYPES[owner as CourseChartTable], column)) {
+    throw new FilterSyntaxError(`unknown column '${label}'`);
+  }
+  return { type: 'column', table: owner as CourseChartTable, column: column as CourseChartColumn };
 }
 
 function describe(token: Token): string {
@@ -541,12 +726,12 @@ function describe(token: Token): string {
 }
 
 /**
- * Parses a random-course stage filter. Supported: column names (optionally `song.`-qualified, quoted with `"`, `` ` ``
- * or `[]`), string / number / `NULL` literals, `=` `==` `!=` `<>` `<` `<=` `>` `>=`, `AND` `OR` `NOT`, parentheses,
+ * Parses a random-course stage filter. Supported: column names (optionally qualified with `song.`, `score.` or
+ * `information.`, quoted with `"`, `` ` `` or `[]`), string / number / `NULL` literals, `=` `==` `!=` `<>` `<` `<=` `>` `>=`, `AND` `OR` `NOT`, parentheses,
  * `[NOT] IN (…)`, `[NOT] LIKE … [ESCAPE …]`, `[NOT] BETWEEN … AND …`, `IS [NOT] NULL`, `+ - * / %`, `& |` and `||`,
  * then an optional `ORDER BY expr | RANDOM() [ASC | DESC] [NULLS FIRST | LAST], …` and `LIMIT n [OFFSET m]` /
  * `LIMIT m, n`. Anything else — an unknown column, an unqualified column beatoraja's joined tables share (`mode`,
- * `notes`, `sha256`, …), another table, a function, a sub-query — gives `{ ok: false }` with the reason.
+ * `notes`, `sha256`, …), a column be-music has no source for (`scorelog.*`, `score.epg`, …), a function, a sub-query — gives `{ ok: false }` with the reason.
  */
 export function parseCourseChartFilter(sql: string): CourseChartFilterParseResult {
   try {
@@ -558,16 +743,34 @@ export function parseCourseChartFilter(sql: string): CourseChartFilterParseResul
   }
 }
 
-type Affinity = 'text' | 'integer' | 'none';
+/** A column's affinity: TEXT, or NUMERIC for an INTEGER or a REAL column; `none` for any other expression. */
+type Affinity = 'text' | 'numeric' | 'none';
 
-function affinityOf(expr: CourseChartFilterExpr): Affinity {
-  return expr.type === 'column' ? COLUMN_TYPES[expr.column] : 'none';
+function columnType(expr: Extract<CourseChartFilterExpr, { type: 'column' }>): ColumnType {
+  return COLUMN_TYPES[expr.table][expr.column]!;
 }
 
-function columnValue(record: CourseChartRecord, column: CourseChartColumn): CourseSQLValue {
-  const value = record[column];
-  if (COLUMN_TYPES[column] === 'text') return typeof value === 'string' ? value : '';
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+function affinityOf(expr: CourseChartFilterExpr): Affinity {
+  if (expr.type !== 'column') return 'none';
+  return columnType(expr) === 'text' ? 'text' : 'numeric';
+}
+
+function columnValue(
+  record: CourseChartRecord,
+  expr: Extract<CourseChartFilterExpr, { type: 'column' }>,
+): CourseSQLValue {
+  const type = columnType(expr);
+  if (expr.table === 'song') {
+    const value = record[expr.column as CourseChartSongColumn];
+    if (type === 'text') return typeof value === 'string' ? value : '';
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  }
+  // A joined row the record lacks reads as NULL in every column, as an outer join gives; so does a field it lacks.
+  const row = record[expr.table];
+  if (row === undefined) return null;
+  if (expr.column === 'sha256') return record.sha256 ?? '';
+  const value = (row as Readonly<Record<string, unknown>>)[expr.column];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 /** SQLite's NUMERIC affinity: a text value that reads as a number in full becomes that number. */
@@ -607,8 +810,8 @@ function comparisonOperands(
   let b = evaluate(right, record);
   const la = affinityOf(left);
   const ra = affinityOf(right);
-  if (la === 'integer' && ra !== 'integer') b = applyNumericAffinity(b);
-  else if (ra === 'integer' && la !== 'integer') a = applyNumericAffinity(a);
+  if (la === 'numeric' && ra !== 'numeric') b = applyNumericAffinity(b);
+  else if (ra === 'numeric' && la !== 'numeric') a = applyNumericAffinity(a);
   else if (la === 'text' && ra === 'none' && typeof b === 'number') b = toText(b);
   else if (ra === 'text' && la === 'none' && typeof a === 'number') a = toText(a);
   return [a, b];
@@ -681,9 +884,10 @@ function likePattern(pattern: string, escape: string | undefined): RegExp {
   return new RegExp(`${source}$`, 'u');
 }
 
-/** Whether an arithmetic operand is REAL by type: a REAL literal, or arithmetic over one. */
+/** Whether an arithmetic operand is REAL by type: a REAL literal or column, or arithmetic over one. */
 function isRealExpr(expr: CourseChartFilterExpr): boolean {
   if (expr.type === 'literal') return expr.real === true;
+  if (expr.type === 'column') return columnType(expr) === 'real';
   if (expr.type === 'unary') return expr.op !== 'not' && isRealExpr(expr.operand);
   if (expr.type === 'binary' && ['+', '-', '*', '/'].includes(expr.op))
     return isRealExpr(expr.left) || isRealExpr(expr.right);
@@ -721,7 +925,7 @@ function evaluate(expr: CourseChartFilterExpr, record: CourseChartRecord): Cours
     case 'literal':
       return expr.value;
     case 'column':
-      return columnValue(record, expr.column);
+      return columnValue(record, expr);
     case 'unary': {
       const value = evaluate(expr.operand, record);
       if (expr.op === 'not') {
