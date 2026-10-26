@@ -150,10 +150,16 @@ function buildAcknowledgementCard(entry: (typeof acknowledgements)[number]): HTM
   }
 
   if (entry.licenseText) {
+    // The copyright notice and license text stay folded until asked for: the list reads as names and licenses.
+    const details = document.createElement('details');
+    details.className = 'ack-card-license-details';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Copyright and license text';
     const pre = document.createElement('pre');
     pre.className = 'ack-card-license-text';
     pre.textContent = entry.licenseText;
-    card.appendChild(pre);
+    details.append(summary, pre);
+    card.appendChild(details);
   } else {
     const note = document.createElement('div');
     note.className = 'ack-card-license-missing';
