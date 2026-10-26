@@ -130,7 +130,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions(changes);
       this.refreshPlayOptionControllers();
       this.setStatus('Previous arrangement selected for the same chart. Live input remains enabled.');
-    } else this.setStatus('Play a chart with beatoraja rules first to retain its arrangement.');
+    } else this.setStatus('Play a chart with the current judgment rules first to retain its arrangement.');
   });
   const fresh = folder.addButton({ title: 'New arrangement' }).on('click', () => {
     this.deps.clearArrangement?.();
@@ -141,10 +141,8 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     this.refreshPlayOptionControllers();
     this.setStatus('A new arrangement will be drawn for the next play.');
   });
-  for (const controller of [reuse, fresh]) {
-    this.trackPlayOption(controller);
-    this.randomSeedControllers.push(controller);
-  }
+  // Every ruleset reuses its own previous arrangement (#774); only the seeds stay beatoraja's.
+  for (const controller of [reuse, fresh]) this.trackPlayOption(controller);
   this.gaugeAutoShiftController = selectBinding(
     folder,
     this.guiState,

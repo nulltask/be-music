@@ -8,7 +8,12 @@ import type { TunableCompressor } from '@be-music/player-browser/audio';
 import { getBrowserWorkerCount } from '@be-music/player-browser/compute';
 import type { PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-browser/host';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
-import { formatGaugeLabel, resolveRandomModes, type PlayOptions } from '@be-music/player-scene-model';
+import {
+  formatGaugeLabel,
+  isDuplicatedBattleChoice,
+  resolveRandomModes,
+  type PlayOptions,
+} from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 // Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
 import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
@@ -435,51 +440,26 @@ export class DebugMenu {
   }
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
   public refreshRulesetChoices(): void {
-    const ac = this.guiState.judgeRuleset === '____';
-    const lr2 = this.guiState.judgeRuleset === 'lr2';
-    if (!lr2 && this.guiState.hsFix === 'CONSTANT') {
-      this.guiState.hsFix = 'OFF';
-      this.setPlayOptions({ hsFix: 'OFF' });
-    }
+    // Options that only transform the chart or the view are offered under every judge ruleset (#774): HS-FIX CONSTANT,
+    // the measured hi-speed modes, automatic display timing, scroll and mine modifiers, both EXTRAs, 7-to-9, the battle
+    // chart constructions and the source-specific lane options.
     if (this.hsFixController)
-      this.hsFixController.options = paneOptions(
-        lr2
-          ? (['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE', 'CONSTANT', 'STARTBPM'] as const)
-          : (['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE', 'STARTBPM'] as const),
-      );
-    if (!ac && this.guiState.normalHiSpeedLevel > 0) {
-      this.guiState.normalHiSpeedLevel = 0;
-      this.setPlayOptions({ normalHiSpeedLevel: 0 });
-    }
-    if (!ac && this.guiState.floatingHiSpeed) {
-      this.guiState.floatingHiSpeed = false;
-      this.setPlayOptions({ floatingHiSpeed: false });
-    }
-    if (!ac && this.guiState.fixedDisplayArea) {
-      this.guiState.fixedDisplayArea = false;
-      this.setPlayOptions({ fixedDisplayArea: false });
-    }
-    if (this.fixedDisplayAreaController) this.fixedDisplayAreaController.hidden = !ac;
+      this.hsFixController.options = paneOptions([
+        'OFF',
+        'MAXBPM',
+        'MINBPM',
+        'AVERAGE',
+        'CONSTANT',
+        'STARTBPM',
+      ] as const);
     const floating = this.guiState.floatingHiSpeed;
-    if (this.floatingHiSpeedController) this.floatingHiSpeedController.hidden = !ac;
     if (this.floatingSpeedController) this.floatingSpeedController.hidden = !floating;
     const normal = this.guiState.normalHiSpeedLevel > 0;
-    if (this.normalHiSpeedController) this.normalHiSpeedController.hidden = !ac;
     if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.hidden = !normal || floating;
-    if (!ac && this.guiState.classicHiSpeed) {
-      this.guiState.classicHiSpeed = false;
-      this.setPlayOptions({ classicHiSpeed: false });
-    }
-    if (this.classicHiSpeedController) this.classicHiSpeedController.hidden = !ac;
     if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
     if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
     if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
     const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
-    if (this.judgeTimingAutoAdjustController) this.judgeTimingAutoAdjustController.hidden = !beatoraja;
-    if (!beatoraja && this.guiState.judgeTimingAutoAdjust) {
-      this.guiState.judgeTimingAutoAdjust = false;
-      this.setPlayOptions({ judgeTimingAutoAdjust: false });
-    }
     if (!beatoraja && this.guiState.longNoteModifier.startsWith('ADD_')) {
       this.guiState.longNoteModifier = 'OFF';
       this.setPlayOptions({ longNoteModifier: 'OFF' });
@@ -500,19 +480,19 @@ export class DebugMenu {
       });
       this.longNoteModifierController.refresh();
     }
-    const sevenToNine = this.guiState.judgeRuleset === 'beatoraja';
-    if (!sevenToNine && this.guiState.sevenToNinePattern !== 0) {
-      this.guiState.sevenToNinePattern = 0;
-      this.setPlayOptions({ sevenToNinePattern: 0 });
-    }
-    if (this.sevenToNinePatternController) this.sevenToNinePatternController.hidden = !sevenToNine;
-    if (this.sevenToNineTypeController) this.sevenToNineTypeController.hidden = !sevenToNine;
-    const battleChoices: Record<string, PlayOptions['battleMode']> =
-      this.guiState.judgeRuleset === 'lr2'
-        ? { OFF: 'OFF', BATTLE: 'TWO-PLAYER', 'D-BATTLE': 'D-BATTLE', 'SP TO DP': 'SP-TO-DP' }
+    // BATTLE names LR2's two-player play and the beatoraja / ???? one-player copy, so it follows the ruleset; the other
+    // chart constructions are offered under every ruleset.
+    const battleChoices: Record<string, PlayOptions['battleMode']> = {
+      OFF: 'OFF',
+      ...(this.guiState.judgeRuleset === 'lr2'
+        ? { BATTLE: 'TWO-PLAYER' as const }
         : this.guiState.judgeRuleset === 'beatoraja'
-          ? { OFF: 'OFF', BATTLE: 'BATTLE', 'BATTLE AS': 'BATTLE-AS' }
-          : { OFF: 'OFF', BATTLE: 'BATTLE', '2P PLAY': 'TWO-PLAYER' };
+          ? { BATTLE: 'BATTLE' as const }
+          : { BATTLE: 'BATTLE' as const, '2P PLAY': 'TWO-PLAYER' as const }),
+      'BATTLE AS': 'BATTLE-AS',
+      'D-BATTLE': 'D-BATTLE',
+      'SP TO DP': 'SP-TO-DP',
+    };
     if (!Object.values(battleChoices).includes(this.guiState.battleMode)) {
       this.guiState.battleMode = 'OFF';
       this.setPlayOptions({ battleMode: 'OFF' });
@@ -524,15 +504,8 @@ export class DebugMenu {
     if (this.dBattleScratchController) this.dBattleScratchController.hidden = this.guiState.battleMode !== 'D-BATTLE';
     const twoPlayer = this.guiState.battleMode === 'TWO-PLAYER';
     if (this.gauge2PController) this.gauge2PController.hidden = !twoPlayer;
-    for (const controller of this.mRanControllers)
-      controller.hidden = !twoPlayer || this.guiState.judgeRuleset !== '____';
-    const lr2Extra = this.guiState.judgeRuleset === 'lr2';
-    if (!lr2Extra && this.guiState.lr2ExtraMode) {
-      this.guiState.lr2ExtraMode = false;
-      this.setPlayOptions({ lr2ExtraMode: false });
-    }
-    if (this.lr2ExtraModeController) this.lr2ExtraModeController.hidden = !lr2Extra;
-    if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.hidden = !lr2Extra || !this.guiState.lr2ExtraMode;
+    for (const controller of this.mRanControllers) controller.hidden = !twoPlayer;
+    if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.hidden = !this.guiState.lr2ExtraMode;
     if (!beatoraja && this.guiState.longNoteMode !== 'LN') {
       this.guiState.longNoteMode = 'LN';
       this.setPlayOptions({ longNoteMode: 'LN' });
@@ -552,12 +525,6 @@ export class DebugMenu {
     if (this.customJudgeController) this.customJudgeController.hidden = !beatoraja;
     for (const controller of this.customJudgeRateControllers)
       controller.hidden = !beatoraja || !this.guiState.customJudge;
-    if (!beatoraja && this.guiState.extraNoteDepth > 0) {
-      this.guiState.extraNoteDepth = 0;
-      this.setPlayOptions({ extraNoteDepth: 0 });
-    }
-    if (this.extraNoteDepthController) this.extraNoteDepthController.hidden = !beatoraja;
-    if (this.extraNoteScratchController) this.extraNoteScratchController.hidden = !beatoraja;
     if (this.longNoteRateController)
       this.longNoteRateController.hidden = !beatoraja || !this.guiState.longNoteModifier.startsWith('ADD_');
     for (const controller of this.randomSeedControllers) controller.hidden = !beatoraja;
@@ -571,20 +538,8 @@ export class DebugMenu {
     }
     if (this.gaugeAutoShiftController) this.gaugeAutoShiftController.hidden = !beatoraja;
     if (this.bottomShiftableGaugeController) this.bottomShiftableGaugeController.hidden = !beatoraja;
-    if (!beatoraja && this.guiState.mineModifier !== 'OFF') {
-      this.guiState.mineModifier = 'OFF';
-      this.setPlayOptions({ mineModifier: 'OFF' });
-    }
-    if (this.mineModifierController) this.mineModifierController.hidden = !beatoraja;
-    if (!beatoraja && this.guiState.scrollModifier !== 'OFF') {
-      this.guiState.scrollModifier = 'OFF';
-      this.setPlayOptions({ scrollModifier: 'OFF' });
-    }
-    if (this.scrollModifierController) this.scrollModifierController.hidden = !beatoraja;
-    if (this.scrollSectionController)
-      this.scrollSectionController.hidden = !beatoraja || this.guiState.scrollModifier !== 'ADD';
-    if (this.scrollRateController)
-      this.scrollRateController.hidden = !beatoraja || this.guiState.scrollModifier !== 'ADD';
+    if (this.scrollSectionController) this.scrollSectionController.hidden = this.guiState.scrollModifier !== 'ADD';
+    if (this.scrollRateController) this.scrollRateController.hidden = this.guiState.scrollModifier !== 'ADD';
     if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {
       this.guiState.judgeAlgorithm = 'combo';
       this.setPlayOptions({ judgeAlgorithm: 'combo' });
@@ -598,7 +553,7 @@ export class DebugMenu {
     for (const side of ['1P', '2P'] as const) {
       const randomModes = resolveRandomModes(
         this.guiState.judgeRuleset,
-        side === '1P' && this.guiState.battleMode === 'BATTLE',
+        side === '1P' && isDuplicatedBattleChoice(this.guiState.battleMode),
       );
       const key = `random${side}` as const;
       if (!randomModes.includes(this.guiState[key])) {

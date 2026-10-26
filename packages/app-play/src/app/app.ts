@@ -506,7 +506,7 @@ export class PlayerWebApp {
       activeBeatorajaPlay: () => this.beatoraja.activeBeatorajaPlay,
       beatorajaSkinConfig: (entryPath, header) => this.beatoraja.beatorajaSkinConfig(entryPath, header),
       setStatus: (text) => this.status.set(text),
-      reusePreviousArrangement: () => this.playOptions.reusePreviousArrangement(),
+      reusePreviousArrangement: () => this.playOptions.reusePreviousArrangement(this.guiState.judgeRuleset),
       clearArrangement: () => this.playOptions.clearArrangement(),
       setPlayOptions: (changes) => this.setPlayOptions(changes),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
