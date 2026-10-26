@@ -242,7 +242,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 - dropped folder、ZIP、song / LR2 / beatoraja theme 混在 drop を扱う browser song library
 - 大きな audio / video file を lazy に扱い、case-insensitive に path lookup
-- select、gameplay、result（スキンが宣言していれば decide も）を描く built-in be-music skin（既定の Synesthesia、Phantom、Plain、Native（DOM + Canvas）と、opt-in の Lattice）
+- select、gameplay、result（スキンが宣言していれば decide も）を描く built-in be-music skin（既定の Synesthesia、Plain、Native（DOM + Canvas））
 - タッチ主体の端末でのタッチ操作とタッチ用 gameplay layout、縦向きステージを持つスキンの縦画面表示、スキンごとの設定
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
 - beatoraja の select / decide / gameplay / result skin を parse して PixiJS で描画

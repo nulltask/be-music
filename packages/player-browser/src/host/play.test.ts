@@ -24,7 +24,7 @@ import { startReplayView } from '../session/play/play-view-settings.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaRenderContext } from '../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
-import { phantomSkin } from '../skins/phantom/index.ts';
+import { synesthesiaSkin } from '../skins/synesthesia/index.ts';
 import { plainSkin } from '../skins/plain/index.ts';
 import { resolveBeatorajaPlayTiming } from '../view/beatoraja/play-view.ts';
 import { createDecideScene } from './decide.ts';
@@ -76,7 +76,7 @@ const AUDIO = { stopOwned: vi.fn(), playJingle: vi.fn(async () => true) } as unk
 function create(overrides: Partial<PlaySceneOptions> = {}) {
   const on = { finish: vi.fn(), exit: vi.fn(), restart: vi.fn(), hiSpeed: vi.fn(), tempo: vi.fn() };
   const scene = createPlayScene(
-    { family: 'built-in', skin: phantomSkin },
+    { family: 'built-in', skin: synesthesiaSkin },
     {
       chart: { ...CHART, chart: RANDOM_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2.5 },
@@ -208,7 +208,7 @@ describe('createPlayScene', () => {
 
   it('plays the #RANDOM branches the decide screen drew (preResolved)', async () => {
     const decide = createDecideScene(
-      { family: 'built-in', skin: phantomSkin },
+      { family: 'built-in', skin: synesthesiaSkin },
       {
         chart: { ...CHART, chart: RANDOM_CHART },
         sounds: {},
@@ -385,7 +385,7 @@ describe('createPlayScene with an LR2 kit', () => {
 
   it('keeps its family and skin when handed another kit', () => {
     const { scene } = createLR2();
-    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit({ family: 'built-in', skin: synesthesiaSkin })).not.toThrow();
     expect(() => scene.updateKit({ family: 'lr2', skin: lr2PlaySkin() })).not.toThrow();
     scene.dispose();
   });
@@ -536,7 +536,7 @@ describe('createPlayScene with a beatoraja kit', () => {
       settings: { initialHiSpeed: 2, hsFix: 'AVERAGE' as const },
     };
     const builtIn = createPlayScene(
-      { family: 'built-in', skin: phantomSkin },
+      { family: 'built-in', skin: synesthesiaSkin },
       { ...options, audio: AUDIO, on: { finish: vi.fn(), exit: vi.fn(), restart: vi.fn() }, keyTarget: NO_KEYS },
     );
     const lr2 = createPlayScene(
@@ -731,7 +731,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     await scene.prepare();
     expect(scene.resolved?.chart).toBeDefined();
     expect(() => scene.updateKit(beatorajaKit({ fadeout: 100 }))).not.toThrow();
-    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit({ family: 'built-in', skin: synesthesiaSkin })).not.toThrow();
     scene.dispose();
     expect(scene.resolved).toBeUndefined();
   });

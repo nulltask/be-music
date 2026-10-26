@@ -8,7 +8,7 @@ import { SILENT_AUDIO } from '../runtime/audio-analysis.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { makeChart, makeCollection } from '../session/select/test-support.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
-import { phantomSkin } from '../skins/phantom/index.ts';
+import { synesthesiaSkin } from '../skins/synesthesia/index.ts';
 import { BuiltInSelectView } from '../view/built-in/select-view.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import type { BeatorajaKit, BuiltInKit } from './family-kit.ts';
@@ -46,7 +46,7 @@ function createFakeAudio() {
   return { audio, service: audio as unknown as AudioService };
 }
 
-const KIT: BuiltInKit = { family: 'built-in', skin: phantomSkin, effects: 'off' };
+const KIT: BuiltInKit = { family: 'built-in', skin: synesthesiaSkin, effects: 'off' };
 
 describe('createSelectScene', () => {
   it('is the built-in family’s select screen, taking no keys off the stage', () => {
@@ -158,7 +158,7 @@ describe('createSelectScene with a beatoraja kit', () => {
 
 describe('BuiltInSelectView', () => {
   it('plays the skin’s launch outro unless its effects are off', () => {
-    const outro = { ...phantomSkin, select: { ...phantomSkin.select, outroMs: 600 } };
+    const outro = { ...synesthesiaSkin, select: { ...synesthesiaSkin.select, outroMs: 600 } };
     expect(new BuiltInSelectView({ family: 'built-in', skin: outro }).launchOutroMs).toBe(600);
     expect(new BuiltInSelectView({ family: 'built-in', skin: outro, effects: 'off' }).launchOutroMs).toBe(0);
   });
