@@ -340,6 +340,32 @@ So `extractCourseStage` still gives a single-chart log that replays on its own; 
 
 Mixed bmson NONSTOP replays also accept `table: "bmson"` (raw `judge_rank`) and `table: "bms-exrank"` (raw `#DEFEXRANK`) in `chart.judgeRank.stageRanks`, with an initial entry at time zero. LR2 and beatoraja apply these stage windows. Optional `chart.totalUnit` selects `absolute` or `percent` for TOTAL; ordinary replays continue to derive the unit from `sourceFormat`.
 
+### Playing a course replay back
+
+Dropping a `*.bmcourse.json` file onto the browser player (or picking it with **Open files**) plays the recorded run back as its course, as LR2 and beatoraja replay a course. LR2 beta3 starts one by holding the start key on a course bar for more than two seconds, or with skin button type 19 (OpenLR2 `LR2f.cpp` L11930-L11968, L10300-L10306); beatoraja with its REPLAY key and a replay slot. Here the file is the entry point; the playback takes a parsed log, so a course replay loaded from elsewhere (the Leaderboard) can start it the same way.
+
+```mermaid
+flowchart TD
+  drop["drop *.bmcourse.json"] --> match{"every stage chart loaded?"}
+  match -->|no| dialog["list the missing charts"]
+  match -->|yes| kind{"NONSTOP?"}
+  kind -->|no| stage["play the next stage's replay"]
+  stage --> result["stage result"]
+  result --> stop{"run stopped here?"}
+  stop -->|no| stage
+  stop -->|yes| course["course result"]
+  kind -->|yes| stitched["stitch as recorded, play nonstop.replay"]
+  stitched --> nonstop["NONSTOP result"]
+```
+
+- **Every stage chart must be loaded.** Each stage is matched against the library by the chart it names (`listCourseReplayStageCharts`, `matchesCourseReplayStageChart`): SHA-256 when it names one, else MD5, else the chart fingerprint. A stage reached or not counts the same, as LR2's `coursePlayable` and beatoraja's `MusicSelector` (433-437) refuse a course replay with a stage chart missing. When one is missing, a dialog lists them and nothing starts.
+- **The stages play in order**, each from its own replay with the state it carried in (`play.course.carryIn`), through the live course flow: the course's decide screen, then each stage's result, then the course result. LR2 skips a stage result only for AUTO (`Main.cpp` M1280-M1310, M1376-M1379), not for a replay, and beatoraja shows each stage's `MusicResult` (179-212) before its `CourseResult`. An AUTO-played stage's result is skipped as a live AUTO run skips it.
+- **The run stops where the recorded run stopped** (`planCourseReplayPlayback`): after the first stage given up (`play.aborted`, which goes straight on to the course result as the live run did) or failed (its recorded gauge, by `isCourseStageFailed`), else after the last stage played. The course result is the recorded one (`results.native`).
+- **A NONSTOP run plays as one chart**, as LR2 replays a NONSTOP course (`LR2f.cpp` L18116-L18117, `Main.cpp` M806): the course is stitched again as recorded (`nonstop.placement`, `nonstop.stitch` and each stage's `randomDraws`) and `nonstop.replay` plays on it.
+- **Nothing is kept.** A course replay updates no stage or course best, lamp, trophy or play count, saves no replay and submits nothing to the Leaderboard, as LR2's course-result save returns early for a replay (`LR2f.cpp` L9599). beatoraja's `CourseResult.updateScoreDatabase` writes with no mode guard, so a course replay there bumps play and clear counts; be-music does not follow it.
+- **The results say they are a replay.** A replay's play and every result it leads to (each stage's, the course's or the NONSTOP run's) carry `PlayResult.fromReplay`, and the LR2 skin lights REPLAY PLAYING (op 84) instead of REPLAY OFF (op 82) on the play and result screens, as LR2 keeps op 84 on for the whole replay (`LR2f.cpp` L4740-L4741).
+- ESC during the playback stops it and goes back to the select screen, as ESC stops a dropped replay; F5 or R on a NONSTOP replay plays it again.
+
 ## CLI
 
 `@be-music/player-terminal` ships a second binary, `bms-replay`:
