@@ -301,17 +301,18 @@ export const PLAYER_APP_HTML = `
       </form>
     </dialog>
     <!--
-      A dropped course replay (\`*.bmcourse.json\`) whose stage charts are not all
-      loaded: it lists the missing ones and the replay does not start. Filled by
-      \`showMissingCourseReplayCharts\` (ui/course-replay-missing.ts).
+      A dropped replay (\`*.bmplay.json\`) whose chart is not loaded, or a course
+      replay (\`*.bmcourse.json\`) whose stage charts are not all loaded: it lists
+      the missing charts and the replay does not start. Filled by
+      \`showMissingReplayCharts\` (ui/replay-missing.ts).
     -->
-    <dialog class="dialog account-dialog" id="course-replay-missing" aria-labelledby="course-replay-missing-title" aria-describedby="course-replay-missing-hint">
+    <dialog class="dialog account-dialog" id="replay-missing" aria-labelledby="replay-missing-title" aria-describedby="replay-missing-hint">
       <form method="dialog" class="account-dialog-body">
         <header>
-          <h2 id="course-replay-missing-title">Charts missing</h2>
-          <p id="course-replay-missing-hint" data-course-replay-missing-hint></p>
+          <h2 id="replay-missing-title">Charts missing</h2>
+          <p id="replay-missing-hint" data-replay-missing-hint></p>
         </header>
-        <ul class="course-replay-missing-list" data-course-replay-missing-list></ul>
+        <ul class="replay-missing-list" data-replay-missing-list></ul>
         <footer>
           <button type="submit" class="btn" autofocus>OK</button>
         </footer>
