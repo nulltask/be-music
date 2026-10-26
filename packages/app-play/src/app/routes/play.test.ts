@@ -166,8 +166,10 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       resolveChartHashes: vi.fn<PlayRouteDeps['records']['resolveChartHashes']>(async () => HASHES),
       activePlayRecordKey: undefined as string | undefined,
       activeStageRecordKey: undefined as string | undefined,
+      recordActivePlay: vi.fn<PlayRouteDeps['records']['recordActivePlay']>(),
       recordActiveCourseStage: vi.fn<PlayRouteDeps['records']['recordActiveCourseStage']>(),
     },
+    leaderboard: { maybeSubmit: vi.fn<PlayRouteDeps['leaderboard']['maybeSubmit']>() },
     familyKits: {
       selectSoundSet: vi.fn(() => ({})),
       resolvePlayKit: vi.fn<PlayRouteDeps['familyKits']['resolvePlayKit']>(async (): Promise<ResolvedPlayKit> => ({
@@ -597,6 +599,58 @@ describe('PlayRoute: where a play leads', () => {
     const play = await started(h, chartEntry('a'));
     play.options.on.exit();
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
+  });
+
+  test('Escape saves a single play as a failed one, the notes it never reached in its BP, and sends it', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'));
+    const progress = {
+      ...resultOf(chartEntry('a')),
+      score: { total: 10, perfect: 3, great: 1, good: 0, bad: 1, poor: 1, emptyPoor: 2, exScore: 7 },
+      maxCombo: 4,
+      cleared: false,
+    } as PlayResult;
+    play.progress.mockReturnValue(progress);
+    const replay = { play: { mode: 'manual', aborted: true } } as unknown as BeMusicReplay;
+    play.waitForReplay.mockResolvedValueOnce(replay);
+    expect(h.deps.records.activePlayRecordKey).toBeDefined();
+    play.options.on.exit();
+    // BP: 1 BAD + 1 POOR + 2 empty POORs + the 4 notes never reached.
+    expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith({
+      lamp: 'FAILED',
+      exScore: 7,
+      maxCombo: 4,
+      missCount: 8,
+    });
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
+  });
+
+  test('Escape from a play that keeps no record (a replay) saves and sends nothing', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'), { replay: REPLAY });
+    play.progress.mockReturnValue(resultOf(chartEntry('a')));
+    play.waitForReplay.mockResolvedValue(REPLAY);
+    play.options.on.exit();
+    await settle();
+    expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+  });
+
+  test('Escape before a note is judged, or in practice, saves nothing', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'));
+    play.progress.mockReturnValue({
+      ...resultOf(chartEntry('a')),
+      score: { total: 10, perfect: 0, great: 0, good: 0, bad: 0, poor: 2, emptyPoor: 1, exScore: 0 },
+    } as PlayResult);
+    play.options.on.exit();
+    play.progress.mockReturnValue({ ...resultOf(chartEntry('a')), practice: true } as PlayResult);
+    play.options.on.exit();
+    await settle();
+    expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
   });
 
   test('Escape gives a course up: the stage is recorded with its replay, and the course result shows', async () => {

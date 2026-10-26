@@ -320,7 +320,8 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     const result = getResultData(play.ctx)!;
     expect(result.score).toMatchObject({ bad: 1, poor: 3, emptyPoor: 2 });
     expect(result.judgedPoor).toBe(1);
-    expect(recordPlayFromResult(result).missCount).toBe(4);
+    // BAD + POOR + empty POOR, and the fourth note the play has not judged yet.
+    expect(recordPlayFromResult(result).missCount).toBe(5);
   });
 
   test('a ruleset with its own empty-POOR figure keeps it apart from the POOR count', () => {
@@ -329,7 +330,7 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     const result = getResultData(play.ctx)!;
     expect(result.score).toMatchObject({ bad: 1, poor: 1, emptyPoor: 2 });
     expect(result.judgedPoor).toBeUndefined();
-    expect(recordPlayFromResult(result).missCount).toBe(4);
+    expect(recordPlayFromResult(result).missCount).toBe(5);
   });
 
   test("an AUTO play's full combo counts every note as its max combo", () => {

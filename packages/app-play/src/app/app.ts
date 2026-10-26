@@ -441,6 +441,7 @@ export class PlayerWebApp {
       elements,
       library: this.library,
       records: this.records,
+      leaderboard: this.leaderboard,
       familyKits: this.familyKits,
       beatoraja: this.beatoraja,
       courses: this.courses,

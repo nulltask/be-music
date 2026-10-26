@@ -10,7 +10,7 @@ import type { AudioService } from '@be-music/player-browser/audio';
 import { resolveChartSource, type ChartFileHashes } from '@be-music/player-browser/collection';
 import { createPlayScene, type PixiSceneHost, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
-import { courseStageRecordPlayFromResult } from '@be-music/player-engine/records';
+import { abortedRecordPlayFromResult, courseStageRecordPlayFromResult } from '@be-music/player-engine/records';
 import { snapHiSpeed, type LibraryChart, type PlayOptions, type PlayResult } from '@be-music/player-scene-model';
 import {
   playAgainOverrides,
@@ -25,6 +25,7 @@ import { resolvePlayLayoutMode, type DeviceProfile } from '../../device-profile.
 import { storeHiSpeed } from '../../hi-speed-storage.ts';
 import { allowsLiveTempo, describePlayingStatus, tempoPercentFromTempo } from '../../play-tempo-settings.ts';
 import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
+import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { PlayOptionsService } from '../../services/play-options.ts';
@@ -79,8 +80,11 @@ export interface PlayRouteDeps {
     | 'lookupChartBestRecord'
     | 'activePlayRecordKey'
     | 'activeStageRecordKey'
+    | 'recordActivePlay'
     | 'recordActiveCourseStage'
   >;
+  /** The Leaderboard: a single play given up with ESC is sent as a failed play. */
+  readonly leaderboard: Pick<LeaderboardPanel, 'maybeSubmit'>;
   /** The kit the play is drawn with. */
   readonly familyKits: Pick<FamilyKits, 'resolvePlayKit' | 'selectSoundSet'>;
   /** The beatoraja play entry in force, which the Debug Menu's skin pickers and the skin-options panel apply to. */
@@ -147,6 +151,7 @@ export class PlayRoute {
   private readonly elements: PlayRouteDeps['elements'];
   private readonly library: PlayRouteDeps['library'];
   private readonly records: PlayRouteDeps['records'];
+  private readonly leaderboard: PlayRouteDeps['leaderboard'];
   private readonly familyKits: PlayRouteDeps['familyKits'];
   private readonly beatoraja: PlayRouteDeps['beatoraja'];
   private readonly courses: PlayRouteDeps['courses'];
@@ -176,6 +181,7 @@ export class PlayRoute {
     this.elements = deps.elements;
     this.library = deps.library;
     this.records = deps.records;
+    this.leaderboard = deps.leaderboard;
     this.familyKits = deps.familyKits;
     this.beatoraja = deps.beatoraja;
     this.courses = deps.courses;
@@ -338,6 +344,19 @@ export class PlayRoute {
             );
           })();
           return;
+        }
+        // A single play given up is saved as a failed play, as LR2 and beatoraja save one: its record (the notes it
+        // never reached counted in its BP) and its Leaderboard entry. One that judged no note yet saves nothing, and so
+        // does one that keeps no record (an AUTO play, a replay, one at another tempo).
+        const keepsRecord = !practicing && this.records.activePlayRecordKey !== undefined;
+        const progress = keepsRecord ? view?.progress() : undefined;
+        const aborted =
+          progress !== undefined && !progress.practice && progress.secondPlayer === undefined
+            ? abortedRecordPlayFromResult(progress)
+            : undefined;
+        if (aborted !== undefined) {
+          this.records.recordActivePlay(aborted);
+          void view?.waitForReplay().then((abortedReplay) => this.leaderboard.maybeSubmit(abortedReplay, chartEntry));
         }
         void this.showSelect();
       },
