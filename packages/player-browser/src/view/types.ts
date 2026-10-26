@@ -163,6 +163,8 @@ export interface SelectFrame {
   readonly records: SelectRecords;
   /** The host's text field is over the search box: the skin leaves the query to it. */
   readonly searchEditing: boolean;
+  /** Why the chart filter expression searched for (`?…`) does not parse; the list is not filtered meanwhile. */
+  readonly searchError?: string;
   /** When the player started the bar under the cursor: a skin's launch outro counts from it, and input waits. */
   readonly startedAtMs?: number;
   /** The README overlay: the text file shown for a chart. */

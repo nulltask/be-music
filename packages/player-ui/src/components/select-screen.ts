@@ -28,31 +28,36 @@ export class BeMusicSelectScreenElement extends FrameElement<BeMusicDOMSelectFra
           <p class="eyebrow">Be-Music / Native</p>
           <h1>Collection</h1>
         </div>
-        <input
-          class="input"
-          type="search"
-          aria-label="Search charts"
-          placeholder="Search title, artist…"
-          .value=${f.searchQuery}
-          ?disabled=${f.launching}
-          @input=${(e: InputEvent) => {
-            if (!e.isComposing) this.emit('search-change', { value: (e.currentTarget as HTMLInputElement).value });
-          }}
-          @compositionend=${(e: CompositionEvent) => this.emit('search-change', { value: (e.currentTarget as HTMLInputElement).value })}
-          @keydown=${(e: KeyboardEvent) => {
-            if (e.isComposing) return;
-            const input = e.currentTarget as HTMLInputElement;
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              input.value = '';
-              this.emit('search-change', { value: '' });
-              input.blur();
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              input.blur();
-            }
-          }}
-        />
+        <div class="search">
+          <input
+            class="input"
+            type="search"
+            aria-label="Search charts"
+            aria-describedby="search-error"
+            aria-invalid=${f.searchError !== undefined ? 'true' : 'false'}
+            placeholder="Search title, artist… (? for a filter)"
+            .value=${f.searchQuery}
+            ?disabled=${f.launching}
+            @input=${(e: InputEvent) => {
+              if (!e.isComposing) this.emit('search-change', { value: (e.currentTarget as HTMLInputElement).value });
+            }}
+            @compositionend=${(e: CompositionEvent) => this.emit('search-change', { value: (e.currentTarget as HTMLInputElement).value })}
+            @keydown=${(e: KeyboardEvent) => {
+              if (e.isComposing) return;
+              const input = e.currentTarget as HTMLInputElement;
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                input.value = '';
+                this.emit('search-change', { value: '' });
+                input.blur();
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                input.blur();
+              }
+            }}
+          />
+          <p id="search-error" class="search-error" role="status">${f.searchError ?? ''}</p>
+        </div>
       </header>
       <div class="columns">
         <section class="browse">
