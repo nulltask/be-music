@@ -41,8 +41,11 @@ export interface ReplayRouteDeps {
     course: LibraryCourse,
     options: { decide?: boolean; replay?: BeMusicCourseReplay },
   ) => Promise<void>;
-  /** Tells the player which stage charts a course replay needs that are not loaded; the replay does not start. */
-  readonly showMissingCourseReplayCharts: (courseName: string, stages: readonly string[]) => void;
+  /**
+   * Tells the player which charts a replay needs that are not loaded (a replay's chart, a course replay's stage charts),
+   * under `hint`; the replay does not start.
+   */
+  readonly showMissingReplayCharts: (hint: string, charts: readonly string[]) => void;
 }
 
 /** A replay played back from a file. */
@@ -55,7 +58,7 @@ export class ReplayRoute {
   private readonly showSelect: ReplayRouteDeps['showSelect'];
   private readonly startCourseReplay: ReplayRouteDeps['startCourseReplay'];
   private readonly startNonstopCourse: ReplayRouteDeps['startNonstopCourse'];
-  private readonly showMissingCourseReplayCharts: ReplayRouteDeps['showMissingCourseReplayCharts'];
+  private readonly showMissingReplayCharts: ReplayRouteDeps['showMissingReplayCharts'];
 
   public constructor(deps: ReplayRouteDeps) {
     this.library = deps.library;
@@ -66,7 +69,7 @@ export class ReplayRoute {
     this.showSelect = deps.showSelect;
     this.startCourseReplay = deps.startCourseReplay;
     this.startNonstopCourse = deps.startNonstopCourse;
-    this.showMissingCourseReplayCharts = deps.showMissingCourseReplayCharts;
+    this.showMissingReplayCharts = deps.showMissingReplayCharts;
   }
 
   /**
@@ -85,12 +88,18 @@ export class ReplayRoute {
       replay = parseReplay(await file.text());
     } catch (error) {
       dropLog.warn('replay parse failed', error);
+      // The drop took the select screen off the stage: it comes back, with the status.
+      await this.showSelect();
       this.setStatus(`Replay: invalid replay (${(error as Error).message})`);
       return;
     }
     const chartEntry = await this.findSongForReplay(replay);
     if (!chartEntry) {
+      await this.showSelect();
       this.setStatus(`Replay: song not loaded (${replay.chart.title ?? 'untitled'})`);
+      this.showMissingReplayCharts('Load this chart to watch the replay, then drop the replay again.', [
+        describeReplayChart(replay),
+      ]);
       return;
     }
     this.setPlayStatus(`Replaying: ${chartEntry.title}`);
@@ -140,8 +149,8 @@ export class ReplayRoute {
     if (missing.length > 0) {
       await this.showSelect();
       this.setStatus(`Course replay: ${missing.length} of ${matched.length} stage charts are not loaded`);
-      this.showMissingCourseReplayCharts(
-        courseLog.course.name,
+      this.showMissingReplayCharts(
+        `Load these charts of ${courseLog.course.name} to replay the course, then drop its course replay again.`,
         missing.map(({ stage }) => describeCourseReplayStage(stage)),
       );
       return;
@@ -193,6 +202,14 @@ export class ReplayRoute {
       (entry) => entry.title === title && (replay.chart.artist === undefined || entry.artist === replay.chart.artist),
     );
   }
+}
+
+/** How the missing-chart dialog names a replay's chart: its title and artist, else the hash or path it was looked for by. */
+export function describeReplayChart(replay: Pick<BeMusicReplay, 'chart' | 'play'>): string {
+  const { title, artist, sha256 } = replay.chart;
+  if (title !== undefined && title.length > 0) return artist !== undefined ? `${title} / ${artist}` : title;
+  const chartPath = replay.play.native?.chartPath;
+  return sha256 ?? (typeof chartPath === 'string' && chartPath.length > 0 ? chartPath : 'untitled chart');
 }
 
 /** A loaded chart's Be-Music chart fingerprint, for a course replay stage named by it alone. */

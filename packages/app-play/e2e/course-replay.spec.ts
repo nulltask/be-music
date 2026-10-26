@@ -108,13 +108,24 @@ test('a dropped GRADE course replay plays the run back to where it failed, with 
   stage.replay.chart.sha256 = '0'.repeat(64);
   stage.replay.chart.title = 'Not Loaded';
   await player.dropText('missing.bmcourse.json', JSON.stringify(log));
-  const dialog = player.page.locator('dialog#course-replay-missing');
+  const dialog = player.page.locator('dialog#replay-missing');
   // A Basecoat dialog is an empty box; its panel, the child, is what shows.
   await expect(dialog.locator(':scope > form')).toBeVisible();
   const artist = stage.replay.chart.artist;
   await expect(dialog.locator('li')).toHaveText([`Stage 2: Not Loaded${artist !== undefined ? ` / ${artist}` : ''}`]);
   state = await player.state();
   expect(state.status).toBe('Course replay: 1 of 3 stage charts are not loaded');
+  expect(state.scene.kind).toBe('select');
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await expect(dialog.locator(':scope > form')).toBeHidden();
+
+  // So does a single replay whose chart is not loaded (its stage replay, cut loose from the loaded chart).
+  delete stage.replay.play.native;
+  await player.dropText('missing.bmplay.json', JSON.stringify(stage.replay));
+  await expect(dialog.locator(':scope > form')).toBeVisible();
+  await expect(dialog.locator('li')).toHaveText([`Not Loaded${artist !== undefined ? ` / ${artist}` : ''}`]);
+  state = await player.state();
+  expect(state.status).toBe('Replay: song not loaded (Not Loaded)');
   expect(state.scene.kind).toBe('select');
   await dialog.getByRole('button', { name: 'OK' }).click();
   await expect(dialog.locator(':scope > form')).toBeHidden();

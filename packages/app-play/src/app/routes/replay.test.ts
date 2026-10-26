@@ -74,7 +74,7 @@ function harness() {
     showSelect: vi.fn<ReplayRouteDeps['showSelect']>(async () => {}),
     startCourseReplay: vi.fn<ReplayRouteDeps['startCourseReplay']>(async () => {}),
     startNonstopCourse: vi.fn<ReplayRouteDeps['startNonstopCourse']>(async () => {}),
-    showMissingCourseReplayCharts: vi.fn<ReplayRouteDeps['showMissingCourseReplayCharts']>(),
+    showMissingReplayCharts: vi.fn<ReplayRouteDeps['showMissingReplayCharts']>(),
   };
   return { route: new ReplayRoute(deps), deps, charts };
 }
@@ -121,9 +121,16 @@ describe('ReplayRoute', () => {
     vi.mocked(parseReplay).mockReturnValueOnce(replay({ title: 'Twin', artist: 'three' }));
     await h.route.startReplayReplayFromFile(FILE);
     expect(h.deps.setStatus).toHaveBeenLastCalledWith('Replay: song not loaded (Twin)');
+    // The select screen comes back, and a dialog names the chart.
+    expect(h.deps.showMissingReplayCharts).toHaveBeenLastCalledWith(
+      'Load this chart to watch the replay, then drop the replay again.',
+      ['Twin / three'],
+    );
     vi.mocked(parseReplay).mockReturnValueOnce(replay({}));
     await h.route.startReplayReplayFromFile(FILE);
     expect(h.deps.setStatus).toHaveBeenLastCalledWith('Replay: song not loaded (untitled)');
+    expect(h.deps.showMissingReplayCharts).toHaveBeenLastCalledWith(expect.any(String), ['untitled chart']);
+    expect(h.deps.showSelect).toHaveBeenCalledTimes(2);
     expect(h.deps.playChart).not.toHaveBeenCalled();
     expect(h.deps.setPlayStatus).not.toHaveBeenCalled();
   });
@@ -135,6 +142,7 @@ describe('ReplayRoute', () => {
     });
     await h.route.startReplayReplayFromFile(FILE);
     expect(h.deps.setStatus).toHaveBeenCalledWith('Replay: invalid replay (not a replay)');
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
     expect(h.deps.playChart).not.toHaveBeenCalled();
   });
 
@@ -176,7 +184,7 @@ describe('ReplayRoute course replays', () => {
     const log = courseReplay('grade', [{ sha256: 'sha-c' }, { sha256: 'SHA-A' }, { md5: 'md5-b' }]);
     vi.mocked(parseCourseReplay).mockReturnValueOnce(log);
     await h.route.startReplayReplayFromFile(COURSE_FILE);
-    expect(h.deps.showMissingCourseReplayCharts).not.toHaveBeenCalled();
+    expect(h.deps.showMissingReplayCharts).not.toHaveBeenCalled();
     expect(h.deps.startCourseReplay).toHaveBeenCalledOnce();
     const [course, started] = h.deps.startCourseReplay.mock.calls[0]!;
     expect(started).toBe(log);
@@ -204,7 +212,10 @@ describe('ReplayRoute course replays', () => {
       courseReplay('grade', [{ sha256: 'sha-a' }, { sha256: 'sha-gone', title: 'Gone' }, { md5: 'md5-gone' }]),
     );
     await h.route.startReplayReplayFromFile(COURSE_FILE);
-    expect(h.deps.showMissingCourseReplayCharts).toHaveBeenCalledWith('Dan', ['Stage 2: Gone', 'Stage 3: md5-gone']);
+    expect(h.deps.showMissingReplayCharts).toHaveBeenCalledWith(
+      'Load these charts of Dan to replay the course, then drop its course replay again.',
+      ['Stage 2: Gone', 'Stage 3: md5-gone'],
+    );
     expect(h.deps.setStatus).toHaveBeenCalledWith('Course replay: 2 of 3 stage charts are not loaded');
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
     expect(h.deps.startCourseReplay).not.toHaveBeenCalled();
