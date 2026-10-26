@@ -250,6 +250,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     random2P: 'OFF',
     dpFlip: false,
     bpmGuide: false,
+    bpmChangeWarning: false,
     judgeTimingAutoAdjust: 'OFF',
     visualConstant: false,
     noteDurationMs: 500,

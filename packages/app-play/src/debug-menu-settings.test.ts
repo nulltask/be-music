@@ -130,6 +130,7 @@ describe('captureDebugMenuSettings', () => {
       random2P: 'MIRROR',
       dpFlip: true,
       bpmGuide: true,
+      bpmChangeWarning: true,
       judgeTimingMs: 0,
       judgeTimingAutoAdjust: 'OFF',
       visualConstant: false,

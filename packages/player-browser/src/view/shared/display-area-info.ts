@@ -50,6 +50,20 @@ export function resolveDisplayAreaLabels(input: {
   return result;
 }
 
+/**
+ * The size of a DOM overlay layer in CSS pixels, which its labels are placed in: the layer's own box, or `fallback`
+ * before it is laid out. The renderer's screen is not it: it is in the renderer's own units and keeps whatever size it
+ * last resized to while a DOM skin shows.
+ */
+export function measureLayer(
+  layer: HTMLElement,
+  fallback: { width: number; height: number },
+): { width: number; height: number } {
+  return layer.clientWidth > 0 && layer.clientHeight > 0
+    ? { width: layer.clientWidth, height: layer.clientHeight }
+    : { width: fallback.width, height: fallback.height };
+}
+
 /** A pointer-transparent readout layer, shared by Canvas and DOM skins and removed with its play view. */
 export class DisplayAreaInfoOverlay {
   private root: HTMLElement | undefined;
@@ -90,9 +104,10 @@ export class DisplayAreaInfoOverlay {
     if (!root) return;
     root.hidden = labels.length === 0;
     root.style.opacity = String(opacity);
-    const scale = Math.min(screen.width / stage.width, screen.height / stage.height);
-    const offsetX = (screen.width - stage.width * scale) / 2;
-    const offsetY = (screen.height - stage.height * scale) / 2;
+    const { width, height } = measureLayer(root, screen);
+    const scale = Math.min(width / stage.width, height / stage.height);
+    const offsetX = (width - stage.width * scale) / 2;
+    const offsetY = (height - stage.height * scale) / 2;
     labels.forEach((label, index) => {
       let node = this.nodes[index];
       if (!node) {

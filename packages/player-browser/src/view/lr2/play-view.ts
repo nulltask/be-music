@@ -1,4 +1,5 @@
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
+import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
 /**
  * The LR2 family's play screen: an LR2 play skin (`play_<variant>.lr2skin`) drawn around the shared playfield
  * (`view/shared/playfield`) in the skin's authored coordinate space, letterboxed into the window. It draws the play session's frames:
@@ -120,6 +121,7 @@ export type LR2PlayViewOptions = Pick<
 /** The LR2 play view. See the module comment. */
 export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContext, LR2PlayElementsContext {
   private readonly displayInfo = new DisplayAreaInfoOverlay();
+  private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
   public readonly family = 'lr2' as const;
   public readonly timing: PlayViewTiming;
   /** The play options the view draws with; the setters change them during the play. */
@@ -270,6 +272,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     build(this, host);
     this.touchLanes.attach(host, emit);
     this.displayInfo.attachCanvas(this.designRoot);
+    this.bpmChangeWarning.attachCanvas(this.designRoot);
   }
 
   public draw(frame: PlayFrame): void {
@@ -279,6 +282,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     for (const event of frame.events) this.handleEvent(event);
     this.root.visible = frame.shown;
     if (!frame.shown) this.displayInfo.hide();
+    if (!frame.shown) this.bpmChangeWarning.hide();
     if (!frame.shown || this.disposed) return;
     this.perf.beginTick();
     this.perf.time('updateFPS', () => this.updateFPS());
@@ -294,13 +298,14 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.perf.time('render', () =>
       render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined),
     );
+    const overlayLanes = Array.from(this.play.laneX, ([channel, lane]) => ({
+      ...lane,
+      side: this.play.chartPlayVariant === '9' || !channel.startsWith('2') ? ('1P' as const) : ('2P' as const),
+    }));
     this.displayInfo.update(
       resolveDisplayAreaLabels({
         mode: frame.playOptions.displayAreaInfo,
-        lanes: Array.from(this.play.laneX, ([channel, lane]) => ({
-          ...lane,
-          side: this.play.chartPlayVariant === '9' || !channel.startsWith('2') ? ('1P' as const) : ('2P' as const),
-        })),
+        lanes: overlayLanes,
         covers: this.play.resolveLaneCovers(),
         visibleMs: (cover) =>
           this.play.resolveVisibleMs(
@@ -313,6 +318,15 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       this.app.screen,
       this.designRoot.alpha,
     );
+    this.bpmChangeWarning.show({
+      enabled: frame.playOptions.bpmChangeWarning,
+      timing: this.play.timingResolver,
+      seconds: frame.seconds,
+      lanes: overlayLanes,
+      stage: this.playfieldSkin.stage,
+      screen: this.app.screen,
+      opacity: this.designRoot.alpha,
+    });
     const report = this.perf.endFrame(() => ({
       stage: this.app.stage.children.length,
       skin: this.skinLayer.children.length,
@@ -328,6 +342,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   public detach(): void {
     this.displayInfo.detach();
+    this.bpmChangeWarning.detach();
     this.touchLanes.detach();
   }
 
@@ -343,6 +358,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   public dispose(): void {
     this.displayInfo.dispose();
+    this.bpmChangeWarning.dispose();
     if (this.disposed) return;
     this.disposed = true;
     this.timers.dispose();
