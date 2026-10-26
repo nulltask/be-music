@@ -131,7 +131,10 @@ test('mine REMOVE removes the same mines from the browser judgment and view bund
   expect(play.mineNotes).toBe(play.preparedChart!.landmineNotes);
   expect(play.mineNotes).toEqual([]);
   expect(play.preparedChart!.mineModifierChangeCount).toBe(1);
-  expect(() => prepare({ judgeRuleset: 'lr2', mineModifier: 'REMOVE' }, entry)).toThrow(/only for beatoraja/);
+  // Removing mines changes the chart only, so LR2 rules take it too (#774); LR2 still decides when a mine goes off.
+  const lr2 = prepare({ judgeRuleset: 'lr2', mineModifier: 'REMOVE' }, entry);
+  expect(lr2.mineNotes).toEqual([]);
+  expect(lr2.preparedChart!.mineModifierChangeCount).toBe(1);
 });
 
 test.each(['ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'] as const)(
@@ -359,7 +362,9 @@ test('EXTRA replays and previous layouts retain converted keysounds and source p
       original.preparedChart!.resolvedChart.sampleTriggers.map((trigger) => [trigger.channel, trigger.sampleKey]),
     );
   }
-  expect(() => prepare({ judgeRuleset: 'lr2', extraNoteDepth: 1 }, entry)).toThrow(/only for beatoraja/);
+  const lr2 = prepare({ judgeRuleset: 'lr2', extraNoteDepth: 1 }, entry);
+  expect(lr2.preparedChart).toMatchObject({ extraNoteDepth: 1 });
+  expect(lr2.preparedChart!.extraNoteChangeCount).toBeGreaterThan(0);
 });
 
 test('LR2 EXTRA replay reconstructs the recorded source tempo before restoring shuffled channels', () => {
@@ -401,7 +406,9 @@ test('LR2 EXTRA replay reconstructs the recorded source tempo before restoring s
   expect(restored.notes.map((note) => [note.channel, note.seconds, note.event.value])).toEqual(
     original.notes.map((note) => [note.channel, note.seconds, note.event.value]),
   );
-  expect(() => prepare({ judgeRuleset: 'beatoraja', lr2ExtraMode: true }, entry)).toThrow(/requires LR2/);
+  expect(prepare({ judgeRuleset: 'beatoraja', lr2ExtraMode: true }, entry).preparedChart).toMatchObject({
+    lr2ExtraMode: true,
+  });
 });
 
 test('SP TO DP replay restores source variant and source assists before DP FLIP and both-side MIRROR matching', () => {
@@ -532,4 +539,79 @@ test('scroll REMOVE keeps generated mines on their notes timelines for time-base
       [],
     );
   }
+});
+
+/** An SP 7KEY chart with a note on every key and the scratch, twice. */
+const sp7: LibraryChart = {
+  ...chart,
+  id: 'sp7',
+  chart: parseChart(
+    [
+      '#BPM 120',
+      '#PLAYER 1',
+      ...['11', '12', '13', '14', '15', '16', '18', '19'].map((lane) => `#000${lane}:0101`),
+    ].join('\n'),
+    'bms',
+  ),
+};
+
+test.each(['lr2', 'beatoraja', '____'] as const)(
+  'source-specific lane options arrange the chart under %s rules (#774)',
+  (judgeRuleset) => {
+    for (const random1P of [
+      'R-RANDOM',
+      'SPIRAL',
+      'H-RANDOM',
+      'ALL-SCR',
+      'RANDOM-EX',
+      'S-RANDOM-EX',
+      'SCATTER',
+    ] as const) {
+      const play = prepare({ judgeRuleset, random1P }, sp7);
+      const lanes = play.notes.map((note) => note.channel);
+      expect(lanes).toHaveLength(16);
+      // Only the 1P keys and scratch are rearranged; nothing lands outside the 7KEY layout.
+      expect(
+        lanes.every((lane) => play.laneChannels.includes(lane)),
+        `${random1P} under ${judgeRuleset}`,
+      ).toBe(true);
+    }
+  },
+);
+
+test('a chart copied onto both sides takes the battle arrangements and two-player M-RAN under any ruleset (#774)', () => {
+  const synchronized = prepare(
+    { judgeRuleset: 'beatoraja', battleMode: 'BATTLE', random1P: 'SYNCHRONIZE-RANDOM' },
+    sp7,
+  );
+  const keys = (side: '1' | '2') =>
+    synchronized.notes
+      .filter((note) => note.channel.startsWith(side) && note.channel !== `${side}6`)
+      .map((note) => note.channel.slice(1));
+  expect(keys('2')).toEqual(keys('1'));
+  const dBattle = prepare({ judgeRuleset: '____', battleMode: 'D-BATTLE', random1P: 'SYMMETRY-RANDOM' }, sp7);
+  expect(dBattle.preparedChart!.battleMode).toBe('D-BATTLE');
+  const mRan = prepare(
+    { judgeRuleset: 'lr2', battleMode: 'TWO-PLAYER', random1P: 'RANDOM', random2P: 'RANDOM', mRan2P: true },
+    sp7,
+  );
+  const sides = (side: '1' | '2') =>
+    mRan.notes
+      .filter((note) => note.channel.startsWith(side) && !note.channel.endsWith('6'))
+      .map((note) => note.channel.slice(1));
+  // Both players share 1P's arrangement, and M-RAN mirrors the second player's side.
+  const mirror: Record<string, string> = { '1': '9', '2': '8', '3': '5', '4': '4', '5': '3', '8': '2', '9': '1' };
+  expect(sides('2')).toEqual(sides('1').map((lane) => mirror[lane]));
+});
+
+test('a previous arrangement is reused only under the judge rules it was played with', () => {
+  const original = prepare({ judgeRuleset: 'lr2', random1P: 'SPIRAL' }, sp7);
+  const replay = createReplayRecorder({
+    json: sp7.chart,
+    chart: original.preparedChart!,
+    play: { mode: 'manual', autoScratch: false, judgeRuleset: 'lr2' },
+  }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } });
+  const fresh = prepare({ judgeRuleset: 'lr2', fixedArrangement: replay }, sp7);
+  expect(fresh.notes.map((note) => note.channel)).toEqual(original.notes.map((note) => note.channel));
+  expect(() => prepare({ judgeRuleset: 'beatoraja', fixedArrangement: replay }, sp7)).toThrow(/other judgment rules/);
 });

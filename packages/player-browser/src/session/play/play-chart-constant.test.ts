@@ -95,8 +95,9 @@ test('CONSTANT setup restores from a recorded replay instead of falling back to 
   expect(own.scrollMapper?.distanceBetween(0, 4)).toBeCloseTo(-24);
 });
 
-test('beatoraja CONSTANT remains a separate visibility setting', () => {
-  expect(() => prepare({ judgeRuleset: 'beatoraja' })).toThrow(/LR2 option/);
+test('beatoraja CONSTANT remains a separate visibility setting from LR2 HS-FIX CONSTANT, which every ruleset offers', () => {
+  // LR2's HS-FIX CONSTANT draws the same distances under beatoraja rules (#774).
+  expect(prepare({ judgeRuleset: 'beatoraja' }).scrollMapper?.distanceBetween(0, 4)).toBeCloseTo(5);
   const beatoraja = prepare({ judgeRuleset: 'beatoraja', hsFix: 'OFF', visualConstant: true });
   expect(beatoraja.scrollMapper?.distanceBetween(0, 4)).toBeCloseTo(-8);
 });
