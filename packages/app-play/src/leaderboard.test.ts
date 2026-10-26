@@ -52,12 +52,12 @@ describe('prepareLeaderboardSubmission', () => {
     expect(prepared.ok).toBe(true);
   });
 
+  test('sends a play given up with ESC, which the server ranks as a failed play', () => {
+    expect(prepareLeaderboardSubmission(recordedReplay({ aborted: true }), SOURCE, CHART_PATH).ok).toBe(true);
+  });
+
   test('skips plays the server would not rank', () => {
     expect(prepareLeaderboardSubmission(recordedReplay({ mode: 'auto' }), SOURCE, CHART_PATH)).toEqual({
-      ok: false,
-      reason: 'not-rankable',
-    });
-    expect(prepareLeaderboardSubmission(recordedReplay({ aborted: true }), SOURCE, CHART_PATH)).toEqual({
       ok: false,
       reason: 'not-rankable',
     });
@@ -188,7 +188,7 @@ describe('describeLeaderboardResult', () => {
 describe('describeSkippedSubmission', () => {
   test('names why a play was not sent', () => {
     expect(describeSkippedSubmission('not-rankable')).toBe(
-      'Leaderboard: not submitted (auto play, aborted runs and course stages are not ranked)',
+      'Leaderboard: not submitted (auto play and course stages are not ranked)',
     );
     expect(describeSkippedSubmission('tempo')).toMatch(/another tempo is practice/);
     expect(describeSkippedSubmission('missing-fingerprint')).toMatch(/no chart fingerprint/);

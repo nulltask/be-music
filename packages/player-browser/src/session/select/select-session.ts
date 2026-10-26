@@ -13,9 +13,11 @@ import { firstReplaySlot, snapClassicHiSpeed, stepClassicHiSpeed, stepReplaySlot
  * a frame, and with what happened since the last one, for the view's slides and timers.
  */
 
+import type { CourseChartRecord } from '@be-music/player-engine/course';
 import {
   browseCursor,
   browseEntries,
+  browseSearchError,
   browseSystemSound,
   captureBrowse,
   clampHiSpeed,
@@ -35,6 +37,7 @@ import {
   type BrowseListOptions,
   type BrowseSnapshot,
   type BrowseState,
+  type Library,
   type LibraryChart,
   type LibraryCourse,
   type LibraryEntry,
@@ -43,6 +46,7 @@ import {
   type SystemSoundSlot,
 } from '@be-music/player-scene-model';
 import { resolveChartSource } from '../../collection/collection.ts';
+import { createCourseChartRecord } from '../../collection/course.ts';
 import type { BrowserChartCollection } from '../../collection/types.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { CourseMaker } from '../../collection/course-maker.ts';
@@ -160,6 +164,13 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private readonly now: () => number;
   private readonly random: () => number;
   private library: BrowserChartCollection;
+  /**
+   * The library as the browse model reads it: the collection, with the reader a chart filter search (`?…`) sees each
+   * chart through. Made again when the library or the records change, so a search lists by the records as they are.
+   */
+  private browseLibrary: Library;
+  /** Each chart's filter record, resolved once: only its `score` row is read again, from the records in force. */
+  private readonly filterRecords = new WeakMap<LibraryChart, CourseChartRecord>();
   private browse: BrowseState;
   private playOptions: PlayOptions;
   private records: SelectRecords;
@@ -194,17 +205,20 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     this.random = options.random ?? Math.random;
     this.library = options.library;
     this.records = options.records ?? NO_RECORDS;
+    this.browseLibrary = this.createBrowseLibrary();
     this.sounds = options.sounds;
     this.playOptions = resolvePlayOptions({ ...DEFAULT_PLAY_OPTIONS, ...options.playOptions });
     // Under a policy that keeps the sort and the filters in the browse position (beatoraja's MODE and SORT), the play
     // options' do not shape the list.
     const base = openLibrary(
-      this.library,
+      this.browseLibrary,
       this.policy,
       this.policy.listOptions === 'play-options' ? { list: listOptionsOf(this.playOptions) } : {},
     );
     this.browse =
-      options.browse === undefined ? base : restoreSelectBrowse(this.library, options.browse, base, this.policy).state;
+      options.browse === undefined
+        ? base
+        : restoreSelectBrowse(this.browseLibrary, options.browse, base, this.policy).state;
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -213,12 +227,12 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
 
   /** The browse position as plain data (`captureBrowse`), to open the screen on again later. */
   public snapshot(): BrowseSnapshot {
-    return captureBrowse(this.library, this.browse);
+    return captureBrowse(this.browseLibrary, this.browse);
   }
 
   /** The bar under the cursor, or `undefined` when the list is empty. */
   public focused(): LibraryEntry | undefined {
-    return focusedEntry(this.library, this.browse);
+    return focusedEntry(this.browseLibrary, this.browse);
   }
 
   /** The play options in force. */
@@ -247,26 +261,50 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       return;
     }
     const previous = this.library;
-    const place = captureBrowse(previous, this.browse);
+    const place = captureBrowse(this.browseLibrary, this.browse);
     this.library = library;
+    this.browseLibrary = this.createBrowseLibrary();
     const empty = previous.charts.length === 0 && (previous.courseFolders?.length ?? 0) === 0;
     this.browse = empty
-      ? openLibrary(library, this.policy, { searchText: this.browse.searchText, list: this.browse.list })
-      : restoreSelectBrowse(library, place, this.browse, this.policy).state;
+      ? openLibrary(this.browseLibrary, this.policy, { searchText: this.browse.searchText, list: this.browse.list })
+      : restoreSelectBrowse(this.browseLibrary, place, this.browse, this.policy).state;
     this.readText = undefined;
     this.changed();
   }
 
   /** Puts the player back where a snapshot says, over the library as it is now (`restoreSelectBrowse`). */
   public restore(snapshot: BrowseSnapshot): void {
-    this.browse = restoreSelectBrowse(this.library, snapshot, this.browse, this.policy).state;
+    this.browse = restoreSelectBrowse(this.browseLibrary, snapshot, this.browse, this.policy).state;
     this.changed();
   }
 
   /** The records changed: the bars and panels draw them again. */
   public refreshRecords(records?: SelectRecords): void {
     if (records !== undefined) this.records = records;
+    this.browseLibrary = this.createBrowseLibrary();
     this.changed();
+  }
+
+  /** The error of the chart filter expression searched for, when it does not parse (`browseSearchError`). */
+  public searchError(): string | undefined {
+    return browseSearchError(this.browse.searchText);
+  }
+
+  /** {@link browseLibrary} for the library and the records in force. */
+  private createBrowseLibrary(): Library {
+    const { charts, courseFolders } = this.library;
+    return {
+      charts,
+      ...(courseFolders !== undefined ? { courseFolders } : {}),
+      chartFilterRecord: (chart) => {
+        let record = this.filterRecords.get(chart);
+        if (record === undefined) {
+          record = createCourseChartRecord(chart, {}, () => this.records.chart(chart));
+          this.filterRecords.set(chart, record);
+        }
+        return record;
+      },
+    };
   }
 
   /** Searches for `text` (`reduceBrowse`'s `search`): a changed query puts the cursor on the top of the new list. */
@@ -431,7 +469,8 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     }
     const events = this.events;
     this.events = [];
-    const entries = browseEntries(this.library, this.browse);
+    const entries = browseEntries(this.browseLibrary, this.browse);
+    const searchError = this.searchError();
     const focused = entries[browseCursor(this.browse)];
     if (this.entered && focused !== this.reportedFocus) {
       this.reportedFocus = focused;
@@ -450,6 +489,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       ...(this.panel !== undefined ? { panel: this.panel } : {}),
       records: this.records,
       searchEditing: this.searchEditing,
+      ...(searchError !== undefined ? { searchError } : {}),
       ...(this.launch !== undefined ? { startedAtMs: this.launch.atMs } : {}),
       ...(this.readText !== undefined ? { readText: this.readText } : {}),
       ...(this.options.courseMaker !== undefined
@@ -474,7 +514,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
    * A back-out at the root follows the policy: the built-in and LR2 screens stay, silently.
    */
   private applyBrowse(command: BrowseCommand, atMs: number): BrowseEvent {
-    const { state, event } = reduceBrowse(this.library, this.browse, command);
+    const { state, event } = reduceBrowse(this.browseLibrary, this.browse, command);
     if (event.kind === 'at-root') {
       if (this.policy.atRoot === 'exit') {
         this.playCue('cancel');
@@ -505,7 +545,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
    * cursor stays but the list still slides and cues, as LR2's rail scrolls.
    */
   private stepCursor(direction: 1 | -1, atMs: number): void {
-    const count = browseEntries(this.library, this.browse).length;
+    const count = browseEntries(this.browseLibrary, this.browse).length;
     if (count === 0) return;
     if (count > 1) {
       this.applyBrowse({ type: 'move', delta: direction }, atMs);
@@ -696,7 +736,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     if (this.policy.listOptions !== 'play-options') return;
     const list = listOptionsOf(this.playOptions);
     if (sameBrowseListOptions(list, this.browse.list)) return;
-    const { state, event } = reduceBrowse(this.library, this.browse, { type: 'list', options: list });
+    const { state, event } = reduceBrowse(this.browseLibrary, this.browse, { type: 'list', options: list });
     this.browse = state;
     if (event.kind !== 'none') this.events.push({ kind: 'browse', event, atMs: this.now() });
   }
@@ -754,7 +794,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       this.closeReadText(true);
       return;
     }
-    const chart = focusedChart(this.library, this.browse);
+    const chart = focusedChart(this.browseLibrary, this.browse);
     if (chart === undefined) return;
     if (this.options.on.readtext !== undefined) {
       this.options.on.readtext(chart);
@@ -805,7 +845,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
 
   /** Points the chart preview at the chart under the cursor, when that changed since it was last pointed. */
   private refreshPreview(): void {
-    const chart = focusedChart(this.library, this.browse);
+    const chart = focusedChart(this.browseLibrary, this.browse);
     const source = chart === undefined ? undefined : resolveChartSource(this.library, chart);
     const key = chart === undefined || source === undefined ? undefined : `${source.id}\n${chart.id}`;
     if (key === this.previewKey) return;

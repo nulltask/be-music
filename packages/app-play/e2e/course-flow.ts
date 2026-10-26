@@ -165,15 +165,19 @@ export function courseFlowTests(setup: FamilyCase): void {
         'NONSTOP under way',
       );
       await player.key('Space');
-      for (let i = 0; i < 3; i++) {
-        await player.key('ArrowRight');
-        await player.waitFor((state) => (state.play?.seconds ?? 0) > 5 * (i + 1), 'the next forward seek');
-      }
+      // Each seek moves 5 s from wherever the play is. The paused position depends on when Space landed, so each seek
+      // is checked against the position just before it, not against fixed times.
+      const seekBy = async (code: 'ArrowLeft' | 'ArrowRight', what: string): Promise<void> => {
+        const before = (await player.state()).play?.seconds ?? 0;
+        await player.key(code);
+        await player.waitFor((state) => {
+          const seconds = state.play?.seconds;
+          return seconds !== undefined && (code === 'ArrowRight' ? seconds > before + 4 : seconds < before - 4);
+        }, what);
+      };
+      for (let i = 0; i < 3; i++) await seekBy('ArrowRight', 'the next forward seek');
       await player.waitFor((state) => (state.play?.seconds ?? 0) > 15, 'NONSTOP sought across a stage seam');
-      for (let i = 0; i < 3; i++) {
-        await player.key('ArrowLeft');
-        await player.waitFor((state) => (state.play?.seconds ?? Infinity) < 16 - 5 * (i + 1), 'the next backward seek');
-      }
+      for (let i = 0; i < 3; i++) await seekBy('ArrowLeft', 'the next backward seek');
       await player.key('Space');
       const state = await player.waitForResult(0);
       expect(state.results[0]).toMatchObject({ run: 'nonstop', practice: true, cleared: true });

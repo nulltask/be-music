@@ -338,6 +338,7 @@ test('replay frames restore selected options at the playhead and after a backwar
 });
 
 test('automatic calibration restores unclamped offsets and rewinds without recalculating samples', () => {
+  // A replay recorded before the modes stores beatoraja's switch as a boolean.
   const replay = {
     play: {
       mode: 'manual',
@@ -348,7 +349,28 @@ test('automatic calibration restores unclamped offsets and rewinds without recal
   const { play, session } = createSceneSession({ replay });
   let seconds = 3;
   play.currentSeconds = () => seconds;
-  expect(session.frame(0).playOptions).toMatchObject({ judgeTimingAutoAdjust: true, judgeTimingMs: 505 });
+  expect(session.frame(0).playOptions).toMatchObject({ judgeTimingAutoAdjust: 'BEATORAJA', judgeTimingMs: 505 });
   seconds = 1;
   expect(session.frame(1).playOptions.judgeTimingMs).toBe(500);
+});
+
+test("an LR2 adjustment's recorded steps replay as recorded", () => {
+  const replay = {
+    play: {
+      mode: 'manual',
+      options: { judgeTimingAutoAdjust: 'LR2-SILENT', judgeTimingMs: 120 },
+      optionChanges: [
+        { timeUs: 2000000, values: { judgeTimingMs: 121 } },
+        { timeUs: 4000000, values: { judgeTimingMs: 122 } },
+      ],
+    },
+  } as unknown as import('@be-music/player-engine/replay').BeMusicReplay;
+  const { play, session } = createSceneSession({ replay });
+  let seconds = 3;
+  play.currentSeconds = () => seconds;
+  expect(session.frame(0).playOptions).toMatchObject({ judgeTimingAutoAdjust: 'LR2-SILENT', judgeTimingMs: 121 });
+  seconds = 5;
+  expect(session.frame(1).playOptions.judgeTimingMs).toBe(122);
+  seconds = 0;
+  expect(session.frame(2).playOptions.judgeTimingMs).toBe(120);
 });

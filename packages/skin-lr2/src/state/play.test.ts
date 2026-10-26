@@ -45,6 +45,15 @@ function frame(overrides: Partial<LR2PlayFrame> = {}): LR2PlayFrame {
 }
 
 describe('resolveLR2PlayState ops', () => {
+  it('lights REPLAY PLAYING (op 84) for a replay played back, REPLAY OFF (op 82) otherwise', () => {
+    const live = resolveLR2PlayState(SETUP, frame()).ops;
+    expect(live.has(LR2_OP.REPLAY_OFF)).toBe(true);
+    expect(live.has(LR2_OP.REPLAY_PLAYING)).toBe(false);
+    const replay = resolveLR2PlayState({ ...SETUP, replay: true }, frame()).ops;
+    expect(replay.has(LR2_OP.REPLAY_PLAYING)).toBe(true);
+    expect(replay.has(LR2_OP.REPLAY_OFF)).toBe(false);
+  });
+
   it('lights per-side judgment gates used by LITONE4 lasers, including the initial miss state', () => {
     const initial = resolveLR2PlayState(SETUP, frame()).ops;
     expect(initial.has(LR2_OP.JUDGE_1P_MISS)).toBe(true);
@@ -128,6 +137,9 @@ describe('resolveLR2PlayState numbers', () => {
     );
     expect(state.number(LR2_NUM.HISPEED_1P)).toBe(250);
     expect(state.number(LR2_NUM.FPS)).toBe(60);
+    // The judge timing reads 0 until the frame carries the live value an automatic adjustment moves.
+    expect(state.number(LR2_NUM.JUDGE_TIMING)).toBe(0);
+    expect(resolveLR2PlayState(SETUP, frame({ judgeTimingMs: 7 })).number(LR2_NUM.JUDGE_TIMING)).toBe(7);
     expect(state.number(LR2_NUM.SCORE)).toBe(120000);
     expect(state.number(LR2_NUM.EXSCORE)).toBe(110);
     expect(state.number(LR2_NUM.COMBO)).toBe(12);

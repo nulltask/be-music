@@ -4,6 +4,7 @@ import {
   checkReplayEligibility,
   REPLAY_ENGINE_VERSION,
   resolveRulesetResultLamp,
+  resolveRulesetResultMissCount,
   simulateReplay,
   type BeMusicReplay,
   type RulesetId,
@@ -14,7 +15,7 @@ import type { Database } from '../db/client.ts';
 import { bestScore, score, scoreResult } from '../db/schema.ts';
 import { rankOfExScore, countPlayers } from '../ranking.ts';
 import { mergeBestScores } from '../scoring/best.ts';
-import { clearLampRank, resolveMissCount } from '@be-music/player-engine/ruleset';
+import { clearLampRank } from '@be-music/player-engine/ruleset';
 import { sha256HexAsync as sha256Hex } from '@be-music/shared-utils/hash';
 import { playedFileOf } from './played-file.ts';
 import { checkPlayedChart, gzipText, playedChartStatements, putChartDocument } from './played-chart.ts';
@@ -95,7 +96,13 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   }
   const { verification } = played;
 
-  const simulated = RULESET_IDS.map((ruleset) => ({ ruleset, result: simulateReplay(input.replay, { ruleset }) }));
+  // A play given up with ESC did not clear, whatever its gauge stood at: it is ranked as a failed play, as LR2 and
+  // beatoraja save one, its BP counting the notes it never reached.
+  const givenUp = input.replay.play.aborted === true;
+  const simulated = RULESET_IDS.map((ruleset) => {
+    const result = simulateReplay(input.replay, { ruleset });
+    return { ruleset, result: givenUp ? { ...result, gauge: { ...result.gauge, cleared: false } } : result };
+  });
 
   const now = deps.now();
   const scoreId = deps.newId();
@@ -114,7 +121,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   const playedRuleset = input.replay.play.judgeRuleset ?? 'lr2';
   const figures = simulated.map(({ ruleset, result }) => {
     const lamp = clearLampRank(resolveRulesetResultLamp(result, ruleset));
-    const missCount = resolveMissCount(result.judge);
+    const missCount = resolveRulesetResultMissCount(result);
     const current = currentBests.get(ruleset);
     const update = mergeBestScores(current, { scoreId, playedAt: now, exScore: result.exScore, lamp, missCount });
     const playedHere = (current?.playedHere ?? false) || playedRuleset === ruleset;

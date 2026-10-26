@@ -1,5 +1,7 @@
+import type { BestRecord } from '@be-music/player-engine/records';
 import {
   DEFAULT_PLAY_OPTIONS,
+  type LibraryChart,
   type SystemSound,
   type SystemSoundSet,
   type SystemSoundSlot,
@@ -265,6 +267,45 @@ describe('SelectSession browse position', () => {
     const frame = advance(10);
     expect(titles(frame)).toEqual(['c']);
     expect(frame.browse.searchText).toBe('C');
+  });
+});
+
+describe('SelectSession chart filter search', () => {
+  it('lists the charts of every folder an expression selects, reading the chart and its song information', () => {
+    const { session, advance } = createSession();
+    session.setSearch('?level >= 2 AND information.n = 2 ORDER BY level DESC');
+    const frame = advance(10);
+    expect(titles(frame)).toEqual(['a', 'c']);
+    expect(frame.searchError).toBeUndefined();
+  });
+
+  it('reads the best records in force, and lists again when they change', () => {
+    let lamps: Record<string, BestRecord['lamp']> = { a: 'HARD' };
+    const records = {
+      chart: (chart: LibraryChart) => (lamps[chart.id] === undefined ? undefined : { lamp: lamps[chart.id]! }),
+      course: () => undefined,
+    };
+    const { session, advance } = createSession({ records });
+    session.setSearch('?score.clear IS NULL');
+    expect(titles(advance(10))).toEqual(['b', 'c', 'x']);
+    lamps = { b: 'FAILED', x: 'MAX' };
+    session.refreshRecords();
+    expect(titles(advance(10))).toEqual(['a', 'c']);
+  });
+
+  it('reports an invalid expression and lists as if nothing were searched until it parses', () => {
+    const { session, advance } = createSession();
+    session.setSearch('?mode = 7');
+    const invalid = advance(10);
+    expect(invalid.searchError).toBe('ambiguous column name: mode');
+    expect(session.searchError()).toBe('ambiguous column name: mode');
+    expect(titles(invalid)).toEqual(['other', 'pack', 'courses']);
+    session.setSearch('?song.mode = 7');
+    const valid = advance(10);
+    expect(valid.searchError).toBeUndefined();
+    expect(titles(valid)).toEqual(['a', 'b', 'c', 'x']);
+    session.setSearch('');
+    expect(titles(advance(10))).toEqual(['other', 'pack', 'courses']);
   });
 });
 

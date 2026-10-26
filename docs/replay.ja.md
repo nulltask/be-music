@@ -190,6 +190,7 @@ kitty キーボードプロトコルのない端末は、キーを 1 回の押�
 始まります（曲フォルダとログを同時にドロップしても動作します — 曲のロード後にリプレイが始まります）。
 楽曲のマッチングは譜面ファイルのハッシュ（`chart.sha256` — セッションやファイル移動をまたいで安定）を最優先し、
 次に記録された `play.native.chartPath`、どちらも無い古いログはタイトル＋アーティストで照合します。
+どの譜面とも一致しなければ、選曲画面に戻り、読み込むべき譜面をダイアログで示します。
 
 リプレイは共有エンジン内で記録済み入力列を決定論的に再駆動します（`PlayerOptions.replayInputs`）。各イベントは
 記録された譜面相対マイクロ秒の時刻ちょうどで発火し、ライブのレーン入力は無視され（ESC / ポーズ / ハイスピは
@@ -255,7 +256,7 @@ beatoraja のシーンの HIDDEN カバーはリフトより上のレーンに�
 
 シーンは表示設定を決まった精度で記録します（`roundReplayView`）。`hiSpeed` は 1/1000 刻み、`visibleMs` は整数 ms、カバーの各値は小数 4 桁です。浮動小数点の誤差（0.1 のカバーが `0.09999999999999999` になるなど）はログに残らず、変更にも数えません。
 
-**選択したプレイオプション。** `play.options` に、参照元のオプション選択一式を記録します。AUTO 開始やコースによる RANDOM 無効化など、開始時の制約も反映します。途中の変更は、譜面時刻のマイクロ秒を使う `{ timeUs, values }` を `play.optionChanges` に記録し、同時刻の変更も順序を維持します。プリミティブ値と未知の参照元固有名を、型変換せずに往復できます。`resolveReplayOptionsAt` は巻き戻しシークを含め、その時点の値を復元します。ブラウザーでは記録した選択を再生に使い、プレイ中のハイスピード変更も実効値の `viewChanges` と併せて残します。動的な表示変更は値が変わったフレームごとに保持します。このスナップショットは任意の名前を実行する指示ではありません。再生の実効値は型付きの譜面・エンジン設定と表示・テンポの時系列が担います。スコアの採用・更新・ランキングの方針は、独立した Leaderboard 側の関心事です。
+**選択したプレイオプション。** `play.options` に、参照元のオプション選択一式を記録します。AUTO 開始やコースによる RANDOM 無効化など、開始時の制約も反映します。途中の変更は、譜面時刻のマイクロ秒を使う `{ timeUs, values }` を `play.optionChanges` に記録し、同時刻の変更も順序を維持します。プリミティブ値と未知の参照元固有名を、型変換せずに往復できます。`resolveReplayOptionsAt` は巻き戻しシークを含め、その時点の値を復元します。ブラウザーでは記録した選択を再生に使い、プレイ中のハイスピード変更も実効値の `viewChanges` と併せて残します。動的な表示変更は値が変わったフレームごとに保持します。このスナップショットは任意の名前を実行する指示ではありません。再生の実効値は型付きの譜面・エンジン設定と表示・テンポの時系列が担います。スコアの採用・更新・ランキングの方針は、独立した Leaderboard 側の関心事です。判定タイミングの自動調整の `judgeTimingAutoAdjust` は方式（`"OFF"`、`"BEATORAJA"`、`"LR2-ON"`、`"LR2-SILENT"`）です。方式ができる前のリプレイは真偽値を持ち、読み手はそれを `"BEATORAJA"`（`true`）か `"OFF"` として読みます（`resolveJudgeTimingAutoAdjust`）。自動調整の各更新は `play.optionChanges` に `judgeTimingMs` として入ります（[プレイオプション](play-options.ja.md#判定タイミングと自動調整)を参照）。
 
 **記録。** すべてのプレイ画面（組み込み、LR2、beatoraja）は開始時の表示設定を `recordReplay.view` として渡し、毎フレーム表示設定を読み取ります。`createReplayViewCoalescer` がそれを変更にまとめます。変わったフィールドだけを持ち（`diffReplayView`。カバーが変わったサイドはそのカバー全体）、描画フレームごとに変わった値を記録します（`minIntervalMs: 0`）。素早く変更した値も再現できます。シーンは変更を `{ kind: 'view', change }` の入力コマンドとして送り、エンジンはそのコマンドを取り出した譜面時刻を付けます。組み込みと LR2 のシーンでプレイ中に変わるのはハイスピード（矢印キー、ホストの `setHiSpeed`）です。カバーはプレイごとに固定で、レーンが配置されると最初の変更が `visibleMs` を運びます。beatoraja のシーンではハイスピード、レーンカバー、リフト、HIDDEN カバーのすべてが変わります（矢印キー、PageUp / PageDown、ホイール、Home / End、譜面のレーンが使わないときの H / J / K、スキンのカバーボタン 330〜332）。開始時のカバーはプレイオプションのとおりです。
 
@@ -357,6 +358,32 @@ flowchart TD
 `checkCourseReplayEligibility` は、NONSTOP のプレイをつないだプレイで確かめます。つないだプレイは単曲と同じ確認を通り（オートプレイは拒否し、ESC で投げたプレイは落ちたプレイとします）、`play.course.kind: 'nonstop'` を持ち、`nonstop.stages` がコースの全ステージを覆っている必要があります。各ステージは譜面を記録している必要があります。結果は、つないだプレイのフィンガープリントを `nonstop` に持ち、`stages` は空です。ステージは単体で遊んだものではないので、検証する側はステージの譜面から作り直します（記録した抽選結果、コースの制約、記録したつなぎ方・配置・結合規則で `prepareNonstopCourse` し、`resolveNonstopRun` を求めます。[コースと段位認定](./course.ja.md#nonstop-コース) と [リーダーボードの設計](./leaderboard.ja.md#61-コースのランキング) を参照）。
 
 bmson を含む NONSTOP の `chart.judgeRank.stageRanks` は、`table: "bmson"`（生の `judge_rank`）と `table: "bms-exrank"`（生の `#DEFEXRANK`）も受け付け、時刻0の初期エントリーを持ちます。LR2 と beatoraja はこのステージ別の判定幅を適用します。省略可能な `chart.totalUnit` は TOTAL の単位を `absolute` または `percent` で指定します。通常のリプレイでは従来どおり `sourceFormat` から単位を決めます。
+
+### コースのリプレイを再生する
+
+ブラウザープレイヤーに `*.bmcourse.json` をドロップする（または **Open files** で選ぶ）と、記録されたプレイをそのコースとして再生します。LR2 と beatoraja がコースのリプレイを再生するのと同じです。LR2 beta3 はコースバーでスタートキーを 2 秒以上押し続けるか、スキンのボタン type 19 で始めます（OpenLR2 `LR2f.cpp` L11930-L11968、L10300-L10306）。beatoraja は REPLAY キーとリプレイのスロットで始めます。ここではファイルが入口ですが、再生は読み込んだログを受け取るので、ほかから読み込んだコースのリプレイ（Leaderboard）も同じように始められます。
+
+```mermaid
+flowchart TD
+  drop["*.bmcourse.json をドロップ"] --> match{"全ステージの譜面がある？"}
+  match -->|いいえ| dialog["足りない譜面を一覧"]
+  match -->|はい| kind{"NONSTOP？"}
+  kind -->|いいえ| stage["次のステージのリプレイを再生"]
+  stage --> result["ステージのリザルト"]
+  result --> stop{"記録はここで終わり？"}
+  stop -->|いいえ| stage
+  stop -->|はい| course["コースのリザルト"]
+  kind -->|はい| stitched["記録どおりにつなぎ、nonstop.replay を再生"]
+  stitched --> nonstop["NONSTOP のリザルト"]
+```
+
+- **全ステージの譜面が必要です。** 各ステージは、そのステージが示す譜面でライブラリと照合します（`listCourseReplayStageCharts`、`matchesCourseReplayStageChart`）。SHA-256 があればそれ、なければ MD5、それもなければ譜面フィンガープリントです。到達したステージもしなかったステージも同じ扱いで、LR2 の `coursePlayable` と beatoraja の `MusicSelector`（433-437）も、ステージの譜面が欠けたコースのリプレイは始めません。欠けていればダイアログで一覧を示し、何も始めません。
+- **ステージは順に再生します。** 各ステージを、持ち込んだ状態（`play.course.carryIn`）とともにそれぞれのリプレイから、通常のコースの流れで再生します。コースの決定画面、各ステージのリザルト、最後にコースのリザルトです。LR2 がステージのリザルトを飛ばすのは AUTO のときだけでリプレイでは飛ばさず（`Main.cpp` M1280-M1310、M1376-M1379）、beatoraja も `CourseResult` の前に各ステージの `MusicResult`（179-212）を出します。AUTO で遊んだステージのリザルトは、通常の AUTO のプレイと同じく飛ばします。
+- **記録されたプレイが止まったところで止まります**（`planCourseReplayPlayback`）。最初に投げ出した（`play.aborted`、通常のプレイと同じくそのままコースのリザルトへ進みます）か落ちた（記録されたゲージで `isCourseStageFailed` が判定）ステージのあと、なければ最後に遊んだステージのあとです。コースのリザルトは記録されたもの（`results.native`）です。
+- **NONSTOP のプレイは 1 譜面として再生します。** LR2 が NONSTOP のコースを再生するのと同じです（`LR2f.cpp` L18116-L18117、`Main.cpp` M806）。記録どおりに（`nonstop.placement`、`nonstop.stitch`、各ステージの `randomDraws`）コースをつなぎ直し、`nonstop.replay` を再生します。
+- **何も残しません。** コースのリプレイは、ステージやコースのベスト、ランプ、トロフィー、プレイ回数を更新せず、リプレイを保存せず、Leaderboard にも送りません。LR2 もリプレイのときはコースリザルトの保存から早く戻ります（`LR2f.cpp` L9599）。beatoraja の `CourseResult.updateScoreDatabase` はモードを確かめずに書くので、コースのリプレイでもプレイ回数やクリア回数が増えますが、be-music はこれに倣いません。
+- **リザルトはリプレイであることを示します。** リプレイのプレイと、そこから続くすべてのリザルト（各ステージ、コース、NONSTOP）は `PlayResult.fromReplay` を持ち、LR2 スキンはプレイ画面とリザルト画面で REPLAY OFF（op 82）の代わりに REPLAY PLAYING（op 84）を点けます。LR2 も op 84 をリプレイの間ずっと点けたままにします（`LR2f.cpp` L4740-L4741）。
+- 再生中の ESC は、ドロップしたリプレイと同じく再生を止めて選曲画面に戻ります。NONSTOP のリプレイでは F5 や R でもう一度再生します。
 
 ## CLI
 

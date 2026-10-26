@@ -33,9 +33,12 @@ describe('checkReplayEligibility', () => {
     });
   });
 
-  test('rejects auto plays and ESC aborts', () => {
+  test('accepts a play given up with ESC, ranked as a failed play', () => {
+    expect(checkReplayEligibility(replay({ aborted: true, abortedAtUs: 1_000_000 }))).toMatchObject({ eligible: true });
+  });
+
+  test('rejects auto plays and course stages', () => {
     expect(checkReplayEligibility(replay({ mode: 'auto' }))).toEqual({ eligible: false, reason: 'auto-play' });
-    expect(checkReplayEligibility(replay({ aborted: true }))).toEqual({ eligible: false, reason: 'aborted' });
     expect(checkReplayEligibility(replay({ course: { kind: 'grade' } }))).toEqual({
       eligible: false,
       reason: 'course-stage',

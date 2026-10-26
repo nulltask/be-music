@@ -488,12 +488,15 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.gameplayView?.controller.dispatch({ type: 'constant-visibility', fadeMs: value });
     });
   this.judgeTimingAutoAdjustController = trackPlayOption(
-    folder
-      .addBinding(this.guiState, 'judgeTimingAutoAdjust', { label: 'Auto judge timing (beatoraja)' })
-      .on('change', ({ value }) => this.setPlayOptions({ judgeTimingAutoAdjust: value })),
+    selectBinding(folder, this.guiState, 'judgeTimingAutoAdjust', 'Auto judge timing', {
+      OFF: 'OFF',
+      beatoraja: 'BEATORAJA',
+      'LR2 ON': 'LR2-ON',
+      'LR2 SILENT': 'LR2-SILENT',
+    }).on('change', ({ value }) => this.setPlayOptions({ judgeTimingAutoAdjust: value })),
   );
   this.judgeTimingController = folder
-    .addBinding(this.guiState, 'judgeTimingMs', { label: 'Judge timing (beatoraja, ms)', min: -500, max: 500, step: 1 })
+    .addBinding(this.guiState, 'judgeTimingMs', { label: 'Judge timing (ms)', min: -500, max: 500, step: 1 })
     .on('change', ({ value }) => {
       this.setPlayOptions({ judgeTimingMs: value });
       this.gameplayView?.setJudgeTimingMs(value);

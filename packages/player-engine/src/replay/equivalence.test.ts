@@ -3,6 +3,8 @@ import { describe, expect, test } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart-model';
 import { manualPlay, preparePlaybackChart } from '../index.ts';
 import { runRecordedPlay } from '../test-support/recorded-play.ts';
+import { recordPlayFromSummary } from '../records/best-record.ts';
+import { resolveRulesetResultMissCount } from './result-lamp.ts';
 import { resolveRulesetConfig, simulateReplay } from './simulate.ts';
 import { createScheduledInputRuntime } from '../test-support/player-fixtures.ts';
 import { parseReplay, serializeReplay, type BeMusicReplay, type ReplayInputEvent } from './format.ts';
@@ -763,6 +765,10 @@ describe('engine / simulator equivalence', () => {
     expect(simulated.judge.poor).toBe(summary.poor);
     expect(simulated.judge.pgreat).toBe(summary.perfect);
     expect(simulated.gauge.final).toBe(summary.gauge?.current);
+    // The BP the play saves and the Leaderboard ranks counts the notes past the abort, the same on both sides.
+    const bp = recordPlayFromSummary(summary, 0, ruleset).missCount;
+    expect(bp).toBe(12 - summary.perfect - summary.great - summary.good + summary.emptyPoor);
+    expect(resolveRulesetResultMissCount(simulated)).toBe(bp);
   });
 
   // LR2 misses an LN head once time moves past its late GOOD leg — before a plain note just ahead of it on the same
@@ -887,6 +893,9 @@ describe('engine / simulator equivalence', () => {
     expect(summary.poor).toBeLessThan(24);
     expect(simulated.judge).toMatchObject({ pgreat: summary.perfect, poor: summary.poor });
     expect(simulated.gauge.final).toBe(summary.gauge?.current);
+    // Its BP counts every note: those missed and those it never reached, on both sides (#584).
+    expect(recordPlayFromSummary(summary, 0, ruleset).missCount).toBe(24 + summary.emptyPoor);
+    expect(resolveRulesetResultMissCount(simulated)).toBe(24 + simulated.judge.emptyPoor);
     // A log without the flag (or a re-simulation told otherwise) keeps judging to the end: every note gets a verdict.
     const kept = simulateReplay(replay, { ruleset, endOnFailure: false }).judge;
     expect(kept.pgreat + kept.great + kept.good + kept.bad + kept.poor).toBe(24);

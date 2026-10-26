@@ -11,7 +11,7 @@ import {
   type SelectScene,
 } from '@be-music/player-browser/host';
 import type { CourseDefinition } from '@be-music/player-engine/course';
-import type { BeMusicReplay } from '@be-music/player-engine/replay';
+import type { BeMusicCourseReplay, BeMusicReplay } from '@be-music/player-engine/replay';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse, PlayResult } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { nextCourseStagePlay, type CourseStagePlay } from '../../course-flow.ts';
@@ -166,8 +166,10 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       resolveChartHashes: vi.fn<PlayRouteDeps['records']['resolveChartHashes']>(async () => HASHES),
       activePlayRecordKey: undefined as string | undefined,
       activeStageRecordKey: undefined as string | undefined,
+      recordActivePlay: vi.fn<PlayRouteDeps['records']['recordActivePlay']>(),
       recordActiveCourseStage: vi.fn<PlayRouteDeps['records']['recordActiveCourseStage']>(),
     },
+    leaderboard: { maybeSubmit: vi.fn<PlayRouteDeps['leaderboard']['maybeSubmit']>() },
     familyKits: {
       selectSoundSet: vi.fn(() => ({})),
       resolvePlayKit: vi.fn<PlayRouteDeps['familyKits']['resolvePlayKit']>(async (): Promise<ResolvedPlayKit> => ({
@@ -599,6 +601,58 @@ describe('PlayRoute: where a play leads', () => {
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
   });
 
+  test('Escape saves a single play as a failed one, the notes it never reached in its BP, and sends it', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'));
+    const progress = {
+      ...resultOf(chartEntry('a')),
+      score: { total: 10, perfect: 3, great: 1, good: 0, bad: 1, poor: 1, emptyPoor: 2, exScore: 7 },
+      maxCombo: 4,
+      cleared: false,
+    } as PlayResult;
+    play.progress.mockReturnValue(progress);
+    const replay = { play: { mode: 'manual', aborted: true } } as unknown as BeMusicReplay;
+    play.waitForReplay.mockResolvedValueOnce(replay);
+    expect(h.deps.records.activePlayRecordKey).toBeDefined();
+    play.options.on.exit();
+    // BP: 1 BAD + 1 POOR + 2 empty POORs + the 4 notes never reached.
+    expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith({
+      lamp: 'FAILED',
+      exScore: 7,
+      maxCombo: 4,
+      missCount: 8,
+    });
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
+  });
+
+  test('Escape from a play that keeps no record (a replay) saves and sends nothing', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'), { replay: REPLAY });
+    play.progress.mockReturnValue(resultOf(chartEntry('a')));
+    play.waitForReplay.mockResolvedValue(REPLAY);
+    play.options.on.exit();
+    await settle();
+    expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+  });
+
+  test('Escape before a note is judged, or in practice, saves nothing', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'));
+    play.progress.mockReturnValue({
+      ...resultOf(chartEntry('a')),
+      score: { total: 10, perfect: 0, great: 0, good: 0, bad: 0, poor: 2, emptyPoor: 1, exScore: 0 },
+    } as PlayResult);
+    play.options.on.exit();
+    play.progress.mockReturnValue({ ...resultOf(chartEntry('a')), practice: true } as PlayResult);
+    play.options.on.exit();
+    await settle();
+    expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
+  });
+
   test('Escape gives a course up: the stage is recorded with its replay, and the course result shows', async () => {
     const h = await harness();
     const active = h.deps.courses.beginRun(course());
@@ -648,7 +702,69 @@ describe('PlayRoute: where a play leads', () => {
     const nonstop = nonstopPlay();
     const play = await started(h, nonstop.prepared.chart, { nonstop });
     play.options.on.restart();
-    expect(h.deps.nonstopRoute.startNonstopCourse).toHaveBeenCalledWith(nonstop.course);
+    expect(h.deps.nonstopRoute.startNonstopCourse).toHaveBeenCalledWith(nonstop.course, {});
+  });
+
+  test('F5 in a NONSTOP replay plays the recorded run again', async () => {
+    const h = await harness();
+    const courseLog = { format: 'be-music-course-replay' } as unknown as BeMusicCourseReplay;
+    const nonstop = { ...nonstopPlay(), replay: courseLog };
+    const play = await started(h, nonstop.prepared.chart, { nonstop });
+    play.options.on.restart();
+    expect(h.deps.nonstopRoute.startNonstopCourse).toHaveBeenCalledWith(nonstop.course, { replay: courseLog });
+  });
+});
+
+describe('PlayRoute: a course replay', () => {
+  /** A course replay of `course()` whose stages were played with `stages`. */
+  function courseReplay(stages: BeMusicReplay[]): BeMusicCourseReplay {
+    return {
+      format: 'be-music-course-replay',
+      version: 1,
+      course: { name: 'Dan', kind: 'grade', constraints: [], trophies: [] },
+      stages: stages.map((replay) => ({ played: true, replay })),
+    } as BeMusicCourseReplay;
+  }
+
+  test('Escape stops a course replay where it is: back to the select screen, with no course result', async () => {
+    const h = await harness();
+    const recorded = { play: { mode: 'manual' } } as unknown as BeMusicReplay;
+    const active = h.deps.courses.beginRun(course(), courseReplay([recorded, recorded]));
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)!, replay: recorded });
+    play.options.on.exit();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    expect(h.deps.courses.active).toBeUndefined();
+    expect(h.deps.courseRoute.showCourseResult).not.toHaveBeenCalled();
+  });
+
+  test('Escape stops a NONSTOP replay too, with no result', async () => {
+    const h = await harness();
+    const nonstop = { ...nonstopPlay(), replay: courseReplay([]) };
+    const play = await started(h, nonstop.prepared.chart, { nonstop });
+    play.options.on.exit();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    expect(h.deps.nonstopRoute.showNonstopCourseResult).not.toHaveBeenCalled();
+  });
+
+  test('the stage the recorded run gave up goes straight on to the course result, as the run did', async () => {
+    const h = await harness();
+    const givenUp = { play: { mode: 'manual', aborted: true } } as unknown as BeMusicReplay;
+    const active = h.deps.courses.beginRun(course(), courseReplay([givenUp]));
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)!, replay: givenUp });
+    play.options.on.finish({ ...resultOf(chartEntry('a')), replay: undefined, fromReplay: true }, undefined);
+    await vi.waitFor(() => expect(h.deps.courseRoute.continueCourse).toHaveBeenCalledOnce());
+    expect(active.run.finished).toBe(true);
+    expect(h.deps.results.showResult).not.toHaveBeenCalled();
+  });
+
+  test('a stage the recorded run went on after shows its result', async () => {
+    const h = await harness();
+    const recorded = { play: { mode: 'manual' } } as unknown as BeMusicReplay;
+    const active = h.deps.courses.beginRun(course(), courseReplay([recorded, recorded]));
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)!, replay: recorded });
+    play.options.on.finish({ ...resultOf(chartEntry('a')), replay: undefined, fromReplay: true }, undefined);
+    expect(h.deps.results.showResult).toHaveBeenCalledOnce();
+    expect(h.deps.courseRoute.continueCourse).not.toHaveBeenCalled();
   });
 });
 

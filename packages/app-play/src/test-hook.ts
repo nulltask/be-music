@@ -104,6 +104,8 @@ export interface TestHookStageResult {
 /** A result screen, as the host showed it. */
 export interface TestHookResult {
   practice?: boolean;
+  /** The result of a replay played back (a dropped replay, a course replay's stage or its course result). */
+  fromReplay?: boolean;
   /** A single play, a course stage, a whole EXPERT / GRADE course, or a NONSTOP run. */
   run: 'single' | 'stage' | 'course' | 'nonstop';
   family: TestHookFamily;
@@ -274,6 +276,7 @@ export function resultFromData(
     family,
     title: data.chart.title,
     ...(data.practice === true ? { practice: true } : {}),
+    ...(data.fromReplay === true ? { fromReplay: true } : {}),
     ...(data.lamp !== undefined ? { lamp: data.lamp } : {}),
     cleared: data.cleared,
     exScore: data.score.exScore,
@@ -288,7 +291,7 @@ export function resultFromData(
 export function resultFromCourseLog(
   courseLog: BeMusicCourseReplay,
   result: ReplayCourseResult,
-  options: { family: TestHookFamily; playSeconds?: number; jingle?: string },
+  options: { family: TestHookFamily; playSeconds?: number; jingle?: string; fromReplay?: boolean },
 ): TestHookResult {
   const stages = courseLog.stages.flatMap((entry): TestHookStageResult[] => {
     if (!entry.played) return [];
@@ -319,6 +322,7 @@ export function resultFromCourseLog(
     run: 'course',
     family: options.family,
     title: courseLog.course.name,
+    ...(options.fromReplay === true ? { fromReplay: true } : {}),
     lamp: result.lamp,
     cleared: result.gauge.cleared,
     exScore: result.exScore,

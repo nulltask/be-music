@@ -424,8 +424,8 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('auto-timing.bms', '#TITLE Auto timing\n#BPM 120\n#RANK 3\n#00111:01\n#00311:01\n');
     await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
-    await player.setOption(['Play options'], 'Auto judge timing (beatoraja)', true);
-    await player.setOption(['Play options'], 'Judge timing (beatoraja, ms)', 100);
+    await player.setOption(['Play options'], 'Auto judge timing', 'beatoraja');
+    await player.setOption(['Play options'], 'Judge timing (ms)', 100);
     await player.cursorTo((bar) => bar.title === 'Auto timing', 'calibration chart');
     await player.key('Enter');
     // The note is at 2 s. Watch the clock in the page and press on the first frame past 2.03 s, so the press is late
@@ -449,7 +449,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     );
     await player.waitForResult(0);
     const replay = await player.lastReplay();
-    expect(replay?.play.options).toMatchObject({ judgeTimingAutoAdjust: true, judgeTimingMs: 100 });
+    expect(replay?.play.options).toMatchObject({ judgeTimingAutoAdjust: 'BEATORAJA', judgeTimingMs: 100 });
     expect(
       replay?.play.optionChanges?.some(
         (change) => typeof change.values.judgeTimingMs === 'number' && change.values.judgeTimingMs > 100,
@@ -462,6 +462,53 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     expect((await player.state()).results[1]?.judged).toEqual((await player.state()).results[0]?.judged);
   });
 }
+
+test('LR2 automatic judge timing steps 1 ms after ten late hits, is recorded and is kept', async ({ player }) => {
+  await player.open();
+  // Twelve notes, half a second apart from 2 s.
+  await player.dropText(
+    'lr2-auto-timing.bms',
+    '#TITLE LR2 auto timing\n#BPM 120\n#RANK 3\n#00111:01010101\n#00211:01010101\n#00311:01010101\n',
+  );
+  await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+  await player.setOption(['Play options'], 'Auto judge timing', 'LR2 ON');
+  await player.setOption(['Play options'], 'Judge timing (ms)', 100);
+  expect(
+    await player.page.evaluate(
+      () => JSON.parse(localStorage.getItem('be-music.debug-menu-settings')!).settings.judgeTimingAutoAdjust,
+    ),
+  ).toBe('LR2-ON');
+  await player.cursorTo((bar) => bar.title === 'LR2 auto timing', 'LR2 auto-timing chart');
+  await player.key('Enter');
+  // Press every note on the first frame 20 ms or more past it, so each hit is late however busy the runner is.
+  await player.page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let next = 0;
+        const step = (): void => {
+          if ((window.__beMusicTest?.state().play?.seconds ?? 0) >= 2.02 + next * 0.5) {
+            for (const type of ['keydown', 'keyup'])
+              window.dispatchEvent(
+                new KeyboardEvent(type, { code: 'KeyZ', key: 'z', bubbles: true, cancelable: true }),
+              );
+            next += 1;
+          }
+          if (next < 12) requestAnimationFrame(step);
+          else resolve();
+        };
+        step();
+      }),
+  );
+  await player.waitForResult(0);
+  const replay = await player.lastReplay();
+  expect(replay?.play.options).toMatchObject({ judgeTimingAutoAdjust: 'LR2-ON', judgeTimingMs: 100 });
+  // Twelve late hits fill one window of ten: a single 1 ms step, later.
+  expect(replay?.play.optionChanges?.map((change) => change.values.judgeTimingMs)).toEqual([101]);
+  await player.leaveResult();
+  // The adjusted timing is kept for the next play.
+  expect(await player.readOption(['Play options'], 'Judge timing (ms)')).toBe(101);
+  expect(await player.readOption(['Play options'], 'Auto judge timing')).toBe('LR2 ON');
+});
 
 for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`SURVIVAL TO GROOVE switches to the parallel NORMAL gauge on ${skin}`, async ({ player }) => {

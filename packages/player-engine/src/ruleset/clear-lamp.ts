@@ -222,8 +222,9 @@ export function resolveCourseClearLamp(run: CourseClearLampFacts): ClearLamp {
 
 /**
  * BP (miss count): BADs, missed POORs and empty POORs, as LR2 and beatoraja count it (LR2 adds an empty POOR to its POOR
- * count, LR2body.exe ApplyJudgeNote @0x4061f1), plus `unjudgedNotes`: the notes a course stage that failed mid-way, or a
- * course run's unreached stages, never judged, which LR2 counts in a course's BP (OpenLR2 L9105-L9113).
+ * count, LR2body.exe ApplyJudgeNote @0x4061f1), plus `unjudgedNotes`: the notes a play or course stage that failed or
+ * was given up mid-way, or a course run's unreached stages, never judged, which LR2 and beatoraja count in BP (OpenLR2
+ * L9111-L9113 and L9436-L9439, beatoraja `BMSPlayer` L915).
  */
 export function resolveMissCount(judge: { bad: number; poor: number; emptyPoor: number }, unjudgedNotes = 0): number {
   return judge.bad + judge.poor + judge.emptyPoor + Math.max(0, unjudgedNotes);

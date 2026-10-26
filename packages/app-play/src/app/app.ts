@@ -22,6 +22,7 @@ import { PlayerShell } from './shell.ts';
 import { InlineSearch } from '../inline-search.ts';
 import { DebugMenu, type DebugMenuDeps } from '../ui/debug-menu/index.ts';
 import { confirmSkinDrop, promptSkinDrop } from '../ui/skin-drop-prompt.ts';
+import { showMissingReplayCharts } from '../ui/replay-missing.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
 import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
 import type { PlayerGUIState, PlayerScene, PlayerWebElements, SkinFamilyOverride } from '../types.ts';
@@ -135,6 +136,7 @@ export class PlayerWebApp {
    */
   private readonly search = new InlineSearch({
     input: document.querySelector<HTMLInputElement>('#search')!,
+    error: document.querySelector<HTMLElement>('#search-error') ?? undefined,
     shell: document.querySelector<HTMLElement>('.shell')!,
     canvas: () => this.sceneHost?.app.canvas,
     fieldRect: () => this.selectView?.searchFieldRect(),
@@ -147,6 +149,7 @@ export class PlayerWebApp {
           }
         : undefined,
     setQuery: (query) => this.selectView?.setSearch(query),
+    searchError: () => this.selectView?.searchError(),
     setEditing: (editing) => this.selectView?.setSearchEditing(editing),
     touch: () => document.documentElement.classList.contains('touch-first'),
   });
@@ -479,6 +482,7 @@ export class PlayerWebApp {
       elements,
       library: this.library,
       records: this.records,
+      leaderboard: this.leaderboard,
       familyKits: this.familyKits,
       beatoraja: this.beatoraja,
       courses: this.courses,
@@ -509,6 +513,9 @@ export class PlayerWebApp {
       setPlayStatus: (text) => this.status.setPlay(text),
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showSelect: () => this.showSelect(),
+      startCourseReplay: (course, courseLog) => this.courseRoute.startCourseReplay(course, courseLog),
+      startNonstopCourse: (course, options) => this.nonstopRoute.startNonstopCourse(course, options),
+      showMissingReplayCharts,
       replaySlots: this.replaySlots,
     });
     this.shell = new PlayerShell({

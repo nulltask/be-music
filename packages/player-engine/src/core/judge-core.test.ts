@@ -283,6 +283,30 @@ describe('judge core', () => {
     });
   });
 
+  test('a long note’s judgment is marked as one, and a BAD carries its instant', () => {
+    const state = createCore(LONG_AND_MINE, 'lr2');
+    stepJudgeCore(state, { kind: 'hold', channels: new Set(['11']) });
+    stepJudgeCore(state, press(1, '11'));
+    stepJudgeCore(state, advance(1.4));
+    const effects = stepJudgeCore(state, {
+      kind: 'release',
+      channels: new Set(['11']),
+      tokens: [],
+      nowSec: 1.5,
+      nowMs: 1500,
+      recordSec: 1.5,
+    });
+    expect(effects.find((effect) => effect.kind === 'judge-combo')).toMatchObject({
+      judge: 'BAD',
+      seconds: 1.5,
+      longNote: true,
+    });
+    // A normal note's hit is not.
+    const tap = stepJudgeCore(state, press(3.001, '12')).find((effect) => effect.kind === 'judge-combo');
+    expect(tap).toMatchObject({ judge: 'PERFECT', channel: '12' });
+    expect(tap).not.toHaveProperty('longNote');
+  });
+
   test('a held LR2 mine drains the gauge and counts one POOR without breaking combo', () => {
     const state = createCore(LONG_AND_MINE, 'lr2');
     stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });

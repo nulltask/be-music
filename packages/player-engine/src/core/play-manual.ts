@@ -198,6 +198,8 @@ function createManualJudge(session: PlaySession): PlayJudge {
         keyState.releaseBefore(tick.nowSec);
       }
       step({ kind: 'advance', nowSec: tick.nowSec, nowMs: tempoClock.initialTempoMsAt(tick.nowMs) });
+      // The presses drained since the last tick and this advance make one judging pass, as LR2's loop judges them.
+      session.settleJudgeTiming();
     },
     judgedThroughSeconds: (tick) => tick.nowSec,
     handleLaneCommand: (command) => {

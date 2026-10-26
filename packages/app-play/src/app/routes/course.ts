@@ -8,7 +8,12 @@ import {
   drawBrowserRandomCourse,
   type CourseMaker,
 } from '@be-music/player-browser/collection';
-import type { BeMusicCourseReplay, ReplayCourseResult, ReplayRecorderInfo } from '@be-music/player-engine/replay';
+import type {
+  BeMusicCourseReplay,
+  BeMusicReplay,
+  ReplayCourseResult,
+  ReplayRecorderInfo,
+} from '@be-music/player-engine/replay';
 import {
   resolveCourseView,
   type BrowseSnapshot,
@@ -50,7 +55,7 @@ export interface CourseRouteDeps {
   /** The library: the charts a random course draws its stages from. */
   readonly library: Pick<LibraryService, 'collection' | 'prepareDrawnCourse'>;
   /** The chart hashes a random course's stage filters match, and the course's best record. */
-  readonly records: Pick<RecordsService, 'resolveChartHashes' | 'recordCourseResult'>;
+  readonly records: Pick<RecordsService, 'resolveChartHashes' | 'peekChartBestRecord' | 'recordCourseResult'>;
   /** The course maker, which a NEW COURSE bar starts. */
   readonly courseMaker: { readonly maker: Pick<CourseMaker, 'start'> };
   /** The course replay's auto-save, by the setting latched at the last stage's start. */
@@ -73,10 +78,10 @@ export interface CourseRouteDeps {
     overrides: { autoPlay?: boolean },
     then: { start: () => Promise<void>; cancel?: () => void; shown?: () => void },
   ) => Promise<void>;
-  /** Plays a course stage, with the course's AUTO when it was started with one. */
+  /** Plays a course stage, with the course's AUTO when it was started with one, or its recorded replay. */
   readonly playChart: (
     chartEntry: LibraryChart,
-    overrides: { courseStage: CourseStagePlay; autoPlay?: boolean },
+    overrides: { courseStage: CourseStagePlay; autoPlay?: boolean; replay?: BeMusicReplay },
   ) => Promise<void>;
   /** The course run's replay slots (`ResultRoute.courseReplaySlots`). */
   readonly courseReplaySlots: ResultRoute['courseReplaySlots'];
@@ -172,7 +177,10 @@ export class CourseRoute {
           ...(await this.records.resolveChartHashes(chartEntry)),
         })),
       );
-      const drawn = drawBrowserRandomCourse(entry, candidates, Math.random);
+      // The candidates are hashed by now, so each one's best record is found by its hash.
+      const drawn = drawBrowserRandomCourse(entry, candidates, Math.random, (chartEntry) =>
+        this.records.peekChartBestRecord(chartEntry),
+      );
       if (!drawn.ok) {
         this.setStatus(describeRandomCourseDrawFailure(entry.definition.name, drawn));
         return;
@@ -212,6 +220,28 @@ export class CourseRoute {
     );
   }
 
+  /**
+   * Plays a course replay back as a course run (`courseFromReplay` rebuilt its course from the log): its decide screen,
+   * then each recorded stage in order with the state it carried in, each stage's result, and the course result, up to
+   * where the recorded run stopped. Nothing is kept: no stage or course record, no saved replay, no Leaderboard run.
+   */
+  public async startCourseReplay(course: LibraryCourse, courseLog: BeMusicCourseReplay): Promise<void> {
+    this.courses.start(undefined);
+    this.courses.leaveSelect(this.selectNavigation());
+    const active = this.courses.beginRun(course, courseLog);
+    const first = course.stages[0]?.chart;
+    if (first === undefined || active.replay?.stages.length === 0) {
+      this.courses.cancelRun(active);
+      this.setStatus(`${course.definition.name}: the course replay has no stage to play`);
+      return;
+    }
+    await this.showDecide(
+      courseDecideSong(course, first),
+      {},
+      { start: () => this.playNextCourseStage(), cancel: () => this.courses.cancelRun(active) },
+    );
+  }
+
   /** Plays the running course's next stage, or shows the course result when it is over. */
   private async playNextCourseStage(): Promise<void> {
     const active = this.courses.active;
@@ -220,7 +250,17 @@ export class CourseRoute {
       await this.showCourseResult();
       return;
     }
-    this.setStatus(`${active.course.definition.name}: stage ${stage.index + 1} / ${stage.stageCount}`);
+    const replaying = stage.replay !== undefined ? ' (replay)' : '';
+    this.setStatus(`${active.course.definition.name}: stage ${stage.index + 1} / ${stage.stageCount}${replaying}`);
+    // A course replay's stage plays its recorded replay (an AUTO stage as AUTO), as a dropped replay plays.
+    if (stage.replay !== undefined) {
+      await this.playChart(stage.stage, {
+        courseStage: stage,
+        replay: stage.replay,
+        autoPlay: stage.replay.play.mode === 'auto',
+      });
+      return;
+    }
     await this.playChart(stage.stage, {
       courseStage: stage,
       ...(this.courses.autoPlay !== undefined ? { autoPlay: this.courses.autoPlay } : {}),
@@ -248,16 +288,26 @@ export class CourseRoute {
       return;
     }
     const { course, run } = active;
+    // A course replay shows the run it recorded, and keeps nothing.
+    const replay = active.replay !== undefined && !run.practice;
     const courseLog = run.practice
       ? undefined
-      : run.buildReplay({ createdAt: new Date().toISOString(), recorder: this.replayRecorder });
-    const result = run.practice ? run.buildPracticeResult() : courseLog?.results?.native;
+      : replay
+        ? active.replay!.log
+        : run.buildReplay({ createdAt: new Date().toISOString(), recorder: this.replayRecorder });
+    const result = run.practice
+      ? run.buildPracticeResult()
+      : (courseLog?.results?.native ?? (replay ? run.buildReplay().results?.native : undefined));
     if (result === undefined) {
       await this.showSelect();
       return;
     }
     let replaySlots: ResultReplaySlots | undefined;
-    if (courseLog !== undefined) {
+    if (courseLog !== undefined && replay) {
+      // A course replay shows its course's replay slots and saves into none, as a single replay does.
+      replaySlots = this.courseReplaySlots(courseLog, result, undefined);
+    }
+    if (courseLog !== undefined && !replay) {
       const update = resolveCourseBestRecordUpdate(courseLog, result, courseBestRecordKey(course));
       const kept = this.records.recordCourseResult(update);
       // The run saves into its course's replay slots only when it kept a record, as beatoraja's `CourseResult` does.
@@ -284,6 +334,7 @@ export class CourseRoute {
         playSeconds: run.playSeconds,
         stageHistories: histories,
         practice: run.practice,
+        fromReplay: active.replay !== undefined,
       });
       const mounted = await this.showBeatorajaResult(runResult, {
         run: 'course',
@@ -301,7 +352,11 @@ export class CourseRoute {
     // LR2 (and the built-in result) shows the last stage's graph.
     const playSeconds = run.playSeconds;
     await this.showResult(
-      buildCourseResultData(course, result, courseLog, histories.at(-1), { playSeconds, practice: run.practice }),
+      buildCourseResultData(course, result, courseLog, histories.at(-1), {
+        playSeconds,
+        practice: run.practice,
+        fromReplay: active.replay !== undefined,
+      }),
       {
         course: courseInfo,
         ...(courseLog !== undefined ? { courseLog: { log: courseLog, native: result } } : {}),

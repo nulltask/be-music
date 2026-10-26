@@ -49,6 +49,9 @@ const BENCH_LIBRARY: sceneModelAPI.Library = {
 };
 const BENCH_CHART_ENTRY: sceneModelAPI.LibraryEntry = { kind: 'chart', chart: BENCH_CHARTS[3]! };
 const BENCH_ENTRIES: readonly sceneModelAPI.LibraryEntry[] = BENCH_CHARTS.map((chart) => ({ kind: 'chart', chart }));
+const BENCH_CHART_QUERY = sceneModelAPI.parseBrowseSearch("?level >= 3 AND title LIKE '%a%' ORDER BY level DESC");
+/** Varies the searched text, so `parseBrowseSearch` parses on every run instead of answering from its last text. */
+let benchSearchIndex = 0;
 const BENCH_ROOT = sceneModelAPI.createBrowseState();
 const BENCH_IN_FOLDER = sceneModelAPI.reduceBrowse(BENCH_LIBRARY, BENCH_ROOT, { type: 'open' }).state;
 const BENCH_SNAPSHOT = sceneModelAPI.captureBrowse(BENCH_LIBRARY, BENCH_IN_FOLDER);
@@ -132,6 +135,31 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.matchesSearchQuery', {
     run: () => {
       sceneModelAPI.matchesSearchQuery(BENCH_CHART_ENTRY, 'bench');
+    },
+  });
+  define('player-scene-model.parseBrowseSearch', {
+    run: () => {
+      sceneModelAPI.parseBrowseSearch(`?level >= ${(benchSearchIndex++ % 12) + 1} AND title LIKE '%bench%'`);
+    },
+  });
+  define('player-scene-model.browseSearchError', {
+    run: () => {
+      sceneModelAPI.browseSearchError('?mode = 7');
+    },
+  });
+  define('player-scene-model.libraryChartFilterRecord', {
+    run: () => {
+      sceneModelAPI.libraryChartFilterRecord(BENCH_CHARTS[3]!);
+    },
+  });
+  define('player-scene-model.filterEntriesByChartQuery', {
+    run: () => {
+      if (BENCH_CHART_QUERY.kind === 'filter')
+        sceneModelAPI.filterEntriesByChartQuery(
+          BENCH_ENTRIES,
+          BENCH_CHART_QUERY.query,
+          sceneModelAPI.libraryChartFilterRecord,
+        );
     },
   });
   define('player-scene-model.sortLibraryEntries', {
