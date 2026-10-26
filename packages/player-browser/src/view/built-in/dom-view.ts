@@ -154,6 +154,7 @@ export class DOMSelectView
       selectedIndex: frame.cursor,
       folderLabel: frame.browse.path.at(-1)?.label,
       searchQuery: frame.browse.searchText,
+      ...(frame.searchError !== undefined ? { searchError: frame.searchError } : {}),
       playOptions: frame.playOptions,
       playOptionChoices: PLAY_OPTION_CHOICES,
       readText: frame.readText?.text,

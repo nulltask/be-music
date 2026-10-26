@@ -44,6 +44,8 @@ export interface BeMusicDOMSelectFrame extends BeMusicDOMPresentation {
   readonly selectedIndex: number;
   readonly folderLabel: string | undefined;
   readonly searchQuery: string;
+  /** Why the chart filter expression searched for (`?…`) does not parse; the list is not filtered meanwhile. */
+  readonly searchError?: string;
   readonly playOptions: Readonly<PlayOptions>;
   readonly playOptionChoices: BeMusicPlayOptionChoices;
   readonly readText: string | undefined;

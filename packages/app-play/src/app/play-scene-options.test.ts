@@ -139,7 +139,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
       hsFix: 'AVERAGE',
       bpmGuide: false,
       judgeTimingMs: 0,
-      judgeTimingAutoAdjust: false,
+      judgeTimingAutoAdjust: 'OFF',
       normalHiSpeedLevel: 0,
       classicHiSpeed: false,
       judgeAlgorithm: 'combo',

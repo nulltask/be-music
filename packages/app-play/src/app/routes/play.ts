@@ -10,10 +10,13 @@ import type { AudioService } from '@be-music/player-browser/audio';
 import { resolveChartSource, type ChartFileHashes } from '@be-music/player-browser/collection';
 import { createPlayScene, type PixiSceneHost, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
-import { courseStageRecordPlayFromResult } from '@be-music/player-engine/records';
+import { abortedRecordPlayFromResult, courseStageRecordPlayFromResult } from '@be-music/player-engine/records';
 import { snapHiSpeed, type LibraryChart, type PlayOptions, type PlayResult } from '@be-music/player-scene-model';
 import {
+  courseGoesOnAfter,
+  courseReplayStageGivenUp,
   playAgainOverrides,
+  recordCourseStage,
   resolveGameplayExit,
   resolveGameplayRestart,
   type ActiveCourse,
@@ -25,6 +28,7 @@ import { resolvePlayLayoutMode, type DeviceProfile } from '../../device-profile.
 import { storeHiSpeed } from '../../hi-speed-storage.ts';
 import { allowsLiveTempo, describePlayingStatus, tempoPercentFromTempo } from '../../play-tempo-settings.ts';
 import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
+import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { PlayOptionsService } from '../../services/play-options.ts';
@@ -79,8 +83,11 @@ export interface PlayRouteDeps {
     | 'lookupChartBestRecord'
     | 'activePlayRecordKey'
     | 'activeStageRecordKey'
+    | 'recordActivePlay'
     | 'recordActiveCourseStage'
   >;
+  /** The Leaderboard: a single play given up with ESC is sent as a failed play. */
+  readonly leaderboard: Pick<LeaderboardPanel, 'maybeSubmit'>;
   /** The kit the play is drawn with. */
   readonly familyKits: Pick<FamilyKits, 'resolvePlayKit' | 'selectSoundSet'>;
   /** The beatoraja play entry in force, which the Debug Menu's skin pickers and the skin-options panel apply to. */
@@ -147,6 +154,7 @@ export class PlayRoute {
   private readonly elements: PlayRouteDeps['elements'];
   private readonly library: PlayRouteDeps['library'];
   private readonly records: PlayRouteDeps['records'];
+  private readonly leaderboard: PlayRouteDeps['leaderboard'];
   private readonly familyKits: PlayRouteDeps['familyKits'];
   private readonly beatoraja: PlayRouteDeps['beatoraja'];
   private readonly courses: PlayRouteDeps['courses'];
@@ -176,6 +184,7 @@ export class PlayRoute {
     this.elements = deps.elements;
     this.library = deps.library;
     this.records = deps.records;
+    this.leaderboard = deps.leaderboard;
     this.familyKits = deps.familyKits;
     this.beatoraja = deps.beatoraja;
     this.courses = deps.courses;
@@ -316,6 +325,12 @@ export class PlayRoute {
         // recorded once the engine hands its replay over.
         const view = this.gameplayView;
         const active = courseStage !== undefined ? this.activeCourse : undefined;
+        // ESC stops a course replay where it is, as it stops a dropped replay: back to the select screen, no result.
+        if (active?.replay !== undefined || nonstop?.replay !== undefined) {
+          this.courses.abandonRun();
+          void this.showSelect();
+          return;
+        }
         const exit = resolveGameplayExit({ courseStage: active !== undefined, nonstop: nonstop !== undefined });
         if (exit === 'give-up-course') {
           void (async () => {
@@ -339,6 +354,19 @@ export class PlayRoute {
           })();
           return;
         }
+        // A single play given up is saved as a failed play, as LR2 and beatoraja save one: its record (the notes it
+        // never reached counted in its BP) and its Leaderboard entry. One that judged no note yet saves nothing, and so
+        // does one that keeps no record (an AUTO play, a replay, one at another tempo).
+        const keepsRecord = !practicing && this.records.activePlayRecordKey !== undefined;
+        const progress = keepsRecord ? view?.progress() : undefined;
+        const aborted =
+          progress !== undefined && !progress.practice && progress.secondPlayer === undefined
+            ? abortedRecordPlayFromResult(progress)
+            : undefined;
+        if (aborted !== undefined) {
+          this.records.recordActivePlay(aborted);
+          void view?.waitForReplay().then((abortedReplay) => this.leaderboard.maybeSubmit(abortedReplay, chartEntry));
+        }
         void this.showSelect();
       },
       onChartFinished: (result: PlayResult) => {
@@ -355,19 +383,21 @@ export class PlayRoute {
           return;
         }
         // A course stage with stage results skipped (or an auto-played one the course goes on after, as LR2 skips it)
-        // goes straight on to the next stage (or the course result).
+        // goes straight on to the next stage (or the course result). So does the stage a course replay's run gave up,
+        // as the run did.
         if (
           courseStage !== undefined &&
           this.activeCourse !== undefined &&
-          skipsCourseStageResult({
-            skipStageResults: this.guiState.courseAutoAdvance,
-            autoPlay,
-            courseGoesOn: this.activeCourse.run.goesOnAfter(result.replay, result.stageOutcome),
-          })
+          (courseReplayStageGivenUp(this.activeCourse) ||
+            skipsCourseStageResult({
+              skipStageResults: this.guiState.courseAutoAdvance,
+              autoPlay,
+              courseGoesOn: courseGoesOnAfter(this.activeCourse, result),
+            }))
         ) {
           void (async () => {
             this.testHook?.recordReplay(result.replay);
-            this.activeCourse?.run.recordStage(result.replay, result);
+            if (this.activeCourse !== undefined) recordCourseStage(this.activeCourse, result);
             if (!result.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             // No screen comes between the stages: the play leaves the stage, its last samples ringing out, and the next
             // stage (or the course result) shows.
@@ -393,7 +423,11 @@ export class PlayRoute {
           nonstop: nonstop !== undefined,
         });
         if (restart === 'restitch') {
-          void this.nonstopRoute.startNonstopCourse(nonstop!.course);
+          // A NONSTOP replay plays its recorded run again.
+          void this.nonstopRoute.startNonstopCourse(
+            nonstop!.course,
+            nonstop!.replay !== undefined ? { replay: nonstop!.replay } : {},
+          );
           return;
         }
         if (restart === 'abandon-course') {

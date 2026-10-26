@@ -174,6 +174,20 @@ describe('POST /api/v0/scores', () => {
     expect(await response.json()).toEqual({ error: 'play-document-fingerprint-mismatch' });
   });
 
+  test('ranks a play given up with ESC as a failed play, the notes it never reached in its BP (#584)', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    // Three PGREATs, then ESC at 2.1 s: the seven notes from 2.5 s on were never reached.
+    const given = makeReplay(chart, { noteCount: 10, hits: 3, play: { aborted: true, abortedAtUs: 2_100_000 } });
+    const response = await submit(cookie, submissionBody(given, chart.playDocument, chart.chartDocument));
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      results: Array<{ ruleset: string; exScore: number; clearLamp: number; missCount: number }>;
+    };
+    for (const result of body.results) {
+      expect(result).toMatchObject({ exScore: 6, clearLamp: clearLampRank('FAILED'), missCount: 7 });
+    }
+  });
+
   test('rejects auto plays and malformed replays', async () => {
     const cookie = await signInAnonymously(fetchApp);
     const auto = makeReplay(chart, { noteCount: 10, hits: 10, play: { mode: 'auto' } });

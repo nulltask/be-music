@@ -155,7 +155,7 @@
 - **判定ルールセット（judge ruleset）**: プレイを判定し順位付けする基準のゲーム。判定幅・ゲージ・ランプが決まります。`lr2`・`beatoraja`・`____`。
 - **ゲージの種類（gauge type）**: プレイヤーが選ぶゲージ。LR2 の名前で `GROOVE`・`HARD`・`DEATH`・`EASY`（`GaugeType`）。判定ルールセットはそれぞれ自分のゲージで遊ばせ、そのゲージはゲージ ID（`NORMAL`・`HAZARD`・`CLASS` など）で呼びます。
 - **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player-engine/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
-- **BP**: ミスの数。BAD・POOR・空 POOR に、コースでは判定されなかったノートを加えたもの（`resolveMissCount`）。
+- **BP**: ミスの数。BAD・POOR・空 POOR に、途中で落ちたり ESC で投げたりして判定されなかったノート（コースでは到達しなかったノートも）を加えたもの（`resolveMissCount`）。
 - **自己ベスト（best record）**: 同じ判定ルールセット・譜面またはコースについて、最良のランプ・最高 EX-SCORE・最大コンボ・最少 BP を項目ごとに保持したものです（`BestRecord`）。各値は異なるプレイから得られることがあり、1 回のプレイ結果とは区別します。
 - **表示設定（view settings）**: 判定とは別に、プレイヤーが見ていたもの。ハイスピード、ハイスピード固定、表示時間、各サイドの SUDDEN+・HIDDEN+・LIFT です。_避ける語_: display options。
 - **プレイテンポ（play tempo）**: 譜面に対してプレイがどれだけ速く進むか（`speed`）。テンポを変えたプレイは練習扱いです。
@@ -166,6 +166,7 @@
 - **設計したエントリポイント（designed entry point）**: ファイル構成ではなく、使う側のために作ったパッケージの subpath。`@be-music/player-engine` は `.`（エンジン）、`./signals`、`./lanes`、`./display`、`./ruleset`、`./replay`、`./records`、`./course` を、`@be-music/player-browser` は `.`、`./host`、`./skin`、`./collection`、`./audio`、`./recording`、`./compute`、`./controller` を公開します。それ以外は内部です。[ADR 0005](./adr/0005-public-entry-points.ja.md) を参照。
 - **ライブラリ / ライブラリの譜面 / ライブラリの項目（library / library chart / library entry）**: 選曲画面が一覧する対象。ルートでフォルダにまとめた譜面と、コースフォルダです（`Library`）。その中の 1 つの譜面がライブラリの譜面（`LibraryChart`）で、一覧の 1 本のバーは譜面・フォルダ・コースのいずれかです（`LibraryEntry`、`kind: 'chart' | 'folder' | 'course'`）。
 - **一覧の状態（browse state）**: プレイヤーがライブラリのどこにいて、一覧がどんな形か。開いているフォルダ、各階層のカーソル、検索、ソートとフィルター（一覧のオプション）、お気に入りです（`BrowseState`）。そのスナップショット（`BrowseSnapshot`。`captureBrowse` で取り、`restoreBrowse` で戻します）がプレイの通るシーンをまたいで状態を保ちます。
+- **譜面フィルター式（chart filter expression）**: `?` で始まる検索。beatoraja のランダムコースが使う SQL の `WHERE` 句（`ORDER BY` / `LIMIT` も可）で、各譜面の `song` の列、ベストレコード（`score.*`）、楽曲情報（`information.*`）に対して評価します（`parseBrowseSearch`、`parseCourseChartFilter`）。
 - **プレイ状態（play state）**: どのプレイ画面も読むプレイの状態で、エンジンのフレームと判定で進みます。進行中のゲージと EX スコアとそのグラフ、コンボ、判定タイミング、表示設定です（`PlayState`。変えるのは `reducePlayState` だけです）。
 - **プレイ結果（play result）**: 単独のプレイ、コースのステージ、コース全体、NONSTOP のプレイの唯一の結果の型（`PlayResult`）。どれかは実行の種類（`single`、`stage`、`course`、`nonstop`）が示します。どのリザルト画面もこれを読みます。
 - **効果音セット（system sound set）**: テーマの効果音とジングルをスロットごとに持つもの（カーソル、決定、フォルダ、オプションパネル、選曲の BGM、クリア / 失敗のジングルなど）。それぞれバイト列かテーマ内のパスに解決済みです（`SystemSoundSet`）。

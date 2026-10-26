@@ -898,7 +898,7 @@
             }
           },
           "422": {
-            "description": "The play cannot be ranked: an auto or aborted play, a play at another tempo, a course stage, a malformed replay, or a fingerprint document that does not hash to the replay’s fingerprint.",
+            "description": "The play cannot be ranked: an auto play, a play at another tempo, a course stage, a malformed replay, or a fingerprint document that does not hash to the replay’s fingerprint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -908,7 +908,6 @@
                       "enum": [
                         "invalid-replay",
                         "auto-play",
-                        "aborted",
                         "tempo",
                         "course-stage",
                         "missing-fingerprint",

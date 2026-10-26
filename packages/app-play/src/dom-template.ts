@@ -38,9 +38,16 @@ export const PLAYER_APP_HTML = `
       replays go through the "Open files" picker below.
     -->
     <input id="songs" type="file" webkitdirectory multiple class="hidden-file-input" />
-    <!-- The "Open files" button's picker: ZIP archives and replays (\`*.bmplay.json\`). -->
+    <!-- The "Open files" button's picker: ZIP archives and replays (\`*.bmplay.json\`, \`*.bmcourse.json\`). -->
     <input id="files" type="file" multiple accept=".zip,.json" class="hidden-file-input" />
-    <input id="search" class="input search-input" type="search" placeholder="Search title / artist / genre..." />
+    <input
+      id="search"
+      class="input search-input"
+      type="search"
+      placeholder="Search title / artist / genre... (? for a filter)"
+      aria-describedby="search-error"
+    />
+    <p id="search-error" class="search-error" role="status" hidden></p>
     <div class="stage" id="stage">
       <!--
         Drop hint. Visible whenever the shell carries the
@@ -301,6 +308,24 @@ export const PLAYER_APP_HTML = `
       </form>
     </dialog>
     <!--
+      A dropped replay (\`*.bmplay.json\`) whose chart is not loaded, or a course
+      replay (\`*.bmcourse.json\`) whose stage charts are not all loaded: it lists
+      the missing charts and the replay does not start. Filled by
+      \`showMissingReplayCharts\` (ui/replay-missing.ts).
+    -->
+    <dialog class="dialog account-dialog" id="replay-missing" aria-labelledby="replay-missing-title" aria-describedby="replay-missing-hint">
+      <form method="dialog" class="account-dialog-body">
+        <header>
+          <h2 id="replay-missing-title">Charts missing</h2>
+          <p id="replay-missing-hint" data-replay-missing-hint></p>
+        </header>
+        <ul class="replay-missing-list" data-replay-missing-list></ul>
+        <footer>
+          <button type="submit" class="btn" autofocus>OK</button>
+        </footer>
+      </form>
+    </dialog>
+    <!--
       Loading overlay. Hidden by default; revealed via the
       "visible" class while a folder / ZIP drop is mid-load. The
       bar below moves between "indeterminate" (CSS animation) and
@@ -519,7 +544,7 @@ export const PLAYER_APP_HTML = `
                 Or click <strong>Open folder</strong> in the Debug Menu (top-right) to use the native
                 folder picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
                 theme and BMS charts loads both in one shot. Press the button again to add another folder.
-                <strong>Open files</strong> picks ZIP archives or a replay (<code>*.bmplay.json</code>) to replay.
+                <strong>Open files</strong> picks ZIP archives or a replay (<code>*.bmplay.json</code>, or a course's <code>*.bmcourse.json</code>) to replay.
               </li>
               <li>Subsequent drops add to the library and keep the current theme.</li>
               <li>
@@ -619,7 +644,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Open folder</dt>
                 <dd>Picks a folder of charts and / or skins; handled like a drop.</dd>
                 <dt>Open files (ZIP / replay)</dt>
-                <dd>Picks chart ZIP archives, or a replay (<code>*.bmplay.json</code>) to watch.</dd>
+                <dd>Picks chart ZIP archives, or a replay (<code>*.bmplay.json</code>, or a course's <code>*.bmcourse.json</code>) to watch.</dd>
               </dl>
             </details>
             <details class="help-menu-folder">
@@ -712,9 +737,9 @@ export const PLAYER_APP_HTML = `
                 <dd>Raises that side's judge line, and by how much. Changes live.</dd>
                 <dt>Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)</dt>
                 <dd>Shows notes only for their last N ms before the judge line, with a fade at their edge.</dd>
-                <dt>Auto judge timing (beatoraja)</dt>
-                <dd>Moves Judge timing by itself from your hits in a manual play.</dd>
-                <dt>Judge timing (beatoraja, ms)</dt>
+                <dt>Auto judge timing</dt>
+                <dd>Moves Judge timing by itself from your hits in a manual play: beatoraja's way after every hit, or LR2's by 1 ms every ten hits. LR2 SILENT also plays without the chart's sounds and BGA and hides the judgment.</dd>
+                <dt>Judge timing (ms)</dt>
                 <dd>Shifts when the notes are drawn, −500 to 500 ms. Input, audio and judgment stay as they are.</dd>
                 <dt>Normal HI-SPEED (AC 32 measured) · Normal HS level</dt>
                 <dd><em class="help-menu-when">The level shows with Normal HI-SPEED on.</em> Picks the speed from twenty levels measured on AC, instead of the Hi-speed slider.</dd>
@@ -913,7 +938,7 @@ export const PLAYER_APP_HTML = `
                 右上 Debug Menu の <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
                 ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマと譜面が同居したフォルダもまとめて読み込めます。
                 ボタンを押し直せば別フォルダを追加で読み込めます。
-                <strong>Open files</strong> では ZIP アーカイブやリプレイ (<code>*.bmplay.json</code>) を選べます。
+                <strong>Open files</strong> では ZIP アーカイブやリプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>) を選べます。
               </li>
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
               <li>
@@ -994,7 +1019,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Open folder</dt>
                 <dd>譜面やスキンのフォルダを選んで読み込みます。ドロップと同じ扱いです。</dd>
                 <dt>Open files (ZIP / replay)</dt>
-                <dd>譜面の ZIP アーカイブ、または再生するリプレイ (<code>*.bmplay.json</code>) を選びます。</dd>
+                <dd>譜面の ZIP アーカイブ、または再生するリプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>) を選びます。</dd>
               </dl>
             </details>
             <details class="help-menu-folder">
@@ -1087,9 +1112,9 @@ export const PLAYER_APP_HTML = `
                 <dd>そのサイドの判定ラインを上げます。高さはプレイ中にも変えられます。</dd>
                 <dt>Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)</dt>
                 <dd>ノーツを判定ラインに届く前の N ミリ秒だけ表示し、その境目をフェードさせます。</dd>
-                <dt>Auto judge timing (beatoraja)</dt>
-                <dd>手で遊んだときの叩いたタイミングから、Judge timing を自動で調整します。</dd>
-                <dt>Judge timing (beatoraja, ms)</dt>
+                <dt>Auto judge timing</dt>
+                <dd>手で遊んだときの叩いたタイミングから、Judge timing を自動で調整します。beatoraja の方式は 1 打ごとに、LR2 の方式は 10 打ごとに 1 ミリ秒ずつ動かします。LR2 SILENT では譜面の音と BGA なしで遊び、判定も表示しません。</dd>
+                <dt>Judge timing (ms)</dt>
                 <dd>ノーツを描くタイミングをずらします (−500〜500 ミリ秒)。入力、音、判定はそのままです。</dd>
                 <dt>Normal HI-SPEED (AC 32 measured) · Normal HS level</dt>
                 <dd><em class="help-menu-when">レベルは Normal HI-SPEED がオンのときに表示。</em> Hi-speed のスライダーの代わりに、AC で実測した 20 段階から速度を選びます。</dd>

@@ -25,7 +25,7 @@ test('uses chart and replay vocabulary in bilingual help', async () => {
   expect(PLAYER_APP_HTML).toContain('Loading charts');
   expect(PLAYER_APP_HTML).toContain('Chart select');
   expect(PLAYER_APP_HTML).toContain('譜面の読み込み');
-  expect(PLAYER_APP_HTML).toContain('リプレイ (<code>*.bmplay.json</code>)');
+  expect(PLAYER_APP_HTML).toContain('リプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>)');
   expect(PLAYER_APP_HTML).not.toContain('チャート');
   expect(PLAYER_APP_HTML).not.toContain('Loading songs');
 });

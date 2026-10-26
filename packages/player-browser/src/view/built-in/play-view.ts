@@ -75,6 +75,7 @@ export type BuiltInPlayViewOptions = Pick<
   | 'noteDurationMs'
   | 'constantFadeMs'
   | 'judgeTimingMs'
+  | 'judgeTimingAutoAdjust'
   | 'bpmGuide'
   | 'autoPlay'
   | 'nonstop'
@@ -217,6 +218,7 @@ export class BuiltInPlayView
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
     this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
+    this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
     this.options.visualConstant = frame.playOptions.visualConstant;
     this.options.noteDurationMs = frame.playOptions.noteDurationMs;
     this.options.constantFadeMs = frame.playOptions.constantFadeMs;

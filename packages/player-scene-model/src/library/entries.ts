@@ -1,5 +1,5 @@
 import type { BeMusicJSON } from '@be-music/chart-source';
-import type { CourseDefinition, RandomCourseDefinition } from '@be-music/player-engine/course';
+import type { CourseChartRecord, CourseDefinition, RandomCourseDefinition } from '@be-music/player-engine/course';
 
 /*
  * The library a select screen browses: its charts, the folders they are grouped in and the courses. Types and fields
@@ -91,6 +91,12 @@ export type LibraryEntry =
 export interface Library {
   readonly charts: readonly LibraryChart[];
   readonly courseFolders?: readonly LibraryFolder[];
+  /**
+   * A chart as a chart filter search (`?…`) sees it: its song columns, best record and song information. Without it
+   * the search reads what the library entry holds (`libraryChartFilterRecord`). Give a new function when what it reads
+   * changes (a new best record): the list is derived again for it.
+   */
+  readonly chartFilterRecord?: (chart: LibraryChart) => CourseChartRecord;
 }
 
 /**

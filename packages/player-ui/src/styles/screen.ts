@@ -29,6 +29,19 @@ export const screenStyles: CSSResultGroup = [
       gap: 16px;
       margin-bottom: 20px;
     }
+    .search {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .search-error {
+      color: var(--destructive, #f87171);
+      font-size: 12px;
+    }
+    .search-error:empty {
+      display: none;
+    }
     h1 {
       font-size: clamp(22px, 3cqi, 36px);
       letter-spacing: -0.035em;

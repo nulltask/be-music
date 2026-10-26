@@ -4,6 +4,16 @@ import type { BeMusicSettingsData } from '../models.ts';
 import { previewHost, previewTheme } from '../styles/preview-theme.ts';
 import { stats } from '../templates.ts';
 
+/** What follows the judge timing for each automatic adjustment. */
+const JUDGE_TIMING_AUTO_ADJUST_LABELS: Readonly<
+  Record<BeMusicSettingsData['options']['judgeTimingAutoAdjust'], string>
+> = {
+  OFF: '',
+  BEATORAJA: ' · AUTO (beatoraja)',
+  'LR2-ON': ' · AUTO (LR2)',
+  'LR2-SILENT': ' · AUTO (LR2 SILENT)',
+};
+
 export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData> {
   static override styles: CSSResultGroup = [previewTheme, previewHost];
   protected override render(): TemplateResult | typeof nothing {
@@ -55,7 +65,7 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
           ['Long notes', o.longNoteModifier === 'LEGACY' ? 'LEGACY NOTE' : o.longNoteModifier.replaceAll('_', ' ')],
           ['LN add rate', o.longNoteModifier.startsWith('ADD_') ? `${Math.round(o.longNoteRate * 1000) / 10}%` : '—'],
           ['Auto scratch', `1P ${o.autoScratch1P ? 'ON' : 'OFF'} / 2P ${o.autoScratch2P ? 'ON' : 'OFF'}`],
-          ['Judge timing', `${o.judgeTimingMs} ms${o.judgeTimingAutoAdjust ? ' · AUTO' : ''}`],
+          ['Judge timing', `${o.judgeTimingMs} ms${JUDGE_TIMING_AUTO_ADJUST_LABELS[o.judgeTimingAutoAdjust] ?? ''}`],
           ['DP flip', o.dpFlip ? 'ON' : 'OFF'],
           ['BGA', o.bga],
         ])}

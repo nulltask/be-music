@@ -94,6 +94,7 @@ import {
 } from '@be-music/player-scene-model';
 import { resolveLaneSides } from '../../chart/lane-sides.ts';
 import type { SecondPlayerState } from './play-state.ts';
+import { isSilentJudgeTimingPlay } from './play-media.ts';
 import { applyUndefinedLongNoteMode } from '@be-music/player-engine/course';
 
 /** The battle modes that copy one SP chart onto both sides (each copy keeps a 2P source channel). */
@@ -106,6 +107,7 @@ export interface PlayChartContext {
     Pick<
       PlaySessionOptions,
       | 'visualConstant'
+      | 'judgeTimingAutoAdjust'
       | 'hsFix'
       | 'classicHiSpeed'
       | 'floatingHiSpeed'
@@ -697,7 +699,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.poorBGAMode = resolvePoorBGAMode(resolved.bms.poorBGA);
   ctx.poorBGAFallbackKey = resolvePoorBGAFallbackKey(resolved);
   ctx.poorBGAFallbackUntilSeconds = ctx.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
-  ctx.hasBGA = ctx.bgaTimeline.base.length > 0 || ctx.bgaTimeline.layer.length > 0 || ctx.bgaTimeline.poor.length > 0;
+  // LR2's SILENT automatic judge timing loads no BGA.
+  ctx.hasBGA =
+    !isSilentJudgeTimingPlay(ctx.options) &&
+    (ctx.bgaTimeline.base.length > 0 || ctx.bgaTimeline.layer.length > 0 || ctx.bgaTimeline.poor.length > 0);
 }
 
 /**

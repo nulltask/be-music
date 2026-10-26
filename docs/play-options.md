@@ -88,13 +88,30 @@ Sources: beatoraja 0.8.9 [`LaneRenderer`](https://github.com/exch-bms2/beatoraja
 
 ## Judge timing and automatic adjustment
 
-**Judge timing (beatoraja, ms)** in Debug Menu sets beatoraja's display timing: an integer from −500 to 500 ms, 0 by default. As in beatoraja, it shifts only the clock the notes are drawn with; a positive value runs that clock ahead. Input, audio and judgment times stay unchanged, so recorded inputs are never shifted. Every skin family applies it, and a beatoraja skin's BPM readout reads the same adjusted clock. The slider stays enabled during play and applies at once. A beatoraja select skin's JUDGE TIMING button (74) steps it by 1 ms, and number 12 shows it.
+**Judge timing (ms)** in Debug Menu sets the display timing beatoraja and LR2 both have: an integer from −500 to 500 ms, 0 by default. As in both, it shifts only the clock the notes are drawn with; a positive value runs that clock ahead. Input, audio and judgment times stay unchanged, so recorded inputs are never shifted. Every skin family applies it, and a beatoraja skin's BPM readout reads the same adjusted clock. The slider stays enabled during play and applies at once. A beatoraja select skin's JUDGE TIMING button (74) steps it by 1 ms within ±500 ms, an LR2 select skin's (74) by 1 ms within ±99 ms as LR2 does, and number 12 of a beatoraja or an LR2 skin shows it.
 
-Under every ruleset, **Auto judge timing (beatoraja)** turns on beatoraja's automatic adjustment for manual play. After each PGREAT, GREAT or GOOD within ±150 ms, the timing moves by that judgment's offset divided by 30, in whole milliseconds rounded away from zero; these updates are not held to the ±500 ms range. Auto play and replays do not adjust. LR2's OFF / ON / SILENT auto adjustment is not implemented.
+Under every ruleset, **Auto judge timing** picks how a manual play moves the timing by itself: **OFF** (the default), **beatoraja**, **LR2 ON** or **LR2 SILENT**. Auto play and replays never adjust.
 
-Replays store `play.options.judgeTimingMs` and `judgeTimingAutoAdjust`. Each accepted automatic update, or a manual change during play, is written to `play.optionChanges` at its chart time, and a replay shows the recorded value. The adjusted value is kept for the next play. A beatoraja select skin's automatic-adjustment button (75) toggles the switch.
+- **beatoraja:** after each PGREAT, GREAT or GOOD within ±150 ms, the timing moves by that judgment's offset divided by 30, in whole milliseconds rounded away from zero. These updates are not held to the ±500 ms range.
+- **LR2 ON** (LR2's `autojudge` 1): every PGREAT, GREAT, GOOD or BAD hit of a normal note adds its offset, in whole milliseconds with late hits positive, to a running sum. Misses, empty POORs and long notes are not counted; both sides of a double play are. Once per judging pass, when more than nine hits have been counted, the timing moves 1 ms toward the side the sum leans to (later hits raise it), or stays when the sum is 0, and the count and the sum start over. There is no averaging, rounding or limit: LR2's ±99 ms range holds only for its select button. A two-player BATTLE does not adjust, as in LR2. Whether LR2 empties the sum when a play starts is undetermined; be-music starts every play with an empty one.
+- **LR2 SILENT** (`autojudge` 2): adjusts as LR2 ON does and, as LR2 does, plays without the chart's keysounds, BGM and BGA, which are not loaded, and draws no judgment or combo on the built-in and LR2 play screens; a beatoraja skin still draws its own. LR2 also turns its ghost display off, which be-music does not have. The play scores as usual.
 
-Sources: beatoraja 0.8.9 [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java), [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/LaneRenderer.java) and [`JudgeManager`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java). Tracked in [#741](https://github.com/nulltask/be-music/issues/741) and [#742](https://github.com/nulltask/be-music/issues/742).
+```mermaid
+flowchart TD
+  hit[Hit of a normal note] --> counted{PGREAT .. BAD?}
+  counted -- yes --> add[Count it and add its offset]
+  counted -- no --> pass
+  add --> pass[End of the judging pass]
+  pass --> full{More than nine counted?}
+  full -- no --> hit
+  full -- yes --> step[Move 1 ms by the sign of the sum]
+  step --> reset[Start the count and the sum over]
+  reset --> hit
+```
+
+Replays store `play.options.judgeTimingMs` and `judgeTimingAutoAdjust`: `"OFF"`, `"BEATORAJA"`, `"LR2-ON"` or `"LR2-SILENT"`. A replay recorded before the modes stores `true` or `false`, read as beatoraja's or OFF. Each accepted automatic update (each of LR2's 1 ms steps) or manual change during play is written to `play.optionChanges` at its chart time, and a replay shows the recorded value; LR2 itself records neither. A replay of an LR2 SILENT play plays without the chart's sounds and BGA too. The adjusted value is kept for the next play, and Debug Menu settings saved before the modes keep beatoraja's switch as **beatoraja**. A beatoraja select skin's automatic-adjustment button (75) switches between OFF and beatoraja (it reads LR2's modes as OFF). An LR2 select skin's button 75 cycles OFF, ON and SILENT, and its text 80 names the setting (beatoraja's reads as OFF).
+
+Sources: beatoraja 0.8.9 [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java), [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/LaneRenderer.java) and [`JudgeManager`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java); OpenLR2 [hit sampling](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7463-L7535), [the 1 ms step](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12620-L12647), [the SILENT loading](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L24346-L24349) and [hidden judgment](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2510-L2515), and [the select button](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L10617-L10625). Tracked in [#741](https://github.com/nulltask/be-music/issues/741), [#742](https://github.com/nulltask/be-music/issues/742) and [#777](https://github.com/nulltask/be-music/issues/777).
 
 ## Visual CONSTANT
 

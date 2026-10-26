@@ -87,8 +87,13 @@ export interface SelectScene extends SessionScene<SelectFrame, SelectIntent> {
    * `records.replaySlots`) starts nothing.
    */
   replay(slot: number): void;
-  /** Searches for `text`; a changed query puts the cursor on the top of the new list. */
+  /**
+   * Searches for `text`; a changed query puts the cursor on the top of the new list. A text that starts with `?` is a
+   * chart filter expression (the SQL `WHERE` clause of beatoraja's random courses) instead of a text search.
+   */
   setSearch(text: string): void;
+  /** Why the chart filter expression searched for does not parse, or `undefined` when it does (or is a text search). */
+  searchError(): string | undefined;
   /** The host's text field is over the skin's search box (`true`) or has left it. */
   setSearchEditing(editing: boolean): void;
   /** Where the skin's search box is on the canvas, in CSS pixels, or `undefined` when it has none. */
@@ -199,6 +204,10 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
 
   public setSearch(text: string): void {
     this.selectSession.setSearch(text);
+  }
+
+  public searchError(): string | undefined {
+    return this.selectSession.searchError();
   }
 
   public setSearchEditing(editing: boolean): void {

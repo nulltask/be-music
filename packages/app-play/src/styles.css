@@ -132,6 +132,28 @@ textarea {
   width: 320px;
 }
 
+/* Why a chart filter expression (`?…`) does not parse: just under the field (`InlineSearch` places it). */
+.search-error {
+  position: absolute;
+  z-index: 12;
+  max-width: min(480px, calc(100% - 24px));
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgb(127 29 29 / 0.9);
+  color: #fef2f2;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.search-error[hidden] {
+  display: none;
+}
+
+.search-input[aria-invalid='true'] {
+  border-color: #f87171;
+}
+
 .search-input:not(:focus):placeholder-shown {
   /*
    * Dim the placeholder when the user hasn't focused yet so the
@@ -1913,7 +1935,9 @@ textarea {
  * reachable by hovering where it sits. The search field shows on the select screen only (`off-select` elsewhere).
  */
 .shell.in-gameplay .search-input,
-.shell.off-select .search-input {
+.shell.off-select .search-input,
+.shell.in-gameplay .search-error,
+.shell.off-select .search-error {
   visibility: hidden;
 }
 
@@ -2120,9 +2144,23 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   flex-wrap: wrap;
 }
 
+/* The charts a dropped replay or course replay needs that are not loaded. */
+.replay-missing-list {
+  list-style: disc;
+  padding-inline-start: 1.25rem;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+}
+
 .shell.search-in-skin .search-input:not(.search-inline) {
   opacity: 0;
   pointer-events: none;
+}
+
+/* The error goes with the field: out of sight while the field is (the skin's box shows the query then). */
+.shell.search-in-skin .search-input:not(.search-inline) + .search-error,
+html.touch-first .search-input:not(:focus) + .search-error {
+  visibility: hidden;
 }
 
 .search-input.search-inline {

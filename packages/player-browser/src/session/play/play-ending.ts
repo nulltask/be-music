@@ -125,6 +125,8 @@ export interface PlayEndingContext {
   readonly fastCount: number;
   readonly slowCount: number;
   readonly replay: BeMusicReplay | undefined;
+  /** The replay the play plays back, when it is one. */
+  readonly options: { readonly replay?: BeMusicReplay | undefined };
   readonly practice?: boolean;
   playClock(): number;
   currentSeconds(): number;
@@ -229,6 +231,7 @@ export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
     fast: ctx.fastCount,
     slow: ctx.slowCount,
     ...(ctx.replay !== undefined ? { replay: ctx.replay } : {}),
+    ...(ctx.options.replay !== undefined ? { fromReplay: true } : {}),
   });
   const second = ctx.secondPlayer;
   return {
