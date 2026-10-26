@@ -210,6 +210,85 @@ describe('search', () => {
   });
 });
 
+describe('chart filter search', () => {
+  /** a1 lv 12, a2 lv 3, a3 lv 9, b1 lv 12; a1 and a3 have best records. */
+  function makeFilterLibrary(): Library {
+    const library = makeLibrary();
+    const levels: Record<string, number> = { a1: 12, a2: 3, a3: 9, b1: 12 };
+    const clears: Record<string, number> = { a1: 5, a3: 7 };
+    return {
+      ...library,
+      charts: library.charts.map((chart) => ({ ...chart, playLevel: levels[chart.id] })),
+      chartFilterRecord: (chart) => ({
+        title: chart.title,
+        level: levels[chart.id],
+        ...(clears[chart.id] !== undefined ? { score: { clear: clears[chart.id] } } : {}),
+      }),
+    };
+  }
+
+  test('lists the charts of every folder an expression selects, at the root', () => {
+    const library = makeFilterLibrary();
+    const state = run(library, createBrowseState(), { type: 'search', text: '?level >= 9' });
+    expect(labels(browseEntries(library, state))).toEqual(['a1', 'a3', 'b1']);
+  });
+
+  test('reads the best record through the library', () => {
+    const library = makeFilterLibrary();
+    const unplayed = run(library, createBrowseState(), { type: 'search', text: '?score.clear IS NULL' });
+    expect(labels(browseEntries(library, unplayed))).toEqual(['a2', 'b1']);
+    const below = run(library, createBrowseState(), { type: 'search', text: '? score.clear < 6' });
+    expect(labels(browseEntries(library, below))).toEqual(['a1']);
+    // A new record reader derives the list again.
+    const updated: Library = { ...library, chartFilterRecord: () => ({ score: { clear: 1 } }) };
+    expect(labels(browseEntries(updated, below))).toEqual(['a1', 'a2', 'a3', 'b1']);
+  });
+
+  test("keeps the expression's case and its ORDER BY / LIMIT, over the list's sort", () => {
+    const library = makeFilterLibrary();
+    const exact = run(library, createBrowseState(), { type: 'search', text: "?title = 'Lapis'" });
+    expect(labels(browseEntries(library, exact))).toEqual(['a3']);
+    const lower = run(library, createBrowseState(), { type: 'search', text: "?title = 'lapis'" });
+    expect(labels(browseEntries(library, lower))).toEqual([]);
+    const ordered = run(library, createBrowseState({ list: { sort: 'TITLE' } }), {
+      type: 'search',
+      text: '?level > 0 ORDER BY level, title DESC LIMIT 3',
+    });
+    expect(labels(browseEntries(library, ordered))).toEqual(['a2', 'a3', 'a1']);
+  });
+
+  test('filters the open folder and lists no folder or course bar', () => {
+    const library = makeFilterLibrary();
+    const inAlpha = run(library, createBrowseState(), { type: 'open' }, { type: 'search', text: '?level = 12' });
+    expect(labels(browseEntries(library, inAlpha))).toEqual(['a1']);
+    const inDan = run(
+      library,
+      createBrowseState(),
+      { type: 'jump', index: 2 },
+      { type: 'open' },
+      { type: 'search', text: '?1' },
+    );
+    expect(labels(browseEntries(library, inDan))).toEqual([]);
+  });
+
+  test('an invalid expression, or `?` alone, filters nothing', () => {
+    const library = makeFilterLibrary();
+    for (const text of ['?level >', '?', '?bogus = 1']) {
+      const state = run(library, createBrowseState(), { type: 'search', text });
+      expect(labels(browseEntries(library, state))).toEqual(['Alpha', 'Beta', 'Dan']);
+    }
+  });
+
+  test('without a record reader the library entry supplies the song columns', () => {
+    const library: Library = { charts: [makeChart('x', 'X', { title: 'Hello', playLevel: '7', totalNotes: 500 })] };
+    const state = run(library, createBrowseState(), {
+      type: 'search',
+      text: "?level = 7 AND song.notes = 500 AND title LIKE 'he%'",
+    });
+    expect(labels(browseEntries(library, state))).toEqual(['x']);
+  });
+});
+
 describe('list options', () => {
   const library: Library = {
     charts: [
