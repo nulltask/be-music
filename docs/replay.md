@@ -236,6 +236,12 @@ flowchart LR
   replay as its `.bmplay.json` / `.bmcourse.json` text, gzip-compressed, in the `replaySlotData` store of the
   `be-music-replays` IndexedDB database (apart from the player's `be-music` one), next to a small record in `replaySlots` (the title, the EX score and rate, the lamp, the size and
   when it was saved), so the screens list the slots without reading a replay. Saving into a slot replaces what it held.
+- **Storage revision.** What `be-music-replays` holds is versioned by a storage revision, kept in its `meta` store and
+  separate from the IndexedDB version. The first use on a page brings the stored slots to the build's revision. It is
+  0 for now: revision 0 may change its shape without a migration, and a stored slot that no longer reads as a slot
+  record is cleared with its replay. From revision 1 on, each bump comes with a migration step from the revision before
+  it, and stored slots are migrated step by step; a slot a step drops, or one from a newer revision that does not read,
+  is cleared. A replay without its record is cleared either way.
 - **What can be saved.** As beatoraja's `MusicResult` / `CourseResult` save only a PLAY whose score may be kept: a live
   play (not AUTO, not a replay, not practice) whose best record counts, or a course run (EXPERT, GRADE or NONSTOP) that
   keeps a course record. A course stage's own result saves nothing: the course is saved as one run. A result that
