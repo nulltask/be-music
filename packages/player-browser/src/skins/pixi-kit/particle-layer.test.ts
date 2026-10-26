@@ -1,6 +1,6 @@
 import { Container, Graphics, Particle, ParticleContainer, Texture } from 'pixi.js';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { pointLayerFor } from './particle-layer.ts';
+import { packParticleColor, pointLayerFor } from './particle-layer.ts';
 
 describe('pointLayerFor', () => {
   test('keeps one layer per anchor and texture', () => {
@@ -57,32 +57,44 @@ test('keeps the active pool prefix through shrinking, growing and empty frames',
   host.destroy({ children: true, context: true });
 });
 
-test('skips unchanged colors and opacity while preserving public tint, alpha and packed color', () => {
+test('writes the packed color Pixi would compute, without the tint and alpha setters', () => {
   const { host, container, point, commit } = setupLayer();
   commit();
   const particle = container.particleChildren[0]! as Particle;
   const tint = vi.spyOn(Particle.prototype, 'tint', 'set');
   const alpha = vi.spyOn(Particle.prototype, 'alpha', 'set');
+  const reference = (color: number, opacity: number) =>
+    new Particle({ texture: Texture.WHITE, tint: color, alpha: opacity }).color;
+  tint.mockClear();
+  alpha.mockClear();
   point();
   commit();
-  expect(tint).not.toHaveBeenCalled();
-  expect(alpha).not.toHaveBeenCalled();
+  expect(particle.color).toBe(reference(0xff0000, 0.5));
   point(0x00ff00, 2);
   commit();
-  expect(tint).toHaveBeenCalledTimes(1);
-  expect(alpha).toHaveBeenCalledTimes(1);
-  expect(particle.tint).toBe(0x00ff00);
-  expect(particle.alpha).toBe(1);
-  const reference = new Particle({ texture: Texture.WHITE, tint: 0x00ff00, alpha: 1 });
-  expect(particle.color).toBe(reference.color);
-  alpha.mockClear();
-  point(0x00ff00, 3);
+  expect(particle.color).toBe(reference(0x00ff00, 1));
+  point(0x123456, -1);
   commit();
-  expect(alpha).not.toHaveBeenCalled();
-  point(0x00ff00, -1);
-  commit();
-  expect(particle.alpha).toBe(0);
+  expect(particle.color).toBe(reference(0x123456, 0));
+  // The references above use the setters; the layer itself never did.
+  expect(tint).toHaveBeenCalledTimes(3);
+  expect(alpha).toHaveBeenCalledTimes(3);
   tint.mockRestore();
   alpha.mockRestore();
   host.destroy({ children: true, context: true });
+});
+
+test('packs a tint and an alpha as Pixi does', () => {
+  for (const [color, opacity] of [
+    [0xffffff, 1],
+    [0x000000, 0],
+    [0xff8000, 0.5],
+    [0x0080ff, 0.999],
+    [0x123456, 1.5],
+    [0xabcdef, -0.25],
+  ] as const) {
+    expect(packParticleColor(color, opacity)).toBe(
+      new Particle({ texture: Texture.WHITE, tint: color, alpha: opacity }).color,
+    );
+  }
 });

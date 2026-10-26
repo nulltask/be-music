@@ -60,15 +60,16 @@ export class PointLayer {
   }
 
   private setColor(particle: Particle, color: number, alpha: number): void {
-    // Keep Pixi's public color/alpha state consistent while avoiding repeated color normalization.
-    if (particle.tint !== color) particle.tint = color;
-    const opacity = Math.min(Math.max(alpha, 0), 1);
-    if (particle.alpha !== opacity) particle.alpha = opacity;
+    // The renderer reads only `color`; writing it directly skips the `tint` setter's `Color` parse, which ran for every
+    // point every frame. The particle's `tint` / `alpha` getters are not kept in step (nothing here reads them).
+    const packed = packParticleColor(color, alpha);
+    if (particle.color !== packed) particle.color = packed;
   }
 
   private next(): Particle {
-    this.attach();
     if (!this.touched) {
+      // Once per frame, on its first point: the anchor does not move among its siblings between two points.
+      this.attach();
       this.touched = true;
       this.cursor = 0;
     }
@@ -112,6 +113,15 @@ export class PointLayer {
     this.touched = false;
     this.cursor = 0;
   }
+}
+
+/**
+ * A particle's packed `color` for an `0xRRGGBB` tint and an alpha, as Pixi's `Particle` computes it from `tint` and
+ * `alpha` (BGR in the low 24 bits, the alpha byte above, added as Pixi adds them).
+ */
+export function packParticleColor(rgb: number, alpha: number): number {
+  const bgr = ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
+  return bgr + (((Math.min(Math.max(alpha, 0), 1) * 255) | 0) << 24);
 }
 
 const LAYERS = new WeakMap<Graphics, Map<Texture, PointLayer>>();
