@@ -242,7 +242,7 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 
 - Browser song library for dropped folders, ZIPs, and mixed song/LR2/beatoraja theme drops
 - Lazy browser asset loading for large audio/video files, with case-insensitive path lookup
-- Built-in be-music skins (Synesthesia by default, Phantom, Plain, Native (DOM + Canvas), and the opt-in Lattice) for select, gameplay, and result, and for a decide screen when the skin declares one
+- Built-in be-music skins (Synesthesia by default, Plain, and Native (DOM + Canvas)) for select, gameplay, and result, and for a decide screen when the skin declares one
 - Touch play and a touch gameplay layout on touch-first devices, portrait stages for skins that provide one, and per-skin settings
 - LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
 - beatoraja select / decide / gameplay / result skin parsing and rendering on PixiJS
