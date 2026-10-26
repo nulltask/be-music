@@ -153,7 +153,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
   autoSaveReplay: boolean;
   /**
    * Each replay slot's auto-save rule (beatoraja's `autosavereplay`), applied as a result opens against the best record
-   * before the play: `never` (the default) leaves the slot to be saved by hand.
+   * before the play (`DEFAULT_REPLAY_AUTO_SAVE_RULES` until the player picks others); `never` leaves the slot to be
+   * saved by hand.
    */
   replaySlotAutoSave1: ReplayAutoSaveRule;
   replaySlotAutoSave2: ReplayAutoSaveRule;

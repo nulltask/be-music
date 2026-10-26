@@ -176,15 +176,26 @@ export const REPLAY_AUTO_SAVE_RULES = [
 /** A slot's auto-save rule (see {@link REPLAY_AUTO_SAVE_RULES}). */
 export type ReplayAutoSaveRule = (typeof REPLAY_AUTO_SAVE_RULES)[number];
 
-/** The four slots' rules as beatoraja ships them: none saves by itself. */
-export const DEFAULT_REPLAY_AUTO_SAVE_RULES: readonly ReplayAutoSaveRule[] = ['never', 'never', 'never', 'never'];
+/**
+ * The four slots' rules until the player picks others, so every slot keeps something by itself: the best EX score
+ * (slot 1), the best clear lamp (slot 2), the fewest BP (slot 3) and the latest play (slot 4). beatoraja ships them all
+ * as NOTHING; be-music saves by default, with beatoraja's own rules.
+ */
+export const DEFAULT_REPLAY_AUTO_SAVE_RULES: readonly ReplayAutoSaveRule[] = [
+  'score-update',
+  'clear-update',
+  'miss-count-update',
+  'always',
+];
 
-/** Reads stored rules back: four of them, an unknown one read as `never`. */
+/** Reads stored rules back: four of them, an unknown one read as the slot's default. */
 export function normalizeReplayAutoSaveRules(value: unknown): ReplayAutoSaveRule[] {
   const rules = Array.isArray(value) ? value : [];
   return Array.from({ length: REPLAY_SLOT_COUNT }, (_, index) => {
     const rule = rules[index];
-    return (REPLAY_AUTO_SAVE_RULES as readonly unknown[]).includes(rule) ? (rule as ReplayAutoSaveRule) : 'never';
+    return (REPLAY_AUTO_SAVE_RULES as readonly unknown[]).includes(rule)
+      ? (rule as ReplayAutoSaveRule)
+      : DEFAULT_REPLAY_AUTO_SAVE_RULES[index]!;
   });
 }
 
