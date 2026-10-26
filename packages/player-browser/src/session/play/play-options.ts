@@ -14,6 +14,7 @@ import type {
   ReplayPlaybackOptions,
 } from '@be-music/player-engine/replay';
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
+import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
@@ -115,7 +116,12 @@ export interface PlaySessionOptions {
   constantFadeMs?: number;
   onJudgeTimingChange?: (judgeTimingMs: number) => void;
   bpmGuide?: boolean;
-  judgeTimingAutoAdjust?: boolean;
+  /**
+   * The automatic judge-timing adjustment of a manual play (default `'OFF'`), which moves {@link judgeTimingMs}:
+   * beatoraja's calibration or LR2's ON / SILENT. LR2's SILENT also loads no keysounds, BGM or BGA and hides the judge
+   * display; a replay takes that from its own recorded mode and never adjusts.
+   */
+  judgeTimingAutoAdjust?: JudgeTimingAutoAdjust;
   /**
    * HIDDEN / SUDDEN / HID+SUD effect picked from `#SRC_BUTTON,type=50/51`:
    *

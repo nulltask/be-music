@@ -90,6 +90,7 @@ export function resolveLR2PlayTiming(skin: Pick<LR2Skin, 'timing'>): PlayViewTim
 export type LR2PlayViewOptions = Pick<
   PlaySessionOptions,
   | 'judgeTimingMs'
+  | 'judgeTimingAutoAdjust'
   | 'bpmGuide'
   | 'bga'
   | 'bgaSize'
@@ -272,6 +273,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
     this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
+    this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
     for (const event of frame.events) this.handleEvent(event);
     this.root.visible = frame.shown;
     if (!frame.shown) this.displayInfo.hide();
@@ -470,6 +472,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       ...(second !== undefined
         ? { secondPlayer: { play: frame?.state2P ?? second.playState, score: second.score } }
         : {}),
+      judgeTimingMs: this.options.judgeTimingMs ?? 0,
       judgments: {
         '1P': play.judgeSideState['1P'].judge || 'EMPTY_POOR',
         '2P': play.judgeSideState['2P'].judge || 'EMPTY_POOR',

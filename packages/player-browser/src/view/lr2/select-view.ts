@@ -28,6 +28,7 @@ import { LR2_TEXT, LR2_TIMER } from '@be-music/skin-lr2/ids';
 import {
   resolveLR2CourseMakerAction,
   LR2_BATTLE_CYCLE,
+  LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
   resolveLR2SelectButton,
   resolveLR2SelectState,
   resolveLR2SelectTimers,
@@ -696,6 +697,18 @@ export class LR2SelectView implements SelectView {
             type: 'set-play-option',
             key: 'battleMode',
             value: nextChoice(LR2_BATTLE_CYCLE, this.frame?.playOptions.battleMode ?? 'OFF', direction),
+          });
+          return;
+        }
+        if (action.option === 'judgeTimingAutoAdjust') {
+          emit({
+            type: 'set-play-option',
+            key: 'judgeTimingAutoAdjust',
+            value: nextChoice(
+              LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
+              this.frame?.playOptions.judgeTimingAutoAdjust ?? 'OFF',
+              direction,
+            ),
           });
           return;
         }
