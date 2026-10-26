@@ -32,6 +32,19 @@ export const LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE: readonly PlayOptions['judgeTimi
   'LR2-SILENT',
 ];
 
+/** The range LR2's JUDGE TIMING button (74) steps the judge timing within, in milliseconds either way. */
+export const LR2_JUDGE_TIMING_LIMIT_MS = 99;
+
+/**
+ * The judge timing after a click on LR2's JUDGE TIMING button (74): 1 ms up or down (`step`'s sign), stopping at ±99
+ * (OpenLR2 `LR2f.cpp` 10617). A timing the automatic adjustment carried past the range only moves back toward it.
+ */
+export function stepLR2JudgeTiming(currentMs: number, step: number): number {
+  if (step > 0) return currentMs < LR2_JUDGE_TIMING_LIMIT_MS ? currentMs + 1 : currentMs;
+  if (step < 0) return currentMs > -LR2_JUDGE_TIMING_LIMIT_MS ? currentMs - 1 : currentMs;
+  return currentMs;
+}
+
 /** The automatic judge-timing label of the option panel (text 80): OFF, ON or SILENT. */
 function judgeAutoAdjustLabel(mode: PlayOptions['judgeTimingAutoAdjust']): string {
   return mode === 'LR2-ON' ? 'ON' : mode === 'LR2-SILENT' ? 'SILENT' : 'OFF';
