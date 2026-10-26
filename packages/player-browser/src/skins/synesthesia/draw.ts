@@ -2,11 +2,11 @@ import type { Graphics } from 'pixi.js';
 import type { Flock } from './boids.ts';
 import { createMantaShape, mantaShapeInto } from './manta.ts';
 import {
+  cameraBasis,
+  cloudBasis,
   emberColor,
-  projectPoint,
-  rotateX,
-  rotateY,
-  viewPoint,
+  projectCloudPointInto,
+  scratchProjected,
   type CameraPose,
   type CloudPoint,
   type Projected,
@@ -366,6 +366,10 @@ export interface CloudTransform {
  * flickers individual points over time so the cloud looks alive. `skip` lets the caller drop points (e.g. inside a
  * live BGA).
  */
+const CLOUD_BASIS = cloudBasis({ scale: 1, x: 0, y: 0, z: 0, yaw: 0 });
+const CLOUD_CAMERA = cameraBasis({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0 });
+const CLOUD_PROJECTED = scratchProjected();
+
 export function drawPointCloud(
   graphics: Graphics,
   points: readonly CloudPoint[],
@@ -388,17 +392,23 @@ export function drawPointCloud(
   const seconds = style.seconds ?? 0;
   const shimmer = style.shimmer ?? 0;
   const batch = sharedShapeBatch;
+  // The transform's and the camera's sines and cosines once per cloud, and one scratch result for every point.
+  const cloud = cloudBasis(transform, CLOUD_BASIS);
+  const camera = view.camera ? cameraBasis(view.camera, CLOUD_CAMERA) : undefined;
+  const projected = CLOUD_PROJECTED;
   for (let index = 0; index < points.length; index += 1) {
     const point = points[index]!;
-    let world = { x: point.x * transform.scale, y: point.y * transform.scale, z: point.z * transform.scale };
-    world = rotateY(world, transform.yaw);
-    if (transform.pitch) world = rotateX(world, transform.pitch);
-    const placed = { x: world.x + transform.x, y: world.y + transform.y, z: world.z + transform.z };
-    const projected = projectPoint(
-      view.camera ? viewPoint(placed, view.camera, view.orbit) : placed,
+    projectCloudPointInto(
+      projected,
+      point.x,
+      point.y,
+      point.z,
+      cloud,
+      camera,
       view.cx,
       view.cy,
       view.focal,
+      view.orbit,
     );
     if (!projected.visible) continue;
     if (style.skip?.(projected.x, projected.y)) continue;
