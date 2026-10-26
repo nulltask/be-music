@@ -11,7 +11,7 @@ import {
   type SelectScene,
 } from '@be-music/player-browser/host';
 import type { CourseDefinition } from '@be-music/player-engine/course';
-import type { BeMusicReplay } from '@be-music/player-engine/replay';
+import type { BeMusicCourseReplay, BeMusicReplay } from '@be-music/player-engine/replay';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse, PlayResult } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { nextCourseStagePlay, type CourseStagePlay } from '../../course-flow.ts';
@@ -702,7 +702,69 @@ describe('PlayRoute: where a play leads', () => {
     const nonstop = nonstopPlay();
     const play = await started(h, nonstop.prepared.chart, { nonstop });
     play.options.on.restart();
-    expect(h.deps.nonstopRoute.startNonstopCourse).toHaveBeenCalledWith(nonstop.course);
+    expect(h.deps.nonstopRoute.startNonstopCourse).toHaveBeenCalledWith(nonstop.course, {});
+  });
+
+  test('F5 in a NONSTOP replay plays the recorded run again', async () => {
+    const h = await harness();
+    const courseLog = { format: 'be-music-course-replay' } as unknown as BeMusicCourseReplay;
+    const nonstop = { ...nonstopPlay(), replay: courseLog };
+    const play = await started(h, nonstop.prepared.chart, { nonstop });
+    play.options.on.restart();
+    expect(h.deps.nonstopRoute.startNonstopCourse).toHaveBeenCalledWith(nonstop.course, { replay: courseLog });
+  });
+});
+
+describe('PlayRoute: a course replay', () => {
+  /** A course replay of `course()` whose stages were played with `stages`. */
+  function courseReplay(stages: BeMusicReplay[]): BeMusicCourseReplay {
+    return {
+      format: 'be-music-course-replay',
+      version: 1,
+      course: { name: 'Dan', kind: 'grade', constraints: [], trophies: [] },
+      stages: stages.map((replay) => ({ played: true, replay })),
+    } as BeMusicCourseReplay;
+  }
+
+  test('Escape stops a course replay where it is: back to the select screen, with no course result', async () => {
+    const h = await harness();
+    const recorded = { play: { mode: 'manual' } } as unknown as BeMusicReplay;
+    const active = h.deps.courses.beginRun(course(), courseReplay([recorded, recorded]));
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)!, replay: recorded });
+    play.options.on.exit();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    expect(h.deps.courses.active).toBeUndefined();
+    expect(h.deps.courseRoute.showCourseResult).not.toHaveBeenCalled();
+  });
+
+  test('Escape stops a NONSTOP replay too, with no result', async () => {
+    const h = await harness();
+    const nonstop = { ...nonstopPlay(), replay: courseReplay([]) };
+    const play = await started(h, nonstop.prepared.chart, { nonstop });
+    play.options.on.exit();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    expect(h.deps.nonstopRoute.showNonstopCourseResult).not.toHaveBeenCalled();
+  });
+
+  test('the stage the recorded run gave up goes straight on to the course result, as the run did', async () => {
+    const h = await harness();
+    const givenUp = { play: { mode: 'manual', aborted: true } } as unknown as BeMusicReplay;
+    const active = h.deps.courses.beginRun(course(), courseReplay([givenUp]));
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)!, replay: givenUp });
+    play.options.on.finish({ ...resultOf(chartEntry('a')), replay: undefined, fromReplay: true }, undefined);
+    await vi.waitFor(() => expect(h.deps.courseRoute.continueCourse).toHaveBeenCalledOnce());
+    expect(active.run.finished).toBe(true);
+    expect(h.deps.results.showResult).not.toHaveBeenCalled();
+  });
+
+  test('a stage the recorded run went on after shows its result', async () => {
+    const h = await harness();
+    const recorded = { play: { mode: 'manual' } } as unknown as BeMusicReplay;
+    const active = h.deps.courses.beginRun(course(), courseReplay([recorded, recorded]));
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)!, replay: recorded });
+    play.options.on.finish({ ...resultOf(chartEntry('a')), replay: undefined, fromReplay: true }, undefined);
+    expect(h.deps.results.showResult).toHaveBeenCalledOnce();
+    expect(h.deps.courseRoute.continueCourse).not.toHaveBeenCalled();
   });
 });
 

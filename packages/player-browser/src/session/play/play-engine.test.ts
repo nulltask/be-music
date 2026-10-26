@@ -1,3 +1,4 @@
+import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import { PlaySession } from './play-session.ts';
 import {
   createPlayerUISignalBus,
@@ -33,6 +34,7 @@ function createPlay(options: {
   courseCarryIn?: { combo: number; maxCombo: number };
   judgeRuleset?: 'lr2' | 'beatoraja' | '____';
   chartPlayVariant?: string;
+  replay?: BeMusicReplay;
 }) {
   const judgeRuleset = options.judgeRuleset ?? 'lr2';
   const gauge = createPlaceholderGaugeState('GROOVE');
@@ -43,7 +45,10 @@ function createPlay(options: {
   /** The channels the play asked the view's key-beam fade of. */
   const fadeAsked: string[] = [];
   const ctx = {
-    options: { autoPlay: options.autoPlay === true },
+    options: {
+      autoPlay: options.autoPlay === true,
+      ...(options.replay !== undefined ? { replay: options.replay } : {}),
+    },
     chart: SONG,
     replay: undefined,
     disposed: false,
@@ -312,6 +317,12 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(result.judgeRuleset).toBe('lr2');
     expect(result.lamp).toBe('FAILED');
     expect(result.chart).toBe(SONG);
+  });
+
+  test('the result of a replay played back says so, so its skins can mark it', () => {
+    expect(getResultData(createPlay({ total: 4 }).ctx)!.fromReplay).toBeUndefined();
+    const replay = { play: { mode: 'manual' } } as unknown as BeMusicReplay;
+    expect(getResultData(createPlay({ total: 4, replay }).ctx)!.fromReplay).toBe(true);
   });
 
   test('under LR2 an empty POOR is in the POOR count, the POOR judgments alone beside it, and in the BP once', () => {

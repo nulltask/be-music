@@ -109,6 +109,8 @@ export type LR2PlayViewOptions = Pick<
   readonly gauge?: GaugeType;
   /** The play is a course stage, on the course's gauge. */
   readonly courseGauge?: boolean;
+  /** The play is a replay played back (LR2 op 84). */
+  readonly replay?: boolean;
   /** The course the play is a stage of (or the NONSTOP course it stitches), with the stage being played. */
   readonly course?: CourseView;
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`. */
@@ -442,6 +444,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       gauge: options.gauge ?? 'GROOVE',
       ...(play.secondPlayer !== undefined && options.gauge2P !== undefined ? { gauge2P: options.gauge2P } : {}),
       courseGauge: options.courseGauge === true,
+      ...(options.replay === true ? { replay: true } : {}),
       ...(options.course !== undefined ? { course: options.course } : {}),
       customOps: this.skin.customOptions.map((option) => option.defaultOp),
     };

@@ -49,6 +49,8 @@ export interface LR2PlaySetup {
   readonly gauge2P?: GaugeType;
   /** Whether the play runs on a course's gauge: LR2 reports the course gauge as the red one (OpenLR2 L4613-L4628). */
   readonly courseGauge?: boolean;
+  /** Whether the play is a replay played back: REPLAY PLAYING (op 84) in place of REPLAY OFF (op 82). */
+  readonly replay?: boolean;
   /** The course the play is a stage of, or the NONSTOP course it stitches, with the stage being played. */
   readonly course?: CourseView;
   /** The skin's `#CUSTOMOPTION` choices: their ops (900-999). A skin that picks the BGA size keeps its pick. */
@@ -106,14 +108,13 @@ export interface LR2PlayState extends LR2SceneState {
   bargraph(type: number): number;
 }
 
-/** Ops a play always lights: a playable chart, no GHOST, difficulty filter, internet ranking or replay. */
+/** Ops a play always lights: a playable chart, no GHOST, difficulty filter or internet ranking. */
 const PLAY_BASE_OPS: readonly number[] = [
   LR2_OP.PLAYABLE_BAR,
   LR2_OP.GHOST_OFF,
   LR2_OP.DIFFICULTY_FILTER_OFF,
   LR2_OP.OFFLINE,
   LR2_OP.SCORE_SAVE_ON,
-  LR2_OP.REPLAY_OFF,
   LR2_OP.NO_TEXT,
   LR2_OP.NO_RANDOM,
   LR2_OP.JUDGE_NORMAL,
@@ -177,6 +178,7 @@ function setupOps(setup: LR2PlaySetup): number[] {
   ops.push(options.scoreGraph === true ? LR2_OP.SCORE_GRAPH_ON : LR2_OP.SCORE_GRAPH_OFF);
   ops.push(isLR2BGAShown(options.bga, options.autoPlay === true) ? LR2_OP.BGA_ON : LR2_OP.BGA_OFF);
   ops.push(options.autoPlay === true ? LR2_OP.AUTOPLAY_ON : LR2_OP.AUTOPLAY_OFF);
+  ops.push(setup.replay === true ? LR2_OP.REPLAY_PLAYING : LR2_OP.REPLAY_OFF);
   ops.push(...resolveLR2PlayKeyModeOps(setup.lanes, options.battleMode));
   ops.push(setup.features.longNote ? LR2_OP.HAS_LN : LR2_OP.NO_LN);
   ops.push(setup.features.bpmChange ? LR2_OP.HAS_BPM_CHANGE : LR2_OP.NO_BPM_CHANGE);

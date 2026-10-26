@@ -1,10 +1,19 @@
 // The replay route: a replay dropped or picked (`*.bmplay.json`) played back on the play screen of the gameplay
-// family, whichever family recorded it, once the chart it was recorded on is found in the library.
+// family, whichever family recorded it, once the chart it was recorded on is found in the library; and a course replay
+// (`*.bmcourse.json`) played back as its course, once every stage's chart is.
 
+import { computeChartFingerprint } from '@be-music/chart-model';
 import { logger } from '@be-music/player-browser';
 import type { BrowserDroppedFile } from '@be-music/player-browser/collection';
-import { parseReplay, type BeMusicReplay } from '@be-music/player-engine/replay';
-import type { LibraryChart } from '@be-music/player-scene-model';
+import {
+  COURSE_REPLAY_FILE_SUFFIX,
+  parseCourseReplay,
+  parseReplay,
+  type BeMusicCourseReplay,
+  type BeMusicReplay,
+} from '@be-music/player-engine/replay';
+import type { LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
+import { courseFromReplay, describeCourseReplayStage, matchCourseReplayCharts } from '../../course-flow.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { RecordsService } from '../../services/records.ts';
 
@@ -14,8 +23,8 @@ const gamereplay = logger('gameplay');
 export interface ReplayRouteDeps {
   /** The library the log's chart is looked for in. */
   readonly library: Pick<LibraryService, 'collection'>;
-  /** The charts' SHA-256, which a log records. */
-  readonly records: Pick<RecordsService, 'resolveChartSHA256'>;
+  /** The charts' SHA-256 and MD5, which a replay records. */
+  readonly records: Pick<RecordsService, 'resolveChartSHA256' | 'resolveChartHashes'>;
   readonly setStatus: (text: string) => void;
   /** Shows a status about the play, which the select screen replaces when it comes back. */
   readonly setPlayStatus: (text: string) => void;
@@ -25,6 +34,18 @@ export interface ReplayRouteDeps {
     overrides: { autoPlay: boolean; replay: BeMusicReplay },
   ) => Promise<void>;
   readonly showSelect: () => Promise<void>;
+  /** Plays an EXPERT / GRADE course replay back (`CourseRoute.startCourseReplay`). */
+  readonly startCourseReplay: (course: LibraryCourse, courseLog: BeMusicCourseReplay) => Promise<void>;
+  /** Plays a NONSTOP course replay back (`NonstopRoute.startNonstopCourse`). */
+  readonly startNonstopCourse: (
+    course: LibraryCourse,
+    options: { decide?: boolean; replay?: BeMusicCourseReplay },
+  ) => Promise<void>;
+  /**
+   * Tells the player which charts a replay needs that are not loaded (a replay's chart, a course replay's stage charts),
+   * under `hint`; the replay does not start.
+   */
+  readonly showMissingReplayCharts: (hint: string, charts: readonly string[]) => void;
 }
 
 /** A replay played back from a file. */
@@ -35,6 +56,9 @@ export class ReplayRoute {
   private readonly setPlayStatus: ReplayRouteDeps['setPlayStatus'];
   private readonly playChart: ReplayRouteDeps['playChart'];
   private readonly showSelect: ReplayRouteDeps['showSelect'];
+  private readonly startCourseReplay: ReplayRouteDeps['startCourseReplay'];
+  private readonly startNonstopCourse: ReplayRouteDeps['startNonstopCourse'];
+  private readonly showMissingReplayCharts: ReplayRouteDeps['showMissingReplayCharts'];
 
   public constructor(deps: ReplayRouteDeps) {
     this.library = deps.library;
@@ -43,6 +67,9 @@ export class ReplayRoute {
     this.setPlayStatus = deps.setPlayStatus;
     this.playChart = deps.playChart;
     this.showSelect = deps.showSelect;
+    this.startCourseReplay = deps.startCourseReplay;
+    this.startNonstopCourse = deps.startNonstopCourse;
+    this.showMissingReplayCharts = deps.showMissingReplayCharts;
   }
 
   /**
@@ -52,17 +79,27 @@ export class ReplayRoute {
    * re-aligned), the failure lands in the status row instead of throwing — a bad drop must never wedge the UI.
    */
   public async startReplayReplayFromFile(file: BrowserDroppedFile): Promise<void> {
+    if (file.name.toLowerCase().endsWith(COURSE_REPLAY_FILE_SUFFIX)) {
+      await this.startCourseReplayFromFile(file);
+      return;
+    }
     let replay: BeMusicReplay;
     try {
       replay = parseReplay(await file.text());
     } catch (error) {
       dropLog.warn('replay parse failed', error);
+      // The drop took the select screen off the stage: it comes back, with the status.
+      await this.showSelect();
       this.setStatus(`Replay: invalid replay (${(error as Error).message})`);
       return;
     }
     const chartEntry = await this.findSongForReplay(replay);
     if (!chartEntry) {
+      await this.showSelect();
       this.setStatus(`Replay: song not loaded (${replay.chart.title ?? 'untitled'})`);
+      this.showMissingReplayCharts('Load this chart to watch the replay, then drop the replay again.', [
+        describeReplayChart(replay),
+      ]);
       return;
     }
     this.setPlayStatus(`Replaying: ${chartEntry.title}`);
@@ -74,6 +111,65 @@ export class ReplayRoute {
       gamereplay.warn('replay replay failed', error);
       this.setStatus(`Replay failed: ${(error as Error).message}`);
       await this.showSelect();
+    }
+  }
+
+  /**
+   * Parses a dropped course replay and plays it back as its course, as LR2 and beatoraja replay a course: only when every
+   * stage's chart is loaded (matched by the hashes the log records), else the missing charts are listed and nothing
+   * starts. The log's source does not matter here: a course replay from elsewhere (the Leaderboard) plays the same way
+   * through {@link startCourseReplayFromLog}.
+   */
+  public async startCourseReplayFromFile(file: BrowserDroppedFile): Promise<void> {
+    let courseLog: BeMusicCourseReplay;
+    try {
+      courseLog = parseCourseReplay(await file.text());
+    } catch (error) {
+      dropLog.warn('course replay parse failed', error);
+      // The drop took the select screen off the stage: it comes back, with the status.
+      await this.showSelect();
+      this.setStatus(`Course replay: invalid course replay (${(error as Error).message})`);
+      return;
+    }
+    await this.startCourseReplayFromLog(courseLog);
+  }
+
+  /** Plays a parsed course replay back as its course, once every stage's chart is found in the library. */
+  public async startCourseReplayFromLog(courseLog: BeMusicCourseReplay): Promise<void> {
+    const matched = await matchCourseReplayCharts(
+      courseLog,
+      this.library.collection.charts,
+      async (chartEntry, needFingerprint) => {
+        const hashes = await this.records.resolveChartHashes(chartEntry);
+        const chartFingerprint = needFingerprint ? fingerprintOf(chartEntry) : undefined;
+        return { ...hashes, ...(chartFingerprint !== undefined ? { chartFingerprint } : {}) };
+      },
+    );
+    const missing = matched.filter((stage) => stage.chart === undefined);
+    if (missing.length > 0) {
+      await this.showSelect();
+      this.setStatus(`Course replay: ${missing.length} of ${matched.length} stage charts are not loaded`);
+      this.showMissingReplayCharts(
+        `Load these charts of ${courseLog.course.name} to replay the course, then drop its course replay again.`,
+        missing.map(({ stage }) => describeCourseReplayStage(stage)),
+      );
+      return;
+    }
+    const course = courseFromReplay(
+      courseLog,
+      matched.map((stage) => stage.chart),
+    );
+    this.setPlayStatus(`Replaying course: ${course.definition.name}`);
+    try {
+      if (course.definition.kind === 'nonstop') {
+        await this.startNonstopCourse(course, { decide: true, replay: courseLog });
+        return;
+      }
+      await this.startCourseReplay(course, courseLog);
+    } catch (error) {
+      gamereplay.warn('course replay failed', error);
+      await this.showSelect();
+      this.setStatus(`Course replay failed: ${(error as Error).message}`);
     }
   }
 
@@ -105,5 +201,22 @@ export class ReplayRoute {
     return this.library.collection.charts.find(
       (entry) => entry.title === title && (replay.chart.artist === undefined || entry.artist === replay.chart.artist),
     );
+  }
+}
+
+/** How the missing-chart dialog names a replay's chart: its title and artist, else the hash or path it was looked for by. */
+export function describeReplayChart(replay: Pick<BeMusicReplay, 'chart' | 'play'>): string {
+  const { title, artist, sha256 } = replay.chart;
+  if (title !== undefined && title.length > 0) return artist !== undefined ? `${title} / ${artist}` : title;
+  const chartPath = replay.play.native?.chartPath;
+  return sha256 ?? (typeof chartPath === 'string' && chartPath.length > 0 ? chartPath : 'untitled chart');
+}
+
+/** A loaded chart's Be-Music chart fingerprint, for a course replay stage named by it alone. */
+function fingerprintOf(chartEntry: LibraryChart): string | undefined {
+  try {
+    return computeChartFingerprint(chartEntry.chart, { chartPath: chartEntry.chartPath });
+  } catch {
+    return undefined;
   }
 }

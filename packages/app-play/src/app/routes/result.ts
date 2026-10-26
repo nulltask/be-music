@@ -23,7 +23,7 @@ import {
   type PlayResult,
   type PlayRunKind,
 } from '@be-music/player-scene-model';
-import { activeCourseInfo, resolveResultRetry, type ActiveCourse } from '../../course-flow.ts';
+import { activeCourseInfo, recordCourseStage, resolveResultRetry, type ActiveCourse } from '../../course-flow.ts';
 import { resolveResultPresentation } from '../../course-result.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
 import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
@@ -166,7 +166,7 @@ export class ResultRoute {
     this.testHook?.recordReplay(data.replay);
     const active = this.activeCourse;
     if (courseStage && active !== undefined) {
-      active.run.recordStage(data.replay, data);
+      recordCourseStage(active, data);
       if (!data.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
       const mounted = await this.showBeatorajaResult(data, {
         run: 'stage',
@@ -283,7 +283,11 @@ export class ResultRoute {
     const jingle = this.nameResultJingle(jingleBytes);
     this.testHook?.recordResult(
       course?.result !== undefined
-        ? resultFromCourseLog(course.result.log, course.result.native, { family: 'beatoraja', jingle })
+        ? resultFromCourseLog(course.result.log, course.result.native, {
+            family: 'beatoraja',
+            jingle,
+            ...(result.fromReplay === true ? { fromReplay: true } : {}),
+          })
         : resultFromData(result, run, 'beatoraja', jingle),
     );
     return true;
@@ -308,7 +312,7 @@ export class ResultRoute {
       mode.course !== undefined ? 'course' : mode.nonstop !== undefined ? 'nonstop' : courseStage ? 'stage' : 'single';
     const presentation = resolveResultPresentation(run);
     if (courseStage) {
-      this.activeCourse!.run.recordStage(data.replay, data);
+      recordCourseStage(this.activeCourse!, data);
       if (!data.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
     }
     // Family dispatch for result. Only the LR2 / default split is modelled here — a play on the beatoraja play screen
@@ -403,6 +407,7 @@ export class ResultRoute {
                 family,
                 playSeconds: data.playSeconds,
                 jingle,
+                ...(data.fromReplay === true ? { fromReplay: true } : {}),
               })
             : resultFromData(data, run, family, jingle),
         );
