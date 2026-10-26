@@ -1315,6 +1315,16 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       displayAPI.adjustBeatorajaJudgeTiming(0, 'GREAT', 45);
     },
   });
+  define('player-engine.display.resolveJudgeTimingAutoAdjust', {
+    run() {
+      displayAPI.resolveJudgeTimingAutoAdjust(true);
+    },
+  });
+  define('player-engine.display.isLR2JudgeTimingAutoAdjust', {
+    run() {
+      displayAPI.isLR2JudgeTimingAutoAdjust('LR2-SILENT');
+    },
+  });
   define('player-engine.lanes.clampScrollSection', {
     run: () => {
       lanesAPI.clampScrollSection(4);
