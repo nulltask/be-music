@@ -239,6 +239,25 @@ describe('BeatorajaSelectView', () => {
     expect(draw().playOptions.longNoteMode).toBe('HCN');
   });
 
+  it("lights the focused chart's replay slot ops and replays a slot from its button", () => {
+    const records: SelectRecords = {
+      chart: () => undefined,
+      course: () => undefined,
+      replaySlots: () => [false, true, false, false],
+    };
+    const { draw, context, press, session, start } = setup(makeCollection([makeChart('a', 'pack')]), { records });
+    session.dispatch({ type: 'activate' });
+    draw();
+    expect([196, 1197, 1199, 1202, 1206].every((op) => context().activeOps.has(op))).toBe(true);
+    press(BEATORAJA_BUTTON.REPLAY);
+    expect(start).not.toHaveBeenCalled();
+    press(BEATORAJA_BUTTON.REPLAY2);
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ kind: 'chart' }), {
+      autoPlay: false,
+      replaySlot: 1,
+    });
+  });
+
   it('steps the DP option (54) through OFF, FLIP, BATTLE and BATTLE AS', () => {
     const { draw, internals } = setup(makeCollection([makeChart('a', 'pack')]));
     draw();
