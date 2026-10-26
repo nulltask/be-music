@@ -2,7 +2,7 @@
 
 # be-music スキンの作り方
 
-ブラウザープレイヤーの組み込みファミリー向けスキンは、`@be-music/player-skin-sdk` の契約に沿って作ります。Synesthesia・Phantom・Lattice・Plain は Canvas を使い、Native は DOM 画面と、canvas を持つ component で組んだプレイフィールドを組み合わせます。各 component はステージ上の自分の範囲と同じ大きさの canvas に描画します。Native の表示部品は `@be-music/player-ui` から独立して再利用できます。
+ブラウザープレイヤーの組み込みファミリー向けスキンは、`@be-music/player-skin-sdk` の契約に沿って作ります。Synesthesia・Plain は Canvas を使い、Native は DOM 画面と、canvas を持つ component で組んだプレイフィールドを組み合わせます。各 component はステージ上の自分の範囲と同じ大きさの canvas に描画します。Native の表示部品は `@be-music/player-ui` から独立して再利用できます。
 
 be-music スキンはデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、be-music スキンはすべての画面を自分で描きます。それ以外はすべてプレイヤーの担当です。
 
@@ -16,11 +16,11 @@ Canvas の描画には毎フレームのサーフェスとデータを、DOM の
 
 SDK 自体は描画を行わず、描画フレームワークも import しません。キャンバスは、スキンに合ったもので描いてください。
 
-| 描画手段                      | `context`                           | 方法                                                                               | 作例                                                                                          |
-| ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Canvas 2D API                 | `'2d'`                              | そのまま描く。キャンバスはクリア済みで、デザインピクセルにスケール済み             | Plain（`packages/player-browser/src/skins/plain/`）                                           |
-| PixiJS                        | `'webgl2'`                          | `setup` でキャンバス上に Pixi レンダラーを作り、シーングラフを組んで `draw` で描画 | Synesthesia、Phantom、Lattice（`packages/player-browser/src/skins/`、`skins/pixi-kit/` 経由） |
-| three.js、素の WebGL / WebGPU | `'webgl'` / `'webgl2'` / `'webgpu'` | `setup` でレンダラーやパイプラインを作り、`draw` で描画し、`teardown` で解放       | —                                                                                             |
+| 描画手段                      | `context`                           | 方法                                                                               | 作例                                                                        |
+| ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Canvas 2D API                 | `'2d'`                              | そのまま描く。キャンバスはクリア済みで、デザインピクセルにスケール済み             | Plain（`packages/player-browser/src/skins/plain/`）                         |
+| PixiJS                        | `'webgl2'`                          | `setup` でキャンバス上に Pixi レンダラーを作り、シーングラフを組んで `draw` で描画 | Synesthesia（`packages/player-browser/src/skins/`、`skins/pixi-kit/` 経由） |
+| three.js、素の WebGL / WebGPU | `'webgl'` / `'webgl2'` / `'webgpu'` | `setup` でレンダラーやパイプラインを作り、`draw` で描画し、`teardown` で解放       | —                                                                           |
 
 フレームワークは、スキン自身の依存として同梱します。Plain は意図的に小さく読みやすく作ってあるので、出発点としてコピーして使えます。縦向きの画面への対応の仕方も示しています（[縦向きに対応する](#縦向きに対応する)を参照）。
 
@@ -592,8 +592,8 @@ SDK は、フレームやヘルパーが使う型も export しています。�
   - `subscribe(listener)` で追加を通知でき、ピッカーを更新できます。
   - 検査に通らないスキン（未対応の `apiVersion` など）は、ホストを壊さずに除外されます。
 
-- **組み込みスキン:** `BUILT_IN_BE_MUSIC_SKINS` には Synesthesia（既定）、Phantom、Plain が入っています。Lattice は `latticeSkin` として同梱されており、ホストが追加します。
-- **デモ:** デモの Debug Menu から、モジュール URL でスキンを追加できます（_Skin & display_ → _Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、デモは先に確認を求めます。信頼できるスキンだけを読み込んでください。いまのデモは `EXTRA_BUILT_IN_SKINS_ENABLED` が off の間、_Add skin_ を Phantom・Lattice とともに隠しています（`services/built-in-skins.ts`）。
+- **組み込みスキン:** `BUILT_IN_BE_MUSIC_SKINS` には Synesthesia（既定）、Plain、Native が入っています。
+- **デモ:** デモの Debug Menu から、モジュール URL でスキンを追加できます（_Skin & display_ → _Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、デモは先に確認を求めます。信頼できるスキンだけを読み込んでください。いまのデモは `ADD_SKIN_ENABLED` が off の間、_Add skin_ を隠しています（`services/built-in-skins.ts`）。
 
 ## バージョニング
 

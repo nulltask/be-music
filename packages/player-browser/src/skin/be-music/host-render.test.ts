@@ -5,7 +5,6 @@ import { rendersOnPixiHost } from '../../skins/pixi-kit/host-render.ts';
 describe('built-in skins drawing through the player renderer', () => {
   it.each([
     ['synesthesia', true],
-    ['phantom', true],
     // Canvas 2D: drawn on its canvas.
     ['plain', false],
   ])('%s → %s', (id, expected) => {

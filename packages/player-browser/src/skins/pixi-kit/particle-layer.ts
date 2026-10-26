@@ -3,8 +3,7 @@ import { Particle, ParticleContainer, Texture, type Container, type Graphics } f
 /**
  * Points and short segments drawn as GPU particles instead of `Graphics` geometry.
  *
- * The built-in skins scatter thousands of tiny marks every frame (Synesthesia's floor lattice, dust, and powder;
- * Lattice's needle field). As `Graphics` shapes each one is re-triangulated and re-uploaded per frame, which dominated
+ * The built-in skins scatter thousands of tiny marks every frame (Synesthesia's floor lattice, dust, and powder). As `Graphics` shapes each one is re-triangulated and re-uploaded per frame, which dominated
  * the skins' frame time and garbage. Here each mark is a {@link Particle} (a 1x1 white texture scaled, rotated, and
  * tinted), kept across frames and only rewritten — no geometry is rebuilt.
  *

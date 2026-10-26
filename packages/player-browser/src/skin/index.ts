@@ -43,11 +43,8 @@ export * from './default/family.ts';
 export * from './be-music/index.ts';
 
 // The built-in be-music skins, drawn when neither an LR2 nor a beatoraja theme is loaded, or when a loaded theme doesn't
-// cover the scene or the chart's variant. `BUILT_IN_BE_MUSIC_SKINS` is the default set, in picker order; `latticeSkin`
-// is bundled but added to a registry on request.
+// cover the scene or the chart's variant. `BUILT_IN_BE_MUSIC_SKINS` is the default set, in picker order.
 export { BUILT_IN_BE_MUSIC_SKINS } from '../skins/built-in.ts';
-export { latticeSkin } from '../skins/lattice/index.ts';
-export { phantomSkin } from '../skins/phantom/index.ts';
 export { plainSkin } from '../skins/plain/index.ts';
 export { synesthesiaSkin } from '../skins/synesthesia/index.ts';
 
