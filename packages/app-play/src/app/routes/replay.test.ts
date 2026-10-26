@@ -1,11 +1,22 @@
 import { createEmptyJSON } from '@be-music/chart-source';
 import type { BrowserDroppedFile, BrowserChartCollection } from '@be-music/player-browser/collection';
-import { parseReplay, type BeMusicReplay } from '@be-music/player-engine/replay';
+import {
+  parseCourseReplay,
+  parseReplay,
+  type BeMusicCourseReplay,
+  type BeMusicReplay,
+  type ReplayCourseStageEntry,
+  type RulesetChartFacts,
+} from '@be-music/player-engine/replay';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { ReplayRoute, type ReplayRouteDeps } from './replay.ts';
 
-vi.mock('@be-music/player-engine/replay', () => ({ parseReplay: vi.fn() }));
+vi.mock('@be-music/player-engine/replay', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@be-music/player-engine/replay')>()),
+  parseReplay: vi.fn(),
+  parseCourseReplay: vi.fn(),
+}));
 
 function chartEntry(id: string, changes: Partial<LibraryChart> = {}): LibraryChart {
   return {
@@ -52,11 +63,18 @@ function harness() {
     library: { collection: { sources: [], charts, errors: [] } as BrowserChartCollection },
     records: {
       resolveChartSHA256: vi.fn<ReplayRouteDeps['records']['resolveChartSHA256']>(async (chart) => `sha-${chart.id}`),
+      resolveChartHashes: vi.fn<ReplayRouteDeps['records']['resolveChartHashes']>(async (chart) => ({
+        sha256: `sha-${chart.id}`,
+        md5: `md5-${chart.id}`,
+      })),
     },
     setStatus: vi.fn<ReplayRouteDeps['setStatus']>(),
     setPlayStatus: vi.fn<ReplayRouteDeps['setPlayStatus']>(),
     playChart: vi.fn<ReplayRouteDeps['playChart']>(async () => {}),
     showSelect: vi.fn<ReplayRouteDeps['showSelect']>(async () => {}),
+    startCourseReplay: vi.fn<ReplayRouteDeps['startCourseReplay']>(async () => {}),
+    startNonstopCourse: vi.fn<ReplayRouteDeps['startNonstopCourse']>(async () => {}),
+    showMissingCourseReplayCharts: vi.fn<ReplayRouteDeps['showMissingCourseReplayCharts']>(),
   };
   return { route: new ReplayRoute(deps), deps, charts };
 }
@@ -127,5 +145,80 @@ describe('ReplayRoute', () => {
     await h.route.startReplayReplayFromFile(FILE);
     expect(h.deps.setStatus).toHaveBeenCalledWith('Replay failed: arrangement differs');
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
+  });
+});
+
+const COURSE_FILE = { name: 'Dan-20260101.bmcourse.json', text: async () => '{}' } as unknown as BrowserDroppedFile;
+
+/** A course replay of `kind` whose stages are `stages` (played on the chart of that SHA-256, or unreached with an MD5). */
+function courseReplay(
+  kind: 'grade' | 'nonstop',
+  stages: Array<{ sha256: string; title?: string } | { md5: string }>,
+): BeMusicCourseReplay {
+  return {
+    format: 'be-music-course-replay',
+    version: 1,
+    course: { name: 'Dan', kind, constraints: ['grade'], trophies: [] },
+    stages: stages.map((stage): ReplayCourseStageEntry =>
+      'sha256' in stage
+        ? { played: true, replay: replay({ sha256: stage.sha256, ...(stage.title ? { title: stage.title } : {}) }) }
+        : { played: false, md5: stage.md5, facts: {} as RulesetChartFacts },
+    ),
+    ...(kind === 'nonstop'
+      ? { nonstop: { connections: ['cut'], placement: 'intended', replay: replay({}), stages: [], noteStages: [] } }
+      : {}),
+  } as BeMusicCourseReplay;
+}
+
+describe('ReplayRoute course replays', () => {
+  test('a course replay plays back as its course once every stage chart is found by its hashes', async () => {
+    const h = harness();
+    const log = courseReplay('grade', [{ sha256: 'sha-c' }, { sha256: 'SHA-A' }, { md5: 'md5-b' }]);
+    vi.mocked(parseCourseReplay).mockReturnValueOnce(log);
+    await h.route.startReplayReplayFromFile(COURSE_FILE);
+    expect(h.deps.showMissingCourseReplayCharts).not.toHaveBeenCalled();
+    expect(h.deps.startCourseReplay).toHaveBeenCalledOnce();
+    const [course, started] = h.deps.startCourseReplay.mock.calls[0]!;
+    expect(started).toBe(log);
+    expect(course.stages.map((stage) => stage.chart)).toEqual([h.charts[2], h.charts[0], h.charts[1]]);
+    expect(course.definition).toMatchObject({ name: 'Dan', kind: 'grade', constraints: ['grade'] });
+    expect(h.deps.setPlayStatus).toHaveBeenCalledWith('Replaying course: Dan');
+    expect(h.deps.playChart).not.toHaveBeenCalled();
+  });
+
+  test('a NONSTOP course replay plays back as one chart, through its decide screen', async () => {
+    const h = harness();
+    const log = courseReplay('nonstop', [{ sha256: 'sha-a' }, { sha256: 'sha-b' }]);
+    vi.mocked(parseCourseReplay).mockReturnValueOnce(log);
+    await h.route.startReplayReplayFromFile(COURSE_FILE);
+    expect(h.deps.startCourseReplay).not.toHaveBeenCalled();
+    expect(h.deps.startNonstopCourse).toHaveBeenCalledWith(
+      expect.objectContaining({ definition: expect.objectContaining({ kind: 'nonstop', connections: ['cut'] }) }),
+      { decide: true, replay: log },
+    );
+  });
+
+  test('a course replay with a stage chart missing lists the missing charts and does not start', async () => {
+    const h = harness();
+    vi.mocked(parseCourseReplay).mockReturnValueOnce(
+      courseReplay('grade', [{ sha256: 'sha-a' }, { sha256: 'sha-gone', title: 'Gone' }, { md5: 'md5-gone' }]),
+    );
+    await h.route.startReplayReplayFromFile(COURSE_FILE);
+    expect(h.deps.showMissingCourseReplayCharts).toHaveBeenCalledWith('Dan', ['Stage 2: Gone', 'Stage 3: md5-gone']);
+    expect(h.deps.setStatus).toHaveBeenCalledWith('Course replay: 2 of 3 stage charts are not loaded');
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    expect(h.deps.startCourseReplay).not.toHaveBeenCalled();
+    expect(h.deps.startNonstopCourse).not.toHaveBeenCalled();
+  });
+
+  test('a file that is no course replay says so', async () => {
+    const h = harness();
+    vi.mocked(parseCourseReplay).mockImplementationOnce(() => {
+      throw new Error('not a course replay');
+    });
+    await h.route.startReplayReplayFromFile(COURSE_FILE);
+    expect(h.deps.setStatus).toHaveBeenCalledWith('Course replay: invalid course replay (not a course replay)');
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    expect(h.deps.startCourseReplay).not.toHaveBeenCalled();
   });
 });

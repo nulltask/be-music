@@ -4,7 +4,7 @@
 // interrupt. What a course's flow decides is `course-flow.ts`'s, and the run itself is `CourseRun`
 // (`@be-music/player-engine/course`).
 
-import type { BeMusicReplay } from '@be-music/player-engine/replay';
+import type { BeMusicCourseReplay, BeMusicReplay } from '@be-music/player-engine/replay';
 import type { BrowseSnapshot, LibraryCourse, PlayResult } from '@be-music/player-scene-model';
 import { startCourseRun, type ActiveCourse } from '../course-flow.ts';
 
@@ -47,9 +47,12 @@ export class CourseRunService {
     this.courseReturnNavigation = navigation;
   }
 
-  /** An EXPERT / GRADE course's run begins (its stages all in the collection). */
-  public beginRun(course: LibraryCourse): ActiveCourse {
-    const active = startCourseRun(course);
+  /**
+   * An EXPERT / GRADE course's run begins (its stages all in the collection): played, or, with `replay`, that course
+   * replay played back.
+   */
+  public beginRun(course: LibraryCourse, replay?: BeMusicCourseReplay): ActiveCourse {
+    const active = startCourseRun(course, replay);
     this.activeCourse = active;
     return active;
   }

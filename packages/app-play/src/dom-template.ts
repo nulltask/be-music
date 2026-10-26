@@ -38,7 +38,7 @@ export const PLAYER_APP_HTML = `
       replays go through the "Open files" picker below.
     -->
     <input id="songs" type="file" webkitdirectory multiple class="hidden-file-input" />
-    <!-- The "Open files" button's picker: ZIP archives and replays (\`*.bmplay.json\`). -->
+    <!-- The "Open files" button's picker: ZIP archives and replays (\`*.bmplay.json\`, \`*.bmcourse.json\`). -->
     <input id="files" type="file" multiple accept=".zip,.json" class="hidden-file-input" />
     <input id="search" class="input search-input" type="search" placeholder="Search title / artist / genre..." />
     <div class="stage" id="stage">
@@ -301,6 +301,23 @@ export const PLAYER_APP_HTML = `
       </form>
     </dialog>
     <!--
+      A dropped course replay (\`*.bmcourse.json\`) whose stage charts are not all
+      loaded: it lists the missing ones and the replay does not start. Filled by
+      \`showMissingCourseReplayCharts\` (ui/course-replay-missing.ts).
+    -->
+    <dialog class="dialog account-dialog" id="course-replay-missing" aria-labelledby="course-replay-missing-title" aria-describedby="course-replay-missing-hint">
+      <form method="dialog" class="account-dialog-body">
+        <header>
+          <h2 id="course-replay-missing-title">Charts missing</h2>
+          <p id="course-replay-missing-hint" data-course-replay-missing-hint></p>
+        </header>
+        <ul class="course-replay-missing-list" data-course-replay-missing-list></ul>
+        <footer>
+          <button type="submit" class="btn" autofocus>OK</button>
+        </footer>
+      </form>
+    </dialog>
+    <!--
       Loading overlay. Hidden by default; revealed via the
       "visible" class while a folder / ZIP drop is mid-load. The
       bar below moves between "indeterminate" (CSS animation) and
@@ -519,7 +536,7 @@ export const PLAYER_APP_HTML = `
                 Or click <strong>Open folder</strong> in the Debug Menu (top-right) to use the native
                 folder picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
                 theme and BMS charts loads both in one shot. Press the button again to add another folder.
-                <strong>Open files</strong> picks ZIP archives or a replay (<code>*.bmplay.json</code>) to replay.
+                <strong>Open files</strong> picks ZIP archives or a replay (<code>*.bmplay.json</code>, or a course's <code>*.bmcourse.json</code>) to replay.
               </li>
               <li>Subsequent drops add to the library and keep the current theme.</li>
               <li>
@@ -619,7 +636,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Open folder</dt>
                 <dd>Picks a folder of charts and / or skins; handled like a drop.</dd>
                 <dt>Open files (ZIP / replay)</dt>
-                <dd>Picks chart ZIP archives, or a replay (<code>*.bmplay.json</code>) to watch.</dd>
+                <dd>Picks chart ZIP archives, or a replay (<code>*.bmplay.json</code>, or a course's <code>*.bmcourse.json</code>) to watch.</dd>
               </dl>
             </details>
             <details class="help-menu-folder">
@@ -913,7 +930,7 @@ export const PLAYER_APP_HTML = `
                 右上 Debug Menu の <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
                 ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマと譜面が同居したフォルダもまとめて読み込めます。
                 ボタンを押し直せば別フォルダを追加で読み込めます。
-                <strong>Open files</strong> では ZIP アーカイブやリプレイ (<code>*.bmplay.json</code>) を選べます。
+                <strong>Open files</strong> では ZIP アーカイブやリプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>) を選べます。
               </li>
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
               <li>
@@ -994,7 +1011,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Open folder</dt>
                 <dd>譜面やスキンのフォルダを選んで読み込みます。ドロップと同じ扱いです。</dd>
                 <dt>Open files (ZIP / replay)</dt>
-                <dd>譜面の ZIP アーカイブ、または再生するリプレイ (<code>*.bmplay.json</code>) を選びます。</dd>
+                <dd>譜面の ZIP アーカイブ、または再生するリプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>) を選びます。</dd>
               </dl>
             </details>
             <details class="help-menu-folder">
