@@ -92,6 +92,8 @@ export interface LR2PlayFrame {
   readonly bpm?: number;
   /** The frame rate (number 20). */
   readonly fps?: number;
+  /** The judge timing the notes are drawn with now (number 12), moved by the automatic adjustment; 0 when absent. */
+  readonly judgeTimingMs?: number;
   /** The 2P player of a two-player BATTLE. */
   readonly secondPlayer?: LR2SecondPlayerFrame;
   /** Latest displayed judgment per side; retained after the judge plate fades. */
@@ -306,6 +308,8 @@ function playNumber(num: number, setup: LR2PlaySetup, frame: LR2PlayFrame): numb
   switch (num) {
     case LR2_NUM.HISPEED_1P:
       return Math.round(play.view.hiSpeed.player * 100);
+    case LR2_NUM.JUDGE_TIMING:
+      return frame.judgeTimingMs ?? 0;
     case LR2_NUM.FPS:
       return frame.fps !== undefined ? Math.round(frame.fps) : undefined;
     case LR2_NUM.SCORE:
