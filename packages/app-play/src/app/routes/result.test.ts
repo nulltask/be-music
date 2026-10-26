@@ -1,3 +1,4 @@
+import { createMemoryReplaySlotBackend, ReplaySlotStore } from '../../services/replay-slots.ts';
 import { createEmptyJSON } from '@be-music/chart-source';
 import type { LR2Skin } from '@be-music/skin-lr2';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
@@ -197,6 +198,12 @@ async function harness(options: { family?: 'lr2' | 'beatoraja' | 'none'; lastPla
     showSelect: vi.fn<ResultRouteDeps['showSelect']>(async () => {}),
     playChart: vi.fn<ResultRouteDeps['playChart']>(async () => {}),
     unlockReplayOptions: vi.fn<ResultRouteDeps['unlockReplayOptions']>(),
+    replaySlots: {
+      store: new ReplaySlotStore({ backend: createMemoryReplaySlotBackend() }),
+      rules: () => ['never', 'never', 'never', 'never'] as const,
+      panel: { showResult: vi.fn() },
+    },
+    setStatus: vi.fn<ResultRouteDeps['setStatus']>(),
   };
   const route = new ResultRoute({
     ...deps,

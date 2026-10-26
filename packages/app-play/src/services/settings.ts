@@ -221,6 +221,11 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     // replay (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
     // scene mounts.
     autoSaveReplay: false,
+    // No replay slot saves by itself, as beatoraja ships its `autosavereplay` rules.
+    replaySlotAutoSave1: 'never',
+    replaySlotAutoSave2: 'never',
+    replaySlotAutoSave3: 'never',
+    replaySlotAutoSave4: 'never',
     courseAutoAdvance: false,
     nonstopPlacement: 'intended',
     // The play tempo, its pitch handling and the keep-pitch stretcher, remembered from the last visit.

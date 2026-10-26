@@ -34,6 +34,7 @@ export const DEBUG_MENU_FOLDERS = {
   compressor: { title: 'Compressor', open: false },
   compressorStages: { title: 'Stages', open: true },
   library: { title: 'Library & records', open: false },
+  replaySlots: { title: 'Replay slots', open: true },
   bgaTranscode: { title: 'BGA video transcode', open: false },
   capture: { title: 'Capture', open: false },
   leaderboard: { title: 'Leaderboard', open: false },

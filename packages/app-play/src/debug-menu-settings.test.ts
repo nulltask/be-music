@@ -214,6 +214,10 @@ describe('captureDebugMenuSettings', () => {
       skinSettings: { test: { glow: false, offset: 5, theme: 'light' } },
       courseTableURLs: ['https://example.com/courses.json'],
       folders: { Audio: false, 'Skin & display': true },
+      replaySlotAutoSave1: 'always',
+      replaySlotAutoSave2: 'never',
+      replaySlotAutoSave3: 'score-update',
+      replaySlotAutoSave4: 'clear-update-or-equal',
     } satisfies DebugMenuSettings;
     expected.compressorTuning.master.thresholdDb = -12;
     const state = Object.assign(create(), expected);

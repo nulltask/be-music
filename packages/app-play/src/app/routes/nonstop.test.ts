@@ -1,3 +1,4 @@
+import type { ResultReplaySlots } from '../../services/replay-slot-service.ts';
 import { createEmptyJSON } from '@be-music/chart-source';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { BrowserAssetSource, BrowserChartCollection } from '@be-music/player-browser/collection';
@@ -136,6 +137,7 @@ function harness(options: { family?: 'built-in' | 'beatoraja' } = {}) {
     playChart: vi.fn<NonstopRouteDeps['playChart']>(async () => {}),
     showResult: vi.fn<NonstopRouteDeps['showResult']>(async () => {}),
     showBeatorajaResult: vi.fn<NonstopRouteDeps['showBeatorajaResult']>(async () => true),
+    courseReplaySlots: vi.fn<NonstopRouteDeps['courseReplaySlots']>(() => ({}) as ResultReplaySlots),
     unlockReplayOptions: vi.fn<NonstopRouteDeps['unlockReplayOptions']>(),
   };
   return { courses, deps, route: new NonstopRoute(deps) };
