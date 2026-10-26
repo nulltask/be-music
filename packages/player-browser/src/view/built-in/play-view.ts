@@ -27,7 +27,7 @@ import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { ChartImageCache } from '../../skin/be-music/chart-images.ts';
 import type { BeMusicStage } from '../../skin/be-music/types.ts';
-import { PHANTOM_BOMB_DURATION_MS } from '../../skins/phantom/playfield.ts';
+import { DEFAULT_BOMB_DURATION_MS } from '../shared/playfield/default-playfield.ts';
 import { build, render, type PlayFrameContext } from '../shared/play-frame.ts';
 import { PlayLayers } from '../shared/play-layers.ts';
 import type { PlayChrome, PlayfieldRuntime } from '../shared/playfield/context.ts';
@@ -293,7 +293,7 @@ function createBuiltInPlayfieldSkin(view: BuiltInPlayView): PlayfieldSkin {
     measureLines: () => undefined,
     bgaTargets: (out) => collectBGATargets(view, out),
     bombCell: () => undefined,
-    bombDurationMs: () => view.skinBinding.bombDurationMs ?? PHANTOM_BOMB_DURATION_MS,
+    bombDurationMs: () => view.skinBinding.bombDurationMs ?? DEFAULT_BOMB_DURATION_MS,
     keyOnFadeMs: () => KEY_ON_FADE_OUT_MS,
   };
 }

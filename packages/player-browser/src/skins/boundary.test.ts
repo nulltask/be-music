@@ -54,14 +54,7 @@ describe('built-in skin import boundary', () => {
   const skins = readdirSync(SKINS_DIR, { withFileTypes: true }).filter((entry) => entry.isDirectory());
 
   it('covers every built-in skin', () => {
-    expect(skins.map((entry) => entry.name).sort()).toEqual([
-      'lattice',
-      'native',
-      'phantom',
-      'pixi-kit',
-      'plain',
-      'synesthesia',
-    ]);
+    expect(skins.map((entry) => entry.name).sort()).toEqual(['native', 'pixi-kit', 'plain', 'synesthesia']);
   });
 
   it.each(skins.map((entry) => entry.name))(

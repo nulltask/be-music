@@ -2,7 +2,7 @@ import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The notes of the shared playfield: walks the chart's notes, mines and invisible notes from the playhead under LR2's
  * or beatoraja's drawing rules (`note-draw-window.ts`) and draws each tap note, long note, mine and invisible-note
- * overlay with the theme's cell, the be-music skin, or Phantom's shape.
+ * overlay with the theme's cell, the be-music skin, or the default playfield's shape.
  */
 
 import { findFirstIndexAtOrAfter } from '@be-music/shared-utils/core';
@@ -22,7 +22,7 @@ import {
 import { PIXELS_PER_BEAT } from '../../../stage/design.ts';
 import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
-import { renderPhantomNote } from '../../../skins/phantom/playfield.ts';
+import { renderDefaultNote } from './default-playfield.ts';
 import type { PlayfieldLaneRect } from '../../types.ts';
 import type { PlayfieldContext, RuntimeNote } from './context.ts';
 import { renderLongNote } from './long-notes.ts';
@@ -250,5 +250,5 @@ function renderSingleNote(
   }
   const graphic = ctx.noteLayerPool.acquireGraphics();
   graphic.label = drawLabel(ctx, 'note-fallback', laneIndex, channel);
-  renderPhantomNote({ graphics: graphic, kind, x: lane.x, w: lane.w, y, nowMs: ctx.play.playClock() });
+  renderDefaultNote({ graphics: graphic, kind, x: lane.x, w: lane.w, y, nowMs: ctx.play.playClock() });
 }

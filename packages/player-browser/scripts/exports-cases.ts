@@ -330,7 +330,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.createDecideScene', {
     run: async () => {
       const kits: playerWebCoreAPI.DecideSceneKit[] = [
-        { family: 'built-in', skin: playerWebCoreAPI.phantomSkin },
+        { family: 'built-in', skin: playerWebCoreAPI.synesthesiaSkin },
         { family: 'lr2', skin: BENCH_LR2_DECIDE_SKIN },
         {
           family: 'beatoraja',
@@ -355,7 +355,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.createResultScene', {
     run: () => {
       const kits: playerWebCoreAPI.ResultSceneKit[] = [
-        { family: 'built-in', skin: playerWebCoreAPI.phantomSkin },
+        { family: 'built-in', skin: playerWebCoreAPI.synesthesiaSkin },
         { family: 'lr2', skin: BENCH_LR2_RESULT_SKIN },
         {
           family: 'beatoraja',
@@ -379,7 +379,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.createPlayScene', {
     run: () => {
       const scene = playerWebCoreAPI.createPlayScene(
-        { family: 'built-in', skin: playerWebCoreAPI.phantomSkin },
+        { family: 'built-in', skin: playerWebCoreAPI.synesthesiaSkin },
         {
           chart: BENCH_SONG,
           settings: { autoPlay: true },
@@ -396,7 +396,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.createSelectScene', {
     run: () => {
       const scene = playerWebCoreAPI.createSelectScene(
-        { family: 'built-in', skin: playerWebCoreAPI.phantomSkin },
+        { family: 'built-in', skin: playerWebCoreAPI.synesthesiaSkin },
         {
           library: { sources: [], charts: [BENCH_SONG], errors: [] },
           sounds: { selectBGM: { bytes: BENCH_BYTES } },
@@ -435,14 +435,14 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   });
   define('player-browser.createBeMusicSkinRegistry', {
     run: () => {
-      const registry = playerWebCoreAPI.createBeMusicSkinRegistry([playerWebCoreAPI.phantomSkin]);
-      registry.resolve('phantom');
+      const registry = playerWebCoreAPI.createBeMusicSkinRegistry([playerWebCoreAPI.synesthesiaSkin]);
+      registry.resolve('synesthesia');
       registry.resolve('missing');
     },
   });
   define('player-browser.resolveSelectListWindow', {
     run: () => {
-      playerWebCoreAPI.resolveSelectListWindow(playerWebCoreAPI.phantomSkin.select.layout, 480, 50, 100);
+      playerWebCoreAPI.resolveSelectListWindow(playerWebCoreAPI.synesthesiaSkin.select.layout, 480, 50, 100);
     },
   });
   define('player-browser.createCroppedBeatorajaTexture', {

@@ -3,7 +3,7 @@ import { drawLabel } from '../../../stage/draw-label.ts';
 
 import { resolveLongNoteAlpha } from '../../../chart/note-draw-window.ts';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
-import { renderPhantomLongNote } from '../../../skins/phantom/playfield.ts';
+import { renderDefaultLongNote } from './default-playfield.ts';
 import type { PlayfieldLaneRect } from '../../types.ts';
 import type { PlayfieldContext, RuntimeNote } from './context.ts';
 
@@ -66,7 +66,7 @@ export function renderLongNote(
     } else {
       const graphic = ctx.noteLayerPool.acquireGraphics();
       graphic.label = drawLabel(ctx, 'ln-body-fallback', laneIndex, channel);
-      renderPhantomLongNote({
+      renderDefaultLongNote({
         graphics: graphic,
         kind,
         x: lane.x,
