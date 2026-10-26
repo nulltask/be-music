@@ -83,7 +83,7 @@ export interface DebugMenuSettings {
   noteDurationMs: number;
   constantFadeMs: number;
   bpmGuide: boolean;
-  judgeTimingAutoAdjust: boolean;
+  judgeTimingAutoAdjust: PlayerGUIState['judgeTimingAutoAdjust'];
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
   longNoteRate: number;
@@ -256,7 +256,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'submitToLeaderboard', booleanOf(raw.submitToLeaderboard));
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
-  assign(settings, 'judgeTimingAutoAdjust', booleanOf(raw.judgeTimingAutoAdjust));
+  // A boolean from before the modes is beatoraja's switch.
+  assign(settings, 'judgeTimingAutoAdjust', resolvePlayOptionValue('judgeTimingAutoAdjust', raw.judgeTimingAutoAdjust));
   assign(settings, 'visualConstant', booleanOf(raw.visualConstant));
   assign(settings, 'lift1P', resolvePlayOptionValue('lift1P', raw.lift1P));
   assign(settings, 'lift2P', resolvePlayOptionValue('lift2P', raw.lift2P));
