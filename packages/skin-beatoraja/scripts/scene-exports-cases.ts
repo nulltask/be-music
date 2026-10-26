@@ -638,6 +638,23 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
     },
   });
 
+  // Replay slots
+  define('skin-beatoraja.scene.beatorajaReplayButtonSlot', {
+    run: () => {
+      sceneAPI.beatorajaReplayButtonSlot(316);
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaResultReplayOps', {
+    run: () => {
+      sceneAPI.resolveBeatorajaResultReplayOps(['exists', 'saved', 'none', 'exists']);
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaSelectReplayOps', {
+    run: () => {
+      sceneAPI.resolveBeatorajaSelectReplayOps([true, false, true, false], 2);
+    },
+  });
+
   // System sounds
   define('skin-beatoraja.scene.discoverBeatorajaSystemSoundPaths', {
     run: () => {
