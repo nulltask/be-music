@@ -95,15 +95,29 @@ function judgmentsOf(result: RecordPlayResult): RecordPlayResult['score'] {
 /**
  * What a play's result contributes to its chart's record: its lamp (a result without one falls back to its gauge's
  * verdict, `NORMAL` or `FAILED`), EX score, max combo and BP (BAD + POOR + empty POOR, each empty POOR once also where
- * the result's POOR folds them in).
+ * the result's POOR folds them in, plus the notes a play that ended early never judged, as LR2 and beatoraja count them:
+ * OpenLR2 L9436-L9439, beatoraja `BMSPlayer` L915).
  */
 export function recordPlayFromResult(result: RecordPlayResult): RecordPlay {
+  const judgments = judgmentsOf(result);
   return {
     lamp: result.lamp ?? (result.cleared ? 'NORMAL' : 'FAILED'),
     exScore: result.score.exScore,
     maxCombo: result.maxCombo,
-    missCount: resolveMissCount(judgmentsOf(result)),
+    missCount: resolveMissCount(judgments, unjudgedNotes(judgments)),
   };
+}
+
+/**
+ * What a single play given up with ESC contributes to its chart's record, from its result so far: as
+ * {@link recordPlayFromResult}, with the `FAILED` lamp and the notes it never reached in its BP, as LR2 and beatoraja
+ * save a play quit mid-way (beatoraja `BMSPlayer.stopPlay` L956-L975). A play quit before it judged a note (no PGREAT to
+ * BAD) saves nothing, as beatoraja saves none (`createScoreData` L866-L868).
+ */
+export function abortedRecordPlayFromResult(result: RecordPlayResult): RecordPlay | undefined {
+  const { perfect, great, good, bad } = result.score;
+  if (perfect + great + good + bad === 0) return undefined;
+  return { ...recordPlayFromResult(result), lamp: 'FAILED' };
 }
 
 /** A play's final engine summary, as the facts a record reads from it. */
@@ -114,7 +128,8 @@ export type RecordPlaySummary = Pick<
 
 /**
  * What a play contributes to its chart's record from its final engine summary, for a host whose gameplay hands it no
- * result (the beatoraja family): the lamp comes from `resolveClearLamp` under `ruleset`, the rule every result uses.
+ * result (the beatoraja family): the lamp comes from `resolveClearLamp` under `ruleset`, the rule every result uses, and
+ * the BP counts the notes a play that ended early never judged, as {@link recordPlayFromResult}'s does.
  */
 export function recordPlayFromSummary(summary: RecordPlaySummary, maxCombo: number, ruleset?: RulesetId): RecordPlay {
   return {
@@ -126,11 +141,14 @@ export function recordPlayFromSummary(summary: RecordPlaySummary, maxCombo: numb
     }),
     exScore: summary.exScore,
     maxCombo,
-    missCount: resolveMissCount(summary),
+    missCount: resolveMissCount(summary, unjudgedNotes(summary)),
   };
 }
 
-/** The notes of a play its judgments do not cover: those a stage that failed mid-way never judged. */
+/**
+ * The notes of a play its judgments do not cover: those a play that failed or was given up mid-way never judged. A mine
+ * POOR (`minePoor`, which LR2 counts in its POOR) judges no note.
+ */
 function unjudgedNotes(
   score: Pick<ScoreSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'minePoor'>,
 ): number {
@@ -138,13 +156,11 @@ function unjudgedNotes(
 }
 
 /**
- * What a course stage's result contributes to its chart's record: as {@link recordPlayFromResult}, with the notes a
- * stage that failed mid-way never judged counted in its BP, as LR2 counts them (OpenLR2 L9105-L9113).
+ * What a course stage's result contributes to its chart's record: the same as {@link recordPlayFromResult}, whose BP
+ * already counts the notes a stage that failed mid-way never judged, as LR2 counts a stage's (OpenLR2 L9111-L9113).
  */
 export function courseStageRecordPlayFromResult(result: RecordPlayResult): RecordPlay {
-  const play = recordPlayFromResult(result);
-  const judgments = judgmentsOf(result);
-  return { ...play, missCount: resolveMissCount(judgments, unjudgedNotes(judgments)) };
+  return recordPlayFromResult(result);
 }
 
 /** {@link courseStageRecordPlayFromResult} for a stage whose result is its engine summary (the beatoraja family). */
@@ -153,8 +169,7 @@ export function courseStageRecordPlayFromSummary(
   maxCombo: number,
   ruleset?: RulesetId,
 ): RecordPlay {
-  const play = recordPlayFromSummary(summary, maxCombo, ruleset);
-  return { ...play, missCount: resolveMissCount(summary, unjudgedNotes(summary)) };
+  return recordPlayFromSummary(summary, maxCombo, ruleset);
 }
 
 /** What a course run's result (`ReplayCourseResult`) contributes to the course's record. */
