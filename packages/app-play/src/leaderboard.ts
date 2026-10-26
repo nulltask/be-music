@@ -302,7 +302,7 @@ function skippedReason(reason: string): 'not-rankable' | 'tempo' | 'missing-fing
 export function describeSkippedSubmission(reason: Exclude<SubmissionPreparation, { ok: true }>['reason']): string {
   switch (reason) {
     case 'not-rankable':
-      return 'Leaderboard: not submitted (auto play, aborted runs and course stages are not ranked)';
+      return 'Leaderboard: not submitted (auto play and course stages are not ranked)';
     case 'tempo':
       return 'Leaderboard: not submitted (a play at another tempo is practice and is not ranked)';
     case 'missing-fingerprint':

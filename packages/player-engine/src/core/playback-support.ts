@@ -1,3 +1,4 @@
+import type { ReplayOptionState } from '../replay/options.ts';
 import type { ReplayViewState } from '../replay/view.ts';
 import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/chart-model';
 import { type PlayerStateSignals } from '../state-signals.ts';
@@ -67,6 +68,8 @@ export function createUIFramePublisher(params: {
   uiSignals: PlayerUISignalBus;
   totalSeconds: number;
   summary: PlayerUIFramePayload['summary'];
+  /** The 2P player's summary of a two-player play. */
+  summary2P?: PlayerUIFramePayload['summary'];
   notes: PlayerUIFramePayload['notes'];
   landmineNotes?: PlayerUIFramePayload['landmineNotes'];
   invisibleNotes?: PlayerUIFramePayload['invisibleNotes'];
@@ -91,6 +94,7 @@ export function createUIFramePublisher(params: {
     uiSignals,
     totalSeconds,
     summary,
+    summary2P,
     notes,
     landmineNotes,
     invisibleNotes,
@@ -117,6 +121,7 @@ export function createUIFramePublisher(params: {
       reversalSeconds: reversal?.seconds,
       totalSeconds,
       summary,
+      ...(summary2P !== undefined ? { summary2P } : {}),
       notes,
       hcnLanes: resolveHCNLanes?.(seconds),
       judgedNoteCount: resolveJudgedNoteCount?.(),
@@ -208,6 +213,7 @@ export function consumePlaybackInputCommands(params: {
   onHighSpeedAction: (action: HighSpeedControlAction | undefined) => void;
   /** A view change to record (`{ kind: 'view' }`). */
   onViewChange?: (change: ReplayViewState) => void;
+  onOptionChange?: (values: ReplayOptionState) => void;
   /** A tempo change (`{ kind: 'tempo' }`). */
   onTempoChange?: (tempo: number) => void;
   /** A seek (`{ kind: 'seek' }`). */
@@ -245,6 +251,10 @@ export function consumePlaybackInputCommands(params: {
       onHighSpeedAction(command.action);
       continue;
     }
+    if (command.kind === 'options') {
+      params.onOptionChange?.(command.values);
+      continue;
+    }
     if (command.kind === 'view') {
       onViewChange?.(command.change);
       continue;
@@ -267,10 +277,16 @@ export function consumePlaybackInputCommands(params: {
  */
 export function recordPendingViewChanges(
   inputSignals: PlayerInputSignalBus,
-  recorder: { recordViewChange(timeSeconds: number, change: ReplayViewState): void } | undefined,
+  recorder:
+    | {
+        recordViewChange(timeSeconds: number, change: ReplayViewState): void;
+        recordOptionChange?(timeSeconds: number, values: ReplayOptionState): void;
+      }
+    | undefined,
   chartSeconds: number,
 ): void {
   for (const command of inputSignals.drainCommands()) {
     if (command.kind === 'view') recorder?.recordViewChange(chartSeconds, command.change);
+    if (command.kind === 'options') recorder?.recordOptionChange?.(chartSeconds, command.values);
   }
 }

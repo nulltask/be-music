@@ -62,6 +62,8 @@ const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
   GROOVE: 'NORMAL',
   NORMAL: 'NORMAL',
   HARD: 'HARD',
+  'P-ATTACK': 'HARD',
+  'G-ATTACK': 'HARD',
   'EX-HARD': 'EX_HARD',
   DEATH: 'EX_HARD',
   HAZARD: 'EX_HARD',
@@ -100,7 +102,14 @@ const COURSE_GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
  * LR2body.exe CheckCourseClear @0x4086d0); beatoraja's follows the class gauge the run played on.
  */
 function courseGaugeClearLamp(gauge: string, ruleset: string, gaugeType: GaugeType): ClearLamp {
-  if (ruleset === 'lr2') return gaugeType === 'EASY' ? 'EASY' : gaugeType === 'HARD' ? 'HARD' : 'NORMAL';
+  // LR2 resets EASY and G.ATTACK to GROOVE when a grade course starts.
+  if (ruleset === 'lr2' && gauge === 'GRADE' && (gaugeType === 'EASY' || gaugeType === 'G-ATTACK')) return 'NORMAL';
+  if (ruleset === 'lr2')
+    return gaugeType === 'EASY'
+      ? 'EASY'
+      : gaugeType === 'HARD' || gaugeType === 'P-ATTACK' || gaugeType === 'G-ATTACK'
+        ? 'HARD'
+        : 'NORMAL';
   return COURSE_GAUGE_LAMPS[gauge] ?? 'NORMAL';
 }
 
@@ -213,8 +222,9 @@ export function resolveCourseClearLamp(run: CourseClearLampFacts): ClearLamp {
 
 /**
  * BP (miss count): BADs, missed POORs and empty POORs, as LR2 and beatoraja count it (LR2 adds an empty POOR to its POOR
- * count, LR2body.exe ApplyJudgeNote @0x4061f1), plus `unjudgedNotes`: the notes a course stage that failed mid-way, or a
- * course run's unreached stages, never judged, which LR2 counts in a course's BP (OpenLR2 L9105-L9113).
+ * count, LR2body.exe ApplyJudgeNote @0x4061f1), plus `unjudgedNotes`: the notes a play or course stage that failed or
+ * was given up mid-way, or a course run's unreached stages, never judged, which LR2 and beatoraja count in BP (OpenLR2
+ * L9111-L9113 and L9436-L9439, beatoraja `BMSPlayer` L915).
  */
 export function resolveMissCount(judge: { bad: number; poor: number; emptyPoor: number }, unjudgedNotes = 0): number {
   return judge.bad + judge.poor + judge.emptyPoor + Math.max(0, unjudgedNotes);

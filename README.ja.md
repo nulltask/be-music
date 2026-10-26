@@ -23,7 +23,7 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 - `@be-music/player-skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
 - `@be-music/player-ui`, `@be-music/player-ui-react`, `@be-music/player-ui-vue`: [再利用可能な Lit 製 Web Components と、型付き React・Vue ラッパー](./packages/player-ui/README.ja.md)
 - `@be-music/player-browser`: browser の PixiJS ランタイム。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音声サービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
-- `@be-music/app-play`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite demo
+- `@be-music/app-play`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite プレイヤー
 - `@be-music/app-leaderboard`: Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
 - `@be-music/chart-editor`: CLI エディタ (インポート・編集・エクスポート)
 
@@ -56,7 +56,7 @@ flowchart TD
     nodeaudio["player-node-audio"]
     lb["app-leaderboard"]
     web["player-browser"]
-    demo["app-play"]
+    app["app-play"]
   end
 
   chart-writer --> editor
@@ -71,7 +71,7 @@ flowchart TD
   ui --> wrappers
   sdk --> web
   beatoraja --> web
-  web --> demo
+  web --> app
 ```
 
 ## 必要環境
@@ -94,7 +94,7 @@ pnpm run check
 pnpm run test
 ```
 
-ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。`pnpm run test:e2e` は Web デモでコースのブラウザ確認を Playwright で端から端まで実行します（数分かかるため `pnpm run test` には含めていません）。[docs/course-checklist.ja.md](docs/course-checklist.ja.md#自動実行) を参照してください。
+ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。`pnpm run test:e2e` は Web プレイヤーでコースのブラウザ確認を Playwright で端から端まで実行します（数分かかるため `pnpm run test` には含めていません）。[docs/course-checklist.ja.md](docs/course-checklist.ja.md#自動実行) を参照してください。
 
 ## package ごとの release
 
@@ -108,7 +108,7 @@ pnpm run release:version
 
 - 通常の feature PR では、変更した package に対する `.changeset/*.md` を追加します
 - release したいタイミングで `devel` 上で `pnpm run release:version` を実行し、生成された `packages/*/package.json` と `packages/*/CHANGELOG.md` の更新をまとめてコミットします
-- その状態で `devel -> main` の release PR を merge すると、version が上がった公開 package だけ GitHub Release が個別に作成されます（プレイヤーのデモや Leaderboard などの private package は対象外です）
+- その状態で `devel -> main` の release PR を merge すると、version が上がった公開 package だけ GitHub Release が個別に作成されます（プレイヤーのプレイヤーや Leaderboard などの private package は対象外です）
 - player SEA 実行ファイルは `@be-music/player-terminal` から build し、`@be-music/player-terminal` release に添付します。`@be-music/chart-audio-renderer` も SEA zip を添付します
 - private な repository root の `package.json` は `0.0.0` のままで、release 対象 version は `packages/*/package.json` で管理します
 
@@ -229,7 +229,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 ### be-music skin SDK (`@be-music/player-skin-sdk`)
 
-- browser player の built-in family 向けスキンの契約。スキンは表示用データから Canvas と任意の DOM 画面を組み合わせる
+- browser プレイヤーの built-in family 向けスキンの契約。スキンは表示用データから Canvas と任意の DOM 画面を組み合わせる
 - 描画フレームワークを import しない。フレームワークはスキンが持ち込む（Canvas 2D、WebGL / WebGPU、PixiJS、three.js など）
 - stage、lane layout、touch / portrait layout、moment、判定表示、loading、audio drive、曲情報、result track、skin settings、motion の helper
 - [be-music スキンの作り方](docs/be-music-skin.ja.md) を参照
@@ -253,7 +253,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - note、timing、scroll distance、BGA cue、score、result は terminal player と共通の再生意味論を使用
 - 選曲 BGM・効果音・ジングル・譜面のプレビュー・スキンの音を 1 つのシステム `AudioContext` で鳴らす音声サービスと、key / BGM / master を分けた compressor control 付きのプレイごとの WebAudio bus
 - BGA still / video 描画、browser-side video transcode fallback、MP4 / WebM gameplay recording
-- 1 つの renderer context を所有し、一度に 1 つの scene を表示する PixiJS scene host。demo ではシーンルーターがすべての切り替えを受け持ち、去った scene を dispose する
+- 1 つの renderer context を所有し、一度に 1 つの scene を表示する PixiJS scene host。player ではシーンルーターがすべての切り替えを受け持ち、去った scene を dispose する
 - hi-speed、BGA mode/size、filter、sort、HS-FIX、lane cover、lift、auto-scratch、DP flip、random/mirror、gauge variant、skin option を扱う LR2 / beatoraja PLAY OPTION control
 
 ### chart-editor (`@be-music/chart-editor`)
@@ -334,17 +334,17 @@ pnpm run player chart.bms --tui-visible-notes-limit 4096
 pnpm run player chart.bms --no-ln-type-auto
 ```
 
-### 5. Browser player demo
+### 5. Browser player
 
 ```bash
 pnpm run player:web
 ```
 
-demo は Vite dev server を起動します。BMS/bmson の楽曲 folder、LR2 theme folder、beatoraja theme folder、ZIP、または楽曲 folder と LR2 / beatoraja theme folder の組み合わせを browser に drop できます。
+player は Vite dev server を起動します。BMS/bmson の楽曲 folder、LR2 theme folder、beatoraja theme folder、ZIP、または楽曲 folder と LR2 / beatoraja theme folder の組み合わせを browser に drop できます。
 
 URL から archive を読み込むこともできます。`?music=<zip の URL>&skin=<zip の URL>`（どちらか一方だけでも可）を付けると、drop と同じ経路で archive を読み込みます。cross-origin の `https` URL は同一オリジンの proxy route `/__url-load-proxy` 経由で取得します。この route は Vite dev server と Cloudflare Worker の両方が提供します。
 
-demo は Player の Worker（`packages/worker-play`）が配信します。build した demo を Static Assets で配信し、ffmpeg core を R2 から返す処理と、Leaderboard の API への転送を Worker が受け持ちます。`main` と `devel` に push すると、すべてのサービスが本番とプレビューにデプロイされます（`.github/workflows/deploy.yml`、[サービスと環境](./docs/services.ja.md)）。Player を手でデプロイするには次を実行します。
+player は Player の Worker（`packages/worker-play`）が配信します。build した player を Static Assets で配信し、ffmpeg core を R2 から返す処理と、Leaderboard の API への転送を Worker が受け持ちます。`main` と `devel` に push すると、すべてのサービスが本番とプレビューにデプロイされます（`.github/workflows/deploy.yml`、[サービスと環境](./docs/services.ja.md)）。Player を手でデプロイするには次を実行します。
 
 ```bash
 pnpm --filter @be-music/app-play run cf:r2:push # 固定している @ffmpeg/core が変わったとき: core を R2 へ upload
@@ -352,7 +352,7 @@ pnpm --filter @be-music/worker-play run deploy                # 本番、play.be
 pnpm --filter @be-music/worker-play run deploy:preview        # プレビュー、play.preview.be-music.app
 ```
 
-`deploy` は demo を build して `cf deploy` を実行します。ffmpeg core（`ffmpeg-core.wasm` / `ffmpeg-core.js`）は Static Assets の 1 file あたりの上限を超えるので、R2 に置いて Worker 経由で配信します。
+`deploy` は player を build して `cf deploy` を実行します。ffmpeg core（`ffmpeg-core.wasm` / `ffmpeg-core.js`）は Static Assets の 1 file あたりの上限を超えるので、R2 に置いて Worker 経由で配信します。
 
 ### 6. エディタ
 
@@ -511,7 +511,7 @@ flowchart TD
 ## SEA (Single Executable Applications)
 
 ```bash
-# player の SEA バイナリを生成
+# プレイヤーの SEA バイナリを生成
 pnpm run player:sea
 
 # chart-audio-renderer の SEA バイナリを生成

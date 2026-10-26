@@ -283,6 +283,30 @@ describe('judge core', () => {
     });
   });
 
+  test('a long note’s judgment is marked as one, and a BAD carries its instant', () => {
+    const state = createCore(LONG_AND_MINE, 'lr2');
+    stepJudgeCore(state, { kind: 'hold', channels: new Set(['11']) });
+    stepJudgeCore(state, press(1, '11'));
+    stepJudgeCore(state, advance(1.4));
+    const effects = stepJudgeCore(state, {
+      kind: 'release',
+      channels: new Set(['11']),
+      tokens: [],
+      nowSec: 1.5,
+      nowMs: 1500,
+      recordSec: 1.5,
+    });
+    expect(effects.find((effect) => effect.kind === 'judge-combo')).toMatchObject({
+      judge: 'BAD',
+      seconds: 1.5,
+      longNote: true,
+    });
+    // A normal note's hit is not.
+    const tap = stepJudgeCore(state, press(3.001, '12')).find((effect) => effect.kind === 'judge-combo');
+    expect(tap).toMatchObject({ judge: 'PERFECT', channel: '12' });
+    expect(tap).not.toHaveProperty('longNote');
+  });
+
   test('a held LR2 mine drains the gauge and counts one POOR without breaking combo', () => {
     const state = createCore(LONG_AND_MINE, 'lr2');
     stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
@@ -651,3 +675,31 @@ describe('practice start', () => {
     expect(isJudgeCoreSettled(state)).toBe(true);
   });
 });
+
+test('input filtering leaves the unassisted scratch side playable', () => {
+  const mapped = resolveJudgeInputChannels(
+    { autoScratch: true, scratchChannels: new Set(['16', '26']), autoScratchChannels: new Set(['16']) },
+    new Map([['both', ['16', '26']]]),
+    new Set(),
+    ['both'],
+  );
+  expect([...mapped]).toEqual(['26']);
+});
+
+test.each([false, true])(
+  'silent generated mines retain damage while suppressing their explosion sample (%s)',
+  (silent) => {
+    const json = structuredClone(LONG_AND_MINE);
+    json.resources.wav['00'] = 'explosion.wav';
+    const state = createCore(json, 'beatoraja');
+    if (silent) state.config.landmineNotes[0]!.silent = true;
+    stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
+    const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
+    // beatoraja mines are gauge-only: the hit still deals its damage, with or without the sample.
+    const hit = effects.find((effect) => effect.kind === 'trace' && effect.name === 'mine-hit');
+    expect(hit?.kind === 'trace' ? Object.fromEntries(hit.fields).damage : undefined).toBeGreaterThan(0);
+    expect(effects.filter((effect) => effect.kind === 'sound' && effect.source === 'mine-hit')).toHaveLength(
+      silent ? 0 : 1,
+    );
+  },
+);

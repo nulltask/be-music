@@ -13,7 +13,7 @@ import {
   type SelectSceneKit,
   type SelectStartEntry,
 } from '@be-music/player-browser/host';
-import type { BrowseSnapshot, LibraryChart } from '@be-music/player-scene-model';
+import type { BrowseSnapshot, LibraryChart, LibraryEntry } from '@be-music/player-scene-model';
 import { lookupCourseBestRecord } from '../../course-result.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
 import type { InlineSearch } from '../../inline-search.ts';
@@ -22,10 +22,12 @@ import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
 import { copyPlayOptionsToGUI, type GUIPlayOptions, type PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
+import type { ReplaySlotService } from '../../services/replay-slot-service.ts';
+import type { ReplaySlotsPanel } from '../../replay-slots-panel.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
 import type { LR2ThemeService } from '../../services/themes/lr2.ts';
-import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { BeatorajaSkinOptionsPanel } from '../../ui/beatoraja-skin-options.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { FamilyKits } from '../family-kits.ts';
@@ -34,9 +36,9 @@ import type { CourseRoute } from './course.ts';
 
 export interface SelectRouteDeps {
   /** The scene router: the select scene it keeps, shown again on a return, or dropped when another family draws it. */
-  readonly router: Pick<SceneRouter<DemoScene, PlayScene, SelectScene>, 'select' | 'show' | 'dropSelect'>;
+  readonly router: Pick<SceneRouter<PlayerScene, PlayScene, SelectScene>, 'select' | 'show' | 'dropSelect'>;
   /** The page: the shell's `playing` and `empty` classes. */
-  readonly elements: Pick<PlayerWebDemoElements, 'shell'>;
+  readonly elements: Pick<PlayerWebElements, 'shell'>;
   /** The library the screen lists. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The best records the screen shows on its bars. */
@@ -61,7 +63,7 @@ export interface SelectRouteDeps {
   /** The play options in force: every select screen starts from them, and its own edits go back to them. */
   readonly playOptions: Pick<PlayOptionsService, 'current' | 'update'>;
   /** The Debug Menu's state: its play options, which mirror the screen's, and the NONSTOP placement. */
-  readonly guiState: GUIPlayOptions & Pick<DemoGUIState, 'nonstopPlacement'>;
+  readonly guiState: GUIPlayOptions & Pick<PlayerGUIState, 'nonstopPlacement'>;
   readonly audio: AudioService;
   /** The search field, which a skin's search box opens. */
   readonly search: Pick<InlineSearch, 'openFromPointer'>;
@@ -78,6 +80,14 @@ export interface SelectRouteDeps {
   readonly rememberHiSpeed: (value: number, source: 'select') => void;
   /** Shows the decide screen for a chart started on the screen (`DecideRoute`). */
   readonly showDecide: (chartEntry: LibraryChart, overrides: { autoPlay?: boolean }) => Promise<void>;
+  /**
+   * The replay slots: which slots a bar has, and the card that lists them on the skins without a replay-slot UI of
+   * their own (every family but beatoraja).
+   */
+  readonly replaySlots: Pick<ReplaySlotService, 'exists'>;
+  readonly replaySlotsPanel: Pick<ReplaySlotsPanel, 'showSelect'>;
+  /** Plays a bar's replay slot (`ReplayRoute.startReplayFromSlot`); returns whether a play starts. */
+  readonly startReplayFromSlot: (entry: Exclude<LibraryEntry, { kind: 'folder' }>, slot: number) => boolean;
 }
 
 /** The select screen, from its first showing to every return, and the starts made on it. */
@@ -110,8 +120,14 @@ export class SelectRoute {
   private readonly unlockReplayOptions: SelectRouteDeps['unlockReplayOptions'];
   private readonly rememberHiSpeed: SelectRouteDeps['rememberHiSpeed'];
   private readonly showDecide: SelectRouteDeps['showDecide'];
+  private readonly replaySlots: SelectRouteDeps['replaySlots'];
+  private readonly replaySlotsPanel: SelectRouteDeps['replaySlotsPanel'];
+  private readonly startReplayFromSlot: SelectRouteDeps['startReplayFromSlot'];
 
   public constructor(deps: SelectRouteDeps) {
+    this.replaySlots = deps.replaySlots;
+    this.replaySlotsPanel = deps.replaySlotsPanel;
+    this.startReplayFromSlot = deps.startReplayFromSlot;
     this.router = deps.router;
     this.elements = deps.elements;
     this.library = deps.library;
@@ -208,12 +224,20 @@ export class SelectRoute {
         chart: (chartEntry) => this.records.lookupChartBestRecord(chartEntry),
         course: (course) =>
           lookupCourseBestRecord(course, this.records.currentRulesetRecords(), this.guiState.nonstopPlacement),
+        replaySlots: (entry) => this.replaySlots.exists(entry),
       },
       sounds,
       audio: this.audio,
       courseMaker: this.courseMaker.maker,
       on: {
-        start: (entry, { autoPlay }) => this.startFromSelect(entry, autoPlay),
+        start: (entry, { autoPlay, replaySlot }) =>
+          replaySlot !== undefined
+            ? this.startReplayFromSlot(entry, replaySlot)
+            : this.startFromSelect(entry, autoPlay),
+        // The card lists the bar's replays where the skin has no replay-slot UI (a beatoraja skin draws its own).
+        focus: (entry) => {
+          if (kit.family !== 'beatoraja') this.replaySlotsPanel.showSelect(entry);
+        },
         playOptions: (options) => {
           // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Debug Menu
           // state so both surfaces always agree, then repaint the Tweakpane controllers.

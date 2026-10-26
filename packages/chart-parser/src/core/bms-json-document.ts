@@ -436,6 +436,17 @@ function normalizeBMSExtensions(input: unknown): BeMusicJSON['bms'] {
   if (typeof raw.charset === 'string' && raw.charset.length > 0) {
     normalized.charset = raw.charset;
   }
+  if (
+    raw.wavNameBytePrefixes !== null &&
+    typeof raw.wavNameBytePrefixes === 'object' &&
+    !Array.isArray(raw.wavNameBytePrefixes)
+  ) {
+    normalized.wavNameBytePrefixes = Object.fromEntries(
+      Object.entries(raw.wavNameBytePrefixes).flatMap(([path, prefix]) =>
+        typeof prefix === 'string' && /^(?:[0-9a-f]{2}){1,2}$/i.test(prefix) ? [[path, prefix.toLowerCase()]] : [],
+      ),
+    );
+  }
 
   return normalized;
 }

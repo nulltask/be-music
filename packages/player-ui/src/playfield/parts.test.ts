@@ -42,6 +42,37 @@ function frame(overrides: Partial<PartsInput> = {}): PartsInput {
 }
 
 describe('resolvePlayfieldParts', () => {
+  it('places each side on its own raised line and leaves room for the cover below it', () => {
+    const input = frame();
+    input.layout.playfield.sides['1P'] = { left: 20, right: 90, judgementY: 350 };
+    input.layout.playfield.sides['2P'] = { left: 300, right: 340, judgementY: 236 };
+    const parts = resolvePlayfieldParts({
+      ...input,
+      lanes: input.lanes.map((lane) => ({ ...lane, bottom: lane.channel.startsWith('2') ? 236 : 350 })),
+      runtime: {
+        laneCovers: [{ side: '1P', sudden: 0.15, hidden: 0.075, lift: 0.25 }],
+        judgeSides: [
+          { side: '1P', judge: 'GREAT', combo: 5 },
+          { side: '2P', judge: 'GOOD', combo: 3 },
+        ],
+      },
+    });
+    expect(parts.judgeLine.data.runs).toEqual([
+      { left: 20, right: 90, y: 350 },
+      { left: 300, right: 340, y: 236 },
+    ]);
+    expect(parts.judgmentDisplay.data.words.map((word) => word.y)).toEqual([260, 146]);
+    expect(parts.laneCovers.rect).toEqual({ x: 20, y: 8, w: 320, h: 456 });
+    expect(parts.laneCovers.data.areas[0]).toMatchObject({
+      top: 8,
+      bottom: 464,
+      sudden: 0.15,
+      hidden: 0.075,
+      lift: 0.25,
+    });
+    expect(parts.bga.rect).toEqual({ x: 724, y: 8, w: 106, h: 106 });
+  });
+
   it('gives each part only the stage rect it draws in', () => {
     const parts = resolvePlayfieldParts(frame());
     expect(parts.stage).toEqual({ width: 854, height: 480 });

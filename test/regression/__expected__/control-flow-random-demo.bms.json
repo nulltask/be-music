@@ -33,7 +33,13 @@
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBGA": {}
+      "swBGA": {},
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361",
+        "branch.wav": "6272",
+        "wrong.wav": "7772",
+        "right.wav": "7269"
+      }
     },
     "controlFlow": [
       "RANDOM 2",
@@ -167,6 +173,11 @@
           "percent": 75
         },
         "noteCount": 17,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "playFingerprint": "bmfp0:f30389cad8378f705e40c26764d7c49d242464fb75830f1f8fc9e4a3e5695b81",
         "title": "Control Flow Random Demo [A]",
         "artist": "Codex"
@@ -677,6 +688,11 @@
           "percent": 75
         },
         "noteCount": 7,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "playFingerprint": "bmfp0:82ddfb397223652a1dd861c0bc908c7fc6559ddda43c491b0672bc86cd22efe6",
         "title": "Control Flow Random Demo [B]",
         "artist": "Codex"

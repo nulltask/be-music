@@ -1,9 +1,10 @@
+import type { BattleMode, LR2ExtraLevel } from '@be-music/player-engine/lanes';
 /**
  * The options of a play session (`PlaySession`) and of its disposal: everything a host sets for a play, whichever family
  * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
  */
 
-import type { CourseView, PlayResult } from '@be-music/player-scene-model';
+import type { CourseView, PlayResult, HSFix, RandomMode } from '@be-music/player-scene-model';
 import type { GameplayLayoutMode } from '@be-music/player-skin-sdk';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import type {
@@ -13,6 +14,7 @@ import type {
   ReplayPlaybackOptions,
 } from '@be-music/player-engine/replay';
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
+import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
@@ -25,6 +27,8 @@ import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
  * whichever family draws the play.
  */
 export interface PlaySessionOptions {
+  /** Selected source options to preserve in the replay, independently of score handling. */
+  recordingOptionState?: import('@be-music/player-engine/replay').ReplayOptionState;
   /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
   /**
@@ -74,7 +78,7 @@ export interface PlaySessionOptions {
    * scale as {@link initialHiSpeed} — before any HS-FIX rescaling — so a host can remember it and seed the next play
    * with it. Not fired for `PlaySession.setHiSpeed` writes, which come from the host.
    */
-  onHiSpeedChange?: (hiSpeed: number) => void;
+  onHiSpeedChange?: (hiSpeed: number, normalLevel?: number, floating?: boolean) => void;
   /**
    * BGA display mode picked from the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). Defaults to `'ON'` so charts that
    * ship a BGA render it by default. With `'OFF'` the BGA layer stays empty for the entire play; with `'AUTOPLAY_ONLY'`
@@ -94,10 +98,30 @@ export interface PlaySessionOptions {
   scoreGraph?: boolean;
   /**
    * HS-FIX mode picked from `#SRC_BUTTON,type=55`. Applied as a one-time multiplier on `initialHiSpeed` at
-   * chart-prepare time so the user's chosen HS feels consistent across BPM changes. `'CONSTANT'` falls back to
-   * `'AVERAGE'` for now — true per-frame BPM-aware scrolling needs a render-pipeline change that hasn't landed yet.
+   * chart-prepare time so the user's chosen HS feels consistent across BPM changes. LR2 `'CONSTANT'` uses a
+   * separate 150-BPM distance map and pauses on STOP, without applying the ordinary HS-FIX multiplier.
    */
-  hsFix?: 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
+  hsFix?: HSFix;
+  classicHiSpeed?: boolean;
+  floatingHiSpeed?: boolean;
+  fixedDisplayArea?: boolean;
+  normalHiSpeedLevel?: number;
+  judgeTimingMs?: number;
+  visualConstant?: boolean;
+  lift1P?: number;
+  lift2P?: number;
+  liftOn1P?: boolean;
+  liftOn2P?: boolean;
+  noteDurationMs?: number;
+  constantFadeMs?: number;
+  onJudgeTimingChange?: (judgeTimingMs: number) => void;
+  bpmGuide?: boolean;
+  /**
+   * The automatic judge-timing adjustment of a manual play (default `'OFF'`), which moves {@link judgeTimingMs}:
+   * beatoraja's calibration or LR2's ON / SILENT. LR2's SILENT also loads no keysounds, BGM or BGA and hides the judge
+   * display; a replay takes that from its own recorded mode and never adjusts.
+   */
+  judgeTimingAutoAdjust?: JudgeTimingAutoAdjust;
   /**
    * HIDDEN / SUDDEN / HID+SUD effect picked from `#SRC_BUTTON,type=50/51`:
    *
@@ -132,6 +156,30 @@ export interface PlaySessionOptions {
    * switches HIDDEN+ and J / K move it. The beatoraja play screen's keys; off by default.
    */
   coverKeys?: boolean;
+  /** beatoraja's note-selection algorithm. */
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** beatoraja CUSTOM JUDGE rates; absent while the option is off. */
+  customJudge?: import('@be-music/player-engine/ruleset').BeatorajaCustomJudge;
+  longNoteModifier?: import('@be-music/player-scene-model').PlayOptions['longNoteModifier'];
+  longNoteRate?: number;
+  sevenToNinePattern?: import('@be-music/player-engine/lanes').SevenToNinePattern;
+  sevenToNineType?: import('@be-music/player-engine/lanes').SevenToNineType;
+  battleMode?: BattleMode;
+  dBattleScratch?: boolean;
+  /** beatoraja PRACTICE range and rules (`PlayerOptions.practice`); set with `practice` so nothing is saved. */
+  practiceRange?: import('@be-music/player-engine').PlayerOptions['practice'];
+  /** beatoraja LN MODE for charts whose long-note mode is undefined. */
+  longNoteMode?: 'LN' | 'CN' | 'HCN';
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
+  mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];
+  scrollModifier?: import('@be-music/player-scene-model').PlayOptions['scrollModifier'];
+  scrollSection?: number;
+  scrollRate?: number;
+  gaugeAutoShift?: import('@be-music/player-scene-model').PlayOptions['gaugeAutoShift'];
+  bottomShiftableGauge?: import('@be-music/player-scene-model').PlayOptions['bottomShiftableGauge'];
   /**
    * 1P side auto-scratch flag — when true, the scratch lane (channel 16) auto-judges as PERFECT at every note's
    * scheduled time even when {@link autoPlay} is off. The player only has to play the keys.
@@ -147,11 +195,16 @@ export interface PlaySessionOptions {
   /**
    * Note-arrangement mode for the 1P keyboard lanes (`#SRC_BUTTON,type=42`). Applied at chart-prepare time so the
    * shuffle is consistent across the play session — pressing F5 (restart) reuses the same `random1P` value but draws a
-   * fresh permutation. SCATTER is a legacy value; new requests are rejected until it is fully implemented.
+   * fresh permutation. LR2 SCATTER avoids preceding-row destinations while respecting active long notes.
    */
-  random1P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  hRandomThresholdBPM?: number;
+  randomSeed1P?: string;
+  randomSeed2P?: string;
+  randomFixedLane1P?: number;
+  randomFixedLane2P?: number;
+  random1P?: RandomMode;
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
-  random2P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  random2P?: RandomMode;
   /**
    * Replay playback: a recorded replay to re-drive instead of live keyboard input. The chart prepare skips the
    * usual DP-flip / lane-shuffle passes and re-applies the RECORDED arrangement (`applyReplayArrangement`), the
@@ -162,6 +215,8 @@ export interface PlaySessionOptions {
    * different chart file).
    */
   replay?: BeMusicReplay;
+  /** Reuse the resolved chart layout while playing fresh input and recording a new replay. */
+  fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
   /**
    * Which of the view a {@link replay} recorded (`play.view` / `play.viewChanges`) it shows over the viewer's own
    * settings: the hi-speed, SUDDEN+ / HIDDEN+, the lift (this scene has none to show) and the tempo. Defaults to all
@@ -184,10 +239,14 @@ export interface PlaySessionOptions {
   replayRecorder?: ReplayRecordingOptions['recorder'];
   /**
    * 1P gauge variant (`#SRC_BUTTON,type=40`). Selects the ruleset's gauge (the engine resolves the curve) and drives
-   * the gauge-on-red-branch op flags (43 / 45). 2P-side gauge isn't yet separately wired — the engine
-   * consumes the 1P value and applies it to the single shared gauge.
+   * the gauge-on-red-branch op flags (43 / 45).
    */
   gauge?: GaugeType;
+  /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`). */
+  gauge2P?: GaugeType;
+  /** That-Which-Must-Not-Be-Named M-RAN per player: MIRROR after a RANDOM-type arrangement in two-player play. */
+  mRan1P?: boolean;
+  mRan2P?: boolean;
   /**
    * The play is one stage of a course (`PlayerOptions.course`): it runs on the ruleset's course gauge, from the state the
    * previous stage left. Recorded into the replay, which then replays on its own.
@@ -242,7 +301,7 @@ export interface PlaySessionOptions {
    * - `'split'` (default) — separate compressors on the key / BGM buses plus a master limiter; key bus tuned
    *   aggressively for transient peaks, BGM bus tuned for musical glue, master for clip protection. Prevents BGM
    *   ducking under dense input bursts (a known failure mode of the legacy single-bus compressor).
-   * - `'legacy'` — original single-compressor topology, kept for A/B comparison via the demo's `?compressor=legacy` URL
+   * - `'legacy'` — original single-compressor topology, kept for A/B comparison via the player's `?compressor=legacy` URL
    *   flag so behavior can be diff-tested directly.
    *
    * `'off'` is reachable via `audioCompressor: false` rather than being a valid value here — `audioCompressor` is the

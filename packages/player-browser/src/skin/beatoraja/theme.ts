@@ -180,6 +180,10 @@ export interface BeatorajaThemeBGM {
   courseClear?: Uint8Array;
   /** Course-result jingle for a failed course — `course_fail.wav`, falling back to {@link fail}. */
   courseFail?: Uint8Array;
+  /** Played as a result screen starts to fade out, stopping its jingle — `resultclose.wav` (`RESULT_CLOSE`). */
+  resultClose?: Uint8Array;
+  /** Played as a course result starts to fade out — `course_close.wav` (`COURSE_CLOSE`), falling back to {@link resultClose}. */
+  courseClose?: Uint8Array;
 }
 
 /**

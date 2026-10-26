@@ -138,3 +138,79 @@ describe('resolveCourseStagePlaySettings', () => {
     expect(resolveCourseStagePlaySettings(free, picks)).toEqual(picks);
   });
 });
+
+test('grade_random keeps R-RANDOM while grade and grade_mirror constrain it', () => {
+  const picked = { random1P: 'R-RANDOM', random2P: 'R-RANDOM', dpFlip: true } as const;
+  expect(resolveCourseLaneOptions(['grade_random'], picked)).toEqual(picked);
+  for (const constraint of ['grade', 'grade_mirror'] as const)
+    expect(resolveCourseLaneOptions([constraint], picked)).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+});
+
+test('grade_random permits SPIRAL at source option index 5', () => {
+  const picked = { random1P: 'SPIRAL', random2P: 'SPIRAL', dpFlip: false } as const;
+  expect(resolveCourseLaneOptions(['grade_random'], picked)).toEqual(picked);
+  expect(resolveCourseLaneOptions(['grade'], picked)).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+});
+
+test('grade_random excludes ALL-SCR and H-RANDOM at source option indices above 5', () => {
+  expect(
+    resolveCourseLaneOptions(['grade_random'], { random1P: 'ALL-SCR', random2P: 'H-RANDOM', dpFlip: true }),
+  ).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: true });
+});
+
+test('grade_random excludes RANDOM-EX', () => {
+  expect(resolveCourseLaneOptions(['grade_random'], { random1P: 'RANDOM-EX', random2P: 'OFF', dpFlip: false })).toEqual(
+    { random1P: 'OFF', random2P: 'OFF', dpFlip: false },
+  );
+});
+
+test('grade_random excludes S-RANDOM-EX', () => {
+  expect(
+    resolveCourseLaneOptions(['grade_random'], { random1P: 'S-RANDOM-EX', random2P: 'OFF', dpFlip: false }),
+  ).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+});
+
+test('course constraints preserve the separately selected SCATTER modes only when unconstrained', () => {
+  const picked = { random1P: 'SCATTER', random2P: 'SCATTER-CORRECTED', dpFlip: false } as const;
+  expect(resolveCourseLaneOptions([], picked)).toEqual(picked);
+  expect(resolveCourseLaneOptions(['grade_random'], picked)).toEqual({
+    random1P: 'OFF',
+    random2P: 'OFF',
+    dpFlip: false,
+  });
+});
+
+test('LR2 grade courses retain P.ATTACK', () => {
+  expect(
+    resolveLR2GradeCoursePlaySettings(
+      { kind: 'grade', source: { format: 'lr2crs', type: 2, header: '', hash: MD5_A } },
+      {
+        gauge: 'P-ATTACK',
+        hiddenSudden1P: 'OFF',
+        hiddenSudden2P: 'OFF',
+        autoScratch1P: false,
+        autoScratch2P: false,
+        dpFlip: false,
+        tempo: 1,
+      },
+    ),
+  ).toMatchObject({ gauge: 'P-ATTACK' });
+});
+
+test('LR2 grade courses reset G.ATTACK to GROOVE and expert courses retain it', () => {
+  const definition = {
+    kind: 'grade' as const,
+    source: { format: 'lr2crs' as const, type: 2, header: '', hash: MD5_A },
+  };
+  const settings = {
+    gauge: 'G-ATTACK' as const,
+    hiddenSudden1P: 'OFF' as const,
+    hiddenSudden2P: 'OFF' as const,
+    autoScratch1P: false,
+    autoScratch2P: false,
+    dpFlip: false,
+    tempo: 1,
+  };
+  expect(resolveLR2GradeCoursePlaySettings(definition, settings).gauge).toBe('GROOVE');
+  expect(resolveLR2GradeCoursePlaySettings({ ...definition, kind: 'expert' }, settings).gauge).toBe('G-ATTACK');
+});

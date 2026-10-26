@@ -1,14 +1,14 @@
 import { plainSkin, synesthesiaSkin } from '@be-music/player-browser/skin';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import type { DemoGUIState } from '../../types.ts';
+import type { PlayerGUIState } from '../../types.ts';
 import { BE_MUSIC_SKINS } from '../built-in-skins.ts';
 import { BuiltInThemeService, type BuiltInThemeServiceOptions } from './built-in.ts';
 
-function harness(state: Partial<Pick<DemoGUIState, 'builtInSkin' | 'skinEffects'>> = {}): {
+function harness(state: Partial<Pick<PlayerGUIState, 'builtInSkin' | 'skinEffects'>> = {}): {
   service: BuiltInThemeService;
   options: BuiltInThemeServiceOptions;
-  guiState: Pick<DemoGUIState, 'builtInSkin' | 'skinEffects'>;
+  guiState: Pick<PlayerGUIState, 'builtInSkin' | 'skinEffects'>;
 } {
   const guiState = { builtInSkin: synesthesiaSkin.id, skinEffects: 'full' as const, ...state };
   const options: BuiltInThemeServiceOptions = { guiState, setStatus: vi.fn(), handleBuiltInSkinChange: vi.fn() };

@@ -41,7 +41,10 @@
       "swBGA": {},
       "player": 1,
       "lnType": 1,
-      "lnMode": 1
+      "lnMode": 1,
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -129,6 +132,11 @@
           "percent": 75
         },
         "noteCount": 12,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:da7eb6342493a5ef5f6505d205679846d7afe5f859f7c47d13362c2060da39d2",
         "playFingerprint": "bmfp0:da7eb6342493a5ef5f6505d205679846d7afe5f859f7c47d13362c2060da39d2",
         "title": "LN Mode 1 Test (LN)",

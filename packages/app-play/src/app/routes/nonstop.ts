@@ -6,7 +6,7 @@
 import { resolveChartSource, type ChartFileHashes } from '@be-music/player-browser/collection';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import { buildNonstopCourseReplay } from '@be-music/player-engine/course';
-import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
+import type { BeMusicCourseReplay, BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import {
   resolveCourseView,
   type CourseView,
@@ -23,14 +23,18 @@ import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { ReplayAutoSave } from '../../services/replays.ts';
 import type { RecordsService } from '../../services/records.ts';
+import type { ResultReplaySlots } from '../../services/replay-slot-service.ts';
+import type { ResultRoute } from './result.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
-import type { DemoGUIState } from '../../types.ts';
+import type { PlayerGUIState } from '../../types.ts';
 import type { FamilyKits } from '../family-kits.ts';
 
 /** A NONSTOP course being played as its stitched chart. */
 export interface NonstopPlay {
   course: LibraryCourse;
   prepared: PreparedNonstopPlay;
+  /** Set when the run plays a NONSTOP course replay back: its stitched replay plays, and its course result shows. */
+  replay?: BeMusicCourseReplay;
 }
 
 export interface NonstopRouteDeps {
@@ -41,7 +45,7 @@ export interface NonstopRouteDeps {
   /** The stages' chart hashes, which their cut-out replays record, and the course's best record. */
   readonly records: Pick<RecordsService, 'resolveChartHashes' | 'recordCourseResult'>;
   /** Debug Menu → Course → NONSTOP placement. */
-  readonly guiState: Pick<DemoGUIState, 'nonstopPlacement'>;
+  readonly guiState: Pick<PlayerGUIState, 'nonstopPlacement'>;
   /** The course replay's auto-save, by the setting latched at the play's start. */
   readonly replayAutoSave: Pick<ReplayAutoSave, 'saveCourse'>;
   /** Ranks the NONSTOP run as one course run. */
@@ -60,16 +64,21 @@ export interface NonstopRouteDeps {
     overrides: { autoPlay?: boolean },
     then: { start: () => Promise<void> },
   ) => Promise<void>;
-  /** Plays the stitched chart, with the course's AUTO when it was started with one. */
+  /** Plays the stitched chart, with the course's AUTO when it was started with one, or a run's recorded replay. */
   readonly playChart: (
     chartEntry: LibraryChart,
-    overrides: { nonstop: NonstopPlay; autoPlay?: boolean },
+    overrides: { nonstop: NonstopPlay; autoPlay?: boolean; replay?: BeMusicReplay },
   ) => Promise<void>;
   /**
    * Shows the result on the LR2 or built-in result screen: the run's (`mode.nonstop`), or the play's own when the
    * stitched play left no course log.
    */
-  readonly showResult: (data: PlayResult, mode?: { nonstop: { info: CourseView; retry: () => void } }) => Promise<void>;
+  readonly showResult: (
+    data: PlayResult,
+    mode?: { nonstop: { info: CourseView; retry: () => void }; replaySlots?: ResultReplaySlots },
+  ) => Promise<void>;
+  /** The run's replay slots (`ResultRoute.courseReplaySlots`). */
+  readonly courseReplaySlots: ResultRoute['courseReplaySlots'];
   /** Shows the run's result on the beatoraja theme's result skin; `false` when the theme has none or it failed to load. */
   readonly showBeatorajaResult: (
     data: PlayResult,
@@ -78,6 +87,7 @@ export interface NonstopRouteDeps {
       course: { info: CourseView };
       nonstopRetry: () => void;
       playChart?: ResolvedPlayChart['chart'];
+      replaySlots?: ResultReplaySlots;
     },
   ) => Promise<boolean>;
   /** Re-enables the options a play latched, once its result shows. */
@@ -100,6 +110,7 @@ export class NonstopRoute {
   private readonly showDecide: NonstopRouteDeps['showDecide'];
   private readonly playChart: NonstopRouteDeps['playChart'];
   private readonly showResult: NonstopRouteDeps['showResult'];
+  private readonly courseReplaySlots: NonstopRouteDeps['courseReplaySlots'];
   private readonly showBeatorajaResult: NonstopRouteDeps['showBeatorajaResult'];
   private readonly unlockReplayOptions: NonstopRouteDeps['unlockReplayOptions'];
 
@@ -118,6 +129,7 @@ export class NonstopRoute {
     this.showDecide = deps.showDecide;
     this.playChart = deps.playChart;
     this.showResult = deps.showResult;
+    this.courseReplaySlots = deps.courseReplaySlots;
     this.showBeatorajaResult = deps.showBeatorajaResult;
     this.unlockReplayOptions = deps.unlockReplayOptions;
   }
@@ -126,8 +138,19 @@ export class NonstopRoute {
    * Starts a NONSTOP course: its stages are stitched into one chart (`prepareNonstopPlay`, on the shared NONSTOP
    * pipeline) played from their own files, as LR2 plays a NONSTOP course in one go. Quick retry stitches and plays it
    * again.
+   *
+   * With `replay`, a NONSTOP course replay plays back as LR2 replays a NONSTOP run, as one chart: the course is stitched
+   * as the run recorded it (its placement, stitching rules and each stage's draws) and its stitched replay plays.
    */
-  public async startNonstopCourse(course: LibraryCourse, options: { decide?: boolean } = {}): Promise<void> {
+  public async startNonstopCourse(
+    course: LibraryCourse,
+    options: { decide?: boolean; replay?: BeMusicCourseReplay } = {},
+  ): Promise<void> {
+    const run = options.replay?.nonstop;
+    if (options.replay !== undefined && run === undefined) {
+      this.setStatus(`${course.definition.name}: the course replay has no NONSTOP run to play`);
+      return;
+    }
     const hashes = new Map<string, ChartFileHashes>();
     for (const stage of course.stages) {
       if (stage.chart === undefined) continue;
@@ -137,7 +160,13 @@ export class NonstopRoute {
     const prepared = prepareNonstopPlay(course, {
       sourceOf: (chartEntry) => resolveChartSource(this.library.collection, chartEntry),
       hashesOf: (chartEntry) => hashes.get(chartEntry.id),
-      placement: this.guiState.nonstopPlacement,
+      ...(run !== undefined
+        ? {
+            placement: run.placement,
+            stitch: run.stitch ?? 1,
+            stageDraws: run.stages.map((stage) => stage.randomDraws),
+          }
+        : { placement: this.guiState.nonstopPlacement }),
     });
     if (!prepared.ok) {
       this.setStatus(describeNonstopPrepareFailure(course.definition.name, prepared));
@@ -152,10 +181,16 @@ export class NonstopRoute {
       ],
     };
     const play = () =>
-      this.playChart(prepared.prepared.chart, {
-        nonstop: { course, prepared: prepared.prepared },
-        ...(this.courses.autoPlay !== undefined ? { autoPlay: this.courses.autoPlay } : {}),
-      });
+      run !== undefined
+        ? this.playChart(prepared.prepared.chart, {
+            nonstop: { course, prepared: prepared.prepared, replay: options.replay! },
+            replay: run.replay,
+            autoPlay: run.replay.play.mode === 'auto',
+          })
+        : this.playChart(prepared.prepared.chart, {
+            nonstop: { course, prepared: prepared.prepared },
+            ...(this.courses.autoPlay !== undefined ? { autoPlay: this.courses.autoPlay } : {}),
+          });
     // The decide screen names the course (the stitched song's title); a quick retry skips it, as LR2's does.
     if (options.decide === true) {
       await this.showDecide(prepared.prepared.chart, {}, { start: play });
@@ -176,6 +211,10 @@ export class NonstopRoute {
     resolved?: ResolvedPlayChart,
   ): Promise<void> {
     this.testHook?.recordReplay(replay);
+    if (nonstop.replay !== undefined && fallback?.practice !== true) {
+      await this.showNonstopReplayResult(nonstop, nonstop.replay, fallback, resolved);
+      return;
+    }
     if (fallback?.practice) {
       const info = resolveCourseView(nonstop.course);
       const retry = (): void => void this.startNonstopCourse(nonstop.course);
@@ -208,12 +247,17 @@ export class NonstopRoute {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
-    this.records.recordCourseResult(
-      resolveCourseBestRecordUpdate(
-        courseLog,
-        native,
-        courseBestRecordKey(nonstop.course, nonstop.prepared.stitched.placement),
-      ),
+    const update = resolveCourseBestRecordUpdate(
+      courseLog,
+      native,
+      courseBestRecordKey(nonstop.course, nonstop.prepared.stitched.placement),
+    );
+    const kept = this.records.recordCourseResult(update);
+    // Saved into the course's replay slots only when the run kept a record, as beatoraja's `CourseResult` does.
+    const replaySlots = this.courseReplaySlots(
+      courseLog,
+      native,
+      update !== undefined && kept !== undefined ? { play: update.play, previous: kept.previous } : undefined,
     );
     this.replayAutoSave.saveCourse(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
@@ -226,6 +270,43 @@ export class NonstopRoute {
     const result = buildCourseResultData(nonstop.course, native, courseLog, fallback);
     const info = resolveCourseView(nonstop.course);
     const retry = (): void => void this.startNonstopCourse(nonstop.course);
+    if (pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'result') === 'beatoraja') {
+      const mounted = await this.showBeatorajaResult(result, {
+        run: 'nonstop',
+        course: { info },
+        nonstopRetry: retry,
+        ...(resolved !== undefined ? { playChart: resolved.chart } : {}),
+        replaySlots,
+      });
+      if (mounted) {
+        this.unlockReplayOptions();
+        return;
+      }
+    }
+    await this.showResult(result, { nonstop: { info, retry }, replaySlots });
+  }
+
+  /**
+   * The course result of a NONSTOP course replay played back: the run it recorded, shown as the live run's is, with
+   * its replay flag on. Nothing is kept: no course record, no saved replay, no Leaderboard run. R plays it again.
+   */
+  private async showNonstopReplayResult(
+    nonstop: NonstopPlay,
+    courseLog: BeMusicCourseReplay,
+    fallback?: PlayResult,
+    resolved?: ResolvedPlayChart,
+  ): Promise<void> {
+    const native = courseLog.results?.native;
+    if (native === undefined) {
+      await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
+      return;
+    }
+    const result: PlayResult = {
+      ...buildCourseResultData(nonstop.course, native, courseLog, fallback),
+      fromReplay: true,
+    };
+    const info = resolveCourseView(nonstop.course);
+    const retry = (): void => void this.startNonstopCourse(nonstop.course, { replay: courseLog });
     if (pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'result') === 'beatoraja') {
       const mounted = await this.showBeatorajaResult(result, {
         run: 'nonstop',

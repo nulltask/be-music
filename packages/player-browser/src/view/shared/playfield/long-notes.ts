@@ -22,6 +22,7 @@ export function renderLongNote(
   yStart: number,
   yEnd: number,
   drawBottom: number,
+  visibilityAlpha = 1,
 ): void {
   const channel = note.channel;
   const state = ctx.play.longNotes.stateOf(channel, note.beat, note.judged);
@@ -54,6 +55,7 @@ export function renderLongNote(
     const binding = ctx.skinBinding;
     if (binding) {
       binding.addLongNote({
+        ...(visibilityAlpha !== 1 ? { alpha: visibilityAlpha } : {}),
         kind,
         x: lane.x,
         w: lane.w,

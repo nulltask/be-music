@@ -2,17 +2,18 @@ import type { DecideScene, PlayScene, ResultScene, SelectScene } from '@be-music
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import type { ReplayPlaybackOptions } from '@be-music/player-engine/replay';
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
-import type { BrowseSort, DifficultyFilter, KeysFilter } from '@be-music/player-scene-model';
+import type { BrowseSort, DifficultyFilter, KeysFilter, HSFix, PlayOptions } from '@be-music/player-scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
+import type { ReplayAutoSaveRule } from './services/replay-slots.ts';
 
-/** Every screen the demo shows, each made by its `create*Scene`. */
-export type DemoScene = SelectScene | DecideScene | PlayScene | ResultScene;
+/** Every screen the player shows, each made by its `create*Scene`. */
+export type PlayerScene = SelectScene | DecideScene | PlayScene | ResultScene;
 
 /**
- * DOM handles passed into the `PlayerWebDemoApp` constructor. The lookups happen once at boot in `main.ts`; the app
+ * DOM handles passed into the `PlayerWebApp` constructor. The lookups happen once at boot in `main.ts`; the app
  * stores the references on `this.elements` and reads them throughout the session.
  */
-export interface PlayerWebDemoElements {
+export interface PlayerWebElements {
   stage: HTMLDivElement;
   shell: HTMLDivElement;
   /**
@@ -43,14 +44,14 @@ export interface PlayerWebDemoElements {
 
 /**
  * User-facing skin-family selection. Mirrors the package's {@link SkinFamilyId} plus an extra `'auto'` sentinel that
- * means "let the demo pick automatically based on what's loaded". The auto branch's policy is documented on
- * `PlayerWebDemoApp.pickActiveFamilyForScene`.
+ * means "let the player pick automatically based on what's loaded". The auto branch's policy is documented on
+ * `PlayerWebApp.pickActiveFamilyForScene`.
  */
 export type SkinFamilyOverride = SkinFamilyId | 'auto';
 
 /**
  * The four scene kinds the family-routing helper dispatches over. Used as the `scene` argument of
- * `PlayerWebDemoApp.availableFamiliesForScene` / `PlayerWebDemoApp.pickActiveFamilyForScene` — passing
+ * `PlayerWebApp.availableFamiliesForScene` / `PlayerWebApp.pickActiveFamilyForScene` — passing
  * the kind lets the helpers consult the right per-skin slots (`decideSkin` only for decide, `selectSkin` only for
  * select, etc.) without N copy-pasted callers each computing the predicate locally.
  */
@@ -62,7 +63,7 @@ export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
  * `controller.updateDisplay()` and the GUI reflects the new value. Function members are bound to the host so `this`
  * keeps its meaning when Tweakpane invokes them.
  */
-export interface DemoGUIState extends PlayTempoSettings {
+export interface PlayerGUIState extends PlayTempoSettings {
   autoPlay: boolean;
   /** Id of the be-music skin the default (no-theme) family renders with. Persisted in `localStorage`. */
   builtInSkin: string;
@@ -96,8 +97,7 @@ export interface DemoGUIState extends PlayTempoSettings {
   playInSilentMode: boolean;
   /**
    * When true, the next play scales every decoded sample by one gain so the loudest peak sits near −3 dBFS. Off by
-   * default, and not remembered: a reload plays charts at the level they were authored at. Takes the next play, not
-   * the one already loaded.
+   * default. Remembered with the other Debug Menu settings. Takes the next play, not the one already loaded.
    */
   peakGain: boolean;
   compressor: boolean;
@@ -152,6 +152,15 @@ export interface DemoGUIState extends PlayTempoSettings {
    */
   autoSaveReplay: boolean;
   /**
+   * Each replay slot's auto-save rule (beatoraja's `autosavereplay`), applied as a result opens against the best record
+   * before the play (`DEFAULT_REPLAY_AUTO_SAVE_RULES` until the player picks others); `never` leaves the slot to be
+   * saved by hand.
+   */
+  replaySlotAutoSave1: ReplayAutoSaveRule;
+  replaySlotAutoSave2: ReplayAutoSaveRule;
+  replaySlotAutoSave3: ReplayAutoSaveRule;
+  replaySlotAutoSave4: ReplayAutoSaveRule;
+  /**
    * In a course, go straight on to the next stage instead of showing each stage's result (the course result still
    * shows at the end). False (the default) shows every stage's result, as LR2 and beatoraja do.
    */
@@ -186,15 +195,78 @@ export interface DemoGUIState extends PlayTempoSettings {
    * reloads.
    */
   hiSpeed: number;
+  hsFix: HSFix;
+  displayAreaInfo: PlayOptions['displayAreaInfo'];
+  hiddenSudden1P: PlayOptions['hiddenSudden1P'];
+  hiddenSudden2P: PlayOptions['hiddenSudden2P'];
+  laneCover: PlayOptions['laneCover'];
+  shutter: PlayOptions['shutter'];
   /** Gauge variant for the next play. Two-way synced with the LR2 select scene's PLAY OPTION panel. */
   gauge: GaugeType;
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
-  random1P: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  hRandomThresholdBPM: number;
+  randomSeed1P: string;
+  randomSeed2P: string;
+  randomFixedLane1P: number;
+  randomFixedLane2P: number;
+  random1P: PlayOptions['random1P'];
   /** 2P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
-  random2P: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  random2P: PlayOptions['random1P'];
   /** DP FLIP for the next play. Two-way synced with the LR2 select panel. */
   dpFlip: boolean;
   /** 1P auto scratch for the next play. Two-way synced with the LR2 select panel. */
+  classicHiSpeed: boolean;
+  floatingHiSpeed: boolean;
+  fixedDisplayArea: boolean;
+  normalHiSpeedLevel: number;
+  judgeTimingMs: number;
+  visualConstant: boolean;
+  lift1P: number;
+  lift2P: number;
+  liftOn1P: boolean;
+  liftOn2P: boolean;
+  noteDurationMs: number;
+  constantFadeMs: number;
+  bpmGuide: boolean;
+  bpmChangeWarning: boolean;
+  judgeTimingAutoAdjust: PlayOptions['judgeTimingAutoAdjust'];
+  judgeAlgorithm: PlayOptions['judgeAlgorithm'];
+  longNoteModifier: PlayOptions['longNoteModifier'];
+  longNoteRate: number;
+  extraNoteDepth: number;
+  extraNoteScratch: boolean;
+  sevenToNinePattern: PlayOptions['sevenToNinePattern'];
+  sevenToNineType: PlayOptions['sevenToNineType'];
+  battleMode: PlayOptions['battleMode'];
+  dBattleScratch: boolean;
+  gauge2P: PlayOptions['gauge2P'];
+  mRan1P: boolean;
+  mRan2P: boolean;
+  longNoteMode: PlayOptions['longNoteMode'];
+  customJudge: boolean;
+  practice: boolean;
+  practiceStartMs: number;
+  practiceEndMs: number;
+  practiceGauge: PlayOptions['practiceGauge'];
+  practiceGaugeCategory: PlayOptions['practiceGaugeCategory'];
+  practiceStartGauge: number;
+  practiceJudgeRank: number;
+  practiceTotal: number;
+  customJudgeKeyPerfectGreat: number;
+  customJudgeKeyGreat: number;
+  customJudgeKeyGood: number;
+  customJudgeScratchPerfectGreat: number;
+  customJudgeScratchGreat: number;
+  customJudgeScratchGood: number;
+  customJudgeLongNoteMargin: number;
+  lr2ExtraMode: boolean;
+  lr2ExtraLevel: PlayOptions['lr2ExtraLevel'];
+  mineModifier: PlayOptions['mineModifier'];
+  scrollModifier: PlayOptions['scrollModifier'];
+  scrollSection: number;
+  scrollRate: number;
+  gaugeAutoShift: PlayOptions['gaugeAutoShift'];
+  bottomShiftableGauge: PlayOptions['bottomShiftableGauge'];
   autoScratch1P: boolean;
   /** 2P auto scratch for the next play. Two-way synced with the LR2 select panel. */
   autoScratch2P: boolean;
@@ -214,7 +286,7 @@ export interface DemoGUIState extends PlayTempoSettings {
    *
    * The dropdown rebuilds its option list whenever a theme load completes so `'lr2'` / `'beatoraja'` only show
    * up when the corresponding theme is present. When the user's pick becomes unavailable mid-session (e.g.
-   * they had LR2 selected then dropped a beatoraja-only theme that wiped the LR2 state), `PlayerWebDemoApp.rebuildSkinFamilyPicker`
+   * they had LR2 selected then dropped a beatoraja-only theme that wiped the LR2 state), `PlayerWebApp.rebuildSkinFamilyPicker`
    * silently resets to `'auto'` so the GUI never displays an unhonorable value.
    */
   skinFamilyOverride: SkinFamilyOverride;

@@ -6,7 +6,7 @@ import type { SkinFamilyOverride, SkinFamilySceneKind } from './types.ts';
 import { canPlayChartBeatoraja } from './chart-shape.ts';
 
 /**
- * Read-only state snapshot the family-dispatch helpers operate on. The demo's `FamilyKits` (`app/family-kits.ts`) builds
+ * Read-only state snapshot the family-dispatch helpers operate on. The player's `FamilyKits` (`app/family-kits.ts`) builds
  * one of these from the theme services (see its `familyDispatchState()`) — these functions stay pure and easy to
  * unit-test in isolation.
  */

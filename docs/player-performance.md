@@ -20,7 +20,7 @@ Install workspace dependencies and Playwright Chromium. Set `PERF_MODERN_CHIC` t
 PERF_OUTPUT=tmp/remaining-work/performance/current pnpm exec playwright test -c scripts/performance/browser.config.ts
 ```
 
-The harness builds its own demo with source maps and serves it on a free local port. It writes fixtures to a temporary directory and removes them afterward. It leaves existing development servers and browser tabs untouched. To capture a subset, set `PERF_FAMILIES=built-in,native,lr2,beatoraja` to the desired comma-separated families; a subset omits the collection scenarios.
+The harness builds its own player with source maps and serves it on a free local port. It writes fixtures to a temporary directory and removes them afterward. It leaves existing development servers and browser tabs untouched. To capture a subset, set `PERF_FAMILIES=built-in,native,lr2,beatoraja` to the desired comma-separated families; a subset omits the collection scenarios.
 
 Keep separate output directories for each revision. Preserve `packages/app-play/dist/assets/*.map` beside the profiles before another build replaces them. Open the `.cpuprofile` and `.heapprofile` files in browser developer tools to inspect source attribution. `summary.json` contains frame percentiles, slow-frame counts, Performance metrics and browser errors. Screenshots and raw frame intervals are saved per capture. When comparing an older revision that predates the harness, copy `scripts/performance/` into its worktree before running it.
 

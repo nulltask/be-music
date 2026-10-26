@@ -43,7 +43,12 @@
       "swBGA": {},
       "player": 1,
       "lnType": 1,
-      "lnMode": 1
+      "lnMode": 1,
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361",
+        "branch.wav": "6272",
+        "right.wav": "7269"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -161,6 +166,11 @@
           "percent": 75
         },
         "noteCount": 25,
+        "headerBPM": 140,
+        "bpmRange": {
+          "min": 140,
+          "max": 140
+        },
         "chartFingerprint": "bmfp0:45034647642b7e06f1728953fa97583debfc304e75a9b4b3734057a66a78d60f",
         "playFingerprint": "bmfp0:45034647642b7e06f1728953fa97583debfc304e75a9b4b3734057a66a78d60f",
         "title": "7 KEY Long Note (BML)",

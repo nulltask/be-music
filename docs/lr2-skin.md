@@ -22,6 +22,9 @@ Play skins are grouped by variant so the browser player can choose the layout th
 - `9`
 - `10`
 - `14`
+- `7-battle` / `5-battle` (LR2's BATTLE play skins, `#INFORMATION` types 12 / 13)
+
+A battle mode plays on the converted chart's skin (`pickLR2PlaySkinVariant` with the battle mode): a two-player BATTLE of a 5/7KEY chart on the BATTLE play skin (a 5KEY BATTLE takes the 7KEY one, as LR2 does), or on a DP skin when the theme has none; D-BATTLE and SP TO DP on the doubled chart's DP skin, and SP TO DP on a DP or 9KEY chart on the merged chart's SP skin. A BATTLE play skin is loaded only from a theme that declares one, and never stands in for another key mode. LR2's 9KEY BATTLE skin (type 14) is not loaded: LR2 offers no 9KEY BATTLE.
 
 LR2 never shipped keyboard-mode play skins, so `24` / `48` KEY charts borrow a `7` / `14` play skin (`PLAY_SKIN_FALLBACKS` in `play-skin.ts`): the skin supplies the frame, gauge, and judge graphics, and the lanes fall back to the host's playfield.
 
@@ -32,7 +35,7 @@ Consumers read only the fields that make sense for their scene.
 
 The browser gameplay view uses the skin's authored canvas for every layer, including notes, measure lines, BGA, covers and effects, and letterboxes that canvas once at the viewport. HD skins no longer pass through a fixed 640×480 gameplay stage. Scroll distance and replay-visible time use the same canvas scale.
 
-`#RESOLUTION,0` / `1` / `2` / `3` select 640×480 / 1280×720 / 1920×1080 / 3840×2160. The explicit `#RESOLUTION,width,height` extension also works. An empty trailing height still selects the indexed form. Missing or invalid declarations leave coordinate-based detection enabled unless an earlier valid declaration already set the canvas. A skin without either a declaration or HD coordinates retains 640×480. `#INFORMATION` play types are 0=7KEY, 1=5KEY, 2=14KEY, 3=10KEY and 4=9KEY; parse-time key-mode conditions follow the selected skin.
+`#RESOLUTION,0` / `1` / `2` / `3` select 640×480 / 1280×720 / 1920×1080 / 3840×2160. The explicit `#RESOLUTION,width,height` extension also works. An empty trailing height still selects the indexed form. Missing or invalid declarations leave coordinate-based detection enabled unless an earlier valid declaration already set the canvas. A skin without either a declaration or HD coordinates retains 640×480. `#INFORMATION` play types are 0=7KEY, 1=5KEY, 2=14KEY, 3=10KEY, 4=9KEY, 12=7KEY BATTLE and 13=5KEY BATTLE; parse-time key-mode conditions follow the selected skin.
 
 Asset and bitmap-font lookup prefer the longest matching directory suffix, so a standalone `LITONE4/` distribution can retain its original `LR2files/Theme/LITONE4/…` references without confusing Play and Result assets with identical filenames. DXA expansion remains automatic.
 
@@ -166,6 +169,10 @@ The LR2 play view (`view/lr2/play-view.ts` in `@be-music/player-browser`) reads 
 | A long note held on a lane     | the lane's hold timer (70-89), faded out over its span after the release |
 
 The key-on bank (100-119) shows the play session's key beams. The session keeps them by channel, for every family (`keyBeamStartedAt`, `keyBeamFadeStartedAt`), and the LR2 view maps each lit channel onto its key-on timer (`resolveLR2LaneTimer('key-on', …)`). The lane index and the timer ids stay in the LR2 view; the session and the shared playfield go by channel.
+
+The battle options reach the play state through its setup (`options.battleMode`, `lr2ExtraMode`, `gauge2P`, and the lanes' `battleSourceVariant`) and, for a two-player BATTLE, the frame's `secondPlayer` (the 2P player's `PlayState` view and score). The 2P player reads on numbers 120-136 (the 1P player's 100-116 off the 2P score; 108 / 128 are each player's EX score less the other's), ranks 210-217, gauge ranges 250-260 and the 2P groove gauge (index 1, drawn only when there is a 2P player). Ops 10-13 follow the key filter and battle mode as LR2 lights them (10 a double-play filter or D-BATTLE / SP TO DP, 11 and 13 BATTLE, 12 either), EXTRA MODE lights 53 instead of 52, and the key-mode ops 160-164 follow the source chart, not the converted lanes: BATTLE on a 7KEY chart lights 7 KEYS, D-BATTLE and SP TO DP on a 5/7KEY chart light 10 / 14 KEYS beside it (`resolveLR2PlayKeyModeOps`). On the select screen, button 56 cycles BATTLE through OFF, BATTLE, D-BATTLE and SP TO DP (`LR2_BATTLE_CYCLE`), and text 69 labels it as LR2's `optionstr.csv` does (COUPLE on a double-play chart, DP TO SP / 9 TO 7 for SP TO DP there, DISABLE where it does not apply).
+
+The automatic judge timing (see [Play options](play-options.md#judge-timing-and-automatic-adjustment)) follows LR2's select panel: button 74 steps the judge timing by 1 ms, up or down by `plusOnly` or the half clicked, stopping at ±99 ms (`stepLR2JudgeTiming`; a timing the adjustment carried past that range only moves back toward it), button 75 cycles it through OFF, ON and SILENT (`LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE`, beatoraja's calibration starting over at OFF), text 80 labels it OFF, ON or SILENT (beatoraja's as OFF), and number 12 shows the judge timing in milliseconds on the select screen and, as the adjustment moves it, during play (the frame's `judgeTimingMs`). Under SILENT the play screen draws no NOWJUDGE / NOWCOMBO, as LR2 does; LR2's GHOST op 34, lit for SILENT too, is always lit since be-music has no ghost.
 
 ## Parsed directives
 

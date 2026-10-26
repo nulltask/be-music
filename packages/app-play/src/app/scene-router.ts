@@ -1,4 +1,4 @@
-// The web demo's scene router (ADR 0006): the one owner of the scene on stage. Every transition finalizes a recording
+// The web player's scene router (ADR 0006): the one owner of the scene on stage. Every transition finalizes a recording
 // in progress, hands the stage over with one `setScene` (the scene showing exits as the next enters, so the stage never
 // shows an empty frame) and then disposes the scene that went, before the transition resolves. Transitions run one at a
 // time, and a scene built for a navigation that a newer one replaced is disposed instead of shown.

@@ -1,4 +1,4 @@
-// The demo's "Play in silent mode" setting: whether the page asks the platform audio session (`navigator.audioSession`,
+// The player's "Play in silent mode" setting: whether the page asks the platform audio session (`navigator.audioSession`,
 // Safari / iOS) for `'playback'`, so sound plays with the Ring / Silent switch on — at the cost of pausing music
 // playing in other apps. On by default (a rhythm game with no sound is unplayable); turned off it restores the
 // browser's own `'auto'`. Offered on the start card and in the Debug Menu. Also the one-time hint pointing iPhone /
@@ -6,8 +6,8 @@
 
 import { applySilentModePlayback, type SystemAudioSessionHost } from '@be-music/player-browser/audio';
 
-export const PLAY_IN_SILENT_MODE_STORAGE_KEY = 'be-music-demo.play-in-silent-mode';
-export const SILENT_MODE_HINT_SEEN_STORAGE_KEY = 'be-music-demo.silent-mode-hint-seen';
+export const PLAY_IN_SILENT_MODE_STORAGE_KEY = 'be-music.play-in-silent-mode';
+export const SILENT_MODE_HINT_SEEN_STORAGE_KEY = 'be-music.silent-mode-hint-seen';
 
 /** Parses the stored setting: only `'off'` turns it off, anything else (nothing stored, junk) keeps the default on. */
 export function parseStoredPlayInSilentMode(raw: string | null | undefined): boolean {
@@ -18,7 +18,7 @@ export function serializePlayInSilentMode(enabled: boolean): string {
   return enabled ? 'on' : 'off';
 }
 
-/** Storage the demo reads settings from: `localStorage`, or a stand-in in tests. */
+/** Storage the player reads settings from: `localStorage`, or a stand-in in tests. */
 export type SettingStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 function defaultStorage(): SettingStorage | undefined {

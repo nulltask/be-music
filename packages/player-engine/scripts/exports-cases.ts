@@ -78,11 +78,23 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.resolvePlayChart(fixtures.controlFlowJSON, { random: () => 0.42 });
     },
   });
+  define('player-engine.lanes.applySevenToNine', {
+    run: (fixtures) => {
+      const prepared = playerAPI.preparePlaybackChart(resolveChart(fixtures.sampleBmsJSON, { playVariant: '7' }));
+      lanesAPI.applySevenToNine(prepared, { sevenToNinePattern: 3, sevenToNineType: 1 });
+    },
+  });
   define('player-engine.preparePlaybackChart', {
     run: (fixtures) => {
       playerAPI.preparePlaybackChart(
         resolveChart(fixtures.sampleBmsJSON, { chartPath: '.bms', inferBmsLNTypeWhenMissing: true }),
-        { laneModeExtension: '.bms' },
+        { laneModeExtension: '.bms', longNoteModifier: 'REMOVE', scrollModifier: 'REMOVE' },
+      );
+      playerAPI.preparePlaybackChart(
+        resolveChart(fixtures.sampleBmsJSON),
+        { scrollModifier: 'ADD', scrollSection: 1 },
+        0,
+        () => 0.25,
       );
     },
   });
@@ -206,6 +218,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.course.applyCourseLongNoteConstraint', {
     run: () => {
       courseAPI.applyCourseLongNoteConstraint(benchNonstopChart, ['cn']);
+    },
+  });
+  define('player-engine.course.applyUndefinedLongNoteMode', {
+    run: () => {
+      courseAPI.applyUndefinedLongNoteMode(benchNonstopChart, 3);
     },
   });
   define('player-engine.course.resolveCourseStageSettings', {
@@ -476,6 +493,19 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         for (const chartEntry of benchCharts) courseAPI.evaluateCourseChartFilter(benchFilter.filter, chartEntry);
     },
   });
+  define('player-engine.course.beatorajaClearType', {
+    run: () => {
+      courseAPI.beatorajaClearType('HARD');
+    },
+  });
+  define('player-engine.course.createCourseChartScore', {
+    run: () => {
+      courseAPI.createCourseChartScore(
+        { lamp: 'HARD', exScore: 2000, maxCombo: 800, missCount: 4, playCount: 3 },
+        1200,
+      );
+    },
+  });
   define('player-engine.course.selectCourseCharts', {
     run: () => {
       if (benchFilter.ok) courseAPI.selectCourseCharts(benchFilter.query, benchCharts, (chartEntry) => chartEntry);
@@ -536,6 +566,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.checkReplayEligibility(BENCH_REPLAY);
     },
   });
+  define('player-engine.replay.resolveReplaySourceChannel', {
+    run() {
+      replayAPI.resolveReplaySourceChannel({ channel: '15', event: { channel: 'D1' } });
+    },
+  });
   define('player-engine.replay.serializeReplay', {
     run: () => {
       replayAPI.serializeReplay(BENCH_REPLAY);
@@ -573,6 +608,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.resolveRulesetConfig', {
     run: () => {
       replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja');
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'lr2', { selectedGauge: 'P-ATTACK' });
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'lr2', { selectedGauge: 'G-ATTACK' });
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja', {
+        gaugeAutoShift: 'BEST_CLEAR',
+        bottomShiftableGauge: 'EASY',
+      });
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja', {
+        selectedGauge: 'DEATH',
+        gaugeAutoShift: 'SURVIVAL_TO_GROOVE',
+      });
     },
   });
   define('player-engine.replay.resolveLR2DefaultTotal', {
@@ -678,6 +723,22 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.parseCourseReplay(benchCourseText);
     },
   });
+  define('player-engine.replay.listCourseReplayStageCharts', {
+    run: () => {
+      replayAPI.listCourseReplayStageCharts(benchCourseLog);
+    },
+  });
+  const benchCourseReplayStage = replayAPI.listCourseReplayStageCharts(benchCourseLog)[0]!;
+  define('player-engine.replay.matchesCourseReplayStageChart', {
+    run: () => {
+      replayAPI.matchesCourseReplayStageChart(benchCourseReplayStage, { sha256: 'a'.repeat(64), md5: 'b'.repeat(32) });
+    },
+  });
+  define('player-engine.replay.planCourseReplayPlayback', {
+    run: () => {
+      replayAPI.planCourseReplayPlayback(benchCourseLog);
+    },
+  });
   const benchLampScore = { total: 100, perfect: 90, great: 8, good: 2 };
   const benchRecordPlay = { lamp: 'HARD' as const, exScore: 1500, maxCombo: 400, missCount: 12 };
   const benchRecord = { lamp: 'EASY' as const, exScore: 1400, maxCombo: 500, missCount: 20, playCount: 3 };
@@ -705,6 +766,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.records.recordPlayFromResult', {
     run: () => {
       recordsAPI.recordPlayFromResult(benchRecordResult);
+    },
+  });
+  define('player-engine.records.abortedRecordPlayFromResult', {
+    run: () => {
+      recordsAPI.abortedRecordPlayFromResult(benchRecordResult);
     },
   });
   define('player-engine.records.recordPlayFromSummary', {
@@ -752,6 +818,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.courseRunKeepsRecord(benchCourseLog);
     },
   });
+  define('player-engine.ruleset.clampCustomJudgeRate', {
+    run() {
+      rulesetAPI.clampCustomJudgeRate('keyPerfectGreat', 10);
+    },
+  });
+  define('player-engine.ruleset.isCustomJudgeAssist', {
+    run() {
+      rulesetAPI.isCustomJudgeAssist(rulesetAPI.DEFAULT_BEATORAJA_CUSTOM_JUDGE);
+    },
+  });
   define('player-engine.ruleset.isClearLamp', {
     run: () => {
       rulesetAPI.isClearLamp('EX_HARD');
@@ -787,6 +863,12 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.resolveClearLamp({ ruleset: 'beatoraja', cleared: true, gauge: 'HARD', score: benchLampScore });
     },
   });
+  define('player-engine.course.isCourseStageFailed', {
+    run: () => {
+      courseAPI.isCourseStageFailed('lr2', { final: 2 });
+      courseAPI.isCourseStageFailed('beatoraja', { final: 1 });
+    },
+  });
   define('player-engine.ruleset.resolveCourseClearLamp', {
     run: () => {
       rulesetAPI.resolveCourseClearLamp({
@@ -803,6 +885,19 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.resolveMissCount', {
     run: () => {
       rulesetAPI.resolveMissCount({ bad: 3, poor: 5, emptyPoor: 2 }, 10);
+    },
+  });
+  define('player-engine.ruleset.resolveGaugeEndOnFailure', {
+    run() {
+      rulesetAPI.resolveGaugeEndOnFailure('CONTINUE', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('BEST_CLEAR', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('SELECT_TO_UNDER', 'beatoraja');
+    },
+  });
+  define('player-engine.ruleset.resolveGaugeTypes', {
+    run: () => {
+      rulesetAPI.resolveGaugeTypes('beatoraja');
     },
   });
   define('player-engine.ruleset.isGaugeType', {
@@ -853,6 +948,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.resolveRulesetResultLamp', {
     run: () => {
       replayAPI.resolveRulesetResultLamp(benchStageResult, 'lr2');
+    },
+  });
+  define('player-engine.replay.resolveRulesetResultMissCount', {
+    run: () => {
+      replayAPI.resolveRulesetResultMissCount(benchStageResult);
     },
   });
   define('player-engine.replay.resolveCourseReplayFilename', {
@@ -920,6 +1020,28 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         stageChartFingerprints: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c'],
         nonstop: { connections: ['cut'], placement: 'intended' },
       });
+    },
+  });
+  const optionState = { hiSpeed: 2, hsFix: 'STARTBPM', displayAreaInfo: 'ON' };
+  const optionChanges = [{ timeUs: 1_000_000, values: { hiSpeed: 3 } }];
+  define('player-engine.replay.parseReplayOptionState', {
+    run: () => {
+      replayAPI.parseReplayOptionState(optionState);
+    },
+  });
+  define('player-engine.replay.parseReplayOptionChanges', {
+    run: () => {
+      replayAPI.parseReplayOptionChanges(optionChanges);
+    },
+  });
+  define('player-engine.replay.resolveReplayOptionsAt', {
+    run: () => {
+      replayAPI.resolveReplayOptionsAt(optionState, optionChanges, 2_000_000);
+    },
+  });
+  define('player-engine.replay.diffReplayOptions', {
+    run: () => {
+      replayAPI.diffReplayOptions(optionState, { ...optionState, hiSpeed: 3 });
     },
   });
   const benchView = { hiSpeed: 2, hsFix: 'MAIN', covers: [{ side: '1P' as const, sudden: 0.2, hidden: 0, lift: 0.1 }] };
@@ -1107,6 +1229,186 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.resolveWheelLaneDirection('1P', '24');
     },
   });
+  define('player-engine.lanes.clampHRandomThresholdBPM', {
+    run: () => {
+      lanesAPI.clampHRandomThresholdBPM(120);
+    },
+  });
+  define('player-engine.lanes.randomizeHRandomNotes', {
+    run: () => {
+      lanesAPI.randomizeHRandomNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 125 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15'],
+        { random: () => 0.5 },
+      );
+    },
+  });
+  define('player-engine.lanes.randomizeLR2ScatterNotes', {
+    run() {
+      lanesAPI.randomizeLR2ScatterNotes(
+        [
+          { channel: '11', timeMs: 100 },
+          { channel: '11', timeMs: 200 },
+        ],
+        ['11', '12', '13', '14', '15'],
+        { random: () => 0.5 },
+      );
+      for (const correctedNineKey of [false, true]) {
+        lanesAPI.randomizeLR2ScatterNotes(
+          [
+            { channel: '22', timeMs: 100 },
+            { channel: '25', timeMs: 200 },
+          ],
+          ['11', '12', '13', '14', '15', '22', '23', '24', '25'],
+          { random: () => 0.999, correctedNineKey },
+        );
+      }
+    },
+  });
+  define('player-engine.lanes.randomizeLR2ConvergeNotes', {
+    run: () => {
+      lanesAPI.randomizeLR2ConvergeNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 125 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15'],
+        { target: '16', scratch: '16', random: () => 0.5 },
+      );
+    },
+  });
+  define('player-engine.lanes.randomizeAllScratchNotes', {
+    run: () => {
+      lanesAPI.randomizeAllScratchNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 125 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15', '16'],
+        { scratchLanes: ['16'], random: () => 0.5 },
+      );
+    },
+  });
+  define('player-engine.lanes.randomizePMSConvergeNotes', {
+    run: () => {
+      lanesAPI.randomizePMSConvergeNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 125 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15', '16', '17', '18', '19'],
+        { random: () => 0.5 },
+      );
+    },
+  });
+  define('player-engine.lanes.randomizePMSPlayableLanes', {
+    run: () => {
+      lanesAPI.randomizePMSPlayableLanes(
+        [
+          { channel: '11', timeMs: 0 },
+          { channel: '14', timeMs: 0 },
+          { channel: '17', timeMs: 0 },
+        ],
+        ['11', '12', '13', '14', '15', '16', '17', '18', '19'],
+        () => 0.5,
+      );
+    },
+  });
+  define('player-engine.lanes.randomizePMSPlayableNotes', {
+    run: () => {
+      lanesAPI.randomizePMSPlayableNotes(
+        [
+          { channel: '11', timeMs: 0 },
+          { channel: '14', timeMs: 0 },
+          { channel: '17', timeMs: 0 },
+        ],
+        ['11', '12', '13', '14', '15', '16', '17', '18', '19'],
+        { random: () => 0.5 },
+      );
+    },
+  });
+  define('player-engine.lanes.createBeatorajaLaneRandom', {
+    run: () => {
+      lanesAPI.createBeatorajaLaneRandom('9223372036854775807').nextInt!(26);
+    },
+  });
+  define('player-engine.lanes.parseLaneRandomSeed', {
+    run: () => {
+      lanesAPI.parseLaneRandomSeed('9223372036854775807');
+    },
+  });
+  define('player-engine.lanes.drawLaneRandomIndex', {
+    run: () => {
+      lanesAPI.drawLaneRandomIndex(9, () => 0.5);
+    },
+  });
+  define('player-engine.display.adjustBeatorajaJudgeTiming', {
+    run() {
+      displayAPI.adjustBeatorajaJudgeTiming(0, 'GREAT', 45);
+    },
+  });
+  define('player-engine.display.resolveJudgeTimingAutoAdjust', {
+    run() {
+      displayAPI.resolveJudgeTimingAutoAdjust(true);
+    },
+  });
+  define('player-engine.display.isLR2JudgeTimingAutoAdjust', {
+    run() {
+      displayAPI.isLR2JudgeTimingAutoAdjust('LR2-SILENT');
+    },
+  });
+  define('player-engine.lanes.clampScrollSection', {
+    run: () => {
+      lanesAPI.clampScrollSection(4);
+    },
+  });
+  define('player-engine.lanes.clampScrollRate', {
+    run: () => {
+      lanesAPI.clampScrollRate(0.5);
+    },
+  });
+  define('player-engine.lanes.clampExtraNoteDepth', {
+    run() {
+      lanesAPI.clampExtraNoteDepth(4);
+    },
+  });
+  define('player-engine.lanes.clampLongNoteRate', {
+    run() {
+      lanesAPI.clampLongNoteRate(0.5);
+    },
+  });
+  define('player-engine.lanes.addLongNotes', {
+    run(fixtures) {
+      const resolved = resolveChart(fixtures.sampleBmsJSON);
+      const prepared = playerAPI.preparePlaybackChart(resolved);
+      lanesAPI.addLongNotes(resolved, prepared.notes, 'ADD_LN', { random: () => 0 });
+    },
+  });
+  define('player-engine.lanes.prepareMineModifier', {
+    run: (fixtures) => {
+      lanesAPI.prepareMineModifier(resolveChart(fixtures.sampleBmsJSON), 'ADD_RANDOM', { random: () => 0.95 });
+    },
+  });
+  define('player-engine.lanes.randomizeSpiralNotes', {
+    run: () => {
+      lanesAPI.randomizeSpiralNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 500 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15'],
+        () => 0.5,
+      );
+    },
+  });
   define('player-engine.lanes.randomizeSRandomNotes', {
     run: () => {
       for (const ruleset of ['lr2', 'beatoraja'] as const) {
@@ -1135,6 +1437,16 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
     run: () => {
       lanesAPI.isPlayableInputChannel('17');
       lanesAPI.isPlayableInputChannel('01');
+    },
+  });
+  define('player-engine.lanes.resolveAutoScratchSides', {
+    run: () => {
+      lanesAPI.resolveAutoScratchSides({ autoScratch1P: true, autoScratch2P: false });
+    },
+  });
+  define('player-engine.lanes.resolveAutoScratchChannels', {
+    run: () => {
+      lanesAPI.resolveAutoScratchChannels({ autoScratch1P: true }, ['16', '26']);
     },
   });
   define('player-engine.lanes.resolveLaneChannels', {
@@ -1217,6 +1529,17 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
       const mapper = new displayAPI.ScrollDistanceMapper(BENCH_SCROLL_TIMELINE, BENCH_SPEED_TIMELINE);
       mapper.distanceBetween(1, 9);
       mapper.maxBeatWithinDistance(1, 6);
+    },
+  });
+  define('player-engine.display.createLR2ConstantScrollMapper', {
+    run() {
+      const mapper = displayAPI.createLR2ConstantScrollMapper([
+        { beat: 0, bpm: 120 },
+        { beat: 4, bpm: 240 },
+      ]);
+      mapper.distanceBetween(2, 8);
+      mapper.firstBeatBeyondDistance(0, 4);
+      mapper.mirrorBeatAt(4, 8);
     },
   });
   define('player-engine.display.createScrollDistanceMapper', {

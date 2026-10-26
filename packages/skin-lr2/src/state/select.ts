@@ -329,6 +329,8 @@ export type LR2SelectButtonAction =
   | { readonly kind: 'panel'; readonly panel: number }
   /** Step a side's hi-speed; the button's `plusOnly` says which way. */
   | { readonly kind: 'hi-speed'; readonly side: PlaySide }
+  /** Step the judge timing by 1 ms within ±99 (`stepLR2JudgeTiming`), up or down by the half clicked. */
+  | { readonly kind: 'judge-timing' }
   /** Move a play option to its next choice. */
   | { readonly kind: 'cycle-option'; readonly option: LR2CycledOption }
   /** Set the difficulty filter. */
@@ -351,15 +353,18 @@ const CYCLE_BUTTONS: Readonly<Record<number, LR2CycledOption>> = {
   [LR2_BUTTON.EFFECT_1P]: 'hiddenSudden1P',
   [LR2_BUTTON.EFFECT_2P]: 'hiddenSudden2P',
   [LR2_BUTTON.FLIP]: 'dpFlip',
+  [LR2_BUTTON.BATTLE]: 'battleMode',
   [LR2_BUTTON.HS_FIX]: 'hsFix',
   [LR2_BUTTON.SCORE_GRAPH]: 'scoreGraph',
   [LR2_BUTTON.BGA]: 'bga',
   [LR2_BUTTON.BGA_SIZE]: 'bgaSize',
+  [LR2_BUTTON.JUDGE_AUTO_ADJUST]: 'judgeTimingAutoAdjust',
 };
 
 /**
- * What an LR2 select button does (`#SRC_BUTTON` `type`): toggle a panel (1-9), step a hi-speed (57 / 58), cycle a play
- * option (10-12, 40-46, 50, 51, 54, 55, 70, 72, 73), set the difficulty filter (91-96), or play, play with AUTOPLAY,
+ * What an LR2 select button does (`#SRC_BUTTON` `type`): toggle a panel (1-9), step a hi-speed (57 / 58) or the judge
+ * timing (74), cycle a play
+ * option (10-12, 40-46, 50, 51, 54, 55, 70, 72, 73, 75), set the difficulty filter (91-96), or play, play with AUTOPLAY,
  * show the text file, replay, or open the key config or skin select (15, 16, 17, 19, 13, 14). `undefined` for any other
  * button, the course maker's included (`resolveLR2CourseMakerAction`).
  */
@@ -367,6 +372,7 @@ export function resolveLR2SelectButton(type: number): LR2SelectButtonAction | un
   if (type >= LR2_BUTTON.PANEL1 && type <= LR2_BUTTON.PANEL9) return { kind: 'panel', panel: type };
   if (type === LR2_BUTTON.HISPEED_1P) return { kind: 'hi-speed', side: '1P' };
   if (type === LR2_BUTTON.HISPEED_2P) return { kind: 'hi-speed', side: '2P' };
+  if (type === LR2_BUTTON.JUDGE_TIMING) return { kind: 'judge-timing' };
   const option = CYCLE_BUTTONS[type];
   if (option !== undefined) return { kind: 'cycle-option', option };
   const difficulty = LR2_DIFFICULTY_FILTER_BUTTONS[type];

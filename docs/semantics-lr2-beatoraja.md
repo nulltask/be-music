@@ -45,7 +45,7 @@ On top of these, each ruleset has a few fidelity bugs.
 Top risks, most serious first:
 
 1. **Assists and options don't affect lamps, records or eligibility.** LR2 does not save an assisted play at all, or caps its lamp at EASY and updates the lamp only. beatoraja gives (LIGHT) ASSIST and merges only the lamp. be-music merges auto-scratch, SCATTER and HS-FIX CONSTANT plays with full lamp, EX and BP. Local bests are inflated, and the Leaderboard mixes SCATTER and CONSTANT plays into the unassisted boards. (B)
-2. **Single-play BP leaves out unjudged notes.** Both engines add them. With `endOnFailure` on by default, fewest-BP bests and the Leaderboard BP reward dying early. Separately, re-simulating a failed run under another ruleset scores notes the player never got to play. (B, all rulesets)
+2. **Single-play BP left out unjudged notes.** Both engines add them. Fixed in [#584](https://github.com/nulltask/be-music/issues/584): every play now counts them. Separately, re-simulating a failed run under another ruleset scores notes the player never got to play. (B, all rulesets)
 3. **The lamp vocabulary has no LIGHT ASSIST EASY.** beatoraja's ASSIST-EASY gauge clears as LightAssistEasy (id 3, op 1101). be-music records ASSIST_EASY, shows op 1100, and cannot round-trip beatoraja `score.db` lamps. The fix touches the Leaderboard `clearLampRank` storage. (A+B)
 4. **beatoraja-ruleset fidelity bugs.**
    - TOTAL divides by base notes, but beatoraja counts CN/HCN tails, so recovery is up to 2× too fast.
@@ -129,7 +129,7 @@ Most fixes below move a rule into the right box. The assist class and LR2 mine c
 | #   | Difference                                          | Class       | be-music today                                          | Recommendation                                                         |
 | --- | --------------------------------------------------- | ----------- | ------------------------------------------------------- | ---------------------------------------------------------------------- |
 | 1   | Assist/option effect on lamp and record             | B           | Ignored; full merge                                     | Per-ruleset assist-class resolver from logged fields; lamp-only merge  |
-| 2   | BP includes unjudged notes (single play)            | B           | Course only                                             | Fix for all rulesets + Leaderboard migration                           |
+| 2   | BP includes unjudged notes (single play)            | B           | Every play (#584)                                       | Done; stored Leaderboard BP left as it was                             |
 | 3   | Failed run re-simulated under other rulesets        | B           | Ranked under all three                                  | Rank failed survival runs only under the played ruleset (or mark them) |
 | 4   | LIGHT ASSIST EASY lamp                              | A, B        | Missing; ASSIST-EASY gauge → ASSIST_EASY                | Add lamp; append-only rank or migration                                |
 | 5   | LR2 FC before gauge check                           | B           | Per-ruleset precedence (fixed in #591)                  | Per ruleset                                                            |
@@ -355,12 +355,12 @@ Already per ruleset: the windows, LR2's re-judge or empty POOR on a reversal, an
 
 ### BP of a play that ended early
 
-- **LR2:** `SaveResult` adds unjudged notes to BP for single plays and grades ([#L9105-L9113](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9105-L9113)). BP = BAD + POOR, where POOR includes empty POORs and mine hits ([#L1945-L1951](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1945-L1951)).
+- **LR2:** `SaveResult` adds unjudged notes to BP for single plays ([#L9436-L9439](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9436-L9439)) and for expert and grade stages ([#L9111-L9113](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9111-L9113)). Each best (EX score, lamp, combo, BP) updates on its own ([#L9372-L9389](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9372-L9389)), so a failed play can still lower the best BP. BP = BAD + POOR, where POOR includes empty POORs and mine hits ([#L1945-L1951](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1945-L1951)).
 - **beatoraja:** `minbp = BD + PR + MS + (notes − pastNotes)` ([BMSPlayer.java#L909](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L909)).
 - **Kind:** both engines agree; be-music differs.
-- **be-music today:** course stages add unjudged notes ([`records/best-record.ts`](../packages/player-engine/src/records/best-record.ts)); single plays (`recordPlayFromResult`) and the Leaderboard ([`packages/app-leaderboard/src/scores/submit.ts`](../packages/app-leaderboard/src/scores/submit.ts)) do not. With `endOnFailure` on by default, a play that dies early gets a tiny BP.
+- **ESC:** both engines save a single play quit with ESC as a failed play, the notes it never reached in its BP (beatoraja `stopPlay` goes to the failed state and saves with the Failed lamp). beatoraja saves nothing from a play that judged no note (`createScoreData` returns `null`).
+- **be-music today:** fixed in [#584](https://github.com/nulltask/be-music/issues/584). Every play's BP counts the notes it never judged, under every ruleset, That-Which-Must-Not-Be-Named included: local records (`recordPlayFromResult`, `recordPlayFromSummary` in [`records/best-record.ts`](../packages/player-engine/src/records/best-record.ts)), course stages (the same functions) and the Leaderboard (`resolveRulesetResultMissCount` on the simulated result, [`packages/app-leaderboard/src/scores/submit.ts`](../packages/app-leaderboard/src/scores/submit.ts)). A mine POOR, which LR2 counts in POOR, is not taken for a judged note. A single play quit with ESC is saved as FAILED (`abortedRecordPlayFromResult`, nothing when no note was judged) and ranked on the Leaderboard as a failed play. BP stored before the fix, locally and on the Leaderboard, is left as it was.
 - **Impact:** B, all rulesets.
-- **Recommendation:** single-play BP = `resolveMissCount(judge, noteCount − judged)`. Needs a Leaderboard migration, as `0012` was.
 
 ### Re-simulating a failed run under another ruleset
 
@@ -711,11 +711,11 @@ These are already documented in format-compat [§2.6](./format-compat.md#26-mine
 - **LR2:** a course hash string (course header + stage MD5s).
 - **beatoraja:** concatenated stage SHA-256s, plus `mode = lnmode + option*10 + no_speed*100 + judge*1000 + gauge*10000` ([PlayDataAccessor.java#L343-L372](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayDataAccessor.java#L343-L372)).
 - **be-music today:**
-  - The demo keys course records by `stage.sha256 ?? stage.md5` ([`packages/app-play/src/course-result.ts`](../packages/app-play/src/course-result.ts) `courseBestRecordKey`). The same course loaded from `.lr2crs` (MD5 only) and from beatoraja JSON gets **two records**.
+  - The player keys course records by `stage.sha256 ?? stage.md5` ([`packages/app-play/src/course-result.ts`](../packages/app-play/src/course-result.ts) `courseBestRecordKey`). The same course loaded from `.lr2crs` (MD5 only) and from beatoraja JSON gets **two records**.
   - The Leaderboard uses the `bmcourse0` fingerprint.
   - Course constraints, gauges, random courses, carry-in and trophies were covered in [#403](https://github.com/nulltask/be-music/issues/403)–[#410](https://github.com/nulltask/be-music/issues/410) and [#408](https://github.com/nulltask/be-music/issues/408). Of those, the random-course SQL filters are **fixed in [#564](https://github.com/nulltask/be-music/issues/564)**, and courses made in the course maker now start unranked (**fixed in [#566](https://github.com/nulltask/be-music/issues/566)**).
 - **Impact:** A/B.
-- **Recommendation:** key demo course records by the course fingerprint, and include the effective LN mode of stages with undefined LNs.
+- **Recommendation:** key player course records by the course fingerprint, and include the effective LN mode of stages with undefined LNs.
 
 ## Skin systems
 
@@ -798,7 +798,7 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Result 150–152            | Start at result entry. Supported JSON/Lua skins leave upstream `ranktime` at zero; LR2's result steps stay separate.                                                                                                                     |
 | Score 348–350             | After a judgment, EX score reaches 18/27, 21/27 or 24/27 of the entire chart maximum (A, AA, AAA).                                                                                                                                       |
-| Score 351–352             | After a judgment, EX score reaches the host's personal best or target, inclusively; absent targets default to zero. The demo supplies the chart's best EX score.                                                                         |
+| Score 351–352             | After a judgment, EX score reaches the host's personal best or target, inclusively; absent targets default to zero. The player supplies the chart's best EX score.                                                                       |
 | HCN 250–289 / 1810–2199   | Use authoritative judge lane state: active while gaining, damage while losing, off before a judged passing head and after its tail. Manual, AUTO, replay, AUTO SCRATCH and seeks share the same engine state.                            |
 | Character 900–907         | Begin neutral. At the authored neutral-motion boundary, choose the latest judgment's reaction; return to neutral after the reaction's duration. 2P is the opponent and reacts inversely.                                                 |
 | Dance 909 / music end 908 | Dance while playing. The session raises music end after the last note (AUTO: the prepared chart's last event) plus five chart seconds; 908 starts and character/dance timers stop. The skin's `finishmargin` then holds before fade-out. |

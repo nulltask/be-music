@@ -242,6 +242,11 @@
           "sourceExRank": 100
         },
         "noteCount": 6,
+        "headerBPM": 150,
+        "bpmRange": {
+          "min": 150,
+          "max": 150
+        },
         "chartFingerprint": "bmfp0:46624580085e82088d8c9d16fcbf8dab635554708c56733e0a689350a5f3716d",
         "playFingerprint": "bmfp0:46624580085e82088d8c9d16fcbf8dab635554708c56733e0a689350a5f3716d",
         "title": "BMSON Mine / Key Channels",

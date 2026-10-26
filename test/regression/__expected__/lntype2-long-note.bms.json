@@ -40,7 +40,12 @@
       "swBGA": {},
       "player": 1,
       "lnType": 2,
-      "lnMode": 1
+      "lnMode": 1,
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361",
+        "branch.wav": "6272",
+        "right.wav": "7269"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -136,6 +141,11 @@
           "percent": 75
         },
         "noteCount": 16,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:1b10d8858ff197afcbef17bae62a10276dbd813682ba3f15906ca50350617fcb",
         "playFingerprint": "bmfp0:1b10d8858ff197afcbef17bae62a10276dbd813682ba3f15906ca50350617fcb",
         "title": "LNTYPE 2 Continuous Long Note",

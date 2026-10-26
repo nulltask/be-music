@@ -20,7 +20,7 @@ Apple M5、メモリ 32 GB、macOS 27.0.1（26A434）、Node 26.12.1、pnpm 10.3
 PERF_OUTPUT=tmp/remaining-work/performance/current pnpm exec playwright test -c scripts/performance/browser.config.ts
 ```
 
-専用のデモをソースマップ付きでビルドし、空いているローカルポートで配信します。一時ディレクトリに作る譜面は終了後に削除します。既存の開発サーバーやブラウザのタブには触れません。対象を絞る場合は `PERF_FAMILIES=built-in,native,lr2,beatoraja` から必要なファミリーをカンマ区切りで指定します。その場合、選曲の計測は省略します。
+専用のプレイヤーをソースマップ付きでビルドし、空いているローカルポートで配信します。一時ディレクトリに作る譜面は終了後に削除します。既存の開発サーバーやブラウザのタブには触れません。対象を絞る場合は `PERF_FAMILIES=built-in,native,lr2,beatoraja` から必要なファミリーをカンマ区切りで指定します。その場合、選曲の計測は省略します。
 
 リビジョンごとに出力先を分けます。次のビルドで上書きする前に `packages/app-play/dist/assets/*.map` も保存します。`.cpuprofile` と `.heapprofile` をブラウザの開発者ツールで開くと、処理別の内訳を確認できます。`summary.json` には描画間隔の分位点、遅いフレーム数、Performance 指標、ブラウザエラーを保存します。区間ごとのスクリーンショットと描画間隔の生データも残ります。計測スクリプトのない古いリビジョンと比較する場合は、`scripts/performance/` をそのワークツリーへコピーしてから実行します。
 

@@ -128,7 +128,15 @@
       "midiFile": "demo.mid",
       "materials": "demo.materials",
       "divideProp": "lane=2",
-      "charset": "UTF-8"
+      "charset": "UTF-8",
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361",
+        "branch.wav": "6272",
+        "right.wav": "7269",
+        "wrong.wav": "7772",
+        "retrigger_a.wav": "7265",
+        "retrigger_b.wav": "7265"
+      }
     },
     "controlFlow": [
       "SETRANDOM 2",
@@ -759,6 +767,11 @@
           "sourceExRank": 120
         },
         "noteCount": 84,
+        "headerBPM": 128,
+        "bpmRange": {
+          "min": 96,
+          "max": 220
+        },
         "playFingerprint": "bmfp0:d251472fe5b98e8d9747182aed23a5bc3f1912fd5c7d406f8b74d1a6f751ef13",
         "title": "Four-Measure Command Combo Test",
         "subtitle": "Visual 4-Bar Command Blocks",
@@ -1484,6 +1497,11 @@
           "sourceExRank": 120
         },
         "noteCount": 84,
+        "headerBPM": 128,
+        "bpmRange": {
+          "min": 96,
+          "max": 220
+        },
         "playFingerprint": "bmfp0:6ed798a13595eade4224bedff67596dda6c81b71b311b089d8a92c10b8913c5f",
         "title": "Four-Measure Command Combo Test",
         "subtitle": "Visual 4-Bar Command Blocks",

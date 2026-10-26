@@ -150,8 +150,9 @@ describe('parseCourseChartFilter / evaluateCourseChartFilter', () => {
   });
 
   test('unsupported syntax fails closed with a reason', () => {
-    expect(parseError('playcount > 3')).toBe("unknown column 'playcount'");
-    expect(parseError('score.clear > 3')).toBe("unsupported table 'score'");
+    expect(parseError('epg > 3')).toBe("unknown column 'epg'");
+    expect(parseError('scorelog.oldclear > 3')).toBe("unknown column 'scorelog.oldclear'");
+    expect(parseError('reviews.score > 3')).toBe('no such table: reviews');
     expect(parseError("lower(title) = 'a'")).toBe('functions are not supported: lower');
     expect(parseError('song.sha256 IN (SELECT sha256 FROM score)')).toBe('sub-queries are not supported');
     expect(parseError("title GLOB 'a*'")).toMatch(/unexpected/u);
@@ -174,7 +175,64 @@ describe('parseCourseChartFilter / evaluateCourseChartFilter', () => {
     expect(parseError('`Mode` = 7')).toBe('ambiguous column name: Mode');
     expect(parseError('level = 12 ORDER BY notes')).toBe('ambiguous column name: notes');
     expect(matches('song.mode = 7')).toBe(true);
-    expect(parseError('song.date > 0')).toBe("unknown column 'date'");
+    expect(parseError('song.date > 0')).toBe("unknown column 'song.date'");
+  });
+
+  test('score columns read the best record, NULL for a chart never played', () => {
+    const played: CourseChartRecord = {
+      ...SONG,
+      score: { clear: 5, exscore: 2400, combo: 900, minbp: 12, playcount: 7, notes: 1500 },
+    };
+    expect(matches('score.clear >= 5', played)).toBe(true);
+    expect(matches('score.clear < 5', played)).toBe(false);
+    expect(matches('exscore > 2000 AND playcount = 7', played)).toBe(true);
+    expect(matches('score.combo = score.notes', played)).toBe(false);
+    expect(matches('score.minbp <= 12', played)).toBe(true);
+    expect(matches('score.exscore * 100 / (score.notes * 2) >= 80', played)).toBe(true);
+    expect(matches(`score.sha256 = '${'a'.repeat(64)}'`, played)).toBe(true);
+    // beatoraja's LEFT OUTER JOIN: an unplayed chart has a NULL score row, so only IS NULL matches it.
+    expect(matches('score.clear < 5')).toBe(false);
+    expect(matches('score.clear IS NULL')).toBe(true);
+    expect(matches('score.clear IS NULL OR score.clear < 5')).toBe(true);
+    expect(matches('score.sha256 IS NULL')).toBe(true);
+    // A field the row lacks is NULL too.
+    expect(matches('score.playcount IS NULL', { ...SONG, score: { clear: 1 } })).toBe(true);
+  });
+
+  test('information columns read the song information', () => {
+    const informed: CourseChartRecord = {
+      ...SONG,
+      information: {
+        n: 1200,
+        ln: 150,
+        s: 100,
+        ls: 50,
+        total: 320.5,
+        density: 9.25,
+        peakdensity: 21,
+        enddensity: 14.4,
+        mainbpm: 150,
+      },
+    };
+    expect(matches('information.n = 1200 AND ln = 150 AND s = 100 AND ls = 50', informed)).toBe(true);
+    expect(matches('information.total > 320', informed)).toBe(true);
+    expect(matches('peakdensity >= 20 AND density BETWEEN 9 AND 10', informed)).toBe(true);
+    expect(matches('enddensity > 14.5', informed)).toBe(false);
+    expect(matches('mainbpm = 150', informed)).toBe(true);
+    // A REAL column divides as REAL.
+    expect(matches('information.total / 2 = 160.25', informed)).toBe(true);
+    // Text compares numerically against a REAL column, as NUMERIC affinity does.
+    expect(matches("density > '9'", informed)).toBe(true);
+    expect(matches('information.density IS NULL')).toBe(true);
+  });
+
+  test('columns be-music has no source for stay unknown', () => {
+    for (const column of ['score.epg', 'score.clearcount', 'score.date', 'information.distribution', 'song.favorite']) {
+      expect(parseError(`${column} = 1`)).toBe(`unknown column '${column}'`);
+    }
+    // Unqualified, `score` / `oldclear` are `scorelog` columns, which be-music does not keep.
+    expect(parseError('oldclear = 1')).toBe("unknown column 'oldclear'");
+    expect(parseError('score > 1')).toBe("unknown column 'score'");
   });
 
   test('a trailing ORDER BY / LIMIT / OFFSET parses into the query', () => {
@@ -183,8 +241,8 @@ describe('parseCourseChartFilter / evaluateCourseChartFilter', () => {
     if (!parsed.ok) return;
     expect(parsed.filter).toEqual(parsed.query.where);
     expect(parsed.query.orderBy).toEqual([
-      { key: { type: 'column', column: 'level' }, descending: true },
-      { key: { type: 'column', column: 'title' }, descending: false, nulls: 'last' },
+      { key: { type: 'column', table: 'song', column: 'level' }, descending: true },
+      { key: { type: 'column', table: 'song', column: 'title' }, descending: false, nulls: 'last' },
     ]);
     expect(parsed.query).toMatchObject({ limit: 10, offset: 2 });
     // `LIMIT m, n` puts the offset first; a negative LIMIT is none and a negative OFFSET is 0, as in SQLite.

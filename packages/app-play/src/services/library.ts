@@ -28,7 +28,7 @@ import {
 } from '@be-music/player-browser/skin';
 import { summarizeLR2PlaySkins, type LR2PlaySkinMap, type LR2Skin } from '@be-music/skin-lr2';
 import { countLR2UnplayedStages, LR2_MAX_PLAYED_STAGES } from '@be-music/player-engine/course';
-import { REPLAY_FILE_SUFFIX } from '@be-music/player-engine/replay';
+import { COURSE_REPLAY_FILE_SUFFIX, REPLAY_FILE_SUFFIX } from '@be-music/player-engine/replay';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import {
   describeCourseTableImportError,
@@ -46,14 +46,14 @@ import {
   showLoadingOverlay,
   type LoadingOverlayElements,
 } from '../loading-overlay.ts';
-import type { PlayerWebDemoElements } from '../types.ts';
+import type { PlayerWebElements } from '../types.ts';
 import { fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
 
 const dropLog = logger('drop');
 
 export interface LibraryServiceOptions {
   /** The loading overlay a URL load shows and every load reports its progress on, and the shell (`.playing`). */
-  readonly elements: LoadingOverlayElements & Pick<PlayerWebDemoElements, 'shell'>;
+  readonly elements: LoadingOverlayElements & Pick<PlayerWebElements, 'shell'>;
   /** A chart's file hashes, cached per chart (`RecordsService`): course stages are matched by them. */
   readonly resolveChartHashes: (chartEntry: LibraryChart) => Promise<ChartFileHashes | undefined>;
   /** The course maker, whose saved courses are listed in their own folders. */
@@ -229,11 +229,15 @@ export class LibraryService {
       return;
     }
     // Replay files ride their own path: they are replay inputs, not chart / theme assets. They are peeled off
-    // BEFORE the song/theme split so a stray `.bmplay.json` never classifies as a theme candidate — and handled
-    // AFTER the split's loaders ran, so dropping a song folder together with its replay loads the song first and
-    // then starts the replay in one gesture.
-    const replayFiles = files.filter((file) => file.name.toLowerCase().endsWith(REPLAY_FILE_SUFFIX));
-    files = files.filter((file) => !file.name.toLowerCase().endsWith(REPLAY_FILE_SUFFIX));
+    // BEFORE the song/theme split so a stray `.bmplay.json` (or a course's `.bmcourse.json`) never classifies as a
+    // theme candidate — and handled AFTER the split's loaders ran, so dropping a song folder together with its replay
+    // loads the song first and then starts the replay in one gesture.
+    const isReplayFile = (file: BrowserDroppedFile) => {
+      const name = file.name.toLowerCase();
+      return name.endsWith(REPLAY_FILE_SUFFIX) || name.endsWith(COURSE_REPLAY_FILE_SUFFIX);
+    };
+    const replayFiles = files.filter(isReplayFile);
+    files = files.filter((file) => !isReplayFile(file));
     if (files.length === 0 && replayFiles.length > 0) {
       await this.startReplayReplayFromFile(replayFiles[0]!);
       return;

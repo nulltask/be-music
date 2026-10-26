@@ -357,7 +357,7 @@ function defaultParseOps(variant: LR2PlayVariant = '7'): Set<number> {
     LR2_OP.LOADED,
     LR2_OP.REPLAY_OFF,
     // Includes can be gated by the skin's key mode (WMIX has distinct SP and DP layouts).
-    LR2_OP[`KEYS_${variant}`],
+    LR2_OP[`KEYS_${variant === '7-battle' ? '7' : variant === '5-battle' ? '5' : variant}`],
     LR2_OP.NO_BGA,
     LR2_OP.NO_LN,
     LR2_OP.NO_TEXT,

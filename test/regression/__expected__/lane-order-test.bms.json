@@ -30,7 +30,10 @@
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBGA": {}
+      "swBGA": {},
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -116,6 +119,11 @@
           "percent": 75
         },
         "noteCount": 16,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:c5b6484b966a0c8f35d23ff4b95c7e1f52108348a12d2d02506a8c83a1059656",
         "playFingerprint": "bmfp0:c5b6484b966a0c8f35d23ff4b95c7e1f52108348a12d2d02506a8c83a1059656",
         "title": "Lane Order Test",

@@ -1,5 +1,5 @@
 import { createEmptyJSON } from '@be-music/chart-source';
-import type { PlayerInputCommand } from '@be-music/player-engine/signals';
+import { createPlayerInputSignalBus, type PlayerInputCommand } from '@be-music/player-engine/signals';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { PlaySceneSession, resolvePlayStage } from './play-scene-session.ts';
@@ -250,4 +250,127 @@ describe('stage-failure sound', () => {
     expect(session.frame(0).events).toContainEqual({ kind: 'exit-close', atMs: 0 });
     session.dispose();
   });
+});
+
+test('records actual hi-speed edits alongside the effective replay view', () => {
+  const { play, session } = createSceneSession({ initialHiSpeed: 2 });
+  const commands: PlayerInputCommand[] = [];
+  const bus = createPlayerInputSignalBus();
+  play.sharedEngineInputSignals = bus;
+  const push = bus.pushCommand;
+  bus.pushCommand = (command) => {
+    commands.push(command);
+    push(command);
+  };
+  session.frame(0);
+  session.dispatch({ type: 'hi-speed', command: { type: 'hi-speed-set', value: 3 } });
+  session.frame(1);
+  expect(commands).toContainEqual({ kind: 'options', values: { hiSpeed: 3 } });
+  session.frame(2);
+  expect(commands.filter((command) => command.kind === 'options')).toHaveLength(1);
+});
+
+test('records accepted live CONSTANT duration and fade changes', () => {
+  const { play, session } = createSceneSession({ visualConstant: true, noteDurationMs: 500, constantFadeMs: 100 });
+  const bus = createPlayerInputSignalBus();
+  play.sharedEngineInputSignals = bus;
+  const push = vi.spyOn(bus, 'pushCommand');
+  session.frame(0);
+  session.dispatch({ type: 'constant-visibility', durationMs: 250, fadeMs: -200 });
+  expect(session.frame(1).playOptions).toMatchObject({ noteDurationMs: 250, constantFadeMs: -200 });
+  expect(push).toHaveBeenCalledWith({ kind: 'options', values: { noteDurationMs: 250, constantFadeMs: -200 } });
+  session.dispatch({ type: 'constant-visibility', durationMs: -1, fadeMs: 2000 });
+  expect(play.options).toMatchObject({ noteDurationMs: 1, constantFadeMs: 1000 });
+});
+
+test('records LIFT heights and enabled flags even when the effective cover is zero', () => {
+  const { play, session } = createSceneSession();
+  play.playState = {
+    ...play.playState,
+    view: {
+      ...play.playState.view,
+      covers: [
+        { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0.1, liftOn: false },
+        { side: '2P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0.1, liftOn: false },
+      ],
+    },
+  };
+  const bus = createPlayerInputSignalBus();
+  play.sharedEngineInputSignals = bus;
+  const push = vi.spyOn(bus, 'pushCommand');
+  session.frame(0);
+  session.dispatch({ type: 'cover', command: { type: 'cover-set', covers: [{ side: '1P', lift: 0, liftOn: true }] } });
+  expect(session.frame(1).playOptions).toMatchObject({ lift1P: 0, liftOn1P: true, lift2P: 0.1, liftOn2P: false });
+  expect(push).toHaveBeenCalledWith({ kind: 'options', values: { lift1P: 0, liftOn1P: true } });
+  session.dispatch({
+    type: 'cover',
+    command: { type: 'cover-set', covers: [{ side: '2P', lift: 0.3, liftOn: false }] },
+  });
+  expect(session.frame(2).playOptions).toMatchObject({ lift2P: 0.3, liftOn2P: false });
+  expect(push).toHaveBeenCalledWith({ kind: 'options', values: { lift2P: 0.3 } });
+});
+
+test('replay frames restore selected options at the playhead and after a backward seek', () => {
+  const replay = {
+    play: {
+      mode: 'manual',
+      options: { displayAreaInfo: 'ON', visualConstant: true, noteDurationMs: 500, constantFadeMs: 100 },
+      optionChanges: [
+        { timeUs: 2_000_000, values: { displayAreaInfo: 'SUDDEN_ONLY', noteDurationMs: 250, constantFadeMs: -200 } },
+      ],
+    },
+  } as unknown as import('@be-music/player-engine/replay').BeMusicReplay;
+  const { play, session } = createSceneSession({ replay });
+  let seconds = 0;
+  play.currentSeconds = () => seconds;
+  expect(session.frame(0).playOptions.displayAreaInfo).toBe('ON');
+  expect(session.frame(0).playOptions).toMatchObject({
+    visualConstant: true,
+    noteDurationMs: 500,
+    constantFadeMs: 100,
+  });
+  seconds = 3;
+  expect(session.frame(3).playOptions.displayAreaInfo).toBe('SUDDEN_ONLY');
+  expect(session.frame(3).playOptions).toMatchObject({ noteDurationMs: 250, constantFadeMs: -200 });
+  seconds = 1;
+  expect(session.frame(4).playOptions.displayAreaInfo).toBe('ON');
+  expect(session.frame(4).playOptions).toMatchObject({ noteDurationMs: 500, constantFadeMs: 100 });
+});
+
+test('automatic calibration restores unclamped offsets and rewinds without recalculating samples', () => {
+  // A replay recorded before the modes stores beatoraja's switch as a boolean.
+  const replay = {
+    play: {
+      mode: 'manual',
+      options: { judgeTimingAutoAdjust: true, judgeTimingMs: 500 },
+      optionChanges: [{ timeUs: 2000000, values: { judgeTimingMs: 505 } }],
+    },
+  } as unknown as import('@be-music/player-engine/replay').BeMusicReplay;
+  const { play, session } = createSceneSession({ replay });
+  let seconds = 3;
+  play.currentSeconds = () => seconds;
+  expect(session.frame(0).playOptions).toMatchObject({ judgeTimingAutoAdjust: 'BEATORAJA', judgeTimingMs: 505 });
+  seconds = 1;
+  expect(session.frame(1).playOptions.judgeTimingMs).toBe(500);
+});
+
+test("an LR2 adjustment's recorded steps replay as recorded", () => {
+  const replay = {
+    play: {
+      mode: 'manual',
+      options: { judgeTimingAutoAdjust: 'LR2-SILENT', judgeTimingMs: 120 },
+      optionChanges: [
+        { timeUs: 2000000, values: { judgeTimingMs: 121 } },
+        { timeUs: 4000000, values: { judgeTimingMs: 122 } },
+      ],
+    },
+  } as unknown as import('@be-music/player-engine/replay').BeMusicReplay;
+  const { play, session } = createSceneSession({ replay });
+  let seconds = 3;
+  play.currentSeconds = () => seconds;
+  expect(session.frame(0).playOptions).toMatchObject({ judgeTimingAutoAdjust: 'LR2-SILENT', judgeTimingMs: 121 });
+  seconds = 5;
+  expect(session.frame(1).playOptions.judgeTimingMs).toBe(122);
+  seconds = 0;
+  expect(session.frame(2).playOptions.judgeTimingMs).toBe(120);
 });

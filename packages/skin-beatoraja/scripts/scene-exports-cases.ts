@@ -615,6 +615,18 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
       });
     },
   });
+  define('skin-beatoraja.scene.resolveBeatorajaOptionButton', {
+    run: () => {
+      sceneAPI.resolveBeatorajaOptionButton(54, { battleMode: 'OFF', dpFlip: true }, false);
+      sceneAPI.resolveBeatorajaOptionButton(308, { longNoteMode: 'HCN' }, false);
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaPlayOptionIndex', {
+    run: () => {
+      sceneAPI.resolveBeatorajaPlayOptionIndex(54, { battleMode: 'BATTLE-AS' });
+      sceneAPI.resolveBeatorajaPlayOptionIndex(78, { gaugeAutoShift: 'BEST_CLEAR' });
+    },
+  });
   define('skin-beatoraja.scene.resolveBeatorajaOptionIndex', {
     run: () => {
       sceneAPI.resolveBeatorajaOptionIndex(370, { lamp: 'EX_HARD' });
@@ -623,6 +635,23 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
   define('skin-beatoraja.scene.beatorajaClearLampOp', {
     run: () => {
       sceneAPI.beatorajaClearLampOp('EX_HARD');
+    },
+  });
+
+  // Replay slots
+  define('skin-beatoraja.scene.beatorajaReplayButtonSlot', {
+    run: () => {
+      sceneAPI.beatorajaReplayButtonSlot(316);
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaResultReplayOps', {
+    run: () => {
+      sceneAPI.resolveBeatorajaResultReplayOps(['exists', 'saved', 'none', 'exists']);
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaSelectReplayOps', {
+    run: () => {
+      sceneAPI.resolveBeatorajaSelectReplayOps([true, false, true, false], 2);
     },
   });
 

@@ -49,6 +49,8 @@
           {"id":7,"channel":"13","type":"normal","timeUs":3166667},
           {"id":8,"channel":"13","type":"normal","timeUs":3666667}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":240},
         "chartFingerprint": "bmfp0:e5caf19e2bd4a8e681c9d0b3bc66ada7347c6b88ceb28ef78f2606c427ffc128",
         "playFingerprint": "bmfp0:e5caf19e2bd4a8e681c9d0b3bc66ada7347c6b88ceb28ef78f2606c427ffc128",
         "title": "tempo",

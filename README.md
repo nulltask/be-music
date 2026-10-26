@@ -23,7 +23,7 @@ BMS/bmson toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/player-skin-sdk`: Framework-free SDK for writing be-music skins for the browser player
 - `@be-music/player-ui`, `@be-music/player-ui-react`, `@be-music/player-ui-vue`: [Reusable Lit Web Components, with typed React and Vue wrappers](./packages/player-ui/README.md)
 - `@be-music/player-browser`: Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
-- `@be-music/app-play`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, the Debug Menu and browser playback together, as services behind one scene router
+- `@be-music/app-play`: Private Vite player that wires folder/ZIP drops, LR2/beatoraja themes, the Debug Menu and browser playback together, as services behind one scene router
 - `@be-music/app-leaderboard`: Private Leaderboard API on Cloudflare Workers: replay submission, verification by re-simulation, and rankings
 - `@be-music/chart-editor`: CLI editor (import/edit/export)
 
@@ -56,7 +56,7 @@ flowchart TD
     nodeaudio["player-node-audio"]
     lb["app-leaderboard"]
     web["player-browser"]
-    demo["app-play"]
+    app["app-play"]
   end
 
   chart-writer --> editor
@@ -71,7 +71,7 @@ flowchart TD
   ui --> wrappers
   sdk --> web
   beatoraja --> web
-  web --> demo
+  web --> app
 ```
 
 ## Required environment
@@ -94,7 +94,7 @@ pnpm run check
 pnpm run test
 ```
 
-The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files. `pnpm run test:e2e` plays the course browser checklist in the web demo end to end with Playwright (a few minutes, so `pnpm run test` leaves it out); see [docs/course-checklist.md](docs/course-checklist.md#automated-run).
+The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files. `pnpm run test:e2e` plays the course browser checklist in the web player end to end with Playwright (a few minutes, so `pnpm run test` leaves it out); see [docs/course-checklist.md](docs/course-checklist.md#automated-run).
 
 ## Package Releases
 
@@ -108,7 +108,7 @@ pnpm run release:version
 
 - Normal feature PR adds `.changeset/*.md` for the changed package
 - When you want to release, run `pnpm run release:version` on `devel` and commit the generated `packages/*/package.json` and `packages/*/CHANGELOG.md` updates together.
-- In that state, merging the release PR of `devel -> main` creates a separate GitHub Release for each public package whose version has increased (private packages such as the player demo and the Leaderboard get none).
+- In that state, merging the release PR of `devel -> main` creates a separate GitHub Release for each public package whose version has increased (private packages such as the player and the Leaderboard get none).
 - The player SEA executable is built from `@be-music/player-terminal` and attached to the `@be-music/player-terminal` release; `@be-music/chart-audio-renderer` also ships a SEA zip
 - The private repository root `package.json` stays at `0.0.0`; releasable versions are tracked in `packages/*/package.json`.
 
@@ -253,7 +253,7 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 - Shared playback semantics with the terminal player for notes, timing, scroll distance, BGA cues, score, and results
 - One audio service on one system `AudioContext` for the select BGM, cues, jingles, chart preview and skin sounds, and a WebAudio bus per play with split key/BGM/master compressor controls
 - BGA still/video rendering, browser-side video transcode fallback, and MP4 / WebM gameplay recording
-- Single PixiJS scene host that owns one renderer context and shows one scene at a time; the demo's scene router owns every transition and disposes the scene that left
+- Single PixiJS scene host that owns one renderer context and shows one scene at a time; the player's scene router owns every transition and disposes the scene that left
 - In-scene LR2 and beatoraja PLAY OPTION controls for hi-speed, BGA mode/size, filters, sort, HS-FIX, lane cover, lift, auto-scratch, DP flip, random/mirror modes, gauge variants, and skin options
 
 ### chart-editor (`@be-music/chart-editor`)
@@ -334,17 +334,17 @@ pnpm run player chart.bms --tui-visible-notes-limit 4096
 pnpm run player chart.bms --no-ln-type-auto
 ```
 
-### 5. Browser player demo
+### 5. Browser player
 
 ```bash
 pnpm run player:web
 ```
 
-The demo starts a Vite dev server. Drop a BMS/bmson song folder, an LR2 theme folder, a beatoraja theme folder, a ZIP, or a song folder and LR2/beatoraja theme folder together into the browser.
+The player starts a Vite dev server. Drop a BMS/bmson song folder, an LR2 theme folder, a beatoraja theme folder, a ZIP, or a song folder and LR2/beatoraja theme folder together into the browser.
 
-The demo can also load archives from a URL: `?music=<zip URL>&skin=<zip URL>` (either parameter may be omitted) feeds the archives into the same pipeline as a drop. Cross-origin `https` URLs are fetched through the same-origin proxy route `/__url-load-proxy`, served by the Vite dev server and by the Cloudflare Worker.
+The player can also load archives from a URL: `?music=<zip URL>&skin=<zip URL>` (either parameter may be omitted) feeds the archives into the same pipeline as a drop. Cross-origin `https` URLs are fetched through the same-origin proxy route `/__url-load-proxy`, served by the Vite dev server and by the Cloudflare Worker.
 
-The demo is served by the Player Worker (`packages/worker-play`): Static Assets for the built demo plus a Worker that streams the ffmpeg core from R2 and forwards the Leaderboard's API. Pushes to `main` and `devel` deploy every service to production and the preview (`.github/workflows/deploy.yml`, [Services and environments](./docs/services.md)). To deploy the Player by hand:
+The player is served by the Player Worker (`packages/worker-play`): Static Assets for the built player plus a Worker that streams the ffmpeg core from R2 and forwards the Leaderboard's API. Pushes to `main` and `devel` deploy every service to production and the preview (`.github/workflows/deploy.yml`, [Services and environments](./docs/services.md)). To deploy the Player by hand:
 
 ```bash
 pnpm --filter @be-music/app-play run cf:r2:push # when the pinned @ffmpeg/core changes: upload the core to R2
@@ -352,7 +352,7 @@ pnpm --filter @be-music/worker-play run deploy                # production, play
 pnpm --filter @be-music/worker-play run deploy:preview        # preview, play.preview.be-music.app
 ```
 
-`deploy` builds the demo and runs `cf deploy`. The ffmpeg core (`ffmpeg-core.wasm` / `ffmpeg-core.js`) exceeds the Static Assets per-file limit, so it lives in R2 and is served through the Worker.
+`deploy` builds the player and runs `cf deploy`. The ffmpeg core (`ffmpeg-core.wasm` / `ffmpeg-core.js`) exceeds the Static Assets per-file limit, so it lives in R2 and is served through the Worker.
 
 ### 6. Editor
 

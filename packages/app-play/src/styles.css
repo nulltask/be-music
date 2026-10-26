@@ -132,6 +132,28 @@ textarea {
   width: 320px;
 }
 
+/* Why a chart filter expression (`?…`) does not parse: just under the field (`InlineSearch` places it). */
+.search-error {
+  position: absolute;
+  z-index: 12;
+  max-width: min(480px, calc(100% - 24px));
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgb(127 29 29 / 0.9);
+  color: #fef2f2;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.search-error[hidden] {
+  display: none;
+}
+
+.search-input[aria-invalid='true'] {
+  border-color: #f87171;
+}
+
 .search-input:not(:focus):placeholder-shown {
   /*
    * Dim the placeholder when the user hasn't focused yet so the
@@ -1210,7 +1232,7 @@ textarea {
   /*
    * Slide-in entry that reads as "the dialog rose into focus"
    * rather than "popped instantly". Matches the drop card's
-   * entry animation cadence so the demo's overlay vocabulary
+   * entry animation cadence so the player's overlay vocabulary
    * stays consistent.
    */
   transform: translateY(8px) scale(0.98);
@@ -1334,6 +1356,80 @@ textarea {
   font-size: 13px;
   line-height: 1.55;
   color: #d2d9e4;
+}
+
+.help-menu-folder {
+  margin: 8px 0 0;
+  border: 1px solid rgb(151 163 179 / 0.18);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #d2d9e4;
+}
+
+.help-menu-folder > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.help-menu-folder > summary::-webkit-details-marker {
+  display: none;
+}
+
+.help-menu-folder > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+  opacity: 0.7;
+}
+
+.help-menu-folder[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.help-menu-folder[open] > summary {
+  border-bottom: 1px solid rgb(151 163 179 / 0.18);
+}
+
+.help-menu-note {
+  margin: 8px 12px 0;
+  color: rgb(151 163 179 / 0.85);
+}
+
+.help-menu-items {
+  margin: 0;
+  padding: 8px 12px 10px;
+  display: grid;
+  gap: 2px 0;
+}
+
+.help-menu-items dt {
+  margin-top: 6px;
+  font-weight: 600;
+  color: #f3f6fa;
+}
+
+.help-menu-items dd {
+  margin: 0;
+}
+
+.help-menu-when {
+  font-style: normal;
+  color: #9db8ff;
+}
+
+.help-menu-items code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
 }
 
 .help-list code {
@@ -1631,7 +1727,7 @@ textarea {
   /*
    * Custom scrollbar styling. Chromium reads
    * `::-webkit-scrollbar`; Firefox reads
-   * `scrollbar-color`. Both surfaces stay in the demo's
+   * `scrollbar-color`. Both surfaces stay in the player's
    * dark / accent palette rather than defaulting to the
    * system grey.
    */
@@ -1839,7 +1935,9 @@ textarea {
  * reachable by hovering where it sits. The search field shows on the select screen only (`off-select` elsewhere).
  */
 .shell.in-gameplay .search-input,
-.shell.off-select .search-input {
+.shell.off-select .search-input,
+.shell.in-gameplay .search-error,
+.shell.off-select .search-error {
   visibility: hidden;
 }
 
@@ -2046,9 +2144,23 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   flex-wrap: wrap;
 }
 
+/* The charts a dropped replay or course replay needs that are not loaded. */
+.replay-missing-list {
+  list-style: disc;
+  padding-inline-start: 1.25rem;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+}
+
 .shell.search-in-skin .search-input:not(.search-inline) {
   opacity: 0;
   pointer-events: none;
+}
+
+/* The error goes with the field: out of sight while the field is (the skin's box shows the query then). */
+.shell.search-in-skin .search-input:not(.search-inline) + .search-error,
+html.touch-first .search-input:not(:focus) + .search-error {
+  visibility: hidden;
 }
 
 .search-input.search-inline {
@@ -2183,6 +2295,61 @@ html.touch-first .search-input.search-inline:focus {
 .course-maker-constraints {
   display: grid;
   gap: 6px;
+}
+
+/* Replay slots (replay-slots-panel.ts): a result's slots to save into, and the select bar's replays. */
+.replay-slots-card {
+  position: fixed;
+  right: 16px;
+  bottom: 64px;
+  z-index: 40;
+  width: min(360px, calc(100vw - 32px));
+  font-size: 13px;
+}
+.replay-slots-card[hidden] {
+  display: none;
+}
+.replay-slots-card h2 {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.replay-slots-card header p {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+.replay-slots-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.replay-slots-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+}
+.replay-slots-name {
+  font-weight: 600;
+}
+.replay-slots-detail {
+  min-width: 0;
+  color: #aab4c2;
+  overflow-wrap: anywhere;
+}
+.replay-slots-actions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.replay-slots-row > button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* The help overlay keeps its build line at the bottom of the overlay, under the dialog card. */

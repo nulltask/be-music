@@ -18,6 +18,12 @@ export type { LR2Clock, LR2SceneState, LR2TimerUpdate } from './scene-state.ts';
 export { resolveLR2ChartFeatures, resolveLR2KeyModeOp, type LR2ChartFeatures } from './chart.ts';
 export { resolveLR2BarLamp, resolveLR2LampOp } from './records.ts';
 export {
+  LR2_BATTLE_CYCLE,
+  LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
+  LR2_JUDGE_TIMING_LIMIT_MS,
+  stepLR2JudgeTiming,
+} from './options.ts';
+export {
   resolveLR2DecideState,
   resolveLR2DecideTimers,
   type LR2DecideInput,
@@ -29,6 +35,7 @@ export {
   resolveLR2GaugeTypeOps,
   resolveLR2LaneTimer,
   resolveLR2PlayKeyModeOp,
+  resolveLR2PlayKeyModeOps,
   resolveLR2PlayState,
   resolveLR2PlayTimers,
   resolveLR2RankOp,

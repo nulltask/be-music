@@ -1,3 +1,4 @@
+import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import { PlaySession } from './play-session.ts';
 import {
   createPlayerUISignalBus,
@@ -33,6 +34,7 @@ function createPlay(options: {
   courseCarryIn?: { combo: number; maxCombo: number };
   judgeRuleset?: 'lr2' | 'beatoraja' | '____';
   chartPlayVariant?: string;
+  replay?: BeMusicReplay;
 }) {
   const judgeRuleset = options.judgeRuleset ?? 'lr2';
   const gauge = createPlaceholderGaugeState('GROOVE');
@@ -43,7 +45,10 @@ function createPlay(options: {
   /** The channels the play asked the view's key-beam fade of. */
   const fadeAsked: string[] = [];
   const ctx = {
-    options: { autoPlay: options.autoPlay === true },
+    options: {
+      autoPlay: options.autoPlay === true,
+      ...(options.replay !== undefined ? { replay: options.replay } : {}),
+    },
     chart: SONG,
     replay: undefined,
     disposed: false,
@@ -314,13 +319,20 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(result.chart).toBe(SONG);
   });
 
+  test('the result of a replay played back says so, so its skins can mark it', () => {
+    expect(getResultData(createPlay({ total: 4 }).ctx)!.fromReplay).toBeUndefined();
+    const replay = { play: { mode: 'manual' } } as unknown as BeMusicReplay;
+    expect(getResultData(createPlay({ total: 4, replay }).ctx)!.fromReplay).toBe(true);
+  });
+
   test('under LR2 an empty POOR is in the POOR count, the POOR judgments alone beside it, and in the BP once', () => {
     const play = createPlay({ total: 4 });
     play.step(1, { counts: { perfect: 1, bad: 1, poor: 1, emptyPoor: 2 } });
     const result = getResultData(play.ctx)!;
     expect(result.score).toMatchObject({ bad: 1, poor: 3, emptyPoor: 2 });
     expect(result.judgedPoor).toBe(1);
-    expect(recordPlayFromResult(result).missCount).toBe(4);
+    // BAD + POOR + empty POOR, and the fourth note the play has not judged yet.
+    expect(recordPlayFromResult(result).missCount).toBe(5);
   });
 
   test('a ruleset with its own empty-POOR figure keeps it apart from the POOR count', () => {
@@ -329,7 +341,7 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     const result = getResultData(play.ctx)!;
     expect(result.score).toMatchObject({ bad: 1, poor: 1, emptyPoor: 2 });
     expect(result.judgedPoor).toBeUndefined();
-    expect(recordPlayFromResult(result).missCount).toBe(4);
+    expect(recordPlayFromResult(result).missCount).toBe(5);
   });
 
   test("an AUTO play's full combo counts every note as its max combo", () => {
@@ -479,4 +491,15 @@ test('keeps a raw PMS maximum for the skin and normalizes the result gauge and b
   expect(play.ctx.gaugeState).toMatchObject({ current: 30, max: 120, clearThreshold: 85 });
   expect(play.state().gauge).toBe(25);
   expect(getResultData(play.ctx)).toMatchObject({ gauge: 25, gaugeBorder: (85 / 120) * 100 });
+});
+
+test('engine calibration updates the display setting without moving the input or play clock', () => {
+  const play = createPlay({ total: 2, judgeRuleset: 'beatoraja' });
+  const onChange = vi.fn();
+  Object.assign(play.ctx.options, { judgeTimingAutoAdjust: true, judgeTimingMs: 500, onJudgeTimingChange: onChange });
+  play.step(2, {}, [], [{ kind: 'judge-timing', value: 505 }]);
+  expect(play.ctx.options.judgeTimingMs).toBe(505);
+  expect(onChange).toHaveBeenCalledWith(505);
+  expect(play.ctx.currentSeconds()).toBe(2);
+  expect(play.ctx.playState.judgeTimings).toHaveLength(0);
 });

@@ -32,7 +32,11 @@
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBGA": {}
+      "swBGA": {},
+      "wavNameBytePrefixes": {
+        "retrigger_a.wav": "7265",
+        "retrigger_b.wav": "7265"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -81,6 +85,11 @@
           "percent": 75
         },
         "noteCount": 3,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:32d86d2ce0191068cbd426227681428b930037aa3d5497e18df90d8d912ed890",
         "playFingerprint": "bmfp0:32d86d2ce0191068cbd426227681428b930037aa3d5497e18df90d8d912ed890",
         "title": "Retrigger Different Key Overlap",

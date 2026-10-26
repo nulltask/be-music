@@ -44,6 +44,8 @@ export interface BeMusicDOMSelectFrame extends BeMusicDOMPresentation {
   readonly selectedIndex: number;
   readonly folderLabel: string | undefined;
   readonly searchQuery: string;
+  /** Why the chart filter expression searched for (`?…`) does not parse; the list is not filtered meanwhile. */
+  readonly searchError?: string;
   readonly playOptions: Readonly<PlayOptions>;
   readonly playOptionChoices: BeMusicPlayOptionChoices;
   readonly readText: string | undefined;
@@ -67,6 +69,8 @@ export interface BeMusicDOMGameplayFrame extends BeMusicDOMPresentation {
   readonly layout: Pick<BeMusicGameplayLayout, 'stage' | 'orientation' | 'playfield' | 'bga'>;
   readonly chart: LibraryChart | undefined;
   readonly state: Readonly<PlayState>;
+  /** The 2P player's play state of a two-player play (LR2 BATTLE); `runtime.secondPlayer` has its figures. */
+  readonly state2P?: Readonly<PlayState>;
   /** The same resource-free HUD values available to Canvas skins. */
   readonly runtime: Readonly<BeMusicGameplayRuntime>;
   readonly playOptions: Readonly<PlayOptions>;

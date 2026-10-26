@@ -1,12 +1,17 @@
 import { type ChartPlayVariant, resolveChartPlayVariant } from '@be-music/chart-model';
+import type { BattleMode } from '@be-music/player-engine/lanes';
 import { normalizePath } from '@be-music/shared-utils/core';
 import { extractDxaArchivesAsFlatFiles } from './dxa.ts';
 import { asLoadedBytes, readFilesIntoBytesMap, type LR2SkinFileEntry } from './file-lookup.ts';
 import type { LR2SkinInputFile } from './file-lookup.ts';
+import { informationTypeToPlayVariant, peekLR2SkinInformationType } from './paths.ts';
 import { loadLR2SkinFromSourceFiles, type LoadLR2SkinOptions, type LR2PlayVariant, type LR2Skin } from './skin.ts';
 import { readLR2SoundSet, resolveLR2SoundSetPath, type LR2SoundSet, type LR2SoundSetKey } from './sound-set.ts';
 
 export const LR2_PLAY_VARIANTS: readonly LR2PlayVariant[] = ['7', '14', '10', '5', '9'];
+
+/** LR2's BATTLE play skins, loaded beside {@link LR2_PLAY_VARIANTS} when a theme declares one (types 12 / 13). */
+export const LR2_BATTLE_PLAY_VARIANTS: readonly LR2PlayVariant[] = ['7-battle', '5-battle'];
 
 export type LR2PlaySkinMap = Partial<Record<LR2PlayVariant, LR2Skin>>;
 
@@ -48,7 +53,7 @@ export interface LR2ThemeSkins {
   /**
    * Decide-screen skin (the brief "song confirmation" splash that plays between the select view and gameplay).
    * Conventionally lives at `LR2files/Theme/<name>/Decide/decide.lr2skin`. Undefined when the theme bundle has no
-   * Decide directory — the demo simply skips the splash and moves straight from select to play in that case.
+   * Decide directory — the player simply skips the splash and moves straight from select to play in that case.
    */
   decideSkin?: LR2Skin;
   /**
@@ -222,6 +227,20 @@ export async function loadLR2ThemeSkinsFromFiles(
   const initialPlaySkins = LR2_PLAY_VARIANTS.map((playVariant) =>
     loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'play', playVariant, resources: beforePlay }),
   );
+  // A BATTLE play skin only from a theme that declares one: the loader would otherwise borrow an SP skin for it. A 5KEY
+  // BATTLE takes the 7KEY one when the theme has no 5KEY one.
+  const declaredBattleVariants = new Set<LR2PlayVariant>();
+  for (const [path, entry] of sharedFiles) {
+    if (!path.toLowerCase().endsWith('.lr2skin')) continue;
+    const declared = informationTypeToPlayVariant(peekLR2SkinInformationType(asLoadedBytes(entry)) ?? -1);
+    if (declared === '7-battle') declaredBattleVariants.add('7-battle').add('5-battle');
+    if (declared === '5-battle') declaredBattleVariants.add('5-battle');
+  }
+  const battlePlaySkins = LR2_BATTLE_PLAY_VARIANTS.map((playVariant) =>
+    declaredBattleVariants.has(playVariant)
+      ? loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'play', playVariant, resources: beforePlay })
+      : undefined,
+  );
   const initialResult = loadLR2SkinFromSourceFiles(sharedFiles, {
     kind: 'result',
     resources: initialPlaySkins[0]?.resources ?? beforePlay,
@@ -290,6 +309,10 @@ export async function loadLR2ThemeSkinsFromFiles(
     if (skin) {
       playSkins[variant] = skin;
     }
+  });
+  LR2_BATTLE_PLAY_VARIANTS.forEach((variant, index) => {
+    const skin = battlePlaySkins[index];
+    if (skin) playSkins[variant] = skin;
   });
   return {
     playSkins,
@@ -498,9 +521,46 @@ export async function loadLR2SystemSound(
   };
 }
 
-export function pickLR2PlaySkin(playSkins: LR2PlaySkinMap, chartEntry: LR2PlaySkinChart): LR2Skin | undefined {
-  const variant = pickLR2PlaySkinVariant(playSkins, chartEntry);
+/**
+ * How a play converts its chart, for the play skin it runs on: the battle mode selected and whether the play is a
+ * course stage (where LR2 skips BATTLE and SP TO DP).
+ */
+export interface LR2PlaySkinBattle {
+  readonly battleMode?: BattleMode;
+  readonly course?: boolean;
+}
+
+export function pickLR2PlaySkin(
+  playSkins: LR2PlaySkinMap,
+  chartEntry: LR2PlaySkinChart,
+  battle?: LR2PlaySkinBattle,
+): LR2Skin | undefined {
+  const variant = pickLR2PlaySkinVariant(playSkins, chartEntry, battle);
   return variant !== undefined ? playSkins[variant] : undefined;
+}
+
+/** The play variant a battle mode turns a chart of `source` into: the copied or merged chart's lanes. */
+const BATTLE_PLAY_VARIANTS: Partial<Record<BattleMode, Partial<Record<ChartPlayVariant, ChartPlayVariant>>>> = {
+  'SP-TO-DP': { '5': '10', '7': '14', '9': '7', '10': '5', '14': '7' },
+  'D-BATTLE': { '5': '10', '7': '14' },
+  BATTLE: { '5': '10', '7': '14', '24': '48' },
+  'BATTLE-AS': { '5': '10', '7': '14', '24': '48' },
+};
+
+/**
+ * The play skins a chart plays on, best first: a two-player BATTLE of a 5/7KEY chart on LR2's BATTLE play skin (a DP
+ * one without it, for its 2P lanes), D-BATTLE / SP TO DP and the other battle modes on the converted chart's lanes,
+ * and anything else on the chart's own.
+ */
+function playSkinOrder(source: ChartPlayVariant, battle: LR2PlaySkinBattle | undefined): readonly LR2PlayVariant[] {
+  const mode = battle?.battleMode ?? 'OFF';
+  const course = battle?.course === true;
+  if (mode === 'TWO-PLAYER' && !course && (source === '5' || source === '7')) {
+    const battleSkins: readonly LR2PlayVariant[] = source === '7' ? ['7-battle'] : ['5-battle', '7-battle'];
+    return [...battleSkins, ...PLAY_SKIN_FALLBACKS[source === '7' ? '14' : '10']];
+  }
+  const converted = mode === 'SP-TO-DP' && course ? undefined : BATTLE_PLAY_VARIANTS[mode]?.[source];
+  return PLAY_SKIN_FALLBACKS[converted ?? source];
 }
 
 /**
@@ -510,6 +570,7 @@ export function pickLR2PlaySkin(playSkins: LR2PlaySkinMap, chartEntry: LR2PlaySk
 export function pickLR2PlaySkinVariant(
   playSkins: LR2PlaySkinMap,
   chartEntry: LR2PlaySkinChart,
+  battle?: LR2PlaySkinBattle,
 ): LR2PlayVariant | undefined {
   const target = resolveChartPlayVariant({
     chartPath: chartEntry.chartPath,
@@ -517,11 +578,11 @@ export function pickLR2PlaySkinVariant(
     bms: chartEntry.chart.bms,
     bmson: chartEntry.chart.bmson,
   });
-  return PLAY_SKIN_FALLBACKS[target].find((variant) => playSkins[variant] !== undefined);
+  return playSkinOrder(target, battle).find((variant) => playSkins[variant] !== undefined);
 }
 
 export function summarizeLR2PlaySkins(playSkins: LR2PlaySkinMap, separator = ','): string {
   return (Object.entries(playSkins) as Array<[LR2PlayVariant, LR2Skin]>)
-    .map(([variant, value]) => `${variant}K=${value.name}`)
+    .map(([variant, value]) => `${variant.replace('-battle', 'K-BATTLE').replace(/^(\d+)$/u, '$1K')}=${value.name}`)
     .join(separator);
 }

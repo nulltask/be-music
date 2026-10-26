@@ -65,7 +65,11 @@
       "swBGA": {},
       "player": 1,
       "lnType": 1,
-      "baseBPM": 120
+      "baseBPM": 120,
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361",
+        "branch.wav": "6272"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -258,6 +262,11 @@
           "percent": 75
         },
         "noteCount": 37,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 60,
+          "max": 240
+        },
         "chartFingerprint": "bmfp0:e58255c04a3422d5115dcfef67fcaf583836c10a14096b4003c110121bfde236",
         "playFingerprint": "bmfp0:e58255c04a3422d5115dcfef67fcaf583836c10a14096b4003c110121bfde236",
         "title": "Scroll / Speed / Stop Gimmick",

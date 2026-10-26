@@ -125,13 +125,16 @@ export function renderSynesthesiaLanes({
   }
 
   // Judgement line: a crisp white filament with no bloom around it — one per play side, so it never crosses the gap
-  // between the double-play banks. The beat rises above it instead: an ember wash fading up the lanes that leaps tall
-  // and bright on each beat and settles back before the next.
-  const y = gridBottom;
-  const beatHeight = Math.min(gridBottom - gridTop, 36 + 110 * pulse * (0.7 + 0.3 * heat));
+  // between the double-play banks, at that side's lanes' foot (a side's LIFT raises it). The beat rises above it
+  // instead: an ember wash fading up the lanes that leaps tall and bright on each beat and settles back before the next.
   const beatAlpha = Math.min(1, (0.1 + 0.55 * pulse) * heat);
   for (const run of resolveLaneRuns(lanes)) {
     const lineW = run.right - run.left;
+    const y = lanes.reduce(
+      (foot, lane) => (lane.x >= run.left && lane.x < run.right ? Math.max(foot, lane.bottom) : foot),
+      gridTop,
+    );
+    const beatHeight = Math.min(y - gridTop, 36 + 110 * pulse * (0.7 + 0.3 * heat));
     graphics
       .rect(run.left, y - 3 - beatHeight, lineW, beatHeight)
       .fill({ fill: beatGradient(lineColor), alpha: beatAlpha });

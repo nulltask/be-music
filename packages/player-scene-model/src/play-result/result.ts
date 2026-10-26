@@ -20,6 +20,8 @@ export type PlayRunKind = 'single' | 'stage' | 'course' | 'nonstop';
 export interface PlayResult {
   /** A seek made this play practice: never save a record, rank it or auto-save its replay. */
   practice?: boolean;
+  /** The 2P player's result of a two-player play (LR2 BATTLE); this result is the 1P player's. */
+  secondPlayer?: PlayResult;
   /** A live course-stage outcome for carrying practice into the next stage without a replay. */
   stageOutcome?: ReplayRulesetResult;
   /** Per-judgment counts, total notes, EX score and the displayed score (LR2's money score, else the EX score). */
@@ -45,6 +47,11 @@ export interface PlayResult {
   scoreHistory: ScoreHistorySample[];
   /** The replay the engine recorded, when it recorded one. */
   replay?: BeMusicReplay;
+  /**
+   * The play was a replay played back, not a live play: a dropped replay, a course replay's stage or its course result.
+   * Skins mark it (LR2 op 84, as LR2 keeps its replay status on through the results).
+   */
+  fromReplay?: boolean;
   /** The clear lamp (FAILED, the gauge cleared on, FULL COMBO, …). */
   lamp?: ClearLamp;
   /** The gauge the play ran on, as the ruleset names it (`GROOVE`, `HARD`, `EX-HARD`, …). */
@@ -127,6 +134,8 @@ export interface PlayResultFacts {
   fast?: number;
   slow?: number;
   replay?: BeMusicReplay;
+  /** The play was a replay played back ({@link PlayResult.fromReplay}). */
+  fromReplay?: boolean;
   run?: PlayRunKind;
   course?: CourseView;
 }
@@ -155,6 +164,7 @@ export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts
     gaugeHistory: [...state.gaugeHistory, { progress, value: state.gauge }],
     scoreHistory: [...state.scoreHistory, { progress, exScore: state.exScore }],
     ...(facts.practice !== true && facts.replay !== undefined ? { replay: facts.replay } : {}),
+    ...(facts.fromReplay === true ? { fromReplay: true } : {}),
     lamp,
     ...(state.gaugeType !== undefined ? { gaugeType: state.gaugeType } : {}),
     ...(facts.run !== undefined ? { run: facts.run } : {}),

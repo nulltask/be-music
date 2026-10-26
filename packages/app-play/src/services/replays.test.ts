@@ -1,9 +1,9 @@
 import type { BeMusicCourseReplay, BeMusicReplay } from '@be-music/player-engine/replay';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
-import demoPackageJSON from '../../package.json' with { type: 'json' };
+import playerPackageJSON from '../../package.json' with { type: 'json' };
 import { REPLAY_RECORDER, ReplayAutoSave } from './replays.ts';
 
-// The build's commit is a define of the demo's Vite build, which the test run does not have.
+// The build's commit is a define of the player's Vite build, which the test run does not have.
 vi.hoisted(() => {
   (globalThis as { __BE_MUSIC_BUILD__?: string }).__BE_MUSIC_BUILD__ = '5760628d';
 });
@@ -18,7 +18,7 @@ describe('REPLAY_RECORDER', () => {
   test('names the web app, its version and the commit it was built from', () => {
     expect(REPLAY_RECORDER).toEqual({
       name: 'be-music-web',
-      version: demoPackageJSON.version,
+      version: playerPackageJSON.version,
       build: '5760628d',
       platform: 'web',
     });
@@ -28,7 +28,7 @@ describe('REPLAY_RECORDER', () => {
     vi.stubGlobal('__BE_MUSIC_BUILD__', '');
     vi.resetModules();
     const { REPLAY_RECORDER: recorder } = await import('./replays.ts');
-    expect(recorder).toEqual({ name: 'be-music-web', version: demoPackageJSON.version, platform: 'web' });
+    expect(recorder).toEqual({ name: 'be-music-web', version: playerPackageJSON.version, platform: 'web' });
   });
 });
 

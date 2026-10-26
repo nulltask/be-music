@@ -8,6 +8,7 @@
 import type { Texture } from 'pixi.js';
 import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player-engine';
 import { createEmptyScore, type LongNoteStyle, type ScoreSummary } from '@be-music/player-engine/ruleset';
+import type { SecondPlayerState } from './play-state.ts';
 import type {
   PlayerInputSignalBus,
   PlayerStateSignals,
@@ -82,6 +83,7 @@ export class PlaySessionState extends PlayPresentation {
   resolvedPlayChart: ResolvedChart | undefined;
   /** The `#RANDOM` / `#SWITCH` draws {@link resolvedChart} was resolved with; handed to the engine with it. */
   randomDraws: RandomDraws | undefined;
+  randomSeeds: { p1?: string; p2?: string } = {};
   /**
    * `seconds → beat` resolver that properly accounts for `#STOP` windows. During a STOP, this returns the same beat
    * across the window's duration so the playfield freezes in place. Without it the previous hand-rolled `currentBeat`
@@ -137,6 +139,8 @@ export class PlaySessionState extends PlayPresentation {
    * 7K-flavored fallbacks keep behaving as before for skinless / pre-prepare code paths.
    */
   chartPlayVariant: ChartPlayVariant = '7';
+  /** The play variant of the chart a battle mode converted, as LR2's key-mode ops read it. */
+  battleSourceVariant: ChartPlayVariant | undefined = undefined;
   laneX: Map<string, PlayfieldLaneRect> = new Map();
   /**
    * `playClock()` value captured at `start()`. Theme animations (LR2 timer 0/40/41 — scene-start / READY / play-start)
@@ -323,6 +327,8 @@ export class PlaySessionState extends PlayPresentation {
    * the player's hi-speed changes; the result is read off it (`playResultFromPlayState`).
    */
   playState: PlayState = createPlayState();
+  /** The 2P player of a two-player play; the session's own score and play state are the 1P player's. */
+  secondPlayer: SecondPlayerState | undefined = undefined;
   /**
    * Replay assembled by the shared engine right before its play promise settles (`onReplayRecorded`). Snapshotted
    * into {@link getResultData} so the result host can offer it as a download.

@@ -69,6 +69,8 @@ export const LR2_BUTTON = {
   FLIP: 54,
   /** Cycles HS-FIX. */
   HS_FIX: 55,
+  /** Cycles BATTLE (OFF / BATTLE / D-BATTLE / SP TO DP / G-BATTLE; OpenLR2 L10555). */
+  BATTLE: 56,
   /** Steps the 1P hi-speed (`plusOnly` picks the direction). */
   HISPEED_1P: 57,
   /** Steps the 2P hi-speed. */
@@ -79,6 +81,10 @@ export const LR2_BUTTON = {
   BGA: 72,
   /** Toggles the BGA size (NORMAL / EXTEND). */
   BGA_SIZE: 73,
+  /** Steps the judge timing by 1 ms within −99..99 (OpenLR2 L10617). */
+  JUDGE_TIMING: 74,
+  /** Cycles the automatic judge timing (OFF / ON / SILENT; OpenLR2 L10625). */
+  JUDGE_AUTO_ADJUST: 75,
   /** Sets the difficulty filter to ALL. Buttons 91-96 set ALL, BEGINNER … INSANE. */
   DIFFICULTY_FILTER_ALL: 91,
   /** Sets the difficulty filter to BEGINNER. */

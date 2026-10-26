@@ -1,11 +1,11 @@
 /**
- * The demo's render resolution setting (canvas pixels per CSS pixel): the Debug Menu offers 1× up to the display's
+ * The player's render resolution setting (canvas pixels per CSS pixel): the Debug Menu offers 1× up to the display's
  * `devicePixelRatio` in 0.5 steps, and the pick is remembered. Before any pick the player renders at 1.5× (full density
  * at 2× and above made tablets fill-rate bound: under 30 fps on iPad, 60 fps at 1.5×) and benchmarks the select screen
  * once to pick for the device.
  */
 
-export const RENDER_RESOLUTION_STORAGE_KEY = 'be-music-demo.render-resolution';
+export const RENDER_RESOLUTION_STORAGE_KEY = 'be-music.render-resolution';
 
 /** Resolution used until the player (or the first-run benchmark) picks one. */
 export const DEFAULT_RENDER_RESOLUTION = 1.5;

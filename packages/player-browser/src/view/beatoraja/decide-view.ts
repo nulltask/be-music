@@ -9,8 +9,7 @@
  * takes keys only.
  */
 
-import { resolveChartLongNoteMode } from '@be-music/chart-model';
-import { resolveBeatorajaOptionIndex } from '@be-music/skin-beatoraja/scene';
+import { resolveBeatorajaOptionRef } from './option-refs.ts';
 import { buildBaseOpSet, type BeatorajaSkin } from '@be-music/skin-beatoraja';
 import {
   resolveBeatorajaDecideGraphValue,
@@ -123,10 +122,8 @@ export class BeatorajaDecideView implements DecideView {
         skin,
         textures,
         resolveRefValue: (ref) =>
-          resolveBeatorajaOptionIndex(ref, {
-            lnMode: this.frame?.playChart === undefined ? undefined : resolveChartLongNoteMode(this.frame.playChart),
-            hsFix: this.frame?.playOptions.hsFix,
-          }) ?? 0,
+          // beatoraja's decide screen shows the player's LN MODE, not the chart's.
+          resolveBeatorajaOptionRef(ref, this.frame !== undefined ? { playOptions: this.frame.playOptions } : {}) ?? 0,
         resolveTextContent: (ref) =>
           resolveBeatorajaChartText(ref, {
             ...(this.frame !== undefined ? { chart: this.frame.chart } : {}),

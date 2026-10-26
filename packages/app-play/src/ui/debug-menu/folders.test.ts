@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
   DEBUG_MENU_FOLDERS,
   DEBUG_MENU_FOLDERS_STORAGE_KEY,
-  clearDemoSettings,
-  demoSettingKeys,
+  clearPlayerSettings,
+  playerSettingKeys,
   folderPath,
   folderEntries,
   parseFolderOpenStates,
@@ -144,21 +144,21 @@ describe('folder open-state persistence', () => {
 });
 
 describe('settings reset', () => {
-  it('removes demo settings but keeps best records and other sites’ keys', () => {
+  it('removes player settings but keeps best records and other sites’ keys', () => {
     const storage = memoryStorage({
-      'be-music-demo.volumes': '{}',
-      'be-music-demo.debug-menu-folders': '{}',
-      'be-music-demo.chart-best-records': '{}',
+      'be-music.volumes': '{}',
+      'be-music.debug-menu-folders': '{}',
+      'be-music.chart-best-records': '{}',
       'other-app.key': 'x',
     });
-    expect(demoSettingKeys(storage).sort()).toEqual(['be-music-demo.debug-menu-folders', 'be-music-demo.volumes']);
-    expect(clearDemoSettings(storage)).toBe(2);
-    expect([...storage.values.keys()].sort()).toEqual(['be-music-demo.chart-best-records', 'other-app.key']);
+    expect(playerSettingKeys(storage).sort()).toEqual(['be-music.debug-menu-folders', 'be-music.volumes']);
+    expect(clearPlayerSettings(storage)).toBe(2);
+    expect([...storage.values.keys()].sort()).toEqual(['be-music.chart-best-records', 'other-app.key']);
   });
 
   it('does nothing on blocked storage', () => {
-    expect(demoSettingKeys(BLOCKED_STORAGE)).toEqual([]);
-    expect(clearDemoSettings(BLOCKED_STORAGE)).toBe(0);
+    expect(playerSettingKeys(BLOCKED_STORAGE)).toEqual([]);
+    expect(clearPlayerSettings(BLOCKED_STORAGE)).toBe(0);
   });
 });
 

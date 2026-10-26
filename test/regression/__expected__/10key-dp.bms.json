@@ -38,7 +38,11 @@
       "speed": {},
       "swBGA": {},
       "player": 2,
-      "lnType": 1
+      "lnType": 1,
+      "wavNameBytePrefixes": {
+        "sample.wav": "7361",
+        "branch.wav": "6272"
+      }
     },
     "controlFlow": [],
     "events": [
@@ -174,6 +178,11 @@
           "percent": 75
         },
         "noteCount": 36,
+        "headerBPM": 120,
+        "bpmRange": {
+          "min": 120,
+          "max": 120
+        },
         "chartFingerprint": "bmfp0:c784da4ad98fc42257375c50c3bc154d2b4cd7abea959e7a0c48a19565bf6487",
         "playFingerprint": "bmfp0:c784da4ad98fc42257375c50c3bc154d2b4cd7abea959e7a0c48a19565bf6487",
         "title": "10 KEY DP Lane Mode",

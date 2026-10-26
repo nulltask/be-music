@@ -3,6 +3,7 @@
  * and draws the lane backgrounds and key beams through the be-music skin (or the default playfield's) unless the skin owns them.
  */
 
+import { resolveLiftedLane } from '@be-music/player-scene-model';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../../stage/design.ts';
 import { PLAYFIELD } from '@be-music/player-skin-sdk';
 import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
@@ -36,8 +37,18 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
     const x = themeLane ? themeLane.x : (fallbackLane?.x ?? fallbackLeft) * fallbackScaleX;
     const w = themeLane ? themeLane.w : Math.max(4, (fallbackLane?.w ?? PLAYFIELD.w) * fallbackScaleX);
     const top = themeLane ? themeLane.top : fallbackTop * fallbackScaleY;
-    const bottom = themeLane ? themeLane.bottom : fallbackBottom * fallbackScaleY;
-    ctx.play.laneX.set(channel, { x, w, top, bottom });
+    const originalBottom = themeLane ? themeLane.bottom : fallbackBottom * fallbackScaleY;
+    const side = ctx.play.chartPlayVariant !== '9' && channel.startsWith('2') ? '2P' : '1P';
+    const lift = ctx.drawsLift ? (ctx.play.resolveLaneCovers().find((cover) => cover.side === side)?.lift ?? 0) : 0;
+    const lane = ctx.drawsLift
+      ? resolveLiftedLane(
+          { x, w, top, bottom: originalBottom },
+          lift,
+          !ctx.play.playState.view.covers.find((cover) => cover.side === side)?.absolute,
+        )
+      : { x, w, top, bottom: originalBottom };
+    const bottom = lane.bottom;
+    ctx.play.laneX.set(channel, lane);
 
     if (skinOwnsLanes) {
       // With a skin owning the lanes, the lane background, judgement line and key lasers are all rendered by the skin

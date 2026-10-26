@@ -25,6 +25,7 @@ import type {
   PlayResult,
   PlaySide,
   PlayState,
+  ReplaySlotState,
   ResultPresentation,
 } from '@be-music/player-scene-model';
 import type { Container, Sprite, Texture } from 'pixi.js';
@@ -103,6 +104,11 @@ export interface SceneViewTiming {
 export interface SelectRecords {
   chart(chart: LibraryChart): BeMusicChartBestRecord | undefined;
   course(course: LibraryCourse): BeMusicCourseBestRecord | undefined;
+  /**
+   * Which of a chart's or course's replay slots hold a replay (`REPLAY_SLOT_COUNT` of them), when the host keeps replay
+   * slots: the screen picks one for REPLAY, and a beatoraja skin lights their ops.
+   */
+  replaySlots?(entry: Exclude<LibraryEntry, { kind: 'folder' }>): readonly boolean[];
 }
 
 /**
@@ -163,12 +169,19 @@ export interface SelectFrame {
   readonly records: SelectRecords;
   /** The host's text field is over the search box: the skin leaves the query to it. */
   readonly searchEditing: boolean;
+  /** Why the chart filter expression searched for (`?…`) does not parse; the list is not filtered meanwhile. */
+  readonly searchError?: string;
   /** When the player started the bar under the cursor: a skin's launch outro counts from it, and input waits. */
   readonly startedAtMs?: number;
   /** The README overlay: the text file shown for a chart. */
   readonly readText?: { readonly chart: LibraryChart; readonly text: string };
   /** The course maker, when the player makes courses (LR2's course-maker ops, texts and buttons). */
   readonly courseMaker?: SelectCourseMakerState;
+  /**
+   * The replay slots of the chart or course under the cursor, when the host keeps replay slots: which hold a replay,
+   * and the one REPLAY plays (−1 for none), as beatoraja's select screen picks it.
+   */
+  readonly replaySlots?: { readonly exists: readonly boolean[]; readonly selected: number };
   /** The screen's music (BGM and chart preview), analysed for audio-reactive skins. */
   readonly audio: BeMusicAudioFrame;
 }
@@ -181,6 +194,13 @@ export type SelectIntent =
   | { readonly type: 'activate' }
   /** Play the chart or course under the cursor (in AUTO with `autoPlay`): a skin's PLAY and AUTO buttons. */
   | { readonly type: 'start'; readonly autoPlay?: boolean }
+  /**
+   * Replay the chart or course under the cursor from replay slot `slot` (a skin's replay buttons), or from the slot
+   * picked when no slot is named (the REPLAY key); a slot that holds no replay starts nothing.
+   */
+  | { readonly type: 'replay'; readonly slot?: number }
+  /** Pick the next (`step` 1) or previous (−1) replay slot holding a replay (beatoraja's NEXT / PREV_REPLAY). */
+  | { readonly type: 'replay-slot'; readonly step: 1 | -1 }
   /** Step a play option through its choices (`cyclePlayOptionValue`), or the hi-speed by its step. */
   | { readonly type: 'play-option'; readonly key: keyof PlayOptions; readonly step: number }
   /** Set a play option; a value outside its choices (or range) is ignored (`resolvePlayOptionValue`). */
@@ -348,6 +368,8 @@ export interface PlayFrame {
   readonly playOptions: PlayOptions;
   /** The running play: gauge, score, combo, judgments, hi-speed and lane covers. */
   readonly state: PlayState;
+  /** The 2P player of a two-player play (LR2 BATTLE): its gauge, score, combo and judgments. */
+  readonly state2P?: PlayState;
   /** Optional personal best and target EX scores for skin comparison animations; missing values mean zero. */
   readonly scoreTargets?: { readonly bestEXScore?: number; readonly targetEXScore?: number };
   readonly stage: PlayStage;
@@ -396,6 +418,7 @@ export type PlayIntent =
   | { readonly type: 'hi-speed'; readonly command: HiSpeedCommand }
   /** Move or switch a lane cover (beatoraja's cover buttons and wheel). */
   | { readonly type: 'cover'; readonly command: LaneCoverCommand }
+  | { readonly type: 'constant-visibility'; readonly durationMs?: number; readonly fadeMs?: number }
   | { readonly type: 'pause' }
   /** Give the play up, as holding ESC does. */
   | { readonly type: 'quit' }
@@ -457,14 +480,23 @@ export interface ResultFrame {
   readonly graphShownAtMs?: number;
   /** When the player pressed on to the record update, on the clock (LR2's timer 152). Absent until then. */
   readonly updateShownAtMs?: number;
+  /**
+   * Each replay slot of the chart (or the course) as this result sees it (beatoraja's ops 196-198 and 1196-1204), when
+   * the host keeps replay slots.
+   */
+  readonly replaySlots?: readonly ReplaySlotState[];
   readonly leaving?: SceneLeaving<'continue' | 'retry'>;
 }
 
 /**
  * What the player asks of the result screen: `continue` presses on, as Enter does (skip the graphs, show the record
- * update, then leave), and `retry` plays the chart again, as R does.
+ * update, then leave), `retry` plays the chart again, as R does, and `saveReplay` saves the play into a replay slot, as
+ * keys 1-4 and a beatoraja skin's replay buttons do.
  */
-export type ResultIntent = { readonly type: 'continue' } | { readonly type: 'retry' };
+export type ResultIntent =
+  | { readonly type: 'continue' }
+  | { readonly type: 'retry' }
+  | { readonly type: 'saveReplay'; readonly slot: number };
 
 /** When the result screen takes input and how it leaves, as its skin authors it. */
 export interface ResultViewTiming extends SceneViewTiming {
@@ -491,6 +523,9 @@ export interface PlayfieldStage {
 
 /** A lane's rect on the stage. `bottom` is the judgement line a note's bottom edge lands on. */
 export interface PlayfieldLaneRect {
+  /** Original judgement line before LIFT; preserves replay and white-number scale. */
+  readonly baseBottom?: number;
+  readonly scrollScale?: number;
   readonly x: number;
   readonly w: number;
   readonly top: number;

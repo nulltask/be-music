@@ -1,7 +1,7 @@
 import { html, nothing, type CSSResultGroup, type PropertyValues, type TemplateResult } from 'lit';
 import type { BeMusicDOMGameplayFrame } from '@be-music/player-skin-sdk';
 import { FrameElement } from '../base.ts';
-import { resolveGameplayPanels } from '../gameplay-data.ts';
+import { resolveGameplayPanels, resolveSecondPlayerPanels } from '../gameplay-data.ts';
 import { screenStyles } from '../styles/screen.ts';
 import { gameplayStyles } from '../styles/gameplay.ts';
 import { stats } from '../templates.ts';
@@ -22,6 +22,7 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
     if (!f) return nothing;
     const { state: s, runtime: r, chart } = f;
     const { score, gauge, judgments, title, facts, totalNotes: total, seconds } = resolveGameplayPanels(f);
+    const second = r.secondPlayer === undefined ? undefined : resolveSecondPlayerPanels(r.secondPlayer, f.state2P);
     const course = f.course
       ? `${f.course.title} · Stage ${(f.course.stageIndex ?? 0) + 1}/${f.course.stages.length}`
       : 'Single chart';
@@ -60,6 +61,23 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
             <dd>${Math.floor(seconds)} / ${Math.ceil(s.totalSeconds)} s</dd>
           </dl>
           <be-music-gauge-panel compact exportparts="meter:gauge-meter" .data=${gauge}></be-music-gauge-panel>
+          ${
+            second
+              ? html`<div class="hud-second" part="second-player" aria-label="2P">
+                  <span class="eyebrow">2P</span>
+                  <be-music-score-summary
+                    compact
+                    exportparts="summary:score-summary,value:score-value"
+                    .data=${second.score}
+                  ></be-music-score-summary>
+                  <be-music-gauge-panel
+                    compact
+                    exportparts="meter:gauge-meter"
+                    .data=${second.gauge}
+                  ></be-music-gauge-panel>
+                </div>`
+              : nothing
+          }
           <progress
             max="1"
             .value=${s.totalSeconds > 0 ? seconds / s.totalSeconds : 0}
@@ -99,6 +117,14 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
               exportparts="panel:judgment-panel,table:judgment-table"
               .data=${judgments}
             ></be-music-judgment-table>
+            ${
+              second
+                ? html`<be-music-judgment-table
+                    exportparts="panel:judgment-panel,table:judgment-table"
+                    .data=${second.judgments}
+                  ></be-music-judgment-table>`
+                : nothing
+            }
             <be-music-gauge-panel
               exportparts="panel:gauge-panel,graph:gauge-graph"
               .data=${gauge}

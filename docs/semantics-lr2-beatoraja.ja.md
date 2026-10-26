@@ -45,7 +45,7 @@ LR2 と beatoraja は、同じ譜面、オプション、スキンの番号を�
 主なリスク（深刻な順）：
 
 1. **アシストとオプションがランプ、記録、対象可否に影響しない。** LR2 はアシスト付きのプレイをまったく保存しないか、ランプを EASY までに抑えてランプだけを更新します。beatoraja は (LIGHT) ASSIST を付けてランプだけをマージします。be-music はオートスクラッチ、SCATTER、HS-FIX CONSTANT のプレイを、ランプ、EX、BP そのままでマージします。ローカルのベストが水増しされ、Leaderboard では SCATTER と CONSTANT のプレイがアシストなしのボードに混ざります。(B)
-2. **シングルプレイの BP に未判定ノートが入らない。** どちらのエンジンも加えます。`endOnFailure` が既定で有効なので、BP 最少のベストと Leaderboard の BP では早く落ちたほうが得をします。これとは別に、失敗したランを別の ruleset で再シミュレーションすると、プレイヤーがたどり着けなかったノートまで採点されます。(B、全 ruleset)
+2. **シングルプレイの BP に未判定ノートが入っていなかった。** どちらのエンジンも加えます。[#584](https://github.com/nulltask/be-music/issues/584) で修正し、どのプレイでも数えるようになりました。これとは別に、失敗したランを別の ruleset で再シミュレーションすると、プレイヤーがたどり着けなかったノートまで採点されます。(B、全 ruleset)
 3. **ランプの種類に LIGHT ASSIST EASY がない。** beatoraja の ASSIST-EASY ゲージは LightAssistEasy（id 3、op 1101）でクリアします。be-music は ASSIST_EASY を記録して op 1100 を表示し、beatoraja の `score.db` のランプを往復できません。修正は Leaderboard の `clearLampRank` の保存に及びます。(A+B)
 4. **beatoraja ruleset の再現度のバグ。**
    - TOTAL を基本ノート数で割っているが、beatoraja は CN/HCN の終端も数えるので、回復が最大 2 倍速すぎる。
@@ -129,7 +129,7 @@ flowchart TD
 | #   | 違い                                                    | 分類           | be-music の現状                                    | 推奨                                                                                  |
 | --- | ------------------------------------------------------- | -------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | 1   | アシストとオプションのランプと記録への影響              | B              | 無視。すべてマージ                                 | ログのフィールドから ruleset ごとにアシスト区分を決める。ランプだけマージ             |
-| 2   | BP に未判定ノートを含める（シングルプレイ）             | B              | コースだけ                                         | 全 ruleset で修正 + Leaderboard のマイグレーション                                    |
+| 2   | BP に未判定ノートを含める（シングルプレイ）             | B              | すべてのプレイ（#584）                             | 対応済み。保存済みの Leaderboard の BP はそのまま                                     |
 | 3   | 失敗したランを別 ruleset で再シミュレーション           | B              | 3 つすべてでランキング                             | 失敗したサバイバルのランはプレイした ruleset でだけランキングする（または印を付ける） |
 | 4   | LIGHT ASSIST EASY ランプ                                | A, B           | なし。ASSIST-EASY ゲージ → ASSIST_EASY             | ランプを追加。追加のみの rank かマイグレーション                                      |
 | 5   | LR2 はゲージ判定より先に FC                             | B              | ruleset ごとの優先順位（fixed in #591）            | ruleset ごと                                                                          |
@@ -355,12 +355,12 @@ flowchart TD
 
 ### 途中で終わったプレイの BP
 
-- **LR2:** `SaveResult` は、シングルプレイと段位で未判定ノートを BP に加えます（[#L9105-L9113](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9105-L9113)）。BP = BAD + POOR で、POOR には空 POOR と地雷の被弾が含まれます（[#L1945-L1951](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1945-L1951)）。
+- **LR2:** `SaveResult` は、シングルプレイ（[#L9436-L9439](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9436-L9439)）とエキスパート・段位のステージ（[#L9111-L9113](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9111-L9113)）で未判定ノートを BP に加えます。各ベスト（EX スコア・ランプ・コンボ・BP）は別々に更新される（[#L9372-L9389](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9372-L9389)）ので、落ちたプレイでもベスト BP は下がりえます。BP = BAD + POOR で、POOR には空 POOR と地雷の被弾が含まれます（[#L1945-L1951](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1945-L1951)）。
 - **beatoraja:** `minbp = BD + PR + MS + (notes − pastNotes)`（[BMSPlayer.java#L909](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L909)）。
 - **種類:** 両エンジンは一致しており、be-music だけが違います。
-- **be-music の現状:** コースのステージは未判定ノートを加えます（[`records/best-record.ts`](../packages/player-engine/src/records/best-record.ts)）。シングルプレイ（`recordPlayFromResult`）と Leaderboard（[`packages/app-leaderboard/src/scores/submit.ts`](../packages/app-leaderboard/src/scores/submit.ts)）は加えません。`endOnFailure` が既定で有効なので、早く落ちたプレイの BP はごく小さくなります。
+- **ESC:** どちらのエンジンも ESC で投げたシングルプレイを落ちたプレイとして保存し、到達しなかったノートを BP に数えます（beatoraja の `stopPlay` は失敗状態に移り、Failed ランプで保存します）。beatoraja はノートを 1 つも判定していないプレイを保存しません（`createScoreData` が `null` を返す）。
+- **be-music の現状:** [#584](https://github.com/nulltask/be-music/issues/584) で修正。どのルールセット（名前を言ってはいけないあのゲームを含む）でも、すべてのプレイの BP に判定されなかったノートを数えます。ローカルの記録（[`records/best-record.ts`](../packages/player-engine/src/records/best-record.ts) の `recordPlayFromResult`・`recordPlayFromSummary`）、コースのステージ（同じ関数）、Leaderboard（シミュレーション結果に対する `resolveRulesetResultMissCount`、[`packages/app-leaderboard/src/scores/submit.ts`](../packages/app-leaderboard/src/scores/submit.ts)）が対象です。LR2 が POOR に数える地雷の POOR は、判定済みのノートとは見なしません。ESC で投げたシングルプレイは FAILED として保存し（`abortedRecordPlayFromResult`。ノートを 1 つも判定していなければ保存しない）、Leaderboard でも落ちたプレイとして順位付けします。修正前に保存された BP は、ローカルも Leaderboard もそのままです。
 - **影響:** B、全 ruleset。
-- **推奨:** シングルプレイの BP = `resolveMissCount(judge, noteCount − judged)`。`0012` と同じく Leaderboard のマイグレーションが必要です。
 
 ### 失敗したランを別の ruleset で再シミュレーションする
 
@@ -711,11 +711,11 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 - **LR2:** コースのハッシュ文字列（コースのヘッダー + ステージの MD5）。
 - **beatoraja:** ステージの SHA-256 をつなげたものと、`mode = lnmode + option*10 + no_speed*100 + judge*1000 + gauge*10000`（[PlayDataAccessor.java#L343-L372](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayDataAccessor.java#L343-L372)）。
 - **be-music の現状:**
-  - デモはコースの記録を `stage.sha256 ?? stage.md5` で区別します（[`packages/app-play/src/course-result.ts`](../packages/app-play/src/course-result.ts) の `courseBestRecordKey`）。同じコースを `.lr2crs`（MD5 だけ）と beatoraja の JSON から読むと、**記録が 2 つ**になります。
+  - プレイヤーはコースの記録を `stage.sha256 ?? stage.md5` で区別します（[`packages/app-play/src/course-result.ts`](../packages/app-play/src/course-result.ts) の `courseBestRecordKey`）。同じコースを `.lr2crs`（MD5 だけ）と beatoraja の JSON から読むと、**記録が 2 つ**になります。
   - Leaderboard は `bmcourse0` のフィンガープリントを使います。
   - コースの制約、ゲージ、ランダムコース、持ち越し、トロフィーは [#403](https://github.com/nulltask/be-music/issues/403)〜[#410](https://github.com/nulltask/be-music/issues/410) と [#408](https://github.com/nulltask/be-music/issues/408) で扱いました。そのうちランダムコースの SQL フィルタは **[#564](https://github.com/nulltask/be-music/issues/564) で修正済み**で、コースメーカーで作ったコースはランキング対象外で始まるようになりました（**[#566](https://github.com/nulltask/be-music/issues/566) で修正済み**）。
 - **影響:** A/B。
-- **推奨:** デモのコース記録をコースのフィンガープリントで区別し、未定義の LN を持つステージの実際の LN モードを含める。
+- **推奨:** プレイヤーのコース記録をコースのフィンガープリントで区別し、未定義の LN を持つステージの実際の LN モードを含める。
 
 ## スキンの仕組み
 
@@ -798,7 +798,7 @@ EX = 2PG + GR はどちらのエンジンでも同じです。マネースコア
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | リザルト 150–152          | リザルト表示時に開始します。対応する JSON／Lua スキンでは上流の `ranktime` はゼロのままで、LR2 のリザルト操作段階とは別です。                                                                                                           |
 | スコア 348–350            | 判定後、EX スコアが譜面全体の最大値の 18/27、21/27、24/27（A・AA・AAA）に達すると開始します。                                                                                                                                           |
-| スコア 351–352            | 判定後、ホストの自己ベストまたは目標 EX スコア以上で開始します。指定がなければゼロです。デモはその譜面の自己ベストを渡します。                                                                                                          |
+| スコア 351–352            | 判定後、ホストの自己ベストまたは目標 EX スコア以上で開始します。指定がなければゼロです。プレイヤーはその譜面の自己ベストを渡します。                                                                                                    |
 | HCN 250–289 / 1810–2199   | 判定エンジンのレーン状態を使い、ゲージ増加中は active、減少中は damage、判定済みの先頭が通過する前と終端後は停止します。手動・AUTO・リプレイ・AUTO SCRATCH・シークは同じエンジンの状態に従います。                                      |
 | キャラクター 900–907      | neutral で始まり、指定された neutral モーションの区切りで最新の判定に応じた反応へ移り、反応の時間が過ぎると neutral に戻ります。2P は対戦相手として逆の反応をします。                                                                   |
 | dance 909 / music end 908 | プレイ中は dance が動きます。シーンは最終ノート（AUTO は準備済み譜面の最終イベント）から譜面時間で5秒後に music end を通知し、908 を開始してキャラクターと dance を停止します。その後、スキンの `finishmargin` を待ってフェードします。 |
