@@ -1,5 +1,6 @@
 import { runBrowserTask, getBrowserWorkerCount } from '../compute/index.ts';
 import { parseChartTask, unzipTask } from '../compute/tasks.ts';
+import { yieldToTask } from '../compute/yield.ts';
 import { seedLibraryChartPlayVariant, type ChartSourceKind, type LibraryChart } from '@be-music/player-scene-model';
 import {
   basename,
@@ -484,7 +485,7 @@ export async function loadChartCollectionFromFiles(
     }
     parsedSoFar += 1;
     throttledParseProgress?.({ phase: 'parsing', current: parsedSoFar, total: chartCount, label: path });
-    if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) await yieldToEventLoop();
+    if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) await yieldToTask();
   });
   charts.push(...loadedCharts.filter((chart): chart is LibraryChart => chart !== undefined));
   errors.push(...parseErrors.filter((error): error is BrowserChartCollection['errors'][number] => error !== undefined));
@@ -493,21 +494,6 @@ export async function loadChartCollectionFromFiles(
   }
 
   return { sources, charts, errors };
-}
-
-/**
- * Yields to a browser task boundary so the host can paint a frame and dispatch pending progress events during large
- * chart drops. `queueMicrotask` is intentionally not used here: microtasks run before the browser gets a render
- * opportunity, so they still let a large parse loop monopolize the page.
- */
-function yieldToEventLoop(): Promise<void> {
-  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
-  if (scheduler?.yield !== undefined) {
-    return scheduler.yield();
-  }
-  return new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
 }
 
 export function describeChartCollection(collection: BrowserChartCollection): string {
