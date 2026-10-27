@@ -1,4 +1,4 @@
-import { and, asc, eq, getTableColumns, inArray } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, inArray, isNull } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { RulesetId } from '@be-music/player-engine/replay';
 import type { Database } from '../db/client.ts';
@@ -96,7 +96,14 @@ export async function rebuildBestScores(
       })
       .from(score)
       .innerJoin(scoreResult, eq(scoreResult.scoreId, score.id))
-      .where(and(eq(score.userId, userId), inArray(score.chartFingerprint, charts), eq(score.hidden, false)))
+      .where(
+        and(
+          eq(score.userId, userId),
+          inArray(score.chartFingerprint, charts),
+          eq(score.hidden, false),
+          isNull(score.unranked),
+        ),
+      )
       .orderBy(asc(score.createdAt), asc(score.id)),
   );
   // Each chart's plays come from one statement, in order, so folding the chunks one after another keeps that order.
