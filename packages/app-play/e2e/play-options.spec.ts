@@ -1003,3 +1003,24 @@ test('That-Which-Must-Not-Be-Named 2P PLAY with M-RAN mirrors one player of a sh
   const mirror: Record<string, string> = { '1': '5', '2': '4', '3': '3', '4': '2', '5': '1' };
   expect(lanes('2')).toEqual(lanes('1').map((lane) => mirror[lane]));
 });
+
+test('a lane option that does not fit the chart names itself in a dialog and goes back to select (#771)', async ({
+  player,
+}) => {
+  await openWithLibrary(player);
+  // beatoraja's CONVERGE is a PMS arrangement; Fixture A is a 7KEY chart.
+  await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+  await player.setOption(['Play options'], 'Random 1P', 'CONVERGE');
+  await player.browseTo(SONGS, 'Fixture A');
+  await player.key('Enter');
+  const dialog = player.page.locator('dialog#play-option-mismatch');
+  // A Basecoat dialog is an empty box; its panel, the child, is what shows.
+  await expect(dialog.locator(':scope > form')).toBeVisible();
+  await expect(dialog.locator('li')).toHaveText(['Random 1P: CONVERGE']);
+  expect((await player.state()).status).toBe('Cannot play Fixture A with Random 1P: CONVERGE');
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await expect(dialog.locator(':scope > form')).toBeHidden();
+  await player.waitFor((state) => state.scene.kind === 'select', 'select after the dialog');
+  // The option stays as the player set it, to change on the select screen.
+  expect(await player.readOption(['Play options'], 'Random 1P')).toBe('CONVERGE');
+});
