@@ -6,7 +6,7 @@
       "bpm": 120,
       "extras": {},
       "title": "Retrigger Different Key Overlap",
-      "artist": "Codex"
+      "artist": "Be-Music Dev Team"
     },
     "resources": {
       "wav": {
@@ -50,7 +50,7 @@
     "roundTripPlayableNotesEqual": true,
     "lines": [
       "#TITLE Retrigger Different Key Overlap",
-      "#ARTIST Codex",
+      "#ARTIST Be-Music Dev Team",
       "#BPM 120",
       "#WAV01 retrigger_a.wav",
       "#WAV02 retrigger_a.wav",
@@ -93,7 +93,7 @@
         "chartFingerprint": "bmfp0:32d86d2ce0191068cbd426227681428b930037aa3d5497e18df90d8d912ed890",
         "playFingerprint": "bmfp0:32d86d2ce0191068cbd426227681428b930037aa3d5497e18df90d8d912ed890",
         "title": "Retrigger Different Key Overlap",
-        "artist": "Codex"
+        "artist": "Be-Music Dev Team"
       },
       "notes": [
         "0 11 normal",

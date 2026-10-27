@@ -6,7 +6,7 @@
       "bpm": 120,
       "extras": {},
       "title": "Edited Sample",
-      "artist": "Codex"
+      "artist": "Be-Music Dev Team"
     },
     "resources": {
       "wav": {
@@ -58,7 +58,7 @@
     "roundTripPlayableNotesEqual": true,
     "lines": [
       "#TITLE Edited Sample",
-      "#ARTIST Codex",
+      "#ARTIST Be-Music Dev Team",
       "#BPM 120",
       "#WAV01 sample.wav",
       "#00011:01010101",
@@ -112,7 +112,7 @@
         "chartFingerprint": "bmfp0:886d08d1c547dd000c0d4434b6cf8cfcbeb543cc683367d208cb7bf36a35c6b4",
         "playFingerprint": "bmfp0:886d08d1c547dd000c0d4434b6cf8cfcbeb543cc683367d208cb7bf36a35c6b4",
         "title": "Edited Sample",
-        "artist": "Codex"
+        "artist": "Be-Music Dev Team"
       },
       "notes": [
         "0 11 normal",

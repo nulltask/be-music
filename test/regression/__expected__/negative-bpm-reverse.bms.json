@@ -7,7 +7,7 @@
       "extras": {},
       "genre": "TEST",
       "title": "negative BPM test 1 (#BPMxx -65 via ch08)",
-      "artist": "be-music #134",
+      "artist": "Be-Music Dev Team",
       "playLevel": 1,
       "rank": 2,
       "total": 300
@@ -87,7 +87,7 @@
       "#PLAYER 1",
       "#GENRE TEST",
       "#TITLE negative BPM test 1 (#BPMxx -65 via ch08)",
-      "#ARTIST be-music #134",
+      "#ARTIST Be-Music Dev Team",
       "#BPM 130",
       "#PLAYLEVEL 1",
       "#RANK 2",
@@ -172,7 +172,7 @@
         "chartFingerprint": "bmfp0:df530a705980ebffe8351a08876d2dcc26272741187f230c9a02d052c4d67150",
         "playFingerprint": "bmfp0:df530a705980ebffe8351a08876d2dcc26272741187f230c9a02d052c4d67150",
         "title": "negative BPM test 1 (#BPMxx -65 via ch08)",
-        "artist": "be-music #134",
+        "artist": "Be-Music Dev Team",
         "genre": "TEST",
         "playLevel": "1",
         "total": 300

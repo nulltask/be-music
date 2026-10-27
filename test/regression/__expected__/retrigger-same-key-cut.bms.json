@@ -6,7 +6,7 @@
       "bpm": 120,
       "extras": {},
       "title": "Retrigger Same Key Cut",
-      "artist": "Codex"
+      "artist": "Be-Music Dev Team"
     },
     "resources": {
       "wav": {
@@ -46,7 +46,7 @@
     "roundTripPlayableNotesEqual": true,
     "lines": [
       "#TITLE Retrigger Same Key Cut",
-      "#ARTIST Codex",
+      "#ARTIST Be-Music Dev Team",
       "#BPM 120",
       "#WAV01 retrigger_a.wav",
       "#00011:0101"
@@ -84,7 +84,7 @@
         "chartFingerprint": "bmfp0:d9aa4c787699e7aa9bdb22ec49d42ffee9c8631c1d821e7ac916ec3262add63a",
         "playFingerprint": "bmfp0:d9aa4c787699e7aa9bdb22ec49d42ffee9c8631c1d821e7ac916ec3262add63a",
         "title": "Retrigger Same Key Cut",
-        "artist": "Codex"
+        "artist": "Be-Music Dev Team"
       },
       "notes": [
         "0 11 normal",

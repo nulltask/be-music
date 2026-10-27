@@ -157,7 +157,7 @@ export function fixtureBMS(chart: FixtureChart): string {
     '#PLAYER 1',
     '#GENRE FIXTURE',
     `#TITLE ${chart.title}`,
-    '#ARTIST be-music checklist',
+    '#ARTIST Be-Music Dev Team',
     `#BPM ${chart.bpm ?? 150}`,
     `#PLAYLEVEL ${chart.playLevel}`,
     `#DIFFICULTY ${chart.difficulty}`,

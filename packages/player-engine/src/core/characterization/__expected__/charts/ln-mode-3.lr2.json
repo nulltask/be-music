@@ -51,7 +51,7 @@
         "chartFingerprint": "bmfp0:7db4b2ac305aab0c644e3b50ae917cdeaeec4e1b7df8900e1caef5204521f80c",
         "playFingerprint": "bmfp0:7db4b2ac305aab0c644e3b50ae917cdeaeec4e1b7df8900e1caef5204521f80c",
         "title": "long notes LNMODE 3",
-        "artist": "characterization"
+        "artist": "Be-Music Dev Team"
       },
       "inputs": [
         {"seq":0,"timeUs":500000,"action":"down","channels":["11"],"tokens":["z"]},

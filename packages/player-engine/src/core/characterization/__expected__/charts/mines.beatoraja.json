@@ -51,7 +51,7 @@
         "chartFingerprint": "bmfp0:12bbe4844f4b2afd2cb103491815587fbfc828b7cb58a796005b11ddac8acdfb",
         "playFingerprint": "bmfp0:12bbe4844f4b2afd2cb103491815587fbfc828b7cb58a796005b11ddac8acdfb",
         "title": "mines",
-        "artist": "characterization"
+        "artist": "Be-Music Dev Team"
       },
       "inputs": [
         {"seq":0,"timeUs":490000,"action":"down","channels":["11"],"tokens":["z"]},

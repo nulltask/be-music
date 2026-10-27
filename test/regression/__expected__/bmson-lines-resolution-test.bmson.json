@@ -7,7 +7,7 @@
       "extras": {},
       "title": "BMSON Lines Resolution Test",
       "subtitle": "",
-      "artist": "Codex",
+      "artist": "Be-Music Dev Team",
       "genre": "TEST",
       "playLevel": 5,
       "total": 100
@@ -35,7 +35,7 @@
       "info": {
         "title": "BMSON Lines Resolution Test",
         "subtitle": "",
-        "artist": "Codex",
+        "artist": "Be-Music Dev Team",
         "genre": "TEST",
         "level": 5,
         "initBPM": 150,
@@ -66,7 +66,7 @@
       "  \"info\": {",
       "    \"title\": \"BMSON Lines Resolution Test\",",
       "    \"subtitle\": \"\",",
-      "    \"artist\": \"Codex\",",
+      "    \"artist\": \"Be-Music Dev Team\",",
       "    \"genre\": \"TEST\",",
       "    \"level\": 5,",
       "    \"init_bpm\": 150,",
@@ -164,7 +164,7 @@
         "chartFingerprint": "bmfp0:593154f90f18ed4e7a4c6a8b857eb3c0ad224e355e406f574bd1d106959e562f",
         "playFingerprint": "bmfp0:593154f90f18ed4e7a4c6a8b857eb3c0ad224e355e406f574bd1d106959e562f",
         "title": "BMSON Lines Resolution Test",
-        "artist": "Codex",
+        "artist": "Be-Music Dev Team",
         "genre": "TEST",
         "playLevel": "5",
         "total": 100
