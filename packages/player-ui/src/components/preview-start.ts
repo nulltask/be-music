@@ -20,6 +20,7 @@ export class BeMusicPreviewStartElement extends BeMusicElement {
         justify-items: center;
         gap: 6px;
         min-width: 8rem;
+        height: auto;
         padding: 18px 26px;
         font-size: 15px;
       }
