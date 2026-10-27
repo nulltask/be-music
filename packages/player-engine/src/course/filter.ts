@@ -853,7 +853,16 @@ function fromTruth(value: boolean | null): CourseSQLValue {
 
 /** SQLite folds ASCII letters only for `LIKE`. */
 function asciiLower(text: string): string {
-  return text.replace(/[A-Z]/gu, (c) => c.toLowerCase());
+  // Most titles and patterns have no capital, or only ASCII: return those as they are, or through `toLowerCase`,
+  // which folds exactly the ASCII capitals in ASCII-only text. Only text with non-ASCII characters needs the
+  // letter-by-letter fold that leaves them alone.
+  let upper = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code > 0x7f) return text.replace(/[A-Z]/gu, (c) => c.toLowerCase());
+    if (code >= 0x41 && code <= 0x5a) upper = true;
+  }
+  return upper ? text.toLowerCase() : text;
 }
 
 const likePatterns = new Map<string, RegExp>();
