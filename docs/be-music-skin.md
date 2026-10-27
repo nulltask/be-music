@@ -38,10 +38,11 @@ This factory connects the existing result component to a skin. Assign it to the 
 
 ```ts
 import { defineBeMusicElements } from '@be-music/player-ui';
+import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import type { BeMusicDOMFactory, BeMusicDOMResultFrame, BeMusicDOMResultActions } from '@be-music/player-skin-sdk';
 
 export const mountResult: BeMusicDOMFactory<BeMusicDOMResultFrame, BeMusicDOMResultActions> = (container, actions) => {
-  defineBeMusicElements();
+  defineBeMusicElements(undefined, { theme: basecoatTheme });
   const element = document.createElement('be-music-result-screen');
   const onContinue = () => actions.continue();
   const onRetry = () => actions.retry();
@@ -61,7 +62,7 @@ export const mountResult: BeMusicDOMFactory<BeMusicDOMResultFrame, BeMusicDOMRes
 };
 ```
 
-Lit is optional for custom DOM screens. The [Player UI guide](../packages/player-ui/README.md) lists reusable tags, JavaScript properties, request events, React/Vue wrappers, and CSS variables, parts and slots. See the [browser player](./player-web.md#native-dom-skins-and-standalone-controllers) for host/controller integration, update cadence and the limitation that Canvas recordings exclude DOM.
+The elements are headless: the look comes from the theme passed when registering (Basecoat here) or from the skin's own custom properties and `::part` rules. Lit is optional for custom DOM screens. The [Player UI guide](../packages/player-ui/README.md) lists reusable tags, JavaScript properties, request events, React/Vue wrappers, and CSS variables, parts and slots. See the [browser player](./player-web.md#native-dom-skins-and-standalone-controllers) for host/controller integration, update cadence and the limitation that Canvas recordings exclude DOM.
 
 ## Quick start: a Canvas 2D skin
 

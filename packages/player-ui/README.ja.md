@@ -2,7 +2,7 @@
 
 # Player UI
 
-Be-Music の表示を再利用する Lit 製 Web Components です。表示データを JavaScript の property で受け取り、操作要求を bubbling・composed な `CustomEvent` で通知します。エンジン・クロック・AudioContext・購読は所有しません。Native Skin も DOM スキンのアダプターを介して同じ部品を使います。
+Be-Music の表示を再利用する Lit 製 Web Components です。表示データを JavaScript の property で受け取り、操作要求を bubbling・composed な `CustomEvent` で通知します。エンジン・クロック・AudioContext・購読は所有しません。要素は headless で、持つのはレイアウトだけです。見た目はテーマから与えます（[外観と組み立て](#外観と組み立て)）。Native Skin も DOM スキンのアダプターを介して同じ部品を使います。
 
 ## パッケージ
 
@@ -122,21 +122,53 @@ Vue は detail を直接 emit するため、`@selection-change="({ index }) => 
 
 ## 外観と組み立て
 
-各要素は Shadow DOM を使います。HTML の画面は Basecoat を採用しているので、ページの Basecoat トークン（`--background`、`--foreground`、`--primary`、`--muted-foreground`、`--card`、`--border`、`--radius` など）に従います。`--be-music-letterbox-background` はステージ周囲の帯、`--be-music-timing-color` はタイミンググラフの色です。`--be-music-list-height` や `--be-music-score-size` のような長さは色ではありません。
+各要素は headless です。shadow 内のスタイルはレイアウト・寸法・スクロール・コンテナクエリだけで、色・枠線・背景・フォントファミリーは指定しません。見た目は次の 3 か所から与えます（範囲の広い順）。
 
-配置は各要素自身の表示幅に従います。各要素は `be-music` という名前の inline-size コンテナで、画面は `be-music-screen` に変えます。40rem 未満ではコレクションのカラムが縦に積み、譜面リストの高さを 18rem に抑えます。それ以上の幅では、リストが譜面詳細の隣の列いっぱいになり、リストの列は詳細より広く残します。22rem 未満では、判定表が Early / Late 列を隠し、再生コントロールが音量スライダーを隠し、プレビューの譜面行はレベルとジャンルをタイトルの下に置き、横画面の Gameplay HUD は操作と詳細カードを詰めます。16rem 未満では、コンパクトなスコアの数値が単独の行になり、プレイオプションが縦に積まれます。`compact` は呼び出し側が明示する property のままです。Gameplay とプレビューのステージは `cqw` と `cqh` で大きさを決め、縦画面の配置はステージの向きに従います。
+1. **テーマ**: 各要素が自身のスタイルの後に shadow root へ採用するスタイルシート。登録時に渡します: `defineBeMusicElements(registry, { theme })`。`@be-music/player-ui/themes/basecoat` は `basecoatTheme` を公開します。中身は Basecoat と、ページの Basecoat トークン（`--background`、`--foreground`、`--primary`、`--muted-foreground`、`--card`、`--border`、`--radius` など）から取る要素の色・枠線・背景です。独自のテーマは shadow root 内の part を選択できます（`[part~='panel']`）。テーマがなければ要素はブラウザ既定の見た目で描画されます。後から `theme` なしで呼んでも設定済みのテーマは保たれ、テーマは要素が初めて描画されるときに適用されます。
+2. **カスタムプロパティ**: どの祖先からでも継承します（下表）。
+3. **part と slot**: 外側から装飾し、内容を差し込みます。
 
-Gameplay HUD は `hud`・`heading`・`primary`・`actions`・`details`・`score-summary`・`score-value`・`score-panel`・`judgment-panel`・`judgment-table`・`gauge-meter`・`gauge-panel`・`gauge-graph`・`timing-panel`・`timing-graph`・`settings-panel` を、一時停止中は `paused` も part として公開します。各部品は `panel` と、該当する `table`・`graph`・`meter`・`value` を公開します。Gameplay と譜面詳細には `actions` slot と既定 slot があり、ほかの画面には既定 slot があります。
+```ts
+import { defineBeMusicElements } from '@be-music/player-ui';
+import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
+
+defineBeMusicElements(customElements, { theme: basecoatTheme });
+```
+
+React と Vue のラッパーはテーマなしで登録します。マウントする前に、テーマを付けて `defineBeMusicElements` を呼んでください。
+
+| プロパティ                                         | 既定値                     | 決めるもの                                              |
+| -------------------------------------------------- | -------------------------- | ------------------------------------------------------- |
+| `--be-music-gap`                                   | `8px`                      | 要素内の間隔（行・操作・数値）                          |
+| `--be-music-panel-padding`                         | `12px`                     | パネルの内側余白（Gameplay HUD は `8px`）               |
+| `--be-music-section-gap`                           | `24px`                     | 画面のセクション間の間隔                                |
+| `--be-music-screen-padding`                        | `24px`                     | 画面の内側余白                                          |
+| `--be-music-center-width`                          | `56rem`                    | デサイドとリザルトの列の最大幅                          |
+| `--be-music-title-size` / `-weight` / `-tracking`  | `1.75rem` / `600` / normal | 画面の見出し                                            |
+| `--be-music-stat-size`                             | `2.25rem`                  | リザルトの EX スコア                                    |
+| `--be-music-graph-height`                          | `44px`                     | ゲージとタイミングのグラフ（リザルトのゲージは `72px`） |
+| `--be-music-row-kind-width`                        | `3.5ch`                    | 譜面リストのレベル列                                    |
+| `--be-music-list-height`                           | `55vh`                     | 画面の外で使う譜面リストの高さ                          |
+| `--be-music-score-size`                            | `1.8em`                    | コンパクトなスコアの数値                                |
+| `--be-music-letterbox-background` / `--background` | `#09090b`                  | プレイフィールドのレターボックスの帯とステージ          |
+| `--be-music-timing-color`                          | `#ffa8b3`                  | タイミンググラフの線                                    |
+
+配置は各要素自身の表示幅に従います。各要素は `be-music` という名前の inline-size コンテナで、画面は `be-music-screen` に変えます。40rem 未満ではコレクションのカラムが縦に積み、検索欄が全幅になり、譜面リストの高さを 18rem に抑えます。それ以上の幅では、リストが譜面詳細の隣の列いっぱいになり、リストの列は詳細より広く残します。30rem 未満では、リザルトのパネルが判定結果を数値の上に積みます。22rem 未満では、判定表が Early / Late 列を隠し、再生コントロールが音量スライダーを隠し、プレビューの譜面行はレベルとジャンルをタイトルの下に置き、横画面の Gameplay HUD は操作と詳細カードを詰めます。16rem 未満では、コンパクトなスコアの数値が単独の行になります。プレイオプションは収まるだけの等幅の列に並びます。`compact` は呼び出し側が明示する property のままです。Gameplay とプレビューのステージは `cqw` と `cqh` で大きさを決め、縦画面の配置はステージの向きに従います。
+
+画面は `screen`・`header`・`eyebrow`・`title` を part として公開します。コレクションは加えて `search`・`folder`・`columns`・`list`・`row`・`details-panel`・`chart-title`、デサイド画面は `progress`・`actions`、リザルトは `players`・`panel`・`stat`・`actions`・`gauge-panel`・`gauge-graph` を公開します。Gameplay HUD は `hud`・`heading`・`primary`・`actions`・`details`・`chart-panel`・`score-summary`・`score-value`・`score-panel`・`judgment-panel`・`judgment-table`・`gauge-meter`・`gauge-panel`・`gauge-graph`・`timing-panel`・`timing-graph`・`settings-panel` を、一時停止中は `paused` も part として公開します。各部品は `panel` と、該当する `table`・`graph`・`meter`・`value` を公開し、譜面リストの行は `row-kind` も公開します。コレクション・デサイド・リザルトの画面は見出しの上に `eyebrow` slot を持ち（デサイドとリザルトは差し込まなければ "Up next" と "Play result" を表示）、コレクションは `title` slot も持ちます。Gameplay と譜面詳細には `actions` slot と既定 slot があり、ほかの画面には既定 slot があります。
 
 ```css
 be-music-gameplay-hud {
   --primary: #a8e6ce;
   --font-sans: system-ui, sans-serif;
+  --be-music-panel-padding: 10px;
 }
 be-music-gameplay-hud::part(judgment-table) {
   font-size: 12px;
 }
 ```
+
+**どこに何を置くか。** コンポーネントは、どの大きさでも成り立つためのもの（レイアウト、ブレークポイント、上表の余白の長さ）を持ちます。テーマは色・枠線・背景・フォントを持ちます。スキンやアプリケーションは独自のスケールと語り口を持ちます。Native は余白と見出しの文字組みをこれらのプロパティと `::part` ルールで、製品名を `eyebrow` slot で設定します（[ADR 0020](../../docs/adr/0020-headless-player-ui.ja.md)）。
 
 ## ライフサイクルと描画
 
