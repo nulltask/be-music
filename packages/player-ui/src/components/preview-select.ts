@@ -2,7 +2,7 @@ import { css, html, type CSSResultGroup, type PropertyDeclarations, type Templat
 import { repeat } from 'lit/directives/repeat.js';
 import type { LibraryChart, LibraryCourse } from '@be-music/player-skin-sdk';
 import { BeMusicElement } from '../base.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 
 type PreviewRow = Pick<LibraryChart, 'id' | 'title' | 'subtitle' | 'artist' | 'genre' | 'playLevel'> & {
   disabled: boolean;
@@ -18,8 +18,7 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
     images: { attribute: false },
   };
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       :host {
         display: grid;
@@ -28,7 +27,6 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         box-sizing: border-box;
         height: 100%;
         padding: 16px;
-        background: var(--background, #171717);
       }
       ul {
         display: grid;
@@ -54,8 +52,6 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         width: 100%;
         aspect-ratio: 16 / 9;
         object-fit: contain;
-        background: var(--muted, #0c1018);
-        border-radius: 4px;
       }
       .title,
       .artist {
@@ -66,7 +62,6 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
       }
       .artist,
       .facts {
-        color: var(--muted-foreground, #b8c7da);
         font-size: 0.85em;
       }
       @container be-music (max-width: 22rem) {

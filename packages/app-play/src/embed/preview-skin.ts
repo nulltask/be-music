@@ -21,6 +21,7 @@ import {
   resolvePlayfieldParts,
   type BeMusicUIEvent,
 } from '@be-music/player-ui';
+import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import { ControlsIdleController } from './controls-idle.ts';
 
 /** The lanes stay in the stage's left half; the BGA and the play's facts take what they leave on the right. */
@@ -114,7 +115,7 @@ function mountPreviewGameplay(
   const document = container.ownerDocument;
   const registry = document.defaultView?.customElements;
   if (!registry) throw new Error('The preview needs a window with Custom Elements support.');
-  defineBeMusicElements(registry);
+  defineBeMusicElements(registry, { theme: basecoatTheme });
   const playfield = document.createElement('be-music-playfield');
   const hud = document.createElement('be-music-preview-hud');
   const showChrome = (): void => {

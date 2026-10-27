@@ -95,6 +95,8 @@ export class PixiSceneHost {
   /** Where the canvas goes back while it is out of the page (see {@link PixiScene.drawsOnCanvas}). */
   private canvasSlot: { parent: HTMLElement; next: Node | null } | undefined;
   private canvasContainer: HTMLElement | undefined;
+  /** Resizes the canvas when the container changes size without a window `resize`. */
+  private containerObserver: ResizeObserver | undefined;
 
   /**
    * The element the host was mounted in. The canvas is in it only while the active scene draws on it, so listen here
@@ -218,6 +220,14 @@ export class PixiSceneHost {
     // path on some browsers. `pointer-events` is intentionally left at `auto` so Pixi's hit-testing
     // (song-select buttons, debug menu, result-screen actions) keeps working.
     this.app.canvas.style.contain = 'content';
+    // `resizeTo` follows only the window's `resize` event. The container also changes size on its own (the page's
+    // layout settles after the first chart is loaded, a side panel opens), and a canvas left at its old size draws the
+    // skin into part of the stage and picks the wrong stage orientation.
+    const View = container.ownerDocument?.defaultView;
+    if (View?.ResizeObserver) {
+      this.containerObserver = new View.ResizeObserver(() => this.app.queueResize());
+      this.containerObserver.observe(container);
+    }
     this.app.stage.label = 'host/stage';
     // The canvas goes in once a scene that draws on it becomes active (`placeCanvas`).
     this.canvasContainer = container;
@@ -369,6 +379,8 @@ export class PixiSceneHost {
       }
       this.current = undefined;
     }
+    this.containerObserver?.disconnect();
+    this.containerObserver = undefined;
     this.domLayer?.remove();
     this.domLayer = undefined;
     if (this.domParent && this.previousPosition !== undefined && this.domParent.style.position === 'relative') {

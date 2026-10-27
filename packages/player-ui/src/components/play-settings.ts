@@ -1,7 +1,7 @@
-import { html, nothing, type CSSResultGroup, type TemplateResult } from 'lit';
+import { css, html, nothing, type CSSResultGroup, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicSettingsData } from '../models.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 import { stats } from '../templates.ts';
 
 /** What follows the judge timing for each automatic adjustment. */
@@ -15,12 +15,20 @@ const JUDGE_TIMING_AUTO_ADJUST_LABELS: Readonly<
 };
 
 export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData> {
-  static override styles: CSSResultGroup = [previewTheme, previewHost];
+  static override styles: CSSResultGroup = [
+    structureStyles,
+    css`
+      :host {
+        display: grid;
+        gap: var(--be-music-gap, 8px);
+      }
+    `,
+  ];
   protected override render(): TemplateResult | typeof nothing {
     const d = this.data;
     if (!d) return nothing;
     const { view, options: o, runtime: r } = d;
-    return html`<section class="card" part="panel">
+    return html`<section class="panel" part="panel">
         <h3>Speed &amp; lanes</h3>
         ${stats([
           [
@@ -46,7 +54,7 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
           ['Main BPM', r.mainBPM === undefined ? '—' : Math.round(r.mainBPM)],
         ])}${view.covers.map((c) => html`<p class="muted">${c.side} · SUD ${c.suddenOn ? Math.round(c.sudden * 100) + '%' : 'OFF'} · HID ${c.hiddenOn ? Math.round(c.hidden * 100) + '%' : 'OFF'} · LIFT ${Math.round(c.lift * 100)}%</p>`)}
       </section>
-      <section class="card" part="panel">
+      <section class="panel" part="panel">
         <h3>Play settings</h3>
         ${stats([
           ['Ruleset', r.rulesetLabel === '____' ? '????' : (r.rulesetLabel ?? '—')],

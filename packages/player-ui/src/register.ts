@@ -22,10 +22,25 @@ import { BeMusicJudgeLineElement } from './components/judge-line.ts';
 import { BeMusicBombsElement } from './components/bombs.ts';
 import { BeMusicJudgmentDisplayElement } from './components/judgment-display.ts';
 import { BeMusicPlayfieldElement } from './components/playfield.ts';
+import { setBeMusicTheme, type BeMusicTheme } from './theme.ts';
+
+/** How {@link defineBeMusicElements} registers the elements. */
+export interface BeMusicElementsOptions {
+  /**
+   * Style sheets every element adds to its shadow root, such as `basecoatTheme` from
+   * `@be-music/player-ui/themes/basecoat`. Without one the elements are headless: layout only, for the page to style
+   * through custom properties and parts. A later call without `theme` keeps the one set.
+   */
+  readonly theme?: BeMusicTheme;
+}
 
 /** Explicit and idempotent: importing the package never registers global elements. */
-export function defineBeMusicElements(registry: CustomElementRegistry | undefined = globalThis.customElements): void {
+export function defineBeMusicElements(
+  registry: CustomElementRegistry | undefined = globalThis.customElements,
+  options: BeMusicElementsOptions = {},
+): void {
   if (!registry) throw new Error('Be-Music elements must be registered in a browser.');
+  if (options.theme) setBeMusicTheme(registry, options.theme);
   for (const [tag, constructor] of [
     ['be-music-score-summary', BeMusicScoreSummaryElement],
     ['be-music-judgment-table', BeMusicJudgmentTableElement],

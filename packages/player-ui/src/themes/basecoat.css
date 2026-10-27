@@ -1,0 +1,5 @@
+/* The Basecoat theme (Tailwind CSS v4 + Basecoat). Compiled by scripts/build-css.ts; themes/basecoat.ts adopts it. */
+@import 'tailwindcss' source(none);
+@source '../components';
+@source '../styles';
+@import 'basecoat-css';

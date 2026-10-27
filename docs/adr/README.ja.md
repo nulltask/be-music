@@ -35,3 +35,5 @@
 - [0018: リプレイのオプション時系列](./0018-replay-option-timeline.ja.md)
 
 - [0019: オプションの値に参照元を持たせる](./0019-source-qualified-option-values.ja.md)
+
+- [0020: Player UI の要素は headless にし、見た目はテーマとスキンが与える](./0020-headless-player-ui.ja.md)

@@ -53,19 +53,20 @@ export const gameplayStyles: CSSResult = css`
     --be-music-hud-heading-inline: 14cqw;
     --be-music-hud-extra-block: 78cqh;
     --be-music-hud-extra-font: clamp(11px, 2.8cqw, 14px);
+    --be-music-gap: 6px;
+    --be-music-panel-padding: 8px;
     pointer-events: auto;
     font-size: clamp(10px, 1.35cqw, 14px);
     font-variant-numeric: tabular-nums;
   }
+  /* Over the lanes, where the eye is, not over the HUD's figures. */
   .paused {
     position: absolute;
-    left: 50%;
+    left: var(--playfield-center, 50%);
     top: 50%;
     transform: translate(-50%, -50%);
     margin: 0;
     padding: 6px 14px;
-    border-radius: 6px;
-    background: #05070bcc;
     font-size: clamp(16px, 4cqh, 28px);
     font-weight: 700;
   }
@@ -96,9 +97,7 @@ export const gameplayStyles: CSSResult = css`
     overflow-wrap: anywhere;
   }
   .hud-primary {
-    background: var(--card, #18181b);
-    border-radius: 6px;
-    padding: 6px;
+    padding: var(--be-music-panel-padding, 8px);
   }
   .hud dl {
     display: grid;
@@ -141,7 +140,6 @@ export const gameplayStyles: CSSResult = css`
   .hud-details > summary {
     padding: 3px 0 6px;
     cursor: pointer;
-    color: var(--muted-foreground, #b8c7da);
     font-size: 0.85em;
   }
   .hud-extra {
@@ -150,18 +148,6 @@ export const gameplayStyles: CSSResult = css`
     align-content: start;
     align-items: start;
     gap: 6px;
-  }
-  .hud-card {
-    min-width: 0;
-    padding: 6px;
-    background: var(--card, #18212fee);
-    border: 1px solid var(--border, #2c394c);
-    border-radius: 6px;
-  }
-  .hud-card h3 {
-    font-size: 0.85em;
-    margin: 0 0 6px;
-    color: var(--primary, #abcaff);
   }
   @container hud (max-width: 22rem) {
     .hud:not([data-orientation='portrait']) .actions {
@@ -179,7 +165,7 @@ export const gameplayStyles: CSSResult = css`
     right: auto;
     bottom: auto;
     width: 75%;
-    height: 11.5%;
+    height: auto;
     padding: 2px 4px;
     font-size: clamp(9px, 2.5cqw, 14px);
   }
@@ -199,30 +185,37 @@ export const gameplayStyles: CSSResult = css`
     display: none;
   }
   .gameplay[data-orientation='portrait'] .hud-primary {
-    padding: 2px 0;
-    background: transparent;
+    padding: 0;
   }
   .gameplay[data-orientation='portrait'] .hud dl.hud-live {
-    margin: 2px 0;
+    margin: 0;
   }
+  /* The band above the lanes holds five lines; the time left is in the live figures already. */
+  .gameplay[data-orientation='portrait'] .hud-primary > progress {
+    display: none;
+  }
+  /* Basecoat's buttons are a fixed height; the portrait band above the lanes is not tall enough for it. */
   .gameplay[data-orientation='portrait'] .hud button {
+    height: auto;
+    min-height: 0;
     padding: 2px 6px;
   }
   .gameplay[data-orientation='portrait'] .hud .actions {
-    margin-top: 2px;
+    margin-top: 4px;
     padding-right: 40%;
   }
   .gameplay[data-orientation='portrait'] .hud-details {
     overflow: visible;
   }
+  /* Level with the action buttons: the same bottom edge, line height, padding and border, so the rows share a centre. */
   .gameplay[data-orientation='portrait'] .hud-details > summary {
     position: absolute;
     right: 4px;
-    bottom: 0;
+    bottom: 2px;
     max-width: 40%;
-    padding: 2px 4px;
-    border-radius: 4px;
-    background: var(--accent, #3f3f46);
+    padding: 2px 6px;
+    border: 1px solid transparent;
+    line-height: var(--text-sm--line-height, calc(1.25 / 0.875));
   }
   .gameplay[data-orientation='portrait'] .hud-extra {
     position: absolute;
@@ -230,9 +223,6 @@ export const gameplayStyles: CSSResult = css`
     left: 0;
     width: 126%;
     padding: 6px;
-    background: color-mix(in oklch, var(--background, #09090b) 96%, transparent);
-    border: 1px solid var(--border, #ffffff1a);
-    border-radius: 8px;
     overflow: auto;
     overscroll-behavior: contain;
     grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr));
