@@ -9,8 +9,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [2e435b9]
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/shared-utils@0.6.0`
 
 ## 0.4.0
 
@@ -20,8 +19,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [dca9a2f]
-  - @be-music/shared-utils@0.5.0
+- Updated dependencies: `@be-music/shared-utils@0.5.0`
 
 ## 0.3.0
 
@@ -37,22 +35,19 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/shared-utils@0.4.0`
 ## 0.2.2
 
 ### Patch Changes
 
 - b9922cf: The IR preserves beatoraja bmson long-note type extensions: `info.ln_type` and per-note `t` (1: LN, 2: CN, 3: HCN).
-- Updated dependencies [ca1012c]
-  - @be-music/shared-utils@0.3.0
+- Updated dependencies: `@be-music/shared-utils@0.3.0`
 
 ## 0.2.1
 
 ### Patch Changes
 
-- Updated dependencies [73dff9a]
-  - @be-music/shared-utils@0.2.1
+- Updated dependencies: `@be-music/shared-utils@0.2.1`
 
 ## 0.2.0
 
@@ -62,10 +57,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-- Updated dependencies [135f822]
-  - @be-music/shared-utils@0.2.0
+- Updated dependencies: `@be-music/shared-utils@0.2.0`
 
 ## 0.1.0
 
@@ -75,5 +67,4 @@
 
 ### Patch Changes
 
-- Updated dependencies
-  - @be-music/shared-utils@0.1.0
+- Updated dependencies: `@be-music/shared-utils@0.1.0`
