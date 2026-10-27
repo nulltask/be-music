@@ -38,10 +38,11 @@ DOM は factory が呼ばれた時点で作ります。`update` は既存の要�
 
 ```ts
 import { defineBeMusicElements } from '@be-music/player-ui';
+import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import type { BeMusicDOMFactory, BeMusicDOMResultFrame, BeMusicDOMResultActions } from '@be-music/player-skin-sdk';
 
 export const mountResult: BeMusicDOMFactory<BeMusicDOMResultFrame, BeMusicDOMResultActions> = (container, actions) => {
-  defineBeMusicElements();
+  defineBeMusicElements(undefined, { theme: basecoatTheme });
   const element = document.createElement('be-music-result-screen');
   const onContinue = () => actions.continue();
   const onRetry = () => actions.retry();
@@ -61,7 +62,7 @@ export const mountResult: BeMusicDOMFactory<BeMusicDOMResultFrame, BeMusicDOMRes
 };
 ```
 
-独自の DOM UI には Lit は必須ではありません。共通部品を利用する場合は [Player UI ガイド](../packages/player-ui/README.ja.md) にタグ一覧、JavaScript property、操作イベント、React / Vue ラッパー、CSS 変数・parts・slots をまとめています。ホストと controller の接続、描画更新の頻度、DOM を含まない Canvas 録画の制約は [ブラウザープレイヤー](./player-web.ja.md#dom-スキンと独立した-controller) を参照してください。
+要素は headless なので、見た目は登録時のテーマ（ここでは Basecoat）か、スキン自身のカスタムプロパティと `::part` ルールで与えます。独自の DOM UI には Lit は必須ではありません。共通部品を利用する場合は [Player UI ガイド](../packages/player-ui/README.ja.md) にタグ一覧、JavaScript property、操作イベント、React / Vue ラッパー、CSS 変数・parts・slots をまとめています。ホストと controller の接続、描画更新の頻度、DOM を含まない Canvas 録画の制約は [ブラウザープレイヤー](./player-web.ja.md#dom-スキンと独立した-controller) を参照してください。
 
 ## クイックスタート: Canvas 2D スキン
 

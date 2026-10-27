@@ -2,7 +2,7 @@
 
 # Player UI
 
-Reusable Lit Web Components for Be-Music. The components receive presentation data through JavaScript properties and emit semantic requests as bubbling, composed `CustomEvent`s. They own no engine, clock, audio context or subscriptions. Native Skin uses the same components through its DOM skin adapter.
+Reusable Lit Web Components for Be-Music. The components receive presentation data through JavaScript properties and emit semantic requests as bubbling, composed `CustomEvent`s. They own no engine, clock, audio context or subscriptions, and ship headless: layout only, with the look from a theme ([Styling](#styling-and-composition)). Native Skin uses the same components through its DOM skin adapter.
 
 ## Packages
 
@@ -122,21 +122,53 @@ Vue emits the event detail directly: `@selection-change="({ index }) => select(i
 
 ## Styling and composition
 
-The elements use shadow roots. HTML screens adopt Basecoat, so they follow the page's Basecoat tokens (`--background`, `--foreground`, `--primary`, `--muted-foreground`, `--card`, `--border`, `--radius`, and the rest of that set). `--be-music-letterbox-background` paints the band around the stage, and `--be-music-timing-color` paints the timing graph. Layout lengths such as `--be-music-list-height` and `--be-music-score-size` are not colors.
+The elements are headless. Their shadow styles cover layout, sizing, scrolling and container queries only, and set no colour, border, background or font family. The look comes from three places, from broadest to narrowest:
 
-Layout follows each element's own width. Every element is an inline-size container named `be-music`; a screen renames it `be-music-screen`. Below 40rem, a collection's columns stack and its chart list caps at 18rem. Above that, the list fills the column beside the chart details, and the list column stays wider than the details. Below 22rem, a judgment table hides its Early and Late columns, playback controls hide the volume slider, a preview chart row places the level and genre under the title, and a landscape gameplay HUD tightens its actions and detail cards. Below 16rem, a compact score puts its value on its own line and play options stack. The `compact` property stays explicit. Gameplay and preview stages still size themselves with `cqw` and `cqh`, and portrait play layout follows the stage orientation.
+1. **A theme**: style sheets every element adopts into its shadow root after its own styles. Pass one when registering: `defineBeMusicElements(registry, { theme })`. `@be-music/player-ui/themes/basecoat` exports `basecoatTheme`, which is Basecoat plus the elements' colours, borders and backgrounds from the page's Basecoat tokens (`--background`, `--foreground`, `--primary`, `--muted-foreground`, `--card`, `--border`, `--radius`, and the rest). A theme of your own may select parts inside the shadow root (`[part~='panel']`). Without a theme the elements render with browser defaults. A later call without `theme` keeps the one set, and a theme applies when an element first renders.
+2. **Custom properties**, inherited from any ancestor (table below).
+3. **Parts and slots**, styled or filled from outside.
 
-The gameplay HUD exposes `hud`, `heading`, `primary`, `actions`, `details`, `score-summary`, `score-value`, `score-panel`, `judgment-panel`, `judgment-table`, `gauge-meter`, `gauge-panel`, `gauge-graph`, `timing-panel`, `timing-graph` and `settings-panel` parts, and a `paused` part while paused. Leaf panels expose their own `panel` and applicable `table` / `graph` / `meter` / `value` parts. Gameplay and chart details have an `actions` slot and a default slot. Other screens have a default slot.
+```ts
+import { defineBeMusicElements } from '@be-music/player-ui';
+import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
+
+defineBeMusicElements(customElements, { theme: basecoatTheme });
+```
+
+The React and Vue wrappers register without a theme; call `defineBeMusicElements` with one before they mount.
+
+| Property                                           | Default                    | Sets                                                      |
+| -------------------------------------------------- | -------------------------- | --------------------------------------------------------- |
+| `--be-music-gap`                                   | `8px`                      | Gaps inside an element (rows, controls, figures)          |
+| `--be-music-panel-padding`                         | `12px`                     | A panel's padding (the gameplay HUD uses `8px`)           |
+| `--be-music-section-gap`                           | `24px`                     | Gaps between a screen's sections                          |
+| `--be-music-screen-padding`                        | `24px`                     | A screen's padding                                        |
+| `--be-music-center-width`                          | `56rem`                    | Widest the decide and result columns grow                 |
+| `--be-music-title-size` / `-weight` / `-tracking`  | `1.75rem` / `600` / normal | A screen's title                                          |
+| `--be-music-stat-size`                             | `2.25rem`                  | The result's EX score                                     |
+| `--be-music-graph-height`                          | `44px`                     | Gauge and timing graphs (the result's gauge takes `72px`) |
+| `--be-music-row-kind-width`                        | `3.5ch`                    | The chart list's level column                             |
+| `--be-music-list-height`                           | `55vh`                     | The chart list's height outside a screen                  |
+| `--be-music-score-size`                            | `1.8em`                    | A compact score's value                                   |
+| `--be-music-letterbox-background` / `--background` | `#09090b`                  | The playfield's letterbox band and stage                  |
+| `--be-music-timing-color`                          | `#ffa8b3`                  | The timing graph's line                                   |
+
+Layout follows each element's own width. Every element is an inline-size container named `be-music`; a screen renames it `be-music-screen`. Below 40rem, a collection's columns stack, its search takes the full width and its chart list caps at 18rem. Above that, the list fills the column beside the chart details, and the list column stays wider than the details. Below 30rem, a result panel stacks its verdict over its figures. Below 22rem, a judgment table hides its Early and Late columns, playback controls hide the volume slider, a preview chart row places the level and genre under the title, and a landscape gameplay HUD tightens its actions and detail cards. Below 16rem, a compact score puts its value on its own line. Play options fill as many even columns as fit. The `compact` property stays explicit. Gameplay and preview stages still size themselves with `cqw` and `cqh`, and portrait play layout follows the stage orientation.
+
+Screens expose `screen`, `header`, `eyebrow` and `title` parts; the collection also `search`, `folder`, `columns`, `list`, `row`, `details-panel` and `chart-title`, the decide screen `progress` and `actions`, and the result `players`, `panel`, `stat`, `actions`, `gauge-panel` and `gauge-graph`. The gameplay HUD exposes `hud`, `heading`, `primary`, `actions`, `details`, `chart-panel`, `score-summary`, `score-value`, `score-panel`, `judgment-panel`, `judgment-table`, `gauge-meter`, `gauge-panel`, `gauge-graph`, `timing-panel`, `timing-graph` and `settings-panel` parts, and a `paused` part while paused. Leaf panels expose their own `panel` and applicable `table` / `graph` / `meter` / `value` parts; chart list rows also `row-kind`. The collection, decide and result screens take an `eyebrow` slot over their title (the decide and result screens show "Up next" and "Play result" without one), and the collection a `title` slot. Gameplay and chart details have an `actions` slot and a default slot. Other screens have a default slot.
 
 ```css
 be-music-gameplay-hud {
   --primary: #a8e6ce;
   --font-sans: system-ui, sans-serif;
+  --be-music-panel-padding: 10px;
 }
 be-music-gameplay-hud::part(judgment-table) {
   font-size: 12px;
 }
 ```
+
+**What belongs where.** A component keeps what makes it work at any size: its layout, its breakpoints and the spacing lengths above. A theme keeps colour, borders, backgrounds and fonts. A skin or application keeps its own scale and voice: Native sets its spacing and title type through these properties and `::part` rules, and its product line through the `eyebrow` slot ([ADR 0020](../../docs/adr/0020-headless-player-ui.md)).
 
 ## Lifecycle and rendering
 
