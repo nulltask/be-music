@@ -71,6 +71,12 @@ export interface LibraryCourse {
    * `definition.kind` (no stages yet). A host routes it through its course-select callback.
    */
   newCourse?: true;
+  /**
+   * LR2's RANDOM MIX bar, after the NEW COURSE bar of the player's EXPERT and NONSTOP courses: deciding it draws a
+   * course of `definition.kind` by the RANDOM MIX settings (`drawLR2RandomMix`) and plays it. A host routes it through
+   * its course-select callback.
+   */
+  randomMix?: true;
   /** A course the player made: it can be renamed and deleted, and a NONSTOP one's connections edited. */
   editable?: true;
 }

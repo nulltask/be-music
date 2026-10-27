@@ -1,10 +1,12 @@
 // The course maker's DOM surfaces, for every skin: a card shown while a course is being made (its name, songs and
 // finish / cancel, standing in for an LR2 skin's buttons 230 / 231 and texts 150-170), and a dialog that manages the
-// saved courses (rename, NONSTOP connections, delete, export as `.lr2crs`).
+// saved courses (rename, NONSTOP connections, delete, export as `.lr2crs`) and the RANDOM MIX settings (LR2's buttons
+// 260-266).
 
 import {
   courseConstraintGroup,
   LR2_NONSTOP_CONNECTIONS,
+  LR2_RANDOM_MIX_SETTING_RANGES,
   parseLR2NonstopConnections,
   serializeBeatorajaCourseFile,
   serializeLR2CourseFile,
@@ -12,9 +14,11 @@ import {
   type CourseConstraintGroup,
   type CourseDefinition,
   type CourseKind,
+  type LR2RandomMixSetting,
   type NonstopConnection,
 } from '@be-music/player-engine/course';
 import { COURSE_NAME_PROMPT, type CourseMaker } from '@be-music/player-browser/collection';
+import { formatLR2RandomMixSetting } from '@be-music/skin-lr2/state';
 
 /** LR2's names of the NONSTOP connections. */
 export const CONNECTION_LABELS: Readonly<Record<NonstopConnection, string>> = {
@@ -163,6 +167,31 @@ function connectionSelect(value: NonstopConnection, onChange: (value: NonstopCon
     select.append(option);
   }
   select.addEventListener('change', () => onChange(select.value as NonstopConnection));
+  return select;
+}
+
+/** The RANDOM MIX settings in LR2's button order (260-266), with what the dialog calls each. */
+const RANDOM_MIX_FIELDS: readonly { readonly setting: LR2RandomMixSetting; readonly label: string }[] = [
+  { setting: 'preferredLevel', label: 'Favorite level' },
+  { setting: 'maxLevel', label: 'Max level' },
+  { setting: 'minLevel', label: 'Min level' },
+  { setting: 'bpmRange', label: 'BPM range' },
+  { setting: 'maxBPM', label: 'Max BPM' },
+  { setting: 'minBPM', label: 'Min BPM' },
+  { setting: 'stageCount', label: 'Stages' },
+];
+
+/** A select of every value of a RANDOM MIX setting, written as LR2's texts 190-196 write them. */
+function randomMixSelect(setting: LR2RandomMixSetting, value: number, onChange: (value: number) => void) {
+  const { max, step } = LR2_RANDOM_MIX_SETTING_RANGES[setting];
+  const select = element('select', { className: 'select course-maker-select' });
+  for (let option = 0; option <= max; option += step) {
+    const item = element('option', { text: formatLR2RandomMixSetting(setting, option) });
+    item.value = String(option);
+    item.selected = option === value;
+    select.append(item);
+  }
+  select.addEventListener('change', () => onChange(Number(select.value)));
   return select;
 }
 
@@ -352,6 +381,7 @@ export class CourseMakerPanel {
           element('p', { text: 'Courses you made, kept in this browser.' }),
         ]),
         list,
+        this.renderRandomMixSettings(),
         element('div', { className: 'course-maker-buttons' }, [
           exportButton,
           exportBeatoraja,
@@ -359,6 +389,28 @@ export class CourseMakerPanel {
         ]),
       ]),
     );
+  }
+
+  /** The RANDOM MIX settings, which the RANDOM MIX bar of MY COURSES and MY NONSTOP draws a course by. */
+  private renderRandomMixSettings(): HTMLElement {
+    const settings = this.maker.randomMixSettings;
+    return element('section', { className: 'card course-maker-course gap-2 px-3' }, [
+      element('h3', { text: 'RANDOM MIX' }),
+      element(
+        'div',
+        {},
+        RANDOM_MIX_FIELDS.map(({ setting, label }) =>
+          element('label', { className: 'course-maker-field', text: label }, [
+            randomMixSelect(setting, settings[setting], (value) =>
+              this.maker.stepRandomMixSetting(
+                setting,
+                (value - settings[setting]) / LR2_RANDOM_MIX_SETTING_RANGES[setting].step,
+              ),
+            ),
+          ]),
+        ),
+      ),
+    ]);
   }
 
   private renderCourse(course: CourseDefinition): HTMLElement {

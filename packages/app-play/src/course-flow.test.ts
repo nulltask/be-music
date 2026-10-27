@@ -84,6 +84,10 @@ describe('planCourseStart', () => {
     expect(planCourseStart(course({ newCourse: true }))).toEqual({ action: 'make', kind: 'expert' });
   });
 
+  test('a RANDOM MIX bar draws a course of its kind', () => {
+    expect(planCourseStart(course({ randomMix: true }))).toEqual({ action: 'random-mix', kind: 'expert' });
+  });
+
   test('a course with a missing stage starts nothing, even a random or NONSTOP one', () => {
     expect(planCourseStart(course({ playable: false }))).toEqual({ action: 'unplayable' });
   });

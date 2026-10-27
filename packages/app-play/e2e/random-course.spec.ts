@@ -24,3 +24,25 @@ test('keeps a successful random course draw and replays its fixed stages', async
   expect(replayed.play?.title).toBe('Fixture A');
   expect(replayed.play?.course?.name).toBe(name);
 });
+
+test('draws a RANDOM MIX from its bar, plays it and keeps it as the folder newest course', async ({ player }) => {
+  test.setTimeout(360_000);
+  await openWithLibrary(player);
+  await player.openFolder('MY COURSES');
+  await player.cursorTo((bar) => bar.course?.randomMix === true, 'the RANDOM MIX bar');
+  await player.setOption(['Play options'], 'Auto play', true);
+  await player.key('Enter');
+  const play = await player.waitFor((s) => s.scene.kind === 'play', 'the drawn RANDOM MIX');
+  expect(play.play?.course?.name).toBe('RANDOM MIX');
+  const stageCount = play.play?.course?.stageCount ?? 0;
+  expect(stageCount).toBeGreaterThan(0);
+  // The last stage's result, then the course result.
+  await player.waitForResult(0, 300_000);
+  await player.leaveResult();
+  await player.waitFor((s) => s.scene.kind === 'result' && s.results.at(-1)?.course !== undefined, 'the course result');
+  await player.leaveResult();
+  const select = await player.waitFor((s) => s.scene.kind === 'select', 'the kept RANDOM MIX');
+  expect(select.cursor?.bar?.title).toBe('RANDOM MIX');
+  expect(select.cursor?.bar?.course).toMatchObject({ kind: 'expert', randomMix: false, playable: true });
+  expect(select.cursor?.bar?.course?.stages).toHaveLength(stageCount);
+});

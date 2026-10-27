@@ -191,6 +191,7 @@ describe('describeBar', () => {
         missingStages: 1,
         playable: false,
         newCourse: false,
+        randomMix: false,
         random: false,
       },
       lamp: 'FAILED',
