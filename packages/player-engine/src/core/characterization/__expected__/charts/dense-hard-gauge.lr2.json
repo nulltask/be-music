@@ -14,6 +14,8 @@
       "emptyPoor": 0,
       "exScore": 8,
       "score": 25000,
+      "combo": 0,
+      "maxCombo": 4,
       "gauge": {
         "current": 0,
         "max": 100,
@@ -70,10 +72,12 @@
           {"id":30,"channel":"13","type":"normal","timeUs":4250000},
           {"id":31,"channel":"14","type":"normal","timeUs":4375000}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":120},
         "chartFingerprint": "bmfp0:abab99b55de70df879641468c540a6d5ec5a9bd767e3d821c7bfa411ca9c1027",
         "playFingerprint": "bmfp0:abab99b55de70df879641468c540a6d5ec5a9bd767e3d821c7bfa411ca9c1027",
         "title": "dense",
-        "artist": "characterization",
+        "artist": "Be-Music Dev Team",
         "total": 100
       },
       "inputs": [
@@ -117,7 +121,7 @@
       },
       "beatoraja": {
         "ruleset": "beatoraja/0",
-        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":14,"emptyPoor":0},
+        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":10,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
         "exScore": 8,
@@ -126,8 +130,8 @@
         "djLevel": "F",
         "gauge": {"type":"HARD","final":0,"cleared":false,"failedMidPlay":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":15,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
@@ -237,6 +241,8 @@
       "emptyPoor": 0,
       "exScore": 8,
       "score": 25000,
+      "combo": 0,
+      "maxCombo": 4,
       "gauge": {
         "current": 0,
         "max": 100,
@@ -338,6 +344,8 @@
       "emptyPoor": 0,
       "exScore": 64,
       "score": 200000,
+      "combo": 32,
+      "maxCombo": 32,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -396,8 +404,8 @@
         "djLevel": "AAA",
         "gauge": {"type":"HARD","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":32,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,

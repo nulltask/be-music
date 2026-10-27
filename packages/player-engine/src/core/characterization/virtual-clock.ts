@@ -84,7 +84,6 @@ export function createVirtualClock(options: VirtualClockOptions = {}): VirtualCl
     wallClockNow: () => wallClockOriginMs + nowMs,
     setTimeout: (callback, ms) => schedule(nowMs + Math.max(0, Number.isFinite(ms) ? ms : 0), callback),
     setImmediate: (callback) => schedule(nowMs, callback),
-    exactTimers: true,
     at: (atMs, callback) => schedule(atMs, callback),
     run: async (play) => {
       setEngineScheduler(clock);

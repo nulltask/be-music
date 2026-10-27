@@ -1,4 +1,4 @@
-import type { BeMusicReplay } from '@be-music/player-engine/replay';
+import type { BeMusicReplay, ReplayRulesetResult } from '@be-music/player-engine/replay';
 import { resolveClearLamp, type ClearLamp, type ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { CourseView } from '../course-view/course-view.ts';
 import type { LibraryChart } from '../library/entries.ts';
@@ -18,6 +18,12 @@ export type PlayRunKind = 'single' | 'stage' | 'course' | 'nonstop';
  * run belongs to.
  */
 export interface PlayResult {
+  /** A seek made this play practice: never save a record, rank it or auto-save its replay. */
+  practice?: boolean;
+  /** The 2P player's result of a two-player play (LR2 BATTLE); this result is the 1P player's. */
+  secondPlayer?: PlayResult;
+  /** A live course-stage outcome for carrying practice into the next stage without a replay. */
+  stageOutcome?: ReplayRulesetResult;
   /** Per-judgment counts, total notes, EX score and the displayed score (LR2's money score, else the EX score). */
   score: ScoreSummary;
   /**
@@ -29,7 +35,7 @@ export interface PlayResult {
   maxCombo: number;
   /** The final gauge in percent (0..100). */
   gauge: number;
-  /** The ruleset's verdict on the gauge (a course run: whether the run cleared). */
+  /** The ruleset's clear verdict, including full-combo precedence (a course run: whether the run cleared). */
   cleared: boolean;
   /** The time played, in seconds (a course run: every stage's). */
   playSeconds: number;
@@ -41,6 +47,11 @@ export interface PlayResult {
   scoreHistory: ScoreHistorySample[];
   /** The replay the engine recorded, when it recorded one. */
   replay?: BeMusicReplay;
+  /**
+   * The play was a replay played back, not a live play: a dropped replay, a course replay's stage or its course result.
+   * Skins mark it (LR2 op 84, as LR2 keeps its replay status on through the results).
+   */
+  fromReplay?: boolean;
   /** The clear lamp (FAILED, the gauge cleared on, FULL COMBO, …). */
   lamp?: ClearLamp;
   /** The gauge the play ran on, as the ruleset names it (`GROOVE`, `HARD`, `EX-HARD`, …). */
@@ -58,7 +69,7 @@ export interface PlayResult {
   course?: CourseView;
   /** A course run's facts beside the summed score: the stages reached and the trophy earned. */
   courseRun?: PlayResultCourseRun;
-  /** The judge ruleset the play ran under (`lr2` / `beatoraja` / `iidx`). */
+  /** The judge ruleset the play ran under (`lr2` / `beatoraja` / `____`). */
   judgeRuleset?: string;
   /** FAST (early) and SLOW (late) GREAT / GOOD counts. */
   fast?: number;
@@ -111,6 +122,7 @@ export function resolveResultPresentation(run: PlayRunKind): ResultPresentation 
 
 /** What a play's result adds to its final play state. */
 export interface PlayResultFacts {
+  practice?: boolean;
   chart: LibraryChart;
   /** The final judgment counts and scores (the engine's final summary). */
   score: ScoreSummary;
@@ -122,6 +134,8 @@ export interface PlayResultFacts {
   fast?: number;
   slow?: number;
   replay?: BeMusicReplay;
+  /** The play was a replay played back ({@link PlayResult.fromReplay}). */
+  fromReplay?: boolean;
   run?: PlayRunKind;
   course?: CourseView;
 }
@@ -132,23 +146,26 @@ export interface PlayResultFacts {
  * clear-lamp rule (`resolveClearLamp`), the timed judgments and their early / late counts.
  */
 export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts): PlayResult {
+  const lamp = resolveClearLamp({
+    cleared: state.cleared,
+    score: facts.score,
+    ...(state.gaugeType !== undefined ? { gauge: state.gaugeType } : {}),
+    ...(facts.judgeRuleset !== undefined ? { ruleset: facts.judgeRuleset } : {}),
+  });
   const progress = state.totalSeconds > 0 ? Math.max(0, Math.min(1, facts.seconds / state.totalSeconds)) : 1;
   return {
     score: { ...facts.score },
+    ...(facts.practice === true ? { practice: true } : {}),
     maxCombo: state.maxCombo,
     gauge: state.gauge,
-    cleared: state.cleared,
+    cleared: lamp !== 'FAILED',
     playSeconds: facts.playSeconds ?? facts.seconds,
     chart: facts.chart,
     gaugeHistory: [...state.gaugeHistory, { progress, value: state.gauge }],
     scoreHistory: [...state.scoreHistory, { progress, exScore: state.exScore }],
-    ...(facts.replay !== undefined ? { replay: facts.replay } : {}),
-    lamp: resolveClearLamp({
-      cleared: state.cleared,
-      score: facts.score,
-      ...(state.gaugeType !== undefined ? { gauge: state.gaugeType } : {}),
-      ...(facts.judgeRuleset !== undefined ? { ruleset: facts.judgeRuleset } : {}),
-    }),
+    ...(facts.practice !== true && facts.replay !== undefined ? { replay: facts.replay } : {}),
+    ...(facts.fromReplay === true ? { fromReplay: true } : {}),
+    lamp,
     ...(state.gaugeType !== undefined ? { gaugeType: state.gaugeType } : {}),
     ...(facts.run !== undefined ? { run: facts.run } : {}),
     ...(facts.course !== undefined ? { course: facts.course } : {}),

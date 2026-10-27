@@ -85,7 +85,7 @@ describe('prepareNonstopPlay', () => {
   });
 });
 
-describe('a NONSTOP run in the demo', () => {
+describe('a NONSTOP run in the player', () => {
   test('records the stitched play with each stage cut out of it, named by its chart and file hashes', async () => {
     const prepared = prepareNonstopPlay(course(), {
       sourceOf,

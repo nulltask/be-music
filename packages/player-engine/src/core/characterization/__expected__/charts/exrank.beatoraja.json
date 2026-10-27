@@ -14,10 +14,12 @@
       "emptyPoor": 0,
       "exScore": 4,
       "score": 4,
+      "combo": 4,
+      "maxCombo": 4,
       "gauge": {
         "current": 100,
         "max": 100,
-        "clearThreshold": 80,
+        "clearThreshold": 75,
         "initial": 20,
         "effectiveTotal": 260,
         "cleared": true,
@@ -49,10 +51,12 @@
           {"id":5,"channel":"14","type":"normal","timeUs":3000000},
           {"id":6,"channel":"15","type":"mine","timeUs":3250000,"damage":10}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":120},
         "chartFingerprint": "bmfp0:c25adf8213019e5c2284cf6b436f55ebcb77f1ef746d8eb79232909cd4e69dfa",
         "playFingerprint": "bmfp0:c25adf8213019e5c2284cf6b436f55ebcb77f1ef746d8eb79232909cd4e69dfa",
         "title": "exrank",
-        "artist": "characterization"
+        "artist": "Be-Music Dev Team"
       },
       "inputs": [
         {"seq":0,"timeUs":535000,"action":"down","channels":["11"],"tokens":["z"]},
@@ -64,7 +68,14 @@
         {"seq":6,"timeUs":3035000,"action":"down","channels":["14"],"tokens":["d"]},
         {"seq":7,"timeUs":3085000,"action":"up","channels":["14"],"tokens":["d"]}
       ],
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -103,8 +114,8 @@
         "djLevel": "C",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":0,"great":0,"good":4,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 4,
@@ -214,10 +225,12 @@
       "emptyPoor": 0,
       "exScore": 4,
       "score": 4,
+      "combo": 4,
+      "maxCombo": 4,
       "gauge": {
         "current": 100,
         "max": 100,
-        "clearThreshold": 80,
+        "clearThreshold": 75,
         "initial": 20,
         "effectiveTotal": 260,
         "cleared": true,
@@ -232,7 +245,14 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -316,10 +336,12 @@
       "emptyPoor": 0,
       "exScore": 8,
       "score": 8,
+      "combo": 4,
+      "maxCombo": 4,
       "gauge": {
         "current": 100,
         "max": 100,
-        "clearThreshold": 80,
+        "clearThreshold": 75,
         "initial": 20,
         "effectiveTotal": 260,
         "cleared": true,
@@ -334,7 +356,14 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "auto",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -373,8 +402,8 @@
         "djLevel": "AAA",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,

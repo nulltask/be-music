@@ -17,15 +17,20 @@ export interface NonstopStageReadoutInput {
   headerBPM?: number;
   /** The header `#RANK`, when the chart has one. */
   rank?: number;
+  /** Source units for a mixed-format NONSTOP stage; omitted by the legacy BMS stitch path. */
+  sourceFormat?: 'bms' | 'bmson';
+  bmsonJudgeRank?: number;
+  exRank?: number;
   /** Stitched seconds of the stage's first and last judged note heads, when it has any. */
   noteHeads?: { first: number; last: number };
 }
 
 /**
  * How a later stage's `#RANK` sets the judge windows: `'chart'` as a chart opening with that `#RANK` does, or
- * `'lr2-nonstop'` by the table LR2's NONSTOP rank object reads (`LR2body.exe` 0x42be2f).
+ * `'lr2-nonstop'` by the table LR2's NONSTOP rank object reads (`LR2body.exe` 0x42be2f). Mixed bmson output also
+ * carries raw `judge_rank` (`'bmson'`) or BMS `#DEFEXRANK` (`'bms-exrank'`) values.
  */
-export type NonstopStageRankTable = 'chart' | 'lr2-nonstop';
+export type NonstopStageRankTable = 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
 
 /** A later stage's `#RANK` taking over the judge windows from stitched `seconds` on. */
 export interface NonstopStageRank {
@@ -118,7 +123,10 @@ export function nonstopBPMAt(tempo: readonly NonstopTempoPoint[], seconds: numbe
  *   they lie past the boundary or are hit late; without notes on either side, at the boundary.
  */
 export function resolveNonstopStageRanks(
-  stages: readonly Pick<NonstopStageReadoutInput, 'rank' | 'noteHeads'>[],
+  stages: readonly Pick<
+    NonstopStageReadoutInput,
+    'rank' | 'noteHeads' | 'sourceFormat' | 'bmsonJudgeRank' | 'exRank'
+  >[],
   placements: readonly NonstopStagePlacement[],
   options: NonstopPlanOptions = {},
 ): NonstopStageRank[] {
@@ -139,7 +147,16 @@ export function resolveNonstopStageRanks(
       previousLast !== undefined && first !== undefined
         ? (previousLast + first) / 2
         : stageWindow(placements, index).start;
-    ranks.push({ seconds, rank: rank ?? DEFAULT_RANK, table: 'chart' });
+    const stage = stages[index]!;
+    if (stage.sourceFormat === 'bmson') {
+      ranks.push({
+        seconds,
+        rank: stage.bmsonJudgeRank !== undefined && stage.bmsonJudgeRank > 0 ? stage.bmsonJudgeRank : 100,
+        table: 'bmson',
+      });
+    } else if (stage.exRank !== undefined) {
+      ranks.push({ seconds, rank: stage.exRank, table: 'bms-exrank' });
+    } else ranks.push({ seconds, rank: rank ?? DEFAULT_RANK, table: 'chart' });
   }
   return ranks.sort((left, right) => left.seconds - right.seconds);
 }

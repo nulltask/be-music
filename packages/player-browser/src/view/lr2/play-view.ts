@@ -1,6 +1,8 @@
+import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
+import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
 /**
  * The LR2 family's play screen: an LR2 play skin (`play_<variant>.lr2skin`) drawn around the shared playfield
- * (`view/shared/playfield`) on LR2's 640x480 canvas, letterboxed into the window. It draws the play session's frames:
+ * (`view/shared/playfield`) in the skin's authored coordinate space, letterboxed into the window. It draws the play session's frames:
  *
  * - the skin's ops, numbers, texts, sliders and bar graphs through the frame's LR2 state (`resolveLR2PlayState` over the
  *   frame's `PlayState` and the play's score);
@@ -29,10 +31,11 @@ import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { LR2PlayKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
-import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
+import { DESIGN_HEIGHT, PIXELS_PER_BEAT } from '../../stage/design.ts';
 import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
+import { LR2TextureRetainer } from './texture-retainer.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import { loadSkinAssetTexture, loadTextureFromBytes } from '../../skin/lr2/textures.ts';
 import { build, render, type PlayFrameContext } from '../shared/play-frame.ts';
@@ -47,7 +50,6 @@ import type {
   PlayViewEvent,
   PlayViewTiming,
   PlayfieldSkin,
-  PlayfieldStage,
 } from '../types.ts';
 import {
   collectLR2BGATargets,
@@ -64,9 +66,6 @@ import { playfieldTouchLanes, TouchLaneInput } from '../shared/touch-lane-input.
 import { LR2Turntable } from './play-turntable.ts';
 
 const log = logger('gameplay');
-
-/** The canvas an LR2 play skin is drawn on: LR2's 640x480, the skin scaled to fit it. */
-const LR2_PLAY_STAGE: PlayfieldStage = { width: DESIGN_WIDTH, height: DESIGN_HEIGHT };
 
 /** Design px above a lane's top through which notes keep drawing as they scroll in from off the stage. */
 const NOTE_OVERSCAN = 48;
@@ -91,6 +90,9 @@ export function resolveLR2PlayTiming(skin: Pick<LR2Skin, 'timing'>): PlayViewTim
 /** What the LR2 play view draws with besides its kit: the options of the play that change what is drawn. */
 export type LR2PlayViewOptions = Pick<
   PlaySessionOptions,
+  | 'judgeTimingMs'
+  | 'judgeTimingAutoAdjust'
+  | 'bpmGuide'
   | 'bga'
   | 'bgaSize'
   | 'autoPlay'
@@ -100,11 +102,16 @@ export type LR2PlayViewOptions = Pick<
   | 'nonstop'
   | 'showInvisibleNotes'
   | 'judgedNoteDisplay'
+  | 'battleMode'
+  | 'lr2ExtraMode'
+  | 'gauge2P'
 > & {
   /** The gauge the play runs on (a replay's recorded one); GROOVE without one. */
   readonly gauge?: GaugeType;
   /** The play is a course stage, on the course's gauge. */
   readonly courseGauge?: boolean;
+  /** The play is a replay played back (LR2 op 84). */
+  readonly replay?: boolean;
   /** The course the play is a stage of (or the NONSTOP course it stitches), with the stage being played. */
   readonly course?: CourseView;
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`. */
@@ -113,6 +120,8 @@ export type LR2PlayViewOptions = Pick<
 
 /** The LR2 play view. See the module comment. */
 export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContext, LR2PlayElementsContext {
+  private readonly displayInfo = new DisplayAreaInfoOverlay();
+  private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
   public readonly family = 'lr2' as const;
   public readonly timing: PlayViewTiming;
   /** The play options the view draws with; the setters change them during the play. */
@@ -130,6 +139,8 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   public readonly text: LR2PlayText = new LR2PlayText();
   /** The skin's images by path, and the chart's images under LR2's special paths; destroyed with the view. */
   public readonly textures: Map<string, Texture> = new Map();
+  /** Where this view's textures go when the play switches family, so the same bytes are not decoded again. */
+  private textureRetainer: LR2TextureRetainer | undefined;
   /** The frame's LR2 state (`resolveLR2PlayState`). */
   public lr2State: LR2PlayState | undefined;
   /** What stays the same for the play: the LR2 state's setup. */
@@ -152,8 +163,10 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.timing = resolveLR2PlayTiming(kit.skin);
     this.timers = new LR2PlayTimers(play);
     const skin = kit.skin;
+    this.overlay.scale.set(skin.height / DESIGN_HEIGHT);
     this.playfieldSkin = {
-      stage: LR2_PLAY_STAGE,
+      stage: { width: skin.width, height: skin.height },
+      pixelsPerBeat: PIXELS_PER_BEAT * (skin.height / DESIGN_HEIGHT),
       ownsLanes: true,
       laneRect: (channel, stage) => resolveLR2LaneRect(skin, this.laneIndex(channel), stage),
       noteCell: (kind, channel) => resolveLR2NoteCell(this, kind, this.laneIndex(channel)),
@@ -202,12 +215,37 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   /** The lanes start at the stage's top edge, so notes scroll in from off the stage. */
   get noteOverscan(): number {
-    return NOTE_OVERSCAN;
+    return NOTE_OVERSCAN * (this.skin.height / DESIGN_HEIGHT);
   }
 
   /** No be-music skin: the playfield draws nothing of its own as data. */
   get skinBinding(): undefined {
     return undefined;
+  }
+
+  /** Parks textures with `retainer` instead of destroying them when this view is replaced mid-play. */
+  public useTextureRetainer(retainer: LR2TextureRetainer): void {
+    this.textureRetainer = retainer;
+  }
+
+  /**
+   * Starts the skin's scene, ready and play timers from the clock when this view joins a play already running.
+   * Those moments were delivered to the view it replaces.
+   */
+  public joinRunningPlay(): void {
+    if (this.play.hasSceneStarted?.() !== true) return;
+    const now = this.play.playClock();
+    const startInput = this.skin.timing.startInput;
+    if (this.play.isIntroPlaying()) {
+      this.loaded = false;
+      this.timers.handle({ kind: 'scene-start', atMs: now }, startInput);
+      return;
+    }
+    const at = now - Math.max(0, this.play.currentSeconds()) * 1000;
+    this.loaded = true;
+    this.timers.handle({ kind: 'scene-start', atMs: at }, startInput);
+    this.timers.handle({ kind: 'load-end', atMs: at }, startInput);
+    this.timers.handle({ kind: 'play-start', atMs: at }, startInput);
   }
 
   /** Builds the layers on `host` ahead of the first frame (a play loading off stage), so its textures can upload. */
@@ -233,12 +271,18 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   public attach(host: PixiSceneHost, emit: IntentSink<PlayIntent>): void {
     build(this, host);
     this.touchLanes.attach(host, emit);
+    this.displayInfo.attachCanvas(this.designRoot);
+    this.bpmChangeWarning.attachCanvas(this.designRoot);
   }
 
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
+    this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
+    this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
     for (const event of frame.events) this.handleEvent(event);
     this.root.visible = frame.shown;
+    if (!frame.shown) this.displayInfo.hide();
+    if (!frame.shown) this.bpmChangeWarning.hide();
     if (!frame.shown || this.disposed) return;
     this.perf.beginTick();
     this.perf.time('updateFPS', () => this.updateFPS());
@@ -254,6 +298,35 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.perf.time('render', () =>
       render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined),
     );
+    const overlayLanes = Array.from(this.play.laneX, ([channel, lane]) => ({
+      ...lane,
+      side: this.play.chartPlayVariant === '9' || !channel.startsWith('2') ? ('1P' as const) : ('2P' as const),
+    }));
+    this.displayInfo.update(
+      resolveDisplayAreaLabels({
+        mode: frame.playOptions.displayAreaInfo,
+        lanes: overlayLanes,
+        covers: this.play.resolveLaneCovers(),
+        visibleMs: (cover) =>
+          this.play.resolveVisibleMs(
+            cover,
+            frame.bpm,
+            this.play.scrollMapper?.rateAt?.(this.play.currentBeat(frame.seconds)) ?? 1,
+          ),
+      }),
+      this.playfieldSkin.stage,
+      this.app.screen,
+      this.designRoot.alpha,
+    );
+    this.bpmChangeWarning.show({
+      enabled: frame.playOptions.bpmChangeWarning,
+      timing: this.play.timingResolver,
+      seconds: frame.seconds,
+      lanes: overlayLanes,
+      stage: this.playfieldSkin.stage,
+      screen: this.app.screen,
+      opacity: this.designRoot.alpha,
+    });
     const report = this.perf.endFrame(() => ({
       stage: this.app.stage.children.length,
       skin: this.skinLayer.children.length,
@@ -268,6 +341,8 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   }
 
   public detach(): void {
+    this.displayInfo.detach();
+    this.bpmChangeWarning.detach();
     this.touchLanes.detach();
   }
 
@@ -282,6 +357,8 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   }
 
   public dispose(): void {
+    this.displayInfo.dispose();
+    this.bpmChangeWarning.dispose();
     if (this.disposed) return;
     this.disposed = true;
     this.timers.dispose();
@@ -305,7 +382,9 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     } catch (error) {
       log.warn('root.destroy threw', error);
     }
-    // The skin's images go a few per frame, so the next screen's first frames do not stall on the sweep.
+    // A play that may show this skin again keeps the textures. Destroying them and decoding the same bytes crashes
+    // PixiJS v8. The play destroys the retainer when it ends.
+    this.handTexturesBack();
     try {
       releaseTexturesOnHost(this.host, [...this.textures.values()]);
     } catch (error) {
@@ -358,7 +437,11 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.nonstopStage = 0;
     this.lr2Setup = {
       ...(play.chart !== undefined ? { chart: play.chart } : {}),
-      lanes: { playVariant: play.chartPlayVariant, channels: play.laneChannels },
+      lanes: {
+        playVariant: play.chartPlayVariant,
+        channels: play.laneChannels,
+        ...(play.battleSourceVariant !== undefined ? { battleSourceVariant: play.battleSourceVariant } : {}),
+      },
       features: {
         longNote: play.notes.some((note) => note.endBeat !== undefined),
         bpmChange: (play.timingResolver?.tempoPoints.length ?? 0) > 1,
@@ -371,9 +454,13 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
         scoreGraph: options.scoreGraph === true,
         bga: options.bga ?? 'ON',
         bgaSize: options.bgaSize ?? 'NORMAL',
+        ...(options.battleMode !== undefined ? { battleMode: options.battleMode } : {}),
+        ...(options.lr2ExtraMode !== undefined ? { lr2ExtraMode: options.lr2ExtraMode } : {}),
       },
       gauge: options.gauge ?? 'GROOVE',
+      ...(play.secondPlayer !== undefined && options.gauge2P !== undefined ? { gauge2P: options.gauge2P } : {}),
       courseGauge: options.courseGauge === true,
+      ...(options.replay === true ? { replay: true } : {}),
       ...(options.course !== undefined ? { course: options.course } : {}),
       customOps: this.skin.customOptions.map((option) => option.defaultOp),
     };
@@ -391,6 +478,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     const play = this.play;
     const seconds = play.currentSeconds();
     const bpm = play.displayBPM(seconds);
+    const second = play.secondPlayer;
     this.lr2State = resolveLR2PlayState(setup, {
       play: frame?.state ?? play.playState,
       score: play.score,
@@ -400,6 +488,14 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       displayedScore: play.displayedScore,
       ...(bpm !== undefined ? { bpm } : {}),
       fps: this.fps,
+      ...(second !== undefined
+        ? { secondPlayer: { play: frame?.state2P ?? second.playState, score: second.score } }
+        : {}),
+      judgeTimingMs: this.options.judgeTimingMs ?? 0,
+      judgments: {
+        '1P': play.judgeSideState['1P'].judge || 'EMPTY_POOR',
+        '2P': play.judgeSideState['2P'].judge || 'EMPTY_POOR',
+      },
     });
   }
 
@@ -435,8 +531,31 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
    * The skin's bitmap fonts (in the background: a text draws in a system font until its font is in), its timer spans,
    * its images (LR2's special graphics `gr=100..111` aside), the 9-keys skin's invisible note, and the chart's images.
    */
+  /** Gives this view's textures back to the play's retainer. Destroying them is the retainer's, when the play ends. */
+  private handTexturesBack(): void {
+    const retainer = this.textureRetainer;
+    if (retainer === undefined || this.textures.size === 0) return;
+    const dropped = retainer.keep(this.skin, this.textures);
+    this.textures.clear();
+    for (const texture of dropped.values()) texture.destroy(true);
+  }
+
+  /** A texture loaded after this view was replaced stays with the retainer. Otherwise it is destroyed. */
+  private releaseUnownedTexture(path: string, texture: Texture): void {
+    const retainer = this.textureRetainer;
+    if (retainer === undefined) {
+      texture.destroy(true);
+      return;
+    }
+    for (const dropped of retainer.keep(this.skin, new Map([[path, texture]])).values()) dropped.destroy(true);
+  }
+
   private async loadSkin(): Promise<void> {
     const skin = this.skin;
+    const adopted = this.textureRetainer?.adopt(skin);
+    if (adopted !== undefined) {
+      for (const [path, texture] of adopted) this.textures.set(path, texture);
+    }
     void loadSkinBitmapFonts(skin.lr2FontPaths, skin.files).then((loaded) => {
       if (this.isGone()) return;
       this.text.setFonts(loaded);
@@ -450,13 +569,17 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     skin.numbers.forEach((number) => imagePaths.add(number.source.imagePath));
     skin.grooveGauges.forEach((gauge) => imagePaths.add(gauge.source.imagePath));
     skin.nowCombos.forEach((combo) => imagePaths.add(combo.source.imagePath));
+    skin.judgeLines.forEach((line) => imagePaths.add(line.source.imagePath));
+    skin.measureLines.forEach((line) => imagePaths.add(line.source.imagePath));
+    skin.bargraphs.forEach((graph) => imagePaths.add(graph.source.imagePath));
+    skin.sliders.forEach((slider) => imagePaths.add(slider.source.imagePath));
     await Promise.all(
       [...imagePaths].map(async (path) => {
-        if (this.isGone() || isLR2SpecialGraphic(path)) return;
+        if (this.isGone() || isLR2SpecialGraphic(path) || this.textures.has(path)) return;
         const texture = await loadSkinAssetTexture(skin, path);
         if (!texture) return;
         if (this.isGone()) {
-          texture.destroy(true);
+          this.releaseUnownedTexture(path, texture);
           return;
         }
         this.textures.set(path, texture);
@@ -474,7 +597,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     ) {
       const texture = await loadSkinAssetTexture(invisibleNoteSkin, invisibleNoteSrc.imagePath);
       if (this.isGone()) {
-        texture?.destroy(true);
+        if (texture) this.releaseUnownedTexture(invisibleNoteSrc.imagePath, texture);
         return;
       }
       if (texture) this.textures.set(invisibleNoteSrc.imagePath, texture);
@@ -505,7 +628,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
           const texture = await loadTextureFromBytes(assetPath, bytes);
           if (!texture) return;
           if (this.isGone()) {
-            texture.destroy(true);
+            this.releaseUnownedTexture(key, texture);
             return;
           }
           this.textures.set(key, texture);

@@ -57,7 +57,7 @@ describe('LR2 play-skin helpers', () => {
     expect(pickLR2PlaySkin(skins, chartWithChannels(['28']))?.name).toBe('10K');
   });
 
-  test('pickLR2PlaySkin falls back to the SP / DP IIDX skins for 24-key keyboard charts', () => {
+  test('pickLR2PlaySkin falls back to the SP / DP That-Which-Must-Not-Be-Named skins for 24-key keyboard charts', () => {
     // LR2 never shipped a keyboard-mode skin. A 24-key chart still needs a frame / gauge / judge skin, so it
     // borrows the SP chain (`'7'` first) and its 26 lanes (24 keys + wheel) render through the host's fallback playfield; the
     // 48-key DP form borrows the DP chain (`'14'` first).
@@ -76,6 +76,29 @@ describe('LR2 play-skin helpers', () => {
     expect(pickLR2PlaySkinVariant(skins, chartWithChannels(['18']))).toBe('7');
     expect(pickLR2PlaySkinVariant(skins, chartWithChannels(['28']))).toBe('10');
     expect(pickLR2PlaySkinVariant({}, chartWithChannels(['11']))).toBeUndefined();
+  });
+
+  test('pickLR2PlaySkinVariant plays a battle mode on the converted chart’s skin', () => {
+    const skins: LR2PlaySkinMap = { '7': skin('7K'), '5': skin('5K'), '14': skin('14K'), '10': skin('10K') };
+    const seven = chartWithChannels(['18']);
+    const five = chartWithChannels(['11']);
+    // A two-player BATTLE takes the BATTLE play skin, a DP one without it; a course stage plays one player.
+    expect(pickLR2PlaySkinVariant(skins, seven, { battleMode: 'TWO-PLAYER' })).toBe('14');
+    expect(pickLR2PlaySkinVariant({ ...skins, '7-battle': skin('7B') }, seven, { battleMode: 'TWO-PLAYER' })).toBe(
+      '7-battle',
+    );
+    expect(pickLR2PlaySkinVariant({ ...skins, '7-battle': skin('7B') }, five, { battleMode: 'TWO-PLAYER' })).toBe(
+      '7-battle',
+    );
+    expect(pickLR2PlaySkinVariant(skins, seven, { battleMode: 'TWO-PLAYER', course: true })).toBe('7');
+    // A DP chart's BATTLE (COUPLE) keeps the DP skin.
+    expect(pickLR2PlaySkinVariant(skins, chartWithChannels(['28']), { battleMode: 'TWO-PLAYER' })).toBe('14');
+    expect(pickLR2PlaySkinVariant(skins, five, { battleMode: 'D-BATTLE' })).toBe('10');
+    expect(pickLR2PlaySkinVariant(skins, seven, { battleMode: 'BATTLE' })).toBe('14');
+    // SP TO DP doubles an SP chart and merges a DP one; a course skips it.
+    expect(pickLR2PlaySkinVariant(skins, seven, { battleMode: 'SP-TO-DP' })).toBe('14');
+    expect(pickLR2PlaySkinVariant(skins, chartWithChannels(['28']), { battleMode: 'SP-TO-DP' })).toBe('7');
+    expect(pickLR2PlaySkinVariant(skins, seven, { battleMode: 'SP-TO-DP', course: true })).toBe('7');
   });
 
   test('summarizeLR2PlaySkins formats loaded variants', () => {
@@ -227,6 +250,23 @@ describe('loadLR2ThemeSkinsFromFiles progress events', () => {
     expect(imagesOf(theme.loadSkin({ kind: 'play', playVariant: '7', parseOps: [290] }))).toEqual(['course.png']);
   });
 
+  test('loads a BATTLE play skin only from a theme that declares one', async () => {
+    const text = (path: string, rows: string[]): LR2SkinInputFile => {
+      const bytes = new TextEncoder().encode(rows.join('\n'));
+      return { webkitRelativePath: path, name: path.split('/').pop()!, arrayBuffer: async () => bytes.buffer };
+    };
+    const play7 = text('LR2files/Theme/T/Play/play_7.lr2skin', ['#INFORMATION,0,SP,a,t.bmp']);
+    const without = await loadLR2ThemeSkinsFromFiles([play7]);
+    expect(without.playSkins['7-battle']).toBeUndefined();
+    const battle = text('LR2files/Theme/T/Play/battle.lr2skin', ['#INFORMATION,12,BATTLE,a,t.bmp']);
+    const theme = await loadLR2ThemeSkinsFromFiles([play7, battle]);
+    expect(theme.playSkins['7-battle']?.name).toBe('BATTLE');
+    // A 5KEY BATTLE takes the 7KEY one; the SP skins never take the BATTLE one.
+    expect(theme.playSkins['5-battle']?.name).toBe('BATTLE');
+    expect(theme.playSkins['7']?.name).toBe('SP');
+    expect(theme.playSkins['14']?.name).toBe('SP');
+  });
+
   test('resolves the course jingles through the sound set, else by the stock stems', async () => {
     const file = (path: string, text = ''): LR2SkinInputFile => {
       const bytes = new TextEncoder().encode(text);
@@ -234,11 +274,13 @@ describe('loadLR2ThemeSkinsFromFiles progress events', () => {
     };
     const jingles = [
       file('LR2files/Sound/lr2/clear.wav'),
+      file('LR2files/Sound/lr2/playstop.wav'),
       file('LR2files/Sound/lr2/fail.wav'),
       file('LR2files/Sound/lr2/course_clear.wav'),
       file('LR2files/Sound/lr2/course_fail.wav'),
     ];
     const withoutSet = await loadLR2ThemeSkinsFromFiles(jingles);
+    expect(withoutSet.systemSounds.playStop?.path).toBe('LR2files/Sound/lr2/playstop.wav');
     expect(withoutSet.courseClearBGM?.path).toBe('LR2files/Sound/lr2/course_clear.wav');
     expect(withoutSet.courseFailBGM?.path).toBe('LR2files/Sound/lr2/course_fail.wav');
     const withSet = await loadLR2ThemeSkinsFromFiles([
@@ -247,10 +289,11 @@ describe('loadLR2ThemeSkinsFromFiles progress events', () => {
       file('LR2files/Sound/my/click.wav'),
       file(
         'LR2files/Sound/lr2.lr2ss',
-        '#COURSECLEAR,LR2files\\Sound\\my\\win.wav,\n#SCRATCH,LR2files\\Sound\\my\\click.wav,',
+        '#STOP,LR2files\\Sound\\my\\click.wav,\n#COURSECLEAR,LR2files\\Sound\\my\\win.wav,\n#SCRATCH,LR2files\\Sound\\my\\click.wav,',
       ),
     ]);
     expect(withSet.courseClearBGM?.path).toBe('LR2files/Sound/my/win.ogg');
+    expect(withSet.systemSounds.playStop?.path).toBe('LR2files/Sound/my/click.wav');
     expect(withSet.systemSounds.cursorMove?.path).toBe('LR2files/Sound/my/click.wav');
     // Commands the set leaves out keep the stem lookup.
     expect(withSet.courseFailBGM?.path).toBe('LR2files/Sound/lr2/course_fail.wav');

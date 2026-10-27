@@ -7,6 +7,8 @@
 export type JudgmentKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
 
 export interface ScoreSummary {
+  /** Final combo eligibility when empty POOR can break combo; absent in legacy/count-only results. */
+  fullCombo?: boolean;
   total: number;
   perfect: number;
   great: number;
@@ -16,12 +18,14 @@ export interface ScoreSummary {
   /** Empty POOR (空POOR) count — see `PlayerSummary.emptyPoor`. Never a note judgment, so `applyJudgeToSummary`
    * does not touch it; the engine increments it on the empty-POOR path. */
   emptyPoor: number;
+  /** LR2 mine hits already included in `poor`; not judgment notes and never a combo break. */
+  minePoor?: number;
   exScore: number;
   score: number;
 }
 
-export const IIDX_EX_SCORE_PER_PGREAT = 2;
-export const IIDX_EX_SCORE_PER_GREAT = 1;
+export const _____EX_SCORE_PER_PGREAT = 2;
+export const _____EX_SCORE_PER_GREAT = 1;
 /** LR2's money-score ceiling: `(4 × PGREAT) × 50000 / notes` reaches exactly this on a full PGREAT clear. */
 export const LR2_MONEY_SCORE_MAX = 200000;
 const LR2_MONEY_SCORE_UNIT = 50000;
@@ -46,18 +50,18 @@ export function computeScoreRate(score: Pick<ScoreSummary, 'total' | 'exScore'>)
   if (score.total <= 0) {
     return 0;
   }
-  const max = score.total * IIDX_EX_SCORE_PER_PGREAT;
+  const max = score.total * _____EX_SCORE_PER_PGREAT;
   return Math.max(0, Math.min(1, score.exScore / max));
 }
 
-export function resolveIIDXRankIndexFromScore(score: Pick<ScoreSummary, 'total' | 'exScore'>): number | undefined {
+export function resolve____RankIndexFromScore(score: Pick<ScoreSummary, 'total' | 'exScore'>): number | undefined {
   if (score.total <= 0) {
     return undefined;
   }
-  return resolveIIDXRankIndexFromRate(computeScoreRate(score));
+  return resolve____RankIndexFromRate(computeScoreRate(score));
 }
 
-export function resolveIIDXRankIndexFromRate(rate: number): number {
+export function resolve____RankIndexFromRate(rate: number): number {
   if (rate >= 8 / 9) return 0;
   if (rate >= 7 / 9) return 1;
   if (rate >= 6 / 9) return 2;
@@ -68,12 +72,12 @@ export function resolveIIDXRankIndexFromRate(rate: number): number {
   return 7;
 }
 
-export function resolveIIDXRankLabel(exScore: number, total: number): string {
-  const rankIndex = resolveIIDXRankIndexFromScore({ exScore, total });
+export function resolve____RankLabel(exScore: number, total: number): string {
+  const rankIndex = resolve____RankIndexFromScore({ exScore, total });
   if (rankIndex === undefined) {
     return '-';
   }
-  return IIDX_RANK_LABELS[rankIndex]!;
+  return _____RANK_LABELS[rankIndex]!;
 }
 
 /**
@@ -86,6 +90,6 @@ export function resolveLR2MoneyScore(summary: Pick<ScoreSummary, 'total' | 'perf
   return Math.min(LR2_MONEY_SCORE_MAX, Math.floor((weighted * LR2_MONEY_SCORE_UNIT) / notes));
 }
 
-/** The DJ Ranks (DJ LEVEL) on the IIDX ninths, best first: the labels `resolveIIDXRankLabel` returns. */
-export const IIDX_RANK_LABELS = ['AAA', 'AA', 'A', 'B', 'C', 'D', 'E', 'F'] as const;
-export type IIDXRankLabel = (typeof IIDX_RANK_LABELS)[number];
+/** The DJ Ranks (DJ LEVEL) on the That-Which-Must-Not-Be-Named ninths, best first: the labels `resolve____RankLabel` returns. */
+export const _____RANK_LABELS = ['AAA', 'AA', 'A', 'B', 'C', 'D', 'E', 'F'] as const;
+export type ____RankLabel = (typeof _____RANK_LABELS)[number];

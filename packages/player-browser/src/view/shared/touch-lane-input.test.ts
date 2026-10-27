@@ -65,6 +65,32 @@ describe('TouchLaneInput', () => {
     expect(intents.at(-1)).toMatchObject({ type: 'lane', channel: '12', pressed: true });
   });
 
+  test('follows the fingers on a DOM playfield’s element, measured from its box, leaving its controls alone', () => {
+    const { host } = createHost();
+    const mount = Object.assign(new EventTarget(), {
+      style: { touchAction: 'auto' },
+      getBoundingClientRect: () => ({ left: 20, top: 10, width: 640, height: 480 }),
+    }) as unknown as HTMLElement;
+    const intents: PlayIntent[] = [];
+    const input = new TouchLaneInput(playfieldTouchLanes(createPlay().view));
+    input.attach(host, (intent) => intents.push(intent), mount);
+    expect(mount.style.touchAction).toBe('none');
+    const touch = (type: string, pointerId: number, clientX: number) =>
+      Object.assign(new Event(type, { cancelable: true }), { pointerId, pointerType: 'touch', clientX, clientY: 310 });
+    const onButton = touch('pointerdown', 2, 125);
+    Object.defineProperty(onButton, 'target', { value: {} });
+    mount.dispatchEvent(onButton);
+    expect(intents).toEqual([]);
+    mount.dispatchEvent(touch('pointerdown', 1, 125));
+    mount.dispatchEvent(touch('pointerup', 1, 125));
+    expect(intents.map((intent) => intent.type === 'lane' && [intent.channel, intent.pressed])).toEqual([
+      ['11', true],
+      ['11', false],
+    ]);
+    input.detach();
+    expect(mount.style.touchAction).toBe('auto');
+  });
+
   test('detaching stops listening, restores the canvas and forgets the fingers', () => {
     const { host, canvas } = createHost();
     const intents: PlayIntent[] = [];

@@ -1,16 +1,11 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { PlayLock, type LockableControl, type PlayLockControls } from './play-lock.ts';
 
-/** A stand-in for a lil-gui controller: lil-gui's `enable(false)` disables, as `disable()` does. */
+/** A native control exposes its disabled state. */
 class FakeControl implements LockableControl {
-  public enabled = true;
-  public enable(enabled = true): this {
-    this.enabled = enabled;
-    return this;
-  }
-  public disable(disabled = true): this {
-    this.enabled = !disabled;
-    return this;
+  public disabled = false;
+  public get enabled(): boolean {
+    return !this.disabled;
   }
 }
 

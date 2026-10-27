@@ -60,7 +60,12 @@ const LONG_AND_MINE = chart(
 function createCore(
   json: BeMusicJSON,
   ruleset: RulesetId = 'lr2',
-  options: { autoScratch?: boolean; judgeMsPerChartSecond?: number; endOnFailure?: boolean } = {},
+  options: {
+    autoScratch?: boolean;
+    judgeMsPerChartSecond?: number;
+    endOnFailure?: boolean;
+    practiceFromSeconds?: number;
+  } = {},
 ): JudgeCoreState {
   const source = structuredClone(json);
   const resolved = resolveChart(source);
@@ -79,6 +84,7 @@ function createCore(
       autoScratch: options.autoScratch ?? false,
       judgeMsPerChartSecond: options.judgeMsPerChartSecond ?? 1000,
       endOnFailure: options.endOnFailure ?? false,
+      practiceFromSeconds: options.practiceFromSeconds,
       wavResources: source.resources.wav,
       idBase: resolveBMSBase(source),
       sourceFormat: source.sourceFormat,
@@ -183,6 +189,67 @@ describe('judge core', () => {
     });
   });
 
+  test('resetting the score removes mine-POOR state before rebuilding a seek', () => {
+    const state = createCore(NOTES);
+    const score = createInitialPlayerSummary(state.config.ruleset, state.config.ruleset.noteCount);
+    score.summary.poor = 1;
+    score.summary.minePoor = 1;
+    score.reset();
+    expect(score.summary.poor).toBe(0);
+    expect(score.summary).not.toHaveProperty('minePoor');
+  });
+
+  test.each([
+    [150, 'perfect', 2],
+    [175, 'great', 1],
+    [225, 'good', 0],
+  ] as const)('LR2 re-judges the next tap at its own offset (%d ms)', (nextMs, kind, exScore) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '11', position: [nextMs, 1000], value: '02' },
+      { measure: 1, channel: '11', position: [nextMs + 5, 1000], value: '03' },
+    ]);
+    const state = createCore(json, 'lr2');
+    const effects = stepJudgeCore(state, press(1.15, '11'));
+    expect(state.summary.bad).toBe(1);
+    expect(state.summary[kind]).toBe(1);
+    expect(state.summary.exScore).toBe(exScore);
+    expect(state.combo).toBe(1);
+    expect(state.config.scorableNotes[2]!.judged).toBe(false);
+    expect(effects.filter((effect) => effect.kind === 'sound' && effect.source === 'manual-note')).toHaveLength(2);
+  });
+
+  test('LR2 follows only the consumed lane and stops at a long-note head', () => {
+    const json = chart(
+      [
+        { measure: 1, channel: '11', position: [0, 1000], value: '01' },
+        { measure: 1, channel: '12', position: [10, 1000], value: '01' },
+        { measure: 1, channel: '51', position: [100, 1000], value: '01' },
+        { measure: 1, channel: '11', position: [450, 1000], value: '01' },
+        { measure: 1, channel: '51', position: [400, 1000], value: '01' },
+      ],
+      (json) => {
+        json.bms.lnType = 1;
+      },
+    );
+    const state = createCore(json, 'lr2');
+    stepJudgeCore(state, press(1.15, '11', '12'));
+    expect(state.summary).toMatchObject({ bad: 1, perfect: 0 });
+    expect(state.config.scorableNotes.filter((note) => note.judged)).toHaveLength(1);
+    expect(state.activeLongNotes.size).toBe(0);
+  });
+
+  test.each(['beatoraja', '____'] as const)('%s does not reuse a BAD press', (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1000], value: '01' },
+      { measure: 1, channel: '11', position: [150, 1000], value: '02' },
+    ]);
+    const state = createCore(json, ruleset);
+    stepJudgeCore(state, press(1.15, '11'));
+    expect(state.config.scorableNotes.filter((note) => note.judged)).toHaveLength(1);
+    expect(state.summary.bad + state.summary.perfect).toBe(1);
+  });
+
   test('a note-less press near a note is an empty POOR that never consumes the note', () => {
     const state = createCore(NOTES);
     const effects = stepJudgeCore(state, press(0.5, '11'));
@@ -216,7 +283,31 @@ describe('judge core', () => {
     });
   });
 
-  test('a lane held through a mine detonates it and drains the gauge without a judgment', () => {
+  test('a long note’s judgment is marked as one, and a BAD carries its instant', () => {
+    const state = createCore(LONG_AND_MINE, 'lr2');
+    stepJudgeCore(state, { kind: 'hold', channels: new Set(['11']) });
+    stepJudgeCore(state, press(1, '11'));
+    stepJudgeCore(state, advance(1.4));
+    const effects = stepJudgeCore(state, {
+      kind: 'release',
+      channels: new Set(['11']),
+      tokens: [],
+      nowSec: 1.5,
+      nowMs: 1500,
+      recordSec: 1.5,
+    });
+    expect(effects.find((effect) => effect.kind === 'judge-combo')).toMatchObject({
+      judge: 'BAD',
+      seconds: 1.5,
+      longNote: true,
+    });
+    // A normal note's hit is not.
+    const tap = stepJudgeCore(state, press(3.001, '12')).find((effect) => effect.kind === 'judge-combo');
+    expect(tap).toMatchObject({ judge: 'PERFECT', channel: '12' });
+    expect(tap).not.toHaveProperty('longNote');
+  });
+
+  test('a held LR2 mine drains the gauge and counts one POOR without breaking combo', () => {
     const state = createCore(LONG_AND_MINE, 'lr2');
     stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
     const before = state.summary.gauge!.current;
@@ -224,10 +315,11 @@ describe('judge core', () => {
 
     expect(effects.find((effect) => effect.kind === 'trace' && effect.name === 'mine-hit')).toBeDefined();
     expect(state.summary.gauge!.current).toBeLessThan(before);
-    expect(state.summary.bad + state.summary.poor).toBe(1); // only the LN head missed meanwhile
+    expect(state.summary.bad + state.summary.poor).toBe(2); // the missed LN head plus one mine POOR
+    expect(state.summary.minePoor).toBe(1);
   });
 
-  test.each(['lr2', 'beatoraja', 'iidx'] as const)('%s: a lane held through a mine detonates it', (ruleset) => {
+  test.each(['lr2', 'beatoraja', '____'] as const)('%s: a lane held through a mine detonates it', (ruleset) => {
     const state = createCore(LONG_AND_MINE, ruleset);
     stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
     const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
@@ -235,12 +327,11 @@ describe('judge core', () => {
   });
 
   test.each([
-    ['lr2', 1],
-    ['iidx', 1],
+    ['lr2', 0],
+    ['____', 1],
     ['beatoraja', 0],
   ] as const)('%s: a press just after a mine crossed, inside PGREAT, detonates it %i time(s)', (ruleset, hits) => {
-    // LR2 also detonates a mine on a press within the PGREAT window (its changelog); beatoraja only damages when the
-    // key is down as the mine crosses the line (JudgeManager L244). IIDX keeps LR2's model.
+    // LR2beta3 has no late press window; only the provisional That-Which-Must-Not-Be-Named model keeps symmetric PGREAT.
     const state = createCore(LONG_AND_MINE, ruleset);
     const effects = [...stepJudgeCore(state, advance(2.501)), ...stepJudgeCore(state, press(2.505, '12'))];
     effects.push(...stepJudgeCore(state, advance(2.6)));
@@ -355,7 +446,7 @@ describe('judge core', () => {
       ['lr2', 1],
       ['beatoraja', 0],
     ] as const)('%s: a tap pressed and released just before the crossing detonates %i time(s)', (ruleset, hits) => {
-      // Down 3 ms before the mine, up 1 ms before it. LR2 detonates on a press inside PGREAT; beatoraja only when the
+      // Down 3 ms before the mine, up 1 ms before it. LR2 detonates on a press inside ahead-only GREAT; beatoraja only when the
       // key is down as the mine crosses, so the key already being up must count even within the 120 ms hold grace.
       expect(
         mineHits(ruleset, [
@@ -388,7 +479,7 @@ describe('judge core', () => {
     });
 
     test('beatoraja: a key let go at the very µs of the crossing is up as it crosses', () => {
-      // (LR2 would still detonate: the key was down as the mine entered the PGREAT window.)
+      // LR2beta3 also waits for crossing, so release at the same microsecond spares the mine.
       expect(
         mineHits('beatoraja', [
           [2300, 'down'],
@@ -400,7 +491,7 @@ describe('judge core', () => {
           [2300, 'down'],
           [2500, 'up'],
         ]),
-      ).toEqual([1, 1, 1]);
+      ).toEqual([0, 0, 0]);
     });
 
     test.each(['lr2', 'beatoraja'] as const)('%s: a second key on a held lane keeps the hold through', (ruleset) => {
@@ -516,7 +607,7 @@ describe('judge core', () => {
     expect(state.activeLongNotes.size).toBe(0);
   });
 
-  test.each(['lr2', 'beatoraja', 'iidx'] as const)(
+  test.each(['lr2', 'beatoraja', '____'] as const)(
     '%s: a replay produces the same effects however its advances are spaced',
     (ruleset) => {
       const stream = inputs(
@@ -542,3 +633,73 @@ describe('judge core', () => {
     },
   );
 });
+
+describe('practice start', () => {
+  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    test(`${ruleset}: consumes earlier heads and tails without judgments or gauge changes`, () => {
+      const state = createCore(LONG_AND_MINE, ruleset, { practiceFromSeconds: 2.75 });
+      const gauge = state.summary.gauge?.current;
+      expect(state.config.scorableNotes[0]!.judged).toBe(true);
+      expect(state.config.landmineNotes[0]!.judged).toBe(true);
+      expect(state.remainingScorableNotes).toBe(1);
+      const effects = stepJudgeCore(state, advance(2.75));
+      expect(effects.some((effect) => effect.kind === 'judge-combo')).toBe(false);
+      expect(state.summary.exScore).toBe(0);
+      expect(state.summary.poor).toBe(0);
+      expect(state.summary.gauge?.current).toBe(gauge);
+      stepJudgeCore(state, press(3, '12'));
+      expect(state.summary.perfect).toBe(1);
+      expect(state.summary.poor).toBe(0);
+      expect(isJudgeCoreSettled(state)).toBe(true);
+    });
+  }
+  test('keeps notes exactly at the target playable and skips an LN crossing the target', () => {
+    const state = createCore(LONG_AND_MINE, 'beatoraja', { practiceFromSeconds: 1.5 });
+    stepJudgeCore(state, advance(2.1));
+    expect(state.summary.poor).toBe(0);
+    expect(state.activeLongNotes.size).toBe(0);
+    const boundary = createCore(NOTES, 'lr2', { practiceFromSeconds: 1.5 });
+    stepJudgeCore(boundary, press(1.5, '12'));
+    expect(boundary.summary.perfect).toBe(1);
+    expect(boundary.summary.poor).toBe(0);
+  });
+  test('skips scratch and invisible notes without leaving outstanding work', () => {
+    const json = chart([
+      { measure: 1, channel: '16', position: [0, 1], value: '01' },
+      { measure: 1, channel: '31', position: [0, 1], value: '01' },
+    ]);
+    const state = createCore(json, 'lr2', { autoScratch: true, practiceFromSeconds: 2 });
+    stepJudgeCore(state, advance(2));
+    expect(state.summary.exScore).toBe(0);
+    expect(state.summary.poor).toBe(0);
+    expect(isJudgeCoreSettled(state)).toBe(true);
+  });
+});
+
+test('input filtering leaves the unassisted scratch side playable', () => {
+  const mapped = resolveJudgeInputChannels(
+    { autoScratch: true, scratchChannels: new Set(['16', '26']), autoScratchChannels: new Set(['16']) },
+    new Map([['both', ['16', '26']]]),
+    new Set(),
+    ['both'],
+  );
+  expect([...mapped]).toEqual(['26']);
+});
+
+test.each([false, true])(
+  'silent generated mines retain damage while suppressing their explosion sample (%s)',
+  (silent) => {
+    const json = structuredClone(LONG_AND_MINE);
+    json.resources.wav['00'] = 'explosion.wav';
+    const state = createCore(json, 'beatoraja');
+    if (silent) state.config.landmineNotes[0]!.silent = true;
+    stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
+    const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
+    // beatoraja mines are gauge-only: the hit still deals its damage, with or without the sample.
+    const hit = effects.find((effect) => effect.kind === 'trace' && effect.name === 'mine-hit');
+    expect(hit?.kind === 'trace' ? Object.fromEntries(hit.fields).damage : undefined).toBeGreaterThan(0);
+    expect(effects.filter((effect) => effect.kind === 'sound' && effect.source === 'mine-hit')).toHaveLength(
+      silent ? 0 : 1,
+    );
+  },
+);

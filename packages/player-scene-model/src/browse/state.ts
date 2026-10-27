@@ -3,7 +3,13 @@ import { libraryEntryKey } from '../library/entries.ts';
 import { libraryRootFolders } from '../library/folders.ts';
 import { entryMatchesListFilters } from './filter.ts';
 import { DEFAULT_BROWSE_LIST_OPTIONS, sameBrowseListOptions, type BrowseListOptions } from './list-options.ts';
-import { matchesSearchQuery, normalizeSearchQuery } from './search.ts';
+import {
+  filterEntriesByChartQuery,
+  libraryChartFilterRecord,
+  matchesSearchQuery,
+  normalizeSearchQuery,
+  parseBrowseSearch,
+} from './search.ts';
 import { sortLibraryEntries } from './sort.ts';
 
 /**
@@ -72,6 +78,7 @@ export function browseFolder(state: BrowseState): LibraryFolder | undefined {
 interface EntriesMemo {
   charts: Library['charts'];
   courseFolders: Library['courseFolders'];
+  chartFilterRecord: Library['chartFilterRecord'];
   query: string;
   list: BrowseListOptions;
   entries: readonly LibraryEntry[];
@@ -91,6 +98,7 @@ export function browseEntries(library: Library, state: BrowseState): readonly Li
     memo !== undefined &&
     memo.charts === library.charts &&
     memo.courseFolders === library.courseFolders &&
+    memo.chartFilterRecord === library.chartFilterRecord &&
     memo.query === query &&
     (memo.list === state.list || sameBrowseListOptions(memo.list, state.list))
   ) {
@@ -100,6 +108,7 @@ export function browseEntries(library: Library, state: BrowseState): readonly Li
   ENTRIES_MEMO.set(state.path, {
     charts: library.charts,
     courseFolders: library.courseFolders,
+    chartFilterRecord: library.chartFilterRecord,
     query,
     list: state.list,
     entries,
@@ -108,13 +117,16 @@ export function browseEntries(library: Library, state: BrowseState): readonly Li
 }
 
 /**
- * The bars listed with `path` open, for a lower-cased search `query` and the list options:
+ * The bars listed with `path` open, for a search `query` ({@link normalizeSearchQuery}) and the list options:
  *
  * - At the root, the folder bars (chart folders, then course folders); while searching, every chart of the library
  *   instead, so typing a title rewrites the list at once.
  * - Inside a chart folder its charts, inside a course folder its courses.
- * - Then the filters ({@link entryMatchesListFilters}), the search ({@link matchesSearchQuery}) at every depth, and the
- *   sort ({@link sortLibraryEntries}).
+ * - Then the filters ({@link entryMatchesListFilters}), the search at every depth, and the sort
+ *   ({@link sortLibraryEntries}). A text search keeps the bars that match it ({@link matchesSearchQuery}); a chart
+ *   filter expression (`?…`, {@link parseBrowseSearch}) the charts it selects, read through
+ *   `library.chartFilterRecord`, and with an `ORDER BY` of its own it keeps its order instead of the sort. An invalid
+ *   expression filters nothing.
  */
 export function listEntriesAt(
   library: Library,
@@ -122,20 +134,25 @@ export function listEntriesAt(
   query: string,
   list: BrowseListOptions,
 ): readonly LibraryEntry[] {
+  const search = parseBrowseSearch(query);
+  const searching = search.kind === 'text' || search.kind === 'filter';
   const top = path[path.length - 1];
   const base: LibraryEntry[] = top
     ? top.courses !== undefined
       ? top.courses.map((course): LibraryEntry => ({ kind: 'course', course }))
       : top.charts.map((chart): LibraryEntry => ({ kind: 'chart', chart }))
-    : query.length > 0
+    : searching
       ? library.charts.map((chart): LibraryEntry => ({ kind: 'chart', chart }))
       : libraryRootFolders(library).map((folder): LibraryEntry => ({ kind: 'folder', folder }));
   let entries = base;
   if (list.keysFilter !== 'ALL' || list.difficultyFilter !== 'ALL') {
     entries = entries.filter((entry) => entryMatchesListFilters(entry, list));
   }
-  if (query.length > 0) {
-    entries = entries.filter((entry) => matchesSearchQuery(entry, query));
+  if (search.kind === 'text') {
+    entries = entries.filter((entry) => matchesSearchQuery(entry, search.query));
+  } else if (search.kind === 'filter') {
+    entries = filterEntriesByChartQuery(entries, search.query, library.chartFilterRecord ?? libraryChartFilterRecord);
+    if (search.query.orderBy.length > 0) return entries;
   }
   return list.sort === 'OFF' ? entries : sortLibraryEntries(entries, list.sort);
 }

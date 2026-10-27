@@ -1,9 +1,14 @@
 import type { GaugeType } from '../ruleset/gauge-type.ts';
-import { resolveIIDXRankLabel } from '../ruleset/score.ts';
+import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 import { resolveRuleset, type RulesetId } from '../ruleset/index.ts';
 import { CLEAR_LAMPS, resolveCourseClearLamp, resolveMissCount, type ClearLamp } from '../ruleset/clear-lamp.ts';
-import { resolveCourseGauge, resolveCourseGaugeId, type RulesetCourseKind } from '../ruleset/course.ts';
+import {
+  isCourseStageFailed,
+  resolveCourseGauge,
+  resolveCourseGaugeId,
+  type RulesetCourseKind,
+} from '../ruleset/course.ts';
 import {
   BE_MUSIC_REPLAY_VERSION,
   parseReplay,
@@ -99,6 +104,11 @@ export interface ReplayCourseResult {
   missCount: number;
   /** The course-wide max combo. */
   maxCombo: number;
+  /** Mine POORs included in judge.poor, not consumed judgment notes. */
+  minePoor?: number;
+  /** Final combo eligibility for modes that break combo on empty POOR. */
+  fullCombo?: boolean;
+
   djLevel: string;
   /** The gauge the course ended on. */
   gauge: { type: string; final: number; cleared: boolean };
@@ -118,16 +128,22 @@ export interface ReplayCourseResult {
  */
 export function resolveCourseLamp(
   ruleset: string,
-  result: Pick<ReplayCourseResult, 'judge' | 'noteCount' | 'maxCombo' | 'gauge'>,
+  result: Pick<ReplayCourseResult, 'judge' | 'noteCount' | 'maxCombo' | 'gauge' | 'fullCombo'>,
   pick: GaugeType,
 ): CourseClearLamp {
+  const id = ruleset.split('/')[0]!;
+  const fullCombo = result.fullCombo !== false && result.noteCount > 0 && result.maxCombo >= result.noteCount;
+  // CheckCourseClear: HP >= 2 may advance; at course end, HP == 2 clears only through the full-combo branch.
+  const cleared =
+    result.gauge.cleared && (id !== 'lr2' || (result.gauge.final >= 2 && (fullCombo || result.gauge.final > 2)));
   return resolveCourseClearLamp({
-    ruleset,
-    cleared: result.gauge.cleared,
+    ruleset: id,
+    cleared,
     gauge: result.gauge.type,
     gaugeType: pick,
     noteCount: result.noteCount,
     maxCombo: result.maxCombo,
+    ...(result.fullCombo !== undefined ? { fullCombo: result.fullCombo } : {}),
     judge: result.judge,
   }) as CourseClearLamp;
 }
@@ -196,12 +212,20 @@ export function aggregateCourseResult(
   let slow = 0;
   let exScore = 0;
   let judged = 0;
+  let minePoor = 0;
   for (const stage of stageResults) {
     for (const key of Object.keys(judge) as Array<keyof ReplayJudgmentCounts>) judge[key] += stage.judge[key];
     fast += stage.fast;
     slow += stage.slow;
     exScore += stage.exScore;
-    judged += stage.judge.pgreat + stage.judge.great + stage.judge.good + stage.judge.bad + stage.judge.poor;
+    minePoor += stage.minePoor ?? 0;
+    judged +=
+      stage.judge.pgreat +
+      stage.judge.great +
+      stage.judge.good +
+      stage.judge.bad +
+      stage.judge.poor -
+      (stage.minePoor ?? 0);
   }
   const noteCount = stageNoteCounts.reduce((sum, count) => sum + count, 0);
   const last = stageResults.at(-1);
@@ -209,12 +233,23 @@ export function aggregateCourseResult(
   const gauge = {
     type: last?.gauge.type ?? '',
     final: last?.gauge.final ?? 0,
-    cleared: reachedAll && last !== undefined && last.gauge.cleared,
+    cleared:
+      reachedAll &&
+      last !== undefined &&
+      last.gauge.cleared &&
+      (ruleset.split('/')[0] !== 'lr2' || judged === noteCount),
   };
   const partial = {
     judge,
     noteCount,
     maxCombo: last?.course?.maxCombo ?? last?.maxCombo ?? 0,
+    ...(stageResults.some((stage) => stage.fullCombo !== undefined)
+      ? {
+          fullCombo:
+            stageResults.every((stage) => stage.fullCombo !== false) &&
+            (last?.course?.combo ?? last?.maxCombo ?? 0) === noteCount,
+        }
+      : {}),
     gauge,
   };
   const missCount = resolveMissCount(judge, noteCount - judged);
@@ -227,12 +262,16 @@ export function aggregateCourseResult(
     noteCount,
     missCount,
     maxCombo: partial.maxCombo,
-    djLevel: resolveIIDXRankLabel(exScore, noteCount),
+    ...(minePoor > 0 ? { minePoor } : {}),
+    ...(partial.fullCombo !== undefined ? { fullCombo: partial.fullCombo } : {}),
+
+    djLevel: resolve____RankLabel(exScore, noteCount),
     gauge,
     stagesPlayed: stageResults.length,
     lamp: resolveCourseLamp(ruleset.split('/')[0]!, partial, pick),
     stages: [...stageResults],
   };
+  gauge.cleared = result.lamp !== 'FAILED';
   const trophy = gauge.cleared ? resolveCourseTrophy(course.trophies, result) : undefined;
   if (trophy !== undefined) result.trophy = trophy;
   return result;
@@ -250,7 +289,7 @@ function givenUpResult(stageLog: BeMusicReplay, result: ReplayRulesetResult): Re
 
 /** The gauge a stage hands on: a stage that ended with its survival gauge empty ends the course. */
 function stageFailed(result: ReplayRulesetResult): boolean {
-  return result.gauge.failedMidPlay === true || result.gauge.final <= 0;
+  return isCourseStageFailed(result.ruleset, result.gauge);
 }
 
 /** The judgment notes one stage counts under a ruleset, from a stage log or from an unreached stage's facts. */
@@ -280,9 +319,10 @@ export function simulateCourseReplay(
   let previous: ReplayRulesetResult | undefined;
   for (const entry of courseLog.stages) {
     if (!entry.played || (previous !== undefined && stageFailed(previous))) break;
-    const stageLog = structuredClone(entry.replay);
-    pick = stageLog.play.gauge;
-    const course = stageLog.play.course ?? { kind: courseLog.course.kind };
+    // Only the stage's course carry-in changes, and `simulateReplay` never writes to the log it reads: copy the path
+    // down to `play.course` and share the rest (the inputs and chart are most of a log).
+    pick = entry.replay.play.gauge;
+    const course = { ...(entry.replay.play.course ?? { kind: courseLog.course.kind }) };
     if (previous === undefined) {
       delete course.carryIn;
     } else {
@@ -292,7 +332,7 @@ export function simulateCourseReplay(
         maxCombo: previous.course?.maxCombo ?? previous.maxCombo,
       };
     }
-    stageLog.play.course = course;
+    const stageLog: BeMusicReplay = { ...entry.replay, play: { ...entry.replay.play, course } };
     previous = givenUpResult(stageLog, simulateReplay(stageLog, options));
     stageResults.push(previous);
   }
@@ -318,12 +358,15 @@ function nonstopCourseResult(
   stageResults: readonly ReplayRulesetResult[],
 ): ReplayCourseResult {
   const { judge, noteCount } = run;
-  const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor;
+  const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor - (run.minePoor ?? 0);
   // A NONSTOP play given up with ESC is a failed run.
   const gauge = {
     type: run.gauge.type,
     final: run.gauge.final,
-    cleared: run.gauge.cleared && courseLog.nonstop?.replay.play.aborted !== true,
+    cleared:
+      run.gauge.cleared &&
+      courseLog.nonstop?.replay.play.aborted !== true &&
+      (run.ruleset.split('/')[0] !== 'lr2' || judged === noteCount),
   };
   const result: ReplayCourseResult = {
     ruleset: run.ruleset,
@@ -334,16 +377,26 @@ function nonstopCourseResult(
     noteCount,
     missCount: resolveMissCount(judge, noteCount - judged),
     maxCombo: run.maxCombo,
-    djLevel: resolveIIDXRankLabel(run.exScore, noteCount),
+    ...(run.minePoor !== undefined ? { minePoor: run.minePoor } : {}),
+    ...(run.fullCombo !== undefined ? { fullCombo: run.fullCombo } : {}),
+
+    djLevel: resolve____RankLabel(run.exScore, noteCount),
     gauge,
     stagesPlayed: courseLog.stages.filter((entry) => entry.played).length,
     lamp: resolveCourseLamp(
       run.ruleset.split('/')[0]!,
-      { judge, noteCount, maxCombo: run.maxCombo, gauge },
+      {
+        judge,
+        noteCount,
+        maxCombo: run.maxCombo,
+        gauge,
+        ...(run.fullCombo !== undefined ? { fullCombo: run.fullCombo } : {}),
+      },
       courseLog.nonstop!.replay.play.gauge,
     ),
     stages: [...stageResults],
   };
+  gauge.cleared = result.lamp !== 'FAILED';
   const trophy = gauge.cleared ? resolveCourseTrophy(courseLog.course.trophies, result) : undefined;
   if (trophy !== undefined) result.trophy = trophy;
   return result;
@@ -662,11 +715,13 @@ function parseCourseResults(results: Record<string, unknown>): Record<string, Re
       noteCount: base!.noteCount,
       missCount: expectFiniteNumber(record.missCount, `${path}.missCount`),
       maxCombo: base!.maxCombo,
+      ...(base!.minePoor !== undefined ? { minePoor: base!.minePoor } : {}),
       djLevel: expectString(record.djLevel, `${path}.djLevel`),
       gauge: { type: base!.gauge.type, final: base!.gauge.final, cleared: base!.gauge.cleared },
       stagesPlayed: expectFiniteNumber(record.stagesPlayed, `${path}.stagesPlayed`),
       lamp: lamp as CourseClearLamp,
       stages: Object.values(parseResults(stageMap, `${path}.stages`)),
+      ...(base!.fullCombo !== undefined ? { fullCombo: base!.fullCombo } : {}),
     };
     const trophy = optionalString(record.trophy, `${path}.trophy`);
     if (trophy !== undefined) result.trophy = trophy;

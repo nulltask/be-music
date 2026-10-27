@@ -1,5 +1,4 @@
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isCLIEntryPoint } from '@be-music/shared-utils/cli';
 import { resolveCLIPath } from '@be-music/shared-utils/cli-path';
 import { renderChartFile } from './index.ts';
 
@@ -99,25 +98,7 @@ function printUsage(): void {
   );
 }
 
-function isCLIEntryPoint(): boolean {
-  const entry = process.argv[1];
-  if (!entry) {
-    return false;
-  }
-
-  try {
-    const moduleURL = (import.meta as { url?: unknown }).url;
-    if (typeof moduleURL === 'string' && moduleURL.length > 0) {
-      return resolve(entry) === fileURLToPath(moduleURL);
-    }
-  } catch {
-    // SEA/CJS bundles may not provide import.meta.url.
-  }
-
-  return resolve(entry) === resolve(process.execPath);
-}
-
-if (isCLIEntryPoint()) {
+if (isCLIEntryPoint(() => (import.meta as { url?: unknown }).url, { allowExecutableFallback: true })) {
   void main().catch((error) => {
     const message = error instanceof Error && error.message ? error.message : String(error);
     process.stderr.write(`${message}\n`);

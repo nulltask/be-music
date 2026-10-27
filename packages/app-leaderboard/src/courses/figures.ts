@@ -1,4 +1,8 @@
-import type { ReplayCourseInfo, ReplayRulesetResult } from '@be-music/player-engine/replay';
+import {
+  resolveRulesetResultMissCount,
+  type ReplayCourseInfo,
+  type ReplayRulesetResult,
+} from '@be-music/player-engine/replay';
 
 /** One reached stage of a course run under one ruleset, as the run page breaks the run down. */
 export interface CourseStageFigures {
@@ -17,14 +21,12 @@ export interface CourseStageFigures {
 
 /** A stage result of `simulateCourseReplay` (`ReplayCourseResult.stages`) as it is stored. */
 export function toCourseStageFigures(result: ReplayRulesetResult): CourseStageFigures {
-  const { judge } = result;
-  const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor;
   return {
     exScore: result.exScore,
     noteCount: result.noteCount,
-    missCount: judge.bad + judge.poor + judge.emptyPoor + Math.max(0, result.noteCount - judged),
+    missCount: resolveRulesetResultMissCount(result),
     maxCombo: result.maxCombo,
-    judges: { ...judge, fast: result.fast, slow: result.slow },
+    judges: { ...result.judge, fast: result.fast, slow: result.slow },
     gaugeType: result.gauge.type,
     gaugeFinal: result.gauge.final,
     cleared: result.gauge.cleared,

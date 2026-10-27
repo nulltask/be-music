@@ -1,3 +1,4 @@
+import { LR2_GAUGE_TYPES } from '@be-music/player-engine/ruleset';
 /**
  * The LR2 family's select view: an LR2 select skin's `#SRC_*` / `#DST_*` frame, its bar list (`#SRC_BAR_BODY` slots
  * around `#BAR_CENTER`, drawn by `select-bars.ts`), buttons, panels, sliders, numbers, texts and mouse cursor, over the
@@ -8,7 +9,7 @@
  * this view: the session sees intents.
  */
 
-import { resolveBeMusicSelectLayout, type BeMusicSelectLayout } from '@be-music/player-skin-sdk';
+import type { BeMusicSelectLayout } from '@be-music/player-skin-sdk';
 import { Color, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type {
   LR2ButtonElement,
@@ -26,6 +27,9 @@ import type {
 import { LR2_TEXT, LR2_TIMER } from '@be-music/skin-lr2/ids';
 import {
   resolveLR2CourseMakerAction,
+  LR2_BATTLE_CYCLE,
+  LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
+  stepLR2JudgeTiming,
   resolveLR2SelectButton,
   resolveLR2SelectState,
   resolveLR2SelectTimers,
@@ -33,7 +37,7 @@ import {
   type LR2SelectState,
   type LR2TimerUpdate,
 } from '@be-music/skin-lr2/state';
-import type { LibraryChart, LibraryEntry } from '@be-music/player-scene-model';
+import { HS_FIX_CYCLE, nextChoice, type LibraryChart, type LibraryEntry } from '@be-music/player-scene-model';
 import type { BrowserChartCollection } from '../../collection/types.ts';
 import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
 import { hasReadtextForChart } from '../../collection/readtext.ts';
@@ -52,7 +56,6 @@ import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { PerfTracker } from '../shared/perf.ts';
 import { disposeChildren } from '../../stage/pixi-utils.ts';
 import type { LR2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
-import { resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import {
   applyDestinationToSprite,
@@ -72,12 +75,17 @@ import {
   LR2SkinTextureStore,
   resolveSolidSpecialGraphicTexture,
 } from '../../skin/lr2/scene-textures.ts';
-import { phantomSkin } from '../../skins/phantom/index.ts';
 import { renderEmptyStateHint } from '../built-in/select-empty-hint.ts';
 import { SelectReadTextOverlay } from '../built-in/select-readtext.ts';
 import { SelectPointer, type SelectDesignSize, type SelectPointerContext } from '../shared/select-pointer.ts';
 import type { IntentSink, SelectFrame, SelectIntent, SelectView } from '../types.ts';
 import { clampSlot, renderLR2SelectBars, wrapIndex, type LR2SelectBarsContext } from './select-bars.ts';
+
+/**
+ * The song-list window a pulled list settles by: the geometry of the built-in select list the LR2 select has always
+ * used (on the 16:9 stage). The skin's own slots still place the bars.
+ */
+const LR2_SELECT_LIST_LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 60, listBottomInset: 26, rowHeight: 28 };
 
 const log = logger('select');
 
@@ -440,6 +448,7 @@ export class LR2SelectView implements SelectView {
               ...(maker.draft !== undefined ? { draft: maker.draft } : {}),
               defaultConnection: maker.defaultConnection,
               namePrompt: COURSE_NAME_PROMPT,
+              ...(maker.randomMixSettings !== undefined ? { randomMixSettings: maker.randomMixSettings } : {}),
             },
           }
         : {}),
@@ -663,8 +672,7 @@ export class LR2SelectView implements SelectView {
     const emit = (intent: SelectIntent): void => this.emit?.(intent);
     const maker = resolveLR2CourseMakerAction(button.type);
     if (maker !== undefined && this.frame?.courseMaker !== undefined) {
-      if (maker.kind === 'connection') emit({ type: 'course-maker', action: { ...maker, step: direction } });
-      else if (maker.kind === 'default-connection')
+      if (maker.kind === 'connection' || maker.kind === 'default-connection' || maker.kind === 'random-mix')
         emit({ type: 'course-maker', action: { ...maker, step: direction } });
       else emit({ type: 'course-maker', action: maker });
       return;
@@ -680,7 +688,50 @@ export class LR2SelectView implements SelectView {
         // Both sides step the one hi-speed.
         emit({ type: 'play-option', key: 'hiSpeed', step: button.plusOnly === -1 ? -1 : 1 });
         return;
+      case 'judge-timing': {
+        // `plusOnly` fixes the direction; without it the half clicked picks it.
+        const current = this.frame?.playOptions?.judgeTimingMs ?? 0;
+        const next = stepLR2JudgeTiming(current, button.plusOnly > 0 ? 1 : button.plusOnly < 0 ? -1 : direction);
+        if (next !== current) emit({ type: 'set-play-option', key: 'judgeTimingMs', value: next });
+        return;
+      }
       case 'cycle-option':
+        if (action.option === 'gauge1P' || action.option === 'gauge2P') {
+          emit({
+            type: 'set-play-option',
+            key: action.option,
+            value: nextChoice(LR2_GAUGE_TYPES, this.frame?.playOptions[action.option] ?? 'GROOVE'),
+          });
+          return;
+        }
+        if (action.option === 'battleMode') {
+          emit({
+            type: 'set-play-option',
+            key: 'battleMode',
+            value: nextChoice(LR2_BATTLE_CYCLE, this.frame?.playOptions.battleMode ?? 'OFF', direction),
+          });
+          return;
+        }
+        if (action.option === 'judgeTimingAutoAdjust') {
+          emit({
+            type: 'set-play-option',
+            key: 'judgeTimingAutoAdjust',
+            value: nextChoice(
+              LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
+              this.frame?.playOptions.judgeTimingAutoAdjust ?? 'OFF',
+              direction,
+            ),
+          });
+          return;
+        }
+        if (action.option === 'hsFix') {
+          emit({
+            type: 'set-play-option',
+            key: 'hsFix',
+            value: nextChoice(HS_FIX_CYCLE, this.frame?.playOptions.hsFix ?? 'OFF'),
+          });
+          return;
+        }
         emit({ type: 'play-option', key: action.option, step: 1 });
         return;
       case 'set-difficulty-filter':
@@ -733,12 +784,7 @@ export class LR2SelectView implements SelectView {
       // A list pulled part of a row settles by the built-in skin's list window, as the LR2 select always did; the
       // skin's slots place the bars.
       get beMusicSelectLayout(): BeMusicSelectLayout {
-        const screen = view.host?.app.screen;
-        const stage = resolveBeMusicSkinStage(
-          phantomSkin,
-          screen !== undefined && screen.width > 0 && screen.height > 0 ? screen : undefined,
-        );
-        return resolveBeMusicSelectLayout(phantomSkin.select, { width: stage.width, height: stage.height });
+        return LR2_SELECT_LIST_LAYOUT;
       },
       get selectedIndex(): number {
         return view.cursor;

@@ -46,7 +46,7 @@ describe('manual play: an input runtime that declares its key releases', () => {
       { atMs: 1500, up: ['11'] },
       { atMs: 2000, up: ['12'] },
     ];
-    const play = { driver: 'manual', chart: longNoteChart(3), script, options: { judgeRuleset: 'iidx' } } as const;
+    const play = { driver: 'manual', chart: longNoteChart(3), script, options: { judgeRuleset: '____' } } as const;
     const declared = await observePlay({ ...play, reportsKeyReleases: true });
     const detected = await observePlay({ ...play, reportsKeyReleases: false });
     expect(declared.judges).toEqual(detected.judges);
@@ -67,7 +67,7 @@ describe('manual play: a tap whose release is drained right after its press', ()
   ];
   const audio = { quantumMs: 128 / 48 };
 
-  test.each(['lr2', 'beatoraja', 'iidx'] as const)(
+  test.each(['lr2', 'beatoraja', '____'] as const)(
     '%s: logs the release no earlier than its press, and the replay and the simulator judge the play as it was judged',
     async (ruleset) => {
       const live = await observePlay({

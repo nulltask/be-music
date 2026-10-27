@@ -3,6 +3,7 @@ import { describeRoute, resolver, validator } from 'hono-openapi';
 import { parseCourseReplay, ReplayParseError, serializeCourseReplay } from '@be-music/player-engine/replay';
 import * as v from 'valibot';
 import type { AppEnv } from '../app.ts';
+import { CARD_HEIGHT, CARD_MAX_BYTES, CARD_WIDTH, courseCardURL, putCourseScoreCard } from '../cards.ts';
 import {
   loadCourseDetail,
   loadCourseReplayAccess,
@@ -44,8 +45,6 @@ const COURSE_REJECTIONS = [
   'invalid-replay',
   'auto-play',
   'aborted',
-  'tempo',
-  'unreleased',
   'missing-fingerprint',
   'not-a-course-run',
   'play-document-not-a-document',
@@ -86,7 +85,8 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
         'before the last stage otherwise must have failed there, or it is refused as `aborted`. A NONSTOP run ' +
         'sends every stage chart instead of documents: the server stitches them again, the stitched play must have ' +
         'been recorded on that chart, and the stitched play is re-simulated (given up with ESC, it is a failed run). ' +
-        'A course run creates no chart scores. The same run submitted again by the same ' +
+        'A course run creates no chart scores. A run with a stage at another tempo, or of a course that is not ' +
+        'released, is stored without ranking it (`unranked`). The same run submitted again by the same ' +
         'account answers 200 with the stored result. Rejections name the stage at fault in `detail` when there is one.',
       requestBody: { required: true, content: { 'application/json': { schema: resolver(courseSubmissionBody) } } },
       responses: {
@@ -241,6 +241,42 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
       const result = await setCourseScoreHidden(c.get('db'), id, userId, c.req.valid('json').hidden, now());
       if (!result.ok) return c.json({ error: result.error }, result.status);
       return c.json({ id, hidden: result.hidden });
+    },
+  );
+
+  v0.put(
+    '/course-scores/:id/card',
+    describeRoute({
+      tags: ['Courses'],
+      summary: 'Upload a course run’s share card',
+      description: `The ${CARD_WIDTH} x ${CARD_HEIGHT} picture link previews of the course run page show (og:image), drawn by the player’s browser: PNG, WebP or JPEG, at most ${CARD_MAX_BYTES / 1024} KB. Only the run’s player can upload it.`,
+      requestBody: {
+        required: true,
+        content: {
+          'image/png': { schema: { type: 'string', format: 'binary' } },
+          'image/webp': { schema: { type: 'string', format: 'binary' } },
+          'image/jpeg': { schema: { type: 'string', format: 'binary' } },
+        },
+      },
+      responses: {
+        200: json('Stored.', v.object({ cardUrl: v.string() })),
+        400: json('No image was sent.', errorResponse(['empty-body'])),
+        401: signInRequired,
+        403: json('Someone else ran it.', errorResponse(['not-your-score'])),
+        404: notFound('The run'),
+        413: json('The image is too large.', errorResponse(['card-too-large'])),
+        415: json('Not a PNG, WebP or JPEG image.', errorResponse(['unsupported-image'])),
+      },
+    }),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      if (Number(c.req.header('content-length') ?? '0') > CARD_MAX_BYTES)
+        return c.json({ error: 'card-too-large' }, 413);
+      const bytes = new Uint8Array(await c.req.arrayBuffer());
+      const result = await putCourseScoreCard(c.get('db'), c.env.BLOBS, c.req.param('id'), userId, bytes);
+      if (!result.ok) return c.json({ error: result.error }, result.status);
+      return c.json({ cardUrl: courseCardURL(c.req.param('id'), result.cardKey) });
     },
   );
 

@@ -25,6 +25,9 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
 - [Writing a be-music skin](./be-music-skin.md)
 - [BMS/bmson intermediate representation (`@be-music/chart-source`) implementation specification](./json-spec.md)
+- [Package names and responsibilities](./packages.md)
+- [Shared utilities](./shared-utils.md)
+- [Reusable Player UI and React / Vue integration](../packages/player-ui/README.md)
 - [Glossary](./glossary.md)
 
 Supplement:
@@ -36,3 +39,5 @@ Supplement:
 - `@be-music/player-engine` is the shared rules and engine package. Terminal-specific behavior lives in `@be-music/player-terminal` and [Terminal player implementation notes](./player-tui.md), while browser-specific behavior lives in `@be-music/player-browser` and [Browser player implementation notes](./player-web.md).
 - `@be-music/player-scene-model` holds what every screen shows and how it behaves, independent of the skin family ([Scene models](./scene-model.md)); in `@be-music/player-browser`, scene sessions run it and family views draw it.
 - `@be-music/skin-lr2` and `@be-music/skin-beatoraja` keep skin parsing renderer-independent. Browser PixiJS rendering is documented under `@be-music/player-browser`.
+
+- [Browser worker benchmark (2026-10-21)](./benchmarks/browser-workers-2026-10-21.md)

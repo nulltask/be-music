@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 /**
  * The decide screen's behaviour, whatever family draws it: the short screen between picking a chart and its play. The
  * session times the screen from its view's skin timing (`DecideView.timing`): input opens after the input delay, the
@@ -76,7 +77,7 @@ type DecideLeavingTo = 'play' | 'select';
 
 function clampProgress(value: number | undefined): number | undefined {
   if (value === undefined || !Number.isFinite(value)) return undefined;
-  return Math.min(1, Math.max(0, value));
+  return clamp(value, 0, 1);
 }
 
 /** The decide screen's session. See the module comment. */

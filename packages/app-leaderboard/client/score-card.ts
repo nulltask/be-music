@@ -116,7 +116,7 @@ function glyphLeftEdges(cssFont: string, glyph: string, size: number): number[] 
   return edges;
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -126,7 +126,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-function hexAlpha(hex: string, alpha: number): string {
+export function hexAlpha(hex: string, alpha: number): string {
   const value = Number.parseInt(hex.replace('#', ''), 16);
   return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
 }
@@ -138,7 +138,7 @@ function hexAlpha(hex: string, alpha: number): string {
 const MARGIN = 72;
 const COLUMN_WIDTH = 720;
 const FOOTER_TOP = 518;
-const TOP = 60;
+export const TOP = 60;
 /**
  * The chart block's baselines: the title's (a shrunk title keeps it, so the artist stays close below) and the
  * artist's.
@@ -147,8 +147,8 @@ const TITLE_BASELINE = TOP + 66;
 const BYLINE_BASELINE = TITLE_BASELINE + 38;
 /** Where the result block starts, and the counts row's baseline (the playfield's judge line sits on it). */
 const RESULT_TOP = 206;
-const COUNTS_BASELINE = FOOTER_TOP - TOP;
-const RIGHT = CARD_WIDTH - MARGIN;
+export const COUNTS_BASELINE = FOOTER_TOP - TOP;
+export const RIGHT = CARD_WIDTH - MARGIN;
 const FOOTER_MIDDLE = (FOOTER_TOP + CARD_HEIGHT) / 2;
 const AVATAR_SIZE = 56;
 /** The footer's two lines: the player's name, then their handle and the date, on these baselines. */
@@ -180,9 +180,9 @@ export const SCORE_CARD_BOXES = {
   siteName: { x: RIGHT - SITE_NAME_MAX_WIDTH, y: TOP, width: SITE_NAME_MAX_WIDTH, height: 26 },
 } as const satisfies Record<string, Box>;
 
-const TEXT = '#ffffff';
-const SOFT = '#c7cde0';
-const MUTED = '#8d97b3';
+export const TEXT = '#ffffff';
+export const SOFT = '#c7cde0';
+export const MUTED = '#8d97b3';
 
 /** The counts row: the five judgments, then BP and the max combo, set apart by a wider gap. */
 export const COUNT_LABELS = ['PGREAT', 'GREAT', 'GOOD', 'BAD', 'POOR', 'BP', 'COMBO'] as const;
@@ -197,8 +197,8 @@ export function countColumns(left: number, width: number, gap: number): number[]
 }
 
 /** The playfield's panel: 406 px at the card's right edge, its left edge fading into the background. */
-const PANEL_WIDTH = 406;
-const PANEL_LEFT = CARD_WIDTH - PANEL_WIDTH;
+export const PANEL_WIDTH = 406;
+export const PANEL_LEFT = CARD_WIDTH - PANEL_WIDTH;
 const LANE_LIGHT = '#1a2036';
 const LANE_DARK = '#10152a';
 
@@ -236,7 +236,7 @@ export interface ExcerptRect extends Box {
 }
 
 /**
- * The excerpt's lanes across the panel, as the Synesthesia skin lays them out (SYNESTHESIA_PLAYFIELD): IIDX modes give
+ * The excerpt's lanes across the panel, as the Synesthesia skin lays them out (SYNESTHESIA_PLAYFIELD): That-Which-Must-Not-Be-Named modes give
  * the scratch, white and blue keys their fixed widths and part double play's banks by the side gap; 9 KEY shares one
  * side's width evenly. The design widths are scaled by one factor so a 7 KEY side fills the panel (and wider modes fit
  * it), and centred in it. Edges are rounded to whole pixels, each lane starting where the previous one ends.
@@ -254,7 +254,7 @@ export function excerptLaneBoxes(excerpt: ChartExcerpt, frame = EXCERPT_FRAME): 
           : laneWidths.white,
   );
   const gaps = excerpt.lanes.map((lane, i): number =>
-    i > 0 && excerpt.widths === 'iidx' && lane.side !== excerpt.lanes[i - 1]?.side ? sideGap : 0,
+    i > 0 && excerpt.widths === '____' && lane.side !== excerpt.lanes[i - 1]?.side ? sideGap : 0,
   );
   const total = widths.reduce((sum, width) => sum + width, 0) + gaps.reduce((sum, gap) => sum + gap, 0);
   const span = frame.right - frame.left;
@@ -392,70 +392,87 @@ function drawPlayfield(ctx: CanvasRenderingContext2D, lampColor: string, excerpt
   ctx.drawImage(layer, left, 0);
 }
 
-/** Draws the card. `avatar` is the player's icon, already loaded, or null to draw their initial instead. */
-export function drawScoreCard(
-  ctx: CanvasRenderingContext2D,
-  data: ScoreCardData,
-  avatar: CanvasImageSource | null,
-  playedOn: string,
-): void {
-  let fontSize = 0;
-  const set = (weight: number, size: number, color: string, spacing = 0) => {
-    fontSize = size;
-    ctx.font = font(weight, size);
-    ctx.fillStyle = color;
-    if ('letterSpacing' in ctx) ctx.letterSpacing = `${spacing}px`;
-  };
+/** The pen every card draws its text with: one font at a time, text placed by its ink. */
+export interface CardPen {
+  /** Sets the font, the colour and the letter spacing. */
+  set(weight: number, size: number, color: string, spacing?: number): void;
   /** The height of capitals in the current font: blocks align on their ink, not on their em box. */
-  const capHeight = () => ctx.measureText('H').actualBoundingBoxAscent;
-  const fit = (text: string, maxWidth: number) => ellipsize((t) => ctx.measureText(t).width, text, maxWidth);
+  capHeight(): number;
+  /** `text`, cut with an ellipsis to `maxWidth` in the current font. */
+  fit(text: string, maxWidth: number): string;
   /**
    * Draws `text` starting at `x` by its ink, not its side bearing, then nudged left by the first glyph's optical inset
    * (opticalInset); returns the ink's right edge.
    */
-  const inkText = (text: string, x: number, baseline: number) => {
-    const metrics = ctx.measureText(text);
-    const inset = opticalInset(glyphLeftEdges(ctx.font, [...text][0] ?? '', fontSize), fontSize);
-    ctx.fillText(text, x + metrics.actualBoundingBoxLeft - inset, baseline);
-    return x + metrics.actualBoundingBoxLeft - inset + metrics.actualBoundingBoxRight;
+  inkText(text: string, x: number, baseline: number): number;
+  /** A label: small spaced capitals, the one style every label repeats; returns its baseline. */
+  label(text: string, x: number, top: number): number;
+}
+
+export function cardPen(ctx: CanvasRenderingContext2D): CardPen {
+  let fontSize = 0;
+  const pen: CardPen = {
+    set(weight, size, color, spacing = 0) {
+      fontSize = size;
+      ctx.font = font(weight, size);
+      ctx.fillStyle = color;
+      if ('letterSpacing' in ctx) ctx.letterSpacing = `${spacing}px`;
+    },
+    capHeight: () => ctx.measureText('H').actualBoundingBoxAscent,
+    fit: (text, maxWidth) => ellipsize((t) => ctx.measureText(t).width, text, maxWidth),
+    inkText(text, x, baseline) {
+      const metrics = ctx.measureText(text);
+      const inset = opticalInset(glyphLeftEdges(ctx.font, [...text][0] ?? '', fontSize), fontSize);
+      ctx.fillText(text, x + metrics.actualBoundingBoxLeft - inset, baseline);
+      return x + metrics.actualBoundingBoxLeft - inset + metrics.actualBoundingBoxRight;
+    },
+    label(text, x, top) {
+      pen.set(700, 15, MUTED, 1.5);
+      const baseline = top + pen.capHeight();
+      pen.inkText(text, x, baseline);
+      return baseline;
+    },
   };
-  /** A label: small spaced capitals, the one style every label repeats. */
-  const label = (text: string, x: number, top: number) => {
-    set(700, 15, MUTED, 1.5);
-    const baseline = top + capHeight();
-    inkText(text, x, baseline);
-    return baseline;
-  };
+  return pen;
+}
+
+/** Background: deep navy, the lamp's colour glowing from the top left. */
+export function drawCardBackground(ctx: CanvasRenderingContext2D, lampColor: string): void {
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
-
-  // Background: deep navy, the lamp's colour glowing from the top left.
   const sky = ctx.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
   sky.addColorStop(0, '#0a0e18');
   sky.addColorStop(1, '#161c38');
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
   const aura = ctx.createRadialGradient(MARGIN, RESULT_TOP, 0, MARGIN, RESULT_TOP, 620);
-  aura.addColorStop(0, hexAlpha(data.lamp.color, 0.26));
-  aura.addColorStop(1, hexAlpha(data.lamp.color, 0));
+  aura.addColorStop(0, hexAlpha(lampColor, 0.26));
+  aura.addColorStop(1, hexAlpha(lampColor, 0));
   ctx.fillStyle = aura;
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
-  drawPlayfield(ctx, data.lamp.color, data.excerpt);
+}
 
-  // The chart: the genre as a label on the top margin, the title (shrunk to fit, then cut) and the artist below. The
-  // rows keep their places when the chart names no genre, so every card shares one grid.
-  if (data.genre !== null && data.genre.length > 0) {
-    set(700, 15, MUTED, 1.5);
-    inkText(fit(data.genre, COLUMN_WIDTH), MARGIN, TOP + capHeight());
+/**
+ * The heading block: a label on the top margin (the genre, or what kind of course), the title (shrunk to fit, then
+ * cut) and a byline below; and the site's name in the top right corner, its capitals' top on the label's. The rows
+ * keep their places when the label or the byline is empty, so every card shares one grid.
+ */
+export function drawCardHeading(
+  ctx: CanvasRenderingContext2D,
+  pen: CardPen,
+  heading: { label: string | null; title: string; byline: string },
+): void {
+  if (heading.label !== null && heading.label.length > 0) {
+    pen.set(700, 15, MUTED, 1.5);
+    pen.inkText(pen.fit(heading.label, COLUMN_WIDTH), MARGIN, TOP + pen.capHeight());
   }
-  // The site's name in the top right corner, its capitals' top on the genre's.
-  set(700, 26, TEXT);
-  const siteBaseline = TOP + capHeight();
-  set(400, 26, MUTED);
+  pen.set(700, 26, TEXT);
+  const siteBaseline = TOP + pen.capHeight();
+  pen.set(400, 26, MUTED);
   const siteWidth = ctx.measureText(' Leaderboard').width;
   ctx.textAlign = 'right';
   ctx.fillText(' Leaderboard', RIGHT, siteBaseline);
-  set(700, 26, TEXT);
+  pen.set(700, 26, TEXT);
   ctx.fillText('be-music', RIGHT - siteWidth, siteBaseline);
   ctx.textAlign = 'left';
   const titleSize = fitFontSize(
@@ -463,46 +480,66 @@ export function drawScoreCard(
       ctx.font = font(800, size);
       return ctx.measureText(text).width;
     },
-    data.title,
+    heading.title,
     COLUMN_WIDTH,
     50,
     34,
   );
-  set(800, titleSize, TEXT, -0.5);
-  inkText(fit(data.title, COLUMN_WIDTH), MARGIN, TITLE_BASELINE);
-  const byline = [data.subtitle, data.artist].filter((part) => part !== null && part.length > 0).join('  ·  ');
-  if (byline.length > 0) {
-    set(400, 24, SOFT);
-    inkText(fit(byline, COLUMN_WIDTH), MARGIN, BYLINE_BASELINE);
+  pen.set(800, titleSize, TEXT, -0.5);
+  pen.inkText(pen.fit(heading.title, COLUMN_WIDTH), MARGIN, TITLE_BASELINE);
+  if (heading.byline.length > 0) {
+    pen.set(400, 24, SOFT);
+    pen.inkText(pen.fit(heading.byline, COLUMN_WIDTH), MARGIN, BYLINE_BASELINE);
   }
+}
 
-  // The result: the DJ Rank, big, in its colour; the EX-Score and rate beside it, top and baseline on the rank's.
-  set(900, 140, TEXT, -2);
-  const rankBaseline = RESULT_TOP + capHeight();
+/** What the result, the play's pills, the counts and the footer show; a play's card and a course run's alike. */
+export type CardResult = Pick<
+  ScoreCardData,
+  | 'djRank'
+  | 'exScore'
+  | 'maxExScore'
+  | 'rate'
+  | 'lamp'
+  | 'rulesetLabel'
+  | 'gauge'
+  | 'judges'
+  | 'bp'
+  | 'maxCombo'
+  | 'playerName'
+  | 'handle'
+>;
+
+/**
+ * The result: the DJ Rank, big, in its colour; the EX-Score and rate beside it, top and baseline on the rank's. Then
+ * the play: lamp pill, ruleset pill, gauge — one row of equal height, text on one baseline.
+ */
+export function drawCardResult(ctx: CanvasRenderingContext2D, pen: CardPen, data: CardResult): void {
+  pen.set(900, 140, TEXT, -2);
+  const rankBaseline = RESULT_TOP + pen.capHeight();
   const [rankLight, rankDark] = djRankGradient(data.djRank);
   const rankGradient = ctx.createLinearGradient(0, RESULT_TOP, 0, rankBaseline);
   rankGradient.addColorStop(0, rankLight);
   rankGradient.addColorStop(1, rankDark);
   ctx.fillStyle = rankGradient;
-  const scoreX = inkText(data.djRank, MARGIN, rankBaseline) + 48;
-  const labelBaseline = label('EX-SCORE', scoreX, RESULT_TOP);
-  set(700, 26, TEXT);
-  const rateCap = capHeight();
-  set(800, 60, TEXT, -1);
-  const scoreCap = capHeight();
+  const scoreX = pen.inkText(data.djRank, MARGIN, rankBaseline) + 48;
+  const labelBaseline = pen.label('EX-SCORE', scoreX, RESULT_TOP);
+  pen.set(700, 26, TEXT);
+  const rateCap = pen.capHeight();
+  pen.set(800, 60, TEXT, -1);
+  const scoreCap = pen.capHeight();
   // The score sits midway between the label and the rate line.
   const scoreBaseline = Math.round(labelBaseline + (rankBaseline - rateCap - labelBaseline + scoreCap) / 2);
-  const scoreRight = inkText(String(data.exScore), scoreX, scoreBaseline);
-  set(500, 26, MUTED);
+  const scoreRight = pen.inkText(String(data.exScore), scoreX, scoreBaseline);
+  pen.set(500, 26, MUTED);
   ctx.fillText(`/ ${data.maxExScore}`, scoreRight + 12, scoreBaseline);
-  set(700, 26, TEXT);
-  inkText(data.rate, scoreX, rankBaseline);
+  pen.set(700, 26, TEXT);
+  pen.inkText(data.rate, scoreX, rankBaseline);
 
-  // The play: lamp pill, ruleset pill, gauge — one row of equal height, text on one baseline.
   const pillTop = rankBaseline + 24;
   const pillHeight = 40;
-  set(800, 19, TEXT, 1);
-  const pillBaseline = Math.round(pillTop + (pillHeight + capHeight()) / 2);
+  pen.set(800, 19, TEXT, 1);
+  const pillBaseline = Math.round(pillTop + (pillHeight + pen.capHeight()) / 2);
   const lampWidth = ctx.measureText(data.lamp.label).width + 40;
   ctx.fillStyle = data.lamp.color;
   ctx.shadowColor = hexAlpha(data.lamp.color, 0.6);
@@ -520,7 +557,7 @@ export function drawScoreCard(
   ctx.stroke();
   ctx.fillStyle = TEXT;
   ctx.fillText(data.rulesetLabel, rulesetX + 20, pillBaseline);
-  set(500, 20, SOFT);
+  pen.set(500, 20, SOFT);
   ctx.fillText(data.gauge, rulesetX + rulesetWidth + 20, pillBaseline);
 
   // The counts: label over value, one column each.
@@ -534,17 +571,25 @@ export function drawScoreCard(
     data.maxCombo,
   ];
   const columns = countColumns(MARGIN, COLUMN_WIDTH, 24);
-  set(700, 28, TEXT);
-  const countsTop = COUNTS_BASELINE - capHeight();
-  set(700, 15, MUTED, 1.5);
-  const labelTop = countsTop - 12 - capHeight();
+  pen.set(700, 28, TEXT);
+  const countsTop = COUNTS_BASELINE - pen.capHeight();
+  pen.set(700, 15, MUTED, 1.5);
+  const labelTop = countsTop - 12 - pen.capHeight();
   columns.forEach((x, i) => {
-    label(COUNT_LABELS[i] ?? '', x, labelTop);
-    set(700, 28, TEXT);
-    inkText(String(counts[i]), x, COUNTS_BASELINE);
+    pen.label(COUNT_LABELS[i] ?? '', x, labelTop);
+    pen.set(700, 28, TEXT);
+    pen.inkText(String(counts[i]), x, COUNTS_BASELINE);
   });
+}
 
-  // The footer band: who played it, and when, on its right; its left is where previews put their own labels.
+/** The footer band: who played it, and when, on its right; its left is where previews put their own labels. */
+export function drawCardFooter(
+  ctx: CanvasRenderingContext2D,
+  pen: CardPen,
+  data: Pick<CardResult, 'playerName' | 'handle'>,
+  avatar: CanvasImageSource | null,
+  playedOn: string,
+): void {
   ctx.fillStyle = 'rgba(5, 7, 14, 0.78)';
   ctx.fillRect(0, FOOTER_TOP, CARD_WIDTH, CARD_HEIGHT - FOOTER_TOP);
   ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
@@ -559,18 +604,34 @@ export function drawScoreCard(
   } else {
     ctx.fillStyle = '#334155';
     ctx.fillRect(avatarBox.x, avatarBox.y, AVATAR_SIZE, AVATAR_SIZE);
-    set(700, 26, TEXT);
+    pen.set(700, 26, TEXT);
     ctx.textAlign = 'center';
-    ctx.fillText([...data.playerName][0] ?? '?', avatarBox.x + AVATAR_SIZE / 2, FOOTER_MIDDLE + capHeight() / 2);
+    ctx.fillText([...data.playerName][0] ?? '?', avatarBox.x + AVATAR_SIZE / 2, FOOTER_MIDDLE + pen.capHeight() / 2);
     ctx.textAlign = 'left';
   }
   ctx.restore();
   // Two lines, right-aligned to the avatar: the name, then the handle and the date.
   ctx.textAlign = 'right';
-  set(700, 26, TEXT);
-  ctx.fillText(fit(data.playerName, PLAYER_TEXT_MAX_WIDTH), PLAYER_TEXT_RIGHT, PLAYER_BASELINE);
-  set(400, 18, MUTED);
-  ctx.fillText(fit(`@${data.handle}  ·  ${playedOn}`, PLAYER_TEXT_MAX_WIDTH), PLAYER_TEXT_RIGHT, HANDLE_BASELINE);
+  pen.set(700, 26, TEXT);
+  ctx.fillText(pen.fit(data.playerName, PLAYER_TEXT_MAX_WIDTH), PLAYER_TEXT_RIGHT, PLAYER_BASELINE);
+  pen.set(400, 18, MUTED);
+  ctx.fillText(pen.fit(`@${data.handle}  ·  ${playedOn}`, PLAYER_TEXT_MAX_WIDTH), PLAYER_TEXT_RIGHT, HANDLE_BASELINE);
   ctx.textAlign = 'left';
   if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+}
+
+/** Draws the card. `avatar` is the player's icon, already loaded, or null to draw their initial instead. */
+export function drawScoreCard(
+  ctx: CanvasRenderingContext2D,
+  data: ScoreCardData,
+  avatar: CanvasImageSource | null,
+  playedOn: string,
+): void {
+  const pen = cardPen(ctx);
+  drawCardBackground(ctx, data.lamp.color);
+  drawPlayfield(ctx, data.lamp.color, data.excerpt);
+  const byline = [data.subtitle, data.artist].filter((part) => part !== null && part.length > 0).join('  ·  ');
+  drawCardHeading(ctx, pen, { label: data.genre, title: data.title, byline });
+  drawCardResult(ctx, pen, data);
+  drawCardFooter(ctx, pen, data, avatar, playedOn);
 }

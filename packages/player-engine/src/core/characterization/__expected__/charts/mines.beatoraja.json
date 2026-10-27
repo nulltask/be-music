@@ -14,10 +14,12 @@
       "emptyPoor": 0,
       "exScore": 4,
       "score": 4,
+      "combo": 2,
+      "maxCombo": 2,
       "gauge": {
         "current": 90,
         "max": 100,
-        "clearThreshold": 80,
+        "clearThreshold": 75,
         "initial": 20,
         "effectiveTotal": 260,
         "cleared": true,
@@ -44,10 +46,12 @@
           {"id":4,"channel":"12","type":"normal","timeUs":2000000},
           {"id":5,"channel":"16","type":"mine","timeUs":2500000,"damage":10}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":120},
         "chartFingerprint": "bmfp0:12bbe4844f4b2afd2cb103491815587fbfc828b7cb58a796005b11ddac8acdfb",
         "playFingerprint": "bmfp0:12bbe4844f4b2afd2cb103491815587fbfc828b7cb58a796005b11ddac8acdfb",
         "title": "mines",
-        "artist": "characterization"
+        "artist": "Be-Music Dev Team"
       },
       "inputs": [
         {"seq":0,"timeUs":490000,"action":"down","channels":["11"],"tokens":["z"]},
@@ -59,7 +63,14 @@
         {"seq":6,"timeUs":2400000,"action":"down","channels":["16"],"tokens":["shift-left"]},
         {"seq":7,"timeUs":2600000,"action":"up","channels":["16"],"tokens":["shift-left"]}
       ],
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -77,7 +88,7 @@
     "simulated": {
       "lr2": {
         "ruleset": "lr2/0",
-        "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":3,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
         "exScore": 4,
@@ -85,6 +96,7 @@
         "maxCombo": 2,
         "djLevel": "AAA",
         "gauge": {"type":"GROOVE","final":90,"cleared":true},
+        "minePoor": 3,
         "score": 200000
       },
       "beatoraja": {
@@ -98,8 +110,8 @@
         "djLevel": "AAA",
         "gauge": {"type":"NORMAL","final":90,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
@@ -204,10 +216,12 @@
       "emptyPoor": 0,
       "exScore": 4,
       "score": 4,
+      "combo": 2,
+      "maxCombo": 2,
       "gauge": {
         "current": 90,
         "max": 100,
-        "clearThreshold": 80,
+        "clearThreshold": 75,
         "initial": 20,
         "effectiveTotal": 260,
         "cleared": true,
@@ -222,7 +236,14 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -301,10 +322,12 @@
       "emptyPoor": 0,
       "exScore": 4,
       "score": 4,
+      "combo": 2,
+      "maxCombo": 2,
       "gauge": {
         "current": 100,
         "max": 100,
-        "clearThreshold": 80,
+        "clearThreshold": 75,
         "initial": 20,
         "effectiveTotal": 260,
         "cleared": true,
@@ -319,7 +342,14 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja","endOnFailure":true},
+      "play": {
+        "mode": "auto",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "beatoraja",
+        "endOnFailure": true,
+        "judgeAlgorithm": "combo"
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -358,8 +388,8 @@
         "djLevel": "AAA",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,

@@ -13,7 +13,7 @@ import type {
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { ActiveCourse } from '../course-flow.ts';
 import { courseBestRecordKey } from '../course-result.ts';
-import type { DemoScene, PlayerWebDemoElements } from '../types.ts';
+import type { PlayerScene, PlayerWebElements } from '../types.ts';
 import { RecordsService } from './records.ts';
 import { liveTestHookState, nameResultJingle, type LiveTestHookDeps } from './test-hook.ts';
 
@@ -93,15 +93,15 @@ function playScene(progress?: Partial<PlayResult>): PlayScene {
 }
 
 /** The loading overlay, shown or not. */
-function overlay(visible: boolean): Pick<PlayerWebDemoElements, 'loadingOverlay'> {
+function overlay(visible: boolean): Pick<PlayerWebElements, 'loadingOverlay'> {
   return {
     loadingOverlay: { classList: { contains: (name: string) => visible && name === 'visible' } },
-  } as unknown as Pick<PlayerWebDemoElements, 'loadingOverlay'>;
+  } as unknown as Pick<PlayerWebElements, 'loadingOverlay'>;
 }
 
 interface Harness {
   readonly deps: LiveTestHookDeps;
-  readonly router: { current: DemoScene | undefined; select: SelectScene | undefined; play: PlayScene | undefined };
+  readonly router: { current: PlayerScene | undefined; select: SelectScene | undefined; play: PlayScene | undefined };
   readonly records: RecordsService;
   readonly ruleset: { current: RulesetId };
 }
@@ -213,7 +213,7 @@ describe('liveTestHookState', () => {
     // JudgmentKind windows picks the ruleset whose records the select screen shows, and the hook reports the same.
     h.ruleset.current = 'beatoraja';
     expect(liveTestHookState(h.deps).cursor?.bar).toMatchObject({ lamp: 'HARD', trophy: 'bronzemedal' });
-    h.ruleset.current = 'iidx';
+    h.ruleset.current = '____';
     const bar = liveTestHookState(h.deps).cursor?.bar;
     expect(bar?.lamp).toBeUndefined();
     expect(bar?.trophy).toBeUndefined();
@@ -222,7 +222,7 @@ describe('liveTestHookState', () => {
   test('reports no cursor while the select scene is kept off the stage', () => {
     const h = harness();
     h.router.select = selectScene({ kind: 'chart', chart: chartEntry('a') });
-    h.router.current = { identity: { kind: 'decide', family: 'lr2' } } as unknown as DemoScene;
+    h.router.current = { identity: { kind: 'decide', family: 'lr2' } } as unknown as PlayerScene;
     expect(liveTestHookState(h.deps)).toMatchObject({ scene: { kind: 'decide', family: 'lr2' }, cursor: undefined });
   });
 
@@ -263,7 +263,7 @@ describe('liveTestHookState', () => {
   test('reports no play while a play loads behind another screen', () => {
     const h = harness();
     h.router.play = playScene();
-    h.router.current = { identity: { kind: 'decide', family: 'beatoraja' } } as unknown as DemoScene;
+    h.router.current = { identity: { kind: 'decide', family: 'beatoraja' } } as unknown as PlayerScene;
     const deps: LiveTestHookDeps = {
       ...h.deps,
       lastPlay: () => ({ chart: chartEntry('b'), overrides: { autoPlay: false } }),

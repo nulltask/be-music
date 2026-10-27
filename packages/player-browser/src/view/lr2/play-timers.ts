@@ -72,6 +72,7 @@ export class LR2PlayTimers {
   private sceneStartAt = 0;
   /** The skin's spans per timer: the longest keyframe time of its elements on that timer. */
   private readonly keyOnFadeSpans = new Map<number, number>();
+  private readonly keyOffTimers = new Set<number>();
   private readonly bombSpans = new Map<number, number>();
   private readonly lnHoldSpans = new Map<number, number>();
   private readonly gaugeSpans = new Map<number, number>();
@@ -90,6 +91,13 @@ export class LR2PlayTimers {
   /** Takes the skin's timer spans: the key-beam, bomb, long-note hold, gauge and full-combo animation lengths. */
   public setSpans(skin: LR2Skin): void {
     this.fullComboSpan = computeFullComboDurationMs(skin);
+    this.keyOffTimers.clear();
+    for (const image of skin.images) {
+      const timer = image.destination.timer;
+      if (timer >= LR2_TIMER.KEY_OFF_1P && timer < LR2_TIMER.KEY_OFF_2P + LR2_LANE_TIMER_BANK_SIZE) {
+        this.keyOffTimers.add(timer);
+      }
+    }
     replace(this.keyOnFadeSpans, computeKeyOnFadeDurationsMs(skin));
     replace(this.bombSpans, computeBombDurationsMs(skin));
     replace(this.lnHoldSpans, computeLNHoldDurationsMs(skin));
@@ -147,11 +155,20 @@ export class LR2PlayTimers {
           resolveLR2PlayTimers({ kind: 'lane', bank: 'bomb', lane: this.lane(event.channel), at: event.atMs }),
         );
         return;
-      case 'lane':
+      case 'lane': {
+        const timer = this.laneTimer('key-off', event.channel);
+        if (timer !== undefined) {
+          if (event.action === 'release') this.started.set(timer, this.play.playClock());
+          else this.started.delete(timer);
+        }
         if (event.action === 'release') this.releaseLNHold(event.channel);
         return;
+      }
       case 'lane-hold':
         this.startLNHold(event.channel);
+        return;
+      case 'seek':
+        this.sought(event.gauge, event.atMs);
         return;
       default:
         return;
@@ -183,6 +200,10 @@ export class LR2PlayTimers {
 
   /** When `timer` started, on the play clock: one the view started, else the key beam on its key-on timer. */
   public startedAt(timer: number): number | undefined {
+    // Skins with an authored release animation switch from key-on to key-off immediately.
+    // Other skins keep the existing key-on alpha fade.
+    const offTimer = timer + LR2_TIMER.KEY_OFF_1P - LR2_TIMER.KEY_ON_1P;
+    if (this.keyOffTimers.has(offTimer) && this.started.has(offTimer)) return undefined;
     return this.started.get(timer) ?? this.keyBeamOn(this.play.keyBeamStartedAt, timer)?.[1];
   }
 
@@ -268,6 +289,20 @@ export class LR2PlayTimers {
     if (this.play.playClock() - startedAt < this.fullComboSpan) return;
     this.started.delete(LR2_TIMER.FULL_COMBO_1P);
     this.started.delete(LR2_TIMER.FULL_COMBO_2P);
+  }
+
+  /**
+   * The play sought: the timers the judgments and the lanes started stop, with the deferred work that would have stopped
+   * them (`resolveLR2PlayTimers`), and the gauge-max timer runs again from `at` when the gauge is full there. The scene's
+   * timers run on.
+   */
+  private sought(gauge: number, at: number): void {
+    if (this.gaugeRiseTimeout !== undefined) clearTimeout(this.gaugeRiseTimeout);
+    this.gaugeRiseTimeout = undefined;
+    for (const timeout of this.lnHoldTimeouts) clearTimeout(timeout);
+    this.lnHoldTimeouts.clear();
+    this.lnHoldFadeOutStart.clear();
+    this.apply(resolveLR2PlayTimers({ kind: 'seek', gauge, at }));
   }
 
   /** Cancels the timers' deferred work; the play is gone. */

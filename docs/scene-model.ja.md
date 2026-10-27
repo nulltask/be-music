@@ -4,7 +4,7 @@
 
 `@be-music/player-scene-model` は、プレイヤーの各画面が何を表示し、どう振る舞うかを、それを描くスキンの種類に関係なく
 保持します（[ADR 0002](./adr/0002-scene-model-package.ja.md)）。標準・LR2・beatoraja の各スキンの種類はこれまで
-一覧のモデルを二つ、プレイ状態の記録を二通り、結果の形を二つ持っていて、そのずれがコース対応で見つかった不具合の
+一覧のモデルを二つ、プレイ状態の記録を二通り、結果の型を二つ持っていて、そのずれがコース対応で見つかった不具合の
 大半の原因でした（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。ここにあるモデルが、各画面のセッションが
 扱う唯一の実装です。スキンの種類は描画だけを受け持ちます。
 
@@ -12,7 +12,7 @@
 flowchart TD
   player["@be-music/player-engine<br/>ルールセット・コース・記録・エンジン"]
   model["@be-music/player-scene-model<br/>ライブラリ・ブラウズ・プレイオプション<br/>プレイ状態・プレイ結果・コース・効果音"]
-  skins["player-skin-sdk・skin-lr2・skin-beatoraja<br/>モデルを各スキンの語彙へ写す"]
+  skins["player-skin-sdk・skin-lr2・skin-beatoraja<br/>モデルを各スキンの表現へ対応付ける"]
   sessions["@be-music/player-browser<br/>シーンセッション・ファミリービュー"]
 
   player --> model
@@ -21,9 +21,9 @@ flowchart TD
   skins --> sessions
 ```
 
-このパッケージは実行環境に依存しません。レンダラーを import せず、DOM や Node のグローバルも時計も読まず、乱数も
+このパッケージは実行環境に依存しません。レンダラーを import せず、DOM や Node のグローバルもクロックも読まず、乱数も
 引きません。時刻と乱数は入力として受け取ります。`pnpm run check` が実行環境に依存しないコードの lint 規則で Node の
-組み込みモジュールと DOM や Node のグローバルを、決定的な判定の lint 規則で時計、タイマー、`Math.random` を禁じ、
+組み込みモジュールと DOM や Node のグローバルを、決定的な判定の lint 規則でクロック、タイマー、`Math.random` を禁じ、
 テストが `@be-music/chart-model`・`@be-music/chart-source`・`@be-music/player-engine` 以外に依存していないことを確かめます。
 
 モデルは、これまでの各シーンの振る舞いから導いています。標準 / LR2 のシーンと beatoraja のシーンで違っていた
@@ -93,7 +93,17 @@ flowchart LR
 フォルダはラベル順、コースは元の順のまま、並べ替えは安定です。記録がソートに使えるようになるまで、`CLEAR` は
 タイトル順、`LASTPLAY` はライブラリの順です。
 
-一覧は、ライブラリ・検索・一覧のオプションが変わらないあいだ開いているパスごとに保持されるので、選曲画面は毎
+`?` で始まる検索は、文字列検索ではなく譜面フィルター式です（`parseBrowseSearch`）。`?` の後ろは beatoraja の
+ランダムコースが使う SQL の `WHERE` 句で、`ORDER BY` / `LIMIT` も書けます（[course.ja.md](course.ja.md#beatoraja-のランダムコース)）。
+たとえば `?level >= 12 AND score.clear < 5` は、レベル 12 以上で HARD 未満の譜面を並べます。前後の空白を除くだけなので、
+文字列リテラルの大文字小文字はそのままです。文字列検索と同じく、ルートではすべてのフォルダの譜面を、その下では開いて
+いるフォルダを絞り込みます。フォルダやコースのバーは並べません。各譜面は `library.chartFilterRecord`（`song` の列、
+`score.*` 用のベストレコード、`information.*` 用の楽曲情報）で読み、なければライブラリの項目だけから読む
+`libraryChartFilterRecord` を使います。式自身の `ORDER BY` があれば、ソートの代わりにその順で並べます。一覧には乱数源が
+ないので `ORDER BY RANDOM()` は拒否します。解析できない式は何も絞り込まず、画面に出す理由は `browseSearchError` が
+返します。`?` だけのときも入力途中の式として何も絞り込みません。
+
+一覧は、ライブラリ（`chartFilterRecord` を含む）・検索・一覧のオプションが変わらないあいだ開いているパスごとに保持されるので、選曲画面は毎
 フレーム読んでかまいません。
 
 ### コマンド
@@ -160,7 +170,7 @@ NONSTOP がライブラリを置き換えていても、コースのバーをキ
 beatoraja の LN モードの上書き（LNMODE ボタン）は一覧の状態には含めません。まだ何もそれでプレイしないので、モデルにも
 入れていません。beatoraja の選曲画面のビューが持ちます。
 
-Web 実行層の選曲セッションは、モデルが任せる選択をファミリーの選曲ポリシー（`@be-music/player-browser` の
+Web ランタイムの選曲セッションは、モデルが任せる選択をファミリーの選曲ポリシー（`@be-music/player-browser` の
 `session/select/select-policy.ts`）で決めます。標準と LR2 の画面では、ルートで戻っても何もせず、戻す位置がなければ
 譜面フォルダが一つだけのライブラリはそれを開き、ソートとフィルターはプレイオプションのものとして復元でも保ちます。beatoraja のポリシーはルートでキャンセル音を鳴らして画面を出て、ライブラリをルートで開き、
 MODE と SORT を一覧の位置に含め（復元で戻ります）、beatoraja のキー（ページのキー、Home / End、ランダムなバーへの R）を
@@ -188,9 +198,10 @@ export します。
 
 プレイ状態（`PlayState`）は、どのプレイ画面も読むプレイの状態です。進行中のゲージと EX スコアとそのグラフ、コンボと
 最大コンボ（コースのステージではコース全体のコンボも）、判定タイミングつきのすべての判定と判定ごとの早い / 遅いの数、
-そして見え方（ハイスピードとレーンカバー）です。状態はイミュータブルで、`reducePlayState` にイベントを渡して進めます。
-エンジンのフレームと判定、`trigger-poor-bga` コマンド（空 POOR。`playEventFromUICommand` で変換）、最後の集計、
-プレイヤーとホストによるハイスピードとカバーの変更です。時計は読みません。譜面上の時刻とプレイの時計の時刻はイベントと
+そして表示設定（ハイスピードとレーンカバー）です。状態はイミュータブルで、`reducePlayState` にイベントを渡して進めます。
+エンジンのフレームと判定、`trigger-poor-bga` コマンド（空 POOR。`playEventFromUICommand` で変換）、シーク（`seek`。
+エンジンの `PlaySeekSnapshot` を渡します）、最後の集計、
+プレイヤーとホストによるハイスピードとカバーの変更です。クロックは読みません。譜面上の時刻とプレイのクロックの時刻はイベントと
 一緒に渡します。
 
 ```mermaid
@@ -213,16 +224,23 @@ flowchart LR
 - **グラフ**。プレイ開始時のゲージ（`createPlayState` で渡したもの、なければ最初のフレーム）から始まり、判定と空 POOR
   のたびに、その譜面上の時刻の割合でゲージ（最大値に対する百分率）と EX スコアを記録します。結果はプレイが終わった
   位置に最後の点を足します。
-- **コンボ**。エンジンが知らせるコンボで、最長のものを最大コンボとして保ちます。最後の集計がフルコンボ（すべてのノーツが
-  GOOD 以上で、BAD も POOR もない）なら、コンボは途切れていないので最大コンボはノーツ数です。コースのステージは、
-  引き継いだコースのコンボを進めます（`reduceCourseCombo`）。
-- **判定タイミング**。タイミングのある PERFECT〜POOR の判定を、プレイの時計の時刻とレーンとともに記録します。
+- **コンボ**。エンジンが知らせるコンボで、最長のものを最大コンボとして保ちます。フレームがコンボ・最大コンボ・コースの
+  コンボを持つときは、エンジン自身の値としてそちらを優先します。最後の集計がフルコンボ（すべてのノーツが GOOD 以上で、
+  BAD も POOR もない）なら、コンボは途切れていないので最大コンボはノーツ数です。コースのステージは、引き継いだコースの
+  コンボを進めます（`reduceCourseCombo`）。
+- **シーク**。エンジンはシークしたプレイを譜面の頭からシークした秒まで組み直し、たどり着いた状態を送ります
+  （`PlaySeekSnapshot`：サマリ、コンボ、最大コンボ、その秒より前のすべての判定。判定ごとに譜面上の秒と、その直後の
+  ゲージと EX スコアを持ちます）。`seek` イベントは状態をそれにします。グラフは開始時の点から判定ごとに 1 点ずつ、
+  タイミングつきの判定（プレイのクロックの時刻はシークの時刻からプレイのテンポで逆算します）とその早い / 遅いの数、
+  そしてスナップショットのゲージ・EX スコア・コンボです。譜面の長さと表示設定はそのままです。こうして組み直した
+  プレイは、同じノーツをその場で判定したプレイと一致します。
+- **判定タイミング**。タイミングのある PERFECT〜POOR の判定を、プレイのクロックの時刻とレーンとともに記録します。
   `recentJudgeTimings` は実時間のメーター用の直近 64 件です（判定の一覧ごとに同じ配列を返します）。判定ごとの
   早い / 遅いの数（beatoraja のもの）も数えます。
 - **ハイスピード**（`HiSpeedState`）。プレイヤー自身の尺度でのハイスピードと、ノーツの流れに使う描画用の値です。描画用は
   プレイヤーの値に譜面の HS-FIX 倍率を掛けたものです（`resolveHSFixMultiplier`。MAXBPM・MINBPM・AVERAGE はその BPM で
   プレイヤーのハイスピードになるように保ち、CONSTANT は当面 AVERAGE と同じ）。プレイヤーのキーはプレイヤーの値を動かし、
-  リプレイが記録した見え方の描画用の値（`hi-speed-drawn`）はそのまま受け取ります。コースの `no_speed` はプレイヤーの
+  リプレイが記録した表示設定の描画用の値（`hi-speed-drawn`）はそのまま受け取ります。コースの `no_speed` はプレイヤーの
   変更を止めますが、ホストの設定と、リプレイが記録したハイスピードは、リプレイが記録したカバーと同じく効きます。
   beatoraja の `no_speed` はハイスピードとカバーをいっしょに固定する（`LaneRenderer`）ので、リプレイはどちらも
   プレイしたときのとおりに見せます。
@@ -232,11 +250,11 @@ flowchart LR
   そのまま設定する（リプレイ）ができ、片方のサイドにもすべてのサイドにも効きます。ハイスピードと同じく `no_speed` はプレイヤーの変更を止めますが、
   そのまま設定するカバー（`cover-set`。リプレイが記録したカバーやホストの設定）は効きます。
   `resolveLaneCover` は描かれるカバーをレーンに対する割合で返し、HIDDEN+ は LIFT より上の部分に対する割合にします。
-- **見え方の設定**。`captureReplayView` はリプレイの単位での見え方です。シーンのハイスピードの尺度での描画用の
+- **表示設定**。`captureReplayView` はリプレイの単位での表示設定です。シーンのハイスピードの尺度での描画用の
   ハイスピード、HS-FIX、サイドごとのカバー、メイン BPM での表示時間（`resolveWhiteNumber`。指定した拍数の長さの
   レーンに対する白数字で、beatoraja は 4 拍。beatoraja と同じく LIFT は差し引きません）です。
   `resolveHiSpeedForWhiteNumber` はその逆で、記録された表示時間になるハイスピードを返します。ハイスピードの尺度が
-  違うリプレイに使います。`ReplayViewCursor` はリプレイするログの見え方を再生位置に沿ってたどります。
+  違うリプレイに使います。`ReplayViewCursor` はリプレイするログの表示設定を再生位置に沿ってたどります。
 
 ### 振る舞いの選択
 
@@ -260,7 +278,7 @@ flowchart LR
 
 ## プレイ結果
 
-`PlayResult` は、どの結果画面も読む唯一の結果の形です。単独のプレイ、コースのステージ、EXPERT / GRADE のコース全体、
+`PlayResult` は、どの結果画面も読む唯一の結果の型です。単独のプレイ、コースのステージ、EXPERT / GRADE のコース全体、
 NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）のいずれも表します。スコアとゲージの判定、唯一の
 クリアランプの規則によるランプ、グラフ、判定タイミングと早い / 遅いの数、リプレイ、ステージやコースが属するコース
 （`course`、コースの表示用モデル）を持ちます。`@be-music/player-skin-sdk` はこれを `BeMusicResultData` として export します。
@@ -290,7 +308,7 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 `optionChange`）、選曲の BGM と決定のジングル、結果のジングル（`clear`・`fail`・`result`・`courseClear`・`courseFail`）
 です。
 
-- LR2 テーマの音はテーマの読み込みで得たバイト列で、鳴らすスロットはホストが埋めます（Web のデモは LR2 テーマの
+- LR2 テーマの音はテーマの読み込みで得たバイト列で、鳴らすスロットはホストが埋めます（Web プレイヤーは LR2 テーマの
   サービスが選曲のスロットを埋めます）。`LR2_SOUND_SET_SLOTS` は LR2 のサウンドセットの各コマンドをスロットに
   対応させます（`SCRATCH` はカーソル、`PANEL_*` はオプションパネル）。
 - `systemSoundSetFromBeatoraja` は beatoraja テーマの効果音のパスと選曲 BGM のパス（テーマの音声で鳴らす）、
@@ -320,12 +338,12 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `SceneCourseInfo`・`resolveSceneCourseInfo`                                       | `player-browser` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名は削除）                                        |
 | `PixiPlayOptions` などの `Pixi*` のプレイオプションの型・`PixiGameplayResultData` | `player-browser` の scene                        | `PlayOptions` など・`PlayResult`（旧名は削除）                                         |
 | `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                     | `player-browser` の `scene/core/course-combo.ts` | 同じ名前。ただし `advanceCourseCombo` は純粋な `reduceCourseCombo` に置き換え          |
-| `ReplayViewCursor`・`resolveBeatorajaReplayView`                                  | `player-browser` の `scene/replay-view.ts`       | `ReplayViewCursor`。どのプレイのビューも `captureReplayView` で見え方を求める          |
+| `ReplayViewCursor`・`resolveBeatorajaReplayView`                                  | `player-browser` の `scene/replay-view.ts`       | `ReplayViewCursor`。どのプレイのビューも `captureReplayView` で表示設定を求める        |
 | `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation`  | `app-play` の `course-result.ts`                 | `playResultFromCourseRun` など（旧名で再 export）                                      |
 | `resolveResultViewJingles`                                                        | `app-play` の `result-jingles.ts`                | そのまま。`resolveResultJingles` の上に実装                                            |
 
 どの種類の選曲画面もこれらのモデル（`reduceBrowse`・`browseEntries`・`captureBrowse` / `restoreBrowse`・
 `browseSystemSound`）で一覧をたどります。どのプレイ画面も `PlayState` を一つ持ち、リザルトをそこから読みます
 （`playResultFromPlayState`）。そのため上のプレイ状態の選択に従います。フルコンボの最大コンボはどのプレイでもノーツ数になり、
-リザルトは判定ごとの早い / 遅いの数を持ち、リプレイの表示時間は白数字（`captureReplayView`）です。Web 実行層の画面は、どれもこれらのモデルの上のシーンセッションです。スキンのパッケージはモデルを各スキンの
-語彙に写します。beatoraja の番号へは `@be-music/skin-beatoraja/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。
+リザルトは判定ごとの早い / 遅いの数を持ち、リプレイの表示時間は白数字（`captureReplayView`）です。Web ランタイムの画面は、どれもこれらのモデルの上のシーンセッションです。スキンのパッケージはモデルを各スキンの
+表現に対応付けます。beatoraja の番号へは `@be-music/skin-beatoraja/scene` が対応付けます（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。

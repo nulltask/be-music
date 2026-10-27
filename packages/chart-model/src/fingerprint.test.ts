@@ -302,7 +302,7 @@ describe('fingerprint sensitivity', () => {
     expect(playFingerprint(text, 'song.pms')).not.toBe(playFingerprint(text, 'song.bms'));
     expect(playFingerprint(text, 'song.bme')).toBe(playFingerprint(text, undefined));
     expect(playDocument(chart('#00221:01')).laneMode).toBe('14');
-    // The lanes in use decide the IIDX modes whatever the extension: a `.bme` chart without a 6 / 7 key column is 5 KEY.
+    // The lanes in use decide the That-Which-Must-Not-Be-Named modes whatever the extension: a `.bme` chart without a 6 / 7 key column is 5 KEY.
     const fiveKeys = ['#BPM 150', '#00111:01', '#00115:01'].join('\n');
     expect(playDocument(fiveKeys).laneMode).toBe('5');
     expect(playDocument(fiveKeys, 'dir.v2/song.BME').laneMode).toBe('5');

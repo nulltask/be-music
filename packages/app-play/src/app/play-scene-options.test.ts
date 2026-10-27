@@ -69,6 +69,7 @@ function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
     autoScratch1P: true,
     autoScratch2P: true,
     replayView: { tempo: true, hiSpeed: true, covers: true, lift: true },
+    tempoEnabled: true,
     tempoPercent: -10,
     tempoPitchMode: 'pitch',
     tempoStretchAlgorithm: 'wsola',
@@ -77,6 +78,7 @@ function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
     hiSpeed: 2.5,
     keyVolume: 80,
     bgmVolume: 60,
+    peakGain: false,
     compressor: true,
     compressorKey: true,
     compressorBGM: false,
@@ -135,6 +137,43 @@ describe('resolvePlaySceneOptions: a single play', () => {
       bgaSize: PLAY_OPTIONS.bgaSize,
       scoreGraph: PLAY_OPTIONS.scoreGraph,
       hsFix: 'AVERAGE',
+      bpmGuide: false,
+      judgeTimingMs: 0,
+      judgeTimingAutoAdjust: 'OFF',
+      normalHiSpeedLevel: 0,
+      classicHiSpeed: false,
+      judgeAlgorithm: 'combo',
+      longNoteModifier: 'OFF',
+      // The play options added by later options, at their defaults.
+      battleMode: 'OFF',
+      bottomShiftableGauge: 'ASSIST-EASY',
+      constantFadeMs: 100,
+      dBattleScratch: false,
+      extraNoteDepth: 0,
+      extraNoteScratch: false,
+      fixedDisplayArea: false,
+      floatingHiSpeed: false,
+      gaugeAutoShift: 'NONE',
+      hRandomThresholdBPM: 120,
+      lift1P: 0.1,
+      lift2P: 0.1,
+      liftOn1P: false,
+      liftOn2P: false,
+      longNoteRate: 1,
+      lr2ExtraLevel: 0,
+      lr2ExtraMode: false,
+      mineModifier: 'OFF',
+      noteDurationMs: 500,
+      randomFixedLane1P: 0,
+      randomFixedLane2P: 0,
+      randomSeed1P: '-1',
+      randomSeed2P: '-1',
+      scrollModifier: 'OFF',
+      scrollRate: 0.5,
+      scrollSection: 4,
+      sevenToNinePattern: 0,
+      sevenToNineType: 0,
+      visualConstant: false,
       hiddenSudden1P: 'SUDDEN',
       hiddenSudden2P: 'OFF',
       shutter: PLAY_OPTIONS.shutter,
@@ -163,6 +202,19 @@ describe('resolvePlaySceneOptions: a single play', () => {
       showInvisibleNotes: false,
       judgedNoteDisplay: 'KEEP_SCROLLING',
     });
+  });
+
+  test('passes peak gain only when the Debug Menu turned it on', () => {
+    expect(resolvePlaySceneOptions(input()).settings.peakGain).toBeUndefined();
+    expect(resolvePlaySceneOptions(input({ guiState: gui({ peakGain: true }) })).settings.peakGain).toBe(true);
+  });
+
+  test('bypasses the stored percentage when disabled but preserves replay tempo', () => {
+    const guiState = gui({ tempoEnabled: false, tempoPercent: -20 });
+    expect(resolvePlaySceneOptions(input({ guiState })).tempo).toBe(1);
+    expect(resolvePlaySceneOptions(input({ guiState, replay: rereplay(1.2) })).tempo).toBe(1.2);
+    guiState.tempoEnabled = true;
+    expect(resolvePlaySceneOptions(input({ guiState })).tempo).toBe(0.8);
   });
 
   test('the start’s AUTO wins over the Debug Menu’s; without one the Debug Menu’s counts', () => {
@@ -195,7 +247,7 @@ describe('resolvePlaySceneOptions: a replay', () => {
       random2P: 'OFF',
       dpFlip: false,
       autoScratch1P: true,
-      autoScratch2P: false,
+      autoScratch2P: true,
       gauge: 'HARD',
     });
     expect(settings).not.toHaveProperty('judgeRuleset');
@@ -260,4 +312,28 @@ describe('resolvePlaySceneOptions: a course', () => {
     expect(settings).not.toHaveProperty('hiSpeedLocked');
     expect(stage).toEqual({ stage: { kind: 'nonstop' }, view: resolveCourseView(nonstopCourse, 0) });
   });
+});
+
+test('replay setup retains an explicitly unassisted DP side', () => {
+  const replay = rereplay();
+  replay.play.autoScratch1P = false;
+  replay.play.autoScratch2P = true;
+  const { settings } = resolvePlaySceneOptions(input({ replay }));
+  expect(settings.autoScratch1P).toBe(false);
+  expect(settings.autoScratch2P).toBe(true);
+});
+
+test('previous arrangement is forwarded without enabling replay input or replacing the live input mode', () => {
+  const fixedArrangement = rereplay();
+  const options = resolvePlaySceneOptions(input({ fixedArrangement }));
+  expect(options.settings.fixedArrangement).toBe(fixedArrangement);
+  expect(options.autoPlay).toBe(false);
+});
+
+test('passes scroll REMOVE into the scene separately from visual CONSTANT', () => {
+  expect(
+    resolvePlaySceneOptions(
+      input({ playOptions: { ...PLAY_OPTIONS, scrollModifier: 'REMOVE', visualConstant: false } }),
+    ).settings,
+  ).toMatchObject({ scrollModifier: 'REMOVE', visualConstant: false });
 });

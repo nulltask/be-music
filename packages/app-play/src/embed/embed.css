@@ -1,0 +1,63 @@
+@import '../theme.css';
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #05070b;
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.preview-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  /* One cell the size of the overlay, so a long chart list scrolls inside it instead of growing the row. */
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+}
+
+.preview-overlay[hidden] {
+  display: none;
+}
+
+.preview-message {
+  place-self: center;
+  max-width: 80%;
+  margin: 0;
+  text-align: center;
+}
+
+.preview-loading {
+  place-self: center;
+  width: min(360px, 80%);
+  text-align: center;
+}
+
+.preview-loading p {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-loading progress {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+/* The pointer hides with the video controls while a play runs untouched. */
+.preview:has(be-music-preview-hud[controls-hidden]) {
+  cursor: none;
+}

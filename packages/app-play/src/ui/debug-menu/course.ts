@@ -1,28 +1,24 @@
+import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 // The Debug Menu's Course folder. It is built with the menu as `this` (`DebugMenu`).
-
-import type { Controller, GUI } from 'lil-gui';
+import type { FolderApi } from 'tweakpane';
 import { normalizeCourseTableURL } from '../../course-table-import.ts';
-import type { DemoGUIState } from '../../types.ts';
+import type { PlayerGUIState } from '../../types.ts';
 import type { DebugMenu, DebugMenuDeps } from './index.ts';
-
 /**
  * Courses: whether stage results show, the player's own courses, the NONSTOP placement, and importing a difficulty
  * table's courses from its URL (remembered and imported again on load).
  */
-export function buildCourseFolder(this: DebugMenu, folder: GUI): void {
-  const trackPlayOption = (controller: Controller): Controller => this.trackPlayOption(controller);
-  folder
-    .add(this.guiState, 'courseAutoAdvance')
-    .name('Skip stage results')
-    .onChange((value: boolean) => {
-      this.guiState.courseAutoAdvance = value;
-    });
-  folder.add({ open: () => this.courseMaker.panel?.openManager() }, 'open').name('My courses…');
+export function buildCourseFolder(this: DebugMenu, folder: FolderApi): void {
+  const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
+  folder.addBinding(this.guiState, 'courseAutoAdvance', { label: 'Skip stage results' }).on('change', ({ value }) => {
+    this.guiState.courseAutoAdvance = value;
+  });
+  folder.addButton({ title: 'My courses…' }).on('click', () => this.courseMaker.panel?.openManager());
   trackPlayOption(
-    folder
-      .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
-      .name('NONSTOP placement')
-      .onChange((value: DemoGUIState['nonstopPlacement']) => applyNonstopPlacement(this.deps, value)),
+    selectBinding(folder, this.guiState, 'nonstopPlacement', 'NONSTOP placement', ['intended', 'lr2']).on(
+      'change',
+      ({ value }) => applyNonstopPlacement(this.deps, value),
+    ),
   );
   // Courses from a difficulty table's page (or header JSON) URL; the URL is remembered and imported again on load.
   const courseTable = {
@@ -33,13 +29,12 @@ export function buildCourseFolder(this: DebugMenu, folder: GUI): void {
         this.setStatus('Enter a difficulty-table URL first');
         return;
       }
-      void this.library.importCourseTables([url], true);
+      void this.library.importCourseTables([url], true).finally(() => this.scheduleSettingsSave());
     },
   };
-  folder.add(courseTable, 'url').name('Table URL');
-  folder.add(courseTable, 'import').name('Import table courses');
+  folder.addBinding(courseTable, 'url', { label: 'Table URL' });
+  folder.addButton({ title: 'Import table courses' }).on('click', () => courseTable['import']());
 }
-
 /**
  * Takes a NONSTOP placement picked on the menu. A NONSTOP course keeps its records per placement (`courseBestRecordKey`), so
  * the select screen draws its records again to show the new placement's: the built-in screen builds itself again only
@@ -47,7 +42,7 @@ export function buildCourseFolder(this: DebugMenu, folder: GUI): void {
  */
 export function applyNonstopPlacement(
   deps: Pick<DebugMenuDeps, 'settings' | 'refreshSelectRecords'>,
-  value: DemoGUIState['nonstopPlacement'],
+  value: PlayerGUIState['nonstopPlacement'],
 ): void {
   deps.settings.nonstopPlacement = value;
   deps.refreshSelectRecords();

@@ -1,3 +1,4 @@
+import { DEFAULT_LR2_RANDOM_MIX_SETTINGS } from '@be-music/player-engine/course';
 import { DEFAULT_PLAY_OPTIONS, type LibraryEntry } from '@be-music/player-scene-model';
 import { describe, expect, it } from 'vite-plus/test';
 import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
@@ -9,6 +10,7 @@ import {
   resolveLR2SelectState,
   resolveLR2SelectTimers,
 } from './select.ts';
+import { LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE, resolveLR2OptionText, stepLR2JudgeTiming } from './options.ts';
 import { makeChart, makeChartWith, makeCourse } from './test-support.ts';
 
 const CLOCK = { year: 2026, month: 10, day: 16, hour: 9, minute: 5, second: 30 };
@@ -257,6 +259,15 @@ describe('resolveLR2SelectState texts', () => {
     expect(making.text(LR2_TEXT.COURSE_TITLE)).toBe('Type a name');
     expect(making.text(LR2_TEXT.COURSE_STAGE1_TITLE)).toBe('picked');
     expect(making.text(LR2_TEXT.COURSE_DEFAULT_CONNECTION)).toBe('CUT');
+    // Texts 190-196 read the RANDOM MIX settings when the host has them.
+    expect(making.text(LR2_TEXT.RANDOM_MIX_STAGE_COUNT)).toBeUndefined();
+    const mixing = resolveLR2SelectState({
+      options: DEFAULT_PLAY_OPTIONS,
+      courseMaker: { defaultConnection: 'cut', randomMixSettings: { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, maxBPM: 180 } },
+    });
+    expect(mixing.text(LR2_TEXT.RANDOM_MIX_STAGE_COUNT)).toBe('5 STAGE');
+    expect(mixing.text(LR2_TEXT.RANDOM_MIX_MAX_BPM)).toBe('180 BPM');
+    expect(mixing.button(LR2_BUTTON.RANDOM_MIX_MAX_BPM)).toBe(18);
   });
 });
 
@@ -289,6 +300,53 @@ describe('resolveLR2SelectState sliders and buttons', () => {
     expect(state.button(LR2_BUTTON.DIFFICULTY_FILTER_ALL)).toBe(0);
     expect(state.button(LR2_BUTTON.FLIP)).toBe(1);
     expect(state.button(LR2_BUTTON.PLAY)).toBeUndefined();
+  });
+
+  it('steps the judge timing (74) by 1 ms within ±99, as LR2 does', () => {
+    expect(resolveLR2SelectButton(LR2_BUTTON.JUDGE_TIMING)).toEqual({ kind: 'judge-timing' });
+    expect(stepLR2JudgeTiming(0, 1)).toBe(1);
+    expect(stepLR2JudgeTiming(0, -1)).toBe(-1);
+    expect(stepLR2JudgeTiming(98, 1)).toBe(99);
+    expect(stepLR2JudgeTiming(99, 1)).toBe(99);
+    expect(stepLR2JudgeTiming(-99, -1)).toBe(-99);
+    // A timing the automatic adjustment carried past the range only moves back toward it.
+    expect(stepLR2JudgeTiming(120, 1)).toBe(120);
+    expect(stepLR2JudgeTiming(120, -1)).toBe(119);
+    expect(stepLR2JudgeTiming(-130, 1)).toBe(-129);
+  });
+
+  it('cycles, names and shows the automatic judge timing as LR2 does', () => {
+    expect(resolveLR2SelectButton(LR2_BUTTON.JUDGE_AUTO_ADJUST)).toEqual({
+      kind: 'cycle-option',
+      option: 'judgeTimingAutoAdjust',
+    });
+    expect(LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE).toEqual(['OFF', 'LR2-ON', 'LR2-SILENT']);
+    const state = (judgeTimingAutoAdjust: (typeof DEFAULT_PLAY_OPTIONS)['judgeTimingAutoAdjust']) =>
+      resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, judgeTimingAutoAdjust, judgeTimingMs: -12 } });
+    for (const [mode, label, cell] of [
+      ['OFF', 'OFF', 0],
+      ['LR2-ON', 'ON', 1],
+      ['LR2-SILENT', 'SILENT', 2],
+      // beatoraja's calibration is not one of LR2's settings.
+      ['BEATORAJA', 'OFF', 0],
+    ] as const) {
+      expect(state(mode).text(LR2_TEXT.OPTION_JUDGE_AUTO_ADJUST)).toBe(label);
+      expect(state(mode).button(LR2_BUTTON.JUDGE_AUTO_ADJUST)).toBe(cell);
+    }
+    expect(state('LR2-ON').number(LR2_NUM.JUDGE_TIMING)).toBe(-12);
+  });
+
+  it('cycles and names BATTLE as LR2 does for the selected chart’s key mode', () => {
+    expect(resolveLR2SelectButton(LR2_BUTTON.BATTLE)).toEqual({ kind: 'cycle-option', option: 'battleMode' });
+    const battle = (battleMode: (typeof DEFAULT_PLAY_OPTIONS)['battleMode'], keyModeOp?: number) =>
+      resolveLR2OptionText(LR2_TEXT.OPTION_BATTLE, { ...DEFAULT_PLAY_OPTIONS, battleMode }, keyModeOp);
+    expect(battle('OFF')).toBe('OFF');
+    expect(battle('TWO-PLAYER', LR2_OP.KEYS_7)).toBe('BATTLE');
+    expect(battle('TWO-PLAYER', LR2_OP.KEYS_14)).toBe('COUPLE');
+    expect(battle('D-BATTLE', LR2_OP.KEYS_9)).toBe('DISABLE');
+    expect(battle('SP-TO-DP', LR2_OP.KEYS_10)).toBe('DP-TO-SP');
+    expect(battle('SP-TO-DP', LR2_OP.KEYS_9)).toBe('9-TO-7');
+    expect(resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, battleMode: 'SP-TO-DP' } }).button(56)).toBe(3);
   });
 
   it('draws the course maker’s connection buttons', () => {
@@ -375,6 +433,7 @@ describe('pickLR2BarBody', () => {
   it('takes LR2’s NEW COURSE body (7) and random-course body (9)', () => {
     expect(pickLR2BarBody(all, courseEntry({ newCourse: true }))?.kind).toBe('courseCreate');
     expect(pickLR2BarBody(all, courseEntry({ random }))?.kind).toBe('randomCourse');
+    expect(pickLR2BarBody(all, courseEntry({ randomMix: true }))?.kind).toBe('randomCourse');
     expect(pickLR2BarBody(all, courseEntry())?.kind).toBe('course');
   });
 
@@ -382,6 +441,7 @@ describe('pickLR2BarBody', () => {
     const plain = bodies('song', 'course');
     expect(pickLR2BarBody(plain, courseEntry({ newCourse: true }))?.kind).toBe('course');
     expect(pickLR2BarBody(plain, courseEntry({ random }))?.kind).toBe('course');
+    expect(pickLR2BarBody(plain, courseEntry({ randomMix: true }))?.kind).toBe('course');
     expect(pickLR2BarBody(bodies('song'), courseEntry({ newCourse: true }))?.kind).toBe('song');
   });
 
@@ -403,4 +463,23 @@ describe('resolveLR2BarLevel', () => {
     expect(resolveLR2BarLevel(makeChart({ playLevel: 3 }))).toEqual({ kind: 'undefined', level: 3 });
     expect(resolveLR2BarLevel(makeChart({ playLevel: '?' }))).toBeUndefined();
   });
+});
+
+it('keeps LR2 HS-FIX sprite cells in range when START is selected externally', () => {
+  const state = resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, hsFix: 'STARTBPM' } });
+  expect(state.button(LR2_BUTTON.HS_FIX)).toBe(0);
+});
+
+it('uses an existing survival cell for externally selected EX-HARD', () => {
+  const state = resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, gauge1P: 'EX-HARD' } });
+  expect(state.button(LR2_BUTTON.GAUGE_1P)).toBe(1);
+  expect(state.text(LR2_TEXT.OPTION_GAUGE_1P)).toBe('EX-HARD');
+  expect(state.ops).toContain(LR2_OP.GAUGE_1P_RED);
+});
+
+it('uses the original EASY cell for an externally selected ASSIST EASY gauge', () => {
+  const state = resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, gauge1P: 'ASSIST-EASY' } });
+  expect(state.button(LR2_BUTTON.GAUGE_1P)).toBe(3);
+  expect(state.text(LR2_TEXT.OPTION_GAUGE_1P)).toBe('ASSIST-EASY');
+  expect(state.ops).toContain(LR2_OP.GAUGE_1P_NORMAL);
 });

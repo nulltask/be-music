@@ -18,7 +18,7 @@ import {
 } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+const unifiedBMSChartPath = resolve(rootDir, 'test/fixtures/four-measure-command-combo-test.bms');
 describe('editor', () => {
   test('editor: createBlankJSON returns an empty JSON-based chart', () => {
     const json = createBlankJSON();
@@ -208,8 +208,8 @@ describe('editor', () => {
     expect(json.events.length).toBeGreaterThan(0);
   });
 
-  test('editor: the examples/test sample quartet is a live import → edit → export round trip', async () => {
-    // `examples/test` ships four files that only mean anything as a set:
+  test('editor: the test/fixtures sample quartet is a live import → edit → export round trip', async () => {
+    // `test/fixtures` ships four files that only mean anything as a set:
     //
     //   sample.bms             the source chart
     //   sample.json            what `importChart` produces from it
@@ -219,8 +219,8 @@ describe('editor', () => {
     //
     // Checking them against the live pipeline is what keeps them from silently going stale: before this test they
     // still carried a pre-`bms`/`bmson`-extension shape that no current code path can produce.
-    const imported = await importChart(resolve(rootDir, 'examples/test/sample.bms'));
-    const expectedImport = await loadJSONFile(resolve(rootDir, 'examples/test/sample.json'));
+    const imported = await importChart(resolve(rootDir, 'test/fixtures/sample.bms'));
+    const expectedImport = await loadJSONFile(resolve(rootDir, 'test/fixtures/sample.json'));
     expect(imported).toEqual(expectedImport);
 
     let edited = setMetadata(imported, 'title', 'Edited Sample');
@@ -231,7 +231,7 @@ describe('editor', () => {
       positionDenominator: 2,
       value: '01',
     });
-    const expectedEdit = await loadJSONFile(resolve(rootDir, 'examples/test/sample.edit.json'));
+    const expectedEdit = await loadJSONFile(resolve(rootDir, 'test/fixtures/sample.edit.json'));
     expect(edited).toEqual(expectedEdit);
 
     const tempDir = await mkdtemp(resolve(tmpdir(), 'bms-editor-fixture-'));
@@ -243,9 +243,9 @@ describe('editor', () => {
 
       const [writtenBMS, expectedBMS, writtenBmson, expectedBmson] = await Promise.all([
         readFile(bmsPath, 'utf8'),
-        readFile(resolve(rootDir, 'examples/test/sample.edited.bms'), 'utf8'),
+        readFile(resolve(rootDir, 'test/fixtures/sample.edited.bms'), 'utf8'),
         readFile(bmsonPath, 'utf8'),
-        readFile(resolve(rootDir, 'examples/test/sample.roundtrip.bmson'), 'utf8'),
+        readFile(resolve(rootDir, 'test/fixtures/sample.roundtrip.bmson'), 'utf8'),
       ]);
       expect(writtenBMS).toBe(expectedBMS);
       expect(writtenBmson).toBe(expectedBmson);

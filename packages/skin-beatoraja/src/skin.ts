@@ -217,6 +217,8 @@ export function extractBeatorajaSkinHeader(obj: Readonly<Record<string, unknown>
     w: typeof obj.w === 'number' ? obj.w : 0,
     h: typeof obj.h === 'number' ? obj.h : 0,
     playstart: typeof obj.playstart === 'number' ? obj.playstart : undefined,
+    loadstart: typeof obj.loadstart === 'number' ? obj.loadstart : undefined,
+    loadend: typeof obj.loadend === 'number' ? obj.loadend : undefined,
     scene: typeof obj.scene === 'number' ? obj.scene : undefined,
     input: typeof obj.input === 'number' ? obj.input : undefined,
     close: typeof obj.close === 'number' ? obj.close : undefined,

@@ -10,7 +10,7 @@ import type { PlayerUICommand } from '../core/ui-signal-bus.ts';
 /**
  * Shared set-up of the player engine's tests (`*.test.ts` next to `index.ts`): a mocked Node audio sink whose clock
  * follows `performance.now()` and which records every write, and the small charts and input scripts the tests play.
- * Each test file mocks `./audio-sink.ts` with {@link mockAudioSinkModule} and calls {@link resetAudioSinkState} before
+ * Each test file mocks the Node adapter's `audio-sink.ts` with {@link mockAudioSinkModule} and calls {@link resetAudioSinkState} before
  * each test; the state lives here, so the mock and the tests see the same object.
  */
 
@@ -34,7 +34,7 @@ export function resetAudioSinkState(): void {
   audioSinkState.scheduledSeconds = 0;
 }
 
-/** The module `vi.mock('./audio-sink.ts', ...)` hands the engine: a Node sink that plays nothing and keeps time. */
+/** The module the mocked Node adapter sink hands the engine: a Node sink that plays nothing and keeps time. */
 export function mockAudioSinkModule() {
   return {
     createNodeAudioSink: vi.fn(async (options: { sampleRate: number; channels: number }) => {
@@ -96,7 +96,7 @@ export function mockAudioSinkModule() {
 }
 
 export const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-export const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+export const unifiedBMSChartPath = resolve(rootDir, 'test/fixtures/four-measure-command-combo-test.bms');
 
 export function createLNOBJLongNoteChart(lnMode?: 1 | 2 | 3) {
   const json = createEmptyJSON('bms');

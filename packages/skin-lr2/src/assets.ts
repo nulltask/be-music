@@ -75,6 +75,23 @@ function getBasenameIndex<T>(files: ReadonlyMap<string, T>): BasenameIndex {
   return index;
 }
 
+/** Prefer the longest authored directory suffix when a distribution omits LR2files/Theme. */
+function findPathSuffixMatch(entries: readonly BasenameIndexEntry[], path: string): BasenameIndexEntry | undefined {
+  for (let suffix = path.toLowerCase(); suffix.includes('/'); suffix = suffix.slice(suffix.indexOf('/') + 1)) {
+    const pattern = suffix.includes('*') ? wildcardToRegExp(`*/${suffix}`) : undefined;
+    const directPattern = suffix.includes('*') ? wildcardToRegExp(suffix) : undefined;
+    let best: BasenameIndexEntry | undefined;
+    for (const entry of entries) {
+      const matches = pattern
+        ? pattern.test(entry.lowerKey) || directPattern!.test(entry.lowerKey)
+        : entry.lowerKey === suffix || entry.lowerKey.endsWith(`/${suffix}`);
+      if (matches && (!best || entry.originalKey.length < best.originalKey.length)) best = entry;
+    }
+    if (best) return best;
+  }
+  return undefined;
+}
+
 /**
  * Returns the bucket for an exact-basename lookup, or `undefined` if no file in the source map shares this basename.
  * Centralised so the call sites don't have to reach into the index's internals.
@@ -138,6 +155,8 @@ export function resolveLR2IncludePath(
   if (!bucket) {
     return undefined;
   }
+  const suffixMatch = findPathSuffixMatch(bucket, normalized);
+  if (suffixMatch) return suffixMatch.originalKey;
   if (grandParent && parentName) {
     for (const entry of bucket) {
       if (entry.parentLower === parentName && entry.grandParentLower === grandParent) {
@@ -190,6 +209,8 @@ export function resolveLR2AssetBytes(skin: LR2Skin, rawPath: string): Uint8Array
   if (buckets.length === 0) {
     return undefined;
   }
+  const suffixMatch = findPathSuffixMatch(buckets.flat(), normalized);
+  if (suffixMatch) return asLoadedBytes(skin.files.get(suffixMatch.originalKey));
   if (grandParent && parentName) {
     for (const bucket of buckets) {
       for (const entry of bucket) {

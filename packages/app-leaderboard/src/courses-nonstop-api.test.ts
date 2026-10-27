@@ -2,7 +2,8 @@ import { gzipSync } from 'node:zlib';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart-model';
-import { parseBMS } from '@be-music/chart-parser';
+import type { BeMusicJSON } from '@be-music/chart-source';
+import { parseChart, parseBMS } from '@be-music/chart-parser';
 import { manualPlay } from '@be-music/player-engine';
 import {
   buildNonstopCourseReplay,
@@ -10,7 +11,7 @@ import {
   prepareNonstopCourse,
 } from '@be-music/player-engine/course';
 import type { BeMusicCourseReplay, BeMusicReplay, ReplayInputEvent } from '@be-music/player-engine/replay';
-import { ORIGIN, signInAnonymously, startTestBindings } from '../test/support.ts';
+import { ORIGIN, signInAnonymously, startTestBindings } from './test-support/support.ts';
 import { createApp } from './app.ts';
 import { openDatabase } from './db/client.ts';
 import { course, courseScore } from './db/schema.ts';
@@ -82,10 +83,10 @@ function presses(chart: Parameters<typeof resolveChart>[0], untilUs = Number.POS
  * (`#RANDOM` drawn) with the course's long-note constraint applied, stitched, played as one chart, and cut into its
  * stages. `untilUs` gives up (ESC) there.
  */
-async function nonstopRun(untilUs?: number): Promise<BeMusicCourseReplay> {
+async function nonstopRun(untilUs?: number, sources: readonly BeMusicJSON[] = SOURCES): Promise<BeMusicCourseReplay> {
   const constraints = normalizeCourseConstraints(COURSE.constraints);
   const prepared = prepareNonstopCourse(
-    SOURCES.map((chart) => ({ chart })),
+    sources.map((chart) => ({ chart })),
     { constraints, connections: ['cut'], placement: 'intended', title: COURSE.name, random: () => 0 },
   );
   if (!prepared.ok) throw new Error(`stitch failed: ${prepared.reason}`);
@@ -98,6 +99,7 @@ async function nonstopRun(untilUs?: number): Promise<BeMusicCourseReplay> {
     tui: false,
     replayInputs: presses(stitched.chart, untilUs),
     course: { kind: 'nonstop', gaugeSet: 'lr2' },
+    stageRanks: stitched.map.stageRanks,
     recordReplay: {},
     onReplayRecorded: (replay) => {
       recorded = replay;
@@ -199,4 +201,46 @@ describe('POST /api/v0/course-scores with a NONSTOP run', () => {
     reassigned.nonstop!.noteStages = reassigned.nonstop!.noteStages.map(() => 0);
     expect(await (await submit(cookie, reassigned)).json()).toEqual({ error: 'nonstop-stage-mismatch' });
   });
+});
+
+test('rebuilds and verifies a NONSTOP course containing bmson and BMS stages', async () => {
+  const bmson = parseChart(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 240, resolution: 240, judge_rank: 125, mode_hint: 'beat-7k' },
+      sound_channels: [
+        {
+          name: 'slice.wav',
+          notes: [
+            { x: 1, y: 240 },
+            { x: 2, y: 480, c: true, l: 240, t: 2 },
+            { x: 3, y: 960 },
+          ],
+        },
+      ],
+    }),
+    'bmson',
+  );
+  for (const sources of [
+    [SOURCES[0]!, bmson],
+    [bmson, SOURCES[0]!],
+  ]) {
+    const cookie = await signInAnonymously(fetchApp);
+    const log = await nonstopRun(undefined, sources);
+    expect(log.nonstop!.replay.chart.sourceFormat).toBe('bmson');
+    expect(
+      log.nonstop!.replay.chart.judgeRank.stageRanks!.some((change) => change.table === 'bmson' && change.rank === 125),
+    ).toBe(true);
+    const response = await submit(cookie, log, sources);
+    expect(response.status, await response.clone().text()).toBe(201);
+    const body = (await response.json()) as Outcome;
+    expect(body.results.find((result) => result.ruleset === 'lr2')).toMatchObject({
+      noteCount: 6,
+      exScore: 12,
+      stagesPlayed: 2,
+    });
+    const db = openDatabase(env.DB);
+    const stored = await db.query.courseScore.findFirst({ where: eq(courseScore.id, body.courseScoreId) });
+    expect(stored?.verification).toBe('L4');
+  }
 });

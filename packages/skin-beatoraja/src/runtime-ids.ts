@@ -156,6 +156,38 @@ export const TIMER_KEY_OFF_1P_BASE: typeof LR2_TIMER.KEY_OFF_1P = LR2_TIMER.KEY_
 /** prop.lua `keyoff_2p_scratch = 130` … `keyoff_2p_key9 = 139`. */
 export const TIMER_KEY_OFF_2P_BASE: typeof LR2_TIMER.KEY_OFF_2P = LR2_TIMER.KEY_OFF_2P;
 
+/** beatoraja-only score, result and character animation timers. */
+export const TIMER_SCORE_A = 348;
+export const TIMER_SCORE_AA = 349;
+export const TIMER_SCORE_AAA = 350;
+export const TIMER_SCORE_BEST = 351;
+export const TIMER_SCORE_TARGET = 352;
+export const TIMER_RESULTGRAPH_BEGIN = 150;
+export const TIMER_RESULTGRAPH_END = 151;
+export const TIMER_RESULT_UPDATESCORE = 152;
+export const TIMER_PM_CHARA_1P_NEUTRAL = 900;
+export const TIMER_PM_CHARA_1P_FEVER = 901;
+export const TIMER_PM_CHARA_1P_GREAT = 902;
+export const TIMER_PM_CHARA_1P_GOOD = 903;
+export const TIMER_PM_CHARA_1P_BAD = 904;
+export const TIMER_PM_CHARA_2P_NEUTRAL = 905;
+export const TIMER_PM_CHARA_2P_GREAT = 906;
+export const TIMER_PM_CHARA_2P_BAD = 907;
+export const TIMER_MUSIC_END = 908;
+export const TIMER_PM_CHARA_DANCE = 909;
+
+/** An HCN lane's active timer; keys 10–99 use the extended bank. */
+export function hcnActiveTimerId(side: BeatorajaSide, lane: number): number | undefined {
+  if (!Number.isInteger(lane) || lane < 0 || lane >= 100) return undefined;
+  return (lane < 10 ? 250 + (side === 2 ? 10 : 0) : 1800 + (side === 2 ? 100 : 0)) + lane;
+}
+
+/** An HCN lane's damage timer; keys 10–99 use the extended bank. */
+export function hcnDamageTimerId(side: BeatorajaSide, lane: number): number | undefined {
+  if (!Number.isInteger(lane) || lane < 0 || lane >= 100) return undefined;
+  return (lane < 10 ? 270 + (side === 2 ? 10 : 0) : 2000 + (side === 2 ? 100 : 0)) + lane;
+}
+
 // ─── 24-key extensions ─────────────────────────────────────────────────────────────────────────
 //
 // Lane indices ≥ 10 fall outside the single-digit range. prop.lua names the bases via `bomb_1p_key10 =
@@ -358,7 +390,7 @@ export const BEATORAJA_OP = {
   // ─── Live rank ops (prop.lua `_1p_aaa = 200` ... `_1p_f = 207`) ────────────────────────────
   // Set live during gameplay from the EX score over the notes judged so far (beatoraja
   // `createNowRank`, `resolveBeatorajaPlayScoreOps`); `computeRankOp` ranks a finished run over
-  // every note. Beatoraja's IIDX-derived rank thresholds are (max = notes × 2):
+  // every note. Beatoraja's That-Which-Must-Not-Be-Named-derived rank thresholds are (max = notes × 2):
   //
   //   AAA = exScore / max >= 8/9   (~88.9%)
   //   AA  = exScore / max >= 7/9   (~77.8%)
@@ -599,6 +631,9 @@ export const BEATORAJA_OP = {
   LIFT1_ON: 272,
   HIDDEN1_ON: 273,
 
+  /** SkinProperty `OPTION_CONSTANT`: the player's CONSTANT setting is on (LR2 uses 400 for its key-config page). */
+  CONSTANT: 400,
+
   // ─── Now-playing rank ops (prop.lua `now_aaa_1p = 340` ... `now_f_1p = 347`) ──────────────
   // Set based on the active run's EX-score band (DIFFERENT from the live `_1p_*` rank ops at
   // 200-207, which are the same data but a separate op block beatoraja maintains for the result
@@ -652,6 +687,19 @@ export const BEATORAJA_OP = {
   GAUGE_NOW_AT_MAX_1P: 90100,
   /** Same as {@link GAUGE_NOW_AT_MAX_1P} but for the 2P side. Synthetic. */
   GAUGE_NOW_AT_MAX_2P: 90101,
+} as const;
+
+/**
+ * The replay slot ops, by slot (1-4): `none` / `exists` / `saved` are `SkinProperty.OPTION_NO_REPLAYDATA` /
+ * `OPTION_REPLAYDATA` / `OPTION_REPLAYDATA_SAVED` (196-198, then 1196-1204), lit on the select screen for the bar under
+ * the cursor (`none` / `exists`) and on a result screen for the run (`saved` once this result saved into the slot);
+ * `selected` is `OPTION_SELECT_REPLAYDATA` (1205-1208), the slot the select screen's REPLAY plays.
+ */
+export const BEATORAJA_REPLAY_SLOT_OP = {
+  none: [196, 1196, 1199, 1202],
+  exists: [197, 1197, 1200, 1203],
+  saved: [198, 1198, 1201, 1204],
+  selected: [1205, 1206, 1207, 1208],
 } as const;
 
 /**
@@ -721,7 +769,7 @@ export type BeatorajaButtonCode = (typeof BEATORAJA_BUTTON)[keyof typeof BEATORA
 
 /**
  * Letter-rank classification from `(exScore, maxExScore)`. Returns the matching `BEATORAJA_OP`
- * code (`P1_RANK_*` for `side: 1`, `P2_RANK_*` for `side: 2`). Beatoraja's IIDX-derived rank
+ * code (`P1_RANK_*` for `side: 1`, `P2_RANK_*` for `side: 2`). Beatoraja's That-Which-Must-Not-Be-Named-derived rank
  * thresholds are 8/9, 7/9, ... down to 2/9 of the theoretical max EX-score (= `total * 2`).
  *
  * Returns `BEATORAJA_OP.P1_RANK_F` when `maxExScore <= 0` (no scorable notes — degenerate chart);

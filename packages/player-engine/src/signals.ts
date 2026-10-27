@@ -3,8 +3,7 @@
  * commands it carries, the UI bus with its frames and commands, the judge / combo / high-speed state signals, and the
  * high-speed range with the actions that step it.
  *
- * Kept apart from the package root so a UI worker can hold the buses without loading the play loop and the audio
- * renderer.
+ * Kept apart from the package root so a UI worker can hold the buses without loading the play loop.
  */
 export {
   createPlayerInputSignalBus,
@@ -14,12 +13,16 @@ export {
 export {
   createPlayerUISignalBus,
   type PlayerGaugeSummary,
+  type PlayerHCNLaneState,
   type PlayerUICommand,
+  type PlayerUIFrameClock,
   type PlayerUIFrameNote,
   type PlayerUIFramePayload,
   type PlayerUIFrameSummary,
   type PlayerUILongNoteMode,
   type PlayerUILongNoteOutcome,
+  type PlayerUISeekJudgment,
+  type PlayerUISeekSnapshot,
   type PlayerUISignalBus,
 } from './core/ui-signal-bus.ts';
 export {

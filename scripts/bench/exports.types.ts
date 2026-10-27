@@ -10,12 +10,16 @@ export const PACKAGE_NAMES = [
   'chart-editor',
   'chart-audio-renderer',
   'player-engine',
+  'player-node-audio',
   'player-scene-model',
   'player-terminal',
   'skin-lr2',
   'skin-beatoraja',
   'player-skin-sdk',
   'player-browser',
+  'player-ui',
+  'player-ui-react',
+  'player-ui-vue',
 ] as const;
 
 export type PackageName = (typeof PACKAGE_NAMES)[number];

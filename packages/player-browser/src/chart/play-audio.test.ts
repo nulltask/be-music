@@ -2,6 +2,7 @@ import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { BrowserAssetSource } from '../collection/types.ts';
 import { collectChartVolumeMultipliers, loadPlaySamples } from './play-audio.ts';
+import { PEAK_GAIN_TARGET_LINEAR } from './peak-gain.ts';
 
 const mocks = vi.hoisted(() => ({
   loadAssetBytes: vi.fn(),
@@ -119,6 +120,33 @@ describe('loadPlaySamples', () => {
       'wsola',
       expect.any(Function),
     );
+  });
+
+  test('scales every decoded sample from the loudest peak when peak gain is on', async () => {
+    const channels = new Map<string, Float32Array>([
+      ['kick.wav', Float32Array.from([0.5, -0.25])],
+      ['snare.wav', Float32Array.from([0.1])],
+    ]);
+    const audioContext = {
+      decodeAudioData: async (buffer: ArrayBuffer) => {
+        const data = channels.get(new TextDecoder().decode(buffer))!;
+        return { numberOfChannels: 1, getChannelData: () => data } as unknown as AudioBuffer;
+      },
+    } as unknown as BaseAudioContext;
+    await loadPlaySamples({
+      audioContext,
+      chart: chartWithWAVs({ '01': 'kick.wav', '02': 'snare.wav' }),
+      source: SOURCE,
+      chartPath: 'Songs/a/main.bms',
+      samples: new Map(),
+      tempo: 1,
+      tempoPitchMode: 'pitch',
+      tempoStretchAlgorithm: 'signalsmith',
+      peakGain: true,
+    });
+    const gain = PEAK_GAIN_TARGET_LINEAR / 0.5;
+    expect(channels.get('kick.wav')![0]).toBeCloseTo(PEAK_GAIN_TARGET_LINEAR);
+    expect(channels.get('snare.wav')![0]).toBeCloseTo(0.1 * gain);
   });
 
   test('stops decoding once the play is cancelled', async () => {

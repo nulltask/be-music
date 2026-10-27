@@ -3,7 +3,7 @@
 # Leaderboard 設計
 
 > ステータス: P0 の中核は [`packages/app-leaderboard`](../packages/app-leaderboard/README.ja.md) に実装済みです（認証、
-> 検証の層 L1〜L3 付きの送信（`#RANDOM` のない譜面では L4 も）、3 つのルールセットでの再計算、ランキングの API）。
+> 検証レイヤー L1〜L3 付きの送信（`#RANDOM` のない譜面では L4 も）、3 つのルールセットでの再計算、ランキングの API）。
 > それ以外はまだ設計段階です。このドキュメントは、これまでに決めたことと、まだ決まっていないこと（15 章）を記録します。
 
 Leaderboard は be-music のオンラインのスコアランキングで、LR2 や beatoraja が「IR」（Internet Ranking）と呼ぶ
@@ -15,7 +15,7 @@ Leaderboard は be-music のオンラインのスコアランキングで、LR2 
 
 目的:
 
-- 譜面ごとに、3 つの互換ルールセット（`lr2`、`beatoraja`、`iidx`）それぞれでプレイを順位付けする。
+- 譜面ごとに、3 つの互換ルールセット（`lr2`、`beatoraja`、`____`）それぞれでプレイを順位付けする。
 - クライアントではなくサーバーを信頼する。クライアントはリプレイを送り、結果はサーバーが計算し直す。
 - 譜面を内容で識別し（Be-Music Fingerprint）、保存し直したもの・文字コードを変えたもの・変換したものが同じ
   ランキングを共有するようにする。
@@ -106,7 +106,7 @@ flowchart LR
   小さな MD5 を追加します。
 
 **開発用のバージョン。** fingerprint のバージョンは `bmfp0`、ルールセットの結果 ID は `lr2/0`、`beatoraja/0`、
-`iidx/0` です。`0` は定義がまだリリース間で変わりうることを表します。そのため `bmfp0` をキーにするランキングは
+`____/0` です。`0` は定義がまだリリース間で変わりうることを表します。そのため `bmfp0` をキーにするランキングは
 すべて暫定です。UI では Leaderboard をリセットされうるベータ版と表示し、`bmfp1` に移るときはデータを捨てることが
 あります（15 章）。
 
@@ -153,7 +153,7 @@ sequenceDiagram
     else 別のアカウントからの同じプレイ
         A-->>C: 409 play_already_submitted
     end
-    A->>A: 対象判定: オートプレイ・ESC 中断・テンポ変更・コースのステージ → 422、アシスト → フラグ
+    A->>A: 対象判定: オートプレイ → 422、テンポ変更・コースのステージ → ランキング対象外、アシスト → フラグ
     A->>A: sha256(canonicalize(play document)) == playFingerprint ?
     A->>D: 既知の譜面?
     alt 未知の譜面
@@ -171,7 +171,7 @@ sequenceDiagram
     alt 不一致
         A-->>C: 422 chart_mismatch
     end
-    A->>A: lr2、beatoraja、iidx で simulateReplay
+    A->>A: lr2、beatoraja、____ で simulateReplay
     A->>R: PUT リプレイ、ゴースト、OG カード
     A->>D: バッチ: スコアと結果を INSERT、自己ベストを UPSERT
     A->>D: ルールセットごとの順位と参加人数
@@ -190,16 +190,16 @@ sequenceDiagram
 - **R2 を D1 より先に書きます。** D1 のバッチが失敗しても残るのは参照されないオブジェクトだけで、定期的な掃除で
   消えます。逆の順だと、リプレイのないスコアが残りえます。
 
-### 5.3 検証の層
+### 5.3 検証レイヤー
 
-| 層  | 確認すること                                                                            | 防げるもの                                         |
-| --- | --------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| L1  | サーバーが入力から計算し直す。リプレイの `results` のキャッシュは無視する               | 数値の改ざん                                       |
-| L2  | オートプレイと ESC 中断は拒否し、アシストにはフラグを付ける                             | アシスト付きのスコアが通常のランキングに混ざること |
-| L3  | 2 つの fingerprint ドキュメントのハッシュが申告された fingerprint と一致する            | ドキュメントの改ざん                               |
-| L4  | play document が chart document の結果の 1 つである                                     | 別の譜面のプレイ                                   |
-| L5  | リプレイのノーツが、レーンオプションの差を除いて play document のノーツの時刻と一致する | リプレイ内の譜面の改変                             |
-| L6  | 異常検知と通報（12 章）                                                                 | bot と TAS                                         |
+| レイヤー | 確認すること                                                                            | 防げるもの                                         |
+| -------- | --------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| L1       | サーバーが入力から計算し直す。リプレイの `results` のキャッシュは無視する               | 数値の改ざん                                       |
+| L2       | オートプレイは拒否し、アシストにはフラグを付ける                                        | アシスト付きのスコアが通常のランキングに混ざること |
+| L3       | 2 つの fingerprint ドキュメントのハッシュが申告された fingerprint と一致する            | ドキュメントの改ざん                               |
+| L4       | play document が chart document の結果の 1 つである                                     | 別の譜面のプレイ                                   |
+| L5       | リプレイのノーツが、レーンオプションの差を除いて play document のノーツの時刻と一致する | リプレイ内の譜面の改変                             |
+| L6       | 異常検知と通報（12 章）                                                                 | bot と TAS                                         |
 
 chart document をでっち上げることはできます。ただしそれは新しい fingerprint を持つので、誰も遊ばないランキングが
 できるだけで、本物のランキングは汚せません。譜面が公開一覧に載るのは条件を満たしてからです（7 章）。
@@ -209,25 +209,33 @@ play document の位置とタイムラインから、エンジンと一致する
 
 ## 6. スコアのルール
 
-- **3 つのルールセット。** すべてのプレイを `lr2`、`beatoraja`、`iidx` で計算し直し、3 つのランキングすべてに
+**送るもの。** 送信はオプトインです。プレイヤーが有効にするまで、Leaderboard には何も送りません。有効にした後は、完全な AUTO プレイとリプレイの再生（ドロップしたリプレイ、リプレイスロット、コースのリプレイ）を除くすべてのプレイを送ります。表示するかどうか、どこに表示するかはプレイヤーではなく Leaderboard が決めます（#788）。部分的なアシスト（オートスクラッチなど）は送り、別に順位付けします。Leaderboard が保存はしても順位付けしないプレイも、それを分類するための情報をリプレイに載せて送ります（`play.tempo`、`play.course`、オプション、アシスト）。そのまま拒否するのは、検証できない、フィンガープリントがそろっていないログだけです。
+
+手動プレイでシークすると練習扱い（`PlayResult.practice`）になります。最初のシークでリプレイの記録を破棄し、beatoraja の PRACTICE もリプレイを記録しないので、どちらも送るリプレイがありません。ホストがリプレイデータも渡した場合を含め、Web アプリはその結果のベスト記録更新・Leaderboard 送信・リプレイ自動保存を行いません。コースのステージや NONSTOP でシークすると、コース全体と後続ステージも対象外になります。リプレイがなくてもコース結果は表示できます。練習のプレイを送るには練習範囲をリプレイに記録する必要があり、後の変更に回します。
+
+- **3 つのルールセット。** すべてのプレイを `lr2`、`beatoraja`、`____` で計算し直し、3 つのランキングすべてに
   載せます。実際にプレイしたルールセット（`play.judgeRuleset`）を保存して印として表示し、「このルールセットで
   プレイしたもの」だけに絞り込めるようにします。
 - **ゲージ**はリプレイと同じ規則でルールセット間を対応させます（`GROOVE` は beatoraja の `NORMAL`、`DEATH` は
   `HAZARD`、など）。
 - **アシスト**（オートスクラッチ、デバッグ用の判定幅の上書きなど）はフラグを付けて保存し、アシストなしのプレイとは
   別に順位付けします。
-- **ESC 中断とコースのステージは拒否します**。ステージは前のステージが残した状態から始まるので、単曲のプレイでは
-  ありません。代わりにコースのプレイの一部としてランキングに載ります（6.1 節）。**テンポを変えたプレイ**
-  （`play.tempo` が 1 以外。Web プレイヤーのテンポスライダー）は `tempo` として拒否します。beatoraja の周波数
-  トレーナーがスコアを保存しないのと同じく、練習として扱います。**落ちたプレイ**（ゲージが尽きたもの）
-  は保存し、プレイ回数に数えます。
+- **ランキング対象外のプレイ**は保存し、すべてのルールセットで計算し直して数値を返します（順位とプレイヤー数は 0、
+  理由は `unranked`）。ただし自己ベストは動かさず、ランキング・集計・すべてのリストから外れます。プレイのページは
+  開け、理由を表示します（`score.unranked`）。単独で送った**コースのステージ**はこれに当たります（`course-stage`）。
+  ステージは前のステージが残した状態から始まるので、単曲のプレイではありません。代わりにコースのプレイの一部として
+  ランキングに載ります（6.1 節）。**テンポを変えたプレイ**（`tempo`。`play.tempo` が 1 以外。Web プレイヤーの
+  テンポスライダー）も同じです。beatoraja の周波数トレーナーがスコアを保存しないのと同じく、練習として扱います。
+  **落ちたプレイ**（ゲージが尽きたもの）
+  は保存し、プレイ回数に数えます。**ESC で投げたプレイ**（`play.aborted`）も同じです。LR2 と beatoraja が保存するのと
+  同じく、途中で投げたプレイはゲージの値に関係なく、どのルールセットでも落ちたプレイとして順位付けします。
 - **ランプと BP はルールセットごとに各ゲームに従います**: `lr2` では DEATH でのクリアは NORMAL です（LR2body.exe の
-  `CheckClear`）。beatoraja と IIDX では DEATH（`HAZARD`）のクリアは EX HARD です。BP には LR2 も含めどのルールセットでも
-  空 POOR を数えます。この規則より前に保存された `lr2` の結果は、マイグレーション `0012` で書き直しました。
-  ランプと BP はどのクライアントとも同じ規則で決めます（`@be-music/player-engine/replay` の `resolveRulesetResultLamp`、`@be-music/player-engine/ruleset` の `resolveClearLamp` と `resolveMissCount`）。フルコンボにはすべてのノートが GOOD 以上である必要があるので、ノートのない譜面はゲージのランプになります。ランプはその順位（`clearLampRank`）で保存します。1 FAILED、2 ASSIST EASY、3 EASY、4 NORMAL、5 HARD、6 EX HARD、7 FULL COMBO、8 PERFECT、9 MAX です。
+  `CheckClear`）。beatoraja と 名前を言ってはいけないあのゲームでは DEATH（`HAZARD`）のクリアは EX HARD です。BP には LR2 も含めどのルールセットでも
+  空 POOR を数えます。この規則より前に保存された `lr2` の結果は、マイグレーション `0012` で書き直しました。BP には、途中で落ちたり ESC で投げたりして判定されなかったノートも両ゲームと同じく数えます（#584）。この規則より前に保存された BP はそのままです。
+  ランプと BP はどのクライアントとも同じ規則で決めます（`@be-music/player-engine/replay` の `resolveRulesetResultLamp` と `resolveRulesetResultMissCount`、`@be-music/player-engine/ruleset` の `resolveClearLamp` と `resolveMissCount`）。フルコンボにはすべてのノートが GOOD 以上である必要があるので、ノートのない譜面はゲージのランプになります。ランプはその順位（`clearLampRank`）で保存します。1 FAILED、2 ASSIST EASY、3 EASY、4 NORMAL、5 HARD、6 EX HARD、7 FULL COMBO、8 PERFECT、9 MAX です。
 - **自己ベストは beatoraja 方式**: EX スコア、クリアランプ、ミス数のベストを別々に持ち、それぞれ達成したスコアを
-  指します。各ベストのリプレイとゴーストにすぐたどれます。ミス数は、中断していないプレイならクリアの有無に関係なく
-  対象にします。
+  指します。各ベストのリプレイとゴーストにすぐたどれます。ミス数は、クリア・落ちた・投げたに関係なく
+  すべてのプレイを対象にします。
 - **スコアの履歴**: 送信はすべて保存するので、推移のグラフや「伸びた譜面」の一覧はそのまま作れます。
 - **プレイの非表示**: プレイヤーは自分のプレイを非表示にでき（`PATCH /api/v0/scores/:id`）、表示に戻すこともできます。
   非表示のプレイは保存したまま、ランキング・自己ベスト（表示中のプレイから作り直します）・集計・すべてのリストから外れ、
@@ -255,12 +263,12 @@ play document の位置とタイムラインから、エンジンと一致する
   つなぐこともできないので、これらのステージには譜面そのものが要ります。サーバーはプレイの検証に読むだけで、保存
   しません。冪等性、レート制限、サインイン、サイズの上限は単曲と同じです。送信 ID は、コースのフィンガープリントと、
   遊んだステージそれぞれを単曲の送信 ID と同じ方法で表したもののハッシュです（NONSTOP ではつないだプレイを使う）。
-- **検証。** 遊んだステージはそれぞれ単曲と同じ確認を通ります（5.2 節と 5.3 節: オートプレイと ESC 中断の拒否、
+- **検証。** 遊んだステージはそれぞれ単曲と同じ確認を通ります（5.2 節と 5.3 節: オートプレイの拒否、
   フィンガープリントのドキュメント、譜面の登録、outcome の合成）。ここではコースのステージであることが条件で、拒否の
   理由にはなりません。ステージはすべて同じルールセットで判定され、コースの制約（ゲージ表、判定の制約、コースが許す
   レーンオプション）に従い、前のステージを計算し直して残った状態（ゲージ、コースのコンボ、コースの最大コンボ。最初の
   ステージは何も引き継がない）をそのまま引き継いでいる必要があります。プレイは `simulateCourseReplay` で `lr2`、
-  `beatoraja`、`iidx` の下で計算し直し、クライアントがキャッシュした結果は使いません。
+  `beatoraja`、`____` の下で計算し直し、クライアントがキャッシュした結果は使いません。
 - **到達しなかったステージ。** そのノートは BP に数えるので、ノート数をクライアントの申告に任せません。到達しなかった
   ステージの譜面は必須で（`stage-chart-required`）、ログがそのステージに記録した譜面フィンガープリントになる必要が
   あり（`stage-chart-fingerprint-mismatch`。これがコースのキーにもなる）、クライアント自身が使う
@@ -274,17 +282,18 @@ play document の位置とタイムラインから、エンジンと一致する
   到達しなかったステージのノートを BP に数えます。それより前のステージの ESC 中断は、これまでどおり `aborted` として
   拒否します。
 - **テンポを変えたプレイは順位付けしません。** コースも単曲と同じくテンポを変えて遊べますが、そのプレイは単曲と
-  同じく `tempo` として拒否します（最初のそうしたステージを示します。NONSTOP ではつないだプレイを見ます）。
+  同じく `tempo` としてランキング対象外で保存します（どのステージでも。NONSTOP ではつないだプレイを見ます）。
+  コースのベストは動かさず、コースのランキングとすべてのリストから外れます。
 - **公開されていないコースは順位付けしません。** beatoraja の `release: false` のコース（抽選したランダムコースと
   コースメーカーで作ったコースもこれに当たります）は、コースのログにそのことを記録し（`course.release: false`）、beatoraja が IR に送らないのと
-  同じく `unreleased` として拒否します。
+  同じく `unreleased` としてランキング対象外で保存します。
 - **NONSTOP のプレイ。** NONSTOP コースはつないだ 1 本の譜面として遊び、判定して順位を付けるのはそのプレイ
   （`nonstop.replay`）です。サーバーはステージの譜面から、クライアントとまったく同じようにつないだ譜面を作り直し
   ます。両者は同じ決定的な処理（`@be-music/player-engine/course` の `prepareNonstopCourse`。
   [コースと段位認定](./course.ja.md#nonstop-コース) を参照）を使います。各ステージの譜面はそのステージの譜面
   フィンガープリントになる必要があり、ステージが記録した `#RANDOM` の抽選結果（`nonstop.stages[].randomDraws`）で
-  解決し、コースの LN 制約を当て、記録したつなぎ方・配置・結合規則の版（`nonstop.stitch`。ないときは版 1。
-  サーバーの知らない版は `nonstop-stitch-unsupported`）でつなぎます。つないだプレイはその譜面で記録されたもの
+  解決し、コースの LN 制約を当て、記録したつなぎ方・配置・結合規則のバージョン（`nonstop.stitch`。ないときはバージョン 1。
+  サーバーの知らないバージョンは `nonstop-stitch-unsupported`）でつなぎます。つないだプレイはその譜面で記録されたもの
   でなければならず（プレイフィンガープリントが作り直した譜面のものと一致する。`nonstop-chart-mismatch`）、ステージの
   対応も作り直したもの（`resolveNonstopRun`）と一致する必要があります。ステージの配置、各ノーツのステージ、プレイが
   到達したステージ数です（`nonstop-stage-mismatch`）。つないだプレイは単曲と同じ対象確認を通り、コースの制約に従う必要があります。すべての
@@ -329,7 +338,7 @@ sequenceDiagram
     end
     A->>A: プレイしたルールセットで simulateCourseReplay
     A->>A: 制約、引き継ぎ、落ちたか投げたか
-    A->>A: lr2、beatoraja、iidx で simulateCourseReplay
+    A->>A: lr2、beatoraja、____ で simulateCourseReplay
     A->>R: PUT コースのリプレイ、新しい譜面ドキュメント
     A->>D: batch: 譜面、コース、コースのスコアと結果、コースのベスト
     A-->>C: 201 { courseScoreId, courseFingerprint, results, ranks }
@@ -343,7 +352,7 @@ flowchart TD
   fp -->|はい| prepare
   subgraph prepare["prepareNonstopCourse"]
     resolve["記録した抽選結果で<br/>解決"] --> ln["ロングノート制約"]
-    ln --> stitch["つなぐ：つなぎ方、<br/>配置、版"]
+    ln --> stitch["つなぐ：つなぎ方、<br/>配置、バージョン"]
   end
   prepare --> same{"プレイフィンガープリントが<br/>nonstop.replay と一致するか"}
   same -->|はい| map{"ステージの対応が<br/>resolveNonstopRun と一致するか"}
@@ -360,7 +369,7 @@ charts          (chart_fp PK, title, artist, note_count, play_fps JSON, status, 
 chart_aliases   (kind, hash, chart_fp)                         -- kind: sha256 | md5
 scores          (id PK, submission_id UNIQUE, user_id, chart_fp, play_fp, played_ruleset, gauge,
                  assist_flags, failed, recorded_by JSON, submitted_by, server_engine, replay_key,
-                 ghost_key, og_key, replay_visibility, created_at)
+                 ghost_key, og_key, replay_visibility, hidden, unranked, created_at)  -- unranked: 0017
 score_results   (score_id, ruleset, ruleset_revision, ex_score, clear_lamp, miss_count,
                  max_combo, judges JSON)                       -- PK(score_id, ruleset)
 best_scores     (user_id, chart_fp, ruleset, assisted,         -- PK
@@ -375,7 +384,7 @@ client_policies (name, min_version, blocked_versions JSON)
 course          (course_fp PK, name, kind, constraints JSON, stage_chart_fps JSON, created_at)
 course_score    (id PK, submission_id UNIQUE, user_id, course_fp, played_ruleset, gauge, assisted,
                  assist_flags, verification, stages_played, recorded_by JSON, submitted_by,
-                 server_engine, replay_key, hidden, created_at)
+                 server_engine, replay_key, hidden, unranked, created_at)
 course_score_result (course_score_id, ruleset, ruleset_revision, ex_score, note_count, clear_lamp,
                  miss_count, max_combo, stages_played, trophy, trophy_rank, gauge_type, gauge_final,
                  judges JSON, stages JSON)
@@ -468,7 +477,7 @@ Tailwind CSS v4 と Basecoat（フレームワークのランタイムなしの 
 - `/courses/:courseFp` — コースのランキング（各プレイヤーのベスト EX スコア、ランプ、BP、トロフィー。アシストありのプレイと匿名プレイヤーは譜面のページと同じスイッチで切り替え）、譜面のページへリンクしたステージ、プレイ数とランプの分布、詳細（種類、制約）。アカウントを持つプレイヤーが誰も遊んでいないコースは検索エンジンに載せません
 - `/course-scores/:id` — コースのプレイをすべてのルールセットで（到達したステージ数、トロフィー）、表示ルールセットでステージごとに（判定、BP、各ステージが引き継いだゲージ、到達しなかったステージ）表示し、リプレイと、本人には非表示にするスイッチを付けます。トップページはプレイの下に最新のコースのプレイを並べます
 
-どのページも、ヘッダーで選んで Cookie に保存する 1 つの**表示ルールセット**（LR2、beatoraja、IIDX）で値を表示し、
+どのページも、ヘッダーで選んで Cookie に保存する 1 つの**表示ルールセット**（LR2、beatoraja、名前を言ってはいけないあのゲーム）で値を表示し、
 プレイ自体のルールセットは「played with」として併記します。切り替えは専用の URL（`/ruleset/:id?next=…`。
 戻り先は Leaderboard のページに限る）で行うので、ページの URL を共有しても、開いた人の設定は変わりません。ページが
 Cookie に依存するので、`Cache-Control: private, max-age=0` を返します。譜面のページには、既知のファイルごとに、BMS Search 自身が使う形式で他のサイトへのリンクを置きます。ファイルの
@@ -498,6 +507,13 @@ SHA-256 で Mocha-Repository、MinIR、BMS Search（`/patterns/{sha256}`）を�
   サイト名の下に描きます。文書が
   ない、レーンモードがわからない、レーンが 16 本を超える（24 / 48 KEY）ときは、これまでの飾りのノーツのままです。
   `#RANDOM` のある譜面はどの分岐にも共通するノーツを描き、プレイのレーンオプションにかかわらず譜面どおりに描きます。
+- **コースのプレイにもカードがあります**（`client/course-card.ts`）。プレイした本人のブラウザが同じように描いて
+  アップロードし（`PUT /api/v0/course-scores/{id}/card`）、`/course-scores/{id}/card` で配信します。スコアのカードと
+  同じグリッドで、見出しにコース名、種類（GRADE / EXPERT / NONSTOP COURSE）、到達したステージ数とトロフィーを
+  出し、リザルト、ピル、判定数、フッターはスコアのカードと同じです。右側のパネルにはプレイフィールドの代わりに
+  ステージの一覧を出します。各譜面のタイトルとそのステージのレートに、クリアしたステージは明るい色、落ちた
+  ステージは赤、到達しなかったステージは暗い色のバーを添えます。入りきらない（5 行を超える）コースは、最後の行で
+  残りの数を示します。
 - **メタタグ**をすべてのページに出します。絶対 URL の `og:image`、`og:image:width` / `height`、
   `twitter:card=summary_large_image`。
 - **セーフエリア**（`src/pages/share-card-safe-area.ts`）: リンクプレビューはカードの上に描き、端を切り落とすので、
@@ -566,4 +582,4 @@ SHA-256 で Mocha-Repository、MinIR、BMS Search（`/patterns/{sha256}`）を�
   フィンガープリントに含まれない部分（キー音、BGM のオブジェクト、ファイル上のオブジェクト行の順序）は信用する
   しかない。BGM と行の順序は NONSTOP のステージの配置を動かすので、偽れば、つないだ譜面の間隔を変えられる（ただし、
   その譜面でプレイを記録している必要がある）。単曲（L5）と同じく、つないだプレイのノーツは、プレイフィンガープリント
-  以上には作り直した譜面と比べない。コースのプレイの共有カードはまだない。
+  以上には作り直した譜面と比べない。

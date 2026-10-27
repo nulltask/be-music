@@ -1,5 +1,25 @@
 # @be-music/chart-parser
 
+## 0.5.0
+
+### Minor Changes
+
+- 29e69c6: Add `parseBMSBytes` and keep the leading bytes of each `#WAV` file name (`bms.wavNameBytePrefixes`), by which LR2 groups a chart's sounds into families for EXTRA MODE and SP TO DP.
+
+### Patch Changes
+
+- 69df53c: Preserve extended bmson resource keys, source-audio slice coordinates and explicit TOTAL units when reading Be-Music JSON for stitched NONSTOP charts.
+- Updated dependencies [a83e326]
+- Updated dependencies [69df53c]
+- Updated dependencies [f994ec4]
+- Updated dependencies [c52d77d]
+- Updated dependencies [69df53c]
+- Updated dependencies [29e69c6]
+- Updated dependencies [2e435b9]
+  - @be-music/chart-model@0.7.0
+  - @be-music/chart-source@0.5.0
+  - @be-music/shared-utils@0.6.0
+
 ## 0.4.0
 
 ### Minor Changes

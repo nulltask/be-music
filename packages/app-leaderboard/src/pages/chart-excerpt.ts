@@ -28,11 +28,11 @@ export interface ExcerptLane {
 }
 
 /**
- * How the lanes share the playfield's width, as the Synesthesia skin lays them out: `iidx` gives each lane a fixed
+ * How the lanes share the playfield's width, as the Synesthesia skin lays them out: `____` gives each lane a fixed
  * width by kind (scratch, white key, blue key) and parts double play's banks; `shared` splits one side's width evenly
  * (9 KEY).
  */
-export type ExcerptLaneWidths = 'iidx' | 'shared';
+export type ExcerptLaneWidths = '____' | 'shared';
 
 /** The excerpt a score card draws: its lanes left to right, and the window's notes and bar lines. */
 export interface ChartExcerpt {
@@ -50,8 +50,8 @@ export interface ChartExcerpt {
  * The Synesthesia skin's playfield in its design pixels (the standard landscape layout,
  * `resolveGameplayLaneGeometry` in packages/player-skin-sdk/src/touch-layout.ts). Mirrored rather than imported: the skin SDK
  * pulls in the player package, which neither the Worker nor the card's client script bundles.
- * - lane widths by kind: `IIDX_LANE_WIDTHS` (packages/player-skin-sdk/src/lane-geometry.ts:21), used for 5 / 7 / 10 / 14 KEY;
- * - the gap between double play's banks: `IIDX_DP_SIDE_GAP` (packages/player-skin-sdk/src/lane-geometry.ts:28);
+ * - lane widths by kind: `_____LANE_WIDTHS` (packages/player-skin-sdk/src/lane-geometry.ts:21), used for 5 / 7 / 10 / 14 KEY;
+ * - the gap between double play's banks: `_____DP_SIDE_GAP` (packages/player-skin-sdk/src/lane-geometry.ts:28);
  * - one side's width (shared out evenly in 9 KEY) and the playfield's height from its top to the judgement line:
  *   `PLAYFIELD` (packages/player-skin-sdk/src/playfield.ts:6, `w: 194`, `y: 0`, `judgementY: 321`).
  */

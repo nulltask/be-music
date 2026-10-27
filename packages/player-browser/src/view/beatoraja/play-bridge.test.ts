@@ -16,6 +16,7 @@ import {
 } from '@be-music/player-scene-model';
 import { describe, expect, it } from 'vite-plus/test';
 import {
+  BEATORAJA_NUM,
   BEATORAJA_OP,
   bombTimerId,
   comboTimerId,
@@ -51,6 +52,8 @@ interface TestEngineFrame {
   readonly currentBeat?: number;
   readonly totalSeconds?: number;
   readonly reversalSeconds?: number;
+  readonly hcnLanes?: BeatorajaPlayEngineInput['hcnLanes'];
+  readonly judgedNoteCount?: number;
   readonly summary?: Partial<BeatorajaPlaySummaryInput>;
 }
 
@@ -59,6 +62,8 @@ function engineOf(frame: TestEngineFrame): BeatorajaPlayEngineInput {
     currentSeconds: frame.currentSeconds ?? 0,
     currentBeat: frame.currentBeat ?? 0,
     totalSeconds: frame.totalSeconds ?? 100,
+    hcnLanes: frame.hcnLanes,
+    judgedNoteCount: frame.judgedNoteCount,
     ...(frame.reversalSeconds !== undefined ? { reversalSeconds: frame.reversalSeconds } : {}),
     summary: {
       total: 0,
@@ -184,18 +189,33 @@ describe('BeatorajaPlayBridge — construction', () => {
     bridge.update({ nowMs: 900, state, events: [{ kind: 'scene-start', atMs: 900 }] });
     expect(bridge.getTimerStart(TIMER_SCENE_START)).toBe(250);
   });
+
+  it('lights OPTION_CONSTANT (400) while the frame carries Visual CONSTANT on', () => {
+    const bridge = new BeatorajaPlayBridge({ chartPlayVariant: '7', baseOps: new Set() });
+    const state = createPlayState();
+    bridge.update({ nowMs: 0, state, events: [] });
+    expect(bridge.hasOp(BEATORAJA_OP.CONSTANT)).toBe(false);
+    bridge.update({ nowMs: 16, state, events: [], visualConstant: true });
+    expect(bridge.hasOp(BEATORAJA_OP.CONSTANT)).toBe(true);
+    bridge.update({ nowMs: 32, state, events: [], visualConstant: false });
+    expect(bridge.hasOp(BEATORAJA_OP.CONSTANT)).toBe(false);
+  });
 });
 
 describe('BeatorajaPlayBridge — built-in timers', () => {
-  it('stamps `startinput` / `ready` / `play` at load-end, flips the loading gate, and `fadeout` at the exit fade', () => {
+  it('stamps input, READY and PLAY at their own stages, and fadeout at exit', () => {
     // The adapter stamped them as the engine came up (its input bus, then its start); the play session raises one
-    // `load-end` moment when the play has loaded and is about to start, and the three start then.
+    // The session raises each stage independently; READY precedes chart time.
     const { bridge, advance, update } = createHarness();
     advance(120);
     update([{ kind: 'load-end', atMs: 120 }]);
-    expect(bridge.getTimerStart(TIMER_STARTINPUT)).toBe(120);
+    expect(bridge.getTimerStart(TIMER_STARTINPUT)).toBeUndefined();
     expect(bridge.getTimerStart(TIMER_READY)).toBe(120);
-    expect(bridge.getTimerStart(TIMER_PLAY)).toBe(120);
+    expect(bridge.getTimerStart(TIMER_PLAY)).toBeUndefined();
+    update([{ kind: 'input-start', atMs: 150 }]);
+    expect(bridge.getTimerStart(TIMER_STARTINPUT)).toBe(150);
+    update([{ kind: 'play-start', atMs: 1120 }]);
+    expect(bridge.getTimerStart(TIMER_PLAY)).toBe(1120);
     expect(bridge.hasOp(BEATORAJA_OP.NOW_LOADING)).toBe(false);
     expect(bridge.hasOp(BEATORAJA_OP.LOADED)).toBe(true);
 
@@ -205,6 +225,26 @@ describe('BeatorajaPlayBridge — built-in timers', () => {
     // A second fade (the engine's stop after the held outro) does not restart it.
     update([{ kind: 'exit-fade-out', atMs: 62_000 }]);
     expect(bridge.getTimerStart(TIMER_FADEOUT)).toBe(61_420);
+  });
+
+  it('keeps PLAY elapsed time on the chart clock through tempo changes and seeks', () => {
+    const { bridge, update, advance, frame } = createHarness();
+    frame({ currentSeconds: -1 });
+    expect(bridge.getTimerStart(TIMER_PLAY)).toBeUndefined();
+    update([{ kind: 'play-start', atMs: 0 }]);
+    advance(1000);
+    frame({ currentSeconds: 2 });
+    expect(1000 - bridge.getTimerStart(TIMER_PLAY)!).toBe(2000);
+    advance(1000);
+    frame({ currentSeconds: 2.5 });
+    expect(2000 - bridge.getTimerStart(TIMER_PLAY)!).toBe(2500);
+    // A seek or pause is represented by the engine's chart clock too.
+    advance(1000);
+    frame({ currentSeconds: 1 });
+    expect(3000 - bridge.getTimerStart(TIMER_PLAY)!).toBe(1000);
+    advance(1000);
+    frame({ currentSeconds: 1 });
+    expect(4000 - bridge.getTimerStart(TIMER_PLAY)!).toBe(1000);
   });
 
   it('starts `TIMER_FAILED` (3), not `fadeout`, as a failed play stops', () => {
@@ -450,6 +490,39 @@ describe('BeatorajaPlayBridge — lane events', () => {
     expect(harness.bridge.getTimerStart(59)).toBe(100);
     expect(harness.bridge.getTimerStart(66)).toBeUndefined();
     expect(harness.bridge.getTimerStart(69)).toBeUndefined();
+  });
+});
+
+describe('BeatorajaPlayBridge — seek', () => {
+  it("stops the judgments' and the lanes' timers and ops, keeps the scene's, and lets the once-per-play ones start again", () => {
+    const harness = createHarness();
+    harness.update([
+      { kind: 'load-end', atMs: 0 },
+      { kind: 'play-start', atMs: 1000 },
+    ]);
+    harness.advance(100);
+    harness.command({ kind: 'press-lane', channel: '13' });
+    harness.judge({ judge: 'PERFECT', combo: 1, channel: '13' });
+    harness.command({ kind: 'hold-lane-until-beat', channel: '14', beat: 8 });
+    expect(harness.bridge.getTimerStart(judgeTimerId(1))).toBe(100);
+    expect(harness.bridge.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(true);
+    expect(harness.bridge.isLaneLNHeld('14')).toBe(true);
+    harness.advance(100);
+    harness.update([{ kind: 'seek', seconds: 2, gauge: 50, judgments: [], atMs: 200 }]);
+    for (const timer of [
+      judgeTimerId(1),
+      comboTimerId(1),
+      bombTimerId(1, 3)!,
+      keyOnTimerId(1, 3)!,
+      lnHoldTimerId(1, 4)!,
+    ]) {
+      expect(harness.bridge.getTimerStart(timer)).toBeUndefined();
+    }
+    expect(harness.bridge.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(false);
+    expect(harness.bridge.isLaneLNHeld('14')).toBe(false);
+    for (const timer of [TIMER_SCENE_START, TIMER_READY, TIMER_PLAY]) {
+      expect(harness.bridge.getTimerStart(timer)).toBeDefined();
+    }
   });
 });
 
@@ -1529,5 +1602,132 @@ describe('BeatorajaPlayBridge — chart TOTAL (368)', () => {
   it('falls back to the chart header before the first frame', () => {
     const { bridge } = createHarness({ chart: { metadata: { total: 320 } } as unknown as BeMusicJSON });
     expect(bridge.resolveNumberValue(368)).toBe(320);
+  });
+});
+
+describe('beatoraja animation timer producers', () => {
+  it('uses the judge HCN state for active/damage, rehold, end, DP and extended keys', () => {
+    const h = createHarness({ chartPlayVariant: '48' });
+    h.frame({ hcnLanes: [{ channel: '11', gaining: true }] });
+    expect(h.bridge.getTimerStart(251)).toBeDefined();
+    h.advance(100);
+    h.frame({ hcnLanes: [{ channel: '11', gaining: false }] });
+    expect(h.bridge.getTimerStart(251)).toBeUndefined();
+    expect(h.bridge.getTimerStart(271)).toBe(100);
+    h.advance(100);
+    h.frame({ hcnLanes: [{ channel: '11', gaining: true }] });
+    expect(h.bridge.getTimerStart(251)).toBe(200);
+    expect(h.bridge.getTimerStart(271)).toBeUndefined();
+    h.frame({ hcnLanes: [{ channel: '21', gaining: true }] });
+    expect(h.bridge.getTimerStart(261)).toBeDefined();
+    expect(h.bridge.getTimerStart(251)).toBeUndefined();
+    h.frame({ hcnLanes: [{ channel: '2Q', gaining: true }] });
+    expect(h.bridge.getTimerStart(1926)).toBeDefined();
+    h.frame({ hcnLanes: [{ channel: '2Q', gaining: false }] });
+    expect(h.bridge.getTimerStart(1926)).toBeUndefined();
+    expect(h.bridge.getTimerStart(2126)).toBeDefined();
+    h.frame({ hcnLanes: [] });
+    expect(h.bridge.getTimerStart(261)).toBeUndefined();
+    expect(h.bridge.getTimerStart(2126)).toBeUndefined();
+  });
+  it('starts score thresholds on a judgment, preserves their start and resets them on seek', () => {
+    const h = createHarness();
+    h.frame({ summary: { total: 27, exScore: 0 } });
+    expect(h.bridge.getTimerStart(351)).toBeUndefined();
+    h.advance(100);
+    h.judge({ judge: 'GREAT', combo: 1 });
+    h.frame({ judgedNoteCount: 1, summary: { total: 27, exScore: 36 } });
+    expect(h.bridge.getTimerStart(348)).toBe(100);
+    expect(h.bridge.getTimerStart(351)).toBe(100);
+    h.advance(100);
+    h.frame({ judgedNoteCount: 1, summary: { total: 27, exScore: 36 } });
+    expect(h.bridge.getTimerStart(348)).toBe(100);
+    h.frame({ judgedNoteCount: 0, summary: { total: 27, exScore: 0 } });
+    h.update([{ kind: 'seek', seconds: 0, gauge: 20, atMs: 200, judgments: [] }]);
+    expect(h.bridge.getTimerStart(348)).toBeUndefined();
+    expect(h.bridge.getTimerStart(351)).toBeUndefined();
+  });
+  it('starts MUSIC_END only at chart completion and stops neutral/dance timers', () => {
+    const h = createHarness();
+    h.update([
+      { kind: 'load-end', atMs: 0 },
+      { kind: 'play-start', atMs: 0 },
+    ]);
+    h.frame({ currentSeconds: 1, totalSeconds: 2 });
+    expect(h.bridge.getTimerStart(909)).toBeDefined();
+    expect(h.bridge.getTimerStart(908)).toBeUndefined();
+    h.advance(1000);
+    h.frame({ currentSeconds: 2, totalSeconds: 2 });
+    expect(h.bridge.getTimerStart(908)).toBeUndefined();
+    h.update([{ kind: 'music-end', atMs: 1000 }]);
+    expect(h.bridge.getTimerStart(908)).toBe(1000);
+    expect(h.bridge.getTimerStart(900)).toBeUndefined();
+    expect(h.bridge.getTimerStart(909)).toBeUndefined();
+    h.advance(1000);
+    h.frame({ currentSeconds: 3, totalSeconds: 2 });
+    expect(h.bridge.getTimerStart(908)).toBe(1000);
+  });
+});
+
+it('passes PMS raw gauge bounds to the skin and percentage to its number', () => {
+  const harness = createHarness({ chartPlayVariant: '9' });
+  harness.frame({ summary: { gauge: { current: 30, max: 120, clearThreshold: 85, type: 'NORMAL' } } });
+  expect(harness.bridge.resolveGaugeState()).toMatchObject({ value: 30, max: 120, border: 85 });
+  expect(harness.bridge.resolveGaugePercent()).toBe(25);
+});
+
+it('switches skin gauge frame conditions when the reported gauge changes', () => {
+  const harness = createHarness();
+  for (const [type, expected] of [
+    ['NORMAL', [42]],
+    ['HARD', [43]],
+    ['EX-HARD', [43, 1046]],
+    ['EASY', [42, 1046]],
+  ] as const) {
+    harness.frame({ summary: { gauge: { type, current: 50, max: 100 } } });
+    expect([42, 43, 1046].filter((op) => harness.bridge.hasOp(op))).toEqual(expected);
+  }
+});
+
+it('forwards the engine empty-POOR count to beatoraja play numbers', () => {
+  const harness = createHarness();
+  harness.frame({ summary: { bad: 2, poor: 3, emptyPoor: 7 } });
+  expect([BEATORAJA_NUM.POOR, 420, 426, 427].map((id) => harness.bridge.resolveNumberValue(id))).toEqual([
+    3, 7, 10, 12,
+  ]);
+});
+
+describe('BeatorajaPlayBridge — GAUGE_MAX intervals', () => {
+  it.each([100, 200])('stops and restarts the effect while preserving its age at max %s', (max) => {
+    const harness = createHarness();
+    const frame = (current: number) =>
+      harness.frame({
+        summary: {
+          gauge: {
+            type: 'NORMAL',
+            current,
+            max,
+            clearThreshold: 80,
+            effectiveTotal: 160,
+          },
+        },
+      });
+    harness.advance(100);
+    frame(max - 1);
+    expect(harness.bridge.getTimerStart(44)).toBeUndefined();
+    harness.advance(100);
+    frame(max);
+    expect(harness.bridge.getTimerStart(44)).toBe(200);
+    harness.advance(100);
+    frame(max);
+    expect(harness.bridge.getTimerStart(44)).toBe(200);
+    harness.advance(100);
+    frame(max - 1);
+    expect(harness.bridge.getTimerStart(44)).toBeUndefined();
+    harness.advance(100);
+    frame(max);
+    expect(harness.bridge.getTimerStart(44)).toBe(500);
+    const fresh = createHarness();
+    expect(fresh.bridge.getTimerStart(44)).toBeUndefined();
   });
 });

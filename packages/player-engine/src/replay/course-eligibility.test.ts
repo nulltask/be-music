@@ -75,18 +75,18 @@ describe('checkCourseReplayEligibility', () => {
     });
   });
 
-  test('rejects a run of a course that is not released (beatoraja release: false, a drawn random course)', () => {
+  test('accepts a run of a course that is not released (beatoraja release: false, a drawn random course), unranked', () => {
     const log = courseLog([stage('bmfp0:a'), stage('bmfp0:b')]);
     log.course.release = false;
-    expect(checkCourseReplayEligibility(log)).toEqual({ eligible: false, reason: 'unreleased' });
+    expect(checkCourseReplayEligibility(log)).toMatchObject({ eligible: true, unranked: 'unreleased' });
   });
 
-  test('rejects a run with a stage played at another tempo, naming the stage', () => {
-    expect(checkCourseReplayEligibility(courseLog([stage('bmfp0:a', { tempo: 0.9 }), stage('bmfp0:b')]))).toEqual({
-      eligible: false,
-      reason: 'tempo',
-      stage: 0,
-    });
+  test('accepts a run with a stage played at another tempo, unranked', () => {
+    const slowed = checkCourseReplayEligibility(courseLog([stage('bmfp0:a', { tempo: 0.9 }), stage('bmfp0:b')]));
+    expect(slowed).toMatchObject({ eligible: true, unranked: 'tempo' });
+    expect(checkCourseReplayEligibility(courseLog([stage('bmfp0:a'), stage('bmfp0:b')]))).not.toHaveProperty(
+      'unranked',
+    );
   });
 
   test('accepts a course given up on its last played stage as a failed run, and no other abort', () => {

@@ -1,11 +1,14 @@
+import { autoPlay, manualPlay } from './test-support/node-audio-player.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 
 // The engine writes to a mocked Node audio sink (shared state in test-support/player-fixtures.ts).
-vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
+vi.mock('../../player-node-audio/src/audio-sink.ts', async () =>
+  (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule(),
+);
 
 import { createEmptyJSON } from '../../chart-source/src/index.ts';
 import { parseChart } from '../../chart-parser/src/index.ts';
-import { type AudioSession, autoPlay, type CreateAudioSessionContext, manualPlay } from './index.ts';
+import { type AudioSession, type CreateAudioSessionContext } from './index.ts';
 import { preparePlaybackChartData } from './core/bootstrap.ts';
 import {
   extractInvisiblePlayableNotes,
@@ -26,6 +29,63 @@ import {
 beforeEach(resetAudioSinkState);
 
 describe('player', () => {
+  test('player: AUTO play started partway counts the earlier notes and starts what still rings partway', async () => {
+    // BPM 240: a measure lasts 1 s. Notes at 1 s, 2 s, 3 s and 4 s; background sounds at 1 s and 3 s.
+    const json = createEmptyJSON('bms');
+    json.metadata.bpm = 240;
+    json.resources.wav = {
+      '01': 'n1.wav',
+      '02': 'n2.wav',
+      '03': 'n3.wav',
+      '04': 'n4.wav',
+      '05': 'bgm1.wav',
+      '06': 'bgm3.wav',
+    };
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 2, channel: '11', position: [0, 1] as const, value: '02' },
+      { measure: 3, channel: '11', position: [0, 1] as const, value: '03' },
+      { measure: 4, channel: '11', position: [0, 1] as const, value: '04' },
+      { measure: 1, channel: '01', position: [0, 1] as const, value: '05' },
+      { measure: 3, channel: '01', position: [0, 1] as const, value: '06' },
+    ];
+    const triggered: string[] = [];
+    const startedPartway: [string, number][] = [];
+    const summary = await autoPlay(json, {
+      speed: 4,
+      leadInMs: 0,
+      startAtSeconds: 2.5,
+      audio: true,
+      tui: false,
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggered.push(event.value);
+        },
+        triggerEventAt: (event, offsetSeconds) => {
+          startedPartway.push([event.value, Math.round(offsetSeconds * 100) / 100]);
+        },
+        stopChannel: () => undefined,
+      }),
+      createInputRuntime: createScheduledInputRuntime([]),
+    });
+
+    expect([...startedPartway].sort(([a], [b]) => a.localeCompare(b))).toEqual([
+      ['01', 1.5],
+      ['02', 0.5],
+      ['05', 1.5],
+    ]);
+    expect([...triggered].sort((a, b) => a.localeCompare(b))).toEqual(['03', '04', '06']);
+    expect(summary.perfect).toBe(4);
+    expect(summary.exScore).toBe(8);
+  });
+
   test('player: LR2 negative BPM freezes autoplay judging and audio at the reversal', async () => {
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
@@ -222,9 +282,8 @@ describe('player', () => {
     expect(audioSinkState.writes.length).toBe(0);
   });
 
-  test('player: falls back to the bundled Node sink when createAudioSession returns undefined', async () => {
-    // Returning `undefined` from the factory must be treated as "no opinion" so a runtime can probe optional
-    // backends without forfeiting the default sink. The Node sink mock should still receive writes in this path.
+  test('player: continues silently when createAudioSession returns undefined', async () => {
+    // An unavailable adapter leaves playback silent; the engine must not create a Node sink.
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
@@ -245,7 +304,7 @@ describe('player', () => {
     });
 
     expect(factoryCalls).toBe(1);
-    expect(audioSinkState.writes.length).toBeGreaterThan(0);
+    expect(audioSinkState.writes.length).toBe(0);
   });
 
   test('player: manual landmine hit sounds #WAV00 when audio is enabled', async () => {
@@ -664,7 +723,7 @@ describe('player', () => {
     expect(summary.total).toBe(1);
   });
 
-  test('player: FREE ZONE (17 / 27) only applies to the IIDX families', () => {
+  test('player: FREE ZONE (17 / 27) only applies to the That-Which-Must-Not-Be-Named families', () => {
     const createChart = (channels: string[]) => {
       const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
@@ -672,9 +731,9 @@ describe('player', () => {
       return json;
     };
 
-    // IIDX 7 KEY — `17` keeps the quarter-note FREE ZONE tail.
-    const iidx = extractPlayableNotes(createChart(['11', '17', '18']));
-    expect(iidx.find((note) => note.channel === '17')?.endBeat).toBeCloseTo(1, 6);
+    // That-Which-Must-Not-Be-Named 7 KEY — `17` keeps the quarter-note FREE ZONE tail.
+    const ____ = extractPlayableNotes(createChart(['11', '17', '18']));
+    expect(____.find((note) => note.channel === '17')?.endBeat).toBeCloseTo(1, 6);
 
     // 24 KEY — `17` is lane 7 of the keyboard bank, so it stays an ordinary tap. Classified from the
     // chart's own extended lane channel, without the host passing a variant.

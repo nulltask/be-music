@@ -48,4 +48,46 @@ describe('createRealtimeAudioCursor', () => {
     cursor.triggerUntil(10);
     expect(cursor.done).toBe(true);
   });
+
+  test('seeks forward past the items due by then, handing each one how long ago it was due', () => {
+    const fired: number[] = [];
+    const ringing: [number, number][] = [];
+    const cursor = createRealtimeAudioCursor(items, (item) => fired.push(item.seconds));
+    cursor.seek(1.25, (item, offsetSeconds) => ringing.push([item.seconds, offsetSeconds]));
+    expect(fired).toEqual([]);
+    expect(ringing).toEqual([
+      [0, 1.25],
+      [0.5, 0.75],
+      [0.5, 0.75],
+      [1, 0.25],
+    ]);
+    cursor.triggerUntil(5);
+    expect(fired).toEqual([2]);
+  });
+
+  test('seeks backwards: the items after the new reference fire again', () => {
+    const fired: number[] = [];
+    const ringing: number[] = [];
+    const cursor = createRealtimeAudioCursor(items, (item) => fired.push(item.seconds));
+    cursor.triggerUntil(5);
+    expect(cursor.done).toBe(true);
+    cursor.seek(0.6, (item) => ringing.push(item.seconds));
+    expect(ringing).toEqual([0, 0.5, 0.5]);
+    expect(cursor.done).toBe(false);
+    cursor.triggerUntil(5);
+    expect(fired).toEqual([0, 0.5, 0.5, 1, 2, 1, 2]);
+  });
+
+  test('a seek without a callback fires the items it passes, from the start, under the clamp', () => {
+    const fired: number[] = [];
+    const cursor = createRealtimeAudioCursor(
+      items,
+      (item) => fired.push(item.seconds),
+      (seconds) => Math.min(seconds, 0.9),
+    );
+    cursor.seek(1.5);
+    expect(fired).toEqual([0, 0.5, 0.5]);
+    cursor.seek(0.2);
+    expect(fired).toEqual([0, 0.5, 0.5, 0]);
+  });
 });

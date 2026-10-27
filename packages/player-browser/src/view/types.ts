@@ -8,7 +8,12 @@
  */
 
 import type { BeMusicJSON } from '@be-music/chart-source';
-import type { CourseDraft, NonstopConnection } from '@be-music/player-engine/course';
+import type {
+  CourseDraft,
+  LR2RandomMixSetting,
+  LR2RandomMixSettings,
+  NonstopConnection,
+} from '@be-music/player-engine/course';
 import type { BeMusicAudioFrame, BeMusicCourseBestRecord, BeMusicChartBestRecord } from '@be-music/player-skin-sdk';
 import type {
   BrowseCommand,
@@ -25,6 +30,7 @@ import type {
   PlayResult,
   PlaySide,
   PlayState,
+  ReplaySlotState,
   ResultPresentation,
 } from '@be-music/player-scene-model';
 import type { Container, Sprite, Texture } from 'pixi.js';
@@ -62,6 +68,8 @@ export interface FamilyView<Frame, Intent> {
    * host captures the whole stage.
    */
   getStageInfo?(): { container: Container; width: number; height: number };
+  /** `false` when every screen the view shows is DOM, so the host can take its canvas out (`PixiScene.drawsOnCanvas`). */
+  readonly drawsOnCanvas?: boolean;
 }
 
 /** When a frame is drawn. */
@@ -101,6 +109,11 @@ export interface SceneViewTiming {
 export interface SelectRecords {
   chart(chart: LibraryChart): BeMusicChartBestRecord | undefined;
   course(course: LibraryCourse): BeMusicCourseBestRecord | undefined;
+  /**
+   * Which of a chart's or course's replay slots hold a replay (`REPLAY_SLOT_COUNT` of them), when the host keeps replay
+   * slots: the screen picks one for REPLAY, and a beatoraja skin lights their ops.
+   */
+  replaySlots?(entry: Exclude<LibraryEntry, { kind: 'folder' }>): readonly boolean[];
 }
 
 /**
@@ -124,12 +137,14 @@ export interface SelectCourseMakerState {
   readonly draft?: CourseDraft;
   /** The connection a new NONSTOP course gets. */
   readonly defaultConnection: NonstopConnection;
+  /** The RANDOM MIX settings, when the host lists RANDOM MIX bars (LR2's texts 190-196, buttons 260-266). */
+  readonly randomMixSettings?: LR2RandomMixSettings;
 }
 
 /**
  * What the player asks of the course maker: name the course being made (or their own course under the cursor),
  * delete their course under the cursor, finish or cancel the course being made, or step a connection of their NONSTOP
- * course under the cursor (`slot`, after stage `slot + 1`) or the default one.
+ * course under the cursor (`slot`, after stage `slot + 1`) or the default one, or step a RANDOM MIX setting.
  */
 export type SelectCourseMakerAction =
   | { readonly kind: 'name' }
@@ -137,7 +152,8 @@ export type SelectCourseMakerAction =
   | { readonly kind: 'finish' }
   | { readonly kind: 'cancel' }
   | { readonly kind: 'connection'; readonly slot: number; readonly step: 1 | -1 }
-  | { readonly kind: 'default-connection'; readonly step: 1 | -1 };
+  | { readonly kind: 'default-connection'; readonly step: 1 | -1 }
+  | { readonly kind: 'random-mix'; readonly setting: LR2RandomMixSetting; readonly step: 1 | -1 };
 
 /** What the select screen draws. */
 export interface SelectFrame {
@@ -161,12 +177,19 @@ export interface SelectFrame {
   readonly records: SelectRecords;
   /** The host's text field is over the search box: the skin leaves the query to it. */
   readonly searchEditing: boolean;
+  /** Why the chart filter expression searched for (`?…`) does not parse; the list is not filtered meanwhile. */
+  readonly searchError?: string;
   /** When the player started the bar under the cursor: a skin's launch outro counts from it, and input waits. */
   readonly startedAtMs?: number;
   /** The README overlay: the text file shown for a chart. */
   readonly readText?: { readonly chart: LibraryChart; readonly text: string };
   /** The course maker, when the player makes courses (LR2's course-maker ops, texts and buttons). */
   readonly courseMaker?: SelectCourseMakerState;
+  /**
+   * The replay slots of the chart or course under the cursor, when the host keeps replay slots: which hold a replay,
+   * and the one REPLAY plays (−1 for none), as beatoraja's select screen picks it.
+   */
+  readonly replaySlots?: { readonly exists: readonly boolean[]; readonly selected: number };
   /** The screen's music (BGM and chart preview), analysed for audio-reactive skins. */
   readonly audio: BeMusicAudioFrame;
 }
@@ -179,6 +202,13 @@ export type SelectIntent =
   | { readonly type: 'activate' }
   /** Play the chart or course under the cursor (in AUTO with `autoPlay`): a skin's PLAY and AUTO buttons. */
   | { readonly type: 'start'; readonly autoPlay?: boolean }
+  /**
+   * Replay the chart or course under the cursor from replay slot `slot` (a skin's replay buttons), or from the slot
+   * picked when no slot is named (the REPLAY key); a slot that holds no replay starts nothing.
+   */
+  | { readonly type: 'replay'; readonly slot?: number }
+  /** Pick the next (`step` 1) or previous (−1) replay slot holding a replay (beatoraja's NEXT / PREV_REPLAY). */
+  | { readonly type: 'replay-slot'; readonly step: 1 | -1 }
   /** Step a play option through its choices (`cyclePlayOptionValue`), or the hi-speed by its step. */
   | { readonly type: 'play-option'; readonly key: keyof PlayOptions; readonly step: number }
   /** Set a play option; a value outside its choices (or range) is ignored (`resolvePlayOptionValue`). */
@@ -200,6 +230,8 @@ export type SelectIntent =
 
 /** A skin family's drawing of the select screen. */
 export interface SelectView extends FamilyView<SelectFrame, SelectIntent> {
+  readonly ownsSearchInput?: boolean;
+  focusSearch?(): boolean;
   /** How long the skin's launch outro plays before a started chart is handed on, in ms; `0` for none. */
   readonly launchOutroMs: number;
   /**
@@ -272,7 +304,17 @@ export interface PlayfieldNote {
  * play clock.
  */
 export type PlayViewEvent =
-  | { readonly kind: 'scene-start' | 'load-end' | 'play-start' | 'exit-fade-out' | 'exit-close'; readonly atMs: number }
+  | {
+      readonly kind:
+        | 'scene-start'
+        | 'input-start'
+        | 'load-end'
+        | 'play-start'
+        | 'music-end'
+        | 'exit-fade-out'
+        | 'exit-close';
+      readonly atMs: number;
+    }
   | {
       readonly kind: 'judge';
       readonly judge: JudgmentKind;
@@ -301,7 +343,20 @@ export type PlayViewEvent =
   /** The POOR image shows (a miss at chart time `seconds`) or clears. */
   | { readonly kind: 'poor-bga'; readonly shown: boolean; readonly seconds?: number }
   /** The player's keys changed a view setting (the hi-speed, a lane cover): the frame's state has the new value. */
-  | { readonly kind: 'view-setting'; readonly setting: PlayViewSetting; readonly atMs: number };
+  | { readonly kind: 'view-setting'; readonly setting: PlayViewSetting; readonly atMs: number }
+  /**
+   * The play sought to chart second `seconds`, its gauge `gauge` percent there: what the view started for the judgments
+   * and the lanes before (skin timers, bombs, plates) is void; the frame's state is the one at `seconds`, `judgments` are
+   * the judgments before it (each at its chart second, with its timing when it has one), and the long notes held across
+   * it come again as `lane-hold` / `long-note-start` events.
+   */
+  | {
+      readonly kind: 'seek';
+      readonly seconds: number;
+      readonly gauge: number;
+      readonly judgments: readonly { readonly judge: string; readonly seconds: number; readonly deltaMs?: number }[];
+      readonly atMs: number;
+    };
 
 /**
  * A view setting the player's keys change during a play: the hi-speed, SUDDEN+ (`sudden`), the LIFT, HIDDEN+'s height
@@ -321,11 +376,17 @@ export interface PlayFrame {
   readonly playOptions: PlayOptions;
   /** The running play: gauge, score, combo, judgments, hi-speed and lane covers. */
   readonly state: PlayState;
+  /** The 2P player of a two-player play (LR2 BATTLE): its gauge, score, combo and judgments. */
+  readonly state2P?: PlayState;
+  /** Optional personal best and target EX scores for skin comparison animations; missing values mean zero. */
+  readonly scoreTargets?: { readonly bestEXScore?: number; readonly targetEXScore?: number };
   readonly stage: PlayStage;
   /** How far the play has loaded, 0..1, while loading. */
   readonly progress?: number;
   /** Chart time in seconds; negative during the intro. */
   readonly seconds: number;
+  /** Whether a `seek` intent moves the play now: an AUTO play or replay whose chart is running (paused or not). */
+  readonly seekable: boolean;
   /** The beat the playfield scrolls from (mirrored past an LR2 negative-BPM reversal). */
   readonly beat: number;
   /** The BPM shown now. */
@@ -365,11 +426,14 @@ export type PlayIntent =
   | { readonly type: 'hi-speed'; readonly command: HiSpeedCommand }
   /** Move or switch a lane cover (beatoraja's cover buttons and wheel). */
   | { readonly type: 'cover'; readonly command: LaneCoverCommand }
+  | { readonly type: 'constant-visibility'; readonly durationMs?: number; readonly fadeMs?: number }
   | { readonly type: 'pause' }
   /** Give the play up, as holding ESC does. */
   | { readonly type: 'quit' }
   /** Play the chart again from the start. */
-  | { readonly type: 'restart' };
+  | { readonly type: 'restart' }
+  /** Move an AUTO play or replay to chart second `seconds` (a preview's seek bar). */
+  | { readonly type: 'seek'; readonly seconds: number };
 
 /**
  * The play screen's timing as its skin authors it, in ms from scene start (LR2's `#LOADSTART` + `#LOADEND`,
@@ -380,10 +444,18 @@ export interface PlayViewTiming {
   readonly loadEndOffsetMs: number;
   /** When the chart begins; `0` uses the player's own intro length. */
   readonly playStartOffsetMs: number;
+  /** Optional input-ready stage, in milliseconds from scene start. */
+  readonly inputStartOffsetMs?: number;
+  /** When present, wait this long after actual load end, including media loading; zero starts immediately. */
+  readonly playStartAfterLoadEndMs?: number;
   /** The fade-out as the play ends; `0` skips it. */
   readonly fadeOutMs: number;
   /** The hold after the fade before the scene moves on; `0` skips it. */
   readonly closeMs: number;
+  /** Optional chart-time delay after the last note/event before the music-end stage. */
+  readonly musicEndDelayMs?: number;
+  /** Wall-clock hold after music end, before fade-out. */
+  readonly finishMarginMs?: number;
 }
 
 export interface PlayView extends FamilyView<PlayFrame, PlayIntent> {
@@ -416,14 +488,23 @@ export interface ResultFrame {
   readonly graphShownAtMs?: number;
   /** When the player pressed on to the record update, on the clock (LR2's timer 152). Absent until then. */
   readonly updateShownAtMs?: number;
+  /**
+   * Each replay slot of the chart (or the course) as this result sees it (beatoraja's ops 196-198 and 1196-1204), when
+   * the host keeps replay slots.
+   */
+  readonly replaySlots?: readonly ReplaySlotState[];
   readonly leaving?: SceneLeaving<'continue' | 'retry'>;
 }
 
 /**
  * What the player asks of the result screen: `continue` presses on, as Enter does (skip the graphs, show the record
- * update, then leave), and `retry` plays the chart again, as R does.
+ * update, then leave), `retry` plays the chart again, as R does, and `saveReplay` saves the play into a replay slot, as
+ * keys 1-4 and a beatoraja skin's replay buttons do.
  */
-export type ResultIntent = { readonly type: 'continue' } | { readonly type: 'retry' };
+export type ResultIntent =
+  | { readonly type: 'continue' }
+  | { readonly type: 'retry' }
+  | { readonly type: 'saveReplay'; readonly slot: number };
 
 /** When the result screen takes input and how it leaves, as its skin authors it. */
 export interface ResultViewTiming extends SceneViewTiming {
@@ -450,6 +531,9 @@ export interface PlayfieldStage {
 
 /** A lane's rect on the stage. `bottom` is the judgement line a note's bottom edge lands on. */
 export interface PlayfieldLaneRect {
+  /** Original judgement line before LIFT; preserves replay and white-number scale. */
+  readonly baseBottom?: number;
+  readonly scrollScale?: number;
   readonly x: number;
   readonly w: number;
   readonly top: number;
@@ -476,6 +560,8 @@ export interface PlayfieldMeasureLine {
   readonly x: number;
   readonly width: number;
   readonly height: number;
+  /** Authored top-edge offset from the note timing origin. Defaults to zero. */
+  readonly yOffset?: number;
   /** Applies the line's alpha, tint and blend to a placed sprite. */
   applyToSprite?(sprite: Sprite): void;
 }
@@ -503,8 +589,10 @@ export interface PlayfieldBGATarget {
  * family views") lists which member took over each one.
  */
 export interface PlayfieldSkin {
-  /** The design canvas: LR2's 640x480, a be-music skin's stage, a beatoraja skin's size. */
+  /** The skin's authored design canvas, fitted to the host viewport as a whole. */
   readonly stage: PlayfieldStage;
+  /** Design pixels per beat at hi-speed 1; defaults to the shared 640x480 baseline. */
+  readonly pixelsPerBeat?: number;
   /**
    * The skin draws the lane backgrounds, key beams and bombs itself; the playfield still lays out the lanes for the
    * notes, measure lines and covers.

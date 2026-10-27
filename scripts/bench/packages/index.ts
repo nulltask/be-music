@@ -1,3 +1,5 @@
+import { playerUIBenchmarkPackage, playerUIReactBenchmarkPackage, playerUIVueBenchmarkPackage } from './player-ui.ts';
+import { nodeAudioBenchmarkPackage } from './player-node-audio.ts';
 import {
   PACKAGE_NAMES,
   type BenchmarkPackageDefinition,
@@ -28,12 +30,16 @@ export const PACKAGE_DEFINITIONS: Record<PackageName, BenchmarkPackageDefinition
   'chart-editor': editorBenchmarkPackage,
   'chart-audio-renderer': audioRendererBenchmarkPackage,
   'player-engine': playerBenchmarkPackage,
+  'player-node-audio': nodeAudioBenchmarkPackage,
   'player-scene-model': sceneModelBenchmarkPackage,
   'player-terminal': playerTUIBenchmarkPackage,
   'skin-lr2': lr2SkinBenchmarkPackage,
   'skin-beatoraja': beatorajaSkinBenchmarkPackage,
   'player-skin-sdk': skinSDKBenchmarkPackage,
   'player-browser': playerWebCoreBenchmarkPackage,
+  'player-ui': playerUIBenchmarkPackage,
+  'player-ui-react': playerUIReactBenchmarkPackage,
+  'player-ui-vue': playerUIVueBenchmarkPackage,
 };
 
 export function registerAllExportsBenchmarkCases(define: DefineBenchmarkCase): void {

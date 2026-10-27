@@ -18,6 +18,16 @@ export const LR2_OP = {
   /** The selected bar can be played: a song, or a course whose stages are all present. */
   PLAYABLE_BAR: 5,
 
+  // ─── Battle (dst_option 10-13, OpenLR2 `GetOptionFlag_dst` L4522-L4551) ──────────────────────────────────────────
+  /** A double-play key filter, or D-BATTLE / SP TO DP. */
+  DOUBLE: 10,
+  /** BATTLE (two players). */
+  BATTLE: 11,
+  /** A double-play key filter, or BATTLE / D-BATTLE / SP TO DP. */
+  DOUBLE_OR_BATTLE: 12,
+  /** BATTLE, or a ghost battle. */
+  GHOST_BATTLE_OR_BATTLE: 13,
+
   // ─── Select: the option panels (OpenLR2 `LR2_skinobject.cpp` `GetOptionFlag_dst`) ───────────────────────────────
   /** No option panel is open. */
   NO_PANEL: 20,
@@ -285,6 +295,8 @@ export const LR2_OP = {
   JUDGE_1P_POOR: 245,
   /** The last 1P judgement was an empty POOR (a miss). */
   JUDGE_1P_MISS: 246,
+  /** The 2P gauge is at 0-9 %. Ops 250-260 are its ten-percent ranges. */
+  GAUGE_2P_0_9: 250,
   /** The last 2P judgement was a PERFECT. */
   JUDGE_2P_PERFECT: 261,
   /** The last 2P judgement was a GREAT. */

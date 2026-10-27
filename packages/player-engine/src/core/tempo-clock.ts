@@ -41,6 +41,12 @@ export interface TempoClock {
    * clock already made. Returns the play-clock milliseconds the change took effect at.
    */
   setTempoAtChartSeconds(chartSeconds: number, tempo: number): number;
+  /**
+   * Moves chart time to `chartSeconds` at play-clock time `clockMs` (a seek): the segments so far are dropped, and one
+   * segment at `tempo` (the tempo in force, when absent or unusable) starts there. Chart time runs on from it as before;
+   * {@link initialTempoMsAt} stays linear in chart time.
+   */
+  rebase(clockMs: number, chartSeconds: number, tempo?: number): void;
 }
 
 const isUsableTempo = (tempo: number): boolean => Number.isFinite(tempo) && tempo > 0;
@@ -49,6 +55,8 @@ const isUsableTempo = (tempo: number): boolean => Number.isFinite(tempo) && temp
 export function createTempoClock(initialTempo = 1): TempoClock {
   const startTempo = isUsableTempo(initialTempo) ? initialTempo : 1;
   const segments: TempoClockSegment[] = [{ clockMs: 0, chartSeconds: 0, tempo: startTempo }];
+  // Whether the first segment still is the play's own start (chart second 0 at play-clock 0, at the initial tempo).
+  let startsAtZero = true;
 
   const segmentAtClockMs = (clockMs: number): TempoClockSegment => {
     for (let index = segments.length - 1; index > 0; index -= 1) {
@@ -94,7 +102,7 @@ export function createTempoClock(initialTempo = 1): TempoClock {
     clockMsAt,
     initialTempoMsAt: (clockMs) => {
       const segment = segmentAtClockMs(clockMs);
-      if (segment === segments[0]) return clockMs;
+      if (startsAtZero && segment === segments[0]) return clockMs;
       return (chartSecondsAt(clockMs) * 1000) / startTempo;
     },
     setTempoAtClockMs: (clockMs, tempo) => {
@@ -112,6 +120,16 @@ export function createTempoClock(initialTempo = 1): TempoClock {
       if (!isUsableTempo(tempo) || tempo === last.tempo) return clockMs;
       append(clockMs, atSeconds, tempo);
       return clockMs;
+    },
+    rebase: (clockMs, chartSeconds, tempo) => {
+      const nextTempo = tempo !== undefined && isUsableTempo(tempo) ? tempo : segments[segments.length - 1]!.tempo;
+      segments.length = 0;
+      segments.push({
+        clockMs: Number.isFinite(clockMs) ? clockMs : 0,
+        chartSeconds: Number.isFinite(chartSeconds) ? Math.max(0, chartSeconds) : 0,
+        tempo: nextTempo,
+      });
+      startsAtZero = false;
     },
   };
 }

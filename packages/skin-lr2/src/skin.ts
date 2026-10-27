@@ -3,6 +3,7 @@ import { asLoadedBytes, readFilesIntoBytesMap } from './file-lookup.ts';
 import type { LR2SkinFileEntry, LR2SkinInputFile } from './file-lookup.ts';
 import {
   informationTypeToKind,
+  informationTypeToPlayVariant,
   isSkinPathOfKind,
   peekLR2SkinInformationType,
   scoreSkinPath,
@@ -35,7 +36,7 @@ import {
 } from './skin/elements.ts';
 import type { ParseContext } from './skin/parse-context.ts';
 import { readLR2Path } from './skin/read.ts';
-import type { LR2Skin } from './skin/types.ts';
+import type { LR2Skin, LR2SkinResources } from './skin/types.ts';
 
 export { resolveLR2AssetBytes } from './assets.ts';
 export { LR2_SPECIAL_GRAPHIC, isLR2SpecialGraphic } from './special-graphic.ts';
@@ -47,6 +48,8 @@ export type * from './skin/types.ts';
 export interface LoadLR2SkinOptions {
   /** Which kind of skin to load. Defaults to `'play'`. */
   kind?: LR2SkinKind;
+  /** Resource slots from the previous scene, for #IMAGE / #LR2FONT CONTINUE. */
+  resources?: LR2SkinResources;
   /**
    * For `kind: 'play'` only — biases the candidate scoring toward `play_<variant>.lr2skin`. Falls back to the default
    * scoring (7K-preferred) if no file matches the requested variant.
@@ -189,7 +192,10 @@ export function loadLR2SkinFromSourceFiles(
     customOptions: [],
     customFiles: [],
     customFileLookup: new Map(),
-    trueOps: new Set([...defaultParseOps(), ...(options.parseOps ?? [])]),
+    trueOps: new Set([
+      ...defaultParseOps(informationTypeToPlayVariant(skinTypeByPath.get(entryPath) ?? -1) ?? variant),
+      ...(options.parseOps ?? []),
+    ]),
     timing: {},
     scratchFlip: {
       flipSide: false,
@@ -205,6 +211,16 @@ export function loadLR2SkinFromSourceFiles(
     nextDeclarationOrder: 0,
   };
   readLR2Path(sourceFiles, entryPath, context, new Set());
+  // CONTINUE keeps the previous scene's resource at the same slot; it is never a filename.
+  for (const [paths, inherited] of [
+    [context.imagePaths, options.resources?.images],
+    [context.lr2FontPaths, options.resources?.fonts],
+  ] as const) {
+    const declared = paths.length;
+    for (let index = 0; index < Math.max(declared, inherited?.length ?? 0); index += 1) {
+      if (index >= declared || paths[index]?.toUpperCase() === 'CONTINUE') paths[index] = inherited?.[index] ?? '';
+    }
+  }
   // Auto-detect the design canvas when the skin omits `#RESOLUTION`. LITONE4 (and many other 1280×720 / 1920×1080
   // era LR2 themes) ship the directive empty, leaving the design space at the legacy 640×480 default — at which
   // point every DST coordinate overflows and the chrome appears clipped. The detector ignores aspect-ratio nuance
@@ -220,6 +236,7 @@ export function loadLR2SkinFromSourceFiles(
 
   return {
     name: context.name,
+    resources: { images: [...context.imagePaths], fonts: [...context.lr2FontPaths] },
     width: context.width,
     height: context.height,
     images: context.imageSources.flatMap((source, index) => {
@@ -312,10 +329,10 @@ function specialGraphicPath(gr: number): LR2SpecialGraphic | undefined {
  * resolve to a sensible default branch. The runtime renderer overrides specific values (key mode, autoplay, etc.) at
  * play time, but they need to be true HERE so the parser doesn't silently drop entire `#INCLUDE` chains gated on them.
  *
- * Notably 160 (7keys mode) and 32 (autoplay off) are included — without them, an `#IF,160` / `#IF,32` block in any
- * included CSV would skip the branch even though the runtime would later mark those ops true.
+ * Includes the selected skin's key mode and autoplay-off, so their #IF blocks survive parsing before runtime state
+ * is available.
  */
-function defaultParseOps(): Set<number> {
+function defaultParseOps(variant: LR2PlayVariant = '7'): Set<number> {
   return new Set<number>([
     LR2_OP.PLAYABLE_BAR,
     LR2_OP.AUTOPLAY_OFF,
@@ -339,8 +356,8 @@ function defaultParseOps(): Set<number> {
     LR2_OP.SCORE_SAVE_ON,
     LR2_OP.LOADED,
     LR2_OP.REPLAY_OFF,
-    // The default key mode, for `play_7.lr2skin`.
-    LR2_OP.KEYS_7,
+    // Includes can be gated by the skin's key mode (WMIX has distinct SP and DP layouts).
+    LR2_OP[`KEYS_${variant === '7-battle' ? '7' : variant === '5-battle' ? '5' : variant}`],
     LR2_OP.NO_BGA,
     LR2_OP.NO_LN,
     LR2_OP.NO_TEXT,

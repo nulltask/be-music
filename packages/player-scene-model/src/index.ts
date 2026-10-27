@@ -14,6 +14,7 @@
  * - Play result: the one result payload for single plays, course stages, course runs and NONSTOP runs (`PlayResult`).
  * - Course view: the course a screen shows (`CourseView`) and the course-wide combo of a stage.
  * - System sounds: a theme's cues and jingles by slot (`SystemSoundSet`), from an LR2 or a beatoraja theme.
+ * - Replay slots: the four replays a chart or a course keeps, the one the select screen picks and their result states.
  */
 export * from './library/entries.ts';
 export * from './library/folders.ts';
@@ -29,6 +30,11 @@ export * from './browse/snapshot.ts';
 export * from './play-options/options.ts';
 export * from './play-options/choices.ts';
 export * from './play-options/hi-speed.ts';
+export * from './play-options/normal-hi-speed.ts';
+export * from './play-options/floating-hi-speed.ts';
+export * from './play-options/judge-timing.ts';
+export * from './play-options/constant-visibility.ts';
+export * from './play-state/lift.ts';
 
 export * from './play-state/types.ts';
 export * from './play-state/hi-speed.ts';
@@ -43,3 +49,5 @@ export * from './course-view/course-view.ts';
 export * from './course-view/course-combo.ts';
 
 export * from './system-sounds/system-sounds.ts';
+
+export * from './replay-slots/replay-slots.ts';

@@ -1,6 +1,7 @@
 import { resolveChart } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import {
+  createCourseChartScore,
   drawRandomCourse,
   isClassCourseConstraints,
   parseBeatorajaCommandFolderFile,
@@ -10,17 +11,23 @@ import {
   resolveCourseStages,
   type CourseChartLookup,
   type CourseDefinition,
+  type CourseChartInformation,
   type CourseChartRecord,
   type RandomCourseDefinition,
   type RandomCourseDrawFailure,
 } from '@be-music/player-engine/course';
+import type { BestRecord } from '@be-music/player-engine/records';
+import { resolveBeatorajaDefaultTotal } from '@be-music/player-engine/replay';
+import { isScratchLaneForVariant } from '@be-music/player-skin-sdk';
 import {
   resolveLibraryChartPlayVariant,
   type LibraryChart,
   type LibraryCourse,
   type LibraryFolder,
 } from '@be-music/player-scene-model';
+import { computeBeatorajaChartDensityValues } from '../chart/beatoraja/density.ts';
 import { resolveChartBPMRange } from '../chart/bpm-range.ts';
+import { resolveShownChartMainBPM } from '../chart/main-bpm.ts';
 
 /** A course file's courses, under the label its folder bar shows. */
 export interface CourseDefinitionGroup {
@@ -165,15 +172,21 @@ type ResolvedChart = ReturnType<typeof resolveChart>;
 
 /**
  * A song as a random-course filter sees it (`CourseChartRecord`), with the song itself under `song`. Text columns,
- * `level`, `difficulty`, `notes` and `judge` are read up front; `mode`, `minbpm` / `maxbpm`, `length` and `feature`
- * need the chart resolved and are worked out on first read, so a filter that never names them costs nothing.
+ * `level`, `difficulty`, `notes` and `judge` are read up front; `mode`, `minbpm` / `maxbpm`, `length`, `feature` and
+ * the `information` row need the chart resolved and are worked out on first read, so a filter that never names them
+ * costs nothing.
  *
  * `feature` carries the long-note bits (LN / CN / HCN by the chart's long-note mode, `UNDEFINEDLN` when the chart names
  * none), mines, `#RANDOM`, STOP and scroll changes. `content` is not filled, so it reads as 0.
+ *
+ * `bestRecord` gives the player's best record on the chart for the `score` row ({@link createCourseChartScore}); it is
+ * asked on every read, so the row follows the records. Without one, or while it answers `undefined`, the chart reads as
+ * never played (every `score` column NULL).
  */
 export function createCourseChartRecord(
   chartEntry: LibraryChart,
   hashes: { md5?: string; sha256?: string } = {},
+  bestRecord?: () => BestRecord | undefined,
 ): CourseChartRecord & { readonly chart: LibraryChart } {
   const { chart } = chartEntry;
   const level =
@@ -198,8 +211,8 @@ export function createCourseChartRecord(
   };
   let resolved: ResolvedChart | undefined;
   const resolve = (): ResolvedChart => (resolved ??= resolveChart(chart));
-  const lazy = (key: keyof CourseChartRecord, read: () => number): void => {
-    let value: number | undefined;
+  const lazy = <K extends keyof CourseChartRecord>(key: K, read: () => NonNullable<CourseChartRecord[K]>): void => {
+    let value: CourseChartRecord[K] | undefined;
     Object.defineProperty(record, key, { enumerable: true, get: () => (value ??= read()) });
   };
   lazy('mode', () => MODE_IDS[resolveLibraryChartPlayVariant(chartEntry)]);
@@ -210,7 +223,61 @@ export function createCourseChartRecord(
     return last === undefined ? 0 : Math.trunc(resolve().timing.eventToSeconds(last) * 1000);
   });
   lazy('feature', () => songFeatureBits(chart, resolve()));
+  lazy('information', () => songInformation(chartEntry, resolve()));
+  if (bestRecord !== undefined) {
+    Object.defineProperty(record, 'score', {
+      enumerable: true,
+      get: () => {
+        const best = bestRecord();
+        return best === undefined ? undefined : createCourseChartScore(best, chartEntry.totalNotes);
+      },
+    });
+  }
   return record;
+}
+
+/**
+ * beatoraja's song information for a chart (`SongInformation(BMSModel)`): the notes by kind (a CN / HCN long note
+ * counts its end too, as `BMSModelUtils.getTotalNotes` does), the TOTAL as beatoraja plays it (`BMSPlayerRule.validate`:
+ * `#TOTAL`, a bmson `total` as a percentage of the default, else the default for the note count), the densities
+ * ({@link computeBeatorajaChartDensityValues}) and the main BPM ({@link resolveShownChartMainBPM}).
+ */
+function songInformation(chartEntry: LibraryChart, resolved: ResolvedChart): CourseChartInformation {
+  const variant = resolveLibraryChartPlayVariant(chartEntry);
+  let n = 0;
+  let ln = 0;
+  let s = 0;
+  let ls = 0;
+  for (const note of resolved.notes) {
+    const scratch = isScratchLaneForVariant(note.channel, variant);
+    if (note.kind === 'ln') {
+      const count = (note.lnMode ?? resolved.lnMode) === 1 ? 1 : 2;
+      if (scratch) ls += count;
+      else ln += count;
+    } else if (scratch) s += 1;
+    else n += 1;
+  }
+  const notes = n + ln + s + ls;
+  const keyboard = variant === '24' || variant === '48';
+  const fallback = keyboard
+    ? Math.max(300, (7.605 * (notes + 100)) / (0.01 * notes + 6.5))
+    : resolveBeatorajaDefaultTotal(notes);
+  const raw = resolved.total.value;
+  const total =
+    raw === undefined || !(raw > 0) ? fallback : resolved.total.unit === 'percent' ? (raw / 100) * fallback : raw;
+  const density = computeBeatorajaChartDensityValues(resolved);
+  const mainbpm = resolveShownChartMainBPM(chartEntry.chart, chartEntry.chartPath);
+  return {
+    n,
+    ln,
+    s,
+    ls,
+    total,
+    density: density.average,
+    peakdensity: density.peak,
+    enddensity: density.end,
+    ...(mainbpm !== undefined ? { mainbpm } : {}),
+  };
 }
 
 /** beatoraja's `SongData.FEATURE_*` bits that the resolved chart shows. */
@@ -231,19 +298,25 @@ function songFeatureBits(chart: BeMusicJSON, resolved: ResolvedChart): number {
  * Draws a random course's stages from the collection (`drawRandomCourse`) and returns the course bar to play: a fixed
  * course whose stages are the drawn songs. `candidates` are the collection's songs with their chart-file hashes, as
  * {@link createChartHashLookup} takes them; a song without a hash is never drawn. `random` returns values in `[0, 1)`.
- * A course without `random` is returned as it is.
+ * `bestRecordOf` gives each song's best record, for the filters' `score` columns. A course without `random` is
+ * returned as it is.
  */
 export function drawBrowserRandomCourse(
   entry: LibraryCourse,
   candidates: Iterable<{ chart: LibraryChart; sha256?: string; md5?: string }>,
   random: () => number,
+  bestRecordOf?: (chart: LibraryChart) => BestRecord | undefined,
 ): { ok: true; course: LibraryCourse } | RandomCourseDrawFailure {
   if (entry.random === undefined) return { ok: true, course: entry };
   const records = Array.from(candidates, ({ chart: chartEntry, md5, sha256 }) =>
-    createCourseChartRecord(chartEntry, {
-      ...(md5 !== undefined ? { md5 } : {}),
-      ...(sha256 !== undefined ? { sha256 } : {}),
-    }),
+    createCourseChartRecord(
+      chartEntry,
+      {
+        ...(md5 !== undefined ? { md5 } : {}),
+        ...(sha256 !== undefined ? { sha256 } : {}),
+      },
+      bestRecordOf === undefined ? undefined : () => bestRecordOf(chartEntry),
+    ),
   );
   const drawn = drawRandomCourse(entry.random, records, random);
   if (!drawn.ok) return drawn;

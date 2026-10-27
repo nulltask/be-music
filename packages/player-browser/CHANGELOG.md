@@ -1,5 +1,154 @@
 # @be-music/player-browser
 
+## 0.12.0
+
+### Minor Changes
+
+- 1cb4d60: Start beatoraja PLAY with the chart after the skin's READY interval, preserve that interval through slow media loading, and follow chart time through tempo changes and seeks. Add optional input and relative play-start timing stages to the family view contract.
+- 1b3e0bd: Connect beatoraja result, score, HCN, and character timers to their scene facts. Add optional personal-best/target EX scores and music-end timing to scene contracts, and drive beatoraja's five-second chart-time ending and finishmargin through the existing engine loop.
+- 7a776a0: Add a configurable shared worker pool for chart parsing and packing, ZIP expansion, and WSOLA. Preserve chart order, and fall back to the same local operations when workers are unavailable.
+- f4b7d9e: Draw Visual CONSTANT on beatoraja skins: notes, mines, bar lines and BPM-change / STOP lines show only during the last note duration with the CONSTANT fade, as beatoraja's `LaneRenderer` does, and `#SPEED` is ignored while it is on. Light op 400 (CONSTANT) on the beatoraja select and play screens while the setting is on.
+  
+  A course with the `NO_SPEED` constraint now turns Visual CONSTANT off for its stages on every skin family, as beatoraja does.
+- f9c1c24: Draw AC 34's BPM-change warning when `bpmChangeWarning` is on: `<current> » <next>` in a framed box centred on each side's lanes, from 2 s of chart time before each BPM change until the change, blue when the tempo rises and red when it falls. The built-in (Canvas and DOM skins), LR2 and beatoraja play screens draw it.
+- a8896a9: The select screen's search takes chart filter expressions (`?level >= 12 AND score.clear < 5`), reading each chart's song columns, its best record under the active judge ruleset and its song information. The frame carries `searchError` and the select scene has `searchError()` while the expression does not parse. `createCourseChartRecord` fills the `information` row and takes a best-record reader for the `score` row, and `drawBrowserRandomCourse` takes one too, so random courses can filter by them.
+- 85f13dc: Accept theme system sounds on play scenes and play the failure stop cue once through the audio service, without triggering it on normal completion or Escape.
+- a95c53c: A play can change drawing family without starting again. `PlayScene.replaceFamily` attaches the new family's view to the running play and disposes the previous view. LR2 textures stay cached until the play ends, so switching back does not decode the same bytes again.
+- c072506: A play takes the automatic judge-timing mode (`judgeTimingAutoAdjust`): beatoraja's calibration, or LR2's ON and SILENT. Under LR2 SILENT, as in LR2, the play loads none of the chart's keysounds, BGM or BGA and the built-in and LR2 play screens draw no judgment or combo; a replay follows the mode it recorded. An LR2 select skin's button 74 steps the judge timing by 1 ms within ±99, button 75 cycles OFF, ON and SILENT, and an LR2 play skin's number 12 shows the live judge timing (#777).
+- 3e694df: Add Native, a built-in skin of DOM screens around a canvas playfield: collection browsing, search, settings, decide and result screens, and a gameplay information dashboard (judgment counts and timing, score and note progress, gauge history, speed, lane covers, course context and play settings) built from the `@be-music/player-ui` elements. Its BGA, lanes, notes, mines, measure lines, lane covers, judge line, bombs and judgment words each draw on a canvas the size of their part of the stage; the lanes stay as tall as the screen allows (a side HUD in landscape, a compact header in portrait, orientation read from the element the screens are mounted in), and touch lanes follow the fingers on its gameplay screen. Renderer-independent scene controllers and selected state stores are exposed through the controller entry, with native skin mount lifecycles and search inputs.
+  The host hands each frame to a skin that sets `gameplay.drawsOnDOM` and creates no gameplay surface for it. A scene whose screens are all DOM reports `drawsOnCanvas: false`, and `PixiSceneHost` keeps its canvas in the page only while the active scene draws on it (also before the first scene) and exposes the element it was mounted in as `container`.
+- 0b4e3c4: Add an optional `peakGain` play setting that scales a chart's decoded samples together so the loudest peak sits near −3 dBFS. When it is omitted, charts keep the level they were authored at.
+- 1e62cb3: A play whose selected options do not fit its chart (beatoraja CONVERGE or playable RANDOM on a non-PMS chart, LR2 SCATTER on a non-9KEY chart, SP TO DP or EXTRA MODE on bmson, ...) now rejects its `prepare` with the new `PlayOptionMismatchError` from `@be-music/player-browser/host`, which names the selected options that convert the chart, instead of an unexplained `RangeError`. Replays, kept arrangements and other load errors reject as before.
+- b09a6cf: Apply the new play options in the play session for every skin family: the judgment, hi-speed and view options (HS-FIX including START BPM, AC normal and floating hi-speed, the fixed display area, per-side LIFT, CONSTANT, BPM GUIDE, judge display timing), the lane arrangements, the chart modifiers, the gauge options, the battle and conversion modes and PRACTICE. The source-specific lane options, HS-FIX CONSTANT, the measured hi-speed modes (with numpad 0 and the fixed display area), the scroll and mine modifiers, both EXTRAs, 7 TO 9, the battle chart constructions, SYNCHRONIZE / SYMMETRY RANDOM and M-RAN are prepared under every judge ruleset, each with its own source's algorithm; RANDOM-EX always runs beatoraja's shuffle, and a reused previous arrangement must come from a play under the same judge rules (#774).
+  Record every selected play option and live hi-speed edit in the replay, and restore the option timeline during replay playback and seeking, the independent AUTO SCRATCH switches and the head-only notes of LEGACY NOTE and LN REMOVE included.
+  Show the cover lengths and green numbers on the selected cover edges for the Native, Canvas, LR2 and beatoraja views.
+  Draw a two-player BATTLE on the Plain, Native and Synesthesia skins with each player's gauge and figures, and on LR2 skins with the BATTLE play skins, the 2P numbers, ranks and gauge. Synesthesia takes the lane cover keys, draws each side's LIFT and labels the floating hi-speed, as Plain and Native do.
+  Wire beatoraja select skins' option buttons to the play options: LNMODE, DP option, gauge auto shift, judgment algorithm, mine, scroll and long-note modes, 7 TO 9, EXTRA NOTE depth, and RANDOM 1P / 2P (42 / 43), which step through beatoraja's lane options for the focused chart's play mode and show the choice. PRACTICE starts from its button, and the LNMODE image shows the player's LN MODE instead of the focused chart's mode.
+  Keep LR2 skin gauge buttons on the original four choices when extended gauges are selected from Debug Menu.
+- f994ec4: Honor POOR BGA overlay and hidden modes across built-in, LR2, beatoraja and DOM frames, including each NONSTOP stage’s policy. Mode 2 suppresses explicit channel-06 cues as well as BMP00.
+- 3b75adf: The player's MY COURSES and MY NONSTOP folders end with LR2's RANDOM MIX bar (`createRandomMixEntry`, listed by `resolveCourseMakerFolders`). `CourseMaker` keeps the RANDOM MIX settings (`randomMixSettings`, `stepRandomMixSetting`) and `drawRandomMix` keeps each folder's last draw as its newest course in place of the previous one; `createRandomMixChart` and `createDrawnRandomMixEntry` turn library charts into draw candidates and a draw into a course bar. On an LR2 select skin, buttons 260-266 step the settings with the option-change cue and texts 190-196 show them.
+- 4b9f91d: Remove the Phantom and Lattice skins: `phantomSkin` and `latticeSkin` are no longer exported, and `BUILT_IN_BE_MUSIC_SKINS` holds Synesthesia, Plain and Native. Neither was shipped by the player. The playfield the built-in and LR2 families fall back to when a skin or theme leaves the lanes, notes, long notes or bombs to the host keeps its look; it no longer comes from Phantom. A stored skin id of `phantom` or `lattice` resolves to the default skin.
+- d0939cc: Add replay slots to the result and select scenes: `createResultScene` takes `replaySlots` and `on.saveReplay` (keys 1-4, a beatoraja skin's replay buttons), `SelectRecords.replaySlots` lets the select screen pick a slot (beatoraja's 4 / F / V keys and replay buttons) and hand it to `on.start` as `replaySlot`, `SelectScene.replay(slot)` replays one, and `on.focus` reports the bar under the cursor. A result now stops its jingle and plays the theme's `resultclose` / `course_close` sound as it starts to fade out.
+- 3e694df: A play can seek: `PlayScene.seek(seconds)`, a `seek` play intent and `PlayFrame.seekable`. AUTO and replay playback also seek five seconds with the left and right arrow keys, and the host's `allowSeek: 'practice'` lets a manual play seek and marks its result as practice.
+  A seek sends the running play the engine's seek command and resolves once the play shows the second sought. The chart clock runs on from every engine frame and a paused play stays paused; the combo, max combo, graphs, timings and held long notes come from the engine's snapshot of the target, and a replay's recorded view is restored there. What the play showed of the old position (key beams, bombs, held long notes, judge plates, the POOR image, a lead-out under way) is cleared, the LR2 and beatoraja play views stop their per-judgment timers, and the Web Audio session stops the sounds playing, starts the ones still ringing partway (`triggerEventAt`), resets the dynamic volumes and moves a NONSTOP chart's fades.
+  The engine is prepared during loading and starts the chart at the skin's PLAY START cue, so a seek during the intro picks the starting position. Course stages and NONSTOP runs can seek too: the run stays practice for its later stages and keeps no course record, ranking or auto-saved replay after a seek.
+  beatoraja BGA videos stay at chart time from their cues through seeks, pauses, tempo changes and NONSTOP crossfades instead of restarting at the beginning, and BGA videos are set back in step with the chart when they drift.
+
+### Patch Changes
+
+- b6f6a72: Connect Lua event_index to image-ref values and allow scene-local custom animation timers to start, change and stop. Lua and numeric destinations now observe the same timer writes immediately, while gameplay timers remain protected.
+- 74838c5: Reduce repeated allocations during gameplay by retaining debug labels, resolving Canvas and DOM HUD values once per frame, and preserving active particle lists while skipping unchanged colors. Previously published HUD snapshots remain intact.
+- 3a5d9c3: Carry final combo eligibility from the engine into result scores so beatoraja FIVEKEYS/PMS results do not award full-combo lamps after empty POOR broke the combo.
+- d08fdf9: MIRROR and RANDOM now permute every key lane of the resolved mode instead of only occupied lanes. This fixes sparse charts, preserves long-note endpoints and secondary-note placement, and keeps historical replay arrangements unchanged.
+- 45aff53: Preserve the engine's mine-POOR count in result scores so LR2 course-stage records count mine hits and unjudged notes correctly.
+- a83e326: Display the That-Which-Must-Not-Be-Named ruleset as `????` in built-in skins and use `____` for engine and replay identifiers.
+- b54a1da: Fix missing landmine notes in beatoraja skins by including the engine's separate mine list in the sorted note drawing stream, including the READY display before playback starts.
+  
+  Honor Show invisible notes in beatoraja skins, displaying hidden keysound objects as green inspection markers only while the option is enabled, including changes during play.
+- 69df53c: Play stitched bmson resources with extended keys and map source-audio slices into keep-pitch FIT buffers, including seeking and audio-tail cleanup.
+- 0c67b28: Fix the built-in skins' layout:
+  
+  - The stage canvas now follows its container when the container changes size without a window resize. Plain drew into an 800 px corner of a wide screen and kept its landscape layout on a phone held upright.
+  - Plain's landscape header no longer draws over the lanes, and its 1P gauge and track line up with the lanes' left edge.
+- 935610f: Mark a replay played back: its result carries `fromReplay`, and the LR2 play screen lights REPLAY PLAYING (op 84) instead of REPLAY OFF (op 82), as LR2 does.
+- 582ad35: Restore judgment-colored lasers and authored key-release animations in LR2 skins, including LITONE4. Align measure lines with the note timing origin and respect their display conditions so HD skins keep notes and bar lines together. Hide missing-glyph placeholders when their loading text fades out. Decode PNG font sheets through the shared image loader so mixed PNG/TGA fonts render their text instead of empty boxes.
+  
+  Load beatoraja bitmap font pages through the shared image decoder so WMII_FHD TGA sheets render with their authored font.
+- 7ab40af: HD LR2 gameplay now uses the skin’s authored canvas for chrome, notes, measure lines and BGA, preserving its aspect ratio and keeping scroll speed and replay-visible time consistent across resolutions. Load dedicated judgement-line, measure-line, bargraph and slider textures as well.
+- 5565fe4: Cut the built-in skins' particle cost: a point writes the particle's packed color directly instead of going through Pixi's `tint` setter (a `Color` parse per point per frame), and a particle layer checks its place among its siblings once per frame instead of on every point. On a dense chart with Synesthesia the frame loop's CPU time drops about 12 %. The built-in play view also prints its `?perf` section summary each second, as the LR2 play view does.
+- 0bee40e: Chart loading no longer waits on clamped timers between tasks: the worker pool's local fallback and the collection loader's progress yields go through `scheduler.yield()` or a `MessageChannel` message instead of `setTimeout(…, 0)`, which nested calls clamp to 4 ms in browsers and 1 ms in Node.
+- f872467: Fix missing POOR BGA after empty presses by stamping the pause-aware millisecond play clock instead of chart seconds. Use an explicit inactive sentinel so a real miss at clock zero displays, and reject future or expired stamps.
+- 238bd8b: Remove the unused multithreaded FFmpeg core dependency from the browser player package.
+- 85250d8: S-RANDOM no longer places new notes inside held long notes. Select the active judge ruleset's arrangement constraints, preserve both LN endpoints and mode/side boundaries, and continue recording final channels for unchanged replay playback.
+- 9065e03: Synesthesia projects its point clouds, bomb grains, light rivers and manta schools without allocating per point: rotation bases are computed once per object or frame and each point is written into a reused result, so the play loop spends less time per frame and produces far less garbage.
+- 00139f5: Update mediabunny to the latest release.
+- Updated dependencies [1b3e0bd]
+- Updated dependencies [ba3cc20]
+- Updated dependencies [dff4d15]
+- Updated dependencies [cc6b4b4]
+- Updated dependencies [166f2d2]
+- Updated dependencies [1cb4d60]
+- Updated dependencies [bd5f119]
+- Updated dependencies [7fca9a9]
+- Updated dependencies [b6f6a72]
+- Updated dependencies [a9cc3d7]
+- Updated dependencies [a83e326]
+- Updated dependencies [69df53c]
+- Updated dependencies [f994ec4]
+- Updated dependencies [c52d77d]
+- Updated dependencies [69df53c]
+- Updated dependencies [29e69c6]
+- Updated dependencies [69df53c]
+- Updated dependencies [29e69c6]
+- Updated dependencies [3a5d9c3]
+- Updated dependencies [3a5d9c3]
+- Updated dependencies [fcaef41]
+- Updated dependencies [7f0386b]
+- Updated dependencies [45aff53]
+- Updated dependencies [582ad35]
+- Updated dependencies [7ab40af]
+- Updated dependencies [1c97afd]
+- Updated dependencies [d08fdf9]
+- Updated dependencies [74127d3]
+- Updated dependencies [a83e326]
+- Updated dependencies [69df53c]
+- Updated dependencies [78faa63]
+- Updated dependencies [3d5e880]
+- Updated dependencies [21f705d]
+- Updated dependencies [a8896a9]
+- Updated dependencies [b1ca2ce]
+- Updated dependencies [6e676fe]
+- Updated dependencies [aeac0d3]
+- Updated dependencies [9f41b30]
+- Updated dependencies [f994ec4]
+- Updated dependencies [4371c72]
+- Updated dependencies [acba3d5]
+- Updated dependencies [3e694df]
+- Updated dependencies [3e694df]
+- Updated dependencies [c35b845]
+- Updated dependencies [a83e326]
+- Updated dependencies [a8896a9]
+- Updated dependencies [85f13dc]
+- Updated dependencies [3c2ea6b]
+- Updated dependencies [aeac0d3]
+- Updated dependencies [b09a6cf]
+- Updated dependencies [85e11f7]
+- Updated dependencies [d0939cc]
+- Updated dependencies [3e694df]
+- Updated dependencies [a83e326]
+- Updated dependencies [01cd4cd]
+- Updated dependencies [29e69c6]
+- Updated dependencies [f994ec4]
+- Updated dependencies [6fc13f5]
+- Updated dependencies [a8896a9]
+- Updated dependencies [3e694df]
+- Updated dependencies [85250d8]
+- Updated dependencies [2e435b9]
+- Updated dependencies [3ab8eac]
+- Updated dependencies [85f13dc]
+- Updated dependencies [b09a6cf]
+- Updated dependencies [0bee40e]
+- Updated dependencies [d0939cc]
+- Updated dependencies [edc1112]
+- Updated dependencies [a83e326]
+- Updated dependencies [85f13dc]
+- Updated dependencies [b506535]
+- Updated dependencies [3d2bc84]
+- Updated dependencies [77d8ec1]
+- Updated dependencies [3ffc4f8]
+- Updated dependencies [affc51c]
+- Updated dependencies [2e435b9]
+  - @be-music/skin-beatoraja@0.5.0
+  - @be-music/player-engine@0.11.0
+  - @be-music/chart-model@0.7.0
+  - @be-music/chart-parser@0.5.0
+  - @be-music/chart-source@0.5.0
+  - @be-music/player-scene-model@0.3.0
+  - @be-music/skin-lr2@0.4.0
+  - @be-music/player-skin-sdk@0.5.0
+  - @be-music/player-ui@0.2.0
+  - @be-music/shared-utils@0.6.0
+
 ## 0.11.0
 
 ### Minor Changes
@@ -167,7 +316,7 @@
   - 24 KEY and 48 KEY charts no longer squeeze 24 lanes per side into the 7K playfield (8 px each): 24 KEY fills the column left of the BGA monitor (about 10.5 px a lane, the monitor stays), and 48 KEY spreads both banks across 616 px (about 12.8 px a lane). The core lane renderer and every built-in skin share the new layout, so chrome, notes, and judgements line up.
   - Key beams read more clearly in every built-in skin: a pressed lane lights a laser in its colour (cool white, electric blue, and red in Phantom; each lane's light in Synesthesia; graphite, cobalt, and vermilion ink in Lattice) that stands near solid at the judgement line and eases out up the lane, so the upper lane where notes are still falling only carries a faint tint.
   - 5 / 7 / 10 / 14 KEY lanes now have fixed widths in proportions taken from the arcade cabinet — a 41 px scratch, 24 px white keys, 19 px black keys (a 7K side stays 194 px) — so a 5K or DP chart never stretches its lanes sideways; the playfield narrows or widens instead. White-key lanes also get their own background tone in every built-in skin, while the scratch lane shares the black keys' background.
-  - Skinless lanes now sit edge to edge (the 2 px gaps between lanes are gone) and every built-in skin draws notes and long notes across the full lane width. In IIDX double play (10 / 14 KEY) the 1P and 2P banks stand 60 px apart, about 0.31 of a side as on the arcade cabinet (`IIDX_DP_SIDE_GAP`), and every built-in skin draws the judgement line and lane grid per side (`resolveLaneRuns` in the skin SDK) so nothing crosses the gap; 48 KEY keeps its banks together.
+  - Skinless lanes now sit edge to edge (the 2 px gaps between lanes are gone) and every built-in skin draws notes and long notes across the full lane width. In That-Which-Must-Not-Be-Named double play (10 / 14 KEY) the 1P and 2P banks stand 60 px apart, about 0.31 of a side as on the arcade cabinet (`_____DP_SIDE_GAP`), and every built-in skin draws the judgement line and lane grid per side (`resolveLaneRuns` in the skin SDK) so nothing crosses the gap; 48 KEY keeps its banks together.
   - Built-in skin text is now vertically aligned by its capitals: Pixi sizes a line box from accent and descender ink, so faces like Anton and Michroma sat visibly low in every plate and button; each face's offset is measured once and corrected through the text pivot.
   - Built-in skin text now rasterizes at the final device density (viewport scale x renderer resolution) instead of being magnified from the 640x480 design canvas, so labels and numbers stay crisp at any window size; glow shadows get texture padding so they no longer clip into hard rectangles.
   - The Pixi renderer now uses the display's full `devicePixelRatio` instead of capping it at 2x, so 3x displays render the scenes at native density.
@@ -196,7 +345,7 @@
 - 2c368ed: Redesign the default (skinless) skin family in a "Phantom" poster style: ink-black ground, blood-red slabs and halftone fields, slanted paper plates, jagged starbursts, and condensed italic type. Gameplay, song select, and result all share the new look while keeping the same geometry contract (LR2 default 7-keys lane positions, 640x480 design canvas, unchanged select hit areas).
   
   - Gameplay chrome: sawtooth header kicker that swells on the beat, slanted mode / ruleset tags, a halftone floor wedge under a slanted score plate with a starburst rank badge, a segmented slanted-cell groove gauge, a paper "track card" song plate, ransom-note judge tally chips, and a BGA monitor that idles on a turning starburst "STAND BY" screen.
-  - The playfield stays deliberately plain and IIDX-like: flat white / blue / red notes, solid-rail long notes, a red judgement line, and a simple ring-and-core hit flash, so reading is never traded for style.
+  - The playfield stays deliberately plain and That-Which-Must-Not-Be-Named-like: flat white / blue / red notes, solid-rail long notes, a red judgement line, and a simple ring-and-core hit flash, so reading is never traded for style.
   - Judgement words and all live numerals (score, EX score, combo, gauge, tally, BPM / HI-SPEED) use Anton with tabular figures, laid out per glyph in fixed-width cells so changing values never jitter sideways.
   - Song select: red halftone slab with a drifting dot field, a starburst that pulses at the focused chart's BPM, speed streaks, a scrolling header kicker, a beat-kicking row pointer, a glint sweeping the focused card, a staggered fly-in of the song list on entry, and a slide-in of the focused card and title on every cursor move. PLAY is now the primary (larger) action and AUTO PLAY secondary.
   - Result: an entrance timeline — the red halftone slash sweeps in, the STAGE CLEAR / FAILED tag slams down, metric plates and judgement rows slide in one after another while every counter rolls up, count bars grow, run graphs draw left to right, and the rank burst pops before its letter stamps down. Afterwards the burst keeps turning and pulsing, the halftone drifts, the header kicker scrolls, speed streaks rake across, and a glint sweeps the verdict tag; a skip jumps straight to the settled layout.
@@ -217,7 +366,7 @@
 - 0103435: Run the selected gauge through the active compat ruleset instead of a hardcoded LR2 groove curve.
   
   `PlayerOptions.gauge` now picks a gauge out of the ruleset's own line-up (LR2 `GROOVE` / `EASY` / `HARD` / `EX-HARD` /
-  `DEATH`, beatoraja `NORMAL` / `ASSIST-EASY` / `EASY` / `HARD` / `EX-HARD` / `HAZARD`, IIDX `NORMAL` / `EASY` /
+  `DEATH`, beatoraja `NORMAL` / `ASSIST-EASY` / `EASY` / `HARD` / `EX-HARD` / `HAZARD`, That-Which-Must-Not-Be-Named `NORMAL` / `EASY` /
   `ASSISTED-EASY` / `HARD` / `EX-HARD`) and the engine runs that gauge's real curve — per-judge deltas, TOTAL scaling,
   guts softening, death border, and the survival-vs-threshold clear rule. Previously the picker was cosmetic: HARD
   rendered red but ran GROOVE's numbers and reported CLEARED at 2 %.
@@ -246,7 +395,7 @@
   `RulesetConfig` gains `emptyPoorCountsInPoorDisplay` — a presentation rule, not a scoring one. LR2 is `true`:
   OpenLR2's `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch and LR2 exposes no separate stat,
   so a run judged under LR2 now folds `emptyPoor` into the POOR figure its result screen, BP, and per-judge rates
-  read. beatoraja shows an empty-POOR figure of its own and IIDX's counter is unmeasured, so both keep them apart.
+  read. beatoraja shows an empty-POOR figure of its own and That-Which-Must-Not-Be-Named's counter is unmeasured, so both keep them apart.
   
   `ScoreSummary` gains `emptyPoor` and `@be-music/player-engine/core/scoring` exports `resolveDisplayedPoor`.
   `PlayerSummary` always reports the split; only the display copy folds.
@@ -440,7 +589,7 @@
 
 - 5ea9072: `PixiGameplayView.prepareSong` now builds a `PreparedPlaybackChartData` and forwards it to the engine through `engineOptions.preparedChart`, so the renderer and the engine share the same note instances instead of mirroring `note.hit` through an index-based sync.
 
-  That removes the class of view ↔ engine drift bugs: notes vanishing mid-lane (HIDE-on-judge dropouts), mid-chart full-combo cues, AUTO PLAY falling short of EX-MAX, PMS keys 6-9 mapping to IIDX 2P, chord bombs only on the right-most lane, AUTO LN lasers staying lit after the tail, and MANUAL LN BAD-failing mid-sustain while the key is held. Simultaneously-judged AUTO PLAY chords now produce one bomb sprite per chord note via `drainPendingJudgeCombos`.
+  That removes the class of view ↔ engine drift bugs: notes vanishing mid-lane (HIDE-on-judge dropouts), mid-chart full-combo cues, AUTO PLAY falling short of EX-MAX, PMS keys 6-9 mapping to That-Which-Must-Not-Be-Named 2P, chord bombs only on the right-most lane, AUTO LN lasers staying lit after the tail, and MANUAL LN BAD-failing mid-sustain while the key is held. Simultaneously-judged AUTO PLAY chords now produce one bomb sprite per chord note via `drainPendingJudgeCombos`.
 
 ### Patch Changes
 
@@ -456,7 +605,7 @@
   Headline capabilities:
 
   - LR2 skin rendering: frame chrome, BGA, lane lasers, scratch turntable, bomb / FC / hold timers, animated bitmap fonts, gauge / combo / score, scroll slider.
-  - PMS / 9 KEY (Pop'n) skin support alongside IIDX 7 / 14-key layouts, with single-side judge / combo plate rendering for PMS-STD charts that source lanes from the `2X` channel block.
+  - PMS / 9 KEY (Pop'n) skin support alongside That-Which-Must-Not-Be-Named 7 / 14-key layouts, with single-side judge / combo plate rendering for PMS-STD charts that source lanes from the `2X` channel block.
   - BGA pipeline: native `<video>` decode with an ffmpeg.wasm transcode fallback, held until the chart-start gate.
   - Web Audio bus: split key / BGM / master compressor topology, per-sample latency tuning, and `MediaRecorder` + canvas `captureStream` for WebM gameplay capture.
   - LR2 button wiring: RANDOM / MIRROR, AUTO-SCRATCH, gauge type, HIDDEN / SUDDEN + shutter, HS-FIX, DP FLIP, BGA / score-graph / filter controls.

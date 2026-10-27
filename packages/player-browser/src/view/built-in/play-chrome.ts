@@ -8,9 +8,9 @@
  */
 
 import type { ChartPlayVariant } from '@be-music/chart-model';
-import { resolveIIDXRankLabel } from '@be-music/player-engine/ruleset';
+import { resolve____RankLabel } from '@be-music/player-engine/ruleset';
 import { resolveGameplayLaneGeometry, resolveGameplayLayout, type GameplayLayoutMode } from '@be-music/player-skin-sdk';
-import { recentJudgeTimings, resolveGreenNumber } from '@be-music/player-scene-model';
+import { formatGaugeLabel, recentJudgeTimings, resolveGreenNumber } from '@be-music/player-scene-model';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import type { Container } from 'pixi.js';
@@ -20,6 +20,7 @@ import type { PlayfieldRuntime } from '../shared/playfield/context.ts';
 import type {
   BeMusicGameplayLayout,
   BeMusicGameplayRuntime,
+  BeMusicSecondPlayerRuntime,
   BeMusicJudgmentState,
   BeMusicStage,
 } from '../../skin/be-music/types.ts';
@@ -88,7 +89,7 @@ export interface LaneGeometryContext {
 /** What the skinless chrome's runtime is made from each frame: a play view's members of these names. */
 export interface PlayChromeContext {
   readonly play: PlayfieldRuntime;
-  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects'>>;
+  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects' | 'judgeTimingAutoAdjust'>>;
   readonly audioFrame: AudioFeatures | undefined;
 }
 
@@ -139,7 +140,8 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
       continue;
     }
     const state = ctx.play.judgeSideState[side];
-    if (state.judge && seconds <= state.until) {
+    // LR2's SILENT automatic judge timing shows no judgment or combo.
+    if (state.judge && seconds <= state.until && ctx.options.judgeTimingAutoAdjust !== 'LR2-SILENT') {
       judgeSides.push({ side, judge: state.judge, combo: state.combo });
     }
   }
@@ -157,6 +159,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     bpm: ctx.play.displayBPM(seconds) ?? bpm,
     // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).
     hiSpeed: play.view.hiSpeed.player,
+    ...(play.view.hiSpeed.floating ? { floatingHiSpeed: true as const } : {}),
     score: ctx.play.score.score,
     exScore: ctx.play.score.exScore,
     exScoreMax: total * 2,
@@ -174,7 +177,8 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     playVariant: ctx.play.chartPlayVariant,
     lastJudge: seconds <= ctx.play.lastJudgeUntil ? ctx.play.lastJudge : undefined,
     judgeSides,
-    rank: total <= 0 ? undefined : resolveIIDXRankLabel(ctx.play.score.exScore, total),
+    rank: total <= 0 ? undefined : resolve____RankLabel(ctx.play.score.exScore, total),
+    ...(ctx.play.secondPlayer !== undefined ? { secondPlayer: secondPlayerRuntime(ctx.play.secondPlayer) } : {}),
     autoplay: ctx.options.autoPlay === true,
     hasBGA: ctx.play.hasBGA,
     nowMs: ctx.play.playClock(),
@@ -182,7 +186,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     // The beat this frame already worked out for the same `seconds`.
     beatPhase: currentBeat - Math.floor(currentBeat),
     rulesetLabel: ctx.play.resolveJudgeRuleset(),
-    gaugeLabel: ctx.play.gaugeState.type ?? 'GROOVE',
+    gaugeLabel: formatGaugeLabel(ctx.play.gaugeState.type) ?? 'GROOVE',
     gaugeSurvival: ctx.play.gaugeState.survival === true,
     fast: ctx.play.fastCount,
     slow: ctx.play.slowCount,
@@ -219,6 +223,19 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   };
 }
 
+/** Keep the base layout/BGA fixed and publish each side's actual line for the skin's chrome. */
+function withLiftLines(ctx: BeMusicLayoutContext, layout: BeMusicGameplayLayout): BeMusicGameplayLayout {
+  if (!ctx.drawsLift) return layout;
+  const sides = { ...layout.playfield.sides };
+  for (const cover of ctx.play.resolveLaneCovers()) {
+    const bounds = sides[cover.side];
+    if (!bounds) continue;
+    const judgementY = layout.playfield.judgementY - (layout.playfield.judgementY - layout.playfield.top) * cover.lift;
+    sides[cover.side] = { ...bounds, judgementY };
+  }
+  return { ...layout, playfield: { ...layout.playfield, sides } };
+}
+
 /** What the built-in BGA rect is worked out from: a play view's members of these names. */
 export interface BGATargetsContext extends LaneGeometryContext {
   stageBGATarget: PlayfieldBGATarget | undefined;
@@ -226,6 +243,7 @@ export interface BGATargetsContext extends LaneGeometryContext {
 
 /** What the be-music chrome's layout is worked out from, and its cache: a play view's members of these names. */
 export interface BeMusicLayoutContext extends LaneGeometryContext {
+  readonly drawsLift?: boolean;
   beMusicLayout:
     | {
         channels: readonly string[];
@@ -270,14 +288,14 @@ export function resolveBeMusicLayout(ctx: BeMusicLayoutContext): BeMusicGameplay
     cached.variant === ctx.play.chartPlayVariant &&
     cached.stage === stage
   ) {
-    return cached.layout;
+    return withLiftLines(ctx, cached.layout);
   }
   const layout = resolveGameplayLayout(
     { laneChannels: ctx.play.laneChannels, playVariant: ctx.play.chartPlayVariant, layoutMode: ctx.layoutMode },
     stage,
   );
   ctx.beMusicLayout = { channels: ctx.play.laneChannels, variant: ctx.play.chartPlayVariant, stage, layout };
-  return layout;
+  return withLiftLines(ctx, layout);
 }
 
 /** What {@link renderBuiltInChrome} draws into: the chrome layers and pools, the BGA layer and the be-music binding. */
@@ -298,6 +316,7 @@ export interface BuiltInChromeContext extends PlayChromeContext, BeMusicLayoutCo
 export function renderBuiltInChrome(
   ctx: BuiltInChromeContext,
   skinlessChromeRenderer: SkinlessGameplayChromeRenderer | undefined,
+  runtime: SkinlessGameplayChromeRuntime = resolveSkinlessGameplayChromeRuntime(ctx),
 ): void {
   ctx.skinLayerPool.begin();
   ctx.overlayLayerPool.begin();
@@ -313,7 +332,7 @@ export function renderBuiltInChrome(
       overlayLayer: ctx.overlayLayer,
       layerPool: ctx.skinLayerPool,
       overlayLayerPool: ctx.overlayLayerPool,
-      runtime: resolveSkinlessGameplayChromeRuntime(ctx),
+      runtime,
     };
     if (skinlessChromeRenderer) {
       skinlessChromeRenderer(context);
@@ -324,4 +343,28 @@ export function renderBuiltInChrome(
     ctx.skinLayerPool.end();
     ctx.overlayLayerPool.end();
   }
+}
+
+/** The 2P player's HUD figures in a two-player play, read off its own play state and scores. */
+function secondPlayerRuntime(second: NonNullable<PlayfieldRuntime['secondPlayer']>): BeMusicSecondPlayerRuntime {
+  const total = Math.max(0, second.score.total);
+  return {
+    score: second.score.score,
+    exScore: second.score.exScore,
+    exScoreMax: total * 2,
+    combo: second.playState.combo,
+    maxCombo: second.playState.maxCombo,
+    perfect: second.score.perfect,
+    great: second.score.great,
+    good: second.score.good,
+    bad: second.score.bad,
+    poor: second.score.poor,
+    gauge: second.playState.gauge,
+    ...(second.gauge !== undefined && second.gauge.max > 0
+      ? { clearThreshold: (second.gauge.clearThreshold / second.gauge.max) * 100 }
+      : {}),
+    gaugeLabel: formatGaugeLabel(second.gauge?.type ?? second.playState.gaugeType) ?? 'GROOVE',
+    gaugeSurvival: second.gauge?.survival === true,
+    ...(total > 0 ? { rank: resolve____RankLabel(second.score.exScore, total) } : {}),
+  };
 }

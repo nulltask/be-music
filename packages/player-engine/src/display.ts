@@ -22,6 +22,7 @@ export {
 } from './playable-notes.ts';
 export {
   createScrollDistanceMapper,
+  createLR2ConstantScrollMapper,
   ScrollDistanceMapper,
   type ScrollDistanceMapperLike,
   type ScrollDistanceMapperOptions,
@@ -48,3 +49,11 @@ export {
   isImageResizeAlgorithm,
   type ImageResizeAlgorithm,
 } from './image-resize-algorithm.ts';
+
+export {
+  adjustBeatorajaJudgeTiming,
+  isLR2JudgeTimingAutoAdjust,
+  JUDGE_TIMING_AUTO_ADJUST_MODES,
+  resolveJudgeTimingAutoAdjust,
+  type JudgeTimingAutoAdjust,
+} from './core/judge-timing.ts';

@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 /**
  * The LR2 family's result screen: an LR2 result skin (`Result/*.lr2skin`, or the course-result skin for a course run)
  * drawn on its canvas, letterboxed into the window. It draws the result session's frames through the LR2 result state
@@ -439,7 +440,7 @@ export class LR2ResultView implements ResultView {
 }
 
 function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
+  return clamp(value, 0, 1);
 }
 
 /**

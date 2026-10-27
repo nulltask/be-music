@@ -5,9 +5,10 @@ import { HI_SPEED_STORAGE_KEY } from '../hi-speed-storage.ts';
 import { PLAY_TEMPO_STORAGE_KEY } from '../play-tempo-settings.ts';
 import { RENDER_RESOLUTION_STORAGE_KEY } from '../render-resolution.ts';
 import { PLAY_IN_SILENT_MODE_STORAGE_KEY } from '../silent-mode-playback.ts';
+import { DEBUG_MENU_SETTINGS_STORAGE_KEY } from '../debug-menu-settings.ts';
 import {
   BUILT_IN_SKIN_STORAGE_KEY,
-  createDemoGUIState,
+  createPlayerGUIState,
   resolveCompressorMode,
   PLAY_LAYOUT_STORAGE_KEY,
   readStoredBuiltInSkinId,
@@ -66,7 +67,7 @@ const phone: DeviceSignals = {
 };
 
 describe('settings storage keys', () => {
-  test('stay the be-music-demo.* keys returning players and the end-to-end suite rely on', () => {
+  test('stay the be-music.* keys returning players and the end-to-end suite rely on', () => {
     expect([
       BUILT_IN_SKIN_STORAGE_KEY,
       SKIN_EFFECTS_STORAGE_KEY,
@@ -74,11 +75,11 @@ describe('settings storage keys', () => {
       RECORDING_FORMAT_STORAGE_KEY,
       VOLUME_STORAGE_KEY,
     ]).toEqual([
-      'be-music-demo.built-in-skin',
-      'be-music-demo.skin-effects',
-      'be-music-demo.play-layout',
-      'be-music-demo.recording-format',
-      'be-music-demo.volumes',
+      'be-music.built-in-skin',
+      'be-music.skin-effects',
+      'be-music.play-layout',
+      'be-music.recording-format',
+      'be-music.volumes',
     ]);
   });
 });
@@ -151,7 +152,7 @@ describe('recording format', () => {
 
 describe('volumes', () => {
   test('are all 100 % when nothing is stored, the JSON is broken or storage is blocked', () => {
-    const full = { masterVolume: 100, keyVolume: 100, bgmVolume: 100 };
+    const full = { masterVolume: 100, muted: false, keyVolume: 100, bgmVolume: 100 };
     expect(readStoredVolumes(memoryStorage())).toEqual(full);
     expect(readStoredVolumes(memoryStorage({ [VOLUME_STORAGE_KEY]: '{not json' }))).toEqual(full);
     expect(readStoredVolumes(blockedStorage)).toEqual(full);
@@ -160,16 +161,16 @@ describe('volumes', () => {
   test('round-trip, each clamped to 0..100, a missing or non-numeric one at 100', () => {
     const storage = memoryStorage();
     storeVolumes({ masterVolume: 80, keyVolume: 55, bgmVolume: 30 }, storage);
-    expect(readStoredVolumes(storage)).toEqual({ masterVolume: 80, keyVolume: 55, bgmVolume: 30 });
+    expect(readStoredVolumes(storage)).toEqual({ masterVolume: 80, muted: false, keyVolume: 55, bgmVolume: 30 });
     const odd = memoryStorage({
       [VOLUME_STORAGE_KEY]: JSON.stringify({ masterVolume: 140, keyVolume: -5, bgmVolume: 'x' }),
     });
-    expect(readStoredVolumes(odd)).toEqual({ masterVolume: 100, keyVolume: 0, bgmVolume: 100 });
+    expect(readStoredVolumes(odd)).toEqual({ masterVolume: 100, muted: false, keyVolume: 0, bgmVolume: 100 });
     expect(() => storeVolumes({ masterVolume: 1, keyVolume: 1, bgmVolume: 1 }, blockedStorage)).not.toThrow();
   });
 });
 
-describe('createDemoGUIState', () => {
+describe('createPlayerGUIState', () => {
   const actions = {
     openFolder: vi.fn(),
     openFiles: vi.fn(),
@@ -177,7 +178,7 @@ describe('createDemoGUIState', () => {
     screenshot: vi.fn(),
   };
   const create = (storage: SettingStorage, overrides: { devicePixelRatio?: number; signals?: DeviceSignals } = {}) =>
-    createDemoGUIState({
+    createPlayerGUIState({
       storage,
       signals: overrides.signals ?? desktop,
       devicePixelRatio: overrides.devicePixelRatio ?? 2,
@@ -190,11 +191,15 @@ describe('createDemoGUIState', () => {
     expect(state).toMatchObject({
       autoPlay: false,
       masterVolume: 100,
+      muted: false,
       keyVolume: 100,
       bgmVolume: 100,
       playInSilentMode: true,
+      peakGain: false,
       compressor: true,
       autoSaveReplay: false,
+      tempoEnabled: false,
+      tempoStretchAlgorithm: 'wsola',
       tempoPercent: 0,
       judgeRuleset: 'lr2',
       gauge: 'GROOVE',
@@ -213,12 +218,16 @@ describe('createDemoGUIState', () => {
     expect(state.record).toBe(actions.record);
   });
 
-  test('picks up every remembered setting from its be-music-demo.* key', () => {
+  test('picks up every remembered setting from its be-music.* key', () => {
     const state = create(
       memoryStorage({
         [VOLUME_STORAGE_KEY]: JSON.stringify({ masterVolume: 70, keyVolume: 60, bgmVolume: 50 }),
         [PLAY_IN_SILENT_MODE_STORAGE_KEY]: 'off',
-        [PLAY_TEMPO_STORAGE_KEY]: JSON.stringify({ tempoPercent: 10, tempoPitchMode: 'keep-pitch' }),
+        [PLAY_TEMPO_STORAGE_KEY]: JSON.stringify({
+          tempoEnabled: true,
+          tempoPercent: 10,
+          tempoPitchMode: 'keep-pitch',
+        }),
         [HI_SPEED_STORAGE_KEY]: '3.5',
         [BUILT_IN_SKIN_STORAGE_KEY]: 'plain',
         [SKIN_EFFECTS_STORAGE_KEY]: 'off',
@@ -229,9 +238,11 @@ describe('createDemoGUIState', () => {
     );
     expect(state).toMatchObject({
       masterVolume: 70,
+      muted: false,
       keyVolume: 60,
       bgmVolume: 50,
       playInSilentMode: false,
+      tempoEnabled: true,
       tempoPercent: 10,
       tempoPitchMode: 'keep-pitch',
       hiSpeed: 3.5,
@@ -249,6 +260,19 @@ describe('createDemoGUIState', () => {
     ).toBe(2);
     expect(create(memoryStorage(), { devicePixelRatio: 1 }).renderResolution).toBe(1);
     expect(create(memoryStorage(), { signals: phone }).skinEffects).toBe('reduced');
+  });
+
+  test('a saved Debug Menu document replaces the visit defaults', () => {
+    const state = create(
+      memoryStorage({
+        [DEBUG_MENU_SETTINGS_STORAGE_KEY]: JSON.stringify({
+          version: 1,
+          updatedAt: 1,
+          settings: { gauge: 'HARD', autoPlay: true, peakGain: true, judgeRuleset: 'beatoraja' },
+        }),
+      }),
+    );
+    expect(state).toMatchObject({ gauge: 'HARD', autoPlay: true, peakGain: true, judgeRuleset: 'beatoraja' });
   });
 
   test('starts from the defaults when storage is blocked', () => {

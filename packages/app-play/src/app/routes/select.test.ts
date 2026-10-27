@@ -17,7 +17,7 @@ import { describe, expect, test, vi } from 'vite-plus/test';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
-import type { DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import { SceneRouter } from '../scene-router.ts';
 import { SelectRoute, type SelectRouteDeps } from './select.ts';
@@ -119,8 +119,8 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     playSkins: {},
     skinFamilyOverride: 'auto',
   });
-  const stage: (DemoScene | undefined)[] = [];
-  const router = new SceneRouter<DemoScene, PlayScene, SelectScene>({
+  const stage: (PlayerScene | undefined)[] = [];
+  const router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene) => {
         stage.push(scene);
@@ -140,7 +140,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
   const lr2: { selectSkin: LR2Skin | undefined } = { selectSkin: undefined };
   const deps = {
     router,
-    elements: { shell } as Pick<PlayerWebDemoElements, 'shell'>,
+    elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: {
       collection: { sources: [], charts: options.charts ?? [chartEntry('a')], errors: [] } as BrowserChartCollection,
     },
@@ -191,6 +191,9 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     unlockReplayOptions: vi.fn<SelectRouteDeps['unlockReplayOptions']>(),
     rememberHiSpeed: vi.fn<SelectRouteDeps['rememberHiSpeed']>(),
     showDecide: vi.fn<SelectRouteDeps['showDecide']>(async () => {}),
+    replaySlots: { exists: vi.fn(() => [false, false, false, false]) },
+    replaySlotsPanel: { showSelect: vi.fn() },
+    startReplayFromSlot: vi.fn<SelectRouteDeps['startReplayFromSlot']>(() => true),
   };
   const route = new SelectRoute({
     ...deps,

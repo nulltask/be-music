@@ -3,11 +3,11 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { isAbortError, throwIfAborted } from '@be-music/shared-utils/core';
 import { resolveFirstExistingPath } from '@be-music/shared-utils/path';
-import { writeStereoPcm16LE } from '@be-music/shared-utils/pcm';
+import { writeStereoPCM16LE } from '@be-music/shared-utils/pcm';
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { parseChartFile, resolveBMSControlFlow } from '@be-music/chart-parser';
 import { type RenderResult, renderJSON } from '@be-music/chart-audio-renderer';
-import { createNodeAudioSink } from '@be-music/player-engine/audio-sink';
+import { createNodeAudioSink } from '@be-music/player-node-audio/audio-sink';
 
 interface PreviewPlaybackHandle {
   stop: () => void;
@@ -675,14 +675,14 @@ function writeLoopedPreviewPCMChunk(chunk: Buffer, rendered: RenderResult, start
     source %= totalFrames;
   }
   const firstChunkFrames = Math.min(PREVIEW_CHUNK_FRAMES, totalFrames - source);
-  writeStereoPcm16LE(chunk, 0, rendered.left, rendered.right, source, firstChunkFrames);
+  writeStereoPCM16LE(chunk, 0, rendered.left, rendered.right, source, firstChunkFrames);
   source += firstChunkFrames;
   if (source >= totalFrames) {
     source = 0;
   }
   const remainingFrames = PREVIEW_CHUNK_FRAMES - firstChunkFrames;
   if (remainingFrames > 0) {
-    writeStereoPcm16LE(chunk, firstChunkFrames * 4, rendered.left, rendered.right, 0, remainingFrames);
+    writeStereoPCM16LE(chunk, firstChunkFrames * 4, rendered.left, rendered.right, 0, remainingFrames);
     source = remainingFrames % totalFrames;
   }
   return source;

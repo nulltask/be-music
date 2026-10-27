@@ -21,23 +21,41 @@ core engine の既定は `lr2` 互換ルールセットと、その `GROOVE` gau
 どちらもオプションで、`PlayerOptions.judgeRuleset` がルールセットを、`PlayerOptions.gauge` がゲージを選びます。
 `bms-player` では `--ruleset` / `--gauge` で指定できます。
 
-## 公開する入口
+## 公開するエントリポイント
 
-`@be-music/player-engine` は、ファイル構成ではなく設計した入口を公開します（[ADR 0005](./adr/0005-public-entry-points.ja.md)）。
+`@be-music/player-engine` は、ファイル構成ではなく設計したエントリポイントを公開します（[ADR 0005](./adr/0005-public-entry-points.ja.md)）。
 
-| 入口                      | 公開するもの                                                                                                                                                                                                                                                                                                                                       |
+| エントリポイント          | 公開するもの                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@be-music/player-engine` | エンジン：`manualPlay`、`autoPlay`、`PlayerOptions` と 5 つの分類の型、`PlayerSummary`、読み込みの進捗、`PlayerInterruptedError`、ランタイムの契約（`AudioSession`、`PlayerInputRuntime`、`PlayerUIRuntime` とその `Create*Context` の型）、`resolvePlayChart`、`preparePlaybackChart`、`resolveChartRulesetFacts`、`createTempoClock`             |
 | `./signals`               | ホストの入力と UI のランタイムが演奏中のプレイとやり取りするもの：入力のバスとそのコマンド、UI のバスとそのフレーム・コマンド・`PlayerGaugeSummary`、状態のシグナル、ハイスピードの範囲と操作                                                                                                                                                      |
 | `./lanes`                 | プレイモードのレーン：レイアウトとスロット、スクラッチとホイールのレーン、キーの割り当て、FREE ZONE の入力、レーンオプションが入れ替えるレーン                                                                                                                                                                                                     |
 | `./display`               | ホストが表示するもの：時刻を付けたプレイのノート（`extract*`、`toTimed*`）、`ScrollDistanceMapper`、画面の BGA の cue（`pickActiveBGACue`、`pickActiveBGAKey`、`DEFAULT_POOR_BGA_DISPLAY_SECONDS`）、選曲画面が表示する譜面の情報（`resolveDisplayed*`）、`formatSeconds`、`resolveAltModifierLabel`、TUI のノートの高さ、BGA の縮小のアルゴリズム |
-| `./ruleset`               | ホスト・スキン・リーダーボードが共有する語彙：判定ルールセットの id（`RULESET_IDS`）、判定幅、ゲージ、クリアランプ、BP、スコア                                                                                                                                                                                                                     |
+| `./ruleset`               | ホスト・スキン・リーダーボードが共有する定義：判定ルールセットの id（`RULESET_IDS`）、判定幅、ゲージ、クリアランプ、BP、スコア                                                                                                                                                                                                                     |
 | `./replay`                | リプレイの形式、その記録・シミュレーター・対象の判定、コースと NONSTOP のログ                                                                                                                                                                                                                                                                      |
 | `./records`               | 判定ルールセットごとのベスト記録と、その記録の規則                                                                                                                                                                                                                                                                                                 |
 | `./course`                | コースの定義：LR2 の `.lr2crs`、beatoraja のコース、難易度表のコース、コースメーカー、NONSTOP の通しプレイ                                                                                                                                                                                                                                         |
-| `./audio-sink`            | Node（`node-web-audio-api`）と Web Audio のコンテキストの音声シンク                                                                                                                                                                                                                                                                                |
 
-譜面の層の名前は `@be-music/chart-model` から読み込みます。`ChartPlayVariant`、`LongNoteMode`、タイムラインとその点、`BGACue` と BGA のタイムラインを作る関数、タイミングの解決、サンプルのトリガーです。それ以外はパッケージの内部です。
+譜面のレイヤーの名前は `@be-music/chart-model` から読み込みます。`ChartPlayVariant`、`LongNoteMode`、タイムラインとその点、`BGACue` と BGA のタイムラインを作る関数、タイミングの解決、サンプルのトリガーです。それ以外はパッケージの内部です。
+
+## Node 音声アダプター
+
+エンジンは `PlayerOptions.createAudioSession` を通して音声を開きます。未指定または戻り値が `undefined` の場合は無音で再生します。`audio: false` の場合はファクトリーを呼びません。ファクトリーにはエンジン自身の `resolvedChart` を渡し、タイミング、サンプルのスライス、元イベントの参照を共有します。
+
+Node で音声を再生する場合は `@be-music/player-node-audio` を導入します。ルートは `createNodeAudioSession` と `loadNodeAudioSampleDurations` を公開します。PCM シンクは `@be-music/player-engine/audio-sink` から `@be-music/player-node-audio/audio-sink` に移動しました。ターミナルプレイヤーはこのアダプターを自動設定し、ブラウザーホストは自身のアダプターを使用します。
+
+```typescript
+import { autoPlay } from '@be-music/player-engine';
+import { createNodeAudioSession, loadNodeAudioSampleDurations } from '@be-music/player-node-audio';
+
+await autoPlay(chart, {
+  audioBaseDir: chartDirectory,
+  createAudioSession: createNodeAudioSession,
+  loadAudioSampleDurations: loadNodeAudioSampleDurations,
+});
+```
+
+`loadAudioSampleDurations` は無音再生を含むアクティブ音声のデバッグ表示にサンプル長を提供します。未指定なら譜面のスライス長または従来の短い推定値を使い、ファイル読み込みやデコードは行いません。[ADR 0011](./adr/0011-host-provided-audio.ja.md) を参照してください。
 
 ## BMS 対応範囲
 
@@ -83,7 +101,7 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | BMS long note の解釈に使います。                                                                                                                                                                                                                     |
 | `#PLAYER`                                                                                                                               | レーンモード推定と表示上の player metadata に使います。                                                                                                                                                                                              |
 | `#VOLWAV`                                                                                                                               | 譜面全体の音量倍率として使います。                                                                                                                                                                                                                   |
-| `#POORBGA`                                                                                                                              | `2` のとき `#BMP00` の POOR fallback を止めます。それ以外の値（または指定なし）では止めません。                                                                                                                                                      |
+| `#POORBGA`                                                                                                                              | `0`（指定なし・不正値も同じ）はミス時に POOR 画像へ切り替え、`1` は通常のレイヤーの上に POOR を重ねます。`2` はチャンネル 06 と `#BMP00` の両方の POOR 画像を非表示にします。                                                                        |
 | `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | ノート描画距離の計算に使います。                                                                                                                                                                                                                     |
 | `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | 再生開始前に制御構文として解決します。                                                                                                                                                                                                               |
 
@@ -96,18 +114,18 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 
 ### 未対応コマンド
 
-| command                                                                                                                                     | 現在の player 実装                                                                                                                                                                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `#TEXTxx`, `#TEXT00`                                                                                                                        | parser は保持しますが、player の表示や runtime 演出には使いません。                                                                                                                                                                              |
-| `#OPTION`, `#CHANGEOPTIONxx`                                                                                                                | parser は保持しますが、core runtime での play option 強制変更は未対応です。                                                                                                                                                                      |
-| `#WAVCMD`, `#EXWAVxx`                                                                                                                       | parser は保持します。bundled Node realtime audio session は適用しませんが、chart-audio-renderer と browser WebAudio は実装済みの volume subset (`#WAVCMD 01` と `#EXWAVxx v`) を反映します。pitch、loop、pan、frequency parameter は未対応です。 |
-| `#BACKBMP`                                                                                                                                  | core/terminal runtime には専用挙動がありません。browser LR2 special graphic はこの値を利用できます。                                                                                                                                             |
-| `#MAKER`                                                                                                                                    | metadata-only / unsupported です。                                                                                                                                                                                                               |
-| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx`                                                                                                 | parser は保持します。terminal/core runtime は適用しませんが、browser player は BGA sub-region、switching、tint、alpha の実装済み subset を描画します。                                                                                           |
-| `#BASEBPM`                                                                                                                                  | parser は保持しますが、player は時間解決に使いません。                                                                                                                                                                                           |
-| `#VIDEOFILE`                                                                                                                                | parser は保持しますが、player の BGA 動画解決には使いません。現実装の動画再生は `#BMPxx` で参照した動画ファイルだけを扱います。                                                                                                                  |
-| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`                                                                                        | parser は保持しますが、player runtime は参照しません。                                                                                                                                                                                           |
-| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | 現在の player 実装では未対応です。                                                                                                                                                                                                               |
+| command                                                                                                                                     | 現在の player 実装                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#TEXTxx`, `#TEXT00`                                                                                                                        | parser は保持しますが、プレイヤーの表示や runtime 演出には使いません。                                                                                                                                                          |
+| `#OPTION`, `#CHANGEOPTIONxx`                                                                                                                | parser は保持しますが、core runtime での play option 強制変更は未対応です。                                                                                                                                                     |
+| `#WAVCMD`, `#EXWAVxx`                                                                                                                       | parser は保持します。Node audio adapter は適用しませんが、chart-audio-renderer と browser WebAudio は実装済みの volume subset (`#WAVCMD 01` と `#EXWAVxx v`) を反映します。pitch、loop、pan、frequency parameter は未対応です。 |
+| `#BACKBMP`                                                                                                                                  | core/terminal runtime には専用挙動がありません。browser LR2 special graphic はこの値を利用できます。                                                                                                                            |
+| `#MAKER`                                                                                                                                    | metadata-only / unsupported です。                                                                                                                                                                                              |
+| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx`                                                                                                 | parser は保持します。terminal/core runtime は適用しませんが、browser player は BGA sub-region、switching、tint、alpha の実装済み subset を描画します。                                                                          |
+| `#BASEBPM`                                                                                                                                  | parser は保持しますが、player は時間解決に使いません。                                                                                                                                                                          |
+| `#VIDEOFILE`                                                                                                                                | parser は保持しますが、プレイヤーの BGA 動画解決には使いません。現実装の動画再生は `#BMPxx` で参照した動画ファイルだけを扱います。                                                                                              |
+| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`                                                                                        | parser は保持しますが、player runtime は参照しません。                                                                                                                                                                          |
+| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | 現在の player 実装では未対応です。                                                                                                                                                                                              |
 
 ## 実行フロー
 
@@ -117,7 +135,7 @@ player は次の順序で譜面を実行します。
 2. 分岐後の譜面を `resolveChart`（`@be-music/chart-model`、[アーキテクチャ](./architecture.ja.md) を参照）で 1 回だけ解決し、演奏ノート、地雷、不可視ノート、リアルタイム音声トリガ、テンポマップ、譜面の事実を、得られた `ResolvedChart` から取り出します。
 3. 分岐後の譜面からレーンモードを確定し（[レーンモードと入力](#レーンモードと入力)）、実際に存在するチャンネル群からキー割り当てと FREE ZONE のエイリアスを確定します。
 4. ゲージ、スコア、UI state、入力 runtime、音声 runtime を初期化します。
-5. 1 つのプレイループ（`play-loop.ts`）を、そのプレイの判定の戦略（手動（AUTO SCRATCH を含む）、リプレイ（`replayInputs`）、AUTO）で実行し、最後に `PlayerSummary` を返します。
+5. 1 つのプレイループ（`play-loop.ts`）を、そのプレイの判定ストラテジー（手動（AUTO SCRATCH を含む）、リプレイ（`replayInputs`）、AUTO）で実行し、最後に `PlayerSummary` を返します。
 
 同じ手順を流れで示します（`play.ts`、`play-session.ts`、`play-loop.ts`、`play-finish.ts`）。
 
@@ -138,7 +156,7 @@ flowchart TD
 
 時間解決では、通常の `#STOPxx` に加えて、BMS 拡張 `#STP` も停止イベントとして扱います。
 同じ位置に `#STOPxx` のオブジェクトが複数あれば、LR2 や beatoraja と同じく最後のものが勝ちます。bmson の同じパルスの `stop_events` は、bmson 仕様のとおり加算します。
-`#STP` は `xxx[.yyy] zzzz` を `measure xxx` の `yyy / 1000` 位置にある `zzzz ms` の停止として解釈し、同位置の複数定義は加算します。`.yyy` が省略された場合は `000` として扱います。書式に合わない `bms.stp` 要素は IR には保持されますが、player の時間解決では無視します。
+`#STP` は `xxx[.yyy] zzzz` を `measure xxx` の `yyy / 1000` 位置にある `zzzz ms` の停止として解釈し、同位置の複数定義は加算します。`.yyy` が省略された場合は `000` として扱います。書式に合わない `bms.stp` 要素は IR には保持されますが、プレイヤーの時間解決では無視します。
 
 ## 制御構文の扱い
 
@@ -179,7 +197,7 @@ flowchart LR
   draws --> users
 ```
 
-どのホストも 1 回だけ引き、同じ譜面と draws をそのプレイのすべての利用者に渡します。CLI はプレビューの描画とゲームプレイ worker に、web player は決定画面、プレイ画面、エンジン、リザルト画面に渡します。
+どのホストも 1 回だけ引き、同じ譜面と draws をそのプレイのすべての利用者に渡します。CLI はプレビューの描画とゲームプレイ worker に、Web プレイヤー は決定画面、プレイ画面、エンジン、リザルト画面に渡します。
 リスタートでは引き直します。LR2 や beatoraja もプレイごとに引き直すためです。
 エンジン（`autoPlay` / `manualPlay`）は自分では引きません。解決済みの譜面はそのまま再生し、`PlayerOptions.randomDraws` は RANDOM 要約にだけ使います。
 制御構文が残った譜面を `randomDraws` と一緒に渡された場合（たとえば元の譜面とリプレイの draws）は、その draws でちょうど 1 回だけ解決します。draws なしで渡された場合は、エンジンの外の誰も知らない分岐を引く代わりに `TypeError` を投げます。
@@ -229,11 +247,11 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 
 地雷がいつ爆発するかは判定 ruleset が決めます（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) の `mineTrigger`）。engine と replay simulator は同じ規則を使います。ダメージモデルはどの ruleset でも同じです（beatoraja `JudgeManager` で確認）。
 
-- `lr2` ruleset — LR2 のモデル（LR2 自身の changelog）。「**キーを押したまま地雷が判定線を通過**」または「**地雷が判定線の `PGREAT` 窓以内にあるときの押下**」で爆発します。キーが押されていない地雷の通過は無害で、通過後かつ `PGREAT` 圏外の押下も無害です。
+- `lr2` ruleset — LR2beta3 本体の挙動。押下は判定線から早い側の GREAT 境界の手前までで地雷を踏みます（境界は含めない）。押したままなら通過時に爆発します。通過した地雷は最初のポーリングで消費し、遅い押下や、押したまま判定幅に入っただけでは爆発しません。
 - `beatoraja` ruleset — beatoraja のモデル（`JudgeManager` L244）。「**地雷が判定線を通過する瞬間にキーが押されている**」ときだけ爆発します。少し前に押して通過前に離した場合や、通過後の押下では何も起きません。
 - 「押されている」かどうかはレーンごとに記録した押下・離鍵の時刻から判定するため、地雷をいつ確定させてもライブプレイ・リプレイ・シミュレータの結果は一致します。2 つのキーで押さえたレーンは、どちらかが押されている間は押されたままです。通過と同じ瞬間の入力は通過より先に扱い、その µs に押したキーは押されている、その µs に離したキーは離れているものとします。離鍵を送らない入力では、判定が押下を受ける前にエンジンが離鍵を推定し、押下のたびにレーンを 120 ms（ロングノートの始点を弾いた押下では 380 ms）押されたままにします（[解放のない入力](./replay.ja.md#解放のない入力)）。
-- `iidx` ruleset — IIDX には地雷がないため、根拠が見つかるまでは LR2 のモデルを使います。（losak の資料は `GOOD` 窓としていますが、一次資料である LR2 changelog は「ピカグレ範囲内」と明記しています。詳細は [`bms-spec.ja.md`](./bms-spec.ja.md) 参照。）
-- 爆発はゲージ減少と `#WAV00` 爆発音のみで、**判定・コンボ・スコアには一切影響しません**。通常ノートの判定は爆発と独立に行われます（地雷が近接ノートへの入力を吸い込むことはありません）。
+- `____` ruleset — 名前を言ってはいけないあのゲームに地雷はありません。既存の暫定的な左右対称 PGREAT の押下・保持モデルを維持します。名前を言ってはいけないあのゲーム 本体の挙動を示すものではありません。
+- 爆発はゲージを減らし `#WAV00` を鳴らします。LR2 は POOR/BP も1回加算しますが、判定表示・コンボ切断・EX-SCORE 変更・通常 POOR 分の追加ゲージダメージは発生しません。`minePoor` は `poor` に含まれる地雷数を記録し、コース BP で未判定ノートの代わりに数えないようにします。beatoraja と暫定 名前を言ってはいけないあのゲームはゲージのみの処理を保ちます。通常ノート判定は独立して行い、地雷は近接ノートの押下を消費しません。
 - ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `mine_channels[].notes[].damage` が付いた地雷はその値を優先します。`damage` のない bmson の地雷は既定の `4%` です（オブジェクト値はパーサーが割り当てた WAV スロットでありダメージ表現ではないため、ダメージとしては読みません）。
 - ダメージは HARD の 30% 緩和・`#TOTAL` 補正の対象外です（beatoraja の `gauge.addValue()` 直接加算と同じ）。
 - `ZZ`（= 1295%）は survival 系（HARD / DEATH）では即 FAILED、GROOVE / EASY では下限 `2%` で止まります。
@@ -251,9 +269,9 @@ bmson の `key_channels`（beatoraja の隠しノート）は不可視ノート�
 FREE ZONE (`17` / `27`) は 1 beat の終端を持つノートとして扱います。
 通常の score/gauge 対象からは除外し、keysound fallback と描画上の補助対象として扱います。
 判定上の効果はありません。FREE ZONE 中のスクラッチの押下はほかの押下と同じく判定し、空 `POOR` になりえます。LR2 と
-beatoraja はどちらも 7 鍵・14 鍵の譜面で `17` / `27` チャンネルを読み込み時に捨て、IIDX にはもともと FREE ZONE が
+beatoraja はどちらも 7 鍵・14 鍵の譜面で `17` / `27` チャンネルを読み込み時に捨て、名前を言ってはいけないあのゲームにはもともと FREE ZONE が
 ありません（FREE ZONE は beatmania 1st / 2ndMIX の仕組みです）。
-これが適用されるのは IIDX 系のみです。`9 KEY` と `24 KEY` / `48 KEY` の keyboard mode では、これらのチャンネルは通常のキーレーンなので、譜面が書いた長さのまま（単押しは単押しのまま）扱います。
+これが適用されるのは 名前を言ってはいけないあのゲーム 系のみです。`9 KEY` と `24 KEY` / `48 KEY` の keyboard mode では、これらのチャンネルは通常のキーレーンなので、譜面が書いた長さのまま（単押しは単押しのまま）扱います。
 
 ## レーンモードと入力
 
@@ -281,11 +299,11 @@ ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。
 既知の固定レイアウトに存在しないチャンネルは、未使用キーへ順番にフォールバック割り当てします。
 FREE ZONE は、対応する scratch レーン (`17 -> 16`, `27 -> 26`) の入力トークンも共有します。
 
-`24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 26 レーンで、24 鍵をチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に、ホイールを `1P`（上）/ `1Q`（下）（2P 側は `2P` / `2Q`）に持ちます。scratch 列はありません。鍵はチャンネル昇順に左から右へ並べ、ホイールは IIDX 系が scratch を置く外側（1P の鍵の左、2P の鍵の右）に置きます。判定は内容ベースで、拡張レーンチャンネル（ホイールを含む）が 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選び、bmson のキーボード系 `mode_hint` はそのままこのモードを選びます。
+`24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 26 レーンで、24 鍵をチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に、ホイールを `1P`（上）/ `1Q`（下）（2P 側は `2P` / `2Q`）に持ちます。scratch 列はありません。鍵はチャンネル昇順に左から右へ並べ、ホイールは 名前を言ってはいけないあのゲーム 系が scratch を置く外側（1P の鍵の左、2P の鍵の右）に置きます。判定は内容ベースで、拡張レーンチャンネル（ホイールを含む）が 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選び、bmson のキーボード系 `mode_hint` はそのままこのモードを選びます。
 
-ホイールは鍵とまったく同じに判定し（beatoraja ruleset の keyboard 判定幅で、scratch 固有の扱いはありません）、FREE ZONE にもなりません。レーンオプション（MIRROR / RANDOM / S-RANDOM）は片側の 24 鍵を入れ替え、ホイールは scratch と同じく動かしません。SP の 24 鍵は fallback キー配置を順に消費します (`a s d f g h j k l ; q w e r u i o p z x c v b n`)。ホイールはその割り当てとも、web player がハイスピード変更に使う矢印キーとも重ならない、キーボードの端のキーを使います。1P のホイール上 / 下は `Tab` / 左 `Shift`、2P は `Enter` / 右 `Shift` です（beatoraja は MIDI コントローラのピッチベンドでホイールを操作しますが、be-music には MIDI 入力がありません）。48 鍵の DP は印字キーの数を超えるため鍵の末尾がファンクションキーに落ちますが、48 鍵は AUTO PLAY と描画の検証対象であって手で押す対象ではないため、意図的な割り切りです。
+ホイールは鍵とまったく同じに判定し（beatoraja ruleset の keyboard 判定幅で、scratch 固有の扱いはありません）、FREE ZONE にもなりません。レーンオプション（MIRROR / RANDOM / S-RANDOM）は片側の 24 鍵を入れ替え、ホイールは scratch と同じく動かしません。SP の 24 鍵は fallback キー配置を順に消費します (`a s d f g h j k l ; q w e r u i o p z x c v b n`)。ホイールはその割り当てとも、Web プレイヤー がハイスピード変更に使う矢印キーとも重ならない、キーボードの端のキーを使います。1P のホイール上 / 下は `Tab` / 左 `Shift`、2P は `Enter` / 右 `Shift` です（beatoraja は MIDI コントローラのピッチベンドでホイールを操作しますが、be-music には MIDI 入力がありません）。48 鍵の DP は印字キーの数を超えるため鍵の末尾がファンクションキーに落ちますが、48 鍵は AUTO PLAY と描画の検証対象であって手で押す対象ではないため、意図的な割り切りです。
 
-IIDX 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とします。
+名前を言ってはいけないあのゲーム 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とします。
 scratch は 1P が左 `Shift`、2P が右 `Shift` です。
 reverse scratch は 1P が左 `Ctrl`、2P が右 `Ctrl` を使います。macOS では `Ctrl` の代わりに左/右 `Option` を使います。
 
@@ -299,7 +317,7 @@ kitty 非対応端末へフォールバックした場合、reverse scratch の 
 ホイールの上 / 下）、side、slot（鍵の番号。scratch は `0`、ホイールは `25` / `26`）、色の分類、そのレーンに載る各オブジェ系統の
 BMS チャンネル（可視 `1x` / `2x`、不可視 `3x` / `4x`、`#LNTYPE` の `5x` / `6x`、地雷 `Dx` / `Ex`。拡張レーン `A`..`Q` を含む）と、
 scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_hint` のレーン表（`BMSON_MODE_HINT_LAYOUTS`）も同じレイアウトから
-作ります。parser、chart-writer、`resolveChartPlayVariant`、player のレーン配置とレーンオプション、CLI のレーン色、skin SDK の
+作ります。parser、chart-writer、`resolveChartPlayVariant`、プレイヤーのレーン配置とレーンオプション、CLI のレーン色、skin SDK の
 レーン種別は、すべてこの表から導出します。
 
 | レイアウト | 表示名               | レーン（左から右）                                                             | bmson `mode_hint`     |
@@ -313,10 +331,27 @@ scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_
 | `24`       | `24 KEY SP`          | `1P` / `1Q`（ホイール）、`11`-`19`、`1A`-`1O`                                  | `keyboard-24k`        |
 | `48`       | `48 KEY DP`          | `24` と同じ並びの後に `21`-`29`、`2A`-`2O`、`2P` / `2Q`（ホイール）            | `keyboard-24k-double` |
 
+### 選択できるレーンオプション
+
+新しいプレイでは OFF、MIRROR、RANDOM、S-RANDOM を提供します。SCATTER は前の行・LN の配置条件とアシスト・記録方針を合わせて実装するまで無効化します。新しい SCATTER の直接要求は譜面準備・リプレイ記録より前に失敗し、暗黙に RANDOM を引くことはありません。旧リプレイに SCATTER という名前があっても、保存済みの確定チャンネルをそのまま再生できます。
+
+### S-RANDOM の配置
+
+`randomizeSRandomNotes`（`@be-music/player-engine/lanes`）は実行環境に依存しない純粋なヘルパーです。確定済みイベントの時刻（ms）、モード・左右の完全な鍵盤範囲、選択した判定ルールセット、外から渡す乱数を受け取り、ノートを変更せず入力順のチャンネルを返します。ブラウザはエンジンが判定するノートと同じオブジェクトに配置を適用し、LN の終端も保持します。スクラッチ・ホイール・反対側のイベントは固定します。
+
+| 規則                   | LR2 と暫定 名前を言ってはいけないあのゲーム            | beatoraja                                                |
+| ---------------------- | ------------------------------------------------------ | -------------------------------------------------------- |
+| 保持中の LN            | 終端の行まで配置先を予約                               | 終端の行まで元と先の対応を保持                           |
+| 通常ノート             | 同時刻・保持中の LN が使わない配置先から選択           | 前の得点対象ノートから整数 ms で40msを超えた配置先を優先 |
+| 連打間隔が足りない場合 | 連打間隔の制限なし                                     | 最も古い配置先を使い、同時なら乱数で選択                 |
+| 地雷・不可視ノート     | 地雷は空きに配置し、不可視ノートは元レーンの対応に従う | 行の置換に従い、連打時刻を更新しない                     |
+
+描画ファミリーに関係なく、選択した判定ルールセットが規則を決めます。完全な範囲は PMS の2形式と5/7/9/10/14/24/48鍵を含みます。LR2 で空きレーンよりイベントが多い行は、無限に引き直さず明示的に失敗します。確定したチャンネルを記録し、リプレイは引き直さずそれを適用するため、旧記録の配置も保たれます。
+
 ## 互換ルールセット
 
 **このプレイヤーは独自の判定ロジックを持ちません。** すべてのプレイは 3 つの互換ルールセット
-`lr2`（デフォルト）/ `beatoraja` / `iidx` のいずれかで動作します（`PlayerOptions.judgeRuleset`）。
+`lr2`（デフォルト）/ `beatoraja` / `____` のいずれかで動作します（`PlayerOptions.judgeRuleset`）。
 判定幅、押下がどのノートを取るか、ロングノートの扱い、空 POOR の規則、ゲージの種類とカーブ、スコア計算式は
 すべてルールセットが所有します。定数と出典は
 [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) にあり、
@@ -500,7 +535,7 @@ flowchart TD
 
 - `summary.emptyPoor` を加算し、ノート判定カウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。ノートを消費していないため。POOR カウンタに両者の合計を表示するかは提示側の選択で、LR2 は合算します（OpenLR2 `ApplyJudgeNote` が空POOR 分岐でも `playerstat.poor` を加算）。
 - EX-SCORE とスコアは **変化させない**。
-- combo はルールセットが指示する場合のみ切る（`comboBreaksOnEmptyPoor`）。beatoraja の 5 鍵 / PMS のみ切れ、LR2 と IIDX は切れません。
+- combo はルールセットが指示する場合のみ切る（`comboBreaksOnEmptyPoor`）。beatoraja の 5 鍵 / PMS のみ切れ、LR2 と 名前を言ってはいけないあのゲームは切れません。
 - ゲージには `EMPTY_POOR` を適用する。デルタはルールセットのゲージ表（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)）にあり、`lr2` では GROOVE `-2`、HARD `-2`（TOTAL 補正対象）、EASY `-1.6`、DEATH `-10`。GROOVE / EASY ではほぼ無害だが、HARD / DEATH では実害が出る。
 - **POOR BGA を発火する** (`trigger-poor-bga`)。
 - **judge 表示を `POOR` で 0.6 秒フラッシュ** する (`publishJudgeCombo('POOR', combo)`)。 LR2 spec 上は op 246 (1P 空POOR) / 266 (2P 空POOR) と op 245 / 265 (見逃しPOOR) が分岐するが、本実装では NOWJUDGE index 0 / 1 を同じ `'poor'` skin slot に解決しているため、視覚上は同一の POOR 表示になる。
@@ -512,7 +547,7 @@ fallback は early `BAD` 窓がすでに開いた同レーン最新 WAV です�
 
 ### 地雷
 
-地雷の爆発は判定語ではありません。`BAD` / `POOR` を発生させず、判定カウンタ・combo・EX-SCORE・score も変更せず、近くの通常ノート候補より優先されることもありません。
+地雷は判定表示やコンボ・EX-SCORE を変更しません。LR2beta3 は POOR と `minePoor` を1回加算し、地雷の生ダメージだけを適用します。他のルールセットはゲージのみの処理を保ちます。
 行うのはゲージへの地雷ダメージ適用と、定義されていれば `#WAV00` の発音だけです。発動条件とダメージ規則は [地雷](#地雷) を参照してください。
 オブジェクト値が 2 文字の大文字 base36 ID でない場合（または `00` の場合）は既定ダメージ `4%` にフォールバックします。`#BASE 62` の小文字の値もこれに該当します。`damage` のない bmson の地雷も同じ `4%` です。
 
@@ -538,7 +573,7 @@ combo は `PERFECT` / `GREAT` / `GOOD` のみで増加します。
 
 ### EX-SCORE
 
-EX-SCORE は IIDX 互換です。
+EX-SCORE は 名前を言ってはいけないあのゲーム互換です。
 
 - `PERFECT`: `+2`
 - `GREAT`: `+1`
@@ -550,11 +585,11 @@ EX-SCORE は IIDX 互換です。
 
 - `lr2` は LR2 のマネースコア `floor((4 × PGREAT + 2 × GREAT + GOOD) × 50000 / notes)`（上限 `200000`）を返します。
   判定内訳だけで決まり、コンボ項はありません。
-- `beatoraja` と `iidx` は EX-SCORE を返します。これが実機の表示です（IIDX は BISTROVER でマネースコアを廃止）。
+- `beatoraja` と `____` は EX-SCORE を返します。これが実機の表示です（名前を言ってはいけないあのゲームは BISTROVER でマネースコアを廃止）。
 
-スコアの語彙はルールセットのもので、`@be-music/player-engine/ruleset` が公開します。`ScoreSummary`、`JudgmentKind`、
-`createEmptyScore`、`computeScoreRate`、DJ ランク（`resolveIIDXRankIndexFromScore`、`resolveIIDXRankLabel`、
-`IIDX_RANK_LABELS`）、`resolveLR2MoneyScore`、`resolveDisplayedPoor` です。
+スコアの定義はルールセットのもので、`@be-music/player-engine/ruleset` が公開します。`ScoreSummary`、`JudgmentKind`、
+`createEmptyScore`、`computeScoreRate`、DJ ランク（`resolve____RankIndexFromScore`、`resolve____RankLabel`、
+`_____RANK_LABELS`）、`resolveLR2MoneyScore`、`resolveDisplayedPoor` です。
 
 ### 空 POOR
 
@@ -562,13 +597,13 @@ EX-SCORE は IIDX 互換です。
 演出を出しますが、ノートを消費しないため EX-SCORE には影響せず、`summary.poor` ではなく
 `summary.emptyPoor` に計上されます。LR2 の miss 窓は早側のみ（`{0, 1 s}`）で、ノートの 1 秒前までの押下は
 空 POOR になりますが、通過後の押下は決してなりません。beatoraja は早側 500 ms・遅側 150 ms です。
-コンボを切るかどうかもルールセット次第で、beatoraja の 5 鍵 / PMS のみ切れ、LR2 と IIDX は切れません。
+コンボを切るかどうかもルールセット次第で、beatoraja の 5 鍵 / PMS のみ切れ、LR2 と 名前を言ってはいけないあのゲームは切れません。
 
 POOR カウンタに `poor` と `emptyPoor` の合計を表示するかは提示側の選択で、ルールセットが
 `emptyPoorCountsInPoorDisplay` として持ちます。LR2 のカウンタは合算します（OpenLR2 `ApplyJudgeNote` が
 空POOR 分岐でも `playerstat.poor` を加算し、LR2 に独立した統計は無いため）。そのため Web のプレイのセッションは `lr2` では
 表示用コピーで合算し、POOR 行・BP・判定別レートがすべて追従します。beatoraja は独自の空POOR 表示を持ち、
-IIDX は未測定のため、どちらも分けたままです。`PlayerSummary` は常に分けて報告します。
+名前を言ってはいけないあのゲームは未測定のため、どちらも分けたままです。`PlayerSummary` は常に分けて報告します。
 
 ## Groove Gauge
 
@@ -576,7 +611,7 @@ IIDX は未測定のため、どちらも分けたままです。`PlayerSummary`
 
 - ゲージは `PlayerOptions.gauge` で選び、LR2 の名前（`GROOVE` / `EASY` / `HARD` / `DEATH`）で指定します。
   各ルールセットが自分のラインナップへ対応付けます（`GROOVE` は beatoraja の `NORMAL`、`DEATH` は `HAZARD`。
-  IIDX に HAZARD 相当は無いため `DEATH` は `EX-HARD` に丸められます）。
+  名前を言ってはいけないあのゲームに HAZARD 相当は無いため `DEATH` は `EX-HARD` に丸められます）。
 - カーブはルールセットが所有します: 判定ごとの増減、TOTAL スケーリング、guts 緩和、死亡ボーダー、
   クリア判定（回復系は閾値、サバイバル系は「一度も 0 にならなかったか」）。
 - 選択したゲージは実際にプレイを支配します。色だけの飾りではありません — HARD は本当に削れ、
@@ -601,7 +636,7 @@ IIDX は未測定のため、どちらも分けたままです。`PlayerSummary`
 - `#TOTAL` 未指定または 0 以下のときは LR2 のノート数式（`LR2_bmsload.cpp`）で求めます:
   400 ノート未満は `(n / 5 + 200) × 0.8`、600 未満は `((n - 400) / 2.5 + 280) × 0.8`、
   それ以上は `((n - 600) / 5 + 360) × 0.8`。beatoraja は独自の既定値（`max(260, 7.605 n / (0.01 n + 6.5))`）を使います。
-  IIDX のゲージは TOTAL を参照せず（回復量はノート数から決まる）、報告する TOTAL は LR2 の式に従います。
+  名前を言ってはいけないあのゲームのゲージは TOTAL を参照せず（回復量はノート数から決まる）、報告する TOTAL は LR2 の式に従います。
 - bmson の `info.total` は絶対 TOTAL ではなく、ルールセット既定値に対する百分率です。どのルールセットも
   自身の既定値の `total / 100 ×` として扱い、0 以下は 100 % とみなします（beatoraja `BMSPlayerRule.validate`）。
   したがって `total` のない bmson 譜面は TOTAL 100 ではなく、ルールセットの既定値で演奏されます。
@@ -651,7 +686,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 - `lr2`（`ln`）: `#LNMODE` に関わらずすべて LN。判定は 1 回だけ遅延確定し、終点より `GOOD` 窓を超えて早く離すと `BAD`。
 - `beatoraja`（`per-note`）: 譜面に従う — `1` が LN、`2` が CN、`3` が HCN。
-- `iidx`（`charge`）: すべてチャージノート（譜面が `3` なら HCN）。始点が `BAD` / `POOR` だと終点判定は取り消されます。
+- `____`（`charge`）: すべてチャージノート（譜面が `3` なら HCN）。始点が `BAD` / `POOR` だと終点判定は取り消されます。
 
 BMS の `#LNMODE` 未指定時は `1` として扱います。
 bmson は beatoraja 拡張の `info.ln_type` と note 単位の `t`（1: LN / 2: CN / 3: HCN、`t` が `ln_type` より優先）でモードを決め、どちらも未指定の場合は LR2 準拠の既定として `1`（LN）を使います。
@@ -678,17 +713,17 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
 
 離鍵はその瞬間に確定します。例外はルールセットのロングノート離鍵マージン（`longNoteReleaseMarginUs`、beatoraja の
 `longnoteMargin` / `longscratchMargin`）で、beatoraja の PMS ルールでは、終点より前の離鍵が早い側の `BAD` 以下になる場合に
-確定を 200 ms 待ち（LN では始点の方が離鍵よりずれていれば始点のタイミングを使うため、遅い `BAD` の始点はすぐ確定します）、その間にレーンを押し直すと離さなかったものとしてホールドを続けます。LR2、IIDX、beatoraja の
+確定を 200 ms 待ち（LN では始点の方が離鍵よりずれていれば始点のタイミングを使うため、遅い `BAD` の始点はすぐ確定します）、その間にレーンを押し直すと離さなかったものとしてホールドを続けます。LR2、名前を言ってはいけないあのゲーム、beatoraja の
 ほかのモードにはマージンがありません。離鍵イベントのない入力（kitty キーボードプロトコルのない端末）では、エンジンが
 離鍵を推定します。キーの最後のリピートから 120 ms 後、リピートがなければロングノートの始点を叩いた押下から 380 ms 後です。
 
 ロングノートを押しているレーンへの押下（ターンテーブルの逆回転など、同じレーンに割り当てた 2 つ目のキー）は、そのレーンの
 ほかのノートを判定しません。そのレーンの現在のノートはロングノートだからです。代わりにどうするかはルールセット
 （`pressDuringLongNote`）が決めます。`lr2` は押下が LN の始点の `BAD` 窓内なら始点を判定し直し、それ以外は空 `POOR`
-とします（OpenLR2 `ProcLongnote`）。`beatoraja` は押し直しとして無視し（`JudgeManager` L355-377）、`iidx` も同じです。
+とします（OpenLR2 `ProcLongnote`）。`beatoraja` は押し直しとして無視し（`JudgeManager` L355-377）、`____` も同じです。
 
 一度も触れなかったロングノートは始点分の `POOR` 1 つに加え、チャージ系ではさらに終点分の `POOR` を負います。
-ただし IIDX は終点判定が取り消されるため、負いません。
+ただし 名前を言ってはいけないあのゲームは終点判定が取り消されるため、負いません。
 
 手動演奏でのロングノートの一生を、実効モードごとに示します。
 
@@ -702,7 +737,7 @@ stateDiagram-v2
   [*] --> Pending
   Pending --> Missed: 始点の窓を過ぎる
   Pending --> Held: 始点を押す
-  Pending --> Done: 始点 BAD / POOR（iidx のチャージ）
+  Pending --> Done: 始点 BAD / POOR（名前を言ってはいけないあのゲームのチャージ）
   Held --> Margin: マージンのある早い離鍵
   Margin --> Held: 押し直す
   Margin --> Done: マージンが過ぎる
@@ -721,7 +756,7 @@ LN 系スタイルは 1 回の `PGREAT` を終点で付けます。チャージ�
 
 ### AUTO SCRATCH
 
-`AUTO SCRATCH` は手動の判定の戦略で scratch レーン (`16` / `26`) だけを自動処理するモードです。
+`AUTO SCRATCH` は手動の判定ストラテジーで scratch レーン (`16` / `26`) だけを自動処理するモードです。
 LN 方式のロングノートは 1 つの `PGREAT` を終点で付けます。チャージノートは beatoraja のオートプレイと同じく、始点の `PGREAT` を始点で、終点の `PGREAT` を終点で付けます。scratch レーンはプレイモードのもの（プレイモード表の `scratch` レーン）なので、9 KEY の BME 配置とキーボードモードではチャンネル `16` / `26` は通常のキーです。
 
 ## モード別挙動
@@ -756,11 +791,22 @@ scratch playable channel 上の演奏ノートだけを自動で処理し、そ�
 `AUTO` / `MANUAL` ともに、譜面上の seconds を実時間へ換算する際に使います。
 
 `speed` は開始時のテンポです。ホストはプレイ中に入力コマンド `{ kind: 'tempo', tempo }` でこれを変えられます。
-エンジンはコマンドを取り出した譜面時刻で時計を付け替える（`createTempoClock`）ので、譜面時刻は途切れずに続き、そこから新しいテンポで進みます。
+エンジンはコマンドを取り出した譜面時刻でクロックを付け替える（`createTempoClock`）ので、譜面時刻は途切れずに続き、そこから新しいテンポで進みます。
 変更はリプレイ（`play.tempoChanges`）に記録し、`AudioSession.setTempo` を呼び、`onTempoChange` でホストへ知らせます。
 判定と記録する入力は譜面時刻のままなので、再シミュレーションには影響しません。
 リプレイは、ホストがログの変更を `replayTempoChanges` で渡すとそれに従います。
 組み込みの Node 音声セッションは開始時のテンポで音声を作るので、変更には追従しません。
+
+### シーク
+
+ホストは入力コマンド `{ kind: 'seek', seconds }` で動いているプレイを譜面の別の秒数へ動かせます。`startAtSeconds` はプレイの最初のシークです（[ADR 0016](./adr/0016-seek-play-loop-command.ja.md)）。
+エンジンは 1 回の取り出しのうち最後のシークを残し、次のティックで譜面の範囲に収めて適用します。リードイン中は譜面を始める位置を決めます。
+音声セッションは鳴っている音を止め（`AudioSession.seek`）、目標より前の音量変化をもう一度適用し、その位置でまだ鳴っている音を途中から鳴らします（`AudioSession.triggerEventAt`）。
+譜面時刻はその時点のテンポで再生クロックに付け替えるので、一時停止中のプレイは一時停止のままです。
+判定の状態は、先頭からのプレイが目標の位置で持つものになります。スコア・ゲージ・コンボ・ノートの判定済みの印は 0 から作り直します。
+UI には `seek` コマンド、目標をまたいで押さえているロングノートの再通知、次の `generation` を持つ目標の位置のフレームを送ります。譜面の後の保持はもう一度待てるようにします。
+シークしたプレイはリプレイを記録しません。
+今シークできるのは AUTO プレイだけで、手動プレイとリプレイはコマンドを捨てます。
 
 ### `highSpeed`
 
@@ -837,6 +883,8 @@ manual long note で保持が切れた場合は、対応チャンネルの再生
 player 本体は UI 実装に依存せず、`stateSignals` と `uiSignals` を通じて状態を通知します。
 judge/combo、フレーム情報、POOR BGA、レーンフラッシュ、レーン保持表示はこの信号経由で伝えます。
 UI コマンドキューはロングノートの開始・終了も伝えます。保持が始まると `long-note-start`（`mode` は `ln` / `cn` / `hcn`。有効なルールセットが実際にそのノートを処理するモードで、譜面の `#LNMODE` と異なる場合があります）、終わると `long-note-end`（`outcome` は `complete` / `dropped`）を送ります。
+シークは、まだ並んでいるコマンドと判定の合図を捨ててから `seek`（`generation`、シークした `seconds`、`snapshot`：サマリ、コンボ、最大コンボ、目標より前のすべての判定）を送ります。
+どのフレームもシークの `generation`（最初のシークまでは 0）と、その譜面時刻が成り立つ `clock`（音声セッションの出力クロックの `outputSeconds`、`tempo`、`paused`）を持ち、サマリは `combo` と `maxCombo` を持ちます。
 
 `PlayerOptions.onRulesetResolved` は再生開始前に 1 回だけ `PlayerRulesetInfo`（`id`、`rulesetId`、`longNoteStyle`、譜面開始時点の判定窓 `windows`（µs））を渡して呼ばれます。ホストは判定窓を自前で導出し直さずに、エンジンが実際に使う値を表示できます。
 
@@ -903,8 +951,8 @@ long note は body と tail を持つ 1 本のノートとして描画し、保�
 channel 08 経由で負の `#BPMxx` を参照すると（先に整数へ切り捨てるため、`-1 < BPM < 0` は対象外）、LR2 の片道逆スクロール・ギミックが起動します（issue #134。LR2 の根拠と意図的な逸脱は [`bms-spec.ja.md`](./bms-spec.ja.md) 参照）。
 
 - タイミングは単調のまま: resolver は |BPM| で積分するため、全ノートは前進する `seconds` を保持し、反転前の音声スケジューリングに影響はありません。
-- 反転以降、エンジンは UI フレームに `displayBeat = 2 × beat(反転点) − beat(現在)` を載せます。LR2 の描画と同じく譜面位置空間での鏡映です。TUI グリッドと web シーンはこれでスクロールするため、譜面は反転後のテンポで逆走して見えます（反転後の STOP では止まり、後続の BPM 変化に追従し、チャート先頭まで巻き戻った後は先頭で固定）。ステータス時計と summary は実クロックのままです。
-- 押下は鏡映クロック `t' = 2 × 反転点 − 現在時刻` で判定し続けます。反転点付近のノートは反転直後も叩け、レーンの次のノートが `t'` からルールセットの空 POOR 範囲内にある間は空 POOR が出て、反転以降のミス掃きはありません。反転を跨ぐホールドは離すと BAD、離さなければ開いたままです。地雷は反転点で凍結しますが、反転点ちょうどの押下は PGREAT 範囲内の地雷をまだ起爆します。
+- 反転以降、エンジンは UI フレームに `displayBeat = 2 × beat(反転点) − beat(現在)` を載せます。LR2 の描画と同じく譜面位置空間での鏡映です。TUI グリッドと web シーンはこれでスクロールするため、譜面は反転後のテンポで逆走して見えます（反転後の STOP では止まり、後続の BPM 変化に追従し、チャート先頭まで巻き戻った後は先頭で固定）。ステータスクロックと summary は実クロックのままです。
+- 押下は鏡映クロック `t' = 2 × 反転点 − 現在時刻` で判定し続けます。反転点付近のノートは反転直後も叩け、レーンの次のノートが `t'` からルールセットの空 POOR 範囲内にある間は空 POOR が出て、反転以降の見逃し判定はありません。反転を跨ぐホールドは離すと BAD、離さなければ開いたままです。地雷は反転点で凍結しますが、反転点ちょうどの押下は PGREAT 範囲内の地雷をまだ起爆します。
 - リアルタイム音声は LR2 のイベントポンプとともに凍結します。反転より後の BGM・キー音トリガは発火しませんが、反転と同じティックの BGM と BGA は発火します（LR2 の op 順）。BGA のキュー切り替えは止まり、再生中の動画は流れ続けます。NOWBPM は負の値の `|trunc(BPM)|` を保持します。
 - ステージは譜面の事前計算された末尾時刻で終了します（意図的逸脱 — 実機 LR2 は ESC まで進行不能）。未判定のスコア対象ノート（反転後のノート、開いたままのホールド、終端が反転点より後にある AUTO SCRATCH のロングノート）が残っていれば、LR2 がそうしたプレイを離脱したとき HP を 0 にするのと同じく、ゲージを 0 にして FAILED とします。replay には `chart.reversalTimeUs` を記録し、再シミュレーションにも同じ鏡映クロックとリザルトを適用します。
 

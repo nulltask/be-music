@@ -24,7 +24,7 @@ describe('designed entries', () => {
   });
 
   it('@be-music/player-engine/replay leaves the score vocabulary to @be-music/player-engine/ruleset', () => {
-    for (const name of ['computeScoreRate', 'resolveIIDXRankLabel', 'IIDX_RANK_LABELS']) {
+    for (const name of ['computeScoreRate', 'resolve____RankLabel', '_____RANK_LABELS']) {
       expect(replay).not.toHaveProperty(name);
     }
   });
@@ -46,11 +46,33 @@ describe('designed entries', () => {
 
   it('@be-music/player-engine/lanes exports the lane layout and the key bindings', () => {
     expect(exportedValues(lanes)).toEqual([
+      'addLongNotes',
       'appendFreeZoneInputChannels',
+      'applySevenToNine',
+      'clampExtraNoteDepth',
+      'clampHRandomThresholdBPM',
+      'clampLongNoteRate',
+      'clampScrollRate',
+      'clampScrollSection',
+      'createBeatorajaLaneRandom',
       'createInputTokenToChannelsMap',
       'createLaneBindings',
+      'drawLaneRandomIndex',
       'isPlayableInputChannel',
       'isScratch',
+      'parseLaneRandomSeed',
+      'prepareMineModifier',
+      'randomizeAllScratchNotes',
+      'randomizeHRandomNotes',
+      'randomizeLR2ConvergeNotes',
+      'randomizeLR2ScatterNotes',
+      'randomizePMSConvergeNotes',
+      'randomizePMSPlayableLanes',
+      'randomizePMSPlayableNotes',
+      'randomizeSRandomNotes',
+      'randomizeSpiralNotes',
+      'resolveAutoScratchChannels',
+      'resolveAutoScratchSides',
       'resolveKeyChannel',
       'resolveLR2LaneIndex',
       'resolveLaneChannels',
@@ -69,10 +91,13 @@ describe('designed entries', () => {
       'DEFAULT_POOR_BGA_DISPLAY_SECONDS',
       'DEFAULT_TUI_NOTE_HEIGHT',
       'IMAGE_RESIZE_ALGORITHMS',
+      'JUDGE_TIMING_AUTO_ADJUST_MODES',
       'MAX_TUI_NOTE_HEIGHT',
       'MIN_TUI_NOTE_HEIGHT',
       'ScrollDistanceMapper',
       'TUI_NOTE_HEIGHT_HALF',
+      'adjustBeatorajaJudgeTiming',
+      'createLR2ConstantScrollMapper',
       'createScrollDistanceMapper',
       'extractInvisiblePlayableNotes',
       'extractLandmineNotes',
@@ -80,6 +105,7 @@ describe('designed entries', () => {
       'extractTimedNotes',
       'formatSeconds',
       'isImageResizeAlgorithm',
+      'isLR2JudgeTimingAutoAdjust',
       'pickActiveBGACue',
       'pickActiveBGAKey',
       'resolveAltModifierLabel',
@@ -87,6 +113,7 @@ describe('designed entries', () => {
       'resolveDisplayedJudgeRankLabel',
       'resolveDisplayedJudgeRankValue',
       'resolveDisplayedPlayLevelValue',
+      'resolveJudgeTimingAutoAdjust',
       'toTimedInvisibleNote',
       'toTimedLandmineNote',
       'toTimedPlayableNote',

@@ -1,0 +1,123 @@
+{
+  "format": "be-music-json/0.1.0",
+  "sourceFormat": "bms",
+  "metadata": {
+    "bpm": 120,
+    "extras": {},
+    "title": "テスト曲",
+    "artist": "佐藤"
+  },
+  "resources": {
+    "wav": {
+      "01": "sample.wav"
+    },
+    "bmp": {},
+    "bpm": {},
+    "stop": {},
+    "text": {}
+  },
+  "measures": [],
+  "events": [
+    {
+      "measure": 0,
+      "channel": "11",
+      "position": [
+        0,
+        1
+      ],
+      "value": "01"
+    }
+  ],
+  "bms": {
+    "controlFlow": [],
+    "lnObjs": [],
+    "exRank": {},
+    "argb": {},
+    "stp": [],
+    "wavCmds": [],
+    "changeOption": {},
+    "exWAV": {},
+    "exBMP": {},
+    "bga": {},
+    "scroll": {},
+    "speed": {},
+    "swBGA": {},
+    "wavNameBytePrefixes": {
+      "sample.wav": "7361"
+    }
+  },
+  "bmson": {
+    "info": {},
+    "bga": {
+      "header": [],
+      "events": [],
+      "layerEvents": [],
+      "poorEvents": []
+    }
+  },
+  "preservation": {
+    "bms": {
+      "sourceLines": [
+        {
+          "kind": "header",
+          "command": "TITLE",
+          "value": "テスト曲"
+        },
+        {
+          "kind": "header",
+          "command": "ARTIST",
+          "value": "佐藤"
+        },
+        {
+          "kind": "header",
+          "command": "BPM",
+          "value": "120"
+        },
+        {
+          "kind": "header",
+          "command": "WAV01",
+          "value": "sample.wav"
+        },
+        {
+          "kind": "object",
+          "measure": 0,
+          "channel": "11",
+          "events": [
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                0,
+                1
+              ],
+              "value": "01"
+            }
+          ]
+        }
+      ],
+      "objectLines": [
+        {
+          "measure": 0,
+          "channel": "11",
+          "events": [
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                0,
+                1
+              ],
+              "value": "01"
+            }
+          ]
+        }
+      ]
+    },
+    "bmson": {
+      "lines": [],
+      "bpmEvents": [],
+      "stopEvents": [],
+      "soundChannels": []
+    }
+  }
+}

@@ -1,14 +1,14 @@
 import type { LoadProgress } from '@be-music/player-browser/collection';
-import { phaseLabels } from './demo-utils.ts';
+import { phaseLabels } from './player-utils.ts';
 
 /**
- * DOM handles the loading-overlay controller writes into. Subset of {@link PlayerWebDemoElements} so callers only need
- * to forward the four overlay-specific elements rather than the whole demo element bundle.
+ * DOM handles the loading-overlay controller writes into. Subset of {@link PlayerWebElements} so callers only need
+ * to forward the four overlay-specific elements rather than the whole player element bundle.
  */
 export interface LoadingOverlayElements {
   loadingOverlay: HTMLDivElement;
   loadingLabel: HTMLDivElement;
-  loadingBarFill: HTMLDivElement;
+  loadingBarFill: HTMLElement;
   loadingCounter: HTMLDivElement;
 }
 

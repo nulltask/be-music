@@ -95,6 +95,7 @@ describe('createNonstopStageMixer', () => {
     const mixer = createNonstopStageMixer(context, destination, MAP);
     expect([mixer.stageOf('01'), mixer.stageOf('03'), mixer.stageOf('zz')]).toEqual([0, 1, undefined]);
     expect([mixer.rate(0), mixer.rate(1)]).toEqual([1, 1.25]);
+    expect([mixer.sliceRate!(0), mixer.sliceRate!(1)]).toEqual([1, 1]);
     expect(gains.map((gain) => gain.gain.value)).toEqual([1, 0]);
     expect(gains.every((gain) => gain.connect.mock.calls[0]?.[0] === destination)).toBe(true);
     expect(mixer.bgmInput(1)).toBe(gains[1]);
@@ -103,7 +104,8 @@ describe('createNonstopStageMixer', () => {
   test('schedules the fades against the chart start on the audio clock', () => {
     const { context, gains } = fakeContext(3);
     const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP);
-    mixer.schedule(2);
+    // The chart started at 2 on the audio clock: chart second 1 now.
+    mixer.retime(1, (seconds) => 2 + seconds);
     const [out] = gains[0]!.gain.setValueCurveAtTime.mock.calls;
     expect(out?.slice(1)).toEqual([22, 10]);
     const [fadeIn] = gains[1]!.gain.setValueCurveAtTime.mock.calls;
@@ -117,8 +119,9 @@ describe('createNonstopStageMixer', () => {
 describe('play tempo', () => {
   test('schedules the fades at the play tempo: chart seconds take 1 / tempo on the audio clock', () => {
     const { context, gains } = fakeContext(0);
-    const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP, { tempo: 0.5 });
-    mixer.schedule(2);
+    const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP);
+    // The chart starts at 2 on the audio clock, at half speed.
+    mixer.retime(0, (seconds) => 2 + seconds / 0.5);
     expect(gains[0]!.gain.setValueCurveAtTime.mock.calls[0]?.slice(1)).toEqual([42, 20]);
     expect(gains[1]!.gain.setValueCurveAtTime.mock.calls[0]?.slice(1)).toEqual([32, 10]);
   });
@@ -129,6 +132,7 @@ describe('keep pitch', () => {
     const { context } = fakeContext();
     const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP, { keepPitch: true });
     expect([mixer.rate(0), mixer.rate(1)]).toEqual([1, 1]);
+    expect([mixer.sliceRate!(0), mixer.sliceRate!(1)]).toEqual([1, 1.25]);
   });
 });
 

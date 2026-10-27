@@ -258,7 +258,9 @@ export class BeMusicGameplayBinding {
   private readonly skin: BeMusicSkin;
   private settings: BeMusicSkinSettingValues;
   private readonly chartImage: BeMusicChartImageLookup;
-  private readonly surface: SkinSurface;
+  /** `undefined` when the skin's DOM screen draws the playfield ({@link drawPlayfield}). */
+  private readonly surface: SkinSurface | undefined;
+  private readonly drawPlayfield: ((frame: BeMusicGameplayFrame) => void) | undefined;
   private frame: BeMusicGameplayFrame | undefined;
   private lanes: BeMusicLaneFrame[] = [];
   private notes: BeMusicNote[] = [];
@@ -273,13 +275,20 @@ export class BeMusicGameplayBinding {
    * `chartImage` resolves the song's images for `frame.chartImage`; without one every image reads as unavailable.
    * `settings` are the player's stored values for the skin's settings; without them the skin draws with its defaults.
    * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
+   * `drawPlayfield` receives every frame instead of a Canvas surface when the skin sets `gameplay.drawsOnDOM`.
    */
   constructor(
     skin: BeMusicSkin,
-    options: { chartImage?: BeMusicChartImageLookup; settings?: BeMusicStoredSkinSettings; renderer?: Renderer } = {},
+    options: {
+      chartImage?: BeMusicChartImageLookup;
+      settings?: BeMusicStoredSkinSettings;
+      renderer?: Renderer;
+      drawPlayfield?: (frame: BeMusicGameplayFrame) => void;
+    } = {},
   ) {
     this.skin = skin;
-    this.surface = new SkinSurface(skin, options.renderer);
+    this.drawPlayfield = skin.gameplay.drawsOnDOM === true ? options.drawPlayfield : undefined;
+    this.surface = this.drawPlayfield ? undefined : new SkinSurface(skin, options.renderer);
     this.chartImage = options.chartImage ?? NO_SONG_IMAGE;
     this.bombDurationMs = skin.gameplay.bombDurationMs ?? 300;
     this.drawsMines = skin.gameplay.drawsMines === true;
@@ -326,6 +335,7 @@ export class BeMusicGameplayBinding {
       settings: this.settings,
       chartImage: this.chartImage,
     };
+    if (!this.surface) return;
     const sprite = context.layerPool.acquireSprite();
     sprite.texture = this.surface.texture;
     // The texture's size is in design pixels already (its source carries the pixel ratio as its resolution).
@@ -337,11 +347,12 @@ export class BeMusicGameplayBinding {
   }
 
   /**
-   * Draws the frame collected since {@link renderChrome} when the skin draws through the player's renderer; call it once
-   * the frame is collected, before the player renders. A no-op for a canvas skin, which draws when its sprite renders.
+   * Draws the frame collected since {@link renderChrome} when the skin draws through the player's renderer or on its DOM
+   * screen; call it once the frame is collected, before the player renders. A no-op for a canvas skin, which draws when
+   * its sprite renders.
    */
   flush(): void {
-    if (this.surface.rendersOnHost) this.drawFrame();
+    if (!this.surface || this.surface.rendersOnHost) this.drawFrame();
   }
 
   addLanes(lanes: readonly BeMusicLaneFrame[]): void {
@@ -375,13 +386,21 @@ export class BeMusicGameplayBinding {
   }
 
   dispose(): void {
-    this.surface.destroy();
+    this.surface?.destroy();
   }
 
   private readonly drawFrame = (): void => {
     const frame = this.frame;
     if (!frame || this.drawnFrame === this.frameNumber) return;
     this.drawnFrame = this.frameNumber;
+    if (!this.surface) {
+      try {
+        this.drawPlayfield?.(frame);
+      } catch (error) {
+        log.warn(`"${this.skin.id}": DOM playfield draw failed`, error);
+      }
+      return;
+    }
     this.surface.draw(frame.layout.stage, (surface) => this.skin.gameplay.draw(surface, frame));
   };
 }

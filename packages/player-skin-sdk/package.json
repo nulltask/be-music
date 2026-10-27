@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-skin-sdk",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Framework-free types and helpers for authoring be-music browser player skins",
   "license": "MIT",
   "files": [
@@ -26,7 +26,8 @@
     "@be-music/chart-model": "workspace:*",
     "@be-music/chart-source": "workspace:*",
     "@be-music/player-engine": "workspace:*",
-    "@be-music/player-scene-model": "workspace:*"
+    "@be-music/player-scene-model": "workspace:*",
+    "@be-music/shared-utils": "workspace:*"
   },
   "devDependencies": {
     "@be-music/chart-parser": "workspace:*"

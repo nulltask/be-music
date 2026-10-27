@@ -1,29 +1,39 @@
-import { SERVICE_CSS, renderBuildInfo, type BuildInfo } from '@be-music/service-web-theme';
+import {
+  renderServiceFooter,
+  renderServiceHeader,
+  resolveLocale,
+  SERVICE_CSS,
+  SERVICE_FOOTER_LINK_CLASS,
+  serviceOrigins,
+  serviceSkipLink,
+  type BuildInfo,
+  type Locale,
+} from '@be-music/service-web-theme';
 
 /** The Accounts public profile combined with the local OIDC session's anonymous status. */
 export interface DashboardAccount {
   handle: string;
   displayName: string;
   anonymous: boolean;
+  avatarURL?: string;
 }
 
-export type Locale = 'ja' | 'en';
+export type { Locale };
 
-/** The other services of the dashboard's environment: `be-music.app` → `play.be-music.app`, and so on. */
+/** Play and Leaderboard next to this Dashboard host. Preview stays on preview. */
 export function serviceLinks(hostname: string): { play: string; leaderboard: string } {
-  const site = hostname.toLowerCase();
-  return { play: `https://play.${site}/`, leaderboard: `https://leaderboard.${site}/` };
+  const origins = serviceOrigins(hostname);
+  return { play: origins.play, leaderboard: origins.leaderboard };
 }
 
-/** Japanese when the browser prefers it, English otherwise. */
+/** Japanese when the browser prefers it, English otherwise. `?lang=` and the language cookie win in `resolveLocale`. */
 export function pickLocale(acceptLanguage: string | null): Locale {
-  const first = (acceptLanguage ?? '').split(',')[0]?.trim().toLowerCase() ?? '';
-  return first.startsWith('ja') ? 'ja' : 'en';
+  return resolveLocale({ acceptLanguage: acceptLanguage ?? undefined });
 }
 
 const TEXT = {
   ja: {
-    title: 'be-music',
+    title: 'Be-Music Dashboard',
     signedIn: (name: string, handle: string) => `${name}（@${handle}）でログイン中です。`,
     anonymous: (handle: string) =>
       `匿名アカウント @${handle} でログイン中です。パスキーを作ると、ほかの端末でも使えます。`,
@@ -33,7 +43,7 @@ const TEXT = {
     note: 'このページは仮のダッシュボードです。',
   },
   en: {
-    title: 'be-music',
+    title: 'Be-Music Dashboard',
     signedIn: (name: string, handle: string) => `Signed in as ${name} (@${handle}).`,
     anonymous: (handle: string) => `Signed in anonymously as @${handle}. Create a passkey to use it on other devices.`,
     signedOut: 'Not signed in.',
@@ -58,16 +68,43 @@ export function renderDashboard(input: {
   locale: Locale;
   showDonateLink?: boolean;
   buildInfo?: BuildInfo;
+  requestURL?: string;
   links?: { play: string; leaderboard: string; donate: string };
 }): string {
   const t = TEXT[input.locale];
   const links = input.links ?? { ...serviceLinks(input.hostname), donate: `https://donate.${input.hostname}/` };
+  const donate = input.showDonateLink
+    ? ` · <a class="${SERVICE_FOOTER_LINK_CLASS}" href="${escapeHTML(links.donate)}">${input.locale === 'ja' ? '寄付' : 'Donate'}</a>`
+    : '';
+  const footer = renderServiceFooter({
+    current: 'dashboard',
+    hostname: input.hostname,
+    origins: { play: links.play, leaderboard: links.leaderboard },
+    navLabel: input.locale === 'ja' ? 'サービス' : 'Services',
+    siteHTML: `be-music${donate}`,
+    buildInfo: input.buildInfo,
+  });
   const status =
     input.account === undefined
       ? t.signedOut
       : input.account.anonymous
         ? t.anonymous(input.account.handle)
         : t.signedIn(input.account.displayName, input.account.handle);
+  const accountHref = input.account === undefined ? '/api/auth/sign-in' : '/api/auth/manage';
+  const accountLabel =
+    input.account === undefined
+      ? input.locale === 'ja'
+        ? 'ログイン'
+        : 'Sign in'
+      : input.locale === 'ja'
+        ? 'アカウント管理'
+        : 'Manage account';
+  const signOut =
+    input.account === undefined
+      ? ''
+      : `<form method="post" action="/api/auth/sign-out?returnTo=%2F"><button class="btn" data-size="sm" data-variant="outline" type="submit">${input.locale === 'ja' ? 'ログアウト' : 'Sign out'}</button></form>`;
+  const serviceCard = (href: string, title: string, description: string, open: string) =>
+    `<a class="card hover:bg-accent focus-visible:ring-ring/50 focus-visible:ring-3 gap-3 px-4 no-underline outline-none" data-size="sm" href="${escapeHTML(href)}"><h3 class="font-medium">${title}</h3><p class="text-muted-foreground flex-1">${description}</p><span class="font-medium">${open} <span aria-hidden="true">→</span></span></a>`;
   return `<!doctype html>
 <html lang="${input.locale}">
 <head>
@@ -75,24 +112,30 @@ export function renderDashboard(input: {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>${t.title}</title>
-<style>${SERVICE_CSS}
-.account-panel{margin-bottom:32px}.account-panel p{font-size:.875rem}.service-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.service-card{display:flex;flex-direction:column;gap:12px;color:var(--fg);text-decoration:none;min-width:0}.service-card p{font-size:.875rem;margin:0;color:var(--muted);flex:1}.service-card .service-open{font-size:.875rem;font-weight:500}.services-heading{margin-bottom:16px}@media(hover:hover){.service-card:hover{background:var(--soft)}}.service-card:focus-visible{outline:3px solid var(--ring);outline-offset:3px}@media(max-width:640px){.service-grid{grid-template-columns:1fr}}
-</style>
+<style>${SERVICE_CSS}</style>
 </head>
-<body>
-<a class="skip-link" href="#main">${input.locale === 'ja' ? '本文へ移動' : 'Skip to content'}</a>
-<header class="site-header"><div class="header-inner"><a class="brand" href="/">be-music <span>Dashboard</span></a><nav class="header-nav" aria-label="${input.locale === 'ja' ? 'アカウント' : 'Account'}"><a href="/api/auth/manage">${input.locale === 'ja' ? 'アカウント管理' : 'Manage account'}</a></nav></div></header>
-<main class="site-main" id="main">
-<div class="page-heading"><h1>${input.locale === 'ja' ? 'ダッシュボード' : 'Dashboard'}</h1><p>${input.locale === 'ja' ? 'アカウントと、それぞれの be-music サービスへ。' : 'Your account and be-music services, in one place.'}</p></div>
-<section class="panel account-panel" aria-labelledby="account-heading"><h2 id="account-heading">${input.locale === 'ja' ? 'アカウント' : 'Account'}</h2>
-<p class="muted" data-state="${input.account === undefined ? 'signed-out' : input.account.anonymous ? 'anonymous' : 'signed-in'}">${escapeHTML(status)}</p>
-<div class="actions"><a class="button" href="${input.account === undefined ? '/api/auth/sign-in' : '/api/auth/manage'}">${input.account === undefined ? (input.locale === 'ja' ? 'ログイン' : 'Sign in') : input.locale === 'ja' ? 'アカウント管理' : 'Manage account'}</a>${input.account === undefined ? '' : `<form method="post" action="/api/auth/sign-out?returnTo=%2F"><button class="button secondary" type="submit">${input.locale === 'ja' ? 'ログアウト' : 'Sign out'}</button></form>`}</div></section>
-<section aria-labelledby="services-heading"><h2 class="services-heading" id="services-heading">${input.locale === 'ja' ? 'サービス' : 'Services'}</h2><nav class="service-grid" aria-label="${input.locale === 'ja' ? 'サービス' : 'Services'}">
-<a class="panel service-card" href="${escapeHTML(links.play)}"><h3>Play</h3><p>${input.locale === 'ja' ? 'BMS・Bmson の譜面をブラウザでプレイ。' : 'Play BMS and Bmson charts in your browser.'}</p><span class="service-open">${t.play} <span aria-hidden="true">→</span></span></a>
-<a class="panel service-card" href="${escapeHTML(links.leaderboard)}"><h3>Leaderboard</h3><p>${input.locale === 'ja' ? 'スコアやプレイヤーの記録をチェック。' : 'Explore scores, rankings and player records.'}</p><span class="service-open">${t.leaderboard} <span aria-hidden="true">→</span></span></a>
+<body class="bg-background text-foreground min-h-svh antialiased">
+${serviceSkipLink(input.locale)}
+${renderServiceHeader({
+  locale: input.locale,
+  title: 'Be-Music Dashboard',
+  homeHref: '/',
+  playHref: links.play,
+  accountHref,
+  account: input.account,
+  requestURL: input.requestURL ?? '/',
+})}
+<main class="mx-auto max-w-5xl px-4 pt-8 pb-12" id="main">
+<div class="mb-6"><h1 class="text-2xl font-semibold tracking-tight">${input.locale === 'ja' ? 'ダッシュボード' : 'Dashboard'}</h1><p class="text-muted-foreground text-sm">${input.locale === 'ja' ? 'アカウントと、それぞれの be-music サービスへ。' : 'Your account and be-music services, in one place.'}</p></div>
+<section class="card mb-8" data-size="sm" aria-labelledby="account-heading"><header><h2 id="account-heading">${input.locale === 'ja' ? 'アカウント' : 'Account'}</h2></header>
+<section class="grid gap-4"><p class="text-muted-foreground text-sm" data-state="${input.account === undefined ? 'signed-out' : input.account.anonymous ? 'anonymous' : 'signed-in'}">${escapeHTML(status)}</p>
+<div class="flex flex-wrap gap-2"><a class="btn no-underline" data-size="sm" href="${accountHref}">${accountLabel}</a>${signOut}</div></section></section>
+<section aria-labelledby="services-heading"><h2 class="mb-4 text-lg font-semibold tracking-tight" id="services-heading">${input.locale === 'ja' ? 'サービス' : 'Services'}</h2><nav class="grid gap-4 sm:grid-cols-2" aria-label="${input.locale === 'ja' ? 'サービス' : 'Services'}">
+${serviceCard(links.play, 'Play', input.locale === 'ja' ? 'BMS・Bmson の譜面をブラウザでプレイ。' : 'Play BMS and Bmson charts in your browser.', t.play)}
+${serviceCard(links.leaderboard, 'Leaderboard', input.locale === 'ja' ? 'スコアやプレイヤーの記録をチェック。' : 'Explore scores, rankings and player records.', t.leaderboard)}
 </nav></section>
 </main>
-<footer class="site-footer">be-music${input.showDonateLink ? ` · <a href="${escapeHTML(links.donate)}">${input.locale === 'ja' ? '寄付' : 'Donate'}</a>` : ''}${input.buildInfo ? ' · ' + renderBuildInfo(input.buildInfo) : ''}</footer>
+${footer}
 </body>
 </html>
 `;

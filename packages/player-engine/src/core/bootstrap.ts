@@ -1,3 +1,14 @@
+import { duplicateBattleChart } from './battle-chart.ts';
+import { applyPracticeRange, resolvePracticeRange } from './practice.ts';
+import { isDuplicatedBattleMode, resolveEffectiveBattleMode } from './battle-mode.ts';
+import { convertLR2SPToDPChart } from './lr2-sp-to-dp-chart.ts';
+import type { BattleMode } from './battle-mode.ts';
+import { convertLR2ExtraChart } from './lr2-extra-chart.ts';
+import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
+import { addExtraNotes, clampExtraNoteDepth } from './extra-note-modifier.ts';
+import { prepareMineModifier, type MineModifier } from './mine-modifier.ts';
+import { addScrollChanges, removeScrollChanges, type ScrollModifier } from './scroll-modifier.ts';
+import { addLongNotes, clampLongNoteRate, removeLongNoteTails, type LongNoteModifier } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import { normalizeChannel, type BeMusicJSON } from '@be-music/chart-source';
@@ -17,7 +28,6 @@ import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus
 import type { CreatePlayerUIRuntimeContext, PlayerOptions, PlayerSummary, PlayerUIRuntime } from './engine-types.ts';
 import {
   toTimedInvisibleNote,
-  toTimedLandmineNote,
   toTimedPlayableNote,
   type TimedLandmineNote,
   type TimedPlayableNote,
@@ -47,9 +57,46 @@ export function resolveDefaultBaseDir(): string {
 }
 
 export interface PreparedPlaybackChartData {
+  scrollModifierApplied?: ScrollModifier;
+  scrollSection?: number;
+  scrollRate?: number;
+  scrollModifierTimeline?: import('@be-music/chart-model').ScrollTimelinePoint[];
+  /** Whether the selected modifier actually changed BPM, STOP or SCROLL; separate from the selected option. */
+  scrollModifierChanged?: boolean;
   notes: TimedPlayableNote[];
   laneSoundNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
+  sevenToNinePattern?: import('./seven-to-nine.ts').SevenToNinePattern;
+  sevenToNineType?: import('./seven-to-nine.ts').SevenToNineType;
+  sevenToNineThresholdBPM?: number;
+  sevenToNineApplied?: boolean;
+  battleMode?: BattleMode;
+  dBattleScratch?: boolean;
+  /** beatoraja PRACTICE: the range played and the note counts before `PracticeModifier`. */
+  practiceStartSeconds?: number;
+  practiceEndSeconds?: number;
+  practiceSourceNotes?: import('../ruleset/facts.ts').RulesetNoteCounts;
+  practiceChangedObjectCount?: number;
+  battleSourceVariant?: import('@be-music/chart-model').ChartPlayVariant;
+  battleTempo?: number;
+  battleAssist1P?: boolean;
+  battleAssist2P?: boolean;
+  battleChangedObjectCount?: number;
+  battleDroppedObjectCount?: number;
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
+  lr2ExtraEffectiveLevel?: LR2ExtraLevel;
+  lr2ExtraConvertedObjectCount?: number;
+  lr2ExtraTempo?: number;
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
+  extraNoteChangeCount?: number;
+  longNoteModifierApplied?: LongNoteModifier;
+  longNoteModifierRate?: number;
+  longNoteModifierChangeCount?: number;
+  /** Number of mines actually changed; selection alone does not imply a source assist. */
+  mineModifierChangeCount?: number;
+  mineModifierApplied?: MineModifier;
   invisibleNotes: TimedPlayableNote[];
   renderNotes: TimedPlayableNote[];
   totalSeconds: number;
@@ -84,42 +131,55 @@ export function createInitialPlayerSummary(
   applyGaugeTick: (judge: GaugeJudgeIndex, rate: number) => void;
   /** Empties the gauge for good (LR2's `HP = 0` on leaving a reversed play with notes outstanding). */
   drainGaugeToZero: () => void;
+  /** Puts the summary and the gauge back to the play's start, in place (a seek rebuilds the play from there). */
+  reset: () => void;
 } {
-  const gauge = new RulesetGauge(ruleset.gauge);
+  let gauge = new RulesetGauge(ruleset.gauge, ruleset.gaugeFallback, ruleset.gaugeBank);
   const gaugeSummary: PlayerGaugeSummary = {
     current: gauge.value,
-    max: ruleset.gauge.max,
-    clearThreshold: ruleset.gauge.border,
-    initial: ruleset.gauge.initial,
+    max: gauge.spec.max,
+    clearThreshold: gauge.spec.border,
+    initial: gauge.spec.initial,
     effectiveTotal: ruleset.effectiveTotal,
     cleared: gauge.cleared(),
     // Ruleset-scoped gauge id (`GROOVE` / `NORMAL` / `HARD` / `EX-HARD` / …) so consumers can label the run's
     // clear lamp without inferring from the threshold, which collides between line-ups.
-    type: ruleset.gauge.id,
-    survival: ruleset.gauge.survival,
-    failedMidPlay: false,
+    type: gauge.spec.id,
+    survival: gauge.spec.survival,
+    failedMidPlay: gauge.failedMidPlay,
+    ...(gauge.values ? { values: gauge.values } : {}),
   };
   const syncGaugeSummary = (): void => {
+    if (gauge.values) gaugeSummary.values = gauge.values;
+    gaugeSummary.type = gauge.spec.id;
+    gaugeSummary.max = gauge.spec.max;
+    gaugeSummary.clearThreshold = gauge.spec.border;
+    gaugeSummary.initial = gauge.spec.initial;
+    gaugeSummary.survival = gauge.spec.survival;
     gaugeSummary.current = gauge.value;
     gaugeSummary.cleared = gauge.cleared();
     gaugeSummary.failedMidPlay = gauge.failedMidPlay;
   };
 
+  const summary: PlayerSummary = {
+    total: totalNotes,
+    perfect: 0,
+    fast: 0,
+    slow: 0,
+    great: 0,
+    good: 0,
+    bad: 0,
+    poor: 0,
+    emptyPoor: 0,
+    exScore: 0,
+    score: 0,
+    combo: 0,
+    maxCombo: 0,
+    gauge: gaugeSummary,
+  };
+
   return {
-    summary: {
-      total: totalNotes,
-      perfect: 0,
-      fast: 0,
-      slow: 0,
-      great: 0,
-      good: 0,
-      bad: 0,
-      poor: 0,
-      emptyPoor: 0,
-      exScore: 0,
-      score: 0,
-      gauge: gaugeSummary,
-    },
+    summary,
     applyGaugeJudge: (judge: GrooveGaugeJudgmentKind): void => {
       gauge.applyJudge(GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX[judge]);
       syncGaugeSummary();
@@ -137,6 +197,15 @@ export function createInitialPlayerSummary(
     drainGaugeToZero: (): void => {
       gauge.drainToZero();
       syncGaugeSummary();
+    },
+    reset: (): void => {
+      gauge = new RulesetGauge(ruleset.gauge, ruleset.gaugeFallback, ruleset.gaugeBank);
+      syncGaugeSummary();
+      delete summary.minePoor;
+      for (const key of ['perfect', 'fast', 'slow', 'great', 'good', 'bad', 'poor', 'emptyPoor', 'exScore'] as const) {
+        summary[key] = 0;
+      }
+      summary.score = 0;
     },
   };
 }
@@ -158,18 +227,128 @@ const GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX: Record<GrooveGaugeJudgmentKind, Gauge
  */
 export function preparePlaybackChart(
   resolved: ResolvedChart,
-  options: Pick<PlayerOptions, 'laneModeExtension'> = {},
+  options: Pick<
+    PlayerOptions,
+    | 'laneModeExtension'
+    | 'longNoteModifier'
+    | 'battleMode'
+    | 'dBattleScratch'
+    | 'practice'
+    | 'judgeRuleset'
+    | 'autoScratch'
+    | 'autoScratch1P'
+    | 'autoScratch2P'
+    | 'lr2ExtraMode'
+    | 'lr2ExtraLevel'
+    | 'course'
+    | 'speed'
+    | 'extraNoteDepth'
+    | 'extraNoteScratch'
+    | 'longNoteRate'
+    | 'longNoteModifierPlacements'
+    | 'mineModifier'
+    | 'mineModifierPlacements'
+    | 'scrollModifier'
+    | 'scrollSection'
+    | 'scrollRate'
+    | 'scrollModifierTimeline'
+  > = {},
   auxiliaryPlaybackEndSeconds = 0,
+  random?: () => number,
 ): PreparedPlaybackChartData {
-  const playVariant = resolved.playVariant;
+  const lr2ExtraMode = options.lr2ExtraMode === true && options.course === undefined;
+  const lr2Extra = lr2ExtraMode
+    ? convertLR2ExtraChart(resolved, { level: options.lr2ExtraLevel ?? 0, tempo: options.speed })
+    : undefined;
+  resolved = lr2Extra?.chart ?? resolved;
+  const battleSourceVariant = resolved.playVariant;
+  const battleMode = resolveEffectiveBattleMode(
+    options.battleMode ?? 'OFF',
+    options.judgeRuleset ?? 'lr2',
+    battleSourceVariant,
+    options.course !== undefined,
+  );
+  const battleAssist1P = options.autoScratch1P ?? options.autoScratch ?? false;
+  const battleAssist2P = options.autoScratch2P ?? options.autoScratch ?? false;
+  const battle =
+    battleMode === 'SP-TO-DP'
+      ? convertLR2SPToDPChart(resolved, {
+          tempo: options.speed,
+          assist1P: battleAssist1P,
+          assist2P: battleAssist2P,
+        })
+      : undefined;
+  resolved = battle?.chart ?? resolved;
+  const scrollAddition =
+    options.scrollModifier === 'ADD'
+      ? addScrollChanges(resolved, {
+          section: options.scrollSection,
+          rate: options.scrollRate,
+          timeline: options.scrollModifierTimeline,
+          random,
+        })
+      : undefined;
+  const scrollResult =
+    scrollAddition ?? (options.scrollModifier === 'REMOVE' ? removeScrollChanges(resolved) : undefined);
+  resolved = scrollResult?.chart ?? resolved;
+  let playVariant = resolved.playVariant;
   const notes = resolved.notes.map(toTimedPlayableNote);
+  const longMode = options.longNoteModifier ?? 'OFF';
+  const longChanges =
+    longMode === 'ADD_LN' || longMode === 'ADD_CN' || longMode === 'ADD_HCN' || longMode === 'ADD_ALL'
+      ? addLongNotes(resolved, notes, longMode, {
+          rate: options.longNoteRate,
+          random,
+          laneModeExtension: options.laneModeExtension,
+          placements: options.longNoteModifierPlacements,
+        })
+      : removeLongNoteTails(notes, longMode, resolved.lnMode);
   // Invisible 3x/4x objects are not score targets, but they do update the lane's current keysound in manual play.
   // They are always prepared, independently of the debug overlay option, so audio never depends on rendering settings.
-  const landmineNotes = resolved.mines.map(toTimedLandmineNote);
+  const mineResult = prepareMineModifier(resolved, options.mineModifier ?? 'OFF', {
+    notes,
+    laneModeExtension: options.laneModeExtension,
+    random,
+    placements: options.mineModifierPlacements,
+  });
+  const landmineNotes = mineResult.mines;
+  const extraResult = addExtraNotes(resolved, notes, landmineNotes, {
+    depth: options.extraNoteDepth,
+    scratch: options.extraNoteScratch,
+    laneModeExtension: options.laneModeExtension,
+  });
+  resolved = extraResult.chart;
   const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
+  const dBattleScratch = battleMode === 'D-BATTLE' && options.dBattleScratch === true;
+  const duplicateBattle = isDuplicatedBattleMode(battleMode, battleSourceVariant)
+    ? duplicateBattleChart(resolved, notes, landmineNotes, invisibleNotes, {
+        // LR2 copies only 1x/3x/5x cells (D-BATTLE, BATTLE); That-Which-Must-Not-Be-Named gives both players one chart.
+        duplicateMines: !(
+          battleMode === 'D-BATTLE' ||
+          (battleMode === 'TWO-PLAYER' && options.judgeRuleset !== '____')
+        ),
+        backgroundScratch: battleMode === 'BATTLE-AS' || (battleMode === 'D-BATTLE' && !dBattleScratch),
+        backgroundMineSample: battleMode === 'D-BATTLE',
+      })
+    : undefined;
+  resolved = duplicateBattle?.chart ?? resolved;
+  playVariant = resolved.playVariant;
+  let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds);
+  for (const note of notes) totalSeconds = Math.max(totalSeconds, note.endSeconds ?? note.seconds);
+  for (const mine of landmineNotes) totalSeconds = Math.max(totalSeconds, mine.seconds);
+  const practiceRange =
+    options.practice !== undefined
+      ? resolvePracticeRange(
+          options.practice,
+          Math.floor(Math.max(totalSeconds, resolved.sampleTriggers.at(-1)?.seconds ?? 0) * 1000),
+        )
+      : undefined;
+  const practice = practiceRange ? applyPracticeRange(resolved, notes, landmineNotes, practiceRange) : undefined;
+  resolved = practice?.chart ?? resolved;
+  // The source plays a practice range until 1000 ms past its end, as an ordinary play runs past its last note.
+  if (practiceRange) totalSeconds = (practiceRange.endMs + 1000) / 1000;
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
   const renderNotes = notes;
-  const totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds);
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = {
     player: resolved.source.bms.player,
@@ -184,9 +363,55 @@ export function preparePlaybackChart(
   const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
 
   return {
+    ...(options.battleMode !== undefined
+      ? {
+          battleMode,
+          battleSourceVariant,
+          battleTempo: options.speed ?? 1,
+          battleAssist1P,
+          battleAssist2P,
+          battleChangedObjectCount: duplicateBattle?.changedObjectCount ?? battle?.changedObjectCount ?? 0,
+          battleDroppedObjectCount: battle?.droppedObjectCount ?? 0,
+          ...(battleMode === 'D-BATTLE' ? { dBattleScratch } : {}),
+        }
+      : {}),
+    ...(practiceRange && practice
+      ? {
+          practiceStartSeconds: practiceRange.startMs / 1000,
+          practiceEndSeconds: practiceRange.endMs / 1000,
+          practiceSourceNotes: practice.sourceNotes,
+          practiceChangedObjectCount: practice.changedObjectCount,
+        }
+      : {}),
+    ...(options.lr2ExtraMode !== undefined
+      ? {
+          lr2ExtraMode,
+          lr2ExtraLevel: options.lr2ExtraLevel ?? 0,
+          lr2ExtraEffectiveLevel: lr2Extra?.level ?? options.lr2ExtraLevel ?? 0,
+          lr2ExtraConvertedObjectCount: lr2Extra?.changes ?? 0,
+          lr2ExtraTempo: options.speed ?? 1,
+        }
+      : {}),
+    ...(options.extraNoteDepth !== undefined || options.extraNoteScratch !== undefined
+      ? {
+          extraNoteDepth: clampExtraNoteDepth(options.extraNoteDepth ?? 0),
+          extraNoteScratch: options.extraNoteScratch ?? false,
+          extraNoteChangeCount: extraResult.changes,
+        }
+      : {}),
     notes,
+    ...(options.longNoteModifier !== undefined
+      ? {
+          longNoteModifierApplied: longMode,
+          longNoteModifierChangeCount: longChanges,
+          longNoteModifierRate: clampLongNoteRate(options.longNoteRate ?? 1),
+        }
+      : {}),
     laneSoundNotes,
     landmineNotes,
+    ...(options.mineModifier !== undefined
+      ? { mineModifierChangeCount: mineResult.changes, mineModifierApplied: options.mineModifier }
+      : {}),
     invisibleNotes,
     renderNotes,
     totalSeconds,
@@ -197,6 +422,16 @@ export function preparePlaybackChart(
     inputTokenToChannels,
     shadowedNotes: resolved.shadowedNotes.map(toTimedPlayableNote),
     resolvedChart: resolved,
+    ...(scrollAddition
+      ? {
+          scrollSection: scrollAddition.section,
+          scrollRate: scrollAddition.rate,
+          scrollModifierTimeline: scrollAddition.timeline,
+        }
+      : {}),
+    ...(options.scrollModifier !== undefined
+      ? { scrollModifierApplied: options.scrollModifier, scrollModifierChanged: scrollResult?.changed ?? false }
+      : {}),
   };
 }
 

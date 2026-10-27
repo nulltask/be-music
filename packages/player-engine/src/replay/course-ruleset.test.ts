@@ -23,8 +23,8 @@ describe('resolveCoursePlayedRuleset', () => {
   });
 
   test('is the ruleset of a NONSTOP run’s stitched play', () => {
-    const nonstop = { replay: { play: { judgeRuleset: 'iidx' } } } as unknown as NonNullable<Log['nonstop']>;
-    expect(resolveCoursePlayedRuleset({ stages: [played('lr2'), unreached], nonstop })).toBe('iidx');
+    const nonstop = { replay: { play: { judgeRuleset: '____' } } } as unknown as NonNullable<Log['nonstop']>;
+    expect(resolveCoursePlayedRuleset({ stages: [played('lr2'), unreached], nonstop })).toBe('____');
     const unnamed = { replay: { play: {} } } as unknown as NonNullable<Log['nonstop']>;
     expect(resolveCoursePlayedRuleset({ stages: [unreached], nonstop: unnamed })).toBe('lr2');
   });

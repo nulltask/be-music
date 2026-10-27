@@ -83,7 +83,7 @@ export interface VideoTextureHandle {
 
 /**
  * Tunables for the ffmpeg.wasm fallback path. Plumbed through from the host so end-users can trade encode time for
- * visual resolution at runtime (the demo wires this to a lil-gui pair).
+ * visual resolution at runtime (the player wires this to a Tweakpane pair).
  */
 export interface VideoTranscodeOptions {
   /**
@@ -324,7 +324,7 @@ async function transcodeVideoToBrowserCodecLocked(
 
 /**
  * Resolves the user's `maxLongEdgePx` knob into a strictly positive integer (or `undefined`). Anything else — `NaN`,
- * `0`, negative numbers — is treated as "no resize", which matches the GUI's `Off` row in the demo dropdown.
+ * `0`, negative numbers — is treated as "no resize", which matches the GUI's `Off` row in the player dropdown.
  */
 function resolveMaxLongEdge(options: VideoTranscodeOptions | undefined): number | undefined {
   const raw = options?.maxLongEdgePx;
@@ -755,7 +755,7 @@ async function loadFFmpeg(): Promise<FFmpegInstance> {
     // own catch with `Cannot read properties of undefined (reading 'startsWith')`. Single-threaded encoding takes ~tens
     // of seconds for a typical BMS BGA but actually completes.
     //
-    // The demo's Vite config installs a custom plugin (`be-music:ffmpeg-core`) that serves the ESM core
+    // The player's Vite config installs a custom plugin (`be-music:ffmpeg-core`) that serves the ESM core
     // (`ffmpeg-core.js` / `.wasm`) at this stable URL prefix in dev and emits them as build assets in production.
     const baseURL = '/ffmpeg-core';
     const coreURL = `${baseURL}/ffmpeg-core.js`;

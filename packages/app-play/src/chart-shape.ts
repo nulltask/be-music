@@ -13,7 +13,7 @@ import { resolveLibraryChartPlayVariant, type LibraryChart } from '@be-music/pla
 export function chartShapeFor(chartEntry: LibraryChart): { keys: number; isDouble: boolean; isPMS: boolean } {
   const variant = resolveLibraryChartPlayVariant(chartEntry);
   // `'48'` is the DP form of the 24-key keyboard mode, so it reports 24 keys per side plus `isDouble` — the same
-  // per-side convention the IIDX `'14'` / `'10'` variants use.
+  // per-side convention the That-Which-Must-Not-Be-Named `'14'` / `'10'` variants use.
   const keys =
     variant === '24' || variant === '48'
       ? 24

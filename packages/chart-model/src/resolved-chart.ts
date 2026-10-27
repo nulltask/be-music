@@ -469,6 +469,6 @@ export function collectExRankChanges(
  */
 export function resolveTotalFacts(json: BeMusicJSON): ResolvedTotal {
   const value = json.metadata.total;
-  const unit = json.sourceFormat === 'bmson' ? 'percent' : 'absolute';
+  const unit = json.bmson.info.totalUnit ?? (json.sourceFormat === 'bmson' ? 'percent' : 'absolute');
   return typeof value === 'number' && Number.isFinite(value) ? { value, unit } : { unit };
 }

@@ -6,6 +6,7 @@ import {
   courseMatchesKeysFilter,
   entryMatchesListFilters,
   keysFilterKeyMode,
+  resolveLR2RandomMixKeyMode,
 } from './filter.ts';
 
 describe('chartMatchesDifficultyFilter', () => {
@@ -43,6 +44,11 @@ describe('chartMatchesKeysFilter', () => {
     expect(keysFilterKeyMode('ALL')).toBeUndefined();
     expect(keysFilterKeyMode('KEYS_9')).toBe(9);
     expect(keysFilterKeyMode('KEYS_48')).toBe(48);
+  });
+
+  test('draws a RANDOM MIX in the filter key mode, 7 under ALL', () => {
+    expect(resolveLR2RandomMixKeyMode('ALL')).toBe(7);
+    expect(resolveLR2RandomMixKeyMode('KEYS_14')).toBe(14);
   });
 });
 

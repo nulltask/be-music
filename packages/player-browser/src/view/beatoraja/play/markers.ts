@@ -133,6 +133,8 @@ export class BeatorajaMarkerLayer {
     laneTopY: number;
     pixelsPerBeat: number;
     markers: BeatorajaMarkerBeats;
+    /** Source BPM GUIDE controls both BPM-change and STOP lines. */
+    bpmGuide?: boolean;
     /**
      * Lane distance from the playhead to a beat, in beats at scroll rate 1 — the note layer's `#SCROLL` / `#SPEED`
      * integrator, so bar lines move with the notes. Defaults to the beat difference.
@@ -148,6 +150,11 @@ export class BeatorajaMarkerLayer {
     window?: NoteDrawWindow;
     /** Chart time of a beat, in seconds; with `window`, hides a marker whose time has come. */
     secondsAt?: (beat: number) => number;
+    /**
+     * Visual CONSTANT's opacity of a timeline at its chart time (`resolveConstantAlpha`), read through `secondsAt`; a
+     * marker it gives 0 is not drawn. Omitted: every marker keeps its authored alpha.
+     */
+    alphaAt?: (seconds: number) => number;
   }): void {
     const distance = args.distance ?? ((beat: number): number => beat - args.currentBeat);
     const { window, secondsAt } = args;
@@ -157,13 +164,13 @@ export class BeatorajaMarkerLayer {
     // Past an LR2 negative-BPM reversal one the playhead passed before it stays gone as the scroll runs back.
     const passedBeat = (window?.reachedBeat ?? args.currentBeat) - 1 / Math.max(1, args.pixelsPerBeat);
     let used = 0;
-    const ranges: ReadonlyArray<{ kind: MarkerKindData[]; beats: ReadonlyArray<number> }> = [
+    const ranges: ReadonlyArray<{ kind: MarkerKindData[]; beats: ReadonlyArray<number>; timed?: boolean }> = [
       { kind: this.kindData.group, beats: args.markers.group },
-      { kind: this.kindData.bpm, beats: args.markers.bpm },
-      { kind: this.kindData.stop, beats: args.markers.stop },
+      { kind: this.kindData.bpm, beats: args.bpmGuide ? args.markers.bpm : [], timed: true },
+      { kind: this.kindData.stop, beats: args.bpmGuide ? args.markers.stop : [], timed: true },
       { kind: this.kindData.time, beats: args.markers.time },
     ];
-    for (const { kind, beats } of ranges) {
+    for (const { kind, beats, timed } of ranges) {
       if (kind.length === 0 || beats.length === 0) continue;
       // Iterate EVERY prototype with a resolved texture per marker kind. DP skins author one
       // destination per side (1P-side x, 2P-side x) for `group` / `bpm` / `stop` / `time` —
@@ -182,6 +189,7 @@ export class BeatorajaMarkerLayer {
         if (proto.texture === undefined) continue;
         for (let beatIndex = firstIndex; beatIndex < beats.length; beatIndex += 1) {
           const beat = beats[beatIndex]!;
+          if (timed && window && secondsAt && secondsAt(beat) < window.nowSeconds) continue;
           if (window?.rules === 'beatoraja') {
             if (isPastDrawWindow(window, beat)) break;
             if (secondsAt && !isDrawnAtTime(window, secondsAt(beat))) continue;
@@ -203,6 +211,8 @@ export class BeatorajaMarkerLayer {
           // culled prematurely. 24-pixel slack matches the note layer's culling so markers
           // don't pop in/out at the edge.
           if (y < args.laneTopY - 24 || y > drawBottom + 24) continue;
+          const alpha = args.alphaAt && secondsAt ? args.alphaAt(secondsAt(beat)) : 1;
+          if (alpha <= 0) continue;
           const sprite = this.acquireSprite(used);
           sprite.texture = proto.texture;
           // Anchor at the rect's BOTTOM-LEFT so the marker's bottom edge sits exactly on `y`.
@@ -215,7 +225,7 @@ export class BeatorajaMarkerLayer {
           sprite.width = proto.rect.w;
           sprite.height = Math.max(1, proto.rect.h);
           sprite.tint = proto.tint;
-          sprite.alpha = proto.alpha;
+          sprite.alpha = proto.alpha * alpha;
           used += 1;
         }
       }

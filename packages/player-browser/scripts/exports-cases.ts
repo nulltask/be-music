@@ -202,6 +202,54 @@ const BENCH_BEATORAJA_DESTINATION = {
 } satisfies BeatorajaDestinationGroup;
 
 export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): void {
+  define('player-browser.defaultBrowserWorkerCount', {
+    run: () => {
+      playerWebCoreAPI.defaultBrowserWorkerCount(8);
+    },
+  });
+  define('player-browser.normalizeBrowserWorkerCount', {
+    run: () => {
+      playerWebCoreAPI.normalizeBrowserWorkerCount(3, 8);
+    },
+  });
+  define('player-browser.getBrowserWorkerCount', {
+    run: () => {
+      playerWebCoreAPI.getBrowserWorkerCount();
+    },
+  });
+  define('player-browser.setBrowserWorkerCount', {
+    run: () => {
+      playerWebCoreAPI.setBrowserWorkerCount(2);
+    },
+  });
+  define('player-browser.runBrowserTask', {
+    run: async () => {
+      await playerWebCoreAPI.runBrowserTask('benchmark', 0, () => 0);
+    },
+  });
+  define('player-browser.executeBrowserTask', {
+    run: () => {
+      playerWebCoreAPI.executeBrowserTask('parse-chart', {
+        path: 'a.bms',
+        bytes: new TextEncoder().encode('#TITLE Bench\n#00111:01'),
+      });
+    },
+  });
+  define('player-browser.configureBrowserWorkers', {
+    interactive: true,
+    run: () => {
+      playerWebCoreAPI.configureBrowserWorkers(() => {
+        throw new Error('No browser worker');
+      });
+    },
+  });
+  define('player-browser.disposeBrowserWorkers', {
+    interactive: true,
+    run: () => {
+      playerWebCoreAPI.disposeBrowserWorkers();
+    },
+  });
+
   define('player-browser.applyBeatorajaStretchRect', {
     run: () => {
       playerWebCoreAPI.applyBeatorajaStretchRect(
@@ -282,7 +330,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.createDecideScene', {
     run: async () => {
       const kits: playerWebCoreAPI.DecideSceneKit[] = [
-        { family: 'built-in', skin: playerWebCoreAPI.phantomSkin },
+        { family: 'built-in', skin: playerWebCoreAPI.synesthesiaSkin },
         { family: 'lr2', skin: BENCH_LR2_DECIDE_SKIN },
         {
           family: 'beatoraja',
@@ -307,7 +355,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.createResultScene', {
     run: () => {
       const kits: playerWebCoreAPI.ResultSceneKit[] = [
-        { family: 'built-in', skin: playerWebCoreAPI.phantomSkin },
+        { family: 'built-in', skin: playerWebCoreAPI.synesthesiaSkin },
         { family: 'lr2', skin: BENCH_LR2_RESULT_SKIN },
         {
           family: 'beatoraja',
@@ -331,7 +379,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.createPlayScene', {
     run: () => {
       const scene = playerWebCoreAPI.createPlayScene(
-        { family: 'built-in', skin: playerWebCoreAPI.phantomSkin },
+        { family: 'built-in', skin: playerWebCoreAPI.synesthesiaSkin },
         {
           chart: BENCH_SONG,
           settings: { autoPlay: true },
@@ -348,7 +396,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.createSelectScene', {
     run: () => {
       const scene = playerWebCoreAPI.createSelectScene(
-        { family: 'built-in', skin: playerWebCoreAPI.phantomSkin },
+        { family: 'built-in', skin: playerWebCoreAPI.synesthesiaSkin },
         {
           library: { sources: [], charts: [BENCH_SONG], errors: [] },
           sounds: { selectBGM: { bytes: BENCH_BYTES } },
@@ -387,14 +435,14 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   });
   define('player-browser.createBeMusicSkinRegistry', {
     run: () => {
-      const registry = playerWebCoreAPI.createBeMusicSkinRegistry([playerWebCoreAPI.phantomSkin]);
-      registry.resolve('phantom');
+      const registry = playerWebCoreAPI.createBeMusicSkinRegistry([playerWebCoreAPI.synesthesiaSkin]);
+      registry.resolve('synesthesia');
       registry.resolve('missing');
     },
   });
   define('player-browser.resolveSelectListWindow', {
     run: () => {
-      playerWebCoreAPI.resolveSelectListWindow(playerWebCoreAPI.phantomSkin.select.layout, 480, 50, 100);
+      playerWebCoreAPI.resolveSelectListWindow(playerWebCoreAPI.synesthesiaSkin.select.layout, 480, 50, 100);
     },
   });
   define('player-browser.createCroppedBeatorajaTexture', {
@@ -505,6 +553,22 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       const maker = new playerWebCoreAPI.CourseMaker({ md5Of: async () => undefined });
       maker.start('expert');
       maker.finish();
+      maker.drawRandomMix('expert', 7, [playerWebCoreAPI.createRandomMixChart(BENCH_SONG, BENCH_SONG_MD5)], () => 0);
+    },
+  });
+  define('player-browser.createRandomMixEntry', {
+    run: () => {
+      playerWebCoreAPI.createRandomMixEntry('nonstop');
+    },
+  });
+  define('player-browser.createRandomMixChart', {
+    run: () => {
+      playerWebCoreAPI.createRandomMixChart(BENCH_SONG, BENCH_SONG_MD5);
+    },
+  });
+  define('player-browser.createDrawnRandomMixEntry', {
+    run: () => {
+      playerWebCoreAPI.createDrawnRandomMixEntry(BENCH_COURSE_DEFINITION, BENCH_HASHED_SONGS);
     },
   });
   define('player-browser.resolveCourseMakerFolders', {
@@ -816,12 +880,43 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     },
     interactive: true,
   });
+  define('player-browser.SceneController', {
+    run: () => {
+      const controller = new playerWebCoreAPI.SceneController(BENCH_SCENE_SESSION);
+      const store = controller.createStore((frame) => frame);
+      const unsubscribe = store.subscribe(() => undefined);
+      controller.enter(0);
+      controller.advance(1);
+      store.getSnapshot();
+      unsubscribe();
+      controller.dispose();
+    },
+  });
+  define('player-browser.createSelectController', {
+    run: () => {
+      const controller = playerWebCoreAPI.createSelectController({
+        library: { sources: [], charts: [BENCH_SONG], errors: [] },
+        sounds: {},
+        audio: playerWebCoreAPI.createAudioService({ createContext: () => undefined }),
+        on: { start: () => undefined },
+        now: () => 0,
+      });
+      controller.enter(0);
+      controller.advance(0);
+      controller.dispose();
+    },
+  });
   define('player-browser.SessionScene', {
     run: async () => {
       const scene = new playerWebCoreAPI.SessionScene(BENCH_SCENE_SESSION, BENCH_FAMILY_VIEW, { now: () => 0 });
       await scene.enter(BENCH_SCENE_HOST);
       scene.exit();
       scene.dispose();
+    },
+  });
+  define('player-browser.PlayOptionMismatchError', {
+    run: () => {
+      void new playerWebCoreAPI.PlayOptionMismatchError(['Random 1P: CONVERGE'], undefined).options;
     },
   });
   define('player-browser.readDroppedFiles', {

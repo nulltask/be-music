@@ -1,3 +1,4 @@
+import type { ReplayOptionState } from '../replay/options.ts';
 import type { ReplayViewState } from '../replay/view.ts';
 import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/chart-model';
 import { type PlayerStateSignals } from '../state-signals.ts';
@@ -67,6 +68,8 @@ export function createUIFramePublisher(params: {
   uiSignals: PlayerUISignalBus;
   totalSeconds: number;
   summary: PlayerUIFramePayload['summary'];
+  /** The 2P player's summary of a two-player play. */
+  summary2P?: PlayerUIFramePayload['summary'];
   notes: PlayerUIFramePayload['notes'];
   landmineNotes?: PlayerUIFramePayload['landmineNotes'];
   invisibleNotes?: PlayerUIFramePayload['invisibleNotes'];
@@ -81,18 +84,26 @@ export function createUIFramePublisher(params: {
    * runs at the post-reversal |BPM| and a post-reversal STOP pauses it.
    */
   reversal?: TempoReversalPoint;
+  /** The seek generation and the clock a frame at `seconds` holds at (`PlayerUIFramePayload.generation` / `clock`). */
+  resolveClock?: (seconds: number) => Pick<PlayerUIFramePayload, 'generation' | 'clock'>;
+  resolveHCNLanes?: (seconds: number) => PlayerUIFramePayload['hcnLanes'];
+  resolveJudgedNoteCount?: () => number;
 }): (seconds: number, beat: number) => void {
   const {
     uiEnabled,
     uiSignals,
     totalSeconds,
     summary,
+    summary2P,
     notes,
     landmineNotes,
     invisibleNotes,
     audioBackend,
     resolveDebugActiveAudioState,
     reversal,
+    resolveClock,
+    resolveHCNLanes,
+    resolveJudgedNoteCount,
   } = params;
   return (seconds: number, beat: number): void => {
     if (!uiEnabled) {
@@ -110,12 +121,16 @@ export function createUIFramePublisher(params: {
       reversalSeconds: reversal?.seconds,
       totalSeconds,
       summary,
+      ...(summary2P !== undefined ? { summary2P } : {}),
       notes,
+      hcnLanes: resolveHCNLanes?.(seconds),
+      judgedNoteCount: resolveJudgedNoteCount?.(),
       landmineNotes,
       invisibleNotes,
       audioBackend,
       activeAudioFiles: debugState.activeAudioFiles,
       activeAudioVoiceCount: debugState.activeAudioVoiceCount,
+      ...resolveClock?.(seconds),
     });
   };
 }
@@ -198,8 +213,11 @@ export function consumePlaybackInputCommands(params: {
   onHighSpeedAction: (action: HighSpeedControlAction | undefined) => void;
   /** A view change to record (`{ kind: 'view' }`). */
   onViewChange?: (change: ReplayViewState) => void;
+  onOptionChange?: (values: ReplayOptionState) => void;
   /** A tempo change (`{ kind: 'tempo' }`). */
   onTempoChange?: (tempo: number) => void;
+  /** A seek (`{ kind: 'seek' }`). */
+  onSeek?: (seconds: number) => void;
   onUnhandledCommand?: (command: PlayerInputCommand) => void;
   logInterrupt?: (reason: InterruptCommand['reason']) => void;
 }): void {
@@ -211,6 +229,7 @@ export function consumePlaybackInputCommands(params: {
     onHighSpeedAction,
     onViewChange,
     onTempoChange,
+    onSeek,
     onUnhandledCommand,
     logInterrupt,
   } = params;
@@ -232,12 +251,20 @@ export function consumePlaybackInputCommands(params: {
       onHighSpeedAction(command.action);
       continue;
     }
+    if (command.kind === 'options') {
+      params.onOptionChange?.(command.values);
+      continue;
+    }
     if (command.kind === 'view') {
       onViewChange?.(command.change);
       continue;
     }
     if (command.kind === 'tempo') {
       onTempoChange?.(command.tempo);
+      continue;
+    }
+    if (command.kind === 'seek') {
+      onSeek?.(command.seconds);
       continue;
     }
     onUnhandledCommand?.(command);
@@ -250,10 +277,16 @@ export function consumePlaybackInputCommands(params: {
  */
 export function recordPendingViewChanges(
   inputSignals: PlayerInputSignalBus,
-  recorder: { recordViewChange(timeSeconds: number, change: ReplayViewState): void } | undefined,
+  recorder:
+    | {
+        recordViewChange(timeSeconds: number, change: ReplayViewState): void;
+        recordOptionChange?(timeSeconds: number, values: ReplayOptionState): void;
+      }
+    | undefined,
   chartSeconds: number,
 ): void {
   for (const command of inputSignals.drainCommands()) {
     if (command.kind === 'view') recorder?.recordViewChange(chartSeconds, command.change);
+    if (command.kind === 'options') recorder?.recordOptionChange?.(chartSeconds, command.values);
   }
 }

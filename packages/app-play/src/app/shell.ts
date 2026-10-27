@@ -1,6 +1,6 @@
 // The page around the stage: the shell's state as the scenes change (the play's overlays, the touch controls shown, the
 // pinch zoom), the canvas's fullscreen toggle with its Escape handling, and the on-screen pause and quit buttons. The
-// app wires it once the scene host is mounted (`PlayerWebDemoApp.mountStage`).
+// app wires it once the scene host is mounted (`PlayerWebApp.mountStage`).
 
 import { logger } from '@be-music/player-browser';
 import type { PixiSceneHost, PlayScene, SceneKind } from '@be-music/player-browser/host';
@@ -15,16 +15,16 @@ import {
   toggleFullscreen,
 } from '../fullscreen.ts';
 import type { InlineSearch } from '../inline-search.ts';
-import type { PlayerWebDemoElements } from '../types.ts';
+import type { PlayerWebElements } from '../types.ts';
 import { resolveShellState, shellStateKey } from './shell-state.ts';
 
 const fullscreenLog = logger('fullscreen');
 
 /** What the shell reads of the app: the stage, the shell element, the search field, the device and the play. */
-export interface DemoShellDeps {
+export interface PlayerShellDeps {
   readonly sceneHost: PixiSceneHost;
-  readonly elements: Pick<PlayerWebDemoElements, 'shell'>;
-  readonly search: Pick<InlineSearch, 'skinHasBox'>;
+  readonly elements: Pick<PlayerWebElements, 'shell'>;
+  readonly search: Pick<InlineSearch, 'skinHasBox'> & Partial<Pick<InlineSearch, 'ownsNativeInput'>>;
   readonly deviceProfile: Pick<DeviceProfile, 'phone'>;
   /** The play, whichever family draws it: loading behind a decide screen, or on the stage. */
   readonly gameplayView: () => PlayScene | undefined;
@@ -32,16 +32,16 @@ export interface DemoShellDeps {
   readonly showing: () => SceneKind | undefined;
 }
 
-/** The demo shell around the stage: its gameplay state, fullscreen and touch controls. */
-export class DemoShell {
-  private readonly sceneHost: DemoShellDeps['sceneHost'];
-  private readonly elements: DemoShellDeps['elements'];
-  private readonly search: DemoShellDeps['search'];
-  private readonly deviceProfile: DemoShellDeps['deviceProfile'];
-  private readonly readGameplayView: DemoShellDeps['gameplayView'];
-  private readonly readShowing: DemoShellDeps['showing'];
+/** The player shell around the stage: its gameplay state, fullscreen and touch controls. */
+export class PlayerShell {
+  private readonly sceneHost: PlayerShellDeps['sceneHost'];
+  private readonly elements: PlayerShellDeps['elements'];
+  private readonly search: PlayerShellDeps['search'];
+  private readonly deviceProfile: PlayerShellDeps['deviceProfile'];
+  private readonly readGameplayView: PlayerShellDeps['gameplayView'];
+  private readonly readShowing: PlayerShellDeps['showing'];
 
-  public constructor(deps: DemoShellDeps) {
+  public constructor(deps: PlayerShellDeps) {
     this.sceneHost = deps.sceneHost;
     this.elements = deps.elements;
     this.search = deps.search;
@@ -91,6 +91,7 @@ export class DemoShell {
       portraitStage: this.sceneHost.getStageOrientation() === 'portrait',
       skinHasBox: this.search.skinHasBox,
     });
+    this.elements.shell.classList.toggle('native-search', this.search.ownsNativeInput === true);
     const state = shellStateKey(resolved);
     if (state === this.shellGameplayState) return;
     this.shellGameplayState = state;
@@ -116,7 +117,8 @@ export class DemoShell {
   };
 
   /**
-   * Double-click the Pixi canvas to toggle the demo shell into (and out of) fullscreen.
+   * Double-click the stage (the Pixi canvas, or the background of a native screen) to toggle the player shell into (and
+   * out of) fullscreen.
    * Escape while fullscreen is consumed here so the active scene's Esc handler — quit play,
    * dismiss result, close a select folder — does not fire on the same keypress that leaves
    * fullscreen. Where the browser has Keyboard Lock (Chrome / Edge), Escape is locked while
@@ -125,9 +127,15 @@ export class DemoShell {
    */
   public wireCanvasFullscreen(): void {
     const canvas = this.sceneHost.app.canvas;
+    // The stage, not the canvas: the host takes the canvas out while a native screen is showing.
+    const stage = this.sceneHost.container;
+    const isStageBackground = (target: EventTarget | null): boolean =>
+      target === canvas ||
+      target === stage ||
+      (target instanceof HTMLElement && target.dataset.beMusicScreen !== undefined);
     let lastPointerType = 'mouse';
     let autoFullscreenTried = false;
-    canvas.addEventListener('pointerdown', (event) => {
+    stage.addEventListener('pointerdown', (event) => {
       lastPointerType = event.pointerType;
       // A phone gives the stage the whole screen on the first tap: the browser bars eat a large share of a landscape
       // phone's height, and the stage is fitted to that height. The whole page goes fullscreen (not just the shell) so the
@@ -138,7 +146,8 @@ export class DemoShell {
         void enterTouchFullscreen(document.documentElement);
       }
     });
-    canvas.addEventListener('dblclick', (event) => {
+    stage.addEventListener('dblclick', (event) => {
+      if (!isStageBackground(event.target)) return;
       event.preventDefault();
       // Double taps are lane presses during play, not a fullscreen toggle.
       if (lastPointerType !== 'mouse' && this.elements.shell.classList.contains('in-gameplay')) return;

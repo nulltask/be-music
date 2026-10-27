@@ -1,0 +1,9 @@
+[Japanese version](./0012-native-skin-screens.ja.md)
+
+# Native screens share the scene sessions
+
+BeMusicSkin can mount native DOM screens alongside its Canvas surfaces. Its optional `dom` factories replace select, decide and result drawing, while the gameplay factory adds a DOM HUD around the Canvas playfield. Factories receive an owned mount element and semantic actions; they return update and dispose operations. Detaching removes the mount from the document and preserves its state for re-entry. Disposing releases it permanently. The native skin uses a shadow tree to isolate CSS and keeps chart metadata in text nodes.
+
+SceneController advances the existing scene session once per tick and shares that frame with drawing and subscriptions. Selected stores retain their snapshot until the selected value changes, so a framework can observe a score without rendering on every animation frame. The controller owns neither the clock nor global input. The renderer-independent controller entry also exposes the existing select session for standalone collection browsers. Removing a subscription does not stop its session; its owner explicitly exits or disposes it.
+
+We retain the single Pixi host for the existing skin families and adapt native screens to that lifecycle with an empty Pixi root. Rebuilding all screens around a new host at once would expand the migration into LR2 and beatoraja compatibility. The DOM mount and standalone select controller have no Pixi runtime dependency, so external applications can use them without that host. The existing internal gameplay preparation and PlayfieldRuntime remain renderer-specific; they are not the controller entry's public contract. Canvas capture and video recording include the Canvas content, so the native HUD is outside that recording surface.

@@ -58,7 +58,11 @@ export function parseJSONDocument(raw: Partial<BeMusicJSON>): BeMusicJSON {
   // hint here.
   const rawBMSBase = (rawBMS as { base?: unknown } | undefined)?.base;
   const reparseBase: 36 | 62 = rawBMSBase === 62 ? 62 : 36;
-  json.events = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>, reparseBase);
+  json.events = sortAndNormalizeEvents(
+    rawEvents as Array<BeMusicEvent | Record<string, unknown>>,
+    reparseBase,
+    json.sourceFormat === 'bmson',
+  );
   if (json.events.length !== rawEvents.length) {
     throw new Error('Invalid bms-json event: position [numerator, denominator] is required.');
   }
@@ -431,6 +435,17 @@ function normalizeBMSExtensions(input: unknown): BeMusicJSON['bms'] {
 
   if (typeof raw.charset === 'string' && raw.charset.length > 0) {
     normalized.charset = raw.charset;
+  }
+  if (
+    raw.wavNameBytePrefixes !== null &&
+    typeof raw.wavNameBytePrefixes === 'object' &&
+    !Array.isArray(raw.wavNameBytePrefixes)
+  ) {
+    normalized.wavNameBytePrefixes = Object.fromEntries(
+      Object.entries(raw.wavNameBytePrefixes).flatMap(([path, prefix]) =>
+        typeof prefix === 'string' && /^(?:[0-9a-f]{2}){1,2}$/i.test(prefix) ? [[path, prefix.toLowerCase()]] : [],
+      ),
+    );
   }
 
   return normalized;

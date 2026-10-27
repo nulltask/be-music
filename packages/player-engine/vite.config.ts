@@ -9,7 +9,6 @@ export default defineConfig({
       signals: 'src/signals.ts',
       lanes: 'src/lanes.ts',
       display: 'src/display.ts',
-      'audio-sink': 'src/audio-sink.ts',
       course: 'src/course/index.ts',
       replay: 'src/replay/index.ts',
       records: 'src/records/index.ts',

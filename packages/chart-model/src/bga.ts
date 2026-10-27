@@ -33,10 +33,10 @@ export function buildBGATimelines(chart: BeMusicJSON, resolver: BGATimingResolve
   const idBase = resolveBMSBase(chart);
   const sortedEvents = sortEvents(chart.events);
   const timelines: BGATimelines = {
-    base: buildBmsBGATimeline(sortedEvents, resolver, BGA_BASE_CHANNEL, idBase),
-    poor: buildBmsBGATimeline(sortedEvents, resolver, BGA_POOR_CHANNEL, idBase),
-    layer: buildBmsBGATimeline(sortedEvents, resolver, BGA_LAYER_CHANNEL, idBase),
-    layer2: buildBmsBGATimeline(sortedEvents, resolver, BGA_LAYER2_CHANNEL, idBase),
+    base: buildBmsBGATimeline(sortedEvents, resolver, BGA_BASE_CHANNEL, idBase, chart.sourceFormat === 'bmson'),
+    poor: buildBmsBGATimeline(sortedEvents, resolver, BGA_POOR_CHANNEL, idBase, chart.sourceFormat === 'bmson'),
+    layer: buildBmsBGATimeline(sortedEvents, resolver, BGA_LAYER_CHANNEL, idBase, chart.sourceFormat === 'bmson'),
+    layer2: buildBmsBGATimeline(sortedEvents, resolver, BGA_LAYER2_CHANNEL, idBase, chart.sourceFormat === 'bmson'),
   };
 
   const bgaSection = chart.bmson.bga;
@@ -63,6 +63,7 @@ export function buildBmsBGATimeline(
   resolver: Pick<BGATimingResolver, 'eventToSeconds'>,
   channel: string,
   base: 36 | 62 = 36,
+  allowLongKeys = false,
 ): BGACue[] {
   const normalized = normalizeChannel(channel);
   const timeline: BGACue[] = [];
@@ -70,7 +71,7 @@ export function buildBmsBGATimeline(
     if (normalizeChannel(event.channel) !== normalized) {
       continue;
     }
-    const key = normalizeObjectKey(event.value, base);
+    const key = normalizeObjectKey(event.value, base, allowLongKeys);
     timeline.push({
       seconds: resolver.eventToSeconds(event),
       key: key === '00' ? undefined : key,
@@ -85,4 +86,13 @@ function sortBGATimelines(timelines: BGATimelines): void {
   timelines.layer.sort(sortBySeconds);
   timelines.layer2.sort(sortBySeconds);
   timelines.poor.sort(sortBySeconds);
+}
+
+/** How a BMS chart displays its miss image: replace, overlay, or hide. */
+export type PoorBGAMode = 0 | 1 | 2;
+
+/** Parses `#POORBGA`; missing, invalid and out-of-range values use the normal replacement mode. */
+export function resolvePoorBGAMode(value: string | undefined): PoorBGAMode {
+  const parsed = value === undefined ? 0 : Number.parseInt(value.trim(), 10);
+  return parsed === 1 || parsed === 2 ? parsed : 0;
 }

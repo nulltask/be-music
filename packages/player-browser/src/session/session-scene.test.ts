@@ -198,6 +198,20 @@ describe('SessionScene', () => {
     expect(session.handleKey).toHaveBeenCalledTimes(1);
   });
 
+  it('respects editable targets inside a shadow tree and native button activation', async () => {
+    const { scene, session, keys } = createScene();
+    await scene.enter(createFakeHost().host);
+    keys.fire('keydown', {
+      code: 'Enter',
+      target: { tagName: 'DIV' } as unknown as EventTarget,
+      composedPath: () => [{ tagName: 'INPUT', type: 'search' }] as unknown as EventTarget[],
+    });
+    keys.fire('keydown', { code: 'Enter', target: { tagName: 'BUTTON' } as unknown as EventTarget });
+    expect(session.handleKey).not.toHaveBeenCalled();
+    keys.fire('keydown', { code: 'Escape', target: { tagName: 'BUTTON' } as unknown as EventTarget });
+    expect(session.handleKey).toHaveBeenCalledTimes(1);
+  });
+
   it('routes the view intents to the session only while entered', async () => {
     const { scene, session, emit } = createScene();
     await scene.enter(createFakeHost().host);

@@ -104,7 +104,7 @@ describe('prepareNonstopCourse', () => {
         return (stage, _kind, path) => `s${stage}/${path}`;
       },
     });
-    expect(course).toMatchObject({ connections: ['cut'], placement: 'intended', stitch: 1 });
+    expect(course).toMatchObject({ connections: ['cut'], placement: 'intended', stitch: 2 });
     expect(course.stageDraws).toEqual([[{ command: 'RANDOM', range: 2, value: 1 }], []]);
     // The stage charts as played: control flow resolved and HCN applied.
     expect(course.stageCharts.map((chart) => chart.sourceFormat === 'bms' && chart.bms.lnMode)).toEqual([3, 3]);
@@ -130,7 +130,11 @@ describe('prepareNonstopCourse', () => {
 
   test('refuses what it cannot stitch, naming the stage', () => {
     expect(
-      prepareNonstopCourse([STAGES[0]!, { chart: createEmptyJSON('bmson') }], { constraints: [], connections: [] }),
+      prepareNonstopCourse([STAGES[0]!, { chart: createEmptyJSON('bmson') }], {
+        constraints: [],
+        connections: [],
+        placement: 'lr2',
+      }),
     ).toEqual({
       ok: false,
       reason: 'bmson',
@@ -163,7 +167,7 @@ describe('buildNonstopCourseReplay', () => {
       recorder: { name: 'test' },
       course: { name: 'Nonstop', kind: 'nonstop', constraints: [] },
     });
-    expect(log.nonstop).toMatchObject({ connections: ['cut'], placement: 'intended', stitch: 1 });
+    expect(log.nonstop).toMatchObject({ connections: ['cut'], placement: 'intended', stitch: 2 });
     expect(log.nonstop!.stages[0]!.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value: 1 }]);
     expect(log.stages.map((entry) => entry.played)).toEqual([true, true]);
     const [first, second] = log.stages;

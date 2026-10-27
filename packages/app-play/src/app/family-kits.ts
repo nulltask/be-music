@@ -10,12 +10,13 @@ import {
   type LibraryCourse,
   type SystemSoundSet,
 } from '@be-music/player-scene-model';
+import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { CourseStagePlay } from '../course-flow.ts';
 import { pickActiveFamilyForScene, type FamilyDispatchState } from '../family-dispatch.ts';
 import type { BeatorajaPlayEntry, BeatorajaThemeService } from '../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../services/themes/built-in.ts';
 import type { LR2ThemeService } from '../services/themes/lr2.ts';
-import type { DemoGUIState } from '../types.ts';
+import type { PlayerGUIState } from '../types.ts';
 
 export interface FamilyKitsOptions {
   /** The LR2 theme: its skins and its select sounds. */
@@ -30,8 +31,8 @@ export interface FamilyKitsOptions {
   >;
   /** The be-music skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'beMusicSkin' | 'builtInKit'>;
-  /** The Debug Menu's "Skin system" pick (`skinFamilyOverride`). */
-  readonly guiState: Pick<DemoGUIState, 'skinFamilyOverride'>;
+  /** The Debug Menu's "Skin system" pick (`skinFamilyOverride`) and the battle mode, which picks the LR2 play skin. */
+  readonly guiState: Pick<PlayerGUIState, 'skinFamilyOverride' | 'battleMode'>;
 }
 
 /** The kit a play is drawn with, and on a beatoraja theme the play entry it was loaded from. */
@@ -107,14 +108,18 @@ export class FamilyKits {
    *   (`loadBeatorajaPlayKit`), with the entry; `undefined` when it cannot be loaded.
    * - **LR2** with a play skin for the chart's key mode → an LR2 kit with that skin (parsed again with the course's ops
    *   for a course stage or a NONSTOP run), and the theme's 9-keys skin, whose Pop'n green wide note at index 3 is drawn
-   *   over each invisible note when {@link DemoGUIState.showInvisibleNotes} is on.
+   *   over each invisible note when {@link PlayerGUIState.showInvisibleNotes} is on.
    * - otherwise → the built-in kit with the active be-music skin.
    *
    * Nothing is put in force here: the play may load behind a decide screen that is backed out of.
    */
   public async resolvePlayKit(
     chartEntry: LibraryChart,
-    overrides: { courseStage?: CourseStagePlay; nonstop?: { readonly course: LibraryCourse } },
+    overrides: {
+      courseStage?: CourseStagePlay;
+      nonstop?: { readonly course: LibraryCourse };
+      replay?: BeMusicReplay;
+    },
   ): Promise<ResolvedPlayKit | undefined> {
     if (this.playsOnBeatoraja(chartEntry)) {
       const loaded = await this.beatoraja.loadBeatorajaPlayKit(chartEntry);
@@ -127,16 +132,21 @@ export class FamilyKits {
     }
     // Picking `'default'` from the Debug Menu strips the LR2 skin even when one is loaded for this chart.
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', chartEntry);
+    // A battle mode plays on the converted chart's skin (LR2's BATTLE play skin for two players); a replay on its own.
+    const battle = {
+      battleMode: overrides.replay?.play.battleMode ?? this.guiState.battleMode,
+      course: overrides.courseStage !== undefined || overrides.nonstop !== undefined,
+    };
     const playSkin =
       gameplayFamily !== 'lr2'
         ? undefined
         : overrides.courseStage !== undefined || overrides.nonstop !== undefined
           ? this.lr2.courseLR2Skin(
-              pickLR2PlaySkin(this.lr2.playSkins, chartEntry),
+              pickLR2PlaySkin(this.lr2.playSkins, chartEntry, battle),
               overrides.courseStage?.courseInfo ?? resolveCourseView(overrides.nonstop!.course, 0),
-              { kind: 'play', playVariant: pickLR2PlaySkinVariant(this.lr2.playSkins, chartEntry) },
+              { kind: 'play', playVariant: pickLR2PlaySkinVariant(this.lr2.playSkins, chartEntry, battle) },
             )
-          : pickLR2PlaySkin(this.lr2.playSkins, chartEntry);
+          : pickLR2PlaySkin(this.lr2.playSkins, chartEntry, battle);
     if (playSkin === undefined) return { kit: this.builtIn.builtInKit };
     const invisibleNoteSkin = this.lr2.playSkins['9'];
     return {

@@ -17,8 +17,10 @@ import type { PlayMoment } from './play-session-theme.ts';
 export function playViewEventFromMoment(event: PlayMoment): PlayViewEvent | undefined {
   switch (event.kind) {
     case 'scene-start':
+    case 'input-start':
     case 'load-end':
     case 'play-start':
+    case 'music-end':
     case 'exit-fade-out':
     case 'exit-close':
       return { kind: event.kind, atMs: event.at };
@@ -41,6 +43,8 @@ export function playViewEventFromMoment(event: PlayMoment): PlayViewEvent | unde
       return { kind: 'bomb', channel: event.channel, atMs: event.at };
     case 'view-setting':
       return { kind: 'view-setting', setting: event.setting, atMs: event.at };
+    case 'seek':
+      return { kind: 'seek', seconds: event.seconds, gauge: event.gauge, judgments: event.judgments, atMs: event.at };
     case 'lane-command': {
       const command = event.command;
       switch (command.kind) {

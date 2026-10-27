@@ -282,7 +282,7 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
         playVariant: '7',
         x: 33,
         w: 194,
-        fixedWidths: skinSdkAPI.IIDX_LANE_WIDTHS,
+        fixedWidths: skinSdkAPI._____LANE_WIDTHS,
       });
     },
   });
@@ -353,6 +353,16 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
         { width: 390, height: 844 },
         { laneChannels: BENCH_CHANNELS_7K, playVariant: '7' },
       );
+    },
+  });
+  define('player-skin-sdk.resolveFluidStageSize', {
+    run: () => {
+      skinSdkAPI.resolveFluidStageSize(skinSdkAPI.wideStage, { width: 1024, height: 768 });
+    },
+  });
+  define('player-skin-sdk.resolveFluidStage', {
+    run: () => {
+      skinSdkAPI.resolveFluidStage(skinSdkAPI.wideStage, { width: 1024, height: 768 });
     },
   });
   define('player-skin-sdk.selectListRows', {
@@ -432,9 +442,9 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.updateMoments(skinSdkAPI.createMomentState(), BENCH_MOMENT_INPUT);
     },
   });
-  define('player-skin-sdk.usesIIDXLaneWidths', {
+  define('player-skin-sdk.uses____LaneWidths', {
     run: () => {
-      skinSdkAPI.usesIIDXLaneWidths('7');
+      skinSdkAPI.uses____LaneWidths('7');
     },
   });
   define('player-skin-sdk.validateBeMusicSkin', {
@@ -460,6 +470,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   define('player-skin-sdk.browseEntryBadge', {
     run: () => {
       for (const entry of BENCH_BROWSE_ENTRIES) skinSdkAPI.browseEntryBadge(entry);
+    },
+  });
+  define('player-skin-sdk.clamp', {
+    run: () => {
+      skinSdkAPI.clamp(1.5, 0, 1);
     },
   });
 }

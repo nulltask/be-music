@@ -1,5 +1,5 @@
 import { Sprite, Texture, TextureSource } from 'pixi.js';
-import { describe, expect, it } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/skin-beatoraja';
 import { BeatorajaBGALayer } from './bga.ts';
 
@@ -161,4 +161,139 @@ describe('BeatorajaBGALayer', () => {
 
     layer.dispose();
   });
+});
+
+function fakeVideo() {
+  const video = {
+    currentTime: 0,
+    duration: 120,
+    playbackRate: 1,
+    paused: true,
+    seeking: false,
+    ended: false,
+    play: vi.fn(async () => {
+      video.paused = false;
+    }),
+    pause: vi.fn(() => {
+      video.paused = true;
+    }),
+  };
+  return video;
+}
+
+it('seeks videos relative to the cue and corrects drift, including repeated cues for the same video', () => {
+  const video = fakeVideo();
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    textures: new Map([['01', fakeTexture()]]),
+    videoElements: new Map([['01', video as unknown as HTMLVideoElement]]),
+    cues: {
+      base: [
+        { seconds: 2, bmpKey: '01' },
+        { seconds: 10, bmpKey: '01' },
+      ],
+      layer: [],
+      poor: [],
+    },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  layer.update(7, context, false, { tempo: 1.5 });
+  expect(video.currentTime).toBe(5);
+  expect(video.playbackRate).toBe(1.5);
+  expect(video.play).toHaveBeenCalledOnce();
+  video.currentTime = 5.05;
+  layer.update(7.1, context, false);
+  expect(video.currentTime).toBe(5.05);
+  layer.update(10.1, context, false);
+  expect(video.currentTime).toBeCloseTo(0.1);
+  layer.update(25, context, false);
+  expect(video.currentTime).toBe(15);
+  layer.update(5, context, false);
+  expect(video.currentTime).toBe(3);
+  layer.dispose();
+});
+
+it('holds videos through the intro and seeks a paused video without playing it', () => {
+  const video = fakeVideo();
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    textures: new Map([['01', fakeTexture()]]),
+    videoElements: new Map([['01', video as unknown as HTMLVideoElement]]),
+    cues: { base: [{ seconds: 0, bmpKey: '01' }], layer: [], poor: [] },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  layer.update(0, context, false, { started: false });
+  expect(video.play).not.toHaveBeenCalled();
+  layer.update(20, context, false, { paused: true });
+  expect(video.currentTime).toBe(20);
+  expect(video.play).not.toHaveBeenCalled();
+  layer.update(10, context, false, { paused: true });
+  expect(video.currentTime).toBe(10);
+  layer.update(10, context, false);
+  expect(video.play).toHaveBeenCalledOnce();
+  layer.dispose();
+});
+
+it('synchronizes both videos of a NONSTOP crossfade to their own cues', () => {
+  const first = fakeVideo();
+  const second = fakeVideo();
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    textures: new Map([
+      ['01', fakeTexture()],
+      ['02', fakeTexture()],
+    ]),
+    videoElements: new Map([
+      ['01', first as unknown as HTMLVideoElement],
+      ['02', second as unknown as HTMLVideoElement],
+    ]),
+    cues: { base: [], layer: [], poor: [] },
+    nonstop: {
+      stages: [
+        { windowStart: 0, windowEnd: 20, bmpKeys: ['01'], bgaFadeOut: { start: 20, end: 23 } },
+        { windowStart: 20, windowEnd: Infinity, bmpKeys: ['02'], bgaFadeIn: { start: 17, end: 20 } },
+      ],
+      timelines: [
+        { base: [{ seconds: 0, bmpKey: '01' }], layer: [], poor: [] },
+        { base: [{ seconds: 18, bmpKey: '02' }], layer: [], poor: [] },
+      ],
+    },
+  });
+  layer.update(21, { activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 }, false);
+  expect(first.currentTime).toBe(21);
+  expect(second.currentTime).toBe(3);
+  expect(first.play).toHaveBeenCalledOnce();
+  expect(second.play).toHaveBeenCalledOnce();
+  layer.dispose();
+});
+
+it.each([0, 1, 2] as const)('draws POOR BGA mode %s using its replacement/overlay/hidden policy', (mode) => {
+  const base = fakeTexture(),
+    overlay = fakeTexture(),
+    poor = fakeTexture();
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    poorBGAMode: mode,
+    textures: new Map([
+      ['b', base],
+      ['p', poor],
+    ]),
+    layerTextures: new Map([['l', overlay]]),
+    cues: {
+      base: [{ seconds: 0, bmpKey: 'b' }],
+      layer: [{ seconds: 0, bmpKey: 'l' }],
+      poor: [{ seconds: 0, bmpKey: 'p' }],
+    },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  layer.update(1, context, true);
+  const textures = (layer.container.children as Sprite[])
+    .filter((sprite) => sprite.visible && sprite.label !== 'bga/canvas')
+    .map((sprite) => sprite.texture);
+  expect(textures).toEqual(mode === 0 ? [poor] : mode === 1 ? [base, overlay, poor] : [base, overlay]);
+  layer.update(2, context, false);
+  expect(
+    (layer.container.children as Sprite[]).filter((sprite) => sprite.visible && sprite.label === 'bga/poor'),
+  ).toHaveLength(0);
+  layer.dispose();
 });

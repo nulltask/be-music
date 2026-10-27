@@ -14,6 +14,8 @@
       "emptyPoor": 0,
       "exScore": 6,
       "score": 6,
+      "combo": 5,
+      "maxCombo": 5,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -44,6 +46,8 @@
           {"id":3,"channel":"14","type":"normal","timeUs":2000000},
           {"id":4,"channel":"14","type":"normal","timeUs":2800000}
         ],
+        "headerBPM": 150,
+        "bpmRange": {"min":150,"max":150},
         "chartFingerprint": "bmfp0:7e6cddcede0041c686f4b26a50933f409257967fefe616bac02ba00a2a3e5535",
         "playFingerprint": "bmfp0:7e6cddcede0041c686f4b26a50933f409257967fefe616bac02ba00a2a3e5535",
         "title": "nonstop"
@@ -66,7 +70,8 @@
         "gauge": "GROOVE",
         "judgeRuleset": "beatoraja",
         "endOnFailure": true,
-        "course": {"kind":"nonstop"}
+        "course": {"kind":"nonstop"},
+        "judgeAlgorithm": "combo"
       },
       "results": {
         "native": {
@@ -109,8 +114,8 @@
         "gauge": {"type":"CLASS","final":100,"cleared":true},
         "course": {"combo":5,"maxCombo":5}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":1,"great":4,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 2,
         "slow": 2,
@@ -228,6 +233,8 @@
       "emptyPoor": 0,
       "exScore": 6,
       "score": 6,
+      "combo": 5,
+      "maxCombo": 5,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -253,7 +260,8 @@
         "gauge": "GROOVE",
         "judgeRuleset": "beatoraja",
         "endOnFailure": true,
-        "course": {"kind":"nonstop"}
+        "course": {"kind":"nonstop"},
+        "judgeAlgorithm": "combo"
       },
       "results": "(same as manual)"
     },
@@ -345,6 +353,8 @@
       "emptyPoor": 0,
       "exScore": 10,
       "score": 10,
+      "combo": 5,
+      "maxCombo": 5,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -370,7 +380,8 @@
         "gauge": "GROOVE",
         "judgeRuleset": "beatoraja",
         "endOnFailure": true,
-        "course": {"kind":"nonstop"}
+        "course": {"kind":"nonstop"},
+        "judgeAlgorithm": "combo"
       },
       "results": {
         "native": {
@@ -413,8 +424,8 @@
         "gauge": {"type":"CLASS","final":100,"cleared":true},
         "course": {"combo":5,"maxCombo":5}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":5,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,

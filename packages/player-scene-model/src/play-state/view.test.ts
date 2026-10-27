@@ -36,6 +36,15 @@ describe('ReplayViewCursor', () => {
     expect(cursor.next(0)).toEqual({ hiSpeed: 2 });
   });
 
+  test('seeking forces the view to be reapplied even inside the same change interval', () => {
+    const cursor = new ReplayViewCursor({ hiSpeed: 2 }, changes);
+    cursor.next(1_500_000);
+    expect(cursor.seek(1_250_000)).toEqual({ hiSpeed: 2.5 });
+    expect(cursor.next(1_300_000)).toBeUndefined();
+    expect(cursor.seek(0)).toEqual({ hiSpeed: 2 });
+    expect(cursor.next(500_000)).toBeUndefined();
+  });
+
   test('a log without a view gives an empty one once', () => {
     const cursor = new ReplayViewCursor(undefined);
     expect(cursor.next(0)).toEqual({});
@@ -83,7 +92,8 @@ describe('resolveReplayView on the beatoraja scale', () => {
       hiSpeedScale: 'beatoraja',
       // 240000 / 150 / 2 × 0.75
       visibleMs: 600,
-      covers: [{ side: '1P', sudden: 0.25, hidden: 0.4, lift: 0.2 }],
+      // SUDDEN+ and HIDDEN+ both drawn over the part of the lane above the LIFT: 0.25 × 0.8, 0.5 × 0.8.
+      covers: [{ side: '1P', sudden: 0.2, hidden: 0.4, lift: 0.2 }],
     });
   });
 
@@ -91,8 +101,8 @@ describe('resolveReplayView on the beatoraja scale', () => {
     const view = beatorajaView({ ...input, hiddenEnabled: false, mainBPM: 0, sides: ['1P', '2P'] });
     expect(view.visibleMs).toBeUndefined();
     expect(view.covers).toEqual([
-      { side: '1P', sudden: 0.25, hidden: 0, lift: 0.2 },
-      { side: '2P', sudden: 0.25, hidden: 0, lift: 0.2 },
+      { side: '1P', sudden: 0.2, hidden: 0, lift: 0.2 },
+      { side: '2P', sudden: 0.2, hidden: 0, lift: 0.2 },
     ]);
   });
 
@@ -100,7 +110,7 @@ describe('resolveReplayView on the beatoraja scale', () => {
     // 0.5 × (1 - 0.8) is 0.09999999999999998 in floating point; 240000 / 150 / 3 × 0.9 is 479.99999999999994.
     const view = beatorajaView({ ...input, hiSpeed: 3, lanecover: 0.1, lift: 0.8 });
     expect(view.visibleMs).toBe(480);
-    expect(view.covers).toEqual([{ side: '1P', sudden: 0.1, hidden: 0.1, lift: 0.8 }]);
+    expect(view.covers).toEqual([{ side: '1P', sudden: 0.02, hidden: 0.1, lift: 0.8 }]);
   });
 });
 
@@ -157,7 +167,8 @@ describe('resolveReplayView', () => {
       hiSpeed: 3,
       hiSpeedScale: 'be-music',
       hsFix: 'MAXBPM',
-      covers: [{ side: '1P', sudden: 0.3, hidden: 0.4, lift: 0.2 }],
+      // SUDDEN+ drawn over the part of the lane above the LIFT: 0.3 × 0.8.
+      covers: [{ side: '1P', sudden: 0.24, hidden: 0.4, lift: 0.2 }],
       // 4 beats / 3 × 0.7 at 120 BPM: the LIFT does not shorten it.
       visibleMs: 467,
     });

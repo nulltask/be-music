@@ -1,7 +1,7 @@
 import { DEFAULT_HISPEED, snapHiSpeed } from '@be-music/player-scene-model';
 
 /** `localStorage` key of the hi-speed the next play starts at (the last one picked in play, the panel or the menu). */
-export const HI_SPEED_STORAGE_KEY = 'be-music-demo.hi-speed';
+export const HI_SPEED_STORAGE_KEY = 'be-music.hi-speed';
 
 /** A stored hi-speed, snapped and clamped to the player's range; {@link DEFAULT_HISPEED} when missing or unreadable. */
 export function parseStoredHiSpeed(raw: string | null | undefined): number {

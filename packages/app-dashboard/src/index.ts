@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import { handleAuth, readSession, type OIDCEnv } from '@be-music/service-auth-client';
-import { pickLocale, renderDashboard, type DashboardAccount } from './page.ts';
+import { isLocale, localeFromCookie, localeSetCookie, resolveLocale } from '@be-music/service-web-theme';
+import { renderDashboard, type DashboardAccount } from './page.ts';
 
 interface Env extends OIDCEnv {
   ACCOUNTS?: Pick<Fetcher, 'fetch'>;
@@ -27,13 +28,14 @@ export default {
         );
         const response = await (env.ACCOUNTS ? env.ACCOUNTS.fetch(profileRequest) : fetch(profileRequest));
         if (!response.ok) throw new Error('Profile unavailable');
-        const profile = (await response.json()) as { handle?: unknown; displayName?: unknown };
+        const profile = (await response.json()) as { handle?: unknown; displayName?: unknown; avatarURL?: unknown };
         if (typeof profile.handle !== 'string' || typeof profile.displayName !== 'string')
           throw new Error('Invalid profile');
         account = {
           handle: profile.handle,
           displayName: profile.displayName,
           anonymous: session.identity.anonymous,
+          avatarURL: typeof profile.avatarURL === 'string' ? profile.avatarURL : undefined,
         };
       } catch {
         return new Response('Account profile temporarily unavailable', {
@@ -50,7 +52,12 @@ export default {
         account,
         hostname: url.hostname,
         showDonateLink: env.SHOW_DONATE_LINK === 'true',
-        locale: pickLocale(request.headers.get('accept-language')),
+        locale: resolveLocale({
+          query: url.searchParams.get('lang') ?? undefined,
+          cookie: localeFromCookie(request.headers.get('cookie')),
+          acceptLanguage: request.headers.get('accept-language') ?? undefined,
+        }),
+        requestURL: request.url,
         links: { play: env.PLAY_ORIGIN, leaderboard: env.LEADERBOARD_ORIGIN, donate: env.DONATE_ORIGIN },
       }),
       {
@@ -58,8 +65,10 @@ export default {
           'content-type': 'text/html; charset=utf-8',
           'cache-control': 'private, no-store',
           vary: 'cookie, accept-language',
-          'content-security-policy':
-            "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+          ...(isLocale(url.searchParams.get('lang'))
+            ? { 'set-cookie': localeSetCookie(url.searchParams.get('lang') as 'en' | 'ja', url.protocol === 'https:') }
+            : {}),
+          'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; img-src ${new URL(env.AUTH_ISSUER).origin}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`,
         },
       },
     );

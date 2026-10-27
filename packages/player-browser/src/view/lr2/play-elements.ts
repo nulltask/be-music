@@ -1,3 +1,4 @@
+import { drawLabel } from '../../stage/draw-label.ts';
 /**
  * The elements of an LR2 play skin, drawn for one frame: `#DST_IMAGE` (with the scratch turntable and the key-beam and
  * long-note-hold release fades), `#DST_JUDGELINE`, numbers, the groove gauge, bar graphs, sliders, texts (bitmap fonts
@@ -53,6 +54,7 @@ import {
   renderNowComboElement,
   resolveJudgeSkinKind,
 } from './play-hud.ts';
+import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { LR2PlayTimers } from './play-timers.ts';
 import type { LR2Turntable } from './play-turntable.ts';
 
@@ -62,6 +64,8 @@ export interface LR2PlayElementsContext {
   /** The 9-keys play skin whose `notes.note[3]` draws invisible notes. */
   readonly invisibleNoteSkin: LR2Skin | undefined;
   readonly play: PlayfieldRuntime;
+  /** The play's automatic judge timing: LR2's SILENT draws no NOWJUDGE / NOWCOMBO. */
+  readonly options: { readonly judgeTimingAutoAdjust?: JudgeTimingAutoAdjust };
   /** The skin's images by path, and the chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` under LR2's special paths. */
   readonly textures: ReadonlyMap<string, Texture>;
   readonly timers: LR2PlayTimers;
@@ -197,17 +201,22 @@ export function resolveLR2MeasureLines(ctx: LR2PlayElementsContext): readonly Pl
   if (skinLines.length === 0) return undefined;
   const lines: PlayfieldMeasureLine[] = [];
   for (const skinLine of skinLines) {
+    if (!isLR2DestinationVisible(ctx, skinLine.destination)) continue;
     const baseTexture = ctx.textures.get(skinLine.source.imagePath);
     if (!baseTexture) continue;
     const lineDst = evaluateLR2ElementDst(ctx, skinLine);
     const cell = pickAnimatedCell(skinLine.source, ctx.timers.elapsed(skinLine.source.timer));
     const cropped = createCroppedTexture(baseTexture, cell);
     if (!cropped) continue;
+    const lane = ctx.skin.laneRects.slice(skinLine.index * 10, skinLine.index * 10 + 10).find(Boolean);
+    const timingY = lane ? lane.y + Math.abs(lane.h) : lineDst.y + Math.abs(lineDst.h);
     lines.push({
       cell: { texture: cropped, width: cell.w, height: cell.h },
       x: lineDst.x,
       width: lineDst.w,
       height: Math.max(1, Math.abs(lineDst.h)),
+      // DST_LINE and DST_NOTE specify their own top edges; both scroll from the note's bottom edge.
+      yOffset: lineDst.y - timingY,
       applyToSprite: (sprite) => applyDestinationToSprite(sprite, lineDst),
     });
   }
@@ -276,18 +285,19 @@ export function drawLR2PlaySkin(ctx: LR2PlayElementsContext, width: number, heig
     });
   }
   for (const gauge of skin.grooveGauges) {
-    // 1P only for now: the 2P side needs battle / DP wiring.
-    if (gauge.index !== 0) continue;
+    // The 2P gauge (index 1) is a two-player BATTLE's 2P player's; without one only the 1P gauge draws.
+    const gaugeState = gauge.index === 0 ? ctx.play.gaugeState : ctx.play.secondPlayer?.gauge;
+    if (gauge.index > 1 || gaugeState === undefined) continue;
     if (!isLR2DestinationVisible(ctx, gauge.destination)) continue;
     renderGrooveGaugeElement(
       ctx.skinLayerPool,
       gauge,
-      ctx.play.gaugeState.current,
+      gaugeState.current,
       ctx.textures,
       evaluateLR2ElementDst(ctx, gauge),
       {
         // Survival gauges (HARD / DEATH) have no 80 % clear border in LR2: the whole bar draws in the red cell.
-        survivalGauge: ctx.play.gaugeState.survival === true,
+        survivalGauge: gaugeState.survival === true,
         // The 4-cell x N-frame animation (the lit tip's scan), on the SRC's timer.
         elapsedMs: ctx.timers.elapsed(gauge.source.timer),
       },
@@ -305,11 +315,14 @@ export function drawLR2PlaySkin(ctx: LR2PlayElementsContext, width: number, heig
     if (!isLR2DestinationVisible(ctx, text.destination)) continue;
     drawText(ctx, text);
   }
-  drawJudgeAndCombo(ctx, '1P');
-  // A 9 KEY (PMS) chart can keep lanes in the 2x channels but is single-side: only DP shows a 2P judge and combo.
-  const usesPlayer2 =
-    ctx.play.chartPlayVariant !== '9' && ctx.play.laneChannels.some((channel) => channel.startsWith('2'));
-  if (usesPlayer2) drawJudgeAndCombo(ctx, '2P');
+  // LR2's SILENT automatic judge timing draws no judgment or combo (OpenLR2 `LR2f.cpp` 2513).
+  if (ctx.options.judgeTimingAutoAdjust !== 'LR2-SILENT') {
+    drawJudgeAndCombo(ctx, '1P');
+    // A 9 KEY (PMS) chart can keep lanes in the 2x channels but is single-side: only DP shows a 2P judge and combo.
+    const usesPlayer2 =
+      ctx.play.chartPlayVariant !== '9' && ctx.play.laneChannels.some((channel) => channel.startsWith('2'));
+    if (usesPlayer2) drawJudgeAndCombo(ctx, '2P');
+  }
   ctx.skinLayerPool.end();
   ctx.overlayLayerPool.end();
   ctx.text.endFrame(ctx.skinLayer);
@@ -373,7 +386,7 @@ function drawImage(ctx: LR2PlayElementsContext, image: LR2ImageElement): void {
   const targetPool = image.destination.ops.includes(LR2_OP.AUTOPLAY_ON) ? ctx.overlayLayerPool : ctx.skinLayerPool;
   const sprite = targetPool.acquireSprite();
   sprite.texture = texture;
-  sprite.label = `image[${image.source.imagePath}]`;
+  sprite.label = drawLabel(image, 'image', image.source.imagePath);
   const { x, y, w, h } = normalizeRect(dst);
   // op4 = 1 / 2 mark the 1P / 2P scratch turntable: the sprite spins about its centre with the turntable's angle.
   if (dst.op4 === 1 || dst.op4 === 2) {
@@ -402,7 +415,7 @@ function drawJudgeLine(ctx: LR2PlayElementsContext, judgeLine: LR2JudgeLineEleme
   if (!texture) return;
   const sprite = ctx.skinLayerPool.acquireSprite();
   sprite.texture = texture;
-  sprite.label = `judgeline[idx=${judgeLine.index}]`;
+  sprite.label = drawLabel(judgeLine, 'judgeline', judgeLine.index);
   sprite.position.set(dst.x, dst.y);
   sprite.width = dst.w;
   sprite.height = dst.h;
@@ -430,7 +443,7 @@ function drawText(ctx: LR2PlayElementsContext, text: LR2TextElement): void {
   const style = ctx.text.textStyle(text.st, fontSize, tint);
   if (node.style !== style) node.style = style;
   node.text = value;
-  node.label = `text[st=${text.st}]`;
+  node.label = drawLabel(text, 'text', text.st);
   node.alpha = interpolated.alpha;
   node.scale.set(1, 1);
   // `#SRC_TEXT` align: 0 puts the left edge at the DST x, 1 the centre, 2 the right edge.
@@ -464,7 +477,7 @@ function drawBarGraph(ctx: LR2PlayElementsContext, bargraph: LR2BarGraphElement)
   if (!cropTexture) return;
   const sprite = ctx.skinLayerPool.acquireSprite();
   sprite.texture = cropTexture;
-  sprite.label = `bargraph[type=${bargraph.type}]`;
+  sprite.label = drawLabel(bargraph, 'bargraph', bargraph.type);
   if (bargraph.muki === 'vertical') {
     const filledHeight = Math.round(h * progress);
     sprite.position.set(x, y + (h - filledHeight));
@@ -506,7 +519,7 @@ function drawSlider(ctx: LR2PlayElementsContext, slider: LR2SliderElement): void
   }
   const sprite = ctx.skinLayerPool.acquireSprite();
   sprite.texture = cropTexture;
-  sprite.label = `slider[type=${slider.type}]`;
+  sprite.label = drawLabel(slider, 'slider', slider.type);
   sprite.position.set(drawX, drawY);
   sprite.width = w;
   sprite.height = h;

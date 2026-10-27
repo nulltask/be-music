@@ -21,10 +21,10 @@ import type {
 
 /**
  * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
- * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a be-music skin draws every
- * screen itself onto a canvas the player hands it, with whatever it likes: the Canvas 2D API, raw WebGL / WebGPU, or a
+ * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a be-music skin draws screens
+ * onto Canvas surfaces or mounts native DOM screens. Canvas drawing can use the Canvas 2D API, raw WebGL / WebGPU, or a
  * framework such as PixiJS or three.js that the skin brings along. The player owns input, timing, audio, judging, and
- * layout, collects what is on screen each frame as plain data, and shows the skin's canvas.
+ * layout, and supplies plain frame data and semantic actions to the skin.
  *
  * Nothing here depends on a rendering framework. Skins are written against the `@be-music/player-skin-sdk` package
  * and declared with its `defineBeMusicSkin`, which checks {@link BeMusicSkin.apiVersion} and the metadata.
@@ -32,6 +32,8 @@ import type {
  * the built-in family's kit (`{ family: 'built-in', skin }`).
  */
 export interface BeMusicSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
+  /** Native DOM screens and a DOM gameplay HUD, mounted independently from Canvas surfaces. */
+  readonly dom?: import('./dom.ts').BeMusicDOMSkin;
   /**
    * The skin API revision the skin was written against (`BE_MUSIC_SKIN_API_VERSION` when it was built). Hosts refuse a
    * skin whose revision they don't support and fall back to a built-in one.
@@ -144,11 +146,33 @@ export type BeMusicStageOrientation = 'landscape' | 'portrait';
 export interface BeMusicStage {
   readonly width: number;
   readonly height: number;
+  /** Optional lane bounds in design pixels, shared by rendering, note placement and touch input. */
+  readonly playfield?: Partial<
+    Record<
+      GameplayLayoutMode,
+      {
+        readonly top: number;
+        readonly judgementY: number;
+        /** Shrinks wide lane banks to leave room for a side HUD; narrower banks retain their widths. */
+        readonly maxRight?: number;
+      }
+    >
+  >;
+
   /**
    * The gameplay BGA rect for a playfield whose rightmost lane ends at `playfieldRight`. The scene composites the BGA
    * here and the skin frames the same rect, so the BGA can make room for wide (double play / keyboard) playfields.
    */
   resolveBGARect(playfieldRight: number): BeMusicRect;
+
+  /**
+   * Makes the stage fluid: the host calls it with a design size of the screen's aspect ratio
+   * (`resolveFluidStageSize`: the stage's short side kept, its long side following the screen) and draws on the stage
+   * it returns, so the screen has no letterbox bars. The host skips it when the screen is turned the other way from the
+   * stage (a double play chart kept on the landscape stage of an upright screen). Without it the stage keeps its size
+   * and is letterboxed into the screen.
+   */
+  resize?(size: { width: number; height: number }): BeMusicStage;
 }
 
 /**
@@ -169,7 +193,7 @@ export type BeMusicImage = CanvasImageSource;
 
 /**
  * Visual class of a lane, resolved from its channel — skins pick colours per class. `'wheel-up'` / `'wheel-down'` are
- * the 24 / 48 KEY modes' wheel lanes, on the outer edge of each side where the IIDX modes keep their scratch: draw them
+ * the 24 / 48 KEY modes' wheel lanes, on the outer edge of each side where the That-Which-Must-Not-Be-Named modes keep their scratch: draw them
  * apart from the keys (like a scratch) and show which way each one turns.
  */
 export type BeMusicLaneKind = 'white' | 'black' | 'scratch' | 'wheel-up' | 'wheel-down';
@@ -221,7 +245,9 @@ export interface BeMusicGameplayLayout {
     top: number;
     judgementY: number;
     /** Horizontal extent of each play side present (`2P` only in double play). */
-    sides: Partial<Record<BeMusicSide, { left: number; right: number }>>;
+    sides: Partial<
+      Record<BeMusicSide, { left: number; right: number; /** Actual line after per-side LIFT. */ judgementY?: number }>
+    >;
   };
   /** The BGA rect, or `undefined` when the playfield leaves no room for one. */
   bga: BeMusicRect | undefined;
@@ -235,6 +261,26 @@ export interface BeMusicJudgmentState {
   combo?: number;
 }
 
+/** The 2P player's live values in a two-player play (LR2 BATTLE): its own score, combo and gauge. */
+export interface BeMusicSecondPlayerRuntime {
+  score: number;
+  exScore: number;
+  exScoreMax: number;
+  combo: number;
+  maxCombo: number;
+  perfect: number;
+  great: number;
+  good: number;
+  bad: number;
+  poor: number;
+  /** The gauge in percent (0..100). */
+  gauge: number;
+  clearThreshold?: number;
+  gaugeLabel?: string;
+  gaugeSurvival?: boolean;
+  rank?: string;
+}
+
 /** Live gameplay values for the HUD. */
 export interface BeMusicGameplayRuntime {
   chartTitle?: string;
@@ -243,6 +289,8 @@ export interface BeMusicGameplayRuntime {
   /** BPM at the playhead: follows the chart's tempo changes (and holds through stops), not just its header BPM. */
   bpm?: number;
   hiSpeed?: number;
+  /** Active measured AC floating-speed controls; omitted outside floating mode. */
+  floatingHiSpeed?: true;
   score?: number;
   exScore?: number;
   exScoreMax?: number;
@@ -264,6 +312,8 @@ export interface BeMusicGameplayRuntime {
   judgeSides?: readonly BeMusicJudgmentState[];
   /** AAA / AA / A / B / C / D / E / F. */
   rank?: string;
+  /** The 2P player of a two-player play (LR2 BATTLE); every other figure here is the 1P player's. */
+  secondPlayer?: BeMusicSecondPlayerRuntime;
   autoplay?: boolean;
   hasBGA?: boolean;
   /** Monotonic play clock (ms) for animation. */
@@ -272,7 +322,7 @@ export interface BeMusicGameplayRuntime {
   progressRatio?: number;
   /** Fractional beat position in [0, 1) — drives beat-synced pulses. */
   beatPhase?: number;
-  /** Active compat ruleset id (`lr2` / `beatoraja` / `iidx`). */
+  /** Active compat ruleset id (`lr2` / `beatoraja` / `____`). */
   rulesetLabel?: string;
   /** Ruleset-scoped gauge id (`GROOVE` / `HARD` / `HAZARD` / ...) labelling the gauge. */
   gaugeLabel?: string;
@@ -324,7 +374,7 @@ export interface BeMusicGameplayRuntime {
    * still, as beatoraja shows it.
    */
   visibleMs?: number;
-  /** IIDX-style green number (`visibleMs × 0.6`): the note's on-screen time in frames at 60 Hz. */
+  /** That-Which-Must-Not-Be-Named-style green number (`visibleMs × 0.6`): the note's on-screen time in frames at 60 Hz. */
   greenNumber?: number;
   /**
    * Lowest, highest, and main BPM of the chart. The main BPM is the BPM the most notes sit at (beatoraja's), the one
@@ -419,6 +469,8 @@ export interface BeMusicLaneFrame {
  * the way beatoraja does); clip to the lane's `bottom` to keep nothing below the line.
  */
 export interface BeMusicNote {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   kind: BeMusicLaneKind;
   x: number;
   w: number;
@@ -435,6 +487,8 @@ export interface BeMusicNote {
  * {@link BeMusicGameplaySkin.drawsMines}.
  */
 export interface BeMusicMine {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   kind: BeMusicLaneKind;
   x: number;
   w: number;
@@ -446,6 +500,8 @@ export interface BeMusicMine {
  * {@link BeMusicNote}, it can reach below the judgement line when a negative `#SCROLL` puts it there.
  */
 export interface BeMusicLongNote {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   kind: BeMusicLaneKind;
   x: number;
   w: number;
@@ -489,6 +545,8 @@ export interface BeMusicBomb {
  * judgement line when a negative `#SCROLL` puts it there.
  */
 export interface BeMusicMeasureLine {
+  /** Source visibility opacity (0..1); omitted means fully visible. Multiply by the skin's own opacity. */
+  alpha?: number;
   side: BeMusicSide;
   /** Left edge and width of the lane run it crosses. */
   x: number;
@@ -514,8 +572,10 @@ export interface BeMusicBGAFrame {
   layer?: BeMusicImage;
   /** The miss image (channel 06), shown while {@link poorActive}. */
   poor?: BeMusicImage;
-  /** True while a POOR is being shown: draw {@link poor} in place of the base and layer. */
+  /** True while a POOR is being shown: replace the base/layer unless {@link poorOverlays} is true. */
   poorActive: boolean;
+  /** Draw the miss image over the normal layers (`#POORBGA 1`), instead of replacing them. */
+  poorOverlays?: boolean;
 }
 
 /**
@@ -585,6 +645,14 @@ export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMus
    * the skin's canvas, in {@link BeMusicGameplayLayout.bga}.
    */
   readonly drawsBGA?: boolean;
+  /**
+   * Set to `true` when the skin's DOM gameplay screen ({@link BeMusicSkin.dom}) draws the playfield from
+   * `drawPlayfield`. Hosts that mount it create no Canvas surface for gameplay and may take their own canvas out of the
+   * page; {@link draw} remains for hosts without DOM screens. Nothing the player draws shows then, so such a skin also
+   * draws the BGA, mines, lane covers and measure lines ({@link drawsBGA}, {@link drawsMines}, {@link drawsLaneCover},
+   * {@link drawsMeasureLines}).
+   */
+  readonly drawsOnDOM?: boolean;
 }
 
 /** Song-list geometry shared by the skin (drawing) and the scene (row hit-testing). */
@@ -705,7 +773,7 @@ export interface BeMusicResultFrame {
   designWidth: number;
   designHeight: number;
   result: BeMusicResultData;
-  /** IIDX DJ level (`AAA` … `F`). */
+  /** That-Which-Must-Not-Be-Named DJ level (`AAA` … `F`). */
   rankLabel: string;
   /** EX-score rate in percent. */
   ratePercent: number;

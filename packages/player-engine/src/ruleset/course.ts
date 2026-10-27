@@ -1,3 +1,4 @@
+import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeGutsStep, GaugeSpec, JudgeWindowSetUs, RulesetId, RulesetWindowTables } from './definitions.ts';
 
 /**
@@ -15,6 +16,11 @@ export type CourseGaugeSet = 'lr2' | '5k' | '7k' | '9k' | '24k';
 /** beatoraja's `NO_GOOD` / `NO_GREAT` course constraints. */
 export type CourseJudgeConstraint = 'no-good' | 'no-great';
 
+/** LR2 advances at HP >= 2; the class gauges of the other rulesets require a positive value. */
+export function isCourseStageFailed(ruleset: string, gauge: { final: number; failedMidPlay?: boolean }): boolean {
+  return gauge.failedMidPlay === true || (ruleset.split('/')[0] === 'lr2' ? gauge.final < 2 : gauge.final <= 0);
+}
+
 export interface RulesetCourseOptions {
   kind: RulesetCourseKind;
   /** The course's `gauge_*` constraint; without one beatoraja picks the set by play mode. LR2 ignores it. */
@@ -25,6 +31,8 @@ export interface RulesetCourseOptions {
    * the gauge's range.
    */
   initialGauge?: number;
+  /** Independent class-gauge values carried by source gauge auto-shift. */
+  initialGauges?: Readonly<Record<string, number>>;
 }
 
 type GaugeValues = GaugeSpec['values'];
@@ -49,6 +57,10 @@ function scaleLR2Damage(values: GaugeValues, damage: number): GaugeValues {
  */
 function resolveLR2CourseGauge(gaugeId: string, damage: number): GaugeSpec {
   switch (gaugeId) {
+    case 'P-ATTACK':
+      return createLR2PerfectAttackGauge();
+    case 'G-ATTACK':
+      return createLR2GoodAttackGauge(damage);
     case 'GRADE-HARD':
       return lr2CourseGauge(gaugeId, scaleLR2Damage([0.1, 0.1, 0.04, -6, -10, -2], damage));
     case 'GRADE-DEATH':
@@ -114,7 +126,7 @@ const CLASS_GAUGE_IDS = ['CLASS', 'EXCLASS', 'EXHARDCLASS'] as const;
  * beatoraja's class gauges (`GaugeProperty`): min 0, max 100, start 100, border 0, no TOTAL modifier. A course plays
  * on them whatever its kind (`GrooveGauge.create`).
  */
-function resolveClassGauge(gaugeId: string, gaugeSet: CourseGaugeSet): GaugeSpec {
+export function resolveClassGauge(gaugeId: string, gaugeSet: CourseGaugeSet): GaugeSpec {
   const index = Math.max(0, CLASS_GAUGE_IDS.indexOf(gaugeId as (typeof CLASS_GAUGE_IDS)[number]));
   const row = CLASS_GAUGES[gaugeSet][index];
   return {
@@ -140,15 +152,22 @@ export function resolveDefaultCourseGaugeSet(laneMode: string): CourseGaugeSet {
 /**
  * Maps the player's LR2-family gauge pick onto a ruleset's course gauge id.
  *
- * - `lr2`: grade courses play `GRADE` (GROOVE and EASY alike: LR2 has no grade EASY), `GRADE-HARD` or `GRADE-DEATH`;
- *   EXPERT / NONSTOP courses play `COURSE`, `COURSE-EASY`, `COURSE-HARD` or `COURSE-DEATH`.
- * - beatoraja and IIDX: GROOVE / EASY play `CLASS`, HARD `EXCLASS`, DEATH `EXHARDCLASS` (`GrooveGauge.create`: types up
+ * - `lr2`: grade courses play `GRADE` for GROOVE, EASY and G.ATTACK (the latter two reset at course start),
+ *   `GRADE-HARD`, `GRADE-DEATH` or P.ATTACK. EXPERT / NONSTOP retain P.ATTACK / G.ATTACK and otherwise
+ *   play `COURSE`, `COURSE-EASY`, `COURSE-HARD` or `COURSE-DEATH`.
+ * - beatoraja and That-Which-Must-Not-Be-Named: GROOVE / EASY play `CLASS`, HARD `EXCLASS`, DEATH `EXHARDCLASS` (`GrooveGauge.create`: types up
  *   to NORMAL → CLASS, HARD → EXCLASS, EX-HARD / HAZARD → EXHARDCLASS).
  */
 export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKind, selectedGauge: string): string {
+  if (rulesetId !== 'lr2' && ['P-ATTACK', 'G-ATTACK'].includes(selectedGauge))
+    throw new RangeError('Attack gauges are available only for LR2.');
   if (rulesetId === 'lr2') {
     const prefix = kind === 'grade' ? 'GRADE' : 'COURSE';
     switch (selectedGauge) {
+      case 'P-ATTACK':
+        return 'P-ATTACK';
+      case 'G-ATTACK':
+        return kind === 'grade' ? 'GRADE' : 'G-ATTACK';
       case 'HARD':
         return `${prefix}-HARD`;
       case 'DEATH':
@@ -162,6 +181,7 @@ export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKi
   switch (selectedGauge) {
     case 'HARD':
       return 'EXCLASS';
+    case 'EX-HARD':
     case 'DEATH':
       return 'EXHARDCLASS';
     default:
@@ -171,7 +191,7 @@ export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKi
 
 /**
  * The gauge a course stage runs on. `damage` is LR2's HARD damage multiplier for the stage's own chart; `laneMode`
- * picks beatoraja's class-gauge set when the course names none. IIDX has no published class gauge, so it uses
+ * picks beatoraja's class-gauge set when the course names none. That-Which-Must-Not-Be-Named has no published class gauge, so it uses
  * beatoraja's (the LR2-first policy falls back to beatoraja for what LR2 lacks).
  */
 export function resolveCourseGauge(
@@ -181,6 +201,8 @@ export function resolveCourseGauge(
   laneMode: string,
   damage: number,
 ): GaugeSpec {
+  if (rulesetId !== 'lr2' && ['P-ATTACK', 'G-ATTACK'].includes(gaugeId))
+    throw new RangeError('Attack gauges are available only for LR2.');
   const spec =
     rulesetId === 'lr2'
       ? resolveLR2CourseGauge(gaugeId, damage)

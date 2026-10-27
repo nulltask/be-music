@@ -15,7 +15,7 @@ import {
   type PlayerSummary,
   type PreparedPlaybackChartData,
 } from '@be-music/player-engine';
-import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
+import { resolveLR2LaneIndex, clampHRandomThresholdBPM } from '@be-music/player-engine/lanes';
 import type {
   PlayerInputSignalBus,
   PlayerGaugeSummary,
@@ -26,7 +26,12 @@ import type {
   PlayerStateSignals,
 } from '@be-music/player-engine/signals';
 import type { TimedPlayableNote } from '@be-music/player-engine/display';
-import type { BeMusicReplay, ReplayRecordingOptions, ReplayViewState } from '@be-music/player-engine/replay';
+import type {
+  BeMusicReplay,
+  ReplayRecordingOptions,
+  ReplayViewState,
+  ReplayOptionState,
+} from '@be-music/player-engine/replay';
 import {
   resolveDisplayedPoor,
   type GaugeType,
@@ -36,11 +41,12 @@ import {
 } from '@be-music/player-engine/ruleset';
 import {
   playEventFromUICommand,
+  reducePlayState,
   ReplayViewCursor,
   type LibraryChart,
   type PlayResult,
 } from '@be-music/player-scene-model';
-import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/player-skin-sdk';
+import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
@@ -54,6 +60,8 @@ import { logger } from '../../logger.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import type { BeMusicJudgmentKind } from '../../skin/be-music/types.ts';
 import { beginExitSequence, resolvePlayEnding, type PlayEndingContext } from './play-ending.ts';
+import type { PlayPresentation } from './play-presentation.ts';
+import { resolveSeekWaiters, settleSeekWaiters } from './play-seek.ts';
 import { applyPlayEvent } from './play-state.ts';
 import { shouldSkipPlayKey } from './play-keys.ts';
 import { samplePlaybackRate } from './play-media.ts';
@@ -61,17 +69,42 @@ import {
   flushReplayView,
   followTempoChange,
   startReplayView,
+  updateReplayView,
   type PlayViewSettingsContext,
 } from './play-view-settings.ts';
 
 const log = logger('gameplay');
 
 /** The scene's members the engine side reads and writes: the play session's members of these names. */
-export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingContext {
+export interface PlayEngineContext
+  extends PlayViewSettingsContext, PlayEndingContext, Omit<PlayPresentation, 'longNotes' | 'playMoments'> {
   readonly options: Readonly<
     Pick<
       PlaySessionOptions,
+      | 'judgeTimingMs'
+      | 'judgeTimingAutoAdjust'
+      | 'onJudgeTimingChange'
       | 'autoPlay'
+      | 'allowSeek'
+      | 'judgeAlgorithm'
+      | 'customJudge'
+      | 'longNoteModifier'
+      | 'longNoteRate'
+      | 'sevenToNinePattern'
+      | 'sevenToNineType'
+      | 'battleMode'
+      | 'dBattleScratch'
+      | 'practiceRange'
+      | 'lr2ExtraMode'
+      | 'lr2ExtraLevel'
+      | 'extraNoteDepth'
+      | 'extraNoteScratch'
+      | 'scrollSection'
+      | 'scrollRate'
+      | 'scrollModifier'
+      | 'mineModifier'
+      | 'gaugeAutoShift'
+      | 'bottomShiftableGauge'
       | 'autoScratch1P'
       | 'autoScratch2P'
       | 'chartMD5'
@@ -79,17 +112,28 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
       | 'course'
       | 'dpFlip'
       | 'gauge'
+      | 'gauge2P'
       | 'judgeRuleset'
       | 'nonstop'
       | 'onChartFinished'
       | 'onExit'
       | 'onRestart'
       | 'replayRecorder'
+      | 'randomSeed1P'
+      | 'randomSeed2P'
+      | 'randomFixedLane1P'
+      | 'randomFixedLane2P'
+      | 'hRandomThresholdBPM'
       | 'random1P'
       | 'random2P'
       | 'replay'
+      | 'fixedArrangement'
       | 'tempoPitchMode'
       | 'hsFix'
+      | 'classicHiSpeed'
+      | 'floatingHiSpeed'
+      | 'fixedDisplayArea'
+      | 'normalHiSpeedLevel'
       | 'hiSpeedLocked'
       | 'onHiSpeedChange'
       | 'onTempoChange'
@@ -103,10 +147,12 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   readonly chart: LibraryChart | undefined;
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly randomDraws: RandomDraws | undefined;
+  readonly randomSeeds?: { p1?: string; p2?: string };
   readonly preparedChart: PreparedPlaybackChartData | undefined;
   readonly notes: TimedPlayableNote[];
   readonly timingResolver: TimingResolver | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
+  readonly audioContext: AudioContext | undefined;
   readonly audioBus: AudioBusHandle | undefined;
   readonly decodedSamples: Map<string, AudioBuffer>;
   readonly wavCmdVolumeMultipliers: Map<string, number>;
@@ -114,7 +160,6 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
   readonly nonstopMixer: NonstopStageMixer | undefined;
-  audioContextStartTime: number;
   readonly replayTempo: ReplayTempo | undefined;
   readonly liveTempo: LiveTempo;
   sharedEnginePromise: Promise<unknown> | undefined;
@@ -126,10 +171,16 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   sharedEngineInputSignals: PlayerInputSignalBus | undefined;
   sharedEngineInterrupt: 'escape' | 'restart' | undefined;
   sharedEngineChartSettled: boolean;
-  sharedEngineClockAnchored: boolean;
   engineFrame: Readonly<PlayerUIFramePayload> | undefined;
+  seekGeneration: number;
+  practice: boolean;
+  engineStartRequested: boolean;
+  readonly paused: boolean;
+  readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
+  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
+  chartEndGate?: (seconds: number) => void;
   replay: BeMusicReplay | undefined;
   readonly replayWaiters: Array<(replay: BeMusicReplay) => void>;
   replayViewCursor: ReplayViewCursor | undefined;
@@ -137,32 +188,11 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   gaugeState: PlayerGaugeSummary;
   fastCount: number;
   slowCount: number;
-  fullComboFired: boolean;
-  lastJudge: string;
-  lastJudgeUntil: number;
-  lastJudgeAt: number | undefined;
-  judgeSideState: Record<'1P' | '2P', { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }>;
   judgeWindows: BeMusicJudgeWindows | undefined;
   longNoteStyle: LongNoteStyle | undefined;
   readonly longNotes: LongNoteTracker;
-  readonly playMoments: {
-    failedAtMs?: number;
-    allNotesDoneAtMs?: number;
-    outroAtMs?: number;
-    gaugeRiseAtMs?: number;
-    gaugeMaxAtMs?: number;
-  };
-  lastPoorAt: number;
-  lastImpulseAt: number | undefined;
-  lastImpulseKind: BeMusicLaneKind | undefined;
-  readonly lanePressedAt: Map<string, number>;
-  readonly laneReleasedAt: Map<string, number>;
-  readonly pressedChannels: Set<string>;
-  readonly keyBeamStartedAt: Map<string, number>;
-  readonly keyBeamFadeStartedAt: Map<string, number>;
-  readonly keyFlashTimeouts: Set<number>;
-  readonly bombStartedAt: Map<string, number>;
-  readonly bombJudge: Map<string, BeMusicJudgmentKind>;
+  readonly playMoments: PlayPresentation['playMoments'];
+  pauseAllBGAVideos(): void;
   resolveSelectedGauge(): GaugeType;
   getResultData(): PlayResult | undefined;
 }
@@ -394,13 +424,140 @@ function buildSharedEngineChart(ctx: PlayEngineContext): BeMusicJSON {
 export function resolveReplayRecording(
   options: Pick<
     PlaySessionOptions,
-    'gauge' | 'chartSHA256' | 'chartMD5' | 'replayRecorder' | 'random1P' | 'random2P' | 'dpFlip'
+    | 'gauge'
+    | 'chartSHA256'
+    | 'chartMD5'
+    | 'replayRecorder'
+    | 'randomSeed1P'
+    | 'randomSeed2P'
+    | 'randomFixedLane1P'
+    | 'randomFixedLane2P'
+    | 'hRandomThresholdBPM'
+    | 'random1P'
+    | 'random2P'
+    | 'dpFlip'
+    | 'recordingOptionState'
+    | 'autoPlay'
+    | 'initialHiSpeed'
+    | 'hsFix'
+    | 'classicHiSpeed'
+    | 'floatingHiSpeed'
+    | 'fixedDisplayArea'
+    | 'normalHiSpeedLevel'
+    | 'judgeTimingMs'
+    | 'judgeTimingAutoAdjust'
+    | 'visualConstant'
+    | 'lift1P'
+    | 'lift2P'
+    | 'liftOn1P'
+    | 'liftOn2P'
+    | 'noteDurationMs'
+    | 'constantFadeMs'
+    | 'bpmGuide'
+    | 'hiddenSudden1P'
+    | 'hiddenSudden2P'
+    | 'shutter'
+    | 'laneCover'
+    | 'judgeAlgorithm'
+    | 'customJudge'
+    | 'longNoteModifier'
+    | 'longNoteRate'
+    | 'sevenToNinePattern'
+    | 'sevenToNineType'
+    | 'battleMode'
+    | 'dBattleScratch'
+    | 'lr2ExtraMode'
+    | 'lr2ExtraLevel'
+    | 'extraNoteDepth'
+    | 'extraNoteScratch'
+    | 'scrollSection'
+    | 'scrollRate'
+    | 'scrollModifier'
+    | 'mineModifier'
+    | 'gaugeAutoShift'
+    | 'bottomShiftableGauge'
+    | 'autoScratch1P'
+    | 'autoScratch2P'
   >,
   chartEntry: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
   view: ReplayViewState,
+  effectivePlayerHiSpeed?: number,
+  effectiveRandomSeeds?: { p1?: string; p2?: string },
 ): ReplayRecordingOptions {
+  const effectiveOptions: ReplayOptionState = {};
+  for (const [key, value] of Object.entries({
+    autoPlay: options.autoPlay,
+    hiSpeed: effectivePlayerHiSpeed ?? options.initialHiSpeed,
+    hsFix:
+      options.floatingHiSpeed || options.classicHiSpeed || (options.normalHiSpeedLevel ?? 0) > 0
+        ? 'OFF'
+        : options.hsFix,
+    classicHiSpeed: options.classicHiSpeed,
+    floatingHiSpeed: options.floatingHiSpeed,
+    fixedDisplayArea: options.fixedDisplayArea,
+    ...(options.floatingHiSpeed ? { floatingHiSpeedProfile: 'AC32-measured' } : {}),
+    normalHiSpeedLevel: options.classicHiSpeed ? 0 : options.normalHiSpeedLevel,
+    ...(!options.classicHiSpeed && (options.normalHiSpeedLevel ?? 0) > 0
+      ? { normalHiSpeedProfile: 'AC32-measured' }
+      : {}),
+    bpmGuide: options.bpmGuide,
+    judgeTimingMs: options.judgeTimingMs,
+    judgeTimingAutoAdjust: options.judgeTimingAutoAdjust,
+    visualConstant: options.visualConstant,
+    noteDurationMs: options.noteDurationMs,
+    lift1P: options.lift1P,
+    lift2P: options.lift2P,
+    liftOn1P: options.liftOn1P,
+    liftOn2P: options.liftOn2P,
+
+    constantFadeMs: options.constantFadeMs,
+    hiddenSudden1P: options.hiddenSudden1P,
+    hiddenSudden2P: options.hiddenSudden2P,
+    shutter: options.shutter,
+    laneCover: options.laneCover,
+    gauge1P: options.gauge,
+    random1P: options.random1P,
+    randomSeed1P: effectiveRandomSeeds?.p1 ?? options.randomSeed1P,
+    randomSeed2P: effectiveRandomSeeds?.p2 ?? options.randomSeed2P,
+    randomFixedLane1P: options.randomFixedLane1P,
+    randomFixedLane2P: options.randomFixedLane2P,
+    hRandomThresholdBPM:
+      options.hRandomThresholdBPM === undefined ? undefined : clampHRandomThresholdBPM(options.hRandomThresholdBPM),
+    random2P: options.random2P,
+    dpFlip: options.dpFlip,
+    judgeAlgorithm: options.judgeAlgorithm,
+    customJudge: options.customJudge === undefined ? undefined : true,
+    customJudgeKeyPerfectGreat: options.customJudge?.keyPerfectGreat,
+    customJudgeKeyGreat: options.customJudge?.keyGreat,
+    customJudgeKeyGood: options.customJudge?.keyGood,
+    customJudgeScratchPerfectGreat: options.customJudge?.scratchPerfectGreat,
+    customJudgeScratchGreat: options.customJudge?.scratchGreat,
+    customJudgeScratchGood: options.customJudge?.scratchGood,
+    customJudgeLongNoteMargin: options.customJudge?.longNoteMargin,
+    longNoteModifier: options.longNoteModifier,
+    longNoteRate: options.longNoteRate,
+    sevenToNinePattern: options.sevenToNinePattern,
+    sevenToNineType: options.sevenToNineType,
+    battleMode: options.battleMode,
+    dBattleScratch: options.dBattleScratch,
+    lr2ExtraMode: options.lr2ExtraMode,
+    lr2ExtraLevel: options.lr2ExtraLevel,
+    extraNoteDepth: options.extraNoteDepth,
+    extraNoteScratch: options.extraNoteScratch,
+    mineModifier: options.mineModifier,
+    scrollModifier: options.scrollModifier,
+    scrollSection: options.scrollSection,
+    scrollRate: options.scrollRate,
+    gaugeAutoShift: options.gaugeAutoShift,
+    bottomShiftableGauge: options.bottomShiftableGauge,
+    autoScratch1P: options.autoScratch1P,
+    autoScratch2P: options.autoScratch2P,
+  })) {
+    if (value !== undefined) effectiveOptions[key] = value;
+  }
   return {
     gauge: options.gauge,
+    options: { ...options.recordingOptionState, ...effectiveOptions },
     ...(options.chartSHA256 !== undefined ? { chartSHA256: options.chartSHA256 } : {}),
     ...(options.chartMD5 !== undefined ? { chartMD5: options.chartMD5 } : {}),
     ...(options.replayRecorder !== undefined ? { recorder: options.replayRecorder } : {}),
@@ -456,6 +613,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ...(ctx.nonstopMixer !== undefined ? { stageMixer: ctx.nonstopMixer } : {}),
       playbackRate: samplePlaybackRate(ctx),
       playbackRateFollowsTempo: supportsLiveTempoChange(ctx.options.tempoPitchMode ?? 'pitch'),
+      tempo: ctx.tempo,
     },
     mode: ctx.options.autoPlay ? 'auto' : 'manual',
     ui: callbacks,
@@ -465,6 +623,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ctx.sharedEngineChartSettled = false;
       // A tempo asked for while the engine was starting.
       ctx.liveTempo.attach(signals.inputSignals);
+      if (ctx.paused) signals.inputSignals.pushCommand({ kind: 'toggle-pause' });
+      if (ctx.engineStartRequested) signals.inputSignals.pushCommand({ kind: 'start' });
     },
     // Listen on the window (default) so the runtime sees keyboard events regardless of which DOM element
     // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
@@ -474,21 +634,77 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     engineOptions: {
       // The draws `resolvedChart` was resolved with; the engine plays that chart as is and names them in its summary.
       ...(ctx.randomDraws !== undefined ? { randomDraws: ctx.randomDraws } : {}),
-      // The view's own intro timing already gated the chart to PLAYSTART; tell the engine to start its chart
-      // immediately so its t=0 lines up with our `audioContextStartTime` anchor instead of imposing the
-      // engine's default 1.5 s lead-in on top.
+      // Prepare during the skin intro; chart time and audio wait for its PLAY START command.
       leadInMs: 0,
+      waitForStart: true,
       // The play tempo: the engine's clock runs `tempo` times as fast and judges in chart time. A change during the
       // play comes back through `onTempoChange`, at the chart second the engine took it.
       speed: ctx.tempo,
       onTempoChange: (change) => followTempoChange(ctx, change),
-      // Forward AUTO SCRATCH: engine has a single boolean rather than per-side, so either-side AUTO SCRATCH
-      // turns scratch auto on for both 16 / 26 channels. That's a per-side fidelity loss for rare DP charts
-      // where only one player's scratch should auto-spin (the demo's lil-gui surfaces them as two separate
-      // toggles), but the alternative — leaving auto off — was worse: scratch notes the user expected to be
-      // auto-spun would just sit there as misses, and the legacy `autoScratchJudge` path is gated off in
-      // shared-engine mode. A future engine extension could split the flag per side.
+      // Only the selected side's scratch lanes are assisted by the engine.
       autoScratch: ctx.options.autoScratch1P === true || ctx.options.autoScratch2P === true,
+      bottomShiftableGauge: ctx.options.replay?.play.bottomShiftableGauge ?? ctx.options.bottomShiftableGauge,
+      gaugeAutoShift:
+        ctx.options.replay !== undefined ? ctx.options.replay.play.gaugeAutoShift : ctx.options.gaugeAutoShift,
+      judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,
+      customJudge: ctx.options.replay ? ctx.options.replay.play.customJudge : ctx.options.customJudge,
+      judgeTimingAutoAdjust: ctx.options.replay === undefined ? (ctx.options.judgeTimingAutoAdjust ?? 'OFF') : 'OFF',
+      judgeTimingMs: ctx.options.judgeTimingMs,
+      battleMode: ctx.options.replay
+        ? (ctx.options.replay.play.battleMode ?? 'OFF')
+        : ctx.options.fixedArrangement
+          ? (ctx.options.fixedArrangement.play.battleMode ?? 'OFF')
+          : ctx.options.battleMode,
+      practice: ctx.options.replay ? undefined : ctx.options.practiceRange,
+      dBattleScratch: ctx.options.replay
+        ? (ctx.options.replay.play.dBattleScratch ?? false)
+        : ctx.options.fixedArrangement
+          ? (ctx.options.fixedArrangement.play.dBattleScratch ?? false)
+          : ctx.options.dBattleScratch,
+      lr2ExtraMode: ctx.options.replay
+        ? (ctx.options.replay.play.lr2ExtraMode ?? false)
+        : ctx.options.fixedArrangement
+          ? (ctx.options.fixedArrangement.play.lr2ExtraMode ?? false)
+          : ctx.options.lr2ExtraMode,
+      lr2ExtraLevel: ctx.options.replay
+        ? (ctx.options.replay.play.lr2ExtraLevel ?? 0)
+        : ctx.options.fixedArrangement
+          ? (ctx.options.fixedArrangement.play.lr2ExtraLevel ?? 0)
+          : ctx.options.lr2ExtraLevel,
+      extraNoteDepth: ctx.options.replay
+        ? (ctx.options.replay.play.extraNoteDepth ?? 0)
+        : ctx.options.fixedArrangement
+          ? (ctx.options.fixedArrangement.play.extraNoteDepth ?? 0)
+          : ctx.options.extraNoteDepth,
+      extraNoteScratch: ctx.options.replay
+        ? (ctx.options.replay.play.extraNoteScratch ?? false)
+        : ctx.options.fixedArrangement
+          ? (ctx.options.fixedArrangement.play.extraNoteScratch ?? false)
+          : ctx.options.extraNoteScratch,
+      longNoteRate:
+        ctx.options.replay?.play.longNoteRate ??
+        ctx.options.fixedArrangement?.play.longNoteRate ??
+        ctx.options.longNoteRate,
+      longNoteModifier:
+        ctx.options.replay?.play.longNoteModifier ??
+        ctx.options.fixedArrangement?.play.longNoteModifier ??
+        ctx.options.longNoteModifier,
+      scrollSection:
+        ctx.options.replay?.play.scrollSection ??
+        ctx.options.fixedArrangement?.play.scrollSection ??
+        ctx.options.scrollSection,
+      scrollRate:
+        ctx.options.replay?.play.scrollRate ?? ctx.options.fixedArrangement?.play.scrollRate ?? ctx.options.scrollRate,
+      scrollModifier:
+        ctx.options.replay?.play.scrollModifier ??
+        ctx.options.fixedArrangement?.play.scrollModifier ??
+        ctx.options.scrollModifier,
+      mineModifier:
+        ctx.options.replay?.play.mineModifier ??
+        ctx.options.fixedArrangement?.play.mineModifier ??
+        ctx.options.mineModifier,
+      autoScratch1P: ctx.options.autoScratch1P === true,
+      autoScratch2P: ctx.options.autoScratch2P === true,
       // Hand the engine the same `PreparedPlaybackChartData` instance the renderer is already pointing at
       // (`this.notes` / `this.mineNotes` / `this.invisibleNotes` are references into this bundle). The
       // engine's `autoPlay` / `manualPlay` use it verbatim instead of running their own
@@ -499,10 +715,20 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       // `random1P: 'OFF'` truthy-check to fix. Every "view extracted differently than engine" bug is
       // structurally impossible because there is only one extract.
       preparedChart: ctx.preparedChart,
+      sevenToNinePattern: ctx.preparedChart?.sevenToNinePattern,
+      sevenToNineType: ctx.preparedChart?.sevenToNineType,
+      hRandomThresholdBPM: ctx.preparedChart?.sevenToNineThresholdBPM,
       // The gauge is part of the judging setup, not just a skin colour: the engine resolves it against the active
       // ruleset's gauge line-up and runs its curve, so HARD really drains and DEATH really ends the run.
       // `resolveSelectedGauge` prefers the replay's recorded pick, so a played-back log runs its original gauge.
       gauge: ctx.resolveSelectedGauge(),
+      ...(ctx.options.replay !== undefined
+        ? ctx.options.replay.play.gauge2P !== undefined
+          ? { gauge2P: ctx.options.replay.play.gauge2P }
+          : {}
+        : ctx.options.gauge2P !== undefined
+          ? { gauge2P: ctx.options.gauge2P }
+          : {}),
       ...(ctx.options.replay === undefined && ctx.options.course !== undefined ? { course: ctx.options.course } : {}),
       // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
       ...(ctx.options.replay === undefined && ctx.options.nonstop !== undefined
@@ -545,6 +771,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
               ? { replayAbortedAtUs: ctx.options.replay.play.abortedAtUs }
               : {}),
             autoScratch: ctx.options.replay.play.autoScratch,
+            autoScratch1P: ctx.options.replay.play.autoScratch1P,
+            autoScratch2P: ctx.options.replay.play.autoScratch2P,
             judgeRuleset: ctx.options.replay.play.judgeRuleset ?? 'lr2',
             // Logs from before plays ended on failure kept judging to the end; replay them that way.
             endOnFailure: ctx.options.replay.play.endOnFailure === true,
@@ -558,19 +786,29 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // Replay recording: the engine snapshots the resolved (post-shuffle) chart and the raw input
             // replay, then hands the assembled log here right before the play promise settles. The host reads it
             // back through `getResultData().replay` for the result screen's auto-save.
-            // What the player sees at the start; the changes during the play go in as `view` commands.
-            recordReplay: resolveReplayRecording(ctx.options, ctx.chart, startReplayView(ctx)),
-            onReplayRecorded: (replay) => {
-              ctx.replay = replay;
-              const waiters = ctx.replayWaiters.splice(0);
-              for (const resolve of waiters) resolve(replay);
-            },
+            // What the player sees at the start; the changes during the play go in as `view` commands. A play that
+            // seeks records none: the engine discards its recorder at the first seek.
+            recordReplay: resolveReplayRecording(
+              ctx.options,
+              ctx.chart,
+              startReplayView(ctx),
+              ctx.playState.view.hiSpeed.player,
+              ctx.randomSeeds,
+            ),
+            onReplayRecorded: ctx.practice
+              ? undefined
+              : (replay: BeMusicReplay) => {
+                  ctx.replay = replay;
+                  const waiters = ctx.replayWaiters.splice(0);
+                  for (const resolve of waiters) resolve(replay);
+                },
           }),
     },
   })
     .then((summary) => {
       log.info('shared engine driver finished');
       drainSharedEngineSignals(ctx);
+      settleSeekWaiters(ctx);
       applyFinalSummary(ctx, summary);
       // A play the view interrupted (ESC / F5 / teardown) has already handed the host over; it does not finish.
       if (ctx.sharedEngineInterrupt !== undefined) return;
@@ -585,6 +823,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       handleSharedEngineChartFinished(ctx, summary);
     })
     .catch((error: unknown) => {
+      settleSeekWaiters(ctx);
       // The view's own ESC / F5 handler (`handleSharedEngineExitKey`) drives the LR2 fadeout animation, calls
       // the host's `onExit` / `onRestart` from the fade-completion callback, and then aborts the engine's
       // signal — which is what produced this rejection. The view is already disposing (or about to), so the
@@ -629,27 +868,18 @@ export function drainSharedEngineSignals(ctx: PlayEngineContext): void {
  * Mirrors the engine's per-frame snapshot into the view's score / gauge / fast-slow fields so the LR2 NUMBER
  * elements + score-graph keep rendering from the existing source paths — they don't need to know the engine
  * replaced the in-tree judge ladder. The summary's optional `gauge` payload populates `this.gaugeState` so the
- * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative.
+ * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative. The frame is also
+ * what the chart's clock runs on from (`PlaySession.currentSeconds`); one of a seek generation older than the last
+ * `seek` command is stale and dropped.
  */
 function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFramePayload>): void {
-  ctx.engineFrame = frame;
-  // Re-anchor the view's chart-time clock to the engine's the very first time the engine publishes a frame.
-  // The engine's `playbackClock` (and therefore the chart-time it stamps on every judge / sample / ui-signal
-  // event) anchors at the moment the engine creates the clock — which lands a few ms to a few hundred ms
-  // AFTER the view set `audioContextStartTime` in its PLAYSTART gate, since `manualPlay` runs through its
-  // entire prepare phase between those two points. Without re-anchoring, every note appears to pass the
-  // judgment line slightly EARLIER (in view time) than the engine actually judges it, so the visual hit
-  // doesn't line up with the score event.
-  //
-  // Using the first non-zero `frame.currentSeconds` snaps the view's `audioContextStartTime` so that
-  // `currentSeconds() === frame.currentSeconds` from now on. Subsequent frames don't re-anchor — both
-  // clocks tick on the AudioContext now, so the offset stays locked.
-  if (!ctx.sharedEngineClockAnchored && frame.currentSeconds > 0 && ctx.audioContext) {
-    ctx.audioContextStartTime = ctx.audioContext.currentTime - ctx.tempoClock.clockMsAt(frame.currentSeconds) / 1000;
-    ctx.sharedEngineClockAnchored = true;
-    ctx.nonstopMixer?.schedule(ctx.audioContextStartTime);
-  }
+  if ((frame.generation ?? 0) < ctx.seekGeneration) return;
+  // The signal bus reuses its frame object. Keep the applied clock metadata owned by this
+  // session, so publishing a seek cannot move time before its score snapshot is drained.
+  ctx.engineFrame = { ...frame };
   applyEngineSummary(ctx, frame.summary);
+  if (frame.summary2P !== undefined) applySecondPlayerSummary(ctx, frame.summary2P);
+  ctx.chartEndGate?.(frame.currentSeconds);
 }
 
 function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
@@ -661,11 +891,15 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
   // the engine's smaller scorable count) and the FC presentation never fires. Sync `score.total` to the
   // engine's value here so the view always agrees with the authority on the scorable population.
   ctx.score.total = summary.total;
+  if (summary.fullCombo !== undefined) ctx.score.fullCombo = summary.fullCombo;
+  else delete ctx.score.fullCombo;
   ctx.score.perfect = summary.perfect;
   ctx.score.great = summary.great;
   ctx.score.good = summary.good;
   ctx.score.bad = summary.bad;
   ctx.score.emptyPoor = summary.emptyPoor;
+  if (summary.minePoor !== undefined) ctx.score.minePoor = summary.minePoor;
+  else delete ctx.score.minePoor;
   // `this.score` is the DISPLAY copy: under LR2 the POOR counter folds empty POORs in, matching the real thing
   // (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch, and LR2 exposes no
   // separate stat). Every LR2 read-out — the POOR row, BP, the per-judge rates, the skin's num 84 / 89 / 114 —
@@ -716,6 +950,34 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
 export function applyFinalSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
   applyEngineSummary(ctx, summary);
   applyPlayEvent(ctx, { type: 'finish', summary });
+  const second = ctx.secondPlayer;
+  if (second !== undefined && summary.secondPlayer !== undefined) {
+    applySecondPlayerSummary(ctx, summary.secondPlayer);
+    second.playState = reducePlayState(second.playState, { type: 'finish', summary: summary.secondPlayer });
+  }
+}
+
+/** The 2P player's scores and play state from its summary (a two-player play), as the 1P player's are kept. */
+function applySecondPlayerSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
+  const second = ctx.secondPlayer;
+  if (second === undefined) return;
+  second.score = {
+    ...second.score,
+    total: summary.total,
+    perfect: summary.perfect,
+    great: summary.great,
+    good: summary.good,
+    bad: summary.bad,
+    emptyPoor: summary.emptyPoor,
+    poor: resolveDisplayedPoor(summary, ctx.resolveEmptyPoorCountsInPoorDisplay()),
+    exScore: summary.exScore,
+    score: summary.score,
+  };
+  if (summary.gauge !== undefined) second.gauge = { ...summary.gauge };
+  second.playState = reducePlayState(second.playState, {
+    type: 'frame',
+    frame: { totalSeconds: ctx.resolveChartDurationSeconds(), summary },
+  });
 }
 
 /**
@@ -726,7 +988,16 @@ export function applyFinalSummary(ctx: PlayEngineContext, summary: Readonly<Play
  * drives its LN-hold timers and turntable from it).
  */
 function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): void {
+  if (command.kind === 'seek') {
+    applyEngineSeek(ctx, command);
+    return;
+  }
   switch (command.kind) {
+    case 'judge-timing':
+      // The engine already recorded the accepted update at its judgment timestamp.
+      (ctx.options as PlaySessionOptions).judgeTimingMs = command.value;
+      ctx.options.onJudgeTimingChange?.(command.value);
+      return;
     case 'flash-lane':
       noteImpulse(ctx, command.channel);
       flashKeyBeam(ctx, command.channel);
@@ -758,7 +1029,8 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
       triggerBomb(ctx, command.channel);
       break;
     case 'trigger-poor-bga': {
-      ctx.lastPoorAt = command.seconds;
+      // Commands carry chart seconds, but the shared miss-image window runs on the pause-aware play clock.
+      ctx.lastPoorAt = ctx.playClock();
       // An empty POOR (the engine fires `trigger-poor-bga` for real POOR judgments too, and for empty presses and
       // misses past the window) moves the gauge without a judgment: the play state samples its graphs here. A real
       // POOR that also publishes a judgment gets a second sample at almost the same progress.
@@ -777,6 +1049,50 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
       break;
   }
   ctx.theme.moment({ kind: 'lane-command', command });
+}
+
+/**
+ * The engine sought: what the play showed of the old position is void — the lane effects, the held long notes, the
+ * plates, the POOR image and the latched moments ({@link PlayPresentation.resetPresentation}), the lead-out and the
+ * BGA videos — and the score, the gauge and the play state become the snapshot it rebuilt (the combo, the max combo,
+ * the graphs and the timings of the judgments before the second sought included). The long notes held across it come
+ * next, as the commands that follow. The view hears of it (`seek` moment), and the seeks waiting on it settle.
+ */
+function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUICommand, { kind: 'seek' }>): void {
+  const { snapshot, seconds, generation } = command;
+  ctx.seekGeneration = generation;
+  if (
+    (ctx.options.autoPlay !== true && ctx.options.replay === undefined) ||
+    ctx.options.course !== undefined ||
+    ctx.options.nonstop !== undefined
+  )
+    ctx.practice = true;
+  ctx.resetPresentation();
+  // A play sought back out of its lead-out plays on: the engine settles the chart again.
+  if (ctx.chartEndTimeout !== undefined) {
+    window.clearTimeout(ctx.chartEndTimeout);
+    ctx.chartEndTimeout = undefined;
+  }
+  ctx.chartEndGate = undefined;
+  ctx.chartEnded = false;
+  ctx.sharedEngineChartSettled = false;
+  ctx.onHeldPlayEnded = undefined;
+  // The next BGA sync starts each video at the chart time sought.
+  ctx.pauseAllBGAVideos();
+  ctx.bgaActiveVideos = {};
+  applyEngineSummary(ctx, snapshot.summary);
+  ctx.displayedScore = ctx.score.score;
+  applyPlayEvent(ctx, { type: 'seek', snapshot, seconds, atMs: ctx.playClock(), tempo: ctx.tempo });
+  ctx.lastPoorAt = -Number.POSITIVE_INFINITY;
+  ctx.theme.moment({
+    kind: 'seek',
+    seconds,
+    gauge: ctx.playState.gauge,
+    judgments: snapshot.judgments,
+    at: ctx.playClock(),
+  });
+  updateReplayView(ctx, seconds, true);
+  resolveSeekWaiters(ctx, seconds);
 }
 
 /** Keeps the engine's long-note style and its judge windows (converted to ms) for the skin runtime. */
@@ -804,7 +1120,16 @@ function applyEngineJudgeCombo(ctx: PlayEngineContext, state: Readonly<PlayerJud
   const judgeKind = state.judge as JudgmentKind;
   const seconds = ctx.currentSeconds();
   // Autoplay hits, mine BADs, and missed notes carry no `deltaMs`: the play state keeps no timing for them.
-  applyPlayEvent(ctx, { type: 'judge', judge: state, seconds, atMs: ctx.playClock() });
+  const second = ctx.secondPlayer;
+  if (second !== undefined && state.channel?.startsWith('2') === true) {
+    // A two-player play's 2P judgment is the 2P player's.
+    second.playState = reducePlayState(second.playState, {
+      type: 'judge',
+      judge: state,
+      seconds,
+      atMs: ctx.playClock(),
+    });
+  } else applyPlayEvent(ctx, { type: 'judge', judge: state, seconds, atMs: ctx.playClock() });
   publishJudge(ctx, judgeKind, seconds, state);
   if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
     triggerBomb(ctx, state.channel, judgeKind);
@@ -832,19 +1157,22 @@ function handleSharedEngineChartFinished(
   ctx.playMoments.outroAtMs ??= ctx.playClock();
   // The end-of-play policy every gameplay family shares (`resolvePlayEnding`): a lead-out after the last note, then the
   // fade-out, or — for a play cut short by its gauge emptying — a stop at once (`beginExitSequence`).
+  const viewTiming = ctx.theme.timing();
   const ending = resolvePlayEnding({
     summary: finalSummary,
     notes: ctx.notes,
     timing: ctx.timingResolver,
     currentSeconds: ctx.currentSeconds(),
     tempo: ctx.tempo,
+    musicEndDelayMs: viewTiming.musicEndDelayMs,
+    finishMarginMs: viewTiming.finishMarginMs,
+    ...(ctx.options.autoPlay ? { chartEndSeconds: ctx.resolveChartDurationSeconds() } : {}),
   });
-  // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
-  // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
-  // charts whose non-note tail has already carried us past the target.
-  ctx.chartEndTimeout = window.setTimeout(() => {
+  // Families without a music-end stage retain the two-measure lead-out. A family with that stage waits on the
+  // engine's chart clock, then holds its finish margin on the scene clock before fading.
+  const beginFade = () => {
     ctx.chartEndTimeout = undefined;
-    if (ctx.disposed) return;
+    if (ctx.disposed || ctx.exiting) return;
     drainSharedEngineSignals(ctx);
     if (finalSummary !== undefined) applyFinalSummary(ctx, finalSummary);
     const finish = (): void => {
@@ -872,11 +1200,32 @@ function handleSharedEngineChartFinished(
       // A normal end lets its last keysounds ring through the fade-out; a failure cuts them.
       { failed: ending.failed, fadeAudio: false },
     );
-  }, ending.leadOutMs);
+  };
+  if (ending.musicEndAtSeconds !== undefined) {
+    const target = ending.musicEndAtSeconds;
+    const musicEnd = () => {
+      ctx.chartEndGate = undefined;
+      if (ctx.disposed || ctx.exiting || !ctx.chartEnded) return;
+      ctx.theme.moment({ kind: 'music-end', at: ctx.playClock() });
+      ctx.chartEndTimeout = window.setTimeout(beginFade, ending.finishMarginMs ?? 0);
+    };
+    if (held) {
+      // The one engine loop drives this gate: pause, tempo changes and seeks keep their chart-time meaning.
+      ctx.chartEndGate = (seconds) => {
+        if (seconds >= target) musicEnd();
+      };
+      ctx.chartEndGate(ctx.currentSeconds());
+    } else {
+      ctx.chartEndTimeout = window.setTimeout(musicEnd, Math.max(0, ending.leadOutMs - (ending.finishMarginMs ?? 0)));
+    }
+  } else {
+    ctx.chartEndTimeout = window.setTimeout(beginFade, ending.leadOutMs);
+  }
 }
 
 /** Stops the shared engine as the play is disposed (`PlaySession.dispose`) and lets go of its buses. */
 export function stopSharedEngine(ctx: PlayEngineContext): void {
+  ctx.chartEndGate = undefined;
   // Abort the shared engine driver BEFORE the audio session tear-down so engine ticks don't fire fresh
   // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via
   // `throwIfAborted` and unwinds; our launchSharedEngine catch swallows the resulting `AbortError` because
@@ -894,6 +1243,6 @@ export function stopSharedEngine(ctx: PlayEngineContext): void {
   ctx.sharedEngineSignals = undefined;
   ctx.sharedEngineInputSignals = undefined;
   ctx.liveTempo.attach(undefined);
-  ctx.sharedEngineClockAnchored = false;
   ctx.sharedEnginePromise = undefined;
+  settleSeekWaiters(ctx);
 }

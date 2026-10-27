@@ -164,6 +164,20 @@ export const LR2_TEXT = {
   COURSE_CONNECTION8: 178,
   /** The connection after stage 9. */
   COURSE_CONNECTION9: 179,
+  /** The RANDOM MIX preferred level: `OFF` or `LEVEL n`. */
+  RANDOM_MIX_PREFERRED_LEVEL: 190,
+  /** The RANDOM MIX max level: `NO LIMIT` or `LEVEL n`. */
+  RANDOM_MIX_MAX_LEVEL: 191,
+  /** The RANDOM MIX min level: `NO LIMIT` or `LEVEL n`. */
+  RANDOM_MIX_MIN_LEVEL: 192,
+  /** The RANDOM MIX BPM range: `NO LIMIT` or `+- nBPM`. */
+  RANDOM_MIX_BPM_RANGE: 193,
+  /** The RANDOM MIX max BPM: `NO LIMIT` or `n BPM`. */
+  RANDOM_MIX_MAX_BPM: 194,
+  /** The RANDOM MIX min BPM: `NO LIMIT` or `n BPM`. */
+  RANDOM_MIX_MIN_BPM: 195,
+  /** The RANDOM MIX stage count: `RANDOM` or `n STAGE`. */
+  RANDOM_MIX_STAGE_COUNT: 196,
   /** The connection a new NONSTOP course gets (`config.course.defaultconnection`). */
   COURSE_DEFAULT_CONNECTION: 198,
 } as const;

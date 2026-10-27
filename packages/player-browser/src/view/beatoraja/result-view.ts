@@ -12,6 +12,8 @@
 
 import { buildBaseOpSet, type BeatorajaSkin } from '@be-music/skin-beatoraja';
 import {
+  beatorajaReplayButtonSlot,
+  resolveBeatorajaResultReplayOps,
   resolveBeatorajaGaugePolyline,
   resolveBeatorajaResultGaugePercent,
   resolveBeatorajaResultGaugeState,
@@ -25,13 +27,14 @@ import {
   type BeatorajaResultInput,
 } from '@be-music/skin-beatoraja/scene';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import type { LibraryChart, PlayResult } from '@be-music/player-scene-model';
-import type { Container } from 'pixi.js';
+import type { LibraryChart, PlayResult, ReplaySlotState } from '@be-music/player-scene-model';
+import { Point, type Container, type Renderer } from 'pixi.js';
 import { computeBeatorajaBPMCurve, type BPMCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
 import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
+import { resolveBeatorajaOptionRef } from './option-refs.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
@@ -107,6 +110,8 @@ export class BeatorajaResultView implements ResultView {
   private reading: BeatorajaResultReading | undefined;
   private baseOps: ReadonlySet<number> | undefined;
   private activeOps: ReadonlySet<number> | undefined;
+  /** The replay slots the active ops were lit for. */
+  private replaySlotsKey = '';
   private host: PixiSceneHost | undefined;
   private emit: IntentSink<ResultIntent> | undefined;
   private disposed = false;
@@ -121,6 +126,11 @@ export class BeatorajaResultView implements ResultView {
       new BeatorajaPlaySkinView({
         skin,
         textures,
+        resolveRefValue: (ref) =>
+          resolveBeatorajaOptionRef(ref, {
+            ...(this.reading?.playChart !== undefined ? { chart: this.reading.playChart } : {}),
+            ...(this.reading !== undefined ? { lamp: this.reading.result.lamp } : {}),
+          }) ?? 0,
         resolveTextContent: (ref) => this.read((input) => resolveBeatorajaResultText(ref, input)),
         resolveNumberValue: (ref) => this.read((input) => resolveBeatorajaResultNumber(ref, input)),
         resolveFontFamily: fonts !== undefined ? (id) => fonts.family(id) : undefined,
@@ -137,6 +147,11 @@ export class BeatorajaResultView implements ResultView {
           this.read((input) => resolveBeatorajaGaugePolyline(input.result.gaugeHistory ?? [])),
         resolveTimingDistribution: () => this.reading?.timings,
         chartImageProvider: (id) => this.chartImages.resolve(id),
+        // The replay buttons (19, 316-318) save the play into their slot, as beatoraja's result does.
+        onButtonAction: (act) => {
+          const slot = beatorajaReplayButtonSlot(act);
+          if (slot !== undefined) this.emit?.({ type: 'saveReplay', slot });
+        },
       }),
     );
   }
@@ -196,10 +211,10 @@ export class BeatorajaResultView implements ResultView {
     if (host === undefined || this.disposed) return;
     this.stage.fitTo(host);
     const reading = this.readingOf(frame);
-    const timers = resolveBeatorajaSceneTimers(frame, 'entry');
+    const timers = resolveBeatorajaSceneTimers(frame, 'entry', 'result');
     const skinSounds = this.options.skinSounds;
     this.stage.view.update({
-      activeOps: this.opsOf(reading),
+      activeOps: this.opsOf(reading, frame.replaySlots),
       // A timer that has not started reads `undefined`, which hides what is gated on it (the fade-out's black overlay).
       getTimerStart: (timerId) => timers.get(timerId),
       // The gauge the play ended on, so `main_state.gauge_type()` and the gauge slab name it (a course's class gauge
@@ -212,11 +227,24 @@ export class BeatorajaResultView implements ResultView {
     });
   }
 
-  /** A tap presses on (the session waits for input to open); a mouse click does nothing. */
+  /**
+   * A tap presses on (the session waits for input to open), unless it lands on one of the skin's buttons, which act on
+   * their own; a mouse click does nothing.
+   */
   private readonly handlePointerDown = (event: PointerEvent): void => {
     const intent = resolveBeatorajaResultPointerIntent(event.pointerType);
-    if (intent !== undefined) this.emit?.(intent);
+    if (intent !== undefined && !this.isOverButton(event)) this.emit?.(intent);
   };
+
+  /** Whether `event` lands on an interactive sprite of the skin (an `act` button), by Pixi's own hit test. */
+  private isOverButton(event: PointerEvent): boolean {
+    const events = (this.host?.app as { renderer?: Partial<Pick<Renderer, 'events'>> } | undefined)?.renderer?.events;
+    if (events === undefined) return false;
+    const point = new Point();
+    events.mapPositionToPoint(point, event.clientX, event.clientY);
+    const hit = events.rootBoundary.hitTest(point.x, point.y);
+    return hit !== null && hit.eventMode === 'static' && hit.cursor === 'pointer';
+  }
 
   /** Reads the result being drawn through `resolve`; `undefined` before the first frame. */
   private read<T>(resolve: (input: BeatorajaResultInput) => T): T | undefined {
@@ -235,10 +263,25 @@ export class BeatorajaResultView implements ResultView {
     return reading;
   }
 
-  /** The ops of the player's picks for the skin's options and the run's ops, kept until the result or kit changes. */
-  private opsOf(reading: BeatorajaResultReading): ReadonlySet<number> {
+  /**
+   * The ops of the player's picks for the skin's options, the run's ops and its replay slots', kept until the result,
+   * the kit or a slot changes.
+   */
+  private opsOf(
+    reading: BeatorajaResultReading,
+    replaySlots: readonly ReplaySlotState[] | undefined,
+  ): ReadonlySet<number> {
+    const slotsKey = replaySlots?.join(',') ?? '';
+    if (slotsKey !== this.replaySlotsKey) {
+      this.replaySlotsKey = slotsKey;
+      this.activeOps = undefined;
+    }
     this.baseOps ??= buildBaseOpSet(this.kit.kit.skinConfig?.option);
-    this.activeOps ??= new Set([...this.baseOps, ...reading.ops]);
+    this.activeOps ??= new Set([
+      ...this.baseOps,
+      ...reading.ops,
+      ...(replaySlots !== undefined ? resolveBeatorajaResultReplayOps(replaySlots) : []),
+    ]);
     return this.activeOps;
   }
 }

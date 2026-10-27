@@ -34,6 +34,8 @@ export interface EngineDriverAudioContext {
   playbackRate?: number;
   /** {@link playbackRate} is the play tempo and follows a live tempo change (`pitch` mode). */
   playbackRateFollowsTempo?: boolean;
+  /** The play tempo the chart starts at (`WebAudioSessionContext.tempo`). */
+  tempo?: number;
 }
 
 /**
@@ -126,6 +128,7 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
       ...(audio.stageMixer !== undefined ? { stageMixer: audio.stageMixer } : {}),
       ...(audio.playbackRate !== undefined ? { playbackRate: audio.playbackRate } : {}),
       ...(audio.playbackRateFollowsTempo === true ? { playbackRateFollowsTempo: true } : {}),
+      ...(audio.tempo !== undefined ? { tempo: audio.tempo } : {}),
     });
   };
   const createInputRuntime = createWebInputRuntimeFactory({

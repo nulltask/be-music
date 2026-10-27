@@ -5,7 +5,7 @@ import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { TestHookBar, TestHookState } from '../src/test-hook.ts';
 
 /**
- * The page helpers the specs share: opening the demo with the test hook, dropping fixture folders the way a person
+ * The page helpers the specs share: opening the player with the test hook, dropping fixture folders the way a person
  * drops them (a synthetic `drop` of `File`s with `webkitRelativePath`, as `docs/course-checklist.md` describes), keys
  * with a `code`, the Debug Menu's controls, and waits on `window.__beMusicTest` state.
  */
@@ -19,6 +19,12 @@ const KEY_OF_CODE: Readonly<Record<string, string>> = {
   KeyZ: 'z',
   KeyS: 's',
   KeyX: 'x',
+  KeyF: 'f',
+  KeyV: 'v',
+  Digit1: '1',
+  Digit2: '2',
+  Digit3: '3',
+  Digit4: '4',
   Space: ' ',
 };
 
@@ -45,7 +51,7 @@ function describeState(state: TestHookState | undefined): string {
   return JSON.stringify({ ...rest, results: results.length, lastResult: results.at(-1) });
 }
 
-export class Demo {
+export class Player {
   readonly page: Page;
 
   constructor(page: Page) {
@@ -53,8 +59,8 @@ export class Demo {
   }
 
   /**
-   * Opens the demo with the test hook on the empty select screen. `storage` seeds `localStorage` (the settings the
-   * demo remembers) before it starts; the built-in skin's effects are off unless a spec asks for them.
+   * Opens the player with the test hook on the empty select screen. `storage` seeds `localStorage` (the settings the
+   * player remembers) before it starts; the built-in skin's effects are off unless a spec asks for them.
    */
   async open(storage: Readonly<Record<string, string>> = {}): Promise<TestHookState> {
     await this.page.route(`**${FILE_ROUTE}**`, async (route) => {
@@ -65,7 +71,7 @@ export class Demo {
       (entries) => {
         for (const [key, value] of Object.entries(entries)) window.localStorage.setItem(key, value);
       },
-      { 'be-music-demo.skin-effects': 'off', ...storage },
+      { 'be-music.skin-effects': 'off', ...storage },
     );
     await this.page.goto('/?e2e=1');
     return this.waitFor((state) => state.scene.kind === 'select', 'the select screen');
@@ -103,7 +109,7 @@ export class Demo {
 
   /**
    * Drops the fixture folder `root` (a path under the fixtures dir) as a person drops it: every file, its path under
-   * `prefix` (the dropped folder's name), filtered by `only`. Resolves once the demo has loaded it.
+   * `prefix` (the dropped folder's name), filtered by `only`. Resolves once the player has loaded it.
    */
   async drop(
     root: string,
@@ -130,6 +136,23 @@ export class Demo {
       },
       { route: FILE_ROUTE, root, files, prefix: options.prefix ?? '' },
     );
+    // Theme imports now wait for an explicit choice before loading assets.
+    await this.page.waitForFunction(
+      (before) => {
+        const state = window.__beMusicTest?.state();
+        return (
+          (state !== undefined && state.loads > before && !state.loading) ||
+          document.querySelector<HTMLDialogElement>('#skin-switch')?.open
+        );
+      },
+      before,
+      { timeout: 90_000 },
+    );
+    const confirmation = this.page.locator('#skin-switch[open]');
+    if (await confirmation.count()) {
+      const beatoraja = confirmation.locator('[data-skin-family="beatoraja"]');
+      await ((await beatoraja.isVisible()) ? beatoraja : confirmation.locator('[data-skin-family="lr2"]')).click();
+    }
     return this.waitFor((state) => state.loads > before && !state.loading, `the drop of ${root} to load`);
   }
 
@@ -158,6 +181,45 @@ export class Demo {
       },
       { code, key: KEY_OF_CODE[code] ?? code },
     );
+  }
+
+  /**
+   * Presses `code` on the first frame `predicate` holds for the test hook's state, checked in the page itself: a poll
+   * from the runner can land well past that moment on a slow machine (a CI runner draws without a GPU). `predicate`
+   * runs in the page, so it reads only its arguments; `arg` carries any value it needs. Returns the state it pressed on.
+   */
+  async keyWhen<A>(
+    predicate: (state: TestHookState, arg: A) => boolean,
+    arg: A,
+    code: string,
+    what: string,
+    timeoutMs = 90_000,
+  ): Promise<TestHookState> {
+    // The predicate becomes a function in the page, handed to the polling loop below as an argument.
+    const holds = await this.page.evaluateHandle<(state: TestHookState, arg: A) => boolean>(
+      `(${predicate.toString()})`,
+    );
+    try {
+      return await this.page.evaluate(
+        ({ holds, arg, code, key, what, timeoutMs }) =>
+          new Promise<TestHookState>((resolve, reject) => {
+            const deadline = performance.now() + timeoutMs;
+            const step = (): void => {
+              const state = window.__beMusicTest?.state();
+              if (state !== undefined && holds(state, arg as A)) {
+                for (const type of ['keydown', 'keyup'])
+                  window.dispatchEvent(new KeyboardEvent(type, { code, key, bubbles: true, cancelable: true }));
+                resolve(state);
+              } else if (performance.now() > deadline) reject(new Error(`timed out waiting for ${what}`));
+              else requestAnimationFrame(step);
+            };
+            step();
+          }),
+        { holds, arg, code, key: KEY_OF_CODE[code] ?? code, what, timeoutMs },
+      );
+    } finally {
+      await holds.dispose();
+    }
   }
 
   /**
@@ -191,23 +253,45 @@ export class Demo {
   ): Promise<{ value: boolean | number | string; enabled: boolean }> {
     return this.page.evaluate(
       ({ folder, name, action }) => {
-        // A beatoraja theme adds its Skin Config panel as another lil-gui root, so pick the Debug Menu's by its title.
-        const titleOf = (candidate: Element): string | undefined =>
-          candidate.querySelector(':scope > .lil-title')?.textContent?.trim();
-        let gui: HTMLElement | undefined = [...document.querySelectorAll<HTMLElement>('.lil-gui.lil-root')].find(
-          (candidate) => titleOf(candidate) === 'Debug Menu',
-        );
-        if (gui === undefined) throw new Error('no Debug Menu');
-        for (const title of folder) {
-          const children: Element | null | undefined = gui?.querySelector(':scope > .lil-children');
-          gui = [...(children?.querySelectorAll<HTMLElement>(':scope > .lil-gui') ?? [])].find(
-            (candidate) => titleOf(candidate) === title,
+        let gui = document.querySelector<HTMLElement>('[data-pane="debug"]');
+        if (gui === null) throw new Error('no Debug Menu');
+        // Tab pages are transparent to the existing folder paths.
+        const children = (content: Element | null): Element[] =>
+          [...(content?.children ?? [])].flatMap((child) =>
+            child.classList.contains('tp-tabv')
+              ? [...child.querySelectorAll(':scope > .tp-tabv_c > .tp-tbpv > .tp-tbpv_c')].flatMap(children)
+              : [child],
           );
+        const revealTab = (element: Element): void => {
+          const page = element.closest('.tp-tbpv');
+          const tab = page?.parentElement?.closest('.tp-tabv');
+          if (!page || !tab) return;
+          const pages = [...tab.querySelectorAll(':scope > .tp-tabv_c > .tp-tbpv')];
+          tab
+            .querySelectorAll<HTMLButtonElement>(':scope > .tp-tabv_t > .tp-tbiv > button')
+            [pages.indexOf(page)]?.click();
+        };
+        for (const title of folder) {
+          const content: Element | null = gui.querySelector(':scope > .tp-rotv_c, :scope > .tp-fldv_c');
+          gui =
+            children(content)
+              .filter(
+                (candidate): candidate is HTMLElement =>
+                  candidate instanceof HTMLElement && candidate.classList.contains('tp-fldv'),
+              )
+              .find(
+                (candidate) => candidate.querySelector(':scope > .tp-fldv_b .tp-fldv_t')?.textContent?.trim() === title,
+              ) ?? null;
+          if (gui === null) throw new Error(`no Debug Menu folder ${title}`);
+          revealTab(gui);
         }
-        const controller = [
-          ...(gui?.querySelectorAll<HTMLElement>(':scope > .lil-children > .lil-controller') ?? []),
-        ].find((candidate) => candidate.querySelector('.lil-name')?.textContent?.trim() === name);
+        const content = gui.querySelector(':scope > .tp-rotv_c, :scope > .tp-fldv_c');
+        const controller = children(content).find((candidate) => {
+          const label = candidate.querySelector('.tp-lblv_l')?.textContent?.trim();
+          return (label || candidate.querySelector('button')?.textContent?.trim()) === name;
+        });
         if (controller === undefined) throw new Error(`no Debug Menu control ${[...folder, name].join(' / ')}`);
+        revealTab(controller);
         const select = controller.querySelector('select');
         const input = controller.querySelector('input');
         const button = controller.querySelector('button');
@@ -225,7 +309,8 @@ export class Demo {
           input.dispatchEvent(new Event('change'));
         } else if (value !== undefined && input !== null) {
           input.value = String(value);
-          input.dispatchEvent(new Event('input'));
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
           input.dispatchEvent(new Event('blur'));
         }
         const read =
@@ -236,7 +321,7 @@ export class Demo {
               : input !== null
                 ? Number(input.value)
                 : '';
-        return { value: read, enabled: !controller.classList.contains('lil-disabled') };
+        return { value: read, enabled: !(select?.disabled || input?.disabled || button?.disabled) };
       },
       { folder: [...folder], name, action },
     );
@@ -300,7 +385,7 @@ export class Demo {
   }
 
   /**
-   * Presses `code` on the result screen until the demo leaves it (a result skin ignores keys for its input delay), and
+   * Presses `code` on the result screen until the player leaves it (a result skin ignores keys for its input delay), and
    * returns the state once it has.
    */
   async leaveResult(code = 'Escape'): Promise<TestHookState> {
@@ -335,9 +420,9 @@ export class Demo {
   }
 }
 
-/** Playwright's `test` with a `demo` fixture that has the demo open, the fixture library not yet dropped. */
-export const test = base.extend<{ demo: Demo }>({
-  demo: async ({ page }, use) => {
+/** Playwright's `test` with a `player` fixture that has the player open, the fixture library not yet dropped. */
+export const test = base.extend<{ player: Player }>({
+  player: async ({ page }, use) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(`uncaught: ${error.message}`));
     page.on('console', (message) => {
@@ -346,8 +431,8 @@ export const test = base.extend<{ demo: Demo }>({
         errors.push(`console: ${message.text()}`);
       }
     });
-    const demo = new Demo(page);
-    await use(demo);
+    const player = new Player(page);
+    await use(player);
     // Checklist item 11: nothing in the flow throws or logs an error.
     if (errors.length > 0) throw new Error(`errors in the page:\n${errors.join('\n')}`);
   },
@@ -355,12 +440,18 @@ export const test = base.extend<{ demo: Demo }>({
 
 export { expect } from '@playwright/test';
 
-/** The checklist library's song folder and course folder, as the demo lists them after a drop of `songs`. */
+/**
+ * The tag of the smoke run each pull request gets (`--grep @smoke`): one journey per area and family, a few minutes in
+ * all. The nightly run plays every test.
+ */
+export const SMOKE = { tag: '@smoke' } as const;
+
+/** The checklist library's song folder and course folder, as the player lists them after a drop of `songs`. */
 export const SONGS = 'fixtures';
 export const COURSES = 'fixture-courses';
 
-/** Opens the demo and drops the checklist library (charts and course file) as the folder `fixtures`. */
-export async function openWithLibrary(demo: Demo, storage: Readonly<Record<string, string>> = {}): Promise<void> {
-  await demo.open(storage);
-  await demo.drop('songs', { prefix: SONGS });
+/** Opens the player and drops the checklist library (charts and course file) as the folder `fixtures`. */
+export async function openWithLibrary(player: Player, storage: Readonly<Record<string, string>> = {}): Promise<void> {
+  await player.open(storage);
+  await player.drop('songs', { prefix: SONGS });
 }

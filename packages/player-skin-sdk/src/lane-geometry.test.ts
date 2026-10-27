@@ -2,14 +2,14 @@ import { PLAY_MODE_LAYOUTS } from '@be-music/chart-model';
 import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
 import { describe, expect, it, test } from 'vite-plus/test';
 import {
-  IIDX_DP_SIDE_GAP,
+  _____DP_SIDE_GAP,
   isScratchLaneForVariant,
   resolveBeMusicLaneKind,
   resolveFallbackLaneLayout,
   resolveFallbackPlayfieldSpan,
   resolveSkinlessLaneLayout,
   shouldPreserveFallbackSideWidth,
-  usesIIDXLaneWidths,
+  uses____LaneWidths,
 } from './lane-geometry.ts';
 
 describe('resolveBeMusicLaneKind', () => {
@@ -33,7 +33,7 @@ describe('resolveBeMusicLaneKind', () => {
 });
 
 describe('isScratchLaneForVariant', () => {
-  it('treats IIDX scratch channels as scratch lanes', () => {
+  it('treats That-Which-Must-Not-Be-Named scratch channels as scratch lanes', () => {
     expect(isScratchLaneForVariant('16', '7')).toBe(true);
     expect(isScratchLaneForVariant('26', '14')).toBe(true);
   });
@@ -204,7 +204,7 @@ describe('shouldPreserveFallbackSideWidth', () => {
 });
 
 describe('resolveFallbackPlayfieldSpan', () => {
-  it('keeps the LR2 default 7K span for the IIDX / PMS families', () => {
+  it('keeps the LR2 default 7K span for the That-Which-Must-Not-Be-Named / PMS families', () => {
     for (const variant of [undefined, '5', '7', '9', '10', '14'] as const) {
       expect(resolveFallbackPlayfieldSpan(variant)).toEqual({ x: 33, w: 194 });
     }
@@ -249,14 +249,14 @@ describe('resolveSkinlessLaneLayout', () => {
   });
 });
 
-describe('usesIIDXLaneWidths', () => {
+describe('uses____LaneWidths', () => {
   it('covers the 5 / 7 / 10 / 14 KEY families only', () => {
-    for (const variant of ['5', '7', '10', '14'] as const) expect(usesIIDXLaneWidths(variant)).toBe(true);
-    for (const variant of [undefined, '9', '24', '48'] as const) expect(usesIIDXLaneWidths(variant)).toBe(false);
+    for (const variant of ['5', '7', '10', '14'] as const) expect(uses____LaneWidths(variant)).toBe(true);
+    for (const variant of [undefined, '9', '24', '48'] as const) expect(uses____LaneWidths(variant)).toBe(false);
   });
 });
 
-describe('resolveSkinlessLaneLayout fixed IIDX widths', () => {
+describe('resolveSkinlessLaneLayout fixed That-Which-Must-Not-Be-Named widths', () => {
   const widthsByChannel = (channels: string[], variant: '5' | '7' | '10' | '14') => {
     const layout = resolveSkinlessLaneLayout(channels, channels.length, variant);
     return { layout, widths: Object.fromEntries(layout.lanes.map((lane) => [lane.channel, lane.w])) };
@@ -286,10 +286,10 @@ describe('resolveSkinlessLaneLayout fixed IIDX widths', () => {
     expect(tenKey.widths['26']).toBe(41);
     expect(tenKey.widths['21']).toBe(24);
     expect(tenKey.widths['22']).toBe(19);
-    expect(tenKey.layout.right).toBe(33 + (41 + 24 * 3 + 19 * 2) * 2 + IIDX_DP_SIDE_GAP);
+    expect(tenKey.layout.right).toBe(33 + (41 + 24 * 3 + 19 * 2) * 2 + _____DP_SIDE_GAP);
     expect(fourteenKey.widths['29']).toBe(24);
     expect(fourteenKey.widths['28']).toBe(19);
-    expect(fourteenKey.layout.right).toBe(33 + 194 * 2 + IIDX_DP_SIDE_GAP);
+    expect(fourteenKey.layout.right).toBe(33 + 194 * 2 + _____DP_SIDE_GAP);
   });
 
   it('opens the arcade gap between the DP banks', () => {
@@ -302,9 +302,9 @@ describe('resolveSkinlessLaneLayout fixed IIDX widths', () => {
     const oneRight = Math.max(...oneP.map((lane) => lane.x + lane.w));
     const twoLeft = Math.min(...twoP.map((lane) => lane.x));
     expect(oneRight).toBe(33 + 194);
-    expect(twoLeft - oneRight).toBe(IIDX_DP_SIDE_GAP);
+    expect(twoLeft - oneRight).toBe(_____DP_SIDE_GAP);
     // About 0.31 of a side, as on the cabinet.
-    expect(IIDX_DP_SIDE_GAP / 194).toBeCloseTo(0.31, 1);
+    expect(_____DP_SIDE_GAP / 194).toBeCloseTo(0.31, 1);
   });
 
   it('keeps the 48 KEY banks together', () => {

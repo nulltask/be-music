@@ -49,6 +49,9 @@ const BENCH_LIBRARY: sceneModelAPI.Library = {
 };
 const BENCH_CHART_ENTRY: sceneModelAPI.LibraryEntry = { kind: 'chart', chart: BENCH_CHARTS[3]! };
 const BENCH_ENTRIES: readonly sceneModelAPI.LibraryEntry[] = BENCH_CHARTS.map((chart) => ({ kind: 'chart', chart }));
+const BENCH_CHART_QUERY = sceneModelAPI.parseBrowseSearch("?level >= 3 AND title LIKE '%a%' ORDER BY level DESC");
+/** Varies the searched text, so `parseBrowseSearch` parses on every run instead of answering from its last text. */
+let benchSearchIndex = 0;
 const BENCH_ROOT = sceneModelAPI.createBrowseState();
 const BENCH_IN_FOLDER = sceneModelAPI.reduceBrowse(BENCH_LIBRARY, BENCH_ROOT, { type: 'open' }).state;
 const BENCH_SNAPSHOT = sceneModelAPI.captureBrowse(BENCH_LIBRARY, BENCH_IN_FOLDER);
@@ -104,6 +107,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.keysFilterKeyMode('KEYS_14');
     },
   });
+  define('player-scene-model.resolveLR2RandomMixKeyMode', {
+    run: () => {
+      sceneModelAPI.resolveLR2RandomMixKeyMode('ALL');
+    },
+  });
   define('player-scene-model.chartMatchesDifficultyFilter', {
     run: () => {
       sceneModelAPI.chartMatchesDifficultyFilter(BENCH_CHARTS[0]!, 'HYPER');
@@ -132,6 +140,31 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.matchesSearchQuery', {
     run: () => {
       sceneModelAPI.matchesSearchQuery(BENCH_CHART_ENTRY, 'bench');
+    },
+  });
+  define('player-scene-model.parseBrowseSearch', {
+    run: () => {
+      sceneModelAPI.parseBrowseSearch(`?level >= ${(benchSearchIndex++ % 12) + 1} AND title LIKE '%bench%'`);
+    },
+  });
+  define('player-scene-model.browseSearchError', {
+    run: () => {
+      sceneModelAPI.browseSearchError('?mode = 7');
+    },
+  });
+  define('player-scene-model.libraryChartFilterRecord', {
+    run: () => {
+      sceneModelAPI.libraryChartFilterRecord(BENCH_CHARTS[3]!);
+    },
+  });
+  define('player-scene-model.filterEntriesByChartQuery', {
+    run: () => {
+      if (BENCH_CHART_QUERY.kind === 'filter')
+        sceneModelAPI.filterEntriesByChartQuery(
+          BENCH_ENTRIES,
+          BENCH_CHART_QUERY.query,
+          sceneModelAPI.libraryChartFilterRecord,
+        );
     },
   });
   define('player-scene-model.sortLibraryEntries', {
@@ -211,6 +244,23 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
     },
   });
 
+  define('player-scene-model.formatGaugeLabel', {
+    run: () => {
+      sceneModelAPI.formatGaugeLabel('P-ATTACK');
+      sceneModelAPI.formatGaugeLabel('G-ATTACK');
+    },
+  });
+  define('player-scene-model.resolveRandomModes', {
+    run: () => {
+      sceneModelAPI.resolveRandomModes('beatoraja');
+    },
+  });
+  define('player-scene-model.isDuplicatedBattleChoice', {
+    run: () => {
+      sceneModelAPI.isDuplicatedBattleChoice('BATTLE-AS');
+    },
+  });
+
   // Play options
   define('player-scene-model.clampHiSpeed', {
     run: () => {
@@ -246,6 +296,90 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.resolvePlayOptions', {
     run: () => {
       sceneModelAPI.resolvePlayOptions({ hiSpeed: 3.25, random1P: 'MIRROR', gauge1P: 'BOGUS' });
+    },
+  });
+  define('player-scene-model.resolveLiftedLane', {
+    run: () => {
+      sceneModelAPI.resolveLiftedLane({ top: 0, bottom: 480 }, 0.2);
+      sceneModelAPI.resolveLiftedLane({ top: 0, bottom: 723 }, 100 / 723, false);
+    },
+  });
+  define('player-scene-model.resolveConstantVisibility', {
+    run: () => {
+      sceneModelAPI.resolveConstantVisibility({ enabled: true, durationMs: 500, fadeMs: -100 });
+    },
+  });
+  define('player-scene-model.resolveConstantAlpha', {
+    run: () => {
+      sceneModelAPI.resolveConstantAlpha(2.55, 2, { enabled: true, durationMs: 500, fadeMs: 100 });
+    },
+  });
+  define('player-scene-model.clampJudgeTimingMs', {
+    run: () => {
+      sceneModelAPI.clampJudgeTimingMs(125);
+    },
+  });
+  define('player-scene-model.resolveNoteDisplaySeconds', {
+    run: () => {
+      sceneModelAPI.resolveNoteDisplaySeconds(2, 125);
+    },
+  });
+  define('player-scene-model.normalizeFloatingLaneCover', {
+    run() {
+      sceneModelAPI.normalizeFloatingLaneCover({
+        side: '1P',
+        sudden: 0.25,
+        suddenOn: true,
+        hidden: 0,
+        hiddenOn: false,
+        lift: 0.1,
+        liftOn: true,
+      });
+    },
+  });
+  define('player-scene-model.clampFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.clampFloatingHiSpeed(2.1);
+    },
+  });
+  define('player-scene-model.captureFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.captureFloatingHiSpeed(2, 120, 0.75);
+    },
+  });
+  define('player-scene-model.resolveFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.resolveFloatingHiSpeed({ hiSpeed: 2, bpm: 120, visibleFraction: 0.75 }, 240, 0.5);
+    },
+  });
+  define('player-scene-model.stepFloatingHiSpeed', {
+    run() {
+      sceneModelAPI.stepFloatingHiSpeed(2, 1, true);
+    },
+  });
+  define('player-scene-model.resolveFloatingHiSpeedExit', {
+    run() {
+      sceneModelAPI.resolveFloatingHiSpeedExit(2.875, 120, true);
+    },
+  });
+  define('player-scene-model.resolveNormalHiSpeed', {
+    run: () => {
+      sceneModelAPI.resolveNormalHiSpeed(3, 120);
+    },
+  });
+  define('player-scene-model.resolveNormalHiSpeedLevel', {
+    run: () => {
+      sceneModelAPI.resolveNormalHiSpeedLevel(2, 120);
+    },
+  });
+  define('player-scene-model.snapClassicHiSpeed', {
+    run: () => {
+      sceneModelAPI.snapClassicHiSpeed(2.3);
+    },
+  });
+  define('player-scene-model.stepClassicHiSpeed', {
+    run: () => {
+      sceneModelAPI.stepClassicHiSpeed(2, 1);
     },
   });
   define('player-scene-model.snapHiSpeed', {
@@ -285,6 +419,7 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.resolveHSFixMultiplier', {
     run: () => {
       sceneModelAPI.resolveHSFixMultiplier('MAXBPM', BENCH_HS_FIX_TEMPO);
+      sceneModelAPI.resolveHSFixMultiplier('STARTBPM', { ...BENCH_HS_FIX_TEMPO, startBPM: 180 });
     },
   });
   define('player-scene-model.createHiSpeedState', {
@@ -332,6 +467,8 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       let state = sceneModelAPI.reducePlayState(BENCH_PLAY_STATE, BENCH_FRAME);
       state = sceneModelAPI.reducePlayState(state, BENCH_JUDGE);
       sceneModelAPI.reducePlayState(state, { type: 'hi-speed-step', delta: 0.1 });
+      // A seek rebuilding 200 judgments.
+      sceneModelAPI.reducePlayState(BENCH_PLAYED, BENCH_SEEK);
     },
   });
   define('player-scene-model.recentJudgeTimings', {
@@ -368,6 +505,8 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       const cursor = new sceneModelAPI.ReplayViewCursor({ hiSpeed: 2 }, [{ timeUs: 1_000_000, hiSpeed: 2.5 }]);
       cursor.next(0);
       cursor.next(2_000_000);
+      cursor.seek(0);
+      cursor.seek(1_500_000);
     },
   });
 
@@ -445,6 +584,16 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolveResultJingle({ clear: { bytes: BENCH_BYTES } }, true);
     },
   });
+  define('player-scene-model.firstReplaySlot', {
+    run: () => {
+      sceneModelAPI.firstReplaySlot([false, false, true, true]);
+    },
+  });
+  define('player-scene-model.stepReplaySlot', {
+    run: () => {
+      sceneModelAPI.stepReplaySlot([true, false, true, false], 2, 1);
+    },
+  });
   define('player-scene-model.browseSystemSound', {
     run: () => {
       sceneModelAPI.browseSystemSound({ type: 'move', delta: 1 }, { kind: 'cursor', from: 0, to: 1, delta: 1 });
@@ -490,6 +639,24 @@ const BENCH_PLAYED = Array.from({ length: 200 }, (_, index): sceneModelAPI.PlayE
   seconds: index / 2,
   atMs: index * 500,
 })).reduce(sceneModelAPI.reducePlayState, sceneModelAPI.reducePlayState(BENCH_PLAY_STATE, BENCH_FRAME));
+const BENCH_SEEK: sceneModelAPI.PlayEvent = {
+  type: 'seek',
+  seconds: 100,
+  atMs: 100_000,
+  snapshot: {
+    summary: { exScore: 334, gauge: { current: 80, max: 100, initial: 20, cleared: true, type: 'GROOVE' } },
+    combo: 200,
+    maxCombo: 200,
+    judgments: Array.from({ length: 200 }, (_, index) => ({
+      judge: index % 3 === 0 ? 'GREAT' : 'PERFECT',
+      combo: index + 1,
+      deltaMs: (index % 21) - 10,
+      seconds: index / 2,
+      gauge: Math.min(100, 20 + index),
+      exScore: index * 2,
+    })),
+  },
+};
 const BENCH_SCORE = {
   total: 200,
   perfect: 133,

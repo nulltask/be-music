@@ -1,3 +1,4 @@
+import { resolveBeatorajaGaugeTypeOps } from './play-ops.ts';
 import { gaugePercent } from '@be-music/player-scene-model';
 import { BEATORAJA_NUM, BEATORAJA_OP, computeJudgeExistOps } from '../runtime-ids.ts';
 import type { BeatorajaEarlyLate, BeatorajaGaugeInput, BeatorajaScoreInput } from './inputs.ts';
@@ -79,9 +80,9 @@ function late(earlyLate: BeatorajaEarlyLate | undefined, judge: keyof NonNullabl
  *   number 101); `TOTAL_RATE` (115 / 116) the EX score as a rate of every note ({@link beatorajaScoreRate}), and so does
  *   `SCORE_RATE` (102 / 103) here: a finished run's rate, as beatoraja's result reads it (a play reads it over the notes
  *   judged so far, `resolveBeatorajaPlayNumber`). The rates read 0 before the engine reports a score.
- * - The engine has no MISS judgment (beatoraja's empty POOR): `MISS` (420) reads the POOR count, and its early / late
- *   rows (421 / 422) the `MISS` entry of the early / late counts, else POOR's.
- * - `COMBOBREAK` (425) and `BAD_PLUS_POOR_PLUS_MISS` (427) count BAD + POOR, `POOR_PLUS_MISS` (426) POOR.
+ * - `MISS` (420) reads empty POORs separately from note POORs. Its early / late rows (421 / 422) read the
+ *   `MISS` entry of the early / late counts, else POOR's.
+ * - `COMBOBREAK` (425) counts BAD + POOR; 426 adds empty POORs to POOR and 427 adds them to BAD + POOR.
  */
 export function resolveBeatorajaScoreNumber(id: number, input: BeatorajaScoreNumberInput): number | undefined {
   const { score, earlyLate } = input;
@@ -119,12 +120,15 @@ export function resolveBeatorajaScoreNumber(id: number, input: BeatorajaScoreNum
     case BEATORAJA_NUM.BAD:
       return score?.bad ?? 0;
     case BEATORAJA_NUM.POOR:
-    case BEATORAJA_NUM.MISS:
-    case BEATORAJA_NUM.POOR_PLUS_MISS:
       return score?.poor ?? 0;
+    case BEATORAJA_NUM.MISS:
+      return score?.emptyPoor ?? 0;
+    case BEATORAJA_NUM.POOR_PLUS_MISS:
+      return (score?.poor ?? 0) + (score?.emptyPoor ?? 0);
     case BEATORAJA_NUM.COMBOBREAK:
-    case BEATORAJA_NUM.BAD_PLUS_POOR_PLUS_MISS:
       return (score?.bad ?? 0) + (score?.poor ?? 0);
+    case BEATORAJA_NUM.BAD_PLUS_POOR_PLUS_MISS:
+      return (score?.bad ?? 0) + (score?.poor ?? 0) + (score?.emptyPoor ?? 0);
     case BEATORAJA_NUM.TOTALEARLY:
       return score?.fast ?? 0;
     case BEATORAJA_NUM.TOTALLATE:
@@ -244,10 +248,11 @@ function nowRankOp(sideRank: number): number {
  */
 export function resolveBeatorajaPlayScoreOps(
   score: BeatorajaScoreInput,
-  gauge: Pick<BeatorajaGaugeInput, 'current' | 'max' | 'clearThreshold'> | undefined,
+  gauge: Pick<BeatorajaGaugeInput, 'current' | 'max' | 'clearThreshold' | 'type'> | undefined,
 ): number[] {
   const sideRank = beatorajaPlayRankOp(score);
   const ops = [
+    ...resolveBeatorajaGaugeTypeOps(gauge?.type),
     ...(sideRank !== undefined ? [sideRank, nowRankOp(sideRank)] : []),
     ...beatorajaGenericRankOps(score),
     ...computeJudgeExistOps(score),

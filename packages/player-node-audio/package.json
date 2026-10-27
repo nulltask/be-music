@@ -1,0 +1,38 @@
+{
+  "name": "@be-music/player-node-audio",
+  "version": "0.2.0",
+  "description": "Node audio playback adapter for the Be-Music engine",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./audio-sink": {
+      "source": "./src/audio-sink.ts",
+      "types": "./dist/audio-sink.d.ts",
+      "default": "./dist/audio-sink.js"
+    }
+  },
+  "scripts": {
+    "build:bundle": "vp pack",
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/chart-audio-renderer": "workspace:*",
+    "@be-music/chart-model": "workspace:*",
+    "@be-music/chart-source": "workspace:*",
+    "@be-music/player-engine": "workspace:*",
+    "@be-music/shared-utils": "workspace:*",
+    "node-web-audio-api": "^2.2.0"
+  }
+}

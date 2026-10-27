@@ -19,6 +19,7 @@
 // 3 s at a stage seam as LR2 does.
 
 import { Container, Sprite, Texture } from 'pixi.js';
+import { resolveBGAVideoResync } from '../../shared/bga-renderer.ts';
 import { destinationToSpriteProps, type BeatorajaRenderContext } from '../../../skin/beatoraja/render.ts';
 import {
   normalizeBeatorajaDestinations,
@@ -35,9 +36,10 @@ import {
 
 export interface BeatorajaBGALayerOptions {
   skin: BeatorajaSkin;
+  poorBGAMode?: 0 | 1 | 2;
   /**
    * Decoded BGA textures keyed by `#BMPxx` slot label (`'00'`..`'ZZ'`). Same map the LR2 path's BGA
-   * loader produces; the demo can build it once and share it across the gameplay views.
+   * loader produces; the player can build it once and share it across the gameplay views.
    */
   textures: ReadonlyMap<string, Texture>;
   /**
@@ -75,6 +77,7 @@ interface BGASpritePair {
   readonly canvas: Sprite;
   readonly sprite: Sprite;
   readonly layer: Sprite;
+  readonly poor: Sprite;
 }
 
 type BGADestinationProps = ReturnType<typeof destinationToSpriteProps>;
@@ -99,10 +102,12 @@ export class BeatorajaBGALayer {
    */
   private readonly canvasHeight: number;
   /** The keys the stacks show now, whose videos play. */
-  private currentKeys = new Set<string>();
+  private currentKeys = new Map<string, number>();
   private disposed = false;
+  private readonly poorBGAMode: 0 | 1 | 2;
 
   constructor(options: BeatorajaBGALayerOptions) {
+    this.poorBGAMode = options.poorBGAMode ?? 0;
     this.textures = options.textures;
     this.layerTextures = options.layerTextures ?? new Map();
     this.videoElements = options.videoElements ?? new Map();
@@ -121,43 +126,64 @@ export class BeatorajaBGALayer {
    * after `view.update(context)` has run, so the BGA layer reads the same activeOps / nowMs the skin
    * view used.
    */
-  update(seconds: number, context: BeatorajaRenderContext, poorBGAActive: boolean): void {
+  update(
+    seconds: number,
+    context: BeatorajaRenderContext,
+    poorBGAActive: boolean,
+    playback: { seconds?: number; tempo?: number; paused?: boolean; started?: boolean } = {},
+  ): void {
     if (this.disposed) return;
     for (const pair of this.pairs) {
       pair.canvas.visible = false;
       pair.sprite.visible = false;
       pair.layer.visible = false;
+      pair.poor.visible = false;
     }
     if (this.group === undefined) return;
     const props = destinationToSpriteProps(this.group, context, this.canvasHeight);
     // One stack, or a NONSTOP chart's stages at their crossfade opacity, earlier stages behind.
     const stacks = resolveBGAStacks({
       timeline: this.cues,
+      poorBGAMode: this.poorBGAMode,
       nonstop: this.nonstop,
       seconds,
       inPoorWindow: poorBGAActive,
     });
-    const keys = new Set<string>();
+    const keys = new Map<string, number>();
     stacks.forEach((stack, index) => {
       const pair = this.pairAt(index);
       // The miss layer replaces both the base and the layer; outside it the layer draws over the base.
-      if (stack.poorKey !== undefined) {
-        keys.add(stack.poorKey);
+      if (stack.poorKey !== undefined && !stack.poorOverlays) {
+        let cueSeconds = seconds;
+        for (const cue of this.cues.poor) {
+          if (cue.seconds > seconds) break;
+          if (cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
+        }
+        keys.set(stack.poorKey, cueSeconds);
         this.drawImage(pair.sprite, pair.canvas, stack.poorKey, this.textures, props, stack.alpha);
         return;
       }
       const baseKey = stack.baseCue?.bmpKey;
       if (baseKey !== undefined) {
-        keys.add(baseKey);
+        keys.set(baseKey, stack.baseCue!.seconds);
         this.drawImage(pair.sprite, pair.canvas, baseKey, this.textures, props, stack.alpha);
       }
       const layerKey = stack.layerCue?.bmpKey;
       if (layerKey !== undefined) {
-        keys.add(layerKey);
+        keys.set(layerKey, stack.layerCue!.seconds);
         this.drawImage(pair.layer, undefined, layerKey, this.layerTextures, props, stack.alpha);
       }
+      if (stack.poorKey !== undefined && stack.poorOverlays) {
+        let cueSeconds = seconds;
+        for (const cue of this.cues.poor) {
+          if (cue.seconds > seconds) break;
+          if (cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
+        }
+        keys.set(stack.poorKey, cueSeconds);
+        this.drawImage(pair.poor, undefined, stack.poorKey, this.textures, props, stack.alpha);
+      }
     });
-    this.syncVideos(keys);
+    this.syncVideos(keys, playback.seconds ?? seconds, playback);
   }
 
   /**
@@ -166,7 +192,7 @@ export class BeatorajaBGALayer {
    */
   resume(): void {
     if (this.disposed) return;
-    for (const key of this.currentKeys) {
+    for (const key of this.currentKeys.keys()) {
       const video = this.videoElements.get(key);
       if (video !== undefined && video.paused) playVideo(video);
     }
@@ -181,7 +207,7 @@ export class BeatorajaBGALayer {
     // pipeline's `dispose()` clears `src` + revokes the URL on EVERY video; this layer
     // pause is just the "stop the in-flight cue" half so a rapid scene-swap (replaceSkin
     // mid-play) doesn't briefly drive two videos before the prep cleanup runs.
-    for (const key of this.currentKeys) {
+    for (const key of this.currentKeys.keys()) {
       try {
         this.videoElements.get(key)?.pause();
       } catch {
@@ -200,9 +226,10 @@ export class BeatorajaBGALayer {
         canvas: new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false, label: 'bga/canvas' }),
         sprite: new Sprite({ visible: false, label: 'bga/base' }),
         layer: new Sprite({ visible: false, label: 'bga/layer' }),
+        poor: new Sprite({ visible: false, label: 'bga/poor' }),
       };
       this.pairs.push(pair);
-      this.container.addChild(pair.canvas, pair.sprite, pair.layer);
+      this.container.addChild(pair.canvas, pair.sprite, pair.layer, pair.poor);
     }
     return this.pairs[index]!;
   }
@@ -257,27 +284,39 @@ export class BeatorajaBGALayer {
     sprite.blendMode = props.blendMode;
   }
 
-  /**
-   * Pauses and rewinds the videos of the keys no longer shown, and starts the newly shown ones from the beginning.
-   * Without the pause, video BGAs queued back-to-back would keep playing in the background, contending for compositor
-   * frame callbacks.
-   */
-  private syncVideos(keys: Set<string>): void {
-    for (const key of this.currentKeys) {
-      if (keys.has(key)) continue;
-      const video = this.videoElements.get(key);
-      if (video !== undefined) {
-        video.pause();
-        video.currentTime = 0;
-      }
+  /** Keeps every visible stack's video at chart time since its cue, including after seeks and stalls. */
+  private syncVideos(
+    keys: Map<string, number>,
+    seconds: number,
+    playback: { tempo?: number; paused?: boolean; started?: boolean },
+  ): void {
+    for (const key of this.currentKeys.keys()) {
+      if (keys.has(key) && playback.started !== false) continue;
+      this.videoElements.get(key)?.pause();
     }
-    for (const key of keys) {
-      if (this.currentKeys.has(key)) continue;
+    if (playback.started === false) {
+      this.currentKeys.clear();
+      return;
+    }
+    for (const [key, cueSeconds] of keys) {
       const video = this.videoElements.get(key);
-      if (video !== undefined) {
-        video.currentTime = 0;
-        playVideo(video);
+      if (video === undefined) continue;
+      video.playbackRate = playback.tempo ?? 1;
+      const expected = Math.max(0, seconds - cueSeconds);
+      const changedCue = this.currentKeys.get(key) !== cueSeconds;
+      const offset = changedCue
+        ? Math.min(expected, Math.max(0, video.duration - 0.05) || expected)
+        : resolveBGAVideoResync(video.currentTime, expected, video.duration);
+      if (offset !== undefined && !video.seeking) {
+        try {
+          video.currentTime = offset;
+        } catch {
+          // Not seekable yet: the next frame retries the drift correction.
+        }
       }
+      if (playback.paused) {
+        if (!video.paused) video.pause();
+      } else if (video.paused && !video.ended) playVideo(video);
     }
     this.currentKeys = keys;
   }

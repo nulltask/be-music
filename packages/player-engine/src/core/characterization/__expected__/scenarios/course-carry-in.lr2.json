@@ -14,6 +14,8 @@
       "emptyPoor": 0,
       "exScore": 7,
       "score": 68181,
+      "combo": 0,
+      "maxCombo": 3,
       "gauge": {
         "current": 0,
         "max": 100,
@@ -50,10 +52,12 @@
           {"id":9,"channel":"12","type":"normal","timeUs":3000000},
           {"id":10,"channel":"11","type":"normal","timeUs":3500000}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":120},
         "chartFingerprint": "bmfp0:6786c0ecfaf1461b14e0f0b60e422b9138384824ef2587ab10f4288bc039fd78",
         "playFingerprint": "bmfp0:6786c0ecfaf1461b14e0f0b60e422b9138384824ef2587ab10f4288bc039fd78",
         "title": "basic",
-        "artist": "characterization",
+        "artist": "Be-Music Dev Team",
         "total": 160
       },
       "inputs": [
@@ -120,8 +124,8 @@
         "gauge": {"type":"EXCLASS","final":47.13,"cleared":true},
         "course": {"combo":0,"maxCombo":30}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":3,"great":1,"good":1,"bad":1,"poor":5,"emptyPoor":0},
         "fast": 1,
         "slow": 1,
@@ -248,6 +252,8 @@
       "emptyPoor": 0,
       "exScore": 7,
       "score": 68181,
+      "combo": 0,
+      "maxCombo": 3,
       "gauge": {
         "current": 0,
         "max": 100,
@@ -373,6 +379,8 @@
       "emptyPoor": 0,
       "exScore": 22,
       "score": 200000,
+      "combo": 11,
+      "maxCombo": 11,
       "gauge": {
         "current": 77.6,
         "max": 100,
@@ -442,8 +450,8 @@
         "gauge": {"type":"EXCLASS","final":78.15,"cleared":true},
         "course": {"combo":18,"maxCombo":30}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":11,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,

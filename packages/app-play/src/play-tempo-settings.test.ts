@@ -51,7 +51,16 @@ describe('stored settings', () => {
       parseStoredPlayTempoSettings(
         JSON.stringify({ tempoPercent: -120, tempoPitchMode: 'keep-pitch', tempoStretchAlgorithm: 'other' }),
       ),
-    ).toEqual({ tempoPercent: -50, tempoPitchMode: 'keep-pitch', tempoStretchAlgorithm: 'signalsmith' });
+    ).toEqual({ tempoEnabled: false, tempoPercent: -50, tempoPitchMode: 'keep-pitch', tempoStretchAlgorithm: 'wsola' });
+  });
+
+  test('keeps disabled percentages and explicitly selected Signalsmith', () => {
+    expect(
+      parseStoredPlayTempoSettings(
+        JSON.stringify({ tempoEnabled: false, tempoPercent: 25, tempoStretchAlgorithm: 'signalsmith' }),
+      ),
+    ).toMatchObject({ tempoEnabled: false, tempoPercent: 25, tempoStretchAlgorithm: 'signalsmith' });
+    expect(parseStoredPlayTempoSettings(JSON.stringify({ tempoEnabled: 'true' })).tempoEnabled).toBe(false);
   });
 
   test('round-trips through storage and survives blocked storage', () => {
@@ -60,7 +69,12 @@ describe('stored settings', () => {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => void values.set(key, value),
     };
-    const settings = { tempoPercent: 15, tempoPitchMode: 'keep-pitch', tempoStretchAlgorithm: 'wsola' } as const;
+    const settings = {
+      tempoEnabled: true,
+      tempoPercent: 15,
+      tempoPitchMode: 'keep-pitch',
+      tempoStretchAlgorithm: 'wsola',
+    } as const;
     storePlayTempoSettings(settings, storage);
     expect(values.has(PLAY_TEMPO_STORAGE_KEY)).toBe(true);
     expect(readStoredPlayTempoSettings(storage)).toEqual(settings);
@@ -83,9 +97,10 @@ describe('live tempo', () => {
   });
 
   test('the slider changes a running play only with the pitch following the tempo, at the slider tempo, not a replay', () => {
-    const pitch = { tempoPercent: -20, tempoPitchMode: 'pitch' as const };
+    const pitch = { tempoEnabled: true, tempoPercent: -20, tempoPitchMode: 'pitch' as const };
     expect(allowsLiveTempo(pitch, { replay: false, tempo: 0.8 })).toBe(true);
     expect(allowsLiveTempo({ ...pitch, tempoPitchMode: 'keep-pitch' }, { replay: false, tempo: 0.8 })).toBe(false);
+    expect(allowsLiveTempo({ ...pitch, tempoEnabled: false }, { replay: false, tempo: 0.8 })).toBe(false);
     expect(allowsLiveTempo(pitch, { replay: true, tempo: 0.8 })).toBe(false);
     // A course stage the course turned the tempo off for.
     expect(allowsLiveTempo(pitch, { replay: false, tempo: 1 })).toBe(false);

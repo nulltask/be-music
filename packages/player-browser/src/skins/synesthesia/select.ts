@@ -10,7 +10,7 @@ import {
   emberColor,
   hsvToHex,
   mixCamera,
-  particleRiverPoint,
+  particleRiverPointInto,
   pointCloudPyramid,
   projectPoint,
   projectViewInto,
@@ -20,6 +20,7 @@ import {
   starfieldInto,
   viewPoint,
   wanderPoint,
+  type RiverOptions,
 } from './space.ts';
 import {
   SPECTRUM_RIDGE_HEIGHT,
@@ -195,6 +196,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private readonly scratchPoint = { x: 0, y: 0, z: 0 };
   private readonly scratchHead = scratchProjected();
   private readonly scratchTail = scratchProjected();
+  private readonly riverOptions: RiverOptions = { length: 1800, speed: 120, amplitude: 36, width: 20, seed: 2 };
   /** Each star's trail during the launch warp, drawn behind the stars. */
   private readonly trails = new Graphics();
   private readonly lock = new Graphics();
@@ -452,19 +454,27 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       }
     }
     // A golden river of particles sweeping across the floor.
-    const riverOptions = {
-      length: 1800,
-      speed: 120 + beatsPerSecond * 60,
-      amplitude: 36 * (1 + 1.3 * drive.mid),
-      width: 20,
-      seed: 2,
-    };
-    const riverWorld = (local: { x: number; y: number; z: number }) =>
-      viewPoint({ x: local.x, y: 110 + local.y, z: 620 + local.z + local.x * 0.5 }, camera, WORLD_ORBIT);
+    const riverOptions = this.riverOptions;
+    riverOptions.speed = 120 + beatsPerSecond * 60;
+    riverOptions.amplitude = 36 * (1 + 1.3 * drive.mid);
+    const local = this.scratchPoint;
     for (let index = 0; index < RIVER_PARTICLES; index += 1) {
-      const local = particleRiverPoint(index, this.travel / 90, riverOptions);
-      const head = projectPoint(riverWorld(local), cx, floorY, 200);
-      const tail = projectPoint(riverWorld({ ...local, x: local.x - 30 }), cx, floorY, 200);
+      particleRiverPointInto(local, index, this.travel / 90, riverOptions);
+      const y = 110 + local.y;
+      const z = 620 + local.z;
+      const head = projectViewInto(
+        this.scratchHead,
+        local.x,
+        y,
+        z + local.x * 0.5,
+        basis,
+        cx,
+        floorY,
+        200,
+        WORLD_ORBIT,
+      );
+      const tailX = local.x - 30;
+      const tail = projectViewInto(this.scratchTail, tailX, y, z + tailX * 0.5, basis, cx, floorY, 200, WORLD_ORBIT);
       if (!head.visible || !tail.visible) continue;
       const heat = hash01(index * 3 + 7);
       batch.line(
@@ -492,7 +502,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         drawSchool(
           world,
           this.flocks[school]!,
-          (point) => projectPoint(viewPoint(point, camera, WORLD_ORBIT), cx, floorY, 200),
+          (out, point) => projectViewInto(out, point.x, point.y, point.z, basis, cx, floorY, 200, WORLD_ORBIT),
           {
             alpha: 0.95 * (1 - warp),
             palette: SCHOOL_SPECS[school]!.palette,

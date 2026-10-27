@@ -1,3 +1,5 @@
+@import './theme.css';
+
 * {
   box-sizing: border-box;
 }
@@ -12,8 +14,8 @@ body,
 
 body {
   background: #08090d;
-  color: #f8fafc;
-  font-family: system-ui, sans-serif;
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
   overflow: hidden;
 }
 
@@ -31,143 +33,79 @@ textarea {
   height: 100%;
 }
 
-/*
- * Hidden file input behind the GUI's "Open folder / ZIP"
- * button. lil-gui's function controllers fire the GUI's
- * `onChange` on click, which we use to forward `.click()` to
- * this input — but the input itself never needs to be visible.
- */
+/* Native buttons activate hidden directory/file inputs. */
 .hidden-file-input {
   display: none;
 }
 
-/*
- * lil-gui custom theming — match the rest of the demo's
- * dark / yellow accent palette. lil-gui ships CSS variables we
- * can override at the root level rather than fighting its
- * built-in selectors.
- *
- * `backdrop-filter: blur` lets the gameplay canvas + drop hint
- * subtly read through the panel, so the controls don't feel
- * like a hard rectangle pasted on top of the scene. The
- * background colours therefore drop to fairly low alpha values;
- * widget / row backgrounds keep slightly more opacity for
- * legibility against busy chart graphics. `-webkit-backdrop-filter`
- * is paired in for Safari / iOS WebKit support. Declare the prefixed form FIRST everywhere in this file: the build's
- * CSS minifier folds a prefixed declaration that follows the standard one into the prefixed form only, which Chromium
- * ignores, so the blur silently disappeared in production.
- */
-.lil-gui.lil-root {
-  --background-color: rgb(17 22 32 / 0.62);
-  --text-color: #f8fafc;
-  --title-background-color: rgb(11 14 22 / 0.72);
-  --title-text-color: #f8fafc;
-  --widget-color: rgb(52 63 84 / 0.85);
-  --hover-color: #ffd166;
-  --focus-color: #ffd166;
-  --number-color: #ffd166;
-  --string-color: #ffd166;
-  --font-family: system-ui, sans-serif;
-  z-index: 10;
+/* Tweakpane's public theme variables keep controls legible over the stage. */
+.debug-pane-container {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  right: max(8px, env(safe-area-inset-right, 0px));
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  z-index: 40;
+}
+.debug-pane,
+.skin-config-pane {
+  --tp-base-background-color: color-mix(in oklch, var(--popover) 92%, transparent);
+  --tp-base-shadow-color: rgb(0 0 0 / 0.3);
+  --tp-base-font-family: var(--font-sans), system-ui, sans-serif;
+  --tp-button-background-color: var(--secondary);
+  --tp-button-background-color-hover: var(--accent);
+  --tp-button-background-color-focus: var(--accent);
+  --tp-button-background-color-active: var(--accent);
+  --tp-button-foreground-color: var(--secondary-foreground);
+  --tp-container-background-color: color-mix(in oklch, var(--muted) 40%, transparent);
+  --tp-container-background-color-hover: var(--accent);
+  --tp-container-foreground-color: var(--foreground);
+  --tp-input-background-color: var(--input);
+  --tp-input-background-color-hover: var(--accent);
+  --tp-input-background-color-focus: var(--accent);
+  --tp-input-foreground-color: var(--foreground);
+  --tp-label-foreground-color: var(--muted-foreground);
+  --tp-monitor-background-color: color-mix(in oklch, var(--muted) 50%, transparent);
+  --tp-monitor-foreground-color: var(--foreground);
+  --tp-groove-foreground-color: rgb(255 255 255 / 0.12);
+  --tp-container-unit-size: 26px;
+  --tp-blade-value-width: 58%;
   -webkit-backdrop-filter: blur(10px) saturate(140%);
   backdrop-filter: blur(10px) saturate(140%);
 }
-
-/*
- * Widgets have to stand off the panel: checkboxes and drop-downs take a
- * hairline edge, and a ticked checkbox fills with the accent. The hover
- * fill of a drop-down is a tint of the accent, not the accent itself,
- * which white text cannot be read on.
- */
-.lil-gui.lil-root input[type='checkbox'],
-.lil-gui.lil-root .lil-controller.lil-option .lil-display {
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.24);
+.debug-pane .status-row {
+  --tp-blade-value-width: 78%;
 }
-.lil-gui.lil-root input[type='checkbox']:checked {
-  background: #ffd166;
-  color: #11161f;
-  box-shadow: none;
-}
-@media (hover: hover) {
-  .lil-gui.lil-root .lil-controller.lil-option .lil-widget:hover .lil-display {
-    background: rgb(255 209 102 / 0.22);
-  }
-}
-
-/*
- * Folder children inherit the root's `--background-color` (transparent),
- * so blur applied to .lil-gui.lil-root covers the whole panel. We
- * deliberately don't add a separate `backdrop-filter` to the
- * folder, otherwise stacked filters would re-blur an already
- * blurred image and over-soften the chart visuals.
- *
- * lil-gui's own stylesheet re-declares its palette on every
- * `.lil-gui`, folders included, so without this rule only the
- * root's own rows would pick up the demo palette.
- */
-.lil-gui.lil-root .lil-gui {
-  --text-color: inherit;
-  --title-background-color: inherit;
-  --title-text-color: inherit;
-  --widget-color: inherit;
-  --hover-color: inherit;
-  --focus-color: inherit;
-  --number-color: inherit;
-  --string-color: inherit;
-  --font-family: inherit;
-}
-
-/*
- * Record-button accent. lil-gui paints function controllers as
- * a single-row button — when capture is live we colour it red
- * via the `.recording` class on the controller's row element
- * and pulse the box-shadow so it stays visible without dominating
- * gameplay rendered behind it.
- */
-.lil-gui .lil-controller.recording {
-  background: #c33b3b;
+.debug-pane .recording button {
+  background: var(--destructive);
+  color: var(--background);
   animation: record-pulse 1.4s ease-in-out infinite;
 }
-
-.lil-gui .lil-controller.recording .lil-name,
-.lil-gui .lil-controller.recording .lil-widget {
-  color: #fff;
-}
-
-/*
- * Armed state — the user clicked Record on the select screen
- * before picking a song. The button is in standby until the
- * next play kicks off, at which point the `recording` class
- * takes over. We use a softer amber + slower pulse so it reads
- * as "ready, but not yet capturing".
- */
-.lil-gui .lil-controller.arming {
-  background: #b8841d;
+.debug-pane .arming button {
+  background: var(--primary);
+  color: var(--primary-foreground);
   animation: record-arming 2s ease-in-out infinite;
-}
-
-.lil-gui .lil-controller.arming .lil-name,
-.lil-gui .lil-controller.arming .lil-widget {
-  color: #fff;
 }
 
 @keyframes record-arming {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgb(184 132 29 / 0.5);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 50%, transparent);
   }
   50% {
-    box-shadow: 0 0 6px 2px rgb(184 132 29 / 0.5);
+    box-shadow: 0 0 6px 2px color-mix(in oklch, var(--primary) 50%, transparent);
   }
 }
 
 @keyframes record-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgb(195 59 59 / 0.6);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--destructive) 60%, transparent);
   }
   50% {
-    box-shadow: 0 0 8px 2px rgb(195 59 59 / 0.6);
+    box-shadow: 0 0 8px 2px color-mix(in oklch, var(--destructive) 60%, transparent);
   }
 }
 
@@ -192,19 +130,28 @@ textarea {
   left: 12px;
   z-index: 10;
   width: 320px;
-  padding: 6px 10px;
-  border: 1px solid #3a4354;
-  border-radius: 6px;
-  background: rgb(11 14 22 / 0.85);
-  color: #f8fafc;
-  font-size: 13px;
-  font-family: system-ui, sans-serif;
-  outline: none;
 }
 
-.search-input:focus {
-  border-color: #ffd166;
-  background: rgb(11 14 22 / 0.95);
+/* Why a chart filter expression (`?…`) does not parse: just under the field (`InlineSearch` places it). */
+.search-error {
+  position: absolute;
+  z-index: 12;
+  max-width: min(480px, calc(100% - 24px));
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgb(127 29 29 / 0.9);
+  color: #fef2f2;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.search-error[hidden] {
+  display: none;
+}
+
+.search-input[aria-invalid='true'] {
+  border-color: #f87171;
 }
 
 .search-input:not(:focus):placeholder-shown {
@@ -237,6 +184,11 @@ textarea {
    * phone, so giving up the bottom inset (home indicator) would shrink the whole play field. Zero on desktops.
    */
   width: auto;
+  /*
+   * The empty shell is also Basecoat's `.empty` state, a centring flex column: stretch, or the stage shrinks to its
+   * canvas and the first screen is drawn at the canvas's default size.
+   */
+  align-self: stretch;
   margin: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   height: 100%;
   min-height: 0;
@@ -339,7 +291,7 @@ textarea {
 .drop-frame {
   position: absolute;
   inset: 24px;
-  border: 1px solid rgb(255 209 102 / 0.18);
+  border: 1px solid color-mix(in oklch, var(--primary) 18%, transparent);
   border-radius: 14px;
   /*
    * Hair-thin ring at rest — present but quiet. The active
@@ -356,19 +308,8 @@ textarea {
 
 .drop-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 18px;
-  padding: 38px 64px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgb(20 24 34 / 0.78), rgb(11 14 22 / 0.78));
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  backdrop-filter: blur(18px) saturate(160%);
-  box-shadow:
-    0 24px 60px rgb(0 0 0 / 0.45),
-    0 0 0 1px rgb(255 255 255 / 0.04) inset;
+  width: min(32rem, calc(100% - 3rem));
   text-align: center;
   /*
    * Initial entry animation. The state-driven property changes
@@ -404,8 +345,8 @@ textarea {
 .drop-icon {
   width: 44px;
   height: 44px;
-  color: #ffd166;
-  filter: drop-shadow(0 0 12px rgb(255 209 102 / 0.35));
+  color: var(--primary);
+  filter: drop-shadow(0 0 12px color-mix(in oklch, var(--primary) 35%, transparent));
   /*
    * Subtle floating motion at rest. Slowed way down so it
    * reads as ambient rather than demanding attention.
@@ -433,13 +374,13 @@ textarea {
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #f8fafc;
+  color: var(--foreground);
   /*
    * Soft yellow under-glow to tie the title back to the
    * accent without inverting its colour entirely. Reads as
    * "highlighted" rather than "loud".
    */
-  text-shadow: 0 0 24px rgb(255 209 102 / 0.25);
+  text-shadow: 0 0 24px color-mix(in oklch, var(--primary) 25%, transparent);
   transition:
     color 200ms ease-out,
     text-shadow 220ms ease-out,
@@ -470,7 +411,7 @@ textarea {
    * alpha so the separator reads as decorative rather than
    * as another label.
    */
-  color: rgb(255 209 102 / 0.45);
+  color: color-mix(in oklch, var(--primary) 45%, transparent);
   font-weight: 700;
 }
 
@@ -509,35 +450,7 @@ textarea {
   gap: 10px;
   font-size: 13px;
   font-weight: 500;
-  color: #f8fafc;
   cursor: pointer;
-}
-
-.start-check input {
-  appearance: none;
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  border: 1.5px solid rgb(255 255 255 / 0.4);
-  border-radius: 4px;
-  background: transparent center / 12px no-repeat;
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out;
-}
-.start-check input:hover {
-  border-color: rgb(255 255 255 / 0.7);
-}
-.start-check input:checked {
-  border-color: #ffd166;
-  background-color: #ffd166;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.5 9.5 3.5' fill='none' stroke='%2311161f' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
-.start-check input:focus-visible {
-  outline: 2px solid #ffd166;
-  outline-offset: 2px;
 }
 
 .start-account {
@@ -589,34 +502,6 @@ textarea {
 .start-account-actions {
   display: flex;
   gap: 6px;
-}
-
-.start-button {
-  padding: 5px 12px;
-  border: 1px solid rgb(255 255 255 / 0.16);
-  border-radius: 8px;
-  background: rgb(255 255 255 / 0.04);
-  color: #f8fafc;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 160ms ease-out,
-    border-color 160ms ease-out;
-}
-.start-button:hover {
-  background: rgb(255 255 255 / 0.1);
-  border-color: rgb(255 255 255 / 0.28);
-}
-.start-button--primary {
-  border-color: #ffd166;
-  background: #ffd166;
-  color: #11161f;
-}
-.start-button--primary:hover {
-  background: #ffe08f;
-  border-color: #ffe08f;
 }
 
 .start-account-hint {
@@ -938,11 +823,11 @@ textarea {
    */
   inset: 12px;
   border-width: 3px;
-  border-color: rgb(255 209 102 / 0.85);
+  border-color: color-mix(in oklch, var(--primary) 85%, transparent);
   box-shadow:
-    0 0 0 1px rgb(255 209 102 / 0.35),
-    0 0 32px rgb(255 209 102 / 0.45),
-    inset 0 0 48px rgb(255 209 102 / 0.18);
+    0 0 0 1px color-mix(in oklch, var(--primary) 35%, transparent),
+    0 0 32px color-mix(in oklch, var(--primary) 45%, transparent),
+    inset 0 0 48px color-mix(in oklch, var(--primary) 18%, transparent);
   animation: drop-frame-pulse 1.8s ease-in-out infinite;
 }
 
@@ -966,11 +851,11 @@ textarea {
    */
   transform: scale(1.14);
   background: linear-gradient(180deg, rgb(24 31 45 / 0.86), rgb(9 14 25 / 0.86));
-  border-color: rgb(255 209 102 / 0.85);
+  border-color: color-mix(in oklch, var(--primary) 85%, transparent);
   box-shadow:
     0 32px 80px rgb(0 0 0 / 0.6),
-    0 0 0 2px rgb(255 209 102 / 0.45) inset,
-    0 0 120px rgb(255 209 102 / 0.45);
+    0 0 0 2px color-mix(in oklch, var(--primary) 45%, transparent) inset,
+    0 0 120px color-mix(in oklch, var(--primary) 45%, transparent);
   /*
    * Breathe is delayed by the same 260ms the `transform`
    * transition takes so the loop only kicks in *after* the
@@ -989,9 +874,9 @@ textarea {
    * shift gives it a subtle "expanded" feel without being a
    * hard transform.
    */
-  color: #ffd166;
+  color: var(--primary);
   letter-spacing: 0.24em;
-  text-shadow: 0 0 28px rgb(255 209 102 / 0.6);
+  text-shadow: 0 0 28px color-mix(in oklch, var(--primary) 60%, transparent);
 }
 
 .dragging .drop-subtitle {
@@ -1001,11 +886,11 @@ textarea {
    * the typography hierarchy stays intact (subtitle still
    * dimmer than the title) but everything is now in-scheme.
    */
-  color: rgb(255 209 102 / 0.85);
+  color: color-mix(in oklch, var(--primary) 85%, transparent);
 }
 
 .dragging .drop-subtitle-sep {
-  color: rgb(255 209 102 / 0.7);
+  color: color-mix(in oklch, var(--primary) 70%, transparent);
 }
 
 .dragging .drop-icon {
@@ -1028,7 +913,7 @@ textarea {
    * the resting-tier values, the float loop hands off
    * without a visible step.
    */
-  filter: drop-shadow(0 0 28px rgb(255 209 102 / 0.85));
+  filter: drop-shadow(0 0 28px color-mix(in oklch, var(--primary) 85%, transparent));
   animation:
     drop-icon-float 1.6s ease-in-out infinite,
     drop-icon-glow 1.8s ease-in-out infinite;
@@ -1070,16 +955,16 @@ textarea {
 @keyframes drop-frame-pulse {
   0%,
   100% {
-    border-color: rgb(255 209 102 / 0.4);
+    border-color: color-mix(in oklch, var(--primary) 40%, transparent);
     box-shadow:
-      0 0 0 1px rgb(255 209 102 / 0.08),
-      0 0 0 8px rgb(255 209 102 / 0) inset;
+      0 0 0 1px color-mix(in oklch, var(--primary) 8%, transparent),
+      0 0 0 8px color-mix(in oklch, var(--primary) 0%, transparent) inset;
   }
   50% {
-    border-color: rgb(255 209 102 / 0.7);
+    border-color: color-mix(in oklch, var(--primary) 70%, transparent);
     box-shadow:
-      0 0 0 1px rgb(255 209 102 / 0.18),
-      0 0 0 24px rgb(255 209 102 / 0.06) inset;
+      0 0 0 1px color-mix(in oklch, var(--primary) 18%, transparent),
+      0 0 0 24px color-mix(in oklch, var(--primary) 6%, transparent) inset;
   }
 }
 
@@ -1096,10 +981,10 @@ textarea {
 @keyframes drop-icon-glow {
   0%,
   100% {
-    filter: drop-shadow(0 0 12px rgb(255 209 102 / 0.35));
+    filter: drop-shadow(0 0 12px color-mix(in oklch, var(--primary) 35%, transparent));
   }
   50% {
-    filter: drop-shadow(0 0 22px rgb(255 209 102 / 0.7));
+    filter: drop-shadow(0 0 22px color-mix(in oklch, var(--primary) 70%, transparent));
   }
 }
 
@@ -1158,8 +1043,6 @@ textarea {
 }
 
 .loading-card {
-  display: flex;
-  flex-direction: column;
   gap: 10px;
   /*
    * Fixed width — the counter line shows the current filename,
@@ -1170,12 +1053,6 @@ textarea {
    * the visual width is stable across phases.
    */
   width: min(80vw, 480px);
-  padding: 18px 22px;
-  border: 1px solid #3a4354;
-  border-radius: 10px;
-  background: rgb(17 22 32 / 0.94);
-  color: #f8fafc;
-  font-family: system-ui, sans-serif;
   /*
    * Card has its own pointer-events so a future "Cancel" button
    * inside it would be clickable; the parent overlay stays
@@ -1183,7 +1060,6 @@ textarea {
    * background canvas in case loading runs in the background.
    */
   pointer-events: auto;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.4);
 }
 
 .loading-label {
@@ -1206,30 +1082,12 @@ textarea {
 }
 
 .loading-bar {
-  /*
-   * Track. Height kept tight (6 px) so the card reads as a hint
-   * rather than a hero element; rounded ends keep the fill from
-   * looking like a sharp data-cell on small percentages.
-   */
-  position: relative;
   width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: #1b2230;
-  overflow: hidden;
 }
 
 .loading-bar-fill {
-  /*
-   * Determinate state — the inline `width` set by JS drives the
-   * fill. Default to a yellow accent so the bar matches the rest
-   * of the demo's highlight colour (toolbar :checked label, drop
-   * border).
-   */
-  height: 100%;
+  /* Determinate state — the inline `width` set by JS drives the fill. */
   width: 0;
-  background: #ffd166;
-  border-radius: 3px;
   transition: width 80ms linear;
 }
 
@@ -1300,47 +1158,6 @@ textarea {
   bottom: 14px;
   transform: translateX(-50%);
   z-index: 8;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px 8px 10px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 999px;
-  background: rgb(11 14 22 / 0.7);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  backdrop-filter: blur(10px) saturate(140%);
-  color: #d2d9e4;
-  font-family: system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  cursor: pointer;
-  box-shadow: 0 8px 22px rgb(0 0 0 / 0.35);
-  transition:
-    color 180ms ease-out,
-    border-color 180ms ease-out,
-    background 180ms ease-out,
-    transform 180ms ease-out;
-}
-
-.help-button:hover,
-.help-button:focus-visible {
-  color: #ffd166;
-  border-color: rgb(255 209 102 / 0.4);
-  background: rgb(20 24 34 / 0.85);
-  transform: translate(-50%, -1px);
-  outline: none;
-}
-
-.help-button:focus-visible {
-  /*
-   * Keyboard-focus ring — uses the accent so it harmonises
-   * with the rest of the demo's hover affordances.
-   */
-  box-shadow:
-    0 8px 22px rgb(0 0 0 / 0.35),
-    0 0 0 2px rgb(255 209 102 / 0.45);
 }
 
 .help-button-icon {
@@ -1388,6 +1205,15 @@ textarea {
   padding: 24px;
   pointer-events: none;
   opacity: 0;
+  /*
+   * The shell's `.empty` class (no charts yet) is also Basecoat's
+   * empty-state component, which centers text and balance-wraps it.
+   * Help is not a `.dialog` — those already reset alignment — so the
+   * overlay keeps the same start alignment as after a chart loads.
+   * The build line below sets its own centering.
+   */
+  text-align: start;
+  text-wrap: wrap;
   transition: opacity 200ms ease-out;
 }
 
@@ -1406,22 +1232,12 @@ textarea {
 
 .help-modal-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
   width: min(720px, 100%);
   max-height: min(80vh, 720px);
-  padding: 22px 26px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 18px;
-  background: rgb(11 14 22 / 0.96);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  backdrop-filter: blur(20px) saturate(150%);
-  box-shadow: 0 28px 80px rgb(0 0 0 / 0.55);
   /*
    * Slide-in entry that reads as "the dialog rose into focus"
    * rather than "popped instantly". Matches the drop card's
-   * entry animation cadence so the demo's overlay vocabulary
+   * entry animation cadence so the player's overlay vocabulary
    * stays consistent.
    */
   transform: translateY(8px) scale(0.98);
@@ -1460,33 +1276,9 @@ textarea {
 }
 
 .help-modal-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 50%;
-  background: rgb(20 24 34 / 0.6);
-  color: #d2d9e4;
-  cursor: pointer;
-  transition:
-    color 180ms ease-out,
-    border-color 180ms ease-out,
-    background 180ms ease-out;
-}
-
-.help-modal-close:hover,
-.help-modal-close:focus-visible {
-  color: #ffd166;
-  border-color: rgb(255 209 102 / 0.4);
-  background: rgb(20 24 34 / 0.78);
-  outline: none;
-}
-
-.help-modal-close svg {
-  width: 18px;
-  height: 18px;
+  position: absolute;
+  top: 16px;
+  right: 16px;
 }
 
 .help-pane-intro {
@@ -1510,34 +1302,9 @@ textarea {
   padding-bottom: 8px;
 }
 
-.help-modal-tab {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: 6px 14px;
-  border-radius: 8px;
-  color: rgb(151 163 179 / 0.85);
-  font-family: system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    color 180ms ease-out,
-    background 180ms ease-out;
-}
-
-.help-modal-tab:hover,
-.help-modal-tab:focus-visible {
-  color: #ffd166;
-  background: rgb(255 209 102 / 0.08);
-  outline: none;
-}
-
 .help-modal-tab.is-active {
-  color: #ffd166;
-  background: rgb(255 209 102 / 0.16);
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 /*
@@ -1555,7 +1322,7 @@ textarea {
    * and lights up on hover. Keeps the modal's chrome
    * coherent across both panes.
    */
-  scrollbar-color: rgb(255 209 102 / 0.4) transparent;
+  scrollbar-color: color-mix(in oklch, var(--primary) 40%, transparent) transparent;
   scrollbar-width: thin;
 }
 
@@ -1564,12 +1331,12 @@ textarea {
 }
 
 .help-modal-pane::-webkit-scrollbar-thumb {
-  background: rgb(255 209 102 / 0.35);
+  background: color-mix(in oklch, var(--primary) 35%, transparent);
   border-radius: 999px;
 }
 
 .help-modal-pane::-webkit-scrollbar-thumb:hover {
-  background: rgb(255 209 102 / 0.6);
+  background: color-mix(in oklch, var(--primary) 60%, transparent);
 }
 
 .help-section-title {
@@ -1596,6 +1363,55 @@ textarea {
   color: #d2d9e4;
 }
 
+.help-menu-folder {
+  margin: 8px 0 0;
+  border: 1px solid rgb(151 163 179 / 0.18);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #d2d9e4;
+}
+
+.help-menu-folder-title {
+  margin: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgb(151 163 179 / 0.18);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.help-menu-note {
+  margin: 8px 12px 0;
+  color: rgb(151 163 179 / 0.85);
+}
+
+.help-menu-items {
+  margin: 0;
+  padding: 8px 12px 10px;
+  display: grid;
+  gap: 2px 0;
+}
+
+.help-menu-items dt {
+  margin-top: 6px;
+  font-weight: 600;
+  color: #f3f6fa;
+}
+
+.help-menu-items dd {
+  margin: 0;
+}
+
+.help-menu-when {
+  font-style: normal;
+  color: #9db8ff;
+}
+
+.help-menu-items code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
 .help-list code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
@@ -1606,13 +1422,13 @@ textarea {
 }
 
 .help-list strong {
-  color: #ffd166;
+  color: var(--primary);
   font-weight: 600;
 }
 
 .help-list em {
   font-style: normal;
-  color: #ffd166;
+  color: var(--primary);
 }
 
 /*
@@ -1665,8 +1481,8 @@ textarea {
   display: inline-block;
   padding: 2px 7px;
   border-radius: 4px;
-  background: rgb(255 209 102 / 0.18);
-  color: #ffd166;
+  background: color-mix(in oklch, var(--primary) 18%, transparent);
+  color: var(--primary);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -1702,40 +1518,13 @@ textarea {
 .help-lang-switch {
   display: inline-flex;
   align-self: flex-end;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid rgb(255 255 255 / 0.06);
-  border-radius: 999px;
-  background: rgb(20 24 34 / 0.55);
+  gap: 4px;
   margin-bottom: 12px;
 }
 
-.help-lang-toggle {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: 5px 14px;
-  border-radius: 999px;
-  color: rgb(151 163 179 / 0.85);
-  font-family: system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-  transition:
-    color 160ms ease-out,
-    background 160ms ease-out;
-}
-
-.help-lang-toggle:hover,
-.help-lang-toggle:focus-visible {
-  color: #ffd166;
-  outline: none;
-}
-
 .help-lang-toggle.is-active {
-  color: #08090d;
-  background: #ffd166;
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 /*
@@ -1771,7 +1560,7 @@ textarea {
   flex-direction: column;
   gap: 10px;
   padding: 14px 16px;
-  border: 1px solid rgb(255 209 102 / 0.2);
+  border: 1px solid color-mix(in oklch, var(--primary) 20%, transparent);
   border-radius: 12px;
   background: linear-gradient(180deg, rgb(20 24 34 / 0.55), rgb(8 13 24 / 0.55));
   margin-bottom: 18px;
@@ -1795,7 +1584,7 @@ textarea {
 }
 
 .help-about-summary strong {
-  color: #ffd166;
+  color: var(--primary);
   font-weight: 600;
 }
 
@@ -1821,7 +1610,7 @@ textarea {
 }
 
 .help-about-meta a {
-  color: #ffd166;
+  color: var(--primary);
   text-decoration: none;
   /*
    * `word-break: break-all` so long URLs (e.g.
@@ -1854,7 +1643,7 @@ textarea {
   list-style: none;
   margin: 0;
   padding: 8px 0 0;
-  border-top: 1px dashed rgb(255 209 102 / 0.18);
+  border-top: 1px dashed color-mix(in oklch, var(--primary) 18%, transparent);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1876,16 +1665,16 @@ textarea {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: rgb(255 209 102 / 0.6);
+  background: color-mix(in oklch, var(--primary) 60%, transparent);
   /*
    * Soft glow keeps the dot legible against the warm About-
    * card background without needing a heavy color or stroke.
    */
-  box-shadow: 0 0 6px rgb(255 209 102 / 0.4);
+  box-shadow: 0 0 6px color-mix(in oklch, var(--primary) 40%, transparent);
 }
 
 .help-about-notes strong {
-  color: #ffd166;
+  color: var(--primary);
   font-weight: 600;
 }
 
@@ -1918,11 +1707,11 @@ textarea {
   /*
    * Custom scrollbar styling. Chromium reads
    * `::-webkit-scrollbar`; Firefox reads
-   * `scrollbar-color`. Both surfaces stay in the demo's
+   * `scrollbar-color`. Both surfaces stay in the player's
    * dark / accent palette rather than defaulting to the
    * system grey.
    */
-  scrollbar-color: rgb(255 209 102 / 0.4) transparent;
+  scrollbar-color: color-mix(in oklch, var(--primary) 40%, transparent) transparent;
   scrollbar-width: thin;
 }
 
@@ -1931,12 +1720,12 @@ textarea {
 }
 
 .help-oss-list::-webkit-scrollbar-thumb {
-  background: rgb(255 209 102 / 0.35);
+  background: color-mix(in oklch, var(--primary) 35%, transparent);
   border-radius: 999px;
 }
 
 .help-oss-list::-webkit-scrollbar-thumb:hover {
-  background: rgb(255 209 102 / 0.6);
+  background: color-mix(in oklch, var(--primary) 60%, transparent);
 }
 
 .ack-card {
@@ -1996,8 +1785,8 @@ textarea {
   text-transform: uppercase;
   padding: 2px 7px;
   border-radius: 4px;
-  background: rgb(255 209 102 / 0.18);
-  color: #ffd166;
+  background: color-mix(in oklch, var(--primary) 18%, transparent);
+  color: var(--primary);
 }
 
 .ack-card-meta {
@@ -2009,7 +1798,7 @@ textarea {
 }
 
 .ack-card-link {
-  color: #ffd166;
+  color: var(--primary);
   text-decoration: none;
 }
 
@@ -2023,14 +1812,37 @@ textarea {
   /* Same dim grey as the version — secondary metadata. */
 }
 
+/* The copyright notice and license text, folded by default. */
+.ack-card-license-details > summary {
+  margin-top: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  color: rgb(151 163 179 / 0.9);
+  list-style: none;
+}
+/* The card has no bottom padding (the license panel runs to its edge); folded, the summary matches the space above the name. */
+.ack-card-license-details:not([open]) > summary {
+  padding-bottom: 10px;
+}
+.ack-card-license-details > summary::-webkit-details-marker {
+  display: none;
+}
+.ack-card-license-details > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 1.2em;
+  font-size: 1.25em;
+  line-height: 1;
+}
+.ack-card-license-details[open] > summary::before {
+  content: '▾';
+}
 .ack-card-license-text {
   /*
-   * Flat layout (no `<details>` wrapper): the license text
-   * is a sibling of the heading / meta blocks rather than a
-   * disclosed-on-click panel. Negative horizontal margin
-   * cancels the card's `padding: 12px 16px` so the dark
-   * inner panel runs edge-to-edge of the card while keeping
-   * the heading / meta padded normally.
+   * Negative horizontal margin cancels the card's
+   * `padding: 12px 16px` so the dark inner panel runs
+   * edge-to-edge of the card while keeping the heading /
+   * meta padded normally.
    */
   margin: 8px -16px 0;
   padding: 12px 16px 14px;
@@ -2084,33 +1896,7 @@ textarea {
   right: 14px;
   bottom: 14px;
   z-index: 8;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   max-width: min(40vw, 260px);
-  padding: 8px 14px 8px 12px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 999px;
-  background: rgb(11 14 22 / 0.7);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  backdrop-filter: blur(10px) saturate(140%);
-  color: #d2d9e4;
-  font-family: system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  box-shadow: 0 8px 22px rgb(0 0 0 / 0.35);
-  transition:
-    color 180ms ease-out,
-    border-color 180ms ease-out,
-    opacity 180ms ease-out;
-}
-
-.account-chip:hover,
-.account-chip:focus-visible {
-  color: #ffd166;
-  border-color: rgb(255 209 102 / 0.4);
-  outline: none;
 }
 
 .account-chip-dot {
@@ -2140,9 +1926,6 @@ textarea {
   .account-chip-label {
     display: none;
   }
-  .account-chip {
-    padding: 11px;
-  }
 }
 
 .shell.in-gameplay .account-chip {
@@ -2155,7 +1938,9 @@ textarea {
  * reachable by hovering where it sits. The search field shows on the select screen only (`off-select` elsewhere).
  */
 .shell.in-gameplay .search-input,
-.shell.off-select .search-input {
+.shell.off-select .search-input,
+.shell.in-gameplay .search-error,
+.shell.off-select .search-error {
   visibility: hidden;
 }
 
@@ -2213,38 +1998,24 @@ html.phone .help-button-label {
   display: none;
 }
 
-html.phone .lil-gui.lil-root.lil-closed {
-  --width: 116px !important;
+html.phone .debug-pane-container:has(> .debug-pane:not(.tp-rotv-expanded)) {
+  width: 116px;
 }
 
-html.phone .lil-gui.lil-root {
-  max-height: 100dvh;
-  overflow-y: auto;
-  right: env(safe-area-inset-right, 0px);
-}
-
-/* No hover on a touch screen to reveal the hidden Help button, and it must not take taps meant for the lanes. */
+/* Keep help and a collapsed pane out of touch lanes. */
 html.touch-first .shell.in-gameplay .help-button {
   visibility: hidden;
 }
-
-html.touch-first:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed {
+html.touch-first:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) {
   opacity: 0.35;
 }
-
-/* During play the collapsed Debug Menu is just its chevron, so it stays off the skin's header labels. */
-html:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed {
-  --width: 40px !important;
+html:has(.shell.in-gameplay) .debug-pane-container:has(> .debug-pane:not(.tp-rotv-expanded)) {
+  width: 40px;
 }
-
-html:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed > .lil-title {
+html:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) > .tp-rotv_b .tp-rotv_t {
   overflow: hidden;
   white-space: nowrap;
   color: transparent;
-}
-
-html:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed > .lil-title::before {
-  color: var(--text-color);
 }
 
 /* Touch play controls: a pause button during play; Resume / Quit while paused. */
@@ -2261,44 +2032,12 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   display: flex;
 }
 
-.touch-control {
-  display: inline-grid;
-  place-items: center;
-  min-width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 999px;
-  background: rgb(11 14 22 / 0.55);
-  color: rgb(248 250 252 / 0.75);
-  font-family: system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.touch-control svg {
-  width: 18px;
-  height: 18px;
-}
-
 .touch-control--text {
   display: none;
-  padding: 0 16px;
-}
-
-.shell.play-paused .touch-control {
-  background: rgb(11 14 22 / 0.85);
-  color: #f8fafc;
 }
 
 .shell.play-paused .touch-control--text {
-  display: inline-grid;
-  border-color: rgb(255 209 102 / 0.5);
-  color: #ffd166;
+  display: inline-flex;
 }
 
 /* Phones held upright: ask for landscape, unless the screen is drawn on the skin's portrait stage. */
@@ -2322,7 +2061,7 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
 .rotate-hint-icon {
   width: 56px;
   height: 56px;
-  color: #ffd166;
+  color: var(--primary);
   animation: rotate-hint-turn 2.4s ease-in-out infinite;
 }
 
@@ -2357,14 +2096,6 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   }
 }
 
-/* One-line explanation under a Debug Menu setting (e.g. "Play in silent mode"). */
-.lil-gui .gui-note {
-  padding: 0 var(--padding) 6px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: rgb(210 217 228 / 0.75);
-}
-
 /*
  * "No sound?" hint, shown once on an iPhone / iPad when sound first starts. Top-centre, clear of the Debug Menu
  * (top-right), the search box (bottom-left) and Help (bottom-right); it never blocks the stage and leaves by itself.
@@ -2374,20 +2105,10 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   top: max(10px, env(safe-area-inset-top, 0px));
   left: 50%;
   z-index: 20;
-  display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
   max-width: min(520px, calc(100vw - 32px));
-  padding: 6px 6px 6px 12px;
-  border: 1px solid rgb(255 209 102 / 0.35);
-  border-radius: 10px;
-  background: rgb(11 14 22 / 0.85);
-  color: #f8fafc;
-  font-size: 12px;
-  line-height: 1.35;
   transform: translateX(-50%);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
   animation: silent-mode-hint-in 0.25s ease-out;
 }
 
@@ -2395,28 +2116,8 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   flex: 1 1 auto;
 }
 
-.silent-mode-hint-action,
 .silent-mode-hint-dismiss {
   flex: none;
-  min-height: 32px;
-  border: 1px solid rgb(255 209 102 / 0.5);
-  border-radius: 7px;
-  background: transparent;
-  color: #ffd166;
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.silent-mode-hint-action {
-  padding: 0 10px;
-}
-
-.silent-mode-hint-dismiss {
-  width: 32px;
-  border-color: transparent;
-  color: rgb(210 217 228 / 0.85);
-  font-size: 16px;
 }
 
 @keyframes silent-mode-hint-in {
@@ -2432,234 +2133,37 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   }
 }
 
-/*
- * Leaderboard sign-in / sign-up dialogs (account-dialogs.ts): the same
- * steps as the Leaderboard's own dialogs, in the demo's palette — a
- * dark card over a dimmed page, the accent on the main button, Google
- * and Discord shown greyed out with an "Coming soon" badge.
- */
-.account-dialog {
-  width: min(380px, calc(100vw - 32px));
-  margin: auto;
-  padding: 0;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 16px;
-  background: rgb(14 18 27 / 0.97);
-  color: #f8fafc;
-  box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
-  font-family: system-ui, sans-serif;
-}
-.account-dialog::backdrop {
-  background: rgb(0 0 0 / 0.55);
+/* Basecoat dialogs inherit a centered alignment; forms in them read from the start. */
+.dialog {
+  text-align: start;
 }
 
-.account-dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 22px;
+/* Hidden family choices must override the shared buttons' inline-flex display. */
+#skin-switch [hidden] {
+  display: none;
+}
+#skin-switch footer,
+#skin-switch .account-dialog-buttons {
+  flex-wrap: wrap;
 }
 
-.account-dialog header h2 {
-  margin: 0 0 4px;
-  font-size: 17px;
-  font-weight: 600;
-}
-.account-dialog header p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #aab4c2;
+/* The charts a dropped replay or course replay needs that are not loaded. */
+.replay-missing-list {
+  list-style: disc;
+  padding-inline-start: 1.25rem;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
 }
 
-.account-dialog-primary,
-.account-dialog-quiet,
-.account-provider {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 9px 14px;
-  border-radius: 9px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.account-dialog-primary {
-  border: 1px solid #ffd166;
-  background: #ffd166;
-  color: #11161f;
-}
-.account-dialog-primary:hover {
-  background: #ffe08f;
-}
-.account-dialog-primary:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-.account-dialog-quiet {
-  border: 1px solid transparent;
-  background: transparent;
-  color: #d2d9e4;
-}
-.account-dialog-quiet:hover {
-  background: rgb(255 255 255 / 0.06);
-}
-
-.account-providers {
-  display: grid;
-  gap: 8px;
-}
-.account-provider {
-  justify-content: flex-start;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  background: rgb(255 255 255 / 0.03);
-  color: #f8fafc;
-}
-.account-provider:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.account-provider-logo {
-  display: inline-flex;
-  width: 16px;
-  height: 16px;
-}
-.account-provider-logo svg {
-  width: 16px;
-  height: 16px;
-}
-.account-provider-badge {
-  margin-left: auto;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.1);
-  font-size: 10px;
-  font-weight: 600;
-  color: #d2d9e4;
-}
-
-.account-dialog-or {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  color: #8b95a5;
-}
-.account-dialog-or::before,
-.account-dialog-or::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: rgb(255 255 255 / 0.1);
-}
-
-.account-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 500;
-}
-.account-field input {
-  padding: 8px 10px;
-  border: 1px solid rgb(255 255 255 / 0.18);
-  border-radius: 8px;
-  background: rgb(255 255 255 / 0.04);
-  color: #f8fafc;
-  font: inherit;
-  font-size: 14px;
-}
-.account-field input:focus {
-  outline: none;
-  border-color: #ffd166;
-  box-shadow: 0 0 0 3px rgb(255 209 102 / 0.2);
-}
-.account-field small {
-  font-size: 11px;
-  font-weight: 400;
-  color: #8b95a5;
-}
-
-.account-dialog-status {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #fda4af;
-}
-
-.account-dialog footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.account-dialog-buttons {
-  display: flex;
-  gap: 8px;
-}
-.account-dialog-link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: #ffd166;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-.account-dialog-link:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-/*
- * "Drop a skin" prompt: the drop card's look, as a modal over the page.
- * Drops on it bubble to the window's drop handler like any other.
- */
-.skin-drop {
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  width: min(420px, calc(100vw - 32px));
-  margin: auto;
-  padding: 38px 40px 24px;
-  border: 1px dashed rgb(255 209 102 / 0.45);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgb(20 24 34 / 0.96), rgb(11 14 22 / 0.96));
-  color: #f8fafc;
-  text-align: center;
-  box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
-  font-family: system-ui, sans-serif;
-}
-.skin-drop[open] {
-  display: flex;
-}
-.skin-drop::backdrop {
-  background: rgb(0 0 0 / 0.6);
-}
-.skin-drop .drop-title {
-  margin: 0;
-}
-.skin-drop-hint {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #aab4c2;
-}
-.skin-drop-hint code {
-  color: #d2d9e4;
-}
-
-/*
- * The search field over a skin's own search box (inline-search.ts): positioned
- * and sized by script to the box, it shows only the typed text and caret, so
- * the skin's box shows through around it. A skin with a box hides the field
- * at the foot of the screen until the box is clicked (or `/` is pressed).
- */
 .shell.search-in-skin .search-input:not(.search-inline) {
   opacity: 0;
   pointer-events: none;
+}
+
+/* The error goes with the field: out of sight while the field is (the skin's box shows the query then). */
+.shell.search-in-skin .search-input:not(.search-inline) + .search-error,
+html.touch-first .search-input:not(:focus) + .search-error {
+  visibility: hidden;
 }
 
 .search-input.search-inline {
@@ -2675,7 +2179,7 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   background: transparent;
   box-shadow: none;
   color: #f8fafc;
-  caret-color: #ffd166;
+  caret-color: var(--primary);
   opacity: 1;
   transform: none;
   -webkit-appearance: none;
@@ -2706,17 +2210,7 @@ html.touch-first .search-input.search-inline:focus {
   left: 16px;
   bottom: 64px;
   z-index: 40;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   width: min(320px, calc(100vw - 32px));
-  padding: 16px;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 14px;
-  background: rgb(14 18 27 / 0.95);
-  color: #f8fafc;
-  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
-  font-family: system-ui, sans-serif;
   font-size: 13px;
 }
 .course-maker-card[hidden] {
@@ -2729,17 +2223,11 @@ html.touch-first .search-input.search-inline:focus {
 }
 .course-maker-card header p {
   margin: 0;
-  color: #aab4c2;
+  color: var(--muted-foreground);
   line-height: 1.4;
 }
 .course-maker-name {
   min-width: 0;
-  padding: 7px 10px;
-  border: 1px solid rgb(255 255 255 / 0.14);
-  border-radius: 8px;
-  background: rgb(255 255 255 / 0.04);
-  color: inherit;
-  font: inherit;
 }
 .course-maker-stages {
   display: grid;
@@ -2765,14 +2253,8 @@ html.touch-first .search-input.search-inline:focus {
   gap: 8px;
   color: #aab4c2;
 }
-.course-maker-select {
-  padding: 4px 6px;
-  border: 1px solid rgb(255 255 255 / 0.14);
-  border-radius: 6px;
-  background: #151b27;
-  color: #f8fafc;
-  font: inherit;
-  font-size: 12px;
+.course-maker-dialog > * {
+  max-width: min(480px, calc(100% - 2rem));
 }
 .course-maker-buttons {
   display: flex;
@@ -2783,9 +2265,6 @@ html.touch-first .search-input.search-inline:focus {
 .course-maker-buttons > button:disabled {
   opacity: 0.45;
   cursor: default;
-}
-.course-maker-dialog {
-  width: min(480px, calc(100vw - 32px));
 }
 .course-maker-list {
   display: grid;
@@ -2801,10 +2280,6 @@ html.touch-first .search-input.search-inline:focus {
 .course-maker-course {
   display: grid;
   gap: 8px;
-  padding: 12px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 10px;
-  background: rgb(255 255 255 / 0.02);
 }
 .course-maker-course-head {
   display: flex;
@@ -2815,7 +2290,7 @@ html.touch-first .search-input.search-inline:focus {
   flex: 1;
 }
 .course-maker-kind {
-  color: #ffd166;
+  color: var(--primary);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -2825,7 +2300,73 @@ html.touch-first .search-input.search-inline:focus {
   gap: 6px;
 }
 
-/* The start-card footer stays outside the skin's playfield. */
+/* Replay slots (replay-slots-panel.ts): a result's slots to save into, and the select bar's replays. */
+.replay-slots-card {
+  position: fixed;
+  right: 16px;
+  bottom: 64px;
+  z-index: 40;
+  width: min(360px, calc(100vw - 32px));
+  font-size: 13px;
+}
+.replay-slots-card[hidden] {
+  display: none;
+}
+/* The card pads its own sides; Basecoat's card header would indent the heading past the slot rows. */
+.replay-slots-card > header {
+  padding-inline: 0;
+}
+.replay-slots-card h2 {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.replay-slots-card header p {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+.replay-slots-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.replay-slots-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+}
+.replay-slots-name {
+  font-weight: 600;
+}
+.replay-slots-detail {
+  min-width: 0;
+  color: #aab4c2;
+  overflow-wrap: anywhere;
+}
+.replay-slots-actions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.replay-slots-row > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The help overlay keeps its build line at the bottom of the overlay, under the dialog card. */
+.help-modal .service-build-footer {
+  position: absolute;
+  right: 0;
+  bottom: 16px;
+  left: 0;
+  z-index: 1;
+}
 .service-build-footer {
   color: #94a3b8;
   text-align: center;
@@ -2834,4 +2375,102 @@ html.touch-first .search-input.search-inline:focus {
 }
 .service-build-footer code {
   font: inherit;
+}
+
+/* The page footer is the start screen only, so it stays off the skin's playfield. */
+.service-page-footer {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: color-mix(in oklch, var(--background) 92%, transparent);
+}
+.shell:not(.empty) .service-page-footer {
+  display: none;
+}
+.shell.empty .drop {
+  padding-bottom: 11rem;
+}
+.shell.empty .help-button,
+.shell.empty .account-chip {
+  bottom: calc(11rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* A DOM skin owns a real search input; remove the Canvas overlay from focus and accessibility as well. */
+.shell.native-search .search-input {
+  display: none;
+}
+
+/* The local data viewer (`local-data-panel.ts`): what the player keeps in this browser, read-only. */
+.local-data-dialog > * {
+  max-width: min(760px, calc(100% - 2rem));
+  max-height: min(85vh, 900px);
+  overflow-y: auto;
+}
+.local-data-section {
+  display: grid;
+  gap: 4px;
+}
+.local-data-section h3 {
+  margin: 8px 0 2px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.local-data-entry {
+  border-top: 1px solid #ffffff14;
+  padding: 4px 0;
+}
+.local-data-entry .local-data-entry {
+  margin-inline-start: 14px;
+}
+.local-data-entry > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  list-style: none;
+}
+.local-data-entry > summary::-webkit-details-marker {
+  display: none;
+}
+/* A flex summary drops the native marker; draw one. */
+.local-data-entry > summary::before {
+  content: '▸';
+  width: 0.8em;
+  color: #aab4c2;
+}
+.local-data-entry[open] > summary::before {
+  content: '▾';
+}
+.local-data-name {
+  overflow-wrap: anywhere;
+}
+.local-data-size,
+.local-data-description,
+.local-data-note,
+.local-data-usage {
+  color: #aab4c2;
+  font-size: 0.75rem;
+}
+.local-data-value {
+  margin: 6px 0;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 4px;
+  background: #0006;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.local-data-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 8px;
 }

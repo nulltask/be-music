@@ -43,6 +43,10 @@ jobs:
       - name: Install dependencies
         run: vp install
 
+      # Workspace package exports point to dist by default; build shared utilities before service bundling.
+      - name: Build shared utilities
+        run: pnpm --filter @be-music/shared-utils build
+
       # Migrations run before the Leaderboard deploys, so each must work with the code still running (expand →
       # switch → contract; docs/leaderboard.md section 2.1).
       - name: Migrate the Leaderboard database

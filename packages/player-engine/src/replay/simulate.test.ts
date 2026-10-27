@@ -11,7 +11,7 @@ import {
 import {
   resolveBeatorajaDefaultTotal,
   resolveBeatorajaHardRecoverMultiplier,
-  resolveIIDXGaugeUnit,
+  resolve____GaugeUnit,
   resolveLR2DefaultTotal,
   resolveLR2HardDamageMultiplier,
   simulateReplay,
@@ -80,11 +80,11 @@ describe('simulateReplay mines', () => {
     return Math.round((without.gauge.final - withMine.gauge.final) * 1000) / 1000;
   }
 
-  test('a press inside the PGREAT window detonates a mine under LR2 (and IIDX), not under beatoraja', () => {
+  test('LR2beta3 and provisional That-Which-Must-Not-Be-Named distinguish ahead-only and symmetric mine press reach', () => {
     // Pressed 3 ms after the crossing: beatoraja damages only a key that is down as the mine crosses the line.
     const late = [down(1_003_000), up(1_020_000)];
-    expect(mineDamage('lr2', late)).toBe(10);
-    expect(mineDamage('iidx', late)).toBeGreaterThan(0);
+    expect(mineDamage('lr2', late)).toBe(0);
+    expect(mineDamage('____', late)).toBeGreaterThan(0);
     expect(mineDamage('beatoraja', late)).toBe(0);
     // Pressed 3 ms before and let go before the crossing: the same.
     const early = [down(997_000), up(999_000)];
@@ -96,7 +96,7 @@ describe('simulateReplay mines', () => {
     const held = [down(900_000), up(1_100_000)];
     expect(mineDamage('lr2', held)).toBe(10);
     expect(mineDamage('beatoraja', held)).toBe(10);
-    expect(mineDamage('iidx', held)).toBeGreaterThan(0);
+    expect(mineDamage('____', held)).toBeGreaterThan(0);
   });
 
   test('at the same µs the input comes before the crossing', () => {
@@ -128,7 +128,7 @@ describe('simulateReplay', () => {
   test('a single note hit dead-on scores PGREAT on every ruleset', () => {
     const replay = makeReplay({ notes: [note(1_000_000)], inputs: [down(1_000_000)] });
     const results = simulateReplayRulesets(replay);
-    for (const ruleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
       const result = results[ruleset]!;
       expect(result.judge, ruleset).toEqual({ pgreat: 1, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 });
       expect(result.exScore, ruleset).toBe(2);
@@ -141,7 +141,7 @@ describe('simulateReplay', () => {
     // Revision 2: the mine rules changed (LR2's press and window-entry legs, beatoraja's hold-only rule).
     expect(results.lr2!.ruleset).toBe('lr2/0');
     expect(results.beatoraja!.ruleset).toBe('beatoraja/0');
-    expect(results.iidx!.ruleset).toBe('iidx/0');
+    expect(results.____!.ruleset).toBe('____/0');
     expect(results.lr2!.score).toBe(200000); // (4 PG × 50000) / 1 note
     expect(results.lr2!.djLevel).toBe('AAA');
     expect(results.beatoraja!.score).toBeUndefined(); // money score is LR2-only
@@ -186,16 +186,16 @@ describe('simulateReplay', () => {
     expect(result.maxCombo).toBe(0);
   });
 
-  test('IIDX windows: ±16.67ms PGREAT / ±33.33ms GREAT / ±116.67ms GOOD / ±250ms BAD', () => {
-    expect(simulateSingleNote('iidx', 16_667).judge.pgreat).toBe(1);
-    expect(simulateSingleNote('iidx', 16_668).judge.great).toBe(1);
-    expect(simulateSingleNote('iidx', 33_333).judge.great).toBe(1);
-    expect(simulateSingleNote('iidx', 33_334).judge.good).toBe(1);
-    expect(simulateSingleNote('iidx', 116_667).judge.good).toBe(1);
-    expect(simulateSingleNote('iidx', 116_668).judge.bad).toBe(1);
-    expect(simulateSingleNote('iidx', 250_000).judge.bad).toBe(1);
+  test('That-Which-Must-Not-Be-Named windows: ±16.67ms PGREAT / ±33.33ms GREAT / ±116.67ms GOOD / ±250ms BAD', () => {
+    expect(simulateSingleNote('____', 16_667).judge.pgreat).toBe(1);
+    expect(simulateSingleNote('____', 16_668).judge.great).toBe(1);
+    expect(simulateSingleNote('____', 33_333).judge.great).toBe(1);
+    expect(simulateSingleNote('____', 33_334).judge.good).toBe(1);
+    expect(simulateSingleNote('____', 116_667).judge.good).toBe(1);
+    expect(simulateSingleNote('____', 116_668).judge.bad).toBe(1);
+    expect(simulateSingleNote('____', 250_000).judge.bad).toBe(1);
 
-    const beyondBad = simulateSingleNote('iidx', 250_001);
+    const beyondBad = simulateSingleNote('____', 250_001);
     expect(beyondBad.judge.emptyPoor).toBe(1);
     expect(beyondBad.judge.poor).toBe(1);
   });
@@ -209,7 +209,7 @@ describe('simulateReplay', () => {
   test('unplayed notes miss as POOR and drain the gauge', () => {
     const replay = makeReplay({ notes: [note(1_000_000), note(2_000_000)] });
     const results = simulateReplayRulesets(replay);
-    for (const ruleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
       const result = results[ruleset]!;
       expect(result.judge.poor, ruleset).toBe(2);
       expect(result.exScore, ruleset).toBe(0);
@@ -231,7 +231,7 @@ describe('simulateReplay', () => {
     expect(beatoraja.judge.poor).toBe(1);
   });
 
-  test('LR2 multi-BAD: one press BADs every note inside BAD but outside GOOD', () => {
+  test('LR2 re-judge chain continues through BADs inside reach', () => {
     const replay = makeReplay({
       notes: [note(1_000_000), note(1_050_000), note(1_100_000)],
       inputs: [down(850_000)], // dm = +150ms / +200ms / +250ms
@@ -320,13 +320,13 @@ describe('simulateReplay', () => {
     expect(lr2.noteCount).toBe(1);
   });
 
-  test('IIDX: a BAD on a charge-note head skips the tail judgment', () => {
+  test('That-Which-Must-Not-Be-Named: a BAD on a charge-note head skips the tail judgment', () => {
     const result = simulateReplay(
       makeReplay({
         notes: [note(1_000_000, { type: 'long', endTimeUs: 2_000_000 })],
         inputs: [down(800_000)], // +200ms: inside BAD, outside GOOD
       }),
-      { ruleset: 'iidx' },
+      { ruleset: '____' },
     );
     expect(result.judge.bad).toBe(1);
     expect(result.judge.poor).toBe(0); // no tail judgment at all
@@ -396,10 +396,10 @@ describe('ruleset helpers', () => {
     expect(resolveBeatorajaDefaultTotal(2000)).toBeCloseTo((7.605 * 2000) / (0.01 * 2000 + 6.5), 9); // ≈ 573.96
   });
 
-  test('resolveIIDXGaugeUnit rounds to the nearest 0.02 %', () => {
-    expect(resolveIIDXGaugeUnit(100)).toBeCloseTo(2.6, 9); // 260 / 100
-    expect(resolveIIDXGaugeUnit(338)).toBeCloseTo(0.76, 9); // 260 / 338 ≈ 0.769 → 0.76
-    expect(resolveIIDXGaugeUnit(1000)).toBeCloseTo(0.46, 9); // 760.5 / 1650 ≈ 0.461 → 0.46
+  test('resolveThat-Which-Must-Not-Be-NamedGaugeUnit rounds to the nearest 0.02 %', () => {
+    expect(resolve____GaugeUnit(100)).toBeCloseTo(2.6, 9); // 260 / 100
+    expect(resolve____GaugeUnit(338)).toBeCloseTo(0.76, 9); // 260 / 338 ≈ 0.769 → 0.76
+    expect(resolve____GaugeUnit(1000)).toBeCloseTo(0.46, 9); // 760.5 / 1650 ≈ 0.461 → 0.46
   });
 
   test('LR2 hard damage / beatoraja hard recovery multipliers', () => {

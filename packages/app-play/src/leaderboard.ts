@@ -14,6 +14,7 @@ import {
   resolveCourseStageChartFingerprints,
   type BeMusicCourseReplay,
   type BeMusicReplay,
+  type CourseReplayIneligibleReason,
   type RulesetId,
 } from '@be-music/player-engine/replay';
 
@@ -26,23 +27,24 @@ export interface LeaderboardSubmission {
 
 export type SubmissionPreparation =
   | { ok: true; submission: LeaderboardSubmission }
-  | { ok: false; reason: 'not-rankable' | 'tempo' | 'missing-fingerprint' | 'fingerprint-mismatch' };
+  | { ok: false; reason: 'auto-play' | 'missing-fingerprint' | 'fingerprint-mismatch' };
 
 /**
  * Builds the submission of a finished play from its replay and the song's chart as loaded. The play document is
  * rebuilt the way the recorder fingerprinted the play (the source chart resolved with the log's `#RANDOM` / `#SWITCH`
  * draws, the chart path as the lane-mode input), then checked against the log's play fingerprint, so a play the server would
- * reject as a mismatch is never sent. Auto plays, replays of aborted runs and other unrankable logs are skipped here.
+ * reject as a mismatch is never sent. Only auto plays and logs without fingerprints are skipped here: a play the
+ * Leaderboard does not rank (another tempo) is still sent, and the Leaderboard decides what it shows.
  */
 export function prepareLeaderboardSubmission(
   replay: BeMusicReplay,
   sourceChart: BeMusicJSON,
   chartPath: string | undefined,
 ): SubmissionPreparation {
-  // The server applies the same check (`checkReplayEligibility`); assists are allowed and ranked apart there.
+  // The server applies the same check (`checkReplayEligibility`); it ranks assists apart and stores unranked plays.
   const eligibility = checkReplayEligibility(replay);
   if (!eligibility.eligible) {
-    return { ok: false, reason: skippedReason(eligibility.reason) };
+    return { ok: false, reason: eligibility.reason };
   }
   const documents = rebuildDocuments(replay, sourceChart, chartPath, eligibility);
   if (documents === undefined) return { ok: false, reason: 'fingerprint-mismatch' };
@@ -80,13 +82,20 @@ export interface LeaderboardRulesetResult {
   exScore: number;
   clearLamp: number;
   missCount: number;
+  /** 0 for a play the Leaderboard stores but does not rank. */
   rank: number;
   players: number;
   improved: { exScore: boolean; lamp: boolean; missCount: boolean };
 }
 
 export type LeaderboardSubmitResult =
-  | { status: 'accepted' | 'duplicate'; scoreId: string; results: LeaderboardRulesetResult[] }
+  | {
+      status: 'accepted' | 'duplicate';
+      scoreId: string;
+      results: LeaderboardRulesetResult[];
+      /** Why the Leaderboard stored the play without ranking it (`tempo`, `course-stage`, ...). */
+      unranked?: string;
+    }
   | { status: 'failed'; httpStatus: number; error: string };
 
 export interface LeaderboardClientOptions {
@@ -111,7 +120,7 @@ export async function submitToLeaderboard(
   }));
   if (!(response instanceof Response)) return response;
   if (response.status === 201 || response.status === 200) {
-    const body = (await response.json()) as { scoreId: string; results: LeaderboardRulesetResult[] };
+    const body = (await response.json()) as { scoreId: string; results: LeaderboardRulesetResult[]; unranked?: string };
     return { status: response.status === 201 ? 'accepted' : 'duplicate', ...body };
   }
   return { status: 'failed', httpStatus: response.status, error: (await readError(response)) ?? 'unknown' };
@@ -163,7 +172,7 @@ export interface CourseLeaderboardSubmission {
 
 export type CourseSubmissionPreparation =
   | { ok: true; submission: CourseLeaderboardSubmission }
-  | { ok: false; reason: 'not-rankable' | 'tempo' | 'unreleased' | 'missing-fingerprint' | 'fingerprint-mismatch' };
+  | { ok: false; reason: CourseReplayIneligibleReason | 'fingerprint-mismatch' };
 
 /**
  * Builds the submission of a finished course run: the course replay, with the fingerprint documents of each played
@@ -172,7 +181,8 @@ export type CourseSubmissionPreparation =
  * reached (the server checks the notes they count as BP), and every stage of a NONSTOP run (the server stitches them
  * again; a NONSTOP run sends no documents). Each such chart must hash to the chart fingerprint the log names for its
  * stage. Runs the server would refuse outright (auto play, an aborted stage, a stage chart without its fingerprint) are
- * skipped here (`checkCourseReplayEligibility`).
+ * skipped here (`checkCourseReplayEligibility`); a run the Leaderboard stores without ranking (another tempo, an
+ * unreleased course) is sent.
  */
 export function prepareCourseLeaderboardSubmission(
   courseReplay: BeMusicCourseReplay,
@@ -180,10 +190,7 @@ export function prepareCourseLeaderboardSubmission(
 ): CourseSubmissionPreparation {
   const eligibility = checkCourseReplayEligibility(courseReplay);
   if (!eligibility.eligible) {
-    return {
-      ok: false,
-      reason: eligibility.reason === 'unreleased' ? 'unreleased' : skippedReason(eligibility.reason),
-    };
+    return { ok: false, reason: eligibility.reason };
   }
   const nonstop = eligibility.nonstop !== undefined;
   const stages: CourseLeaderboardSubmission['stages'] = [];
@@ -235,7 +242,13 @@ export interface CourseLeaderboardRulesetResult extends LeaderboardRulesetResult
 }
 
 export type CourseLeaderboardSubmitResult =
-  | { status: 'accepted' | 'duplicate'; courseScoreId: string; results: CourseLeaderboardRulesetResult[] }
+  | {
+      status: 'accepted' | 'duplicate';
+      courseScoreId: string;
+      results: CourseLeaderboardRulesetResult[];
+      /** Why the Leaderboard stored the run without ranking it (`tempo`, `unreleased`). */
+      unranked?: string;
+    }
   | { status: 'failed'; httpStatus: number; error: string };
 
 /**
@@ -257,7 +270,11 @@ export async function submitCourseToLeaderboard(
   }));
   if (!(response instanceof Response)) return response;
   if (response.status === 201 || response.status === 200) {
-    const body = (await response.json()) as { courseScoreId: string; results: CourseLeaderboardRulesetResult[] };
+    const body = (await response.json()) as {
+      courseScoreId: string;
+      results: CourseLeaderboardRulesetResult[];
+      unranked?: string;
+    };
     return { status: response.status === 201 ? 'accepted' : 'duplicate', ...body };
   }
   return { status: 'failed', httpStatus: response.status, error: (await readError(response)) ?? 'unknown' };
@@ -267,7 +284,12 @@ export async function submitCourseToLeaderboard(
 export function describeCourseLeaderboardResult(result: CourseLeaderboardSubmitResult, playedRuleset: string): string {
   if (result.status === 'failed') return `Leaderboard: course not submitted (${result.error})`;
   const summary = describeLeaderboardResult(
-    { status: result.status, scoreId: result.courseScoreId, results: result.results },
+    {
+      status: result.status,
+      scoreId: result.courseScoreId,
+      results: result.results,
+      ...(result.unranked !== undefined ? { unranked: result.unranked } : {}),
+    },
     playedRuleset,
   );
   return summary.replace(/^Leaderboard /, 'Leaderboard course ');
@@ -281,6 +303,9 @@ export function describeLeaderboardResult(result: LeaderboardSubmitResult, playe
   if (result.status === 'failed') {
     return `Leaderboard: not submitted (${result.error})`;
   }
+  const again = result.status === 'duplicate' ? ' (already submitted)' : '';
+  if (result.unranked !== undefined)
+    return `Leaderboard: stored, not ranked (${describeUnranked(result.unranked)})${again}`;
   const mine = result.results.find((entry) => entry.ruleset === playedRuleset) ?? result.results[0];
   if (mine === undefined) return 'Leaderboard: submitted';
   const improved = [
@@ -289,22 +314,28 @@ export function describeLeaderboardResult(result: LeaderboardSubmitResult, playe
     mine.improved.missCount ? 'BP' : undefined,
   ].filter((part) => part !== undefined);
   const best = result.status === 'accepted' && improved.length > 0 ? ` · new best ${improved.join(' / ')}` : '';
-  const again = result.status === 'duplicate' ? ' (already submitted)' : '';
   return `Leaderboard ${mine.ruleset}: #${mine.rank} / ${mine.players} · EX ${mine.exScore}${best}${again}`;
 }
 
-/** The skip reason of a play or course run the server would refuse with `reason`. */
-function skippedReason(reason: string): 'not-rankable' | 'tempo' | 'missing-fingerprint' {
-  return reason === 'missing-fingerprint' || reason === 'tempo' ? reason : 'not-rankable';
+/** Why the Leaderboard stored a play without ranking it, for the status line. */
+function describeUnranked(reason: string): string {
+  switch (reason) {
+    case 'tempo':
+      return 'a play at another tempo is practice';
+    case 'course-stage':
+      return 'a course stage ranks with its course';
+    case 'unreleased':
+      return 'made and random courses are not ranked';
+    default:
+      return reason;
+  }
 }
 
 /** Why a play was not sent, for the status line (a skipped play must never pass silently). */
 export function describeSkippedSubmission(reason: Exclude<SubmissionPreparation, { ok: true }>['reason']): string {
   switch (reason) {
-    case 'not-rankable':
-      return 'Leaderboard: not submitted (auto play, aborted runs and course stages are not ranked)';
-    case 'tempo':
-      return 'Leaderboard: not submitted (a play at another tempo is practice and is not ranked)';
+    case 'auto-play':
+      return 'Leaderboard: not submitted (an auto play is not sent)';
     case 'missing-fingerprint':
       return 'Leaderboard: not submitted (this replay has no chart fingerprint)';
     case 'fingerprint-mismatch':
@@ -317,12 +348,12 @@ export function describeSkippedCourseSubmission(
   reason: Exclude<CourseSubmissionPreparation, { ok: true }>['reason'],
 ): string {
   switch (reason) {
-    case 'not-rankable':
-      return 'Leaderboard: course not submitted (auto play and aborted stages are not ranked)';
-    case 'tempo':
-      return 'Leaderboard: course not submitted (a run at another tempo is practice and is not ranked)';
-    case 'unreleased':
-      return 'Leaderboard: course not submitted (this course is unranked: made and random courses are not ranked)';
+    case 'auto-play':
+      return 'Leaderboard: course not submitted (an auto play is not sent)';
+    case 'aborted':
+      return 'Leaderboard: course not submitted (a stage before the last was given up)';
+    case 'not-a-course-run':
+      return 'Leaderboard: course not submitted (the stages do not make one run)';
     case 'missing-fingerprint':
       return 'Leaderboard: course not submitted (a stage chart has no fingerprint)';
     case 'fingerprint-mismatch':

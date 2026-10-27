@@ -52,20 +52,17 @@ describe('prepareLeaderboardSubmission', () => {
     expect(prepared.ok).toBe(true);
   });
 
-  test('skips plays the server would not rank', () => {
+  test('sends a play given up with ESC, which the server ranks as a failed play', () => {
+    expect(prepareLeaderboardSubmission(recordedReplay({ aborted: true }), SOURCE, CHART_PATH).ok).toBe(true);
+  });
+
+  test('skips auto plays and logs without fingerprints, and sends a play the Leaderboard will not rank', () => {
     expect(prepareLeaderboardSubmission(recordedReplay({ mode: 'auto' }), SOURCE, CHART_PATH)).toEqual({
       ok: false,
-      reason: 'not-rankable',
+      reason: 'auto-play',
     });
-    expect(prepareLeaderboardSubmission(recordedReplay({ aborted: true }), SOURCE, CHART_PATH)).toEqual({
-      ok: false,
-      reason: 'not-rankable',
-    });
-    // A play at another tempo is practice: skipped, with its own reason for the status line.
-    expect(prepareLeaderboardSubmission(recordedReplay({ tempo: 0.8 }), SOURCE, CHART_PATH)).toEqual({
-      ok: false,
-      reason: 'tempo',
-    });
+    // A play at another tempo is practice: sent all the same, and the Leaderboard stores it unranked.
+    expect(prepareLeaderboardSubmission(recordedReplay({ tempo: 0.8 }), SOURCE, CHART_PATH).ok).toBe(true);
     const withoutFingerprint = recordedReplay();
     delete withoutFingerprint.chart.playFingerprint;
     expect(prepareLeaderboardSubmission(withoutFingerprint, SOURCE, CHART_PATH)).toEqual({
@@ -179,6 +176,10 @@ describe('describeLeaderboardResult', () => {
     expect(describeLeaderboardResult({ status: 'duplicate', scoreId: 's', results: [result] }, 'lr2')).toBe(
       'Leaderboard lr2: #4 / 20 · EX 1234 (already submitted)',
     );
+    // A play the Leaderboard stores without ranking says so instead of a rank.
+    expect(
+      describeLeaderboardResult({ status: 'accepted', scoreId: 's', results: [result], unranked: 'tempo' }, 'lr2'),
+    ).toBe('Leaderboard: stored, not ranked (a play at another tempo is practice)');
     expect(describeLeaderboardResult({ status: 'failed', httpStatus: 429, error: 'rate-limited' }, 'lr2')).toBe(
       'Leaderboard: not submitted (rate-limited)',
     );
@@ -187,10 +188,7 @@ describe('describeLeaderboardResult', () => {
 
 describe('describeSkippedSubmission', () => {
   test('names why a play was not sent', () => {
-    expect(describeSkippedSubmission('not-rankable')).toBe(
-      'Leaderboard: not submitted (auto play, aborted runs and course stages are not ranked)',
-    );
-    expect(describeSkippedSubmission('tempo')).toMatch(/another tempo is practice/);
+    expect(describeSkippedSubmission('auto-play')).toBe('Leaderboard: not submitted (an auto play is not sent)');
     expect(describeSkippedSubmission('missing-fingerprint')).toMatch(/no chart fingerprint/);
     expect(describeSkippedSubmission('fingerprint-mismatch')).toMatch(/does not match/);
   });
@@ -245,7 +243,7 @@ describe('course submissions', () => {
     });
     expect(prepareCourseLeaderboardSubmission(courseLog({ mode: 'auto' }), stageCharts)).toEqual({
       ok: false,
-      reason: 'not-rankable',
+      reason: 'auto-play',
     });
     expect(prepareCourseLeaderboardSubmission(courseLog({}, false), stageCharts)).toEqual({
       ok: false,
@@ -255,10 +253,10 @@ describe('course submissions', () => {
       ok: false,
       reason: 'fingerprint-mismatch',
     });
-    // A made or random course is unranked (`release: false`): skipped, and said so.
+    // A made or random course is unranked (`release: false`): sent all the same, and the Leaderboard stores it.
     const unranked = courseLog();
     unranked.course.release = false;
-    expect(prepareCourseLeaderboardSubmission(unranked, stageCharts)).toEqual({ ok: false, reason: 'unreleased' });
+    expect(prepareCourseLeaderboardSubmission(unranked, stageCharts).ok).toBe(true);
   });
 
   test('submitCourseToLeaderboard resends with every stage’s chart document when asked', async () => {
@@ -305,15 +303,18 @@ describe('course submissions', () => {
     expect(describeCourseLeaderboardResult(result, 'beatoraja')).toBe(
       'Leaderboard course beatoraja: #3 / 7 · EX 8 · new best EX',
     );
+    expect(describeCourseLeaderboardResult({ ...result, unranked: 'unreleased' } as typeof result, 'lr2')).toBe(
+      'Leaderboard: stored, not ranked (made and random courses are not ranked)',
+    );
     expect(describeCourseLeaderboardResult({ status: 'failed', httpStatus: 422, error: 'aborted' }, 'lr2')).toBe(
       'Leaderboard: course not submitted (aborted)',
     );
   });
 
   test('describeSkippedCourseSubmission names why a run was not sent', () => {
-    expect(describeSkippedCourseSubmission('not-rankable')).toMatch(/auto play and aborted stages/);
-    expect(describeSkippedCourseSubmission('tempo')).toMatch(/another tempo is practice/);
-    expect(describeSkippedCourseSubmission('unreleased')).toMatch(/this course is unranked/);
+    expect(describeSkippedCourseSubmission('auto-play')).toMatch(/auto play is not sent/);
+    expect(describeSkippedCourseSubmission('aborted')).toMatch(/given up/);
+    expect(describeSkippedCourseSubmission('not-a-course-run')).toMatch(/one run/);
     expect(describeSkippedCourseSubmission('missing-fingerprint')).toMatch(/no fingerprint/);
     expect(describeSkippedCourseSubmission('fingerprint-mismatch')).toMatch(/does not match/);
   });

@@ -1,4 +1,4 @@
 {
   "extends": "./tsconfig.typecheck.json",
-  "include": ["scripts/**/*.ts", "tests/**/*.ts", "vite.config.ts", "vite.package.config.ts"]
+  "include": ["scripts/**/*.ts", "test/**/*.ts", "vite.config.ts", "vite.package.config.ts"]
 }

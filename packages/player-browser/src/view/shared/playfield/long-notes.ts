@@ -1,8 +1,9 @@
+import { drawLabel } from '../../../stage/draw-label.ts';
 /** The long notes of the shared playfield: one long note's body and caps. */
 
 import { resolveLongNoteAlpha } from '../../../chart/note-draw-window.ts';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
-import { renderPhantomLongNote } from '../../../skins/phantom/playfield.ts';
+import { renderDefaultLongNote } from './default-playfield.ts';
 import type { PlayfieldLaneRect } from '../../types.ts';
 import type { PlayfieldContext, RuntimeNote } from './context.ts';
 
@@ -21,6 +22,7 @@ export function renderLongNote(
   yStart: number,
   yEnd: number,
   drawBottom: number,
+  visibilityAlpha = 1,
 ): void {
   const channel = note.channel;
   const state = ctx.play.longNotes.stateOf(channel, note.beat, note.judged);
@@ -38,7 +40,7 @@ export function renderLongNote(
     if (bodyCell.texture) {
       const sprite = ctx.noteLayerPool.acquireSprite();
       sprite.texture = bodyCell.texture;
-      sprite.label = `ln-body[lane=${laneIndex},ch=${channel}]`;
+      sprite.label = drawLabel(ctx, 'ln-body', laneIndex, channel);
       sprite.x = lane.x + (lane.w - bodyCell.width) / 2;
       // Shift the body up by one cell-height so the body's bottom edge aligns with the LN_START's bottom edge (=
       // judgement line at the head's just-timing). Without this, the body sticks out ~half a note below the line at
@@ -53,6 +55,7 @@ export function renderLongNote(
     const binding = ctx.skinBinding;
     if (binding) {
       binding.addLongNote({
+        ...(visibilityAlpha !== 1 ? { alpha: visibilityAlpha } : {}),
         kind,
         x: lane.x,
         w: lane.w,
@@ -64,8 +67,8 @@ export function renderLongNote(
       });
     } else {
       const graphic = ctx.noteLayerPool.acquireGraphics();
-      graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
-      renderPhantomLongNote({
+      graphic.label = drawLabel(ctx, 'ln-body-fallback', laneIndex, channel);
+      renderDefaultLongNote({
         graphics: graphic,
         kind,
         x: lane.x,
@@ -82,7 +85,7 @@ export function renderLongNote(
   if (endCell?.texture) {
     const sprite = ctx.noteLayerPool.acquireSprite();
     sprite.texture = endCell.texture;
-    sprite.label = `ln-end[lane=${laneIndex},ch=${channel}]`;
+    sprite.label = drawLabel(ctx, 'ln-end', laneIndex, channel);
     sprite.x = lane.x + (lane.w - endCell.width) / 2;
     sprite.y = yEnd - endCell.height;
     sprite.width = endCell.width;
@@ -96,7 +99,7 @@ export function renderLongNote(
     if (startCell?.texture) {
       const sprite = ctx.noteLayerPool.acquireSprite();
       sprite.texture = startCell.texture;
-      sprite.label = `ln-start[lane=${laneIndex},ch=${channel}]`;
+      sprite.label = drawLabel(ctx, 'ln-start', laneIndex, channel);
       sprite.x = lane.x + (lane.w - startCell.width) / 2;
       sprite.y = yStart - startCell.height;
       sprite.width = startCell.width;

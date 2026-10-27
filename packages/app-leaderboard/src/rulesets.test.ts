@@ -10,8 +10,8 @@ describe('rulesets', () => {
   });
 
   test('byRulesetOrder sorts into display order', () => {
-    const sorted = [{ ruleset: 'iidx' }, { ruleset: 'lr2' }, { ruleset: 'beatoraja' }].sort(byRulesetOrder);
-    expect(sorted.map((entry) => entry.ruleset)).toEqual(['lr2', 'beatoraja', 'iidx']);
+    const sorted = [{ ruleset: '____' }, { ruleset: 'lr2' }, { ruleset: 'beatoraja' }].sort(byRulesetOrder);
+    expect(sorted.map((entry) => entry.ruleset)).toEqual(['lr2', 'beatoraja', '____']);
   });
 });
 

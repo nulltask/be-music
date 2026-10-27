@@ -1,4 +1,4 @@
-import type { CourseDraft, NonstopConnection } from '@be-music/player-engine/course';
+import type { CourseDraft, LR2RandomMixSettings, NonstopConnection } from '@be-music/player-engine/course';
 import type { ClearLamp } from '@be-music/player-engine/ruleset';
 import {
   resolveCourseView,
@@ -25,6 +25,8 @@ import {
   resolveLR2CourseMakerButtonState,
   resolveLR2CourseMakerOps,
   resolveLR2CourseMakerText,
+  resolveLR2RandomMixButtonState,
+  resolveLR2RandomMixText,
   resolveLR2CourseNumber,
   resolveLR2CourseOps,
   resolveLR2CourseStageDifficultyOps,
@@ -49,6 +51,8 @@ export interface LR2CourseMakerInput {
   readonly defaultConnection: NonstopConnection;
   /** What the course name (text 170) reads while the name being made is empty. */
   readonly namePrompt?: string;
+  /** The RANDOM MIX settings (texts 190-196, buttons 260-266); absent from hosts without a RANDOM MIX bar. */
+  readonly randomMixSettings?: LR2RandomMixSettings;
 }
 
 /** What the LR2 select screen shows: the bar under the cursor, the player's options and records, the screen's state. */
@@ -200,6 +204,7 @@ function selectText(
     (textCourse !== undefined ? resolveLR2CourseText(st, textCourse) : undefined) ??
     (course !== undefined ? resolveLR2CourseConnectionText(st, course) : noCourseConnectionText(st)) ??
     (maker !== undefined ? resolveLR2CourseMakerText(st, maker.defaultConnection) : undefined) ??
+    (maker?.randomMixSettings !== undefined ? resolveLR2RandomMixText(st, maker.randomMixSettings) : undefined) ??
     resolveLR2OptionText(st, input.options, chart !== undefined ? resolveLR2KeyModeOp(chart) : undefined) ??
     (chart !== undefined ? resolveLR2ChartText(st, chart) : undefined)
   );
@@ -316,6 +321,9 @@ export function resolveLR2SelectState(input: LR2SelectInput): LR2SelectState {
       type === LR2_SLIDER.SELECT_POSITION ? input.listPosition : resolveLR2OptionSlider(type, input.options),
     button: (type) =>
       (maker !== undefined ? resolveLR2CourseMakerButtonState(type, course, maker.defaultConnection) : undefined) ??
+      (maker?.randomMixSettings !== undefined
+        ? resolveLR2RandomMixButtonState(type, maker.randomMixSettings)
+        : undefined) ??
       resolveLR2OptionButton(type, input.options),
   };
 }
@@ -329,6 +337,8 @@ export type LR2SelectButtonAction =
   | { readonly kind: 'panel'; readonly panel: number }
   /** Step a side's hi-speed; the button's `plusOnly` says which way. */
   | { readonly kind: 'hi-speed'; readonly side: PlaySide }
+  /** Step the judge timing by 1 ms within ±99 (`stepLR2JudgeTiming`), up or down by the half clicked. */
+  | { readonly kind: 'judge-timing' }
   /** Move a play option to its next choice. */
   | { readonly kind: 'cycle-option'; readonly option: LR2CycledOption }
   /** Set the difficulty filter. */
@@ -351,15 +361,18 @@ const CYCLE_BUTTONS: Readonly<Record<number, LR2CycledOption>> = {
   [LR2_BUTTON.EFFECT_1P]: 'hiddenSudden1P',
   [LR2_BUTTON.EFFECT_2P]: 'hiddenSudden2P',
   [LR2_BUTTON.FLIP]: 'dpFlip',
+  [LR2_BUTTON.BATTLE]: 'battleMode',
   [LR2_BUTTON.HS_FIX]: 'hsFix',
   [LR2_BUTTON.SCORE_GRAPH]: 'scoreGraph',
   [LR2_BUTTON.BGA]: 'bga',
   [LR2_BUTTON.BGA_SIZE]: 'bgaSize',
+  [LR2_BUTTON.JUDGE_AUTO_ADJUST]: 'judgeTimingAutoAdjust',
 };
 
 /**
- * What an LR2 select button does (`#SRC_BUTTON` `type`): toggle a panel (1-9), step a hi-speed (57 / 58), cycle a play
- * option (10-12, 40-46, 50, 51, 54, 55, 70, 72, 73), set the difficulty filter (91-96), or play, play with AUTOPLAY,
+ * What an LR2 select button does (`#SRC_BUTTON` `type`): toggle a panel (1-9), step a hi-speed (57 / 58) or the judge
+ * timing (74), cycle a play
+ * option (10-12, 40-46, 50, 51, 54, 55, 70, 72, 73, 75), set the difficulty filter (91-96), or play, play with AUTOPLAY,
  * show the text file, replay, or open the key config or skin select (15, 16, 17, 19, 13, 14). `undefined` for any other
  * button, the course maker's included (`resolveLR2CourseMakerAction`).
  */
@@ -367,6 +380,7 @@ export function resolveLR2SelectButton(type: number): LR2SelectButtonAction | un
   if (type >= LR2_BUTTON.PANEL1 && type <= LR2_BUTTON.PANEL9) return { kind: 'panel', panel: type };
   if (type === LR2_BUTTON.HISPEED_1P) return { kind: 'hi-speed', side: '1P' };
   if (type === LR2_BUTTON.HISPEED_2P) return { kind: 'hi-speed', side: '2P' };
+  if (type === LR2_BUTTON.JUDGE_TIMING) return { kind: 'judge-timing' };
   const option = CYCLE_BUTTONS[type];
   if (option !== undefined) return { kind: 'cycle-option', option };
   const difficulty = LR2_DIFFICULTY_FILTER_BUTTONS[type];
@@ -393,15 +407,16 @@ export function resolveLR2SelectButton(type: number): LR2SelectButtonAction | un
 function barBodyKind(entry: LibraryEntry | undefined): LR2BarBodyKind {
   if (entry?.kind === 'folder') return entry.folder.courses !== undefined ? 'courseFolder' : 'folder';
   if (entry?.kind !== 'course') return 'song';
-  // LR2's NEW COURSE bar (body 7, "make a course") and beatoraja's random course (body 9).
+  // LR2's NEW COURSE bar (body 7, "make a course"), its RANDOM MIX bar and beatoraja's random course (body 9). A drawn
+  // RANDOM MIX is an ordinary course (body 8), as LR2 lists it.
   if (entry.course.newCourse === true) return 'courseCreate';
-  if (entry.course.random !== undefined) return 'randomCourse';
+  if (entry.course.randomMix === true || entry.course.random !== undefined) return 'randomCourse';
   return 'course';
 }
 
 /**
  * The bar body a bar of the list draws (`#SRC_BAR_BODY`): a chart takes body 0, a folder 1, a folder of courses 6 (else
- * 1), a course 8, a NEW COURSE bar 7 and a random course 9 (each else 8). Anything the skin lacks falls back to the
+ * 1), a course 8, a NEW COURSE bar 7 and a RANDOM MIX bar or random course 9 (each else 8). Anything the skin lacks falls back to the
  * chart body, then the first body. A slot with no bar (past either end of the list) still gets a body, as LR2's rail
  * draws past the end of the list.
  */

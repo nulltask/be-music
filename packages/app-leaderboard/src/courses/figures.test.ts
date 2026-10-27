@@ -9,6 +9,21 @@ const TROPHIES = [
 ];
 
 describe('toCourseStageFigures', () => {
+  test('mine POORs do not hide notes that were never judged', () => {
+    const result: ReplayRulesetResult = {
+      ruleset: 'lr2/0',
+      judge: { pgreat: 8, great: 0, good: 0, bad: 0, poor: 2, emptyPoor: 0 },
+      minePoor: 2,
+      fast: 0,
+      slow: 0,
+      exScore: 16,
+      noteCount: 10,
+      maxCombo: 8,
+      gauge: { type: 'GRADE', final: 0, cleared: false },
+    };
+    expect(toCourseStageFigures(result).missCount).toBe(4);
+  });
+
   test('keeps the stage’s figures, with BP counting the notes a failed stage never judged', () => {
     const result: ReplayRulesetResult = {
       ruleset: 'lr2/0',

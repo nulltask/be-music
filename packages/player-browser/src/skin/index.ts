@@ -3,7 +3,7 @@
  * `SkinFamily` registry, the LR2 and beatoraja theme loaders (with their audio, fonts, textures and the beatoraja scene
  * kit), the default family with the be-music skin registry, and the built-in be-music skins. Pixi-bound texture / font /
  * rendering helpers under `skin/lr2/*` are mostly package-internal (they back the family views); the only one exported
- * here is `loadTextureFromBytes`, which the demo needs to decode per-song STAGEFILE / BACKBMP / BANNER bitmaps.
+ * here is `loadTextureFromBytes`, which the player needs to decode per-song STAGEFILE / BACKBMP / BANNER bitmaps.
  *
  * The be-music skin contract itself (`BeMusicSkin`, its frames and settings) is `@be-music/player-skin-sdk`'s, and isn't
  * re-exported here.
@@ -43,10 +43,9 @@ export * from './default/family.ts';
 export * from './be-music/index.ts';
 
 // The built-in be-music skins, drawn when neither an LR2 nor a beatoraja theme is loaded, or when a loaded theme doesn't
-// cover the scene or the chart's variant. `BUILT_IN_BE_MUSIC_SKINS` is the default set, in picker order; `latticeSkin`
-// is bundled but added to a registry on request.
+// cover the scene or the chart's variant. `BUILT_IN_BE_MUSIC_SKINS` is the default set, in picker order.
 export { BUILT_IN_BE_MUSIC_SKINS } from '../skins/built-in.ts';
-export { latticeSkin } from '../skins/lattice/index.ts';
-export { phantomSkin } from '../skins/phantom/index.ts';
 export { plainSkin } from '../skins/plain/index.ts';
 export { synesthesiaSkin } from '../skins/synesthesia/index.ts';
+
+export { nativeSkin } from '../skins/native/index.ts';

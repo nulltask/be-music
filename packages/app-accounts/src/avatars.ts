@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { Database } from './db/client.ts';
 import { profile } from './schema.ts';
-import { sha256Hex } from './hash.ts';
+import { sha256HexAsync as sha256Hex } from '@be-music/shared-utils/hash';
 
 /**
  * Player icons. A player may upload one (the clients shrink it to a 256 px square first); without one, an icon is

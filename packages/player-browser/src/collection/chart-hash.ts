@@ -1,3 +1,4 @@
+import { sha256HexAsync } from '@be-music/shared-utils/hash';
 import { normalizePath } from '@be-music/shared-utils/core';
 import { loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import { md5HexOfBytes } from './md5.ts';
@@ -8,12 +9,7 @@ import type { BrowserAssetSource } from './types.ts';
  * `chart.sha256` at record time) and the replay drop matching (hashing loaded charts for comparison).
  */
 export async function computeSHA256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource);
-  let hex = '';
-  for (const byte of new Uint8Array(digest)) {
-    hex += byte.toString(16).padStart(2, '0');
-  }
-  return hex;
+  return sha256HexAsync(bytes);
 }
 
 /**

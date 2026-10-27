@@ -1,8 +1,8 @@
 import { DEFAULT_HIGH_SPEED, MAX_HIGH_SPEED, MIN_HIGH_SPEED } from '@be-music/player-engine/signals';
 import { clamp } from '@be-music/shared-utils/core';
 
-const IIDX_MEASURE_BEATS = 4;
-const IIDX_MEASURE_ROWS_AT_HS1 = 16;
+const _____MEASURE_BEATS = 4;
+const _____MEASURE_ROWS_AT_HS1 = 16;
 const MIN_SCROLL_WINDOW_BEATS = 0.25;
 const MIN_GRID_ROWS = 4;
 
@@ -16,8 +16,8 @@ export function normalizeHighSpeed(value: number): number {
 export function resolveVisibleBeatsForTUIGrid(rowCount: number, highSpeed: number): number {
   const safeRows = Number.isFinite(rowCount) ? Math.max(MIN_GRID_ROWS, Math.floor(rowCount)) : MIN_GRID_ROWS;
   const safeHighSpeed = normalizeHighSpeed(highSpeed);
-  const visibleMeasures = safeRows / (IIDX_MEASURE_ROWS_AT_HS1 * safeHighSpeed);
-  return Math.max(MIN_SCROLL_WINDOW_BEATS, visibleMeasures * IIDX_MEASURE_BEATS);
+  const visibleMeasures = safeRows / (_____MEASURE_ROWS_AT_HS1 * safeHighSpeed);
+  return Math.max(MIN_SCROLL_WINDOW_BEATS, visibleMeasures * _____MEASURE_BEATS);
 }
 
 export function resolveAnimatedHighSpeedValue(

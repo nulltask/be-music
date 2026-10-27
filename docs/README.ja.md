@@ -4,7 +4,7 @@
 
 このディレクトリは、`be-music` リポジトリで使う仕様を Markdown でまとめたものです。
 
-- [アーキテクチャ: 譜面の層、エンジン、パッケージの層](architecture.ja.md)
+- [アーキテクチャ: 譜面のレイヤー、エンジン、パッケージのレイヤー](architecture.ja.md)
 - [設計判断の記録](adr/README.ja.md)
 - [BMS 実装仕様](bms-spec.ja.md)
 - [bmson 実装仕様](bmson-spec.ja.md)
@@ -25,6 +25,9 @@
 - [beatoraja skin 実装メモ](beatoraja-skin.ja.md)
 - [be-music スキンの作り方](be-music-skin.ja.md)
 - [BMS/bmson 中間表現 (`@be-music/chart-source`) 実装仕様](json-spec.ja.md)
+- [パッケージの命名と責務](./packages.ja.md)
+- [共有ユーティリティ](./shared-utils.ja.md)
+- [再利用可能な Player UI・React / Vue 連携](../packages/player-ui/README.ja.md)
 - [用語集](glossary.ja.md)
 
 補足:
@@ -32,7 +35,9 @@
 - 公式仕様そのものではなく、**このリポジトリの実装がどう解釈するか**を優先して記述しています。
 - 公式仕様と齟齬が出る場合は、まず実装方針を決めてからこのドキュメントを更新してください。
 - これらの文書は現在の実装に集中させます。過去の判断は pull request、commit message、changelog に残してください。
-- `@be-music/chart-source` は pure IR（Source 層）、`@be-music/chart-model` は beat 解決やイベント順序などの譜面意味論を担当します。プレイヤー側のすべてのパッケージが読む Resolved 層へ変える唯一の関数 `resolveChart` も `@be-music/chart-model` にあります（[アーキテクチャ](architecture.ja.md) を参照）。
+- `@be-music/chart-source` は pure IR（Source レイヤー）、`@be-music/chart-model` は beat 解決やイベント順序などの譜面意味論を担当します。プレイヤー側のすべてのパッケージが読む Resolved レイヤーへ変える唯一の関数 `resolveChart` も `@be-music/chart-model` にあります（[アーキテクチャ](architecture.ja.md) を参照）。
 - `@be-music/player-engine` は共有の規則と engine の package です。terminal 固有の挙動は `@be-music/player-terminal` と [Terminal player 実装メモ](player-tui.ja.md)、browser 固有の挙動は `@be-music/player-browser` と [Browser player 実装メモ](player-web.ja.md) に置きます。
 - `@be-music/player-scene-model` は、スキンの種類によらず各画面が何を見せ、どう振る舞うかを持ちます（[シーンモデル](scene-model.ja.md)）。`@be-music/player-browser` ではシーンセッションがそれを動かし、ファミリービューが描きます。
 - `@be-music/skin-lr2` と `@be-music/skin-beatoraja` は skin parsing を renderer 非依存に保ちます。browser PixiJS rendering は `@be-music/player-browser` 側に記述します。
+
+- [ブラウザ Worker のベンチマーク（2026-10-21）](./benchmarks/browser-workers-2026-10-21.ja.md)

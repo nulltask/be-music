@@ -35,9 +35,12 @@ describe('resolveBeatorajaPlayNumber — hi-speed and covers', () => {
   it('reads the lane cover and LIFT in per mille, the lane cover of the lane above the LIFT', () => {
     // IntegerPropertyFactory: (int) (lanecover * 1000) and (int) (lift * 1000).
     const numbers = input({ cover: cover({ sudden: 0.25, suddenOn: true, lift: 0.104 }) });
-    // 0.25 of the whole lane is 0.25 / 0.896 = 0.2790... of the lane above the LIFT.
-    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, numbers)).toBe(279);
+    // SUDDEN+ is kept as beatoraja keeps it, of the lane above the LIFT.
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, numbers)).toBe(250);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LIFT1, numbers)).toBe(104);
+    // An absolute cover's (the floating hi-speed's) 0.25 of the whole lane is 0.25 / 0.896 = 0.2790... above the LIFT.
+    const absolute = input({ cover: cover({ sudden: 0.25, suddenOn: true, lift: 0.104, absolute: true }) });
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, absolute)).toBe(279);
     // Ten 0.01 steps add up to 0.09999999999999999: on beatoraja's floats that reads 100, not the 99 a double gives.
     const noLift = input({ cover: cover({ sudden: 0.09999999999999999, suddenOn: true }) });
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, noLift)).toBe(100);
@@ -45,7 +48,10 @@ describe('resolveBeatorajaPlayNumber — hi-speed and covers', () => {
     // beatoraja reads the stored lane cover while it is off.
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, input({ cover: cover({ sudden: 0.25 }) }))).toBe(250);
     expect(
-      resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, input({ cover: cover({ sudden: 0.8, lift: 0.5 }) })),
+      resolveBeatorajaPlayNumber(
+        BEATORAJA_NUM.LANECOVER1,
+        input({ cover: cover({ sudden: 0.8, lift: 0.5, absolute: true }) }),
+      ),
     ).toBe(1000);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.LANECOVER1, input())).toBe(0);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.HIDDEN1, numbers)).toBe(0);
@@ -247,4 +253,24 @@ describe('beatorajaBPMAt', () => {
       ),
     ).toBe(150);
   });
+});
+
+it('reports the calibration value and the BPM at the adjusted display time', () => {
+  const numbers = input({
+    judgeTimingMs: 100,
+    clock: { currentSeconds: 1.95, totalSeconds: 4 },
+    chart: {
+      bpm: 120,
+      minBPM: 120,
+      maxBPM: 240,
+      bpmSegments: [
+        { timeMs: 0, bpm: 120 },
+        { timeMs: 2000, bpm: 240 },
+      ],
+    },
+  });
+  expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.JUDGETIMING, numbers)).toBe(100);
+  expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.NOWBPM, numbers)).toBe(240);
+  expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.NOWBPM, { ...numbers, judgeTimingMs: 0 })).toBe(120);
+  expect(numbers.clock?.currentSeconds).toBe(1.95);
 });

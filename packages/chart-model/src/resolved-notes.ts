@@ -22,7 +22,7 @@ export interface ResolvedNote {
   readonly endSeconds?: number;
   /** `ln` only: the long-note mode (bmson per-note `t` > `info.ln_type` > `#LNMODE` > LN). */
   readonly lnMode?: LongNoteMode;
-  /** `ln` only: the note sits on a FREE ZONE column (`17` / `27` in the IIDX families), which has a fixed one-beat tail. */
+  /** `ln` only: the note sits on a FREE ZONE column (`17` / `27` in the That-Which-Must-Not-Be-Named families), which has a fixed one-beat tail. */
   readonly freeZone?: true;
   /** The keysound slot (the object value normalized under the chart's `#BASE`). For a mine, its object value. */
   readonly sampleKey: string;
@@ -106,8 +106,10 @@ interface MutableNote {
 export function resolveJudgedNotes(context: ResolvedNoteContext): ResolvedNoteLists {
   const { notes, shadowed } = resolveMutableJudgedNotes(context);
   return {
-    notes: notes.map((note) => freezeJudgedNote(note, context.idBase)),
-    shadowedNotes: shadowed.map((note) => freezeJudgedNote(note, context.idBase)),
+    notes: notes.map((note) => freezeJudgedNote(note, context.idBase, context.json.sourceFormat === 'bmson')),
+    shadowedNotes: shadowed.map((note) =>
+      freezeJudgedNote(note, context.idBase, context.json.sourceFormat === 'bmson'),
+    ),
   };
 }
 
@@ -175,7 +177,7 @@ export function resolveMineNotes(context: ResolvedNoteContext): ResolvedNote[] {
       channel: `${side === 0x44 ? '1' : '2'}${channel[1]!}`,
       beat,
       seconds: context.timing.beatToSeconds(beat),
-      sampleKey: normalizeObjectKey(event.value, context.idBase),
+      sampleKey: normalizeObjectKey(event.value, context.idBase, context.json.sourceFormat === 'bmson'),
       damage: resolveLandmineDamage(event, context.idBase, context.json.sourceFormat),
       event,
     });
@@ -198,7 +200,7 @@ export function resolveInvisibleNotes(context: ResolvedNoteContext): ResolvedNot
       channel: `${side === 0x33 ? '1' : '2'}${channel[1]!}`,
       beat,
       seconds: context.timing.beatToSeconds(beat),
-      sampleKey: normalizeObjectKey(event.value, context.idBase),
+      sampleKey: normalizeObjectKey(event.value, context.idBase, context.json.sourceFormat === 'bmson'),
       event,
     });
   }
@@ -210,7 +212,7 @@ export function resolveInvisibleNotes(context: ResolvedNoteContext): ResolvedNot
  *
  * They're real key columns in POPN-9 (lane 7 of the nine-column bank) and in the 24-key keyboard modes (lane 7 of the
  * 24-column bank), where stamping the FREE ZONE one-beat tail would turn an ordinary tap into a phantom long note — and
- * would shadow a genuine `#LNOBJ` tail authored on the same channel. Every IIDX family keeps them as FREE ZONE.
+ * would shadow a genuine `#LNOBJ` tail authored on the same channel. Every That-Which-Must-Not-Be-Named family keeps them as FREE ZONE.
  */
 export function variantUsesFreeZone(variant: ChartPlayVariant): boolean {
   return variant !== '9' && variant !== '24' && variant !== '48';
@@ -239,8 +241,8 @@ function isLaneChannel(normalizedChannel: string): boolean {
   return (laneCode >= 0x31 && laneCode <= 0x39) || (laneCode >= 0x41 && laneCode <= 0x5a);
 }
 
-function freezeJudgedNote(note: MutableNote, idBase: 36 | 62): ResolvedNote {
-  const sampleKey = normalizeObjectKey(note.event.value, idBase);
+function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boolean): ResolvedNote {
+  const sampleKey = normalizeObjectKey(note.event.value, idBase, allowLongKeys);
   if (note.endBeat === undefined) {
     return { kind: 'tap', channel: note.channel, beat: note.beat, seconds: note.seconds, sampleKey, event: note.event };
   }

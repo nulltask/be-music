@@ -1,3 +1,4 @@
+import type { RandomDraws } from '@be-music/chart-model';
 import {
   prepareNonstopCourse,
   type NonstopPrepareFailure,
@@ -6,7 +7,7 @@ import {
 import type { LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import { createNonstopAssets, NONSTOP_CHART_PATH, type BrowserAssetSource } from '@be-music/player-browser/collection';
 
-/** A NONSTOP course stitched for the demo to play as one chart. */
+/** A NONSTOP course stitched for the player to play as one chart. */
 export interface PreparedNonstopPlay {
   /** The stitched chart as a song entry the gameplay scenes play (title: the course name). */
   chart: LibraryChart;
@@ -22,9 +23,10 @@ export type NonstopPlayFailure = 'missing-stage' | NonstopPrepareFailure;
 /**
  * Stitches a NONSTOP course from the collection with the shared pipeline (`prepareNonstopCourse` in
  * `@be-music/player-engine/course`, which the Leaderboard rebuilds runs with): each stage's `#RANDOM` drawn with `random`, the
- * course's long-note constraint applied, and the stages stitched with the course's connections. The demo's part is the
+ * course's long-note constraint applied, and the stages stitched with the course's connections. The player's part is the
  * asset plumbing (each stage's files found in its own source, `createNonstopAssets`) and the song entry the scenes play.
- * `hashesOf` gives each stage's file hashes, which its cut-out replay records.
+ * `hashesOf` gives each stage's file hashes, which its cut-out replay records. A recorded run is stitched again as it was
+ * played: with each stage's recorded draws (`stageDraws`) and the stitching rules it was built by (`stitch`).
  */
 export function prepareNonstopPlay(
   course: LibraryCourse,
@@ -33,6 +35,8 @@ export function prepareNonstopPlay(
     hashesOf?: (chartEntry: LibraryChart) => { sha256?: string; md5?: string } | undefined;
     placement?: 'intended' | 'lr2';
     random?: () => number;
+    stageDraws?: ReadonlyArray<RandomDraws | undefined>;
+    stitch?: number;
   },
 ): { ok: true; prepared: PreparedNonstopPlay } | { ok: false; reason: NonstopPlayFailure; stage?: number } {
   const chartEntries = course.stages.map((stage) => stage.chart);
@@ -46,11 +50,13 @@ export function prepareNonstopPlay(
   const stages = chartEntries as LibraryChart[];
   let assets: ReturnType<typeof createNonstopAssets> | undefined;
   const stitched = prepareNonstopCourse(
-    stages.map((chartEntry) => {
+    stages.map((chartEntry, index) => {
       const hashes = options.hashesOf?.(chartEntry);
+      const randomDraws = options.stageDraws?.[index];
       return {
         chart: chartEntry.chart,
         chartPath: chartEntry.chartPath,
+        ...(randomDraws !== undefined ? { randomDraws } : {}),
         facts: {
           title: chartEntry.title,
           ...(chartEntry.subtitle !== undefined ? { subtitle: chartEntry.subtitle } : {}),
@@ -64,6 +70,7 @@ export function prepareNonstopPlay(
       constraints: course.definition.constraints,
       connections: course.definition.connections ?? [],
       placement: options.placement ?? 'intended',
+      ...(options.stitch !== undefined ? { stitch: options.stitch } : {}),
       title: course.definition.name,
       ...(options.random !== undefined ? { random: options.random } : {}),
       assetPath: (stageCharts) => {
@@ -83,8 +90,8 @@ export function prepareNonstopPlay(
     ...stages[0]!,
     id: `nonstop:${course.id}`,
     sourceId: source.id,
-    chartPath: NONSTOP_CHART_PATH,
-    fileLabel: NONSTOP_CHART_PATH,
+    chartPath: stitched.course.chart.sourceFormat === 'bmson' ? 'nonstop.bmson' : NONSTOP_CHART_PATH,
+    fileLabel: stitched.course.chart.sourceFormat === 'bmson' ? 'nonstop.bmson' : NONSTOP_CHART_PATH,
     title: course.definition.name,
     totalNotes: stages.reduce((sum, stage) => sum + stage.totalNotes, 0),
     chart: stitched.course.chart,

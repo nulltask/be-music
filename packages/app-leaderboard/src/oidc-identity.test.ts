@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vite-plus/test';
 import { eq, count } from 'drizzle-orm';
-import { startTestBindings } from '../test/support.ts';
+import { startTestBindings } from './test-support/support.ts';
 import { syncIdentity, loadSession, oidcEnv } from './auth.ts';
 import { openDatabase } from './db/client.ts';
 import { oidcIdentity, profile, user } from './db/schema.ts';

@@ -28,4 +28,4 @@ D1 と R2 は `accounts`／`accounts-preview`、`leaderboard`／`leaderboard-pre
 
 Leaderboard の削除用マイグレーションは、旧セッション、認証チャレンジ、外部プロバイダーの認証情報、パスキーを削除し、ローカルのプレイヤー行から旧メール・画像情報を取り除きます。プレイヤー ID、プロフィール、ID 対応、スコアは維持します。テーブル定義は単独のローカル開発用に残しますが、本番の認証は Accounts の OIDC だけを使います。
 
-通知方式を使っていた環境では、Accounts の送信側 Binding と定期ハンドラーを除いた版を先にデプロイし、その後 Leaderboard の RPC エントリーポイントを削除します。Accounts の 0002_remove_profile_outbox.sql を適用し、不要な通知用テーブルを削除します。
+通知方式を使っていた環境では、Accounts の送信側 Binding と定期ハンドラーを除いたバージョンを先にデプロイし、その後 Leaderboard の RPC エントリーポイントを削除します。Accounts の 0002_remove_profile_outbox.sql を適用し、不要な通知用テーブルを削除します。

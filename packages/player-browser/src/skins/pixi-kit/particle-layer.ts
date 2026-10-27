@@ -3,8 +3,7 @@ import { Particle, ParticleContainer, Texture, type Container, type Graphics } f
 /**
  * Points and short segments drawn as GPU particles instead of `Graphics` geometry.
  *
- * The built-in skins scatter thousands of tiny marks every frame (Synesthesia's floor lattice, dust, and powder;
- * Lattice's needle field). As `Graphics` shapes each one is re-triangulated and re-uploaded per frame, which dominated
+ * The built-in skins scatter thousands of tiny marks every frame (Synesthesia's floor lattice, dust, and powder). As `Graphics` shapes each one is re-triangulated and re-uploaded per frame, which dominated
  * the skins' frame time and garbage. Here each mark is a {@link Particle} (a 1x1 white texture scaled, rotated, and
  * tinted), kept across frames and only rewritten — no geometry is rebuilt.
  *
@@ -44,8 +43,7 @@ export class PointLayer {
     particle.scaleX = size / this.texture.width;
     particle.scaleY = size / this.texture.height;
     particle.rotation = 0;
-    particle.tint = color;
-    particle.alpha = alpha;
+    this.setColor(particle, color, alpha);
   }
 
   /** Writes one straight segment from `(x0, y0)` to `(x1, y1)`, `width` px thick (a rotated thin quad). */
@@ -58,13 +56,20 @@ export class PointLayer {
     particle.scaleX = Math.hypot(dx, dy) / this.texture.width;
     particle.scaleY = width / this.texture.height;
     particle.rotation = Math.atan2(dy, dx);
-    particle.tint = color;
-    particle.alpha = alpha;
+    this.setColor(particle, color, alpha);
+  }
+
+  private setColor(particle: Particle, color: number, alpha: number): void {
+    // The renderer reads only `color`; writing it directly skips the `tint` setter's `Color` parse, which ran for every
+    // point every frame. The particle's `tint` / `alpha` getters are not kept in step (nothing here reads them).
+    const packed = packParticleColor(color, alpha);
+    if (particle.color !== packed) particle.color = packed;
   }
 
   private next(): Particle {
-    this.attach();
     if (!this.touched) {
+      // Once per frame, on its first point: the anchor does not move among its siblings between two points.
+      this.attach();
       this.touched = true;
       this.cursor = 0;
     }
@@ -98,14 +103,25 @@ export class PointLayer {
     const count = this.touched ? this.cursor : 0;
     if (count !== this.shown) {
       const children = this.container.particleChildren;
-      children.length = 0;
-      for (let index = 0; index < count; index += 1) children.push(this.particles[index]!);
+      // The active list is always a prefix of the pool. Preserve its backing storage and unchanged entries.
+      const previous = children.length;
+      children.length = count;
+      for (let index = previous; index < count; index += 1) children[index] = this.particles[index]!;
       this.container.update();
       this.shown = count;
     }
     this.touched = false;
     this.cursor = 0;
   }
+}
+
+/**
+ * A particle's packed `color` for an `0xRRGGBB` tint and an alpha, as Pixi's `Particle` computes it from `tint` and
+ * `alpha` (BGR in the low 24 bits, the alpha byte above, added as Pixi adds them).
+ */
+export function packParticleColor(rgb: number, alpha: number): number {
+  const bgr = ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
+  return bgr + (((Math.min(Math.max(alpha, 0), 1) * 255) | 0) << 24);
 }
 
 const LAYERS = new WeakMap<Graphics, Map<Texture, PointLayer>>();

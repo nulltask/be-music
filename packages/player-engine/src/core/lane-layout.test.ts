@@ -13,7 +13,7 @@ import {
 } from './lane-layout.ts';
 
 describe('resolveSideKeySlot', () => {
-  test('IIDX-side default — 11..15 → 1..5, 16/26 → 0 (scratch), 18/19 → 6/7', () => {
+  test('That-Which-Must-Not-Be-Named-side default — 11..15 → 1..5, 16/26 → 0 (scratch), 18/19 → 6/7', () => {
     expect(resolveSideKeySlot('11')).toBe(1);
     expect(resolveSideKeySlot('15')).toBe(5);
     expect(resolveSideKeySlot('16')).toBe(0);
@@ -121,14 +121,14 @@ describe('24 KEY / 48 KEY keyboard modes', () => {
     expect(resolveLaneOptionChannels('1P', '24')).toEqual(SP_KEYS);
     expect(resolveLaneOptionChannels('2P', '24')).toEqual([]);
     expect(resolveLaneOptionChannels('2P', '48')).toEqual(DP_KEYS);
-    // The IIDX families move the keys and leave the scratch alone.
+    // The That-Which-Must-Not-Be-Named families move the keys and leave the scratch alone.
     expect(resolveLaneOptionChannels('1P', '7')).toEqual(['11', '12', '13', '14', '15', '18', '19']);
     expect(resolveLaneOptionChannels('2P', '14')).toEqual(['21', '22', '23', '24', '25', '28', '29']);
     expect(resolveLaneOptionChannels('1P')).toEqual(['11', '12', '13', '14', '15', '18', '19']);
   });
 
   test('resolveLR2LaneIndex — keyboard modes have no LR2 lane rects, so every channel reports -1', () => {
-    // LR2 only defines the 20 IIDX rects; returning -1 sends these charts to the fallback playfield
+    // LR2 only defines the 20 That-Which-Must-Not-Be-Named rects; returning -1 sends these charts to the fallback playfield
     // instead of squeezing 26 lanes into the 7-key rect table.
     expect(resolveLR2LaneIndex('11', '24')).toBe(-1);
     expect(resolveLR2LaneIndex('1O', '24')).toBe(-1);
@@ -192,7 +192,7 @@ describe('24 KEY / 48 KEY keyboard modes', () => {
 });
 
 describe('resolveLR2LaneIndex', () => {
-  test('IIDX-side — 1P stays at 0..7, 2P offsets by 10', () => {
+  test('That-Which-Must-Not-Be-Named-side — 1P stays at 0..7, 2P offsets by 10', () => {
     expect(resolveLR2LaneIndex('11')).toBe(1);
     expect(resolveLR2LaneIndex('16')).toBe(0);
     expect(resolveLR2LaneIndex('19')).toBe(7);
@@ -213,11 +213,11 @@ describe('resolveLR2LaneIndex', () => {
 });
 
 describe('resolveLaneChannels', () => {
-  test('IIDX default — `17` and unsupported channels are filtered out', () => {
+  test('That-Which-Must-Not-Be-Named default — `17` and unsupported channels are filtered out', () => {
     const notes = [
       { channel: '11' },
       { channel: '15' },
-      { channel: '17' }, // FREE ZONE on IIDX-side — should NOT participate
+      { channel: '17' }, // FREE ZONE on ____-side — should NOT participate
       { channel: '18' },
       { channel: '19' },
     ];
@@ -301,7 +301,7 @@ describe('lane mode `playVariant` host override (PlayerOptions.playVariant)', ()
 });
 
 describe('resolveSideRelativeLaneIndex', () => {
-  test('IIDX — collapses to side-relative 0..7', () => {
+  test('That-Which-Must-Not-Be-Named — collapses to side-relative 0..7', () => {
     expect(resolveSideRelativeLaneIndex('11')).toBe(1);
     expect(resolveSideRelativeLaneIndex('21')).toBe(1);
     expect(resolveSideRelativeLaneIndex('19')).toBe(7);
@@ -418,5 +418,34 @@ describe('the play-mode table drives the lane layout', () => {
         expect(resolveWheelLaneDirection(lane.channel, layout.variant)).toBe(expected);
       }
     }
+  });
+});
+
+describe('complete lane-option domains', () => {
+  test.each([
+    ['5', '1P', ['11', '12', '13', '14', '15']],
+    ['5', '2P', []],
+    ['10', '2P', ['21', '22', '23', '24', '25']],
+    ['7', '2P', []],
+    ['9', '1P', ['11', '12', '13', '14', '15', '16', '17', '18', '19']],
+    ['9', '2P', []],
+  ] as const)('%s %s uses the complete mode key set', (variant, side, expected) => {
+    expect(resolveLaneOptionChannels(side, variant)).toEqual(expected);
+  });
+
+  test('PMS-STD right-bank encodings are keys of 1P, including on a sparse chart', () => {
+    const bindings = createLaneBindings(['11'], { playVariant: '9', chartExtension: '.pms' });
+    expect(resolveLaneOptionChannels('1P', '9', bindings)).toEqual([
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '22',
+      '23',
+      '24',
+      '25',
+    ]);
+    expect(resolveLaneOptionChannels('2P', '9', bindings)).toEqual([]);
   });
 });

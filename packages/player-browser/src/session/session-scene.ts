@@ -12,43 +12,13 @@
  */
 
 import type { Container } from 'pixi.js';
-import type { SceneIdentity, SceneKind } from '../host/family-kit.ts';
+import type { SceneIdentity } from '../host/family-kit.ts';
 import type { PixiScene, PixiSceneHost } from '../host/scene-host.ts';
 import type { FamilyView, IntentSink } from '../view/types.ts';
 
-/** A key going down or up, as plain data so a session reads it without the DOM. */
-export interface SessionKeyEvent {
-  readonly type: 'down' | 'up';
-  /** The physical key (`KeyboardEvent.code`, e.g. `'KeyZ'`, `'Escape'`). */
-  readonly code: string;
-  /** The key's value under the current layout (`KeyboardEvent.key`). */
-  readonly key: string;
-  /** An auto-repeat of a key held down. */
-  readonly repeat: boolean;
-  /** When the event happened (`KeyboardEvent.timeStamp`), on the host clock. */
-  readonly timeStamp: number;
-  readonly shiftKey: boolean;
-  readonly ctrlKey: boolean;
-  readonly altKey: boolean;
-  readonly metaKey: boolean;
-}
-
-/** A screen's behaviour, whatever family draws it: it reads keys and intents and answers each tick with a frame. */
-export interface SceneSession<Frame, Intent> {
-  readonly kind: SceneKind;
-  /** The scene is on the stage from `nowMs`: start (or restart) the session's timers and sounds. */
-  enter(nowMs: number): void;
-  /** The scene left the stage: stop the session's timers and sounds, keeping its state for the next `enter`. */
-  exit(): void;
-  /** The scene ends. */
-  dispose(): void;
-  /** A key went down or up; returns whether the session used it, so the browser does not act on it too. */
-  handleKey(event: SessionKeyEvent): boolean;
-  /** Something the player asked for on the view. */
-  dispatch(intent: Intent): void;
-  /** Advances the session to `nowMs` and returns what the view draws. */
-  frame(nowMs: number): Frame;
-}
+export type { SceneSession, SessionKeyEvent } from './contracts.ts';
+import type { SceneSession, SessionKeyEvent } from './contracts.ts';
+import { SceneController } from './controller.ts';
 
 /** Where the scene listens for keys: `window` in a browser. */
 export interface SessionKeyTarget {
@@ -100,11 +70,11 @@ export function toSessionKeyEvent(type: SessionKeyEvent['type'], event: Keyboard
 
 /** A `PixiScene` made of a scene session and the family view that draws it. See the module comment. */
 export class SessionScene<Frame, Intent> implements PixiScene {
-  public readonly identity: SceneIdentity;
+  private readonly sceneIdentity: { kind: SceneIdentity['kind']; family: SceneIdentity['family'] };
   /** The view's screenshot descriptor, when it has one. */
-  public readonly getStageInfo?: () => { container: Container; width: number; height: number };
-  private readonly session: SceneSession<Frame, Intent>;
-  private readonly view: FamilyView<Frame, Intent>;
+  private stageInfo: (() => { container: Container; width: number; height: number }) | undefined;
+  public readonly controller: SceneController<Frame, Intent>;
+  private view: FamilyView<Frame, Intent>;
   private readonly keyTarget: SessionKeyTarget | undefined;
   private readonly now: () => number;
   private state: SceneState = 'idle';
@@ -117,19 +87,30 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     view: FamilyView<Frame, Intent>,
     options: SessionSceneOptions = {},
   ) {
-    this.session = session;
+    this.controller = new SceneController(session);
     this.view = view;
     this.keyTarget = options.keyTarget ?? defaultKeyTarget();
     this.now = options.now ?? defaultNow;
-    this.identity = { kind: session.kind, family: view.family };
-    if (view.getStageInfo !== undefined) {
-      this.getStageInfo = () => view.getStageInfo!();
-    }
+    this.sceneIdentity = { kind: session.kind, family: view.family };
+    this.stageInfo = view.getStageInfo !== undefined ? () => view.getStageInfo!() : undefined;
+  }
+
+  public get identity(): SceneIdentity {
+    return this.sceneIdentity;
+  }
+
+  public get getStageInfo(): (() => { container: Container; width: number; height: number }) | undefined {
+    return this.stageInfo;
   }
 
   /** The view's scene graph, which the host puts on the stage. */
   public get root(): Container {
     return this.view.root;
+  }
+
+  /** Whether the view draws on the Pixi canvas; the host takes the canvas out while it does not. */
+  public get drawsOnCanvas(): boolean {
+    return this.view.drawsOnCanvas !== false;
   }
 
   /** Whether the scene is on the stage: attached, ticking and listening. */
@@ -159,7 +140,7 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     }
     this.state = 'entered';
     this.host = host;
-    this.session.enter(this.now());
+    this.controller.enter(this.now());
     this.keyTarget?.addEventListener('keydown', this.onKeyDown);
     this.keyTarget?.addEventListener('keyup', this.onKeyUp);
     host.app.ticker.add(this.tick);
@@ -181,7 +162,41 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     this.keyTarget?.removeEventListener('keydown', this.onKeyDown);
     this.keyTarget?.removeEventListener('keyup', this.onKeyUp);
     this.view.detach();
-    this.session.exit();
+    this.controller.exit();
+  }
+
+  /**
+   * Draws with `next` from here on. The session stays. While the scene is on the stage, the previous view is detached
+   * and `next` is attached in its place. The caller disposes the previous view once this resolves `true`.
+   */
+  public async replaceView(next: FamilyView<Frame, Intent>): Promise<boolean> {
+    if (this.state === 'disposed' || this.state === 'attaching') return false;
+    const previous = this.view;
+    if (previous === next) return true;
+    const host = this.host;
+    const entered = this.state === 'entered';
+    if (entered) {
+      previous.detach();
+      previous.root.parent?.removeChild(previous.root);
+    }
+    this.installView(next);
+    if (!entered || host === undefined) return true;
+    try {
+      await next.attach(host, this.emit);
+    } catch (error) {
+      next.detach();
+      this.installView(previous);
+      if (this.state === 'entered') {
+        await previous.attach(host, this.emit);
+        host.app.stage.addChild(previous.root);
+        host.syncCanvas(this.drawsOnCanvas);
+      }
+      throw error;
+    }
+    if (this.state !== 'entered' || this.view !== next) return false;
+    host.app.stage.addChild(next.root);
+    host.syncCanvas(this.drawsOnCanvas);
+    return true;
   }
 
   /** Ends the scene: leaves the stage if on it, then disposes the view and the session. */
@@ -191,7 +206,7 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     this.state = 'disposed';
     this.generation += 1;
     this.view.dispose();
-    this.session.dispose();
+    this.controller.dispose();
   }
 
   /**
@@ -200,15 +215,21 @@ export class SessionScene<Frame, Intent> implements PixiScene {
    */
   private readonly tick = (): void => {
     if (this.state !== 'entered') return;
-    const frame = this.session.frame(this.now());
-    if ((this.state as SceneState) !== 'entered') return;
+    const frame = this.controller.advance(this.now());
+    if ((this.state as SceneState) !== 'entered' || frame === undefined) return;
     this.view.draw(frame);
   };
+
+  private installView(view: FamilyView<Frame, Intent>): void {
+    this.view = view;
+    this.sceneIdentity.family = view.family;
+    this.stageInfo = view.getStageInfo !== undefined ? () => view.getStageInfo!() : undefined;
+  }
 
   /** The view's intents reach the session only while the scene is on the stage. */
   private readonly emit: IntentSink<Intent> = (intent) => {
     if (this.state !== 'entered') return;
-    this.session.dispatch(intent);
+    this.controller.dispatch(intent);
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -220,7 +241,11 @@ export class SessionScene<Frame, Intent> implements PixiScene {
   };
 
   private handleKey(type: SessionKeyEvent['type'], event: KeyboardEvent): void {
-    if (this.state !== 'entered' || isEditableKeyTarget(event.target)) return;
-    if (this.session.handleKey(toSessionKeyEvent(type, event))) event.preventDefault();
+    const target = event.composedPath?.()[0] ?? event.target;
+    if (this.state !== 'entered' || isEditableKeyTarget(target)) return;
+    // Native controls activate themselves on Enter/Space. Let their click generate exactly one intent.
+    const tag = (target as { tagName?: string } | null)?.tagName;
+    if ((tag === 'BUTTON' || tag === 'A') && (event.code === 'Enter' || event.code === 'Space')) return;
+    if (this.controller.handleKey(toSessionKeyEvent(type, event))) event.preventDefault();
   }
 }

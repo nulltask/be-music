@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { detectBeatorajaSkinFormat, loadBeatorajaSkin } from './skin.ts';
+import { detectBeatorajaSkinFormat, extractBeatorajaSkinHeader, loadBeatorajaSkin } from './skin.ts';
 import {
   BEATORAJA_SKIN_TYPE,
   buildDefaultSkinConfigOptions,
@@ -237,5 +237,20 @@ describe('loadBeatorajaSkin (Lua)', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.error.message);
     expect(result.skin?.name).toBe('from-parent');
+  });
+});
+
+describe('play timing header', () => {
+  it('retains the external input, loading and READY interval keys in the Lua header pass', () => {
+    expect(extractBeatorajaSkinHeader({ input: 250, loadstart: 100, loadend: 3500, playstart: 1000 })).toMatchObject({
+      input: 250,
+      loadstart: 100,
+      loadend: 3500,
+      playstart: 1000,
+    });
+    expect(extractBeatorajaSkinHeader({ loadstart: '100', loadend: null })).toMatchObject({
+      loadstart: undefined,
+      loadend: undefined,
+    });
   });
 });

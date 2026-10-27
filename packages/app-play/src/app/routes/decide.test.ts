@@ -16,7 +16,7 @@ import { describe, expect, test, vi } from 'vite-plus/test';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
-import type { DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { PlayerScene, PlayerWebElements } from '../../types.ts';
 import { SceneRouter } from '../scene-router.ts';
 import { DecideRoute, playingFamily, type DecideRouteDeps } from './decide.ts';
 
@@ -103,9 +103,9 @@ function fakeShell(): { readonly classes: Set<string>; readonly shell: HTMLDivEl
  * screen is drawn by `decideFamily` (`undefined`: no decide screen), the play by `playFamily`.
  */
 async function harness(options: { decideFamily?: Family | null; playFamily?: Family } = {}) {
-  const stage: (DemoScene | undefined)[] = [];
+  const stage: (PlayerScene | undefined)[] = [];
   const onInterrupt = vi.fn();
-  const router = new SceneRouter<DemoScene, PlayScene, SelectScene>({
+  const router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene) => {
         stage.push(scene);
@@ -151,7 +151,7 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
   const deps = {
     router,
     selectRoute,
-    elements: { shell } as Pick<PlayerWebDemoElements, 'shell'>,
+    elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },
     records: { resolveChartHashes: vi.fn<DecideRouteDeps['records']['resolveChartHashes']>(async () => HASHES) },
     familyKits: {
@@ -168,7 +168,7 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
       beatorajaThemeBGM: { decide: new Uint8Array([1, 2, 3]) } as DecideRouteDeps['beatoraja']['beatorajaThemeBGM'],
     },
     playOptions: new PlayOptionsService({ hiSpeed: 3 }),
-    guiState: { autoPlay: false, tempoPercent: 0, tempoPitchMode: 'pitch' as const },
+    guiState: { autoPlay: false, tempoEnabled: true, tempoPercent: 0, tempoPitchMode: 'pitch' as const },
     audio: {} as AudioService,
     beatorajaSkinOptions: { refreshBeatorajaPlaySkinOptions: vi.fn() },
     lastPlay: vi.fn<DecideRouteDeps['lastPlay']>(() => undefined),
@@ -446,5 +446,44 @@ describe('DecideRoute: the other families', () => {
     });
     expect(playingFamily({ identity: { kind: 'play', family: 'lr2' } } as PlayScene)).toEqual({});
     expect(playingFamily({ identity: { kind: 'play', family: 'built-in' } } as PlayScene)).toEqual({});
+  });
+});
+
+describe('DecideRoute continuation visibility', () => {
+  test('notifies only after the decide scene is shown', async () => {
+    const h = await harness();
+    const shown = vi.fn();
+    await h.route.showDecide(chartEntry('a'), {}, { start: vi.fn(async () => {}), shown });
+    expect(shown).toHaveBeenCalledOnce();
+  });
+  test('does not notify when the navigation was superseded', async () => {
+    const h = await harness();
+    vi.spyOn(h.router, 'show').mockResolvedValueOnce(false);
+    const shown = vi.fn();
+    await h.route.showDecide(chartEntry('a'), {}, { start: vi.fn(async () => {}), shown });
+    expect(shown).not.toHaveBeenCalled();
+  });
+  test('without a decide screen waits for direct play, and does not notify on load failure', async () => {
+    const h = await harness({ decideFamily: null });
+    const shown = vi.fn();
+    const start = vi.fn(async () => {
+      expect(shown).not.toHaveBeenCalled();
+    });
+    await h.route.showDecide(chartEntry('a'), {}, { start, shown });
+    expect(shown).toHaveBeenCalledOnce();
+    shown.mockClear();
+    await expect(
+      h.route.showDecide(
+        chartEntry('a'),
+        {},
+        {
+          start: async () => {
+            throw new Error('load failed');
+          },
+          shown,
+        },
+      ),
+    ).rejects.toThrow('load failed');
+    expect(shown).not.toHaveBeenCalled();
   });
 });

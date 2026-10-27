@@ -7,10 +7,12 @@ import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
 import {
   DEFAULT_PLAY_OPTIONS,
+  resolvePlayOptions,
   type CourseView,
   type LibraryChart,
   type PlayOptions,
   type PlayResult,
+  type SystemSoundSet,
 } from '@be-music/player-scene-model';
 import type { Texture } from 'pixi.js';
 import type { BrowserAssetSource } from '../collection/types.ts';
@@ -26,8 +28,9 @@ import type { PlayReplayViewScale, PlaySessionTheme } from '../session/play/play
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { logger } from '../logger.ts';
 import { BeatorajaPlayView } from '../view/beatoraja/play-view.ts';
-import { BuiltInPlayView } from '../view/built-in/play-view.ts';
+import { BuiltInPlayView, LIFT_SKINS } from '../view/built-in/play-view.ts';
 import { LR2PlayView } from '../view/lr2/play-view.ts';
+import { LR2TextureRetainer } from '../view/lr2/texture-retainer.ts';
 import type { PlayFrame, PlayIntent, PlayView, PlayfieldSkin } from '../view/types.ts';
 import type { BeatorajaKit, BuiltInKit, LR2PlayKit } from './family-kit.ts';
 
@@ -50,6 +53,7 @@ export type PlaySceneSettings = Omit<
   | 'onExit'
   | 'onRestart'
   | 'onChartFinished'
+  | 'onJudgeTimingChange'
   | 'onHiSpeedChange'
   | 'onTempoChange'
   | 'replay'
@@ -61,6 +65,8 @@ export type PlaySceneSettings = Omit<
 
 /** The course a play is a stage of: the stage's rules and carried-in state, and the course as a skin shows it. */
 export interface PlaySceneCourse {
+  /** A previous stage sought; the entire course stays practice. */
+  readonly practice?: boolean;
   /** The stage's rules for the engine (`ReplayCourseStage`), with what the previous stage carried in. */
   readonly stage: ReplayCourseStage;
   /** The course and the stage being played, for the skin. */
@@ -76,9 +82,10 @@ export interface PlaySceneEvents {
   /** The player asked to play the chart again (F5). */
   restart(): void;
   /** The player stepped the hi-speed; on the player's own scale, to remember for the next play. */
-  hiSpeed?(hiSpeed: number): void;
+  hiSpeed?(hiSpeed: number, normalLevel?: number, floating?: boolean): void;
   /** The play's tempo changed (a live change, or a replay following its log). */
   tempo?(tempo: number): void;
+  judgeTiming?(judgeTimingMs: number): void;
 }
 
 export interface PlaySceneOptions extends SessionSceneOptions {
@@ -87,6 +94,8 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   /** Where the chart's files are: its samples, BGA and images. */
   readonly source?: BrowserAssetSource;
   readonly settings: PlaySceneSettings;
+  /** Allow manual seeking; the first seek makes the play practice and disables saved results. */
+  readonly allowSeek?: 'practice';
   /** The course stage this play is, if any. */
   readonly course?: PlaySceneCourse;
   /** A replay to play back instead of the player's input: its recorded setup, arrangement, tempo and view. */
@@ -98,8 +107,11 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   readonly preResolved?: ResolvedPlayChart;
   /** The host's audio service: the play opens its own context and bus through it. */
   readonly audio: AudioService;
+  /** Optional theme sounds; `playStop` plays once when the play fails. */
+  readonly sounds?: SystemSoundSet;
   /** The play options as the select screen set them, for the frames a view reads. Defaults to `DEFAULT_PLAY_OPTIONS`. */
   readonly playOptions?: PlayOptions;
+  readonly scoreTargets?: PlayFrame['scoreTargets'];
   /**
    * The host the scene will show on. With it the scene builds its layers as it loads, so the BGA uploads to the GPU
    * behind a decide screen instead of on its first cue.
@@ -130,11 +142,20 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   /** Pauses or resumes the play, as Space does. */
   requestTogglePause(): void;
   isPaused(): boolean;
+  /**
+   * Moves an AUTO play or replay to chart second `seconds` (clamped to the chart) and plays on from there, as a preview's seek bar
+   * does; a paused play stays paused there. The running play seeks — it is not started again — and the promise resolves
+   * once the play shows the second sought (its frames are of the new seek generation). Manual play requires
+   * `allowSeek: 'practice'` and the first seek disables result persistence (`PlayFrame.seekable`).
+   */
+  seek(seconds: number): Promise<void>;
   /** Changes the play's tempo (pitch mode, not in a replay); whether it was taken. */
   setTempo(tempo: number): boolean;
   getTempo(): number;
   /** Sets the player's hi-speed (HS-FIX applies on top). */
   setHiSpeed(hiSpeed: number): void;
+  /** beatoraja display-clock calibration; never shifts recorded inputs. */
+  setJudgeTimingMs(judgeTimingMs: number): void;
   getHiSpeed(): number;
   /** The play's recording. */
   readonly recording: PlaySceneRecording;
@@ -150,9 +171,15 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   /**
    * Takes the player's new settings for the kit's skin; the next frame draws with them. The scene keeps its family: a
    * kit of another family is ignored. A built-in or LR2 scene keeps its skin too, while a beatoraja scene takes another
-   * entry's skin (the demo's play-skin picker) and rebuilds its stage.
+   * entry's skin (the player's play-skin picker) and rebuilds its stage.
    */
   updateKit(kit: PlaySceneKit): void;
+  /**
+   * Draws the play with `kit` from the next frame. The chart, judgments and audio stay. A kit this scene already draws
+   * is handed to {@link updateKit}. Another family's view is disposed; its LR2 textures stay until the play ends, so
+   * switching back does not decode the same bytes again.
+   */
+  replaceFamily(kit: PlaySceneKit): Promise<void>;
   setAudioVolume(channel: AudioBusChannel, volume: number): void;
   setAudioCompressor(enabled: boolean): void;
   setAudioCompressorMode(mode: 'split' | 'legacy'): void;
@@ -188,15 +215,25 @@ interface FamilyPlayView {
  * The play view of `kit`'s family, drawing `play`. A beatoraja skin's Lua sounds play through the audio service as
  * `soundOwner`'s, so they stop as the scene leaves the stage.
  */
+/** True when `view` is already drawing `kit`, so {@link PlayScene.updateKit} can take it without a new view. */
+function viewDrawsKit(view: FamilyPlayView, kit: PlaySceneKit): boolean {
+  if (view.view.family !== kit.family) return false;
+  if (kit.family === 'beatoraja') return true;
+  if (kit.family === 'lr2') return view.view instanceof LR2PlayView && view.view.skin === kit.skin;
+  return view.view instanceof BuiltInPlayView && view.view.drawsSkin(kit.skin);
+}
+
 function createPlayView(
   kit: PlaySceneKit,
   play: PlaySession,
-  options: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio'>,
+  options: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio' | 'replay'>,
   soundOwner: AudioOwner,
+  textures: LR2TextureRetainer,
 ): FamilyPlayView {
   const { settings, course, source } = options;
   if (kit.family === 'beatoraja') {
     const view = new BeatorajaPlayView(kit, play, {
+      ...(settings.showInvisibleNotes !== undefined ? { showInvisibleNotes: settings.showInvisibleNotes } : {}),
       ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
       ...(settings.dpFlip !== undefined ? { dpFlip: settings.dpFlip } : {}),
       ...(course?.view !== undefined ? { course: course.view } : {}),
@@ -214,13 +251,18 @@ function createPlayView(
       replayView: () => view.replayView(),
       drawsLift: true,
       uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
-      // A beatoraja skin draws its own notes: neither drawing option applies.
+      // A beatoraja skin determines how judged notes draw.
       setJudgedNoteDisplay: () => {},
-      setShowInvisibleNotes: () => {},
+      setShowInvisibleNotes: (enabled) => view.setShowInvisibleNotes(enabled),
       updateKit: (next) => (next.family === 'beatoraja' ? view.updateKit(next) : ignoreKit(next, 'beatoraja')),
     };
   }
   const drawing = {
+    ...(settings.visualConstant !== undefined ? { visualConstant: settings.visualConstant } : {}),
+    ...(settings.noteDurationMs !== undefined ? { noteDurationMs: settings.noteDurationMs } : {}),
+    ...(settings.constantFadeMs !== undefined ? { constantFadeMs: settings.constantFadeMs } : {}),
+    ...(settings.judgeTimingMs !== undefined ? { judgeTimingMs: settings.judgeTimingMs } : {}),
+    ...(settings.bpmGuide !== undefined ? { bpmGuide: settings.bpmGuide } : {}),
     ...(settings.bga !== undefined ? { bga: settings.bga } : {}),
     ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
     ...(settings.nonstop !== undefined ? { nonstop: settings.nonstop } : {}),
@@ -235,10 +277,15 @@ function createPlayView(
       ...(settings.autoScratch1P !== undefined ? { autoScratch1P: settings.autoScratch1P } : {}),
       ...(settings.autoScratch2P !== undefined ? { autoScratch2P: settings.autoScratch2P } : {}),
       ...(settings.scoreGraph !== undefined ? { scoreGraph: settings.scoreGraph } : {}),
+      ...(settings.battleMode !== undefined ? { battleMode: settings.battleMode } : {}),
+      ...(settings.lr2ExtraMode !== undefined ? { lr2ExtraMode: settings.lr2ExtraMode } : {}),
+      ...(settings.gauge2P !== undefined ? { gauge2P: settings.gauge2P } : {}),
       gauge: play.resolveSelectedGauge(),
       courseGauge: course !== undefined,
       ...(course?.view !== undefined ? { course: course.view } : {}),
+      ...(options.replay !== undefined ? { replay: true } : {}),
     });
+    view.useTextureRetainer(textures);
     return {
       view,
       playfieldSkin: view.playfieldSkin,
@@ -261,6 +308,9 @@ function createPlayView(
   return {
     view,
     playfieldSkin: view.playfieldSkin,
+    get drawsLift() {
+      return view.drawsLift;
+    },
     prepareOn: (host) => view.prepareOn(host),
     uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
     setJudgedNoteDisplay: (mode) => {
@@ -277,23 +327,45 @@ function ignoreKit(kit: PlaySceneKit, family: PlaySceneKit['family']): void {
   log.warn(`a ${family} play scene keeps its family; ignoring a ${kit.family} kit`);
 }
 
+interface FamilySlot {
+  current: FamilyPlayView;
+}
+
 class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements PlayScene {
   public readonly recording: PlaySceneRecording;
   private readonly playSession: PlaySceneSession;
-  private readonly familyView: FamilyPlayView;
+  private readonly familySlot: FamilySlot;
+  private readonly textures: LR2TextureRetainer;
+  private readonly audio: AudioService;
+  private readonly soundOwner: AudioOwner;
+  private readonly viewOptions: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio'>;
   private readonly chart: LibraryChart;
   private readonly source: BrowserAssetSource | undefined;
   private readonly prepareHost: PixiSceneHost | undefined;
+  /** Family swaps run one at a time. A newer one waits until the view being prepared is in place or discarded. */
+  private replaceChain: Promise<void> = Promise.resolve();
 
   public constructor(
     session: PlaySceneSession,
-    familyView: FamilyPlayView,
-    facts: { chart: LibraryChart; source?: BrowserAssetSource; host?: PixiSceneHost },
+    familySlot: FamilySlot,
+    facts: {
+      chart: LibraryChart;
+      source?: BrowserAssetSource;
+      host?: PixiSceneHost;
+      audio: AudioService;
+      soundOwner: AudioOwner;
+      viewOptions: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio'>;
+      textures: LR2TextureRetainer;
+    },
     options: SessionSceneOptions,
   ) {
-    super(session, familyView.view, options);
+    super(session, familySlot.current.view, options);
     this.playSession = session;
-    this.familyView = familyView;
+    this.familySlot = familySlot;
+    this.textures = facts.textures;
+    this.audio = facts.audio;
+    this.soundOwner = facts.soundOwner;
+    this.viewOptions = facts.viewOptions;
     this.chart = facts.chart;
     this.source = facts.source;
     this.prepareHost = facts.host;
@@ -318,7 +390,7 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
   public async prepare(onProgress?: (progress: number) => void): Promise<void> {
     if (this.prepareHost !== undefined) {
       this.play.host ??= this.prepareHost;
-      this.familyView.prepareOn(this.prepareHost);
+      this.familySlot.current.prepareOn(this.prepareHost);
     }
     const report = (progress: number): void => {
       this.playSession.loadProgress = progress;
@@ -345,12 +417,20 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
     return this.play.isPaused();
   }
 
+  public seek(seconds: number): Promise<void> {
+    return this.play.seek(seconds);
+  }
+
   public setTempo(tempo: number): boolean {
     return this.play.setTempo(tempo);
   }
 
   public getTempo(): number {
     return this.play.getTempo();
+  }
+
+  public setJudgeTimingMs(judgeTimingMs: number): void {
+    this.play.setJudgeTimingMs(judgeTimingMs);
   }
 
   public setHiSpeed(hiSpeed: number): void {
@@ -375,7 +455,15 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
   }
 
   public updateKit(kit: PlaySceneKit): void {
-    this.familyView.updateKit(kit);
+    this.familySlot.current.updateKit(kit);
+  }
+
+  public replaceFamily(kit: PlaySceneKit): Promise<void> {
+    const run = this.replaceChain.then(() => this.installFamily(kit));
+    this.replaceChain = run.catch((error) => {
+      log.warn('play family replace failed', error);
+    });
+    return run;
   }
 
   public setAudioVolume(channel: AudioBusChannel, volume: number): void {
@@ -403,16 +491,64 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
   }
 
   public setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void {
-    this.familyView.setJudgedNoteDisplay(mode);
+    this.familySlot.current.setJudgedNoteDisplay(mode);
   }
 
   public setShowInvisibleNotes(enabled: boolean): void {
-    this.familyView.setShowInvisibleNotes(enabled);
+    this.familySlot.current.setShowInvisibleNotes(enabled);
   }
 
   public override dispose(options: PlayDisposeOptions = {}): void {
     this.playSession.disposeOptions = options;
     super.dispose();
+    this.textures.destroyAll(this.prepareHost ?? this.play.host);
+  }
+
+  /** Swaps in `kit`'s view. The play session is not rebuilt. */
+  private async installFamily(kit: PlaySceneKit): Promise<void> {
+    if (this.disposed) return;
+    const current = this.familySlot.current;
+    if (viewDrawsKit(current, kit)) {
+      current.updateKit(kit);
+      this.play.options.coverKeys = kit.family === 'beatoraja';
+      return;
+    }
+    this.audio.stopOwned(this.soundOwner);
+    const next = createPlayView(kit, this.play, this.viewOptions, this.soundOwner, this.textures);
+    const host = this.prepareHost ?? this.play.host;
+    if (host !== undefined) next.prepareOn(host);
+    try {
+      await next.prepareView?.();
+    } catch (error) {
+      this.retire(next);
+      throw error;
+    }
+    if (this.disposed) {
+      this.retire(next);
+      return;
+    }
+    this.familySlot.current = next;
+    let installed = false;
+    try {
+      installed = await this.replaceView(next.view);
+    } catch (error) {
+      this.familySlot.current = current;
+      this.retire(next);
+      throw error;
+    }
+    if (!installed) {
+      this.familySlot.current = current;
+      this.retire(next);
+      return;
+    }
+    this.play.options.coverKeys = kit.family === 'beatoraja';
+    if (next.view instanceof LR2PlayView || next.view instanceof BeatorajaPlayView) next.view.joinRunningPlay();
+    this.retire(current);
+  }
+
+  /** Drops `family`'s scene graph and DOM. LR2 textures go back to {@link textures} instead of being destroyed. */
+  private retire(family: FamilyPlayView): void {
+    family.view.dispose();
   }
 }
 
@@ -424,32 +560,135 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
  */
 export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): PlayScene {
   const { settings, course, on } = options;
+  const recordedSpeed =
+    options.replay !== undefined && (settings.replayView?.hiSpeed ?? true) ? options.replay.play.options : undefined;
+  const speedProfile = recordedSpeed
+    ? {
+        ...(typeof recordedSpeed.floatingHiSpeed === 'boolean'
+          ? { floatingHiSpeed: recordedSpeed.floatingHiSpeed }
+          : {}),
+        ...(typeof recordedSpeed.classicHiSpeed === 'boolean' ? { classicHiSpeed: recordedSpeed.classicHiSpeed } : {}),
+        ...(typeof recordedSpeed.normalHiSpeedLevel === 'number'
+          ? { normalHiSpeedLevel: recordedSpeed.normalHiSpeedLevel }
+          : {}),
+      }
+    : {};
+  const playOptions = resolvePlayOptions({
+    ...(options.playOptions ?? DEFAULT_PLAY_OPTIONS),
+    ...Object.fromEntries(Object.entries(settings).filter(([, value]) => value !== undefined)),
+    ...(settings.initialHiSpeed !== undefined ? { hiSpeed: settings.initialHiSpeed } : {}),
+    ...(settings.gauge !== undefined ? { gauge1P: settings.gauge } : {}),
+    ...speedProfile,
+    ...(options.replay !== undefined &&
+    ((settings.replayView?.covers ?? true) || (settings.replayView?.lift ?? true)) &&
+    typeof options.replay.play.options?.fixedDisplayArea === 'boolean'
+      ? { fixedDisplayArea: options.replay.play.options.fixedDisplayArea }
+      : {}),
+  });
   let sceneSession: PlaySceneSession | undefined;
-  let family: FamilyPlayView | undefined;
+  const familySlot: { current?: FamilyPlayView } = {};
+  const textures = new LR2TextureRetainer();
+  const viewOptions = {
+    settings,
+    ...(course !== undefined ? { course } : {}),
+    ...(options.source !== undefined ? { source: options.source } : {}),
+    audio: options.audio,
+  };
   // The view is made for the play below; the play asks its theme nothing before both exist.
   const theme: PlaySessionTheme = {
-    timing: () => family!.view.timing,
+    timing: () => familySlot.current!.view.timing,
+    pixelsPerBeat: () => familySlot.current?.playfieldSkin.pixelsPerBeat,
     moment: (moment) => sceneSession?.queueEvent(moment),
-    keyOnFadeMs: (channel) => family!.playfieldSkin.keyOnFadeMs(channel),
-    prepareView: () => family?.prepareView?.() ?? Promise.resolve(),
-    uploadTextures: (textures) => family?.uploadTextures(textures, () => play.disposed) ?? Promise.resolve(),
-    replayView: () => family?.replayView?.(),
-    drawsLift: () => family?.drawsLift === true,
+    keyOnFadeMs: (channel) => familySlot.current!.playfieldSkin.keyOnFadeMs(channel),
+    prepareView: () => familySlot.current?.prepareView?.() ?? Promise.resolve(),
+    uploadTextures: (uploaded) =>
+      familySlot.current?.uploadTextures(uploaded, () => play.disposed) ?? Promise.resolve(),
+    replayView: () => familySlot.current?.replayView?.(),
+    drawsLift: () => familySlot.current?.drawsLift === true,
   };
   const play = new PlaySession(
     {
       ...settings,
+      ...(kit.family === 'built-in' && LIFT_SKINS.has(kit.skin.id) ? { coverKeys: true } : {}),
+      judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
+      ...(playOptions.customJudge && settings.judgeRuleset === 'beatoraja'
+        ? {
+            customJudge: {
+              keyPerfectGreat: playOptions.customJudgeKeyPerfectGreat,
+              keyGreat: playOptions.customJudgeKeyGreat,
+              keyGood: playOptions.customJudgeKeyGood,
+              scratchPerfectGreat: playOptions.customJudgeScratchPerfectGreat,
+              scratchGreat: playOptions.customJudgeScratchGreat,
+              scratchGood: playOptions.customJudgeScratchGood,
+              longNoteMargin: playOptions.customJudgeLongNoteMargin,
+            },
+          }
+        : {}),
+      hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
+      mineModifier: playOptions.mineModifier,
+      scrollModifier: playOptions.scrollModifier,
+      scrollSection: playOptions.scrollSection,
+      scrollRate: playOptions.scrollRate,
+      longNoteRate: playOptions.longNoteRate,
+      sevenToNinePattern: playOptions.sevenToNinePattern,
+      sevenToNineType: playOptions.sevenToNineType,
+      battleMode: playOptions.battleMode,
+      dBattleScratch: playOptions.dBattleScratch,
+      gauge2P: playOptions.gauge2P,
+      mRan1P: playOptions.mRan1P,
+      mRan2P: playOptions.mRan2P,
+      longNoteMode: playOptions.longNoteMode,
+      lr2ExtraMode: playOptions.lr2ExtraMode,
+      lr2ExtraLevel: playOptions.lr2ExtraLevel,
+      extraNoteDepth: playOptions.extraNoteDepth,
+      extraNoteScratch: playOptions.extraNoteScratch,
+      gaugeAutoShift: playOptions.gaugeAutoShift,
+      bottomShiftableGauge: playOptions.bottomShiftableGauge,
+      randomSeed1P: playOptions.randomSeed1P,
+      randomSeed2P: playOptions.randomSeed2P,
+      randomFixedLane1P: playOptions.randomFixedLane1P,
+      randomFixedLane2P: playOptions.randomFixedLane2P,
+      classicHiSpeed: playOptions.classicHiSpeed,
+      floatingHiSpeed: playOptions.floatingHiSpeed,
+      fixedDisplayArea: playOptions.fixedDisplayArea,
+      normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
+      visualConstant: playOptions.visualConstant,
+      noteDurationMs: playOptions.noteDurationMs,
+      lift1P: playOptions.lift1P,
+      lift2P: playOptions.lift2P,
+      liftOn1P: playOptions.liftOn1P,
+      liftOn2P: playOptions.liftOn2P,
+
+      constantFadeMs: playOptions.constantFadeMs,
+      hsFix: playOptions.hsFix,
+      recordingOptionState: { ...playOptions },
+      ...(options.allowSeek !== undefined ? { allowSeek: options.allowSeek } : {}),
       ...(kit.family === 'beatoraja' ? BEATORAJA_PLAY_SETTINGS : {}),
       ...(course !== undefined
-        ? { course: course.stage, ...(course.view !== undefined ? { courseInfo: course.view } : {}) }
+        ? {
+            course: course.stage,
+            ...(course.view !== undefined ? { courseInfo: course.view } : {}),
+            ...(course.practice === true ? { practice: true } : {}),
+          }
         : {}),
       ...(options.replay !== undefined ? { replay: options.replay } : {}),
       ...(options.preResolved !== undefined ? { preResolved: options.preResolved } : {}),
+      ...resolvePracticeSessionOptions(
+        playOptions,
+        settings.judgeRuleset,
+        course === undefined && options.replay === undefined,
+      ),
       audio: options.audio,
       onExit: () => on.exit(),
       onRestart: () => on.restart(),
       onChartFinished: (result) => on.finish(result, result.replay),
-      ...(on.hiSpeed !== undefined ? { onHiSpeedChange: (hiSpeed: number) => on.hiSpeed?.(hiSpeed) } : {}),
+      ...(on.judgeTiming !== undefined ? { onJudgeTimingChange: (value: number) => on.judgeTiming?.(value) } : {}),
+      ...(on.hiSpeed !== undefined
+        ? {
+            onHiSpeedChange: (hiSpeed: number, normalLevel?: number, floating?: boolean) =>
+              on.hiSpeed?.(hiSpeed, normalLevel, floating),
+          }
+        : {}),
       ...(on.tempo !== undefined ? { onTempoChange: (tempo: number) => on.tempo?.(tempo) } : {}),
     },
     theme,
@@ -457,17 +696,25 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   sceneSession = new PlaySceneSession(play, {
     chart: options.chart,
     ...(course?.view !== undefined ? { course: course.view } : {}),
-    playOptions: options.playOptions ?? DEFAULT_PLAY_OPTIONS,
+    playOptions,
+    ...(options.scoreTargets !== undefined ? { scoreTargets: options.scoreTargets } : {}),
     audio: options.audio,
+    ...(options.sounds !== undefined ? { sounds: options.sounds } : {}),
   });
-  family = createPlayView(kit, play, options, sceneSession);
+  // The views draw with the session's settings: the host's, with what the session resolved from them.
+  viewOptions.settings = play.options;
+  familySlot.current = createPlayView(kit, play, viewOptions, sceneSession, textures);
   return new FamilyPlayScene(
     sceneSession,
-    family,
+    familySlot as FamilySlot,
     {
       chart: options.chart,
       ...(options.source !== undefined ? { source: options.source } : {}),
       ...(options.host !== undefined ? { host: options.host } : {}),
+      audio: options.audio,
+      soundOwner: sceneSession,
+      viewOptions,
+      textures,
     },
     {
       // The play listens for its own keys (`play-input.ts`), so the scene listens for none.
@@ -481,8 +728,38 @@ const NO_KEYS = { addEventListener: (): void => {}, removeEventListener: (): voi
 
 /**
  * What a beatoraja play runs with over the host's settings: beatoraja's cover keys. The lane options (RANDOM, MIRROR,
- * S-RANDOM, SCATTER), HS-FIX and the lane covers it starts with are the host's, as on every family.
+ * S-RANDOM), HS-FIX and the lane covers it starts with are the host's, as on every family.
  */
 const BEATORAJA_PLAY_SETTINGS: Pick<PlaySessionOptions, 'coverKeys'> = {
   coverKeys: true,
 };
+
+/**
+ * beatoraja PRACTICE for a single fresh play: the range and rules (`practiceRange`), a practice play saving nothing,
+ * and no chart modifier, as the source applies them only in PLAY / AUTOPLAY.
+ */
+function resolvePracticeSessionOptions(
+  playOptions: Readonly<PlayOptions>,
+  ruleset: string | undefined,
+  single: boolean,
+): Partial<PlaySessionOptions> {
+  if (!playOptions.practice || ruleset !== 'beatoraja' || !single) return {};
+  return {
+    practice: true,
+    practiceRange: {
+      startMs: playOptions.practiceStartMs,
+      ...(playOptions.practiceEndMs > 0 ? { endMs: playOptions.practiceEndMs } : {}),
+      gauge: playOptions.practiceGauge,
+      ...(playOptions.practiceGaugeCategory !== 'MODE' ? { gaugeCategory: playOptions.practiceGaugeCategory } : {}),
+      startGauge: playOptions.practiceStartGauge,
+      ...(playOptions.practiceJudgeRank > 0 ? { judgeRank: playOptions.practiceJudgeRank } : {}),
+      ...(playOptions.practiceTotal > 0 ? { total: playOptions.practiceTotal } : {}),
+    },
+    battleMode: 'OFF',
+    longNoteModifier: 'OFF',
+    mineModifier: 'OFF',
+    scrollModifier: 'OFF',
+    extraNoteDepth: 0,
+    lr2ExtraMode: false,
+  };
+}

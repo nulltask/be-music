@@ -1,3 +1,18 @@
+import type { BeatorajaCustomJudge } from '../ruleset/custom-judge.ts';
+import type { BattleMode } from '../core/battle-mode.ts';
+import type { ChartPlayVariant } from '@be-music/chart-model';
+import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
+import type { ScrollTimelinePoint } from '@be-music/chart-model';
+import type { ScrollModifier } from '../core/scroll-modifier.ts';
+import type { LongNoteModifier } from '../core/long-note-modifier.ts';
+import { resolveReplaySourceChannel } from './source-channel.ts';
+import type { MineModifier } from '../core/mine-modifier.ts';
+import {
+  diffReplayOptions,
+  parseReplayOptionState,
+  type ReplayOptionState,
+  type ReplayOptionChange,
+} from './options.ts';
 import type { ReplayTempoChange, ReplayViewChange, ReplayViewState } from './view.ts';
 import {
   computeChartFingerprint,
@@ -12,8 +27,8 @@ import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
-import { resolveIIDXRankLabel } from '../ruleset/score.ts';
-import type { GaugeType } from '../ruleset/gauge-type.ts';
+import { resolve____RankLabel } from '../ruleset/score.ts';
+import type { GaugeType, GaugeAutoShift, GaugeShiftBottom } from '../ruleset/gauge-type.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import packageJSON from '../../package.json' with { type: 'json' };
 import {
@@ -48,8 +63,44 @@ export type ReplayRecorderChartData = Pick<
   Partial<Pick<PreparedPlaybackChartData, 'resolvedChart'>>;
 
 export interface ReplayRecorderPlaySettings {
+  options?: ReplayOptionState;
   mode: 'manual' | 'auto';
   autoScratch: boolean;
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  customJudge?: BeatorajaCustomJudge;
+  longNoteModifier?: LongNoteModifier;
+  longNoteRate?: number;
+  sevenToNinePattern?: import('../core/seven-to-nine.ts').SevenToNinePattern;
+  sevenToNineType?: import('../core/seven-to-nine.ts').SevenToNineType;
+  sevenToNineThresholdBPM?: number;
+  sevenToNineApplied?: boolean;
+  battleMode?: BattleMode;
+  battleSourceVariant?: ChartPlayVariant;
+  battleTempo?: number;
+  battleAssist1P?: boolean;
+  battleAssist2P?: boolean;
+  battleChangedObjectCount?: number;
+  battleDroppedObjectCount?: number;
+  dBattleScratch?: boolean;
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
+  lr2ExtraEffectiveLevel?: LR2ExtraLevel;
+  lr2ExtraConvertedObjectCount?: number;
+  lr2ExtraTempo?: number;
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
+  /** Actual source conversions, including overwritten additions; independent of record policy. */
+  extraNoteChangeCount?: number;
+  longNoteModifierChangeCount?: number;
+  mineModifier?: MineModifier;
+  scrollModifier?: ScrollModifier;
+  scrollSection?: number;
+  scrollRate?: number;
+  scrollModifierTimeline?: ScrollTimelinePoint[];
+  scrollModifierChanged?: boolean;
+  mineModifierChangeCount?: number;
+  autoScratch1P?: boolean;
+  autoScratch2P?: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
   gauge?: GaugeType;
   randomLane?: { p1?: string; p2?: string };
@@ -61,6 +112,8 @@ export interface ReplayRecorderPlaySettings {
   randomDraws?: RandomDraws;
   /** The play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`). Recorded when true. */
   endOnFailure?: boolean;
+  gaugeAutoShift?: GaugeAutoShift;
+  bottomShiftableGauge?: GaugeShiftBottom;
   /** The course stage the play was (`PlayerOptions.course`). */
   course?: ReplayCourseStage;
   /** The play tempo (`PlayerOptions.speed`). Recorded when it is not 1. */
@@ -82,7 +135,7 @@ export interface ReplayRecorderPlaySettings {
  */
 export type ReplayRecordingOptions = Pick<
   ReplayRecorderPlaySettings,
-  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native'
+  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native' | 'options'
 > & {
   chartSHA256?: string;
   chartMD5?: string;
@@ -116,7 +169,11 @@ export interface ReplayRecorderOptions {
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
   /** A stitched NONSTOP chart's later stages taking over the judge rank (`PlayerPlaySettings.stageRanks`). */
-  stageRanks?: ReadonlyArray<{ seconds: number; rank: number; table: 'chart' | 'lr2-nonstop' }>;
+  stageRanks?: ReadonlyArray<{
+    seconds: number;
+    rank: number;
+    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
+  }>;
   /** LR2 negative-BPM reversal (chart seconds, #134) — recorded so re-simulations freeze judging at the same point. */
   reversalSeconds?: number;
   /** Clock source for `createdAt` — injectable for tests. Defaults to `Date`. */
@@ -129,9 +186,13 @@ export interface ReplayRecorderFinalizeInput {
   aborted?: boolean;
   /** Chart seconds the judge had settled through when the play was aborted. */
   abortedAtSeconds?: number;
+  /** The 2P player of a two-player play: its summary, max combo and gauge (recorded as `results.secondPlayer`). */
+  secondPlayer?: { summary: PlayerSummary; maxCombo: number; gauge: GaugeType };
 }
 
 export interface ReplayRecorder {
+  /** Discards recorded data and ignores later input after a practice seek. Finalization is no longer allowed. */
+  discard(): void;
   /** Records a press or release; `inferred` marks a release the engine inferred from input without releases. */
   recordInput(
     action: ReplayInputAction,
@@ -144,6 +205,8 @@ export interface ReplayRecorder {
   recordEmptyPoor(): void;
   /** Records a view change (hi-speed, covers, lift) at a chart time. An empty change is dropped. */
   recordViewChange(timeSeconds: number, change: ReplayViewState): void;
+  /** Records selected options at the chart clock; repeated values are dropped. */
+  recordOptionChange(timeSeconds: number, values: ReplayOptionState): void;
   /** Records a tempo change at a chart time. A change to the tempo already in force is dropped. */
   recordTempoChange(timeSeconds: number, tempo: number): void;
   finalize(input: ReplayRecorderFinalizeInput): BeMusicReplay;
@@ -152,14 +215,27 @@ export interface ReplayRecorder {
 export function createReplayRecorder(options: ReplayRecorderOptions): ReplayRecorder {
   const chart = buildReplayChart(options);
   const inputs: ReplayInputEvent[] = [];
+  let discarded = false;
   let seq = 0;
   let emptyPoorCount = 0;
   const viewChanges: ReplayViewChange[] = [];
+  const initialOptions = options.play.options === undefined ? undefined : parseReplayOptionState(options.play.options);
+  let currentOptions = { ...initialOptions };
+  const optionChanges: ReplayOptionChange[] = [];
   const tempoChanges: ReplayTempoChange[] = [];
   let currentTempo = options.play.tempo ?? 1;
 
   return {
+    discard: () => {
+      discarded = true;
+      inputs.length = 0;
+      viewChanges.length = 0;
+      optionChanges.length = 0;
+      tempoChanges.length = 0;
+      emptyPoorCount = 0;
+    },
     recordInput: (action, timeSeconds, tokens, channels, inferred): void => {
+      if (discarded) return;
       const channelList = [...channels];
       if (channelList.length === 0) {
         return;
@@ -179,9 +255,21 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       inputs.push(event);
     },
     recordEmptyPoor: (): void => {
+      if (discarded) return;
       emptyPoorCount += 1;
     },
+    recordOptionChange: (timeSeconds, values): void => {
+      if (discarded) return;
+      const change = diffReplayOptions(currentOptions, parseReplayOptionState(values));
+      if (!change) return;
+      const timeUs = secondsToMicroseconds(timeSeconds);
+      if (!Number.isSafeInteger(timeUs) || timeUs < (optionChanges.at(-1)?.timeUs ?? 0))
+        throw new RangeError('Option changes must use nondecreasing chart times.');
+      optionChanges.push({ timeUs, values: change });
+      currentOptions = { ...currentOptions, ...change };
+    },
     recordViewChange: (timeSeconds, change): void => {
+      if (discarded) return;
       const entries = Object.entries(change).filter(([, value]) => value !== undefined);
       if (entries.length === 0) return;
       const recorded: ReplayViewChange = { timeUs: secondsToMicroseconds(timeSeconds), ...change };
@@ -189,16 +277,19 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       viewChanges.push(recorded);
     },
     recordTempoChange: (timeSeconds, tempo): void => {
+      if (discarded) return;
       if (!(tempo > 0) || tempo === currentTempo) return;
       currentTempo = tempo;
       tempoChanges.push({ timeUs: secondsToMicroseconds(timeSeconds), tempo });
     },
-    finalize: ({ summary, maxCombo, aborted, abortedAtSeconds }): BeMusicReplay => {
+    finalize: ({ summary, maxCombo, aborted, abortedAtSeconds, secondPlayer }): BeMusicReplay => {
+      if (discarded) throw new Error('Cannot finalize a discarded practice replay');
       const play: ReplayPlay = {
         mode: options.play.mode,
         autoScratch: options.play.autoScratch,
         gauge: options.play.gauge ?? 'GROOVE',
       };
+      if (secondPlayer !== undefined) play.gauge2P = secondPlayer.gauge;
       if (options.play.randomLane !== undefined) play.randomLane = options.play.randomLane;
       if (options.play.dpFlip !== undefined) play.dpFlip = options.play.dpFlip;
       if (options.play.judgeWindowOverrideMs !== undefined) {
@@ -212,11 +303,61 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         play.aborted = true;
         if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
       }
+      if (options.play.bottomShiftableGauge !== undefined)
+        play.bottomShiftableGauge = options.play.bottomShiftableGauge;
+      if (options.play.gaugeAutoShift !== undefined) play.gaugeAutoShift = options.play.gaugeAutoShift;
       if (options.play.endOnFailure === true) play.endOnFailure = true;
       if (options.play.course !== undefined) play.course = structuredClone(options.play.course);
       if (options.play.tempo !== undefined && options.play.tempo !== 1) play.tempo = options.play.tempo;
       if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
+      if (options.play.judgeAlgorithm !== undefined) play.judgeAlgorithm = options.play.judgeAlgorithm;
+      if (options.play.customJudge !== undefined) play.customJudge = { ...options.play.customJudge };
+      if (options.play.scrollModifier !== undefined) play.scrollModifier = options.play.scrollModifier;
+      if (options.play.scrollSection !== undefined) play.scrollSection = options.play.scrollSection;
+      if (options.play.scrollRate !== undefined) play.scrollRate = options.play.scrollRate;
+      if (options.play.scrollModifierTimeline !== undefined)
+        play.scrollModifierTimeline = options.play.scrollModifierTimeline.map((point) => ({ ...point }));
+      if (options.play.scrollModifierChanged !== undefined)
+        play.scrollModifierChanged = options.play.scrollModifierChanged;
+      if (options.play.mineModifier !== undefined) play.mineModifier = options.play.mineModifier;
+      if (options.play.mineModifierChangeCount !== undefined)
+        play.mineModifierChangeCount = options.play.mineModifierChangeCount;
+      for (const field of [
+        'sevenToNinePattern',
+        'sevenToNineType',
+        'sevenToNineThresholdBPM',
+        'sevenToNineApplied',
+        'battleMode',
+        'battleSourceVariant',
+        'battleTempo',
+        'battleAssist1P',
+        'battleAssist2P',
+        'battleChangedObjectCount',
+        'battleDroppedObjectCount',
+        'dBattleScratch',
+      ] as const)
+        if (options.play[field] !== undefined) Object.assign(play, { [field]: options.play[field] });
+      for (const field of [
+        'lr2ExtraMode',
+        'lr2ExtraLevel',
+        'lr2ExtraEffectiveLevel',
+        'lr2ExtraConvertedObjectCount',
+        'lr2ExtraTempo',
+      ] as const)
+        if (options.play[field] !== undefined) Object.assign(play, { [field]: options.play[field] });
+      if (options.play.extraNoteDepth !== undefined) play.extraNoteDepth = options.play.extraNoteDepth;
+      if (options.play.extraNoteScratch !== undefined) play.extraNoteScratch = options.play.extraNoteScratch;
+      if (options.play.extraNoteChangeCount !== undefined)
+        play.extraNoteChangeCount = options.play.extraNoteChangeCount;
+      if (options.play.longNoteRate !== undefined) play.longNoteRate = options.play.longNoteRate;
+      if (options.play.longNoteModifierChangeCount !== undefined)
+        play.longNoteModifierChangeCount = options.play.longNoteModifierChangeCount;
+      if (options.play.longNoteModifier !== undefined) play.longNoteModifier = options.play.longNoteModifier;
+      if (options.play.autoScratch1P !== undefined) play.autoScratch1P = options.play.autoScratch1P;
+      if (options.play.autoScratch2P !== undefined) play.autoScratch2P = options.play.autoScratch2P;
+      if (initialOptions !== undefined) play.options = { ...initialOptions };
+      if (optionChanges.length > 0) play.optionChanges = structuredClone(optionChanges);
       if (viewChanges.length > 0) play.viewChanges = structuredClone(viewChanges);
       if (options.play.native !== undefined) play.native = options.play.native;
 
@@ -231,7 +372,25 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         inputs,
         play,
         results: {
-          native: buildNativeResult(summary, maxCombo, emptyPoorCount, play.gauge, options.moneyScore === true),
+          // Two players share the recorder: each side's empty POORs are its own summary's.
+          native: buildNativeResult(
+            summary,
+            maxCombo,
+            secondPlayer === undefined ? emptyPoorCount : summary.emptyPoor,
+            play.gauge,
+            options.moneyScore === true,
+          ),
+          ...(secondPlayer !== undefined
+            ? {
+                secondPlayer: buildNativeResult(
+                  secondPlayer.summary,
+                  secondPlayer.maxCombo,
+                  secondPlayer.summary.emptyPoor,
+                  secondPlayer.gauge,
+                  options.moneyScore === true,
+                ),
+              }
+            : {}),
         },
       };
     },
@@ -252,6 +411,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     const entry: ReplayNote = {
       id: 0,
       channel: note.channel,
+      ...(resolveReplaySourceChannel(note) !== note.channel ? { sourceChannel: resolveReplaySourceChannel(note) } : {}),
       type: isFreeZone ? 'freezone' : hasTail ? 'long' : 'normal',
       timeUs: secondsToMicroseconds(note.seconds),
     };
@@ -259,6 +419,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
       entry.endTimeUs = secondsToMicroseconds(note.endSeconds!);
       if (!isFreeZone) {
         entry.lnMode = note.longNoteMode ?? chartLNMode;
+        if (note.generatedLongNote) entry.generatedLongNote = true;
       }
     }
     notes.push(entry);
@@ -267,15 +428,20 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     notes.push({
       id: 0,
       channel: mine.channel,
+      ...(resolveReplaySourceChannel(mine) !== mine.channel ? { sourceChannel: resolveReplaySourceChannel(mine) } : {}),
       type: 'mine',
       timeUs: secondsToMicroseconds(mine.seconds),
       damage: resolveLandmineGaugeEffect(mine.event, idBase, json.sourceFormat).damage,
+      ...(mine.silent ? { silent: true } : {}),
     });
   }
   for (const invisible of chart.invisibleNotes) {
     notes.push({
       id: 0,
       channel: invisible.channel,
+      ...(resolveReplaySourceChannel(invisible) !== invisible.channel
+        ? { sourceChannel: resolveReplaySourceChannel(invisible) }
+        : {}),
       type: 'invisible',
       timeUs: secondsToMicroseconds(invisible.seconds),
     });
@@ -309,6 +475,16 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     noteCount: chart.scorableNotes.length,
     notes,
   };
+  if (Number.isFinite(json.metadata.bpm)) result.headerBPM = json.metadata.bpm;
+  let minBPM = Infinity;
+  let maxBPM = -Infinity;
+  for (const { bpm } of resolved.timing.tempoPoints) {
+    if (!Number.isFinite(bpm)) continue;
+    minBPM = Math.min(minBPM, bpm);
+    maxBPM = Math.max(maxBPM, bpm);
+  }
+  if (minBPM <= maxBPM) result.bpmRange = { min: minBPM, max: maxBPM };
+  if (json.bmson.info.totalUnit !== undefined) result.totalUnit = json.bmson.info.totalUnit;
   if (typeof options.reversalSeconds === 'number' && Number.isFinite(options.reversalSeconds)) {
     result.reversalTimeUs = secondsToMicroseconds(options.reversalSeconds);
   }
@@ -417,13 +593,22 @@ function buildNativeResult(
     exScore: summary.exScore,
     noteCount: summary.total,
     maxCombo: maxCombo ?? 0,
-    djLevel: resolveIIDXRankLabel(summary.exScore, summary.total),
+    djLevel: resolve____RankLabel(summary.exScore, summary.total),
     gauge: {
       type: summary.gauge?.type ?? declaredGauge,
-      final: summary.gauge?.current ?? 0,
+      ...(summary.gauge?.values ? { values: { ...summary.gauge.values } } : {}),
+      final:
+        summary.gauge?.max === 100
+          ? summary.gauge.current
+          : summary.gauge !== undefined && summary.gauge.max > 0
+            ? (summary.gauge.current / summary.gauge.max) * 100
+            : 0,
       cleared: summary.gauge?.cleared ?? false,
     },
   };
+  if (summary.minePoor !== undefined) result.minePoor = summary.minePoor;
+  if (summary.fullCombo !== undefined) result.fullCombo = summary.fullCombo;
+
   if (summary.gauge?.failedMidPlay === true) {
     result.gauge.failedMidPlay = true;
   }

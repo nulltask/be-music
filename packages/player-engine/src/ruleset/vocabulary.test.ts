@@ -5,7 +5,7 @@ import { isRulesetId, RULESET_IDS, resolveJudgeWindowsMs } from './vocabulary.ts
 
 describe('judge ruleset ids', () => {
   it('lists the judge rulesets in the order the replay simulators run them', () => {
-    expect(RULESET_IDS).toEqual(['lr2', 'beatoraja', 'iidx']);
+    expect(RULESET_IDS).toEqual(['lr2', 'beatoraja', '____']);
     expect(RULESET_IDS).toEqual(REPLAY_SIMULATOR_RULESETS);
   });
 

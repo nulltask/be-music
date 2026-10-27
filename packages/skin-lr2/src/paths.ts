@@ -6,9 +6,15 @@ import { stripComment } from './csv.ts';
 export type LR2SkinKind = 'play' | 'select' | 'result' | 'decide' | 'courseResult';
 
 /**
- * `play_N.lr2skin` variant hint for the play-skin loader.
+ * `play_N.lr2skin` variant hint for the play-skin loader. `7-battle` / `5-battle` are LR2's BATTLE play skins
+ * (`#INFORMATION` types 12 / 13), which LR2 plays a two-player BATTLE on.
  */
-export type LR2PlayVariant = '5' | '7' | '9' | '10' | '14';
+export type LR2PlayVariant = '5' | '7' | '9' | '10' | '14' | '7-battle' | '5-battle';
+
+/** The play variants of LR2's BATTLE play skins. */
+export function isLR2BattlePlayVariant(variant: LR2PlayVariant | undefined): variant is '7-battle' | '5-battle' {
+  return variant === '7-battle' || variant === '5-battle';
+}
 
 /**
  * Numeric type code declared by each `.lr2skin`'s `#INFORMATION,<type>,<title>,<author>,<thumbnail>` header.
@@ -24,19 +30,22 @@ export type LR2PlayVariant = '5' | '7' | '9' | '10' | '14';
  * - 7    — Result.
  * - 8    — Key config (out of scope — player config screen).
  * - 9    — Skin select (also out of scope — we replace this UI with the Debug Menu's theme picker).
+ * - 12, 13 — BATTLE play (7K / 5K); 14, the 9K BATTLE play skin, is out of scope (LR2 plays no 9KEY BATTLE).
  * - 15   — Course result (the result of a whole course; conventionally under `CourseResult/`).
  */
 export const LR2_SKIN_INFORMATION_TYPE = {
   PLAY_7KEYS: 0,
   PLAY_5KEYS: 1,
-  PLAY_9KEYS: 2,
+  PLAY_14KEYS: 2,
   PLAY_10KEYS: 3,
-  PLAY_14KEYS: 4,
+  PLAY_9KEYS: 4,
   MUSIC_SELECT: 5,
   DECIDE: 6,
   RESULT: 7,
   KEY_CONFIG: 8,
   SKIN_SELECT: 9,
+  PLAY_7KEYS_BATTLE: 12,
+  PLAY_5KEYS_BATTLE: 13,
   COURSE_RESULT: 15,
 } as const;
 
@@ -49,7 +58,7 @@ export type LR2SkinInformationType = (typeof LR2_SKIN_INFORMATION_TYPE)[keyof ty
  * for variant-aware play-skin scoring).
  */
 export function informationTypeToKind(type: number): LR2SkinKind | undefined {
-  if (type >= 0 && type <= 4) return 'play';
+  if ((type >= 0 && type <= 4) || type === 12 || type === 13) return 'play';
   if (type === 5) return 'select';
   if (type === 6) return 'decide';
   if (type === 7) return 'result';
@@ -73,6 +82,10 @@ export function informationTypeToPlayVariant(type: number): LR2PlayVariant | und
       return '10';
     case LR2_SKIN_INFORMATION_TYPE.PLAY_14KEYS:
       return '14';
+    case LR2_SKIN_INFORMATION_TYPE.PLAY_7KEYS_BATTLE:
+      return '7-battle';
+    case LR2_SKIN_INFORMATION_TYPE.PLAY_5KEYS_BATTLE:
+      return '5-battle';
     default:
       return undefined;
   }
@@ -195,6 +208,26 @@ export function scoreSkinPath(
     if (lower.endsWith('/decide.lr2skin')) return 0;
     if (lower.includes('/decide') && lower.endsWith('.lr2skin')) return 10;
     return informationTypeMatches(options.type, kind) ? 20 : 100;
+  }
+  // A declared key mode outranks a misleading filename. When the requested mode is absent,
+  // prefer the same number of play sides before borrowing an SP/DP layout.
+  const declaredVariant = options.type === undefined ? undefined : informationTypeToPlayVariant(options.type);
+  // A BATTLE play skin is only ever the BATTLE one (a 5KEY BATTLE takes the 7KEY one as LR2's SetFirstSkin_5kb does);
+  // the host loads a BATTLE variant only when the theme declares one.
+  if (isLR2BattlePlayVariant(options.variant) || isLR2BattlePlayVariant(declaredVariant)) {
+    if (declaredVariant === options.variant) return -1;
+    if (options.variant === '5-battle' && declaredVariant === '7-battle') return 0;
+    return 100;
+  }
+  if (options.variant && declaredVariant && declaredVariant !== options.variant) {
+    const fallbackOrder: Record<'5' | '7' | '9' | '10' | '14', readonly LR2PlayVariant[]> = {
+      '5': ['5', '7', '9', '10', '14'],
+      '7': ['7', '5', '9', '14', '10'],
+      '9': ['9', '7', '5', '14', '10'],
+      '10': ['10', '14', '5', '7', '9'],
+      '14': ['14', '10', '7', '5', '9'],
+    };
+    return 60 + fallbackOrder[options.variant].indexOf(declaredVariant);
   }
   if (options.variant && lower.endsWith(`/play_${options.variant}.lr2skin`)) return -1;
   if (lower.endsWith('/play_7.lr2skin')) return 0;

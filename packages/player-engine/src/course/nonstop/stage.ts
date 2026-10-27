@@ -71,9 +71,13 @@ export function createNonstopStageTiming(json: BeMusicJSON, options: { pms?: boo
 
   let firstNote = Number.POSITIVE_INFINITY;
   let lastNote = 0;
-  for (const event of json.events) {
+  const visible =
+    json.sourceFormat === 'bmson'
+      ? resolved.notes.filter((note) => note.freeZone !== true).map((note) => note.event)
+      : json.events;
+  for (const event of visible) {
     const number = lr2ChannelNumber(event.channel);
-    if (number === undefined || !isLR2VisibleNote(number, pms)) continue;
+    if (json.sourceFormat !== 'bmson' && (number === undefined || !isLR2VisibleNote(number, pms))) continue;
     const position = eventPosition(event);
     firstNote = Math.min(firstNote, position);
     lastNote = Math.max(lastNote, position);

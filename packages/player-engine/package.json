@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-engine",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Playback engine with judgment, scoring, rulesets, courses, best records, and replays",
   "license": "MIT",
   "files": [
@@ -49,11 +49,6 @@
       "source": "./src/ruleset/vocabulary.ts",
       "types": "./dist/ruleset.d.ts",
       "default": "./dist/ruleset.js"
-    },
-    "./audio-sink": {
-      "source": "./src/audio-sink.ts",
-      "types": "./dist/audio-sink.d.ts",
-      "default": "./dist/audio-sink.js"
     }
   },
   "scripts": {
@@ -63,12 +58,10 @@
     "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
-    "@be-music/chart-audio-renderer": "workspace:*",
     "@be-music/chart-model": "workspace:*",
     "@be-music/chart-parser": "workspace:*",
     "@be-music/chart-source": "workspace:*",
     "@be-music/shared-utils": "workspace:*",
-    "alien-signals": "^3.2.1",
-    "node-web-audio-api": "^2.2.0"
+    "alien-signals": "^3.2.1"
   }
 }
