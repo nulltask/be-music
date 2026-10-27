@@ -88,6 +88,7 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
     enabled: ctx.options?.visualConstant,
     durationMs: ctx.options?.noteDurationMs,
     fadeMs: ctx.options?.constantFadeMs,
+    noSpeed: ctx.play.playState.view.hiSpeed.locked,
   });
   const alphaAt = (beat: number) =>
     constant.enabled && ctx.play.timingResolver

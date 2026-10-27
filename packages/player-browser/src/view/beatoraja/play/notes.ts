@@ -15,6 +15,7 @@
 //      so a partial-asset theme still plays — better than silent blanks.
 
 import { Container, Graphics, Sprite, type Texture, TilingSprite } from 'pixi.js';
+import { resolveConstantAlpha, type ConstantVisibility } from '@be-music/player-scene-model';
 import { findFirstIndexAtOrAfter } from '@be-music/shared-utils/core';
 import { resolveSideKeySlot } from '@be-music/player-engine/lanes';
 import type { PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player-engine/signals';
@@ -333,6 +334,11 @@ export class BeatorajaNoteLayer {
      */
     isLaneLNHeld?: (channel: string) => boolean,
     showInvisibleNotes = false,
+    /**
+     * Visual CONSTANT: a note shows only in the last `durationMs` before its time, faded by `fadeMs`, as beatoraja's
+     * `LaneRenderer` sets each timeline's colour; a long note by its head's time. Omitted or off: every note is opaque.
+     */
+    constant?: ConstantVisibility,
   ): void {
     this.invisibleLayer.clear();
     this.invisibleLayer.visible = false;
@@ -412,7 +418,11 @@ export class BeatorajaNoteLayer {
         if (rect === undefined) continue;
         const y = judgementY - distance(note.beat) * pixelsPerBeat;
         if (y < rect.y - TAP_LEAD_IN_PX || y > drawBottom) continue;
-        this.invisibleLayer.rect(rect.x + 2, y - 4, Math.max(4, rect.w - 4), 4).fill({ color: 0x33dd66, alpha: 0.7 });
+        const alpha = constant === undefined ? 1 : resolveConstantAlpha(note.seconds, frame.currentSeconds, constant);
+        if (alpha <= 0) continue;
+        this.invisibleLayer
+          .rect(rect.x + 2, y - 4, Math.max(4, rect.w - 4), 4)
+          .fill({ color: 0x33dd66, alpha: 0.7 * alpha });
         this.invisibleLayer.visible = true;
       }
     }
@@ -441,6 +451,8 @@ export class BeatorajaNoteLayer {
       if (lane === undefined) continue;
       const rect = rects[lane];
       if (rect === undefined) continue;
+      const alpha = constant === undefined ? 1 : resolveConstantAlpha(note.seconds, frame.currentSeconds, constant);
+      if (alpha <= 0) continue;
 
       // LR2's rules hold a passed note on the judgement line.
       const y = resolveDrawY(drawWindow, judgementY - distance(note.beat) * pixelsPerBeat, judgementY);
@@ -473,7 +485,18 @@ export class BeatorajaNoteLayer {
         const isThisNoteBeingJudged = note.judged;
         const heldChannel = isLaneLNHeld !== undefined ? isLaneLNHeld(note.channel) : true;
         const held = isThisNoteBeingJudged && heldChannel;
-        const r = this.paintLongNote(usedG, usedS, usedT, rect, lane, yEnd, yStartClipped, held, note.longNoteMode);
+        const r = this.paintLongNote(
+          usedG,
+          usedS,
+          usedT,
+          rect,
+          lane,
+          yEnd,
+          yStartClipped,
+          held,
+          note.longNoteMode,
+          alpha,
+        );
         usedG = r.g;
         usedS = r.s;
         usedT = r.t;
@@ -484,7 +507,7 @@ export class BeatorajaNoteLayer {
       // rules hold a passed note there), or under beatoraja's rules the stage bottom while the note's time is ahead.
       if (y < rect.y - TAP_LEAD_IN_PX || y > drawBottom) continue;
       if (scrolling && !isDrawnAtTime(drawWindow, note.seconds)) continue;
-      const r = this.paintTapNote(usedG, usedS, rect, lane, note, y);
+      const r = this.paintTapNote(usedG, usedS, rect, lane, note, y, alpha);
       usedG = r.g;
       usedS = r.s;
     }
@@ -648,6 +671,7 @@ export class BeatorajaNoteLayer {
     lane: number,
     note: PlayerUIFrameNote,
     y: number,
+    alpha: number,
   ): { g: number; s: number } {
     const imageId = note.mine ? this.noteSection.mine[lane] : this.noteSection.note[lane];
     const cropped = this.resolveLaneSprite(imageId);
@@ -675,7 +699,7 @@ export class BeatorajaNoteLayer {
       sprite.width = drawW;
       sprite.height = drawHExpanded;
       sprite.tint = note.mine ? FALLBACK_COLOR_BY_KEY.red! : 0xffffff;
-      sprite.alpha = 1;
+      sprite.alpha = alpha;
       return { g: usedG, s: usedS + 1 };
     }
     // Fallback Graphics — the skin didn't ship a per-lane sprite for this slot or the cell-crop
@@ -683,6 +707,7 @@ export class BeatorajaNoteLayer {
     const color = note.mine ? FALLBACK_COLOR_BY_KEY.red! : this.fallbackColorForLane(lane);
     const g = this.acquireGraphics(usedG);
     g.clear();
+    g.alpha = alpha;
     g.rect(rect.x, y - 6, rect.w, 12).fill({ color });
     return { g: usedG + 1, s: usedS };
   }
@@ -724,6 +749,8 @@ export class BeatorajaNoteLayer {
      *     wired `longNoteMode` through the frame keeps the both-caps layout.
      */
     longNoteMode: 1 | 2 | 3 | undefined,
+    /** Visual CONSTANT's opacity of the long note's head timeline (1 without CONSTANT). */
+    alpha: number,
   ): { g: number; s: number; t: number } {
     // **upstream skin-spec convention** (`JsonPlaySkinObjectLoader.java:48-49` is the
     // ground truth):
@@ -792,6 +819,7 @@ export class BeatorajaNoteLayer {
       const color = this.fallbackColorForLane(lane);
       const g = this.acquireGraphics(usedG);
       g.clear();
+      g.alpha = alpha;
       g.rect(rect.x + 4, yEnd, rect.w - 8, yStart - yEnd).fill({ color, alpha: 0.6 });
       g.rect(rect.x, yStart - 6, rect.w, 12).fill({ color });
       g.rect(rect.x, yEnd - 6, rect.w, 12).fill({ color });
@@ -822,7 +850,7 @@ export class BeatorajaNoteLayer {
     body.height = Math.max(0, bodyBottomY - bodyTopY);
     body.tilePosition.set(0, 0);
     body.tileScale.set(drawW / Math.max(1, bodyCrop.cellW), 1);
-    body.alpha = 1;
+    body.alpha = alpha;
 
     // **Cap draw order mirrors upstream `LaneRenderer.drawLongNote`** (Y-UP, lines
     // 673-697). Upstream's call sequence is `body → topCap (lnend/hcnend) → bottomCap
@@ -848,7 +876,7 @@ export class BeatorajaNoteLayer {
       topCap.width = drawW;
       topCap.height = topHExpanded;
       topCap.tint = 0xffffff;
-      topCap.alpha = 1;
+      topCap.alpha = alpha;
       spritesUsed += 1;
     }
 
@@ -862,7 +890,7 @@ export class BeatorajaNoteLayer {
     bottomCap.width = drawW;
     bottomCap.height = bottomHExpanded;
     bottomCap.tint = 0xffffff;
-    bottomCap.alpha = 1;
+    bottomCap.alpha = alpha;
     spritesUsed += 1;
 
     return { g: usedG, s: usedS + spritesUsed, t: usedT + 1 };

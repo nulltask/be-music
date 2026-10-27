@@ -25,3 +25,22 @@ describe('select image-ref option indices', () => {
     expect(state.resolveSelectionRefValue(54)).toBe(2);
   });
 });
+
+describe('select CONSTANT op', () => {
+  const context = (visualConstant: boolean): BeatorajaSelectSkinStateContext => ({
+    options: { skin: { type: 5, w: 1280, h: 720 } },
+    entries: [],
+    currentIndex: 0,
+    searchQuery: '',
+    list: { keysFilter: 'ALL', sort: 'OFF' },
+    playOptions: { visualConstant },
+    currentFolderLabel: () => '',
+    lampOpOf: () => undefined,
+    nowMs: () => 0,
+  });
+
+  test('lights OPTION_CONSTANT (400) while the player has Visual CONSTANT on', () => {
+    expect(new BeatorajaSelectSkinState(context(true)).computeActiveOps().has(400)).toBe(true);
+    expect(new BeatorajaSelectSkinState(context(false)).computeActiveOps().has(400)).toBe(false);
+  });
+});

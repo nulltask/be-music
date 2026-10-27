@@ -9,6 +9,7 @@ describe('skin measure-line alignment', () => {
     const context = {
       play: {
         chart: { id: 'chart' },
+        playState: { view: { hiSpeed: { locked: false } } },
         laneChannels: ['11', '21'],
         laneX: new Map([
           ['11', { x: 10, w: 40, top: 0, bottom: 300, baseBottom: 400, scrollScale: 0.75 }],
@@ -36,6 +37,7 @@ describe('skin measure-line alignment', () => {
     const context = {
       play: {
         chart: { id: 'chart' },
+        playState: { view: { hiSpeed: { locked: false } } },
         laneChannels: ['11'],
         laneX: new Map([['11', { x: 75, w: 54, top: 0, bottom: 725 }]]),
       },

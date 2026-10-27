@@ -1,7 +1,7 @@
 import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
-import { resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
+import { resolveConstantVisibility, resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
 /**
  * The beatoraja family's play screen: a beatoraja play skin (`play_<variant>`) drawn by `BeatorajaPlaySkinView` with the
  * play's notes, lane markers and BGA spliced in where the skin authors them (`BeatorajaPlayStage`), its canvas fitted
@@ -137,6 +137,8 @@ export interface BeatorajaPlayRuntime {
       }
     | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
+  /** The play's Visual CONSTANT switch and the course's NO_SPEED lock, which decide whether `#SPEED` scrolls. */
+  readonly options?: { readonly visualConstant?: boolean; readonly hiSpeedLocked?: boolean };
   readonly notes: readonly PlayerUIFrameNote[];
   readonly mineNotes: readonly PlayerUIFrameNote[];
   readonly invisibleNotes: readonly PlayerUIFrameNote[];
@@ -296,7 +298,12 @@ export class BeatorajaPlayView implements PlayView {
     if (resolved === undefined) return;
     const chart = this.options.dpFlip === true ? flipDPChart(resolved) : resolved;
     const skin = this.kit.kit.skin;
-    const scrollMapper = createBeatorajaScrollMapper(chart);
+    // Visual CONSTANT ignores `#SPEED` (`LaneRenderer`'s `speed` is 1), unless a NO_SPEED course turns it off.
+    const constant = resolveConstantVisibility({
+      enabled: play.options?.visualConstant,
+      noSpeed: play.options?.hiSpeedLocked,
+    });
+    const scrollMapper = createBeatorajaScrollMapper(chart, { ignoreSpeed: constant.enabled });
     const laneTimelines = scrollMapper !== undefined ? createBeatorajaLaneTimelines(chart) : undefined;
     const timeMarkers = normalizeBeatorajaNote(skin.note).time.length > 0;
     const guideEvents = play.resolvedPlayChart?.timing ? collectBPMGuideEvents(play.resolvedPlayChart.timing) : [];
@@ -484,6 +491,7 @@ export class BeatorajaPlayView implements PlayView {
     this.wasPaused = paused;
     const context = bridge.update({
       judgeTimingMs: frame.playOptions.judgeTimingMs,
+      visualConstant: frame.playOptions.visualConstant,
       nowMs: play.playClock(),
       hostNowMs: frame.clock.nowMs,
       state: frame.state,
@@ -513,6 +521,12 @@ export class BeatorajaPlayView implements PlayView {
       showInvisibleNotes: this.showInvisibleNotes,
       bpmGuide: frame.playOptions.bpmGuide,
       judgeTimingMs: frame.playOptions.judgeTimingMs,
+      constant: resolveConstantVisibility({
+        enabled: frame.playOptions.visualConstant,
+        durationMs: frame.playOptions.noteDurationMs,
+        fadeMs: frame.playOptions.constantFadeMs,
+        noSpeed: frame.state.view.hiSpeed.locked,
+      }),
     });
     // A failed play's picture fades with its sound; on a normal end the skin draws its own fade-out.
     if (play.exiting && play.playMoments.failedAtMs !== undefined && play.exitFadeStartedAt !== undefined) {
