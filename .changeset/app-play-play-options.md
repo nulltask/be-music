@@ -2,22 +2,7 @@
 '@be-music/app-play': patch
 ---
 
-Expose HS-FIX including START BPM in Debug Menu, synchronize it with select screens, and persist the selected mode.
-
-Add the four AC 34 display-area information choices and expose the existing per-side cover settings in Debug Menu, with saved preferences.
-
-Restore each recorded AUTO SCRATCH side independently and apply older combined replay switches to both sides.
-
-Expose the source-specific LEGACY NOTE and LN REMOVE choices in Debug Menu and save the selected modifier.
-
-Apply AC 34's A-SCR & LEGACY NOTE preset in a single Debug Menu action while retaining both explicit settings in replay.
-
-Offer EX-HARD for beatoraja and AC rules in Debug Menu, label HAZARD separately and reset unsupported choices when switching rulesets.
-
-Offer ASSIST EASY for beatoraja and ASSISTED EASY for AC rules in Debug Menu.
-
-Expose every new play option in Debug Menu with saved preferences, offering each ruleset only its own choices, and lock the ones a running play cannot change.
-
-Play a battle mode on the converted chart's LR2 play skin, start PRACTICE again after each run, and keep a two-player result out of the records and the Leaderboard while still saving its replay.
-
-Fix the Debug Menu's hi-speed controls overwriting a hi-speed the play changed: the classic speed list reset a 2.1 to 1, and the floating speed slider rounded a cover-coupled 2.2458 back to 2.25; each control now takes only an edit made on it, while its mode is in use.
+Expose every new play option in Debug Menu with saved preferences, offering each ruleset its own choices and locking the ones a running play cannot change: HS-FIX including START BPM (kept in sync with the select screens), the four AC 34 display-area information choices and the per-side cover settings, independent AUTO SCRATCH sides, the source-specific LEGACY NOTE and LN REMOVE, AC 34's A-SCR & LEGACY NOTE preset in one action, EX-HARD for beatoraja and AC rules with HAZARD labelled apart, ASSIST EASY for beatoraja and ASSISTED EASY for AC rules, and the other judgment, hi-speed, view, arrangement, modifier, gauge, battle and PRACTICE options.
+The options that only transform the chart or the view are offered under every judge ruleset and kept when Judgment windows changes: HS-FIX CONSTANT, CLASSIC / Normal / FLOATING HI-SPEED and the fixed display area, scroll and mine modifiers, both EXTRAs, 7 TO 9, BATTLE AS / D-BATTLE / SP TO DP, the source-specific lane options, SYNCHRONIZE / SYMMETRY RANDOM, M-RAN, and Reuse previous arrangement (for a play under the same rules). Choices the new ruleset does not support are reset (#774).
+A replay restores each recorded AUTO SCRATCH side on its own, and an older replay's combined switch applies to both sides.
+A battle mode plays on the converted chart's LR2 play skin, PRACTICE starts again after each run, and a two-player result stays out of the records and the Leaderboard while its replay is still saved.
