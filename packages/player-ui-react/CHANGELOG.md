@@ -8,5 +8,4 @@
 
 ### Patch Changes
 
-- Updated dependencies [3e694df]
-  - @be-music/player-ui@0.2.0
+- Updated dependencies: `@be-music/player-ui@0.2.0`

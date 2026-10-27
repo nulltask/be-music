@@ -4,19 +4,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [2e435b9]
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-parser@0.5.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/chart-model@0.7.0`, `@be-music/chart-parser@0.5.0`, `@be-music/chart-source@0.5.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.5.0
 
@@ -26,14 +14,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-parser@0.4.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/shared-utils@0.5.0
+- Updated dependencies: `@be-music/chart-model@0.6.0`, `@be-music/chart-parser@0.4.0`, `@be-music/chart-source@0.4.0`, `@be-music/shared-utils@0.5.0`
 
 ## 0.4.0
 
@@ -50,11 +31,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/chart-parser@0.3.0
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/chart-parser@0.3.0`, `@be-music/shared-utils@0.4.0`
 ## 0.3.3
 
 ### Patch Changes
@@ -66,24 +43,14 @@
 
 ### Patch Changes
 
-- Updated dependencies [202a28b]
-  - @be-music/chart-model@0.4.0
-  - @be-music/chart-parser@0.2.4
+- Updated dependencies: `@be-music/chart-model@0.4.0`, `@be-music/chart-parser@0.2.4`
 
 ## 0.3.1
 
 ### Patch Changes
 
 - b9922cf: Round-trip beatoraja bmson long-note type extensions (`info.ln_type` and per-note `t`) through JSON and bmson output.
-- Updated dependencies [b2c4f9b]
-- Updated dependencies [b9922cf]
-- Updated dependencies [4d5a89e]
-- Updated dependencies [cdc42a1]
-- Updated dependencies [ca1012c]
-  - @be-music/chart-parser@0.2.3
-  - @be-music/chart-source@0.2.2
-  - @be-music/shared-utils@0.3.0
-  - @be-music/chart-model@0.3.2
+- Updated dependencies: `@be-music/chart-parser@0.2.3`, `@be-music/chart-source@0.2.2`, `@be-music/shared-utils@0.3.0`, `@be-music/chart-model@0.3.2`
 
 ## 0.3.0
 
@@ -93,19 +60,13 @@
 
 ### Patch Changes
 
-- Updated dependencies [73dff9a]
-  - @be-music/shared-utils@0.2.1
-  - @be-music/chart-source@0.2.1
-  - @be-music/chart-parser@0.2.2
-  - @be-music/chart-model@0.3.1
+- Updated dependencies: `@be-music/shared-utils@0.2.1`, `@be-music/chart-source@0.2.1`, `@be-music/chart-parser@0.2.2`, `@be-music/chart-model@0.3.1`
 
 ## 0.2.1
 
 ### Patch Changes
 
-- Updated dependencies [06a2db9]
-  - @be-music/chart-model@0.3.0
-  - @be-music/chart-parser@0.2.1
+- Updated dependencies: `@be-music/chart-model@0.3.0`, `@be-music/chart-parser@0.2.1`
 
 ## 0.2.0
 
@@ -115,13 +76,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-- Updated dependencies [135f822]
-  - @be-music/chart-parser@0.2.0
-  - @be-music/chart-model@0.2.0
-  - @be-music/chart-source@0.2.0
-  - @be-music/shared-utils@0.2.0
+- Updated dependencies: `@be-music/chart-parser@0.2.0`, `@be-music/chart-model@0.2.0`, `@be-music/chart-source@0.2.0`, `@be-music/shared-utils@0.2.0`
 
 ## 0.1.0
 
@@ -131,8 +86,4 @@
 
 ### Patch Changes
 
-- Updated dependencies
-  - @be-music/chart-model@0.1.0
-  - @be-music/chart-source@0.1.0
-  - @be-music/chart-parser@0.1.0
-  - @be-music/shared-utils@0.1.0
+- Updated dependencies: `@be-music/chart-model@0.1.0`, `@be-music/chart-source@0.1.0`, `@be-music/chart-parser@0.1.0`, `@be-music/shared-utils@0.1.0`

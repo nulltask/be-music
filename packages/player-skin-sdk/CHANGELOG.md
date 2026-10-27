@@ -17,54 +17,7 @@
 ### Patch Changes
 
 - 6fc13f5: A RANDOM MIX bar reads `draw a course` with an `RND` badge in the select list, and a course folder's count leaves it out, as it does the NEW COURSE bar.
-- Updated dependencies [ba3cc20]
-- Updated dependencies [7fca9a9]
-- Updated dependencies [a9cc3d7]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [fcaef41]
-- Updated dependencies [7f0386b]
-- Updated dependencies [45aff53]
-- Updated dependencies [1c97afd]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [78faa63]
-- Updated dependencies [3d5e880]
-- Updated dependencies [21f705d]
-- Updated dependencies [a8896a9]
-- Updated dependencies [b1ca2ce]
-- Updated dependencies [6e676fe]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [9f41b30]
-- Updated dependencies [f994ec4]
-- Updated dependencies [4371c72]
-- Updated dependencies [acba3d5]
-- Updated dependencies [3e694df]
-- Updated dependencies [3e694df]
-- Updated dependencies [c35b845]
-- Updated dependencies [a83e326]
-- Updated dependencies [a8896a9]
-- Updated dependencies [85f13dc]
-- Updated dependencies [3c2ea6b]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [b09a6cf]
-- Updated dependencies [85e11f7]
-- Updated dependencies [d0939cc]
-- Updated dependencies [3e694df]
-- Updated dependencies [85250d8]
-- Updated dependencies [2e435b9]
-  - @be-music/player-engine@0.11.0
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/player-scene-model@0.3.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/player-engine@0.11.0`, `@be-music/chart-model@0.7.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-scene-model@0.3.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.4.0
 
@@ -76,14 +29,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/player-engine@0.10.0
-  - @be-music/player-scene-model@0.2.0
+- Updated dependencies: `@be-music/chart-model@0.6.0`, `@be-music/chart-source@0.4.0`, `@be-music/player-engine@0.10.0`, `@be-music/player-scene-model@0.2.0`
 
 ## 0.3.0
 
@@ -100,11 +46,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/player-engine@0.9.0
-  - @be-music/player-scene-model@0.1.0
+- Updated dependencies: `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/player-engine@0.9.0`, `@be-music/player-scene-model@0.1.0`
 ## 0.2.0
 
 ### Minor Changes
@@ -132,8 +74,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [73fd398]
-  - @be-music/player-engine@0.8.0
+- Updated dependencies: `@be-music/player-engine@0.8.0`
 
 ## 0.1.0
 
@@ -148,20 +89,4 @@
 
 ### Patch Changes
 
-- Updated dependencies [202a28b]
-- Updated dependencies [d9958ac]
-- Updated dependencies [f24ed8b]
-- Updated dependencies [202a28b]
-- Updated dependencies [750c47d]
-- Updated dependencies [b3fa635]
-- Updated dependencies [2d7652c]
-- Updated dependencies [0103435]
-- Updated dependencies [9505684]
-- Updated dependencies [1589105]
-- Updated dependencies [1c6e7aa]
-- Updated dependencies [08e62d0]
-- Updated dependencies [41f5efb]
-- Updated dependencies [40f1050]
-  - @be-music/chart-model@0.4.0
-  - @be-music/player-engine@0.7.0
-  - @be-music/chart-audio-renderer@0.2.4
+- Updated dependencies: `@be-music/chart-model@0.4.0`, `@be-music/player-engine@0.7.0`, `@be-music/chart-audio-renderer@0.2.4`

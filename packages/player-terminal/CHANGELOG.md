@@ -10,50 +10,7 @@
 
 - a83e326: Use `____` for the That-Which-Must-Not-Be-Named ruleset CLI argument and `????` in replay comparison reports.
 - f994ec4: Honor POOR BGA overlay and hidden modes in ANSI and Kitty rendering. Preserve PNG transparency for overlays and keep the normal BGA cache intact when POOR display is disabled.
-- Updated dependencies [ba3cc20]
-- Updated dependencies [7fca9a9]
-- Updated dependencies [a9cc3d7]
-- Updated dependencies [69df53c]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [fcaef41]
-- Updated dependencies [7f0386b]
-- Updated dependencies [45aff53]
-- Updated dependencies [1c97afd]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [7f0386b]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [78faa63]
-- Updated dependencies [3d5e880]
-- Updated dependencies [21f705d]
-- Updated dependencies [a8896a9]
-- Updated dependencies [b1ca2ce]
-- Updated dependencies [6e676fe]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [9f41b30]
-- Updated dependencies [f994ec4]
-- Updated dependencies [4371c72]
-- Updated dependencies [acba3d5]
-- Updated dependencies [3e694df]
-- Updated dependencies [3e694df]
-- Updated dependencies [c35b845]
-- Updated dependencies [85250d8]
-- Updated dependencies [2e435b9]
-  - @be-music/player-engine@0.11.0
-  - @be-music/chart-audio-renderer@0.4.1
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-parser@0.5.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/player-node-audio@0.2.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/player-engine@0.11.0`, `@be-music/chart-audio-renderer@0.4.1`, `@be-music/chart-model@0.7.0`, `@be-music/chart-parser@0.5.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-node-audio@0.2.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.7.0
 
@@ -65,18 +22,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [dca9a2f]
-  - @be-music/chart-audio-renderer@0.4.0
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-parser@0.4.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/player-engine@0.10.0
-  - @be-music/shared-utils@0.5.0
+- Updated dependencies: `@be-music/chart-audio-renderer@0.4.0`, `@be-music/chart-model@0.6.0`, `@be-music/chart-parser@0.4.0`, `@be-music/chart-source@0.4.0`, `@be-music/player-engine@0.10.0`, `@be-music/shared-utils@0.5.0`
 
 ## 0.6.0
 
@@ -93,20 +39,13 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/chart-audio-renderer@0.3.0
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/chart-parser@0.3.0
-  - @be-music/player-engine@0.9.0
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/chart-audio-renderer@0.3.0`, `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/chart-parser@0.3.0`, `@be-music/player-engine@0.9.0`, `@be-music/shared-utils@0.4.0`
 ## 0.5.1
 
 ### Patch Changes
 
 - 63bea3f: Fix `bms-playlog` rejecting `--` with "unknown option '--'", which broke `pnpm playlog -- <file>`. `--` now ends the options, and every argument after it is read as a file.
-- Updated dependencies [73fd398]
-  - @be-music/player-engine@0.8.0
+- Updated dependencies: `@be-music/player-engine@0.8.0`
 
 ## 0.5.0
 
@@ -127,24 +66,7 @@
   miss-BGA default, so the previous 2-second window held the miss layer four times longer than LR2.
   `DEFAULT_POOR_BGA_DISPLAY_SECONDS` is shared by the TUI compositor and the web LR2 scene, so both
   runtimes pick up the corrected timing.
-- Updated dependencies [202a28b]
-- Updated dependencies [d9958ac]
-- Updated dependencies [f24ed8b]
-- Updated dependencies [202a28b]
-- Updated dependencies [750c47d]
-- Updated dependencies [b3fa635]
-- Updated dependencies [2d7652c]
-- Updated dependencies [0103435]
-- Updated dependencies [9505684]
-- Updated dependencies [1589105]
-- Updated dependencies [1c6e7aa]
-- Updated dependencies [08e62d0]
-- Updated dependencies [41f5efb]
-- Updated dependencies [40f1050]
-  - @be-music/chart-model@0.4.0
-  - @be-music/player-engine@0.7.0
-  - @be-music/chart-audio-renderer@0.2.4
-  - @be-music/chart-parser@0.2.4
+- Updated dependencies: `@be-music/chart-model@0.4.0`, `@be-music/player-engine@0.7.0`, `@be-music/chart-audio-renderer@0.2.4`, `@be-music/chart-parser@0.2.4`
 
 ## 0.4.0
 
@@ -154,9 +76,7 @@
 
 ### Patch Changes
 
-- Updated dependencies
-- Updated dependencies [ab210cb]
-  - @be-music/player-engine@0.6.0
+- Updated dependencies: `@be-music/player-engine@0.6.0`
 
 ## 0.3.0
 
@@ -171,77 +91,43 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2c4f9b]
-- Updated dependencies [b9922cf]
-- Updated dependencies [4d5a89e]
-- Updated dependencies [254e213]
-- Updated dependencies [7bbf052]
-- Updated dependencies [811cdfc]
-- Updated dependencies [d0bb321]
-- Updated dependencies [ebfdba7]
-- Updated dependencies [ca1012c]
-- Updated dependencies [6ce9173]
-- Updated dependencies [7802f98]
-- Updated dependencies [cdc42a1]
-- Updated dependencies [ca1012c]
-  - @be-music/chart-parser@0.2.3
-  - @be-music/chart-source@0.2.2
-  - @be-music/player-engine@0.5.0
-  - @be-music/chart-audio-renderer@0.2.3
-  - @be-music/shared-utils@0.3.0
-  - @be-music/chart-model@0.3.2
+- Updated dependencies: `@be-music/chart-parser@0.2.3`, `@be-music/chart-source@0.2.2`, `@be-music/player-engine@0.5.0`, `@be-music/chart-audio-renderer@0.2.3`, `@be-music/shared-utils@0.3.0`, `@be-music/chart-model@0.3.2`
 
 ## 0.2.6
 
 ### Patch Changes
 
-- Updated dependencies [9b7f269]
-  - @be-music/player-engine@0.4.3
+- Updated dependencies: `@be-music/player-engine@0.4.3`
 
 ## 0.2.5
 
 ### Patch Changes
 
-- Updated dependencies [eb92249]
-  - @be-music/player-engine@0.4.2
+- Updated dependencies: `@be-music/player-engine@0.4.2`
 
 ## 0.2.4
 
 ### Patch Changes
 
-- Updated dependencies [69f77d1]
-- Updated dependencies [956fd01]
-- Updated dependencies [73dff9a]
-  - @be-music/player-engine@0.4.1
-  - @be-music/shared-utils@0.2.1
-  - @be-music/chart-audio-renderer@0.2.2
-  - @be-music/chart-source@0.2.1
-  - @be-music/chart-parser@0.2.2
-  - @be-music/chart-model@0.3.1
+- Updated dependencies: `@be-music/player-engine@0.4.1`, `@be-music/shared-utils@0.2.1`, `@be-music/chart-audio-renderer@0.2.2`, `@be-music/chart-source@0.2.1`, `@be-music/chart-parser@0.2.2`, `@be-music/chart-model@0.3.1`
 
 ## 0.2.3
 
 ### Patch Changes
 
-- Updated dependencies [06a2db9]
-  - @be-music/chart-model@0.3.0
-  - @be-music/player-engine@0.4.0
-  - @be-music/chart-audio-renderer@0.2.1
-  - @be-music/chart-parser@0.2.1
+- Updated dependencies: `@be-music/chart-model@0.3.0`, `@be-music/player-engine@0.4.0`, `@be-music/chart-audio-renderer@0.2.1`, `@be-music/chart-parser@0.2.1`
 
 ## 0.2.2
 
 ### Patch Changes
 
-- Updated dependencies [b9a5f51]
-  - @be-music/player-engine@0.3.1
+- Updated dependencies: `@be-music/player-engine@0.3.1`
 
 ## 0.2.1
 
 ### Patch Changes
 
-- Updated dependencies [5ea9072]
-  - @be-music/player-engine@0.3.0
+- Updated dependencies: `@be-music/player-engine@0.3.0`
 
 ## 0.2.0
 
@@ -262,18 +148,7 @@
   - POOR / BAD verdict plates no longer pair with the running combo number (would otherwise display `POOR 5` after EMPTY POOR preserves combo).
   - In-play key input is no longer swallowed in the TUI worker-thread engine — `pressedAt` is wall-clock-ms-based so the main-thread input runtime and the worker-thread engine share a comparable clock domain.
 
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-- Updated dependencies [135f822]
-  - @be-music/chart-parser@0.2.0
-  - @be-music/chart-model@0.2.0
-  - @be-music/player-engine@0.2.0
-  - @be-music/chart-audio-renderer@0.2.0
-  - @be-music/chart-source@0.2.0
-  - @be-music/shared-utils@0.2.0
+- Updated dependencies: `@be-music/chart-parser@0.2.0`, `@be-music/chart-model@0.2.0`, `@be-music/player-engine@0.2.0`, `@be-music/chart-audio-renderer@0.2.0`, `@be-music/chart-source@0.2.0`, `@be-music/shared-utils@0.2.0`
 
 ## 0.1.0
 
@@ -283,9 +158,4 @@
 
 ### Patch Changes
 
-- Updated dependencies
-  - @be-music/chart-audio-renderer@0.1.0
-  - @be-music/chart-model@0.1.0
-  - @be-music/chart-source@0.1.0
-  - @be-music/chart-parser@0.1.0
-  - @be-music/shared-utils@0.1.0
+- Updated dependencies: `@be-music/chart-audio-renderer@0.1.0`, `@be-music/chart-model@0.1.0`, `@be-music/chart-source@0.1.0`, `@be-music/chart-parser@0.1.0`, `@be-music/shared-utils@0.1.0`
