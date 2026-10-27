@@ -214,11 +214,11 @@ sequenceDiagram
 - リプレイスロット（[replay.ja.md](./replay.ja.md#リプレイスロット)）：選曲画面では op 196 / 197（スロット 1 が空 / リプレイあり）、1196 / 1197、1199 / 1200、1202 / 1203（スロット 2-4）がカーソルの下のバーに従い、1205-1208 が選んだスロットを示し、リプレイボタン（19、316-318）がそのスロットを再生します。リザルト画面では各スロットが none・exists・saved の op（196-198、1196-1204）のどれかを点け、リプレイボタンがそのスロットに保存します（`resolveBeatorajaSelectReplayOps`、`resolveBeatorajaResultReplayOps`、`beatorajaReplayButtonSlot`）。beatoraja の `createReplayProperty` と `getReplayEventConsumer` と同じです。リザルトのスキンのボタンをタップすると、そのボタンだけが働き、画面は先へ進みません。
 - テーマの `resultclose` と `course_close`（`pickBeatorajaThemeBGMPaths` の `resultClose` / `courseClose`）は、リザルトとコースのリザルトを閉じる音です。beatoraja にはリプレイを保存したときの音はありません。
 - beatoraja にとって別の意味を持つ LR2 の番号がいくつかあります（`IntegerPropertyFactory`、`BooleanPropertyFactory`、`StringPropertyFactory`）。number 92 はメイン BPM（LR2 ではインターネットランキングの順位）、op 400 は CONSTANT のオプション（LR2 ではキーコンフィグのページ）です。beatoraja には number 38-41・93-94、text 17-29、op 34 がないので、何も読みません（result と decide の画面では 0）（#430）。
+- op 400（CONSTANT）は、プレイヤーが[表示用 CONSTANT](./play-options.ja.md#表示用-constant)をオンにしている間、選曲画面とプレイ画面で点きます（`resolveBeatorajaConstantOps`）。beatoraja の `BooleanPropertyFactory` がプレイヤーのプレイ設定を読むとおり、`NO_SPEED` 制約で CONSTANT を描画しないコースでも点いたままです（#776）。
 
 ### 既知の未対応
 
 - 自己ベストとターゲットはまだ mapping に届いていません。number 150-158（ペースメーカーのスコア、それとの差、それに対するレート、27 分の 1 刻みの次のランクまでの差である beatoraja の `NUMBER_DIFF_NEXTRANK`）、自己ベストの number（71-89）、自己ベストとターゲットのランクの op は 0 か何も読みません。
-- op 400（CONSTANT）は点きません。be-music には CONSTANT のオプションがありません。
 
 ## Browser player への配線
 

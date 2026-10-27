@@ -108,6 +108,15 @@ export const BEATORAJA_PLAY_STARTED_OPS: { readonly on: number; readonly off: nu
   off: BEATORAJA_OP.NOW_LOADING,
 };
 
+/**
+ * The CONSTANT op (`OPTION_CONSTANT`, 400) while the player's CONSTANT setting is on. beatoraja's
+ * `BooleanPropertyFactory` reads the player's play config, not the lane renderer's copy, so a course's `NO_SPEED`
+ * constraint, which stops CONSTANT drawing, leaves the op lit.
+ */
+export function resolveBeatorajaConstantOps(constant: boolean | undefined): number[] {
+  return constant === true ? [BEATORAJA_OP.CONSTANT] : [];
+}
+
 /** The lane cover ops a play skin keeps up to date (`LANECOVER1_CHANGING`, `LANECOVER1_ON`, `LIFT1_ON`). */
 export const BEATORAJA_COVER_OPS: readonly number[] = [
   BEATORAJA_OP.LANECOVER1_CHANGING,
