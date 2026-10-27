@@ -448,6 +448,7 @@ export class LR2SelectView implements SelectView {
               ...(maker.draft !== undefined ? { draft: maker.draft } : {}),
               defaultConnection: maker.defaultConnection,
               namePrompt: COURSE_NAME_PROMPT,
+              ...(maker.randomMixSettings !== undefined ? { randomMixSettings: maker.randomMixSettings } : {}),
             },
           }
         : {}),
@@ -671,8 +672,7 @@ export class LR2SelectView implements SelectView {
     const emit = (intent: SelectIntent): void => this.emit?.(intent);
     const maker = resolveLR2CourseMakerAction(button.type);
     if (maker !== undefined && this.frame?.courseMaker !== undefined) {
-      if (maker.kind === 'connection') emit({ type: 'course-maker', action: { ...maker, step: direction } });
-      else if (maker.kind === 'default-connection')
+      if (maker.kind === 'connection' || maker.kind === 'default-connection' || maker.kind === 'random-mix')
         emit({ type: 'course-maker', action: { ...maker, step: direction } });
       else emit({ type: 'course-maker', action: maker });
       return;

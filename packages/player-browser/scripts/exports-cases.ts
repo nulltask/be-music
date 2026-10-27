@@ -555,6 +555,27 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       maker.finish();
     },
   });
+  define('player-browser.createRandomMixEntry', {
+    run: () => {
+      playerWebCoreAPI.createRandomMixEntry('nonstop');
+    },
+  });
+  define('player-browser.createRandomMixChart', {
+    run: () => {
+      playerWebCoreAPI.createRandomMixChart(BENCH_SONG, BENCH_SONG_MD5);
+    },
+  });
+  define('player-browser.createDrawnRandomMixEntry', {
+    run: () => {
+      playerWebCoreAPI.createDrawnRandomMixEntry(BENCH_COURSE_DEFINITION, BENCH_HASHED_SONGS);
+    },
+  });
+  define('player-browser.CourseMaker.drawRandomMix', {
+    run: () => {
+      const maker = new playerWebCoreAPI.CourseMaker({ md5Of: async () => undefined });
+      maker.drawRandomMix('expert', 7, [playerWebCoreAPI.createRandomMixChart(BENCH_SONG, BENCH_SONG_MD5)], () => 0);
+    },
+  });
   define('player-browser.resolveCourseMakerFolders', {
     run: () => {
       playerWebCoreAPI.resolveCourseMakerFolders([BENCH_COURSE_DEFINITION], BENCH_COURSE_LOOKUP);
