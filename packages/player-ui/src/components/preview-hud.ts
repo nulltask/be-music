@@ -102,6 +102,10 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         left: 50%;
         top: 50%;
         transform: translate(-50%, -50%);
+        /* Sized by its icon, which follows the stage's height, not by the theme's fixed icon-button size. */
+        width: auto;
+        height: auto;
+        padding: 0.6em;
         pointer-events: auto;
       }
       .resume svg {
