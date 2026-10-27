@@ -253,13 +253,16 @@ sequenceDiagram
   `StringPropertyFactory`): number 92 is the main BPM (LR2's internet-ranking place), op 400 the CONSTANT option (LR2's
   key-config page), and beatoraja defines no numbers 38-41 or 93-94, no texts 17-29 and no op 34, so they read nothing
   (0 on the result and decide screens) (#430).
+- Op 400 (CONSTANT) is lit on the select and play screens while the player has
+  [Visual CONSTANT](./play-options.md#visual-constant) on (`resolveBeatorajaConstantOps`). As beatoraja's
+  `BooleanPropertyFactory` reads the player's play config, it stays lit in a course whose `NO_SPEED` constraint stops
+  CONSTANT drawing (#776).
 
 ### Known gaps
 
 - The best record and the target do not reach the mapping yet: numbers 150-158 (the pacemaker scores, the differences
   from them, the rates over them and beatoraja's `NUMBER_DIFF_NEXTRANK`, the distance to the next rank on 27ths), the best record's
   numbers (71-89) and the best and target rank ops read 0 or nothing.
-- Op 400 (CONSTANT) is never lit: be-music has no CONSTANT option.
 
 ## Browser player wiring
 
