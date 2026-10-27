@@ -45,7 +45,7 @@ export class BeMusicScoreSummaryElement extends DataElement<BeMusicScoreData> {
           ><span class="muted">${rate}</span>
         </div>
         <p class="combo">Combo <b>${d.combo}</b> · Max ${d.maxCombo}</p>`;
-    return html`<section class="card" part="panel">
+    return html`<section class="panel" part="panel">
       <h3>Score &amp; progress</h3>
       ${stats([
         ['Score', d.score],

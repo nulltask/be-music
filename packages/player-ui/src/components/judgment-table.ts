@@ -27,7 +27,7 @@ export class BeMusicJudgmentTableElement extends DataElement<BeMusicJudgmentData
   protected override render(): TemplateResult | typeof nothing {
     const d = this.data;
     if (!d) return nothing;
-    return html`<section class="card" part="panel">
+    return html`<section class="panel" part="panel">
       <h3>Judgments</h3>
       <table part="table">
         <thead>
