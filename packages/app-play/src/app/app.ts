@@ -22,6 +22,7 @@ import { PlayerShell } from './shell.ts';
 import { InlineSearch } from '../inline-search.ts';
 import { DebugMenu, type DebugMenuDeps } from '../ui/debug-menu/index.ts';
 import { confirmSkinDrop, promptSkinDrop } from '../ui/skin-drop-prompt.ts';
+import { showPlayOptionMismatch } from '../ui/play-option-mismatch.ts';
 import { showMissingReplayCharts } from '../ui/replay-missing.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
 import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
@@ -504,6 +505,7 @@ export class PlayerWebApp {
       lockReplayOptionsForPlay: (liveTempo) => this.lockReplayOptionsForPlay(liveTempo),
       unlockReplayOptions: () => this.unlockReplayOptions(),
       showSelect: () => this.showSelect(),
+      showPlayOptionMismatch,
       setPlayOptions: (changes) => this.setPlayOptions(changes),
     });
     this.replayRoute = new ReplayRoute({

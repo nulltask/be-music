@@ -8,7 +8,13 @@ import { clampFloatingHiSpeed } from '@be-music/player-scene-model';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { AudioService } from '@be-music/player-browser/audio';
 import { resolveChartSource, type ChartFileHashes } from '@be-music/player-browser/collection';
-import { createPlayScene, type PixiSceneHost, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
+import {
+  createPlayScene,
+  PlayOptionMismatchError,
+  type PixiSceneHost,
+  type PlayScene,
+  type SelectScene,
+} from '@be-music/player-browser/host';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import { abortedRecordPlayFromResult, courseStageRecordPlayFromResult } from '@be-music/player-engine/records';
 import { snapHiSpeed, type LibraryChart, type PlayOptions, type PlayResult } from '@be-music/player-scene-model';
@@ -68,7 +74,7 @@ export interface PlayRouteDeps {
   /** The scene router: the select scene it keeps, the play it holds, and the navigation a play shows in. */
   readonly router: Pick<
     SceneRouter<PlayerScene, PlayScene, SelectScene>,
-    'select' | 'play' | 'begin' | 'leave' | 'show' | 'prepare'
+    'select' | 'play' | 'begin' | 'isCurrent' | 'leave' | 'show' | 'prepare'
   >;
   /** The select route: where its screen was, for its next showing to come back to. */
   readonly selectRoute: Pick<SelectRoute, 'lastSelectNavigation'>;
@@ -129,6 +135,8 @@ export interface PlayRouteDeps {
   /** Re-enables the options a play latched. */
   readonly unlockReplayOptions: () => void;
   readonly showSelect: () => Promise<void>;
+  /** Names the selected options a chart cannot be played with; `onClose` runs once the player dismisses it. */
+  readonly showPlayOptionMismatch: (options: readonly string[], onClose: () => void) => void;
   /** Keeps a play option for every screen and play, and pushes it to the select screen. */
   readonly setPlayOptions: (changes: Partial<PlayOptions>) => void;
 }
@@ -176,6 +184,7 @@ export class PlayRoute {
   private readonly lockReplayOptionsForPlay: PlayRouteDeps['lockReplayOptionsForPlay'];
   private readonly unlockReplayOptions: PlayRouteDeps['unlockReplayOptions'];
   private readonly showSelect: PlayRouteDeps['showSelect'];
+  private readonly showPlayOptionMismatch: PlayRouteDeps['showPlayOptionMismatch'];
   private readonly setPlayOptions: PlayRouteDeps['setPlayOptions'];
 
   public constructor(deps: PlayRouteDeps) {
@@ -206,6 +215,7 @@ export class PlayRoute {
     this.lockReplayOptionsForPlay = deps.lockReplayOptionsForPlay;
     this.unlockReplayOptions = deps.unlockReplayOptions;
     this.showSelect = deps.showSelect;
+    this.showPlayOptionMismatch = deps.showPlayOptionMismatch;
     this.setPlayOptions = deps.setPlayOptions;
   }
 
@@ -570,7 +580,18 @@ export class PlayRoute {
     // state while the chart's audio decodes, then the play starts.
     if (!(await this.router.show(view, { role: 'play', token }))) return;
     this.latchPlay(view);
-    if (!(await this.router.prepare(view, { token }))) return;
+    try {
+      if (!(await this.router.prepare(view, { token }))) return;
+    } catch (error) {
+      if (!(error instanceof PlayOptionMismatchError)) throw error;
+      // The chart cannot be played with the selected options: say which, and go back to select to change them.
+      if (overrides.courseStage !== undefined || overrides.nonstop !== undefined) this.courses.abandonRun();
+      this.setPlayStatus(`Cannot play ${chartEntry.title} with ${error.options.join(', ')}`);
+      this.showPlayOptionMismatch(error.options, () => {
+        if (this.router.isCurrent(token)) void this.showSelect();
+      });
+      return;
+    }
     view.start();
     // Consume the "user pressed Record on the select screen" flag now that gameplay is prepared — `startRecording`
     // requires the gameplay AudioContext to exist, which only happens after `prepare`. Failing here is non-fatal: the
