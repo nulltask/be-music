@@ -158,6 +158,7 @@ terminal player は LR2 skin file や beatoraja skin file を読み込みませ�
 
 互換ルールセットとゲージは選択できます: `--ruleset <lr2|beatoraja|____>`（既定 `lr2`）と
 `--gauge <GROOVE|EASY|HARD|DEATH>`（既定 `GROOVE`）。各ルールセットが何を支配するかは
-[player-spec.ja.md](./player-spec.ja.md) を参照してください。
+[player-spec.ja.md](./player-spec.ja.md) を参照してください。サバイバル系ゲージが尽きるとその場でプレイを終えます。
+`--no-end-on-failure` は練習用に最後まで判定を続けます（`PlayerOptions.endOnFailure: false`）。
 
 2P independent gauge variant と LR2 / beatoraja skin option panel は browser 側の関心事です。

@@ -114,6 +114,9 @@ describe('player cli', () => {
     expect(parseArgs(['chart.bms', '--ruleset', '____']).judgeRuleset).toBe('____');
     expect(parseArgs(['chart.bms', '--gauge', 'hard']).gauge).toBe('HARD');
 
+    expect(parseArgs(['chart.bms']).endOnFailure).toBeUndefined();
+    expect(parseArgs(['chart.bms', '--no-end-on-failure']).endOnFailure).toBe(false);
+
     expect(() => parseArgs(['chart.bms', '--ruleset', 'lr2oraja'])).toThrow(/Unknown --ruleset/);
     expect(() => parseArgs(['chart.bms', '--gauge', 'ASSIST'])).toThrow(/Unknown --gauge/);
     const parsed = parseArgs(['chart.bms', '--no-ln-type-auto']);
