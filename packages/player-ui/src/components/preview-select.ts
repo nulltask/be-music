@@ -21,10 +21,13 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
     structureStyles,
     css`
       :host {
+        height: 100%;
+      }
+      /* Padded inside the shadow root: a page reset such as "* { padding: 0 }" outranks :host rules. */
+      .layout {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
         gap: 10px;
-        box-sizing: border-box;
         height: 100%;
         padding: 16px;
       }
@@ -33,25 +36,32 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         align-content: start;
         gap: 6px;
         margin: 0;
-        padding: 0;
+        /* Room for an overlay scrollbar, which takes no gutter of its own, so it does not cover the level. */
+        padding: 0 12px 0 0;
         overflow: auto;
         list-style: none;
         overscroll-behavior: contain;
       }
       button {
         display: grid;
-        grid-template-columns: 128px minmax(0, 1fr) auto;
+        grid-template-columns: 96px minmax(0, 1fr) auto;
         align-items: center;
         gap: 12px;
         width: 100%;
+        height: auto;
         padding: 6px;
         text-align: left;
+        white-space: normal;
       }
+      /* A picture keeps its own shape (a 4:3 #STAGEFILE, a wide #BANNER); the blank stands in for a stage file. */
       .thumb {
         display: block;
         width: 100%;
-        aspect-ratio: 16 / 9;
+        max-height: 96px;
         object-fit: contain;
+      }
+      span.thumb {
+        aspect-ratio: 4 / 3;
       }
       .title,
       .artist {
@@ -64,15 +74,23 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
       .facts {
         font-size: 0.85em;
       }
-      @container be-music (max-width: 22rem) {
+      /* A long genre wraps instead of squeezing the title out. */
+      .facts {
+        max-width: 16em;
+        text-align: right;
+      }
+      @container be-music (max-width: 32rem) {
         button {
-          grid-template-columns: auto minmax(0, 1fr);
+          grid-template-columns: 64px minmax(0, 1fr);
+          row-gap: 4px;
         }
-        .play {
+        .thumb {
           grid-row: span 2;
         }
         .facts {
           grid-column: 2;
+          max-width: none;
+          text-align: left;
         }
       }
     `,
@@ -97,9 +115,8 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
             playLevel: undefined,
           }))
         : (this.charts ?? []).map((chart) => ({ ...chart, disabled: false }));
-    return html`<h2 part="heading">
-        ${this.heading ?? (courses !== undefined ? 'Choose a course' : 'Choose a chart')}
-      </h2>
+    return html`<div class="layout">
+      <h2 part="heading">${this.heading ?? (courses !== undefined ? 'Choose a course' : 'Choose a chart')}</h2>
       <ul part="list" aria-label=${courses !== undefined ? 'Courses' : 'Charts'}>
         ${repeat(
           rows,
@@ -133,6 +150,7 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
             </li>`;
           },
         )}
-      </ul>`;
+      </ul>
+    </div>`;
   }
 }
