@@ -102,6 +102,14 @@ test('beatoraja CONSTANT remains a separate visibility setting from LR2 HS-FIX C
   expect(beatoraja.scrollMapper?.distanceBetween(0, 4)).toBeCloseTo(-8);
 });
 
+test('a NO_SPEED course turns beatoraja CONSTANT off, so #SPEED scrolls again', () => {
+  const options = { judgeRuleset: 'beatoraja', hsFix: 'OFF', visualConstant: true } as const;
+  const course = prepare({ ...options, hiSpeedLocked: true });
+  const plain = prepare({ judgeRuleset: 'beatoraja', hsFix: 'OFF' });
+  expect(course.scrollMapper?.distanceBetween(0, 4)).toBeCloseTo(plain.scrollMapper!.distanceBetween(0, 4));
+  expect(course.scrollMapper?.distanceBetween(0, 4)).not.toBeCloseTo(-8);
+});
+
 test('a negative BPM mirrors the fixed distance instead of the unconverted beat axis', () => {
   const reversedEntry = { ...entry, chart: parseChart('#BPM 120\n#BPM01 -240\n#00108:01\n#00311:01', 'bms') };
   const play = new PlaySession({ judgeRuleset: 'lr2', hsFix: 'CONSTANT' });

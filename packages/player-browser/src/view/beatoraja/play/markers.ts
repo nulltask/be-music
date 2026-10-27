@@ -150,6 +150,11 @@ export class BeatorajaMarkerLayer {
     window?: NoteDrawWindow;
     /** Chart time of a beat, in seconds; with `window`, hides a marker whose time has come. */
     secondsAt?: (beat: number) => number;
+    /**
+     * Visual CONSTANT's opacity of a timeline at its chart time (`resolveConstantAlpha`), read through `secondsAt`; a
+     * marker it gives 0 is not drawn. Omitted: every marker keeps its authored alpha.
+     */
+    alphaAt?: (seconds: number) => number;
   }): void {
     const distance = args.distance ?? ((beat: number): number => beat - args.currentBeat);
     const { window, secondsAt } = args;
@@ -206,6 +211,8 @@ export class BeatorajaMarkerLayer {
           // culled prematurely. 24-pixel slack matches the note layer's culling so markers
           // don't pop in/out at the edge.
           if (y < args.laneTopY - 24 || y > drawBottom + 24) continue;
+          const alpha = args.alphaAt && secondsAt ? args.alphaAt(secondsAt(beat)) : 1;
+          if (alpha <= 0) continue;
           const sprite = this.acquireSprite(used);
           sprite.texture = proto.texture;
           // Anchor at the rect's BOTTOM-LEFT so the marker's bottom edge sits exactly on `y`.
@@ -218,7 +225,7 @@ export class BeatorajaMarkerLayer {
           sprite.width = proto.rect.w;
           sprite.height = Math.max(1, proto.rect.h);
           sprite.tint = proto.tint;
-          sprite.alpha = proto.alpha;
+          sprite.alpha = proto.alpha * alpha;
           used += 1;
         }
       }

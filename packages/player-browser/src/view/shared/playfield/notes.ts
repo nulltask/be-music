@@ -50,6 +50,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     enabled: ctx.options.visualConstant,
     durationMs: ctx.options.noteDurationMs,
     fadeMs: ctx.options.constantFadeMs,
+    noSpeed: ctx.play.playState.view.hiSpeed.locked,
   });
   const opacity = (eventSeconds: number) => resolveConstantAlpha(eventSeconds, displaySeconds, constant);
   // The eased scroll factor, so a hi-speed change glides instead of making the notes jump.

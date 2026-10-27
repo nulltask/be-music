@@ -1,4 +1,4 @@
-import { resolveNoteDisplaySeconds } from '@be-music/player-scene-model';
+import { resolveConstantAlpha, resolveNoteDisplaySeconds, type ConstantVisibility } from '@be-music/player-scene-model';
 /**
  * One beatoraja play skin on the stage: the skin's elements (`BeatorajaPlaySkinView`) with the play's layers spliced in
  * where the skin authored them — the lane markers under the notes at the skin's note anchor, and the BGA at its `bga`
@@ -206,6 +206,8 @@ export class BeatorajaPlayStage {
       showInvisibleNotes?: boolean;
       bpmGuide?: boolean;
       judgeTimingMs?: number;
+      /** Visual CONSTANT: notes, mines, bar lines and BPM guide lines show only near their time. */
+      constant?: ConstantVisibility;
     } = {},
   ): void {
     const view = this.stage.view;
@@ -225,6 +227,7 @@ export class BeatorajaPlayStage {
       activeOps,
       (channel) => lanes.isLaneLNHeld(channel),
       playback.showInvisibleNotes,
+      playback.constant,
     );
     // The markers scroll with the notes' per-beat distance (`rxhs / 4 * hispeed`, `LaneRenderer.java:271-276`) on the
     // lane the active dst block resolves; skin-canvas defaults when no lane matched.
@@ -244,6 +247,11 @@ export class BeatorajaPlayStage {
       timelineBeats: layout.timelineBeats,
       stageBottomY: view.height,
     });
+    const constant = playback.constant;
+    const alphaAt =
+      constant?.enabled === true
+        ? (seconds: number): number => resolveConstantAlpha(seconds, noteClock.currentSeconds, constant)
+        : undefined;
     this.markerLayer.update({
       currentBeat,
       distance: layout.scrollMapper ? placement.distance : undefined,
@@ -254,6 +262,7 @@ export class BeatorajaPlayStage {
       bpmGuide: playback.bpmGuide === true,
       window: placement.window,
       secondsAt: layout.beatToSeconds,
+      ...(alphaAt !== undefined ? { alphaAt } : {}),
     });
     this.guidePool.begin();
     if (this.guideLayer.visible) {
@@ -282,6 +291,7 @@ export class BeatorajaPlayStage {
         lanes,
         pool: this.guidePool,
         drawLines: false,
+        ...(alphaAt !== undefined ? { alphaAt } : {}),
       });
     }
     this.guidePool.end();

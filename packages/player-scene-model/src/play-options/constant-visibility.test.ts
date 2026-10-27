@@ -15,7 +15,14 @@ test('normalizes beatoraja CONSTANT settings and disables only its practice prev
     fadeMs: -1000,
   });
   expect(resolveConstantVisibility({ enabled: true, practicePreview: true }).enabled).toBe(false);
+  expect(resolveConstantVisibility({ enabled: true, noSpeed: false }).enabled).toBe(true);
   expect(resolveConstantVisibility({ durationMs: NaN, fadeMs: Infinity })).toEqual(resolveConstantVisibility());
+});
+
+test('a NO_SPEED course turns CONSTANT off but keeps the duration and fade', () => {
+  const options = resolveConstantVisibility({ enabled: true, durationMs: 300, fadeMs: -50, noSpeed: true });
+  expect(options).toEqual({ enabled: false, durationMs: 300, fadeMs: -50 });
+  expect(resolveConstantAlpha(10, 0, options)).toBe(1);
 });
 
 test('positive fade reveals the timeline before the duration horizon', () => {
