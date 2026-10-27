@@ -184,6 +184,11 @@ textarea {
    * phone, so giving up the bottom inset (home indicator) would shrink the whole play field. Zero on desktops.
    */
   width: auto;
+  /*
+   * The empty shell is also Basecoat's `.empty` state, a centring flex column: stretch, or the stage shrinks to its
+   * canvas and the first screen is drawn at the canvas's default size.
+   */
+  align-self: stretch;
   margin: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   height: 100%;
   min-height: 0;
