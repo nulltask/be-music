@@ -281,6 +281,11 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
       sceneAPI.resolveBeatorajaPlayStartOps({ playVariant: '7', autoPlay: false, traits: BENCH_SELECT_FACTS.traits });
     },
   });
+  define('skin-beatoraja.scene.resolveBeatorajaConstantOps', {
+    run: () => {
+      sceneAPI.resolveBeatorajaConstantOps(true);
+    },
+  });
   define('skin-beatoraja.scene.resolveBeatorajaCoverOps', {
     run: () => {
       sceneAPI.resolveBeatorajaCoverOps(BENCH_COVER, true);
