@@ -662,6 +662,19 @@ describe('PlayRoute: where a play leads', () => {
     await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
   });
 
+  test('Escape from a play at another tempo keeps no record but still sends it', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'));
+    play.progress.mockReturnValue(resultOf(chartEntry('a')));
+    const replay = { play: { mode: 'manual', aborted: true, tempo: 0.8 } } as unknown as BeMusicReplay;
+    play.waitForReplay.mockResolvedValueOnce(replay);
+    // A live tempo change drops the record key (`followLiveTempo`).
+    h.deps.records.activePlayRecordKey = undefined;
+    play.options.on.exit();
+    await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
+    expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+  });
+
   test('Escape from a play that keeps no record (a replay) saves and sends nothing', async () => {
     const h = await harness();
     const play = await started(h, chartEntry('a'), { replay: REPLAY });

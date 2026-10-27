@@ -314,7 +314,7 @@ A survival gauge that empties ends the play there (`PlayerOptions.endOnFailure`,
 
 A stage given up with ESC also ends the course as a failed run. This departs from LR2 on purpose: `LR2body.exe` shows the given-up stage's result as FAILED and, when the gauge is still at 2 % or more and stages remain, goes on to the next stage (the course lamp is FAILED in the end, since a stage was left unplayed); with no GOOD or better judged it returns to the select screen without saving. be-music treats ESC as giving up the course.
 
-A course stage cannot be ranked as a single-chart play: `checkReplayEligibility` rejects it as `course-stage`.
+A course stage cannot be ranked as a single-chart play: `checkReplayEligibility` marks it `unranked` as `course-stage`, and the Leaderboard stores such a play without ranking it.
 
 ### The course run
 

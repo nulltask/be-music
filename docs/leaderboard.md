@@ -154,7 +154,7 @@ sequenceDiagram
     else the same play from another account
         A-->>C: 409 play_already_submitted
     end
-    A->>A: eligibility: auto play, tempo or course stage → 422, assists → flags
+    A->>A: eligibility: auto play → 422, tempo or course stage → unranked, assists → flags
     A->>A: sha256(canonicalize(play document)) == playFingerprint ?
     A->>D: chart known?
     alt unknown chart
@@ -210,7 +210,9 @@ turning a play document's positions and timeline into note times that match the 
 
 ## 6. Scoring rules
 
-A manual play that seeks is practice (`PlayResult.practice`). Its first seek discards the replay recorder. The web app skips best-record writes, Leaderboard submission and replay auto-save for that result, even if a host supplies replay data alongside it. Seeking a course stage or NONSTOP run also excludes the entire course and every later stage; course results remain available without a replay.
+**What is sent.** Sending is opt-in: nothing goes to the Leaderboard until the player turns it on. Once it is on, every play is sent except a fully AUTO play and replay playback (a dropped replay, a replay slot, a course replay); whether a play is shown, and where, is the Leaderboard's decision, not the player's (#788). Partial assists (auto scratch and the like) are sent and ranked apart. A play the Leaderboard stores but does not rank is still sent, with the facts in its replay that classify it (`play.tempo`, `play.course`, the options and assists). Only a log without both fingerprints is refused outright, as it cannot be verified.
+
+A manual play that seeks is practice (`PlayResult.practice`). Its first seek discards the replay recorder, and beatoraja PRACTICE records none, so neither has a replay to send: the web app skips best-record writes, Leaderboard submission and replay auto-save for that result, even if a host supplies replay data alongside it. Seeking a course stage or NONSTOP run also excludes the entire course and every later stage; course results remain available without a replay. Sending practice plays needs their range in the replay, and is left to a later change.
 
 - **Three rulesets.** Every play is re-simulated under `lr2`, `beatoraja` and `____`, and appears in all three
   rankings. The ruleset the player actually played (`play.judgeRuleset`) is stored and shown as a mark, and a ranking
@@ -219,10 +221,13 @@ A manual play that seeks is practice (`PlayResult.practice`). Its first seek dis
   `HAZARD`, and so on).
 - **Assists** (auto scratch, a debug judge-window override, ...) are stored with flags and ranked separately from
   unassisted plays.
-- **Course stages are rejected**: a stage starts from the state the previous one left, so it is
-  not a single-chart play; it is ranked as part of its course run instead (section 6.1). **Plays at another tempo**
-  (`play.tempo` other than 1, the web player's tempo slider) are refused as `tempo`: they are practice, as beatoraja's
-  frequency trainer does not save its scores. **Failed plays** (the gauge
+- **Unranked plays** are stored, simulated under every ruleset and answered with their figures (rank and players 0,
+  `unranked` naming why), but they move no personal best and stay out of the rankings, the figures and every list;
+  their own page still opens and says why (`score.unranked`). A **course stage** sent on its own is one
+  (`course-stage`): a stage starts from the state the previous one left, so it is not a single-chart play; it is ranked
+  as part of its course run instead (section 6.1). So is a **play at another tempo** (`tempo`: `play.tempo` other than
+  1, the web player's tempo slider): it is practice, as beatoraja's frequency trainer does not save its scores.
+  **Failed plays** (the gauge
   emptied) are stored and count as plays. So are **plays given up with ESC** (`play.aborted`): a play quit mid-way is
   ranked as a failed play under every ruleset, whatever its gauge stood at, as LR2 and beatoraja save one.
 - **Lamps and BP per ruleset** follow each game: under `lr2` a DEATH clear is a NORMAL clear (LR2body.exe `CheckClear`);
@@ -276,11 +281,11 @@ with its own rankings per ruleset, and never as single-chart plays.
   stage may carry `play.aborted`, the run fails whatever its gauge, and the rest of that stage and the unreached
   stages count as BP. An ESC abort on any earlier stage is still refused as `aborted`.
 - **Runs at another tempo are not ranked.** A course may be played at another tempo, as a single chart may, and the
-  run is then refused as `tempo` (naming the first such stage; for a NONSTOP run, its stitched play), like a single
-  play at another tempo.
+  run is then stored unranked as `tempo` (any stage; for a NONSTOP run, its stitched play), like a single play at
+  another tempo: it moves no course best and stays out of the course rankings and every list.
 - **Unreleased courses are not ranked.** A course with beatoraja's `release: false`, which a drawn random course and a
-  course made in the course maker also have, is recorded so in the course log (`course.release: false`), and its runs are refused as `unreleased`, as
-  beatoraja keeps them off IR.
+  course made in the course maker also have, is recorded so in the course log (`course.release: false`), and its runs
+  are stored unranked as `unreleased`, as beatoraja keeps them off IR.
 - **NONSTOP runs.** A NONSTOP course is played as one stitched chart, and that play (`nonstop.replay`) is what is
   judged and ranked. The server rebuilds the stitched chart from the stage charts exactly as the client built it: both
   take the same deterministic pipeline (`prepareNonstopCourse` in `@be-music/player-engine/course`, see
@@ -364,7 +369,7 @@ charts          (chart_fp PK, title, artist, note_count, play_fps JSON, status, 
 chart_aliases   (kind, hash, chart_fp)                         -- kind: sha256 | md5
 scores          (id PK, submission_id UNIQUE, user_id, chart_fp, play_fp, played_ruleset, gauge,
                  assist_flags, failed, recorded_by JSON, submitted_by, server_engine, replay_key,
-                 ghost_key, og_key, replay_visibility, created_at)
+                 ghost_key, og_key, replay_visibility, hidden, unranked, created_at)  -- unranked: 0017
 score_results   (score_id, ruleset, ruleset_revision, ex_score, clear_lamp, miss_count,
                  max_combo, judges JSON)                       -- PK(score_id, ruleset)
 best_scores     (user_id, chart_fp, ruleset, assisted,         -- PK
@@ -379,7 +384,7 @@ client_policies (name, min_version, blocked_versions JSON)
 course          (course_fp PK, name, kind, constraints JSON, stage_chart_fps JSON, created_at)
 course_score    (id PK, submission_id UNIQUE, user_id, course_fp, played_ruleset, gauge, assisted,
                  assist_flags, verification, stages_played, recorded_by JSON, submitted_by,
-                 server_engine, replay_key, hidden, created_at)
+                 server_engine, replay_key, hidden, unranked, created_at)
 course_score_result (course_score_id, ruleset, ruleset_revision, ex_score, note_count, clear_lamp,
                  miss_count, max_combo, stages_played, trophy, trophy_rank, gauge_type, gauge_final,
                  judges JSON, stages JSON)

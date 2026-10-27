@@ -1,4 +1,4 @@
-import { and, count, countDistinct, eq, max, min, sql, type SQL } from 'drizzle-orm';
+import { and, count, countDistinct, eq, isNull, max, min, sql, type SQL } from 'drizzle-orm';
 import {
   computeScoreRate,
   _____RANK_LABELS,
@@ -75,6 +75,7 @@ export async function loadChartStats(db: Database, filter: RankingFilter): Promi
     eq(score.chartFingerprint, filter.chartFingerprint),
     eq(score.assisted, filter.assisted),
     eq(score.hidden, false),
+    isNull(score.unranked),
   ];
   if (!filter.includeAnonymous) playConditions.push(eq(user.isAnonymous, false));
   const [[plays], lampRows] = await Promise.all([
@@ -110,6 +111,7 @@ export async function loadCourseStats(db: Database, filter: CourseRankingFilter)
     eq(courseScore.courseFingerprint, filter.courseFingerprint),
     eq(courseScore.assisted, filter.assisted),
     eq(courseScore.hidden, false),
+    isNull(courseScore.unranked),
   ];
   if (!filter.includeAnonymous) runConditions.push(eq(user.isAnonymous, false));
   const [[runs], lampRows] = await Promise.all([
@@ -196,7 +198,7 @@ export async function loadPlayerStats(db: Database, userId: string, ruleset: Rul
       })
       .from(score)
       .leftJoin(scoreResult, and(eq(scoreResult.scoreId, score.id), eq(scoreResult.ruleset, ruleset)))
-      .where(and(eq(score.userId, userId), eq(score.hidden, false))),
+      .where(and(eq(score.userId, userId), eq(score.hidden, false), isNull(score.unranked))),
     db
       .select({ lamp: bestScore.bestLamp, exScore: bestScore.bestEx, noteCount: chart.noteCount })
       .from(bestScore)

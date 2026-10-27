@@ -365,17 +365,21 @@ export class PlayRoute {
           return;
         }
         // A single play given up is saved as a failed play, as LR2 and beatoraja save one: its record (the notes it
-        // never reached counted in its BP) and its Leaderboard entry. One that judged no note yet saves nothing, and so
-        // does one that keeps no record (an AUTO play, a replay, one at another tempo).
+        // never reached counted in its BP) and its Leaderboard entry. One that judged no note yet saves nothing. One
+        // that keeps no record but is the player's own (at another tempo) still goes to the Leaderboard, which decides
+        // whether it ranks; an AUTO play and a replay go nowhere.
         const keepsRecord = !practicing && this.records.activePlayRecordKey !== undefined;
-        const progress = keepsRecord ? view?.progress() : undefined;
+        const sends = !practicing && !autoPlay && replay === undefined;
+        const progress = keepsRecord || sends ? view?.progress() : undefined;
         const aborted =
           progress !== undefined && !progress.practice && progress.secondPlayer === undefined
             ? abortedRecordPlayFromResult(progress)
             : undefined;
         if (aborted !== undefined) {
-          this.records.recordActivePlay(aborted);
-          void view?.waitForReplay().then((abortedReplay) => this.leaderboard.maybeSubmit(abortedReplay, chartEntry));
+          if (keepsRecord) this.records.recordActivePlay(aborted);
+          if (sends) {
+            void view?.waitForReplay().then((abortedReplay) => this.leaderboard.maybeSubmit(abortedReplay, chartEntry));
+          }
         }
         void this.showSelect();
       },
