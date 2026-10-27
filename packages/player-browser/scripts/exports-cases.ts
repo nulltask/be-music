@@ -898,6 +898,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       scene.dispose();
     },
   });
+  define('player-browser.PlayOptionMismatchError', {
+    run: () => {
+      void new playerWebCoreAPI.PlayOptionMismatchError(['Random 1P: CONVERGE'], undefined).options;
+    },
+  });
   define('player-browser.readDroppedFiles', {
     run: async () => {
       await playerWebCoreAPI.readDroppedFiles({ files: [BENCH_BMS_FILE] } as unknown as DataTransfer);
