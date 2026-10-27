@@ -80,7 +80,10 @@ for (const gauge of ['P-ATTACK', 'G-ATTACK'] as const)
       expect(native.gauge.final).toBeCloseTo(effective === 'GROOVE' ? 100 : 98.4);
       expect(native.gauge.type).toBe(effective === 'GROOVE' ? 'GRADE' : gauge);
       expect(native).toMatchObject({ stagesPlayed: 2, lamp: 'FULL_COMBO', gauge: { cleared: true } });
+      const recorded = structuredClone(replay);
       const simulated = simulateCourseReplay(replay, { ruleset: 'lr2' });
+      // Re-simulating swaps in its own carry-in without writing to the course log.
+      expect(replay).toEqual(recorded);
       expect(simulated.judge).toEqual(native.judge);
       expect(simulated.gauge).toEqual(native.gauge);
       expect(simulated.lamp).toBe(native.lamp);

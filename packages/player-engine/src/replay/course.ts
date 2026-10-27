@@ -319,9 +319,10 @@ export function simulateCourseReplay(
   let previous: ReplayRulesetResult | undefined;
   for (const entry of courseLog.stages) {
     if (!entry.played || (previous !== undefined && stageFailed(previous))) break;
-    const stageLog = structuredClone(entry.replay);
-    pick = stageLog.play.gauge;
-    const course = stageLog.play.course ?? { kind: courseLog.course.kind };
+    // Only the stage's course carry-in changes, and `simulateReplay` never writes to the log it reads: copy the path
+    // down to `play.course` and share the rest (the inputs and chart are most of a log).
+    pick = entry.replay.play.gauge;
+    const course = { ...(entry.replay.play.course ?? { kind: courseLog.course.kind }) };
     if (previous === undefined) {
       delete course.carryIn;
     } else {
@@ -331,7 +332,7 @@ export function simulateCourseReplay(
         maxCombo: previous.course?.maxCombo ?? previous.maxCombo,
       };
     }
-    stageLog.play.course = course;
+    const stageLog: BeMusicReplay = { ...entry.replay, play: { ...entry.replay.play, course } };
     previous = givenUpResult(stageLog, simulateReplay(stageLog, options));
     stageResults.push(previous);
   }
