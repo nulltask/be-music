@@ -1,4 +1,5 @@
 import { defineBeMusicElements } from '@be-music/player-ui';
+import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import type { BeMusicDOMScreen } from '@be-music/player-skin-sdk';
 import { NATIVE_EYEBROW, adoptNativeTheme } from './theme.ts';
 
@@ -16,7 +17,7 @@ export function mountElement<Frame>(
 ): BeMusicDOMScreen<Frame> {
   const registry = container.ownerDocument.defaultView?.customElements;
   if (!registry) throw new Error('Native skin requires a window with Custom Elements support.');
-  defineBeMusicElements(registry);
+  defineBeMusicElements(registry, { theme: basecoatTheme });
   const element = container.ownerDocument.createElement(tag) as HTMLElement & {
     frame: Frame | undefined;
     focusSearch?: () => void;

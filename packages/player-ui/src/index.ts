@@ -1,4 +1,5 @@
-export { defineBeMusicElements } from './register.ts';
+export { defineBeMusicElements, type BeMusicElementsOptions } from './register.ts';
+export { setBeMusicTheme, type BeMusicTheme } from './theme.ts';
 export type * from './events.ts';
 export type * from './models.ts';
 export { BeMusicScoreSummaryElement } from './components/score-summary.ts';

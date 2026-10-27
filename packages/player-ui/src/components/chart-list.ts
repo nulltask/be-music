@@ -9,7 +9,7 @@ import {
 import { repeat } from 'lit/directives/repeat.js';
 import { browseEntryBadge, browseEntryCount, browseEntryTitle, type LibraryEntry } from '@be-music/player-skin-sdk';
 import { BeMusicElement } from '../base.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 
 export class BeMusicChartListElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
@@ -18,8 +18,7 @@ export class BeMusicChartListElement extends BeMusicElement {
     disabled: { type: Boolean },
   };
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       :host {
         display: flex;
@@ -52,12 +51,6 @@ export class BeMusicChartListElement extends BeMusicElement {
         padding: 6px var(--be-music-gap, 8px);
         text-align: left;
         white-space: normal;
-        border-color: transparent;
-      }
-      button[aria-current='true'] {
-        background: var(--accent, #293d59);
-        color: var(--accent-foreground, inherit);
-        border-color: var(--border, transparent);
       }
       .text {
         display: grid;
@@ -74,7 +67,6 @@ export class BeMusicChartListElement extends BeMusicElement {
         white-space: nowrap;
       }
       .kind {
-        color: var(--primary, #abcaff);
         font-size: 0.85em;
         font-variant-numeric: tabular-nums;
         text-align: right;

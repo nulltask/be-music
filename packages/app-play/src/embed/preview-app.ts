@@ -31,6 +31,7 @@ import {
   type BeMusicPreviewSelectElement,
   type BeMusicUIEvent,
 } from '@be-music/player-ui';
+import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import { previewArtworkPath } from './artwork.ts';
 import { findEmbedChart } from './chart-match.ts';
 import { createPreviewSkin, type PreviewChrome, type PreviewChromeState } from './preview-skin.ts';
@@ -80,7 +81,7 @@ export class PreviewApp {
   public constructor(elements: PreviewAppElements) {
     this.elements = elements;
     this.chrome = new PreviewChromeController(elements.root);
-    defineBeMusicElements();
+    defineBeMusicElements(undefined, { theme: basecoatTheme });
   }
 
   private get charts(): readonly LibraryChart[] {

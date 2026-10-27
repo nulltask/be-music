@@ -1,13 +1,12 @@
 import { css, type CSSResultGroup } from 'lit';
-import { previewHost, previewTheme } from './preview-theme.ts';
+import { structureStyles } from './structure.ts';
 
 /**
  * Full-screen composition; list, detail and option styling belongs to their own elements. Lengths and type read the
  * `--be-music-*` custom properties with neutral defaults; a skin's own scale and typography go on the host element.
  */
 export const screenStyles: CSSResultGroup = [
-  previewTheme,
-  previewHost,
+  structureStyles,
   css`
     :host {
       height: 100%;
@@ -22,7 +21,6 @@ export const screenStyles: CSSResultGroup = [
       min-height: 0;
       overflow: auto;
       pointer-events: auto;
-      background: var(--background, #171717);
       padding: var(--be-music-screen-padding, 24px);
     }
     header {
@@ -49,7 +47,6 @@ export const screenStyles: CSSResultGroup = [
       width: 100%;
     }
     .search-error {
-      color: var(--destructive, #f87171);
       font-size: 12px;
     }
     .search-error:empty {
@@ -66,7 +63,6 @@ export const screenStyles: CSSResultGroup = [
       font-size: 18px;
     }
     .eyebrow {
-      color: var(--muted-foreground, #8da7c7);
       font-size: 0.75rem;
       line-height: 1.3;
     }
@@ -140,13 +136,9 @@ export const screenStyles: CSSResultGroup = [
       grid-column: 1 / -1;
       --be-music-graph-height: 72px;
     }
-    /* The gauge sits inside the player's panel: no box of its own. */
+    /* The gauge sits inside the player's panel. */
     .player > be-music-gauge-panel::part(panel) {
       padding: var(--be-music-gap, 8px) 0 0;
-      background: none;
-      border: 0;
-      border-top: 1px solid var(--border, #ffffff1a);
-      border-radius: 0;
     }
     .stat {
       font-size: var(--be-music-stat-size, 2.25rem);

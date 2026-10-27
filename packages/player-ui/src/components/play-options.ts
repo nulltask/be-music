@@ -2,7 +2,7 @@ import { html, css, type CSSResultGroup, type PropertyDeclarations, type Templat
 import type { BeMusicDOMSelectFrame } from '@be-music/player-skin-sdk';
 import type { BeMusicPlayOptionChange } from '../events.ts';
 import { BeMusicElement } from '../base.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 
 const OPTIONS = [
   ['gauge1P', 'Gauge'],
@@ -18,8 +18,7 @@ export class BeMusicPlayOptionsElement extends BeMusicElement {
     disabled: { type: Boolean },
   };
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       :host {
         display: grid;
@@ -30,7 +29,6 @@ export class BeMusicPlayOptionsElement extends BeMusicElement {
         display: grid;
         gap: 4px;
         min-width: 0;
-        color: var(--muted-foreground, #b8c7da);
         font-size: 12px;
       }
       select {

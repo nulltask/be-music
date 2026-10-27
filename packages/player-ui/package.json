@@ -15,6 +15,11 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./themes/basecoat": {
+      "source": "./src/themes/basecoat.ts",
+      "types": "./dist/themes/basecoat.d.ts",
+      "default": "./dist/themes/basecoat.js"
     }
   },
   "scripts": {

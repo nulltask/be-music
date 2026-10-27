@@ -1,7 +1,7 @@
 import { html, css, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
 import { browseEntryCount, browseEntryTitle, type LibraryEntry } from '@be-music/player-skin-sdk';
 import { BeMusicElement } from '../base.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 
 export class BeMusicChartDetailsElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
@@ -10,8 +10,7 @@ export class BeMusicChartDetailsElement extends BeMusicElement {
     readText: { attribute: false },
   };
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       .panel {
         gap: var(--be-music-section-gap, 16px);

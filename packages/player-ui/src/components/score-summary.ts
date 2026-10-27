@@ -1,14 +1,13 @@
 import { html, nothing, css, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicScoreData } from '../models.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 import { stats } from '../templates.ts';
 
 export class BeMusicScoreSummaryElement extends DataElement<BeMusicScoreData> {
   static override properties: PropertyDeclarations = { ...DataElement.properties, compact: { type: Boolean } };
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       .summary {
         display: flex;
