@@ -1,3 +1,5 @@
+import { yieldToTask } from './yield.ts';
+
 /** A bounded, lazy pool shared by loading, audio preparation, and submission tasks. */
 export interface TaskWorker {
   postMessage(message: unknown): void;
@@ -101,7 +103,7 @@ export class BrowserTaskPool {
   private local(job: Job): void {
     // Yield before the fallback so a loading indicator can paint, including in non-Worker hosts.
     this.localJobs.add(job);
-    void new Promise<void>((resolve) => setTimeout(resolve, 0))
+    void yieldToTask()
       .then(() => {
         if (this.closed) throw new Error('Worker pool is closed');
         return job.fallback();

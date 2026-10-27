@@ -63,68 +63,69 @@ export function parseBeatorajaSkinJSONHeader(source: Uint8Array | string): Beato
  * `JSON.parse` will reject them with a clear error if a community theme tries.
  */
 export function relaxBeatorajaJSON(source: string): string {
+  // Untouched runs are copied as slices: `start` is where the pending run begins, and an edit flushes it.
   let result = '';
-  let inString = false;
-  let escape = false;
-  for (let i = 0; i < source.length; i += 1) {
-    const ch = source[i];
-    if (inString) {
-      result += ch;
-      if (escape) {
-        escape = false;
-      } else if (ch === '\\') {
-        escape = true;
-      } else if (ch === '"') {
-        inString = false;
+  let start = 0;
+  const length = source.length;
+  for (let i = 0; i < length; i += 1) {
+    const code = source.charCodeAt(i);
+    if (code === QUOTE) {
+      // Skip to the closing quote; nothing inside a string is relaxed.
+      for (i += 1; i < length; i += 1) {
+        const inner = source.charCodeAt(i);
+        if (inner === BACKSLASH) i += 1;
+        else if (inner === QUOTE) break;
       }
       continue;
     }
-    if (ch === '"') {
-      inString = true;
-      result += ch;
-      continue;
-    }
-    if (ch === ',') {
+    if (code === COMMA) {
       // Trailing-comma drop: look ahead past whitespace; if we land on `]`/`}`, swallow the comma.
       const next = peekNonWhitespace(source, i + 1);
-      if (next !== -1 && (source[next] === ']' || source[next] === '}')) {
-        continue;
+      if (next !== -1 && isClose(source.charCodeAt(next))) {
+        result += source.slice(start, i);
+        start = i + 1;
       }
-      result += ch;
       continue;
     }
-    if (ch === '{') {
+    if (code === OPEN_BRACE) {
       // `{{` doubled-open typo: when the next non-whitespace character is another `{`, drop THIS one
       // (the outer of the pair) — `play5.json` line 307 has `"value": {{"x":20, …}},` where the
       // matching `}}` only closes the entry + value pair, NOT the typo `{`. So eliding the typo open
       // alone leaves the close braces correctly balanced. Skipping the SECOND `{` instead (which the
       // earlier draft did via a stack) would make the relaxer also drop a real close brace later, and
       // a depth-balanced object falls out unclosed.
-      const nextIdx = peekNonWhitespace(source, i + 1);
-      if (nextIdx !== -1 && source[nextIdx] === '{') {
-        continue;
+      const next = peekNonWhitespace(source, i + 1);
+      if (next !== -1 && source.charCodeAt(next) === OPEN_BRACE) {
+        result += source.slice(start, i);
+        start = i + 1;
       }
-      result += ch;
       continue;
     }
-    if (ch === '}' || ch === ']') {
-      result += ch;
+    if (isClose(code)) {
       // Missing-comma insert: if the next non-whitespace character starts a new value, inject a `,`.
       const next = peekNonWhitespace(source, i + 1);
-      if (next !== -1 && startsNewElementChar(source[next])) {
-        result += ',';
+      if (next !== -1 && startsNewElementChar(source[next]!)) {
+        result += `${source.slice(start, i + 1)},`;
+        start = i + 1;
       }
-      continue;
     }
-    result += ch;
   }
-  return result;
+  return start === 0 ? source : result + source.slice(start);
+}
+
+const QUOTE = 0x22;
+const BACKSLASH = 0x5c;
+const COMMA = 0x2c;
+const OPEN_BRACE = 0x7b;
+
+function isClose(code: number): boolean {
+  return code === 0x7d || code === 0x5d;
 }
 
 function peekNonWhitespace(source: string, from: number): number {
   for (let i = from; i < source.length; i += 1) {
-    const c = source[i];
-    if (c !== ' ' && c !== '\t' && c !== '\n' && c !== '\r') return i;
+    const c = source.charCodeAt(i);
+    if (c !== 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) return i;
   }
   return -1;
 }
