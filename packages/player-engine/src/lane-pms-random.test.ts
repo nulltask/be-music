@@ -167,3 +167,51 @@ test('picks the same permutation as the previous search on random charts', () =>
     }
   }
 });
+
+test('picks the same permutation as a direct Heap search over chord supersets', () => {
+  // The source's search, spelled out: every Heap permutation after the regular one, minus the mirror and any that
+  // maps a chord onto a superset of an impossible chord.
+  const reference = (chords: readonly number[][], draw: number): number[] => {
+    const permutation = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    const counters = Array.from({ length: 9 }, () => 0);
+    const valid: number[][] = [];
+    let index = 0;
+    while (index < 9) {
+      if (counters[index]! < index) {
+        const other = index % 2 === 0 ? 0 : counters[index]!;
+        [permutation[index], permutation[other]] = [permutation[other]!, permutation[index]!];
+        const mirror = permutation.every((lane, at) => lane === 8 - at);
+        const hits = chords.some((chord) => {
+          const image = new Set(chord.map((lane) => permutation[lane]!));
+          return forbidden.some((triple) => triple.every((lane) => image.has(lane)));
+        });
+        if (!mirror && !hits) valid.push([...permutation]);
+        counters[index]! += 1;
+        index = 0;
+      } else {
+        counters[index] = 0;
+        index += 1;
+      }
+    }
+    return valid[Math.floor(draw * valid.length)]!;
+  };
+  const cases: [number[][], number][] = [
+    [[[0, 3, 6]], 0.5],
+    [[[0, 1, 2, 3]], 0.123],
+    [
+      [
+        [0, 4, 8],
+        [2, 4, 6],
+      ],
+      0.77,
+    ],
+    [[[1, 2], [5]], 0.999],
+  ];
+  for (const [chords, draw] of cases) {
+    const notes = chords.flatMap((chord, timeMs) => chord.map((lane) => ({ channel: lanes[lane]!, timeMs })));
+    const permutation = reference(chords, draw);
+    expect(randomizePMSPlayableLanes(notes, lanes, () => draw)).toEqual(
+      notes.map((note) => lanes[permutation[lanes.indexOf(note.channel)]!]),
+    );
+  }
+});
