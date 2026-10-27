@@ -34,6 +34,7 @@ import {
   parseTotal,
   usesInferredLongNoteType,
   type ChartItems,
+  type LaneNotesCache,
   type FingerprintLength,
   type FingerprintTimelineType,
   type FlatItems,
@@ -93,6 +94,30 @@ function mineKey(mine: MineItem): string {
 
 function timelineKey(item: TimelineItem): string {
   return `${item.type}|${timeKey(item.t)}|${formatRational(item.v)}`;
+}
+
+// Field-by-field equality that implies equal keys, so `diffKeyedAgainstTop` can find the runs an outcome shares with the
+// top without building a key for every item of the lane.
+function sameTime(a: FpTime, b: FpTime): boolean {
+  return a.m === b.m && a.n === b.n && a.d === b.d;
+}
+
+function sameNote(a: NoteItem, b: NoteItem): boolean {
+  return (
+    a.lane === b.lane &&
+    sameTime(a.t, b.t) &&
+    (a.end === undefined ? b.end === undefined : b.end !== undefined && sameTime(a.end, b.end)) &&
+    a.ln === b.ln &&
+    a.fz === b.fz
+  );
+}
+
+function sameMine(a: MineItem, b: MineItem): boolean {
+  return a.lane === b.lane && sameTime(a.t, b.t) && a.damage.n === b.damage.n && a.damage.d === b.damage.d;
+}
+
+function sameTimelineItem(a: TimelineItem, b: TimelineItem): boolean {
+  return a.type === b.type && sameTime(a.t, b.t) && a.v.n === b.v.n && a.v.d === b.v.d;
 }
 
 export function headerFieldText(header: Partial<HeaderItems>, field: HeaderField): string {
@@ -188,22 +213,24 @@ function diffKeyedAgainstTop<T>(
   before: ReadonlyArray<T>,
   after: ReadonlyArray<T>,
   key: (item: T) => string,
+  same: (a: T, b: T) => boolean,
   add: Array<Keyed<T>>,
   remove: Array<Keyed<T>>,
 ): void {
   const top = keyedTop(before, key);
-  const afterKeys = after.map(key);
   const beforeLength = before.length;
   const afterLength = after.length;
+  // The shared runs are found by `same`, which implies equal keys: a pair it misses has equal keys and cancels out in
+  // the counts below, so only the outcome's changed stretch needs keys.
   let prefix = 0;
-  while (prefix < beforeLength && prefix < afterLength && top.keys[prefix] === afterKeys[prefix]) {
+  while (prefix < beforeLength && prefix < afterLength && same(before[prefix]!, after[prefix]!)) {
     prefix += 1;
   }
   let suffix = 0;
   while (
     suffix < beforeLength - prefix &&
     suffix < afterLength - prefix &&
-    top.keys[beforeLength - 1 - suffix] === afterKeys[afterLength - 1 - suffix]
+    same(before[beforeLength - 1 - suffix]!, after[afterLength - 1 - suffix]!)
   ) {
     suffix += 1;
   }
@@ -220,7 +247,7 @@ function diffKeyedAgainstTop<T>(
     }
   }
   for (let index = prefix; index < afterLength - suffix; index += 1) {
-    const itemKey = afterKeys[index]!;
+    const itemKey = key(after[index]!);
     const entry = counts.get(itemKey);
     if (entry) {
       entry.count += 1;
@@ -270,6 +297,8 @@ export interface ReplayContext {
   topBuckets: Map<string, BeMusicEvent[]>;
   topItems: ChartItems;
   base: 36 | 62;
+  /** Lane notes shared by the outcomes that change only events ({@link LaneNotesCache}). */
+  laneCache?: LaneNotesCache;
 }
 
 /**
@@ -485,7 +514,9 @@ export function computeDelta(
   if (touched.size === 0) {
     return delta;
   }
-  const items = computeChartItems(json, buckets, touched, context.topItems);
+  // The lane cache holds only for outcomes whose chart differs from the top-level one in its events.
+  const eventsOnly = !touched.has(LENGTHS_BUCKET) && applied.every((index) => entries[index]!.kind !== 'header');
+  const items = computeChartItems(json, buckets, touched, context.topItems, eventsOnly ? context.laneCache : undefined);
   const top = context.topItems;
   for (const bucket of touched) {
     if (bucket.startsWith('lane:')) {
@@ -493,17 +524,19 @@ export function computeDelta(
         top.lanes.get(bucket) ?? [],
         items.lanes.get(bucket) ?? [],
         noteKey,
+        sameNote,
         delta.add.notes,
         delta.remove.notes,
       );
     } else if (bucket === MINES_BUCKET) {
-      diffKeyedAgainstTop(top.mines, items.mines, mineKey, delta.add.mines, delta.remove.mines);
+      diffKeyedAgainstTop(top.mines, items.mines, mineKey, sameMine, delta.add.mines, delta.remove.mines);
     } else if (bucket.startsWith('tl:')) {
       const type = bucket.slice(3) as FingerprintTimelineType;
       diffKeyedAgainstTop(
         top.timeline.get(type) ?? [],
         items.timeline.get(type) ?? [],
         timelineKey,
+        sameTimelineItem,
         delta.add.timeline,
         delta.remove.timeline,
       );
