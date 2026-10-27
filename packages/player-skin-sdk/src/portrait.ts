@@ -81,6 +81,8 @@ export function supportsPortraitLayout(
  * The stage to draw `skin` on for a `screen` (the canvas, in CSS px): its {@link BeMusicSkin.portraitStage} when it has
  * one and the screen is taller than wide — and, for gameplay (`chart` given), the chart fits a portrait playfield
  * ({@link supportsPortraitLayout}) — otherwise its {@link BeMusicSkin.stage} (the 16:9 {@link wideStage} by default).
+ * A fluid stage ({@link BeMusicStage.resize}) comes back resized to the screen's aspect ratio
+ * ({@link resolveFluidStage}).
  */
 export function resolveBeMusicStage(
   skin: Pick<BeMusicSkin, 'stage' | 'portraitStage'>,
@@ -89,9 +91,50 @@ export function resolveBeMusicStage(
 ): BeMusicStage {
   const landscape = skin.stage ?? wideStage;
   const portrait = skin.portraitStage;
-  if (!portrait || resolveStageOrientation(screen) !== 'portrait') return landscape;
-  if (chart && !supportsPortraitLayout(chart.laneChannels, chart.playVariant)) return landscape;
-  return portrait;
+  // A fixed stage (every skin but a fluid one) is returned as is, without the fluid sizing's call.
+  const stage =
+    !portrait ||
+    resolveStageOrientation(screen) !== 'portrait' ||
+    (chart && !supportsPortraitLayout(chart.laneChannels, chart.playVariant))
+      ? landscape
+      : portrait;
+  return stage.resize ? resolveFluidStage(stage, screen) : stage;
+}
+
+/**
+ * The design size a fluid `stage` takes on `screen`: the stage's short side kept (so type and lane sizes stay what the
+ * skin drew them at) and its long side stretched or shrunk to the screen's aspect ratio, rounded to whole design px.
+ * `undefined` when the screen is turned the other way from the stage, or has no area.
+ */
+export function resolveFluidStageSize(
+  stage: { width: number; height: number },
+  screen: { width: number; height: number },
+): { width: number; height: number } | undefined {
+  if (!(screen.width > 0 && screen.height > 0)) return undefined;
+  if (resolveStageOrientation(screen) !== resolveStageOrientation(stage)) return undefined;
+  const short = Math.min(stage.width, stage.height);
+  return resolveStageOrientation(screen) === 'portrait'
+    ? { width: short, height: Math.round((short * screen.height) / screen.width) }
+    : { width: Math.round((short * screen.width) / screen.height), height: short };
+}
+
+/** The last stage each fluid stage was resized to, so a screen that keeps its size keeps getting the same object. */
+const fluidStages = new WeakMap<BeMusicStage, BeMusicStage>();
+
+/**
+ * `stage` resized to `screen` ({@link resolveFluidStageSize}) when it is fluid ({@link BeMusicStage.resize}), `stage`
+ * itself otherwise. The resized stage is kept while the size holds: hosts cache lane layouts by stage identity, so a
+ * new object only appears when the screen's aspect ratio changes.
+ */
+export function resolveFluidStage(stage: BeMusicStage, screen: { width: number; height: number }): BeMusicStage {
+  if (!stage.resize) return stage;
+  const size = resolveFluidStageSize(stage, screen);
+  if (!size) return stage;
+  const last = fluidStages.get(stage);
+  if (last && last.width === size.width && last.height === size.height) return last;
+  const resized = stage.resize(size);
+  fluidStages.set(stage, resized);
+  return resized;
 }
 
 /** The select skin's song-list geometry for `stage`: its `portraitLayout` on a portrait stage when it has one. */

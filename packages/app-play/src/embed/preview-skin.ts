@@ -10,6 +10,7 @@ import {
   type BeMusicDOMGameplayScreen,
   type BeMusicRect,
   type BeMusicSkin,
+  type BeMusicStage,
   type BeMusicSurface,
 } from '@be-music/player-skin-sdk';
 import {
@@ -24,13 +25,8 @@ import {
 import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import { ControlsIdleController } from './controls-idle.ts';
 
-/** The lanes stay in the stage's left half; the BGA and the play's facts take what they leave on the right. */
-const PANE_SPLIT = STAGE_WIDTH / 2;
-/** A tall screen: the BGA square across the top, the lanes in the band under it. */
-const PORTRAIT = resolvePreviewPortrait({ width: TALL_STAGE_WIDTH, height: TALL_STAGE_HEIGHT })!;
-const PORTRAIT_PLAYFIELD = { top: PORTRAIT.laneTop, judgementY: PORTRAIT.judgementY };
 /** The controls bar along the bottom of the stage takes this much below the judge line. */
-const JUDGEMENT_Y = STAGE_HEIGHT - 60;
+const CONTROLS_BELOW_JUDGEMENT = 60;
 /** Between HUD redraws (12 a second); a stage, view or seekability change redraws at once. */
 const HUD_INTERVAL_MS = 80;
 
@@ -49,14 +45,47 @@ export interface PreviewChrome {
   toggleFullscreen(): void;
 }
 
-/** The BGA square: as large as fits right of the lanes and above the video controls (`resolvePreviewBGARect`). */
-export function resolvePreviewBGARect(playfieldRight: number): BeMusicRect {
-  return resolvePreviewBGARectOnStage({ width: STAGE_WIDTH, height: STAGE_HEIGHT }, playfieldRight);
+/**
+ * The BGA square on a landscape stage of `size`: as large as fits right of the lanes and above the video controls
+ * (`resolvePreviewBGARect`).
+ */
+export function resolvePreviewBGARect(
+  playfieldRight: number,
+  size: { width: number; height: number } = { width: STAGE_WIDTH, height: STAGE_HEIGHT },
+): BeMusicRect {
+  return resolvePreviewBGARectOnStage(size, playfieldRight);
+}
+
+/**
+ * The preview's stage at `size`. It is fluid ({@link BeMusicStage.resize}): the player resizes it to the window, so the
+ * preview fills any aspect ratio. Landscape keeps the lanes in the left half and the BGA and the play's facts on the
+ * right; a tall stage puts the BGA square across the top and the lanes in the band under it.
+ */
+export function createPreviewStage(size: { width: number; height: number }): BeMusicStage {
+  const { width, height } = size;
+  const portrait = resolvePreviewPortrait(size);
+  if (portrait) {
+    const playfield = { top: portrait.laneTop, judgementY: portrait.judgementY };
+    return {
+      width,
+      height,
+      playfield: { standard: playfield, touch: playfield },
+      resolveBGARect: () => portrait.bga,
+      resize: createPreviewStage,
+    };
+  }
+  const playfield = { top: 0, judgementY: height - CONTROLS_BELOW_JUDGEMENT, maxRight: width / 2 - PREVIEW_GUTTER };
+  return {
+    width,
+    height,
+    playfield: { standard: playfield, touch: playfield },
+    resolveBGARect: (playfieldRight) => resolvePreviewBGARect(playfieldRight, size),
+    resize: createPreviewStage,
+  };
 }
 
 /** The embed's be-music skin: a DOM playfield and preview HUD, no Canvas of its own. */
 export function createPreviewSkin(chrome: PreviewChrome): BeMusicSkin {
-  const playfield = { top: 0, judgementY: JUDGEMENT_Y, maxRight: PANE_SPLIT - PREVIEW_GUTTER };
   return defineBeMusicSkin({
     apiVersion: BE_MUSIC_SKIN_API_VERSION,
     id: 'preview',
@@ -68,18 +97,8 @@ export function createPreviewSkin(chrome: PreviewChrome): BeMusicSkin {
     license: 'MIT',
     fontLoads: [],
     context: '2d',
-    stage: {
-      width: STAGE_WIDTH,
-      height: STAGE_HEIGHT,
-      playfield: { standard: playfield, touch: playfield },
-      resolveBGARect: resolvePreviewBGARect,
-    },
-    portraitStage: {
-      width: TALL_STAGE_WIDTH,
-      height: TALL_STAGE_HEIGHT,
-      playfield: { standard: PORTRAIT_PLAYFIELD, touch: PORTRAIT_PLAYFIELD },
-      resolveBGARect: () => PORTRAIT.bga,
-    },
+    stage: createPreviewStage({ width: STAGE_WIDTH, height: STAGE_HEIGHT }),
+    portraitStage: createPreviewStage({ width: TALL_STAGE_WIDTH, height: TALL_STAGE_HEIGHT }),
     gameplay: {
       draw: drawPlayfield,
       drawsOnDOM: true,
