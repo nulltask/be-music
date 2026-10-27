@@ -1,6 +1,6 @@
 {
   "name": "@be-music/app-play",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "private": true,
   "description": "Web player application for browsing charts, gameplay, and replays",
   "type": "module",

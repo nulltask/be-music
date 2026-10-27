@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-terminal",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Terminal player application and CLI for chart browsing, gameplay, and replay simulation",
   "license": "MIT",
   "bin": {

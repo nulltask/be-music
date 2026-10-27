@@ -1,5 +1,77 @@
 # @be-music/skin-beatoraja
 
+## 0.5.0
+
+### Minor Changes
+
+- 1b3e0bd: Add HCN timer ID helpers and deterministic score, HCN, and POMYU character timer transitions so skins can animate rank thresholds, changing holds, character reactions, and music completion.
+- dff4d15: Carry optional emptyPoor counts in score inputs and judgedPoor in result facts. Show MISS and combined miss numbers separately from note POORs, avoiding double counting when an LR2 result folds empty POORs into its displayed count.
+- 166f2d2: Add resolveBeatorajaGaugeTypeOps and use it for play and result gauge-frame conditions. HARD and course survival gauges now select the hard frame, and the EX condition follows beatoraja’s gauge classes, including EASY and ASSIST-EASY.
+- 1cb4d60: Expose the skin's loading timing fields in typed headers and retain them during Lua header extraction so the browser can honor authored loading and READY intervals.
+- b6f6a72: Add resolveBeatorajaOptionIndex for shared LN mode, HS-FIX and clear-lamp image indices so image refs and Lua event_index display the same selected options and records.
+- 3ab8eac: Add `BEATORAJA_OP.CONSTANT` (400) and `resolveBeatorajaConstantOps`, which lights it while the player's Visual CONSTANT setting is on, as beatoraja's `BooleanPropertyFactory` does.
+- 85f13dc: Discover the optional `playStop` system sound in dropped themes.
+- b09a6cf: Add `resolveBeatorajaOptionButton` and `resolveBeatorajaPlayOptionIndex`: the select screen's option buttons step the play options and their labels read them, as beatoraja does. The RANDOM 1P / 2P buttons (42 / 43) step through beatoraja 0.8.9's ten lane options in its order for the play mode passed in (`BeatorajaOptionButtonMode`: `Random.OPTION_GENERAL`, or `Random.OPTION_PMS` for PMS), and the automatic display-timing button (75) switches the automatic judge-timing mode between OFF and beatoraja's calibration, reading LR2's modes as off (#777).
+  Report START BPM HS-FIX with beatoraja's original option index, show the judge display timing on number 12, and show the player's LN MODE on the LNMODE image where the chart leaves its long-note mode undefined.
+- d0939cc: Resolve beatoraja's replay slot ops (196-198, 1196-1208) on the select and result screens and the replay buttons (19, 316-318), and pick a theme's `resultclose` / `course_close` sounds instead of taking `resultclose.wav` as the generic result jingle.
+- edc1112: New `resolveBeatorajaSeekTimers`: the timers a play skin changes when the play seeks — every running timer but the scene's stops, the rhythm timer starts again, and the full gauge and each side's end of the notes start once when the second sought is past them.
+
+### Patch Changes
+
+- cc6b4b4: Stop the GAUGE_MAX timer when the gauge drops below its actual maximum and restart it on each return to full, so skin effects follow the current gauge instead of remaining active for the rest of the play.
+- bd5f119: Restore delayed Lua draw predicates such as WMII_FHD lasers and key flashes by exposing `os.clock()` in seconds from the host-provided scene clock.
+- 0bee40e: JSON skins load faster: `relaxBeatorajaJSON` copies the untouched runs between its edits as slices instead of rebuilding the text one character at a time, and returns well-formed JSON unchanged, about 2.3× faster on the bundled play skin.
+- Updated dependencies [ba3cc20]
+- Updated dependencies [7fca9a9]
+- Updated dependencies [a9cc3d7]
+- Updated dependencies [3a5d9c3]
+- Updated dependencies [3a5d9c3]
+- Updated dependencies [fcaef41]
+- Updated dependencies [7f0386b]
+- Updated dependencies [45aff53]
+- Updated dependencies [582ad35]
+- Updated dependencies [7ab40af]
+- Updated dependencies [1c97afd]
+- Updated dependencies [d08fdf9]
+- Updated dependencies [a83e326]
+- Updated dependencies [69df53c]
+- Updated dependencies [78faa63]
+- Updated dependencies [3d5e880]
+- Updated dependencies [21f705d]
+- Updated dependencies [a8896a9]
+- Updated dependencies [b1ca2ce]
+- Updated dependencies [6e676fe]
+- Updated dependencies [aeac0d3]
+- Updated dependencies [9f41b30]
+- Updated dependencies [f994ec4]
+- Updated dependencies [4371c72]
+- Updated dependencies [acba3d5]
+- Updated dependencies [3e694df]
+- Updated dependencies [3e694df]
+- Updated dependencies [c35b845]
+- Updated dependencies [a83e326]
+- Updated dependencies [a8896a9]
+- Updated dependencies [85f13dc]
+- Updated dependencies [3c2ea6b]
+- Updated dependencies [aeac0d3]
+- Updated dependencies [b09a6cf]
+- Updated dependencies [85e11f7]
+- Updated dependencies [d0939cc]
+- Updated dependencies [3e694df]
+- Updated dependencies [85250d8]
+- Updated dependencies [2e435b9]
+- Updated dependencies [a83e326]
+- Updated dependencies [85f13dc]
+- Updated dependencies [b506535]
+- Updated dependencies [3d2bc84]
+- Updated dependencies [77d8ec1]
+- Updated dependencies [3ffc4f8]
+- Updated dependencies [affc51c]
+  - @be-music/player-engine@0.11.0
+  - @be-music/player-scene-model@0.3.0
+  - @be-music/skin-lr2@0.4.0
+  - @be-music/shared-utils@0.6.0
+
 ## 0.4.0
 
 ### Minor Changes

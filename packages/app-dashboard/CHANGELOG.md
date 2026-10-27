@@ -1,5 +1,17 @@
 # @be-music/app-dashboard
 
+## 0.1.2
+
+### Patch Changes
+
+- 3e694df: Dashboard pages use the shared service header (who is signed in, a link to Play, the viewer's language) and footer, and Basecoat cards and buttons, the same components as the Leaderboard. The be-music label and the preview Donate link stay in this site's own footer row.
+- Updated dependencies [17aebd5]
+- Updated dependencies [051e0c0]
+- Updated dependencies [6f94ff0]
+- Updated dependencies [00139f5]
+  - @be-music/service-web-theme@0.3.0
+  - @be-music/service-auth-client@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes
