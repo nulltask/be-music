@@ -1,7 +1,7 @@
 import { html, css, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
 import { browseEntryCount, browseEntryTitle, type LibraryEntry } from '@be-music/player-skin-sdk';
 import { BeMusicElement } from '../base.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 
 export class BeMusicChartDetailsElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
@@ -10,15 +10,23 @@ export class BeMusicChartDetailsElement extends BeMusicElement {
     readText: { attribute: false },
   };
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
-      .card {
+      .panel {
+        gap: var(--be-music-section-gap, 16px);
+        padding: var(--be-music-panel-padding, 16px);
+      }
+      .heading {
         display: grid;
-        gap: 18px;
+        gap: 4px;
       }
       h2 {
-        font-size: 18px;
+        font-size: 1.25rem;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+      }
+      .kind {
+        text-transform: capitalize;
       }
       pre {
         white-space: pre-wrap;
@@ -34,16 +42,16 @@ export class BeMusicChartDetailsElement extends BeMusicElement {
   protected override render(): TemplateResult {
     const entry = this.entry;
     const playable = !!entry && entry.kind !== 'folder';
-    return html`<aside class="card" part="panel">
-      <div>
-        <p class="muted">${entry?.kind ?? 'Collection'}</p>
+    return html`<aside class="panel" part="panel">
+      <div class="heading">
+        <p class="muted kind">${entry?.kind ?? 'Collection'}</p>
         <h2 part="title">${entry ? browseEntryTitle(entry) : 'No chart selected'}</h2>
         <p class="muted">${entry?.kind === 'chart' ? (entry.chart.artist ?? '') : ''}</p>
       </div>
       <p class="muted">
         ${entry?.kind === 'chart' ? `Level ${entry.chart.playLevel ?? '—'} · ${entry.chart.bpm ?? '—'} BPM` : entry ? (browseEntryCount(entry) ?? '') : ''}
       </p>
-      <div class="actions">
+      <div class="actions" part="actions">
         <button
           class="btn"
           ?disabled=${this.launching || !playable}

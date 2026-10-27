@@ -9,7 +9,7 @@ import {
 import { repeat } from 'lit/directives/repeat.js';
 import { browseEntryBadge, browseEntryCount, browseEntryTitle, type LibraryEntry } from '@be-music/player-skin-sdk';
 import { BeMusicElement } from '../base.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 
 export class BeMusicChartListElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
@@ -18,8 +18,7 @@ export class BeMusicChartListElement extends BeMusicElement {
     disabled: { type: Boolean },
   };
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       :host {
         display: flex;
@@ -36,26 +35,44 @@ export class BeMusicChartListElement extends BeMusicElement {
         overflow: auto;
         overscroll-behavior: contain;
       }
-      button {
-        display: grid;
-        grid-template-columns: 48px 1fr;
-        gap: 12px;
-        width: 100%;
-        text-align: left;
-        margin-bottom: 5px;
-        border-color: transparent;
+      li + li {
+        margin-top: 2px;
       }
-      button[aria-current='true'] {
-        background: var(--accent, #293d59);
-        color: var(--accent-foreground, inherit);
-        border-color: var(--border, transparent);
+      /* Basecoat's .btn is one line high; a row is two lines, the title over the artist. */
+      button.btn {
+        display: grid;
+        grid-template-columns: var(--be-music-row-kind-width, 3.5ch) minmax(0, 1fr);
+        align-items: center;
+        justify-content: stretch;
+        gap: var(--be-music-gap, 8px);
+        width: 100%;
+        height: auto;
+        min-height: 2.75rem;
+        padding: 6px var(--be-music-gap, 8px);
+        text-align: left;
+        white-space: normal;
+      }
+      .text {
+        display: grid;
+        min-width: 0;
       }
       strong {
-        display: block;
-        overflow-wrap: anywhere;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
-      .badge {
-        color: var(--primary, #abcaff);
+      .text .muted {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .kind {
+        font-size: 0.85em;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      .empty-list {
+        padding: var(--be-music-gap, 8px);
       }
     `,
   ];
@@ -116,8 +133,8 @@ export class BeMusicChartListElement extends BeMusicElement {
                   }
                 }}
               >
-                <span class="badge">${browseEntryBadge(entry)}</span
-                ><span
+                <span class="kind" part="row-kind">${browseEntryBadge(entry)}</span
+                ><span class="text"
                   ><strong>${browseEntryTitle(entry)}</strong
                   ><span class="muted"
                     >${entry.kind === 'chart' ? (entry.chart.artist ?? '') : (browseEntryCount(entry) ?? '')}</span
@@ -128,6 +145,6 @@ export class BeMusicChartListElement extends BeMusicElement {
           `,
         )}
       </ul>
-      ${entries.length === 0 ? html`<p class="muted">No matching charts.</p>` : ''}`;
+      ${entries.length === 0 ? html`<p class="muted empty-list">No matching charts.</p>` : ''}`;
   }
 }

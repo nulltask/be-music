@@ -36,7 +36,7 @@ function violations(file: string): string[] {
     if (
       specifier === SDK_PACKAGE ||
       (specifier === 'pixi.js' && usesPixi) ||
-      (specifier === UI_PACKAGE && skinName === 'native')
+      ((specifier === UI_PACKAGE || specifier.startsWith(`${UI_PACKAGE}/themes/`)) && skinName === 'native')
     )
       continue;
     if (isTest && (specifier === 'vite-plus/test' || specifier.startsWith('node:'))) continue;

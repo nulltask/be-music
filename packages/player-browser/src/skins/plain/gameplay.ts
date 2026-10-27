@@ -222,15 +222,22 @@ function judgeColor(judge: string): string {
   return TEXT;
 }
 
-/** Header (mode, tempo, speed), the gauge under the lanes, the track and the score figures along the bottom. */
+/**
+ * Header (mode, tempo, speed) over the BGA, the gauge under the lanes, the track and the score figures along the bottom.
+ * The lanes run from the stage's top, so the header starts at the BGA's left edge, clear of them; the gauge and the track
+ * share the lanes' left edge.
+ */
 function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, width: number, height: number): void {
-  const { runtime, nowMs } = frame;
+  const { runtime, nowMs, layout } = frame;
+  const { playfield } = layout;
+  const headerX = layout.bga?.x ?? playfield.right + MARGIN;
+  const left = playfield.left;
 
-  text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', MARGIN, 18, { size: 12, weight: 800, color: ACCENT });
+  text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', headerX, 18, { size: 12, weight: 800, color: ACCENT });
   text(
     ctx,
     `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,
-    110,
+    headerX + 94,
     18,
     {
       size: 12,
@@ -245,15 +252,15 @@ function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
   if (second && side1P && side2P) {
     drawGauge(ctx, runtime, side1P.left, 372, side1P.right - side1P.left, 9, '1P ');
     drawGauge(ctx, second, side2P.left, 372, side2P.right - side2P.left, 9, '2P ');
-  } else drawGauge(ctx, runtime, MARGIN, 372, 240, 9);
+  } else drawGauge(ctx, runtime, left, 372, playfield.right - left, 9);
 
   // Track, bottom left.
   // Genre, title, artist — the order every built-in skin uses.
   if (runtime.chartGenre) {
-    text(ctx, runtime.chartGenre, MARGIN, height - 70, { size: 10, color: MUTED, maxWidth: 380, nowMs });
+    text(ctx, runtime.chartGenre, left, height - 70, { size: 10, color: MUTED, maxWidth: 380, nowMs });
   }
-  text(ctx, runtime.chartTitle ?? '', MARGIN, height - 50, { size: 16, weight: 700, maxWidth: 380, nowMs });
-  text(ctx, runtime.chartArtist ?? '', MARGIN, height - 28, { size: 11, color: MUTED, maxWidth: 380, nowMs });
+  text(ctx, runtime.chartTitle ?? '', left, height - 50, { size: 16, weight: 700, maxWidth: 380, nowMs });
+  text(ctx, runtime.chartArtist ?? '', left, height - 28, { size: 11, color: MUTED, maxWidth: 380, nowMs });
 
   // Score figures, bottom right, in one row (the 2P player's row above the 1P player's).
   scoreFigures(runtime).forEach(([label, value], index) => {

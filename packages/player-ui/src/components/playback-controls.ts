@@ -2,7 +2,7 @@ import { css, html, svg, type CSSResultGroup, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicPlaybackData } from '../models.ts';
 import { formatPlaybackTime, resolvePlaybackSeconds } from '../playback.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 
 const ICONS = {
   play: svg`<path d="M8 5v14l11-7z" />`,
@@ -24,8 +24,7 @@ function icon(name: keyof typeof ICONS): TemplateResult {
  */
 export class BeMusicPlaybackControlsElement extends DataElement<BeMusicPlaybackData> {
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       :host {
         display: block;

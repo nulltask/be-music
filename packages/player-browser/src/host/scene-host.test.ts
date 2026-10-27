@@ -103,6 +103,52 @@ describe('PixiSceneHost', () => {
     }
   });
 
+  it('resizes the canvas when its container changes size without a window resize', async () => {
+    const host = new PixiSceneHost();
+    const canvas = { setAttribute: vi.fn(), style: {} as Record<string, string>, tabIndex: 0 };
+    const init = vi.spyOn(host.app, 'init').mockImplementation(async function initMock(this: typeof host.app) {
+      (this as unknown as { renderer: { canvas: typeof canvas; type: RendererType } }).renderer = {
+        canvas,
+        type: RendererType.WEBGL,
+      };
+    });
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const queueResize = vi.fn();
+    (host.app as unknown as { queueResize: () => void }).queueResize = queueResize;
+    const observers: { callback: () => void; observed: unknown[]; disconnect: ReturnType<typeof vi.fn> }[] = [];
+    class FakeResizeObserver {
+      observed: unknown[] = [];
+      disconnect = vi.fn();
+      readonly callback: () => void;
+      constructor(callback: () => void) {
+        this.callback = callback;
+        observers.push(this);
+      }
+      observe(target: unknown): void {
+        this.observed.push(target);
+      }
+    }
+    const container = {
+      appendChild: vi.fn(),
+      ownerDocument: { defaultView: { ResizeObserver: FakeResizeObserver } },
+    } as unknown as HTMLElement;
+    const destroy = vi.spyOn(host.app, 'destroy').mockImplementation(() => undefined);
+
+    try {
+      await host.mount(container);
+      expect(observers).toHaveLength(1);
+      expect(observers[0]!.observed).toEqual([container]);
+      observers[0]!.callback();
+      expect(queueResize).toHaveBeenCalledTimes(1);
+      host.dispose();
+      expect(observers[0]!.disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      destroy.mockRestore();
+      info.mockRestore();
+      init.mockRestore();
+    }
+  });
+
   it('disposes and forgets a scene whose enter hook fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const host = new PixiSceneHost();

@@ -184,6 +184,11 @@ textarea {
    * phone, so giving up the bottom inset (home indicator) would shrink the whole play field. Zero on desktops.
    */
   width: auto;
+  /*
+   * The empty shell is also Basecoat's `.empty` state, a centring flex column: stretch, or the stage shrinks to its
+   * canvas and the first screen is drawn at the canvas's default size.
+   */
+  align-self: stretch;
   margin: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   height: 100%;
   min-height: 0;
@@ -2306,6 +2311,10 @@ html.touch-first .search-input.search-inline:focus {
 }
 .replay-slots-card[hidden] {
   display: none;
+}
+/* The card pads its own sides; Basecoat's card header would indent the heading past the slot rows. */
+.replay-slots-card > header {
+  padding-inline: 0;
 }
 .replay-slots-card h2 {
   margin: 0 0 2px;

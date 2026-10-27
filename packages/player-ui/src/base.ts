@@ -1,10 +1,19 @@
-import { LitElement, type CSSResultGroup, type PropertyDeclarations } from 'lit';
+import { LitElement, adoptStyles, type CSSResultGroup, type PropertyDeclarations } from 'lit';
 import type { BeMusicUIEventMap } from './events.ts';
-import { baseStyles } from './styles/base.ts';
+import { structureStyles } from './styles/structure.ts';
+import { resolveBeMusicTheme } from './theme.ts';
 
 /** No registration, clocks, subscriptions, audio or renderer ownership. */
 export abstract class BeMusicElement extends LitElement {
-  static override styles: CSSResultGroup = baseStyles;
+  static override styles: CSSResultGroup = structureStyles;
+  /** The element's own styles, then the theme registered for its window ({@link setBeMusicTheme}). */
+  protected override createRenderRoot(): HTMLElement | DocumentFragment {
+    const root = super.createRenderRoot();
+    const theme = resolveBeMusicTheme(this.ownerDocument.defaultView?.customElements);
+    if (theme.length > 0 && root instanceof (this.ownerDocument.defaultView?.ShadowRoot ?? ShadowRoot))
+      adoptStyles(root, [...(this.constructor as typeof LitElement).elementStyles, ...theme]);
+    return root;
+  }
   constructor() {
     super();
     this.addEventListener('keydown', (event) => {

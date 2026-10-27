@@ -26,7 +26,7 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
     const course = f.course
       ? `${f.course.title} · Stage ${(f.course.stageIndex ?? 0) + 1}/${f.course.stages.length}`
       : 'Single chart';
-    const style = `--stage-ratio:${f.layout.stage.width / f.layout.stage.height};--hud-left:${((f.layout.playfield.right + 20) / f.layout.stage.width) * 100}%;--be-music-compact-combo-display:none`;
+    const style = `--stage-ratio:${f.layout.stage.width / f.layout.stage.height};--hud-left:${((f.layout.playfield.right + 20) / f.layout.stage.width) * 100}%;--playfield-center:${(f.layout.playfield.centerX / f.layout.stage.width) * 100}%;--be-music-compact-combo-display:none`;
     return html`<section
       class="gameplay"
       data-orientation=${f.layout.orientation}
@@ -137,7 +137,7 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
               exportparts="panel:settings-panel"
               .data=${{ view: s.view, options: f.playOptions, runtime: r }}
             ></be-music-play-settings>
-            <section class="hud-card">
+            <section class="panel" part="chart-panel">
               <h3>Chart &amp; course</h3>
               <p class="muted">${chart?.artist ?? ''} · ${facts} · ${total} notes</p>
               <p class="muted">${chart?.chartPath ?? ''}</p>

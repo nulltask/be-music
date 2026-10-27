@@ -1,14 +1,13 @@
 import { svg, html, nothing, css, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicGaugeData } from '../models.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 import { stats } from '../templates.ts';
 
 export class BeMusicGaugePanelElement extends DataElement<BeMusicGaugeData> {
   static override properties: PropertyDeclarations = { ...DataElement.properties, compact: { type: Boolean } };
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       label {
         display: flex;
@@ -39,13 +38,13 @@ export class BeMusicGaugePanelElement extends DataElement<BeMusicGaugeData> {
       return `${sample.progress * 220},${44 - Math.max(0, Math.min(100, sample.value)) * 0.44}`;
     }).join(' ');
     const threshold = 44 - Math.max(0, Math.min(100, d.threshold ?? 0)) * 0.44;
-    return html`<section class="card" part="panel">
+    return html`<section class="panel" part="panel">
       <h3>Gauge</h3>
       ${meter}${stats([
         ['Clear threshold', d.survival ? 'Survival' : d.threshold === undefined ? '—' : `${d.threshold}%`],
         ['Status', d.survival ? (value > 0 ? 'Surviving' : 'Failed') : d.cleared ? 'Clear' : 'Below threshold'],
       ])}
-      <svg part="graph" viewBox="0 0 220 44" role="img" aria-label="Gauge history">
+      <svg part="graph" viewBox="0 0 220 44" preserveAspectRatio="none" role="img" aria-label="Gauge history">
         ${!d.survival && d.threshold !== undefined ? svg`<line x1="0" x2="220" y1=${threshold} y2=${threshold} stroke="currentColor" stroke-dasharray="3 3"></line>` : nothing}
         <polyline fill="none" stroke="var(--primary,#edf2fa)" stroke-width="2" points=${points}></polyline>
       </svg>
