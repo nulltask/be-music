@@ -30,22 +30,38 @@ describe('resolvePreviewBGARect', () => {
 });
 
 describe('resolvePreviewPortrait', () => {
-  const stage = { width: 480, height: 854 };
-
-  it('puts the BGA square across the top and the lanes below it', () => {
+  it('puts the BGA square across the top, the facts in a band under it and the lanes below both on a phone', () => {
+    // 375×812: 480×1039 design px. 894 − 16 − 260 − 16 = 602 tall, less the facts' 12 + 220 leaves 370.
+    const stage = { width: 480, height: 1039 };
     expect(resolvePreviewPortrait(stage)).toEqual({
-      bga: { x: 19, y: 16, w: 442, h: 442 },
-      laneTop: 474,
-      judgementY: 698,
+      bga: { x: 55, y: 16, w: 370, h: 370 },
+      info: { left: 16, top: 398, right: 464, bottom: 618 },
+      laneTop: 634,
+      judgementY: 858,
     });
-    expect(resolvePreviewBGARect(stage, 427)).toEqual({ x: 19, y: 16, w: 442, h: 442 });
+    expect(resolvePreviewBGARect(stage, 427)).toEqual({ x: 55, y: 16, w: 370, h: 370 });
   });
 
-  it('keeps the BGA above the lanes and clear of the video controls', () => {
-    const portrait = resolvePreviewPortrait(stage)!;
-    expect(portrait.bga.y + portrait.bga.h).toBeLessThan(portrait.laneTop);
-    expect(portrait.laneTop).toBeLessThan(portrait.judgementY);
-    expect(portrait.judgementY).toBeLessThan(Math.round(stage.height * 0.86));
+  it('puts the facts beside the BGA on a stage close to square', () => {
+    // 768×1024: 480×640. Under it the BGA would be 26 px; beside it, 448 − 24 − 200 = 224.
+    expect(resolvePreviewPortrait({ width: 480, height: 640 })).toEqual({
+      bga: { x: 16, y: 16, w: 224, h: 224 },
+      info: { left: 264, top: 16, right: 464, bottom: 240 },
+      laneTop: 256,
+      judgementY: 514,
+    });
+  });
+
+  it('keeps the BGA, the facts and the lanes apart and clear of the video controls', () => {
+    for (const height of [600, 640, 854, 1039, 1200]) {
+      const stage = { width: 480, height };
+      const { bga, info, laneTop, judgementY } = resolvePreviewPortrait(stage)!;
+      const besideBGA = info.left >= bga.x + bga.w;
+      if (!besideBGA) expect(bga.y + bga.h).toBeLessThan(info.top);
+      expect(Math.max(bga.y + bga.h, info.bottom)).toBeLessThan(laneTop);
+      expect(laneTop).toBeLessThan(judgementY);
+      expect(judgementY).toBeLessThan(Math.round(height * 0.86));
+    }
   });
 
   it('is unused on a landscape stage', () => {
@@ -74,12 +90,10 @@ describe('resolvePreviewInfoBox', () => {
     });
   });
 
-  it('puts the facts on the BGA when the lanes sit under it', () => {
-    const stage = { width: 480, height: 854 };
+  it('gives the facts their own band on a tall stage', () => {
+    const stage = { width: 480, height: 1039 };
     const portrait = resolvePreviewPortrait(stage)!;
-    expect(
-      resolvePreviewInfoBox({ stage, bga: portrait.bga, playfield: { right: 427, top: portrait.laneTop } }),
-    ).toEqual({ left: 19, top: 318, right: 461, bottom: 458 });
+    expect(resolvePreviewInfoBox({ stage, bga: portrait.bga, playfield: { right: 427 } })).toEqual(portrait.info);
   });
 
   it('puts the facts right of the lanes without a BGA', () => {
