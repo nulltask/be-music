@@ -23,12 +23,12 @@ export class BeMusicSelectScreenElement extends FrameElement<BeMusicDOMSelectFra
     const f = this.frame;
     if (!f) return nothing;
     return html`<section class="screen" part="screen" @pointerdown=${() => this.emit('gesture-request', undefined)}>
-      <header>
-        <div>
-          <p class="eyebrow">Be-Music / Native</p>
-          <h1>Collection</h1>
+      <header part="header">
+        <div class="heading">
+          <p class="eyebrow" part="eyebrow"><slot name="eyebrow"></slot></p>
+          <h1 part="title"><slot name="title">Collection</slot></h1>
         </div>
-        <div class="search">
+        <div class="search" part="search">
           <input
             class="input"
             type="search"
@@ -59,9 +59,9 @@ export class BeMusicSelectScreenElement extends FrameElement<BeMusicDOMSelectFra
           <p id="search-error" class="search-error" role="status">${f.searchError ?? ''}</p>
         </div>
       </header>
-      <div class="columns">
+      <div class="columns" part="columns">
         <section class="browse">
-          <div class="actions">
+          <div class="actions folder" part="folder">
             <button
               class="btn"
               data-size="sm"

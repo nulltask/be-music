@@ -2,6 +2,7 @@ import { html, nothing, type CSSResultGroup, type TemplateResult } from 'lit';
 import type { BeMusicDOMResultFrame } from '@be-music/player-skin-sdk';
 import { FrameElement } from '../base.ts';
 import { screenStyles } from '../styles/screen.ts';
+import { formatEnumLabel } from '../labels.ts';
 import { stats } from '../templates.ts';
 
 export class BeMusicResultScreenElement extends FrameElement<BeMusicDOMResultFrame> {
@@ -19,16 +20,22 @@ export class BeMusicResultScreenElement extends FrameElement<BeMusicDOMResultFra
       : ([['', r]] as const);
     return html`<section class="screen" part="screen">
       <div class="center">
-        <p class="eyebrow">Play result</p>
-        <h1>${r.chart.title}</h1>
+        <div class="heading" part="header">
+          <p class="eyebrow" part="eyebrow"><slot name="eyebrow">Play result</slot></p>
+          <h1 part="title">${r.chart.title}</h1>
+        </div>
         <div class="players" part="players" data-count=${players.length}>
           ${players.map(
             ([label, p]) =>
-              html`<div class="panel" part=${label ? `panel player-${label}` : 'panel'}>
-                <p class="muted">${label ? `${label} ` : ''}${p.lamp ?? (p.cleared ? 'CLEARED' : 'FAILED')}</p>
-                <p class="stat">${p.score.exScore} / ${p.score.total * 2}</p>
-                <p class="muted">${label ? `${label} ` : ''}EX SCORE</p>
-                ${stats([['Max combo', p.maxCombo], ['Gauge', `${p.gauge.toFixed(1)}%`], ...(['perfect', 'great', 'good', 'bad', 'poor', 'emptyPoor'] as const).map((key) => [key.toUpperCase(), p.score[key]] as const)])}
+              html`<div class="panel player" part=${label ? `panel player-${label}` : 'panel'}>
+                <div class="verdict">
+                  <p class="muted">
+                    ${label ? `${label} ` : ''}${formatEnumLabel(p.lamp ?? (p.cleared ? 'CLEARED' : 'FAILED'))}
+                  </p>
+                  <p class="stat" part="stat">${p.score.exScore} / ${p.score.total * 2}</p>
+                  <p class="muted">EX SCORE</p>
+                </div>
+                ${stats([['Max combo', p.maxCombo], ['Gauge', `${p.gauge.toFixed(1)}%`], ...(['perfect', 'great', 'good', 'bad', 'poor', 'emptyPoor'] as const).map((key) => [formatEnumLabel(key), p.score[key]] as const)])}
                 <be-music-gauge-panel
                   exportparts="panel:gauge-panel,graph:gauge-graph"
                   .data=${{ value: p.gauge, label: p.score.total > 0 ? 'Gauge' : '', cleared: p.cleared, history: p.gaugeHistory }}
@@ -36,7 +43,7 @@ export class BeMusicResultScreenElement extends FrameElement<BeMusicDOMResultFra
               </div>`,
           )}
         </div>
-        <div class="actions">
+        <div class="actions" part="actions">
           <button class="btn" ?disabled=${!f.inputReady} @click=${() => this.emit('continue-request', undefined)}>
             Continue</button
           ><button
