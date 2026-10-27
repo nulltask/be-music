@@ -553,6 +553,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       const maker = new playerWebCoreAPI.CourseMaker({ md5Of: async () => undefined });
       maker.start('expert');
       maker.finish();
+      maker.drawRandomMix('expert', 7, [playerWebCoreAPI.createRandomMixChart(BENCH_SONG, BENCH_SONG_MD5)], () => 0);
     },
   });
   define('player-browser.createRandomMixEntry', {
@@ -568,12 +569,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.createDrawnRandomMixEntry', {
     run: () => {
       playerWebCoreAPI.createDrawnRandomMixEntry(BENCH_COURSE_DEFINITION, BENCH_HASHED_SONGS);
-    },
-  });
-  define('player-browser.CourseMaker.drawRandomMix', {
-    run: () => {
-      const maker = new playerWebCoreAPI.CourseMaker({ md5Of: async () => undefined });
-      maker.drawRandomMix('expert', 7, [playerWebCoreAPI.createRandomMixChart(BENCH_SONG, BENCH_SONG_MD5)], () => 0);
     },
   });
   define('player-browser.resolveCourseMakerFolders', {
