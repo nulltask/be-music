@@ -42,6 +42,9 @@ export interface BeMusicMeasure {
 export type BeMusicPosition = readonly [numerator: number, denominator: number];
 
 export interface BmsonEventExtensions {
+  /** Source-audio slice coordinates retained by a stitched NONSTOP chart, independent of FIT placement. */
+  sampleOffsetSeconds?: number;
+  sampleDurationSeconds?: number;
   l?: number;
   c?: boolean;
   /**
@@ -83,6 +86,8 @@ export interface BmsonInfoExtensions {
   resolution?: number;
   modeHint?: string;
   judgeRank?: number;
+  /** A stitched mixed-format course can retain the last BMS stage's absolute TOTAL. */
+  totalUnit?: 'absolute' | 'percent';
   total?: number;
   /**
    * Chart-level long-note type (beatoraja bmson extension `info.ln_type`): `1` = LN, `2` = CN, `3` = HCN. A per-note
@@ -294,6 +299,8 @@ export interface BMSExtensions {
   materials?: string;
   divideProp?: string;
   charset?: string;
+  /** Original first one/two filename bytes, in hex and keyed by WAV path; LR2 EXTRA groups sounds by these bytes. */
+  wavNameBytePrefixes?: Record<string, string>;
   /**
    * `#BASE` directive — the radix used for object IDs (`#WAVxx`, `#BMPxx`, `#BPMxx`, channel object tokens, …). Default
    * is base 36 (case-insensitive `0-9A-Z`). The value `62` opts into the beatoraja-style base-62 extension where
@@ -444,6 +451,9 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
       argb: { ...json.bms.argb },
       stp: [...json.bms.stp],
       wavCmds: [...json.bms.wavCmds],
+      ...(json.bms.wavNameBytePrefixes !== undefined
+        ? { wavNameBytePrefixes: { ...json.bms.wavNameBytePrefixes } }
+        : {}),
       changeOption: { ...json.bms.changeOption },
       exWAV: { ...json.bms.exWAV },
       exBMP: { ...json.bms.exBMP },
@@ -524,22 +534,27 @@ export function parseBmsonSubartist(entry: string): BmsonSubartistEntry {
   return { role, name };
 }
 
-export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
+export function normalizeObjectKey(value: string, base: 36 | 62 = 36, allowLongKeys = false): string {
+  // bmson has no two-character resource limit. BMS callers retain their original token normalization.
+  if (allowLongKeys && value.length > 2) {
+    const trimmed = value.trim();
+    if (trimmed.length > 2) return base === 62 ? trimmed : trimmed.toUpperCase();
+  }
   if (base === 62) {
     return normalizeObjectKeyBase62(value);
   }
   if (value.length === 2) {
     const raw0 = value.charCodeAt(0);
     const raw1 = value.charCodeAt(1);
-    const code0 = normalizeASCIIBase36CodeFast(raw0);
-    const code1 = normalizeASCIIBase36CodeFast(raw1);
+    const code0 = normalizeASCIIBase36Code(raw0);
+    const code1 = normalizeASCIIBase36Code(raw1);
     if (code0 >= 0 && code1 >= 0) {
       // Already normalized (the common case, called per event in every hot loop): no new string.
       return code0 === raw0 && code1 === raw1 ? value : String.fromCharCode(code0, code1);
     }
   }
   if (value.length === 1) {
-    const code = normalizeASCIIBase36CodeFast(value.charCodeAt(0));
+    const code = normalizeASCIIBase36Code(value.charCodeAt(0));
     if (code >= 0) {
       return String.fromCharCode(0x30, code);
     }
@@ -615,8 +630,8 @@ export function normalizeChannel(value: string): string {
   if (value.length === 2) {
     const raw0 = value.charCodeAt(0);
     const raw1 = value.charCodeAt(1);
-    const code0 = normalizeASCIIBase36CodeFast(raw0);
-    const code1 = normalizeASCIIBase36CodeFast(raw1);
+    const code0 = normalizeASCIIBase36Code(raw0);
+    const code1 = normalizeASCIIBase36Code(raw1);
     if (code0 >= 0 && code1 >= 0) {
       // Already normalized (the common case, called per event in every hot loop): no new string.
       return code0 === raw0 && code1 === raw1 ? value : String.fromCharCode(code0, code1);
@@ -710,15 +725,4 @@ function cloneBMSObjectLineEntry(entry: BMSObjectLineEntry): BMSObjectLineEntry 
     ...entry,
     events: entry.events.map(cloneEvent),
   };
-}
-
-function normalizeASCIIBase36CodeFast(code: number): number {
-  if (code >= 0x30 && code <= 0x39) {
-    return code;
-  }
-  const uppercase = code & 0xdf;
-  if (uppercase >= 0x41 && uppercase <= 0x5a) {
-    return uppercase;
-  }
-  return -1;
 }

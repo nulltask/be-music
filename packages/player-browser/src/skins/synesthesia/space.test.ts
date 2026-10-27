@@ -4,12 +4,17 @@ import {
   clipSegmentOutsideRect,
   burstParticles,
   cameraBasis,
+  projectYawedInto,
+  burstParticlePositionInto,
+  cloudBasis,
+  projectCloudPointInto,
   emberColor,
   flyPast,
   floorRise,
   hsvToHex,
   mixCamera,
   particleRiverPoint,
+  particleRiverPointInto,
   perlin2,
   pointCloudPyramid,
   projectPoint,
@@ -441,5 +446,97 @@ describe('flyPast', () => {
   it('pushes an object sitting on the vanishing point off it', () => {
     const passed = flyPast(320, 240, 50, 320, 240, 0.5);
     expect(Math.hypot(passed.x - 320, passed.y - 240)).toBeGreaterThan(40);
+  });
+});
+
+describe('projectCloudPointInto', () => {
+  it('places and projects a cloud point exactly as the composed helpers do', () => {
+    let seed = 99;
+    const next = (): number => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648) * 2 - 1;
+    for (let round = 0; round < 200; round += 1) {
+      const transform = {
+        scale: 1 + next() * 0.9,
+        x: next() * 300,
+        y: next() * 200,
+        z: 400 + next() * 380,
+        yaw: next() * Math.PI,
+        ...(round % 3 === 0 ? {} : { pitch: next() * 0.6 }),
+      };
+      const camera =
+        round % 2 === 0
+          ? undefined
+          : { x: next() * 40, y: next() * 20, z: next() * 30, yaw: next() * 0.3, pitch: next() * 0.2 };
+      const orbit = round % 4 === 1 ? 500 : 0;
+      const point = { x: next() * 100, y: next() * 100, z: next() * 100 };
+      let world = { x: point.x * transform.scale, y: point.y * transform.scale, z: point.z * transform.scale };
+      world = rotateY(world, transform.yaw);
+      if (transform.pitch) world = rotateX(world, transform.pitch);
+      const placed = { x: world.x + transform.x, y: world.y + transform.y, z: world.z + transform.z };
+      const expected = projectPoint(camera ? viewPoint(placed, camera, orbit) : placed, 400, 300, 600);
+      const actual = projectCloudPointInto(
+        scratchProjected(),
+        point.x,
+        point.y,
+        point.z,
+        cloudBasis(transform),
+        camera ? cameraBasis(camera) : undefined,
+        400,
+        300,
+        600,
+        orbit,
+      );
+      expect(actual).toEqual(expected);
+    }
+  });
+
+  it('reports a point behind the camera as not visible', () => {
+    const behind = projectCloudPointInto(
+      scratchProjected(),
+      0,
+      0,
+      -10,
+      cloudBasis({ scale: 100, x: 0, y: 0, z: 0, yaw: 0 }),
+      undefined,
+      1,
+      2,
+      600,
+    );
+    expect(behind).toEqual({ x: 1, y: 2, scale: 0, visible: false });
+  });
+});
+
+describe('allocation-free burst projection', () => {
+  it('matches burstParticlePosition and projectPoint(rotateY(…)) exactly', () => {
+    const particles = burstParticles(4242, 64);
+    const out = { x: 0, y: 0, z: 0 };
+    const projected = scratchProjected();
+    for (const [index, particle] of particles.entries()) {
+      const life = (index % 13) / 12 - 0.05;
+      const spin = (index % 7) * 0.13 - 0.4;
+      expect(burstParticlePositionInto(out, particle, life, 80, 40)).toEqual(
+        burstParticlePosition(particle, life, 80, 40),
+      );
+      const point = { x: out.x * 0.55, y: out.y * 1.1 - 12, z: out.z * 0.8 };
+      expect(
+        projectYawedInto(projected, point.x, point.y, point.z, Math.cos(spin), Math.sin(spin), 200, 500, 600),
+      ).toEqual(projectPoint(rotateY(point, spin), 200, 500, 600));
+    }
+    expect(projectYawedInto(scratchProjected(), 0, 0, -700, 1, 0, 3, 4, 600)).toEqual({
+      x: 3,
+      y: 4,
+      scale: 0,
+      visible: false,
+    });
+  });
+});
+
+describe('particleRiverPointInto', () => {
+  it('writes particleRiverPoint into the given point', () => {
+    const options = { length: 1500, speed: 300, amplitude: 28, width: 16, seed: 2 };
+    const out = { x: 0, y: 0, z: 0 };
+    for (let index = 0; index < 50; index += 1) {
+      expect(particleRiverPointInto(out, index, 2.5, options, index * 40)).toBe(out);
+      expect(out).toEqual(particleRiverPoint(index, 2.5, options, index * 40));
+    }
   });
 });

@@ -1,9 +1,5 @@
-import {
-  resolveGreenNumber,
-  resolveLaneCover,
-  resolveWhiteNumber,
-  type LaneCoverState,
-} from '@be-music/player-scene-model';
+import { clamp } from '@be-music/shared-utils/core';
+import { resolveGreenNumber, resolveWhiteNumber, type LaneCoverState } from '@be-music/player-scene-model';
 import {
   BEATORAJA_NUM,
   SYNTHETIC_NUM_JUDGE_COMBO_1P,
@@ -49,6 +45,7 @@ export interface BeatorajaPlayClock {
 
 /** What a play skin's numbers read: the score, the view (hi-speed and covers), the chart, the clock. */
 export interface BeatorajaPlayNumberInput extends BeatorajaScoreNumberInput {
+  readonly judgeTimingMs?: number;
   /** The hi-speed the notes scroll at. */
   readonly hiSpeed: number;
   /** The 1P lane covers; none when absent. */
@@ -124,7 +121,11 @@ export function beatorajaBPMAt(segments: readonly BeatorajaBPMSegment[], timeMs:
 function playheadBPM(input: BeatorajaPlayNumberInput): number {
   const { clock, chart } = input;
   if (clock === undefined) return chart.bpm;
-  return beatorajaBPMAt(chart.bpmSegments ?? [], clock.currentSeconds * 1000, chart.bpm);
+  const offset =
+    typeof input.judgeTimingMs === 'number' && Number.isFinite(input.judgeTimingMs)
+      ? Math.trunc(input.judgeTimingMs)
+      : 0;
+  return beatorajaBPMAt(chart.bpmSegments ?? [], clock.currentSeconds * 1000 + offset, chart.bpm);
 }
 
 /**
@@ -132,7 +133,7 @@ function playheadBPM(input: BeatorajaPlayNumberInput): number {
  * lane cover when `withCover`. The LIFT does not shorten it. Rounded, 0 for a hi-speed or BPM that is not positive.
  */
 function whiteDuration(input: BeatorajaPlayNumberInput, bpm: number, withCover: boolean): number {
-  const sudden = withCover && input.cover !== undefined ? resolveLaneCover(input.cover).sudden : 0;
+  const sudden = withCover && input.cover?.suddenOn === true ? beatorajaLaneCover(input.cover) : 0;
   return Math.round(resolveWhiteNumber({ laneBeats: 4, hiSpeed: input.hiSpeed, sudden, bpm }));
 }
 
@@ -142,16 +143,17 @@ function duration(input: BeatorajaPlayNumberInput, bpm: number, withCover: boole
 }
 
 function clampUnit(value: number): number {
-  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+  return Number.isFinite(value) ? clamp(value, 0, 1) : 0;
 }
 
 /**
  * beatoraja's lane cover (`PlayConfig.lanecover`): the SUDDEN+ height as a fraction of the part of the lane above the
- * LIFT, kept while the cover is off. be-music keeps SUDDEN+ as a fraction of the whole lane, so the same drawn height
- * is `sudden / (1 - lift)`.
+ * LIFT, kept while the cover is off. be-music keeps SUDDEN+ so too, except an absolute cover (the floating hi-speed's),
+ * a fraction of the whole lane: the same drawn height is `sudden / (1 - lift)` there.
  */
 function beatorajaLaneCover(cover: LaneCoverState): number {
   const sudden = clampUnit(cover.sudden);
+  if (cover.absolute !== true) return sudden;
   const above = 1 - clampUnit(cover.lift);
   return above > 0 ? Math.min(1, sudden / above) : 0;
 }
@@ -216,6 +218,9 @@ export function resolveBeatorajaPlayNumber(id: number, input: BeatorajaPlayNumbe
     case BEATORAJA_NUM.LIFT1:
       return input.cover !== undefined ? beatorajaPerMille(clampUnit(input.cover.lift)) : 0;
     case BEATORAJA_NUM.JUDGETIMING:
+      return typeof input.judgeTimingMs === 'number' && Number.isFinite(input.judgeTimingMs)
+        ? Math.trunc(input.judgeTimingMs)
+        : 0;
     case BEATORAJA_NUM.HIDDEN1:
       return 0;
 

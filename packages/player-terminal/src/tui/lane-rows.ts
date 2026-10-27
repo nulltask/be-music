@@ -25,7 +25,7 @@ const HIGHLIGHT_DECAY_POWER = 0.72;
 const HIGHLIGHT_R_BOOST = 56;
 const HIGHLIGHT_G_BOOST = 62;
 const HIGHLIGHT_B_BOOST = 74;
-// Lane colours come from the play-mode table, by channel and whatever the mode: the IIDX scratches and the keyboard
+// Lane colours come from the play-mode table, by channel and whatever the mode: the That-Which-Must-Not-Be-Named scratches and the keyboard
 // modes' wheel lanes (`1P` / `1Q` / `2P` / `2Q`, which no other mode uses) are red, the 14 KEY layout's white keys
 // white, and its black keys plus the FREE ZONE channels (`17` / `27`) blue.
 const SCRATCH_LANE_CHANNELS: ReadonlySet<string> = new Set(

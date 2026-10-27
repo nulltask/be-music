@@ -6,15 +6,15 @@ import type { ChartFileHashes } from '@be-music/player-browser/collection';
 import type { PlaySceneCourse, PlaySceneSettings } from '@be-music/player-browser/host';
 import { resolveCourseStagePlaySettings, resolveCourseStageSettings } from '@be-music/player-engine/course';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
-import { resolveCourseView, type PlayOptions } from '@be-music/player-scene-model';
+import { resolvePlayOptions, resolveCourseView, type PlayOptions } from '@be-music/player-scene-model';
 import type { ActiveCourse, CourseStagePlay } from '../course-flow.ts';
 import { tempoFromPercent } from '../play-tempo-settings.ts';
-import type { DemoGUIState } from '../types.ts';
+import type { PlayerGUIState } from '../types.ts';
 import type { NonstopPlay } from './routes/nonstop.ts';
 
 /** The Debug Menu's state a play is made with: its lane, gauge, tempo, audio and debug options. */
 export type PlaySceneGUIState = Pick<
-  DemoGUIState,
+  PlayerGUIState,
   | 'autoPlay'
   | 'random1P'
   | 'random2P'
@@ -23,14 +23,18 @@ export type PlaySceneGUIState = Pick<
   | 'autoScratch1P'
   | 'autoScratch2P'
   | 'replayView'
+  | 'tempoEnabled'
   | 'tempoPercent'
   | 'tempoPitchMode'
   | 'tempoStretchAlgorithm'
   | 'judgeRuleset'
   | 'autoPauseOnBlur'
   | 'hiSpeed'
+  | 'judgeTimingMs'
+  | 'normalHiSpeedLevel'
   | 'keyVolume'
   | 'bgmVolume'
+  | 'peakGain'
   | 'compressor'
   | 'compressorKey'
   | 'compressorBGM'
@@ -50,6 +54,7 @@ export interface PlaySceneOptionsInput {
   readonly autoPlay?: boolean;
   /** A replay to play back instead of the player's input. */
   readonly replay?: BeMusicReplay;
+  readonly fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
   /** The chart file's hashes, which the replay records. */
   readonly chartHashes?: ChartFileHashes;
   /** The EXPERT / GRADE course stage this play is. */
@@ -81,7 +86,10 @@ export interface PlaySceneOptions {
  * what a course allows, a replay's recorded setup in place of the player's, and the tempo chosen.
  */
 export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlaySceneOptions {
-  const { guiState, playOptions, replay, courseStage, nonstop } = input;
+  const { guiState, replay, courseStage, nonstop } = input;
+  const playOptions = replay?.play.options
+    ? resolvePlayOptions({ ...input.playOptions, ...replay.play.options })
+    : input.playOptions;
   const autoPlay = input.autoPlay ?? guiState.autoPlay;
   // A course limits the lane options (both sides and DP FLIP) to what its constraint allows (`grade` none,
   // `grade_mirror` MIRROR, ...), a NONSTOP course's stitched play included, and an LR2 GRADE course also turns off
@@ -98,7 +106,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     tempo:
       replay !== undefined && guiState.replayView.tempo
         ? (replay.play.tempo ?? 1)
-        : tempoFromPercent(guiState.tempoPercent),
+        : tempoFromPercent(guiState.tempoEnabled ? guiState.tempoPercent : 0),
   };
   const lanes =
     input.activeCourse !== undefined && courseStage !== undefined
@@ -108,6 +116,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
         : picked;
   const tempo = lanes.tempo;
   const sharedOptions = {
+    ...(input.fixedArrangement !== undefined ? { fixedArrangement: input.fixedArrangement } : {}),
     // The replay-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
     // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
     // is the surface that exists on every family (default / beatoraja selects have no LR2 PLAY OPTION panel).
@@ -119,7 +128,44 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     bga: playOptions.bga,
     bgaSize: playOptions.bgaSize,
     scoreGraph: playOptions.scoreGraph,
-    hsFix: playOptions.hsFix,
+    hsFix: playOptions.classicHiSpeed || playOptions.normalHiSpeedLevel > 0 ? ('OFF' as const) : playOptions.hsFix,
+    bpmGuide: playOptions.bpmGuide,
+    judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
+    classicHiSpeed: playOptions.classicHiSpeed,
+    visualConstant: playOptions.visualConstant,
+    noteDurationMs: playOptions.noteDurationMs,
+    lift1P: playOptions.lift1P,
+    lift2P: playOptions.lift2P,
+    liftOn1P: playOptions.liftOn1P,
+    liftOn2P: playOptions.liftOn2P,
+
+    constantFadeMs: playOptions.constantFadeMs,
+    judgeTimingMs: playOptions.judgeTimingMs,
+    normalHiSpeedLevel: playOptions.normalHiSpeedLevel,
+    floatingHiSpeed: playOptions.floatingHiSpeed,
+    fixedDisplayArea: playOptions.fixedDisplayArea,
+    hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
+    randomSeed1P: playOptions.randomSeed1P,
+    randomSeed2P: playOptions.randomSeed2P,
+    randomFixedLane1P: playOptions.randomFixedLane1P,
+    randomFixedLane2P: playOptions.randomFixedLane2P,
+    judgeAlgorithm: replay?.play.judgeAlgorithm ?? playOptions.judgeAlgorithm,
+    longNoteModifier: playOptions.longNoteModifier,
+    mineModifier: playOptions.mineModifier,
+    scrollModifier: playOptions.scrollModifier,
+    scrollSection: playOptions.scrollSection,
+    scrollRate: playOptions.scrollRate,
+    longNoteRate: playOptions.longNoteRate,
+    sevenToNinePattern: playOptions.sevenToNinePattern,
+    sevenToNineType: playOptions.sevenToNineType,
+    battleMode: playOptions.battleMode,
+    dBattleScratch: playOptions.dBattleScratch,
+    lr2ExtraMode: playOptions.lr2ExtraMode,
+    lr2ExtraLevel: playOptions.lr2ExtraLevel,
+    extraNoteDepth: playOptions.extraNoteDepth,
+    extraNoteScratch: playOptions.extraNoteScratch,
+    gaugeAutoShift: playOptions.gaugeAutoShift,
+    bottomShiftableGauge: playOptions.bottomShiftableGauge,
     hiddenSudden1P: lanes.hiddenSudden1P,
     hiddenSudden2P: lanes.hiddenSudden2P,
     shutter: playOptions.shutter,
@@ -127,8 +173,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge / judge ruleset govern
     // judging and the gauge readout, and the lane transforms stay off because the view re-applies the recorded
     // arrangement directly (see `PlaySceneOptions.replay`).
-    autoScratch1P: replay !== undefined ? replay.play.autoScratch : lanes.autoScratch1P,
-    autoScratch2P: replay !== undefined ? false : lanes.autoScratch2P,
+    autoScratch1P: replay !== undefined ? (replay.play.autoScratch1P ?? replay.play.autoScratch) : lanes.autoScratch1P,
+    autoScratch2P: replay !== undefined ? (replay.play.autoScratch2P ?? replay.play.autoScratch) : lanes.autoScratch2P,
     dpFlip: replay !== undefined ? false : lanes.dpFlip,
     random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
     random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,
@@ -156,6 +202,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     // What the replay shows of the recorded view (the Debug Menu's "Replay / ghost" toggles, latched at song start).
     replayView: { ...guiState.replayView },
     audioVolumes: { key: guiState.keyVolume / 100, bgm: guiState.bgmVolume / 100 },
+    ...(guiState.peakGain ? { peakGain: true } : {}),
     audioCompressorParams: input.audioCompressorParams,
     audioCompressor: guiState.compressor,
     audioCompressorMode: input.audioCompressorMode,

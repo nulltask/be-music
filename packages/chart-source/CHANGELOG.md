@@ -1,5 +1,17 @@
 # @be-music/chart-source
 
+## 0.5.0
+
+### Minor Changes
+
+- 69df53c: Add optional bmson IR source-audio slice coordinates, explicit TOTAL units and resource-key normalization beyond two characters for mixed NONSTOP courses. BMS token normalization remains unchanged.
+- 29e69c6: Add `bms.wavNameBytePrefixes` to the chart JSON: the leading bytes of each `#WAV` file name as the file wrote them, by which LR2 groups a chart's sounds for EXTRA MODE and SP TO DP.
+
+### Patch Changes
+
+- Updated dependencies [2e435b9]
+  - @be-music/shared-utils@0.6.0
+
 ## 0.4.0
 
 ### Minor Changes

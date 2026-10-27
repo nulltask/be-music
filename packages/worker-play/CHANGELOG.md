@@ -1,5 +1,13 @@
 # @be-music/worker-play
 
+## 0.1.2
+
+### Patch Changes
+
+- 4a4b111: Keep a browser's Debug Menu settings in R2, addressed by a server-set device cookie that Safari's seven-day storage cap does not delete. Preserve edit revisions independently of the server clock, use conditional writes to reject stale updates, and retain reset revisions without settings values.
+- Updated dependencies [00139f5]
+  - @be-music/service-auth-client@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes

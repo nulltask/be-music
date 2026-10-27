@@ -1,3 +1,7 @@
+import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
+import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
+import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
+import { resolveConstantVisibility, resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
 /**
  * The beatoraja family's play screen: a beatoraja play skin (`play_<variant>`) drawn by `BeatorajaPlaySkinView` with the
  * play's notes, lane markers and BGA spliced in where the skin authors them (`BeatorajaPlayStage`), its canvas fitted
@@ -11,8 +15,8 @@
  *
  * The skin's cover buttons and the mouse wheel come back as cover intents; the cover keys and the hi-speed keys are the
  * session's (`PlaySessionOptions.coverKeys`), and the view shows what they set for a moment. The session times the
- * play from the view's timing ({@link resolveBeatorajaPlayTiming}): the loading ends at once, the chart starts
- * {@link BEATORAJA_PLAY_LEAD_IN_MS} later, and the play ends over the skin's `fadeout`, or, failed, after its `close`.
+ * play from the view's timing ({@link resolveBeatorajaPlayTiming}): READY follows loading, the chart starts
+ * after the skin's `playstart` interval, and the play ends over the skin's `fadeout`, or, failed, after its `close`.
  */
 
 import {
@@ -25,7 +29,7 @@ import {
 } from '@be-music/skin-beatoraja';
 import { withBeatorajaCourseStageOps } from '@be-music/skin-beatoraja/scene';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import type { ChartPlayVariant } from '@be-music/chart-model';
+import { createBeatAtSecondsResolverFromTimingResolver, type ChartPlayVariant } from '@be-music/chart-model';
 import type { PlayerGaugeSummary, PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { CourseView, HiSpeedTransition, LibraryChart, PlayState } from '@be-music/player-scene-model';
@@ -59,6 +63,7 @@ import type {
   PlayViewTiming,
   PlayfieldSkin,
 } from '../types.ts';
+import { resolveBeatorajaOptionRef } from './option-refs.ts';
 import { BeatorajaPlayBridge, type BeatorajaPlayEngineInput } from './play-bridge.ts';
 import { BeatorajaPlayStage, type BeatorajaPlayBGA, type BeatorajaPlayChartLayout } from './play-stage.ts';
 import { createBeatorajaLaneTimelines, createBeatorajaScrollMapper } from './play/scroll-placement.ts';
@@ -67,10 +72,7 @@ import { BeatorajaViewChartImages, resolveBeatorajaFadeOutMs } from './scene-fra
 
 const log = logger('beatoraja-gameplay');
 
-/**
- * How long the chart waits after the play has loaded: the 1.5 s the engine's lead-in held a beatoraja play at READY
- * before the chart's start.
- */
+/** @deprecated The legacy fixed lead-in. Play timing now uses the skin's `playstart` (zero when omitted). */
 export const BEATORAJA_PLAY_LEAD_IN_MS = 1500;
 
 /** How far the skin's cover buttons move a cover: 5 % of the lane per click (Shift reverses). */
@@ -92,17 +94,23 @@ const BUTTON_HIDDEN = 332;
 /** The beatoraja scale the replay reads the hi-speed on: a lane is four beats at hi-speed 1. */
 const BEATORAJA_REPLAY_VIEW: PlayReplayViewScale = { scale: BEATORAJA_HI_SPEED_SCALE, laneBeats: 4 };
 
-/**
- * The beatoraja play skin's timing: the play has loaded once it shows (READY and the play timers start then), the chart
- * starts {@link BEATORAJA_PLAY_LEAD_IN_MS} later, and the play ends over the skin's `fadeout` (500 ms without one) or,
- * failed, after its `close` (`BMSPlayer` opens the result once `TIMER_FAILED` passes it; 0 without one).
- */
-export function resolveBeatorajaPlayTiming(skin: Pick<BeatorajaSkin, 'fadeout' | 'close'>): PlayViewTiming {
+/** The skin's input/loading offsets and its READY interval; omitted beatoraja timings default to zero. */
+export function resolveBeatorajaPlayTiming(
+  skin: Pick<BeatorajaSkin, 'fadeout' | 'close' | 'input' | 'loadstart' | 'loadend' | 'playstart' | 'finishmargin'>,
+): PlayViewTiming {
+  const duration = (value: number | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+  const loadEndOffsetMs = duration(skin.loadstart) + duration(skin.loadend);
+  const playStartAfterLoadEndMs = duration(skin.playstart);
   return {
-    loadEndOffsetMs: 0,
-    playStartOffsetMs: BEATORAJA_PLAY_LEAD_IN_MS,
+    inputStartOffsetMs: duration(skin.input),
+    loadEndOffsetMs,
+    playStartOffsetMs: loadEndOffsetMs + playStartAfterLoadEndMs,
+    playStartAfterLoadEndMs,
+    musicEndDelayMs: 5000,
+    finishMarginMs: duration(skin.finishmargin),
     fadeOutMs: resolveBeatorajaFadeOutMs(skin.fadeout),
-    closeMs: typeof skin.close === 'number' && Number.isFinite(skin.close) && skin.close > 0 ? skin.close : 0,
+    closeMs: duration(skin.close),
   };
 }
 
@@ -122,9 +130,18 @@ export interface BeatorajaPlayRuntime {
   readonly chart: LibraryChart | undefined;
   /** The chart as the play plays it (its `#RANDOM` branches drawn), before DP FLIP. */
   readonly resolvedChart: BeMusicJSON | undefined;
-  readonly resolvedPlayChart: { readonly reversal?: BeatorajaPlayChartLayout['reversal'] } | undefined;
+  readonly resolvedPlayChart:
+    | {
+        readonly timing?: import('@be-music/chart-model').TimingResolver;
+        readonly reversal?: BeatorajaPlayChartLayout['reversal'];
+      }
+    | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
+  /** The play's Visual CONSTANT switch and the course's NO_SPEED lock, which decide whether `#SPEED` scrolls. */
+  readonly options?: { readonly visualConstant?: boolean; readonly hiSpeedLocked?: boolean };
   readonly notes: readonly PlayerUIFrameNote[];
+  readonly mineNotes: readonly PlayerUIFrameNote[];
+  readonly invisibleNotes: readonly PlayerUIFrameNote[];
   /** The engine's latest frame; `undefined` before its first. */
   readonly engineFrame: Readonly<PlayerUIFramePayload> | undefined;
   /** The engine's counts as the play started (all 0 but the total), for the intro before its first frame. */
@@ -134,6 +151,7 @@ export interface BeatorajaPlayRuntime {
   readonly bgaTextures: ReadonlyMap<string, Texture>;
   readonly bgaLayerTextures: ReadonlyMap<string, Texture>;
   readonly bgaVideos: ReadonlyMap<string, { video: HTMLVideoElement }>;
+  readonly poorBGAMode?: 0 | 1 | 2;
   readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
   /** A stitched NONSTOP chart's cues split by stage (`splitNonstopBGATimeline`), for the BGA's crossfade at a seam. */
   readonly nonstopBGATimelines: readonly NonstopStageBGATimeline[] | undefined;
@@ -149,11 +167,17 @@ export interface BeatorajaPlayRuntime {
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly disposed: boolean;
   playClock(): number;
+  currentSeconds(): number;
+  /** True once the play's intro timeline has started. Absent on a stand-in that never starts. */
+  hasSceneStarted?(): boolean;
+  isIntroPlaying(): boolean;
   resolveChartDurationSeconds(): number;
 }
 
 /** What the beatoraja play view draws with besides its kit. */
 export interface BeatorajaPlayViewOptions {
+  /** Show hidden keysound objects as green inspection markers. Off by default. */
+  readonly showInvisibleNotes?: boolean;
   /** The play is AUTO PLAY. */
   readonly autoPlay?: boolean;
   /** DP FLIP: the chart's sides swap, for the skin's per-side readouts (the notes come flipped from the session). */
@@ -178,6 +202,8 @@ interface PreparedChart {
 
 /** The beatoraja play view. See the module comment. */
 export class BeatorajaPlayView implements PlayView {
+  private readonly displayInfo = new DisplayAreaInfoOverlay();
+  private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
   public readonly family = 'beatoraja' as const;
   public readonly root: Container = new Container();
   public readonly timing: PlayViewTiming;
@@ -195,9 +221,11 @@ export class BeatorajaPlayView implements PlayView {
   private kit: BeatorajaKit;
   private readonly play: BeatorajaPlayRuntime;
   private readonly options: BeatorajaPlayViewOptions;
+  private showInvisibleNotes: boolean;
   private readonly chartImages: BeatorajaViewChartImages;
   private prepared: PreparedChart | undefined;
   private bridge: BeatorajaPlayBridge | undefined;
+  private playOptions: PlayFrame['playOptions'] | undefined;
   private stage: BeatorajaPlayStage | undefined;
   private host: PixiSceneHost | undefined;
   /** The host the play loads on, for the GPU upload of its BGA before the view is attached. */
@@ -215,6 +243,7 @@ export class BeatorajaPlayView implements PlayView {
     this.kit = kit;
     this.play = play;
     this.options = options;
+    this.showInvisibleNotes = options.showInvisibleNotes === true;
     this.timing = resolveBeatorajaPlayTiming(kit.kit.skin);
     this.chartImages = new BeatorajaViewChartImages(play.chart, options.source);
     const skin = kit.kit.skin;
@@ -240,6 +269,24 @@ export class BeatorajaPlayView implements PlayView {
   }
 
   /**
+   * Starts the skin's scene timers from the clock when this view joins a play already running. Those moments were
+   * delivered to the view it replaces; without them a beatoraja skin stays on its loading frame.
+   */
+  public joinRunningPlay(): void {
+    const bridge = this.bridge;
+    if (bridge === undefined || this.play.hasSceneStarted?.() !== true) return;
+    const now = this.play.playClock();
+    const chartStarted = !this.play.isIntroPlaying();
+    const at = chartStarted ? now - Math.max(0, this.play.currentSeconds()) * 1000 : now;
+    bridge.joinRunning(at, chartStarted);
+  }
+
+  /** Toggles the inspection overlay without restarting the play. */
+  public setShowInvisibleNotes(enabled: boolean): void {
+    this.showInvisibleNotes = enabled;
+  }
+
+  /**
    * Gets the skin ready for the play once its chart is prepared (the session's `prepareView`): the chart as the play
    * plays it (DP FLIP applied for the skin's per-side readouts), its BPM graph, note distribution, markers and scroll,
    * the bridge, the skin with the notes and markers, and the chart's own images.
@@ -251,9 +298,15 @@ export class BeatorajaPlayView implements PlayView {
     if (resolved === undefined) return;
     const chart = this.options.dpFlip === true ? flipDPChart(resolved) : resolved;
     const skin = this.kit.kit.skin;
-    const scrollMapper = createBeatorajaScrollMapper(chart);
+    // Visual CONSTANT ignores `#SPEED` (`LaneRenderer`'s `speed` is 1), unless a NO_SPEED course turns it off.
+    const constant = resolveConstantVisibility({
+      enabled: play.options?.visualConstant,
+      noSpeed: play.options?.hiSpeedLocked,
+    });
+    const scrollMapper = createBeatorajaScrollMapper(chart, { ignoreSpeed: constant.enabled });
     const laneTimelines = scrollMapper !== undefined ? createBeatorajaLaneTimelines(chart) : undefined;
     const timeMarkers = normalizeBeatorajaNote(skin.note).time.length > 0;
+    const guideEvents = play.resolvedPlayChart?.timing ? collectBPMGuideEvents(play.resolvedPlayChart.timing) : [];
     this.prepared = {
       chart,
       analysis: computeBeatorajaChartNoteDistribution(chart),
@@ -262,13 +315,21 @@ export class BeatorajaPlayView implements PlayView {
         variant: play.chartPlayVariant,
         scrollMapper,
         timelineBeats: laneTimelines?.beats,
-        beatToSeconds: laneTimelines?.beatToSeconds,
+        beatToSeconds: laneTimelines?.beatToSeconds ?? play.resolvedPlayChart?.timing?.beatToSeconds,
+        beatAtSeconds: play.resolvedPlayChart?.timing
+          ? createBeatAtSecondsResolverFromTimingResolver(play.resolvedPlayChart.timing)
+          : undefined,
         reversal: play.resolvedPlayChart?.reversal,
         // One-second time ticks when the skin authors `time[]` markers.
-        markers: computeBeatorajaChartMarkers(chart, {
-          timeIntervalSec: timeMarkers ? 1 : undefined,
-          totalSeconds: undefined,
-        }),
+        markers: {
+          ...computeBeatorajaChartMarkers(chart, {
+            timeIntervalSec: timeMarkers ? 1 : undefined,
+            totalSeconds: undefined,
+          }),
+          bpm: guideEvents.filter((event) => event.kind === 'bpm').map((event) => event.beat),
+          stop: guideEvents.filter((event) => event.kind === 'stop').map((event) => event.beat),
+        },
+        guideEvents,
         autoPlay: this.options.autoPlay === true,
       },
     };
@@ -318,7 +379,16 @@ export class BeatorajaPlayView implements PlayView {
       resolveSkinConfigOps(kit.skinConfig, this.options.course),
       prepared.layout,
       {
-        resolveRefValue: (ref) => bridge.resolveRefValue(ref),
+        resolveRefValue: (ref) => {
+          // The chart as played, its undefined long notes given the player's LN MODE.
+          const playedChart = this.play.resolvedChart ?? this.play.chart?.chart;
+          return (
+            resolveBeatorajaOptionRef(ref, {
+              ...(playedChart !== undefined ? { chart: playedChart } : {}),
+              ...(this.playOptions !== undefined ? { playOptions: this.playOptions } : {}),
+            }) ?? bridge.resolveRefValue(ref)
+          );
+        },
         resolveTextContent: (ref) => bridge.resolveTextContent(ref),
         resolveNumberValue: (ref) => bridge.resolveNumberValue(ref),
         resolveFontFamily: kit.fonts !== undefined ? (id) => kit.fonts!.family(id) : undefined,
@@ -372,6 +442,7 @@ export class BeatorajaPlayView implements PlayView {
       layerTextures: play.bgaLayerTextures,
       videos: new Map([...play.bgaVideos].map(([key, { video }]) => [key, video] as const)),
       cues: play.bgaTimeline,
+      poorBGAMode: play.poorBGAMode,
       ...(nonstop !== undefined && play.nonstopBGATimelines !== undefined
         ? { nonstop: { stages: nonstop.stages, timelines: play.nonstopBGATimelines } }
         : {}),
@@ -384,9 +455,13 @@ export class BeatorajaPlayView implements PlayView {
     this.emit = emit;
     if (typeof window !== 'undefined') window.addEventListener('wheel', this.handleWheel, { passive: false });
     this.touchLanes.attach(host, emit);
+    if (this.stage) this.displayInfo.attachCanvas(this.stage.canvas);
+    if (this.stage) this.bpmChangeWarning.attachCanvas(this.stage.canvas);
   }
 
   public detach(): void {
+    this.displayInfo.detach();
+    this.bpmChangeWarning.detach();
     this.touchLanes.detach();
     if (typeof window !== 'undefined') window.removeEventListener('wheel', this.handleWheel);
     this.host = undefined;
@@ -398,10 +473,13 @@ export class BeatorajaPlayView implements PlayView {
     const bridge = this.bridge;
     const host = this.host;
     this.root.visible = frame.shown;
+    if (!frame.shown) this.displayInfo.hide();
+    if (!frame.shown) this.bpmChangeWarning.hide();
     if (stage === undefined || bridge === undefined || host === undefined || !frame.shown || this.disposed) return;
     stage.fitTo(host);
     const play = this.play;
     this.state = frame.state;
+    this.playOptions = frame.playOptions;
     for (const event of frame.events) {
       if (event.kind === 'load-end') this.loaded = true;
       else if (event.kind === 'view-setting') this.showViewSetting(event.setting, frame.state);
@@ -412,21 +490,78 @@ export class BeatorajaPlayView implements PlayView {
     if (this.wasPaused && !paused) stage.resumeBGA();
     this.wasPaused = paused;
     const context = bridge.update({
+      judgeTimingMs: frame.playOptions.judgeTimingMs,
+      visualConstant: frame.playOptions.visualConstant,
       nowMs: play.playClock(),
       hostNowMs: frame.clock.nowMs,
       state: frame.state,
       ...withEngine(this.engineInput()),
       ...(play.judgeWindows !== undefined ? { judgeWindows: play.judgeWindows } : {}),
       events: frame.events,
+      exiting: play.exiting,
+      scoreTargets: frame.scoreTargets,
     });
     // The notes stand at the chart's start from READY until the engine's first frame, as the engine's lead-in held them.
     const engineFrame = play.engineFrame;
-    const clock = engineFrame ?? (this.loaded ? { notes: play.notes, currentSeconds: 0, currentBeat: 0 } : undefined);
-    stage.draw(context, clock, play.scrollHiSpeed.valueAt(performance.now()), bridge);
+    const clock =
+      engineFrame ??
+      (this.loaded
+        ? {
+            notes: play.notes,
+            landmineNotes: play.mineNotes,
+            invisibleNotes: play.invisibleNotes,
+            currentSeconds: 0,
+            currentBeat: 0,
+          }
+        : undefined);
+    stage.draw(context, clock, play.scrollHiSpeed.valueAt(performance.now()), bridge, {
+      tempo: engineFrame?.clock?.tempo ?? 1,
+      paused,
+      started: !play.isIntroPlaying(),
+      showInvisibleNotes: this.showInvisibleNotes,
+      bpmGuide: frame.playOptions.bpmGuide,
+      judgeTimingMs: frame.playOptions.judgeTimingMs,
+      constant: resolveConstantVisibility({
+        enabled: frame.playOptions.visualConstant,
+        durationMs: frame.playOptions.noteDurationMs,
+        fadeMs: frame.playOptions.constantFadeMs,
+        noSpeed: frame.state.view.hiSpeed.locked,
+      }),
+    });
     // A failed play's picture fades with its sound; on a normal end the skin draws its own fade-out.
     if (play.exiting && play.playMoments.failedAtMs !== undefined && play.exitFadeStartedAt !== undefined) {
       stage.canvas.alpha = playEndingFadeAlpha(play.playClock() - play.exitFadeStartedAt, play.exitFadeOutMs);
     }
+    const overlayLanes = stage.getDisplayAreaLanes(context.activeOps, frame.playfield.laneChannels);
+    this.displayInfo.attachCanvas(stage.canvas);
+    this.displayInfo.update(
+      resolveDisplayAreaLabels({
+        mode: frame.playOptions.displayAreaInfo,
+        lanes: overlayLanes,
+        covers: frame.state.view.covers.map(resolveLaneCover),
+        visibleMs: (cover) =>
+          resolveWhiteNumber({
+            laneBeats: 4,
+            hiSpeed: frame.state.view.hiSpeed.drawn,
+            sudden: cover.sudden,
+            bpm: frame.bpm ?? 0,
+            scrollRate: frame.playfield.scrollMapper?.rateAt?.(frame.playfield.currentBeat(frame.seconds)) ?? 1,
+          }),
+      }),
+      { width: stage.width, height: stage.height },
+      host.app.screen,
+      stage.canvas.alpha,
+    );
+    this.bpmChangeWarning.attachCanvas(stage.canvas);
+    this.bpmChangeWarning.show({
+      enabled: frame.playOptions.bpmChangeWarning,
+      timing: play.resolvedPlayChart?.timing,
+      seconds: frame.seconds,
+      lanes: overlayLanes,
+      stage: { width: stage.width, height: stage.height },
+      screen: host.app.screen,
+      opacity: stage.canvas.alpha,
+    });
     this.fadeIndicator();
   }
 
@@ -445,6 +580,8 @@ export class BeatorajaPlayView implements PlayView {
         totalSeconds,
         ...(frame.reversalSeconds !== undefined ? { reversalSeconds: frame.reversalSeconds } : {}),
         summary: frame.summary,
+        hcnLanes: frame.hcnLanes,
+        judgedNoteCount: frame.judgedNoteCount,
       };
     }
     if (!this.loaded) return undefined;
@@ -488,6 +625,8 @@ export class BeatorajaPlayView implements PlayView {
   }
 
   public dispose(): void {
+    this.displayInfo.dispose();
+    this.bpmChangeWarning.dispose();
     if (this.disposed) return;
     this.detach();
     this.disposed = true;

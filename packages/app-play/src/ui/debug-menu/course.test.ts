@@ -1,10 +1,10 @@
-import type { GUI } from 'lil-gui';
+import type { FolderApi } from 'tweakpane';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import type { DemoGUIState } from '../../types.ts';
+import type { PlayerGUIState } from '../../types.ts';
 import { applyNonstopPlacement, buildCourseFolder } from './course.ts';
 import type { DebugMenu } from './index.ts';
 
-/** A stand-in for a lil-gui controller bound to `object[property]`. */
+/** A stand-in for a Tweakpane controller bound to `object[property]`. */
 class FakeController {
   public label = '';
   private readonly object: Record<string, unknown>;
@@ -16,33 +16,35 @@ class FakeController {
     this.property = property;
   }
 
-  public name(label: string): this {
-    this.label = label;
+  public on(_event: 'change', handler: (event: { value: unknown }) => void): this {
+    this.changeHandler = (value) => handler({ value });
     return this;
   }
-
-  public onChange(handler: (value: unknown) => void): this {
-    this.changeHandler = handler;
-    return this;
-  }
-
-  /** What lil-gui does on a pick: writes the bound property, then calls the change handler. */
+  /** What Tweakpane does on a pick: writes the bound property, then calls the change handler. */
   public pick(value: unknown): void {
     this.object[this.property] = value;
     this.changeHandler?.(value);
   }
 }
 
-/** A stand-in for a lil-gui folder that keeps the controllers added to it. */
+/** A stand-in for a Tweakpane folder that keeps the controllers added to it. */
 class FakeFolder {
   public readonly controllers: FakeController[] = [];
 
-  public add(object: Record<string, unknown>, property: string): FakeController {
+  public addBinding(
+    object: Record<string, unknown>,
+    property: string,
+    params: { label?: string } = {},
+  ): FakeController {
     const controller = new FakeController(object, property);
+    controller.label = params.label ?? property;
     this.controllers.push(controller);
     return controller;
   }
 
+  public addButton(_params: { title: string }) {
+    return { on: () => undefined };
+  }
   public controller(label: string): FakeController {
     const found = this.controllers.find((controller) => controller.label === label);
     if (found === undefined) throw new Error(`no controller named ${label}`);
@@ -50,8 +52,8 @@ class FakeFolder {
   }
 }
 
-function courseSettings(): DemoGUIState {
-  return { courseAutoAdvance: false, nonstopPlacement: 'intended' } as DemoGUIState;
+function courseSettings(): PlayerGUIState {
+  return { courseAutoAdvance: false, nonstopPlacement: 'intended' } as PlayerGUIState;
 }
 
 /** Builds the Course folder into a fake folder, with the menu's members it reaches stubbed. */
@@ -71,7 +73,7 @@ function buildFolder() {
     },
   };
   const folder = new FakeFolder();
-  buildCourseFolder.call(menu as unknown as DebugMenu, folder as unknown as GUI);
+  buildCourseFolder.call(menu as unknown as DebugMenu, folder as unknown as FolderApi);
   return { settings, refreshSelectRecords, tracked, folder };
 }
 

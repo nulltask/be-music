@@ -1,7 +1,7 @@
 /**
  * The Leaderboard pages' English text: the reference catalog. Every other language (ja.ts) has the same shape, so a
  * missing or extra entry fails the type check. Game terms players use as they are — lamp names (CLEAR), judgments
- * (PGREAT), DJ LEVEL, ruleset names (LR2 / beatoraja / IIDX) — stay out of the catalog and are never translated.
+ * (PGREAT), DJ LEVEL, ruleset names (LR2 / beatoraja / That-Which-Must-Not-Be-Named) — stay out of the catalog and are never translated.
  */
 
 const plural = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
@@ -36,10 +36,10 @@ export const en = {
     notes: {
       lr2: 'LR2’s judgment windows, gauges and lamps',
       beatoraja: 'beatoraja’s, with the PERFECT and MAX lamps',
-      iidx: 'beatmania IIDX’s, with charge notes',
+      ____: 'That-Which-Must-Not-Be-Named’s, with charge notes',
     },
     meaning:
-      'Every play is scored under each ruleset: the judgment windows, gauges and clear lamps of LR2, beatoraja or IIDX, applied by the be-music engine to the replay. It is how the score is counted, not the software the play came from.',
+      'Every play is scored under each ruleset: the judgment windows, gauges and clear lamps of LR2, beatoraja or That-Which-Must-Not-Be-Named, applied by the be-music engine to the replay. It is how the score is counted, not the software the play came from.',
     playedWith: (name: string) => `played with ${name}`,
     playedWithTitle: 'The scoring rules the player played under',
   },
@@ -204,6 +204,13 @@ export const en = {
     hiddenTitle: 'This run is hidden',
     hiddenLead:
       'Only you can see it. It is out of the course rankings, your personal bests and every list until you show it again.',
+    unrankedTitle: 'This run is not ranked',
+    unrankedReasons: {
+      tempo:
+        'A stage was played at another tempo, which is practice. The run is kept, but out of the course rankings, the personal bests and every list.',
+      unreleased:
+        'The course is not released (a made or a random course). The run is kept, but out of the course rankings, the personal bests and every list.',
+    },
     notPublicTitle: 'This run is not public',
     visibility: 'Visibility',
     visibilityShownLead:
@@ -347,7 +354,7 @@ export const en = {
     eachSet: 'each set of rules',
     rulesLabel: 'the rule sets',
     rulesHelp:
-      'Every play is scored under LR2, beatoraja and IIDX rules. “selected” is the one the pages show; “played with” is the one the player played under.',
+      'Every play is scored under LR2, beatoraja and That-Which-Must-Not-Be-Named rules. “selected” is the one the pages show; “played with” is the one the player played under.',
     selected: 'selected',
     playedWith: 'played with',
     combo: 'Combo',
@@ -373,6 +380,13 @@ export const en = {
     hiddenTitle: 'This play is hidden',
     hiddenLead:
       'Only you can see it. It is out of the rankings, your personal bests, your figures and every list until you show it again.',
+    unrankedTitle: 'This play is not ranked',
+    unrankedReasons: {
+      tempo:
+        'It was played at another tempo, which is practice. It is kept, but out of the rankings, the personal bests and every list.',
+      'course-stage':
+        'It is a course stage, which ranks with its course. It is kept, but out of the rankings, the personal bests and every list.',
+    },
     visibility: 'Visibility',
     visibilityShownLead:
       'Hide this play to take it out of the rankings, your personal bests, your figures and every list. It is kept, and you can show it again.',
@@ -416,7 +430,7 @@ export const en = {
     4: 'Cleared on the normal gauge (GROOVE / NORMAL).',
     5: 'Cleared on the HARD gauge.',
     6: 'Cleared on the EX-HARD, DEATH or HAZARD gauge.',
-    7: 'No BAD and no missed POOR (empty POORs do not count). The top lamp under LR2 and IIDX.',
+    7: 'No BAD and no missed POOR (empty POORs do not count). The top lamp under LR2 and That-Which-Must-Not-Be-Named.',
     8: 'A full combo without a GOOD (beatoraja).',
     9: 'Every note a PGREAT (beatoraja).',
     none: 'Not played.',

@@ -33,19 +33,25 @@ describe('checkReplayEligibility', () => {
     });
   });
 
-  test('rejects auto plays and ESC aborts', () => {
+  test('accepts a play given up with ESC, ranked as a failed play', () => {
+    expect(checkReplayEligibility(replay({ aborted: true, abortedAtUs: 1_000_000 }))).toMatchObject({ eligible: true });
+  });
+
+  test('rejects auto plays', () => {
     expect(checkReplayEligibility(replay({ mode: 'auto' }))).toEqual({ eligible: false, reason: 'auto-play' });
-    expect(checkReplayEligibility(replay({ aborted: true }))).toEqual({ eligible: false, reason: 'aborted' });
-    expect(checkReplayEligibility(replay({ course: { kind: 'grade' } }))).toEqual({
-      eligible: false,
-      reason: 'course-stage',
+  });
+
+  test('accepts a course stage, unranked', () => {
+    expect(checkReplayEligibility(replay({ course: { kind: 'grade' } }))).toMatchObject({
+      eligible: true,
+      unranked: 'course-stage',
     });
   });
 
-  test('rejects a play at another tempo, which is practice', () => {
-    expect(checkReplayEligibility(replay({ tempo: 0.8 }))).toEqual({ eligible: false, reason: 'tempo' });
-    expect(checkReplayEligibility(replay({ tempo: 1.5 }))).toEqual({ eligible: false, reason: 'tempo' });
-    expect(checkReplayEligibility(replay({ tempo: 1 }))).toMatchObject({ eligible: true });
+  test('accepts a play at another tempo, which is practice, unranked', () => {
+    expect(checkReplayEligibility(replay({ tempo: 0.8 }))).toMatchObject({ eligible: true, unranked: 'tempo' });
+    expect(checkReplayEligibility(replay({ tempo: 1.5 }))).toMatchObject({ eligible: true, unranked: 'tempo' });
+    expect(checkReplayEligibility(replay({ tempo: 1 }))).not.toHaveProperty('unranked');
   });
 
   test('rejects a log without either fingerprint', () => {

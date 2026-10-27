@@ -65,7 +65,7 @@ const SEA_TARGETS: Record<SEATargetName, SEATargetConfig> = {
     entry: 'src/sea-main.ts',
     embedBundleAsset: true,
     embeddedNodeModules: [
-      { name: 'node-web-audio-api', resolveFrom: 'packages/player-engine' },
+      { name: 'node-web-audio-api', resolveFrom: 'packages/player-node-audio' },
       {
         name: '@uwx/libav.js-fat',
         resolveFrom: 'packages/player-terminal',

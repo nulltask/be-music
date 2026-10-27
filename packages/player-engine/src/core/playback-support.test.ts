@@ -2,7 +2,7 @@ import { createBeatAtSecondsResolverFromTimingResolver, createTimingResolver } f
 import { createEmptyJSON } from '@be-music/chart-source';
 import { describe, expect, test } from 'vite-plus/test';
 import { createPlayerInputSignalBus } from './input-signal-bus.ts';
-import { createUIFramePublisher, recordPendingViewChanges } from './playback-support.ts';
+import { consumePlaybackInputCommands, createUIFramePublisher, recordPendingViewChanges } from './playback-support.ts';
 import type { PlayerUIFramePayload, PlayerUISignalBus } from './ui-signal-bus.ts';
 
 function createCapturingUISignals(): { uiSignals: PlayerUISignalBus; frames: PlayerUIFramePayload[] } {
@@ -38,6 +38,26 @@ const SUMMARY: PlayerUIFramePayload['summary'] = {
 };
 
 describe('createUIFramePublisher', () => {
+  test('publishes authoritative HCN and judged-note facts and clears missing providers', () => {
+    const { uiSignals, frames } = createCapturingUISignals();
+    const publish = createUIFramePublisher({
+      uiEnabled: true,
+      uiSignals,
+      totalSeconds: 10,
+      summary: SUMMARY,
+      notes: [],
+      audioBackend: 'test',
+      resolveDebugActiveAudioState: () => ({}),
+      resolveHCNLanes: (seconds) => (seconds < 1 ? [{ channel: '11', gaining: false }] : []),
+      resolveJudgedNoteCount: () => 7,
+    });
+    publish(0.5, 1);
+    publish(1.5, 3);
+    expect(frames[0]?.hcnLanes).toEqual([{ channel: '11', gaining: false }]);
+    expect(frames[1]?.hcnLanes).toEqual([]);
+    expect(frames[1]?.judgedNoteCount).toBe(7);
+  });
+
   test('mirrors the display beat in chart-position space past the LR2 reversal and pins it at the chart head', () => {
     const { uiSignals, frames } = createCapturingUISignals();
     const publish = createUIFramePublisher({
@@ -157,4 +177,35 @@ describe('recordPendingViewChanges', () => {
     ]);
     expect(bus.drainCommands()).toEqual([]);
   });
+});
+
+test('drains final option edits into their own replay timeline', () => {
+  const bus = createPlayerInputSignalBus();
+  bus.pushCommand({ kind: 'options', values: { hiSpeed: 3, displayAreaInfo: 'ON' } });
+  const saved: unknown[] = [];
+  recordPendingViewChanges(
+    bus,
+    { recordViewChange() {}, recordOptionChange: (seconds, values) => saved.push({ seconds, values }) },
+    2,
+  );
+  expect(saved).toEqual([{ seconds: 2, values: { hiSpeed: 3, displayAreaInfo: 'ON' } }]);
+  expect(bus.drainCommands()).toEqual([]);
+});
+
+test('option commands reach the recorder without being interpreted as judge inputs', () => {
+  const bus = createPlayerInputSignalBus();
+  bus.pushCommand({ kind: 'options', values: { hiSpeed: 2.1 } });
+  const recorded: unknown[] = [];
+  const unhandled: unknown[] = [];
+  consumePlaybackInputCommands({
+    inputSignals: bus,
+    isInterrupted: () => false,
+    setInterruptedReason() {},
+    onTogglePause() {},
+    onHighSpeedAction() {},
+    onOptionChange: (values) => recorded.push(values),
+    onUnhandledCommand: (command) => unhandled.push(command),
+  });
+  expect(recorded).toEqual([{ hiSpeed: 2.1 }]);
+  expect(unhandled).toEqual([]);
 });

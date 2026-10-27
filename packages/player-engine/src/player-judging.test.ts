@@ -1,11 +1,14 @@
+import { autoPlay, manualPlay } from './test-support/node-audio-player.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 
 // The engine writes to a mocked Node audio sink (shared state in test-support/player-fixtures.ts).
-vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
+vi.mock('../../player-node-audio/src/audio-sink.ts', async () =>
+  (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule(),
+);
 
 import { createEmptyJSON } from '../../chart-source/src/index.ts';
 import { parseChart } from '../../chart-parser/src/index.ts';
-import { autoPlay, manualPlay } from './index.ts';
+
 import { preparePlaybackChartData } from './core/bootstrap.ts';
 import { parseReplay, serializeReplay, type BeMusicReplay } from './replay/index.ts';
 import {
@@ -18,10 +21,9 @@ import {
 beforeEach(resetAudioSinkState);
 
 describe('player', () => {
-  test("player: LR2's multi-BAD collector takes down every other note the press mistimed", async () => {
-    // lr2oraja `MultiBadCollector`: one press at 1.15 s sits 150 ms after the `11` note and 150 ms before the `12`
-    // note — inside BAD (±200 ms at `#RANK 2`) but outside GOOD (±100 ms) for both. LR2 BADs both; beatoraja has
-    // no collector, so its press consumes one note and the other misses on its own deadline.
+  test('player: an LR2 BAD press never re-judges another lane', async () => {
+    // One press maps to two lanes. LR2's forward tap chain stays on the lane it consumed; it cannot collect
+    // another lane's BAD. The other lane and the later 19 note miss normally, as under beatoraja.
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.metadata.rank = 2;
@@ -41,8 +43,10 @@ describe('player', () => {
     const lr2 = await manualPlay(json, { ...base });
     const beatoraja = await manualPlay(json, { ...base, judgeRuleset: 'beatoraja' });
 
-    expect(lr2.bad).toBe(2);
+    expect(lr2.bad).toBe(1);
+    expect(lr2.poor).toBe(2);
     expect(beatoraja.bad).toBe(1);
+    expect(beatoraja.poor).toBe(2);
   });
 
   test('player: recordReplay stamps the chart hash and judge ruleset into the replay', async () => {
@@ -56,7 +60,7 @@ describe('player', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
-      judgeRuleset: 'iidx',
+      judgeRuleset: '____',
       recordReplay: { chartSHA256: 'ABCDEF0123456789' },
       onReplayRecorded: (recorded) => {
         replay = recorded;
@@ -67,10 +71,10 @@ describe('player', () => {
     });
 
     expect(replay!.chart.sha256).toBe('abcdef0123456789');
-    expect(replay!.play.judgeRuleset).toBe('iidx');
+    expect(replay!.play.judgeRuleset).toBe('____');
     const parsed = parseReplay(serializeReplay(replay!));
     expect(parsed.chart.sha256).toBe('abcdef0123456789');
-    expect(parsed.play.judgeRuleset).toBe('iidx');
+    expect(parsed.play.judgeRuleset).toBe('____');
   });
 
   test('player: ESC-interrupted play records an aborted replay', async () => {
@@ -346,9 +350,10 @@ describe('player', () => {
     });
 
     expect(summary.total).toBe(0);
-    // LR2 — mine hits never emit a verdict: gauge damage + explosion sound only.
+    // LR2beta3 adds one POOR/BP with the raw damage and explosion sound, without a judgment cue.
     expect(summary.bad).toBe(0);
-    expect(summary.poor).toBe(0);
+    expect(summary.poor).toBe(1);
+    expect(summary.minePoor).toBe(1);
     expect(
       output.some(
         (line) =>
@@ -373,7 +378,8 @@ describe('player', () => {
 
     expect(summary.total).toBe(0);
     expect(summary.bad).toBe(0);
-    expect(summary.poor).toBe(0);
+    expect(summary.poor).toBe(1);
+    expect(summary.minePoor).toBe(1);
     // LR2 / beatoraja interpret the mine value directly as the damage percent ('08' = 8 %, NOT the nanasi-memo
     // value/2): gauge 20 → 12.
     expect(summary.gauge?.current).toBeCloseTo(12, 9);

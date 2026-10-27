@@ -11,6 +11,8 @@ export interface BeatorajaScoreInput {
   readonly good: number;
   readonly bad: number;
   readonly poor: number;
+  /** Empty POORs (beatoraja MISS), separate from missed notes; absent reads as zero. */
+  readonly emptyPoor?: number;
   readonly exScore: number;
   /** The displayed score: LR2's money score under LR2, else the EX score. */
   readonly score: number;

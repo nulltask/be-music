@@ -45,9 +45,9 @@ export function parseDestination(row: string[]): LR2DestinationRect {
     (op) => Number.isFinite(op) && op !== 0,
   );
   // LR2 keyframes commonly leave the trailing fields blank past the first row (e.g. `#DST_IMAGE,0,1500,...,,,,,`). An
-  // empty field for `timer` should be treated as "inherit from the previous keyframe", not as `timer=0` -- this is what
+  // empty field for `timer` should be treated as "keep the first keyframe's control", not as `timer=0` -- this is what
   // kept things like the "STAGE FAILED" plate (timer=3 on the first keyframe) drawing during gameplay. Use -1 here as a
-  // sentinel and let the DST-list builder resolve the inheritance.
+  // sentinel and let the DST-list builder normalize the element-wide controls.
   const timerRaw = row[17];
   const timerProvided = typeof timerRaw === 'string' && timerRaw.trim() !== '';
   const timer = timerProvided ? Math.max(0, Math.trunc(toNumber(timerRaw, 0))) : -1;
@@ -73,40 +73,18 @@ export function parseDestination(row: string[]): LR2DestinationRect {
   };
 }
 
-/**
- * Push a freshly-parsed `#DST_*` row into a keyframe group, inheriting the `timer`, `loop`, and `ops` values from the
- * previous keyframe when they were omitted on the trailing row.
- *
- * Per the LR2 spec, a chain like `#DST_IMAGE,0,400,...,1000,0,161,0,0` `#DST_IMAGE,0,1000,...,,,,,` is read as "second
- * keyframe inherits everything that was blank from the first." Without inheritance, the second keyframe would silently
- * default to `timer=0, loop=0, ops=[]`, which made gated overlays (5keys lane cover with op=161, autoscratch lane cover
- * with op=55, …) leak in unrelated modes. The destination check uses the *final* keyframe, so its `ops` MUST carry the
- * gate forward.
- */
+/** Append geometry keyframes while retaining the first row's element-wide controls (OpenLR2 ReadDST). */
 export function appendDestinationKeyframe(group: LR2DestinationRect[], row: string[], context?: ParseContext): void {
   const dst = parseDestination(row);
-  const previous = group[group.length - 1];
-  if (dst.timer === -1) {
-    dst.timer = previous?.timer ?? 0;
-  }
-  if (previous) {
-    // `loop`, `acc`, and the trailing op fields are blank-inherited the same way: a row that only specifies
-    // `time,x,y,w,h,...` keeps the original easing / loop gate / op gate.
-    if (isBlank(row[16])) {
-      dst.loop = previous.loop;
-    }
-    if (isBlank(row[7])) {
-      dst.acc = previous.acc;
-    }
-    if (isBlank(row[18]) && isBlank(row[19]) && isBlank(row[20])) {
-      dst.ops = previous.ops;
-    }
-    // `op4` (scratch-turntable spin marker) inherits the same way. Without this the LR2 default 7-keys skin's turntable
-    // disc has op4=1 on its first keyframe but a blank op4 on the second (final) keyframe — `evaluateElementDst` reads
-    // the final, sees op4=0, and the spin code in `player-web`'s `view/lr2/play-elements.ts` never fires.
-    if (isBlank(row[21])) {
-      dst.op4 = previous.op4;
-    }
+  const first = group[0];
+  if (first) {
+    dst.timer = first.timer;
+    dst.loop = first.loop;
+    dst.ops = first.ops;
+    dst.op4 = first.op4;
+    if (isBlank(row[7])) dst.acc = group[group.length - 1]!.acc;
+  } else if (dst.timer === -1) {
+    dst.timer = 0;
   }
   group.push(dst);
   // Feed the right-bottom corner into the canvas auto-detector's sample set. We skip entries with negative `x` or

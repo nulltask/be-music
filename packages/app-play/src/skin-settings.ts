@@ -1,9 +1,9 @@
-// The demo's values for be-music skins' `settings`: persistence per skin id across reloads, and the Debug Menu
+// The player's values for be-music skins' `settings`: persistence per skin id across reloads, and the Debug Menu
 // controllers built from a skin's settings schema.
 
 import type { BeMusicSkinSetting } from '@be-music/player-skin-sdk';
 
-const STORAGE_KEY = 'be-music-demo.skin-settings';
+const STORAGE_KEY = 'be-music.skin-settings';
 /** Bumped when the stored shape changes; a stored map with another version is ignored. */
 const STORAGE_VERSION = 1;
 
@@ -89,7 +89,7 @@ export type SkinSettingController =
       kind: 'dropdown';
       id: string;
       name: string;
-      /** Shown label → option value, as lil-gui's `add(object, key, options)` takes them. */
+      /** Shown label → option value, converted to native list items by the pane. */
       options: Record<string, string>;
     }
   | { kind: 'slider'; id: string; name: string; min: number; max: number; step: number | undefined }

@@ -654,7 +654,7 @@ function resolveBmsonModeHintForOutput(json: BeMusicJSON, playableChannels: read
 
 /**
  * Lane channel → bmson `x`. A hint with a lane table in the play-mode table (`@be-music/chart-model`) gives each lane the
- * fixed `x` the parser reads back from it — the keyboard layouts x = side * 26 + lane, the IIDX / Pop'n hints their
+ * fixed `x` the parser reads back from it — the keyboard layouts x = side * 26 + lane, the That-Which-Must-Not-Be-Named / Pop'n hints their
  * spec table — so a sparse chart keeps its keys; lanes outside the table follow after its last `x`. Unknown hints
  * number the lanes in use from 1.
  */

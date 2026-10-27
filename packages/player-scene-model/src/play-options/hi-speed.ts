@@ -1,13 +1,13 @@
 /**
  * Hi-speed (note scroll multiplier) range shared by the select screens' play-option panels, the gameplay screens'
- * hi-speed keys and hosts that remember the player's pick (e.g. the demo's Debug Menu). Visual only: hi-speed changes how
+ * hi-speed keys and hosts that remember the player's pick (e.g. the player's Debug Menu). Visual only: hi-speed changes how
  * far apart notes are drawn, never when they are judged.
  */
 
 /**
  * Hi-speed a play starts at when nothing else is picked — 2.0× rather than upstream beatoraja's `PlayConfig.java:16`
  * default of `1.0f`: at 1.0 most charts (BPM 130-180) take about 1.8 seconds to cross the lane, which reads as "the chart
- * isn't moving" to anyone coming from LR2 / IIDX defaults, and 2.0 is the lowest setting most players use.
+ * isn't moving" to anyone coming from LR2 / That-Which-Must-Not-Be-Named defaults, and 2.0 is the lowest setting most players use.
  */
 export const DEFAULT_HISPEED = 2.0;
 /** Slowest selectable hi-speed. */
@@ -38,10 +38,12 @@ export function stepPlayerHiSpeed(
   player: number,
   delta: number,
   multiplier: number,
+  classic = false,
 ): { player: number; drawn: number } | undefined {
-  const next = snapHiSpeed(player + delta);
+  const next = classic ? stepClassicHiSpeed(player, delta) : snapHiSpeed(player + delta);
   if (next === undefined) return undefined;
-  const drawn = snapHiSpeed(next * multiplier);
+  const rawDrawn = next * multiplier;
+  const drawn = classic ? (Number.isFinite(rawDrawn) && rawDrawn > 0 ? rawDrawn : undefined) : snapHiSpeed(rawDrawn);
   return drawn === undefined ? undefined : { player: next, drawn };
 }
 
@@ -103,4 +105,23 @@ export class HiSpeedTransition {
     this.from = value;
     this.to = value;
   }
+}
+
+/** AC 34's official CLASSIC HI-SPEED window, bottom to top (05_classic.jpg). */
+export const CLASSIC_HI_SPEED_STEPS: readonly number[] = [1, 1.5, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4];
+
+/** Nearest classic multiplier, preferring the lower step on a tie; invalid input leaves the setting alone. */
+export function snapClassicHiSpeed(value: number): number | undefined {
+  if (!Number.isFinite(value)) return undefined;
+  return CLASSIC_HI_SPEED_STEPS.reduce((best, candidate) =>
+    Math.abs(candidate - value) < Math.abs(best - value) ? candidate : best,
+  );
+}
+
+/** Steps through the source's table without wrapping past either end. Zero delta only snaps the setting. */
+export function stepClassicHiSpeed(value: number, delta: number): number | undefined {
+  const current = snapClassicHiSpeed(value);
+  if (current === undefined || !Number.isFinite(delta)) return undefined;
+  const index = CLASSIC_HI_SPEED_STEPS.indexOf(current);
+  return CLASSIC_HI_SPEED_STEPS[Math.max(0, Math.min(CLASSIC_HI_SPEED_STEPS.length - 1, index + Math.sign(delta)))]!;
 }

@@ -135,3 +135,54 @@ describe('parseBeatorajaSkinJSON', () => {
     expect((header as unknown as Record<string, unknown>).destination).toBeUndefined();
   });
 });
+
+describe('relaxBeatorajaJSON — run copying', () => {
+  // The character-by-character relaxer the run-copying one replaced, kept as the reference.
+  const reference = (source: string): string => {
+    const peek = (from: number): number => {
+      for (let i = from; i < source.length; i += 1) if (!' \t\n\r'.includes(source[i]!)) return i;
+      return -1;
+    };
+    let result = '';
+    let inString = false;
+    let escape = false;
+    for (let i = 0; i < source.length; i += 1) {
+      const ch = source[i]!;
+      if (inString) {
+        result += ch;
+        if (escape) escape = false;
+        else if (ch === '\\') escape = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') inString = true;
+      const next = peek(i + 1);
+      const after = next === -1 ? '' : source[next]!;
+      if (ch === ',' && (after === ']' || after === '}')) continue;
+      if (ch === '{' && after === '{') continue;
+      result += ch;
+      if ((ch === '}' || ch === ']') && /^[{["0-9+\-a-zA-Z]$/u.test(after)) result += ',';
+    }
+    return result;
+  };
+
+  it('matches the character-by-character relaxer', () => {
+    const pieces = ['{', '}', '[', ']', ',', ' ', '\n', '"a', '\\"', '"', '1', '-2', 'true', ':', '{{', ',]', '}\n{'];
+    let seed = 7;
+    const random = (): number => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed / 2_147_483_648;
+    };
+    for (let round = 0; round < 2000; round += 1) {
+      let text = '';
+      const count = 1 + Math.floor(random() * 30);
+      for (let index = 0; index < count; index += 1) text += pieces[Math.floor(random() * pieces.length)];
+      expect(relaxBeatorajaJSON(text)).toBe(reference(text));
+    }
+  });
+
+  it('returns well-formed JSON unchanged', () => {
+    const text = '{"a": [1, 2, {"b": "c,]"}], "d": "\\"}"}';
+    expect(relaxBeatorajaJSON(text)).toBe(text);
+  });
+});

@@ -37,6 +37,8 @@ Use **replay** for recorded playback data: `BeMusicReplay` for its type, `replay
 
 Use **chart** in code names for playable arrangements and **track** for musical works. Keep external names such as beatoraja’s `song` table and `BMSONDecoder` unchanged.
 
+Use `____` in source identifiers and project-owned serialized values, `????` for the displayed game name, and **That-Which-Must-Not-Be-Named** in English or **名前を言ってはいけないあのゲーム** in Japanese when describing the game. Previous identifiers are not supported or migrated.
+
 ## Score And Resources
 
 - **BMS**: Be-Music Source text score format. It consists of header and object lines such as `#TITLE`, `#WAVxx`, and `#mmmcc:...`.
@@ -70,7 +72,7 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **mine**: Damage note. Following LR2, a mine explodes when its lane is held as it crosses the judge line or pressed within the `PGREAT` window; the explosion only drains the gauge by the chart-defined damage and is not a judgment.
 - **judgment**: A note evaluation such as `PERFECT`, `GREAT`, `GOOD`, `BAD`, or `POOR`. Use judgment for the result and judge for the verb; use `JudgmentKind` for a kind and `JudgmentTiming` for a timed result. Verb-led engine names and format fields such as `judge` and `judgeRuleset` retain their roles.
 - **FAST/SLOW**: Timing-direction display for early or late hits. The current implementation aggregates only `GREAT` and `GOOD`.
-- **EX-SCORE**: IIDX-compatible score where `PERFECT=2`, `GREAT=1`, and other judgments add `0`.
+- **EX-SCORE**: That-Which-Must-Not-Be-Named-compatible score where `PERFECT=2`, `GREAT=1`, and other judgments add `0`.
 - **SCORE**: The displayed score: LR2 uses its normalized 200,000-point money score; the other current rulesets display EX-SCORE.
 - **groove gauge**: Clear gauge. The shared core defaults to LR2-compatible `GROOVE` (`NORMAL`); the exported helper also supports `HARD`, `DEATH`, and `EASY` for browser play options.
 - **hi-speed**: The visual note-scroll setting; it changes the presentation and visible interval without changing note timing or playback tempo. External skin labels such as `HI-SPEED` and `HIGH-SPEED`, and existing `hiSpeed` names, keep their spellings.
@@ -82,12 +84,13 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 ## Runtime Packages
 
 - **player core**: The shared `@be-music/player-engine` rules and engine. The package root is the engine (`manualPlay`, `autoPlay`): it prepares a play from the resolved chart, judges it and owns the UI / audio / input runtime contracts. The other entries hold the rules (`./ruleset`, `./course`, `./records`, `./replay`) and what a host shares with a play (`./signals`, `./lanes`, `./display`). Timing, note resolution and timelines live in `@be-music/chart-model`.
+- **Node audio adapter**: The Node audio implementation in `@be-music/player-node-audio`. Hosts pass `createAudioSession: createNodeAudioSession` to the engine. The engine owns the audio contract; the adapter owns decoding and output.
 - **terminal player**: The `@be-music/player-terminal` CLI and TUI frontend. It provides Music Select, terminal gameplay, terminal BGA, loading screens, and SEA builds on top of the core engine.
-- **browser player**: The `@be-music/player-browser` PixiJS/WebAudio runtime and the `@be-music/app-play` Vite host. The runtime makes every screen as a scene session drawn by a family view, behind its host API, and loads the library and the skins and records plays; the demo handles browser drops, themes, the Debug Menu and the scene router.
+- **browser player**: The `@be-music/player-browser` PixiJS/WebAudio runtime and the `@be-music/app-play` Vite host. The runtime makes every screen as a scene session drawn by a family view, behind its host API, and loads the library and the skins and records plays; the player handles browser drops, themes, the Debug Menu and the scene router.
 - **skin family**: The kind of skin that draws a browser-player scene: `built-in` (be-music skins), `lr2` or `beatoraja` (`SceneFamily`). The host picks it from the loaded themes and the player's choice.
 - **built-in family (default skin family)**: The skin family used when no external theme is active or when the host explicitly selects it. It draws select, play and result (and decide, when the skin declares one) through a be-music skin; its play view draws the shared playfield, as the LR2 one does, and the skin draws the chrome around it.
-- **be-music skin**: Code-based skin written against `@be-music/player-skin-sdk`. The player hands it a canvas and plain per-frame data, and the skin draws each screen with whatever renderer it brings.
-- **built-in skins**: The be-music skins bundled with the browser player: Synesthesia (the default), Phantom, and Plain, plus the opt-in Lattice.
+- **be-music skin**: Code-based skin written against `@be-music/player-skin-sdk`. It receives presentation frames and combines Canvas drawing with optional DOM screens. DOM replaces select, decide and result drawing, and adds a HUD beside the Canvas playfield during gameplay; a skin that sets `gameplay.drawsOnDOM` draws the playfield on DOM too.
+- **built-in skins**: The be-music skins bundled with the browser player: Synesthesia (the default), Plain, and Native (DOM + Canvas). Native uses reusable components from `@be-music/player-ui`.
 - **touch layout / portrait stage**: Gameplay layouts for touch-first devices. The touch layout spreads equal-width lanes across the stage; a skin with a `portraitStage` can also be shown on a portrait (9:16) stage.
 - **LR2 skin**: Lunatic Rave 2 CSV skin format handled by `@be-music/skin-lr2`. The package parses skin files and resolves theme assets independently from PixiJS.
 - **beatoraja skin**: beatoraja JSON or Lua skin format handled by `@be-music/skin-beatoraja`. The package parses headers and full skins, resolves options and assets, and normalizes elements independently from PixiJS.
@@ -139,7 +142,7 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **Sound / Visual status**: Separate loading-screen progress states for audio and visual resources.
 - **structured log**: NDJSON execution log written separately from TUI output, usually under `~/.be-music/logs/player.ndjson`.
 - **video BGA streaming**: Policy that prepares only the first video frame before gameplay starts, then decodes remaining frames progressively.
-- **replay**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-replay` re-simulates it under the LR2, beatoraja, and IIDX rulesets.
+- **replay**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-replay` re-simulates it under the LR2, beatoraja, and That-Which-Must-Not-Be-Named rulesets.
 - **PlayerSummary**: Final playback summary containing judgment counts, FAST/SLOW, EX-SCORE, SCORE, gauge, and clear state.
 
 ## Courses, Records And View
@@ -149,10 +152,10 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **carry-in**: The gauge value, course combo and course max combo a stage starts from, left by the stage before it.
 - **give up**: Leaving a course run with ESC. A run given up is a failed run.
 - **stitched play**: The single chart a NONSTOP course is played as, built by stitching its stages with their connections and placement.
-- **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `iidx`.
+- **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `____`.
 - **gauge type**: The gauge the player picks, in LR2's names: `GROOVE`, `HARD`, `DEATH` or `EASY` (`GaugeType`). Each judge ruleset plays it on a gauge of its own line-up, named by its gauge id (`NORMAL`, `HAZARD`, `CLASS`, ...).
 - **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player-engine/ruleset`).
-- **BP**: The miss count: BADs, POORs and empty POORs, plus, for a course, the notes the run never judged (`resolveMissCount`).
+- **BP**: The miss count: BADs, POORs and empty POORs, plus the notes the play never judged because it failed or was given up mid-way (for a course, the notes the run never reached too) (`resolveMissCount`).
 - **best record**: The independently retained best clear lamp, highest EX-SCORE, highest max combo, and lowest BP across a player’s plays of a chart or course under one judge ruleset (`BestRecord`). These values can come from different plays; a best record is not a single play result.
 - **view settings**: What the player saw, apart from what was judged: hi-speed, hi-speed fix, visible time and each side's SUDDEN+, HIDDEN+ and LIFT. _Avoid_: display options.
 - **play tempo**: How fast a play runs relative to the chart (`speed`). A play at another tempo is practice.
@@ -160,9 +163,10 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 ## Architecture
 
 - **scene model**: The state and rules of one screen, independent of the skin family: what it shows and how it responds. See [ADR 0002](./adr/0002-scene-model-package.md) and [Scene models](./scene-model.md).
-- **designed entry point**: A package subpath made for its consumers rather than a file of its layout. `@be-music/player-engine` exports `.` (the engine), `./signals`, `./lanes`, `./display`, `./ruleset`, `./replay`, `./records`, `./course` and `./audio-sink`; `@be-music/player-browser` exports `.`, `./host`, `./skin`, `./collection`, `./audio` and `./recording`. Everything else is internal. See [ADR 0005](./adr/0005-public-entry-points.md).
+- **designed entry point**: A package subpath made for its consumers rather than a file of its layout. `@be-music/player-engine` exports `.` (the engine), `./signals`, `./lanes`, `./display`, `./ruleset`, `./replay`, `./records`, `./course`; `@be-music/player-browser` exports `.`, `./host`, `./skin`, `./collection`, `./audio`, `./recording`, `./compute` and `./controller`. Everything else is internal. See [ADR 0005](./adr/0005-public-entry-points.md).
 - **library / library chart / library entry**: What a select screen browses: the charts, grouped into folders at the root, and the course folders (`Library`); one chart in it is a library chart (`LibraryChart`), and one bar of its list is a chart, a folder or a course (`LibraryEntry`, `kind: 'chart' | 'folder' | 'course'`).
 - **browse state**: Where the player is in the library and how the list is shaped: the open folders, the cursor at each depth, the search, the sort and filters (the list options) and the favourites (`BrowseState`). Its snapshot (`BrowseSnapshot`, taken with `captureBrowse` and restored with `restoreBrowse`) keeps it across the scenes a play goes through.
+- **chart filter expression**: A search that starts with `?`: the SQL `WHERE` clause beatoraja random courses use, with an optional `ORDER BY` / `LIMIT`, run against each chart's song columns, best record (`score.*`) and song information (`information.*`) (`parseBrowseSearch`, `parseCourseChartFilter`).
 - **play state**: What every play screen reads of a play, fed by the engine's frames and judgments: the running gauge and EX-SCORE with their graphs, the combo, the timed judgments, and the view settings (`PlayState`, changed only through `reducePlayState`).
 - **play result**: The one result payload of a single play, a course stage, a course run or a NONSTOP run (`PlayResult`); its run kind (`single`, `stage`, `course`, `nonstop`) says which. Every result screen reads it.
 - **system sound set**: A theme's cues and jingles by slot (cursor, decide, folders, option panels, select BGM, clear / fail jingles, …), each resolved to bytes or to a path in the theme (`SystemSoundSet`).
@@ -173,7 +177,8 @@ Use **chart** in code names for playable arrangements and **track** for musical 
 - **scene lifecycle**: The one contract every scene implements (`PixiScene`): `root`, `identity` (`{ kind, family }`), `enter`, `exit` and `dispose`. A host changes scenes only with `setScene`.
 - **intent**: What a player's action on a view means for the scene: open a folder, start a course, cycle the gauge.
 - **play loop / judge strategy**: The one engine loop every play runs through, and the manual, auto or replay judging plugged into it. See [ADR 0003](./adr/0003-one-play-loop.md).
-- **scene router**: The host's single owner of the current scene and every transition (`app/scene-router.ts` in the web demo). See [ADR 0006](./adr/0006-scene-router.md).
+- **seek**: Moving a running play to another chart second: a command to the play loop (`{ kind: 'seek' }`), never a new run. The judge state there is the one a play from the start reaches, and every seek starts a new frame generation. A play that seeks is practice and records no replay. See [ADR 0016](./adr/0016-seek-play-loop-command.md).
+- **scene router**: The host's single owner of the current scene and every transition (`app/scene-router.ts` in the web player). See [ADR 0006](./adr/0006-scene-router.md).
 - **audio service**: The one way the web player plays sounds outside a play's chart (`createAudioService` on `@be-music/player-browser/audio`): the select BGM, cues, jingles, chart preview and skin sounds, on one system `AudioContext`. Each play opens its own context through it (`openPlayGraph`). A scene passes itself as the owner of what it starts and stops it with `stopOwned`. See [ADR 0007](./adr/0007-one-system-audio-context.md).
 
 ## Related Documents

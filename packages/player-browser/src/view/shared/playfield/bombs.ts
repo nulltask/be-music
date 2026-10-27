@@ -1,12 +1,13 @@
+import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The bombs (hit explosions) of the shared playfield: retires each bomb once its effect has played out, and draws the
- * live ones with the skin's cells, or by default through the be-music skin (or Phantom's).
+ * live ones with the skin's cells, or by default through the be-music skin (or the default playfield's).
  */
 
 import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import type { BeMusicBomb } from '../../../skin/be-music/types.ts';
-import { renderPhantomBombs } from '../../../skins/phantom/playfield.ts';
+import { renderDefaultBombs } from './default-playfield.ts';
 import type { PlayfieldContext } from './context.ts';
 
 /**
@@ -49,7 +50,7 @@ export function renderBombs(ctx: PlayfieldContext): void {
 
 /**
  * The bombs on lanes the skin leaves to the playfield: each with the skin's cell (`PlayfieldSkin.bombCell`) when it has
- * one, centred on the lane's judgement line; the rest through the be-music skin, or Phantom's.
+ * one, centred on the lane's judgement line; the rest through the be-music skin, or the default playfield's.
  */
 function renderBombEffects(ctx: PlayfieldContext): void {
   const now = ctx.play.playClock();
@@ -62,7 +63,7 @@ function renderBombEffects(ctx: PlayfieldContext): void {
     if (cell?.texture) {
       const sprite = ctx.bombLayerPool.acquireSprite();
       sprite.texture = cell.texture;
-      sprite.label = `bomb[ch=${channel}]`;
+      sprite.label = drawLabel(ctx, 'bomb', channel);
       sprite.position.set(lane.x + (lane.w - cell.width) / 2, lane.bottom - cell.height / 2);
       sprite.width = cell.width;
       sprite.height = cell.height;
@@ -90,7 +91,7 @@ function renderBombEffects(ctx: PlayfieldContext): void {
     binding.addBombs(bombs);
     return;
   }
-  renderPhantomBombs({
+  renderDefaultBombs({
     pool: ctx.bombLayerPool,
     bombs,
     nowMs: now,

@@ -3,6 +3,7 @@
  * kit's family and returns the scene to show with `PixiSceneHost.setScene`.
  */
 
+import { DOMSelectView } from '../view/built-in/dom-view.ts';
 import type { BeatorajaSkinConfig } from '@be-music/skin-beatoraja';
 import type { BrowseSnapshot, LibraryEntry, PlayOptions, SystemSoundSet } from '@be-music/player-scene-model';
 import type { BrowserChartCollection } from '../collection/types.ts';
@@ -60,6 +61,9 @@ export interface SelectSceneOptions extends SessionSceneOptions {
 
 /** The select screen as a scene. */
 export interface SelectScene extends SessionScene<SelectFrame, SelectIntent> {
+  /** The skin owns a native search input, so the host can hide its overlay input. */
+  readonly ownsSearchInput: boolean;
+  focusSearch(): boolean;
   /** The browse position as plain data (`captureBrowse`): hand it back as `browse`, or to `restore`, later. */
   snapshot(): BrowseSnapshot;
   /** The bar under the cursor, or `undefined` when the list is empty. */
@@ -75,10 +79,21 @@ export interface SelectScene extends SessionScene<SelectFrame, SelectIntent> {
   setLibrary(library: BrowserChartCollection): void;
   /** Puts the player back where a snapshot says, over the library as it is now. */
   restore(snapshot: BrowseSnapshot): void;
-  /** The records changed (another judge ruleset, a new best): the bars and panels draw them again. */
+  /** The records changed (another judge ruleset, a new best, a replay slot saved): the bars and panels draw them again. */
   refreshRecords(): void;
-  /** Searches for `text`; a changed query puts the cursor on the top of the new list. */
+  /**
+   * Replays the chart or course under the cursor from replay slot `slot` (0-3), as a skin's replay button does: it is
+   * handed on through `on.start` with `replaySlot`, with the decide cue and jingle. A slot holding no replay (by
+   * `records.replaySlots`) starts nothing.
+   */
+  replay(slot: number): void;
+  /**
+   * Searches for `text`; a changed query puts the cursor on the top of the new list. A text that starts with `?` is a
+   * chart filter expression (the SQL `WHERE` clause of beatoraja's random courses) instead of a text search.
+   */
   setSearch(text: string): void;
+  /** Why the chart filter expression searched for does not parse, or `undefined` when it does (or is a text search). */
+  searchError(): string | undefined;
   /** The host's text field is over the skin's search box (`true`) or has left it. */
   setSearchEditing(editing: boolean): void;
   /** Where the skin's search box is on the canvas, in CSS pixels, or `undefined` when it has none. */
@@ -125,7 +140,7 @@ function createSelectView(
       };
     }
     case 'built-in': {
-      const view = new BuiltInSelectView(kit);
+      const view = kit.skin.dom?.select ? new DOMSelectView(kit) : new BuiltInSelectView(kit);
       return {
         view,
         updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
@@ -146,6 +161,13 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
     super(session, familyView.view, options);
     this.selectSession = session;
     this.familyView = familyView;
+  }
+
+  public get ownsSearchInput(): boolean {
+    return this.familyView.view.ownsSearchInput === true;
+  }
+  public focusSearch(): boolean {
+    return this.familyView.view.focusSearch?.() ?? false;
   }
 
   public snapshot(): BrowseSnapshot {
@@ -176,8 +198,16 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
     this.selectSession.refreshRecords();
   }
 
+  public replay(slot: number): void {
+    this.selectSession.dispatch({ type: 'replay', slot });
+  }
+
   public setSearch(text: string): void {
     this.selectSession.setSearch(text);
+  }
+
+  public searchError(): string | undefined {
+    return this.selectSession.searchError();
   }
 
   public setSearchEditing(editing: boolean): void {

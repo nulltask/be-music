@@ -2,6 +2,8 @@ import { resolveChart } from '@be-music/chart-model';
 import { createEmptyJSON } from '@be-music/chart-source';
 import { parseChart } from '@be-music/chart-parser';
 import { describe, expect, test } from 'vite-plus/test';
+import { resolveChartRulesetFacts } from '../../core/play-chart.ts';
+import { resolveRuleset } from '../../ruleset/index.ts';
 import { NONSTOP_STITCH_VERSION, stitchNonstopCourse } from './compose.ts';
 
 const bms = (...lines: string[]) => parseChart(lines.join('\n'), 'bms');
@@ -160,8 +162,13 @@ describe('stitchNonstopCourse', () => {
     expect(lr2.map.stageRanks).toEqual([{ seconds: b!.offsetSeconds, rank: 1, table: 'lr2-nonstop' }]);
   });
 
-  test('refuses bmson stages and a course past the key space', () => {
-    expect(stitchNonstopCourse([{ chart: createEmptyJSON('bmson') }], { connections: [] })).toEqual({
+  test('refuses bmson under LR2 placement and BMS courses past the key space', () => {
+    expect(stitchNonstopCourse([{ chart: createEmptyJSON('bmson') }], { connections: [], placement: 'lr2' })).toEqual({
+      ok: false,
+      reason: 'bmson',
+      stage: 0,
+    });
+    expect(stitchNonstopCourse([{ chart: createEmptyJSON('json') }], { connections: [] })).toEqual({
       ok: false,
       reason: 'bmson',
       stage: 0,
@@ -187,4 +194,246 @@ describe('stitchNonstopCourse', () => {
       reason: 'stitch-version',
     });
   });
+});
+
+/** A sliced sample, a charge tail, a hidden keysound, a mine and three BGA layers. */
+function bmsonStage(judgeRank = 125) {
+  return parseChart(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 120, judge_rank: judgeRank, total: 100, resolution: 240, mode_hint: 'beat-7k' },
+      sound_channels: [
+        {
+          name: 'sliced.wav',
+          notes: [
+            { x: 1, y: 0, c: false },
+            { x: 2, y: 240, c: true },
+            { x: 3, y: 480, l: 240, t: 2, c: true },
+            { x: 4, y: 960, c: false },
+          ],
+        },
+      ],
+      key_channels: [{ name: 'hidden.wav', notes: [{ x: 5, y: 480 }] }],
+      mine_channels: [{ name: 'mine.wav', notes: [{ x: 6, y: 720, damage: 12.5 }] }],
+      bga: {
+        bga_header: [
+          { id: 1, name: 'base.png' },
+          { id: 2, name: 'layer.png' },
+          { id: 3, name: 'poor.png' },
+        ],
+        bga_events: [{ y: 0, id: 1 }],
+        layer_events: [{ y: 240, id: 2 }],
+        poor_events: [{ y: 480, id: 3 }],
+      },
+    }),
+    'bmson',
+  );
+}
+
+describe('bmson NONSTOP stitching', () => {
+  test.each([false, true])(
+    'preserves slices, long notes, hidden objects, mines and BGA (BMS first: %s)',
+    (bmsFirst) => {
+      const bmson = bmsonStage();
+      const stages = bmsFirst ? [stageA, bmson] : [bmson, stageA];
+      const result = stitchNonstopCourse(
+        stages.map((chart) => ({ chart })),
+        {
+          connections: ['blank2'],
+          placement: 'intended',
+          assetPath: (stage, _kind, path) => `s${stage}/${path}`,
+        },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.chart.sourceFormat).toBe('bmson');
+      const own = bmsFirst ? 1 : 0;
+      const placement = result.map.stages[own]!.placement;
+      const chart = resolveChart(result.chart);
+      const sliced = chart.sampleTriggers.filter((trigger) => trigger.samplePath === `s${own}/sliced.wav`);
+      expect(sliced.map((trigger) => trigger.sampleOffsetSeconds)).toEqual([0, 0.5, 1, 0]);
+      expect(sliced.map((trigger) => trigger.event.bmson?.c)).toEqual([false, true, true, false]);
+      expect(sliced[0]!.seconds).toBeCloseTo(placement.offsetSeconds, 3);
+      expect(chart.notes.filter((note) => note.kind === 'ln')).toHaveLength(1);
+      const long = chart.notes.find((note) => note.kind === 'ln')!;
+      expect(long.lnMode).toBe(2);
+      expect(long.endSeconds! - long.seconds).toBeCloseTo(0.5, 3);
+      expect(chart.invisibleNotes).toHaveLength(1);
+      expect(chart.mines).toHaveLength(1);
+      expect(chart.mines[0]!.damage).toBe(12.5);
+      for (const [layer, path] of [
+        ['base', 'base.png'],
+        ['layer', 'layer.png'],
+        ['poor', 'poor.png'],
+      ] as const) {
+        const cue = chart.bga[layer].find((cue) => result.chart.resources.bmp[cue.key!] === `s${own}/${path}`);
+        expect(cue).toBeDefined();
+      }
+      expect(result.map.stageRanks.some((change) => change.table === 'bmson' && change.rank === 125)).toBe(true);
+      // The BMS stage declares no TOTAL, so the bmson stage's (a percentage) is the last one declared, as LR2 keeps
+      // it; the version 1 rules took the last stage's.
+      expect(chart.total.unit).toBe('percent');
+      const v1 = stitchNonstopCourse(
+        stages.map((chart) => ({ chart })),
+        {
+          connections: ['blank2'],
+          placement: 'intended',
+          assetPath: (stage, _kind, path) => `s${stage}/${path}`,
+          stitch: 1,
+        },
+      );
+      expect(v1.ok && resolveChart(v1.chart).total.unit).toBe(bmsFirst ? 'percent' : 'absolute');
+    },
+  );
+
+  test('keeps original source-audio offsets under FIT', () => {
+    const result = stitchNonstopCourse([{ chart: stageB }, { chart: bmsonStage() }], { connections: ['fade-fit'] });
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.map.stages[1]!.placement.rate).toBe(1.5);
+    const slices = resolveChart(result.chart).sampleTriggers.filter(
+      (trigger) => result.chart.resources.wav[trigger.sampleKey] === 'sliced.wav',
+    );
+    expect(slices.map((trigger) => trigger.sampleOffsetSeconds)).toEqual([0, 0.5, 1, 0]);
+  });
+
+  test('does not exhaust the BMS two-character key space in a mixed course', () => {
+    const crowded = createEmptyJSON('bms');
+    for (let index = 1; index <= 1295; index += 1) {
+      const key = index.toString(36).toUpperCase().padStart(2, '0');
+      crowded.resources.wav[key] = `${key}.wav`;
+      crowded.events.push({ measure: Math.floor(index / 16), position: [index % 16, 16], channel: '01', value: key });
+    }
+    const result = stitchNonstopCourse(
+      [crowded, crowded, crowded, bmsonStage()].map((chart) => ({ chart })),
+      { connections: ['blank2', 'blank2', 'blank2'] },
+    );
+    if (!result.ok) throw new Error(result.reason);
+    expect(Object.keys(result.chart.resources.wav).length).toBeGreaterThan(3843);
+    const triggers = resolveChart(result.chart).sampleTriggers;
+    expect(triggers.filter((trigger) => trigger.samplePath !== undefined).length).toBeGreaterThan(3843);
+    expect(triggers.some((trigger) => trigger.sampleKey.length > 2 && trigger.samplePath === 'sliced.wav')).toBe(true);
+  });
+});
+
+test('mixed NONSTOP keeps native stage judge windows and TOTAL units through replay facts', () => {
+  const bmsRanked = bms('#BPM 120', '#RANK 1', '#TOTAL 250', '#00111:01', '#00211:01');
+  for (const stages of [
+    [bmsRanked, bmsonStage(150)],
+    [bmsonStage(150), bmsRanked],
+  ]) {
+    const result = stitchNonstopCourse(
+      stages.map((chart) => ({ chart })),
+      { connections: ['blank2'] },
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const stitchedFacts = resolveChartRulesetFacts(result.chart);
+    stitchedFacts.judgeRank.stageRanks = result.map.stageRanks.map((change) => ({
+      ...change,
+      timeUs: Math.round(change.seconds * 1e6),
+    }));
+    for (const ruleset of ['lr2', 'beatoraja'] as const) {
+      const actual = resolveRuleset(stitchedFacts, ruleset);
+      for (const [index, stage] of stages.entries()) {
+        const expected = resolveRuleset(resolveChartRulesetFacts(stage), ruleset);
+        const start = result.map.stageRanks[index]!.seconds;
+        expect(actual.windowsAt(Math.round((start + 0.1) * 1e6))).toEqual(expected.windowsAt(0));
+      }
+      if (stages[1]!.sourceFormat === 'bms') expect(actual.effectiveTotal).toBe(250);
+    }
+    const roundTrip = parseChart(JSON.stringify(result.chart), 'json');
+    expect(roundTrip.bmson.info.totalUnit).toBe(result.chart.bmson.info.totalUnit);
+    expect(resolveChart(roundTrip).sampleTriggers.map((trigger) => trigger.sampleOffsetSeconds)).toEqual(
+      resolveChart(result.chart).sampleTriggers.map((trigger) => trigger.sampleOffsetSeconds),
+    );
+  }
+});
+
+test('mixed NONSTOP preserves BMS DEFEXRANK as its own stage unit', () => {
+  const extended = bms('#BPM 120', '#DEFEXRANK 150', '#00111:01', '#00219:01');
+  const result = stitchNonstopCourse([{ chart: bmsonStage() }, { chart: extended }], { connections: ['blank2'] });
+  if (!result.ok) throw new Error(result.reason);
+  const change = result.map.stageRanks[1]!;
+  expect(change).toMatchObject({ rank: 150, table: 'bms-exrank' });
+  const facts = resolveChartRulesetFacts(result.chart);
+  facts.judgeRank.stageRanks = result.map.stageRanks.map((entry) => ({
+    ...entry,
+    timeUs: Math.round(entry.seconds * 1e6),
+  }));
+  for (const ruleset of ['lr2', 'beatoraja'] as const) {
+    expect(resolveRuleset(facts, ruleset).windowsAt(Math.round((change.seconds + 0.1) * 1e6))).toEqual(
+      resolveRuleset(resolveChartRulesetFacts(extended), ruleset).windowsAt(0),
+    );
+  }
+});
+
+test('mixed bmson output preserves a PMS first stage as nine keys', () => {
+  const pms = bms('#BPM 120', '#00111:01', '#00225:01');
+  const popn = parseChart(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 120, mode_hint: 'popn-9k' },
+      sound_channels: [{ name: 'key.wav', notes: [{ x: 9, y: 960 }] }],
+    }),
+    'bmson',
+  );
+  const result = stitchNonstopCourse([{ chart: pms, pms: true }, { chart: popn }], { connections: ['blank2'] });
+  if (!result.ok) throw new Error(result.reason);
+  expect(result.chart.bmson.info.modeHint).toBe('popn-9k');
+  expect(resolveChart(result.chart).playVariant).toBe('9');
+});
+
+test('keeps each NONSTOP stage’s POOR BGA mode', () => {
+  const a = structuredClone(stageA),
+    b = structuredClone(stageB);
+  a.bms.poorBGA = '1';
+  b.bms.poorBGA = '2';
+  const result = stitchNonstopCourse([{ chart: a }, { chart: b }], { connections: ['cut'] });
+  if (!result.ok) throw new Error('stitch failed');
+  expect(result.map.stages.map((stage) => stage.poorBGAMode)).toEqual([1, 2]);
+});
+
+test('NONSTOP version 2 retains the last declared TOTAL, while version 1 preserves previous replay behavior', () => {
+  const first = bms('#BPM 240', '#TOTAL 80', '#00111:01');
+  const second = bms('#BPM 240', '#00112:01');
+  const build = (stitch: number, tail = second) => {
+    const result = stitchNonstopCourse([{ chart: first }, { chart: tail }], { connections: ['blank2'], stitch });
+    if (!result.ok) throw new Error(result.reason);
+    return result;
+  };
+  const current = build(2),
+    legacy = build(1);
+  expect(NONSTOP_STITCH_VERSION).toBe(2);
+  expect(current.chart.metadata.total).toBe(80);
+  expect(legacy.chart.metadata.total).toBeUndefined();
+  expect(resolveChart(current.chart).notes.map((note) => [note.seconds, note.endSeconds])).toEqual(
+    resolveChart(legacy.chart).notes.map((note) => [note.seconds, note.endSeconds]),
+  );
+  expect(build(2, bms('#BPM 240', '#TOTAL 300', '#00112:01')).chart.metadata.total).toBe(300);
+  expect(build(2, bms('#BPM 240', '#TOTAL 0', '#00112:01')).chart.metadata.total).toBe(0);
+});
+
+test('G.ATTACK NONSTOP damage uses all remaining joined notes and the last declared TOTAL, as HARD does', () => {
+  for (const total of [80, 300]) {
+    const first = bms('#BPM 240', `#TOTAL ${total}`, `#00111:${'01'.repeat(16)}`);
+    const second = bms('#BPM 240', `#00112:${'01'.repeat(16)}`);
+    const result = stitchNonstopCourse([{ chart: first }, { chart: second }], { connections: ['blank2'] });
+    if (!result.ok) throw new Error(result.reason);
+    const facts = resolveChartRulesetFacts(result.chart);
+    expect(facts.notes.normal).toBe(32);
+    const options = { course: { kind: 'nonstop' as const } };
+    const attack = resolveRuleset(facts, 'lr2', { ...options, selectedGauge: 'G-ATTACK' });
+    const hard = resolveRuleset(facts, 'lr2', { ...options, selectedGauge: 'HARD' });
+    expect(attack.effectiveTotal).toBe(total);
+    expect(attack.gauge.values[0]).toBeCloseTo(total === 80 ? -100 : -(7 - 2 / 15) * 10);
+    expect(attack.gauge.values[0]).toBe(hard.gauge.values[4]);
+    expect(attack.gauge.values[3]).toBe(-6);
+  }
+});
+
+test('an inherited TOTAL keeps its original unit in a mixed NONSTOP chart', () => {
+  const result = stitchNonstopCourse([{ chart: bmsonStage() }, { chart: bms('#BPM 240', '#00111:01') }], {
+    connections: ['blank2'],
+  });
+  if (!result.ok) throw new Error(result.reason);
+  expect(resolveChart(result.chart).total).toEqual({ value: 100, unit: 'percent' });
 });

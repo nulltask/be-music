@@ -1,5 +1,5 @@
 // Virtual module produced by the `be-music:acknowledgements` Vite plugin (see `vite.config.ts`).
-import acknowledgements from 'virtual:acknowledgements';
+import loadAcknowledgements, { type Acknowledgement } from 'virtual:acknowledgements';
 
 export function wireHelpModal(): void {
   const button = document.querySelector<HTMLButtonElement>('#help-button');
@@ -26,8 +26,8 @@ export function wireHelpModal(): void {
       pane.toggleAttribute('hidden', !matches);
     }
     if (paneId === 'oss' && !ossPopulated) {
-      renderAcknowledgementsList(ossList);
       ossPopulated = true;
+      void renderAcknowledgementsList(ossList);
     }
   };
 
@@ -91,21 +91,29 @@ function wireUsageLanguageSwitch(): void {
   }
 }
 
-function renderAcknowledgementsList(list: HTMLOListElement): void {
-  list.replaceChildren();
-  if (acknowledgements.length === 0) {
-    const empty = document.createElement('li');
-    empty.className = 'ack-empty';
-    empty.textContent = 'No third-party dependencies were detected at build time.';
-    list.appendChild(empty);
+async function renderAcknowledgementsList(list: HTMLOListElement): Promise<void> {
+  const message = (text: string): void => {
+    const item = document.createElement('li');
+    item.className = 'ack-empty';
+    item.textContent = text;
+    list.replaceChildren(item);
+  };
+  message('Loading…');
+  let acknowledgements: Acknowledgement[];
+  try {
+    acknowledgements = await loadAcknowledgements();
+  } catch {
+    message('Could not load the list.');
     return;
   }
-  for (const entry of acknowledgements) {
-    list.appendChild(buildAcknowledgementCard(entry));
+  if (acknowledgements.length === 0) {
+    message('No third-party packages were found in this build.');
+    return;
   }
+  list.replaceChildren(...acknowledgements.map(buildAcknowledgementCard));
 }
 
-function buildAcknowledgementCard(entry: (typeof acknowledgements)[number]): HTMLLIElement {
+function buildAcknowledgementCard(entry: Acknowledgement): HTMLLIElement {
   const card = document.createElement('li');
   card.className = 'ack-card';
 
@@ -150,10 +158,16 @@ function buildAcknowledgementCard(entry: (typeof acknowledgements)[number]): HTM
   }
 
   if (entry.licenseText) {
+    // The copyright notice and license text stay folded until asked for: the list reads as names and licenses.
+    const details = document.createElement('details');
+    details.className = 'ack-card-license-details';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Copyright and license text';
     const pre = document.createElement('pre');
     pre.className = 'ack-card-license-text';
     pre.textContent = entry.licenseText;
-    card.appendChild(pre);
+    details.append(summary, pre);
+    card.appendChild(details);
   } else {
     const note = document.createElement('div');
     note.className = 'ack-card-license-missing';

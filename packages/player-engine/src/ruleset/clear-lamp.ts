@@ -4,7 +4,7 @@ import type { GaugeType } from './gauge-type.ts';
  * Clear lamps, worst first: not played, failed, the gauge a play cleared on (ASSIST EASY … EX HARD), FULL COMBO (every
  * note judged GOOD or better), PERFECT (GREAT or better) and MAX (every note a PGREAT). A lamp's index is its rank
  * ({@link clearLampRank}): a better lamp ranks higher, and the Leaderboard stores lamps by their rank. Each judge ruleset
- * awards its own subset: LR2 and IIDX stop at FULL COMBO, LR2 has no ASSIST EASY or EX HARD, beatoraja goes up to MAX.
+ * awards its own subset: LR2 and That-Which-Must-Not-Be-Named stop at FULL COMBO, LR2 has no ASSIST EASY or EX HARD, beatoraja goes up to MAX.
  */
 export const CLEAR_LAMPS = [
   'NO_PLAY',
@@ -43,17 +43,17 @@ export function betterClearLamp(current: ClearLamp, candidate: ClearLamp): Clear
 }
 
 /**
- * The best lamp a judge ruleset awards: LR2 and IIDX stop at FULL COMBO (they have no PERFECT or MAX lamp); beatoraja,
+ * The best lamp a judge ruleset awards: LR2 and That-Which-Must-Not-Be-Named stop at FULL COMBO (they have no PERFECT or MAX lamp); beatoraja,
  * and a ruleset this does not know, go up to MAX.
  */
 export function topClearLamp(ruleset: string | undefined): ClearLamp {
-  return ruleset === 'lr2' || ruleset === 'iidx' ? 'FULL_COMBO' : 'MAX';
+  return ruleset === 'lr2' || ruleset === '____' ? 'FULL_COMBO' : 'MAX';
 }
 
 /**
  * The lamp a cleared single play earns from its gauge, by the gauge ids the rulesets use (`GROOVE` / `EASY` / `HARD` /
  * `DEATH` under LR2, `ASSIST-EASY` / `EASY` / `NORMAL` / `HARD` / `EX-HARD` / `HAZARD` under beatoraja,
- * `ASSISTED-EASY` … under IIDX). DEATH and HAZARD clear on the strictest lamp below the full-combo ones.
+ * `ASSISTED-EASY` … under That-Which-Must-Not-Be-Named). DEATH and HAZARD clear on the strictest lamp below the full-combo ones.
  */
 const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
   'ASSIST-EASY': 'ASSIST_EASY',
@@ -62,6 +62,8 @@ const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
   GROOVE: 'NORMAL',
   NORMAL: 'NORMAL',
   HARD: 'HARD',
+  'P-ATTACK': 'HARD',
+  'G-ATTACK': 'HARD',
   'EX-HARD': 'EX_HARD',
   DEATH: 'EX_HARD',
   HAZARD: 'EX_HARD',
@@ -71,7 +73,7 @@ const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
  * The lamp a cleared single play earns from its gauge (a ruleset gauge id, any case), before the full-combo lamps:
  * `NORMAL` for a gauge the table does not know. LR2 awards HARD only for its HARD-family gauges and NORMAL for every
  * other one but EASY, so a DEATH clear is NORMAL there (OpenLR2 `LR2f.cpp` L2593-L2600, LR2body.exe CheckClear
- * @0x405da0); beatoraja and IIDX keep EX HARD for theirs.
+ * @0x405da0); beatoraja and That-Which-Must-Not-Be-Named keep EX HARD for theirs.
  */
 function gaugeClearLamp(gauge: string | undefined, ruleset: string | undefined): ClearLamp {
   const id = gauge?.toUpperCase();
@@ -100,7 +102,14 @@ const COURSE_GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
  * LR2body.exe CheckCourseClear @0x4086d0); beatoraja's follows the class gauge the run played on.
  */
 function courseGaugeClearLamp(gauge: string, ruleset: string, gaugeType: GaugeType): ClearLamp {
-  if (ruleset === 'lr2') return gaugeType === 'EASY' ? 'EASY' : gaugeType === 'HARD' ? 'HARD' : 'NORMAL';
+  // LR2 resets EASY and G.ATTACK to GROOVE when a grade course starts.
+  if (ruleset === 'lr2' && gauge === 'GRADE' && (gaugeType === 'EASY' || gaugeType === 'G-ATTACK')) return 'NORMAL';
+  if (ruleset === 'lr2')
+    return gaugeType === 'EASY'
+      ? 'EASY'
+      : gaugeType === 'HARD' || gaugeType === 'P-ATTACK' || gaugeType === 'G-ATTACK'
+        ? 'HARD'
+        : 'NORMAL';
   return COURSE_GAUGE_LAMPS[gauge] ?? 'NORMAL';
 }
 
@@ -130,35 +139,44 @@ function finishClearLamp(play: {
 
 /**
  * Whether a play is a full combo: it has notes and judged every one of them GOOD or better. A play that stopped before
- * its last note is none. Empty POORs never touch a note, so they don't cost a full combo.
+ * its last note is none. A mode that breaks combo on empty POOR also supplies its final combo eligibility.
  */
-export function isFullCombo(score: { total: number; perfect: number; great: number; good: number }): boolean {
-  return score.total > 0 && score.perfect + score.great + score.good >= score.total;
+export function isFullCombo(score: {
+  total: number;
+  perfect: number;
+  great: number;
+  good: number;
+  fullCombo?: boolean;
+}): boolean {
+  return score.fullCombo !== false && score.total > 0 && score.perfect + score.great + score.good >= score.total;
 }
 
 /** What the clear lamp of a single play is read from. */
 export interface PlayClearLampFacts {
-  /** The judge ruleset the play ran under (`lr2`, `beatoraja`, `iidx`); any other value or none uses beatoraja's lamps. */
+  /** The judge ruleset the play ran under (`lr2`, `beatoraja`, `____`); any other value or none uses beatoraja's lamps. */
   ruleset?: string;
   /** The ruleset's verdict on the gauge the play ended on. */
   cleared: boolean;
   /** The gauge the play ran on, by the ruleset's gauge id (`GROOVE`, `HARD`, `EX-HARD`, …); none counts as NORMAL. */
   gauge?: string;
   /** The judgments over the ruleset's `total` judgment notes (PGREATs are `perfect`). */
-  score: { total: number; perfect: number; great: number; good: number };
+  score: { total: number; perfect: number; great: number; good: number; fullCombo?: boolean };
 }
 
 /**
  * The clear lamp of a single play: FAILED when its gauge did not clear, FULL COMBO / PERFECT / MAX for a cleared full
  * combo ({@link isFullCombo}), else the lamp of the gauge it cleared on, kept to the judge ruleset's own lamps: under
- * LR2 and IIDX a full combo is the top lamp, and under LR2 a DEATH clear is NORMAL.
+ * LR2 and That-Which-Must-Not-Be-Named a full combo is the top lamp. LR2 awards it before the gauge check; a DEATH clear is NORMAL.
  */
 export function resolveClearLamp(play: PlayClearLampFacts): ClearLamp {
+  const fullCombo = isFullCombo(play.score);
+  // LR2 CheckClear (0x405da4–0x405dc9) returns FULL COMBO before inspecting the gauge.
+  if (play.ruleset === 'lr2' && fullCombo) return 'FULL_COMBO';
   return finishClearLamp({
     top: topClearLamp(play.ruleset),
     cleared: play.cleared,
     gaugeLamp: gaugeClearLamp(play.gauge, play.ruleset),
-    fullCombo: isFullCombo(play.score),
+    fullCombo,
     great: play.score.great,
     good: play.score.good,
   });
@@ -178,6 +196,8 @@ export interface CourseClearLampFacts {
   noteCount: number;
   /** The course-wide max combo. */
   maxCombo: number;
+  /** The final combo eligibility, where the mode breaks combo on empty POOR. */
+  fullCombo?: boolean;
   /** The judgments summed over the stages played. */
   judge: { great: number; good: number };
 }
@@ -185,16 +205,16 @@ export interface CourseClearLampFacts {
 /**
  * The clear lamp of a course run (LR2 `CheckCourseClear`, beatoraja `MusicResult`): FAILED when it did not clear; a FULL
  * COMBO when the course max combo covers every note (Σ notes == course max combo, as both check), PERFECT without a GOOD
- * and MAX with only PGREATs; otherwise the lamp of its gauge — LR2's by the gauge picked, beatoraja's and IIDX's by the
+ * and MAX with only PGREATs; otherwise the lamp of its gauge — LR2's by the gauge picked, beatoraja's and That-Which-Must-Not-Be-Named's by the
  * class gauge. Kept to the ruleset's own lamps, with FULL COMBO the top lamp for a ruleset this does not know.
  */
 export function resolveCourseClearLamp(run: CourseClearLampFacts): ClearLamp {
-  const known = run.ruleset === 'lr2' || run.ruleset === 'beatoraja' || run.ruleset === 'iidx';
+  const known = run.ruleset === 'lr2' || run.ruleset === 'beatoraja' || run.ruleset === '____';
   return finishClearLamp({
     top: known ? topClearLamp(run.ruleset) : 'FULL_COMBO',
     cleared: run.cleared,
     gaugeLamp: courseGaugeClearLamp(run.gauge, run.ruleset, run.gaugeType),
-    fullCombo: run.noteCount > 0 && run.maxCombo >= run.noteCount,
+    fullCombo: run.fullCombo !== false && run.noteCount > 0 && run.maxCombo >= run.noteCount,
     great: run.judge.great,
     good: run.judge.good,
   });
@@ -202,8 +222,9 @@ export function resolveCourseClearLamp(run: CourseClearLampFacts): ClearLamp {
 
 /**
  * BP (miss count): BADs, missed POORs and empty POORs, as LR2 and beatoraja count it (LR2 adds an empty POOR to its POOR
- * count, LR2body.exe ApplyJudgeNote @0x4061f1), plus `unjudgedNotes`: the notes a course stage that failed mid-way, or a
- * course run's unreached stages, never judged, which LR2 counts in a course's BP (OpenLR2 L9105-L9113).
+ * count, LR2body.exe ApplyJudgeNote @0x4061f1), plus `unjudgedNotes`: the notes a play or course stage that failed or
+ * was given up mid-way, or a course run's unreached stages, never judged, which LR2 and beatoraja count in BP (OpenLR2
+ * L9111-L9113 and L9436-L9439, beatoraja `BMSPlayer` L915).
  */
 export function resolveMissCount(judge: { bad: number; poor: number; emptyPoor: number }, unjudgedNotes = 0): number {
   return judge.bad + judge.poor + judge.emptyPoor + Math.max(0, unjudgedNotes);

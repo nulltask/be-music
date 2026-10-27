@@ -9,11 +9,13 @@ const workspacePackages = [
   'chart-writer',
   'chart-audio-renderer',
   'player-engine',
+  'player-node-audio',
   'player-scene-model',
   'player-terminal',
   'skin-lr2',
   'skin-beatoraja',
   'player-skin-sdk',
+  'player-ui',
   'chart-editor',
   'player-browser',
   'app-accounts',
@@ -31,17 +33,26 @@ const workspacePackages = [
  * (`PlayerOptions.createAudioSession`, `createUIRuntime`, the parser's `node-file.ts`) instead.
  */
 const runtimeNeutralSources = [
+  'packages/shared-utils/src/core.ts',
+  'packages/shared-utils/src/hash.ts',
+  'packages/shared-utils/src/async.ts',
   'packages/skin-beatoraja/src/scene/**/*.ts',
   'packages/chart-model/src/**/*.ts',
   'packages/chart-source/src/**/*.ts',
   'packages/skin-lr2/src/state/**/*.ts',
   'packages/chart-parser/src/**/*.ts',
   'packages/player-engine/src/core/**/*.ts',
+  'packages/player-engine/src/audio-clock.ts',
   'packages/player-engine/src/course/**/*.ts',
   'packages/player-engine/src/display.ts',
   'packages/player-engine/src/image-resize-algorithm.ts',
   'packages/player-engine/src/judging.ts',
   'packages/player-engine/src/lanes.ts',
+  'packages/player-engine/src/lane-random.ts',
+  'packages/player-engine/src/lane-random-source.ts',
+  'packages/player-engine/src/lane-converge.ts',
+  'packages/player-engine/src/lane-scatter.ts',
+  'packages/player-engine/src/lane-pms-random.ts',
   'packages/player-engine/src/playable-notes.ts',
   'packages/player-engine/src/replay/**/*.ts',
   'packages/player-engine/src/records/**/*.ts',
@@ -59,6 +70,11 @@ const runtimeAdapterSources = ['packages/chart-parser/src/cli.ts', 'packages/cha
  * scene models and the LR2 and beatoraja state resolvers are held to the same rule: a scene's time comes in as an input.
  */
 const deterministicJudgeSources = [
+  'packages/player-engine/src/lane-random.ts',
+  'packages/player-engine/src/lane-random-source.ts',
+  'packages/player-engine/src/lane-converge.ts',
+  'packages/player-engine/src/lane-scatter.ts',
+  'packages/player-engine/src/lane-pms-random.ts',
   'packages/skin-beatoraja/src/scene/**/*.ts',
   'packages/skin-lr2/src/state/**/*.ts',
   'packages/player-engine/src/core/judge-*.ts',
@@ -104,7 +120,7 @@ const clockGlobals = ['Date', 'performance', 'setTimeout', 'setInterval', 'setIm
  * - A view only draws frames and returns intents, so it reaches neither the engine nor its web runtimes, and its session
  *   and the host only for types.
  * - Only a session and the engine driver run the engine; every other file imports its types only.
- * - Only the audio layer (`runtime/`) creates an audio context; the rest of the runtime and the web demo play through
+ * - Only the audio layer (`runtime/`) creates an audio context; the rest of the runtime and the web player play through
  *   the audio service.
  *
  * Oxlint does not merge the options of two overrides that set the same rule: the last one wins. So each file group
@@ -116,8 +132,8 @@ const webAudioLayerSources = ['packages/player-browser/src/runtime/**/*.ts'];
 const sceneSessionSources = ['packages/player-browser/src/session/**/*.ts'];
 const familyViewSources = ['packages/player-browser/src/view/**/*.ts'];
 const webHostSources = ['packages/player-browser/src/host/**/*.ts', 'packages/player-browser/src/index.ts'];
-const webDemoSources = ['packages/app-play/src/**/*.ts'];
-/** Import specifiers that reach the named directories of `player-web/src` (or of the web demo's `src`). */
+const webPlayerSources = ['packages/app-play/src/**/*.ts'];
+/** Import specifiers that reach the named directories of `player-web/src` (or of the web player's `src`). */
 const webLayerGroup = (...dirs: string[]): string[] => dirs.flatMap((dir) => [`**/${dir}`, `**/${dir}/**`]);
 const lowerLayerMessage =
   'A lower layer of the web runtime knows no scene: it imports no host, session or view module.';
@@ -166,16 +182,22 @@ const webAudioProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
   audioContextNames.map((property) => ({ object, property, message: webAudioMessage })),
 );
 /**
- * The web demo's layers (docs/player-web.md, "How the demo is built"): `main.ts` boots the app, `app/` composes it (the
+ * The web player's layers (docs/player-web.md, "How the player is built"): `main.ts` boots the app, `app/` composes it (the
  * scene router, the routes, the shell), `ui/` is the Debug Menu and the panels, and `services/` hold the state and rules
- * the others share. A service knows neither the UI nor the wiring: it imports no lil-gui, `ui/` or `app/` module, not
+ * the others share. A service knows neither the UI nor the wiring: it imports no Tweakpane, `ui/` or `app/` module, not
  * even a type, and reaches the app through the deps it is given.
  */
-const webDemoServiceSources = ['packages/app-play/src/services/**/*.ts'];
-const webDemoServiceMessage = 'A demo service imports no lil-gui, ui/ or app/ module; it takes what it needs as deps.';
-const webDemoServiceImports = {
-  paths: [...engineTypeImports.paths, { name: 'lil-gui', message: webDemoServiceMessage }],
-  patterns: [{ group: ['lil-gui/*', ...webLayerGroup('ui', 'app')], message: webDemoServiceMessage }],
+const webPlayerServiceSources = ['packages/app-play/src/services/**/*.ts'];
+const webPlayerServiceMessage =
+  'A player service imports no Tweakpane, ui/ or app/ module; it takes what it needs as deps.';
+const webPlayerServiceImports = {
+  paths: [...engineTypeImports.paths, { name: 'tweakpane', message: webPlayerServiceMessage }],
+  patterns: [
+    {
+      group: ['tweakpane', 'tweakpane/*', '@tweakpane/core', '@tweakpane/core/*', ...webLayerGroup('ui', 'app')],
+      message: webPlayerServiceMessage,
+    },
+  ],
 };
 
 const workspaceProjects = workspacePackages.map((name) => ({
@@ -211,7 +233,7 @@ export default defineConfig({
         extends: true as const,
         test: {
           name: '@be-music/app-play',
-          include: ['packages/app-play/src/**/*.test.ts'],
+          include: ['packages/app-play/src/**/*.test.ts', 'packages/app-play/scripts/**/*.test.ts'],
         },
       },
       {
@@ -219,7 +241,7 @@ export default defineConfig({
         test: {
           name: '@be-music/app-leaderboard',
           // The pages' stylesheet, icons and client script are generated, not kept in git.
-          globalSetup: ['packages/app-leaderboard/test/global-setup.ts'],
+          globalSetup: ['packages/app-leaderboard/src/test-support/global-setup.ts'],
           include: ['packages/app-leaderboard/src/**/*.test.ts', 'packages/app-leaderboard/client/**/*.test.ts'],
           // The API tests start a workerd process (Miniflare) for real D1 and R2 bindings.
           testTimeout: 30_000,
@@ -230,7 +252,7 @@ export default defineConfig({
         extends: true as const,
         test: {
           name: 'regression',
-          include: ['tests/regression/**/*.test.ts'],
+          include: ['test/regression/**/*.test.ts'],
         },
       },
       {
@@ -258,14 +280,10 @@ export default defineConfig({
         'packages/chart-audio-renderer/src/index.ts',
         'packages/chart-parser/src/index.ts',
         'packages/player-engine/src/index.ts',
-        'packages/player-engine/src/tui.ts',
-        'packages/player-engine/src/node/*protocol.ts',
         'packages/player-terminal/src/cli.ts',
         'packages/player-terminal/src/tui.ts',
         'packages/player-terminal/src/node/*protocol.ts',
         'packages/player-browser/src/index.ts',
-        'packages/player-browser/src/library.ts',
-        'packages/player-browser/src/pixi-*.ts',
       ],
       thresholds: {
         // Use package-level thresholds so lower-coverage packages don't hide behind unrelated ones.
@@ -337,18 +355,21 @@ export default defineConfig({
       'packages/*/node_modules/**',
       'packages/*/dist/**',
       'examples/**',
+      'test/fixtures/**',
       'tmp/**',
       // Real-world beatoraja skins are lenient JSON (missing / trailing commas) and the parser tests depend on them
       // staying byte-for-byte as shipped.
       'packages/*/src/__fixtures__/**',
       // Regression snapshots are compared byte-for-byte by `toMatchFileSnapshot`; reformatting them would fail the suite.
-      'tests/regression/__expected__/**',
+      'test/regression/__expected__/**',
       // So are the engine characterization snapshots.
       'packages/player-engine/src/core/characterization/__expected__/**',
       // Generated by Changesets on every release; reformatting them would churn each version bump.
       '**/CHANGELOG.md',
-      // Generated by the Leaderboard's `build:css`; it is rewritten whole on every rebuild.
+      // Generated by `build:css`; rewritten whole on every rebuild.
       'packages/app-leaderboard/src/pages/styles.generated.ts',
+      'packages/service-web-theme/src/styles.generated.ts',
+      'packages/player-ui/src/themes/basecoat.generated.ts',
       'packages/app-leaderboard/src/pages/icons.generated.ts',
       'packages/app-leaderboard/src/pages/fonts.generated.ts',
       'packages/app-leaderboard/src/pages/client.generated.ts',
@@ -367,8 +388,11 @@ export default defineConfig({
       'packages/*/node_modules/**',
       'packages/*/dist/**',
       'examples/**',
+      'test/fixtures/**',
       'tmp/**',
       'packages/app-leaderboard/src/pages/styles.generated.ts',
+      'packages/service-web-theme/src/styles.generated.ts',
+      'packages/player-ui/src/themes/basecoat.generated.ts',
       'packages/app-leaderboard/src/pages/icons.generated.ts',
       'packages/app-leaderboard/src/pages/fonts.generated.ts',
       'packages/app-leaderboard/src/pages/client.generated.ts',
@@ -457,7 +481,7 @@ export default defineConfig({
         },
       },
       {
-        files: webDemoSources,
+        files: webPlayerSources,
         rules: {
           'no-restricted-imports': ['error', engineTypeImports],
           'no-restricted-globals': ['error', ...webAudioGlobals],
@@ -465,9 +489,9 @@ export default defineConfig({
         },
       },
       {
-        files: webDemoServiceSources,
+        files: webPlayerServiceSources,
         rules: {
-          'no-restricted-imports': ['error', webDemoServiceImports],
+          'no-restricted-imports': ['error', webPlayerServiceImports],
         },
       },
       {

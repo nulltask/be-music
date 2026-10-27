@@ -1,5 +1,11 @@
 # @be-music/service-auth-client
 
+## 0.1.2
+
+### Patch Changes
+
+- 00139f5: Update jose to the latest release.
+
 ## 0.1.1
 
 ### Patch Changes

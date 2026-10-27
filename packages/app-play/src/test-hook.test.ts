@@ -191,6 +191,8 @@ describe('describeBar', () => {
         missingStages: 1,
         playable: false,
         newCourse: false,
+        randomMix: false,
+        random: false,
       },
       lamp: 'FAILED',
       trophy: 'bronzemedal',
@@ -212,6 +214,7 @@ describe('results', () => {
       lamp: 'NORMAL',
       gaugeType: 'GROOVE',
     } satisfies PlayResult;
+    expect(resultFromData({ ...data, practice: true }, 'stage', 'lr2').practice).toBe(true);
     expect(resultFromData(data, 'stage', 'lr2', 'lr2:clear')).toEqual({
       run: 'stage',
       family: 'lr2',

@@ -1,4 +1,4 @@
-import { unzipSync } from 'fflate';
+import { runBrowserTask, executeBrowserTask } from '@be-music/player-browser/compute';
 
 /**
  * URL-driven auto-load: lets a link pre-load a song and/or skin archive via query parameters, e.g.
@@ -9,11 +9,11 @@ import { unzipSync } from 'fflate';
  * `services/library.ts`), so the select screen lists the archive's charts and any skin is applied — no bespoke rendering
  * path.
  *
- * Cross-origin URLs are fetched through the demo's same-origin proxy route so archive links still work when the remote
+ * Cross-origin URLs are fetched through the player's same-origin proxy route so archive links still work when the remote
  * host does not send `Access-Control-Allow-Origin`.
  */
 
-// Guard for skin archives we expand here in the demo (music archives go through the player-web loader's own guarded
+// Guard for skin archives we expand here in the player (music archives go through the player-web loader's own guarded
 // `unzipSync`). Skins are small in practice; this only exists to stop a hostile/oversized link from exhausting memory.
 const MAX_SKIN_UNZIP_BYTES = 512 * 1024 * 1024;
 export const URL_LOAD_PROXY_PATH = '/__url-load-proxy';
@@ -107,19 +107,17 @@ function fileWithRelativePath(bytes: Uint8Array, name: string, relativePath: str
  */
 export async function fetchZipAsFiles(url: string): Promise<File[]> {
   const bytes = await fetchBytes(url);
-  let uncompressed = 0;
-  const entries = unzipSync(bytes, {
-    filter: (entry) => {
-      const path = normalizeZipPath(entry.name);
-      // Skip directory records and macOS resource-fork junk; only real files become `File`s.
-      if (!path || entry.name.endsWith('/') || path.startsWith('__MACOSX/')) return false;
-      uncompressed += entry.originalSize;
-      if (uncompressed > MAX_SKIN_UNZIP_BYTES) {
-        throw new Error(`archive at ${url} expands beyond ${Math.round(MAX_SKIN_UNZIP_BYTES / (1024 * 1024))} MiB`);
-      }
-      return true;
-    },
-  });
+  const input = {
+    bytes,
+    skin: true,
+    limit: MAX_SKIN_UNZIP_BYTES,
+    limitMessage: `archive at ${url} expands beyond ${Math.round(MAX_SKIN_UNZIP_BYTES / (1024 * 1024))} MiB`,
+  };
+  const entries = await runBrowserTask(
+    'unzip',
+    input,
+    () => executeBrowserTask('unzip', input) as Record<string, Uint8Array>,
+  );
   const files: File[] = [];
   for (const [rawPath, content] of Object.entries(entries)) {
     const path = normalizeZipPath(rawPath);

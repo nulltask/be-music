@@ -1,6 +1,12 @@
 import { parseChart } from '@be-music/chart-parser';
 import { describe, expect, test } from 'vite-plus/test';
-import { CourseMaker, resolveCourseMakerFolders, type CourseMakerChange } from './course-maker.ts';
+import {
+  CourseMaker,
+  createDrawnRandomMixEntry,
+  createRandomMixChart,
+  resolveCourseMakerFolders,
+  type CourseMakerChange,
+} from './course-maker.ts';
 import { createChartHashLookup } from './course.ts';
 import type { LibraryChart } from '@be-music/player-scene-model';
 
@@ -125,6 +131,64 @@ describe('resolveCourseMakerFolders', () => {
     const [made, add] = folders[0]!.courses!;
     expect(made).toMatchObject({ editable: true, playable: true, stages: [{ title: 'A' }] });
     expect(add).toMatchObject({ newCourse: true, definition: { kind: 'expert', name: 'NEW COURSE' } });
-    expect(folders[1]!.courses!.map((entry) => entry.newCourse)).toEqual([true]);
+    // A RANDOM MIX bar follows NEW COURSE in the EXPERT and NONSTOP folders, not in GRADE.
+    expect(folders.map((folder) => folder.courses!.map((entry) => entry.randomMix === true))).toEqual([
+      [false, false, true],
+      [false, true],
+      [false],
+    ]);
+    expect(folders[1]!.courses![1]).toMatchObject({ definition: { kind: 'nonstop', name: 'RANDOM MIX' } });
+  });
+});
+
+describe('RANDOM MIX', () => {
+  const charts = [...SEVEN, DOUBLE].map((entry) => createRandomMixChart(entry, MD5.get(entry.id)!));
+
+  test('reads a song as LR2 song database columns', () => {
+    const song = createRandomMixChart({ ...SEVEN[0]!, chartPath: 'pack/x/a.bms', playLevel: '7.5' }, 'A'.repeat(32));
+    expect(song).toMatchObject({ md5: 'a'.repeat(32), folder: 'drop1/pack/x', keyMode: 7, level: 7, title: 'A' });
+    expect(createRandomMixChart(DOUBLE, MD5.get('d')!).keyMode).toBe(10);
+  });
+
+  test('keeps the last draw of a folder in place of the previous one, and a renamed one as the player own', () => {
+    const changes: CourseMakerChange[] = [];
+    const courses = maker(changes);
+    courses.stepRandomMixSetting('stageCount', -2);
+    expect(courses.randomMixSettings.stageCount).toBe(3);
+    const first = courses.drawRandomMix('expert', 7, charts, () => 0);
+    expect(first.ok && first.charts.length).toBe(1);
+    expect(first.ok && first.course).toMatchObject({ name: 'RANDOM MIX', kind: 'expert', keyMode: 7 });
+    const nonstop = courses.drawRandomMix('nonstop', 7, charts, () => 0);
+    const second = courses.drawRandomMix('expert', 7, charts, () => 0);
+    if (!first.ok || !second.ok || !nonstop.ok) throw new Error('draw failed');
+    expect(courses.courses).toEqual([second.course, nonstop.course]);
+    expect(courses.randomMixes).toEqual([second.course, nonstop.course]);
+    const renamed = courses.renameCourse(second.course, 'Keep')!;
+    courses.drawRandomMix('expert', 7, charts, () => 0);
+    expect(courses.courses).toHaveLength(3);
+    expect(courses.courses).toContain(renamed);
+    expect(courses.drawRandomMix('expert', 9, charts, () => 0)).toEqual({ ok: false, reason: 'no-candidates' });
+    expect(courses.courses).toHaveLength(3);
+    expect(changes).toContain('settings');
+    expect(changes).toContain('courses');
+    const entry = createDrawnRandomMixEntry(second.course, second.charts);
+    expect(entry).toMatchObject({ id: 'maker:expert#0', playable: true, editable: true });
+    expect(entry.stages.map((stage) => stage.chart)).toEqual(second.charts.map(({ chart }) => chart));
+  });
+
+  test('writes back min and max swapped by a draw, and restores the settings and draws', () => {
+    const courses = maker();
+    courses.stepRandomMixSetting('minLevel', 5);
+    courses.stepRandomMixSetting('maxLevel', 1);
+    courses.drawRandomMix('expert', 7, charts, () => 0);
+    expect(courses.randomMixSettings).toMatchObject({ minLevel: 1, maxLevel: 5 });
+    const restored = maker();
+    restored.restore({
+      courses: courses.courses,
+      randomMixSettings: { ...courses.randomMixSettings, stageCount: 9 },
+      randomMixes: courses.randomMixes,
+    });
+    expect(restored.randomMixSettings.stageCount).toBe(5);
+    expect(restored.randomMixes).toEqual(courses.randomMixes);
   });
 });

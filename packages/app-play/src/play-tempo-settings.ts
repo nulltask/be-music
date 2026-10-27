@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 /**
  * The Debug Menu's play tempo settings: the tempo slider (-50 % .. +50 %), how a tempo change sounds (also for NONSTOP
  * FIT stages) and the keep-pitch stretcher. Remembered in `localStorage` and read once per play, at its start; with the
@@ -5,13 +6,15 @@
  */
 
 /** `localStorage` key of the play tempo settings. */
-export const PLAY_TEMPO_STORAGE_KEY = 'be-music-demo.play-tempo';
+export const PLAY_TEMPO_STORAGE_KEY = 'be-music.play-tempo';
 
 /** The slider's range, in percent off the chart's own tempo. */
 export const TEMPO_PERCENT_MIN = -50;
 export const TEMPO_PERCENT_MAX = 50;
 
 export interface PlayTempoSettings {
+  /** Apply the stored tempo percentage; disabling preserves it for later. */
+  tempoEnabled: boolean;
   /** The play tempo in percent off the chart's own: 0 plays it as written, -20 at 80 %. */
   tempoPercent: number;
   /**
@@ -19,20 +22,21 @@ export interface PlayTempoSettings {
    * the sound faster or slower so the pitch moves too; `'keep-pitch'` stretches the sound and keeps its pitch.
    */
   tempoPitchMode: 'pitch' | 'keep-pitch';
-  /** The time stretcher keep pitch uses: Signalsmith Stretch (the default) or WSOLA. */
+  /** The time stretcher keep pitch uses: WSOLA (the default) or Signalsmith Stretch. */
   tempoStretchAlgorithm: 'signalsmith' | 'wsola';
 }
 
 export const DEFAULT_PLAY_TEMPO_SETTINGS: Readonly<PlayTempoSettings> = {
+  tempoEnabled: false,
   tempoPercent: 0,
   tempoPitchMode: 'pitch',
-  tempoStretchAlgorithm: 'signalsmith',
+  tempoStretchAlgorithm: 'wsola',
 };
 
 /** `value` as a whole percent within the slider's range; 0 when it is not a finite number. */
 export function clampTempoPercent(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
-  return Math.round(Math.min(TEMPO_PERCENT_MAX, Math.max(TEMPO_PERCENT_MIN, value)));
+  return Math.round(clamp(value, TEMPO_PERCENT_MIN, TEMPO_PERCENT_MAX));
 }
 
 /** The play tempo multiplier (`tempo` / `speed`) of a slider percent: -20 → 0.8. */
@@ -51,10 +55,15 @@ export function tempoPercentFromTempo(tempo: number): number {
  * log), at the slider's tempo (not a course stage the course turned the tempo off for).
  */
 export function allowsLiveTempo(
-  settings: Pick<PlayTempoSettings, 'tempoPercent' | 'tempoPitchMode'>,
+  settings: Pick<PlayTempoSettings, 'tempoEnabled' | 'tempoPercent' | 'tempoPitchMode'>,
   play: { replay: boolean; tempo: number },
 ): boolean {
-  return settings.tempoPitchMode === 'pitch' && !play.replay && play.tempo === tempoFromPercent(settings.tempoPercent);
+  return (
+    settings.tempoEnabled &&
+    settings.tempoPitchMode === 'pitch' &&
+    !play.replay &&
+    play.tempo === tempoFromPercent(settings.tempoPercent)
+  );
 }
 
 /** The tempo for a status line (`tempo -20%`, `tempo +5%`), or `undefined` at the chart's own tempo. */
@@ -86,9 +95,10 @@ export function parseStoredPlayTempoSettings(raw: string | null | undefined): Pl
     // Unreadable: the defaults.
   }
   return {
+    tempoEnabled: stored.tempoEnabled === true,
     tempoPercent: clampTempoPercent(stored.tempoPercent),
     tempoPitchMode: stored.tempoPitchMode === 'keep-pitch' ? 'keep-pitch' : 'pitch',
-    tempoStretchAlgorithm: stored.tempoStretchAlgorithm === 'wsola' ? 'wsola' : 'signalsmith',
+    tempoStretchAlgorithm: stored.tempoStretchAlgorithm === 'signalsmith' ? 'signalsmith' : 'wsola',
   };
 }
 
@@ -112,6 +122,7 @@ export function storePlayTempoSettings(
     storage?.setItem(
       PLAY_TEMPO_STORAGE_KEY,
       JSON.stringify({
+        tempoEnabled: settings.tempoEnabled,
         tempoPercent: clampTempoPercent(settings.tempoPercent),
         tempoPitchMode: settings.tempoPitchMode,
         tempoStretchAlgorithm: settings.tempoStretchAlgorithm,

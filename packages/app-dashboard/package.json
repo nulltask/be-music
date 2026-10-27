@@ -1,6 +1,6 @@
 {
   "name": "@be-music/app-dashboard",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Web dashboard for accessing be-music services and managing account access",
   "type": "module",
@@ -13,9 +13,9 @@
     "@be-music/service-web-theme": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261015.1",
-    "cf": "1.0.0-beta.17",
+    "@cloudflare/workers-types": "^5.20261022.1",
+    "cf": "1.0.0-beta.20",
     "vite-plus": "catalog:",
-    "wrangler": "^4.151.0"
+    "wrangler": "^4.151.3"
   }
 }

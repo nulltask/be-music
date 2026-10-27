@@ -4,11 +4,8 @@
 declare const __BE_MUSIC_BUILD__: string;
 
 /**
- * Virtual module produced by the `be-music:acknowledgements` Vite plugin (see `vite.config.ts`). Walks the production
- * dependency tree at build start and exposes one entry per third-party package shipped in the bundle.
- *
- * The demo imports this once and renders it inside the Acknowledgements modal — no runtime fetch, no manual
- * maintenance.
+ * Virtual module of the `be-music:acknowledgements` Vite plugin (`scripts/acknowledgements.ts`): loads the Help's Open
+ * source list, one entry per third-party package the build bundled, from `acknowledgements.json`.
  */
 declare module 'virtual:acknowledgements' {
   export interface Acknowledgement {
@@ -20,8 +17,7 @@ declare module 'virtual:acknowledgements' {
     repository?: string;
     licenseText?: string;
   }
-  const acknowledgements: ReadonlyArray<Acknowledgement>;
-  export default acknowledgements;
+  export default function loadAcknowledgements(): Promise<Acknowledgement[]>;
 }
 
 declare const __BE_MUSIC_BUILD_TIME__: string;

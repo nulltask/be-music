@@ -28,6 +28,8 @@ type Mutable<T> = { -readonly [K in keyof T]: T[K] };
  * each frame, and the integer / string / float properties that are either a ref id or a Lua function.
  */
 export class BeatorajaSkinLuaContext {
+  private readonly resolveRefValue: (ref: number) => number;
+  private readonly customTimerStarts = new Map<number, number | undefined>();
   private readonly resolveTextContent: (refOp: number) => string | undefined;
   private readonly resolveNumberValue: (refOp: number) => number | undefined;
   private readonly resolveGraphValue: (type: number) => number | undefined;
@@ -35,6 +37,7 @@ export class BeatorajaSkinLuaContext {
   private readonly resolveGaugePercent: () => number | undefined;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
+    this.resolveRefValue = options.resolveRefValue ?? (() => 0);
     this.resolveTextContent = options.resolveTextContent ?? (() => undefined);
     this.resolveNumberValue = options.resolveNumberValue ?? (() => undefined);
     this.resolveGraphValue = options.resolveGraphValue ?? (() => undefined);
@@ -71,10 +74,25 @@ export class BeatorajaSkinLuaContext {
       text: (id) => this.resolveTextContent(id),
       offset: (id) => frame().resolveOffset?.(id),
       timer: (id) => {
-        const start = id === 0 ? 0 : frame().getTimerStart(id);
+        const start = id === 0 ? 0 : this.getTimerStart(id);
         return start === undefined ? BEATORAJA_LUA_TIMER_OFF_VALUE : start * 1000;
       },
       time: () => frame().nowMs * 1000,
+      eventIndex: (id) => this.resolveRefValue(id),
+      setTimer: (id, value) => {
+        // Only skin animation timers are writable; engine and scene-stage timers remain protected.
+        if (
+          !Number.isInteger(id) ||
+          id < 10000 ||
+          id > 19999 ||
+          !Number.isFinite(value) ||
+          value < BEATORAJA_LUA_TIMER_OFF_VALUE ||
+          value > -BEATORAJA_LUA_TIMER_OFF_VALUE
+        )
+          return false;
+        this.customTimerStarts.set(id, value === BEATORAJA_LUA_TIMER_OFF_VALUE ? undefined : Math.trunc(value) / 1000);
+        return true;
+      },
       rate: () => this.resolveNumberValue(BEATORAJA_NUM.SCORE_RATE),
       exscore: () => this.resolveNumberValue(BEATORAJA_NUM.POINT),
       judge: (judge) => {
@@ -91,6 +109,10 @@ export class BeatorajaSkinLuaContext {
       gaugeType: () => frame().resolveGaugeState?.()?.mode,
     };
   }
+
+  /** The same timer overlay is read by Lua and numeric destination timers, including same-frame writes. */
+  readonly getTimerStart = (id: number): number | undefined =>
+    this.customTimerStarts.has(id) ? this.customTimerStarts.get(id) : this.luaFrame?.getTimerStart(id);
 
   resolveIntegerProperty(property: BeatorajaIntegerPropertyRef, luaContext: BeatorajaLuaRuntimeContext): number {
     if (typeof property === 'number') return this.resolveNumberValue(property) ?? 0;

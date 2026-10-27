@@ -148,3 +148,11 @@ describe('json', () => {
     expect(parseBmsonSubartist('artist:')).toEqual({ role: 'artist', name: '' });
   });
 });
+
+test('bmson resource keys can exceed two characters without changing BMS token normalization', () => {
+  expect(normalizeObjectKey('100', 62, true)).toBe('100');
+  expect(normalizeObjectKey(' aZ1 ', 62, true)).toBe('aZ1');
+  expect(normalizeObjectKey(' abc ', 36, true)).toBe('ABC');
+  expect(normalizeObjectKey('100', 62)).toBe('10');
+  expect(normalizeObjectKey('a', 62, true)).toBe('0a');
+});

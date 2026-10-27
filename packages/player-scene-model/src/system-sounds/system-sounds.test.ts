@@ -16,6 +16,7 @@ const bytes = (value: number): Uint8Array => new Uint8Array([value]);
 
 describe('LR2_SOUND_SET_SLOTS', () => {
   test('maps each LR2 sound set command to a slot', () => {
+    expect(LR2_SOUND_SET_SLOTS.STOP).toBe('playStop');
     expect(LR2_SOUND_SET_SLOTS.SCRATCH).toBe('cursor');
     expect(LR2_SOUND_SET_SLOTS.PANEL_OPEN).toBe('optionOpen');
     expect(LR2_SOUND_SET_SLOTS.COURSEFAIL).toBe('courseFail');
@@ -26,11 +27,12 @@ describe('LR2_SOUND_SET_SLOTS', () => {
 describe('systemSoundSetFromBeatoraja', () => {
   test('takes the cues and the select BGM by path, the jingles by bytes', () => {
     const set = systemSoundSetFromBeatoraja({
-      paths: { cursor: 'sound/cursor.wav', cancel: 'sound/cancel.wav', decide: '' },
+      paths: { playStop: 'sound/playstop.wav', cursor: 'sound/cursor.wav', cancel: 'sound/cancel.wav', decide: '' },
       selectBGMPath: 'BGM/select.wav',
       bgm: { clear: bytes(1), courseFail: bytes(2) },
     });
     expect(set).toEqual({
+      playStop: { path: 'sound/playstop.wav' },
       cursor: { path: 'sound/cursor.wav' },
       cancel: { path: 'sound/cancel.wav' },
       selectBGM: { path: 'BGM/select.wav' },
@@ -54,6 +56,20 @@ describe('result jingles', () => {
   test("plays a course run's jingles, falling back to the clear and fail ones", () => {
     expect(resolveResultJingles([beatoraja], true)).toEqual({ clear: beatoraja.courseClear });
     expect(resolveResultJingles([lr2], true)).toEqual(lr2);
+  });
+
+  test('closes a result with its close sound, and a course result with the course one, falling back to it', () => {
+    const closing: SystemSoundSet = { clear: { bytes: bytes(1) }, resultClose: { bytes: bytes(4) } };
+    expect(resolveResultJingles([closing], false).close).toBe(closing.resultClose);
+    expect(resolveResultJingles([closing], true).close).toBe(closing.resultClose);
+    const course: SystemSoundSet = { ...closing, courseClose: { bytes: bytes(5) } };
+    expect(resolveResultJingles([course], true).close).toBe(course.courseClose);
+    expect(resolveResultJingles([course], false).close).toBe(course.resultClose);
+    expect(resolveResultJingles([lr2], true).close).toBeUndefined();
+    expect(systemSoundSetFromBeatoraja({ bgm: { resultClose: bytes(6), courseClose: bytes(7) } })).toEqual({
+      resultClose: { bytes: bytes(6) },
+      courseClose: { bytes: bytes(7) },
+    });
   });
 
   test('picks the clear or fail jingle by the verdict, else the generic one', () => {

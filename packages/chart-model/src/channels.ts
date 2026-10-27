@@ -1,3 +1,4 @@
+import { normalizeASCIIBase36Code } from '@be-music/shared-utils/core';
 import { normalizeChannel, normalizeObjectKey } from '@be-music/chart-source';
 
 /**
@@ -213,23 +214,12 @@ function tryPackChannel(channel: string): number {
   if (isNormalizedBase36Code(sourceHigh) && isNormalizedBase36Code(sourceLow)) {
     return (sourceHigh << 8) | sourceLow;
   }
-  const high = normalizeASCIIBase36CodeFast(sourceHigh);
-  const low = normalizeASCIIBase36CodeFast(sourceLow);
+  const high = normalizeASCIIBase36Code(sourceHigh);
+  const low = normalizeASCIIBase36Code(sourceLow);
   if (high < 0 || low < 0) {
     return -1;
   }
   return (high << 8) | low;
-}
-
-function normalizeASCIIBase36CodeFast(code: number): number {
-  if (code >= 0x30 && code <= 0x39) {
-    return code;
-  }
-  const uppercase = code & 0xdf;
-  if (uppercase >= 0x41 && uppercase <= 0x5a) {
-    return uppercase;
-  }
-  return -1;
 }
 
 function isTempoNormalizedChannel(normalized: string): boolean {

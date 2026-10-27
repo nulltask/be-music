@@ -1,0 +1,36 @@
+{
+  "name": "@be-music/player-ui-react",
+  "version": "0.2.0",
+  "description": "Typed React wrappers for Be-Music Web Components",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vp pack",
+    "clean": "rimraf dist",
+    "bench": "node --conditions=source scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/player-ui": "workspace:*",
+    "@lit/react": "^1.0.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "react": "^19.3.1"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  }
+}

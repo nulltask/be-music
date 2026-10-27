@@ -39,7 +39,7 @@ export interface WebAudioSessionSlicePlayback {
 }
 
 /**
- * Construction-time inputs for {@link createWebAudioSession}. Decoupled from `BeMusicJSON` resolution so the demo's
+ * Construction-time inputs for {@link createWebAudioSession}. Decoupled from `BeMusicJSON` resolution so the player's
  * existing prepare path can decode every `#WAVxx` to an `AudioBuffer` once and reuse the same buffer cache across
  * pause / restart / replay cycles without re-decoding.
  */
@@ -90,9 +90,15 @@ export interface WebAudioSessionContext {
   /**
    * {@link playbackRate} is the play tempo (`pitch` mode), so a live tempo change ({@link AudioSession.setTempo}) sets it:
    * samples started afterwards play at the new tempo, and the ones still playing glide to it. Without it (keep pitch,
-   * where the samples were stretched to the tempo they load at) the session ignores tempo changes.
+   * where the samples were stretched to the tempo they load at) the samples' rate ignores tempo changes.
    */
   playbackRateFollowsTempo?: boolean;
+  /**
+   * The play tempo the chart starts at (chart seconds per second): how far into a sample a sound started partway begins
+   * (`triggerEventAt`), and when a NONSTOP stage's fades fall on the audio clock. Defaults to {@link playbackRate} when
+   * it follows the tempo, else 1.
+   */
+  tempo?: number;
 }
 
 /**
@@ -144,6 +150,24 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     context;
   const resolveChartStartContextTime = context.getChartStartContextTime ?? (() => 0);
   let basePlaybackRate = context.playbackRate !== undefined && context.playbackRate > 0 ? context.playbackRate : 1;
+  /** The play tempo in force: chart seconds per second of the audio clock. */
+  let tempo =
+    context.tempo !== undefined && Number.isFinite(context.tempo) && context.tempo > 0
+      ? context.tempo
+      : context.playbackRateFollowsTempo === true
+        ? basePlaybackRate
+        : 1;
+  /** Where the chart was on the audio clock at the last start, seek or tempo change: chart second `chart` at `context`. */
+  let anchor: { context: number; chart: number } | undefined;
+  /** The chart second the audio clock reads now, from the last anchor at the tempo in force (paused: the context holds). */
+  const chartSecondsNow = (): number | undefined =>
+    anchor === undefined ? undefined : anchor.chart + (audioContext.currentTime - anchor.context) * tempo;
+  /** Re-anchors the chart at `chartSeconds` now and moves a NONSTOP chart's fades to fall where the chart now runs. */
+  const anchorChartAt = (chartSeconds: number): void => {
+    const now = audioContext.currentTime;
+    anchor = { context: now, chart: chartSeconds };
+    stageMixer?.retime?.(chartSeconds, (seconds) => now + (seconds - chartSeconds) / tempo);
+  };
   const sampleIdBase = resolveBMSBase(chart);
   /** Active BufferSource per `#WAVxx` slot. Used to honor bmson `c = true` (skip retrigger of a still-playing sample)
    *  and to wipe the slot once the source ends naturally. */
@@ -161,8 +185,28 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   let currentBGMDynamicGain = 1;
   let currentKeyDynamicGain = 1;
 
+  /**
+   * How far into its sample a sound that started `elapsedSeconds` of chart time ago is: the time it has played, at the
+   * rate it plays (the session's rate times its NONSTOP stage's), over the tempo the chart runs at. With pitch the rate
+   * is the tempo, so a chart second is a stage-rate second of the sample; with kept pitch the samples were stretched to
+   * the tempo and play at rate 1, so it is `1 / tempo` of one.
+   */
+  const elapsedInBuffer = (sampleKey: string, elapsedSeconds: number): number =>
+    (elapsedSeconds * basePlaybackRate * stageRateOf(sampleKey)) / tempo;
+
+  /** How fast a sample plays for its NONSTOP stage (FIT); 1 outside a stitched chart. */
+  const stageRateOf = (sampleKey: string): number => {
+    const stage = stageMixer?.stageOf(sampleKey);
+    return stage === undefined ? 1 : stageMixer!.rate(stage);
+  };
+
+  const sliceRateOf = (sampleKey: string): number => {
+    const stage = stageMixer?.stageOf(sampleKey);
+    return stage === undefined ? 1 : (stageMixer?.sliceRate?.(stage) ?? 1);
+  };
+
   const resolveSamplePath = (event: BeMusicEvent): { sampleKey: string; path: string } | undefined => {
-    const sampleKey = normalizeObjectKey(event.value, sampleIdBase);
+    const sampleKey = normalizeObjectKey(event.value, sampleIdBase, chart.sourceFormat === 'bmson');
     const path = chart.resources.wav[sampleKey];
     if (typeof path !== 'string') return undefined;
     return { sampleKey, path };
@@ -184,9 +228,8 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const node = audioContext.createBufferSource();
     node.buffer = buffer;
     const stage = stageMixer?.stageOf(sampleKey);
-    let stageRate = 1;
+    const stageRate = stageRateOf(sampleKey);
     if (stage !== undefined) {
-      stageRate = stageMixer!.rate(stage);
       // A stage's background voices go through its fade; the player's keysounds stay on the key bus.
       if (bus === audioBus.bgmMixer) bus = stageMixer!.bgmInput(stage) ?? bus;
     }
@@ -249,11 +292,12 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     }
   };
 
-  const playSampleEvent = (event: BeMusicEvent, audioContextStartSeconds?: number): void => {
+  const playSampleEvent = (event: BeMusicEvent, audioContextStartSeconds?: number, elapsedSeconds = 0): void => {
     if (disposed) return;
     const resolved = resolveSamplePath(event);
     if (!resolved) return;
     const { sampleKey, path } = resolved;
+    if (elapsedSeconds > 0 && !isStillRinging(event, sampleKey, path, elapsedSeconds)) return;
 
     // bmson `c = true` — a previous instance of this slot is still playing, so the chart asked for a sustained
     // continuation rather than a fresh attack. Skip the retrigger and let the existing source ride through.
@@ -272,8 +316,14 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     };
 
     const slice = bmsonSlicePlayback?.get(event);
-    const offsetSeconds = clampSampleOffset(slice?.offsetSeconds, buffer.duration);
-    const durationSeconds = clampSampleDuration(slice?.durationSeconds, buffer.duration, offsetSeconds);
+    const elapsed = elapsedSeconds > 0 ? elapsedInBuffer(sampleKey, elapsedSeconds) : 0;
+    const sliceRate = sliceRateOf(sampleKey);
+    const offsetSeconds = clampSampleOffset((slice?.offsetSeconds ?? 0) / sliceRate + elapsed, buffer.duration);
+    const durationSeconds = clampSampleDuration(
+      slice?.durationSeconds !== undefined ? slice.durationSeconds / sliceRate - elapsed : undefined,
+      buffer.duration,
+      offsetSeconds,
+    );
     // Scheduled BGM cues clamp to "now" so a slightly-late polling tick still fires immediately rather than
     // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
     const startAt =
@@ -289,6 +339,20 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     activeSources.add(built);
     activeBySlot.set(sampleKey, built);
     if (isPlayerLane) activeByChannel.set(channel, built);
+  };
+
+  /** Whether `event`'s sound, started `elapsedSeconds` ago, still has something left to play. */
+  const isStillRinging = (event: BeMusicEvent, sampleKey: string, path: string, elapsedSeconds: number): boolean => {
+    const buffer = decodedSamples.get(decodedSampleKey(path));
+    if (!buffer) return false;
+    const slice = bmsonSlicePlayback?.get(event);
+    const sliceRate = sliceRateOf(sampleKey);
+    const start = (slice?.offsetSeconds ?? 0) / sliceRate;
+    const end = Math.min(
+      slice?.durationSeconds !== undefined ? start + slice.durationSeconds / sliceRate : buffer.duration,
+      buffer.duration,
+    );
+    return start + elapsedInBuffer(sampleKey, elapsedSeconds) < end;
   };
 
   const applyDynamicVolumeEvent = (event: BeMusicEvent): void => {
@@ -316,6 +380,9 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // the active-source tracking (which would lose `stopChannel` reach to in-flight LN samples).
       if (started) return;
       started = true;
+      // Chart second 0 is now (after the backend's own start delay): a NONSTOP chart's fades fall from here.
+      const delaySeconds = (context.chartStartDelayMs ?? 0) / 1000;
+      anchorChartAt(delaySeconds > 0 ? -delaySeconds * tempo : 0);
     },
     pause: (): void => {
       if (paused) return;
@@ -372,6 +439,13 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       }
       playSampleEvent(event);
     },
+    triggerEventAt: (event: BeMusicEvent, offsetSeconds: number): void => {
+      if (isBmsBGMVolumeChangeChannel(event.channel) || isBMSKeyVolumeChangeChannel(event.channel)) {
+        applyDynamicVolumeEvent(event);
+        return;
+      }
+      playSampleEvent(event, undefined, offsetSeconds);
+    },
     scheduleEvent: (event: BeMusicEvent, audioContextStartSeconds: number): void => {
       // Scheduled cues are exclusively BGM-style triggers (player input is by definition immediate), so we don't
       // expect dynamic volume events to arrive here — but route them through the same handler if they ever do so a
@@ -382,13 +456,30 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       }
       playSampleEvent(event, audioContextStartSeconds);
     },
-    setTempo: (tempo: number): void => {
-      if (context.playbackRateFollowsTempo !== true || disposed || !(Number.isFinite(tempo) && tempo > 0)) return;
-      basePlaybackRate = tempo;
+    setTempo: (next: number): void => {
+      if (disposed || !(Number.isFinite(next) && next > 0)) return;
+      // The chart runs on at the new tempo from where it is now: a NONSTOP chart's fades move with it.
+      const chartNow = chartSecondsNow();
+      tempo = next;
+      if (chartNow !== undefined) anchorChartAt(chartNow);
+      if (context.playbackRateFollowsTempo !== true) return;
+      basePlaybackRate = next;
       const now = audioContext.currentTime;
       for (const handle of activeSources) {
-        glidePlaybackRate(handle.node.playbackRate, tempo * handle.stageRate, now);
+        glidePlaybackRate(handle.node.playbackRate, next * handle.stageRate, now);
       }
+    },
+    seek: (seconds: number): void => {
+      if (disposed) return;
+      // What plays belongs to the old position; the engine starts what still rings at `seconds` partway.
+      for (const handle of Array.from(activeSources)) stopSource(handle);
+      activeBySlot.clear();
+      activeByChannel.clear();
+      activeSources.clear();
+      // The engine applies the volume changes before `seconds` again, from the chart's start values.
+      currentBGMDynamicGain = 1;
+      currentKeyDynamicGain = 1;
+      anchorChartAt(seconds);
     },
     stopChannel: (channel: string): void => {
       const handle = activeByChannel.get(normalizeChannel(channel));

@@ -6,6 +6,7 @@
   "include": [
     "src/**/*.ts",
     "e2e/**/*.ts",
+    "scripts/**/*.ts",
     "../skin-lr2/src/**/*.ts",
     "../player-browser/src/**/*.ts",
     "../skin-beatoraja/src/**/*.ts",

@@ -173,12 +173,14 @@ describe('BeatorajaSelectView', () => {
     draw();
     press(BEATORAJA_BUTTON.PLAY);
     press(BEATORAJA_BUTTON.AUTOPLAY);
-    press(BEATORAJA_BUTTON.PRACTICE);
+    // PRACTICE starts in the practice mode and PLAY in the regular one.
+    expect(press(BEATORAJA_BUTTON.PRACTICE).playOptions.practice).toBe(true);
     expect(start.mock.calls.map(([, options]) => options)).toEqual([
       { autoPlay: false },
       { autoPlay: true },
       { autoPlay: false },
     ]);
+    expect(press(BEATORAJA_BUTTON.PLAY).playOptions.practice).toBe(false);
     expect(press(BEATORAJA_BUTTON.FAVORITTE_SONG).browse.favorites.music).toEqual(['a']);
     expect(press(BEATORAJA_BUTTON.FAVORITTE_CHART).browse.favorites.charts).toEqual(['a']);
   });
@@ -221,32 +223,60 @@ describe('BeatorajaSelectView', () => {
     expect(internals.scrollPosition).toBe(2);
   });
 
-  it("keeps the LNMODE button's choice in the view, from the chart's own #LNMODE", () => {
+  it("steps the player's LN MODE on the LNMODE button and shows it, not the chart's own #LNMODE", () => {
     const chart = makeChart('a', 'pack');
     chart.chart.bms.lnMode = 2;
     const { draw, internals, session } = setup(makeCollection([chart]));
     session.dispatch({ type: 'activate' });
     draw();
-    expect(internals.skinState.resolveSelectionRefValue(BEATORAJA_BUTTON.LNMODE)).toBe(1);
-    internals.handleButtonAction(BEATORAJA_BUTTON.LNMODE, false);
-    expect(internals.skinState.resolveSelectionRefValue(BEATORAJA_BUTTON.LNMODE)).toBe(2);
-    internals.handleButtonAction(BEATORAJA_BUTTON.LNMODE, true);
-    internals.handleButtonAction(BEATORAJA_BUTTON.LNMODE, true);
     expect(internals.skinState.resolveSelectionRefValue(BEATORAJA_BUTTON.LNMODE)).toBe(0);
+    internals.handleButtonAction(BEATORAJA_BUTTON.LNMODE, false);
+    expect(draw().playOptions.longNoteMode).toBe('CN');
+    expect(internals.skinState.resolveSelectionRefValue(BEATORAJA_BUTTON.LNMODE)).toBe(1);
+    internals.handleButtonAction(BEATORAJA_BUTTON.LNMODE, true);
+    draw();
+    internals.handleButtonAction(BEATORAJA_BUTTON.LNMODE, true);
+    expect(draw().playOptions.longNoteMode).toBe('HCN');
   });
 
-  it("steps the skin's judge timing within ±200 ms and hands the options to the host", () => {
-    const onSkinConfigChange = vi.fn();
-    const { draw, press } = setup(makeCollection([makeChart('a', 'pack')]), {
-      kit: beatorajaSelectKit({ offset: 199, option: { 1: 2 }, file: {} }),
-      view: { onSkinConfigChange },
+  it("lights the focused chart's replay slot ops and replays a slot from its button", () => {
+    const records: SelectRecords = {
+      chart: () => undefined,
+      course: () => undefined,
+      replaySlots: () => [false, true, false, false],
+    };
+    const { draw, context, press, session, start } = setup(makeCollection([makeChart('a', 'pack')]), { records });
+    session.dispatch({ type: 'activate' });
+    draw();
+    expect([196, 1197, 1199, 1202, 1206].every((op) => context().activeOps.has(op))).toBe(true);
+    press(BEATORAJA_BUTTON.REPLAY);
+    expect(start).not.toHaveBeenCalled();
+    press(BEATORAJA_BUTTON.REPLAY2);
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ kind: 'chart' }), {
+      autoPlay: false,
+      replaySlot: 1,
     });
+  });
+
+  it('steps the DP option (54) through OFF, FLIP, BATTLE and BATTLE AS', () => {
+    const { draw, internals } = setup(makeCollection([makeChart('a', 'pack')]));
+    draw();
+    internals.handleButtonAction(54, false);
+    expect(draw().playOptions).toMatchObject({ battleMode: 'OFF', dpFlip: true });
+    internals.handleButtonAction(54, false);
+    expect(draw().playOptions).toMatchObject({ battleMode: 'BATTLE', dpFlip: false });
+    expect(internals.skinState.resolveSelectionRefValue(54)).toBe(2);
+  });
+
+  it('steps the judge timing play option by 1 ms within ±500 ms, Shift stepping back', () => {
+    const { draw, press, session } = setup(makeCollection([makeChart('a', 'pack')]));
     draw();
     press(BEATORAJA_BUTTON.JUDGE_TIMING);
     press(BEATORAJA_BUTTON.JUDGE_TIMING);
-    press(BEATORAJA_BUTTON.JUDGE_TIMING, true);
-    expect(onSkinConfigChange.mock.calls.map(([config]) => (config as BeatorajaSkinConfig).offset)).toEqual([200, 199]);
-    expect(onSkinConfigChange.mock.calls[0]![0]).toMatchObject({ option: { 1: 2 } });
+    expect(press(BEATORAJA_BUTTON.JUDGE_TIMING, true).playOptions.judgeTimingMs).toBe(1);
+    session.dispatch({ type: 'set-play-option', key: 'judgeTimingMs', value: 500 });
+    draw();
+    expect(press(BEATORAJA_BUTTON.JUDGE_TIMING).playOptions.judgeTimingMs).toBe(500);
   });
 
   it("loads the focused chart's own images over the library's files", async () => {

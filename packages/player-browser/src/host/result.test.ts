@@ -8,7 +8,7 @@ import type { AudioService } from '../runtime/audio-service.ts';
 import type { PixiSceneHost } from './scene-host.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
-import { phantomSkin } from '../skins/phantom/index.ts';
+import { synesthesiaSkin } from '../skins/synesthesia/index.ts';
 import { resolveBeatorajaResultTiming } from '../view/beatoraja/result-view.ts';
 import { BUILT_IN_RESULT_TIMING, BuiltInResultView, resolveBuiltInRankLabel } from '../view/built-in/result-view.ts';
 import { resolveLR2ResultTiming } from '../view/lr2/result-view.ts';
@@ -61,7 +61,7 @@ function createFakeHost() {
 describe('createResultScene', () => {
   it('is the built-in result screen', () => {
     const scene = createResultScene(
-      { family: 'built-in', skin: phantomSkin },
+      { family: 'built-in', skin: synesthesiaSkin },
       {
         result: RESULT,
         sounds: {},
@@ -78,11 +78,11 @@ describe('createResultScene', () => {
 describe('BuiltInResultView', () => {
   it("waits LR2's default 1500 ms for input and has no auto advance or fade-out", () => {
     expect(BUILT_IN_RESULT_TIMING).toEqual({ inputDelayMs: 1500, fadeOutMs: 0 });
-    expect(new BuiltInResultView({ family: 'built-in', skin: phantomSkin }).timing).toBe(BUILT_IN_RESULT_TIMING);
+    expect(new BuiltInResultView({ family: 'built-in', skin: synesthesiaSkin }).timing).toBe(BUILT_IN_RESULT_TIMING);
   });
 
   it('presses on with a click on the canvas, and stops listening as it leaves', () => {
-    const view = new BuiltInResultView({ family: 'built-in', skin: phantomSkin });
+    const view = new BuiltInResultView({ family: 'built-in', skin: synesthesiaSkin });
     const fake = createFakeHost();
     const emit = vi.fn();
     view.attach(fake.host, emit);
@@ -97,7 +97,7 @@ describe('BuiltInResultView', () => {
 });
 
 describe('resolveBuiltInRankLabel', () => {
-  it('ranks the EX score as IIDX does, and a chart without notes as AAA', () => {
+  it('ranks the EX score as That-Which-Must-Not-Be-Named does, and a chart without notes as AAA', () => {
     expect(resolveBuiltInRankLabel(20, 10)).toBe('AAA');
     expect(resolveBuiltInRankLabel(0, 10)).toBe('F');
     expect(resolveBuiltInRankLabel(0, 0)).toBe('AAA');
@@ -235,7 +235,7 @@ describe('createResultScene with an LR2 kit', () => {
 
   it('keeps its family and its skin', () => {
     const { scene, kit } = create();
-    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit({ family: 'built-in', skin: synesthesiaSkin })).not.toThrow();
     expect(() => scene.updateKit({ family: 'lr2', skin: lr2ResultSkin() })).not.toThrow();
     expect(() => scene.updateKit(kit)).not.toThrow();
     scene.dispose();
@@ -416,7 +416,7 @@ describe('createResultScene with a beatoraja kit', () => {
 
   it('keeps its family and its skin', () => {
     const { scene } = create();
-    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit({ family: 'built-in', skin: synesthesiaSkin })).not.toThrow();
     expect(() => scene.updateKit(beatorajaResultKit())).not.toThrow();
     scene.dispose();
   });

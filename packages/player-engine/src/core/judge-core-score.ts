@@ -256,7 +256,7 @@ export function markInvisibleJudged(state: JudgeCoreState, note: TimedPlayableNo
 
 /**
  * True when a long note the player never held contributes a SECOND miss for its tail. Charge modes score head and
- * tail separately, so a note missed at the head owes two POORs — except under IIDX, where a broken head cancels the
+ * tail separately, so a note missed at the head owes two POORs — except under That-Which-Must-Not-Be-Named, where a broken head cancels the
  * tail outright (`headBadSkipsTail`).
  */
 export function noteOwesTailMiss(ruleset: RulesetConfig, note: TimedPlayableNote): boolean {
@@ -281,6 +281,7 @@ export function applyResolvedManualJudge(
   judge: TimedManualJudge,
   atSeconds: number,
   emit: JudgeCoreEffectSink,
+  longNote = false,
 ): void {
   if (isJudgingClosed(state)) {
     return;
@@ -303,7 +304,15 @@ export function applyResolvedManualJudge(
         ['deltaMs', Math.round(deltaMs)],
       ],
     });
-    emit({ kind: 'judge-combo', judge: judge.kind, combo: state.combo, channel, signedDeltaMs: judge.signedDeltaMs });
+    emit({
+      kind: 'judge-combo',
+      seconds: atSeconds,
+      judge: judge.kind,
+      combo: state.combo,
+      channel,
+      signedDeltaMs: judge.signedDeltaMs,
+      ...(longNote ? { longNote } : {}),
+    });
     emit({ kind: 'poor-trace', action: 'clear', seconds: atSeconds });
     return;
   }
@@ -319,7 +328,15 @@ export function applyResolvedManualJudge(
         ['deltaMs', Math.round(deltaMs)],
       ],
     });
-    emit({ kind: 'judge-combo', judge: 'BAD', combo: state.combo, channel, signedDeltaMs: judge.signedDeltaMs });
+    emit({
+      kind: 'judge-combo',
+      seconds: atSeconds,
+      judge: 'BAD',
+      combo: state.combo,
+      channel,
+      signedDeltaMs: judge.signedDeltaMs,
+      ...(longNote ? { longNote } : {}),
+    });
     return;
   }
   emit({ kind: 'poor-bga', action: 'trigger', seconds: atSeconds });
@@ -335,7 +352,14 @@ export function applyResolvedManualJudge(
       ['deltaMs', Math.round(deltaMs)],
     ],
   });
-  emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo, channel, signedDeltaMs: judge.signedDeltaMs });
+  emit({
+    kind: 'judge-combo',
+    judge: 'POOR',
+    combo: state.combo,
+    channel,
+    signedDeltaMs: judge.signedDeltaMs,
+    ...(longNote ? { longNote } : {}),
+  });
 }
 
 /** Charges a POOR (gauge + tally) with no other cue — the second judgment a missed charge note owes. */

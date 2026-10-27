@@ -1,12 +1,12 @@
+import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
-import { resolveIIDXRankLabel } from '../ruleset/score.ts';
+import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { BeMusicReplay, ReplayInputEvent, ReplayRulesetResult } from './format.ts';
 import {
   classifyRulesetJudge,
   ignoresLateLongNoteHeadBad,
   noteLateReachUs,
   addHCNPassing,
-  isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
   longNoteOwesTailMiss,
   pgreatWindowReachUs,
@@ -16,6 +16,7 @@ import {
   resolveLNEarlyRelease,
   RULESET_JUDGE_NONE,
   RulesetGauge,
+  resolveGaugeEndOnFailure,
   selectJudgeWindowSet,
   type GaugeJudgeIndex,
   type JudgeSelectionCandidate,
@@ -37,7 +38,7 @@ export {
   resolveRulesetConfig,
   resolveLR2DefaultTotal,
   resolveBeatorajaDefaultTotal,
-  resolveIIDXGaugeUnit,
+  resolve____GaugeUnit,
   resolveLR2HardDamageMultiplier,
   resolveBeatorajaHardRecoverMultiplier,
 } from './rulesets.ts';
@@ -49,22 +50,29 @@ export interface SimulateReplayOptions extends ResolveRulesetOptions {
 }
 
 /** The rulesets `simulateReplay` scores under, in display order. */
-export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', 'iidx'] = ['lr2', 'beatoraja', 'iidx'];
+export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____'] = ['lr2', 'beatoraja', '____'];
 
 /**
  * Re-derives one ruleset's judgments / EX-SCORE / combo / gauge from a replay's canonical data (resolved chart +
  * raw input stream + play settings). Pure function — never mutates the replay.
  *
  * The LR2 simulation follows lr2oraja / OpenLR2 semantics, the beatoraja simulation the current beatoraja master,
- * and the IIDX simulation the community-measured behavior of recent arcade versions (with documented stand-ins
+ * and the That-Which-Must-Not-Be-Named simulation the community-measured behavior of recent arcade versions (with documented stand-ins
  * where no measurement exists — see `rulesets.ts`).
  */
 export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOptions): ReplayRulesetResult {
   const config = resolveRulesetConfig(replay, options.ruleset, options);
-  return new ReplaySimulation(replay, config, options.endOnFailure ?? replay.play.endOnFailure === true).run();
+  const endOnFailure =
+    options.endOnFailure ??
+    resolveGaugeEndOnFailure(
+      options.ruleset === 'beatoraja' ? replay.play.gaugeAutoShift : undefined,
+      options.ruleset,
+      replay.play.endOnFailure === true,
+    );
+  return new ReplaySimulation(replay, config, endOnFailure).run();
 }
 
-/** Runs {@link simulateReplay} for each requested ruleset (default: LR2, beatoraja, IIDX). */
+/** Runs {@link simulateReplay} for each requested ruleset (default: LR2, beatoraja, That-Which-Must-Not-Be-Named). */
 export function simulateReplayRulesets(
   replay: BeMusicReplay,
   rulesets: readonly RulesetId[] = REPLAY_SIMULATOR_RULESETS,
@@ -137,6 +145,8 @@ interface SimMine {
   damage: number;
   /** Settled: detonated, or past the point where it no longer can (see {@link ReplaySimulation.mineSettleUs}). */
   applied: boolean;
+  /** Its PGREAT reach, worked out on first use (the windows at a fixed time never change during a run). */
+  reachUs?: readonly [number, number];
 }
 
 interface ActiveHold {
@@ -144,7 +154,7 @@ interface ActiveHold {
   /** Deferred LN head judge (style 1). */
   headJudge?: GaugeJudgeIndex;
   headDmUs?: number;
-  /** IIDX charge heads that BAD/POOR'd skip the tail — such notes never become holds. */
+  /** That-Which-Must-Not-Be-Named charge heads that BAD/POOR'd skip the tail — such notes never become holds. */
   /** Held-past-end deadline for charge tails. */
   tailMissDeadlineUs: number;
   /**
@@ -185,10 +195,13 @@ interface SelectionCandidate {
 
 class ReplaySimulation {
   private readonly lanes = new Map<string, SimLane>();
+  /** {@link lanes} in insertion order, for the per-advance sweeps (an array walk instead of a map iterator). */
+  private readonly laneList: SimLane[] = [];
   private readonly counts = [0, 0, 0, 0, 0, 0];
   private readonly gauge: RulesetGauge;
   private combo = 0;
   private maxCombo = 0;
+  private minePoor = 0;
   /** The course-wide combo and max combo, for a course stage (carried in from the previous stage). */
   private readonly course: { combo: number; maxCombo: number } | undefined;
   /** Judging stops the moment the survival gauge empties (`play.endOnFailure`). */
@@ -208,7 +221,7 @@ class ReplaySimulation {
     this.endOnFailure = endOnFailure;
     this.course = replay.play.course === undefined ? undefined : courseStageCarryCombo(replay.play.course);
     this.scratchChannels = resolveScratchChannels(replay.chart.laneMode);
-    this.gauge = new RulesetGauge(config.gauge);
+    this.gauge = new RulesetGauge(config.gauge, config.gaugeFallback, config.gaugeBank);
     this.buildLanes();
   }
 
@@ -256,13 +269,24 @@ class ReplaySimulation {
       exScore: this.exScore,
       noteCount: this.config.noteCount,
       maxCombo: this.maxCombo,
-      djLevel: resolveIIDXRankLabel(this.exScore, this.config.noteCount),
+      djLevel: resolve____RankLabel(this.exScore, this.config.noteCount),
       gauge: {
-        type: this.config.gauge.id,
-        final: this.gauge.value,
+        type: this.gauge.spec.id,
+        ...(this.gauge.values ? { values: this.gauge.values } : {}),
+        final:
+          this.gauge.spec.max === 100
+            ? this.gauge.value
+            : this.gauge.spec.max > 0
+              ? (this.gauge.value / this.gauge.spec.max) * 100
+              : 0,
         cleared: this.gauge.cleared(),
       },
     };
+    if (this.minePoor > 0) result.minePoor = this.minePoor;
+    if (this.config.comboBreaksOnEmptyPoor && this.counts[JUDGE_EMPTY_POOR]! > 0) {
+      result.fullCombo = this.config.noteCount > 0 && this.combo === this.config.noteCount;
+    }
+
     if (this.gauge.failedMidPlay) {
       result.gauge.failedMidPlay = true;
     }
@@ -279,7 +303,7 @@ class ReplaySimulation {
   }
 
   private hasOutstandingNotes(): boolean {
-    for (const lane of this.lanes.values()) {
+    for (const lane of this.laneList) {
       if (lane.notes.some((note) => !note.judged)) {
         return true;
       }
@@ -289,7 +313,7 @@ class ReplaySimulation {
 
   private buildLanes(): void {
     const autoPlay = this.replay.play.mode === 'auto';
-    const autoScratch = this.replay.play.autoScratch;
+    const autoScratch = resolveAutoScratchSides(this.replay.play);
     for (const note of this.replay.chart.notes) {
       if (note.type === 'invisible' || note.type === 'freezone') {
         continue;
@@ -318,13 +342,17 @@ class ReplaySimulation {
       }
       lane.notes.push(simNote);
     }
-    for (const lane of this.lanes.values()) {
+    for (const lane of this.laneList) {
       lane.notes.sort((left, right) => left.timeUs - right.timeUs);
       lane.mines.sort((left, right) => left.timeUs - right.timeUs);
     }
   }
 
-  private laneFor(channel: string, autoPlay: boolean, autoScratch: boolean): SimLane {
+  private laneFor(
+    channel: string,
+    autoPlay: boolean,
+    autoScratch: ReturnType<typeof resolveAutoScratchSides>,
+  ): SimLane {
     let lane = this.lanes.get(channel);
     if (!lane) {
       const scratch = this.scratchChannels.has(channel);
@@ -337,10 +365,12 @@ class ReplaySimulation {
         mineCursor: 0,
         held: false,
         downTokens: new Set(),
-        auto: autoPlay || (autoScratch && scratch),
+        auto:
+          autoPlay || (scratch && (channel.startsWith('2') ? autoScratch.autoScratch2P : autoScratch.autoScratch1P)),
         autoCursor: 0,
       };
       this.lanes.set(channel, lane);
+      this.laneList.push(lane);
     }
     return lane;
   }
@@ -376,7 +406,7 @@ class ReplaySimulation {
       gain?: boolean;
     }
     const events: TimedEvent[] = [];
-    for (const lane of this.lanes.values()) {
+    for (const lane of this.laneList) {
       if (lane.auto) {
         for (let index = lane.autoCursor; index < lane.notes.length; index += 1) {
           const note = lane.notes[index]!;
@@ -420,20 +450,23 @@ class ReplaySimulation {
         if (mine.timeUs - earlyUs >= untilUs) break;
         if (mine.applied) continue;
         // Each point is visited once: in the advance whose span [lastAdvanceUs, untilUs) holds it.
-        const due = (timeUs: number): boolean => timeUs >= this.lastAdvanceUs && timeUs < untilUs;
+        const fromUs = this.lastAdvanceUs;
         const enterUs = mine.timeUs - earlyUs;
-        if (this.config.mineTrigger === 'press-or-hold' && due(enterUs)) {
-          // LR2: a key already down as the mine enters the PGREAT window detonates it there.
+        if (this.config.mineTrigger === 'press-or-hold' && enterUs >= fromUs && enterUs < untilUs) {
+          // The provisional That-Which-Must-Not-Be-Named model also detonates on held PGREAT entry.
           events.push({ timeUs: enterUs, kind: 'mine-enter', lane, mine });
         }
-        if (due(mine.timeUs)) events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
+        if (mine.timeUs >= fromUs && mine.timeUs < untilUs) {
+          events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
+        }
         const settleUs = this.config.mineTrigger === 'press-or-hold' ? mine.timeUs + lateUs : mine.timeUs;
-        if (due(settleUs)) events.push({ timeUs: settleUs, kind: 'mine-settle', lane, mine });
+        if (settleUs >= fromUs && settleUs < untilUs)
+          events.push({ timeUs: settleUs, kind: 'mine-settle', lane, mine });
       }
     }
     // Hell Charge ticks, including those of a head missed in this span: no input falls inside it, so the miss is
     // certain and its ticks run from the deadline on.
-    for (const lane of this.lanes.values()) {
+    for (const lane of this.laneList) {
       if (lane.auto) continue;
       for (let index = lane.sweepCursor; index < lane.notes.length; index += 1) {
         const note = lane.notes[index]!;
@@ -460,12 +493,13 @@ class ReplaySimulation {
 
     // One instant settles tails first, then auto notes, then misses, then mines, each in channel order — the order the
     // engine's judge core settles them in.
-    events.sort(
-      (left, right) =>
-        left.timeUs - right.timeUs ||
-        TIMED_EVENT_ORDER[left.kind] - TIMED_EVENT_ORDER[right.kind] ||
-        (left.lane.channel < right.lane.channel ? -1 : left.lane.channel > right.lane.channel ? 1 : 0),
-    );
+    if (events.length > 1)
+      events.sort(
+        (left, right) =>
+          left.timeUs - right.timeUs ||
+          TIMED_EVENT_ORDER[left.kind] - TIMED_EVENT_ORDER[right.kind] ||
+          (left.lane.channel < right.lane.channel ? -1 : left.lane.channel > right.lane.channel ? 1 : 0),
+      );
 
     for (const event of events) {
       if (event.kind === 'auto') {
@@ -484,7 +518,7 @@ class ReplaySimulation {
         note.judged = true;
         this.applyJudge(JUDGE_MISS_POOR, undefined);
         if (longNoteOwesTailMiss(this.config, note.isLong ? note.longStyle : undefined)) {
-          // beatoraja: a missed CN/HCN head also POORs the tail. IIDX (headBadSkipsTail) skips it.
+          // beatoraja: a missed CN/HCN head also POORs the tail. That-Which-Must-Not-Be-Named (headBadSkipsTail) skips it.
           this.applyJudge(JUDGE_MISS_POOR, undefined);
         }
       } else if (event.kind === 'mine' || event.kind === 'mine-enter') {
@@ -511,7 +545,7 @@ class ReplaySimulation {
         hold.note.judged = true;
         this.applyJudge(hold.headJudge ?? JUDGE_BAD, hold.headDmUs);
       } else {
-        // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / IIDX).
+        // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / That-Which-Must-Not-Be-Named).
         const lane = event.lane;
         const hold = lane.hold;
         if (!hold || hold.note !== event.note) continue;
@@ -523,7 +557,7 @@ class ReplaySimulation {
     }
 
     // Advance sweep cursors past settled notes.
-    for (const lane of this.lanes.values()) {
+    for (const lane of this.laneList) {
       while (lane.sweepCursor < lane.notes.length) {
         const note = lane.notes[lane.sweepCursor]!;
         if (note.judged || (note.missDeadlineUs < untilUs && !note.holding)) {
@@ -544,7 +578,7 @@ class ReplaySimulation {
 
   /** The PGREAT window's `[late, early]` reach (µs) around a mine, which bounds LR2's press-or-hold detonation. */
   private minePgreatReachUs(mine: SimMine): readonly [number, number] {
-    return pgreatWindowReachUs(this.config.windowsAt(mine.timeUs).note);
+    return (mine.reachUs ??= pgreatWindowReachUs(this.config.windowsAt(mine.timeUs).note));
   }
 
   private detonateMine(mine: SimMine): void {
@@ -552,12 +586,16 @@ class ReplaySimulation {
     mine.applied = true;
     if (this.closed()) return;
     // Applied even at 0 damage, as the engine does: the raw path still settles a gauge sitting on its floor.
+    if (this.config.mineTrigger === 'press-ahead-or-hold') {
+      this.counts[JUDGE_MISS_POOR]! += 1;
+      this.minePoor += 1;
+    }
     this.gauge.applyRawDelta(-mine.damage);
   }
 
-  /** LR2: a press with a mine inside the PGREAT window of the line detonates it (before the press judges a note). */
+  /** LR2beta3 uses strict ahead-only GREAT; the provisional That-Which-Must-Not-Be-Named model keeps symmetric PGREAT. */
   private detonateMinesOnPress(lanes: readonly SimLane[], timeUs: number): void {
-    if (this.config.mineTrigger !== 'press-or-hold') return;
+    if (this.config.mineTrigger === 'hold') return;
     const reversalUs = this.replay.chart.reversalTimeUs;
     for (const lane of lanes) {
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
@@ -565,10 +603,13 @@ class ReplaySimulation {
         if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
         // Mines further ahead than any PGREAT reach cannot be hit.
         if (mine.timeUs - timeUs > 1_000_000) break;
-        // The PGREAT window in force at the press, as LR2 reads it (`#EXRANK` can change it).
+        // Read the window at the press, including a dynamic LR2 rank.
         const [lateUs, earlyUs] = pgreatWindowReachUs(this.config.windowsAt(timeUs).note);
-        if (mine.timeUs - earlyUs > timeUs) continue;
-        if (!mine.applied && timeUs - mine.timeUs <= lateUs) this.detonateMine(mine);
+        const hit =
+          this.config.mineTrigger === 'press-ahead-or-hold'
+            ? mine.timeUs >= timeUs && mine.timeUs - timeUs < this.config.windowsAt(timeUs).note.judges[1][1]
+            : mine.timeUs - earlyUs <= timeUs && timeUs - mine.timeUs <= lateUs;
+        if (!mine.applied && hit) this.detonateMine(mine);
       }
     }
   }
@@ -661,7 +702,7 @@ class ReplaySimulation {
     }
     if (this.config.multiBad) {
       // Only scoreable judgments (PGREAT..BAD) consume a note, so the judge is a real window index here.
-      this.applyMultiBad(lanes, timeUs, windows, note, selected.judge as RulesetJudgeIndex);
+      this.applyLR2RejudgeChain(lane, timeUs, windows, note, selected.judge as RulesetJudgeIndex);
     }
   }
 
@@ -771,7 +812,7 @@ class ReplaySimulation {
     // Charge styles score the head immediately.
     this.applyJudge(judge, dmUs);
     if (this.config.headBadSkipsTail && judge >= JUDGE_BAD) {
-      // IIDX: a BAD head cancels the tail judgment entirely.
+      // That-Which-Must-Not-Be-Named: a BAD head cancels the tail judgment entirely.
       note.judged = true;
       return;
     }
@@ -868,43 +909,28 @@ class ReplaySimulation {
     return preferJudgeCandidate(this.config.selection, toSelection(best), toSelection(candidate), timeUs);
   }
 
-  /**
-   * lr2oraja `MultiBadCollector`: after the press consumed `tnote`, every other unjudged note inside the BAD
-   * window but outside the GOOD window also resolves as a BAD — with the collector's own pruning rules.
-   */
-  private applyMultiBad(
-    lanes: readonly SimLane[],
+  /** LR2's forward tap chain: every BAD reuses this press for the next tap, until a non-BAD stops it. */
+  private applyLR2RejudgeChain(
+    lane: SimLane,
     timeUs: number,
     windows: RulesetWindowTables,
-    tnote: SimNote,
-    tnoteJudge: RulesetJudgeIndex,
+    consumed: SimNote,
+    consumedJudge: RulesetJudgeIndex,
   ): void {
-    const extras: Array<{ note: SimNote }> = [];
-    for (const lane of lanes) {
-      const set = selectJudgeWindowSet(windows, { scratch: lane.scratch });
-      const badWindow = set.judges[JUDGE_BAD]!;
-      const goodWindow = set.judges[JUDGE_GOOD]!;
-      for (let index = firstNoteInReach(lane.notes, timeUs, badWindow[0]); index < lane.notes.length; index += 1) {
-        const note = lane.notes[index]!;
-        const dmUs = note.timeUs - timeUs;
-        if (dmUs > badWindow[1]) break;
-        if (note.judged || note.holding || note === tnote) continue;
-        if (dmUs >= goodWindow[0] && dmUs <= goodWindow[1]) continue;
-        extras.push({ note });
-      }
-    }
-    if (extras.length === 0) return;
-    extras.sort((left, right) => left.note.timeUs - right.note.timeUs);
-    const consumed = { time: tnote.timeUs, isLong: tnote.isLong, judge: tnoteJudge };
-    const filtered = extras.filter(({ note }) =>
-      isMultiBadCollectorTarget(consumed, { time: note.timeUs, isLong: note.isLong }),
-    );
-    for (const { note } of filtered) {
+    if (consumedJudge !== JUDGE_BAD || consumed.isLong || this.closed()) return;
+    const set = selectJudgeWindowSet(windows, { scratch: lane.scratch });
+    const bad = set.judges[JUDGE_BAD]!;
+    for (let index = lane.notes.indexOf(consumed) + 1; index < lane.notes.length; index += 1) {
+      const note = lane.notes[index]!;
+      if (note.judged || note.holding) continue;
+      if (note.isLong) break;
+      const deltaUs = note.timeUs - timeUs;
+      if (deltaUs < bad[0] || deltaUs > bad[1]) break;
+      const judge = classifyRulesetJudge(deltaUs, set);
+      if (judge === RULESET_JUDGE_NONE || judge > JUDGE_BAD) break;
       note.judged = true;
-      this.applyJudge(JUDGE_BAD, undefined);
-      if (longNoteOwesTailMiss(this.config, note.isLong ? (note.longStyle ?? 1) : undefined)) {
-        this.applyJudge(JUDGE_MISS_POOR, undefined);
-      }
+      this.applyJudge(judge, deltaUs);
+      if (judge !== JUDGE_BAD || this.closed()) break;
     }
   }
 

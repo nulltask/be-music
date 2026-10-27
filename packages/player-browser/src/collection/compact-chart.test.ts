@@ -9,7 +9,7 @@ function chartOf(title: string) {
 }
 
 describe('compactCollectionChart', () => {
-  test('drops the preservation layers and keeps playable data intact', () => {
+  test('drops formatting layers, retains WAV loader order and keeps playable data intact', () => {
     const parsed = parseBMS(SOURCE);
     const snapshot = structuredClone({
       metadata: parsed.metadata,
@@ -22,7 +22,7 @@ describe('compactCollectionChart', () => {
     const chart = compactCollectionChart(parsed, new PackedEventStrings());
 
     expect(chart).toBe(parsed);
-    expect(chart.preservation.bms.sourceLines).toEqual([]);
+    expect(chart.preservation.bms.sourceLines).toEqual([{ kind: 'header', command: 'WAV01', value: 'kick.wav' }]);
     expect(chart.preservation.bms.objectLines).toEqual([]);
     expect(chart.preservation.bmson.soundChannels).toEqual([]);
     expect({ metadata: chart.metadata, resources: chart.resources, events: chart.events, bms: chart.bms }).toEqual(

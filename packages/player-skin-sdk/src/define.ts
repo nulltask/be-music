@@ -71,6 +71,20 @@ export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
   if (!CONTEXT_KINDS.has(skin.context)) {
     problems.push(`context "${String(skin.context)}" must be one of ${[...CONTEXT_KINDS].join(', ')}`);
   }
+  if (skin.dom !== undefined) {
+    if (typeof skin.dom !== 'object' || skin.dom === null || Array.isArray(skin.dom)) {
+      problems.push('dom must be an object of screen factories');
+    } else {
+      for (const screen of ['select', 'decide', 'result', 'gameplay'] as const) {
+        if (skin.dom[screen] !== undefined && typeof skin.dom[screen] !== 'function') {
+          problems.push(`dom.${screen} must be a function`);
+        }
+      }
+    }
+  }
+  if (skin.gameplay?.drawsOnDOM === true && typeof skin.dom?.gameplay !== 'function') {
+    problems.push('gameplay.drawsOnDOM requires a dom.gameplay screen');
+  }
   for (const screen of ['gameplay', 'select', 'result'] as const) {
     if (typeof skin[screen]?.draw !== 'function') problems.push(`${screen}.draw must be a function`);
   }

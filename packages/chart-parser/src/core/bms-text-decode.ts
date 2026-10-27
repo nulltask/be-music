@@ -38,13 +38,13 @@ export interface DecodedBMSText {
 }
 
 export function decodeBMSText(buffer: Uint8Array): DecodedBMSText {
-  if (hasUtf8BOM(buffer)) {
+  if (hasUTF8BOM(buffer)) {
     return {
       encoding: 'utf8',
       text: decodeUTF8Text(buffer),
     };
   }
-  if (hasUtf16LeBOM(buffer)) {
+  if (hasUTF16LeBOM(buffer)) {
     return {
       encoding: 'utf-16le',
       text: new TextDecoder('utf-16le').decode(buffer).replace(/^\ufeff/u, ''),
@@ -373,11 +373,11 @@ export function decodeUTF8Text(buffer: Uint8Array): string {
   return new TextDecoder('utf-8').decode(buffer).replace(/^\ufeff/u, '');
 }
 
-function hasUtf8BOM(buffer: Uint8Array): boolean {
+function hasUTF8BOM(buffer: Uint8Array): boolean {
   return buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf;
 }
 
-function hasUtf16LeBOM(buffer: Uint8Array): boolean {
+function hasUTF16LeBOM(buffer: Uint8Array): boolean {
   return buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe;
 }
 

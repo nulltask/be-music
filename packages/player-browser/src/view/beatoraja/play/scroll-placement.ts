@@ -21,11 +21,17 @@ import {
   type NoteDrawWindow,
 } from '../../../chart/note-draw-window.ts';
 
-/** The chart's `#SCROLL` / `#SPEED` distance integrator, or `undefined` when it has neither (or only points at 1). */
-export function createBeatorajaScrollMapper(chart: BeMusicJSON): ScrollDistanceMapperLike | undefined {
+/**
+ * The chart's `#SCROLL` / `#SPEED` distance integrator, or `undefined` when it has neither (or only points at 1).
+ * `ignoreSpeed` leaves `#SPEED` out, as beatoraja's `LaneRenderer` does while Visual CONSTANT is drawn.
+ */
+export function createBeatorajaScrollMapper(
+  chart: BeMusicJSON,
+  options: { readonly ignoreSpeed?: boolean } = {},
+): ScrollDistanceMapperLike | undefined {
   const beatResolver = createBeatResolver(chart);
   const scroll = createScrollTimeline(chart, beatResolver);
-  const speed = createSpeedTimeline(chart, beatResolver);
+  const speed = options.ignoreSpeed === true ? [] : createSpeedTimeline(chart, beatResolver);
   if (!changesScrollRate(scroll, speed)) {
     return undefined;
   }

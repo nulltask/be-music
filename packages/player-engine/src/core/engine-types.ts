@@ -1,14 +1,18 @@
-import { type ChartPlayVariant, type RandomDraws } from '@be-music/chart-model';
+import type { BattleMode } from './battle-mode.ts';
+import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
+import type { LongNoteModifier, LongNotePlacement } from './long-note-modifier.ts';
+import type { MineModifier, MinePlacement } from './mine-modifier.ts';
+import { type ChartPlayVariant, type RandomDraws, type ResolvedChart } from '@be-music/chart-model';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import { type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { type LaneBinding } from './lane-layout.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
 import { type TUINoteHeight } from './ui-options.ts';
-import { type AudioSinkClockState } from '../audio-sink.ts';
+import { type AudioSinkClockState } from '../audio-clock.ts';
 import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
-import type { GaugeType } from '../ruleset/gauge-type.ts';
+import type { GaugeType, GaugeAutoShift } from '../ruleset/gauge-type.ts';
 import { type LongNoteStyle, type RulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type ReplayRecordingOptions } from '../replay/recorder.ts';
 import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent } from '../replay/format.ts';
@@ -76,8 +80,50 @@ export interface CreatePlayerInputRuntimeContext {
  * `autoPlay` or `manualPlay`.
  */
 export interface PlayerPlaySettings {
+  /** beatoraja scroll modifier; REMOVE changes coordinates and ADD replaces the scroll-rate timeline. Event times stay fixed. */
+  scrollModifier?: import('./scroll-modifier.ts').ScrollModifier;
+  scrollSection?: number;
+  scrollRate?: number;
+  /** Effective source ADD curve; supplying it restores the original draws. */
+  scrollModifierTimeline?: readonly import('@be-music/chart-model').ScrollTimelinePoint[];
   auto?: boolean;
   autoScratch?: boolean;
+  /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** beatoraja CUSTOM JUDGE rates; absent while the option is off. Recorded into the replay. */
+  customJudge?: import('../ruleset/custom-judge.ts').BeatorajaCustomJudge;
+  /**
+   * beatoraja PRACTICE: plays only the range, with its gauge, TOTAL and judgerank, from 1000 ms before the range. The
+   * source applies no chart modifier in PRACTICE; a practice play records no replay.
+   */
+  practice?: import('./practice.ts').BeatorajaPractice;
+  /**
+   * The automatic judge-timing adjustment of a manual play (default `'OFF'`): beatoraja's calibration or LR2's ON /
+   * SILENT. Display-only: it moves {@link judgeTimingMs}, never the input or audio clocks. AUTO and replays never adjust.
+   */
+  judgeTimingAutoAdjust?: import('./judge-timing.ts').JudgeTimingAutoAdjust;
+  judgeTimingMs?: number;
+  longNoteModifier?: LongNoteModifier;
+  /** Probability for source long-note additions, default 1. */
+  longNoteRate?: number;
+  /** beatoraja EXTRA: source depth 0..100 (0 disables it), with optional scratch participation. */
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
+  /** LR2 beta3 EXTRA, independently selected from beatoraja EXTRA depth. Courses ignore it. */
+  sevenToNinePattern?: import('./seven-to-nine.ts').SevenToNinePattern;
+  sevenToNineType?: import('./seven-to-nine.ts').SevenToNineType;
+  hRandomThresholdBPM?: number;
+  battleMode?: BattleMode;
+  /** The 2P player's gauge in a two-player play (`battleMode: 'TWO-PLAYER'`); absent plays the 1P gauge. */
+  gauge2P?: string;
+  /** LR2 D-BATTLE: the scratch key was held through the decide animation, so scratch objects stay playable. */
+  dBattleScratch?: boolean;
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
+  mineModifier?: MineModifier;
+  /** Independently assist the source play side; explicit values override autoScratch for that side. */
+  autoScratch1P?: boolean;
+  autoScratch2P?: boolean;
   /**
    * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
@@ -85,8 +131,8 @@ export interface PlayerPlaySettings {
    */
   gauge?: GaugeType;
   /**
-   * The compat ruleset the play is judged under: `'lr2'` (default), `'beatoraja'` or `'iidx'`. It owns every judge
-   * rule — the windows (beatoraja's SEVENKEYS windows scaled by its judgerank, IIDX's fixed ±16.67 / ±33.33 /
+   * The compat ruleset the play is judged under: `'lr2'` (default), `'beatoraja'` or `'____'`. It owns every judge
+   * rule — the windows (beatoraja's SEVENKEYS windows scaled by its judgerank, That-Which-Must-Not-Be-Named's fixed ±16.67 / ±33.33 /
    * ±116.67 / ±250 ms), which note a press resolves against, the long-note style, the empty-POOR rule, mines, the gauge
    * line-up and its curve, and the score — and the replay simulator plays by the same tables. Dynamic `#EXRANKxx`
    * changes are an LR2 concept and only apply under `'lr2'`. Recorded into the replay (`play.judgeRuleset`) so
@@ -128,6 +174,9 @@ export interface PlayerPlaySettings {
    * dead (`failedMidPlay`). Recorded into the replay (`play.endOnFailure`) so re-simulations stop at the same point.
    */
   endOnFailure?: boolean;
+  /** Source-defined beatoraja policy; when present, takes precedence over endOnFailure. */
+  gaugeAutoShift?: GaugeAutoShift;
+  bottomShiftableGauge?: import('../ruleset/gauge-type.ts').GaugeShiftBottom;
   /**
    * This play is one stage of a course: the stage runs on the ruleset's course gauge under the course's judge
    * constraint, starting from the state the previous stage left (`carryIn`; absent for the first stage). Recorded into
@@ -137,17 +186,25 @@ export interface PlayerPlaySettings {
   /**
    * The judge rank changes of a stitched LR2 NONSTOP chart's later stages (`NonstopStitchMap.stageRanks` from
    * `@be-music/player-engine/course`), in chart seconds: from each change on, the windows of that stage's `#RANK`. Applied under
-   * the LR2 ruleset only (as `#EXRANKxx`) and recorded into the replay (`chart.judgeRank.stageRanks`), so a replay
+   * LR2 (and beatoraja for mixed bmson courses) and recorded into the replay (`chart.judgeRank.stageRanks`), so a replay
    * and a re-simulation judge with them.
    */
   stageRanks?: ReadonlyArray<PlayerStageRank>;
+  /**
+   * The chart second the play starts at instead of the chart's beginning: the play's first seek (a `{ kind: 'seek' }`
+   * input command, applied as the chart starts). AUTO play and replays rebuild their judgments; manual play starts practice and skips earlier note heads and tails without scoring.
+   * The judge state there is the one a play from the start reaches (the notes before it judged, without their keysounds,
+   * flashes or bombs), the volume changes before it apply, and sounds that started earlier and still ring start
+   * partway, through `AudioSession.triggerEventAt`. A play that seeks records no replay.
+   */
+  startAtSeconds?: number;
 }
 
 /** One judge rank change of {@link PlayerPlaySettings.stageRanks}. */
 export interface PlayerStageRank {
   seconds: number;
   rank: number;
-  table: 'chart' | 'lr2-nonstop';
+  table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
 }
 
 /**
@@ -181,19 +238,18 @@ export interface PlayerPlayRuntime {
    * runs its own `preparePlaybackChartData` internally, just like before.
    */
   preparedChart?: PreparedPlaybackChartData;
+  /** Recorded mine population for deterministic playback of a generated mine option. */
+  mineModifierPlacements?: readonly MinePlacement[];
+  longNoteModifierPlacements?: readonly LongNotePlacement[];
   createUIRuntime?: (context: CreatePlayerUIRuntimeContext) => Promise<PlayerUIRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
-  /**
-   * Optional override for the audio playback backend. When provided, the engine routes every sample trigger / channel
-   * stop / pause-resume / finish-dispose through the returned {@link AudioSession} instead of the bundled Node
-   * `createNodeAudioSink` path. Used by the web (Pixi) runtime to wire a Web Audio API backend through the same
-   * judging code the TUI runs, so both runtimes hit the engine's beatoraja-compliant judge / fallback / LN logic
-   * without each one re-implementing it.
-   *
-   * Returning `undefined` (or omitting the option entirely) preserves the original behavior — the engine falls
-   * through to the Node sink, which is what every existing TUI / test path already relies on.
-   */
+  /** The host's audio backend. Omitted or returning undefined means playback without audio. */
   createAudioSession?: (context: CreateAudioSessionContext) => Promise<AudioSession | undefined>;
+  /** Optional sample-duration loader for active-audio diagnostics, including silent playback. */
+  loadAudioSampleDurations?: (
+    resolved: ResolvedChart,
+    options: { baseDir?: string; signal?: AbortSignal },
+  ) => Promise<ReadonlyMap<string, number>>;
   signal?: AbortSignal;
   /**
    * Keeps a play open after its chart is over, so the player's keys still light the lanes (and the chart's remaining
@@ -246,6 +302,8 @@ export interface PlayerPlayTuning {
   limiterCeilingDb?: number;
   limiterReleaseMs?: number;
   leadInMs?: number;
+  /** Wait for a `start` input command as well as the lead-in before starting chart time and audio. */
+  waitForStart?: boolean;
   audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
   audioTailSeconds?: number;
@@ -296,8 +354,9 @@ export interface PlayerPlayRecording {
    * Enables replay recording: when set, the engine snapshots the resolved chart it actually played
    * (post-`#RANDOM`, post lane-shuffle via `preparedChart`), records every judged key press / release with
    * chart-relative timestamps, and hands the assembled {@link BeMusicReplay} here right before `autoPlay` /
-   * `manualPlay` resolves — including the ESC (aborted) exit. The replay's `results.native` caches this run's
-   * engine summary; see `@be-music/player-engine/replay` for the format and the LR2 / beatoraja / IIDX re-simulation
+   * `manualPlay` resolves — including the ESC (aborted) exit. A play that sought (`startAtSeconds`, a `seek` command)
+   * records none: it is discarded at the first seek. The replay's `results.native` caches this run's
+   * engine summary; see `@be-music/player-engine/replay` for the format and the LR2 / beatoraja / That-Which-Must-Not-Be-Named re-simulation
    * tools.
    */
   onReplayRecorded?: (replay: BeMusicReplay) => void;
@@ -344,7 +403,7 @@ export interface PlayerTempoChange {
 
 /** The judging setup a play resolved to; see {@link PlayerOptions.onRulesetResolved}. */
 export interface PlayerRulesetInfo {
-  /** Versioned ruleset id (`'lr2/0'`, `'beatoraja/0'`, `'iidx/0'`). */
+  /** Versioned ruleset id (`'lr2/0'`, `'beatoraja/0'`, `'____/0'`). */
   id: string;
   rulesetId: RulesetId;
   /** How the ruleset plays the chart's long notes (LN / per-note / charge). */
@@ -368,7 +427,7 @@ export interface PlayerSummary {
   great: number;
   good: number;
   bad: number;
-  /** Notes that were missed or hit outside every scoring window. Empty POORs are counted separately. */
+  /** Missed notes, plus LR2 mine hits (`minePoor`). Empty POORs are counted separately. */
   poor: number;
   /**
    * Empty POOR (空POOR) — a press with no note in reach but one inside the ruleset's miss window. It costs gauge
@@ -377,11 +436,25 @@ export interface PlayerSummary {
    * (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for it), which is why the split is exposed here.
    */
   emptyPoor: number;
+  /** LR2 mine hits already included in `poor`; not judgment notes and never a combo break. */
+  minePoor?: number;
   exScore: number;
   score: number;
+  /**
+   * The combo running now: the one the judge cues count, rebuilt with the rest of the summary when the play seeks. The
+   * engine's summaries always carry it; it is optional so a summary a host builds itself need not.
+   */
+  combo?: number;
+  /** Final combo eligibility when empty POOR can break combo; absent in legacy/count-only results. */
+  fullCombo?: boolean;
+
+  /** The highest combo of the play so far; see {@link combo}. */
+  maxCombo?: number;
   gauge?: PlayerGaugeSummary;
   /** For a course stage: the course-wide combo running now and the course-wide max combo (carried across stages). */
   course?: { combo: number; maxCombo: number };
+  /** The 2P player's summary of a two-player play (LR2 BATTLE); this summary is the 1P player's. */
+  secondPlayer?: PlayerSummary;
 }
 
 export interface PlayerLoadProgress {
@@ -413,9 +486,8 @@ export class PlayerInterruptedError extends Error {
 }
 
 /**
- * The audio playback contract the engine uses regardless of which runtime backs it. The default Node implementation
- * created in {@link createAudioSessionIfEnabled} wraps `node-web-audio-api`; alternative runtimes (browser Web Audio,
- * test mocks) implement this same shape and plug in via {@link PlayerOptions.createAudioSession}.
+ * The host-provided audio playback contract. Node and browser adapters implement this shape and plug in via
+ * {@link PlayerOptions.createAudioSession}.
  *
  * **Lifetime**: caller invokes `start()` once chart playback begins, `pause()` / `resume()` during input-driven
  * pauses, and exactly one of `finish()` (graceful drain) or `dispose()` (abort, no drain) at the end of playback.
@@ -440,6 +512,19 @@ export interface AudioSession {
   getActiveAudioFiles?: () => string[];
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
+  /**
+   * Plays `event`'s sound as if it had started `offsetSeconds` ago, for a play that seeks (`PlayerOptions.startAtSeconds`,
+   * a `seek` command). A sound shorter than the offset plays nothing. Without it, sounds that started before the second
+   * sought stay silent.
+   */
+  triggerEventAt?: (event: BeMusicEvent, offsetSeconds: number) => void;
+  /**
+   * The play seeks to chart second `seconds`: the sounds playing now stop and the gains go back to the chart's start
+   * (the engine then replays the volume changes before `seconds` and starts what still rings there through
+   * {@link triggerEventAt}); a backend that schedules on the chart's time (fades, stage rates) moves it to `seconds`.
+   * The play clock carries on: chart time re-bases in the engine. Without it, sounds playing at the seek ring on.
+   */
+  seek?: (seconds: number) => void;
   stopChannel?: (channel: string) => void;
   /**
    * The play tempo changed during the play (see {@link PlayerOptions.onTempoChange}): samples started from now on, and
@@ -450,12 +535,12 @@ export interface AudioSession {
 }
 
 /**
- * Context handed to a {@link PlayerOptions.createAudioSession} factory. Mirrors the inputs the engine's built-in
- * Node session would consume so a custom backend can apply the same chart-derived gain / volume semantics. Forward-
- * compatible: backends should ignore unrecognized fields.
+ * Context handed to a {@link PlayerOptions.createAudioSession} factory. The resolved chart is shared with the engine
+ * so adapters use the same timing, sample slices and chart facts.
  */
 export interface CreateAudioSessionContext {
   json: BeMusicJSON;
+  resolvedChart: ResolvedChart;
   options: PlayerOptions;
   mode: 'auto' | 'manual';
   onLoadProgress?: (progress: AudioSessionLoadProgress) => void;

@@ -1,6 +1,6 @@
+import { isCLIEntryPoint } from '@be-music/shared-utils/cli';
 import { stat } from 'node:fs/promises';
-import { dirname, extname, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, extname, relative } from 'node:path';
 import { resolveCLIPath } from '@be-music/shared-utils/cli-path';
 import {
   createFileLogger,
@@ -854,6 +854,7 @@ function createPlayOptionsFromCLIArgs(args: CLIArgs, chartPath: string) {
     judgeWindowMs: args.judgeWindowMs,
     judgeRuleset: args.judgeRuleset,
     gauge: args.gauge,
+    endOnFailure: args.endOnFailure,
     debugActiveAudio: args.debugActiveAudio,
     audio: args.audio,
     volume: args.volume,
@@ -1043,24 +1044,7 @@ export function resolveMusicSelectInitialFocusKey(
   return createChartFocusKey(normalized);
 }
 
-function isCLIEntryPoint(): boolean {
-  const entry = process.argv[1];
-  if (!entry) {
-    return false;
-  }
-
-  try {
-    const moduleURL = (import.meta as { url?: unknown }).url;
-    if (typeof moduleURL !== 'string' || moduleURL.length === 0) {
-      return false;
-    }
-    return resolve(entry) === fileURLToPath(moduleURL);
-  } catch {
-    return false;
-  }
-}
-
-if (isCLIEntryPoint()) {
+if (isCLIEntryPoint(() => (import.meta as { url?: unknown }).url)) {
   void main()
     .then(() => {
       process.exit(process.exitCode ?? 0);

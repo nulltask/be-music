@@ -17,12 +17,22 @@
  * timer: a flash and a long note's tail bomb end when a later frame reaches their end.
  */
 
+import {
+  resolveBeatorajaScoreTimers,
+  resolveBeatorajaHCNTimers,
+  resolveBeatorajaCharacterTimers,
+  type BeatorajaCharacterTimerState,
+} from '@be-music/skin-beatoraja/scene';
+import type { PlayerHCNLaneState } from '@be-music/player-engine/signals';
+import type { PlayFrame } from '../types.ts';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import {
+  BEATORAJA_OP,
   JUDGE_LANE_REF_RANGE,
   TIMER_FADEOUT,
   TIMER_FAILED,
   TIMER_PLAY,
+  TIMER_MUSIC_END,
   TIMER_PREVIEW,
   TIMER_READY,
   TIMER_SCENE_START,
@@ -38,8 +48,10 @@ import {
   beatorajaLaneJudgeRef,
   beatorajaWallClockOf,
   createBeatorajaJudgeStateGraph,
+  resolveBeatorajaConstantOps,
   resolveBeatorajaCoverOps,
   resolveBeatorajaFrameTimers,
+  resolveBeatorajaSeekTimers,
   resolveBeatorajaGaugeState,
   resolveBeatorajaJudgeEffect,
   resolveBeatorajaJudgeStateMove,
@@ -98,6 +110,8 @@ export interface BeatorajaPlayBridgeOptions {
   readonly baseOps: ReadonlySet<number>;
   /** The play is AUTO PLAY (`AUTOPLAY_ON`). */
   readonly autoPlay?: boolean;
+  /** Motion periods from a character pack; the upstream default is 1 ms for every motion. */
+  readonly pmCharaMotionDurationsMs?: readonly number[];
   /**
    * The chart as the play plays it (its `#RANDOM` branches drawn, DP FLIP applied): its texts, BPM, last notes, note
    * kinds and the judge-state graph's seconds. Without it every text renders empty.
@@ -137,12 +151,19 @@ export interface BeatorajaPlayEngineInput {
   /** Chart time of an LR2 negative-BPM reversal, when the chart has one. */
   readonly reversalSeconds?: number;
   readonly summary: BeatorajaPlaySummaryInput;
+  readonly hcnLanes?: readonly PlayerHCNLaneState[];
+  readonly judgedNoteCount?: number;
 }
 
 /** What the bridge reads of one frame of the play. */
 export interface BeatorajaPlayBridgeFrame {
   /** The play clock, in ms: the skin's timers count on it. */
   readonly nowMs: number;
+  readonly judgeTimingMs?: number;
+  /** The player's Visual CONSTANT setting, which lights `OPTION_CONSTANT` (400) even where a course stops it drawing. */
+  readonly visualConstant?: boolean;
+  readonly exiting?: boolean;
+  readonly scoreTargets?: PlayFrame['scoreTargets'];
   /** The host's clock, in ms, for the frame rate; the play clock without it. */
   readonly hostNowMs?: number;
   readonly state: PlayState;
@@ -235,7 +256,11 @@ export class BeatorajaPlayBridge {
   private readonly texts: BeatorajaPlayTextInput;
   private readonly play: PlayInput;
   private readonly lastNoteBeats: { 1?: number; 2?: number };
+  private readonly pmCharaMotionDurationsMs: readonly number[] | undefined;
   private nowMs = 0;
+  private hasJudgment = false;
+  private characterJudge: string | undefined;
+  private characterState: BeatorajaCharacterTimerState = { lastNotes: [0, 0] };
   private engine: BeatorajaPlayEngineInput | undefined;
   private state: PlayState | undefined;
   private sceneStarted = false;
@@ -302,6 +327,7 @@ export class BeatorajaPlayBridge {
   private readonly unresolvedTextRefs = new Set<number>();
 
   public constructor(options: BeatorajaPlayBridgeOptions) {
+    this.pmCharaMotionDurationsMs = options.pmCharaMotionDurationsMs;
     this.chartPlayVariant = options.chartPlayVariant;
     this.baseOps = options.baseOps;
     this.activeOps = new Set(options.baseOps);
@@ -399,15 +425,75 @@ export class BeatorajaPlayBridge {
     this.endDueLanes(frame.nowMs);
     if (frame.engine !== undefined) this.applyEngine(frame.engine, frame.hostNowMs ?? frame.nowMs);
     for (const event of frame.events) this.handle(event);
+    // PLAY is chart time: tempo changes, replay tempo, pauses and seeks all come from the same engine clock.
+    if (this.timerStartedAt.has(TIMER_PLAY) && frame.engine !== undefined) {
+      this.timerStartedAt.set(TIMER_PLAY, frame.nowMs - Math.max(0, frame.engine.currentSeconds) * 1000);
+    }
+    this.applyAnimationTimers(frame);
     this.applyState(frame.state);
+    this.play.judgeTimingMs = frame.judgeTimingMs ?? 0;
+    this.activeOps.delete(BEATORAJA_OP.CONSTANT);
+    for (const op of resolveBeatorajaConstantOps(frame.visualConstant)) this.activeOps.add(op);
     this.judgeWindows = frame.judgeWindows;
     return this.renderContextAt(frame.nowMs);
+  }
+
+  private applyAnimationTimers(frame: BeatorajaPlayBridgeFrame): void {
+    const engine = frame.engine;
+    const score = engine?.summary;
+    const pastNotes =
+      engine?.judgedNoteCount ??
+      (score === undefined ? 0 : score.perfect + score.great + score.good + score.bad + score.poor);
+    if (score !== undefined) {
+      this.applyTimers(
+        resolveBeatorajaScoreTimers({
+          exScore: score.exScore,
+          totalNotes: score.total,
+          hasJudgment: this.hasJudgment || pastNotes > 0,
+          ...frame.scoreTargets,
+          started: new Set(this.timerStartedAt.keys()),
+        }),
+      );
+      this.applyTimers(
+        resolveBeatorajaHCNTimers({
+          lanes: (engine?.hcnLanes ?? []).map((lane) => ({ ...this.placementOf(lane.channel), gaining: lane.gaining })),
+          started: this.timerStartedAt.keys(),
+        }),
+      );
+    }
+    const playing = this.timerStartedAt.has(TIMER_PLAY);
+    const finished = this.timerStartedAt.has(TIMER_MUSIC_END);
+    const stopped = frame.exiting === true && !finished;
+    const character = resolveBeatorajaCharacterTimers({
+      nowMs: frame.nowMs,
+      timers: this.timerStartedAt,
+      state: this.characterState,
+      stage: finished ? 'finished' : stopped ? 'stopped' : playing ? 'playing' : 'loading',
+      pastNotes,
+      motionDurationsMs: this.pmCharaMotionDurationsMs,
+      latestJudge: this.characterJudge,
+      gaugeMax: score?.gauge !== undefined && score.gauge.max > 0 && score.gauge.current >= score.gauge.max,
+    });
+    this.characterState = character.state;
+    this.applyTimers(character.changes);
   }
 
   /**
    * Starts the scene's timers (scene start, preview: ModernChic's lane reveal) on the first frame shown, or when the
    * play's scene starts, whichever comes first.
    */
+  /**
+   * The scene, ready and play timers a view that joins mid-play starts at `atMs` (the play clock when the chart
+   * started, or now while the intro is still running). Later frames move the play timer onto the engine clock.
+   */
+  public joinRunning(atMs: number, chartStarted: boolean): void {
+    this.startScene(atMs);
+    if (!chartStarted) return;
+    this.markLoaded(atMs);
+    if (!this.timerStartedAt.has(TIMER_STARTINPUT)) this.timerStartedAt.set(TIMER_STARTINPUT, atMs);
+    if (!this.timerStartedAt.has(TIMER_PLAY)) this.timerStartedAt.set(TIMER_PLAY, atMs);
+  }
+
   public startScene(atMs: number): void {
     if (this.sceneStarted) return;
     this.sceneStarted = true;
@@ -420,6 +506,15 @@ export class BeatorajaPlayBridge {
     switch (event.kind) {
       case 'scene-start':
         this.startScene(event.atMs);
+        return;
+      case 'input-start':
+        if (!this.timerStartedAt.has(TIMER_STARTINPUT)) this.timerStartedAt.set(TIMER_STARTINPUT, event.atMs);
+        return;
+      case 'play-start':
+        if (!this.timerStartedAt.has(TIMER_PLAY)) this.timerStartedAt.set(TIMER_PLAY, event.atMs);
+        return;
+      case 'music-end':
+        if (!this.timerStartedAt.has(TIMER_MUSIC_END)) this.timerStartedAt.set(TIMER_MUSIC_END, event.atMs);
         return;
       case 'load-end':
         this.markLoaded(event.atMs);
@@ -451,21 +546,68 @@ export class BeatorajaPlayBridge {
       case 'judge':
         this.applyJudge(event);
         return;
+      case 'seek':
+        this.applySeek(event);
+        return;
       default:
         return;
     }
   }
 
   /**
-   * The chart has loaded and the play is about to start: the input (1), READY (40) and play (41) timers start, and
+   * The play sought: every timer but the scene's stops and the once-per-play ones may start again
+   * ({@link resolveBeatorajaSeekTimers}); the plates' judgment and FAST / SLOW ops, the lanes' latest judgments, the held
+   * long notes, the flashes still to end and the miss window go; and the judge-state graph is rebuilt from the
+   * judgments before the second sought. The long notes held across it come next, as their own events.
+   */
+  private applySeek(event: Extract<PlayViewEvent, { kind: 'seek' }>): void {
+    const engine = this.engine;
+    const changes = resolveBeatorajaSeekTimers({
+      started: [...this.timerStartedAt.keys()],
+      beat: engine?.currentBeat ?? Number.NaN,
+      ...(engine?.summary.gauge !== undefined ? { gauge: engine.summary.gauge } : {}),
+      lastNoteBeats: this.lastNoteBeats,
+    });
+    for (const id of changes.stop) this.firedOnce.delete(id);
+    this.applyTimers(changes);
+    if (engine !== undefined && Number.isFinite(engine.currentBeat)) this.lastFrameBeat = engine.currentBeat;
+    for (const plate of [1, 2, 3] as const) {
+      const ops = this.plates[plate];
+      if (ops.lastJudgeOp !== undefined) this.activeOps.delete(ops.lastJudgeOp);
+      if (ops.lastFastSlowOp !== undefined) this.activeOps.delete(ops.lastFastSlowOp);
+      ops.lastJudgeOp = undefined;
+      ops.lastFastSlowOp = undefined;
+      this.lastJudgeOnLane[plate] = createEmptyLaneJudgeRing();
+    }
+    this.lnHoldHeldByChannel.clear();
+    this.lnTailVerdictLatch.clear();
+    this.pressedChannels.clear();
+    this.pending = [];
+    this.lastMissSeconds = undefined;
+    this.hasJudgment = event.judgments.length > 0;
+    this.characterJudge = event.judgments.at(-1)?.judge;
+    this.characterState = { lastNotes: [0, 0] };
+    this.initJudgeState();
+    const graph = this.judgeState;
+    if (graph === undefined) return;
+    for (const judgment of event.judgments) {
+      const noteMs = judgment.seconds * 1000 - (judgment.deltaMs ?? 0);
+      const move = resolveBeatorajaJudgeStateMove(graph, judgment.judge, noteMs);
+      if (move === undefined) continue;
+      const bucket = graph.buckets[move.bucket]!;
+      bucket[0] = bucket[0]! - 1;
+      bucket[move.slot] = bucket[move.slot]! + 1;
+    }
+  }
+
+  /**
+   * The chart has loaded: READY (40) starts, and
    * `LOADED` lights in place of `NOW_LOADING`.
    */
   private markLoaded(atMs: number): void {
     if (this.loaded) return;
     this.loaded = true;
-    this.timerStartedAt.set(TIMER_STARTINPUT, atMs);
     this.timerStartedAt.set(TIMER_READY, atMs);
-    this.timerStartedAt.set(TIMER_PLAY, atMs);
     this.activeOps.delete(BEATORAJA_PLAY_STARTED_OPS.off);
     this.activeOps.add(BEATORAJA_PLAY_STARTED_OPS.on);
   }
@@ -600,6 +742,8 @@ export class BeatorajaPlayBridge {
    * the plate's combo, the lane's latest judgment, a long note's tail bomb and the judge-state graph.
    */
   private applyJudge(event: Extract<PlayViewEvent, { kind: 'judge' }>): void {
+    this.hasJudgment = true;
+    this.characterJudge = event.judge;
     const channel = event.channel;
     const placement = channel !== undefined ? this.placementOf(channel) : undefined;
     const combo = event.combo ?? this.state?.combo ?? 0;

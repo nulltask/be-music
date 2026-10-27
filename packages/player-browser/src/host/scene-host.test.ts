@@ -94,8 +94,56 @@ describe('PixiSceneHost', () => {
       await host.mount(container);
 
       expect(init).toHaveBeenCalledTimes(1);
-      expect(container.appendChild).toHaveBeenCalledWith(canvas);
+      // The canvas goes in with the first scene that draws on it.
+      expect(container.appendChild).not.toHaveBeenCalled();
+      expect(host.container).toBe(container);
     } finally {
+      info.mockRestore();
+      init.mockRestore();
+    }
+  });
+
+  it('resizes the canvas when its container changes size without a window resize', async () => {
+    const host = new PixiSceneHost();
+    const canvas = { setAttribute: vi.fn(), style: {} as Record<string, string>, tabIndex: 0 };
+    const init = vi.spyOn(host.app, 'init').mockImplementation(async function initMock(this: typeof host.app) {
+      (this as unknown as { renderer: { canvas: typeof canvas; type: RendererType } }).renderer = {
+        canvas,
+        type: RendererType.WEBGL,
+      };
+    });
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const queueResize = vi.fn();
+    (host.app as unknown as { queueResize: () => void }).queueResize = queueResize;
+    const observers: { callback: () => void; observed: unknown[]; disconnect: ReturnType<typeof vi.fn> }[] = [];
+    class FakeResizeObserver {
+      observed: unknown[] = [];
+      disconnect = vi.fn();
+      readonly callback: () => void;
+      constructor(callback: () => void) {
+        this.callback = callback;
+        observers.push(this);
+      }
+      observe(target: unknown): void {
+        this.observed.push(target);
+      }
+    }
+    const container = {
+      appendChild: vi.fn(),
+      ownerDocument: { defaultView: { ResizeObserver: FakeResizeObserver } },
+    } as unknown as HTMLElement;
+    const destroy = vi.spyOn(host.app, 'destroy').mockImplementation(() => undefined);
+
+    try {
+      await host.mount(container);
+      expect(observers).toHaveLength(1);
+      expect(observers[0]!.observed).toEqual([container]);
+      observers[0]!.callback();
+      expect(queueResize).toHaveBeenCalledTimes(1);
+      host.dispose();
+      expect(observers[0]!.disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      destroy.mockRestore();
       info.mockRestore();
       init.mockRestore();
     }
@@ -124,6 +172,41 @@ describe('PixiSceneHost', () => {
 });
 
 describe('PixiSceneHost scene lifecycle', () => {
+  it('keeps the canvas in the page only while the active scene draws on it, putting it back in its place', async () => {
+    const host = new PixiSceneHost();
+    const children: object[] = [];
+    const parent = {
+      insertBefore(node: object, next: object | null) {
+        children.splice(next ? children.indexOf(next) : children.length, 0, node);
+      },
+    };
+    const domLayer = { parentNode: parent };
+    const canvas = {
+      get parentElement() {
+        return children.includes(canvas) ? parent : null;
+      },
+      get nextSibling() {
+        return children[children.indexOf(canvas) + 1] ?? null;
+      },
+      remove() {
+        children.splice(children.indexOf(canvas), 1);
+      },
+    };
+    children.push(canvas, domLayer);
+    const placed = (): string[] => children.map((node) => (node === canvas ? 'canvas' : 'dom'));
+    Object.defineProperty(host.app, 'canvas', { value: canvas });
+    Object.assign(host as unknown as { domParent: object }, { domParent: parent });
+
+    await host.setScene(makeScene({ drawsOnCanvas: false }));
+    expect(placed()).toEqual(['dom']);
+    await host.setScene(makeScene({ drawsOnCanvas: false }));
+    expect(placed()).toEqual(['dom']);
+    await host.setScene(makeScene());
+    expect(placed()).toEqual(['canvas', 'dom']);
+    await host.setScene(undefined);
+    expect(placed()).toEqual(['dom']);
+  });
+
   it('exits the previous scene and takes its root off the stage before the next one enters and goes on', async () => {
     const host = new PixiSceneHost();
     const log: string[] = [];

@@ -11,7 +11,7 @@ import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/displa
 import { Texture } from 'pixi.js';
 import {
   buildSkinBGAFrame,
-  pickActiveBGAKey,
+  isMissLayerShown,
   resolveBGAImageRect,
   resolveBGAStacks as resolveBGAStacksOf,
   type BGACue,
@@ -79,9 +79,10 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   // is fine in practice: the LR2 default skin uses identical flags on every rect, and a future skin that mixes them
   // per-rect would still get a consistent global playback state from this single sync point.
   const controllingBGA = visibleBGAs[0]!;
-  const poorWindowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000;
   const inPoorWindow =
-    !controllingBGA.noPoor && ctx.play.lastPoorAt > 0 && ctx.play.playClock() - ctx.play.lastPoorAt < poorWindowMs;
+    (ctx.options.nonstop !== undefined || ctx.play.poorBGAMode !== 2) &&
+    !controllingBGA.noPoor &&
+    isMissLayerShown(ctx.play.lastPoorAt / 1000, ctx.play.playClock() / 1000, DEFAULT_POOR_BGA_DISPLAY_SECONDS);
   // A stitched NONSTOP chart shows one BGA stack per stage, crossfading at the seams; any other chart one stack.
   const stacks = resolveBGAStacks(
     ctx,
@@ -100,7 +101,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   const layerKey = layerCue?.bmpKey;
   let poorKey = ctx.play.nonstopBGATimelines !== undefined ? leading?.poorKey : undefined;
   if (inPoorWindow && ctx.play.nonstopBGATimelines === undefined) {
-    poorKey = pickActiveBGAKey(ctx.play.bgaTimeline.poor, cueSeconds);
+    poorKey = leading?.poorKey;
   }
   // BMP00 fallback: when no explicit POOR cue is active but the chart has a `#BMP00` (and no `#POORBGA 2`),
   // paint BMP00 during the miss window. Capped at the first authored POOR cue's chart-time so a chart that does
@@ -126,6 +127,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           base: baseKey !== undefined ? resolveBGAFrameKey(ctx, baseKey, baseCue?.seconds, seconds) : undefined,
           layer: layerKey !== undefined ? resolveBGAFrameKey(ctx, layerKey, layerCue?.seconds, seconds) : undefined,
           poor: poorKey,
+          poorOverlays: leading?.poorOverlays,
         },
         (key, track) =>
           resolveSkinBGAImage(ctx, (track === 'layer' ? ctx.play.bgaLayerTextures : ctx.play.bgaTextures).get(key)),
@@ -143,6 +145,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       layerName: 'base' | 'layer' | 'poor',
       cueSeconds: number | undefined,
       alpha = 1,
+      overlay = false,
     ): void => {
       if (!key) return;
       const resolvedKey = resolveBGAFrameKey(ctx, key, cueSeconds, seconds);
@@ -159,7 +162,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
             bga,
             ctx.play.bgaSubRegionOrigins.get(resolvedKey),
           );
-      if (layerName !== 'layer' && (placed.w < bga.w || placed.h < bga.h)) {
+      if (layerName !== 'layer' && !overlay && (placed.w < bga.w || placed.h < bga.h)) {
         // The base canvas around a small image is black (a 1x1 black BMP blanks the BGA in LR2 and beatoraja), so
         // fill the rect before drawing the image; the layer track's canvas stays transparent.
         const backdrop = ctx.bgaLayerPool.acquireSprite();
@@ -203,7 +206,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       }
     };
     for (const stack of stacks) {
-      if (stack.poorKey) {
+      if (stack.poorKey && !stack.poorOverlays) {
         // POOR uses base-mode decoding (no chroma key) since it replaces the stack's base+layer composite during its
         // window. POOR has no per-cue origin time we can hand to `drawLayer` for `#SWBGAxx` frame timing; chart
         // authors don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
@@ -216,6 +219,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       // Layer track is composited on top with black→transparent so the base track shows through where the
       // foreground BMP is empty.
       drawLayer(stack.layerCue?.bmpKey, ctx.play.bgaLayerTextures, 'layer', stack.layerCue?.seconds, stack.alpha);
+      if (stack.poorKey && stack.poorOverlays)
+        drawLayer(stack.poorKey, ctx.play.bgaTextures, 'poor', undefined, stack.alpha, true);
     }
   }
   ctx.bgaLayerPool.end();
@@ -235,7 +240,8 @@ function resolveBGAStacks(
   const stages = ctx.options.nonstop?.stages;
   const timelines = ctx.play.nonstopBGATimelines;
   return resolveBGAStacksOf({
-    timeline: { base: ctx.play.bgaTimeline.base, layer: ctx.play.bgaTimeline.layer },
+    timeline: ctx.play.bgaTimeline,
+    poorBGAMode: ctx.play.poorBGAMode,
     nonstop: stages !== undefined && timelines !== undefined ? { stages, timelines } : undefined,
     seconds: cueSeconds,
     noBase,
@@ -291,6 +297,24 @@ function resolveSkinBGAImage(ctx: BGARendererContext, texture: Texture | undefin
   return undefined;
 }
 
+/** How far (seconds) a BGA video may drift from the chart's time since its cue before it is set back in step. */
+export const BGA_VIDEO_DRIFT_SECONDS = 0.25;
+
+/**
+ * Where a BGA video playing its cue should be set to keep in step with the chart: `expectedSeconds` (the chart time
+ * since the cue, which the video runs at the play tempo) when it has drifted more than {@link BGA_VIDEO_DRIFT_SECONDS}
+ * from it — a seek, a stall, a throttled tab — and the video has not played out; `undefined` while it is in step.
+ */
+export function resolveBGAVideoResync(
+  currentSeconds: number,
+  expectedSeconds: number,
+  durationSeconds: number,
+): number | undefined {
+  if (!Number.isFinite(expectedSeconds) || expectedSeconds < 0) return undefined;
+  if (Number.isFinite(durationSeconds) && expectedSeconds >= durationSeconds) return undefined;
+  return Math.abs(currentSeconds - expectedSeconds) > BGA_VIDEO_DRIFT_SECONDS ? expectedSeconds : undefined;
+}
+
 /**
  * Drives playback of a video BGA on a single track (`base` or `layer`). When the cue's key matches a known video: -
  * first time it fires, `play()` from the cue's start offset - re-firing the same cue is a no-op (video keeps playing)
@@ -329,9 +353,18 @@ function syncBGAVideo(
     }
     return;
   }
-  if (previous?.key === key) {
-    // Same cue still active — nothing to do; the video plays forward on its own and the Pixi VideoSource pulls fresh
-    // frames each tick.
+  if (previous !== undefined && previous.key === key) {
+    // Same cue still active: the video plays forward on its own and the Pixi VideoSource pulls fresh frames each tick;
+    // one that drifted from the chart is set back in step.
+    const video = handle.video;
+    if (video.paused || video.seeking) return;
+    const resync = resolveBGAVideoResync(video.currentTime, seconds - previous.cueSeconds, video.duration);
+    if (resync === undefined) return;
+    try {
+      video.currentTime = resync;
+    } catch {
+      // Not seekable yet: the next frame tries again.
+    }
     return;
   }
   if (previous) {
@@ -351,6 +384,8 @@ function syncBGAVideo(
     // Some browsers throw on currentTime assignment before the video has its initial buffer. Best-effort — play()
     // below will retry once the buffer arrives.
   }
+  // A paused play (one sought while paused) shows the cue's frame; resuming plays the active videos.
+  if (ctx.play.paused) return;
   void handle.video.play().catch(() => {
     // Autoplay policy / codec rejections — silently swallow so the still-image fallback keeps working.
   });

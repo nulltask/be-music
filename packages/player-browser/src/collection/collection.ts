@@ -1,6 +1,6 @@
-import { unzipSync } from 'fflate';
-import { countScoredNotes } from '@be-music/chart-model';
-import { decodeBMSText, decodeUTF8Text, parseBMS, parseBmson } from '@be-music/chart-parser';
+import { runBrowserTask, getBrowserWorkerCount } from '../compute/index.ts';
+import { parseChartTask, unzipTask } from '../compute/tasks.ts';
+import { yieldToTask } from '../compute/yield.ts';
 import { seedLibraryChartPlayVariant, type ChartSourceKind, type LibraryChart } from '@be-music/player-scene-model';
 import {
   basename,
@@ -11,7 +11,7 @@ import {
 } from '@be-music/shared-utils/core';
 import type { BrowserAssetEntry, BrowserAssetSource, BrowserChartCollection, LoadProgressCallback } from './types.ts';
 import { createEagerDropPathPredicate, isChartFilePath } from '../browser/drop.ts';
-import { compactCollectionChart, PackedEventStrings } from './compact-chart.ts';
+import { restorePackedCollectionChart } from './compact-chart.ts';
 import {
   type BrowserDroppedFile,
   DeferredDroppedFile,
@@ -27,8 +27,6 @@ export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles }
 const log = logger('drop');
 const MAX_ZIP_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024;
-/** How many chart reads the parse loop keeps in flight ahead of the chart it is parsing. */
-const CHART_READ_AHEAD = 8;
 
 /**
  * Optional progress hook for the dropped-folder loaders. When supplied, the loader fires the callback as it walks
@@ -377,31 +375,34 @@ export async function loadChartCollectionFromFiles(
       looseFiles.set(path, bytes);
     }
   }
-  // ZIPs read after the loose pool — there's typically zero or one of them per drop, so serializing here costs nothing.
-  for (const dropped of zipFiles) {
+  const zipSources: Array<BrowserAssetSource | undefined> = Array.from({ length: zipFiles.length });
+  const zipErrors: BrowserChartCollection['errors'][] = Array.from({ length: zipFiles.length }, () => []);
+  await runWithConcurrency(zipFiles, getBrowserWorkerCount(), async (dropped, index) => {
     const sourceId = `zip:${dropped.name}`;
     const [file] = await materializeDroppedFiles([dropped]);
     if (!file) {
-      errors.push({ sourceId, message: 'failed to open ZIP archive' });
-      continue;
+      zipErrors[index]!.push({ sourceId, message: 'failed to open ZIP archive' });
+      return;
     }
     if (file.size > MAX_ZIP_ARCHIVE_BYTES) {
-      errors.push({
+      zipErrors[index]!.push({
         sourceId,
         message: `ZIP archive is too large (${formatBytes(file.size)}; limit ${formatBytes(MAX_ZIP_ARCHIVE_BYTES)})`,
       });
-      continue;
+      return;
     }
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      sources.push(createZipSource(file.name, bytes));
+      zipSources[index] = await createZipSource(file.name, bytes);
     } catch (error) {
-      errors.push({
+      zipErrors[index]!.push({
         sourceId,
         message: error instanceof Error ? error.message : 'failed to read ZIP archive',
       });
     }
-  }
+  });
+  sources.push(...zipSources.filter((source): source is BrowserAssetSource => source !== undefined));
+  errors.push(...zipErrors.flat());
   // Final 100 % emit for the read phase — the throttled wrapper may have suppressed the last one.
   onProgress?.({ phase: 'reading', current: fileList.length, total: fileList.length });
 
@@ -415,7 +416,6 @@ export async function loadChartCollectionFromFiles(
   }
 
   const charts: LibraryChart[] = [];
-  const eventStrings = new PackedEventStrings();
   // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
   // just asset lookups.
@@ -433,101 +433,67 @@ export async function loadChartCollectionFromFiles(
     onProgress?.({ phase: 'parsing', current: 0, total: chartCount });
   }
   const throttledParseProgress = createThrottledProgress(onProgress);
-  // Yield to the event loop every few charts so the host can paint a frame and run the throttled progress emit. Chart
-  // parsing is CPU-bound and otherwise blocks the main thread for the entire parse phase on a multi-hundred-chart drop.
+  // Keep cooperative progress yielding for hosts using the local fallback; workers already run outside the UI thread.
   const PARSE_YIELD_INTERVAL = 32;
-  for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
-    const source = sources[sourceIndex]!;
-    const paths = chartPathsBySource[sourceIndex]!;
-    // Charts are stored as lazy references in the song-bundle map (everything is deferred). Keep a few reads in flight
-    // ahead of the parser so opening / reading the next charts overlaps with parsing the current one; each slot is
-    // cleared once consumed, so parse-phase memory stays bounded to the look-ahead window rather than the whole bundle.
-    const pendingReads: Array<Promise<Uint8Array | undefined> | undefined> = [];
-    const startRead = (index: number): void => {
-      const entry = index < paths.length ? source.files.get(paths[index]!) : undefined;
-      if (entry === undefined) return;
-      const read = loadAssetBytes(entry);
-      // Rejections are surfaced when the slot is awaited; this only keeps them from reporting as unhandled meanwhile.
-      read.catch(() => undefined);
-      pendingReads[index] = read;
-    };
-    for (let index = 0; index < Math.min(CHART_READ_AHEAD, paths.length); index += 1) {
-      startRead(index);
-    }
-    for (let pathIndex = 0; pathIndex < paths.length; pathIndex += 1) {
-      const path = paths[pathIndex]!;
-      const read = pendingReads[pathIndex];
-      pendingReads[pathIndex] = undefined;
-      startRead(pathIndex + CHART_READ_AHEAD);
-      try {
-        const chartBytes = await read;
-        if (!chartBytes) {
-          throw new Error(`chart bytes missing for ${path}`);
-        }
-        const chart = parseChart(path, chartBytes);
-        // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
-        const scored = countScoredNotes(chart, { chartPath: path, inferBmsLNTypeWhenMissing: true });
-        const libraryChart: LibraryChart = {
-          id: `${source.id}:${path}`,
-          sourceId: source.id,
-          sourceLabel: source.label,
-          sourceKind: source.kind,
-          chartPath: path,
-          directoryLabel: dirname(path) || source.label,
-          fileLabel: basename(path),
-          title: chart.metadata.title || basenameWithoutExtension(path),
-          subtitle: chart.metadata.subtitle,
-          artist: chart.metadata.artist,
-          genre: chart.metadata.genre,
-          playLevel: chart.metadata.playLevel,
-          bpm: chart.metadata.bpm,
-          // The notes the engine scores: FREE ZONE tails are judged by nobody, and mines / invisible objects are not
-          // notes at all. A long note counts once.
-          totalNotes: scored.notes,
-          chart,
-        };
-        charts.push(libraryChart);
-        // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
-        // it. Keep the play variant first, while the events are still plain objects: select screens filter the whole
-        // list by it, and a cached answer spares them from unpacking every chart's events. Counting the notes already
-        // worked it out (`resolveChartPlayVariant` over the same chart and path).
-        seedLibraryChartPlayVariant(libraryChart, scored.playVariant);
-        compactCollectionChart(chart, eventStrings);
-      } catch (error) {
-        errors.push({
-          sourceId: source.id,
-          path,
-          message: error instanceof Error ? error.message : 'failed to parse chart',
-        });
+  const items = sources.flatMap((source, index) => chartPathsBySource[index]!.map((path) => ({ source, path })));
+  const loadedCharts: Array<LibraryChart | undefined> = Array.from({ length: items.length });
+  const parseErrors: Array<BrowserChartCollection['errors'][number] | undefined> = Array.from({ length: items.length });
+  await runWithConcurrency(items, getBrowserWorkerCount(), async ({ source, path }, index) => {
+    try {
+      const chartBytes = await loadAssetBytes(source.files.get(path));
+      if (!chartBytes) {
+        throw new Error(`chart bytes missing for ${path}`);
       }
-      parsedSoFar += 1;
-      throttledParseProgress?.({ phase: 'parsing', current: parsedSoFar, total: chartCount, label: path });
-      // Cooperative yield — gives the browser a slot to paint and flush the throttled progress callback.
-      if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) {
-        await yieldToEventLoop();
-      }
+      const input = { path, bytes: chartBytes };
+      const { chart, scored, packed, strings } = await runBrowserTask('parse-chart', input, () =>
+        parseChartTask(input),
+      );
+      // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
+
+      const libraryChart: LibraryChart = {
+        id: `${source.id}:${path}`,
+        sourceId: source.id,
+        sourceLabel: source.label,
+        sourceKind: source.kind,
+        chartPath: path,
+        directoryLabel: dirname(path) || source.label,
+        fileLabel: basename(path),
+        title: chart.metadata.title || basenameWithoutExtension(path),
+        subtitle: chart.metadata.subtitle,
+        artist: chart.metadata.artist,
+        genre: chart.metadata.genre,
+        playLevel: chart.metadata.playLevel,
+        bpm: chart.metadata.bpm,
+        // The notes the engine scores: FREE ZONE tails are judged by nobody, and mines / invisible objects are not
+        // notes at all. A long note counts once.
+        totalNotes: scored.notes,
+        chart,
+      };
+      loadedCharts[index] = libraryChart;
+      // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
+      // it. Keep the play variant first, while the events are still plain objects: select screens filter the whole
+      // list by it, and a cached answer spares them from unpacking every chart's events. Counting the notes already
+      // worked it out (`resolveChartPlayVariant` over the same chart and path).
+      seedLibraryChartPlayVariant(libraryChart, scored.playVariant);
+      restorePackedCollectionChart(chart, packed, strings);
+    } catch (error) {
+      parseErrors[index] = {
+        sourceId: source.id,
+        path,
+        message: error instanceof Error ? error.message : 'failed to parse chart',
+      };
     }
-  }
+    parsedSoFar += 1;
+    throttledParseProgress?.({ phase: 'parsing', current: parsedSoFar, total: chartCount, label: path });
+    if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) await yieldToTask();
+  });
+  charts.push(...loadedCharts.filter((chart): chart is LibraryChart => chart !== undefined));
+  errors.push(...parseErrors.filter((error): error is BrowserChartCollection['errors'][number] => error !== undefined));
   if (chartCount > 0) {
     onProgress?.({ phase: 'parsing', current: chartCount, total: chartCount });
   }
 
   return { sources, charts, errors };
-}
-
-/**
- * Yields to a browser task boundary so the host can paint a frame and dispatch pending progress events during large
- * chart drops. `queueMicrotask` is intentionally not used here: microtasks run before the browser gets a render
- * opportunity, so they still let a large parse loop monopolize the page.
- */
-function yieldToEventLoop(): Promise<void> {
-  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
-  if (scheduler?.yield !== undefined) {
-    return scheduler.yield();
-  }
-  return new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
 }
 
 export function describeChartCollection(collection: BrowserChartCollection): string {
@@ -536,21 +502,13 @@ export function describeChartCollection(collection: BrowserChartCollection): str
   }`;
 }
 
-function createZipSource(name: string, bytes: Uint8Array): BrowserAssetSource {
-  let uncompressedBytes = 0;
-  const entries = unzipSync(bytes, {
-    filter: (file) => {
-      const normalizedPath = normalizePath(file.name);
-      if (!normalizedPath || normalizedPath.endsWith('/')) return false;
-      uncompressedBytes += file.originalSize;
-      if (uncompressedBytes > MAX_ZIP_UNCOMPRESSED_BYTES) {
-        throw new Error(
-          `ZIP archive expands beyond ${formatBytes(MAX_ZIP_UNCOMPRESSED_BYTES)}; use a smaller archive or drop an extracted folder`,
-        );
-      }
-      return true;
-    },
-  });
+async function createZipSource(name: string, bytes: Uint8Array): Promise<BrowserAssetSource> {
+  const input = {
+    bytes,
+    limit: MAX_ZIP_UNCOMPRESSED_BYTES,
+    limitMessage: `ZIP archive expands beyond ${formatBytes(MAX_ZIP_UNCOMPRESSED_BYTES)}; use a smaller archive or drop an extracted folder`,
+  };
+  const entries = await runBrowserTask('unzip', input, () => unzipTask(input));
   const files = new Map<string, Uint8Array>();
   for (const [path, entryBytes] of Object.entries(entries)) {
     const normalizedPath = normalizePath(path);
@@ -573,15 +531,6 @@ function formatBytes(bytes: number): string {
   if (mib < 1024) return `${mib.toFixed(mib >= 10 ? 0 : 1)} MiB`;
   const gib = mib / 1024;
   return `${gib.toFixed(gib >= 10 ? 0 : 1)} GiB`;
-}
-
-function parseChart(path: string, bytes: Uint8Array) {
-  if (extensionOf(path) === '.bmson') {
-    return parseBmson(decodeUTF8Text(bytes));
-  }
-  // Single canonical decode pipeline (`@be-music/chart-parser`'s `decodeBMSText`) so the web player resolves a chart's
-  // encoding exactly like the CLI / TUI do \u2014 BOM, `#CHARSET`, and the shift_jis fallback all live in one module.
-  return parseBMS(decodeBMSText(bytes).text);
 }
 
 /**

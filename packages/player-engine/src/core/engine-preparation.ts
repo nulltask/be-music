@@ -14,7 +14,8 @@ import { type RulesetConfig } from '../ruleset/index.ts';
 import { initializePlayerUIRuntime } from './bootstrap.ts';
 import { createAudioSessionIfEnabled } from './engine-audio.ts';
 import { resolveChartRulesetFacts, resolveEngineChart, resolvePlayChart } from './play-chart.ts';
-import { delay } from './engine-clock.ts';
+import { getEngineScheduler } from './engine-clock.ts';
+import { settleWithTimeout } from '@be-music/shared-utils/async';
 import {
   type AudioSession,
   type AudioSessionLoadProgress,
@@ -161,7 +162,7 @@ function resolveAudioLoadComponentStatus(progress: AudioSessionLoadProgress): Pl
   if (progress.message === 'Audio disabled; skipping audio setup.') {
     return createDisabledLoadComponentStatus('Disabled');
   }
-  if (progress.message === 'node-web-audio-api is unavailable; continuing without audio.') {
+  if (progress.message === 'Audio unavailable.') {
     return createDisabledLoadComponentStatus('Unavailable');
   }
   return createPendingLoadComponentStatus(progress.message, progress.detail);
@@ -380,33 +381,19 @@ export async function finalizeAudioSessionSafely(audioSession: AudioSession | un
     return;
   }
   await audioSession.finish().catch(() => undefined);
-  await settleWithTimeout(audioSession.dispose(), 600);
+  await settleMaybeAsyncWithTimeout(audioSession.dispose(), 600);
 }
 
 export async function disposeAudioSessionSafely(audioSession: AudioSession | undefined): Promise<void> {
   if (!audioSession) {
     return;
   }
-  await settleWithTimeout(audioSession.dispose(), 600);
-}
-
-async function settleWithTimeout(task: Promise<void>, timeoutMs: number): Promise<boolean> {
-  let completed = false;
-  const guardedTask = task
-    .catch(() => undefined)
-    .then(() => {
-      completed = true;
-    });
-  await Promise.race([guardedTask, delay(timeoutMs)]);
-  return completed;
+  await settleMaybeAsyncWithTimeout(audioSession.dispose(), 600);
 }
 
 export async function settleMaybeAsyncWithTimeout(
   task: void | Promise<void> | undefined,
   timeoutMs: number,
 ): Promise<boolean> {
-  if (!task) {
-    return true;
-  }
-  return settleWithTimeout(Promise.resolve(task), timeoutMs);
+  return settleWithTimeout(task, timeoutMs, (callback, ms) => getEngineScheduler().setTimeout(callback, ms));
 }

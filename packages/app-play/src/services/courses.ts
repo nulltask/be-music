@@ -4,8 +4,8 @@
 // interrupt. What a course's flow decides is `course-flow.ts`'s, and the run itself is `CourseRun`
 // (`@be-music/player-engine/course`).
 
-import type { BeMusicReplay } from '@be-music/player-engine/replay';
-import type { BrowseSnapshot, LibraryCourse } from '@be-music/player-scene-model';
+import type { BeMusicCourseReplay, BeMusicReplay } from '@be-music/player-engine/replay';
+import type { BrowseSnapshot, LibraryCourse, PlayResult } from '@be-music/player-scene-model';
 import { startCourseRun, type ActiveCourse } from '../course-flow.ts';
 
 /**
@@ -47,9 +47,12 @@ export class CourseRunService {
     this.courseReturnNavigation = navigation;
   }
 
-  /** An EXPERT / GRADE course's run begins (its stages all in the collection). */
-  public beginRun(course: LibraryCourse): ActiveCourse {
-    const active = startCourseRun(course);
+  /**
+   * An EXPERT / GRADE course's run begins (its stages all in the collection): played, or, with `replay`, that course
+   * replay played back.
+   */
+  public beginRun(course: LibraryCourse, replay?: BeMusicCourseReplay): ActiveCourse {
+    const active = startCourseRun(course, replay);
     this.activeCourse = active;
     return active;
   }
@@ -63,8 +66,8 @@ export class CourseRunService {
    * ESC gave `active` up: the stage given up is recorded, with its replay once the engine has handed it over, and the
    * run is the running one again, so that its course result shows it as a failed run.
    */
-  public giveUp(active: ActiveCourse, replay: BeMusicReplay | undefined): void {
-    active.run.giveUp(replay);
+  public giveUp(active: ActiveCourse, replay: BeMusicReplay | undefined, result?: PlayResult): void {
+    active.run.giveUp(replay, result);
     this.activeCourse = active;
   }
 

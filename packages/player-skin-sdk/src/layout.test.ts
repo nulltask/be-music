@@ -92,7 +92,7 @@ describe('resolveLaneRuns', () => {
     ]);
   });
 
-  it('gives one run per side in IIDX double play', () => {
+  it('gives one run per side in That-Which-Must-Not-Be-Named double play', () => {
     const layout = resolveGameplayLayout({ laneChannels: DP, playVariant: '14' }, wideStage);
     const runs = resolveLaneRuns(layout.lanes);
     expect(runs).toHaveLength(2);

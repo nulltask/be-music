@@ -8,7 +8,7 @@ import {
   startTestBindings,
   submissionBody,
   type TestChart,
-} from '../test/support.ts';
+} from './test-support/support.ts';
 import { createApp } from './app.ts';
 import { eq } from 'drizzle-orm';
 import { openDatabase } from './db/client.ts';
@@ -121,7 +121,7 @@ describe('POST /api/v0/scores', () => {
       results: Array<{ ruleset: string; rulesetRevision: string; exScore: number; clearLamp: number; rank: number }>;
     };
     expect(body.chartFingerprint).toBe(chart.chartFingerprint);
-    expect(body.results.map((result) => result.ruleset)).toEqual(['lr2', 'beatoraja', 'iidx']);
+    expect(body.results.map((result) => result.ruleset)).toEqual(['lr2', 'beatoraja', '____']);
     for (const result of body.results) {
       expect(result.exScore).toBe(20); // ten PGREATs
       expect(result.rank).toBe(1);
@@ -174,18 +174,74 @@ describe('POST /api/v0/scores', () => {
     expect(await response.json()).toEqual({ error: 'play-document-fingerprint-mismatch' });
   });
 
+  test('ranks a play given up with ESC as a failed play, the notes it never reached in its BP (#584)', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    // Three PGREATs, then ESC at 2.1 s: the seven notes from 2.5 s on were never reached.
+    const given = makeReplay(chart, { noteCount: 10, hits: 3, play: { aborted: true, abortedAtUs: 2_100_000 } });
+    const response = await submit(cookie, submissionBody(given, chart.playDocument, chart.chartDocument));
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      results: Array<{ ruleset: string; exScore: number; clearLamp: number; missCount: number }>;
+    };
+    for (const result of body.results) {
+      expect(result).toMatchObject({ exScore: 6, clearLamp: clearLampRank('FAILED'), missCount: 7 });
+    }
+  });
+
+  test('stores a play at another tempo, or a course stage, without ranking it (#788)', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    const unrankedChart = makeChart(['#00114:01010101', '#00214:01010101', '#00314:01010101']);
+    // A play at another tempo is practice, and a course stage ranks with its course: both are kept, neither ranks.
+    const slowed = makeReplay(unrankedChart, { noteCount: 12, hits: 12, play: { tempo: 0.8 } });
+    const slowedResponse = await submit(
+      cookie,
+      submissionBody(slowed, unrankedChart.playDocument, unrankedChart.chartDocument),
+    );
+    expect(slowedResponse.status).toBe(201);
+    const slowedBody = (await slowedResponse.json()) as {
+      unranked?: string;
+      results: Array<{ exScore: number; rank: number; players: number; improved: Record<string, boolean> }>;
+    };
+    expect(slowedBody.unranked).toBe('tempo');
+    for (const result of slowedBody.results) {
+      expect(result).toMatchObject({
+        exScore: 24,
+        rank: 0,
+        players: 0,
+        improved: { exScore: false, lamp: false, missCount: false },
+      });
+    }
+    // Sent again, it answers the stored play, still unranked.
+    const again = await submit(cookie, submissionBody(slowed, unrankedChart.playDocument));
+    expect(again.status).toBe(200);
+    expect(((await again.json()) as { unranked?: string }).unranked).toBe('tempo');
+
+    const stage = makeReplay(unrankedChart, { noteCount: 12, hits: 6, play: { course: { kind: 'grade' } } });
+    const stageResponse = await submit(cookie, submissionBody(stage, unrankedChart.playDocument));
+    expect(stageResponse.status).toBe(201);
+    expect(((await stageResponse.json()) as { unranked?: string }).unranked).toBe('course-stage');
+
+    // Neither moved a best nor shows on the board.
+    const ranking = (await (
+      await fetchApp(
+        `/api/v0/charts/${encodeURIComponent(unrankedChart.chartFingerprint)}/leaderboard?ruleset=lr2&anonymous=1`,
+      )
+    ).json()) as { players: number; entries: unknown[] };
+    expect(ranking).toMatchObject({ players: 0, entries: [] });
+    const db = openDatabase(env.DB);
+    const stored = await db.query.score.findMany({ where: eq(score.chartFingerprint, unrankedChart.chartFingerprint) });
+    expect(new Set(stored.map((row) => row.unranked))).toEqual(new Set(['course-stage', 'tempo']));
+    expect(
+      await db.query.bestScore.findMany({ where: eq(bestScore.chartFingerprint, unrankedChart.chartFingerprint) }),
+    ).toEqual([]);
+  });
+
   test('rejects auto plays and malformed replays', async () => {
     const cookie = await signInAnonymously(fetchApp);
     const auto = makeReplay(chart, { noteCount: 10, hits: 10, play: { mode: 'auto' } });
     const autoResponse = await submit(cookie, submissionBody(auto, chart.playDocument, chart.chartDocument));
     expect(autoResponse.status).toBe(422);
     expect(await autoResponse.json()).toEqual({ error: 'auto-play' });
-
-    // A play at another tempo is practice: refused, like beatoraja's frequency trainer leaves its scores unsaved.
-    const slowed = makeReplay(chart, { noteCount: 10, hits: 10, play: { tempo: 0.8 } });
-    const slowedResponse = await submit(cookie, submissionBody(slowed, chart.playDocument, chart.chartDocument));
-    expect(slowedResponse.status).toBe(422);
-    expect(await slowedResponse.json()).toEqual({ error: 'tempo' });
 
     const malformed = await submit(cookie, submissionBody({ format: 'nope' }, chart.playDocument));
     expect(malformed.status).toBe(422);
@@ -383,7 +439,7 @@ describe('reassignScores', () => {
       const rows = await db.select().from(bestScore).where(eq(bestScore.userId, linkedId));
       expect(rows).toHaveLength(charts.length * 3);
       for (const row of rows) {
-        expect(row).toMatchObject({ bestEx: 16, playCount: 2, playedHere: row.ruleset !== 'iidx' });
+        expect(row).toMatchObject({ bestEx: 16, playCount: 2, playedHere: row.ruleset !== '____' });
       }
     };
     await expectBests();

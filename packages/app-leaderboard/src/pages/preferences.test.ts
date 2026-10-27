@@ -4,7 +4,7 @@ import { resolveDisplayRuleset, safeReturnPath } from './preferences.ts';
 describe('display ruleset preference', () => {
   test('reads a known ruleset and defaults to LR2', () => {
     expect(resolveDisplayRuleset('beatoraja')).toBe('beatoraja');
-    expect(resolveDisplayRuleset('iidx')).toBe('iidx');
+    expect(resolveDisplayRuleset('____')).toBe('____');
     expect(resolveDisplayRuleset(undefined)).toBe('lr2');
     expect(resolveDisplayRuleset('popn')).toBe('lr2');
   });

@@ -154,9 +154,9 @@ describe('informationTypeToKind / informationTypeToPlayVariant', () => {
   it('extracts the play variant from play codes only', () => {
     expect(informationTypeToPlayVariant(0)).toBe('7');
     expect(informationTypeToPlayVariant(1)).toBe('5');
-    expect(informationTypeToPlayVariant(2)).toBe('9');
+    expect(informationTypeToPlayVariant(2)).toBe('14');
     expect(informationTypeToPlayVariant(3)).toBe('10');
-    expect(informationTypeToPlayVariant(4)).toBe('14');
+    expect(informationTypeToPlayVariant(4)).toBe('9');
     expect(informationTypeToPlayVariant(5)).toBeUndefined();
     expect(informationTypeToPlayVariant(6)).toBeUndefined();
   });

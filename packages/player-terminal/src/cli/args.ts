@@ -40,6 +40,8 @@ export interface CLIArgs {
   judgeRuleset?: RulesetId;
   /** Gauge pick, in LR2's names; each ruleset maps it onto its own line-up. Defaults to `GROOVE`. */
   gauge?: GaugeType;
+  /** `false` keeps judging after a survival gauge empties (`PlayerOptions.endOnFailure`); omitted ends the play there. */
+  endOnFailure?: boolean;
   debugActiveAudio: boolean;
   renderAudioPath?: string;
   audio: boolean;
@@ -169,6 +171,9 @@ function applyCLIToggleArg(args: CLIArgs, token: string): boolean {
       return true;
     case '--audio':
       args.audio = true;
+      return true;
+    case '--no-end-on-failure':
+      args.endOnFailure = false;
       return true;
     case '--tui':
       args.tui = true;
@@ -448,8 +453,9 @@ export function printUsage(): void {
       '',
       'Developer/debug:',
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
-      '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | iidx',
+      '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | ____',
       '  --gauge <name>         Gauge: GROOVE (default) | EASY | HARD | DEATH',
+      '  --no-end-on-failure    Keep playing after a survival gauge empties (default: the play ends there)',
       '  --debug-judge-window <ms> Override BAD window for debugging',
     ].join('\n') + '\n',
   );

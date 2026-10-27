@@ -1,14 +1,14 @@
-import { latticeSkin, plainSkin, synesthesiaSkin } from '@be-music/player-browser/skin';
+import { plainSkin, synesthesiaSkin } from '@be-music/player-browser/skin';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import type { DemoGUIState } from '../../types.ts';
+import type { PlayerGUIState } from '../../types.ts';
 import { BE_MUSIC_SKINS } from '../built-in-skins.ts';
 import { BuiltInThemeService, type BuiltInThemeServiceOptions } from './built-in.ts';
 
-function harness(state: Partial<Pick<DemoGUIState, 'builtInSkin' | 'skinEffects'>> = {}): {
+function harness(state: Partial<Pick<PlayerGUIState, 'builtInSkin' | 'skinEffects'>> = {}): {
   service: BuiltInThemeService;
   options: BuiltInThemeServiceOptions;
-  guiState: Pick<DemoGUIState, 'builtInSkin' | 'skinEffects'>;
+  guiState: Pick<PlayerGUIState, 'builtInSkin' | 'skinEffects'>;
 } {
   const guiState = { builtInSkin: synesthesiaSkin.id, skinEffects: 'full' as const, ...state };
   const options: BuiltInThemeServiceOptions = { guiState, setStatus: vi.fn(), handleBuiltInSkinChange: vi.fn() };
@@ -54,12 +54,13 @@ describe('BuiltInThemeService', () => {
 
   test('an added skin is registered, its fonts load and the scenes switch to it', () => {
     const { service, options } = harness();
-    service.addBeMusicSkin(latticeSkin);
-    expect(BE_MUSIC_SKINS.skins).toContain(latticeSkin);
+    const added = { ...plainSkin, id: 'added', label: 'Added', fontLoads: ['400 12px "Added"'] };
+    service.addBeMusicSkin(added);
+    expect(BE_MUSIC_SKINS.skins).toContain(added);
     expect(document.fonts.load).toHaveBeenCalled();
-    expect(options.handleBuiltInSkinChange).toHaveBeenCalledWith(latticeSkin.id);
+    expect(options.handleBuiltInSkinChange).toHaveBeenCalledWith(added.id);
     expect(options.setStatus).toHaveBeenLastCalledWith(
-      `Added skin ${latticeSkin.label} ${latticeSkin.version} by ${latticeSkin.author.name}`,
+      `Added skin ${added.label} ${added.version} by ${added.author.name}`,
     );
   });
 

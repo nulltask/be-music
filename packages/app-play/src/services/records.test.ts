@@ -125,7 +125,7 @@ describe('RecordsService record lookups', () => {
     ruleset.current = 'beatoraja';
     expect(service.lookupChartBestRecord(chartEntry)?.lamp).toBe('EX_HARD');
     expect(service.currentRulesetRecords().get(`sha256:${ABC_SHA256}`)?.lamp).toBe('EX_HARD');
-    ruleset.current = 'iidx';
+    ruleset.current = '____';
     expect(service.lookupChartBestRecord(chartEntry)).toBeUndefined();
   });
 });
@@ -170,7 +170,7 @@ describe('RecordsService record latches', () => {
     service.recordActivePlay({ ...PLAY, exScore: 200 });
     expect(service.chartBestRecords.get('lr2:path:a.bms')?.exScore).toBe(100);
 
-    expect(stored.has('be-music-demo.chart-best-records')).toBe(true);
+    expect(stored.has('be-music.chart-best-records')).toBe(true);
     expect(records(library({})).chartBestRecords.get('lr2:path:a.bms')).toEqual({ ...PLAY, playCount: 1 });
   });
 

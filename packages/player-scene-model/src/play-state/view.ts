@@ -55,7 +55,7 @@ export function resolveHiSpeedForWhiteNumber(input: {
   return atHiSpeed1 / input.whiteNumberMs;
 }
 
-/** The IIDX-style green number for a white number: three fifths of it, rounded (beatoraja's `duration_green`). */
+/** The That-Which-Must-Not-Be-Named-style green number for a white number: three fifths of it, rounded (beatoraja's `duration_green`). */
 export function resolveGreenNumber(whiteNumberMs: number): number {
   return Math.round((whiteNumberMs * 3) / 5);
 }
@@ -82,7 +82,9 @@ export function captureReplayView(
     replayView.visibleMs = resolveWhiteNumber({
       laneBeats,
       hiSpeed: view.hiSpeed.drawn,
-      sudden: covers[0]?.sudden ?? 0,
+      sudden:
+        (view.covers[0]?.suddenOn ? view.covers[0].sudden : 0) +
+        (view.covers[0]?.absolute && (view.covers[0]?.liftOn ?? false) ? (view.covers[0]?.lift ?? 0) : 0),
       bpm: mainBPM,
     });
   }
@@ -101,6 +103,12 @@ export class ReplayViewCursor {
   constructor(initial: ReplayViewState | undefined, changes: readonly ReplayViewChange[] = []) {
     this.initial = initial;
     this.changes = changes;
+  }
+
+  /** The view at a seek, returned even when the target shares the last call's change interval. */
+  seek(timeUs: number): ReplayViewState {
+    this.applied = -1;
+    return this.next(timeUs)!;
   }
 
   /**

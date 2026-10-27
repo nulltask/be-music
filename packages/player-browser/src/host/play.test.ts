@@ -24,7 +24,8 @@ import { startReplayView } from '../session/play/play-view-settings.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaRenderContext } from '../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
-import { phantomSkin } from '../skins/phantom/index.ts';
+import { synesthesiaSkin } from '../skins/synesthesia/index.ts';
+import { plainSkin } from '../skins/plain/index.ts';
 import { resolveBeatorajaPlayTiming } from '../view/beatoraja/play-view.ts';
 import { createDecideScene } from './decide.ts';
 import type { BeatorajaKit } from './family-kit.ts';
@@ -72,10 +73,10 @@ const MAIN_BPM_CHART = parseChart(
 const NO_KEYS: SessionKeyTarget = { addEventListener: () => undefined, removeEventListener: () => undefined };
 const AUDIO = { stopOwned: vi.fn(), playJingle: vi.fn(async () => true) } as unknown as AudioService;
 
-function create(overrides: Partial<PlaySceneOptions> = {}) {
+function create(overrides: Partial<PlaySceneOptions> = {}, skin: typeof synesthesiaSkin = synesthesiaSkin) {
   const on = { finish: vi.fn(), exit: vi.fn(), restart: vi.fn(), hiSpeed: vi.fn(), tempo: vi.fn() };
   const scene = createPlayScene(
-    { family: 'built-in', skin: phantomSkin },
+    { family: 'built-in', skin },
     {
       chart: { ...CHART, chart: RANDOM_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2.5 },
@@ -110,6 +111,7 @@ function createFakeHost() {
     createElement,
   });
   const canvas = { ...target(), style: { touchAction: 'auto' }, focus: vi.fn() };
+  const stageChildren: unknown[] = [];
   const host = {
     app: {
       ticker: {
@@ -119,9 +121,19 @@ function createFakeHost() {
       canvas,
       screen: { width: 1280, height: 720 },
       renderer: { resolution: 1 },
-      stage: { children: [] },
+      stage: {
+        children: stageChildren,
+        addChild: (child: unknown) => {
+          stageChildren.push(child);
+        },
+        removeChild: (child: unknown) => {
+          const index = stageChildren.indexOf(child);
+          if (index >= 0) stageChildren.splice(index, 1);
+        },
+      },
     },
     setStageOrientation: vi.fn(),
+    syncCanvas: vi.fn(),
     isDisposed: () => false,
     onAfterRender: () => () => undefined,
   } as unknown as PixiSceneHost;
@@ -159,6 +171,26 @@ describe('createPlayScene', () => {
     scene.dispose();
   });
 
+  it('swaps the drawing family during a play and keeps the chart', async () => {
+    const fake = createFakeHost();
+    const { scene } = create({ host: fake.host });
+    await scene.prepare();
+    await scene.enter(fake.host);
+    scene.start();
+    const title = scene.progress()?.chart.title;
+    const lr2 = lr2PlaySkin();
+    await scene.replaceFamily({ family: 'lr2', skin: lr2 });
+    expect(scene.identity).toEqual({ kind: 'play', family: 'lr2' });
+    expect(scene.progress()?.chart.title).toBe(title);
+    await scene.replaceFamily({ family: 'built-in', skin: plainSkin });
+    expect(scene.identity).toEqual({ kind: 'play', family: 'built-in' });
+    expect(scene.progress()?.chart.title).toBe(title);
+    await scene.replaceFamily({ family: 'lr2', skin: lr2 });
+    expect(scene.identity.family).toBe('lr2');
+    expect(scene.progress()?.chart.title).toBe(title);
+    scene.dispose();
+  });
+
   it('loads the chart off stage and reports its progress', async () => {
     const { scene } = create();
     const progress: number[] = [];
@@ -176,7 +208,7 @@ describe('createPlayScene', () => {
 
   it('plays the #RANDOM branches the decide screen drew (preResolved)', async () => {
     const decide = createDecideScene(
-      { family: 'built-in', skin: phantomSkin },
+      { family: 'built-in', skin: synesthesiaSkin },
       {
         chart: { ...CHART, chart: RANDOM_CHART },
         sounds: {},
@@ -353,7 +385,7 @@ describe('createPlayScene with an LR2 kit', () => {
 
   it('keeps its family and skin when handed another kit', () => {
     const { scene } = createLR2();
-    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit({ family: 'built-in', skin: synesthesiaSkin })).not.toThrow();
     expect(() => scene.updateKit({ family: 'lr2', skin: lr2PlaySkin() })).not.toThrow();
     scene.dispose();
   });
@@ -412,12 +444,32 @@ describe('createPlayScene with a beatoraja kit', () => {
     expect(scene.identity).toEqual({ kind: 'play', family: 'beatoraja' });
     expect(scene.getHiSpeed()).toBe(2);
     expect(resolveBeatorajaPlayTiming({ fadeout: 300 })).toEqual({
+      inputStartOffsetMs: 0,
       loadEndOffsetMs: 0,
-      playStartOffsetMs: 1500,
+      playStartOffsetMs: 0,
+      playStartAfterLoadEndMs: 0,
+      musicEndDelayMs: 5000,
+      finishMarginMs: 0,
       fadeOutMs: 300,
       closeMs: 0,
     });
     expect(resolveBeatorajaPlayTiming({}).fadeOutMs).toBe(500);
+    expect(resolveBeatorajaPlayTiming({ input: 250, loadstart: 100, loadend: 3500, playstart: 1000 })).toMatchObject({
+      inputStartOffsetMs: 250,
+      loadEndOffsetMs: 3600,
+      playStartOffsetMs: 4600,
+      playStartAfterLoadEndMs: 1000,
+    });
+    for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        resolveBeatorajaPlayTiming({ input: value, loadstart: value, loadend: value, playstart: value }),
+      ).toMatchObject({
+        inputStartOffsetMs: 0,
+        loadEndOffsetMs: 0,
+        playStartOffsetMs: 0,
+        playStartAfterLoadEndMs: 0,
+      });
+    }
     // A failed play waits for the skin's `close` (1500 ms on beatoraja's default skins).
     expect(resolveBeatorajaPlayTiming({ close: 1500 }).closeMs).toBe(1500);
     expect(resolveBeatorajaPlayTiming({ close: -1 }).closeMs).toBe(0);
@@ -429,9 +481,9 @@ describe('createPlayScene with a beatoraja kit', () => {
     const { scene, play } = createBeatoraja();
     await scene.prepare();
     expect(play.options).toMatchObject({ coverKeys: true });
-    // SUDDEN at the shutter's 0.3, the lane cover shown; HIDDEN+ keeps the height, off; no LIFT.
+    // SUDDEN at the shutter's 0.3, the lane cover shown; HIDDEN+ keeps the height, off; the LIFT at its 0.1, off.
     expect(play.playState.view.covers).toEqual([
-      { side: '1P', sudden: 0.3, suddenOn: true, hidden: 0.3, hiddenOn: false, lift: 0 },
+      { side: '1P', sudden: 0.3, suddenOn: true, hidden: 0.3, hiddenOn: false, lift: 0.1, liftOn: false },
     ]);
     scene.dispose();
   });
@@ -484,7 +536,7 @@ describe('createPlayScene with a beatoraja kit', () => {
       settings: { initialHiSpeed: 2, hsFix: 'AVERAGE' as const },
     };
     const builtIn = createPlayScene(
-      { family: 'built-in', skin: phantomSkin },
+      { family: 'built-in', skin: synesthesiaSkin },
       { ...options, audio: AUDIO, on: { finish: vi.fn(), exit: vi.fn(), restart: vi.fn() }, keyTarget: NO_KEYS },
     );
     const lr2 = createPlayScene(
@@ -511,13 +563,13 @@ describe('createPlayScene with a beatoraja kit', () => {
     });
     await scene.prepare();
     expect(play.options).toMatchObject({ random1P: 'MIRROR', random2P: 'OFF' });
-    // MIRROR swaps the chart's two lanes: lane 1's note plays on lane 2 and lane 2's on lane 1.
-    expect(play.notes.map((note) => note.channel)).toEqual(['12', '11']);
+    // MIRROR uses the complete five-key domain even though this chart only uses lanes 1 and 2.
+    expect(play.notes.map((note) => note.channel)).toEqual(['15', '14']);
     expect(resolveReplayRecording(play.options, play.chart, {}).randomLane).toEqual({ p1: 'MIRROR', p2: 'OFF' });
     scene.dispose();
   });
 
-  it("starts READY and the play at once, and leaves over the skin's fadeout", async () => {
+  it("starts READY and PLAY with zero authored timings, and leaves over the skin's fadeout", async () => {
     vi.useFakeTimers();
     const update = vi.spyOn(BeatorajaPlaySkinView.prototype, 'update');
     const fake = createFakeHost();
@@ -558,26 +610,30 @@ describe('createPlayScene with a beatoraja kit', () => {
     fake.fire('keydown', keydown('h'));
     fake.fire('wheel', { deltaY: 1, shiftKey: true, preventDefault: vi.fn() });
     // From the play options' SUDDEN 0.3: PageDown and the Shift wheel lower SUDDEN+ by 0.01 and 0.025, End raises the
-    // LIFT, and H switches HIDDEN+ on at its kept height.
+    // LIFT from its 0.1 and switches it on, and H switches HIDDEN+ on at its kept height.
     expect(play.playState.view.covers[0]).toEqual({
       side: '1P',
       sudden: 0.335,
       suddenOn: true,
       hidden: 0.3,
       hiddenOn: true,
-      lift: 0.01,
+      lift: 0.11,
+      liftOn: true,
     });
     scene.dispose();
 
     const locked = createBeatoraja({
       host: fake.host,
-      settings: { hiSpeedLocked: true, hiddenSudden1P: 'SUDDEN', shutter: 0.3 },
+      settings: { hiSpeedLocked: true, hiddenSudden1P: 'SUDDEN', laneCover: true, shutter: 0.3 },
     });
     await locked.scene.prepare();
     await locked.scene.enter(fake.host);
+    // A locked course starts without covers, and the cover keys and the wheel leave them so.
+    const before = locked.play.playState.view.covers;
+    expect(before[0]).toMatchObject({ sudden: 0, suddenOn: false });
     fake.fire('keydown', keydown('PageDown'));
     fake.fire('wheel', { deltaY: 1, shiftKey: false, preventDefault: vi.fn() });
-    expect(locked.play.playState.view.covers[0]).toMatchObject({ sudden: 0.3, suddenOn: true });
+    expect(locked.play.playState.view.covers).toBe(before);
     locked.scene.dispose();
   });
 
@@ -604,9 +660,10 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it('leaves the cover keys to a play that takes them (not the built-in or LR2 play)', async () => {
+  it('leaves the cover keys to a play that takes them (not a built-in skin that draws no covers)', async () => {
     const fake = createFakeHost();
-    const { scene } = create({ host: fake.host });
+    // Every built-in skin takes them now; a skin added from a module URL does not.
+    const { scene } = create({ host: fake.host }, { ...synesthesiaSkin, id: 'added-skin' });
     await scene.prepare();
     await scene.enter(fake.host);
     const play = (scene as unknown as { playSession: PlaySceneSession }).playSession.play;
@@ -675,7 +732,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     await scene.prepare();
     expect(scene.resolved?.chart).toBeDefined();
     expect(() => scene.updateKit(beatorajaKit({ fadeout: 100 }))).not.toThrow();
-    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit({ family: 'built-in', skin: synesthesiaSkin })).not.toThrow();
     scene.dispose();
     expect(scene.resolved).toBeUndefined();
   });

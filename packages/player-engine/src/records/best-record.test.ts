@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import {
+  abortedRecordPlayFromResult,
   courseRunKeepsRecord,
   courseRunRecordPlay,
   courseStageKeepsRecord,
@@ -101,6 +102,45 @@ describe('recordPlayFromResult', () => {
     const lr2: RecordPlayResult = { score: { ...score, poor: 5 }, judgedPoor: 1, maxCombo: 6, cleared: true };
     expect(recordPlayFromResult(lr2).missCount).toBe(6);
   });
+
+  it('counts the notes a play that failed mid-way never judged in its BP, as LR2 and beatoraja do (#584)', () => {
+    const failed = { total: 100, perfect: 30, great: 10, good: 5, bad: 2, poor: 3, emptyPoor: 1, exScore: 70 };
+    // BAD + POOR + empty POOR (6), plus the 50 notes never judged.
+    expect(recordPlayFromResult({ score: failed, maxCombo: 20, cleared: false })).toEqual({
+      lamp: 'FAILED',
+      exScore: 70,
+      maxCombo: 20,
+      missCount: 56,
+    });
+  });
+
+  it('does not take mine POORs (which an LR2 POOR counts) for judged notes', () => {
+    // 6 notes judged, 2 POORs from mines: 4 notes were never reached.
+    const mines = { total: 10, perfect: 6, great: 0, good: 0, bad: 0, poor: 2, minePoor: 2, emptyPoor: 0, exScore: 12 };
+    expect(recordPlayFromResult({ score: mines, maxCombo: 6, cleared: false }).missCount).toBe(6);
+  });
+});
+
+describe('abortedRecordPlayFromResult', () => {
+  it('saves a play given up with ESC as FAILED, the notes it never reached in its BP', () => {
+    const score = { total: 50, perfect: 10, great: 5, good: 1, bad: 1, poor: 2, emptyPoor: 3, exScore: 25 };
+    // A gauge still above the border does not make a play given up a clear.
+    expect(abortedRecordPlayFromResult({ score, maxCombo: 12, cleared: true, lamp: 'NORMAL' })).toEqual({
+      lamp: 'FAILED',
+      exScore: 25,
+      maxCombo: 12,
+      missCount: 37,
+    });
+  });
+
+  it('saves nothing from a play that judged no note yet, as beatoraja saves none', () => {
+    const score = { total: 50, perfect: 0, great: 0, good: 0, bad: 0, poor: 3, emptyPoor: 2, exScore: 0 };
+    expect(abortedRecordPlayFromResult({ score, maxCombo: 0, cleared: false })).toBeUndefined();
+    expect(abortedRecordPlayFromResult({ score: { ...score, bad: 1 }, maxCombo: 0, cleared: false })).toMatchObject({
+      lamp: 'FAILED',
+      missCount: 52,
+    });
+  });
 });
 
 describe('recordPlayFromSummary', () => {
@@ -136,9 +176,27 @@ describe('recordPlayFromSummary', () => {
     };
     expect(recordPlayFromSummary(failed, 4)).toMatchObject({ lamp: 'FAILED', missCount: 6 });
   });
+
+  it('counts the notes a play that failed mid-way never judged in its BP', () => {
+    const failed = { ...summary, perfect: 3, bad: 1, poor: 1, gauge: { type: 'HARD', cleared: false } };
+    expect(recordPlayFromSummary(failed as RecordPlaySummary, 3)).toMatchObject({ lamp: 'FAILED', missCount: 7 });
+  });
 });
 
 describe('course stage record plays', () => {
+  it('count a stage’s BP as a single play counts it, the notes never judged once', () => {
+    const score = { total: 100, perfect: 30, great: 10, good: 5, bad: 2, poor: 3, emptyPoor: 1, exScore: 70 };
+    const result: RecordPlayResult = { score, maxCombo: 20, cleared: false };
+    expect(courseStageRecordPlayFromResult(result)).toEqual(recordPlayFromResult(result));
+    expect(courseStageRecordPlayFromResult(result).missCount).toBe(56);
+  });
+
+  it('counts mine POORs as BP without counting them as judged notes', () => {
+    const score = { total: 10, perfect: 8, great: 0, good: 0, bad: 0, poor: 2, minePoor: 2, emptyPoor: 0, exScore: 16 };
+    expect(courseStageRecordPlayFromResult({ score, maxCombo: 8, cleared: false }).missCount).toBe(4);
+    expect(courseStageRecordPlayFromSummary(score, 8).missCount).toBe(4);
+  });
+
   it('count the notes a failed stage never judged in its BP', () => {
     const score = { total: 100, perfect: 30, great: 10, good: 5, bad: 2, poor: 3, emptyPoor: 1, exScore: 70 };
     // BAD + POOR + empty POOR (6), plus the 50 notes never judged.
@@ -242,4 +300,28 @@ describe('isCourseRunAutoPlayed / courseRunKeepsRecord', () => {
     expect(courseRunKeepsRecord({ stages: [played({ mode: 'auto' }), played()] })).toBe(false);
     expect(courseRunKeepsRecord({ stages: [played({ tempo: 1.2 }), played()] })).toBe(false);
   });
+});
+
+it('keeps an LR2 full combo below the gauge border, using the same lamp rule as replay results', () => {
+  const summary: RecordPlaySummary = {
+    total: 10,
+    perfect: 8,
+    great: 1,
+    good: 1,
+    bad: 0,
+    poor: 0,
+    emptyPoor: 30,
+    exScore: 17,
+    gauge: {
+      type: 'GROOVE',
+      current: 40,
+      max: 100,
+      initial: 20,
+      clearThreshold: 80,
+      effectiveTotal: 160,
+      cleared: false,
+    },
+  };
+  expect(recordPlayFromSummary(summary, 10, 'lr2').lamp).toBe('FULL_COMBO');
+  expect(recordPlayFromSummary(summary, 10, 'beatoraja').lamp).toBe('FAILED');
 });

@@ -1,3 +1,5 @@
+import type { BeMusicReplay } from '@be-music/player-engine/replay';
+import { PlaySession } from './play-session.ts';
 import {
   createPlayerUISignalBus,
   type PlayerUICommand,
@@ -30,8 +32,9 @@ function createPlay(options: {
   total: number;
   autoPlay?: boolean;
   courseCarryIn?: { combo: number; maxCombo: number };
-  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  judgeRuleset?: 'lr2' | 'beatoraja' | '____';
   chartPlayVariant?: string;
+  replay?: BeMusicReplay;
 }) {
   const judgeRuleset = options.judgeRuleset ?? 'lr2';
   const gauge = createPlaceholderGaugeState('GROOVE');
@@ -42,7 +45,10 @@ function createPlay(options: {
   /** The channels the play asked the view's key-beam fade of. */
   const fadeAsked: string[] = [];
   const ctx = {
-    options: { autoPlay: options.autoPlay === true },
+    options: {
+      autoPlay: options.autoPlay === true,
+      ...(options.replay !== undefined ? { replay: options.replay } : {}),
+    },
     chart: SONG,
     replay: undefined,
     disposed: false,
@@ -175,6 +181,63 @@ afterEach(() => {
 });
 
 describe('the play state of a built-in / LR2 play, fed from the engine', () => {
+  test('an empty POOR stamps the pause-aware millisecond clock even when chart time differs', () => {
+    const play = createPlay({ total: 4 });
+    // At tempo 2, chart second 10 is not play-clock millisecond 10. A queued command has no judgment overwrite.
+    play.step(10, {}, [], [{ kind: 'trigger-poor-bga', seconds: 20 }]);
+    expect(play.ctx.lastPoorAt).toBe(10000);
+    play.step(10.2, {}, [], [{ kind: 'clear-poor-bga' }]);
+    expect(play.ctx.lastPoorAt).toBe(-Number.POSITIVE_INFINITY);
+  });
+
+  test('a paused seek cancels the old music-end gate and finish-margin timeout', () => {
+    const play = new PlaySession();
+    const frame = frameAt(0, { gauge: createPlaceholderGaugeState('GROOVE') });
+    const bus = createPlayerUISignalBus(frame);
+    play.sharedEngineSignals = { uiSignals: bus };
+    play.paused = true;
+    play.chartEnded = true;
+    const ended = vi.fn();
+    play.chartEndGate = (seconds) => {
+      if (seconds >= 5) ended();
+    };
+    play.chartEndTimeout = window.setTimeout(ended, 10);
+    bus.pushCommand({
+      kind: 'seek',
+      generation: 1,
+      seconds: 2,
+      snapshot: { summary: frame.summary, combo: 0, maxCombo: 0, judgments: [] },
+    });
+    drainSharedEngineSignals(play);
+    expect(play.chartEndGate).toBeUndefined();
+    expect(play.chartEndTimeout).toBeUndefined();
+    expect(play.chartEnded).toBe(false);
+    expect(play.paused).toBe(true);
+    vi.advanceTimersByTime(20);
+    expect(ended).not.toHaveBeenCalled();
+    play.dispose();
+  });
+
+  test('drives a chart-end milestone from authoritative frames and allows the gate to clear itself once', () => {
+    const h = createPlay({ total: 1 });
+    const reached = vi.fn();
+    h.ctx.chartEndGate = (seconds) => {
+      if (seconds >= 5) {
+        h.ctx.chartEndGate = undefined;
+        reached(seconds);
+      }
+    };
+    h.step(1, {});
+    h.step(4.9, {});
+    expect(reached).not.toHaveBeenCalled();
+    // A paused clock produces no progress; a faster playback simply reaches the same chart second sooner.
+    h.step(4.9, {});
+    expect(reached).not.toHaveBeenCalled();
+    h.step(5, {});
+    h.step(6, {});
+    expect(reached).toHaveBeenCalledExactlyOnceWith(5);
+  });
+
   test('frames, judgments and empty POORs reach one PlayState', () => {
     const play = createPlay({ total: 4 });
     play.step(1, { exScore: 2, gauge: 22 }, [{ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -3 }]);
@@ -218,6 +281,10 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(play.ctx.judgeSideState['1P'].courseCombo).toBe(7);
     play.step(3, {}, [{ judge: 'POOR', combo: 0 }]);
     expect(play.state().courseCombo).toMatchObject({ combo: 0, maxCombo: 10 });
+    expect(getResultData(play.ctx)?.stageOutcome).toMatchObject({
+      noteCount: 4,
+      course: { combo: 0, maxCombo: 10 },
+    });
   });
 
   test('the full combo event fires once the combo reaches every note', () => {
@@ -252,13 +319,20 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(result.chart).toBe(SONG);
   });
 
+  test('the result of a replay played back says so, so its skins can mark it', () => {
+    expect(getResultData(createPlay({ total: 4 }).ctx)!.fromReplay).toBeUndefined();
+    const replay = { play: { mode: 'manual' } } as unknown as BeMusicReplay;
+    expect(getResultData(createPlay({ total: 4, replay }).ctx)!.fromReplay).toBe(true);
+  });
+
   test('under LR2 an empty POOR is in the POOR count, the POOR judgments alone beside it, and in the BP once', () => {
     const play = createPlay({ total: 4 });
     play.step(1, { counts: { perfect: 1, bad: 1, poor: 1, emptyPoor: 2 } });
     const result = getResultData(play.ctx)!;
     expect(result.score).toMatchObject({ bad: 1, poor: 3, emptyPoor: 2 });
     expect(result.judgedPoor).toBe(1);
-    expect(recordPlayFromResult(result).missCount).toBe(4);
+    // BAD + POOR + empty POOR, and the fourth note the play has not judged yet.
+    expect(recordPlayFromResult(result).missCount).toBe(5);
   });
 
   test('a ruleset with its own empty-POOR figure keeps it apart from the POOR count', () => {
@@ -267,7 +341,7 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     const result = getResultData(play.ctx)!;
     expect(result.score).toMatchObject({ bad: 1, poor: 1, emptyPoor: 2 });
     expect(result.judgedPoor).toBeUndefined();
-    expect(recordPlayFromResult(result).missCount).toBe(4);
+    expect(recordPlayFromResult(result).missCount).toBe(5);
   });
 
   test("an AUTO play's full combo counts every note as its max combo", () => {
@@ -276,7 +350,15 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     play.step(1, {}, [{ judge: 'PERFECT', combo: 1 }]);
     play.step(2, {}, [{ judge: 'PERFECT', combo: 3 }]);
     expect(play.state().maxCombo).toBe(3);
+    applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8, minePoor: 1 }, 30));
+    expect(play.ctx.score.minePoor).toBe(1);
     applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8 }, 30));
+    expect(play.ctx.score).not.toHaveProperty('minePoor');
+    applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8, fullCombo: false }, 30));
+    expect(play.ctx.score.fullCombo).toBe(false);
+    applyFinalSummary(play.ctx, summary({ perfect: 4, exScore: 8 }, 30));
+    expect(play.ctx.score).not.toHaveProperty('fullCombo');
+
     expect(play.state().maxCombo).toBe(4);
     expect(play.state().combo).toBe(4);
     expect(getResultData(play.ctx)!.maxCombo).toBe(4);
@@ -311,7 +393,7 @@ describe('the BP a play records from its result', () => {
   test.each([
     { judgeRuleset: 'lr2', displayedPoor: 5 },
     { judgeRuleset: 'beatoraja', displayedPoor: 2 },
-    { judgeRuleset: 'iidx', displayedPoor: 2 },
+    { judgeRuleset: '____', displayedPoor: 2 },
   ] as const)('counts each empty POOR once under $judgeRuleset', ({ judgeRuleset, displayedPoor }) => {
     const play = createPlay({ total: 6, judgeRuleset });
     applyFinalSummary(play.ctx, summary(counts, 30));
@@ -399,4 +481,25 @@ describe('the key beams of a play, by channel', () => {
     play.step(1.2, {}, [], [{ kind: 'release-lane', channel: '1A' }]);
     expect([...play.ctx.keyBeamFadeStartedAt.keys()]).toEqual(['1A']);
   });
+});
+
+test('keeps a raw PMS maximum for the skin and normalizes the result gauge and border', () => {
+  const play = createPlay({ total: 2, judgeRuleset: 'beatoraja', chartPlayVariant: '9' });
+  const final = summary({}, 30);
+  final.gauge = { ...final.gauge!, current: 30, max: 120, initial: 30, clearThreshold: 85, type: 'NORMAL' };
+  applyFinalSummary(play.ctx, final);
+  expect(play.ctx.gaugeState).toMatchObject({ current: 30, max: 120, clearThreshold: 85 });
+  expect(play.state().gauge).toBe(25);
+  expect(getResultData(play.ctx)).toMatchObject({ gauge: 25, gaugeBorder: (85 / 120) * 100 });
+});
+
+test('engine calibration updates the display setting without moving the input or play clock', () => {
+  const play = createPlay({ total: 2, judgeRuleset: 'beatoraja' });
+  const onChange = vi.fn();
+  Object.assign(play.ctx.options, { judgeTimingAutoAdjust: true, judgeTimingMs: 500, onJudgeTimingChange: onChange });
+  play.step(2, {}, [], [{ kind: 'judge-timing', value: 505 }]);
+  expect(play.ctx.options.judgeTimingMs).toBe(505);
+  expect(onChange).toHaveBeenCalledWith(505);
+  expect(play.ctx.currentSeconds()).toBe(2);
+  expect(play.ctx.playState.judgeTimings).toHaveLength(0);
 });

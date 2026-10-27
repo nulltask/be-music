@@ -1,7 +1,7 @@
 /**
  * What the beatoraja select view's skin reads of the screen (`BeatorajaSelectView`), through
  * `@be-music/skin-beatoraja/scene`: the frame's select input (the focused bar and its chart's facts, the folder, the
- * search, the list's key-mode filter and sort, the LNMODE choice, the skin, the judge timing, the bar's best lamp, the
+ * search, the list's key-mode filter and sort, the player's LN MODE, the skin, the judge timing, the bar's best lamp, the
  * clock), the texts, numbers and image-set values resolved from it, and the active ops: the skin's options, the focused
  * bar's ops and the buttons pressed a moment ago.
  *
@@ -11,15 +11,20 @@
 import { buildBaseOpSet } from '@be-music/skin-beatoraja';
 import {
   beatorajaWallClockOf,
+  resolveBeatorajaConstantOps,
   resolveBeatorajaSelectBarOps,
   resolveBeatorajaSelectNumber,
   resolveBeatorajaSelectRefValue,
   resolveBeatorajaSelectText,
+  resolveBeatorajaOptionIndex,
+  resolveBeatorajaPlayOptionIndex,
   type BeatorajaSelectInput,
 } from '@be-music/skin-beatoraja/scene';
-import type { BrowseListOptions, LibraryEntry } from '@be-music/player-scene-model';
+import type { BrowseListOptions, LibraryEntry, PlayOptions } from '@be-music/player-scene-model';
 import type { BeatorajaSceneKit } from '../../../skin/beatoraja/scene-kit.ts';
 import { selectChartFacts } from './chart-facts.ts';
+
+const LONG_NOTE_MODE_INDICES: Readonly<Record<PlayOptions['longNoteMode'], 0 | 1 | 2>> = { LN: 0, CN: 1, HCN: 2 };
 
 /**
  * How long a `BUTTON_*` op stays active after a click fires (audit 2.1). 200ms is long
@@ -34,6 +39,8 @@ const BUTTON_PRESS_WINDOW_MS = 200;
 export interface BeatorajaSelectSkinStateContext {
   /** The skin and the player's options for it. */
   readonly options: Pick<BeatorajaSceneKit, 'skin' | 'skinConfig'>;
+  /** The play options, which the skin's option buttons show and step. */
+  readonly playOptions?: Partial<PlayOptions>;
   readonly entries: ReadonlyArray<LibraryEntry>;
   /** The cursor: `entries[currentIndex]` is the focused bar. */
   readonly currentIndex: number;
@@ -41,11 +48,11 @@ export interface BeatorajaSelectSkinStateContext {
   readonly searchQuery: string;
   /** The list's key-mode filter and sort (the MODE and SORT buttons). */
   readonly list: Pick<BrowseListOptions, 'keysFilter' | 'sort'>;
-  /** The LNMODE button's pick over the chart's own `#LNMODE`. */
-  readonly lnModeOverride: 0 | 1 | 2 | undefined;
   currentFolderLabel(): string;
   /** The best clear lamp of a chart or course bar, as its op (`beatorajaClearLampOp`); `undefined` for none. */
   lampOpOf(entry: LibraryEntry): number | undefined;
+  /** The focused bar's replay slots and the one picked (`SelectFrame.replaySlots`), when the host keeps them. */
+  readonly replaySlots?: { readonly exists: readonly boolean[]; readonly selected: number };
   /** The clock a button press is timed on, in ms. */
   nowMs(): number;
 }
@@ -86,11 +93,16 @@ export class BeatorajaSelectSkinState {
    */
   computeActiveOps(): ReadonlySet<number> {
     const base = this.baseOps();
+    // The player's CONSTANT setting lights `OPTION_CONSTANT` on every bar: beatoraja reads the selected bar's play
+    // config, and be-music keeps one for every key mode.
+    const constantOps = resolveBeatorajaConstantOps(this.ctx.playOptions?.visualConstant);
     // Fast path: no active entry → just the base set (includes `skin_config.option` picks).
     const entry = this.ctx.entries[this.ctx.currentIndex];
-    if (entry === undefined) return base;
+    if (entry === undefined && constantOps.length === 0) return base;
 
     const ops = new Set(base);
+    for (const op of constantOps) ops.add(op);
+    if (entry === undefined) return ops;
     // The bar's ops: the screen's fixed state, and the folder, course or chart bar with its key mode, traits,
     // difficulty, judge rank and clear lamp (`resolveBeatorajaSelectBarOps`).
     for (const op of resolveBeatorajaSelectBarOps(this.selectInput())) ops.add(op);
@@ -114,14 +126,14 @@ export class BeatorajaSelectSkinState {
 
   /**
    * What the skin reads of the screen (`@be-music/skin-beatoraja/scene`): the focused bar and its chart's facts, the
-   * folder, the search, the list's key-mode filter and sort, the LNMODE choice, the skin, the judge timing, the bar's
-   * best lamp and the clock. Built once per frame by the view's draw; read through it for every value, text and image
+   * folder, the search, the list's key-mode filter and sort, the player's LN MODE, the skin, the judge timing, the bar's
+   * best lamp, its replay slots and the clock. Built once per frame by the view's draw; read through it for every value, text and image
    * of the frame.
    */
   selectInput(): BeatorajaSelectInput {
     if (this.frameInput !== undefined) return this.frameInput;
     const entry = this.ctx.entries[this.ctx.currentIndex];
-    const offset = this.ctx.options.skinConfig?.offset;
+    const offset = this.ctx.playOptions?.judgeTimingMs ?? this.ctx.options.skinConfig?.offset;
     // A random course bar has no record.
     const lampOp =
       entry === undefined || (entry.kind === 'course' && entry.course.random !== undefined)
@@ -135,10 +147,15 @@ export class BeatorajaSelectSkinState {
       folderLabel: this.ctx.currentFolderLabel(),
       searchText: this.ctx.searchQuery,
       list: { keysFilter: this.ctx.list.keysFilter, sort: this.ctx.list.sort },
-      ...(this.ctx.lnModeOverride !== undefined ? { lnMode: this.ctx.lnModeOverride } : {}),
+      ...(this.ctx.playOptions?.longNoteMode !== undefined
+        ? { lnMode: LONG_NOTE_MODE_INDICES[this.ctx.playOptions.longNoteMode] }
+        : {}),
       skin: { name: this.ctx.options.skin.name, author: this.ctx.options.skin.author },
       judgeTiming: typeof offset === 'number' && Number.isFinite(offset) ? offset : 0,
       ...(lampOp !== undefined ? { lampOp } : {}),
+      ...(this.ctx.replaySlots !== undefined
+        ? { replaySlots: this.ctx.replaySlots.exists, selectedReplaySlot: this.ctx.replaySlots.selected }
+        : {}),
       wallClock: beatorajaWallClockOf(new Date()),
     };
   }
@@ -155,6 +172,17 @@ export class BeatorajaSelectSkinState {
   }
 
   resolveSelectionRefValue(refOp: number): number {
-    return resolveBeatorajaSelectRefValue(refOp, this.selectInput());
+    const input = this.selectInput();
+    // beatoraja's select screen shows the player's LN MODE on the LNMODE image, not the focused chart's.
+    const playOptions = this.ctx.playOptions ?? {};
+    return (
+      resolveBeatorajaOptionIndex(refOp, {
+        ...(playOptions.longNoteMode !== undefined ? { longNoteMode: playOptions.longNoteMode } : {}),
+        hsFix: playOptions.hsFix,
+        lampOp: input.lampOp,
+      }) ??
+      resolveBeatorajaPlayOptionIndex(refOp, playOptions) ??
+      resolveBeatorajaSelectRefValue(refOp, input)
+    );
   }
 }

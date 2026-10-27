@@ -7,6 +7,12 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   activeCourseInfo,
   courseDecideSong,
+  courseFromReplay,
+  courseGoesOnAfter,
+  courseReplayStageGivenUp,
+  describeCourseReplayStage,
+  matchCourseReplayCharts,
+  recordCourseStage,
   courseStageHistories,
   describeNonstopPrepareFailure,
   describeRandomCourseDrawFailure,
@@ -78,6 +84,10 @@ describe('planCourseStart', () => {
     expect(planCourseStart(course({ newCourse: true }))).toEqual({ action: 'make', kind: 'expert' });
   });
 
+  test('a RANDOM MIX bar draws a course of its kind', () => {
+    expect(planCourseStart(course({ randomMix: true }))).toEqual({ action: 'random-mix', kind: 'expert' });
+  });
+
   test('a course with a missing stage starts nothing, even a random or NONSTOP one', () => {
     expect(planCourseStart(course({ playable: false }))).toEqual({ action: 'unplayable' });
   });
@@ -145,7 +155,7 @@ describe('resolveCourseBestRecordUpdate', () => {
   });
 
   test('keeps nothing for a run whose stages were judged under different rulesets', () => {
-    const mixed = courseLog({ judgeRuleset: 'lr2' }, { judgeRuleset: 'iidx' });
+    const mixed = courseLog({ judgeRuleset: 'lr2' }, { judgeRuleset: '____' });
     expect(resolveCourseBestRecordUpdate(mixed, RESULT, 'course:k')).toBeUndefined();
   });
 
@@ -259,5 +269,135 @@ describe('a running course', () => {
     active.run.recordStage(stageLog(), history);
     active.run.giveUp(stageLog());
     expect(courseStageHistories(active)).toEqual([history, { gaugeHistory: [], scoreHistory: [] }]);
+  });
+});
+
+/** A course stage replay played on chart `sha256`, its gauge left at `final`, given up when `aborted`. */
+function stageReplay(sha256: string, final = 80, aborted = false): BeMusicReplay {
+  return {
+    chart: { sha256, title: sha256.toUpperCase() },
+    play: { mode: 'manual', judgeRuleset: 'lr2', ...(aborted ? { aborted: true } : {}) },
+    results: {
+      native: {
+        ...RESULT,
+        noteCount: 10,
+        gauge: { type: 'GRADE', final, cleared: final >= 2 },
+        course: { combo: 5, maxCombo: 9 },
+      },
+    },
+  } as unknown as BeMusicReplay;
+}
+
+function replayLog(stages: BeMusicCourseReplay['stages'], kind: 'grade' | 'nonstop' = 'grade'): BeMusicCourseReplay {
+  return {
+    format: 'be-music-course-replay',
+    version: 1,
+    course: {
+      name: 'Dan',
+      kind,
+      constraints: ['grade_mirror'],
+      trophies: [{ name: 'gold', missRate: 5, scoreRate: 80 }],
+    },
+    stages,
+    ...(kind === 'nonstop'
+      ? {
+          nonstop: {
+            connections: ['fade'],
+            placement: 'lr2',
+            replay: stageReplay('stitched'),
+            stages: [],
+            noteStages: [],
+          },
+        }
+      : {}),
+  } as BeMusicCourseReplay;
+}
+
+describe('course replays as course runs', () => {
+  test('courseFromReplay rebuilds the course from the log and the charts found', () => {
+    const log = replayLog(
+      [
+        { played: true, replay: stageReplay('aa') },
+        { played: false, md5: 'bb', facts: {} as never },
+      ],
+      'nonstop',
+    );
+    const rebuilt = courseFromReplay(log, [chartEntry('a'), chartEntry('b')]);
+    expect(rebuilt.definition).toMatchObject({
+      name: 'Dan',
+      kind: 'nonstop',
+      constraints: ['grade_mirror'],
+      trophies: [{ name: 'gold', missRate: 5, scoreRate: 80 }],
+      release: true,
+      connections: ['fade'],
+      stages: [
+        { sha256: 'aa', title: 'a' },
+        { md5: 'bb', title: 'b' },
+      ],
+    });
+    expect(rebuilt.stages.map((stage) => stage.chart?.id)).toEqual(['a', 'b']);
+    expect(rebuilt.playable).toBe(true);
+    expect(courseFromReplay(log, [chartEntry('a'), undefined]).playable).toBe(false);
+  });
+
+  test('a run playing a course replay back plays each recorded stage replay, then ends where the run stopped', () => {
+    const first = stageReplay('aa');
+    const failed = stageReplay('bb', 0);
+    const log = replayLog([
+      { played: true, replay: first },
+      { played: true, replay: failed },
+      { played: false, md5: 'cc', facts: {} as never },
+    ]);
+    const active = startCourseRun(courseFromReplay(log, [chartEntry('a'), chartEntry('b'), chartEntry('c')]), log);
+    const played = { gaugeHistory: [], scoreHistory: [] } as never;
+    expect(nextCourseStagePlay(active)).toMatchObject({ index: 0, replay: first });
+    expect(courseGoesOnAfter(active, played)).toBe(true);
+    // The stage records its recorded replay, which a replay played back does not record again.
+    recordCourseStage(active, played);
+    expect(nextCourseStagePlay(active)).toMatchObject({ index: 1, replay: failed });
+    expect(courseGoesOnAfter(active, played)).toBe(false);
+    recordCourseStage(active, played);
+    expect(active.run.finished).toBe(true);
+    expect(nextCourseStagePlay(active)).toBeUndefined();
+    expect(active.run.buildReplay().stages.map((stage) => stage.played)).toEqual([true, true, false]);
+  });
+
+  test('a stage the recorded run gave up ends the run there, as given up', () => {
+    const log = replayLog([
+      { played: true, replay: stageReplay('aa', 80, true) },
+      { played: false, md5: 'bb', facts: {} as never },
+    ]);
+    const active = startCourseRun(courseFromReplay(log, [chartEntry('a'), chartEntry('b')]), log);
+    expect(courseReplayStageGivenUp(active)).toBe(true);
+    recordCourseStage(active, { gaugeHistory: [], scoreHistory: [] } as never);
+    expect(active.run.finished).toBe(true);
+    expect(courseReplayStageGivenUp(active)).toBe(false);
+    expect(courseReplayStageGivenUp(undefined)).toBe(false);
+  });
+
+  test('matchCourseReplayCharts finds each stage by its hashes, and leaves a stage with no loaded chart missing', async () => {
+    const log = replayLog([
+      { played: true, replay: stageReplay('sha-b') },
+      { played: false, md5: 'md5-a', facts: {} as never },
+      { played: false, chartFingerprint: 'bmfp0:gone', facts: {} as never },
+    ]);
+    const asked: boolean[] = [];
+    const matched = await matchCourseReplayCharts(log, [chartEntry('a'), chartEntry('b')], async (chart, fp) => {
+      asked.push(fp);
+      return { sha256: `sha-${chart.id}`, md5: `md5-${chart.id}`, ...(fp ? { chartFingerprint: 'bmfp0:x' } : {}) };
+    });
+    expect(matched.map((stage) => stage.chart?.id)).toEqual(['b', 'a', undefined]);
+    // A stage named by its fingerprint alone has the charts fingerprinted.
+    expect(asked).toEqual([true, true]);
+    expect(
+      matched.filter((stage) => stage.chart === undefined).map(({ stage }) => describeCourseReplayStage(stage)),
+    ).toEqual(['Stage 3: bmfp0:gone']);
+  });
+
+  test('describeCourseReplayStage names a stage by its title and artist, else by its hash', () => {
+    expect(describeCourseReplayStage({ index: 0, played: true, title: 'Song', artist: 'Someone', md5: 'x' })).toBe(
+      'Stage 1: Song / Someone',
+    );
+    expect(describeCourseReplayStage({ index: 1, played: false, sha256: 'abc', md5: 'def' })).toBe('Stage 2: abc');
   });
 });

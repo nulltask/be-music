@@ -13,7 +13,7 @@ import {
   startTestBindings,
   submissionBody,
   type TestChart,
-} from '../../test/support.ts';
+} from '../test-support/support.ts';
 
 // Tests never reach BMS Search: a submission's background chartset lookup finds nothing.
 const noChartsets = async () => undefined;
@@ -457,7 +457,7 @@ describe('Leaderboard pages', () => {
     expect(score.html).toContain('LR2 rules');
     expect(score.html).toContain('Scored with');
     expect(score.html).toContain('beatoraja');
-    expect(score.html).toContain('IIDX');
+    expect(score.html).toContain('????');
     expect(score.html).toContain(`/api/v0/scores/${firstScore}/replay`);
 
     const ranking = await page(`/charts/${encodeURIComponent(chart.chartFingerprint)}`);
@@ -558,4 +558,12 @@ test('renders deployment metadata in the shared page footer', async () => {
   expect(response.status).toBe(200);
   expect(html.split('</main>')[1]).toContain('2026-10-20 08:00:00 UTC');
   expect(html).toContain('>01234567</code>');
+  const footer = html.slice(html.lastIndexOf('<footer'));
+  expect(footer).toContain('aria-current="page">Leaderboard</span>');
+  expect(footer).not.toContain('>Leaderboard</a>');
+  expect(footer).toContain('href="https://be-music.app/">Dashboard</a>');
+  expect(footer).toContain('href="https://accounts.be-music.app/">Accounts</a>');
+  expect(footer).toContain('href="https://play.be-music.app/">Play</a>');
+  expect(footer).toContain('href="/about"');
+  expect(footer).toContain('© 2026 nulltask · MIT License');
 });

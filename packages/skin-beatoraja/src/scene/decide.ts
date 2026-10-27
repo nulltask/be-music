@@ -1,3 +1,4 @@
+import { clamp } from '@be-music/shared-utils/core';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import { BEATORAJA_NUM, BEATORAJA_OP } from '../runtime-ids.ts';
 import { beatorajaDifficultyOps } from './select.ts';
@@ -15,7 +16,7 @@ export interface BeatorajaDecideInput {
 }
 
 function clampUnit(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+  return Number.isFinite(value) ? clamp(value, 0, 1) : 0;
 }
 
 /**

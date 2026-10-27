@@ -1,5 +1,29 @@
+import {
+  clampCustomJudgeRate,
+  DEFAULT_BEATORAJA_CUSTOM_JUDGE,
+  type BeatorajaCustomJudge,
+} from '../ruleset/custom-judge.ts';
+import type { BattleMode } from '../core/battle-mode.ts';
+import type { ChartPlayVariant } from '@be-music/chart-model';
+import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
+import type { ScrollTimelinePoint } from '@be-music/chart-model';
+import type { ScrollModifier } from '../core/scroll-modifier.ts';
+import type { LongNoteModifier } from '../core/long-note-modifier.ts';
+import type { MineModifier } from '../core/mine-modifier.ts';
+import {
+  parseReplayOptionState,
+  parseReplayOptionChanges,
+  type ReplayOptionState,
+  type ReplayOptionChange,
+} from './options.ts';
 import type { LongNoteMode, RandomDraw } from '@be-music/chart-model';
-import { GAUGE_TYPES, isGaugeType, type GaugeType } from '../ruleset/gauge-type.ts';
+import {
+  GAUGE_TYPES,
+  isGaugeType,
+  type GaugeType,
+  type GaugeAutoShift,
+  type GaugeShiftBottom,
+} from '../ruleset/gauge-type.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import {
@@ -11,6 +35,7 @@ import {
   type ReplayViewState,
 } from './view.ts';
 import {
+  parseGaugeValues,
   expectFiniteNumber,
   expectNonNegativeInteger,
   expectRecord,
@@ -60,6 +85,10 @@ export interface ReplayNote {
   id: number;
   /** Normalized playable channel AFTER every lane transform (`11`..`19` / `21`..`29`), i.e. the lane the player saw. */
   channel: string;
+  /** Original lane when rearranged; omitted when it is the same as channel or in older replays. */
+  sourceChannel?: string;
+  /** A generated long-note head; source identity and endpoint reconstruct the modifier without rerolling. */
+  generatedLongNote?: true;
   type: ReplayNoteType;
   timeUs: number;
   /** Long-note / freezone tail. Present only when `type` is `'long'` or `'freezone'`. */
@@ -68,6 +97,8 @@ export interface ReplayNote {
   lnMode?: LongNoteMode;
   /** Gauge damage percentage for `type: 'mine'` notes (base-36 value / bmson `damage`, already resolved). */
   damage?: number;
+  /** Generated mines carry no explosion sample. Valid only for mine notes. */
+  silent?: boolean;
 }
 
 export type ReplayInputAction = 'down' | 'up';
@@ -110,10 +141,14 @@ export interface ReplayJudgeRank {
    * `timeUs` on, the windows a chart opening with `rank` gets (`'chart'`) or LR2's NONSTOP rank table
    * (`'lr2-nonstop'`). Absent in logs recorded before it existed, which played with the first stage's rank throughout.
    */
-  stageRanks?: Array<{ timeUs: number; rank: number; table: 'chart' | 'lr2-nonstop' }>;
+  stageRanks?: Array<{ timeUs: number; rank: number; table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' }>;
 }
 
 export interface ReplayChart {
+  /** Original header BPM, kept separately from the effective tempo map. */
+  headerBPM?: number;
+  /** Resolved chart BPM extrema, used for source option classification. */
+  bpmRange?: { min: number; max: number };
   title?: string;
   subtitle?: string;
   artist?: string;
@@ -139,6 +174,8 @@ export interface ReplayChart {
    */
   playFingerprint?: string;
   sourceFormat: 'bms' | 'bmson';
+  /** Explicit TOTAL units for mixed-format NONSTOP charts; otherwise derived from sourceFormat. */
+  totalUnit?: 'absolute' | 'percent';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
   laneMode: string;
   /**
@@ -160,10 +197,55 @@ export interface ReplayChart {
 }
 
 export interface ReplayPlay {
+  /** Selected source options at the start; typed effective play/chart fields remain authoritative for judging. */
+  options?: ReplayOptionState;
+  /** Every later selected-option change, on the same chart clock as inputs and view changes. */
+  optionChanges?: ReplayOptionChange[];
   mode: 'manual' | 'auto';
   autoScratch: boolean;
+  /** Effective manual assist per side; older replays fall back to autoScratch for both. */
+  judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** beatoraja CUSTOM JUDGE rates in percent; absent while the option was off. */
+  customJudge?: BeatorajaCustomJudge;
+  longNoteModifier?: LongNoteModifier;
+  longNoteRate?: number;
+  sevenToNinePattern?: import('../core/seven-to-nine.ts').SevenToNinePattern;
+  sevenToNineType?: import('../core/seven-to-nine.ts').SevenToNineType;
+  sevenToNineThresholdBPM?: number;
+  sevenToNineApplied?: boolean;
+  battleMode?: BattleMode;
+  battleSourceVariant?: ChartPlayVariant;
+  battleTempo?: number;
+  battleAssist1P?: boolean;
+  battleAssist2P?: boolean;
+  battleChangedObjectCount?: number;
+  battleDroppedObjectCount?: number;
+  /** LR2 D-BATTLE: scratch objects stayed playable (scratch key held through the decide animation). */
+  dBattleScratch?: boolean;
+  lr2ExtraMode?: boolean;
+  lr2ExtraLevel?: LR2ExtraLevel;
+  lr2ExtraEffectiveLevel?: LR2ExtraLevel;
+  lr2ExtraConvertedObjectCount?: number;
+  lr2ExtraTempo?: number;
+  extraNoteDepth?: number;
+  extraNoteScratch?: boolean;
+  /** Actual source conversions, including overwritten additions; independent of record policy. */
+  extraNoteChangeCount?: number;
+  longNoteModifierChangeCount?: number;
+  mineModifier?: MineModifier;
+  scrollModifier?: ScrollModifier;
+  scrollSection?: number;
+  scrollRate?: number;
+  scrollModifierTimeline?: ScrollTimelinePoint[];
+  /** Effective chart change, not an assist-policy decision (source ADD does not set an assist flag). */
+  scrollModifierChanged?: boolean;
+  mineModifierChangeCount?: number;
+  autoScratch1P?: boolean;
+  autoScratch2P?: boolean;
   /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
   gauge: GaugeType;
+  /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`); `results.secondPlayer` is its result. */
+  gauge2P?: GaugeType;
   /** Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / ...). */
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
@@ -190,6 +272,8 @@ export interface ReplayPlay {
    * judgment that emptied it counts. Absent on older logs, which kept judging to the end.
    */
   endOnFailure?: boolean;
+  gaugeAutoShift?: GaugeAutoShift;
+  bottomShiftableGauge?: GaugeShiftBottom;
   /** Set when the play was one stage of a course: what the stage's rules and starting state were. */
   course?: ReplayCourseStage;
   /**
@@ -228,6 +312,8 @@ export interface ReplayCourseStage {
 
 /** The state carried from one course stage into the next. */
 export interface ReplayCourseCarry {
+  /** Independent raw CLASS / EXCLASS / EXHARDCLASS values under gauge auto-shift. */
+  gauges?: Record<string, number>;
   /** Gauge value in percent. */
   gauge: number;
   /** The course-wide combo running into the stage. */
@@ -247,6 +333,8 @@ export interface ReplayJudgmentCounts {
 }
 
 export interface ReplayGaugeResult {
+  /** Raw values for every parallel gauge; course stages carry these into the next stage. */
+  values?: Record<string, number>;
   /** Ruleset-scoped gauge id (`'GROOVE'`, `'HARD'`, `'NORMAL'`, `'EX-HARD'`, ...). */
   type: string;
   /** Final gauge value in percent. */
@@ -257,7 +345,7 @@ export interface ReplayGaugeResult {
 }
 
 export interface ReplayRulesetResult {
-  /** Ruleset identifier + revision (e.g. `'lr2/0'`, `'beatoraja/0'`, `'iidx/0'`, `'be-music/native'`). */
+  /** Ruleset identifier + revision (e.g. `'lr2/0'`, `'beatoraja/0'`, `'____/0'`, `'be-music/native'`). */
   ruleset: string;
   judge: ReplayJudgmentCounts;
   fast: number;
@@ -265,13 +353,17 @@ export interface ReplayRulesetResult {
   exScore: number;
   /**
    * The ruleset's judgment-note count (EX-SCORE denominator ÷ 2). Differs per ruleset: charge-note styles
-   * (beatoraja CN/HCN, IIDX CN) count a long note's head and tail as two judgments, LN styles as one.
+   * (beatoraja CN/HCN, That-Which-Must-Not-Be-Named CN) count a long note's head and tail as two judgments, LN styles as one.
    */
   noteCount: number;
+  /** Final combo eligibility when empty POOR can break combo; absent in legacy/count-only results. */
+  fullCombo?: boolean;
   maxCombo: number;
+  /** LR2 mine hits included in judge.poor, excluded from the judged-note count. */
+  minePoor?: number;
   /** 200000-max money score where the ruleset defines one. */
   score?: number;
-  /** IIDX DJ LEVEL label (`'AAA'`..`'F'`) where the ruleset defines one. */
+  /** That-Which-Must-Not-Be-Named DJ LEVEL label (`'AAA'`..`'F'`) where the ruleset defines one. */
   djLevel?: string;
   gauge: ReplayGaugeResult;
   /** For a course stage: the course-wide combo and max combo the stage left, which the next stage carries in. */
@@ -382,6 +474,8 @@ export function parseReplay(source: unknown): BeMusicReplay {
 
 function parseChart(chart: Record<string, unknown>): ReplayChart {
   const sourceFormat = chart.sourceFormat;
+  if (chart.totalUnit !== undefined && chart.totalUnit !== 'absolute' && chart.totalUnit !== 'percent')
+    throw new ReplayParseError('chart.totalUnit: expected absolute or percent');
   if (sourceFormat !== 'bms' && sourceFormat !== 'bmson') {
     throw new ReplayParseError(`chart.sourceFormat: expected 'bms' | 'bmson'`);
   }
@@ -409,7 +503,17 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
     throw new ReplayParseError('chart.lnMode: expected 1 | 2 | 3');
   }
 
+  let bpmRange: ReplayChart['bpmRange'];
+  if (chart.bpmRange !== undefined) {
+    const range = expectRecord(chart.bpmRange, 'chart.bpmRange');
+    const min = expectFiniteNumber(range.min, 'chart.bpmRange.min');
+    const max = expectFiniteNumber(range.max, 'chart.bpmRange.max');
+    if (min > max) throw new ReplayParseError('chart.bpmRange: min must not exceed max');
+    bpmRange = { min, max };
+  }
   const parsed: ReplayChart = {
+    ...(bpmRange !== undefined ? { bpmRange } : {}),
+    ...(chart.headerBPM !== undefined ? { headerBPM: expectFiniteNumber(chart.headerBPM, 'chart.headerBPM') } : {}),
     title: optionalString(chart.title, 'chart.title'),
     subtitle: optionalString(chart.subtitle, 'chart.subtitle'),
     artist: optionalString(chart.artist, 'chart.artist'),
@@ -423,6 +527,7 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
     sourceFormat,
     laneMode: expectString(chart.laneMode, 'chart.laneMode'),
     total: optionalFiniteNumber(chart.total, 'chart.total'),
+    ...(chart.totalUnit !== undefined ? { totalUnit: chart.totalUnit as 'absolute' | 'percent' } : {}),
     lnMode,
     judgeRank,
     noteCount: expectFiniteNumber(chart.noteCount, 'chart.noteCount'),
@@ -471,8 +576,8 @@ function parseStageRanks(value: unknown): ReplayJudgeRank['stageRanks'] {
     const path = `chart.judgeRank.stageRanks[${index}]`;
     const record = expectRecord(entry, path);
     const table = record.table;
-    if (table !== 'chart' && table !== 'lr2-nonstop') {
-      throw new ReplayParseError(`${path}.table: expected 'chart' or 'lr2-nonstop'`);
+    if (table !== 'chart' && table !== 'lr2-nonstop' && table !== 'bmson' && table !== 'bms-exrank') {
+      throw new ReplayParseError(`${path}.table: expected 'chart', 'lr2-nonstop', 'bmson' or 'bms-exrank'`);
     }
     return {
       timeUs: expectFiniteNumber(record.timeUs, `${path}.timeUs`),
@@ -496,6 +601,11 @@ function parseNote(value: unknown, index: number): ReplayNote {
     type: type as ReplayNoteType,
     timeUs: expectFiniteNumber(record.timeUs, `chart.notes[${index}].timeUs`),
   };
+  if (record.sourceChannel !== undefined) {
+    if (typeof record.sourceChannel !== 'string' || !/^[12][0-9A-Z]$/.test(record.sourceChannel))
+      throw new ReplayParseError(`chart.notes[${index}].sourceChannel: expected a normalized playable lane`);
+    note.sourceChannel = record.sourceChannel;
+  }
   const endTimeUs = optionalFiniteNumber(record.endTimeUs, `chart.notes[${index}].endTimeUs`);
   if (endTimeUs !== undefined) note.endTimeUs = endTimeUs;
   if (record.lnMode !== undefined) {
@@ -506,6 +616,25 @@ function parseNote(value: unknown, index: number): ReplayNote {
   }
   const damage = optionalFiniteNumber(record.damage, `chart.notes[${index}].damage`);
   if (damage !== undefined) note.damage = damage;
+  if (record.generatedLongNote !== undefined) {
+    if (
+      record.generatedLongNote !== true ||
+      type !== 'long' ||
+      note.lnMode === undefined ||
+      !Number.isSafeInteger(note.timeUs) ||
+      !Number.isSafeInteger(note.endTimeUs) ||
+      !(note.endTimeUs! > note.timeUs)
+    )
+      throw new ReplayParseError(
+        `chart.notes[${index}].generatedLongNote: expected a timed long note with a resolved mode`,
+      );
+    note.generatedLongNote = true;
+  }
+  if (record.silent !== undefined) {
+    if (type !== 'mine' || typeof record.silent !== 'boolean')
+      throw new ReplayParseError(`chart.notes[${index}].silent: expected a mine boolean`);
+    note.silent = record.silent;
+  }
   return note;
 }
 
@@ -568,11 +697,16 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     if (p2 !== undefined) parsed.randomLane.p2 = p2;
   }
   if (play.dpFlip !== undefined) parsed.dpFlip = play.dpFlip === true;
+  if (play.gauge2P !== undefined) {
+    if (!isGaugeType(play.gauge2P))
+      throw new ReplayParseError(`play.gauge2P: expected one of ${GAUGE_TYPES.join(' | ')}`);
+    parsed.gauge2P = play.gauge2P;
+  }
   const judgeWindowOverrideMs = optionalFiniteNumber(play.judgeWindowOverrideMs, 'play.judgeWindowOverrideMs');
   if (judgeWindowOverrideMs !== undefined) parsed.judgeWindowOverrideMs = judgeWindowOverrideMs;
   if (play.judgeRuleset !== undefined) {
-    if (play.judgeRuleset !== 'lr2' && play.judgeRuleset !== 'beatoraja' && play.judgeRuleset !== 'iidx') {
-      throw new ReplayParseError(`play.judgeRuleset: expected 'lr2' | 'beatoraja' | 'iidx'`);
+    if (play.judgeRuleset !== 'lr2' && play.judgeRuleset !== 'beatoraja' && play.judgeRuleset !== '____') {
+      throw new ReplayParseError(`play.judgeRuleset: expected 'lr2' | 'beatoraja' | '____'`);
     }
     parsed.judgeRuleset = play.judgeRuleset;
   }
@@ -582,6 +716,22 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
+  if (play.bottomShiftableGauge !== undefined) {
+    if (!['ASSIST-EASY', 'EASY', 'GROOVE'].includes(play.bottomShiftableGauge as string))
+      throw new ReplayParseError('play.bottomShiftableGauge: expected ASSIST-EASY, EASY or GROOVE');
+    parsed.bottomShiftableGauge = play.bottomShiftableGauge as GaugeShiftBottom;
+  }
+  if (play.gaugeAutoShift !== undefined) {
+    if (
+      !['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER'].includes(
+        play.gaugeAutoShift as string,
+      )
+    )
+      throw new ReplayParseError(
+        'play.gaugeAutoShift: expected NONE, CONTINUE, SURVIVAL_TO_GROOVE, BEST_CLEAR or SELECT_TO_UNDER',
+      );
+    parsed.gaugeAutoShift = play.gaugeAutoShift as GaugeAutoShift;
+  }
   if (play.course !== undefined) parsed.course = parseCourseStage(expectRecord(play.course, 'play.course'));
   if (play.tempo !== undefined) {
     const tempo = expectFiniteNumber(play.tempo, 'play.tempo');
@@ -597,6 +747,175 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     const changes = parseReplayViewChanges(play.viewChanges, 'play.viewChanges');
     if (changes.length > 0) parsed.viewChanges = changes;
   }
+  if (play.judgeAlgorithm !== undefined) {
+    if (!['combo', 'duration', 'lowest'].includes(play.judgeAlgorithm as string)) {
+      throw new ReplayParseError('play.judgeAlgorithm: expected combo, duration or lowest');
+    }
+    parsed.judgeAlgorithm = play.judgeAlgorithm as 'combo' | 'duration' | 'lowest';
+  }
+  if (play.customJudge !== undefined) {
+    const raw = expectRecord(play.customJudge, 'play.customJudge');
+    const judge = {} as BeatorajaCustomJudge;
+    for (const field of Object.keys(DEFAULT_BEATORAJA_CUSTOM_JUDGE) as Array<keyof BeatorajaCustomJudge>) {
+      const value = expectNonNegativeInteger(raw[field], `play.customJudge.${field}`);
+      if (value !== clampCustomJudgeRate(field, value))
+        throw new ReplayParseError(`play.customJudge.${field}: outside the source range`);
+      judge[field] = value;
+    }
+    parsed.customJudge = judge;
+  }
+  if (play.scrollModifier !== undefined) {
+    if (play.scrollModifier !== 'OFF' && play.scrollModifier !== 'REMOVE' && play.scrollModifier !== 'ADD')
+      throw new ReplayParseError('play.scrollModifier: expected OFF, REMOVE or ADD');
+    parsed.scrollModifier = play.scrollModifier;
+  }
+  if (play.scrollSection !== undefined) {
+    const section = expectNonNegativeInteger(play.scrollSection, 'play.scrollSection');
+    if (section < 1 || section > 1024) throw new ReplayParseError('play.scrollSection: expected 1..1024');
+    parsed.scrollSection = section;
+  }
+  if (play.scrollRate !== undefined) {
+    const rate = expectFiniteNumber(play.scrollRate, 'play.scrollRate');
+    if (rate < 0 || rate > 1) throw new ReplayParseError('play.scrollRate: expected 0..1');
+    parsed.scrollRate = rate;
+  }
+  if (play.scrollModifierTimeline !== undefined) {
+    if (!Array.isArray(play.scrollModifierTimeline))
+      throw new ReplayParseError('play.scrollModifierTimeline: expected array');
+    let previous = -Infinity;
+    parsed.scrollModifierTimeline = play.scrollModifierTimeline.map((value, index) => {
+      const point = expectRecord(value, `play.scrollModifierTimeline[${index}]`);
+      const beat = expectFiniteNumber(point.beat, 'scroll timeline beat');
+      const speed = expectFiniteNumber(point.speed, 'scroll timeline speed');
+      if (beat < 0 || beat < previous)
+        throw new ReplayParseError('play.scrollModifierTimeline: expected ordered nonnegative beats');
+      previous = beat;
+      return { beat, speed };
+    });
+  }
+  if (
+    parsed.scrollModifier === 'ADD' &&
+    (parsed.scrollSection === undefined || parsed.scrollRate === undefined || !parsed.scrollModifierTimeline?.length)
+  )
+    throw new ReplayParseError('play.scrollModifier: ADD requires section, rate and an effective timeline');
+  if (parsed.scrollModifier === 'ADD' && parsed.scrollModifierTimeline?.[0]?.beat !== 0)
+    throw new ReplayParseError('play.scrollModifierTimeline: expected initial beat zero');
+  if (play.scrollModifierChanged !== undefined) {
+    if (typeof play.scrollModifierChanged !== 'boolean')
+      throw new ReplayParseError('play.scrollModifierChanged: expected boolean');
+    parsed.scrollModifierChanged = play.scrollModifierChanged;
+  }
+  if (play.mineModifier !== undefined) {
+    if (!['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'].includes(play.mineModifier as string))
+      throw new ReplayParseError('play.mineModifier: expected OFF, REMOVE, ADD_RANDOM, ADD_NEAR or ADD_BLANK');
+    parsed.mineModifier = play.mineModifier as MineModifier;
+  }
+  if (play.mineModifierChangeCount !== undefined)
+    parsed.mineModifierChangeCount = expectNonNegativeInteger(
+      play.mineModifierChangeCount,
+      'play.mineModifierChangeCount',
+    );
+  if (play.sevenToNinePattern !== undefined) {
+    const value = expectNonNegativeInteger(play.sevenToNinePattern, 'play.sevenToNinePattern');
+    if (value > 6) throw new ReplayParseError('play.sevenToNinePattern: expected 0..6');
+    parsed.sevenToNinePattern = value as import('../core/seven-to-nine.ts').SevenToNinePattern;
+  }
+  if (play.sevenToNineType !== undefined) {
+    const value = expectNonNegativeInteger(play.sevenToNineType, 'play.sevenToNineType');
+    if (value > 2) throw new ReplayParseError('play.sevenToNineType: expected 0..2');
+    parsed.sevenToNineType = value as import('../core/seven-to-nine.ts').SevenToNineType;
+  }
+  if (play.sevenToNineThresholdBPM !== undefined) {
+    if (typeof play.sevenToNineThresholdBPM !== 'number' || !Number.isFinite(play.sevenToNineThresholdBPM))
+      throw new ReplayParseError('play.sevenToNineThresholdBPM: expected finite number');
+    parsed.sevenToNineThresholdBPM = play.sevenToNineThresholdBPM;
+  }
+  if (play.sevenToNineApplied !== undefined) {
+    if (typeof play.sevenToNineApplied !== 'boolean')
+      throw new ReplayParseError('play.sevenToNineApplied: expected boolean');
+    parsed.sevenToNineApplied = play.sevenToNineApplied;
+  }
+  if (play.battleMode !== undefined) {
+    if (!['OFF', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS', 'TWO-PLAYER'].includes(play.battleMode as string))
+      throw new ReplayParseError('play.battleMode: expected OFF, SP-TO-DP, D-BATTLE, BATTLE, BATTLE-AS or TWO-PLAYER');
+    parsed.battleMode = play.battleMode as BattleMode;
+  }
+  if (play.battleSourceVariant !== undefined) {
+    if (!['5', '7', '9', '10', '14', '24', '48'].includes(play.battleSourceVariant as string))
+      throw new ReplayParseError('play.battleSourceVariant: unknown play variant');
+    parsed.battleSourceVariant = play.battleSourceVariant as ChartPlayVariant;
+  }
+  if (play.battleTempo !== undefined) {
+    const tempo = expectFiniteNumber(play.battleTempo, 'play.battleTempo');
+    if (tempo <= 0) throw new ReplayParseError('play.battleTempo: expected positive tempo');
+    parsed.battleTempo = tempo;
+  }
+  for (const field of ['battleAssist1P', 'battleAssist2P', 'dBattleScratch'] as const) {
+    if (play[field] === undefined) continue;
+    if (typeof play[field] !== 'boolean') throw new ReplayParseError(`play.${field}: expected boolean`);
+    parsed[field] = play[field] as boolean;
+  }
+  for (const field of ['battleChangedObjectCount', 'battleDroppedObjectCount'] as const)
+    if (play[field] !== undefined) parsed[field] = expectNonNegativeInteger(play[field], `play.${field}`);
+  if (play.lr2ExtraMode !== undefined) {
+    if (typeof play.lr2ExtraMode !== 'boolean') throw new ReplayParseError('play.lr2ExtraMode: expected boolean');
+    parsed.lr2ExtraMode = play.lr2ExtraMode;
+  }
+  for (const field of ['lr2ExtraLevel', 'lr2ExtraEffectiveLevel'] as const) {
+    if (play[field] === undefined) continue;
+    const value = expectNonNegativeInteger(play[field], `play.${field}`);
+    if (value > 2) throw new ReplayParseError(`play.${field}: expected 0, 1 or 2`);
+    parsed[field] = value as LR2ExtraLevel;
+  }
+  if (play.lr2ExtraConvertedObjectCount !== undefined)
+    parsed.lr2ExtraConvertedObjectCount = expectNonNegativeInteger(
+      play.lr2ExtraConvertedObjectCount,
+      'play.lr2ExtraConvertedObjectCount',
+    );
+  if (play.lr2ExtraTempo !== undefined) {
+    const tempo = expectFiniteNumber(play.lr2ExtraTempo, 'play.lr2ExtraTempo');
+    if (tempo <= 0) throw new ReplayParseError('play.lr2ExtraTempo: expected positive tempo');
+    parsed.lr2ExtraTempo = tempo;
+  }
+  if (play.extraNoteDepth !== undefined) {
+    parsed.extraNoteDepth = expectNonNegativeInteger(play.extraNoteDepth, 'play.extraNoteDepth');
+    if (parsed.extraNoteDepth > 100) throw new ReplayParseError('play.extraNoteDepth: expected 0..100');
+  }
+  if (play.extraNoteScratch !== undefined) {
+    if (typeof play.extraNoteScratch !== 'boolean')
+      throw new ReplayParseError('play.extraNoteScratch: expected boolean');
+    parsed.extraNoteScratch = play.extraNoteScratch;
+  }
+  if (play.extraNoteChangeCount !== undefined)
+    parsed.extraNoteChangeCount = expectNonNegativeInteger(play.extraNoteChangeCount, 'play.extraNoteChangeCount');
+  if (play.longNoteRate !== undefined) {
+    const rate = expectFiniteNumber(play.longNoteRate, 'play.longNoteRate');
+    if (rate < 0 || rate > 1) throw new ReplayParseError('play.longNoteRate: expected 0..1');
+    parsed.longNoteRate = rate;
+  }
+  if (play.longNoteModifierChangeCount !== undefined)
+    parsed.longNoteModifierChangeCount = expectNonNegativeInteger(
+      play.longNoteModifierChangeCount,
+      'play.longNoteModifierChangeCount',
+    );
+  if (play.longNoteModifier !== undefined) {
+    if (
+      !['OFF', 'LEGACY', 'REMOVE', 'ADD_LN', 'ADD_CN', 'ADD_HCN', 'ADD_ALL'].includes(play.longNoteModifier as string)
+    ) {
+      throw new ReplayParseError(
+        'play.longNoteModifier must be OFF, LEGACY, REMOVE, ADD_LN, ADD_CN, ADD_HCN or ADD_ALL',
+      );
+    }
+    parsed.longNoteModifier = play.longNoteModifier as LongNoteModifier;
+  }
+  for (const key of ['autoScratch1P', 'autoScratch2P'] as const) {
+    if (play[key] !== undefined) {
+      if (typeof play[key] !== 'boolean') throw new ReplayParseError(`play.${key}: expected a boolean`);
+      parsed[key] = play[key];
+    }
+  }
+  if (play.options !== undefined) parsed.options = parseReplayOptionState(play.options);
+  if (play.optionChanges !== undefined) parsed.optionChanges = parseReplayOptionChanges(play.optionChanges);
   if (play.native !== undefined) {
     const native = expectRecord(play.native, 'play.native');
     const copied: Record<string, string | number | boolean | null> = {};
@@ -634,6 +953,9 @@ function parseCourseStage(course: Record<string, unknown>): ReplayCourseStage {
   if (course.carryIn !== undefined) {
     const carry = expectRecord(course.carryIn, 'play.course.carryIn');
     parsed.carryIn = {
+      ...(carry.gauges !== undefined
+        ? { gauges: parseGaugeValues(carry.gauges, 'play.course.carryIn.gauges', true) }
+        : {}),
       gauge: expectFiniteNumber(carry.gauge, 'play.course.carryIn.gauge'),
       combo: expectNonNegativeInteger(carry.combo, 'play.course.carryIn.combo'),
       maxCombo: expectNonNegativeInteger(carry.maxCombo, 'play.course.carryIn.maxCombo'),

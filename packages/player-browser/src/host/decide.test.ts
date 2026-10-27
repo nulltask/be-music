@@ -9,7 +9,7 @@ import type { AudioService } from '../runtime/audio-service.ts';
 import type { PixiSceneHost } from './scene-host.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
-import { phantomSkin } from '../skins/phantom/index.ts';
+import { synesthesiaSkin } from '../skins/synesthesia/index.ts';
 import { resolveBeatorajaDecideTiming } from '../view/beatoraja/decide-view.ts';
 import { BuiltInDecideView, resolveBuiltInDecideTiming } from '../view/built-in/decide-view.ts';
 import { resolveLR2DecideTiming } from '../view/lr2/decide-view.ts';
@@ -74,24 +74,27 @@ describe('resolveBuiltInDecideTiming', () => {
   it("moves on after the skin's decide duration, 2000 ms by default, with input open at once", () => {
     const draw = () => undefined;
     expect(
-      resolveBuiltInDecideTiming({ family: 'built-in', skin: { ...phantomSkin, decide: { durationMs: 3500, draw } } }),
+      resolveBuiltInDecideTiming({
+        family: 'built-in',
+        skin: { ...synesthesiaSkin, decide: { durationMs: 3500, draw } },
+      }),
     ).toEqual({
       inputDelayMs: 0,
       autoAdvanceMs: 3500,
       fadeOutMs: 0,
     });
     expect(
-      resolveBuiltInDecideTiming({ family: 'built-in', skin: { ...phantomSkin, decide: { draw } } }).autoAdvanceMs,
+      resolveBuiltInDecideTiming({ family: 'built-in', skin: { ...synesthesiaSkin, decide: { draw } } }).autoAdvanceMs,
     ).toBe(2000);
   });
 
   it('moves on at once for a skin without a decide screen', () => {
-    expect(resolveBuiltInDecideTiming({ family: 'built-in', skin: phantomSkin }).autoAdvanceMs).toBe(0);
+    expect(resolveBuiltInDecideTiming({ family: 'built-in', skin: synesthesiaSkin }).autoAdvanceMs).toBe(0);
   });
 });
 
 describe('createDecideScene', () => {
-  function create(kit: BuiltInKit = { family: 'built-in', skin: { ...phantomSkin, decide: undefined } }) {
+  function create(kit: BuiltInKit = { family: 'built-in', skin: { ...synesthesiaSkin, decide: undefined } }) {
     const { audio, service } = createFakeAudio();
     const on = { continue: vi.fn(), cancel: vi.fn() };
     const clock = { now: 1000 };
@@ -116,7 +119,7 @@ describe('createDecideScene', () => {
   it("hands on the chart's #RANDOM branches it drew for the play", () => {
     const chart = parseChart(['#RANDOM 2', '#IF 2', '#00112:01', '#ENDIF', '#ENDRANDOM'].join('\n'), 'bms');
     const scene = createDecideScene(
-      { family: 'built-in', skin: phantomSkin },
+      { family: 'built-in', skin: synesthesiaSkin },
       {
         chart: { ...CHART, chart },
         sounds: {},
@@ -150,7 +153,7 @@ describe('createDecideScene', () => {
   });
 
   it('asks to continue on a click on the canvas, and stops listening as it leaves', () => {
-    const view = new BuiltInDecideView({ family: 'built-in', skin: phantomSkin });
+    const view = new BuiltInDecideView({ family: 'built-in', skin: synesthesiaSkin });
     const fake = createFakeHost();
     const emit = vi.fn();
     view.attach(fake.host, emit);
@@ -308,7 +311,7 @@ describe('createDecideScene with an LR2 kit', () => {
 
   it('keeps its family and its skin', () => {
     const { scene, kit } = create();
-    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit({ family: 'built-in', skin: synesthesiaSkin })).not.toThrow();
     expect(() => scene.updateKit({ family: 'lr2', skin: lr2DecideSkin() })).not.toThrow();
     expect(() => scene.updateKit(kit)).not.toThrow();
     scene.dispose();
@@ -479,7 +482,7 @@ describe('createDecideScene with a beatoraja kit', () => {
 
   it('keeps its family and its skin', () => {
     const { scene } = create();
-    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit({ family: 'built-in', skin: synesthesiaSkin })).not.toThrow();
     expect(() => scene.updateKit(beatorajaDecideKit())).not.toThrow();
     scene.dispose();
   });

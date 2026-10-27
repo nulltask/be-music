@@ -1,6 +1,6 @@
 {
   "name": "@be-music/app-play",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "private": true,
   "description": "Web player application for browsing charts, gameplay, and replays",
   "type": "module",
@@ -22,17 +22,19 @@
     "@be-music/player-scene-model": "workspace:*",
     "@be-music/player-skin-sdk": "workspace:*",
     "@be-music/service-web-theme": "workspace:*",
+    "@be-music/shared-utils": "workspace:*",
     "@be-music/skin-beatoraja": "workspace:*",
     "@be-music/skin-lr2": "workspace:*",
-    "@better-auth/passkey": "^1.7.10",
-    "better-auth": "^1.7.10",
     "fflate": "^0.8.3",
-    "lil-gui": "^0.21.0"
+    "tweakpane": "^4.0.5"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261015.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tweakpane/core": "^2.0.5",
+    "basecoat-css": "^1.0.2",
+    "tailwindcss": "^4.3.3",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "wrangler": "^4.151.0"
+    "wrangler": "^4.151.3"
   }
 }

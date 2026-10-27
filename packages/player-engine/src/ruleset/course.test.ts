@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   applyCourseJudgeConstraint,
+  isCourseStageFailed,
   resolveCourseGauge,
   resolveCourseGaugeId,
   resolveDefaultCourseGaugeSet,
@@ -26,11 +27,11 @@ describe('resolveCourseGaugeId', () => {
     expect(resolveCourseGaugeId('lr2', 'expert', 'HARD')).toBe('COURSE-HARD');
   });
 
-  test('beatoraja and IIDX map the pick onto the class gauges whatever the course kind', () => {
+  test('beatoraja and That-Which-Must-Not-Be-Named map the pick onto the class gauges whatever the course kind', () => {
     expect(resolveCourseGaugeId('beatoraja', 'expert', 'EASY')).toBe('CLASS');
     expect(resolveCourseGaugeId('beatoraja', 'grade', 'GROOVE')).toBe('CLASS');
     expect(resolveCourseGaugeId('beatoraja', 'grade', 'HARD')).toBe('EXCLASS');
-    expect(resolveCourseGaugeId('iidx', 'grade', 'DEATH')).toBe('EXHARDCLASS');
+    expect(resolveCourseGaugeId('____', 'grade', 'DEATH')).toBe('EXHARDCLASS');
   });
 });
 
@@ -82,7 +83,7 @@ describe('resolveCourseGauge', () => {
         guts: [{ threshold: 30, multiplier: 0.6 }],
       },
     );
-    expect(resolveCourseGauge('iidx', 'EXHARDCLASS', { kind: 'grade', gaugeSet: '5k' }, '7-key-sp', 1).values).toEqual([
+    expect(resolveCourseGauge('____', 'EXHARDCLASS', { kind: 'grade', gaugeSet: '5k' }, '7-key-sp', 1).values).toEqual([
       0.01, 0.01, 0, -2.5, -5, -2.5,
     ]);
   });
@@ -171,4 +172,17 @@ describe('resolveRuleset with a course', () => {
     expect(later[1]).toEqual(later[0]);
     expect(later[2]).toEqual(later[0]);
   });
+});
+
+test('maps independent EX-HARD into the source course EXHARDCLASS', () => {
+  expect(resolveCourseGaugeId('beatoraja', 'expert', 'EX-HARD')).toBe('EXHARDCLASS');
+  expect(resolveCourseGaugeId('____', 'grade', 'EX-HARD')).toBe('EXHARDCLASS');
+});
+
+test('course advancement follows the LR2 two-percent boundary and other sources zero boundary', () => {
+  expect(isCourseStageFailed('lr2/0', { final: 1.99 })).toBe(true);
+  expect(isCourseStageFailed('lr2', { final: 2 })).toBe(false);
+  expect(isCourseStageFailed('lr2', { final: 100, failedMidPlay: true })).toBe(true);
+  expect(isCourseStageFailed('beatoraja', { final: 1 })).toBe(false);
+  expect(isCourseStageFailed('beatoraja/0', { final: 0 })).toBe(true);
 });

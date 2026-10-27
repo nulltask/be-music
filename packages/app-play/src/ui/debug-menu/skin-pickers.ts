@@ -1,10 +1,9 @@
+import { selectBinding } from '../../pane-controls.ts';
 // The Debug Menu's "Beatoraja skins" pickers: one per scene type the loaded beatoraja theme ships, and the switch of
 // the screen showing to the entry picked. They run with the menu as `this` (`DebugMenu`).
-
 import { BEATORAJA_SKIN_TYPE, type BeatorajaSkinEntry } from '@be-music/skin-beatoraja';
-import { playSkinTypeForVariant } from '../../demo-utils.ts';
+import { playSkinTypeForVariant } from '../../player-utils.ts';
 import type { DebugMenu } from './index.ts';
-
 /**
  * Repopulate the "Beatoraja skins" debug-menu folder with one dropdown per scene type that the
  * loaded theme actually ships an entry for. Called from `loadBeatorajaTheme` after each drop,
@@ -23,21 +22,23 @@ import type { DebugMenu } from './index.ts';
 export function rebuildBeatorajaSkinPickers(this: DebugMenu): void {
   const folder = this.beatorajaSkinPickerFolder;
   if (folder === undefined) return;
-  // Tear down previous controllers so dropdown options match the current theme bundle. lil-gui
-  // doesn't support live-updating an `add(target, prop, options)` controller's option list, so
-  // recreating each time is the safe path.
+  // The scene-type set can change with a drop, so rebuild these native bindings as a group.
   for (const controller of this.beatorajaSkinPickerControllers.values()) {
-    controller.destroy();
+    controller.dispose();
   }
   this.beatorajaSkinPickerControllers.clear();
   const theme = this.deps.beatorajaTheme()?.theme;
   // Shown only while a beatoraja theme is loaded; an empty folder header would just be noise.
-  folder.show(theme !== undefined);
+  folder.hidden = theme === undefined;
   if (theme === undefined) return;
   // Order matters here — the folder lays controllers out in insertion order, so we keep the
   // play-variant types together (clustered by key count), then chrome scenes (select / decide
   // / result / etc.) below them.
-  const sceneTypes: ReadonlyArray<{ typeCode: number; label: string; best?: BeatorajaSkinEntry }> = [
+  const sceneTypes: ReadonlyArray<{
+    typeCode: number;
+    label: string;
+    best?: BeatorajaSkinEntry;
+  }> = [
     { typeCode: BEATORAJA_SKIN_TYPE.PLAY_5KEYS, label: 'Play 5K', best: theme.playSkins['5'] },
     { typeCode: BEATORAJA_SKIN_TYPE.PLAY_7KEYS, label: 'Play 7K', best: theme.playSkins['7'] },
     { typeCode: BEATORAJA_SKIN_TYPE.PLAY_9KEYS, label: 'Play 9K', best: theme.playSkins['9'] },
@@ -53,7 +54,7 @@ export function rebuildBeatorajaSkinPickers(this: DebugMenu): void {
   for (const scene of sceneTypes) {
     const candidates = theme.entries.filter((entry) => entry.header.type === scene.typeCode);
     if (candidates.length === 0) continue;
-    // Build a label → entryPath map. lil-gui shows the keys in the dropdown and writes the
+    // Build a label → entryPath map. Tweakpane shows the keys in the dropdown and writes the
     // matching value to the proxy. Using entryPath as the value lets us look up the entry on
     // change without keeping a separate index.
     const options: Record<string, string> = {};
@@ -65,10 +66,9 @@ export function rebuildBeatorajaSkinPickers(this: DebugMenu): void {
     // The proxy holds the currently-selected entryPath. Default to the discovery's best pick
     // so the dropdown reflects what would actually mount if no override is set.
     const proxy = { entryPath: scene.best?.entryPath ?? candidates[0]!.entryPath };
-    const controller = folder
-      .add(proxy, 'entryPath', options)
-      .name(`${scene.label} (${candidates.length})`)
-      .onChange((nextEntryPath: string) => {
+    const controller = selectBinding(folder, proxy, 'entryPath', `${scene.label} (${candidates.length})`, options).on(
+      'change',
+      ({ value: nextEntryPath }) => {
         if (scene.best !== undefined && nextEntryPath === scene.best.entryPath) {
           // Picking the discovery default = "no override" — drop any prior override so future
           // theme rotations pick up the new "best" automatically.
@@ -81,11 +81,11 @@ export function rebuildBeatorajaSkinPickers(this: DebugMenu): void {
         // the NEXT scene transition, which felt broken to the user (drop a theme, pick a skin,
         // nothing visible until you ESC and re-enter the scene).
         this.applyBeatorajaSkinSwitchIfActive(scene.typeCode, nextEntryPath, candidates);
-      });
+      },
+    );
     this.beatorajaSkinPickerControllers.set(scene.typeCode, controller);
   }
 }
-
 /**
  * If the active scene's type-code matches `typeCode`, re-mount it against `entryPath`. Invoked
  * by the Debug Menu's skin-picker dropdown (the canonical surface for switching skins —

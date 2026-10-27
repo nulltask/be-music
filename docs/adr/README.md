@@ -15,3 +15,27 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0008: Independent Accounts and OIDC](./0008-accounts-oidc.md)
 
 - [0009: Accounts owns public profiles and avatars](./0009-accounts-profiles.md)
+
+- [Share a bounded worker pool for browser CPU tasks](./0010-browser-task-pool.md)
+
+- [Hosts provide audio implementations](./0011-host-provided-audio.md)
+
+- [Native screens share the scene sessions](./0012-native-skin-screens.md)
+
+- [Reusable player interfaces are Web Components](./0013-player-ui-components.md)
+
+- [Native draws its playfield with canvas components](./0014-native-playfield-components.md)
+
+- [Previews seek by starting AUTO play partway](./0015-preview-seek.md) (superseded by 0016)
+
+- [Seek is a play-loop command](./0016-seek-play-loop-command.md)
+
+- [Mixed NONSTOP courses retain source units in the bmson IR](./0017-bmson-nonstop.md)
+
+- [0018: Replay option timeline](./0018-replay-option-timeline.md)
+
+- [0019: Option values name their source](./0019-source-qualified-option-values.md)
+
+- [0020: Player UI elements are headless; themes and skins supply the look](./0020-headless-player-ui.md)
+
+- [0021: A skin's stage may be fluid](./0021-fluid-stage.md)

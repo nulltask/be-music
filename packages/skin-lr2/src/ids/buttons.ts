@@ -69,6 +69,8 @@ export const LR2_BUTTON = {
   FLIP: 54,
   /** Cycles HS-FIX. */
   HS_FIX: 55,
+  /** Cycles BATTLE (OFF / BATTLE / D-BATTLE / SP TO DP / G-BATTLE; OpenLR2 L10555). */
+  BATTLE: 56,
   /** Steps the 1P hi-speed (`plusOnly` picks the direction). */
   HISPEED_1P: 57,
   /** Steps the 2P hi-speed. */
@@ -79,6 +81,10 @@ export const LR2_BUTTON = {
   BGA: 72,
   /** Toggles the BGA size (NORMAL / EXTEND). */
   BGA_SIZE: 73,
+  /** Steps the judge timing by 1 ms within −99..99 (OpenLR2 L10617). */
+  JUDGE_TIMING: 74,
+  /** Cycles the automatic judge timing (OFF / ON / SILENT; OpenLR2 L10625). */
+  JUDGE_AUTO_ADJUST: 75,
   /** Sets the difficulty filter to ALL. Buttons 91-96 set ALL, BEGINNER … INSANE. */
   DIFFICULTY_FILTER_ALL: 91,
   /** Sets the difficulty filter to BEGINNER. */
@@ -117,6 +123,20 @@ export const LR2_BUTTON = {
   COURSE_CONNECTION8: 247,
   /** Steps the connection after stage 9. */
   COURSE_CONNECTION9: 248,
+  /** Steps the RANDOM MIX preferred level (`optimumlevel_7`, FAVORITE), 0-99. */
+  RANDOM_MIX_PREFERRED_LEVEL: 260,
+  /** Steps the RANDOM MIX max level, 0-99. */
+  RANDOM_MIX_MAX_LEVEL: 261,
+  /** Steps the RANDOM MIX min level, 0-99. */
+  RANDOM_MIX_MIN_LEVEL: 262,
+  /** Steps the RANDOM MIX BPM range around stage 1's max BPM, 0-99. */
+  RANDOM_MIX_BPM_RANGE: 263,
+  /** Steps the RANDOM MIX max BPM, 0-990 by 10. */
+  RANDOM_MIX_MAX_BPM: 264,
+  /** Steps the RANDOM MIX min BPM, 0-990 by 10. */
+  RANDOM_MIX_MIN_BPM: 265,
+  /** Steps the RANDOM MIX stage count, 0 (random) to 5. */
+  RANDOM_MIX_STAGE_COUNT: 266,
   /** Steps the connection a new NONSTOP course gets. */
   COURSE_DEFAULT_CONNECTION: 268,
 } as const;

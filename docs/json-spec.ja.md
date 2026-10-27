@@ -16,7 +16,7 @@
 - `@be-music/chart-source` は純粋な IR パッケージです
 - `@be-music/chart-source` が提供するのは、型、正規化済みのデータ構造、clone / 初期化 / 基本的な整形 helper に限られます
 - beat 変換、イベント順序、ロングノート解決、sample trigger 判定などの譜面意味論は `@be-music/chart-model` が担当します。譜面の [Be-Music Fingerprint](fingerprint-spec.ja.md) も `@be-music/chart-model` が求めます（`computeChartFingerprint` / `computePlayFingerprint`）
-- round-trip のための source-level 情報は IR の一部として保持しますが、正規化済みの譜面意味論とは `preservation` 層で分離します
+- round-trip のための source-level 情報は IR の一部として保持しますが、正規化済みの譜面意味論とは `preservation` レイヤーで分離します
 
 ## 設計原則
 
@@ -349,7 +349,7 @@ ID を消費する code は手動で upper-case せず、`resolveBMSBase(json)` 
 - `barlinesSuppressed`: bmson source が明示的に `lines: []` を書いた場合だけ `true` になります。`lines` 欠落とは区別し、欠落時は既定の 4/4 barline model を意味します
 - `bga`: `header`, `events`, `layerEvents`, `poorEvents` を保持
 
-`preservation` は round-trip のための source-level 情報を保持する補助層です。
+`preservation` は round-trip のための source-level 情報を保持する補助レイヤーです。
 
 - `preservation.bms.sourceLines`: 空行/コメントを除く BMS の全行を宣言順で保持するスナップショット
 - `preservation.bms.sourceLines` は BMS の header / object / 制御構文の相対位置を保ったまま `stringifyBMS(parseChart(...))` を再現するための第一選択です
@@ -377,6 +377,8 @@ interface BeMusicEvent {
     c?: boolean;
     t?: number;
     damage?: number;
+    sampleOffsetSeconds?: number;
+    sampleDurationSeconds?: number;
   };
 }
 ```
@@ -384,6 +386,8 @@ interface BeMusicEvent {
 `bmson.damage` は beatoraja の bmson 拡張 `mine_channels` の地雷に使います。
 譜面で authoring された gauge damage を非負数で保持し、それ以外の event（`key_channels`（beatoraja の隠しノート）から読んだ不可視オブジェクトを含む）では省略します。
 `bmson.t` は beatoraja のノート単位のロングノート種別（`notes[].t`: `1` = LN、`2` = CN、`3` = HCN）です。ロングノート（`l > 0`）のときだけ保持し、`bmson.info.lnType` より優先されます。
+
+結合済みの bmson NONSTOP 譜面は、2文字を超えるリソースキーを使えます。`normalizeObjectKey(value, base, true)` はそのキーを保持し、BMS のトークンの正規化は従来どおりです。`bmson.sampleOffsetSeconds` と `bmson.sampleDurationSeconds` は、配置後の譜面時刻とは独立に元の音声座標を保持します。オフセットが明示され長さがない場合はサンプルの末尾まで再生します。`bmson.info.totalUnit` は最後のステージの TOTAL の単位（`absolute` または `percent`）を保持します。これらは Be-Music の IR のフィールドで、外部の bmson のキーではありません。
 
 ## `position` の意味
 

@@ -1,3 +1,4 @@
+import { firstReplaySlot, snapClassicHiSpeed, stepClassicHiSpeed, stepReplaySlot } from '@be-music/player-scene-model';
 /**
  * The select screen's behaviour, whatever family draws it: where the player is in the library, as the browse model of
  * `@be-music/player-scene-model` keeps it (`BrowseState`, changed by `reduceBrowse`, its list derived by `browseEntries`), the
@@ -12,9 +13,11 @@
  * a frame, and with what happened since the last one, for the view's slides and timers.
  */
 
+import type { CourseChartRecord } from '@be-music/player-engine/course';
 import {
   browseCursor,
   browseEntries,
+  browseSearchError,
   browseSystemSound,
   captureBrowse,
   clampHiSpeed,
@@ -34,6 +37,7 @@ import {
   type BrowseListOptions,
   type BrowseSnapshot,
   type BrowseState,
+  type Library,
   type LibraryChart,
   type LibraryCourse,
   type LibraryEntry,
@@ -42,6 +46,7 @@ import {
   type SystemSoundSlot,
 } from '@be-music/player-scene-model';
 import { resolveChartSource } from '../../collection/collection.ts';
+import { createCourseChartRecord } from '../../collection/course.ts';
 import type { BrowserChartCollection } from '../../collection/types.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { CourseMaker } from '../../collection/course-maker.ts';
@@ -68,7 +73,12 @@ export interface SelectSessionEvents {
    * so the host can say why it does not start. Return `false` when the entry starts no play (the course being made
    * takes the chart, the course cannot start): the screen then plays no decide sound.
    */
-  start(entry: SelectStartEntry, options: { readonly autoPlay: boolean }): boolean | void;
+  start(entry: SelectStartEntry, options: { readonly autoPlay: boolean; readonly replaySlot?: number }): boolean | void;
+  /**
+   * The bar under the cursor changed, or the screen came on the stage (`undefined` on an empty list): the host's own
+   * surfaces for it (the replay slots' card) follow it. Reported from the frame.
+   */
+  focus?(entry: LibraryEntry | undefined): void;
   /** The player changed the play options on the screen; the host's own `setPlayOptions` is not reported. */
   playOptions?(options: PlayOptions): void;
   /** The player asked to type a search: the host lays its text field over the skin's search box. */
@@ -123,7 +133,9 @@ export interface SelectSessionOptions {
 export type SelectCourseMaker = Pick<
   CourseMaker,
   'draft' | 'defaultConnection' | 'owns' | 'finish' | 'cancel' | 'stepDefaultConnection' | 'stepConnection'
->;
+> &
+  /** The RANDOM MIX settings and their buttons, for a host that lists RANDOM MIX bars. */
+  Partial<Pick<CourseMaker, 'randomMixSettings' | 'stepRandomMixSetting'>>;
 
 /** The select BGM's level: about -6 dB, under the cues and the preview, as the select scenes always played it. */
 const SELECT_BGM_VOLUME = 0.5;
@@ -143,6 +155,7 @@ interface PendingLaunch {
   readonly atMs: number;
   readonly entry: SelectStartEntry;
   readonly autoPlay: boolean;
+  readonly replaySlot?: number;
 }
 
 /** The select screen's session. See the module comment. */
@@ -153,6 +166,13 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private readonly now: () => number;
   private readonly random: () => number;
   private library: BrowserChartCollection;
+  /**
+   * The library as the browse model reads it: the collection, with the reader a chart filter search (`?…`) sees each
+   * chart through. Made again when the library or the records change, so a search lists by the records as they are.
+   */
+  private browseLibrary: Library;
+  /** Each chart's filter record, resolved once: only its `score` row is read again, from the records in force. */
+  private readonly filterRecords = new WeakMap<LibraryChart, CourseChartRecord>();
   private browse: BrowseState;
   private playOptions: PlayOptions;
   private records: SelectRecords;
@@ -175,6 +195,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
    * chart does.
    */
   private previewKey: string | undefined;
+  /** The replay slot picked for the bar it was picked on (beatoraja's `selectedreplay`), reset when the bar changes. */
+  private replayPick: { readonly entry: SelectStartEntry; readonly slot: number } | undefined;
+  /** The bar last reported through `on.focus`; `null` before the first report of an entry. */
+  private reportedFocus: LibraryEntry | undefined | null = null;
 
   public constructor(options: SelectSessionOptions) {
     this.options = options;
@@ -183,17 +207,20 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     this.random = options.random ?? Math.random;
     this.library = options.library;
     this.records = options.records ?? NO_RECORDS;
+    this.browseLibrary = this.createBrowseLibrary();
     this.sounds = options.sounds;
     this.playOptions = resolvePlayOptions({ ...DEFAULT_PLAY_OPTIONS, ...options.playOptions });
     // Under a policy that keeps the sort and the filters in the browse position (beatoraja's MODE and SORT), the play
     // options' do not shape the list.
     const base = openLibrary(
-      this.library,
+      this.browseLibrary,
       this.policy,
       this.policy.listOptions === 'play-options' ? { list: listOptionsOf(this.playOptions) } : {},
     );
     this.browse =
-      options.browse === undefined ? base : restoreSelectBrowse(this.library, options.browse, base, this.policy).state;
+      options.browse === undefined
+        ? base
+        : restoreSelectBrowse(this.browseLibrary, options.browse, base, this.policy).state;
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -202,12 +229,12 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
 
   /** The browse position as plain data (`captureBrowse`), to open the screen on again later. */
   public snapshot(): BrowseSnapshot {
-    return captureBrowse(this.library, this.browse);
+    return captureBrowse(this.browseLibrary, this.browse);
   }
 
   /** The bar under the cursor, or `undefined` when the list is empty. */
   public focused(): LibraryEntry | undefined {
-    return focusedEntry(this.library, this.browse);
+    return focusedEntry(this.browseLibrary, this.browse);
   }
 
   /** The play options in force. */
@@ -236,26 +263,50 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       return;
     }
     const previous = this.library;
-    const place = captureBrowse(previous, this.browse);
+    const place = captureBrowse(this.browseLibrary, this.browse);
     this.library = library;
+    this.browseLibrary = this.createBrowseLibrary();
     const empty = previous.charts.length === 0 && (previous.courseFolders?.length ?? 0) === 0;
     this.browse = empty
-      ? openLibrary(library, this.policy, { searchText: this.browse.searchText, list: this.browse.list })
-      : restoreSelectBrowse(library, place, this.browse, this.policy).state;
+      ? openLibrary(this.browseLibrary, this.policy, { searchText: this.browse.searchText, list: this.browse.list })
+      : restoreSelectBrowse(this.browseLibrary, place, this.browse, this.policy).state;
     this.readText = undefined;
     this.changed();
   }
 
   /** Puts the player back where a snapshot says, over the library as it is now (`restoreSelectBrowse`). */
   public restore(snapshot: BrowseSnapshot): void {
-    this.browse = restoreSelectBrowse(this.library, snapshot, this.browse, this.policy).state;
+    this.browse = restoreSelectBrowse(this.browseLibrary, snapshot, this.browse, this.policy).state;
     this.changed();
   }
 
   /** The records changed: the bars and panels draw them again. */
   public refreshRecords(records?: SelectRecords): void {
     if (records !== undefined) this.records = records;
+    this.browseLibrary = this.createBrowseLibrary();
     this.changed();
+  }
+
+  /** The error of the chart filter expression searched for, when it does not parse (`browseSearchError`). */
+  public searchError(): string | undefined {
+    return browseSearchError(this.browse.searchText);
+  }
+
+  /** {@link browseLibrary} for the library and the records in force. */
+  private createBrowseLibrary(): Library {
+    const { charts, courseFolders } = this.library;
+    return {
+      charts,
+      ...(courseFolders !== undefined ? { courseFolders } : {}),
+      chartFilterRecord: (chart) => {
+        let record = this.filterRecords.get(chart);
+        if (record === undefined) {
+          record = createCourseChartRecord(chart, {}, () => this.records.chart(chart));
+          this.filterRecords.set(chart, record);
+        }
+        return record;
+      },
+    };
   }
 
   /** Searches for `text` (`reduceBrowse`'s `search`): a changed query puts the cursor on the top of the new list. */
@@ -296,6 +347,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     if (!this.entered) return;
     this.entered = false;
     this.launch = undefined;
+    this.reportedFocus = null;
     this.options.audio.stopOwned(this);
   }
 
@@ -331,6 +383,11 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         return true;
       case 'activate':
         this.activate(atMs);
+        return true;
+      case 'replay-slot':
+        return this.stepReplayPick(action.step);
+      case 'replay':
+        this.replay(undefined, atMs);
         return true;
       case 'back':
         // Backing out of nothing leaves the key to the page.
@@ -373,6 +430,12 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       case 'start':
         this.start(intent.autoPlay === true, atMs);
         return;
+      case 'replay':
+        this.replay(intent.slot, atMs);
+        return;
+      case 'replay-slot':
+        this.stepReplayPick(intent.step);
+        return;
       case 'play-option':
         this.stepPlayOption(intent.key, intent.step);
         return;
@@ -408,7 +471,14 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     }
     const events = this.events;
     this.events = [];
-    const entries = browseEntries(this.library, this.browse);
+    const entries = browseEntries(this.browseLibrary, this.browse);
+    const searchError = this.searchError();
+    const focused = entries[browseCursor(this.browse)];
+    if (this.entered && focused !== this.reportedFocus) {
+      this.reportedFocus = focused;
+      this.options.on.focus?.(focused);
+    }
+    const replaySlots = this.replaySlotsOf(focused);
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
       library: this.library,
@@ -421,11 +491,13 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       ...(this.panel !== undefined ? { panel: this.panel } : {}),
       records: this.records,
       searchEditing: this.searchEditing,
+      ...(searchError !== undefined ? { searchError } : {}),
       ...(this.launch !== undefined ? { startedAtMs: this.launch.atMs } : {}),
       ...(this.readText !== undefined ? { readText: this.readText } : {}),
       ...(this.options.courseMaker !== undefined
         ? { courseMaker: this.courseMakerState(this.options.courseMaker) }
         : {}),
+      ...(replaySlots !== undefined ? { replaySlots } : {}),
       audio: this.options.audio.analyzer.sample(nowMs),
     };
   }
@@ -444,7 +516,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
    * A back-out at the root follows the policy: the built-in and LR2 screens stay, silently.
    */
   private applyBrowse(command: BrowseCommand, atMs: number): BrowseEvent {
-    const { state, event } = reduceBrowse(this.library, this.browse, command);
+    const { state, event } = reduceBrowse(this.browseLibrary, this.browse, command);
     if (event.kind === 'at-root') {
       if (this.policy.atRoot === 'exit') {
         this.playCue('cancel');
@@ -475,7 +547,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
    * cursor stays but the list still slides and cues, as LR2's rail scrolls.
    */
   private stepCursor(direction: 1 | -1, atMs: number): void {
-    const count = browseEntries(this.library, this.browse).length;
+    const count = browseEntries(this.browseLibrary, this.browse).length;
     if (count === 0) return;
     if (count > 1) {
       this.applyBrowse({ type: 'move', delta: direction }, atMs);
@@ -503,6 +575,56 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     this.launchEntry(entry, autoPlay, atMs);
   }
 
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Replay slots
+  // ---------------------------------------------------------------------------------------------------------------------
+
+  /**
+   * The replay slots of `entry` and the one picked, when the host keeps replay slots and `entry` is a chart or a course.
+   * The pick starts on the first slot holding a replay whenever the bar changes (beatoraja's `RESET_REPLAY`), and again
+   * when the slot picked no longer holds one (the slots load after the screen shows, or a replay was removed).
+   */
+  private replaySlotsOf(entry: LibraryEntry | undefined): { exists: readonly boolean[]; selected: number } | undefined {
+    const lookup = this.records.replaySlots;
+    if (lookup === undefined || entry === undefined || entry.kind === 'folder') return undefined;
+    const exists = lookup.call(this.records, entry);
+    const pick = this.replayPick;
+    if (pick === undefined || pick.entry !== entry || pick.slot < 0 || exists[pick.slot] !== true) {
+      this.replayPick = { entry, slot: firstReplaySlot(exists) };
+    }
+    return { exists, selected: this.replayPick!.slot };
+  }
+
+  /** Picks the next or previous replay slot holding a replay of the bar under the cursor. Returns whether it could. */
+  private stepReplayPick(step: 1 | -1): boolean {
+    const entry = this.focused();
+    const slots = this.replaySlotsOf(entry);
+    if (slots === undefined || entry === undefined || entry.kind === 'folder') return false;
+    const slot = stepReplaySlot(slots.exists, slots.selected, step);
+    if (slot !== slots.selected) {
+      this.replayPick = { entry, slot };
+      this.changed();
+    }
+    return true;
+  }
+
+  /**
+   * Replays the chart or course under the cursor from `slot`, or from the slot picked when none is named. The REPLAY key
+   * plays the bar as PLAY does when no slot holds a replay, as beatoraja's does; a button naming an empty slot starts
+   * nothing.
+   */
+  private replay(slot: number | undefined, atMs: number): void {
+    const entry = this.focused();
+    if (entry === undefined || entry.kind === 'folder') return;
+    const slots = this.replaySlotsOf(entry);
+    const target = slot ?? slots?.selected ?? -1;
+    if (target >= 0 && slots?.exists[target] === true) {
+      this.launchEntry(entry, false, atMs, target);
+      return;
+    }
+    if (slot === undefined) this.launchEntry(entry, false, atMs);
+  }
+
   /**
    * Escape, Backspace, ←: backs out of the folder shown, or at the root does what the policy says, unless `inFolder`
    * limits the key to a folder. Returns whether it did something.
@@ -521,14 +643,14 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
    * Starts `entry`: a chart waits for the skin's launch outro, if any (input waits too); a course is handed on at once,
    * as it has no outro.
    */
-  private launchEntry(entry: SelectStartEntry, autoPlay: boolean, atMs: number): void {
+  private launchEntry(entry: SelectStartEntry, autoPlay: boolean, atMs: number, replaySlot?: number): void {
     if (this.launch !== undefined) return;
     const outroMs = entry.kind === 'chart' ? (this.options.launchOutroMs?.() ?? 0) : 0;
     if (outroMs <= 0) {
-      this.handOn(entry, autoPlay);
+      this.handOn(entry, autoPlay, replaySlot);
       return;
     }
-    this.launch = { atMs, entry, autoPlay };
+    this.launch = { atMs, entry, autoPlay, ...(replaySlot !== undefined ? { replaySlot } : {}) };
     this.changed();
   }
 
@@ -539,7 +661,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     if (this.nowMs - launch.atMs < (this.options.launchOutroMs?.() ?? 0)) return;
     this.launch = undefined;
     this.changed();
-    this.handOn(launch.entry, launch.autoPlay);
+    this.handOn(launch.entry, launch.autoPlay, launch.replaySlot);
   }
 
   /**
@@ -547,8 +669,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
    * the cancel cue; one that starts a play plays the decide cue and the decide jingle. Neither has an owner, so they
    * play out while the screen leaves: the jingle rings on through the decide screen into the play.
    */
-  private handOn(entry: SelectStartEntry, autoPlay: boolean): void {
-    const started = this.options.on.start(entry, { autoPlay }) !== false;
+  private handOn(entry: SelectStartEntry, autoPlay: boolean, replaySlot?: number): void {
+    const started =
+      this.options.on.start(entry, { autoPlay, ...(replaySlot !== undefined ? { replaySlot } : {}) }) !== false;
     const cue = startSystemSound(entry);
     if (cue === 'cancel') {
       this.playCue('cancel');
@@ -584,7 +707,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   /** Steps a play option through its choices, or the hi-speed by its step. */
   private stepPlayOption(key: keyof PlayOptions, step: number): void {
     if (key === 'hiSpeed') {
-      const value = clampHiSpeed(this.playOptions.hiSpeed + (step < 0 ? -1 : 1) * HISPEED_STEP);
+      const value = this.playOptions.classicHiSpeed
+        ? stepClassicHiSpeed(this.playOptions.hiSpeed, step)
+        : clampHiSpeed(this.playOptions.hiSpeed + (step < 0 ? -1 : 1) * HISPEED_STEP);
       this.setPlayOption('hiSpeed', value);
       return;
     }
@@ -595,6 +720,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private setPlayOption<K extends keyof PlayOptions>(key: K, value: PlayOptions[K] | undefined): void {
     if (value === undefined || this.playOptions[key] === value) return;
     this.playOptions = { ...this.playOptions, [key]: value };
+    if (this.playOptions.classicHiSpeed) {
+      this.playOptions.hiSpeed = snapClassicHiSpeed(this.playOptions.hiSpeed)!;
+      this.playOptions.hsFix = 'OFF';
+    }
     this.options.on.playOptions?.({ ...this.playOptions });
     this.playCue('optionChange');
     if (isListPlayOption(key)) this.syncListOptions();
@@ -609,7 +738,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     if (this.policy.listOptions !== 'play-options') return;
     const list = listOptionsOf(this.playOptions);
     if (sameBrowseListOptions(list, this.browse.list)) return;
-    const { state, event } = reduceBrowse(this.library, this.browse, { type: 'list', options: list });
+    const { state, event } = reduceBrowse(this.browseLibrary, this.browse, { type: 'list', options: list });
     this.browse = state;
     if (event.kind !== 'none') this.events.push({ kind: 'browse', event, atMs: this.now() });
   }
@@ -620,11 +749,17 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
 
   private courseMakerState(maker: SelectCourseMaker): SelectCourseMakerState {
     const draft = maker.draft;
-    return { ...(draft !== undefined ? { draft } : {}), defaultConnection: maker.defaultConnection };
+    const randomMixSettings = maker.randomMixSettings;
+    return {
+      ...(draft !== undefined ? { draft } : {}),
+      defaultConnection: maker.defaultConnection,
+      ...(randomMixSettings !== undefined ? { randomMixSettings } : {}),
+    };
   }
 
   /**
-   * Runs a course-maker action: finishing or cancelling the course being made and stepping the default connection run
+   * Runs a course-maker action: finishing or cancelling the course being made, stepping the default connection and a
+   * RANDOM MIX setting run
    * on the course maker; deleting a course, or stepping one of its connections, only on a course of the player's own
    * under the cursor; naming the course being made (or the player's course under the cursor) is the host's.
    */
@@ -650,6 +785,12 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       case 'default-connection':
         maker?.stepDefaultConnection(action.step);
         break;
+      case 'random-mix':
+        // LR2's buttons 260-266 play `option_change` as they step (OpenLR2 L11155-L11222).
+        if (maker?.stepRandomMixSetting === undefined) return;
+        maker.stepRandomMixSetting(action.setting, action.step);
+        this.playCue('optionChange');
+        break;
       case 'connection':
         if (own !== undefined) maker?.stepConnection(own.definition, action.slot, action.step);
         break;
@@ -667,7 +808,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       this.closeReadText(true);
       return;
     }
-    const chart = focusedChart(this.library, this.browse);
+    const chart = focusedChart(this.browseLibrary, this.browse);
     if (chart === undefined) return;
     if (this.options.on.readtext !== undefined) {
       this.options.on.readtext(chart);
@@ -718,7 +859,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
 
   /** Points the chart preview at the chart under the cursor, when that changed since it was last pointed. */
   private refreshPreview(): void {
-    const chart = focusedChart(this.library, this.browse);
+    const chart = focusedChart(this.browseLibrary, this.browse);
     const source = chart === undefined ? undefined : resolveChartSource(this.library, chart);
     const key = chart === undefined || source === undefined ? undefined : `${source.id}\n${chart.id}`;
     if (key === this.previewKey) return;

@@ -132,6 +132,35 @@ describe('BeatorajaResultView', () => {
     expect(intents).toHaveLength(3);
   });
 
+  it('lights the replay slot ops of the frame, again when a slot changes', async () => {
+    const update = vi.spyOn(BeatorajaPlaySkinView.prototype, 'update').mockImplementation(() => undefined);
+    const view = createView();
+    await view.attach(HOST, () => {});
+    view.draw(frame({ replaySlots: ['none', 'exists', 'none', 'none'] }));
+    view.draw(frame({ replaySlots: ['none', 'exists', 'none', 'none'] }));
+    view.draw(frame({ replaySlots: ['saved', 'exists', 'none', 'none'] }));
+    const [first, same, saved] = update.mock.calls.map((call) => (call[0] as BeatorajaRenderContext).activeOps);
+    expect([...first!].filter((op) => op >= 196 && op <= 198)).toEqual([196]);
+    expect(first!.has(1197)).toBe(true);
+    expect(same).toBe(first);
+    expect(saved!.has(198)).toBe(true);
+    expect(saved!.has(196)).toBe(false);
+    view.dispose();
+  });
+
+  it("saves into a slot from the skin's replay buttons", async () => {
+    const intents: ResultIntent[] = [];
+    const view = createView();
+    await view.attach(createHost().host, (intent) => intents.push(intent));
+    // The skin view keeps the callback it was made with.
+    const onButtonAction = (view as unknown as { stage: { view: { onButtonAction: (act: number) => void } } }).stage
+      .view.onButtonAction;
+    onButtonAction(316);
+    onButtonAction(15);
+    expect(intents).toEqual([{ type: 'saveReplay', slot: 1 }]);
+    view.dispose();
+  });
+
   it('takes a beatoraja skin timing: no steps to press through, every key held back until input', () => {
     expect(resolveBeatorajaResultTiming({})).toMatchObject({
       inputDelayMs: 500,

@@ -1,8 +1,8 @@
+import { throwIfAborted } from '@be-music/shared-utils/core';
 import { formatSeconds } from '../utils.ts';
 import { maxJudgeReachSeconds } from './judge-core.ts';
 import { createInputWakeUp, type InputWakeUp } from './input-wakeup.ts';
 import {
-  createAudioPlaybackClockSource,
   createPlaybackClock,
   getEngineScheduler,
   PAUSE_POLL_INTERVAL_MS,
@@ -19,13 +19,15 @@ import {
 import { emitPlayerLog, writeRuntimeEventLog } from './engine-trace.ts';
 import type { PlayerInterruptReason } from './engine-types.ts';
 import type { PlayControls } from './play-controls.ts';
+import { applySeek, clampSeekSeconds } from './play-seek.ts';
 import type { PlaySession } from './play-session.ts';
 import type { PlayJudge, PlayTick } from './play-strategy.ts';
 
 /**
  * The play loop: one for every judge strategy. It opens the play (the UI or the no-TUI introduction), waits out the
  * lead-in, starts the chart's audio and the play clock, and then ticks at 60 Hz (or sooner, when input arrives): input
- * commands, realtime audio against the audio write head, the judge, a UI frame. It ends at an interrupt, when judging
+ * commands, a seek (the last one asked for, `play-seek.ts`), realtime audio against the audio write head, the judge, a
+ * UI frame. It ends at an interrupt, when judging
  * closes on a failed gauge, once the chart is over and judged, or at its horizon — held open past it while the host
  * holds the play (`holdAfterChart`) — and always closes the audio session, the input runtime and the UI runtime.
  */
@@ -64,21 +66,22 @@ function openPlay(session: PlaySession): void {
 /**
  * Waits out the lead-in, taking the commands sent during it: an interrupt ends it at once, a tempo or HIGH-SPEED
  * change sets what the chart starts with, a view change is recorded at the chart's start, a pause holds the chart at
- * its start, and lane input is dropped (there is nothing to judge yet).
+ * its start, a seek sets where it starts, and lane input is dropped (there is nothing to judge yet).
  */
 async function waitOutLeadIn(session: PlaySession, controls: PlayControls, wakeUp: InputWakeUp): Promise<void> {
   const scheduler = getEngineScheduler();
   const endMs = scheduler.now() + session.leadInMs;
   for (;;) {
+    throwIfAborted(session.options.signal);
     controls.consume();
     if (controls.interruptedReason !== undefined) return;
     const remainingMs = endMs - scheduler.now();
-    if (remainingMs <= 0) return;
-    await waitPreciseOrInput(remainingMs, wakeUp);
+    if (remainingMs <= 0 && controls.startRequested) return;
+    await waitPreciseOrInput(remainingMs > 0 ? remainingMs : PAUSE_POLL_INTERVAL_MS, wakeUp);
   }
 }
 
-/** Starts the chart's audio and the play clock (chart second 0). */
+/** Starts the chart's audio and the play clock (chart second 0; a play starting partway seeks on its first tick). */
 function startChart(session: PlaySession): PlaybackClock {
   const { options, strategy, audioSession, uiEnabled } = session;
   emitPlayerLog(options, 'info', 'audio.start', { mode: strategy.mode });
@@ -90,7 +93,7 @@ function startChart(session: PlaySession): PlaybackClock {
     ]);
   }
   const clock = createPlaybackClock(
-    createAudioPlaybackClockSource(audioSession),
+    session.clockSource,
     session.audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0),
   );
   session.clock = clock;
@@ -144,6 +147,16 @@ async function playChart(
       return false;
     }
     const nowMs = clock.nowMs();
+    const seekSeconds = controls.takeSeek();
+    if (seekSeconds !== undefined) {
+      controls.seekReplayTempoChanges(clampSeekSeconds(session, seekSeconds), nowMs);
+      const sought = applySeek(session, judge, seekSeconds, nowMs);
+      if (sought !== undefined) {
+        lastFrameSeconds = sought;
+        // A play sought back out of its hold after the chart settles again; the host's outro is its to cancel.
+        if (sought < totalSeconds) settled = false;
+      }
+    }
     if (clock.isPaused()) {
       const nowSec = tempoClock.chartSecondsAt(nowMs);
       publishUIFrame(nowSec, beatAtSeconds(nowSec));

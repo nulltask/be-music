@@ -6,8 +6,9 @@
  *   it); while it is open the 1P lane keys step its options, and Escape closes an open panel.
  * - **beatoraja**. ↑ / ↓ move the cursor, Page Up / Page Down ten bars, Home / End to the first and the last bar, R to a
  *   random bar (beatoraja's random select), Enter takes the bar under it, Escape backs out of a folder (and leaves the
- *   screen at the root, as the family's select policy says) and Backspace backs out of a folder only. beatoraja has no
- *   option panel.
+ *   screen at the root, as the family's select policy says) and Backspace backs out of a folder only. As beatoraja's
+ *   `MusicSelectInputProcessor` binds them, 4 and the 6th lane key (F) pick the next replay slot holding a replay
+ *   (NEXT_REPLAY) and the 7th lane key (V) replays it (REPLAY). beatoraja has no option panel.
  *
  * While the README overlay is open, the keys scroll or close it, on either map.
  */
@@ -36,6 +37,10 @@ export type SelectKeyAction =
   | { readonly type: 'random' }
   /** Open the folder or start the bar under the cursor. */
   | { readonly type: 'activate' }
+  /** Pick the next replay slot holding a replay (beatoraja's NEXT_REPLAY). */
+  | { readonly type: 'replay-slot'; readonly step: 1 | -1 }
+  /** Replay the bar under the cursor from the replay slot picked, or play it when none is (beatoraja's REPLAY). */
+  | { readonly type: 'replay' }
   /**
    * Back out of the folder shown. At the root the screen does what its select policy says, unless `inFolder` limits
    * the key to a folder (beatoraja's Backspace).
@@ -135,6 +140,9 @@ function resolveLR2Key(event: SessionKeyEvent, state: SelectKeyState): SelectKey
 
 function resolveBeatorajaKey(event: SessionKeyEvent, state: SelectKeyState): SelectKeyAction | undefined {
   if (state.readTextOpen) return resolveReadTextKey(event);
+  const modified = event.ctrlKey || event.metaKey || event.altKey;
+  if (!modified && (event.code === 'KeyF' || event.key === '4')) return { type: 'replay-slot', step: 1 };
+  if (!modified && event.code === 'KeyV') return { type: 'replay' };
   switch (event.key) {
     case 'ArrowDown':
       return { type: 'step', direction: 1 };

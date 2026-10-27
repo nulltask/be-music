@@ -292,7 +292,7 @@ export interface ParseContext {
   width: number;
   height: number;
   /**
-   * `true` once the parser has seen an explicit `#RESOLUTION,<w>,<h>` directive. When the skin omits the directive
+   * `true` once the parser has seen an valid `#RESOLUTION,<index>` or `#RESOLUTION,<w>,<h>` directive. When the skin omits the directive
    * entirely we leave this `false` and {@link autoDetectCanvasFromObservedCoordinates} kicks in at the end of the
    * parse, snapping {@link width} / {@link height} to the smallest standard canvas that contains the bulk of the
    * skin's authored DST coordinates. LR2 themes from the 1280×720 / 1920×1080 era frequently ship without

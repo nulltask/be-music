@@ -52,6 +52,20 @@ describe('validateBeMusicSkin', () => {
     ]);
   });
 
+  it('requires a DOM gameplay screen for a playfield drawn on DOM', () => {
+    expect(validateBeMusicSkin(skin({ gameplay: { draw: () => {}, drawsOnDOM: true } }))).toEqual([
+      'gameplay.drawsOnDOM requires a dom.gameplay screen',
+    ]);
+    expect(
+      validateBeMusicSkin(
+        skin({
+          gameplay: { draw: () => {}, drawsOnDOM: true },
+          dom: { gameplay: () => ({ update: () => {}, dispose: () => {} }) },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   it('reports a screen without a draw function', () => {
     expect(validateBeMusicSkin(skin({ result: {} as BeMusicSkin['result'] }))).toEqual([
       'result.draw must be a function',
@@ -139,6 +153,20 @@ describe('defineBeMusicSkin', () => {
   it('throws with every problem listed', () => {
     expect(() => defineBeMusicSkin(skin({ version: 'latest', apiVersion: 7 }))).toThrow(
       /apiVersion 7.*version "latest"/u,
+    );
+  });
+});
+
+describe('native DOM skin declarations', () => {
+  it('accepts native screens alongside the Canvas playfield', () => {
+    expect(validateBeMusicSkin(skin({ dom: { select: () => ({ update() {}, dispose() {} }) } }))).toEqual([]);
+  });
+  it('rejects malformed DOM factories without throwing', () => {
+    expect(validateBeMusicSkin(skin({ dom: null as unknown as BeMusicSkin['dom'] }))).toContain(
+      'dom must be an object of screen factories',
+    );
+    expect(validateBeMusicSkin(skin({ dom: { select: 1 } as unknown as BeMusicSkin['dom'] }))).toContain(
+      'dom.select must be a function',
     );
   });
 });

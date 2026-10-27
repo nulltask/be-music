@@ -28,8 +28,8 @@ import {
 } from '@be-music/player-browser/skin';
 import { summarizeLR2PlaySkins, type LR2PlaySkinMap, type LR2Skin } from '@be-music/skin-lr2';
 import { countLR2UnplayedStages, LR2_MAX_PLAYED_STAGES } from '@be-music/player-engine/course';
-import { REPLAY_FILE_SUFFIX } from '@be-music/player-engine/replay';
-import type { BrowseSnapshot, LibraryChart } from '@be-music/player-scene-model';
+import { COURSE_REPLAY_FILE_SUFFIX, REPLAY_FILE_SUFFIX } from '@be-music/player-engine/replay';
+import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import {
   describeCourseTableImportError,
   importCourseTable,
@@ -46,14 +46,14 @@ import {
   showLoadingOverlay,
   type LoadingOverlayElements,
 } from '../loading-overlay.ts';
-import type { PlayerWebDemoElements } from '../types.ts';
+import type { PlayerWebElements } from '../types.ts';
 import { fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
 
 const dropLog = logger('drop');
 
 export interface LibraryServiceOptions {
   /** The loading overlay a URL load shows and every load reports its progress on, and the shell (`.playing`). */
-  readonly elements: LoadingOverlayElements & Pick<PlayerWebDemoElements, 'shell'>;
+  readonly elements: LoadingOverlayElements & Pick<PlayerWebElements, 'shell'>;
   /** A chart's file hashes, cached per chart (`RecordsService`): course stages are matched by them. */
   readonly resolveChartHashes: (chartEntry: LibraryChart) => Promise<ChartFileHashes | undefined>;
   /** The course maker, whose saved courses are listed in their own folders. */
@@ -83,8 +83,10 @@ export interface LibraryServiceOptions {
   readonly resultSkin: () => LR2Skin | undefined;
   /** The beatoraja theme. */
   readonly beatorajaTheme: () => BeatorajaThemeBundle | undefined;
-  /** Hands the skin families a drop brought to the "Drop a skin" prompt, once its select screen shows. */
-  readonly answerSkinDropPrompt: (families: ReadonlySet<SkinFamilyId>) => void;
+  /** Confirms a detected skin before replacing any loaded theme; cancellation leaves charts importable. */
+  readonly confirmSkinDrop: (families: ReadonlySet<SkinFamilyId>) => Promise<SkinFamilyId | undefined>;
+  /** Applies the confirmed skin and releases the previous select scene before its replacement mounts. */
+  readonly applyDroppedSkin: (family: SkinFamilyId) => void | Promise<void>;
 }
 
 /** The charts and courses the select screen lists, and the loads that add to them. */
@@ -100,6 +102,9 @@ export class LibraryService {
    * resolved into `collection.courseFolders`.
    */
   private courseGroups: CourseDefinitionGroup[] = [];
+  /** Session-only draws, oldest first across every source folder. */
+  private keptRandomCourses: Array<{ folderLabel: string; course: LibraryCourse }> = [];
+  private nextDrawId = 0;
   private readonly elements: LibraryServiceOptions['elements'];
   private readonly resolveChartHashes: LibraryServiceOptions['resolveChartHashes'];
   private readonly courseMaker: LibraryServiceOptions['courseMaker'];
@@ -116,7 +121,8 @@ export class LibraryService {
   private readonly selectSkin: LibraryServiceOptions['selectSkin'];
   private readonly resultSkin: LibraryServiceOptions['resultSkin'];
   private readonly beatorajaTheme: LibraryServiceOptions['beatorajaTheme'];
-  private readonly answerSkinDropPrompt: LibraryServiceOptions['answerSkinDropPrompt'];
+  private readonly confirmSkinDrop: LibraryServiceOptions['confirmSkinDrop'];
+  private readonly applyDroppedSkin: LibraryServiceOptions['applyDroppedSkin'];
 
   public constructor(options: LibraryServiceOptions) {
     this.elements = options.elements;
@@ -135,7 +141,59 @@ export class LibraryService {
     this.selectSkin = options.selectSkin;
     this.resultSkin = options.resultSkin;
     this.beatorajaTheme = options.beatorajaTheme;
-    this.answerSkinDropPrompt = options.answerSkinDropPrompt;
+    this.confirmSkinDrop = options.confirmSkinDrop;
+    this.applyDroppedSkin = options.applyDroppedSkin;
+  }
+
+  /** Names a draw now, but lists it only once the decide screen (or direct play) has loaded. */
+  public prepareDrawnCourse(
+    drawn: LibraryCourse,
+    navigation: BrowseSnapshot | undefined,
+    at: Date = new Date(),
+  ): { course: LibraryCourse; remember: () => void } {
+    const folderLabel =
+      navigation?.folderPath.at(-1) ??
+      this.collection.courseFolders?.find((folder) => folder.courses?.some((course) => course.id === drawn.id))?.label;
+    const pad = (value: number): string => String(value).padStart(2, '0');
+    const suffix = `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}_${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
+    const { random: _random, ...fixed } = drawn;
+    let id: string;
+    do {
+      id = `be-music:drawn-random:${++this.nextDrawId}`;
+    } while (this.collection.courseFolders?.some((folder) => folder.courses?.some((entry) => entry.id === id)));
+    const course: LibraryCourse = {
+      ...fixed,
+      id,
+      definition: { ...drawn.definition, name: `${drawn.definition.name} ${suffix}`, release: false },
+    };
+    let remembered = false;
+    return {
+      course,
+      remember: () => {
+        if (remembered || folderLabel === undefined) return;
+        remembered = true;
+        const replacedIds = new Set(this.keptRandomCourses.map((entry) => entry.course.id));
+        this.keptRandomCourses.push({ folderLabel, course });
+        if (this.keptRandomCourses.length > 100) this.keptRandomCourses.shift();
+        this.appendKeptRandomCourses(replacedIds);
+      },
+    };
+  }
+
+  /** Reprojects the history after imports, maker edits and each draw; fixed bars retain their authored order. */
+  private appendKeptRandomCourses(
+    replacedIds: ReadonlySet<string> = new Set(this.keptRandomCourses.map((entry) => entry.course.id)),
+  ): void {
+    this.collection = {
+      ...this.collection,
+      courseFolders: this.collection.courseFolders?.map((folder) => ({
+        ...folder,
+        courses: [
+          ...(folder.courses ?? []).filter((course) => !replacedIds.has(course.id)),
+          ...this.keptRandomCourses.filter((entry) => entry.folderLabel === folder.label).map((entry) => entry.course),
+        ],
+      })),
+    };
   }
 
   /**
@@ -171,11 +229,15 @@ export class LibraryService {
       return;
     }
     // Replay files ride their own path: they are replay inputs, not chart / theme assets. They are peeled off
-    // BEFORE the song/theme split so a stray `.bmplay.json` never classifies as a theme candidate — and handled
-    // AFTER the split's loaders ran, so dropping a song folder together with its replay loads the song first and
-    // then starts the replay in one gesture.
-    const replayFiles = files.filter((file) => file.name.toLowerCase().endsWith(REPLAY_FILE_SUFFIX));
-    files = files.filter((file) => !file.name.toLowerCase().endsWith(REPLAY_FILE_SUFFIX));
+    // BEFORE the song/theme split so a stray `.bmplay.json` (or a course's `.bmcourse.json`) never classifies as a
+    // theme candidate — and handled AFTER the split's loaders ran, so dropping a song folder together with its replay
+    // loads the song first and then starts the replay in one gesture.
+    const isReplayFile = (file: BrowserDroppedFile) => {
+      const name = file.name.toLowerCase();
+      return name.endsWith(REPLAY_FILE_SUFFIX) || name.endsWith(COURSE_REPLAY_FILE_SUFFIX);
+    };
+    const replayFiles = files.filter(isReplayFile);
+    files = files.filter((file) => !isReplayFile(file));
     if (files.length === 0 && replayFiles.length > 0) {
       await this.startReplayReplayFromFile(replayFiles[0]!);
       return;
@@ -213,8 +275,9 @@ export class LibraryService {
     const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
       themeFiles.map((file) => file.webkitRelativePath || file.name),
     );
-    const carriesLR2Theme = themeFamilies.has('lr2');
-    const carriesBeatorajaTheme = themeFamilies.has('beatoraja');
+    const confirmedFamily = await this.confirmSkinDrop(themeFamilies);
+    const carriesLR2Theme = confirmedFamily === 'lr2';
+    const carriesBeatorajaTheme = confirmedFamily === 'beatoraja';
     const themeMarkers = [...themeFamilies];
     dropLog.info(
       `received ${files.length} file(s) · theme=${themeFiles.length}${
@@ -233,8 +296,10 @@ export class LibraryService {
     if (chartFiles.length > 0) {
       tasks.push(this.loadCharts(chartFiles));
     }
+    const playContinues = this.showing() === 'play';
     if (tasks.length === 0) {
-      dropLog.warn('nothing to load — neither theme nor chart files matched');
+      // A canceled skin drop resumes select; unrelated files leave navigation untouched. A play on the stage stays.
+      if (themeFamilies.size > 0 && !playContinues) await this.showSelect();
       return;
     }
     await Promise.all(tasks);
@@ -265,9 +330,10 @@ export class LibraryService {
     // Open what was dropped: its folder, or the folder list when the drop carried several.
     const dropped = navigationAfterDrop(this.collection.charts, previousChartIds);
     if (dropped !== undefined) this.browseTo(dropped);
-    await this.showSelect();
-    // A skin the player asked for through the Debug Menu ("drop a skin") is switched to once the drop brings it.
-    this.answerSkinDropPrompt(themeFamilies);
+    // Commit the confirmed family before mounting the next select scene. A skin dropped onto a play swaps that play's
+    // family (`applyDroppedSkin`) and leaves the chart running; the select screen takes the family when the play returns.
+    if (confirmedFamily !== undefined) await this.applyDroppedSkin(confirmedFamily);
+    if (!(playContinues && chartFiles.length === 0 && confirmedFamily !== undefined)) await this.showSelect();
     if (replayFiles.length > 0) {
       await this.startReplayReplayFromFile(replayFiles[0]!);
     }
@@ -389,6 +455,7 @@ export class LibraryService {
         ...resolveCourseMakerFolders(this.courseMaker.courses, createChartHashLookup(hashed)),
       ],
     };
+    this.appendKeptRandomCourses();
   }
 
   /** Relists the course folders after the player's own courses changed, keeping the select screen where it was. */

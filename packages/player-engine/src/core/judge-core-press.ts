@@ -3,7 +3,7 @@ import { findFirstIndexNumberAtOrAfter } from '@be-music/shared-utils/core';
 import { findLaneSoundCandidate, lowerBoundBySeconds } from '../judging.ts';
 import type { TimedPlayableNote } from '../playable-notes.ts';
 import { classifyRulesetJudge, RULESET_JUDGE_NONE, type RulesetJudgeIndex } from '../ruleset/judge.ts';
-import { ignoresLateLongNoteHeadBad, isChargeLongNoteMode, isMultiBadCollectorTarget } from '../ruleset/long-note.ts';
+import { ignoresLateLongNoteHeadBad, isChargeLongNoteMode } from '../ruleset/long-note.ts';
 import { preferJudgeCandidate, type JudgeSelectionCandidate } from '../ruleset/selection.ts';
 import {
   isLongPlayableNote,
@@ -26,12 +26,10 @@ import { recordLaneDown, recordLaneUp } from './lane-hold.ts';
 import {
   applyGaugeJudge,
   applyResolvedManualJudge,
-  applyTailMissPoor,
   judgeWindowsFor,
   markScorableJudged,
   maxJudgeEarlyReachSeconds,
   maxJudgeReachSeconds,
-  noteOwesTailMiss,
   setCombo,
   toJudgeClock,
   toJudgeUs,
@@ -116,67 +114,41 @@ function selectPressCandidate(
 }
 
 /**
- * lr2oraja `MultiBadCollector`: once a press has consumed its note, every OTHER unjudged note on the pressed lanes
- * that sits inside the BAD window but outside the GOOD window also resolves as a BAD (pruned by
- * {@link isMultiBadCollectorTarget}). `nowSec` is the judge clock; the BADs land at `atSeconds` on the true clock
- * (the two differ only past an LR2 negative-BPM reversal).
+ * LR2 ProcSinglenote reuses a BAD press for the next tap on that lane, judging its own delta. A non-BAD,
+ * a long note or a note outside BAD reach stops the forward chain. Effect times retain the true clock past reversal.
  */
-function applyMultiBadCollector(
+function applyLR2RejudgeChain(
   state: JudgeCoreState,
   nowSec: number,
-  candidateChannels: ReadonlySet<string>,
   consumed: TimedPlayableNote,
   consumedJudge: RulesetJudgeIndex,
   atSeconds: number,
   emit: JudgeCoreEffectSink,
 ): void {
+  if (consumedJudge !== 3 || isLongPlayableNote(consumed) || isJudgingClosed(state)) return;
   const { config } = state;
-  const scorableNotes = config.scorableNotes;
-  const reachSeconds = maxJudgeReachSeconds(config, nowSec);
-  const inputTimeUs = Math.round(nowSec * 1e6);
-  const consumedNote = { time: consumed.seconds, isLong: isLongPlayableNote(consumed), judge: consumedJudge };
-  const extras: TimedPlayableNote[] = [];
-  for (let index = scanStartIndex(scorableNotes, nowSec, reachSeconds); index < scorableNotes.length; index += 1) {
-    const note = scorableNotes[index]!;
-    if (isBeyondScanReach(note, inputTimeUs, reachSeconds)) {
-      break;
-    }
-    if (note === consumed || note.judged || !candidateChannels.has(note.channel)) {
+  let passedConsumed = false;
+  for (
+    let index = lowerBoundBySeconds(config.scorableNotes, consumed.seconds);
+    index < config.scorableNotes.length;
+    index += 1
+  ) {
+    const note = config.scorableNotes[index]!;
+    if (!passedConsumed) {
+      passedConsumed = note === consumed;
       continue;
     }
-    if (state.activeLongNotes.get(note.channel)?.note === note) {
-      continue;
-    }
-    // The windows in force at the press, as LR2 reads its judge widths (`#EXRANK` can change them mid-chart).
+    if (note.judged || note.channel !== consumed.channel) continue;
+    if (isLongPlayableNote(note)) break;
     const windows = judgeWindowsFor(config, note.channel, nowSec);
-    const dmUs = judgeDeltaUs(note.seconds, nowSec);
-    const bad = windows.judges[3];
-    const good = windows.judges[2];
-    if (dmUs < bad[0] || dmUs > bad[1]) {
-      continue;
-    }
-    if (dmUs >= good[0] && dmUs <= good[1]) {
-      continue;
-    }
-    if (!isMultiBadCollectorTarget(consumedNote, { time: note.seconds, isLong: isLongPlayableNote(note) })) {
-      continue;
-    }
-    extras.push(note);
-  }
-  for (const note of extras) {
-    if (!markScorableJudged(state, note)) {
-      continue;
-    }
-    applyResolvedManualJudge(
-      state,
-      note.channel,
-      { kind: 'BAD', signedDeltaMs: (nowSec - note.seconds) * 1000 },
-      atSeconds,
-      emit,
-    );
-    if (noteOwesTailMiss(config.ruleset, note)) {
-      applyTailMissPoor(state, atSeconds, emit);
-    }
+    const deltaUs = judgeDeltaUs(note.seconds, nowSec);
+    if (deltaUs < windows.judges[3][0] || deltaUs > windows.judges[3][1]) break;
+    if (!markScorableJudged(state, note)) break;
+    const judge = resolveManualTimedJudge((nowSec - note.seconds) * 1000, windows);
+    emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
+    emit({ kind: 'sound', source: 'manual-note', event: note.event, seconds: atSeconds, channel: note.channel });
+    applyResolvedManualJudge(state, note.channel, judge, atSeconds, emit);
+    if (judge.kind !== 'BAD' || isJudgingClosed(state)) break;
   }
 }
 
@@ -321,9 +293,9 @@ export function handleLanePress(
   }
   const channel = candidate.channel;
   const signedDeltaMs = (judgeSec - candidate.seconds) * 1000;
-  const collectMultiBad = (): void => {
+  const rejudgeAfterBad = (): void => {
     if (ruleset.multiBad) {
-      applyMultiBadCollector(state, judgeSec, judgedChannels, candidate, selected.judge, nowSec, emit);
+      applyLR2RejudgeChain(state, judgeSec, candidate, selected.judge, nowSec, emit);
     }
   };
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel } });
@@ -355,15 +327,15 @@ export function handleLanePress(
     const headJudge = resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(config, channel, judgeSec));
     if (longNoteMode !== undefined && isChargeLongNoteMode(longNoteMode)) {
       // Charge modes score the head right here — it is a judgment of its own, not half of a deferred one.
-      applyResolvedManualJudge(state, channel, headJudge, nowSec, emit);
+      applyResolvedManualJudge(state, channel, headJudge, nowSec, emit, true);
       startHCNPassing(state, candidate, toJudgeUs(nowSec));
       if (ruleset.headBadSkipsTail && (headJudge.kind === 'BAD' || headJudge.kind === 'POOR')) {
-        // IIDX: a broken charge-note head cancels the tail; the note is finished with a single judgment.
+        // That-Which-Must-Not-Be-Named: a broken charge-note head cancels the tail; the note is finished with a single judgment.
         state.activeLongNotes.delete(channel);
         state.longNoteSettleMs.delete(channel);
         emit({ kind: 'ui', command: { kind: 'long-note-end', channel, outcome: 'dropped' } });
         emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
-        collectMultiBad();
+        rejudgeAfterBad();
         return;
       }
       state.activeLongNotes.set(channel, {
@@ -376,7 +348,7 @@ export function handleLanePress(
       });
       state.longNoteSettleMs.delete(channel);
       state.longHoldReleaseSeconds.delete(channel);
-      collectMultiBad();
+      rejudgeAfterBad();
       return;
     }
     if (longNoteMode === 1) {
@@ -390,12 +362,12 @@ export function handleLanePress(
       });
       state.longNoteSettleMs.delete(channel);
       state.longHoldReleaseSeconds.delete(channel);
-      collectMultiBad();
+      rejudgeAfterBad();
       return;
     }
     state.activeLongNotes.delete(channel);
     state.longNoteSettleMs.delete(channel);
-    collectMultiBad();
+    rejudgeAfterBad();
     return;
   }
   state.activeLongNotes.delete(channel);
@@ -408,12 +380,12 @@ export function handleLanePress(
     nowSec,
     emit,
   );
-  collectMultiBad();
+  rejudgeAfterBad();
 }
 
 /**
  * A press on a lane whose long note is held, by the ruleset's {@link PressDuringLongNoteRule}: LR2 judges the LN's head
- * again when the press is within its BAD window and charges an empty POOR otherwise; beatoraja and IIDX ignore it.
+ * again when the press is within its BAD window and charges an empty POOR otherwise; beatoraja and That-Which-Must-Not-Be-Named ignore it.
  */
 function applyPressDuringLongNote(
   state: JudgeCoreState,

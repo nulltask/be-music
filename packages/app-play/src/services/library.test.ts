@@ -1,6 +1,6 @@
 import type { BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
-import type { BrowseSnapshot } from '@be-music/player-scene-model';
+import type { BrowseSnapshot, LibraryCourse } from '@be-music/player-scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { COURSE_TABLE_URLS_STORAGE_KEY } from '../course-table-import.ts';
 import { LibraryService, type LibraryServiceOptions } from './library.ts';
@@ -110,7 +110,8 @@ function harness(overrides: Partial<LibraryServiceOptions> = {}) {
     selectSkin: () => undefined,
     resultSkin: () => undefined,
     beatorajaTheme: () => undefined,
-    answerSkinDropPrompt: vi.fn(),
+    confirmSkinDrop: vi.fn(async (families) => [...families][0]),
+    applyDroppedSkin: vi.fn(),
     ...overrides,
   };
   const library = new LibraryService(options);
@@ -215,6 +216,46 @@ describe('LibraryService drops', () => {
     expect(options.loadTheme).not.toHaveBeenCalled();
   });
 
+  test('canceling a skin-only drop restores select without replacing the current skin', async () => {
+    const confirmSkinDrop = vi.fn(async () => undefined);
+    const { library, options, shown } = harness({ confirmSkinDrop });
+    const before = library.collection;
+    await library.processIncomingFiles([dropped('theme/select.lr2skin', '#INFORMATION,5,Example')]);
+    expect(confirmSkinDrop).toHaveBeenCalledWith(new Set(['lr2']));
+    expect(library.collection).toBe(before);
+    expect(options.loadTheme).not.toHaveBeenCalled();
+    expect(options.loadBeatorajaTheme).not.toHaveBeenCalled();
+    expect(options.applyDroppedSkin).not.toHaveBeenCalled();
+    expect(shown).toEqual([before]);
+  });
+
+  test('applies the confirmed skin before showing select', async () => {
+    const order: string[] = [];
+    const { library, options } = harness({
+      loadTheme: vi.fn(async () => {
+        order.push('load');
+      }),
+      applyDroppedSkin: vi.fn(async () => {
+        order.push('apply');
+      }),
+      showSelect: async () => {
+        order.push('show');
+      },
+    });
+    await library.processIncomingFiles([dropped('theme/select.lr2skin', '#INFORMATION,5,Example')]);
+    expect(options.applyDroppedSkin).toHaveBeenCalledWith('lr2');
+    expect(order).toEqual(['load', 'apply', 'show']);
+  });
+
+  test('a skin dropped during a play applies the skin and leaves the play up', async () => {
+    const { library, options, shown, showing } = harness();
+    showing.current = 'play';
+    await library.processIncomingFiles([dropped('theme/select.lr2skin', '#INFORMATION,5,Example')]);
+    expect(options.applyDroppedSkin).toHaveBeenCalledWith('lr2');
+    expect(options.loadTheme).toHaveBeenCalledOnce();
+    expect(shown).toEqual([]);
+  });
+
   test('reads a course file that lists more than five stages as the five LR2 plays, and says so', async () => {
     const { library, statuses, shown, folders } = harness();
     await library.processIncomingFiles([dropped('seven-stages.lr2crs', lr2CourseList('SEVEN', 7))]);
@@ -261,5 +302,89 @@ describe('LibraryService made courses', () => {
       'MY DAN',
     ]);
     expect(view.restore).toHaveBeenCalledWith(navigation);
+  });
+});
+
+describe('LibraryService kept random courses', () => {
+  const drawn: LibraryCourse = {
+    id: 'random',
+    playable: true,
+    stages: [],
+    definition: {
+      name: 'Random',
+      kind: 'expert',
+      stages: [],
+      constraints: [],
+      trophies: [],
+      release: true,
+      source: { format: 'beatoraja-random' },
+    },
+  };
+  const at = new Date(2026, 9, 24, 12, 34, 56);
+  function historyLibrary() {
+    const h = harness();
+    h.library.collection = {
+      sources: [],
+      charts: [],
+      errors: [],
+      courseFolders: [
+        { label: 'MY COURSES', charts: [], courses: [drawn] },
+        { label: 'MY DAN', charts: [], courses: [drawn] },
+      ],
+    };
+    return h;
+  }
+  const navigation = (label: string): BrowseSnapshot => ({ folderPath: [label], cursors: [0, 0] });
+
+  test('names a fixed draw in local time, defers listing, and remembers it once after the original bars', () => {
+    const { library } = historyLibrary();
+    const first = library.prepareDrawnCourse(drawn, navigation('MY COURSES'), at);
+    const second = library.prepareDrawnCourse(drawn, navigation('MY COURSES'), at);
+    expect(first.course.definition).toMatchObject({ name: 'Random 20261024_123456', release: false });
+    expect(first.course.random).toBeUndefined();
+    expect(first.course.stages).toBe(drawn.stages);
+    expect(first.course.id).not.toBe(second.course.id);
+    expect(library.collection.courseFolders![0]!.courses).toEqual([drawn]);
+    first.remember();
+    first.remember();
+    second.remember();
+    expect(library.collection.courseFolders![0]!.courses).toEqual([drawn, first.course, second.course]);
+    expect(library.collection.courseFolders![1]!.courses).toEqual([drawn]);
+    expect(drawn.definition.name).toBe('Random');
+    expect(drawn.definition.release).toBe(true);
+  });
+
+  test('keeps at most 100 across folders, evicting the oldest without touching the original bars', () => {
+    const { library } = historyLibrary();
+    const kept = Array.from({ length: 101 }, (_, i) => {
+      const prepared = library.prepareDrawnCourse(drawn, navigation(i % 2 === 0 ? 'MY COURSES' : 'MY DAN'), at);
+      prepared.remember();
+      return prepared.course;
+    });
+    const folders = library.collection.courseFolders!;
+    expect(folders.flatMap((folder) => folder.courses!.slice(1))).toHaveLength(100);
+    expect(folders[0]!.courses).toEqual([drawn, ...kept.filter((_, i) => i > 0 && i % 2 === 0)]);
+    expect(folders[1]!.courses).toEqual([drawn, ...kept.filter((_, i) => i % 2 === 1)]);
+  });
+
+  test('preserves imported bars with similar IDs and avoids an existing ID', () => {
+    const { library } = historyLibrary();
+    const imported = { ...drawn, id: 'be-music:drawn-random:1' };
+    library.collection.courseFolders![0]!.courses = [imported];
+    const prepared = library.prepareDrawnCourse(drawn, navigation('MY COURSES'), at);
+    expect(prepared.course.id).not.toBe(imported.id);
+    prepared.remember();
+    expect(library.collection.courseFolders![0]!.courses).toEqual([imported, prepared.course]);
+  });
+
+  test('survives course-folder rebuilds, but a new session has no history', async () => {
+    const { library } = historyLibrary();
+    const prepared = library.prepareDrawnCourse(drawn, undefined, at);
+    prepared.remember();
+    await library.refreshMadeCourses();
+    expect(library.collection.courseFolders!.find((folder) => folder.label === 'MY COURSES')!.courses!.at(-1)).toBe(
+      prepared.course,
+    );
+    expect(harness().library.collection.courseFolders).toBeUndefined();
   });
 });

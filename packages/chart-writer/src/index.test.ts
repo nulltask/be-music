@@ -13,12 +13,12 @@ import {
 import { stringifyBMS, stringifyBmson } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+const unifiedBMSChartPath = resolve(rootDir, 'test/fixtures/four-measure-command-combo-test.bms');
 describe('chart-writer', () => {
   test('BMS stringify: generates measure resolution from fractional positions', () => {
     const json = createEmptyJSON('json');
     json.metadata.title = 'Stringify BMS Test';
-    json.metadata.artist = 'Codex';
+    json.metadata.artist = 'Be-Music Dev Team';
     json.resources.wav['01'] = 'sample.wav';
     json.events = [
       { measure: 0, channel: '11', position: [0, 1], value: '01' },
@@ -54,7 +54,7 @@ describe('chart-writer', () => {
   });
 
   test('bmson stringify: outputs version/lines/info.resolution', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/bmson-lines-resolution-test.bmson');
+    const chartPath = resolve(rootDir, 'test/fixtures/bmson-lines-resolution-test.bmson');
     const source = parseBmson(await readFile(chartPath, 'utf8'));
 
     const output = stringifyBmson(source);
@@ -72,7 +72,7 @@ describe('chart-writer', () => {
   test('bmson stringify: generates lines from measure lengths when IR has no lines', () => {
     const json = createEmptyJSON('json');
     json.metadata.title = 'Lines Fallback Test';
-    json.metadata.artist = 'Codex';
+    json.metadata.artist = 'Be-Music Dev Team';
     json.metadata.bpm = 120;
     json.resources.wav['01'] = 'sample.wav';
     json.events = [
@@ -243,7 +243,7 @@ describe('chart-writer', () => {
   });
 
   test('bmson stringify: preserves and outputs bga/info extensions and notes.l/c', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
+    const chartPath = resolve(rootDir, 'test/fixtures/bmson-strict-features.bmson');
     const source = parseBmson(await readFile(chartPath, 'utf8'));
 
     const output = stringifyBmson(source);
@@ -301,7 +301,7 @@ describe('chart-writer', () => {
         version: '1.0.0',
         info: {
           title: 'Test',
-          artist: 'Codex',
+          artist: 'Be-Music Dev Team',
           init_bpm: 120,
           resolution: 240,
         },
@@ -344,7 +344,7 @@ describe('chart-writer', () => {
   test('BMS stringify: handles maxResolution/eol options and controlFlow objects', () => {
     const json = createEmptyJSON('bms');
     json.metadata.title = 'Options';
-    json.metadata.artist = 'Codex';
+    json.metadata.artist = 'Be-Music Dev Team';
     json.metadata.extras = {
       CUSTOM: 'YES',
       PLAYER: 'ignored-as-extra',
@@ -389,7 +389,7 @@ describe('chart-writer', () => {
     const json = createEmptyJSON('bms');
     json.metadata.title = 'Sort Check';
     json.metadata.subtitle = 'Sub';
-    json.metadata.artist = 'Codex';
+    json.metadata.artist = 'Be-Music Dev Team';
     json.metadata.genre = 'Genre';
     json.metadata.comment = 'Comment';
     json.metadata.stageFile = 'stage.png';
@@ -456,7 +456,7 @@ describe('chart-writer', () => {
   test('BMS stringify: writes string PLAYLEVEL values as-is', () => {
     const json = createEmptyJSON('bms');
     json.metadata.title = 'String Level';
-    json.metadata.artist = 'Codex';
+    json.metadata.artist = 'Be-Music Dev Team';
     json.metadata.playLevel = '安心';
 
     const output = stringifyBMS(json);
@@ -809,7 +809,7 @@ describe('chart-writer', () => {
 
     test('bmson-mine-key-channels.bmson (beat-7k, keys 6 / 7, scratch and mines)', async () => {
       const source = parseBmson(
-        await readFile(resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson'), 'utf8'),
+        await readFile(resolve(rootDir, 'test/fixtures/bmson-mine-key-channels.bmson'), 'utf8'),
       );
       expect(toChannels(parseBmson(stringifyBmson(source)))).toEqual(toChannels(source));
     });
@@ -930,7 +930,7 @@ describe('chart-writer', () => {
   });
 
   test('bmson stringify: rescales preserved `lines` to the output resolution', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson');
+    const chartPath = resolve(rootDir, 'test/fixtures/bmson-mine-key-channels.bmson');
     const parsed = parseBmson(await readFile(chartPath, 'utf8'));
 
     const output = JSON.parse(stringifyBmson(parsed, { resolution: 480 })) as {
@@ -1078,10 +1078,10 @@ describe('chart-writer', () => {
       const lateEdges = (set: JudgeWindowSetUs): number[] => set.judges.map((pair) => pair[1]);
 
       test.each(['#RANK 0', '#RANK 1', '#RANK 2', '#RANK 3', '#RANK 4', '#DEFEXRANK 120', '#RANK 7'])(
-        'IIDX (rank-independent windows) matches for %s',
+        '____ (rank-independent windows) matches for %s',
         (header) => {
           const { bms, bmson } = convert(bmsChart(header));
-          expect(windowsOf(bmson, 'iidx')).toEqual(windowsOf(bms, 'iidx'));
+          expect(windowsOf(bmson, '____')).toEqual(windowsOf(bms, '____'));
         },
       );
 

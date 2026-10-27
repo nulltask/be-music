@@ -14,6 +14,8 @@
       "emptyPoor": 0,
       "exScore": 4,
       "score": 75000,
+      "combo": 1,
+      "maxCombo": 1,
       "gauge": {
         "current": 73.066667,
         "max": 100,
@@ -44,10 +46,12 @@
           {"id":4,"channel":"14","type":"long","timeUs":2500000,"endTimeUs":3500000,"lnMode":1},
           {"id":5,"channel":"15","type":"normal","timeUs":3500000}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":120},
         "chartFingerprint": "bmfp0:a3e7e6c303de032ab41f6c22d86d5eb0053eb67c37958894a684848d366817c1",
         "playFingerprint": "bmfp0:a3e7e6c303de032ab41f6c22d86d5eb0053eb67c37958894a684848d366817c1",
         "title": "long notes LNMODE 1",
-        "artist": "characterization"
+        "artist": "Be-Music Dev Team"
       },
       "inputs": [
         {"seq":0,"timeUs":500000,"action":"down","channels":["11"],"tokens":["z"]},
@@ -101,8 +105,8 @@
         "djLevel": "D",
         "gauge": {"type":"NORMAL","final":88,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":5,"great":1,"good":1,"bad":0,"poor":2,"emptyPoor":0},
         "fast": 1,
         "slow": 1,
@@ -223,6 +227,8 @@
       "emptyPoor": 0,
       "exScore": 4,
       "score": 75000,
+      "combo": 1,
+      "maxCombo": 1,
       "gauge": {
         "current": 73.066667,
         "max": 100,

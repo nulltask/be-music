@@ -13,6 +13,7 @@ describe('discoverBeatorajaSystemSoundPaths', () => {
   it('picks the first canonical filename it finds for each slot', () => {
     const files = fakeFiles([
       'sound/cursor.wav',
+      'sound/playstop.wav',
       'sound/decide.wav',
       'sound/cancel.wav',
       'sound/folder_open.wav',
@@ -20,6 +21,7 @@ describe('discoverBeatorajaSystemSoundPaths', () => {
       'sound/option.wav',
     ]);
     expect(discoverBeatorajaSystemSoundPaths(files)).toEqual({
+      playStop: 'sound/playstop.wav',
       cursor: 'sound/cursor.wav',
       decide: 'sound/decide.wav',
       cancel: 'sound/cancel.wav',
@@ -30,7 +32,7 @@ describe('discoverBeatorajaSystemSoundPaths', () => {
   });
 
   it('honors filename aliases when canonicals are absent', () => {
-    // IIDX-style themes ship `scratch.wav` instead of `cursor.wav`; LR2-derived themes use
+    // That-Which-Must-Not-Be-Named-style themes ship `scratch.wav` instead of `cursor.wav`; LR2-derived themes use
     // `f-open.wav` / `f-close.wav` / `o-change.wav`. The picker walks the alias list in
     // priority order until something matches.
     const files = fakeFiles([
@@ -110,6 +112,14 @@ describe('pickBeatorajaThemeBGMPaths', () => {
       result: 'sound/result.wav',
       courseClear: 'sound/course_clear.wav',
       courseFail: 'sound/course_fail.ogg',
+      resultClose: 'sound/resultclose.wav',
+    });
+  });
+
+  it('takes the close sounds of a result and a course result', () => {
+    expect(pickBeatorajaThemeBGMPaths(['sound/course_close.wav', 'sound/resultclose.ogg'])).toEqual({
+      resultClose: 'sound/resultclose.ogg',
+      courseClose: 'sound/course_close.wav',
     });
   });
 
@@ -137,6 +147,11 @@ describe('pickBeatorajaThemeBGMPaths', () => {
   });
 
   it('does not reuse one file for two slots', () => {
-    expect(pickBeatorajaThemeBGMPaths(['sound/resultclose.wav'])).toEqual({ result: 'sound/resultclose.wav' });
+    // `resultclose` is the close sound; it is never taken loosely for the generic result jingle too.
+    expect(pickBeatorajaThemeBGMPaths(['sound/resultclose.wav'])).toEqual({ resultClose: 'sound/resultclose.wav' });
+    expect(pickBeatorajaThemeBGMPaths(['sound/result_loop.wav', 'sound/course_close.wav'])).toEqual({
+      result: 'sound/result_loop.wav',
+      courseClose: 'sound/course_close.wav',
+    });
   });
 });

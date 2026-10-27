@@ -5,7 +5,7 @@
  * intents.
  */
 
-import type { PlayerUICommand } from '@be-music/player-engine/signals';
+import type { PlayerUICommand, PlayerUISeekJudgment } from '@be-music/player-engine/signals';
 import type { Texture } from 'pixi.js';
 import type { PlayViewSetting, PlayViewTiming } from '../../view/types.ts';
 
@@ -16,8 +16,10 @@ import type { PlayViewSetting, PlayViewTiming } from '../../view/types.ts';
  */
 export type PlayMoment =
   | { readonly kind: 'scene-start'; readonly at: number }
+  | { readonly kind: 'input-start'; readonly at: number }
   | { readonly kind: 'load-end'; readonly at: number }
   | { readonly kind: 'play-start'; readonly at: number }
+  | { readonly kind: 'music-end'; readonly at: number }
   | { readonly kind: 'exit-fade-out'; readonly at: number }
   | { readonly kind: 'exit-close'; readonly at: number }
   | {
@@ -36,6 +38,17 @@ export type PlayMoment =
   | { readonly kind: 'gauge'; readonly previous: number; readonly next: number; readonly at: number }
   | { readonly kind: 'bomb'; readonly channel: string; readonly at: number }
   | { readonly kind: 'lane-command'; readonly command: PlayerUICommand }
+  /**
+   * The play sought to chart second `seconds`, its gauge `gauge` percent there: what the view showed of the run before
+   * (its per-judgment timers, lane effects) is void, and `judgments` are the ones the engine rebuilt before `seconds`.
+   */
+  | {
+      readonly kind: 'seek';
+      readonly seconds: number;
+      readonly gauge: number;
+      readonly judgments: readonly PlayerUISeekJudgment[];
+      readonly at: number;
+    }
   /** The player's keys changed a view setting (the hi-speed, a lane cover). */
   | { readonly kind: 'view-setting'; readonly setting: PlayViewSetting; readonly at: number };
 
@@ -46,6 +59,8 @@ export type PlayMoment =
 export interface PlaySessionTheme {
   /** The view's timing as its skin authors it: when loading counts as done, when the chart starts, the fade and close. */
   timing(): PlayViewTiming;
+  /** Design pixels per beat at hi-speed 1, when the view uses a different canvas scale. */
+  pixelsPerBeat?(): number | undefined;
   /** A moment of the play happened. */
   moment(moment: PlayMoment): void;
   /** How long `channel`'s key beam fades once its key is up, in ms. */

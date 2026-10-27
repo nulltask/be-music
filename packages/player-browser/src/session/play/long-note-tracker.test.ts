@@ -15,7 +15,7 @@ describe('resolveBeMusicLongNoteMode', () => {
     expect(resolveBeMusicLongNoteMode('per-note', undefined)).toBe('cn');
   });
 
-  it('plays charge notes under IIDX, hell charge where the chart asks', () => {
+  it('plays charge notes under That-Which-Must-Not-Be-Named, hell charge where the chart asks', () => {
     expect(resolveBeMusicLongNoteMode('charge', 1)).toBe('cn');
     expect(resolveBeMusicLongNoteMode('charge', 2)).toBe('cn');
     expect(resolveBeMusicLongNoteMode('charge', 3)).toBe('hcn');

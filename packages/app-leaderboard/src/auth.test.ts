@@ -58,7 +58,7 @@ describe('hasSessionCookie', () => {
 
   test('is false without one, so signed-out requests skip the session lookup', () => {
     expect(hasSessionCookie(new Headers())).toBe(false);
-    expect(hasSessionCookie(new Headers({ cookie: 'lb-lang=ja; lb-ruleset=iidx' }))).toBe(false);
+    expect(hasSessionCookie(new Headers({ cookie: 'lb-lang=ja; lb-ruleset=____' }))).toBe(false);
   });
 });
 

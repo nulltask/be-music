@@ -111,8 +111,11 @@ describe('player cli', () => {
     expect(parseArgs(['chart.bms']).gauge).toBeUndefined();
 
     expect(parseArgs(['chart.bms', '--ruleset', 'beatoraja']).judgeRuleset).toBe('beatoraja');
-    expect(parseArgs(['chart.bms', '--ruleset', 'IIDX']).judgeRuleset).toBe('iidx');
+    expect(parseArgs(['chart.bms', '--ruleset', '____']).judgeRuleset).toBe('____');
     expect(parseArgs(['chart.bms', '--gauge', 'hard']).gauge).toBe('HARD');
+
+    expect(parseArgs(['chart.bms']).endOnFailure).toBeUndefined();
+    expect(parseArgs(['chart.bms', '--no-end-on-failure']).endOnFailure).toBe(false);
 
     expect(() => parseArgs(['chart.bms', '--ruleset', 'lr2oraja'])).toThrow(/Unknown --ruleset/);
     expect(() => parseArgs(['chart.bms', '--gauge', 'ASSIST'])).toThrow(/Unknown --gauge/);
@@ -306,7 +309,7 @@ describe('player cli', () => {
         fileLabel: 'sample.bms',
         title: 'Four-Measure Command Combo Test',
         subtitle: 'Visual 4-Bar Command Blocks',
-        artist: 'Codex',
+        artist: 'Be-Music Dev Team',
         subartist: 'Alice, Bob',
         genre: 'TEST',
         comment: 'Each 4-measure block targets a different command combination set.',
@@ -316,7 +319,7 @@ describe('player cli', () => {
 
     expect(lines[0]).toContain('TITLE Four-Measure Command Combo Test');
     expect(lines[0]).toContain('\u001b[38;2;160;160;160mVisual 4-Bar Command Blocks\u001b[0m');
-    expect(lines[1]).toContain('ARTIST Codex');
+    expect(lines[1]).toContain('ARTIST Be-Music Dev Team');
     expect(lines[1]).toContain('\u001b[38;2;160;160;160mAlice, Bob\u001b[0m');
     expect(lines[2]).toContain('GENRE TEST');
     expect(lines[3]).toContain('COMMENT Each 4-measure block targets a different command combination set.');
@@ -329,7 +332,7 @@ describe('player cli', () => {
         filePath: '/charts/sample.bms',
         fileLabel: 'sample.bms',
         title: 'Sample',
-        artist: 'Codex',
+        artist: 'Be-Music Dev Team',
         genre: 'TEST',
         comment: 'Ready',
       },
@@ -340,7 +343,7 @@ describe('player cli', () => {
     );
 
     expect(lines[0]).toMatch(/TITLE Sample\s+\[01\]$/);
-    expect(lines[1]).toMatch(/ARTIST Codex\s+\[02\]$/);
+    expect(lines[1]).toMatch(/ARTIST Be-Music Dev Team\s+\[02\]$/);
     expect(lines[2]).toMatch(/GENRE TEST\s+\[03\]$/);
     expect(lines[3]).toMatch(/COMMENT Ready\s+\[04\]$/);
   });
@@ -352,7 +355,7 @@ describe('player cli', () => {
         filePath: '/charts/sample.bms',
         fileLabel: 'sample.bms',
         title: 'Sample',
-        artist: 'Codex',
+        artist: 'Be-Music Dev Team',
         genre: 'TEST',
         comment: 'Ready',
       },
@@ -363,7 +366,7 @@ describe('player cli', () => {
     );
 
     expect(lines[0]).toMatch(/TITLE Sample\s{12,}$/);
-    expect(lines[1]).toMatch(/ARTIST Codex\s{12,}$/);
+    expect(lines[1]).toMatch(/ARTIST Be-Music Dev Team\s{12,}$/);
     expect(lines[2]).toMatch(/GENRE TEST\s{12,}$/);
     expect(lines[3]).toMatch(/COMMENT Ready\s{12,}$/);
   });
@@ -377,7 +380,7 @@ describe('player cli', () => {
         fileLabel: 'sample.bms',
         title: 'Four-Measure Command Combo Test',
         subtitle: 'Visual 4-Bar Command Blocks',
-        artist: 'Codex',
+        artist: 'Be-Music Dev Team',
         subartist: 'Alice, Bob',
         genre: 'TEST',
         comment: 'Each 4-measure block targets a different command combination set.',

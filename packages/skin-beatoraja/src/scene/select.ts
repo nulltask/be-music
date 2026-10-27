@@ -1,3 +1,4 @@
+import { resolveBeatorajaSelectReplayOps } from './replay-slots.ts';
 import {
   resolveCourseView,
   type BrowseListOptions,
@@ -171,13 +172,17 @@ export interface BeatorajaSelectInput {
   /** The search text as typed. */
   readonly searchText: string;
   readonly list: Pick<BrowseListOptions, 'keysFilter' | 'sort'>;
-  /** The LNMODE button's choice; the focused chart's `#LNMODE` when absent. */
+  /** The player's LN MODE (0 LN, 1 CN, 2 HCN), which the LNMODE button steps; the focused chart's `#LNMODE` when absent. */
   readonly lnMode?: 0 | 1 | 2;
   readonly skin?: BeatorajaSkinTextInput;
   /** The skin config's judge timing offset (ms). */
   readonly judgeTiming: number;
   /** The focused bar's best clear lamp, as its op (`beatorajaClearLampOp`); NO PLAY when absent. */
   readonly lampOp?: number;
+  /** Which of the focused chart's or course's replay slots hold a replay; none when absent. */
+  readonly replaySlots?: readonly boolean[];
+  /** The replay slot REPLAY plays (0-3), or −1 for none. */
+  readonly selectedReplaySlot?: number;
   readonly wallClock?: BeatorajaWallClock;
 }
 
@@ -185,7 +190,8 @@ export interface BeatorajaSelectInput {
  * The ops the select screen lights for the bar under the cursor, none without one. With a bar: the screen's fixed state
  * (`LOADED`, `OFFLINE`, `REPLAY_OFF`, `DISABLE_SAVE_SCORE`, `NO_SAVE_CLEAR`, `BGA_ON`), and `FOLDERBAR` on a folder bar,
  * the course bar ops on a course bar ({@link resolveBeatorajaCourseBarOps}), and on a chart bar `SONGBAR`,
- * `PLAYABLEBAR`, its key-mode, trait, difficulty and judge-rank ops and its clear lamp.
+ * `PLAYABLEBAR`, its key-mode, trait, difficulty and judge-rank ops and its clear lamp. A chart or course bar also lights
+ * its replay slot ops ({@link resolveBeatorajaSelectReplayOps}).
  */
 export function resolveBeatorajaSelectBarOps(input: BeatorajaSelectInput): number[] {
   const entry = input.focused;
@@ -204,6 +210,7 @@ export function resolveBeatorajaSelectBarOps(input: BeatorajaSelectInput): numbe
       break;
     case 'course':
       ops.push(...resolveBeatorajaCourseBarOps(entry.course, input.lampOp));
+      ops.push(...resolveBeatorajaSelectReplayOps(input.replaySlots ?? [], input.selectedReplaySlot ?? -1));
       break;
     case 'chart': {
       ops.push(BEATORAJA_OP.SONGBAR, BEATORAJA_OP.PLAYABLEBAR);
@@ -216,6 +223,7 @@ export function resolveBeatorajaSelectBarOps(input: BeatorajaSelectInput): numbe
         ops.push(beatorajaJudgeRankOp(chart.judgeRank));
       }
       ops.push(input.lampOp ?? BEATORAJA_OP.CLEAR_LAMP_NOPLAY);
+      ops.push(...resolveBeatorajaSelectReplayOps(input.replaySlots ?? [], input.selectedReplaySlot ?? -1));
       break;
     }
   }
@@ -373,7 +381,7 @@ export function resolveBeatorajaSelectNumber(id: number, input: BeatorajaSelectI
 
 /**
  * The image an image set with a `ref` picks on the select screen: the MODE button's filter (11), the SORT button's sort
- * (12), the LNMODE button's choice (308, else the focused chart's `#LNMODE`) and the best clear lamp (370, NO PLAY: no
+ * (12), the player's LN MODE (308, else the focused chart's `#LNMODE`) and the best clear lamp (370, NO PLAY: no
  * records feed it yet). 0 (the first image) for any other ref.
  */
 export function resolveBeatorajaSelectRefValue(ref: number, input: BeatorajaSelectInput): number {

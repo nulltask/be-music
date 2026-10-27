@@ -46,7 +46,7 @@ import {
   type LaneModeExtension,
   type TimelineItem,
 } from './fingerprint-items.ts';
-import { sha256Hex } from './sha256.ts';
+import { sha256Hex } from '@be-music/shared-utils/hash';
 import {
   type BeMusicChartFingerprintDocument,
   type BeMusicFingerprintDocument,
@@ -134,6 +134,7 @@ export function buildChartModel(json: BeMusicJSON, extension: LaneModeExtension)
     topBuckets,
     topItems,
     base: resolveBMSBase(json),
+    laneCache: new Map(),
   };
   const pairing = resolvePairingStreams(json, entries, topBuckets);
   const segments: SegmentModel[] = [];

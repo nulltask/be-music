@@ -49,7 +49,11 @@ export function rulesetChartFactsFromChart(
   json: BeMusicJSON,
   chart: EngineRulesetChartInput,
   dynamicJudgeRankChanges: ReadonlyArray<{ seconds: number; exRankValue: number }> = [],
-  stageRanks: ReadonlyArray<{ seconds: number; rank: number; table: 'chart' | 'lr2-nonstop' }> = [],
+  stageRanks: ReadonlyArray<{
+    seconds: number;
+    rank: number;
+    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
+  }> = [],
 ): RulesetChartFacts {
   const resolved = chart.resolvedChart ?? resolveChart(json);
   const chartLNMode = resolved.lnMode;
@@ -88,6 +92,7 @@ export function rulesetChartFactsFromChart(
     judgeRank,
     notes: { ...notes, normal, long },
   };
+  if (json.bmson.info.totalUnit !== undefined) facts.totalUnit = json.bmson.info.totalUnit;
   if (resolved.total.value !== undefined) {
     facts.total = resolved.total.value;
   }

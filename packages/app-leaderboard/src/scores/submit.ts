@@ -4,18 +4,20 @@ import {
   checkReplayEligibility,
   REPLAY_ENGINE_VERSION,
   resolveRulesetResultLamp,
+  resolveRulesetResultMissCount,
   simulateReplay,
   type BeMusicReplay,
   type RulesetId,
   type ReplayRulesetResult,
+  type ReplayUnrankedReason,
 } from '@be-music/player-engine/replay';
 import { refreshChartListing } from '../charts.ts';
 import type { Database } from '../db/client.ts';
 import { bestScore, score, scoreResult } from '../db/schema.ts';
 import { rankOfExScore, countPlayers } from '../ranking.ts';
 import { mergeBestScores } from '../scoring/best.ts';
-import { clearLampRank, resolveMissCount } from '@be-music/player-engine/ruleset';
-import { sha256Hex } from '../hash.ts';
+import { clearLampRank } from '@be-music/player-engine/ruleset';
+import { sha256HexAsync as sha256Hex } from '@be-music/shared-utils/hash';
 import { playedFileOf } from './played-file.ts';
 import { checkPlayedChart, gzipText, playedChartStatements, putChartDocument } from './played-chart.ts';
 import { byRulesetOrder, RULESET_IDS } from '../rulesets.ts';
@@ -53,12 +55,21 @@ export interface RulesetOutcome {
 }
 
 export type SubmissionOutcome =
-  | { status: 'accepted' | 'duplicate'; scoreId: string; chartFingerprint: string; results: RulesetOutcome[] }
+  | {
+      status: 'accepted' | 'duplicate';
+      scoreId: string;
+      chartFingerprint: string;
+      results: RulesetOutcome[];
+      /** Why the play was stored without ranking it; its results then carry rank and players 0. */
+      unranked?: ReplayUnrankedReason;
+    }
   | { status: 'rejected'; httpStatus: 409 | 422; reason: string };
 
 /**
  * Accepts one play (docs/leaderboard.md section 5). Rejections never write anything; an accepted play writes its
- * replay to R2 before the D1 batch, so a failed batch leaves only an unreferenced object.
+ * replay to R2 before the D1 batch, so a failed batch leaves only an unreferenced object. A play that does not rank
+ * (another tempo, a course stage: `checkReplayEligibility`'s `unranked`) is stored and simulated all the same, but
+ * moves no personal best and takes no place in a ranking (docs/leaderboard.md section 6).
  */
 export async function submitScore(deps: SubmissionDeps, input: SubmissionInput): Promise<SubmissionOutcome> {
   const { db, blobs } = deps;
@@ -66,7 +77,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   if (!eligibility.eligible) {
     return { status: 'rejected', httpStatus: 422, reason: eligibility.reason };
   }
-  const { chartFingerprint, playFingerprint, assistFlags } = eligibility;
+  const { chartFingerprint, playFingerprint, assistFlags, unranked } = eligibility;
   const assisted = assistFlags.length > 0;
 
   const submissionId = await sha256Hex(identifyPlay(input.replay, playFingerprint));
@@ -80,7 +91,8 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
       status: 'duplicate',
       scoreId: existing.id,
       chartFingerprint: existing.chartFingerprint,
-      results: await loadOutcomes(db, existing.id, existing.chartFingerprint, existing.assisted),
+      results: await loadOutcomes(db, existing.id, existing.chartFingerprint, existing.assisted, existing.unranked),
+      ...(existing.unranked !== null ? { unranked: existing.unranked } : {}),
     };
   }
 
@@ -95,7 +107,13 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   }
   const { verification } = played;
 
-  const simulated = RULESET_IDS.map((ruleset) => ({ ruleset, result: simulateReplay(input.replay, { ruleset }) }));
+  // A play given up with ESC did not clear, whatever its gauge stood at: it is ranked as a failed play, as LR2 and
+  // beatoraja save one, its BP counting the notes it never reached.
+  const givenUp = input.replay.play.aborted === true;
+  const simulated = RULESET_IDS.map((ruleset) => {
+    const result = simulateReplay(input.replay, { ruleset });
+    return { ruleset, result: givenUp ? { ...result, gauge: { ...result.gauge, cleared: false } } : result };
+  });
 
   const now = deps.now();
   const scoreId = deps.newId();
@@ -103,7 +121,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   // The stored files and the current bests do not depend on each other: one wait for all of them. The play's rows are
   // written only once every file is stored, as before.
   const [currentBests] = await Promise.all([
-    loadBestScores(db, input.userId, chartFingerprint, assisted),
+    unranked === undefined ? loadBestScores(db, input.userId, chartFingerprint, assisted) : new Map(),
     gzipText(input.replayText).then((compressed) =>
       blobs.put(replayKey, compressed, {
         httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
@@ -114,7 +132,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   const playedRuleset = input.replay.play.judgeRuleset ?? 'lr2';
   const figures = simulated.map(({ ruleset, result }) => {
     const lamp = clearLampRank(resolveRulesetResultLamp(result, ruleset));
-    const missCount = resolveMissCount(result.judge);
+    const missCount = resolveRulesetResultMissCount(result);
     const current = currentBests.get(ruleset);
     const update = mergeBestScores(current, { scoreId, playedAt: now, exScore: result.exScore, lamp, missCount });
     const playedHere = (current?.playedHere ?? false) || playedRuleset === ruleset;
@@ -139,13 +157,15 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
       submittedBy: input.submittedBy ?? null,
       serverEngine: REPLAY_ENGINE_VERSION,
       replayKey,
+      unranked: unranked ?? null,
       createdAt: new Date(now),
       updatedAt: new Date(now),
     }),
     ...figures.map(({ ruleset, result, lamp, missCount }) =>
       db.insert(scoreResult).values(toScoreResultRow(scoreId, ruleset, result, lamp, missCount)),
     ),
-    ...figures.map(({ ruleset, update, playedHere }) => {
+    // An unranked play moves no personal best.
+    ...(unranked !== undefined ? [] : figures).map(({ ruleset, update, playedHere }) => {
       const row = toBestScoreRow(
         { userId: input.userId, chartFingerprint, ruleset, assisted },
         update.next,
@@ -162,6 +182,12 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
     }),
   ];
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+  if (unranked !== undefined) {
+    const results = figures.map(({ ruleset, result, lamp, missCount }) =>
+      unrankedOutcome(ruleset, result.ruleset, result, lamp, missCount),
+    );
+    return { status: 'accepted', scoreId, chartFingerprint, results, unranked };
+  }
 
   // The listing and each ruleset's rank and player count read the rows just written and not each other: asked at once.
   const [, results] = await Promise.all([
@@ -188,6 +214,27 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
     ),
   ]);
   return { status: 'accepted', scoreId, chartFingerprint, results };
+}
+
+/** The outcome of an unranked play under one ruleset: its figures, with no rank, players or best moved. */
+function unrankedOutcome(
+  ruleset: RulesetId,
+  rulesetRevision: string,
+  figures: { exScore: number; noteCount: number },
+  clearLamp: number,
+  missCount: number,
+): RulesetOutcome {
+  return {
+    ruleset,
+    rulesetRevision,
+    exScore: figures.exScore,
+    noteCount: figures.noteCount,
+    clearLamp,
+    missCount,
+    rank: 0,
+    players: 0,
+    improved: { exScore: false, lamp: false, missCount: false },
+  };
 }
 
 /**
@@ -229,10 +276,14 @@ async function loadOutcomes(
   scoreId: string,
   chartFingerprint: string,
   assisted: boolean,
+  unranked: string | null,
 ): Promise<RulesetOutcome[]> {
   const rows = await db.select().from(scoreResult).where(eq(scoreResult.scoreId, scoreId));
   const outcomes = await Promise.all(
     rows.map(async (row): Promise<RulesetOutcome> => {
+      if (unranked !== null) {
+        return unrankedOutcome(row.ruleset, row.rulesetRevision, row, row.clearLamp, row.missCount);
+      }
       const filter = {
         chartFingerprint,
         ruleset: row.ruleset,

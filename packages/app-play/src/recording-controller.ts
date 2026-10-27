@@ -6,7 +6,8 @@ import {
   recordingFileExtension,
   type RecordingFormat,
 } from '@be-music/player-browser/recording';
-import type { Controller } from 'lil-gui';
+import type { ButtonApi } from 'tweakpane';
+import { setDisabled, setButtonTitle } from './pane-controls.ts';
 
 /** The Debug Menu button that records the play screen (gameplay) as a video. */
 export const RECORD_LABEL = '● Record gameplay video';
@@ -28,18 +29,18 @@ export interface GameplayRecorder {
 
 /**
  * Dependencies the recording controller's free functions read from / write to. Modelled as explicit getters /
- * setters / callbacks (rather than `this` references) so the demo class can pass them in without having to drop its
- * private modifier on every backing field. Each call site builds one of these from the demo's recording service — see
+ * setters / callbacks (rather than `this` references) so the player class can pass them in without having to drop its
+ * private modifier on every backing field. Each call site builds one of these from the player's recording service — see
  * `RecordingService.deps` in `services/recording.ts`.
  */
 export interface RecordingDeps {
   readonly sceneHost: PixiSceneHost;
-  readonly recordController: Controller | undefined;
+  readonly recordController: ButtonApi | undefined;
   /** Whichever gameplay view is mounted right now, or `undefined` when neither family is active. */
   getActiveGameplay(): GameplayRecorder | undefined;
   getAutoRecordArmed(): boolean;
   setAutoRecordArmed(value: boolean): void;
-  /** Snapshot of the recording filename stem at call time; the demo updates it per chart in `playChart`. */
+  /** Snapshot of the recording filename stem at call time; the player updates it per chart in `playChart`. */
   getRecordingFilenameBase(): string;
   /** The Debug Menu's "Video format": the container and codec a new recording is written in. */
   getRecordingFormat(): RecordingFormat;
@@ -62,7 +63,7 @@ export async function captureScreenshot(deps: RecordingDeps): Promise<void> {
     const activeScene = deps.sceneHost.getCurrentScene();
     const stageInfo = activeScene?.getStageInfo?.();
     // `extract.canvas` returns Pixi's `ICanvas` (HTMLCanvasElement | OffscreenCanvas
-    // union). Demo doesn't depend directly on `pixi.js` so we type it via the runtime
+    // union). Player doesn't depend directly on `pixi.js` so we type it via the runtime
     // duck-type `{ toBlob }` we actually consume below.
     let canvas: { toBlob?: (cb: (blob: Blob | null) => void, type?: string) => void };
     let captureWidth: number;
@@ -152,18 +153,18 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
     const next = !deps.getAutoRecordArmed();
     deps.setAutoRecordArmed(next);
     if (next) {
-      controller?.domElement.classList.add('arming');
-      controller?.name('◉ Records the next play');
+      controller?.element.classList.add('arming');
+      setButtonTitle(controller, '◉ Records the next play');
       deps.setStatus('Recording armed — pick a song to start capturing');
     } else {
-      controller?.domElement.classList.remove('arming');
-      controller?.name(RECORD_LABEL);
+      controller?.element.classList.remove('arming');
+      setButtonTitle(controller, RECORD_LABEL);
       deps.setStatus('Recording disarmed');
     }
     return;
   }
   if (gameplay.isRecording()) {
-    controller?.disable();
+    setDisabled(controller, true);
     deps.setStatus('Finalizing recording…');
     try {
       const result = await gameplay.stopRecording();
@@ -180,16 +181,16 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
         deps.setStatus(`Saved ${filename} (${seconds}s, ${sizeMb} MB)`);
       }
     } finally {
-      controller?.domElement.classList.remove('recording');
-      controller?.name(RECORD_LABEL);
-      controller?.enable();
+      controller?.element.classList.remove('recording');
+      setButtonTitle(controller, RECORD_LABEL);
+      setDisabled(controller, false);
     }
     return;
   }
   try {
     gameplay.startRecording({ format: deps.getRecordingFormat() });
-    controller?.domElement.classList.add('recording');
-    controller?.name(STOP_RECORDING_LABEL);
+    controller?.element.classList.add('recording');
+    setButtonTitle(controller, STOP_RECORDING_LABEL);
     deps.setStatus('Recording…');
   } catch (error) {
     recordLog.warn('start failed', error);
@@ -220,14 +221,14 @@ export function startArmedRecording(deps: RecordingDeps): void {
   if (gameplay === undefined) return;
   deps.setAutoRecordArmed(false);
   const controller = deps.recordController;
-  controller?.domElement.classList.remove('arming');
+  controller?.element.classList.remove('arming');
   try {
     gameplay.startRecording({ format: deps.getRecordingFormat() });
-    controller?.domElement.classList.add('recording');
-    controller?.name(STOP_RECORDING_LABEL);
+    controller?.element.classList.add('recording');
+    setButtonTitle(controller, STOP_RECORDING_LABEL);
     deps.setStatus('Recording…');
   } catch (error) {
-    controller?.name(RECORD_LABEL);
+    setButtonTitle(controller, RECORD_LABEL);
     recordLog.warn('auto-start failed', error);
     deps.setStatus(`Recording unavailable: ${(error as Error).message}`);
   }

@@ -3,13 +3,15 @@ import type { LibraryEntry } from '../library/entries.ts';
 
 /**
  * The sounds a theme gives the screens, whatever skin family it is: the select screen's cues (cursor, decide, cancel,
- * folders, option panels and changes), the looping select BGM and the decide jingle, and the result jingles (clear,
- * fail, the generic result one, and a course run's).
+ * folders, option panels and changes), the looping select BGM and the decide jingle, the result jingles (clear,
+ * fail, the generic result one, and a course run's), and the sounds a result screen plays as it closes (beatoraja's
+ * `resultclose` and `course_close`).
  */
 export type SystemSoundSlot =
   | 'cursor'
   | 'decide'
   | 'cancel'
+  | 'playStop'
   | 'folderOpen'
   | 'folderClose'
   | 'optionOpen'
@@ -21,13 +23,16 @@ export type SystemSoundSlot =
   | 'fail'
   | 'result'
   | 'courseClear'
-  | 'courseFail';
+  | 'courseFail'
+  | 'resultClose'
+  | 'courseClose';
 
 /** Every system sound slot. */
 export const SYSTEM_SOUND_SLOTS: readonly SystemSoundSlot[] = [
   'cursor',
   'decide',
   'cancel',
+  'playStop',
   'folderOpen',
   'folderClose',
   'optionOpen',
@@ -40,6 +45,8 @@ export const SYSTEM_SOUND_SLOTS: readonly SystemSoundSlot[] = [
   'result',
   'courseClear',
   'courseFail',
+  'resultClose',
+  'courseClose',
 ];
 
 /**
@@ -69,6 +76,7 @@ export const LR2_SOUND_SET_SLOTS: Readonly<Record<string, SystemSoundSlot>> = {
   CLEAR: 'clear',
   FAIL: 'fail',
   SCRATCH: 'cursor',
+  STOP: 'playStop',
   COURSECLEAR: 'courseClear',
   COURSEFAIL: 'courseFail',
 };
@@ -86,6 +94,7 @@ export interface BeatorajaThemeSounds {
   /** The cue paths found in the theme's files (`BeatorajaSelectSystemSoundPaths`). */
   readonly paths?: {
     readonly cursor?: string;
+    readonly playStop?: string;
     readonly decide?: string;
     readonly cancel?: string;
     readonly folderOpen?: string;
@@ -101,6 +110,8 @@ export interface BeatorajaThemeSounds {
     readonly result?: Uint8Array;
     readonly courseClear?: Uint8Array;
     readonly courseFail?: Uint8Array;
+    readonly resultClose?: Uint8Array;
+    readonly courseClose?: Uint8Array;
   };
 }
 
@@ -121,6 +132,7 @@ export function systemSoundSetFromBeatoraja(theme: BeatorajaThemeSounds): System
   const bgm = theme.bgm ?? {};
   return compact([
     ['cursor', fromPath(paths.cursor)],
+    ['playStop', fromPath(paths.playStop)],
     ['decide', fromPath(paths.decide)],
     ['cancel', fromPath(paths.cancel)],
     ['folderOpen', fromPath(paths.folderOpen)],
@@ -133,6 +145,8 @@ export function systemSoundSetFromBeatoraja(theme: BeatorajaThemeSounds): System
     ['result', fromBytes(bgm.result)],
     ['courseClear', fromBytes(bgm.courseClear)],
     ['courseFail', fromBytes(bgm.courseFail)],
+    ['resultClose', fromBytes(bgm.resultClose)],
+    ['courseClose', fromBytes(bgm.courseClose)],
   ]);
 }
 
@@ -147,18 +161,24 @@ export function hasResultJingle(set: SystemSoundSet): boolean {
   );
 }
 
-/** The jingles a result screen plays: on a clear, on a failure, and the generic one either falls back to. */
+/**
+ * The jingles a result screen plays: on a clear, on a failure, and the generic one either falls back to, and the sound
+ * it plays as it closes.
+ */
 export interface ResultJingles {
   readonly clear?: SystemSound;
   readonly fail?: SystemSound;
   readonly result?: SystemSound;
+  /** Played as the screen starts to fade out, stopping the jingle (beatoraja's `RESULT_CLOSE` / `COURSE_CLOSE`). */
+  readonly close?: SystemSound;
 }
 
 /**
  * The jingles a result plays, from the first of `sets` (in order of preference: the theme whose result skin is shown,
  * then the others) that has any result jingle, kept whole as beatoraja plays every result from its one set.
  * `courseJingles` (a course run's result) plays the course-clear / course-fail jingles, falling back to the clear /
- * fail ones as LR2 and beatoraja do.
+ * fail ones as LR2 and beatoraja do, and closes with the course-close sound, falling back to the result-close one as
+ * beatoraja's `CourseResult` does.
  */
 export function resolveResultJingles(
   sets: readonly (SystemSoundSet | undefined)[],
@@ -167,10 +187,12 @@ export function resolveResultJingles(
   const set = sets.find((candidate) => candidate !== undefined && hasResultJingle(candidate)) ?? {};
   const clear = (courseJingles ? set.courseClear : undefined) ?? set.clear;
   const fail = (courseJingles ? set.courseFail : undefined) ?? set.fail;
+  const close = (courseJingles ? set.courseClose : undefined) ?? set.resultClose;
   return {
     ...(clear !== undefined ? { clear } : {}),
     ...(fail !== undefined ? { fail } : {}),
     ...(set.result !== undefined ? { result: set.result } : {}),
+    ...(close !== undefined ? { close } : {}),
   };
 }
 

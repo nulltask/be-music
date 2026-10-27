@@ -49,7 +49,7 @@ const repositoryDir = resolve(scriptDir, '../..');
 
 const BENCH_BMS_TEXT = [
   '#TITLE Tinybench Benchmark',
-  '#ARTIST be-music',
+  '#ARTIST Be-Music Dev Team',
   '#BPM 130',
   '#BPM01 180',
   '#STOP01 96',

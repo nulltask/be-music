@@ -2,27 +2,67 @@
 
 # Writing a be-music skin
 
-This guide is for people who want to make a skin for the browser player's built-in (default) family. Skins are written against the `@be-music/player-skin-sdk` package. The built-in skins use exactly this package: Synesthesia, Phantom, Lattice, and Plain import nothing else from the player. Anything they do, your skin can do too.
+Skins for the browser player's built-in family use the `@be-music/player-skin-sdk` contract. Synesthesia and Plain use Canvas; Native combines DOM screens with a playfield of canvas components, each drawing on a canvas the size of its part of the stage. Native's presentation components are also available independently from `@be-music/player-ui`.
 
 A be-music skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a be-music skin draws every screen itself. The player keeps ownership of everything else:
 
 - input, timing, audio, and judging;
 - the lane layout and note positions;
-- select-list hit-testing.
+- Canvas select-list hit-testing; DOM screens handle their own elements and forward actions.
 
-Each frame, the player hands your skin a canvas and the frame's content as plain data. Your skin decides how it looks.
+Canvas drawing receives a surface and per-frame data. DOM presentation receives a mount container, presentation frames and actions. The skin owns appearance while scene sessions share behavior.
 
 ## Bring your own renderer
 
 The SDK does not draw and imports no rendering framework. Draw the canvas with whatever suits your skin:
 
-| Renderer                     | `context`                            | How                                                                                       | Example                                                                                         |
-| ---------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Canvas 2D API                | `'2d'`                               | Draw directly; the canvas comes cleared and scaled to design pixels                       | Plain (`packages/player-browser/src/skins/plain/`)                                              |
-| PixiJS                       | `'webgl2'`                           | Create a Pixi renderer on the canvas in `setup`, build a scene graph, render it in `draw` | Synesthesia, Phantom, Lattice (`packages/player-browser/src/skins/`, through `skins/pixi-kit/`) |
-| three.js, raw WebGL / WebGPU | `'webgl'`, `'webgl2'`, or `'webgpu'` | Create the renderer or pipelines in `setup`, render in `draw`, release them in `teardown` | —                                                                                               |
+| Renderer                     | `context`                            | How                                                                                       | Example                                                                       |
+| ---------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Canvas 2D API                | `'2d'`                               | Draw directly; the canvas comes cleared and scaled to design pixels                       | Plain (`packages/player-browser/src/skins/plain/`)                            |
+| PixiJS                       | `'webgl2'`                           | Create a Pixi renderer on the canvas in `setup`, build a scene graph, render it in `draw` | Synesthesia (`packages/player-browser/src/skins/`, through `skins/pixi-kit/`) |
+| three.js, raw WebGL / WebGPU | `'webgl'`, `'webgl2'`, or `'webgpu'` | Create the renderer or pipelines in `setup`, render in `draw`, release them in `teardown` | —                                                                             |
 
 Your skin bundles its own framework as a dependency. Plain is deliberately small and readable; copy it as a starting point. It also shows how to support portrait screens; see [Supporting portrait](#supporting-portrait).
+
+## Combine Canvas and DOM
+
+`BeMusicSkin.dom.select`, `.decide` and `.result` replace the corresponding Canvas screens. `.gameplay` accompanies Canvas lanes, BGA and immediate judgment feedback. Each factory receives `(container, actions)` and returns `update(frame)`, `dispose()` and, optionally for select screens, `focusSearch()`.
+
+A gameplay screen can also draw the playfield. Set `gameplay.drawsOnDOM` and return `drawPlayfield(frame)` from `dom.gameplay`: the host then calls it once per frame with the full `BeMusicGameplayFrame` (lanes, notes, long notes, mines, measure lines and bombs) and creates no Canvas surface for gameplay. `gameplay.draw` remains the fallback for hosts without DOM screens. Nothing the player draws shows then (the browser player takes its canvas out of the page), so such a skin also sets `drawsBGA`, `drawsMines`, `drawsLaneCover` and `drawsMeasureLines`. Native places `be-music-playfield` from `@be-music/player-ui` under its HUD this way.
+
+Gameplay actions are `pause()`, `restart()`, `quit()` and `seek(seconds)`. `seek` moves an AUTO play or replay to a chart second and plays on from there (a paused play stays paused there); it does nothing unless the frame is `seekable`. The frame's `layout` carries the BGA rect (`bga`) with the stage and lane bounds. The embed's preview skin (`packages/app-play/src/embed/preview-skin.ts`) combines both with `be-music-preview-hud`.
+
+Create DOM when the factory is called. Update existing elements to preserve focus and IME state, and release listeners and elements in `dispose`. Leaving a screen temporarily preserves its mount for re-entry. A custom React or Vue screen can use the same contract: deliver frames through its framework and unmount its root on disposal.
+
+This factory connects the existing result component to a skin. Assign it to the skin's `dom.result` property.
+
+```ts
+import { defineBeMusicElements } from '@be-music/player-ui';
+import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
+import type { BeMusicDOMFactory, BeMusicDOMResultFrame, BeMusicDOMResultActions } from '@be-music/player-skin-sdk';
+
+export const mountResult: BeMusicDOMFactory<BeMusicDOMResultFrame, BeMusicDOMResultActions> = (container, actions) => {
+  defineBeMusicElements(undefined, { theme: basecoatTheme });
+  const element = document.createElement('be-music-result-screen');
+  const onContinue = () => actions.continue();
+  const onRetry = () => actions.retry();
+  element.addEventListener('continue-request', onContinue);
+  element.addEventListener('retry-request', onRetry);
+  container.append(element);
+  return {
+    update(frame) {
+      element.frame = frame;
+    },
+    dispose() {
+      element.removeEventListener('continue-request', onContinue);
+      element.removeEventListener('retry-request', onRetry);
+      element.remove();
+    },
+  };
+};
+```
+
+The elements are headless: the look comes from the theme passed when registering (Basecoat here) or from the skin's own custom properties and `::part` rules. Lit is optional for custom DOM screens. The [Player UI guide](../packages/player-ui/README.md) lists reusable tags, JavaScript properties, request events, React/Vue wrappers, and CSS variables, parts and slots. See the [browser player](./player-web.md#native-dom-skins-and-standalone-controllers) for host/controller integration, update cadence and the limitation that Canvas recordings exclude DOM.
 
 ## Quick start: a Canvas 2D skin
 
@@ -191,7 +231,8 @@ Every skin declares these fields. `defineBeMusicSkin` checks the rules it can te
 ## Stage and layout
 
 - **Stage:** the stage is the design canvas a skin draws on. `wideStage` is the 16:9 stage the built-in skins use (854×480), and the default.
-- **Portrait stage:** a skin may also declare a `portraitStage`, the canvas it draws on while the screen is taller than wide. `tallStage` is the built-in one: 480×854 (9:16), `wideStage` turned on its side, so type keeps its size; a phone browser's viewport (about 9:16 to 9:19.5 once its toolbars take their share) letterboxes a little and a 3:4 tablet pillarboxes. Hosts pick the stage per frame with `resolveBeMusicStage(skin, screen, chart?)`: the portrait stage when the skin has one and the screen is portrait, otherwise `stage`. Gameplay stays on `stage` for charts too wide for a portrait playfield: only single play up to 9 lanes (5 / 7 KEY, 9 KEY) goes portrait (`supportsPortraitLayout`); double play (10 / 14 KEY) and the keyboard modes (24 / 48 KEY) are drawn on the landscape stage, scaled down (the demo asks a phone to rotate). A skin without a `portraitStage` is always drawn on `stage`.
+- **Portrait stage:** a skin may also declare a `portraitStage`, the canvas it draws on while the screen is taller than wide. `tallStage` is the built-in one: 480×854 (9:16), `wideStage` turned on its side, so type keeps its size; a phone browser's viewport (about 9:16 to 9:19.5 once its toolbars take their share) letterboxes a little and a 3:4 tablet pillarboxes. Hosts pick the stage per frame with `resolveBeMusicStage(skin, screen, chart?)`: the portrait stage when the skin has one and the screen is portrait, otherwise `stage`. Gameplay stays on `stage` for charts too wide for a portrait playfield: only single play up to 9 lanes (5 / 7 KEY, 9 KEY) goes portrait (`supportsPortraitLayout`); double play (10 / 14 KEY) and the keyboard modes (24 / 48 KEY) are drawn on the landscape stage, scaled down (the player asks a phone to rotate). A skin without a `portraitStage` is always drawn on `stage`.
+- **Fluid stage:** a stage may declare `resize(size)` to follow the screen instead of being letterboxed into it. `resolveBeMusicStage` then sizes it with `resolveFluidStageSize`, keeping its short side (480 px for the built-in stages) and giving the long side the screen's aspect ratio (640×480 on 4:3, 1138×480 on 21:9), and draws on the stage `resize` returns for that size. Lay everything out from that stage (`layout.stage`), not from fixed coordinates. A stage turned the other way from the screen keeps its size. The built-in, LR2 and beatoraja stages are fixed; the embed preview's is fluid. See [ADR 0021](./adr/0021-fluid-stage.md).
 - **BGA placement:** `BeMusicStage.resolveBGARect(playfieldRight)` decides where the gameplay BGA goes. The player composites the video there, and your skin frames the same rect. `wideStage` grows the BGA beside a single-play field and shrinks it next to wide double-play or keyboard fields.
 - **Layout per frame:** each gameplay frame comes with `layout` (`BeMusicGameplayLayout`), resolved by the host:
   - `mode`: `'standard'` or `'touch'` (optional; absent means `'standard'`). See the touch layout below.
@@ -201,7 +242,7 @@ Every skin declares these fields. `defineBeMusicSkin` checks the rules it can te
   - `playfield`: `left`, `right`, `centerX`, `top`, `judgementY`, and `sides` (the horizontal extent of 1P and, in double play, 2P).
   - `bga`: the BGA rect, or `undefined` when the playfield leaves no room.
 - **Placing chrome:** place your chrome from these values instead of hard-coding geometry. Host-side layout changes (double play, keyboard modes, new aspect ratios) then reach your skin for free.
-- **Double-play gap:** the 1P and 2P banks stand 60 px apart in the standard layout (`IIDX_DP_SIDE_GAP`) and 24 px apart in the touch layout (`TOUCH_PLAYFIELD.sideGap`); don't hard-code either value. `resolveLaneRuns(lanes)` returns one `{ left, right }` run per contiguous bank. Draw the judgement line and lane grid per run so nothing crosses the gap.
+- **Double-play gap:** the 1P and 2P banks stand 60 px apart in the standard layout (`_____DP_SIDE_GAP`) and 24 px apart in the touch layout (`TOUCH_PLAYFIELD.sideGap`); don't hard-code either value. `resolveLaneRuns(lanes)` returns one `{ left, right }` run per contiguous bank. Draw the judgement line and lane grid per run so nothing crosses the gap.
 - **Lane widths:** lane widths are fixed by the player. Skins colour lanes, but never resize or move them.
 - **Touch layout:** on touch screens the host may resolve the layout with `layoutMode: 'touch'` (`resolveGameplayLayout` input). The lanes then spread across the stage from its left margin to the judgement tally's column (`TOUCH_PLAYFIELD`): every key one width (at most 72 px) and a scratch 1.4 keys wide, the lanes run from y 48 (below the header band) to the judgement line at y 330 (above the bottom HUD band), and `bga` is `undefined`. The 24 / 48 KEY modes keep the standard layout (`supportsTouchLayout`). A skin that places its chrome from `layout` needs no change; read `layout.mode` only to restyle something for touch play. Keep chrome that sits beside the lanes in the standard layout (anything placed from the BGA rect) working when `bga` is `undefined`.
 - **Portrait layout:** on a portrait stage the lanes span the stage's width in its lower part, in both modes (`PORTRAIT_PLAYFIELD`, scaled to the stage from the 480×854 `tallStage`): they run from y 300 down to a low judgement line, and the BGA and HUD go in the band above them (`tallStage` puts the BGA in a 206 px square at the top left, under a 40 px header band). `'touch'` gives every key one width (a scratch 1.4 keys wide) across the stage between 12 px margins, with the judgement line at y 740, leaving a band under it for the thumbs; `'standard'` keeps the cabinet's key widths (7 KEY 374 px wide), centred, with the judgement line at y 786. `bga` comes from the portrait stage's `resolveBGARect` in both modes. `resolvePortraitLaneLayout` returns the lane rects for a portrait stage.
@@ -268,7 +309,7 @@ flowchart LR
 - `mines`: mine notes as `{ kind, x, w, y }`, where `y` is the bottom edge. A mine that explodes (its lane held as it crosses the judgement line, or under the LR2 ruleset also pressed within the PGREAT window) drains the gauge; it is not a judgement. Empty unless the skin sets `gameplay.drawsMines` (below).
 - `bombs`: live hit effects with `elapsedMs`, a stable `seed`, and the `judge` that set them off.
 - `measureLines`: measure lines as `{ side, x, w, y }`, one per lane run they cross. Empty unless the skin sets `gameplay.drawsMeasureLines`.
-- `bga`: the BGA layers to composite (`{ base?, layer?, poor?, poorActive }`). `undefined` unless the skin sets `gameplay.drawsBGA`.
+- `bga`: the BGA layers to composite (`{ base?, layer?, poor?, poorActive, poorOverlays? }`). `undefined` unless the skin sets `gameplay.drawsBGA`.
 - `runtime`: the HUD values (below).
 - `beatPhase`, `nowMs`, `effects`, and `audio`.
 - `settings` and `chartImage`: see [Skin settings](#skin-settings) and [Song images](#chart-images).
@@ -288,7 +329,7 @@ By default the player draws a few things over (or behind) your canvas, so a skin
 | `drawsMeasureLines` | `frame.measureLines` | The player draws its own measure lines.                                 |
 | `drawsBGA`          | `frame.bga`          | The player shows the BGA behind your canvas, in `layout.bga`.           |
 
-Every flag defaults to `false`, and the frame field it unlocks stays empty (or `undefined`) until you set it, so existing skins keep their look. With `drawsBGA`, the `layer` image arrives with pure black already turned transparent (the BMS layer convention) while `base` and `poor` are opaque: draw them with plain alpha blending, and show `poor` instead of the others while `poorActive`. A bmson layer (its spec keeps black opaque) and a video layer arrive as authored. The images are `ImageBitmap`s or, for a video BGA, the playing `<video>` element; a `#BGA` sub-region arrives as its own cropped image (missing for the first frame or two while it is cut). The player still picks the frame of a `#SWBGA` animation, but leaves a slot's `#ARGB` tint and opacity to you.
+Every flag defaults to `false`, and the frame field it unlocks stays empty (or `undefined`) until you set it, so existing skins keep their look. With `drawsBGA`, the `layer` image arrives with pure black already turned transparent (the BMS layer convention) while `base` and `poor` retain black pixels: draw them with plain alpha blending, and while `poorActive`, draw `poor` over the normal layers when `poorOverlays` is true (`#POORBGA 1`), otherwise replace them. Mode 2 supplies no POOR image. A bmson layer (its spec keeps black opaque) and a video layer arrive as authored. The images are `ImageBitmap`s or, for a video BGA, the playing `<video>` element; a `#BGA` sub-region arrives as its own cropped image (missing for the first frame or two while it is cut). The player still picks the frame of a `#SWBGA` animation, but leaves a slot's `#ARGB` tint and opacity to you.
 
 `runtime` (`BeMusicGameplayRuntime`) carries:
 
@@ -299,7 +340,7 @@ Every flag defaults to `false`, and the frame field it unlocks stays empty (or `
   - `rank`, `totalNotes`
 - **Gauge:** `gauge`, `clearThreshold`, `gaugeLabel`, `gaugeSurvival`
 - **Judgements:** `lastJudge` and `judgeSides` (the latest judgement and combo per side)
-- **Play state:** `rulesetLabel` (the active compat ruleset: `lr2` / `beatoraja` / `iidx`), `autoplay`, `hasBGA`, `loading` (show NOW LOADING while audio decodes or a BGA transcodes), `progressRatio`, `chartMs`, `beatPhase`, `nowMs`
+- **Play state:** `rulesetLabel` (the active compat ruleset: `lr2` / `beatoraja` / `____`), `autoplay`, `hasBGA`, `loading` (show NOW LOADING while audio decodes or a BGA transcodes), `progressRatio`, `chartMs`, `beatPhase`, `nowMs`
 - **Event timestamps:** `judgeAtMs`, `impulseAtMs`, `impulseKind` (the last judgement and key press, for punch and impulse effects)
 - **Comfort and sound:** `effects`, `audio`
 - **Chart:** `song` (the `LibraryChart` being played; level, difficulty, `#RANK`, and `#TOTAL` are in `song.chart.metadata`), `minBPM`, `maxBPM`, `mainBPM` (the BPM the most notes sit at, the one HS-FIX `AVERAGE` and the replay use), `playVariant` (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY), `laneCount`, and `laneChannels` (the lane channels in display order)
@@ -338,7 +379,7 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 `result.draw(surface, frame)` receives a `BeMusicResultFrame`:
 
 - `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the replay. When the host provides them, also `lamp` (the clear lamp: `FAILED`, the gauge it was cleared on, `FULL_COMBO`, `PERFECT`, `MAX`), `gaugeType`, `judgeRuleset`, `fast` / `slow`, `judgeTimings` (every timed judgement of the play), `run` (`'single'`, `'stage'` for a course stage, `'course'` for a whole EXPERT / GRADE course with the stages summed, or `'nonstop'`), `course` (the course a stage or run belongs to) and `courseRun` (a course run's stages played and trophy).
-- `rankLabel` (IIDX DJ level) and `ratePercent`.
+- `rankLabel` (That-Which-Must-Not-Be-Named DJ level) and `ratePercent`.
 - `elapsedMs` since the scene mounted, or `Infinity` once the player skipped the entrance.
 - `nowMs` and `effects`.
 - `settings` and `chartImage`: see [Skin settings](#skin-settings) and [Song images](#chart-images).
@@ -386,7 +427,7 @@ settings: [
 - **Validation:** `validateBeMusicSkin` checks the schema. Ids must be unique, labels must not be empty, and every `default` must be one of the options or lie in its range. Choice option values must be unique, a number's `step` must be positive, and its `unit` must be one of the three above.
 - **Values:** every frame carries `settings`, the player's values keyed by id. Hosts persist the values per skin and resolve them with `resolveBeMusicSkinSettings(skin, stored)`, which falls back to the default for anything missing, stale, or mistyped, clamps numbers into their range, and drops ids the skin no longer declares. You can rely on every declared id being present with the right type.
 - **Live changes:** the player may change a value while a screen is showing; the next frame carries it, and on select `revision` moves too. Read `frame.settings` every frame (or key anything you derive from it on `revision`) rather than caching it from the first frame.
-- **In the be-music player:** hosts pass the stored values in the built-in kit (`{ family: 'built-in', skin, settings }`) and hand a showing scene a new kit with `scene.updateKit(kit)` when they change. The demo builds a "Skin settings" folder in its Debug Menu from the schema (a dropdown per `choice`, a slider per `number` with the unit in its name, a checkbox per `toggle`), hides it for a skin that declares none, and saves the values per skin id in the browser.
+- **In the be-music player:** hosts pass the stored values in the built-in kit (`{ family: 'built-in', skin, settings }`) and hand a showing scene a new kit with `scene.updateKit(kit)` when they change. The player builds a "Skin settings" folder in its Debug Menu from the schema (a dropdown per `choice`, a slider per `number` with the unit in its name, a checkbox per `toggle`), hides it for a skin that declares none, and saves the values per skin id in the browser.
 
 ## Song images
 
@@ -416,7 +457,7 @@ settings: [
 | Text          | `DEFAULT_TEXT_FONT`, `layoutTabularRun` (tabular figures)                                                                                                                                                                                                                                                                                                                    |
 | Motion        | `easeOutCubic`, `easeOutBack`, `stageProgress`, `rollUpValue`, `hash01` (deterministic jitter)                                                                                                                                                                                                                                                                               |
 | Skin          | `defineBeMusicSkin`, `validateBeMusicSkin`, `BE_MUSIC_SKIN_API_VERSION`, `isSupportedBeMusicSkinAPIVersion`                                                                                                                                                                                                                                                                  |
-| Lane geometry | The player's own skinless lane geometry: `IIDX_LANE_WIDTHS`, `IIDX_DP_SIDE_GAP`, `resolveSkinlessLaneLayout`, `resolveFallbackLaneLayout`, `resolveFallbackPlayfieldSpan`, `usesIIDXLaneWidths`, `isScratchLaneForVariant`, `shouldPreserveFallbackSideWidth`, `resolveBeMusicLaneKind`. Skins normally read `layout.lanes` instead.                                         |
+| Lane geometry | The player's own skinless lane geometry: `_____LANE_WIDTHS`, `_____DP_SIDE_GAP`, `resolveSkinlessLaneLayout`, `resolveFallbackLaneLayout`, `resolveFallbackPlayfieldSpan`, `uses____LaneWidths`, `isScratchLaneForVariant`, `shouldPreserveFallbackSideWidth`, `resolveBeMusicLaneKind`. Skins normally read `layout.lanes` instead.                                         |
 
 The SDK also exports the types its frames and helpers use, for example `BeMusicClearLamp`, `BeMusicChartBestRecord`, `BeMusicJudgeWindows`, `BeMusicLaneCover`, `GameplayLayoutMode`, `BeMusicPlayOptionChoices`, `AudioDrive`, `MomentInput` / `MomentState`, `MilestoneArea`, `LaneRun`, `GameplayLaneGeometry`, `PortraitLaneGeometry`, `ChartStats`, `ChartRowFacts`, `ResultLamp`, and `ResultTrackRow`.
 
@@ -529,7 +570,7 @@ A skin shares each frame with the player's judging, audio scheduling, and BGA de
 
 ## Fonts
 
-List every face you draw with in `fontLoads`. The host loads them with `document.fonts.load` (the web demo waits for its registered skins' faces at start-up and loads an added skin's in the background), so the first frame does not rasterize with a fallback face. Make sure the host can obtain the face itself, either from a font service or bundled with your skin.
+List every face you draw with in `fontLoads`. The host loads them with `document.fonts.load` (the web player waits for its registered skins' faces at start-up and loads an added skin's in the background), so the first frame does not rasterize with a fallback face. Make sure the host can obtain the face itself, either from a font service or bundled with your skin.
 
 ## Packaging and loading
 
@@ -553,8 +594,8 @@ List every face you draw with in `fontLoads`. The host loads them with `document
   - `subscribe(listener)` reports additions so a picker can refresh.
   - Skins that fail validation, for example because of an unsupported `apiVersion`, are left out instead of breaking the host.
 
-- **Built-in skins:** `BUILT_IN_BE_MUSIC_SKINS` contains Synesthesia (the default), Phantom, and Plain. Lattice ships as `latticeSkin` for hosts to add.
-- **Demo:** the demo's Debug Menu can add a skin from a module URL (_Skin & display_ → _Add skin_ → _Skin module URL_). A skin runs with the page's full access, so the demo asks for confirmation first. Only load skins you trust. The demo currently hides _Add skin_, with Phantom and Lattice, while `EXTRA_BUILT_IN_SKINS_ENABLED` is off (`services/built-in-skins.ts`).
+- **Built-in skins:** `BUILT_IN_BE_MUSIC_SKINS` contains Synesthesia (the default), Plain, and Native.
+- **Player:** the player's Debug Menu can add a skin from a module URL (_Skin & display_ → _Add skin_ → _Skin module URL_). A skin runs with the page's full access, so the player asks for confirmation first. Only load skins you trust. The player currently hides _Add skin_ while `ADD_SKIN_ENABLED` is off (`services/built-in-skins.ts`).
 
 ## Versioning
 

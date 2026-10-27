@@ -56,6 +56,7 @@ export function makeLR2BitmapTextSprite(
 ): Container {
   const root = new Container();
   root.label = `lr2-bitmap-text[st=${element.st},font=${element.font}]`;
+  root.alpha = dst.alpha;
   if (value.length === 0) return root;
   const rect = normalizeRect(dst);
   const font = loaded.font;
@@ -121,7 +122,6 @@ export function makeLR2BitmapTextSprite(
         sprite.scale.set(glyphScale, glyphScale);
         sprite.position.set(cursorX, 0);
         sprite.tint = tint;
-        sprite.alpha = dst.alpha;
         inner.addChild(sprite);
       } else {
         inner.addChild(buildPlaceholderRect(cursorX, 0, item.width, targetHeight));

@@ -1,3 +1,6 @@
+import { resolveAutoScratchChannels } from './auto-scratch.ts';
+import type { PlayerHCNLaneState } from './ui-signal-bus.ts';
+import { resolveRulesetLongNoteMode } from './judge-rules.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../utils.ts';
 import {
   createJudgeCoreState,
@@ -30,7 +33,11 @@ import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
  * chart time); a replay has no wall clock to honour, so it runs them on chart time and its judgments do not depend on
  * `speed`.
  */
-export function createPlayJudgeCore(session: PlaySession, judgeMsPerChartSecond: number): JudgeCoreState {
+export function createPlayJudgeCore(
+  session: PlaySession,
+  judgeMsPerChartSecond: number,
+  practiceFromSeconds?: number,
+): JudgeCoreState {
   const { playbackChart, resolvedJSON } = session;
   return createJudgeCoreState(
     {
@@ -43,6 +50,10 @@ export function createPlayJudgeCore(session: PlaySession, judgeMsPerChartSecond:
         playbackChart.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
       ),
       autoScratch: session.autoScratch,
+      autoScratchChannels: resolveAutoScratchChannels(
+        session.options,
+        playbackChart.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
+      ),
       judgeMsPerChartSecond,
       wavResources: session.wavResources,
       idBase: session.idBase,
@@ -52,6 +63,7 @@ export function createPlayJudgeCore(session: PlaySession, judgeMsPerChartSecond:
       // already cut there (`collectRealtimeAudioTriggers` / `collectRealtimeAudioVolumeEvents`).
       reversalSeconds: session.resolvedChart.reversal?.seconds,
       endOnFailure: session.endOnFailure,
+      ...(practiceFromSeconds !== undefined ? { practiceFromSeconds } : {}),
     },
     session.score,
   );
@@ -62,6 +74,31 @@ export function judgeCoreJudge(
   session: PlaySession,
   judgeCore: JudgeCoreState,
 ): Pick<PlayJudge, 'isSettled' | 'isClosed' | 'finish' | 'settledThroughSeconds'> {
+  const empty: readonly PlayerHCNLaneState[] = [];
+  session.readHCNLanes = (seconds) => {
+    if (judgeCore.hcnPassing.size === 0 && judgeCore.pendingAutoScratchLongNotes.length === 0) return empty;
+    const lanes: PlayerHCNLaneState[] = [];
+    for (const [channel, first] of judgeCore.hcnPassing) {
+      for (let passing: typeof first | undefined = first; passing !== undefined; passing = passing.next) {
+        if (seconds < passing.note.seconds || seconds >= passing.endUs / 1e6) continue;
+        lanes.push({
+          channel,
+          gaining: passing.tailGood || (judgeCore.laneHolds.get(channel)?.activeTokens.size ?? 0) > 0,
+        });
+        break;
+      }
+    }
+    for (const { note, endSeconds } of judgeCore.pendingAutoScratchLongNotes) {
+      if (
+        seconds >= note.seconds &&
+        seconds < endSeconds &&
+        resolveRulesetLongNoteMode(session.ruleset.longNoteStyle, note) === 3
+      ) {
+        lanes.push({ channel: note.channel, gaining: true });
+      }
+    }
+    return lanes;
+  };
   return {
     isSettled: () => isJudgeCoreSettled(judgeCore),
     isClosed: () => isJudgingClosed(judgeCore),
@@ -96,7 +133,8 @@ export function writeManualIntro(session: PlaySession): void {
 function createManualJudge(session: PlaySession): PlayJudge {
   const { tempoClock, uiEnabled, writeOutput, tracer, applyJudgeEffect } = session;
   const { inputTokenToChannels } = session.playbackChart;
-  const judgeCore = createPlayJudgeCore(session, 1000 / tempoClock.initialTempo);
+  let judgeCore = createPlayJudgeCore(session, 1000 / tempoClock.initialTempo);
+  let coreJudge = judgeCoreJudge(session, judgeCore);
   // Input that reports its key releases: declared by the input runtime before the play, or else detected from the first
   // `kitty-state` command. Until then when each key came up is inferred, and the inference watches the judge's effects.
   let inputReportsReleases = session.inputRuntime?.reportsKeyReleases === true;
@@ -123,11 +161,13 @@ function createManualJudge(session: PlaySession): PlayJudge {
       ['tokens', tokens.join(',')],
     ]);
   };
-  const keyState = createKeyStateInference(
-    judgeCore,
-    step,
-    uiEnabled ? undefined : (seconds, tokens) => traceInput(seconds, 'inferred-release', tokens),
-  );
+  const createKeyState = () =>
+    createKeyStateInference(
+      judgeCore,
+      step,
+      uiEnabled ? undefined : (seconds, tokens) => traceInput(seconds, 'inferred-release', tokens),
+    );
+  let keyState = createKeyState();
   // The instant (playback-clock ms) the last press or release was stamped at. Each lane command is stamped as it is
   // drained: the playback clock read then, moved back by the age of its `pressedAt` on the wall clock. The playback
   // clock follows the audio clock, which moves a render quantum at a time (Web Audio's `currentTime`), while the wall
@@ -141,12 +181,25 @@ function createManualJudge(session: PlaySession): PlayJudge {
   };
 
   return {
-    ...judgeCoreJudge(session, judgeCore),
+    isSettled: () => coreJudge.isSettled(),
+    isClosed: () => coreJudge.isClosed(),
+    finish: () => coreJudge.finish(),
+    settledThroughSeconds: () => coreJudge.settledThroughSeconds(),
+    seek: (seconds) => {
+      keyState.stop();
+      judgeCore = createPlayJudgeCore(session, 1000 / tempoClock.initialTempo, seconds);
+      coreJudge = judgeCoreJudge(session, judgeCore);
+      keyState = createKeyState();
+      lastStampMs = Number.NEGATIVE_INFINITY;
+      return { judgments: [], heldLongNotes: [] };
+    },
     judge: (tick) => {
       if (!inputReportsReleases) {
         keyState.releaseBefore(tick.nowSec);
       }
       step({ kind: 'advance', nowSec: tick.nowSec, nowMs: tempoClock.initialTempoMsAt(tick.nowMs) });
+      // The presses drained since the last tick and this advance make one judging pass, as LR2's loop judges them.
+      session.settleJudgeTiming();
     },
     judgedThroughSeconds: (tick) => tick.nowSec,
     handleLaneCommand: (command) => {

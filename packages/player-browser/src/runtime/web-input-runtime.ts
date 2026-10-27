@@ -151,7 +151,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
 /**
  * Maps a `KeyboardEvent` to the engine's lowercase-token convention. The engine's `inputTokenToChannels` map keys
  * off the `inputTokens` field of each `LaneBinding` (`packages/player-engine/src/core/lane-layout.ts`), which uses lowercase
- * letter / symbol strings (`'z'`, `'shift-left'`, etc.); we mirror that here so a chart's IIDX_5KEY_SP_BINDINGS
+ * letter / symbol strings (`'z'`, `'shift-left'`, etc.); we mirror that here so a chart's _____5KEY_SP_BINDINGS
  * (`{ inputTokens: ['shift-left'] }`) gets routed correctly when the player presses Left Shift.
  *
  * Modifier-aware forms are emitted in BOTH variants when applicable — pressing Left Shift produces both

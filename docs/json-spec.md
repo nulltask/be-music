@@ -377,6 +377,8 @@ interface BeMusicEvent {
     c?: boolean;
     t?: number;
     damage?: number;
+    sampleOffsetSeconds?: number;
+    sampleDurationSeconds?: number;
   };
 }
 ```
@@ -384,6 +386,8 @@ interface BeMusicEvent {
 `bmson.damage` is used for mines from the beatoraja bmson extension `mine_channels`.
 It stores the authored gauge damage as a non-negative number and is absent on every other event, including the invisible objects read from `key_channels` (beatoraja's hidden notes).
 `bmson.t` is the beatoraja per-note long-note type (`notes[].t`: `1` = LN, `2` = CN, `3` = HCN). It is kept only on long notes (`l > 0`) and overrides `bmson.info.lnType`.
+
+Stitched bmson NONSTOP charts can use resource keys longer than two characters. `normalizeObjectKey(value, base, true)` preserves them; BMS token normalization is unchanged. `bmson.sampleOffsetSeconds` and `bmson.sampleDurationSeconds` retain source-audio coordinates independently of placed chart time. An explicit offset with no duration plays to the end of the sample. `bmson.info.totalUnit` retains the last stage's TOTAL unit (`absolute` or `percent`). These are Be-Music IR fields, not external bmson keys.
 
 ## Meaning of `position`
 

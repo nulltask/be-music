@@ -37,6 +37,7 @@ export function rulesetChartFactsFromReplay(replay: BeMusicReplay): RulesetChart
     judgeRank: chart.judgeRank,
     notes: { ...notes, normal, long },
   };
+  if (chart.totalUnit !== undefined) facts.totalUnit = chart.totalUnit;
   if (chart.total !== undefined) facts.total = chart.total;
   return facts;
 }
@@ -53,6 +54,18 @@ export function resolveRulesetConfig(
   const { course } = replay.play;
   return resolveRuleset(rulesetChartFactsFromReplay(replay), rulesetId, {
     selectedGauge: replay.play.gauge,
+    ...(rulesetId === 'beatoraja' && replay.play.bottomShiftableGauge !== undefined
+      ? { bottomShiftableGauge: replay.play.bottomShiftableGauge }
+      : {}),
+    ...(rulesetId === 'beatoraja' && replay.play.gaugeAutoShift !== undefined
+      ? { gaugeAutoShift: replay.play.gaugeAutoShift }
+      : {}),
+    ...(rulesetId === 'beatoraja' && replay.play.judgeAlgorithm !== undefined
+      ? { judgeAlgorithm: replay.play.judgeAlgorithm }
+      : {}),
+    ...(rulesetId === 'beatoraja' && replay.play.customJudge !== undefined
+      ? { customJudge: replay.play.customJudge }
+      : {}),
     ...(replay.play.judgeWindowOverrideMs !== undefined
       ? { judgeWindowOverrideMs: replay.play.judgeWindowOverrideMs }
       : {}),
@@ -67,6 +80,7 @@ export function courseStageRulesetOptions(course: ReplayCourseStage): RulesetCou
   if (course.gaugeSet !== undefined) options.gaugeSet = course.gaugeSet;
   if (course.judge !== undefined) options.judge = course.judge;
   if (course.carryIn !== undefined) options.initialGauge = course.carryIn.gauge;
+  if (course.carryIn?.gauges !== undefined) options.initialGauges = course.carryIn.gauges;
   return options;
 }
 

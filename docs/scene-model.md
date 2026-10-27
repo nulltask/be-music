@@ -93,7 +93,19 @@ are LR2's (`OFF`, `LEVEL`, `TITLE`, `CLEAR`) and beatoraja's (`ARTIST`, `GENRE`,
 sort by label, courses keep their order, and the sort is stable. `CLEAR` sorts by title and `LASTPLAY` keeps the
 library's order until records feed the sort.
 
-The list is kept per open path while the library, the search and the list options stay the same, so a select screen
+A search that starts with `?` is a chart filter expression instead (`parseBrowseSearch`): the text after the `?` is
+the SQL `WHERE` clause beatoraja's random courses use, with an optional `ORDER BY` / `LIMIT`
+([course.md](course.md#beatoraja-random-courses)), so `?level >= 12 AND score.clear < 5` lists the level-12-and-up
+charts not yet cleared on HARD. It is only trimmed, so its string literals keep their case. Like a text search it lists
+the charts of every folder at the root and filters the open folder below it; it lists no folder or course bar. Each
+chart is read through `library.chartFilterRecord` (the song columns, the best record for `score.*`, the song
+information for `information.*`), else through `libraryChartFilterRecord`, which knows only the library entry. An
+`ORDER BY` of its own orders the list instead of the sort; `ORDER BY RANDOM()` is refused, as the list has no random
+source. An expression that does not parse filters nothing, and `browseSearchError` gives the reason for the screen to
+show; `?` alone is an expression still being typed and filters nothing either.
+
+The list is kept per open path while the library (its `chartFilterRecord` included), the search and the list options
+stay the same, so a select screen
 can read it every frame.
 
 ### Commands
@@ -192,8 +204,8 @@ The play state (`PlayState`) is what every gameplay screen reads of a play: the 
 graphs, the combo and max combo (and a course stage's course-wide combo), every timed judgment with the early / late
 count of each judgment, and the view — the hi-speed and the lane covers. It is immutable and fed by events through
 `reducePlayState`: the engine's frames and judgments, its `trigger-poor-bga` command (an empty POOR, through
-`playEventFromUICommand`), the final summary, and the player's and the host's hi-speed and cover changes. No clock is
-read: chart time and play-clock time come in with the events.
+`playEventFromUICommand`), a seek (`seek`, with the engine's `PlaySeekSnapshot`), the final summary, and the player's and
+the host's hi-speed and cover changes. No clock is read: chart time and play-clock time come in with the events.
 
 ```mermaid
 flowchart LR
@@ -215,9 +227,16 @@ flowchart LR
 - **Graphs.** They start at the gauge the play starts with (from `createPlayState`, else the first frame) and take a
   sample of the gauge (in percent of its maximum) and the EX score at each judgment and each empty POOR, at the
   judgment's chart-time fraction. The result adds a last sample where the play ended.
-- **Combo.** The combo the engine publishes, the longest kept as the max combo; a final summary that is a full combo
-  (every note GOOD or better, none BAD or POOR) makes the max combo every note, as the combo never broke. A course stage
-  runs the course combo on from the one carried in (`reduceCourseCombo`).
+- **Combo.** The combo the engine publishes, the longest kept as the max combo; a frame's combo, max combo and course
+  combo, when it carries them, are the engine's own and win. A final summary that is a full combo (every note GOOD or
+  better, none BAD or POOR) makes the max combo every note, as the combo never broke. A course stage runs the course
+  combo on from the one carried in (`reduceCourseCombo`).
+- **Seek.** The engine rebuilds a play that seeks from the chart's start to the second sought and sends what it reached
+  (`PlaySeekSnapshot`: the summary, the combo, the max combo and every judgment before the second, each with its chart
+  second and the gauge and EX score right after it). The `seek` event makes the state that one: the graphs from their
+  start sample with one sample per judgment, the timed judgments (their play-clock time worked back from the seek's at
+  the play's tempo) with their early / late counts, and the snapshot's gauge, EX score and combos; the chart's length
+  and the view stay. A play rebuilt this way equals one that judged the same notes live.
 - **Judgment timings.** Each PERFECT … POOR judgment with a timing, with its play-clock time and lane;
   `recentJudgeTimings` is the latest 64 for a live meter (one array per judgment list). Each judgment's early and late
   count (beatoraja's) comes with them.
@@ -291,7 +310,7 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 `optionChange`), the select BGM and the decide jingle, and the result jingles (`clear`, `fail`, `result`,
 `courseClear`, `courseFail`).
 
-- An LR2 theme's sounds come by bytes from its theme load, and the host fills the slots it plays (the web demo's LR2
+- An LR2 theme's sounds come by bytes from its theme load, and the host fills the slots it plays (the web player's LR2
   theme service fills the select ones). `LR2_SOUND_SET_SLOTS` maps each command of an LR2 sound set to its slot
   (`SCRATCH` is the cursor cue, `PANEL_*` the option panel ones).
 - `systemSoundSetFromBeatoraja` reads a beatoraja theme's cue paths and select BGM path (played through the theme's

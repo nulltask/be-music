@@ -1,12 +1,17 @@
 import { type ChartPlayVariant, resolveChartPlayVariant } from '@be-music/chart-model';
+import type { BattleMode } from '@be-music/player-engine/lanes';
 import { normalizePath } from '@be-music/shared-utils/core';
 import { extractDxaArchivesAsFlatFiles } from './dxa.ts';
 import { asLoadedBytes, readFilesIntoBytesMap, type LR2SkinFileEntry } from './file-lookup.ts';
 import type { LR2SkinInputFile } from './file-lookup.ts';
+import { informationTypeToPlayVariant, peekLR2SkinInformationType } from './paths.ts';
 import { loadLR2SkinFromSourceFiles, type LoadLR2SkinOptions, type LR2PlayVariant, type LR2Skin } from './skin.ts';
 import { readLR2SoundSet, resolveLR2SoundSetPath, type LR2SoundSet, type LR2SoundSetKey } from './sound-set.ts';
 
 export const LR2_PLAY_VARIANTS: readonly LR2PlayVariant[] = ['7', '14', '10', '5', '9'];
+
+/** LR2's BATTLE play skins, loaded beside {@link LR2_PLAY_VARIANTS} when a theme declares one (types 12 / 13). */
+export const LR2_BATTLE_PLAY_VARIANTS: readonly LR2PlayVariant[] = ['7-battle', '5-battle'];
 
 export type LR2PlaySkinMap = Partial<Record<LR2PlayVariant, LR2Skin>>;
 
@@ -48,7 +53,7 @@ export interface LR2ThemeSkins {
   /**
    * Decide-screen skin (the brief "song confirmation" splash that plays between the select view and gameplay).
    * Conventionally lives at `LR2files/Theme/<name>/Decide/decide.lr2skin`. Undefined when the theme bundle has no
-   * Decide directory — the demo simply skips the splash and moves straight from select to play in that case.
+   * Decide directory — the player simply skips the splash and moves straight from select to play in that case.
    */
   decideSkin?: LR2Skin;
   /**
@@ -108,6 +113,8 @@ export interface LR2ThemeSkins {
 }
 
 export interface LR2ThemeSystemSounds {
+  /** Stage-failure stop cue (`#STOP`, conventionally `playstop.wav`). */
+  playStop?: LR2ThemeBGM;
   /** Bar / cursor-move click (`scratch.wav` in the LR2 default theme). */
   cursorMove?: LR2ThemeBGM;
   /** Folder-enter cue (`f-open.wav`). */
@@ -124,7 +131,7 @@ export interface LR2ThemeSystemSounds {
 
 /**
  * Play-skin preference order per chart variant. LR2 never shipped a keyboard-mode skin, so `'24'` / `'48'` borrow the
- * SP / DP IIDX chains — the mounted skin supplies the frame, gauge, and judge graphics while the 26 lanes themselves
+ * SP / DP That-Which-Must-Not-Be-Named chains — the mounted skin supplies the frame, gauge, and judge graphics while the 26 lanes themselves
  * fall through to the host's fallback playfield (see `resolveLR2LaneIndex`, which returns `-1` for these variants).
  */
 const PLAY_SKIN_FALLBACKS: Record<ChartPlayVariant, readonly LR2PlayVariant[]> = {
@@ -185,10 +192,10 @@ export async function loadLR2ThemeSkinsFromFiles(
     (sharedFiles as Map<string, LR2SkinFileEntry>).set(path, bytes);
   }
   // Total = play variants (one per LR2_PLAY_VARIANTS entry) + select skin + result skin + decide skin + course-result
-  // skin + 7 theme BGMs (select / decide / clear / fail / result / course clear / course fail) + 6 system sounds
-  // (cursor-move + folder open/close + option open/close/change). Hard-coding it to the structural shape below keeps the count honest if anyone adds another
-  // sub-task later (compile breaks when the awaited tuple disagrees with this constant).
-  const totalSubTasks = LR2_PLAY_VARIANTS.length + 17;
+  // skin + 7 theme BGMs (select / decide / clear / fail / result / course clear / course fail) + 7 system sounds
+  // (play-stop + cursor-move + folder open/close + option open/close/change). The progress regression test
+  // checks the final task count against this total.
+  const totalSubTasks = LR2_PLAY_VARIANTS.length + 18;
   let completed = 0;
   onProgress?.({ phase: 'theme', current: 0, total: totalSubTasks });
   const track = <T>(label: string, task: Promise<T>): Promise<T> =>
@@ -210,11 +217,40 @@ export async function loadLR2ThemeSkinsFromFiles(
     pickFromSoundSet(sharedFiles, soundSet, key) ?? pickLR2ThemeBGMFromMap(sharedFiles, role);
   // Each task wraps a synchronous parse / pick in `Promise.resolve` so the existing progress-tracking + parallel-await
   // shape continues to work — no semantic change beyond the up-front batched read.
-  const playSkinTasks = LR2_PLAY_VARIANTS.map((variant) =>
-    track(
-      `play/${variant}K`,
-      Promise.resolve(loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'play', playVariant: variant })),
-    ),
+  // Seed every variant independently from the scene preceding gameplay; parsing DP must not overwrite SP slots.
+  const initialSelect = loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'select' });
+  const initialDecide = loadLR2SkinFromSourceFiles(sharedFiles, {
+    kind: 'decide',
+    resources: initialSelect?.resources,
+  });
+  const beforePlay = initialDecide?.resources ?? initialSelect?.resources;
+  const initialPlaySkins = LR2_PLAY_VARIANTS.map((playVariant) =>
+    loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'play', playVariant, resources: beforePlay }),
+  );
+  // A BATTLE play skin only from a theme that declares one: the loader would otherwise borrow an SP skin for it. A 5KEY
+  // BATTLE takes the 7KEY one when the theme has no 5KEY one.
+  const declaredBattleVariants = new Set<LR2PlayVariant>();
+  for (const [path, entry] of sharedFiles) {
+    if (!path.toLowerCase().endsWith('.lr2skin')) continue;
+    const declared = informationTypeToPlayVariant(peekLR2SkinInformationType(asLoadedBytes(entry)) ?? -1);
+    if (declared === '7-battle') declaredBattleVariants.add('7-battle').add('5-battle');
+    if (declared === '5-battle') declaredBattleVariants.add('5-battle');
+  }
+  const battlePlaySkins = LR2_BATTLE_PLAY_VARIANTS.map((playVariant) =>
+    declaredBattleVariants.has(playVariant)
+      ? loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'play', playVariant, resources: beforePlay })
+      : undefined,
+  );
+  const initialResult = loadLR2SkinFromSourceFiles(sharedFiles, {
+    kind: 'result',
+    resources: initialPlaySkins[0]?.resources ?? beforePlay,
+  });
+  const initialCourseResult = loadLR2SkinFromSourceFiles(sharedFiles, {
+    kind: 'courseResult',
+    resources: initialResult?.resources,
+  });
+  const playSkinTasks = LR2_PLAY_VARIANTS.map((variant, index) =>
+    track(`play/${variant}K`, Promise.resolve(initialPlaySkins[index])),
   );
   const [
     variantSkins,
@@ -229,6 +265,7 @@ export async function loadLR2ThemeSkinsFromFiles(
     resultBGM,
     courseClearBGM,
     courseFailBGM,
+    playStop,
     cursorMove,
     folderOpen,
     folderClose,
@@ -237,13 +274,13 @@ export async function loadLR2ThemeSkinsFromFiles(
     optionChange,
   ] = await Promise.all([
     Promise.all(playSkinTasks),
-    track('select', Promise.resolve(loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'select' }))),
-    track('result', Promise.resolve(loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'result' }))),
-    track('decide', Promise.resolve(loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'decide' }))),
-    track('courseResult', Promise.resolve(loadLR2SkinFromSourceFiles(sharedFiles, { kind: 'courseResult' }))),
+    track('select', Promise.resolve(initialSelect)),
+    track('result', Promise.resolve(initialResult)),
+    track('decide', Promise.resolve(initialDecide)),
+    track('courseResult', Promise.resolve(initialCourseResult)),
     // Theme audio (BGM + system sounds) goes through `materializeLR2ThemeAudio` so the lazy file branch from
     // `readFilesIntoBytesMap`'s `deferAudio: true` default is unwrapped here. The rest of the pack stays lazy — only
-    // the theme's small handful of audio files (BGM + ~6 cues) is forced eager up front, since they need to be ready
+    // the theme's small handful of audio files (BGM + 7 cues) is forced eager up front, since they need to be ready
     // the moment the user lands on the select scene.
     track('bgm/select', materializeLR2ThemeAudio(pickBGM('SELECT', 'select'))),
     track('bgm/decide', materializeLR2ThemeAudio(pickBGM('DECIDE', 'decide'))),
@@ -257,6 +294,7 @@ export async function loadLR2ThemeSkinsFromFiles(
     track('sound/result', materializeLR2ThemeAudio(pickLR2SystemSoundFromMap(sharedFiles, 'result'))),
     track('sound/courseclear', materializeLR2ThemeAudio(pickSound('COURSECLEAR', ['course_clear', 'courseclear']))),
     track('sound/coursefail', materializeLR2ThemeAudio(pickSound('COURSEFAIL', ['course_fail', 'coursefail']))),
+    track('sound/playstop', materializeLR2ThemeAudio(pickSound('STOP', ['playstop']))),
     track('sound/scratch', materializeLR2ThemeAudio(pickSound('SCRATCH', ['scratch']))),
     track('sound/f-open', materializeLR2ThemeAudio(pickSound('FOLDER_OPEN', ['f-open']))),
     track('sound/f-close', materializeLR2ThemeAudio(pickSound('FOLDER_CLOSE', ['f-close']))),
@@ -272,13 +310,34 @@ export async function loadLR2ThemeSkinsFromFiles(
       playSkins[variant] = skin;
     }
   });
+  LR2_BATTLE_PLAY_VARIANTS.forEach((variant, index) => {
+    const skin = battlePlaySkins[index];
+    if (skin) playSkins[variant] = skin;
+  });
   return {
     playSkins,
     selectSkin,
     resultSkin,
     decideSkin,
     courseResultSkin,
-    loadSkin: (skinOptions) => loadLR2SkinFromSourceFiles(sharedFiles, skinOptions),
+    loadSkin: (skinOptions) => {
+      let resources = beforePlay;
+      switch (skinOptions.kind) {
+        case 'select':
+          resources = undefined;
+          break;
+        case 'decide':
+          resources = selectSkin?.resources;
+          break;
+        case 'result':
+          resources = playSkins[skinOptions.playVariant ?? '7']?.resources ?? beforePlay;
+          break;
+        case 'courseResult':
+          resources = resultSkin?.resources;
+          break;
+      }
+      return loadLR2SkinFromSourceFiles(sharedFiles, { ...skinOptions, resources: skinOptions.resources ?? resources });
+    },
     selectBGM,
     decideBGM,
     clearBGM,
@@ -287,6 +346,7 @@ export async function loadLR2ThemeSkinsFromFiles(
     courseClearBGM,
     courseFailBGM,
     systemSounds: {
+      playStop,
       cursorMove,
       folderOpen,
       folderClose,
@@ -461,9 +521,46 @@ export async function loadLR2SystemSound(
   };
 }
 
-export function pickLR2PlaySkin(playSkins: LR2PlaySkinMap, chartEntry: LR2PlaySkinChart): LR2Skin | undefined {
-  const variant = pickLR2PlaySkinVariant(playSkins, chartEntry);
+/**
+ * How a play converts its chart, for the play skin it runs on: the battle mode selected and whether the play is a
+ * course stage (where LR2 skips BATTLE and SP TO DP).
+ */
+export interface LR2PlaySkinBattle {
+  readonly battleMode?: BattleMode;
+  readonly course?: boolean;
+}
+
+export function pickLR2PlaySkin(
+  playSkins: LR2PlaySkinMap,
+  chartEntry: LR2PlaySkinChart,
+  battle?: LR2PlaySkinBattle,
+): LR2Skin | undefined {
+  const variant = pickLR2PlaySkinVariant(playSkins, chartEntry, battle);
   return variant !== undefined ? playSkins[variant] : undefined;
+}
+
+/** The play variant a battle mode turns a chart of `source` into: the copied or merged chart's lanes. */
+const BATTLE_PLAY_VARIANTS: Partial<Record<BattleMode, Partial<Record<ChartPlayVariant, ChartPlayVariant>>>> = {
+  'SP-TO-DP': { '5': '10', '7': '14', '9': '7', '10': '5', '14': '7' },
+  'D-BATTLE': { '5': '10', '7': '14' },
+  BATTLE: { '5': '10', '7': '14', '24': '48' },
+  'BATTLE-AS': { '5': '10', '7': '14', '24': '48' },
+};
+
+/**
+ * The play skins a chart plays on, best first: a two-player BATTLE of a 5/7KEY chart on LR2's BATTLE play skin (a DP
+ * one without it, for its 2P lanes), D-BATTLE / SP TO DP and the other battle modes on the converted chart's lanes,
+ * and anything else on the chart's own.
+ */
+function playSkinOrder(source: ChartPlayVariant, battle: LR2PlaySkinBattle | undefined): readonly LR2PlayVariant[] {
+  const mode = battle?.battleMode ?? 'OFF';
+  const course = battle?.course === true;
+  if (mode === 'TWO-PLAYER' && !course && (source === '5' || source === '7')) {
+    const battleSkins: readonly LR2PlayVariant[] = source === '7' ? ['7-battle'] : ['5-battle', '7-battle'];
+    return [...battleSkins, ...PLAY_SKIN_FALLBACKS[source === '7' ? '14' : '10']];
+  }
+  const converted = mode === 'SP-TO-DP' && course ? undefined : BATTLE_PLAY_VARIANTS[mode]?.[source];
+  return PLAY_SKIN_FALLBACKS[converted ?? source];
 }
 
 /**
@@ -473,6 +570,7 @@ export function pickLR2PlaySkin(playSkins: LR2PlaySkinMap, chartEntry: LR2PlaySk
 export function pickLR2PlaySkinVariant(
   playSkins: LR2PlaySkinMap,
   chartEntry: LR2PlaySkinChart,
+  battle?: LR2PlaySkinBattle,
 ): LR2PlayVariant | undefined {
   const target = resolveChartPlayVariant({
     chartPath: chartEntry.chartPath,
@@ -480,11 +578,11 @@ export function pickLR2PlaySkinVariant(
     bms: chartEntry.chart.bms,
     bmson: chartEntry.chart.bmson,
   });
-  return PLAY_SKIN_FALLBACKS[target].find((variant) => playSkins[variant] !== undefined);
+  return playSkinOrder(target, battle).find((variant) => playSkins[variant] !== undefined);
 }
 
 export function summarizeLR2PlaySkins(playSkins: LR2PlaySkinMap, separator = ','): string {
   return (Object.entries(playSkins) as Array<[LR2PlayVariant, LR2Skin]>)
-    .map(([variant, value]) => `${variant}K=${value.name}`)
+    .map(([variant, value]) => `${variant.replace('-battle', 'K-BATTLE').replace(/^(\d+)$/u, '$1K')}=${value.name}`)
     .join(separator);
 }

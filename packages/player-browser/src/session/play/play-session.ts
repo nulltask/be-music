@@ -1,3 +1,4 @@
+import { clampJudgeTimingMs, resolvePlayOptionValue } from '@be-music/player-scene-model';
 /**
  * The play session: one play's behaviour, whatever skin family draws it (ADR 0001). It composes the play's parts around
  * one `PlayState` — the chart (`play-chart.ts`), the media (`play-media.ts`, through the audio service's play graph when
@@ -12,7 +13,6 @@
  */
 
 import { mirrorBeatAtTempoReversal } from '@be-music/chart-model';
-import { createTempoClock, type TempoClock } from '@be-music/player-engine';
 import { nonstopBPMAt } from '@be-music/player-engine/course';
 import { DEFAULT_REPLAY_PLAYBACK_OPTIONS, type BeMusicReplay } from '@be-music/player-engine/replay';
 import type { GaugeType } from '@be-music/player-engine/ruleset';
@@ -47,8 +47,11 @@ import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { PlayViewTiming } from '../../view/types.ts';
 import { prepareChart } from './play-chart.ts';
+import { toPlayOptionMismatch } from './play-option-mismatch.ts';
 import { beginExitSequence, getResultData } from './play-ending.ts';
 import { interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
+import { chartSecondsFromFrame } from './play-clock.ts';
+import { seekPlay } from './play-seek.ts';
 import {
   attachPlayInput,
   detachPlayInput,
@@ -84,11 +87,6 @@ export class PlaySession extends PlaySessionState {
   tempo: number;
   /** The tempo a replay plays at and the changes it follows (`resolveReplayTempo`). */
   readonly replayTempo: ReplayTempo | undefined;
-  /**
-   * The play tempo over the view's clock (seconds since `audioContextStartTime`, in ms): re-anchored at the chart second
-   * of every change the engine reports, so the view's chart time stays the engine's.
-   */
-  tempoClock: TempoClock;
   /** The live tempo changes asked for ({@link setTempo}), pushed to the engine (held until its input bus is up). */
   readonly liveTempo: LiveTempo;
   readonly options: PlaySessionOptions;
@@ -102,7 +100,13 @@ export class PlaySession extends PlaySessionState {
 
   public constructor(options: PlaySessionOptions = {}, theme: PlaySessionTheme = NO_THEME) {
     super();
+    const recordedHSFix =
+      (options.replayView?.hiSpeed ?? true)
+        ? resolvePlayOptionValue('hsFix', options.replay?.play.options?.hsFix ?? options.replay?.play.view?.hsFix)
+        : undefined;
+    if (recordedHSFix !== undefined) options = { ...options, hsFix: recordedHSFix };
     this.options = options;
+    this.practice = options.practice === true;
     this.theme = theme;
     // A replay plays back at the tempo it was played at, unless its viewer keeps their own (`replayView.tempo`).
     this.replayTempo =
@@ -115,7 +119,6 @@ export class PlaySession extends PlaySessionState {
           })
         : undefined;
     this.tempo = this.replayTempo?.tempo ?? clampPlayTempo(options.tempo);
-    this.tempoClock = createTempoClock(this.tempo);
     // Only in pitch mode (kept pitch stretched the samples to the tempo they loaded at), and not for a replay.
     this.liveTempo = new LiveTempo(
       this.tempo,
@@ -128,6 +131,9 @@ export class PlaySession extends PlaySessionState {
       view: {
         hiSpeed: createHiSpeedState({
           ...(options.initialHiSpeed !== undefined ? { hiSpeed: options.initialHiSpeed } : {}),
+          classic: options.classicHiSpeed,
+          floating: options.floatingHiSpeed,
+          normalLevel: options.classicHiSpeed ? undefined : options.normalHiSpeedLevel,
           locked: options.hiSpeedLocked === true,
         }),
       },
@@ -165,7 +171,12 @@ export class PlaySession extends PlaySessionState {
     // Hidden until {@link start} fires, so a play shown before it begins draws nothing of it yet.
     this.shown = false;
     this.assetsLoading = true;
-    prepareChart(this, chartEntry);
+    try {
+      prepareChart(this, chartEntry);
+    } catch (error) {
+      // An option that does not fit the chart is the player's to change: the host says which, other errors go on.
+      throw toPlayOptionMismatch(error, this.options) ?? error;
+    }
     if (this.entered) {
       // No splash covers the load window: hold the chart clock before its start (see `start()`) and draw the loading
       // playfield while assets decode, instead of a blank stage.
@@ -177,6 +188,8 @@ export class PlaySession extends PlaySessionState {
     if (this.disposed) return;
     await prepareAudio(this);
     if (this.disposed) return;
+    // Build the engine while BGA and the skin intro are still loading; START opens its chart gate.
+    launchSharedEngine(this);
     this.bgaReadyPromise = prepareBGA(this).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
@@ -221,10 +234,15 @@ export class PlaySession extends PlaySessionState {
     // as the pause-aware reads further below.
     const now = this.playClock();
     this.sceneStartTime = now;
-    const { loadEndOffsetMs, playStartOffsetMs } = this.theme.timing();
-    // Skinless / non-LR2 demos have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
+    const { loadEndOffsetMs, playStartOffsetMs, inputStartOffsetMs, playStartAfterLoadEndMs } = this.theme.timing();
+    // Skinless / non-LR2 players have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
     // of the built-in fallback frame still has room to land before notes begin.
-    const introMs = playStartOffsetMs > 0 ? playStartOffsetMs : FALLBACK_INTRO_DELAY_MS;
+    const introMs =
+      playStartAfterLoadEndMs !== undefined
+        ? loadEndOffsetMs + playStartAfterLoadEndMs
+        : playStartOffsetMs > 0
+          ? playStartOffsetMs
+          : FALLBACK_INTRO_DELAY_MS;
     this.scheduledIntroMs = introMs;
     // The chart waits on BOTH the configured PLAY START delay AND the BGA preload (which may still be transcoding video
     // in the background — see `load()`). Until the gate opens below, `startTime = +Infinity` keeps `isIntroPlaying`
@@ -234,33 +252,41 @@ export class PlaySession extends PlaySessionState {
     // later via the `Promise.all` gates below so they wait for the BGA preload too. Exit-phase events are deliberately
     // NOT raised here: `beginExitSequence` raises them at the actual transition moment (ESC / chart end / failure).
     this.theme.moment({ kind: 'scene-start', at: now });
+    launchSharedEngine(this);
     // The `start()` invocation we belong to — captured so the gate handlers below can detect a dispose-and-re-mount and
     // bail out instead of mutating a fresh play's state.
     const sceneEpoch = this.sceneStartTime;
     const bgaReady = this.bgaReadyPromise ?? Promise.resolve();
     // LOAD END gate — both the configured load-end delay AND the BGA preload need to finish.
-    void Promise.all([bgaReady, this.delaySceneStage(loadEndOffsetMs)]).then(() => {
-      if (this.disposed) return;
-      if (this.sceneStartTime !== sceneEpoch) return;
+    const isCurrent = () => !this.disposed && !this.exiting && this.sceneStartTime === sceneEpoch;
+    if (inputStartOffsetMs !== undefined) {
+      void this.delaySceneStage(inputStartOffsetMs).then(() => {
+        if (isCurrent()) this.theme.moment({ kind: 'input-start', at: this.playClock() });
+      });
+    }
+    const loadEnd = Promise.all([bgaReady, this.delaySceneStage(loadEndOffsetMs)]).then(() => {
+      if (!isCurrent()) return;
       this.theme.moment({ kind: 'load-end', at: this.playClock() });
     });
-    // PLAY START gate — same pattern, but for the configured play-start (or fallback intro). Raises the theme's
-    // play-start event (animation clock) and anchors the wall-clock + audio-context start times (chart-engine clock) so
-    // the chart engine and BGM samples share a single t=0.
-    void Promise.all([bgaReady, this.delaySceneStage(introMs)]).then(() => {
-      if (this.disposed) return;
-      if (this.sceneStartTime !== sceneEpoch) return;
+    // beatoraja's READY interval starts at actual load end, so a slow preload cannot consume it. LR2 keeps its
+    // absolute PLAY START gate. Both anchor the animation, engine and BGM clocks at the same chart start.
+    const playStart =
+      playStartAfterLoadEndMs === undefined
+        ? Promise.all([bgaReady, this.delaySceneStage(introMs)])
+        : loadEnd.then(() => {
+            if (isCurrent() && playStartAfterLoadEndMs > 0) return this.delaySceneStage(playStartAfterLoadEndMs);
+          });
+    void playStart.then(() => {
+      if (!isCurrent()) return;
       this.theme.moment({ kind: 'play-start', at: this.playClock() });
       // `startTime` is consumed by `isIntroPlaying` and `currentSeconds`, both of which work in raw wall-clock units
       // (with `currentSeconds` subtracting `pauseTotal` explicitly), so it MUST stay on `performance.now()`.
       this.startTime = performance.now();
-      if (this.audioContext) {
-        this.audioContextStartTime = this.audioContext.currentTime;
-        this.nonstopMixer?.schedule(this.audioContextStartTime);
-      }
-      // Hand chart playback over to `@be-music/player-engine`'s engine. Fires only after the play-start gate, so the engine's
-      // chart-time t=0 lines up with the `audioContextStartTime` anchor — no double lead-in.
-      launchSharedEngine(this);
+      // The chart's clock until the engine's first frame; the engine's audio session schedules a NONSTOP chart's fades.
+      if (this.audioContext) this.audioContextStartTime = this.audioContext.currentTime;
+      // The engine is prepared already; opening its gate starts chart time and audio together.
+      this.engineStartRequested = true;
+      this.sharedEngineInputSignals?.pushCommand({ kind: 'start' });
     });
     this.host?.app.canvas.focus();
   }
@@ -291,6 +317,14 @@ export class PlaySession extends PlaySessionState {
     togglePause(this);
   }
 
+  /**
+   * Moves an AUTO play or replay to chart second `seconds` (`seekPlay`): the engine seeks the running play, and the promise resolves
+   * once it has (its frames are of the new seek generation). A paused play stays paused there. Manual play requires `allowSeek: 'practice'`.
+   */
+  public seek(seconds: number): Promise<void> {
+    return seekPlay(this, seconds);
+  }
+
   /** Whether the play is paused (by Space, {@link requestTogglePause}, or the auto-pause on losing focus). */
   public isPaused(): boolean {
     return this.paused;
@@ -304,16 +338,20 @@ export class PlaySession extends PlaySessionState {
   public waitForReplay(timeoutMs = 2000): Promise<BeMusicReplay | undefined> {
     if (this.replay !== undefined) return Promise.resolve(this.replay);
     return new Promise((resolve) => {
-      const timer = setTimeout(() => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const settle = (replay: BeMusicReplay | undefined): void => {
+        if (timer !== undefined) clearTimeout(timer);
         const index = this.replayWaiters.indexOf(settle);
         if (index >= 0) this.replayWaiters.splice(index, 1);
-        resolve(undefined);
-      }, timeoutMs);
-      const settle = (replay: BeMusicReplay): void => {
-        clearTimeout(timer);
         resolve(replay);
       };
+      timer = setTimeout(() => settle(undefined), timeoutMs);
       this.replayWaiters.push(settle);
+      // Practice and replay playback produce no recording. Wait for the final summary, then settle without a timeout.
+      void this.sharedEnginePromise?.then(
+        () => settle(this.replay),
+        () => settle(undefined),
+      );
     });
   }
 
@@ -372,7 +410,7 @@ export class PlaySession extends PlaySessionState {
 
   /**
    * Switches the compressor architecture between `'split'` (default 3-stage) and `'legacy'` (original
-   * single-compressor) at runtime. Mostly useful for the demo's `?compressor=` URL flag and for live A/B comparison
+   * single-compressor) at runtime. Mostly useful for the player's `?compressor=` URL flag and for live A/B comparison
    * while debugging.
    *
    * Calling this while `setAudioCompressor(false)` has the bus in `'off'` mode just remembers the choice — the new
@@ -489,6 +527,7 @@ export class PlaySession extends PlaySessionState {
       window.clearTimeout(timeout);
     }
     this.sceneStageTimeouts.clear();
+    this.chartEndGate = undefined;
     if (this.chartEndTimeout !== undefined) {
       window.clearTimeout(this.chartEndTimeout);
       this.chartEndTimeout = undefined;
@@ -552,6 +591,7 @@ export class PlaySession extends PlaySessionState {
     this.resolvedChart = undefined;
     this.resolvedPlayChart = undefined;
     this.randomDraws = undefined;
+    this.randomSeeds = {};
     this.beatAtSeconds = undefined;
     this.scrollMapper = undefined;
     this.timingResolver = undefined;
@@ -577,7 +617,7 @@ export class PlaySession extends PlaySessionState {
 
   /**
    * Does the ruleset this run judges under show empty POORs inside its POOR counter? LR2 does; beatoraja shows a
-   * figure of its own, and IIDX's counter is unmeasured, so both keep them apart.
+   * figure of its own, and That-Which-Must-Not-Be-Named's counter is unmeasured, so both keep them apart.
    */
   resolveEmptyPoorCountsInPoorDisplay(): boolean {
     const ruleset = this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
@@ -592,6 +632,11 @@ export class PlaySession extends PlaySessionState {
   /** Whether the engine plays `channel`'s notes itself: every lane under autoplay, the scratch under auto-scratch. */
   isAutoplayedChannel(channel: string): boolean {
     return this.options.autoPlay === true || this.autoScratchChannels.has(channel);
+  }
+
+  /** True once {@link start} has begun the intro. A view that joins later reads this to seed its skin timers. */
+  public hasSceneStarted(): boolean {
+    return this.sceneStartTime !== 0;
   }
 
   /** True while the wall-clock playhead is still inside the intro buffer. */
@@ -636,7 +681,18 @@ export class PlaySession extends PlaySessionState {
     // post-reversal |BPM| and pauses through post-reversal STOPs. Every display consumer — renderNotes, measure
     // lines, beatPhase — funnels through this method, so mirroring here covers them all; the forward beat underneath
     // keeps `beatAtSeconds`'s monotonic stop-window cursor intact.
-    return mirrorBeatAtTempoReversal(this.timingResolver?.reversal, seconds, this.forwardBeat(seconds));
+    const reversal = this.timingResolver?.reversal;
+    const forward = this.forwardBeat(seconds);
+    // CONSTANT mirrors LR2's converted 150-BPM position, then maps back to a beat for every view.
+    if (
+      reversal &&
+      seconds > reversal.seconds &&
+      this.playState.view.hsFix === 'CONSTANT' &&
+      this.scrollMapper?.mirrorBeatAt
+    ) {
+      return this.scrollMapper.mirrorBeatAt(reversal.beat, forward);
+    }
+    return mirrorBeatAtTempoReversal(reversal, seconds, forward);
   }
 
   private forwardBeat(seconds: number): number {
@@ -690,6 +746,7 @@ export class PlaySession extends PlaySessionState {
     this.quitHold.cancel();
   };
 
+  public lastStartTapMs: number | undefined;
   readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => handleSharedEngineExitKey(this, event);
 
   /**
@@ -697,8 +754,23 @@ export class PlaySession extends PlaySessionState {
    * {@link PlaySessionOptions.initialHiSpeed}: the chart's HS-FIX multiplier is applied on top, as at the start.
    * Snapped and clamped like the in-game hotkey; non-finite values are ignored.
    */
+  public setJudgeTimingMs(value: number): void {
+    if (!Number.isFinite(value)) return;
+    const next = clampJudgeTimingMs(value);
+    if (next === (this.options.judgeTimingMs ?? 0)) return;
+    this.options.judgeTimingMs = next;
+    this.sharedEngineInputSignals?.pushCommand({ kind: 'options', values: { judgeTimingMs: next } });
+    this.options.onJudgeTimingChange?.(next);
+  }
+
   public setHiSpeed(value: number): void {
-    applyPlayEvent(this, { type: 'hi-speed-set', value });
+    applyPlayEvent(this, {
+      type: 'hi-speed-set',
+      value,
+      bpm: this.timingResolver?.bpmAtBeat(this.currentBeat(this.currentSeconds())),
+    });
+    if (this.playState.view.hiSpeed.normalLevel !== undefined)
+      this.options.onHiSpeedChange?.(this.playState.view.hiSpeed.player, this.playState.view.hiSpeed.normalLevel);
   }
 
   /**
@@ -771,21 +843,24 @@ export class PlaySession extends PlaySessionState {
   }
 
   /**
-   * Chart-time seconds since the first beat, derived from the audio context clock so it stays *bit-exact* with
-   * scheduled `node.start()` times across pause / resume cycles. The wall-clock approach we used previously
-   * (`performance.now() - pauseTotal`) drifted out of sync with the audio context on every pause because `suspend()`
-   * and `resume()` are asynchronous: the audio clock paused a few ms after we recorded `pauseTime` and resumed a few ms
-   * before we credited `pauseTotal`, so each toggle slid the two clocks apart by ~10–30 ms.
-   *
-   * Anchoring everything on `audioContext.currentTime` removes that accumulating drift entirely. For environments where
-   * the audio context isn't ready yet we fall back to the wall-clock model.
+   * The chart second the play is at now. The engine owns chart time: each of its frames carries the second it shows and
+   * the audio-clock reading that second holds at (`chartSecondsFromFrame`), so the playfield runs on from the latest
+   * frame on `audioContext.currentTime` — bit-exact with the scheduled sounds, through pauses, tempo changes and seeks.
+   * Before the engine's first frame, the chart runs from the play-start gate at the play's tempo (audio clock, else wall
+   * clock while the audio context is not up).
    */
   currentSeconds(): number {
-    if (this.audioContext && this.audioContextStartTime > 0) {
-      return this.tempoClock.chartSecondsAt((this.audioContext.currentTime - this.audioContextStartTime) * 1000);
+    const context = this.audioContext;
+    const frame = this.engineFrame;
+    if (context !== undefined && frame !== undefined) {
+      const seconds = chartSecondsFromFrame(frame, context.currentTime);
+      if (seconds !== undefined) return seconds;
+    }
+    if (context !== undefined && this.audioContextStartTime > 0) {
+      return (context.currentTime - this.audioContextStartTime) * this.tempo;
     }
     const nowMs = this.paused ? this.pauseTime : performance.now();
-    return this.tempoClock.chartSecondsAt(nowMs - this.startTime - this.pauseTotal);
+    return ((nowMs - this.startTime - this.pauseTotal) / 1000) * this.tempo;
   }
 
   /** The play tempo in force: the one the play started at, or the last change. */
@@ -815,8 +890,7 @@ export class PlaySession extends PlaySessionState {
    */
   resolveChartMs(): number | undefined {
     if (this.startTime === 0) return undefined;
-    if (Number.isFinite(this.startTime))
-      return this.tempoClock.chartSecondsAt(performance.now() - this.startTime) * 1000;
+    if (Number.isFinite(this.startTime)) return this.currentSeconds() * 1000;
     return Math.min(-1, this.playClock() - this.sceneStartTime - this.scheduledIntroMs);
   }
 

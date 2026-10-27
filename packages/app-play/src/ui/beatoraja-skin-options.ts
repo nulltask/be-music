@@ -16,7 +16,7 @@ export interface ActiveBeatorajaPlay {
 
 /** What the panel needs from the app: the beatoraja screens showing, their skins' options, and applying new ones. */
 export interface BeatorajaSkinOptionsPanelDeps {
-  /** The demo shell, which the panel attaches to. */
+  /** The player shell, which the panel attaches to. */
   readonly container: HTMLElement;
   /** The beatoraja scene kit caches, whose `skinConfigs` keep the options the player picks for each entry. */
   readonly beatorajaKitCaches: Pick<BeatorajaSceneKitCaches, 'skinConfigs'>;
@@ -42,9 +42,9 @@ export interface BeatorajaSkinOptionsPanelDeps {
 /** The skin-options panel for the beatoraja select screen or play showing. */
 export class BeatorajaSkinOptionsPanel {
   /**
-   * Bottom-right lil-gui panel exposing the active beatoraja skin's `property[]` / `filepath[]` /
+   * Bottom-right Tweakpane panel exposing the active beatoraja skin's `property[]` / `filepath[]` /
    * note-offset for live editing. Lazily constructed once `start()` mounts the host (the panel is
-   * absolute-positioned inside the demo shell so the shell needs to exist first).
+   * absolute-positioned inside the player shell so the shell needs to exist first).
    */
   private beatorajaSkinOptionsGUI: BeatorajaSkinOptionsGUI | undefined;
   private readonly deps: BeatorajaSkinOptionsPanelDeps;
@@ -85,7 +85,7 @@ export class BeatorajaSkinOptionsPanel {
   }
 
   /**
-   * Lazily instantiate the skin-options panel. Deferred from the constructor because the demo shell
+   * Lazily instantiate the skin-options panel. Deferred from the constructor because the player shell
    * (the parent the panel attaches to) doesn't exist until `app.innerHTML` materializes.
    */
   private ensureBeatorajaSkinOptionsGUI(): BeatorajaSkinOptionsGUI {

@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
   DEBUG_MENU_FOLDERS,
   DEBUG_MENU_FOLDERS_STORAGE_KEY,
-  clearDemoSettings,
-  demoSettingKeys,
+  clearPlayerSettings,
+  playerSettingKeys,
   folderPath,
-  folderTitles,
+  folderEntries,
   parseFolderOpenStates,
   readFolderOpenStates,
   rememberFolderOpenStates,
@@ -51,29 +51,25 @@ const BLOCKED_STORAGE: DebugMenuStorage = {
   },
 };
 
-/** A stand-in for lil-gui's `GUI` with the same open / close bubbling. */
+/** A stand-in for Tweakpane's `GUI` with the same open / close bubbling. */
 class FakeFolder implements FolderNode {
-  public _closed: boolean;
-  public readonly folders: FakeFolder[] = [];
-  private listener: ((changed: FolderNode) => void) | undefined;
-  public readonly _title: string;
-  public readonly parent: FakeFolder | undefined;
+  public readonly children: FakeFolder[] = [];
+  public readonly title: string;
+  private openState: boolean;
+  private listener: ((event: { expanded: boolean }) => void) | undefined;
   public constructor(title: string, parent?: FakeFolder, open = true) {
-    this._title = title;
-    this.parent = parent;
-    this._closed = !open;
-    parent?.folders.push(this);
+    this.title = title;
+    this.openState = open;
+    parent?.children.push(this);
   }
-  public open(open = true): this {
-    this._closed = !open;
-    this.notify(this);
-    return this;
+  public get expanded(): boolean {
+    return this.openState;
   }
-  private notify(changed: FakeFolder): void {
-    this.parent?.notify(changed);
-    this.listener?.(changed);
+  public set expanded(value: boolean) {
+    this.openState = value;
+    this.listener?.({ expanded: value });
   }
-  public onOpenClose(callback: (changed: FolderNode) => void): this {
+  public on(_event: 'fold', callback: (event: { expanded: boolean }) => void): this {
     this.listener = callback;
     return this;
   }
@@ -124,8 +120,8 @@ describe('folder open-state persistence', () => {
     const root = new FakeFolder('Debug Menu');
     const audio = new FakeFolder('Audio', root);
     const compressor = new FakeFolder('Compressor', audio);
-    expect(folderTitles(compressor)).toEqual(['Audio', 'Compressor']);
-    expect(folderTitles(root)).toEqual([]);
+    expect(folderEntries(root).find(({ folder }) => folder === compressor)?.titles).toEqual(['Audio', 'Compressor']);
+    expect(folderEntries(root)[0]?.titles).toEqual([]);
   });
 
   it('restores remembered folders and remembers later changes, but not the root panel', () => {
@@ -137,31 +133,43 @@ describe('folder open-state persistence', () => {
     const compressor = new FakeFolder('Compressor', audio, false);
     const developer = new FakeFolder('Developer', root, false);
     rememberFolderOpenStates(root, storage);
-    expect(audio._closed).toBe(true);
-    expect(compressor._closed).toBe(false);
-    expect(developer._closed).toBe(true);
+    expect(!audio.expanded).toBe(true);
+    expect(!compressor.expanded).toBe(false);
+    expect(!developer.expanded).toBe(true);
 
-    developer.open();
-    root.open();
+    developer.expanded = true;
+    root.expanded = true;
     expect(readFolderOpenStates(storage)).toEqual({ Audio: false, 'Audio / Compressor': true, Developer: true });
   });
 });
 
 describe('settings reset', () => {
-  it('removes demo settings but keeps best records and other sites’ keys', () => {
+  it('removes player settings but keeps best records and other sites’ keys', () => {
     const storage = memoryStorage({
-      'be-music-demo.volumes': '{}',
-      'be-music-demo.debug-menu-folders': '{}',
-      'be-music-demo.chart-best-records': '{}',
+      'be-music.volumes': '{}',
+      'be-music.debug-menu-folders': '{}',
+      'be-music.chart-best-records': '{}',
       'other-app.key': 'x',
     });
-    expect(demoSettingKeys(storage).sort()).toEqual(['be-music-demo.debug-menu-folders', 'be-music-demo.volumes']);
-    expect(clearDemoSettings(storage)).toBe(2);
-    expect([...storage.values.keys()].sort()).toEqual(['be-music-demo.chart-best-records', 'other-app.key']);
+    expect(playerSettingKeys(storage).sort()).toEqual(['be-music.debug-menu-folders', 'be-music.volumes']);
+    expect(clearPlayerSettings(storage)).toBe(2);
+    expect([...storage.values.keys()].sort()).toEqual(['be-music.chart-best-records', 'other-app.key']);
   });
 
   it('does nothing on blocked storage', () => {
-    expect(demoSettingKeys(BLOCKED_STORAGE)).toEqual([]);
-    expect(clearDemoSettings(BLOCKED_STORAGE)).toBe(0);
+    expect(playerSettingKeys(BLOCKED_STORAGE)).toEqual([]);
+    expect(clearPlayerSettings(BLOCKED_STORAGE)).toBe(0);
   });
+});
+
+it('keeps stored folder keys stable under native tab pages and ignores value blades', () => {
+  const root = new FakeFolder('Debug Menu');
+  const audio = new FakeFolder('Audio');
+  const wrapper = { pages: [{ title: 'Sound', children: [audio, { label: 'Master' }] }] };
+  (root.children as unknown[]).push(wrapper);
+  const storage = memoryStorage({ [DEBUG_MENU_FOLDERS_STORAGE_KEY]: '{"Audio":false}' });
+  rememberFolderOpenStates(root, storage);
+  expect(audio.expanded).toBe(false);
+  audio.expanded = true;
+  expect(readFolderOpenStates(storage)).toEqual({ Audio: true });
 });

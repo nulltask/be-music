@@ -34,7 +34,7 @@ import {
 } from '@be-music/skin-beatoraja';
 import { systemSoundSetFromBeatoraja, type LibraryChart, type SystemSoundSet } from '@be-music/player-scene-model';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from '../../chart-shape.ts';
-import { playSkinTypeForVariant } from '../../demo-utils.ts';
+import { playSkinTypeForVariant } from '../../player-utils.ts';
 import { applyLoadProgress, type LoadingOverlayElements } from '../../loading-overlay.ts';
 
 const dropLog = logger('drop');
@@ -551,7 +551,7 @@ export class BeatorajaThemeService {
   /**
    * Pre-resolve `filepath[]` candidate lists for the skin-options panel. Each entry's `path` field
    * is a wildcard relative to the skin directory; `expandBeatorajaWildcard` walks the dropped file
-   * map and returns every match. The panel hands these to lil-gui as dropdown options so the user
+   * map and returns every match. The panel hands these to Tweakpane as dropdown options so the user
    * can pick a specific file by name rather than guessing.
    */
   public collectBeatorajaFileCandidates(

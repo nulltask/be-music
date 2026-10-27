@@ -1,3 +1,11 @@
+import {
+  adjustBeatorajaJudgeTiming,
+  createLR2JudgeTimingSamples,
+  isLR2JudgeTimingAutoAdjust,
+  sampleLR2JudgeTiming,
+  settleLR2JudgeTiming,
+  type JudgeTimingAutoAdjust,
+} from './judge-timing.ts';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { formatSeconds } from '../utils.ts';
 import { type PlayerUISignalBus } from './ui-signal-bus.ts';
@@ -18,6 +26,11 @@ import { type AudioSession } from './engine-types.ts';
 /** What a driver hands {@link createJudgeEffectHandler}: the host side of every judge-core effect. */
 interface JudgeEffectHost {
   uiEnabled: boolean;
+  /**
+   * The automatic judge-timing adjustment this play runs (`OFF` for none: AUTO, replays, or a mode the play skips), and
+   * the live timing it moves. `currentSeconds` is the chart time an LR2 step is recorded at.
+   */
+  judgeTiming?: { mode: JudgeTimingAutoAdjust; value: number; currentSeconds?: () => number };
   writeOutput: (text: string) => void;
   wavResources: Readonly<Record<string, string>>;
   idBase: 36 | 62;
@@ -31,11 +44,17 @@ interface JudgeEffectHost {
   beatAtSeconds: (seconds: number) => number;
 }
 
+/** The judge-effect sink of one play, with the step LR2's automatic judge timing takes once per judging pass. */
+export interface JudgeEffectHandler extends JudgeCoreEffectSink {
+  /** Ends a judging pass: LR2's adjustment steps when its window is full (a no-op in any other mode). */
+  settleJudgeTiming(): void;
+}
+
 /**
  * Interprets judge-core effects for one play: audio always, UI cues or the no-TUI trace depending on the mode, and
  * the replay when one is being recorded. Shared by the manual and the auto drivers.
  */
-export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffectSink {
+export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeEffectHandler {
   const {
     uiEnabled,
     writeOutput,
@@ -50,7 +69,18 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffect
     publishUIFrame,
     beatAtSeconds,
   } = host;
-  return (effect) => {
+  const judgeTiming = host.judgeTiming;
+  const judgeTimingMode = judgeTiming?.mode ?? 'OFF';
+  // LR2's window starts empty with the play (OpenLR2 leaves the reset at play start undetermined).
+  const lr2Samples = isLR2JudgeTimingAutoAdjust(judgeTimingMode) ? createLR2JudgeTimingSamples() : undefined;
+  const changeJudgeTiming = (next: number, seconds: number): void => {
+    judgeTiming!.value = next;
+    replayRecorder?.recordOptionChange(Math.max(0, seconds, judgeTiming!.currentSeconds?.() ?? 0), {
+      judgeTimingMs: next,
+    });
+    uiSignals.pushCommand({ kind: 'judge-timing', value: next });
+  };
+  const sink: JudgeCoreEffectSink = (effect) => {
     switch (effect.kind) {
       case 'record-input':
         replayRecorder?.recordInput(effect.action, effect.seconds, effect.tokens, effect.channels, effect.inferred);
@@ -136,6 +166,12 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffect
         }
         return;
       case 'judge-combo':
+        if (judgeTimingMode === 'BEATORAJA' && effect.seconds !== undefined) {
+          const next = adjustBeatorajaJudgeTiming(judgeTiming!.value, effect.judge, effect.signedDeltaMs);
+          if (next !== judgeTiming!.value) changeJudgeTiming(next, effect.seconds);
+        } else if (lr2Samples !== undefined) {
+          sampleLR2JudgeTiming(lr2Samples, effect.judge, effect.signedDeltaMs, effect.longNote === true);
+        }
         activeStateSignals?.publishJudgeCombo(
           effect.judge,
           effect.combo,
@@ -156,4 +192,11 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffect
         return;
     }
   };
+  return Object.assign(sink, {
+    settleJudgeTiming: () => {
+      if (lr2Samples === undefined) return;
+      const next = settleLR2JudgeTiming(judgeTiming!.value, lr2Samples);
+      if (next !== judgeTiming!.value) changeJudgeTiming(next, 0);
+    },
+  });
 }

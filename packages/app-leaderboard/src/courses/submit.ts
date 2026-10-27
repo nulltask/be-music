@@ -7,13 +7,14 @@ import {
   simulateCourseReplay,
   type BeMusicCourseReplay,
   type BeMusicReplay,
+  type CourseReplayUnrankedReason,
   type ReplayCourseResult,
   type RulesetId,
 } from '@be-music/player-engine/replay';
 import { normalizeCourseConstraints } from '@be-music/player-engine/course';
 import type { Database } from '../db/client.ts';
 import { course, courseBestScore, courseScore, courseScoreResult } from '../db/schema.ts';
-import { sha256Hex } from '../hash.ts';
+import { sha256HexAsync as sha256Hex } from '@be-music/shared-utils/hash';
 import { byRulesetOrder, RULESET_IDS } from '../rulesets.ts';
 import {
   checkPlayedChart,
@@ -71,6 +72,8 @@ export type CourseSubmissionOutcome =
       courseScoreId: string;
       courseFingerprint: string;
       results: CourseRulesetOutcome[];
+      /** Why the run was stored without ranking it; its results then carry rank and players 0. */
+      unranked?: CourseReplayUnrankedReason;
     }
   | { status: 'rejected'; httpStatus: 400 | 409 | 422; reason: string; stage?: number };
 
@@ -81,7 +84,9 @@ export type CourseSubmissionOutcome =
  * `checkCourseRun` refuses runs whose stages do not follow from each other or that were given up. A NONSTOP run is
  * verified on its stitched play instead: the server stitches the stage charts again (`checkNonstopStageCharts`) and the
  * play must have been recorded on that chart. A course run creates no chart scores. Rejections never write anything;
- * the course replay goes to R2 before the D1 batch, as for single plays.
+ * the course replay goes to R2 before the D1 batch, as for single plays. A run that does not rank (a stage at another
+ * tempo, an unreleased course: `checkCourseReplayEligibility`'s `unranked`) is stored and simulated all the same, but
+ * moves no course best and takes no place in the course ranking.
  */
 export async function submitCourseScore(
   deps: SubmissionDeps,
@@ -93,7 +98,7 @@ export async function submitCourseScore(
   if (!eligibility.eligible) {
     return { status: 'rejected', httpStatus: 422, reason: eligibility.reason, ...stageOf(eligibility.stage) };
   }
-  const { courseFingerprint, assistFlags } = eligibility;
+  const { courseFingerprint, assistFlags, unranked } = eligibility;
   const assisted = assistFlags.length > 0;
   const playedLogs = courseLog.stages.flatMap((entry) => (entry.played ? [entry.replay] : []));
   const nonstop =
@@ -116,7 +121,14 @@ export async function submitCourseScore(
       status: 'duplicate',
       courseScoreId: existing.id,
       courseFingerprint: existing.courseFingerprint,
-      results: await loadCourseOutcomes(db, existing.id, existing.courseFingerprint, existing.assisted),
+      results: await loadCourseOutcomes(
+        db,
+        existing.id,
+        existing.courseFingerprint,
+        existing.assisted,
+        existing.unranked,
+      ),
+      ...(existing.unranked !== null ? { unranked: existing.unranked } : {}),
     };
   }
 
@@ -151,7 +163,7 @@ export async function submitCourseScore(
   const courseScoreId = deps.newId();
   const replayKey = `course-replays/${courseScoreId}.bmcourse.json.gz`;
   const [currentBests] = await Promise.all([
-    loadCourseBestScores(db, input.userId, courseFingerprint, assisted),
+    unranked === undefined ? loadCourseBestScores(db, input.userId, courseFingerprint, assisted) : new Map(),
     gzipText(input.courseLogText).then((compressed) =>
       blobs.put(replayKey, compressed, {
         httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
@@ -220,6 +232,7 @@ export async function submitCourseScore(
       submittedBy: input.submittedBy ?? null,
       serverEngine: REPLAY_ENGINE_VERSION,
       replayKey,
+      unranked: unranked ?? null,
       createdAt: new Date(now),
       updatedAt: new Date(now),
     }),
@@ -242,7 +255,8 @@ export async function submitCourseScore(
         judges: { ...result.judge, fast: result.fast, slow: result.slow },
       }),
     ),
-    ...figures.map(({ ruleset, update, trophy, playedHere }) => {
+    // An unranked run moves no course best.
+    ...(unranked !== undefined ? [] : figures).map(({ ruleset, update, trophy, playedHere }) => {
       const row = toCourseBestScoreRow(
         { userId: input.userId, courseFingerprint, ruleset, assisted },
         update.next,
@@ -268,6 +282,9 @@ export async function submitCourseScore(
 
   const results = await Promise.all(
     figures.map(async ({ ruleset, result, lamp, update, trophy }): Promise<CourseRulesetOutcome> => {
+      if (unranked !== undefined) {
+        return unrankedCourseOutcome({ ...result, ruleset, rulesetRevision: result.ruleset, clearLamp: lamp });
+      }
       const filter = { courseFingerprint, ruleset, assisted, includeAnonymous: true, playedHereOnly: false };
       const [rank, players] = await Promise.all([
         rankOfCourseExScore(db, filter, update.next.bestEx),
@@ -289,7 +306,41 @@ export async function submitCourseScore(
       };
     }),
   );
-  return { status: 'accepted', courseScoreId, courseFingerprint, results };
+  return {
+    status: 'accepted',
+    courseScoreId,
+    courseFingerprint,
+    results,
+    ...(unranked !== undefined ? { unranked } : {}),
+  };
+}
+
+/** The outcome of an unranked run under one ruleset: its figures, with no rank, players or best moved. */
+function unrankedCourseOutcome(figures: {
+  ruleset: RulesetId;
+  rulesetRevision: string;
+  exScore: number;
+  noteCount: number;
+  clearLamp: number;
+  missCount: number;
+  maxCombo: number;
+  stagesPlayed: number;
+  trophy?: string | null;
+}): CourseRulesetOutcome {
+  return {
+    ruleset: figures.ruleset,
+    rulesetRevision: figures.rulesetRevision,
+    exScore: figures.exScore,
+    noteCount: figures.noteCount,
+    clearLamp: figures.clearLamp,
+    missCount: figures.missCount,
+    maxCombo: figures.maxCombo,
+    stagesPlayed: figures.stagesPlayed,
+    trophy: figures.trophy ?? null,
+    rank: 0,
+    players: 0,
+    improved: { exScore: false, lamp: false, missCount: false, trophy: false },
+  };
 }
 
 /**
@@ -332,10 +383,12 @@ async function loadCourseOutcomes(
   courseScoreId: string,
   courseFingerprint: string,
   assisted: boolean,
+  unranked: string | null,
 ): Promise<CourseRulesetOutcome[]> {
   const rows = await db.select().from(courseScoreResult).where(eq(courseScoreResult.courseScoreId, courseScoreId));
   const outcomes = await Promise.all(
     rows.map(async (row): Promise<CourseRulesetOutcome> => {
+      if (unranked !== null) return unrankedCourseOutcome(row);
       const filter = {
         courseFingerprint,
         ruleset: row.ruleset,

@@ -1,3 +1,5 @@
+import { resolveConstantVisibility, resolveConstantAlpha } from '@be-music/player-scene-model';
+import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The measure lines of the shared playfield: the chart's bar lines from the playhead, drawn with the skin's lines, by the
  * be-music skin, or as a thin bar across each run of adjacent lanes.
@@ -67,18 +69,31 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
     // began on it stays on the judgement line for the STOP. A pixel of slack keeps the line just crossed for a frame,
     // as LR2 draws it once more on the line before dropping it.
     // Past an LR2 negative-BPM reversal a bar line the playhead passed before it stays gone as the scroll runs back.
-    firstBeatIndex = findFirstIndexNumberAtOrAfter(beats, drawWindow.reachedBeat - 1 / Math.max(1, pixelsPerBeat));
+    firstBeatIndex = findFirstIndexNumberAtOrAfter(
+      beats,
+      drawWindow.reachedBeat - 1 / Math.max(Number.EPSILON, pixelsPerBeat),
+    );
   }
   // beatoraja's rules end the walk where the notes' walk ends (bar lines are timelines like any other).
   const maxBeat =
     drawWindow.rules === 'beatoraja'
       ? drawWindow.lastBeat
-      : currentBeat + (bottom - top + 1) / Math.max(1, pixelsPerBeat);
+      : currentBeat + ((left.baseBottom ?? bottom) - top + 1) / Math.max(Number.EPSILON, pixelsPerBeat);
   const beatDistance = ctx.play.scrollMapper
     ? (toBeat: number): number => ctx.play.scrollMapper!.distanceBetween(currentBeat, toBeat)
     : (toBeat: number): number => toBeat - currentBeat;
   const drawBottom = resolveDrawBottom(drawWindow, bottom);
   const lineY = (beat: number): number => resolveDrawY(drawWindow, bottom - beatDistance(beat) * pixelsPerBeat, bottom);
+  const constant = resolveConstantVisibility({
+    enabled: ctx.options?.visualConstant,
+    durationMs: ctx.options?.noteDurationMs,
+    fadeMs: ctx.options?.constantFadeMs,
+    noSpeed: ctx.play.playState.view.hiSpeed.locked,
+  });
+  const alphaAt = (beat: number) =>
+    constant.enabled && ctx.play.timingResolver
+      ? resolveConstantAlpha(ctx.play.timingResolver.beatToSeconds(beat), drawWindow.nowSeconds, constant)
+      : 1;
   const skinLines = ctx.playfieldSkin.measureLines();
   if (skinLines !== undefined) {
     // Each of the skin's lines (one per side under double play) at every boundary, in the skin's order.
@@ -95,13 +110,16 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
         if (y < top - 1 || y > drawBottom + 1) {
           continue;
         }
+        const alpha = alphaAt(beat);
+        if (alpha <= 0) continue;
         const sprite = ctx.noteLayerPool.acquireSprite();
         sprite.texture = texture;
-        sprite.label = `measure-line[idx=${lineIndex},beat=${beat}]`;
-        sprite.position.set(line.x, Math.round(y));
+        sprite.label = drawLabel(ctx, 'measure-line', lineIndex, beat);
+        sprite.position.set(line.x, Math.round(y + (line.yOffset ?? 0)));
         sprite.width = line.width;
         sprite.height = line.height;
         line.applyToSprite?.(sprite);
+        if (alpha !== 1) sprite.alpha *= alpha;
       }
     }
     return;
@@ -109,18 +127,26 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
   const binding = ctx.skinBinding;
   if (binding?.drawsMeasureLines) {
     // The skin draws them: hand it one line per lane run, so double play's gap stays clear.
-    const runs = resolveMeasureLineRuns(ctx);
+    const runs = resolveMeasureLineRuns(ctx).map((run) => ({
+      ...run,
+      lane: [...ctx.play.laneX.values()].find((lane) => lane.x === run.x) ?? left,
+    }));
     for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
       const beat = beats[beatIndex]!;
       if (beat > maxBeat) {
         break;
       }
-      const y = lineY(beat);
-      if (y < top - 1 || y > drawBottom + 1) {
-        continue;
-      }
       for (const run of runs) {
-        binding.addMeasureLine({ side: run.side, x: run.x, w: run.w, y });
+        const lane = run.lane;
+        const y = resolveDrawY(
+          drawWindow,
+          lane.bottom - beatDistance(beat) * pixelsPerBeat * (lane.scrollScale ?? 1),
+          lane.bottom,
+        );
+        if (y < lane.top - 1 || y > resolveDrawBottom(drawWindow, lane.bottom) + 1) continue;
+        const alpha = alphaAt(beat);
+        if (alpha > 0)
+          binding.addMeasureLine({ side: run.side, x: run.x, w: run.w, y, ...(alpha !== 1 ? { alpha } : {}) });
       }
     }
     return;
@@ -128,19 +154,25 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
   // Fallback: simple white strip when the theme draws none, one per run of adjacent lanes so double play's gap stays
   // clear. One pooled `Graphics` carries every line — the accumulated rect-fill commands form one batched draw, no
   // per-line allocation.
-  const runs = resolveMeasureLineRuns(ctx);
+  const runs = resolveMeasureLineRuns(ctx).map((run) => ({
+    ...run,
+    lane: [...ctx.play.laneX.values()].find((lane) => lane.x === run.x) ?? left,
+  }));
   const graphic = ctx.noteLayerPool.acquireGraphics();
   for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
     const beat = beats[beatIndex]!;
     if (beat > maxBeat) {
       break;
     }
-    const y = lineY(beat);
-    if (y < top - 1 || y > drawBottom + 1) {
-      continue;
-    }
     for (const run of runs) {
-      graphic.rect(run.x, Math.round(y), run.w, 1).fill({ color: 0x9a8fd0, alpha: 0.28 });
+      const lane = run.lane;
+      const y = resolveDrawY(
+        drawWindow,
+        lane.bottom - beatDistance(beat) * pixelsPerBeat * (lane.scrollScale ?? 1),
+        lane.bottom,
+      );
+      if (y < lane.top - 1 || y > resolveDrawBottom(drawWindow, lane.bottom) + 1) continue;
+      graphic.rect(run.x, Math.round(y), run.w, 1).fill({ color: 0x9a8fd0, alpha: 0.28 * alphaAt(beat) });
     }
   }
 }

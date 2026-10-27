@@ -4,6 +4,7 @@ import type { AudioService } from '@be-music/player-browser/audio';
 import type { BrowserChartCollection, ChartFileHashes } from '@be-music/player-browser/collection';
 import {
   createPlayScene,
+  PlayOptionMismatchError,
   type PixiSceneHost,
   type PlayScene,
   type PlaySceneKit,
@@ -11,7 +12,7 @@ import {
   type SelectScene,
 } from '@be-music/player-browser/host';
 import type { CourseDefinition } from '@be-music/player-engine/course';
-import type { BeMusicReplay } from '@be-music/player-engine/replay';
+import type { BeMusicCourseReplay, BeMusicReplay } from '@be-music/player-engine/replay';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse, PlayResult } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { nextCourseStagePlay, type CourseStagePlay } from '../../course-flow.ts';
@@ -24,14 +25,23 @@ import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
 import type { BeatorajaPlayEntry } from '../../services/themes/beatoraja.ts';
 import { courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
-import type { DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { ResolvedPlayKit } from '../family-kits.ts';
 import { SceneRouter } from '../scene-router.ts';
 import type { NonstopPlay } from './nonstop.ts';
 import { PlayRoute, type LastPlay, type PlayRouteDeps } from './play.ts';
 
-vi.mock('@be-music/player-browser/host', () => ({ createPlayScene: vi.fn() }));
+vi.mock('@be-music/player-browser/host', () => ({
+  createPlayScene: vi.fn(),
+  PlayOptionMismatchError: class extends RangeError {
+    readonly options: readonly string[];
+    constructor(options: readonly string[]) {
+      super(options.join(', '));
+      this.options = options;
+    }
+  },
+}));
 vi.mock('../../recording-controller.ts', () => ({ startArmedRecording: vi.fn() }));
 vi.mock('../../hi-speed-storage.ts', () => ({ storeHiSpeed: vi.fn() }));
 
@@ -87,12 +97,14 @@ const kitOf = (family: Family): PlaySceneKit => ({ family }) as unknown as PlayS
 const REPLAY = { play: { mode: 'auto', autoScratch: false, gauge: 'GROOVE', tempo: 1.2 } } as unknown as BeMusicReplay;
 
 /** A promise settled from outside: a play's load. */
-function deferred(): { promise: Promise<void>; resolve: () => void } {
+function deferred(): { promise: Promise<void>; resolve: () => void; reject: (error: unknown) => void } {
   let resolve!: () => void;
-  const promise = new Promise<void>((res) => {
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<void>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 /** A play as `createPlayScene` makes it: the kit and options it was made with, and what it was told. */
@@ -105,6 +117,7 @@ interface FakePlay {
   readonly start: ReturnType<typeof vi.fn<() => void>>;
   readonly getTempo: () => number;
   readonly setHiSpeed: ReturnType<typeof vi.fn<(hiSpeed: number) => void>>;
+  readonly progress: ReturnType<typeof vi.fn<() => PlayResult | undefined>>;
   readonly waitForReplay: ReturnType<typeof vi.fn<() => Promise<BeMusicReplay | undefined>>>;
   readonly resolved: ResolvedPlayChart;
   readonly dispose: ReturnType<typeof vi.fn<(options?: { preserveAudioTail?: boolean }) => void>>;
@@ -112,9 +125,9 @@ interface FakePlay {
 
 /** The play route on a real scene router over a fake stage, with the select screen up and fake services. */
 async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlayEntry } = {}) {
-  const stage: (DemoScene | undefined)[] = [];
+  const stage: (PlayerScene | undefined)[] = [];
   const onInterrupt = vi.fn();
-  const router = new SceneRouter<DemoScene, PlayScene, SelectScene>({
+  const router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene) => {
         stage.push(scene);
@@ -143,6 +156,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       start: vi.fn(),
       getTempo: () => sceneOptions.settings.tempo ?? 1,
       setHiSpeed: vi.fn(),
+      progress: vi.fn(() => undefined),
       waitForReplay: vi.fn(async () => undefined),
       resolved: { chart: createEmptyJSON('bms'), draws: [] } as unknown as ResolvedPlayChart,
       dispose: vi.fn(),
@@ -157,15 +171,19 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
   const deps = {
     router,
     selectRoute: { lastSelectNavigation: undefined as BrowseSnapshot | undefined },
-    elements: { shell } as Pick<PlayerWebDemoElements, 'shell'>,
+    elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },
     records: {
+      lookupChartBestRecord: vi.fn<PlayRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
       resolveChartHashes: vi.fn<PlayRouteDeps['records']['resolveChartHashes']>(async () => HASHES),
       activePlayRecordKey: undefined as string | undefined,
       activeStageRecordKey: undefined as string | undefined,
+      recordActivePlay: vi.fn<PlayRouteDeps['records']['recordActivePlay']>(),
       recordActiveCourseStage: vi.fn<PlayRouteDeps['records']['recordActiveCourseStage']>(),
     },
+    leaderboard: { maybeSubmit: vi.fn<PlayRouteDeps['leaderboard']['maybeSubmit']>() },
     familyKits: {
+      selectSoundSet: vi.fn(() => ({})),
       resolvePlayKit: vi.fn<PlayRouteDeps['familyKits']['resolvePlayKit']>(async (): Promise<ResolvedPlayKit> => ({
         kit: kitOf(family),
         ...(options.beatorajaPlay !== undefined ? { beatorajaPlay: options.beatorajaPlay } : {}),
@@ -196,6 +214,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       autoScratch1P: false,
       autoScratch2P: false,
       replayView: { tempo: true, hiSpeed: true, covers: true, lift: true },
+      tempoEnabled: true,
       tempoPercent: 0,
       tempoPitchMode: 'pitch',
       tempoStretchAlgorithm: 'wsola',
@@ -204,6 +223,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       hiSpeed: 3,
       keyVolume: 100,
       bgmVolume: 100,
+      peakGain: false,
       compressor: true,
       compressorKey: true,
       compressorBGM: true,
@@ -231,6 +251,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
     lockReplayOptionsForPlay: vi.fn<PlayRouteDeps['lockReplayOptionsForPlay']>(),
     unlockReplayOptions: vi.fn<PlayRouteDeps['unlockReplayOptions']>(),
     showSelect: vi.fn<PlayRouteDeps['showSelect']>(async () => {}),
+    showPlayOptionMismatch: vi.fn<PlayRouteDeps['showPlayOptionMismatch']>(),
     setPlayOptions: vi.fn<PlayRouteDeps['setPlayOptions']>(),
   };
   const route = new PlayRoute({ ...deps, debugMenu: deps.debugMenu as unknown as DebugMenu });
@@ -271,6 +292,13 @@ async function afterAPlay(): Promise<Harness> {
 }
 
 describe('PlayRoute: what a play puts in force, and when', () => {
+  test('passes the selected chart best EX score to the play frame facts', async () => {
+    const h = await harness();
+    vi.mocked(h.deps.records.lookupChartBestRecord).mockReturnValue({ lamp: 'NORMAL', exScore: 42 });
+    const play = await playing(h, chartEntry('a'));
+    expect(play.options.scoreTargets).toEqual({ bestEXScore: 42 });
+  });
+
   test('a play loading behind a decide screen, or one backed out of, puts nothing in force', async () => {
     const h = await afterAPlay();
     const before = inForce(h);
@@ -517,6 +545,29 @@ describe('PlayRoute.playChart: a chart played at once', () => {
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
     expect(createPlayScene).not.toHaveBeenCalled();
   });
+  test('a chart the selected options do not fit names them, and goes back to select when dismissed', async () => {
+    const h = await harness();
+    const started = h.route.playChart(chartEntry('a'));
+    await vi.waitFor(() => expect(h.plays.at(-1)?.prepare).toHaveBeenCalled());
+    const play = h.plays.at(-1)!;
+    play.load.reject(new PlayOptionMismatchError(['Random 1P: CONVERGE'], undefined));
+    await started;
+    expect(play.start).not.toHaveBeenCalled();
+    expect(h.deps.setPlayStatus).toHaveBeenLastCalledWith('Cannot play a with Random 1P: CONVERGE');
+    expect(h.deps.showPlayOptionMismatch).toHaveBeenCalledWith(['Random 1P: CONVERGE'], expect.any(Function));
+    expect(h.deps.showSelect).not.toHaveBeenCalled();
+    h.deps.showPlayOptionMismatch.mock.calls[0]![1]();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+  });
+
+  test('a play that fails to load for another reason keeps its error', async () => {
+    const h = await harness();
+    const started = h.route.playChart(chartEntry('a'));
+    await vi.waitFor(() => expect(h.plays.at(-1)?.prepare).toHaveBeenCalled());
+    h.plays.at(-1)!.load.reject(new Error('decode failed'));
+    await expect(started).rejects.toThrow('decode failed');
+    expect(h.deps.showPlayOptionMismatch).not.toHaveBeenCalled();
+  });
 });
 
 describe('PlayRoute: where a play leads', () => {
@@ -586,6 +637,71 @@ describe('PlayRoute: where a play leads', () => {
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
   });
 
+  test('Escape saves a single play as a failed one, the notes it never reached in its BP, and sends it', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'));
+    const progress = {
+      ...resultOf(chartEntry('a')),
+      score: { total: 10, perfect: 3, great: 1, good: 0, bad: 1, poor: 1, emptyPoor: 2, exScore: 7 },
+      maxCombo: 4,
+      cleared: false,
+    } as PlayResult;
+    play.progress.mockReturnValue(progress);
+    const replay = { play: { mode: 'manual', aborted: true } } as unknown as BeMusicReplay;
+    play.waitForReplay.mockResolvedValueOnce(replay);
+    expect(h.deps.records.activePlayRecordKey).toBeDefined();
+    play.options.on.exit();
+    // BP: 1 BAD + 1 POOR + 2 empty POORs + the 4 notes never reached.
+    expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith({
+      lamp: 'FAILED',
+      exScore: 7,
+      maxCombo: 4,
+      missCount: 8,
+    });
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
+  });
+
+  test('Escape from a play at another tempo keeps no record but still sends it', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'));
+    play.progress.mockReturnValue(resultOf(chartEntry('a')));
+    const replay = { play: { mode: 'manual', aborted: true, tempo: 0.8 } } as unknown as BeMusicReplay;
+    play.waitForReplay.mockResolvedValueOnce(replay);
+    // A live tempo change drops the record key (`followLiveTempo`).
+    h.deps.records.activePlayRecordKey = undefined;
+    play.options.on.exit();
+    await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
+    expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+  });
+
+  test('Escape from a play that keeps no record (a replay) saves and sends nothing', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'), { replay: REPLAY });
+    play.progress.mockReturnValue(resultOf(chartEntry('a')));
+    play.waitForReplay.mockResolvedValue(REPLAY);
+    play.options.on.exit();
+    await settle();
+    expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+  });
+
+  test('Escape before a note is judged, or in practice, saves nothing', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'));
+    play.progress.mockReturnValue({
+      ...resultOf(chartEntry('a')),
+      score: { total: 10, perfect: 0, great: 0, good: 0, bad: 0, poor: 2, emptyPoor: 1, exScore: 0 },
+    } as PlayResult);
+    play.options.on.exit();
+    play.progress.mockReturnValue({ ...resultOf(chartEntry('a')), practice: true } as PlayResult);
+    play.options.on.exit();
+    await settle();
+    expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
+  });
+
   test('Escape gives a course up: the stage is recorded with its replay, and the course result shows', async () => {
     const h = await harness();
     const active = h.deps.courses.beginRun(course());
@@ -635,7 +751,69 @@ describe('PlayRoute: where a play leads', () => {
     const nonstop = nonstopPlay();
     const play = await started(h, nonstop.prepared.chart, { nonstop });
     play.options.on.restart();
-    expect(h.deps.nonstopRoute.startNonstopCourse).toHaveBeenCalledWith(nonstop.course);
+    expect(h.deps.nonstopRoute.startNonstopCourse).toHaveBeenCalledWith(nonstop.course, {});
+  });
+
+  test('F5 in a NONSTOP replay plays the recorded run again', async () => {
+    const h = await harness();
+    const courseLog = { format: 'be-music-course-replay' } as unknown as BeMusicCourseReplay;
+    const nonstop = { ...nonstopPlay(), replay: courseLog };
+    const play = await started(h, nonstop.prepared.chart, { nonstop });
+    play.options.on.restart();
+    expect(h.deps.nonstopRoute.startNonstopCourse).toHaveBeenCalledWith(nonstop.course, { replay: courseLog });
+  });
+});
+
+describe('PlayRoute: a course replay', () => {
+  /** A course replay of `course()` whose stages were played with `stages`. */
+  function courseReplay(stages: BeMusicReplay[]): BeMusicCourseReplay {
+    return {
+      format: 'be-music-course-replay',
+      version: 1,
+      course: { name: 'Dan', kind: 'grade', constraints: [], trophies: [] },
+      stages: stages.map((replay) => ({ played: true, replay })),
+    } as BeMusicCourseReplay;
+  }
+
+  test('Escape stops a course replay where it is: back to the select screen, with no course result', async () => {
+    const h = await harness();
+    const recorded = { play: { mode: 'manual' } } as unknown as BeMusicReplay;
+    const active = h.deps.courses.beginRun(course(), courseReplay([recorded, recorded]));
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)!, replay: recorded });
+    play.options.on.exit();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    expect(h.deps.courses.active).toBeUndefined();
+    expect(h.deps.courseRoute.showCourseResult).not.toHaveBeenCalled();
+  });
+
+  test('Escape stops a NONSTOP replay too, with no result', async () => {
+    const h = await harness();
+    const nonstop = { ...nonstopPlay(), replay: courseReplay([]) };
+    const play = await started(h, nonstop.prepared.chart, { nonstop });
+    play.options.on.exit();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    expect(h.deps.nonstopRoute.showNonstopCourseResult).not.toHaveBeenCalled();
+  });
+
+  test('the stage the recorded run gave up goes straight on to the course result, as the run did', async () => {
+    const h = await harness();
+    const givenUp = { play: { mode: 'manual', aborted: true } } as unknown as BeMusicReplay;
+    const active = h.deps.courses.beginRun(course(), courseReplay([givenUp]));
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)!, replay: givenUp });
+    play.options.on.finish({ ...resultOf(chartEntry('a')), replay: undefined, fromReplay: true }, undefined);
+    await vi.waitFor(() => expect(h.deps.courseRoute.continueCourse).toHaveBeenCalledOnce());
+    expect(active.run.finished).toBe(true);
+    expect(h.deps.results.showResult).not.toHaveBeenCalled();
+  });
+
+  test('a stage the recorded run went on after shows its result', async () => {
+    const h = await harness();
+    const recorded = { play: { mode: 'manual' } } as unknown as BeMusicReplay;
+    const active = h.deps.courses.beginRun(course(), courseReplay([recorded, recorded]));
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)!, replay: recorded });
+    play.options.on.finish({ ...resultOf(chartEntry('a')), replay: undefined, fromReplay: true }, undefined);
+    expect(h.deps.results.showResult).toHaveBeenCalledOnce();
+    expect(h.deps.courseRoute.continueCourse).not.toHaveBeenCalled();
   });
 });
 
@@ -684,3 +862,39 @@ describe('PlayRoute: the hi-speed and the tempo', () => {
     await settle();
   });
 });
+
+test('an interrupted practice stage keeps its live outcome without a replay', async () => {
+  const h = await harness();
+  const active = h.deps.courses.beginRun(course());
+  const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)! });
+  const outcome = {
+    ruleset: 'lr2',
+    judge: { pgreat: 1, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
+    fast: 0,
+    slow: 0,
+    exScore: 2,
+    noteCount: 10,
+    maxCombo: 1,
+    gauge: { type: 'GRADE', final: 90, cleared: true },
+    course: { combo: 1, maxCombo: 1 },
+  };
+  play.progress.mockReturnValue({ ...resultOf(chartEntry('a')), practice: true, stageOutcome: outcome });
+  play.options.on.exit();
+  await vi.waitFor(() => expect(h.deps.courseRoute.showCourseResult).toHaveBeenCalledOnce());
+  expect(active.run.practice).toBe(true);
+  expect(active.run.stagesPlayed).toBe(1);
+  expect(() => active.run.buildReplay()).toThrow('practice course');
+});
+
+test.each(['built-in', 'lr2', 'beatoraja'] as const)(
+  'passes the %s theme stop cue to the play scene',
+  async (family) => {
+    const h = await harness({ family });
+    const sound = { path: 'sound/playstop.wav' };
+    vi.mocked(h.deps.familyKits.selectSoundSet).mockReturnValue({ playStop: sound });
+    const play = await playing(h, chartEntry('a'));
+    expect(h.deps.familyKits.selectSoundSet).toHaveBeenCalledWith(family);
+    expect(play.options.sounds).toEqual({ playStop: sound });
+    play.load.resolve();
+  },
+);

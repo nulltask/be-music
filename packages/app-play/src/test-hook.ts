@@ -1,6 +1,6 @@
-// The demo's test hook: `window.__beMusicTest`, a read-only view of what the demo shows, for the end-to-end suite
+// The player's test hook: `window.__beMusicTest`, a read-only view of what the player shows, for the end-to-end suite
 // (`packages/app-play/e2e`, `docs/course-checklist.md`). It reads state the host already keeps and the facts of
-// each result screen and replay the host hands it; it never drives the demo. Files are loaded through the page's
+// each result screen and replay the host hands it; it never drives the player. Files are loaded through the page's
 // drop handler, as a person drops them.
 //
 // The shape is a contract: the scene router and host rewrite (docs/architecture.md, P5) keep every field meaning
@@ -45,6 +45,10 @@ export interface TestHookBar {
     playable: boolean;
     /** LR2's NEW COURSE bar, which starts the course maker. */
     newCourse: boolean;
+    /** LR2's RANDOM MIX bar, which draws a course of its folder's kind when started. */
+    randomMix: boolean;
+    /** A bar that draws new stages when started. */
+    random: boolean;
   };
   /** The best lamp kept for the chart or course, when there is one. */
   lamp?: string;
@@ -101,6 +105,9 @@ export interface TestHookStageResult {
 
 /** A result screen, as the host showed it. */
 export interface TestHookResult {
+  practice?: boolean;
+  /** The result of a replay played back (a dropped replay, a course replay's stage or its course result). */
+  fromReplay?: boolean;
   /** A single play, a course stage, a whole EXPERT / GRADE course, or a NONSTOP run. */
   run: 'single' | 'stage' | 'course' | 'nonstop';
   family: TestHookFamily;
@@ -253,6 +260,8 @@ export function describeBar(entry: LibraryEntry, record?: { lamp?: string; troph
         course.random !== undefined ? 0 : course.stages.filter((stage) => stage.chart === undefined).length,
       playable: course.playable,
       newCourse: course.newCourse === true,
+      randomMix: course.randomMix === true,
+      random: course.random !== undefined,
     },
     ...kept,
   };
@@ -269,6 +278,8 @@ export function resultFromData(
     run,
     family,
     title: data.chart.title,
+    ...(data.practice === true ? { practice: true } : {}),
+    ...(data.fromReplay === true ? { fromReplay: true } : {}),
     ...(data.lamp !== undefined ? { lamp: data.lamp } : {}),
     cleared: data.cleared,
     exScore: data.score.exScore,
@@ -283,7 +294,7 @@ export function resultFromData(
 export function resultFromCourseLog(
   courseLog: BeMusicCourseReplay,
   result: ReplayCourseResult,
-  options: { family: TestHookFamily; playSeconds?: number; jingle?: string },
+  options: { family: TestHookFamily; playSeconds?: number; jingle?: string; fromReplay?: boolean },
 ): TestHookResult {
   const stages = courseLog.stages.flatMap((entry): TestHookStageResult[] => {
     if (!entry.played) return [];
@@ -314,6 +325,7 @@ export function resultFromCourseLog(
     run: 'course',
     family: options.family,
     title: courseLog.course.name,
+    ...(options.fromReplay === true ? { fromReplay: true } : {}),
     lamp: result.lamp,
     cleared: result.gauge.cleared,
     exScore: result.exScore,

@@ -1,13 +1,20 @@
 {
   "name": "@be-music/service-web-theme",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Shared web styles and build metadata presentation for be-music services",
+  "description": "Shared Basecoat styles and build metadata presentation for be-music services",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
+    "prepare": "node --experimental-strip-types scripts/build-css.ts",
+    "build:css": "node --experimental-strip-types scripts/build-css.ts",
     "bench": "node scripts/bench.ts"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "basecoat-css": "^1.0.2",
+    "tailwindcss": "^4.3.3"
   }
 }

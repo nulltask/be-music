@@ -1,3 +1,4 @@
+import { createNodeAudioSession, loadNodeAudioSampleDurations } from '@be-music/player-node-audio';
 import { effect } from 'alien-signals';
 import { createAbortError } from '@be-music/shared-utils/core';
 import type { LogEntry, LogLevel } from '@be-music/shared-utils/log';
@@ -342,10 +343,14 @@ async function bootstrap(): Promise<void> {
       initData.mode === 'auto'
         ? await autoPlay(initData.json, {
             ...playOptions,
+            createAudioSession: createNodeAudioSession,
+            loadAudioSampleDurations: loadNodeAudioSampleDurations,
             auto: true,
           })
         : await manualPlay(initData.json, {
             ...playOptions,
+            createAudioSession: createNodeAudioSession,
+            loadAudioSampleDurations: loadNodeAudioSampleDurations,
             autoScratch: Boolean(initData.autoScratch),
           });
     postWorkerMessage({ kind: 'result', summary });

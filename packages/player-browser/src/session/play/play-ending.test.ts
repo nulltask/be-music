@@ -26,6 +26,37 @@ describe('resolvePlayEnding', () => {
     expect(resolvePlayEnding(input({}))).toEqual({ failed: false, leadOutMs: 4000 });
   });
 
+  test('uses the family music-end target and a wall-clock finish margin', () => {
+    expect(resolvePlayEnding(input({ musicEndDelayMs: 5000, finishMarginMs: 300, tempo: 2 }))).toEqual({
+      failed: false,
+      musicEndAtSeconds: 11,
+      finishMarginMs: 300,
+      leadOutMs: 2800,
+    });
+    expect(resolvePlayEnding(input({ musicEndDelayMs: 5000, chartEndSeconds: 9, finishMarginMs: 100 }))).toEqual({
+      failed: false,
+      musicEndAtSeconds: 14,
+      finishMarginMs: 100,
+      leadOutMs: 8100,
+    });
+    expect(resolvePlayEnding(input({ musicEndDelayMs: 5000, currentSeconds: 20 })).leadOutMs).toBe(0);
+  });
+
+  test('a failed play never emits a music-end stage or waits for its margin', () => {
+    expect(
+      resolvePlayEnding(
+        input({ summary: failedMidPlay, currentSeconds: 3, musicEndDelayMs: 5000, finishMarginMs: 1000 }),
+      ),
+    ).toEqual({ failed: true, leadOutMs: 0 });
+  });
+
+  test('includes a long-note tail when calculating the family music-end target', () => {
+    expect(
+      resolvePlayEnding(input({ notes: [{ beat: 4, endBeat: 12, seconds: 2 }], musicEndDelayMs: 5000 }))
+        .musicEndAtSeconds,
+    ).toBe(11);
+  });
+
   test('takes the lead-out in chart time: at another tempo it is 1 / tempo as long', () => {
     expect(resolvePlayEnding(input({ tempo: 2 })).leadOutMs).toBe(2000);
   });

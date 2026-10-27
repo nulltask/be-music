@@ -1,0 +1,488 @@
+import { describe, expect, test } from 'vite-plus/test';
+import {
+  randomizeHRandomNotes,
+  randomizeAllScratchNotes,
+  randomizePMSConvergeNotes,
+  randomizePMSPlayableNotes,
+  clampHRandomThresholdBPM,
+  randomizeSpiralNotes,
+  randomizeSRandomNotes,
+  type SRandomNote,
+} from './lane-random.ts';
+import { resolveLaneOptionChannels } from './core/lane-layout.ts';
+
+const zero = () => 0;
+function random(seed: number): () => number {
+  let state = seed;
+  return () => (state = (Math.imul(state, 1664525) + 1013904223) >>> 0) / 0x1_0000_0000;
+}
+
+describe('randomizeSRandomNotes', () => {
+  test.each(['lr2', 'beatoraja', '____'] as const)(
+    '%s reserves long-note destinations through the tail row',
+    (ruleset) => {
+      const notes: SRandomNote[] = [
+        { channel: '11', timeMs: 0, endTimeMs: 1000 },
+        { channel: '12', timeMs: 0 },
+        { channel: '12', timeMs: 300 },
+        { channel: '12', timeMs: 1000 },
+        { channel: '12', timeMs: 1000.001 },
+      ];
+      const original = structuredClone(notes);
+      const channels = randomizeSRandomNotes(notes, ['11', '12'], { ruleset, random: zero });
+      expect(channels).toEqual(['11', '12', '12', '12', '11']);
+      expect(notes).toEqual(original);
+    },
+  );
+
+  test.each([20, 40, 40.999, 41])('beatoraja uses a strict 40-integer-ms threshold (%s ms)', (timeMs) => {
+    const notes = [
+      { channel: '11', timeMs: 0 },
+      { channel: '11', timeMs },
+    ];
+    expect(randomizeSRandomNotes(notes, ['11', '12'], { ruleset: 'lr2', random: zero })).toEqual(['11', '11']);
+    expect(randomizeSRandomNotes(notes, ['11', '12'], { ruleset: 'beatoraja', random: zero })).toEqual([
+      '11',
+      timeMs >= 41 ? '11' : '12',
+    ]);
+  });
+
+  test('beatoraja falls back to the oldest free lanes, with random tie-breaking', () => {
+    const notes = [
+      { channel: '11', timeMs: 0 },
+      { channel: '12', timeMs: 0 },
+      { channel: '11', timeMs: 10 },
+      { channel: '11', timeMs: 20 },
+      { channel: '11', timeMs: 30 },
+    ];
+    expect(randomizeSRandomNotes(notes, ['11', '12'], { ruleset: 'beatoraja', random: zero })).toEqual([
+      '11',
+      '12',
+      '11',
+      '12',
+      '11',
+    ]);
+  });
+
+  test('mines and invisible notes follow their row map without updating jack times', () => {
+    const notes: SRandomNote[] = [
+      { channel: '11', timeMs: 0, kind: 'mine' },
+      { channel: '11', timeMs: 0, kind: 'invisible' },
+      { channel: '11', timeMs: 10 },
+    ];
+    expect(randomizeSRandomNotes(notes, ['11', '12'], { ruleset: 'beatoraja', random: zero })).toEqual([
+      '11',
+      '11',
+      '11',
+    ]);
+    const held: SRandomNote[] = [
+      { channel: '11', timeMs: 0, endTimeMs: 1000 },
+      { channel: '11', timeMs: 10, kind: 'mine' },
+      { channel: '12', timeMs: 10, kind: 'invisible' },
+      { channel: '13', timeMs: 10 },
+    ];
+    expect(randomizeSRandomNotes(held, ['11', '12', '13'], { ruleset: 'beatoraja', random: zero })).toEqual([
+      '11',
+      '11',
+      '13',
+      '12',
+    ]);
+  });
+
+  test.each(['5', '7', '9', '10', '14', '24', '48'] as const)(
+    'preserves chords, LN occupancy and boundaries in %s-key mode',
+    (variant) => {
+      for (const side of ['1P', '2P'] as const) {
+        const lanes = resolveLaneOptionChannels(side, variant);
+        if (lanes.length < 2) continue;
+        const notes: SRandomNote[] = [
+          { channel: lanes[0]!, timeMs: 0, endTimeMs: 1000 },
+          ...[0, 10, 40, 200, 1000].flatMap((timeMs) => lanes.slice(1).map((channel) => ({ channel, timeMs }))),
+          { channel: side === '1P' ? '21' : '11', timeMs: 50 },
+          {
+            channel:
+              variant === '24' || variant === '48' || variant === '9'
+                ? side === '1P'
+                  ? '1P'
+                  : '2P'
+                : side === '1P'
+                  ? '16'
+                  : '26',
+            timeMs: 50,
+          },
+        ];
+        for (const ruleset of ['lr2', 'beatoraja'] as const) {
+          for (let seed = 1; seed <= 20; seed += 1) {
+            const channels = randomizeSRandomNotes(notes, lanes, { ruleset, random: random(seed) });
+            expect(channels).toEqual(randomizeSRandomNotes(notes, lanes, { ruleset, random: random(seed) }));
+            for (const timeMs of [0, 10, 40, 200, 1000]) {
+              const row = channels.filter((_, index) => notes[index]!.timeMs === timeMs);
+              expect(new Set(row).size).toBe(row.length);
+              expect(row.every((channel) => lanes.includes(channel))).toBe(true);
+              if (timeMs > 0) expect(row).not.toContain(channels[0]);
+            }
+            expect(channels.slice(-2)).toEqual(notes.slice(-2).map((note) => note.channel));
+          }
+        }
+      }
+    },
+  );
+
+  test('LR2 also keeps mines out of held destinations, while beatoraja preserves their active source map', () => {
+    const notes: SRandomNote[] = [
+      { channel: '11', timeMs: 0, endTimeMs: 1000 },
+      { channel: '11', timeMs: 10, kind: 'mine' },
+    ];
+    expect(randomizeSRandomNotes(notes, ['11', '12'], { ruleset: 'lr2', random: zero })).toEqual(['11', '12']);
+    expect(randomizeSRandomNotes(notes, ['11', '12'], { ruleset: 'beatoraja', random: zero })).toEqual(['11', '11']);
+  });
+
+  test('an impossible LR2 row fails instead of retrying forever', () => {
+    expect(() =>
+      randomizeSRandomNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '11', timeMs: 10 },
+        ],
+        ['11'],
+        { ruleset: 'lr2', random: zero },
+      ),
+    ).toThrow(/available lanes/);
+  });
+
+  test('PMS-STD treats its encoded right-bank keys as part of the same domain', () => {
+    const lanes = resolveLaneOptionChannels('1P', '9', [{ channel: '22' }]);
+    const notes = [
+      { channel: '11', timeMs: 0, endTimeMs: 100 },
+      { channel: '22', timeMs: 10 },
+    ];
+    expect(randomizeSRandomNotes(notes, lanes, { ruleset: 'lr2', random: zero })).toEqual(['11', '12']);
+    expect(
+      randomizeSRandomNotes(notes, [], {
+        ruleset: 'lr2',
+        random: () => {
+          throw new Error('unused');
+        },
+      }),
+    ).toEqual(['11', '22']);
+  });
+
+  test('processes rows chronologically and keeps output aligned to unsorted input', () => {
+    const notes = [
+      { channel: '11', timeMs: 10 },
+      { channel: '11', timeMs: 0 },
+    ];
+    expect(randomizeSRandomNotes(notes, ['11', '12'], { ruleset: 'beatoraja', random: zero })).toEqual(['12', '11']);
+  });
+
+  test.each([-1, 1, Number.NaN])('rejects an invalid random draw %s', (draw) => {
+    expect(() =>
+      randomizeSRandomNotes([{ channel: '11', timeMs: 0 }], ['11', '12'], { ruleset: 'lr2', random: () => draw }),
+    ).toThrow(RangeError);
+  });
+});
+
+describe('randomizeSpiralNotes', () => {
+  test('advances once per occupied row, including scratch, other side, mines and hidden-only rows', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0 },
+      { channel: 'b', timeMs: 0 },
+      { channel: '16', timeMs: 1 },
+      { channel: '21', timeMs: 2 },
+      { channel: 'a', timeMs: 3, kind: 'mine' },
+      { channel: 'a', timeMs: 4, kind: 'invisible' },
+      { channel: 'a', timeMs: 5 },
+    ];
+    const original = structuredClone(notes);
+    expect(randomizeSpiralNotes(notes, ['a', 'b', 'c'], zero)).toEqual(['b', 'c', '16', '21', 'b', 'c', 'a']);
+    expect(notes).toEqual(original);
+  });
+
+  test('freezes until every overlapping LN ends, including exact tail-row chords', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, endTimeMs: 20 },
+      { channel: 'b', timeMs: 5, endTimeMs: 30 },
+      { channel: 'c', timeMs: 20 },
+      { channel: 'a', timeMs: 25 },
+      { channel: 'a', timeMs: 30 },
+      { channel: 'a', timeMs: 31 },
+    ];
+    expect(randomizeSpiralNotes(notes, ['a', 'b', 'c'], zero)).toEqual(['b', 'c', 'a', 'b', 'b', 'c']);
+  });
+
+  test('visits an outside-domain LN tail even when no head occurs on that row', () => {
+    expect(
+      randomizeSpiralNotes(
+        [
+          { channel: '16', timeMs: 0, endTimeMs: 1 },
+          { channel: 'a', timeMs: 2 },
+        ],
+        ['a', 'b', 'c'],
+        zero,
+      ),
+    ).toEqual(['16', 'a']);
+  });
+
+  test('chooses each nonzero increment once and sorts rows without reordering output', () => {
+    const notes = [
+      { channel: 'a', timeMs: 2 },
+      { channel: 'a', timeMs: 0 },
+      { channel: 'a', timeMs: 1 },
+    ];
+    expect(randomizeSpiralNotes(notes, ['a', 'b', 'c', 'd'], () => 0.5)).toEqual(['c', 'c', 'a']);
+    expect(randomizeSpiralNotes(notes, ['a', 'b', 'c', 'd'], () => 0.99)).toEqual(['b', 'd', 'c']);
+  });
+
+  test('handles empty or single-lane domains without drawing, and rejects invalid randomness', () => {
+    const notes = [{ channel: 'a', timeMs: 0 }];
+    const fail = () => {
+      throw new Error('draw');
+    };
+    expect(randomizeSpiralNotes(notes, [], fail)).toEqual(['a']);
+    expect(randomizeSpiralNotes(notes, ['a'], fail)).toEqual(['a']);
+    expect(() => randomizeSpiralNotes(notes, ['a', 'b'], () => 1)).toThrow(RangeError);
+  });
+});
+
+describe('randomizeHRandomNotes', () => {
+  test.each([125, 125.999, 126])('uses the strict 125-integer-ms threshold by default (%s)', (timeMs) => {
+    expect(
+      randomizeHRandomNotes(
+        [
+          { channel: 'a', timeMs: 0 },
+          { channel: 'a', timeMs },
+        ],
+        ['a', 'b'],
+        { random: zero },
+      ),
+    ).toEqual(['a', timeMs >= 126 ? 'a' : 'b']);
+  });
+  test.each([50, 50.999, 51])('the configured BPM changes the threshold (%s)', (timeMs) => {
+    expect(
+      randomizeHRandomNotes(
+        [
+          { channel: 'a', timeMs: 0 },
+          { channel: 'a', timeMs },
+        ],
+        ['a', 'b'],
+        { random: zero, thresholdBPM: 300 },
+      ),
+    ).toEqual(['a', timeMs >= 51 ? 'a' : 'b']);
+  });
+  test('falls back to the oldest free lane and reserves holds through their tail', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, endTimeMs: 300 },
+      { channel: 'b', timeMs: 1 },
+      { channel: 'b', timeMs: 2 },
+      { channel: 'b', timeMs: 300 },
+      { channel: 'b', timeMs: 301 },
+    ];
+    const original = structuredClone(notes);
+    expect(randomizeHRandomNotes(notes, ['a', 'b', 'c'], { random: zero })).toEqual(['a', 'b', 'c', 'b', 'c']);
+    expect(notes).toEqual(original);
+  });
+  test('mine and hidden rows consume permutations without updating scoring timestamps', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, kind: 'mine' },
+      { channel: 'a', timeMs: 1, kind: 'invisible' },
+      { channel: '16', timeMs: 2, endTimeMs: 3 },
+      { channel: 'a', timeMs: 4 },
+    ];
+    let draws = 0;
+    expect(
+      randomizeHRandomNotes(notes, ['a', 'b'], {
+        random: () => {
+          draws += 1;
+          return 0;
+        },
+      }),
+    ).toEqual(['a', 'a', '16', 'a']);
+    expect(draws).toBe(10); // five timelines, including the outside-domain tail
+  });
+});
+
+test('H-RANDOM threshold BPM follows the versioned PlayerConfig range and default', () => {
+  expect(clampHRandomThresholdBPM(Number.NaN)).toBe(120);
+  expect(clampHRandomThresholdBPM(0)).toBe(1);
+  expect(clampHRandomThresholdBPM(1001)).toBe(1000);
+  expect(clampHRandomThresholdBPM(300.9)).toBe(300);
+});
+
+describe('randomizeAllScratchNotes', () => {
+  const lanes = ['a', 'b', 's'];
+  test.each([40, 40.999, 41])('scratch priority uses a strict 40-integer-ms interval (%s)', (timeMs) => {
+    expect(
+      randomizeAllScratchNotes(
+        [
+          { channel: 'a', timeMs: 0 },
+          { channel: 'a', timeMs },
+        ],
+        lanes,
+        { scratchLanes: ['s'], random: zero },
+      ),
+    ).toEqual(['s', timeMs >= 41 ? 's' : 'a']);
+  });
+  test.each(['1P', '2P'] as const)('DP %s fallback picks the outermost eligible key', (side) => {
+    const notes = [
+      { channel: 'a', timeMs: 0 },
+      { channel: 'b', timeMs: 0 },
+    ];
+    expect(
+      randomizeAllScratchNotes(notes, lanes, { scratchLanes: ['s'], random: zero, doublePlay: true, side }),
+    ).toEqual(['s', side === '1P' ? 'a' : 'b']);
+  });
+  test('24-key alternates wheel directions and freezes each held destination through its tail', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, endTimeMs: 10 },
+      { channel: 'b', timeMs: 1, endTimeMs: 10 },
+      { channel: 'c', timeMs: 2 },
+      { channel: 'c', timeMs: 10 },
+      { channel: 'c', timeMs: 41 },
+    ];
+    expect(
+      randomizeAllScratchNotes(notes, ['a', 'b', 'c', 'u', 'd'], { scratchLanes: ['u', 'd'], random: zero }),
+    ).toEqual(['u', 'd', 'a', 'b', 'u']);
+  });
+  test('mines and hidden notes share permutations without being chosen for scratch priority', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, kind: 'mine' },
+      { channel: 'b', timeMs: 0 },
+      { channel: 'b', timeMs: 0, kind: 'invisible' },
+      { channel: '21', timeMs: 0 },
+    ];
+    const original = structuredClone(notes);
+    expect(randomizeAllScratchNotes(notes, lanes, { scratchLanes: ['s'], random: zero })).toEqual([
+      'a',
+      's',
+      's',
+      '21',
+    ]);
+    expect(notes).toEqual(original);
+  });
+  test('rejects a missing or foreign scratch domain', () => {
+    expect(() => randomizeAllScratchNotes([], lanes, { scratchLanes: [], random: zero })).toThrow(RangeError);
+    expect(() => randomizeAllScratchNotes([], lanes, { scratchLanes: ['x'], random: zero })).toThrow(RangeError);
+  });
+});
+
+describe('randomizePMSConvergeNotes', () => {
+  test('prefers the longest recent eligible jack streak, resetting only after twice the threshold', () => {
+    const notes = [0, 126, 252, 502, 753].map((timeMs) => ({ channel: 'a', timeMs }));
+    let draws = 0;
+    expect(randomizePMSConvergeNotes(notes, ['a', 'b', 'c'], { random: () => (draws++ === 0 ? 0.5 : 0) })).toEqual([
+      'b',
+      'b',
+      'b',
+      'b',
+      'a',
+    ]);
+  });
+  test('a longer streak never overrides the strict jack threshold', () => {
+    const notes = [0, 125, 126].map((timeMs) => ({ channel: 'a', timeMs }));
+    let draws = 0;
+    expect(randomizePMSConvergeNotes(notes, ['a', 'b', 'c'], { random: () => (draws++ === 0 ? 0.5 : 0) })).toEqual([
+      'b',
+      'a',
+      'b',
+    ]);
+  });
+  test('holds reserve source and destination through their tail and non-scoring companions share placement', () => {
+    const notes: SRandomNote[] = [
+      { channel: 'a', timeMs: 0, endTimeMs: 300 },
+      { channel: 'b', timeMs: 1 },
+      { channel: 'b', timeMs: 300 },
+      { channel: 'b', timeMs: 301, kind: 'mine' },
+      { channel: 'b', timeMs: 301, kind: 'invisible' },
+    ];
+    const original = structuredClone(notes);
+    const result = randomizePMSConvergeNotes(notes, ['a', 'b', 'c'], { random: zero });
+    expect(result[0]).toBe('a');
+    expect(result[1]).not.toBe('a');
+    expect(result[2]).not.toBe('a');
+    expect(result[3]).toBe(result[4]);
+    expect(notes).toEqual(original);
+  });
+});
+
+describe('randomizePMSPlayableNotes', () => {
+  const lanes = Array.from({ length: 9 }, (_, index) => `key${index}`);
+  const allowed = [
+    [0, 1, 2, 3, 4, 5],
+    [0, 1, 2, 4, 5, 6],
+    [0, 1, 2, 5, 6, 7],
+    [0, 1, 2, 6, 7, 8],
+    [1, 2, 3, 4, 5, 6],
+    [1, 2, 3, 5, 6, 7],
+    [1, 2, 3, 6, 7, 8],
+    [2, 3, 4, 5, 6, 7],
+    [2, 3, 4, 6, 7, 8],
+    [3, 4, 5, 6, 7, 8],
+  ];
+  test.each([0, 0.5, 0.99])('six-key chords use one of the source playable combinations (%s)', (draw) => {
+    const notes = lanes.slice(0, 6).map((channel) => ({ channel, timeMs: 0 }));
+    const result = randomizePMSPlayableNotes(notes, lanes, { random: () => draw });
+    const placed = result.map((channel) => lanes.indexOf(channel)).sort((a, b) => a - b);
+    expect(allowed).toContainEqual(placed);
+  });
+  test('holds remain reserved through their exact tail, and mine/hidden companions share mapping', () => {
+    const notes: SRandomNote[] = [
+      { channel: lanes[0]!, timeMs: 0, endTimeMs: 300 },
+      { channel: lanes[1]!, timeMs: 150 },
+      { channel: lanes[2]!, timeMs: 150 },
+      { channel: lanes[1]!, timeMs: 300 },
+      { channel: lanes[1]!, timeMs: 301, kind: 'mine' },
+      { channel: lanes[1]!, timeMs: 301, kind: 'invisible' },
+    ];
+    const original = structuredClone(notes);
+    const result = randomizePMSPlayableNotes(notes, lanes, { random: zero });
+    expect(result[1]).not.toBe(result[0]);
+    expect(result[2]).not.toBe(result[0]);
+    expect(result[3]).not.toBe(result[0]);
+    expect(result[4]).toBe(result[5]);
+    expect(notes).toEqual(original);
+  });
+  test('reports the pinned source empty-candidate failure explicitly', () => {
+    const notes = [0, 1].flatMap((timeMs) => lanes.slice(0, 6).map((channel) => ({ channel, timeMs })));
+    expect(() => randomizePMSPlayableNotes(notes, lanes, { random: zero })).toThrow(/upstream nextInt\(0\)/);
+  });
+  test('rejects a non-nine-key domain', () => {
+    expect(() => randomizePMSPlayableNotes([], lanes.slice(0, 5), { random: zero })).toThrow(RangeError);
+  });
+});
+
+test('ordinary beatoraja PMS S-RANDOM uses the source no-threshold modifier', () => {
+  const notes = [
+    { channel: 'a', timeMs: 0 },
+    { channel: 'a', timeMs: 1 },
+  ];
+  expect(randomizeSRandomNotes(notes, ['a', 'b'], { ruleset: 'beatoraja', random: zero, mode: 'pms' })).toEqual([
+    'a',
+    'a',
+  ]);
+  expect(randomizeSRandomNotes(notes, ['a', 'b'], { ruleset: 'beatoraja', random: zero })).toEqual(['a', 'b']);
+});
+
+test('beatoraja S-RANDOM visits outside-domain and LN-tail-only timelines like NoteShuffleModifier', () => {
+  let draws = 0;
+  const notes = [
+    { channel: '16', timeMs: 0, endTimeMs: 1 },
+    { channel: 'a', timeMs: 2 },
+  ];
+  const result = randomizeSRandomNotes(notes, ['a', 'b'], {
+    ruleset: 'beatoraja',
+    random: () => {
+      draws += 1;
+      return 0;
+    },
+  });
+  expect(result).toEqual(['16', 'a']);
+  expect(draws).toBe(6);
+});
+
+test('beatoraja restores LN source and destination lanes at the end of the source lists', () => {
+  const notes = [
+    { channel: 'a', timeMs: 0, endTimeMs: 100 },
+    { channel: 'b', timeMs: 150 },
+  ];
+  expect(randomizeSRandomNotes(notes, ['a', 'b'], { ruleset: 'beatoraja', random: zero })).toEqual(['a', 'b']);
+});

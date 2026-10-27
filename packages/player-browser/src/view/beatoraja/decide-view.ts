@@ -9,6 +9,7 @@
  * takes keys only.
  */
 
+import { resolveBeatorajaOptionRef } from './option-refs.ts';
 import { buildBaseOpSet, type BeatorajaSkin } from '@be-music/skin-beatoraja';
 import {
   resolveBeatorajaDecideGraphValue,
@@ -120,6 +121,9 @@ export class BeatorajaDecideView implements DecideView {
       new BeatorajaPlaySkinView({
         skin,
         textures,
+        resolveRefValue: (ref) =>
+          // beatoraja's decide screen shows the player's LN MODE, not the chart's.
+          resolveBeatorajaOptionRef(ref, this.frame !== undefined ? { playOptions: this.frame.playOptions } : {}) ?? 0,
         resolveTextContent: (ref) =>
           resolveBeatorajaChartText(ref, {
             ...(this.frame !== undefined ? { chart: this.frame.chart } : {}),

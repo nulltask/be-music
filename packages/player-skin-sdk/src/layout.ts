@@ -76,7 +76,7 @@ export interface LaneRun {
 }
 
 /**
- * Groups lanes that touch into runs, left to right — one run in single play, one per side in IIDX double play, where
+ * Groups lanes that touch into runs, left to right — one run in single play, one per side in That-Which-Must-Not-Be-Named double play, where
  * the 1P and 2P banks stand apart. Draw anything that spans the lanes (the judgement line, a frame) once per run so
  * it never crosses the gap between the sides.
  */

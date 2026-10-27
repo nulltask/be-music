@@ -50,9 +50,16 @@ export interface PixiScene {
    * back to capturing the entire stage at its visible (window) size.
    */
   getStageInfo?(): { container: Container; width: number; height: number };
+  /**
+   * `false` while the scene draws nothing on the Pixi canvas (its screens are all DOM). The canvas is in the page only
+   * while the active scene draws on it. Absent means `true`.
+   */
+  readonly drawsOnCanvas?: boolean;
 }
 
 export interface PixiSceneHostMountOptions {
+  /** Native skin screens mount here; defaults to the Canvas container. */
+  domContainer?: HTMLElement;
   /**
    * Optional override for the underlying `Application.init` options. The host fills in opinionated defaults (no
    * antialias, nearest sampling, devicePixelRatio resolution, transparent BG) that match the LR2 pixel-art aesthetic;
@@ -82,6 +89,41 @@ export interface PixiSceneHostMountOptions {
 export class PixiSceneHost {
   /** The shared `Application`. Scenes read `host.app` for the ticker, screen size, canvas, etc. */
   public readonly app: Application = new Application();
+  private domLayer: HTMLElement | undefined;
+  private domParent: HTMLElement | undefined;
+  private previousPosition: string | undefined;
+  /** Where the canvas goes back while it is out of the page (see {@link PixiScene.drawsOnCanvas}). */
+  private canvasSlot: { parent: HTMLElement; next: Node | null } | undefined;
+  private canvasContainer: HTMLElement | undefined;
+  /** Resizes the canvas when the container changes size without a window `resize`. */
+  private containerObserver: ResizeObserver | undefined;
+
+  /**
+   * The element the host was mounted in. The canvas is in it only while the active scene draws on it, so listen here
+   * for input meant for the whole stage.
+   */
+  public get container(): HTMLElement {
+    if (!this.canvasContainer) throw new Error('Mount the scene host before reading its container');
+    return this.canvasContainer;
+  }
+
+  /** The host-owned native layer. DOM screens are siblings of the Canvas, outside the Pixi scene graph. */
+  public get domRoot(): HTMLElement {
+    if (!this.domParent) throw new Error('Mount the scene host before attaching a DOM skin');
+    if (!this.domLayer) {
+      const parent = this.domParent;
+      if (parent.ownerDocument.defaultView?.getComputedStyle(parent).position === 'static') {
+        this.previousPosition = parent.style.position;
+        parent.style.position = 'relative';
+      }
+      this.domLayer = parent.ownerDocument.createElement('div');
+      this.domLayer.setAttribute('data-be-music-dom', '');
+      Object.assign(this.domLayer.style, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '1' });
+      parent.append(this.domLayer);
+    }
+    return this.domLayer;
+  }
+
   /** The currently-active scene, or `undefined` between transitions. */
   private current: PixiScene | undefined;
   /**
@@ -178,8 +220,19 @@ export class PixiSceneHost {
     // path on some browsers. `pointer-events` is intentionally left at `auto` so Pixi's hit-testing
     // (song-select buttons, debug menu, result-screen actions) keeps working.
     this.app.canvas.style.contain = 'content';
+    // `resizeTo` follows only the window's `resize` event. The container also changes size on its own (the page's
+    // layout settles after the first chart is loaded, a side panel opens), and a canvas left at its old size draws the
+    // skin into part of the stage and picks the wrong stage orientation.
+    const View = container.ownerDocument?.defaultView;
+    if (View?.ResizeObserver) {
+      this.containerObserver = new View.ResizeObserver(() => this.app.queueResize());
+      this.containerObserver.observe(container);
+    }
     this.app.stage.label = 'host/stage';
-    container.appendChild(this.app.canvas);
+    // The canvas goes in once a scene that draws on it becomes active (`placeCanvas`).
+    this.canvasContainer = container;
+    this.canvasSlot = { parent: container, next: null };
+    this.domParent = options?.domContainer ?? container;
   }
 
   /**
@@ -231,6 +284,7 @@ export class PixiSceneHost {
           this.app.stage.addChild(scene.root);
         }
       }
+      if (!this.disposed) this.placeCanvas(scene !== undefined && scene.drawsOnCanvas !== false);
     })();
     this.transitionLock = next.catch(() => undefined);
     return next;
@@ -247,6 +301,32 @@ export class PixiSceneHost {
     return () => {
       ticker.remove(callback);
     };
+  }
+
+  /**
+   * Puts the canvas in the page when `placed`, or takes it out. A play calls this when it swaps a DOM family for a
+   * canvas one, or the other way, without changing scenes.
+   */
+  public syncCanvas(placed: boolean): void {
+    this.placeCanvas(placed);
+  }
+
+  /** Puts the canvas in the page, or takes it out while the active scene draws only on DOM. */
+  private placeCanvas(placed: boolean): void {
+    // Before `mount` there is no canvas yet.
+    if (!this.domParent) return;
+    const canvas = this.app.canvas;
+    if (placed) {
+      const slot = this.canvasSlot;
+      if (!slot) return;
+      this.canvasSlot = undefined;
+      slot.parent.insertBefore(canvas, slot.next?.parentNode === slot.parent ? slot.next : null);
+      return;
+    }
+    const parent = canvas.parentElement;
+    if (this.canvasSlot || !parent) return;
+    this.canvasSlot = { parent, next: canvas.nextSibling };
+    canvas.remove();
   }
 
   /** Called by the active scene with the orientation of the stage it draws on (see {@link getStageOrientation}). */
@@ -299,6 +379,14 @@ export class PixiSceneHost {
       }
       this.current = undefined;
     }
+    this.containerObserver?.disconnect();
+    this.containerObserver = undefined;
+    this.domLayer?.remove();
+    this.domLayer = undefined;
+    if (this.domParent && this.previousPosition !== undefined && this.domParent.style.position === 'relative') {
+      this.domParent.style.position = this.previousPosition;
+    }
+    this.domParent = undefined;
     try {
       // With only ONE Application owned by the process, releasing the module-shared `batchPool` here is safe — no other
       // live Application can be tripped up by the cleared pool. (See the class doc-block above for the

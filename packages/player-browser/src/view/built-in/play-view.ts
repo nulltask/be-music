@@ -1,3 +1,5 @@
+import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
+import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
 /**
  * The built-in family's play screen: a be-music skin's chrome around the shared playfield (`view/shared/playfield`),
  * letterboxed into the window. It draws the play session's frames; its skin answers the shared playfield through a
@@ -6,7 +8,17 @@
  * touch lanes and sends them as `lane` intents.
  */
 
-import { resolveStageOrientation, type GameplayLayoutMode } from '@be-music/player-skin-sdk';
+import type {
+  BeMusicDOMGameplayFrame,
+  BeMusicDOMGameplayActions,
+  BeMusicDOMGameplayScreen,
+} from '@be-music/player-skin-sdk';
+import { SkinDOMMount } from '../../skin/be-music/dom-mount.ts';
+import {
+  resolveBeMusicSkinSettings,
+  resolveStageOrientation,
+  type GameplayLayoutMode,
+} from '@be-music/player-skin-sdk';
 import type { Application, Texture } from 'pixi.js';
 import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
@@ -17,7 +29,7 @@ import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { ChartImageCache } from '../../skin/be-music/chart-images.ts';
 import type { BeMusicStage } from '../../skin/be-music/types.ts';
-import { PHANTOM_BOMB_DURATION_MS } from '../../skins/phantom/playfield.ts';
+import { DEFAULT_BOMB_DURATION_MS } from '../shared/playfield/default-playfield.ts';
 import { build, render, type PlayFrameContext } from '../shared/play-frame.ts';
 import { PlayLayers } from '../shared/play-layers.ts';
 import type { PlayChrome, PlayfieldRuntime } from '../shared/playfield/context.ts';
@@ -28,8 +40,11 @@ import {
   collectBGATargets,
   LEGACY_STAGE_SIZE,
   renderBuiltInChrome,
+  resolveBeMusicLayout,
+  resolveSkinlessGameplayChromeRuntime,
   type BGATargetsContext,
   type BuiltInChromeContext,
+  type SkinlessGameplayChromeRuntime,
 } from './play-chrome.ts';
 
 const log = logger('gameplay');
@@ -41,6 +56,11 @@ const NOTE_OVERSCAN = 48;
  * A be-music skin's timing on the play screen: no load or play-start offsets of its own (the play's fallback intro
  * applies), and a 450 ms fade back to black, with the audio, before the result or select screen takes over.
  */
+/**
+ * The built-in skins that draw each side's LIFT and take the lane cover keys: the ones brought up to the per-side covers.
+ */
+export const LIFT_SKINS: ReadonlySet<string> = new Set(['plain', 'native', 'synesthesia']);
+
 export const BUILT_IN_PLAY_TIMING: PlayViewTiming = {
   loadEndOffsetMs: 0,
   playStartOffsetMs: 0,
@@ -51,7 +71,18 @@ export const BUILT_IN_PLAY_TIMING: PlayViewTiming = {
 /** What the built-in play view draws with besides its kit: the options of the play that change what is drawn. */
 export type BuiltInPlayViewOptions = Pick<
   PlaySessionOptions,
-  'bga' | 'autoPlay' | 'nonstop' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'layoutMode'
+  | 'bga'
+  | 'visualConstant'
+  | 'noteDurationMs'
+  | 'constantFadeMs'
+  | 'judgeTimingMs'
+  | 'judgeTimingAutoAdjust'
+  | 'bpmGuide'
+  | 'autoPlay'
+  | 'nonstop'
+  | 'showInvisibleNotes'
+  | 'judgedNoteDisplay'
+  | 'layoutMode'
 > & {
   /** Where the chart's files are, for the skin's song images. */
   readonly source?: BrowserAssetSource;
@@ -62,6 +93,12 @@ export class BuiltInPlayView
   extends PlayLayers
   implements PlayView, PlayFrameContext, BuiltInChromeContext, BGATargetsContext
 {
+  private readonly displayInfo = new DisplayAreaInfoOverlay();
+  private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
+  /** LIFT integration is currently enabled for Plain and Native. */
+  public get drawsLift(): boolean {
+    return LIFT_SKINS.has(this.kit.skin.id);
+  }
   public readonly family = 'built-in' as const;
   public readonly timing: PlayViewTiming = BUILT_IN_PLAY_TIMING;
   /** The play options the view draws with; the setters change them during the play. */
@@ -72,21 +109,31 @@ export class BuiltInPlayView
   public readonly chrome: PlayChrome;
   /** The fingers on the lanes, sent to the session as `lane` intents while attached. */
   private readonly touchLanes: TouchLaneInput = new TouchLaneInput(playfieldTouchLanes(this));
+  private domSettings: ReturnType<typeof resolveBeMusicSkinSettings>;
   private kit: BuiltInKit;
+  /** Shared only within one draw; published snapshots from earlier frames stay untouched. */
+  private chromeRuntime: SkinlessGameplayChromeRuntime | undefined;
+  private dom: SkinDOMMount<BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions, BeMusicDOMGameplayScreen> | undefined;
 
   public constructor(kit: BuiltInKit, play: PlayfieldRuntime, options: BuiltInPlayViewOptions = {}) {
     super(play);
     this.kit = kit;
+    this.domSettings = resolveBeMusicSkinSettings(kit.skin, kit.settings);
     this.options = { ...options, ...(kit.effects !== undefined ? { beMusicEffects: kit.effects } : {}) };
     this.playfieldSkin = createBuiltInPlayfieldSkin(this);
     // A be-music skin draws notes from data: no text of its own after the bombs, and nothing for a retired bomb.
-    this.chrome = { draw: () => renderBuiltInChrome(this, undefined) };
+    this.chrome = { draw: () => renderBuiltInChrome(this, undefined, this.resolveChromeRuntime()) };
   }
 
   /** The host's `Application`; the view draws only once attached (or built for a host ahead of its first frame). */
   get app(): Application {
     if (!this.host) throw new Error('BuiltInPlayView: app accessed before attach');
     return this.host.app;
+  }
+
+  /** Whether the skin's DOM gameplay screen draws the playfield, so nothing of the play is drawn on the canvas. */
+  get drawsOnCanvas(): boolean {
+    return !(this.kit.skin.gameplay.drawsOnDOM === true && this.kit.skin.dom?.gameplay !== undefined);
   }
 
   /** A be-music skin always paints the chrome: the screen fades up from black as it appears. */
@@ -136,6 +183,7 @@ export class BuiltInPlayView
         chartImage: this.chartImages.lookup,
         settings: this.kit.settings,
         renderer: this.host?.app.renderer,
+        drawPlayfield: (frame) => this.dom?.connectedScreen?.drawPlayfield?.(frame),
       });
     }
     return this.skinBindingInstance;
@@ -148,20 +196,111 @@ export class BuiltInPlayView
 
   public attach(host: PixiSceneHost, emit: IntentSink<PlayIntent>): void {
     build(this, host);
-    this.touchLanes.attach(host, emit);
+    const factory = this.kit.skin.dom?.gameplay;
+    if (factory && !this.dom)
+      this.dom = new SkinDOMMount(
+        factory,
+        {
+          pause: () => emit({ type: 'pause' }),
+          restart: () => emit({ type: 'restart' }),
+          quit: () => emit({ type: 'quit' }),
+          seek: (seconds) => emit({ type: 'seek', seconds }),
+        },
+        'gameplay',
+      );
+    this.dom?.attach(host.domRoot);
+    // Without the canvas the fingers land on the screen's mount, which covers the same area.
+    const mount = this.drawsOnCanvas ? undefined : this.dom?.root;
+    if (mount) mount.style.pointerEvents = 'auto';
+    this.touchLanes.attach(host, emit, mount);
+    if (this.drawsOnCanvas) this.displayInfo.attachCanvas(this.designRoot);
+    else this.displayInfo.attach(host.domRoot);
+    if (this.drawsOnCanvas) this.bpmChangeWarning.attachCanvas(this.designRoot);
+    else this.bpmChangeWarning.attach(host.domRoot);
   }
 
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
+    this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
+    this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
+    this.options.visualConstant = frame.playOptions.visualConstant;
+    this.options.noteDurationMs = frame.playOptions.noteDurationMs;
+    this.options.constantFadeMs = frame.playOptions.constantFadeMs;
     this.root.visible = frame.shown;
+    if (!frame.shown) this.displayInfo.hide();
+    if (!frame.shown) this.bpmChangeWarning.hide();
     if (!frame.shown) return;
+    this.perf.beginTick();
+    this.chromeRuntime = undefined;
     render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined);
-    // A skin drawing through the player's renderer draws the frame just collected now, before Pixi renders.
+    // A skin drawing through the player's renderer or on its DOM screen draws the frame just collected now.
+    const overlayLanes = Array.from(this.play.laneX, ([channel, lane]) => ({
+      ...lane,
+      side: this.play.chartPlayVariant === '9' || !channel.startsWith('2') ? ('1P' as const) : ('2P' as const),
+    }));
+    this.displayInfo.update(
+      resolveDisplayAreaLabels({
+        mode: frame.playOptions.displayAreaInfo,
+        lanes: overlayLanes,
+        covers: this.play.resolveLaneCovers(),
+        visibleMs: (cover) =>
+          this.play.resolveVisibleMs(
+            cover,
+            frame.bpm,
+            this.play.scrollMapper?.rateAt?.(this.play.currentBeat(frame.seconds)) ?? 1,
+          ),
+      }),
+      this.playfieldSkin.stage,
+      this.app.screen,
+      this.designRoot.alpha,
+    );
+    this.bpmChangeWarning.show({
+      enabled: frame.playOptions.bpmChangeWarning,
+      timing: this.play.timingResolver,
+      seconds: frame.seconds,
+      lanes: overlayLanes,
+      stage: this.playfieldSkin.stage,
+      screen: this.app.screen,
+      opacity: this.designRoot.alpha,
+    });
     this.skinBindingInstance?.flush();
+    this.dom?.setOpacity(this.designRoot.alpha);
+    this.dom?.update({
+      layout: resolveBeMusicLayout(this),
+      settings: this.domSettings,
+      effects: this.kit.effects ?? 'full',
+      chart: frame.chart,
+      state: frame.state,
+      runtime: this.resolveChromeRuntime(),
+      playOptions: frame.playOptions,
+      emptyPoor: frame.playfield.score.emptyPoor,
+      ...(frame.state2P !== undefined ? { state2P: frame.state2P } : {}),
+      course: frame.course,
+      seconds: frame.seconds,
+      bpm: frame.bpm,
+      progress: frame.progress,
+      stage: frame.stage,
+      autoPlay: frame.autoPlay,
+      replay: frame.replay,
+      seekable: frame.seekable,
+    });
+    // `?perf`: the per-second section summary, as the LR2 play view reports it.
+    const report = this.perf.endFrame(() => ({
+      note: this.noteLayer.children.length,
+      notesTotal: this.play.notes.length,
+    }));
+    if (report) log.debug('perf', report);
+  }
+
+  private resolveChromeRuntime(): SkinlessGameplayChromeRuntime {
+    return (this.chromeRuntime ??= resolveSkinlessGameplayChromeRuntime(this));
   }
 
   public detach(): void {
+    this.displayInfo.detach();
+    this.bpmChangeWarning.detach();
     this.touchLanes.detach();
+    this.dom?.detach();
   }
 
   /** Uploads `textures` to the GPU through the host's renderer (the BGA the play loads), when the view has a host. */
@@ -169,14 +308,24 @@ export class BuiltInPlayView
     return uploadTextures(this.host?.app.renderer, textures, isCancelled);
   }
 
+  /** Whether this view is drawing `skin`. A different be-music skin replaces the view. */
+  public drawsSkin(skin: BuiltInKit['skin']): boolean {
+    return this.kit.skin === skin;
+  }
+
   /** Takes the player's new kit (skin settings, effects); the next frame draws with them. */
   public updateKit(kit: BuiltInKit): void {
     this.kit = kit;
+    this.domSettings = resolveBeMusicSkinSettings(kit.skin, kit.settings);
     if (kit.effects !== undefined) this.options.beMusicEffects = kit.effects;
     this.skinBindingInstance?.setSettings(kit.settings);
   }
 
   public dispose(): void {
+    this.displayInfo.dispose();
+    this.bpmChangeWarning.dispose();
+    this.dom?.dispose();
+    this.dom = undefined;
     // Drop every per-frame child pool before the scene graph so each pooled child is freed through its own `destroy()`.
     try {
       this.skinBindingInstance?.dispose();
@@ -220,7 +369,7 @@ function createBuiltInPlayfieldSkin(view: BuiltInPlayView): PlayfieldSkin {
     measureLines: () => undefined,
     bgaTargets: (out) => collectBGATargets(view, out),
     bombCell: () => undefined,
-    bombDurationMs: () => view.skinBinding.bombDurationMs ?? PHANTOM_BOMB_DURATION_MS,
+    bombDurationMs: () => view.skinBinding.bombDurationMs ?? DEFAULT_BOMB_DURATION_MS,
     keyOnFadeMs: () => KEY_ON_FADE_OUT_MS,
   };
 }

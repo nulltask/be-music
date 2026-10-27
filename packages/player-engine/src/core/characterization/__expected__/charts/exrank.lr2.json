@@ -14,6 +14,8 @@
       "emptyPoor": 0,
       "exScore": 3,
       "score": 75000,
+      "combo": 2,
+      "maxCombo": 2,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -49,10 +51,12 @@
           {"id":5,"channel":"14","type":"normal","timeUs":3000000},
           {"id":6,"channel":"15","type":"mine","timeUs":3250000,"damage":10}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":120},
         "chartFingerprint": "bmfp0:c25adf8213019e5c2284cf6b436f55ebcb77f1ef746d8eb79232909cd4e69dfa",
         "playFingerprint": "bmfp0:c25adf8213019e5c2284cf6b436f55ebcb77f1ef746d8eb79232909cd4e69dfa",
         "title": "exrank",
-        "artist": "characterization"
+        "artist": "Be-Music Dev Team"
       },
       "inputs": [
         {"seq":0,"timeUs":535000,"action":"down","channels":["11"],"tokens":["z"]},
@@ -104,8 +108,8 @@
         "djLevel": "C",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":0,"great":0,"good":4,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 4,
@@ -159,11 +163,11 @@
       "judged": [
         "535.000 seconds=0.535 note 11@0.5",
         "1535.000 seconds=1.535 note 12@1.5",
-        "1768.333 seconds=1.768333 mine 15@1.75",
+        "1751.667 seconds=1.751667 mine 15@1.75",
         "2451.667 seconds=2.451667 invisible 16@2.25",
         "2535.000 seconds=2.535 note 13@2.5",
         "3035.000 seconds=3.035 note 14@3",
-        "3285.000 seconds=3.285 mine 15@3.25"
+        "3251.667 seconds=3.251667 mine 15@3.25"
       ],
       "last": "4451.667 seconds=4.435 beat=8.87"
     },
@@ -215,6 +219,8 @@
       "emptyPoor": 0,
       "exScore": 3,
       "score": 75000,
+      "combo": 2,
+      "maxCombo": 2,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -284,7 +290,7 @@
         "2550.000 seconds=2.55 note 13@2.5",
         "2550.000 seconds=2.55 invisible 16@2.25",
         "3050.000 seconds=3.05 note 14@3",
-        "3283.333 seconds=3.283333 mine 15@3.25"
+        "3266.667 seconds=3.266667 mine 15@3.25"
       ],
       "last": "4466.667 seconds=4.45 beat=8.9"
     },
@@ -316,6 +322,8 @@
       "emptyPoor": 0,
       "exScore": 8,
       "score": 200000,
+      "combo": 4,
+      "maxCombo": 4,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -374,8 +382,8 @@
         "djLevel": "AAA",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,

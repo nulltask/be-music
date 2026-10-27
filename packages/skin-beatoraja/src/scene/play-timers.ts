@@ -7,20 +7,26 @@ import {
   keyOffTimerId,
   keyOnTimerId,
   lnHoldTimerId,
+  TIMER_FADEOUT,
   TIMER_FAILED,
   TIMER_FULLCOMBO_1P,
   TIMER_FULLCOMBO_2P,
   TIMER_GAUGE_INCREASE_1P,
   TIMER_GAUGE_INCREASE_2P,
   TIMER_GAUGE_MAX_1P,
+  TIMER_PLAY,
+  TIMER_PREVIEW,
+  TIMER_READY,
   TIMER_RHYTHM,
+  TIMER_SCENE_START,
+  TIMER_STARTINPUT,
   type BeatorajaSide,
 } from '../runtime-ids.ts';
 import { beatorajaFastSlowOp } from './play-ops.ts';
 
 /**
  * Timers a change of the play starts and stops, as data: `start` (re)starts each timer now, `startOnce` starts each one
- * unless it already started during this play (the failure, the end of the notes, the full combo, the full gauge), and
+ * unless it already started during this play (the failure, the end of the notes, the full combo), and
  * `stop` turns each off, hiding what is gated on it.
  */
 export interface BeatorajaTimerChanges {
@@ -228,12 +234,14 @@ export interface BeatorajaFrameTimerInput {
 /**
  * The timers an engine frame starts: the rhythm timer (140) on the first frame and whenever the beat crosses a whole
  * beat either way; once each, the failure timer (3) when the gauge drops from above 0 to 0 (a survival gauge failing
- * mid-play), each side's end-of-notes timer (143 / 144) once the beat passes its last note, and the full-gauge timer
- * (44) when the gauge reaches its maximum. A non-finite beat starts no beat timer.
+ * mid-play), and each side's end-of-notes timer (143 / 144) once the beat passes its last note. The full-gauge timer
+ * (44) starts on each transition to maximum, keeps its age while full and stops below maximum.
+ * A non-finite beat starts no beat timer.
  */
 export function resolveBeatorajaFrameTimers(input: BeatorajaFrameTimerInput): BeatorajaTimerChanges {
   const start: number[] = [];
   const startOnce: number[] = [];
+  const stop: number[] = [];
   const { beat, previousBeat, gauge } = input;
   if (Number.isFinite(beat)) {
     if (previousBeat === undefined || Math.floor(beat) !== Math.floor(previousBeat)) start.push(TIMER_RHYTHM);
@@ -245,7 +253,53 @@ export function resolveBeatorajaFrameTimers(input: BeatorajaFrameTimerInput): Be
   if (gauge !== undefined) {
     if (input.previousGauge !== undefined && input.previousGauge > 0 && gauge.current <= 0)
       startOnce.push(TIMER_FAILED);
-    if (gauge.max > 0 && gauge.current >= gauge.max) startOnce.push(TIMER_GAUGE_MAX_1P);
+    if (gauge.max > 0 && gauge.current >= gauge.max) {
+      if (input.previousGauge === undefined || input.previousGauge < gauge.max) start.push(TIMER_GAUGE_MAX_1P);
+    } else stop.push(TIMER_GAUGE_MAX_1P);
   }
-  return start.length === 0 && startOnce.length === 0 ? NO_TIMERS : { start, startOnce, stop: [] };
+  return start.length === 0 && startOnce.length === 0 && stop.length === 0 ? NO_TIMERS : { start, startOnce, stop };
+}
+
+/** The scene's timers, which a seek leaves running: the scene start, input, fade-out, failure, READY, play and preview. */
+const BEATORAJA_SCENE_TIMERS: ReadonlySet<number> = new Set([
+  TIMER_SCENE_START,
+  TIMER_STARTINPUT,
+  TIMER_FADEOUT,
+  TIMER_FAILED,
+  TIMER_READY,
+  TIMER_PLAY,
+  TIMER_PREVIEW,
+]);
+
+/** What a play skin's timers read of a play that sought to another chart second. */
+export interface BeatorajaSeekTimerInput {
+  /** The timers running now (started and not stopped). */
+  readonly started: Iterable<number>;
+  /** The chart beat sought. */
+  readonly beat: number;
+  /** The gauge there. */
+  readonly gauge?: { readonly current: number; readonly max: number };
+  /** The beat of each side's last note; a side without notes never ends. */
+  readonly lastNoteBeats?: { readonly 1?: number; readonly 2?: number };
+}
+
+/**
+ * The timers a seek changes: every running timer but the scene's stops — the judgments' (judge, combo, bombs, gauge
+ * sparkle, full combo), the lanes' (key on and off, long-note holds), the end of the notes and the full gauge — and a
+ * host lets the ones that start once per play start again; then the rhythm timer (140) starts, and, once each, the full
+ * gauge (44) when the gauge is full and each side's end of the notes (143 / 144) when the beat is past its last note.
+ * The long notes held across the second sought start their hold timers again as the play announces them.
+ */
+export function resolveBeatorajaSeekTimers(input: BeatorajaSeekTimerInput): BeatorajaTimerChanges {
+  const stop = [...input.started].filter((timer) => !BEATORAJA_SCENE_TIMERS.has(timer));
+  const startOnce: number[] = [];
+  const { beat, gauge } = input;
+  if (gauge !== undefined && gauge.max > 0 && gauge.current >= gauge.max) startOnce.push(TIMER_GAUGE_MAX_1P);
+  if (Number.isFinite(beat)) {
+    for (const side of [1, 2] as const) {
+      const lastBeat = input.lastNoteBeats?.[side];
+      if (lastBeat !== undefined && beat >= lastBeat) startOnce.push(endOfNoteTimerId(side));
+    }
+  }
+  return { start: Number.isFinite(beat) ? [TIMER_RHYTHM] : [], startOnce, stop };
 }

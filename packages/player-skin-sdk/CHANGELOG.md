@@ -1,5 +1,71 @@
 # @be-music/player-skin-sdk
 
+## 0.5.0
+
+### Minor Changes
+
+- 74127d3: Allow `BeMusicSkin` to mount native DOM select, decide and result screens and a DOM gameplay screen alongside Canvas surfaces, with DOM frame, action and lifecycle contracts and validated screen factories. DOM gameplay frames carry the stage geometry (playfield bounds per input layout, and the BGA rect in `layout`) so native HUDs can avoid the lanes, and DOM skins get the shared gameplay HUD runtime, play options, course context and full immutable play state.
+  A skin that sets `gameplay.drawsOnDOM` draws the playfield in its DOM gameplay screen: it receives every `BeMusicGameplayFrame` through the screen's `drawPlayfield(frame)` (`BeMusicDOMGameplayScreen`) and needs no Canvas surface for gameplay. Validation reports `drawsOnDOM` without a `dom.gameplay` screen.
+  DOM gameplay screens can seek through `BeMusicDOMGameplayActions.seek(seconds)` and `BeMusicDOMGameplayFrame.seekable`.
+- a83e326: Rename the That-Which-Must-Not-Be-Named lane geometry constants and helper to use `____` in their exported names.
+- 01cd4cd: A stage can be fluid: `BeMusicStage.resize(size)` lets a skin lay its stage out at the screen's aspect ratio instead of being letterboxed into it. `resolveBeMusicStage` resizes a fluid stage to the screen, keeping its 480 px short side, and the new `resolveFluidStageSize` and `resolveFluidStage` expose that sizing. Stages without `resize` keep their fixed size.
+- 29e69c6: Add a two-player play's 2P player to the gameplay runtime and DOM frame (`runtime.secondPlayer`, `state2P`), the floating hi-speed flag, per-side LIFT and note opacity for CONSTANT, so skins can draw them.
+- f994ec4: Expose optional `poorOverlays` on BGA frames so skins can render `#POORBGA 1` over the normal layers.
+- a8896a9: `BeMusicDOMSelectFrame` carries `searchError`, why the chart filter expression searched for does not parse, for a DOM select screen to show.
+- 2e435b9: Export the shared `clamp` helper so skins can reuse numeric bounds through the SDK without importing player internals or extra utility packages.
+
+### Patch Changes
+
+- 6fc13f5: A RANDOM MIX bar reads `draw a course` with an `RND` badge in the select list, and a course folder's count leaves it out, as it does the NEW COURSE bar.
+- Updated dependencies [ba3cc20]
+- Updated dependencies [7fca9a9]
+- Updated dependencies [a9cc3d7]
+- Updated dependencies [a83e326]
+- Updated dependencies [69df53c]
+- Updated dependencies [f994ec4]
+- Updated dependencies [c52d77d]
+- Updated dependencies [69df53c]
+- Updated dependencies [29e69c6]
+- Updated dependencies [3a5d9c3]
+- Updated dependencies [3a5d9c3]
+- Updated dependencies [fcaef41]
+- Updated dependencies [7f0386b]
+- Updated dependencies [45aff53]
+- Updated dependencies [1c97afd]
+- Updated dependencies [d08fdf9]
+- Updated dependencies [a83e326]
+- Updated dependencies [69df53c]
+- Updated dependencies [78faa63]
+- Updated dependencies [3d5e880]
+- Updated dependencies [21f705d]
+- Updated dependencies [a8896a9]
+- Updated dependencies [b1ca2ce]
+- Updated dependencies [6e676fe]
+- Updated dependencies [aeac0d3]
+- Updated dependencies [9f41b30]
+- Updated dependencies [f994ec4]
+- Updated dependencies [4371c72]
+- Updated dependencies [acba3d5]
+- Updated dependencies [3e694df]
+- Updated dependencies [3e694df]
+- Updated dependencies [c35b845]
+- Updated dependencies [a83e326]
+- Updated dependencies [a8896a9]
+- Updated dependencies [85f13dc]
+- Updated dependencies [3c2ea6b]
+- Updated dependencies [aeac0d3]
+- Updated dependencies [b09a6cf]
+- Updated dependencies [85e11f7]
+- Updated dependencies [d0939cc]
+- Updated dependencies [3e694df]
+- Updated dependencies [85250d8]
+- Updated dependencies [2e435b9]
+  - @be-music/player-engine@0.11.0
+  - @be-music/chart-model@0.7.0
+  - @be-music/chart-source@0.5.0
+  - @be-music/player-scene-model@0.3.0
+  - @be-music/shared-utils@0.6.0
+
 ## 0.4.0
 
 ### Minor Changes
@@ -76,7 +142,7 @@
 - 872c26c: Add `@be-music/player-skin-sdk`, the package be-music skins for the browser player are written against. It imports no rendering framework: the player hands a skin a canvas and plain per-frame data, and the skin draws with whatever it brings (the Canvas 2D API, raw WebGL / WebGPU, PixiJS, three.js, …).
   
   - Skin contract: `BeMusicSkin` and its surface and frame types (gameplay, select, result), `defineBeMusicSkin`, `validateBeMusicSkin`, and `BE_MUSIC_SKIN_API_VERSION`. A skin declares its metadata (id, semantic version, author), the canvas context it wants, optional `setup` / `teardown` hooks for its own renderer, and one `draw` per screen.
-  - Stage and layout: `wideStage` and its BGA placement, `resolveGameplayLayout`, `resolveLaneRuns`, the lane geometry the player lays lanes out with (IIDX lane widths, the double-play gap, keyboard modes), and `resolveBeMusicLaneKind`.
+  - Stage and layout: `wideStage` and its BGA placement, `resolveGameplayLayout`, `resolveLaneRuns`, the lane geometry the player lays lanes out with (That-Which-Must-Not-Be-Named lane widths, the double-play gap, keyboard modes), and `resolveBeMusicLaneKind`.
   - Play state and sound: judgement words, moments (count-in, combo milestones, the clear line, full combo, combo break), effect levels, the loading caption, and `audioDrive` / `bandLevel` over the `BeMusicAudioFrame` analysis.
   - Song and result facts: the song entry types, select-row facts, result lamp and track rows, plus tabular figure layout and motion helpers.
 

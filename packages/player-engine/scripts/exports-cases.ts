@@ -1,7 +1,7 @@
+import { cloneJSON } from '@be-music/chart-source';
 import { resolveChart } from '@be-music/chart-model';
 import { parseChart } from '@be-music/chart-parser';
 import * as playerAPI from '@be-music/player-engine';
-import * as audioSinkAPI from '@be-music/player-engine/audio-sink';
 import * as courseAPI from '@be-music/player-engine/course';
 import * as displayAPI from '@be-music/player-engine/display';
 import * as lanesAPI from '@be-music/player-engine/lanes';
@@ -10,7 +10,6 @@ import * as recordsAPI from '@be-music/player-engine/records';
 import * as rulesetAPI from '@be-music/player-engine/ruleset';
 import * as signalsAPI from '@be-music/player-engine/signals';
 import type { PlayerOptions } from '@be-music/player-engine';
-import type { WebAudioContextLike } from '@be-music/player-engine/audio-sink';
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
@@ -23,6 +22,28 @@ const BENCH_PLAYER_OPTIONS: PlayerOptions = {
   highSpeed: 1,
   inferBmsLNTypeWhenMissing: true,
 };
+
+/** 64 measures of sixteenth notes over four lanes and a long note every other measure, at 150 BPM: 4 128 notes. */
+const SEEK_REBUILD_CHART = parseChart(
+  [
+    '#TITLE seek rebuild',
+    '#BPM 150',
+    '#WAV01 missing01.wav',
+    '#LNTYPE 1',
+    ...Array.from({ length: 64 }, (_, measure) => {
+      const id = String(measure).padStart(3, '0');
+      return [
+        `#${id}11:${'01'.repeat(16)}`,
+        `#${id}12:${'01'.repeat(16)}`,
+        `#${id}13:${'01'.repeat(16)}`,
+        `#${id}14:${'01'.repeat(16)}`,
+        `#${id}55:0100`,
+      ];
+    }).flat(),
+  ].join('\n'),
+  'bms',
+);
+const SEEK_REBUILD_SECONDS = 64 * 1.6;
 
 export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.resolveChartRulesetFacts', {
@@ -38,6 +59,8 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       clock.chartSecondsAt(2500);
       clock.clockMsAt(2.5);
       clock.initialTempoMsAt(2500);
+      clock.rebase(3000, 1.5);
+      clock.chartSecondsAt(3500);
     },
   });
   define('player-engine.resolvePlayChart', {
@@ -55,11 +78,23 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.resolvePlayChart(fixtures.controlFlowJSON, { random: () => 0.42 });
     },
   });
+  define('player-engine.lanes.applySevenToNine', {
+    run: (fixtures) => {
+      const prepared = playerAPI.preparePlaybackChart(resolveChart(fixtures.sampleBmsJSON, { playVariant: '7' }));
+      lanesAPI.applySevenToNine(prepared, { sevenToNinePattern: 3, sevenToNineType: 1 });
+    },
+  });
   define('player-engine.preparePlaybackChart', {
     run: (fixtures) => {
       playerAPI.preparePlaybackChart(
         resolveChart(fixtures.sampleBmsJSON, { chartPath: '.bms', inferBmsLNTypeWhenMissing: true }),
-        { laneModeExtension: '.bms' },
+        { laneModeExtension: '.bms', longNoteModifier: 'REMOVE', scrollModifier: 'REMOVE' },
+      );
+      playerAPI.preparePlaybackChart(
+        resolveChart(fixtures.sampleBmsJSON),
+        { scrollModifier: 'ADD', scrollSection: 1 },
+        0,
+        () => 0.25,
       );
     },
   });
@@ -67,6 +102,9 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     run: async (fixtures) => {
       await runSilently(async () => {
         await playerAPI.autoPlay(fixtures.emptyBmsJSON, BENCH_PLAYER_OPTIONS);
+        // The seek rebuild: a play started at the end of a dense chart (`startAtSeconds` is its first seek) re-simulates
+        // its judge over every note before it, then ends at once.
+        await playerAPI.autoPlay(SEEK_REBUILD_CHART, { ...BENCH_PLAYER_OPTIONS, startAtSeconds: SEEK_REBUILD_SECONDS });
       });
     },
     interactive: true,
@@ -166,14 +204,25 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     },
   });
   const benchNonstopInputs = [benchNonstopChart, benchNonstopChart, benchNonstopChart].map((chart) => ({ chart }));
+  const bmsonNonstopChart = cloneJSON(benchNonstopChart);
+  bmsonNonstopChart.sourceFormat = 'bmson';
+  bmsonNonstopChart.bmson.info.resolution = 240;
   define('player-engine.course.stitchNonstopCourse', {
     run: () => {
       courseAPI.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
+      courseAPI.stitchNonstopCourse([{ chart: benchNonstopChart }, { chart: bmsonNonstopChart }], {
+        connections: ['cut'],
+      });
     },
   });
   define('player-engine.course.applyCourseLongNoteConstraint', {
     run: () => {
       courseAPI.applyCourseLongNoteConstraint(benchNonstopChart, ['cn']);
+    },
+  });
+  define('player-engine.course.applyUndefinedLongNoteMode', {
+    run: () => {
+      courseAPI.applyUndefinedLongNoteMode(benchNonstopChart, 3);
     },
   });
   define('player-engine.course.resolveCourseStageSettings', {
@@ -444,6 +493,19 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         for (const chartEntry of benchCharts) courseAPI.evaluateCourseChartFilter(benchFilter.filter, chartEntry);
     },
   });
+  define('player-engine.course.beatorajaClearType', {
+    run: () => {
+      courseAPI.beatorajaClearType('HARD');
+    },
+  });
+  define('player-engine.course.createCourseChartScore', {
+    run: () => {
+      courseAPI.createCourseChartScore(
+        { lamp: 'HARD', exScore: 2000, maxCombo: 800, missCount: 4, playCount: 3 },
+        1200,
+      );
+    },
+  });
   define('player-engine.course.selectCourseCharts', {
     run: () => {
       if (benchFilter.ok) courseAPI.selectCourseCharts(benchFilter.query, benchCharts, (chartEntry) => chartEntry);
@@ -461,6 +523,43 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
           distinct: true,
         },
         benchCharts,
+        () => {
+          benchSeed = (benchSeed * 16807) % 2147483647;
+          return (benchSeed - 1) / 2147483646;
+        },
+      );
+    },
+  });
+  const benchMixSettings = { ...courseAPI.DEFAULT_LR2_RANDOM_MIX_SETTINGS, minLevel: 9, maxLevel: 3 };
+  const benchMixCharts = Array.from({ length: 200 }, (_, index) => ({
+    md5: index.toString(16).padStart(32, '0'),
+    folder: `f${index % 80}`,
+    keyMode: index % 10 === 0 ? 5 : 7,
+    level: (index % 12) + 1,
+    minBPM: 140 + (index % 7) * 5,
+    maxBPM: 150 + (index % 7) * 5,
+  }));
+  define('player-engine.course.normalizeLR2RandomMixSettings', {
+    run: () => {
+      courseAPI.normalizeLR2RandomMixSettings({ maxBPM: 1234, minBPM: 155, stageCount: 'x' });
+    },
+  });
+  define('player-engine.course.stepLR2RandomMixSetting', {
+    run: () => {
+      courseAPI.stepLR2RandomMixSetting(benchMixSettings, 'maxBPM', -1);
+      courseAPI.stepLR2RandomMixSetting(benchMixSettings, 'stageCount', 1);
+    },
+  });
+  define('player-engine.course.resolveLR2RandomMixSettings', {
+    run: () => {
+      courseAPI.resolveLR2RandomMixSettings(benchMixSettings);
+    },
+  });
+  define('player-engine.course.drawLR2RandomMix', {
+    run: () => {
+      courseAPI.drawLR2RandomMix(
+        { kind: 'nonstop', keyMode: 7, settings: { ...benchMixSettings, preferredLevel: 6, bpmRange: 20 } },
+        benchMixCharts,
         () => {
           benchSeed = (benchSeed * 16807) % 2147483647;
           return (benchSeed - 1) / 2147483646;
@@ -504,6 +603,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.checkReplayEligibility(BENCH_REPLAY);
     },
   });
+  define('player-engine.replay.resolveReplaySourceChannel', {
+    run() {
+      replayAPI.resolveReplaySourceChannel({ channel: '15', event: { channel: 'D1' } });
+    },
+  });
   define('player-engine.replay.serializeReplay', {
     run: () => {
       replayAPI.serializeReplay(BENCH_REPLAY);
@@ -512,20 +616,20 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.createReplayRecorder', {
     run: () => {
       const json = parseChart('#BPM 120\n#00111:01\n');
-      replayAPI
-        .createReplayRecorder({
-          json,
-          chart: {
-            notes: [],
-            landmineNotes: [],
-            invisibleNotes: [],
-            activeFreeZoneChannels: new Set<string>(),
-            scorableNotes: [],
-            laneDisplayMode: '7keys',
-          },
-          play: { mode: 'manual', autoScratch: false },
-        })
-        .recordInput('down', 0.5, ['z'], ['11']);
+      const recorder = replayAPI.createReplayRecorder({
+        json,
+        chart: {
+          notes: [],
+          landmineNotes: [],
+          invisibleNotes: [],
+          activeFreeZoneChannels: new Set<string>(),
+          scorableNotes: [],
+          laneDisplayMode: '7keys',
+        },
+        play: { mode: 'manual', autoScratch: false },
+      });
+      recorder.recordInput('down', 0.5, ['z'], ['11']);
+      recorder.discard();
     },
   });
   define('player-engine.replay.ReplayParseError', {
@@ -541,6 +645,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.resolveRulesetConfig', {
     run: () => {
       replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja');
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'lr2', { selectedGauge: 'P-ATTACK' });
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'lr2', { selectedGauge: 'G-ATTACK' });
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja', {
+        gaugeAutoShift: 'BEST_CLEAR',
+        bottomShiftableGauge: 'EASY',
+      });
+      replayAPI.resolveRulesetConfig(BENCH_REPLAY, 'beatoraja', {
+        selectedGauge: 'DEATH',
+        gaugeAutoShift: 'SURVIVAL_TO_GROOVE',
+      });
     },
   });
   define('player-engine.replay.resolveLR2DefaultTotal', {
@@ -553,9 +667,9 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.resolveBeatorajaDefaultTotal(1200);
     },
   });
-  define('player-engine.replay.resolveIIDXGaugeUnit', {
+  define('player-engine.replay.resolve____GaugeUnit', {
     run: () => {
-      replayAPI.resolveIIDXGaugeUnit(1200);
+      replayAPI.resolve____GaugeUnit(1200);
     },
   });
   define('player-engine.replay.resolveLR2HardDamageMultiplier', {
@@ -610,6 +724,8 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       run.recordStage(benchRunStageLog, { playSeconds: 16 });
       run.nextStage();
       run.buildReplay();
+      run.recordStage(undefined, { practice: true, stageOutcome: benchStageResult });
+      run.buildPracticeResult();
     },
   });
   define('player-engine.course.resolveGivenUpPlaySeconds', {
@@ -644,6 +760,22 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.parseCourseReplay(benchCourseText);
     },
   });
+  define('player-engine.replay.listCourseReplayStageCharts', {
+    run: () => {
+      replayAPI.listCourseReplayStageCharts(benchCourseLog);
+    },
+  });
+  const benchCourseReplayStage = replayAPI.listCourseReplayStageCharts(benchCourseLog)[0]!;
+  define('player-engine.replay.matchesCourseReplayStageChart', {
+    run: () => {
+      replayAPI.matchesCourseReplayStageChart(benchCourseReplayStage, { sha256: 'a'.repeat(64), md5: 'b'.repeat(32) });
+    },
+  });
+  define('player-engine.replay.planCourseReplayPlayback', {
+    run: () => {
+      replayAPI.planCourseReplayPlayback(benchCourseLog);
+    },
+  });
   const benchLampScore = { total: 100, perfect: 90, great: 8, good: 2 };
   const benchRecordPlay = { lamp: 'HARD' as const, exScore: 1500, maxCombo: 400, missCount: 12 };
   const benchRecord = { lamp: 'EASY' as const, exScore: 1400, maxCombo: 500, missCount: 20, playCount: 3 };
@@ -671,6 +803,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.records.recordPlayFromResult', {
     run: () => {
       recordsAPI.recordPlayFromResult(benchRecordResult);
+    },
+  });
+  define('player-engine.records.abortedRecordPlayFromResult', {
+    run: () => {
+      recordsAPI.abortedRecordPlayFromResult(benchRecordResult);
     },
   });
   define('player-engine.records.recordPlayFromSummary', {
@@ -718,6 +855,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.courseRunKeepsRecord(benchCourseLog);
     },
   });
+  define('player-engine.ruleset.clampCustomJudgeRate', {
+    run() {
+      rulesetAPI.clampCustomJudgeRate('keyPerfectGreat', 10);
+    },
+  });
+  define('player-engine.ruleset.isCustomJudgeAssist', {
+    run() {
+      rulesetAPI.isCustomJudgeAssist(rulesetAPI.DEFAULT_BEATORAJA_CUSTOM_JUDGE);
+    },
+  });
   define('player-engine.ruleset.isClearLamp', {
     run: () => {
       rulesetAPI.isClearLamp('EX_HARD');
@@ -753,6 +900,12 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.resolveClearLamp({ ruleset: 'beatoraja', cleared: true, gauge: 'HARD', score: benchLampScore });
     },
   });
+  define('player-engine.course.isCourseStageFailed', {
+    run: () => {
+      courseAPI.isCourseStageFailed('lr2', { final: 2 });
+      courseAPI.isCourseStageFailed('beatoraja', { final: 1 });
+    },
+  });
   define('player-engine.ruleset.resolveCourseClearLamp', {
     run: () => {
       rulesetAPI.resolveCourseClearLamp({
@@ -771,6 +924,19 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.resolveMissCount({ bad: 3, poor: 5, emptyPoor: 2 }, 10);
     },
   });
+  define('player-engine.ruleset.resolveGaugeEndOnFailure', {
+    run() {
+      rulesetAPI.resolveGaugeEndOnFailure('CONTINUE', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('BEST_CLEAR', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('SELECT_TO_UNDER', 'beatoraja');
+    },
+  });
+  define('player-engine.ruleset.resolveGaugeTypes', {
+    run: () => {
+      rulesetAPI.resolveGaugeTypes('beatoraja');
+    },
+  });
   define('player-engine.ruleset.isGaugeType', {
     run: () => {
       rulesetAPI.isGaugeType('DEATH');
@@ -786,14 +952,14 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.computeScoreRate({ total: 1000, exScore: 1650 });
     },
   });
-  define('player-engine.ruleset.resolveIIDXRankIndexFromScore', {
+  define('player-engine.ruleset.resolve____RankIndexFromScore', {
     run: () => {
-      rulesetAPI.resolveIIDXRankIndexFromScore({ total: 1000, exScore: 1650 });
+      rulesetAPI.resolve____RankIndexFromScore({ total: 1000, exScore: 1650 });
     },
   });
-  define('player-engine.ruleset.resolveIIDXRankLabel', {
+  define('player-engine.ruleset.resolve____RankLabel', {
     run: () => {
-      rulesetAPI.resolveIIDXRankLabel(1650, 1000);
+      rulesetAPI.resolve____RankLabel(1650, 1000);
     },
   });
   define('player-engine.ruleset.resolveLR2MoneyScore', {
@@ -819,6 +985,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.resolveRulesetResultLamp', {
     run: () => {
       replayAPI.resolveRulesetResultLamp(benchStageResult, 'lr2');
+    },
+  });
+  define('player-engine.replay.resolveRulesetResultMissCount', {
+    run: () => {
+      replayAPI.resolveRulesetResultMissCount(benchStageResult);
     },
   });
   define('player-engine.replay.resolveCourseReplayFilename', {
@@ -886,6 +1057,28 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         stageChartFingerprints: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c'],
         nonstop: { connections: ['cut'], placement: 'intended' },
       });
+    },
+  });
+  const optionState = { hiSpeed: 2, hsFix: 'STARTBPM', displayAreaInfo: 'ON' };
+  const optionChanges = [{ timeUs: 1_000_000, values: { hiSpeed: 3 } }];
+  define('player-engine.replay.parseReplayOptionState', {
+    run: () => {
+      replayAPI.parseReplayOptionState(optionState);
+    },
+  });
+  define('player-engine.replay.parseReplayOptionChanges', {
+    run: () => {
+      replayAPI.parseReplayOptionChanges(optionChanges);
+    },
+  });
+  define('player-engine.replay.resolveReplayOptionsAt', {
+    run: () => {
+      replayAPI.resolveReplayOptionsAt(optionState, optionChanges, 2_000_000);
+    },
+  });
+  define('player-engine.replay.diffReplayOptions', {
+    run: () => {
+      replayAPI.diffReplayOptions(optionState, { ...optionState, hiSpeed: 3 });
     },
   });
   const benchView = { hiSpeed: 2, hsFix: 'MAIN', covers: [{ side: '1P' as const, sudden: 0.2, hidden: 0, lift: 0.1 }] };
@@ -995,7 +1188,6 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   registerSignalsCases(define);
   registerLanesCases(define);
   registerDisplayCases(define);
-  registerAudioSinkCases(define);
 }
 
 /** `@be-music/player-engine/signals`: the buses and state signals a host's runtimes exchange with a play. */
@@ -1074,15 +1266,224 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.resolveWheelLaneDirection('1P', '24');
     },
   });
+  define('player-engine.lanes.clampHRandomThresholdBPM', {
+    run: () => {
+      lanesAPI.clampHRandomThresholdBPM(120);
+    },
+  });
+  define('player-engine.lanes.randomizeHRandomNotes', {
+    run: () => {
+      lanesAPI.randomizeHRandomNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 125 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15'],
+        { random: () => 0.5 },
+      );
+    },
+  });
+  define('player-engine.lanes.randomizeLR2ScatterNotes', {
+    run() {
+      lanesAPI.randomizeLR2ScatterNotes(
+        [
+          { channel: '11', timeMs: 100 },
+          { channel: '11', timeMs: 200 },
+        ],
+        ['11', '12', '13', '14', '15'],
+        { random: () => 0.5 },
+      );
+      for (const correctedNineKey of [false, true]) {
+        lanesAPI.randomizeLR2ScatterNotes(
+          [
+            { channel: '22', timeMs: 100 },
+            { channel: '25', timeMs: 200 },
+          ],
+          ['11', '12', '13', '14', '15', '22', '23', '24', '25'],
+          { random: () => 0.999, correctedNineKey },
+        );
+      }
+    },
+  });
+  define('player-engine.lanes.randomizeLR2ConvergeNotes', {
+    run: () => {
+      lanesAPI.randomizeLR2ConvergeNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 125 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15'],
+        { target: '16', scratch: '16', random: () => 0.5 },
+      );
+    },
+  });
+  define('player-engine.lanes.randomizeAllScratchNotes', {
+    run: () => {
+      lanesAPI.randomizeAllScratchNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 125 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15', '16'],
+        { scratchLanes: ['16'], random: () => 0.5 },
+      );
+    },
+  });
+  define('player-engine.lanes.randomizePMSConvergeNotes', {
+    run: () => {
+      lanesAPI.randomizePMSConvergeNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 125 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15', '16', '17', '18', '19'],
+        { random: () => 0.5 },
+      );
+    },
+  });
+  define('player-engine.lanes.randomizePMSPlayableLanes', {
+    run: () => {
+      lanesAPI.randomizePMSPlayableLanes(
+        [
+          { channel: '11', timeMs: 0 },
+          { channel: '14', timeMs: 0 },
+          { channel: '17', timeMs: 0 },
+        ],
+        ['11', '12', '13', '14', '15', '16', '17', '18', '19'],
+        () => 0.5,
+      );
+    },
+  });
+  define('player-engine.lanes.randomizePMSPlayableNotes', {
+    run: () => {
+      lanesAPI.randomizePMSPlayableNotes(
+        [
+          { channel: '11', timeMs: 0 },
+          { channel: '14', timeMs: 0 },
+          { channel: '17', timeMs: 0 },
+        ],
+        ['11', '12', '13', '14', '15', '16', '17', '18', '19'],
+        { random: () => 0.5 },
+      );
+    },
+  });
+  define('player-engine.lanes.createBeatorajaLaneRandom', {
+    run: () => {
+      lanesAPI.createBeatorajaLaneRandom('9223372036854775807').nextInt!(26);
+    },
+  });
+  define('player-engine.lanes.parseLaneRandomSeed', {
+    run: () => {
+      lanesAPI.parseLaneRandomSeed('9223372036854775807');
+    },
+  });
+  define('player-engine.lanes.drawLaneRandomIndex', {
+    run: () => {
+      lanesAPI.drawLaneRandomIndex(9, () => 0.5);
+    },
+  });
+  define('player-engine.display.adjustBeatorajaJudgeTiming', {
+    run() {
+      displayAPI.adjustBeatorajaJudgeTiming(0, 'GREAT', 45);
+    },
+  });
+  define('player-engine.display.resolveJudgeTimingAutoAdjust', {
+    run() {
+      displayAPI.resolveJudgeTimingAutoAdjust(true);
+    },
+  });
+  define('player-engine.display.isLR2JudgeTimingAutoAdjust', {
+    run() {
+      displayAPI.isLR2JudgeTimingAutoAdjust('LR2-SILENT');
+    },
+  });
+  define('player-engine.lanes.clampScrollSection', {
+    run: () => {
+      lanesAPI.clampScrollSection(4);
+    },
+  });
+  define('player-engine.lanes.clampScrollRate', {
+    run: () => {
+      lanesAPI.clampScrollRate(0.5);
+    },
+  });
+  define('player-engine.lanes.clampExtraNoteDepth', {
+    run() {
+      lanesAPI.clampExtraNoteDepth(4);
+    },
+  });
+  define('player-engine.lanes.clampLongNoteRate', {
+    run() {
+      lanesAPI.clampLongNoteRate(0.5);
+    },
+  });
+  define('player-engine.lanes.addLongNotes', {
+    run(fixtures) {
+      const resolved = resolveChart(fixtures.sampleBmsJSON);
+      const prepared = playerAPI.preparePlaybackChart(resolved);
+      lanesAPI.addLongNotes(resolved, prepared.notes, 'ADD_LN', { random: () => 0 });
+    },
+  });
+  define('player-engine.lanes.prepareMineModifier', {
+    run: (fixtures) => {
+      lanesAPI.prepareMineModifier(resolveChart(fixtures.sampleBmsJSON), 'ADD_RANDOM', { random: () => 0.95 });
+    },
+  });
+  define('player-engine.lanes.randomizeSpiralNotes', {
+    run: () => {
+      lanesAPI.randomizeSpiralNotes(
+        [
+          { channel: '11', timeMs: 0, endTimeMs: 1000 },
+          { channel: '12', timeMs: 500 },
+          { channel: '12', timeMs: 1100 },
+        ],
+        ['11', '12', '13', '14', '15'],
+        () => 0.5,
+      );
+    },
+  });
+  define('player-engine.lanes.randomizeSRandomNotes', {
+    run: () => {
+      for (const ruleset of ['lr2', 'beatoraja'] as const) {
+        lanesAPI.randomizeSRandomNotes(
+          [
+            { channel: '11', timeMs: 0, endTimeMs: 1000 },
+            { channel: '12', timeMs: 10 },
+            { channel: '12', timeMs: 30 },
+            { channel: '12', timeMs: 1100 },
+          ],
+          ['11', '12', '13', '14', '15'],
+          { ruleset, random: () => 0.5 },
+        );
+      }
+    },
+  });
   define('player-engine.lanes.resolveLaneOptionChannels', {
     run: () => {
       lanesAPI.resolveLaneOptionChannels('1P', '7');
+      lanesAPI.resolveLaneOptionChannels('1P', '5');
+      lanesAPI.resolveLaneOptionChannels('1P', '9', [{ channel: '22' }]);
+      lanesAPI.resolveLaneOptionChannels('2P', '48');
     },
   });
   define('player-engine.lanes.isPlayableInputChannel', {
     run: () => {
       lanesAPI.isPlayableInputChannel('17');
       lanesAPI.isPlayableInputChannel('01');
+    },
+  });
+  define('player-engine.lanes.resolveAutoScratchSides', {
+    run: () => {
+      lanesAPI.resolveAutoScratchSides({ autoScratch1P: true, autoScratch2P: false });
+    },
+  });
+  define('player-engine.lanes.resolveAutoScratchChannels', {
+    run: () => {
+      lanesAPI.resolveAutoScratchChannels({ autoScratch1P: true }, ['16', '26']);
     },
   });
   define('player-engine.lanes.resolveLaneChannels', {
@@ -1167,6 +1568,17 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
       mapper.maxBeatWithinDistance(1, 6);
     },
   });
+  define('player-engine.display.createLR2ConstantScrollMapper', {
+    run() {
+      const mapper = displayAPI.createLR2ConstantScrollMapper([
+        { beat: 0, bpm: 120 },
+        { beat: 4, bpm: 240 },
+      ]);
+      mapper.distanceBetween(2, 8);
+      mapper.firstBeatBeyondDistance(0, 4);
+      mapper.mirrorBeatAt(4, 8);
+    },
+  });
   define('player-engine.display.createScrollDistanceMapper', {
     run: () => {
       const mapper = displayAPI.createScrollDistanceMapper(BENCH_SCROLL_TIMELINE, BENCH_SPEED_TIMELINE);
@@ -1223,35 +1635,6 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
   });
 }
 
-/** `@be-music/player-engine/audio-sink`: the PCM sinks over Web Audio. */
-function registerAudioSinkCases(define: DefineBenchmarkCase): void {
-  define('player-engine.audio-sink.createBrowserAudioSink', {
-    run: () => {
-      const sink = audioSinkAPI.createBrowserAudioSink(createBenchAudioContext(), {
-        sampleRate: 44_100,
-        channels: 2,
-        samplesPerFrame: 512,
-        mode: 'manual',
-      });
-      sink.write(BENCH_PCM_CHUNK);
-      sink.getClockState();
-    },
-  });
-  define('player-engine.audio-sink.createNodeAudioSink', {
-    // Opens the machine's audio output through node-web-audio-api.
-    run: async () => {
-      const sink = await audioSinkAPI.createNodeAudioSink({
-        sampleRate: 44_100,
-        channels: 2,
-        samplesPerFrame: 512,
-        mode: 'manual',
-      });
-      sink?.destroy();
-    },
-    interactive: true,
-  });
-}
-
 const BENCH_UI_FRAME: PlayerUIFramePayload = {
   currentBeat: 0,
   currentSeconds: 0,
@@ -1292,18 +1675,6 @@ const BENCH_SPEED_TIMELINE = [
   { beat: 12, speed: 2 },
 ];
 const BENCH_BGA_CUES = Array.from({ length: 512 }, (_, index) => ({ seconds: index * 0.125, key: `${index}` }));
-const BENCH_PCM_CHUNK = new Uint8Array(new Int16Array(1024).buffer);
-
-function createBenchAudioContext(): WebAudioContextLike {
-  return {
-    currentTime: 0,
-    destination: {},
-    createBuffer: (_channels: number, length: number) => ({ getChannelData: () => new Float32Array(length) }),
-    createBufferSource: () => ({ buffer: null, connect: () => undefined, start: () => undefined }),
-    suspend: async () => undefined,
-    resume: async () => undefined,
-  };
-}
 
 const BENCH_REPLAY: BeMusicReplay = {
   format: 'be-music-replay',

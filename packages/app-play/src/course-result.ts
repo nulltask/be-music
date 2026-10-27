@@ -3,7 +3,7 @@ import type { LibraryCourse } from '@be-music/player-scene-model';
 import type { BeMusicCourseBestRecord, BeMusicChartBestRecord } from '@be-music/player-skin-sdk';
 
 /*
- * How the demo shows a course run's results: when a stage's result is skipped, and the records kept per course. The
+ * How the player shows a course run's results: when a stage's result is skipped, and the records kept per course. The
  * run itself is `CourseRun` (`@be-music/player-engine/course`); its result payload (on every family's result screen), the
  * stage graphs and how a result is presented are the play result model of `@be-music/player-scene-model`.
  */
@@ -48,14 +48,14 @@ export function courseBestRecordKey(course: LibraryCourse, placement: 'intended'
  * The player's best record on a course bar, read from the records under {@link courseBestRecordKey}, with the trophy its
  * bests earn: beatoraja's `GradeBar.getTrophy` takes the best EX score and the fewest BP (which may come from different
  * runs) over the course's notes, whether the run cleared or not. A random course bar (its stages are drawn on start)
- * and a NEW COURSE bar have no record. A NONSTOP course reads the record of the placement it would be played with.
+ * a NEW COURSE bar and a RANDOM MIX bar have no record. A NONSTOP course reads the record of the placement it would be played with.
  */
 export function lookupCourseBestRecord(
   course: LibraryCourse,
   records: { get(key: string): BeMusicChartBestRecord | undefined },
   placement: 'intended' | 'lr2' = 'intended',
 ): BeMusicCourseBestRecord | undefined {
-  if (course.random !== undefined || course.newCourse === true) return undefined;
+  if (course.random !== undefined || course.newCourse === true || course.randomMix === true) return undefined;
   const record = records.get(courseBestRecordKey(course, placement));
   if (record === undefined) return undefined;
   const noteCount = course.stages.reduce((sum, stage) => sum + (stage.chart?.totalNotes ?? 0), 0);

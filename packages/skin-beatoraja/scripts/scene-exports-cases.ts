@@ -271,9 +271,19 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
       sceneAPI.beatorajaKeysongOp('14');
     },
   });
+  define('skin-beatoraja.scene.resolveBeatorajaGaugeTypeOps', {
+    run: () => {
+      sceneAPI.resolveBeatorajaGaugeTypeOps('EX-HARD');
+    },
+  });
   define('skin-beatoraja.scene.resolveBeatorajaPlayStartOps', {
     run: () => {
       sceneAPI.resolveBeatorajaPlayStartOps({ playVariant: '7', autoPlay: false, traits: BENCH_SELECT_FACTS.traits });
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaConstantOps', {
+    run: () => {
+      sceneAPI.resolveBeatorajaConstantOps(true);
     },
   });
   define('skin-beatoraja.scene.resolveBeatorajaCoverOps', {
@@ -316,6 +326,16 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
   define('skin-beatoraja.scene.resolveBeatorajaJudgeEffect', {
     run: () => {
       sceneAPI.resolveBeatorajaJudgeEffect({ judge: 'PERFECT', combo: 321, deltaMs: -3 }, BENCH_PLACEMENT, 1200);
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaSeekTimers', {
+    run: () => {
+      sceneAPI.resolveBeatorajaSeekTimers({
+        started: [0, 41, 46, 446, 51, 101, 140],
+        beat: 128.2,
+        gauge: BENCH_GAUGE,
+        lastNoteBeats: { 1: 300 },
+      });
     },
   });
   define('skin-beatoraja.scene.resolveBeatorajaFrameTimers', {
@@ -574,9 +594,71 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
       sceneAPI.beatorajaMissingCourseStages(BENCH_COURSE);
     },
   });
+  define('skin-beatoraja.scene.resolveBeatorajaScoreTimers', {
+    run: () => {
+      sceneAPI.resolveBeatorajaScoreTimers({ exScore: 180, totalNotes: 100, hasJudgment: true, started: new Set() });
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaHCNTimers', {
+    run: () => {
+      sceneAPI.resolveBeatorajaHCNTimers({ lanes: [{ side: 2, plate: 2, lane: 26, gaining: true }], started: [] });
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaCharacterTimers', {
+    run: () => {
+      sceneAPI.resolveBeatorajaCharacterTimers({
+        nowMs: 100,
+        timers: new Map([
+          [900, 0],
+          [905, 0],
+        ]),
+        state: { lastNotes: [0, 0] },
+        stage: 'playing',
+        pastNotes: 1,
+        latestJudge: 'GREAT',
+        gaugeMax: false,
+      });
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaOptionButton', {
+    run: () => {
+      sceneAPI.resolveBeatorajaOptionButton(54, { battleMode: 'OFF', dpFlip: true }, false);
+      sceneAPI.resolveBeatorajaOptionButton(308, { longNoteMode: 'HCN' }, false);
+      sceneAPI.resolveBeatorajaOptionButton(42, { random1P: 'H-RANDOM' }, false, { pms: true });
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaPlayOptionIndex', {
+    run: () => {
+      sceneAPI.resolveBeatorajaPlayOptionIndex(54, { battleMode: 'BATTLE-AS' });
+      sceneAPI.resolveBeatorajaPlayOptionIndex(78, { gaugeAutoShift: 'BEST_CLEAR' });
+      sceneAPI.resolveBeatorajaPlayOptionIndex(43, { random2P: 'S_RANDOM_PLAYABLE' });
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaOptionIndex', {
+    run: () => {
+      sceneAPI.resolveBeatorajaOptionIndex(370, { lamp: 'EX_HARD' });
+    },
+  });
   define('skin-beatoraja.scene.beatorajaClearLampOp', {
     run: () => {
       sceneAPI.beatorajaClearLampOp('EX_HARD');
+    },
+  });
+
+  // Replay slots
+  define('skin-beatoraja.scene.beatorajaReplayButtonSlot', {
+    run: () => {
+      sceneAPI.beatorajaReplayButtonSlot(316);
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaResultReplayOps', {
+    run: () => {
+      sceneAPI.resolveBeatorajaResultReplayOps(['exists', 'saved', 'none', 'exists']);
+    },
+  });
+  define('skin-beatoraja.scene.resolveBeatorajaSelectReplayOps', {
+    run: () => {
+      sceneAPI.resolveBeatorajaSelectReplayOps([true, false, true, false], 2);
     },
   });
 

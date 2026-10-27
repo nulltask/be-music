@@ -14,6 +14,8 @@
       "emptyPoor": 0,
       "exScore": 10,
       "score": 122222,
+      "combo": 3,
+      "maxCombo": 5,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -47,10 +49,12 @@
           {"id":7,"channel":"13","type":"normal","timeUs":3166667},
           {"id":8,"channel":"13","type":"normal","timeUs":3666667}
         ],
+        "headerBPM": 120,
+        "bpmRange": {"min":120,"max":240},
         "chartFingerprint": "bmfp0:e5caf19e2bd4a8e681c9d0b3bc66ada7347c6b88ceb28ef78f2606c427ffc128",
         "playFingerprint": "bmfp0:e5caf19e2bd4a8e681c9d0b3bc66ada7347c6b88ceb28ef78f2606c427ffc128",
         "title": "tempo",
-        "artist": "characterization"
+        "artist": "Be-Music Dev Team"
       },
       "inputs": [
         {"seq":0,"timeUs":500000,"action":"down","channels":["11"],"tokens":["z"]},
@@ -110,10 +114,11 @@
         "noteCount": 9,
         "maxCombo": 5,
         "djLevel": "B",
-        "gauge": {"type":"NORMAL","final":100,"cleared":true}
+        "gauge": {"type":"NORMAL","final":100,"cleared":true},
+        "fullCombo": false
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":4,"great":2,"good":2,"bad":1,"poor":0,"emptyPoor":0},
         "fast": 3,
         "slow": 1,
@@ -260,6 +265,8 @@
       "emptyPoor": 0,
       "exScore": 10,
       "score": 122222,
+      "combo": 3,
+      "maxCombo": 5,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -398,6 +405,8 @@
       "emptyPoor": 0,
       "exScore": 18,
       "score": 200000,
+      "combo": 9,
+      "maxCombo": 9,
       "gauge": {
         "current": 100,
         "max": 100,
@@ -456,8 +465,8 @@
         "djLevel": "AAA",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
-      "iidx": {
-        "ruleset": "iidx/0",
+      "____": {
+        "ruleset": "____/0",
         "judge": {"pgreat":9,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
         "fast": 0,
         "slow": 0,

@@ -15,7 +15,13 @@ export function renderShutter(ctx: PlayfieldContext): void {
   if (ctx.skinBinding?.drawsLaneCover) return;
   if (ctx.play.laneX.size === 0) return;
   for (const cover of ctx.play.resolveLaneCovers()) {
-    paintSideShutter(ctx, collectSideBounds(ctx, cover.side), cover.sudden, cover.hidden);
+    paintSideShutter(
+      ctx,
+      collectSideBounds(ctx, cover.side),
+      cover.sudden,
+      cover.hidden,
+      ctx.drawsLift ? cover.lift : 0,
+    );
   }
 }
 
@@ -42,7 +48,7 @@ function collectSideBounds(
     left = Math.min(left, lane.x);
     right = Math.max(right, lane.x + lane.w);
     top = Math.min(top, lane.top);
-    bottom = Math.max(bottom, lane.bottom);
+    bottom = Math.max(bottom, lane.baseBottom ?? lane.bottom);
   }
   if (!any) return undefined;
   if (!Number.isFinite(left) || !Number.isFinite(right) || bottom - top <= 0) return undefined;
@@ -54,6 +60,7 @@ function paintSideShutter(
   bounds: { left: number; right: number; top: number; bottom: number } | undefined,
   sudden: number,
   hidden: number,
+  lift: number,
 ): void {
   if (!bounds) return;
   const width = bounds.right - bounds.left;
@@ -62,11 +69,15 @@ function paintSideShutter(
     // SUDDEN — opaque rect at the TOP of the playfield. Notes emerge below it.
     ctx.shutterLayer.rect(bounds.left, bounds.top, width, height * sudden).fill({ color: 0x000000, alpha: 0.92 });
   }
+  if (lift > 0)
+    ctx.shutterLayer
+      .rect(bounds.left, bounds.bottom - height * lift, width, height * lift)
+      .fill({ color: 0x000000, alpha: 1 });
   if (hidden > 0) {
     // HIDDEN — opaque rect at the BOTTOM of the playfield, just above the judge line (lanes' `bottom` is the judge
     // line bottom edge — the mask itself ends there).
     ctx.shutterLayer
-      .rect(bounds.left, bounds.bottom - height * hidden, width, height * hidden)
+      .rect(bounds.left, bounds.bottom - height * (lift + hidden), width, height * hidden)
       .fill({ color: 0x000000, alpha: 0.92 });
   }
 }

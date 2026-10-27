@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { ReplayRulesetResult } from './format.ts';
-import { resolveRulesetResultLamp } from './result-lamp.ts';
+import { resolveRulesetResultLamp, resolveRulesetResultMissCount } from './result-lamp.ts';
 
 function result(
   gauge: { type: string; cleared: boolean },
@@ -21,19 +21,35 @@ function result(
 }
 
 describe('resolveRulesetResultLamp', () => {
-  test('a run that did not clear is FAILED whatever its judgments', () => {
+  test('a final combo break overrides even a maximum combo covering every note', () => {
+    const broken = result({ type: 'NORMAL', cleared: true }, { bad: 0, poor: 0, good: 0, great: 0 });
+    broken.maxCombo = broken.noteCount;
+    broken.fullCombo = false;
+    expect(resolveRulesetResultLamp(broken, 'beatoraja')).toBe('NORMAL');
+  });
+
+  test('LR2 awards a full combo before gauge failure, while other rulesets still require a clear', () => {
     expect(resolveRulesetResultLamp(result({ type: 'HARD', cleared: false }, { bad: 0, poor: 0 }), 'lr2')).toBe(
-      'FAILED',
+      'FULL_COMBO',
     );
+  });
+
+  test('an incomplete LR2 play and an uncleared beatoraja or That-Which-Must-Not-Be-Named full combo still fail', () => {
+    expect(resolveRulesetResultLamp(result({ type: 'GROOVE', cleared: false }), 'lr2')).toBe('FAILED');
+    for (const ruleset of ['beatoraja', '____'] as const) {
+      expect(resolveRulesetResultLamp(result({ type: 'NORMAL', cleared: false }, { bad: 0, poor: 0 }), ruleset)).toBe(
+        'FAILED',
+      );
+    }
   });
 
   test.each([
     ['ASSIST-EASY', 'beatoraja', 'ASSIST_EASY'],
-    ['ASSISTED-EASY', 'iidx', 'ASSIST_EASY'],
+    ['ASSISTED-EASY', '____', 'ASSIST_EASY'],
     ['EASY', 'lr2', 'EASY'],
     ['GROOVE', 'lr2', 'NORMAL'],
     ['NORMAL', 'beatoraja', 'NORMAL'],
-    ['HARD', 'iidx', 'HARD'],
+    ['HARD', '____', 'HARD'],
     ['EX-HARD', 'beatoraja', 'EX_HARD'],
     ['DEATH', 'lr2', 'NORMAL'],
     ['DEATH', 'beatoraja', 'EX_HARD'],
@@ -48,17 +64,35 @@ describe('resolveRulesetResultLamp', () => {
     expect(resolveRulesetResultLamp(fullCombo, 'lr2')).toBe('FULL_COMBO');
   });
 
-  test('beatoraja awards PERFECT and MAX; LR2 and IIDX stop at FULL COMBO', () => {
+  test('beatoraja awards PERFECT and MAX; LR2 and That-Which-Must-Not-Be-Named stop at FULL COMBO', () => {
     const perfect = result({ type: 'NORMAL', cleared: true }, { bad: 0, poor: 0, good: 0 });
     const max = result({ type: 'NORMAL', cleared: true }, { bad: 0, poor: 0, good: 0, great: 0 });
     expect(resolveRulesetResultLamp(perfect, 'beatoraja')).toBe('PERFECT');
     expect(resolveRulesetResultLamp(max, 'beatoraja')).toBe('MAX');
     expect(resolveRulesetResultLamp(max, 'lr2')).toBe('FULL_COMBO');
-    expect(resolveRulesetResultLamp(max, 'iidx')).toBe('FULL_COMBO');
+    expect(resolveRulesetResultLamp(max, '____')).toBe('FULL_COMBO');
   });
 
   test('a chart without notes takes its gauge’s lamp', () => {
     const empty = result({ type: 'HARD', cleared: true }, { pgreat: 0, great: 0, good: 0, bad: 0, poor: 0 });
     expect(resolveRulesetResultLamp(empty, 'beatoraja')).toBe('HARD');
+  });
+});
+
+describe('resolveRulesetResultMissCount', () => {
+  test('a play that reached the end counts its BADs, POORs and empty POORs', () => {
+    expect(resolveRulesetResultMissCount(result({ type: 'NORMAL', cleared: true }))).toBe(5);
+  });
+
+  test('a play that failed or was given up mid-way also counts the notes it never judged', () => {
+    const early = { ...result({ type: 'HARD', cleared: false }), noteCount: 40 };
+    // 1 BAD + 1 POOR + 3 empty POORs, plus the 21 notes never reached.
+    expect(resolveRulesetResultMissCount(early)).toBe(26);
+  });
+
+  test('a mine POOR (counted in an LR2 POOR) judges no note', () => {
+    const mines = { ...result({ type: 'GROOVE', cleared: false }, { poor: 3 }), noteCount: 21, minePoor: 2 };
+    // 1 BAD + 3 POORs + 3 empty POORs, plus the 2 notes the mine POORs do not stand for.
+    expect(resolveRulesetResultMissCount(mines)).toBe(9);
   });
 });

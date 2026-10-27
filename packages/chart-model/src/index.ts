@@ -66,6 +66,8 @@ export {
 } from './timelines.ts';
 
 export {
+  resolvePoorBGAMode,
+  type PoorBGAMode,
   buildBGATimelines,
   buildBmsBGATimeline,
   type BGACue,
@@ -124,7 +126,7 @@ export {
 } from './fingerprint.ts';
 export { resolveChartMainBPM, type MainBPMChart } from './main-bpm.ts';
 export { canonicalizeJSONValue } from './fingerprint-document.ts';
-export { sha256Hex } from './sha256.ts';
+export { sha256Hex } from '@be-music/shared-utils/hash';
 
 export {
   compareEvents,

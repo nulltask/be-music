@@ -11,7 +11,7 @@ import {
   resolveLaneModeExtension,
   withEventTimes,
 } from './fingerprint-items.ts';
-import { sha256Hex } from './sha256.ts';
+import { sha256Hex } from '@be-music/shared-utils/hash';
 import {
   type BeMusicFingerprintDocument,
   type BeMusicFingerprintOptions,

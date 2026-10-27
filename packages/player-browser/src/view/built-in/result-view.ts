@@ -4,7 +4,7 @@
  * plays the jingle and steps the screen.
  */
 
-import { computeScoreRate, resolveIIDXRankLabel } from '@be-music/player-engine/ruleset';
+import { computeScoreRate, resolve____RankLabel } from '@be-music/player-engine/ruleset';
 import { resolveStageOrientation } from '@be-music/player-skin-sdk';
 import { Color, Container, Graphics } from 'pixi.js';
 import type { BrowserAssetSource } from '../../collection/types.ts';
@@ -37,9 +37,9 @@ export const BUILT_IN_RESULT_TIMING: SceneViewTiming = {
   fadeOutMs: 0,
 };
 
-/** The rank label a skin shows: the IIDX rank of the EX score, `AAA` for a chart without notes. */
+/** The rank label a skin shows: the That-Which-Must-Not-Be-Named rank of the EX score, `AAA` for a chart without notes. */
 export function resolveBuiltInRankLabel(exScore: number, total: number): string {
-  return total <= 0 ? 'AAA' : resolveIIDXRankLabel(exScore, total);
+  return total <= 0 ? 'AAA' : resolve____RankLabel(exScore, total);
 }
 
 export interface BuiltInResultViewOptions {

@@ -26,6 +26,7 @@ import {
   isBeatorajaCleanHit,
   isBeatorajaComboJudge,
   resolveBeatorajaFrameTimers,
+  resolveBeatorajaSeekTimers,
   resolveBeatorajaJudgeEffect,
   resolveBeatorajaLanePlacement,
   resolveBeatorajaLaneTimers,
@@ -201,13 +202,78 @@ describe('resolveBeatorajaFrameTimers', () => {
   });
 
   it('starts the full-gauge timer at the maximum', () => {
-    expect(
-      resolveBeatorajaFrameTimers({ beat: 3, previousBeat: 3, gauge: { current: 100, max: 100 } }).startOnce,
-    ).toEqual([TIMER_GAUGE_MAX_1P]);
+    expect(resolveBeatorajaFrameTimers({ beat: 3, previousBeat: 3, gauge: { current: 100, max: 100 } }).start).toEqual([
+      TIMER_GAUGE_MAX_1P,
+    ]);
     expect(resolveBeatorajaFrameTimers({ beat: 3, previousBeat: 3, gauge: { current: 0, max: 0 } })).toEqual({
       start: [],
       startOnce: [],
-      stop: [],
+      stop: [TIMER_GAUGE_MAX_1P],
     });
+  });
+});
+
+describe('GAUGE_MAX transitions', () => {
+  it.each([100, 200])('stops below max and restarts each full interval with max %s', (max) => {
+    let previousGauge: number | undefined;
+    const frames = [max - 1, max, max, max - 1, max, max];
+    const changes = frames.map((current) => {
+      const change = resolveBeatorajaFrameTimers({
+        beat: 3,
+        previousBeat: 3,
+        gauge: { current, max },
+        ...(previousGauge !== undefined ? { previousGauge } : {}),
+      });
+      previousGauge = current;
+      return change;
+    });
+    expect(changes.map((change) => change.start.includes(TIMER_GAUGE_MAX_1P))).toEqual([
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+    ]);
+    expect(changes.map((change) => change.stop.includes(TIMER_GAUGE_MAX_1P))).toEqual([
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+    ]);
+    expect(changes.every((change) => !change.startOnce.includes(TIMER_GAUGE_MAX_1P))).toBe(true);
+  });
+
+  it('starts at full on a fresh scene and treats invalid maximum as off', () => {
+    expect(resolveBeatorajaFrameTimers({ beat: 3, previousBeat: 3, gauge: { current: 50, max: 50 } }).start).toEqual([
+      TIMER_GAUGE_MAX_1P,
+    ]);
+    expect(resolveBeatorajaFrameTimers({ beat: 3, previousBeat: 3, gauge: { current: 0, max: 0 } }).stop).toEqual([
+      TIMER_GAUGE_MAX_1P,
+    ]);
+  });
+});
+
+describe('resolveBeatorajaSeekTimers', () => {
+  it("stops every running timer but the scene's, and starts the rhythm again", () => {
+    const changes = resolveBeatorajaSeekTimers({
+      started: [0, 1, 3, 40, 41, 141, 46, 446, 51, 101, 71, 48, 143, 140],
+      beat: 4,
+    });
+    expect(changes.stop).toEqual([46, 446, 51, 101, 71, 48, 143, 140]);
+    expect(changes.start).toEqual([TIMER_RHYTHM]);
+    expect(changes.startOnce).toEqual([]);
+  });
+
+  it('starts the full gauge and the end of the notes once when the second sought is past them', () => {
+    const changes = resolveBeatorajaSeekTimers({
+      started: [],
+      beat: 18,
+      gauge: { current: 100, max: 100 },
+      lastNoteBeats: { 1: 16, 2: 20 },
+    });
+    expect(changes.startOnce).toEqual([TIMER_GAUGE_MAX_1P, TIMER_ENDOFNOTE_1P]);
   });
 });
