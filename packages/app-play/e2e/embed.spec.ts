@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { unzipSync, zipSync } from 'fflate';
 import { createHash } from 'node:crypto';
 import { lr2CourseList } from '../../../scripts/course-checklist/fixtures.ts';
@@ -35,6 +35,16 @@ async function openEmbed(page: Page, folders: readonly string[], chart?: string)
 
 const stageCanvas = (page: Page) => page.locator('canvas[aria-label="be-music stage"]');
 
+/** Fails when `inner` sticks out of `outer`, as a theme's fixed button height once cut the content of a row or a button. */
+async function expectInside(outer: Locator, inner: Locator): Promise<void> {
+  const a = (await outer.boundingBox())!;
+  const b = (await inner.boundingBox())!;
+  expect(b.x).toBeGreaterThanOrEqual(a.x - 0.5);
+  expect(b.y).toBeGreaterThanOrEqual(a.y - 0.5);
+  expect(b.x + b.width).toBeLessThanOrEqual(a.x + a.width + 0.5);
+  expect(b.y + b.height).toBeLessThanOrEqual(a.y + a.height + 0.5);
+}
+
 test(
   'a single chart waits behind a play button, plays in AUTO with seekable controls, and offers a replay',
   SMOKE,
@@ -43,6 +53,7 @@ test(
     const play = page.getByRole('button', { name: 'Play', exact: true });
     await expect(play).toBeEnabled({ timeout: 60_000 });
     await expect(stageCanvas(page)).toHaveCount(0);
+    await expectInside(play, play.locator('svg'));
     const hud = page.locator('be-music-preview-hud');
     await expect(hud.getByRole('heading', { name: 'Fixture A' })).toBeVisible();
     await play.click();
@@ -115,6 +126,12 @@ test('several charts list first, play the one picked at once, and return to the 
   const list = page.locator('be-music-preview-select');
   await expect(list.getByRole('button')).toHaveCount(2, { timeout: 60_000 });
   await expect(stageCanvas(page)).toHaveCount(0);
+  for (const row of await list.getByRole('button').all()) {
+    await expectInside(row, row.locator('[part~="artwork"]'));
+    await expectInside(row, row.locator('.title'));
+  }
+  // The list keeps its padding even under the page's reset of every element's padding.
+  expect((await list.getByRole('heading').boundingBox())!.x).toBeGreaterThan(0);
   await page.screenshot({ path: info.outputPath('embed-select.png') });
   await list.getByRole('button', { name: /Fixture A/ }).click();
   await expect(list).toHaveCount(0);
@@ -155,6 +172,7 @@ test('a paused play shows a centred play button, and the controls fade out while
   await hud.locator('be-music-playback-controls').getByRole('button', { name: 'Pause', exact: true }).click();
   const resume = hud.locator('button.resume');
   await expect(resume).toBeVisible();
+  await expectInside(resume, resume.locator('svg'));
   await expect(hud.getByText('Paused', { exact: true })).toHaveCount(0);
   // Paused, the controls stay however long the viewer waits.
   await page.waitForTimeout(3500);
