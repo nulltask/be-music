@@ -5,7 +5,7 @@
     "bpm": 120,
     "extras": {},
     "title": "Sample",
-    "artist": "Codex"
+    "artist": "Be-Music Dev Team"
   },
   "resources": {
     "wav": {
@@ -174,7 +174,7 @@
         {
           "kind": "header",
           "command": "ARTIST",
-          "value": "Codex"
+          "value": "Be-Music Dev Team"
         },
         {
           "kind": "header",

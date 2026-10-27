@@ -6,7 +6,7 @@
       "bpm": 120,
       "extras": {},
       "title": "Measure Length Test",
-      "artist": "Codex"
+      "artist": "Be-Music Dev Team"
     },
     "resources": {
       "wav": {
@@ -52,7 +52,7 @@
     "roundTripPlayableNotesEqual": true,
     "lines": [
       "#TITLE Measure Length Test",
-      "#ARTIST Codex",
+      "#ARTIST Be-Music Dev Team",
       "#BPM 120",
       "#WAV01 sample.wav",
       "#00102:0.5",
@@ -94,7 +94,7 @@
         "chartFingerprint": "bmfp0:ff23bb38044a1d05a29e50a72d9fe57bbee0513116fb902b9c98706d36e7add1",
         "playFingerprint": "bmfp0:ff23bb38044a1d05a29e50a72d9fe57bbee0513116fb902b9c98706d36e7add1",
         "title": "Measure Length Test",
-        "artist": "Codex"
+        "artist": "Be-Music Dev Team"
       },
       "notes": [
         "0 11 normal",
