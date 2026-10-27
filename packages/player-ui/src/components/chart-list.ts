@@ -36,13 +36,22 @@ export class BeMusicChartListElement extends BeMusicElement {
         overflow: auto;
         overscroll-behavior: contain;
       }
-      button {
+      li + li {
+        margin-top: 2px;
+      }
+      /* Basecoat's .btn is one line high; a row is two lines, the title over the artist. */
+      button.btn {
         display: grid;
-        grid-template-columns: 48px 1fr;
-        gap: 12px;
+        grid-template-columns: var(--be-music-row-kind-width, 3.5ch) minmax(0, 1fr);
+        align-items: center;
+        justify-content: stretch;
+        gap: var(--be-music-gap, 8px);
         width: 100%;
+        height: auto;
+        min-height: 2.75rem;
+        padding: 6px var(--be-music-gap, 8px);
         text-align: left;
-        margin-bottom: 5px;
+        white-space: normal;
         border-color: transparent;
       }
       button[aria-current='true'] {
@@ -50,12 +59,28 @@ export class BeMusicChartListElement extends BeMusicElement {
         color: var(--accent-foreground, inherit);
         border-color: var(--border, transparent);
       }
-      strong {
-        display: block;
-        overflow-wrap: anywhere;
+      .text {
+        display: grid;
+        min-width: 0;
       }
-      .badge {
+      strong {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .text .muted {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .kind {
         color: var(--primary, #abcaff);
+        font-size: 0.85em;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      .empty-list {
+        padding: var(--be-music-gap, 8px);
       }
     `,
   ];
@@ -116,8 +141,8 @@ export class BeMusicChartListElement extends BeMusicElement {
                   }
                 }}
               >
-                <span class="badge">${browseEntryBadge(entry)}</span
-                ><span
+                <span class="kind" part="row-kind">${browseEntryBadge(entry)}</span
+                ><span class="text"
                   ><strong>${browseEntryTitle(entry)}</strong
                   ><span class="muted"
                     >${entry.kind === 'chart' ? (entry.chart.artist ?? '') : (browseEntryCount(entry) ?? '')}</span
@@ -128,6 +153,6 @@ export class BeMusicChartListElement extends BeMusicElement {
           `,
         )}
       </ul>
-      ${entries.length === 0 ? html`<p class="muted">No matching charts.</p>` : ''}`;
+      ${entries.length === 0 ? html`<p class="muted empty-list">No matching charts.</p>` : ''}`;
   }
 }

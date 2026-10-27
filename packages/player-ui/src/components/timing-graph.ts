@@ -11,11 +11,12 @@ export class BeMusicTimingGraphElement extends DataElement<BeMusicTimingData> {
     const points = hits
       .map((hit, i) => `${(i / 31) * 220},${22 + Math.max(-100, Math.min(100, hit.deltaMs)) * 0.22}`)
       .join(' ');
-    return html`<section class="card" part="panel">
+    return html`<section class="panel" part="panel">
       <h3>Timing</h3>
       <svg
         part="graph"
         viewBox="0 0 220 44"
+        preserveAspectRatio="none"
         role="img"
         aria-label="Recent timing offsets; early above and late below center"
       >
