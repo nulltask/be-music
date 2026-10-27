@@ -134,6 +134,7 @@ export function buildChartModel(json: BeMusicJSON, extension: LaneModeExtension)
     topBuckets,
     topItems,
     base: resolveBMSBase(json),
+    laneCache: new Map(),
   };
   const pairing = resolvePairingStreams(json, entries, topBuckets);
   const segments: SegmentModel[] = [];
