@@ -314,7 +314,12 @@ export async function loadCourseRun(db: Database, courseScoreId: string) {
   if (row === undefined) return undefined;
   const player =
     row.handle !== null && row.displayName !== null
-      ? { handle: row.handle, displayName: row.displayName, anonymous: row.anonymous === true }
+      ? {
+          handle: row.handle,
+          displayName: row.displayName,
+          anonymous: row.anonymous === true,
+          avatarKey: row.avatarKey,
+        }
       : null;
   return { run: row.run, player, results: results.sort(byRulesetOrder) };
 }
