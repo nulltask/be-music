@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
+import { DEFAULT_LR2_RANDOM_MIX_SETTINGS } from '@be-music/player-engine/course';
 import type { CourseView } from '@be-music/player-scene-model';
 import {
+  formatLR2RandomMixSetting,
   lr2ShowsCourseCombo,
   resolveLR2JudgeCombo,
   resolveLR2CourseStageDifficultyOps,
@@ -14,6 +16,8 @@ import {
   resolveLR2CourseOps,
   resolveLR2CourseText,
   resolveLR2NonstopStage,
+  resolveLR2RandomMixButtonState,
+  resolveLR2RandomMixText,
 } from './course.ts';
 
 function course(stageCount: number, stageIndex?: number, kind: CourseView['kind'] = 'grade'): CourseView {
@@ -143,6 +147,38 @@ describe('LR2 course maker', () => {
     expect(resolveLR2CourseMakerAction(240)).toEqual({ kind: 'connection', slot: 0 });
     expect(resolveLR2CourseMakerAction(248)).toEqual({ kind: 'connection', slot: 8 });
     expect(resolveLR2CourseMakerAction(268)).toEqual({ kind: 'default-connection' });
+    expect(resolveLR2CourseMakerAction(260)).toEqual({ kind: 'random-mix', setting: 'preferredLevel' });
+    expect(resolveLR2CourseMakerAction(263)).toEqual({ kind: 'random-mix', setting: 'bpmRange' });
+    expect(resolveLR2CourseMakerAction(266)).toEqual({ kind: 'random-mix', setting: 'stageCount' });
+    expect(resolveLR2CourseMakerAction(267)).toBeUndefined();
+  });
+
+  it('writes the RANDOM MIX settings as LR2 does, and draws their buttons at the value', () => {
+    const defaults = DEFAULT_LR2_RANDOM_MIX_SETTINGS;
+    expect([190, 191, 192, 193, 194, 195, 196].map((st) => resolveLR2RandomMixText(st, defaults))).toEqual([
+      'OFF',
+      'NO LIMIT',
+      'NO LIMIT',
+      '+- 10BPM',
+      'NO LIMIT',
+      'NO LIMIT',
+      '5 STAGE',
+    ]);
+    const set = { preferredLevel: 12, maxLevel: 10, minLevel: 3, bpmRange: 0, maxBPM: 200, minBPM: 120, stageCount: 0 };
+    expect([190, 191, 192, 193, 194, 195, 196].map((st) => resolveLR2RandomMixText(st, set))).toEqual([
+      'LEVEL 12',
+      'LEVEL 10',
+      'LEVEL 3',
+      'NO LIMIT',
+      '200 BPM',
+      '120 BPM',
+      'RANDOM',
+    ]);
+    expect(resolveLR2RandomMixText(197, set)).toBeUndefined();
+    expect(formatLR2RandomMixSetting('bpmRange', 15)).toBe('+- 15BPM');
+    expect(resolveLR2RandomMixButtonState(260, set)).toBe(12);
+    expect(resolveLR2RandomMixButtonState(264, set)).toBe(20);
+    expect(resolveLR2RandomMixButtonState(268, set)).toBeUndefined();
   });
 
   it('draws the connection buttons at the value they edit', () => {

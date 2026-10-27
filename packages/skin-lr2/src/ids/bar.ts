@@ -20,7 +20,7 @@ export const LR2_BAR_BODY = {
   COURSE_CREATE: 7,
   /** A course. */
   COURSE: 8,
-  /** A random course (beatoraja). */
+  /** LR2's RANDOM MIX bar, which draws a course; be-music also draws a beatoraja random course with it. */
   RANDOM_COURSE: 9,
 } as const;
 

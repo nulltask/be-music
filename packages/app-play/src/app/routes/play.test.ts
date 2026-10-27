@@ -4,6 +4,7 @@ import type { AudioService } from '@be-music/player-browser/audio';
 import type { BrowserChartCollection, ChartFileHashes } from '@be-music/player-browser/collection';
 import {
   createPlayScene,
+  PlayOptionMismatchError,
   type PixiSceneHost,
   type PlayScene,
   type PlaySceneKit,
@@ -31,7 +32,16 @@ import { SceneRouter } from '../scene-router.ts';
 import type { NonstopPlay } from './nonstop.ts';
 import { PlayRoute, type LastPlay, type PlayRouteDeps } from './play.ts';
 
-vi.mock('@be-music/player-browser/host', () => ({ createPlayScene: vi.fn() }));
+vi.mock('@be-music/player-browser/host', () => ({
+  createPlayScene: vi.fn(),
+  PlayOptionMismatchError: class extends RangeError {
+    readonly options: readonly string[];
+    constructor(options: readonly string[]) {
+      super(options.join(', '));
+      this.options = options;
+    }
+  },
+}));
 vi.mock('../../recording-controller.ts', () => ({ startArmedRecording: vi.fn() }));
 vi.mock('../../hi-speed-storage.ts', () => ({ storeHiSpeed: vi.fn() }));
 
@@ -87,12 +97,14 @@ const kitOf = (family: Family): PlaySceneKit => ({ family }) as unknown as PlayS
 const REPLAY = { play: { mode: 'auto', autoScratch: false, gauge: 'GROOVE', tempo: 1.2 } } as unknown as BeMusicReplay;
 
 /** A promise settled from outside: a play's load. */
-function deferred(): { promise: Promise<void>; resolve: () => void } {
+function deferred(): { promise: Promise<void>; resolve: () => void; reject: (error: unknown) => void } {
   let resolve!: () => void;
-  const promise = new Promise<void>((res) => {
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<void>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 /** A play as `createPlayScene` makes it: the kit and options it was made with, and what it was told. */
@@ -239,6 +251,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
     lockReplayOptionsForPlay: vi.fn<PlayRouteDeps['lockReplayOptionsForPlay']>(),
     unlockReplayOptions: vi.fn<PlayRouteDeps['unlockReplayOptions']>(),
     showSelect: vi.fn<PlayRouteDeps['showSelect']>(async () => {}),
+    showPlayOptionMismatch: vi.fn<PlayRouteDeps['showPlayOptionMismatch']>(),
     setPlayOptions: vi.fn<PlayRouteDeps['setPlayOptions']>(),
   };
   const route = new PlayRoute({ ...deps, debugMenu: deps.debugMenu as unknown as DebugMenu });
@@ -532,6 +545,29 @@ describe('PlayRoute.playChart: a chart played at once', () => {
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
     expect(createPlayScene).not.toHaveBeenCalled();
   });
+  test('a chart the selected options do not fit names them, and goes back to select when dismissed', async () => {
+    const h = await harness();
+    const started = h.route.playChart(chartEntry('a'));
+    await vi.waitFor(() => expect(h.plays.at(-1)?.prepare).toHaveBeenCalled());
+    const play = h.plays.at(-1)!;
+    play.load.reject(new PlayOptionMismatchError(['Random 1P: CONVERGE'], undefined));
+    await started;
+    expect(play.start).not.toHaveBeenCalled();
+    expect(h.deps.setPlayStatus).toHaveBeenLastCalledWith('Cannot play a with Random 1P: CONVERGE');
+    expect(h.deps.showPlayOptionMismatch).toHaveBeenCalledWith(['Random 1P: CONVERGE'], expect.any(Function));
+    expect(h.deps.showSelect).not.toHaveBeenCalled();
+    h.deps.showPlayOptionMismatch.mock.calls[0]![1]();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+  });
+
+  test('a play that fails to load for another reason keeps its error', async () => {
+    const h = await harness();
+    const started = h.route.playChart(chartEntry('a'));
+    await vi.waitFor(() => expect(h.plays.at(-1)?.prepare).toHaveBeenCalled());
+    h.plays.at(-1)!.load.reject(new Error('decode failed'));
+    await expect(started).rejects.toThrow('decode failed');
+    expect(h.deps.showPlayOptionMismatch).not.toHaveBeenCalled();
+  });
 });
 
 describe('PlayRoute: where a play leads', () => {
@@ -624,6 +660,19 @@ describe('PlayRoute: where a play leads', () => {
     });
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
     await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
+  });
+
+  test('Escape from a play at another tempo keeps no record but still sends it', async () => {
+    const h = await harness();
+    const play = await started(h, chartEntry('a'));
+    play.progress.mockReturnValue(resultOf(chartEntry('a')));
+    const replay = { play: { mode: 'manual', aborted: true, tempo: 0.8 } } as unknown as BeMusicReplay;
+    play.waitForReplay.mockResolvedValueOnce(replay);
+    // A live tempo change drops the record key (`followLiveTempo`).
+    h.deps.records.activePlayRecordKey = undefined;
+    play.options.on.exit();
+    await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
+    expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
   });
 
   test('Escape from a play that keeps no record (a replay) saves and sends nothing', async () => {

@@ -1,5 +1,12 @@
 import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_TEXT } from '../ids/index.ts';
-import type { CourseDraft, CourseKind, NonstopConnection } from '@be-music/player-engine/course';
+import {
+  LR2_RANDOM_MIX_SETTING_RANGES,
+  type CourseDraft,
+  type CourseKind,
+  type LR2RandomMixSetting,
+  type LR2RandomMixSettings,
+  type NonstopConnection,
+} from '@be-music/player-engine/course';
 import type { CourseView } from '@be-music/player-scene-model';
 
 const KIND_OPS: Record<CourseKind, number> = {
@@ -153,12 +160,66 @@ export type LR2CourseMakerAction =
   | { kind: 'cancel' }
   | { kind: 'delete' }
   | { kind: 'connection'; slot: number }
-  | { kind: 'default-connection' };
+  | { kind: 'default-connection' }
+  | { kind: 'random-mix'; setting: LR2RandomMixSetting };
+
+/** The RANDOM MIX setting each of buttons 260-266 steps and texts 190-196 show (OpenLR2 L11155-L11222, L6153-L6218). */
+const LR2_RANDOM_MIX_IDS: ReadonlyArray<{ button: number; text: number; setting: LR2RandomMixSetting }> = [
+  {
+    button: LR2_BUTTON.RANDOM_MIX_PREFERRED_LEVEL,
+    text: LR2_TEXT.RANDOM_MIX_PREFERRED_LEVEL,
+    setting: 'preferredLevel',
+  },
+  { button: LR2_BUTTON.RANDOM_MIX_MAX_LEVEL, text: LR2_TEXT.RANDOM_MIX_MAX_LEVEL, setting: 'maxLevel' },
+  { button: LR2_BUTTON.RANDOM_MIX_MIN_LEVEL, text: LR2_TEXT.RANDOM_MIX_MIN_LEVEL, setting: 'minLevel' },
+  { button: LR2_BUTTON.RANDOM_MIX_BPM_RANGE, text: LR2_TEXT.RANDOM_MIX_BPM_RANGE, setting: 'bpmRange' },
+  { button: LR2_BUTTON.RANDOM_MIX_MAX_BPM, text: LR2_TEXT.RANDOM_MIX_MAX_BPM, setting: 'maxBPM' },
+  { button: LR2_BUTTON.RANDOM_MIX_MIN_BPM, text: LR2_TEXT.RANDOM_MIX_MIN_BPM, setting: 'minBPM' },
+  { button: LR2_BUTTON.RANDOM_MIX_STAGE_COUNT, text: LR2_TEXT.RANDOM_MIX_STAGE_COUNT, setting: 'stageCount' },
+];
+
+/**
+ * A RANDOM MIX setting as LR2's texts 190-196 write it (OpenLR2 L6153-L6218): `OFF` / `LEVEL n` for the preferred
+ * level, `NO LIMIT` / `LEVEL n` for the level limits, `NO LIMIT` / `+- nBPM` for the BPM range, `NO LIMIT` / `n BPM` for
+ * the BPM limits and `RANDOM` / `n STAGE` for the stage count.
+ */
+export function formatLR2RandomMixSetting(setting: LR2RandomMixSetting, value: number): string {
+  switch (setting) {
+    case 'preferredLevel':
+      return value === 0 ? 'OFF' : `LEVEL ${value}`;
+    case 'maxLevel':
+    case 'minLevel':
+      return value === 0 ? 'NO LIMIT' : `LEVEL ${value}`;
+    case 'bpmRange':
+      return value === 0 ? 'NO LIMIT' : `+- ${value}BPM`;
+    case 'maxBPM':
+    case 'minBPM':
+      return value === 0 ? 'NO LIMIT' : `${value} BPM`;
+    case 'stageCount':
+      return value === 0 ? 'RANDOM' : `${value} STAGE`;
+  }
+}
+
+/** LR2 texts 190-196: the RANDOM MIX settings ({@link formatLR2RandomMixSetting}). `undefined` for other text ids. */
+export function resolveLR2RandomMixText(st: number, settings: LR2RandomMixSettings): string | undefined {
+  const setting = LR2_RANDOM_MIX_IDS.find((ids) => ids.text === st)?.setting;
+  return setting === undefined ? undefined : formatLR2RandomMixSetting(setting, settings[setting]);
+}
+
+/**
+ * The cell LR2 buttons 260-266 draw: the value of the RANDOM MIX setting they step, in steps (a BPM button's cell is the
+ * BPM / 10), as `ButtonByInput` draws the value it edits. `undefined` for other buttons.
+ */
+export function resolveLR2RandomMixButtonState(type: number, settings: LR2RandomMixSettings): number | undefined {
+  const setting = LR2_RANDOM_MIX_IDS.find((ids) => ids.button === type)?.setting;
+  if (setting === undefined) return undefined;
+  return Math.round(settings[setting] / LR2_RANDOM_MIX_SETTING_RANGES[setting].step);
+}
 
 /**
  * The course-maker action of an LR2 select button type: 230 finishes the course being made, 231 cancels it, 233 deletes
- * the selected course, 240-248 step the connection after stage 1-9 of the selected NONSTOP course and 268 the default
- * connection. `undefined` for any other button.
+ * the selected course, 240-248 step the connection after stage 1-9 of the selected NONSTOP course, 260-266 a RANDOM MIX
+ * setting and 268 the default connection. `undefined` for any other button.
  */
 export function resolveLR2CourseMakerAction(type: number): LR2CourseMakerAction | undefined {
   if (type === LR2_BUTTON.COURSE_FINISH) return { kind: 'finish' };
@@ -168,6 +229,8 @@ export function resolveLR2CourseMakerAction(type: number): LR2CourseMakerAction 
     return { kind: 'connection', slot: type - LR2_BUTTON.COURSE_CONNECTION1 };
   }
   if (type === LR2_BUTTON.COURSE_DEFAULT_CONNECTION) return { kind: 'default-connection' };
+  const setting = LR2_RANDOM_MIX_IDS.find((ids) => ids.button === type)?.setting;
+  if (setting !== undefined) return { kind: 'random-mix', setting };
   return undefined;
 }
 

@@ -7,6 +7,7 @@ import {
   beatorajaFastSlowOp,
   beatorajaKeysongOp,
   resolveBeatorajaChartTraitOps,
+  resolveBeatorajaConstantOps,
   resolveBeatorajaCoverOps,
   resolveBeatorajaPlayStartOps,
   resolveBeatorajaGaugeTypeOps,
@@ -72,6 +73,14 @@ describe('resolveBeatorajaPlayStartOps', () => {
       BEATORAJA_OP.KEYSONG_24K_DP,
     ]);
     expect(BEATORAJA_PLAY_STARTED_OPS).toEqual({ on: BEATORAJA_OP.LOADED, off: BEATORAJA_OP.NOW_LOADING });
+  });
+});
+
+describe('resolveBeatorajaConstantOps', () => {
+  it('lights OPTION_CONSTANT (400) only while CONSTANT is on', () => {
+    expect(resolveBeatorajaConstantOps(true)).toEqual([400]);
+    expect(resolveBeatorajaConstantOps(false)).toEqual([]);
+    expect(resolveBeatorajaConstantOps(undefined)).toEqual([]);
   });
 });
 

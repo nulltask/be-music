@@ -1,13 +1,16 @@
 // The course route: a course bar started on the select screen (a NEW COURSE bar starting the course maker, a random
-// course drawn first, a NONSTOP course handed to `nonstop.ts`), an EXPERT / GRADE course's decide screen, each of its
+// course or a RANDOM MIX drawn first, a NONSTOP course handed to `nonstop.ts`), an EXPERT / GRADE course's decide screen, each of its
 // stages in turn, and its course result. The run it acts on is the course run service's (`services/courses.ts`); the
 // screens are the app's.
 
 import {
   createCourseChartRecord,
+  createDrawnRandomMixEntry,
+  createRandomMixChart,
   drawBrowserRandomCourse,
   type CourseMaker,
 } from '@be-music/player-browser/collection';
+import { LR2_RANDOM_MIX_NAME } from '@be-music/player-engine/course';
 import type {
   BeMusicCourseReplay,
   BeMusicReplay,
@@ -16,8 +19,10 @@ import type {
 } from '@be-music/player-engine/replay';
 import {
   resolveCourseView,
+  resolveLR2RandomMixKeyMode,
   type BrowseSnapshot,
   type CourseView,
+  type KeysFilter,
   type LibraryChart,
   type LibraryCourse,
   type PlayResult,
@@ -56,8 +61,10 @@ export interface CourseRouteDeps {
   readonly library: Pick<LibraryService, 'collection' | 'prepareDrawnCourse'>;
   /** The chart hashes a random course's stage filters match, and the course's best record. */
   readonly records: Pick<RecordsService, 'resolveChartHashes' | 'peekChartBestRecord' | 'recordCourseResult'>;
-  /** The course maker, which a NEW COURSE bar starts. */
-  readonly courseMaker: { readonly maker: Pick<CourseMaker, 'start'> };
+  /** The course maker, which a NEW COURSE bar starts and a RANDOM MIX bar draws a course with. */
+  readonly courseMaker: { readonly maker: Pick<CourseMaker, 'start' | 'drawRandomMix'> };
+  /** The select screen's key filter, whose key mode a RANDOM MIX draws. */
+  readonly keysFilter: () => KeysFilter;
   /** The course replay's auto-save, by the setting latched at the last stage's start. */
   readonly replayAutoSave: Pick<ReplayAutoSave, 'saveCourse'>;
   /** Ranks the course run as one. */
@@ -112,6 +119,7 @@ export class CourseRoute {
   private readonly library: CourseRouteDeps['library'];
   private readonly records: CourseRouteDeps['records'];
   private readonly courseMaker: CourseRouteDeps['courseMaker'];
+  private readonly keysFilter: CourseRouteDeps['keysFilter'];
   private readonly replayAutoSave: CourseRouteDeps['replayAutoSave'];
   private readonly leaderboard: CourseRouteDeps['leaderboard'];
   private readonly familyKits: CourseRouteDeps['familyKits'];
@@ -132,6 +140,7 @@ export class CourseRoute {
     this.library = deps.library;
     this.records = deps.records;
     this.courseMaker = deps.courseMaker;
+    this.keysFilter = deps.keysFilter;
     this.replayAutoSave = deps.replayAutoSave;
     this.leaderboard = deps.leaderboard;
     this.familyKits = deps.familyKits;
@@ -166,9 +175,18 @@ export class CourseRoute {
       this.setStatus(describeUnplayableCourse(entry));
       return;
     }
-    const navigation = this.selectNavigation();
-    this.courses.leaveSelect(navigation);
     let course = entry;
+    if (plan.action === 'random-mix') {
+      const drawn = await this.drawRandomMix(plan.kind);
+      if (drawn === undefined) return;
+      course = drawn;
+    }
+    const navigation = this.selectNavigation();
+    this.courses.leaveSelect(
+      plan.action === 'random-mix' && navigation !== undefined
+        ? { ...navigation, focusKey: `course:${course.id}` }
+        : navigation,
+    );
     let rememberDraw: (() => void) | undefined;
     if (plan.action === 'draw') {
       const candidates = await Promise.all(
@@ -218,6 +236,33 @@ export class CourseRoute {
           : {}),
       },
     );
+  }
+
+  /**
+   * Draws a RANDOM MIX of `kind` from the library in the key filter's key mode and keeps it as the folder's newest
+   * course, as LR2's `CreateRandomCourse` does; `undefined`, with a status, when no chart can be its first stage (LR2
+   * then does nothing). A song whose chart cannot be hashed is never drawn.
+   */
+  private async drawRandomMix(kind: 'expert' | 'nonstop'): Promise<LibraryCourse | undefined> {
+    const charts = (
+      await Promise.all(
+        this.library.collection.charts.map(async (chartEntry) => {
+          const md5 = (await this.records.resolveChartHashes(chartEntry))?.md5;
+          return md5 === undefined ? undefined : createRandomMixChart(chartEntry, md5);
+        }),
+      )
+    ).filter((chart) => chart !== undefined);
+    const drawn = this.courseMaker.maker.drawRandomMix(
+      kind,
+      resolveLR2RandomMixKeyMode(this.keysFilter()),
+      charts,
+      Math.random,
+    );
+    if (!drawn.ok) {
+      this.setStatus(`${LR2_RANDOM_MIX_NAME}: no chart matches the RANDOM MIX settings`);
+      return undefined;
+    }
+    return createDrawnRandomMixEntry(drawn.course, drawn.charts);
   }
 
   /**

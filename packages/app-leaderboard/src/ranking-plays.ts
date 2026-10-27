@@ -43,6 +43,7 @@ export async function loadPlayRanking(
     sql`s.chart_fingerprint = ${filter.chartFingerprint}`,
     sql`s.assisted = ${filter.assisted ? 1 : 0}`,
     sql`s.hidden = 0`,
+    sql`s.unranked is null`,
   ];
   if (!filter.includeAnonymous) conditions.push(sql`coalesce(u.is_anonymous, 0) = 0`);
   if (filter.playedHereOnly) conditions.push(sql`s.played_ruleset = ${filter.ruleset}`);
@@ -114,6 +115,7 @@ export async function loadChartFiles(db: Database, chartFingerprint: string): Pr
     select file_sha256 as sha256, max(file_md5) as md5, count(*) as plays, count(distinct user_id) as players
     from score
     where chart_fingerprint = ${chartFingerprint} and file_sha256 is not null and hidden = 0
+      and unranked is null
     group by file_sha256
     order by plays desc, sha256 asc
   `);

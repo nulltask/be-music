@@ -107,6 +107,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.keysFilterKeyMode('KEYS_14');
     },
   });
+  define('player-scene-model.resolveLR2RandomMixKeyMode', {
+    run: () => {
+      sceneModelAPI.resolveLR2RandomMixKeyMode('ALL');
+    },
+  });
   define('player-scene-model.chartMatchesDifficultyFilter', {
     run: () => {
       sceneModelAPI.chartMatchesDifficultyFilter(BENCH_CHARTS[0]!, 'HYPER');

@@ -26,62 +26,32 @@ export function sha256Hex(text: string): string {
 /** SHA-256 of `bytes`, as 64 lowercase hex digits. */
 export function sha256HexOfBytes(bytes: Uint8Array): string {
   const byteLength = bytes.length;
-  // Message + 0x80 + zero padding + 64-bit big-endian bit length, rounded up to whole 64-byte blocks.
-  const paddedLength = Math.ceil((byteLength + 9) / 64) * 64;
-  const padded = new Uint8Array(paddedLength);
-  padded.set(bytes);
-  padded[byteLength] = 0x80;
-  const view = new DataView(padded.buffer);
+  const state = new Int32Array(INITIAL_STATE);
+  const words = new Int32Array(64);
+  // Whole blocks are read from `bytes` as they are; only the tail (the last partial block, 0x80, zero padding and the
+  // 64-bit big-endian bit length) is copied into one or two padding blocks.
+  const wholeLength = byteLength - (byteLength % 64);
+  for (let offset = 0; offset < wholeLength; offset += 64) {
+    compressBlock(state, words, bytes, offset);
+  }
+  const tailLength = byteLength - wholeLength;
+  const tail = new Uint8Array(tailLength + 9 > 64 ? 128 : 64);
+  tail.set(bytes.subarray(wholeLength));
+  tail[tailLength] = 0x80;
   const bitLength = byteLength * 8;
-  view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x100000000));
-  view.setUint32(paddedLength - 4, bitLength >>> 0);
-
-  const state = INITIAL_STATE.slice();
-  const words = new Uint32Array(64);
-  for (let offset = 0; offset < paddedLength; offset += 64) {
-    for (let index = 0; index < 16; index += 1) {
-      words[index] = view.getUint32(offset + index * 4);
-    }
-    for (let index = 16; index < 64; index += 1) {
-      const w15 = words[index - 15];
-      const w2 = words[index - 2];
-      const s0 = rotateRight(w15, 7) ^ rotateRight(w15, 18) ^ (w15 >>> 3);
-      const s1 = rotateRight(w2, 17) ^ rotateRight(w2, 19) ^ (w2 >>> 10);
-      words[index] = (words[index - 16] + s0 + words[index - 7] + s1) | 0;
-    }
-
-    let a = state[0];
-    let b = state[1];
-    let c = state[2];
-    let d = state[3];
-    let e = state[4];
-    let f = state[5];
-    let g = state[6];
-    let h = state[7];
-    for (let index = 0; index < 64; index += 1) {
-      const sum1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25);
-      const choice = (e & f) ^ (~e & g);
-      const temp1 = (h + sum1 + choice + ROUND_CONSTANTS[index] + words[index]) | 0;
-      const sum0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
-      const majority = (a & b) ^ (a & c) ^ (b & c);
-      const temp2 = (sum0 + majority) | 0;
-      h = g;
-      g = f;
-      f = e;
-      e = (d + temp1) | 0;
-      d = c;
-      c = b;
-      b = a;
-      a = (temp1 + temp2) | 0;
-    }
-    state[0] = (state[0] + a) | 0;
-    state[1] = (state[1] + b) | 0;
-    state[2] = (state[2] + c) | 0;
-    state[3] = (state[3] + d) | 0;
-    state[4] = (state[4] + e) | 0;
-    state[5] = (state[5] + f) | 0;
-    state[6] = (state[6] + g) | 0;
-    state[7] = (state[7] + h) | 0;
+  const high = Math.floor(bitLength / 0x100000000);
+  const low = bitLength >>> 0;
+  const end = tail.length;
+  tail[end - 8] = high >>> 24;
+  tail[end - 7] = (high >>> 16) & 0xff;
+  tail[end - 6] = (high >>> 8) & 0xff;
+  tail[end - 5] = high & 0xff;
+  tail[end - 4] = low >>> 24;
+  tail[end - 3] = (low >>> 16) & 0xff;
+  tail[end - 2] = (low >>> 8) & 0xff;
+  tail[end - 1] = low & 0xff;
+  for (let offset = 0; offset < end; offset += 64) {
+    compressBlock(state, words, tail, offset);
   }
 
   let hex = '';
@@ -91,6 +61,54 @@ export function sha256HexOfBytes(bytes: Uint8Array): string {
     }
   }
   return hex;
+}
+
+/** Folds the 64-byte block of `source` at `offset` into `state`, using `words` as the message schedule. */
+function compressBlock(state: Int32Array, words: Int32Array, source: Uint8Array, offset: number): void {
+  for (let index = 0; index < 16; index += 1) {
+    const at = offset + index * 4;
+    words[index] = (source[at]! << 24) | (source[at + 1]! << 16) | (source[at + 2]! << 8) | source[at + 3]!;
+  }
+  for (let index = 16; index < 64; index += 1) {
+    const w15 = words[index - 15]!;
+    const w2 = words[index - 2]!;
+    const s0 = rotateRight(w15, 7) ^ rotateRight(w15, 18) ^ (w15 >>> 3);
+    const s1 = rotateRight(w2, 17) ^ rotateRight(w2, 19) ^ (w2 >>> 10);
+    words[index] = (words[index - 16]! + s0 + words[index - 7]! + s1) | 0;
+  }
+
+  let a = state[0]!;
+  let b = state[1]!;
+  let c = state[2]!;
+  let d = state[3]!;
+  let e = state[4]!;
+  let f = state[5]!;
+  let g = state[6]!;
+  let h = state[7]!;
+  for (let index = 0; index < 64; index += 1) {
+    const sum1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25);
+    const choice = (e & f) ^ (~e & g);
+    const temp1 = (h + sum1 + choice + ROUND_CONSTANTS[index]! + words[index]!) | 0;
+    const sum0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
+    const majority = (a & b) ^ (a & c) ^ (b & c);
+    const temp2 = (sum0 + majority) | 0;
+    h = g;
+    g = f;
+    f = e;
+    e = (d + temp1) | 0;
+    d = c;
+    c = b;
+    b = a;
+    a = (temp1 + temp2) | 0;
+  }
+  state[0] = (state[0]! + a) | 0;
+  state[1] = (state[1]! + b) | 0;
+  state[2] = (state[2]! + c) | 0;
+  state[3] = (state[3]! + d) | 0;
+  state[4] = (state[4]! + e) | 0;
+  state[5] = (state[5]! + f) | 0;
+  state[6] = (state[6]! + g) | 0;
+  state[7] = (state[7]! + h) | 0;
 }
 
 function rotateRight(value: number, bits: number): number {

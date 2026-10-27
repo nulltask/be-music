@@ -189,6 +189,17 @@ describe('BeatorajaPlayBridge — construction', () => {
     bridge.update({ nowMs: 900, state, events: [{ kind: 'scene-start', atMs: 900 }] });
     expect(bridge.getTimerStart(TIMER_SCENE_START)).toBe(250);
   });
+
+  it('lights OPTION_CONSTANT (400) while the frame carries Visual CONSTANT on', () => {
+    const bridge = new BeatorajaPlayBridge({ chartPlayVariant: '7', baseOps: new Set() });
+    const state = createPlayState();
+    bridge.update({ nowMs: 0, state, events: [] });
+    expect(bridge.hasOp(BEATORAJA_OP.CONSTANT)).toBe(false);
+    bridge.update({ nowMs: 16, state, events: [], visualConstant: true });
+    expect(bridge.hasOp(BEATORAJA_OP.CONSTANT)).toBe(true);
+    bridge.update({ nowMs: 32, state, events: [], visualConstant: false });
+    expect(bridge.hasOp(BEATORAJA_OP.CONSTANT)).toBe(false);
+  });
 });
 
 describe('BeatorajaPlayBridge — built-in timers', () => {

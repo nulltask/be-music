@@ -537,7 +537,7 @@
           "Scores"
         ],
         "summary": "Submit a play",
-        "description": "Submits a replay with its fingerprint documents. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). The server re-simulates the play under every ruleset and answers its figures and ranks. The same play submitted again by the same account answers 200 with the stored result.",
+        "description": "Submits a replay with its fingerprint documents. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). The server re-simulates the play under every ruleset and answers its figures and ranks. The same play submitted again by the same account answers 200 with the stored result. A play at another tempo, or a course stage sent on its own, is stored without ranking it (`unranked`): the Leaderboard decides what it shows.",
         "requestBody": {
           "required": true,
           "content": {
@@ -613,7 +613,7 @@
                           },
                           "rank": {
                             "type": "integer",
-                            "description": "The player’s rank on the chart after this play."
+                            "description": "The player’s rank on the chart after this play; 0 (and `players` 0) for an unranked play."
                           },
                           "players": {
                             "type": "integer"
@@ -652,6 +652,14 @@
                         ]
                       },
                       "description": "The play under every ruleset."
+                    },
+                    "unranked": {
+                      "enum": [
+                        "tempo",
+                        "course-stage"
+                      ],
+                      "type": "string",
+                      "description": "Why the play was stored without ranking it: played at another tempo, or a course stage sent on its own. It moves no personal best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -712,7 +720,7 @@
                           },
                           "rank": {
                             "type": "integer",
-                            "description": "The player’s rank on the chart after this play."
+                            "description": "The player’s rank on the chart after this play; 0 (and `players` 0) for an unranked play."
                           },
                           "players": {
                             "type": "integer"
@@ -751,6 +759,14 @@
                         ]
                       },
                       "description": "The play under every ruleset."
+                    },
+                    "unranked": {
+                      "enum": [
+                        "tempo",
+                        "course-stage"
+                      ],
+                      "type": "string",
+                      "description": "Why the play was stored without ranking it: played at another tempo, or a course stage sent on its own. It moves no personal best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -898,7 +914,7 @@
             }
           },
           "422": {
-            "description": "The play cannot be ranked: an auto play, a play at another tempo, a course stage, a malformed replay, or a fingerprint document that does not hash to the replay’s fingerprint.",
+            "description": "The play cannot be stored: an auto play, a malformed replay, a replay without fingerprints, or a fingerprint document that does not hash to the replay’s fingerprint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -908,8 +924,6 @@
                       "enum": [
                         "invalid-replay",
                         "auto-play",
-                        "tempo",
-                        "course-stage",
                         "missing-fingerprint",
                         "play-document-not-a-document",
                         "play-document-fingerprint-mismatch",
@@ -2016,7 +2030,7 @@
           "Courses"
         ],
         "summary": "Submit a course run",
-        "description": "Submits a course replay with the fingerprint documents of each played stage and the charts of the stages it never reached. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). Every played stage is checked like a single play, every unreached stage’s facts must be its chart’s, the run is re-simulated under every ruleset, and each stage’s carry-in must be the state the previous stage, re-simulated, left. A run given up with ESC on its last stage played is a failed run; one that stopped before the last stage otherwise must have failed there, or it is refused as `aborted`. A NONSTOP run sends every stage chart instead of documents: the server stitches them again, the stitched play must have been recorded on that chart, and the stitched play is re-simulated (given up with ESC, it is a failed run). A course run creates no chart scores. The same run submitted again by the same account answers 200 with the stored result. Rejections name the stage at fault in `detail` when there is one.",
+        "description": "Submits a course replay with the fingerprint documents of each played stage and the charts of the stages it never reached. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). Every played stage is checked like a single play, every unreached stage’s facts must be its chart’s, the run is re-simulated under every ruleset, and each stage’s carry-in must be the state the previous stage, re-simulated, left. A run given up with ESC on its last stage played is a failed run; one that stopped before the last stage otherwise must have failed there, or it is refused as `aborted`. A NONSTOP run sends every stage chart instead of documents: the server stitches them again, the stitched play must have been recorded on that chart, and the stitched play is re-simulated (given up with ESC, it is a failed run). A course run creates no chart scores. A run with a stage at another tempo, or of a course that is not released, is stored without ranking it (`unranked`). The same run submitted again by the same account answers 200 with the stored result. Rejections name the stage at fault in `detail` when there is one.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2149,7 +2163,7 @@
                           },
                           "rank": {
                             "type": "integer",
-                            "description": "The player’s rank on the course after this run."
+                            "description": "The player’s rank on the course after this run; 0 (and `players` 0) for an unranked run."
                           },
                           "players": {
                             "type": "integer"
@@ -2195,6 +2209,14 @@
                         ]
                       },
                       "description": "The run under every ruleset."
+                    },
+                    "unranked": {
+                      "enum": [
+                        "tempo",
+                        "unreleased"
+                      ],
+                      "type": "string",
+                      "description": "Why the run was stored without ranking it: a stage played at another tempo, or a course that is not released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -2275,7 +2297,7 @@
                           },
                           "rank": {
                             "type": "integer",
-                            "description": "The player’s rank on the course after this run."
+                            "description": "The player’s rank on the course after this run; 0 (and `players` 0) for an unranked run."
                           },
                           "players": {
                             "type": "integer"
@@ -2321,6 +2343,14 @@
                         ]
                       },
                       "description": "The run under every ruleset."
+                    },
+                    "unranked": {
+                      "enum": [
+                        "tempo",
+                        "unreleased"
+                      ],
+                      "type": "string",
+                      "description": "Why the run was stored without ranking it: a stage played at another tempo, or a course that is not released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -2479,8 +2509,6 @@
                         "invalid-replay",
                         "auto-play",
                         "aborted",
-                        "tempo",
-                        "unreleased",
                         "missing-fingerprint",
                         "not-a-course-run",
                         "play-document-not-a-document",

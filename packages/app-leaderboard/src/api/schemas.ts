@@ -131,7 +131,10 @@ const rulesetOutcome = v.object({
   noteCount: v.pipe(v.number(), v.integer()),
   clearLamp,
   missCount: described(v.pipe(v.number(), v.integer()), 'BP: BADs plus POORs.'),
-  rank: described(v.pipe(v.number(), v.integer()), 'The player’s rank on the chart after this play.'),
+  rank: described(
+    v.pipe(v.number(), v.integer()),
+    'The player’s rank on the chart after this play; 0 (and `players` 0) for an unranked play.',
+  ),
   players: v.pipe(v.number(), v.integer()),
   improved: described(
     v.object({ exScore: v.boolean(), lamp: v.boolean(), missCount: v.boolean() }),
@@ -143,6 +146,13 @@ export const submissionResponse = v.object({
   scoreId: v.string(),
   chartFingerprint: described(v.string(), 'Chart fingerprint (`bmfp0:…`), the ranking key.'),
   results: described(v.array(rulesetOutcome), 'The play under every ruleset.'),
+  unranked: v.optional(
+    described(
+      v.picklist(['tempo', 'course-stage']),
+      'Why the play was stored without ranking it: played at another tempo, or a course stage sent on its own. ' +
+        'It moves no personal best and stays out of the rankings and lists.',
+    ),
+  ),
 });
 
 export const scoreVisibilityBody = v.object({
@@ -224,7 +234,10 @@ const courseRulesetOutcome = v.object({
   maxCombo: described(v.pipe(v.number(), v.integer()), 'The course-wide max combo.'),
   stagesPlayed: described(v.pipe(v.number(), v.integer()), 'Stages reached under this ruleset.'),
   trophy: described(v.nullable(v.string()), 'The best trophy the run earned, by name.'),
-  rank: described(v.pipe(v.number(), v.integer()), 'The player’s rank on the course after this run.'),
+  rank: described(
+    v.pipe(v.number(), v.integer()),
+    'The player’s rank on the course after this run; 0 (and `players` 0) for an unranked run.',
+  ),
   players: v.pipe(v.number(), v.integer()),
   improved: described(
     v.object({ exScore: v.boolean(), lamp: v.boolean(), missCount: v.boolean(), trophy: v.boolean() }),
@@ -236,6 +249,13 @@ export const courseSubmissionResponse = v.object({
   courseScoreId: v.string(),
   courseFingerprint: described(v.string(), 'Course fingerprint (`bmcourse0:…`), the ranking key.'),
   results: described(v.array(courseRulesetOutcome), 'The run under every ruleset.'),
+  unranked: v.optional(
+    described(
+      v.picklist(['tempo', 'unreleased']),
+      'Why the run was stored without ranking it: a stage played at another tempo, or a course that is not ' +
+        'released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists.',
+    ),
+  ),
 });
 
 export const courseResponse = v.object({

@@ -188,18 +188,60 @@ describe('POST /api/v0/scores', () => {
     }
   });
 
+  test('stores a play at another tempo, or a course stage, without ranking it (#788)', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    const unrankedChart = makeChart(['#00114:01010101', '#00214:01010101', '#00314:01010101']);
+    // A play at another tempo is practice, and a course stage ranks with its course: both are kept, neither ranks.
+    const slowed = makeReplay(unrankedChart, { noteCount: 12, hits: 12, play: { tempo: 0.8 } });
+    const slowedResponse = await submit(
+      cookie,
+      submissionBody(slowed, unrankedChart.playDocument, unrankedChart.chartDocument),
+    );
+    expect(slowedResponse.status).toBe(201);
+    const slowedBody = (await slowedResponse.json()) as {
+      unranked?: string;
+      results: Array<{ exScore: number; rank: number; players: number; improved: Record<string, boolean> }>;
+    };
+    expect(slowedBody.unranked).toBe('tempo');
+    for (const result of slowedBody.results) {
+      expect(result).toMatchObject({
+        exScore: 24,
+        rank: 0,
+        players: 0,
+        improved: { exScore: false, lamp: false, missCount: false },
+      });
+    }
+    // Sent again, it answers the stored play, still unranked.
+    const again = await submit(cookie, submissionBody(slowed, unrankedChart.playDocument));
+    expect(again.status).toBe(200);
+    expect(((await again.json()) as { unranked?: string }).unranked).toBe('tempo');
+
+    const stage = makeReplay(unrankedChart, { noteCount: 12, hits: 6, play: { course: { kind: 'grade' } } });
+    const stageResponse = await submit(cookie, submissionBody(stage, unrankedChart.playDocument));
+    expect(stageResponse.status).toBe(201);
+    expect(((await stageResponse.json()) as { unranked?: string }).unranked).toBe('course-stage');
+
+    // Neither moved a best nor shows on the board.
+    const ranking = (await (
+      await fetchApp(
+        `/api/v0/charts/${encodeURIComponent(unrankedChart.chartFingerprint)}/leaderboard?ruleset=lr2&anonymous=1`,
+      )
+    ).json()) as { players: number; entries: unknown[] };
+    expect(ranking).toMatchObject({ players: 0, entries: [] });
+    const db = openDatabase(env.DB);
+    const stored = await db.query.score.findMany({ where: eq(score.chartFingerprint, unrankedChart.chartFingerprint) });
+    expect(new Set(stored.map((row) => row.unranked))).toEqual(new Set(['course-stage', 'tempo']));
+    expect(
+      await db.query.bestScore.findMany({ where: eq(bestScore.chartFingerprint, unrankedChart.chartFingerprint) }),
+    ).toEqual([]);
+  });
+
   test('rejects auto plays and malformed replays', async () => {
     const cookie = await signInAnonymously(fetchApp);
     const auto = makeReplay(chart, { noteCount: 10, hits: 10, play: { mode: 'auto' } });
     const autoResponse = await submit(cookie, submissionBody(auto, chart.playDocument, chart.chartDocument));
     expect(autoResponse.status).toBe(422);
     expect(await autoResponse.json()).toEqual({ error: 'auto-play' });
-
-    // A play at another tempo is practice: refused, like beatoraja's frequency trainer leaves its scores unsaved.
-    const slowed = makeReplay(chart, { noteCount: 10, hits: 10, play: { tempo: 0.8 } });
-    const slowedResponse = await submit(cookie, submissionBody(slowed, chart.playDocument, chart.chartDocument));
-    expect(slowedResponse.status).toBe(422);
-    expect(await slowedResponse.json()).toEqual({ error: 'tempo' });
 
     const malformed = await submit(cookie, submissionBody({ format: 'nope' }, chart.playDocument));
     expect(malformed.status).toBe(422);

@@ -8,7 +8,12 @@
  */
 
 import type { BeMusicJSON } from '@be-music/chart-source';
-import type { CourseDraft, NonstopConnection } from '@be-music/player-engine/course';
+import type {
+  CourseDraft,
+  LR2RandomMixSetting,
+  LR2RandomMixSettings,
+  NonstopConnection,
+} from '@be-music/player-engine/course';
 import type { BeMusicAudioFrame, BeMusicCourseBestRecord, BeMusicChartBestRecord } from '@be-music/player-skin-sdk';
 import type {
   BrowseCommand,
@@ -132,12 +137,14 @@ export interface SelectCourseMakerState {
   readonly draft?: CourseDraft;
   /** The connection a new NONSTOP course gets. */
   readonly defaultConnection: NonstopConnection;
+  /** The RANDOM MIX settings, when the host lists RANDOM MIX bars (LR2's texts 190-196, buttons 260-266). */
+  readonly randomMixSettings?: LR2RandomMixSettings;
 }
 
 /**
  * What the player asks of the course maker: name the course being made (or their own course under the cursor),
  * delete their course under the cursor, finish or cancel the course being made, or step a connection of their NONSTOP
- * course under the cursor (`slot`, after stage `slot + 1`) or the default one.
+ * course under the cursor (`slot`, after stage `slot + 1`) or the default one, or step a RANDOM MIX setting.
  */
 export type SelectCourseMakerAction =
   | { readonly kind: 'name' }
@@ -145,7 +152,8 @@ export type SelectCourseMakerAction =
   | { readonly kind: 'finish' }
   | { readonly kind: 'cancel' }
   | { readonly kind: 'connection'; readonly slot: number; readonly step: 1 | -1 }
-  | { readonly kind: 'default-connection'; readonly step: 1 | -1 };
+  | { readonly kind: 'default-connection'; readonly step: 1 | -1 }
+  | { readonly kind: 'random-mix'; readonly setting: LR2RandomMixSetting; readonly step: 1 | -1 };
 
 /** What the select screen draws. */
 export interface SelectFrame {

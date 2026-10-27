@@ -1,8 +1,8 @@
 {
-  "id": "a27ee762-0d1e-454e-9d0b-0191dcb714af",
-  "prevId": "9ecf975f-3971-4148-b931-9c490509cdd5",
   "version": "6",
   "dialect": "sqlite",
+  "id": "c43461f4-cb2f-49ea-ab10-6e76c1391e4c",
+  "prevId": "9ecf975f-3971-4148-b931-9c490509cdd5",
   "tables": {
     "account": {
       "name": "account",
@@ -114,15 +114,15 @@
         "account_user_id_user_id_fk": {
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -248,28 +248,28 @@
         "best_score_user_id_user_id_fk": {
           "name": "best_score_user_id_user_id_fk",
           "tableFrom": "best_score",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "best_score_chart_fingerprint_chart_chart_fingerprint_fk": {
           "name": "best_score_chart_fingerprint_chart_chart_fingerprint_fk",
           "tableFrom": "best_score",
+          "tableTo": "chart",
           "columnsFrom": [
             "chart_fingerprint"
           ],
-          "tableTo": "chart",
           "columnsTo": [
             "chart_fingerprint"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -467,15 +467,15 @@
         "chart_chartset_id_chartset_id_fk": {
           "name": "chart_chartset_id_chartset_id_fk",
           "tableFrom": "chart",
+          "tableTo": "chartset",
           "columnsFrom": [
             "chartset_id"
           ],
-          "tableTo": "chartset",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -520,15 +520,15 @@
         "chart_alias_chart_fingerprint_chart_chart_fingerprint_fk": {
           "name": "chart_alias_chart_fingerprint_chart_chart_fingerprint_fk",
           "tableFrom": "chart_alias",
+          "tableTo": "chart",
           "columnsFrom": [
             "chart_fingerprint"
           ],
-          "tableTo": "chart",
           "columnsTo": [
             "chart_fingerprint"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -792,28 +792,28 @@
         "course_best_score_user_id_user_id_fk": {
           "name": "course_best_score_user_id_user_id_fk",
           "tableFrom": "course_best_score",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "course_best_score_course_fingerprint_course_course_fingerprint_fk": {
           "name": "course_best_score_course_fingerprint_course_course_fingerprint_fk",
           "tableFrom": "course_best_score",
+          "tableTo": "course",
           "columnsFrom": [
             "course_fingerprint"
           ],
-          "tableTo": "course",
           "columnsTo": [
             "course_fingerprint"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -924,6 +924,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "replay_key": {
+          "name": "replay_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "hidden": {
           "name": "hidden",
           "type": "integer",
@@ -931,6 +938,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": false
+        },
+        "unranked": {
+          "name": "unranked",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
@@ -947,20 +961,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
-        },
-        "replay_key": {
-          "name": "replay_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "card_key": {
-          "name": "card_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -1008,28 +1008,28 @@
         "course_score_user_id_user_id_fk": {
           "name": "course_score_user_id_user_id_fk",
           "tableFrom": "course_score",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "course_score_course_fingerprint_course_course_fingerprint_fk": {
           "name": "course_score_course_fingerprint_course_course_fingerprint_fk",
           "tableFrom": "course_score",
+          "tableTo": "course",
           "columnsFrom": [
             "course_fingerprint"
           ],
-          "tableTo": "course",
           "columnsTo": [
             "course_fingerprint"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1151,15 +1151,15 @@
         "course_score_result_course_score_id_course_score_id_fk": {
           "name": "course_score_result_course_score_id_course_score_id_fk",
           "tableFrom": "course_score_result",
+          "tableTo": "course_score",
           "columnsFrom": [
             "course_score_id"
           ],
-          "tableTo": "course_score",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -1213,15 +1213,15 @@
         "handle_history_user_id_user_id_fk": {
           "name": "handle_history_user_id_user_id_fk",
           "tableFrom": "handle_history",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1258,15 +1258,15 @@
         "oidc_identity_user_id_user_id_fk": {
           "name": "oidc_identity_user_id_user_id_fk",
           "tableFrom": "oidc_identity",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -1382,15 +1382,15 @@
         "passkey_user_id_user_id_fk": {
           "name": "passkey_user_id_user_id_fk",
           "tableFrom": "passkey",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1458,15 +1458,15 @@
         "profile_user_id_user_id_fk": {
           "name": "profile_user_id_user_id_fk",
           "tableFrom": "profile",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1595,6 +1595,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "replay_key": {
+          "name": "replay_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "card_key": {
           "name": "card_key",
           "type": "text",
@@ -1618,6 +1625,13 @@
           "autoincrement": false,
           "default": false
         },
+        "unranked": {
+          "name": "unranked",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1633,13 +1647,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
-        },
-        "replay_key": {
-          "name": "replay_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -1687,44 +1694,44 @@
           "columns": [
             "duration_ms"
           ],
-          "where": "\"score\".\"duration_ms\" is null",
-          "isUnique": false
+          "isUnique": false,
+          "where": "\"score\".\"duration_ms\" is null"
         },
         "score_pending_lane_option_idx": {
           "name": "score_pending_lane_option_idx",
           "columns": [
             "lane_option"
           ],
-          "where": "\"score\".\"lane_option\" is null",
-          "isUnique": false
+          "isUnique": false,
+          "where": "\"score\".\"lane_option\" is null"
         }
       },
       "foreignKeys": {
         "score_user_id_user_id_fk": {
           "name": "score_user_id_user_id_fk",
           "tableFrom": "score",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "score_chart_fingerprint_chart_chart_fingerprint_fk": {
           "name": "score_chart_fingerprint_chart_chart_fingerprint_fk",
           "tableFrom": "score",
+          "tableTo": "chart",
           "columnsFrom": [
             "chart_fingerprint"
           ],
-          "tableTo": "chart",
           "columnsTo": [
             "chart_fingerprint"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1817,15 +1824,15 @@
         "score_result_score_id_score_id_fk": {
           "name": "score_result_score_id_score_id_fk",
           "tableFrom": "score_result",
+          "tableTo": "score",
           "columnsFrom": [
             "score_id"
           ],
-          "tableTo": "score",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -1922,15 +1929,15 @@
         "session_user_id_user_id_fk": {
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2088,9 +2095,9 @@
   "views": {},
   "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
   },
   "internal": {
     "indexes": {}

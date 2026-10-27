@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { RulesetId } from '@be-music/player-engine/replay';
 import type { Database } from '../db/client.ts';
@@ -102,6 +102,7 @@ export async function rebuildCourseBestScores(
         eq(courseScore.userId, userId),
         inArray(courseScore.courseFingerprint, [...courseFingerprints]),
         eq(courseScore.hidden, false),
+        isNull(courseScore.unranked),
       ),
     )
     .orderBy(asc(courseScore.createdAt), asc(courseScore.id));
