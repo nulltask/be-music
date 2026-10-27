@@ -2,28 +2,9 @@
 '@be-music/player-browser': minor
 ---
 
-Apply START BPM anchoring from the chart header and preserve the effective view in replay playback across skin families.
-
-Keep cover lengths and green numbers visible on the selected cover edges for Native, Canvas, LR2 and beatoraja views, preserving each side’s geometry and removing the readouts with the scene.
-
-Record all selected play options and live hi-speed edits, restore option timelines during replay and seeking, and preserve every observed view change instead of dropping rapid edits.
-
-Retain the independent AUTO SCRATCH switches when starting live play or replay playback.
-
-Share the head-only notes of LEGACY NOTE and LN REMOVE with the renderer and restore the recorded modifier before replay arrangement.
-
+Apply the new play options in the play session for every skin family: the judgment, hi-speed and view options (HS-FIX including START BPM, AC normal and floating hi-speed, the fixed display area, per-side LIFT, CONSTANT, BPM GUIDE, judge display timing), the lane arrangements, the chart modifiers, the gauge options, the battle and conversion modes and PRACTICE. The source-specific lane options, HS-FIX CONSTANT, the measured hi-speed modes (with numpad 0 and the fixed display area), the scroll and mine modifiers, both EXTRAs, 7 TO 9, the battle chart constructions, SYNCHRONIZE / SYMMETRY RANDOM and M-RAN are prepared under every judge ruleset, each with its own source's algorithm; RANDOM-EX always runs beatoraja's shuffle, and a reused previous arrangement must come from a play under the same judge rules (#774).
+Record every selected play option and live hi-speed edit in the replay, and restore the option timeline during replay playback and seeking, the independent AUTO SCRATCH switches and the head-only notes of LEGACY NOTE and LN REMOVE included.
+Show the cover lengths and green numbers on the selected cover edges for the Native, Canvas, LR2 and beatoraja views.
+Draw a two-player BATTLE on the Plain, Native and Synesthesia skins with each player's gauge and figures, and on LR2 skins with the BATTLE play skins, the 2P numbers, ranks and gauge. Synesthesia takes the lane cover keys, draws each side's LIFT and labels the floating hi-speed, as Plain and Native do.
+Wire beatoraja select skins' option buttons to the play options: LNMODE, DP option, gauge auto shift, judgment algorithm, mine, scroll and long-note modes, 7 TO 9, EXTRA NOTE depth, and RANDOM 1P / 2P (42 / 43), which step through beatoraja's lane options for the focused chart's play mode and show the choice. PRACTICE starts from its button, and the LNMODE image shows the player's LN MODE instead of the focused chart's mode.
 Keep LR2 skin gauge buttons on the original four choices when extended gauges are selected from Debug Menu.
-
-Apply every new play option in the play session for every skin family: the judgment, hi-speed and view options (AC normal and floating hi-speed, fixed display area, per-side LIFT, CONSTANT, BPM GUIDE, judge display timing), the lane arrangements, the chart modifiers, the gauge options, the battle and conversion modes and PRACTICE.
-
-Draw a two-player BATTLE on the Plain, Native and Synesthesia skins with each player's gauge and figures, and on LR2 skins with the BATTLE play skins, the 2P numbers, ranks and gauge.
-
-Wire beatoraja select skins' option buttons (LNMODE, DP option, gauge auto shift, judgment algorithm, mine, scroll and long-note modes, 7 TO 9, EXTRA NOTE depth) to the play options, and start PRACTICE from its button.
-
-Fix beatoraja skins' LNMODE image showing the focused chart's mode on the select screen instead of the player's LN MODE.
-
-Bring the Synesthesia skin up to the floating hi-speed label and per-side LIFT.
-
-Fix the floating hi-speed and fixed display area keys (numpad 0, double Enter) being ignored on some skins, depending on whether the lane input listener had registered first; the play now reads its own keys ahead of it and leaves only focused fields and buttons their keys.
-
-Let the Synesthesia skin take the lane cover keys and draw each side's LIFT, as Plain and Native do.
