@@ -167,6 +167,50 @@ test('a paused play shows a centred play button, and the controls fade out while
   await expect(hud).not.toHaveAttribute('controls-hidden');
 });
 
+test('the play fills the window at any aspect ratio and follows a resize, then still seeks', async ({ page }, info) => {
+  await openEmbed(page, ['songs/fixD']);
+  await page.getByRole('button', { name: 'Play', exact: true }).click({ timeout: 60_000 });
+  const hud = page.locator('be-music-preview-hud');
+  const seek = hud.getByRole('slider', { name: 'Seek' });
+  await expect(seek).toBeEnabled({ timeout: 30_000 });
+  await hud.locator('be-music-playback-controls').getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(hud.locator('button.resume')).toBeVisible();
+  const sizes = [
+    { name: '16x9', width: 1280, height: 720 },
+    { name: '4x3', width: 1024, height: 768 },
+    { name: '21x9', width: 1680, height: 720 },
+    { name: 'phone-portrait', width: 375, height: 812 },
+    { name: 'phone-landscape', width: 812, height: 375 },
+  ];
+  for (const size of sizes) {
+    await page.setViewportSize(size);
+    // No letterbox: the HUD's and the playfield's stages cover the whole window.
+    for (const stage of [hud.locator('[part="stage"]'), page.locator('be-music-playfield [part="stage"]')]) {
+      await expect
+        .poll(async () => {
+          const box = (await stage.boundingBox())!;
+          return [Math.round(box.x), Math.round(box.y), Math.round(box.width), Math.round(box.height)];
+        })
+        .toEqual([0, 0, size.width, size.height]);
+    }
+    const lanes = (await page.locator('be-music-lanes').boundingBox())!;
+    const bga = (await page.locator('be-music-bga').boundingBox())!;
+    if (size.height > size.width) {
+      expect(bga.y + bga.height).toBeLessThanOrEqual(lanes.y + 1);
+      expect(lanes.x).toBeGreaterThanOrEqual(0);
+      expect(lanes.x + lanes.width).toBeLessThanOrEqual(size.width);
+    } else {
+      expect(lanes.x + lanes.width).toBeLessThanOrEqual(size.width / 2 + 1);
+      expect(bga.x).toBeGreaterThanOrEqual(lanes.x + lanes.width);
+      expect(bga.x + bga.width).toBeLessThanOrEqual(size.width);
+    }
+    await page.screenshot({ path: info.outputPath(`embed-${size.name}.png`) });
+  }
+  // The controls still seek after the resizes.
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(async () => Number(await seek.inputValue())).toBeGreaterThanOrEqual(4);
+});
+
 test('asks the platform audio session for playback, so an iPhone in silent mode still plays the sound', async ({
   page,
 }) => {
