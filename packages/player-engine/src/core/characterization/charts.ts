@@ -13,7 +13,7 @@ const bms = (...lines: string[]): BeMusicJSON => parseChart(lines.join('\n'), 'b
 const header = (title: string, ...extra: string[]): string[] => [
   '#PLAYER 1',
   `#TITLE ${title}`,
-  '#ARTIST characterization',
+  '#ARTIST Be-Music Dev Team',
   '#BPM 120',
   '#RANK 2',
   '#WAV01 bgm.wav',
