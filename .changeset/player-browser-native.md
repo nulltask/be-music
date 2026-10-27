@@ -1,6 +1,0 @@
----
-'@be-music/player-browser': minor
----
-
-Add Native, a built-in skin of DOM screens around a canvas playfield: collection browsing, search, settings, decide and result screens, and a gameplay information dashboard (judgment counts and timing, score and note progress, gauge history, speed, lane covers, course context and play settings) built from the `@be-music/player-ui` elements. Its BGA, lanes, notes, mines, measure lines, lane covers, judge line, bombs and judgment words each draw on a canvas the size of their part of the stage; the lanes stay as tall as the screen allows (a side HUD in landscape, a compact header in portrait, orientation read from the element the screens are mounted in), and touch lanes follow the fingers on its gameplay screen. Renderer-independent scene controllers and selected state stores are exposed through the controller entry, with native skin mount lifecycles and search inputs.
-The host hands each frame to a skin that sets `gameplay.drawsOnDOM` and creates no gameplay surface for it. A scene whose screens are all DOM reports `drawsOnCanvas: false`, and `PixiSceneHost` keeps its canvas in the page only while the active scene draws on it (also before the first scene) and exposes the element it was mounted in as `container`.
