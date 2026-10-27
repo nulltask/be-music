@@ -82,13 +82,13 @@ export function randomizePMSPlayableLanes(
   for (const mask of tripleMasks)
     for (let lane = 0; lane < 9; lane += 1) if ((mask & (1 << lane)) !== 0) triples[offset++] = lane;
   // The visit ordinals of the valid permutations, in the source order; a uniform pick among them is the source's pick.
-  const validOrdinals = impossible ? new Uint32Array(0) : searchValidOrdinals(triples);
+  const validCount = impossible ? 0 : searchValidOrdinals(triples);
   const draw = random();
   if (!Number.isFinite(draw) || draw < 0 || draw >= 1) throw new RangeError('Lane randomness must be in [0, 1).');
   const permutation =
-    validOrdinals.length === 0
+    validCount === 0
       ? Array.from({ length: 9 }, (_, index) => (draw < 0.5 ? index : 8 - index))
-      : permutationAt(validOrdinals[Math.floor(draw * validOrdinals.length)]!);
+      : permutationAt(VALID_ORDINALS[Math.floor(draw * validCount)]!);
   return notes.map((note) => {
     const source = indexByLane.get(note.channel);
     return source === undefined ? note.channel : lanes[permutation[source]!]!;
@@ -99,51 +99,17 @@ export function randomizePMSPlayableLanes(
 const VISITED_PERMUTATIONS = 362_879;
 
 /**
- * Heap's algorithm in the source order (omitting the initial regular permutation), keeping the ordinal of each
- * permutation that is not the mirror and maps none of `triples` (`a, b, c, …`) onto an impossible chord. Written as one
- * loop: it runs once per visited permutation.
+ * Heap's algorithm in the source order, as its swaps: visit `k` (0 = the first after the regular permutation) swaps
+ * positions `HEAP_SWAPS[2k]` and `HEAP_SWAPS[2k + 1]`. Built on first use; with it the search runs one straight loop
+ * instead of Heap's counter bookkeeping.
  */
-function searchValidOrdinals(triples: Uint8Array): Uint32Array {
-  const ordinals = new Uint32Array(VISITED_PERMUTATIONS);
-  const permutation = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8]);
-  const counters = new Uint8Array(9);
-  let found = 0;
-  let ordinal = 0;
-  let index = 0;
-  while (index < 9) {
-    if (counters[index]! < index) {
-      const other = index % 2 === 0 ? 0 : counters[index]!;
-      const swap = permutation[index]!;
-      permutation[index] = permutation[other]!;
-      permutation[other] = swap;
-      let valid = false;
-      for (let lane = 0; lane < 9; lane += 1) {
-        if (permutation[lane] !== 8 - lane) {
-          valid = true;
-          break;
-        }
-      }
-      for (let at = 0; valid && at < triples.length; at += 3) {
-        const image =
-          (1 << permutation[triples[at]!]!) |
-          (1 << permutation[triples[at + 1]!]!) |
-          (1 << permutation[triples[at + 2]!]!);
-        if (IMPOSSIBLE_TRIPLE[image] === 1) valid = false;
-      }
-      if (valid) ordinals[found++] = ordinal;
-      ordinal += 1;
-      counters[index]! += 1;
-      index = 0;
-    } else {
-      counters[index] = 0;
-      index += 1;
-    }
-  }
-  return ordinals.subarray(0, found);
-}
+let HEAP_SWAPS: Uint8Array | undefined;
+/** The visit ordinal of the mirror permutation, which the source never picks. */
+let MIRROR_ORDINAL = -1;
 
-/** The permutation Heap's algorithm visits at `target` (0 = the first after the regular one). */
-function permutationAt(target: number): number[] {
+function heapSwaps(): Uint8Array {
+  if (HEAP_SWAPS) return HEAP_SWAPS;
+  const swaps = new Uint8Array(VISITED_PERMUTATIONS * 2);
   const permutation = [0, 1, 2, 3, 4, 5, 6, 7, 8];
   const counters = new Uint8Array(9);
   let ordinal = 0;
@@ -154,7 +120,10 @@ function permutationAt(target: number): number[] {
       const swap = permutation[index]!;
       permutation[index] = permutation[other]!;
       permutation[other] = swap;
-      if (ordinal++ === target) return permutation;
+      swaps[ordinal * 2] = index;
+      swaps[ordinal * 2 + 1] = other;
+      if (permutation.every((lane, at) => lane === 8 - at)) MIRROR_ORDINAL = ordinal;
+      ordinal += 1;
       counters[index]! += 1;
       index = 0;
     } else {
@@ -162,5 +131,58 @@ function permutationAt(target: number): number[] {
       index += 1;
     }
   }
-  throw new RangeError(`No permutation at ${target}.`);
+  HEAP_SWAPS = swaps;
+  return swaps;
+}
+
+/** The ordinals {@link searchValidOrdinals} found, reused across calls (only its returned prefix is meaningful). */
+const VALID_ORDINALS = new Uint32Array(VISITED_PERMUTATIONS);
+
+/**
+ * Heap's algorithm in the source order (omitting the initial regular permutation), writing into
+ * {@link VALID_ORDINALS} the ordinal of each permutation that is not the mirror and maps none of `triples`
+ * (`a, b, c, …`) onto an impossible chord. Returns how many it wrote.
+ */
+function searchValidOrdinals(triples: Uint8Array): number {
+  const swaps = heapSwaps();
+  const permutation = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  const ordinals = VALID_ORDINALS;
+  const tripleLength = triples.length;
+  let found = 0;
+  for (let ordinal = 0; ordinal < VISITED_PERMUTATIONS; ordinal += 1) {
+    const index = swaps[ordinal * 2]!;
+    const other = swaps[ordinal * 2 + 1]!;
+    const swap = permutation[index]!;
+    permutation[index] = permutation[other]!;
+    permutation[other] = swap;
+    if (ordinal === MIRROR_ORDINAL) continue;
+    let valid = true;
+    for (let at = 0; at < tripleLength; at += 3) {
+      const image =
+        (1 << permutation[triples[at]!]!) |
+        (1 << permutation[triples[at + 1]!]!) |
+        (1 << permutation[triples[at + 2]!]!);
+      if (IMPOSSIBLE_TRIPLE[image] === 1) {
+        valid = false;
+        break;
+      }
+    }
+    if (valid) ordinals[found++] = ordinal;
+  }
+  return found;
+}
+
+/** The permutation Heap's algorithm visits at `target` (0 = the first after the regular one). */
+function permutationAt(target: number): number[] {
+  if (target < 0 || target >= VISITED_PERMUTATIONS) throw new RangeError(`No permutation at ${target}.`);
+  const swaps = heapSwaps();
+  const permutation = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+  for (let ordinal = 0; ordinal <= target; ordinal += 1) {
+    const index = swaps[ordinal * 2]!;
+    const other = swaps[ordinal * 2 + 1]!;
+    const swap = permutation[index]!;
+    permutation[index] = permutation[other]!;
+    permutation[other] = swap;
+  }
+  return permutation;
 }

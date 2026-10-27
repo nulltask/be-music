@@ -182,7 +182,8 @@ describe('loadChartCollectionFromFiles progress events', () => {
     const collection = await loadChartCollectionFromFiles(files);
 
     expect(collection.charts).toHaveLength(32);
-    expect(scheduler.yield).toHaveBeenCalledTimes(1);
+    // One yield after the 32-chart batch, plus one before each chart's local (worker-less) parse.
+    expect(scheduler.yield).toHaveBeenCalledTimes(33);
   });
 
   test('loads charts from zip archives', async () => {
