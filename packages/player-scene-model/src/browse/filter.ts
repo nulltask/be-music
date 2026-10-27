@@ -28,6 +28,14 @@ export function keysFilterKeyMode(filter: KeysFilter): KeyMode | undefined {
 }
 
 /**
+ * The key mode a RANDOM MIX draws under a key-mode filter: the filter's, and 7 under `ALL`, as LR2's
+ * `CreateRandomCourse` does (OpenLR2 L8709-L8775; its SINGLE / DOUBLE filters, which be-music lacks, draw 7 and 14).
+ */
+export function resolveLR2RandomMixKeyMode(filter: KeysFilter): KeyMode {
+  return keysFilterKeyMode(filter) ?? 7;
+}
+
+/**
  * Whether a chart is listed under a difficulty filter: every chart under `ALL`, else the charts whose `#DIFFICULTY` is
  * the filter's. A chart that names no difficulty (none, or 0) has no bucket, so a filter other than `ALL` leaves it out.
  */
