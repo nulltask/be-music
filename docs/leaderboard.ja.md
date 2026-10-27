@@ -153,7 +153,7 @@ sequenceDiagram
     else 別のアカウントからの同じプレイ
         A-->>C: 409 play_already_submitted
     end
-    A->>A: 対象判定: オートプレイ・テンポ変更・コースのステージ → 422、アシスト → フラグ
+    A->>A: 対象判定: オートプレイ → 422、テンポ変更・コースのステージ → ランキング対象外、アシスト → フラグ
     A->>A: sha256(canonicalize(play document)) == playFingerprint ?
     A->>D: 既知の譜面?
     alt 未知の譜面
@@ -209,7 +209,9 @@ play document の位置とタイムラインから、エンジンと一致する
 
 ## 6. スコアのルール
 
-手動プレイでシークすると練習扱い（`PlayResult.practice`）になります。最初のシークでリプレイの記録を破棄します。ホストがリプレイデータも渡した場合を含め、Web アプリはその結果のベスト記録更新・Leaderboard 送信・リプレイ自動保存を行いません。コースのステージや NONSTOP でシークすると、コース全体と後続ステージも対象外になります。リプレイがなくてもコース結果は表示できます。
+**送るもの。** 送信はオプトインです。プレイヤーが有効にするまで、Leaderboard には何も送りません。有効にした後は、完全な AUTO プレイとリプレイの再生（ドロップしたリプレイ、リプレイスロット、コースのリプレイ）を除くすべてのプレイを送ります。表示するかどうか、どこに表示するかはプレイヤーではなく Leaderboard が決めます（#788）。部分的なアシスト（オートスクラッチなど）は送り、別に順位付けします。Leaderboard が保存はしても順位付けしないプレイも、それを分類するための情報をリプレイに載せて送ります（`play.tempo`、`play.course`、オプション、アシスト）。そのまま拒否するのは、検証できない、フィンガープリントがそろっていないログだけです。
+
+手動プレイでシークすると練習扱い（`PlayResult.practice`）になります。最初のシークでリプレイの記録を破棄し、beatoraja の PRACTICE もリプレイを記録しないので、どちらも送るリプレイがありません。ホストがリプレイデータも渡した場合を含め、Web アプリはその結果のベスト記録更新・Leaderboard 送信・リプレイ自動保存を行いません。コースのステージや NONSTOP でシークすると、コース全体と後続ステージも対象外になります。リプレイがなくてもコース結果は表示できます。練習のプレイを送るには練習範囲をリプレイに記録する必要があり、後の変更に回します。
 
 - **3 つのルールセット。** すべてのプレイを `lr2`、`beatoraja`、`____` で計算し直し、3 つのランキングすべてに
   載せます。実際にプレイしたルールセット（`play.judgeRuleset`）を保存して印として表示し、「このルールセットで
@@ -218,10 +220,13 @@ play document の位置とタイムラインから、エンジンと一致する
   `HAZARD`、など）。
 - **アシスト**（オートスクラッチ、デバッグ用の判定幅の上書きなど）はフラグを付けて保存し、アシストなしのプレイとは
   別に順位付けします。
-- **コースのステージは拒否します**。ステージは前のステージが残した状態から始まるので、単曲のプレイでは
-  ありません。代わりにコースのプレイの一部としてランキングに載ります（6.1 節）。**テンポを変えたプレイ**
-  （`play.tempo` が 1 以外。Web プレイヤーのテンポスライダー）は `tempo` として拒否します。beatoraja の周波数
-  トレーナーがスコアを保存しないのと同じく、練習として扱います。**落ちたプレイ**（ゲージが尽きたもの）
+- **ランキング対象外のプレイ**は保存し、すべてのルールセットで計算し直して数値を返します（順位とプレイヤー数は 0、
+  理由は `unranked`）。ただし自己ベストは動かさず、ランキング・集計・すべてのリストから外れます。プレイのページは
+  開け、理由を表示します（`score.unranked`）。単独で送った**コースのステージ**はこれに当たります（`course-stage`）。
+  ステージは前のステージが残した状態から始まるので、単曲のプレイではありません。代わりにコースのプレイの一部として
+  ランキングに載ります（6.1 節）。**テンポを変えたプレイ**（`tempo`。`play.tempo` が 1 以外。Web プレイヤーの
+  テンポスライダー）も同じです。beatoraja の周波数トレーナーがスコアを保存しないのと同じく、練習として扱います。
+  **落ちたプレイ**（ゲージが尽きたもの）
   は保存し、プレイ回数に数えます。**ESC で投げたプレイ**（`play.aborted`）も同じです。LR2 と beatoraja が保存するのと
   同じく、途中で投げたプレイはゲージの値に関係なく、どのルールセットでも落ちたプレイとして順位付けします。
 - **ランプと BP はルールセットごとに各ゲームに従います**: `lr2` では DEATH でのクリアは NORMAL です（LR2body.exe の
@@ -277,10 +282,11 @@ play document の位置とタイムラインから、エンジンと一致する
   到達しなかったステージのノートを BP に数えます。それより前のステージの ESC 中断は、これまでどおり `aborted` として
   拒否します。
 - **テンポを変えたプレイは順位付けしません。** コースも単曲と同じくテンポを変えて遊べますが、そのプレイは単曲と
-  同じく `tempo` として拒否します（最初のそうしたステージを示します。NONSTOP ではつないだプレイを見ます）。
+  同じく `tempo` としてランキング対象外で保存します（どのステージでも。NONSTOP ではつないだプレイを見ます）。
+  コースのベストは動かさず、コースのランキングとすべてのリストから外れます。
 - **公開されていないコースは順位付けしません。** beatoraja の `release: false` のコース（抽選したランダムコースと
   コースメーカーで作ったコースもこれに当たります）は、コースのログにそのことを記録し（`course.release: false`）、beatoraja が IR に送らないのと
-  同じく `unreleased` として拒否します。
+  同じく `unreleased` としてランキング対象外で保存します。
 - **NONSTOP のプレイ。** NONSTOP コースはつないだ 1 本の譜面として遊び、判定して順位を付けるのはそのプレイ
   （`nonstop.replay`）です。サーバーはステージの譜面から、クライアントとまったく同じようにつないだ譜面を作り直し
   ます。両者は同じ決定的な処理（`@be-music/player-engine/course` の `prepareNonstopCourse`。
@@ -363,7 +369,7 @@ charts          (chart_fp PK, title, artist, note_count, play_fps JSON, status, 
 chart_aliases   (kind, hash, chart_fp)                         -- kind: sha256 | md5
 scores          (id PK, submission_id UNIQUE, user_id, chart_fp, play_fp, played_ruleset, gauge,
                  assist_flags, failed, recorded_by JSON, submitted_by, server_engine, replay_key,
-                 ghost_key, og_key, replay_visibility, created_at)
+                 ghost_key, og_key, replay_visibility, hidden, unranked, created_at)  -- unranked: 0017
 score_results   (score_id, ruleset, ruleset_revision, ex_score, clear_lamp, miss_count,
                  max_combo, judges JSON)                       -- PK(score_id, ruleset)
 best_scores     (user_id, chart_fp, ruleset, assisted,         -- PK
@@ -378,7 +384,7 @@ client_policies (name, min_version, blocked_versions JSON)
 course          (course_fp PK, name, kind, constraints JSON, stage_chart_fps JSON, created_at)
 course_score    (id PK, submission_id UNIQUE, user_id, course_fp, played_ruleset, gauge, assisted,
                  assist_flags, verification, stages_played, recorded_by JSON, submitted_by,
-                 server_engine, replay_key, hidden, created_at)
+                 server_engine, replay_key, hidden, unranked, created_at)
 course_score_result (course_score_id, ruleset, ruleset_revision, ex_score, note_count, clear_lamp,
                  miss_count, max_combo, stages_played, trophy, trophy_rank, gauge_type, gauge_final,
                  judges JSON, stages JSON)

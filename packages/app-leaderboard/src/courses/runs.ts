@@ -1,4 +1,4 @@
-import { and, desc, eq, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { avatarURL } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import { course, courseScore, courseScoreResult, profile, user } from '../db/schema.ts';
@@ -55,6 +55,8 @@ export async function loadRecentCourseRuns(db: Database, filter: RecentCourseRun
     filter.ownerUserId === undefined ? condition : or(condition, eq(courseScore.userId, filter.ownerUserId))!;
   if (!filter.includeAnonymous) conditions.push(own(eq(user.isAnonymous, false)));
   conditions.push(own(eq(courseScore.hidden, false)));
+  // Runs stored without ranking (another tempo, an unreleased course) stay out of every list.
+  conditions.push(isNull(courseScore.unranked));
   if (filter.handle !== undefined) conditions.push(eq(profile.handle, filter.handle));
   const page = db
     .select({ id: courseScore.id, createdAt: courseScore.createdAt })

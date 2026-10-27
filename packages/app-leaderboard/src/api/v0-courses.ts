@@ -44,8 +44,6 @@ const COURSE_REJECTIONS = [
   'invalid-replay',
   'auto-play',
   'aborted',
-  'tempo',
-  'unreleased',
   'missing-fingerprint',
   'not-a-course-run',
   'play-document-not-a-document',
@@ -86,7 +84,8 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
         'before the last stage otherwise must have failed there, or it is refused as `aborted`. A NONSTOP run ' +
         'sends every stage chart instead of documents: the server stitches them again, the stitched play must have ' +
         'been recorded on that chart, and the stitched play is re-simulated (given up with ESC, it is a failed run). ' +
-        'A course run creates no chart scores. The same run submitted again by the same ' +
+        'A course run creates no chart scores. A run with a stage at another tempo, or of a course that is not ' +
+        'released, is stored without ranking it (`unranked`). The same run submitted again by the same ' +
         'account answers 200 with the stored result. Rejections name the stage at fault in `detail` when there is one.',
       requestBody: { required: true, content: { 'application/json': { schema: resolver(courseSubmissionBody) } } },
       responses: {

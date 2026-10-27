@@ -100,6 +100,12 @@ export async function courseRunPage(c: PageContext<'/course-scores/:id'>) {
         </a>
         {player.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
       </PageHeader>
+      {run.unranked !== null ? (
+        <div class="alert" role="note">
+          <h2>{t.courseRun.unrankedTitle}</h2>
+          <section>{t.courseRun.unrankedReasons[run.unranked]}</section>
+        </div>
+      ) : null}
       {run.hidden ? (
         <div class="alert" role="note">
           <h2>{t.courseRun.hiddenTitle}</h2>
