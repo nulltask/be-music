@@ -1,4 +1,4 @@
-import { and, asc, countDistinct, desc, eq, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, countDistinct, desc, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { avatarURL } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import type { RulesetId } from '../rulesets.ts';
@@ -94,6 +94,8 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
   // Hidden plays stay out, except for their own player.
   const shown = eq(score.hidden, false);
   conditions.push(filter.ownerUserId === undefined ? shown : or(shown, eq(score.userId, filter.ownerUserId))!);
+  // Plays stored without ranking (another tempo, a course stage) stay out of every list.
+  conditions.push(isNull(score.unranked));
   if (filter.handle !== undefined) conditions.push(eq(profile.handle, filter.handle));
   const page = db
     .select({ id: score.id, createdAt: score.createdAt })
@@ -186,6 +188,7 @@ function previousBest(ruleset: RulesetId) {
     select ${column} from score p join score_result pr on pr.score_id = p.id and pr.ruleset = ${ruleset}
     where p.user_id = ${score.userId} and p.chart_fingerprint = ${score.chartFingerprint}
       and p.assisted = ${score.assisted} and p.created_at < ${score.createdAt} and p.hidden = 0
+      and p.unranked is null
   )`;
   return {
     previousEx: sql<number | null>`${earlier(sql`max(pr.ex_score)`)}`,
@@ -251,7 +254,7 @@ export async function loadChartsetCharts(db: Database, chartsetId: string): Prom
       players: countDistinct(score.userId),
     })
     .from(chart)
-    .leftJoin(score, eq(score.chartFingerprint, chart.chartFingerprint))
+    .leftJoin(score, and(eq(score.chartFingerprint, chart.chartFingerprint), isNull(score.unranked)))
     .where(eq(chart.chartsetId, chartsetId))
     .groupBy(chart.chartFingerprint)
     .orderBy(asc(chart.noteCount));

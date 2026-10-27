@@ -168,6 +168,36 @@ describe('POST /api/v0/course-scores', () => {
     expect(lr2.missCount).toBe(10);
   });
 
+  test('stores a run of an unreleased course, or with a stage at another tempo, without ranking it (#788)', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    const own = [stageChart('15'), stageChart('16'), stageChart('17')];
+    const unreleased = courseRun(own, [10, 10, 10]);
+    unreleased.course.release = false;
+    const slowed = courseRun(own, [10, 5, 10], {
+      tamper: (stage, index) => {
+        if (index === 1) stage.play.tempo = 0.9;
+      },
+    });
+    for (const [log, reason] of [
+      [unreleased, 'unreleased'],
+      [slowed, 'tempo'],
+    ] as const) {
+      const response = await submitCourse(cookie, courseBody(log, own));
+      expect(response.status).toBe(201);
+      const body = (await response.json()) as CourseOutcome & { unranked?: string };
+      expect(body.unranked).toBe(reason);
+      for (const result of body.results) expect(result).toMatchObject({ rank: 0, players: 0 });
+    }
+    const [{ courseFingerprint }] = await openDatabase(env.DB)
+      .select({ courseFingerprint: courseScore.courseFingerprint })
+      .from(courseScore)
+      .where(eq(courseScore.unranked, 'tempo'));
+    const ranking = await fetchApp(
+      `/api/v0/courses/${encodeURIComponent(courseFingerprint!)}/leaderboard?ruleset=lr2&anonymous=1`,
+    );
+    expect(await ranking.json()).toMatchObject({ players: 0, entries: [] });
+  });
+
   test('refuses a course log without every stage chart fingerprint', async () => {
     const cookie = await signInAnonymously(fetchApp);
     const log = courseRun(charts, [10, 0], { gauge: 'DEATH' });
