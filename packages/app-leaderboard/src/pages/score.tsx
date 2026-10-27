@@ -12,10 +12,10 @@ import { pickPlayInfoRows } from './components/play-info.tsx';
 import { toPlayInfo } from '../play-info.ts';
 import { avatarURL } from '../avatars.ts';
 import { cardURL } from '../cards.ts';
-import { CARD_FONT } from './icons.ts';
 import type { ScoreDetail } from '../scores/detail.ts';
 import { chartTitle, djLevel, formatGauge, formatScoreRate, lampStyle, rulesetName } from './format.ts';
-import { shareText, xIntentURL, type ScoreCardData } from './score-card-data.ts';
+import { shareText, type ScoreCardData } from './score-card-data.ts';
+import { ShareCard } from './components/share-card.tsx';
 import { scoreCardExcerpt } from './score-card-excerpt.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { helpHref } from './help-topics.ts';
@@ -60,55 +60,6 @@ function scoreCardData(detail: ScoreDetail, played: ScoreDetail['results'][numbe
     gauge: formatGauge(played.gaugeType, played.gaugeFinal),
     playedAt: detail.score.createdAt.getTime(),
   };
-}
-
-/**
- * The share section: the card, a post on X (a plain link, so it works without script), the system share sheet and a
- * copy-link button. For the play's own player, the client script draws the card and uploads it when there is none yet.
- */
-function ShareCard(props: { data: ScoreCardData; pageURL: string; image: string; upload?: string; hasCard: boolean }) {
-  const t = useMessages().score;
-  const text = shareText(props.data);
-  return (
-    <section class="card gap-4" data-size="sm" data-share>
-      <header>
-        <h2>{t.share}</h2>
-        <p>{props.upload !== undefined && !props.hasCard ? t.shareDrawing : t.shareShown}</p>
-      </header>
-      <div class="space-y-4 px-4">
-        <img
-          src={props.image}
-          width={600}
-          height={315}
-          alt={text}
-          class="w-full max-w-[600px] rounded-lg border"
-          data-card-preview
-        />
-        <div class="flex flex-wrap gap-2">
-          <a class="btn" href={xIntentURL(text, props.pageURL)} target="_blank" rel="noopener" data-share-x>
-            {t.postOnX}
-          </a>
-          <button type="button" class="btn" data-variant="outline" data-share-native hidden>
-            {t.shareNative}
-          </button>
-          <button type="button" class="btn" data-variant="outline" data-share-copy>
-            {t.copyLink}
-          </button>
-        </div>
-        <p class="text-muted-foreground text-sm" data-share-status role="status" hidden />
-      </div>
-      <script
-        type="application/json"
-        data-score-card
-        data-upload={props.upload}
-        data-has-card={props.hasCard ? 'true' : 'false'}
-        data-font-family={CARD_FONT.family}
-        data-font-url={CARD_FONT.url}
-        data-share-text={text}
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(props.data).replace(/</g, '\\u003c') }}
-      />
-    </section>
-  );
 }
 
 /** The play's own player hides it, or shows it again (wired by the client script's `hide-score` / `show-score`). */
@@ -316,6 +267,7 @@ export async function scorePage(c: PageContext<'/scores/:id'>) {
       {card !== undefined && !hidden ? (
         <ShareCard
           data={card}
+          text={shareText(card)}
           pageURL={c.req.url}
           image={image}
           upload={isOwner ? `/api/v0/scores/${encodeURIComponent(detail.score.id)}/card` : undefined}

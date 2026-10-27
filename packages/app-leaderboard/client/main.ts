@@ -3,7 +3,9 @@
  * what needs the browser: passkey sign-in and sign-out in the header, and the settings page (profile form, icon upload,
  * passkey creation). The pages work without it, minus these actions.
  */
+import type { CourseCardData } from '../src/pages/course-card-data.ts';
 import type { ScoreCardData } from '../src/pages/score-card-data.ts';
+import { drawCourseCard } from './course-card.ts';
 import { clientMessages } from './messages.ts';
 import { centerSquare, describeAccountError } from './profile.ts';
 import { CARD_HEIGHT, CARD_WIDTH, drawScoreCard } from './score-card.ts';
@@ -173,22 +175,26 @@ document.addEventListener('change', (event) => {
     });
 });
 
-/** Draws the play's share card and returns it as an image, PNG unless that is too large for the upload limit. */
-async function renderScoreCard(data: ScoreCardData, font: CardFont | undefined): Promise<Blob> {
+/** What a share card is of: a play, or a course run (`data-card-kind="course"`). */
+type CardSource = { kind: 'score'; data: ScoreCardData } | { kind: 'course'; data: CourseCardData };
+
+/** Draws a share card and returns it as an image, PNG unless that is too large for the upload limit. */
+async function renderShareCard(card: CardSource, font: CardFont | undefined): Promise<Blob> {
   const canvas = document.createElement('canvas');
   canvas.width = CARD_WIDTH;
   canvas.height = CARD_HEIGHT;
   const context = canvas.getContext('2d');
   if (context === null) throw new Error(t.cannotDrawCard);
-  const avatar = await loadImage(data.avatarUrl).catch(() => null);
+  const avatar = await loadImage(card.data.avatarUrl).catch(() => null);
   await loadCardFont(font);
   if (document.fonts !== undefined) await document.fonts.ready;
-  const playedOn = new Date(data.playedAt).toLocaleDateString(undefined, {
+  const playedOn = new Date(card.data.playedAt).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   });
-  drawScoreCard(context, data, avatar, playedOn);
+  if (card.kind === 'course') drawCourseCard(context, card.data, avatar, playedOn);
+  else drawScoreCard(context, card.data, avatar, playedOn);
   const encode = (type: string, quality?: number) =>
     new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
   const png = await encode('image/png');
@@ -224,14 +230,18 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** The play's own player: draw the card and upload it when the play has none yet. */
-async function ensureScoreCard(source: HTMLScriptElement): Promise<void> {
+/** The play's or the run's own player: draw the card and upload it when there is none yet. */
+async function ensureShareCard(source: HTMLScriptElement): Promise<void> {
   const upload = source.dataset.upload;
   if (upload === undefined || source.dataset.hasCard === 'true') return;
-  const data = JSON.parse(source.textContent ?? '{}') as ScoreCardData;
+  const data: unknown = JSON.parse(source.textContent ?? '{}');
+  const card: CardSource =
+    source.dataset.cardKind === 'course'
+      ? { kind: 'course', data: data as CourseCardData }
+      : { kind: 'score', data: data as ScoreCardData };
   const { fontFamily, fontUrl: fontURL } = source.dataset;
   const font = fontFamily !== undefined && fontURL !== undefined ? { family: fontFamily, url: fontURL } : undefined;
-  const blob = await renderScoreCard(data, font);
+  const blob = await renderShareCard(card, font);
   const response = await fetch(upload, {
     method: 'PUT',
     credentials: 'same-origin',
@@ -262,7 +272,7 @@ function setUpSharing(): void {
       .then(() => say(t.linkCopied, '[data-share-status]'))
       .catch(() => say(t.copyNotAllowed, '[data-share-status]'));
   });
-  void ensureScoreCard(source).catch((error: unknown) =>
+  void ensureShareCard(source).catch((error: unknown) =>
     say(t.cardFailed(error instanceof Error ? error.message : String(error)), '[data-share-status]'),
   );
 }

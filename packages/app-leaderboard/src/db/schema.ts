@@ -383,6 +383,8 @@ export const courseScore = sqliteTable(
     submittedBy: text('submitted_by'),
     serverEngine: text('server_engine').notNull(),
     replayKey: text('replay_key').notNull(),
+    /** R2 key of the run's share card (`cards/course-scores/{courseScoreId}/{sha256}.{ext}`), as `score.cardKey`. */
+    cardKey: text('card_key'),
     /** Hidden by its player, as `score.hidden`. */
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
     /**
