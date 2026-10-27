@@ -79,6 +79,9 @@ describe('parseCourseChartFilter / evaluateCourseChartFilter', () => {
     expect(matches("title LIKE '%x%%' ESCAPE 'x'", { title: 'a 100% b' })).toBe(true);
     expect(matches("title LIKE '%x%%' ESCAPE 'x'", { title: 'a 100 b' })).toBe(false);
     expect(matches("title LIKE 'Ä%'", { title: 'ä' })).toBe(false);
+    // Non-ASCII text still folds its ASCII capitals, and only those.
+    expect(matches("title LIKE 'ÄIR%'", { title: 'Äir' })).toBe(true);
+    expect(matches("title LIKE 'äir%'", { title: 'ÄIR' })).toBe(false);
     expect(matches("level LIKE '1%'")).toBe(true);
   });
 
