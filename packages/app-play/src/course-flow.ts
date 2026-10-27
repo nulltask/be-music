@@ -37,6 +37,8 @@ import { rulesetRecordKey } from './chart-best-records.ts';
 export type CourseStartPlan =
   /** A NEW COURSE bar: start making a course of its folder's kind. */
   | { action: 'make'; kind: LibraryCourse['definition']['kind'] }
+  /** A RANDOM MIX bar: draw a course of its folder's kind, keep it, then play it. */
+  | { action: 'random-mix'; kind: 'expert' | 'nonstop' }
   /** A course with a stage missing from the collection: nothing starts. */
   | { action: 'unplayable' }
   /** A random course: draw its stages first, then plan the drawn course. */
@@ -48,6 +50,9 @@ export type CourseStartPlan =
 
 export function planCourseStart(entry: LibraryCourse): CourseStartPlan {
   if (entry.newCourse === true) return { action: 'make', kind: entry.definition.kind };
+  if (entry.randomMix === true && entry.definition.kind !== 'grade') {
+    return { action: 'random-mix', kind: entry.definition.kind };
+  }
   if (!entry.playable) return { action: 'unplayable' };
   if (entry.random !== undefined) return { action: 'draw' };
   return entry.definition.kind === 'nonstop' ? { action: 'nonstop' } : { action: 'stages' };

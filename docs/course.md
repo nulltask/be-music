@@ -222,7 +222,46 @@ stateDiagram-v2
 - **Constraints.** LR2's maker has none to set (its option-ban buttons were never built), so a made course takes `defaultCourseMakerConstraints` (a GRADE course reads as an LR2 grade, no lane option with the LR2 gauge; the others have none) unless the host sets them, as beatoraja's course editor does: `CourseDraft.constraints` while making, `withCourseConstraints` afterwards (one per group, normalized).
 - **Sharing.** `serializeLR2CourseFile` writes courses as a UTF-8 `.lr2crs` that `parseLR2CourseFile` reads back into the same courses, but the format has no room for constraints or `release` (every course reads back released). `serializeBeatorajaCourseFile` writes a beatoraja `course/*.json` that keeps both (NONSTOP courses, which beatoraja lacks, are left out).
 
-`CourseMaker` (`@be-music/player-browser/collection`) holds the player's courses and the course being made for a host, and `resolveCourseMakerFolders` lists them as LR2 does: one course folder per kind, each with its courses and a NEW COURSE bar last.
+`CourseMaker` (`@be-music/player-browser/collection`) holds the player's courses and the course being made for a host, and `resolveCourseMakerFolders` lists them as LR2 does: one course folder per kind, each with its courses, then a NEW COURSE bar and, in EXPERT and NONSTOP, a [RANDOM MIX](#random-mix) bar.
+
+## RANDOM MIX
+
+LR2's RANDOM MIX bar draws a course from the library by level, BPM and stage count, then plays it ([L8709-L8775](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L8709-L8775), [L18387-L18474](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18387-L18474); LR2 beta3 `history.txt`, "ランダムコースオプションについて"). LR2 lists it after NEW COURSE in the EXPERT and NONSTOP course folders, not GRADE ([L18168-L18191](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18168-L18191)). `drawLR2RandomMix` (`@be-music/player-engine/course`) is the draw as a pure function: the randomness comes in as `random`, so a draw is reproducible.
+
+```mermaid
+flowchart TD
+    count[Stage count: 1-5, or 2-5 at random] --> first[Stage 1: key mode, level and BPM limits]
+    first -->|none| fail[No course]
+    first --> window[BPM window: stage 1 max BPM ± range]
+    window --> rest[Stages 2+: one random order, one per song folder]
+    rest --> prefer[Each stage: the chart of its folder nearest the favorite level]
+    prefer --> course[RANDOM MIX course]
+```
+
+- **Settings.** `LR2RandomMixSettings` are LR2's `config.course` values, which select buttons 260-266 step and texts 190-196 show ([L11155-L11222](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11155-L11222), [L6153-L6218](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L6153-L6218)). `stepLR2RandomMixSetting` wraps around at both ends as LR2's `ButtonByInput` does. A level or BPM limit of 0 is no limit.
+
+  | Button | Setting                     | Range       | Default | Text | At 0       | Otherwise |
+  | ------ | --------------------------- | ----------- | ------- | ---- | ---------- | --------- |
+  | 260    | `preferredLevel` (FAVORITE) | 0-99        | 0       | 190  | `OFF`      | `LEVEL n` |
+  | 261    | `maxLevel`                  | 0-99        | 0       | 191  | `NO LIMIT` | `LEVEL n` |
+  | 262    | `minLevel`                  | 0-99        | 0       | 192  | `NO LIMIT` | `LEVEL n` |
+  | 263    | `bpmRange`                  | 0-99        | 10      | 193  | `NO LIMIT` | `+- nBPM` |
+  | 264    | `maxBPM`                    | 0-990 by 10 | 0       | 194  | `NO LIMIT` | `n BPM`   |
+  | 265    | `minBPM`                    | 0-990 by 10 | 0       | 195  | `NO LIMIT` | `n BPM`   |
+  | 266    | `stageCount`                | 0-5         | 5       | 196  | `RANDOM`   | `n STAGE` |
+
+- **The draw.** A min level above the max level, or a min BPM above the max BPM, is swapped first when both are set, and kept swapped (`resolveLR2RandomMixSettings`), as LR2 writes the swap back. Stage 1 is a chart of the key mode within the level limits whose min and max BPM lie within the BPM limits; with a BPM range set it must also keep one BPM. Stages 2+ come from one random order of the charts within the level limits and the window of the range around stage 1's max BPM (intersected with the BPM limits). A chart from a song folder an earlier stage came from is skipped, so the course can come out shorter than asked. With a favorite level, each drawn chart is replaced by the chart of its folder and key mode within the level limits nearest that level; its BPMs are not checked again. No chart for stage 1 draws nothing.
+- **The course.** The draw is a course the player made, named `RANDOM MIX`, in stage 1's key mode, unranked (`release: false`, LR2's `ir = 0`). A NONSTOP draw gets the default connection (button 268) after every stage. `CourseMaker.drawRandomMix` keeps it as the newest course of its folder in place of the folder's previous draw, as LR2 deletes and re-inserts its `RANDOM MIX` row, so it has its own record and replays until the next draw. LR2 finds the previous draw by its title, so it also deletes a course the player named "RANDOM MIX"; be-music remembers which course is its draw instead, and a draw the player renames becomes their own course, which the next draw keeps.
+- **Key mode.** The draw takes the select key filter's key mode (`resolveLR2RandomMixKeyMode`): 7 under ALL, as LR2's `CreateRandomCourse` does.
+
+What LR2 leaves unknown, and how be-music reads it:
+
+- LR2 draws with SQLite `random()` (the song order) and DxLib `GetRand` (the random stage count); `random` stands in for both. A draw takes it for the stage count (when random), then stage 1's order, then stages 2+'s. The order of the library's charts stands in for SQLite's row order, which breaks a favorite-level tie.
+- Stages 2+ are drawn in the key mode too, as LR2's second query reads the same `mode` condition.
+- LR2 keeps a favorite level per key mode (`optimumlevel_5/7/9/10/14`) but only reads the 7-key one, whatever the key mode; be-music has the one value and uses it for every key mode.
+- LR2 passes `defaultgauge` (text 199) to its course writer, which does not write it anywhere; be-music has no default gauge for a draw.
+- LR2 puts the first four characters of the player's password MD5 into the course hash; a browser has no password, so they stay `0`, as for any course made here.
+- LR2 starts the play straight away; be-music shows a course's decide screen first, as it does for every course, and says so in the status line when no chart can be stage 1 (LR2 does nothing).
 
 ## Playing a course stage
 

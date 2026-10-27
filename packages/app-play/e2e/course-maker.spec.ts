@@ -126,7 +126,10 @@ test('makes, saves, cancels, renames, deletes and exports courses', async ({ pla
   await player.openFolder('MY NONSTOP');
   state = await player.cursorTo((bar) => bar.course?.newCourse === true, 'the NEW COURSE bar');
   expect(state.library.courseFolders).toContain('MY NONSTOP');
-  // Only the NEW COURSE bar is left in MY NONSTOP.
+  // Only the NEW COURSE and RANDOM MIX bars are left in MY NONSTOP.
+  await player.key('ArrowDown');
+  state = await player.state();
+  expect(state.cursor?.bar?.course?.randomMix).toBe(true);
   await player.key('ArrowDown');
   state = await player.state();
   expect(state.cursor?.bar?.course?.newCourse).toBe(true);

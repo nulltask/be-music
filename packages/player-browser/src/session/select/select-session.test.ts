@@ -502,6 +502,20 @@ describe('SelectSession course maker', () => {
     expect(courseMaker.stepDefaultConnection).toHaveBeenCalledWith(-1);
   });
 
+  it('steps a RANDOM MIX setting with the option-change cue, when the host has the settings', () => {
+    const randomMixSettings = { stageCount: 5 } as never;
+    const courseMaker = { ...createMaker(false), randomMixSettings, stepRandomMixSetting: vi.fn() };
+    const { intent, advance, cues } = createSession({ courseMaker });
+    expect(advance(10).courseMaker).toEqual({ defaultConnection: 'FADE', randomMixSettings });
+    intent({ type: 'course-maker', action: { kind: 'random-mix', setting: 'stageCount', step: 1 } });
+    expect(courseMaker.stepRandomMixSetting).toHaveBeenCalledWith('stageCount', 1);
+    expect(cues()).toEqual(['optionChange']);
+    // A host without the settings ignores the buttons.
+    const plain = createSession({ courseMaker: createMaker(false) });
+    plain.intent({ type: 'course-maker', action: { kind: 'random-mix', setting: 'stageCount', step: 1 } });
+    expect(plain.cues()).toEqual([]);
+  });
+
   it('steps a connection of, or asks to delete, only the player’s own course under the cursor', () => {
     const courseMaker = createMaker(false);
     const courseMakerEvent = vi.fn();

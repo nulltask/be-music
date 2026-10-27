@@ -1,13 +1,17 @@
 // The player's own courses (made on the select screen) kept across reloads in IndexedDB, as LR2 keeps them in its
-// database: the courses as `.lr2crs` text plus what that format has no room for (the stage titles, the constraints and
-// whether each course is ranked), and the default NONSTOP connection.
+// database: the courses as `.lr2crs` text plus what that format has no room for (the stage titles, the constraints,
+// whether each course is ranked and which are a folder's last RANDOM MIX), the default NONSTOP connection and the
+// RANDOM MIX settings (LR2's `config.xml` `<course>`).
 
 import {
   LR2_NONSTOP_CONNECTIONS,
   normalizeCourseConstraints,
   parseLR2CourseFile,
   serializeLR2CourseFile,
+  DEFAULT_LR2_RANDOM_MIX_SETTINGS,
+  normalizeLR2RandomMixSettings,
   type CourseDefinition,
+  type LR2RandomMixSettings,
   type NonstopConnection,
 } from '@be-music/player-engine/course';
 
@@ -23,6 +27,9 @@ export interface MadeCourses {
   /** Newest first. */
   courses: CourseDefinition[];
   defaultConnection: NonstopConnection;
+  randomMixSettings: LR2RandomMixSettings;
+  /** Those of `courses` that are their folder's last RANDOM MIX, which the next draw there replaces. */
+  randomMixes: CourseDefinition[];
 }
 
 interface StoredMadeCourses {
@@ -37,7 +44,11 @@ interface StoredMadeCourses {
    * those courses read back released, as they were made).
    */
   release?: boolean[];
+  /** Whether each course is its folder's last RANDOM MIX (absent in records saved before RANDOM MIX). */
+  randomMix?: boolean[];
   defaultConnection: string;
+  /** The RANDOM MIX settings (absent in records saved before RANDOM MIX: LR2's defaults). */
+  randomMixSettings?: Record<string, unknown>;
 }
 
 /** The stored record of `made`. */
@@ -48,13 +59,20 @@ export function serializeMadeCourses(made: MadeCourses): StoredMadeCourses {
     titles: made.courses.map((course) => course.stages.map((stage) => stage.title ?? '')),
     constraints: made.courses.map((course) => [...course.constraints]),
     release: made.courses.map((course) => course.release),
+    randomMix: made.courses.map((course) => made.randomMixes.includes(course)),
     defaultConnection: made.defaultConnection,
+    randomMixSettings: { ...made.randomMixSettings },
   };
 }
 
-/** Reads a stored record back; anything unreadable gives no course and the FADE default. */
+/** Reads a stored record back; anything unreadable gives no course, the FADE default and LR2's RANDOM MIX defaults. */
 export function parseMadeCourses(value: unknown): MadeCourses {
-  const empty: MadeCourses = { courses: [], defaultConnection: 'fade' };
+  const empty: MadeCourses = {
+    courses: [],
+    defaultConnection: 'fade',
+    randomMixSettings: { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS },
+    randomMixes: [],
+  };
   if (typeof value !== 'object' || value === null) return empty;
   const stored = value as Partial<StoredMadeCourses>;
   if (stored.version !== STORE_VERSION || typeof stored.lr2crs !== 'string') return empty;
@@ -78,7 +96,16 @@ export function parseMadeCourses(value: unknown): MadeCourses {
       }),
     };
   });
-  return { courses, defaultConnection };
+  const flags: unknown[] = Array.isArray(stored.randomMix) ? stored.randomMix : [];
+  const randomMixSettings = normalizeLR2RandomMixSettings(
+    typeof stored.randomMixSettings === 'object' && stored.randomMixSettings !== null ? stored.randomMixSettings : {},
+  );
+  return {
+    courses,
+    defaultConnection,
+    randomMixSettings,
+    randomMixes: courses.filter((_, index) => flags[index] === true),
+  };
 }
 
 function openDatabase(): Promise<IDBDatabase> {
