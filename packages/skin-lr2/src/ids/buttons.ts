@@ -123,6 +123,20 @@ export const LR2_BUTTON = {
   COURSE_CONNECTION8: 247,
   /** Steps the connection after stage 9. */
   COURSE_CONNECTION9: 248,
+  /** Steps the RANDOM MIX preferred level (`optimumlevel_7`, FAVORITE), 0-99. */
+  RANDOM_MIX_PREFERRED_LEVEL: 260,
+  /** Steps the RANDOM MIX max level, 0-99. */
+  RANDOM_MIX_MAX_LEVEL: 261,
+  /** Steps the RANDOM MIX min level, 0-99. */
+  RANDOM_MIX_MIN_LEVEL: 262,
+  /** Steps the RANDOM MIX BPM range around stage 1's max BPM, 0-99. */
+  RANDOM_MIX_BPM_RANGE: 263,
+  /** Steps the RANDOM MIX max BPM, 0-990 by 10. */
+  RANDOM_MIX_MAX_BPM: 264,
+  /** Steps the RANDOM MIX min BPM, 0-990 by 10. */
+  RANDOM_MIX_MIN_BPM: 265,
+  /** Steps the RANDOM MIX stage count, 0 (random) to 5. */
+  RANDOM_MIX_STAGE_COUNT: 266,
   /** Steps the connection a new NONSTOP course gets. */
   COURSE_DEFAULT_CONNECTION: 268,
 } as const;

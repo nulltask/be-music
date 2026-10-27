@@ -1,3 +1,4 @@
+import { DEFAULT_LR2_RANDOM_MIX_SETTINGS } from '@be-music/player-engine/course';
 import { DEFAULT_PLAY_OPTIONS, type LibraryEntry } from '@be-music/player-scene-model';
 import { describe, expect, it } from 'vite-plus/test';
 import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
@@ -258,6 +259,15 @@ describe('resolveLR2SelectState texts', () => {
     expect(making.text(LR2_TEXT.COURSE_TITLE)).toBe('Type a name');
     expect(making.text(LR2_TEXT.COURSE_STAGE1_TITLE)).toBe('picked');
     expect(making.text(LR2_TEXT.COURSE_DEFAULT_CONNECTION)).toBe('CUT');
+    // Texts 190-196 read the RANDOM MIX settings when the host has them.
+    expect(making.text(LR2_TEXT.RANDOM_MIX_STAGE_COUNT)).toBeUndefined();
+    const mixing = resolveLR2SelectState({
+      options: DEFAULT_PLAY_OPTIONS,
+      courseMaker: { defaultConnection: 'cut', randomMixSettings: { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, maxBPM: 180 } },
+    });
+    expect(mixing.text(LR2_TEXT.RANDOM_MIX_STAGE_COUNT)).toBe('5 STAGE');
+    expect(mixing.text(LR2_TEXT.RANDOM_MIX_MAX_BPM)).toBe('180 BPM');
+    expect(mixing.button(LR2_BUTTON.RANDOM_MIX_MAX_BPM)).toBe(18);
   });
 });
 
@@ -423,6 +433,7 @@ describe('pickLR2BarBody', () => {
   it('takes LR2’s NEW COURSE body (7) and random-course body (9)', () => {
     expect(pickLR2BarBody(all, courseEntry({ newCourse: true }))?.kind).toBe('courseCreate');
     expect(pickLR2BarBody(all, courseEntry({ random }))?.kind).toBe('randomCourse');
+    expect(pickLR2BarBody(all, courseEntry({ randomMix: true }))?.kind).toBe('randomCourse');
     expect(pickLR2BarBody(all, courseEntry())?.kind).toBe('course');
   });
 
@@ -430,6 +441,7 @@ describe('pickLR2BarBody', () => {
     const plain = bodies('song', 'course');
     expect(pickLR2BarBody(plain, courseEntry({ newCourse: true }))?.kind).toBe('course');
     expect(pickLR2BarBody(plain, courseEntry({ random }))?.kind).toBe('course');
+    expect(pickLR2BarBody(plain, courseEntry({ randomMix: true }))?.kind).toBe('course');
     expect(pickLR2BarBody(bodies('song'), courseEntry({ newCourse: true }))?.kind).toBe('song');
   });
 
