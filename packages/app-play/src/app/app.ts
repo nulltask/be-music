@@ -377,6 +377,7 @@ export class PlayerWebApp {
       library: this.library,
       records: this.records,
       courseMaker: this.courseMaker,
+      keysFilter: () => this.guiState.keysFilter,
       replayAutoSave: this.replayAutoSave,
       leaderboard: this.leaderboard,
       familyKits: this.familyKits,
