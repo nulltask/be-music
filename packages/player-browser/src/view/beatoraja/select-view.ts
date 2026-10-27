@@ -10,10 +10,10 @@
  *
  * A click on a bar moves the cursor onto it, or takes it when it is the focused one. The skin's buttons come back as
  * intents: PLAY / AUTO / PRACTICE, READ TEXT, the song and chart favourites, the MODE and SORT buttons, which step
- * the key-mode filter and the sort of the browse position (Shift steps back), and the option buttons (LNMODE, DP
- * option, gauge auto shift, …), which step the play options as beatoraja's select screen does
- * (`resolveBeatorajaOptionButton`); the JUDGE TIMING button steps the skin's timing offset and hands the options to the
- * host.
+ * the key-mode filter and the sort of the browse position (Shift steps back), and the option buttons (RANDOM 1P / 2P,
+ * LNMODE, DP option, gauge auto shift, …), which step the play options as beatoraja's select screen does
+ * (`resolveBeatorajaOptionButton`; RANDOM through the lane options of the focused chart's play mode); the JUDGE TIMING
+ * button steps the skin's timing offset and hands the options to the host.
  */
 
 import {
@@ -33,7 +33,13 @@ import {
   resolveBeatorajaOptionButton,
   resolveBeatorajaSelectSliderValue,
 } from '@be-music/skin-beatoraja/scene';
-import type { BrowseListOptions, LibraryChart, LibraryEntry, PlayOptions } from '@be-music/player-scene-model';
+import {
+  resolveLibraryChartPlayVariant,
+  type BrowseListOptions,
+  type LibraryChart,
+  type LibraryEntry,
+  type PlayOptions,
+} from '@be-music/player-scene-model';
 import { Container } from 'pixi.js';
 import { resolveChartSource } from '../../collection/collection.ts';
 import type { BrowserChartCollection } from '../../collection/types.ts';
@@ -420,7 +426,9 @@ export class BeatorajaSelectView implements SelectView {
         emit({ type: 'replay', slot: beatorajaReplayButtonSlot(act)! });
         return;
       default: {
-        const changed = resolveBeatorajaOptionButton(act, frame.playOptions, back);
+        const focused = frame.entries[frame.cursor];
+        const pms = focused?.kind === 'chart' && resolveLibraryChartPlayVariant(focused.chart) === '9';
+        const changed = resolveBeatorajaOptionButton(act, frame.playOptions, back, { pms });
         if (changed !== undefined) {
           for (const [key, value] of Object.entries(changed))
             emit({ type: 'set-play-option', key: key as keyof PlayOptions, value });
