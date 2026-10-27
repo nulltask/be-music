@@ -45,6 +45,8 @@ export interface TestHookBar {
     playable: boolean;
     /** LR2's NEW COURSE bar, which starts the course maker. */
     newCourse: boolean;
+    /** LR2's RANDOM MIX bar, which draws a course of its folder's kind when started. */
+    randomMix: boolean;
     /** A bar that draws new stages when started. */
     random: boolean;
   };
@@ -258,6 +260,7 @@ export function describeBar(entry: LibraryEntry, record?: { lamp?: string; troph
         course.random !== undefined ? 0 : course.stages.filter((stage) => stage.chart === undefined).length,
       playable: course.playable,
       newCourse: course.newCourse === true,
+      randomMix: course.randomMix === true,
       random: course.random !== undefined,
     },
     ...kept,

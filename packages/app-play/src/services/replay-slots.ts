@@ -127,14 +127,16 @@ export function libraryChartReplaySlotTarget(chartEntry: LibraryChart): ReplaySl
 
 /**
  * The slot target of a course bar: its course fingerprint over its stages' charts, as a run of it records it. A random
- * course (its stages are drawn on start), a NEW COURSE bar and a course with a stage missing have none.
+ * course (its stages are drawn on start), a NEW COURSE bar, a RANDOM MIX bar and a course with a stage missing have none.
  */
 export function libraryCourseReplaySlotTarget(
   course: LibraryCourse,
   placement: 'intended' | 'lr2',
   fingerprintOf: (chartEntry: LibraryChart) => ReplaySlotTarget | undefined = libraryChartReplaySlotTarget,
 ): ReplaySlotTarget | undefined {
-  if (course.random !== undefined || course.newCourse === true || !course.playable) return undefined;
+  if (course.random !== undefined || course.newCourse === true || course.randomMix === true || !course.playable) {
+    return undefined;
+  }
   const stageChartFingerprints: string[] = [];
   for (const stage of course.stages) {
     const chart = stage.chart;
