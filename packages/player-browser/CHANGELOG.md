@@ -62,92 +62,7 @@
 - 85250d8: S-RANDOM no longer places new notes inside held long notes. Select the active judge ruleset's arrangement constraints, preserve both LN endpoints and mode/side boundaries, and continue recording final channels for unchanged replay playback.
 - 9065e03: Synesthesia projects its point clouds, bomb grains, light rivers and manta schools without allocating per point: rotation bases are computed once per object or frame and each point is written into a reused result, so the play loop spends less time per frame and produces far less garbage.
 - 00139f5: Update mediabunny to the latest release.
-- Updated dependencies [1b3e0bd]
-- Updated dependencies [ba3cc20]
-- Updated dependencies [dff4d15]
-- Updated dependencies [cc6b4b4]
-- Updated dependencies [166f2d2]
-- Updated dependencies [1cb4d60]
-- Updated dependencies [bd5f119]
-- Updated dependencies [7fca9a9]
-- Updated dependencies [b6f6a72]
-- Updated dependencies [a9cc3d7]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [fcaef41]
-- Updated dependencies [7f0386b]
-- Updated dependencies [45aff53]
-- Updated dependencies [582ad35]
-- Updated dependencies [7ab40af]
-- Updated dependencies [1c97afd]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [74127d3]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [78faa63]
-- Updated dependencies [3d5e880]
-- Updated dependencies [21f705d]
-- Updated dependencies [a8896a9]
-- Updated dependencies [b1ca2ce]
-- Updated dependencies [6e676fe]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [9f41b30]
-- Updated dependencies [f994ec4]
-- Updated dependencies [4371c72]
-- Updated dependencies [acba3d5]
-- Updated dependencies [3e694df]
-- Updated dependencies [3e694df]
-- Updated dependencies [c35b845]
-- Updated dependencies [a83e326]
-- Updated dependencies [a8896a9]
-- Updated dependencies [85f13dc]
-- Updated dependencies [3c2ea6b]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [b09a6cf]
-- Updated dependencies [85e11f7]
-- Updated dependencies [d0939cc]
-- Updated dependencies [3e694df]
-- Updated dependencies [a83e326]
-- Updated dependencies [01cd4cd]
-- Updated dependencies [29e69c6]
-- Updated dependencies [f994ec4]
-- Updated dependencies [6fc13f5]
-- Updated dependencies [a8896a9]
-- Updated dependencies [3e694df]
-- Updated dependencies [85250d8]
-- Updated dependencies [2e435b9]
-- Updated dependencies [3ab8eac]
-- Updated dependencies [85f13dc]
-- Updated dependencies [b09a6cf]
-- Updated dependencies [0bee40e]
-- Updated dependencies [d0939cc]
-- Updated dependencies [edc1112]
-- Updated dependencies [a83e326]
-- Updated dependencies [85f13dc]
-- Updated dependencies [b506535]
-- Updated dependencies [3d2bc84]
-- Updated dependencies [77d8ec1]
-- Updated dependencies [3ffc4f8]
-- Updated dependencies [affc51c]
-- Updated dependencies [2e435b9]
-  - @be-music/skin-beatoraja@0.5.0
-  - @be-music/player-engine@0.11.0
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-parser@0.5.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/player-scene-model@0.3.0
-  - @be-music/skin-lr2@0.4.0
-  - @be-music/player-skin-sdk@0.5.0
-  - @be-music/player-ui@0.2.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/skin-beatoraja@0.5.0`, `@be-music/player-engine@0.11.0`, `@be-music/chart-model@0.7.0`, `@be-music/chart-parser@0.5.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-scene-model@0.3.0`, `@be-music/skin-lr2@0.4.0`, `@be-music/player-skin-sdk@0.5.0`, `@be-music/player-ui@0.2.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.11.0
 
@@ -159,24 +74,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-  - @be-music/skin-beatoraja@0.4.0
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-parser@0.4.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/skin-lr2@0.3.0
-  - @be-music/player-engine@0.10.0
-  - @be-music/player-scene-model@0.2.0
-  - @be-music/shared-utils@0.5.0
-  - @be-music/player-skin-sdk@0.4.0
+- Updated dependencies: `@be-music/skin-beatoraja@0.4.0`, `@be-music/chart-model@0.6.0`, `@be-music/chart-parser@0.4.0`, `@be-music/chart-source@0.4.0`, `@be-music/skin-lr2@0.3.0`, `@be-music/player-engine@0.10.0`, `@be-music/player-scene-model@0.2.0`, `@be-music/shared-utils@0.5.0`, `@be-music/player-skin-sdk@0.4.0`
 
 ## 0.10.0
 
@@ -197,16 +95,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/skin-beatoraja@0.3.0
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/skin-lr2@0.2.0
-  - @be-music/chart-parser@0.3.0
-  - @be-music/player-engine@0.9.0
-  - @be-music/player-scene-model@0.1.0
-  - @be-music/player-skin-sdk@0.3.0
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/skin-beatoraja@0.3.0`, `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/skin-lr2@0.2.0`, `@be-music/chart-parser@0.3.0`, `@be-music/player-engine@0.9.0`, `@be-music/player-scene-model@0.1.0`, `@be-music/player-skin-sdk@0.3.0`, `@be-music/shared-utils@0.4.0`
 ## 0.9.0
 
 ### Minor Changes
@@ -281,14 +170,7 @@
   
   - The 100-combo cut-in no longer covers the bottom HUD when there is no BGA monitor (the landscape touch layout, 48 KEY): it plays in the side column under the judgement tally.
   - The play header keeps its top corners clear for the host's controls, so a touch pause button no longer covers the PLAY label and a menu tab no longer covers the ruleset label.
-- Updated dependencies [73fd398]
-- Updated dependencies [7260b23]
-- Updated dependencies [3f1b6b3]
-- Updated dependencies [d2f7f82]
-- Updated dependencies [9a79565]
-- Updated dependencies [7f01985]
-  - @be-music/player-engine@0.8.0
-  - @be-music/player-skin-sdk@0.2.0
+- Updated dependencies: `@be-music/player-engine@0.8.0`, `@be-music/player-skin-sdk@0.2.0`
 
 ## 0.8.0
 
@@ -410,29 +292,7 @@
 - 8b07494: Fix gameplay recordings dropping below 60 fps.
   
   `captureStream(fps)` samples the canvas on its own timer, which drifts against the render loop: a 60 fps capture of a 60 fps scene measured about 54 fps, with regular one-frame gaps. The recorder now captures with frame rate 0 and requests a frame on every animation frame (thinned to the `fps` option), so it takes exactly the frames the scene painted — measured at 60.0 fps with no gaps. Browsers without `requestFrame` keep the timer-driven capture.
-- Updated dependencies [202a28b]
-- Updated dependencies [d9958ac]
-- Updated dependencies [202a28b]
-- Updated dependencies [f24ed8b]
-- Updated dependencies [202a28b]
-- Updated dependencies [750c47d]
-- Updated dependencies [b3fa635]
-- Updated dependencies [2d7652c]
-- Updated dependencies [0103435]
-- Updated dependencies [9505684]
-- Updated dependencies [1589105]
-- Updated dependencies [1c6e7aa]
-- Updated dependencies [08e62d0]
-- Updated dependencies [41f5efb]
-- Updated dependencies [40f1050]
-- Updated dependencies [872c26c]
-  - @be-music/chart-model@0.4.0
-  - @be-music/player-engine@0.7.0
-  - @be-music/skin-lr2@0.1.6
-  - @be-music/skin-beatoraja@0.2.0
-  - @be-music/player-skin-sdk@0.1.0
-  - @be-music/chart-audio-renderer@0.2.4
-  - @be-music/chart-parser@0.2.4
+- Updated dependencies: `@be-music/chart-model@0.4.0`, `@be-music/player-engine@0.7.0`, `@be-music/skin-lr2@0.1.6`, `@be-music/skin-beatoraja@0.2.0`, `@be-music/player-skin-sdk@0.1.0`, `@be-music/chart-audio-renderer@0.2.4`, `@be-music/chart-parser@0.2.4`
 
 ## 0.7.0
 
@@ -445,11 +305,7 @@
 ### Patch Changes
 
 - Emit declaration-compatible types for the beatoraja theme's playable-variant constant so consumers building under `isolatedDeclarations` no longer fail on the inferred `as const satisfies ...` type.
-- Updated dependencies
-- Updated dependencies
-- Updated dependencies [ab210cb]
-  - @be-music/skin-lr2@0.1.5
-  - @be-music/player-engine@0.6.0
+- Updated dependencies: `@be-music/skin-lr2@0.1.5`, `@be-music/player-engine@0.6.0`
 
 ## 0.6.2
 
@@ -457,27 +313,7 @@
 
 - f07ff77: Match the LR2 groove gauge bar rendering: remove the peak-hold / afterimage bead (LR2 has none — the bar tracks only the live value) and suppress the green clear-zone split for survival gauges (HARD / DEATH render the whole bar red in LR2, since they have no 80% clear border). GROOVE / EASY keep the green ≥80% zone. The per-bead cell selection is now the pure, tested `resolveGrooveGaugeBeads` helper.
 - 99324e8: `#xxx97` / `#xxx98` dynamic volume changes in the WebAudio session now apply only to voices triggered after the event, matching the documented semantics and the Node engine. Previously the web runtime wrote the new gain onto the shared bus mixers, retroactively changing the volume of already-playing voices.
-- Updated dependencies [b2c4f9b]
-- Updated dependencies [b9922cf]
-- Updated dependencies [4d5a89e]
-- Updated dependencies [254e213]
-- Updated dependencies [7bbf052]
-- Updated dependencies [811cdfc]
-- Updated dependencies [d0bb321]
-- Updated dependencies [ebfdba7]
-- Updated dependencies [ca1012c]
-- Updated dependencies [6ce9173]
-- Updated dependencies [7802f98]
-- Updated dependencies [cdc42a1]
-- Updated dependencies [ca1012c]
-  - @be-music/chart-parser@0.2.3
-  - @be-music/chart-source@0.2.2
-  - @be-music/player-engine@0.5.0
-  - @be-music/chart-audio-renderer@0.2.3
-  - @be-music/shared-utils@0.3.0
-  - @be-music/chart-model@0.3.2
-  - @be-music/skin-lr2@0.1.4
-  - @be-music/skin-beatoraja@0.1.2
+- Updated dependencies: `@be-music/chart-parser@0.2.3`, `@be-music/chart-source@0.2.2`, `@be-music/player-engine@0.5.0`, `@be-music/chart-audio-renderer@0.2.3`, `@be-music/shared-utils@0.3.0`, `@be-music/chart-model@0.3.2`, `@be-music/skin-lr2@0.1.4`, `@be-music/skin-beatoraja@0.1.2`
 
 ## 0.6.1
 
@@ -491,8 +327,7 @@
   - Rebalanced the Web Audio bus gain staging: a -3 dB input trim ahead of the per-bus / master compressors with a matching +3 dB makeup after, plus retuned compressor params (higher thresholds, gentler ratios, softer knees), so hot source files keep headroom and the compressors act on real overloads instead of smashing normal hits. `off` mode still bypasses trim, compressors, and makeup.
   - Bump pixi.js to 8.19.0.
 
-- Updated dependencies [9b7f269]
-  - @be-music/player-engine@0.4.3
+- Updated dependencies: `@be-music/player-engine@0.4.3`
 
 ## 0.6.0
 
@@ -508,8 +343,7 @@
 
 - eb92249: Bump `fflate` from 0.8.2 to 0.8.3.
 - eb92249: Cap beatoraja texture decoding at four concurrent jobs through `runWithConcurrency` instead of dispatching every asset in parallel via `Promise.all`. Themes that ship hundreds of bitmaps (the LITONE families, several Hi-Speed packs) used to allocate every decoded `ImageBitmap` plus its backing `ArrayBuffer` at the same time, peaking gameplay heap by several hundred MB before the GC could reclaim the input buffers. The bounded scheduler keeps memory pressure proportional to the worker count.
-- Updated dependencies [eb92249]
-  - @be-music/player-engine@0.4.2
+- Updated dependencies: `@be-music/player-engine@0.4.2`
 
 ## 0.5.0
 
@@ -534,20 +368,7 @@
 - 69f77d1: Serialize BGA video FFmpeg transcodes through a single-flight queue so charts that reference several `.mpg` / `.avi` BGAs no longer launch parallel `ffmpeg.wasm` workers and exhaust browser memory.
 - 69f77d1: Yield to macrotasks while parsing a large chart so the page stays responsive (loading overlay animation, scrollbar, click handlers) and the browser doesn't flag the tab as unresponsive on multi-MB BMS / BMSON files.
 - 69f77d1: Precompute `sortedChromeEntries` (tagged union over image / number / text / button / onMouse / slider) once per LR2 select-scene skin reference. The previous render path merged six arrays into `work[]` and called `.sort()` every frame; the underlying skin is frozen after parse so the order is static. Per-frame visibility (op gating, panel-open gating, DST keyframe evaluation) still happens during the switch dispatch — only the merge / sort step is hoisted out.
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [956fd01]
-- Updated dependencies [73dff9a]
-  - @be-music/skin-lr2@0.1.3
-  - @be-music/skin-beatoraja@0.1.1
-  - @be-music/player-engine@0.4.1
-  - @be-music/shared-utils@0.2.1
-  - @be-music/chart-audio-renderer@0.2.2
-  - @be-music/chart-source@0.2.1
-  - @be-music/chart-parser@0.2.2
-  - @be-music/chart-model@0.3.1
+- Updated dependencies: `@be-music/skin-lr2@0.1.3`, `@be-music/skin-beatoraja@0.1.1`, `@be-music/player-engine@0.4.1`, `@be-music/shared-utils@0.2.1`, `@be-music/chart-audio-renderer@0.2.2`, `@be-music/chart-source@0.2.1`, `@be-music/chart-parser@0.2.2`, `@be-music/chart-model@0.3.1`
 
 ## 0.4.0
 
@@ -563,13 +384,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [06a2db9]
-  - @be-music/skin-beatoraja@0.1.0
-  - @be-music/chart-model@0.3.0
-  - @be-music/player-engine@0.4.0
-  - @be-music/skin-lr2@0.1.2
-  - @be-music/chart-audio-renderer@0.2.1
-  - @be-music/chart-parser@0.2.1
+- Updated dependencies: `@be-music/skin-beatoraja@0.1.0`, `@be-music/chart-model@0.3.0`, `@be-music/player-engine@0.4.0`, `@be-music/skin-lr2@0.1.2`, `@be-music/chart-audio-renderer@0.2.1`, `@be-music/chart-parser@0.2.1`
 
 ## 0.3.1
 
@@ -580,8 +395,7 @@
   - AUTO LN lane laser no longer fades out ~150 ms into the sustain: `hold-lane-until-beat` now keeps the lane in `pressedChannels` so the same-tick `flash-lane` auto-release is skipped.
   - MANUAL LN-hold effects (sustain glow / hold sparkles) now show: the renderer starts the LR2 LN-hold timer (70..89) for every LN start and fades it at the tail.
 
-- Updated dependencies [b9a5f51]
-  - @be-music/player-engine@0.3.1
+- Updated dependencies: `@be-music/player-engine@0.3.1`
 
 ## 0.3.0
 
@@ -593,8 +407,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [5ea9072]
-  - @be-music/player-engine@0.3.0
+- Updated dependencies: `@be-music/player-engine@0.3.0`
 
 ## 0.2.0
 
@@ -618,16 +431,4 @@
 
 ### Patch Changes
 
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-- Updated dependencies [135f822]
-  - @be-music/chart-parser@0.2.0
-  - @be-music/chart-model@0.2.0
-  - @be-music/player-engine@0.2.0
-  - @be-music/chart-audio-renderer@0.2.0
-  - @be-music/chart-source@0.2.0
-  - @be-music/shared-utils@0.2.0
-  - @be-music/skin-lr2@0.1.1
+- Updated dependencies: `@be-music/chart-parser@0.2.0`, `@be-music/chart-model@0.2.0`, `@be-music/player-engine@0.2.0`, `@be-music/chart-audio-renderer@0.2.0`, `@be-music/chart-source@0.2.0`, `@be-music/shared-utils@0.2.0`, `@be-music/skin-lr2@0.1.1`

@@ -14,12 +14,4 @@
 
 ### Patch Changes
 
-- Updated dependencies [74127d3]
-- Updated dependencies [a83e326]
-- Updated dependencies [01cd4cd]
-- Updated dependencies [29e69c6]
-- Updated dependencies [f994ec4]
-- Updated dependencies [6fc13f5]
-- Updated dependencies [a8896a9]
-- Updated dependencies [2e435b9]
-  - @be-music/player-skin-sdk@0.5.0
+- Updated dependencies: `@be-music/player-skin-sdk@0.5.0`

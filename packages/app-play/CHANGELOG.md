@@ -47,132 +47,7 @@
 - 7a776a0: Keep bulk chart imports, ZIP expansion, and WSOLA time stretching off the main thread. Add a persistent Debug Panel CPU worker setting, defaulting to half the browser-reported logical CPU count, rounded down with a minimum of one.
   
   Add a persistent Tempo enable switch that bypasses the saved percentage when off, and make WSOLA the default and first keep-pitch algorithm.
-- Updated dependencies [1b3e0bd]
-- Updated dependencies [ba3cc20]
-- Updated dependencies [dff4d15]
-- Updated dependencies [cc6b4b4]
-- Updated dependencies [166f2d2]
-- Updated dependencies [1cb4d60]
-- Updated dependencies [bd5f119]
-- Updated dependencies [b6f6a72]
-- Updated dependencies [7fca9a9]
-- Updated dependencies [b6f6a72]
-- Updated dependencies [1cb4d60]
-- Updated dependencies [a9cc3d7]
-- Updated dependencies [1b3e0bd]
-- Updated dependencies [7a776a0]
-- Updated dependencies [74838c5]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [fcaef41]
-- Updated dependencies [7f0386b]
-- Updated dependencies [45aff53]
-- Updated dependencies [582ad35]
-- Updated dependencies [7ab40af]
-- Updated dependencies [45aff53]
-- Updated dependencies [1c97afd]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [74127d3]
-- Updated dependencies [a83e326]
-- Updated dependencies [f4b7d9e]
-- Updated dependencies [b54a1da]
-- Updated dependencies [69df53c]
-- Updated dependencies [f9c1c24]
-- Updated dependencies [0c67b28]
-- Updated dependencies [a8896a9]
-- Updated dependencies [85f13dc]
-- Updated dependencies [935610f]
-- Updated dependencies [a95c53c]
-- Updated dependencies [c072506]
-- Updated dependencies [582ad35]
-- Updated dependencies [7ab40af]
-- Updated dependencies [3e694df]
-- Updated dependencies [5565fe4]
-- Updated dependencies [0b4e3c4]
-- Updated dependencies [1e62cb3]
-- Updated dependencies [b09a6cf]
-- Updated dependencies [f994ec4]
-- Updated dependencies [3b75adf]
-- Updated dependencies [4b9f91d]
-- Updated dependencies [d0939cc]
-- Updated dependencies [3e694df]
-- Updated dependencies [0bee40e]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [78faa63]
-- Updated dependencies [3d5e880]
-- Updated dependencies [21f705d]
-- Updated dependencies [a8896a9]
-- Updated dependencies [b1ca2ce]
-- Updated dependencies [6e676fe]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [9f41b30]
-- Updated dependencies [f994ec4]
-- Updated dependencies [4371c72]
-- Updated dependencies [acba3d5]
-- Updated dependencies [3e694df]
-- Updated dependencies [3e694df]
-- Updated dependencies [c35b845]
-- Updated dependencies [a83e326]
-- Updated dependencies [a8896a9]
-- Updated dependencies [85f13dc]
-- Updated dependencies [3c2ea6b]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [b09a6cf]
-- Updated dependencies [85e11f7]
-- Updated dependencies [d0939cc]
-- Updated dependencies [3e694df]
-- Updated dependencies [a83e326]
-- Updated dependencies [01cd4cd]
-- Updated dependencies [29e69c6]
-- Updated dependencies [f994ec4]
-- Updated dependencies [6fc13f5]
-- Updated dependencies [a8896a9]
-- Updated dependencies [f872467]
-- Updated dependencies [238bd8b]
-- Updated dependencies [85250d8]
-- Updated dependencies [17aebd5]
-- Updated dependencies [051e0c0]
-- Updated dependencies [6f94ff0]
-- Updated dependencies [2e435b9]
-- Updated dependencies [3ab8eac]
-- Updated dependencies [85f13dc]
-- Updated dependencies [b09a6cf]
-- Updated dependencies [0bee40e]
-- Updated dependencies [d0939cc]
-- Updated dependencies [edc1112]
-- Updated dependencies [a83e326]
-- Updated dependencies [85f13dc]
-- Updated dependencies [b506535]
-- Updated dependencies [3d2bc84]
-- Updated dependencies [77d8ec1]
-- Updated dependencies [3ffc4f8]
-- Updated dependencies [affc51c]
-- Updated dependencies [2e435b9]
-- Updated dependencies [85250d8]
-- Updated dependencies [9065e03]
-- Updated dependencies [00139f5]
-  - @be-music/skin-beatoraja@0.5.0
-  - @be-music/player-engine@0.11.0
-  - @be-music/player-browser@0.12.0
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-parser@0.5.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/player-scene-model@0.3.0
-  - @be-music/skin-lr2@0.4.0
-  - @be-music/player-skin-sdk@0.5.0
-  - @be-music/service-web-theme@0.3.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/skin-beatoraja@0.5.0`, `@be-music/player-engine@0.11.0`, `@be-music/player-browser@0.12.0`, `@be-music/chart-model@0.7.0`, `@be-music/chart-parser@0.5.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-scene-model@0.3.0`, `@be-music/skin-lr2@0.4.0`, `@be-music/player-skin-sdk@0.5.0`, `@be-music/service-web-theme@0.3.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.6.1
 
@@ -184,26 +59,7 @@
 - 9a0c3f9: Use chart-based navigation, image, and best-record names, and replay terminology for saved recording data and controls. Update the test hook to expose chart bars and chart counts consistently.
   
   Align help, course messages, loading statuses, and replay controls with the chart and replay vocabulary.
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [ebff0e7]
-  - @be-music/skin-beatoraja@0.4.0
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-parser@0.4.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/skin-lr2@0.3.0
-  - @be-music/player-engine@0.10.0
-  - @be-music/player-browser@0.11.0
-  - @be-music/player-scene-model@0.2.0
-  - @be-music/player-skin-sdk@0.4.0
-  - @be-music/service-web-theme@0.2.0
+- Updated dependencies: `@be-music/skin-beatoraja@0.4.0`, `@be-music/chart-model@0.6.0`, `@be-music/chart-parser@0.4.0`, `@be-music/chart-source@0.4.0`, `@be-music/skin-lr2@0.3.0`, `@be-music/player-engine@0.10.0`, `@be-music/player-browser@0.11.0`, `@be-music/player-scene-model@0.2.0`, `@be-music/player-skin-sdk@0.4.0`, `@be-music/service-web-theme@0.2.0`
 
 ## 0.6.0
 
@@ -222,16 +78,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/skin-beatoraja@0.3.0
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/skin-lr2@0.2.0
-  - @be-music/chart-parser@0.3.0
-  - @be-music/player-engine@0.9.0
-  - @be-music/player-browser@0.10.0
-  - @be-music/player-scene-model@0.1.0
-  - @be-music/player-skin-sdk@0.3.0
+- Updated dependencies: `@be-music/skin-beatoraja@0.3.0`, `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/skin-lr2@0.2.0`, `@be-music/chart-parser@0.3.0`, `@be-music/player-engine@0.9.0`, `@be-music/player-browser@0.10.0`, `@be-music/player-scene-model@0.1.0`, `@be-music/player-skin-sdk@0.3.0`
 ## 0.5.0
 
 ### Minor Changes
@@ -250,22 +97,7 @@
 
 - dc99100: Large folder drops reach the song list faster because the demo now hands song-bundle files to the collection loader unopened and only opens theme files before mounting a theme.
 - 7051b53: Phones held upright no longer get the rotate prompt on screens drawn on the skin's portrait stage (Synesthesia), only where the screen stays landscape (other skins, double play, 24 / 48 KEY). During play the collapsed Debug Menu shrinks to its chevron, so it stays off the skin's header.
-- Updated dependencies [38a2568]
-- Updated dependencies [00e8bce]
-- Updated dependencies [6808622]
-- Updated dependencies [dc99100]
-- Updated dependencies [3f1b6b3]
-- Updated dependencies [e265198]
-- Updated dependencies [d2f7f82]
-- Updated dependencies [1518e28]
-- Updated dependencies [9dbb569]
-- Updated dependencies [7260b23]
-- Updated dependencies [5f76923]
-- Updated dependencies [c749205]
-- Updated dependencies [77b070f]
-- Updated dependencies [0848402]
-- Updated dependencies [5dfc779]
-  - @be-music/player-browser@0.9.0
+- Updated dependencies: `@be-music/player-browser@0.9.0`
 
 ## 0.4.0
 
@@ -279,43 +111,19 @@
 
 ### Patch Changes
 
-- Updated dependencies [cd83c89]
-- Updated dependencies [9534c16]
-- Updated dependencies [36bcb71]
-- Updated dependencies [2c368ed]
-- Updated dependencies [d9958ac]
-- Updated dependencies [202a28b]
-- Updated dependencies [0319694]
-- Updated dependencies [202a28b]
-- Updated dependencies [750c47d]
-- Updated dependencies [b3fa635]
-- Updated dependencies [4ab6e91]
-- Updated dependencies [8b07494]
-- Updated dependencies [d5e558c]
-- Updated dependencies [0103435]
-  - @be-music/player-browser@0.8.0
-  - @be-music/skin-lr2@0.1.6
-  - @be-music/skin-beatoraja@0.2.0
+- Updated dependencies: `@be-music/player-browser@0.8.0`, `@be-music/skin-lr2@0.1.6`, `@be-music/skin-beatoraja@0.2.0`
 
 ## 0.3.2
 
 ### Patch Changes
 
-- Updated dependencies
-- Updated dependencies
-- Updated dependencies [ab210cb]
-  - @be-music/skin-lr2@0.1.5
-  - @be-music/player-browser@0.7.0
+- Updated dependencies: `@be-music/skin-lr2@0.1.5`, `@be-music/player-browser@0.7.0`
 
 ## 0.3.1
 
 ### Patch Changes
 
-- Updated dependencies [f07ff77]
-- Updated dependencies [99324e8]
-  - @be-music/player-browser@0.6.2
-  - @be-music/skin-lr2@0.1.4
-  - @be-music/skin-beatoraja@0.1.2
+- Updated dependencies: `@be-music/player-browser@0.6.2`, `@be-music/skin-lr2@0.1.4`, `@be-music/skin-beatoraja@0.1.2`
 
 ## 0.3.0
 
@@ -329,58 +137,27 @@
 
 ### Patch Changes
 
-- Updated dependencies [9b7f269]
-  - @be-music/player-browser@0.6.1
+- Updated dependencies: `@be-music/player-browser@0.6.1`
 
 ## 0.2.7
 
 ### Patch Changes
 
 - a36c2b1: Update the demo shell for the rearranged default gameplay layout (`index.html` / `styles.css`) and follow the new chrome-injection seam in `main.ts`.
-- Updated dependencies [a36c2b1]
-  - @be-music/player-browser@0.6.0
+- Updated dependencies: `@be-music/player-browser@0.6.0`
 
 ## 0.2.6
 
 ### Patch Changes
 
-- Updated dependencies [eb92249]
-- Updated dependencies [eb92249]
-  - @be-music/player-browser@0.5.1
+- Updated dependencies: `@be-music/player-browser@0.5.1`
 
 ## 0.2.5
 
 ### Patch Changes
 
 - 69f77d1: `discoverLr2Themes` scopes its return to `LR2files/Theme/<name>/`, which dropped shared `LR2files/` siblings (`WallPaper/`, `Bgm/`, `Sound/`, …) from the file list handed to the skin loader. The LR2 default select skin references its backdrop via the wildcard `LR2files/WallPaper/Select/*.bmp`; without the siblings the lookup failed and the select scene painted black. Union the theme's own files with all other files under `LR2files/` that aren't part of any other theme subtree, so wildcard `#CUSTOMFILE` assets resolve as before.
-- Updated dependencies [3ee4d90]
-- Updated dependencies [d4b427c]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [4275fef]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [cc37f42]
-- Updated dependencies [18e4a48]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [a66b7aa]
-- Updated dependencies [73dff9a]
-  - @be-music/player-browser@0.5.0
-  - @be-music/skin-lr2@0.1.3
-  - @be-music/skin-beatoraja@0.1.1
+- Updated dependencies: `@be-music/player-browser@0.5.0`, `@be-music/skin-lr2@0.1.3`, `@be-music/skin-beatoraja@0.1.1`
 
 ## 0.2.4
 
@@ -394,24 +171,19 @@
 
 - 06a2db9: Add a beatoraja-theme path alongside LR2 themes: a "Beatoraja preview" folder in the debug menu, a variant dropdown (`7` / `5` / `14` / `10` / `9`), and an "Open preview" button that mounts `BeatorajaPlaySkinPreviewScene`. Texture caches are memoized per entry path, and skin-options panel state persists across mid-edit `replaceSkin` round-trips.
 
-- Updated dependencies [06a2db9]
-  - @be-music/skin-beatoraja@0.1.0
-  - @be-music/player-browser@0.4.0
-  - @be-music/skin-lr2@0.1.2
+- Updated dependencies: `@be-music/skin-beatoraja@0.1.0`, `@be-music/player-browser@0.4.0`, `@be-music/skin-lr2@0.1.2`
 
 ## 0.2.2
 
 ### Patch Changes
 
-- Updated dependencies [b9a5f51]
-  - @be-music/player-browser@0.3.1
+- Updated dependencies: `@be-music/player-browser@0.3.1`
 
 ## 0.2.1
 
 ### Patch Changes
 
-- Updated dependencies [5ea9072]
-  - @be-music/player-browser@0.3.0
+- Updated dependencies: `@be-music/player-browser@0.3.0`
 
 ## 0.2.0
 
@@ -423,7 +195,4 @@
 
 ### Patch Changes
 
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-  - @be-music/player-browser@0.2.0
-  - @be-music/skin-lr2@0.1.1
+- Updated dependencies: `@be-music/player-browser@0.2.0`, `@be-music/skin-lr2@0.1.1`
