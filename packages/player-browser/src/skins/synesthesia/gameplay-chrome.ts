@@ -20,7 +20,7 @@ import {
   cameraBasis,
   hsvToHex,
   mixCamera,
-  particleRiverPoint,
+  particleRiverPointInto,
   pointCloudPyramid,
   projectPoint,
   projectViewInto,
@@ -32,6 +32,7 @@ import {
   viewPoint,
   wanderPoint,
   type CameraPose,
+  type RiverOptions,
 } from './space.ts';
 import {
   SPECTRUM_RIDGE_HEIGHT,
@@ -300,11 +301,13 @@ export function renderSynesthesiaChrome({
       drive.onset,
     );
     const shown = effects.screenWide ? schools.length : 1;
+    const schoolBasis = cameraBasis(camera, SCRATCH_BASIS);
     for (let school = 0; school < shown; school += 1) {
       drawSchool(
         light,
         schools[school]!,
-        (point) => projectPoint(viewPoint(point, camera), VIEW.centerX, VIEW.horizon, FLOOR.focal),
+        (out, point) =>
+          projectViewInto(out, point.x, point.y, point.z, schoolBasis, VIEW.centerX, VIEW.horizon, FLOOR.focal),
         {
           alpha: 0.95,
           palette: SCHOOL_SPECS[school]!.palette,
@@ -588,6 +591,12 @@ const SCRATCH_B = scratchProjected();
 const SCRATCH_POINT = { x: 0, y: 0, z: 0 };
 
 const RIVER_PARTICLES = 280;
+/** Each river's height, depth and diagonal slope. */
+const RIVER_BASE_Y = [118, 70, 134];
+const RIVER_BASE_Z = [520, 900, 300];
+const RIVER_SLOPE = [0.55, -0.4, 0.3];
+/** Scratch flow for {@link drawRiver}, refilled per river each frame. */
+const RIVER_OPTIONS: RiverOptions = { length: 1500, speed: 260, amplitude: 28, width: 16, seed: 1 };
 
 /**
  * A river of light particles streaming low over the floor, receding diagonally into the distance — golden
@@ -603,22 +612,40 @@ function drawRiver(
   camera: CameraPose,
   drive: AudioDrive,
 ): void {
-  const options = {
-    length: 1500,
-    speed: 260 + 60 * tier,
-    amplitude: 28 * (1 + 1.4 * drive.mid),
-    width: 16,
-    seed: river + 1,
-  };
-  const baseY = [118, 70, 134][river] ?? 118;
-  const baseZ = [520, 900, 300][river] ?? 520;
-  const slope = [0.55, -0.4, 0.3][river] ?? 0.5;
-  const toWorld = (local: { x: number; y: number; z: number }) =>
-    viewPoint({ x: local.x, y: baseY + local.y, z: baseZ + local.z + local.x * slope }, camera);
+  const options = RIVER_OPTIONS;
+  options.speed = 260 + 60 * tier;
+  options.amplitude = 28 * (1 + 1.4 * drive.mid);
+  options.seed = river + 1;
+  const baseY = RIVER_BASE_Y[river] ?? 118;
+  const baseZ = RIVER_BASE_Z[river] ?? 520;
+  const slope = RIVER_SLOPE[river] ?? 0.5;
+  const basis = cameraBasis(camera, SCRATCH_BASIS);
+  const local = SCRATCH_POINT;
   for (let index = 0; index < RIVER_PARTICLES; index += 1) {
-    const local = particleRiverPoint(index, seconds, options, distance);
-    const head = projectPoint(toWorld(local), VIEW.centerX, VIEW.horizon, FLOOR.focal);
-    const tail = projectPoint(toWorld({ ...local, x: local.x - 26 }), VIEW.centerX, VIEW.horizon, FLOOR.focal);
+    particleRiverPointInto(local, index, seconds, options, distance);
+    const y = baseY + local.y;
+    const z = baseZ + local.z;
+    const head = projectViewInto(
+      SCRATCH_A,
+      local.x,
+      y,
+      z + local.x * slope,
+      basis,
+      VIEW.centerX,
+      VIEW.horizon,
+      FLOOR.focal,
+    );
+    const tailX = local.x - 26;
+    const tail = projectViewInto(
+      SCRATCH_B,
+      tailX,
+      y,
+      z + tailX * slope,
+      basis,
+      VIEW.centerX,
+      VIEW.horizon,
+      FLOOR.focal,
+    );
     if (!head.visible || !tail.visible) continue;
     if (head.x < -20 || head.x > VIEW.width + 20 || head.y < 0 || head.y > VIEW.height) continue;
     if (hasBGA && (insideBGA(head.x, head.y, 4) || insideBGA(tail.x, tail.y, 4))) continue;
