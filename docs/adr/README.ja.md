@@ -37,3 +37,5 @@
 - [0019: オプションの値に参照元を持たせる](./0019-source-qualified-option-values.ja.md)
 
 - [0020: Player UI の要素は headless にし、見た目はテーマとスキンが与える](./0020-headless-player-ui.ja.md)
+
+- [0021: スキンのステージは可変にできる](./0021-fluid-stage.ja.md)

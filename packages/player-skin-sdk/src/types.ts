@@ -164,6 +164,15 @@ export interface BeMusicStage {
    * here and the skin frames the same rect, so the BGA can make room for wide (double play / keyboard) playfields.
    */
   resolveBGARect(playfieldRight: number): BeMusicRect;
+
+  /**
+   * Makes the stage fluid: the host calls it with a design size of the screen's aspect ratio
+   * (`resolveFluidStageSize`: the stage's short side kept, its long side following the screen) and draws on the stage
+   * it returns, so the screen has no letterbox bars. The host skips it when the screen is turned the other way from the
+   * stage (a double play chart kept on the landscape stage of an upright screen). Without it the stage keeps its size
+   * and is letterboxed into the screen.
+   */
+  resize?(size: { width: number; height: number }): BeMusicStage;
 }
 
 /**
