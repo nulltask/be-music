@@ -222,7 +222,46 @@ stateDiagram-v2
 - **縛り。** LR2 のコース作成には縛りを設定する手段がありません（オプション禁止のボタンは実装されませんでした）。そのため、作ったコースは `defaultCourseMakerConstraints` の縛りになります（GRADE は LR2 の段位としてレーンオプションなし・LR2 ゲージ、ほかは縛りなし）。ホストが beatoraja のコースエディタのように縛りを設定することもできます。作成中は `CourseDraft.constraints`、作った後は `withCourseConstraints` で、グループごとに 1 つに正規化します。
 - **共有。** `serializeLR2CourseFile` は、コースを UTF-8 の `.lr2crs` に書きます。`parseLR2CourseFile` で読み戻すと同じコースになりますが、この形式には縛りと `release` を書く場所がありません（どのコースもランキング対象として読み戻されます）。`serializeBeatorajaCourseFile` は両方を残したまま beatoraja の `course/*.json` を書きます（beatoraja にない NONSTOP コースは含めません）。
 
-`CourseMaker`（`@be-music/player-browser/collection`）は、ホストのためにプレイヤーのコースと作成中のコースを持ちます。`resolveCourseMakerFolders` は、LR2 と同じくそれらを並べます。種類ごとにコースフォルダが 1 つあり、その中にコースが並んで、最後に NEW COURSE バーが来ます。
+`CourseMaker`（`@be-music/player-browser/collection`）は、ホストのためにプレイヤーのコースと作成中のコースを持ちます。`resolveCourseMakerFolders` は、LR2 と同じくそれらを並べます。種類ごとにコースフォルダが 1 つあり、その中にコースが並んで、その後に NEW COURSE バーと、EXPERT と NONSTOP では [RANDOM MIX](#random-mix) バーが来ます。
+
+## RANDOM MIX
+
+LR2 の RANDOM MIX バーは、レベル・BPM・ステージ数からライブラリのコースを抽選して、そのまま遊ばせます（[L8709-L8775](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L8709-L8775)、[L18387-L18474](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18387-L18474)、LR2 beta3 の `history.txt`「ランダムコースオプションについて」）。LR2 は EXPERT と NONSTOP のコースフォルダの NEW COURSE の後に置き、GRADE には置きません（[L18168-L18191](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18168-L18191)）。`drawLR2RandomMix`（`@be-music/player-engine/course`）はこの抽選を純粋関数にしたものです。乱数は `random` として受け取るので、同じ乱数なら同じコースになります。
+
+```mermaid
+flowchart TD
+    count[ステージ数：1-5、またはランダムに 2-5] --> first[1 曲目：キーモード、レベルと BPM の制限]
+    first -->|なし| fail[コースなし]
+    first --> window[BPM の幅：1 曲目の最大 BPM ± 範囲]
+    window --> rest[2 曲目以降：1 つの乱順、曲フォルダごとに 1 曲]
+    rest --> prefer[各ステージ：同じフォルダで好みのレベルに近い譜面]
+    prefer --> course[RANDOM MIX のコース]
+```
+
+- **設定。** `LR2RandomMixSettings` は LR2 の `config.course` の値で、選曲画面のボタン 260-266 で変え、テキスト 190-196 に出します（[L11155-L11222](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11155-L11222)、[L6153-L6218](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L6153-L6218)）。`stepLR2RandomMixSetting` は LR2 の `ButtonByInput` と同じく両端で折り返します。レベルと BPM の制限は 0 で制限なしです。
+
+  | ボタン | 設定                         | 範囲             | 既定 | テキスト | 0 のとき   | それ以外  |
+  | ------ | ---------------------------- | ---------------- | ---- | -------- | ---------- | --------- |
+  | 260    | `preferredLevel`（FAVORITE） | 0-99             | 0    | 190      | `OFF`      | `LEVEL n` |
+  | 261    | `maxLevel`                   | 0-99             | 0    | 191      | `NO LIMIT` | `LEVEL n` |
+  | 262    | `minLevel`                   | 0-99             | 0    | 192      | `NO LIMIT` | `LEVEL n` |
+  | 263    | `bpmRange`                   | 0-99             | 10   | 193      | `NO LIMIT` | `+- nBPM` |
+  | 264    | `maxBPM`                     | 0-990（10 刻み） | 0    | 194      | `NO LIMIT` | `n BPM`   |
+  | 265    | `minBPM`                     | 0-990（10 刻み） | 0    | 195      | `NO LIMIT` | `n BPM`   |
+  | 266    | `stageCount`                 | 0-5              | 5    | 196      | `RANDOM`   | `n STAGE` |
+
+- **抽選。** 最小レベルが最大レベルより大きい、または最小 BPM が最大 BPM より大きいときは、両方が設定されていれば先に入れ替え、入れ替えたまま残します（`resolveLR2RandomMixSettings`。LR2 も設定に書き戻します）。1 曲目は、そのキーモードでレベルの制限内、最小・最大 BPM が BPM の制限内の譜面です。BPM の範囲を設定しているときは、BPM が変わらない譜面に限ります。2 曲目以降は、レベルの制限内で、1 曲目の最大 BPM から範囲の幅（BPM の制限と重なる部分）に入る譜面を 1 つの乱順で並べて選びます。それまでのステージと同じ曲フォルダの譜面は飛ばすので、コースが指定より短くなることがあります。好みのレベルがあると、選んだ譜面を、同じフォルダ・キーモードでレベルの制限内にあり、そのレベルに最も近い譜面に置き換えます。その譜面の BPM は確かめ直しません。1 曲目が見つからなければ何も抽選しません。
+- **コース。** 抽選したコースは、プレイヤーが作ったコースと同じ形で、名前は `RANDOM MIX`、キーモードは 1 曲目のもの、ランキング対象外（`release: false`。LR2 の `ir = 0`）です。NONSTOP では、すべてのステージの後に既定のつなぎ方（ボタン 268）が入ります。`CourseMaker.drawRandomMix` はそれをフォルダのいちばん新しいコースとし、そのフォルダの前回の抽選と置き換えます。LR2 が `RANDOM MIX` の行を消して入れ直すのと同じで、次に抽選するまで自分の記録とリプレイを持ちます。LR2 は前回の抽選を名前で探すので、プレイヤーが「RANDOM MIX」と名付けたコースも消してしまいます。be-music はどのコースが抽選したものかを覚えておき、名前を変えた抽選はプレイヤーのコースとして次の抽選でも残します。
+- **キーモード。** 選曲画面のキーフィルタのキーモードで抽選します（`resolveLR2RandomMixKeyMode`）。ALL では LR2 の `CreateRandomCourse` と同じく 7 です。
+
+LR2 の動作で分からないところと、be-music の読み方：
+
+- LR2 は SQLite の `random()`（曲の順）と DxLib の `GetRand`（ランダムなステージ数）で抽選します。`random` はその両方の代わりです。抽選では、ステージ数（ランダムのとき）、1 曲目の順、2 曲目以降の順の順に使います。好みのレベルが同じ譜面の間では、SQLite の行の順の代わりにライブラリの譜面の順を使います。
+- 2 曲目以降もキーモードで絞ります。LR2 の 2 つ目のクエリも同じ `mode` の条件を読むためです。
+- LR2 は好みのレベルをキーモードごと（`optimumlevel_5/7/9/10/14`）に持ちますが、どのキーモードでも 7 鍵のものしか読みません。be-music は値を 1 つだけ持ち、すべてのキーモードで使います。
+- LR2 は `defaultgauge`（テキスト 199）をコースの書き込みに渡しますが、どこにも書きません。be-music の抽選には既定のゲージがありません。
+- LR2 はコースのハッシュにプレイヤーのパスワードの MD5 の先頭 4 文字を入れます。ブラウザにはパスワードがないので、ここで作るほかのコースと同じく `0` のままです。
+- LR2 はすぐにプレイを始めます。be-music はほかのコースと同じく先に決定画面を出し、1 曲目が見つからないときはステータス行に知らせます（LR2 は何もしません）。
 
 ## コースのステージを遊ぶ
 
