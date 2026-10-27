@@ -280,14 +280,10 @@ export default defineConfig({
         'packages/chart-audio-renderer/src/index.ts',
         'packages/chart-parser/src/index.ts',
         'packages/player-engine/src/index.ts',
-        'packages/player-engine/src/tui.ts',
-        'packages/player-engine/src/node/*protocol.ts',
         'packages/player-terminal/src/cli.ts',
         'packages/player-terminal/src/tui.ts',
         'packages/player-terminal/src/node/*protocol.ts',
         'packages/player-browser/src/index.ts',
-        'packages/player-browser/src/library.ts',
-        'packages/player-browser/src/pixi-*.ts',
       ],
       thresholds: {
         // Use package-level thresholds so lower-coverage packages don't hide behind unrelated ones.
