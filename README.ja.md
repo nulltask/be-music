@@ -111,6 +111,7 @@ pnpm run release:version
 - その状態で `devel -> main` の release PR を merge すると、version が上がった公開 package だけ GitHub Release が個別に作成されます（プレイヤーのプレイヤーや Leaderboard などの private package は対象外です）
 - player SEA 実行ファイルは `@be-music/player-terminal` から build し、`@be-music/player-terminal` release に添付します。`@be-music/chart-audio-renderer` も SEA zip を添付します
 - private な repository root の `package.json` は `0.0.0` のままで、release 対象 version は `packages/*/package.json` で管理します
+- changelog の行は `scripts/release/changelog.ts` が書きます。changeset ごとに `- <commit>: <summary>`、workspace の依存が上がっただけの package には、依存の新しい version を並べた `- Updated dependencies: ...` を 1 行だけ書きます
 
 tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 

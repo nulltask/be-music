@@ -111,6 +111,7 @@ pnpm run release:version
 - In that state, merging the release PR of `devel -> main` creates a separate GitHub Release for each public package whose version has increased (private packages such as the player and the Leaderboard get none).
 - The player SEA executable is built from `@be-music/player-terminal` and attached to the `@be-music/player-terminal` release; `@be-music/chart-audio-renderer` also ships a SEA zip
 - The private repository root `package.json` stays at `0.0.0`; releasable versions are tracked in `packages/*/package.json`.
+- `scripts/release/changelog.ts` writes the changelog lines: each changeset as `- <commit>: <summary>`, and a package bumped only because its workspace dependencies moved gets one `- Updated dependencies: ...` line listing their new versions.
 
 The tag is created in the format `@be-music/package-name@x.y.z`.
 
