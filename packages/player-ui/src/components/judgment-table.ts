@@ -1,7 +1,7 @@
 import { css, html, nothing, type CSSResultGroup, type TemplateResult } from 'lit';
 import { DataElement } from '../base.ts';
 import type { BeMusicJudgmentData } from '../models.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 import { stats } from '../templates.ts';
 
 const JUDGES = [
@@ -13,8 +13,7 @@ const JUDGES = [
 ] as const;
 export class BeMusicJudgmentTableElement extends DataElement<BeMusicJudgmentData> {
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       @container be-music (max-width: 22rem) {
         th:nth-child(n + 3),

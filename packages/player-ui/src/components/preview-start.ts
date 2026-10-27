@@ -1,13 +1,12 @@
 import { css, html, svg, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
 import { BeMusicElement } from '../base.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 
 /** The large play button over a preview before it plays (`mode="play"`) or after it ended (`mode="replay"`). */
 export class BeMusicPreviewStartElement extends BeMusicElement {
   static override properties: PropertyDeclarations = { mode: {}, disabled: { type: Boolean } };
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       :host {
         display: grid;

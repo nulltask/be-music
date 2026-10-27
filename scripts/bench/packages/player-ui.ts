@@ -88,11 +88,13 @@ const NON_ELEMENT_EXPORTS = new Set([
   'resolvePreviewBGARect',
   'resolvePreviewInfoBox',
   'resolvePreviewPortrait',
+  'setBeMusicTheme',
 ]);
 export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
   module: ui,
   registerCases(define) {
     define('player-ui.defineBeMusicElements', { run: () => ui.defineBeMusicElements(registry) });
+    define('player-ui.setBeMusicTheme', { run: () => ui.setBeMusicTheme(registry, []) });
     define('player-ui.resolvePlayfieldParts', {
       run: () => {
         ui.resolvePlayfieldParts(playfieldFrame);

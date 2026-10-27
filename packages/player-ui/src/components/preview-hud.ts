@@ -3,7 +3,7 @@ import type { BeMusicDOMGameplayFrame } from '@be-music/player-skin-sdk';
 import { FrameElement } from '../base.ts';
 import { resolveGameplayPanels } from '../gameplay-data.ts';
 import { resolvePreviewInfoBox } from '../preview-layout.ts';
-import { previewHost, previewTheme } from '../styles/preview-theme.ts';
+import { structureStyles } from '../styles/structure.ts';
 
 /**
  * The HUD of a preview: the chart's facts, score, combo, gauge and judgments beside or under the BGA
@@ -20,8 +20,7 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
     controlsHidden: { type: Boolean, attribute: 'controls-hidden', reflect: true },
   };
   static override styles: CSSResultGroup = [
-    previewTheme,
-    previewHost,
+    structureStyles,
     css`
       :host {
         display: block;
@@ -85,9 +84,6 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .muted {
-        color: var(--muted-foreground, #b8c7da);
-      }
       .judgments {
         display: flex;
         flex-wrap: wrap;
@@ -97,9 +93,6 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
       .judgments div {
         display: flex;
         gap: 0.35em;
-      }
-      dt {
-        color: var(--muted-foreground, #b8c7da);
       }
       dd {
         margin: 0;
