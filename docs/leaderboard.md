@@ -520,6 +520,13 @@ application, HonoX or Nuxt can take over; the shared data-access functions keep 
   inside the safe area and below the site's name. Without the document, with an unknown lane mode or with more than
   16 lanes (24 / 48 KEY), the playfield keeps its decorative notes. A chart with `#RANDOM` shows the notes every
   outcome shares, and the chart is drawn as written, whatever lane option the play used.
+- **Course runs have a card too** (`client/course-card.ts`), drawn and uploaded the same way by the run's own player
+  (`PUT /api/v0/course-scores/{id}/card`, served at `/course-scores/{id}/card`). It keeps the score card's grid: the
+  heading names the course, its kind (GRADE / EXPERT / NONSTOP COURSE), how many stages the run reached and its
+  trophy; the result, the pills, the counts and the footer are a play's. The panel on the right lists the stages
+  instead of a playfield: each chart's title and the run's rate on it, with a bar that is light for a cleared stage,
+  red for a failed one and dim for one never reached. A course with more stages than fit (five rows) ends the list
+  with a row that counts the rest.
 - **Meta tags** on every page: absolute `og:image`, `og:image:width` / `height`, `twitter:card=summary_large_image`.
 - **Safe area** (`src/pages/share-card-safe-area.ts`): link previews draw over and crop the card, so titles, scores,
   the player and the site's name stay inside it, and the bottom left holds nothing that matters. As of October 2026:
@@ -588,5 +595,4 @@ application, HonoX or Nuxt can take over; the shared data-access functions keep 
   stage chart's content outside its fingerprint (keysounds, BGM objects, the file's object-line order) is taken on
   trust; the BGM and the line order move where a NONSTOP stage is placed, so a forged one could change the gaps of a
   stitched chart, though the play must then have been recorded on that chart. Like single plays (L5), the stitched
-  play's notes are not compared with the rebuilt chart beyond its play fingerprint. Course runs have no share card
-  yet.
+  play's notes are not compared with the rebuilt chart beyond its play fingerprint.
