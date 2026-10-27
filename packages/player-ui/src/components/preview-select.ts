@@ -36,9 +36,9 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         align-content: start;
         gap: 6px;
         margin: 0;
-        padding: 0;
+        /* Room for an overlay scrollbar, which takes no gutter of its own, so it does not cover the level. */
+        padding: 0 12px 0 0;
         overflow: auto;
-        scrollbar-gutter: stable;
         list-style: none;
         overscroll-behavior: contain;
       }
