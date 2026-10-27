@@ -4,12 +4,15 @@ export interface ConstantVisibility {
   readonly fadeMs: number;
 }
 
-/** beatoraja 0.8.9 PlayConfig bounds; LaneRenderer disables this only in its practice configurator preview. */
+/**
+ * beatoraja 0.8.9 PlayConfig bounds. LaneRenderer draws CONSTANT off in its practice configurator preview and in a
+ * course with the `NO_SPEED` constraint (`noSpeed`), which turns it off for every stage.
+ */
 export function resolveConstantVisibility(
-  input: Partial<ConstantVisibility> & { practicePreview?: boolean } = {},
+  input: Partial<ConstantVisibility> & { practicePreview?: boolean; noSpeed?: boolean } = {},
 ): ConstantVisibility {
   return {
-    enabled: input.enabled === true && input.practicePreview !== true,
+    enabled: input.enabled === true && input.practicePreview !== true && input.noSpeed !== true,
     durationMs:
       typeof input.durationMs === 'number' && Number.isFinite(input.durationMs)
         ? Math.max(1, Math.min(10000, Math.round(input.durationMs)))
