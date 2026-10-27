@@ -37,6 +37,7 @@ export {
   type PlaySceneRecording,
   type PlaySceneSettings,
 } from './play.ts';
+export { PlayOptionMismatchError } from '../session/play/play-option-mismatch.ts';
 export {
   createSelectScene,
   type SelectScene,

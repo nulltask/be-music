@@ -326,6 +326,24 @@ export const PLAYER_APP_HTML = `
       </form>
     </dialog>
     <!--
+      A play whose selected options do not fit its chart (beatoraja CONVERGE on a
+      7KEY chart, LR2 SCATTER on a non-9KEY chart, ...): it names the options and
+      the player goes back to the select screen when it closes. Filled by
+      \`showPlayOptionMismatch\` (ui/play-option-mismatch.ts).
+    -->
+    <dialog class="dialog account-dialog" id="play-option-mismatch" aria-labelledby="play-option-mismatch-title" aria-describedby="play-option-mismatch-hint">
+      <form method="dialog" class="account-dialog-body">
+        <header>
+          <h2 id="play-option-mismatch-title">Option not available</h2>
+          <p id="play-option-mismatch-hint">The selected play options cannot be used with this chart. Change them and start the chart again.</p>
+        </header>
+        <ul class="replay-missing-list" data-play-option-mismatch-list></ul>
+        <footer>
+          <button type="submit" class="btn" autofocus>OK</button>
+        </footer>
+      </form>
+    </dialog>
+    <!--
       Loading overlay. Hidden by default; revealed via the
       "visible" class while a folder / ZIP drop is mid-load. The
       bar below moves between "indeterminate" (CSS animation) and
