@@ -127,6 +127,48 @@ describe('course pages', () => {
     expect((await page('/course-scores/nothing')).status).toBe(404);
   });
 
+  test('a run page previews as its share card, the default one until its player uploads one', async () => {
+    const db = openDatabase(env.DB);
+    const fay = await signInAnonymously(fetchApp);
+    await claimAccount(db, await userIdOf(fay));
+    const done = await run(fay, [10, 10, 9]);
+    const id = done.courseScoreId;
+    const shown = await page(`/course-scores/${id}`);
+    expect(shown.html).toContain('<meta name="twitter:card" content="summary_large_image"');
+    const image = /<meta property="og:image" content="([^"]+)"/.exec(shown.html)?.[1];
+    expect(image).toBe(`${ORIGIN}/course-scores/${id}/card?v=d`);
+    expect(shown.html).toMatch(/<meta property="og:image:alt" content="Page Dan — [^"]+ · EX \d+\/\d+ \([\d.]+%\) \[/);
+    expect(shown.html).toContain('https://x.com/intent/post?');
+    expect(shown.html).toContain('data-card-kind="course"');
+    expect(shown.html).toContain('"kindLabel":"GRADE COURSE"');
+    // Only the run's own player draws and uploads the card.
+    expect(shown.html).not.toContain('data-upload=');
+    expect((await page(`/course-scores/${id}`, fay)).html).toContain(`data-upload="/api/v0/course-scores/${id}/card"`);
+
+    const fallback = await fetchApp(`/course-scores/${id}/card?v=d`);
+    expect(fallback.status).toBe(200);
+    expect(fallback.headers.get('content-type')).toBe('image/png');
+    expect((await fetchApp('/course-scores/nothing/card')).status).toBe(404);
+
+    const png = Uint8Array.from(
+      atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='),
+      (c) => c.charCodeAt(0),
+    );
+    const put = (cookie: string, body: BodyInit, type = 'image/png') =>
+      fetchApp(`/api/v0/course-scores/${id}/card`, { method: 'PUT', headers: { cookie, 'content-type': type }, body });
+    expect((await put(await signInAnonymously(fetchApp), png)).status).toBe(403);
+    expect((await put(fay, '<svg/>', 'image/svg+xml')).status).toBe(415);
+    expect((await put(fay, new Uint8Array(600 * 1024))).status).toBe(413);
+    const stored = await put(fay, png);
+    expect(stored.status).toBe(200);
+    const { cardUrl: cardURL } = (await stored.json()) as { cardUrl: string };
+    expect(cardURL).toMatch(new RegExp(`^/course-scores/${id}/card\\?v=[0-9a-f]{16}$`));
+    expect(new Uint8Array(await (await fetchApp(cardURL)).arrayBuffer())).toEqual(png);
+    const after = await page(`/course-scores/${id}`, fay);
+    expect(after.html).toContain(`${ORIGIN}${cardURL}`);
+    expect(after.html).toContain('data-has-card="true"');
+  });
+
   test('a hidden run is its player’s alone, on its page and in the lists', async () => {
     const db = openDatabase(env.DB);
     const erin = await signInAnonymously(fetchApp);

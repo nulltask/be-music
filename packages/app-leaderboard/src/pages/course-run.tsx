@@ -1,4 +1,6 @@
 /** @jsxImportSource hono/jsx */
+import { avatarURL } from '../avatars.ts';
+import { courseCardURL } from '../cards.ts';
 import { openDatabase } from '../db/client.ts';
 import { loadCourseDetail } from '../courses/detail.ts';
 import { toPlayInfo } from '../play-info.ts';
@@ -9,6 +11,9 @@ import { courseHref, LocalTime, playerHref, SectionHeading, Tag } from './compon
 import { HelpTip } from './components/help-tip.tsx';
 import { ResultCards } from './components/lists.tsx';
 import { pickPlayInfoRows } from './components/play-info.tsx';
+import { ShareCard } from './components/share-card.tsx';
+import { courseShareText } from './course-card-data.ts';
+import { courseCardData } from './course-run-card.ts';
 import { loadCourseRun } from './data.ts';
 import { RULESET_LABELS, rulesetName } from './format.ts';
 import { helpHref } from './help-topics.ts';
@@ -74,6 +79,20 @@ export async function courseRunPage(c: PageContext<'/course-scores/:id'>) {
     submittedBy: run.submittedBy,
     serverEngine: run.serverEngine,
   });
+  const card =
+    played === undefined
+      ? undefined
+      : courseCardData({
+          course,
+          played,
+          player: {
+            displayName: player.displayName,
+            handle: player.handle,
+            avatarUrl: avatarURL(player.handle, player.avatarKey),
+          },
+          playedAt: run.createdAt.getTime(),
+        });
+  const image = courseCardURL(run.id, run.cardKey);
   c.header('cache-control', PAGE_CACHE);
   return c.html(
     <Layout
@@ -82,6 +101,7 @@ export async function courseRunPage(c: PageContext<'/course-scores/:id'>) {
           { label: course.name, href: courseHref(course.courseFingerprint), kind: 'course' },
           { label: t.courseRun.crumb(player.displayName), kind: 'score' },
         ]),
+        image: { path: image, alt: card !== undefined ? courseShareText(card) : description },
         // A hidden run stays out of search engines, and so does an anonymous one.
         noindex: run.hidden || player.anonymous,
       }}
@@ -194,6 +214,17 @@ export async function courseRunPage(c: PageContext<'/course-scores/:id'>) {
           ],
         ]}
       />
+      {card !== undefined && !run.hidden ? (
+        <ShareCard
+          data={card}
+          text={courseShareText(card)}
+          kind="course"
+          pageURL={c.req.url}
+          image={image}
+          upload={isOwner ? `/api/v0/course-scores/${encodeURIComponent(run.id)}/card` : undefined}
+          hasCard={run.cardKey !== null}
+        />
+      ) : null}
       {isOwner ? <RunVisibilityCard courseScoreId={run.id} hidden={run.hidden} /> : null}
     </Layout>,
   );
