@@ -56,13 +56,14 @@ export function browseEntryCount(entry: LibraryEntry): string | undefined {
   if (entry.kind === 'chart') return undefined;
   if (entry.kind === 'course') {
     if (entry.course.newCourse === true) return 'make a course';
+    if (entry.course.randomMix === true) return 'draw a course';
     const stages = entry.course.stages.length;
     if (entry.course.random !== undefined) return `${stages} stage${stages === 1 ? '' : 's'} · random`;
     const missing = entry.course.stages.filter((stage) => stage.chart === undefined).length;
     return `${stages} stage${stages === 1 ? '' : 's'}${missing > 0 ? ` · ${missing} missing` : ''}`;
   }
-  // A NEW COURSE bar is not a course.
-  const courses = entry.folder.courses?.filter((course) => course.newCourse !== true);
+  // Neither a NEW COURSE nor a RANDOM MIX bar is a course.
+  const courses = entry.folder.courses?.filter((course) => course.newCourse !== true && course.randomMix !== true);
   if (courses !== undefined) return `${courses.length} course${courses.length === 1 ? '' : 's'}`;
   const charts = entry.folder.charts.length;
   return `${charts} chart${charts === 1 ? '' : 's'}`;
@@ -76,6 +77,7 @@ export function browseEntryBadge(entry: LibraryEntry): string {
   if (entry.kind === 'folder') return 'DIR';
   if (entry.kind === 'course') {
     if (entry.course.newCourse === true) return 'NEW';
+    if (entry.course.randomMix === true) return 'RND';
     return entry.course.definition.kind === 'grade' ? 'DAN' : 'CRS';
   }
   return entry.chart.playLevel !== undefined ? String(entry.chart.playLevel) : '-';
@@ -85,7 +87,7 @@ const COURSE_KIND_LABELS = { grade: 'DAN', expert: 'COURSE', nonstop: 'NONSTOP' 
 
 /**
  * What a select card shows for a focused course bar in place of a chart: the course's name, a line naming its kind and
- * its stage count (or `make a course` on a NEW COURSE bar), and its stage titles in order. With the player's `record`
+ * its stage count (`make a course` on a NEW COURSE bar, `draw a course` on a RANDOM MIX bar), and its stage titles in order. With the player's `record`
  * on the course (`frame.courseBestRecord`), the line also names its best lamp and trophy (`DAN · 4 stages · HARD ·
  * goldmedal`); a lamp of `NO_PLAY` is left out.
  */
@@ -95,6 +97,7 @@ export function describeCourseCard(
 ): { title: string; detail: string; stages: string[] } {
   const title = course.definition.name;
   if (course.newCourse === true) return { title, detail: 'make a course', stages: [] };
+  if (course.randomMix === true) return { title, detail: 'draw a course', stages: [] };
   const kind = course.random !== undefined ? 'RANDOM COURSE' : COURSE_KIND_LABELS[course.definition.kind];
   const count = browseEntryCount({ kind: 'course', course }) ?? '';
   const best = [

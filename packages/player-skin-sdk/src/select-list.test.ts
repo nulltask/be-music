@@ -103,6 +103,10 @@ describe('browse entry row text', () => {
     expect(browseEntryCount({ kind: 'course', course: newCourse })).toBe('make a course');
     expect(browseEntryBadge({ kind: 'course', course: newCourse })).toBe('NEW');
     expect(describeCourseCard(newCourse)).toEqual({ title: 'Dan', detail: 'make a course', stages: [] });
+    const randomMix = { ...course, stages: [], randomMix: true } as unknown as LibraryCourse;
+    expect(browseEntryCount({ kind: 'course', course: randomMix })).toBe('draw a course');
+    expect(browseEntryBadge({ kind: 'course', course: randomMix })).toBe('RND');
+    expect(describeCourseCard(randomMix)).toEqual({ title: 'Dan', detail: 'draw a course', stages: [] });
     expect(describeCourseCard(course)).toEqual({
       title: 'Dan',
       detail: 'DAN · 2 stages · 1 missing',
@@ -115,7 +119,10 @@ describe('browse entry row text', () => {
     );
     expect(describeCourseCard(course, { lamp: 'NO_PLAY' }).detail).toBe('DAN · 2 stages · 1 missing');
     expect(
-      browseEntryCount({ kind: 'folder', folder: { label: 'mine', charts: [], courses: [course, newCourse] } }),
+      browseEntryCount({
+        kind: 'folder',
+        folder: { label: 'mine', charts: [], courses: [course, newCourse, randomMix] },
+      }),
     ).toBe('1 course');
   });
 });
