@@ -1,5 +1,6 @@
 import { defineBeMusicElements } from '@be-music/player-ui';
 import type { BeMusicDOMScreen } from '@be-music/player-skin-sdk';
+import { NATIVE_EYEBROW, adoptNativeTheme } from './theme.ts';
 
 /** Native only adapts scene frames and intents to the reusable presentation elements. */
 export function mountElement<Frame>(
@@ -23,6 +24,13 @@ export function mountElement<Frame>(
   element.dataset.nativeScreen =
     tag === 'be-music-gameplay-hud' ? 'gameplay' : tag.slice('be-music-'.length).replace('-screen', '');
   Object.assign(element.style, { position: 'absolute', inset: '0', width: '100%', height: '100%' });
+  if (tag === 'be-music-select-screen') {
+    const eyebrow = container.ownerDocument.createElement('span');
+    eyebrow.slot = 'eyebrow';
+    eyebrow.textContent = NATIVE_EYEBROW;
+    element.append(eyebrow);
+  }
+  const releaseTheme = adoptNativeTheme(container);
   const entries = Object.entries(listeners);
   for (const [name, listener] of entries) element.addEventListener(name, listener);
   container.append(element);
@@ -37,6 +45,7 @@ export function mountElement<Frame>(
       disposed = true;
       for (const [name, listener] of entries) element.removeEventListener(name, listener);
       element.remove();
+      releaseTheme();
     },
   };
 }
