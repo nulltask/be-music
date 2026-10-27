@@ -282,7 +282,12 @@ and `beatorajaSortIndex` an option's place); its buttons come back to the select
 step the play options as beatoraja's select screen does (`resolveBeatorajaOptionButton`): LNMODE (308) the LN MODE,
 `optiondp` (54) OFF / FLIP / BATTLE / BATTLE AS, and 75, 78, 340, 341, 350-353, 360 and 361 the display-timing
 auto-adjust, gauge auto shift, judgment algorithm, bottom shiftable gauge, EXTRA NOTE depth, mine, scroll and long-note
-modes and 7 TO 9; their label images read the same options (`resolveBeatorajaPlayOptionIndex`). PLAY and PRACTICE (315)
+modes and 7 TO 9. RANDOM 1P / 2P (42 / 43) step Random 1P / Random 2P through beatoraja 0.8.9's ten slots in its
+order: `Random.OPTION_GENERAL` (OFF, MIRROR, RANDOM, R-RANDOM, S-RANDOM, SPIRAL, H-RANDOM, ALL-SCR, RANDOM-EX,
+S-RANDOM-EX) unless the focused chart is PMS, else `Random.OPTION_PMS` (OFF, MIRROR, RANDOM, R-RANDOM, S-RANDOM, SPIRAL,
+H-RANDOM, CONVERGE, RANDOM_PLAYABLE, S_RANDOM_PLAYABLE). A choice from the other list steps on from its slot, and one
+beatoraja does not offer (SCATTER, …) reads as slot 0. The label images read the same options, the RANDOM labels showing
+the slot (`resolveBeatorajaPlayOptionIndex`). PLAY and PRACTICE (315)
 start in the regular and the practice mode. The LNMODE image shows the player's LN MODE on the select and decide
 screens and the played chart's long-note mode on the play and result screens, as beatoraja's does.
 The play view draws through `BeatorajaPlayBridge`: the play's state is the play session's `PlayState`, and the bridge

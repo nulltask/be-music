@@ -619,12 +619,14 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
     run: () => {
       sceneAPI.resolveBeatorajaOptionButton(54, { battleMode: 'OFF', dpFlip: true }, false);
       sceneAPI.resolveBeatorajaOptionButton(308, { longNoteMode: 'HCN' }, false);
+      sceneAPI.resolveBeatorajaOptionButton(42, { random1P: 'H-RANDOM' }, false, { pms: true });
     },
   });
   define('skin-beatoraja.scene.resolveBeatorajaPlayOptionIndex', {
     run: () => {
       sceneAPI.resolveBeatorajaPlayOptionIndex(54, { battleMode: 'BATTLE-AS' });
       sceneAPI.resolveBeatorajaPlayOptionIndex(78, { gaugeAutoShift: 'BEST_CLEAR' });
+      sceneAPI.resolveBeatorajaPlayOptionIndex(43, { random2P: 'S_RANDOM_PLAYABLE' });
     },
   });
   define('skin-beatoraja.scene.resolveBeatorajaOptionIndex', {
