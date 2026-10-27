@@ -133,7 +133,9 @@ export interface SelectSessionOptions {
 export type SelectCourseMaker = Pick<
   CourseMaker,
   'draft' | 'defaultConnection' | 'owns' | 'finish' | 'cancel' | 'stepDefaultConnection' | 'stepConnection'
->;
+> &
+  /** The RANDOM MIX settings and their buttons, for a host that lists RANDOM MIX bars. */
+  Partial<Pick<CourseMaker, 'randomMixSettings' | 'stepRandomMixSetting'>>;
 
 /** The select BGM's level: about -6 dB, under the cues and the preview, as the select scenes always played it. */
 const SELECT_BGM_VOLUME = 0.5;
@@ -747,11 +749,17 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
 
   private courseMakerState(maker: SelectCourseMaker): SelectCourseMakerState {
     const draft = maker.draft;
-    return { ...(draft !== undefined ? { draft } : {}), defaultConnection: maker.defaultConnection };
+    const randomMixSettings = maker.randomMixSettings;
+    return {
+      ...(draft !== undefined ? { draft } : {}),
+      defaultConnection: maker.defaultConnection,
+      ...(randomMixSettings !== undefined ? { randomMixSettings } : {}),
+    };
   }
 
   /**
-   * Runs a course-maker action: finishing or cancelling the course being made and stepping the default connection run
+   * Runs a course-maker action: finishing or cancelling the course being made, stepping the default connection and a
+   * RANDOM MIX setting run
    * on the course maker; deleting a course, or stepping one of its connections, only on a course of the player's own
    * under the cursor; naming the course being made (or the player's course under the cursor) is the host's.
    */
@@ -776,6 +784,12 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         break;
       case 'default-connection':
         maker?.stepDefaultConnection(action.step);
+        break;
+      case 'random-mix':
+        // LR2's buttons 260-266 play `option_change` as they step (OpenLR2 L11155-L11222).
+        if (maker?.stepRandomMixSetting === undefined) return;
+        maker.stepRandomMixSetting(action.setting, action.step);
+        this.playCue('optionChange');
         break;
       case 'connection':
         if (own !== undefined) maker?.stepConnection(own.definition, action.slot, action.step);

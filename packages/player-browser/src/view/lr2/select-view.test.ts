@@ -108,12 +108,14 @@ describe('LR2SelectView buttons', () => {
     view.dispatchButtonClick({ type: 233 }, 1);
     view.dispatchButtonClick({ type: 242 }, -1);
     view.dispatchButtonClick({ type: 268 }, 1);
+    view.dispatchButtonClick({ type: 264 }, -1);
     expect(intents).toEqual([
       { type: 'course-maker', action: { kind: 'finish' } },
       { type: 'course-maker', action: { kind: 'cancel' } },
       { type: 'course-maker', action: { kind: 'delete' } },
       { type: 'course-maker', action: { kind: 'connection', slot: 2, step: -1 } },
       { type: 'course-maker', action: { kind: 'default-connection', step: 1 } },
+      { type: 'course-maker', action: { kind: 'random-mix', setting: 'maxBPM', step: -1 } },
     ]);
     const without = createView();
     without.view.dispatchButtonClick({ type: 230 }, 1);
