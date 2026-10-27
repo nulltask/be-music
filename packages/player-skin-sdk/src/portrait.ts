@@ -91,9 +91,14 @@ export function resolveBeMusicStage(
 ): BeMusicStage {
   const landscape = skin.stage ?? wideStage;
   const portrait = skin.portraitStage;
-  if (!portrait || resolveStageOrientation(screen) !== 'portrait') return resolveFluidStage(landscape, screen);
-  if (chart && !supportsPortraitLayout(chart.laneChannels, chart.playVariant)) return landscape;
-  return resolveFluidStage(portrait, screen);
+  // A fixed stage (every skin but a fluid one) is returned as is, without the fluid sizing's call.
+  const stage =
+    !portrait ||
+    resolveStageOrientation(screen) !== 'portrait' ||
+    (chart && !supportsPortraitLayout(chart.laneChannels, chart.playVariant))
+      ? landscape
+      : portrait;
+  return stage.resize ? resolveFluidStage(stage, screen) : stage;
 }
 
 /**
