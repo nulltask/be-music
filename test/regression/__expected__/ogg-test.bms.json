@@ -6,7 +6,7 @@
       "bpm": 120,
       "extras": {},
       "title": "OGG TEST",
-      "artist": "codex"
+      "artist": "Be-Music Dev Team"
     },
     "resources": {
       "wav": {
@@ -46,7 +46,7 @@
     "roundTripPlayableNotesEqual": true,
     "lines": [
       "#TITLE OGG TEST",
-      "#ARTIST codex",
+      "#ARTIST Be-Music Dev Team",
       "#BPM 120",
       "#WAV01 ogg-test.ogg",
       "#00011:0101"
@@ -84,7 +84,7 @@
         "chartFingerprint": "bmfp0:d9aa4c787699e7aa9bdb22ec49d42ffee9c8631c1d821e7ac916ec3262add63a",
         "playFingerprint": "bmfp0:d9aa4c787699e7aa9bdb22ec49d42ffee9c8631c1d821e7ac916ec3262add63a",
         "title": "OGG TEST",
-        "artist": "codex"
+        "artist": "Be-Music Dev Team"
       },
       "notes": [
         "0 11 normal",

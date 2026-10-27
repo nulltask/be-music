@@ -6,7 +6,7 @@
       "bpm": 120,
       "extras": {},
       "title": "Control Flow Random Demo",
-      "artist": "Codex"
+      "artist": "Be-Music Dev Team"
     },
     "resources": {
       "wav": {
@@ -86,7 +86,7 @@
     "roundTripPlayableNotesEqual": true,
     "lines": [
       "#TITLE Control Flow Random Demo",
-      "#ARTIST Codex",
+      "#ARTIST Be-Music Dev Team",
       "#BPM 120",
       "#WAV01 sample.wav",
       "#WAV02 branch.wav",
@@ -180,7 +180,7 @@
         },
         "playFingerprint": "bmfp0:f30389cad8378f705e40c26764d7c49d242464fb75830f1f8fc9e4a3e5695b81",
         "title": "Control Flow Random Demo [A]",
-        "artist": "Codex"
+        "artist": "Be-Music Dev Team"
       },
       "notes": [
         "0 11 normal",
@@ -695,7 +695,7 @@
         },
         "playFingerprint": "bmfp0:82ddfb397223652a1dd861c0bc908c7fc6559ddda43c491b0672bc86cd22efe6",
         "title": "Control Flow Random Demo [B]",
-        "artist": "Codex"
+        "artist": "Be-Music Dev Team"
       },
       "notes": [
         "0 29 normal",

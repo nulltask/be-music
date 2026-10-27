@@ -6,7 +6,7 @@
       "bpm": 120,
       "extras": {},
       "title": "Lane Order Test",
-      "artist": "codex"
+      "artist": "Be-Music Dev Team"
     },
     "resources": {
       "wav": {
@@ -60,7 +60,7 @@
     "roundTripPlayableNotesEqual": true,
     "lines": [
       "#TITLE Lane Order Test",
-      "#ARTIST codex",
+      "#ARTIST Be-Music Dev Team",
       "#BPM 120",
       "#WAV01 sample.wav",
       "#00011:01",
@@ -127,7 +127,7 @@
         "chartFingerprint": "bmfp0:c5b6484b966a0c8f35d23ff4b95c7e1f52108348a12d2d02506a8c83a1059656",
         "playFingerprint": "bmfp0:c5b6484b966a0c8f35d23ff4b95c7e1f52108348a12d2d02506a8c83a1059656",
         "title": "Lane Order Test",
-        "artist": "codex"
+        "artist": "Be-Music Dev Team"
       },
       "notes": [
         "0 11 normal",

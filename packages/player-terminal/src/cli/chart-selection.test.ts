@@ -53,7 +53,7 @@ describe('chart selection', () => {
     expect(chartEntry).toMatchObject({
       kind: 'chart',
       title: 'Sample',
-      artist: 'Codex',
+      artist: 'Be-Music Dev Team',
     });
   });
 
@@ -114,7 +114,7 @@ describe('chart selection', () => {
     const chartPath = join(tempRoot, 'banner-test.bms');
     await writeFile(
       chartPath,
-      ['#TITLE Banner Test', '#ARTIST Codex', '#BANNER banner.bmp', '#PLAYER 1', '#BPM 120'].join('\n'),
+      ['#TITLE Banner Test', '#ARTIST Be-Music Dev Team', '#BANNER banner.bmp', '#PLAYER 1', '#BPM 120'].join('\n'),
     );
 
     const entries = await buildChartSelectionEntries(tempRoot, [chartPath]);
@@ -133,7 +133,10 @@ describe('chart selection', () => {
     const chartPaths = [join(tempRoot, 'alpha.bms'), join(tempRoot, 'beta.bms'), join(tempRoot, 'gamma.bms')];
     await Promise.all(
       chartPaths.map((chartPath, index) =>
-        writeFile(chartPath, [`#TITLE Chart ${index + 1}`, '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n')),
+        writeFile(
+          chartPath,
+          [`#TITLE Chart ${index + 1}`, '#ARTIST Be-Music Dev Team', '#PLAYER 1', '#BPM 120'].join('\n'),
+        ),
       ),
     );
 
@@ -159,7 +162,7 @@ describe('chart selection', () => {
 
     const chartSource = [
       '#TITLE Stress',
-      '#ARTIST Codex',
+      '#ARTIST Be-Music Dev Team',
       '#PLAYER 1',
       '#BPM 120',
       '#WAV01 sample.wav',
@@ -185,7 +188,7 @@ describe('chart selection', () => {
     process.env.HOME = tempHome;
 
     const chartPath = join(tempRoot, 'cached-hit.bms');
-    const originalSource = ['#TITLE Cache Hit', '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n');
+    const originalSource = ['#TITLE Cache Hit', '#ARTIST Be-Music Dev Team', '#PLAYER 1', '#BPM 120'].join('\n');
     await writeFile(chartPath, originalSource);
 
     const firstEntries = await buildChartSelectionEntries(tempRoot, [chartPath]);
@@ -193,7 +196,7 @@ describe('chart selection', () => {
     expect(firstChart).toMatchObject({
       kind: 'chart',
       title: 'Cache Hit',
-      artist: 'Codex',
+      artist: 'Be-Music Dev Team',
     });
 
     const initialStat = await stat(chartPath);
@@ -207,7 +210,7 @@ describe('chart selection', () => {
     expect(secondChart).toMatchObject({
       kind: 'chart',
       title: 'Cache Hit',
-      artist: 'Codex',
+      artist: 'Be-Music Dev Team',
     });
     expect(parseChartSpy).not.toHaveBeenCalled();
 
@@ -236,7 +239,7 @@ describe('chart selection', () => {
     process.env.HOME = tempHome;
 
     const chartPath = join(tempRoot, 'cached-tamper.bms');
-    await writeFile(chartPath, ['#TITLE Original', '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n'));
+    await writeFile(chartPath, ['#TITLE Original', '#ARTIST Be-Music Dev Team', '#PLAYER 1', '#BPM 120'].join('\n'));
 
     await buildChartSelectionEntries(tempRoot, [chartPath]);
 
@@ -275,8 +278,8 @@ describe('chart selection', () => {
     process.env.HOME = tempHome;
 
     const chartPath = join(tempRoot, 'cached-miss.bms');
-    const firstSource = ['#TITLE First', '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n');
-    const secondSource = ['#TITLE Other', '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n');
+    const firstSource = ['#TITLE First', '#ARTIST Be-Music Dev Team', '#PLAYER 1', '#BPM 120'].join('\n');
+    const secondSource = ['#TITLE Other', '#ARTIST Be-Music Dev Team', '#PLAYER 1', '#BPM 120'].join('\n');
     expect(Buffer.byteLength(firstSource)).toBe(Buffer.byteLength(secondSource));
     await writeFile(chartPath, firstSource);
 
@@ -307,7 +310,7 @@ describe('chart selection', () => {
 
     const firstPath = join(tempRoot, 'first.bms');
     const secondPath = join(tempRoot, 'nested', 'second.bms');
-    const source = ['#TITLE Shared', '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n');
+    const source = ['#TITLE Shared', '#ARTIST Be-Music Dev Team', '#PLAYER 1', '#BPM 120'].join('\n');
     await mkdir(dirname(secondPath), { recursive: true });
     await writeFile(firstPath, source);
 
@@ -326,7 +329,7 @@ describe('chart selection', () => {
         kind: 'chart',
         filePath: secondPath,
         title: 'Shared',
-        artist: 'Codex',
+        artist: 'Be-Music Dev Team',
       }),
     );
     expect(parseChartSpy).not.toHaveBeenCalled();

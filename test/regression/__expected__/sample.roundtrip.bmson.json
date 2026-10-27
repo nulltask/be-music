@@ -7,7 +7,7 @@
       "extras": {},
       "title": "Sample",
       "subtitle": "",
-      "artist": "Codex",
+      "artist": "Be-Music Dev Team",
       "genre": "",
       "playLevel": 0,
       "total": 100
@@ -28,7 +28,7 @@
       "info": {
         "title": "Sample",
         "subtitle": "",
-        "artist": "Codex",
+        "artist": "Be-Music Dev Team",
         "genre": "",
         "modeHint": "beat-5k",
         "level": 0,
@@ -68,7 +68,7 @@
       "  \"info\": {",
       "    \"title\": \"Sample\",",
       "    \"subtitle\": \"\",",
-      "    \"artist\": \"Codex\",",
+      "    \"artist\": \"Be-Music Dev Team\",",
       "    \"genre\": \"\",",
       "    \"level\": 0,",
       "    \"init_bpm\": 120,",
@@ -222,7 +222,7 @@
         "chartFingerprint": "bmfp0:f389d618faf2d164642d5a50c999edcf3a68907fbeab7ebe01a52a0fb5859be5",
         "playFingerprint": "bmfp0:f389d618faf2d164642d5a50c999edcf3a68907fbeab7ebe01a52a0fb5859be5",
         "title": "Sample",
-        "artist": "Codex",
+        "artist": "Be-Music Dev Team",
         "playLevel": "0",
         "total": 100
       },

@@ -18,7 +18,7 @@ describe('chart-writer', () => {
   test('BMS stringify: generates measure resolution from fractional positions', () => {
     const json = createEmptyJSON('json');
     json.metadata.title = 'Stringify BMS Test';
-    json.metadata.artist = 'Codex';
+    json.metadata.artist = 'Be-Music Dev Team';
     json.resources.wav['01'] = 'sample.wav';
     json.events = [
       { measure: 0, channel: '11', position: [0, 1], value: '01' },
@@ -72,7 +72,7 @@ describe('chart-writer', () => {
   test('bmson stringify: generates lines from measure lengths when IR has no lines', () => {
     const json = createEmptyJSON('json');
     json.metadata.title = 'Lines Fallback Test';
-    json.metadata.artist = 'Codex';
+    json.metadata.artist = 'Be-Music Dev Team';
     json.metadata.bpm = 120;
     json.resources.wav['01'] = 'sample.wav';
     json.events = [
@@ -301,7 +301,7 @@ describe('chart-writer', () => {
         version: '1.0.0',
         info: {
           title: 'Test',
-          artist: 'Codex',
+          artist: 'Be-Music Dev Team',
           init_bpm: 120,
           resolution: 240,
         },
@@ -344,7 +344,7 @@ describe('chart-writer', () => {
   test('BMS stringify: handles maxResolution/eol options and controlFlow objects', () => {
     const json = createEmptyJSON('bms');
     json.metadata.title = 'Options';
-    json.metadata.artist = 'Codex';
+    json.metadata.artist = 'Be-Music Dev Team';
     json.metadata.extras = {
       CUSTOM: 'YES',
       PLAYER: 'ignored-as-extra',
@@ -389,7 +389,7 @@ describe('chart-writer', () => {
     const json = createEmptyJSON('bms');
     json.metadata.title = 'Sort Check';
     json.metadata.subtitle = 'Sub';
-    json.metadata.artist = 'Codex';
+    json.metadata.artist = 'Be-Music Dev Team';
     json.metadata.genre = 'Genre';
     json.metadata.comment = 'Comment';
     json.metadata.stageFile = 'stage.png';
@@ -456,7 +456,7 @@ describe('chart-writer', () => {
   test('BMS stringify: writes string PLAYLEVEL values as-is', () => {
     const json = createEmptyJSON('bms');
     json.metadata.title = 'String Level';
-    json.metadata.artist = 'Codex';
+    json.metadata.artist = 'Be-Music Dev Team';
     json.metadata.playLevel = '安心';
 
     const output = stringifyBMS(json);

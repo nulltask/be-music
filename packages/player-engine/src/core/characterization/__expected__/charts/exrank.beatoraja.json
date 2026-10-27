@@ -56,7 +56,7 @@
         "chartFingerprint": "bmfp0:c25adf8213019e5c2284cf6b436f55ebcb77f1ef746d8eb79232909cd4e69dfa",
         "playFingerprint": "bmfp0:c25adf8213019e5c2284cf6b436f55ebcb77f1ef746d8eb79232909cd4e69dfa",
         "title": "exrank",
-        "artist": "characterization"
+        "artist": "Be-Music Dev Team"
       },
       "inputs": [
         {"seq":0,"timeUs":535000,"action":"down","channels":["11"],"tokens":["z"]},
