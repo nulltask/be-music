@@ -23,11 +23,6 @@ export interface EngineScheduler {
   setTimeout(callback: () => void, ms: number): () => void;
   /** Calls `callback` on the next turn of the event loop, like `setImmediate`. Returns a function that cancels it. */
   setImmediate(callback: () => void): () => void;
-  /**
-   * Whether timers fire exactly when due. Host timers fire late by up to a few milliseconds, so a precise wait sleeps a
-   * little short and spins out the rest; a virtual clock's timers are exact, so its precise wait is a single timer.
-   */
-  readonly exactTimers: boolean;
 }
 
 const hostEngineScheduler: EngineScheduler = {
@@ -49,7 +44,6 @@ const hostEngineScheduler: EngineScheduler = {
     const handle = setTimeout(callback, 0);
     return () => clearTimeout(handle);
   },
-  exactTimers: false,
 };
 
 let activeEngineScheduler: EngineScheduler = hostEngineScheduler;
@@ -205,10 +199,15 @@ export function resolveJudgeNowMsFromPressedAt(drainNowMs: number, pressedAt: nu
 const PRESSED_AT_MAX_DELTA_MS = 50;
 
 /**
- * Precise sleep that cuts the wait short on the next input arrival
- * (`inputSignals.pushCommand`). Returns `'timeout'` when the full delay elapsed and `'input'` when an input
- * woke us up early. The caller decides what to do on `'input'` — typically re-drain the input queue and
- * continue waiting for the rest of the original tick.
+ * Sleeps `delayMs`, cut short on the next input arrival (`inputSignals.pushCommand`). Returns `'timeout'` when the full
+ * delay elapsed and `'input'` when an input woke us up early. The caller decides what to do on `'input'` — typically
+ * re-drain the input queue and continue waiting for the rest of the original tick.
+ *
+ * The wait is one timer for the whole remainder (re-armed if the host fires it early). It used to sleep 4 ms short and
+ * poll the rest with zero-delay timers so a tick landed on time; that kept the thread busy for the last few
+ * milliseconds of every 60 Hz tick (about 5% of the browser's main thread in a dense chart) and bought nothing: a JUDGE
+ * is timed by its `pressedAt`, audio is queued against the write head ahead of time, and the next tick reads the clock
+ * wherever it lands.
  *
  * The input wake-up owns a cancellable input-vs-timeout wait. That matters for timeout-heavy runs: using
  * `Promise.race([wakeUp.wait(), timer])` leaves the losing wake-up branch attached to the shared input promise
@@ -226,25 +225,11 @@ export async function waitPreciseOrInput(
   wakeUp: { waitForInputOrTimeout: (timeoutMs: number) => Promise<'timeout' | 'input'> },
 ): Promise<'timeout' | 'input'> {
   const scheduler = activeEngineScheduler;
-  if (scheduler.exactTimers) {
-    return wakeUp.waitForInputOrTimeout(Math.max(0, delayMs));
-  }
   const target = scheduler.now() + Math.max(0, delayMs);
-  while (true) {
-    const remaining = target - scheduler.now();
-    if (remaining <= 0) {
-      return 'timeout';
-    }
-    if (remaining > 8) {
-      const winner = await wakeUp.waitForInputOrTimeout(remaining - 4);
-      if (winner === 'input') {
-        return 'input';
-      }
-      continue;
-    }
-    const winner = await wakeUp.waitForInputOrTimeout(0);
-    if (winner === 'input') {
-      return 'input';
-    }
-  }
+  let remaining = Math.max(0, delayMs);
+  do {
+    if ((await wakeUp.waitForInputOrTimeout(remaining)) === 'input') return 'input';
+    remaining = target - scheduler.now();
+  } while (remaining > 0);
+  return 'timeout';
 }
