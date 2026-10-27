@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { openDatabase } from '../db/client.ts';
-import { score } from '../db/schema.ts';
+import { courseScore, score } from '../db/schema.ts';
 import { ICONS } from './icons.generated.ts';
 import type { PageContext } from './page.tsx';
 
@@ -17,15 +17,10 @@ function defaultCardBytes(): Uint8Array<ArrayBuffer> {
   return defaultCard;
 }
 
-/** A play's share card (og:image): the one its player's browser drew, or the site's default card. */
-export async function scoreCardImage(c: PageContext<'/scores/:id/card'>) {
-  const found = await openDatabase(c.env.DB).query.score.findFirst({
-    where: eq(score.id, c.req.param('id')),
-    columns: { cardKey: true },
-  });
-  if (found === undefined) return c.body('Not Found', 404);
-  if (found.cardKey !== null) {
-    const object = await c.env.BLOBS.get(found.cardKey);
+/** A stored card, or the site's default card when there is none (or its object is gone). */
+async function cardResponse(c: PageContext, cardKey: string | null) {
+  if (cardKey !== null) {
+    const object = await c.env.BLOBS.get(cardKey);
     if (object !== null) {
       return c.body(object.body, 200, {
         'content-type': object.httpMetadata?.contentType ?? 'application/octet-stream',
@@ -35,4 +30,24 @@ export async function scoreCardImage(c: PageContext<'/scores/:id/card'>) {
     }
   }
   return c.body(defaultCardBytes(), 200, { 'content-type': 'image/png', 'cache-control': CARD_CACHE });
+}
+
+/** A play's share card (og:image): the one its player's browser drew, or the site's default card. */
+export async function scoreCardImage(c: PageContext<'/scores/:id/card'>) {
+  const found = await openDatabase(c.env.DB).query.score.findFirst({
+    where: eq(score.id, c.req.param('id')),
+    columns: { cardKey: true },
+  });
+  if (found === undefined) return c.body('Not Found', 404);
+  return cardResponse(c, found.cardKey);
+}
+
+/** A course run's share card (og:image), as `scoreCardImage`. */
+export async function courseScoreCardImage(c: PageContext<'/course-scores/:id/card'>) {
+  const found = await openDatabase(c.env.DB).query.courseScore.findFirst({
+    where: eq(courseScore.id, c.req.param('id')),
+    columns: { cardKey: true },
+  });
+  if (found === undefined) return c.body('Not Found', 404);
+  return cardResponse(c, found.cardKey);
 }

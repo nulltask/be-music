@@ -1,0 +1,1 @@
+ALTER TABLE `course_score` ADD `card_key` text;
