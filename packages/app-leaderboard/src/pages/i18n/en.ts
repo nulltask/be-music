@@ -204,6 +204,13 @@ export const en = {
     hiddenTitle: 'This run is hidden',
     hiddenLead:
       'Only you can see it. It is out of the course rankings, your personal bests and every list until you show it again.',
+    unrankedTitle: 'This run is not ranked',
+    unrankedReasons: {
+      tempo:
+        'A stage was played at another tempo, which is practice. The run is kept, but out of the course rankings, the personal bests and every list.',
+      unreleased:
+        'The course is not released (a made or a random course). The run is kept, but out of the course rankings, the personal bests and every list.',
+    },
     notPublicTitle: 'This run is not public',
     visibility: 'Visibility',
     visibilityShownLead:
@@ -373,6 +380,13 @@ export const en = {
     hiddenTitle: 'This play is hidden',
     hiddenLead:
       'Only you can see it. It is out of the rankings, your personal bests, your figures and every list until you show it again.',
+    unrankedTitle: 'This play is not ranked',
+    unrankedReasons: {
+      tempo:
+        'It was played at another tempo, which is practice. It is kept, but out of the rankings, the personal bests and every list.',
+      'course-stage':
+        'It is a course stage, which ranks with its course. It is kept, but out of the rankings, the personal bests and every list.',
+    },
     visibility: 'Visibility',
     visibilityShownLead:
       'Hide this play to take it out of the rankings, your personal bests, your figures and every list. It is kept, and you can show it again.',

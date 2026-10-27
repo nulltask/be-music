@@ -11,6 +11,7 @@
 import { buildBaseOpSet } from '@be-music/skin-beatoraja';
 import {
   beatorajaWallClockOf,
+  resolveBeatorajaConstantOps,
   resolveBeatorajaSelectBarOps,
   resolveBeatorajaSelectNumber,
   resolveBeatorajaSelectRefValue,
@@ -92,11 +93,16 @@ export class BeatorajaSelectSkinState {
    */
   computeActiveOps(): ReadonlySet<number> {
     const base = this.baseOps();
+    // The player's CONSTANT setting lights `OPTION_CONSTANT` on every bar: beatoraja reads the selected bar's play
+    // config, and be-music keeps one for every key mode.
+    const constantOps = resolveBeatorajaConstantOps(this.ctx.playOptions?.visualConstant);
     // Fast path: no active entry → just the base set (includes `skin_config.option` picks).
     const entry = this.ctx.entries[this.ctx.currentIndex];
-    if (entry === undefined) return base;
+    if (entry === undefined && constantOps.length === 0) return base;
 
     const ops = new Set(base);
+    for (const op of constantOps) ops.add(op);
+    if (entry === undefined) return ops;
     // The bar's ops: the screen's fixed state, and the folder, course or chart bar with its key mode, traits,
     // difficulty, judge rank and clear lamp (`resolveBeatorajaSelectBarOps`).
     for (const op of resolveBeatorajaSelectBarOps(this.selectInput())) ops.add(op);

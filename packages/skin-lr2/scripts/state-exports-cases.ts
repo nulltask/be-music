@@ -1,5 +1,6 @@
 import { createEmptyJSON } from '@be-music/chart-source';
 import * as lr2StateAPI from '@be-music/skin-lr2/state';
+import { DEFAULT_LR2_RANDOM_MIX_SETTINGS } from '@be-music/player-engine/course';
 import { createEmptyScore } from '@be-music/player-engine/ruleset';
 import type { LR2BarBodySource } from '@be-music/skin-lr2';
 import {
@@ -22,6 +23,7 @@ const BENCH_COURSE: CourseView = {
   stageIndex: 0,
 };
 const BENCH_NONSTOP: CourseView = { ...BENCH_COURSE, kind: 'nonstop', connections: ['cut', 'blank1'] };
+const BENCH_RANDOM_MIX = { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, maxBPM: 200 };
 const BENCH_DRAFT = {
   kind: 'nonstop' as const,
   name: 'Bench',
@@ -284,6 +286,22 @@ export function registerLR2SkinStateExportsCases(define: DefineBenchmarkCase): v
   define('skin-lr2.state.resolveLR2CourseMakerText', {
     run: () => {
       lr2StateAPI.resolveLR2CourseMakerText(198, 'cut');
+    },
+  });
+  define('skin-lr2.state.formatLR2RandomMixSetting', {
+    run: () => {
+      lr2StateAPI.formatLR2RandomMixSetting('bpmRange', 15);
+      lr2StateAPI.formatLR2RandomMixSetting('stageCount', 0);
+    },
+  });
+  define('skin-lr2.state.resolveLR2RandomMixText', {
+    run: () => {
+      lr2StateAPI.resolveLR2RandomMixText(194, BENCH_RANDOM_MIX);
+    },
+  });
+  define('skin-lr2.state.resolveLR2RandomMixButtonState', {
+    run: () => {
+      lr2StateAPI.resolveLR2RandomMixButtonState(264, BENCH_RANDOM_MIX);
     },
   });
   define('skin-lr2.state.resolveLR2CourseNumber', {

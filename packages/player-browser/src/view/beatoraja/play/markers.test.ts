@@ -1,6 +1,7 @@
 import { Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeatorajaImageElement, BeatorajaImageId } from '@be-music/skin-beatoraja';
+import { resolveConstantAlpha, resolveConstantVisibility } from '@be-music/player-scene-model';
 import { BeatorajaMarkerLayer } from './markers.ts';
 import { resolveNoteDrawWindow } from '../../../chart/note-draw-window.ts';
 import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts';
@@ -336,5 +337,24 @@ describe('BeatorajaMarkerLayer — LR2 window on a chart that does not scroll', 
       window,
     });
     expect(visibleYs(layer)).toEqual([800, 750, 700, 650, 600, 550, 500]);
+  });
+
+  it('fades bar lines by Visual CONSTANT and drops the ones it hides', () => {
+    const layer = makeLayer();
+    const constant = resolveConstantVisibility({ enabled: true, durationMs: 500, fadeMs: 100 });
+    layer.update({
+      currentBeat: 0,
+      judgementY: 800,
+      laneTopY: 500,
+      pixelsPerBeat: 100,
+      // At 1 beat per second: inside the duration, half way through the fade, and past it.
+      markers: { group: [0.25, 0.55, 1], bpm: [], stop: [], time: [] },
+      secondsAt: (beat) => beat,
+      alphaAt: (seconds) => resolveConstantAlpha(seconds, 0, constant),
+    });
+    const shown = layer.container.children.filter((child) => child.visible);
+    expect(shown.map((child) => (child as { y: number }).y)).toEqual([775, 745]);
+    expect(shown[0]!.alpha).toBe(1);
+    expect(shown[1]!.alpha).toBeCloseTo(0.5);
   });
 });

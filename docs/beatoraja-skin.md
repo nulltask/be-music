@@ -253,13 +253,16 @@ sequenceDiagram
   `StringPropertyFactory`): number 92 is the main BPM (LR2's internet-ranking place), op 400 the CONSTANT option (LR2's
   key-config page), and beatoraja defines no numbers 38-41 or 93-94, no texts 17-29 and no op 34, so they read nothing
   (0 on the result and decide screens) (#430).
+- Op 400 (CONSTANT) is lit on the select and play screens while the player has
+  [Visual CONSTANT](./play-options.md#visual-constant) on (`resolveBeatorajaConstantOps`). As beatoraja's
+  `BooleanPropertyFactory` reads the player's play config, it stays lit in a course whose `NO_SPEED` constraint stops
+  CONSTANT drawing (#776).
 
 ### Known gaps
 
 - The best record and the target do not reach the mapping yet: numbers 150-158 (the pacemaker scores, the differences
   from them, the rates over them and beatoraja's `NUMBER_DIFF_NEXTRANK`, the distance to the next rank on 27ths), the best record's
   numbers (71-89) and the best and target rank ops read 0 or nothing.
-- Op 400 (CONSTANT) is never lit: be-music has no CONSTANT option.
 
 ## Browser player wiring
 
@@ -282,7 +285,12 @@ and `beatorajaSortIndex` an option's place); its buttons come back to the select
 step the play options as beatoraja's select screen does (`resolveBeatorajaOptionButton`): LNMODE (308) the LN MODE,
 `optiondp` (54) OFF / FLIP / BATTLE / BATTLE AS, and 75, 78, 340, 341, 350-353, 360 and 361 the display-timing
 auto-adjust, gauge auto shift, judgment algorithm, bottom shiftable gauge, EXTRA NOTE depth, mine, scroll and long-note
-modes and 7 TO 9; their label images read the same options (`resolveBeatorajaPlayOptionIndex`). PLAY and PRACTICE (315)
+modes and 7 TO 9. RANDOM 1P / 2P (42 / 43) step Random 1P / Random 2P through beatoraja 0.8.9's ten slots in its
+order: `Random.OPTION_GENERAL` (OFF, MIRROR, RANDOM, R-RANDOM, S-RANDOM, SPIRAL, H-RANDOM, ALL-SCR, RANDOM-EX,
+S-RANDOM-EX) unless the focused chart is PMS, else `Random.OPTION_PMS` (OFF, MIRROR, RANDOM, R-RANDOM, S-RANDOM, SPIRAL,
+H-RANDOM, CONVERGE, RANDOM_PLAYABLE, S_RANDOM_PLAYABLE). A choice from the other list steps on from its slot, and one
+beatoraja does not offer (SCATTER, …) reads as slot 0. The label images read the same options, the RANDOM labels showing
+the slot (`resolveBeatorajaPlayOptionIndex`). PLAY and PRACTICE (315)
 start in the regular and the practice mode. The LNMODE image shows the player's LN MODE on the select and decide
 screens and the played chart's long-note mode on the play and result screens, as beatoraja's does.
 The play view draws through `BeatorajaPlayBridge`: the play's state is the play session's `PlayState`, and the bridge

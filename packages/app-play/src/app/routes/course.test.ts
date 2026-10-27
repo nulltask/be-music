@@ -2,7 +2,11 @@ import type { ResultReplaySlots } from '../../services/replay-slot-service.ts';
 import { createEmptyJSON } from '@be-music/chart-source';
 import { drawBrowserRandomCourse, type BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
-import { parseBeatorajaCourseData } from '@be-music/player-engine/course';
+import {
+  parseBeatorajaCourseData,
+  type LR2RandomMixChart,
+  type LR2RandomMixDrawResult,
+} from '@be-music/player-engine/course';
 import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player-engine/replay';
 import type { PlayResult } from '@be-music/player-scene-model';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
@@ -89,6 +93,14 @@ function familyState(family: 'built-in' | 'beatoraja'): FamilyDispatchState {
 /** The course route on fake screens and services, recording what it shows. */
 function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?: boolean } = {}) {
   const courses = new CourseRunService();
+  const drawRandomMix = vi.fn<
+    (
+      kind: 'expert' | 'nonstop',
+      keyMode: number,
+      charts: readonly LR2RandomMixChart[],
+      random: () => number,
+    ) => LR2RandomMixDrawResult<LR2RandomMixChart>
+  >(() => ({ ok: false, reason: 'no-candidates' }));
   const deps = {
     courses,
     library: {
@@ -103,7 +115,13 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
       peekChartBestRecord: vi.fn<CourseRouteDeps['records']['peekChartBestRecord']>(() => undefined),
       recordCourseResult: vi.fn<CourseRouteDeps['records']['recordCourseResult']>(),
     },
-    courseMaker: { maker: { start: vi.fn<CourseRouteDeps['courseMaker']['maker']['start']>() } },
+    courseMaker: {
+      maker: {
+        start: vi.fn<CourseRouteDeps['courseMaker']['maker']['start']>(),
+        drawRandomMix: drawRandomMix as unknown as CourseRouteDeps['courseMaker']['maker']['drawRandomMix'],
+      },
+    },
+    keysFilter: vi.fn<CourseRouteDeps['keysFilter']>(() => 'ALL'),
     replayAutoSave: { saveCourse: vi.fn<CourseRouteDeps['replayAutoSave']['saveCourse']>() },
     leaderboard: { maybeSubmitCourse: vi.fn<CourseRouteDeps['leaderboard']['maybeSubmitCourse']>() },
     familyKits: { familyDispatchState: () => familyState(options.family ?? 'built-in') },
@@ -122,7 +140,7 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
   const route = new CourseRoute(deps);
   /** What the decide screen shown for the course leads to. */
   const decided = (): Parameters<CourseRouteDeps['showDecide']>[2] => deps.showDecide.mock.calls.at(-1)![2];
-  return { courses, deps, route, decided };
+  return { courses, deps, route, decided, drawRandomMix };
 }
 
 /** Starts `course` and plays its first stage from its decide screen. */
@@ -180,6 +198,37 @@ describe('CourseRoute: starting a course', () => {
     expect(h.courses.active).toBeUndefined();
     expect(h.courses.takeReturnNavigation()).toBeUndefined();
     expect(h.deps.showDecide).not.toHaveBeenCalled();
+  });
+
+  test('a RANDOM MIX bar draws a course of hashed songs in the key filter mode, then plays it', async () => {
+    const h = harness();
+    const bar = grade([], { randomMix: true });
+    const mix = { ...bar, definition: { ...bar.definition, kind: 'expert' as const } };
+    await h.route.startCourse(mix);
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('RANDOM MIX: no chart matches the RANDOM MIX settings');
+    expect(h.drawRandomMix).toHaveBeenLastCalledWith('expert', 7, [], Math.random);
+    expect(h.deps.showDecide).not.toHaveBeenCalled();
+
+    h.deps.records.resolveChartHashes.mockImplementation(async (chart) =>
+      chart.id === 'a' ? { md5: 'A'.repeat(32), sha256: 'b'.repeat(64) } : undefined,
+    );
+    h.deps.keysFilter.mockReturnValue('KEYS_14');
+    const drawn = grade(['a']).definition;
+    h.drawRandomMix.mockImplementation((_kind, _keyMode, charts) => ({
+      ok: true,
+      course: { ...drawn, kind: 'expert' },
+      charts: [...charts],
+      settings: {} as never,
+    }));
+    await h.route.startCourse(mix, { autoPlay: true });
+    const [, keyMode, charts] = h.drawRandomMix.mock.calls.at(-1)!;
+    expect(keyMode).toBe(14);
+    expect(charts).toMatchObject([{ md5: 'a'.repeat(32), chart: { id: 'a' } }]);
+    expect(h.courses.active?.course).toMatchObject({ id: 'maker:expert#0', stages: [{ chart: { id: 'a' } }] });
+    expect(h.courses.autoPlay).toBe(true);
+    // Back on the select screen, the cursor is on the drawn course, the newest of its folder.
+    h.decided().cancel!();
+    expect(h.courses.takeReturnNavigation()).toEqual({ ...AT_COURSE_BAR, focusKey: 'course:maker:expert#0' });
   });
 
   test('a NONSTOP course goes to the NONSTOP route with its decide screen, and keeps no run', async () => {

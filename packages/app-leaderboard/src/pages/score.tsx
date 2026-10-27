@@ -176,6 +176,12 @@ export async function scorePage(c: PageContext<'/scores/:id'>) {
         </a>
         {player.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
       </PageHeader>
+      {detail.score.unranked !== null ? (
+        <div class="alert" role="note">
+          <h2>{t.score.unrankedTitle}</h2>
+          <section>{t.score.unrankedReasons[detail.score.unranked]}</section>
+        </div>
+      ) : null}
       {hidden ? (
         <div class="alert" role="note">
           <h2>{t.score.hiddenTitle}</h2>

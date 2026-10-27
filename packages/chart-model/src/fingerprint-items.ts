@@ -308,6 +308,38 @@ export function bucketEvents(events: ReadonlyArray<BeMusicEvent>): Map<string, B
   return buckets;
 }
 
+/**
+ * The concatenation of `lists` in the engine's event order, as a stable sort of it would give, when each list is in that
+ * order already (`bucketEvents` sorts every bucket): adjacent lists merge pairwise, the earlier list first on a tie. The
+ * note resolver then finds its events sorted instead of sorting every lane of every outcome again.
+ */
+export function mergeSortedEvents(lists: ReadonlyArray<ReadonlyArray<BeMusicEvent>>): BeMusicEvent[] {
+  let runs = lists.filter((list) => list.length > 0);
+  if (runs.length === 0) return [];
+  while (runs.length > 1) {
+    const next: Array<ReadonlyArray<BeMusicEvent>> = [];
+    for (let index = 0; index < runs.length; index += 2) {
+      next.push(index + 1 < runs.length ? mergeTwo(runs[index]!, runs[index + 1]!) : runs[index]!);
+    }
+    runs = next;
+  }
+  return [...runs[0]!];
+}
+
+function mergeTwo(left: ReadonlyArray<BeMusicEvent>, right: ReadonlyArray<BeMusicEvent>): BeMusicEvent[] {
+  const merged: BeMusicEvent[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < left.length && j < right.length) {
+    // `<=` keeps the left (earlier) list's event first on a tie, as a stable sort of the concatenation does.
+    if (compareEvents(left[i]!, right[j]!) <= 0) merged.push(left[i++]!);
+    else merged.push(right[j++]!);
+  }
+  while (i < left.length) merged.push(left[i++]!);
+  while (j < right.length) merged.push(right[j++]!);
+  return merged;
+}
+
 function sortEventsInPlace(events: BeMusicEvent[]): void {
   for (let index = 1; index < events.length; index += 1) {
     if (compareEvents(events[index - 1]!, events[index]!) > 0) {
@@ -354,19 +386,36 @@ export function computeChartItems(
   bucketed: Map<string, BeMusicEvent[]>,
   only?: ReadonlySet<string>,
   reuse?: ChartItems,
+  laneCache?: LaneNotesCache,
 ): ChartItems {
   const wants = (bucket: string): boolean => only === undefined || only.has(bucket);
   const context = createItemContext(json, bucketed);
 
   // Lanes are independent once `#LNTYPE` is fixed for the whole chart, so the requested lanes resolve together.
   const lanes = new Map<string, NoteItem[]>(only === undefined ? [] : reuse!.lanes);
-  const laneBuckets = [...(only ?? bucketed.keys())].filter((bucket) => bucket.startsWith('lane:'));
+  let laneBuckets = [...(only ?? bucketed.keys())].filter((bucket) => bucket.startsWith('lane:'));
   for (const bucket of laneBuckets) {
     lanes.delete(bucket);
   }
+  if (laneCache !== undefined) {
+    // A lane whose events (and the chart's `#LNTYPE`) another outcome already resolved takes that result.
+    for (const bucket of laneBuckets) {
+      const events = bucketed.get(bucket) ?? [];
+      const key = `${context.lnType}|${bucket}|${hashLaneEvents(events)}`;
+      let notes = lookupLaneNotes(laneCache, key, events);
+      if (notes === undefined) {
+        notes = computeLaneNotes(context, events).get(bucket) ?? [];
+        const entries = laneCache.get(key);
+        if (entries === undefined) laneCache.set(key, [{ events, notes }]);
+        else entries.push({ events, notes });
+      }
+      if (notes.length > 0) lanes.set(bucket, notes);
+    }
+    laneBuckets = [];
+  }
   for (const [bucket, notes] of computeLaneNotes(
     context,
-    laneBuckets.flatMap((bucket) => bucketed.get(bucket) ?? []),
+    mergeSortedEvents(laneBuckets.map((bucket) => bucketed.get(bucket) ?? [])),
   )) {
     lanes.set(bucket, notes);
   }
@@ -385,6 +434,72 @@ export function computeChartItems(
     lengths: wants(LENGTHS_BUCKET) ? computeLengths(context) : reuse!.lengths,
     header: wants(HEADER_BUCKET) ? computeHeader(json) : reuse!.header,
   };
+}
+
+/**
+ * Resolved notes of lanes, by `#LNTYPE`, lane and a hash of the lane's events (each entry keeps its events, which a hit
+ * compares field by field): what `computeDelta` reuses across the outcomes of a chart's factors, which mostly leave a
+ * lane in one of a few states. Valid only among outcomes whose chart differs from the top-level one in its events alone
+ * (no header, no measure length), as a lane's notes then depend on nothing else.
+ */
+export type LaneNotesCache = Map<string, Array<{ events: ReadonlyArray<BeMusicEvent>; notes: NoteItem[] }>>;
+
+/** {@link hashLaneEvents} per events array: the top-level lanes come back unchanged in many outcomes. */
+const LANE_EVENTS_HASHES = new WeakMap<ReadonlyArray<BeMusicEvent>, number>();
+
+/** FNV-1a over a lane's events: only narrows the cache lookup, which compares the events themselves. */
+function hashLaneEvents(events: ReadonlyArray<BeMusicEvent>): number {
+  let hash = LANE_EVENTS_HASHES.get(events);
+  if (hash !== undefined) return hash;
+  hash = 0x811c9dc5;
+  const mix = (text: string): void => {
+    for (let index = 0; index < text.length; index += 1) {
+      hash = Math.imul(hash! ^ text.charCodeAt(index), 0x01000193);
+    }
+    hash = Math.imul(hash! ^ 0x1f, 0x01000193);
+  };
+  for (const event of events) {
+    hash = Math.imul(hash ^ (event.measure | 0), 0x01000193);
+    mix(event.channel);
+    mix(event.value);
+    hash = Math.imul(hash ^ (event.position[0] | 0), 0x01000193);
+    hash = Math.imul(hash ^ (event.position[1] | 0), 0x01000193);
+  }
+  LANE_EVENTS_HASHES.set(events, hash);
+  return hash;
+}
+
+function sameLaneEvents(left: ReadonlyArray<BeMusicEvent>, right: ReadonlyArray<BeMusicEvent>): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const a = left[index]!;
+    const b = right[index]!;
+    if (a === b) continue;
+    if (
+      a.measure !== b.measure ||
+      a.channel !== b.channel ||
+      a.value !== b.value ||
+      a.position.length !== b.position.length ||
+      a.position.some((part, at) => part !== b.position[at]) ||
+      (a.bmson === undefined) !== (b.bmson === undefined) ||
+      (a.bmson !== undefined && JSON.stringify(a.bmson) !== JSON.stringify(b.bmson))
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function lookupLaneNotes(
+  cache: LaneNotesCache,
+  key: string,
+  events: ReadonlyArray<BeMusicEvent>,
+): NoteItem[] | undefined {
+  for (const entry of cache.get(key) ?? []) {
+    if (sameLaneEvents(entry.events, events)) return entry.notes;
+  }
+  return undefined;
 }
 
 function createItemContext(json: BeMusicJSON, bucketed: Map<string, BeMusicEvent[]>): ItemContext {

@@ -553,6 +553,22 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       const maker = new playerWebCoreAPI.CourseMaker({ md5Of: async () => undefined });
       maker.start('expert');
       maker.finish();
+      maker.drawRandomMix('expert', 7, [playerWebCoreAPI.createRandomMixChart(BENCH_SONG, BENCH_SONG_MD5)], () => 0);
+    },
+  });
+  define('player-browser.createRandomMixEntry', {
+    run: () => {
+      playerWebCoreAPI.createRandomMixEntry('nonstop');
+    },
+  });
+  define('player-browser.createRandomMixChart', {
+    run: () => {
+      playerWebCoreAPI.createRandomMixChart(BENCH_SONG, BENCH_SONG_MD5);
+    },
+  });
+  define('player-browser.createDrawnRandomMixEntry', {
+    run: () => {
+      playerWebCoreAPI.createDrawnRandomMixEntry(BENCH_COURSE_DEFINITION, BENCH_HASHED_SONGS);
     },
   });
   define('player-browser.resolveCourseMakerFolders', {
@@ -896,6 +912,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await scene.enter(BENCH_SCENE_HOST);
       scene.exit();
       scene.dispose();
+    },
+  });
+  define('player-browser.PlayOptionMismatchError', {
+    run: () => {
+      void new playerWebCoreAPI.PlayOptionMismatchError(['Random 1P: CONVERGE'], undefined).options;
     },
   });
   define('player-browser.readDroppedFiles', {

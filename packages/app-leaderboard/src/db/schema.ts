@@ -261,6 +261,12 @@ export const score = sqliteTable(
      * to no one else. The player can show it again.
      */
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * Why the play is stored but not ranked (`tempo`: played at another tempo; `course-stage`: a course stage sent on
+     * its own), null for a ranked play. Like a hidden play, it stays out of the rankings, the personal bests, the
+     * figures and every list; unlike one, its page still opens for anyone the replay setting allows.
+     */
+    unranked: text('unranked', { enum: ['tempo', 'course-stage'] }),
     ...timestamps,
   },
   (table) => [
@@ -381,6 +387,11 @@ export const courseScore = sqliteTable(
     cardKey: text('card_key'),
     /** Hidden by its player, as `score.hidden`. */
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * Why the run is stored but not ranked, as `score.unranked` (`tempo`: a stage at another tempo; `unreleased`: a
+     * course with `release: false`), null for a ranked run.
+     */
+    unranked: text('unranked', { enum: ['tempo', 'unreleased'] }),
     ...timestamps,
   },
   (table) => [

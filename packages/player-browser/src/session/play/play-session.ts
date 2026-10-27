@@ -47,6 +47,7 @@ import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { PlayViewTiming } from '../../view/types.ts';
 import { prepareChart } from './play-chart.ts';
+import { toPlayOptionMismatch } from './play-option-mismatch.ts';
 import { beginExitSequence, getResultData } from './play-ending.ts';
 import { interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
 import { chartSecondsFromFrame } from './play-clock.ts';
@@ -170,7 +171,12 @@ export class PlaySession extends PlaySessionState {
     // Hidden until {@link start} fires, so a play shown before it begins draws nothing of it yet.
     this.shown = false;
     this.assetsLoading = true;
-    prepareChart(this, chartEntry);
+    try {
+      prepareChart(this, chartEntry);
+    } catch (error) {
+      // An option that does not fit the chart is the player's to change: the host says which, other errors go on.
+      throw toPlayOptionMismatch(error, this.options) ?? error;
+    }
     if (this.entered) {
       // No splash covers the load window: hold the chart clock before its start (see `start()`) and draw the loading
       // playfield while assets decode, instead of a blank stage.

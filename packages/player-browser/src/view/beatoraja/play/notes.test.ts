@@ -1,3 +1,4 @@
+import { resolveConstantVisibility } from '@be-music/player-scene-model';
 import { Sprite, Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vite-plus/test';
 import { BEATORAJA_OP, normalizeBeatorajaNote, normalizeBeatorajaImages } from '@be-music/skin-beatoraja';
@@ -288,4 +289,38 @@ it('uses the active authored lane block and coordinate flip for display-area inf
     { side: '2P', x: 450, w: 30, top: 200, bottom: 800 },
   ]);
   layer.dispose();
+});
+
+describe('BeatorajaNoteLayer Visual CONSTANT', () => {
+  it('shows notes, long notes and mines only near their time, faded by the CONSTANT fade', () => {
+    const layer = new BeatorajaNoteLayer({
+      noteSection: normalizeBeatorajaNote({
+        dst: Array.from({ length: 8 }, (_, i) => ({ x: i * 50, y: 200, w: 50, h: 600 })),
+      }),
+      variant: '7',
+      images: new Map(),
+      textures: { get: () => undefined, values: () => [][Symbol.iterator](), pathOf: () => undefined },
+      canvasHeight: 1000,
+    });
+    // At 1 beat per second: a note inside the duration, a long note whose head is half way through the fade, and a
+    // mine past it.
+    const frame = {
+      notes: [
+        { channel: '11', beat: 0.25, seconds: 0.25, judged: false },
+        { channel: '12', beat: 0.55, seconds: 0.55, endBeat: 0.75, judged: false, longNoteMode: 1 as const },
+      ],
+      landmineNotes: [{ channel: '13', beat: 1, seconds: 1, judged: false, mine: true }],
+      currentBeat: 0,
+      currentSeconds: 0,
+    };
+    const constant = resolveConstantVisibility({ enabled: true, durationMs: 500, fadeMs: 100 });
+    layer.update(frame, 1, new Set(), undefined, false, constant);
+    const shown = layer.container.children[2]!.children.filter((child) => child.visible);
+    expect(shown.map((child) => child.alpha)).toEqual([1, expect.closeTo(0.5)]);
+    // Off, every note draws opaque again.
+    layer.update(frame, 1, new Set(), undefined, false, resolveConstantVisibility());
+    const all = layer.container.children[2]!.children.filter((child) => child.visible);
+    expect(all.map((child) => child.alpha)).toEqual([1, 1, 1]);
+    layer.dispose();
+  });
 });

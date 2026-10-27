@@ -186,11 +186,11 @@ describe('NONSTOP replays', () => {
       stages: [],
       nonstop: { playFingerprint: replay.chart.playFingerprint },
     });
-    // A NONSTOP run played at another tempo is practice, refused on its stitched play.
+    // A NONSTOP run played at another tempo is practice: stored, not ranked, on its stitched play.
     const slowed = { ...log.nonstop!.replay, play: { ...log.nonstop!.replay.play, tempo: 0.9 } };
-    expect(checkCourseReplayEligibility({ ...log, nonstop: { ...log.nonstop!, replay: slowed } })).toEqual({
-      eligible: false,
-      reason: 'tempo',
+    expect(checkCourseReplayEligibility({ ...log, nonstop: { ...log.nonstop!, replay: slowed } })).toMatchObject({
+      eligible: true,
+      unranked: 'tempo',
     });
     expect(() =>
       parseCourseReplay({

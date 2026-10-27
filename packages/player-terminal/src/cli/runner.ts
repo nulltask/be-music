@@ -854,6 +854,7 @@ function createPlayOptionsFromCLIArgs(args: CLIArgs, chartPath: string) {
     judgeWindowMs: args.judgeWindowMs,
     judgeRuleset: args.judgeRuleset,
     gauge: args.gauge,
+    endOnFailure: args.endOnFailure,
     debugActiveAudio: args.debugActiveAudio,
     audio: args.audio,
     volume: args.volume,

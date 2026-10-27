@@ -70,6 +70,7 @@ export {
   type LR2SelectTimerEvent,
 } from './select.ts';
 export {
+  formatLR2RandomMixSetting,
   lr2ShowsCourseCombo,
   resolveLR2CourseConnectionText,
   resolveLR2CourseDraftInfo,
@@ -80,6 +81,8 @@ export {
   resolveLR2CourseNumber,
   resolveLR2CourseOps,
   resolveLR2CourseStageDifficultyOps,
+  resolveLR2RandomMixButtonState,
+  resolveLR2RandomMixText,
   resolveLR2CourseText,
   resolveLR2JudgeCombo,
   resolveLR2NonstopStage,

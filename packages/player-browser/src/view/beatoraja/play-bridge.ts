@@ -27,6 +27,7 @@ import type { PlayerHCNLaneState } from '@be-music/player-engine/signals';
 import type { PlayFrame } from '../types.ts';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import {
+  BEATORAJA_OP,
   JUDGE_LANE_REF_RANGE,
   TIMER_FADEOUT,
   TIMER_FAILED,
@@ -47,6 +48,7 @@ import {
   beatorajaLaneJudgeRef,
   beatorajaWallClockOf,
   createBeatorajaJudgeStateGraph,
+  resolveBeatorajaConstantOps,
   resolveBeatorajaCoverOps,
   resolveBeatorajaFrameTimers,
   resolveBeatorajaSeekTimers,
@@ -158,6 +160,8 @@ export interface BeatorajaPlayBridgeFrame {
   /** The play clock, in ms: the skin's timers count on it. */
   readonly nowMs: number;
   readonly judgeTimingMs?: number;
+  /** The player's Visual CONSTANT setting, which lights `OPTION_CONSTANT` (400) even where a course stops it drawing. */
+  readonly visualConstant?: boolean;
   readonly exiting?: boolean;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
   /** The host's clock, in ms, for the frame rate; the play clock without it. */
@@ -428,6 +432,8 @@ export class BeatorajaPlayBridge {
     this.applyAnimationTimers(frame);
     this.applyState(frame.state);
     this.play.judgeTimingMs = frame.judgeTimingMs ?? 0;
+    this.activeOps.delete(BEATORAJA_OP.CONSTANT);
+    for (const op of resolveBeatorajaConstantOps(frame.visualConstant)) this.activeOps.add(op);
     this.judgeWindows = frame.judgeWindows;
     return this.renderContextAt(frame.nowMs);
   }

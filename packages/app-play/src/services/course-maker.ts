@@ -57,7 +57,7 @@ export class CourseMakerService {
 
   /**
    * Reacts to the course maker: redraws its card and the select skin for the course being made, and saves the courses
-   * (and relists them) when they or the default connection change.
+   * (and relists them) when they or the settings (the default connection, the RANDOM MIX settings) change.
    */
   private async handleCourseMakerChange(change: 'draft' | 'courses' | 'settings'): Promise<void> {
     this.panel?.update();
@@ -70,6 +70,8 @@ export class CourseMakerService {
       await saveMadeCourses({
         courses: [...this.maker.courses],
         defaultConnection: this.maker.defaultConnection,
+        randomMixSettings: this.maker.randomMixSettings,
+        randomMixes: [...this.maker.randomMixes],
       });
     } catch (error) {
       this.setStatus('Could not save your courses in this browser; they last until the page is closed');

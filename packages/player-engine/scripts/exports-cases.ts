@@ -530,6 +530,43 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  const benchMixSettings = { ...courseAPI.DEFAULT_LR2_RANDOM_MIX_SETTINGS, minLevel: 9, maxLevel: 3 };
+  const benchMixCharts = Array.from({ length: 200 }, (_, index) => ({
+    md5: index.toString(16).padStart(32, '0'),
+    folder: `f${index % 80}`,
+    keyMode: index % 10 === 0 ? 5 : 7,
+    level: (index % 12) + 1,
+    minBPM: 140 + (index % 7) * 5,
+    maxBPM: 150 + (index % 7) * 5,
+  }));
+  define('player-engine.course.normalizeLR2RandomMixSettings', {
+    run: () => {
+      courseAPI.normalizeLR2RandomMixSettings({ maxBPM: 1234, minBPM: 155, stageCount: 'x' });
+    },
+  });
+  define('player-engine.course.stepLR2RandomMixSetting', {
+    run: () => {
+      courseAPI.stepLR2RandomMixSetting(benchMixSettings, 'maxBPM', -1);
+      courseAPI.stepLR2RandomMixSetting(benchMixSettings, 'stageCount', 1);
+    },
+  });
+  define('player-engine.course.resolveLR2RandomMixSettings', {
+    run: () => {
+      courseAPI.resolveLR2RandomMixSettings(benchMixSettings);
+    },
+  });
+  define('player-engine.course.drawLR2RandomMix', {
+    run: () => {
+      courseAPI.drawLR2RandomMix(
+        { kind: 'nonstop', keyMode: 7, settings: { ...benchMixSettings, preferredLevel: 6, bpmRange: 20 } },
+        benchMixCharts,
+        () => {
+          benchSeed = (benchSeed * 16807) % 2147483647;
+          return (benchSeed - 1) / 2147483646;
+        },
+      );
+    },
+  });
   define('player-engine.course.resolveTableModeKeys', {
     run: () => {
       courseAPI.resolveTableModeKeys('beat-7k');

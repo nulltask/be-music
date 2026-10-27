@@ -84,6 +84,7 @@ import {
   gaugePercent,
   laneCoversFromPlayOptions,
   reducePlayState,
+  resolveConstantVisibility,
   resolveHSFixMultiplier,
   resolveLibraryChartPlayVariant,
   SHUTTER_DEFAULT,
@@ -617,7 +618,12 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // the common case stays on the plain beat-diff path with no extra cost (and on its ruleset's drawing rules).
   const beatResolver = resolvedPlay.beatResolver;
   const scrollTimeline = resolvedPlay.scroll;
-  const speedTimeline = ctx.options.visualConstant ? [] : resolvedPlay.speed;
+  // CONSTANT ignores `#SPEED`, unless a NO_SPEED course turns it off.
+  const constant = resolveConstantVisibility({
+    enabled: ctx.options.visualConstant,
+    noSpeed: ctx.options.hiSpeedLocked,
+  });
+  const speedTimeline = constant.enabled ? [] : resolvedPlay.speed;
   const lr2Constant =
     ctx.options.hsFix === 'CONSTANT' &&
     !ctx.options.floatingHiSpeed &&

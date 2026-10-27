@@ -631,6 +631,9 @@ export const BEATORAJA_OP = {
   LIFT1_ON: 272,
   HIDDEN1_ON: 273,
 
+  /** SkinProperty `OPTION_CONSTANT`: the player's CONSTANT setting is on (LR2 uses 400 for its key-config page). */
+  CONSTANT: 400,
+
   // ─── Now-playing rank ops (prop.lua `now_aaa_1p = 340` ... `now_f_1p = 347`) ──────────────
   // Set based on the active run's EX-score band (DIFFERENT from the live `_1p_*` rank ops at
   // 200-207, which are the same data but a separate op block beatoraja maintains for the result
