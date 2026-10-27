@@ -355,6 +355,16 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-skin-sdk.resolveFluidStageSize', {
+    run: () => {
+      skinSdkAPI.resolveFluidStageSize(skinSdkAPI.wideStage, { width: 1024, height: 768 });
+    },
+  });
+  define('player-skin-sdk.resolveFluidStage', {
+    run: () => {
+      skinSdkAPI.resolveFluidStage(skinSdkAPI.wideStage, { width: 1024, height: 768 });
+    },
+  });
   define('player-skin-sdk.selectListRows', {
     run: () => {
       skinSdkAPI.selectListRows(

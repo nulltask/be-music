@@ -7,12 +7,15 @@ import {
   TALL_STAGE_WIDTH,
   resolveBeMusicSelectLayout,
   resolveBeMusicStage,
+  resolveFluidStage,
+  resolveFluidStageSize,
   resolvePortraitLaneLayout,
   resolveStageOrientation,
   supportsPortraitLayout,
   tallStage,
 } from './portrait.ts';
 import { wideStage } from './stage.ts';
+import type { BeMusicStage } from './types.ts';
 import { resolveGameplayLaneGeometry } from './touch-layout.ts';
 
 const SP5 = ['16', '11', '12', '13', '14', '15'];
@@ -69,6 +72,56 @@ describe('resolveBeMusicStage', () => {
     expect(resolveBeMusicStage(skin, PHONE, { laneChannels: SP7, playVariant: '7' })).toBe(tallStage);
     expect(resolveBeMusicStage(skin, PHONE, { laneChannels: DP14, playVariant: '14' })).toBe(wideStage);
     expect(resolveBeMusicStage(skin, PHONE, { playVariant: '48' })).toBe(wideStage);
+  });
+});
+
+describe('resolveFluidStageSize', () => {
+  it('keeps the short side and follows the screen with the long side', () => {
+    expect(resolveFluidStageSize(wideStage, { width: 1024, height: 768 })).toEqual({ width: 640, height: 480 });
+    expect(resolveFluidStageSize(wideStage, { width: 2560, height: 1080 })).toEqual({ width: 1138, height: 480 });
+    expect(resolveFluidStageSize(tallStage, { width: 375, height: 812 })).toEqual({ width: 480, height: 1039 });
+  });
+
+  it('gives a square screen a square landscape stage', () => {
+    expect(resolveFluidStageSize(wideStage, { width: 600, height: 600 })).toEqual({ width: 480, height: 480 });
+  });
+
+  it('leaves a stage turned the other way from the screen, or a screen without area, alone', () => {
+    expect(resolveFluidStageSize(wideStage, { width: 375, height: 812 })).toBeUndefined();
+    expect(resolveFluidStageSize(tallStage, { width: 812, height: 375 })).toBeUndefined();
+    expect(resolveFluidStageSize(wideStage, { width: 0, height: 0 })).toBeUndefined();
+  });
+});
+
+describe('resolveFluidStage', () => {
+  const fluid = (size: { width: number; height: number }): BeMusicStage => ({
+    ...size,
+    resolveBGARect: () => ({ x: 0, y: 0, w: 0, h: 0 }),
+    resize: fluid,
+  });
+
+  it('keeps a fixed stage', () => {
+    expect(resolveFluidStage(wideStage, { width: 1024, height: 768 })).toBe(wideStage);
+  });
+
+  it('resizes a fluid stage to the screen and hands back the same object while the size holds', () => {
+    const base = fluid({ width: 854, height: 480 });
+    const first = resolveFluidStage(base, { width: 1024, height: 768 });
+    expect(first).toMatchObject({ width: 640, height: 480 });
+    expect(resolveFluidStage(base, { width: 800, height: 600 })).toBe(first);
+    expect(resolveFluidStage(base, { width: 2560, height: 1080 })).toMatchObject({ width: 1138, height: 480 });
+  });
+
+  it('resolves the fluid stage for the screen through resolveBeMusicStage', () => {
+    const skin = { stage: fluid({ width: 854, height: 480 }), portraitStage: fluid({ width: 480, height: 854 }) };
+    expect(resolveBeMusicStage(skin, { width: 1024, height: 768 })).toMatchObject({ width: 640, height: 480 });
+    expect(
+      resolveBeMusicStage(skin, { width: 375, height: 812 }, { laneChannels: SP7, playVariant: '7' }),
+    ).toMatchObject({ width: 480, height: 1039 });
+    // Double play stays on the landscape stage of an upright screen, letterboxed at its own size.
+    expect(resolveBeMusicStage(skin, { width: 375, height: 812 }, { laneChannels: DP14, playVariant: '14' })).toBe(
+      skin.stage,
+    );
   });
 });
 
