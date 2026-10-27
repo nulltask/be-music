@@ -43,6 +43,19 @@ describe('sha256HexOfBytes', () => {
     const bytes = Uint8Array.from({ length: 1000 }, (_, index) => (index * 31) & 0xff);
     expect(sha256HexOfBytes(bytes)).toBe(nodeSHA256(bytes));
   });
+
+  test('matches node:crypto at every length around the padding boundaries', () => {
+    const bytes = Uint8Array.from({ length: 200 }, (_, index) => (index * 97 + 13) & 0xff);
+    for (let length = 0; length <= 200; length += 1) {
+      expect(sha256HexOfBytes(bytes.subarray(0, length))).toBe(nodeSHA256(bytes.subarray(0, length)));
+    }
+  });
+
+  test('reads a typed array window that starts inside its buffer', () => {
+    const buffer = Uint8Array.from({ length: 300 }, (_, index) => index & 0xff);
+    const window = buffer.subarray(37, 37 + 150);
+    expect(sha256HexOfBytes(window)).toBe(nodeSHA256(window));
+  });
 });
 
 describe('sha256HexAsync', () => {
