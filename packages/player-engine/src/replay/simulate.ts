@@ -145,6 +145,8 @@ interface SimMine {
   damage: number;
   /** Settled: detonated, or past the point where it no longer can (see {@link ReplaySimulation.mineSettleUs}). */
   applied: boolean;
+  /** Its PGREAT reach, worked out on first use (the windows at a fixed time never change during a run). */
+  reachUs?: readonly [number, number];
 }
 
 interface ActiveHold {
@@ -193,6 +195,8 @@ interface SelectionCandidate {
 
 class ReplaySimulation {
   private readonly lanes = new Map<string, SimLane>();
+  /** {@link lanes} in insertion order, for the per-advance sweeps (an array walk instead of a map iterator). */
+  private readonly laneList: SimLane[] = [];
   private readonly counts = [0, 0, 0, 0, 0, 0];
   private readonly gauge: RulesetGauge;
   private combo = 0;
@@ -299,7 +303,7 @@ class ReplaySimulation {
   }
 
   private hasOutstandingNotes(): boolean {
-    for (const lane of this.lanes.values()) {
+    for (const lane of this.laneList) {
       if (lane.notes.some((note) => !note.judged)) {
         return true;
       }
@@ -338,7 +342,7 @@ class ReplaySimulation {
       }
       lane.notes.push(simNote);
     }
-    for (const lane of this.lanes.values()) {
+    for (const lane of this.laneList) {
       lane.notes.sort((left, right) => left.timeUs - right.timeUs);
       lane.mines.sort((left, right) => left.timeUs - right.timeUs);
     }
@@ -366,6 +370,7 @@ class ReplaySimulation {
         autoCursor: 0,
       };
       this.lanes.set(channel, lane);
+      this.laneList.push(lane);
     }
     return lane;
   }
@@ -401,7 +406,7 @@ class ReplaySimulation {
       gain?: boolean;
     }
     const events: TimedEvent[] = [];
-    for (const lane of this.lanes.values()) {
+    for (const lane of this.laneList) {
       if (lane.auto) {
         for (let index = lane.autoCursor; index < lane.notes.length; index += 1) {
           const note = lane.notes[index]!;
@@ -445,20 +450,23 @@ class ReplaySimulation {
         if (mine.timeUs - earlyUs >= untilUs) break;
         if (mine.applied) continue;
         // Each point is visited once: in the advance whose span [lastAdvanceUs, untilUs) holds it.
-        const due = (timeUs: number): boolean => timeUs >= this.lastAdvanceUs && timeUs < untilUs;
+        const fromUs = this.lastAdvanceUs;
         const enterUs = mine.timeUs - earlyUs;
-        if (this.config.mineTrigger === 'press-or-hold' && due(enterUs)) {
+        if (this.config.mineTrigger === 'press-or-hold' && enterUs >= fromUs && enterUs < untilUs) {
           // The provisional That-Which-Must-Not-Be-Named model also detonates on held PGREAT entry.
           events.push({ timeUs: enterUs, kind: 'mine-enter', lane, mine });
         }
-        if (due(mine.timeUs)) events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
+        if (mine.timeUs >= fromUs && mine.timeUs < untilUs) {
+          events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
+        }
         const settleUs = this.config.mineTrigger === 'press-or-hold' ? mine.timeUs + lateUs : mine.timeUs;
-        if (due(settleUs)) events.push({ timeUs: settleUs, kind: 'mine-settle', lane, mine });
+        if (settleUs >= fromUs && settleUs < untilUs)
+          events.push({ timeUs: settleUs, kind: 'mine-settle', lane, mine });
       }
     }
     // Hell Charge ticks, including those of a head missed in this span: no input falls inside it, so the miss is
     // certain and its ticks run from the deadline on.
-    for (const lane of this.lanes.values()) {
+    for (const lane of this.laneList) {
       if (lane.auto) continue;
       for (let index = lane.sweepCursor; index < lane.notes.length; index += 1) {
         const note = lane.notes[index]!;
@@ -485,12 +493,13 @@ class ReplaySimulation {
 
     // One instant settles tails first, then auto notes, then misses, then mines, each in channel order — the order the
     // engine's judge core settles them in.
-    events.sort(
-      (left, right) =>
-        left.timeUs - right.timeUs ||
-        TIMED_EVENT_ORDER[left.kind] - TIMED_EVENT_ORDER[right.kind] ||
-        (left.lane.channel < right.lane.channel ? -1 : left.lane.channel > right.lane.channel ? 1 : 0),
-    );
+    if (events.length > 1)
+      events.sort(
+        (left, right) =>
+          left.timeUs - right.timeUs ||
+          TIMED_EVENT_ORDER[left.kind] - TIMED_EVENT_ORDER[right.kind] ||
+          (left.lane.channel < right.lane.channel ? -1 : left.lane.channel > right.lane.channel ? 1 : 0),
+      );
 
     for (const event of events) {
       if (event.kind === 'auto') {
@@ -548,7 +557,7 @@ class ReplaySimulation {
     }
 
     // Advance sweep cursors past settled notes.
-    for (const lane of this.lanes.values()) {
+    for (const lane of this.laneList) {
       while (lane.sweepCursor < lane.notes.length) {
         const note = lane.notes[lane.sweepCursor]!;
         if (note.judged || (note.missDeadlineUs < untilUs && !note.holding)) {
@@ -569,7 +578,7 @@ class ReplaySimulation {
 
   /** The PGREAT window's `[late, early]` reach (µs) around a mine, which bounds LR2's press-or-hold detonation. */
   private minePgreatReachUs(mine: SimMine): readonly [number, number] {
-    return pgreatWindowReachUs(this.config.windowsAt(mine.timeUs).note);
+    return (mine.reachUs ??= pgreatWindowReachUs(this.config.windowsAt(mine.timeUs).note));
   }
 
   private detonateMine(mine: SimMine): void {
