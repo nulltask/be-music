@@ -32,6 +32,8 @@ export {
   PREVIEW_GUTTER,
   PREVIEW_INFO_BELOW_HEIGHT,
   PREVIEW_INFO_MIN_WIDTH,
+  PREVIEW_PORTRAIT_FONT_RATIO,
+  PREVIEW_PORTRAIT_INFO_HEIGHT,
   previewContentBottom,
   resolvePreviewBGARect,
   resolvePreviewInfoBox,

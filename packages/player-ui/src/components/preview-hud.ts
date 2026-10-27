@@ -2,7 +2,7 @@ import { css, html, nothing, type CSSResultGroup, type PropertyDeclarations, typ
 import type { BeMusicDOMGameplayFrame } from '@be-music/player-skin-sdk';
 import { FrameElement } from '../base.ts';
 import { resolveGameplayPanels } from '../gameplay-data.ts';
-import { resolvePreviewInfoBox } from '../preview-layout.ts';
+import { PREVIEW_PORTRAIT_FONT_RATIO, resolvePreviewInfoBox } from '../preview-layout.ts';
 import { structureStyles } from '../styles/structure.ts';
 
 /**
@@ -40,6 +40,10 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         font-size: clamp(9px, 2.6cqh, 15px);
         font-variant-numeric: tabular-nums;
       }
+      /* A tall stage sets the facts in their own band, so their type follows the stage's width to fit it. */
+      .stage[data-orientation='portrait'] {
+        font-size: max(9px, calc(min(100cqw, 100cqh * var(--stage-ratio, 1)) * var(--portrait-font-ratio)));
+      }
       .stage-hit {
         position: absolute;
         inset: 0;
@@ -61,6 +65,8 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
       .info {
         position: absolute;
         display: grid;
+        /* Rows keep their height in a box too short for them: the facts clip at the bottom instead of overlapping. */
+        grid-auto-rows: max-content;
         align-content: start;
         gap: 0.4em;
         overflow: hidden;
@@ -153,7 +159,12 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
     const bpm = f.bpm === undefined ? undefined : `BPM ${Math.round(f.bpm)}`;
     const rate = score.maximum > 0 ? `${((score.exScore / score.maximum) * 100).toFixed(2)}%` : '—';
     const playing = f.stage !== 'paused' && f.stage !== 'ending';
-    return html`<section class="stage" part="stage" style=${`--stage-ratio:${stage.width / stage.height}`}>
+    return html`<section
+      class="stage"
+      part="stage"
+      data-orientation=${stage.height > stage.width ? 'portrait' : 'landscape'}
+      style=${`--stage-ratio:${stage.width / stage.height};--portrait-font-ratio:${PREVIEW_PORTRAIT_FONT_RATIO}`}
+    >
       <button
         class="stage-hit"
         part="stage-hit"

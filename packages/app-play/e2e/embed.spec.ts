@@ -198,6 +198,7 @@ test('the play fills the window at any aspect ratio and follows a resize, then s
     { name: '4x3', width: 1024, height: 768 },
     { name: '21x9', width: 1680, height: 720 },
     { name: 'phone-portrait', width: 375, height: 812 },
+    { name: 'tablet-portrait', width: 768, height: 1024 },
     { name: 'phone-landscape', width: 812, height: 375 },
   ];
   for (const size of sizes) {
@@ -213,6 +214,13 @@ test('the play fills the window at any aspect ratio and follows a resize, then s
     }
     const lanes = (await page.locator('be-music-lanes').boundingBox())!;
     const bga = (await page.locator('be-music-bga').boundingBox())!;
+    // The chart's facts fit their box, and stay off the lanes and the BGA.
+    const facts = hud.locator('[aria-label="Chart and play status"]');
+    expect(await facts.evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+    const factsBox = (await facts.boundingBox())!;
+    if (size.height > size.width) expect(factsBox.y + factsBox.height).toBeLessThanOrEqual(lanes.y + 1);
+    else expect(factsBox.x).toBeGreaterThanOrEqual(lanes.x + lanes.width);
+    expect(factsBox.y >= bga.y + bga.height - 1 || factsBox.x >= bga.x + bga.width - 1).toBe(true);
     if (size.height > size.width) {
       expect(bga.y + bga.height).toBeLessThanOrEqual(lanes.y + 1);
       expect(lanes.x).toBeGreaterThanOrEqual(0);
