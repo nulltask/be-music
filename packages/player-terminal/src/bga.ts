@@ -1,7 +1,7 @@
 import { availableParallelism } from 'node:os';
 import { runWithConcurrency, throwIfAborted } from '@be-music/shared-utils/core';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { resolvePoorBGAMode, type PoorBGAMode, resolveChart, type BGACue } from '@be-music/chart-model';
+import { parseBMSExBMP, resolvePoorBGAMode, type PoorBGAMode, resolveChart, type BGACue } from '@be-music/chart-model';
 import {
   DEFAULT_IMAGE_RESIZE_ALGORITHM,
   DEFAULT_POOR_BGA_DISPLAY_SECONDS,
@@ -578,6 +578,10 @@ export async function createBgaANSIRenderer(
   const { base: baseTimeline, poor: poorTimeline, layer: layerTimeline, layer2: layer2Timeline } = resolved.bga;
   // bmson cues carry header filenames directly; BMS cues carry resource slots. Keep that lookup local to loading.
   const resources = { ...json.resources.bmp };
+  for (const [key, raw] of Object.entries(json.bms.exBMP)) {
+    const definition = parseBMSExBMP(raw);
+    if (definition && !resources[key]) resources[key] = definition.filename;
+  }
   for (const entry of json.bmson.bga.header) resources[entry.name] = entry.name;
 
   const baseKeys = new Set(baseTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
@@ -586,9 +590,7 @@ export async function createBgaANSIRenderer(
   const layer2Keys = new Set(layer2Timeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   // LR2 starts its miss layer from `#BMP00`; only `#POORBGA 2` (no POOR image) turns that off.
   const shouldUsePoorBMP00Fallback =
-    resolvePoorBGAMode(json.bms.poorBGA) !== 2 &&
-    typeof json.resources.bmp['00'] === 'string' &&
-    json.resources.bmp['00'].length > 0;
+    resolvePoorBGAMode(json.bms.poorBGA) !== 2 && typeof resources['00'] === 'string' && resources['00'].length > 0;
   const poorFallbackKey = shouldUsePoorBMP00Fallback ? '00' : undefined;
   if (poorFallbackKey) {
     poorKeys.add(poorFallbackKey);
