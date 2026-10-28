@@ -127,6 +127,46 @@ function createSolidSourceVideoFrame(
 }
 
 describe('player bga', () => {
+  test('loads bmson header filenames for base, opaque-black layer and POOR without a BMS resource table', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bmson-bga-'));
+    try {
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'layer.png'), 256, 256, (x) => ({ r: 0, g: x < 128 ? 0 : 255, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      const json = createEmptyJSON('bmson');
+      json.metadata.bpm = 120;
+      json.bmson.info.resolution = 240;
+      json.bmson.bga = {
+        header: [
+          { id: 1, name: 'base.png' },
+          { id: 2, name: 'layer.png' },
+          { id: 3, name: 'poor.png' },
+        ],
+        events: [{ y: 0, id: 1 }],
+        layerEvents: [{ y: 0, id: 2 }],
+        poorEvents: [{ y: 0, id: 3 }],
+      };
+      const progress: string[] = [];
+      const renderer = await createBgaANSIRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+        onLoadProgress: ({ detail }) => progress.push(detail),
+      });
+      expect(renderer).toBeDefined();
+      expect(progress.sort()).toEqual(['base.png', 'layer.png', 'poor.png']);
+      const normal = parseANSIPixels(renderer!.getANSILines(0) ?? []);
+      expect(normal[10]?.[5]).toEqual({ r: 0, g: 0, b: 0 });
+      expect(normal[10]?.[35]).toEqual({ r: 0, g: 255, b: 0 });
+      renderer!.triggerPoor(0);
+      expect(parseANSIPixels(renderer!.getANSILines(0) ?? [])[10]?.[5]).toEqual({ r: 0, g: 0, b: 255 });
+      expect(Array.from(renderer!.getKittyImage(0).rgb.slice(0, 3))).toEqual([0, 0, 255]);
+      expect(json.resources.bmp).toEqual({});
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   test('player bga: reports loading progress details with target file names', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-progress-'));
     try {
