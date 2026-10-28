@@ -127,6 +127,7 @@ It also tracks terminal resize events, pause state, high-speed changes, judge/co
 The terminal BGA renderer uses the shared BGA timeline helper and supports base, layer, layer2, and POOR tracks.
 It loads BMP, PNG, JPEG, and supported video frames, then composites the active frame into ANSI color blocks or a Kitty graphics image.
 BMS layer channels treat black pixels as transparent; bmson layer images preserve black pixels as image data.
+Video codecs are handled by the bundled LibAV decoder, including H.264, HEVC and VP9/WebM; an unavailable decoder or unsupported pixel layout leaves the asset unavailable. The first-frame loading pass stops after one converted frame, including delayed frames flushed at end of file.
 
 `#STAGEFILE` is used only for the loading screen.
 It is drawn with a cover fit over the terminal and falls back to text loading when the image is missing or unsupported.

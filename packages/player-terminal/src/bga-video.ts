@@ -5,7 +5,6 @@ import { createAbortError, isAbortError, throwIfAborted } from '@be-music/shared
 import { loadOptionalNodeModule } from '@be-music/shared-utils/optional-node-module';
 import { createSEAWorker, isSEARuntime } from './node/sea-worker.ts';
 
-const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
 // Keep chunks small so ff_decode_multi never allocates too many full-size frames at once.
 const PACKET_READ_CHUNK_BYTES = 65_536;
 const MAX_PACKET_READ_ITERATIONS = 16_384;
@@ -91,7 +90,7 @@ export interface DecodedVideoFrame {
 }
 
 export interface DecodedVideoStreamInfo {
-  codecName: 'mpeg1video' | 'h264' | 'mjpeg';
+  codecName: string;
   durationSeconds?: number;
 }
 
@@ -121,7 +120,7 @@ interface VideoDecodeWorkerFrameMessage {
 
 interface VideoDecodeWorkerDoneMessage {
   kind: 'done';
-  result?: { codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number };
+  result?: { codecName: string; frameCount: number; durationSeconds?: number };
 }
 
 interface VideoDecodeWorkerErrorMessage {
@@ -144,7 +143,7 @@ export async function decodeVideoFramesStream(
     onReady?: (info: DecodedVideoStreamInfo) => void;
     stopAfterFirstFrame?: boolean;
   } = {},
-): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
+): Promise<{ codecName: string; frameCount: number; durationSeconds?: number } | undefined> {
   return await decodeVideoFramesStreamDirect(videoPath, onFrame, signal, options);
 }
 
@@ -156,7 +155,7 @@ export async function decodeVideoFramesStreamDirect(
     onReady?: (info: DecodedVideoStreamInfo) => void;
     stopAfterFirstFrame?: boolean;
   } = {},
-): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
+): Promise<{ codecName: string; frameCount: number; durationSeconds?: number } | undefined> {
   let libav: LibAVInstance | undefined;
   try {
     throwIfAborted(signal);
@@ -175,9 +174,6 @@ export async function decodeVideoFramesStreamDirect(
     }
 
     const codecName = await libavInstance.avcodec_get_name(videoStream.codec_id);
-    if (!isSupportedVideoCodec(codecName)) {
-      return undefined;
-    }
     const durationSeconds = resolveStreamDurationSeconds(videoStream);
     options.onReady?.({
       codecName,
@@ -231,7 +227,7 @@ export async function decodeVideoFramesToSourceFramesInWorker(
     onReady?: (info: DecodedVideoStreamInfo) => void;
     stopAfterFirstFrame?: boolean;
   } = {},
-): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
+): Promise<{ codecName: string; frameCount: number; durationSeconds?: number } | undefined> {
   throwIfAborted(signal);
   const workerInitData = {
     videoPath,
@@ -303,10 +299,6 @@ export async function decodeVideoFramesToSourceFramesInWorker(
   });
 }
 
-function isSupportedVideoCodec(codecName: string): codecName is 'mpeg1video' | 'h264' | 'mjpeg' {
-  return SUPPORTED_VIDEO_CODECS.has(codecName);
-}
-
 async function decodeVideoFramesWithCallback(
   libav: LibAVInstance,
   formatContext: number,
@@ -359,6 +351,7 @@ async function decodeVideoFramesWithCallback(
         rgba: converted.rgba,
       });
       frameCount += 1;
+      if (stopAfterFirstFrame) return;
     }
   };
 

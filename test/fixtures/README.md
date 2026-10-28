@@ -117,3 +117,7 @@ Regenerate them through the editor API rather than by hand — that is what keep
 | `retrigger_a.wav`, `retrigger_b.wav`                       | The 2.2 s samples the retrigger charts need in order to overlap at all.           |
 | `ogg-test.ogg`                                             | The Vorbis sample `ogg-test.bms` declares.                                        |
 | `render-codec-test.mp3` / `.ogg` / `.opus`                 | The chart-audio-renderer's per-codec decode cases, and its missing-`.wav` fallback case. |
+
+## Video assets
+
+`bga-hevc.mp4` and `bga-vp9.webm` are generated 16×16 red clips (two frames at 1 fps), used by `player-terminal/src/bga-video.test.ts` to exercise real HEVC and VP9 decoding and the first-frame limit. They contain no third-party media. Regenerate with FFmpeg color input, `-frames:v 2 -pix_fmt yuv420p`, and respectively `-c:v libx265 -tag:v hvc1` or `-c:v libvpx-vp9`.

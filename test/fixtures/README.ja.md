@@ -117,3 +117,7 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 | `retrigger_a.wav`, `retrigger_b.wav`       | リトリガー譜面が重なりを作るために必要な 2.2 秒サンプル。               |
 | `ogg-test.ogg`                             | `ogg-test.bms` が宣言する Vorbis サンプル。                            |
 | `render-codec-test.mp3` / `.ogg` / `.opus` | chart-audio-renderer のコーデック別デコードケースと、`.wav` 不在時のフォールバックケース。 |
+
+## 動画アセット
+
+`bga-hevc.mp4` と `bga-vp9.webm` は16×16ピクセルの赤い動画を生成したもの（1 fps、2フレーム）です。`player-terminal/src/bga-video.test.ts` で実際の HEVC／VP9 デコードと先頭1フレームの制限を検証します。第三者の素材は含みません。FFmpeg の color 入力に `-frames:v 2 -pix_fmt yuv420p` と、それぞれ `-c:v libx265 -tag:v hvc1` または `-c:v libvpx-vp9` を指定して再生成できます。
