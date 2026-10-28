@@ -998,3 +998,20 @@ test('audio-renderer: a stitched bmson stage preserves its source audio slices',
     expect(actual.right[frame]).toBeCloseTo(expected.right[frame]!, 5);
   }
 });
+
+test('renderSingleSample applies PATH_WAV with slash normalization and bare-path fallback', async () => {
+  const reference = await renderSingleSample('01', 'sample.wav', { baseDir: fixtureDir, sampleRate: 8000 });
+  const prefixed = await renderSingleSample('01', 'sample.wav', {
+    baseDir: resolve(fixtureDir, '..'),
+    pathPrefix: 'fixtures\\',
+    sampleRate: 8000,
+  });
+  const fallback = await renderSingleSample('01', 'sample.wav', {
+    baseDir: fixtureDir,
+    pathPrefix: 'absent/',
+    sampleRate: 8000,
+  });
+  expect(reference.peak).toBeGreaterThan(0);
+  expect(prefixed).toEqual(reference);
+  expect(fallback).toEqual(reference);
+});

@@ -68,6 +68,8 @@ export interface RenderSingleSampleOptions {
    * charts that declared `#BASE 62` so a lowercase `0a` key isn't re-folded back to `0A` during validation.
    */
   base?: 36 | 62;
+  /** The chart's `#PATH_WAV` directory, tried before the bare sample path. */
+  pathPrefix?: string;
 }
 
 interface StereoSample {
@@ -433,6 +435,7 @@ export async function renderSingleSample(
     samplePath,
     sampleRate,
     baseDir,
+    pathPrefix: options.pathPrefix,
     fallbackToneSeconds,
     loadedSamples: new Map(),
     resolvedPathCache: new Map(),

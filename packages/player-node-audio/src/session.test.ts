@@ -20,6 +20,7 @@ test('duration loading decodes each referenced sample once with its chart radix'
   vi.mocked(renderSingleSample).mockClear();
   const json = createEmptyJSON('bms');
   json.resources.wav = { '01': 'sample.wav' };
+  json.bms.pathWAV = 'audio/';
   json.events = [0, 1].map((measure) => ({ measure, channel: '01', position: [0, 1] as const, value: '01' }));
   const durations = await loadNodeAudioSampleDurations(resolveChart(json), { baseDir: '/charts' });
   expect(durations.get('01')).toBe(2);
@@ -27,7 +28,7 @@ test('duration loading decodes each referenced sample once with its chart radix'
   expect(renderSingleSample).toHaveBeenCalledWith(
     '01',
     'sample.wav',
-    expect.objectContaining({ baseDir: '/charts', base: 36 }),
+    expect.objectContaining({ baseDir: '/charts', base: 36, pathPrefix: 'audio/' }),
   );
 });
 
@@ -62,7 +63,9 @@ test('duration loading propagates cancellation before decoding', async () => {
 });
 
 test('bmson continuations play independently while simultaneous uses of one slice share a voice', async () => {
+  vi.mocked(renderSingleSample).mockClear();
   const json = createEmptyJSON('bmson');
+  json.bms.pathWAV = 'audio/';
   json.metadata.bpm = 120;
   json.resources.wav = { '01': 'stem.wav' };
   json.events = [
@@ -98,6 +101,7 @@ test('bmson continuations play independently while simultaneous uses of one slic
     mode: 'manual',
   });
   expect(session).toBeDefined();
+  expect(renderSingleSample).toHaveBeenCalledWith('01', 'stem.wav', expect.objectContaining({ pathPrefix: 'audio/' }));
   session!.triggerEvent?.(json.events[0]!);
   session!.triggerEvent?.(json.events[1]!);
   session!.triggerEvent?.(json.events[2]!);

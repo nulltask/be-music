@@ -156,6 +156,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Keep extension header `#ARGBxx` in `bms` extension area
 - [x] Keep extension header `#PLAYER` in `bms` extension area
 - [x] Keep extension header `#PATH_WAV` in `bms` extension area
+- [x] Apply `#PATH_WAV` when loading Node gameplay samples and diagnostic durations, using the shared prefix-first / bare-path fallback resolver
 - [x] Keep extension header `#BASEBPM` in `bms` extension area
 - [x] Keep extension header `#STP` in `bms` extension area
 - [x] Keep extension header `#OPTION` in `bms` extension area

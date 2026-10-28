@@ -374,3 +374,32 @@ describe('exported constants', () => {
     expect(CHART_PREVIEW_STOP_FADE_OUT_SECONDS).toBe(0.25);
   });
 });
+
+test.each([true, false])('preview retries codec failure with PATH_WAV (preview file: %s)', async (filePreview) => {
+  const chart = makeBMSChart(filePreview ? 'preview.wav' : undefined);
+  chart.bms.pathWAV = 'audio/';
+  chart.resources.wav = { '01': 'preview.wav' };
+  chart.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+  const candidates = [new Uint8Array([1]), new Uint8Array([2])];
+  collectionMocks.resolveChartAudioAsset.mockImplementation((_source, _chartPath, _path, options) =>
+    candidates.find((entry) => !options?.excludedEntries?.has(entry)),
+  );
+  collectionMocks.loadAssetBytes.mockImplementation(async (entry) => entry);
+  const { audioContext, output, sources } = makePreviewAudioMocks();
+  const decoded = makeMockAudioBuffer();
+  decoded.getChannelData = () => new Float32Array([1]);
+  vi.mocked(audioContext.decodeAudioData)
+    .mockRejectedValueOnce(new Error('unsupported codec'))
+    .mockResolvedValueOnce(decoded);
+  const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+  engine.focus(makePreviewTarget(chart));
+  await vi.waitFor(() => expect(sources).toHaveLength(1));
+  expect(audioContext.decodeAudioData).toHaveBeenCalledTimes(2);
+  expect(collectionMocks.resolveChartAudioAsset).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.anything(),
+    'preview.wav',
+    expect.objectContaining({ pathPrefix: 'audio/' }),
+  );
+  engine.dispose();
+});
