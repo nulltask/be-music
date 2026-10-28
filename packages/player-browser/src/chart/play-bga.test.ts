@@ -55,6 +55,13 @@ describe('resolvePoorBGAMode', () => {
 });
 
 describe('resolvePoorBGAFallbackKey', () => {
+  test('includes an EXBMP-only implicit POOR image and respects POORBGA 2', () => {
+    const chart = bmsChart({});
+    chart.bms.exBMP['00'] = '0,0,0,0 miss.png';
+    expect(resolvePoorBGAFallbackKey(chart)).toBe('00');
+    chart.bms.poorBGA = '2';
+    expect(resolvePoorBGAFallbackKey(chart)).toBeUndefined();
+  });
   test('uses #BMP00 as the POOR image unless #POORBGA is 2', () => {
     expect(resolvePoorBGAFallbackKey(bmsChart({ '00': 'miss.bmp' }))).toBe('00');
     expect(resolvePoorBGAFallbackKey(bmsChart({ '01': 'a.bmp' }))).toBeUndefined();
@@ -70,6 +77,35 @@ describe('resolvePoorBGAFallbackKey', () => {
 });
 
 describe('collectPlayBGAResources', () => {
+  test('loads referenced EXBMP-only resources and preserves explicit BMP paths', () => {
+    const chart = bmsChart({ '01': 'explicit.png' });
+    chart.bms.exBMP = {
+      '00': '0,0,0,0 miss.png',
+      '01': '0,0,0,0 ignored.png',
+      '02': '0,0,0,0 images/my layer,01.png',
+      '03': '0,0,0,0 unused.png',
+      '04': 'malformed',
+    };
+    const original = structuredClone(chart);
+    const resources = collectPlayBGAResources(
+      chart,
+      {
+        base: [{ seconds: 0, bmpKey: '01' }],
+        layer: [
+          { seconds: 0, bmpKey: '02' },
+          { seconds: 1, bmpKey: '04' },
+        ],
+        poor: [],
+      },
+      resolvePoorBGAFallbackKey(chart),
+    );
+    expect(Object.fromEntries(resources.paths)).toEqual({
+      '00': 'miss.png',
+      '01': 'explicit.png',
+      '02': 'images/my layer,01.png',
+    });
+    expect(chart).toEqual(original);
+  });
   test('maps the referenced keys to their files, per track, with sub-region sources and the POOR fallback', () => {
     const chart = bmsChart({
       '00': 'miss.bmp',

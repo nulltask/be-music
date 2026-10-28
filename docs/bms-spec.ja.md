@@ -187,8 +187,9 @@
 - [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、chart-audio-renderer と browser WebAudio では `01` volume parameter を反映
 - [x] `#EXWAVxx` を parse し、`v` volume parameter を chart-audio-renderer と browser WebAudio で反映
 - [x] `#BASEBPM` を `@be-music/chart-model` 経由で browser HS-FIX calibration の reference BPM として使用
-- [x] Browser player で `#BGAxx` sub-region BGA、`#SWBGAxx` switching BGA、`#ARGBxx` / `#EXBMPxx` tint/alpha を反映
-- [x] Terminal は `#EXBMPxx` のみで定義したファイル名を、暗黙の POOR スロット `00` も含めて読み込む。明示的な `#BMPxx` のファイル名を優先する。Terminal の EXBMP の色・透明度と BGA/SWBGA の描画は未対応。
+- [x] Browser player は `#BGAxx` sub-region BGA を描画する。現在の SWBGA アニメーションとスロット単位の ARGB/EXBMP tint は Be-Music 独自の解釈であり、nanasi 互換ではない。
+- [ ] nanasi の EXBMP 透過色指定、各 BGA 面に対する ARGB（`A1`〜`A4`）/ 透明度（`0B`〜`0E`）、キー入力に連動する SWBGA（`A5`）を実装する。[コマンド資料](https://hitkey.nekokan.dyndns.info/cmds.htm#EXBMPXX) では画像への tint とは異なる意味で定義されている。
+- [x] Browser と terminal は `#EXBMPxx a,r,g,b filename` のみで定義したファイル名を、暗黙の POOR スロット `00` も含めて読み込む。明示的な `#BMPxx` のファイル名を優先する。ファイル名前の区切りがカンマの記法も引き続き受け付ける。Terminal の BGA 切り出しと上記 nanasi 描画機能は未対応。
 - [x] チャンネル `51-59` / `61-69`（拡張の `5A-5O` / `6A-6O` を含む）をロングノートとして解釈。`#LNTYPE` 省略時の既定である `#LNTYPE 1` はオブジェクトを始点 / 終点の組にし、`#LNTYPE 2`（MGQ）は `00` 以外が連続するセルの並びを 1 本のロングノートにする
 - [x] `#LNOBJ`: すべての宣言が有効で、宣言順に `bms.lnObjs` へ保持する。このオブジェクトは同じレーンの直前のノートから始まるロングノートを終わらせ、発音しない（HDX の Keyup 発音は採用しない）。直前にノートのない `#LNOBJ` オブジェクトは通常ノートになる
 - [x] `51-69` と `#LNOBJ` のロングノートが同じレーン・同じ位置から始まる場合は `51-69` を優先

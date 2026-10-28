@@ -367,12 +367,28 @@ describe('chart', () => {
     expect(parseBmsBGA(' 0 0 256 256 0 0')).toBeUndefined();
   });
 
-  test('parseBMSExBMP decodes "a,r,g,b,filename" with the ARGB tint applied', () => {
-    // Hitkey BMS Memo: `#EXBMPxx a,r,g,b,filename`. The ARGB tuple should round-trip via the same `parseBmsARGB` parser
-    // that `#ARGBxx` uses (so consumers don't carry two code paths for "what is this slot's tint?").
-    const parsed = parseBMSExBMP('255,0,0,0,backdrop.bmp');
-    expect(parsed?.filename).toBe('backdrop.bmp');
-    expect(parsed?.argb).toEqual({ a: 255, r: 0, g: 0, b: 0 });
+  test.each(['255,0,0,0 backdrop.bmp', '255,0,0,0,backdrop.bmp'])(
+    'parseBMSExBMP decodes the resource and color fields (%s)',
+    (definition) => {
+      const parsed = parseBMSExBMP(definition);
+      expect(parsed?.filename).toBe('backdrop.bmp');
+      expect(parsed?.argb).toEqual({ a: 255, r: 0, g: 0, b: 0 });
+    },
+  );
+
+  test.each([' 128, 20, 30, 40\timages/my file,01.png ', '128,20,30,40,images/my file,01.png'])(
+    'parseBMSExBMP preserves spaces and commas in filenames (%s)',
+    (definition) => {
+      expect(parseBMSExBMP(definition)).toMatchObject({
+        filename: 'images/my file,01.png',
+        argb: { a: 128, r: 20, g: 30, b: 40 },
+      });
+    },
+  );
+
+  test('parseBMSExBMP retains a filename with malformed color fields', () => {
+    expect(parseBMSExBMP('bad,0,0,0 image.png')).toMatchObject({ filename: 'image.png', argb: undefined });
+    expect(parseBMSExBMP('255,0,0,0   ')).toBeUndefined();
   });
 
   test('parseBMSExBMP surfaces filename even when the ARGB fields are blank', () => {
