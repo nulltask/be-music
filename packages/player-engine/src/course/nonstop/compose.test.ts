@@ -458,3 +458,22 @@ test('bmson NONSTOP keeps layered slices attached to one input note, with no sha
   ]);
   expect(resolved.sampleTriggers.filter((trigger) => trigger.channel === '01')).toEqual([]);
 });
+
+test('NONSTOP keeps an up sound on its LN tail with its source slice coordinates', () => {
+  const source = bmsonStage();
+  source.resources.wav['ZZ'] = 'end.wav';
+  source.events.push({ measure: 0, channel: '13', position: [3, 4], value: 'ZZ', bmson: { up: true, c: true } });
+  const result = stitchNonstopCourse([{ chart: source }, { chart: bmsonStage() }], {
+    connections: ['blank2'],
+    placement: 'intended',
+    assetPath: (stage, _kind, path) => `s${stage}/${path}`,
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const resolved = resolveChart(result.chart);
+  const note = resolved.notes.find((note) => note.endSoundEvent !== undefined)!;
+  expect(note).toBeDefined();
+  expect(result.chart.resources.wav[note.endSoundEvent!.value]).toBe('s0/end.wav');
+  expect(note.endSoundEvent!.bmson).toMatchObject({ up: true, sampleOffsetSeconds: 0 });
+  expect(resolved.notes.filter((note) => result.chart.resources.wav[note.sampleKey] === 's0/end.wav')).toEqual([]);
+});

@@ -24,7 +24,6 @@ import {
   type BMSSwitchingBGA,
   type RandomDraws,
   type ResolvedChart,
-  createBmsonSamplePlaybackMap,
   type TimedSampleTrigger,
   type TimingResolver,
   type ChartPlayVariant,
@@ -616,7 +615,6 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
   // Build the #SCROLL / #SPEED distance integrator. Skipped when the chart has no such events, or only ones at 1, so
   // the common case stays on the plain beat-diff path with no extra cost (and on its ruleset's drawing rules).
-  const beatResolver = resolvedPlay.beatResolver;
   const scrollTimeline = resolvedPlay.scroll;
   // CONSTANT ignores `#SPEED`, unless a NO_SPEED course turns it off.
   const constant = resolveConstantVisibility({
@@ -638,28 +636,19 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.autoSampleTriggers = resolvedPlay.sampleTriggers
     .filter((trigger) => !isPlayableInputChannel(trigger.channel))
     .sort((left, right) => left.seconds - right.seconds);
-  // bmson 1.0.0 slicing — for bmson charts, each `sound_channels[]` entry is a single audio file that gets sliced at
-  // every distinct pulse where any of its notes fire, and each note plays its assigned slice (`audio_offset` ..
-  // `audio_offset + slice_duration`) instead of the whole WAV from t=0. `@be-music/chart-model` computes the per-event
-  // slice playback table; we wire it up here so the `WebAudioSession` can look up the offset / duration by event
-  // identity at trigger time. BMS / json charts skip the build (the map stays undefined)
-  // since they have no slicing semantics — every note plays its WAV from the start.
+  // Use the model's source-channel slicing, including boundaries whose up event has no matching LN.
+  // Recomputing from displayed notes would omit those silent boundaries and lengthen the preceding slice.
   ctx.bmsonSlicePlayback =
     resolved.sourceFormat === 'bmson'
-      ? createBmsonSamplePlaybackMap(
-          resolved,
-          resolver,
-          // Include both playable notes and the auto-trigger BGM events so the {@link WebAudioSession} can resolve
-          // slice metadata for both code paths through a single Map lookup. Without the trigger events here, the
-          // session's `scheduleEvent` would fall back to "play whole WAV" for every BGM cue, regressing bmson
-          // sliced-WAV authoring intent (each note's `audio_offset` / `slice_duration` window).
-          [
-            ...ctx.notes.flatMap((note) => note.soundEvents ?? [note.event]),
-            ...ctx.mineNotes.map((note) => note.event),
-            ...ctx.invisibleNotes.map((note) => note.event),
-            ...ctx.autoSampleTriggers.map((trigger) => trigger.event),
-          ],
-          beatResolver,
+      ? new Map(
+          resolvedPlay.sampleTriggers.map((trigger) => [
+            trigger.event,
+            {
+              offsetSeconds: trigger.sampleOffsetSeconds,
+              durationSeconds: trigger.sampleDurationSeconds,
+              sliceId: trigger.sampleSliceId ?? `${trigger.sampleKey}:beat:${trigger.beat}`,
+            },
+          ]),
         )
       : undefined;
   ctx.chartDurationSeconds = Math.max(ctx.chartLastNoteEndSeconds, ctx.autoSampleTriggers.at(-1)?.seconds ?? 0);

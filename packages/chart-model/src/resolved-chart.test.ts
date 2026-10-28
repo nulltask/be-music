@@ -207,3 +207,15 @@ describe('bmson layered sound events', () => {
     expect(() => layered([a, b]).notes).toThrow('bmson layered notes must have equal lengths');
   });
 });
+
+test('pairs bmson LN end sounds by pulse despite floating-point beat addition', () => {
+  const source = createEmptyJSON('bmson');
+  source.bmson.info.resolution = 10;
+  source.events = [
+    { ...event(0, '11', '01', [1, 40]), bmson: { l: 2 } },
+    { ...event(0, '11', '02', [3, 40]), bmson: { up: true } },
+  ];
+  const note = resolveChart(source).notes[0]!;
+  expect(note.endBeat).not.toBe(0.3);
+  expect(note.endSoundEvent).toBe(source.events[1]);
+});

@@ -9,6 +9,8 @@ export interface TimedPlayableNote {
   event: BeMusicEvent;
   /** Constituent bmson source events, including `event`, sounded by the same input. */
   soundEvents?: readonly BeMusicEvent[];
+  /** bmson up source slice attached to the long-note tail. */
+  endSoundEvent?: BeMusicEvent;
   channel: string;
   beat: number;
   endBeat?: number;
@@ -107,6 +109,7 @@ export function toTimedPlayableNote(note: ResolvedNote): TimedPlayableNote {
     endBeat: note.endBeat,
     endSeconds: note.endSeconds,
     longNoteMode: note.lnMode,
+    ...(note.endSoundEvent ? { endSoundEvent: note.endSoundEvent } : {}),
     seconds: note.seconds,
     judged: false,
   };

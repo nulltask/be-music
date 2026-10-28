@@ -644,6 +644,10 @@ function convertChartForBMSOutput(json: BeMusicJSON): BeMusicJSON {
 
   for (const event of json.events) {
     const channel = normalizeChannel(event.channel);
+    if (isBmsonSource && event.bmson?.up === true && isPlayableChannel(channel)) {
+      changed = true;
+      continue;
+    }
     const length = event.bmson?.l;
     if (isPlayableChannel(channel) && typeof length === 'number' && Number.isFinite(length) && length > 0) {
       const longNoteChannel = `${channel[0] === '1' ? '5' : '6'}${channel[1]}`;

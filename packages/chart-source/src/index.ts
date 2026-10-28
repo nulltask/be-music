@@ -47,6 +47,8 @@ export interface BmsonEventExtensions {
   /** Source-audio slice coordinates retained by a stitched NONSTOP chart, independent of FIT placement. */
   sampleOffsetSeconds?: number;
   sampleDurationSeconds?: number;
+  /** beatoraja extension: the source slice belongs to the LN ending on this lane and pulse. */
+  up?: boolean;
   l?: number;
   c?: boolean;
   /**
@@ -144,6 +146,8 @@ export interface BmsonSoundNoteEntry {
   y: number;
   l?: number;
   c?: boolean;
+  /** beatoraja extension: attach this source slice to an LN end instead of creating a tap. */
+  up?: boolean;
   /** beatoraja bmson extension — per-note long-note type (`1` = LN, `2` = CN, `3` = HCN) for notes with `l > 0`. */
   t?: number;
 }

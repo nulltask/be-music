@@ -59,6 +59,7 @@ export interface BmsonSoundNote {
   y: number;
   l?: number;
   c?: boolean;
+  up?: boolean;
 }
 
 export interface BmsonSoundChannel {
@@ -695,6 +696,7 @@ function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
     if (typeof raw.c === 'boolean') {
       note.c = raw.c;
     }
+    if (typeof raw.up === 'boolean') note.up = raw.up;
     const noteType = normalizeBmsonLongNoteType(raw.t);
     if (noteType !== undefined) {
       note.t = noteType;

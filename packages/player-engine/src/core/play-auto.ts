@@ -83,7 +83,13 @@ function createAutoJudge(session: PlaySession): PlayJudge {
   };
   // Note keysounds freeze with the judge pump at an LR2 negative-BPM reversal (#134).
   const noteKeysounds = createRealtimeAudioCursor(
-    scorableNotes,
+    scorableNotes
+      .flatMap((note) =>
+        note.endSoundEvent && note.endSeconds !== undefined
+          ? [note, { ...note, seconds: note.endSeconds, event: note.endSoundEvent, soundEvents: undefined }]
+          : [note],
+      )
+      .sort((left, right) => left.seconds - right.seconds),
     (note) => {
       for (const event of note.soundEvents ?? [note.event]) {
         if (!uiEnabled) {

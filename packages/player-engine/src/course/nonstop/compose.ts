@@ -407,6 +407,8 @@ function addStageObjects(
     if (asBmson) {
       for (const event of note.soundEvents ?? [note.event])
         add(note.seconds, note.channel, wav(event.value), event, note.endSeconds, note.lnMode);
+      if (note.endSoundEvent && note.endSeconds !== undefined)
+        add(note.endSeconds, note.channel, wav(note.endSoundEvent.value), note.endSoundEvent);
     } else if (note.kind === 'ln' && note.endSeconds !== undefined) {
       const lane = `${note.channel[0] === '2' ? '6' : '5'}${note.channel[1]}`;
       add(note.seconds, lane, key);

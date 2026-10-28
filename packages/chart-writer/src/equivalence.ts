@@ -12,7 +12,7 @@ import {
 } from '@be-music/chart-source';
 
 export function areEventBmsonExtensionsEqual(left: BeMusicEvent['bmson'], right: BeMusicEvent['bmson']): boolean {
-  return left?.l === right?.l && left?.c === right?.c;
+  return left?.l === right?.l && left?.c === right?.c && left?.up === right?.up && left?.t === right?.t;
 }
 
 export function areBMSChartsEquivalent(left: BeMusicJSON, right: BeMusicJSON): boolean {
@@ -345,7 +345,9 @@ function areBmsonSoundNotesEqual(
       left[index]!.x !== right[index]!.x ||
       left[index]!.y !== right[index]!.y ||
       left[index]!.l !== right[index]!.l ||
-      left[index]!.c !== right[index]!.c
+      left[index]!.c !== right[index]!.c ||
+      left[index]!.up !== right[index]!.up ||
+      left[index]!.t !== right[index]!.t
     ) {
       return false;
     }

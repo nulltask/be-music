@@ -62,7 +62,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
 
   const soundChannels = new Map<
     string,
-    { name: string; notes: Array<{ x: number; y: number; l: number; c: boolean; t?: number }> }
+    { name: string; notes: Array<{ x: number; y: number; l: number; c: boolean; t?: number; up?: boolean }> }
   >();
   // beatoraja's lane extensions, grouped by sample like `sound_channels`: `key_channels` hold hidden notes (BMS
   // invisible objects) and `mine_channels` hold mines, each keeping its `damage`.
@@ -134,7 +134,14 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
           : undefined;
 
       const slot = soundChannels.get(key) ?? { name: fileName, notes: [] };
-      slot.notes.push({ x, y, l: length, c: continuation, ...(longNoteType !== undefined ? { t: longNoteType } : {}) });
+      slot.notes.push({
+        x,
+        y,
+        l: length,
+        c: continuation,
+        ...(longNoteType !== undefined ? { t: longNoteType } : {}),
+        ...(typeof event.bmson?.up === 'boolean' ? { up: event.bmson.up } : {}),
+      });
       soundChannels.set(key, slot);
     }
 
@@ -349,7 +356,7 @@ function mapBmsonScrollEventForOutput(event: BmsonScrollEventEntry): { y: number
 
 function mapBmsonSoundChannelForOutput(channel: BmsonSoundChannelEntry): {
   name: string;
-  notes: Array<{ x?: number; y: number; l?: number; c?: boolean }>;
+  notes: Array<{ x?: number; y: number; l?: number; c?: boolean; t?: number; up?: boolean }>;
 } {
   return {
     name: channel.name,
@@ -358,6 +365,8 @@ function mapBmsonSoundChannelForOutput(channel: BmsonSoundChannelEntry): {
       y: Math.max(0, Math.floor(note.y)),
       ...(typeof note.l === 'number' ? { l: Math.max(0, Math.floor(note.l)) } : {}),
       ...(typeof note.c === 'boolean' ? { c: note.c } : {}),
+      ...(typeof note.up === 'boolean' ? { up: note.up } : {}),
+      ...(note.t !== undefined ? { t: note.t } : {}),
     })),
   };
 }
