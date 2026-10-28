@@ -62,6 +62,7 @@ export function paintBGA(ctx: BeMusicPlayfieldPaintContext, data: BeMusicBGAData
   }
   if (frame.base) drawBGAImage(ctx, frame.base, rect);
   if (frame.layer) drawBGAImage(ctx, frame.layer, rect);
+  if (frame.layer2) drawBGAImage(ctx, frame.layer2, rect);
   if (frame.poorActive && frame.poorOverlays && frame.poor) drawBGAImage(ctx, frame.poor, rect);
 }
 

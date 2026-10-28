@@ -11,7 +11,7 @@
 //
 // Layering rules, as beatoraja's `BGAProcessor.drawBGA` draws them:
 //   - `base` (chart channel `04`) is the always-active BGA.
-//   - `layer` (channels `07` / `0A`) draws on top of base, its black keyed out.
+//   - `layer` (channel `07`) and `layer2` (channel `0A`) independently draw above base, black keyed out.
 //   - `poor` (channel `06`) replaces both while the miss layer shows (`misslayerDuration` from the last miss).
 //
 // A stitched NONSTOP chart draws one such stack per stage at the opacity of its crossfade
@@ -50,7 +50,12 @@ export interface BeatorajaBGALayerOptions {
    * Chart-time BGA cue lists. Built via `buildBGATimeline(chart, resolver)` in `chart/bga-timeline.ts`.
    * Pass an empty `{ base: [], layer: [], poor: [] }` if the chart has no BGA — the layer hides itself.
    */
-  cues: { base: ReadonlyArray<BGACue>; layer: ReadonlyArray<BGACue>; poor: ReadonlyArray<BGACue> };
+  cues: {
+    base: ReadonlyArray<BGACue>;
+    layer: ReadonlyArray<BGACue>;
+    layer2?: ReadonlyArray<BGACue>;
+    poor: ReadonlyArray<BGACue>;
+  };
   /**
    * Optional video-element map for keys whose BMPxx resolves to a video file. The layer
    * pauses / plays / seeks these elements when their texture becomes the active cue.
@@ -77,6 +82,7 @@ interface BGASpritePair {
   readonly canvas: Sprite;
   readonly sprite: Sprite;
   readonly layer: Sprite;
+  readonly layer2: Sprite;
   readonly poor: Sprite;
 }
 
@@ -94,7 +100,12 @@ export class BeatorajaBGALayer {
   private readonly textures: ReadonlyMap<string, Texture>;
   private readonly layerTextures: ReadonlyMap<string, Texture>;
   private readonly videoElements: ReadonlyMap<string, HTMLVideoElement>;
-  private readonly cues: { base: ReadonlyArray<BGACue>; layer: ReadonlyArray<BGACue>; poor: ReadonlyArray<BGACue> };
+  private readonly cues: {
+    base: ReadonlyArray<BGACue>;
+    layer: ReadonlyArray<BGACue>;
+    layer2?: ReadonlyArray<BGACue>;
+    poor: ReadonlyArray<BGACue>;
+  };
   private readonly nonstop: BeatorajaBGALayerOptions['nonstop'];
   /**
    * Skin canvas height in skin-pixel units. Read from `skin.h` at construction so we can flip
@@ -137,6 +148,7 @@ export class BeatorajaBGALayer {
       pair.canvas.visible = false;
       pair.sprite.visible = false;
       pair.layer.visible = false;
+      pair.layer2.visible = false;
       pair.poor.visible = false;
     }
     if (this.group === undefined) return;
@@ -168,10 +180,15 @@ export class BeatorajaBGALayer {
         keys.set(baseKey, stack.baseCue!.seconds);
         this.drawImage(pair.sprite, pair.canvas, baseKey, this.textures, props, stack.alpha);
       }
-      const layerKey = stack.layerCue?.bmpKey;
+      const layerKey = this.videoKey(stack.layerCue?.bmpKey, 'layer');
       if (layerKey !== undefined) {
         keys.set(layerKey, stack.layerCue!.seconds);
         this.drawImage(pair.layer, undefined, layerKey, this.layerTextures, props, stack.alpha);
+      }
+      const layer2Key = this.videoKey(stack.layer2Cue?.bmpKey, 'layer2');
+      if (layer2Key !== undefined) {
+        keys.set(layer2Key, stack.layer2Cue!.seconds);
+        this.drawImage(pair.layer2, undefined, layer2Key, this.layerTextures, props, stack.alpha);
       }
       if (stack.poorKey !== undefined && stack.poorOverlays) {
         let cueSeconds = seconds;
@@ -219,6 +236,11 @@ export class BeatorajaBGALayer {
     }
   }
 
+  private videoKey(key: string | undefined, track: 'layer' | 'layer2'): string | undefined {
+    const videoKey = String.fromCharCode(0) + track + ':' + key;
+    return this.videoElements.has(videoKey) ? videoKey : key;
+  }
+
   /** The sprite set of the stack at `index`, mounted on first use. */
   private pairAt(index: number): BGASpritePair {
     while (this.pairs.length <= index) {
@@ -226,10 +248,11 @@ export class BeatorajaBGALayer {
         canvas: new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false, label: 'bga/canvas' }),
         sprite: new Sprite({ visible: false, label: 'bga/base' }),
         layer: new Sprite({ visible: false, label: 'bga/layer' }),
+        layer2: new Sprite({ visible: false, label: 'bga/layer2' }),
         poor: new Sprite({ visible: false, label: 'bga/poor' }),
       };
       this.pairs.push(pair);
-      this.container.addChild(pair.canvas, pair.sprite, pair.layer, pair.poor);
+      this.container.addChild(pair.canvas, pair.sprite, pair.layer, pair.layer2, pair.poor);
     }
     return this.pairs[index]!;
   }

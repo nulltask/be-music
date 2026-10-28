@@ -416,7 +416,7 @@ export class PlaySessionState extends PlayPresentation {
    */
   /** A stitched NONSTOP chart's base / layer cues split by stage (`options.nonstop`). */
   nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
-  bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] } = {
+  bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[] } = {
     base: [],
     layer: [],
     poor: [],
@@ -451,7 +451,11 @@ export class PlaySessionState extends PlayPresentation {
    * detect cue transitions in `renderBGA` (start the new cue's video, pause the previous one) and to compute the
    * `currentTime` offset relative to the cue's start seconds.
    */
-  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } } = {};
+  bgaActiveVideos: {
+    base?: { key: string; cueSeconds: number };
+    layer?: { key: string; cueSeconds: number };
+    layer2?: { key: string; cueSeconds: number };
+  } = {};
   /**
    * BMS spec — when the chart omits `#POORBGA` and provides `#BMP00`, the BMP00 image acts as the implicit POOR
    * placeholder until an explicit `#xxx06` POOR cue takes over. Set during {@link prepareChart} so the renderer can

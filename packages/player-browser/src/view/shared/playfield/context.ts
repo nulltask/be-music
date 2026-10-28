@@ -119,7 +119,7 @@ export interface PlayfieldRuntime {
   readonly bombStartedAt: Map<string, number>;
   readonly bombJudge: Map<string, BeMusicJudgmentKind>;
   readonly hasBGA: boolean;
-  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[] };
   readonly nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
   readonly poorBGAMode?: 0 | 1 | 2;
   readonly poorBGAFallbackKey: string | undefined;
@@ -130,7 +130,11 @@ export interface PlayfieldRuntime {
   readonly bgaLayerTextures: Map<string, Texture>;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }>;
-  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
+  bgaActiveVideos: {
+    base?: { key: string; cueSeconds: number };
+    layer?: { key: string; cueSeconds: number };
+    layer2?: { key: string; cueSeconds: number };
+  };
   readonly audioAnalyzer: AudioAnalyzer | undefined;
   readonly audioContextStartTime: number;
   readonly paused: boolean;

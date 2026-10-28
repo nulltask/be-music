@@ -11,9 +11,13 @@
 #IMAGE,LR2files\Theme\E2E\parts.png
 #FONT,16,1,0,sans-serif
 
-// Background.
+// Background behind the lanes; leave the BGA window on the right uncovered.
 #SRC_IMAGE,0,0,0,0,64,64,1,1,0,0
-#DST_IMAGE,0,0,0,0,640,480,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#DST_IMAGE,0,0,0,0,300,480,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+
+// Chart BGA, with both overlay channels.
+#SRC_BGA,0,0,0,0,0,0,0,0,0,0,0,0,0
+#DST_BGA,0,0,320,100,256,256,0,255,255,255,255,0,0,0,0,0,0,0,0,0
 
 // Notes: lane 0 is the scratch, lanes 1-7 the keys; each lane ends at the judge line (y 400).
 #SRC_NOTE,0,0,0,128,64,8,1,1,0,0
