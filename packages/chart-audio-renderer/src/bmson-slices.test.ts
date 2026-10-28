@@ -52,3 +52,21 @@ test('different sound channels naming the same file remain independently audible
   expect(rendered.left[2000]).toBeCloseTo(0.25, 4);
   expect(rendered.left[6000]).toBeCloseTo(0.5, 4);
 });
+
+test('offline rendering plays a paired up slice but leaves an orphan up slice silent', async () => {
+  const json = createEmptyJSON('bmson');
+  json.metadata.bpm = 120;
+  json.bmson.info.resolution = 240;
+  json.resources.wav['01'] = 'stem.wav';
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { l: 240 } },
+    { measure: 0, channel: '11', position: [1, 4], value: '01', bmson: { up: true, c: true } },
+    { measure: 0, channel: '12', position: [3, 8], value: '01', bmson: { up: true, c: true } },
+    { measure: 0, channel: '01', position: [1, 2], value: '01', bmson: { c: false } },
+  ];
+  const rendered = await renderJSON(json, options());
+  expect(rendered.left[2000]).toBeCloseTo(0.125, 4);
+  expect(rendered.left[5000]).toBeCloseTo(0.25, 4);
+  expect(rendered.left[7000]).toBe(0);
+  expect(rendered.left[9000]).toBeCloseTo(0.125, 4);
+});

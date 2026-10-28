@@ -187,7 +187,7 @@ export type JudgeCoreInput =
 export type JudgeTraceField = readonly [key: string, value: string | number | boolean | undefined];
 
 /** Where a keysound the core triggered came from. */
-export type JudgeSoundSource = 'auto-scratch' | 'manual-note' | 'lane-fallback' | 'mine-hit';
+export type JudgeSoundSource = 'auto-scratch' | 'manual-note' | 'lane-fallback' | 'mine-hit' | 'long-note-end';
 
 /** What a step produced, in order. Drivers map these onto audio, the UI buses, the replay and the no-TUI trace. */
 export type JudgeCoreEffect =

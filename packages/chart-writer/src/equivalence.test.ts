@@ -18,6 +18,8 @@ describe('areEventBmsonExtensionsEqual', () => {
     expect(areEventBmsonExtensionsEqual({ l: 240, c: true }, { l: 240, c: true })).toBe(true);
     expect(areEventBmsonExtensionsEqual({ l: 240 }, { l: 480 })).toBe(false);
     expect(areEventBmsonExtensionsEqual({ c: true }, undefined)).toBe(false);
+    expect(areEventBmsonExtensionsEqual({ up: true }, { up: false })).toBe(false);
+    expect(areEventBmsonExtensionsEqual({ t: 1 }, { t: 2 })).toBe(false);
   });
 });
 
@@ -33,4 +35,15 @@ describe('areBmsonChartsEquivalent', () => {
     expect(areBmsonChartsEquivalent(parseBmson(bmson(150)), parseBmson(bmson(150)))).toBe(true);
     expect(areBmsonChartsEquivalent(parseBmson(bmson(150)), parseBmson(bmson(180)))).toBe(false);
   });
+});
+
+test('bmson equivalence includes up and type changes in preserved sound channels', () => {
+  const source = parseBmson(bmson(120));
+  for (const field of ['up', 't'] as const) {
+    const changed = structuredClone(source);
+    const note = changed.preservation.bmson.soundChannels[0]!.notes[0]!;
+    if (field === 'up') note.up = true;
+    else note.t = 2;
+    expect(areBmsonChartsEquivalent(source, changed)).toBe(false);
+  }
 });

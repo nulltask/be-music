@@ -88,6 +88,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] `notes.l` output (`l=0` if not specified)
 - [x] `notes.c` output (`c=false` if not specified)
 - [x] `notes.t` output (beatoraja extension, long notes only)
+- [x] `notes.up` input/output and LN end playback (beatoraja extension)
 - [x] `info.ln_type` output (beatoraja extension)
 - [x] `bga.bga_header` output
 - [x] `bga.bga_events` output
@@ -129,12 +130,16 @@ Each sound channel is cut into independently triggered slices at every distinct 
 
 `info.title_image` is preserved separately as `bmson.info.titleImage` and mirrored into `metadata.titleImage`. Native displays it on the decide screen in place of the title text after decoding; a missing or undecodable image keeps the text fallback. Canvas skins can request `chartImage(chart, 'titleImage')`; DOM decide frames receive the decoded image URL as `titleImage`. Loading artwork (`eyecatch_image`) and background artwork (`back_image`) retain their own roles.
 
+The beatoraja `up` extension marks an LN end keysound. A playable `up=true` event attaches to the long note ending on the same lane and pulse, irrespective of sound-channel order; its own `l` does not create another note. Later definitions replace earlier ones. Unmatched or replaced definitions stay in the source and still delimit slices, but are neither judged nor sounded. `up` on BGM remains BGM. Parsing, Be-Music JSON and bmson output retain boolean `up`, including explicit `false`; editing it invalidates preserved output. Lossy BMS conversion omits playable end-sound entries.
+
+The resolved note carries `endSoundEvent`. Manual LN plays it when a held tail completes or a release settles; CN/HCN plays it on a resolved release, including an early failed release after the existing margin. A missed head, or CN/HCN held through its release deadline, emits no end sound. AUTO and AUTO SCRATCH play it at the authored tail. AUTO seeking resumes it with elapsed time measured from the tail; manual practice skips preceding heads and their end sounds. Replay reconstruction emits no audio. NONSTOP retains pairing and source slices. See [jbms-parser pairing](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/BMSONDecoder.java#L201-L218) and [beatoraja release handling](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java#L470-L565).
+
 ## Fields read by implementation (parser)
 
 - Root: `version`, `lines`, `resolution`(compatible), `info`, `sound_channels`, `key_channels` / `mine_channels` / `scroll_events` (beatoraja extensions), `bpm_events`, `stop_events`, `bga`
 - `scroll_events[]`: `y`, `rate`
 - `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `title_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
-- `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
+- `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t`, `up` (beatoraja extensions)
 - `key_channels[].notes[]`: `x`, `y`
 - `mine_channels[].notes[]`: `x`, `y`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`

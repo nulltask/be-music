@@ -88,6 +88,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `notes.l` 出力 (未指定時 `l=0`)
 - [x] `notes.c` 出力 (未指定時 `c=false`)
 - [x] `notes.t` 出力 (beatoraja 拡張、ロングノートのみ)
+- [x] `notes.up` 入出力と LN 終端の発音 (beatoraja 拡張)
 - [x] `info.ln_type` 出力 (beatoraja 拡張)
 - [x] `bga.bga_header` 出力
 - [x] `bga.bga_events` 出力
@@ -129,12 +130,16 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 
 `info.title_image` は `bmson.info.titleImage` に保持し、`metadata.titleImage` にも反映する。Native は決定画面で、デコード済みの画像をタイトル文字の代わりに表示する。画像が見つからない場合やデコードできない場合は文字を表示する。Canvas スキンは `chartImage(chart, 'titleImage')` で画像を取得でき、DOM の決定画面には `titleImage` の URL を渡す。読み込み用の `eyecatch_image` と背景用の `back_image` は別の役割を保つ。
 
+beatoraja の `up` 拡張は LN 終端キー音を表します。演奏レーンの `up=true` イベントは sound channel の順序によらず、同じレーン・同じ pulse で終わるロングノートに結び付け、自身の `l` から別ノートを作りません。複数ある場合は後の定義を採用します。対応する LN がない定義や置き換えられた定義はソースに保持し、スライスの境界には使いますが、判定・発音しません。BGM の `up` は BGM のままです。パース、Be-Music JSON、bmson 出力では明示的な `false` も含めて真偽値の `up` を保持し、編集時は保持済み出力を無効化します。BMS への非可逆変換では演奏レーンの終端音イベントを除外します。
+
+解決済みノートは `endSoundEvent` を保持します。手動演奏の LN は保持したまま終端を通過するか、離しが確定すると終端音を鳴らします。CN/HCN は離しが確定したときに鳴らし、早離しの失敗でも既存の離し猶予を経て鳴らします。始点を見逃した場合や、CN/HCN を離さず終端の判定期限を過ぎた場合は鳴らしません。AUTO と AUTO SCRATCH は譜面の終端時刻に鳴らします。AUTO のシークは終端からの経過時間で音声を再開し、手動の練習は開始位置より前の始点とその終端音をスキップします。リプレイの判定再構築中は発音しません。NONSTOP でも対応関係とソーススライスを維持します。[jbms-parser の対応付け](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/BMSONDecoder.java#L201-L218)と [beatoraja の離し処理](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java#L470-L565)を参照してください。
+
 ## 実装が読み込むフィールド (parser)
 
 - ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `key_channels` / `mine_channels` / `scroll_events` (beatoraja 拡張), `bpm_events`, `stop_events`, `bga`
 - `scroll_events[]`: `y`, `rate`
 - `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `title_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
-- `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
+- `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t`, `up` (beatoraja extensions)
 - `key_channels[].notes[]`: `x`, `y`
 - `mine_channels[].notes[]`: `x`, `y`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`

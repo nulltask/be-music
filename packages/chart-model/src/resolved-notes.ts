@@ -32,6 +32,8 @@ export interface ResolvedNote {
   readonly event: BeMusicEvent;
   /** bmson layered note: every constituent source event, including `event`, triggered by one press. */
   readonly soundEvents?: readonly BeMusicEvent[];
+  /** bmson `up`: source slice played when this long note's tail is resolved. */
+  readonly endSoundEvent?: BeMusicEvent;
 }
 
 export interface ResolvedNoteLists {
@@ -98,6 +100,7 @@ interface MutableNote {
   freeZone?: true;
   tail?: JudgedNoteTail;
   soundEvents?: BeMusicEvent[];
+  endSoundEvent?: BeMusicEvent;
 }
 
 /**
@@ -141,6 +144,7 @@ function resolveMutableJudgedNotes(context: ResolvedNoteContext): { notes: Mutab
     if (!isLaneChannel(channel) || (channel.charCodeAt(0) !== 0x31 && channel.charCodeAt(0) !== 0x32)) {
       continue;
     }
+    if (json.sourceFormat === 'bmson' && event.bmson?.up === true) continue;
     const beat = beatResolver.eventToBeat(event);
     const note: MutableNote = { event, channel, beat, seconds: timing.beatToSeconds(beat) };
     if (freeZoneActive && (channel === '17' || channel === '27')) {
@@ -163,6 +167,18 @@ function resolveMutableJudgedNotes(context: ResolvedNoteContext): { notes: Mutab
   appendLNTypeLongNotes(context, withLNOBJ, bmsLongNoteMode);
   withLNOBJ.sort(compareNotes);
   const shadowed = collapseSamePositionNotes(withLNOBJ, json.sourceFormat === 'bmson');
+  if (json.sourceFormat === 'bmson') {
+    const endSounds = new Map<string, BeMusicEvent>();
+    const endKey = (channel: string, beat: number): string => `${channel}:${Math.round(beat * bmsonResolution!)}`;
+    // Source-channel order is retained by the parser's slot keys: later definitions replace earlier ones.
+    for (const event of context.sortedEvents) {
+      if (event.bmson?.up === true)
+        endSounds.set(endKey(normalizeChannel(event.channel), beatResolver.eventToBeat(event)), event);
+    }
+    for (const note of withLNOBJ) {
+      if (note.endBeat !== undefined) note.endSoundEvent = endSounds.get(endKey(note.channel, note.endBeat));
+    }
+  }
   return { notes: withLNOBJ, shadowed };
 }
 
@@ -268,6 +284,7 @@ function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boo
     endBeat: note.endBeat,
     endSeconds: note.endSeconds,
     lnMode: note.lnMode,
+    ...(note.endSoundEvent ? { endSoundEvent: note.endSoundEvent } : {}),
     sampleKey,
     event: note.event,
     ...(note.soundEvents ? { soundEvents: note.soundEvents } : {}),

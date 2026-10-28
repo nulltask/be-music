@@ -194,8 +194,14 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
         (note.t === 1 || note.t === 2 || note.t === 3) && noteLength !== undefined && noteLength > 0
           ? note.t
           : undefined;
-      if (noteLength !== undefined || noteContinue !== undefined || noteLongNoteType !== undefined) {
+      if (
+        noteLength !== undefined ||
+        noteContinue !== undefined ||
+        noteLongNoteType !== undefined ||
+        typeof note.up === 'boolean'
+      ) {
         event.bmson = {};
+        if (typeof note.up === 'boolean') event.bmson.up = note.up;
         if (noteLength !== undefined) {
           event.bmson.l = noteLength;
         }

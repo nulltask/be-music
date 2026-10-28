@@ -118,3 +118,36 @@ test('a negative BPM mirrors the fixed distance instead of the unconverted beat 
   expect(play.currentBeat(3)).toBeCloseTo(2);
   expect(play.currentBeat(6)).toBeCloseTo(-4);
 });
+
+test('browser slices retain paired end sounds and silent orphan-up boundaries', () => {
+  const chart = parseChart(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 120, mode_hint: 'beat-7k' },
+      sound_channels: [
+        {
+          name: 'stem.wav',
+          notes: [
+            { x: 1, y: 0, l: 240 },
+            { x: 1, y: 240, up: true, c: true },
+            { x: 2, y: 360, up: true, c: true },
+            { x: 0, y: 480, c: true },
+          ],
+        },
+      ],
+    }),
+    'bmson',
+  );
+  const chartEntry = { ...entry, id: 'up', chartPath: 'up.bmson', chart };
+  const play = new PlaySession({ judgeRuleset: 'beatoraja' });
+  play.chart = chartEntry;
+  prepareChart(play, chartEntry);
+  expect(play.notes).toHaveLength(1);
+  const head = play.notes[0]!;
+  expect(play.bmsonSlicePlayback?.get(head.event)).toMatchObject({ offsetSeconds: 0, durationSeconds: 0.5 });
+  expect(play.bmsonSlicePlayback?.get(head.endSoundEvent!)).toMatchObject({
+    offsetSeconds: 0.5,
+    durationSeconds: 0.25,
+  });
+  expect(play.autoSampleTriggers).toHaveLength(1);
+});

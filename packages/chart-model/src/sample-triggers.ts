@@ -12,6 +12,8 @@ import {
   resolveBMSLongNotes,
   type BeatResolver,
 } from './index.ts';
+import { resolveJudgedNotes } from './resolved-notes.ts';
+import { resolveChartPlayVariant } from './play-variant.ts';
 import {
   createTimingBuildContext,
   createTimingResolver,
@@ -78,9 +80,25 @@ export function collectSampleTriggersWithContext(
     json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events, beatResolver) : undefined;
 
   const idBase = resolveBMSBase(json);
+  // Keep every up entry in the slicing pass, but only an attached LN-end sample is audible on a playable lane.
+  const endSounds =
+    json.sourceFormat === 'bmson' && events.some((event) => event.bmson?.up === true)
+      ? new Set(
+          resolveJudgedNotes({
+            json,
+            timing: resolver,
+            beatResolver,
+            sortedEvents,
+            idBase,
+            resolvePlayVariant: () => resolveChartPlayVariant(json),
+            inferBmsLNTypeWhenMissing: options.inferBmsLNTypeWhenMissing === true,
+          }).notes.flatMap((note) => (note.endSoundEvent ? [note.endSoundEvent] : [])),
+        )
+      : undefined;
   const triggers: TimedSampleTrigger[] = [];
   for (const item of selectedEvents) {
     const event = item.event;
+    if (endSounds && item.normalizedChannel !== '01' && event.bmson?.up === true && !endSounds.has(event)) continue;
     const sampleKey = normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson');
     const playback = bmsonPlaybackMap?.get(event);
     const beat = beatResolver.eventToBeat(event);

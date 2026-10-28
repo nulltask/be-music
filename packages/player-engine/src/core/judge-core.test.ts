@@ -794,3 +794,91 @@ describe('bmson layered input audio', () => {
     expect(effects.filter((effect) => effect.kind === 'sound')).toEqual([]);
   });
 });
+
+describe('bmson LN end keysounds', () => {
+  function endChart(type: 1 | 2 | 3, channel = '11') {
+    const json = chart([
+      { measure: 1, channel, position: [0, 1], value: '01', bmson: { l: 960, t: type } },
+      { measure: 2, channel, position: [0, 1], value: '02', bmson: { up: true } },
+    ]);
+    json.sourceFormat = 'bmson';
+    json.bmson.info.resolution = 240;
+    json.bmson.info.judgeRank = 100;
+    return json;
+  }
+  function release(seconds: number): Parameters<typeof stepJudgeCore>[1] {
+    return {
+      kind: 'release',
+      channels: new Set(['11']),
+      tokens: [],
+      nowSec: seconds,
+      nowMs: seconds * 1000,
+      recordSec: seconds,
+    };
+  }
+
+  test.each([1, 2, 3] as const)(
+    'type %s plays the end slice once on a successful tail without an extra tap',
+    (type) => {
+      const state = createCore(endChart(type), 'beatoraja');
+      stepJudgeCore(state, { kind: 'hold', channels: new Set(['11']) });
+      const head = stepJudgeCore(state, press(1, '11'));
+      expect(head.filter((effect) => effect.kind === 'sound')).toMatchObject([{ event: { value: '01' } }]);
+      const tail = type === 1 ? stepJudgeCore(state, advance(2.001)) : stepJudgeCore(state, release(2));
+      expect(tail.filter((effect) => effect.kind === 'sound')).toMatchObject([
+        { source: 'long-note-end', event: { value: '02' } },
+      ]);
+      expect(stepJudgeCore(state, advance(3)).filter((effect) => effect.kind === 'sound')).toEqual([]);
+      expect(state.config.scorableNotes).toHaveLength(1);
+    },
+  );
+
+  test.each([1, 2, 3] as const)('type %s early release plays the end sample once after stopping the head', (type) => {
+    const state = createCore(endChart(type), 'beatoraja');
+    stepJudgeCore(state, { kind: 'hold', channels: new Set(['11']) });
+    stepJudgeCore(state, press(1, '11'));
+    const effects = [...stepJudgeCore(state, release(1.5)), ...stepJudgeCore(state, advance(1.6))];
+    const sounds = effects.filter((effect) => effect.kind === 'sound');
+    expect(sounds).toMatchObject([{ source: 'long-note-end', event: { value: '02' }, seconds: 1.5 }]);
+    expect(effects.findIndex((effect) => effect.kind === 'stop-sound')).toBeLessThan(
+      effects.findIndex((effect) => effect.kind === 'sound'),
+    );
+  });
+
+  test.each([1, 2, 3] as const)('type %s missed head never emits its end slice', (type) => {
+    const state = createCore(endChart(type), 'beatoraja');
+    const effects = [...stepJudgeCore(state, advance(3)), ...stepJudgeCore(state, release(3.1))];
+    expect(effects.filter((effect) => effect.kind === 'sound')).toEqual([]);
+  });
+
+  test.each([2, 3] as const)('type %s held past the release deadline misses silently', (type) => {
+    const state = createCore(endChart(type), 'beatoraja');
+    stepJudgeCore(state, { kind: 'hold', channels: new Set(['11']) });
+    stepJudgeCore(state, press(1, '11'));
+    const effects = stepJudgeCore(state, advance(3));
+    expect(effects.filter((effect) => effect.kind === 'sound')).toEqual([]);
+    expect(state.summary.poor).toBe(1);
+  });
+
+  test.each([1, 2, 3] as const)('type %s replay tail audio is independent of frame spacing', (type) => {
+    const json = endChart(type);
+    const stream = inputs([1_000_000, 'down', '11'], [2_000_000, 'up', '11']);
+    const once = replay(json, stream, [3], 'beatoraja');
+    expect(once).toEqual(replay(json, stream, [1, 1.5, 2, 2.1, 3], 'beatoraja'));
+    expect(once.effects.filter((effect) => (effect as JudgeCoreEffect).kind === 'sound')).toHaveLength(2);
+  });
+
+  test.each([1, 2, 3] as const)('type %s AUTO SCRATCH plays its tail sound exactly once', (type) => {
+    const state = createCore(endChart(type, '16'), 'beatoraja', { autoScratch: true });
+    const effects = stepJudgeCore(state, advance(3));
+    expect(effects.filter((effect) => effect.kind === 'sound')).toMatchObject([
+      { event: { value: '01' } },
+      { source: 'long-note-end', event: { value: '02' } },
+    ]);
+  });
+
+  test('seeking past an unpressed head does not synthesize an LN end input', () => {
+    const state = createCore(endChart(1), 'beatoraja', { practiceFromSeconds: 1.5 });
+    expect(stepJudgeCore(state, advance(3)).filter((effect) => effect.kind === 'sound')).toEqual([]);
+  });
+});

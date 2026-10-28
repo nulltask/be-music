@@ -115,3 +115,43 @@ test('bmson continuations play independently while simultaneous uses of one slic
   expect(session!.getActiveAudioVoiceCount?.()).toBe(0);
   await session!.dispose();
 });
+
+test('Node preloads and resolves a paired up source slice without treating it as a judged tap', async () => {
+  const json = createEmptyJSON('bmson');
+  json.metadata.bpm = 120;
+  json.bmson.info.resolution = 240;
+  json.resources.wav = { '01': 'head.wav', '02': 'end.wav' };
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { l: 240 } },
+    { measure: 0, channel: '11', position: [1, 4], value: '02', bmson: { up: true } },
+  ];
+  vi.mocked(renderSingleSample).mockClear();
+  vi.mocked(renderSingleSample).mockResolvedValue({
+    sampleRate: 8000,
+    left: new Float32Array(8000).fill(0.25),
+    right: new Float32Array(8000).fill(0.25),
+    durationSeconds: 1,
+    peak: 0.25,
+  });
+  vi.mocked(createNodeAudioSink).mockResolvedValueOnce({
+    runtime: 'node',
+    engine: 'webaudio',
+    label: 'test',
+    write: () => true,
+    waitWritable: async () => undefined,
+    end: async () => undefined,
+    destroy() {},
+    onError() {},
+    getClockState: () => ({ outputSeconds: 0.5, scheduledSeconds: 0.5 }),
+    suspend: async () => undefined,
+    resume: async () => undefined,
+  });
+  const resolved = resolveChart(json);
+  const session = await createNodeAudioSession({ json, resolvedChart: resolved, options: {}, mode: 'manual' });
+  expect(resolved.notes).toHaveLength(1);
+  expect(renderSingleSample).toHaveBeenCalledWith('02', 'end.wav', expect.anything());
+  session!.triggerEvent?.(resolved.notes[0]!.endSoundEvent!);
+  session!.triggerEvent?.(resolved.notes[0]!.endSoundEvent!);
+  expect(session!.getActiveAudioVoiceCount?.()).toBe(1);
+  await session!.dispose();
+});
