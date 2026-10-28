@@ -117,7 +117,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `bga.layer_events` の shared BGA timeline 抽出
 - [x] `bga.poor_events` の shared BGA timeline 抽出
 - [x] Browser player は shared BGA timeline 経由で bmson BGA の still / video asset を描画
-- [ ] CLI/TUI の bmson header filename 向け BGA resource loading
+- [x] CLI/TUI の bmson header filename 向け BGA resource loading
 - [ ] 同一 pulse の処理順（Note/BGA → BPM → STOP）を仕様通りに固定
 - [ ] 同一 `y` の `bpm_events` を末尾優先で適用
 - [ ] 同一 `y` の `stop_events` を加算して適用

@@ -117,7 +117,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] Shared BGA timeline extraction for `bga.layer_events`
 - [x] Shared BGA timeline extraction for `bga.poor_events`
 - [x] Browser player renders bmson BGA still/video assets through the shared BGA timeline
-- [ ] CLI/TUI BGA resource loading for bmson header filenames
+- [x] CLI/TUI BGA resource loading for bmson header filenames
 - [ ] Fixed the processing order of the same pulse (Note/BGA → BPM → STOP) as specified.
 - [ ] Apply `bpm_events` of the same `y` with priority to the end
 - [ ] Add and apply `stop_events` of the same `y`

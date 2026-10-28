@@ -576,6 +576,9 @@ export async function createBgaANSIRenderer(
   const resizeAlgorithm = options.imageResizeAlgorithm ?? DEFAULT_IMAGE_RESIZE_ALGORITHM;
   const resolved = resolveChart(json);
   const { base: baseTimeline, poor: poorTimeline, layer: layerTimeline, layer2: layer2Timeline } = resolved.bga;
+  // bmson cues carry header filenames directly; BMS cues carry resource slots. Keep that lookup local to loading.
+  const resources = { ...json.resources.bmp };
+  for (const entry of json.bmson.bga.header) resources[entry.name] = entry.name;
 
   const baseKeys = new Set(baseTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const poorKeys = new Set(poorTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
@@ -592,10 +595,10 @@ export async function createBgaANSIRenderer(
   }
   const poorFallbackUntilSeconds = poorTimeline[0]?.seconds ?? Number.POSITIVE_INFINITY;
   const totalLoadTargetCount =
-    countMappedBMPResourceTargets(baseKeys, json.resources.bmp) +
-    countMappedBMPResourceTargets(poorKeys, json.resources.bmp) +
-    countMappedBMPResourceTargets(layerKeys, json.resources.bmp) +
-    countMappedBMPResourceTargets(layer2Keys, json.resources.bmp);
+    countMappedBMPResourceTargets(baseKeys, resources) +
+    countMappedBMPResourceTargets(poorKeys, resources) +
+    countMappedBMPResourceTargets(layerKeys, resources) +
+    countMappedBMPResourceTargets(layer2Keys, resources);
   let loadedTargetCount = 0;
   const reportLoadProgress = (detail: string): void => {
     if (!options.onLoadProgress || totalLoadTargetCount <= 0) {
@@ -617,7 +620,7 @@ export async function createBgaANSIRenderer(
     await Promise.all([
       loadFramesByKeys({
         keys: baseKeys,
-        resources: json.resources.bmp,
+        resources,
         baseDir: options.baseDir,
         mode: 'base',
         width: displaySize.width,
@@ -630,7 +633,7 @@ export async function createBgaANSIRenderer(
       }),
       loadFramesByKeys({
         keys: poorKeys,
-        resources: json.resources.bmp,
+        resources,
         baseDir: options.baseDir,
         mode: resolvePoorBGAMode(json.bms.poorBGA) === 1 ? 'bmson-layer' : 'base',
         width: displaySize.width,
@@ -643,7 +646,7 @@ export async function createBgaANSIRenderer(
       }),
       loadFramesByKeys({
         keys: layerKeys,
-        resources: json.resources.bmp,
+        resources,
         baseDir: options.baseDir,
         mode: layerMode,
         width: displaySize.width,
@@ -656,7 +659,7 @@ export async function createBgaANSIRenderer(
       }),
       loadFramesByKeys({
         keys: layer2Keys,
-        resources: json.resources.bmp,
+        resources,
         baseDir: options.baseDir,
         mode: layerMode,
         width: displaySize.width,
