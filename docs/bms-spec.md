@@ -277,67 +277,11 @@ The value converts the hex integer `1-255` to the gain of `value / 255` and appl
 In actual implementation, these channels themselves are not treated as sample triggers.
 Also, volume changes will only be reflected in the initial gain of new sounds that are played after that point, and will not be reflected in the voices of the same type that are already playing.
 
-## Not supported (difference to primary reference)
+## Runtime support boundary
 
-- [ ] Playback of `#MIDIFILE` (kept in `bms.midiFile`; not played)
-- [ ] Dedicated interpretation of header `#MAKER`
-- [ ] Interpretation of multiple line definition (Multiplex) of `#SUBTITLE` / `#SUBARTIST` / `#COMMENT`
-- [ ] Rules for treating the old-style compatible header `#SONGxx` as equivalent to `#TEXTxx`
-- [ ] Compatible header `#EXBPMxx` reading policy (difference with `#BPMxx`)
-- [ ] Handling of BM98 extension `#CHARFILE` / `#ExtChr` (policy of ignoring, retaining, and replaying)
-- [ ] Handling of header `#CDDA` (policy of ignoring, retaining, and replaying)
-- [ ] Handling of old video headers `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK`
-- [ ] Handling of material separation header `#MATERIALSBMP` / `#MATERIALSWAV`
-- [ ] `#WAVCMD` pitch and loop execution. Current runtime support only applies the `01` volume parameter in chart-audio-renderer and browser WebAudio.
-- [ ] `#OPTION` Simultaneous application rule for multiple lines (currently holds a single value)
-- [ ] Runtime reflection of object channel `#xxxA6` (`#CHANGEOPTIONxx`)
-- [ ] `#TEXTxx` / `#TEXT00` display behavior during play (currently only retained)
-- [ ] Clarification of compatibility policy for inputs containing negative numbers and decimal numbers for `#STOPxx`
-- [ ] `#EXBPM` Compatible header reading policy (including priority with `#BPMxx`)
-- [ ] Clarification of index range of `#BPMxx` / `#STOPxx` (`01-FF` / `01-ZZ`) and handling of `00`
-- [ ] Index range of `#WAVxx` / `#BMPxx` (operational difference including `01-FF` / `01-ZZ` / `00`) and case handling
-- [ ] Conflict priority between `#xxx03` and `#xxx08` on the same timeline
-- [ ] Conflict priority between `#xxx08` and `#xxx09` on the same timeline
-- [ ] Runtime reflection of `#@BGAxx` (branch/conditional BGA definition)
-- [ ] CLI/TUI reflection of `#BGAxx`, `#SWBGAxx`, `#ARGBxx`, and `#EXBMPxx`
-- [ ] Decision width interpretation of boundary values ​​including `#DEFEXRANK 0`
-- [ ] Apply `#PATH_WAV` when the terminal player loads samples for play (browser gameplay, the offline renderer and the song selection preview already try it as a directory prefix)
-- [ ] Acceptance policy for compatible directives `#RONDAM` / `#SETRONDAM` / `#IFEND`
-- [ ] Acceptance policy for mixed input of full-width commands and full-width spaces
-- [ ] Compatible with control syntax evaluation for CRLF+LF mixed files (line end shaking)
-- [ ] Strict compatibility for files without trailing newlines (parser/control syntax)
-- [ ] Evaluation stability of scores containing large numbers/nested `#RANDOM` and `#SWITCH`
-- [ ] Fixed random number generation specifications for musical scores that use a large upper limit of `#RANDOM`
-- [ ] `#000` Time/judgment compatibility for musical scores containing measure performance objects
-- [ ] Accuracy verification and upper limit policy for high-resolution musical scores (e.g. measure resolution 4032 or higher)
-- [ ] Upper limit of measure number (near `#999`) and handling when inputting after `#1000`
-- [ ] Policy for audio format compatibility (μ-law WAV, etc.)
-- [ ] Compatibility policy for treating `00` object tokens as ordinary `#WAV00` references outside landmine playback
-- [x] Search for alternative files when extension omitted/mismatches for `#WAVxx` (extension fallback; see [BMS / bmson compatibility notes §2.19](./format-compat.md#219-asset-file-lookup))
-- [x] Search for alternative files when extension omitted/mismatches for `#BMPxx` (extension fallback; see [BMS / bmson compatibility notes §2.19](./format-compat.md#219-asset-file-lookup))
-- [ ] Compatible behavior when referencing undefined `#BPMxx` / `#STOPxx` (ignored, default value, error)
-- [ ] `#STOPxx` Compatibility behavior when empty definition reference (e.g. undefined token of `#05209:`)
-- [ ] EOF completion rules when `#IF` / `#SWITCH` block is unterminated (`#ENDIF` / `#ENDSW` is missing)
-- [ ] Acceptance rules for Bemuse extension line `#EXT #xxxyy:...` (differences from normal objects)
-- [ ] Whether to apply `#ARGBxx` / `#BGAxx` parameters to video BGA
-- [ ] `#BASEBPM` core time-resolution reflection policy. Browser HS-FIX uses it as a visual reference BPM, but internal chart timing still follows BPM events.
-- [ ] player: `#PLAYER` When not specified, the default value `1` is reflected on the song selection screen, TUI, and result display.
-- [ ] player: Match the display of `#PLAYER=2` / `#PLAYER=4` with the actual implementation (meta only explicit or dedicated mode implementation)
-- [ ] editor: `setMetadata` / `set-meta` write `#PLAYER` to `bms.player` instead of `metadata.extras`
-- [ ] editor: Allow dedicated BMS extension headers to be exported without save/load roundtrips after API/CLI editing
-- [ ] Acceptance limit and error handling when inputting extremely long lines (e.g. 100KB class)
-- [ ] Upper limit and performance guarantee policy for musical scores with hundreds of thousands of performance/internal objects
+Preserving syntax does not imply player execution. `#MIDIFILE` is retained in `bms.midiFile` but not played. `#WAVCMD` applies volume parameter `01`; pitch and loop parameters are not executed. `#TEXTxx` and `#CHANGEOPTIONxx` are retained in the IR but do not drive gameplay text or option changes.
 
-### TODO (SCROLL/BPM/STOP) from reference materials
-
-| TODO                                                                                                                                       | current situation | remarks                                                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [x] `#SCROLL 0` Specify the display priority of notes that overlap in the same lane in the section before and after.                       | correspondence    | If they overlap in the same cell, place the note that comes first on the reference line, and stack subsequent notes in the direction away from the judgment line.                                                                    |
-| [x] `#SCROLL < 0`'s reverse running display (direction, near the judgment line, off-screen) is fixed as a compatible specification.        | correspondence    | The web player runs notes backwards as beatoraja does, drawing them below the judgement line while they are still ahead; the terminal player keeps "proximity display priority" and treats the drawing distance as an absolute value |
-| [x] `#SCROLL 0` Specify the upper limit of lookahead and visible range in long intervals                                                   | correspondence    | Read-ahead is discontinued at `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 measures), and notes outside the visible range are excluded from drawing.                                                                                           |
-| [x] BPM×`100001` + `#STOPxx` Clarified "display BPM" compatibility policy when correcting                                                  | correspondence    | The same BPM value as the time resolution is displayed as is, and LR2 compatible display replacement and rounding are not performed.                                                                                                 |
-| [x] SCROLL/BPM/STOP Added regression test for complex gimmicks (partial warp, blank keystroke, reverse run)                                | correspondence    | Add complex cases to `timeline` and continue to verify POOR system with existing `bga` test group                                                                                                                                    |
-| [x] Determined the handling of beatoraja-specific appearance/disappearance bug-dependent scores (unsupported clearly or reproduction mode) | correspondence    | Specify that it is not compatible and consider reproducing mode with another option if necessary in the future.                                                                                                                      |
+Header and object interpretation follows the support tables above and this document’s control-flow rules. Asset lookup is defined in [format compatibility](./format-compat.md), browser-specific rendering in the [browser player specification](./player-web.md), and terminal rendering and audio in the [terminal player specification](./player-tui.md).
 
 ## Player-Specific Behavior
 

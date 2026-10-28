@@ -18,7 +18,7 @@ The default count is half of `navigator.hardwareConcurrency`, rounded down with 
 
 Inputs are cloned so a worker crash can retry with intact data; output array buffers are transferred. Parsing returns packed event columns and a per-chart string table, restored as lazy events on the main thread. Import results preserve source/path ordering even when tasks finish out of order. ZIP compressed/uncompressed limits and filtering remain in force. Each WSOLA job keeps all channels of one sample together; playback audio buffers are rebuilt on the main thread. Signalsmith's existing AudioWorklet path remains unchanged.
 
-Playback preparation, fingerprint verification, and submission JSON serialization/compression stay local. The [real-data benchmark](../benchmarks/browser-workers-2026-10-21.md) measured speedups for chart imports, ZIP expansion, and WSOLA, but slower single-play and submission preparation after message-copy and transfer costs. Only the three faster operations use workers. Input handling, judging, Web Audio scheduling, and Pixi rendering keep their existing paths.
+Playback preparation, fingerprint verification, and submission JSON serialization/compression run locally. Input handling, judging, Web Audio scheduling, and Pixi rendering also stay on the main thread. See the [performance specification](../player-performance.md) for worker measurements.
 
 ## Considered options
 

@@ -27,9 +27,7 @@ browser runtime は次の adapter module を使います。
 | [`web-ui-runtime.ts`](../packages/player-browser/src/runtime/web-ui-runtime.ts)       | engine UI signal をプレイのセッションへ流します。frame snapshot は note、score、gauge、result state を更新し、command は lane flash、key hold、POOR BGA、judge/combo effect を駆動します。                                                    |
 | [`engine-driver.ts`](../packages/player-browser/src/runtime/engine-driver.ts)         | audio、input、UI adapter を組み立て、1 譜面分の `manualPlay` / `autoPlay` を呼び出します。                                                                                                                                                    |
 
-engine（`@be-music/player-engine`）は `node:path` / `node:timers/promises` 依存を排除済みで、 browser bundle にそのまま
-含められます。 `createNodeAudioSink` (Node 専用 audio backend) も lazy import なので、 host が
-`PlayerOptions.createAudioSession` factory (= `createWebAudioSession`) を渡す経路では一切到達しません。
+エンジンは実行環境に依存しません。ホストは `PlayerOptions.createAudioSession` を渡します。ブラウザーは `createWebAudioSession`、ターミナルは `@be-music/player-node-audio` を使い、エンジン自身は Node の音声バックエンドを読み込みません。
 
 ## 対象範囲
 
@@ -155,7 +153,7 @@ flowchart TD
 
 矢印は、モジュールから、それが作るもの・使うものへ向かいます。シーンルーターとサービスもアプリが作り、ルートと Debug Menu に渡します。
 
-**起動処理。** `main.ts` はページのマークアップを書き、ブラウザーの互換性チェックを最初に行い（レンダラーを起動できないブラウザーでも理由を表示するためです）、スマートフォンとタブレットを判別して印を付け、Help のモーダルをつなぎます。UI のフォントの準備ができたらアプリを作り、その上に[テスト用フック](./course-checklist.ja.md#テスト用フック)を取り付けてから始めます。
+**起動処理。** `main.ts` はページのマークアップを書き、ブラウザーの互換性チェックを最初に行い（レンダラーを起動できないブラウザーでも理由を表示するためです）、スマートフォンとタブレットを判別して印を付け、Help のモーダルをつなぎます。UI のフォントの準備ができたらアプリを作り、その上に[テスト用フック](./player-web.ja.md#テスト用フック)を取り付けてから始めます。
 
 **構成の根。** `app/app.ts`（`PlayerWebApp`）はサービス、シーンルーター、ルートを作り、それらどうし、Debug Menu、Leaderboard をつなぎます。プレイ中のロックもここが持ちます。プレイが始まるときに Auto-save play history の設定を確定し、プレイが確定したオプション、Skin system 以外のスキンの操作、Submit to Leaderboard を無効にします。リザルトが出るか選曲画面に戻ると解除します。Skin system は譜面を続けたまま描画する family を切り替えます。`app/shell.ts` は、stage を載せたあと、stage のまわりのページをシーンに合わせます。シェルの `in-gameplay` の状態とそれで止めるピンチズーム、タッチ用の一時停止と Quit のボタン、キャンバスのダブルクリックでのフルスクリーンとその `Esc` の扱いです。
 
@@ -175,7 +173,7 @@ flowchart TD
 
 **リプレイ、録画、ステータス。** `services/replays.ts` は、player が書くリプレイの記録者として プレイヤーの名前（`REPLAY_RECORDER`: `be-music-web`、そのバージョンとビルド元のコミット）を持ち、リプレイを自動保存します。プレイのログはリザルトが出たとき、コースのログはコースリザルトが出たときに、そのプレイ（コースなら最後のステージ）を始めたときの Auto-save play history の設定に従って保存します。`services/recording.ts` は、Capture フォルダーの録画とスクリーンショットがプレイをまたいで使うものを持ちます。選曲画面で予約した録画（次のプレイと一緒に始まります）、次の録画を保存するファイル名（譜面のタイトル）、選んだ動画の形式です。録画そのものは `recording-controller.ts` が行い、録画中のものはシーンルーターが遷移のたびに確定させます。`services/status.ts` はステータス行を持ちます。Debug Menu の Status の行で、テスト用のフックが記録するものです。その行がプレイやリザルトを説明しているかどうかも持ちます。説明している行は、選曲画面に戻るとライブラリの要約に置き換わります。
 
-**テスト用フック。** E2E テストの[テスト用フック](./course-checklist.ja.md#テスト用フック)（`window.__beMusicTest`）に答えるのは `services/test-hook.ts` です。読まれるたびに、シーンルーターが出しているシーン、選曲画面のカーソルとその下のバーの自己ベスト、stage のプレイ、ライブラリ、コースのプレイ、作成中のコースを読みます。結果、リプレイ、読み込みの完了など、アプリが渡すものは `test-hook.ts` が足します。読むだけで何も始めず、アプリがすでに持っているものからすぐに答えます。バーの自己ベストは選曲画面と同じく今の判定ルールのものです。譜面の自己ベストは、選曲画面がその譜面のハッシュを計算したあとはハッシュで、それまではパスで探すので、読んでも譜面のハッシュは計算しません。
+**テスト用フック。** E2E テストの[テスト用フック](./player-web.ja.md#テスト用フック)（`window.__beMusicTest`）に答えるのは `services/test-hook.ts` です。読まれるたびに、シーンルーターが出しているシーン、選曲画面のカーソルとその下のバーの自己ベスト、stage のプレイ、ライブラリ、コースのプレイ、作成中のコースを読みます。結果、リプレイ、読み込みの完了など、アプリが渡すものは `test-hook.ts` が足します。読むだけで何も始めず、アプリがすでに持っているものからすぐに答えます。バーの自己ベストは選曲画面と同じく今の判定ルールのものです。譜面の自己ベストは、選曲画面がその譜面のハッシュを計算したあとはハッシュで、それまではパスで探すので、読んでも譜面のハッシュは計算しません。
 
 **Debug Menu。** [Debug Menu](#debug-menu) は `ui/debug-menu/` にあります。`DebugMenu`（`index.ts`）がフォルダーごとのモジュールでメニューを組み立て、アプリには `DebugMenuDeps` を通してだけ触れます。アプリが設定、ライブラリ・記録・コースメーカーのサービス、アプリの状態を読む関数、アプリの操作をそこに渡します。フォルダー名と開閉状態の記憶は `folders.ts`、プレイ中に確定したオプションとスキンの操作にかけるロックは `play-lock.ts` です。beatoraja のスキンオプションのパネルは `ui/beatoraja-skin-options.ts` です。
 
@@ -933,4 +931,33 @@ controller.dispose();
 
 Native の各画面は `@be-music/player-ui` の Lit 製 Web Components で組み立て、スキン側はフレームと操作イベントの受け渡しを担当します。同じ画面とパネルを `@be-music/player-ui-react`・`@be-music/player-ui-vue` からも使えます。[Player UI ガイド](../packages/player-ui/README.ja.md) と [ADR 0013](./adr/0013-player-ui-components.ja.md) を参照してください。
 
-計測手順、Lua キャッシュを見送った理由、プレイ中のメモリ確保の比較は[ブラウザプレイヤーのパフォーマンス計測](./player-performance.ja.md)を参照してください。
+描画の契約と計測手順は[性能仕様](./player-performance.ja.md)を参照してください。
+
+## ブラウザー検証
+
+`pnpm run test:e2e` は `packages/app-play/e2e/*.spec.ts` を Playwright の Chromium で実行します。設定は `packages/app-play/e2e/playwright.config.ts` です。プレイヤーをビルドし、専用の空きポートで配信し、一時ディレクトリに作った譜面・コース・スキンをドロップして操作します。通常の `pnpm test` とは別に実行します。
+
+初回は `pnpm exec playwright install chromium` でブラウザーを準備します。`E2E_WORKERS` は並列数（既定 4）、`E2E_PORT` はポートを指定します。`pnpm run test:e2e --list` で現在のテスト一覧を表示できます。失敗時の trace は `packages/app-play/e2e-results/` に残ります。
+
+コースの期待動作は本書の「コースと段位認定」と[コース仕様](./course.ja.md)に従います。テスト用スキンは `scripts/course-checklist/skins/`、手動確認用データの生成は `node scripts/course-checklist/fixtures.ts <dir>` です。実際のスキンの描画と音声は、そのスキンを読み込んで確認します。
+
+- **CI では**（[`e2e.yml`](../.github/workflows/e2e.yml)）、プレイヤーかそれが取り込むパッケージを変えるプルリクエストでスモークを実行します。`@smoke` のタグ（`support.ts` の `SMOKE`）を付けたテストで、領域とスキンの種類ごとに 1 つの流れを確かめます（手元では `pnpm run test:e2e --grep @smoke`）。毎晩 3 時（日本時間）には `devel` で全件を実行し、手動の実行ではどちらかを選べます。CI では失敗したテストをもう一度実行し、そこで通れば不安定なテスト（flaky）として数えます。失敗した実行は HTML のレポートとトレースを残します。新しいテストに `@smoke` を付けるのは、スモークがまだ通っていない流れを確かめるときだけにします。
+
+### テスト用フック
+
+URL に `?e2e=1` を付けるか開発ビルドで動かすと、プレイヤーの起動処理（`main.ts`）が、アプリを始める前に `window.__beMusicTest` を置きます。[`test-hook.ts`](../packages/app-play/src/test-hook.ts) が契約とアプリから渡されたものの記録を持ち、[`services/test-hook.ts`](../packages/app-play/src/services/test-hook.ts) がアプリの今の状態を読みます。フックは表示しているものを読むだけのもので、読んでも何も始めません（譜面のハッシュを計算することもありません）。バーの自己ベストのランプとトロフィーは、選曲画面と同じく今の判定ルールのものです。ホストが持っている状態と、ホストが渡す結果画面とリプレイの中身を読み、プレイヤーを操作することはありません。ファイルはページのドロップの処理から読み込みます。
+
+項目の意味を変えるときは `version` を上げます。
+
+| メンバー                          | 内容                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`                         | 契約のバージョン（1）。                                                                                                                                                                                                                                                                                                                                                       |
+| `state().scene`                   | `{ kind, family }`：`select`、`decide`、`play`、`result`、`none`（画面の切り替えの途中）と、描いているスキンの種類（`built-in`、`lr2`、`beatoraja`）。                                                                                                                                                                                                                        |
+| `state().status`、`statusLog`     | ステータス行と、これまでに出たすべてのステータス行。                                                                                                                                                                                                                                                                                                                          |
+| `state().loading`、`loads`        | ドロップしたファイルを読んでいる最中かどうかと、読み込みを終えたドロップ（とファイルの選択）の数。                                                                                                                                                                                                                                                                            |
+| `state().library`                 | 譜面の数とコースのフォルダの名前。                                                                                                                                                                                                                                                                                                                                            |
+| `state().cursor`                  | 選曲画面で開いているフォルダとカーソルの下のバー（種類、タイトル。コースなら種類、ステージのタイトル、欠けたステージの数、遊べるかどうか、LR2 の NEW COURSE かどうか。そのバーの自己ベストのランプとトロフィー）。標準と LR2 の画面では一覧の形も（`list`：ソート、キーモードフィルター、難易度フィルターを `@be-music/player-scene-model` の名前で、検索を入力したままで）。 |
+| `state().play`                    | 表示中のプレイ：タイトル、AUTO、リプレイかどうか、テンポ、HIGH-SPEED（LR2 と標準）、譜面の秒数、ここまでの判定とゲージ、コースのステージ（コース名、何曲目か、曲数）。                                                                                                                                                                                                        |
+| `state().courseDraft`             | 作っているコースの種類と曲。                                                                                                                                                                                                                                                                                                                                                  |
+| `state().results`                 | これまでに出た結果画面（古い順）：プレイの種類（`single`、`stage`、`course`、`nonstop`）、スキンの種類、タイトル、ランプ、クリアかどうか、EX スコア、判定、ゲージ、PLAY TIME、結果の曲の取得元（`lr2:courseClear`、`beatoraja:fail` など）。コースなら、各ステージの判定、持ち越したゲージと最後のゲージ、投げたかどうか、到達したステージの数。                              |
+| `state().replays`、`lastReplay()` | 終わったプレイが記録したリプレイの数と、最後のリプレイ（1 曲のプレイ、コースのステージ、NONSTOP のプレイ）。                                                                                                                                                                                                                                                                  |

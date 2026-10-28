@@ -2,8 +2,6 @@
 
 # Seek is a play-loop command
 
-Supersedes [ADR 0015](./0015-preview-seek.md).
-
 ## Context
 
 ADR 0015 let an AUTO play start partway (`startAtSeconds`), and the browser sought by stopping the engine and launching it again there. Seeking from outside the engine left defects that patches could not remove:
