@@ -22,9 +22,9 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 - `leaderboard.be-music.app` のルートのページ: 新着スコアとコースのプレイ（トップ）、スコア、譜面のランキング、作品、コース、
   コースのプレイ、プレイヤー。
 
-未実装: 新しい `#RANDOM` の結果に対する L4 と L5、ライバル、OG カード。
+未実装: 新しい `#RANDOM` の結果に対する L4 と L5、ライバル。スコア共有画像はブラウザーで生成し、`PUT /api/v0/scores/:id/card` で送信して `/scores/:id/card` で配信します。
 
-スコアの送信を、Worker が確かめる順に示します（`src/api/v0.ts`、`src/scores/submit.ts`）。クライアントを含む全体のシーケンスは [docs/leaderboard.ja.md 5.2 節](../../docs/leaderboard.ja.md#52-シーケンス) にあります。
+スコアの送信を、Worker が確かめる順に示します（`src/api/v0.ts`、`src/scores/submit.ts`）。クライアントを含む全体のシーケンスは [docs/leaderboard.ja.md 5.2 節](../../docs/leaderboard.ja.md#52-送信処理) にあります。
 
 ```mermaid
 flowchart TD

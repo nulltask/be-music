@@ -4,7 +4,7 @@
 
 A **course** chains several charts into one run. The best-known kind is **dan certification (段位認定)**: the stages are played back to back on one shared class gauge, and the whole run gets a single result. LR2 and beatoraja each define courses in their own formats, and difficulty tables publish theirs inside the table header. be-music reads all three into one model, `CourseDefinition` in `@be-music/player-engine/course`, so nothing downstream needs to know where a course came from.
 
-This document covers the course model and how each format maps onto it. The play rules (class gauges, carried state, the course result) and the replay are covered in their own sections as they land.
+This document defines the course model, format mappings, play rules, records and replays. See the [browser player specification](./player-web.md#courses-and-dan-certification) for scene transitions.
 
 ```mermaid
 flowchart LR
@@ -137,7 +137,7 @@ No source, so refused: `song.folder`, `stagefile`, `banner`, `backbmp`, `preview
 
 ## NONSTOP courses
 
-An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). NONSTOP is LR2-only and BMS-only. This section covers how the stages are placed and stitched; the browser player plays the stitched chart ([player-web.md](player-web.md)).
+An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). The LR2-compatible placement accepts BMS stages. The intended placement also accepts bmson stages and mixed courses. This section covers how the stages are placed and stitched; the browser player plays the stitched chart ([player-web.md](player-web.md)).
 
 **Connections.** Each stage but the last has a connection to the next, stored in the first ten characters of the course hash (`courseKeys`, `0`-`5`) and read by `parseLR2NonstopConnections` into `CourseDefinition.connections`:
 
@@ -179,7 +179,7 @@ flowchart LR
 - **For the host.** The result's map gives each stage its keys (for its sound bus and BGA layer), its window, the sound fades and the 3 s BGA crossfade the connection calls for, and whether LR2 announces the stage (only after a BLANK connection), plus the BPM readout (`tempo`) and the judge rank changes (`stageRanks`, for the engine's `stageRanks` option, which the replay records as `chart.judgeRank.stageRanks` so a replay and a re-simulation judge with them). `assetPath` lets the host prefix each stage's file paths.
 - **Not covered yet.** The scroll of an object of one stage that sounds during another stage's STOP.
 
-**bmson stages.** Under `placement: 'intended'`, any bmson stage makes the output a bmson IR chart, including mixed BMS/bmson courses. LR2 placement refuses bmson. The stitch retains source-audio slice coordinates, continuation flags, long-note modes, hidden keysounds, mine damage and BGA layers. FIT preserves source-audio coordinates; keep-pitch playback converts them into stretched-buffer coordinates. LR2 and beatoraja apply each stage's own judge-rank units (`bmson` for raw `judge_rank`, `chart` for BMS `#RANK`, `bms-exrank` for `#DEFEXRANK`). The last stage's TOTAL retains its absolute or percentage unit. Course fingerprints still use the original stage fingerprints, and stitch version 1 remains valid because these courses were previously unplayable. See [ADR 0017](./adr/0017-bmson-nonstop.md).
+**bmson stages.** Under `placement: 'intended'`, any bmson stage makes the output a bmson IR chart, including mixed BMS/bmson courses. LR2 placement refuses bmson. The stitch retains source-audio slice coordinates, continuation flags, long-note modes, hidden keysounds, mine damage and BGA layers. FIT preserves source-audio coordinates; keep-pitch playback converts them into stretched-buffer coordinates. LR2 and beatoraja apply each stage's own judge-rank units (`bmson` for raw `judge_rank`, `chart` for BMS `#RANK`, `bms-exrank` for `#DEFEXRANK`). The last stage's TOTAL retains its absolute or percentage unit. Course fingerprints still use the original stage fingerprints, and the stitch version is 1. See [ADR 0017](./adr/0017-bmson-nonstop.md).
 
 **The pipeline** (`prepareNonstopCourse`, `resolveNonstopRun`, `buildNonstopCourseReplay`). A host stitches a course to play it, and the Leaderboard rebuilds a run's stitched chart to verify it, with the same steps, so the two agree on the chart that was played:
 

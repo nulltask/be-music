@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
 /**
- * The course browser checklist run end to end (`docs/course-checklist.md`): the player is built and served on a free
+ * The course browser checklist run end to end (`docs/player-web.md#browser-verification`): the player is built and served on a free
  * port, the checklist fixtures (charts, course files, minimal LR2 / beatoraja skins) are written to a temp dir by the
  * global setup, and the specs drive the player through synthetic drops and keys, asserting on `window.__beMusicTest`.
  *

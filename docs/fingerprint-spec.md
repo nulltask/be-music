@@ -4,8 +4,6 @@
 
 > Status: implemented in `@be-music/chart-model` and recorded in replays (section 7). Algorithm version: `bmfp0`.
 
-The abbreviation naming migration changes the canonical document key `baseBpm` to `baseBPM`, including header deltas. This changes existing `bmfp0` values even when the chart plays identically; course fingerprints containing those values also change. Recompute fingerprints and regenerate canonical documents from the chart when migrating stored data. The development version remains `bmfp0`.
-
 The Be-Music Fingerprint identifies a chart by **what the player plays and sees in the lanes**, not by the bytes of the file. Two chart files get the same fingerprint when they play the same, even if:
 
 - one has no BGA, a different BGM, other keysounds, or other metadata;
