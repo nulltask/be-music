@@ -8,7 +8,7 @@ import {
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { LibraryChart } from '@be-music/player-scene-model';
-import type { BrowserAssetSource } from '../collection/types.ts';
+import type { BrowserAssetEntry, BrowserAssetSource } from '../collection/types.ts';
 
 /**
  * Sample-amplitude threshold below which we treat audio as silent for the leading-silence trim. Mirrors
@@ -359,20 +359,35 @@ export class ChartPreviewEngine {
     await this.playInPlace(target, sequence);
   }
 
-  private async playPreviewFile(target: ChartPreviewTarget, previewPath: string, sequence: number): Promise<void> {
-    const entry = resolveChartAudioAsset(target.source, target.chart.chartPath, previewPath);
-    const bytes = await loadAssetBytes(entry);
-    if (!bytes) return;
-    if (this.isStale(sequence)) return;
-    let buffer: AudioBuffer;
-    try {
-      buffer = await this.audioContext.decodeAudioData(bytes.slice().buffer);
-    } catch {
-      // Codec mismatch or corrupt file. Silently skip — the user will see the focused bar but hear nothing, which is
-      // strictly better than throwing into the rAF tick.
-      return;
+  private async decodeChartAudio(
+    target: ChartPreviewTarget,
+    path: string,
+    sequence: number,
+  ): Promise<AudioBuffer | undefined> {
+    const attempted = new Set<BrowserAssetEntry>();
+    while (!this.isStale(sequence)) {
+      const entry = resolveChartAudioAsset(target.source, target.chart.chartPath, path, {
+        pathPrefix: target.chart.chart.bms.pathWAV,
+        ...(attempted.size ? { excludedEntries: attempted } : {}),
+      });
+      if (entry === undefined || attempted.has(entry)) return undefined;
+      attempted.add(entry);
+      try {
+        const bytes = await loadAssetBytes(entry);
+        if (this.isStale(sequence)) return undefined;
+        if (!bytes) continue;
+        const buffer = await this.audioContext.decodeAudioData(bytes.slice().buffer);
+        return this.isStale(sequence) ? undefined : buffer;
+      } catch {
+        // A missing or unsupported candidate may still have a playable alternate codec.
+      }
     }
-    if (this.isStale(sequence)) return;
+    return undefined;
+  }
+
+  private async playPreviewFile(target: ChartPreviewTarget, previewPath: string, sequence: number): Promise<void> {
+    const buffer = await this.decodeChartAudio(target, previewPath, sequence);
+    if (!buffer) return;
     // LR2 / packages/player-engine both trim leading silence from the preview rendering so the user hears the first audible
     // sample the moment the focus delay elapses, not several hundred milliseconds of "did anything happen?" silence
     // baked into the source file. Web Audio's `start(when, offset)` is exactly the right tool: skip past the silent
@@ -423,17 +438,8 @@ export class ChartPreviewEngine {
         if (this.isStale(sequence)) return;
         const path = chart.resources.wav[key];
         if (typeof path !== 'string') return;
-        const entry = resolveChartAudioAsset(target.source, target.chart.chartPath, path);
-        const bytes = await loadAssetBytes(entry);
-        if (!bytes) return;
-        if (this.isStale(sequence)) return;
-        try {
-          const buffer = await this.audioContext.decodeAudioData(bytes.slice().buffer);
-          if (this.isStale(sequence)) return;
-          buffers.set(key, buffer);
-        } catch {
-          // Skipped — same rationale as the file branch above.
-        }
+        const buffer = await this.decodeChartAudio(target, path, sequence);
+        if (buffer) buffers.set(key, buffer);
       }),
     );
     if (this.isStale(sequence)) return;

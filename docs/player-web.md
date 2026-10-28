@@ -188,6 +188,8 @@ An arrow points from a module to one it makes or uses. The app also makes the sc
 - Folder walking and file reads use bounded concurrency and progress callbacks so large folders can load without flooding the browser's FileSystem APIs or UI update loop.
 - Parse errors are accumulated in the collection instead of aborting the whole drop.
 
+Gameplay and select previews try the next distinct audio asset when reading or decoding a codec candidate fails. The existing order stays Opus → Ogg → MP3 → WAV → M4A → the declared path; folder lookup, case-insensitive matching and `#PATH_WAV` still apply. A cancelled or superseded load stops before the next attempt. NONSTOP sources retain each stage's candidate chain in `BrowserAssetSource.audioFallbacks`, keyed by its stitched resource path, so failed codecs can still fall back across original stage folders. Decoded samples remain keyed by the chart's declared resource name.
+
 ## Courses and dan certification
 
 Courses play through the same select → play → result scenes. See [Courses and dan certification](./course.md) for the rules.

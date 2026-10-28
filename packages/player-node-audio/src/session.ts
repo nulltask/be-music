@@ -361,6 +361,7 @@ export async function loadNodeAudioSampleDurations(
     throwIfAborted(signal);
     const rendered = await renderSingleSample(trigger.sampleKey, trigger.samplePath, {
       baseDir: baseDir ?? resolveDefaultBaseDir(),
+      pathPrefix: resolved.source.bms.pathWAV,
       sampleRate: DEBUG_ACTIVE_AUDIO_SAMPLE_RATE,
       gain: 1,
       fallbackToneSeconds: DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS,
@@ -734,6 +735,7 @@ async function buildRuntimeSampleMap(
     const sourcePath = json.resources.wav[key];
     const rendered = await renderSingleSample(key, sourcePath, {
       baseDir: options.audioBaseDir ?? resolveDefaultBaseDir(),
+      pathPrefix: json.bms.pathWAV,
       sampleRate,
       gain: chartWAVGain,
       fallbackToneSeconds:

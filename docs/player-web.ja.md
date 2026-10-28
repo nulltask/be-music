@@ -186,6 +186,8 @@ flowchart TD
 - folder walking と file read は bounded concurrency と progress callback を使い、大きな folder でも browser の FileSystem API や UI update loop を過剰に詰まらせないようにします。
 - parse error は drop 全体を abort せず、collection に蓄積します。
 
+演奏と選曲プレビューは、候補音声の読み込みやデコードに失敗すると、次の異なる素材を試します。探索順は既存の Opus → Ogg → MP3 → WAV → M4A → 宣言されたパスを維持し、フォルダー探索・大文字小文字を区別しない照合・`#PATH_WAV` も適用します。読み込みが中断されたり選曲が変わったりした場合は、次の候補を試しません。NONSTOP の音声は、連結後のリソースパスをキーとする `BrowserAssetSource.audioFallbacks` に各ステージの候補列を保持し、元のステージの別フォルダーにある形式にも切り替えます。デコード結果は引き続き譜面で宣言されたリソース名をキーに保持します。
+
 ## コースと段位認定
 
 コースも、選曲 → プレイ → 結果の同じシーンで遊びます。規則は [コースと段位認定](./course.ja.md) を参照してください。

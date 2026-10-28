@@ -8,7 +8,7 @@ import { collectBMSExWAVVolumeMultipliers, collectBmsWAVCmdVolumeMultipliers } f
 import { resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
-import type { BrowserAssetSource } from '../collection/types.ts';
+import type { BrowserAssetEntry, BrowserAssetSource } from '../collection/types.ts';
 import {
   resolveSampleStretchRates,
   stretchDecodedSamples,
@@ -62,7 +62,7 @@ export interface LoadPlaySamplesOptions {
 /**
  * Decodes every `#WAVxx` sample of the chart into `samples` (codec fallbacks via `resolveChartAudioAsset`, honouring
  * `#PATH_WAV`) and, for keep pitch, stretches them to the play tempo once so they then play at their own pitch.
- * Samples the browser can't decode are skipped. Resolves `true` when the samples were stretched.
+ * Decode or read failures advance to the next distinct asset; a sample with no playable candidate is skipped. Resolves `true` when the samples were stretched.
  */
 export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<boolean> {
   const { audioContext, chart, source, chartPath, samples } = options;
@@ -73,17 +73,28 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   const pathPrefix = typeof chart.bms.pathWAV === 'string' ? chart.bms.pathWAV : undefined;
   await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
     if (isCancelled()) return;
-    // Audio entries are lazy `File` references; `loadAssetBytes` reads this chart's bytes on demand.
-    const bytes = await loadAssetBytes(resolveChartAudioAsset(source, chartPath, path, { pathPrefix }));
-    if (!bytes || isCancelled()) return;
-    try {
-      const decoded = await audioContext.decodeAudioData(bytes.slice().buffer);
-      if (isCancelled()) return;
-      // Keyed by the chart's `#WAV` value (not the codec file found), as the audio session looks it up.
-      samples.set(decodedSampleKey(path), decoded);
-    } catch (error) {
-      // Unsupported codecs are skipped, and so is a decode cut short by the context closing (ESC during loading).
-      log.debug('decode skipped', { path, error });
+    const attempted = new Set<BrowserAssetEntry>();
+    while (!isCancelled()) {
+      const entry = resolveChartAudioAsset(source, chartPath, path, {
+        pathPrefix,
+        ...(attempted.size ? { excludedEntries: attempted } : {}),
+      });
+      if (entry === undefined || attempted.has(entry)) return;
+      attempted.add(entry);
+      try {
+        // Lazy audio files are read only when their codec candidate is attempted.
+        const bytes = await loadAssetBytes(entry);
+        if (isCancelled()) return;
+        if (!bytes) continue;
+        const decoded = await audioContext.decodeAudioData(bytes.slice().buffer);
+        if (isCancelled()) return;
+        // Keep the declared WAV name as the key even when an alternate codec supplied the PCM.
+        samples.set(decodedSampleKey(path), decoded);
+        return;
+      } catch (error) {
+        if (isCancelled()) return;
+        log.debug('decode candidate skipped', { path, error });
+      }
     }
   });
   let stretched = false;
