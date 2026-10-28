@@ -280,6 +280,7 @@ A full example:
 
 `metadata` is the normalized, format-neutral metadata area.
 
+- `titleImage`: bmson `info.title_image`, the pre-play title artwork, independent of the loading image
 - `stageFile`: BMS `#STAGEFILE`; bmson mirrors `info.eyecatch_image` here when present
 - `backBMP`: BMS `#BACKBMP`; bmson mirrors `info.back_image` here when present
 - `banner`: BMS `#BANNER`; bmson mirrors `info.banner_image` here when present

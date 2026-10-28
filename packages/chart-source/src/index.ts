@@ -14,6 +14,8 @@ export interface BeMusicMetadata {
   comment?: string;
   /** `#STAGEFILE`: full-size loading screen image. */
   stageFile?: string;
+  /** bmson `info.title_image`: title artwork shown before play, distinct from the loading image. */
+  titleImage?: string;
   /** `#BACKBMP`: select-screen banner / preview image (typically 256×256). */
   backBMP?: string;
   /** `#BANNER`: small banner image (typically 300×80). */
@@ -96,6 +98,7 @@ export interface BmsonInfoExtensions {
   lnType?: number;
   backImage?: string;
   eyecatchImage?: string;
+  titleImage?: string;
   bannerImage?: string;
   previewMusic?: string;
 }

@@ -48,6 +48,7 @@ function areMetadataEqual(left: BeMusicJSON['metadata'], right: BeMusicJSON['met
     left.genre === right.genre &&
     left.comment === right.comment &&
     left.stageFile === right.stageFile &&
+    left.titleImage === right.titleImage &&
     left.playLevel === right.playLevel &&
     left.rank === right.rank &&
     left.total === right.total &&

@@ -280,6 +280,7 @@ classDiagram
 
 `metadata` は、format に依存しない normalized metadata 領域です。
 
+- `titleImage`: bmson の `info.title_image`。読み込み画像とは別の、演奏前のタイトル画像
 - `stageFile`: BMS `#STAGEFILE`。bmson では `info.eyecatch_image` が存在する場合にここへ mirror します
 - `backBMP`: BMS `#BACKBMP`。bmson では `info.back_image` が存在する場合にここへ mirror します
 - `banner`: BMS `#BANNER`。bmson では `info.banner_image` が存在する場合にここへ mirror します

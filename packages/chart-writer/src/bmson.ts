@@ -303,6 +303,9 @@ function createPreservedBmsonInfoForOutput(json: BeMusicJSON, resolution: number
   if (typeof info.eyecatchImage === 'string') {
     output.eyecatch_image = info.eyecatchImage;
   }
+  if (typeof info.titleImage === 'string') {
+    output.title_image = info.titleImage;
+  }
   if (typeof info.bannerImage === 'string') {
     output.banner_image = info.bannerImage;
   }
@@ -419,6 +422,9 @@ function createBmsonInfoForOutput(json: BeMusicJSON, resolution: number, modeHin
   }
   if (typeof info.eyecatchImage === 'string') {
     output.eyecatch_image = info.eyecatchImage;
+  }
+  if (typeof info.titleImage === 'string') {
+    output.title_image = info.titleImage;
   }
   if (typeof info.bannerImage === 'string') {
     output.banner_image = info.bannerImage;

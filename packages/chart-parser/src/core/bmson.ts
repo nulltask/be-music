@@ -29,6 +29,7 @@ export interface BmsonInfo {
   ln_type?: number;
   back_image?: string;
   eyecatch_image?: string;
+  title_image?: string;
   banner_image?: string;
   preview_music?: string;
 }
@@ -489,6 +490,7 @@ export function normalizeBmsonInfoForIR(info: BmsonInfo, resolution: number): Be
   copyIfString(normalized, 'modeHint', info.mode_hint);
   copyIfString(normalized, 'backImage', info.back_image);
   copyIfString(normalized, 'eyecatchImage', info.eyecatch_image);
+  copyIfString(normalized, 'titleImage', info.title_image);
   copyIfString(normalized, 'bannerImage', info.banner_image);
   copyIfString(normalized, 'previewMusic', info.preview_music);
 
@@ -810,6 +812,7 @@ function normalizeBmsonInfoFromIR(input: unknown): BeMusicJSON['bmson']['info'] 
   copyIfString(info, 'modeHint', raw.modeHint ?? raw.mode_hint);
   copyIfString(info, 'backImage', raw.backImage ?? raw.back_image);
   copyIfString(info, 'eyecatchImage', raw.eyecatchImage ?? raw.eyecatch_image);
+  copyIfString(info, 'titleImage', raw.titleImage ?? raw.title_image);
   copyIfString(info, 'bannerImage', raw.bannerImage ?? raw.banner_image);
   copyIfString(info, 'previewMusic', raw.previewMusic ?? raw.preview_music);
 

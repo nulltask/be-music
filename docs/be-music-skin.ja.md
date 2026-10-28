@@ -431,7 +431,7 @@ settings: [
 
 ## 曲の画像
 
-`chartImage(song, kind)` はすべてのフレーム（選曲、決定、ゲームプレイ、リザルト）にあります。曲の `'stageFile'`、`'banner'`、`'backBMP'` を `ImageBitmap` で返すので、そのまま `drawImage` やテクスチャのアップロードに使えます。
+`chartImage(song, kind)` はすべてのフレーム（選曲、決定、ゲームプレイ、リザルト）にあります。譜面の `'stageFile'`、`'banner'`、`'backBMP'`、`'titleImage'` を `ImageBitmap` で返すので、そのまま `drawImage` やテクスチャのアップロードに使えます。
 
 - 画像は遅延読み込みです。デコード中の最初の呼び出しは `undefined` を返し、準備ができると画面が描き直されます（選曲では `revision` が進みます）。
 - 曲にその画像がない場合や、ホストが画像を提供しない場合も `undefined` を返すので、必ず代替表示を用意してください。

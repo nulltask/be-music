@@ -431,7 +431,7 @@ settings: [
 
 ## Song images
 
-`chartImage(song, kind)` is on every frame (select, decide, gameplay, and result). It returns the song's `'stageFile'`, `'banner'`, or `'backBMP'` as an `ImageBitmap`, ready for `drawImage` or a texture upload.
+`chartImage(song, kind)` is on every frame (select, decide, gameplay, and result). It returns the chart's `'stageFile'`, `'banner'`, `'backBMP'`, or `'titleImage'` as an `ImageBitmap`, ready for `drawImage` or a texture upload.
 
 - Images load lazily. The first calls return `undefined` while an image decodes; the screen is redrawn once it is ready (on select, `revision` moves).
 - It also returns `undefined` when the song has no such image or the host doesn't provide images, so always draw a fallback.
