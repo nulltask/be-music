@@ -75,14 +75,17 @@ export async function loadFrameSource(
   imageResizeAlgorithm: ImageResizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
   videoBGAStreaming = true,
   signal?: AbortSignal,
+  preserveSourceGeometry = false,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
-  const imageFrame = await loadImageAsSpecFrame(resourcePath, mode, imageResizeAlgorithm, signal);
+  const imageFrame = preserveSourceGeometry
+    ? await loadImageAsSourceFrame(resourcePath, mode, signal)
+    : await loadImageAsSpecFrame(resourcePath, mode, imageResizeAlgorithm, signal);
   if (imageFrame) {
     return createStaticFrameSource(imageFrame);
   }
 
-  return loadVideoAsFrameSource(resourcePath, mode, videoBGAStreaming, signal);
+  return loadVideoAsFrameSource(resourcePath, mode, videoBGAStreaming, signal, preserveSourceGeometry);
 }
 
 async function loadVideoAsFrameSource(
@@ -90,6 +93,7 @@ async function loadVideoAsFrameSource(
   mode: FrameMode,
   videoBGAStreaming = true,
   signal?: AbortSignal,
+  preserveVideoBorders = false,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
   const frames: TimedANSIFrame[] = [];
@@ -125,6 +129,7 @@ async function loadVideoAsFrameSource(
         format: 'video',
       },
       mode,
+      preserveVideoBorders,
     );
     frames.push({
       seconds: frame.seconds,
@@ -219,6 +224,7 @@ async function loadVideoAsFrameSource(
           },
           signal,
           {
+            preserveVideoBorders,
             onReady: (info) => {
               source.durationSeconds = info.durationSeconds;
             },

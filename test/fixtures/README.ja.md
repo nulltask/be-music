@@ -121,3 +121,5 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 ## 動画アセット
 
 `bga-hevc.mp4` と `bga-vp9.webm` は16×16ピクセルの赤い動画を生成したもの（1 fps、2フレーム）です。`player-terminal/src/bga-video.test.ts` で実際の HEVC／VP9 デコードと先頭1フレームの制限を検証します。第三者の素材は含みません。FFmpeg の color 入力に `-frames:v 2 -pix_fmt yuv420p` と、それぞれ `-c:v libx265 -tag:v hvc1` または `-c:v libvpx-vp9` を指定して再生成できます。
+
+`bga-bordered.webm` は黒枠の内側の16×16領域が赤から緑へ変わる32×32の VP9 動画を生成したものです（2 fps、2フレーム）。Terminal の元画像座標での切り出しと、再生中に届く後続フレームを検証します。FFmpeg で red と lime の16×16 color 入力をそれぞれ `r=2:d=0.5,pad=32:32:8:8:color=black` で生成し、`[0:v][1:v]concat=n=2:v=1:a=0` で連結して `-c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p` でエンコードできます。第三者の素材は含みません。

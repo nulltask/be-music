@@ -11,6 +11,7 @@ interface VideoDecodeWorkerInitData {
   videoPath: string;
   mode: FrameMode;
   stopAfterFirstFrame: boolean;
+  preserveVideoBorders: boolean;
 }
 
 interface ANSIFrame {
@@ -60,7 +61,7 @@ async function bootstrap(): Promise<void> {
     const result = await decodeVideoFramesStreamDirect(
       initData.videoPath,
       (frame) => {
-        const sourceFrame = convertDecodedVideoFrameToSourceFrame(frame, initData.mode);
+        const sourceFrame = convertDecodedVideoFrameToSourceFrame(frame, initData.mode, initData.preserveVideoBorders);
         postMessage(
           {
             kind: 'frame',
@@ -106,7 +107,11 @@ function postMessage(message: unknown, transferList?: ArrayBuffer[]): void {
   port?.postMessage(message, transferList ?? []);
 }
 
-function convertDecodedVideoFrameToSourceFrame(frame: DecodedVideoFrame, mode: FrameMode): ANSIFrame {
+function convertDecodedVideoFrameToSourceFrame(
+  frame: DecodedVideoFrame,
+  mode: FrameMode,
+  preserveVideoBorders: boolean,
+): ANSIFrame {
   const safeWidth = Math.max(1, Math.floor(frame.width));
   const safeHeight = Math.max(1, Math.floor(frame.height));
   const sourceFrame = createSolidANSIFrame(safeWidth, safeHeight, 0, 0, 0, 0);
@@ -131,7 +136,7 @@ function convertDecodedVideoFrameToSourceFrame(frame: DecodedVideoFrame, mode: F
     }
   }
 
-  return trimBlackVideoFrameBorders(sourceFrame);
+  return preserveVideoBorders ? sourceFrame : trimBlackVideoFrameBorders(sourceFrame);
 }
 
 function createSolidANSIFrame(

@@ -382,7 +382,11 @@ function lanczosKernel(value: number): number {
   return sinc(distance) * sinc(distance / 3);
 }
 
-export function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode): ANSIFrame {
+export function convertImageToSourceFrame(
+  image: DecodedImage,
+  mode: FrameMode,
+  preserveVideoBorders = false,
+): ANSIFrame {
   const safeWidth = Math.max(1, Math.floor(image.width));
   const safeHeight = Math.max(1, Math.floor(image.height));
   const sourceFrame = createSolidANSIFrame(safeWidth, safeHeight, 0, 0, 0, 0);
@@ -407,7 +411,7 @@ export function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode):
     }
   }
 
-  return image.format === 'video' ? trimBlackVideoFrameBorders(sourceFrame) : sourceFrame;
+  return image.format === 'video' && !preserveVideoBorders ? trimBlackVideoFrameBorders(sourceFrame) : sourceFrame;
 }
 
 function trimBlackVideoFrameBorders(source: ANSIFrame): ANSIFrame {
