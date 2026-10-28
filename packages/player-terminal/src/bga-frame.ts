@@ -103,7 +103,9 @@ function createConvertImageToSpecFrameWorker(): WorkerizedSpecFrameConverter {
       SPEC_BGA_CANVAS_SIZE,
       TRANSPARENT_ALPHA_THRESHOLD,
     ],
-    true,
+    // Plain image/frame records need only structured cloning. isoworker's argument serializer transfers their
+    // buffers, leaving fallback conversion with detached pixel data when worker startup or execution fails.
+    false,
   ) as WorkerizedSpecFrameConverter;
 }
 
