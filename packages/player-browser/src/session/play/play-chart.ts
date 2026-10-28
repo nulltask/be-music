@@ -1,3 +1,4 @@
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 /**
  * Chart preparation for a play (`PlaySession`), whichever family draws it: resolves the chart's `#RANDOM` / `#SWITCH`
  * control flow, prepares the notes the engine judges and the view draws (one shared `PreparedPlaybackChartData`),
@@ -17,6 +18,7 @@ import {
 } from '@be-music/player-scene-model';
 import {
   resolvePoorBGAMode,
+  buildBGAOpacityTimelines,
   PLAY_MODE_LAYOUTS,
   parseBMSSwBGA,
   resolveChart,
@@ -212,7 +214,7 @@ export interface PlayChartContext {
   fullComboFired: boolean;
   timingResolver: TimingResolver | undefined;
   nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
-  bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[] };
+  bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[]; opacity?: BGAOpacityTimelines };
   poorBGAMode: 0 | 1 | 2;
   poorBGAFallbackKey: string | undefined;
   poorBGAFallbackUntilSeconds: number;
@@ -684,6 +686,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
     : new Set();
   ctx.bgaTimeline = toBrowserBGATimeline(resolvedPlay.bga);
+  const opacity = buildBGAOpacityTimelines(resolvedPlay.source, resolvedPlay.timing);
+  if ([opacity.base, opacity.layer, opacity.layer2, opacity.poor].some((cues) => cues.length > 0)) {
+    ctx.bgaTimeline.opacity = opacity;
+  }
   ctx.nonstopBGATimelines =
     ctx.options.nonstop !== undefined
       ? splitNonstopBGATimeline(ctx.bgaTimeline, ctx.options.nonstop.stages)

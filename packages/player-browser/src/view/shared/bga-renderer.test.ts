@@ -152,6 +152,77 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     state.dispose();
   });
 
+  test('multiplies each plane opacity by the skin alpha and uses the frozen cue clock', () => {
+    const state = setup(1);
+    Object.assign(state.play.bgaTimeline, {
+      opacity: {
+        base: [
+          { seconds: 2, opacity: 0.5 },
+          { seconds: 4, opacity: 1 },
+        ],
+        layer: [{ seconds: 2, opacity: 0.25 }],
+        layer2: [{ seconds: 2, opacity: 0.125 }],
+        poor: [{ seconds: 2, opacity: 0.75 }],
+      },
+    });
+    Object.assign(state.ctx.playfieldSkin, {
+      bgaTargets: (out: unknown[]) =>
+        out.push({
+          x: 0,
+          y: 0,
+          w: 256,
+          h: 256,
+          applyToSprite: (sprite: Sprite) => {
+            sprite.alpha = 0.6;
+          },
+        }),
+    });
+    state.play.lastPoorAt = 0;
+    renderBGA(state.ctx, 3);
+    const alpha = (name: string) => state.sprites.find((sprite) => sprite.label.startsWith(`bga/${name}[`))!.alpha;
+    expect(alpha('base')).toBeCloseTo(0.3);
+    expect(alpha('layer')).toBeCloseTo(0.15);
+    expect(alpha('layer2')).toBeCloseTo(0.075);
+    expect(alpha('poor')).toBeCloseTo(0.45);
+    renderBGA(state.ctx, 10, 3);
+    expect(alpha('base')).toBeCloseTo(0.3);
+    renderBGA(state.ctx, 1.5);
+    expect(alpha('base')).toBeCloseTo(0.6);
+    state.dispose();
+  });
+
+  test('passes every NONSTOP stack and its own opacity to a Canvas skin', () => {
+    const state = setup();
+    const frames: Array<{ stacks?: Array<{ alpha: number; opacity?: { base: number } }> }> = [];
+    const timeline = { base: [{ seconds: 0, bmpKey: 'base' }], layer: [], poor: [] };
+    const opacity = (value: number) => ({ base: [{ seconds: 0, opacity: value }], layer: [], layer2: [], poor: [] });
+    Object.assign(state.play, { nonstopBGATimelines: [timeline, timeline] });
+    Object.assign(state.ctx.options, {
+      nonstop: {
+        stages: [
+          {
+            windowStart: 0,
+            windowEnd: 2,
+            bmpKeys: ['base'],
+            bgaOpacity: opacity(0.5),
+            bgaFadeOut: { start: 2, end: 4 },
+          },
+          { windowStart: 2, windowEnd: 4, bmpKeys: [], bgaOpacity: opacity(0.25), bgaFadeIn: { start: 0, end: 2 } },
+        ],
+      },
+    });
+    Object.assign(state.ctx, {
+      skinBinding: { drawsBGA: true, setBGA: (frame: (typeof frames)[number]) => frames.push(frame) },
+      skinBGACrops: new Map(),
+    });
+    renderBGA(state.ctx, 1);
+    expect(frames[0]!.stacks!.map((stack) => [stack.alpha, stack.opacity?.base])).toEqual([
+      [1, 0.5],
+      [0.5, 0.25],
+    ]);
+    state.dispose();
+  });
+
   test.each([0, 1, 2] as const)('POORBGA %s replaces, overlays or disables POOR over both layers', (mode) => {
     const state = setup(mode);
     state.play.lastPoorAt = 0;

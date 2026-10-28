@@ -25,6 +25,63 @@ function skin(): BeatorajaSkin {
   };
 }
 
+it('applies opacity independently to base, both overlays and POOR and restores it after a seek', () => {
+  const texture = fakeTexture();
+  const cues = [{ seconds: 0, bmpKey: 'image' }];
+  const opacity = (value: number) => [{ seconds: 2, opacity: value }];
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    poorBGAMode: 1,
+    textures: new Map([['image', texture]]),
+    cues: {
+      base: cues,
+      layer: cues,
+      layer2: cues,
+      poor: cues,
+      opacity: { base: opacity(0.5), layer: opacity(0.25), layer2: opacity(0.125), poor: opacity(0.75) },
+    },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  layer.update(3, context, true);
+  const alpha = (label: string) =>
+    (layer.container.children.find((child) => child.label === `bga/${label}`) as Sprite).alpha;
+  expect(['base', 'layer', 'layer2', 'poor'].map(alpha)).toEqual([0.5, 0.25, 0.125, 0.75]);
+  layer.update(1, context, true);
+  expect(['base', 'layer', 'layer2', 'poor'].map(alpha)).toEqual([1, 1, 1, 1]);
+  layer.dispose();
+  texture.destroy(true);
+});
+
+it('uses each NONSTOP stage opacity with its own crossfade instead of the flattened opacity', () => {
+  const texture = fakeTexture();
+  const timeline = { base: [{ seconds: 0, bmpKey: 'image' }], layer: [], poor: [] };
+  const opacity = (value: number) => ({ base: [{ seconds: 0, opacity: value }], layer: [], layer2: [], poor: [] });
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    textures: new Map([['image', texture]]),
+    cues: { ...timeline, opacity: opacity(0.1) },
+    nonstop: {
+      stages: [
+        {
+          windowStart: 0,
+          windowEnd: 2,
+          bmpKeys: ['image'],
+          bgaOpacity: opacity(0.5),
+          bgaFadeOut: { start: 2, end: 4 },
+        },
+        { windowStart: 2, windowEnd: 4, bmpKeys: [], bgaOpacity: opacity(0.25), bgaFadeIn: { start: 0, end: 2 } },
+      ],
+      timelines: [timeline, timeline],
+    },
+  });
+  layer.update(1, { activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 }, false);
+  expect(layer.container.children.filter((child) => child.label === 'bga/base').map((child) => child.alpha)).toEqual([
+    0.5, 0.125,
+  ]);
+  layer.dispose();
+  texture.destroy(true);
+});
+
 describe('BeatorajaBGALayer', () => {
   it('hides missing BGA cues without swapping a rendered sprite back to Texture.EMPTY', () => {
     const validTexture = fakeTexture();

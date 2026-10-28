@@ -1,3 +1,4 @@
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
@@ -152,7 +153,13 @@ export interface BeatorajaPlayRuntime {
   readonly bgaLayerTextures: ReadonlyMap<string, Texture>;
   readonly bgaVideos: ReadonlyMap<string, { video: HTMLVideoElement }>;
   readonly poorBGAMode?: 0 | 1 | 2;
-  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[] };
+  readonly bgaTimeline: {
+    base: BGACue[];
+    layer: BGACue[];
+    layer2?: BGACue[];
+    poor: BGACue[];
+    opacity?: BGAOpacityTimelines;
+  };
   /** A stitched NONSTOP chart's cues split by stage (`splitNonstopBGATimeline`), for the BGA's crossfade at a seam. */
   readonly nonstopBGATimelines: readonly NonstopStageBGATimeline[] | undefined;
   readonly assetsLoading: boolean;

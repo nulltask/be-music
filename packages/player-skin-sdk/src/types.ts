@@ -559,13 +559,18 @@ export interface BeMusicMeasureLine {
  * Following the BMS convention, the host hands {@link layer} with pure black (`#000000`) already turned transparent,
  * while {@link base} and {@link poor} are opaque: draw the base and both overlays with plain alpha blending, without keying them again.
  * A bmson layer (whose spec keeps black opaque) and a video layer come as authored. `#SWBGA` animation frames are
- * already picked; a slot's `#ARGB` tint and opacity are left to the skin.
+ * already picked. Channel opacity (0B–0E) is supplied in `opacity`; the legacy per-slot ARGB tint interpretation
+ * remains separate from nanasi's channel-scoped ARGB commands.
  *
  * Images come at their authored size. The BGA rect stands for a 256x256 canvas: to match other BMS players, draw a
  * still image whose long edge is at most 256 px at its own size on that canvas, centered horizontally and against the
  * top edge, and stretch a larger image or a video over the whole rect.
  */
 export interface BeMusicBGAFrame {
+  /** Authored channel opacity (0..1) for each plane; omitted means opaque. */
+  opacity?: { base: number; layer: number; layer2: number; poor: number };
+  /** NONSTOP stages in back-to-front order, each with its own layers, opacity and crossfade weight. */
+  stacks?: Array<Omit<BeMusicBGAFrame, 'stacks'> & { alpha: number }>;
   /** The base layer (`#BMP` on channel 04), or a video frame. */
   base?: BeMusicImage;
   /** The layer drawn over the base (channel 07). */

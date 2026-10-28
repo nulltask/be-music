@@ -97,10 +97,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   );
   const baseCue = leading?.baseCue;
   const layerCue = leading?.layerCue;
-  const baseKey = baseCue?.bmpKey;
-  const layerKey = layerCue?.bmpKey;
   const layer2Cue = leading?.layer2Cue;
-  const layer2Key = layer2Cue?.bmpKey;
   let poorKey = ctx.play.nonstopBGATimelines !== undefined ? leading?.poorKey : undefined;
   if (inPoorWindow && ctx.play.nonstopBGATimelines === undefined) {
     poorKey = leading?.poorKey;
@@ -124,29 +121,53 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   const binding = ctx.skinBinding;
   if (binding?.drawsBGA) {
     // The skin composites the BGA itself: hand it the images and leave the BGA layer empty.
-    binding.setBGA(
+    const skinFrame = (stack: BGAStack) =>
       buildSkinBGAFrame(
         {
-          base: baseKey !== undefined ? resolveBGAFrameKey(ctx, baseKey, baseCue?.seconds, seconds) : undefined,
-          layer:
-            layerKey !== undefined ? resolveBGAFrameKey(ctx, layerKey, layerCue?.seconds, seconds, 'layer') : undefined,
-          layer2:
-            layer2Key !== undefined
-              ? resolveBGAFrameKey(ctx, layer2Key, layer2Cue?.seconds, seconds, 'layer2')
+          base:
+            stack.baseCue?.bmpKey !== undefined
+              ? resolveBGAFrameKey(ctx, stack.baseCue.bmpKey, stack.baseCue.seconds, seconds)
               : undefined,
-          poor: poorKey,
-          poorOverlays: leading?.poorOverlays,
+          layer:
+            stack.layerCue?.bmpKey !== undefined
+              ? resolveBGAFrameKey(ctx, stack.layerCue.bmpKey, stack.layerCue.seconds, seconds, 'layer')
+              : undefined,
+          layer2:
+            stack.layer2Cue?.bmpKey !== undefined
+              ? resolveBGAFrameKey(ctx, stack.layer2Cue.bmpKey, stack.layer2Cue.seconds, seconds, 'layer2')
+              : undefined,
+          poor: stack.poorKey,
+          poorOverlays: stack.poorOverlays,
+          opacity: stack.opacity,
         },
         (key, track) =>
           resolveSkinBGAImage(ctx, (track === 'layer' ? ctx.play.bgaLayerTextures : ctx.play.bgaTextures).get(key)),
-      ),
-    );
+      );
+    const frame = leading !== undefined ? skinFrame(leading) : { poorActive: false };
+    binding.setBGA({
+      ...frame,
+      ...(ctx.play.nonstopBGATimelines !== undefined
+        ? {
+            stacks: stacks.map((stack) => ({ ...skinFrame(stack), alpha: stack.alpha })),
+          }
+        : {}),
+    });
     ctx.bgaLayerPool.end();
     return;
   }
 
   for (const bga of visibleBGAs) {
     if (bga.w <= 0 || bga.h <= 0) continue;
+    if (stacks.some((stack) => stack.opacity !== undefined)) {
+      const backdrop = ctx.bgaLayerPool.acquireSprite();
+      backdrop.texture = Texture.WHITE;
+      backdrop.label = 'bga/background';
+      backdrop.position.set(bga.x, bga.y);
+      backdrop.width = bga.w;
+      backdrop.height = bga.h;
+      bga.applyToSprite(backdrop);
+      backdrop.tint = 0x000000;
+    }
     const drawLayer = (
       key: string | undefined,
       textures: ReadonlyMap<string, Texture>,
@@ -191,14 +212,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       sprite.height = placed.h;
       bga.applyToSprite(sprite);
       sprite.alpha *= alpha;
-      // BMS spec — `#ARGBxx AARRGGBB` (and the ARGB tuple embedded in `#EXBMPxx a,r,g,b,filename`) declare the BMP
-      // slot's alpha + RGB tint for layer composition. Apply the parsed values via Pixi's per-sprite `tint` (RGB
-      // multiply) and `alpha` (overall opacity); the default `#FFFFFFFF` round-trips to `tint = 0xFFFFFF` / `alpha =
-      // 1` which is the no-op identity, so charts that omit both directives see no change. `resolveBmsBmpARGB`
-      // prefers `#ARGBxx` over the `#EXBMPxx`-embedded tuple when both target the same slot, matching the LR2 /
-      // beatoraja precedence. BGA-cue keys come from `buildBGATimelines`, which routes through `normalizeObjectKey` —
-      // exactly the same key normalization the parser applies to the `chart.bms.argb` / `chart.bms.exBMP` maps, so
-      // the direct lookup matches.
+      // Preserve the legacy Be-Music per-slot tint interpretation. This is separate from 0B–0E opacity and does
+      // not implement nanasi's channel-scoped A1–A4 commands. The helper prefers ARGB over EXBMP for the same slot.
       const resolvedChart = ctx.play.resolvedChart;
       if (resolvedChart) {
         // Tint resolution honors the original cue key first (so `#ARGBxx 01` applies even when `#SWBGA01` is ALSO
@@ -218,18 +233,43 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         // POOR uses base-mode decoding (no chroma key) since it replaces the stack's base+layer composite during its
         // window. POOR has no per-cue origin time we can hand to `drawLayer` for `#SWBGAxx` frame timing; chart
         // authors don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
-        drawLayer(stack.poorKey, ctx.play.bgaTextures, 'poor', undefined, stack.alpha);
+        drawLayer(stack.poorKey, ctx.play.bgaTextures, 'poor', undefined, stack.alpha * (stack.opacity?.poor ?? 1));
         continue;
       }
       // `cue.seconds` anchors switching-BGA frame timing — `pickSwitchingBGAFrame` advances frames relative to when
       // the cue fired, not relative to the chart origin.
-      drawLayer(stack.baseCue?.bmpKey, ctx.play.bgaTextures, 'base', stack.baseCue?.seconds, stack.alpha);
+      drawLayer(
+        stack.baseCue?.bmpKey,
+        ctx.play.bgaTextures,
+        'base',
+        stack.baseCue?.seconds,
+        stack.alpha * (stack.opacity?.base ?? 1),
+      );
       // Layer track is composited on top with black→transparent so the base track shows through where the
       // foreground BMP is empty.
-      drawLayer(stack.layerCue?.bmpKey, ctx.play.bgaLayerTextures, 'layer', stack.layerCue?.seconds, stack.alpha);
-      drawLayer(stack.layer2Cue?.bmpKey, ctx.play.bgaLayerTextures, 'layer2', stack.layer2Cue?.seconds, stack.alpha);
+      drawLayer(
+        stack.layerCue?.bmpKey,
+        ctx.play.bgaLayerTextures,
+        'layer',
+        stack.layerCue?.seconds,
+        stack.alpha * (stack.opacity?.layer ?? 1),
+      );
+      drawLayer(
+        stack.layer2Cue?.bmpKey,
+        ctx.play.bgaLayerTextures,
+        'layer2',
+        stack.layer2Cue?.seconds,
+        stack.alpha * (stack.opacity?.layer2 ?? 1),
+      );
       if (stack.poorKey && stack.poorOverlays)
-        drawLayer(stack.poorKey, ctx.play.bgaTextures, 'poor', undefined, stack.alpha, true);
+        drawLayer(
+          stack.poorKey,
+          ctx.play.bgaTextures,
+          'poor',
+          undefined,
+          stack.alpha * (stack.opacity?.poor ?? 1),
+          true,
+        );
     }
   }
   ctx.bgaLayerPool.end();

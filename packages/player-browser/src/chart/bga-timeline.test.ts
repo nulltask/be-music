@@ -308,6 +308,27 @@ describe('NONSTOP BGA', () => {
 });
 
 describe('resolveBGAStacks', () => {
+  it('keeps NONSTOP stage opacity independent of the flattened timeline and restores it on seek', () => {
+    const opacity = (value: number) => ({ base: [], layer: [{ seconds: 1, opacity: value }], layer2: [], poor: [] });
+    const cues = { base: [], layer: [{ seconds: 0, bmpKey: 'layer' }], poor: [] };
+    const stages = [
+      { windowStart: 0, windowEnd: 2, bmpKeys: ['layer'], bgaFadeOut: { start: 2, end: 4 }, bgaOpacity: opacity(0.5) },
+      { windowStart: 2, windowEnd: 4, bmpKeys: [], bgaFadeIn: { start: 0, end: 2 }, bgaOpacity: opacity(0.25) },
+    ];
+    const input = {
+      timeline: { ...cues, opacity: opacity(0.1) },
+      nonstop: { stages, timelines: [cues, cues] },
+      inPoorWindow: false,
+    };
+    const stacks = resolveBGAStacks({ ...input, seconds: 1.5 });
+    expect(stacks.map((stack) => stack.opacity?.layer)).toEqual([0.5, 0.25]);
+    expect(stacks.map((stack) => stack.alpha)).toEqual([1, 0.75]);
+    expect(resolveBGAStacks({ ...input, seconds: 0.5 }).map((stack) => stack.opacity?.layer)).toEqual([1, 1]);
+    expect(
+      buildSkinBGAFrame({ base: undefined, layer: 'layer', poor: undefined, opacity: stacks[0]!.opacity }, (key) => key)
+        .opacity?.layer,
+    ).toBe(0.5);
+  });
   const timeline = {
     base: [{ seconds: 0, bmpKey: '01' }],
     layer: [{ seconds: 0, bmpKey: '02' }],
