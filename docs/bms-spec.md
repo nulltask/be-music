@@ -187,8 +187,9 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Keep every `#WAVCMD` line in `bms.wavCmds`; chart-audio-renderer and browser WebAudio apply the `01` volume parameter
 - [x] Parse `#EXWAVxx` and apply its `v` volume parameter in chart-audio-renderer and browser WebAudio
 - [x] Use `#BASEBPM` as the chart reference BPM for browser HS-FIX calibration through `@be-music/chart-model`
-- [x] Browser player reflects `#BGAxx` sub-region BGA, `#SWBGAxx` switching BGA, and `#ARGBxx` / `#EXBMPxx` tint and alpha
-- [x] Terminal loads filenames declared only by `#EXBMPxx`, including implicit POOR slot `00`; an explicit `#BMPxx` filename takes precedence. Terminal EXBMP tint/alpha and BGA/SWBGA rendering remain pending.
+- [x] Browser player renders `#BGAxx` sub-region BGA. Its current SWBGA animation and per-slot ARGB/EXBMP tint follow a Be-Music-specific interpretation; they do not implement nanasi compatibility.
+- [ ] Implement nanasi EXBMP transparent-color keying, channel-scoped ARGB (`A1`–`A4`) / opacity (`0B`–`0E`), and key-bound SWBGA (`A5`). The [command reference](https://hitkey.nekokan.dyndns.info/cmds.htm#EXBMPXX) distinguishes these semantics from image tinting.
+- [x] Browser and terminal load filenames declared only by `#EXBMPxx a,r,g,b filename`, including implicit POOR slot `00`; an explicit `#BMPxx` filename takes precedence. The comma-before-filename spelling remains accepted. Terminal BGA sub-regions and the nanasi rendering features above remain pending.
 - [x] Interpret channels `51-59` / `61-69` (and the extended `5A-5O` / `6A-6O`) as long notes. `#LNTYPE 1`, the default when `#LNTYPE` is omitted, pairs objects as start / end; `#LNTYPE 2` (MGQ) makes a run of consecutive non-`00` cells one long note
 - [x] `#LNOBJ`: every declaration is active and kept in declaration order in `bms.lnObjs`; the object ends the long note started by the previous note on its lane and is not sounded (the HDX key-up sound is not adopted). A `#LNOBJ` object with no note before it becomes an ordinary note
 - [x] Where `51-69` and `#LNOBJ` long notes start on the same lane and position, the `51-69` long note wins

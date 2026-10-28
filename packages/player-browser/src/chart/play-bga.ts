@@ -5,7 +5,7 @@
 
 import { Rectangle, Texture } from 'pixi.js';
 import { runWithConcurrency } from '@be-music/shared-utils/core';
-import { parseBmsBGA, resolvePoorBGAMode } from '@be-music/chart-model';
+import { parseBMSExBMP, parseBmsBGA, resolvePoorBGAMode } from '@be-music/chart-model';
 import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import { loadAssetBytes, resolveChartBGAAsset } from '../collection/collection.ts';
 import type { BrowserAssetSource } from '../collection/types.ts';
@@ -50,7 +50,7 @@ export { resolvePoorBGAMode, type PoorBGAMode } from '@be-music/chart-model';
  * convention does not apply.
  */
 export function resolvePoorBGAFallbackKey(chart: BeMusicJSON): string | undefined {
-  const poorBMP00 = chart.resources.bmp['00'];
+  const poorBMP00 = chart.resources.bmp['00'] || parseBMSExBMP(chart.bms.exBMP['00'] ?? '')?.filename;
   return resolvePoorBGAMode(chart.bms.poorBGA) !== 2 && typeof poorBMP00 === 'string' && poorBMP00.length > 0
     ? '00'
     : undefined;
@@ -71,6 +71,11 @@ export function collectPlayBGAResources(
   const paths = new Map<string, string>();
   for (const [key, path] of Object.entries(chart.resources.bmp)) {
     if (typeof path === 'string' && referenced.has(key)) paths.set(key, path);
+  }
+  for (const [key, raw] of Object.entries(chart.bms.exBMP)) {
+    if (!referenced.has(key) || paths.get(key)) continue;
+    const definition = parseBMSExBMP(raw);
+    if (definition) paths.set(key, definition.filename);
   }
   for (const entry of chart.bmson.bga.header) {
     if (referenced.has(entry.name)) paths.set(entry.name, entry.name);

@@ -1,74 +1,39 @@
 import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
 
-/**
- * Parsed `#EXBMPxx a,r,g,b,filename` directive.
- *
- * Where `#BMPxx filename` declares an opaque image slot, `#EXBMPxx` declares the same slot's filename PLUS an ARGB
- * tuple that the player should apply on top — typically used by chart authors to chroma-key a backdrop color to
- * transparent (`a = 0` for the keyed color) or to dim a layer image (`a < 255`). The format is a single
- * `a,r,g,b,filename` string (commas separating the four byte channels and the filename).
- *
- * `argbRaw` keeps the AARRGGBB-equivalent string so consumers can pass it straight to {@link parseBmsARGB} — the same
- * parser `#ARGBxx` already uses, no second code path. `argb` is the pre-parsed shortcut for the common case.
- */
+/** A filename and optional transparent-color tuple from `#EXBMPxx a,r,g,b filename`. */
 export interface BMSExBMP {
-  /** Filename of the image to load into this `#BMPxx` slot. */
   filename: string;
-  /**
-   * Decoded ARGB values, or `undefined` when the directive omitted the ARGB tuple (e.g. `#EXBMP01 ,,,,filename.bmp`).
-   */
+  /** Authored transparent-color tuple; parsing does not apply rendering semantics. */
   argb: BmsARGB | undefined;
-  /**
-   * Comma-separated AARRGGBB-equivalent text — kept so consumers can roundtrip through the same `parseBmsARGB` pipeline
-   * that `#ARGBxx` uses, without re-emitting it from the `argb` shortcut.
-   */
+  /** Raw comma-separated tuple for preservation and subsequent parsing. */
   argbRaw: string;
 }
 
 /**
- * Parses one `#EXBMPxx` directive value (the post-`#EXBMPxx ` text).
- *
- * Token layout: `a,r,g,b,filename`. Filenames containing literal commas are unsupported by the spec — that's a property
- * of the format, not a limitation here. Whitespace inside each field is trimmed.
- *
- * Returns `undefined` for malformed input (less than five comma groups or an empty filename). When the ARGB fields are
- * present but unparseable (e.g. `xxx,yyy,zzz,www,foo.bmp`), the entry's `argb` is `undefined` while `filename` is still
- * surfaced — so the consumer at least knows which file the slot points at.
+ * Parse the four comma-separated color fields followed by whitespace and the filename. Also accept the older
+ * Be-Music comma-before-filename spelling. Preserve spaces and commas inside the filename. A missing filename is
+ * invalid; malformed or omitted color fields still leave the resource available to loaders.
  */
 export function parseBMSExBMP(raw: string): BMSExBMP | undefined {
   if (typeof raw !== 'string') return undefined;
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return undefined;
-  // Five-way split on commas. `split(',', limit)` would silently drop trailing commas in the filename if a chart author
-  // left any, so split unbounded and rejoin the tail.
-  const parts = trimmed.split(',');
-  if (parts.length < 5) return undefined;
-  const [aRaw, rRaw, gRaw, bRaw, ...rest] = parts;
-  const filename = rest.join(',').trim();
+  const match = /^([^,]*),([^,]*),([^,]*),\s*([^,\s]*)(?:\s+|,)([\s\S]+)$/u.exec(raw.trim());
+  if (!match) return undefined;
+  const [, aRaw, rRaw, gRaw, bRaw, filenameRaw] = match;
+  const filename = filenameRaw!.trim();
   if (filename.length === 0) return undefined;
-  // The argb tuple may legally be empty (chart authors sometimes ship `#EXBMP01 ,,,,foo.bmp` to mean "filename only"),
-  // in which case we still surface the filename and leave `argb` undefined so the consumer can fall back to `#ARGBxx`
-  // or the image's own alpha channel.
-  const argbCandidate = `${aRaw},${rRaw},${gRaw},${bRaw}`;
-  const argbValuesAllBlank = [aRaw, rRaw, gRaw, bRaw].every((part) => part.trim().length === 0);
-  const argb = argbValuesAllBlank ? undefined : parseBmsARGB(argbCandidate);
+  const fields = [aRaw!, rRaw!, gRaw!, bRaw!];
+  const argbRaw = fields.join(',');
   return {
     filename,
-    argb,
-    argbRaw: argbCandidate,
+    argb: fields.every((field) => field.trim().length === 0) ? undefined : parseBmsARGB(argbRaw),
+    argbRaw,
   };
 }
 
 /**
- * Resolves the ARGB tint to apply when compositing `chart.bms.bmp[slot]`, folding the two BMS directives that can drive
- * it (in priority order):
- *
- * 1. `#ARGBxx` — explicit per-slot ARGB. Wins when present.
- * 2. `#EXBMPxx` — the ARGB embedded in the filename declaration. Used as a fallback so chart authors who only wrote the
- *    extended form still get their transparent / dim composite.
- *
- * Returns `undefined` when neither directive is present (or neither parses), letting the consumer skip the tint stage
- * entirely on the unaffected path.
+ * Resolve Be-Music's existing per-slot tint interpretation, preferring ARGB over EXBMP. This legacy helper does not
+ * implement nanasi's channel-scoped A1–A4 commands or EXBMP transparent-color keying; callers must not use its
+ * presence as evidence of standard extension support.
  */
 export function resolveBmsBmpARGB(chart: BeMusicJSON, slot: string): BmsARGB | undefined {
   const argbRaw = chart.bms.argb[slot];
@@ -91,7 +56,7 @@ export function resolveBmsBmpARGB(chart: BeMusicJSON, slot: string): BmsARGB | u
  * `#BMPxx` slots one frame at a time. The header tokens — `fr` / `tot` / `lp` / optional `ARGB` — drive how the cycle
  * progresses, the rest of the line is the per-frame slot list.
  *
- * Field semantics (hitkey BMS Memo): - `fr` (frame rate): frame interval in `1/100`-second units, so `fr = 10` means
+ * Legacy Be-Music semantics (not nanasi A5 key-bound animation): - `fr` (frame rate): frame interval in `1/100`-second units, so `fr = 10` means
  * one frame every 100 ms. Stored here in ms. - `tot` (total frames): number of frames in the animation. The slot list
  * MAY be shorter / longer; a shorter list cycles itself, a longer one is truncated to `tot`. - `lp` (loop): `0` = play
  * once and hold the last frame, non-zero = loop. - `ARGB` (optional): AARRGGBB tint applied to every frame, same format
@@ -268,9 +233,8 @@ const BMS_ARGB_HEX_RE = /^[0-9A-Fa-f]{8}$/;
  *
  * Returns `undefined` for unrecognized / malformed input so the caller can fall back to "no tint".
  *
- * Spec note (hitkey BMS Memo): `#ARGBxx` adjusts the color / alpha of `#BMPxx` for BGA layer composition. Authors
- * typically use it to chroma-key a backdrop color to transparent, or to dim a layer image — in both cases the consumer
- * applies the parsed values as a tint × alpha at draw time.
+ * Parsing only: nanasi ARGB definitions are selected through channels A1–A4 and describe transparent colors and
+ * opacity, rather than assigning a multiplicative tint to the BMP slot with the same id.
  */
 export function parseBmsARGB(raw: string): BmsARGB | undefined {
   if (typeof raw !== 'string') return undefined;

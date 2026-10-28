@@ -7,6 +7,17 @@ import { describe, expect, test } from 'vite-plus/test';
 import { createBgaANSIRenderer } from './bga.ts';
 
 describe('terminal extended BGA resources', () => {
+  test('loads a standard EXBMP filename containing whitespace and commas', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-exbmp-standard-'));
+    try {
+      await writeRedPNG(join(baseDir, 'my image,01.png'));
+      const chart = parseBMS('#BPM 120\n#EXBMP01 0,0,0,0 my image,01.png\n#00004:01');
+      const renderer = await createBgaANSIRenderer(chart, { baseDir });
+      expect(renderer!.getANSILines(0)!.join('')).toContain('\u001b[48;2;255;0;0m');
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
   test.each(['04', '07', '0A', '06'])('loads an EXBMP-only image for channel %s', async (channel) => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-exbmp-'));
     try {

@@ -129,7 +129,7 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   });
   define('chart-model.parseBMSExBMP', {
     run: () => {
-      chartAPI.parseBMSExBMP('255,0,0,0,backdrop.bmp');
+      chartAPI.parseBMSExBMP('255,0,0,0 backdrop.bmp');
     },
   });
   define('chart-model.resolveBmsBmpARGB', {
