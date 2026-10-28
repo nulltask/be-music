@@ -38,6 +38,71 @@ function recorder(): BeMusicPlayfieldPaintContext & { calls: string[] } {
 }
 
 describe('playfield painters', () => {
+  it('keeps each NONSTOP base canvas black outside a small image at its stage opacity', () => {
+    const ctx = recorder();
+    const image = { id: 'small', width: 128, height: 64 } as unknown as CanvasImageSource;
+    paintBGA(
+      ctx,
+      {
+        shown: true,
+        frame: {
+          poorActive: false,
+          stacks: [
+            { base: image, poorActive: false, alpha: 0.5 },
+            { poor: image, poorActive: true, alpha: 0.25 },
+          ],
+        },
+      },
+      { x: 0, y: 0, w: 256, h: 256 },
+    );
+    expect(ctx.calls).toEqual([
+      'fillRect 0,0,256,256 #000000 1',
+      'fillRect 0,0,256,256 #000000 0.5',
+      'drawImage small 64,0,128,64',
+      'fillRect 0,0,256,256 #000000 0.25',
+      'drawImage small 64,0,128,64',
+    ]);
+  });
+  it('combines skin alpha, NONSTOP crossfade and per-plane opacity without leaking alpha', () => {
+    const ctx = recorder();
+    ctx.globalAlpha = 0.8;
+    const alphas: number[] = [];
+    ctx.drawImage = (() => {
+      alphas.push(ctx.globalAlpha);
+    }) as typeof ctx.drawImage;
+    const image = {} as CanvasImageSource;
+    paintBGA(
+      ctx,
+      {
+        shown: true,
+        frame: {
+          poorActive: false,
+          stacks: [
+            {
+              base: image,
+              layer: image,
+              layer2: image,
+              poor: image,
+              poorActive: true,
+              poorOverlays: true,
+              alpha: 0.5,
+              opacity: { base: 0.5, layer: 0.25, layer2: 0.125, poor: 0.75 },
+            },
+            {
+              base: image,
+              poor: image,
+              poorActive: true,
+              alpha: 0.25,
+              opacity: { base: 1, layer: 1, layer2: 1, poor: 0.5 },
+            },
+          ],
+        },
+      },
+      { x: 0, y: 0, w: 256, h: 256 },
+    );
+    expect(alphas).toEqual([0.2, 0.1, 0.05, 0.30000000000000004, 0.1]);
+    expect(ctx.globalAlpha).toBe(0.8);
+  });
   it('paints HIDDEN above the lifted line and an opaque cover below it', () => {
     const ctx = recorder();
     paintLaneCovers(ctx, {

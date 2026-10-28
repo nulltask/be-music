@@ -1,5 +1,12 @@
 import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
-import { parseBmsBGA, type BGATimelines, type TimingResolver, buildBGATimelines } from '@be-music/chart-model';
+import {
+  pickBGAOpacity,
+  type BGAOpacityTimelines,
+  parseBmsBGA,
+  type BGATimelines,
+  type TimingResolver,
+  buildBGATimelines,
+} from '@be-music/chart-model';
 import { pickActiveBGACue as pickActiveCoreBGACue } from '@be-music/player-engine/display';
 
 export interface BGACue {
@@ -125,6 +132,7 @@ export function resolveBGAImageRect(
 
 /** The BGA keys showing this frame, as `renderBGA` resolved them (`#SWBGA` frames already picked). */
 export interface ActiveBGAKeys {
+  opacity?: Record<keyof BGAOpacityTimelines, number>;
   base: string | undefined;
   layer: string | undefined;
   layer2?: string | undefined;
@@ -140,7 +148,15 @@ export interface ActiveBGAKeys {
 export function buildSkinBGAFrame<Image>(
   keys: ActiveBGAKeys,
   resolve: (key: string, track: 'base' | 'layer') => Image | undefined,
-): { base?: Image; layer?: Image; layer2?: Image; poor?: Image; poorActive: boolean; poorOverlays?: boolean } {
+): {
+  base?: Image;
+  layer?: Image;
+  layer2?: Image;
+  poor?: Image;
+  poorActive: boolean;
+  poorOverlays?: boolean;
+  opacity?: Record<keyof BGAOpacityTimelines, number>;
+} {
   const base = keys.base !== undefined ? resolve(keys.base, 'base') : undefined;
   const layer = keys.layer !== undefined ? resolve(keys.layer, 'layer') : undefined;
   const layer2 = keys.layer2 !== undefined ? resolve(keys.layer2, 'layer') : undefined;
@@ -152,12 +168,14 @@ export function buildSkinBGAFrame<Image>(
     ...(layer2 !== undefined ? { layer2 } : {}),
     ...(poor !== undefined ? { poor } : {}),
     poorActive: poor !== undefined,
+    ...(keys.opacity !== undefined ? { opacity: keys.opacity } : {}),
     ...(keys.poorOverlays ? { poorOverlays: true } : {}),
   };
 }
 
 /** One stage of a stitched NONSTOP chart as its BGA needs it (`NonstopStitchStage` from `@be-music/player-engine/course`). */
 export interface NonstopBGAStage {
+  bgaOpacity?: BGAOpacityTimelines;
   poorBGAMode?: 0 | 1 | 2;
   windowStart: number;
   windowEnd: number;
@@ -229,6 +247,7 @@ export function isMissLayerShown(missSeconds: number | undefined, seconds: numbe
 
 /** One BGA stack to draw: its base and layer cues (and a POOR image in place of them) at `alpha`. */
 export interface BGAStack {
+  opacity?: Record<keyof BGAOpacityTimelines, number>;
   poorOverlays?: boolean;
   alpha: number;
   baseCue: BGACue | undefined;
@@ -242,7 +261,13 @@ export interface BGAStack {
 export interface BGAStacksInput {
   poorBGAMode?: 0 | 1 | 2;
   /** The chart's cues; its POOR cues, when given, are picked during a POOR. */
-  timeline: { base: readonly BGACue[]; layer: readonly BGACue[]; layer2?: readonly BGACue[]; poor?: readonly BGACue[] };
+  timeline: {
+    base: readonly BGACue[];
+    layer: readonly BGACue[];
+    layer2?: readonly BGACue[];
+    poor?: readonly BGACue[];
+    opacity?: BGAOpacityTimelines;
+  };
   /** A stitched NONSTOP chart's stages and their own cues (`splitNonstopBGATimeline`), in stage order. */
   nonstop?: { stages: readonly NonstopBGAStage[]; timelines: readonly NonstopStageBGATimeline[] } | undefined;
   /** The cue clock in chart seconds. */
@@ -269,7 +294,18 @@ export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
     },
     alpha: number,
     mode: 0 | 1 | 2 = 0,
+    opacity?: BGAOpacityTimelines,
   ): BGAStack => ({
+    ...(opacity !== undefined
+      ? {
+          opacity: {
+            base: pickBGAOpacity(opacity.base, seconds),
+            layer: pickBGAOpacity(opacity.layer, seconds),
+            layer2: pickBGAOpacity(opacity.layer2, seconds),
+            poor: pickBGAOpacity(opacity.poor, seconds),
+          },
+        }
+      : {}),
     alpha,
     baseCue: input.noBase ? undefined : pickActiveBGACue(timeline.base, seconds),
     layerCue: input.noLayer ? undefined : pickActiveBGACue(timeline.layer, seconds),
@@ -282,10 +318,10 @@ export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
       : {}),
   });
   const nonstop = input.nonstop;
-  if (nonstop === undefined) return [pick(input.timeline, 1, input.poorBGAMode)];
+  if (nonstop === undefined) return [pick(input.timeline, 1, input.poorBGAMode, input.timeline.opacity)];
   return nonstop.stages.flatMap((stage, index) => {
     const timeline = nonstop.timelines[index];
     const alpha = resolveNonstopBGAAlpha(stage, seconds);
-    return timeline !== undefined && alpha > 0 ? [pick(timeline, alpha, stage.poorBGAMode)] : [];
+    return timeline !== undefined && alpha > 0 ? [pick(timeline, alpha, stage.poorBGAMode, stage.bgaOpacity)] : [];
   });
 }

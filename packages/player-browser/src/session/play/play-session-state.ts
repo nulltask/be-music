@@ -1,3 +1,4 @@
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 /**
  * The state of a play the play session works on, apart from what draws it: the chart and its notes, the audio graph,
  * the engine's handles, the play state (gauge, score, judgements, hi-speed and covers), the lane effects, the BGA's
@@ -416,7 +417,7 @@ export class PlaySessionState extends PlayPresentation {
    */
   /** A stitched NONSTOP chart's base / layer cues split by stage (`options.nonstop`). */
   nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
-  bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[] } = {
+  bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[]; opacity?: BGAOpacityTimelines } = {
     base: [],
     layer: [],
     poor: [],

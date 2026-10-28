@@ -1,3 +1,4 @@
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 /**
  * What the shared playfield's passes (`view/shared/playfield/*`) read and write: the layers and pools they draw into,
  * the skin's answers ({@link PlayfieldSkin}), the view's own drawing around them ({@link PlayChrome}) and its caches,
@@ -119,7 +120,13 @@ export interface PlayfieldRuntime {
   readonly bombStartedAt: Map<string, number>;
   readonly bombJudge: Map<string, BeMusicJudgmentKind>;
   readonly hasBGA: boolean;
-  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[] };
+  readonly bgaTimeline: {
+    base: BGACue[];
+    layer: BGACue[];
+    layer2?: BGACue[];
+    poor: BGACue[];
+    opacity?: BGAOpacityTimelines;
+  };
   readonly nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
   readonly poorBGAMode?: 0 | 1 | 2;
   readonly poorBGAFallbackKey: string | undefined;

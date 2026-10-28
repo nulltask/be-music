@@ -309,7 +309,7 @@ flowchart LR
 - `mines`: mine notes as `{ kind, x, w, y }`, where `y` is the bottom edge. A mine that explodes (its lane held as it crosses the judgement line, or under the LR2 ruleset also pressed within the PGREAT window) drains the gauge; it is not a judgement. Empty unless the skin sets `gameplay.drawsMines` (below).
 - `bombs`: live hit effects with `elapsedMs`, a stable `seed`, and the `judge` that set them off.
 - `measureLines`: measure lines as `{ side, x, w, y }`, one per lane run they cross. Empty unless the skin sets `gameplay.drawsMeasureLines`.
-- `bga`: the BGA layers to composite (`{ base?, layer?, layer2?, poor?, poorActive, poorOverlays? }`). `undefined` unless the skin sets `gameplay.drawsBGA`.
+- `bga`: the BGA layers to composite (`{ base?, layer?, layer2?, poor?, poorActive, poorOverlays?, opacity?, stacks? }`). `undefined` unless the skin sets `gameplay.drawsBGA`.
 - `runtime`: the HUD values (below).
 - `beatPhase`, `nowMs`, `effects`, and `audio`.
 - `settings` and `chartImage`: see [Skin settings](#skin-settings) and [Song images](#chart-images).
@@ -330,6 +330,8 @@ By default the player draws a few things over (or behind) your canvas, so a skin
 | `drawsBGA`          | `frame.bga`          | The player shows the BGA behind your canvas, in `layout.bga`.           |
 
 Every flag defaults to `false`, and the frame field it unlocks stays empty (or `undefined`) until you set it, so existing skins keep their look. With `drawsBGA`, the `layer` and `layer2` images arrive with pure black already turned transparent (the BMS layer convention; draw 07 before 0A) while `base` and `poor` retain black pixels: draw them with plain alpha blending, and while `poorActive`, draw `poor` over the normal layers when `poorOverlays` is true (`#POORBGA 1`), otherwise replace them. Mode 2 supplies no POOR image. A bmson layer (its spec keeps black opaque) and a video layer arrive as authored. The images are `ImageBitmap`s or, for a video BGA, the playing `<video>` element; a `#BGA` sub-region arrives as its own cropped image (missing for the first frame or two while it is cut). The player still picks the frame of a `#SWBGA` animation, but leaves a slot's `#ARGB` tint and opacity to you.
+
+`opacity` contains 0..1 values for `{ base, layer, layer2, poor }`; omitted values default to 1. For NONSTOP, `stacks` lists every visible stage from back to front, with its own images, `poorActive` / `poorOverlays`, `opacity`, and crossfade `alpha`. Apply the inherited Canvas `globalAlpha × stack.alpha × stack.opacity[plane]` to each plane. Top-level images still identify the leading stage for existing skins; use `stacks` to draw the full NONSTOP composite. The standard UI's `paintPlayfieldParts` handles these fields.
 
 `runtime` (`BeMusicGameplayRuntime`) carries:
 

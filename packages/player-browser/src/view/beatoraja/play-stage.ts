@@ -1,3 +1,4 @@
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { resolveConstantAlpha, resolveNoteDisplaySeconds, type ConstantVisibility } from '@be-music/player-scene-model';
 /**
  * One beatoraja play skin on the stage: the skin's elements (`BeatorajaPlaySkinView`) with the play's layers spliced in
@@ -60,7 +61,13 @@ export interface BeatorajaPlayBGA {
   readonly layerTextures: ReadonlyMap<string, Texture>;
   readonly videos: ReadonlyMap<string, HTMLVideoElement>;
   readonly poorBGAMode?: 0 | 1 | 2;
-  readonly cues: { base: readonly BGACue[]; layer: readonly BGACue[]; poor: readonly BGACue[] };
+  readonly cues: {
+    base: readonly BGACue[];
+    layer: readonly BGACue[];
+    layer2?: readonly BGACue[];
+    poor: readonly BGACue[];
+    opacity?: BGAOpacityTimelines;
+  };
   readonly nonstop?: {
     readonly stages: readonly NonstopBGAStage[];
     readonly timelines: readonly NonstopStageBGATimeline[];
