@@ -281,9 +281,9 @@ export async function createPlaySession(
     // Keep the shared array identity when the host prepared the chart before choosing REMOVE.
     playbackChart.landmineNotes.length = 0;
   }
-  // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds, as
-  // background audio at its own time.
-  appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
+  // BMS duplicate keysounds play as BGM. bmson layers belong to the judged note's input instead.
+  if (resolvedJSON.sourceFormat !== 'bmson')
+    appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
   // Constant for the whole play and read on every tick and judgment: hoisted out of the hot paths.
   const idBase = resolveBMSBase(resolvedJSON);
   const wavResources = resolvedJSON.resources.wav;

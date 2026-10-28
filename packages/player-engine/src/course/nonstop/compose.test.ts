@@ -437,3 +437,24 @@ test('an inherited TOTAL keeps its original unit in a mixed NONSTOP chart', () =
   if (!result.ok) throw new Error(result.reason);
   expect(resolveChart(result.chart).total).toEqual({ value: 100, unit: 'percent' });
 });
+
+test('bmson NONSTOP keeps layered slices attached to one input note, with no shadow BGM', () => {
+  const source = bmsonStage();
+  const first = source.events.find((event) => event.channel === '11')!;
+  source.resources.wav['ZZ'] = 'layer.wav';
+  source.events.push({ ...first, value: 'ZZ', bmson: { ...first.bmson } });
+  const result = stitchNonstopCourse([{ chart: source }, { chart: bmsonStage() }], {
+    connections: ['blank2'],
+    placement: 'intended',
+    assetPath: (stage, _kind, path) => `s${stage}/${path}`,
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const resolved = resolveChart(result.chart);
+  const note = resolved.notes.find((note) => note.soundEvents?.length === 2);
+  expect(note?.soundEvents?.map((event) => result.chart.resources.wav[event.value])).toEqual([
+    's0/sliced.wav',
+    's0/layer.wav',
+  ]);
+  expect(resolved.sampleTriggers.filter((trigger) => trigger.channel === '01')).toEqual([]);
+});

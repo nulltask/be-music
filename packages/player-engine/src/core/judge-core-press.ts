@@ -146,7 +146,8 @@ function applyLR2RejudgeChain(
     if (!markScorableJudged(state, note)) break;
     const judge = resolveManualTimedJudge((nowSec - note.seconds) * 1000, windows);
     emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
-    emit({ kind: 'sound', source: 'manual-note', event: note.event, seconds: atSeconds, channel: note.channel });
+    for (const event of note.soundEvents ?? [note.event])
+      emit({ kind: 'sound', source: 'manual-note', event, seconds: atSeconds, channel: note.channel });
     applyResolvedManualJudge(state, note.channel, judge, atSeconds, emit);
     if (judge.kind !== 'BAD' || isJudgingClosed(state)) break;
   }
@@ -271,13 +272,8 @@ export function handleLanePress(
       maxJudgeEarlyReachSeconds(config, judgeSec),
     );
     if (fallback) {
-      emit({
-        kind: 'sound',
-        source: 'lane-fallback',
-        event: fallback.event,
-        seconds: nowSec,
-        channel: fallback.channel,
-      });
+      for (const event of fallback.soundEvents ?? [fallback.event])
+        emit({ kind: 'sound', source: 'lane-fallback', event, seconds: nowSec, channel: fallback.channel });
     }
     if (!hasEmptyPoorReferenceNote(state, judgedChannels, judgeSec)) {
       // No note in the ruleset's miss window — the press is harmless: only the lane keysound plays.
@@ -299,7 +295,8 @@ export function handleLanePress(
     }
   };
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel } });
-  emit({ kind: 'sound', source: 'manual-note', event: candidate.event, seconds: nowSec, channel });
+  for (const event of candidate.soundEvents ?? [candidate.event])
+    emit({ kind: 'sound', source: 'manual-note', event, seconds: nowSec, channel });
   const endSeconds = candidate.endSeconds;
   if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
     const longNoteMode = resolveRulesetLongNoteMode(ruleset.longNoteStyle, candidate);

@@ -123,8 +123,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [ ] Add and apply `stop_events` of the same `y`
 - [x] Playback based on sound channel slicing rules (`c` and restart)
 - [x] BGM discard when a playable note and a BGM note share the same `y` in one sound channel (applied at parse time; the BGM note is dropped)
-- [x] Layered notes (several sound channels with a note on the same `x` and `y`) are one judged note in the player, the first sound channel's, as in beatoraja; the other sound channels still sound at that time ([player spec — Duplicate notes](./player-spec.md#duplicate-notes))
-- [ ] Composite playback of the same `(x,y)` notes from different sound channels as Layered Notes
+- [x] Layered notes (several sound channels with a note on the same `x` and `y`) form one judged note. Every constituent slice sounds on its input, including early/late presses and replay; a miss sounds none. All constituent lengths must match, otherwise resolution throws an error. NONSTOP preserves the input binding ([player spec — Duplicate notes](./player-spec.md#duplicate-notes))
 
 Each sound channel is cut into independently triggered slices at every distinct pulse. `c=true` continues the source offset from the last restart; it does not suppress the note's audio trigger. Notes on one pulse share a slice, and mixed continuation flags restart the source. Different slices may sound independently during manual play, so missing a later note cannot leave its audio playing through the preceding slice. Browser, Node and offline rendering share this rule.
 

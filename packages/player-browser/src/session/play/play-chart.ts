@@ -654,7 +654,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
           // session's `scheduleEvent` would fall back to "play whole WAV" for every BGM cue, regressing bmson
           // sliced-WAV authoring intent (each note's `audio_offset` / `slice_duration` window).
           [
-            ...ctx.notes.map((note) => note.event),
+            ...ctx.notes.flatMap((note) => note.soundEvents ?? [note.event]),
             ...ctx.mineNotes.map((note) => note.event),
             ...ctx.invisibleNotes.map((note) => note.event),
             ...ctx.autoSampleTriggers.map((trigger) => trigger.event),

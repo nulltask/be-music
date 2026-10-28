@@ -181,3 +181,29 @@ describe('resolveChart', () => {
     ]);
   });
 });
+
+describe('bmson layered sound events', () => {
+  function layered(lengths: number[]) {
+    const json = createEmptyJSON('bmson');
+    json.metadata.bpm = 120;
+    json.bmson.info.resolution = 240;
+    json.events = lengths.map((l, index) => ({ ...event(0, '11', `0${index + 1}`), bmson: { l, c: index === 1 } }));
+    return resolveChart(json);
+  }
+
+  test.each([0, 240])('keeps all source slices on one judged note of length %s', (length) => {
+    const resolved = layered([length, length]);
+    expect(resolved.notes).toHaveLength(1);
+    expect(resolved.notes[0]?.soundEvents?.map((event) => event.value)).toEqual(['01', '02']);
+    expect(resolved.shadowedNotes).toHaveLength(1);
+    expect(resolved.sampleTriggers).toHaveLength(2);
+    expect(resolved.notes[0]?.endBeat).toBe(length ? 1 : undefined);
+  });
+
+  test.each([
+    [0, 240],
+    [240, 480],
+  ])('rejects unequal layer lengths %s / %s', (a, b) => {
+    expect(() => layered([a, b]).notes).toThrow('bmson layered notes must have equal lengths');
+  });
+});

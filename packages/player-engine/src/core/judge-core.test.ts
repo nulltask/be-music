@@ -703,3 +703,94 @@ test.each([false, true])(
     );
   },
 );
+
+describe('bmson layered input audio', () => {
+  function layered(long = false) {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01', bmson: { l: long ? 960 : 0 } },
+      { measure: 1, channel: '11', position: [0, 1], value: '02', bmson: { l: long ? 960 : 0, c: true } },
+    ]);
+    json.sourceFormat = 'bmson';
+    json.bmson.info.resolution = 240;
+    json.bmson.info.modeHint = 'beat-7k';
+    json.bmson.info.judgeRank = 100;
+    return json;
+  }
+
+  test.each([0.998, 1.002])('sounds both layers at the press time %s, with one judgment', (seconds) => {
+    const state = createCore(layered());
+    const effects: JudgeCoreEffect[] = [];
+    runJudgeCoreStep(state, advance(0.9), (effect) => effects.push(effect));
+    expect(effects.filter((effect) => effect.kind === 'sound')).toEqual([]);
+    runJudgeCoreStep(state, press(seconds, '11'), (effect) => effects.push(effect));
+    expect(effects.filter((effect) => effect.kind === 'sound')).toMatchObject([
+      { event: { value: '01' }, seconds },
+      { event: { value: '02' }, seconds },
+    ]);
+    expect(state.summary.total).toBe(1);
+    expect(state.summary.perfect + state.summary.great + state.summary.good).toBe(1);
+    expect(effects.filter((effect) => effect.kind === 'judge-combo')).toHaveLength(1);
+  });
+
+  test('missing the note emits no layer audio', () => {
+    const state = createCore(layered());
+    const effects: JudgeCoreEffect[] = [];
+    runJudgeCoreStep(state, advance(3), (effect) => effects.push(effect));
+    expect(effects.filter((effect) => effect.kind === 'sound')).toEqual([]);
+    expect(state.summary.poor).toBe(1);
+  });
+
+  test('replay frame spacing preserves both layer sounds and their original input time', () => {
+    const stream = inputs([1_020_000, 'down', '11'], [1_030_000, 'up', '11']);
+    const once = replay(layered(), stream, [3], 'lr2');
+    expect(once).toEqual(replay(layered(), stream, [0.5, 1, 1.02, 1.5, 3], 'lr2'));
+    expect(once.effects.filter((effect) => (effect as JudgeCoreEffect).kind === 'sound')).toMatchObject([
+      { event: { value: '01' }, seconds: 1.02 },
+      { event: { value: '02' }, seconds: 1.02 },
+    ]);
+  });
+
+  test('long note layers share one hold and are cut together on an early release', () => {
+    const state = createCore(layered(true));
+    const effects: JudgeCoreEffect[] = [];
+    runJudgeCoreStep(state, press(1, '11'), (effect) => effects.push(effect));
+    runJudgeCoreStep(
+      state,
+      { kind: 'release', channels: new Set(['11']), tokens: [], nowSec: 1.2, nowMs: 1200, recordSec: 1.2 },
+      (effect) => effects.push(effect),
+    );
+    expect(effects.filter((effect) => effect.kind === 'sound')).toHaveLength(2);
+    expect(effects.filter((effect) => effect.kind === 'stop-sound')).toMatchObject([{ channel: '11' }]);
+    expect(state.config.scorableNotes).toHaveLength(1);
+  });
+
+  test('AUTO SCRATCH emits each layer once while judging one scratch', () => {
+    const json = layered();
+    for (const event of json.events) event.channel = '16';
+    const state = createCore(json, 'lr2', { autoScratch: true });
+    const effects = stepJudgeCore(state, advance(1.001));
+    expect(effects.filter((effect) => effect.kind === 'sound')).toMatchObject([
+      { source: 'auto-scratch', event: { value: '01' } },
+      { source: 'auto-scratch', event: { value: '02' } },
+    ]);
+    expect(state.summary.perfect).toBe(1);
+  });
+
+  test('empty input after a missed layered note uses all of its keysounds', () => {
+    const state = createCore(layered());
+    stepJudgeCore(state, advance(2));
+    const effects = stepJudgeCore(state, press(2.1, '11'));
+    expect(effects.filter((effect) => effect.kind === 'sound')).toMatchObject([
+      { source: 'lane-fallback', event: { value: '01' } },
+      { source: 'lane-fallback', event: { value: '02' } },
+    ]);
+    expect(state.summary.poor).toBe(1);
+  });
+
+  test('practice starts after a layered note without sounding either skipped slice', () => {
+    const state = createCore(layered(), 'lr2', { practiceFromSeconds: 1.5 });
+    const effects: JudgeCoreEffect[] = [];
+    runJudgeCoreStep(state, advance(2), (effect) => effects.push(effect));
+    expect(effects.filter((effect) => effect.kind === 'sound')).toEqual([]);
+  });
+});

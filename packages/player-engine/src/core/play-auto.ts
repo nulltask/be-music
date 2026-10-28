@@ -85,18 +85,20 @@ function createAutoJudge(session: PlaySession): PlayJudge {
   const noteKeysounds = createRealtimeAudioCursor(
     scorableNotes,
     (note) => {
-      if (!uiEnabled) {
-        writePlayableSampleTriggerEventLog(
-          writeOutput,
-          note.event,
-          note.seconds,
-          wavResources,
-          'auto-note',
-          note.channel,
-          idBase,
-        );
+      for (const event of note.soundEvents ?? [note.event]) {
+        if (!uiEnabled) {
+          writePlayableSampleTriggerEventLog(
+            writeOutput,
+            event,
+            note.seconds,
+            wavResources,
+            'auto-note',
+            note.channel,
+            idBase,
+          );
+        }
+        audioSession?.triggerEvent?.(event);
       }
-      audioSession?.triggerEvent?.(note.event);
     },
     (seconds) => clampToReversal(autoJudge.config, seconds),
   );
@@ -109,7 +111,9 @@ function createAutoJudge(session: PlaySession): PlayJudge {
     for (const at of [...rebuildSteps(config, seconds), seconds]) {
       runAutoJudgeStep(autoJudge, { kind: 'advance', nowSec: at }, rebuild.emit);
     }
-    noteKeysounds.seek(seconds, (note, offsetSeconds) => audioSession?.triggerEventAt?.(note.event, offsetSeconds));
+    noteKeysounds.seek(seconds, (note, offsetSeconds) => {
+      for (const event of note.soundEvents ?? [note.event]) audioSession?.triggerEventAt?.(event, offsetSeconds);
+    });
     judgedThroughSeconds = seconds;
     return {
       judgments: rebuild.judgments,
