@@ -158,6 +158,12 @@ export {
 } from './channels.ts';
 
 export { resolveChartReferenceBPM } from './reference-bpm.ts';
+export {
+  buildBGAOpacityTimelines,
+  pickBGAOpacity,
+  type BGAOpacityCue,
+  type BGAOpacityTimelines,
+} from './bga-opacity.ts';
 
 export {
   collectBMSExWAVVolumeMultipliers,
