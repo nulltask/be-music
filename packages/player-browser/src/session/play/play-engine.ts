@@ -177,7 +177,11 @@ export interface PlayEngineContext
   engineStartRequested: boolean;
   readonly paused: boolean;
   readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
-  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
+  bgaActiveVideos: {
+    base?: { key: string; cueSeconds: number };
+    layer?: { key: string; cueSeconds: number };
+    layer2?: { key: string; cueSeconds: number };
+  };
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
   chartEndGate?: (seconds: number) => void;

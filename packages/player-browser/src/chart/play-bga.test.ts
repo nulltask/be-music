@@ -177,6 +177,36 @@ describe('loadPlayBGA', () => {
     expect(into.layerTextures.has('01')).toBe(false);
   });
 
+  test('loads second-overlay assets and separate video playheads for a BMP reused on all tracks', async () => {
+    const handles = [0, 1, 2].map((index) => ({
+      texture: new Texture(),
+      objectURL: `blob:${index}`,
+      video: { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 },
+    }));
+    for (const handle of handles) mocks.loadVideoTextureFromBytes.mockResolvedValueOnce(handle);
+    const into = emptyResources();
+    mocks.resolveChartBGAAsset.mockReturnValue({ entry: 'movie.mp4', path: 'movie.mp4' });
+    await loadPlayBGA({
+      chart: bmsChart({ '01': 'movie.bmp' }),
+      source: SOURCE,
+      chartPath: 'x.bms',
+      timeline: {
+        base: [{ seconds: 0, bmpKey: '01' }],
+        layer: [{ seconds: 2, bmpKey: '01' }],
+        layer2: [{ seconds: 4, bmpKey: '01' }],
+        poor: [],
+      },
+      into,
+      tempo: 1.5,
+    });
+    // A BMP declaration can resolve to a video re-encode.
+    expect(mocks.loadTextureFromBytes).not.toHaveBeenCalled();
+    expect(into.videos.size).toBe(3);
+    expect(into.videos.get(String.fromCharCode(0) + 'layer:01')?.video).toBe(handles[1]!.video);
+    expect(into.layerTextures.get(String.fromCharCode(0) + 'layer2:01')).toBe(handles[2]!.texture);
+    expect(handles.every((handle) => handle.video.playbackRate === 1.5)).toBe(true);
+  });
+
   test('loads nothing once the play is cancelled', async () => {
     const into = emptyResources();
     await loadPlayBGA({

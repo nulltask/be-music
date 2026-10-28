@@ -21,6 +21,7 @@ const BGA_DECODE_CONCURRENCY = 4;
 export interface PlayBGATimeline {
   base: readonly BGACue[];
   layer: readonly BGACue[];
+  layer2?: readonly BGACue[];
   poor: readonly BGACue[];
 }
 
@@ -106,29 +107,37 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
   const { paths, base, layer } = collectPlayBGAResources(chart, options.timeline, options.poorFallbackKey);
   // The bmson spec draws layer blacks as black ("Unlike BMS Layer Channel #xxx07"); BMS keys them out.
   const keyOutLayerBlack = chart.sourceFormat !== 'bmson';
+  const firstLayer = new Set(options.timeline.layer.map((cue) => cue.bmpKey));
+  const secondLayer = new Set(options.timeline.layer2?.map((cue) => cue.bmpKey));
   await runWithConcurrency([...paths], BGA_DECODE_CONCURRENCY, async ([key, path]) => {
     if (isCancelled()) return;
     const resolved = resolveChartBGAAsset(source, chartPath, path);
     const bytes = await loadAssetBytes(resolved?.entry);
     if (!bytes || isCancelled()) return;
     try {
-      if (isVideoExtension(path)) {
-        // The file found may be a re-encode under another extension: name it as found.
-        const handle = await loadVideoTextureFromBytes(resolved?.path ?? path, bytes, options.transcode);
-        if (!handle) return;
-        if (isCancelled()) {
-          releaseVideo({ video: handle.video, objectURL: handle.objectURL });
-          destroyTexture(handle.texture);
-          return;
+      if (isVideoExtension(resolved?.path ?? path)) {
+        // Reused video BMPs need an independent playhead on each track.
+        // NUL-prefixed keys are internal and cannot collide with an external asset path.
+        const videoKeys = [key];
+        if (base.has(key) && firstLayer.has(key)) videoKeys.push(String.fromCharCode(0) + 'layer:' + key);
+        if ((base.has(key) || firstLayer.has(key)) && secondLayer.has(key))
+          videoKeys.push(String.fromCharCode(0) + 'layer2:' + key);
+        for (const videoKey of videoKeys) {
+          const handle = await loadVideoTextureFromBytes(resolved?.path ?? path, bytes, options.transcode);
+          if (!handle) continue;
+          if (isCancelled()) {
+            releaseVideo({ video: handle.video, objectURL: handle.objectURL });
+            destroyTexture(handle.texture);
+            return;
+          }
+          handle.texture.label = `bga[${key}]:video`;
+          handle.video.pause();
+          handle.video.defaultPlaybackRate = options.tempo;
+          handle.video.playbackRate = options.tempo;
+          into.videos.set(videoKey, { video: handle.video, objectURL: handle.objectURL });
+          if (videoKey === key && base.has(key)) into.textures.set(key, handle.texture);
+          if (layer.has(key)) into.layerTextures.set(videoKey, handle.texture);
         }
-        handle.texture.label = `bga[${key}]:video`;
-        // Paused until its cue fires; one texture serves both tracks (keying a moving video's blacks looks worse).
-        handle.video.pause();
-        handle.video.defaultPlaybackRate = options.tempo;
-        handle.video.playbackRate = options.tempo;
-        into.videos.set(key, { video: handle.video, objectURL: handle.objectURL });
-        if (base.has(key)) into.textures.set(key, handle.texture);
-        if (layer.has(key)) into.layerTextures.set(key, handle.texture);
         return;
       }
       if (base.has(key)) {

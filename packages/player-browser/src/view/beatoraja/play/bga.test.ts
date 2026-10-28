@@ -297,3 +297,100 @@ it.each([0, 1, 2] as const)('draws POOR BGA mode %s using its replacement/overla
   ).toHaveLength(0);
   layer.dispose();
 });
+
+it('draws and clears the second overlay independently, including during POOR modes', () => {
+  const base = fakeTexture(),
+    first = fakeTexture(),
+    second = fakeTexture(),
+    poor = fakeTexture();
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  for (const mode of [0, 1, 2] as const) {
+    const layer = new BeatorajaBGALayer({
+      skin: skin(),
+      textures: new Map([
+        ['base', base],
+        ['poor', poor],
+      ]),
+      layerTextures: new Map([
+        ['first', first],
+        ['second', second],
+      ]),
+      poorBGAMode: mode,
+      cues: {
+        base: [{ seconds: 0, bmpKey: 'base' }],
+        layer: [{ seconds: 0, bmpKey: 'first' }],
+        layer2: [
+          { seconds: 1, bmpKey: 'second' },
+          { seconds: 3, bmpKey: undefined },
+        ],
+        poor: [{ seconds: 0, bmpKey: 'poor' }],
+      },
+    });
+    const visible = () => layer.container.children.filter((child) => child.visible).map((child) => child.label);
+    layer.update(2, context, false);
+    expect(visible()).toContain('bga/layer');
+    expect(visible()).toContain('bga/layer2');
+    layer.update(4, context, false);
+    expect(visible()).toContain('bga/layer');
+    expect(visible()).not.toContain('bga/layer2');
+    layer.update(2, context, true);
+    if (mode === 0) expect(visible()).not.toContain('bga/layer2');
+    else expect(visible()).toContain('bga/layer2');
+    if (mode === 1) expect(visible()).toContain('bga/poor');
+    layer.dispose();
+  }
+  for (const texture of [base, first, second, poor]) texture.destroy(true);
+});
+
+it('uses independent playheads when both overlays reference the same video BMP', () => {
+  const first = fakeVideo(),
+    second = fakeVideo();
+  const texture1 = fakeTexture(),
+    texture2 = fakeTexture();
+  const secondKey = String.fromCharCode(0) + 'layer2:01';
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    textures: new Map(),
+    layerTextures: new Map([
+      ['01', texture1],
+      [secondKey, texture2],
+    ]),
+    videoElements: new Map([
+      ['01', first as unknown as HTMLVideoElement],
+      [secondKey, second as unknown as HTMLVideoElement],
+    ]),
+    cues: {
+      base: [],
+      layer: [{ seconds: 1, bmpKey: '01' }],
+      layer2: [
+        { seconds: 3, bmpKey: '01' },
+        { seconds: 5, bmpKey: undefined },
+      ],
+      poor: [],
+    },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  layer.update(4, context, false);
+  expect(first.currentTime).toBe(3);
+  expect(second.currentTime).toBe(1);
+  expect(layer.container.children.find((sprite) => sprite.label === 'bga/layer2')).toMatchObject({
+    texture: texture2,
+    visible: true,
+  });
+  layer.update(6, context, false);
+  expect(first.paused).toBe(false);
+  expect(second.paused).toBe(true);
+  layer.update(4, context, false, { paused: true });
+  expect(first.paused).toBe(true);
+  expect(second.paused).toBe(true);
+  expect(first.currentTime).toBe(3);
+  expect(second.currentTime).toBe(1);
+  layer.resume();
+  expect(first.paused).toBe(false);
+  expect(second.paused).toBe(false);
+  layer.dispose();
+  expect(first.paused).toBe(true);
+  expect(second.paused).toBe(true);
+  texture1.destroy(true);
+  texture2.destroy(true);
+});

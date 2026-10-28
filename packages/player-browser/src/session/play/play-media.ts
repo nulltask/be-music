@@ -73,7 +73,7 @@ export interface PlayMediaContext {
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
   readonly hasBGA: boolean;
-  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[] };
   readonly poorBGAFallbackKey: string | undefined;
   readonly bgaTextures: Map<string, Texture>;
   readonly bgaLayerTextures: Map<string, Texture>;
@@ -322,7 +322,11 @@ export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: PlayDis
 /** Stops the BGA videos and lets go of them as the play is disposed. */
 export function disposeBGAVideos(ctx: {
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
-  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
+  bgaActiveVideos: {
+    base?: { key: string; cueSeconds: number };
+    layer?: { key: string; cueSeconds: number };
+    layer2?: { key: string; cueSeconds: number };
+  };
 }): void {
   // Pause every BGA video BEFORE we touch textures. The Pixi `VideoSource` wrapping each video registers a
   // `requestVideoFrameCallback` that re-uploads frames into the GL texture as they decode — leaving those callbacks

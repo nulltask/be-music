@@ -122,6 +122,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Channel `07` is used for display as BGA layer
 - [x] Use channel `0A` for display as BGA layer2
 - [x] Combine display of `04` / `07` / `0A` (priority: `04` < `07` < `0A`)
+- Browser Native, Canvas, LR2 and beatoraja scenes keep `07` and `0A` independent, including their clear cues and NONSTOP stage stacks. The skin frame exposes them as `layer` and `layer2`. A video BMP reused on multiple tracks receives separate video playheads, and pause/resume and seek include both overlays.
 - [x] Treat black (`#000000`) as a transparent color in layer (`07`)
 - [x] Apply the same transparency rules to layer2 (`0A`) as layer (`07`)
 - [x] Handle BGA images assuming a 256x256 canvas

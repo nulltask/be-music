@@ -212,7 +212,7 @@ export interface PlayChartContext {
   fullComboFired: boolean;
   timingResolver: TimingResolver | undefined;
   nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
-  bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[] };
   poorBGAMode: 0 | 1 | 2;
   poorBGAFallbackKey: string | undefined;
   poorBGAFallbackUntilSeconds: number;
@@ -697,7 +697,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // LR2's SILENT automatic judge timing loads no BGA.
   ctx.hasBGA =
     !isSilentJudgeTimingPlay(ctx.options) &&
-    (ctx.bgaTimeline.base.length > 0 || ctx.bgaTimeline.layer.length > 0 || ctx.bgaTimeline.poor.length > 0);
+    (ctx.bgaTimeline.base.length > 0 ||
+      ctx.bgaTimeline.layer.length > 0 ||
+      (ctx.bgaTimeline.layer2?.length ?? 0) > 0 ||
+      ctx.bgaTimeline.poor.length > 0);
 }
 
 /**

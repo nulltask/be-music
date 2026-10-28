@@ -37,7 +37,8 @@ describe('buildBGATimeline', () => {
 
     expect(timeline.base.map((cue) => cue.bmpKey)).toEqual(['01', '02']);
     expect(timeline.base.map((cue) => cue.seconds)).toEqual([0, 20]);
-    expect(timeline.layer.map((cue) => cue.bmpKey)).toEqual(['AA', 'BB']);
+    expect(timeline.layer.map((cue) => cue.bmpKey)).toEqual(['AA']);
+    expect(timeline.layer2.map((cue) => cue.bmpKey)).toEqual(['BB']);
     expect(timeline.poor.map((cue) => cue.bmpKey)).toEqual(['CC']);
   });
 
@@ -173,7 +174,7 @@ describe('buildSkinBGAFrame', () => {
 });
 
 describe('toBrowserBGATimeline', () => {
-  it('keeps base and POOR cues and merges both layer channels in time order', () => {
+  it('keeps base, POOR and both overlay channels independent', () => {
     expect(
       toBrowserBGATimeline({
         base: [{ seconds: 0, key: '01' }],
@@ -183,9 +184,9 @@ describe('toBrowserBGATimeline', () => {
       }),
     ).toEqual({
       base: [{ seconds: 0, bmpKey: '01' }],
-      layer: [
+      layer: [{ seconds: 2, bmpKey: 'AA' }],
+      layer2: [
         { seconds: 1, bmpKey: 'BB' },
-        { seconds: 2, bmpKey: 'AA' },
         { seconds: 3, bmpKey: undefined },
       ],
       poor: [{ seconds: 4, bmpKey: 'CC' }],
@@ -259,11 +260,13 @@ describe('NONSTOP BGA', () => {
         { seconds: 19, bmpKey: '02' },
       ],
       layer: [{ seconds: 2, bmpKey: '02' }],
+      layer2: [],
       poor: [{ seconds: 0, bmpKey: '01' }],
     });
     expect(split[1]).toEqual({
       base: [{ seconds: 18, bmpKey: '03' }],
       layer: [{ seconds: 25, bmpKey: undefined }],
+      layer2: [],
       poor: [
         { seconds: 17, bmpKey: '03' },
         { seconds: 21, bmpKey: undefined },
@@ -377,4 +380,54 @@ it('resolves POOR overlay and hidden modes for explicit cues, including per-stag
   expect(stacks[1]).not.toHaveProperty('poorKey');
   expect(stacks[2]?.poorKey).toBe('p');
   expect(stacks[2]).not.toHaveProperty('poorOverlays');
+});
+
+describe('independent overlays', () => {
+  const timeline = {
+    base: [{ seconds: 0, bmpKey: 'base' }],
+    layer: [{ seconds: 1, bmpKey: 'first' }],
+    layer2: [
+      { seconds: 2, bmpKey: 'second' },
+      { seconds: 3, bmpKey: undefined },
+    ],
+    poor: [{ seconds: 0, bmpKey: 'miss' }],
+  };
+  it('clears only the authored overlay and reconstructs both when seeking backwards', () => {
+    const at = (seconds: number) => resolveBGAStacks({ timeline, seconds, inPoorWindow: false })[0]!;
+    expect(at(2.5)).toMatchObject({ layerCue: { bmpKey: 'first' }, layer2Cue: { bmpKey: 'second' } });
+    expect(at(3.5)).toMatchObject({ layerCue: { bmpKey: 'first' }, layer2Cue: { bmpKey: undefined } });
+    expect(at(1.5).layer2Cue).toBeUndefined();
+    expect(at(2.5).layer2Cue?.bmpKey).toBe('second');
+  });
+  it('suppresses both overlays for noLayer while keeping normal and POOR modes independent', () => {
+    for (const mode of [0, 1, 2] as const) {
+      const stack = resolveBGAStacks({ timeline, seconds: 2.5, inPoorWindow: true, poorBGAMode: mode })[0]!;
+      expect(stack.layerCue?.bmpKey).toBe('first');
+      expect(stack.layer2Cue?.bmpKey).toBe('second');
+      expect(stack.poorKey).toBe(mode === 2 ? undefined : 'miss');
+      expect(stack.poorOverlays).toBe(mode === 1 ? true : undefined);
+    }
+    const hidden = resolveBGAStacks({ timeline, seconds: 2.5, inPoorWindow: false, noLayer: true })[0]!;
+    expect(hidden.layerCue).toBeUndefined();
+    expect(hidden.layer2Cue).toBeUndefined();
+  });
+  it('loads the second overlay and exposes it to a skin as a layer image', () => {
+    const chart = createEmptyJSON('bms');
+    expect([...collectBGATextureLoadKeys(chart, timeline, undefined).layer]).toEqual(['first', 'second']);
+    expect(
+      buildSkinBGAFrame(
+        { base: 'base', layer: 'first', layer2: 'second', poor: undefined },
+        (key, track) => `${track}:${key}`,
+      ),
+    ).toEqual({ base: 'base:base', layer: 'layer:first', layer2: 'layer:second', poorActive: false });
+  });
+  it('retains second overlays through NONSTOP stage splitting and crossfades', () => {
+    const stages = [{ windowStart: 0, windowEnd: 4, bmpKeys: ['base', 'first', 'second', 'miss'] }];
+    const split = splitNonstopBGATimeline(timeline, stages);
+    expect(split[0]?.layer2).toEqual(timeline.layer2);
+    expect(
+      resolveBGAStacks({ timeline, nonstop: { stages, timelines: split }, seconds: 2.5, inPoorWindow: false })[0]
+        ?.layer2Cue?.bmpKey,
+    ).toBe('second');
+  });
 });

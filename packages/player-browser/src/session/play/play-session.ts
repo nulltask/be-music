@@ -800,11 +800,11 @@ export class PlaySession extends PlaySessionState {
   }
 
   /**
-   * Resumes only the videos tied to currently-active base / layer cues. Avoids touching videos that were paused for a
+   * Resumes only the videos tied to currently-active base / layer / layer2 cues. Avoids touching videos that were paused for a
    * different reason (e.g. an earlier cue switched away from them in `syncBGAVideo`).
    */
   resumeActiveBGAVideos(): void {
-    for (const track of ['base', 'layer'] as const) {
+    for (const track of ['base', 'layer', 'layer2'] as const) {
       const active = this.bgaActiveVideos[track];
       if (!active) continue;
       const handle = this.bgaVideos.get(active.key);

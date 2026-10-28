@@ -190,13 +190,33 @@ describe('playfield painters', () => {
     const ctx = recorder();
     paintBGA(
       ctx,
-      { shown: true, frame: { base: image('base'), layer: image('layer'), poor: image('poor'), poorActive: true } },
+      {
+        shown: true,
+        frame: {
+          base: image('base'),
+          layer: image('layer'),
+          layer2: image('second'),
+          poor: image('poor'),
+          poorActive: true,
+        },
+      },
       rect,
     );
     expect(ctx.calls).toEqual(['fillRect 0,0,256,256 #000000 1', 'drawImage poor 0,0,256,256']);
     const layered = recorder();
-    paintBGA(layered, { shown: true, frame: { base: image('base'), layer: image('layer'), poorActive: false } }, rect);
-    expect(layered.calls.slice(1)).toEqual(['drawImage base 0,0,256,256', 'drawImage layer 0,0,256,256']);
+    paintBGA(
+      layered,
+      {
+        shown: true,
+        frame: { base: image('base'), layer: image('layer'), layer2: image('second'), poorActive: false },
+      },
+      rect,
+    );
+    expect(layered.calls.slice(1)).toEqual([
+      'drawImage base 0,0,256,256',
+      'drawImage layer 0,0,256,256',
+      'drawImage second 0,0,256,256',
+    ]);
     const overlay = recorder();
     paintBGA(
       overlay,
@@ -205,6 +225,7 @@ describe('playfield painters', () => {
         frame: {
           base: image('base'),
           layer: image('layer'),
+          layer2: image('second'),
           poor: image('poor'),
           poorActive: true,
           poorOverlays: true,
@@ -215,6 +236,7 @@ describe('playfield painters', () => {
     expect(overlay.calls.slice(1)).toEqual([
       'drawImage base 0,0,256,256',
       'drawImage layer 0,0,256,256',
+      'drawImage second 0,0,256,256',
       'drawImage poor 0,0,256,256',
     ]);
     const none = recorder();

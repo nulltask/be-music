@@ -557,7 +557,7 @@ export interface BeMusicMeasureLine {
 /**
  * The BGA layers showing this frame, for a skin that composites the BGA itself ({@link BeMusicGameplaySkin.drawsBGA}).
  * Following the BMS convention, the host hands {@link layer} with pure black (`#000000`) already turned transparent,
- * while {@link base} and {@link poor} are opaque: draw all three with plain alpha blending, without keying them again.
+ * while {@link base} and {@link poor} are opaque: draw the base and both overlays with plain alpha blending, without keying them again.
  * A bmson layer (whose spec keeps black opaque) and a video layer come as authored. `#SWBGA` animation frames are
  * already picked; a slot's `#ARGB` tint and opacity are left to the skin.
  *
@@ -570,9 +570,11 @@ export interface BeMusicBGAFrame {
   base?: BeMusicImage;
   /** The layer drawn over the base (channel 07). */
   layer?: BeMusicImage;
+  /** The second overlay (channel 0A), drawn above layer. */
+  layer2?: BeMusicImage;
   /** The miss image (channel 06), shown while {@link poorActive}. */
   poor?: BeMusicImage;
-  /** True while a POOR is being shown: replace the base/layer unless {@link poorOverlays} is true. */
+  /** True while a POOR is being shown: replace the base and both overlays unless {@link poorOverlays} is true. */
   poorActive: boolean;
   /** Draw the miss image over the normal layers (`#POORBGA 1`), instead of replacing them. */
   poorOverlays?: boolean;
