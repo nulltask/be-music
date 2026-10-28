@@ -5,7 +5,7 @@ import { decodeVideoFramesStreamDirect, type DecodedVideoFrame } from './bga-vid
 const TRANSPARENT_ALPHA_THRESHOLD = 16;
 const VIDEO_BLACK_BORDER_THRESHOLD = 8;
 
-type FrameMode = 'base' | 'layer';
+type FrameMode = 'base' | 'layer' | 'bmson-layer';
 
 interface VideoDecodeWorkerInitData {
   videoPath: string;
