@@ -354,15 +354,7 @@ function shouldScheduleTrigger(
   if (json.sourceFormat !== 'bmson') {
     return true;
   }
-  // bmson 1.0.0 spec: a `c=true` note MUST NOT restart playback — it's a continuation marker that rides on the previous
-  // `c=false` anchor's BufferSource. Scheduling a separate render for it would overlap with the still-running anchor
-  // sample (especially now that the slice's `durationSeconds` is walked out to the next genuine restart) and
-  // effectively double the mix gain at every `c=true` hit. The runtime side achieves the same outcome via its
-  // `activeSampleNodes` "skip when already playing" gate; the offline mixer has no such state, so the skip has to
-  // happen up front here.
-  if (trigger.event.bmson?.c === true) {
-    return false;
-  }
+  // Each pulse plays its assigned slice, including continuations. Only simultaneous uses of that slice share audio.
   if (!trigger.sampleSliceId) {
     return true;
   }

@@ -259,7 +259,7 @@ export async function createNodeAudioSession({
       if (lnobjEndEvents.has(event)) {
         return;
       }
-      const normalized = normalizeObjectKey(event.value, runtimeSampleIdBase);
+      const normalized = normalizeObjectKey(event.value, runtimeSampleIdBase, json.sourceFormat === 'bmson');
       const sample = samplesByKey.get(normalized);
       if (!sample) {
         return;
@@ -278,8 +278,12 @@ export async function createNodeAudioSession({
       if (usesMonophonicWAVPlayback(json)) {
         removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
       }
-      if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
-        return;
+      const startSeconds = output.getClockState().outputSeconds;
+      if (playback?.sliceId) {
+        if (activeVoices.some((voice) => voice.sliceId === playback.sliceId && voice.startSeconds === startSeconds)) {
+          return;
+        }
+        removeActiveVoicesInPlace(activeVoices, (voice) => voice.sliceId === playback.sliceId);
       }
       const isPlayLaneSound = isPlayLaneSoundChannel(normalizedChannel);
       const voiceGain =
@@ -295,6 +299,7 @@ export async function createNodeAudioSession({
         sampleKey: normalized,
         samplePath: json.resources.wav[normalized],
         sliceId: playback?.sliceId,
+        startSeconds,
         gain: voiceGain,
       });
     },
@@ -319,6 +324,7 @@ interface ActiveVoice {
   sampleKey?: string;
   samplePath?: string;
   sliceId?: string;
+  startSeconds?: number;
   gain: number;
 }
 

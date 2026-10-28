@@ -60,3 +60,54 @@ test('duration loading propagates cancellation before decoding', async () => {
     loadNodeAudioSampleDurations(resolveChart(createEmptyJSON('bms')), { signal: controller.signal }),
   ).rejects.toMatchObject({ name: 'AbortError' });
 });
+
+test('bmson continuations play independently while simultaneous uses of one slice share a voice', async () => {
+  const json = createEmptyJSON('bmson');
+  json.metadata.bpm = 120;
+  json.resources.wav = { '01': 'stem.wav' };
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
+    { measure: 0, channel: '12', position: [1, 4], value: '01', bmson: { c: true } },
+    { measure: 0, channel: '13', position: [1, 4], value: '01', bmson: { c: true } },
+  ];
+  vi.mocked(renderSingleSample).mockResolvedValueOnce({
+    sampleRate: 44_100,
+    left: new Float32Array(88_200),
+    right: new Float32Array(88_200),
+    durationSeconds: 2,
+    peak: 0,
+  });
+  let seconds = 0;
+  vi.mocked(createNodeAudioSink).mockResolvedValueOnce({
+    runtime: 'node',
+    engine: 'webaudio',
+    label: 'test',
+    write: () => true,
+    waitWritable: async () => undefined,
+    end: async () => undefined,
+    destroy: () => undefined,
+    onError: () => undefined,
+    getClockState: () => ({ outputSeconds: seconds, scheduledSeconds: seconds }),
+    suspend: async () => undefined,
+    resume: async () => undefined,
+  });
+  const session = await createNodeAudioSession({
+    json,
+    resolvedChart: resolveChart(json),
+    options: {},
+    mode: 'manual',
+  });
+  expect(session).toBeDefined();
+  session!.triggerEvent?.(json.events[0]!);
+  session!.triggerEvent?.(json.events[1]!);
+  session!.triggerEvent?.(json.events[2]!);
+  expect(session!.getActiveAudioVoiceCount?.()).toBe(2);
+  seconds = 0.05;
+  session!.triggerEvent?.(json.events[2]!);
+  expect(session!.getActiveAudioVoiceCount?.()).toBe(2);
+  session!.stopChannel?.('13');
+  expect(session!.getActiveAudioVoiceCount?.()).toBe(1);
+  session!.stopChannel?.('11');
+  expect(session!.getActiveAudioVoiceCount?.()).toBe(0);
+  await session!.dispose();
+});

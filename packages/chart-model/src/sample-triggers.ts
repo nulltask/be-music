@@ -128,6 +128,8 @@ export function createBmsonSamplePlaybackMap(
 
   const playbackMap = new Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>();
   for (const entries of perSampleKey.values()) {
+    // Hosts can concatenate playable and BGM lists; source order must not change slice boundaries.
+    entries.sort((left, right) => left.beat - right.beat);
     let anchorSeconds = 0;
     let hasAnchor = false;
     let sliceIndex = 0;
@@ -150,16 +152,8 @@ export function createBmsonSamplePlaybackMap(
       }
 
       const offsetSeconds = Math.max(0, firstEntry.seconds - anchorSeconds);
-      // bmson 1.0.0 spec: a `c=true` note must NOT restart playback — the previous `c=false` anchor's audio keeps
-      // streaming through it. So the slice's duration boundary is the next note that forces a restart (`c !== true`),
-      // not just the next note. Walking past every consecutive `c=true` chord here means the BufferSource scheduled for
-      // THIS slice plays long enough to cover them all, and the runtime's "skip retrigger when this sample is already
-      // active" path actually has an active sample to compare against.
-      let boundaryIndex = end;
-      while (boundaryIndex < entries.length && entries[boundaryIndex]!.event.bmson?.c === true) {
-        boundaryIndex += 1;
-      }
-      const boundary = boundaryIndex < entries.length ? entries[boundaryIndex]! : undefined;
+      // Every distinct pulse cuts the stem. `c` chooses the source offset, not whether the next note needs a trigger.
+      const boundary = entries[end];
       const durationSeconds = boundary ? Math.max(0, boundary.seconds - firstEntry.seconds) : undefined;
       const sliceId = `${firstEntry.sampleKey}:${sliceIndex}`;
       sliceIndex += 1;
