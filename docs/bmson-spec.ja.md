@@ -121,10 +121,12 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [ ] 同一 pulse の処理順（Note/BGA → BPM → STOP）を仕様通りに固定
 - [ ] 同一 `y` の `bpm_events` を末尾優先で適用
 - [ ] 同一 `y` の `stop_events` を加算して適用
-- [ ] sound channel スライス規則（`c` と restart）に基づく再生
+- [x] sound channel スライス規則（`c` と restart）に基づく再生
 - [x] 同じ sound channel 内で playable ノートと BGM ノートが同じ `y` にある場合の BGM 破棄（parse 時に BGM ノートを捨てる）
 - [x] レイヤーノート（複数の sound channel が同じ `x` と `y` にノートを持つ場合）は、beatoraja と同じく player では最初の sound channel のノート 1 つとして判定し、ほかの sound channel もその時刻に鳴らす（[player 仕様 — 重複ノート](./player-spec.ja.md#重複ノート)）
 - [ ] 異なる sound channel の同一 `(x,y)` ノートを Layered Note として合成再生
+
+各 sound channel は異なる pulse ごとに独立したスライスへ切り出す。`c=true` は直前の再始動からの音源オフセットを継続し、ノートの発音を省略する指定ではない。同一 pulse のノートは一つのスライスを共有し、`c` が混在する場合は再始動する。異なるスライスは手動入力で独立して発音でき、後続ノートを見逃しても先行スライスがその音を鳴らし続けることはない。browser、Node、オフラインレンダラーでこの規則を共有する。
 
 ## 実装が読み込むフィールド (parser)
 

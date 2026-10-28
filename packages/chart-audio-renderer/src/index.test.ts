@@ -524,33 +524,28 @@ describe('chart-audio-renderer', () => {
     expect(triggers.map((trigger) => Number(trigger.sampleOffsetSeconds.toFixed(3)))).toEqual([0, 0.5, 0, 0.5]);
   });
 
-  test('audio-renderer: extends slice duration past consecutive c=true notes to the next restart', () => {
-    // bmson 1.0.0 — `c=true` MUST NOT restart audio playback. So the BufferSource scheduled at the `c=false` anchor
-    // must be long enough to reach the next `c=false` anchor (or end of the channel), letting the runtime's "skip
-    // retrigger when already playing" path keep the audio continuous.
+  test('audio-renderer: cuts slice duration at every distinct pulse', () => {
+    // Continuation selects the source offset; each distinct pulse still owns a separately triggered slice.
     const json = createEmptyJSON('bmson');
     json.metadata.bpm = 120;
     json.resources.wav['01'] = 'sample.wav';
     json.events = [
-      // anchor at 0s — should hold open until 1.0s.
+      // Anchor at 0s, cut at the continuation at 0.5s.
       { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
       // c=true at 0.5s — should hold open until 1.0s.
       { measure: 0, channel: '12', position: [1, 4], value: '01', bmson: { c: true } },
-      // anchor at 1.0s — open-ended (no further restart).
+      // Restart at 1.0s, cut at 1.5s.
       { measure: 0, channel: '13', position: [2, 4], value: '01', bmson: { c: false } },
-      // c=true at 1.5s — open-ended too.
+      // Final continuation at 1.5s runs to EOF.
       { measure: 0, channel: '14', position: [3, 4], value: '01', bmson: { c: true } },
     ];
 
     const triggers = collectSampleTriggers(json);
-    expect(triggers.map((trigger) => trigger.sampleDurationSeconds)).toEqual([1, 0.5, undefined, undefined]);
+    expect(triggers.map((trigger) => trigger.sampleDurationSeconds)).toEqual([0.5, 0.5, 0.5, undefined]);
   });
 
-  test('audio-renderer: bmson c=true notes never schedule a second render on top of the c=false anchor', async () => {
-    // The runtime relies on an `activeSampleNodes` gate to skip the BufferSource retrigger; the offline mixer has none,
-    // so a `c=true` trigger must be filtered before scheduling. Two notes at distinct beats sharing one anchor — a
-    // `c=false` followed by a `c=true` — must mix at the same peak as the `c=false` alone (i.e. NOT 2x), confirming the
-    // second trigger produced no extra render.
+  test('audio-renderer: disjoint bmson continuation slices retain the original mix peak', async () => {
+    // Slices of one source are adjacent, so perfect AUTO playback retains its peak.
     const anchorOnly = createEmptyJSON('bmson');
     anchorOnly.metadata.bpm = 120;
     anchorOnly.resources.wav['01'] = 'not-found.wav';
@@ -561,7 +556,7 @@ describe('chart-audio-renderer', () => {
     withContinuation.resources.wav['01'] = 'not-found.wav';
     withContinuation.events = [
       { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
-      // `c=true` at a later beat must NOT spawn its own render.
+      // This continuation plays from the matching offset, without extending the source.
       { measure: 0, channel: '12', position: [1, 2], value: '01', bmson: { c: true } },
     ];
 

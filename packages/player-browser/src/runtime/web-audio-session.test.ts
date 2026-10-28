@@ -406,21 +406,41 @@ describe('createWebAudioSession', () => {
     expect(createdGains[0]!.disconnect).toHaveBeenCalled();
   });
 
-  test('honours bmson c=true continuation by suppressing retriggers of an in-flight slot', () => {
+  test('plays different continuation slices independently and deduplicates one chord slice', () => {
     const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const chart = makeChartWithSamples();
+    chart.sourceFormat = 'bmson';
+    const first = mkEvent('11', '01');
+    const continuation = mkEvent('12', '01', { position: [1, 4], bmson: { c: true } });
+    const chord = mkEvent('13', '01', { position: [1, 4], bmson: { c: true } });
     const session = createWebAudioSession({
       audioContext,
       audioBus,
-      chart: makeChartWithSamples(),
-      decodedSamples: new Map([['kick.wav', makeMockAudioBuffer()]]),
+      chart,
+      decodedSamples: new Map([['kick.wav', makeMockAudioBuffer(5)]]),
       wavCmdVolumeMultipliers: new Map(),
+      bmsonSlicePlayback: new Map([
+        [first, { offsetSeconds: 0, durationSeconds: 0.5 }],
+        [continuation, { offsetSeconds: 0.5, durationSeconds: 0.5 }],
+        [chord, { offsetSeconds: 0.5, durationSeconds: 0.5 }],
+      ]),
     });
 
-    session.triggerEvent?.(mkEvent('11', '01'));
-    // Same slot, c=true, sample still in-flight (onended hasn't fired) — must not allocate a fresh source.
-    session.triggerEvent?.(mkEvent('11', '01', { bmson: { c: true } }));
+    session.triggerEvent?.(first);
+    session.triggerEvent?.(continuation);
+    session.triggerEvent?.(chord);
 
-    expect(trackedBufferSources).toHaveLength(1);
+    expect(trackedBufferSources).toHaveLength(2);
+    expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 0, 0.5);
+    expect(trackedBufferSources[1]!.node.start).toHaveBeenCalledWith(0, 0.5, 0.5);
+    expect(trackedBufferSources[0]!.node.stop).not.toHaveBeenCalled();
+    // A miss never invokes triggerEvent; the first slice's duration already prevents audio leaking into that note.
+    trackedBufferSources[1]!.node.onended?.(new Event('ended'));
+    session.triggerEvent?.(chord);
+    expect(trackedBufferSources).toHaveLength(3);
+    session.seek?.(0);
+    session.triggerEvent?.(continuation);
+    expect(trackedBufferSources).toHaveLength(4);
   });
 
   test('stops the previous BMS source when the same #WAV slot is retriggered', () => {
