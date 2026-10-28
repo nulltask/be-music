@@ -1,10 +1,9 @@
 // The player's test hook: `window.__beMusicTest`, a read-only view of what the player shows, for the end-to-end suite
-// (`packages/app-play/e2e`, `docs/course-checklist.md`). It reads state the host already keeps and the facts of
+// (`packages/app-play/e2e`, `docs/player-web.md#browser-verification`). It reads state the host already keeps and the facts of
 // each result screen and replay the host hands it; it never drives the player. Files are loaded through the page's
 // drop handler, as a person drops them.
 //
-// The shape is a contract: the scene router and host rewrite (docs/architecture.md, P5) keep every field meaning
-// what it means here, and bump `version` when one changes.
+// The shape is a contract: bump `version` when the meaning of a field changes.
 
 import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player-engine/replay';
 import type { LibraryEntry, PlayResult } from '@be-music/player-scene-model';
@@ -27,10 +26,7 @@ export interface TestHookJudged {
   poor: number;
 }
 
-/**
- * A bar on the select screen. A chart bar is `'song'`: contract v1 keeps the name the library entries had, although
- * `@be-music/player-scene-model` now calls the kind `'chart'`.
- */
+/** A bar on the select screen: a folder, chart or course. */
 export interface TestHookBar {
   kind: 'folder' | 'chart' | 'course';
   /** The folder label, the chart title or the course name. */

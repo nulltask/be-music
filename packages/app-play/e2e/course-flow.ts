@@ -2,7 +2,7 @@ import type { TestHookFamily, TestHookResult, TestHookState } from '../src/test-
 import { COURSES, expect, SMOKE, test, type Player } from './support.ts';
 
 /**
- * The course flow of the checklist (`docs/course-checklist.md`, items 1-8 and 10), run the same way on each skin family:
+ * The course flow of the checklist (`docs/player-web.md#browser-verification`), run the same way on each skin family:
  * a spec file describes the family ({@link FamilyCase}) and calls {@link courseFlowTests}.
  */
 

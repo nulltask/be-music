@@ -25,7 +25,7 @@ The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
 - Pages at the root of `leaderboard.be-music.app`: new scores and course runs (top), a score, a chart's rankings, a chartset, a course, a
   course run, and a player.
 
-Not yet: L4 for new `#RANDOM` outcomes and L5, rivals, and OG cards.
+Not implemented: L4 for new `#RANDOM` outcomes, L5 and rivals. Score share cards are generated in the browser, uploaded through `PUT /api/v0/scores/:id/card` and served by `/scores/:id/card`.
 
 A score submission, in the order the Worker checks it (`src/api/v0.ts`, `src/scores/submit.ts`); the full sequence with the client is in [docs/leaderboard.md section 5.2](../../docs/leaderboard.md#52-sequence):
 
