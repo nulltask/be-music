@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseBMS } from '@be-music/chart-parser';
+import { stitchNonstopCourse } from '@be-music/player-engine/course';
 import { encode } from 'fast-png';
 import { expect, test } from 'vite-plus/test';
 import { createBgaANSIRenderer, type BGAKittyImage } from './bga.ts';
@@ -77,6 +78,26 @@ function center(image: BGAKittyImage): number[] {
   const offset = (Math.floor(image.pixelHeight / 2) * image.pixelWidth + Math.floor(image.pixelWidth / 2)) * 3;
   return Array.from(image.rgb.subarray(offset, offset + 3));
 }
+
+test('stitched opacity resets at the next stage and cannot leak from the previous stage tail', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-nonstop-opacity-'));
+  try {
+    await writeSolidPNG(join(baseDir, 'red.png'), [255, 0, 0]);
+    await writeSolidPNG(join(baseDir, 'blue.png'), [0, 0, 255]);
+    const a = parseBMS('#BPM 120\n#BMP01 red.png\n#00004:01\n#00111:01\n#00411:01\n#0000B:80\n#0060B:20');
+    const b = parseBMS('#BPM 120\n#BMP01 blue.png\n#00204:01\n#00211:01\n#00411:01');
+    const course = stitchNonstopCourse([{ chart: a }, { chart: b }], { connections: ['cut'] });
+    if (!course.ok) throw new Error(course.reason);
+    const renderer = (await createBgaANSIRenderer(course.chart, { baseDir, width: 40, height: 20 }))!;
+    const boundary = course.map.stages[1]!.windowStart;
+    expect(center(renderer.getKittyImage(boundary - 0.01))).toEqual([128, 0, 0]);
+    expect(center(renderer.getKittyImage(boundary + 0.01))).toEqual([0, 0, 255]);
+    expect(center(renderer.getKittyImage(12.1))).toEqual([0, 0, 255]);
+    expect(center(renderer.getKittyImage(boundary - 0.01))).toEqual([128, 0, 0]);
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
 
 async function writeSolidPNG(path: string, color: number[]): Promise<void> {
   const data = new Uint8Array(256 * 256 * 4);

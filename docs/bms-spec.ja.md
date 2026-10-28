@@ -189,7 +189,7 @@
 - [x] `#BASEBPM` を `@be-music/chart-model` 経由で browser HS-FIX calibration の reference BPM として使用
 - [x] Browser player は `#BGAxx` sub-region BGA を描画する。現在の SWBGA アニメーションとスロット単位の ARGB/EXBMP tint は Be-Music 独自の解釈であり、nanasi 互換ではない。
 - [ ] nanasi の EXBMP 透過色指定、各 BGA 面に対する ARGB（`A1`〜`A4`）、キー入力に連動する SWBGA（`A5`）を実装する。[コマンド資料](https://hitkey.nekokan.dyndns.info/cmds.htm#EXBMPXX) では画像への tint とは異なる意味で定義されている。
-- [x] Terminal は透明度チャンネル `0B` / `0C` / `0D` / `0E` を base / layer / layer2 / POOR に適用し、ANSI と Kitty の両方に反映する。非ゼロの16進バイト値を `value / 255` の透明度として扱い、`00` は休符、初期値は不透明とする。譜面の時刻に従って次の指定まで値を保持し、シークでは以前の状態を復元する。置換型 POOR は黒地に、重ねる POOR は通常の BGA に合成する。Browser の透明度描画、NONSTOP への透明度イベントの引き継ぎ、各面への ARGB との連動は未対応。
+- [x] Terminal は透明度チャンネル `0B` / `0C` / `0D` / `0E` を base / layer / layer2 / POOR に適用し、ANSI と Kitty の両方に反映する。非ゼロの16進バイト値を `value / 255` の透明度として扱い、`00` は休符、初期値は不透明とする。譜面の時刻に従って次の指定まで値を保持し、シークでは以前の状態を復元する。置換型 POOR は黒地に、重ねる POOR は通常の BGA に合成する。NONSTOP は透明度イベントと各ステージの有効な初期値を引き継ぎ、クロスフェード用にステージ別の履歴も公開する。Browser の透明度描画（NONSTOP を含む）と、各面への ARGB との連動は未対応。
 - [x] Browser と terminal は `#EXBMPxx a,r,g,b filename` のみで定義したファイル名を、暗黙の POOR スロット `00` も含めて読み込む。明示的な `#BMPxx` のファイル名を優先する。ファイル名前の区切りがカンマの記法も引き続き受け付ける。上記 nanasi 描画機能は未対応。
 - [x] Terminal は base・両オーバーレイ・POOR で `#BGAxx` の切り出しを描画し、暗黙のスロット `00` にも対応する。座標はリサイズや動画の黒枠除去前の画像・動画を基準とし、`dx dy` で 256×256 キャンバスに配置して領域外を切る。base と置換型 POOR の周囲は黒、オーバーレイの周囲は透過にする。再生中に届く動画フレームにも同じ処理を適用する。明示的な BMP/EXBMP リソースを BGA 別名より優先し、未定義・循環する別名は欠落リソース用フレームにする。
 - [x] チャンネル `51-59` / `61-69`（拡張の `5A-5O` / `6A-6O` を含む）をロングノートとして解釈。`#LNTYPE` 省略時の既定である `#LNTYPE 1` はオブジェクトを始点 / 終点の組にし、`#LNTYPE 2`（MGQ）は `00` 以外が連続するセルの並びを 1 本のロングノートにする
