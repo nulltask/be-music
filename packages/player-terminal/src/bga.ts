@@ -38,6 +38,7 @@ import {
   createBlackBackgroundANSILines,
 } from './bga-compose.ts';
 import { loadFrameSource, loadTerminalImageSourceFrame, resolveMediaPath } from './bga-media.ts';
+import { cropBGAFrameSource, resolveBGAResource, type BGAResource } from './bga-subregions.ts';
 
 const MAX_NORMAL_BGA_COMPOSITE_LAYERS = 3;
 const DEFAULT_BGA_ASCII_WIDTH = 34;
@@ -584,23 +585,28 @@ export async function createBgaANSIRenderer(
   }
   for (const entry of json.bmson.bga.header) resources[entry.name] = entry.name;
 
+  const resourceDefinitions = new Map<string, BGAResource>();
+  for (const key of new Set([...Object.keys(resources), ...Object.keys(json.bms.bga)])) {
+    const definition = resolveBGAResource(json, resources, key);
+    if (definition) resourceDefinitions.set(key, definition);
+  }
+
   const baseKeys = new Set(baseTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const poorKeys = new Set(poorTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layer2Keys = new Set(layer2Timeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   // LR2 starts its miss layer from `#BMP00`; only `#POORBGA 2` (no POOR image) turns that off.
-  const shouldUsePoorBMP00Fallback =
-    resolvePoorBGAMode(json.bms.poorBGA) !== 2 && typeof resources['00'] === 'string' && resources['00'].length > 0;
+  const shouldUsePoorBMP00Fallback = resolvePoorBGAMode(json.bms.poorBGA) !== 2 && resourceDefinitions.has('00');
   const poorFallbackKey = shouldUsePoorBMP00Fallback ? '00' : undefined;
   if (poorFallbackKey) {
     poorKeys.add(poorFallbackKey);
   }
   const poorFallbackUntilSeconds = poorTimeline[0]?.seconds ?? Number.POSITIVE_INFINITY;
   const totalLoadTargetCount =
-    countMappedBMPResourceTargets(baseKeys, resources) +
-    countMappedBMPResourceTargets(poorKeys, resources) +
-    countMappedBMPResourceTargets(layerKeys, resources) +
-    countMappedBMPResourceTargets(layer2Keys, resources);
+    countMappedBMPResourceTargets(baseKeys, resourceDefinitions) +
+    countMappedBMPResourceTargets(poorKeys, resourceDefinitions) +
+    countMappedBMPResourceTargets(layerKeys, resourceDefinitions) +
+    countMappedBMPResourceTargets(layer2Keys, resourceDefinitions);
   let loadedTargetCount = 0;
   const reportLoadProgress = (detail: string): void => {
     if (!options.onLoadProgress || totalLoadTargetCount <= 0) {
@@ -622,7 +628,7 @@ export async function createBgaANSIRenderer(
     await Promise.all([
       loadFramesByKeys({
         keys: baseKeys,
-        resources,
+        resources: resourceDefinitions,
         baseDir: options.baseDir,
         mode: 'base',
         width: displaySize.width,
@@ -635,7 +641,7 @@ export async function createBgaANSIRenderer(
       }),
       loadFramesByKeys({
         keys: poorKeys,
-        resources,
+        resources: resourceDefinitions,
         baseDir: options.baseDir,
         mode: resolvePoorBGAMode(json.bms.poorBGA) === 1 ? 'bmson-layer' : 'base',
         width: displaySize.width,
@@ -648,7 +654,7 @@ export async function createBgaANSIRenderer(
       }),
       loadFramesByKeys({
         keys: layerKeys,
-        resources,
+        resources: resourceDefinitions,
         baseDir: options.baseDir,
         mode: layerMode,
         width: displaySize.width,
@@ -661,7 +667,7 @@ export async function createBgaANSIRenderer(
       }),
       loadFramesByKeys({
         keys: layer2Keys,
-        resources,
+        resources: resourceDefinitions,
         baseDir: options.baseDir,
         mode: layerMode,
         width: displaySize.width,
@@ -722,7 +728,7 @@ export async function createBgaANSIRenderer(
 
 async function loadFramesByKeys(params: {
   keys: ReadonlySet<string>;
-  resources: Record<string, string>;
+  resources: ReadonlyMap<string, BGAResource>;
   baseDir: string;
   mode: FrameMode;
   width: number;
@@ -753,10 +759,12 @@ async function loadFramesByKeys(params: {
     Math.min(orderedKeys.length || 1, BGA_SOURCE_LOAD_CONCURRENCY),
     async (key) => {
       throwIfAborted(signal);
-      const resourcePath = resources[key];
-      if (!resourcePath) {
+      const definition = resources.get(key);
+      if (!definition) {
         return;
       }
+      const resourcePath = definition.path;
+      const preserveSourceGeometry = definition.regions.length > 0;
       const resolved = await resolveMediaPath(baseDir, resourcePath, signal);
       if (!resolved) {
         onLoadProgress?.(resourcePath);
@@ -764,7 +772,7 @@ async function loadFramesByKeys(params: {
       }
 
       const cacheKey =
-        `${mode}:${width}x${height}:${imageResizeAlgorithm}:` +
+        `${mode}:${preserveSourceGeometry ? 'native' : 'spec'}:${width}x${height}:${imageResizeAlgorithm}:` +
         `${videoBGAStreaming === false ? 'full' : 'stream'}:${resolved}`;
       let sourcePromise = sharedSourceCache.get(cacheKey);
       if (!sourcePromise) {
@@ -776,13 +784,14 @@ async function loadFramesByKeys(params: {
           imageResizeAlgorithm,
           videoBGAStreaming,
           signal,
+          preserveSourceGeometry,
         ).then((source) => source ?? null);
         sharedSourceCache.set(cacheKey, sourcePromise);
       }
 
       const source = await sourcePromise;
       if (source) {
-        map.set(key, source);
+        map.set(key, cropBGAFrameSource(source, definition.regions, mode));
       }
       onLoadProgress?.(resourcePath);
     },
@@ -792,10 +801,10 @@ async function loadFramesByKeys(params: {
   return map;
 }
 
-function countMappedBMPResourceTargets(keys: ReadonlySet<string>, resources: Record<string, string>): number {
+function countMappedBMPResourceTargets(keys: ReadonlySet<string>, resources: ReadonlyMap<string, BGAResource>): number {
   let count = 0;
   for (const key of keys) {
-    if (resources[key]) {
+    if (resources.has(key)) {
       count += 1;
     }
   }

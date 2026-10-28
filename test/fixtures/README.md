@@ -121,3 +121,5 @@ Regenerate them through the editor API rather than by hand — that is what keep
 ## Video assets
 
 `bga-hevc.mp4` and `bga-vp9.webm` are generated 16×16 red clips (two frames at 1 fps), used by `player-terminal/src/bga-video.test.ts` to exercise real HEVC and VP9 decoding and the first-frame limit. They contain no third-party media. Regenerate with FFmpeg color input, `-frames:v 2 -pix_fmt yuv420p`, and respectively `-c:v libx265 -tag:v hvc1` or `-c:v libvpx-vp9`.
+
+`bga-bordered.webm` is a generated 32×32 VP9 clip with a black border and a 16×16 center that changes from red to green (two frames at 2 fps). Terminal tests verify native crop coordinates and late streaming frames against it. Generate red and lime 16×16 FFmpeg color inputs, each with `r=2:d=0.5,pad=32:32:8:8:color=black`; concatenate with `[0:v][1:v]concat=n=2:v=1:a=0` and encode with `-c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p`. It contains no third-party media.

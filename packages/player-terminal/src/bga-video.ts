@@ -106,6 +106,7 @@ interface VideoDecodeWorkerInitData {
   videoPath: string;
   mode: FrameMode;
   stopAfterFirstFrame: boolean;
+  preserveVideoBorders: boolean;
 }
 
 interface VideoDecodeWorkerReadyMessage {
@@ -226,6 +227,7 @@ export async function decodeVideoFramesToSourceFramesInWorker(
   options: {
     onReady?: (info: DecodedVideoStreamInfo) => void;
     stopAfterFirstFrame?: boolean;
+    preserveVideoBorders?: boolean;
   } = {},
 ): Promise<{ codecName: string; frameCount: number; durationSeconds?: number } | undefined> {
   throwIfAborted(signal);
@@ -233,6 +235,7 @@ export async function decodeVideoFramesToSourceFramesInWorker(
     videoPath,
     mode,
     stopAfterFirstFrame: Boolean(options.stopAfterFirstFrame),
+    preserveVideoBorders: Boolean(options.preserveVideoBorders),
   } satisfies VideoDecodeWorkerInitData;
   const worker = isSEARuntime()
     ? createSEAWorker('bga-video-worker', workerInitData)

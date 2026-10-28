@@ -80,6 +80,16 @@ describe('convertImageToSourceFrame', () => {
     expect(frame.height).toBe(1);
     expect([...frame.rgb]).toEqual([200, 100, 50]);
   });
+
+  test('retains native video coordinates for authored BGA sub-regions', () => {
+    const frame = convertImageToSourceFrame(
+      createImage('video', 3, [0, 0, 0, 255, 200, 100, 50, 255, 0, 0, 0, 255]),
+      'base',
+      true,
+    );
+    expect(frame.width).toBe(3);
+    expect(Array.from(frame.rgb)).toEqual([0, 0, 0, 200, 100, 50, 0, 0, 0]);
+  });
 });
 
 describe('resizeANSIFrame', () => {
