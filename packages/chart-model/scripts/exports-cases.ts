@@ -28,6 +28,26 @@ function getBenchFingerprintDocument(
 }
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
+  define('chart-model.buildBGAOpacityTimelines', {
+    run: (fixtures) => {
+      const chart = {
+        ...fixtures.emptyBmsJSON,
+        events: [{ measure: 0, position: [0, 1] as [number, number], channel: '0C', value: '80' }],
+      };
+      chartAPI.buildBGAOpacityTimelines(chart, chartAPI.createTimingResolver(chart));
+    },
+  });
+  define('chart-model.pickBGAOpacity', {
+    run: () => {
+      chartAPI.pickBGAOpacity(
+        [
+          { seconds: 0, opacity: 1 },
+          { seconds: 1, opacity: 128 / 255 },
+        ],
+        1.5,
+      );
+    },
+  });
   define('chart-model.resolvePoorBGAMode', {
     run: () => {
       chartAPI.resolvePoorBGAMode('1');

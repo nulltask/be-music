@@ -5,6 +5,7 @@ import {
   cropANSIFrameToOpaqueBounds,
   fillANSIFrameBackground,
   mergeCompositeFrames,
+  mergeCompositeLayers,
 } from './bga-compose.ts';
 import { type ANSIFrame, createSolidANSIFrame } from './bga-frame.ts';
 
@@ -56,6 +57,46 @@ describe('mergeCompositeFrames', () => {
     const frame = createFrame(1, 1, [[1, 2, 3]]);
     expect(mergeCompositeFrames(undefined, frame)).toBe(frame);
     expect(mergeCompositeFrames(undefined)).toBeUndefined();
+  });
+});
+
+describe('mergeCompositeLayers', () => {
+  test('blends both overlays over the lower tracks without mutating source pixels', () => {
+    const base = createFrame(1, 1, [[0, 0, 255]]);
+    const red = createFrame(1, 1, [[255, 0, 0]]);
+    const green = createFrame(1, 1, [[0, 255, 0]]);
+    const result = mergeCompositeLayers([
+      { frame: base, opacity: 1 },
+      { frame: red, opacity: 128 / 255 },
+      { frame: green, opacity: 64 / 255 },
+    ])!;
+    expect(Array.from(result.rgb)).toEqual([96, 64, 95]);
+    expect(Array.from(base.rgb)).toEqual([0, 0, 255]);
+    expect(Array.from(red.rgb)).toEqual([255, 0, 0]);
+  });
+
+  test('keeps masked holes transparent to lower layers and centers a smaller frame', () => {
+    const result = mergeCompositeLayers([
+      {
+        frame: createFrame(3, 1, [
+          [0, 0, 255],
+          [0, 0, 255],
+          [0, 0, 255],
+        ]),
+        opacity: 1,
+      },
+      { frame: createFrame(1, 1, [[255, 0, 0]]), opacity: 128 / 255 },
+      { frame: createFrame(1, 1, [null]), opacity: 0.5 },
+    ])!;
+    expect(Array.from(result.rgb)).toEqual([0, 0, 255, 128, 0, 127, 0, 0, 255]);
+  });
+
+  test('dims a single frame over black and supports zero opacity without shrinking the canvas', () => {
+    const frame = createFrame(1, 1, [[255, 0, 0]]);
+    expect(Array.from(mergeCompositeLayers([{ frame, opacity: 128 / 255 }])!.rgb)).toEqual([128, 0, 0]);
+    expect(Array.from(mergeCompositeLayers([{ frame, opacity: 0 }])!.rgb)).toEqual([0, 0, 0]);
+    expect(mergeCompositeLayers([{ frame, opacity: 1 }])).toBe(frame);
+    expect(mergeCompositeLayers([{ opacity: 0.5 }])).toBeUndefined();
   });
 });
 

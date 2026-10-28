@@ -1,7 +1,16 @@
 import { availableParallelism } from 'node:os';
 import { runWithConcurrency, throwIfAborted } from '@be-music/shared-utils/core';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { parseBMSExBMP, resolvePoorBGAMode, type PoorBGAMode, resolveChart, type BGACue } from '@be-music/chart-model';
+import {
+  parseBMSExBMP,
+  buildBGAOpacityTimelines,
+  pickBGAOpacity,
+  type BGAOpacityTimelines,
+  resolvePoorBGAMode,
+  type PoorBGAMode,
+  resolveChart,
+  type BGACue,
+} from '@be-music/chart-model';
 import {
   DEFAULT_IMAGE_RESIZE_ALGORITHM,
   DEFAULT_POOR_BGA_DISPLAY_SECONDS,
@@ -32,7 +41,7 @@ import {
 import {
   type CompositeFrame,
   cropANSIFrameToOpaqueBounds,
-  mergeCompositeFrames,
+  mergeCompositeLayers,
   fillANSIFrameBackground,
   composeANSILines,
   createBlackBackgroundANSILines,
@@ -201,6 +210,10 @@ export class BgaANSIRenderer {
 
   private cachedPoorActive = false;
 
+  private cachedOpacityToken = '';
+
+  private readonly opacityTimelines: BGAOpacityTimelines;
+
   private cachedComposite?: CompositeFrame;
 
   private cachedLines?: string[];
@@ -232,6 +245,7 @@ export class BgaANSIRenderer {
     missingPoorSourceFrame: ANSIFrame;
     missingLayerSourceFrame: ANSIFrame;
     poorBGAMode?: PoorBGAMode;
+    opacityTimelines?: BGAOpacityTimelines;
     poorFallbackKey?: string;
     poorFallbackUntilSeconds: number;
     playbackEndSeconds: number;
@@ -253,6 +267,7 @@ export class BgaANSIRenderer {
     this.missingPoorSourceFrame = params.missingPoorSourceFrame;
     this.missingLayerSourceFrame = params.missingLayerSourceFrame;
     this.poorBGAMode = params.poorBGAMode ?? 0;
+    this.opacityTimelines = params.opacityTimelines ?? { base: [], layer: [], layer2: [], poor: [] };
     this.poorFallbackKey = params.poorFallbackKey;
     this.poorFallbackUntilSeconds = params.poorFallbackUntilSeconds;
     this.playbackEndSeconds = params.playbackEndSeconds;
@@ -371,25 +386,28 @@ export class BgaANSIRenderer {
       `${state.baseKey}:${baseSelection.index}:` +
       `${state.layerKey}:${layerSelection.index}:` +
       `${state.layer2Key}:${layer2Selection.index}:` +
-      `${state.poorActive ? '1' : '0'}:${state.poorKey}:${poorSelection.index}`;
+      `${state.poorActive ? '1' : '0'}:${state.poorKey}:${poorSelection.index}:${state.opacityToken}`;
     if (this.cachedKittyImage?.token === token) {
       return this.cachedKittyImage;
     }
 
-    const normalFrames = [baseSelection.frame, layerSelection.frame, layer2Selection.frame].slice(
-      0,
-      MAX_NORMAL_BGA_COMPOSITE_LAYERS,
-    );
+    const normalFrames = [
+      { frame: baseSelection.frame, opacity: state.opacity.base },
+      { frame: layerSelection.frame, opacity: state.opacity.layer },
+      { frame: layer2Selection.frame, opacity: state.opacity.layer2 },
+    ].slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS);
+    const poorLayer = { frame: poorSelection.frame, opacity: state.opacity.poor };
     const frames =
       state.poorActive && poorSelection.frame
         ? this.poorBGAMode === 1
-          ? [...normalFrames, poorSelection.frame]
-          : [poorSelection.frame]
+          ? [...normalFrames, poorLayer]
+          : [poorLayer]
         : normalFrames;
-    const composite = mergeCompositeFrames(
-      ...frames.map((frame) =>
-        frame ? resizeANSIFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm) : undefined,
-      ),
+    const composite = mergeCompositeLayers(
+      frames.map(({ frame, opacity }) => ({
+        frame: frame ? resizeANSIFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm) : undefined,
+        opacity,
+      })),
     );
     const filledFrame = composite
       ? fillANSIFrameBackground(composite, 0, 0, 0)
@@ -486,7 +504,8 @@ export class BgaANSIRenderer {
       this.cachedLayerFrameIndex === layerSelection.index &&
       this.cachedLayer2FrameIndex === layer2Selection.index &&
       this.cachedPoorFrameIndex === poorSelection.index &&
-      this.cachedPoorActive === state.poorActive
+      this.cachedPoorActive === state.poorActive &&
+      this.cachedOpacityToken === state.opacityToken
     ) {
       return;
     }
@@ -500,16 +519,19 @@ export class BgaANSIRenderer {
     this.cachedLayer2FrameIndex = layer2Selection.index;
     this.cachedPoorFrameIndex = poorSelection.index;
     this.cachedPoorActive = state.poorActive;
-    const normalFrames = [baseSelection.frame, layerSelection.frame, layer2Selection.frame].slice(
-      0,
-      MAX_NORMAL_BGA_COMPOSITE_LAYERS,
-    );
-    this.cachedComposite = mergeCompositeFrames(
-      ...(state.poorActive && poorSelection.frame
+    this.cachedOpacityToken = state.opacityToken;
+    const normalFrames = [
+      { frame: baseSelection.frame, opacity: state.opacity.base },
+      { frame: layerSelection.frame, opacity: state.opacity.layer },
+      { frame: layer2Selection.frame, opacity: state.opacity.layer2 },
+    ].slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS);
+    const poorLayer = { frame: poorSelection.frame, opacity: state.opacity.poor };
+    this.cachedComposite = mergeCompositeLayers(
+      state.poorActive && poorSelection.frame
         ? this.poorBGAMode === 1
-          ? [...normalFrames, poorSelection.frame]
-          : [poorSelection.frame]
-        : normalFrames),
+          ? [...normalFrames, poorLayer]
+          : [poorLayer]
+        : normalFrames,
     );
     this.cachedLines = undefined;
     this.cachedKittyImage = undefined;
@@ -525,6 +547,8 @@ export class BgaANSIRenderer {
     layer2Seconds: number;
     poorSeconds: number;
     poorActive: boolean;
+    opacity: Record<keyof BGAOpacityTimelines, number>;
+    opacityToken: string;
   } {
     const cueSeconds = Math.min(currentSeconds, this.cueFreezeSeconds);
     const baseCue = pickActiveBGACue(this.baseTimeline, cueSeconds);
@@ -532,7 +556,15 @@ export class BgaANSIRenderer {
     const layer2Cue = pickActiveBGACue(this.layer2Timeline, cueSeconds);
     const poorCue = pickActiveBGACue(this.poorTimeline, cueSeconds);
     const poorActive = this.poorBGAMode !== 2 && currentSeconds < this.poorActiveUntilSeconds;
+    const opacity = {
+      base: pickBGAOpacity(this.opacityTimelines.base, cueSeconds),
+      layer: pickBGAOpacity(this.opacityTimelines.layer, cueSeconds),
+      layer2: pickBGAOpacity(this.opacityTimelines.layer2, cueSeconds),
+      poor: pickBGAOpacity(this.opacityTimelines.poor, cueSeconds),
+    };
     return {
+      opacity,
+      opacityToken: Object.values(opacity).join(':'),
       baseKey: baseCue?.key ?? '',
       layerKey: layerCue?.key ?? '',
       layer2Key: layer2Cue?.key ?? '',
@@ -711,6 +743,7 @@ export async function createBgaANSIRenderer(
     missingPoorSourceFrame,
     missingLayerSourceFrame,
     poorBGAMode: resolvePoorBGAMode(json.bms.poorBGA),
+    opacityTimelines: buildBGAOpacityTimelines(json, resolved.timing),
     poorFallbackKey,
     poorFallbackUntilSeconds,
     playbackEndSeconds: Math.max(
