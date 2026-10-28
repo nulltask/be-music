@@ -30,6 +30,8 @@ export interface ResolvedNote {
   readonly damage?: number;
   /** The source event the note was resolved from, for keysound lookup and diagnostics. */
   readonly event: BeMusicEvent;
+  /** bmson layered note: every constituent source event, including `event`, triggered by one press. */
+  readonly soundEvents?: readonly BeMusicEvent[];
 }
 
 export interface ResolvedNoteLists {
@@ -37,7 +39,8 @@ export interface ResolvedNoteLists {
   notes: ResolvedNote[];
   /**
    * Notes that lost their lane and position to a note in `notes` and carry a different keysound: not judged or drawn,
-   * but their keysound still belongs to the chart, so a manual-play host sounds them as background audio.
+   * but their keysound still belongs to the chart. BMS hosts sound them as background audio; bmson keeps
+   * them on the judged note in `soundEvents`.
    */
   shadowedNotes: ResolvedNote[];
 }
@@ -94,6 +97,7 @@ interface MutableNote {
   lnMode?: LongNoteMode;
   freeZone?: true;
   tail?: JudgedNoteTail;
+  soundEvents?: BeMusicEvent[];
 }
 
 /**
@@ -158,7 +162,7 @@ function resolveMutableJudgedNotes(context: ResolvedNoteContext): { notes: Mutab
   const withLNOBJ = applyLNOBJLongNotes(json, notes, timing, bmsLongNoteMode);
   appendLNTypeLongNotes(context, withLNOBJ, bmsLongNoteMode);
   withLNOBJ.sort(compareNotes);
-  const shadowed = collapseSamePositionNotes(withLNOBJ);
+  const shadowed = collapseSamePositionNotes(withLNOBJ, json.sourceFormat === 'bmson');
   return { notes: withLNOBJ, shadowed };
 }
 
@@ -244,7 +248,15 @@ function isLaneChannel(normalizedChannel: string): boolean {
 function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boolean): ResolvedNote {
   const sampleKey = normalizeObjectKey(note.event.value, idBase, allowLongKeys);
   if (note.endBeat === undefined) {
-    return { kind: 'tap', channel: note.channel, beat: note.beat, seconds: note.seconds, sampleKey, event: note.event };
+    return {
+      kind: 'tap',
+      channel: note.channel,
+      beat: note.beat,
+      seconds: note.seconds,
+      sampleKey,
+      event: note.event,
+      ...(note.soundEvents ? { soundEvents: note.soundEvents } : {}),
+    };
   }
   const resolved: {
     -readonly [K in keyof ResolvedNote]: ResolvedNote[K];
@@ -258,6 +270,7 @@ function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boo
     lnMode: note.lnMode,
     sampleKey,
     event: note.event,
+    ...(note.soundEvents ? { soundEvents: note.soundEvents } : {}),
   };
   if (note.freeZone) {
     resolved.freeZone = true;
@@ -274,7 +287,7 @@ function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boo
  * first in sort order wins: beatoraja keeps the later line of a BMS file, but the IR no longer records line order, so
  * the lowest object ID stands in; for bmson this is the first sound channel, which is the note beatoraja judges.
  */
-function collapseSamePositionNotes(notes: MutableNote[]): MutableNote[] {
+function collapseSamePositionNotes(notes: MutableNote[], layered: boolean): MutableNote[] {
   const shadowed: MutableNote[] = [];
   let writeIndex = 0;
   let groupStart = 0;
@@ -302,6 +315,21 @@ function collapseSamePositionNotes(notes: MutableNote[]): MutableNote[] {
       }
     }
     const kept = notes[keptIndex]!;
+    if (layered) {
+      for (let index = groupStart; index < groupEnd; index += 1) {
+        if (notes[index]!.endBeat !== kept.endBeat) {
+          throw new RangeError(
+            `bmson layered notes must have equal lengths (lane ${kept.channel}, beat ${kept.beat}).`,
+          );
+        }
+      }
+      const events = new Map<string, BeMusicEvent>();
+      for (let index = groupStart; index < groupEnd; index += 1) {
+        const event = notes[index]!.event;
+        if (!events.has(event.value)) events.set(event.value, event);
+      }
+      kept.soundEvents = [...events.values()];
+    }
     const soundedValues = new Set<string>([kept.event.value]);
     for (let index = groupStart; index < groupEnd; index += 1) {
       const note = notes[index]!;

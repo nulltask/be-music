@@ -405,7 +405,8 @@ function addStageObjects(
     if (note.freeZone === true) continue;
     const key = wav(note.sampleKey);
     if (asBmson) {
-      add(note.seconds, note.channel, key, note.event, note.endSeconds, note.lnMode);
+      for (const event of note.soundEvents ?? [note.event])
+        add(note.seconds, note.channel, wav(event.value), event, note.endSeconds, note.lnMode);
     } else if (note.kind === 'ln' && note.endSeconds !== undefined) {
       const lane = `${note.channel[0] === '2' ? '6' : '5'}${note.channel[1]}`;
       add(note.seconds, lane, key);
@@ -414,7 +415,8 @@ function addStageObjects(
       add(note.seconds, note.channel, key);
     }
   }
-  for (const note of chart.shadowedNotes) add(note.seconds, '01', wav(note.sampleKey), note.event);
+  if (chart.sourceFormat !== 'bmson')
+    for (const note of chart.shadowedNotes) add(note.seconds, '01', wav(note.sampleKey), note.event);
   for (const note of chart.invisibleNotes)
     add(note.seconds, normalizeChannel(note.event.channel), wav(note.sampleKey), note.event);
   for (const mine of chart.mines) {

@@ -342,7 +342,8 @@ function startAutoScratchNote(
   if (!markScorableJudged(state, note)) {
     return;
   }
-  emit({ kind: 'sound', source: 'auto-scratch', event: note.event, seconds: note.seconds, channel: note.channel });
+  for (const event of note.soundEvents ?? [note.event])
+    emit({ kind: 'sound', source: 'auto-scratch', event, seconds: note.seconds, channel: note.channel });
   const endSeconds = resolveLongNoteEndSeconds(note);
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
   if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {

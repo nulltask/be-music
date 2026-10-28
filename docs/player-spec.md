@@ -231,13 +231,14 @@ Therefore, both LNs derived from `#LNOBJ` and LNs derived from `#mmm51-69` are w
 ### Duplicate notes
 
 A lane holds at most one note per position, as in beatoraja, whose timeline keeps one note per lane.
-When several notes start on the same lane and position (two BMS object lines writing the same cell, a tap on the start of a `#mmm51-69` / `#LNOBJ` long note, or layered bmson notes with the same `x` and `y`), only one is played and judged:
+When several notes start on the same lane and position (two BMS object lines writing the same cell, a tap on the start of a `#mmm51-69` / `#LNOBJ` long note, or layered bmson notes with the same `x` and `y`), only one is judged:
 
 - A long note wins over a tap. beatoraja also replaces a tap with a `5x` / `6x` long note that starts on it.
 - Otherwise the first note in event order wins: the lowest object ID for BMS, the first sound channel for bmson. For bmson this is the note beatoraja judges. For BMS, beatoraja keeps the later line of the file instead, but the IR does not record line order. LR2's choice is not known.
 
-The other notes are not judged, drawn, or counted in `summary.total`. Their keysound still plays, at their own time, as background audio in manual play (auto play already sounds every play-lane object), unless it is the same `#WAVxx` / sound channel as the kept note's.
-The resolved chart returns these notes as `shadowedNotes` (`extractTimedNotes` too).
+The other notes are not judged, drawn, or counted in `summary.total`. For BMS, their keysounds play at their own time as background audio in manual play (AUTO already sounds every play-lane object), unless they use the kept note's `#WAVxx`.
+For bmson, one judged note holds all constituent source events in `soundEvents`, including the representative `event`. Every slice sounds on that note's press, including early/late input, lane fallback and replay; a missed note sounds none. AUTO schedules all constituent slices at chart time. Layers with unequal lengths are invalid and throw a `RangeError` during resolution; a tap layered with a long note is invalid too.
+The resolved chart returns the remaining source notes as `shadowedNotes` for inspection (`extractTimedNotes` too); a bmson host must not schedule them as BGM.
 Landmines and invisible notes are not collapsed.
 
 ### Landmines
