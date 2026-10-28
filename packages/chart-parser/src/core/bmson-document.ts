@@ -96,6 +96,7 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
   if (json.bmson.info.eyecatchImage && !json.metadata.stageFile) {
     json.metadata.stageFile = json.bmson.info.eyecatchImage;
   }
+  if (json.bmson.info.titleImage) json.metadata.titleImage = json.bmson.info.titleImage;
 
   const soundChannels = normalizeBmsonSoundChannels(document.sound_channels);
   json.preservation.bmson.soundChannels = soundChannels;

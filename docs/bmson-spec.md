@@ -62,7 +62,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [ ] `bpm_events` Same `y` Normalization of “last priority” when overloading
 - [ ] `stop_events` Same `y` "Addition" normalization when overloaded
 - [ ] When the same `id` of `bga.bga_header` is defined multiple times, it is interpreted as the winner.
-- [ ] Acceptance of `info.title_image` and retention in IR
+- [x] Acceptance of `info.title_image` and retention in IR
 - [x] Retention rules for `key:value` format (`music:`/`chart:` etc.) of `subartists`
 - [ ] Transparent preservation of unknown root keys
 
@@ -96,7 +96,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] Preserve explicit `lines: []` through `bmson.barlinesSuppressed`
 - [ ] `bpm_events` Normalize and output events with the same `y` to "last priority"
 - [ ] `stop_events` Add and normalize events of the same `y` and output
-- [ ] Output of `info.title_image`
+- [x] Output of `info.title_image`
 - [ ] Path-separated normalization and dangerous path removal for `sound_channels[].name`
 - [ ] Transparent reoutput of unknown root key
 - [~] Strictly maintain the original value of `notes.x` (exact identity is not guaranteed as lanes are reallocated in IR)
@@ -128,11 +128,13 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 
 Each sound channel is cut into independently triggered slices at every distinct pulse. `c=true` continues the source offset from the last restart; it does not suppress the note's audio trigger. Notes on one pulse share a slice, and mixed continuation flags restart the source. Different slices may sound independently during manual play, so missing a later note cannot leave its audio playing through the preceding slice. Browser, Node and offline rendering share this rule.
 
+`info.title_image` is preserved separately as `bmson.info.titleImage` and mirrored into `metadata.titleImage`. Native displays it on the decide screen in place of the title text after decoding; a missing or undecodable image keeps the text fallback. Canvas skins can request `chartImage(chart, 'titleImage')`; DOM decide frames receive the decoded image URL as `titleImage`. Loading artwork (`eyecatch_image`) and background artwork (`back_image`) retain their own roles.
+
 ## Fields read by implementation (parser)
 
 - Root: `version`, `lines`, `resolution`(compatible), `info`, `sound_channels`, `key_channels` / `mine_channels` / `scroll_events` (beatoraja extensions), `bpm_events`, `stop_events`, `bga`
 - `scroll_events[]`: `y`, `rate`
-- `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
+- `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `title_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
 - `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
 - `key_channels[].notes[]`: `x`, `y`
 - `mine_channels[].notes[]`: `x`, `y`, `damage`

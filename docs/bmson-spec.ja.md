@@ -62,7 +62,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [ ] `bpm_events` 同一 `y` 多重定義時の「末尾優先」正規化
 - [ ] `stop_events` 同一 `y` 多重定義時の「加算」正規化
 - [ ] `bga.bga_header` の同一 `id` 多重定義時に後勝ちで解釈
-- [ ] `info.title_image` の受理と IR への保持
+- [x] `info.title_image` の受理と IR への保持
 - [x] `subartists` の `key:value` 形式（`music:`/`chart:` 等）の保持規則
 - [ ] 未知ルートキーの透過保持
 
@@ -96,7 +96,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `bmson.barlinesSuppressed` により明示的な `lines: []` を保持
 - [ ] `bpm_events` 同一 `y` のイベントを「末尾優先」へ正規化して出力
 - [ ] `stop_events` 同一 `y` のイベントを加算正規化して出力
-- [ ] `info.title_image` の出力
+- [x] `info.title_image` の出力
 - [ ] `sound_channels[].name` のパス区切り正規化と危険パス除去
 - [ ] 未知ルートキーの透過再出力
 - [~] `notes.x` の元値を厳密保持 (IR で lanes を再割当するため完全同一は保証しない)
@@ -128,11 +128,13 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 
 各 sound channel は異なる pulse ごとに独立したスライスへ切り出す。`c=true` は直前の再始動からの音源オフセットを継続し、ノートの発音を省略する指定ではない。同一 pulse のノートは一つのスライスを共有し、`c` が混在する場合は再始動する。異なるスライスは手動入力で独立して発音でき、後続ノートを見逃しても先行スライスがその音を鳴らし続けることはない。browser、Node、オフラインレンダラーでこの規則を共有する。
 
+`info.title_image` は `bmson.info.titleImage` に保持し、`metadata.titleImage` にも反映する。Native は決定画面で、デコード済みの画像をタイトル文字の代わりに表示する。画像が見つからない場合やデコードできない場合は文字を表示する。Canvas スキンは `chartImage(chart, 'titleImage')` で画像を取得でき、DOM の決定画面には `titleImage` の URL を渡す。読み込み用の `eyecatch_image` と背景用の `back_image` は別の役割を保つ。
+
 ## 実装が読み込むフィールド (parser)
 
 - ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `key_channels` / `mine_channels` / `scroll_events` (beatoraja 拡張), `bpm_events`, `stop_events`, `bga`
 - `scroll_events[]`: `y`, `rate`
-- `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
+- `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `title_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
 - `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
 - `key_channels[].notes[]`: `x`, `y`
 - `mine_channels[].notes[]`: `x`, `y`, `damage`
