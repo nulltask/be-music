@@ -182,7 +182,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   });
   const benchNonstopHeader = `0125${'0'.repeat(6)}1${'0'.repeat(21)}`;
   const benchNonstopChart = parseChart(
-    ['#BPM 150', '#BPM01 180', '#00002:0.75', '#00111:01010101', '#00301:01', '#00408:01', '#00512:0001'].join('\n'),
+    [
+      '#BPM 150',
+      '#BPM01 180',
+      '#00002:0.75',
+      '#0000C:80',
+      '#00111:01010101',
+      '#00301:01',
+      '#00408:01',
+      '#00512:0001',
+    ].join('\n'),
     'bms',
   );
   const benchNonstopStage = courseAPI.createNonstopStageTiming(benchNonstopChart);

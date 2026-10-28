@@ -1,4 +1,10 @@
-import { resolvePoorBGAMode, type PoorBGAMode, resolveChart, type ResolvedChart } from '@be-music/chart-model';
+import {
+  resolvePoorBGAMode,
+  type PoorBGAMode,
+  resolveChart,
+  type ResolvedChart,
+  type BGAOpacityTimelines,
+} from '@be-music/chart-model';
 import {
   createEmptyJSON,
   normalizeChannel,
@@ -21,6 +27,7 @@ import {
   type NonstopTempoPoint,
 } from './readouts.ts';
 import { createNonstopStageTiming } from './stage.ts';
+import { flattenNonstopBGAOpacity, hasBGAOpacity, placeNonstopBGAOpacity } from './bga-opacity.ts';
 
 /** One stage to stitch: its BMS or bmson chart with control flow resolved, and whether it is a `.pms` chart. */
 export interface NonstopStageInput {
@@ -72,6 +79,8 @@ export interface NonstopStitchStage {
   bmpKeys: string[];
   /** This stage’s miss-image mode; omitted means replacement. */
   poorBGAMode?: PoorBGAMode;
+  /** Independent stage opacity histories, on the stitched clock, for BGA crossfades. Omitted means fully opaque. */
+  bgaOpacity?: BGAOpacityTimelines;
   /** Fades of the stage's background sound (LR2 fades the stage BGM channel; keysounds play at full level). */
   soundFadeIn?: NonstopFade;
   soundFadeOut?: NonstopFade;
@@ -177,6 +186,7 @@ export function stitchNonstopCourse(
   }));
   const stitchedSeconds = (stage: number, seconds: number): number =>
     placements[stage]!.offsetSeconds + seconds / placements[stage]!.rate;
+  const stageOpacity = resolved.map((source, index) => placeNonstopBGAOpacity(source, placements[index]!));
 
   const asBmson = bmsonStage >= 0;
   const wavKeys = new NonstopKeyAllocator(asBmson);
@@ -279,6 +289,15 @@ export function stitchNonstopCourse(
     }
   }
 
+  objects.push(
+    ...flattenNonstopBGAOpacity(
+      stageOpacity.map((opacity, index) => ({
+        opacity,
+        windowStart: windows[index]!.start,
+        windowEnd: windows[index]!.end,
+      })),
+    ),
+  );
   convertSeamNotes(objects, stages.length);
   layOnGrid(chart, objects, stops, barLines, stopKeys);
   if (chart.events.length === 0 && objects.length > 0) return { ok: false, reason: 'id-space' };
@@ -342,6 +361,7 @@ export function stitchNonstopCourse(
           windowEnd: windows[index]!.end,
           wavKeys: stageWAV[index]!,
           bmpKeys: stageBMP[index]!,
+          ...(hasBGAOpacity(stageOpacity[index]!) ? { bgaOpacity: stageOpacity[index]! } : {}),
           ...(resolvePoorBGAMode(stages[index]!.chart.bms.poorBGA) !== 0
             ? { poorBGAMode: resolvePoorBGAMode(stages[index]!.chart.bms.poorBGA) }
             : {}),
