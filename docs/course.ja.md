@@ -4,7 +4,7 @@
 
 **コース**は、複数の譜面を 1 回のプレイにつなげたものです。代表的なのが**段位認定**で、共通の段位ゲージのまま各ステージを続けて遊び、全体に 1 つの結果が付きます。LR2 と beatoraja はそれぞれ独自の形式でコースを定義し、難易度表は表のヘッダーにコースを載せています。be-music はこの 3 つを `@be-music/player-engine/course` の `CourseDefinition` という 1 つのモデルに読み込むので、後段はコースの取得元を気にする必要がありません。
 
-この文書では、コースのモデルと、各形式がそれにどう対応するかを説明します。プレイの規則（段位ゲージ、引き継ぐ状態、コースの結果）とリプレイは、実装に合わせてそれぞれの節に追加します。
+本書はコースのモデル、形式ごとの対応、プレイ規則、記録、リプレイを定義します。ブラウザーの画面遷移は[ブラウザープレイヤー仕様](./player-web.ja.md#コースと段位認定)を参照してください。
 
 ```mermaid
 flowchart LR
@@ -137,7 +137,7 @@ flowchart LR
 
 ## NONSTOP コース
 
-LR2 の NONSTOP コース（`.lr2crs` の type 1）は、ステージごとには遊びません。LR2 の譜面読み込みが全ステージ（最大 5）を 1 本の譜面につなぎ、1 回のプレイとして遊びます（[`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680)、`LR2body.exe` 0x4b0690）。NONSTOP は LR2 だけの機能で、BMS だけが対象です。この節はステージの配置と結合を扱います。結合した譜面はブラウザのプレイヤーで遊べます（[player-web.ja.md](player-web.ja.md)）。
+LR2 の NONSTOP コース（`.lr2crs` の type 1）は、ステージごとには遊びません。LR2 の譜面読み込みが全ステージ（最大 5）を 1 本の譜面につなぎ、1 回のプレイとして遊びます（[`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680)、`LR2body.exe` 0x4b0690）。LR2 互換の配置は BMS のステージを受け入れます。intended の配置は bmson と BMS/bmson 混在のコースにも対応します。この節はステージの配置と結合を扱います。結合した譜面はブラウザのプレイヤーで遊べます（[player-web.ja.md](player-web.ja.md)）。
 
 **つなぎ方。** 最後以外の各ステージは、次のステージへのつなぎ方を持ちます。コースのハッシュの先頭 10 文字（`courseKeys`、`0`〜`5`）に保存されており、`parseLR2NonstopConnections` が `CourseDefinition.connections` に読み込みます。
 
@@ -179,7 +179,7 @@ flowchart LR
 - **ホスト向けの情報。** 結果のマップは各ステージについて次を返します：キー（ステージ別の音のバスと BGA レイヤー用）、担当区間、つなぎ方に応じた音のフェードと 3 秒の BGA クロスフェード、LR2 がステージの切り替わりを知らせるか（BLANK でつないだときだけ）。さらに BPM 表示（`tempo`）と判定ランクの切り替え（`stageRanks`）を返します。`stageRanks` はエンジンの `stageRanks` オプションに渡します。リプレイは `chart.judgeRank.stageRanks` として記録するので、リプレイと再シミュレーションでも同じ判定幅で判定します。`assetPath` で、ホストは各ステージのファイルパスに接頭辞を付けられます。
 - **未対応。** あるステージのオブジェクトが別のステージの STOP 中に鳴るときのスクロール。
 
-**bmson のステージ。** `placement: 'intended'` で1つでも bmson のステージを含むコースは、BMS と混在する場合も bmson の IR 譜面として出力します。LR2 の配置では bmson を拒否します。元の音声のスライス座標、継続フラグ、ロングノート種別、不可視キーサウンド、地雷ダメージ、BGA レイヤーを保持します。FIT 後も元の音声座標を保ち、ピッチ維持再生では伸縮済みバッファーの座標へ変換します。各ステージの判定ランクの単位（生の `judge_rank` は `bmson`、BMS `#RANK` は `chart`、`#DEFEXRANK` は `bms-exrank`）を LR2 と beatoraja が適用します。最後のステージの TOTAL も絶対値・百分率の単位を保ちます。コースの識別子には元のステージのフィンガープリントを使います。従来は遊べなかったコースなので結合バージョン1を維持します。[ADR 0017](./adr/0017-bmson-nonstop.ja.md) を参照してください。
+**bmson のステージ。** `placement: 'intended'` で1つでも bmson のステージを含むコースは、BMS と混在する場合も bmson の IR 譜面として出力します。LR2 の配置では bmson を拒否します。元の音声のスライス座標、継続フラグ、ロングノート種別、不可視キーサウンド、地雷ダメージ、BGA レイヤーを保持します。FIT 後も元の音声座標を保ち、ピッチ維持再生では伸縮済みバッファーの座標へ変換します。各ステージの判定ランクの単位（生の `judge_rank` は `bmson`、BMS `#RANK` は `chart`、`#DEFEXRANK` は `bms-exrank`）を LR2 と beatoraja が適用します。最後のステージの TOTAL も絶対値・百分率の単位を保ちます。コースの識別子には元のステージのフィンガープリントを使います。結合バージョンは 1 です。[ADR 0017](./adr/0017-bmson-nonstop.ja.md) を参照してください。
 
 **処理の流れ**（`prepareNonstopCourse`、`resolveNonstopRun`、`buildNonstopCourseReplay`）。ホストが遊ぶためにコースを結合するときも、Leaderboard が確かめるためにプレイの結合譜面を作り直すときも、同じ手順を使います。そのため、遊んだ譜面について両者の結果が一致します。
 

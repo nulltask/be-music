@@ -6,7 +6,7 @@ import type { TestHookBar, TestHookState } from '../src/test-hook.ts';
 
 /**
  * The page helpers the specs share: opening the player with the test hook, dropping fixture folders the way a person
- * drops them (a synthetic `drop` of `File`s with `webkitRelativePath`, as `docs/course-checklist.md` describes), keys
+ * drops them (a synthetic `drop` of `File`s with `webkitRelativePath`, as `docs/player-web.md#browser-verification` describes), keys
  * with a `code`, the Debug Menu's controls, and waits on `window.__beMusicTest` state.
  */
 
