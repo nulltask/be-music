@@ -1,3 +1,4 @@
+import type { KeyBoundBGACue } from '@be-music/chart-model';
 import { availableParallelism } from 'node:os';
 import { runWithConcurrency, throwIfAborted } from '@be-music/shared-utils/core';
 import type { BeMusicJSON } from '@be-music/chart-source';
@@ -59,6 +60,8 @@ const KITTY_GRAPHICS_PIXEL_SCALE = 4;
 const BGA_SOURCE_LOAD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 
 export interface BgaANSIOptions {
+  /** Host-remapped selections; NONSTOP callers pass map.keyBoundBGA. */
+  keyBoundBGACues?: readonly KeyBoundBGACue[];
   baseDir: string;
   width?: number;
   height?: number;
@@ -373,7 +376,7 @@ export class BgaANSIRenderer {
           this.layer2SourceFramesByKey,
           EMPTY_KEY_BOUND_FRAME,
           keyBoundKey,
-          Math.max(0, currentSeconds - keyBound.frameStartSeconds),
+          Math.max(0, (currentSeconds - keyBound.frameStartSeconds) * (keyBound.playbackRate ?? 1)),
         )
       : { frame: undefined, index: -1 };
     const pixelWidth = Math.max(1, this.displayWidth * KITTY_GRAPHICS_PIXEL_SCALE);
@@ -513,7 +516,7 @@ export class BgaANSIRenderer {
           this.layer2FramesByKey,
           EMPTY_KEY_BOUND_FRAME,
           keyBoundKey,
-          Math.max(0, currentSeconds - keyBound.frameStartSeconds),
+          Math.max(0, (currentSeconds - keyBound.frameStartSeconds) * (keyBound.playbackRate ?? 1)),
         )
       : { frame: undefined, index: -1 };
     state.opacityToken += `:${keyBoundKey}:${keyBoundSelection.index}`;
@@ -666,7 +669,7 @@ export async function createBgaANSIRenderer(
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layer2Keys = new Set(layer2Timeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const keyBoundKeys = new Set<string>();
-  for (const cue of buildKeyBoundBGATimeline(json, resolved.timing)) {
+  for (const cue of options.keyBoundBGACues ?? buildKeyBoundBGATimeline(json, resolved.timing)) {
     for (const bmp of cue.definition.frames) {
       const key = keyBoundResourceKey(cue.definitionId, bmp);
       const resource = resourceDefinitions.get(bmp);

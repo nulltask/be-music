@@ -220,6 +220,8 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   extendedBGAChart.bms.exBMP['03'] = ',,,,sheet.png';
   extendedBGAChart.bms.bga['04'] = '03 0 0 64 64 32 48';
   extendedBGAChart.events.push({ measure: 1, position: [0, 1], channel: '04', value: '04' });
+  extendedBGAChart.bms.swBGA['61'] = '100:0:11:1:255,255,255,255 0004';
+  extendedBGAChart.events.push({ measure: 0, position: [0, 1], channel: 'A5', value: '61' });
   define('player-engine.course.stitchNonstopCourse', {
     run: () => {
       courseAPI.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
@@ -1541,6 +1543,7 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
         {
           seconds: 0,
           definitionId: '61',
+          endSeconds: 1.3,
           definition: {
             frameIntervalMs: 100,
             durationMs: 400,
@@ -1553,6 +1556,7 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
       ]);
       state.addInput({ seconds: 1, action: 'down', channels: ['16'] });
       state.read(1.25);
+      state.read(1.3);
       state.read(1.1);
       state.reset();
     },

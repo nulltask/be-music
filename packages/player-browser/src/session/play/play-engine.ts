@@ -730,6 +730,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
           ? { gauge2P: ctx.options.gauge2P }
           : {}),
       ...(ctx.options.replay === undefined && ctx.options.course !== undefined ? { course: ctx.options.course } : {}),
+      keyBoundBGACues: ctx.options.nonstop?.keyBoundBGA,
       // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
       ...(ctx.options.replay === undefined && ctx.options.nonstop !== undefined
         ? { stageRanks: ctx.options.nonstop.stageRanks }

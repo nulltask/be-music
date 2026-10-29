@@ -2,7 +2,12 @@ import type { BattleMode } from './battle-mode.ts';
 import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
 import type { LongNoteModifier, LongNotePlacement } from './long-note-modifier.ts';
 import type { MineModifier, MinePlacement } from './mine-modifier.ts';
-import { type ChartPlayVariant, type RandomDraws, type ResolvedChart } from '@be-music/chart-model';
+import {
+  type KeyBoundBGACue,
+  type ChartPlayVariant,
+  type RandomDraws,
+  type ResolvedChart,
+} from '@be-music/chart-model';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import { type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
 import { type PlayerStateSignals } from '../state-signals.ts';
@@ -46,6 +51,7 @@ export interface PlayerInputRuntime {
 }
 
 export interface CreatePlayerUIRuntimeContext {
+  keyBoundBGACues?: readonly KeyBoundBGACue[];
   json: BeMusicJSON;
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;
@@ -212,6 +218,8 @@ export interface PlayerStageRank {
  * output sinks, and the chart data a host prepared itself. Functions and live objects, never serialized.
  */
 export interface PlayerPlayRuntime {
+  /** Host-remapped input-bound BGA selections, e.g. NonstopStitchMap.keyBoundBGA. Overrides chart A5 controls. */
+  keyBoundBGACues?: readonly KeyBoundBGACue[];
   /**
    * Pre-built playback chart data the host wants the engine to use verbatim instead of running its own
    * `preparePlaybackChartData` pass. When provided, the engine treats the supplied {@link PreparedPlaybackChartData}

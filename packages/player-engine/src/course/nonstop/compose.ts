@@ -4,6 +4,7 @@ import {
   resolveChart,
   type ResolvedChart,
   type BGAOpacityTimelines,
+  type KeyBoundBGACue,
 } from '@be-music/chart-model';
 import {
   createEmptyJSON,
@@ -28,6 +29,7 @@ import {
 } from './readouts.ts';
 import { createNonstopStageTiming } from './stage.ts';
 import { flattenNonstopBGAOpacity, hasBGAOpacity, placeNonstopBGAOpacity } from './bga-opacity.ts';
+import { placeNonstopKeyBoundBGA } from './key-bound-bga.ts';
 import { createNonstopBMPAllocator } from './bga-resources.ts';
 
 /** One stage to stitch: its BMS or bmson chart with control flow resolved, and whether it is a `.pms` chart. */
@@ -93,6 +95,8 @@ export interface NonstopStitchStage {
 }
 
 export interface NonstopStitchMap {
+  /** Remapped input-bound BGA selections, with stage ownership windows on the stitched clock. */
+  keyBoundBGA?: KeyBoundBGACue[];
   stages: NonstopStitchStage[];
   /**
    * What the BPM readouts show over the play ({@link resolveNonstopTempo}, look it up with `nonstopBPMAt`): each
@@ -192,6 +196,7 @@ export function stitchNonstopCourse(
   const asBmson = bmsonStage >= 0;
   const wavKeys = new NonstopKeyAllocator(asBmson);
   const bmpKeys = new NonstopKeyAllocator(asBmson);
+  const keyBoundBGA: KeyBoundBGACue[] = [];
   const stopKeys = new NonstopKeyAllocator(asBmson);
   const chart = createEmptyJSON(asBmson ? 'bmson' : 'bms');
   let totalStage = stages.length - 1;
@@ -265,6 +270,9 @@ export function stitchNonstopCourse(
       return true;
     };
 
+    const keyBound = placeNonstopKeyBoundBGA(chartIndex, placements[index]!, window, index, bmp);
+    if (!keyBound) return { ok: false, reason: 'id-space', stage: index };
+    keyBoundBGA.push(...keyBound);
     if (!addStageObjects(chartIndex, push, wav, bmp, asBmson)) return { ok: false, reason: 'id-space', stage: index };
 
     for (const stop of chartIndex.timing.stopPoints) {
@@ -358,6 +366,7 @@ export function stitchNonstopCourse(
     ok: true,
     chart,
     map: {
+      ...(keyBoundBGA.length > 0 ? { keyBoundBGA } : {}),
       tempo: resolveNonstopTempo(readouts, placements, options),
       stageRanks,
       stages: placements.map((placement, index) => {

@@ -204,6 +204,7 @@ export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
   // track's are keyed out for BMS, videos keep independent plane playheads, and `#BGAxx` aliases share source views.
   await loadPlayBGA({
     chart,
+    keyBoundBGACues: ctx.options.nonstop?.keyBoundBGA,
     source,
     chartPath: chartEntry.chartPath,
     timeline: ctx.bgaTimeline,

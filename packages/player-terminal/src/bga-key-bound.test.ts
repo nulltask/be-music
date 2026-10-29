@@ -1,3 +1,4 @@
+import { stitchNonstopCourse } from '@be-music/player-engine/course';
 import { mkdtemp, rm, writeFile, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -67,7 +68,7 @@ test.each([3, 4] as const)(
   },
 );
 
-test('keys native video borders and later decoded frames in a held SWBGA resource', async () => {
+test.each([1, 2])('keys native video borders and later frames at the SWBGA source rate %s', async (rate) => {
   const dir = await mkdtemp(join(tmpdir(), 'be-music-swbga-video-'));
   try {
     await writeFile(
@@ -86,9 +87,12 @@ test('keys native video borders and later decoded frames in a held SWBGA resourc
       `#BPM 120\n#POORBGA 2\n#BMP01 ${path}\n#BMP05 blue.png\n#00004:05\n#SWBGA61 1000:0:11:0:255,0,0,0 01\n#000A5:61`,
     );
     const resolved = resolveChart(source);
-    const state = new KeyBoundBGAController(buildKeyBoundBGATimeline(source, resolved.timing), {
-      inputs: [{ seconds: 0, action: 'down', channels: ['11'] }],
-    });
+    const state = new KeyBoundBGAController(
+      buildKeyBoundBGATimeline(source, resolved.timing).map((cue) => ({ ...cue, playbackRate: rate })),
+      {
+        inputs: [{ seconds: 0, action: 'down', channels: ['11'] }],
+      },
+    );
     const renderer = (await createBgaANSIRenderer(source, {
       baseDir: dir,
       width: 80,
@@ -96,8 +100,56 @@ test('keys native video borders and later decoded frames in a held SWBGA resourc
       videoBGAStreaming: false,
     }))!;
     expect(pixel(renderer.getKittyImage(0, state.read(0)), 128, 128)[0]).toBeGreaterThan(200);
-    expect(pixel(renderer.getKittyImage(0.75, state.read(0.75)), 128, 128)[1]).toBeGreaterThan(200);
-    expect(pixel(renderer.getKittyImage(0.75, state.read(0.75)), 8, 8)).toEqual([21, 79, 227]);
+    expect(pixel(renderer.getKittyImage(0.75 / rate, state.read(0.75 / rate)), 128, 128)[1]).toBeGreaterThan(200);
+    expect(pixel(renderer.getKittyImage(0.75 / rate, state.read(0.75 / rate)), 8, 8)).toEqual([21, 79, 227]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('loads NONSTOP remapped BMP00 frames and restores the normal BGA at stage boundaries', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'be-music-swbga-nonstop-'));
+  try {
+    for (const [name, color] of [
+      ['base.png', [21, 79, 227]],
+      ['a.png', [237, 23, 75]],
+      ['b.png', [22, 207, 99]],
+    ] as const)
+      await writeFile(
+        join(dir, name),
+        encode({
+          width: 256,
+          height: 256,
+          channels: 3,
+          depth: 8,
+          data: Uint8Array.from({ length: 256 * 256 * 3 }, (_, i) => color[i % 3]!),
+        }),
+      );
+    const stage = (name: string) =>
+      parseBMS(
+        `#BPM 120\n#POORBGA 2\n#BMP05 base.png\n#BMP00 ${name}.png\n#SWBGA61 100:20000:11:0:255,255,255,255 00\n#000A5:61\n#00004:05\n#00111:01\n#00411:01`,
+      );
+    const stitched = stitchNonstopCourse([{ chart: stage('a') }, { chart: stage('b') }], { connections: ['cut'] });
+    if (!stitched.ok) throw new Error(stitched.reason);
+    const boundary = stitched.map.stages[1]!.windowStart;
+    const state = new KeyBoundBGAController(stitched.map.keyBoundBGA!, {
+      inputs: [
+        { seconds: 1, action: 'down', channels: ['11'] },
+        { seconds: boundary + 0.1, action: 'up', channels: ['11'] },
+        { seconds: boundary + 0.2, action: 'down', channels: ['11'] },
+      ],
+    });
+    const renderer = (await createBgaANSIRenderer(stitched.chart, {
+      baseDir: dir,
+      width: 40,
+      height: 20,
+      keyBoundBGACues: stitched.map.keyBoundBGA,
+    }))!;
+    expect(pixel(renderer.getKittyImage(1, state.read(1)), 128, 128)).toEqual([237, 23, 75]);
+    expect(pixel(renderer.getKittyImage(boundary, state.read(boundary)), 128, 128)).toEqual([21, 79, 227]);
+    expect(pixel(renderer.getKittyImage(boundary + 0.3, state.read(boundary + 0.3)), 128, 128)).toEqual([22, 207, 99]);
+    expect(renderer.getANSILines(boundary + 0.3, state.read(boundary + 0.3))!.join('')).toContain('22;207;99');
+    expect(pixel(renderer.getKittyImage(1, state.read(1)), 128, 128)).toEqual([237, 23, 75]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

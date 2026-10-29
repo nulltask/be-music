@@ -129,3 +129,28 @@ test('AUTO preserves short LN tails, merges equal-time held layers and ignores i
     input(4.1, 'up', '14'),
   ]);
 });
+
+test.each([0, 20000])(
+  'stage window ends selection and active animation even while a key stays held (duration=%s)',
+  (duration) => {
+    const first = { ...cue(`100:${duration}:16:1:0,0,0,0 0001`, 0), endSeconds: 2 };
+    const second = { ...cue('100:0:16:1:0,0,0,0 0203', 3, '02'), endSeconds: 4 };
+    const state = new KeyBoundBGAController([first, second], {
+      inputs: [
+        input(1.5, 'down', '16'),
+        input(2.1, 'up', '16'),
+        input(2.2, 'down', '16'),
+        input(3.1, 'down', '16'),
+        input(3.2, 'up', '16'),
+        input(3.3, 'down', '16'),
+      ],
+    });
+    expect(state.read(1.9)?.definitionId).toBe('01');
+    expect(state.read(2)).toBeUndefined();
+    expect(state.read(2.2)).toBeUndefined();
+    expect(state.read(3.1)).toBeUndefined(); // Held across the next selection needs another fresh press.
+    expect(state.read(3.3)?.definitionId).toBe('02');
+    expect(state.read(4)).toBeUndefined();
+    expect(state.read(1.9)?.definitionId).toBe('01');
+  },
+);

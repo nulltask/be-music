@@ -805,7 +805,7 @@ pnpm bench -- --packages player-browser
 - BGA supports still images and video assets referenced by chart BGA events.
 - Every BGA rect (LR2 `#DST_BGA`, beatoraja `bga`, the built-in frames) stands for the 256x256 BMS canvas: a still image whose long edge is at most 256 px keeps its pixel size on it, centered horizontally and top-aligned over black, while larger images and videos fill the rect ([format compatibility](./format-compat.md#217-bga)).
 - The default family renders the same chart BGA layer stack as LR2 skins inside its built-in BGA frame.
-- BMS rendering applies `#BGAxx` sub-regions, EXBMP still-image transparent-color keys, channel-scoped A1–A4 ARGB and input-bound A5 SWBGA. SWBGA includes keyed video crops; its NONSTOP resource remapping remains pending. See [BMS support](bms-spec.md).
+- BMS rendering applies `#BGAxx` sub-regions, EXBMP still-image transparent-color keys, channel-scoped A1–A4 ARGB and input-bound A5 SWBGA. SWBGA includes keyed video crops and remapped NONSTOP resources, with selection/animation ending at the stage boundary and FIT-adjusted animation/movie clocks. See [BMS support](bms-spec.md).
 - bmson rendering uses `bga.bga_events`, `bga.layer_events`, and `bga.poor_events`; unlike BMS layer channels, bmson layer images preserve black pixels instead of treating black as transparent.
 - The browser player can transcode unsupported video assets before playback with ffmpeg.wasm and its single-threaded `@ffmpeg/core`. The multithreaded core is not installed because its current 0.12.x build crashes in libx264; typical BMS BGA videos take tens of seconds to transcode.
 - Natural chart completion waits for a short post-chart delay before opening the result scene. The visual transition

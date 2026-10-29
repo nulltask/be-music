@@ -540,7 +540,7 @@ export async function createPlaySession(
   const clockSource = createAudioPlaybackClockSource(audioSession);
   // `session` is returned below; the frames read its clock and seek generation as they are published.
   let session: PlaySession | undefined;
-  const keyBoundCues = buildKeyBoundBGATimeline(resolvedChart.source, resolvedChart.timing);
+  const keyBoundCues = options.keyBoundBGACues ?? buildKeyBoundBGATimeline(resolvedChart.source, resolvedChart.timing);
   const assistedChannels = resolveAutoScratchChannels(
     options,
     playbackChart.laneBindings.filter((lane) => lane.isScratch).map((lane) => lane.channel),

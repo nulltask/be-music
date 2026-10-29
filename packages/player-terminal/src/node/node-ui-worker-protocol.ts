@@ -1,3 +1,4 @@
+import type { KeyBoundBGACue } from '@be-music/chart-model';
 import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import type { BeMusicJSON } from '@be-music/chart-source';
@@ -7,6 +8,7 @@ import type { ImageResizeAlgorithm, TUINoteHeight } from '@be-music/player-engin
 import type { PlayerUIFramePatch } from './ui-frame-patch.ts';
 
 export interface NodeUIWorkerInitData {
+  keyBoundBGACues?: readonly KeyBoundBGACue[];
   json: BeMusicJSON;
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;

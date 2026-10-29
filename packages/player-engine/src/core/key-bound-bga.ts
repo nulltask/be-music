@@ -16,6 +16,8 @@ export interface KeyBoundBGAFrame {
   startedSeconds: number;
   /** Start of this displayed frame, for hosts that play a movie as an animation frame. */
   frameStartSeconds: number;
+  /** Source movie rate relative to chart seconds, e.g. a NONSTOP FIT stage. */
+  playbackRate?: number;
   argb: BmsARGB;
 }
 
@@ -85,14 +87,19 @@ export class KeyBoundBGAController {
           this.active = undefined;
       } else {
         const cue = pickActiveBGACue(this.cues, input.seconds);
-        if (cue && input.channels.includes(cue.definition.channel) && !this.held.has(cue.definition.channel))
+        if (
+          cue &&
+          input.seconds < (cue.endSeconds ?? Infinity) &&
+          input.channels.includes(cue.definition.channel) &&
+          !this.held.has(cue.definition.channel)
+        )
           this.active = { cue, seconds: input.seconds };
         for (const channel of input.channels) this.held.add(channel);
       }
     }
     this.through = seconds;
     const active = this.active;
-    if (!active) return undefined;
+    if (!active || seconds >= (active.cue.endSeconds ?? Infinity)) return undefined;
     const definition = active.cue.definition;
     const elapsedMs = (seconds - active.seconds) * 1000;
     const bmpKey = pickKeyBoundBGAFrame(definition, elapsedMs);
@@ -100,6 +107,7 @@ export class KeyBoundBGAController {
     const step = Math.floor((elapsedMs + 1e-6) / definition.frameIntervalMs);
     return {
       definitionId: active.cue.definitionId,
+      ...(active.cue.playbackRate !== undefined ? { playbackRate: active.cue.playbackRate } : {}),
       channel: definition.channel,
       bmpKey,
       startedSeconds: active.seconds,

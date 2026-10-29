@@ -168,6 +168,46 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     state.dispose();
   });
 
+  test('uses a FIT SWBGA movie rate for initial seek, live playback and drift correction', () => {
+    const state = setup();
+    const key = keyBoundBGAResourceKey('stage:1:61', '00');
+    const video = {
+      currentTime: 0,
+      duration: 10,
+      playbackRate: 1,
+      paused: false,
+      seeking: false,
+      play: vi.fn(async () => {}),
+      pause: vi.fn(),
+    };
+    Object.assign(state.play, {
+      engineFrame: {
+        keyBoundBGA: {
+          definitionId: 'stage:1:61',
+          channel: '11',
+          bmpKey: '00',
+          startedSeconds: 2,
+          frameStartSeconds: 2,
+          playbackRate: 2,
+          argb: { a: 0, r: 0, g: 0, b: 0 },
+        },
+      },
+    });
+    state.play.bgaVideos.set(key, { video, objectURL: 'blob:fit' });
+    state.play.bgaLayerTextures.set(key, state.textures[1]!);
+    state.play.tempo = 1.5;
+    renderBGA(state.ctx, 3);
+    expect(video.currentTime).toBe(2);
+    expect(video.playbackRate).toBe(3);
+    video.currentTime = 0;
+    renderBGA(state.ctx, 3.5);
+    expect(video.currentTime).toBe(3);
+    Object.assign(state.play, { engineFrame: {} });
+    renderBGA(state.ctx, 3.6);
+    expect(video.pause).toHaveBeenCalled();
+    state.dispose();
+  });
+
   test('draws both overlays in order, clears only 0A, and restores it on backward seek', () => {
     const state = setup();
     renderBGA(state.ctx, 3);

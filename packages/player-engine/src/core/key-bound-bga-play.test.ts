@@ -126,3 +126,30 @@ test('replay seek reconstructs held animation state at the target and lets its r
   expect(at(frames, 1.2, 1)?.animation).toMatchObject({ startedSeconds: 1, bmpKey: '02' });
   expect(at(frames, 1.6, 1)?.animation).toBeUndefined();
 });
+
+test('plays host-remapped NONSTOP selections, expires stage state and rebuilds it from replay inputs', async () => {
+  const { stitchNonstopCourse } = await import('../course/nonstop/compose.ts');
+  const stage = chart(20000);
+  const result = stitchNonstopCourse([{ chart: stage }, { chart: stage }], { connections: ['cut'] });
+  if (!result.ok) throw new Error(result.reason);
+  const boundary = result.map.stages[1]!.windowStart;
+  const frames: Frame[] = [];
+  const observed = await observePlay({
+    driver: 'manual',
+    chart: result.chart,
+    options: {
+      keyBoundBGACues: result.map.keyBoundBGA,
+      replayInputs: [
+        { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'] },
+        { seq: 1, timeUs: Math.round((boundary + 0.1) * 1e6), action: 'up', channels: ['11'] },
+        { seq: 2, timeUs: Math.round((boundary + 0.2) * 1e6), action: 'down', channels: ['11'] },
+      ],
+    },
+    onFrame: capture(frames),
+  });
+  expect(observed.outcome).toBe('completed');
+  expect(at(frames, 1.1)?.animation?.definitionId).toBe('stage:0:61');
+  expect(at(frames, boundary + 0.05)?.animation).toBeUndefined();
+  expect(at(frames, boundary + 0.3)?.animation?.definitionId).toBe('stage:1:61');
+  expect(at(frames, boundary + 0.3)?.animation?.bmpKey).toBe(result.map.keyBoundBGA![1]!.definition.frames[1]);
+});
