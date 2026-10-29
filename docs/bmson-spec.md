@@ -31,7 +31,9 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] Root: `scroll_events` (beatoraja extension), read as BMS `#SCROLL` (channel `SC`)
 - [x] Root: `bga`
 - [x] Preserve beatoraja `bga_sequence` and event `id_set` / `condition` / `interval` through parsing, cloning, Be-Music JSON and bmson output
-- [ ] Connect sequence/conditional-event selection to engine judgments and browser/terminal rendering
+- [x] Drive sequence/conditional-event selection from engine judgments and restore it during AUTO/replay seek
+- [x] Render the engine sequence state in terminal ANSI/Kitty output
+- [ ] Connect browser sequence rendering and NONSTOP stage placement
 - [x] `info` extended item: `subartists`
 - [x] `info` extended item: `chart_name`
 - [x] `info` extended item: `mode_hint`
@@ -285,7 +287,7 @@ be-music follows the NORMAL reading (`100` = NORMAL): it matches the spec's exam
 
 The model exports `buildBmsonBGAEventTimeline` and `pickBmsonBGASequenceFrame`. Cue pulses use the BPM/STOP resolver, while frame times remain elapsed milliseconds. Sequence ids take precedence over image ids for event-layer references. Normal image references use declared header ids, but sequence frame ids use zero-based header array indices, as the [upstream decoder](https://github.com/exch-bms2/jbms-parser/blob/master/src/bms/model/BMSONDecoder.java) and [renderer](https://github.com/exch-bms2/beatoraja/blob/master/src/bms/player/beatoraja/play/bga/BGAProcessor.java) do. Missing images resolve to no image; an end marker stays ended until a new trigger. Ordinary image-only layers stay on the existing BGA timeline.
 
-This adds data preservation and deterministic sequence lookup. Engine judgment triggers, image-set selection, interval behavior and browser/terminal sequence rendering remain tracked by #826. The upstream renderer currently draws only MISS event layers and does not consume event intervals; preservation does not claim full playback support.
+The engine now publishes active sequence state as `PlayerUIFramePayload.bmsonBGA`, and terminal ANSI/Kitty rendering loads every referenced alternative and draws that state with native alpha, placement and movie frame clocks. PLAY/MISS judgments, ALWAYS repeats, millisecond intervals and ordered image-set choices follow [ADR 0022](./adr/0022-bmson-bga-events.md). AUTO/replay seek rebuilds the exact trigger effects; manual seek clears live history. `buildBmsonBGAEventTimeline` accepts `includeOrdinaryLayerClears` so the engine cancels an old conditional program at a later ordinary image cue. Browser sequence drawing and NONSTOP placement remain tracked by #826. These execution rules extend the upstream renderer, which currently draws only MISS event layers and does not consume event intervals; complete upstream playback parity is not claimed.
 
 ## Unsupported/incompatible for primary references
 

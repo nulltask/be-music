@@ -31,7 +31,9 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] ルート: `scroll_events`（beatoraja 拡張）を BMS の `#SCROLL`（チャンネル `SC`）として読む
 - [x] ルート: `bga`
 - [x] beatoraja の `bga_sequence` とイベントの `id_set` / `condition` / `interval` をパース・複製・Be-Music JSON・bmson 出力で保持
-- [ ] シーケンス／条件付きイベントの選択を engine の判定および Browser／Terminal 描画につなぐ
+- [x] シーケンス／条件付きイベントの選択を engine の判定につなぎ、AUTO／リプレイの seek で復元する
+- [x] engine のシーケンス状態を Terminal の ANSI／Kitty 出力で描く
+- [ ] Browser のシーケンス描画と NONSTOP のステージ配置をつなぐ
 - [x] `info` 拡張項目: `subartists`
 - [x] `info` 拡張項目: `chart_name`
 - [x] `info` 拡張項目: `mode_hint`
@@ -289,7 +291,7 @@ be-music は NORMAL の解釈（`100` = NORMAL）に従います。仕様の説�
 
 モデルは `buildBmsonBGAEventTimeline` と `pickBmsonBGASequenceFrame` を公開する。キューの pulse は BPM・STOP のリゾルバーで解決し、フレーム時刻は経過ミリ秒のまま扱う。イベントレイヤーの参照では、画像 id よりシーケンス id を優先する。通常の画像参照はヘッダーの宣言 id を使うが、シーケンスのフレーム id は [上流のデコーダー](https://github.com/exch-bms2/jbms-parser/blob/master/src/bms/model/BMSONDecoder.java)と[描画処理](https://github.com/exch-bms2/beatoraja/blob/master/src/bms/player/beatoraja/play/bga/BGAProcessor.java)と同じく、ヘッダー配列の 0 始まりの位置を使う。未定義画像は画像なしとなり、終端後は新しいトリガーまで終了状態を保つ。通常の画像だけのレイヤーは既存の BGA タイムラインに残る。
 
-ここではデータ保持と決定的なシーケンス参照を追加している。engine の判定トリガー・画像セットの選択・interval の動作・Browser／Terminal のシーケンス描画は #826 で継続する。上流の描画処理は現時点で MISS イベントレイヤーだけを描き、イベントの interval を参照しない。データ保持を完全な再生対応とは扱わない。
+engine はアクティブなシーケンス状態を `PlayerUIFramePayload.bmsonBGA` に公開し、Terminal の ANSI／Kitty 描画はすべての候補の参照先を読み込んで、元画像の alpha・配置・動画フレーム時刻とともに描く。PLAY／MISS の判定・ALWAYS の繰り返し・ミリ秒の interval・定義順の画像セット選択は [ADR 0022](./adr/0022-bmson-bga-events.ja.md) に従う。AUTO／リプレイの seek は正確なトリガーのエフェクトを再構成し、手動 seek はライブ履歴を消す。`buildBmsonBGAEventTimeline` は `includeOrdinaryLayerClears` を受け付け、後続の通常画像キューで古い条件付きプログラムを解除できる。Browser のシーケンス描画と NONSTOP の配置は #826 で継続する。これらは MISS イベントレイヤーだけを描き interval を参照しない上流を拡張する実行規則であり、完全な再生互換とは扱わない。
 
 ## y -> position 変換規則
 

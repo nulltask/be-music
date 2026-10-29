@@ -889,6 +889,8 @@ UI コマンドキューはロングノートの開始・終了も伝えます�
 
 `PlayerOptions.onRulesetResolved` は再生開始前に 1 回だけ `PlayerRulesetInfo`（`id`、`rulesetId`、`longNoteStyle`、譜面開始時点の判定窓 `windows`（µs））を渡して呼ばれます。ホストは判定窓を自前で導出し直さずに、エンジンが実際に使う値を表示できます。
 
+条件付き bmson BGA の状態は `PlayerUIFramePayload.bmsonBGA` に、アクティブな画像ファイル名・レイヤー／POOR 面・起動時刻・元フレームの開始時刻として載せる。engine は [ADR 0022](./adr/0022-bmson-bga-events.ja.md) に従い、実際の判定からこの状態を作る。Terminal worker は `BgaANSIRenderer.getANSILines` / `getKittyImage` の任意の第 3 引数に渡し、既存の合成処理で元画像の alpha と動画時刻を保つ。Browser のシーケンス描画と NONSTOP の配置は #826 の残作業とする。
+
 ### Loading screen
 
 選曲後の loading 中は、CLI が progress bar と現在の手順を標準出力へ描画します。

@@ -50,8 +50,23 @@ export function buildBGATimelines(chart: BeMusicJSON, resolver: BGATimingResolve
       return { seconds, key: entry.id === 0 ? undefined : headerById.get(entry.id) };
     };
     for (const event of bgaSection.events) timelines.base.push(toCue(event));
-    for (const event of bgaSection.layerEvents) timelines.layer.push(toCue(event));
-    for (const event of bgaSection.poorEvents) timelines.poor.push(toCue(event));
+    const sequenceIds = new Set((bgaSection.sequences ?? []).map((entry) => entry.id));
+    for (const event of bgaSection.layerEvents) {
+      const cue = toCue(event);
+      if (
+        event.idSet !== undefined ||
+        event.condition !== undefined ||
+        event.interval !== undefined ||
+        sequenceIds.has(event.id)
+      )
+        cue.key = undefined;
+      timelines.layer.push(cue);
+    }
+    for (const event of bgaSection.poorEvents) {
+      const cue = toCue(event);
+      if (sequenceIds.has(event.id)) cue.key = undefined;
+      timelines.poor.push(cue);
+    }
   }
 
   sortBGATimelines(timelines);

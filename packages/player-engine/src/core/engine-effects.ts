@@ -1,3 +1,4 @@
+import { resolveBmsonBGAEventInput, type BmsonBGAEventInput } from './bmson-bga.ts';
 import {
   adjustBeatorajaJudgeTiming,
   createLR2JudgeTimingSamples,
@@ -26,6 +27,7 @@ import { type AudioSession } from './engine-types.ts';
 /** What a driver hands {@link createJudgeEffectHandler}: the host side of every judge-core effect. */
 interface JudgeEffectHost {
   uiEnabled: boolean;
+  onBmsonBGAInput?: (input: BmsonBGAEventInput) => void;
   onInput?: (input: Extract<Parameters<JudgeCoreEffectSink>[0], { kind: 'record-input' }>) => void;
   /**
    * The automatic judge-timing adjustment this play runs (`OFF` for none: AUTO, replays, or a mode the play skips), and
@@ -82,6 +84,10 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeEffectHand
     uiSignals.pushCommand({ kind: 'judge-timing', value: next });
   };
   const sink: JudgeCoreEffectSink = (effect) => {
+    if (host.onBmsonBGAInput) {
+      const input = resolveBmsonBGAEventInput(effect);
+      if (input) host.onBmsonBGAInput(input);
+    }
     switch (effect.kind) {
       case 'record-input':
         host.onInput?.(effect);

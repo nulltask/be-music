@@ -123,6 +123,7 @@ function createAutoJudge(session: PlaySession): PlayJudge {
     judgedThroughSeconds = seconds;
     return {
       judgments: rebuild.judgments,
+      bmsonBGAInputs: rebuild.bmsonBGAInputs,
       heldLongNotes: autoJudge.pendingLongNotes.map(({ note }) => ({
         channel: note.channel,
         beat: note.beat,

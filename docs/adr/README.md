@@ -37,3 +37,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0020: Player UI elements are headless; themes and skins supply the look](./0020-headless-player-ui.md)
 
 - [0021: A skin's stage may be fluid](./0021-fluid-stage.md)
+
+- [0022: Conditional bmson BGA events follow deterministic chart time](./0022-bmson-bga-events.md)

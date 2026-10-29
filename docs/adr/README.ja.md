@@ -37,3 +37,5 @@
 - [0020: Player UI の要素は headless にし、見た目はテーマとスキンが与える](./0020-headless-player-ui.ja.md)
 
 - [0021: スキンのステージは可変にできる](./0021-fluid-stage.ja.md)
+
+- [0022: bmson の条件付き BGA イベントは決定的な譜面時刻で動かす](./0022-bmson-bga-events.ja.md)

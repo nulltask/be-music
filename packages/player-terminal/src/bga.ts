@@ -6,6 +6,7 @@ import {
   parseBMSExBMP,
   buildBGAOpacityTimelines,
   buildKeyBoundBGATimeline,
+  buildBmsonBGAEventTimeline,
   pickBGAOpacity,
   pickBGATint,
   type BGAOpacityTimelines,
@@ -20,6 +21,7 @@ import {
   pickActiveBGACue,
   type ImageResizeAlgorithm,
   type KeyBoundBGAFrame,
+  type BmsonBGAFrame,
 } from '@be-music/player-engine/display';
 import {
   TERMINAL_PIXEL_ASPECT_X,
@@ -352,8 +354,8 @@ export class BgaANSIRenderer {
     this.rebuildFrames();
   }
 
-  getANSILines(currentSeconds: number, keyBound?: KeyBoundBGAFrame): string[] | undefined {
-    this.refreshComposite(currentSeconds, keyBound);
+  getANSILines(currentSeconds: number, keyBound?: KeyBoundBGAFrame, bmson?: BmsonBGAFrame): string[] | undefined {
+    this.refreshComposite(currentSeconds, keyBound, bmson);
     if (!this.cachedComposite) {
       return this.blackBackgroundLines;
     }
@@ -366,8 +368,8 @@ export class BgaANSIRenderer {
     return this.cachedLines;
   }
 
-  getKittyImage(currentSeconds: number, keyBound?: KeyBoundBGAFrame): BGAKittyImage {
-    const state = this.resolveActiveState(currentSeconds);
+  getKittyImage(currentSeconds: number, keyBound?: KeyBoundBGAFrame, bmson?: BmsonBGAFrame): BGAKittyImage {
+    const state = this.resolveActiveState(currentSeconds, bmson);
     const keyBoundKey = keyBound ? keyBoundResourceKey(keyBound.definitionId, keyBound.bmpKey) : '';
     const keyBoundSelection = keyBound
       ? resolveFrameSelection(
@@ -506,8 +508,8 @@ export class BgaANSIRenderer {
     this.cachedKittyImage = undefined;
   }
 
-  private refreshComposite(currentSeconds: number, keyBound?: KeyBoundBGAFrame): void {
-    const state = this.resolveActiveState(currentSeconds);
+  private refreshComposite(currentSeconds: number, keyBound?: KeyBoundBGAFrame, bmson?: BmsonBGAFrame): void {
+    const state = this.resolveActiveState(currentSeconds, bmson);
     const keyBoundKey = keyBound ? keyBoundResourceKey(keyBound.definitionId, keyBound.bmpKey) : '';
     const keyBoundSelection = keyBound
       ? resolveFrameSelection(
@@ -568,7 +570,10 @@ export class BgaANSIRenderer {
     this.cachedKittyImage = undefined;
   }
 
-  private resolveActiveState(currentSeconds: number): {
+  private resolveActiveState(
+    currentSeconds: number,
+    bmson?: BmsonBGAFrame,
+  ): {
     baseKey: string;
     layerKey: string;
     layer2Key: string;
@@ -587,7 +592,8 @@ export class BgaANSIRenderer {
     const layerCue = pickActiveBGACue(this.layerTimeline, cueSeconds);
     const layer2Cue = pickActiveBGACue(this.layer2Timeline, cueSeconds);
     const poorCue = pickActiveBGACue(this.poorTimeline, cueSeconds);
-    const poorActive = this.poorBGAMode !== 2 && currentSeconds < this.poorActiveUntilSeconds;
+    const sequencePoor = bmson?.plane === 'poor' && this.poorBGAMode !== 2;
+    const poorActive = sequencePoor || (this.poorBGAMode !== 2 && currentSeconds < this.poorActiveUntilSeconds);
     const opacity = {
       base: pickBGAOpacity(this.opacityTimelines.base, cueSeconds),
       layer: pickBGAOpacity(this.opacityTimelines.layer, cueSeconds),
@@ -605,13 +611,26 @@ export class BgaANSIRenderer {
       tint,
       opacityToken: [...Object.values(opacity), ...Object.values(tint)].join(':'),
       baseKey: baseCue?.key ?? '',
-      layerKey: layerCue?.key ?? '',
+      layerKey: bmson?.plane === 'layer' ? (bmson.key ?? '') : (layerCue?.key ?? ''),
       layer2Key: layer2Cue?.key ?? '',
-      poorKey: poorActive ? (this.resolvePoorKey(poorCue, currentSeconds) ?? '') : '',
+      poorKey: sequencePoor
+        ? (bmson.key ?? '')
+        : poorActive
+          ? (this.resolvePoorKey(poorCue, currentSeconds) ?? '')
+          : '',
       baseSeconds: baseCue ? Math.max(0, currentSeconds - baseCue.seconds) : Math.max(0, currentSeconds),
-      layerSeconds: layerCue ? Math.max(0, currentSeconds - layerCue.seconds) : 0,
+      layerSeconds:
+        bmson?.plane === 'layer'
+          ? Math.max(0, currentSeconds - bmson.frameStartSeconds)
+          : layerCue
+            ? Math.max(0, currentSeconds - layerCue.seconds)
+            : 0,
       layer2Seconds: layer2Cue ? Math.max(0, currentSeconds - layer2Cue.seconds) : 0,
-      poorSeconds: poorCue ? Math.max(0, currentSeconds - poorCue.seconds) : Math.max(0, currentSeconds),
+      poorSeconds: sequencePoor
+        ? Math.max(0, currentSeconds - bmson.frameStartSeconds)
+        : poorCue
+          ? Math.max(0, currentSeconds - poorCue.seconds)
+          : Math.max(0, currentSeconds),
       poorActive,
     };
   }
@@ -666,6 +685,12 @@ export async function createBgaANSIRenderer(
   const poorKeys = new Set(poorTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layer2Keys = new Set(layer2Timeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
+  for (const cue of buildBmsonBGAEventTimeline(json, resolved.timing)) {
+    const keys = cue.condition === 'miss' ? poorKeys : layerKeys;
+    for (const sequence of cue.sequences) {
+      for (const frame of sequence.frames) if (frame.key) keys.add(frame.key);
+    }
+  }
   const keyBoundKeys = new Set<string>();
   for (const cue of options.keyBoundBGACues ?? buildKeyBoundBGATimeline(json, resolved.timing)) {
     for (const bmp of cue.definition.frames) {
