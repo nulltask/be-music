@@ -1,5 +1,5 @@
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
-import { Texture } from 'pixi.js';
+import { Texture, TextureSource } from 'pixi.js';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { BrowserAssetSource } from '../collection/types.ts';
 import {
@@ -40,6 +40,10 @@ function emptyResources(): PlayBGAResources {
   return { textures: new Map(), layerTextures: new Map(), videos: new Map(), subRegionOrigins: new Map() };
 }
 
+function sourceTexture(): Texture {
+  return new Texture({ source: new TextureSource({ width: 512, height: 256 }) });
+}
+
 describe('resolvePoorBGAMode', () => {
   test('parses 0..2 and treats a missing, unparsable or out-of-range value as 0', () => {
     expect(resolvePoorBGAMode(undefined)).toBe(0);
@@ -77,6 +81,40 @@ describe('resolvePoorBGAFallbackKey', () => {
 });
 
 describe('collectPlayBGAResources', () => {
+  test('walks reversed dependencies, terminates cycles and stops at explicit BMP/EXBMP declarations', () => {
+    const chart = bmsChart({ '09': 'sheet.png', '03': 'direct.png' });
+    chart.bms.exBMP['04'] = ',,,,extended.png';
+    chart.bms.bga = {
+      '02': '09 0 0 64 64 16 16',
+      '01': '02 16 16 80 80 32 32',
+      '03': '08 0 0 64 64 0 0',
+      '04': '08 0 0 64 64 0 0',
+      '05': '06 0 0 64 64 0 0',
+      '06': '05 0 0 64 64 0 0',
+    };
+    const original = structuredClone(chart);
+    const resources = collectPlayBGAResources(
+      chart,
+      {
+        base: [{ seconds: 0, bmpKey: '03' }],
+        layer: [
+          { seconds: 0, bmpKey: '01' },
+          { seconds: 1, bmpKey: '04' },
+          { seconds: 2, bmpKey: '05' },
+        ],
+        poor: [],
+      },
+      undefined,
+    );
+    expect([...resources.paths]).toEqual([
+      ['09', 'sheet.png'],
+      ['03', 'direct.png'],
+      ['04', 'extended.png'],
+    ]);
+    expect(resources.layer).toEqual(new Set(['01', '02', '09', '04', '05', '06']));
+    expect(resources.base).toEqual(new Set(['03']));
+    expect(chart).toEqual(original);
+  });
   test('loads referenced EXBMP-only resources and preserves explicit BMP paths', () => {
     const chart = bmsChart({ '01': 'explicit.png' });
     chart.bms.exBMP = {
@@ -260,6 +298,87 @@ describe('loadPlayBGA', () => {
 });
 
 describe('registerSubRegionBGATextures', () => {
+  test('composes nested alias coordinates and clips source and destination on both tracks', () => {
+    const chart = bmsChart({ '09': 'sheet.png' });
+    // The parent first crops native x=256..384 to canvas x=32..160. The child samples x=16..112,
+    // so its first 16 columns are empty; negative destination y clips another 8 source rows.
+    chart.bms.bga = { '01': '02 16 48 112 112 200 -8', '02': '09 256 0 384 128 32 48' };
+    const into = emptyResources();
+    const source = sourceTexture();
+    into.textures.set('09', source);
+    into.layerTextures.set('09', source);
+    registerSubRegionBGATextures(chart, into);
+    for (const textures of [into.textures, into.layerTextures]) {
+      expect(textures.get('01')?.source).toBe(source.source);
+      expect(textures.get('01')?.frame).toMatchObject({ x: 256, y: 8, width: 40, height: 56 });
+    }
+    expect(into.subRegionOrigins.get('01')).toEqual({ x: 216, y: 0 });
+  });
+
+  test('ignores aliases shadowed by direct images, even when the declared image did not load', () => {
+    const chart = bmsChart({ '01': 'direct.png', '03': 'missing.png', '09': 'sheet.png' });
+    chart.bms.exBMP['02'] = ',,,,extended.png';
+    chart.bms.bga = Object.fromEntries(['01', '02', '03'].map((slot) => [slot, '09 8 4 24 20 10 12']));
+    const into = emptyResources();
+    const source = sourceTexture();
+    into.layerTextures.set('09', source);
+    into.layerTextures.set('01', source);
+    registerSubRegionBGATextures(chart, into);
+    expect([...into.layerTextures.keys()]).toEqual(['09', '01']);
+    expect(into.subRegionOrigins.size).toBe(0);
+  });
+
+  test('keeps wholly clipped aliases empty and terminates missing and cyclic dependencies', () => {
+    const chart = bmsChart({ '09': 'sheet.png' });
+    chart.bms.bga = {
+      '01': '09 600 0 620 20 0 0',
+      '02': '01 0 0 256 256 0 0',
+      '03': '04 0 0 10 10 0 0',
+      '04': '03 0 0 10 10 0 0',
+      '05': '08 0 0 10 10 0 0',
+    };
+    const into = emptyResources();
+    const fillRect = vi.fn();
+    const canvases: unknown[] = [];
+    vi.stubGlobal('document', {
+      createElement: () => {
+        const canvas = { getContext: () => ({ fillRect, fillStyle: '' }) };
+        canvases.push(canvas);
+        return canvas;
+      },
+    });
+    const from = vi.spyOn(Texture, 'from').mockImplementation(() => new Texture());
+    try {
+      into.textures.set('09', sourceTexture());
+      into.layerTextures.set('09', sourceTexture());
+      registerSubRegionBGATextures(chart, into);
+      expect([...into.layerTextures.keys()].sort()).toEqual(['01', '02', '09']);
+      expect([...into.textures.keys()].sort()).toEqual(['01', '02', '09']);
+      expect(from).toHaveBeenCalledTimes(2);
+      expect(fillRect).toHaveBeenCalledExactlyOnceWith(0, 0, 256, 256);
+      expect(canvases).toHaveLength(2);
+      expect(into.layerTextures.get('01')?.source).toBe(into.layerTextures.get('02')?.source);
+    } finally {
+      from.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test('resolves a long internal bmson dependency chain without recursive calls', () => {
+    const chart = createEmptyJSON('bmson');
+    chart.bms.base = 62;
+    chart.resources.bmp['root'] = 'sheet.png';
+    // All generated IDs are valid base-62 strings, and deliberately list consumers before dependencies.
+    for (let index = 0; index < 5000; index++)
+      chart.bms.bga[`id${index}`] = `${index === 4999 ? 'root' : `id${index + 1}`} 0 0 256 256 0 0`;
+    const into = emptyResources();
+    const source = sourceTexture();
+    into.layerTextures.set('root', source);
+    registerSubRegionBGATextures(chart, into);
+    expect(into.layerTextures.size).toBe(5001);
+    expect(into.layerTextures.get('id0')?.source).toBe(source.source);
+    expect(into.layerTextures.get('id0')?.frame.width).toBe(256);
+  });
   test('loads and cuts internal long resource ids from mixed NONSTOP bmson output without truncation', () => {
     const chart = createEmptyJSON('bmson');
     chart.bms.base = 62;
@@ -272,7 +391,7 @@ describe('registerSubRegionBGATextures', () => {
     );
     expect(Object.fromEntries(resources.paths)).toEqual({ '101': 'source.png' });
     const into = emptyResources();
-    const source = new Texture();
+    const source = sourceTexture();
     into.layerTextures.set('101', source);
     registerSubRegionBGATextures(chart, into);
     expect(into.layerTextures.get('100')?.source).toBe(source.source);
@@ -283,7 +402,7 @@ describe('registerSubRegionBGATextures', () => {
     const chart = bmsChart({ '04': 'src.png' });
     chart.bms.bga = { '05': '04 8 4 24 20 10 12', '06': '09 0 0 16 16 0 0' };
     const into = emptyResources();
-    const source = new Texture();
+    const source = sourceTexture();
     into.layerTextures.set('04', source);
     registerSubRegionBGATextures(chart, into);
     const view = into.layerTextures.get('05');

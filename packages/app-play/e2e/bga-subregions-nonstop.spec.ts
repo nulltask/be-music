@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { expect, test, type Player } from './support.ts';
 
-async function placementError(player: Player, green: boolean): Promise<number> {
+async function placementError(player: Player, green: boolean | 'empty-layer' | 'empty-base'): Promise<number> {
   const screenshot = await player.page.screenshot();
   return player.page.evaluate(
     async ({ base64, green }) => {
@@ -32,6 +32,8 @@ async function placementError(player: Player, green: boolean): Promise<number> {
             }
         }
       const [canvasBox, crop] = bounds;
+      if (green === 'empty-layer') return crop![2]! < 0 && canvasBox![2]! >= 0 ? 0 : 1;
+      if (green === 'empty-base') return crop![2]! < 0 && canvasBox![2]! < 0 ? 0 : 1;
       if (crop![2]! < 0 || canvasBox![2]! < 0) return 1;
       const w = canvasBox![2]! - canvasBox![0]! + 1,
         h = canvasBox![3]! - canvasBox![1]! + 1;
@@ -49,13 +51,13 @@ async function placementError(player: Player, green: boolean): Promise<number> {
 }
 
 for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
-  test(`${family} keeps EXBMP sub-region resources and origins through NONSTOP`, async ({ player }, info) => {
+  test(`${family} keeps nested EXBMP sub-region resources and origins through NONSTOP`, async ({ player }, info) => {
     await player.open({ 'be-music.built-in-skin': family === 'native' ? 'native' : 'plain' });
     if (family === 'lr2' || family === 'beatoraja') await player.drop(`skins/${family}`);
     const a =
-      '#TITLE Red sub-region\n#BPM 120\n#BMP01 base.png\n#EXBMP03 ,,,,a-sheet.png\n#BGA02 03 256 0 384 128 32 64\n#00004:01\n#00007:02\n#00111:01\n#00419:01\n';
+      '#TITLE Red sub-region\n#BPM 120\n#BMP01 base.png\n#EXBMP03 ,,,,a-sheet.png\n#BGA02 04 16 32 144 160 32 64\n#BGA04 03 256 0 384 128 16 32\n#00004:01\n#00007:02\n#00111:01\n#00419:01\n';
     const b =
-      '#TITLE Green sub-region\n#BPM 120\n#BMP01 base.png\n#EXBMP03 ,,,,b-sheet.png\n#BGA02 03 0 0 128 128 96 96\n#00204:01\n#00207:02\n#00211:01\n#00819:01\n';
+      '#TITLE Green sub-region\n#BPM 120\n#BMP01 base.png\n#EXBMP03 ,,,,b-sheet.png\n#BGA02 04 48 32 240 224 96 96\n#BGA04 03 0 0 128 128 48 32\n#00204:01\n#00207:02\n#BGA05 03 600 0 620 20 0 0\n#00211:01\n#00307:05\n#00404:05\n#00819:01\n';
     const before = (await player.state()).loads;
     await player.page.evaluate(
       async ({ a, b }) => {
@@ -101,5 +103,9 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await player.page.screenshot({ path: info.outputPath('nonstop-red-subregion.png') });
     await expect.poll(() => placementError(player, true), { timeout: 18_000 }).toBeLessThan(0.025);
     await player.page.screenshot({ path: info.outputPath('nonstop-green-subregion.png') });
+    await expect.poll(() => placementError(player, 'empty-layer'), { timeout: 10_000 }).toBe(0);
+    await player.page.screenshot({ path: info.outputPath('nonstop-empty-layer.png') });
+    await expect.poll(() => placementError(player, 'empty-base'), { timeout: 10_000 }).toBe(0);
+    await player.page.screenshot({ path: info.outputPath('nonstop-empty-base.png') });
   });
 }
