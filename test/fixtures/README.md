@@ -123,3 +123,9 @@ Regenerate them through the editor API rather than by hand — that is what keep
 `bga-hevc.mp4` and `bga-vp9.webm` are generated 16×16 red clips (two frames at 1 fps), used by `player-terminal/src/bga-video.test.ts` to exercise real HEVC and VP9 decoding and the first-frame limit. They contain no third-party media. Regenerate with FFmpeg color input, `-frames:v 2 -pix_fmt yuv420p`, and respectively `-c:v libx265 -tag:v hvc1` or `-c:v libvpx-vp9`.
 
 `bga-bordered.webm` is a generated 32×32 VP9 clip with a black border and a 16×16 center that changes from red to green (two frames at 2 fps). Terminal tests verify native crop coordinates and late streaming frames against it. Generate red and lime 16×16 FFmpeg color inputs, each with `r=2:d=0.5,pad=32:32:8:8:color=black`; concatenate with `[0:v][1:v]concat=n=2:v=1:a=0` and encode with `-c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p`. It contains no third-party media.
+
+`bga-crop-colors.webm` is a generated 512×256 VP9 sheet (10 fps, 16 seconds, no audio). A 128×128 tile at `(256, 0)` changes from red to green at four seconds against black. Browser E2E tests cut nested 64×128 views from its native coordinates, start the two overlays at different times and retrigger the first. The moving Canvas crop and independent playheads must preserve the expected color sequence. No third-party media is included. Regenerate it with:
+
+```sh
+ffmpeg -f lavfi -i 'color=c=black:s=512x256:r=10:d=16' -vf "drawbox=x=256:y=0:w=128:h=128:color=0xed174b:t=fill:enable='lt(t,4)',drawbox=x=256:y=0:w=128:h=128:color=0x16cf63:t=fill:enable='gte(t,4)'" -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p -an bga-crop-colors.webm
+```

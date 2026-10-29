@@ -201,7 +201,7 @@ export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
   // Use the control-flow-resolved chart so #IF-gated BMP / bga header declarations match the chosen #RANDOM branch.
   const chart = ctx.resolvedChart ?? chartEntry.chart;
   // Loaded as the beatoraja prep loads them (`chart/play-bga.ts`): base + POOR textures keep their blacks, the layer
-  // track's are keyed out for BMS, videos get one texture for both tracks, and `#BGAxx` sub-regions become views.
+  // track's are keyed out for BMS, videos keep independent plane playheads, and `#BGAxx` aliases share source views.
   await loadPlayBGA({
     chart,
     source,
@@ -326,13 +326,14 @@ export function disposeBGAVideos(ctx: {
     base?: { key: string; cueSeconds: number };
     layer?: { key: string; cueSeconds: number };
     layer2?: { key: string; cueSeconds: number };
+    poor?: { key: string; cueSeconds: number };
   };
 }): void {
   // Pause every BGA video BEFORE we touch textures. The Pixi `VideoSource` wrapping each video registers a
   // `requestVideoFrameCallback` that re-uploads frames into the GL texture as they decode — leaving those callbacks
   // in flight while we destroy the textures throws inside the GL texture system. Pausing also revokes the Blob URL so
   // the underlying buffer can be released.
-  for (const { video, objectURL } of ctx.bgaVideos.values()) {
+  for (const { video, objectURL } of new Set(ctx.bgaVideos.values())) {
     try {
       video.pause();
       video.removeAttribute('src');

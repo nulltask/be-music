@@ -11,6 +11,7 @@ import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/displa
 import { Texture } from 'pixi.js';
 import {
   buildSkinBGAFrame,
+  pickActiveBGACue,
   isMissLayerShown,
   resolveBGAImageRect,
   resolveBGAStacks as resolveBGAStacksOf,
@@ -117,6 +118,21 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   syncBGAVideo(ctx, 'base', baseCue, seconds);
   syncBGAVideo(ctx, 'layer', layerCue, seconds);
   syncBGAVideo(ctx, 'layer2', layer2Cue, seconds);
+  const poorCue = pickActiveBGACue(ctx.play.bgaTimeline.poor, cueSeconds);
+  syncBGAVideo(
+    ctx,
+    'poor',
+    poorKey === undefined
+      ? undefined
+      : {
+          bmpKey: poorKey,
+          seconds:
+            poorCue?.bmpKey === poorKey
+              ? poorCue.seconds
+              : seconds - Math.max(0, (ctx.play.playClock() - ctx.play.lastPoorAt) / 1000),
+        },
+    seconds,
+  );
 
   const binding = ctx.skinBinding;
   if (binding?.drawsBGA) {
@@ -136,12 +152,19 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
             stack.layer2Cue?.bmpKey !== undefined
               ? resolveBGAFrameKey(ctx, stack.layer2Cue.bmpKey, stack.layer2Cue.seconds, seconds, 'layer2')
               : undefined,
-          poor: stack.poorKey,
+          poor:
+            stack.poorKey !== undefined
+              ? resolveBGAFrameKey(ctx, stack.poorKey, undefined, seconds, 'poor')
+              : undefined,
           poorOverlays: stack.poorOverlays,
           opacity: stack.opacity,
         },
         (key, track) =>
-          resolveSkinBGAImage(ctx, (track === 'layer' ? ctx.play.bgaLayerTextures : ctx.play.bgaTextures).get(key)),
+          resolveSkinBGAImage(
+            ctx,
+            (track === 'layer' ? ctx.play.bgaLayerTextures : ctx.play.bgaTextures).get(key),
+            ctx.play.bgaSubRegionOrigins?.has(key),
+          ),
         ctx.play.bgaSubRegionOrigins,
       );
     const frame = leading !== undefined ? skinFrame(leading) : { poorActive: false };
@@ -178,20 +201,21 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       overlay = false,
     ): void => {
       if (!key) return;
-      const resolvedKey = resolveBGAFrameKey(ctx, key, cueSeconds, seconds, layerName === 'poor' ? 'base' : layerName);
+      const resolvedKey = resolveBGAFrameKey(ctx, key, cueSeconds, seconds, layerName);
       const texture = textures.get(resolvedKey);
       if (!texture) return;
       // The rect stands for the 256x256 BMS canvas: an image that fits it keeps its pixel size there, centered
       // horizontally and top-aligned (a 256x161 frame leaves a band at the bottom), while a larger image or a
       // video fills the rect, as LR2 and beatoraja do.
-      const placed = ctx.play.bgaVideos.has(resolvedKey)
-        ? bga
-        : resolveBGAImageRect(
-            texture.frame.width,
-            texture.frame.height,
-            bga,
-            ctx.play.bgaSubRegionOrigins.get(resolvedKey),
-          );
+      const placed =
+        ctx.play.bgaVideos.has(resolvedKey) && !ctx.play.bgaSubRegionOrigins.has(resolvedKey)
+          ? bga
+          : resolveBGAImageRect(
+              texture.frame.width,
+              texture.frame.height,
+              bga,
+              ctx.play.bgaSubRegionOrigins.get(resolvedKey),
+            );
       if (layerName !== 'layer' && layerName !== 'layer2' && !overlay && (placed.w < bga.w || placed.h < bga.h)) {
         // The base canvas around a small image is black (a 1x1 black BMP blanks the BGA in LR2 and beatoraja), so
         // fill the rect before drawing the image; the layer track's canvas stays transparent.
@@ -311,7 +335,7 @@ function resolveBGAFrameKey(
   key: string,
   cueSeconds: number | undefined,
   seconds: number,
-  track: 'base' | 'layer' | 'layer2' = 'base',
+  track: 'base' | 'layer' | 'layer2' | 'poor' = 'base',
 ): string {
   const swBGA = cueSeconds === undefined ? undefined : ctx.play.switchingBGAs.get(key);
   const frameKey = swBGA ? pickSwitchingBGAFrame(swBGA, Math.max(0, (seconds - cueSeconds!) * 1000)) || key : key;
@@ -319,18 +343,42 @@ function resolveBGAFrameKey(
   return ctx.play.bgaVideos?.has(videoKey) ? videoKey : frameKey;
 }
 
+/** Video crops remain live canvases; their Texture keys disappear with the play session. */
+const videoCrops = new WeakMap<Texture, HTMLCanvasElement>();
+
 /**
  * The image behind a loaded BGA texture, for `frame.bga`: the decoded bitmap or the `<video>` element itself, or a
  * cropped copy for a `#BGAxx` sub-region (made on first use, so `undefined` for a frame or two).
  */
-function resolveSkinBGAImage(ctx: BGARendererContext, texture: Texture | undefined): BeMusicImage | undefined {
+function resolveSkinBGAImage(
+  ctx: BGARendererContext,
+  texture: Texture | undefined,
+  subRegion = false,
+): BeMusicImage | undefined {
   if (!texture) return undefined;
   const source = texture.source;
   const resource = source.resource as BeMusicImage | undefined;
   if (!resource) return undefined;
   const { frame } = texture;
-  if (frame.x === 0 && frame.y === 0 && frame.width === source.width && frame.height === source.height) {
+  if (!subRegion && frame.x === 0 && frame.y === 0 && frame.width === source.width && frame.height === source.height) {
     return resource;
+  }
+  if ('videoWidth' in resource) {
+    let canvas = videoCrops.get(texture);
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.width = frame.width;
+      canvas.height = frame.height;
+      videoCrops.set(texture, canvas);
+    }
+    const context = canvas.getContext('2d')!;
+    try {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(resource, frame.x, frame.y, frame.width, frame.height, 0, 0, canvas.width, canvas.height);
+    } catch {
+      // A seeking/not-yet-buffered video gets another opportunity next frame.
+    }
+    return canvas;
   }
   const crop = ctx.skinBGACrops.get(texture);
   if (crop !== undefined) return crop ?? undefined;
@@ -366,7 +414,7 @@ export function resolveBGAVideoResync(
 }
 
 /**
- * Drives playback of a video BGA on a single track (`base` or `layer`). When the cue's key matches a known video: -
+ * Drives playback of a video BGA on one of the four planes. When the cue's key matches a known video: -
  * first time it fires, `play()` from the cue's start offset - re-firing the same cue is a no-op (video keeps playing)
  * - switching keys pauses the previous video, then plays the new
  *
@@ -376,7 +424,7 @@ export function resolveBGAVideoResync(
  */
 function syncBGAVideo(
   ctx: BGARendererContext,
-  track: 'base' | 'layer' | 'layer2',
+  track: 'base' | 'layer' | 'layer2' | 'poor',
   cue: BGACue | undefined,
   seconds: number,
 ): void {

@@ -113,8 +113,16 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
   const { paths, base, layer } = collectPlayBGAResources(chart, options.timeline, options.poorFallbackKey);
   // The bmson spec draws layer blacks as black ("Unlike BMS Layer Channel #xxx07"); BMS keys them out.
   const keyOutLayerBlack = chart.sourceFormat !== 'bmson';
-  const firstLayer = new Set(options.timeline.layer.map((cue) => cue.bmpKey));
-  const secondLayer = new Set(options.timeline.layer2?.map((cue) => cue.bmpKey));
+  const aliasSources = new Set([...collectBGASubRegions(chart).values()].map((region) => region.sourceBMP));
+  const trackKeys = (cues: readonly BGACue[]) =>
+    collectBGATextureLoadKeys(chart, { base: cues, layer: [], poor: [] }, undefined).base;
+  const firstLayer = trackKeys(options.timeline.layer);
+  const secondLayer = trackKeys(options.timeline.layer2 ?? []);
+  const baseOnly = trackKeys(options.timeline.base);
+  const poor = trackKeys([
+    ...options.timeline.poor,
+    ...(options.poorFallbackKey ? [{ seconds: 0, bmpKey: options.poorFallbackKey }] : []),
+  ]);
   await runWithConcurrency([...paths], BGA_DECODE_CONCURRENCY, async ([key, path]) => {
     if (isCancelled()) return;
     const resolved = resolveChartBGAAsset(source, chartPath, path);
@@ -128,8 +136,13 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
         if (base.has(key) && firstLayer.has(key)) videoKeys.push(String.fromCharCode(0) + 'layer:' + key);
         if ((base.has(key) || firstLayer.has(key)) && secondLayer.has(key))
           videoKeys.push(String.fromCharCode(0) + 'layer2:' + key);
+        if (poor.has(key) && baseOnly.has(key)) videoKeys.push(String.fromCharCode(0) + 'poor:' + key);
         for (const videoKey of videoKeys) {
-          const handle = await loadVideoTextureFromBytes(resolved?.path ?? path, bytes, options.transcode);
+          const handle = await loadVideoTextureFromBytes(
+            resolved?.path ?? path,
+            bytes,
+            aliasSources.has(key) ? { ...options.transcode, maxLongEdgePx: 0 } : options.transcode,
+          );
           if (!handle) continue;
           if (isCancelled()) {
             releaseVideo({ video: handle.video, objectURL: handle.objectURL });
@@ -141,7 +154,8 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
           handle.video.defaultPlaybackRate = options.tempo;
           handle.video.playbackRate = options.tempo;
           into.videos.set(videoKey, { video: handle.video, objectURL: handle.objectURL });
-          if (videoKey === key && base.has(key)) into.textures.set(key, handle.texture);
+          if ((videoKey === key || videoKey.startsWith(String.fromCharCode(0) + 'poor:')) && base.has(key))
+            into.textures.set(videoKey, handle.texture);
           if (layer.has(key)) into.layerTextures.set(videoKey, handle.texture);
         }
         return;
@@ -224,6 +238,20 @@ export function registerSubRegionBGATextures(chart: BeMusicJSON, into: PlayBGARe
         );
         textures.set(slot, new Texture({ source: parent.source, frame }));
         into.subRegionOrigins.set(slot, { x: left, y: top });
+        const video = into.videos.get(region.sourceBMP);
+        if (video) into.videos.set(slot, video);
+        // Each plane keeps its own root video/playhead, while aliases share that plane's root. A transition
+        // between aliases still uses a different cue key and restarts the root at the new cue's offset.
+        for (const track of textures === into.textures ? ['poor'] : ['layer', 'layer2']) {
+          const parentKey = String.fromCharCode(0) + track + ':' + region.sourceBMP;
+          const parentVideo = into.videos.get(parentKey);
+          const parentTexture = textures.get(parentKey);
+          if (!parentVideo || !parentTexture) continue;
+          const key = String.fromCharCode(0) + track + ':' + slot;
+          textures.set(key, new Texture({ source: parentTexture.source, frame: frame.clone() }));
+          into.subRegionOrigins.set(key, { x: left, y: top });
+          into.videos.set(key, parentVideo);
+        }
       }
     }
   }

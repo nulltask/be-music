@@ -1,4 +1,4 @@
-import { Sprite, Texture, TextureSource } from 'pixi.js';
+import { Rectangle, Sprite, Texture, TextureSource } from 'pixi.js';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/display';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { BGA_VIDEO_DRIFT_SECONDS, resolveBGAVideoResync, renderBGA, type BGARendererContext } from './bga-renderer.ts';
@@ -104,7 +104,7 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
         ['base', textures[0]!],
         ['poor', textures[3]!],
       ]),
-      bgaLayerTextures: new Map([
+      bgaLayerTextures: new Map<string, Texture>([
         ['first', textures[1]!],
         ['second', textures[2]!],
       ]),
@@ -280,6 +280,80 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     expect(second.currentTime).toBe(1);
     expect(first.paused).toBe(true);
     expect(second.paused).toBe(true);
+    state.dispose();
+  });
+
+  test.each([false, true])('refreshes a Canvas skin video crop and its origin (whole source=%s)', (wholeSource) => {
+    const state = setup();
+    const video = {
+      videoWidth: 512,
+      videoHeight: 256,
+      paused: true,
+      seeking: false,
+      currentTime: 0,
+      duration: 60,
+      play: vi.fn(async () => {}),
+      pause: vi.fn(),
+    };
+    const texture = new Texture({
+      source: new TextureSource({ resource: video, width: wholeSource ? 64 : 512, height: wholeSource ? 128 : 256 }),
+      frame: new Rectangle(wholeSource ? 0 : 256, 0, 64, 128),
+    });
+    state.play.bgaLayerTextures.set('first', texture);
+    state.play.bgaVideos.set('first', { video, objectURL: 'blob:crop' });
+    state.play.bgaSubRegionOrigins.set('first', { x: 32, y: 64 });
+    const drawImage = vi.fn(),
+      clearRect = vi.fn();
+    const canvas = { width: 0, height: 0, getContext: () => ({ drawImage, clearRect }) };
+    const frames: Array<{ layer?: unknown; origins?: unknown }> = [];
+    Object.assign(state.ctx, {
+      skinBinding: { drawsBGA: true, setBGA: (frame: (typeof frames)[number]) => frames.push(frame) },
+      skinBGACrops: new Map(),
+    });
+    vi.stubGlobal('document', { createElement: () => canvas });
+    try {
+      renderBGA(state.ctx, 3);
+      renderBGA(state.ctx, 3.5);
+      expect(frames.map((frame) => frame.layer)).toEqual([canvas, canvas]);
+      expect(frames[1]?.origins).toEqual({ layer: { x: 32, y: 64 } });
+      expect(drawImage).toHaveBeenCalledTimes(2);
+      expect(drawImage).toHaveBeenLastCalledWith(video, wholeSource ? 0 : 256, 0, 64, 128, 0, 0, 64, 128);
+      expect(clearRect).toHaveBeenCalledTimes(2);
+      expect(state.ctx.skinBGACrops.size).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+      texture.destroy(true);
+      state.dispose();
+    }
+  });
+
+  test('keeps an overlay POOR video independent from the base and pauses it when the miss expires', () => {
+    const state = setup(1);
+    const video = () => ({
+      paused: true,
+      seeking: false,
+      currentTime: 0,
+      duration: 60,
+      play: vi.fn(async () => {}),
+      pause: vi.fn(),
+    });
+    const base = video(),
+      poor = video();
+    const key = String.fromCharCode(0) + 'poor:poor';
+    state.play.bgaVideos.set('base', { video: base, objectURL: 'blob:base' });
+    state.play.bgaVideos.set(key, { video: poor, objectURL: 'blob:poor' });
+    state.play.bgaTextures.set(key, state.textures[3]!);
+    state.play.bgaTimeline.poor = [{ seconds: 1, bmpKey: 'poor' }];
+    state.play.lastPoorAt = 0;
+    renderBGA(state.ctx, 3);
+    expect(base.currentTime).toBe(3);
+    expect(poor.currentTime).toBe(2);
+    expect(state.ctx.play.bgaActiveVideos.poor).toEqual({ key, cueSeconds: 1 });
+    poor.paused = false;
+    state.play.lastPoorAt = -Infinity;
+    renderBGA(state.ctx, 4);
+    expect(poor.pause).toHaveBeenCalledOnce();
+    expect(state.ctx.play.bgaActiveVideos.poor).toBeUndefined();
     state.dispose();
   });
 });

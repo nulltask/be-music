@@ -141,6 +141,7 @@ export interface PlayfieldRuntime {
     base?: { key: string; cueSeconds: number };
     layer?: { key: string; cueSeconds: number };
     layer2?: { key: string; cueSeconds: number };
+    poor?: { key: string; cueSeconds: number };
   };
   readonly audioAnalyzer: AudioAnalyzer | undefined;
   readonly audioContextStartTime: number;

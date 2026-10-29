@@ -195,11 +195,12 @@ export class BeatorajaBGALayer {
           if (cue.seconds > seconds) break;
           if (cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
         }
-        keys.set(stack.poorKey, cueSeconds);
+        const poorKey = this.videoKey(stack.poorKey, 'poor')!;
+        keys.set(poorKey, cueSeconds);
         this.drawImage(
           pair.sprite,
           pair.canvas,
-          stack.poorKey,
+          poorKey,
           this.textures,
           props,
           stack.alpha * (stack.opacity?.poor ?? 1),
@@ -248,15 +249,9 @@ export class BeatorajaBGALayer {
           if (cue.seconds > seconds) break;
           if (cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
         }
-        keys.set(stack.poorKey, cueSeconds);
-        this.drawImage(
-          pair.poor,
-          undefined,
-          stack.poorKey,
-          this.textures,
-          props,
-          stack.alpha * (stack.opacity?.poor ?? 1),
-        );
+        const poorKey = this.videoKey(stack.poorKey, 'poor')!;
+        keys.set(poorKey, cueSeconds);
+        this.drawImage(pair.poor, undefined, poorKey, this.textures, props, stack.alpha * (stack.opacity?.poor ?? 1));
       }
     });
     this.syncVideos(keys, playback.seconds ?? seconds, playback);
@@ -295,7 +290,7 @@ export class BeatorajaBGALayer {
     }
   }
 
-  private videoKey(key: string | undefined, track: 'layer' | 'layer2'): string | undefined {
+  private videoKey(key: string | undefined, track: 'layer' | 'layer2' | 'poor'): string | undefined {
     const videoKey = String.fromCharCode(0) + track + ':' + key;
     return this.videoElements.has(videoKey) ? videoKey : key;
   }
@@ -342,9 +337,10 @@ export class BeatorajaBGALayer {
     // top-aligned at its pixel size on a black canvas (beatoraja's `BGImageProcessor`), anything larger and videos
     // fill the rect.
     const rect = { x: props.x, y: props.y, w: props.width, h: props.height };
-    const placed = this.videoElements.has(key)
-      ? rect
-      : resolveBGAImageRect(texture.frame.width, texture.frame.height, rect, this.subRegionOrigins.get(key));
+    const placed =
+      this.videoElements.has(key) && !this.subRegionOrigins.has(key)
+        ? rect
+        : resolveBGAImageRect(texture.frame.width, texture.frame.height, rect, this.subRegionOrigins.get(key));
     if (canvas !== undefined && (placed.w < rect.w || placed.h < rect.h)) {
       canvas.visible = true;
       canvas.x = rect.x;
