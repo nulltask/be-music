@@ -174,10 +174,12 @@ export interface BMSSubRegionBGA {
  * Parses one `#BGAxx YY x1 y1 x2 y2 dx dy` directive. Whitespace- separated tokens, all integer except `YY` which is
  * the source BMP slot id (base-36 / base-62 depending on `#BASE`).
  *
+ * `allowLongKeys` retains internal resource ids from mixed NONSTOP bmson output; ordinary BMS keeps two-character ids.
+ *
  * Returns `undefined` for malformed lines (fewer than seven tokens, non-integer numerics, empty source slot, or a
  * degenerate rectangle where `ex <= sx` / `ey <= sy`).
  */
-export function parseBmsBGA(raw: string, idBase: 36 | 62 = 36): BMSSubRegionBGA | undefined {
+export function parseBmsBGA(raw: string, idBase: 36 | 62 = 36, allowLongKeys = false): BMSSubRegionBGA | undefined {
   if (typeof raw !== 'string') return undefined;
   const tokens = raw.trim().split(/\s+/u);
   if (tokens.length < 7) return undefined;
@@ -193,7 +195,7 @@ export function parseBmsBGA(raw: string, idBase: 36 | 62 = 36): BMSSubRegionBGA 
   ) {
     return undefined;
   }
-  const sourceBMP = normalizeObjectKey(sourceRaw, idBase);
+  const sourceBMP = normalizeObjectKey(sourceRaw, idBase, allowLongKeys);
   if (sourceBMP.length === 0) return undefined;
   const sx = Number.parseInt(sxRaw, 10);
   const sy = Number.parseInt(syRaw, 10);

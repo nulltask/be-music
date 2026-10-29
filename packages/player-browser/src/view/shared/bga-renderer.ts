@@ -142,6 +142,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         },
         (key, track) =>
           resolveSkinBGAImage(ctx, (track === 'layer' ? ctx.play.bgaLayerTextures : ctx.play.bgaTextures).get(key)),
+        ctx.play.bgaSubRegionOrigins,
       );
     const frame = leading !== undefined ? skinFrame(leading) : { poorActive: false };
     binding.setBGA({

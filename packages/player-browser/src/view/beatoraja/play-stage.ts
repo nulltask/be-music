@@ -55,6 +55,7 @@ export interface BeatorajaPlayChartLayout {
  * chart's stages with each stage's own cues.
  */
 export interface BeatorajaPlayBGA {
+  readonly subRegionOrigins?: ReadonlyMap<string, { x: number; y: number }>;
   /** Base and POOR track textures (black kept). */
   readonly textures: ReadonlyMap<string, Texture>;
   /** Layer track textures (black keyed out for a BMS chart). */
@@ -168,6 +169,7 @@ export class BeatorajaPlayStage {
     const view = this.stage.view;
     this.bgaLayer = new BeatorajaBGALayer({
       skin: this.kit.skin,
+      subRegionOrigins: bga.subRegionOrigins,
       textures: bga.textures,
       layerTextures: bga.layerTextures,
       videoElements: bga.videos,

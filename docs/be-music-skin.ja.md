@@ -309,7 +309,7 @@ flowchart LR
 - `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。レーンを押したまま判定ラインを通過するか、LR2 ruleset では PGREAT 窓内で押しても地雷が爆発してゲージが減ります（判定にはなりません）。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
 - `bombs`: 生きているヒットエフェクト。`elapsedMs`、固定の `seed`、発生させた判定 `judge` を持ちます。
 - `measureLines`: 小節線 `{ side, x, w, y }`。横切るレーンランごとに 1 本です。スキンが `gameplay.drawsMeasureLines` を設定したときだけ中身が入ります。
-- `bga`: 合成する BGA のレイヤー（`{ base?, layer?, layer2?, poor?, poorActive, poorOverlays?, opacity?, stacks? }`）。スキンが `gameplay.drawsBGA` を設定したとき以外は `undefined` です。
+- `bga`: 合成する BGA のレイヤー（`{ base?, layer?, layer2?, poor?, poorActive, poorOverlays?, opacity?, origins?, stacks? }`）。スキンが `gameplay.drawsBGA` を設定したとき以外は `undefined` です。
 - `runtime`: HUD の値（下記）。
 - `beatPhase`、`nowMs`、`effects`、`audio`。
 - `settings` と `chartImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
@@ -330,6 +330,8 @@ flowchart LR
 | `drawsBGA`          | `frame.bga`          | プレイヤーが BGA をキャンバスの後ろ、`layout.bga` の位置に表示します。 |
 
 どのフラグも既定は `false` で、解禁されるフレームのフィールドは設定するまで空（または `undefined`）のままです。既存のスキンの見た目は変わりません。`drawsBGA` では、`layer` と `layer2` の画像は 07 → 0A の順に描く BMS のレイヤーの慣習どおり純粋な黒が透明になった状態で渡され、`base` と `poor` は黒を残した状態です。通常のアルファブレンドで描き、`poorActive` の間は、`poorOverlays` が `true`（`#POORBGA 1`）なら通常のレイヤーの上に `poor` を描き、それ以外は他の代わりに `poor` を表示してください。`#POORBGA 2` ではミス画像を渡しません。bmson のレイヤー（仕様で黒は不透明のまま）と動画のレイヤーは作者が作ったとおりに渡されます。画像は `ImageBitmap`、動画の BGA なら再生中の `<video>` 要素です。`#BGA` の部分領域は切り出した画像として渡されます（切り出しが終わるまでの最初の 1〜2 フレームは渡されません）。`#SWBGA` のアニメーションのフレームはプレイヤーが選びますが、スロットの `#ARGB` による色と不透明度はスキンに任されます。
+
+`origins` は BGA 切り出し画像の面別の配置 `{ base?, layer?, layer2?, poor? }` で、各値は256×256キャンバス上のピクセル座標 `{ x, y }` です。指定された面は中央・上端に寄せず、この位置に配置してください。NONSTOP の各 `stack` にも含まれます。標準 Canvas UI は配置を反映します。
 
 `opacity` は `{ base, layer, layer2, poor }` の各面について 0〜1 の値を持ち、省略時はすべて 1 です。NONSTOP の `stacks` は奥から手前の順に各ステージの画像、`poorActive` / `poorOverlays`、`opacity`、クロスフェードの `alpha` を持ちます。各面には Canvas の既存 `globalAlpha × stack.alpha × stack.opacity[面]` を適用してください。最上位の画像は既存スキン向けに優勢なステージを引き続き示しますが、NONSTOP 全体を描くには `stacks` を使います。標準 UI の `paintPlayfieldParts` はこれらを反映します。
 

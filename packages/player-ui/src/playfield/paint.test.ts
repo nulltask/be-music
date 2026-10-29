@@ -38,6 +38,32 @@ function recorder(): BeMusicPlayfieldPaintContext & { calls: string[] } {
 }
 
 describe('playfield painters', () => {
+  it('uses each plane origin in a skin BGA frame', () => {
+    const ctx = recorder();
+    const image = { id: 'crop', width: 128, height: 64 } as unknown as CanvasImageSource;
+    paintBGA(
+      ctx,
+      {
+        shown: true,
+        frame: {
+          base: image,
+          layer: image,
+          layer2: image,
+          poor: image,
+          poorActive: true,
+          poorOverlays: true,
+          origins: { base: { x: 32, y: 48 }, layer: { x: 0, y: 0 }, layer2: { x: 64, y: 64 }, poor: { x: 96, y: 96 } },
+        },
+      },
+      { x: 100, y: 10, w: 128, h: 128 },
+    );
+    expect(ctx.calls.slice(1)).toEqual([
+      'drawImage crop 116,34,64,32',
+      'drawImage crop 100,10,64,32',
+      'drawImage crop 132,42,64,32',
+      'drawImage crop 148,58,64,32',
+    ]);
+  });
   it('keeps each NONSTOP base canvas black outside a small image at its stage opacity', () => {
     const ctx = recorder();
     const image = { id: 'small', width: 128, height: 64 } as unknown as CanvasImageSource;

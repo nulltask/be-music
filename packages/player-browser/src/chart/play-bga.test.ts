@@ -260,6 +260,25 @@ describe('loadPlayBGA', () => {
 });
 
 describe('registerSubRegionBGATextures', () => {
+  test('loads and cuts internal long resource ids from mixed NONSTOP bmson output without truncation', () => {
+    const chart = createEmptyJSON('bmson');
+    chart.bms.base = 62;
+    chart.resources.bmp['101'] = 'source.png';
+    chart.bms.bga['100'] = '101 8 4 24 20 10 12';
+    const resources = collectPlayBGAResources(
+      chart,
+      { base: [], layer: [{ seconds: 0, bmpKey: '100' }], poor: [] },
+      undefined,
+    );
+    expect(Object.fromEntries(resources.paths)).toEqual({ '101': 'source.png' });
+    const into = emptyResources();
+    const source = new Texture();
+    into.layerTextures.set('101', source);
+    registerSubRegionBGATextures(chart, into);
+    expect(into.layerTextures.get('100')?.source).toBe(source.source);
+    expect(into.subRegionOrigins.get('100')).toEqual({ x: 10, y: 12 });
+    expect(into.layerTextures.has('10')).toBe(false);
+  });
   test('cuts a view of the loaded source on its track and records the placement', () => {
     const chart = bmsChart({ '04': 'src.png' });
     chart.bms.bga = { '05': '04 8 4 24 20 10 12', '06': '09 0 0 16 16 0 0' };

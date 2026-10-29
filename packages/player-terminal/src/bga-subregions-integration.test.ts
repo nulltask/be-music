@@ -1,7 +1,9 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseBMS } from '@be-music/chart-parser';
+import { createEmptyJSON } from '@be-music/chart-source';
+import { stitchNonstopCourse } from '@be-music/player-engine/course';
 import { encode } from 'fast-png';
 import { expect, test, vi } from 'vite-plus/test';
 import { createBgaANSIRenderer, type BGAKittyImage } from './bga.ts';
@@ -71,6 +73,67 @@ test('sub-region cues switch and rewind independently of source image cues', asy
   } finally {
     await rm(baseDir, { recursive: true, force: true });
   }
+});
+
+test.each([false, true])(
+  'stitched EXBMP/sub-region chains retain stage-specific pixels and placement (mixed %s)',
+  async (mixed) => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-nonstop-bga-crop-'));
+    try {
+      for (const stage of [0, 1]) {
+        await mkdir(join(baseDir, `s${stage}`));
+        await writePNG(join(baseDir, `s${stage}/source.png`), 512, 256, (x, y) =>
+          stage === 0 ? (x >= 256 && x < 384 && y < 128 ? [255, 0, 0] : [0, 0, 255]) : [0, 255, 0],
+        );
+      }
+      const a = parseBMS(
+        '#BASE 62\n#BPM 120\n#EXBMPaa ,,,,source.png\n#BGAaA aa 256 0 384 128 64 64\n#BGAaB aA 64 64 192 192 32 32\n#00004:aB\n#00111:01\n#00411:01',
+      );
+      const b = parseBMS(
+        '#BASE 62\n#BPM 120\n#EXBMPaa ,,,,source.png\n#BGAaB aa 0 0 128 128 96 96\n#00204:aB\n#00211:01\n#00411:01',
+      );
+      const stages = [{ chart: a }, { chart: b }];
+      if (mixed) stages.push({ chart: createEmptyJSON('bmson') });
+      const course = stitchNonstopCourse(stages, {
+        connections: ['cut', 'blank2'],
+        assetPath: (stage, _kind, path) => `s${stage}/${path}`,
+      });
+      if (!course.ok) throw new Error(course.reason);
+      const renderer = (await createBgaANSIRenderer(course.chart, {
+        baseDir,
+        width: 40,
+        height: 20,
+        imageResizeAlgorithm: 'nearest',
+      }))!;
+      expect(pixelAt(renderer.getKittyImage(0), 64, 64)).toEqual([255, 0, 0]);
+      expect(pixelAt(renderer.getKittyImage(0), 16, 16)).toEqual([0, 0, 0]);
+      const boundary = course.map.stages[1]!.windowStart;
+      expect(pixelAt(renderer.getKittyImage(boundary + 0.01), 128, 128)).toEqual([0, 255, 0]);
+      expect(pixelAt(renderer.getKittyImage(boundary + 0.01), 64, 64)).toEqual([0, 0, 0]);
+      expect(renderer.getANSILines(boundary + 0.01)!.join('')).toContain('\u001b[48;2;0;255;0m');
+      expect(pixelAt(renderer.getKittyImage(0), 64, 64)).toEqual([255, 0, 0]);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  },
+);
+
+test('stitched EXBMP video sub-regions preserve native crop coordinates and later decoded frames', async () => {
+  const a = parseBMS(
+    '#BPM 120\n#EXBMP01 ,,,,bga-bordered.webm\n#BGA02 01 0 0 16 16 32 32\n#00004:02\n#00111:01\n#00411:01',
+  );
+  const course = stitchNonstopCourse([{ chart: a }, { chart: a }], { connections: ['cut'] });
+  if (!course.ok) throw new Error(course.reason);
+  const renderer = (await createBgaANSIRenderer(course.chart, {
+    baseDir: resolve(import.meta.dirname, '../../../test/fixtures'),
+    width: 256,
+    height: 128,
+    videoBGAStreaming: false,
+    imageResizeAlgorithm: 'nearest',
+  }))!;
+  expect(pixelAt(renderer.getKittyImage(0), 33, 33)).toEqual([0, 0, 0]);
+  expect(pixelAt(renderer.getKittyImage(0), 44, 44)[0]).toBeGreaterThan(240);
+  expect(pixelAt(renderer.getKittyImage(0.75), 44, 44)[1]).toBeGreaterThan(240);
 });
 
 test.each(['#BGA02 03 0 0 256 256 0 0\n#BGA03 02 0 0 256 256 0 0', '#BGA02 missing', '#BGA02 03 0 0 256 256 0 0'])(

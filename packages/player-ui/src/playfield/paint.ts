@@ -68,6 +68,7 @@ export function paintBGA(ctx: BeMusicPlayfieldPaintContext, data: BeMusicBGAData
         image,
         rect,
         frame.stacks !== undefined && (track === 'base' || (track === 'poor' && !stack.poorOverlays)),
+        stack.origins?.[track],
       );
     };
     if (stack.poorActive && !stack.poorOverlays) draw('poor');
@@ -82,13 +83,19 @@ export function paintBGA(ctx: BeMusicPlayfieldPaintContext, data: BeMusicBGAData
 }
 
 /** Where `image` of `width` x `height` goes in the BGA `rect` (see {@link paintBGA}). */
-export function placeBGAImage(width: number, height: number, isVideo: boolean, rect: BeMusicRect): BeMusicRect {
+export function placeBGAImage(
+  width: number,
+  height: number,
+  isVideo: boolean,
+  rect: BeMusicRect,
+  origin?: { x: number; y: number },
+): BeMusicRect {
   if (isVideo || !(width > 0) || !(height > 0) || Math.max(width, height) > BGA_CANVAS_SIZE) return { ...rect };
   const scaleX = rect.w / BGA_CANVAS_SIZE;
   const scaleY = rect.h / BGA_CANVAS_SIZE;
   return {
-    x: rect.x + Math.floor((BGA_CANVAS_SIZE - width) / 2) * scaleX,
-    y: rect.y,
+    x: rect.x + (origin?.x ?? Math.floor((BGA_CANVAS_SIZE - width) / 2)) * scaleX,
+    y: rect.y + (origin?.y ?? 0) * scaleY,
     w: width * scaleX,
     h: height * scaleY,
   };
@@ -99,9 +106,10 @@ function drawBGAImage(
   image: CanvasImageSource,
   rect: BeMusicRect,
   fillCanvas = false,
+  origin?: { x: number; y: number },
 ): void {
   const { width, height, isVideo } = imageSize(image);
-  const placed = placeBGAImage(width, height, isVideo, rect);
+  const placed = placeBGAImage(width, height, isVideo, rect, origin);
   if (fillCanvas && (placed.w < rect.w || placed.h < rect.h)) ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
   ctx.drawImage(image, placed.x, placed.y, placed.w, placed.h);
 }

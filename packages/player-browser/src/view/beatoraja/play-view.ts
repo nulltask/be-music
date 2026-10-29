@@ -150,6 +150,7 @@ export interface BeatorajaPlayRuntime {
   readonly gaugeState: PlayerGaugeSummary;
   readonly scrollHiSpeed: HiSpeedTransition;
   readonly bgaTextures: ReadonlyMap<string, Texture>;
+  readonly bgaSubRegionOrigins?: ReadonlyMap<string, { x: number; y: number }>;
   readonly bgaLayerTextures: ReadonlyMap<string, Texture>;
   readonly bgaVideos: ReadonlyMap<string, { video: HTMLVideoElement }>;
   readonly poorBGAMode?: 0 | 1 | 2;
@@ -446,6 +447,7 @@ export class BeatorajaPlayView implements PlayView {
     const nonstop = this.options.nonstop;
     return {
       textures: play.bgaTextures,
+      subRegionOrigins: play.bgaSubRegionOrigins,
       layerTextures: play.bgaLayerTextures,
       videos: new Map([...play.bgaVideos].map(([key, { video }]) => [key, video] as const)),
       cues: play.bgaTimeline,

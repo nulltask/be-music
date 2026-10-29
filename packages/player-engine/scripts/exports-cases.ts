@@ -216,10 +216,14 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   const bmsonNonstopChart = cloneJSON(benchNonstopChart);
   bmsonNonstopChart.sourceFormat = 'bmson';
   bmsonNonstopChart.bmson.info.resolution = 240;
+  const extendedBGAChart = cloneJSON(benchNonstopChart);
+  extendedBGAChart.bms.exBMP['03'] = ',,,,sheet.png';
+  extendedBGAChart.bms.bga['04'] = '03 0 0 64 64 32 48';
+  extendedBGAChart.events.push({ measure: 1, position: [0, 1], channel: '04', value: '04' });
   define('player-engine.course.stitchNonstopCourse', {
     run: () => {
       courseAPI.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
-      courseAPI.stitchNonstopCourse([{ chart: benchNonstopChart }, { chart: bmsonNonstopChart }], {
+      courseAPI.stitchNonstopCourse([{ chart: extendedBGAChart }, { chart: bmsonNonstopChart }], {
         connections: ['cut'],
       });
     },

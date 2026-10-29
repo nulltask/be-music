@@ -48,6 +48,7 @@ const playfieldFrame: Parameters<typeof ui.resolvePlayfieldParts>[0] = {
 };
 const playfieldParts = ui.resolvePlayfieldParts(playfieldFrame);
 const bgaImage = { width: 256, height: 256 } as CanvasImageSource;
+const bgaCropImage = { width: 128, height: 64 } as CanvasImageSource;
 const opacityPlayfieldParts: ui.BeMusicPlayfieldParts = {
   ...playfieldParts,
   bga: {
@@ -59,7 +60,8 @@ const opacityPlayfieldParts: ui.BeMusicPlayfieldParts = {
         stacks: [
           {
             base: bgaImage,
-            layer: bgaImage,
+            layer: bgaCropImage,
+            origins: { layer: { x: 32, y: 48 } },
             poorActive: false,
             alpha: 0.75,
             opacity: { base: 1, layer: 0.5, layer2: 1, poor: 1 },

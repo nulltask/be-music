@@ -23,7 +23,7 @@ export function resolveBGAResource(
     if (seen.has(current)) return undefined;
     seen.add(current);
     const raw = chart.bms.bga[current];
-    const region = typeof raw === 'string' ? parseBmsBGA(raw, base) : undefined;
+    const region = typeof raw === 'string' ? parseBmsBGA(raw, base, chart.sourceFormat === 'bmson') : undefined;
     if (!region) return undefined;
     regions.push(region);
     current = region.sourceBMP;

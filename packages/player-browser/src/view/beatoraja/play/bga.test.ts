@@ -25,6 +25,23 @@ function skin(): BeatorajaSkin {
   };
 }
 
+it('places a BGA sub-region at its authored canvas origin instead of centering it', () => {
+  const texture = new Texture({
+    source: new TextureSource({ resource: new Uint8Array(128 * 64 * 4), width: 128, height: 64 }),
+  });
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    textures: new Map([['crop', texture]]),
+    subRegionOrigins: new Map([['crop', { x: 32, y: 48 }]]),
+    cues: { base: [{ seconds: 0, bmpKey: 'crop' }], layer: [], poor: [] },
+  });
+  layer.update(0, { activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 }, false);
+  const sprite = layer.container.children.find((child) => child.label === 'bga/base') as Sprite;
+  expect([sprite.x, sprite.y, sprite.width, sprite.height]).toEqual([140, 405, 160, 60]);
+  layer.dispose();
+  texture.destroy(true);
+});
+
 it('applies opacity independently to base, both overlays and POOR and restores it after a seek', () => {
   const texture = fakeTexture();
   const cues = [{ seconds: 0, bmpKey: 'image' }];

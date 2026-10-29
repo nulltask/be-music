@@ -567,6 +567,8 @@ export interface BeMusicMeasureLine {
  * top edge, and stretch a larger image or a video over the whole rect.
  */
 export interface BeMusicBGAFrame {
+  /** Authored BGA sub-region placement on the 256×256 canvas; other images retain normal placement. */
+  origins?: Partial<Record<'base' | 'layer' | 'layer2' | 'poor', { x: number; y: number }>>;
   /** Authored channel opacity (0..1) for each plane; omitted means opaque. */
   opacity?: { base: number; layer: number; layer2: number; poor: number };
   /** NONSTOP stages in back-to-front order, each with its own layers, opacity and crossfade weight. */

@@ -137,6 +137,17 @@ describe('isVideoExtension', () => {
 });
 
 describe('buildSkinBGAFrame', () => {
+  it('passes sub-region origins with the corresponding active images', () => {
+    const frame = buildSkinBGAFrame(
+      { base: 'base', layer: 'crop', layer2: 'other', poor: undefined },
+      (key) => key,
+      new Map([
+        ['crop', { x: 32, y: 48 }],
+        ['other', { x: 96, y: 96 }],
+      ]),
+    );
+    expect(frame.origins).toEqual({ layer: { x: 32, y: 48 }, layer2: { x: 96, y: 96 } });
+  });
   const images = {
     base: new Map([
       ['01', 'base-01'],
