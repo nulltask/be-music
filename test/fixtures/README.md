@@ -130,6 +130,12 @@ Regenerate them through the editor API rather than by hand — that is what keep
 ffmpeg -f lavfi -i 'color=c=black:s=512x256:r=10:d=16' -vf "drawbox=x=256:y=0:w=128:h=128:color=0xed174b:t=fill:enable='lt(t,4)',drawbox=x=256:y=0:w=128:h=128:color=0x16cf63:t=fill:enable='gte(t,4)'" -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p -an bga-crop-colors.webm
 ```
 
+`exbmp-video.webm` is a generated 256×256 VP9 clip (4 fps, 4 seconds, no audio). Four vertical bands contain white, red/green, black and white; the colored band changes from red to green at two seconds. Browser tests key white before cropping, preserve unselected black, switch from a placed alias to the whole movie, and draw a keyed base against the black viewport. It contains no third-party media. Regenerate with:
+
+```sh
+ffmpeg -f lavfi -i 'color=c=white:s=256x256:r=4:d=4,drawbox=x=64:y=0:w=64:h=256:color=0xed174b:t=fill:enable=lt(t\,2),drawbox=x=64:y=0:w=64:h=256:color=0x16cf63:t=fill:enable=gte(t\,2),drawbox=x=128:y=0:w=64:h=256:color=black:t=fill' -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv444p -an exbmp-video.webm
+```
+
 ## Authored EXBMP images
 
 `exbmp-rgb.png` is a 256×256, 4-bit indexed Adam7 PNG without encoded alpha. A blue border surrounds four vertical gray/gray/black/green stripes. The first gray stripe lies on the inclusive ±8 RGB key boundary; the second is outside it.

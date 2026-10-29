@@ -130,6 +130,12 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 ffmpeg -f lavfi -i 'color=c=black:s=512x256:r=10:d=16' -vf "drawbox=x=256:y=0:w=128:h=128:color=0xed174b:t=fill:enable='lt(t,4)',drawbox=x=256:y=0:w=128:h=128:color=0x16cf63:t=fill:enable='gte(t,4)'" -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p -an bga-crop-colors.webm
 ```
 
+`exbmp-video.webm` は生成した 256×256 の VP9 動画です（4 fps、4 秒、音声なし）。縦の 4 帯が白、赤／緑、黒、白となり、色の付いた帯が 2 秒で赤から緑へ変わります。Browser テストは切り出す前の白の透過処理、指定されていない黒の保持、配置付き部分領域から動画全体への切り替え、黒い表示領域の上へのベースの描画を検証します。第三者の素材は含みません。次のコマンドで再生成できます。
+
+```sh
+ffmpeg -f lavfi -i 'color=c=white:s=256x256:r=4:d=4,drawbox=x=64:y=0:w=64:h=256:color=0xed174b:t=fill:enable=lt(t\,2),drawbox=x=64:y=0:w=64:h=256:color=0x16cf63:t=fill:enable=gte(t\,2),drawbox=x=128:y=0:w=64:h=256:color=black:t=fill' -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv444p -an exbmp-video.webm
+```
+
 ## 自作の EXBMP 画像
 
 `exbmp-rgb.png` は、アルファ情報を持たない 256×256・4 ビットパレット・Adam7 PNG。青い枠の内側に灰色・灰色・黒・緑の縦帯を配置する。最初の灰色は RGB の各成分 ±8 の境界に一致し、次の灰色は範囲外となる。

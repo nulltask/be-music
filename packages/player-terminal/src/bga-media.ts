@@ -115,12 +115,12 @@ export async function loadFrameSource(
 
   const video = await loadVideoAsFrameSource(
     resourcePath,
-    swBGAColorKey ? 'exbmp' : mode,
+    swBGAColorKey || colorKey ? 'exbmp' : mode,
     videoBGAStreaming,
     signal,
-    preserveSourceGeometry || swBGAColorKey !== undefined,
+    preserveSourceGeometry || swBGAColorKey !== undefined || colorKey !== undefined,
   );
-  if (!video || !swBGAColorKey) return video;
+  if (!video || (!swBGAColorKey && !colorKey)) return video;
   return mapFrameSource(video, (frame) => {
     const rgba = new Uint8Array(frame.width * frame.height * 4);
     for (let pixel = 0; pixel < frame.opaqueMask.length; pixel++) {
@@ -128,7 +128,7 @@ export async function loadFrameSource(
       rgba[pixel * 4 + 3] = frame.opaqueMask[pixel] ? 255 : 0;
     }
     if (colorKey) applyBMSColorKey(rgba, colorKey, false);
-    applyBMSColorKey(rgba, swBGAColorKey, true);
+    if (swBGAColorKey) applyBMSColorKey(rgba, swBGAColorKey, true);
     return { ...frame, opaqueMask: Uint8Array.from(frame.opaqueMask, (_, pixel) => (rgba[pixel * 4 + 3] ? 1 : 0)) };
   });
 }

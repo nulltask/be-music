@@ -2,15 +2,14 @@ import { applyBMSColorKey, type BmsARGB } from '@be-music/chart-model';
 import { Texture } from 'pixi.js';
 
 const dynamicCanvases = new WeakSet<object>();
-export function isKeyBoundVideoCanvas(resource: object): boolean {
+export function isColorKeyVideoCanvas(resource: object): boolean {
   return dynamicCanvases.has(resource);
 }
 
 /** Key decoded video pixels before sub-region views are cut; every alias shares the live native-size canvas. */
-export function createKeyBoundVideoTexture(
+export function createColorKeyVideoTexture(
   video: HTMLVideoElement,
-  key: BmsARGB,
-  imageKey?: BmsARGB,
+  keys: { bmsColorKey?: BmsARGB; swBGAColorKey?: BmsARGB },
 ): {
   texture: Texture;
   dispose: () => void;
@@ -20,6 +19,7 @@ export function createKeyBoundVideoTexture(
   canvas.height = Math.max(1, video.videoHeight);
   const context = canvas.getContext('2d', { willReadFrequently: true })!;
   const texture = Texture.from(canvas);
+  texture.source.scaleMode = 'nearest';
   dynamicCanvases.add(canvas);
   let disposed = false;
   let callback: number | undefined;
@@ -33,8 +33,9 @@ export function createKeyBoundVideoTexture(
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.drawImage(video, 0, 0);
       const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-      if (imageKey) applyBMSColorKey(pixels.data, imageKey, false);
-      applyBMSColorKey(pixels.data, key, true);
+      // EXBMP compares the inserted alpha of opaque movies against zero.
+      if (keys.bmsColorKey) applyBMSColorKey(pixels.data, keys.bmsColorKey, false);
+      if (keys.swBGAColorKey) applyBMSColorKey(pixels.data, keys.swBGAColorKey, true);
       context.putImageData(pixels, 0, 0);
       texture.source.update();
     } catch {
