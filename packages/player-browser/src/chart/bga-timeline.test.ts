@@ -483,3 +483,24 @@ it('Canvas skin image resolution receives each selected plane tint, including PO
     poorActive: true,
   });
 });
+
+it('applies bmson sequence frames only to the owning NONSTOP stack during a crossfade', () => {
+  const stages = [
+    { windowStart: 0, windowEnd: 20, bmpKeys: ['old'], bgaFadeOut: { start: 20, end: 23 } },
+    { windowStart: 20, windowEnd: Infinity, bmpKeys: ['new'], bgaFadeIn: { start: 17, end: 20 } },
+  ];
+  const timelines = ['old', 'new'].map((bmpKey) => ({ base: [{ seconds: 0, bmpKey }], layer: [], poor: [] }));
+  for (const plane of ['layer', 'poor'] as const) {
+    const stacks = resolveBGAStacks({
+      timeline: timelines[0]!,
+      nonstop: { stages, timelines },
+      seconds: 21,
+      inPoorWindow: false,
+      bmsonBGA: { stage: 1, plane, key: 'sequence', startedSeconds: 20, frameStartSeconds: 20.5, playbackRate: 2 },
+    });
+    expect(stacks).toHaveLength(2);
+    expect(stacks[0]!.layerCue).toBeUndefined();
+    expect(stacks[0]!.poorCue).toBeUndefined();
+    expect(plane === 'layer' ? stacks[1]!.layerCue : stacks[1]!.poorCue).toEqual({ bmpKey: 'sequence', seconds: 20.5 });
+  }
+});

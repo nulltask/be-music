@@ -141,6 +141,7 @@ async function bootstrap(): Promise<void> {
     imageResizeAlgorithm: initData.imageResizeAlgorithm,
     videoBGAStreaming: initData.videoBGAStreaming,
     keyBoundBGACues: initData.keyBoundBGACues,
+    bmsonBGACues: initData.bmsonBGACues,
     signal: abortController.signal,
     onLoadProgress: (progress) => {
       postWorkerMessage({

@@ -128,7 +128,14 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       // Stitched stages own disjoint BMP namespaces. The cue key keeps a stage's slot stable while its
       // crossfade weight passes the leading stage or earlier stacks disappear from the visible list.
       const slot = ctx.play.nonstopBGATimelines === undefined ? track : `${track}:${cue.bmpKey}`;
-      requests.set(slot, { track, cue });
+      const frame = ctx.play.engineFrame?.bmsonBGA;
+      requests.set(slot, {
+        track,
+        cue,
+        ...(frame?.key === cue.bmpKey && (frame.plane === 'poor' ? track === 'poor' : track === 'layer')
+          ? { playbackRate: frame.playbackRate }
+          : {}),
+      });
     };
     for (const stack of stacks) {
       add('base', stack.baseCue);

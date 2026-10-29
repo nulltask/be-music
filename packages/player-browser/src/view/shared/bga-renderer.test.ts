@@ -156,10 +156,13 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     };
     state.play.bgaVideos.set('first', { video, objectURL: 'blob:sequence' });
     Object.assign(state.play, {
-      engineFrame: { bmsonBGA: { plane: 'layer', key: 'first', startedSeconds: 1, frameStartSeconds: 2.5 } },
+      engineFrame: {
+        bmsonBGA: { plane: 'layer', key: 'first', startedSeconds: 1, frameStartSeconds: 2.5, playbackRate: 2 },
+      },
     });
     renderBGA(state.ctx, 3);
-    expect(video.currentTime).toBe(0.5);
+    expect(video.currentTime).toBe(1);
+    expect(video.playbackRate).toBe(2);
     expect(state.labels()).toContain('bga/layer[key=first]');
     Object.assign(state.play, {
       engineFrame: { bmsonBGA: { plane: 'poor', key: 'poor', startedSeconds: 1, frameStartSeconds: 2.8 } },

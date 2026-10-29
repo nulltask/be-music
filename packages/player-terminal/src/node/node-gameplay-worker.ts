@@ -426,6 +426,7 @@ function serializeUIRuntimeInit(context: CreatePlayerUIRuntimeContext): NodeGame
     kittyGraphics: Boolean(initData.playOptions.kittyGraphics),
     videoBGAStreaming: context.videoBGAStreaming !== false,
     keyBoundBGACues: context.keyBoundBGACues,
+    bmsonBGACues: context.bmsonBGACues,
     initialFrame: context.uiSignals.getFrame(),
     initialPaused: context.stateSignals.paused(),
     initialJudgeCombo: context.stateSignals.getJudgeCombo(),

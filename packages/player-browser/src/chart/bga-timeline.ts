@@ -313,6 +313,7 @@ export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
     alpha: number,
     mode: 0 | 1 | 2 = 0,
     opacity?: BGAOpacityTimelines,
+    stage?: number,
   ): BGAStack => {
     const stack: BGAStack = {
       ...(opacity !== undefined
@@ -349,8 +350,7 @@ export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
         ? { poorKey: pickActiveBGAKey(timeline.poor, seconds) }
         : {}),
     };
-    // Course integration must place event frames in stage-owned stacks, not broadcast one frame across a crossfade.
-    const frame = input.nonstop === undefined ? input.bmsonBGA : undefined;
+    const frame = input.nonstop === undefined || input.bmsonBGA?.stage === stage ? input.bmsonBGA : undefined;
     if (frame?.plane === 'layer' && !input.noLayer) {
       stack.layerCue = { seconds: frame.frameStartSeconds, bmpKey: frame.key };
     } else if (frame?.plane === 'poor' && !input.noPoor && mode !== 2) {
@@ -364,6 +364,8 @@ export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
   return nonstop.stages.flatMap((stage, index) => {
     const timeline = nonstop.timelines[index];
     const alpha = resolveNonstopBGAAlpha(stage, seconds);
-    return timeline !== undefined && alpha > 0 ? [pick(timeline, alpha, stage.poorBGAMode, stage.bgaOpacity)] : [];
+    return timeline !== undefined && alpha > 0
+      ? [pick(timeline, alpha, stage.poorBGAMode, stage.bgaOpacity, index)]
+      : [];
   });
 }

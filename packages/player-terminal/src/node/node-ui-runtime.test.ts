@@ -233,8 +233,19 @@ describe('node ui runtime', () => {
       },
     ];
     const uiSignals = createPlayerUISignalBus(createFrame());
-    const runtime = await createNodeUIRuntime({ ...createContext(uiSignals), keyBoundBGACues });
-    expect(workerState.lastWorkerOptions?.workerData).toMatchObject({ keyBoundBGACues });
+    const bmsonBGACues = [
+      {
+        seconds: 2,
+        stage: 0,
+        endSeconds: 4,
+        condition: 'play' as const,
+        plane: 'layer' as const,
+        interval: 0,
+        sequences: [{ id: 10, frames: [{ elapsedSeconds: 0, key: 'longImage' }] }],
+      },
+    ];
+    const runtime = await createNodeUIRuntime({ ...createContext(uiSignals), keyBoundBGACues, bmsonBGACues });
+    expect(workerState.lastWorkerOptions?.workerData).toMatchObject({ keyBoundBGACues, bmsonBGACues });
     await runtime.dispose();
   });
 

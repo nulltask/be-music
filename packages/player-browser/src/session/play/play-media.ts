@@ -205,6 +205,7 @@ export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
   await loadPlayBGA({
     chart,
     keyBoundBGACues: ctx.options.nonstop?.keyBoundBGA,
+    bmsonBGACues: ctx.options.nonstop?.bmsonBGA,
     source,
     chartPath: chartEntry.chartPath,
     timeline: ctx.bgaTimeline,

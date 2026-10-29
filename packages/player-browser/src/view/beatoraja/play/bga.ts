@@ -410,7 +410,13 @@ export class BeatorajaBGALayer {
   private syncVideos(
     keys: Map<string, number>,
     seconds: number,
-    playback: { tempo?: number; paused?: boolean; started?: boolean; keyBoundBGA?: KeyBoundBGAFrame },
+    playback: {
+      tempo?: number;
+      paused?: boolean;
+      started?: boolean;
+      keyBoundBGA?: KeyBoundBGAFrame;
+      bmsonBGA?: BmsonBGAFrame;
+    },
   ): void {
     for (const key of this.currentKeys.keys()) {
       if (keys.has(key) && playback.started !== false) continue;
@@ -425,7 +431,12 @@ export class BeatorajaBGALayer {
       if (video === undefined) continue;
       const frame = playback.keyBoundBGA;
       const rate =
-        frame && key === keyBoundBGAResourceKey(frame.definitionId, frame.bmpKey) ? (frame.playbackRate ?? 1) : 1;
+        frame && key === keyBoundBGAResourceKey(frame.definitionId, frame.bmpKey)
+          ? (frame.playbackRate ?? 1)
+          : playback.bmsonBGA !== undefined &&
+              key === this.videoKey(playback.bmsonBGA.key, playback.bmsonBGA.plane === 'poor' ? 'poor' : 'layer')
+            ? (playback.bmsonBGA.playbackRate ?? 1)
+            : 1;
       video.playbackRate = (playback.tempo ?? 1) * rate;
       const expected = Math.max(0, (seconds - cueSeconds) * rate);
       const changedCue = this.currentKeys.get(key) !== cueSeconds;

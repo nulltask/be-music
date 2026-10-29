@@ -4,6 +4,7 @@ import type { LongNoteModifier, LongNotePlacement } from './long-note-modifier.t
 import type { MineModifier, MinePlacement } from './mine-modifier.ts';
 import {
   type KeyBoundBGACue,
+  type BmsonBGAEventCue,
   type ChartPlayVariant,
   type RandomDraws,
   type ResolvedChart,
@@ -52,6 +53,8 @@ export interface PlayerInputRuntime {
 
 export interface CreatePlayerUIRuntimeContext {
   keyBoundBGACues?: readonly KeyBoundBGACue[];
+  /** Remapped bmson event animations supplied by a NONSTOP host. */
+  bmsonBGACues?: readonly BmsonBGAEventCue[];
   json: BeMusicJSON;
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;
@@ -220,6 +223,8 @@ export interface PlayerStageRank {
 export interface PlayerPlayRuntime {
   /** Host-remapped input-bound BGA selections, e.g. NonstopStitchMap.keyBoundBGA. Overrides chart A5 controls. */
   keyBoundBGACues?: readonly KeyBoundBGACue[];
+  /** Remapped bmson event animations supplied by a NONSTOP host. */
+  bmsonBGACues?: readonly BmsonBGAEventCue[];
   /**
    * Pre-built playback chart data the host wants the engine to use verbatim instead of running its own
    * `preparePlaybackChartData` pass. When provided, the engine treats the supplied {@link PreparedPlaybackChartData}

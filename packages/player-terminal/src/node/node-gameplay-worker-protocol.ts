@@ -1,4 +1,4 @@
-import type { KeyBoundBGACue } from '@be-music/chart-model';
+import type { BmsonBGAEventCue, KeyBoundBGACue } from '@be-music/chart-model';
 import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import type { RandomDraws } from '@be-music/chart-model';
@@ -16,6 +16,7 @@ import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
   keyBoundBGACues?: readonly KeyBoundBGACue[];
+  bmsonBGACues?: readonly BmsonBGAEventCue[];
   inferBmsLNTypeWhenMissing?: boolean;
   showInvisibleNotes?: boolean;
   compressor?: boolean;
@@ -72,6 +73,7 @@ export interface NodeGameplayWorkerInitData {
 
 export interface NodeGameplayUIRuntimeInit {
   keyBoundBGACues?: readonly KeyBoundBGACue[];
+  bmsonBGACues?: readonly BmsonBGAEventCue[];
   json: BeMusicJSON;
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;

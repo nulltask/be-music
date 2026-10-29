@@ -216,6 +216,9 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   const bmsonNonstopChart = cloneJSON(benchNonstopChart);
   bmsonNonstopChart.sourceFormat = 'bmson';
   bmsonNonstopChart.bmson.info.resolution = 240;
+  bmsonNonstopChart.bmson.bga.header = [{ id: 20, name: 'clip.webm' }];
+  bmsonNonstopChart.bmson.bga.sequences = [{ id: 10, sequence: [{ time: 0, id: 0 }, { time: 1000 }] }];
+  bmsonNonstopChart.bmson.bga.layerEvents = [{ y: 0, id: 10, condition: 'play' }];
   const extendedBGAChart = cloneJSON(benchNonstopChart);
   extendedBGAChart.bms.exBMP['03'] = ',,,,sheet.png';
   extendedBGAChart.bms.bga['04'] = '03 0 0 64 64 32 48';
@@ -1542,6 +1545,9 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
       const state = new displayAPI.BmsonBGAController([
         {
           seconds: 0,
+          stage: 1,
+          endSeconds: 2,
+          playbackRate: 2,
           plane: 'layer',
           condition: 'play',
           interval: 100,
@@ -1559,6 +1565,7 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
       ]);
       state.addInput({ seconds: 1, condition: 'play' });
       state.read(1.2);
+      state.read(2);
       state.read(1.1);
       state.reset([{ seconds: 1, condition: 'play' }]);
       state.read(1.2);

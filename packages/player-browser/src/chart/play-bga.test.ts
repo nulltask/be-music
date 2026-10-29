@@ -681,3 +681,38 @@ describe('registerSubRegionBGATextures', () => {
     expect(into.subRegionOrigins.has('06')).toBe(false);
   });
 });
+
+test('loads mapped NONSTOP bmson alternatives without source header metadata', async () => {
+  const chart = bmsChart({ longImage: 'stage/image.png', other: 'stage/other.png' });
+  const resources = emptyResources();
+  mocks.loadTextureFromBytes.mockImplementation(
+    async () => new Texture({ source: new TextureSource({ resource: new Uint8Array(4), width: 1, height: 1 }) }),
+  );
+  await loadPlayBGA({
+    chart,
+    source: SOURCE,
+    chartPath: 'course.bmson',
+    tempo: 1,
+    timeline: { base: [], layer: [], poor: [] },
+    into: resources,
+    bmsonBGACues: [
+      {
+        seconds: 1,
+        stage: 0,
+        endSeconds: 4,
+        condition: 'play',
+        plane: 'layer',
+        interval: 0,
+        sequences: [
+          { id: 10, frames: [{ elapsedSeconds: 0, key: 'longImage' }] },
+          { id: 11, frames: [{ elapsedSeconds: 0, key: 'other' }] },
+        ],
+      },
+    ],
+  });
+  expect(resources.layerTextures.has('longImage')).toBe(true);
+  expect(resources.layerTextures.has('other')).toBe(true);
+  expect(mocks.loadTextureFromBytes.mock.calls.map((call) => call[0])).toEqual(
+    expect.arrayContaining(['stage/image.png', 'stage/other.png']),
+  );
+});

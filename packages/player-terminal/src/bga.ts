@@ -7,6 +7,7 @@ import {
   buildBGAOpacityTimelines,
   buildKeyBoundBGATimeline,
   buildBmsonBGAEventTimeline,
+  type BmsonBGAEventCue,
   pickBGAOpacity,
   pickBGATint,
   type BGAOpacityTimelines,
@@ -64,6 +65,7 @@ const BGA_SOURCE_LOAD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism
 export interface BgaANSIOptions {
   /** Host-remapped selections; NONSTOP callers pass map.keyBoundBGA. */
   keyBoundBGACues?: readonly KeyBoundBGACue[];
+  bmsonBGACues?: readonly BmsonBGAEventCue[];
   baseDir: string;
   width?: number;
   height?: number;
@@ -621,13 +623,13 @@ export class BgaANSIRenderer {
       baseSeconds: baseCue ? Math.max(0, currentSeconds - baseCue.seconds) : Math.max(0, currentSeconds),
       layerSeconds:
         bmson?.plane === 'layer'
-          ? Math.max(0, currentSeconds - bmson.frameStartSeconds)
+          ? Math.max(0, (currentSeconds - bmson.frameStartSeconds) * (bmson.playbackRate ?? 1))
           : layerCue
             ? Math.max(0, currentSeconds - layerCue.seconds)
             : 0,
       layer2Seconds: layer2Cue ? Math.max(0, currentSeconds - layer2Cue.seconds) : 0,
       poorSeconds: sequencePoor
-        ? Math.max(0, currentSeconds - bmson.frameStartSeconds)
+        ? Math.max(0, (currentSeconds - bmson.frameStartSeconds) * (bmson.playbackRate ?? 1))
         : poorCue
           ? Math.max(0, currentSeconds - poorCue.seconds)
           : Math.max(0, currentSeconds),
@@ -685,7 +687,7 @@ export async function createBgaANSIRenderer(
   const poorKeys = new Set(poorTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layer2Keys = new Set(layer2Timeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
-  for (const cue of buildBmsonBGAEventTimeline(json, resolved.timing)) {
+  for (const cue of options.bmsonBGACues ?? buildBmsonBGAEventTimeline(json, resolved.timing)) {
     const keys = cue.condition === 'miss' ? poorKeys : layerKeys;
     for (const sequence of cue.sequences) {
       for (const frame of sequence.frames) if (frame.key) keys.add(frame.key);
