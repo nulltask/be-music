@@ -1,24 +1,13 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { createAbortError, isAbortError } from '@be-music/shared-utils/core';
 import { decodeVideoFramesStreamDirect, type DecodedVideoFrame } from './bga-video.ts';
-
-const TRANSPARENT_ALPHA_THRESHOLD = 16;
-const VIDEO_BLACK_BORDER_THRESHOLD = 8;
-
-type FrameMode = 'base' | 'layer' | 'bmson-layer' | 'exbmp';
+import { convertImageToSourceFrame, type ANSIFrame, type FrameMode } from './bga-frame.ts';
 
 interface VideoDecodeWorkerInitData {
   videoPath: string;
   mode: FrameMode;
   stopAfterFirstFrame: boolean;
   preserveVideoBorders: boolean;
-}
-
-interface ANSIFrame {
-  width: number;
-  height: number;
-  rgb: Uint8Array;
-  opaqueMask: Uint8Array;
 }
 
 const port = parentPort;
@@ -71,9 +60,14 @@ async function bootstrap(): Promise<void> {
               height: sourceFrame.height,
               rgb: sourceFrame.rgb,
               opaqueMask: sourceFrame.opaqueMask,
+              ...(sourceFrame.alpha ? { alpha: sourceFrame.alpha } : {}),
             },
           },
-          [sourceFrame.rgb.buffer as ArrayBuffer, sourceFrame.opaqueMask.buffer as ArrayBuffer],
+          [
+            sourceFrame.rgb.buffer as ArrayBuffer,
+            sourceFrame.opaqueMask.buffer as ArrayBuffer,
+            ...(sourceFrame.alpha ? [sourceFrame.alpha.buffer as ArrayBuffer] : []),
+          ],
         );
       },
       abortController.signal,
@@ -112,134 +106,9 @@ function convertDecodedVideoFrameToSourceFrame(
   mode: FrameMode,
   preserveVideoBorders: boolean,
 ): ANSIFrame {
-  const safeWidth = Math.max(1, Math.floor(frame.width));
-  const safeHeight = Math.max(1, Math.floor(frame.height));
-  const sourceFrame = createSolidANSIFrame(safeWidth, safeHeight, 0, 0, 0, 0);
-
-  for (let y = 0; y < safeHeight; y += 1) {
-    for (let x = 0; x < safeWidth; x += 1) {
-      const sourceOffset = (y * safeWidth + x) * 4;
-      const r = frame.rgba[sourceOffset] ?? 0;
-      const g = frame.rgba[sourceOffset + 1] ?? 0;
-      const b = frame.rgba[sourceOffset + 2] ?? 0;
-      const a = frame.rgba[sourceOffset + 3] ?? 255;
-      if (!isOpaqueVideoPixel(r, g, b, a, mode)) {
-        continue;
-      }
-
-      const targetPixelOffset = y * safeWidth + x;
-      const targetRGBOffset = targetPixelOffset * 3;
-      sourceFrame.rgb[targetRGBOffset] = r;
-      sourceFrame.rgb[targetRGBOffset + 1] = g;
-      sourceFrame.rgb[targetRGBOffset + 2] = b;
-      sourceFrame.opaqueMask[targetPixelOffset] = 1;
-    }
-  }
-
-  return preserveVideoBorders ? sourceFrame : trimBlackVideoFrameBorders(sourceFrame);
-}
-
-function createSolidANSIFrame(
-  width: number,
-  height: number,
-  r: number,
-  g: number,
-  b: number,
-  maskFill: 0 | 1,
-): ANSIFrame {
-  const safeWidth = Math.max(1, width);
-  const safeHeight = Math.max(1, height);
-  const rgb = new Uint8Array(safeWidth * safeHeight * 3);
-  const opaqueMask = new Uint8Array(safeWidth * safeHeight);
-  if (maskFill === 0) {
-    return {
-      width: safeWidth,
-      height: safeHeight,
-      rgb,
-      opaqueMask,
-    };
-  }
-
-  for (let pixelOffset = 0; pixelOffset < safeWidth * safeHeight; pixelOffset += 1) {
-    const rgbOffset = pixelOffset * 3;
-    rgb[rgbOffset] = r;
-    rgb[rgbOffset + 1] = g;
-    rgb[rgbOffset + 2] = b;
-    opaqueMask[pixelOffset] = 1;
-  }
-
-  return {
-    width: safeWidth,
-    height: safeHeight,
-    rgb,
-    opaqueMask,
-  };
-}
-
-function isOpaqueVideoPixel(r: number, g: number, b: number, a: number, mode: FrameMode): boolean {
-  if (mode !== 'layer') {
-    return true;
-  }
-  if (a <= TRANSPARENT_ALPHA_THRESHOLD) {
-    return false;
-  }
-  return !(r === 0 && g === 0 && b === 0);
-}
-
-function trimBlackVideoFrameBorders(source: ANSIFrame): ANSIFrame {
-  let minX = source.width;
-  let minY = source.height;
-  let maxX = -1;
-  let maxY = -1;
-
-  for (let y = 0; y < source.height; y += 1) {
-    for (let x = 0; x < source.width; x += 1) {
-      const pixelOffset = y * source.width + x;
-      if (source.opaqueMask[pixelOffset] === 0) {
-        continue;
-      }
-      const rgbOffset = pixelOffset * 3;
-      const r = source.rgb[rgbOffset] ?? 0;
-      const g = source.rgb[rgbOffset + 1] ?? 0;
-      const b = source.rgb[rgbOffset + 2] ?? 0;
-      if (r <= VIDEO_BLACK_BORDER_THRESHOLD && g <= VIDEO_BLACK_BORDER_THRESHOLD && b <= VIDEO_BLACK_BORDER_THRESHOLD) {
-        continue;
-      }
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
-  }
-
-  if (maxX < 0 || maxY < 0) {
-    return source;
-  }
-  if (minX === 0 && minY === 0 && maxX === source.width - 1 && maxY === source.height - 1) {
-    return source;
-  }
-
-  const width = maxX - minX + 1;
-  const height = maxY - minY + 1;
-  const trimmed = createSolidANSIFrame(width, height, 0, 0, 0, 0);
-
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const sourceX = minX + x;
-      const sourceY = minY + y;
-      const sourcePixelOffset = sourceY * source.width + sourceX;
-      if (source.opaqueMask[sourcePixelOffset] === 0) {
-        continue;
-      }
-      const targetPixelOffset = y * width + x;
-      const sourceRGBOffset = sourcePixelOffset * 3;
-      const targetRGBOffset = targetPixelOffset * 3;
-      trimmed.rgb[targetRGBOffset] = source.rgb[sourceRGBOffset] ?? 0;
-      trimmed.rgb[targetRGBOffset + 1] = source.rgb[sourceRGBOffset + 1] ?? 0;
-      trimmed.rgb[targetRGBOffset + 2] = source.rgb[sourceRGBOffset + 2] ?? 0;
-      trimmed.opaqueMask[targetPixelOffset] = 1;
-    }
-  }
-
-  return trimmed;
+  return convertImageToSourceFrame(
+    { width: frame.width, height: frame.height, data: frame.rgba, format: 'video' },
+    mode,
+    preserveVideoBorders,
+  );
 }

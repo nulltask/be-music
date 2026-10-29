@@ -1,3 +1,4 @@
+import { getANSIFrameAlpha } from './bga-alpha.ts';
 import { applyBMSColorKey, type BmsARGB } from '@be-music/chart-model';
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
@@ -125,11 +126,15 @@ export async function loadFrameSource(
     const rgba = new Uint8Array(frame.width * frame.height * 4);
     for (let pixel = 0; pixel < frame.opaqueMask.length; pixel++) {
       rgba.set(frame.rgb.subarray(pixel * 3, pixel * 3 + 3), pixel * 4);
-      rgba[pixel * 4 + 3] = frame.opaqueMask[pixel] ? 255 : 0;
+      rgba[pixel * 4 + 3] = getANSIFrameAlpha(frame, pixel);
     }
     if (colorKey) applyBMSColorKey(rgba, colorKey, false);
     if (swBGAColorKey) applyBMSColorKey(rgba, swBGAColorKey, true);
-    return { ...frame, opaqueMask: Uint8Array.from(frame.opaqueMask, (_, pixel) => (rgba[pixel * 4 + 3] ? 1 : 0)) };
+    return {
+      ...frame,
+      opaqueMask: Uint8Array.from(frame.opaqueMask, (_, pixel) => (rgba[pixel * 4 + 3] ? 1 : 0)),
+      ...(frame.alpha ? { alpha: Uint8Array.from(frame.alpha, (_, pixel) => rgba[pixel * 4 + 3]!) } : {}),
+    };
   });
 }
 
@@ -264,6 +269,7 @@ async function loadVideoAsFrameSource(
                 height: frame.height,
                 rgb: frame.rgb,
                 opaqueMask: frame.opaqueMask,
+                ...(frame.alpha ? { alpha: frame.alpha } : {}),
               },
             });
           },

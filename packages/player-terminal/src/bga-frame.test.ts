@@ -1,3 +1,4 @@
+import { getANSIFrameAlpha, setANSIFrameAlpha } from './bga-alpha.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import type { DecodedImage } from './bga-image.ts';
 import {
@@ -116,3 +117,48 @@ describe('resizeANSIFrameWithAspectMode', () => {
     expect([...resized.rgb]).toEqual([...RED, ...BLUE, ...RED, ...BLUE]);
   });
 });
+
+test.each(['base', 'layer', 'bmson-layer', 'exbmp'] as const)(
+  'preserves PNG source coverage including alpha 1 on %s',
+  (mode) => {
+    const values = [0, 1, 16, 127, 128, 254, 255];
+    const image = createImage(
+      'png',
+      values.length,
+      values.flatMap((alpha) => [255, 0, 0, alpha]),
+    );
+    const original = image.data.slice();
+    const frame = convertImageToSourceFrame(image, mode);
+    expect(values.map((_, index) => getANSIFrameAlpha(frame, index))).toEqual(values);
+    expect([...frame.opaqueMask]).toEqual([0, 1, 1, 1, 1, 1, 1]);
+    expect(image.data).toEqual(original);
+  },
+);
+
+test('honors encoded BMP alpha while retaining BMS black keying and alpha-less BMP compatibility', () => {
+  const image = { ...createImage('bmp', 2, [255, 0, 0, 128, 0, 0, 0, 128]), hasAlphaChannel: true };
+  const base = convertImageToSourceFrame(image, 'base');
+  const layer = convertImageToSourceFrame(image, 'layer');
+  expect([0, 1].map((pixel) => getANSIFrameAlpha(base, pixel))).toEqual([128, 128]);
+  expect([0, 1].map((pixel) => getANSIFrameAlpha(layer, pixel))).toEqual([128, 0]);
+  expect(getANSIFrameAlpha(convertImageToSourceFrame({ ...image, hasAlphaChannel: false }, 'base'), 0)).toBe(255);
+});
+
+test.each(['nearest', 'lanczos'] as const)(
+  'keeps fractional coverage through resize and hides transparent RGB (%s)',
+  (algorithm) => {
+    const source = createSolidANSIFrame(2, 1, 0, 0, 0, 0);
+    source.rgb.set([255, 0, 0, 0, 0, 255]);
+    setANSIFrameAlpha(source, 0, 128);
+    const original = structuredClone(source);
+    const resized = resizeANSIFrameWithAspectMode(source, 8, 4, 1, 1, 'cover', algorithm);
+    expect(resized.alpha).toBeDefined();
+    for (let pixel = 0; pixel < resized.opaqueMask.length; pixel++)
+      if (resized.opaqueMask[pixel]) {
+        expect(resized.rgb[pixel * 3]).toBe(255);
+        expect(resized.rgb[pixel * 3 + 2]).toBe(0);
+      }
+    expect(source).toEqual(original);
+    expect(resizeANSIFrameWithAspectMode(source, 8, 4, 1, 1, 'cover', algorithm)).toBe(resized);
+  },
+);

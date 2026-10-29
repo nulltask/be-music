@@ -1,3 +1,4 @@
+import { getANSIFrameAlpha, setANSIFrameAlpha } from './bga-alpha.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   composeANSILines,
@@ -122,4 +123,39 @@ describe('cropANSIFrameToOpaqueBounds', () => {
     expect([empty.width, empty.height]).toEqual([1, 1]);
     expect([...empty.opaqueMask]).toEqual([0]);
   });
+});
+
+test('source-over preserves fractional coverage until the result is flattened against its background', () => {
+  const red = createSolidANSIFrame(1, 1, 255, 0, 0, 1);
+  const green = createSolidANSIFrame(1, 1, 0, 255, 0, 1);
+  setANSIFrameAlpha(red, 0, 128);
+  setANSIFrameAlpha(green, 0, 128);
+  const original = structuredClone([red, green]);
+  const combined = mergeCompositeFrames(red, green)!;
+  expect([...combined.rgb]).toEqual([85, 170, 0]);
+  expect(getANSIFrameAlpha(combined, 0)).toBe(192);
+  expect([...fillANSIFrameBackground(combined, 0, 0, 0).rgb]).toEqual([64, 128, 0]);
+  expect([red, green]).toEqual(original);
+});
+
+test('multiplies source coverage by plane opacity and tint without dropping very faint pixels', () => {
+  const red = createSolidANSIFrame(1, 1, 255, 0, 0, 1);
+  const blue = createSolidANSIFrame(1, 1, 0, 0, 255, 1);
+  setANSIFrameAlpha(red, 0, 128);
+  const output = mergeCompositeLayers([
+    { frame: blue, opacity: 1 },
+    { frame: red, opacity: 128 / 255, tint: 0x80ffff },
+  ])!;
+  expect([...output.rgb]).toEqual([32, 0, 191]);
+  setANSIFrameAlpha(red, 0, 1);
+  expect([...mergeCompositeFrames(blue, red)!.rgb]).toEqual([1, 0, 254]);
+  expect([...fillANSIFrameBackground(red, 0, 0, 0).rgb]).toEqual([1, 0, 0]);
+});
+
+test('trims transparent bounds without changing the surviving source alpha', () => {
+  const source = createSolidANSIFrame(3, 1, 255, 0, 0, 0);
+  setANSIFrameAlpha(source, 1, 64);
+  const cropped = cropANSIFrameToOpaqueBounds(source);
+  expect([cropped.width, cropped.height]).toEqual([1, 1]);
+  expect(getANSIFrameAlpha(cropped, 0)).toBe(64);
 });

@@ -358,12 +358,10 @@ export class BgaANSIRenderer {
       return this.blackBackgroundLines;
     }
     if (!this.cachedLines) {
-      this.cachedLines = composeANSILines(
-        this.cachedComposite.rgb,
-        this.cachedComposite.opaqueMask,
-        this.cachedComposite.width,
-        this.cachedComposite.height,
-      );
+      const frame = this.cachedComposite.alpha
+        ? fillANSIFrameBackground(this.cachedComposite, 0, 0, 0)
+        : this.cachedComposite;
+      this.cachedLines = composeANSILines(frame.rgb, frame.opaqueMask, frame.width, frame.height);
     }
     return this.cachedLines;
   }
