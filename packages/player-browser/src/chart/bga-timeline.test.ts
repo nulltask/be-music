@@ -463,3 +463,23 @@ describe('independent overlays', () => {
     ).toBe('second');
   });
 });
+
+it('Canvas skin image resolution receives each selected plane tint, including POOR and independent overlays', () => {
+  const frame = buildSkinBGAFrame(
+    {
+      base: 'same',
+      layer: 'same',
+      layer2: 'same',
+      poor: 'same',
+      tint: { base: 0x123456, layer: 0x654321, layer2: 0xabcdef, poor: 0xfedcba },
+    },
+    (key, map, tint) => `${map}:${key}:${tint?.toString(16)}`,
+  );
+  expect(frame).toEqual({
+    base: 'base:same:123456',
+    layer: 'layer:same:654321',
+    layer2: 'layer:same:abcdef',
+    poor: 'base:same:fedcba',
+    poorActive: true,
+  });
+});

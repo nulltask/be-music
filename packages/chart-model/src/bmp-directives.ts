@@ -235,8 +235,8 @@ const BMS_ARGB_HEX_RE = /^[0-9A-Fa-f]{8}$/;
  *
  * Returns `undefined` for unrecognized / malformed input so the caller can fall back to "no tint".
  *
- * Parsing only: nanasi ARGB definitions are selected through channels A1–A4 and describe transparent colors and
- * opacity, rather than assigning a multiplicative tint to the BMP slot with the same id.
+ * Parsing only: ARGB definitions are selected through channels A1–A4 and set a plane's RGB multipliers and alpha.
+ * EXBMP transparent-color keys are a separate operation; ARGB ids do not address BMP slots.
  */
 export function parseBmsARGB(raw: string): BmsARGB | undefined {
   if (typeof raw !== 'string') return undefined;

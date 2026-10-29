@@ -93,16 +93,23 @@ export function mergeCompositeFrames(...sourceFrames: Array<ANSIFrame | undefine
 
 /** Composite chart opacity over the terminal BGA's black canvas. Source masks still leave lower layers visible. */
 export function mergeCompositeLayers(
-  layers: readonly { frame?: ANSIFrame; opacity: number }[],
+  layers: readonly { frame?: ANSIFrame; opacity: number; tint?: number }[],
 ): CompositeFrame | undefined {
-  if (layers.every((layer) => !layer.frame || layer.opacity === 1))
+  if (
+    layers.every(
+      (layer) => !layer.frame || (layer.opacity === 1 && (layer.tint === undefined || layer.tint === 0xffffff)),
+    )
+  )
     return mergeCompositeFrames(...layers.map((layer) => layer.frame));
-  const visible = layers.filter((layer): layer is { frame: ANSIFrame; opacity: number } => layer.frame !== undefined);
+  const visible = layers.filter(
+    (layer): layer is { frame: ANSIFrame; opacity: number; tint?: number } => layer.frame !== undefined,
+  );
   if (visible.length === 0) return undefined;
   const width = Math.max(...visible.map((layer) => layer.frame.width));
   const height = Math.max(...visible.map((layer) => layer.frame.height));
   const result = createSolidANSIFrame(width, height, 0, 0, 0, 1);
-  for (const layer of visible) paintFrame(result.rgb, result.opaqueMask, width, height, layer.frame, layer.opacity);
+  for (const layer of visible)
+    paintFrame(result.rgb, result.opaqueMask, width, height, layer.frame, layer.opacity, layer.tint);
   return result;
 }
 
@@ -127,6 +134,7 @@ function paintFrame(
   canvasHeight: number,
   frame: ANSIFrame,
   opacity = 1,
+  tint = 0xffffff,
 ): void {
   const alpha = Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1;
   if (alpha === 0) return;
@@ -152,10 +160,11 @@ function paintFrame(
       const targetPixelOffset = targetY * canvasWidth + targetX;
       const targetRGBOffset = targetPixelOffset * 3;
       for (let component = 0; component < 3; component += 1) {
-        const foreground = frame.rgb[sourceRGBOffset + component] ?? 0;
+        const foreground =
+          ((frame.rgb[sourceRGBOffset + component] ?? 0) * ((tint >>> ((2 - component) * 8)) & 255)) / 255;
         canvasRGB[targetRGBOffset + component] =
           alpha === 1
-            ? foreground
+            ? Math.round(foreground)
             : Math.round(foreground * alpha + (canvasRGB[targetRGBOffset + component] ?? 0) * (1 - alpha));
       }
       canvasMask[targetPixelOffset] = 1;

@@ -80,7 +80,7 @@ export interface NonstopStitchStage {
   bmpKeys: string[];
   /** This stage’s miss-image mode; omitted means replacement. */
   poorBGAMode?: PoorBGAMode;
-  /** Independent stage opacity histories, on the stitched clock, for BGA crossfades. Omitted means fully opaque. */
+  /** Independent stage opacity/RGB histories, on the stitched clock, for BGA crossfades. Omitted means opaque white. */
   bgaOpacity?: BGAOpacityTimelines;
   /** Fades of the stage's background sound (LR2 fades the stage BGM channel; keysounds play at full level). */
   soundFadeIn?: NonstopFade;
@@ -286,15 +286,30 @@ export function stitchNonstopCourse(
     }
   }
 
-  objects.push(
-    ...flattenNonstopBGAOpacity(
-      stageOpacity.map((opacity, index) => ({
-        opacity,
-        windowStart: windows[index]!.start,
-        windowEnd: windows[index]!.end,
-      })),
-    ),
+  const planeControls = flattenNonstopBGAOpacity(
+    stageOpacity.map((opacity, index) => ({
+      opacity,
+      windowStart: windows[index]!.start,
+      windowEnd: windows[index]!.end,
+    })),
   );
+  const argbKeys = new NonstopKeyAllocator(asBmson);
+  const argbValues = new Map<string, string>();
+  for (const control of planeControls) {
+    if (control.channel.startsWith('A')) {
+      let key = argbValues.get(control.value);
+      if (key === undefined) {
+        do {
+          key = argbKeys.fresh();
+        } while (key !== undefined && chart.bms.argb[key] !== undefined);
+        if (key === undefined) return { ok: false, reason: 'id-space', stage: control.stage };
+        chart.bms.argb[key] = control.value;
+        argbValues.set(control.value, key);
+      }
+      control.value = key;
+    }
+    objects.push(control);
+  }
   convertSeamNotes(objects, stages.length);
   layOnGrid(chart, objects, stops, barLines, stopKeys);
   if (chart.events.length === 0 && objects.length > 0) return { ok: false, reason: 'id-space' };

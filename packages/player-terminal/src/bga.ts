@@ -5,6 +5,7 @@ import {
   parseBMSExBMP,
   buildBGAOpacityTimelines,
   pickBGAOpacity,
+  pickBGATint,
   type BGAOpacityTimelines,
   resolvePoorBGAMode,
   type PoorBGAMode,
@@ -392,11 +393,11 @@ export class BgaANSIRenderer {
     }
 
     const normalFrames = [
-      { frame: baseSelection.frame, opacity: state.opacity.base },
-      { frame: layerSelection.frame, opacity: state.opacity.layer },
-      { frame: layer2Selection.frame, opacity: state.opacity.layer2 },
+      { frame: baseSelection.frame, opacity: state.opacity.base, tint: state.tint.base },
+      { frame: layerSelection.frame, opacity: state.opacity.layer, tint: state.tint.layer },
+      { frame: layer2Selection.frame, opacity: state.opacity.layer2, tint: state.tint.layer2 },
     ].slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS);
-    const poorLayer = { frame: poorSelection.frame, opacity: state.opacity.poor };
+    const poorLayer = { frame: poorSelection.frame, opacity: state.opacity.poor, tint: state.tint.poor };
     const frames =
       state.poorActive && poorSelection.frame
         ? this.poorBGAMode === 1
@@ -404,9 +405,10 @@ export class BgaANSIRenderer {
           : [poorLayer]
         : normalFrames;
     const composite = mergeCompositeLayers(
-      frames.map(({ frame, opacity }) => ({
+      frames.map(({ frame, opacity, tint }) => ({
         frame: frame ? resizeANSIFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm) : undefined,
         opacity,
+        tint,
       })),
     );
     const filledFrame = composite
@@ -521,11 +523,11 @@ export class BgaANSIRenderer {
     this.cachedPoorActive = state.poorActive;
     this.cachedOpacityToken = state.opacityToken;
     const normalFrames = [
-      { frame: baseSelection.frame, opacity: state.opacity.base },
-      { frame: layerSelection.frame, opacity: state.opacity.layer },
-      { frame: layer2Selection.frame, opacity: state.opacity.layer2 },
+      { frame: baseSelection.frame, opacity: state.opacity.base, tint: state.tint.base },
+      { frame: layerSelection.frame, opacity: state.opacity.layer, tint: state.tint.layer },
+      { frame: layer2Selection.frame, opacity: state.opacity.layer2, tint: state.tint.layer2 },
     ].slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS);
-    const poorLayer = { frame: poorSelection.frame, opacity: state.opacity.poor };
+    const poorLayer = { frame: poorSelection.frame, opacity: state.opacity.poor, tint: state.tint.poor };
     this.cachedComposite = mergeCompositeLayers(
       state.poorActive && poorSelection.frame
         ? this.poorBGAMode === 1
@@ -549,6 +551,7 @@ export class BgaANSIRenderer {
     poorActive: boolean;
     opacity: Record<keyof BGAOpacityTimelines, number>;
     opacityToken: string;
+    tint: Record<keyof BGAOpacityTimelines, number>;
   } {
     const cueSeconds = Math.min(currentSeconds, this.cueFreezeSeconds);
     const baseCue = pickActiveBGACue(this.baseTimeline, cueSeconds);
@@ -562,9 +565,16 @@ export class BgaANSIRenderer {
       layer2: pickBGAOpacity(this.opacityTimelines.layer2, cueSeconds),
       poor: pickBGAOpacity(this.opacityTimelines.poor, cueSeconds),
     };
+    const tint = {
+      base: pickBGATint(this.opacityTimelines.base, cueSeconds),
+      layer: pickBGATint(this.opacityTimelines.layer, cueSeconds),
+      layer2: pickBGATint(this.opacityTimelines.layer2, cueSeconds),
+      poor: pickBGATint(this.opacityTimelines.poor, cueSeconds),
+    };
     return {
       opacity,
-      opacityToken: Object.values(opacity).join(':'),
+      tint,
+      opacityToken: [...Object.values(opacity), ...Object.values(tint)].join(':'),
       baseKey: baseCue?.key ?? '',
       layerKey: layerCue?.key ?? '',
       layer2Key: layer2Cue?.key ?? '',
