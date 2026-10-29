@@ -6,7 +6,7 @@
  * The functions read and write the scene's state through {@link BGARendererContext}; the play view passes itself.
  */
 
-import { pickSwitchingBGAFrame, resolveBmsBmpARGB } from '@be-music/chart-model';
+import { pickSwitchingBGAFrame, parseBmsARGB } from '@be-music/chart-model';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/display';
 import { Texture } from 'pixi.js';
 import {
@@ -196,16 +196,14 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
 
   for (const bga of visibleBGAs) {
     if (bga.w <= 0 || bga.h <= 0) continue;
-    if (stacks.some((stack) => stack.opacity !== undefined)) {
-      const backdrop = ctx.bgaLayerPool.acquireSprite();
-      backdrop.texture = Texture.WHITE;
-      backdrop.label = 'bga/background';
-      backdrop.position.set(bga.x, bga.y);
-      backdrop.width = bga.w;
-      backdrop.height = bga.h;
-      bga.applyToSprite(backdrop);
-      backdrop.tint = 0x000000;
-    }
+    const backdrop = ctx.bgaLayerPool.acquireSprite();
+    backdrop.texture = Texture.WHITE;
+    backdrop.label = 'bga/background';
+    backdrop.position.set(bga.x, bga.y);
+    backdrop.width = bga.w;
+    backdrop.height = bga.h;
+    bga.applyToSprite(backdrop);
+    backdrop.tint = 0x000000;
     const drawLayer = (
       key: string | undefined,
       textures: ReadonlyMap<string, Texture>,
@@ -252,13 +250,14 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       bga.applyToSprite(sprite);
       sprite.alpha *= alpha;
       // Preserve the legacy Be-Music per-slot tint interpretation. This is separate from 0B–0E opacity and does
-      // not implement nanasi's channel-scoped A1–A4 commands. The helper prefers ARGB over EXBMP for the same slot.
+      // not implement nanasi's channel-scoped A1–A4 commands. EXBMP color keys are applied while loading pixels.
       const resolvedChart = ctx.play.resolvedChart;
       if (resolvedChart) {
         // Tint resolution honors the original cue key first (so `#ARGBxx 01` applies even when `#SWBGA01` is ALSO
         // active and the per-frame source slot lacks its own tint). Falling back to the resolved frame key catches
         // the inverse case: chart tints the source `#BMPYY` slot but not the `#SWBGA01` alias.
-        const argb = resolveBmsBmpARGB(resolvedChart, key) ?? resolveBmsBmpARGB(resolvedChart, resolvedKey);
+        const argb =
+          parseBmsARGB(resolvedChart.bms.argb[key] ?? '') ?? parseBmsARGB(resolvedChart.bms.argb[resolvedKey] ?? '');
         if (argb) {
           sprite.tint = (argb.r << 16) | (argb.g << 8) | argb.b;
           // Compose with the call-site alpha that `applyToSprite` may have already written (e.g. skin-driven LR2

@@ -227,12 +227,16 @@ describe('BeatorajaBGALayer', () => {
 
     layer.update(1, context, false);
     expect(shown()).toEqual([
+      ['bga/background', Texture.WHITE],
       ['bga/base', base],
       ['bga/layer', layerImage],
     ]);
 
     layer.update(1, context, true);
-    expect(shown()).toEqual([['bga/base', poor]]);
+    expect(shown()).toEqual([
+      ['bga/background', Texture.WHITE],
+      ['bga/base', poor],
+    ]);
 
     layer.dispose();
   });
@@ -365,7 +369,11 @@ it.each([0, 1, 2] as const)('draws POOR BGA mode %s using its replacement/overla
   const textures = (layer.container.children as Sprite[])
     .filter((sprite) => sprite.visible && sprite.label !== 'bga/canvas')
     .map((sprite) => sprite.texture);
-  expect(textures).toEqual(mode === 0 ? [poor] : mode === 1 ? [base, overlay, poor] : [base, overlay]);
+  expect(textures).toEqual([
+    Texture.WHITE,
+    ...(mode === 0 ? [poor] : mode === 1 ? [base, overlay, poor] : [base, overlay]),
+  ]);
+  expect(layer.container.children[0]).toMatchObject({ label: 'bga/background', tint: 0, visible: true });
   layer.update(2, context, false);
   expect(
     (layer.container.children as Sprite[]).filter((sprite) => sprite.visible && sprite.label === 'bga/poor'),

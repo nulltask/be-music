@@ -1,3 +1,4 @@
+import * as pngAPI from '@be-music/shared-utils/png';
 import * as hashAPI from '@be-music/shared-utils/hash';
 import * as asyncAPI from '@be-music/shared-utils/async';
 import * as cliAPI from '@be-music/shared-utils/cli';
@@ -5,6 +6,13 @@ import * as utilsAPI from '@be-music/shared-utils';
 import * as optionalNodeModuleAPI from '@be-music/shared-utils/optional-node-module';
 import * as workerizeAPI from '@be-music/shared-utils/workerize';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
+
+const BENCH_PNG = Uint8Array.from(
+  atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAABnRSTlMAfwB/AH+KMzNPAAAAD0lEQVR4nGOor69n+M8AAAl2An3QNTIfAAAAAElFTkSuQmCC',
+  ),
+  (character) => character.charCodeAt(0),
+);
 
 const caseInsensitiveFiles = new Map<string, Uint8Array>([['Song/Kick.WAV', new Uint8Array([1, 2, 3])]]);
 const eagerEntry = new Uint8Array([1, 2, 3]);
@@ -28,6 +36,11 @@ const inlineWorker = Object.assign(
 const workerAbortController = new AbortController();
 
 export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
+  define('shared-utils.png.decodePNGToRGBA8', {
+    run: () => {
+      pngAPI.decodePNGToRGBA8(BENCH_PNG);
+    },
+  });
   define('shared-utils.resolveCLIPath', {
     run: () => {
       utilsAPI.resolveCLIPath('./assets/sample.wav', '/tmp/bench');

@@ -195,6 +195,38 @@ describe('loadPlayBGA', () => {
     mocks.loadTextureFromBytes.mockImplementation(async () => new Texture());
   });
 
+  test.each(['0,0,0,0', '64,127,128,129'])(
+    'passes EXBMP color keys before alias cropping on base and layers (%s)',
+    async (tuple) => {
+      const chart = bmsChart({ '01': 'override.png' });
+      chart.bms.exBMP = { '01': '0,127,127,127 ignored.png', '02': `${tuple} colors.png` };
+      chart.bms.bga['04'] = '02 0 0 1 1 0 0';
+      await loadPlayBGA({
+        chart,
+        source: SOURCE,
+        chartPath: 'x.bms',
+        into: emptyResources(),
+        tempo: 1,
+        timeline: {
+          base: [
+            { seconds: 0, bmpKey: '01' },
+            { seconds: 1, bmpKey: '04' },
+          ],
+          layer: [{ seconds: 0, bmpKey: '04' }],
+          poor: [],
+        },
+      });
+      const [a, r, g, b] = tuple.split(',').map(Number);
+      const bmsColorKey = { a, r, g, b };
+      expect(mocks.loadTextureFromBytes).toHaveBeenCalledWith('colors.png', expect.any(Uint8Array), { bmsColorKey });
+      expect(mocks.loadTextureFromBytes).toHaveBeenCalledWith('colors.png', expect.any(Uint8Array), {
+        bmsColorKey,
+        keyOutBlack: false,
+      });
+      expect(mocks.loadTextureFromBytes).toHaveBeenCalledWith('override.png', expect.any(Uint8Array));
+    },
+  );
+
   test('binds nested video aliases to independent plane playheads and preserves native crop coordinates', async () => {
     const chart = bmsChart({ '01': 'sheet.webm' });
     chart.bms.bga = { '02': '04 16 32 80 160 32 64', '03': '04 80 32 144 160 128 64', '04': '01 256 0 384 128 16 32' };

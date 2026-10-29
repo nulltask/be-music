@@ -1,6 +1,6 @@
 import { extname } from 'node:path';
 import { decode as decodeBmpFast } from 'fast-bmp';
-import { convertIndexedToRgb, decode as decodePngFast } from 'fast-png';
+import { decodePNGToRGBA8 } from '@be-music/shared-utils/png';
 import jpeg from 'jpeg-js';
 
 export type ImageFormat = 'bmp' | 'png' | 'jpeg' | 'video';
@@ -48,68 +48,7 @@ export function decodeImageBuffer(buffer: Buffer, pathHint: string): DecodedImag
 }
 
 function decodePNG(buffer: Buffer): DecodedImage {
-  let decoderBuffer = buffer;
-  let nativeTransparency: number[] | undefined;
-  if (buffer[25] === 0 || buffer[25] === 2) {
-    for (let offset = 8; offset + 12 <= buffer.length;) {
-      const length = buffer.readUInt32BE(offset);
-      if (offset + 12 + length > buffer.length) break;
-      if (buffer.toString('ascii', offset + 4, offset + 8) === 'tRNS' && length === (buffer[25] === 0 ? 2 : 6)) {
-        nativeTransparency = [];
-        for (let index = 0; index < length; index += 2)
-          nativeTransparency.push(buffer.readUInt16BE(offset + 8 + index));
-        // fast-png checks tRNS sample count against pixel count, rejecting valid one/two-pixel RGB images.
-        // Decode the color samples without that chunk and apply the original native key ourselves below.
-        decoderBuffer = Buffer.concat([buffer.subarray(0, offset), buffer.subarray(offset + length + 12)]);
-        break;
-      }
-      offset += length + 12;
-    }
-  }
-  const decoded = decodePngFast(decoderBuffer);
-  let samples = decoded.data;
-  if (!decoded.palette && decoded.depth < 8) {
-    // Low-bit grayscale rows are packed; compare original samples before converting them to RGBA8.
-    const unpacked = new Uint8Array(decoded.width * decoded.height);
-    const stride = Math.ceil((decoded.width * decoded.depth) / 8);
-    for (let y = 0; y < decoded.height; y++)
-      for (let x = 0; x < decoded.width; x++) {
-        const bit = x * decoded.depth;
-        unpacked[y * decoded.width + x] =
-          (samples[y * stride + Math.floor(bit / 8)]! >>> (8 - decoded.depth - (bit % 8))) & (2 ** decoded.depth - 1);
-      }
-    samples = unpacked;
-  }
-  const rgba = decoded.palette
-    ? convertToRGBA8(convertIndexedToRgb(decoded), decoded.width, decoded.height, decoded.palette[0]!.length, 8)
-    : convertToRGBA8(samples, decoded.width, decoded.height, decoded.channels, decoded.depth);
-  const transparency = nativeTransparency ?? decoded.transparency;
-  if (!decoded.palette && transparency?.length) {
-    // RGB/grayscale tRNS carries native sample values, not an extra decoded alpha channel.
-    for (let pixel = 0; pixel < decoded.width * decoded.height; pixel++) {
-      if (transparency.every((sample, channel) => samples[pixel * decoded.channels + channel] === sample))
-        rgba[pixel * 4 + 3] = 0;
-    }
-  }
-  return {
-    width: decoded.width,
-    height: decoded.height,
-    data: rgba,
-    format: 'png',
-    hasAlphaChannel: pngHasAlphaChannel(buffer),
-  };
-}
-
-function pngHasAlphaChannel(buffer: Buffer): boolean {
-  if (buffer[25] === 4 || buffer[25] === 6) return true;
-  // A palette decoder can expand opaque RGB into RGBA too. Only encoded alpha/tRNS counts as source alpha.
-  for (let offset = 8; offset + 12 <= buffer.length;) {
-    const length = buffer.readUInt32BE(offset);
-    if (offset + 12 + length > buffer.length) return false;
-    if (buffer.toString('ascii', offset + 4, offset + 8) === 'tRNS') return true;
-    offset += length + 12;
-  }
-  return false;
+  return { ...decodePNGToRGBA8(buffer), format: 'png' };
 }
 
 function decodeJPEG(buffer: Buffer): DecodedImage {

@@ -129,3 +129,9 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 ```sh
 ffmpeg -f lavfi -i 'color=c=black:s=512x256:r=10:d=16' -vf "drawbox=x=256:y=0:w=128:h=128:color=0xed174b:t=fill:enable='lt(t,4)',drawbox=x=256:y=0:w=128:h=128:color=0x16cf63:t=fill:enable='gte(t,4)'" -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p -an bga-crop-colors.webm
 ```
+
+## 自作の EXBMP 画像
+
+`exbmp-rgb.png` は、アルファ情報を持たない 256×256・4 ビットパレット・Adam7 PNG。青い枠の内側に灰色・灰色・黒・緑の縦帯を配置する。最初の灰色は RGB の各成分 ±8 の境界に一致し、次の灰色は範囲外となる。
+
+`exbmp-alpha.png` は同じ枠と黒・緑の帯を持つ RGBA8 PNG。最初の二つの帯は RGB `(255, 228, 173)` が同じで、アルファをそれぞれ 64・65 とし、アルファの完全一致と隣接値の保持を検証する。どちらも第三者の素材を含まない自作画像。Browser テストは四つの描画系統、別名参照、全ゼロ指定による無効化、ベース面の透過部分に見える黒地を確認する。

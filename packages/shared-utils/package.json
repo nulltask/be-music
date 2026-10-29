@@ -64,6 +64,11 @@
       "source": "./src/cli.ts",
       "types": "./dist/cli.d.ts",
       "default": "./dist/cli.js"
+    },
+    "./png": {
+      "source": "./src/png.ts",
+      "types": "./dist/png.d.ts",
+      "default": "./dist/png.js"
     }
   },
   "scripts": {
@@ -73,6 +78,8 @@
     "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
+    "fast-png": "^8.0.0",
+    "fflate": "^0.8.3",
     "isoworker": "^0.2.4",
     "pino": "^10.4.0"
   }
