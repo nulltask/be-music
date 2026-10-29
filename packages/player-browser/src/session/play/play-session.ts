@@ -804,8 +804,7 @@ export class PlaySession extends PlaySessionState {
    * different reason (e.g. an earlier cue switched away from them in `syncBGAVideo`).
    */
   resumeActiveBGAVideos(): void {
-    for (const track of ['base', 'layer', 'layer2', 'poor'] as const) {
-      const active = this.bgaActiveVideos[track];
+    for (const active of Object.values(this.bgaActiveVideos)) {
       if (!active) continue;
       const handle = this.bgaVideos.get(active.key);
       if (!handle || !handle.video.paused) continue;

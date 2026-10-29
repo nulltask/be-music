@@ -96,9 +96,6 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
     (best, stack) => (best === undefined || stack.alpha >= best.alpha ? stack : best),
     undefined,
   );
-  const baseCue = leading?.baseCue;
-  const layerCue = leading?.layerCue;
-  const layer2Cue = leading?.layer2Cue;
   let poorKey = ctx.play.nonstopBGATimelines !== undefined ? leading?.poorKey : undefined;
   if (inPoorWindow && ctx.play.nonstopBGATimelines === undefined) {
     poorKey = leading?.poorKey;
@@ -115,24 +112,41 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
     poorKey = ctx.play.poorBGAFallbackKey;
   }
   if (ctx.play.nonstopBGATimelines === undefined && stacks[0] !== undefined) stacks[0].poorKey = poorKey;
-  syncBGAVideo(ctx, 'base', baseCue, seconds);
-  syncBGAVideo(ctx, 'layer', layerCue, seconds);
-  syncBGAVideo(ctx, 'layer2', layer2Cue, seconds);
-  const poorCue = pickActiveBGACue(ctx.play.bgaTimeline.poor, cueSeconds);
-  syncBGAVideo(
-    ctx,
-    'poor',
-    poorKey === undefined
-      ? undefined
-      : {
-          bmpKey: poorKey,
-          seconds:
-            poorCue?.bmpKey === poorKey
-              ? poorCue.seconds
-              : seconds - Math.max(0, (ctx.play.playClock() - ctx.play.lastPoorAt) / 1000),
-        },
-    seconds,
-  );
+  if (ctx.play.audioContextStartTime !== 0) {
+    const requests = new Map<string, { track: 'base' | 'layer' | 'layer2' | 'poor'; cue: BGACue }>();
+    const add = (track: 'base' | 'layer' | 'layer2' | 'poor', cue: BGACue | undefined) => {
+      if (cue?.bmpKey === undefined) return;
+      // Stitched stages own disjoint BMP namespaces. The cue key keeps a stage's slot stable while its
+      // crossfade weight passes the leading stage or earlier stacks disappear from the visible list.
+      const slot = ctx.play.nonstopBGATimelines === undefined ? track : `${track}:${cue.bmpKey}`;
+      requests.set(slot, { track, cue });
+    };
+    for (const stack of stacks) {
+      add('base', stack.baseCue);
+      add('layer', stack.layerCue);
+      add('layer2', stack.layer2Cue);
+      if (stack.poorKey !== undefined) {
+        const timelines = ctx.play.nonstopBGATimelines ?? [ctx.play.bgaTimeline];
+        const poorCue = timelines
+          .map((timeline) => pickActiveBGACue(timeline.poor, cueSeconds))
+          .find((cue) => cue?.bmpKey === stack.poorKey);
+        add('poor', {
+          bmpKey: stack.poorKey,
+          seconds: poorCue?.seconds ?? seconds - Math.max(0, (ctx.play.playClock() - ctx.play.lastPoorAt) / 1000),
+        });
+      }
+    }
+    // Retire departed cues before starting their replacements, including aliases that share a video handle.
+    for (const [slot, previous] of Object.entries(ctx.play.bgaActiveVideos)) {
+      if (requests.has(slot)) continue;
+      if (previous) {
+        const video = ctx.play.bgaVideos.get(previous.key)?.video;
+        if (video && !video.paused) video.pause();
+      }
+      delete ctx.play.bgaActiveVideos[slot];
+    }
+    for (const [slot, { track, cue }] of requests) syncBGAVideo(ctx, track, cue, seconds, slot);
+  }
 
   const binding = ctx.skinBinding;
   if (binding?.drawsBGA) {
@@ -427,17 +441,18 @@ function syncBGAVideo(
   track: 'base' | 'layer' | 'layer2' | 'poor',
   cue: BGACue | undefined,
   seconds: number,
+  slot: string = track,
 ): void {
   // Hold off on every video state mutation until the chart-start gate has fired and `audioContextStartTime` is
   // anchored to the audio clock. Without this guard `renderBGA` (which runs every tick from the moment `start()`
   // reveals the scene) picks up the t=0 BGA cue while we're still in the LR2 LOADING phase and `play()`s the video —
   // the user sees the BGA running behind the LOADING / DONE chrome. By short-circuiting we also avoid populating
-  // `bgaActiveVideos[track]`, so when PLAY START fires the next sync call still sees `previous = undefined` and
+  // `bgaActiveVideos[slot]`, so when PLAY START fires the next sync call still sees `previous = undefined` and
   // re-enters the "first cue" branch with the correct seek offset.
   if (ctx.play.audioContextStartTime === 0) {
     return;
   }
-  const previous = ctx.play.bgaActiveVideos[track];
+  const previous = ctx.play.bgaActiveVideos[slot];
   const cueKey = cue?.bmpKey;
   const independentKey = String.fromCharCode(0) + track + ':' + cueKey;
   const key = ctx.play.bgaVideos?.has(independentKey) ? independentKey : cueKey;
@@ -449,7 +464,7 @@ function syncBGAVideo(
       if (prevHandle && !prevHandle.video.paused) {
         prevHandle.video.pause();
       }
-      ctx.play.bgaActiveVideos[track] = undefined;
+      ctx.play.bgaActiveVideos[slot] = undefined;
     }
     return;
   }
@@ -474,7 +489,7 @@ function syncBGAVideo(
     }
   }
   const cueSeconds = cue?.seconds ?? 0;
-  ctx.play.bgaActiveVideos[track] = { key: key!, cueSeconds };
+  ctx.play.bgaActiveVideos[slot] = { key: key!, cueSeconds };
   const offset = Math.max(0, seconds - cueSeconds);
   // The video runs at the play tempo, so its time stays the chart time since its cue.
   handle.video.playbackRate = ctx.play.tempo;

@@ -53,3 +53,17 @@ test('disposes a video shared by source and alias keys only once', () => {
     revoke.mockRestore();
   }
 });
+
+test('resumes every active NONSTOP stage video while keeping inactive resources paused', () => {
+  const session = new PlaySession({});
+  const videos = [0, 1, 2].map(() => ({ paused: true, play: vi.fn(async () => {}) }));
+  for (const [index, video] of videos.entries())
+    session.bgaVideos.set(String(index), {
+      video: video as unknown as HTMLVideoElement,
+      objectURL: `blob:${index}`,
+    });
+  session.bgaActiveVideos['base:stage-a'] = { key: '0', cueSeconds: 0 };
+  session.bgaActiveVideos['base:stage-b'] = { key: '1', cueSeconds: 5 };
+  session.resumeActiveBGAVideos();
+  expect(videos.map((video) => video.play.mock.calls.length)).toEqual([1, 1, 0]);
+});

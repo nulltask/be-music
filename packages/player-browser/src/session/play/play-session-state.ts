@@ -448,16 +448,12 @@ export class PlaySessionState extends PlayPresentation {
     { video: HTMLVideoElement; objectURL: string }
   >();
   /**
-   * Tracks which video is currently associated with each BGA layer and the chart-time it was seeded at. We use this to
+   * Tracks active BGA videos and the chart-time each cue was seeded at. Single charts use plane slots; NONSTOP
+   * slots include the stage-owned BMP key so both sides of a crossfade remain active. We use this to
    * detect cue transitions in `renderBGA` (start the new cue's video, pause the previous one) and to compute the
    * `currentTime` offset relative to the cue's start seconds.
    */
-  bgaActiveVideos: {
-    base?: { key: string; cueSeconds: number };
-    layer?: { key: string; cueSeconds: number };
-    layer2?: { key: string; cueSeconds: number };
-    poor?: { key: string; cueSeconds: number };
-  } = {};
+  bgaActiveVideos: Record<string, { key: string; cueSeconds: number } | undefined> = {};
   /**
    * BMS spec — when the chart omits `#POORBGA` and provides `#BMP00`, the BMP00 image acts as the implicit POOR
    * placeholder until an explicit `#xxx06` POOR cue takes over. Set during {@link prepareChart} so the renderer can
