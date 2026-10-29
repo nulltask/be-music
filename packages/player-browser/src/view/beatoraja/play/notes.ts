@@ -14,6 +14,7 @@
 //      the per-lane sprite, image[] entry missing, or texture decode failed). Keeps something visible
 //      so a partial-asset theme still plays — better than silent blanks.
 
+import { createGenericLaneRects } from './generic-lane-rects.ts';
 import { Container, Graphics, Sprite, type Texture, TilingSprite } from 'pixi.js';
 import { resolveConstantAlpha, type ConstantVisibility } from '@be-music/player-scene-model';
 import { findFirstIndexAtOrAfter } from '@be-music/shared-utils/core';
@@ -28,7 +29,7 @@ import type {
 } from '@be-music/skin-beatoraja';
 import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts';
-import type { TempoReversalPoint, ChartPlayVariant } from '@be-music/chart-model';
+import { resolveGenericBmsonKeyCount, type TempoReversalPoint, type ChartPlayVariant } from '@be-music/chart-model';
 import {
   advanceDrawCursor,
   GoneDrawObjects,
@@ -580,7 +581,10 @@ export class BeatorajaNoteLayer {
       return rect
         ? [
             {
-              side: this.variant === '9' || !channel.startsWith('2') ? ('1P' as const) : ('2P' as const),
+              side:
+                this.variant === '9' || this.variant.startsWith('generic-') || !channel.startsWith('2')
+                  ? ('1P' as const)
+                  : ('2P' as const),
               x: rect.x,
               w: rect.w,
               top: rect.y,
@@ -602,7 +606,9 @@ export class BeatorajaNoteLayer {
     // left). Flip each rect once on resolve so the rest of the layer (judgement-Y, getLaneBounds,
     // per-frame scroll math) can treat lane rects as ordinary Pixi Y-DOWN screen rects.
     const raw = blockIndex < 0 ? [] : this.noteSection.dst[blockIndex]!.rects;
-    this.cachedRects = raw.map((rect) => flipRectToPixi(rect, this.canvasHeight));
+    const rects = raw.map((rect) => flipRectToPixi(rect, this.canvasHeight));
+    const genericCount = resolveGenericBmsonKeyCount(`${this.variant}keys`);
+    this.cachedRects = genericCount === undefined ? rects : createGenericLaneRects(rects, genericCount);
     this.cachedBlockIndex = blockIndex;
     return this.cachedRects;
   }
@@ -633,7 +639,7 @@ export class BeatorajaNoteLayer {
    * doesn't declare a sprite for the slot or the image's source texture isn't bindable.
    */
   private resolveLaneSprite(imageId: BeatorajaImageId | undefined): CroppedSprite | undefined {
-    if (imageId === undefined || imageId === '') return undefined;
+    if (this.variant.startsWith('generic-') || imageId === undefined || imageId === '') return undefined;
     if (this.croppedTextureCache.has(imageId)) return this.croppedTextureCache.get(imageId);
     const image = this.images.get(imageId);
     if (image === undefined) {
@@ -897,6 +903,7 @@ export class BeatorajaNoteLayer {
   }
 
   private fallbackColorForLane(lane: number): number {
+    if (this.variant.startsWith('generic-')) return PALETTE_COLOR.white!;
     if (this.variant === '24' || this.variant === '48') {
       const sideLane = lane % KEYBOARD_SKIN_SIDE_LANES;
       // The wheel takes the scratch red, like the skins' own `note-su` / `note-sd` art.

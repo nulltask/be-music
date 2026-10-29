@@ -129,13 +129,6 @@ const BMS_LANE_CODES = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const BMSON_DEFAULT_MODE_HINT = 'beat-7k';
 
 /**
- * `generic-Nkeys` template pattern — bmson allows arbitrary key counts via this naming convention ("a layout for a
- * generic symmetrical keyboard layout, ordered left to right"). The numeric prefix is the key count; we route it as a
- * positional left-to-right `x=1..N → 11, 12, …` map.
- */
-const BMSON_GENERIC_KEYS_PATTERN = /^generic-(\d+)keys?$/;
-
-/**
  * Resolves the `x` → BMS channel mapping for a chart's playable lanes. Order of resolution:
  *
  * 1. `mode_hint` blank / undefined → spec default `beat-7k` (per bmson 1.0.0).
@@ -155,15 +148,6 @@ export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?:
   const hinted = resolveBmsonModeHintLayout(effectiveHint);
   if (hinted) {
     return new Map(hinted.channelByX);
-  }
-  const genericMatch = effectiveHint.match(BMSON_GENERIC_KEYS_PATTERN);
-  if (genericMatch) {
-    const keyCount = Math.max(0, Math.min(99, Number.parseInt(genericMatch[1]!, 10)));
-    const map = new Map<number, string>();
-    for (let index = 0; index < keyCount; index += 1) {
-      map.set(index + 1, laneIndexToChannel(index));
-    }
-    return map;
   }
   const xValues = new Set<number>();
   for (const soundChannel of soundChannels) {

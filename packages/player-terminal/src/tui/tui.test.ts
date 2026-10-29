@@ -567,3 +567,23 @@ describe('player-terminal', () => {
     });
   });
 });
+
+test('generic channel 16 and 17 notes use normal white keys rather than scratch or FREE ZONE colors', () => {
+  const output = renderOutputRaw(
+    [
+      { channel: '16', beat: 0.1, seconds: 0.05 },
+      { channel: '17', beat: 0.2, seconds: 0.1 },
+    ],
+    {
+      laneDisplayMode: '8 KEY GENERIC',
+      lanes: [
+        { channel: '16', key: 'h', isScratch: false },
+        { channel: '17', key: 'j', isScratch: false },
+      ],
+    },
+  ).join('\n');
+  expect(output).toContain('8 KEY GENERIC');
+  expect(output).toContain('\u001b[38;2;255;255;255;4m');
+  expect(output).not.toContain('\u001b[38;2;255;95;95;4m');
+  expect(output).not.toContain('\u001b[38;2;95;135;255;4m');
+});

@@ -560,7 +560,7 @@ function playSkinOrder(source: ChartPlayVariant, battle: LR2PlaySkinBattle | und
     return [...battleSkins, ...PLAY_SKIN_FALLBACKS[source === '7' ? '14' : '10']];
   }
   const converted = mode === 'SP-TO-DP' && course ? undefined : BATTLE_PLAY_VARIANTS[mode]?.[source];
-  return PLAY_SKIN_FALLBACKS[converted ?? source];
+  return PLAY_SKIN_FALLBACKS[converted ?? source] ?? PLAY_SKIN_FALLBACKS['7'];
 }
 
 /**

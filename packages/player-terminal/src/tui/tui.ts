@@ -771,11 +771,13 @@ export class PlayerTUI {
     }
     lines.push('');
     const laneLines: string[] = [];
+    const genericKeys = this.options.laneDisplayMode.endsWith(' KEY GENERIC');
+    const colorChannels = genericKeys ? this.laneChannels.map(() => '11') : this.laneChannels;
     if (showLaneChannels) {
       laneLines.push(
         renderLaneRow(
           this.options.lanes.map((lane) => lane.channel),
-          this.laneChannels,
+          colorChannels,
           this.laneWidths,
           this.options.splitAfterIndex,
           this.options.noteHeight,
@@ -790,12 +792,12 @@ export class PlayerTUI {
         laneLines.push(
           renderJudgeRow(
             row,
-            this.laneChannels,
+            colorChannels,
             this.laneWidths,
             this.options.splitAfterIndex,
             this.options.noteHeight,
             laneHighlightRatios,
-            gridSourceChannels[rowIndex],
+            genericKeys ? colorChannels : gridSourceChannels[rowIndex],
           ),
         );
         continue;
@@ -804,12 +806,12 @@ export class PlayerTUI {
         laneLines.push(
           renderMeasureRow(
             row,
-            this.laneChannels,
+            colorChannels,
             this.laneWidths,
             this.options.splitAfterIndex,
             this.options.noteHeight,
             laneHighlightRatios,
-            gridSourceChannels[rowIndex],
+            genericKeys ? colorChannels : gridSourceChannels[rowIndex],
           ),
         );
         continue;
@@ -817,12 +819,12 @@ export class PlayerTUI {
       laneLines.push(
         renderLaneRow(
           row,
-          this.laneChannels,
+          colorChannels,
           this.laneWidths,
           this.options.splitAfterIndex,
           this.options.noteHeight,
           laneHighlightRatios,
-          gridSourceChannels[rowIndex],
+          genericKeys ? colorChannels : gridSourceChannels[rowIndex],
         ),
       );
     }
@@ -832,7 +834,7 @@ export class PlayerTUI {
     laneLines.push(renderJudgeComboLine(judgeComboLabels, this.laneWidths, this.options.splitAfterIndex));
 
     const [blackKeyRow, whiteAndScratchKeyRow] = renderInputKeyRows(
-      this.options.lanes,
+      genericKeys ? this.options.lanes.map((lane) => ({ ...lane, tone: 'white' as const })) : this.options.lanes,
       this.laneWidths,
       this.options.splitAfterIndex,
       activeInputKeyChannels,

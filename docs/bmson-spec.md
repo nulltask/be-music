@@ -37,7 +37,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] Place NONSTOP sequence programs with stage-owned resources, trim phase, FIT clocks and boundary expiry
 - [x] `info` extended item: `subartists`
 - [x] `info` extended item: `chart_name`
-- [x] `info` extended item: `mode_hint`
+- [x] `info` extended item: `mode_hint`, including distinct `generic-Nkeys` keyboards (1–70 normal keys)
 - [x] `info` extended item: `judge_rank`
 - [x] `info` extended item: `total`
 - [x] Preserve the beatoraja extensions `info.ln_type` and per-note `t` (1: LN / 2: CN / 3: HCN) in the IR, used for the player's LN mode resolution and chart-writer output
@@ -190,7 +190,7 @@ flowchart TD
 - Map `notes[].x` to BMS channels by `info.mode_hint`, in this order:
   1. A blank or missing `mode_hint` is treated as `beat-7k` (the bmson 1.0.0 default).
   2. `beat-5k`, `beat-7k`, `beat-10k`, `beat-14k`, `popn-5k`, `popn-9k`, `keyboard-24k`, and `keyboard-24k-double` use a fixed lane table (for example `beat-7k` maps `x` 1-5 to `11`-`15`, 6-7 to `18`-`19`, and 8 to the scratch `16`; the keyboard tables are below). As in the bmson spec's canonical list and beatoraja, `beat-5k` keeps the scratch on `x` 8 and leaves `x` 6 / 7 without a lane, and `beat-10k` puts the 2P keys on `x` 9-13 and the 2P scratch on `x` 16. The tables are `BMSON_MODE_HINT_LAYOUTS` in `@be-music/chart-model`, built from the play-mode table (see [Player spec — Play-mode table](./player-spec.md#play-mode-table)).
-  3. `generic-Nkeys` maps `x = 1..N` left to right onto consecutive channels from `11`.
+  3. `generic-Nkeys` supports integer counts 1–70 and maps `x = 1..N` left to right onto `11..1Z`, then `21..2Z`. Zero and larger counts raise `RangeError`; they are never clamped. Malformed `generic-` hints raise `TypeError` rather than falling back to beat mode. The singular `generic-Nkey` spelling remains accepted. All columns are normal keys on one keyboard, including channels `16`, `17`, `26` and `27`. The declared count selects `generic-N` even when most columns are empty.
   4. Any other hint is unknown. When every positive `x` of `sound_channels`, `key_channels` and `mine_channels` is in the `beat-7k` table (1–8), the chart is read as `beat-7k`, as beatoraja (with a warning), Qwilight and Bemuse read it. Otherwise the unique positive `x` values are numbered in ascending order onto consecutive channels from `11`: beatoraja would turn the lanes past `x` 8 into BGM, and keeping them is what the author meant (be-music decision).
 - A note with `x` omitted or `x <= 0` becomes BGM (`01`).
 - The keyboard hints (Keyboardmania-style 24 keys plus the wheel, as beatoraja reads them) give every `x` a fixed lane, so a chart that leaves some keys empty never shifts onto the wrong ones:
@@ -281,6 +281,8 @@ The bmson spec leaves the window for `judge_rank` to each player (default `100` 
 | be-music (`stringifyBmson`)                                                                                                                | `33` / `67` / `100` / `133` / `167`; `#DEFEXRANK` verbatim |
 
 be-music follows the NORMAL reading (`100` = NORMAL): it matches the spec's example and most players, and keeps a chart's windows when be-music converts it to bmson and reads it back. The cost is that a converted chart judges about 4/3 wider in beatoraja. Distributed bmson charts almost always carry the default `100`.
+
+- An authored generic hint preserves empty positions through canonical output. A synthesized generic hint for BMS conversion numbers the used lanes consecutively. Exporting an explicitly generic layout to BMS raises `RangeError`; use bmson or Be-Music JSON to retain the keyboard identity.
 
 ### beatoraja BGA sequence data
 

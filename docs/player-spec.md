@@ -297,9 +297,10 @@ The main modes the current implementation determines automatically are as follow
 - `9 KEY (PMS-STD / PMS-COMPAT)`
 - `24 KEY SP`
 - `48 KEY DP`
+- `N KEY GENERIC` (1–70)
 
 Channels that do not exist in a known fixed layout will fallback to unused keys in order.
-FREE ZONE also shares the input tokens of the corresponding scratch lanes (`17 -> 16`, `27 -> 26`).
+In beat-family layouts, FREE ZONE also shares the input tokens of the corresponding scratch lanes (`17 -> 16`, `27 -> 26`).
 
 `24 KEY SP` / `48 KEY DP` are the Keyboardmania-style keyboard modes. Each side has 26 lanes: 24 keys on channels
 `11..19` + `1A..1O` (`21..29` + `2A..2O` for the 2P side) and the wheel, up on `1P` and down on `1Q` (`2P` / `2Q`).
@@ -323,6 +324,10 @@ For reverse scratch, 1P uses left `Ctrl` and 2P uses right `Ctrl`. On macOS, use
 
 Distinguishing between left/right `Ctrl` and left/right `Option` is done using the kitty keyboard protocol.
 If you fall back to a terminal that does not support kitty, side-specific input of reverse scratch is not guaranteed.
+
+`generic-Nkeys` bmson charts use `N KEY GENERIC` with 1–70 equal-width normal keys on one side. The declared count remains authoritative for sparse charts and takes precedence over channel-based mode detection. Channels `16` / `17` / `26` / `27` are ordinary keys; there is no scratch, wheel, FREE ZONE alias or DP bank. Default tokens use the existing 28-key pool, then digits `1..0`, `t y - = [ ] \` and backquote, followed by `F1..F24`. Browser input recognizes those codes; a bound F5 is a lane key, and an unbound F5 restarts. Terminal stateful function-key events retain press, repeat and release through kitty and Win32 input modes. Large layouts need suitable hardware or custom input and a sufficiently wide terminal; a binding does not imply that a conventional keyboard can press a full chord.
+
+Native, Canvas and LR2 use uniform fallback columns. A beatoraja skin contributes its note-area bounds, divided into N equal columns with normal-key fallback notes, rather than assigning its scratch image to a generic key. Terminal uses normal white-key coloring. In the beatoraja ruleset, generic layouts use keyboard judgment windows and default TOTAL independently of N. Beat-specific BATTLE / SP TO DP conversions remain unavailable. A NONSTOP course may retain one generic count throughout; a different generic count or a beat/keyboard stage is rejected as `generic-layout-mismatch`. These Be-Music policies are recorded in [ADR 0023](./adr/0023-generic-bmson-keyboards.md).
 
 ### Play-mode table
 

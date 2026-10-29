@@ -4,7 +4,7 @@ import {
   type BeatorajaCustomJudge,
 } from '../ruleset/custom-judge.ts';
 import type { BattleMode } from '../core/battle-mode.ts';
-import type { ChartPlayVariant } from '@be-music/chart-model';
+import { getPlayModeLayouts, type ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
 import type { ScrollModifier } from '../core/scroll-modifier.ts';
@@ -841,8 +841,17 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.battleMode = play.battleMode as BattleMode;
   }
   if (play.battleSourceVariant !== undefined) {
-    if (!['5', '7', '9', '10', '14', '24', '48'].includes(play.battleSourceVariant as string))
-      throw new ReplayParseError('play.battleSourceVariant: unknown play variant');
+    let knownVariant = false;
+    try {
+      knownVariant =
+        typeof play.battleSourceVariant === 'string' &&
+        getPlayModeLayouts(play.battleSourceVariant as ChartPlayVariant).some(
+          (layout) => layout.variant === play.battleSourceVariant,
+        );
+    } catch {
+      // Numeric generic variants outside the supported domain are malformed replay input.
+    }
+    if (!knownVariant) throw new ReplayParseError('play.battleSourceVariant: unknown play variant');
     parsed.battleSourceVariant = play.battleSourceVariant as ChartPlayVariant;
   }
   if (play.battleTempo !== undefined) {

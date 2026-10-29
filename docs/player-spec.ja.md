@@ -296,9 +296,10 @@ ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。
 - `9 KEY (PMS-STD / PMS-COMPAT)`
 - `24 KEY SP`
 - `48 KEY DP`
+- `N KEY GENERIC`（1〜70）
 
 既知の固定レイアウトに存在しないチャンネルは、未使用キーへ順番にフォールバック割り当てします。
-FREE ZONE は、対応する scratch レーン (`17 -> 16`, `27 -> 26`) の入力トークンも共有します。
+beat 系の配置では、FREE ZONE は対応する scratch レーン (`17 -> 16`, `27 -> 26`) の入力トークンも共有します。
 
 `24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 26 レーンで、24 鍵をチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に、ホイールを `1P`（上）/ `1Q`（下）（2P 側は `2P` / `2Q`）に持ちます。scratch 列はありません。鍵はチャンネル昇順に左から右へ並べ、ホイールは 名前を言ってはいけないあのゲーム 系が scratch を置く外側（1P の鍵の左、2P の鍵の右）に置きます。判定は内容ベースで、拡張レーンチャンネル（ホイールを含む）が 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選び、bmson のキーボード系 `mode_hint` はそのままこのモードを選びます。
 
@@ -310,6 +311,10 @@ reverse scratch は 1P が左 `Ctrl`、2P が右 `Ctrl` を使います。macOS 
 
 left/right `Ctrl` と left/right `Option` の識別は kitty keyboard protocol で行います。
 kitty 非対応端末へフォールバックした場合、reverse scratch の side-specific 入力は保証しません。
+
+`generic-Nkeys` の bmson 譜面は、1〜70 個の等幅の通常キーを片側に並べる `N KEY GENERIC` を使います。疎な譜面でも宣言したキー数を保持し、チャンネルからのモード推定より優先します。`16` / `17` / `26` / `27` も通常キーであり、scratch・ホイール・FREE ZONE の別名・DP のバンクにはしません。既定の入力は既存の 28 キーのプール、数字 `1..0`、`t y - = [ ] \` とバッククォート、`F1..F24` の順です。Browser はこれらのコードを認識します。F5 がレーンに割り当てられていればレーン入力とし、未割り当てなら再開します。Terminal の kitty／Win32 入力モードは、ファンクションキーの押下・リピート・解放を保持します。多いキー数では適切な入力機器または独自の入力と、十分に横幅のある端末が必要です。割り当てがあっても、一般的なキーボードで全列の同時押しができるとは限りません。
+
+Native・Canvas・LR2 は等幅のフォールバック列を使います。beatoraja のスキンではノート領域の外周を借りて N 等分し、通常キーのフォールバックノートを使います。スキンの scratch 画像は generic のキーへ割り当てません。Terminal は通常の白キーの配色を使います。beatoraja ruleset の判定幅と既定 TOTAL は、N にかかわらず keyboard の規則を使います。beat 固有の BATTLE / SP TO DP 変換は利用できません。NONSTOP はすべてのステージで同じ generic のキー数を保持できます。異なるキー数や beat／keyboard のステージとの混在は `generic-layout-mismatch` として拒否します。Be-Music の方針は [ADR 0023](./adr/0023-generic-bmson-keyboards.ja.md) に記録します。
 
 ### プレイモード表
 

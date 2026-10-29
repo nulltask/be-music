@@ -1,3 +1,4 @@
+import { MAX_GENERIC_BMSON_KEYS, resolveGenericBmsonKeyCount, type GenericBmsonPlayVariant } from './generic-bmson.ts';
 import type { ChartPlayVariant } from './index.ts';
 
 /**
@@ -55,7 +56,7 @@ export interface PlayFreeZone {
  * Layout ids. Every play variant has one layout except 9 KEY, which has two: `9-pms` (PMS-STD, `11..15` + `22..25`)
  * and `9-bme` (the BME-type / PMS-COMPAT layout, `11..19`).
  */
-export type PlayModeLayoutId = '5' | '7' | '9-pms' | '9-bme' | '10' | '14' | '24' | '48';
+export type PlayModeLayoutId = '5' | '7' | '9-pms' | '9-bme' | '10' | '14' | '24' | '48' | GenericBmsonPlayVariant;
 
 export interface PlayModeLayout {
   readonly id: PlayModeLayoutId;
@@ -73,7 +74,7 @@ export interface PlayModeLayout {
   readonly bmsonModeHint?: BmsonModeHint;
 }
 
-/** The bmson `mode_hint`s with a fixed lane table: the six of the bmson spec plus beatoraja's keyboard hints. */
+/** The canonical, Keyboardmania and bounded generic bmson hints with an explicit lane table. */
 export type BmsonModeHint =
   | 'beat-5k'
   | 'beat-7k'
@@ -82,7 +83,9 @@ export type BmsonModeHint =
   | 'popn-5k'
   | 'popn-9k'
   | 'keyboard-24k'
-  | 'keyboard-24k-double';
+  | 'keyboard-24k-double'
+  | `generic-${number}keys`
+  | `generic-${number}key`;
 
 export interface BmsonModeHintLayout {
   readonly modeHint: BmsonModeHint;
@@ -244,6 +247,29 @@ export const PLAY_MODE_LAYOUTS: Readonly<Record<PlayModeLayoutId, PlayModeLayout
   },
 };
 
+for (let count = 1; count <= MAX_GENERIC_BMSON_KEYS; count++) {
+  const id: GenericBmsonPlayVariant = `generic-${count}`;
+  const layout: PlayModeLayout = {
+    id,
+    variant: id,
+    label: `${count} KEY GENERIC`,
+    bmsonModeHint: `generic-${count}keys`,
+    freeZones: [],
+    lanes: Array.from({ length: count }, (_, index) => {
+      const channel = `${index < LANE_CODES.length ? '1' : '2'}${LANE_CODES[index % LANE_CODES.length]}`;
+      return {
+        channel,
+        kind: 'key',
+        side: '1P',
+        slot: index + 1,
+        tone: 'white',
+        channels: resolvePlayLaneChannels(channel)!,
+      };
+    }),
+  };
+  Object.assign(PLAY_MODE_LAYOUTS, { [id]: layout });
+}
+
 const LAYOUTS_BY_VARIANT: ReadonlyMap<ChartPlayVariant, readonly PlayModeLayout[]> = (() => {
   const map = new Map<ChartPlayVariant, PlayModeLayout[]>();
   for (const layout of Object.values(PLAY_MODE_LAYOUTS)) {
@@ -256,6 +282,11 @@ const LAYOUTS_BY_VARIANT: ReadonlyMap<ChartPlayVariant, readonly PlayModeLayout[
 
 /** The layouts of a play variant: one for every variant except `'9'`, which has PMS-STD then the BME type. */
 export function getPlayModeLayouts(variant: ChartPlayVariant): readonly PlayModeLayout[] {
+  if (variant.startsWith('generic-')) {
+    const count = resolveGenericBmsonKeyCount(`${variant}keys`);
+    if (count === undefined) throw new RangeError(`Unsupported generic play variant: ${variant}`);
+    return LAYOUTS_BY_VARIANT.get(`generic-${count}`)!;
+  }
   return LAYOUTS_BY_VARIANT.get(variant) ?? [];
 }
 
@@ -323,9 +354,24 @@ export const BMSON_MODE_HINT_LAYOUTS: Readonly<Record<BmsonModeHint, BmsonModeHi
   'keyboard-24k-double': bmsonHintFromLayout('keyboard-24k-double', '48', 26),
 };
 
+for (let count = 1; count <= MAX_GENERIC_BMSON_KEYS; count++) {
+  const modeHint = `generic-${count}keys` as const;
+  const layout = PLAY_MODE_LAYOUTS[`generic-${count}`];
+  const channelByX = new Map(layout.lanes.map((lane, index) => [index + 1, lane.channel]));
+  const table: BmsonModeHintLayout = {
+    modeHint,
+    width: count,
+    channelByX,
+    xByChannel: new Map([...channelByX].map(([x, channel]) => [channel, x])),
+  };
+  Object.assign(BMSON_MODE_HINT_LAYOUTS, { [modeHint]: table, [`generic-${count}key`]: table });
+}
+
 /** The lane table of a bmson `mode_hint` (surrounding whitespace ignored), or `undefined` for a hint without one. */
 export function resolveBmsonModeHintLayout(modeHint: string | undefined): BmsonModeHintLayout | undefined {
   if (typeof modeHint !== 'string') return undefined;
+  const count = resolveGenericBmsonKeyCount(modeHint);
+  if (count !== undefined) return BMSON_MODE_HINT_LAYOUTS[`generic-${count}keys`];
   const trimmed = modeHint.trim();
   return Object.hasOwn(BMSON_MODE_HINT_LAYOUTS, trimmed)
     ? BMSON_MODE_HINT_LAYOUTS[trimmed as BmsonModeHint]

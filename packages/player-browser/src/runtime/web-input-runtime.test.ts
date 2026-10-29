@@ -246,7 +246,35 @@ describe('keyboardEventToTokens', () => {
   });
 
   test('returns an empty array for keys without a meaningful token mapping', () => {
-    expect(keyboardEventToTokens(makeKeyEvent('F1'))).toEqual([]);
+    expect(keyboardEventToTokens(makeKeyEvent('F0'))).toEqual([]);
+    expect(keyboardEventToTokens(makeKeyEvent('F25'))).toEqual([]);
     expect(keyboardEventToTokens(makeKeyEvent('IntlBackslash'))).toEqual([]);
   });
+});
+
+test.each([
+  ['Minus', '-'],
+  ['Equal', '='],
+  ['BracketLeft', '['],
+  ['BracketRight', ']'],
+  ['Backslash', '\\'],
+  ['Backquote', '`'],
+  ...Array.from({ length: 24 }, (_, index) => [`F${index + 1}`, `f${index + 1}`]),
+])('maps generic keyboard code %s to a usable lane token', (code, token) => {
+  expect(keyboardEventToTokens(makeKeyEvent(code!))).toEqual([token]);
+});
+
+test('a bound F5 sends lane press/release commands without restarting', () => {
+  const inputSignals = createPlayerInputSignalBus();
+  const { target, dispatch } = makeMockTarget();
+  const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map([['f5', ['2G']]]), target });
+  runtime.start();
+  dispatch('keydown', makeKeyEvent('F5'));
+  dispatch('keyup', makeKeyEvent('F5'));
+  expect(inputSignals.drainCommands()).toEqual([
+    { kind: 'lane-input', tokens: ['f5'], pressedAt: expect.any(Number) },
+    { kind: 'kitty-state', pressTokens: ['f5'], repeatTokens: [], releaseTokens: [], pressedAt: expect.any(Number) },
+    { kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens: ['f5'], pressedAt: expect.any(Number) },
+  ]);
+  runtime.stop();
 });

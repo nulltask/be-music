@@ -39,3 +39,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0021: A skin's stage may be fluid](./0021-fluid-stage.md)
 
 - [0022: Conditional bmson BGA events follow deterministic chart time](./0022-bmson-bga-events.md)
+
+- [0023: Generic bmson keyboards retain their declared layout](./0023-generic-bmson-keyboards.md)

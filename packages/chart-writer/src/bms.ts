@@ -1,5 +1,6 @@
 import {
   compareEvents,
+  resolveGenericBmsonKeyCount,
   createBeatResolver,
   isLandmineChannel,
   isPlayableChannel,
@@ -28,6 +29,8 @@ import { areBMSChartsEquivalent, areEventBmsonExtensionsEqual } from './equivale
 import type { BMSStringifyOptions } from './options.ts';
 
 export function stringifyBMS(json: BeMusicJSON, options: BMSStringifyOptions = {}): string {
+  if (resolveGenericBmsonKeyCount(json.bmson.info.modeHint) !== undefined)
+    throw new RangeError('Generic bmson layouts cannot be represented by BMS; export bmson or Be-Music JSON.');
   assertBmsonKeysFitBMS(json);
   const eol = options.eol ?? '\n';
   const maxResolution = options.maxResolution;

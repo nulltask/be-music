@@ -1517,6 +1517,7 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
   define('player-engine.lanes.createLaneBindings', {
     run: () => {
       lanesAPI.createLaneBindings(BENCH_7KEY_CHANNELS, { playVariant: '7', platform: 'linux' });
+      lanesAPI.createLaneBindings(['11', '2Z'], { playVariant: 'generic-70', platform: 'linux' });
     },
   });
   define('player-engine.lanes.appendFreeZoneInputChannels', {

@@ -37,7 +37,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] シーケンスプログラムをステージ固有の参照先・途中開始の位相・FIT の時計・境界での解除とともに NONSTOP へ配置する
 - [x] `info` 拡張項目: `subartists`
 - [x] `info` 拡張項目: `chart_name`
-- [x] `info` 拡張項目: `mode_hint`
+- [x] `info` 拡張項目: `mode_hint`（独立した `generic-Nkeys` キーボード、1〜70 個の通常キーを含む）
 - [x] `info` 拡張項目: `judge_rank`
 - [x] `info` 拡張項目: `total`
 - [x] beatoraja 拡張 `info.ln_type` と note 単位 `t`（1: LN / 2: CN / 3: HCN）を IR に保持し、プレイヤーの LN モード解決と chart-writer 出力に使用
@@ -190,7 +190,7 @@ flowchart TD
 - `notes[].x` は `info.mode_hint` に従って次の順で BMS チャンネルへ写像
   1. `mode_hint` が空または未指定なら `beat-7k`（bmson 1.0.0 の既定値）として扱う
   2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`、`keyboard-24k`、`keyboard-24k-double` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ。キーボードの表は後述）。bmson 仕様の正式な一覧や beatoraja と同じく、`beat-5k` もスクラッチを `x` 8 に置いて `x` 6 / 7 にはレーンを割り当てず、`beat-10k` は 2P の鍵を `x` 9〜13、2P のスクラッチを `x` 16 に置く。表は `@be-music/chart-model` の `BMSON_MODE_HINT_LAYOUTS` で、プレイモード表から作る（[Player 仕様 — プレイモード表](./player-spec.ja.md#プレイモード表) を参照）
-  3. `generic-Nkeys` は `x = 1..N` を左から順に `11` からの連続チャンネルへ写像
+  3. `generic-Nkeys` は整数の 1〜70 キーに対応し、`x = 1..N` を左から順に `11..1Z`、続いて `21..2Z` へ写像する。ゼロと上限超過は `RangeError` にし、丸めない。形式が不正な `generic-` の hint は `TypeError` にし、beat のモードへフォールバックしない。単数形の `generic-Nkey` も引き続き受け付ける。`16`・`17`・`26`・`27` を含め、すべてを 1 つのキーボードの通常キーとして扱う。ほとんどの列が空でも、宣言したキー数から `generic-N` を選ぶ。
   4. それ以外の hint は未知の hint とする。`sound_channels`・`key_channels`・`mine_channels` の正の `x` がすべて `beat-7k` の表（1〜8）に収まれば、beatoraja（警告つき）、Qwilight、Bemuse と同じく `beat-7k` として読む。収まらなければ正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番する。beatoraja では `x` 8 より先のレーンが BGM になるが、残すのが作者の意図だからである（be-music の判断）
 - `x` が未指定、または `x <= 0` のノートは BGM (`01`)
 - キーボード系 hint（beatoraja が読む Keyboardmania 風の 24 鍵 + ホイール）はすべての `x` に固定のレーンを与えるため、使わない鍵がある譜面でも別の鍵へずれない
@@ -285,6 +285,8 @@ be-music は NORMAL の解釈（`100` = NORMAL）に従います。仕様の説�
 ## 一次参照に対する未対応/非互換
 
 - 未対応: bmson で未使用の未知ルートキーの透過保持
+
+- 明示された generic の hint は、正規出力でも空の列の位置を保つ。BMS 変換時に生成する generic の hint は、使用レーンへ連続番号を振る。明示的な generic 配置を BMS に出力すると `RangeError` にする。キーボードの同一性を保つには bmson または Be-Music JSON を使う。
 
 ### beatoraja の BGA シーケンスデータ
 
