@@ -79,7 +79,7 @@ export function isSampleTriggerChannel(channel: string): boolean {
     if (highCode === 0x39 && (lowCode === 0x37 || lowCode === 0x38)) {
       return false;
     }
-    if ((highCode & 0xdf) === 0x41 && lowCode === 0x30) {
+    if ((highCode & 0xdf) === 0x41 && lowCode >= 0x30 && lowCode <= 0x36) {
       return false;
     }
     if ((highCode & 0xdf) === 0x53 && (lowCode & 0xdf) === 0x43) {
@@ -255,7 +255,11 @@ function isSampleTriggerNormalizedChannel(normalized: string): boolean {
     return normalized === '01';
   }
   return (
-    normalized !== '97' && normalized !== '98' && normalized !== 'A0' && normalized !== 'SC' && normalized !== 'SP'
+    normalized !== '97' &&
+    normalized !== '98' &&
+    !/^A[0-6]$/u.test(normalized) &&
+    normalized !== 'SC' &&
+    normalized !== 'SP'
   );
 }
 
@@ -321,7 +325,7 @@ function isPackedSampleTriggerChannel(packed: number): boolean {
   ) {
     return false;
   }
-  return packed !== 0x4130;
+  return packed < 0x4130 || packed > 0x4136;
 }
 
 function isPackedPlayableChannel(packed: number): boolean {

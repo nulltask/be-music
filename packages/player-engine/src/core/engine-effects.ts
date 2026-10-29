@@ -26,6 +26,7 @@ import { type AudioSession } from './engine-types.ts';
 /** What a driver hands {@link createJudgeEffectHandler}: the host side of every judge-core effect. */
 interface JudgeEffectHost {
   uiEnabled: boolean;
+  onInput?: (input: Extract<Parameters<JudgeCoreEffectSink>[0], { kind: 'record-input' }>) => void;
   /**
    * The automatic judge-timing adjustment this play runs (`OFF` for none: AUTO, replays, or a mode the play skips), and
    * the live timing it moves. `currentSeconds` is the chart time an LR2 step is recorded at.
@@ -83,6 +84,7 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeEffectHand
   const sink: JudgeCoreEffectSink = (effect) => {
     switch (effect.kind) {
       case 'record-input':
+        host.onInput?.(effect);
         replayRecorder?.recordInput(effect.action, effect.seconds, effect.tokens, effect.channels, effect.inferred);
         return;
       case 'record-empty-poor':

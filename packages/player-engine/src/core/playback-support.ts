@@ -87,6 +87,7 @@ export function createUIFramePublisher(params: {
   /** The seek generation and the clock a frame at `seconds` holds at (`PlayerUIFramePayload.generation` / `clock`). */
   resolveClock?: (seconds: number) => Pick<PlayerUIFramePayload, 'generation' | 'clock'>;
   resolveHCNLanes?: (seconds: number) => PlayerUIFramePayload['hcnLanes'];
+  resolveKeyBoundBGA?: (seconds: number) => PlayerUIFramePayload['keyBoundBGA'];
   resolveJudgedNoteCount?: () => number;
 }): (seconds: number, beat: number) => void {
   const {
@@ -103,6 +104,7 @@ export function createUIFramePublisher(params: {
     reversal,
     resolveClock,
     resolveHCNLanes,
+    resolveKeyBoundBGA,
     resolveJudgedNoteCount,
   } = params;
   return (seconds: number, beat: number): void => {
@@ -124,6 +126,7 @@ export function createUIFramePublisher(params: {
       ...(summary2P !== undefined ? { summary2P } : {}),
       notes,
       hcnLanes: resolveHCNLanes?.(seconds),
+      ...(resolveKeyBoundBGA ? { keyBoundBGA: resolveKeyBoundBGA(seconds) } : {}),
       judgedNoteCount: resolveJudgedNoteCount?.(),
       landmineNotes,
       invisibleNotes,

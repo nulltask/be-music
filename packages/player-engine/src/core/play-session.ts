@@ -2,9 +2,11 @@ import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
-import { resolveAutoScratchSides } from './auto-scratch.ts';
+import { buildAutoKeyBoundBGAInputs, KeyBoundBGAController } from './key-bound-bga.ts';
+import { resolveAutoScratchChannels, resolveAutoScratchSides } from './auto-scratch.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
+  buildKeyBoundBGATimeline,
   isPlayLaneSoundChannel,
   type ResolvedChart,
 } from '@be-music/chart-model';
@@ -120,6 +122,7 @@ export interface PlaySession {
   readonly tracer: NoTUIPlaybackEventTracer;
   readonly stateLogger: PlaybackStateLogger;
   readonly publishUIFrame: (seconds: number, beat: number) => void;
+  readonly keyBoundBGA?: KeyBoundBGAController;
   /** The judge supplies HCN display facts from its existing state; no second simulation. */
   readHCNLanes?: (seconds: number) => readonly PlayerHCNLaneState[];
   /** Maps the judge's effects onto audio, the UI buses, the replay and the trace. */
@@ -537,6 +540,30 @@ export async function createPlaySession(
   const clockSource = createAudioPlaybackClockSource(audioSession);
   // `session` is returned below; the frames read its clock and seek generation as they are published.
   let session: PlaySession | undefined;
+  const keyBoundCues = buildKeyBoundBGATimeline(resolvedChart.source, resolvedChart.timing);
+  const assistedChannels = resolveAutoScratchChannels(
+    options,
+    playbackChart.laneBindings.filter((lane) => lane.isScratch).map((lane) => lane.channel),
+  );
+  const freezeSeconds = resolvedChart.reversal?.seconds ?? Infinity;
+  const keyBoundBGA =
+    keyBoundCues.length === 0
+      ? undefined
+      : new KeyBoundBGAController(keyBoundCues, {
+          freezeSeconds,
+          inputs: [
+            ...(options.replayInputs ?? []).map((input) => ({
+              seconds: input.timeUs / 1e6,
+              action: input.action,
+              channels: input.channels,
+            })),
+            ...buildAutoKeyBoundBGAInputs(
+              playbackChart.scorableNotes.filter(
+                (note) => note.seconds <= freezeSeconds && (mode === 'auto' || assistedChannels.has(note.channel)),
+              ),
+            ),
+          ],
+        });
   const publishUIFrame = createUIFramePublisher({
     uiEnabled,
     uiSignals,
@@ -548,6 +575,7 @@ export async function createPlaySession(
     audioBackend: audioBackendLabel,
     ...(secondPlayer !== undefined ? { summary2P: secondPlayer.summary } : {}),
     resolveHCNLanes: (seconds) => session?.readHCNLanes?.(seconds),
+    ...(keyBoundBGA ? { resolveKeyBoundBGA: (seconds: number) => keyBoundBGA.read(seconds) } : {}),
     resolveJudgedNoteCount: () =>
       Math.max(
         0,
@@ -589,6 +617,12 @@ export async function createPlaySession(
     },
   });
   const applyJudgeEffect = createJudgeEffectHandler({
+    ...(keyBoundBGA && !replay
+      ? {
+          onInput: (input: { seconds: number; action: 'down' | 'up'; channels: ReadonlySet<string> }) =>
+            keyBoundBGA.addInput({ seconds: input.seconds, action: input.action, channels: [...input.channels] }),
+        }
+      : {}),
     judgeTiming: {
       // Manual play only, under any judge rules; LR2 skips its own adjustment in a two-player BATTLE (`battle` 1).
       mode:
@@ -670,6 +704,7 @@ export async function createPlaySession(
     tracer,
     stateLogger,
     publishUIFrame,
+    ...(keyBoundBGA ? { keyBoundBGA } : {}),
     applyJudgeEffect,
     settleJudgeTiming: () => applyJudgeEffect.settleJudgeTiming(),
     volumeChanges,

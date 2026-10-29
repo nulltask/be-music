@@ -92,6 +92,7 @@ describe('designed entries', () => {
       'DEFAULT_TUI_NOTE_HEIGHT',
       'IMAGE_RESIZE_ALGORITHMS',
       'JUDGE_TIMING_AUTO_ADJUST_MODES',
+      'KeyBoundBGAController',
       'MAX_TUI_NOTE_HEIGHT',
       'MIN_TUI_NOTE_HEIGHT',
       'ScrollDistanceMapper',

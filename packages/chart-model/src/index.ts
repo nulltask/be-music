@@ -204,3 +204,11 @@ export {
 } from './long-notes.ts';
 
 export { applyBMSColorKey, resolveBmsExBMPColorKey } from './bga-color-key.ts';
+
+export {
+  parseBMSKeyBoundBGA,
+  buildKeyBoundBGATimeline,
+  pickKeyBoundBGAFrame,
+  type BMSKeyBoundBGA,
+  type KeyBoundBGACue,
+} from './key-bound-bga.ts';

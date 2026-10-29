@@ -1,4 +1,5 @@
 import { signal } from 'alien-signals';
+import type { KeyBoundBGAFrame } from './key-bound-bga.ts';
 
 type WritableSignal<T> = {
   (): T;
@@ -108,6 +109,8 @@ export interface PlayerHCNLaneState {
 }
 
 export interface PlayerUIFramePayload {
+  /** Active input-driven SWBGA frame; absent while no key-bound animation is visible. */
+  keyBoundBGA?: KeyBoundBGAFrame;
   currentBeat: number;
   currentSeconds: number;
   /**
@@ -215,6 +218,7 @@ export function createPlayerUISignalBus(initialFrame: PlayerUIFramePayload): Pla
   const commandQueue: PlayerUICommand[] = [];
 
   const publishFrame = (frame: PlayerUIFramePayload): void => {
+    frameState.keyBoundBGA = frame.keyBoundBGA;
     frameState.currentBeat = frame.currentBeat;
     frameState.currentSeconds = frame.currentSeconds;
     frameState.displayBeat = frame.displayBeat;

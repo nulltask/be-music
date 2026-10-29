@@ -57,3 +57,5 @@ export {
   resolveJudgeTimingAutoAdjust,
   type JudgeTimingAutoAdjust,
 } from './core/judge-timing.ts';
+
+export { KeyBoundBGAController, type KeyBoundBGAInput, type KeyBoundBGAFrame } from './core/key-bound-bga.ts';
