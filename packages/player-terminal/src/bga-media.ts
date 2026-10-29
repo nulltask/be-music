@@ -17,6 +17,7 @@ import {
   type VideoFrameSource,
   type FrameSource,
   createStaticFrameSource,
+  mapFrameSource,
 } from './bga-frame-source.ts';
 
 async function loadImageAsSpecFrame(
@@ -25,6 +26,7 @@ async function loadImageAsSpecFrame(
   resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
   signal?: AbortSignal,
   colorKey?: BmsARGB,
+  swBGAColorKey?: BmsARGB,
 ): Promise<ANSIFrame | undefined> {
   const extension = extname(imagePath).toLowerCase();
   if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
@@ -35,9 +37,18 @@ async function loadImageAsSpecFrame(
     const buffer = await readFile(imagePath, { signal });
     throwIfAborted(signal);
     const decoded = decodeImageBuffer(buffer, imagePath);
+    if ((colorKey || swBGAColorKey) && !decoded.hasAlphaChannel) {
+      for (let offset = 3; offset < decoded.data.length; offset += 4) decoded.data[offset] = 255;
+    }
     if (colorKey) applyImageColorKey(decoded, colorKey);
+    if (swBGAColorKey) applyBMSColorKey(decoded.data, swBGAColorKey, true);
     throwIfAborted(signal);
-    return await convertImageToSpecFrameOffThread(decoded, colorKey ? 'exbmp' : mode, resizeAlgorithm, signal);
+    return await convertImageToSpecFrameOffThread(
+      decoded,
+      colorKey || swBGAColorKey ? 'exbmp' : mode,
+      resizeAlgorithm,
+      signal,
+    );
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -51,6 +62,7 @@ async function loadImageAsSourceFrame(
   mode: FrameMode,
   signal?: AbortSignal,
   colorKey?: BmsARGB,
+  swBGAColorKey?: BmsARGB,
 ): Promise<ANSIFrame | undefined> {
   const extension = extname(imagePath).toLowerCase();
   if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
@@ -61,9 +73,13 @@ async function loadImageAsSourceFrame(
     const buffer = await readFile(imagePath, { signal });
     throwIfAborted(signal);
     const decoded = decodeImageBuffer(buffer, imagePath);
+    if ((colorKey || swBGAColorKey) && !decoded.hasAlphaChannel) {
+      for (let offset = 3; offset < decoded.data.length; offset += 4) decoded.data[offset] = 255;
+    }
     if (colorKey) applyImageColorKey(decoded, colorKey);
+    if (swBGAColorKey) applyBMSColorKey(decoded.data, swBGAColorKey, true);
     throwIfAborted(signal);
-    return convertImageToSourceFrame(decoded, colorKey ? 'exbmp' : mode);
+    return convertImageToSourceFrame(decoded, colorKey || swBGAColorKey ? 'exbmp' : mode);
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -74,10 +90,6 @@ async function loadImageAsSourceFrame(
 
 /** Key native pixels before scaling and before the terminal's binary alpha-mask conversion. */
 function applyImageColorKey(image: DecodedImage, colorKey: BmsARGB): void {
-  if (!image.hasAlphaChannel) {
-    // BMP palette/unused-alpha bytes are not source alpha. EXBMP compares these images against alpha zero.
-    for (let offset = 3; offset < image.data.length; offset += 4) image.data[offset] = 255;
-  }
   applyBMSColorKey(image.data, colorKey, image.hasAlphaChannel === true);
 }
 
@@ -91,16 +103,34 @@ export async function loadFrameSource(
   signal?: AbortSignal,
   preserveSourceGeometry = false,
   colorKey?: BmsARGB,
+  swBGAColorKey?: BmsARGB,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
   const imageFrame = preserveSourceGeometry
-    ? await loadImageAsSourceFrame(resourcePath, mode, signal, colorKey)
-    : await loadImageAsSpecFrame(resourcePath, mode, imageResizeAlgorithm, signal, colorKey);
+    ? await loadImageAsSourceFrame(resourcePath, mode, signal, colorKey, swBGAColorKey)
+    : await loadImageAsSpecFrame(resourcePath, mode, imageResizeAlgorithm, signal, colorKey, swBGAColorKey);
   if (imageFrame) {
     return createStaticFrameSource(imageFrame);
   }
 
-  return loadVideoAsFrameSource(resourcePath, mode, videoBGAStreaming, signal, preserveSourceGeometry);
+  const video = await loadVideoAsFrameSource(
+    resourcePath,
+    swBGAColorKey ? 'exbmp' : mode,
+    videoBGAStreaming,
+    signal,
+    preserveSourceGeometry || swBGAColorKey !== undefined,
+  );
+  if (!video || !swBGAColorKey) return video;
+  return mapFrameSource(video, (frame) => {
+    const rgba = new Uint8Array(frame.width * frame.height * 4);
+    for (let pixel = 0; pixel < frame.opaqueMask.length; pixel++) {
+      rgba.set(frame.rgb.subarray(pixel * 3, pixel * 3 + 3), pixel * 4);
+      rgba[pixel * 4 + 3] = frame.opaqueMask[pixel] ? 255 : 0;
+    }
+    if (colorKey) applyBMSColorKey(rgba, colorKey, false);
+    applyBMSColorKey(rgba, swBGAColorKey, true);
+    return { ...frame, opaqueMask: Uint8Array.from(frame.opaqueMask, (_, pixel) => (rgba[pixel * 4 + 3] ? 1 : 0)) };
+  });
 }
 
 async function loadVideoAsFrameSource(

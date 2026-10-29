@@ -1,3 +1,5 @@
+import { keyBoundBGAResourceKey } from '../../chart/key-bound-bga.ts';
+import { isKeyBoundVideoCanvas } from '../../media/key-bound-video.ts';
 /**
  * The chart's BGA on the built-in and LR2 play screens: composites the base, layer and POOR
  * images (or a stitched NONSTOP chart's per-stage stacks) into the skin's BGA rects, or hands them to a be-music skin
@@ -112,6 +114,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
     poorKey = ctx.play.poorBGAFallbackKey;
   }
   if (ctx.play.nonstopBGATimelines === undefined && stacks[0] !== undefined) stacks[0].poorKey = poorKey;
+  const keyBound = ctx.play.engineFrame?.keyBoundBGA;
+  const keyBoundKey = keyBound ? keyBoundBGAResourceKey(keyBound.definitionId, keyBound.bmpKey) : undefined;
   if (ctx.play.audioContextStartTime !== 0) {
     const requests = new Map<string, { track: 'base' | 'layer' | 'layer2' | 'poor'; cue: BGACue }>();
     const add = (track: 'base' | 'layer' | 'layer2' | 'poor', cue: BGACue | undefined) => {
@@ -136,6 +140,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         });
       }
     }
+    if (keyBound && keyBoundKey && !controllingBGA.noLayer)
+      requests.set('key-bound', { track: 'layer2', cue: { bmpKey: keyBoundKey, seconds: keyBound.frameStartSeconds } });
     // Retire departed cues before starting their replacements, including aliases that share a video handle.
     for (const [slot, previous] of Object.entries(ctx.play.bgaActiveVideos)) {
       if (requests.has(slot)) continue;
@@ -188,9 +194,25 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
     const frame = leading !== undefined ? skinFrame(leading) : { poorActive: false };
     binding.setBGA({
       ...frame,
-      ...(ctx.play.nonstopBGATimelines !== undefined
+      ...(ctx.play.nonstopBGATimelines !== undefined || (keyBoundKey !== undefined && !controllingBGA.noLayer)
         ? {
-            stacks: stacks.map((stack) => ({ ...skinFrame(stack), alpha: stack.alpha })),
+            stacks: [
+              ...stacks.map((stack) => ({ ...skinFrame(stack), alpha: stack.alpha })),
+              ...(keyBoundKey !== undefined && !controllingBGA.noLayer
+                ? [
+                    {
+                      layer: resolveSkinBGAImage(
+                        ctx,
+                        ctx.play.bgaLayerTextures.get(keyBoundKey),
+                        ctx.play.bgaSubRegionOrigins.has(keyBoundKey),
+                      ),
+                      origins: { layer: ctx.play.bgaSubRegionOrigins.get(keyBoundKey) ?? { x: 0, y: 0 } },
+                      poorActive: false,
+                      alpha: 1,
+                    },
+                  ]
+                : []),
+            ],
           }
         : {}),
     });
@@ -319,6 +341,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           stack.tint?.poor,
         );
     }
+    if (keyBoundKey && !bga.noLayer) drawLayer(keyBoundKey, ctx.play.bgaLayerTextures, 'layer2', undefined, 1, true);
   }
   ctx.bgaLayerPool.end();
 }
@@ -383,15 +406,25 @@ function resolveSkinBGAImage(
   const resource = source.resource as BeMusicImage | undefined;
   if (!resource) return undefined;
   const { frame } = texture;
-  if (!subRegion && frame.x === 0 && frame.y === 0 && frame.width === source.width && frame.height === source.height) {
+  // A keyed video is a canvas rather than a <video>; present a full-source movie at the BMS canvas size
+  // so Canvas skins retain the same fill behavior as Pixi. Aliases keep their native crop dimensions.
+  const fullKeyedVideo = !subRegion && isKeyBoundVideoCanvas(resource);
+  if (
+    !fullKeyedVideo &&
+    !subRegion &&
+    frame.x === 0 &&
+    frame.y === 0 &&
+    frame.width === source.width &&
+    frame.height === source.height
+  ) {
     return resource;
   }
-  if ('videoWidth' in resource) {
+  if ('videoWidth' in resource || isKeyBoundVideoCanvas(resource)) {
     let canvas = videoCrops.get(texture);
     if (!canvas) {
       canvas = document.createElement('canvas');
-      canvas.width = frame.width;
-      canvas.height = frame.height;
+      canvas.width = fullKeyedVideo ? 256 : frame.width;
+      canvas.height = fullKeyedVideo ? 256 : frame.height;
       videoCrops.set(texture, canvas);
     }
     const context = canvas.getContext('2d')!;

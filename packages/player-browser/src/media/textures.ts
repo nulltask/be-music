@@ -939,6 +939,8 @@ function resolveImageDecoder(lowerPath: string): ImageDecoder | undefined {
 export interface LoadTextureOptions {
   /** EXBMP's alpha-aware transparent-color key, applied before Canvas premultiplication where raw pixels are available. */
   bmsColorKey?: BmsARGB;
+  /** SWBGA transparent color compares decoded RGBA, including inserted opaque alpha. */
+  swBGAColorKey?: BmsARGB;
   /** Skin-declared `#TRANSCOLOR` chroma key (rare on BGA assets, common on UI sprites). */
   transparentColor?: { r: number; g: number; b: number };
   /**
@@ -965,7 +967,7 @@ export async function loadTextureFromBytes(
   const options = normalizeLoadTextureOptions(transparentColorOrOptions);
   const lower = path.toLowerCase();
   if (
-    options.bmsColorKey &&
+    (options.bmsColorKey || options.swBGAColorKey) &&
     bytes.length >= 8 &&
     bytes[0] === 0x89 &&
     bytes[1] === 0x50 &&
@@ -975,13 +977,13 @@ export async function loadTextureFromBytes(
     try {
       const { decodePNGToRGBA8 } = await import('@be-music/shared-utils/png');
       const image = decodePNGToRGBA8(bytes);
-      applyBMSColorKey(image.data, options.bmsColorKey, image.hasAlphaChannel);
+      applyBGAColorKeys(image.data, options, image.hasAlphaChannel);
       return loadTextureFromImageData(
         new Uint8ClampedArray(image.data.buffer, image.data.byteOffset, image.data.byteLength),
         image.width,
         image.height,
         path,
-        { ...options, bmsColorKey: undefined, keyOutBlack: false },
+        { ...options, bmsColorKey: undefined, swBGAColorKey: undefined, keyOutBlack: false },
       );
     } catch {
       return undefined;
@@ -1043,17 +1045,19 @@ async function loadTextureFromImageData(
     const ownedBuffer = new ArrayBuffer(rgba.byteLength);
     const pixels = new Uint8ClampedArray(ownedBuffer);
     pixels.set(rgba);
-    if (options.bmsColorKey) {
+    if (options.bmsColorKey || options.swBGAColorKey) {
       if (!hasAlphaChannel) for (let offset = 3; offset < pixels.length; offset += 4) pixels[offset] = 255;
-      applyBMSColorKey(pixels, options.bmsColorKey, hasAlphaChannel);
+      applyBGAColorKeys(pixels, options, hasAlphaChannel);
     }
     const imageData = new ImageData(new Uint8ClampedArray(ownedBuffer), width, height);
     const imageBitmap = await createImageBitmap(imageData);
     let finalBitmap = imageBitmap;
-    if (options.transparentColor || (options.keyOutBlack && !options.bmsColorKey)) {
+    if (options.transparentColor || (options.keyOutBlack && !options.bmsColorKey && !options.swBGAColorKey)) {
       const keyedBitmap = await applyChromaKeyToBitmap(
         imageBitmap,
-        options.bmsColorKey ? { ...options, bmsColorKey: undefined, keyOutBlack: false } : options,
+        options.bmsColorKey || options.swBGAColorKey
+          ? { ...options, bmsColorKey: undefined, swBGAColorKey: undefined, keyOutBlack: false }
+          : options,
       );
       if (keyedBitmap) {
         imageBitmap.close();
@@ -1128,7 +1132,7 @@ async function loadTextureFromBlob(
   try {
     const imageBitmap = await createImageBitmap(blob);
     let finalBitmap = imageBitmap;
-    if (options.transparentColor || options.keyOutBlack || options.bmsColorKey) {
+    if (options.transparentColor || options.keyOutBlack || options.bmsColorKey || options.swBGAColorKey) {
       const keyedBitmap = await applyChromaKeyToBitmap(imageBitmap, options, hasAlphaChannel);
       if (keyedBitmap) {
         imageBitmap.close();
@@ -1171,9 +1175,10 @@ async function applyChromaKeyToBitmap(
   context.drawImage(imageBitmap, 0, 0);
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const { data } = imageData;
-  if (options.bmsColorKey) applyBMSColorKey(data, options.bmsColorKey, hasAlphaChannel);
+  applyBGAColorKeys(data, options, hasAlphaChannel);
   const transparent = options.transparentColor;
-  const keyOutBlack = options.keyOutBlack === true && options.bmsColorKey === undefined;
+  const keyOutBlack =
+    options.keyOutBlack === true && options.bmsColorKey === undefined && options.swBGAColorKey === undefined;
   for (let index = 0; index < data.length; index += 4) {
     const r = data[index] ?? 0;
     const g = data[index + 1] ?? 0;
@@ -1208,7 +1213,8 @@ async function decodeTGATexture(
  */
 function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {}): ImageData | undefined {
   const transparentColor = options.transparentColor;
-  const keyOutBlack = options.keyOutBlack === true && options.bmsColorKey === undefined;
+  const keyOutBlack =
+    options.keyOutBlack === true && options.bmsColorKey === undefined && options.swBGAColorKey === undefined;
   if (bytes.length < 18) {
     return undefined;
   }
@@ -1262,7 +1268,9 @@ function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {})
       const g = bytes[source + 1] ?? 0;
       const b = bytes[source] ?? 0;
       let a =
-        bitsPerPixel === 32 && (!options.bmsColorKey || (descriptor & 15) !== 0) ? (bytes[source + 3] ?? 255) : 255;
+        bitsPerPixel === 32 && (!(options.bmsColorKey || options.swBGAColorKey) || (descriptor & 15) !== 0)
+          ? (bytes[source + 3] ?? 255)
+          : 255;
       if (transparentColor && r === transparentColor.r && g === transparentColor.g && b === transparentColor.b) {
         a = 0;
       } else if (keyOutBlack && r === 0 && g === 0 && b === 0) {
@@ -1307,8 +1315,7 @@ function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {})
     }
   }
 
-  if (options.bmsColorKey)
-    applyBMSColorKey(imageData.data, options.bmsColorKey, bitsPerPixel === 32 && (descriptor & 15) !== 0);
+  applyBGAColorKeys(imageData.data, options, bitsPerPixel === 32 && (descriptor & 15) !== 0);
   return imageData;
 }
 
@@ -1328,4 +1335,9 @@ function sourceHasAlphaChannel(bytes: Uint8Array, path: string): boolean {
     return (view.getUint32(80, true) & 1) !== 0 && view.getUint32(104, true) !== 0;
   if (path.endsWith('.tga') && bytes.length >= 18) return bytes[16] === 32 && (bytes[17]! & 15) !== 0;
   return true;
+}
+
+function applyBGAColorKeys(data: Uint8Array | Uint8ClampedArray, options: LoadTextureOptions, hasAlpha: boolean): void {
+  if (options.bmsColorKey) applyBMSColorKey(data, options.bmsColorKey, hasAlpha);
+  if (options.swBGAColorKey) applyBMSColorKey(data, options.swBGAColorKey, true);
 }

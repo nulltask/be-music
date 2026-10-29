@@ -5,7 +5,14 @@
 
 import { Rectangle, Texture } from 'pixi.js';
 import { runWithConcurrency } from '@be-music/shared-utils/core';
-import { parseBMSExBMP, resolveBmsExBMPColorKey, resolvePoorBGAMode } from '@be-music/chart-model';
+import {
+  parseBMSExBMP,
+  buildKeyBoundBGATimeline,
+  createTimingResolver,
+  resolveBmsExBMPColorKey,
+  resolvePoorBGAMode,
+  type BmsARGB,
+} from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { loadAssetBytes, resolveChartBGAAsset } from '../collection/collection.ts';
 import type { BrowserAssetSource } from '../collection/types.ts';
@@ -13,6 +20,9 @@ import { loadTextureFromBytes, loadVideoTextureFromBytes, type VideoTranscodeOpt
 import { collectBGATextureLoadKeys, isVideoExtension, type BGACue } from './bga-timeline.ts';
 import { logger } from '../logger.ts';
 import { collectBGASubRegions } from './bga-subregions.ts';
+
+import { createKeyBoundVideoTexture } from '../media/key-bound-video.ts';
+import { keyBoundBGAResourceKey } from './key-bound-bga.ts';
 
 const log = logger('play-bga');
 
@@ -30,6 +40,7 @@ export interface PlayBGATimeline {
 export interface PlayBGAVideo {
   video: HTMLVideoElement;
   objectURL: string;
+  dispose?: () => void;
 }
 
 /** Where {@link loadPlayBGA} puts what it decoded, keyed by the timeline's BMP key. */
@@ -108,11 +119,45 @@ export interface LoadPlayBGAOptions {
  * fails to decode is skipped so the rest of the chart still renders.
  */
 export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
+  await loadBGAResourceSet(options);
+  if (options.isCancelled?.()) return;
+  const definitions = new Map(
+    buildKeyBoundBGATimeline(options.chart, createTimingResolver(options.chart)).map((cue) => [
+      cue.definitionId,
+      cue.definition,
+    ]),
+  );
+  for (const [id, definition] of definitions) {
+    const into: PlayBGAResources = {
+      textures: new Map(),
+      layerTextures: new Map(),
+      videos: new Map(),
+      subRegionOrigins: new Map(),
+    };
+    await loadBGAResourceSet(
+      {
+        ...options,
+        poorFallbackKey: undefined,
+        into,
+        timeline: { base: [], poor: [], layer: definition.frames.map((bmpKey) => ({ seconds: 0, bmpKey })) },
+      },
+      definition.argb,
+    );
+    for (const [key, texture] of into.layerTextures)
+      options.into.layerTextures.set(keyBoundBGAResourceKey(id, key), texture);
+    for (const [key, origin] of into.subRegionOrigins)
+      options.into.subRegionOrigins.set(keyBoundBGAResourceKey(id, key), origin);
+    for (const [key, video] of into.videos) options.into.videos.set(keyBoundBGAResourceKey(id, key), video);
+    if (options.isCancelled?.()) return;
+  }
+}
+
+async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: BmsARGB): Promise<void> {
   const { chart, source, chartPath, into } = options;
   const isCancelled = options.isCancelled ?? (() => false);
   const { paths, base, layer } = collectPlayBGAResources(chart, options.timeline, options.poorFallbackKey);
   // The bmson spec draws layer blacks as black ("Unlike BMS Layer Channel #xxx07"); BMS keys them out.
-  const keyOutLayerBlack = chart.sourceFormat !== 'bmson';
+  const keyOutLayerBlack = chart.sourceFormat !== 'bmson' && swBGAColorKey === undefined;
   const aliasSources = new Set([...collectBGASubRegions(chart).values()].map((region) => region.sourceBMP));
   const trackKeys = (cues: readonly BGACue[]) =>
     collectBGATextureLoadKeys(chart, { base: cues, layer: [], poor: [] }, undefined).base;
@@ -149,14 +194,26 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
             destroyTexture(handle.texture);
             return;
           }
-          handle.texture.label = `bga[${key}]:video`;
+          let texture = handle.texture;
+          let dispose: (() => void) | undefined;
+          if (swBGAColorKey) {
+            const keyed = createKeyBoundVideoTexture(handle.video, swBGAColorKey, resolveBmsExBMPColorKey(chart, key));
+            texture = keyed.texture;
+            dispose = keyed.dispose;
+            into.layerTextures.set(`${String.fromCharCode(0)}native:${videoKey}`, handle.texture);
+          }
+          texture.label = `bga[${key}]:video`;
           handle.video.pause();
           handle.video.defaultPlaybackRate = options.tempo;
           handle.video.playbackRate = options.tempo;
-          into.videos.set(videoKey, { video: handle.video, objectURL: handle.objectURL });
+          into.videos.set(videoKey, {
+            video: handle.video,
+            objectURL: handle.objectURL,
+            ...(dispose ? { dispose } : {}),
+          });
           if ((videoKey === key || videoKey.startsWith(String.fromCharCode(0) + 'poor:')) && base.has(key))
-            into.textures.set(videoKey, handle.texture);
-          if (layer.has(key)) into.layerTextures.set(videoKey, handle.texture);
+            into.textures.set(videoKey, texture);
+          if (layer.has(key)) into.layerTextures.set(videoKey, texture);
         }
         return;
       }
@@ -172,6 +229,7 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
         const texture = await loadTextureFromBytes(path, bytes, {
           keyOutBlack: keyOutLayerBlack && bmsColorKey === undefined,
           ...(bmsColorKey ? { bmsColorKey } : {}),
+          ...(swBGAColorKey ? { swBGAColorKey } : {}),
         });
         if (isCancelled()) return destroyTexture(texture);
         if (texture) into.layerTextures.set(key, texture);
@@ -264,7 +322,8 @@ export function registerSubRegionBGATextures(chart: BeMusicJSON, into: PlayBGARe
 }
 
 /** Stops a video BGA and frees its object URL. Pause before destroying its texture: in-flight frame callbacks throw. */
-export function releaseVideo({ video, objectURL }: PlayBGAVideo): void {
+export function releaseVideo({ video, objectURL, dispose }: PlayBGAVideo): void {
+  dispose?.();
   try {
     video.pause();
     video.removeAttribute('src');

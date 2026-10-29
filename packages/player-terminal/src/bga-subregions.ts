@@ -6,6 +6,7 @@ import { mapFrameSource, type FrameSource } from './bga-frame-source.ts';
 export interface BGAResource {
   path: string;
   colorKey?: BmsARGB;
+  swBGAColorKey?: BmsARGB;
   /** Source-to-destination order, including chained sub-regions. */
   regions: BMSSubRegionBGA[];
 }

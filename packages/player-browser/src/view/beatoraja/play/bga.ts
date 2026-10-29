@@ -1,3 +1,5 @@
+import type { KeyBoundBGAFrame } from '@be-music/player-engine/display';
+import { keyBoundBGAResourceKey } from '../../../chart/key-bound-bga.ts';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
 // BGA (background animation) rendering layer for a beatoraja play skin.
 //
@@ -94,6 +96,7 @@ type BGADestinationProps = ReturnType<typeof destinationToSpriteProps>;
 export class BeatorajaBGALayer {
   readonly container: Container = new Container();
   private background: Sprite | undefined;
+  private keyBoundSprite = new Sprite({ visible: false, label: 'bga/key-bound' });
   /**
    * One sprite set per stack drawn (one, or a NONSTOP chart's stages at a seam), earlier stacks behind. Each set is a
    * black fill behind a base image smaller than the BGA canvas, which beatoraja leaves black around it, the base image
@@ -148,9 +151,16 @@ export class BeatorajaBGALayer {
     seconds: number,
     context: BeatorajaRenderContext,
     poorBGAActive: boolean,
-    playback: { seconds?: number; tempo?: number; paused?: boolean; started?: boolean } = {},
+    playback: {
+      seconds?: number;
+      tempo?: number;
+      paused?: boolean;
+      started?: boolean;
+      keyBoundBGA?: KeyBoundBGAFrame;
+    } = {},
   ): void {
     if (this.disposed) return;
+    this.keyBoundSprite.visible = false;
     if (this.background) this.background.visible = false;
     for (const pair of this.pairs) {
       pair.canvas.visible = false;
@@ -271,6 +281,15 @@ export class BeatorajaBGALayer {
         );
       }
     });
+    this.keyBoundSprite.visible = false;
+    const keyBound = playback.keyBoundBGA;
+    if (keyBound) {
+      const key = keyBoundBGAResourceKey(keyBound.definitionId, keyBound.bmpKey);
+      keys.set(key, keyBound.frameStartSeconds);
+      if (this.keyBoundSprite.parent !== this.container) this.container.addChild(this.keyBoundSprite);
+      else this.container.setChildIndex(this.keyBoundSprite, this.container.children.length - 1);
+      this.drawImage(this.keyBoundSprite, undefined, key, this.layerTextures, props, 1);
+    }
     this.syncVideos(keys, playback.seconds ?? seconds, playback);
   }
 
@@ -302,6 +321,7 @@ export class BeatorajaBGALayer {
         // Already paused / disposed.
       }
     }
+    if (!this.keyBoundSprite.destroyed) this.keyBoundSprite.destroy();
     if (!this.container.destroyed) {
       this.container.destroy({ children: true });
     }

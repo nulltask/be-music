@@ -1,3 +1,4 @@
+import { keyBoundBGAResourceKey } from '../../../chart/key-bound-bga.ts';
 import { Sprite, Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/skin-beatoraja';
@@ -480,4 +481,35 @@ it('uses independent playheads when both overlays reference the same video BMP',
   expect(second.paused).toBe(true);
   texture1.destroy(true);
   texture2.destroy(true);
+});
+
+it('draws input-bound SWBGA after replacement POOR and clears its sprite after release', () => {
+  const texture = fakeTexture();
+  const key = keyBoundBGAResourceKey('61', '00');
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    poorBGAMode: 0,
+    textures: new Map([['poor', texture]]),
+    layerTextures: new Map([[key, texture]]),
+    cues: { base: [], layer: [], poor: [{ seconds: 0, bmpKey: 'poor' }] },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  layer.update(3, context, true, {
+    keyBoundBGA: {
+      definitionId: '61',
+      channel: '11',
+      bmpKey: '00',
+      startedSeconds: 2,
+      frameStartSeconds: 2,
+      argb: { a: 255, r: 255, g: 255, b: 255 },
+    },
+  });
+  const overlay = layer.container.children.at(-1) as Sprite;
+  expect(overlay.visible).toBe(true);
+  expect(overlay.texture).toBe(texture);
+  expect(layer.container.children.some((child) => child.label === 'bga/base' && child.visible)).toBe(true);
+  layer.update(3.1, context, true);
+  expect(overlay.visible).toBe(false);
+  layer.dispose();
+  texture.destroy(true);
 });

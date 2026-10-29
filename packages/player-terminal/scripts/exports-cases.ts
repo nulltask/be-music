@@ -40,7 +40,18 @@ export function registerPlayerTUIExportsCases(define: DefineBenchmarkCase): void
   });
   define('player-terminal.BgaANSIRenderer', {
     run: () => {
-      createBenchBgaANSIRenderer();
+      const renderer = createBenchBgaANSIRenderer();
+      const frame = {
+        definitionId: '61',
+        channel: '11',
+        bmpKey: '00',
+        startedSeconds: 0,
+        frameStartSeconds: 0,
+        argb: { a: 255, r: 255, g: 255, b: 255 },
+      };
+      renderer.getANSILines(0, frame);
+      renderer.getKittyImage(0, frame);
+      renderer.getKittyImage(0.1);
     },
   });
   define('player-terminal.createBgaANSIRenderer', {
@@ -164,7 +175,7 @@ function createBenchBgaANSIRenderer(): playerTuiAPI.BgaANSIRenderer {
     baseSourceFramesByKey: new Map(),
     poorSourceFramesByKey: new Map(),
     layerSourceFramesByKey: new Map(),
-    layer2SourceFramesByKey: new Map(),
+    layer2SourceFramesByKey: new Map([[String.fromCharCode(0) + 'swbga:61:00', { kind: 'static', frame }]]),
     missingBaseSourceFrame: frame,
     missingPoorSourceFrame: frame,
     missingLayerSourceFrame: frame,

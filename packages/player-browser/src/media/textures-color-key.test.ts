@@ -139,3 +139,29 @@ test.each([false, true])(
     texture!.destroy(true);
   },
 );
+
+test('SWBGA keys decoded opaque alpha, keeps black and distinguishes adjacent source alpha before Canvas', async () => {
+  const bytes = Uint8Array.from(
+    atob('iVBORw0KGgoAAAANSUhEUgAAAAMAAAABCAYAAAAb4BS0AAAAEUlEQVR4nGP4DwH/GBgY/gMARMMI9xN1CmIAAAAASUVORK5CYII='),
+    (c) => c.charCodeAt(0),
+  );
+  const texture = await loadTextureFromBytes('sw.png', bytes, {
+    keyOutBlack: true,
+    swBGAColorKey: { a: 255, r: 255, g: 255, b: 255 },
+  });
+  expect([...uploaded[0]!.data]).toEqual([255, 255, 255, 0, 255, 255, 255, 254, 0, 0, 0, 255]);
+  texture!.destroy(true);
+});
+
+test('SWBGA composes its key with EXBMP on an alpha-less source without restoring keyed pixels', async () => {
+  const bytes = Uint8Array.from(
+    atob('iVBORw0KGgoAAAANSUhEUgAAAAMAAAABCAIAAACUgoPjAAAAEklEQVR4nGP4////W3FvBgYGAB8fBE1J2Gx0AAAAAElFTkSuQmCC'),
+    (c) => c.charCodeAt(0),
+  );
+  const texture = await loadTextureFromBytes('sw.png', bytes, {
+    bmsColorKey: { a: 0, r: 237, g: 23, b: 75 },
+    swBGAColorKey: { a: 255, r: 255, g: 255, b: 255 },
+  });
+  expect([...uploaded[0]!.data]).toEqual([255, 255, 255, 0, 237, 23, 75, 0, 0, 0, 0, 255]);
+  texture!.destroy(true);
+});
