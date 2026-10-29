@@ -21,6 +21,7 @@ import {
   buildBGAOpacityTimelines,
   PLAY_MODE_LAYOUTS,
   parseBMSSwBGA,
+  buildKeyBoundBGATimeline,
   resolveChart,
   resolveChartReferenceBPM,
   type BMSSwitchingBGA,
@@ -706,7 +707,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     (ctx.bgaTimeline.base.length > 0 ||
       ctx.bgaTimeline.layer.length > 0 ||
       (ctx.bgaTimeline.layer2?.length ?? 0) > 0 ||
-      ctx.bgaTimeline.poor.length > 0);
+      ctx.bgaTimeline.poor.length > 0 ||
+      buildKeyBoundBGATimeline(resolvedPlay.source, resolvedPlay.timing).length > 0);
 }
 
 /**

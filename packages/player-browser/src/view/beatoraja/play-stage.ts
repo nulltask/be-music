@@ -1,3 +1,4 @@
+import type { KeyBoundBGAFrame } from '@be-music/player-engine/display';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { resolveConstantAlpha, resolveNoteDisplaySeconds, type ConstantVisibility } from '@be-music/player-scene-model';
 /**
@@ -76,7 +77,10 @@ export interface BeatorajaPlayBGA {
 }
 
 /** Where the engine is, as the layers scroll: its notes, chart time and beat. */
-export type BeatorajaPlayLayerClock = BeatorajaNoteClock & { readonly reversalSeconds?: number };
+export type BeatorajaPlayLayerClock = BeatorajaNoteClock & {
+  readonly reversalSeconds?: number;
+  readonly keyBoundBGA?: KeyBoundBGAFrame;
+};
 
 /** One beatoraja play skin on the stage. See the module comment. */
 export class BeatorajaPlayStage {
@@ -309,7 +313,7 @@ export class BeatorajaPlayStage {
       Math.min(clock.currentSeconds, clock.reversalSeconds ?? Number.POSITIVE_INFINITY),
       context,
       lanes.isPoorBGAActive(clock.currentSeconds),
-      { ...playback, seconds: clock.currentSeconds },
+      { ...playback, seconds: clock.currentSeconds, keyBoundBGA: clock.keyBoundBGA },
     );
   }
 

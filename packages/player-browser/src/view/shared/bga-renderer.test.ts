@@ -1,3 +1,4 @@
+import { keyBoundBGAResourceKey } from '../../chart/key-bound-bga.ts';
 import { Rectangle, Sprite, Texture, TextureSource } from 'pixi.js';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/display';
 import { createEmptyJSON } from '@be-music/chart-source';
@@ -141,6 +142,31 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
       },
     };
   }
+
+  test.each([0, 1] as const)('places input-bound SWBGA above POOR mode %s and removes it on release', (mode) => {
+    const state = setup(mode);
+    const key = keyBoundBGAResourceKey('61', '00');
+    state.play.bgaLayerTextures.set(key, state.textures[1]!);
+    state.play.lastPoorAt = 0;
+    const frame = {
+      keyBoundBGA: {
+        definitionId: '61',
+        channel: '11',
+        bmpKey: '00',
+        startedSeconds: 2,
+        frameStartSeconds: 2,
+        argb: { a: 255, r: 255, g: 255, b: 255 },
+      },
+    };
+    Object.assign(state.play, { engineFrame: frame });
+    renderBGA(state.ctx, 3);
+    expect(state.labels().at(-1)).toBe(`bga/layer2[key=${key}]`);
+    expect(state.labels()).toContain('bga/poor[key=poor]');
+    Object.assign(state.play, { engineFrame: {} });
+    renderBGA(state.ctx, 3);
+    expect(state.labels().at(-1)).toBe('bga/poor[key=poor]');
+    state.dispose();
+  });
 
   test('draws both overlays in order, clears only 0A, and restores it on backward seek', () => {
     const state = setup();

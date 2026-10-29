@@ -13,7 +13,7 @@ import { resolveJudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { TimedPlayableNote } from '@be-music/player-engine/display';
 import type { Texture } from 'pixi.js';
 import { loadPlaySamples } from '../../chart/play-audio.ts';
-import { loadPlayBGA } from '../../chart/play-bga.ts';
+import { loadPlayBGA, releaseVideo } from '../../chart/play-bga.ts';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import type { BrowserAssetSource } from '../../collection/types.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
@@ -77,7 +77,7 @@ export interface PlayMediaContext {
   readonly poorBGAFallbackKey: string | undefined;
   readonly bgaTextures: Map<string, Texture>;
   readonly bgaLayerTextures: Map<string, Texture>;
-  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
+  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string; dispose?: () => void }>;
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }>;
   /** Uploads `textures` to the GPU now (Pixi's `PrepareSystem`), so the first frame that draws them does not stall. */
   preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void>;
@@ -321,23 +321,14 @@ export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: PlayDis
 
 /** Stops the BGA videos and lets go of them as the play is disposed. */
 export function disposeBGAVideos(ctx: {
-  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
+  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string; dispose?: () => void }>;
   bgaActiveVideos: Record<string, { key: string; cueSeconds: number } | undefined>;
 }): void {
   // Pause every BGA video BEFORE we touch textures. The Pixi `VideoSource` wrapping each video registers a
   // `requestVideoFrameCallback` that re-uploads frames into the GL texture as they decode — leaving those callbacks
   // in flight while we destroy the textures throws inside the GL texture system. Pausing also revokes the Blob URL so
   // the underlying buffer can be released.
-  for (const { video, objectURL } of new Set(ctx.bgaVideos.values())) {
-    try {
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-    } catch {
-      // Defensive — `load()` can throw on detached videos.
-    }
-    URL.revokeObjectURL(objectURL);
-  }
+  for (const handle of new Set(ctx.bgaVideos.values())) releaseVideo(handle);
   ctx.bgaVideos.clear();
   ctx.bgaActiveVideos = {};
 }

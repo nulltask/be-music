@@ -727,7 +727,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
           ),
           (character) => character.charCodeAt(0),
         ),
-        { bmsColorKey: { a: 0, r: 127, g: 127, b: 127 } },
+        { bmsColorKey: { a: 0, r: 127, g: 127, b: 127 }, swBGAColorKey: { a: 255, r: 255, g: 255, b: 255 } },
       );
     },
     interactive: true,

@@ -4,6 +4,7 @@ import type { BeMusicJSON } from '@be-music/chart-source';
 import {
   parseBMSExBMP,
   buildBGAOpacityTimelines,
+  buildKeyBoundBGATimeline,
   pickBGAOpacity,
   pickBGATint,
   type BGAOpacityTimelines,
@@ -17,6 +18,7 @@ import {
   DEFAULT_POOR_BGA_DISPLAY_SECONDS,
   pickActiveBGACue,
   type ImageResizeAlgorithm,
+  type KeyBoundBGAFrame,
 } from '@be-music/player-engine/display';
 import {
   TERMINAL_PIXEL_ASPECT_X,
@@ -143,6 +145,12 @@ export async function loadStageFileANSILines(
 ): Promise<string[] | undefined> {
   return (await loadStageFileANSIImage(json, options))?.lines;
 }
+
+function keyBoundResourceKey(id: string, bmp: string): string {
+  return `${String.fromCharCode(0)}swbga:${id}:${bmp}`;
+}
+
+const EMPTY_KEY_BOUND_FRAME = createSolidANSIFrame(1, 1, 0, 0, 0, 0);
 
 export class BgaANSIRenderer {
   readonly playbackEndSeconds: number;
@@ -341,8 +349,8 @@ export class BgaANSIRenderer {
     this.rebuildFrames();
   }
 
-  getANSILines(currentSeconds: number): string[] | undefined {
-    this.refreshComposite(currentSeconds);
+  getANSILines(currentSeconds: number, keyBound?: KeyBoundBGAFrame): string[] | undefined {
+    this.refreshComposite(currentSeconds, keyBound);
     if (!this.cachedComposite) {
       return this.blackBackgroundLines;
     }
@@ -357,8 +365,17 @@ export class BgaANSIRenderer {
     return this.cachedLines;
   }
 
-  getKittyImage(currentSeconds: number): BGAKittyImage {
+  getKittyImage(currentSeconds: number, keyBound?: KeyBoundBGAFrame): BGAKittyImage {
     const state = this.resolveActiveState(currentSeconds);
+    const keyBoundKey = keyBound ? keyBoundResourceKey(keyBound.definitionId, keyBound.bmpKey) : '';
+    const keyBoundSelection = keyBound
+      ? resolveFrameSelection(
+          this.layer2SourceFramesByKey,
+          EMPTY_KEY_BOUND_FRAME,
+          keyBoundKey,
+          Math.max(0, currentSeconds - keyBound.frameStartSeconds),
+        )
+      : { frame: undefined, index: -1 };
     const pixelWidth = Math.max(1, this.displayWidth * KITTY_GRAPHICS_PIXEL_SCALE);
     const pixelHeight = Math.max(1, this.displayHeight * KITTY_GRAPHICS_PIXEL_SCALE);
     const baseSelection = resolveFrameSelection(
@@ -387,7 +404,7 @@ export class BgaANSIRenderer {
       `${state.baseKey}:${baseSelection.index}:` +
       `${state.layerKey}:${layerSelection.index}:` +
       `${state.layer2Key}:${layer2Selection.index}:` +
-      `${state.poorActive ? '1' : '0'}:${state.poorKey}:${poorSelection.index}:${state.opacityToken}`;
+      `${state.poorActive ? '1' : '0'}:${state.poorKey}:${poorSelection.index}:${state.opacityToken}:${keyBoundKey}:${keyBoundSelection.index}`;
     if (this.cachedKittyImage?.token === token) {
       return this.cachedKittyImage;
     }
@@ -405,7 +422,7 @@ export class BgaANSIRenderer {
           : [poorLayer]
         : normalFrames;
     const composite = mergeCompositeLayers(
-      frames.map(({ frame, opacity, tint }) => ({
+      [...frames, { frame: keyBoundSelection.frame, opacity: 1, tint: 0xffffff }].map(({ frame, opacity, tint }) => ({
         frame: frame ? resizeANSIFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm) : undefined,
         opacity,
         tint,
@@ -488,8 +505,18 @@ export class BgaANSIRenderer {
     this.cachedKittyImage = undefined;
   }
 
-  private refreshComposite(currentSeconds: number): void {
+  private refreshComposite(currentSeconds: number, keyBound?: KeyBoundBGAFrame): void {
     const state = this.resolveActiveState(currentSeconds);
+    const keyBoundKey = keyBound ? keyBoundResourceKey(keyBound.definitionId, keyBound.bmpKey) : '';
+    const keyBoundSelection = keyBound
+      ? resolveFrameSelection(
+          this.layer2FramesByKey,
+          EMPTY_KEY_BOUND_FRAME,
+          keyBoundKey,
+          Math.max(0, currentSeconds - keyBound.frameStartSeconds),
+        )
+      : { frame: undefined, index: -1 };
+    state.opacityToken += `:${keyBoundKey}:${keyBoundSelection.index}`;
     const baseSelection = this.resolveBaseFrame(state.baseKey, state.baseSeconds);
     const layerSelection = this.resolveLayerFrame(state.layerKey, state.layerSeconds);
     const layer2Selection = this.resolveLayer2Frame(state.layer2Key, state.layer2Seconds);
@@ -528,13 +555,14 @@ export class BgaANSIRenderer {
       { frame: layer2Selection.frame, opacity: state.opacity.layer2, tint: state.tint.layer2 },
     ].slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS);
     const poorLayer = { frame: poorSelection.frame, opacity: state.opacity.poor, tint: state.tint.poor };
-    this.cachedComposite = mergeCompositeLayers(
-      state.poorActive && poorSelection.frame
+    this.cachedComposite = mergeCompositeLayers([
+      ...(state.poorActive && poorSelection.frame
         ? this.poorBGAMode === 1
           ? [...normalFrames, poorLayer]
           : [poorLayer]
-        : normalFrames,
-    );
+        : normalFrames),
+      { frame: keyBoundSelection.frame, opacity: 1 },
+    ]);
     this.cachedLines = undefined;
     this.cachedKittyImage = undefined;
   }
@@ -637,6 +665,17 @@ export async function createBgaANSIRenderer(
   const poorKeys = new Set(poorTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layer2Keys = new Set(layer2Timeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
+  const keyBoundKeys = new Set<string>();
+  for (const cue of buildKeyBoundBGATimeline(json, resolved.timing)) {
+    for (const bmp of cue.definition.frames) {
+      const key = keyBoundResourceKey(cue.definitionId, bmp);
+      const resource = resourceDefinitions.get(bmp);
+      if (!resource) continue;
+      resourceDefinitions.set(key, { ...resource, swBGAColorKey: cue.definition.argb });
+      keyBoundKeys.add(key);
+    }
+  }
+  for (const key of keyBoundKeys) layer2Keys.add(key);
   // LR2 starts its miss layer from `#BMP00`; only `#POORBGA 2` (no POOR image) turns that off.
   const shouldUsePoorBMP00Fallback = resolvePoorBGAMode(json.bms.poorBGA) !== 2 && resourceDefinitions.has('00');
   const poorFallbackKey = shouldUsePoorBMP00Fallback ? '00' : undefined;
@@ -816,7 +855,7 @@ async function loadFramesByKeys(params: {
 
       const cacheKey =
         `${mode}:${preserveSourceGeometry ? 'native' : 'spec'}:${width}x${height}:${imageResizeAlgorithm}:` +
-        `${videoBGAStreaming === false ? 'full' : 'stream'}:${JSON.stringify(definition.colorKey)}:${resolved}`;
+        `${videoBGAStreaming === false ? 'full' : 'stream'}:${JSON.stringify(definition.colorKey)}:${JSON.stringify(definition.swBGAColorKey)}:${resolved}`;
       let sourcePromise = sharedSourceCache.get(cacheKey);
       if (!sourcePromise) {
         sourcePromise = loadFrameSource(
@@ -829,6 +868,7 @@ async function loadFramesByKeys(params: {
           signal,
           preserveSourceGeometry,
           definition.colorKey,
+          definition.swBGAColorKey,
         ).then((source) => source ?? null);
         sharedSourceCache.set(cacheKey, sourcePromise);
       }

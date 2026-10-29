@@ -1,6 +1,7 @@
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { Texture, TextureSource } from 'pixi.js';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
+import { keyBoundBGAResourceKey } from './key-bound-bga.ts';
 import type { BrowserAssetSource } from '../collection/types.ts';
 import {
   collectPlayBGAResources,
@@ -193,6 +194,42 @@ describe('loadPlayBGA', () => {
     mocks.resolveChartBGAAsset.mockImplementation((_source, _chartPath, path: string) => ({ entry: path, path }));
     mocks.loadAssetBytes.mockImplementation(async (path: string) => new TextEncoder().encode(path));
     mocks.loadTextureFromBytes.mockImplementation(async () => new Texture());
+  });
+
+  test('loads A5-only packed frames, aliases and per-definition color variants without replacing normal images', async () => {
+    const chart = bmsChart({ '00': 'strip.png', '05': 'base.png' });
+    chart.bms.swBGA = { '61': '500:0:11:1:255,255,255,255 0002', '62': '500:0:12:0:255,0,0,0 00' };
+    chart.bms.bga['02'] = '00 0 0 1 1 32 64';
+    chart.events = [
+      { measure: 0, position: [0, 1], channel: 'A5', value: '61' },
+      { measure: 1, position: [0, 1], channel: 'A5', value: '62' },
+    ];
+    const resources = emptyResources();
+    mocks.loadTextureFromBytes.mockImplementation(
+      async () => new Texture({ source: new TextureSource({ resource: new Uint8Array(4), width: 1, height: 1 }) }),
+    );
+    const original = structuredClone(chart);
+    await loadPlayBGA({
+      chart,
+      source: SOURCE,
+      chartPath: 'x.bms',
+      timeline: { base: [{ seconds: 0, bmpKey: '05' }], layer: [], poor: [] },
+      into: resources,
+      tempo: 1,
+    });
+    expect(resources.textures.has('05')).toBe(true);
+    expect(resources.layerTextures.has(keyBoundBGAResourceKey('61', '00'))).toBe(true);
+    expect(resources.layerTextures.has(keyBoundBGAResourceKey('61', '02'))).toBe(true);
+    expect(resources.layerTextures.get(keyBoundBGAResourceKey('61', '00'))).not.toBe(
+      resources.layerTextures.get(keyBoundBGAResourceKey('62', '00')),
+    );
+    expect(resources.subRegionOrigins.get(keyBoundBGAResourceKey('61', '02'))).toEqual({ x: 32, y: 64 });
+    expect(mocks.loadTextureFromBytes.mock.calls.map(([path, , options]) => [path, options])).toEqual([
+      ['base.png', undefined],
+      ['strip.png', { keyOutBlack: false, swBGAColorKey: { a: 255, r: 255, g: 255, b: 255 } }],
+      ['strip.png', { keyOutBlack: false, swBGAColorKey: { a: 255, r: 0, g: 0, b: 0 } }],
+    ]);
+    expect(chart).toEqual(original);
   });
 
   test.each(['0,0,0,0', '64,127,128,129'])(

@@ -9,7 +9,7 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import type { BMSSwitchingBGA, ResolvedChart, TimingResolver, ChartPlayVariant } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { ScrollDistanceMapperLike, TimedLandmineNote, TimedPlayableNote } from '@be-music/player-engine/display';
-import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
+import type { PlayerGaugeSummary, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { JudgmentKind, ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { HiSpeedTransition, LibraryChart, PlayState } from '@be-music/player-scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind, BeMusicLongNote } from '@be-music/player-skin-sdk';
@@ -132,6 +132,7 @@ export interface PlayfieldRuntime {
   readonly poorBGAFallbackKey: string | undefined;
   readonly poorBGAFallbackUntilSeconds: number;
   readonly lastPoorAt: number;
+  readonly engineFrame?: Pick<PlayerUIFramePayload, 'keyBoundBGA' | 'currentSeconds'>;
   readonly switchingBGAs: Map<string, BMSSwitchingBGA>;
   readonly bgaTextures: Map<string, Texture>;
   readonly bgaLayerTextures: Map<string, Texture>;
