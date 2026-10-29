@@ -1,8 +1,8 @@
-import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
+import type { BeMusicJSON } from '@be-music/chart-source';
+import { collectBGASubRegions } from './bga-subregions.ts';
 import {
   pickBGAOpacity,
   type BGAOpacityTimelines,
-  parseBmsBGA,
   type BGATimelines,
   type TimingResolver,
   buildBGATimelines,
@@ -78,12 +78,11 @@ function toBrowserBGACue(cue: { seconds: number; key?: string }): BGACue {
 }
 
 function addReferencedSubRegionSources(chart: BeMusicJSON, keys: Set<string>): void {
-  const base = resolveBMSBase(chart);
-  for (const [rawSlot, raw] of Object.entries(chart.bms.bga)) {
-    const slot = normalizeObjectKey(rawSlot, base, chart.sourceFormat === 'bmson');
-    if (!keys.has(slot)) continue;
-    const parsed = parseBmsBGA(raw, base, chart.sourceFormat === 'bmson');
-    if (parsed) keys.add(parsed.sourceBMP);
+  const regions = collectBGASubRegions(chart);
+  // Set iteration visits newly discovered dependencies too, and visits each key only once (including cycles).
+  for (const key of keys) {
+    const region = regions.get(key);
+    if (region) keys.add(region.sourceBMP);
   }
 }
 

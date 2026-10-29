@@ -5,13 +5,14 @@
 
 import { Rectangle, Texture } from 'pixi.js';
 import { runWithConcurrency } from '@be-music/shared-utils/core';
-import { parseBMSExBMP, parseBmsBGA, resolvePoorBGAMode } from '@be-music/chart-model';
-import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
+import { parseBMSExBMP, resolvePoorBGAMode } from '@be-music/chart-model';
+import type { BeMusicJSON } from '@be-music/chart-source';
 import { loadAssetBytes, resolveChartBGAAsset } from '../collection/collection.ts';
 import type { BrowserAssetSource } from '../collection/types.ts';
 import { loadTextureFromBytes, loadVideoTextureFromBytes, type VideoTranscodeOptions } from '../media/textures.ts';
 import { collectBGATextureLoadKeys, isVideoExtension, type BGACue } from './bga-timeline.ts';
 import { logger } from '../logger.ts';
+import { collectBGASubRegions } from './bga-subregions.ts';
 
 const log = logger('play-bga');
 
@@ -38,7 +39,7 @@ export interface PlayBGAResources {
   /** Layer track textures: black keyed out for a BMS chart, kept for bmson (its spec says so). */
   layerTextures: Map<string, Texture>;
   videos: Map<string, PlayBGAVideo>;
-  /** A `#BGAxx` sub-region slot's `dx dy` placement. */
+  /** Each visible sub-region's position on the 256×256 canvas after composing and clipping aliases. */
   subRegionOrigins: Map<string, { x: number; y: number }>;
 }
 
@@ -163,29 +164,67 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
 }
 
 /**
- * Cuts a texture view for every `#BGAxx YY sx sy ex ey dx dy` sub-region from its loaded source `#BMPYY` (on each track
- * the source loaded for), and records the slot's `dx dy` placement. A slot whose source did not load stays empty.
+ * Cuts texture views for `#BGAxx YY sx sy ex ey dx dy` sub-regions, composing chained aliases from their loaded root
+ * image on each track. Records the visible rectangle's placement after clipping; missing/cyclic aliases stay absent.
  * The views share their source's `TextureSource`: no extra upload.
  */
 export function registerSubRegionBGATextures(chart: BeMusicJSON, into: PlayBGAResources): void {
-  const base = resolveBMSBase(chart);
-  for (const [bgaSlot, raw] of Object.entries(chart.bms.bga)) {
-    const slot = normalizeObjectKey(bgaSlot, base, chart.sourceFormat === 'bmson');
-    const parsed = parseBmsBGA(raw, base, chart.sourceFormat === 'bmson');
-    if (!parsed) continue;
-    const width = parsed.ex - parsed.sx;
-    const height = parsed.ey - parsed.sy;
-    if (width <= 0 || height <= 0) continue;
-    const sourceBase = into.textures.get(parsed.sourceBMP);
-    const sourceLayer = into.layerTextures.get(parsed.sourceBMP);
-    if (!sourceBase && !sourceLayer) continue;
-    const frame = new Rectangle(parsed.sx, parsed.sy, width, height);
-    into.subRegionOrigins.set(slot, { x: parsed.dx, y: parsed.dy });
-    if (sourceBase && !into.textures.has(slot)) {
-      into.textures.set(slot, new Texture({ source: sourceBase.source, frame }));
-    }
-    if (sourceLayer && !into.layerTextures.has(slot)) {
-      into.layerTextures.set(slot, new Texture({ source: sourceLayer.source, frame }));
+  const regions = collectBGASubRegions(chart);
+  for (const textures of [into.textures, into.layerTextures]) {
+    const visited = new Set<string>();
+    for (const root of regions.keys()) {
+      const path: string[] = [];
+      let current = root;
+      while (!visited.has(current) && !textures.has(current) && regions.has(current)) {
+        visited.add(current);
+        path.push(current);
+        current = regions.get(current)!.sourceBMP;
+      }
+      // Dependencies are registered before their consumers, independent of declaration order. Cycles have no
+      // loaded source, so none of their texture views are created.
+      for (const slot of path.reverse()) {
+        const region = regions.get(slot)!;
+        const parent = textures.get(region.sourceBMP);
+        if (!parent) continue;
+        const origin = into.subRegionOrigins.get(region.sourceBMP) ?? { x: 0, y: 0 };
+        // A parent's texture contains only its visible rectangle, located at origin on a 256×256 alias canvas.
+        // Root images retain their native coordinates; each alias clips both the source and destination edges.
+        const left = Math.max(0, region.dx, region.dx + origin.x - region.sx);
+        const top = Math.max(0, region.dy, region.dy + origin.y - region.sy);
+        const right = Math.min(
+          256,
+          region.dx + region.ex - region.sx,
+          region.dx + origin.x + parent.frame.width - region.sx,
+        );
+        const bottom = Math.min(
+          256,
+          region.dy + region.ey - region.sy,
+          region.dy + origin.y + parent.frame.height - region.sy,
+        );
+        if (right <= left || bottom <= top) {
+          // Keep a real canvas resource so Canvas skins can display a blank base/POOR too, and avoid sharing
+          // Texture.EMPTY's global source with the session's owned textures.
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 256;
+          // WebGPU requires a canvas with a rendering context, including the transparent layer canvas.
+          const context = canvas.getContext('2d')!;
+          if (textures === into.textures) {
+            context.fillStyle = '#000000';
+            context.fillRect(0, 0, 256, 256);
+          }
+          textures.set(slot, Texture.from(canvas));
+          into.subRegionOrigins.set(slot, { x: 0, y: 0 });
+          continue;
+        }
+        const frame = new Rectangle(
+          parent.frame.x + region.sx + left - region.dx - origin.x,
+          parent.frame.y + region.sy + top - region.dy - origin.y,
+          right - left,
+          bottom - top,
+        );
+        textures.set(slot, new Texture({ source: parent.source, frame }));
+        into.subRegionOrigins.set(slot, { x: left, y: top });
+      }
     }
   }
 }
