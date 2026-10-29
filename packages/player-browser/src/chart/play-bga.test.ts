@@ -196,6 +196,48 @@ describe('loadPlayBGA', () => {
     mocks.loadTextureFromBytes.mockImplementation(async () => new Texture());
   });
 
+  test('loads host-remapped SWBGA frames with long ids even when the stitched chart has no A5 controls', async () => {
+    const chart = createEmptyJSON('bmson');
+    chart.bms.base = 62;
+    chart.resources.bmp.longImage = 'stage/image.png';
+    chart.bms.bga.longAlias = 'longImage 0 0 1 1 32 64';
+    mocks.loadTextureFromBytes.mockImplementation(
+      async () => new Texture({ source: new TextureSource({ resource: new Uint8Array(4), width: 1, height: 1 }) }),
+    );
+    const resources = emptyResources();
+    await loadPlayBGA({
+      chart,
+      source: SOURCE,
+      chartPath: 'course.bmson',
+      tempo: 1,
+      timeline: { base: [], layer: [], poor: [] },
+      into: resources,
+      keyBoundBGACues: [
+        {
+          seconds: 2,
+          endSeconds: 4,
+          definitionId: 'stage:0:61',
+          definition: {
+            frameIntervalMs: 100,
+            durationMs: 0,
+            channel: '11',
+            loop: true,
+            argb: { a: 255, r: 255, g: 255, b: 255 },
+            frames: ['longAlias'],
+          },
+        },
+      ],
+    });
+    const key = keyBoundBGAResourceKey('stage:0:61', 'longAlias');
+    expect(resources.layerTextures.has(key)).toBe(true);
+    expect(resources.subRegionOrigins.get(key)).toEqual({ x: 32, y: 64 });
+    expect(mocks.loadTextureFromBytes.mock.calls[0]).toMatchObject([
+      'stage/image.png',
+      expect.any(Uint8Array),
+      { swBGAColorKey: { a: 255, r: 255, g: 255, b: 255 } },
+    ]);
+  });
+
   test('loads A5-only packed frames, aliases and per-definition color variants without replacing normal images', async () => {
     const chart = bmsChart({ '00': 'strip.png', '05': 'base.png' });
     chart.bms.swBGA = { '61': '500:0:11:1:255,255,255,255 0002', '62': '500:0:12:0:255,0,0,0 00' };

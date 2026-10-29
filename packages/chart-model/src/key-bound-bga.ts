@@ -11,12 +11,16 @@ export interface BMSKeyBoundBGA {
   loop: boolean;
   /** Authored ARGB fields, retained without applying a rendering interpretation. */
   argb: BmsARGB;
-  /** Packed two-character BMP-family ids. 00 is a real frame, not a rest. */
+  /** Source patterns pack two-character BMP ids; hosts may remap them to longer internal ids. 00 is a real frame. */
   frames: string[];
 }
 
 export interface KeyBoundBGACue {
   seconds: number;
+  /** Exclusive end of a host-owned selection/animation window, e.g. a NONSTOP stage. */
+  endSeconds?: number;
+  /** Source-video seconds per stitched second; omitted means 1. Animation intervals are already placed. */
+  playbackRate?: number;
   definitionId: string;
   definition: BMSKeyBoundBGA;
 }

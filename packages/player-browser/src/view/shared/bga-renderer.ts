@@ -117,7 +117,10 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   const keyBound = ctx.play.engineFrame?.keyBoundBGA;
   const keyBoundKey = keyBound ? keyBoundBGAResourceKey(keyBound.definitionId, keyBound.bmpKey) : undefined;
   if (ctx.play.audioContextStartTime !== 0) {
-    const requests = new Map<string, { track: 'base' | 'layer' | 'layer2' | 'poor'; cue: BGACue }>();
+    const requests = new Map<
+      string,
+      { track: 'base' | 'layer' | 'layer2' | 'poor'; cue: BGACue; playbackRate?: number }
+    >();
     const add = (track: 'base' | 'layer' | 'layer2' | 'poor', cue: BGACue | undefined) => {
       if (cue?.bmpKey === undefined) return;
       // Stitched stages own disjoint BMP namespaces. The cue key keeps a stage's slot stable while its
@@ -141,7 +144,11 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       }
     }
     if (keyBound && keyBoundKey && !controllingBGA.noLayer)
-      requests.set('key-bound', { track: 'layer2', cue: { bmpKey: keyBoundKey, seconds: keyBound.frameStartSeconds } });
+      requests.set('key-bound', {
+        track: 'layer2',
+        cue: { bmpKey: keyBoundKey, seconds: keyBound.frameStartSeconds },
+        playbackRate: keyBound.playbackRate,
+      });
     // Retire departed cues before starting their replacements, including aliases that share a video handle.
     for (const [slot, previous] of Object.entries(ctx.play.bgaActiveVideos)) {
       if (requests.has(slot)) continue;
@@ -151,7 +158,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       }
       delete ctx.play.bgaActiveVideos[slot];
     }
-    for (const [slot, { track, cue }] of requests) syncBGAVideo(ctx, track, cue, seconds, slot);
+    for (const [slot, { track, cue, playbackRate }] of requests)
+      syncBGAVideo(ctx, track, cue, seconds, slot, playbackRate);
   }
 
   const binding = ctx.skinBinding;
@@ -484,6 +492,7 @@ function syncBGAVideo(
   cue: BGACue | undefined,
   seconds: number,
   slot: string = track,
+  playbackRate = 1,
 ): void {
   // Hold off on every video state mutation until the chart-start gate has fired and `audioContextStartTime` is
   // anchored to the audio clock. Without this guard `renderBGA` (which runs every tick from the moment `start()`
@@ -510,12 +519,17 @@ function syncBGAVideo(
     }
     return;
   }
+  handle.video.playbackRate = ctx.play.tempo * playbackRate;
   if (previous !== undefined && previous.key === key && previous.cueSeconds === (cue?.seconds ?? 0)) {
     // Same cue still active: the video plays forward on its own and the Pixi VideoSource pulls fresh frames each tick;
     // one that drifted from the chart is set back in step.
     const video = handle.video;
     if (video.paused || video.seeking) return;
-    const resync = resolveBGAVideoResync(video.currentTime, seconds - previous.cueSeconds, video.duration);
+    const resync = resolveBGAVideoResync(
+      video.currentTime,
+      (seconds - previous.cueSeconds) * playbackRate,
+      video.duration,
+    );
     if (resync === undefined) return;
     try {
       video.currentTime = resync;
@@ -532,9 +546,7 @@ function syncBGAVideo(
   }
   const cueSeconds = cue?.seconds ?? 0;
   ctx.play.bgaActiveVideos[slot] = { key: key!, cueSeconds };
-  const offset = Math.max(0, seconds - cueSeconds);
-  // The video runs at the play tempo, so its time stays the chart time since its cue.
-  handle.video.playbackRate = ctx.play.tempo;
+  const offset = Math.max(0, (seconds - cueSeconds) * playbackRate);
   try {
     handle.video.currentTime = Math.min(offset, Math.max(0, handle.video.duration - 0.05) || offset);
   } catch {

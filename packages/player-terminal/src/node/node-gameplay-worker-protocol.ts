@@ -1,3 +1,4 @@
+import type { KeyBoundBGACue } from '@be-music/chart-model';
 import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import type { RandomDraws } from '@be-music/chart-model';
@@ -14,6 +15,7 @@ import type { ImageResizeAlgorithm, TUINoteHeight } from '@be-music/player-engin
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
+  keyBoundBGACues?: readonly KeyBoundBGACue[];
   inferBmsLNTypeWhenMissing?: boolean;
   showInvisibleNotes?: boolean;
   compressor?: boolean;
@@ -69,6 +71,7 @@ export interface NodeGameplayWorkerInitData {
 }
 
 export interface NodeGameplayUIRuntimeInit {
+  keyBoundBGACues?: readonly KeyBoundBGACue[];
   json: BeMusicJSON;
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;

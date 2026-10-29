@@ -513,3 +513,39 @@ it('draws input-bound SWBGA after replacement POOR and clears its sprite after r
   layer.dispose();
   texture.destroy(true);
 });
+
+it('scales SWBGA movie time and playback by its NONSTOP FIT rate', () => {
+  const texture = fakeTexture();
+  const video = fakeVideo();
+  const key = keyBoundBGAResourceKey('stage:1:61', '00');
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    textures: new Map(),
+    layerTextures: new Map([[key, texture]]),
+    videoElements: new Map([[key, video as unknown as HTMLVideoElement]]),
+    cues: { base: [], layer: [], poor: [] },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  const playback = {
+    tempo: 1.5,
+    keyBoundBGA: {
+      definitionId: 'stage:1:61',
+      channel: '11',
+      bmpKey: '00',
+      startedSeconds: 2,
+      frameStartSeconds: 2,
+      playbackRate: 2,
+      argb: { a: 0, r: 0, g: 0, b: 0 },
+    },
+  };
+  layer.update(3, context, false, playback);
+  expect(video.currentTime).toBe(2);
+  expect(video.playbackRate).toBe(3);
+  video.currentTime = 0;
+  layer.update(3.5, context, false, playback);
+  expect(video.currentTime).toBe(3);
+  layer.update(3.6, context, false);
+  expect(video.pause).toHaveBeenCalled();
+  layer.dispose();
+  texture.destroy(true);
+});

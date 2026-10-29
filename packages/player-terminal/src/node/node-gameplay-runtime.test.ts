@@ -204,6 +204,7 @@ describe('node gameplay runtime', () => {
     expect(uiRuntimeState.context?.tuiNoteHeight).toBe(8);
     expect(uiRuntimeState.context?.imageResizeAlgorithm).toBe('nearest');
     expect(uiRuntimeState.context?.videoBGAStreaming).toBe(true);
+    expect(uiRuntimeState.context?.keyBoundBGACues).toEqual(createUIInit().keyBoundBGACues);
     expect(uiRuntimeState.context?.initialFrame).toMatchObject({
       currentBeat: 0,
       currentSeconds: 0,
@@ -373,6 +374,21 @@ function createUIInit() {
     showLaneChannels: false,
     baseDir: process.cwd(),
     videoBGAStreaming: true,
+    keyBoundBGACues: [
+      {
+        seconds: 0,
+        endSeconds: 4,
+        definitionId: 'stage:0:61',
+        definition: {
+          frameIntervalMs: 100,
+          durationMs: 0,
+          channel: '11',
+          loop: true,
+          argb: { a: 255, r: 255, g: 255, b: 255 },
+          frames: ['longImage'],
+        },
+      },
+    ],
     initialFrame: {
       currentBeat: 0,
       currentSeconds: 0,

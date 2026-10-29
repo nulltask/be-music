@@ -12,6 +12,7 @@ import {
   resolveBmsExBMPColorKey,
   resolvePoorBGAMode,
   type BmsARGB,
+  type KeyBoundBGACue,
 } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { loadAssetBytes, resolveChartBGAAsset } from '../collection/collection.ts';
@@ -96,6 +97,8 @@ export function collectPlayBGAResources(
 }
 
 export interface LoadPlayBGAOptions {
+  /** Remapped selections from NONSTOP; omitted uses the chart A5 controls. */
+  keyBoundBGACues?: readonly KeyBoundBGACue[];
   /** The resolved chart (after `#RANDOM` / `#IF`). */
   chart: BeMusicJSON;
   source: BrowserAssetSource;
@@ -122,10 +125,9 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
   await loadBGAResourceSet(options);
   if (options.isCancelled?.()) return;
   const definitions = new Map(
-    buildKeyBoundBGATimeline(options.chart, createTimingResolver(options.chart)).map((cue) => [
-      cue.definitionId,
-      cue.definition,
-    ]),
+    (options.keyBoundBGACues ?? buildKeyBoundBGATimeline(options.chart, createTimingResolver(options.chart))).map(
+      (cue) => [cue.definitionId, cue.definition],
+    ),
   );
   for (const [id, definition] of definitions) {
     const into: PlayBGAResources = {
