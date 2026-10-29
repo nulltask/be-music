@@ -90,7 +90,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
         const damage = resolveMineDamageForBmsonOutput(json, event, idBase);
         // A BMS mine's value is its damage, not a WAV slot: every BMS mine explodes with `#WAV00`, so they share one
         // channel named after it (no sample when the chart has none). bmson-sourced mines keep their WAV slot.
-        const key = json.sourceFormat === 'bmson' ? normalizeObjectKey(event.value, idBase) : BMS_MINE_SAMPLE_KEY;
+        const key = json.sourceFormat === 'bmson' ? normalizeObjectKey(event.value, idBase, true) : BMS_MINE_SAMPLE_KEY;
         const name = json.resources.wav[key] ?? (json.sourceFormat === 'bmson' ? key : '');
         const slot = mineChannels.get(key) ?? { name, notes: [] };
         slot.notes.push({ x, y, ...(damage !== undefined ? { damage } : {}) });
@@ -102,7 +102,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
       const lane = invisibleChannelToPlayableChannel(channel);
       const x = lane ? xMap.get(lane) : undefined;
       if (x !== undefined) {
-        const key = normalizeObjectKey(event.value, idBase);
+        const key = normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson');
         const slot = keyChannels.get(key) ?? { name: json.resources.wav[key] ?? key, notes: [] };
         slot.notes.push({ x, y });
         keyChannels.set(key, slot);
@@ -115,7 +115,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
       if (bmsLongNotes.endEvents.has(event)) {
         continue;
       }
-      const key = normalizeObjectKey(event.value, idBase);
+      const key = normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson');
       const fileName = json.resources.wav[key] ?? key;
       const lane = mapBMSLongNoteChannelToPlayable(channel) ?? channel;
       const x = channel === '01' ? 0 : (xMap.get(lane) ?? 0);
@@ -153,7 +153,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
       continue;
     }
     if (channel === '08') {
-      const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase)];
+      const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson')];
       if (typeof bpm === 'number' && bpm > 0) {
         bpmEvents.push({ y, bpm });
       }
@@ -161,7 +161,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
     }
     if (channel === '09') {
       // `#STOPxx` counts 1/192 of a 4/4 measure (48 per beat); bmson `duration` counts pulses at `resolution`.
-      const stopUnits = json.resources.stop[normalizeObjectKey(event.value, idBase)];
+      const stopUnits = json.resources.stop[normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson')];
       if (typeof stopUnits === 'number' && stopUnits > 0) {
         stopEvents.push({ y, duration: Math.round((stopUnits * resolution) / 48) });
       }
@@ -169,7 +169,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
     }
     if (channel === 'SC') {
       // beatoraja's `scroll_events` extension carries `#SCROLLxx` rates as they are.
-      const rate = json.bms.scroll[normalizeObjectKey(event.value, idBase)];
+      const rate = json.bms.scroll[normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson')];
       if (typeof rate === 'number' && Number.isFinite(rate)) {
         scrollEvents.push({ y, rate });
       }

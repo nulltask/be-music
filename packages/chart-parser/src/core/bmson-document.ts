@@ -155,11 +155,7 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
   }
   for (let index = 0; index < soundChannels.length; index += 1) {
     const soundChannel = soundChannels[index]!;
-    const key = encodeBmsonKey(index + 1, keyBase);
-    if (key === undefined) {
-      // Past the 3,843 base-62 WAV slots: drop the channel rather than overwrite an earlier channel's sample.
-      break;
-    }
+    const key = encodeBmsonKey(index + 1, keyBase)!;
     json.resources.wav[key] = soundChannel.name;
     const notes = soundChannel.notes ?? [];
     const playableTicks = new Set<number>();
@@ -240,11 +236,8 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
     keepDamage: boolean,
   ): void => {
     for (const extensionChannel of channels) {
-      const wavKey = encodeBmsonKey(nextWAVIndex, keyBase);
+      const wavKey = encodeBmsonKey(nextWAVIndex, keyBase)!;
       nextWAVIndex += 1;
-      if (wavKey === undefined) {
-        return;
-      }
       json.resources.wav[wavKey] = extensionChannel.name;
       for (const note of extensionChannel.notes) {
         const lane = Number.isFinite(note.x) ? Math.floor(note.x!) : 0;
@@ -292,6 +285,6 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
     json.events.push({ measure, position, channel: 'SC', value: scrollKeys.keys[index]! });
   });
 
-  json.events = sortAndNormalizeEvents(json.events, keyBase);
+  json.events = sortAndNormalizeEvents(json.events, keyBase, true);
   return json;
 }

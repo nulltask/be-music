@@ -161,7 +161,8 @@ function resolveEventResourceInfo(
   event: Pick<BeMusicEvent, 'value'>,
   base: 36 | 62 = 36,
 ): { sampleKey: string; resourcePath?: string } {
-  const sampleKey = normalizeObjectKey(event.value, base);
+  const exactKey = normalizeObjectKey(event.value, base, true);
+  const sampleKey = Object.hasOwn(resources, exactKey) ? exactKey : normalizeObjectKey(event.value, base);
   return {
     sampleKey,
     resourcePath: resources[sampleKey],
