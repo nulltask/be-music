@@ -5,7 +5,7 @@
 
 import { Rectangle, Texture } from 'pixi.js';
 import { runWithConcurrency } from '@be-music/shared-utils/core';
-import { parseBMSExBMP, resolvePoorBGAMode } from '@be-music/chart-model';
+import { parseBMSExBMP, resolveBmsExBMPColorKey, resolvePoorBGAMode } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { loadAssetBytes, resolveChartBGAAsset } from '../collection/collection.ts';
 import type { BrowserAssetSource } from '../collection/types.ts';
@@ -160,13 +160,19 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
         }
         return;
       }
+      const bmsColorKey = resolveBmsExBMPColorKey(chart, key);
       if (base.has(key)) {
-        const texture = await loadTextureFromBytes(path, bytes);
+        const texture = bmsColorKey
+          ? await loadTextureFromBytes(path, bytes, { bmsColorKey })
+          : await loadTextureFromBytes(path, bytes);
         if (isCancelled()) return destroyTexture(texture);
         if (texture) into.textures.set(key, texture);
       }
       if (layer.has(key)) {
-        const texture = await loadTextureFromBytes(path, bytes, { keyOutBlack: keyOutLayerBlack });
+        const texture = await loadTextureFromBytes(path, bytes, {
+          keyOutBlack: keyOutLayerBlack && bmsColorKey === undefined,
+          ...(bmsColorKey ? { bmsColorKey } : {}),
+        });
         if (isCancelled()) return destroyTexture(texture);
         if (texture) into.layerTextures.set(key, texture);
       }

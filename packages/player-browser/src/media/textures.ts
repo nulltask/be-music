@@ -1,3 +1,4 @@
+import { applyBMSColorKey, type BmsARGB } from '@be-music/chart-model';
 import { Texture, VideoSource } from 'pixi.js';
 import { logger } from '../logger.ts';
 // Types only: the runtime module is imported on demand in `transcodeViaWebCodecsLocked`.
@@ -936,6 +937,8 @@ function resolveImageDecoder(lowerPath: string): ImageDecoder | undefined {
 }
 
 export interface LoadTextureOptions {
+  /** EXBMP's alpha-aware transparent-color key, applied before Canvas premultiplication where raw pixels are available. */
+  bmsColorKey?: BmsARGB;
   /** Skin-declared `#TRANSCOLOR` chroma key (rare on BGA assets, common on UI sprites). */
   transparentColor?: { r: number; g: number; b: number };
   /**
@@ -961,6 +964,30 @@ export async function loadTextureFromBytes(
 ): Promise<Texture | undefined> {
   const options = normalizeLoadTextureOptions(transparentColorOrOptions);
   const lower = path.toLowerCase();
+  if (
+    options.bmsColorKey &&
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    try {
+      const { decodePNGToRGBA8 } = await import('@be-music/shared-utils/png');
+      const image = decodePNGToRGBA8(bytes);
+      applyBMSColorKey(image.data, options.bmsColorKey, image.hasAlphaChannel);
+      return loadTextureFromImageData(
+        new Uint8ClampedArray(image.data.buffer, image.data.byteOffset, image.data.byteLength),
+        image.width,
+        image.height,
+        path,
+        { ...options, bmsColorKey: undefined, keyOutBlack: false },
+      );
+    } catch {
+      return undefined;
+    }
+  }
+  const hasAlphaChannel = sourceHasAlphaChannel(bytes, lower);
   if (lower.endsWith('.tga')) {
     return decodeTGATexture(bytes, options, path);
   }
@@ -973,7 +1000,7 @@ export async function loadTextureFromBytes(
     // fails gracefully via `createImageBitmap`'s exception handling.
     const decoded = decoder(bytes);
     if (decoded) {
-      return loadTextureFromImageData(decoded.rgba, decoded.width, decoded.height, path, options);
+      return loadTextureFromImageData(decoded.rgba, decoded.width, decoded.height, path, options, hasAlphaChannel);
     }
   }
   if (lower.endsWith('.avi')) {
@@ -990,7 +1017,7 @@ export async function loadTextureFromBytes(
   // array view) before the Blob makes its own internal copy — doubling the peak memory for skin / BGA bitmaps. See
   // `tryLoadVideoTextureFromBytes` for the matching `ArrayBuffer` cast rationale.
   const blob = new Blob([bytes as Uint8Array<ArrayBuffer>]);
-  return loadTextureFromBlob(blob, path, options);
+  return loadTextureFromBlob(blob, path, options, hasAlphaChannel);
 }
 
 /**
@@ -1007,18 +1034,27 @@ async function loadTextureFromImageData(
   height: number,
   label: string,
   options: LoadTextureOptions,
+  hasAlphaChannel = true,
 ): Promise<Texture | undefined> {
   try {
     // `new ImageData(rgba, width, height)` rejects a `Uint8ClampedArray` whose backing buffer is typed as
     // `ArrayBufferLike` (the DOM lib only narrows to `ArrayBuffer`-backed views). Copy into a fresh buffer that's
     // unambiguously typed as a regular `ArrayBuffer` — the bytes themselves are the same, just the type narrows.
     const ownedBuffer = new ArrayBuffer(rgba.byteLength);
-    new Uint8ClampedArray(ownedBuffer).set(rgba);
+    const pixels = new Uint8ClampedArray(ownedBuffer);
+    pixels.set(rgba);
+    if (options.bmsColorKey) {
+      if (!hasAlphaChannel) for (let offset = 3; offset < pixels.length; offset += 4) pixels[offset] = 255;
+      applyBMSColorKey(pixels, options.bmsColorKey, hasAlphaChannel);
+    }
     const imageData = new ImageData(new Uint8ClampedArray(ownedBuffer), width, height);
     const imageBitmap = await createImageBitmap(imageData);
     let finalBitmap = imageBitmap;
-    if (options.transparentColor || options.keyOutBlack) {
-      const keyedBitmap = await applyChromaKeyToBitmap(imageBitmap, options);
+    if (options.transparentColor || (options.keyOutBlack && !options.bmsColorKey)) {
+      const keyedBitmap = await applyChromaKeyToBitmap(
+        imageBitmap,
+        options.bmsColorKey ? { ...options, bmsColorKey: undefined, keyOutBlack: false } : options,
+      );
       if (keyedBitmap) {
         imageBitmap.close();
         finalBitmap = keyedBitmap;
@@ -1087,12 +1123,13 @@ async function loadTextureFromBlob(
   blob: Blob,
   label?: string,
   options: LoadTextureOptions = {},
+  hasAlphaChannel = true,
 ): Promise<Texture | undefined> {
   try {
     const imageBitmap = await createImageBitmap(blob);
     let finalBitmap = imageBitmap;
-    if (options.transparentColor || options.keyOutBlack) {
-      const keyedBitmap = await applyChromaKeyToBitmap(imageBitmap, options);
+    if (options.transparentColor || options.keyOutBlack || options.bmsColorKey) {
+      const keyedBitmap = await applyChromaKeyToBitmap(imageBitmap, options, hasAlphaChannel);
       if (keyedBitmap) {
         imageBitmap.close();
         finalBitmap = keyedBitmap;
@@ -1122,6 +1159,7 @@ async function loadTextureFromBlob(
 async function applyChromaKeyToBitmap(
   imageBitmap: ImageBitmap,
   options: LoadTextureOptions,
+  hasAlphaChannel = true,
 ): Promise<ImageBitmap | undefined> {
   const canvas = document.createElement('canvas');
   canvas.width = imageBitmap.width;
@@ -1133,8 +1171,9 @@ async function applyChromaKeyToBitmap(
   context.drawImage(imageBitmap, 0, 0);
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const { data } = imageData;
+  if (options.bmsColorKey) applyBMSColorKey(data, options.bmsColorKey, hasAlphaChannel);
   const transparent = options.transparentColor;
-  const keyOutBlack = options.keyOutBlack === true;
+  const keyOutBlack = options.keyOutBlack === true && options.bmsColorKey === undefined;
   for (let index = 0; index < data.length; index += 4) {
     const r = data[index] ?? 0;
     const g = data[index + 1] ?? 0;
@@ -1160,20 +1199,7 @@ async function decodeTGATexture(
   if (!imageData) {
     return undefined;
   }
-  const { width, height } = imageData;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return undefined;
-  }
-  context.putImageData(imageData, 0, 0);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) {
-    return undefined;
-  }
-  return loadTextureFromBlob(blob, label);
+  return loadTextureFromImageData(imageData.data, imageData.width, imageData.height, label ?? 'TGA', {});
 }
 
 /**
@@ -1182,7 +1208,7 @@ async function decodeTGATexture(
  */
 function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {}): ImageData | undefined {
   const transparentColor = options.transparentColor;
-  const keyOutBlack = options.keyOutBlack === true;
+  const keyOutBlack = options.keyOutBlack === true && options.bmsColorKey === undefined;
   if (bytes.length < 18) {
     return undefined;
   }
@@ -1235,7 +1261,8 @@ function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {})
       const r = bytes[source + 2] ?? 0;
       const g = bytes[source + 1] ?? 0;
       const b = bytes[source] ?? 0;
-      let a = bitsPerPixel === 32 ? (bytes[source + 3] ?? 255) : 255;
+      let a =
+        bitsPerPixel === 32 && (!options.bmsColorKey || (descriptor & 15) !== 0) ? (bytes[source + 3] ?? 255) : 255;
       if (transparentColor && r === transparentColor.r && g === transparentColor.g && b === transparentColor.b) {
         a = 0;
       } else if (keyOutBlack && r === 0 && g === 0 && b === 0) {
@@ -1280,5 +1307,25 @@ function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {})
     }
   }
 
+  if (options.bmsColorKey)
+    applyBMSColorKey(imageData.data, options.bmsColorKey, bitsPerPixel === 32 && (descriptor & 15) !== 0);
   return imageData;
+}
+
+/** Known container metadata; custom RGBA decoders otherwise expose an alpha-bearing pixel buffer. */
+function sourceHasAlphaChannel(bytes: Uint8Array, path: string): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return false;
+  if (bytes.length >= 30 && bytes[0] === 0x42 && bytes[1] === 0x4d) {
+    return (
+      view.getUint16(28, true) === 32 &&
+      view.getUint32(14, true) >= 56 &&
+      bytes.length >= 70 &&
+      view.getUint32(66, true) !== 0
+    );
+  }
+  if (bytes.length >= 128 && view.getUint32(0, true) === 0x20534444)
+    return (view.getUint32(80, true) & 1) !== 0 && view.getUint32(104, true) !== 0;
+  if (path.endsWith('.tga') && bytes.length >= 18) return bytes[16] === 32 && (bytes[17]! & 15) !== 0;
+  return true;
 }

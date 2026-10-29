@@ -129,3 +129,9 @@ Regenerate them through the editor API rather than by hand — that is what keep
 ```sh
 ffmpeg -f lavfi -i 'color=c=black:s=512x256:r=10:d=16' -vf "drawbox=x=256:y=0:w=128:h=128:color=0xed174b:t=fill:enable='lt(t,4)',drawbox=x=256:y=0:w=128:h=128:color=0x16cf63:t=fill:enable='gte(t,4)'" -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p -an bga-crop-colors.webm
 ```
+
+## Authored EXBMP images
+
+`exbmp-rgb.png` is a 256×256, 4-bit indexed Adam7 PNG without encoded alpha. A blue border surrounds four vertical gray/gray/black/green stripes. The first gray stripe lies on the inclusive ±8 RGB key boundary; the second is outside it.
+
+`exbmp-alpha.png` is an RGBA8 PNG with the same border and black/green stripes. Its first two stripes share RGB `(255, 228, 173)` with alpha 64 and 65, respectively, verifying exact alpha matching and preservation of the adjacent value. Both images are authored fixtures without third-party media. Browser tests cover all four renderer families, aliases, disabled all-zero keys and the black viewport behind a keyed base.

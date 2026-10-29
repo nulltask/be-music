@@ -1,5 +1,6 @@
 import { Rectangle, Sprite, Texture, TextureSource } from 'pixi.js';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/display';
+import { createEmptyJSON } from '@be-music/chart-source';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { BGA_VIDEO_DRIFT_SECONDS, resolveBGAVideoResync, renderBGA, type BGARendererContext } from './bga-renderer.ts';
 
@@ -144,11 +145,33 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
   test('draws both overlays in order, clears only 0A, and restores it on backward seek', () => {
     const state = setup();
     renderBGA(state.ctx, 3);
-    expect(state.labels()).toEqual(['bga/base[key=base]', 'bga/layer[key=first]', 'bga/layer2[key=second]']);
+    expect(state.labels()).toEqual([
+      'bga/background',
+      'bga/base[key=base]',
+      'bga/layer[key=first]',
+      'bga/layer2[key=second]',
+    ]);
     renderBGA(state.ctx, 5);
-    expect(state.labels()).toEqual(['bga/base[key=base]', 'bga/layer[key=first]']);
+    expect(state.labels()).toEqual(['bga/background', 'bga/base[key=base]', 'bga/layer[key=first]']);
     renderBGA(state.ctx, 3);
-    expect(state.labels()).toHaveLength(3);
+    expect(state.labels()).toHaveLength(4);
+    expect(state.sprites[0]).toMatchObject({ label: 'bga/background', tint: 0, x: 0, y: 0, width: 256, height: 256 });
+    state.dispose();
+  });
+
+  test('does not multiply EXBMP colors/alpha after loading but retains legacy per-slot ARGB', () => {
+    const state = setup();
+    const chart = createEmptyJSON('bms');
+    chart.bms.exBMP['first'] = '64,255,128,64 colors.png';
+    Object.assign(state.play, { resolvedChart: chart });
+    renderBGA(state.ctx, 3);
+    const sprite = () => state.sprites.find((entry) => entry.label === 'bga/layer[key=first]')!;
+    expect(sprite().tint).toBe(0xffffff);
+    expect(sprite().alpha).toBe(1);
+    chart.bms.argb['first'] = '128,64,128,192';
+    renderBGA(state.ctx, 3);
+    expect(sprite().tint).toBe(0x4080c0);
+    expect(sprite().alpha).toBeCloseTo(128 / 255);
     state.dispose();
   });
 
@@ -313,8 +336,9 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     renderBGA(state.ctx, 3);
     expect(state.labels()).toEqual(
       mode === 0
-        ? ['bga/poor[key=poor]']
+        ? ['bga/background', 'bga/poor[key=poor]']
         : [
+            'bga/background',
             'bga/base[key=base]',
             'bga/layer[key=first]',
             'bga/layer2[key=second]',

@@ -169,9 +169,14 @@ export class BeatorajaBGALayer {
       seconds,
       inPoorWindow: poorBGAActive,
     });
-    if (props.visible && stacks.some((stack) => stack.opacity !== undefined)) {
+    if (props.visible) {
       if (this.background === undefined) {
-        this.background = new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false });
+        this.background = new Sprite({
+          texture: Texture.WHITE,
+          tint: 0x000000,
+          visible: false,
+          label: 'bga/background',
+        });
         this.container.addChildAt(this.background, 0);
       }
       Object.assign(this.background, {
