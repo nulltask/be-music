@@ -806,7 +806,7 @@ async function loadFramesByKeys(params: {
 
       const cacheKey =
         `${mode}:${preserveSourceGeometry ? 'native' : 'spec'}:${width}x${height}:${imageResizeAlgorithm}:` +
-        `${videoBGAStreaming === false ? 'full' : 'stream'}:${resolved}`;
+        `${videoBGAStreaming === false ? 'full' : 'stream'}:${JSON.stringify(definition.colorKey)}:${resolved}`;
       let sourcePromise = sharedSourceCache.get(cacheKey);
       if (!sourcePromise) {
         sourcePromise = loadFrameSource(
@@ -818,6 +818,7 @@ async function loadFramesByKeys(params: {
           videoBGAStreaming,
           signal,
           preserveSourceGeometry,
+          definition.colorKey,
         ).then((source) => source ?? null);
         sharedSourceCache.set(cacheKey, sourcePromise);
       }

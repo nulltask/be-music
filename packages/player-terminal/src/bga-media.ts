@@ -1,10 +1,11 @@
+import { applyBMSColorKey, type BmsARGB } from '@be-music/chart-model';
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { isAbortError, throwIfAborted } from '@be-music/shared-utils/core';
 import { resolveFirstExistingPath } from '@be-music/shared-utils/path';
 import { decodeVideoFramesStream, decodeVideoFramesToSourceFramesInWorker } from './bga-video.ts';
 import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player-engine/display';
-import { decodeImageBuffer } from './bga-image.ts';
+import { decodeImageBuffer, type DecodedImage } from './bga-image.ts';
 import {
   type FrameMode,
   type ANSIFrame,
@@ -23,6 +24,7 @@ async function loadImageAsSpecFrame(
   mode: FrameMode,
   resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
   signal?: AbortSignal,
+  colorKey?: BmsARGB,
 ): Promise<ANSIFrame | undefined> {
   const extension = extname(imagePath).toLowerCase();
   if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
@@ -33,8 +35,9 @@ async function loadImageAsSpecFrame(
     const buffer = await readFile(imagePath, { signal });
     throwIfAborted(signal);
     const decoded = decodeImageBuffer(buffer, imagePath);
+    if (colorKey) applyImageColorKey(decoded, colorKey);
     throwIfAborted(signal);
-    return await convertImageToSpecFrameOffThread(decoded, mode, resizeAlgorithm, signal);
+    return await convertImageToSpecFrameOffThread(decoded, colorKey ? 'exbmp' : mode, resizeAlgorithm, signal);
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -47,6 +50,7 @@ async function loadImageAsSourceFrame(
   imagePath: string,
   mode: FrameMode,
   signal?: AbortSignal,
+  colorKey?: BmsARGB,
 ): Promise<ANSIFrame | undefined> {
   const extension = extname(imagePath).toLowerCase();
   if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
@@ -57,14 +61,24 @@ async function loadImageAsSourceFrame(
     const buffer = await readFile(imagePath, { signal });
     throwIfAborted(signal);
     const decoded = decodeImageBuffer(buffer, imagePath);
+    if (colorKey) applyImageColorKey(decoded, colorKey);
     throwIfAborted(signal);
-    return convertImageToSourceFrame(decoded, mode);
+    return convertImageToSourceFrame(decoded, colorKey ? 'exbmp' : mode);
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
     }
     return undefined;
   }
+}
+
+/** Key native pixels before scaling and before the terminal's binary alpha-mask conversion. */
+function applyImageColorKey(image: DecodedImage, colorKey: BmsARGB): void {
+  if (!image.hasAlphaChannel) {
+    // BMP palette/unused-alpha bytes are not source alpha. EXBMP compares these images against alpha zero.
+    for (let offset = 3; offset < image.data.length; offset += 4) image.data[offset] = 255;
+  }
+  applyBMSColorKey(image.data, colorKey, image.hasAlphaChannel === true);
 }
 
 export async function loadFrameSource(
@@ -76,11 +90,12 @@ export async function loadFrameSource(
   videoBGAStreaming = true,
   signal?: AbortSignal,
   preserveSourceGeometry = false,
+  colorKey?: BmsARGB,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
   const imageFrame = preserveSourceGeometry
-    ? await loadImageAsSourceFrame(resourcePath, mode, signal)
-    : await loadImageAsSpecFrame(resourcePath, mode, imageResizeAlgorithm, signal);
+    ? await loadImageAsSourceFrame(resourcePath, mode, signal, colorKey)
+    : await loadImageAsSpecFrame(resourcePath, mode, imageResizeAlgorithm, signal, colorKey);
   if (imageFrame) {
     return createStaticFrameSource(imageFrame);
   }

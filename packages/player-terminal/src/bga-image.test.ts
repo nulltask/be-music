@@ -10,8 +10,51 @@ describe('decodeImageBuffer', () => {
       encodePng({ width: 2, height: 1, data: new Uint8Array([255, 0, 0, 0, 0, 255]), depth: 8, channels: 3 }),
     );
     const image = decodeImageBuffer(png, 'image.png');
-    expect(image).toMatchObject({ width: 2, height: 1, format: 'png' });
+    expect(image).toMatchObject({ width: 2, height: 1, format: 'png', hasAlphaChannel: false });
     expect([...image.data]).toEqual([255, 0, 0, 255, 0, 0, 255, 255]);
+  });
+
+  test('distinguishes an encoded opaque alpha channel from inserted RGBA alpha', () => {
+    const data = new Uint8Array([127, 127, 127, 255, 255, 228, 173, 64]);
+    const image = decodeImageBuffer(
+      Buffer.from(encodePng({ width: 2, height: 1, data, depth: 8, channels: 4 })),
+      'alpha.png',
+    );
+    expect(image.hasAlphaChannel).toBe(true);
+    expect([...image.data]).toEqual([...data]);
+  });
+
+  test.each([
+    [
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAMAAAAoyzS7AAAAA1BMVEV/f3+QyhsjAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==',
+      false,
+      255,
+    ],
+    [
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAMAAAAoyzS7AAAAA1BMVEV/f3+QyhsjAAAAAXRSTlOArV5bRgAAAApJREFUeJxjYAAAAAIAAUivpHEAAAAASUVORK5CYII=',
+      true,
+      128,
+    ],
+  ] as const)('detects encoded palette transparency instead of expanded RGBA (%s)', (base64, hasAlpha, alpha) => {
+    // Owned one-pixel indexed PNGs with the same gray palette; only the second has a tRNS chunk.
+    const image = decodeImageBuffer(Buffer.from(base64, 'base64'), 'palette.png');
+    expect(image.hasAlphaChannel).toBe(hasAlpha);
+    expect([...image.data]).toEqual([127, 127, 127, alpha]);
+  });
+
+  test.each([
+    [
+      'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAABnRSTlMAfwB/AH+KMzNPAAAAD0lEQVR4nGOor69n+M8AAAl2An3QNTIfAAAAAElFTkSuQmCC',
+      [127, 127, 127, 0, 0, 255, 0, 255],
+    ],
+    [
+      'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABAgAAAACb+Tj3AAAAAnRSTlMAAQGU/a4AAAAKSURBVHicY0gAAABiAGGxmHnyAAAAAElFTkSuQmCC',
+      [85, 85, 85, 0, 170, 170, 170, 255],
+    ],
+  ] as const)('expands native RGB/grayscale tRNS before color matching (%s)', (base64, rgba) => {
+    const image = decodeImageBuffer(Buffer.from(base64, 'base64'), 'transparent.png');
+    expect(image.hasAlphaChannel).toBe(true);
+    expect([...image.data]).toEqual([...rgba]);
   });
 
   test('detects the format from the file header before the extension', () => {

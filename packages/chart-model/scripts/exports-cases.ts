@@ -1,4 +1,5 @@
 import * as chartAPI from '@be-music/chart-model';
+import { createEmptyJSON } from '@be-music/chart-source';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_RANDOM_DRAWS_CACHE = new WeakMap<object, chartAPI.RandomDraws>();
@@ -11,6 +12,12 @@ function benchRandomDraws(source: chartAPI.ControlFlowSource): chartAPI.RandomDr
   }
   return draws;
 }
+
+const BENCH_COLOR_KEY_PIXELS = Uint8Array.from({ length: 256 * 256 * 4 }, (_, index) =>
+  (index & 3) === 3 ? 255 : ((index >>> 2) & 1) === 1 ? 127 : 32,
+);
+const BENCH_COLOR_KEY_CHART = createEmptyJSON('bms');
+BENCH_COLOR_KEY_CHART.bms.exBMP['01'] = '0,127,127,127 image.png';
 
 const BENCH_SWITCHING_BGA = chartAPI.parseBMSSwBGA('10:5:1:FF000000 02 03 04 05 06');
 const BENCH_FINGERPRINT_OPTIONS: chartAPI.BeMusicFingerprintOptions = { chartPath: 'sample.bms' };
@@ -28,6 +35,16 @@ function getBenchFingerprintDocument(
 }
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
+  define('chart-model.resolveBmsExBMPColorKey', {
+    run: () => {
+      chartAPI.resolveBmsExBMPColorKey(BENCH_COLOR_KEY_CHART, '01');
+    },
+  });
+  define('chart-model.applyBMSColorKey', {
+    run: () => {
+      chartAPI.applyBMSColorKey(BENCH_COLOR_KEY_PIXELS, { a: 0, r: 127, g: 127, b: 127 }, false);
+    },
+  });
   define('chart-model.buildBGAOpacityTimelines', {
     run: (fixtures) => {
       const chart = {
