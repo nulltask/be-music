@@ -172,6 +172,7 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.parseBmsBGA', {
     run: () => {
       chartAPI.parseBmsBGA('02 0 0 256 256 0 0');
+      chartAPI.parseBmsBGA('100 0 0 64 64 0 0', 62, true);
     },
   });
   define('chart-model.parseBmsARGB', {

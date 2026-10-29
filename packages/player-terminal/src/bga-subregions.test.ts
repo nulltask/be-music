@@ -7,6 +7,15 @@ import { selectFrameFromSource, type VideoFrameSource } from './bga-frame-source
 const region = { sourceBMP: '01', sx: 0, sy: 0, ex: 2, ey: 1, dx: 10, dy: 20 };
 
 describe('BGA sub-region source lookup', () => {
+  test('retains long internal ids in mixed NONSTOP bmson resources', () => {
+    const chart = createEmptyJSON('bmson');
+    chart.bms.base = 62;
+    chart.bms.bga['100'] = '101 0 0 2 1 10 20';
+    expect(resolveBGAResource(chart, { '101': 'source.png' }, '100')).toMatchObject({
+      path: 'source.png',
+      regions: [{ sourceBMP: '101' }],
+    });
+  });
   test('resolves out-of-order chains, preserving explicit resource precedence and base-62 ids', () => {
     const chart = createEmptyJSON('bms');
     chart.bms.base = 62;

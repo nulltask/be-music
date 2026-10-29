@@ -37,6 +37,7 @@ import {
 
 export interface BeatorajaBGALayerOptions {
   skin: BeatorajaSkin;
+  subRegionOrigins?: ReadonlyMap<string, { x: number; y: number }>;
   poorBGAMode?: 0 | 1 | 2;
   /**
    * Decoded BGA textures keyed by `#BMPxx` slot label (`'00'`..`'ZZ'`). Same map the LR2 path's BGA
@@ -101,6 +102,7 @@ export class BeatorajaBGALayer {
   private readonly pairs: BGASpritePair[] = [];
   private readonly group: BeatorajaDestinationGroup | undefined;
   private readonly textures: ReadonlyMap<string, Texture>;
+  private readonly subRegionOrigins: ReadonlyMap<string, { x: number; y: number }>;
   private readonly layerTextures: ReadonlyMap<string, Texture>;
   private readonly videoElements: ReadonlyMap<string, HTMLVideoElement>;
   private readonly cues: {
@@ -124,6 +126,7 @@ export class BeatorajaBGALayer {
   constructor(options: BeatorajaBGALayerOptions) {
     this.poorBGAMode = options.poorBGAMode ?? 0;
     this.textures = options.textures;
+    this.subRegionOrigins = options.subRegionOrigins ?? new Map();
     this.layerTextures = options.layerTextures ?? new Map();
     this.videoElements = options.videoElements ?? new Map();
     this.cues = options.cues;
@@ -341,7 +344,7 @@ export class BeatorajaBGALayer {
     const rect = { x: props.x, y: props.y, w: props.width, h: props.height };
     const placed = this.videoElements.has(key)
       ? rect
-      : resolveBGAImageRect(texture.frame.width, texture.frame.height, rect);
+      : resolveBGAImageRect(texture.frame.width, texture.frame.height, rect, this.subRegionOrigins.get(key));
     if (canvas !== undefined && (placed.w < rect.w || placed.h < rect.h)) {
       canvas.visible = true;
       canvas.x = rect.x;

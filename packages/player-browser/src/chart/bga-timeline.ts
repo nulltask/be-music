@@ -80,9 +80,9 @@ function toBrowserBGACue(cue: { seconds: number; key?: string }): BGACue {
 function addReferencedSubRegionSources(chart: BeMusicJSON, keys: Set<string>): void {
   const base = resolveBMSBase(chart);
   for (const [rawSlot, raw] of Object.entries(chart.bms.bga)) {
-    const slot = normalizeObjectKey(rawSlot, base);
+    const slot = normalizeObjectKey(rawSlot, base, chart.sourceFormat === 'bmson');
     if (!keys.has(slot)) continue;
-    const parsed = parseBmsBGA(raw, base);
+    const parsed = parseBmsBGA(raw, base, chart.sourceFormat === 'bmson');
     if (parsed) keys.add(parsed.sourceBMP);
   }
 }
@@ -148,6 +148,7 @@ export interface ActiveBGAKeys {
 export function buildSkinBGAFrame<Image>(
   keys: ActiveBGAKeys,
   resolve: (key: string, track: 'base' | 'layer') => Image | undefined,
+  subRegionOrigins?: ReadonlyMap<string, { x: number; y: number }>,
 ): {
   base?: Image;
   layer?: Image;
@@ -156,18 +157,26 @@ export function buildSkinBGAFrame<Image>(
   poorActive: boolean;
   poorOverlays?: boolean;
   opacity?: Record<keyof BGAOpacityTimelines, number>;
+  origins?: Partial<Record<keyof BGAOpacityTimelines, { x: number; y: number }>>;
 } {
   const base = keys.base !== undefined ? resolve(keys.base, 'base') : undefined;
   const layer = keys.layer !== undefined ? resolve(keys.layer, 'layer') : undefined;
   const layer2 = keys.layer2 !== undefined ? resolve(keys.layer2, 'layer') : undefined;
   // POOR images decode like the base (no chroma key), so they live in the base map.
   const poor = keys.poor !== undefined ? resolve(keys.poor, 'base') : undefined;
+  const origins: Partial<Record<keyof BGAOpacityTimelines, { x: number; y: number }>> = {};
+  for (const track of ['base', 'layer', 'layer2', 'poor'] as const) {
+    const key = keys[track];
+    const origin = key !== undefined ? subRegionOrigins?.get(key) : undefined;
+    if (origin !== undefined) origins[track] = origin;
+  }
   return {
     ...(base !== undefined ? { base } : {}),
     ...(layer !== undefined ? { layer } : {}),
     ...(layer2 !== undefined ? { layer2 } : {}),
     ...(poor !== undefined ? { poor } : {}),
     poorActive: poor !== undefined,
+    ...(Object.keys(origins).length > 0 ? { origins } : {}),
     ...(keys.opacity !== undefined ? { opacity: keys.opacity } : {}),
     ...(keys.poorOverlays ? { poorOverlays: true } : {}),
   };

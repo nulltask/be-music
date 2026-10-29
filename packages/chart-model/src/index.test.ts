@@ -367,6 +367,11 @@ describe('chart', () => {
     expect(parseBmsBGA(' 0 0 256 256 0 0')).toBeUndefined();
   });
 
+  test('parseBmsBGA retains long internal resource ids only when explicitly enabled', () => {
+    expect(parseBmsBGA('100 0 0 64 64 0 0', 62)?.sourceBMP).toBe('10');
+    expect(parseBmsBGA('100 0 0 64 64 0 0', 62, true)?.sourceBMP).toBe('100');
+  });
+
   test.each(['255,0,0,0 backdrop.bmp', '255,0,0,0,backdrop.bmp'])(
     'parseBMSExBMP decodes the resource and color fields (%s)',
     (definition) => {

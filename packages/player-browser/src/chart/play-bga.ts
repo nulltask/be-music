@@ -170,8 +170,8 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
 export function registerSubRegionBGATextures(chart: BeMusicJSON, into: PlayBGAResources): void {
   const base = resolveBMSBase(chart);
   for (const [bgaSlot, raw] of Object.entries(chart.bms.bga)) {
-    const slot = normalizeObjectKey(bgaSlot, base);
-    const parsed = parseBmsBGA(raw, base);
+    const slot = normalizeObjectKey(bgaSlot, base, chart.sourceFormat === 'bmson');
+    const parsed = parseBmsBGA(raw, base, chart.sourceFormat === 'bmson');
     if (!parsed) continue;
     const width = parsed.ex - parsed.sx;
     const height = parsed.ey - parsed.sy;

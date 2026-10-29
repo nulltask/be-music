@@ -28,6 +28,7 @@ import {
 } from './readouts.ts';
 import { createNonstopStageTiming } from './stage.ts';
 import { flattenNonstopBGAOpacity, hasBGAOpacity, placeNonstopBGAOpacity } from './bga-opacity.ts';
+import { createNonstopBMPAllocator } from './bga-resources.ts';
 
 /** One stage to stitch: its BMS or bmson chart with control flow resolved, and whether it is a `.pms` chart. */
 export interface NonstopStageInput {
@@ -237,18 +238,14 @@ export function stitchNonstopCourse(
       }
       return stitched;
     };
-    const bmp = (key: string): string | undefined => {
-      const stitched = bmpKeys.keyFor(index, key);
-      if (stitched === undefined) return undefined;
-      if (!known.has(`b${stitched}`)) {
-        known.add(`b${stitched}`);
-        stageBMP[index]!.push(stitched);
-        const path =
-          source.resources.bmp[key] ?? (source.bmson.bga.header.some((entry) => entry.name === key) ? key : undefined);
-        if (path !== undefined) chart.resources.bmp[stitched] = assetPath(index, 'bmp', path);
-      }
-      return stitched;
-    };
+    const bmp = createNonstopBMPAllocator({
+      source,
+      target: chart,
+      stage: index,
+      keys: bmpKeys,
+      stageKeys: stageBMP[index]!,
+      assetPath: (path) => assetPath(index, 'bmp', path),
+    });
     const push = (
       seconds: number,
       channel: string,
