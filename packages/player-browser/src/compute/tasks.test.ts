@@ -36,3 +36,23 @@ test('stereo WSOLA and task dispatch use the same algorithm', () => {
   expect(executeBrowserTask('stretch', input)).toEqual(stretchTask(input));
   expect(() => executeBrowserTask('arbitrary', {})).toThrow('Unknown browser task');
 });
+
+test.each([null, undefined, 'broken', '2.0.0'])(
+  'browser chart loading propagates invalid bmson version %s',
+  (version) => {
+    const input = {
+      path: 'chart.bmson',
+      bytes: strToU8(JSON.stringify({ version, info: { init_bpm: 120 }, sound_channels: [] })),
+    };
+    expect(() => parseChartTask(input)).toThrow(/bmson.*version|legacy bmson/);
+    expect(() => executeBrowserTask('parse-chart', input)).toThrow();
+  },
+);
+
+test('browser chart loading accepts stable bmson with build metadata', () => {
+  const result = parseChartTask({
+    path: 'chart.bmson',
+    bytes: strToU8(JSON.stringify({ version: '1.0.0+local', info: { init_bpm: 120 }, sound_channels: [] })),
+  });
+  expect(result.chart.bmson.version).toBe('1.0.0+local');
+});

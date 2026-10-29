@@ -26,12 +26,11 @@ import {
 } from './bmson.ts';
 
 export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
+  const version = requireSupportedBmsonVersion(document);
   const json = createEmptyJSON('bmson');
 
   const info = document.info ?? {};
-  if (typeof document.version === 'string' && document.version.length > 0) {
-    json.bmson.version = document.version;
-  }
+  json.bmson.version = version;
 
   const resolution = resolveBmsonResolution(document);
   json.bmson.info = normalizeBmsonInfoForIR(info, resolution);
@@ -287,4 +286,37 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
 
   json.events = sortAndNormalizeEvents(json.events, keyBase, true);
   return json;
+}
+
+/** Only the stable 1.0.0 format is implemented; build metadata has no SemVer precedence. */
+function requireSupportedBmsonVersion(document: BmsonDocument): string {
+  if (document === null || typeof document !== 'object' || Array.isArray(document)) {
+    throw new TypeError('Invalid bmson document: expected a JSON object with version "1.0.0".');
+  }
+  if (!Object.hasOwn(document, 'version')) {
+    throw new Error(
+      'Unsupported legacy bmson v0.21: version is missing. Convert the chart to bmson 1.0.0 with a format converter; adding a version field alone does not convert legacy fields or timing units.',
+    );
+  }
+  const version: unknown = document.version;
+  if (version === null) {
+    throw new TypeError("Invalid bmson version: null is not allowed. Supply the chart's actual format version.");
+  }
+  if (typeof version !== 'string') {
+    throw new TypeError('Invalid bmson version: expected a Semantic Versioning 2.0.0 string such as "1.0.0".');
+  }
+  // Validate SemVer syntax before checking support; compare decimal components as strings to avoid precision loss.
+  const match =
+    /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(
+      version,
+    );
+  if (!match || match[4]?.split('.').some((part) => /^0[0-9]+$/.test(part))) {
+    throw new TypeError('Invalid bmson version: expected a Semantic Versioning 2.0.0 string such as "1.0.0".');
+  }
+  if (match[1] !== '1' || match[2] !== '0' || match[3] !== '0' || match[4] !== undefined) {
+    throw new Error(
+      `Unsupported bmson version "${version}". This reader supports stable 1.0.0 (with optional build metadata); convert the chart to that format or use a reader for its declared version.`,
+    );
+  }
+  return version;
 }
