@@ -343,9 +343,9 @@ be-music も beatoraja と同じく読みます。`mine_channels` は `damage` �
 仕様の `bga`（L765-806）は `bga_header`、`bga_events`、`layer_events`、`poor_events` を持ちます。ヘッダの `id` が重複すれば後のものが勝ち、レイヤーで黒は透過しません。
 
 - beatoraja：`bga_events` で BGA を設定し、`layer_events` は条件付きのイベントレイヤーになるが描かれるのは MISS レイヤーだけ。`poor_events` は MISS レイヤーになる [V]（[BMSONDecoder L369-438][j-bmson-bga]、[BGAProcessor][b-bga]）。
-- be-music：`bga_events` をベース、`layer_events` をレイヤー、`poor_events` を POOR とし、`y` で時刻を決める（[`bga.ts`][bm-bga]）。web プレイヤーは描くが、ターミナルプレイヤーは bmson の BGA ファイルを読み込まない。
+- be-music：通常の `bga_events` をベース、`layer_events` をレイヤー、`poor_events` を POOR とし、`y` で時刻を決める（[`bga.ts`][bm-bga]）。Browser・Terminal とも bmson ヘッダーのファイル名を読み込む。シーケンス定義と条件のメタデータは往復保存でき、モデルはシーケンスのフレームを解決する。判定に応じたシーケンス描画は #826 で継続する。
 - BGA、画像、音声の名前からのファイルの探し方は [§2.19](#219-アセットファイルの探し方) に従う。
-- 画像：どちらも `back_image`、`eyecatch_image`、`banner_image`、`preview_music` を読む。仕様が本文でしか説明していない `title_image`（L401-405）はどちらも読まない。be-music はそれぞれ `#BACKBMP`、`#STAGEFILE`（未設定のとき）、`#BANNER` に相当する欄へ入れる。
+- 画像：どちらも `back_image`、`eyecatch_image`、`banner_image`、`preview_music` を読む。be-music はそれぞれ `#BACKBMP`、`#STAGEFILE`（未設定のとき）、`#BANNER` に相当する欄へ入れ、さらに Browser の演奏前画面用に `title_image` を保持する。画像がない場合はテキスト表示へ戻る。
 - テキスト：beatoraja は `chart_name` を `[name]` としてサブタイトルに付け加え、`subartists` をカンマでつなぐ [V]。be-music はどちらも構造を保ったまま持つ（[bmson 実装仕様](./bmson-spec.ja.md#実装が読み込むフィールド-parser)）。
 
 ## 4. BMS と bmson の相互変換

@@ -34,7 +34,32 @@ function getBenchFingerprintDocument(
   return document;
 }
 
+const BENCH_BMSON_BGA = createEmptyJSON('bmson');
+BENCH_BMSON_BGA.bmson.bga = {
+  header: [
+    { id: 10, name: 'a.png' },
+    { id: 20, name: 'b.png' },
+  ],
+  events: [],
+  poorEvents: [{ y: 0, id: 1 }],
+  layerEvents: [{ y: 240, id: 1, idSet: [1, 20], condition: 'play', interval: 2 }],
+  sequences: [{ id: 1, sequence: [{ time: 0, id: 0 }, { time: 100, id: 1 }, { time: 500 }] }],
+};
+const BENCH_BMSON_BGA_TIMING = chartAPI.createTimingResolver(BENCH_BMSON_BGA);
+const BENCH_BMSON_BGA_SEQUENCE = chartAPI.buildBmsonBGAEventTimeline(BENCH_BMSON_BGA, BENCH_BMSON_BGA_TIMING)[0]!
+  .sequences[0]!;
+
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
+  define('chart-model.buildBmsonBGAEventTimeline', {
+    run: () => {
+      chartAPI.buildBmsonBGAEventTimeline(BENCH_BMSON_BGA, BENCH_BMSON_BGA_TIMING);
+    },
+  });
+  define('chart-model.pickBmsonBGASequenceFrame', {
+    run: () => {
+      chartAPI.pickBmsonBGASequenceFrame(BENCH_BMSON_BGA_SEQUENCE, 0.2);
+    },
+  });
   define('chart-model.parseBMSKeyBoundBGA', {
     run: () => {
       chartAPI.parseBMSKeyBoundBGA('100:400:16:0:255,255,255,255 00010203');

@@ -343,9 +343,9 @@ The spec (L366-386): default `100`, relative to the player's default gauge rate;
 The spec's `bga` (L765-806) has `bga_header`, `bga_events`, `layer_events` and `poor_events`; a duplicated header `id` lets the later one win, and black is not transparent on the layer.
 
 - beatoraja: `bga_events` set the BGA; `layer_events` become event layers keyed by a condition, and only MISS layers are drawn; `poor_events` become the MISS layer [V] ([BMSONDecoder L369-438][j-bmson-bga], [BGAProcessor][b-bga]).
-- be-music: `bga_events` → base, `layer_events` → layer, `poor_events` → POOR, timed by `y` ([`bga.ts`][bm-bga]). The web player renders them; the terminal player does not load bmson BGA files.
+- be-music: ordinary `bga_events` → base, `layer_events` → layer and `poor_events` → POOR, timed by `y` ([`bga.ts`][bm-bga]). Both browser and terminal load bmson header filenames. Sequence definitions and conditional metadata now survive round trips, and the model resolves sequence frames; judgment-driven sequence rendering remains in #826.
 - File lookup for BGA, image and sound names follows [§2.19](#219-asset-file-lookup).
-- Images: both read `back_image`, `eyecatch_image`, `banner_image` and `preview_music`; neither reads `title_image`, which the spec describes only in prose (L401-405). be-music maps them to `#BACKBMP`, `#STAGEFILE` (when none is set) and `#BANNER` equivalents.
+- Images: both read `back_image`, `eyecatch_image`, `banner_image` and `preview_music`. be-music maps them to `#BACKBMP`, `#STAGEFILE` (when none is set) and `#BANNER` equivalents, and additionally preserves `title_image` for the browser pre-play screen, with text fallback for missing assets.
 - Text: beatoraja appends `chart_name` to the subtitle as `[name]` and joins `subartists` with commas [V]; be-music keeps both as structured fields ([bmson spec](./bmson-spec.md#fields-read-by-implementation-parser)).
 
 ## 4. Converting between BMS and bmson

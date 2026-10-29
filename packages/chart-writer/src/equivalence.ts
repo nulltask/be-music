@@ -248,6 +248,7 @@ function areBmsonInfoEqual(left: BeMusicJSON['bmson']['info'], right: BeMusicJSO
 
 function areBmsonBGAEqual(left: BeMusicJSON['bmson']['bga'], right: BeMusicJSON['bmson']['bga']): boolean {
   return (
+    JSON.stringify(left.sequences ?? []) === JSON.stringify(right.sequences ?? []) &&
     areBmsonBGAHeadersEqual(left.header, right.header) &&
     areBmsonBGAEventsEqual(left.events, right.events) &&
     areBmsonBGAEventsEqual(left.layerEvents, right.layerEvents) &&
@@ -278,7 +279,13 @@ function areBmsonBGAEventsEqual(
     return false;
   }
   for (let index = 0; index < left.length; index += 1) {
-    if (left[index]!.y !== right[index]!.y || left[index]!.id !== right[index]!.id) {
+    if (
+      left[index]!.y !== right[index]!.y ||
+      left[index]!.id !== right[index]!.id ||
+      left[index]!.condition !== right[index]!.condition ||
+      left[index]!.interval !== right[index]!.interval ||
+      JSON.stringify(left[index]!.idSet) !== JSON.stringify(right[index]!.idSet)
+    ) {
       return false;
     }
   }

@@ -18,6 +18,8 @@ import {
   normalizeObjectKey,
   resolveBMSBase,
   type BmsonBPMEventEntry,
+  type BmsonBGAEvent,
+  type BmsonBGASequence,
   type BmsonScrollEventEntry,
   type BmsonSoundChannelEntry,
   type BmsonStopEventEntry,
@@ -523,9 +525,10 @@ function resolveBmsonCompatiblePlayLevel(value: BeMusicJSON['metadata']['playLev
 function createBmsonBGAForOutput(json: BeMusicJSON):
   | {
       bga_header: Array<{ id: number; name: string }>;
-      bga_events: Array<{ y: number; id: number }>;
-      layer_events: Array<{ y: number; id: number }>;
-      poor_events: Array<{ y: number; id: number }>;
+      bga_sequence?: BmsonBGASequence[];
+      bga_events: Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }>;
+      layer_events: Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }>;
+      poor_events: Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }>;
     }
   | undefined {
   const header: Array<{ id: number; name: string }> = [];
@@ -539,12 +542,26 @@ function createBmsonBGAForOutput(json: BeMusicJSON):
   const layerEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.layerEvents ?? []);
   const poorEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.poorEvents ?? []);
 
-  if (header.length === 0 && events.length === 0 && layerEvents.length === 0 && poorEvents.length === 0) {
+  if (
+    header.length === 0 &&
+    events.length === 0 &&
+    layerEvents.length === 0 &&
+    poorEvents.length === 0 &&
+    json.bmson.bga.sequences === undefined
+  ) {
     return undefined;
   }
 
   return {
     bga_header: header,
+    ...(json.bmson.bga.sequences !== undefined
+      ? {
+          bga_sequence: json.bmson.bga.sequences.map((entry) => ({
+            id: entry.id,
+            sequence: entry.sequence.map((frame) => ({ ...frame })),
+          })),
+        }
+      : {}),
     bga_events: events,
     layer_events: layerEvents,
     poor_events: poorEvents,
@@ -631,13 +648,16 @@ function mapBmsonLineValues(lines: ReadonlyArray<number>): Array<{ y: number }> 
 }
 
 function normalizeBmsonBGAEventEntries(
-  entries: ReadonlyArray<{ y: number; id: number }>,
-): Array<{ y: number; id: number }> {
-  const normalized: Array<{ y: number; id: number }> = [];
+  entries: ReadonlyArray<BmsonBGAEvent>,
+): Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }> {
+  const normalized: Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }> = [];
   for (const entry of entries) {
     normalized.push({
       y: Math.max(0, Math.floor(entry.y)),
       id: Math.max(0, Math.floor(entry.id)),
+      ...(entry.idSet !== undefined ? { id_set: [...entry.idSet] } : {}),
+      ...(entry.condition !== undefined ? { condition: entry.condition } : {}),
+      ...(entry.interval !== undefined ? { interval: entry.interval } : {}),
     });
   }
   return normalized;
