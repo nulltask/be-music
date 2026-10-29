@@ -28,6 +28,7 @@ import { areBMSChartsEquivalent, areEventBmsonExtensionsEqual } from './equivale
 import type { BMSStringifyOptions } from './options.ts';
 
 export function stringifyBMS(json: BeMusicJSON, options: BMSStringifyOptions = {}): string {
+  assertBmsonKeysFitBMS(json);
   const eol = options.eol ?? '\n';
   const maxResolution = options.maxResolution;
   const skipValidation = options.skipPreservationValidation === true;
@@ -57,6 +58,41 @@ export function stringifyBMS(json: BeMusicJSON, options: BMSStringifyOptions = {
   pushControlFlowLines(lines, json);
 
   return lines.join(eol);
+}
+
+/** BMS object IDs are exactly two characters; truncating bmson keys would alias unrelated resources. */
+function assertBmsonKeysFitBMS(json: BeMusicJSON): void {
+  if (json.sourceFormat !== 'bmson') {
+    return;
+  }
+  const fail = (key: string): never => {
+    throw new RangeError(
+      `Cannot export bmson resource key "${key}" to two-character BMS IDs. Keep bmson or Be-Music JSON, or reduce and remap resources before exporting BMS.`,
+    );
+  };
+  for (const table of [
+    ...Object.values(json.resources),
+    json.bms.exRank,
+    json.bms.argb,
+    json.bms.changeOption,
+    json.bms.exWAV,
+    json.bms.exBMP,
+    json.bms.bga,
+    json.bms.scroll,
+    json.bms.speed,
+    json.bms.swBGA,
+  ]) {
+    for (const key of Object.keys(table)) {
+      if (key.length > 2) {
+        fail(key);
+      }
+    }
+  }
+  for (const event of json.events) {
+    if (event.value.length > 2) {
+      fail(event.value);
+    }
+  }
 }
 
 function resolvePreservedBMSSourceLinesForOutput(json: BeMusicJSON, skipValidation: boolean): string[] | undefined {

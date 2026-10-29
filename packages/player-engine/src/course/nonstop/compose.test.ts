@@ -477,3 +477,25 @@ test('NONSTOP keeps an up sound on its LN tail with its source slice coordinates
   expect(note.endSoundEvent!.bmson).toMatchObject({ up: true, sampleOffsetSeconds: 0 });
   expect(resolved.notes.filter((note) => result.chart.resources.wav[note.sampleKey] === 's0/end.wav')).toEqual([]);
 });
+
+test('NONSTOP preserves source channels beyond the BMS capacity across bmson stages', () => {
+  const source = parseChart(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 120 },
+      sound_channels: Array.from({ length: 3_844 }, (_, index) => ({
+        name: `sample-${index}.wav`,
+        notes: [{ x: 1, y: index * 240 }],
+      })),
+    }),
+    'bmson',
+  );
+  const result = stitchNonstopCourse([{ chart: source }, { chart: source }], { connections: ['blank2'] });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const triggers = resolveChart(result.chart).sampleTriggers;
+  expect(triggers).toHaveLength(7_688);
+  expect(triggers.filter((trigger) => trigger.samplePath?.endsWith('sample-3843.wav'))).toHaveLength(2);
+  const finalTriggers = triggers.filter((trigger) => trigger.samplePath?.endsWith('sample-3843.wav'));
+  expect(finalTriggers[0]!.sampleKey).not.toBe(finalTriggers[1]!.sampleKey);
+});

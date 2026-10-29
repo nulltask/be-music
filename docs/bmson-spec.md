@@ -176,7 +176,7 @@ flowchart TD
 - `info.total` is a percentage of the player's default TOTAL, not an absolute TOTAL. Every player ruleset (`lr2`, `beatoraja`, `____`) plays it as `total / 100 ×` its own default TOTAL, and a value ≤ 0 means 100 % — the beatoraja behaviour (`BMSPlayerRule.validate`) — so `total: 0` does not freeze the gauge even though the spec says the lifebar then does not increase. See [player-spec](./player-spec.md#initial-and-default-values-lr2).
 - Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into normalized metadata image fields.
 - Register `sound_channels[i].name` in `resources.wav[key]`
-- Each sound channel gets its own 2-char WAV key, numbered from `01` in channel order (`sound_channels`, then `key_channels`, then `mine_channels`)
+- Each sound channel gets its own WAV key of at least two characters, numbered from `01` in channel order (`sound_channels`, then `key_channels`, then `mine_channels`)
 - Convert `notes[].y` to fractional position and turn it into an event
 - `notes[].l/c` is kept as `events[].bmson.l/c`
 - `notes[].t` (1 = LN, 2 = CN, 3 = HCN) is kept as `events[].bmson.t` on long notes (`l > 0`); `info.ln_type` is kept as `bmson.info.lnType`
@@ -205,7 +205,8 @@ flowchart TD
 - An out-of-table note on the same `y` as a playable note of the same sound channel is dropped, like an `x = 0` note.
 - `bpm_events` is converted to `resources.bpm` + channel `08`
 - `stop_events` is converted to `resources.stop` + channel `09`
-- BPM and STOP values get one key per distinct value, in order of first appearance, so a gimmick chart with thousands of changes that repeat a few values needs only a few keys. A 2-char key holds 1,295 slots in base 36 (`01`–`ZZ`); when the WAV channels or the distinct values of one table need more, the chart switches to base-62 keys (`bms.base = 62`, 3,843 slots), so no key wraps round onto an earlier value. Past 3,843, a BPM / STOP value takes the key of the nearest value that has one, and further WAV channels are dropped; beatoraja has no such limit, but no known chart reaches it
+- BPM, STOP and SCROLL values get one exact key per distinct value, in order of first appearance; repeated values share a key. Keys use base 36 until a resource table needs more than 1,295 entries, then base 62 (`bms.base = 62`). Beyond 3,843 entries, internal keys grow to three or more characters: no sound/key/mine channels are dropped and no timing or scroll values are approximated. Be-Music JSON and bmson output retain these identities. BMS export throws a `RangeError` when resource or event keys exceed two characters; keep bmson/Be-Music JSON, or reduce and remap resources before converting.
+- STOP fingerprints use the resolved duration rather than treating a resource key as an index into the preserved source array. Fingerprints can change for charts affected by repeated-duration or base-62 STOP lookup errors. Existing record and replay schemas remain unchanged.
 - Original array of `bpm_events` is kept in `preservation.bmson.bpmEvents`
 - Original array of `stop_events` is kept in `preservation.bmson.stopEvents`
 - The beatoraja extension `scroll_events` is converted to `bms.scroll` (the `#SCROLLxx` table, one key per distinct `rate`) + channel `SC`, so it plays through the BMS SCROLL machinery (scroll timeline, lane distances, green number). A rate holds until the next scroll event, as `#SCROLL` does; of several events on one `y` the last one in the list wins, as in beatoraja. Any finite `rate` is kept, zero and negative included; an entry without a finite `y` or `rate` is skipped. The authored array is kept in `preservation.bmson.scrollEvents` (left out when there is none)

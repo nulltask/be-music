@@ -176,7 +176,7 @@ flowchart TD
 - `info.total` はプレイヤー既定 TOTAL に対する百分率で、絶対 TOTAL ではない。プレイヤーの全ルールセット（`lr2`、`beatoraja`、`____`）はこれを各ルールセット自身の既定 TOTAL の `total / 100 ×` として扱い、0 以下は 100 % とみなす（beatoraja の `BMSPlayerRule.validate` と同じ）。仕様では `0` はライフバーが増えない意味だが、`total: 0` でもゲージは止まらない。詳細は [player-spec](./player-spec.ja.md#初期値と既定値lr2) を参照
 - `info.back_image`, `info.banner_image`, `info.eyecatch_image` を normalized metadata image field に mirror
 - `sound_channels[i].name` を `resources.wav[key]` に登録
-- サウンドチャンネルごとに 2 文字の WAV キーを割り当てる。番号はチャンネル順（`sound_channels`、`key_channels`、`mine_channels`）に `01` から
+- サウンドチャンネルごとに最低 2 文字の WAV キーを割り当てる。番号はチャンネル順（`sound_channels`、`key_channels`、`mine_channels`）に `01` から
 - `notes[].y` を分数位置へ変換してイベント化
 - `notes[].l/c` は `events[].bmson.l/c` として保持
 - `notes[].t`（1 = LN、2 = CN、3 = HCN）はロングノート（`l > 0`）のとき `events[].bmson.t` として保持し、`info.ln_type` は `bmson.info.lnType` に保持
@@ -205,7 +205,8 @@ flowchart TD
 - 表にないノートが同じ sound channel の playable ノートと同じ `y` にある場合は、`x = 0` のノートと同じく捨てる
 - `bpm_events` は `resources.bpm` + チャンネル `08` へ変換
 - `stop_events` は `resources.stop` + チャンネル `09` へ変換
-- BPM と STOP の値には、異なる値ごとに初出順で 1 つのキーを割り当てる。数千の変化が少数の値を繰り返すギミック譜面でもキーは数個で済む。2 文字のキーは base 36 で 1,295 個（`01`〜`ZZ`）。WAV チャンネルか 1 つの表の異なる値がそれを超える譜面は base 62 のキー（`bms.base = 62`、3,843 個）に切り替え、キーが一周して前の値を上書きすることはない。3,843 を超えた BPM / STOP の値は、キーを持つ最も近い値のキーを使い、それ以上の WAV チャンネルは捨てる。beatoraja にはこの上限がないが、そこまで達する既知の譜面はない
+- BPM・STOP・SCROLL は、異なる値ごとに初出順で正確なキーを 1 つ割り当て、同じ値ではキーを共有する。各リソース表が 1,295 件までは base 36、それを超えると base 62（`bms.base = 62`）を使う。3,843 件を超えた内部キーは 3 文字以上に延び、sound/key/mine チャンネルの欠落やタイミング・スクロール値の近似は行わない。Be-Music JSON と bmson 出力でも識別を保つ。BMS 出力では、リソースまたはイベントのキーが 2 文字を超えると `RangeError` を返す。bmson / Be-Music JSON を使うか、リソースを減らしてキーを振り直してから変換する。
+- STOP のフィンガープリントは、リソースキーを保持済みソース配列の番号として扱わず、解決済みの長さから計算する。同じ長さの繰り返しや base 62 の STOP 参照に誤りがあった譜面では、フィンガープリントが変わる場合がある。記録・リプレイのスキーマは変更しない。
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
 - `stop_events` の元配列は `preservation.bmson.stopEvents` に保持
 - beatoraja 拡張の `scroll_events` は `bms.scroll`（`#SCROLLxx` の表。異なる `rate` ごとに 1 キー）+ チャンネル `SC` へ変換し、BMS の SCROLL の仕組み（スクロールのタイムライン、レーン上の距離、緑数字）でそのまま再生する。速度は `#SCROLL` と同じく次のスクロールイベントまで続く。同じ `y` に複数あれば、beatoraja と同じくリストの最後のものが勝つ。有限の `rate` は 0 や負の値も含めて保持し、`y` か `rate` が有限数でない要素は読み飛ばす。元配列は `preservation.bmson.scrollEvents` に保持する（ない場合は省く）

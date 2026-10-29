@@ -11,7 +11,6 @@
 import {
   DEFAULT_BPM,
   normalizeChannel,
-  normalizeObjectKey,
   resolveBMSBase,
   type BeMusicEvent,
   type BeMusicJSON,
@@ -749,13 +748,18 @@ function computeStops(context: ItemContext, events: BeMusicEvent[]): TimelineIte
   const { json, bmson } = context;
   const items: TimelineItem[] = [];
   const beatResolver = createBeatResolver(json);
+  // Resource keys deduplicate durations and use the chart's radix; they are not source-event indices.
+  const preservedDurationByUnits = new Map<number, number>();
+  if (bmson) {
+    for (const stop of json.preservation.bmson.stopEvents) {
+      preservedDurationByUnits.set((stop.duration * 48) / bmson.resolution, stop.duration);
+    }
+  }
   for (const stop of collectStopChanges(json, events, beatResolver)) {
     let beats: Rational | undefined;
-    const bmsonStop = bmson
-      ? json.preservation.bmson.stopEvents[Number.parseInt(normalizeObjectKey(stop.event.value, context.base), 36) - 1]
-      : undefined;
-    if (bmson && bmsonStop && bmsonStop.duration > 0) {
-      const pulses = rationalFromNumber(bmsonStop.duration);
+    const duration = preservedDurationByUnits.get(stop.duration);
+    if (bmson && duration !== undefined && duration > 0) {
+      const pulses = rationalFromNumber(duration);
       beats = pulses && divideRational(snapValue(pulses), createRational(BigInt(bmson.resolution)));
     } else {
       const units = rationalFromNumber(stop.duration);

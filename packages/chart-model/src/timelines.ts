@@ -110,7 +110,14 @@ export interface KeyframeChange {
  * included). Not part of the package API (the chart fingerprint reads exact positions from the events).
  */
 export function collectScrollChanges(json: BeMusicJSON, sortedEvents: ReadonlyArray<BeMusicEvent>): KeyframeChange[] {
-  return collectKeyframeChanges(json.bms.scroll, resolveBMSBase(json), sortedEvents, isScrollChannel, true);
+  return collectKeyframeChanges(
+    json.bms.scroll,
+    resolveBMSBase(json),
+    sortedEvents,
+    isScrollChannel,
+    true,
+    json.sourceFormat === 'bmson',
+  );
 }
 
 /**
@@ -124,6 +131,7 @@ export function collectSpeedChanges(json: BeMusicJSON, sortedEvents: ReadonlyArr
     sortedEvents,
     (channel) => normalizeChannel(channel) === 'SP',
     false,
+    json.sourceFormat === 'bmson',
   );
 }
 
@@ -133,13 +141,14 @@ function collectKeyframeChanges(
   sortedEvents: ReadonlyArray<BeMusicEvent>,
   isChannel: (channel: string) => boolean,
   allowNegative: boolean,
+  allowLongKeys: boolean,
 ): KeyframeChange[] {
   const changes: KeyframeChange[] = [];
   for (const event of sortedEvents) {
     if (!isChannel(event.channel)) {
       continue;
     }
-    const key = normalizeObjectKey(event.value, idBase);
+    const key = normalizeObjectKey(event.value, idBase, allowLongKeys);
     if (!Object.hasOwn(values, key)) {
       continue;
     }

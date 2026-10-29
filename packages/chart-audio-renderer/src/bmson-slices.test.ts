@@ -2,6 +2,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vite-plus/test';
+import { parseBmson } from '@be-music/chart-parser';
 import { createEmptyJSON } from '@be-music/chart-source';
 import { encodeWAV16 } from './core/file-codec.ts';
 import { renderJSON } from './index.ts';
@@ -69,4 +70,20 @@ test('offline rendering plays a paired up slice but leaves an orphan up slice si
   expect(rendered.left[5000]).toBeCloseTo(0.25, 4);
   expect(rendered.left[7000]).toBe(0);
   expect(rendered.left[9000]).toBeCloseTo(0.125, 4);
+});
+
+test('offline rendering keeps channels beyond the BMS key capacity audible', async () => {
+  const json = parseBmson(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 120 },
+      sound_channels: Array.from({ length: 3_845 }, (_, index) => ({
+        name: index >= 3_843 ? 'stem.wav' : 'unused.wav',
+        notes: index >= 3_843 ? [{ x: 1, y: 0 }] : [],
+      })),
+    }),
+  );
+  const rendered = await renderJSON(json, options());
+  expect(rendered.left[2000]).toBeCloseTo(0.25, 4);
+  expect(rendered.left[6000]).toBeCloseTo(0.5, 4);
 });
