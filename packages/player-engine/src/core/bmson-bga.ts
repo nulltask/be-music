@@ -13,6 +13,8 @@ export interface BmsonBGAFrame {
   key?: string;
   startedSeconds: number;
   frameStartSeconds: number;
+  stage?: number;
+  playbackRate?: number;
 }
 
 /** Shared by live judging and silent replay/AUTO seek reconstruction. */
@@ -94,8 +96,13 @@ export class BmsonBGAController {
         this.ordinal = 0;
       } else if (input && input.seconds <= seconds) {
         this.inputCursor++;
-        if (input.condition === 'play' && this.active?.cue.condition === 'miss') this.active = undefined;
         const selected = this.selection;
+        if (
+          input.seconds >= (selected?.endSeconds ?? Infinity) ||
+          input.seconds > (selected?.freezeSeconds ?? Infinity)
+        )
+          continue;
+        if (input.condition === 'play' && this.active?.cue.condition === 'miss') this.active = undefined;
         if (
           selected?.condition === input.condition &&
           input.seconds - this.lastTrigger + 1e-9 >= Math.max(0, selected.interval) / 1000
@@ -106,24 +113,29 @@ export class BmsonBGAController {
       } else break;
     }
     this.through = seconds;
+    if (this.selection && seconds >= (this.selection.endSeconds ?? Infinity)) return undefined;
+    const animationSeconds = Math.min(seconds, this.selection?.freezeSeconds ?? Infinity);
     let active = this.active;
     if (this.selection?.condition === 'always') {
       const cue = this.selection;
       const interval = Math.max(0, cue.interval) / 1000;
-      const cycle = interval > 0 ? Math.floor((seconds - cue.seconds + 1e-9) / interval) : 0;
-      active = { cue, seconds: cue.seconds + cycle * interval, choice: cycle };
+      const anchor = cue.animationStartSeconds ?? cue.seconds;
+      const cycle = interval > 0 ? Math.floor((animationSeconds - anchor + 1e-9) / interval) : 0;
+      active = { cue, seconds: anchor + cycle * interval, choice: cycle };
     }
     if (!active || active.cue.sequences.length === 0) return undefined;
     const choice = Number.isFinite(active.choice) ? Math.trunc(active.choice) : 0;
     const count = active.cue.sequences.length;
     const sequence = active.cue.sequences[((choice % count) + count) % count]!;
-    const frame = pickBmsonBGASequenceFrame(sequence, Math.max(0, seconds - active.seconds) + 1e-9);
+    const frame = pickBmsonBGASequenceFrame(sequence, Math.max(0, animationSeconds - active.seconds) + 1e-9);
     if (!frame) return undefined;
     return {
       plane: active.cue.condition === 'miss' ? 'poor' : 'layer',
       key: frame.key,
       startedSeconds: active.seconds,
       frameStartSeconds: active.seconds + frame.elapsedSeconds,
+      ...(active.cue.stage !== undefined ? { stage: active.cue.stage } : {}),
+      ...(active.cue.playbackRate !== undefined ? { playbackRate: active.cue.playbackRate } : {}),
     };
   }
 

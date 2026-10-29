@@ -1,4 +1,4 @@
-import type { KeyBoundBGACue } from '@be-music/chart-model';
+import type { BmsonBGAEventCue, KeyBoundBGACue } from '@be-music/chart-model';
 import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import type { BeMusicJSON } from '@be-music/chart-source';
@@ -9,6 +9,7 @@ import type { PlayerUIFramePatch } from './ui-frame-patch.ts';
 
 export interface NodeUIWorkerInitData {
   keyBoundBGACues?: readonly KeyBoundBGACue[];
+  bmsonBGACues?: readonly BmsonBGAEventCue[];
   json: BeMusicJSON;
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;

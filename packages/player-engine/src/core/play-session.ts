@@ -567,9 +567,11 @@ export async function createPlaySession(
             ),
           ],
         });
-  const bmsonCues = buildBmsonBGAEventTimeline(resolvedChart.source, resolvedChart.timing, {
-    includeOrdinaryLayerClears: true,
-  });
+  const bmsonCues =
+    options.bmsonBGACues ??
+    buildBmsonBGAEventTimeline(resolvedChart.source, resolvedChart.timing, {
+      includeOrdinaryLayerClears: true,
+    });
   const bmsonBGA = bmsonCues.length > 0 ? new BmsonBGAController(bmsonCues, freezeSeconds) : undefined;
   const publishUIFrame = createUIFramePublisher({
     uiEnabled,

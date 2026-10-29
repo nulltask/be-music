@@ -583,3 +583,31 @@ it('draws conditional bmson frames on their plane and restarts movies at the eng
   base.destroy(true);
   sequence.destroy(true);
 });
+
+it.each(['layer', 'poor'] as const)('scales independent bmson %s movie playheads by FIT and tempo', (plane) => {
+  const texture = fakeTexture();
+  const video = fakeVideo();
+  const key = String.fromCharCode(0) + plane + ':sequence';
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    textures: new Map([
+      ['sequence', texture],
+      [key, texture],
+    ]),
+    layerTextures: new Map([
+      ['sequence', texture],
+      [key, texture],
+    ]),
+    videoElements: new Map([[key, video as unknown as HTMLVideoElement]]),
+    cues: { base: [], layer: [], poor: [] },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  layer.update(3, context, false, {
+    tempo: 1.5,
+    bmsonBGA: { plane, key: 'sequence', stage: 1, startedSeconds: 1, frameStartSeconds: 2.5, playbackRate: 2 },
+  });
+  expect(video.currentTime).toBe(1);
+  expect(video.playbackRate).toBe(3);
+  layer.dispose();
+  texture.destroy(true);
+});

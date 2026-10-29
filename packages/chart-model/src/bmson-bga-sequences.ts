@@ -16,6 +16,15 @@ export interface ResolvedBmsonBGASequence {
 /** A sequence selection; the engine supplies trigger times and a choice among alternatives. */
 export interface BmsonBGAEventCue {
   seconds: number;
+  /** NONSTOP stage ownership and exclusive end on the composed clock. */
+  stage?: number;
+  endSeconds?: number;
+  /** Original ALWAYS start, retained when a stage begins partway through an animation. */
+  animationStartSeconds?: number;
+  /** Source seconds per composed second for movie playback. */
+  playbackRate?: number;
+  /** Freeze animation at a source timing reversal without extending the stage window. */
+  freezeSeconds?: number;
   plane: 'layer' | 'poor';
   condition: 'always' | 'play' | 'miss';
   /** Authored event-start interval; the Be-Music controller interprets it as chart milliseconds, not pulses. */

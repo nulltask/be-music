@@ -126,3 +126,51 @@ test('an ordinary layer cue ends an earlier conditional selection', async () => 
   expect(at(frames, 1.01)?.bga?.key).toBe('a.png');
   expect(at(frames, 3.01)?.bga).toBeUndefined();
 });
+
+test.each(['auto', 'replay'] as const)(
+  'NONSTOP %s uses mapped resources and restores stage ownership after seek',
+  async (driver) => {
+    const { stitchNonstopCourse } = await import('../course/nonstop/compose.ts');
+    const { resolveChart } = await import('@be-music/chart-model');
+    const stage = chart();
+    const result = stitchNonstopCourse([{ chart: stage }, { chart: stage }], { connections: ['cut'] });
+    if (!result.ok) throw new Error(result.reason);
+    const notes = resolveChart(result.chart).notes;
+    const second = notes.find((note) => note.seconds >= result.map.stages[1]!.windowStart)!;
+    const target = second.seconds + 0.15;
+    const frames: Frame[] = [];
+    const observed = await observePlay({
+      driver: driver === 'auto' ? 'auto' : 'manual',
+      chart: result.chart,
+      options: {
+        bmsonBGACues: result.map.bmsonBGA,
+        ...(driver === 'replay'
+          ? {
+              replayInputs: notes.flatMap((note, index) => [
+                {
+                  seq: index * 2,
+                  timeUs: Math.round(note.seconds * 1e6),
+                  action: 'down' as const,
+                  channels: [note.channel],
+                },
+                {
+                  seq: index * 2 + 1,
+                  timeUs: Math.round((note.seconds + 0.06) * 1e6),
+                  action: 'up' as const,
+                  channels: [note.channel],
+                },
+              ]),
+            }
+          : {}),
+      },
+      script: [{ atMs: (target + 0.1) * 1000, command: { kind: 'seek', seconds: target } }],
+      onFrame: capture(frames),
+    });
+    expect(observed.outcome).toBe('completed');
+    const first = frames.find((frame) => frame.bga?.stage === 0)!;
+    expect(first).toBeDefined();
+    expect(result.chart.resources.bmp[first.bga!.key!]).toBe('a.png');
+    expect(at(frames, target, 1)?.bga).toMatchObject({ stage: 1, startedSeconds: second.seconds });
+    expect(result.chart.resources.bmp[at(frames, target, 1)!.bga!.key!]).toBe('b.png');
+  },
+);

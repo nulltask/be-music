@@ -502,6 +502,7 @@ export async function initializePlayerUIRuntime({
     imageResizeAlgorithm: options.imageResizeAlgorithm ?? DEFAULT_IMAGE_RESIZE_ALGORITHM,
     videoBGAStreaming: options.videoBGAStreaming,
     keyBoundBGACues: options.keyBoundBGACues,
+    bmsonBGACues: options.bmsonBGACues,
     showLaneChannels: Boolean(options.debugActiveAudio),
     randomPatternSummary,
     stateSignals,

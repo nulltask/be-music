@@ -14,6 +14,7 @@ import {
   resolvePoorBGAMode,
   type BmsARGB,
   type KeyBoundBGACue,
+  type BmsonBGAEventCue,
 } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { loadAssetBytes, resolveChartBGAAsset } from '../collection/collection.ts';
@@ -80,10 +81,11 @@ export function collectPlayBGAResources(
   timeline: PlayBGATimeline,
   poorFallbackKey: string | undefined,
   includeBmsonEvents = true,
+  bmsonBGACues?: readonly BmsonBGAEventCue[],
 ): { paths: Map<string, string>; base: Set<string>; layer: Set<string> } {
   const { base, layer } = collectBGATextureLoadKeys(chart, timeline, poorFallbackKey);
   const sequences = includeBmsonEvents
-    ? collectBmsonBGAFrameKeys(chart)
+    ? collectBmsonBGAFrameKeys(chart, bmsonBGACues)
     : { layer: new Set<string>(), poor: new Set<string>() };
   const extras = collectBGATextureLoadKeys(
     chart,
@@ -115,6 +117,7 @@ export function collectPlayBGAResources(
 export interface LoadPlayBGAOptions {
   /** Remapped selections from NONSTOP; omitted uses the chart A5 controls. */
   keyBoundBGACues?: readonly KeyBoundBGACue[];
+  bmsonBGACues?: readonly BmsonBGAEventCue[];
   /** The resolved chart (after `#RANDOM` / `#IF`). */
   chart: BeMusicJSON;
   source: BrowserAssetSource;
@@ -178,6 +181,7 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
     options.timeline,
     options.poorFallbackKey,
     swBGAColorKey === undefined,
+    options.bmsonBGACues,
   );
   // The bmson spec draws layer blacks as black ("Unlike BMS Layer Channel #xxx07"); BMS keys them out.
   const keyOutLayerBlack = chart.sourceFormat !== 'bmson' && swBGAColorKey === undefined;
@@ -186,7 +190,7 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
     collectBGATextureLoadKeys(chart, { base: cues, layer: [], poor: [] }, undefined).base;
   const sequenceKeys =
     swBGAColorKey === undefined
-      ? collectBmsonBGAFrameKeys(chart)
+      ? collectBmsonBGAFrameKeys(chart, options.bmsonBGACues)
       : { layer: new Set<string>(), poor: new Set<string>() };
   const firstLayer = trackKeys([
     ...options.timeline.layer,

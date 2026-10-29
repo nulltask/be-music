@@ -5,6 +5,7 @@ import {
   type ResolvedChart,
   type BGAOpacityTimelines,
   type KeyBoundBGACue,
+  type BmsonBGAEventCue,
 } from '@be-music/chart-model';
 import {
   createEmptyJSON,
@@ -29,6 +30,7 @@ import {
 } from './readouts.ts';
 import { createNonstopStageTiming } from './stage.ts';
 import { flattenNonstopBGAOpacity, hasBGAOpacity, placeNonstopBGAOpacity } from './bga-opacity.ts';
+import { placeNonstopBmsonBGA } from './bmson-bga.ts';
 import { placeNonstopKeyBoundBGA } from './key-bound-bga.ts';
 import { createNonstopBMPAllocator } from './bga-resources.ts';
 
@@ -97,6 +99,8 @@ export interface NonstopStitchStage {
 export interface NonstopStitchMap {
   /** Remapped input-bound BGA selections, with stage ownership windows on the stitched clock. */
   keyBoundBGA?: KeyBoundBGACue[];
+  /** Resolved conditional animations, remapped to stage-owned resources and FIT time. */
+  bmsonBGA?: BmsonBGAEventCue[];
   stages: NonstopStitchStage[];
   /**
    * What the BPM readouts show over the play ({@link resolveNonstopTempo}, look it up with `nonstopBPMAt`): each
@@ -197,6 +201,7 @@ export function stitchNonstopCourse(
   const wavKeys = new NonstopKeyAllocator(asBmson);
   const bmpKeys = new NonstopKeyAllocator(asBmson);
   const keyBoundBGA: KeyBoundBGACue[] = [];
+  const bmsonBGA: BmsonBGAEventCue[] = [];
   const stopKeys = new NonstopKeyAllocator(asBmson);
   const chart = createEmptyJSON(asBmson ? 'bmson' : 'bms');
   let totalStage = stages.length - 1;
@@ -273,6 +278,9 @@ export function stitchNonstopCourse(
     const keyBound = placeNonstopKeyBoundBGA(chartIndex, placements[index]!, window, index, bmp);
     if (!keyBound) return { ok: false, reason: 'id-space', stage: index };
     keyBoundBGA.push(...keyBound);
+    const bmson = placeNonstopBmsonBGA(chartIndex, placements[index]!, window, index, bmp);
+    if (!bmson) return { ok: false, reason: 'id-space', stage: index };
+    bmsonBGA.push(...bmson);
     if (!addStageObjects(chartIndex, push, wav, bmp, asBmson)) return { ok: false, reason: 'id-space', stage: index };
 
     for (const stop of chartIndex.timing.stopPoints) {
@@ -367,6 +375,7 @@ export function stitchNonstopCourse(
     chart,
     map: {
       ...(keyBoundBGA.length > 0 ? { keyBoundBGA } : {}),
+      ...(bmsonBGA.some((cue) => cue.sequences.length > 0) ? { bmsonBGA } : {}),
       tempo: resolveNonstopTempo(readouts, placements, options),
       stageRanks,
       stages: placements.map((placement, index) => {

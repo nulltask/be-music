@@ -1,4 +1,4 @@
-import type { KeyBoundBGACue } from '@be-music/chart-model';
+import type { BmsonBGAEventCue, KeyBoundBGACue } from '@be-music/chart-model';
 import { createAbortError, isAbortError } from '@be-music/shared-utils/core';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import { effect } from 'alien-signals';
@@ -21,6 +21,7 @@ import type {
 
 export interface NodeUIRuntimeOptions {
   keyBoundBGACues?: readonly KeyBoundBGACue[];
+  bmsonBGACues?: readonly BmsonBGAEventCue[];
   json: NodeUIWorkerInitData['json'];
   mode: NodeUIWorkerInitData['mode'];
   laneDisplayMode: string;
@@ -297,6 +298,7 @@ function createWorkerInitData(options: NodeUIRuntimeOptions): NodeUIWorkerInitDa
     kittyGraphics: options.kittyGraphics,
     videoBGAStreaming: options.videoBGAStreaming,
     keyBoundBGACues: options.keyBoundBGACues,
+    bmsonBGACues: options.bmsonBGACues,
     useAlternateScreen: shouldUseAlternateScreen(process.platform),
     stdinIsTTY: Boolean(process.stdin.isTTY),
     stdoutIsTTY: Boolean(process.stdout.isTTY),

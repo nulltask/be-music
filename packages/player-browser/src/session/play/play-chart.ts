@@ -708,6 +708,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       ctx.bgaTimeline.layer.length > 0 ||
       (ctx.bgaTimeline.layer2?.length ?? 0) > 0 ||
       ctx.bgaTimeline.poor.length > 0 ||
+      (ctx.options.nonstop?.bmsonBGA?.some((cue) => cue.sequences.length > 0) ?? false) ||
       (ctx.options.nonstop?.keyBoundBGA ?? buildKeyBoundBGATimeline(resolvedPlay.source, resolvedPlay.timing)).length >
         0);
 }
