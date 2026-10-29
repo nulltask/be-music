@@ -113,9 +113,26 @@ export interface BmsonBGAHeaderEntry {
 export interface BmsonBGAEvent {
   y: number;
   id: number;
+  /** beatoraja layer-event alternatives, in authored order; overrides id for layer_events when present. */
+  idSet?: number[];
+  condition?: string;
+  interval?: number;
+}
+
+export interface BmsonBGASequenceFrame {
+  /** Elapsed milliseconds from the sequence trigger, independent of pulse resolution. */
+  time: number;
+  /** Zero-based bga_header array index, as in beatoraja. Missing id (or -2147483648) ends the sequence. */
+  id?: number;
+}
+
+export interface BmsonBGASequence {
+  id: number;
+  sequence: BmsonBGASequenceFrame[];
 }
 
 export interface BmsonBGAExtensions {
+  sequences?: BmsonBGASequence[];
   header: BmsonBGAHeaderEntry[];
   events: BmsonBGAEvent[];
   layerEvents: BmsonBGAEvent[];
@@ -430,9 +447,13 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
     notes: channel.notes.map((note) => ({ ...note })),
   }));
   const header = json.bmson.bga.header.map((entry) => ({ id: entry.id, name: entry.name }));
-  const bgaEvents = json.bmson.bga.events.map((event) => ({ y: event.y, id: event.id }));
-  const layerEvents = json.bmson.bga.layerEvents.map((event) => ({ y: event.y, id: event.id }));
-  const poorEvents = json.bmson.bga.poorEvents.map((event) => ({ y: event.y, id: event.id }));
+  const cloneBGAEvent = (event: BmsonBGAEvent): BmsonBGAEvent => ({
+    ...event,
+    ...(event.idSet !== undefined ? { idSet: [...event.idSet] } : {}),
+  });
+  const bgaEvents = json.bmson.bga.events.map(cloneBGAEvent);
+  const layerEvents = json.bmson.bga.layerEvents.map(cloneBGAEvent);
+  const poorEvents = json.bmson.bga.poorEvents.map(cloneBGAEvent);
 
   return {
     format: json.format,
@@ -476,6 +497,14 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
         subartists: json.bmson.info.subartists ? [...json.bmson.info.subartists] : undefined,
       },
       bga: {
+        ...(json.bmson.bga.sequences !== undefined
+          ? {
+              sequences: json.bmson.bga.sequences.map((entry) => ({
+                id: entry.id,
+                sequence: entry.sequence.map((frame) => ({ ...frame })),
+              })),
+            }
+          : {}),
         header,
         events: bgaEvents,
         layerEvents,

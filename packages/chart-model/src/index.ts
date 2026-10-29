@@ -212,3 +212,11 @@ export {
   type BMSKeyBoundBGA,
   type KeyBoundBGACue,
 } from './key-bound-bga.ts';
+
+export {
+  buildBmsonBGAEventTimeline,
+  pickBmsonBGASequenceFrame,
+  type BmsonBGAEventCue,
+  type ResolvedBmsonBGASequence,
+  type ResolvedBmsonBGASequenceFrame,
+} from './bmson-bga-sequences.ts';

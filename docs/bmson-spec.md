@@ -30,6 +30,8 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] Root: `stop_events`
 - [x] Root: `scroll_events` (beatoraja extension), read as BMS `#SCROLL` (channel `SC`)
 - [x] Root: `bga`
+- [x] Preserve beatoraja `bga_sequence` and event `id_set` / `condition` / `interval` through parsing, cloning, Be-Music JSON and bmson output
+- [ ] Connect sequence/conditional-event selection to engine judgments and browser/terminal rendering
 - [x] `info` extended item: `subartists`
 - [x] `info` extended item: `chart_name`
 - [x] `info` extended item: `mode_hint`
@@ -276,6 +278,14 @@ The bmson spec leaves the window for `judge_rank` to each player (default `100` 
 | be-music (`stringifyBmson`)                                                                                                                | `33` / `67` / `100` / `133` / `167`; `#DEFEXRANK` verbatim |
 
 be-music follows the NORMAL reading (`100` = NORMAL): it matches the spec's example and most players, and keeps a chart's windows when be-music converts it to bmson and reads it back. The cost is that a converted chart judges about 4/3 wider in beatoraja. Distributed bmson charts almost always carry the default `100`.
+
+### beatoraja BGA sequence data
+
+`bmson.bga.sequences` retains `bga_sequence` definitions, with millisecond `time` and optional frame `id`; omitted ids and `-2147483648` are end markers. Event arrays retain ordered `idSet`, `condition` and `interval`. A set-only event defaults its ordinary `id` to zero, matching beatoraja's integer default; a present empty set remains empty. External output uses `id_set`.
+
+The model exports `buildBmsonBGAEventTimeline` and `pickBmsonBGASequenceFrame`. Cue pulses use the BPM/STOP resolver, while frame times remain elapsed milliseconds. Sequence ids take precedence over image ids for event-layer references. Normal image references use declared header ids, but sequence frame ids use zero-based header array indices, as the [upstream decoder](https://github.com/exch-bms2/jbms-parser/blob/master/src/bms/model/BMSONDecoder.java) and [renderer](https://github.com/exch-bms2/beatoraja/blob/master/src/bms/player/beatoraja/play/bga/BGAProcessor.java) do. Missing images resolve to no image; an end marker stays ended until a new trigger. Ordinary image-only layers stay on the existing BGA timeline.
+
+This adds data preservation and deterministic sequence lookup. Engine judgment triggers, image-set selection, interval behavior and browser/terminal sequence rendering remain tracked by #826. The upstream renderer currently draws only MISS event layers and does not consume event intervals; preservation does not claim full playback support.
 
 ## Unsupported/incompatible for primary references
 

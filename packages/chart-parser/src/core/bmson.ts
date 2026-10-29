@@ -104,10 +104,11 @@ export interface BmsonDocument {
    */
   mine_channels?: BmsonExtensionChannel[];
   bga?: {
+    bga_sequence?: Array<{ id: number; sequence: Array<{ time: number; id?: number }> }>;
     bga_header?: Array<{ id: number; name: string }>;
-    bga_events?: Array<{ y: number; id: number }>;
-    layer_events?: Array<{ y: number; id: number }>;
-    poor_events?: Array<{ y: number; id: number }>;
+    bga_events?: Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }>;
+    layer_events?: Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }>;
+    poor_events?: Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }>;
   };
 }
 
@@ -540,6 +541,7 @@ export function normalizeBmsonBGAForIR(input: BmsonDocument['bga'] | undefined):
     };
   }
   return {
+    ...(input.bga_sequence !== undefined ? { sequences: normalizeBmsonBGASequences(input.bga_sequence) } : {}),
     header: normalizeBmsonBGAHeaderEntries(input.bga_header),
     events: normalizeBmsonBGAEventEntries(input.bga_events),
     layerEvents: normalizeBmsonBGAEventEntries(input.layer_events),
@@ -604,24 +606,52 @@ function normalizeBmsonBGAHeaderEntries(input: unknown): BeMusicJSON['bmson']['b
 }
 
 function normalizeBmsonBGAEventEntries(input: unknown): BeMusicJSON['bmson']['bga']['events'] {
-  if (!Array.isArray(input)) {
-    return [];
-  }
+  if (!Array.isArray(input)) return [];
   const entries: BeMusicJSON['bmson']['bga']['events'] = [];
   for (const item of input) {
-    if (!item || typeof item !== 'object') {
-      continue;
-    }
+    if (!item || typeof item !== 'object') continue;
     const raw = item as Record<string, unknown>;
     const id = normalizePositiveInteger(raw.id);
+    const rawIdSet = raw.idSet ?? raw.id_set;
+    const idSet = Array.isArray(rawIdSet)
+      ? rawIdSet.map(normalizePositiveInteger).filter((value): value is number => value !== undefined)
+      : undefined;
     const y = normalizePositiveInteger(raw.y);
-    if (id === undefined || y === undefined) {
-      continue;
-    }
+    if (y === undefined || (id === undefined && idSet === undefined)) continue;
+    const interval = normalizePositiveInteger(raw.interval);
     entries.push({
       y,
-      id,
+      id: id ?? 0,
+      ...(idSet !== undefined ? { idSet } : {}),
+      ...(typeof raw.condition === 'string' ? { condition: raw.condition } : {}),
+      ...(interval !== undefined ? { interval } : {}),
     });
+  }
+  return entries;
+}
+
+function normalizeBmsonBGASequences(input: unknown): NonNullable<BeMusicJSON['bmson']['bga']['sequences']> {
+  if (!Array.isArray(input)) return [];
+  const entries: NonNullable<BeMusicJSON['bmson']['bga']['sequences']> = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as Record<string, unknown>;
+    const id = normalizePositiveInteger(raw.id);
+    if (id === undefined || !Array.isArray(raw.sequence)) continue;
+    const sequence: (typeof entries)[number]['sequence'] = [];
+    for (const item of raw.sequence) {
+      if (!item || typeof item !== 'object') continue;
+      const frame = item as Record<string, unknown>;
+      const time = normalizePositiveInteger(frame.time);
+      if (time === undefined) continue;
+      if (frame.id === undefined || frame.id === -2147483648) {
+        sequence.push({ time, ...(frame.id === -2147483648 ? { id: -2147483648 } : {}) });
+      } else {
+        const id = normalizePositiveInteger(frame.id);
+        if (id !== undefined) sequence.push({ time, id });
+      }
+    }
+    entries.push({ id, sequence });
   }
   return entries;
 }
@@ -853,6 +883,9 @@ function normalizeBmsonBGAFromIR(input: unknown): BeMusicJSON['bmson']['bga'] {
   }
   const raw = input as Record<string, unknown>;
   return {
+    ...((raw.sequences ?? raw.bga_sequence) !== undefined
+      ? { sequences: normalizeBmsonBGASequences(raw.sequences ?? raw.bga_sequence) }
+      : {}),
     header: normalizeBmsonBGAHeaderEntries(raw.header ?? raw.bga_header),
     events: normalizeBmsonBGAEventEntries(raw.events ?? raw.bga_events),
     layerEvents: normalizeBmsonBGAEventEntries(raw.layerEvents ?? raw.layer_events),
