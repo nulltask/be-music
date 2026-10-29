@@ -22,7 +22,7 @@ import { collectBGATextureLoadKeys, isVideoExtension, type BGACue } from './bga-
 import { logger } from '../logger.ts';
 import { collectBGASubRegions } from './bga-subregions.ts';
 
-import { createKeyBoundVideoTexture } from '../media/key-bound-video.ts';
+import { createColorKeyVideoTexture } from '../media/color-key-video.ts';
 import { keyBoundBGAResourceKey } from './key-bound-bga.ts';
 
 const log = logger('play-bga');
@@ -198,11 +198,21 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
           }
           let texture = handle.texture;
           let dispose: (() => void) | undefined;
-          if (swBGAColorKey) {
-            const keyed = createKeyBoundVideoTexture(handle.video, swBGAColorKey, resolveBmsExBMPColorKey(chart, key));
-            texture = keyed.texture;
-            dispose = keyed.dispose;
-            into.layerTextures.set(`${String.fromCharCode(0)}native:${videoKey}`, handle.texture);
+          const bmsColorKey = resolveBmsExBMPColorKey(chart, key);
+          if (swBGAColorKey || bmsColorKey) {
+            try {
+              const keyed = createColorKeyVideoTexture(handle.video, { swBGAColorKey, bmsColorKey });
+              texture = keyed.texture;
+              dispose = keyed.dispose;
+              (base.has(key) ? into.textures : into.layerTextures).set(
+                `${String.fromCharCode(0)}native:${videoKey}`,
+                handle.texture,
+              );
+            } catch (error) {
+              releaseVideo(handle);
+              destroyTexture(handle.texture);
+              throw error;
+            }
           }
           texture.label = `bga[${key}]:video`;
           handle.video.pause();

@@ -1,5 +1,5 @@
 import { keyBoundBGAResourceKey } from '../../chart/key-bound-bga.ts';
-import { isKeyBoundVideoCanvas } from '../../media/key-bound-video.ts';
+import { isColorKeyVideoCanvas } from '../../media/color-key-video.ts';
 /**
  * The chart's BGA on the built-in and LR2 play screens: composites the base, layer and POOR
  * images (or a stitched NONSTOP chart's per-stage stacks) into the skin's BGA rects, or hands them to a be-music skin
@@ -416,7 +416,7 @@ function resolveSkinBGAImage(
   const { frame } = texture;
   // A keyed video is a canvas rather than a <video>; present a full-source movie at the BMS canvas size
   // so Canvas skins retain the same fill behavior as Pixi. Aliases keep their native crop dimensions.
-  const fullKeyedVideo = !subRegion && isKeyBoundVideoCanvas(resource);
+  const fullKeyedVideo = !subRegion && isColorKeyVideoCanvas(resource);
   if (
     !fullKeyedVideo &&
     !subRegion &&
@@ -427,7 +427,7 @@ function resolveSkinBGAImage(
   ) {
     return resource;
   }
-  if ('videoWidth' in resource || isKeyBoundVideoCanvas(resource)) {
+  if ('videoWidth' in resource || isColorKeyVideoCanvas(resource)) {
     let canvas = videoCrops.get(texture);
     if (!canvas) {
       canvas = document.createElement('canvas');

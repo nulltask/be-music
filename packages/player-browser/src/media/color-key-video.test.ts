@@ -1,13 +1,23 @@
 import { Texture } from 'pixi.js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
-import { createKeyBoundVideoTexture, isKeyBoundVideoCanvas } from './key-bound-video.ts';
+import { createColorKeyVideoTexture, isColorKeyVideoCanvas } from './color-key-video.ts';
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
-test('keys each native video frame, keeps unkeyed black and cancels callbacks on disposal', () => {
+test.each([
+  { keys: { swBGAColorKey: { a: 255, r: 255, g: 255, b: 255 } }, white: 0, red: 255 },
+  { keys: { bmsColorKey: { a: 0, r: 255, g: 255, b: 255 } }, white: 0, red: 255 },
+  { keys: { bmsColorKey: { a: 255, r: 255, g: 255, b: 255 } }, white: 255, red: 255 },
+  { keys: { bmsColorKey: { a: 0, r: 0, g: 0, b: 0 } }, white: 255, red: 255 },
+  {
+    keys: { bmsColorKey: { a: 0, r: 237, g: 23, b: 75 }, swBGAColorKey: { a: 255, r: 255, g: 255, b: 255 } },
+    white: 0,
+    red: 0,
+  },
+])('keys successive native video frames and disposes their callbacks (%j)', ({ keys, white, red }) => {
   let source = new Uint8ClampedArray([255, 255, 255, 255, 237, 23, 75, 255, 0, 0, 0, 255]);
   let output: Uint8ClampedArray = new Uint8ClampedArray();
   let next: (() => void) | undefined;
@@ -39,18 +49,18 @@ test('keys each native video frame, keeps unkeyed black and cancels callbacks on
   const update = vi.fn();
   vi.stubGlobal('document', { createElement: () => canvas });
   vi.spyOn(Texture, 'from').mockReturnValue({ source: { update } } as unknown as Texture);
-  const keyed = createKeyBoundVideoTexture(video, { a: 255, r: 255, g: 255, b: 255 });
-  expect([...output]).toEqual([255, 255, 255, 0, 237, 23, 75, 255, 0, 0, 0, 255]);
-  expect(isKeyBoundVideoCanvas(canvas)).toBe(true);
+  const keyed = createColorKeyVideoTexture(video, keys);
+  expect([...output]).toEqual([255, 255, 255, white, 237, 23, 75, red, 0, 0, 0, 255]);
+  expect(isColorKeyVideoCanvas(canvas)).toBe(true);
   source = new Uint8ClampedArray([255, 255, 255, 255, 22, 207, 99, 255, 0, 0, 0, 255]);
   next!();
-  expect([...output]).toEqual([255, 255, 255, 0, 22, 207, 99, 255, 0, 0, 0, 255]);
+  expect([...output]).toEqual([255, 255, 255, white, 22, 207, 99, 255, 0, 0, 0, 255]);
   expect(update).toHaveBeenCalledTimes(2);
   const pending = next;
   keyed.dispose();
   expect(video.cancelVideoFrameCallback).toHaveBeenCalledWith(17);
   expect(handlers.size).toBe(0);
-  expect(isKeyBoundVideoCanvas(canvas)).toBe(false);
+  expect(isColorKeyVideoCanvas(canvas)).toBe(false);
   pending!();
   expect(update).toHaveBeenCalledTimes(2);
 });

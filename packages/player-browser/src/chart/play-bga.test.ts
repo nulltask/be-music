@@ -17,12 +17,15 @@ const mocks = vi.hoisted(() => ({
   resolveChartBGAAsset: vi.fn(),
   loadTextureFromBytes: vi.fn(),
   loadVideoTextureFromBytes: vi.fn(),
+  createColorKeyVideoTexture: vi.fn(),
 }));
 
 vi.mock('../collection/collection.ts', () => ({
   loadAssetBytes: mocks.loadAssetBytes,
   resolveChartBGAAsset: mocks.resolveChartBGAAsset,
 }));
+
+vi.mock('../media/color-key-video.ts', () => ({ createColorKeyVideoTexture: mocks.createColorKeyVideoTexture }));
 
 vi.mock('../media/textures.ts', () => ({
   loadTextureFromBytes: mocks.loadTextureFromBytes,
@@ -194,6 +197,78 @@ describe('loadPlayBGA', () => {
     mocks.resolveChartBGAAsset.mockImplementation((_source, _chartPath, path: string) => ({ entry: path, path }));
     mocks.loadAssetBytes.mockImplementation(async (path: string) => new TextEncoder().encode(path));
     mocks.loadTextureFromBytes.mockImplementation(async () => new Texture());
+  });
+
+  test.each(['0,255,255,255', '255,255,255,255', '0,0,0,0'])(
+    'owns per-plane keyed video canvases for EXBMP %s',
+    async (tuple) => {
+      const chart = bmsChart({});
+      chart.bms.exBMP['01'] = `${tuple} clip.webm`;
+      const handles = [0, 1, 2, 3].map((index) => ({
+        texture: sourceTexture(),
+        objectURL: `blob:${index}`,
+        video: { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 },
+      }));
+      const canvases = handles.map(() => ({ texture: sourceTexture(), dispose: vi.fn() }));
+      for (const handle of handles) mocks.loadVideoTextureFromBytes.mockResolvedValueOnce(handle);
+      for (const canvas of canvases) mocks.createColorKeyVideoTexture.mockReturnValueOnce(canvas);
+      const into = emptyResources();
+      await loadPlayBGA({
+        chart,
+        source: SOURCE,
+        chartPath: 'x.bms',
+        tempo: 1,
+        into,
+        timeline: {
+          base: [{ seconds: 0, bmpKey: '01' }],
+          layer: [{ seconds: 0, bmpKey: '01' }],
+          layer2: [{ seconds: 0, bmpKey: '01' }],
+          poor: [{ seconds: 0, bmpKey: '01' }],
+        },
+      });
+      expect(mocks.createColorKeyVideoTexture).toHaveBeenCalledTimes(4);
+      const [a, r, g, b] = tuple.split(',').map(Number);
+      for (const [index, key] of ['01', '\0layer:01', '\0layer2:01', '\0poor:01'].entries()) {
+        expect(mocks.createColorKeyVideoTexture).toHaveBeenNthCalledWith(index + 1, handles[index]!.video, {
+          bmsColorKey: { a, r, g, b },
+          swBGAColorKey: undefined,
+        });
+        expect(into.textures.get(`\0native:${key}`)).toBe(handles[index]!.texture);
+        expect(into.videos.get(key)?.dispose).toBe(canvases[index]!.dispose);
+        expect((index === 1 || index === 2 ? into.layerTextures : into.textures).get(key)).toBe(
+          canvases[index]!.texture,
+        );
+      }
+    },
+  );
+
+  test('releases a video if creating its keyed canvas fails', async () => {
+    const chart = bmsChart({});
+    chart.bms.exBMP['01'] = '0,255,255,255 clip.webm';
+    const video = { pause: vi.fn(), removeAttribute: vi.fn(), load: vi.fn() };
+    const texture = sourceTexture();
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    mocks.loadVideoTextureFromBytes.mockResolvedValue({ video, texture, objectURL: 'blob:failed-key' });
+    mocks.createColorKeyVideoTexture.mockImplementation(() => {
+      throw new Error('Canvas unavailable');
+    });
+    const into = emptyResources();
+    try {
+      await loadPlayBGA({
+        chart,
+        source: SOURCE,
+        chartPath: 'x.bms',
+        tempo: 1,
+        into,
+        timeline: { base: [{ seconds: 0, bmpKey: '01' }], layer: [], poor: [] },
+      });
+      expect(video.pause).toHaveBeenCalledOnce();
+      expect(revoke).toHaveBeenCalledWith('blob:failed-key');
+      expect(texture.destroyed).toBe(true);
+      expect(into.videos.size).toBe(0);
+    } finally {
+      revoke.mockRestore();
+    }
   });
 
   test('loads host-remapped SWBGA frames with long ids even when the stitched chart has no A5 controls', async () => {
