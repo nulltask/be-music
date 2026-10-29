@@ -201,3 +201,5 @@ export {
   type LNOBJLongNoteResolution,
   type ResolveBMSLongNotesOptions,
 } from './long-notes.ts';
+
+export { applyBMSColorKey, resolveBmsExBMPColorKey } from './bga-color-key.ts';

@@ -12,7 +12,7 @@ const FALLBACK_FPS = 30;
 // Mirror the `FrameMode` shape declared in `./bga.ts` — kept in sync so a bmson-source layer can be threaded through
 // the video decode worker without losing the spec-aware `'bmson-layer'` distinction (which suppresses the BMS-style
 // black chroma-key per the bmson 1.0.0 spec).
-type FrameMode = 'base' | 'layer' | 'bmson-layer';
+type FrameMode = 'base' | 'layer' | 'bmson-layer' | 'exbmp';
 
 interface LibAVPlaneLayout {
   offset: number;

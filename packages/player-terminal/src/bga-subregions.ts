@@ -1,10 +1,11 @@
-import { parseBmsBGA, type BMSSubRegionBGA } from '@be-music/chart-model';
+import { parseBmsBGA, resolveBmsExBMPColorKey, type BmsARGB, type BMSSubRegionBGA } from '@be-music/chart-model';
 import { resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import { createSolidANSIFrame, type ANSIFrame, type FrameMode } from './bga-frame.ts';
 import { mapFrameSource, type FrameSource } from './bga-frame-source.ts';
 
 export interface BGAResource {
   path: string;
+  colorKey?: BmsARGB;
   /** Source-to-destination order, including chained sub-regions. */
   regions: BMSSubRegionBGA[];
 }
@@ -28,7 +29,8 @@ export function resolveBGAResource(
     regions.push(region);
     current = region.sourceBMP;
   }
-  return { path: resources[current]!, regions: regions.reverse() };
+  const colorKey = resolveBmsExBMPColorKey(chart, current);
+  return { path: resources[current]!, regions: regions.reverse(), ...(colorKey ? { colorKey } : {}) };
 }
 
 /** Draw source pixels at the authored offset on the BMS 256×256 canvas, clipping both source and destination. */

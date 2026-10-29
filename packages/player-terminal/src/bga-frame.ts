@@ -16,6 +16,8 @@ const resizedANSIFrameCache = new WeakMap<ANSIFrame, Map<string, ANSIFrame>>();
 /**
  * Composition mode for a BGA frame.
  *
+ * - `'exbmp'` — already-keyed RGBA image. Use the alpha mask and keep unkeyed black pixels on every plane.
+ *
  * - `'base'` — bottommost track. Every pixel renders, including pure black, since there's nothing visible behind it.
  * - `'layer'` — BMS-style overlay (`#xxx07`). Pure-black BMP / video pixels render transparent so the foreground
  *   composites over the base BGA, mirroring the BMS spec's chroma-key convention.
@@ -23,7 +25,7 @@ const resizedANSIFrameCache = new WeakMap<ANSIFrame, Map<string, ANSIFrame>>();
  *   transparent." Honor the PNG alpha channel but render BMP / video black pixels as black, since bmson layer artwork
  *   ships with a real alpha channel (or pre-multiplied composite intent).
  */
-export type FrameMode = 'base' | 'layer' | 'bmson-layer';
+export type FrameMode = 'base' | 'layer' | 'bmson-layer' | 'exbmp';
 
 export interface ANSIFrame {
   width: number;
@@ -670,6 +672,7 @@ function resampleANSIFrameLanczos(source: ANSIFrame, targetWidth: number, target
 }
 
 function isOpaquePixel(r: number, g: number, b: number, a: number, format: ImageFormat, mode: FrameMode): boolean {
+  if (mode === 'exbmp') return a > TRANSPARENT_ALPHA_THRESHOLD;
   if (mode === 'base') {
     return true;
   }
