@@ -23,7 +23,7 @@ export const PLAY_SCENE_KEY_CODES: ReadonlySet<string> = new Set([
  * The `shouldSkipKey` filter of the engine's web input runtime for a play: a key typed into a text field, or one of
  * {@link PLAY_SCENE_KEY_CODES}, is not a lane.
  */
-export function shouldSkipPlayKey(event: KeyboardEvent): boolean {
+export function shouldSkipPlayKey(event: KeyboardEvent, laneTokens: ReadonlySet<string> = new Set()): boolean {
   // Suppress lane-input dispatch when the user is typing into a focused text input (search box, etc.).
   const target = event.target as HTMLElement | null;
   if (target) {
@@ -38,5 +38,6 @@ export function shouldSkipPlayKey(event: KeyboardEvent): boolean {
   // routing the toggle through the view's `togglePause` keeps the view's `paused` flag, the audio bus's
   // suspend, the BGA video pause, and the engine's playback clock all on the same single entry-point.
   // Backspace is the view's hold-to-quit key (`QuitHoldController`), never a lane.
+  if (event.code === 'F5' && laneTokens.has('f5')) return false;
   return PLAY_SCENE_KEY_CODES.has(event.code);
 }

@@ -60,7 +60,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   const playableChannels = [...playableChannelSet].sort();
 
   const modeHint = resolveBmsonModeHintForOutput(json, playableChannels);
-  const xMap = createBmsonXMap(playableChannels, modeHint);
+  const xMap = createBmsonXMap(playableChannels, modeHint, json.bmson.info.modeHint !== undefined);
 
   const soundChannels = new Map<
     string,
@@ -693,9 +693,13 @@ function resolveBmsonModeHintForOutput(json: BeMusicJSON, playableChannels: read
  * spec table — so a sparse chart keeps its keys; lanes outside the table follow after its last `x`. Unknown hints
  * number the lanes in use from 1.
  */
-function createBmsonXMap(playableChannels: readonly string[], modeHint: string): Map<string, number> {
+function createBmsonXMap(
+  playableChannels: readonly string[],
+  modeHint: string,
+  authoredHint: boolean,
+): Map<string, number> {
   const xMap = new Map<string, number>();
-  const table = resolveBmsonModeHintLayout(modeHint);
+  const table = !authoredHint && modeHint.startsWith('generic-') ? undefined : resolveBmsonModeHintLayout(modeHint);
   const unmapped: string[] = [];
   for (const channel of playableChannels) {
     const x = table?.xByChannel.get(channel.toUpperCase());

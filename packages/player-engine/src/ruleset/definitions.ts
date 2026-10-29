@@ -317,6 +317,7 @@ const BEATORAJA_MODES: Record<'FIVEKEYS' | 'SEVENKEYS' | 'PMS' | 'KEYBOARD', Bea
 };
 
 function resolveBeatorajaMode(laneMode: string): BeatorajaModeWindows {
+  if (laneMode.endsWith(' KEY GENERIC')) return BEATORAJA_MODES.KEYBOARD;
   if (laneMode.startsWith('5') || laneMode.startsWith('10')) return BEATORAJA_MODES.FIVEKEYS;
   if (laneMode.startsWith('9')) return BEATORAJA_MODES.PMS;
   if (laneMode.startsWith('24') || laneMode.startsWith('48')) return BEATORAJA_MODES.KEYBOARD;

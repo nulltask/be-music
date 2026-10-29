@@ -78,6 +78,7 @@ export interface ResolveFallbackLaneLayoutOptions {
  * {@link resolveSkinlessLaneLayout}).
  */
 export function resolveFallbackPlayfieldSpan(playVariant?: ChartPlayVariant): { x: number; w: number } {
+  if (playVariant?.startsWith('generic-')) return KEYBOARD_PLAYFIELD_SPANS['48'];
   return playVariant === '24' || playVariant === '48' ? KEYBOARD_PLAYFIELD_SPANS[playVariant] : FALLBACK_PLAYFIELD_SPAN;
 }
 
@@ -129,6 +130,7 @@ export function shouldPreserveFallbackSideWidth(
   channels: readonly string[] | undefined,
   playVariant?: ChartPlayVariant,
 ): boolean {
+  if (playVariant?.startsWith('generic-')) return false;
   if (playVariant === '10' || playVariant === '14') {
     return true;
   }
@@ -197,7 +199,7 @@ function resolveFixedLaneWidth(
 }
 
 function resolveFallbackLaneSide(channel: string | undefined, playVariant?: ChartPlayVariant): '1P' | '2P' {
-  return playVariant !== '9' && channel?.startsWith('2') === true ? '2P' : '1P';
+  return playVariant !== '9' && !playVariant?.startsWith('generic-') && channel?.startsWith('2') === true ? '2P' : '1P';
 }
 
 function resolveTotalInterLaneGap(
@@ -220,7 +222,7 @@ function resolveFallbackLaneDisplayOrder(
   scratchFlags: ReadonlyArray<boolean>,
   playVariant?: ChartPlayVariant,
 ): number[] {
-  if (playVariant === '9') {
+  if (playVariant === '9' || playVariant?.startsWith('generic-')) {
     return channels.map((_, index) => index);
   }
   return channels
@@ -256,6 +258,7 @@ export function resolveBeMusicLaneKind(
   laneIndex: number,
   playVariant: ChartPlayVariant | undefined,
 ): BeMusicLaneKind {
+  if (playVariant?.startsWith('generic-')) return 'white';
   if (isScratchLaneForVariant(channel, playVariant)) return 'scratch';
   if (playVariant === '24' || playVariant === '48') {
     const lane = findPlayModeLane(playVariant, channel);

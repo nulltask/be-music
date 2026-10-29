@@ -272,6 +272,8 @@ be-music validates SemVer syntax before reading chart fields and supports stable
 
 A BGM note (`x` = 0 or outside the hint's table) at the same `y` as a playable note of the same sound channel is dropped by be-music when parsing ([`bmson-document.ts`][bm-bmson-document]).
 
+Be-Music keeps `generic-Nkeys` (1–70) as an explicit `generic-N` variant with N ordinary keys, even in sparse charts. Storage channels `16` / `17` and the second bank do not select scratch, FREE ZONE or double play. Browser/terminal rendering, input, AUTO/replay and fingerprints retain the layout; beatoraja themes borrow a uniform fallback note area. See [ADR 0023](./adr/0023-generic-bmson-keyboards.md) for bounds, judging and export/course policy.
+
 ### 3.3 `lines`, `resolution` and `y`
 
 | Topic                  | De jure                                                                                                          | beatoraja                                                                                 | be-music                                                                                                                                                                                                                 |

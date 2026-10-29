@@ -63,6 +63,7 @@ import { beginExitSequence, resolvePlayEnding, type PlayEndingContext } from './
 import type { PlayPresentation } from './play-presentation.ts';
 import { resolveSeekWaiters, settleSeekWaiters } from './play-seek.ts';
 import { applyPlayEvent } from './play-state.ts';
+import { resolveLaneInputTokens } from './play-cover-keys.ts';
 import { shouldSkipPlayKey } from './play-keys.ts';
 import { samplePlaybackRate } from './play-media.ts';
 import {
@@ -630,7 +631,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
     // canvas's `tabIndex = 0` only makes it focusable, not auto-focused, so a canvas-scoped listener would
     // only fire after the user clicked the canvas first.
-    shouldSkipKey: shouldSkipPlayKey,
+    shouldSkipKey: (event) => shouldSkipPlayKey(event, resolveLaneInputTokens(ctx.preparedChart?.laneBindings)),
     engineOptions: {
       // The draws `resolvedChart` was resolved with; the engine plays that chart as is and names them in its summary.
       ...(ctx.randomDraws !== undefined ? { randomDraws: ctx.randomDraws } : {}),

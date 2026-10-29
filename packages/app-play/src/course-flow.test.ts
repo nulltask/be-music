@@ -134,6 +134,9 @@ describe('failure messages', () => {
   });
 
   test('say why a NONSTOP course could not be stitched', () => {
+    expect(describeNonstopPrepareFailure('N', { reason: 'generic-layout-mismatch', stage: 1 })).toBe(
+      'N: all NONSTOP stages must use the same generic keyboard layout (stage 2)',
+    );
     expect(describeNonstopPrepareFailure('N', { reason: 'bmson', stage: 2 })).toBe(
       'N: cannot stitch the NONSTOP course: bmson (stage 3)',
     );

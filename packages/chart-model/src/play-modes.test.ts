@@ -208,7 +208,7 @@ describe('bmson mode_hint lane tables', () => {
   test('resolveBmsonModeHintLayout trims the hint and ignores hints without a table', () => {
     expect(resolveBmsonModeHintLayout(' beat-10k ')?.modeHint).toBe('beat-10k');
     expect(resolveBmsonModeHintLayout('keyboard-48k')).toBeUndefined();
-    expect(resolveBmsonModeHintLayout('generic-6keys')).toBeUndefined();
+    expect(resolveBmsonModeHintLayout('generic-6keys')?.width).toBe(6);
     expect(resolveBmsonModeHintLayout('toString')).toBeUndefined();
     expect(resolveBmsonModeHintLayout(undefined)).toBeUndefined();
   });

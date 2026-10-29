@@ -1,3 +1,5 @@
+export { MAX_GENERIC_BMSON_KEYS, resolveGenericBmsonKeyCount, type GenericBmsonPlayVariant } from './generic-bmson.ts';
+
 export {
   BMSON_MODE_HINT_LAYOUTS,
   PLAY_MODE_LAYOUTS,

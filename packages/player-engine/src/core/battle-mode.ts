@@ -26,7 +26,7 @@ export function resolveEffectiveBattleMode(
   sourceVariant: ChartPlayVariant,
   course: boolean,
 ): BattleMode {
-  if (selected === 'OFF') return 'OFF';
+  if (selected === 'OFF' || sourceVariant.startsWith('generic-')) return 'OFF';
   // SP TO DP, D-BATTLE (LR2) and BATTLE AS (beatoraja) build a chart and judge nothing themselves, so every judge ruleset
   // offers them (#774), each with its source's chart support.
   if (selected === 'SP-TO-DP' || selected === 'D-BATTLE') {

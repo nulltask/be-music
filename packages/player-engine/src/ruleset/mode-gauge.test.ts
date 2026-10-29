@@ -135,14 +135,17 @@ describe('beatoraja per-mode single gauges', () => {
     expect(gauge('5K', 'EX-HARD', 100).values[4]).toBeCloseTo(-200, 9);
   });
 
-  test.each(['24K', '48K'])('%s uses the keyboard default TOTAL for BMS and bmson', (mode) => {
-    const expected = (7.605 * 1100) / 16.5;
-    expect(resolveRuleset(facts(mode, undefined), 'beatoraja').effectiveTotal).toBeCloseTo(expected, 9);
-    expect(resolveRuleset({ ...facts(mode, 150), sourceFormat: 'bmson' }, 'beatoraja').effectiveTotal).toBeCloseTo(
-      expected * 1.5,
-      9,
-    );
-  });
+  test.each(['24K', '48K', '5 KEY GENERIC', '9 KEY GENERIC', '70 KEY GENERIC'])(
+    '%s uses the keyboard default TOTAL for BMS and bmson',
+    (mode) => {
+      const expected = (7.605 * 1100) / 16.5;
+      expect(resolveRuleset(facts(mode, undefined), 'beatoraja').effectiveTotal).toBeCloseTo(expected, 9);
+      expect(resolveRuleset({ ...facts(mode, 150), sourceFormat: 'bmson' }, 'beatoraja').effectiveTotal).toBeCloseTo(
+        expected * 1.5,
+        9,
+      );
+    },
+  );
 });
 
 test.each(['5K', '7K', '9K', '24K', '14K'])('SURVIVAL TO GROOVE uses %s NORMAL TOTAL, floor and border', (mode) => {

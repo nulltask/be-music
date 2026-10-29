@@ -116,7 +116,11 @@ export interface NonstopStitchMap {
 
 export type StitchNonstopResult =
   | { ok: true; chart: BeMusicJSON; map: NonstopStitchMap }
-  | { ok: false; reason: 'bmson' | 'id-space' | 'no-stage' | 'stitch-version'; stage?: number };
+  | {
+      ok: false;
+      reason: 'bmson' | 'id-space' | 'no-stage' | 'stitch-version' | 'generic-layout-mismatch';
+      stage?: number;
+    };
 
 /** The stitched chart's tempo: LR2 scrolls a NONSTOP play at `realtime × 1.2` per 1920-unit measure, 150 BPM. */
 const STITCHED_BPM = 150;
@@ -187,6 +191,10 @@ export function stitchNonstopCourse(
   const resolved = stages.map((stage) =>
     resolveChart(stage.chart, bmsonStage >= 0 && stage.pms === true ? { chartPath: '.pms' } : {}),
   );
+  if (resolved.some((chart) => chart.playVariant.startsWith('generic-'))) {
+    const incompatible = resolved.findIndex((chart) => chart.playVariant !== resolved[0]!.playVariant);
+    if (incompatible >= 0) return { ok: false, reason: 'generic-layout-mismatch', stage: incompatible };
+  }
   const timings = stages.map((stage) => createNonstopStageTiming(stage.chart, { pms: stage.pms === true }));
   const placements = planNonstopCourse(timings, options.connections, options);
   const windows = placements.map((placement, index) => ({
@@ -210,17 +218,19 @@ export function stitchNonstopCourse(
   if (asBmson) {
     chart.bmson.info.resolution = 2400;
     const variant = resolved[0]!.playVariant;
-    chart.bmson.info.modeHint = (
-      {
-        '5': 'beat-5k',
-        '7': 'beat-7k',
-        '9': 'popn-9k',
-        '10': 'beat-10k',
-        '14': 'beat-14k',
-        '24': 'keyboard-24k',
-        '48': 'keyboard-24k-double',
-      } as const
-    )[variant];
+    chart.bmson.info.modeHint = variant.startsWith('generic-')
+      ? `${variant}keys`
+      : (
+          {
+            '5': 'beat-5k',
+            '7': 'beat-7k',
+            '9': 'popn-9k',
+            '10': 'beat-10k',
+            '14': 'beat-14k',
+            '24': 'keyboard-24k',
+            '48': 'keyboard-24k-double',
+          } as const
+        )[variant as '5' | '7' | '9' | '10' | '14' | '24' | '48'];
     chart.bmson.info.totalUnit = resolved[totalStage < 0 ? stages.length - 1 : totalStage]!.total.unit;
   }
   chart.bms.base = 62;

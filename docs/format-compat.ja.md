@@ -272,6 +272,8 @@ be-music は譜面フィールドを読む前に SemVer 表記を検証し、安
 
 同じサウンドチャンネルで演奏ノートと同じ `y` にある BGM ノート（`x` = 0 または hint の表にない `x`）を、be-music は読み込み時に捨てます（[`bmson-document.ts`][bm-bmson-document]）。
 
+Be-Music は `generic-Nkeys`（1〜70）を、N 個の通常キーを持つ明示的な `generic-N` として保持する。疎な譜面でも格納チャンネルの `16` / `17` や第 2 バンクから scratch・FREE ZONE・DP を選ばない。Browser／Terminal の描画、入力、AUTO／replay、fingerprint で配置を保持し、beatoraja テーマでは等幅のフォールバックのノート領域を使う。範囲・判定・出力／コースの方針は [ADR 0023](./adr/0023-generic-bmson-keyboards.ja.md) を参照。
+
 ### 3.3 `lines` と `resolution` と `y`
 
 | 項目                  | de jure                                                                             | beatoraja                                                                         | be-music                                                                                                                                                                                                           |

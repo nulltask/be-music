@@ -199,9 +199,16 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.resolvePlayLaneChannels('1A');
     },
   });
+  define('chart-model.resolveGenericBmsonKeyCount', {
+    run: () => {
+      chartAPI.resolveGenericBmsonKeyCount('generic-70keys');
+      chartAPI.resolveGenericBmsonKeyCount('beat-7k');
+    },
+  });
   define('chart-model.resolveBmsonModeHintLayout', {
     run: () => {
       chartAPI.resolveBmsonModeHintLayout(' beat-10k ');
+      chartAPI.resolveBmsonModeHintLayout('generic-70keys');
     },
   });
   define('chart-model.resolveChartReferenceBPM', {

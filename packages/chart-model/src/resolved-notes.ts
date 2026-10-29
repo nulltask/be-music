@@ -235,7 +235,7 @@ export function resolveInvisibleNotes(context: ResolvedNoteContext): ResolvedNot
  * would shadow a genuine `#LNOBJ` tail authored on the same channel. Every That-Which-Must-Not-Be-Named family keeps them as FREE ZONE.
  */
 export function variantUsesFreeZone(variant: ChartPlayVariant): boolean {
-  return variant !== '9' && variant !== '24' && variant !== '48';
+  return ['5', '7', '10', '14'].includes(variant);
 }
 
 /**

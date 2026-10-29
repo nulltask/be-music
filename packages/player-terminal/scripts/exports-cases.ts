@@ -153,6 +153,9 @@ export function registerPlayerTUIExportsCases(define: DefineBenchmarkCase): void
   define('player-terminal.resolveInputTokenEvent', {
     run: () => {
       playerTuiAPI.resolveInputTokenEvent('z', BENCH_KEY);
+      playerTuiAPI.resolveInputTokenEvent('\u001b[57387;1:3u', BENCH_KEY);
+      playerTuiAPI.resolveInputTokenEvent('\u001b[15;1:1~', BENCH_KEY);
+      playerTuiAPI.resolveInputTokenEvent('\u001b[135;0;0;1;0;1_', BENCH_KEY);
     },
   });
 }

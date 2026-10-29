@@ -28,6 +28,7 @@ import {
   resolveChartPlayVariant,
   type ChartPlayVariant,
 } from './index.ts';
+import { resolveGenericBmsonKeyCount } from './generic-bmson.ts';
 import { resolveKeyboardModeHint, type KeyboardModeHint } from './keyboard-mode-hint.ts';
 import { collectExRankChanges, resolveJudgeRankFacts, resolveTotalFacts } from './resolved-chart.ts';
 import {
@@ -112,8 +113,8 @@ export interface HeaderItems {
   total: TotalItem;
   /** `#PLAYER 3`, one of the lane-mode inputs. */
   player3: boolean;
-  /** The bmson keyboard `mode_hint` (`keyboard-24k` / `keyboard-24k-double`), one of the lane-mode inputs. */
-  modeHint: KeyboardModeHint | null;
+  /** The explicit bmson keyboard or generic hint, one of the lane-mode inputs. */
+  modeHint: KeyboardModeHint | `generic-${number}keys` | null;
   /** `false` only for a bmson chart with an explicit `lines: []` (no bar lines drawn). */
   barLines: boolean;
 }
@@ -844,6 +845,7 @@ function optionalSnapped(value: number | undefined): Rational | undefined {
 /** Header values, from the same chart facts the Resolved layer exposes (`judgeRank`, `total`, `barLinesSuppressed`). */
 function computeHeader(json: BeMusicJSON): HeaderItems {
   const bpm = optionalSnapped(json.metadata.bpm);
+  const genericKeys = resolveGenericBmsonKeyCount(json.bmson?.info?.modeHint);
   return {
     bpm: bpm !== undefined && bpm.n > 0n ? bpm : createRational(BigInt(DEFAULT_BPM)),
     baseBPM:
@@ -851,7 +853,10 @@ function computeHeader(json: BeMusicJSON): HeaderItems {
     judge: resolveJudge(json),
     total: resolveTotal(json),
     player3: json.bms.player === 3,
-    modeHint: resolveKeyboardModeHint(json.bmson?.info?.modeHint) ?? null,
+    modeHint:
+      genericKeys !== undefined
+        ? `generic-${genericKeys}keys`
+        : (resolveKeyboardModeHint(json.bmson?.info?.modeHint) ?? null),
     barLines: json.bmson.barlinesSuppressed !== true,
   };
 }
@@ -1129,7 +1134,7 @@ export function resolveFingerprintLaneMode(
   notes: ReadonlyArray<NoteItem>,
   extension: LaneModeExtension,
   player3: boolean,
-  modeHint: KeyboardModeHint | null,
+  modeHint: KeyboardModeHint | `generic-${number}keys` | null,
 ): ChartPlayVariant {
   const lanes = new Set<string>();
   for (const note of notes) {
