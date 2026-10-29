@@ -549,3 +549,37 @@ it('scales SWBGA movie time and playback by its NONSTOP FIT rate', () => {
   layer.dispose();
   texture.destroy(true);
 });
+
+it('draws conditional bmson frames on their plane and restarts movies at the engine frame origin', () => {
+  const base = fakeTexture(),
+    sequence = fakeTexture();
+  const video = fakeVideo();
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    textures: new Map([
+      ['base', base],
+      ['sequence', sequence],
+    ]),
+    layerTextures: new Map([['sequence', sequence]]),
+    videoElements: new Map([['sequence', video as unknown as HTMLVideoElement]]),
+    cues: { base: [{ seconds: 0, bmpKey: 'base' }], layer: [], poor: [] },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  layer.update(3, context, false, {
+    bmsonBGA: { plane: 'layer', key: 'sequence', startedSeconds: 1, frameStartSeconds: 2.5 },
+  });
+  expect(video.currentTime).toBe(0.5);
+  expect(layer.container.children.some((child) => child.label === 'bga/layer' && child.visible)).toBe(true);
+  layer.update(4, context, false, {
+    bmsonBGA: { plane: 'poor', key: 'sequence', startedSeconds: 1, frameStartSeconds: 3.8 },
+  });
+  expect(video.currentTime).toBeCloseTo(0.2, 9);
+  const visible = layer.container.children.filter((child) => child.visible);
+  expect(visible.some((child) => child.label === 'bga/layer')).toBe(false);
+  expect(visible.find((child) => child.label === 'bga/base')).toMatchObject({ texture: sequence });
+  layer.update(4.1, context, false);
+  expect(video.paused).toBe(true);
+  layer.dispose();
+  base.destroy(true);
+  sequence.destroy(true);
+});

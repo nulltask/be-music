@@ -1,3 +1,4 @@
+import type { BmsonBGAFrame } from '@be-music/player-engine/display';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { collectBGASubRegions } from './bga-subregions.ts';
 import {
@@ -268,10 +269,14 @@ export interface BGAStack {
   layer2Cue?: BGACue | undefined;
   /** Set only while a POOR is being shown and the stack has a POOR cue. */
   poorKey?: string | undefined;
+  /** Explicit engine frame start for a conditional POOR movie. */
+  poorCue?: BGACue;
 }
 
 /** What {@link resolveBGAStacks} reads: the chart's cues, a stitched NONSTOP chart's stages and the BGA rect's flags. */
 export interface BGAStacksInput {
+  bmsonBGA?: BmsonBGAFrame;
+  noPoor?: boolean;
   poorBGAMode?: 0 | 1 | 2;
   /** The chart's cues; its POOR cues, when given, are picked during a POOR. */
   timeline: {
@@ -308,41 +313,52 @@ export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
     alpha: number,
     mode: 0 | 1 | 2 = 0,
     opacity?: BGAOpacityTimelines,
-  ): BGAStack => ({
-    ...(opacity !== undefined
-      ? {
-          opacity: {
-            base: pickBGAOpacity(opacity.base, seconds),
-            layer: pickBGAOpacity(opacity.layer, seconds),
-            layer2: pickBGAOpacity(opacity.layer2, seconds),
-            poor: pickBGAOpacity(opacity.poor, seconds),
-          },
-        }
-      : {}),
-    ...(opacity !== undefined &&
-    [opacity.base, opacity.layer, opacity.layer2, opacity.poor].some((cues) =>
-      cues.some((cue) => cue.tint !== undefined),
-    )
-      ? {
-          tint: {
-            base: pickBGATint(opacity.base, seconds),
-            layer: pickBGATint(opacity.layer, seconds),
-            layer2: pickBGATint(opacity.layer2, seconds),
-            poor: pickBGATint(opacity.poor, seconds),
-          },
-        }
-      : {}),
-    alpha,
-    baseCue: input.noBase ? undefined : pickActiveBGACue(timeline.base, seconds),
-    layerCue: input.noLayer ? undefined : pickActiveBGACue(timeline.layer, seconds),
-    ...(timeline.layer2 !== undefined
-      ? { layer2Cue: input.noLayer ? undefined : pickActiveBGACue(timeline.layer2, seconds) }
-      : {}),
-    ...(mode === 1 ? { poorOverlays: true } : {}),
-    ...(input.inPoorWindow && mode !== 2 && timeline.poor !== undefined
-      ? { poorKey: pickActiveBGAKey(timeline.poor, seconds) }
-      : {}),
-  });
+  ): BGAStack => {
+    const stack: BGAStack = {
+      ...(opacity !== undefined
+        ? {
+            opacity: {
+              base: pickBGAOpacity(opacity.base, seconds),
+              layer: pickBGAOpacity(opacity.layer, seconds),
+              layer2: pickBGAOpacity(opacity.layer2, seconds),
+              poor: pickBGAOpacity(opacity.poor, seconds),
+            },
+          }
+        : {}),
+      ...(opacity !== undefined &&
+      [opacity.base, opacity.layer, opacity.layer2, opacity.poor].some((cues) =>
+        cues.some((cue) => cue.tint !== undefined),
+      )
+        ? {
+            tint: {
+              base: pickBGATint(opacity.base, seconds),
+              layer: pickBGATint(opacity.layer, seconds),
+              layer2: pickBGATint(opacity.layer2, seconds),
+              poor: pickBGATint(opacity.poor, seconds),
+            },
+          }
+        : {}),
+      alpha,
+      baseCue: input.noBase ? undefined : pickActiveBGACue(timeline.base, seconds),
+      layerCue: input.noLayer ? undefined : pickActiveBGACue(timeline.layer, seconds),
+      ...(timeline.layer2 !== undefined
+        ? { layer2Cue: input.noLayer ? undefined : pickActiveBGACue(timeline.layer2, seconds) }
+        : {}),
+      ...(mode === 1 ? { poorOverlays: true } : {}),
+      ...(input.inPoorWindow && !input.noPoor && mode !== 2 && timeline.poor !== undefined
+        ? { poorKey: pickActiveBGAKey(timeline.poor, seconds) }
+        : {}),
+    };
+    // Course integration must place event frames in stage-owned stacks, not broadcast one frame across a crossfade.
+    const frame = input.nonstop === undefined ? input.bmsonBGA : undefined;
+    if (frame?.plane === 'layer' && !input.noLayer) {
+      stack.layerCue = { seconds: frame.frameStartSeconds, bmpKey: frame.key };
+    } else if (frame?.plane === 'poor' && !input.noPoor && mode !== 2) {
+      stack.poorKey = frame.key;
+      stack.poorCue = { seconds: frame.frameStartSeconds, bmpKey: frame.key };
+    }
+    return stack;
+  };
   const nonstop = input.nonstop;
   if (nonstop === undefined) return [pick(input.timeline, 1, input.poorBGAMode, input.timeline.opacity)];
   return nonstop.stages.flatMap((stage, index) => {

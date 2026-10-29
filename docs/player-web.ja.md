@@ -945,6 +945,8 @@ Native の各画面は `@be-music/player-ui` の Lit 製 Web Components で組�
 
 - **CI では**（[`e2e.yml`](../.github/workflows/e2e.yml)）、プレイヤーかそれが取り込むパッケージを変えるプルリクエストでスモークを実行します。`@smoke` のタグ（`support.ts` の `SMOKE`）を付けたテストで、領域とスキンの種類ごとに 1 つの流れを確かめます（手元では `pnpm run test:e2e --grep @smoke`）。毎晩 3 時（日本時間）には `devel` で全件を実行し、手動の実行ではどちらかを選べます。CI では失敗したテストをもう一度実行し、そこで通れば不安定なテスト（flaky）として数えます。失敗した実行は HTML のレポートとトレースを残します。新しいテストに `@smoke` を付けるのは、スモークがまだ通っていない流れを確かめるときだけにします。
 
+`bmson-bga-sequences.spec.ts` は Native・Canvas・LR2・beatoraja で、判定連動 PLAY の画像セット選択・半透明合成・一時停止・500 ms を超えるシーケンス付き MISS・終端・短い MISS の終了後に古い POOR が再表示されないこと・ALWAYS 動画の再起動を確認します。作成した bmson／PNG と所有する VP9 fixture をドロップし、スクリーンショットのピクセルを検証します。シーケンスの候補は実際の表示面に読み込み、base／layer／POOR の動画ハンドルは独立させます。シーケンスの NONSTOP 配置は #826 で継続します。
+
 ### テスト用フック
 
 URL に `?e2e=1` を付けるか開発ビルドで動かすと、プレイヤーの起動処理（`main.ts`）が、アプリを始める前に `window.__beMusicTest` を置きます。[`test-hook.ts`](../packages/app-play/src/test-hook.ts) が契約とアプリから渡されたものの記録を持ち、[`services/test-hook.ts`](../packages/app-play/src/services/test-hook.ts) がアプリの今の状態を読みます。フックは表示しているものを読むだけのもので、読んでも何も始めません（譜面のハッシュを計算することもありません）。バーの自己ベストのランプとトロフィーは、選曲画面と同じく今の判定ルールのものです。ホストが持っている状態と、ホストが渡す結果画面とリプレイの中身を読み、プレイヤーを操作することはありません。ファイルはページのドロップの処理から読み込みます。

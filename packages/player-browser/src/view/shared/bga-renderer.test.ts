@@ -143,6 +143,43 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     };
   }
 
+  test('draws engine-driven layer and POOR frames beyond the legacy window and uses their video clocks', () => {
+    const state = setup();
+    const video = {
+      currentTime: 0,
+      duration: 10,
+      playbackRate: 1,
+      paused: false,
+      seeking: false,
+      play: vi.fn(async () => {}),
+      pause: vi.fn(),
+    };
+    state.play.bgaVideos.set('first', { video, objectURL: 'blob:sequence' });
+    Object.assign(state.play, {
+      engineFrame: { bmsonBGA: { plane: 'layer', key: 'first', startedSeconds: 1, frameStartSeconds: 2.5 } },
+    });
+    renderBGA(state.ctx, 3);
+    expect(video.currentTime).toBe(0.5);
+    expect(state.labels()).toContain('bga/layer[key=first]');
+    Object.assign(state.play, {
+      engineFrame: { bmsonBGA: { plane: 'poor', key: 'poor', startedSeconds: 1, frameStartSeconds: 2.8 } },
+    });
+    renderBGA(state.ctx, 3);
+    expect(state.labels()).toEqual(['bga/background', 'bga/poor[key=poor]']);
+    Object.assign(state.play, {
+      engineFrame: { bmsonBGA: { plane: 'poor', startedSeconds: 1, frameStartSeconds: 2.8 } },
+      poorBGAFallbackKey: 'poor',
+      poorBGAFallbackUntilSeconds: Infinity,
+    });
+    renderBGA(state.ctx, 3);
+    expect(state.labels()).not.toContain('bga/poor[key=poor]');
+    Object.assign(state.play, { engineFrame: {} });
+    renderBGA(state.ctx, 3);
+    expect(state.labels()).toContain('bga/base[key=base]');
+    expect(video.pause).toHaveBeenCalled();
+    state.dispose();
+  });
+
   test.each([0, 1] as const)('places input-bound SWBGA above POOR mode %s and removes it on release', (mode) => {
     const state = setup(mode);
     const key = keyBoundBGAResourceKey('61', '00');

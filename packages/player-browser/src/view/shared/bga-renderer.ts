@@ -85,7 +85,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   const inPoorWindow =
     (ctx.options.nonstop !== undefined || ctx.play.poorBGAMode !== 2) &&
     !controllingBGA.noPoor &&
-    isMissLayerShown(ctx.play.lastPoorAt / 1000, ctx.play.playClock() / 1000, DEFAULT_POOR_BGA_DISPLAY_SECONDS);
+    (ctx.play.engineFrame?.bmsonBGA?.plane === 'poor' ||
+      isMissLayerShown(ctx.play.lastPoorAt / 1000, ctx.play.playClock() / 1000, DEFAULT_POOR_BGA_DISPLAY_SECONDS));
   // A stitched NONSTOP chart shows one BGA stack per stage, crossfading at the seams; any other chart one stack.
   const stacks = resolveBGAStacks(
     ctx,
@@ -108,6 +109,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   if (
     inPoorWindow &&
     poorKey === undefined &&
+    ctx.play.engineFrame?.bmsonBGA?.plane !== 'poor' &&
     ctx.play.poorBGAFallbackKey !== undefined &&
     cueSeconds < ctx.play.poorBGAFallbackUntilSeconds
   ) {
@@ -139,7 +141,10 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           .find((cue) => cue?.bmpKey === stack.poorKey);
         add('poor', {
           bmpKey: stack.poorKey,
-          seconds: poorCue?.seconds ?? seconds - Math.max(0, (ctx.play.playClock() - ctx.play.lastPoorAt) / 1000),
+          seconds:
+            stack.poorCue?.seconds ??
+            poorCue?.seconds ??
+            seconds - Math.max(0, (ctx.play.playClock() - ctx.play.lastPoorAt) / 1000),
         });
       }
     }
@@ -182,7 +187,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
               : undefined,
           poor:
             stack.poorKey !== undefined
-              ? resolveBGAFrameKey(ctx, stack.poorKey, undefined, seconds, 'poor')
+              ? resolveBGAFrameKey(ctx, stack.poorKey, stack.poorCue?.seconds, seconds, 'poor')
               : undefined,
           poorOverlays: stack.poorOverlays,
           opacity: stack.opacity,
@@ -294,13 +299,13 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
     for (const stack of stacks) {
       if (stack.poorKey && !stack.poorOverlays) {
         // POOR uses base-mode decoding (no chroma key) since it replaces the stack's base+layer composite during its
-        // window. POOR has no per-cue origin time we can hand to `drawLayer` for `#SWBGAxx` frame timing; chart
-        // authors don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
+        // window. Conditional bmson frames supply their exact source-frame origin; ordinary POOR keeps its
+        // existing static fallback when it has no explicit frame clock.
         drawLayer(
           stack.poorKey,
           ctx.play.bgaTextures,
           'poor',
-          undefined,
+          stack.poorCue?.seconds,
           stack.alpha * (stack.opacity?.poor ?? 1),
           false,
           stack.tint?.poor,
@@ -343,7 +348,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           stack.poorKey,
           ctx.play.bgaTextures,
           'poor',
-          undefined,
+          stack.poorCue?.seconds,
           stack.alpha * (stack.opacity?.poor ?? 1),
           true,
           stack.tint?.poor,
@@ -375,6 +380,8 @@ function resolveBGAStacks(
     noBase,
     noLayer,
     inPoorWindow,
+    noPoor: ctx.bgaTargetsScratch[0]?.noPoor === true,
+    bmsonBGA: ctx.play.engineFrame?.bmsonBGA,
   });
 }
 

@@ -61,6 +61,9 @@ export function buildBGATimelines(chart: BeMusicJSON, resolver: BGATimingResolve
       )
         cue.key = undefined;
       timelines.layer.push(cue);
+      // A conditional MISS selection replaces the old POOR definition even after its sequence ends.
+      // Ordinary image-only layers keep the independent standard bmson POOR channel unchanged.
+      if (event.condition === 'miss') timelines.poor.push({ seconds: cue.seconds, key: undefined });
     }
     for (const event of bgaSection.poorEvents) {
       const cue = toCue(event);
