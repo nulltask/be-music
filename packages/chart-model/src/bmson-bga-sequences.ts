@@ -18,7 +18,7 @@ export interface BmsonBGAEventCue {
   seconds: number;
   plane: 'layer' | 'poor';
   condition: 'always' | 'play' | 'miss';
-  /** Authored interval, retained for the event controller rather than interpreted as a pulse position. */
+  /** Authored event-start interval; the Be-Music controller interprets it as chart milliseconds, not pulses. */
   interval: number;
   sequences: ResolvedBmsonBGASequence[];
 }
@@ -26,10 +26,12 @@ export interface BmsonBGAEventCue {
 /**
  * Resolve beatoraja event-layer alternatives. Ordinary image-only layer events stay on the normal BGA timeline.
  * Sequence frame times are milliseconds; cue positions are bmson pulses resolved through the chart's BPM/STOP clock.
+ * Engine consumers can include empty selections for ordinary layers, cancelling an older conditional program.
  */
 export function buildBmsonBGAEventTimeline(
   chart: BeMusicJSON,
   resolver: Pick<BGATimingResolver, 'beatToSeconds'>,
+  options: { includeOrdinaryLayerClears?: boolean } = {},
 ): BmsonBGAEventCue[] {
   const bga = chart.bmson.bga;
   const headers = new Map(bga.header.map((entry) => [entry.id, entry.name]));
@@ -63,15 +65,15 @@ export function buildBmsonBGAEventTimeline(
     sequences: (plane === 'poor' ? [event.id] : (event.idSet ?? [event.id])).map(resolve),
   });
   return [
-    ...bga.layerEvents
-      .filter(
-        (event) =>
-          event.idSet !== undefined ||
-          event.condition !== undefined ||
-          event.interval !== undefined ||
-          definitions.has(event.id),
-      )
-      .map((event) => cue(event, 'layer')),
+    ...bga.layerEvents.flatMap((event) => {
+      const extended =
+        event.idSet !== undefined ||
+        event.condition !== undefined ||
+        event.interval !== undefined ||
+        definitions.has(event.id);
+      if (extended) return [cue(event, 'layer')];
+      return options.includeOrdinaryLayerClears ? [{ ...cue(event, 'layer'), sequences: [] }] : [];
+    }),
     ...bga.poorEvents.map((event) => cue(event, 'poor')),
   ].sort((left, right) => left.seconds - right.seconds);
 }

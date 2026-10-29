@@ -114,3 +114,10 @@ test('poor events retain the upstream forced MISS condition and single-id select
   expect(cue.interval).toBe(1);
   expect(cue.sequences.map((sequence) => sequence.id)).toEqual([10]);
 });
+
+test('engine consumers may include ordinary layer changes as ordered event-selection clears', () => {
+  const json = chart();
+  const cues = buildBmsonBGAEventTimeline(json, createTimingResolver(json), { includeOrdinaryLayerClears: true });
+  expect(cues[0]).toMatchObject({ seconds: 0, plane: 'layer', sequences: [] });
+  expect(cues).toHaveLength(5);
+});

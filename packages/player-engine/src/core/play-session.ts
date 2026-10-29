@@ -1,3 +1,4 @@
+import { BmsonBGAController } from './bmson-bga.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
@@ -7,6 +8,7 @@ import { resolveAutoScratchChannels, resolveAutoScratchSides } from './auto-scra
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   buildKeyBoundBGATimeline,
+  buildBmsonBGAEventTimeline,
   isPlayLaneSoundChannel,
   type ResolvedChart,
 } from '@be-music/chart-model';
@@ -123,6 +125,7 @@ export interface PlaySession {
   readonly stateLogger: PlaybackStateLogger;
   readonly publishUIFrame: (seconds: number, beat: number) => void;
   readonly keyBoundBGA?: KeyBoundBGAController;
+  readonly bmsonBGA?: BmsonBGAController;
   /** The judge supplies HCN display facts from its existing state; no second simulation. */
   readHCNLanes?: (seconds: number) => readonly PlayerHCNLaneState[];
   /** Maps the judge's effects onto audio, the UI buses, the replay and the trace. */
@@ -564,6 +567,10 @@ export async function createPlaySession(
             ),
           ],
         });
+  const bmsonCues = buildBmsonBGAEventTimeline(resolvedChart.source, resolvedChart.timing, {
+    includeOrdinaryLayerClears: true,
+  });
+  const bmsonBGA = bmsonCues.length > 0 ? new BmsonBGAController(bmsonCues, freezeSeconds) : undefined;
   const publishUIFrame = createUIFramePublisher({
     uiEnabled,
     uiSignals,
@@ -574,6 +581,7 @@ export async function createPlaySession(
     invisibleNotes,
     audioBackend: audioBackendLabel,
     ...(secondPlayer !== undefined ? { summary2P: secondPlayer.summary } : {}),
+    ...(bmsonBGA ? { resolveBmsonBGA: (seconds: number) => bmsonBGA.read(seconds) } : {}),
     resolveHCNLanes: (seconds) => session?.readHCNLanes?.(seconds),
     ...(keyBoundBGA ? { resolveKeyBoundBGA: (seconds: number) => keyBoundBGA.read(seconds) } : {}),
     resolveJudgedNoteCount: () =>
@@ -617,6 +625,7 @@ export async function createPlaySession(
     },
   });
   const applyJudgeEffect = createJudgeEffectHandler({
+    ...(bmsonBGA ? { onBmsonBGAInput: (input) => bmsonBGA.addInput(input) } : {}),
     ...(keyBoundBGA && !replay
       ? {
           onInput: (input: { seconds: number; action: 'down' | 'up'; channels: ReadonlySet<string> }) =>
@@ -705,6 +714,7 @@ export async function createPlaySession(
     stateLogger,
     publishUIFrame,
     ...(keyBoundBGA ? { keyBoundBGA } : {}),
+    ...(bmsonBGA ? { bmsonBGA } : {}),
     applyJudgeEffect,
     settleJudgeTiming: () => applyJudgeEffect.settleJudgeTiming(),
     volumeChanges,

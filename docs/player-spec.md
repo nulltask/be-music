@@ -920,6 +920,8 @@ Every frame carries its seek `generation` (0 until the first seek) and the `cloc
 
 `PlayerOptions.onRulesetResolved` is called once before playback starts with a `PlayerRulesetInfo` (`id`, `rulesetId`, `longNoteStyle`, and the judge `windows` in µs at the start of the chart), so a host can show the windows the engine actually uses instead of re-deriving them.
 
+Conditional bmson BGA state is carried on `PlayerUIFramePayload.bmsonBGA`: the active image filename, layer/POOR plane, trigger time and source-frame start time. The engine derives it from actual judgments using [ADR 0022](./adr/0022-bmson-bga-events.md). The terminal worker forwards it as the optional third argument to `BgaANSIRenderer.getANSILines` / `getKittyImage`, preserving source alpha and movie timing through the existing compositor. Browser sequence drawing and NONSTOP placement remain pending in #826.
+
 ### Loading screen
 
 During loading after song selection, the CLI draws a progress bar and current steps to standard output.

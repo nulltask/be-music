@@ -52,6 +52,10 @@ export function registerPlayerTUIExportsCases(define: DefineBenchmarkCase): void
       renderer.getANSILines(0, frame);
       renderer.getKittyImage(0, frame);
       renderer.getKittyImage(0.1);
+      const bmson = { plane: 'layer' as const, key: 'sequence.png', startedSeconds: 0, frameStartSeconds: 0 };
+      renderer.getANSILines(0.2, undefined, bmson);
+      renderer.getKittyImage(0.2, undefined, bmson);
+      renderer.getKittyImage(0.3, undefined, { ...bmson, plane: 'poor' });
     },
   });
   define('player-terminal.createBgaANSIRenderer', {
@@ -173,8 +177,8 @@ function createBenchBgaANSIRenderer(): playerTuiAPI.BgaANSIRenderer {
     layerTimeline: [],
     layer2Timeline: [],
     baseSourceFramesByKey: new Map(),
-    poorSourceFramesByKey: new Map(),
-    layerSourceFramesByKey: new Map(),
+    poorSourceFramesByKey: new Map([['sequence.png', { kind: 'static', frame }]]),
+    layerSourceFramesByKey: new Map([['sequence.png', { kind: 'static', frame }]]),
     layer2SourceFramesByKey: new Map([
       [
         String.fromCharCode(0) + 'swbga:61:00',

@@ -1,3 +1,4 @@
+import type { BmsonBGAFrame } from './bmson-bga.ts';
 import { signal } from 'alien-signals';
 import type { KeyBoundBGAFrame } from './key-bound-bga.ts';
 
@@ -111,6 +112,8 @@ export interface PlayerHCNLaneState {
 export interface PlayerUIFramePayload {
   /** Active input-driven SWBGA frame; absent while no key-bound animation is visible. */
   keyBoundBGA?: KeyBoundBGAFrame;
+  /** Active conditional bmson animation, resolved on the engine chart clock. */
+  bmsonBGA?: BmsonBGAFrame;
   currentBeat: number;
   currentSeconds: number;
   /**
@@ -219,6 +222,7 @@ export function createPlayerUISignalBus(initialFrame: PlayerUIFramePayload): Pla
 
   const publishFrame = (frame: PlayerUIFramePayload): void => {
     frameState.keyBoundBGA = frame.keyBoundBGA;
+    frameState.bmsonBGA = frame.bmsonBGA;
     frameState.currentBeat = frame.currentBeat;
     frameState.currentSeconds = frame.currentSeconds;
     frameState.displayBeat = frame.displayBeat;

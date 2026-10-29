@@ -87,6 +87,7 @@ describe('designed entries', () => {
 
   it('@be-music/player-engine/display exports what a host shows, and no chart-layer names', () => {
     expect(exportedValues(display)).toEqual([
+      'BmsonBGAController',
       'DEFAULT_IMAGE_RESIZE_ALGORITHM',
       'DEFAULT_POOR_BGA_DISPLAY_SECONDS',
       'DEFAULT_TUI_NOTE_HEIGHT',
