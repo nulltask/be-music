@@ -53,8 +53,8 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] Treat missing / non-numeric `info.total` as the bmson default `100`, take the absolute value of a negative one, and keep `0` as written
 - [x] Treat missing, zero, negative, or non-numeric `info.init_bpm` as a parse error
 - [x] Interpret an `x` outside the `mode_hint` lane table as background music (`01`), as beatoraja does
-- [ ] Validation of `version` (turning `null` into an error, treating legacy as unspecified)
-- [ ] Clarification of policy for determining compatibility of `version` with SemVer
+- [x] Validate `version`: reject `null`, malformed SemVer and unsupported versions before reading chart data; reject missing-version legacy v0.21 with conversion guidance
+- [x] Support stable `1.0.0` and SemVer build metadata (for example `1.0.0+local`); reject prereleases and every other version until its format has explicit support
 - [ ] Error policy when required information such as `info.title` / `artist` / `genre` is missing
 - [ ] `sound_channels[].name` extension fallback search (`.wav`/`.ogg`/`.m4a`)
 - [ ] `sound_channels[].name` path normalization (`\` and `/`) and directory traversal prevention
@@ -167,6 +167,7 @@ flowchart TD
 ```
 
 - Keep `version` in `bmson.version`
+- Version validation follows [bmson’s top-level specification](https://github.com/bemusic/bmson-spec/blob/668c4338cd7c64da2d2ec0f848c4ad58a3a881d9/doc/index.rst#top-level-object-bmson) and [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html). Only stable `1.0.0` precedence is supported; optional build metadata is accepted and retained. Numeric components have no leading zeroes; prerelease numeric identifiers obey the same rule. A missing field identifies unsupported legacy v0.21, which needs a format converter because field names and time units differ. Adding `version` alone does not migrate it. A null, non-string or malformed version raises `TypeError`; legacy and unsupported valid versions raise `Error` with guidance. Raw bmson readers, automatic format detection, Node file loading and browser chart loading share this check. Be-Music JSON is a separate internal document format and retains its existing normalization.
 - Keep `lines[].y` in `preservation.bmson.lines`
 - Keep `info.resolution` in `bmson.info.resolution`
 - Also read the root `resolution` for compatibility, and adopt it if `info.resolution` is not present.

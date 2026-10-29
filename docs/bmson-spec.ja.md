@@ -53,8 +53,8 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` はそのまま保持として扱う
 - [x] `info.init_bpm` 欠落、0、負値、非数値は parse error として扱う
 - [x] `mode_hint` のレーン表にない `x` の note を、beatoraja と同じく BGM (`01`) として解釈
-- [ ] `version` の妥当性検証（`null` のエラー化、未指定時の legacy 扱い方針）
-- [ ] `version` の互換判定を SemVer で行う方針の明文化
+- [x] `version` を検証し、譜面データを読む前に `null`・不正な SemVer・未対応版を拒否する。バージョン省略の旧形式 v0.21 には変換方法を案内する
+- [x] 安定版 `1.0.0` と SemVer のビルドメタデータ付き表記（例: `1.0.0+local`）に対応する。プレリリースとその他の版は、形式への対応を明示するまで拒否する
 - [ ] `info.title` / `artist` / `genre` など必須情報の欠損時エラー方針
 - [ ] `sound_channels[].name` の拡張子フォールバック探索（`.wav`/`.ogg`/`.m4a`）
 - [ ] `sound_channels[].name` のパス正規化（`\` と `/`）およびディレクトリトラバーサル防止
@@ -167,6 +167,7 @@ flowchart TD
 ```
 
 - `version` を `bmson.version` に保持
+- バージョン検証は [bmson のルート仕様](https://github.com/bemusic/bmson-spec/blob/668c4338cd7c64da2d2ec0f848c4ad58a3a881d9/doc/index.rst#top-level-object-bmson)と [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html)に従う。優先順位が安定版 `1.0.0` と等しい表記だけに対応し、ビルドメタデータは受け付けて保持する。数値部分とプレリリースの数値識別子には先頭ゼロを認めない。省略は未対応の旧形式 v0.21 を表し、フィールド名・時間単位が異なるため形式変換が必要で、`version` を足すだけでは移行できない。`null`・文字列以外・不正な表記には `TypeError`、旧形式・未対応の有効なバージョンには案内付きの `Error` を返す。bmson の直接読込・形式の自動判別・Node ファイル読込・Browser の譜面読込は同じ検証を使う。Be-Music JSON は別の内部文書形式として既存の正規化を使う。
 - `lines[].y` を `preservation.bmson.lines` に保持
 - `info.resolution` を `bmson.info.resolution` に保持
 - 互換としてルート `resolution` も読み取り、`info.resolution` がなければ採用
