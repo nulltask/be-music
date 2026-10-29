@@ -1,3 +1,4 @@
+import { collectBmsonBGAFrameKeys } from './bmson-bga.ts';
 // BGA resource loading for the play session (`session/play/play-media.ts`), which every gameplay family plays
 // through. One place decides which `#BMPxx` / bmson BGA resources a play needs, decodes
 // them (stills through the shared texture loader, videos through the video loader with its transcode fallback), keys the
@@ -78,8 +79,23 @@ export function collectPlayBGAResources(
   chart: BeMusicJSON,
   timeline: PlayBGATimeline,
   poorFallbackKey: string | undefined,
+  includeBmsonEvents = true,
 ): { paths: Map<string, string>; base: Set<string>; layer: Set<string> } {
   const { base, layer } = collectBGATextureLoadKeys(chart, timeline, poorFallbackKey);
+  const sequences = includeBmsonEvents
+    ? collectBmsonBGAFrameKeys(chart)
+    : { layer: new Set<string>(), poor: new Set<string>() };
+  const extras = collectBGATextureLoadKeys(
+    chart,
+    {
+      base: [...sequences.poor].map((bmpKey) => ({ seconds: 0, bmpKey })),
+      layer: [...sequences.layer].map((bmpKey) => ({ seconds: 0, bmpKey })),
+      poor: [],
+    },
+    undefined,
+  );
+  for (const key of extras.base) base.add(key);
+  for (const key of extras.layer) layer.add(key);
   const referenced = new Set<string>([...base, ...layer]);
   const paths = new Map<string, string>();
   for (const [key, path] of Object.entries(chart.resources.bmp)) {
@@ -157,17 +173,30 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
 async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: BmsARGB): Promise<void> {
   const { chart, source, chartPath, into } = options;
   const isCancelled = options.isCancelled ?? (() => false);
-  const { paths, base, layer } = collectPlayBGAResources(chart, options.timeline, options.poorFallbackKey);
+  const { paths, base, layer } = collectPlayBGAResources(
+    chart,
+    options.timeline,
+    options.poorFallbackKey,
+    swBGAColorKey === undefined,
+  );
   // The bmson spec draws layer blacks as black ("Unlike BMS Layer Channel #xxx07"); BMS keys them out.
   const keyOutLayerBlack = chart.sourceFormat !== 'bmson' && swBGAColorKey === undefined;
   const aliasSources = new Set([...collectBGASubRegions(chart).values()].map((region) => region.sourceBMP));
   const trackKeys = (cues: readonly BGACue[]) =>
     collectBGATextureLoadKeys(chart, { base: cues, layer: [], poor: [] }, undefined).base;
-  const firstLayer = trackKeys(options.timeline.layer);
+  const sequenceKeys =
+    swBGAColorKey === undefined
+      ? collectBmsonBGAFrameKeys(chart)
+      : { layer: new Set<string>(), poor: new Set<string>() };
+  const firstLayer = trackKeys([
+    ...options.timeline.layer,
+    ...[...sequenceKeys.layer].map((bmpKey) => ({ seconds: 0, bmpKey })),
+  ]);
   const secondLayer = trackKeys(options.timeline.layer2 ?? []);
   const baseOnly = trackKeys(options.timeline.base);
   const poor = trackKeys([
     ...options.timeline.poor,
+    ...[...sequenceKeys.poor].map((bmpKey) => ({ seconds: 0, bmpKey })),
     ...(options.poorFallbackKey ? [{ seconds: 0, bmpKey: options.poorFallbackKey }] : []),
   ]);
   await runWithConcurrency([...paths], BGA_DECODE_CONCURRENCY, async ([key, path]) => {

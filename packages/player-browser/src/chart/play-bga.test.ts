@@ -199,6 +199,40 @@ describe('loadPlayBGA', () => {
     mocks.loadTextureFromBytes.mockImplementation(async () => new Texture());
   });
 
+  test('owns independent base, PLAY and MISS video handles even when all use a sequence-only frame', async () => {
+    const chart = createEmptyJSON('bmson');
+    chart.bmson.bga = {
+      header: [{ id: 20, name: 'clip.webm' }],
+      events: [],
+      poorEvents: [],
+      sequences: [{ id: 10, sequence: [{ time: 0, id: 0 }, { time: 500 }] }],
+      layerEvents: [
+        { y: 0, id: 10, condition: 'play' },
+        { y: 240, id: 10, condition: 'miss' },
+      ],
+    };
+    const handles = [0, 1, 2].map((index) => ({
+      texture: sourceTexture(),
+      objectURL: `blob:${index}`,
+      video: { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 },
+    }));
+    for (const handle of handles) mocks.loadVideoTextureFromBytes.mockResolvedValueOnce(handle);
+    const into = emptyResources();
+    await loadPlayBGA({
+      chart,
+      source: SOURCE,
+      chartPath: 'x.bmson',
+      tempo: 1,
+      into,
+      timeline: { base: [{ seconds: 0, bmpKey: 'clip.webm' }], layer: [], poor: [] },
+    });
+    expect(mocks.loadVideoTextureFromBytes).toHaveBeenCalledTimes(3);
+    expect(into.videos.get('clip.webm')?.video).toBe(handles[0]!.video);
+    expect(into.videos.get(String.fromCharCode(0) + 'layer:clip.webm')?.video).toBe(handles[1]!.video);
+    expect(into.videos.get(String.fromCharCode(0) + 'poor:clip.webm')?.video).toBe(handles[2]!.video);
+    expect(mocks.createColorKeyVideoTexture).not.toHaveBeenCalled();
+  });
+
   test.each(['0,255,255,255', '255,255,255,255', '0,0,0,0'])(
     'owns per-plane keyed video canvases for EXBMP %s',
     async (tuple) => {

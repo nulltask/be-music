@@ -1,4 +1,4 @@
-import type { KeyBoundBGAFrame } from '@be-music/player-engine/display';
+import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
 import { keyBoundBGAResourceKey } from '../../../chart/key-bound-bga.ts';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
 // BGA (background animation) rendering layer for a beatoraja play skin.
@@ -157,6 +157,7 @@ export class BeatorajaBGALayer {
       paused?: boolean;
       started?: boolean;
       keyBoundBGA?: KeyBoundBGAFrame;
+      bmsonBGA?: BmsonBGAFrame;
     } = {},
   ): void {
     if (this.disposed) return;
@@ -178,6 +179,7 @@ export class BeatorajaBGALayer {
       nonstop: this.nonstop,
       seconds,
       inPoorWindow: poorBGAActive,
+      bmsonBGA: playback.bmsonBGA,
     });
     if (props.visible) {
       if (this.background === undefined) {
@@ -205,10 +207,10 @@ export class BeatorajaBGALayer {
       const pair = this.pairAt(index);
       // The miss layer replaces both the base and the layer; outside it the layer draws over the base.
       if (stack.poorKey !== undefined && !stack.poorOverlays) {
-        let cueSeconds = seconds;
+        let cueSeconds = stack.poorCue?.seconds ?? seconds;
         for (const cue of this.cues.poor) {
           if (cue.seconds > seconds) break;
-          if (cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
+          if (stack.poorCue === undefined && cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
         }
         const poorKey = this.videoKey(stack.poorKey, 'poor')!;
         keys.set(poorKey, cueSeconds);
@@ -263,10 +265,10 @@ export class BeatorajaBGALayer {
         );
       }
       if (stack.poorKey !== undefined && stack.poorOverlays) {
-        let cueSeconds = seconds;
+        let cueSeconds = stack.poorCue?.seconds ?? seconds;
         for (const cue of this.cues.poor) {
           if (cue.seconds > seconds) break;
-          if (cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
+          if (stack.poorCue === undefined && cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
         }
         const poorKey = this.videoKey(stack.poorKey, 'poor')!;
         keys.set(poorKey, cueSeconds);
