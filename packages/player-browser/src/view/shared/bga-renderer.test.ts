@@ -223,6 +223,90 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     state.dispose();
   });
 
+  test.each(['base', 'layer', 'layer2', 'poor'] as const)(
+    'keeps both NONSTOP %s videos synchronized across the whole overlap and seek',
+    (track) => {
+      const state = setup(1);
+      const video = () => {
+        const value = {
+          paused: true,
+          seeking: false,
+          currentTime: 0,
+          duration: 60,
+          play: vi.fn(async () => {
+            value.paused = false;
+          }),
+          pause: vi.fn(() => {
+            value.paused = true;
+          }),
+        };
+        return value;
+      };
+      const outgoing = video(),
+        incoming = video();
+      state.play.bgaVideos.set('outgoing', { video: outgoing, objectURL: 'outgoing' });
+      state.play.bgaVideos.set('incoming', { video: incoming, objectURL: 'incoming' });
+      for (const key of ['outgoing', 'incoming']) {
+        state.play.bgaTextures.set(key, state.textures[0]!);
+        state.play.bgaLayerTextures.set(key, state.textures[0]!);
+      }
+      const timeline = (key: string, seconds: number) => ({
+        base: [],
+        layer: [],
+        layer2: [],
+        poor: [],
+        [track]: [{ seconds, bmpKey: key }],
+      });
+      Object.assign(state.play, { nonstopBGATimelines: [timeline('outgoing', 0), timeline('incoming', 5)] });
+      Object.assign(state.ctx.options, {
+        nonstop: {
+          stages: [
+            { windowStart: 0, windowEnd: 8, bmpKeys: ['outgoing'], poorBGAMode: 1, bgaFadeOut: { start: 8, end: 11 } },
+            {
+              windowStart: 8,
+              windowEnd: Infinity,
+              bmpKeys: ['incoming'],
+              poorBGAMode: 1,
+              bgaFadeIn: { start: 5, end: 8 },
+            },
+          ],
+        },
+      });
+      state.play.lastPoorAt = 0;
+      state.play.audioContextStartTime = 0;
+      renderBGA(state.ctx, 6);
+      expect(outgoing.play).not.toHaveBeenCalled();
+      expect(incoming.play).not.toHaveBeenCalled();
+      state.play.audioContextStartTime = 1;
+      renderBGA(state.ctx, 6);
+      expect([outgoing.currentTime, incoming.currentTime]).toEqual([6, 1]);
+      expect([outgoing.paused, incoming.paused]).toEqual([false, false]);
+      renderBGA(state.ctx, 9);
+      expect([outgoing.currentTime, incoming.currentTime]).toEqual([9, 4]);
+      expect(outgoing.play).toHaveBeenCalledOnce();
+      expect(incoming.play).toHaveBeenCalledOnce();
+      renderBGA(state.ctx, 10, 6); // Frozen cue clock still allows already-started movies to advance.
+      expect([outgoing.currentTime, incoming.currentTime]).toEqual([10, 5]);
+      renderBGA(state.ctx, 12);
+      expect(outgoing.paused).toBe(true);
+      expect(incoming.currentTime).toBe(7);
+      expect(incoming.play).toHaveBeenCalledOnce();
+      expect(state.ctx.play.bgaActiveVideos[`${track}:outgoing`]).toBeUndefined();
+      renderBGA(state.ctx, 6);
+      expect([outgoing.currentTime, incoming.currentTime]).toEqual([6, 1]);
+      expect(outgoing.play).toHaveBeenCalledTimes(2);
+      outgoing.pause();
+      incoming.pause();
+      state.play.paused = true;
+      state.ctx.play.bgaActiveVideos = {};
+      renderBGA(state.ctx, 9);
+      expect([outgoing.currentTime, incoming.currentTime]).toEqual([9, 4]);
+      expect([outgoing.paused, incoming.paused]).toEqual([true, true]);
+      expect(Object.keys(state.ctx.play.bgaActiveVideos)).toHaveLength(2);
+      state.dispose();
+    },
+  );
+
   test.each([0, 1, 2] as const)('POORBGA %s replaces, overlays or disables POOR over both layers', (mode) => {
     const state = setup(mode);
     state.play.lastPoorAt = 0;

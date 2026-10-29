@@ -137,12 +137,7 @@ export interface PlayfieldRuntime {
   readonly bgaLayerTextures: Map<string, Texture>;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }>;
-  bgaActiveVideos: {
-    base?: { key: string; cueSeconds: number };
-    layer?: { key: string; cueSeconds: number };
-    layer2?: { key: string; cueSeconds: number };
-    poor?: { key: string; cueSeconds: number };
-  };
+  bgaActiveVideos: Record<string, { key: string; cueSeconds: number } | undefined>;
   readonly audioAnalyzer: AudioAnalyzer | undefined;
   readonly audioContextStartTime: number;
   readonly paused: boolean;
