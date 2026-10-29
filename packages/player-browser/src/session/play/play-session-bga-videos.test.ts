@@ -1,7 +1,8 @@
 import { expect, test, vi } from 'vite-plus/test';
 import { PlaySession } from './play-session.ts';
+import { disposeBGAVideos } from './play-media.ts';
 
-test('pause freezes every video and resume restarts the active second overlay only', () => {
+test.each(['layer2', 'poor'] as const)('pause freezes every video and resumes only the active %s plane', (track) => {
   const session = new PlaySession({});
   function video() {
     const value = {
@@ -17,10 +18,10 @@ test('pause freezes every video and resume restarts the active second overlay on
   }
   const active = video(),
     inactive = video();
-  const key = String.fromCharCode(0) + 'layer2:01';
+  const key = String.fromCharCode(0) + track + ':01';
   session.bgaVideos.set(key, { video: active as unknown as HTMLVideoElement, objectURL: 'blob:active' });
   session.bgaVideos.set('unused', { video: inactive as unknown as HTMLVideoElement, objectURL: 'blob:unused' });
-  session.bgaActiveVideos.layer2 = { key, cueSeconds: 3 };
+  session.bgaActiveVideos[track] = { key, cueSeconds: 3 };
   session.pauseAllBGAVideos();
   expect(active.paused).toBe(true);
   expect(inactive.paused).toBe(true);
@@ -29,4 +30,26 @@ test('pause freezes every video and resume restarts the active second overlay on
   expect(active.paused).toBe(false);
   expect(inactive.play).not.toHaveBeenCalled();
   expect(inactive.paused).toBe(true);
+});
+
+test('disposes a video shared by source and alias keys only once', () => {
+  const video = { pause: vi.fn(), removeAttribute: vi.fn(), load: vi.fn() };
+  const handle = { video: video as unknown as HTMLVideoElement, objectURL: 'blob:shared' };
+  const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  try {
+    const context = {
+      bgaVideos: new Map([
+        ['root', handle],
+        ['alias', handle],
+      ]),
+      bgaActiveVideos: {},
+    };
+    disposeBGAVideos(context);
+    expect(video.pause).toHaveBeenCalledOnce();
+    expect(video.load).toHaveBeenCalledOnce();
+    expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:shared');
+    expect(context.bgaVideos.size).toBe(0);
+  } finally {
+    revoke.mockRestore();
+  }
 });

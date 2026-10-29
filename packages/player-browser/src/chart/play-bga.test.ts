@@ -195,6 +195,52 @@ describe('loadPlayBGA', () => {
     mocks.loadTextureFromBytes.mockImplementation(async () => new Texture());
   });
 
+  test('binds nested video aliases to independent plane playheads and preserves native crop coordinates', async () => {
+    const chart = bmsChart({ '01': 'sheet.webm' });
+    chart.bms.bga = { '02': '04 16 32 80 160 32 64', '03': '04 80 32 144 160 128 64', '04': '01 256 0 384 128 16 32' };
+    const handles = [0, 1, 2, 3].map((index) => ({
+      texture: sourceTexture(),
+      objectURL: `blob:${index}`,
+      video: { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 },
+    }));
+    for (const handle of handles) mocks.loadVideoTextureFromBytes.mockResolvedValueOnce(handle);
+    const into = emptyResources();
+    await loadPlayBGA({
+      chart,
+      source: SOURCE,
+      chartPath: 'x.bms',
+      into,
+      tempo: 1.25,
+      transcode: { maxLongEdgePx: 128, useWebCodecs: true },
+      timeline: {
+        base: [{ seconds: 0, bmpKey: '02' }],
+        layer: [{ seconds: 1, bmpKey: '02' }],
+        layer2: [{ seconds: 2, bmpKey: '03' }],
+        poor: [{ seconds: 0, bmpKey: '02' }],
+      },
+    });
+    const layer = String.fromCharCode(0) + 'layer:02';
+    const layer2 = String.fromCharCode(0) + 'layer2:03';
+    const poor = String.fromCharCode(0) + 'poor:02';
+    for (const [key, index] of [
+      ['02', 0],
+      [layer, 1],
+      [layer2, 2],
+      [poor, 3],
+    ] as const)
+      expect(into.videos.get(key)?.video).toBe(handles[index]!.video);
+    expect(into.layerTextures.get(layer)?.source).toBe(handles[1]!.texture.source);
+    expect(into.layerTextures.get(layer2)?.frame).toMatchObject({ x: 320, y: 0, width: 64, height: 128 });
+    expect(into.textures.get(poor)?.source).toBe(handles[3]!.texture.source);
+    expect(into.subRegionOrigins.get(layer2)).toEqual({ x: 128, y: 64 });
+    expect(mocks.loadAssetBytes).toHaveBeenCalledOnce();
+    expect(mocks.loadVideoTextureFromBytes).toHaveBeenCalledTimes(4);
+    expect(mocks.loadVideoTextureFromBytes).toHaveBeenCalledWith('sheet.webm', expect.any(Uint8Array), {
+      maxLongEdgePx: 0,
+      useWebCodecs: true,
+    });
+  });
+
   test('keys the layer track black out for BMS but not for bmson', async () => {
     const timeline = { base: [{ seconds: 0, bmpKey: '01' }], layer: [{ seconds: 0, bmpKey: '01' }], poor: [] };
     const into = emptyResources();

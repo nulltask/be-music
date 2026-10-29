@@ -25,7 +25,7 @@ function skin(): BeatorajaSkin {
   };
 }
 
-it('places a BGA sub-region at its authored canvas origin instead of centering it', () => {
+it.each([false, true])('places a BGA sub-region at its authored origin (video=%s)', (video) => {
   const texture = new Texture({
     source: new TextureSource({ resource: new Uint8Array(128 * 64 * 4), width: 128, height: 64 }),
   });
@@ -33,6 +33,7 @@ it('places a BGA sub-region at its authored canvas origin instead of centering i
     skin: skin(),
     textures: new Map([['crop', texture]]),
     subRegionOrigins: new Map([['crop', { x: 32, y: 48 }]]),
+    videoElements: video ? new Map([['crop', fakeVideo() as unknown as HTMLVideoElement]]) : undefined,
     cues: { base: [{ seconds: 0, bmpKey: 'crop' }], layer: [], poor: [] },
   });
   layer.update(0, { activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 }, false);
