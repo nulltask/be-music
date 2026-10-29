@@ -2,6 +2,7 @@ import { createEmptyJSON } from '@be-music/chart-source';
 import {
   buildBGAOpacityTimelines,
   pickBGAOpacity,
+  pickBGATint,
   resolveChart,
   type BGAOpacityTimelines,
 } from '@be-music/chart-model';
@@ -123,4 +124,55 @@ test('opacity events after a stage STOP retain their placed times in the flatten
   expect(cues.find((cue) => cue.opacity === 64 / 255)!.seconds).toBeCloseTo(expected, 3);
   expect(pickBGAOpacity(cues, expected - 0.01)).toBe(128 / 255);
   expect(pickBGAOpacity(cues, expected + 0.01)).toBe(64 / 255);
+});
+
+test.each(['fade', 'fade-fit', 'cut', 'cut-fit', 'blank1', 'blank2'] as const)(
+  'stitches channel ARGB under %s and restores untinted defaults without alpha leakage',
+  (connection) => {
+    const a = parseBMS(
+      '#BPM 120\n#WAV01 a.wav\n#BMP01 a.png\n#00111:01\n#00411:01\n#00004:01\n#ARGB01 0,40,175,48\n#ARGB02 128,234,210,173\n#000A1:01\n#000A2:02\n#0010C:FF',
+    );
+    const b = parseBMS('#BPM 180\n#WAV01 b.wav\n#00111:01\n#00411:01');
+    const result = stitchNonstopCourse([{ chart: a }, { chart: b }], { connections: [connection] });
+    if (!result.ok) throw new Error('Stitch failed');
+    const controls = buildBGAOpacityTimelines(result.chart, resolveChart(result.chart).timing);
+    const boundary = result.map.stages[1]!.windowStart;
+    expect(pickBGAOpacity(controls.base, boundary - 0.01)).toBe(0);
+    expect(pickBGATint(controls.base, boundary - 0.01)).toBe(0x28af30);
+    expect(pickBGATint(controls.layer, boundary - 0.01)).toBe(0xead2ad);
+    for (const track of ['base', 'layer', 'layer2', 'poor'] as const) {
+      expect(pickBGAOpacity(controls[track], boundary + 0.001)).toBe(1);
+      expect(pickBGATint(controls[track], boundary + 0.001)).toBe(0xffffff);
+    }
+    const stage = result.map.stages[0]!;
+    expect(stage.bgaOpacity!.base[0]!.tint).toBe(0x28af30);
+    expect(stage.bgaOpacity!.layer.at(-1)!.tint).toBe(0xead2ad);
+    expect(result.chart.bms.argb[stage.bmpKeys[0]!]).toBe('0,40,175,48');
+    expect(result.chart.events.filter((entry) => /^A[1-4]$/u.test(entry.channel)).length).toBeGreaterThan(4);
+  },
+);
+
+test('mixed bmson composition retains ARGB controls and independent FIT-adjusted stage colors', () => {
+  const a = parseBMS('#BPM 120\n#00111:01\n#00411:01\n#ARGB61 64,1,2,3\n#000A3:61\n#0010D:FF');
+  const b = createEmptyJSON('bmson');
+  b.metadata.bpm = 180;
+  b.events = [
+    { measure: 1, position: [0, 1], channel: '11', value: 'note', bmson: { c: false } },
+    { measure: 4, position: [0, 1], channel: '11', value: 'note', bmson: { c: false } },
+  ];
+  b.resources.wav.note = 'b.wav';
+  const result = stitchNonstopCourse([{ chart: a }, { chart: b }], { connections: ['fade-fit'] });
+  if (!result.ok) throw new Error(result.reason);
+  expect(result.chart.sourceFormat).toBe('bmson');
+  const controls = buildBGAOpacityTimelines(result.chart, resolveChart(result.chart).timing);
+  const boundary = result.map.stages[1]!.windowStart;
+  expect(pickBGATint(controls.layer2, boundary - 0.01)).toBe(0x010203);
+  expect(pickBGAOpacity(controls.layer2, boundary - 0.01)).toBe(1);
+  expect(pickBGATint(controls.layer2, boundary + 0.001)).toBe(0xffffff);
+  const placed = result.map.stages[0]!.bgaOpacity!.layer2;
+  expect(placed[0]!.seconds).toBe(result.map.stages[0]!.placement.offsetSeconds);
+  expect(placed[0]!.tint).toBe(0x010203);
+  expect(placed[1]!.seconds).toBeCloseTo(
+    result.map.stages[0]!.placement.offsetSeconds + 2 / result.map.stages[0]!.placement.rate,
+  );
 });

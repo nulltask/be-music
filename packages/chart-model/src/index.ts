@@ -161,6 +161,7 @@ export { resolveChartReferenceBPM } from './reference-bpm.ts';
 export {
   buildBGAOpacityTimelines,
   pickBGAOpacity,
+  pickBGATint,
   type BGAOpacityCue,
   type BGAOpacityTimelines,
 } from './bga-opacity.ts';

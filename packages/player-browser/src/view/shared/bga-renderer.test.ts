@@ -159,7 +159,7 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     state.dispose();
   });
 
-  test('does not multiply EXBMP colors/alpha after loading but retains legacy per-slot ARGB', () => {
+  test('ignores per-slot EXBMP/ARGB and applies the selected plane controls', () => {
     const state = setup();
     const chart = createEmptyJSON('bms');
     chart.bms.exBMP['first'] = '64,255,128,64 colors.png';
@@ -169,6 +169,12 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     expect(sprite().tint).toBe(0xffffff);
     expect(sprite().alpha).toBe(1);
     chart.bms.argb['first'] = '128,64,128,192';
+    renderBGA(state.ctx, 3);
+    expect(sprite().tint).toBe(0xffffff);
+    expect(sprite().alpha).toBe(1);
+    Object.assign(state.play.bgaTimeline, {
+      opacity: { base: [], layer: [{ seconds: 0, opacity: 128 / 255, tint: 0x4080c0 }], layer2: [], poor: [] },
+    });
     renderBGA(state.ctx, 3);
     expect(sprite().tint).toBe(0x4080c0);
     expect(sprite().alpha).toBeCloseTo(128 / 255);
@@ -180,12 +186,12 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     Object.assign(state.play.bgaTimeline, {
       opacity: {
         base: [
-          { seconds: 2, opacity: 0.5 },
-          { seconds: 4, opacity: 1 },
+          { seconds: 2, opacity: 0.5, tint: 0xff8040 },
+          { seconds: 4, opacity: 1, tint: 0xff8040 },
         ],
-        layer: [{ seconds: 2, opacity: 0.25 }],
-        layer2: [{ seconds: 2, opacity: 0.125 }],
-        poor: [{ seconds: 2, opacity: 0.75 }],
+        layer: [{ seconds: 2, opacity: 0.25, tint: 0x4080ff }],
+        layer2: [{ seconds: 2, opacity: 0.125, tint: 0x80ff40 }],
+        poor: [{ seconds: 2, opacity: 0.75, tint: 0xff4080 }],
       },
     });
     Object.assign(state.ctx.playfieldSkin, {
@@ -197,6 +203,7 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
           h: 256,
           applyToSprite: (sprite: Sprite) => {
             sprite.alpha = 0.6;
+            sprite.tint = 0x808080;
           },
         }),
     });
@@ -207,10 +214,13 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     expect(alpha('layer')).toBeCloseTo(0.15);
     expect(alpha('layer2')).toBeCloseTo(0.075);
     expect(alpha('poor')).toBeCloseTo(0.45);
+    const tint = (name: string) => state.sprites.find((sprite) => sprite.label.startsWith(`bga/${name}[`))!.tint;
+    expect(['base', 'layer', 'layer2', 'poor'].map(tint)).toEqual([0x804020, 0x204080, 0x408020, 0x802040]);
     renderBGA(state.ctx, 10, 3);
     expect(alpha('base')).toBeCloseTo(0.3);
     renderBGA(state.ctx, 1.5);
     expect(alpha('base')).toBeCloseTo(0.6);
+    expect(tint('base')).toBe(0x808080);
     state.dispose();
   });
 

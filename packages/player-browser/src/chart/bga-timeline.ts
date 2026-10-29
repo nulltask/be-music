@@ -2,6 +2,7 @@ import type { BeMusicJSON } from '@be-music/chart-source';
 import { collectBGASubRegions } from './bga-subregions.ts';
 import {
   pickBGAOpacity,
+  pickBGATint,
   type BGAOpacityTimelines,
   type BGATimelines,
   type TimingResolver,
@@ -132,6 +133,7 @@ export function resolveBGAImageRect(
 /** The BGA keys showing this frame, as `renderBGA` resolved them (`#SWBGA` frames already picked). */
 export interface ActiveBGAKeys {
   opacity?: Record<keyof BGAOpacityTimelines, number>;
+  tint?: Record<keyof BGAOpacityTimelines, number>;
   base: string | undefined;
   layer: string | undefined;
   layer2?: string | undefined;
@@ -146,7 +148,7 @@ export interface ActiveBGAKeys {
  */
 export function buildSkinBGAFrame<Image>(
   keys: ActiveBGAKeys,
-  resolve: (key: string, track: 'base' | 'layer') => Image | undefined,
+  resolve: (key: string, track: 'base' | 'layer', tint?: number) => Image | undefined,
   subRegionOrigins?: ReadonlyMap<string, { x: number; y: number }>,
 ): {
   base?: Image;
@@ -158,11 +160,13 @@ export function buildSkinBGAFrame<Image>(
   opacity?: Record<keyof BGAOpacityTimelines, number>;
   origins?: Partial<Record<keyof BGAOpacityTimelines, { x: number; y: number }>>;
 } {
-  const base = keys.base !== undefined ? resolve(keys.base, 'base') : undefined;
-  const layer = keys.layer !== undefined ? resolve(keys.layer, 'layer') : undefined;
-  const layer2 = keys.layer2 !== undefined ? resolve(keys.layer2, 'layer') : undefined;
+  const image = (key: string, map: 'base' | 'layer', plane: keyof BGAOpacityTimelines): Image | undefined =>
+    keys.tint ? resolve(key, map, keys.tint[plane]) : resolve(key, map);
+  const base = keys.base !== undefined ? image(keys.base, 'base', 'base') : undefined;
+  const layer = keys.layer !== undefined ? image(keys.layer, 'layer', 'layer') : undefined;
+  const layer2 = keys.layer2 !== undefined ? image(keys.layer2, 'layer', 'layer2') : undefined;
   // POOR images decode like the base (no chroma key), so they live in the base map.
-  const poor = keys.poor !== undefined ? resolve(keys.poor, 'base') : undefined;
+  const poor = keys.poor !== undefined ? image(keys.poor, 'base', 'poor') : undefined;
   const origins: Partial<Record<keyof BGAOpacityTimelines, { x: number; y: number }>> = {};
   for (const track of ['base', 'layer', 'layer2', 'poor'] as const) {
     const key = keys[track];
@@ -255,6 +259,7 @@ export function isMissLayerShown(missSeconds: number | undefined, seconds: numbe
 
 /** One BGA stack to draw: its base and layer cues (and a POOR image in place of them) at `alpha`. */
 export interface BGAStack {
+  tint?: Record<keyof BGAOpacityTimelines, number>;
   opacity?: Record<keyof BGAOpacityTimelines, number>;
   poorOverlays?: boolean;
   alpha: number;
@@ -311,6 +316,19 @@ export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
             layer: pickBGAOpacity(opacity.layer, seconds),
             layer2: pickBGAOpacity(opacity.layer2, seconds),
             poor: pickBGAOpacity(opacity.poor, seconds),
+          },
+        }
+      : {}),
+    ...(opacity !== undefined &&
+    [opacity.base, opacity.layer, opacity.layer2, opacity.poor].some((cues) =>
+      cues.some((cue) => cue.tint !== undefined),
+    )
+      ? {
+          tint: {
+            base: pickBGATint(opacity.base, seconds),
+            layer: pickBGATint(opacity.layer, seconds),
+            layer2: pickBGATint(opacity.layer2, seconds),
+            poor: pickBGATint(opacity.poor, seconds),
           },
         }
       : {}),

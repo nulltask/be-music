@@ -209,6 +209,7 @@ export class BeatorajaBGALayer {
           this.textures,
           props,
           stack.alpha * (stack.opacity?.poor ?? 1),
+          stack.tint?.poor,
         );
         return;
       }
@@ -222,6 +223,7 @@ export class BeatorajaBGALayer {
           this.textures,
           props,
           stack.alpha * (stack.opacity?.base ?? 1),
+          stack.tint?.base,
         );
       }
       const layerKey = this.videoKey(stack.layerCue?.bmpKey, 'layer');
@@ -234,6 +236,7 @@ export class BeatorajaBGALayer {
           this.layerTextures,
           props,
           stack.alpha * (stack.opacity?.layer ?? 1),
+          stack.tint?.layer,
         );
       }
       const layer2Key = this.videoKey(stack.layer2Cue?.bmpKey, 'layer2');
@@ -246,6 +249,7 @@ export class BeatorajaBGALayer {
           this.layerTextures,
           props,
           stack.alpha * (stack.opacity?.layer2 ?? 1),
+          stack.tint?.layer2,
         );
       }
       if (stack.poorKey !== undefined && stack.poorOverlays) {
@@ -256,7 +260,15 @@ export class BeatorajaBGALayer {
         }
         const poorKey = this.videoKey(stack.poorKey, 'poor')!;
         keys.set(poorKey, cueSeconds);
-        this.drawImage(pair.poor, undefined, poorKey, this.textures, props, stack.alpha * (stack.opacity?.poor ?? 1));
+        this.drawImage(
+          pair.poor,
+          undefined,
+          poorKey,
+          this.textures,
+          props,
+          stack.alpha * (stack.opacity?.poor ?? 1),
+          stack.tint?.poor,
+        );
       }
     });
     this.syncVideos(keys, playback.seconds ?? seconds, playback);
@@ -328,6 +340,7 @@ export class BeatorajaBGALayer {
     textures: ReadonlyMap<string, Texture>,
     props: BGADestinationProps,
     alpha: number,
+    tint = 0xffffff,
   ): void {
     const texture = textures.get(key) ?? this.textures.get(key);
     // No decoded texture (or Pixi's source-less EMPTY singleton) must not enter the renderer's
@@ -362,7 +375,11 @@ export class BeatorajaBGALayer {
     sprite.width = placed.w;
     sprite.height = placed.h;
     sprite.alpha = props.alpha * alpha;
-    sprite.tint = props.tint;
+    sprite.tint = [16, 8, 0].reduce(
+      (value, shift) =>
+        value | (Math.round((((props.tint >>> shift) & 255) * ((tint >>> shift) & 255)) / 255) << shift),
+      0,
+    );
     sprite.angle = props.angle;
     sprite.blendMode = props.blendMode;
   }

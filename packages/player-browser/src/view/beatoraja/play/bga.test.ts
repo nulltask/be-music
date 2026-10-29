@@ -46,7 +46,7 @@ it.each([false, true])('places a BGA sub-region at its authored origin (video=%s
 it('applies opacity independently to base, both overlays and POOR and restores it after a seek', () => {
   const texture = fakeTexture();
   const cues = [{ seconds: 0, bmpKey: 'image' }];
-  const opacity = (value: number) => [{ seconds: 2, opacity: value }];
+  const opacity = (value: number) => [{ seconds: 2, opacity: value, tint: 0x4080c0 }];
   const layer = new BeatorajaBGALayer({
     skin: skin(),
     poorBGAMode: 1,
@@ -64,8 +64,12 @@ it('applies opacity independently to base, both overlays and POOR and restores i
   const alpha = (label: string) =>
     (layer.container.children.find((child) => child.label === `bga/${label}`) as Sprite).alpha;
   expect(['base', 'layer', 'layer2', 'poor'].map(alpha)).toEqual([0.5, 0.25, 0.125, 0.75]);
+  const tint = (label: string) =>
+    (layer.container.children.find((child) => child.label === `bga/${label}`) as Sprite).tint;
+  expect(['base', 'layer', 'layer2', 'poor'].map(tint)).toEqual([0x4080c0, 0x4080c0, 0x4080c0, 0x4080c0]);
   layer.update(1, context, true);
   expect(['base', 'layer', 'layer2', 'poor'].map(alpha)).toEqual([1, 1, 1, 1]);
+  expect(['base', 'layer', 'layer2', 'poor'].map(tint)).toEqual([0xffffff, 0xffffff, 0xffffff, 0xffffff]);
   layer.dispose();
   texture.destroy(true);
 });

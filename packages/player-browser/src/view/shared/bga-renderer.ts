@@ -6,7 +6,7 @@
  * The functions read and write the scene's state through {@link BGARendererContext}; the play view passes itself.
  */
 
-import { pickSwitchingBGAFrame, parseBmsARGB } from '@be-music/chart-model';
+import { pickSwitchingBGAFrame } from '@be-music/chart-model';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/display';
 import { Texture } from 'pixi.js';
 import {
@@ -172,12 +172,16 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
               : undefined,
           poorOverlays: stack.poorOverlays,
           opacity: stack.opacity,
+          tint: stack.tint,
         },
-        (key, track) =>
-          resolveSkinBGAImage(
-            ctx,
-            (track === 'layer' ? ctx.play.bgaLayerTextures : ctx.play.bgaTextures).get(key),
-            ctx.play.bgaSubRegionOrigins?.has(key),
+        (key, track, tint) =>
+          tintSkinBGAImage(
+            resolveSkinBGAImage(
+              ctx,
+              (track === 'layer' ? ctx.play.bgaLayerTextures : ctx.play.bgaTextures).get(key),
+              ctx.play.bgaSubRegionOrigins?.has(key),
+            ),
+            tint,
           ),
         ctx.play.bgaSubRegionOrigins,
       );
@@ -211,6 +215,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       cueSeconds: number | undefined,
       alpha = 1,
       overlay = false,
+      tint = 0xffffff,
     ): void => {
       if (!key) return;
       const resolvedKey = resolveBGAFrameKey(ctx, key, cueSeconds, seconds, layerName);
@@ -249,29 +254,27 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       sprite.height = placed.h;
       bga.applyToSprite(sprite);
       sprite.alpha *= alpha;
-      // Preserve the legacy Be-Music per-slot tint interpretation. This is separate from 0B–0E opacity and does
-      // not implement nanasi's channel-scoped A1–A4 commands. EXBMP color keys are applied while loading pixels.
-      const resolvedChart = ctx.play.resolvedChart;
-      if (resolvedChart) {
-        // Tint resolution honors the original cue key first (so `#ARGBxx 01` applies even when `#SWBGA01` is ALSO
-        // active and the per-frame source slot lacks its own tint). Falling back to the resolved frame key catches
-        // the inverse case: chart tints the source `#BMPYY` slot but not the `#SWBGA01` alias.
-        const argb =
-          parseBmsARGB(resolvedChart.bms.argb[key] ?? '') ?? parseBmsARGB(resolvedChart.bms.argb[resolvedKey] ?? '');
-        if (argb) {
-          sprite.tint = (argb.r << 16) | (argb.g << 8) | argb.b;
-          // Compose with the call-site alpha that `applyToSprite` may have already written (e.g. skin-driven LR2
-          // fades) so the chart-level α stacks multiplicatively rather than overriding it.
-          sprite.alpha *= argb.a / 255;
-        }
-      }
+      const skinTint = sprite.tint;
+      sprite.tint = [16, 8, 0].reduce(
+        (value, shift) =>
+          value | (Math.round((((skinTint >>> shift) & 255) * ((tint >>> shift) & 255)) / 255) << shift),
+        0,
+      );
     };
     for (const stack of stacks) {
       if (stack.poorKey && !stack.poorOverlays) {
         // POOR uses base-mode decoding (no chroma key) since it replaces the stack's base+layer composite during its
         // window. POOR has no per-cue origin time we can hand to `drawLayer` for `#SWBGAxx` frame timing; chart
         // authors don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
-        drawLayer(stack.poorKey, ctx.play.bgaTextures, 'poor', undefined, stack.alpha * (stack.opacity?.poor ?? 1));
+        drawLayer(
+          stack.poorKey,
+          ctx.play.bgaTextures,
+          'poor',
+          undefined,
+          stack.alpha * (stack.opacity?.poor ?? 1),
+          false,
+          stack.tint?.poor,
+        );
         continue;
       }
       // `cue.seconds` anchors switching-BGA frame timing — `pickSwitchingBGAFrame` advances frames relative to when
@@ -282,6 +285,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         'base',
         stack.baseCue?.seconds,
         stack.alpha * (stack.opacity?.base ?? 1),
+        false,
+        stack.tint?.base,
       );
       // Layer track is composited on top with black→transparent so the base track shows through where the
       // foreground BMP is empty.
@@ -291,6 +296,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         'layer',
         stack.layerCue?.seconds,
         stack.alpha * (stack.opacity?.layer ?? 1),
+        false,
+        stack.tint?.layer,
       );
       drawLayer(
         stack.layer2Cue?.bmpKey,
@@ -298,6 +305,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         'layer2',
         stack.layer2Cue?.seconds,
         stack.alpha * (stack.opacity?.layer2 ?? 1),
+        false,
+        stack.tint?.layer2,
       );
       if (stack.poorKey && stack.poorOverlays)
         drawLayer(
@@ -307,6 +316,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           undefined,
           stack.alpha * (stack.opacity?.poor ?? 1),
           true,
+          stack.tint?.poor,
         );
     }
   }
@@ -503,4 +513,54 @@ function syncBGAVideo(
   void handle.video.play().catch(() => {
     // Autoplay policy / codec rejections — silently swallow so the still-image fallback keeps working.
   });
+}
+
+const tintedSkinImages = new WeakMap<BeMusicImage, Map<number, HTMLCanvasElement>>();
+/** Canvas skins receive already-tinted pixels, so existing skins honor the same plane controls as Pixi scenes. */
+function tintSkinBGAImage(image: BeMusicImage | undefined, tint = 0xffffff): BeMusicImage | undefined {
+  if (!image || tint === 0xffffff) return image;
+  let colors = tintedSkinImages.get(image);
+  if (!colors) {
+    colors = new Map();
+    tintedSkinImages.set(image, colors);
+  }
+  const existing = colors.get(tint);
+  if (existing && ('naturalWidth' in image || (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap)))
+    return existing;
+  const canvas = existing ?? document.createElement('canvas');
+  if (!existing) {
+    if (colors.size >= 4) colors.delete(colors.keys().next().value!);
+    colors.set(tint, canvas);
+  }
+  const source = image as {
+    videoWidth?: number;
+    videoHeight?: number;
+    naturalWidth?: number;
+    naturalHeight?: number;
+    width?: number;
+    height?: number;
+  };
+  const width = source.videoWidth ?? source.naturalWidth ?? source.width ?? 0;
+  const height = source.videoHeight ?? source.naturalHeight ?? source.height ?? 0;
+  if (!width || !height) return undefined;
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return undefined;
+  try {
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, width, height);
+    for (let offset = 0; offset < pixels.data.length; offset += 4) {
+      pixels.data[offset] = Math.round((pixels.data[offset]! * ((tint >>> 16) & 255)) / 255);
+      pixels.data[offset + 1] = Math.round((pixels.data[offset + 1]! * ((tint >>> 8) & 255)) / 255);
+      pixels.data[offset + 2] = Math.round((pixels.data[offset + 2]! * (tint & 255)) / 255);
+    }
+    context.putImageData(pixels, 0, 0);
+    return canvas;
+  } catch {
+    return undefined;
+  }
 }

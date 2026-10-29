@@ -49,9 +49,24 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
     run: (fixtures) => {
       const chart = {
         ...fixtures.emptyBmsJSON,
-        events: [{ measure: 0, position: [0, 1] as [number, number], channel: '0C', value: '80' }],
+        bms: { ...fixtures.emptyBmsJSON.bms, argb: { '01': '128,40,175,48' } },
+        events: [
+          { measure: 0, position: [0, 1] as [number, number], channel: 'A2', value: '01' },
+          { measure: 1, position: [0, 1] as [number, number], channel: '0C', value: '80' },
+        ],
       };
       chartAPI.buildBGAOpacityTimelines(chart, chartAPI.createTimingResolver(chart));
+    },
+  });
+  define('chart-model.pickBGATint', {
+    run: () => {
+      chartAPI.pickBGATint(
+        [
+          { seconds: 0, opacity: 1, tint: 0x28af30 },
+          { seconds: 1, opacity: 0.5, tint: 0xead2ad },
+        ],
+        1.5,
+      );
     },
   });
   define('chart-model.pickBGAOpacity', {

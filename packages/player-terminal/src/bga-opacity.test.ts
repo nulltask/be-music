@@ -104,3 +104,51 @@ async function writeSolidPNG(path: string, color: number[]): Promise<void> {
   for (let offset = 0; offset < data.length; offset += 4) data.set([...color, 255], offset);
   await writeFile(path, encode({ width: 256, height: 256, channels: 4, depth: 8, data }));
 }
+
+test.each([
+  ['04', 'A1', '0B', '0'],
+  ['07', 'A2', '0C', '0'],
+  ['0A', 'A3', '0D', '0'],
+  ['06', 'A4', '0E', '0'],
+  ['06', 'A4', '0E', '1'],
+])(
+  'applies channel color and shared alpha on %s, including ANSI/Kitty seek and resize',
+  async (track, argbChannel, opacityChannel, mode) => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-argb-'));
+    try {
+      await writeSolidPNG(join(baseDir, 'white.png'), [255, 255, 255]);
+      const chart = parseBMS(
+        [
+          '#BPM 120',
+          `#POORBGA ${mode}`,
+          '#BMP01 white.png',
+          '#ARGB01 128,40,175,48',
+          '#ARGB02 0,234,210,173',
+          `#000${track}:01`,
+          `#001${argbChannel}:01`,
+          `#002${opacityChannel}:FF`,
+          `#003${argbChannel}:02`,
+        ].join('\n'),
+      );
+      const renderer = (await createBgaANSIRenderer(chart, { baseDir, width: 40, height: 20 }))!;
+      const get = (seconds: number) => {
+        if (track === '06') {
+          renderer.clearPoor();
+          renderer.triggerPoor(seconds);
+        }
+        return renderer.getKittyImage(seconds);
+      };
+      expect(center(get(0))).toEqual([255, 255, 255]);
+      const colored = get(2);
+      expect(center(colored)).toEqual([20, 88, 24]);
+      expect(renderer.getANSILines(2)![10]).toContain('\u001b[48;2;20;88;24m');
+      expect(center(get(4))).toEqual([40, 175, 48]);
+      expect(center(get(6))).toEqual([0, 0, 0]);
+      expect(center(get(2))).toEqual([20, 88, 24]);
+      renderer.setDisplaySize(80, 40);
+      expect(center(get(4))).toEqual([40, 175, 48]);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  },
+);
