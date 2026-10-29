@@ -35,6 +35,36 @@ function getBenchFingerprintDocument(
 }
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
+  define('chart-model.parseBMSKeyBoundBGA', {
+    run: () => {
+      chartAPI.parseBMSKeyBoundBGA('100:400:16:0:255,255,255,255 00010203');
+    },
+  });
+  define('chart-model.pickKeyBoundBGAFrame', {
+    run: () => {
+      chartAPI.pickKeyBoundBGAFrame(
+        {
+          frameIntervalMs: 100,
+          durationMs: 400,
+          channel: '16',
+          loop: false,
+          argb: { a: 255, r: 255, g: 255, b: 255 },
+          frames: ['00', '01', '02', '03'],
+        },
+        250,
+      );
+    },
+  });
+  define('chart-model.buildKeyBoundBGATimeline', {
+    run: (fixtures) => {
+      const chart = {
+        ...fixtures.emptyBmsJSON,
+        bms: { ...fixtures.emptyBmsJSON.bms, swBGA: { '61': '100:400:16:0:255,255,255,255 00010203' } },
+        events: [{ measure: 0, position: [0, 1] as [number, number], channel: 'A5', value: '61' }],
+      };
+      chartAPI.buildKeyBoundBGATimeline(chart, chartAPI.createTimingResolver(chart));
+    },
+  });
   define('chart-model.resolveBmsExBMPColorKey', {
     run: () => {
       chartAPI.resolveBmsExBMPColorKey(BENCH_COLOR_KEY_CHART, '01');

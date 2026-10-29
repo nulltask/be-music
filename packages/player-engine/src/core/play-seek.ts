@@ -79,6 +79,7 @@ export function applySeek(session: PlaySession, judge: PlayJudge, seconds: numbe
   const target = clampSeekSeconds(session, seconds);
   session.replayRecorder?.discard();
   session.seekGeneration += 1;
+  session.keyBoundBGA?.reset();
   const generation = session.seekGeneration;
 
   audioSession?.seek?.(target);

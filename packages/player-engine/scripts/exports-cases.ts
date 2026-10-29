@@ -1535,6 +1535,28 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
 
 /** `@be-music/player-engine/display`: play notes, scrolling, the BGA cue and the chart facts a host shows. */
 function registerDisplayCases(define: DefineBenchmarkCase): void {
+  define('player-engine.display.KeyBoundBGAController', {
+    run: () => {
+      const state = new displayAPI.KeyBoundBGAController([
+        {
+          seconds: 0,
+          definitionId: '61',
+          definition: {
+            frameIntervalMs: 100,
+            durationMs: 400,
+            channel: '16',
+            loop: false,
+            argb: { a: 255, r: 255, g: 255, b: 255 },
+            frames: ['00', '01', '02', '03'],
+          },
+        },
+      ]);
+      state.addInput({ seconds: 1, action: 'down', channels: ['16'] });
+      state.read(1.25);
+      state.read(1.1);
+      state.reset();
+    },
+  });
   define('player-engine.display.extractTimedNotes', {
     run: (fixtures) => {
       displayAPI.extractTimedNotes(fixtures.sampleBmsJSON, {
