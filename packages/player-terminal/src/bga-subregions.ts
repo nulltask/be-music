@@ -1,3 +1,4 @@
+import { getANSIFrameAlpha, setANSIFrameAlpha } from './bga-alpha.ts';
 import { parseBmsBGA, resolveBmsExBMPColorKey, type BmsARGB, type BMSSubRegionBGA } from '@be-music/chart-model';
 import { resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import { createSolidANSIFrame, type ANSIFrame, type FrameMode } from './bga-frame.ts';
@@ -47,7 +48,7 @@ export function cropBGASubRegion(source: ANSIFrame, region: BMSSubRegionBGA, mod
       if (!source.opaqueMask[from]) continue;
       const to = y * 256 + x;
       frame.rgb.set(source.rgb.subarray(from * 3, from * 3 + 3), to * 3);
-      frame.opaqueMask[to] = 1;
+      setANSIFrameAlpha(frame, to, getANSIFrameAlpha(source, from));
     }
   }
   return frame;

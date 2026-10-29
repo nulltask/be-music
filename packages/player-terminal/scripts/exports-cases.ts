@@ -175,7 +175,12 @@ function createBenchBgaANSIRenderer(): playerTuiAPI.BgaANSIRenderer {
     baseSourceFramesByKey: new Map(),
     poorSourceFramesByKey: new Map(),
     layerSourceFramesByKey: new Map(),
-    layer2SourceFramesByKey: new Map([[String.fromCharCode(0) + 'swbga:61:00', { kind: 'static', frame }]]),
+    layer2SourceFramesByKey: new Map([
+      [
+        String.fromCharCode(0) + 'swbga:61:00',
+        { kind: 'static', frame: { ...frame, rgb: new Uint8Array([255, 0, 0]), alpha: new Uint8Array([128]) } },
+      ],
+    ]),
     missingBaseSourceFrame: frame,
     missingPoorSourceFrame: frame,
     missingLayerSourceFrame: frame,

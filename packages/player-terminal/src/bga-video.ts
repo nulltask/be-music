@@ -1,3 +1,4 @@
+import type { FrameMode } from './bga-frame.ts';
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { Worker } from 'node:worker_threads';
@@ -9,10 +10,6 @@ import { createSEAWorker, isSEARuntime } from './node/sea-worker.ts';
 const PACKET_READ_CHUNK_BYTES = 65_536;
 const MAX_PACKET_READ_ITERATIONS = 16_384;
 const FALLBACK_FPS = 30;
-// Mirror the `FrameMode` shape declared in `./bga.ts` — kept in sync so a bmson-source layer can be threaded through
-// the video decode worker without losing the spec-aware `'bmson-layer'` distinction (which suppresses the BMS-style
-// black chroma-key per the bmson 1.0.0 spec).
-type FrameMode = 'base' | 'layer' | 'bmson-layer' | 'exbmp';
 
 interface LibAVPlaneLayout {
   offset: number;
@@ -95,6 +92,7 @@ export interface DecodedVideoStreamInfo {
 }
 
 export interface DecodedSourceVideoFrame {
+  alpha?: Uint8Array;
   seconds: number;
   width: number;
   height: number;

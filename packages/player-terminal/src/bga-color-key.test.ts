@@ -91,10 +91,11 @@ test('keeps cache entries separate for different keys of the same file, preserve
       imageResizeAlgorithm: 'nearest',
     }))!;
     expect(pixel(renderer.getKittyImage(0), 32, 64)).toEqual([0, 0, 0]);
-    expect(pixel(renderer.getKittyImage(0), 96, 64)).toEqual([127, 127, 127]);
+    // Alpha 129 survives the alpha-128 key and blends its gray RGB against black.
+    expect(pixel(renderer.getKittyImage(0), 96, 64)).toEqual([64, 64, 64]);
     expect(pixel(renderer.getKittyImage(0), 160, 64)).toEqual([0, 0, 0]);
     expect(pixel(renderer.getKittyImage(0), 224, 64)).toEqual([0, 255, 0]);
-    expect(pixel(renderer.getKittyImage(2.5), 32, 64)).toEqual([127, 127, 127]);
+    expect(pixel(renderer.getKittyImage(2.5), 32, 64)).toEqual([64, 64, 64]);
     expect(pixel(renderer.getKittyImage(0), 32, 64)).toEqual([0, 0, 0]);
     const stitched = stitchNonstopCourse(
       [
@@ -113,7 +114,7 @@ test('keeps cache entries separate for different keys of the same file, preserve
     }))!;
     const boundary = stitched.map.stages[1]!.windowStart;
     expect(pixel(course.getKittyImage(0), 32, 64)).toEqual([0, 0, 0]);
-    expect(pixel(course.getKittyImage(boundary + 0.1), 32, 64)).toEqual([127, 127, 127]);
+    expect(pixel(course.getKittyImage(boundary + 0.1), 32, 64)).toEqual([64, 64, 64]);
     expect(pixel(course.getKittyImage(boundary + 0.1), 96, 64)).toEqual([0, 0, 0]);
   } finally {
     await rm(baseDir, { recursive: true, force: true });
