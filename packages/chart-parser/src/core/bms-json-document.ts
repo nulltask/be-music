@@ -166,6 +166,7 @@ function migrateBMSExtensionHeadersFromExtras(json: BeMusicJSON): void {
     if (upper === 'OPTION') {
       if (typeof json.bms.option !== 'string' && value.length > 0) {
         json.bms.option = value;
+        json.bms.options = [value];
       }
       continue;
     }
@@ -398,6 +399,15 @@ function normalizeBMSExtensions(input: unknown, allowLongKeys: boolean): BeMusic
   if (typeof raw.option === 'string' && raw.option.length > 0) {
     normalized.option = raw.option;
   }
+
+  if (raw.options !== undefined) {
+    if (!Array.isArray(raw.options) || raw.options.some((value) => typeof value !== 'string' || value.length === 0))
+      throw new TypeError('bms.options must be an array of nonempty declaration strings');
+    normalized.options = [...raw.options] as string[];
+    if (normalized.options.length > 0) normalized.option = normalized.options.at(-1);
+    else delete normalized.option;
+  }
+  if (raw.optionHeadersInControlFlow === true) normalized.optionHeadersInControlFlow = true;
 
   const wavCmd = raw.wavCmd ?? raw.wavcmd ?? raw.wav_cmd;
   if (typeof wavCmd === 'string' && wavCmd.length > 0) {

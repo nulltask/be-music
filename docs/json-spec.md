@@ -314,7 +314,9 @@ A full example:
 - `base`: `62` when the chart declares `#BASE 62`; omitted otherwise, which means `36`.
 - `baseBPM`: value of `#BASEBPM`
 - `stp`: `#STP` value array
-- `option`: value of `#OPTION`
+- `option`: legacy last unconditional `#OPTION` payload; after branch resolution, the last active declaration
+- `options`: optional ordered array of whole `#OPTION` payloads, including vendor arguments with spaces; when present it owns the declarations and an empty array clears the legacy alias
+- `optionHeadersInControlFlow`: optional `true` when `controlFlow` includes every `#OPTION` in whole-file order, including unconditional lines; branch resolution rebuilds `options` from the active program once and removes this marker
 - `changeOption`: Map of `#CHANGEOPTIONxx`
 - `wavCmd`: first value of `#WAVCMD`, kept for legacy compatibility
 - `wavCmds`: all `#WAVCMD` lines as raw post-directive text in declaration order
@@ -330,9 +332,9 @@ A full example:
 - `materials`: value of `#MATERIALS`
 - `divideProp`: value of `#DIVIDEPROP`
 - `charset`: value of `#CHARSET`
-- `controlFlow`: Control syntax (`#RANDOM`/`#IF`/`#SWITCH` series) and the header/object lines inside it
+- `controlFlow`: Control syntax (`#RANDOM`/`#IF`/`#SWITCH` series) and the header/object lines inside it (plus unconditional OPTION declarations when marked above)
 - `controlFlow.kind = "object"` is kept in the same `events` format as normal events (with `measureLength` if necessary)
-- `controlFlow.kind = "header"` has `overriddenByLaterHeader: true` when a top-level line later in the file defines the same header; header lines apply in file order, so resolving the control flow skips it
+- `controlFlow.kind = "header"` has `overriddenByLaterHeader: true` when a top-level line later in the file defines the same nonrepeatable header; replacing headers apply in file order, so resolving the control flow skips it
 - Parser keeps control syntax in this array and branches are executed at playback/render time
 - `scroll` values ​​allow finite numbers, `0` and negative values ​​are also retained
 

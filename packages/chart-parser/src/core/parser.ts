@@ -189,6 +189,18 @@ export function parseBMS(input: string): BeMusicJSON {
     pushHeaderLine(json, command, commandRaw, value, base);
   });
 
+  if (
+    json.bms.controlFlow.length > 0 &&
+    json.preservation.bms.sourceLines.some((entry) => entry.kind === 'header' && entry.command === 'OPTION')
+  ) {
+    // Unlike replacing headers, OPTION families combine. Keep unconditional declarations interleaved with
+    // branch declarations so their source order remains available after choosing a RANDOM/SWITCH outcome.
+    const captured = new Set(json.bms.controlFlow);
+    json.bms.controlFlow = json.preservation.bms.sourceLines.filter(
+      (entry) => captured.has(entry) || (entry.kind === 'header' && entry.command === 'OPTION'),
+    );
+    json.bms.optionHeadersInControlFlow = true;
+  }
   if (!hasValidMainBPMHeader) {
     // BMS compatibility: if #BPM is not declared, treat 130 as the default base BPM.
     json.metadata.bpm = 130;

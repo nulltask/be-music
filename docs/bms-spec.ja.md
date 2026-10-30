@@ -300,6 +300,12 @@ runtime と round-trip の扱い:
 
 表示値は対応する外側の二重引用符を一組だけ外し、内部の空白と文字はそのまま残します。元の定義は IR と BMS・JSON の往復で変更しません。チャンネル `99` は同じリソース ID の WAV を鳴らしません。engine は `PlayerUIFramePayload.chartText` を公開し、native・Canvas・LR2・beatoraja・terminal が表示します。[ADR 0025](./adr/0025-chart-text-playback.ja.md) に、Be-Music の 0.5 譜面秒のミス上書き、pause・seek・restart・反転の規則、最後の命令から 1 秒の表示時間を定義します。NONSTOP のホストはステージごとの `NonstopStitchMap.chartText` を `chartTextStages` に渡します。FIT・先頭の切り詰め・空ステージでの消去・ステージごとの TEXT00 も、同じ元譜面の時計で解決します。browser は自動で接続します。
 
+## 譜面からのオプション宣言
+
+複数の `#OPTION` 行は、ベンダー固有の宣言全体を組み合わせます。パーサは `bms.options` に順序を保持し、`bms.option` は最後の値を表す legacy 互換フィールドとして残します。charatbeatHDX の命令には数値引数があるため、空白では分割しません。制御構文のある譜面では、無条件の OPTION 行も含む完全なプログラムを分岐命令とともに保持します。選んだ分岐を解決するときに有効な宣言を再構築し、無条件の行を重複追加しません。canonical BMS と Be-Music JSON は、未知の ID を含めて順序と値を維持します。
+
+`buildChartOptionTimeline` は RANDOM・SWITCH 解決後の初期宣言と、チャンネル `A6` の時刻付き参照を収集します。BPM・STOP、有効な base-62 ID、同時刻での正規化済み IR 順を維持し、未定義参照は後の診断用に残します。オブジェクト `00` は休符です。この API はベンダーごとの意味を決めずに宣言を収集するもので、実行やネイティブの同時刻優先順位を示しません。実行時の反映、実効状態の replay・記録方針、残るオプション群は #835 で追跡します。
+
 ## 実行時の対応範囲
 
 構文を保持することと、プレイヤーで実行することは別です。`#MIDIFILE` は `bms.midiFile` に保持しますが再生しません。`#WAVCMD` はピッチ・百分率音量・発音時間の上限を反映します。`#EXWAVxx` は音量・左右バランス・元レートに対する周波数を反映します。合成規則は [ADR 0024](./adr/0024-extended-bms-audio.ja.md) に定義します。[MacBeat の原仕様](http://harinezumi.s14.xrea.com/download/mbm.txt)では、ピッチの基準は 60、音量の基準は 100、コマンド `02` は 0.5 ms 単位の発音時間です。0 は原音の終端まで再生し、ループ指定ではありません。Be-Music は WAVCMD の百分率音量、EXWAV の減衰、VOLWAV、動的バス音量を掛け合わせます。WAVCMD の重複はスロット・パラメーターごとの後勝ちです。MacBeat が重複を定義していないため、これは Be-Music の規則です。EXWAV の再生音量は -10000..0 に制限し、-10000 は無音です。既存の `wavCmdVolumeByteToLinearGain` は `wavCmdVolumePercentToLinearGain` に委譲する非推奨 API とし、誤っていた 127 基準の動作を修正しました。既存の `volumeCentibels` フィールドと変換関数名は API 互換のため残しますが、単位は 1/100 dB です。`#TEXTxx` は上記の譜面テキスト表示に反映します。`#CHANGEOPTIONxx` は IR に保持しますが、オプション変更は実行しません。

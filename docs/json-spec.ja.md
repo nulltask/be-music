@@ -314,7 +314,9 @@ classDiagram
 - `base`: 譜面が `#BASE 62` を宣言している場合は `62`。それ以外は省略し、省略時は `36`
 - `baseBPM`: `#BASEBPM` の値
 - `stp`: `#STP` の値配列
-- `option`: `#OPTION` の値
+- `option`: legacy 互換の最後の無条件 `#OPTION` 値。分岐解決後は最後に有効な宣言
+- `options`: `#OPTION` の値全体を宣言順で保持する省略可能な配列。空白を含むベンダー引数も分割しません。存在する場合はこちらが宣言を管理し、空配列は legacy 値を消去します
+- `optionHeadersInControlFlow`: 無条件の行も含め、すべての `#OPTION` をファイル順の `controlFlow` に保持するときだけ `true`。分岐解決は有効なプログラムから `options` を一度だけ再構築し、この印を削除します
 - `changeOption`: `#CHANGEOPTIONxx` のマップ
 - `wavCmd`: legacy compatibility のために保持する最初の `#WAVCMD` 値
 - `wavCmds`: すべての `#WAVCMD` 行の directive 後テキスト。宣言順で保持します
@@ -330,9 +332,9 @@ classDiagram
 - `materials`: `#MATERIALS` の値
 - `divideProp`: `#DIVIDEPROP` の値
 - `charset`: `#CHARSET` の値
-- `controlFlow`: 制御構文 (`#RANDOM`/`#IF`/`#SWITCH` 系) と、その内側のヘッダ/オブジェクト行
+- `controlFlow`: 制御構文 (`#RANDOM`/`#IF`/`#SWITCH` 系) と、その内側のヘッダ/オブジェクト行（上記の印がある場合は無条件の OPTION 宣言も含む）
 - `controlFlow.kind = "object"` は通常イベントと同じ `events` 形式（必要に応じて `measureLength`）で保持
-- `controlFlow.kind = "header"` は、ファイルの後のほうに同じヘッダのトップレベル行があるとき `overriddenByLaterHeader: true` を持つ。ヘッダ行はファイル順に適用するため、制御構文の解決ではこれを適用しない
+- `controlFlow.kind = "header"` は、ファイルの後のほうに同じ非反復ヘッダのトップレベル行があるとき `overriddenByLaterHeader: true` を持つ。ヘッダ行はファイル順に適用するため、制御構文の解決ではこれを適用しない
 - パーサは制御構文をこの配列へ保持し、分岐の実行は再生/レンダリング時に行います
 - `scroll` の値は有限数を許可し、`0` および負値も保持対象です
 

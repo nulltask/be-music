@@ -219,8 +219,11 @@ function pushBMSExtensionLines(lines: string[], json: BeMusicJSON): void {
     }
   }
 
-  if (typeof json.bms.option === 'string' && json.bms.option.length > 0) {
-    lines.push(`#OPTION ${json.bms.option}`);
+  const optionDeclarations = json.bms.optionHeadersInControlFlow
+    ? []
+    : (json.bms.options ?? (json.bms.option ? [json.bms.option] : []));
+  for (const option of optionDeclarations) {
+    if (option.length > 0) lines.push(`#OPTION ${option}`);
   }
   pushIndexedStringLines(lines, 'CHANGEOPTION', json.bms.changeOption, base);
 
