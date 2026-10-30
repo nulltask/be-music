@@ -73,6 +73,7 @@ describe('designed entries', () => {
       'randomizeSpiralNotes',
       'resolveAutoScratchChannels',
       'resolveAutoScratchSides',
+      'resolveEffectiveBattleMode',
       'resolveKeyChannel',
       'resolveLR2LaneIndex',
       'resolveLaneChannels',

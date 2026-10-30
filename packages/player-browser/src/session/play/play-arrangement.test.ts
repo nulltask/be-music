@@ -663,3 +663,31 @@ test('recorded LN mode retains old replay and previous-arrangement semantics aft
       1,
     );
 });
+
+test('header COUPLE follows branch draws while old replay and explicit OFF keep single-player execution', () => {
+  const entry = {
+    ...chart,
+    chart: parseChart(
+      '#BPM 120\n#00011:01\n#00021:0101\n#RANDOM 2\n#IF 1\n#PLAYER 2\n#ELSE\n#PLAYER 1\n#ENDIF\n#ENDRANDOM',
+      'bms',
+    ),
+  };
+  const auto = prepare(
+    { judgeRuleset: 'lr2', battleMode: 'AUTO', preResolved: resolvePlayChart(entry.chart, { random: () => 0 }) },
+    entry,
+  );
+  expect(auto.preparedChart!.battleMode).toBe('COUPLE');
+  expect(auto.secondPlayer).toBeDefined();
+  const off = prepare({ judgeRuleset: 'lr2', battleMode: 'OFF' }, entry);
+  const replay = createReplayRecorder({
+    json: entry.chart,
+    chart: off.preparedChart!,
+    play: { mode: 'manual', autoScratch: false, judgeRuleset: 'lr2', randomDraws: off.randomDraws },
+  }).finalize({ summary: { ...createEmptyScore(3), fast: 0, slow: 0 } });
+  delete replay.play.battleMode;
+  for (const options of [{ replay }, { fixedArrangement: replay }]) {
+    const restored = prepare({ judgeRuleset: 'lr2', battleMode: 'AUTO', ...options }, entry);
+    expect(restored.preparedChart!.battleMode).toBe('OFF');
+    expect(restored.secondPlayer).toBeUndefined();
+  }
+});

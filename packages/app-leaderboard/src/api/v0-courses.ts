@@ -44,6 +44,7 @@ const notFound = (what: string) => json(`${what} does not exist.`, errorResponse
 const COURSE_REJECTIONS = [
   'invalid-replay',
   'auto-play',
+  'two-player',
   'aborted',
   'missing-fingerprint',
   'not-a-course-run',

@@ -1,8 +1,10 @@
+import { getPlayModeLayouts } from '@be-music/chart-model';
+import { withChartOverrides } from './resolved-chart-overrides.ts';
 import { duplicateBattleChart } from './battle-chart.ts';
 import { applyPracticeRange, resolvePracticeRange } from './practice.ts';
 import { isDuplicatedBattleMode, resolveEffectiveBattleMode } from './battle-mode.ts';
 import { convertLR2SPToDPChart } from './lr2-sp-to-dp-chart.ts';
-import type { BattleMode } from './battle-mode.ts';
+import type { EffectiveBattleMode } from './battle-mode.ts';
 import { convertLR2ExtraChart } from './lr2-extra-chart.ts';
 import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
 import { addExtraNotes, clampExtraNoteDepth } from './extra-note-modifier.ts';
@@ -70,7 +72,7 @@ export interface PreparedPlaybackChartData {
   sevenToNineType?: import('./seven-to-nine.ts').SevenToNineType;
   sevenToNineThresholdBPM?: number;
   sevenToNineApplied?: boolean;
-  battleMode?: BattleMode;
+  battleMode?: EffectiveBattleMode;
   dBattleScratch?: boolean;
   /** beatoraja PRACTICE: the range played and the note counts before `PracticeModifier`. */
   practiceStartSeconds?: number;
@@ -267,7 +269,12 @@ export function preparePlaybackChart(
     options.judgeRuleset ?? 'lr2',
     battleSourceVariant,
     options.course !== undefined,
+    resolved.sourceFormat === 'bms' ? resolved.source.bms.player : undefined,
   );
+  if (battleMode === 'COUPLE' && (resolved.playVariant === '5' || resolved.playVariant === '7')) {
+    const playVariant = resolved.playVariant === '5' ? '10' : '14';
+    resolved = withChartOverrides(resolved, { playVariant, layouts: getPlayModeLayouts(playVariant) });
+  }
   const battleAssist1P = options.autoScratch1P ?? options.autoScratch ?? false;
   const battleAssist2P = options.autoScratch2P ?? options.autoScratch ?? false;
   const battle =

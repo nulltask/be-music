@@ -78,6 +78,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.resolvePlayChart(fixtures.controlFlowJSON, { random: () => 0.42 });
     },
   });
+  define('player-engine.lanes.resolveEffectiveBattleMode', {
+    run: () => {
+      lanesAPI.resolveEffectiveBattleMode('AUTO', 'lr2', '14', false, 2);
+    },
+  });
   define('player-engine.lanes.applySevenToNine', {
     run: (fixtures) => {
       const prepared = playerAPI.preparePlaybackChart(resolveChart(fixtures.sampleBmsJSON, { playVariant: '7' }));
@@ -639,6 +644,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.checkReplayEligibility', {
     run: () => {
       replayAPI.checkReplayEligibility(BENCH_REPLAY);
+      replayAPI.checkReplayEligibility(BENCH_COUPLE_REPLAY);
     },
   });
   define('player-engine.replay.resolveReplaySourceChannel', {
@@ -728,6 +734,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.simulateReplay', {
     run: () => {
       replayAPI.simulateReplay(BENCH_REPLAY, { ruleset: 'lr2' });
+      replayAPI.simulateReplay(BENCH_COUPLE_REPLAY, { ruleset: 'lr2', player: 2 });
     },
   });
   define('player-engine.replay.simulateReplayRulesets', {
@@ -1796,6 +1803,10 @@ const BENCH_REPLAY: BeMusicReplay = {
     channels: [`1${((index >> 1) % 7) + 1}`],
   })),
   play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+};
+const BENCH_COUPLE_REPLAY: BeMusicReplay = {
+  ...BENCH_REPLAY,
+  play: { ...BENCH_REPLAY.play, battleMode: 'COUPLE', gauge2P: 'HARD' },
 };
 const BENCH_REPLAY_JSON = JSON.stringify(BENCH_REPLAY);
 

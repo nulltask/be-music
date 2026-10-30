@@ -27,7 +27,7 @@ export interface LeaderboardSubmission {
 
 export type SubmissionPreparation =
   | { ok: true; submission: LeaderboardSubmission }
-  | { ok: false; reason: 'auto-play' | 'missing-fingerprint' | 'fingerprint-mismatch' };
+  | { ok: false; reason: 'auto-play' | 'two-player' | 'missing-fingerprint' | 'fingerprint-mismatch' };
 
 /**
  * Builds the submission of a finished play from its replay and the song's chart as loaded. The play document is
@@ -334,6 +334,8 @@ function describeUnranked(reason: string): string {
 /** Why a play was not sent, for the status line (a skipped play must never pass silently). */
 export function describeSkippedSubmission(reason: Exclude<SubmissionPreparation, { ok: true }>['reason']): string {
   switch (reason) {
+    case 'two-player':
+      return 'Leaderboard: not submitted (two-player plays have no single-player ranking)';
     case 'auto-play':
       return 'Leaderboard: not submitted (an auto play is not sent)';
     case 'missing-fingerprint':
@@ -348,6 +350,8 @@ export function describeSkippedCourseSubmission(
   reason: Exclude<CourseSubmissionPreparation, { ok: true }>['reason'],
 ): string {
   switch (reason) {
+    case 'two-player':
+      return 'Leaderboard: course not submitted (two-player plays have no single-player ranking)';
     case 'auto-play':
       return 'Leaderboard: course not submitted (an auto play is not sent)';
     case 'aborted':

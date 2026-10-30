@@ -304,3 +304,15 @@ describe('loadLR2ThemeSkinsFromFiles progress events', () => {
     await expect(loadLR2ThemeSkinsFromFiles([])).resolves.toBeDefined();
   });
 });
+
+test('header selection uses the matching COUPLE/BATTLE skin and preserves replay/course overrides', () => {
+  const skins: LR2PlaySkinMap = { '5': skin('SP'), '10': skin('DP'), '5-battle': skin('BATTLE') };
+  const entry = chartWithChannels(['11']);
+  entry.chart.bms = { player: 2 };
+  expect(pickLR2PlaySkinVariant(skins, entry, { battleMode: 'AUTO' })).toBe('10');
+  expect(pickLR2PlaySkinVariant(skins, entry, { battleMode: 'OFF' })).toBe('5');
+  expect(pickLR2PlaySkinVariant(skins, entry, { battleMode: 'AUTO', course: true })).toBe('5');
+  expect(pickLR2PlaySkinVariant(skins, entry, { battleMode: 'AUTO', judgeRuleset: 'beatoraja' })).toBe('5');
+  entry.chart.bms.player = 4;
+  expect(pickLR2PlaySkinVariant(skins, entry, { battleMode: 'AUTO' })).toBe('5-battle');
+});

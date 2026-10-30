@@ -5,7 +5,7 @@ import {
   DEFAULT_BEATORAJA_CUSTOM_JUDGE,
   type BeatorajaCustomJudge,
 } from '../ruleset/custom-judge.ts';
-import type { BattleMode } from '../core/battle-mode.ts';
+import type { EffectiveBattleMode } from '../core/battle-mode.ts';
 import { getPlayModeLayouts, type ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
@@ -217,7 +217,7 @@ export interface ReplayPlay {
   sevenToNineType?: import('../core/seven-to-nine.ts').SevenToNineType;
   sevenToNineThresholdBPM?: number;
   sevenToNineApplied?: boolean;
-  battleMode?: BattleMode;
+  battleMode?: EffectiveBattleMode;
   battleSourceVariant?: ChartPlayVariant;
   battleTempo?: number;
   battleAssist1P?: boolean;
@@ -841,9 +841,15 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.sevenToNineApplied = play.sevenToNineApplied;
   }
   if (play.battleMode !== undefined) {
-    if (!['OFF', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS', 'TWO-PLAYER'].includes(play.battleMode as string))
-      throw new ReplayParseError('play.battleMode: expected OFF, SP-TO-DP, D-BATTLE, BATTLE, BATTLE-AS or TWO-PLAYER');
-    parsed.battleMode = play.battleMode as BattleMode;
+    if (
+      !['OFF', 'COUPLE', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS', 'TWO-PLAYER'].includes(
+        play.battleMode as string,
+      )
+    )
+      throw new ReplayParseError(
+        'play.battleMode: expected OFF, COUPLE, SP-TO-DP, D-BATTLE, BATTLE, BATTLE-AS or TWO-PLAYER',
+      );
+    parsed.battleMode = play.battleMode as EffectiveBattleMode;
   }
   if (play.battleSourceVariant !== undefined) {
     let knownVariant = false;

@@ -92,9 +92,9 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret channels `17` / `27` as FREE ZONE (other than 9KEY / 24KEY)
 - [x] When judging 9KEY, channel `17` is interpreted as a normal lane note.
 - [x] `#PLAYER=1` is retained as SINGLE meta information, and lane determination prioritizes channel configuration.
-- [x] `#PLAYER=2` (COUPLE) is retained as meta information, and dedicated 1P/2P separation play is not currently implemented.
+- [x] `#PLAYER=2` (COUPLE) is retained. Explicit CHART HEADER (AUTO) selects independent authored sides under LR2; OFF remains the compatibility default.
 - [x] `#PLAYER=3` is used as a 9KEY determination hint only when `17` channel exists
-- [x] `#PLAYER=4` (BATTLE) will be retained as meta information, and dedicated two-player competitive play will not be implemented at this time.
+- [x] `#PLAYER=4` (BATTLE) is retained. Explicit CHART HEADER selects TWO-PLAYER under LR2: copy SP or preserve authored double-side banks. See [ADR 0028](./adr/0028-player-header-selection.md) for precedence, corpus evidence and replay policy.
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
 - [x] Detonate LR2beta3 mines on a key-down strictly inside ahead-only GREAT, or a held crossing; retain hold-only beatoraja and the provisional That-Which-Must-Not-Be-Named symmetric-PGREAT model.
