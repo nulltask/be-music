@@ -1,3 +1,5 @@
+import type { ChartTextStage } from './chart-text.ts';
+export type { ChartTextStage } from './chart-text.ts';
 import type { BattleMode } from './battle-mode.ts';
 import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
 import type { LongNoteModifier, LongNotePlacement } from './long-note-modifier.ts';
@@ -221,6 +223,8 @@ export interface PlayerStageRank {
  * output sinks, and the chart data a host prepared itself. Functions and live objects, never serialized.
  */
 export interface PlayerPlayRuntime {
+  /** Stage-owned chart text supplied by a NONSTOP host; overrides flattened TEXT definitions. */
+  chartTextStages?: readonly ChartTextStage[];
   /** Host-remapped input-bound BGA selections, e.g. NonstopStitchMap.keyBoundBGA. Overrides chart A5 controls. */
   keyBoundBGACues?: readonly KeyBoundBGACue[];
   /** Remapped bmson event animations supplied by a NONSTOP host. */

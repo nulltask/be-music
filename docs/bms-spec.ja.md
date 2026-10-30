@@ -298,7 +298,7 @@ runtime と round-trip の扱い:
 
 [TEXT 命令の観測資料](https://hitkey.nekokan.dyndns.info/cmdsJP.htm#TEXTXX)では、チャンネル `99` はテキストの選択、nanasigroove の TEXT00 はミス時のテキストです。`buildChartTextTimeline` は BPM・STOP を含む譜面時刻で選択を解決し、`pickChartText` は seek・restart に使える状態を持たない検索を行います。最初の選択前は空であり、TEXT00 を初期表示しません。空の定義と未定義参照は直前の選択を消去します。オブジェクト `00` は休符です。同時刻の選択は正規化済み IR 順の最後を使います。
 
-表示値は対応する外側の二重引用符を一組だけ外し、内部の空白と文字はそのまま残します。元の定義は IR と BMS・JSON の往復で変更しません。チャンネル `99` は同じリソース ID の WAV を鳴らしません。engine は `PlayerUIFramePayload.chartText` を公開し、native・Canvas・LR2・beatoraja・terminal が表示します。[ADR 0025](./adr/0025-chart-text-playback.ja.md) に、Be-Music の 0.5 譜面秒のミス上書き、pause・seek・restart・反転の規則、最後の命令から 1 秒の表示時間を定義します。NONSTOP のステージ所有権は #834 で追跡を続けます。
+表示値は対応する外側の二重引用符を一組だけ外し、内部の空白と文字はそのまま残します。元の定義は IR と BMS・JSON の往復で変更しません。チャンネル `99` は同じリソース ID の WAV を鳴らしません。engine は `PlayerUIFramePayload.chartText` を公開し、native・Canvas・LR2・beatoraja・terminal が表示します。[ADR 0025](./adr/0025-chart-text-playback.ja.md) に、Be-Music の 0.5 譜面秒のミス上書き、pause・seek・restart・反転の規則、最後の命令から 1 秒の表示時間を定義します。NONSTOP のホストはステージごとの `NonstopStitchMap.chartText` を `chartTextStages` に渡します。FIT・先頭の切り詰め・空ステージでの消去・ステージごとの TEXT00 も、同じ元譜面の時計で解決します。browser は自動で接続します。
 
 ## 実行時の対応範囲
 

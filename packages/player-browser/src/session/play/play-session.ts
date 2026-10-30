@@ -912,7 +912,7 @@ export class PlaySession extends PlaySessionState {
     if (!this.chart) {
       return 0;
     }
-    return this.chartDurationSeconds;
+    return Math.max(this.chartDurationSeconds, this.engineFrame?.totalSeconds ?? 0);
   }
 
   /**

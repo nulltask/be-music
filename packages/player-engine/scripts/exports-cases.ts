@@ -185,6 +185,9 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     [
       '#BPM 150',
       '#BPM01 180',
+      '#TEXT00 "MISS"',
+      '#TEXT01 "stage text"',
+      '#00099:01',
       '#00002:0.75',
       '#0000C:80',
       '#00111:01010101',

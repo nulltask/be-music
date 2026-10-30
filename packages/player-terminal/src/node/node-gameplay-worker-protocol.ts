@@ -9,12 +9,13 @@ import type {
   PlayerUICommand,
   PlayerUIFramePayload,
 } from '@be-music/player-engine/signals';
-import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player-engine';
+import type { ChartTextStage, PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player-engine';
 import type { LaneBinding } from '../manual-input.ts';
 import type { ImageResizeAlgorithm, TUINoteHeight } from '@be-music/player-engine/display';
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
+  chartTextStages?: readonly ChartTextStage[];
   keyBoundBGACues?: readonly KeyBoundBGACue[];
   bmsonBGACues?: readonly BmsonBGAEventCue[];
   inferBmsLNTypeWhenMissing?: boolean;
