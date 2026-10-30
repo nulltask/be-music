@@ -8,6 +8,27 @@ import { NONSTOP_STITCH_VERSION, stitchNonstopCourse } from './compose.ts';
 
 const bms = (...lines: string[]) => parseChart(lines.join('\n'), 'bms');
 
+test('NONSTOP retains EXWAV-only filenames and stage-owned audio modifiers', () => {
+  const stage = bms('#BPM 120', '#EXWAV01 pv 500 -600 only.wav', '#WAVCMD 01 01 50', '#00111:01');
+  const result = stitchNonstopCourse([{ chart: stage }, { chart: stage }], {
+    connections: ['cut'],
+    assetPath: (index, _kind, path) => `stage${index}/${path}`,
+  });
+  if (!result.ok) throw new Error('stitch failed');
+  const keys = result.map.stages.map((entry) => entry.wavKeys[0]!);
+  expect(new Set(keys).size).toBe(2);
+  for (const [index, key] of keys.entries()) {
+    expect(result.chart.resources.wav[key]).toBe(`stage${index}/only.wav`);
+    expect(result.chart.bms.exWAV[key]).toBe(`pv 500 -600 stage${index}/only.wav`);
+    expect(result.chart.bms.wavCmds).toContain(`01 ${key} 50`);
+  }
+  expect(
+    resolveChart(result.chart)
+      .sampleTriggers.map((trigger) => trigger.samplePath)
+      .sort((left, right) => (left ?? '').localeCompare(right ?? '')),
+  ).toEqual(['stage0/only.wav', 'stage1/only.wav']);
+});
+
 /** Stage A: 120 BPM, a note every measure on lanes 1 / 2, BGM at measure 1, last note at measure 4. */
 const stageA = bms(
   '#BPM 120',

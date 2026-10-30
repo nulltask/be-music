@@ -50,7 +50,7 @@ describe('collectChartVolumeMultipliers', () => {
 
   test('multiplies #WAVCMD and #EXWAV volumes of the same slot', () => {
     const chart = createEmptyJSON('bms');
-    chart.bms.wavCmds = ['01 01 127', '01 02 0'];
+    chart.bms.wavCmds = ['01 01 100', '01 02 0'];
     chart.bms.exWAV = { '01': 'v -2000 quiet.wav', '03': 'v 0 unity.wav' };
     const multipliers = collectChartVolumeMultipliers(chart);
     expect(multipliers.get('01')).toBeCloseTo(0.1, 3);
@@ -69,6 +69,25 @@ describe('loadPlaySamples', () => {
     mocks.loadAssetBytes.mockImplementation(async (path: string) =>
       path === 'missing.wav' ? undefined : new TextEncoder().encode(path.includes('broken') ? 'broken' : path),
     );
+  });
+
+  test('loads EXWAV-only resources and prefers EXWAV over WAV for a shared slot', async () => {
+    const chart = chartWithWAVs({ '01': 'ordinary.wav' });
+    chart.bms.exWAV = { '01': 'v -600 extended.wav', '02': 'p 0 only.wav' };
+    const samples = new Map<string, AudioBuffer>();
+    const context = fakeAudioContext();
+    await loadPlaySamples({
+      audioContext: context,
+      chart,
+      source: SOURCE,
+      chartPath: 'main.bms',
+      samples,
+      tempo: 1,
+      tempoPitchMode: 'pitch',
+      tempoStretchAlgorithm: 'signalsmith',
+    });
+    expect(context.decoded.sort()).toEqual(['extended.wav', 'only.wav']);
+    expect([...samples.keys()].sort()).toEqual(['extended.wav', 'only.wav']);
   });
 
   test('keys every decoded sample as the audio session looks it up and skips undecodable ones', async () => {

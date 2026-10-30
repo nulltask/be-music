@@ -240,14 +240,11 @@ async function scheduleSampleRenders(params: {
   // `pathPrefix + samplePath` before the bare path so charts that organize their WAVs under a sub-folder (e.g.
   // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve correctly.
   const pathWAVPrefix = typeof json.bms.pathWAV === 'string' ? json.bms.pathWAV : undefined;
-  // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides as a 0..127 byte. Pre-collect into a Map<slotKey,
-  // 0..1 multiplier> so the per-trigger lookup is O(1); slots without a `#WAVCMD 01` line stay absent and skip the
-  // multiplication. Pitch / loop bytes (`pp = 00` / `02`) are intentionally not collected here — applying them would
-  // require resampling / loop-aware mixing that this offline renderer doesn't yet implement.
+  // MacBeat WAVCMD volume is a percentage (100 = unity). Pitch and duration are handled separately.
   const wavCmdVolumeMultipliers = collectBmsWAVCmdVolumeMultipliers(json.bms.wavCmds, resolveBMSBase(json));
   // BMS spec — `#EXWAVxx [flags] params filename` extended WAV declarations include an optional `v` (centibel) volume
   // that composes multiplicatively with `#WAVCMD 01 xx vv`. Fold the extracted multipliers into the same Map so the
-  // per-trigger gain math stays a single lookup. Pan / freq fall to a future patch since they require resampling /
+  // per-trigger gain math stays a single lookup. Pan / freq require resampling /
   // stereo splitting in this offline renderer.
   for (const [slot, multiplier] of collectBMSExWAVVolumeMultipliers(json.bms.exWAV)) {
     const previous = wavCmdVolumeMultipliers.get(slot) ?? 1;

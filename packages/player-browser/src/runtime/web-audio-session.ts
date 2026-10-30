@@ -3,6 +3,7 @@ import {
   isBMSKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   parseBMSDynamicVolumeGain,
+  resolveBMSWAVResources,
   usesMonophonicWAVPlayback,
 } from '@be-music/chart-model';
 import type { WebAudioStageMixer } from './nonstop-audio.ts';
@@ -170,6 +171,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     stageMixer?.retime?.(chartSeconds, (seconds) => now + (seconds - chartSeconds) / tempo);
   };
   const sampleIdBase = resolveBMSBase(chart);
+  const wavResources = resolveBMSWAVResources(chart);
   /** The most recent source per WAV slot, for BMS monophonic retriggers. */
   const activeBySlot = new Map<string, WebAudioSourceHandle>();
   const activeBySlice = new Map<string, WebAudioSourceHandle>();
@@ -208,7 +210,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
 
   const resolveSamplePath = (event: BeMusicEvent): { sampleKey: string; path: string } | undefined => {
     const sampleKey = normalizeObjectKey(event.value, sampleIdBase, chart.sourceFormat === 'bmson');
-    const path = chart.resources.wav[sampleKey];
+    const path = wavResources[sampleKey];
     if (typeof path !== 'string') return undefined;
     return { sampleKey, path };
   };

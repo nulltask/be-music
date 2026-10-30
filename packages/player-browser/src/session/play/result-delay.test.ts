@@ -54,6 +54,19 @@ describe('resolvePostChartResultDelayMs', () => {
 });
 
 describe('resolveGameplayAudioTailCleanupDelayMs', () => {
+  it('keeps an EXWAV-only tail alive using the effective sample filename', () => {
+    const chart = createEmptyJSON('bms');
+    chart.bms.exWAV = { '01': 'v 0 tail.wav' };
+    expect(
+      resolveGameplayAudioTailCleanupDelayMs({
+        chart,
+        notes: [note({ seconds: 1 })],
+        autoSampleTriggers: [],
+        decodedSamples: new Map([['tail.wav', mockBuffer(3)]]),
+        currentSeconds: 2,
+      }),
+    ).toBe(2500);
+  });
   it('keeps the gameplay audio graph alive until the longest known sample tail ends', () => {
     const chart = createEmptyJSON('bms');
     chart.resources.wav = { '01': 'short.wav', '02': 'tail.wav' };

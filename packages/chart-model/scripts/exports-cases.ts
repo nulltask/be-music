@@ -17,6 +17,9 @@ const BENCH_COLOR_KEY_PIXELS = Uint8Array.from({ length: 256 * 256 * 4 }, (_, in
   (index & 3) === 3 ? 255 : ((index >>> 2) & 1) === 1 ? 127 : 32,
 );
 const BENCH_COLOR_KEY_CHART = createEmptyJSON('bms');
+const BENCH_EXWAV_CHART = createEmptyJSON('bms');
+BENCH_EXWAV_CHART.resources.wav = { '01': 'ordinary.wav' };
+BENCH_EXWAV_CHART.bms.exWAV = { '01': 'pvf 500 -600 48000 extended.wav', '02': 'v 0 only.wav' };
 BENCH_COLOR_KEY_CHART.bms.exBMP['01'] = '0,127,127,127 image.png';
 
 const BENCH_SWITCHING_BGA = chartAPI.parseBMSSwBGA('10:5:1:FF000000 02 03 04 05 06');
@@ -282,6 +285,16 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.wavCmdVolumeByteToLinearGain', {
     run: () => {
       chartAPI.wavCmdVolumeByteToLinearGain(64);
+    },
+  });
+  define('chart-model.wavCmdVolumePercentToLinearGain', {
+    run: () => {
+      chartAPI.wavCmdVolumePercentToLinearGain(64);
+    },
+  });
+  define('chart-model.resolveBMSWAVResources', {
+    run: () => {
+      chartAPI.resolveBMSWAVResources(BENCH_EXWAV_CHART);
     },
   });
   define('chart-model.parseBmsWAVCmd', {

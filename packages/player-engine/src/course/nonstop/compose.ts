@@ -2,6 +2,9 @@ import {
   resolvePoorBGAMode,
   type PoorBGAMode,
   resolveChart,
+  resolveBMSWAVResources,
+  parseBMSExWAV,
+  parseBmsWAVCmd,
   type ResolvedChart,
   type BGAOpacityTimelines,
   type KeyBoundBGACue,
@@ -9,6 +12,7 @@ import {
 } from '@be-music/chart-model';
 import {
   createEmptyJSON,
+  resolveBMSBase,
   normalizeChannel,
   normalizeObjectKey,
   type BeMusicEvent,
@@ -242,6 +246,8 @@ export function stitchNonstopCourse(
 
   for (let index = 0; index < stages.length; index += 1) {
     const source = stages[index]!.chart;
+    const wavResources = resolveBMSWAVResources(source);
+    const wavCommands = source.bms.wavCmds.map((line) => parseBmsWAVCmd(line, resolveBMSBase(source)));
     const chartIndex = resolved[index]!;
     const window = windows[index]!;
     // Every source key gets its own stitched key, even one without a file (it then stays silent), so two stages'
@@ -253,8 +259,24 @@ export function stitchNonstopCourse(
       if (!known.has(`w${stitched}`)) {
         known.add(`w${stitched}`);
         stageWAV[index]!.push(stitched);
-        const path = source.resources.wav[key];
+        const path = wavResources[key];
         if (path !== undefined) chart.resources.wav[stitched] = assetPath(index, 'wav', path);
+        const rawExWAV = source.bms.exWAV[key];
+        const exWAV = rawExWAV === undefined ? undefined : parseBMSExWAV(rawExWAV);
+        if (exWAV && rawExWAV !== undefined) {
+          const parameters = [
+            ['p', exWAV.pan],
+            ['v', exWAV.volumeCentibels],
+            ['f', exWAV.frequencyHz],
+          ].filter((entry) => entry[1] !== undefined);
+          chart.bms.exWAV[stitched] =
+            `${parameters.map(([flag]) => flag).join('')} ${parameters.map(([, value]) => value).join(' ')} ${assetPath(index, 'wav', exWAV.filename)}`;
+        }
+        for (const command of wavCommands) {
+          if (command?.slot !== key) continue;
+          const parameter = command.param === 'pitch' ? '00' : command.param === 'volume' ? '01' : '02';
+          chart.bms.wavCmds.push(`${parameter} ${stitched} ${command.value}`);
+        }
       }
       return stitched;
     };
