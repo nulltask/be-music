@@ -8,6 +8,27 @@ import { NONSTOP_STITCH_VERSION, stitchNonstopCourse } from './compose.ts';
 
 const bms = (...lines: string[]) => parseChart(lines.join('\n'), 'bms');
 
+test('NONSTOP retains exact stage VOLWAV independently of authored slot volume and intrinsic gain', () => {
+  const first = bms('#BPM 120', '#VOLWAV 77', '#WAV01 a.wav', '#WAVCMD 01 01 33', '#00111:01');
+  first.resources.wavGain = { '01': 0.37 };
+  const second = bms('#BPM 120', '#VOLWAV 141', '#WAV01 a.wav', '#WAVCMD 01 01 50', '#00111:01');
+  const result = stitchNonstopCourse([{ chart: first }, { chart: second }], { connections: ['cut'] });
+  if (!result.ok) throw new Error('stitch failed');
+  const [a, b] = result.map.stages.map((stage) => stage.wavKeys[0]!);
+  expect(result.chart.resources.wavGain).toEqual({ [a!]: 0.77 * 0.37, [b!]: 1.41 });
+  expect(result.chart.bms.volWAV).toBeUndefined();
+  expect(result.chart.bms.wavCmds).toEqual([`01 ${a} 33`, `01 ${b} 50`]);
+  expect(first.resources.wavGain).toEqual({ '01': 0.37 });
+});
+
+test.each([undefined, 0, 200, -1])('NONSTOP leaves ignored/unity VOLWAV %s implicit', (volume) => {
+  const stage = bms('#BPM 120', '#WAV01 a.wav', '#00111:01');
+  stage.bms.volWAV = volume;
+  const result = stitchNonstopCourse([{ chart: stage }], { connections: [] });
+  if (!result.ok) throw new Error('stitch failed');
+  expect(result.chart.resources.wavGain).toBeUndefined();
+});
+
 test('NONSTOP retains EXWAV-only filenames and stage-owned audio modifiers', () => {
   const stage = bms('#BPM 120', '#EXWAV01 pv 500 -600 only.wav', '#WAVCMD 01 01 50', '#00111:01');
   const result = stitchNonstopCourse([{ chart: stage }, { chart: stage }], {

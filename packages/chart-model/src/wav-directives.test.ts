@@ -1,12 +1,35 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   collectBMSExWAVVolumeMultipliers,
+  collectBmsWAVVolumeMultipliers,
   parseBMSExWAV,
   resolveBMSWAVResources,
   wavCmdVolumePercentToLinearGain,
 } from './wav-directives.ts';
 import { createEmptyJSON } from '@be-music/chart-source';
 import { resolveChart } from './resolved-chart.ts';
+import { computeChartFingerprint, computePlayFingerprint } from './fingerprint.ts';
+
+test('intrinsic audio gain does not change chart or play identity', () => {
+  const chart = createEmptyJSON();
+  chart.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+  const options = { chartPath: 'chart.bms' };
+  const before = [computeChartFingerprint(chart, options), computePlayFingerprint(chart, options)];
+  chart.resources.wavGain = { '01': 0.77 };
+  expect([computeChartFingerprint(chart, options), computePlayFingerprint(chart, options)]).toEqual(before);
+});
+
+test('intrinsic gain composes once with WAVCMD and EXWAV without integer-percentage rounding', () => {
+  const chart = createEmptyJSON();
+  chart.bms.wavCmds = ['01 01 33', '01 02 50'];
+  chart.bms.exWAV = { '01': 'v -600 a.wav' };
+  chart.resources.wavGain = { '01': 0.77, '02': 1.41, '03': 0 };
+  expect([...collectBmsWAVVolumeMultipliers(chart)]).toEqual([
+    ['01', 0.33 * 10 ** (-6 / 20) * 0.77],
+    ['02', 0.5 * 1.41],
+    ['03', 0],
+  ]);
+});
 
 test('EXWAV owns a shared slot, supplies EXWAV-only slots and preserves the authored maps', () => {
   const chart = createEmptyJSON('bms');

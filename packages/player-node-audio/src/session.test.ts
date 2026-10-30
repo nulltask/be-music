@@ -25,6 +25,7 @@ test.each([0, 50, 100, 127, 200])(
     json.bms.volWAV = 80;
     json.bms.wavCmds = [`01 01 ${volume}`];
     json.bms.exWAV = { '01': 'pvf 0 -600 44100 sample.wav' };
+    json.resources.wavGain = { '01': 0.77 };
     json.events = [0, 1].flatMap((measure) =>
       ['01', '02'].map((value) => ({ measure, channel: '01', position: [0, 1] as const, value })),
     );
@@ -36,7 +37,7 @@ test.each([0, 50, 100, 127, 200])(
     });
     expect(renderSingleSample).toHaveBeenCalledTimes(2);
     const first = vi.mocked(renderSingleSample).mock.calls.find(([key]) => key === '01');
-    expect(first?.[2]?.gain).toBeCloseTo(((0.8 * volume) / 100) * 10 ** (-6 / 20));
+    expect(first?.[2]?.gain).toBeCloseTo(((0.8 * volume) / 100) * 10 ** (-6 / 20) * 0.77);
     expect(renderSingleSample).toHaveBeenCalledWith('02', 'plain.wav', expect.objectContaining({ gain: 0.8 }));
   },
 );

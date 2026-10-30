@@ -11,6 +11,15 @@ import {
 } from './index.ts';
 
 describe('json', () => {
+  test('cloneJSON copies optional intrinsic WAV gains independently without adding them to old charts', () => {
+    const source = createEmptyJSON();
+    expect(cloneJSON(source).resources.wavGain).toBeUndefined();
+    source.resources.wavGain = { '01': 0.77, '0a': 0.37 };
+    const cloned = cloneJSON(source);
+    expect(cloned.resources.wavGain).toEqual(source.resources.wavGain);
+    cloned.resources.wavGain!['01'] = 0;
+    expect(source.resources.wavGain['01']).toBe(0.77);
+  });
   test('json: createEmptyJSON initializes defaults and preservation layers', () => {
     const json = createEmptyJSON();
     expect(json.sourceFormat).toBe('bms');

@@ -5,12 +5,11 @@
 
 import { runWithConcurrency } from '@be-music/shared-utils/core';
 import {
-  collectBMSExWAVVolumeMultipliers,
-  collectBmsWAVCmdVolumeMultipliers,
+  collectBmsWAVVolumeMultipliers,
   resolveBMSWAVResources,
   collectBmsWAVPlaybackModifiers,
 } from '@be-music/chart-model';
-import { resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
+import { type BeMusicJSON } from '@be-music/chart-source';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { BrowserAssetEntry, BrowserAssetSource } from '../collection/types.ts';
@@ -35,11 +34,7 @@ const AUDIO_DECODE_CONCURRENCY = 8;
  * slot has both. Pitch, balance, frequency and sounding time are prepared separately.
  */
 export function collectChartVolumeMultipliers(chart: BeMusicJSON): Map<string, number> {
-  const multipliers = collectBmsWAVCmdVolumeMultipliers(chart.bms.wavCmds, resolveBMSBase(chart));
-  for (const [slot, multiplier] of collectBMSExWAVVolumeMultipliers(chart.bms.exWAV)) {
-    multipliers.set(slot, (multipliers.get(slot) ?? 1) * multiplier);
-  }
-  return multipliers;
+  return collectBmsWAVVolumeMultipliers(chart);
 }
 
 export interface LoadPlaySamplesOptions {

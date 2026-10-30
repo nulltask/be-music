@@ -1,6 +1,5 @@
 import {
-  collectBMSExWAVVolumeMultipliers,
-  collectBmsWAVCmdVolumeMultipliers,
+  collectBmsWAVVolumeMultipliers,
   collectBmsWAVPlaybackModifiers,
   collectLNOBJEndEvents,
   isBmsBGMVolumeChangeChannel,
@@ -737,11 +736,8 @@ async function buildRuntimeSampleMap(
 
   const idBase = resolveBMSBase(json);
   const wavResources = resolveBMSWAVResources(json);
-  const volumeMultipliers = collectBmsWAVCmdVolumeMultipliers(json.bms.wavCmds, idBase);
+  const volumeMultipliers = collectBmsWAVVolumeMultipliers(json);
   const playbackModifiers = collectBmsWAVPlaybackModifiers(json);
-  for (const [key, gain] of collectBMSExWAVVolumeMultipliers(json.bms.exWAV)) {
-    volumeMultipliers.set(key, (volumeMultipliers.get(key) ?? 1) * gain);
-  }
   for (let index = 0; index < keys.length; index += 1) {
     throwIfAborted(signal);
     const key = keys[index];

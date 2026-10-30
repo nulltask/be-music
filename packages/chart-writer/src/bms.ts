@@ -27,8 +27,10 @@ import {
 import { BMS_MINE_SAMPLE_KEY, BMSON_LONG_NOTE_TYPES } from './bmson.ts';
 import { areBMSChartsEquivalent, areEventBmsonExtensionsEqual } from './equivalence.ts';
 import type { BMSStringifyOptions } from './options.ts';
+import { applyIntrinsicWAVGainForBMS } from './wav-gain.ts';
 
 export function stringifyBMS(json: BeMusicJSON, options: BMSStringifyOptions = {}): string {
+  json = applyIntrinsicWAVGainForBMS(json);
   if (resolveGenericBmsonKeyCount(json.bmson.info.modeHint) !== undefined)
     throw new RangeError('Generic bmson layouts cannot be represented by BMS; export bmson or Be-Music JSON.');
   assertBmsonKeysFitBMS(json);
@@ -74,7 +76,11 @@ function assertBmsonKeysFitBMS(json: BeMusicJSON): void {
     );
   };
   for (const table of [
-    ...Object.values(json.resources),
+    json.resources.wav,
+    json.resources.bmp,
+    json.resources.bpm,
+    json.resources.stop,
+    json.resources.text,
     json.bms.exRank,
     json.bms.argb,
     json.bms.changeOption,

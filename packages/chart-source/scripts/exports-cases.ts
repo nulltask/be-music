@@ -10,6 +10,10 @@ export function registerJSONExportsCases(define: DefineBenchmarkCase): void {
   define('chart-source.cloneJSON', {
     run: (fixtures) => {
       jsonAPI.cloneJSON(fixtures.sampleBmsJSON);
+      jsonAPI.cloneJSON({
+        ...fixtures.sampleBmsJSON,
+        resources: { ...fixtures.sampleBmsJSON.resources, wavGain: { '01': 0.77 } },
+      });
     },
   });
   define('chart-source.normalizeObjectKey', {

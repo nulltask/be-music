@@ -1,6 +1,5 @@
 import {
-  collectBMSExWAVVolumeMultipliers,
-  collectBmsWAVCmdVolumeMultipliers,
+  collectBmsWAVVolumeMultipliers,
   collectBmsWAVPlaybackModifiers,
   resolveBmsWAVPlayback,
   type BmsWAVPlaybackModifiers,
@@ -24,7 +23,7 @@ let nodeFSPromisesPromise: Promise<NodeFSPromises> | undefined;
 let nodePathPromise: Promise<NodePath> | undefined;
 const loadNodeFSPromises = (): Promise<NodeFSPromises> => (nodeFSPromisesPromise ??= import('node:fs/promises'));
 const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
-import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
+import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
 import { isAbortError, throwIfAborted, transformStereoPCM } from '@be-music/shared-utils/core';
 import { parseChartFile, resolveBMSControlFlow } from '@be-music/chart-parser';
 import { detectAudioFormat, encodeAIFF16, encodeWAV16 } from './file-codec.ts';
@@ -246,15 +245,8 @@ async function scheduleSampleRenders(params: {
   // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve correctly.
   const pathWAVPrefix = typeof json.bms.pathWAV === 'string' ? json.bms.pathWAV : undefined;
   // MacBeat WAVCMD volume is a percentage (100 = unity). Pitch and duration are handled separately.
-  const wavCmdVolumeMultipliers = collectBmsWAVCmdVolumeMultipliers(json.bms.wavCmds, resolveBMSBase(json));
+  const wavCmdVolumeMultipliers = collectBmsWAVVolumeMultipliers(json);
   const playbackModifiers = collectBmsWAVPlaybackModifiers(json);
-  // BMS spec — `#EXWAVxx [flags] params filename` extended WAV declarations include an optional `v` (centibel) volume
-  // that composes multiplicatively with `#WAVCMD 01 xx vv`. Fold the extracted multipliers into the same Map so the
-  // per-trigger gain math stays a single lookup. Pan/frequency/pitch/time are prepared during sample decoding.
-  for (const [slot, multiplier] of collectBMSExWAVVolumeMultipliers(json.bms.exWAV)) {
-    const previous = wavCmdVolumeMultipliers.get(slot) ?? 1;
-    wavCmdVolumeMultipliers.set(slot, previous * multiplier);
-  }
   for (const trigger of triggers) {
     throwIfAborted(signal);
     const sample = await getOrCreateSample({

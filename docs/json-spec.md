@@ -25,6 +25,14 @@ Also, as it is still in the early stages of development, backward compatibility 
 - Surface information that is not explicitly maintained by the IR, such as blank lines, comments, white space, line breaks, character codes, etc., is not subject to this principle.
 - As a result of editing the IR, if the retained structural information and the normalized `events` / `measures` / extension information no longer match, the chart-writer will prioritize consistency and regenerate it.
 
+## Intrinsic sample gain
+
+`resources.wavGain` is an optional map from WAV slot ids to finite, nonnegative linear gain. Missing slots use 1. The map belongs to Be-Music JSON and is not a BMS or bmson field. It preserves composition gain without rounding authored WAVCMD parameters. NONSTOP stores each stage's effective VOLWAV multiplied by any existing intrinsic slot gain; its target chart has no global VOLWAV. Cloning and JSON parsing copy the map independently and retain base-62 slot case.
+
+`collectBmsWAVVolumeMultipliers` multiplies WAVCMD percentage volume, EXWAV attenuation and intrinsic gain. The backend applies the target chart's VOLWAV and dynamic bus gain separately. Browser, Node and offline playback share this calculation. Gain affects audio only; timing, scoring and fingerprints are unchanged.
+
+BMS export converts intrinsic gain into a final integer WAVCMD volume only when that volume reproduces the combined gain exactly. It never rounds, and unresolved BMS control flow must be resolved first. bmson has no supported per-channel gain field, so non-unity intrinsic gain cannot be exported to bmson. These checks also apply when preservation validation is skipped; export Be-Music JSON to retain unrepresentable gain. Unity-only maps do not change native output.
+
 ## Identifier and key naming
 
 Abbreviations in code identifiers and Be-Music JSON keys use uppercase, while the first segment of lowerCamelCase stays lowercase: `BeMusicJSON`, `backBMP`, `initBPM`, `poorBGA`, and `bpm`. In consecutive abbreviations, only the last is uppercase (`BmsJSON`, `inferBmsLNTypeWhenMissing`). `Id` / `Ids` and `bmson` / `Bmson` keep their conventional spelling. External BMS and bmson keys, database schemas, and external tool and API contract keys retain their required spelling.

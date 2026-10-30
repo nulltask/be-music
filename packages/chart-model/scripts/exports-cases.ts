@@ -317,6 +317,14 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.collectBmsWAVCmdVolumeMultipliers(['01 0A 64', '00 0A 2', '01 0B 127']);
     },
   });
+  define('chart-model.collectBmsWAVVolumeMultipliers', {
+    run: () => {
+      chartAPI.collectBmsWAVVolumeMultipliers({
+        bms: { ...BENCH_EXWAV_CHART.bms, wavCmds: ['01 01 33'] },
+        resources: { ...BENCH_EXWAV_CHART.resources, wavGain: { '01': 0.77 } },
+      });
+    },
+  });
   define('chart-model.isTempoChannel', {
     run: () => {
       chartAPI.isTempoChannel('08');
