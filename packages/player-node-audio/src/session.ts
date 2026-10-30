@@ -1,6 +1,7 @@
 import {
   collectBMSExWAVVolumeMultipliers,
   collectBmsWAVCmdVolumeMultipliers,
+  collectBmsWAVPlaybackModifiers,
   collectLNOBJEndEvents,
   isBmsBGMVolumeChangeChannel,
   isBMSDynamicVolumeChangeChannel,
@@ -361,6 +362,7 @@ export async function loadNodeAudioSampleDurations(
   }
 
   const durations = new Map<string, number>();
+  const playbackModifiers = collectBmsWAVPlaybackModifiers(resolved.source);
   for (const trigger of uniqueTriggers.values()) {
     throwIfAborted(signal);
     const rendered = await renderSingleSample(trigger.sampleKey, trigger.samplePath, {
@@ -371,6 +373,7 @@ export async function loadNodeAudioSampleDurations(
       fallbackToneSeconds: DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS,
       signal,
       base,
+      playbackModifiers: playbackModifiers.get(trigger.sampleKey),
     });
     durations.set(trigger.sampleKey, rendered.durationSeconds);
   }
@@ -735,6 +738,7 @@ async function buildRuntimeSampleMap(
   const idBase = resolveBMSBase(json);
   const wavResources = resolveBMSWAVResources(json);
   const volumeMultipliers = collectBmsWAVCmdVolumeMultipliers(json.bms.wavCmds, idBase);
+  const playbackModifiers = collectBmsWAVPlaybackModifiers(json);
   for (const [key, gain] of collectBMSExWAVVolumeMultipliers(json.bms.exWAV)) {
     volumeMultipliers.set(key, (volumeMultipliers.get(key) ?? 1) * gain);
   }
@@ -755,6 +759,7 @@ async function buildRuntimeSampleMap(
           : 0,
       signal,
       base: idBase,
+      playbackModifiers: playbackModifiers.get(key),
     });
 
     sampleMap.set(key, rendered);

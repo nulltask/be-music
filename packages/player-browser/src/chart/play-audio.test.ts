@@ -34,7 +34,7 @@ function fakeAudioContext(): BaseAudioContext & { decoded: string[] } {
       const text = new TextDecoder().decode(buffer);
       if (text === 'broken') throw new Error('unsupported codec');
       decoded.push(text);
-      return { duration: 1, label: text } as unknown as AudioBuffer;
+      return { duration: 1, sampleRate: 44100, label: text } as unknown as AudioBuffer;
     },
   } as unknown as BaseAudioContext & { decoded: string[] };
 }
@@ -87,7 +87,7 @@ describe('loadPlaySamples', () => {
       tempoStretchAlgorithm: 'signalsmith',
     });
     expect(context.decoded.sort()).toEqual(['extended.wav', 'only.wav']);
-    expect([...samples.keys()].sort()).toEqual(['extended.wav', 'only.wav']);
+    expect([...samples.keys()].sort()).toEqual(['extended.wav', 'only.wav', 'only.wav\0slot:02']);
   });
 
   test('keys every decoded sample as the audio session looks it up and skips undecodable ones', async () => {
@@ -147,7 +147,7 @@ describe('loadPlaySamples', () => {
     );
   });
 
-  test('scales every decoded sample from the loudest peak when peak gain is on', async () => {
+  test('scales audible buffers once even when an identity effect aliases the raw buffer', async () => {
     const channels = new Map<string, Float32Array>([
       ['kick.wav', Float32Array.from([0.5, -0.25])],
       ['snare.wav', Float32Array.from([0.1])],
@@ -155,12 +155,14 @@ describe('loadPlaySamples', () => {
     const audioContext = {
       decodeAudioData: async (buffer: ArrayBuffer) => {
         const data = channels.get(new TextDecoder().decode(buffer))!;
-        return { numberOfChannels: 1, getChannelData: () => data } as unknown as AudioBuffer;
+        return { sampleRate: 44100, numberOfChannels: 1, getChannelData: () => data } as unknown as AudioBuffer;
       },
     } as unknown as BaseAudioContext;
+    const chart = chartWithWAVs({ '01': 'kick.wav', '02': 'snare.wav' });
+    chart.bms.wavCmds = ['00 01 60'];
     await loadPlaySamples({
       audioContext,
-      chart: chartWithWAVs({ '01': 'kick.wav', '02': 'snare.wav' }),
+      chart,
       source: SOURCE,
       chartPath: 'Songs/a/main.bms',
       samples: new Map(),

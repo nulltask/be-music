@@ -4,6 +4,7 @@ import {
   isPlayLaneSoundChannel,
   parseBMSDynamicVolumeGain,
   resolveBMSWAVResources,
+  collectBmsWAVPlaybackModifiers,
   usesMonophonicWAVPlayback,
 } from '@be-music/chart-model';
 import type { WebAudioStageMixer } from './nonstop-audio.ts';
@@ -17,6 +18,7 @@ import {
 import type { AudioSession } from '@be-music/player-engine';
 import { normalizePath } from '@be-music/shared-utils/core';
 import { type AudioBusHandle } from './audio-bus.ts';
+import { prepareWAVPlaybackBuffer } from './wav-playback.ts';
 
 interface WebAudioSourceHandle {
   node: AudioBufferSourceNode;
@@ -59,6 +61,8 @@ export interface WebAudioSessionContext {
   /** Decoded WAV cache, keyed by lower-cased `normalizePath(resourceWAVPath)`. The session reads from this map but
    *  never mutates it; the host keeps decoding ownership so cross-session caches stay possible. */
   decodedSamples: ReadonlyMap<string, AudioBuffer>;
+  /** Native encoded rates for externally decoded/resampled buffers with EXWAV frequency, keyed by decodedSampleKey(path). */
+  nativeSampleRates?: ReadonlyMap<string, number>;
   /** Per-`#WAVxx` slot gain multiplier produced by `collectBmsWAVCmdVolumeMultipliers` /
    *  `collectBMSExWAVVolumeMultipliers`. Slots without an entry play at unity gain. */
   wavCmdVolumeMultipliers: ReadonlyMap<string, number>;
@@ -172,6 +176,29 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   };
   const sampleIdBase = resolveBMSBase(chart);
   const wavResources = resolveBMSWAVResources(chart);
+  const playbackModifiers = collectBmsWAVPlaybackModifiers(chart);
+  const preparedBuffers = new Map<string, AudioBuffer>();
+  const sampleBuffer = (path: string, key: string): AudioBuffer | undefined => {
+    const cacheKey = decodedSampleKey(path, key);
+    const prepared = decodedSamples.get(cacheKey) ?? preparedBuffers.get(cacheKey);
+    if (prepared) return prepared;
+    const raw = decodedSamples.get(decodedSampleKey(path));
+    const modifiers = playbackModifiers.get(key);
+    if (!raw || !modifiers) return raw;
+    if (modifiers.frequencyHz !== undefined && !context.nativeSampleRates?.has(decodedSampleKey(path))) {
+      throw new Error(
+        'EXWAV frequency requires a prepared slot buffer or nativeSampleRates for externally decoded audio',
+      );
+    }
+    const buffer = prepareWAVPlaybackBuffer(
+      audioContext,
+      raw,
+      modifiers,
+      context.nativeSampleRates?.get(decodedSampleKey(path)),
+    );
+    preparedBuffers.set(cacheKey, buffer);
+    return buffer;
+  };
   /** The most recent source per WAV slot, for BMS monophonic retriggers. */
   const activeBySlot = new Map<string, WebAudioSourceHandle>();
   const activeBySlice = new Map<string, WebAudioSourceHandle>();
@@ -226,7 +253,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     bus: AudioNode,
     dynamicGain: number,
   ): WebAudioSourceHandle | undefined => {
-    const buffer = decodedSamples.get(decodedSampleKey(path));
+    const buffer = sampleBuffer(path, sampleKey);
     if (!buffer) return undefined;
     const node = audioContext.createBufferSource();
     node.buffer = buffer;
@@ -357,7 +384,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
 
   /** Whether `event`'s sound, started `elapsedSeconds` ago, still has something left to play. */
   const isStillRinging = (event: BeMusicEvent, sampleKey: string, path: string, elapsedSeconds: number): boolean => {
-    const buffer = decodedSamples.get(decodedSampleKey(path));
+    const buffer = sampleBuffer(path, sampleKey);
     if (!buffer) return false;
     const slice = bmsonSlicePlayback?.get(event);
     const sliceRate = sliceRateOf(sampleKey);
@@ -445,6 +472,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       activeBySlice.clear();
       activeByChannel.clear();
       activeSources.clear();
+      preparedBuffers.clear();
     },
     triggerEvent: (event: BeMusicEvent): void => {
       // Dynamic volume changes (`#xxx97` / `#xxx98`) reach the session through the same `triggerEvent` channel as
@@ -593,6 +621,7 @@ export function startSampleNode(
  * (`\\` → `/`, `.` / `..` / empty segments resolved) and lower-cased. Every host that fills `decodedSamples` uses it, so
  * `./kick.wav`, `../common/kick.wav` or a differently-cased path finds its buffer.
  */
-export function decodedSampleKey(path: string): string {
-  return normalizePath(path).toLowerCase();
+export function decodedSampleKey(path: string, slot?: string): string {
+  const key = normalizePath(path).toLowerCase();
+  return slot === undefined ? key : `${key}\0slot:${slot}`;
 }

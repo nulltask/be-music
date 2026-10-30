@@ -187,7 +187,7 @@
 - [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、browser・Node・オフライン再生で `01` の百分率音量を反映
 - [x] `#EXWAVxx` を parse し、`v` volume parameter を browser・Node・オフライン再生で反映
 
-`#EXWAVxx` は nanasigroove の空白区切りパラメーターをフラグ順に受け付けます。例は `pvf 0 -600 44100 sample.wav` です。従来の Be-Music のカンマ区切りも引き続き受け付けます。ファイル名はすべてのパラメーターの後から始まり、空白を含められます。有効な EXWAV は WAV がなくても読み込み、同じスロットに WAV がある場合も EXWAV のファイル名を優先します。不正な EXWAV は WAV を上書きしません。これは Be-Music の優先規則です。browser のデコード・再生、Node の再生・診断、オフライン描画で同じ解決関数を使います。NONSTOP は EXWAV のファイル名と WAVCMD のパラメーターをステージごとに変換します。pan/frequency の実行は #831 で追跡します。
+`#EXWAVxx` は nanasigroove の空白区切りパラメーターをフラグ順に受け付けます。例は `pvf 0 -600 44100 sample.wav` です。従来の Be-Music のカンマ区切りも引き続き受け付けます。ファイル名はすべてのパラメーターの後から始まり、空白を含められます。有効な EXWAV は WAV がなくても読み込み、同じスロットに WAV がある場合も EXWAV のファイル名を優先します。不正な EXWAV は WAV を上書きしません。これは Be-Music の優先規則です。browser のデコード・再生、Node の再生・診断、オフライン描画で同じ解決関数を使います。NONSTOP は EXWAV のファイル名と WAVCMD のパラメーターをステージごとに変換します。browser・Node・オフラインは共通の[拡張音声規則](./adr/0024-extended-bms-audio.ja.md)でピッチ・発音時間の上限・pan/frequency を実行します。
 
 - [x] `#BASEBPM` を `@be-music/chart-model` 経由で browser HS-FIX calibration の reference BPM として使用
 - [x] Browser player は `#BGAxx` sub-region BGA を描画する。既存のキュー駆動 SWBGA ヘルパーは API 互換のため残し、標準 A5 の描画にはキー入力連動のエンジン状態を使う。 静止画の多段参照は定義順に依存せず解決し、各段の配置位置を 256×256 キャンバス上で合成して、切り出し元と配置先の端を切り取る。完全に画面外となるベース／POOR は黒、オーバーレイは透明になる。明示的な BMP／EXBMP 定義は、その画像を読み込めない場合も同じ ID の BGA 参照より優先する。
@@ -296,7 +296,7 @@ runtime と round-trip の扱い:
 
 ## 実行時の対応範囲
 
-構文を保持することと、プレイヤーで実行することは別です。`#MIDIFILE` は `bms.midiFile` に保持しますが再生しません。`#WAVCMD` は音量パラメーター `01` を扱い、ピッチと発音時間指定は実行しません。[MacBeat の原仕様](http://harinezumi.s14.xrea.com/download/mbm.txt)では、ピッチの基準は 60、音量の基準は 100、コマンド `02` は 0.5 ms 単位の発音時間です。0 は原音の終端まで再生し、ループ指定ではありません。Be-Music は WAVCMD の百分率音量、EXWAV の減衰、VOLWAV、動的バス音量を掛け合わせます。WAVCMD の重複はスロット・パラメーターごとの後勝ちです。MacBeat が重複を定義していないため、これは Be-Music の規則です。EXWAV の再生音量は -10000..0 に制限し、-10000 は無音です。既存の `wavCmdVolumeByteToLinearGain` は `wavCmdVolumePercentToLinearGain` に委譲する非推奨 API とし、誤っていた 127 基準の動作を修正しました。既存の `volumeCentibels` フィールドと変換関数名は API 互換のため残しますが、単位は 1/100 dB です。`#TEXTxx` と `#CHANGEOPTIONxx` は IR に保持しますが、プレイ中のテキスト表示やオプション変更には使いません。
+構文を保持することと、プレイヤーで実行することは別です。`#MIDIFILE` は `bms.midiFile` に保持しますが再生しません。`#WAVCMD` はピッチ・百分率音量・発音時間の上限を反映します。`#EXWAVxx` は音量・左右バランス・元レートに対する周波数を反映します。合成規則は [ADR 0024](./adr/0024-extended-bms-audio.ja.md) に定義します。[MacBeat の原仕様](http://harinezumi.s14.xrea.com/download/mbm.txt)では、ピッチの基準は 60、音量の基準は 100、コマンド `02` は 0.5 ms 単位の発音時間です。0 は原音の終端まで再生し、ループ指定ではありません。Be-Music は WAVCMD の百分率音量、EXWAV の減衰、VOLWAV、動的バス音量を掛け合わせます。WAVCMD の重複はスロット・パラメーターごとの後勝ちです。MacBeat が重複を定義していないため、これは Be-Music の規則です。EXWAV の再生音量は -10000..0 に制限し、-10000 は無音です。既存の `wavCmdVolumeByteToLinearGain` は `wavCmdVolumePercentToLinearGain` に委譲する非推奨 API とし、誤っていた 127 基準の動作を修正しました。既存の `volumeCentibels` フィールドと変換関数名は API 互換のため残しますが、単位は 1/100 dB です。`#TEXTxx` と `#CHANGEOPTIONxx` は IR に保持しますが、プレイ中のテキスト表示やオプション変更には使いません。
 
 ヘッダーとオブジェクトの解釈は上の対応表と本書の制御構文の節に従います。アセットの探索は[互換仕様](./format-compat.ja.md)、ブラウザー固有の描画は[ブラウザープレイヤー仕様](./player-web.ja.md)、ターミナル固有の描画と音声は[ターミナルプレイヤー仕様](./player-tui.ja.md)を参照してください。
 

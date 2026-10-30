@@ -1,6 +1,9 @@
 import {
   collectBMSExWAVVolumeMultipliers,
   collectBmsWAVCmdVolumeMultipliers,
+  collectBmsWAVPlaybackModifiers,
+  resolveBmsWAVPlayback,
+  type BmsWAVPlaybackModifiers,
   firesBeforeTempoReversal,
   isPlayLaneSoundChannel,
   resolveChart,
@@ -22,7 +25,7 @@ let nodePathPromise: Promise<NodePath> | undefined;
 const loadNodeFSPromises = (): Promise<NodeFSPromises> => (nodeFSPromisesPromise ??= import('node:fs/promises'));
 const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
 import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
-import { isAbortError, throwIfAborted } from '@be-music/shared-utils/core';
+import { isAbortError, throwIfAborted, transformStereoPCM } from '@be-music/shared-utils/core';
 import { parseChartFile, resolveBMSControlFlow } from '@be-music/chart-parser';
 import { detectAudioFormat, encodeAIFF16, encodeWAV16 } from './file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
@@ -57,6 +60,8 @@ export interface RenderResult {
 }
 
 export interface RenderSingleSampleOptions {
+  /** Authored pitch, pan, frequency and sounding-time limit, applied before host tempo controls. */
+  playbackModifiers?: BmsWAVPlaybackModifiers;
   sampleRate?: number;
   gain?: number;
   baseDir?: string;
@@ -242,10 +247,10 @@ async function scheduleSampleRenders(params: {
   const pathWAVPrefix = typeof json.bms.pathWAV === 'string' ? json.bms.pathWAV : undefined;
   // MacBeat WAVCMD volume is a percentage (100 = unity). Pitch and duration are handled separately.
   const wavCmdVolumeMultipliers = collectBmsWAVCmdVolumeMultipliers(json.bms.wavCmds, resolveBMSBase(json));
+  const playbackModifiers = collectBmsWAVPlaybackModifiers(json);
   // BMS spec — `#EXWAVxx [flags] params filename` extended WAV declarations include an optional `v` (centibel) volume
   // that composes multiplicatively with `#WAVCMD 01 xx vv`. Fold the extracted multipliers into the same Map so the
-  // per-trigger gain math stays a single lookup. Pan / freq require resampling /
-  // stereo splitting in this offline renderer.
+  // per-trigger gain math stays a single lookup. Pan/frequency/pitch/time are prepared during sample decoding.
   for (const [slot, multiplier] of collectBMSExWAVVolumeMultipliers(json.bms.exWAV)) {
     const previous = wavCmdVolumeMultipliers.get(slot) ?? 1;
     wavCmdVolumeMultipliers.set(slot, previous * multiplier);
@@ -263,6 +268,7 @@ async function scheduleSampleRenders(params: {
       signal,
       onSampleLoadProgress,
       pathPrefix: pathWAVPrefix,
+      playbackModifiers: playbackModifiers.get(trigger.sampleKey),
     });
     const frameWindow = resolveScheduledSampleFrameWindow(trigger, sampleRate, sample);
     if (!frameWindow) {
@@ -438,6 +444,7 @@ export async function renderSingleSample(
     resolvedPathCache: new Map(),
     signal: options.signal,
     onSampleLoadProgress: options.onSampleLoadProgress,
+    playbackModifiers: options.playbackModifiers,
   });
   throwIfAborted(options.signal);
   return toRenderResult(sample, sampleRate, gain);
@@ -468,6 +475,7 @@ export async function writeAudioFile(outputPath: string, result: RenderResult): 
 }
 
 async function getOrCreateSample(params: {
+  playbackModifiers?: BmsWAVPlaybackModifiers;
   sampleKey: string;
   samplePath?: string;
   sampleRate: number;
@@ -490,6 +498,7 @@ async function getOrCreateSample(params: {
     signal,
     onSampleLoadProgress,
     pathPrefix,
+    playbackModifiers,
   } = params;
   throwIfAborted(signal);
 
@@ -503,7 +512,17 @@ async function getOrCreateSample(params: {
     return cached;
   }
 
-  const fallback = getFallbackSample(sampleKey, sampleRate, fallbackToneSeconds);
+  const originalFallback = getFallbackSample(sampleKey, sampleRate, fallbackToneSeconds);
+  const fallback = playbackModifiers
+    ? transformStereoPCM(
+        originalFallback.left,
+        originalFallback.right,
+        sampleRate,
+        sampleRate,
+        resolveBmsWAVPlayback(playbackModifiers, sampleRate),
+        signal,
+      )
+    : originalFallback;
   if (!samplePath) {
     loadedSamples.set(sampleKey, fallback);
     onSampleLoadProgress?.({
@@ -549,10 +568,20 @@ async function getOrCreateSample(params: {
     throwIfAborted(signal);
     const decoded = await decodeAudioSample(buffer, resolvedPath, signal);
     throwIfAborted(signal);
-    const left = resampleLinear(decoded.left, decoded.sampleRate, sampleRate, signal);
     const rightSource = decoded.right ?? decoded.left;
-    const right = resampleLinear(rightSource, decoded.sampleRate, sampleRate, signal);
-    const sample = { left, right };
+    const sample = playbackModifiers
+      ? transformStereoPCM(
+          decoded.left,
+          rightSource,
+          decoded.sampleRate,
+          sampleRate,
+          resolveBmsWAVPlayback(playbackModifiers, decoded.sampleRate),
+          signal,
+        )
+      : {
+          left: resampleLinear(decoded.left, decoded.sampleRate, sampleRate, signal),
+          right: resampleLinear(rightSource, decoded.sampleRate, sampleRate, signal),
+        };
     loadedSamples.set(sampleKey, sample);
     onSampleLoadProgress?.({
       stage: 'decoded',

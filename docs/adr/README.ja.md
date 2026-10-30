@@ -41,3 +41,5 @@
 - [0022: bmson の条件付き BGA イベントは決定的な譜面時刻で動かす](./0022-bmson-bga-events.ja.md)
 
 - [0023: generic bmson キーボードは宣言した配置を保持する](./0023-generic-bmson-keyboards.ja.md)
+
+- [0024: BMS の拡張音声効果はホストのテンポ変更より前に準備する](./0024-extended-bms-audio.ja.md)

@@ -229,10 +229,7 @@ test('audio-renderer: composes #EXWAVxx and #WAVCMD attenuation multiplicatively
   expect(stackedRendered.peak).toBeCloseTo(baselineRendered.peak * 0.501 * (64 / 100), 2);
 });
 
-test('audio-renderer: ignores non-volume #WAVCMD bytes (pitch / duration)', async () => {
-  // Pitch and playback duration are not executed yet; they must not enter the volume path.
-  // They must NOT fall through to the volume code path either — a `#WAVCMD 00 01 12` line should leave the sample at
-  // full volume, not at 12/100.
+test('audio-renderer: changes pitch and duration without treating pitch as volume', async () => {
   const baseline = createSingleTriggerBMSChart('not-found.wav');
   const withPitch = createSingleTriggerBMSChart('not-found.wav');
   withPitch.bms.wavCmds = ['00 01 12'];
@@ -253,6 +250,7 @@ test('audio-renderer: ignores non-volume #WAVCMD bytes (pitch / duration)', asyn
     }),
   ]);
   expect(pitchRendered.peak).toBeCloseTo(baselineRendered.peak, 6);
+  expect(pitchRendered.durationSeconds).toBeCloseTo(baselineRendered.durationSeconds * 16, 6);
 });
 
 test('audio-renderer: scales rendered chart audio with #VOLWAV', async () => {

@@ -69,6 +69,21 @@ test('Node runtime and duration diagnostics resolve EXWAV-only filenames identic
   expect(vi.mocked(renderSingleSample).mock.calls.map((call) => call[1])).toEqual(['only.wav', 'only.wav']);
 });
 
+test('Node runtime and duration diagnostics pass the same authored sample effects to decoding', async () => {
+  vi.mocked(renderSingleSample).mockClear();
+  const json = createEmptyJSON('bms');
+  json.bms.exWAV = { '01': 'pf -600 22050 only.wav' };
+  json.bms.wavCmds = ['00 01 72', '02 01 500'];
+  json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+  const resolvedChart = resolveChart(json);
+  await loadNodeAudioSampleDurations(resolvedChart);
+  await createNodeAudioSession({ json, resolvedChart, options: { writeOutput: () => undefined }, mode: 'auto' });
+  expect(vi.mocked(renderSingleSample).mock.calls.map((call) => call[2]?.playbackModifiers)).toEqual([
+    { semitones: 12, durationSeconds: 0.25, pan: -600, frequencyHz: 22050 },
+    { semitones: 12, durationSeconds: 0.25, pan: -600, frequencyHz: 22050 },
+  ]);
+});
+
 test('disabled audio does not open Node output', async () => {
   vi.mocked(createNodeAudioSink).mockClear();
   const json = createEmptyJSON('bms');
