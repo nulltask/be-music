@@ -172,6 +172,7 @@ export {
 export {
   collectBMSExWAVVolumeMultipliers,
   collectBmsWAVCmdVolumeMultipliers,
+  collectBmsWAVVolumeMultipliers,
   exWAVVolumeCentibelsToLinearGain,
   parseBMSExWAV,
   parseBmsWAVCmd,

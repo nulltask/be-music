@@ -225,6 +225,20 @@ export function collectBmsWAVCmdVolumeMultipliers(
   return out;
 }
 
+/** Per-slot authored volume, including exact intrinsic gain retained by composed Be-Music JSON charts. */
+export function collectBmsWAVVolumeMultipliers(json: Pick<BeMusicJSON, 'bms' | 'resources'>): Map<string, number> {
+  const result = collectBmsWAVCmdVolumeMultipliers(json.bms.wavCmds, json.bms.base ?? 36);
+  for (const [key, gain] of collectBMSExWAVVolumeMultipliers(json.bms.exWAV))
+    result.set(key, (result.get(key) ?? 1) * gain);
+  for (const [key, gain] of Object.entries(json.resources.wavGain ?? {})) {
+    if (!Number.isFinite(gain) || gain < 0) throw new RangeError(`Invalid intrinsic WAV gain for slot ${key}`);
+    const combined = (result.get(key) ?? 1) * gain;
+    if (!Number.isFinite(combined)) throw new RangeError(`Combined WAV gain overflow for slot ${key}`);
+    result.set(key, combined);
+  }
+  return result;
+}
+
 /**
  * Whether a chart's keysounds restart from the head when the same `#WAVxx` slot is retriggered (one voice per slot).
  *

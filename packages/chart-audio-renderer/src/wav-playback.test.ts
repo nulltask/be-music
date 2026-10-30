@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vite-plus/test';
 import { parseChart } from '@be-music/chart-parser';
+import { resolveChart } from '@be-music/chart-model';
+import { stitchNonstopCourse } from '@be-music/player-engine/course';
 import { renderJSON, renderSingleSample } from './index.ts';
 import { encodeWAV16 } from './core/file-codec.ts';
 
@@ -22,6 +24,30 @@ function cycles(samples: Float32Array): number {
   for (let index = 1; index < samples.length; index++) if (samples[index - 1]! <= 0 && samples[index]! > 0) count++;
   return count;
 }
+
+test('NONSTOP preserves fractional stage volume in actual PCM and through Be-Music JSON', async () => {
+  const first = parseChart('#BPM 120\n#VOLWAV 77\n#WAV01 stereo.wav\n#WAVCMD 01 01 33\n#00111:01', 'bms');
+  const second = parseChart('#BPM 120\n#VOLWAV 141\n#WAV01 stereo.wav\n#WAVCMD 01 01 50\n#00111:01', 'bms');
+  const composed = stitchNonstopCourse([{ chart: first }, { chart: second }], { connections: ['blank2'] });
+  if (!composed.ok) throw new Error('stitch failed');
+  const options = { baseDir: directory, sampleRate: 16000, gain: 1, normalize: false, tailSeconds: 0 };
+  const rendered = await renderJSON(composed.chart, options);
+  const reloaded = parseChart(JSON.stringify(composed.chart), 'json');
+  const replayed = await renderJSON(reloaded, options);
+  expect(replayed.left).toEqual(rendered.left);
+  expect(replayed.right).toEqual(rendered.right);
+  const baseline = await renderSingleSample('01', 'stereo.wav', options);
+  const triggers = [...resolveChart(composed.chart).sampleTriggers].sort((a, b) => a.seconds - b.seconds);
+  expect(triggers[1]!.seconds - triggers[0]!.seconds).toBeGreaterThan(baseline.durationSeconds);
+  const gains = [0.77 * 0.33, 1.41 * 0.5];
+  for (const [index, trigger] of triggers.entries()) {
+    const offset = Math.round(trigger.seconds * options.sampleRate);
+    for (let frame = 0; frame < baseline.left.length; frame++) {
+      expect(rendered.left[offset + frame]).toBeCloseTo(baseline.left[frame]! * gains[index]!, 6);
+    }
+  }
+  expect(triggers).toHaveLength(2);
+});
 
 test.each([44100, 48000])(
   'native frequency, pitch, balance and duration produce exact sounding time at %s Hz',

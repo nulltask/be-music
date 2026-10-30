@@ -29,8 +29,11 @@ import {
 import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/shared-utils/core';
 import { areBmsonChartsEquivalent } from './equivalence.ts';
 import type { BmsonStringifyOptions } from './options.ts';
+import { intrinsicWAVGains } from './wav-gain.ts';
 
 export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions = {}): string {
+  if (intrinsicWAVGains(json).length)
+    throw new RangeError('Intrinsic WAV gain cannot be represented by bmson; export Be-Music JSON.');
   const resolution = resolveBmsonResolutionForOutput(json, options);
   const indent = options.indent ?? 2;
   const skipValidation = options.skipPreservationValidation === true;

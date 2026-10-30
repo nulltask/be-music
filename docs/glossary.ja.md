@@ -47,6 +47,7 @@
 - **メタデータ (metadata)**: 曲名、アーティスト、ジャンル、コメント、`#STAGEFILE`、`#BACKBMP`、`#BANNER` など、譜面本体以外の付加情報です。
 - **リソース (resource)**: 譜面や skin から参照される音声、画像、動画、テキストなどの外部ファイルです。
 - **keysound**: ノートや BGM の発音に使う音声リソースです。BMS では主に `#WAVxx`、bmson では `sound_channels` が対応します。
+- **スロット固有ゲイン（intrinsic sample gain）**: 再生バスやユーザー音量とは独立して keysound のスロットが持つ線形ゲインです。合成時に元ステージの音量を保持するために使います。
 - **試聴音（audio preview）**: Music Select で再生する短い音です。デプロイ環境も扱う文脈では audio preview と明示します。`#PREVIEW` や bmson の `info.preview_music` を優先して使います。
 - **BGA**: gameplay 中に表示する背景画像/動画です。base、layer、layer2、POOR などの cue を持ちます。
 - **POOR BGA**: `POOR` 判定時に表示する専用 BGA です。譜面側で定義されている場合だけ使います。

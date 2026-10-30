@@ -5,6 +5,7 @@ import {
   resolveBMSWAVResources,
   parseBMSExWAV,
   parseBmsWAVCmd,
+  volWAVToLinearGain,
   type ResolvedChart,
   type BGAOpacityTimelines,
   type KeyBoundBGACue,
@@ -261,6 +262,10 @@ export function stitchNonstopCourse(
         stageWAV[index]!.push(stitched);
         const path = wavResources[key];
         if (path !== undefined) chart.resources.wav[stitched] = assetPath(index, 'wav', path);
+        const intrinsicGain = (source.resources.wavGain?.[key] ?? 1) * volWAVToLinearGain(source.bms.volWAV);
+        if (!Number.isFinite(intrinsicGain) || intrinsicGain < 0)
+          throw new RangeError(`Invalid stage WAV gain: ${key}`);
+        if (intrinsicGain !== 1) (chart.resources.wavGain ??= {})[stitched] = intrinsicGain;
         const rawExWAV = source.bms.exWAV[key];
         const exWAV = rawExWAV === undefined ? undefined : parseBMSExWAV(rawExWAV);
         if (exWAV && rawExWAV !== undefined) {

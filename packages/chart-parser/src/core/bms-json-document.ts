@@ -58,6 +58,18 @@ export function parseJSONDocument(raw: Partial<BeMusicJSON>): BeMusicJSON {
   // hint here.
   const rawBMSBase = (rawBMS as { base?: unknown } | undefined)?.base;
   const reparseBase: 36 | 62 = rawBMSBase === 62 ? 62 : 36;
+  const rawGains: unknown = raw.resources?.wavGain;
+  if (rawGains !== undefined) {
+    if (rawGains === null || typeof rawGains !== 'object' || Array.isArray(rawGains))
+      throw new TypeError('resources.wavGain must be a slot-to-gain map');
+    const gains: Record<string, number> = {};
+    for (const [key, gain] of Object.entries(rawGains)) {
+      if (typeof gain !== 'number' || !Number.isFinite(gain) || gain < 0)
+        throw new TypeError(`resources.wavGain.${key} must be finite and nonnegative`);
+      gains[normalizeObjectKey(key, reparseBase, json.sourceFormat === 'bmson')] = gain;
+    }
+    json.resources.wavGain = gains;
+  }
   json.events = sortAndNormalizeEvents(
     rawEvents as Array<BeMusicEvent | Record<string, unknown>>,
     reparseBase,

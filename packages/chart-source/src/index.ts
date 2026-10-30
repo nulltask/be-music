@@ -30,6 +30,8 @@ export interface BeMusicMetadata {
 
 export interface BMSResources {
   wav: Record<string, string>;
+  /** Intrinsic per-slot linear gain, e.g. a composed NONSTOP stage's VOLWAV. Omitted slots use unity. */
+  wavGain?: Record<string, number>;
   bmp: Record<string, string>;
   bpm: Record<string, number>;
   stop: Record<string, number>;
@@ -464,6 +466,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
     },
     resources: {
       wav: { ...json.resources.wav },
+      ...(json.resources.wavGain !== undefined ? { wavGain: { ...json.resources.wavGain } } : {}),
       bmp: { ...json.resources.bmp },
       bpm: { ...json.resources.bpm },
       stop: { ...json.resources.stop },
