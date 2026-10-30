@@ -21,6 +21,7 @@ export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): 
     run: async (fixtures) => {
       await audioRendererAPI.renderSingleSample('01', undefined, {
         sampleRate: 22_050,
+        playbackModifiers: { semitones: 12, pan: -600, durationSeconds: 0.02 },
         gain: 1,
         baseDir: fixtures.tmpDir,
         fallbackToneSeconds: 0.03,

@@ -129,6 +129,46 @@ const mkEvent = (channel: string, value: string, extra: Partial<BeMusicEvent> = 
 });
 
 describe('createWebAudioSession', () => {
+  test('prepared slot effects survive repeated triggers, seek, pause and live tempo changes', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const chart = makeChartWithSamples();
+    chart.bms.wavCmds = ['00 01 72', '02 01 2000'];
+    const prepared = makeMockAudioBuffer(1);
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart,
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer(2)],
+        [decodedSampleKey('kick.wav', '01'), prepared],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+      playbackRate: 1,
+      playbackRateFollowsTempo: true,
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.triggerEvent?.(mkEvent('11', '01'));
+    expect(trackedBufferSources.map((source) => source.buffer)).toEqual([prepared, prepared]);
+    expect(trackedBufferSources[0]!.node.stop).toHaveBeenCalled();
+    session.pause?.();
+    session.resume?.();
+    expect(audioContext.suspend).toHaveBeenCalledOnce();
+    expect(audioContext.resume).toHaveBeenCalledOnce();
+    session.setTempo?.(1.2);
+    expect(trackedBufferSources[1]!.node.playbackRate.linearRampToValueAtTime).toHaveBeenCalled();
+    session.seek?.(0);
+    expect(trackedBufferSources[1]!.node.stop).toHaveBeenCalled();
+    session.triggerEventAt?.(mkEvent('11', '01'), 0.3);
+    expect(trackedBufferSources[2]!.node.start).toHaveBeenCalledWith(0, 0.3);
+    expect(trackedBufferSources[2]!.node.playbackRate.value).toBe(1.2);
+    session.triggerEventAt?.(mkEvent('11', '01'), 1.1);
+    expect(trackedBufferSources).toHaveLength(3);
+  });
+
+  test('prepared cache keys preserve base-62 slot case on one shared file', () => {
+    expect(decodedSampleKey('A.WAV', '0a')).not.toBe(decodedSampleKey('a.wav', '0A'));
+  });
   test('plays the effective EXWAV filename rather than an overridden WAV declaration', () => {
     const { audioContext, audioBus, trackedBufferSources } = createMocks();
     const chart = makeChartWithSamples();

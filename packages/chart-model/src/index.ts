@@ -160,6 +160,7 @@ export {
 } from './channels.ts';
 
 export { resolveChartReferenceBPM } from './reference-bpm.ts';
+export { collectBmsWAVPlaybackModifiers, resolveBmsWAVPlayback, type BmsWAVPlaybackModifiers } from './wav-playback.ts';
 export {
   buildBGAOpacityTimelines,
   pickBGAOpacity,

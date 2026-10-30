@@ -297,6 +297,16 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.resolveBMSWAVResources(BENCH_EXWAV_CHART);
     },
   });
+  define('chart-model.collectBmsWAVPlaybackModifiers', {
+    run: () => {
+      chartAPI.collectBmsWAVPlaybackModifiers(BENCH_EXWAV_CHART);
+    },
+  });
+  define('chart-model.resolveBmsWAVPlayback', {
+    run: () => {
+      chartAPI.resolveBmsWAVPlayback({ semitones: 12, frequencyHz: 22050, pan: -600, durationSeconds: 0.1 }, 44100);
+    },
+  });
   define('chart-model.parseBmsWAVCmd', {
     run: () => {
       chartAPI.parseBmsWAVCmd('01 0A 64');

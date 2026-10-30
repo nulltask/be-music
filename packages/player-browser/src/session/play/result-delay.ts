@@ -4,6 +4,7 @@ import type { TimedPlayableNote } from '@be-music/player-engine/display';
 import {
   clampSampleDuration,
   clampSampleOffset,
+  decodedSampleKey,
   type WebAudioSessionSlicePlayback,
 } from '../../runtime/web-audio-session.ts';
 
@@ -86,7 +87,9 @@ function resolveSamplePlaybackDurationSeconds(
   );
   const path = wavResources[sampleKey];
   if (typeof path !== 'string') return undefined;
-  const buffer = context.decodedSamples.get(normalizeSamplePath(path));
+  const buffer =
+    context.decodedSamples.get(decodedSampleKey(path, sampleKey)) ??
+    context.decodedSamples.get(normalizeSamplePath(path));
   if (buffer === undefined) return undefined;
   const slice = context.bmsonSlicePlayback?.get(event);
   const offsetSeconds = clampSampleOffset(slice?.offsetSeconds, buffer.duration);

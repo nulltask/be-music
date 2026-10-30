@@ -41,3 +41,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0022: Conditional bmson BGA events follow deterministic chart time](./0022-bmson-bga-events.md)
 
 - [0023: Generic bmson keyboards retain their declared layout](./0023-generic-bmson-keyboards.md)
+
+- [0024: Extended BMS audio effects are prepared before host tempo changes](./0024-extended-bms-audio.md)

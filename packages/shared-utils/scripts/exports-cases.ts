@@ -13,6 +13,7 @@ const BENCH_PNG = Uint8Array.from(
   ),
   (character) => character.charCodeAt(0),
 );
+const BENCH_AUDIO_PCM = Float32Array.from({ length: 4410 }, (_, index) => Math.sin(index / 20));
 
 const caseInsensitiveFiles = new Map<string, Uint8Array>([['Song/Kick.WAV', new Uint8Array([1, 2, 3])]]);
 const eagerEntry = new Uint8Array([1, 2, 3]);
@@ -36,6 +37,15 @@ const inlineWorker = Object.assign(
 const workerAbortController = new AbortController();
 
 export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
+  define('shared-utils.transformStereoPCM', {
+    run: () => {
+      utilsAPI.transformStereoPCM(BENCH_AUDIO_PCM, BENCH_AUDIO_PCM, 44100, 48000, {
+        playbackRate: 2,
+        leftGain: 0.5,
+        maxDurationSeconds: 0.05,
+      });
+    },
+  });
   define('shared-utils.png.decodePNGToRGBA8', {
     run: () => {
       pngAPI.decodePNGToRGBA8(BENCH_PNG);
