@@ -24,6 +24,9 @@ BENCH_TEXT_CHART.events = [
   { measure: 0, channel: '99', position: [0, 1], value: '01' },
   { measure: 1, channel: '99', position: [0, 1], value: '02' },
 ];
+BENCH_TEXT_CHART.bms.options = ['774:HI-SPEED_x0.77', 'charatbeatHDX:BGAMODE 0'];
+BENCH_TEXT_CHART.bms.changeOption['01'] = '774:HIDDEN_STEALTH';
+BENCH_TEXT_CHART.events.push({ measure: 1, channel: 'A6', position: [0, 1], value: '01' });
 const BENCH_TEXT_TIMELINE = chartAPI.buildChartTextTimeline(BENCH_TEXT_CHART);
 BENCH_EXWAV_CHART.resources.wav = { '01': 'ordinary.wav' };
 BENCH_EXWAV_CHART.bms.exWAV = { '01': 'pvf 500 -600 48000 extended.wav', '02': 'v 0 only.wav' };
@@ -60,6 +63,11 @@ const BENCH_BMSON_BGA_SEQUENCE = chartAPI.buildBmsonBGAEventTimeline(BENCH_BMSON
   .sequences[0]!;
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
+  define('chart-model.buildChartOptionTimeline', {
+    run: () => {
+      chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART);
+    },
+  });
   define('chart-model.buildChartTextTimeline', {
     run: () => {
       chartAPI.buildChartTextTimeline(BENCH_TEXT_CHART);

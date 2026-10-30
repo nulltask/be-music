@@ -303,7 +303,12 @@ export interface BMSExtensions {
   pathWAV?: string;
   baseBPM?: number;
   stp: string[];
+  /** Legacy last unconditional #OPTION declaration (last active declaration after resolving branches). */
   option?: string;
+  /** Whole #OPTION declaration payloads in source order, without splitting vendor arguments. */
+  options?: string[];
+  /** The control-flow program includes every #OPTION, including unconditional declarations, in source order. */
+  optionHeadersInControlFlow?: true;
   changeOption: Record<string, string>;
   wavCmd?: string;
   /**
@@ -482,6 +487,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
       argb: { ...json.bms.argb },
       stp: [...json.bms.stp],
       wavCmds: [...json.bms.wavCmds],
+      ...(json.bms.options !== undefined ? { options: [...json.bms.options] } : {}),
       ...(json.bms.wavNameBytePrefixes !== undefined
         ? { wavNameBytePrefixes: { ...json.bms.wavNameBytePrefixes } }
         : {}),

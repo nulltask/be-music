@@ -20,7 +20,7 @@ type IndexedHeaderDirective =
   | 'SWBGA';
 
 /** Header commands whose lines add up instead of replacing each other, so file order never makes one override another. */
-const REPEATABLE_HEADER_COMMANDS: ReadonlySet<string> = new Set(['STP', 'WAVCMD', 'LNOBJ']);
+const REPEATABLE_HEADER_COMMANDS: ReadonlySet<string> = new Set(['STP', 'WAVCMD', 'LNOBJ', 'OPTION']);
 
 /**
  * Which definition a header line sets, for the file-order rule: the command, plus the normalized object key of an
@@ -167,6 +167,8 @@ export function pushHeaderLine(
       return;
     case 'OPTION':
       if (value.length > 0) {
+        const declarations = (json.bms.options ??= json.bms.option ? [json.bms.option] : []);
+        declarations.push(value);
         json.bms.option = value;
       }
       return;

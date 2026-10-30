@@ -227,3 +227,5 @@ export {
   type ResolvedBmsonBGASequence,
   type ResolvedBmsonBGASequenceFrame,
 } from './bmson-bga-sequences.ts';
+
+export { buildChartOptionTimeline, type ChartOptionCue, type ChartOptionTimeline } from './chart-options.ts';

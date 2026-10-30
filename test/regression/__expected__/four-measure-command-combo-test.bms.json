@@ -117,6 +117,9 @@
       "player": 3,
       "pathWAV": "./",
       "baseBPM": 128,
+      "options": [
+        "RANDOM"
+      ],
       "option": "RANDOM",
       "wavCmd": "legacy",
       "lnType": 1,
@@ -129,6 +132,7 @@
       "materials": "demo.materials",
       "divideProp": "lane=2",
       "charset": "UTF-8",
+      "optionHeadersInControlFlow": true,
       "wavNameBytePrefixes": {
         "sample.wav": "7361",
         "branch.wav": "6272",
@@ -139,6 +143,7 @@
       }
     },
     "controlFlow": [
+      "header",
       "SETRANDOM 2",
       "IF 2",
       "object",
