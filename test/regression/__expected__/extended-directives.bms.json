@@ -53,8 +53,8 @@
         "02": "RANDOM"
       },
       "exWAV": {
-        "01": "pvf 1024,-200,48000 sample.wav",
-        "02": "vp -600,-500 branch.wav",
+        "01": "pvf 1024 -200 48000 sample.wav",
+        "02": "vp -600 -500 branch.wav",
         "03": "v 0 right.wav"
       },
       "exBMP": {
@@ -124,8 +124,8 @@
       "#DEFEXRANK 100",
       "#STP 001.500",
       "#STP 002.250",
-      "#EXWAV01 pvf 1024,-200,48000 sample.wav",
-      "#EXWAV02 vp -600,-500 branch.wav",
+      "#EXWAV01 pvf 1024 -200 48000 sample.wav",
+      "#EXWAV02 vp -600 -500 branch.wav",
       "#EXWAV03 v 0 right.wav",
       "#EXBMP01 255,0,0,0,bga-base.bmp",
       "#EXBMP02 128,255,255,255,bga-layer.bmp",

@@ -42,6 +42,12 @@ function fakeAudioContext(): BaseAudioContext & { decoded: string[] } {
 const SOURCE = {} as BrowserAssetSource;
 
 describe('collectChartVolumeMultipliers', () => {
+  test('reads volume after pan in a whitespace-separated EXWAV declaration', () => {
+    const chart = createEmptyJSON('bms');
+    chart.bms.exWAV = { '01': 'pvf 500 -600 48000 sample.wav' };
+    expect(collectChartVolumeMultipliers(chart).get('01')).toBeCloseTo(10 ** (-6 / 20));
+  });
+
   test('multiplies #WAVCMD and #EXWAV volumes of the same slot', () => {
     const chart = createEmptyJSON('bms');
     chart.bms.wavCmds = ['01 01 127', '01 02 0'];

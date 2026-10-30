@@ -186,6 +186,9 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Supports LR2 100001x BPM gimmick by `#BPMxx` with time resolution
 - [x] Keep every `#WAVCMD` line in `bms.wavCmds`; chart-audio-renderer and browser WebAudio apply the `01` volume parameter
 - [x] Parse `#EXWAVxx` and apply its `v` volume parameter in chart-audio-renderer and browser WebAudio
+
+`#EXWAVxx` accepts the nanasigroove whitespace-separated parameters in flag order, such as `pvf 0 -600 44100 sample.wav`. Earlier Be-Music comma-separated parameters remain accepted. The filename starts after all flag parameters and may contain spaces. This syntax support does not imply pan/frequency execution or EXWAV-only resource loading; those remain tracked by #831.
+
 - [x] Use `#BASEBPM` as the chart reference BPM for browser HS-FIX calibration through `@be-music/chart-model`
 - [x] Browser player renders `#BGAxx` sub-region BGA. Static alias chains resolve independently of declaration order, compose each intermediate placement on the 256×256 canvas and clip source/destination edges. Fully clipped base/POOR images become black, while overlay images become transparent. Explicit BMP/EXBMP declarations override aliases even when the declared asset fails to load. The legacy cue-driven SWBGA helper remains available for API compatibility; standard A5 rendering uses the input-bound engine controller.
 - [x] Terminal BMP/PNG/JPEG EXBMP keying runs before cropping/resizing: RGB matches within ±8, source alpha matches exactly, alpha-less images compare as zero, and the all-zero tuple disables keying. Other colors and black survive without tinting. Keys have separate caches and follow implicit POOR/NONSTOP resources. Unkeyed source coverage is retained for the composition described below. See the [experimental specification](https://bms.ms/~hitkey/diary1811.php). Shared APIs are `resolveBmsExBMPColorKey` and `applyBMSColorKey`.

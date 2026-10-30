@@ -4,10 +4,10 @@ import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
  * Parsed `#EXWAVxx [flags] params filename` directive.
  *
  * `#EXWAVxx` declares an "extended" WAV slot whose playback should be modified by the listed parameters. The `flags`
- * token names which channels are present (in order), and `params` is a comma-separated list whose values match those
- * flags positionally.
+ * token names which channels are present (in order), and whitespace-separated parameters follow those flags
+ * positionally. Be-Music also accepts its earlier comma-separated parameter spelling.
  *
- * Supported flags (hitkey BMS Memo): - `p` — stereo pan (`-10000..10000` LR2-style, where 0 is center). - `v` —
+ * Supported flags (hitkey BMS Memo): - `p` — stereo pan (`-10000..10000`, where 0 is center). - `v` —
  * playback volume in centibels (CB), where each step is `1/100` of a dB. Negative values attenuate, `0` is unity. - `f`
  * — playback frequency in Hz. The sample is resampled (or replayed at a different rate) so its native sample rate maps
  * onto this output rate.
@@ -29,10 +29,9 @@ export interface BMSExWAV {
 /**
  * Parses one `#EXWAVxx` directive value (the post-`#EXWAVxx ` text).
  *
- * Token layout — three whitespace-separated groups: 1. Flag string in declaration order, e.g. `pvf` / `vp` / `v`. 2.
- * Comma-separated integer params matching the flag positions (`pvf 100,-200,48000` → pan=100, vol=-200, freq=48000). 3.
- * Filename. Any trailing whitespace-separated tokens are joined back together so chart authors can use names with
- * spaces.
+ * A flag string in declaration order (`pvf` / `vp` / `v`) is followed by one whitespace-separated integer per flag,
+ * then the filename. Earlier Be-Music comma-separated parameters remain accepted. Trailing filename tokens are
+ * joined back together so filenames can contain spaces.
  *
  * Returns `undefined` for malformed input — better to skip a broken `#EXWAV` than to apply nonsense to the audible
  * signal.
@@ -44,10 +43,11 @@ export function parseBMSExWAV(raw: string): BMSExWAV | undefined {
   const tokens = trimmed.split(/\s+/u);
   if (tokens.length < 3) return undefined;
   const flags = tokens[0]!.toLowerCase();
-  const params = tokens[1]!.split(',');
-  // Filename can legitimately contain spaces; rejoin every remaining token. (LR2 uses Windows-style paths, never URL-
-  // encoded, so a literal space in the name is the only edge.)
-  const filename = tokens.slice(2).join(' ');
+  const commaSeparated = tokens[1]!.includes(',');
+  const params = commaSeparated ? tokens[1]!.split(',') : tokens.slice(1, 1 + flags.length);
+  const filenameStart = commaSeparated ? 2 : 1 + flags.length;
+  // Parameter count determines the boundary; the remaining filename may contain spaces.
+  const filename = tokens.slice(filenameStart).join(' ');
   if (filename.length === 0) return undefined;
   const out: BMSExWAV = { filename };
   for (let index = 0; index < flags.length; index += 1) {
