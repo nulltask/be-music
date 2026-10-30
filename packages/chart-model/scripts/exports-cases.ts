@@ -18,6 +18,13 @@ const BENCH_COLOR_KEY_PIXELS = Uint8Array.from({ length: 256 * 256 * 4 }, (_, in
 );
 const BENCH_COLOR_KEY_CHART = createEmptyJSON('bms');
 const BENCH_EXWAV_CHART = createEmptyJSON('bms');
+const BENCH_TEXT_CHART = createEmptyJSON('bms');
+BENCH_TEXT_CHART.resources.text = { '00': '"MISS"', '01': '"Hello"', '02': '""' };
+BENCH_TEXT_CHART.events = [
+  { measure: 0, channel: '99', position: [0, 1], value: '01' },
+  { measure: 1, channel: '99', position: [0, 1], value: '02' },
+];
+const BENCH_TEXT_TIMELINE = chartAPI.buildChartTextTimeline(BENCH_TEXT_CHART);
 BENCH_EXWAV_CHART.resources.wav = { '01': 'ordinary.wav' };
 BENCH_EXWAV_CHART.bms.exWAV = { '01': 'pvf 500 -600 48000 extended.wav', '02': 'v 0 only.wav' };
 BENCH_COLOR_KEY_CHART.bms.exBMP['01'] = '0,127,127,127 image.png';
@@ -53,6 +60,16 @@ const BENCH_BMSON_BGA_SEQUENCE = chartAPI.buildBmsonBGAEventTimeline(BENCH_BMSON
   .sequences[0]!;
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
+  define('chart-model.buildChartTextTimeline', {
+    run: () => {
+      chartAPI.buildChartTextTimeline(BENCH_TEXT_CHART);
+    },
+  });
+  define('chart-model.pickChartText', {
+    run: () => {
+      chartAPI.pickChartText(BENCH_TEXT_TIMELINE, 1);
+    },
+  });
   define('chart-model.buildBmsonBGAEventTimeline', {
     run: () => {
       chartAPI.buildBmsonBGAEventTimeline(BENCH_BMSON_BGA, BENCH_BMSON_BGA_TIMING);
