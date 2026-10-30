@@ -186,6 +186,9 @@
 - [x] `#BPMxx` による LR2 100001倍 BPM 系ギミックを時刻解決でサポート
 - [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、chart-audio-renderer と browser WebAudio では `01` volume parameter を反映
 - [x] `#EXWAVxx` を parse し、`v` volume parameter を chart-audio-renderer と browser WebAudio で反映
+
+`#EXWAVxx` は nanasigroove の空白区切りパラメーターをフラグ順に受け付けます。例は `pvf 0 -600 44100 sample.wav` です。従来の Be-Music のカンマ区切りも引き続き受け付けます。ファイル名はすべてのパラメーターの後から始まり、空白を含められます。この構文対応だけでは pan/frequency の実行や EXWAV のみで定義したリソースの読み込みには対応しません。これらは #831 で追跡します。
+
 - [x] `#BASEBPM` を `@be-music/chart-model` 経由で browser HS-FIX calibration の reference BPM として使用
 - [x] Browser player は `#BGAxx` sub-region BGA を描画する。既存のキュー駆動 SWBGA ヘルパーは API 互換のため残し、標準 A5 の描画にはキー入力連動のエンジン状態を使う。 静止画の多段参照は定義順に依存せず解決し、各段の配置位置を 256×256 キャンバス上で合成して、切り出し元と配置先の端を切り取る。完全に画面外となるベース／POOR は黒、オーバーレイは透明になる。明示的な BMP／EXBMP 定義は、その画像を読み込めない場合も同じ ID の BGA 参照より優先する。
 - [x] Terminal の BMP／PNG／JPEG 静止画 EXBMP は、切り出し・縮小の前に透明色を適用する。RGB は各成分 ±8、アルファ付き画像のアルファ値は完全一致とし、アルファなし画像は指定との比較に 0 を使う。全ゼロ指定は色透過を無効にする。対象外の色と黒を残し、色の乗算はしない。異なる透明色のキャッシュを分け、暗黙の POOR と NONSTOP の参照先にも適用する。透過対象外の元画像アルファは、次項の合成に渡す。[実測に基づく仕様](https://bms.ms/~hitkey/diary1811.php)。共通 API は `resolveBmsExBMPColorKey` と `applyBMSColorKey`。

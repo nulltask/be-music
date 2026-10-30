@@ -172,7 +172,7 @@ test('audio-renderer: scales individual sample triggers with #EXWAVxx v', async 
   // / `#WAVCMD` chain. -600 cB = -6 dB ≈ 0.501 linear gain.
   const baseline = createSingleTriggerBMSChart('not-found.wav');
   const attenuated = createSingleTriggerBMSChart('not-found.wav');
-  attenuated.bms.exWAV['01'] = 'v -600 not-found.wav';
+  attenuated.bms.exWAV['01'] = 'pvf 0 -600 44100 not-found.wav';
   const [baselineRendered, attenuatedRendered] = await Promise.all([
     renderJSON(baseline, {
       sampleRate: 44_100,
