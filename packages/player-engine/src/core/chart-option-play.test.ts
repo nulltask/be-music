@@ -162,3 +162,56 @@ test('negative-BPM reversal freezes effective display operations at the same cha
   expect(values.length).toBeGreaterThan(0);
   expect(values.every((value) => value === 100)).toBe(true);
 });
+
+test.each(['auto', 'replay'] as const)(
+  'NONSTOP %s owns stage programs and restores them after backwards seek',
+  async (driver) => {
+    const { stitchNonstopCourse } = await import('../course/nonstop/compose.ts');
+    const first = parseBMS('#BPM 120\n#OPTION 774:HI-SPEED_x0.77\n#00211:01\n#00411:01');
+    const second = parseBMS(
+      '#BPM 60\n#OPTION 774:HI-SPEED_x100.00\n#CHANGEOPTION01 774:HI-SPEED_x0.25\n#003A6:01\n#00211:01\n#00411:01',
+    );
+    const plain = parseBMS('#BPM 120\n#00211:01\n#00411:01');
+    const stitched = stitchNonstopCourse([{ chart: first }, { chart: second }, { chart: plain }], {
+      connections: ['cut-fit', 'cut'],
+    });
+    if (!stitched.ok) throw new Error(stitched.reason);
+    const start = stitched.map.stages[1]!.windowStart;
+    const clear = stitched.map.stages[2]!.windowStart;
+    const frames: { seconds: number; generation: number; speed?: number }[] = [];
+    const result = await observePlay({
+      driver: driver === 'auto' ? 'auto' : 'manual',
+      chart: stitched.chart,
+      options: {
+        chartOptionProgram: structuredClone(stitched.map.chartOptions),
+        ...(driver === 'replay' ? { replayInputs: [] } : {}),
+      },
+      script: [{ atMs: (clear + 0.3) * 1000, command: { kind: 'seek', seconds: start + 1 } }],
+      onFrame: (frame) =>
+        frames.push({
+          seconds: frame.currentSeconds,
+          generation: frame.generation ?? 0,
+          speed: frame.chartOptions?.hiSpeed,
+        }),
+    });
+    expect(result.outcome).toBe('completed');
+    expect(frames.find((frame) => frame.seconds >= start + 1)?.speed).toBe(100);
+    expect(frames.find((frame) => frame.seconds >= start + 2.1)?.speed).toBe(0.25);
+    expect(frames.find((frame) => frame.seconds >= clear + 0.1)?.speed).toBeUndefined();
+    expect(frames.find((frame) => frame.generation === 1)?.speed).toBe(100);
+    expect(frames.find((frame) => frame.generation === 1 && frame.seconds >= start + 2.1)?.speed).toBe(0.25);
+  },
+);
+
+test('host-compiled NONSTOP diagnostics reach the engine without losing stage provenance', async () => {
+  const { stitchNonstopCourse } = await import('../course/nonstop/compose.ts');
+  const source = parseBMS('#BPM 120\n#OPTION unknown:stage option\n#00111:01');
+  const stitched = stitchNonstopCourse([{ chart: source }], { connections: [] });
+  if (!stitched.ok) throw new Error(stitched.reason);
+  const result = await observePlay({
+    driver: 'auto',
+    chart: stitched.chart,
+    options: { chartOptionDiagnostics: stitched.map.chartOptionDiagnostics },
+  });
+  expect(result.log.some((entry) => entry.includes('unsupported-option') && entry.includes('"stage":0'))).toBe(true);
+});

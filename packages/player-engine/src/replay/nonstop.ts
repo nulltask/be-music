@@ -1,3 +1,4 @@
+import { shiftChartOptionProgram } from './chart-options.ts';
 import { resolveChart, type RandomDraw } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { NonstopConnection } from '../course/definition.ts';
@@ -164,6 +165,9 @@ export function splitNonstopReplay(
       clock: replay.clock,
       chart: {
         ...facts,
+        ...(replay.chart.chartOptions
+          ? { chartOptions: shiftChartOptionProgram(replay.chart.chartOptions, stage) }
+          : {}),
         sourceFormat: replay.chart.sourceFormat,
         ...(replay.chart.totalUnit !== undefined ? { totalUnit: replay.chart.totalUnit } : {}),
         laneMode: replay.chart.laneMode,

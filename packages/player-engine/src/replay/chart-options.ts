@@ -1,3 +1,4 @@
+import { resolveChartOptionsAt } from '@be-music/chart-model';
 import type { ChartOptionProgram, ChartOptionState } from '@be-music/chart-model';
 import { expectRecord, ReplayParseError } from './parse.ts';
 
@@ -36,4 +37,21 @@ export function parseChartOptionProgram(raw: unknown): ChartOptionProgram {
       return { timeUs: cue.timeUs, state: state(cue.state) };
     }),
   };
+}
+
+/** Retain only one stage's played ownership window on its offset-relative (already FIT-scaled) replay clock. */
+export function shiftChartOptionProgram(
+  program: ChartOptionProgram,
+  window: { windowStartUs: number; windowEndUs?: number; offsetUs: number },
+): ChartOptionProgram {
+  const startUs = Math.max(0, window.windowStartUs - window.offsetUs);
+  const courseStartUs = Math.max(window.windowStartUs, window.offsetUs);
+  const seed = resolveChartOptionsAt(program, courseStartUs);
+  const cues = program.cues
+    .filter((cue) => cue.timeUs > courseStartUs && cue.timeUs < (window.windowEndUs ?? Infinity))
+    .map((cue) => ({ timeUs: cue.timeUs - window.offsetUs, state: { ...cue.state } }));
+  if (startUs > 0) cues.unshift({ timeUs: startUs, state: seed });
+  const endUs = window.windowEndUs === undefined ? undefined : window.windowEndUs - window.offsetUs;
+  if (endUs !== undefined && endUs >= startUs) cues.push({ timeUs: endUs, state: {} });
+  return { version: 1, initial: startUs === 0 ? seed : {}, cues };
 }

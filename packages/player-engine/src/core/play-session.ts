@@ -278,7 +278,7 @@ export async function createPlaySession(
       ? compileChartOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing))
       : { program: structuredClone(options.chartOptionProgram), diagnostics: [] };
   const chartOptions = compiledOptions.program;
-  for (const diagnostic of compiledOptions.diagnostics)
+  for (const diagnostic of [...compiledOptions.diagnostics, ...(options.chartOptionDiagnostics ?? [])])
     emitPlayerLog(options, 'warn', 'chart.option', { ...diagnostic });
   const extraDepth = clampExtraNoteDepth(options.extraNoteDepth ?? playbackChart.extraNoteDepth ?? 0);
   const extraScratch = options.extraNoteScratch ?? playbackChart.extraNoteScratch ?? false;
