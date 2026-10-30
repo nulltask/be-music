@@ -68,3 +68,62 @@ test('only actual poor-display effects drive the miss text', () => {
   });
   expect(resolveChartTextInput({ kind: 'record-empty-poor' })).toBeUndefined();
 });
+
+test('NONSTOP owns selections and misses in exclusive windows, seeds trimmed text and scales lifetime with FIT', () => {
+  const stages = [
+    { startSeconds: 0, endSeconds: 4, offsetSeconds: 0, rate: 1, timeline },
+    {
+      startSeconds: 4,
+      endSeconds: 8,
+      offsetSeconds: 2,
+      rate: 2,
+      timeline: { cues: [{ seconds: 1, key: '01', text: 'stage 2' }], missText: 'MISS 2' },
+    },
+    { startSeconds: 8, endSeconds: 10, offsetSeconds: 8, rate: 1, timeline: { cues: [] } },
+  ];
+  const text = new ChartTextController({ cues: [] }, Infinity, stages);
+  text.addInput({ seconds: 3.9, action: 'trigger' });
+  expect(text.read(3.99)).toBe('MISS');
+  expect(text.read(4)).toBe('stage 2');
+  text.addInput({ seconds: 4.1, action: 'trigger' });
+  expect(text.read(4.34)).toBe('MISS 2');
+  expect(text.read(4.36)).toBe('stage 2');
+  text.addInput({ seconds: 7.9, action: 'trigger' });
+  expect(text.read(8)).toBe('');
+  expect(text.read(10)).toBe('');
+  text.reset([{ seconds: 4.1, action: 'trigger' }]);
+  expect(text.read(4.2)).toBe('MISS 2');
+  text.reset();
+  expect(text.read(4.2)).toBe('stage 2');
+});
+
+test('a stage reversal freezes its source text and miss lifetime only until its ownership ends', () => {
+  const text = new ChartTextController({ cues: [] }, Infinity, [
+    {
+      startSeconds: 0,
+      endSeconds: 4,
+      offsetSeconds: -1,
+      rate: 2,
+      freezeSeconds: 1.5,
+      timeline,
+    },
+  ]);
+  // Source 1.4 s is course -0.3 s, outside ownership: it cannot introduce a miss.
+  text.addInput({ seconds: -0.3, action: 'trigger' });
+  expect(text.read(1)).toBe('normal');
+  expect(text.read(4)).toBe('');
+  const frozen = new ChartTextController({ cues: [] }, Infinity, [
+    {
+      startSeconds: 0,
+      endSeconds: 4,
+      offsetSeconds: 0,
+      rate: 2,
+      freezeSeconds: 1.5,
+      timeline,
+    },
+  ]);
+  frozen.addInput({ seconds: 0.7, action: 'trigger' });
+  frozen.addInput({ seconds: 1, action: 'clear' });
+  expect(frozen.read(3)).toBe('MISS');
+  expect(frozen.read(4)).toBe('');
+});

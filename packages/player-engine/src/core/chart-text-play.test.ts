@@ -88,3 +88,38 @@ test('replay seek reconstructs the missed judgment, and a fresh play starts with
   expect(at(restarted, 0)?.text).toBe('');
   expect(at(restarted, 1.3)?.text).toBe('first');
 });
+
+test.each(['auto', 'replay'] as const)(
+  'NONSTOP %s preserves source definitions and restores stage-owned text on seek',
+  async (driver) => {
+    const { stitchNonstopCourse } = await import('../course/nonstop/compose.ts');
+    const { resolveChart } = await import('@be-music/chart-model');
+    const source = chart();
+    const other = chart();
+    other.resources.text['00'] = 'MISS 2';
+    other.resources.text['01'] = 'stage 2';
+    other.resources.text['02'] = 'stage 2';
+    const before = JSON.stringify([source, other]);
+    const stitched = stitchNonstopCourse([{ chart: source }, { chart: other }], { connections: ['cut'] });
+    if (!stitched.ok) throw new Error(stitched.reason);
+    expect(JSON.stringify([source, other])).toBe(before);
+    expect(stitched.map.chartText).toHaveLength(2);
+    const boundary = stitched.map.stages[1]!.windowStart;
+    const note = resolveChart(stitched.chart).notes.find((note) => note.seconds >= boundary)!;
+    const target = note.seconds + 0.3;
+    const frames: Frame[] = [];
+    const result = await observePlay({
+      driver: driver === 'auto' ? 'auto' : 'manual',
+      chart: stitched.chart,
+      options: {
+        chartTextStages: structuredClone(stitched.map.chartText),
+        ...(driver === 'replay' ? { replayInputs: [] } : {}),
+      },
+      script: [{ atMs: (target + 0.1) * 1000, command: { kind: 'seek', seconds: target } }],
+      onFrame: (frame) => frames.push(snapshot(frame)),
+    });
+    expect(result.outcome).toBe('completed');
+    expect(at(frames, target, 1)?.text).toBe(driver === 'replay' ? 'MISS 2' : 'stage 2');
+    expect(frames.some((frame) => frame.text === 'first')).toBe(true);
+  },
+);

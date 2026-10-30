@@ -1,4 +1,6 @@
+import type { ChartTextStage } from '../../core/chart-text.ts';
 import {
+  buildChartTextTimeline,
   resolvePoorBGAMode,
   type PoorBGAMode,
   resolveChart,
@@ -102,6 +104,8 @@ export interface NonstopStitchStage {
 }
 
 export interface NonstopStitchMap {
+  /** Source text programs with stage ownership and FIT time mapping. */
+  chartText?: ChartTextStage[];
   /** Remapped input-bound BGA selections, with stage ownership windows on the stitched clock. */
   keyBoundBGA?: KeyBoundBGACue[];
   /** Resolved conditional animations, remapped to stage-owned resources and FIT time. */
@@ -215,6 +219,7 @@ export function stitchNonstopCourse(
   const bmpKeys = new NonstopKeyAllocator(asBmson);
   const keyBoundBGA: KeyBoundBGACue[] = [];
   const bmsonBGA: BmsonBGAEventCue[] = [];
+  const chartText: ChartTextStage[] = [];
   const stopKeys = new NonstopKeyAllocator(asBmson);
   const chart = createEmptyJSON(asBmson ? 'bmson' : 'bms');
   let totalStage = stages.length - 1;
@@ -312,6 +317,14 @@ export function stitchNonstopCourse(
       return true;
     };
 
+    chartText.push({
+      startSeconds: Math.max(0, window.start),
+      endSeconds: window.end,
+      offsetSeconds: placements[index]!.offsetSeconds,
+      rate: placements[index]!.rate,
+      timeline: buildChartTextTimeline(chartIndex.source, chartIndex.timing),
+      ...(chartIndex.reversal ? { freezeSeconds: chartIndex.reversal.seconds } : {}),
+    });
     const keyBound = placeNonstopKeyBoundBGA(chartIndex, placements[index]!, window, index, bmp);
     if (!keyBound) return { ok: false, reason: 'id-space', stage: index };
     keyBoundBGA.push(...keyBound);
@@ -411,6 +424,9 @@ export function stitchNonstopCourse(
     ok: true,
     chart,
     map: {
+      ...(chartText.some((stage) => stage.timeline.cues.length > 0 || stage.timeline.missText !== undefined)
+        ? { chartText }
+        : {}),
       ...(keyBoundBGA.length > 0 ? { keyBoundBGA } : {}),
       ...(bmsonBGA.some((cue) => cue.sequences.length > 0) ? { bmsonBGA } : {}),
       tempo: resolveNonstopTempo(readouts, placements, options),

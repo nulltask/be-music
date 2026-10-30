@@ -36,7 +36,7 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
 #TEXT02 ""
 #00199:01
 #00399:02
-#00511:01
+#00011:0001
 `,
     );
     await player.setOption(['Play options'], 'Auto play', true);
@@ -55,5 +55,42 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 6.2, 'text clear');
     await expect.poll(() => textPixels(player), { timeout: 2000, intervals: [100] }).toBeLessThan(before + 300);
     if (family === 'native') await expect(player.page.locator('[data-chart-text]')).toBeHidden();
+  });
+}
+
+for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
+  test(`${family} clears a preceding stage's text at the NONSTOP ownership boundary`, async ({ player }, info) => {
+    const { createHash } = await import('node:crypto');
+    await player.open({ 'be-music.built-in-skin': family === 'native' ? 'native' : 'plain' });
+    if (family === 'lr2' || family === 'beatoraja') await player.drop(`skins/${family}`);
+    const a = `#TITLE Text stage A
+#BPM 120
+#TEXT01 "${'W'.repeat(80)}"
+#00099:01
+#00211:01
+#00411:01
+`;
+    const b = '#TITLE Text stage B\n#BPM 120\n#00211:01\n#00411:01\n';
+    await player.dropText('text-a.bms', a);
+    await player.dropText('text-b.bms', b);
+    const hashes = [a, b].map((text) => createHash('md5').update(text).digest('hex')).join('');
+    await player.dropText(
+      'Text.lr2crs',
+      `<courselist><course><title>Text NONSTOP</title><line>7</line><type>1</type><hash>${'0'.repeat(32)}${hashes}</hash></course></courselist>`,
+    );
+    await player.openFolder('Text');
+    await player.setOption(['Play options'], 'Auto play', true);
+    await player.key('Enter');
+    await player.waitFor(
+      (state) => state.scene.kind === 'play' && state.play?.title === 'Text NONSTOP' && (state.play.seconds ?? 0) > 1,
+      'text NONSTOP',
+    );
+    if (family === 'native') await expect(player.page.locator('[data-chart-text]')).toHaveText('W'.repeat(80));
+    const active = await textPixels(player);
+    await player.page.screenshot({ path: info.outputPath('stage-text.png') });
+    await player.waitFor((state) => (state.play?.seconds ?? 0) > 8.5, 'second stage text clear');
+    await expect.poll(() => textPixels(player), { timeout: 3000, intervals: [100] }).toBeLessThan(active - 500);
+    if (family === 'native') await expect(player.page.locator('[data-chart-text]')).toBeHidden();
+    await player.page.screenshot({ path: info.outputPath('stage-cleared.png') });
   });
 }

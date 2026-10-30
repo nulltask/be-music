@@ -481,10 +481,19 @@ export async function createPlaySession(
   const stateSignals = createPlayerStateSignals(highSpeed);
   const { landmineNotes, invisibleNotes, renderNotes, laneBindings, laneDisplayMode, inputTokenToChannels } =
     playbackChart;
+  let textPlaybackEndSeconds = 0;
+  for (const stage of options.practice === undefined ? (options.chartTextStages ?? []) : []) {
+    const last = stage.timeline.cues.filter((cue) => cue.seconds <= (stage.freezeSeconds ?? Infinity)).at(-1);
+    if (last)
+      textPlaybackEndSeconds = Math.max(
+        textPlaybackEndSeconds,
+        Math.min(stage.endSeconds, stage.offsetSeconds + (last.seconds + 1) / stage.rate),
+      );
+  }
   const uiSignals = createPlayerUISignalBus({
     currentBeat: 0,
     currentSeconds: 0,
-    totalSeconds: playbackChart.totalSeconds,
+    totalSeconds: Math.max(playbackChart.totalSeconds, textPlaybackEndSeconds),
     summary,
     notes: renderNotes,
     landmineNotes,
@@ -506,7 +515,7 @@ export async function createPlaySession(
       randomPatternSummary,
       stateSignals,
       uiSignals,
-      totalSeconds: playbackChart.totalSeconds,
+      totalSeconds: Math.max(playbackChart.totalSeconds, textPlaybackEndSeconds),
       audioMode: mode,
     });
 
@@ -578,8 +587,8 @@ export async function createPlaySession(
   const bmsonBGA = bmsonCues.length > 0 ? new BmsonBGAController(bmsonCues, freezeSeconds) : undefined;
   const textTimeline = buildChartTextTimeline(resolvedChart.source, resolvedChart.timing);
   const chartText =
-    textTimeline.cues.length || textTimeline.missText !== undefined
-      ? new ChartTextController(textTimeline, freezeSeconds)
+    options.chartTextStages !== undefined || textTimeline.cues.length || textTimeline.missText !== undefined
+      ? new ChartTextController(textTimeline, freezeSeconds, options.chartTextStages)
       : undefined;
   const publishUIFrame = createUIFramePublisher({
     uiEnabled,
