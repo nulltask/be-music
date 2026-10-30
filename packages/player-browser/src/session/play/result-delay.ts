@@ -1,4 +1,4 @@
-import type { TimingResolver, TimedSampleTrigger } from '@be-music/chart-model';
+import { resolveBMSWAVResources, type TimingResolver, type TimedSampleTrigger } from '@be-music/chart-model';
 import { type BeMusicEvent, type BeMusicJSON, normalizeObjectKey, resolveBMSBase } from '@be-music/chart-source';
 import type { TimedPlayableNote } from '@be-music/player-engine/display';
 import {
@@ -44,9 +44,10 @@ export function resolveGameplayAudioTailCleanupDelayMs(options: {
   bmsonSlicePlayback?: ReadonlyMap<BeMusicEvent, WebAudioSessionSlicePlayback>;
   currentSeconds: number;
 }): number {
+  const wavResources = resolveBMSWAVResources(options.chart);
   const latestEndSeconds = Math.max(
-    resolveLatestSampleEndSeconds(options.notes, options),
-    resolveLatestSampleEndSeconds(options.autoSampleTriggers, options),
+    resolveLatestSampleEndSeconds(options.notes, options, wavResources),
+    resolveLatestSampleEndSeconds(options.autoSampleTriggers, options, wavResources),
   );
   if (!Number.isFinite(latestEndSeconds) || latestEndSeconds <= options.currentSeconds) return 0;
   const remainingMs = Math.ceil((latestEndSeconds - options.currentSeconds) * 1000) + AUDIO_TAIL_PAD_MS;
@@ -59,10 +60,11 @@ function resolveLatestSampleEndSeconds(
     Parameters<typeof resolveGameplayAudioTailCleanupDelayMs>[0],
     'chart' | 'decodedSamples' | 'bmsonSlicePlayback'
   >,
+  wavResources: Readonly<Record<string, string>>,
 ): number {
   let latest = 0;
   for (const timed of timedEvents) {
-    const duration = resolveSamplePlaybackDurationSeconds(timed.event, context);
+    const duration = resolveSamplePlaybackDurationSeconds(timed.event, context, wavResources);
     if (duration === undefined) continue;
     latest = Math.max(latest, timed.seconds + duration);
   }
@@ -75,13 +77,14 @@ function resolveSamplePlaybackDurationSeconds(
     Parameters<typeof resolveGameplayAudioTailCleanupDelayMs>[0],
     'chart' | 'decodedSamples' | 'bmsonSlicePlayback'
   >,
+  wavResources: Readonly<Record<string, string>>,
 ): number | undefined {
   const sampleKey = normalizeObjectKey(
     event.value,
     resolveBMSBase(context.chart),
     context.chart.sourceFormat === 'bmson',
   );
-  const path = context.chart.resources.wav[sampleKey];
+  const path = wavResources[sampleKey];
   if (typeof path !== 'string') return undefined;
   const buffer = context.decodedSamples.get(normalizeSamplePath(path));
   if (buffer === undefined) return undefined;

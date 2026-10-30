@@ -10,6 +10,16 @@ import { type RenderResult, renderJSON, renderSingleSample } from './index.ts';
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const fixtureDir = resolve(rootDir, 'test/fixtures');
 
+test('offline rendering loads an EXWAV-only sample and applies percentage volume to actual WAV PCM', async () => {
+  const baseline = parseChart('#BPM 120\n#WAV01 sample.wav\n#00111:01', 'bms');
+  const extended = parseChart('#BPM 120\n#EXWAV01 v -600 sample.wav\n#WAVCMD 01 01 50\n#00111:01', 'bms');
+  const options = { baseDir: fixtureDir, sampleRate: 44100, gain: 1, normalize: false, tailSeconds: 0 };
+  const [plain, modified] = await Promise.all([renderJSON(baseline, options), renderJSON(extended, options)]);
+  expect(plain.peak).toBeGreaterThan(0);
+  expect(modified.peak).toBeCloseTo(plain.peak * 0.5 * 10 ** (-6 / 20), 6);
+  expect(modified.durationSeconds).toBe(plain.durationSeconds);
+});
+
 function createSingleTriggerChart(samplePath: string) {
   const json = createEmptyJSON('json');
   json.metadata.bpm = 120;
@@ -141,11 +151,11 @@ test.each(codecCases)(
 );
 
 test('audio-renderer: scales individual sample triggers with #WAVCMD 01 xx vv', async () => {
-  // BMS spec — `#WAVCMD 01 xx vv` declares a per-slot volume override (0..127 byte). A trigger for that slot should
-  // attenuate by `vv / 127`; everything else stays at full.
+  // BMS spec — `#WAVCMD 01 xx vv` declares a per-slot percentage volume override. A trigger for that slot should
+  // attenuate by `vv / 100`; everything else stays at full.
   const baseline = createSingleTriggerBMSChart('not-found.wav');
   const attenuated = createSingleTriggerBMSChart('not-found.wav');
-  // 64 / 127 ≈ 50% — chosen so the multiplier is unambiguous even after the renderer's per-frame summing.
+  // 64 / 100 = 64% — chosen so the multiplier is unambiguous even after the renderer's per-frame summing.
   attenuated.bms.wavCmds = ['01 01 64'];
   const [baselineRendered, attenuatedRendered] = await Promise.all([
     renderJSON(baseline, {
@@ -164,7 +174,7 @@ test('audio-renderer: scales individual sample triggers with #WAVCMD 01 xx vv', 
     }),
   ]);
   expect(attenuatedRendered.left.length).toBe(baselineRendered.left.length);
-  expect(attenuatedRendered.peak).toBeCloseTo(baselineRendered.peak * (64 / 127), 6);
+  expect(attenuatedRendered.peak).toBeCloseTo(baselineRendered.peak * (64 / 100), 6);
 });
 
 test('audio-renderer: scales individual sample triggers with #EXWAVxx v', async () => {
@@ -193,7 +203,7 @@ test('audio-renderer: scales individual sample triggers with #EXWAVxx v', async 
 });
 
 test('audio-renderer: composes #EXWAVxx and #WAVCMD attenuation multiplicatively', async () => {
-  // Stack a `#EXWAV01 v -600` (≈ 0.5x) on top of a `#WAVCMD 01 01 64` (≈ 0.504x) — the rendered peak should be the
+  // Stack a `#EXWAV01 v -600` (≈ 0.5x) on top of a `#WAVCMD 01 01 64` (0.64x) — the rendered peak should be the
   // product, not just one of them.
   const baseline = createSingleTriggerBMSChart('not-found.wav');
   const stacked = createSingleTriggerBMSChart('not-found.wav');
@@ -215,14 +225,14 @@ test('audio-renderer: composes #EXWAVxx and #WAVCMD attenuation multiplicatively
       fallbackToneSeconds: 0.05,
     }),
   ]);
-  // 0.501 × (64/127) ≈ 0.252.
-  expect(stackedRendered.peak).toBeCloseTo(baselineRendered.peak * 0.501 * (64 / 127), 2);
+  // 0.501 × (64/100) ≈ 0.321.
+  expect(stackedRendered.peak).toBeCloseTo(baselineRendered.peak * 0.501 * (64 / 100), 2);
 });
 
-test('audio-renderer: ignores non-volume #WAVCMD bytes (pitch / loop)', async () => {
-  // Pitch / loop bytes are intentionally not applied yet (the offline renderer doesn't resample / loop dynamically).
+test('audio-renderer: ignores non-volume #WAVCMD bytes (pitch / duration)', async () => {
+  // Pitch and playback duration are not executed yet; they must not enter the volume path.
   // They must NOT fall through to the volume code path either — a `#WAVCMD 00 01 12` line should leave the sample at
-  // full volume, not at 12/127.
+  // full volume, not at 12/100.
   const baseline = createSingleTriggerBMSChart('not-found.wav');
   const withPitch = createSingleTriggerBMSChart('not-found.wav');
   withPitch.bms.wavCmds = ['00 01 12'];

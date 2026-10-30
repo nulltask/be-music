@@ -151,7 +151,7 @@ describe('test/fixtures corpus', () => {
     expect(wavCmds).toEqual([
       { param: 'volume', slot: '01', value: 64 },
       { param: 'pitch', slot: '02', value: 12 },
-      { param: 'loop', slot: '03', value: 1024 },
+      { param: 'duration', slot: '03', value: 1024 },
     ]);
 
     // `#EXRANKxx` percentages cued from channel A0, `#CHANGEOPTIONxx` from channel A6.

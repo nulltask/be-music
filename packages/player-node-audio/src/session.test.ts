@@ -16,6 +16,31 @@ vi.mock('@be-music/chart-audio-renderer', () => ({
 }));
 vi.mock('./audio-sink.ts', () => ({ createNodeAudioSink: vi.fn(async () => undefined) }));
 
+test.each([0, 50, 100, 127, 200])(
+  'Node applies WAVCMD percentage %s with EXWAV and VOLWAV once per slot',
+  async (volume) => {
+    vi.mocked(renderSingleSample).mockClear();
+    const json = createEmptyJSON('bms');
+    json.resources.wav = { '01': 'sample.wav', '02': 'plain.wav' };
+    json.bms.volWAV = 80;
+    json.bms.wavCmds = [`01 01 ${volume}`];
+    json.bms.exWAV = { '01': 'pvf 0 -600 44100 sample.wav' };
+    json.events = [0, 1].flatMap((measure) =>
+      ['01', '02'].map((value) => ({ measure, channel: '01', position: [0, 1] as const, value })),
+    );
+    await createNodeAudioSession({
+      json,
+      resolvedChart: resolveChart(json),
+      options: { writeOutput: () => undefined },
+      mode: 'auto',
+    });
+    expect(renderSingleSample).toHaveBeenCalledTimes(2);
+    const first = vi.mocked(renderSingleSample).mock.calls.find(([key]) => key === '01');
+    expect(first?.[2]?.gain).toBeCloseTo(((0.8 * volume) / 100) * 10 ** (-6 / 20));
+    expect(renderSingleSample).toHaveBeenCalledWith('02', 'plain.wav', expect.objectContaining({ gain: 0.8 }));
+  },
+);
+
 test('duration loading decodes each referenced sample once with its chart radix', async () => {
   vi.mocked(renderSingleSample).mockClear();
   const json = createEmptyJSON('bms');
@@ -30,6 +55,18 @@ test('duration loading decodes each referenced sample once with its chart radix'
     'sample.wav',
     expect.objectContaining({ baseDir: '/charts', base: 36, pathPrefix: 'audio/' }),
   );
+});
+
+test('Node runtime and duration diagnostics resolve EXWAV-only filenames identically', async () => {
+  vi.mocked(renderSingleSample).mockClear();
+  const json = createEmptyJSON('bms');
+  json.bms.exWAV = { '01': 'v -600 only.wav' };
+  json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+  const resolvedChart = resolveChart(json);
+  await loadNodeAudioSampleDurations(resolvedChart);
+  await createNodeAudioSession({ json, resolvedChart, options: { writeOutput: () => undefined }, mode: 'auto' });
+  expect(renderSingleSample).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(renderSingleSample).mock.calls.map((call) => call[1])).toEqual(['only.wav', 'only.wav']);
 });
 
 test('disabled audio does not open Node output', async () => {

@@ -456,14 +456,13 @@ describe('chart', () => {
     expect(parseBmsARGB('300,-5,9999,128')).toEqual({ a: 255, r: 0, g: 255, b: 128 });
   });
 
-  test('parseBmsWAVCmd parses volume / pitch / loop lines and normalizes the slot id', () => {
+  test('parseBmsWAVCmd parses volume / pitch / duration lines and normalizes the slot id', () => {
     // The trailing token is parsed as a base-10 integer (the spec gives the value in decimal even though the slot id is
-    // base-36), so `64` here means literal 64 / 127 ≈ 50% volume.
+    // base-36), so `64` here means literal 64 / 100 = 64% volume.
     expect(parseBmsWAVCmd('01 0a 64')).toEqual({ param: 'volume', slot: '0A', value: 64 });
     expect(parseBmsWAVCmd('00 0A 2')).toEqual({ param: 'pitch', slot: '0A', value: 2 });
-    // Loop point: 0 = no loop, otherwise the sample-frame index the player should jump to once the source reaches its
-    // tail.
-    expect(parseBmsWAVCmd('02 ZZ 1024')).toEqual({ param: 'loop', slot: 'ZZ', value: 1024 });
+    // Duration: 0 plays to the original end; a positive value is in 0.5 ms units.
+    expect(parseBmsWAVCmd('02 ZZ 1024')).toEqual({ param: 'duration', slot: 'ZZ', value: 1024 });
   });
 
   test('parseBmsWAVCmd preserves slot case under base-62 charts', () => {
@@ -481,34 +480,34 @@ describe('chart', () => {
     expect(parseBmsWAVCmd('')).toBeUndefined();
   });
 
-  test('wavCmdVolumeByteToLinearGain maps 0..127 to 0..1 with edge clamping', () => {
+  test('legacy volume helper follows the corrected percentage semantics', () => {
     expect(wavCmdVolumeByteToLinearGain(0)).toBe(0);
-    expect(wavCmdVolumeByteToLinearGain(127)).toBe(1);
-    expect(wavCmdVolumeByteToLinearGain(63.5)).toBeCloseTo(0.5);
-    // Out-of-range bytes clamp to the byte range so a malformed `300` doesn't poison the gain stage.
+    expect(wavCmdVolumeByteToLinearGain(127)).toBe(1.27);
+    expect(wavCmdVolumeByteToLinearGain(50)).toBeCloseTo(0.5);
+    // Negative volume mutes; positive amplification is allowed by MacBeat.
     expect(wavCmdVolumeByteToLinearGain(-10)).toBe(0);
-    expect(wavCmdVolumeByteToLinearGain(255)).toBe(1);
+    expect(wavCmdVolumeByteToLinearGain(255)).toBe(2.55);
     // Non-finite inputs default to unity (no-op).
     expect(wavCmdVolumeByteToLinearGain(Number.NaN)).toBe(1);
   });
 
   test('collectBmsWAVCmdVolumeMultipliers builds slot → gain map from volume lines only', () => {
     const map = collectBmsWAVCmdVolumeMultipliers([
-      '01 01 64', // WAV01 → volume 64/127
+      '01 01 64', // WAV01 → volume 64/100
       '00 01 2', // pitch line for the same slot — must NOT
       // override the volume entry (different param).
       '01 02 0', // WAV02 → muted
-      '02 03 1024', // loop line — skipped (not volume).
+      '02 03 1024', // duration line — skipped (not volume).
     ]);
-    expect(map.get('01')).toBeCloseTo(64 / 127);
+    expect(map.get('01')).toBeCloseTo(64 / 100);
     expect(map.get('02')).toBe(0);
     expect(map.has('03')).toBe(false);
   });
 
   test('collectBmsWAVCmdVolumeMultipliers honors later-overrides-earlier', () => {
-    // Authors occasionally re-issue a #WAVCMD volume line. LR2 and beatoraja apply the LAST value, so we mirror that.
+    // Be-Music resolves duplicate commands with the last value for each parameter.
     const map = collectBmsWAVCmdVolumeMultipliers(['01 01 32', '01 01 96']);
-    expect(map.get('01')).toBeCloseTo(96 / 127);
+    expect(map.get('01')).toBeCloseTo(96 / 100);
   });
 
   test('parseBmsARGB returns undefined for unrecognized / empty input', () => {

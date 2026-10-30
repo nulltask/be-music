@@ -4,7 +4,11 @@
 // `#EXWAV` volumes.
 
 import { runWithConcurrency } from '@be-music/shared-utils/core';
-import { collectBMSExWAVVolumeMultipliers, collectBmsWAVCmdVolumeMultipliers } from '@be-music/chart-model';
+import {
+  collectBMSExWAVVolumeMultipliers,
+  collectBmsWAVCmdVolumeMultipliers,
+  resolveBMSWAVResources,
+} from '@be-music/chart-model';
 import { resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
@@ -68,7 +72,8 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   const { audioContext, chart, source, chartPath, samples } = options;
   const isCancelled = options.isCancelled ?? (() => false);
   // Every declared path: a `#WAVxx` slot is base-36, so a dense chart can use well over 256 samples.
-  const wavPaths = Object.values(chart.resources.wav).filter((path): path is string => typeof path === 'string');
+  const wavResources = resolveBMSWAVResources(chart);
+  const wavPaths = Object.values(wavResources).filter((path): path is string => typeof path === 'string');
   // `#PATH_WAV <prefix>`: the chart's samples live under that directory; the resolver tries the prefixed path first.
   const pathPrefix = typeof chart.bms.pathWAV === 'string' ? chart.bms.pathWAV : undefined;
   await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
@@ -99,7 +104,7 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   });
   let stretched = false;
   if (options.tempoPitchMode === 'keep-pitch' && !isCancelled()) {
-    const rates = resolveSampleStretchRates(chart.resources.wav, decodedSampleKey, options.tempo, options.nonstop);
+    const rates = resolveSampleStretchRates(wavResources, decodedSampleKey, options.tempo, options.nonstop);
     if (rates.size > 0) {
       await stretchDecodedSamples(audioContext, samples, rates, options.tempoStretchAlgorithm, isCancelled);
       stretched = true;

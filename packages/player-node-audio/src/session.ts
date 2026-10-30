@@ -1,10 +1,13 @@
 import {
+  collectBMSExWAVVolumeMultipliers,
+  collectBmsWAVCmdVolumeMultipliers,
   collectLNOBJEndEvents,
   isBmsBGMVolumeChangeChannel,
   isBMSDynamicVolumeChangeChannel,
   isBMSKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   parseBMSDynamicVolumeGain,
+  resolveBMSWAVResources,
   usesMonophonicWAVPlayback,
   volWAVToLinearGain,
   type ResolvedChart,
@@ -88,6 +91,7 @@ export async function createNodeAudioSession({
   onLoadProgress,
 }: CreateAudioSessionContext): Promise<AudioSession | undefined> {
   const json = resolved.source;
+  const wavResources = resolveBMSWAVResources(json);
   throwIfAborted(options.signal);
   const writeOutput =
     options.writeOutput ??
@@ -297,7 +301,7 @@ export async function createNodeAudioSession({
         endPosition,
         channel: normalizeChannel(event.channel),
         sampleKey: normalized,
-        samplePath: json.resources.wav[normalized],
+        samplePath: wavResources[normalized],
         sliceId: playback?.sliceId,
         startSeconds,
         gain: voiceGain,
@@ -729,15 +733,20 @@ async function buildRuntimeSampleMap(
   }
 
   const idBase = resolveBMSBase(json);
+  const wavResources = resolveBMSWAVResources(json);
+  const volumeMultipliers = collectBmsWAVCmdVolumeMultipliers(json.bms.wavCmds, idBase);
+  for (const [key, gain] of collectBMSExWAVVolumeMultipliers(json.bms.exWAV)) {
+    volumeMultipliers.set(key, (volumeMultipliers.get(key) ?? 1) * gain);
+  }
   for (let index = 0; index < keys.length; index += 1) {
     throwIfAborted(signal);
     const key = keys[index];
-    const sourcePath = json.resources.wav[key];
+    const sourcePath = wavResources[key];
     const rendered = await renderSingleSample(key, sourcePath, {
       baseDir: options.audioBaseDir ?? resolveDefaultBaseDir(),
       pathPrefix: json.bms.pathWAV,
       sampleRate,
-      gain: chartWAVGain,
+      gain: chartWAVGain * (volumeMultipliers.get(key) ?? 1),
       fallbackToneSeconds:
         typeof options.missingSampleToneSeconds === 'number' &&
         Number.isFinite(options.missingSampleToneSeconds) &&
@@ -774,6 +783,7 @@ function buildEventPlaybackMap(resolved: ResolvedChart): Map<BeMusicEvent, Playa
 
 function collectRealtimeAudioSampleKeys(resolved: ResolvedChart): string[] {
   const json = resolved.source;
+  const wavResources = resolveBMSWAVResources(json);
   const keys = new Set<string>();
   for (const trigger of resolved.sampleTriggers) {
     keys.add(trigger.sampleKey);
@@ -781,8 +791,8 @@ function collectRealtimeAudioSampleKeys(resolved: ResolvedChart): string[] {
   // `#WAV00` sounds when a mine detonates: preload it when the chart has a mine on any lane, the extended 24 / 48 KEY
   // lanes (`DA`–`DO` / `EA`–`EO`) and bmson `mine_channels` included.
   if (
-    typeof json.resources.wav[LANDMINE_EXPLOSION_SAMPLE_KEY] === 'string' &&
-    json.resources.wav[LANDMINE_EXPLOSION_SAMPLE_KEY].length > 0 &&
+    typeof wavResources[LANDMINE_EXPLOSION_SAMPLE_KEY] === 'string' &&
+    wavResources[LANDMINE_EXPLOSION_SAMPLE_KEY].length > 0 &&
     resolved.mines.length > 0
   ) {
     keys.add(LANDMINE_EXPLOSION_SAMPLE_KEY);

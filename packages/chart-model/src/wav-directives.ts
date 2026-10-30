@@ -8,12 +8,10 @@ import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
  * positionally. Be-Music also accepts its earlier comma-separated parameter spelling.
  *
  * Supported flags (hitkey BMS Memo): - `p` — stereo pan (`-10000..10000`, where 0 is center). - `v` —
- * playback volume in centibels (CB), where each step is `1/100` of a dB. Negative values attenuate, `0` is unity. - `f`
+ * playback attenuation in hundredths of a dB (the legacy field name is `volumeCentibels`). Negative values attenuate, `0` is unity. - `f`
  * — playback frequency in Hz. The sample is resampled (or replayed at a different rate) so its native sample rate maps
  * onto this output rate.
  *
- * Real-world charts use this most often for `v` (per-slot volume trim) and occasionally `p` for stereo placement of
- * one-shots.
  */
 export interface BMSExWAV {
   /** Raw filename token, joined back together if it contained spaces. */
@@ -43,9 +41,11 @@ export function parseBMSExWAV(raw: string): BMSExWAV | undefined {
   const tokens = trimmed.split(/\s+/u);
   if (tokens.length < 3) return undefined;
   const flags = tokens[0]!.toLowerCase();
+  if (!/^[pvf]+$/u.test(flags) || new Set(flags).size !== flags.length) return undefined;
   const commaSeparated = tokens[1]!.includes(',');
   const params = commaSeparated ? tokens[1]!.split(',') : tokens.slice(1, 1 + flags.length);
   const filenameStart = commaSeparated ? 2 : 1 + flags.length;
+  if (params.length !== flags.length || params.some((value) => !/^[+-]?\d+$/u.test(value))) return undefined;
   // Parameter count determines the boundary; the remaining filename may contain spaces.
   const filename = tokens.slice(filenameStart).join(' ');
   if (filename.length === 0) return undefined;
@@ -55,7 +55,7 @@ export function parseBMSExWAV(raw: string): BMSExWAV | undefined {
     const valueRaw = params[index];
     if (valueRaw === undefined) break;
     const value = Number.parseInt(valueRaw.trim(), 10);
-    if (!Number.isFinite(value)) continue;
+    if (!Number.isSafeInteger(value)) return undefined;
     if (flag === 'p') out.pan = value;
     else if (flag === 'v') out.volumeCentibels = value;
     else if (flag === 'f') out.frequencyHz = value;
@@ -69,8 +69,8 @@ export function parseBMSExWAV(raw: string): BMSExWAV | undefined {
  * +18 dB) so a malformed chart can't blow the bus, and at `0` so very-negative inputs collapse to silence rather than
  * producing a denormal.
  *
- * Centibels rather than decibels because LR2 / beatoraja both persist `#EXWAV v` as cB — `v -200` = −2 dB, `v -600` =
- * −6 dB. Treating the value as straight dB would silently halve every attenuation in the wild.
+ * The public function name is retained for compatibility; the unit is a hundredth of a decibel, as in DirectSound.
+ * `v -200` is −2 dB and `v -600` is −6 dB. Playback collectors enforce the dialect's attenuation-only bounds.
  */
 export function exWAVVolumeCentibelsToLinearGain(centibels: number): number {
   if (!Number.isFinite(centibels)) return 1;
@@ -94,21 +94,37 @@ export function collectBMSExWAVVolumeMultipliers(entries: Readonly<Record<string
     const parsed = parseBMSExWAV(raw);
     if (parsed === undefined) continue;
     if (parsed.volumeCentibels === undefined) continue;
-    out.set(slot, exWAVVolumeCentibelsToLinearGain(parsed.volumeCentibels));
+    // nanasigroove defines attenuation only; its minimum is explicitly silent.
+    const volume = Math.max(-10000, Math.min(0, parsed.volumeCentibels));
+    out.set(slot, volume === -10000 ? 0 : exWAVVolumeCentibelsToLinearGain(volume));
   }
   return out;
 }
 
 /**
+ * Effective sample filenames. A valid EXWAV definition owns its shared WAV slot, including when WAV is also present.
+ * This is Be-Music's explicit cross-dialect precedence; invalid EXWAV leaves the ordinary WAV definition intact.
+ * Neither the authored resource map nor the raw EXWAV declarations are mutated.
+ */
+export function resolveBMSWAVResources(json: Pick<BeMusicJSON, 'resources' | 'bms'>): Record<string, string> {
+  const resources = { ...json.resources.wav };
+  for (const [key, raw] of Object.entries(json.bms.exWAV)) {
+    const parsed = parseBMSExWAV(raw);
+    if (parsed) resources[key] = parsed.filename;
+  }
+  return resources;
+}
+
+/**
  * Parameter byte for a `#WAVCMD pp xx vv` entry.
  *
- * - `'pitch'` (`pp = 00`) — semitone shift, signed (`-127..127`).
- * - `'volume'` (`pp = 01`) — playback volume, `0..127` where 0 is mute and 127 is unity. We map this to a 0..1 linear
- *   gain multiplier so consumers can multiply directly into a gain stage.
- * - `'loop'` (`pp = 02`) — sample-frame loop point. `0` disables looping; otherwise the sample loops back to that frame
- *   index after reaching its end.
+ * - `'pitch'` (`pp = 00`) — relative chromatic pitch, `0..127`, with 60 as unity.
+ * - `'volume'` (`pp = 01`) — percentage volume, with 100 as unity; values above 100 amplify.
+ * - `'duration'` (`pp = 02`) — playback time in 0.5 ms units; zero plays to the original end.
+ *
+ * Source: http://harinezumi.s14.xrea.com/download/mbm.txt (MacBeat MOD specification, 2000-04-19).
  */
-export type BmsWAVCmdParam = 'pitch' | 'volume' | 'loop';
+export type BmsWAVCmdParam = 'pitch' | 'volume' | 'duration';
 
 export interface BmsWAVCmdEntry {
   param: BmsWAVCmdParam;
@@ -116,7 +132,7 @@ export interface BmsWAVCmdEntry {
   slot: string;
   /**
    * Raw integer value as written in the chart. The interpretation depends on `param` — see {@link BmsWAVCmdParam}.
-   * Volume here is the literal 0..127 byte; convert to a gain multiplier via {@link wavCmdVolumeByteToLinearGain}.
+   * Volume is a percentage; convert to a gain multiplier via {@link wavCmdVolumePercentToLinearGain}.
    */
   value: number;
 }
@@ -136,23 +152,19 @@ export function volWAVToLinearGain(volWAV: number | undefined): number {
   return volWAV / 100;
 }
 
-/**
- * Maps a `#WAVCMD 01 xx vv` volume byte (0..127) to a 0..1 linear gain multiplier. `127 = 1.0` (unity), `0 = 0.0`
- * (mute), linear in between. Out-of-range bytes are clamped.
- *
- * Hitkey BMS Memo describes the 0..127 byte as the volume, with 127 the practical "loud as authored" reference. We
- * treat it as a straight ratio rather than a dB curve because most players (LR2 / beatoraja) implement it linearly and
- * chart authors compose against that.
- */
-export function wavCmdVolumeByteToLinearGain(byteValue: number): number {
-  if (!Number.isFinite(byteValue)) return 1;
-  const clamped = Math.max(0, Math.min(127, byteValue));
-  return clamped / 127;
+/** Convert MacBeat percentage volume to linear gain. Values above 100 amplify; negative inputs mute. */
+export function wavCmdVolumePercentToLinearGain(percent: number): number {
+  return Number.isFinite(percent) ? Math.max(0, percent) / 100 : 1;
+}
+
+/** @deprecated Use {@link wavCmdVolumePercentToLinearGain}; WAVCMD volume is a percentage, not a byte. */
+export function wavCmdVolumeByteToLinearGain(value: number): number {
+  return wavCmdVolumePercentToLinearGain(value);
 }
 
 /**
  * Parses one `#WAVCMD pp xx vv` line. Whitespace-separated tokens: - `pp` (parameter byte): `00`/`01`/`02`
- * (pitch/volume/loop). - `xx` (slot id): two-character base-36 (or base-62) id matching a `#WAVxx` declaration.
+ * (pitch/volume/duration). - `xx` (slot id): two-character base-36 (or base-62) id matching a `#WAVxx` declaration.
  * Returned as the normalized key. - `vv`: integer value.
  *
  * Returns `undefined` for malformed lines so callers can skip them rather than crashing on an unrecognized parameter
@@ -181,7 +193,7 @@ export function parseBmsWAVCmd(line: string, idBase: 36 | 62 = 36): BmsWAVCmdEnt
       param = 'volume';
       break;
     case 2:
-      param = 'loop';
+      param = 'duration';
       break;
     default:
       return undefined;
@@ -194,9 +206,9 @@ export function parseBmsWAVCmd(line: string, idBase: 36 | 62 = 36): BmsWAVCmdEnt
 /**
  * Builds a `slot → linear-gain-multiplier` map by collecting every `#WAVCMD 01 xx vv` (volume) line. Slots with no
  * `#WAVCMD 01` line stay absent (the consumer falls back to unity gain). When a chart writes multiple volume lines for
- * the same slot the LAST one wins, matching LR2 / beatoraja's "later directives override earlier" behavior.
+ * the same slot the LAST one wins. This is Be-Music's policy; MacBeat leaves duplication undefined.
  *
- * Pitch / loop lines are intentionally skipped — they require sample-graph wiring (playback rate, loop points) that
+ * Pitch / duration lines are intentionally skipped — they require sample-graph wiring that
  * lives in the audio engine, not in this pure pre-process.
  */
 export function collectBmsWAVCmdVolumeMultipliers(
@@ -207,7 +219,7 @@ export function collectBmsWAVCmdVolumeMultipliers(
   for (const line of lines) {
     const entry = parseBmsWAVCmd(line, idBase);
     if (entry?.param === 'volume') {
-      out.set(entry.slot, wavCmdVolumeByteToLinearGain(entry.value));
+      out.set(entry.slot, wavCmdVolumePercentToLinearGain(entry.value));
     }
   }
   return out;

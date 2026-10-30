@@ -129,6 +129,28 @@ const mkEvent = (channel: string, value: string, extra: Partial<BeMusicEvent> = 
 });
 
 describe('createWebAudioSession', () => {
+  test('plays the effective EXWAV filename rather than an overridden WAV declaration', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const chart = makeChartWithSamples();
+    chart.bms.exWAV = { '01': 'v 0 extended.wav', '02': 'p 0 only.wav' };
+    delete chart.resources.wav['02'];
+    const extended = makeMockAudioBuffer();
+    const only = makeMockAudioBuffer();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart,
+      decodedSamples: new Map([
+        ['extended.wav', extended],
+        ['only.wav', only],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.triggerEvent?.(mkEvent('12', '02'));
+    expect(trackedBufferSources.map((source) => source.buffer)).toEqual([extended, only]);
+  });
   test('routes player-input lane events to keyMixer and BGM-style channels to bgmMixer', () => {
     const { audioContext, audioBus, trackedBufferSources, keyMixer, bgmMixer } = createMocks();
     const session = createWebAudioSession({

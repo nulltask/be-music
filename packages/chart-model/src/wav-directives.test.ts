@@ -1,5 +1,60 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { collectBMSExWAVVolumeMultipliers, parseBMSExWAV } from './wav-directives.ts';
+import {
+  collectBMSExWAVVolumeMultipliers,
+  parseBMSExWAV,
+  resolveBMSWAVResources,
+  wavCmdVolumePercentToLinearGain,
+} from './wav-directives.ts';
+import { createEmptyJSON } from '@be-music/chart-source';
+import { resolveChart } from './resolved-chart.ts';
+
+test('EXWAV owns a shared slot, supplies EXWAV-only slots and preserves the authored maps', () => {
+  const chart = createEmptyJSON('bms');
+  chart.resources.wav = { '01': 'ordinary.wav', '03': 'fallback.wav' };
+  chart.bms.exWAV = { '01': 'v -600 extended.wav', '02': 'p 0 only.wav', '03': 'broken' };
+  chart.events = ['01', '02', '03'].map((value) => ({ measure: 0, channel: '01', position: [0, 1], value }));
+  expect(resolveBMSWAVResources(chart)).toEqual({ '01': 'extended.wav', '02': 'only.wav', '03': 'fallback.wav' });
+  expect(resolveChart(chart).sampleTriggers.map((trigger) => trigger.samplePath)).toEqual([
+    'extended.wav',
+    'only.wav',
+    'fallback.wav',
+  ]);
+  expect(chart.resources.wav).toEqual({ '01': 'ordinary.wav', '03': 'fallback.wav' });
+});
+
+test.each(['v nope bad.wav', 'pv 0 bad.wav', 'p 3oops bad.wav', 'pp 0 1 bad.wav', 'x 1 bad.wav', 'v 1e3 bad.wav'])(
+  'malformed EXWAV does not replace a WAV filename: %s',
+  (raw) => {
+    const chart = createEmptyJSON('bms');
+    chart.resources.wav['01'] = 'fallback.wav';
+    chart.bms.exWAV['01'] = raw;
+    expect(parseBMSExWAV(raw)).toBeUndefined();
+    expect(resolveBMSWAVResources(chart)['01']).toBe('fallback.wav');
+  },
+);
+
+test.each([
+  [0, 0],
+  [50, 0.5],
+  [100, 1],
+  [127, 1.27],
+  [200, 2],
+  [-1, 0],
+  [Number.NaN, 1],
+  [Infinity, 1],
+])('MacBeat volume %s resolves to gain %s', (percent, gain) => {
+  expect(wavCmdVolumePercentToLinearGain(percent)).toBe(gain);
+});
+
+test('EXWAV playback volume respects attenuation-only bounds and the silent endpoint', () => {
+  const gains = collectBMSExWAVVolumeMultipliers({
+    '01': 'v -10000 silent.wav',
+    '02': 'v -12000 below.wav',
+    '03': 'v 600 above.wav',
+    '04': 'v 0 unity.wav',
+  });
+  expect([...gains.values()]).toEqual([0, 0, 1, 1]);
+});
 
 describe('EXWAV whitespace parameters', () => {
   test('reads the published nanasigroove vfp example without treating parameters as the filename', () => {
