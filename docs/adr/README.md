@@ -45,3 +45,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0024: Extended BMS audio effects are prepared before host tempo changes](./0024-extended-bms-audio.md)
 
 - [0025: Chart text follows engine time and judgment effects](./0025-chart-text-playback.md)
+
+- [0026: Record effective chart display operations separately from user settings](./0026-chart-authored-display-options.md)

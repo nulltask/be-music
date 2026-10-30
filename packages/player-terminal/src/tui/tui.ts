@@ -131,6 +131,7 @@ interface TUINote {
 }
 
 interface TUIFrame {
+  chartOptions?: { hiSpeed?: number };
   chartText?: string;
   currentBeat: number;
   currentSeconds: number;
@@ -493,8 +494,12 @@ export class PlayerTUI {
     const laneCount = Math.max(1, this.options.lanes.length);
     const now = Date.now();
     const currentFPS = this.resolveFPS(now);
-    const displayHighSpeed = this.resolveDisplayHighSpeed(now);
-    const scrollWindowBeats = resolveVisibleBeatsForTUIGrid(rowCount, displayHighSpeed);
+    const displayHighSpeed = frame.chartOptions?.hiSpeed ?? this.resolveDisplayHighSpeed(now);
+    const scrollWindowBeats = resolveVisibleBeatsForTUIGrid(
+      rowCount,
+      displayHighSpeed,
+      frame.chartOptions?.hiSpeed !== undefined,
+    );
     const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => LANE_FILL_SYMBOL));
     const gridSourceChannels = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => ''));
     const measureLineRows = new Set<number>();
@@ -752,7 +757,7 @@ export class PlayerTUI {
       `${renderProgress(frame.currentSeconds, frame.totalSeconds)}  ${formatSeconds(frame.currentSeconds)} / ${formatSeconds(frame.totalSeconds)}`,
     );
     lines.push(
-      `TIMING  SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBPM(currentBPM)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}`,
+      `TIMING  SPEED x${this.options.speed.toFixed(2)}  HS x${frame.chartOptions?.hiSpeed !== undefined ? displayHighSpeed.toFixed(2) : formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBPM(currentBPM)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);

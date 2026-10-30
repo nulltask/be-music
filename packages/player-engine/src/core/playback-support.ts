@@ -90,6 +90,7 @@ export function createUIFramePublisher(params: {
   resolveKeyBoundBGA?: (seconds: number) => PlayerUIFramePayload['keyBoundBGA'];
   resolveBmsonBGA?: (seconds: number) => PlayerUIFramePayload['bmsonBGA'];
   resolveChartText?: (seconds: number) => string;
+  resolveChartOptions?: (seconds: number) => PlayerUIFramePayload['chartOptions'];
   resolveJudgedNoteCount?: () => number;
 }): (seconds: number, beat: number) => void {
   const {
@@ -109,6 +110,7 @@ export function createUIFramePublisher(params: {
     resolveKeyBoundBGA,
     resolveBmsonBGA,
     resolveChartText,
+    resolveChartOptions,
     resolveJudgedNoteCount,
   } = params;
   return (seconds: number, beat: number): void => {
@@ -122,6 +124,7 @@ export function createUIFramePublisher(params: {
         : undefined;
     uiSignals.publishFrame({
       currentBeat: beat,
+      ...(resolveChartOptions ? { chartOptions: resolveChartOptions(seconds) } : {}),
       currentSeconds: seconds,
       displayBeat,
       reversalSeconds: reversal?.seconds,

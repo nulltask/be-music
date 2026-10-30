@@ -339,6 +339,7 @@ export function reducePlayState(state: PlayState, event: PlayEvent): PlayState {
     case 'hi-speed-scale':
     case 'hi-speed-step':
     case 'hi-speed-set':
+    case 'chart-hi-speed':
     case 'hi-speed-drawn': {
       if (event.type === 'hi-speed-fine' && state.view.covers.some((cover) => cover.suddenOn || cover.liftOn))
         return state;

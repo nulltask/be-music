@@ -143,6 +143,8 @@ export function registerPlayerTUIExportsCases(define: DefineBenchmarkCase): void
   define('player-terminal.resolveVisibleBeatsForTUIGrid', {
     run: () => {
       playerTuiAPI.resolveVisibleBeatsForTUIGrid(24, 2);
+      playerTuiAPI.resolveVisibleBeatsForTUIGrid(24, 0.77, true);
+      playerTuiAPI.resolveVisibleBeatsForTUIGrid(24, 100, true);
     },
   });
   define('player-terminal.resolveLaneDisplayMode', {

@@ -45,3 +45,5 @@
 - [0024: BMS の拡張音声効果はホストのテンポ変更より前に準備する](./0024-extended-bms-audio.ja.md)
 
 - [0025: 譜面テキストは engine の時刻と判定エフェクトに従う](./0025-chart-text-playback.ja.md)
+
+- [0026: 譜面の実効表示操作をユーザー設定と分けて記録する](./0026-chart-authored-display-options.ja.md)

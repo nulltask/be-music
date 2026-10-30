@@ -11,6 +11,10 @@ import {
   buildKeyBoundBGATimeline,
   buildBmsonBGAEventTimeline,
   buildChartTextTimeline,
+  buildChartOptionTimeline,
+  compileChartOptions,
+  resolveChartOptionsAt,
+  type ChartOptionProgram,
   isPlayLaneSoundChannel,
   type ResolvedChart,
 } from '@be-music/chart-model';
@@ -129,6 +133,7 @@ export interface PlaySession {
   readonly keyBoundBGA?: KeyBoundBGAController;
   readonly bmsonBGA?: BmsonBGAController;
   readonly chartText?: ChartTextController;
+  readonly chartOptions: ChartOptionProgram;
   /** The judge supplies HCN display facts from its existing state; no second simulation. */
   readHCNLanes?: (seconds: number) => readonly PlayerHCNLaneState[];
   /** Maps the judge's effects onto audio, the UI buses, the replay and the trace. */
@@ -268,6 +273,13 @@ export async function createPlaySession(
   )
     throw new RangeError('Prepared 7-to-9 conversion does not match selected options.');
   resolvedChart = playbackChart.resolvedChart;
+  const compiledOptions =
+    options.chartOptionProgram === undefined
+      ? compileChartOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing))
+      : { program: structuredClone(options.chartOptionProgram), diagnostics: [] };
+  const chartOptions = compiledOptions.program;
+  for (const diagnostic of compiledOptions.diagnostics)
+    emitPlayerLog(options, 'warn', 'chart.option', { ...diagnostic });
   const extraDepth = clampExtraNoteDepth(options.extraNoteDepth ?? playbackChart.extraNoteDepth ?? 0);
   const extraScratch = options.extraNoteScratch ?? playbackChart.extraNoteScratch ?? false;
   if ((playbackChart.extraNoteDepth ?? 0) !== extraDepth || (playbackChart.extraNoteScratch ?? false) !== extraScratch)
@@ -361,6 +373,7 @@ export async function createPlaySession(
           const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
           return createReplayRecorder({
             json: resolvedJSON,
+            chartOptions,
             moneyScore: ruleset.moneyScore,
             chart: playbackChart,
             chartSHA256,
@@ -481,7 +494,11 @@ export async function createPlaySession(
   const stateSignals = createPlayerStateSignals(highSpeed);
   const { landmineNotes, invisibleNotes, renderNotes, laneBindings, laneDisplayMode, inputTokenToChannels } =
     playbackChart;
-  let textPlaybackEndSeconds = 0;
+  const finalOptionCue = chartOptions.cues
+    .filter((cue) => cue.timeUs <= (resolvedChart.reversal?.seconds ?? Infinity) * 1_000_000)
+    .at(-1);
+  let textPlaybackEndSeconds =
+    options.practice === undefined && finalOptionCue ? finalOptionCue.timeUs / 1_000_000 + 1 : 0;
   for (const stage of options.practice === undefined ? (options.chartTextStages ?? []) : []) {
     const last = stage.timeline.cues.filter((cue) => cue.seconds <= (stage.freezeSeconds ?? Infinity)).at(-1);
     if (last)
@@ -601,6 +618,12 @@ export async function createPlaySession(
     audioBackend: audioBackendLabel,
     ...(secondPlayer !== undefined ? { summary2P: secondPlayer.summary } : {}),
     ...(bmsonBGA ? { resolveBmsonBGA: (seconds: number) => bmsonBGA.read(seconds) } : {}),
+    ...(chartOptions.initial.hiSpeed !== undefined || chartOptions.cues.length > 0
+      ? {
+          resolveChartOptions: (seconds: number) =>
+            resolveChartOptionsAt(chartOptions, Math.round(Math.min(seconds, freezeSeconds) * 1_000_000)),
+        }
+      : {}),
     ...(chartText ? { resolveChartText: (seconds: number) => chartText.read(seconds) } : {}),
     resolveHCNLanes: (seconds) => session?.readHCNLanes?.(seconds),
     ...(keyBoundBGA ? { resolveKeyBoundBGA: (seconds: number) => keyBoundBGA.read(seconds) } : {}),
@@ -737,6 +760,7 @@ export async function createPlaySession(
     ...(keyBoundBGA ? { keyBoundBGA } : {}),
     ...(bmsonBGA ? { bmsonBGA } : {}),
     ...(chartText ? { chartText } : {}),
+    chartOptions,
     applyJudgeEffect,
     settleJudgeTiming: () => applyJudgeEffect.settleJudgeTiming(),
     volumeChanges,

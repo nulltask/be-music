@@ -596,6 +596,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     },
   };
   ctx.engineFrame = undefined;
+  applyPlayEvent(ctx, { type: 'chart-hi-speed' });
   // A replay shows its recorded view along the playhead; a recorded replays its own from the start.
   ctx.replayViewCoalescer = undefined;
   ctx.replayViewCursor =
@@ -733,6 +734,11 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ...(ctx.options.replay === undefined && ctx.options.course !== undefined ? { course: ctx.options.course } : {}),
       keyBoundBGACues: ctx.options.nonstop?.keyBoundBGA,
       bmsonBGACues: ctx.options.nonstop?.bmsonBGA,
+      ...(ctx.options.replay
+        ? {
+            chartOptionProgram: ctx.options.replay.chart.chartOptions ?? { version: 1 as const, initial: {}, cues: [] },
+          }
+        : {}),
       chartTextStages: ctx.options.nonstop?.chartText,
       // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
       ...(ctx.options.replay === undefined && ctx.options.nonstop !== undefined
@@ -881,6 +887,7 @@ function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFrameP
   // The signal bus reuses its frame object. Keep the applied clock metadata owned by this
   // session, so publishing a seek cannot move time before its score snapshot is drained.
   ctx.engineFrame = { ...frame };
+  applyPlayEvent(ctx, { type: 'chart-hi-speed', value: frame.chartOptions?.hiSpeed });
   applyEngineSummary(ctx, frame.summary);
   if (frame.summary2P !== undefined) applySecondPlayerSummary(ctx, frame.summary2P);
   ctx.chartEndGate?.(frame.currentSeconds);
