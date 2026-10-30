@@ -253,6 +253,7 @@ export async function createPlaySession(
     options.judgeRuleset ?? 'lr2',
     playbackChart.battleSourceVariant ?? resolvedChart.playVariant,
     options.course !== undefined,
+    resolvedChart.sourceFormat === 'bms' ? resolvedChart.source.bms.player : undefined,
   );
   if ((playbackChart.battleMode ?? 'OFF') !== expectedBattle)
     throw new RangeError('The shared prepared chart must include the selected battle mode.');
@@ -320,7 +321,7 @@ export async function createPlaySession(
     throw new RangeError('Selectable judgment algorithms belong to beatoraja 0.8.9.');
   }
   // Two players judge one side each: each side's notes make its own judgment count and TOTAL.
-  const twoPlayer = playbackChart.battleMode === 'TWO-PLAYER';
+  const twoPlayer = playbackChart.battleMode === 'TWO-PLAYER' || playbackChart.battleMode === 'COUPLE';
   const ruleset = resolveRuleset(
     rulesetChartFactsFromChart(
       resolvedJSON,

@@ -6,6 +6,7 @@ import { clampFloatingHiSpeed } from '@be-music/player-scene-model';
 // of a course, or back to the select screen.
 
 import type { ResolvedPlayChart } from '@be-music/player-engine';
+import { resolvePlayChart } from '@be-music/player-engine/replay';
 import type { AudioService } from '@be-music/player-browser/audio';
 import { resolveChartSource, type ChartFileHashes } from '@be-music/player-browser/collection';
 import {
@@ -156,7 +157,15 @@ export class PlayRoute {
    * The chart the latest play was made for, and the course it belongs to, so a family change during that play can
    * resolve the same chart's kit without starting the play again.
    */
-  private liveDrawing: { chart: LibraryChart; courseStage?: CourseStagePlay; nonstop?: NonstopPlay } | undefined;
+  private liveDrawing:
+    | {
+        chart: LibraryChart;
+        courseStage?: CourseStagePlay;
+        nonstop?: NonstopPlay;
+        preResolved?: ResolvedPlayChart;
+        replay?: BeMusicReplay;
+      }
+    | undefined;
   private readonly router: PlayRouteDeps['router'];
   private readonly selectRoute: PlayRouteDeps['selectRoute'];
   private readonly elements: PlayRouteDeps['elements'];
@@ -254,6 +263,8 @@ export class PlayRoute {
   ): PlayScene {
     this.liveDrawing = {
       chart: chartEntry,
+      preResolved: overrides.preResolved,
+      replay: overrides.replay,
       ...(overrides.courseStage !== undefined ? { courseStage: overrides.courseStage } : {}),
       ...(overrides.nonstop !== undefined ? { nonstop: overrides.nonstop } : {}),
     };
@@ -505,6 +516,8 @@ export class PlayRoute {
     const drawing = this.liveDrawing;
     if (drawing === undefined || this.router.play !== view || view.disposed) return;
     const resolved = await this.familyKits.resolvePlayKit(drawing.chart, {
+      ...(drawing.preResolved ? { preResolved: drawing.preResolved } : {}),
+      ...(drawing.replay ? { replay: drawing.replay } : {}),
       ...(drawing.courseStage !== undefined ? { courseStage: drawing.courseStage } : {}),
       ...(drawing.nonstop !== undefined ? { nonstop: { course: drawing.nonstop.course } } : {}),
     });
@@ -551,6 +564,8 @@ export class PlayRoute {
     // The kit for the gameplay family the Debug Menu's "Skin family" pick (or the auto chain, beatoraja → LR2 →
     // default) gives the chart, a replay and a NONSTOP run included (`playsOnBeatoraja`). `preloadGameplay` asks the
     // same.
+    if (this.playOptions.current.battleMode === 'AUTO' && !overrides.replay && !overrides.preResolved)
+      overrides = { ...overrides, preResolved: resolvePlayChart(chartEntry.chart) };
     const kit = await this.familyKits.resolvePlayKit(chartEntry, overrides);
     if (kit === undefined) {
       void this.showSelect();

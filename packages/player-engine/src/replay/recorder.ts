@@ -1,6 +1,6 @@
 import type { ChartOptionProgram } from '@be-music/chart-model';
 import type { BeatorajaCustomJudge } from '../ruleset/custom-judge.ts';
-import type { BattleMode } from '../core/battle-mode.ts';
+import type { EffectiveBattleMode } from '../core/battle-mode.ts';
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
@@ -75,7 +75,7 @@ export interface ReplayRecorderPlaySettings {
   sevenToNineType?: import('../core/seven-to-nine.ts').SevenToNineType;
   sevenToNineThresholdBPM?: number;
   sevenToNineApplied?: boolean;
-  battleMode?: BattleMode;
+  battleMode?: EffectiveBattleMode;
   battleSourceVariant?: ChartPlayVariant;
   battleTempo?: number;
   battleAssist1P?: boolean;

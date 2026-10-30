@@ -997,3 +997,5 @@ TUI が無効な場合は、モード開始メッセージ、レーン割り当�
 - ゲージ推移タイムライン表示
 - beatoraja の非デフォルトのノート選択アルゴリズム（`duration` / `lowest` / `score`）は実装済みですが
   ライブプレイのオプションとしては公開していません（`bms-replay` のシミュレータでは `--algorithm=` で選べます）
+
+Battle 選択に CHART HEADER（AUTO）と COUPLE を追加します。実際の作者が SP・DP・PMS にも PLAYER 2 を使うため、既定値は OFF を維持します。ヘッダ解釈は明示的な選択を必要とし、LR2・単一譜面・beat 配置だけで有効です。明示的な選択と replay の記録モードを優先します。[ADR 0028](./adr/0028-player-header-selection.ja.md) を参照してください。

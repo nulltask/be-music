@@ -370,6 +370,8 @@ test('LR2 EXTRA keeps source minimum levels separate from beatoraja depth', () =
 
 test('SP TO DP is a mutually exclusive battle choice with an OFF default', () => {
   expect(DEFAULT_PLAY_OPTIONS.battleMode).toBe('OFF');
+  expect(resolvePlayOptionValue('battleMode', 'AUTO')).toBe('AUTO');
+  expect(resolvePlayOptionValue('battleMode', 'COUPLE')).toBe('COUPLE');
   expect(resolvePlayOptionValue('battleMode', 'SP-TO-DP')).toBe('SP-TO-DP');
   expect(resolvePlayOptionValue('battleMode', 'D-BATTLE')).toBe('D-BATTLE');
   expect(resolvePlayOptionValue('battleMode', 'BATTLE-AS')).toBe('BATTLE-AS');

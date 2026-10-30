@@ -70,3 +70,10 @@ describe('checkReplayEligibility', () => {
     expect(result).toMatchObject({ eligible: true, assistFlags: ['auto-scratch', 'judge-window-override'] });
   });
 });
+
+test.each(['COUPLE', 'TWO-PLAYER'] as const)(
+  '%s retains its replay without entering single-player rankings',
+  (battleMode) => {
+    expect(checkReplayEligibility(replay({ battleMode }))).toEqual({ eligible: false, reason: 'two-player' });
+  },
+);

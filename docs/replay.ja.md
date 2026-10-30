@@ -433,3 +433,5 @@ beatoraja/0    1174   82.68%   AA   ...
 ホストは再生時に `PlayerOptions.chartOptionProgram` として渡します。browser はフィールドのない古い記録には空のプログラムを明示し、元の動作を維持します。既存の実効プロファイルへソース宣言を再解釈して追加しません。`play.options`・`play.view` とその変更には元のユーザー速度を保持し、強制表示は譜面プロファイルで再現します。譜面の値を永続的なユーザー設定へ書き込まず、解除時に正確なユーザー view を復元できます。シミュレーションは表示操作を無視し、スコア・入力 replay・fingerprint・記録可否は変えません。[ADR 0026](./adr/0026-chart-authored-display-options.ja.md)を参照してください。NONSTOP は合成した実効プログラムを記録します。切り出したステージの記録には所有する範囲だけを残し、ステージ offset を引きます。FIT を二重に適用せず、遊んだ先頭の状態を復元し、有限のステージ終了で解除します。切り詰めた未プレイの前方区間には、未観測の強制状態を作りません。
 
 譜面指定の HDX LONGMODE は `chartOptions` ではなく、記録する譜面・ノートのモードに解決します。記録されたモード1も、新たに対応した元譜面の宣言より優先します。NONSTOP stitch バージョン3は内部 bmson のノート別種別で BMS の CN・HCN を保持し、過去のプレイにはバージョン1・2を引き続き使えます。[ADR 0027](./adr/0027-hdx-long-note-modes.ja.md) を参照してください。
+
+CHART HEADER（AUTO）は AUTO 自体ではなく、実効 COUPLE・TWO-PLAYER・OFF として記録します。記録されたモードが未指定なら引き続き OFF です。二人用録画の `simulateReplay` は既定で1Pを計算し、`player: 2` で2Pとそのゲージを選びます。二人用録画は一人用オンライン送信の対象外（`two-player`）とし、二人分のローカル結果と共通 replay は保持します。[ADR 0028](./adr/0028-player-header-selection.ja.md) を参照してください。

@@ -243,6 +243,13 @@ describe('POST /api/v0/scores', () => {
     expect(autoResponse.status).toBe(422);
     expect(await autoResponse.json()).toEqual({ error: 'auto-play' });
 
+    for (const battleMode of ['COUPLE', 'TWO-PLAYER'] as const) {
+      const two = makeReplay(chart, { noteCount: 10, hits: 10, play: { battleMode } });
+      const response = await submit(cookie, submissionBody(two, chart.playDocument, chart.chartDocument));
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: 'two-player' });
+    }
+
     const malformed = await submit(cookie, submissionBody({ format: 'nope' }, chart.playDocument));
     expect(malformed.status).toBe(422);
     expect(((await malformed.json()) as { error: string }).error).toBe('invalid-replay');

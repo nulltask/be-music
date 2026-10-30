@@ -1028,3 +1028,5 @@ ruleset-scoped gauge id), `survival`, and `failedMidPlay`.
 - Gauge timeline display
 - beatoraja's non-default note-selection algorithms (`duration` / `lowest` / `score`) are implemented but not
   exposed as a live-play option (the `bms-replay` simulator can select them with `--algorithm=`)
+
+The Battle selector adds CHART HEADER (AUTO) and COUPLE. OFF remains the default because actual authors use PLAYER 2 for SP/DP/PMS. Header interpretation is opt-in, LR2-only, single-chart and beat-layout only; explicit choices and recorded replay modes take precedence. See [ADR 0028](./adr/0028-player-header-selection.md).

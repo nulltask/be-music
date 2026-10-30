@@ -9,7 +9,12 @@ import { checkReplayEligibility, type ReplayAssistFlag } from './eligibility.ts'
  * no stage played, a played stage after an unreached one, a stage log that was not played as a stage of this course (no
  * `play.course`, or another course kind), or a NONSTOP run whose stitched play does not cover the course's stages.
  */
-export type CourseReplayIneligibleReason = 'auto-play' | 'aborted' | 'missing-fingerprint' | 'not-a-course-run';
+export type CourseReplayIneligibleReason =
+  | 'auto-play'
+  | 'two-player'
+  | 'aborted'
+  | 'missing-fingerprint'
+  | 'not-a-course-run';
 
 /**
  * Why a submitted course run is stored but not ranked. `tempo` is a run with a stage (or a NONSTOP run's stitched play)

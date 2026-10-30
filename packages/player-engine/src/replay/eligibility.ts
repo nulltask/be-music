@@ -5,7 +5,7 @@ import type { BeMusicReplay } from './format.ts';
 export type ReplayAssistFlag = 'auto-scratch' | 'judge-window-override';
 
 /** Why a play cannot be submitted at all. */
-export type ReplayIneligibleReason = 'auto-play' | 'missing-fingerprint';
+export type ReplayIneligibleReason = 'auto-play' | 'two-player' | 'missing-fingerprint';
 
 /**
  * Why a submitted play is stored but not ranked: a play at another tempo (`tempo`), and a course stage played on its
@@ -26,7 +26,7 @@ export type ReplayEligibility =
 
 /**
  * Decides whether a play can be submitted and whether it ranks (docs/leaderboard.md section 6), for both the client
- * that submits it and the server that stores it. Every play is submitted except an auto play (replay playback records
+ * that submits it and the server that stores it. Every play is submitted except a two-player play (which has no single-player ranking), an auto play (replay playback records
  * no new replay, so it never reaches here) and a log without both fingerprints, since the chart fingerprint is the
  * ranking key and the play fingerprint is what the server verifies. A play at another tempo (`play.tempo`) is
  * practice, as beatoraja's frequency trainer does not save its scores, and a course stage started from the state the
@@ -38,6 +38,8 @@ export function checkReplayEligibility(replay: BeMusicReplay): ReplayEligibility
   if (replay.play.mode !== 'manual') {
     return { eligible: false, reason: 'auto-play' };
   }
+  if (replay.play.battleMode === 'TWO-PLAYER' || replay.play.battleMode === 'COUPLE')
+    return { eligible: false, reason: 'two-player' };
   const { chartFingerprint, playFingerprint } = replay.chart;
   if (chartFingerprint === undefined || playFingerprint === undefined) {
     return { eligible: false, reason: 'missing-fingerprint' };

@@ -479,9 +479,11 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         : undefined;
     // Two players with the same lane option play one arrangement: LR2 copies 1P's lanes after shuffling them
     // (`battle == 1 && random[0] == random[1]`), as That-Which-Must-Not-Be-Named does for two players' equal options.
-    const twoPlayer = prepared.battleMode === 'TWO-PLAYER';
+    const twoPlayer = prepared.battleMode === 'TWO-PLAYER' || prepared.battleMode === 'COUPLE';
     // A DP chart's two players (LR2 COUPLE) keep their own sides.
-    const copied = prepared.battleSourceVariant === '5' || prepared.battleSourceVariant === '7';
+    const copied =
+      prepared.battleMode === 'TWO-PLAYER' &&
+      (prepared.battleSourceVariant === '5' || prepared.battleSourceVariant === '7');
     const twins =
       twoPlayer && copied && (ctx.options.random1P ?? 'OFF') === (ctx.options.random2P ?? 'OFF')
         ? pairTwoPlayerTwins([ctx.notes, ctx.mineNotes, ctx.invisibleNotes])
@@ -670,7 +672,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.playState = createChartPlayState(ctx, resolver, resolveChartReferenceBPM(resolved, ctx.chart?.bpm));
   // A two-player play's 2P player starts from the same clean slate; the engine's frames fill its gauge in.
   ctx.secondPlayer =
-    prepared.battleMode === 'TWO-PLAYER'
+    prepared.battleMode === 'TWO-PLAYER' || prepared.battleMode === 'COUPLE'
       ? {
           score: createEmptyScore(prepared.scorableNotes.filter((note) => note.channel.startsWith('2')).length),
           playState: createPlayState({ totalSeconds: ctx.chartDurationSeconds }),

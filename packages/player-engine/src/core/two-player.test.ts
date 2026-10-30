@@ -1,3 +1,4 @@
+import { simulateReplay } from '../replay/simulate.ts';
 import { expect, test } from 'vite-plus/test';
 import { parseBMS } from '@be-music/chart-parser';
 import { observePlay } from './characterization/harness.ts';
@@ -27,6 +28,8 @@ test.each(['lr2', '____'] as const)(
     expect([second.total, second.perfect, second.poor, second.maxCombo]).toEqual([2, 1, 1, 1]);
     expect(first.gauge?.type).not.toBe(second.gauge?.type);
     const replay = play.replay!;
+    expect(play.simulated?.[ruleset]?.noteCount).toBe(first.total);
+    expect(simulateReplay(replay, { ruleset, player: 2 }).noteCount).toBe(second.total);
     expect(replay.play).toMatchObject({ battleMode: 'TWO-PLAYER', gauge2P: 'EASY' });
     expect(replay.results?.secondPlayer).toMatchObject({ judge: { pgreat: 1, poor: 1 } });
     expect(replay.inputs.map((input) => input.channels.join(','))).toEqual(['11', '11', '21', '21']);

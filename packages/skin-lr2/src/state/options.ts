@@ -59,6 +59,10 @@ function battleLabel(battle: PlayOptions['battleMode'], keyModeOp: number | unde
   const double = keyModeOp === LR2_OP.KEYS_10 || keyModeOp === LR2_OP.KEYS_14;
   const nine = keyModeOp === LR2_OP.KEYS_9;
   switch (battle) {
+    case 'AUTO':
+      return 'CHART';
+    case 'COUPLE':
+      return nine ? 'DISABLE' : 'COUPLE';
     case 'TWO-PLAYER':
       return double ? 'COUPLE' : nine ? 'DISABLE' : 'BATTLE';
     case 'D-BATTLE':
@@ -77,7 +81,7 @@ function battleLabel(battle: PlayOptions['battleMode'], keyModeOp: number | unde
  */
 export function resolveLR2BattleOps(options: Partial<Pick<PlayOptions, 'keysFilter' | 'battleMode'>>): number[] {
   const doubleFilter = options.keysFilter === 'KEYS_10' || options.keysFilter === 'KEYS_14';
-  const battle = options.battleMode === 'TWO-PLAYER';
+  const battle = options.battleMode === 'TWO-PLAYER' || options.battleMode === 'COUPLE';
   const doubleBattle = options.battleMode === 'D-BATTLE' || options.battleMode === 'SP-TO-DP';
   const ops: number[] = [];
   if (doubleFilter || doubleBattle) ops.push(LR2_OP.DOUBLE);

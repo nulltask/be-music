@@ -235,7 +235,7 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
     await h.route.showDecide(chartEntry('a'), { autoPlay: true });
     const { play } = await decided(h);
 
-    expect(h.deps.familyKits.resolvePlayKit).toHaveBeenCalledWith(chartEntry('a'), {});
+    expect(h.deps.familyKits.resolvePlayKit).toHaveBeenCalledWith(chartEntry('a'), { preResolved: RESOLVED });
     expect(h.deps.buildPlayScene).toHaveBeenCalledWith(
       chartEntry('a'),
       { kit: { family: 'built-in' } },

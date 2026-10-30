@@ -898,3 +898,14 @@ test.each(['built-in', 'lr2', 'beatoraja'] as const)(
     play.load.resolve();
   },
 );
+
+test('CHART HEADER resolves once before picking a kit and hands the same branch to gameplay', async () => {
+  const h = await harness();
+  const options = { ...h.deps.playOptions.current, battleMode: 'AUTO' as const };
+  vi.spyOn(h.deps.playOptions, 'current', 'get').mockReturnValue(options);
+  const entry = chartEntry('header');
+  const play = await playing(h, entry);
+  const passed = h.deps.familyKits.resolvePlayKit.mock.calls[0]![1].preResolved;
+  expect(passed).toBeDefined();
+  expect(play.options.preResolved).toBe(passed);
+});

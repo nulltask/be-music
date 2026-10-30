@@ -341,6 +341,11 @@ describe('resolveLR2SelectState sliders and buttons', () => {
     const battle = (battleMode: (typeof DEFAULT_PLAY_OPTIONS)['battleMode'], keyModeOp?: number) =>
       resolveLR2OptionText(LR2_TEXT.OPTION_BATTLE, { ...DEFAULT_PLAY_OPTIONS, battleMode }, keyModeOp);
     expect(battle('OFF')).toBe('OFF');
+    expect(battle('AUTO')).toBe('CHART');
+    expect(battle('COUPLE', LR2_OP.KEYS_7)).toBe('COUPLE');
+    expect(battle('COUPLE', LR2_OP.KEYS_9)).toBe('DISABLE');
+    const couple = resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, battleMode: 'COUPLE' } });
+    expect(couple.ops.has(LR2_OP.BATTLE)).toBe(true);
     expect(battle('TWO-PLAYER', LR2_OP.KEYS_7)).toBe('BATTLE');
     expect(battle('TWO-PLAYER', LR2_OP.KEYS_14)).toBe('COUPLE');
     expect(battle('D-BATTLE', LR2_OP.KEYS_9)).toBe('DISABLE');
