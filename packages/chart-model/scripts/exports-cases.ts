@@ -30,6 +30,8 @@ BENCH_TEXT_CHART.bms.changeOption['02'] = '774:HI-SPEED_x100.00';
 BENCH_TEXT_CHART.events.push({ measure: 1, channel: 'A6', position: [0, 1], value: '02' });
 BENCH_TEXT_CHART.events.push({ measure: 1, channel: 'A6', position: [0, 1], value: '01' });
 const BENCH_CHART_OPTIONS = chartAPI.compileChartOptions(chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART));
+const BENCH_HDX_CHART = createEmptyJSON('bms');
+BENCH_HDX_CHART.bms.options = ['774:HI-SPEED_x0.77', 'charatbeatHDX:LONGMODE 1'];
 const BENCH_TEXT_TIMELINE = chartAPI.buildChartTextTimeline(BENCH_TEXT_CHART);
 BENCH_EXWAV_CHART.resources.wav = { '01': 'ordinary.wav' };
 BENCH_EXWAV_CHART.bms.exWAV = { '01': 'pvf 500 -600 48000 extended.wav', '02': 'v 0 only.wav' };
@@ -628,6 +630,7 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.resolveChartLongNoteMode', {
     run: (fixtures) => {
       chartAPI.resolveChartLongNoteMode(fixtures.sampleBmsJSON);
+      chartAPI.resolveChartLongNoteMode(BENCH_HDX_CHART);
     },
   });
   define('chart-model.resolveLandmineDamage', {

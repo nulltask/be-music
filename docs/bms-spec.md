@@ -150,6 +150,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Keep extension header `#LNTYPE` in `bms` extension area
 - [x] Keep extension header `#LNMODE` in `bms` extension area (`1` = LN, `2` = CN, `3` = HCN)
 - [x] The player plays `#LNMODE 2` / `3` long notes as CN / HCN under the `beatoraja` ruleset; `____` plays every long note as CN (HCN for `#LNMODE 3`), and `lr2` plays every long note as LN
+- [x] Initial `#OPTION charatbeatHDX:LONGMODE 0` / `1` selects CN / HCN after branch selection. Valid explicit `#LNMODE` wins, followed by the last valid HDX declaration, then the user default. Timed A6 LONGMODE is diagnosed without changing notes. Fingerprints, replay modes, bmson conversion and NONSTOP stitch version 3 retain the effective mode. See [ADR 0027](./adr/0027-hdx-long-note-modes.md).
 - [x] Keep extension header `#LNOBJ` in `bms` extension area
 - [x] Keep extension header `#VOLWAV` in `bms` extension area
 - [x] Keep extension header `#DEFEXRANK` in `bms` extension area

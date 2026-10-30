@@ -1,3 +1,4 @@
+import { resolveChartLongNoteMode } from '@be-music/chart-model';
 import {
   createBeatResolver,
   isLandmineChannel,
@@ -796,13 +797,14 @@ function resolveMineDamageForBmsonOutput(json: BeMusicJSON, event: BeMusicEvent,
 }
 
 /**
- * bmson `info.ln_type`: the authored `bmson.info.lnType`, else BMS `#LNMODE` — both use 1 = LN, 2 = CN, 3 = HCN.
+ * bmson `info.ln_type`: the authored `bmson.info.lnType`, else the effective BMS mode (`#LNMODE` or HDX LONGMODE) — both use 1 = LN, 2 = CN, 3 = HCN.
  */
 function resolveBmsonLNTypeForOutput(json: BeMusicJSON): number | undefined {
   const authored = json.bmson.info.lnType;
   if (typeof authored === 'number' && BMSON_LONG_NOTE_TYPES.has(authored)) {
     return authored;
   }
-  const lnMode = json.bms.lnMode;
+  const effective = json.sourceFormat === 'bms' ? resolveChartLongNoteMode(json) : undefined;
+  const lnMode = effective === 2 || effective === 3 ? effective : json.bms.lnMode;
   return typeof lnMode === 'number' && BMSON_LONG_NOTE_TYPES.has(lnMode) ? lnMode : undefined;
 }

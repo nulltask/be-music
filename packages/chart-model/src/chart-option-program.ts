@@ -1,3 +1,4 @@
+import { parseHDXLongNoteMode } from './hdx-long-note-mode.ts';
 import { findLastIndexAtOrBefore } from '@be-music/shared-utils/core';
 import type { ChartOptionTimeline } from './chart-options.ts';
 
@@ -17,7 +18,13 @@ export interface ChartOptionProgram {
   cues: ChartOptionStateCue[];
 }
 export interface ChartOptionDiagnostic {
-  code: 'unsupported-option' | 'invalid-parameter' | 'initial-only-alias' | 'missing-reference' | 'invalid-time';
+  code:
+    | 'unsupported-option'
+    | 'invalid-parameter'
+    | 'initial-only-alias'
+    | 'initial-only-option'
+    | 'missing-reference'
+    | 'invalid-time';
   declaration?: string;
   key?: string;
   seconds?: number;
@@ -67,6 +74,8 @@ function compileDeclaration(declaration: string, timed: boolean): number | Chart
   const legacy = /^774:HSP-(.+)$/.exec(declaration);
   if (legacy && LEGACY_HI_SPEED_VALUES.has(legacy[1]!))
     return timed ? 'initial-only-alias' : Math.max(0.25, Number(legacy[1]));
+  if (parseHDXLongNoteMode(declaration) !== undefined) return 'initial-only-option';
+  if (declaration.startsWith('charatbeatHDX:LONGMODE')) return 'invalid-parameter';
   return 'unsupported-option';
 }
 
@@ -78,6 +87,8 @@ export function compileChartOptions(timeline: ChartOptionTimeline): CompiledChar
   const diagnostics: ChartOptionDiagnostic[] = [];
   let state: ChartOptionState = {};
   for (const declaration of timeline.initial) {
+    // LONGMODE is resolved by note-rules before note extraction, not a display/replay-profile operation.
+    if (parseHDXLongNoteMode(declaration) !== undefined) continue;
     const value = compileDeclaration(declaration, false);
     if (typeof value === 'number') state = { ...state, hiSpeed: value };
     else diagnostics.push({ code: value, declaration });

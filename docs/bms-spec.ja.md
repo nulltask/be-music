@@ -150,6 +150,7 @@
 - [x] 拡張ヘッダ `#LNTYPE` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#LNMODE` を `bms` 拡張領域へ保持（`1` = LN、`2` = CN、`3` = HCN）
 - [x] player は `beatoraja` ルールセットで `#LNMODE 2` / `3` のロングノートを CN / HCN として処理する。`____` はすべてのロングノートを CN（`#LNMODE 3` なら HCN）、`lr2` はすべて LN として処理する
+- [x] 初期 `#OPTION charatbeatHDX:LONGMODE 0` / `1` は、分岐選択後に CN・HCN を指定する。有効な明示的 `#LNMODE`、最後の有効な HDX 宣言、ユーザーの既定値の順で優先する。時刻付き A6 の LONGMODE は診断し、ノートを変更しない。fingerprint・replay・bmson 変換・NONSTOP stitch バージョン3も実効モードを保持する。[ADR 0027](./adr/0027-hdx-long-note-modes.ja.md) を参照。
 - [x] 拡張ヘッダ `#LNOBJ` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#VOLWAV` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#DEFEXRANK` を `bms` 拡張領域へ保持

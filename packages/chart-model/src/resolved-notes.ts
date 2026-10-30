@@ -1,6 +1,11 @@
 import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
 import { resolveBMSLongNotes, resolveLNOBJLongNotes, type BeatResolver, type ChartPlayVariant } from './index.ts';
-import { DEFAULT_LONG_NOTE_MODE, resolveLandmineDamage, type LongNoteMode } from './note-rules.ts';
+import {
+  DEFAULT_LONG_NOTE_MODE,
+  resolveChartLongNoteMode,
+  resolveLandmineDamage,
+  type LongNoteMode,
+} from './note-rules.ts';
 import type { TimingResolver } from './timing.ts';
 
 /** What a resolved note is: a judged tap, a judged long note, a landmine, or an invisible (keysound-only) object. */
@@ -441,12 +446,9 @@ function appendLNTypeLongNotes(context: ResolvedNoteContext, notes: MutableNote[
   }
 }
 
-/** Long-note mode of a BMS `#LNOBJ` / `#LNTYPE` long note: `#LNMODE`, otherwise LN. */
+/** BMS #LNOBJ / #LNTYPE use the same chart-level LNMODE / HDX LONGMODE precedence. */
 function resolveBMSLongNoteMode(json: BeMusicJSON): LongNoteMode {
-  if (json.sourceFormat === 'bms' && (json.bms.lnMode === 2 || json.bms.lnMode === 3)) {
-    return json.bms.lnMode;
-  }
-  return DEFAULT_LONG_NOTE_MODE;
+  return json.sourceFormat === 'bms' ? resolveChartLongNoteMode(json) : DEFAULT_LONG_NOTE_MODE;
 }
 
 /**

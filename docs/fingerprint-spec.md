@@ -50,12 +50,12 @@ Lane options such as MIRROR / RANDOM / DP flip are play options, not part of the
 | Mines (`Dx` / `Ex`, bmson `mine_channels`): position, lane, and damage                   | BGA, layers, POOR image, `#BMP`, `#BGA`, `#SWBGA`, `#ARGB`, `#STAGEFILE`, `#BANNER`, `#BACKBMP`, video |
 | Bar lines (measure lengths, and whether bar lines are drawn at all)                      | Invisible notes (`3x` / `4x`, bmson `key_channels`; not judged)                                        |
 | Initial BPM, BPM changes, STOP, `#STP`                                                   | `#LNTYPE`, `#LNOBJ`, and `5x` / `6x` as notations (the resolved long notes are included instead)       |
-| SCROLL (`SC`) and SPEED (`SP`)                                                           | `#OPTION`, `#MIDIFILE`, `#PATH_WAV`, `#MATERIALS`, `#BASE`, `#CHARSET`                                 |
+| SCROLL (`SC`) and SPEED (`SP`)                                                           | `#OPTION` except HDX LONGMODE, `#MIDIFILE`, `#PATH_WAV`, `#MATERIALS`, `#BASE`, `#CHARSET`             |
 | `#BASEBPM` (sets the reference BPM for hi-speed, so it changes how fast notes look)      | `#CHANGEOPTION` (see below)                                                                            |
 | Judgment rank: `#RANK`, `#DEFEXRANK`, bmson `judge_rank`, and `#EXRANKxx` changes (`A0`) | Anything a player does not draw in or over the lanes                                                   |
 | `#TOTAL` / bmson `total`                                                                 |                                                                                                        |
 
-`#CHANGEOPTION` can force lane options mid-chart, which would change play. be-music parses it but never applies it, so it is excluded: two charts that differ only in `#CHANGEOPTION` play the same in be-music. If be-music ever applies it, it joins the fingerprint with a version bump (section 5).
+`#CHANGEOPTION` currently executes display-only HI-SPEED, which is excluded like user hi-speed. Other timed families are diagnosed without effects. If a future operation changes note placement or judging, its effective semantics must join the fingerprint with a version bump (section 5).
 
 ## 3. Normalization
 
@@ -115,7 +115,7 @@ Known limits: a measure length or value whose intended denominator is above the 
   - `#LNOBJ`: the end is the end object's own time; it pairs with the previous object of that `1x` / `2x` channel, as in be-music (an object at a tick that holds a `5x` / `6x` object resets the pairing);
   - `5x` / `6x`: `#LNTYPE 1` pairs consecutive objects of a channel and the end is the second object's time; `#LNTYPE 2` runs end at the cell right after the run's last object. Without `#LNTYPE`, be-music infers 2 when some `5x` / `6x` channel repeats one value over three consecutive cells, else 1;
   - bmson: the end is pulse `y + l`, mapped like any position.
-  - Mode: bmson per-note `t`, else `info.ln_type`, else 1 (LN); BMS `#LNMODE` 2 or 3, else 1. An end that does not come after its start leaves a normal note.
+  - Mode: bmson per-note `t`, else `info.ln_type`, else 1 (LN); BMS valid explicit `#LNMODE`, else initial HDX LONGMODE (0 = CN, 1 = HCN), else 1. An end that does not come after its start leaves a normal note.
 - **FREE ZONE**: in every lane mode but 9 / 24 / 48 KEY, be-music plays an object of lane `17` / `27` (from `1x` / `2x` or bmson, not from `57` / `67`) as a one-beat FREE ZONE note, ignoring any `#LNOBJ` end or bmson `l` it has. Such a note is `{"m", "p", "lane", "fz": true, "ln": mode}` without `end`, where the mode is bmson `t`, else `info.ln_type`, else 1.
 - **Mines** (`Dx` / `Ex`, bmson `mine_channels`): lane, position, and damage. Damage is bmson `damage` when present, else `4` for bmson; for BMS, the object value read in base 36, or `4` when that is not a valid non-zero base-36 pair.
 - **BPM**: the initial BPM is a header value. Channel `03`, channel `08` with `#BPMxx`, and bmson `bpm_events` all become `bpm` events. A zero BPM and a `#BPMxx` that is not defined are ignored, as in be-music. A negative `#BPMxx` is kept with its sign: be-music plays it as LR2's reverse scroll. The sign of every negative change is kept, although only the first one anchors the reversal, so two charts that differ only in the sign of a later negative change get different fingerprints even though they play alike; the fingerprint errs toward telling charts apart rather than merging them.
@@ -170,7 +170,7 @@ The content outside control flow plays in every outcome. For one outcome of a se
 
 Segments whose outcomes can interact are evaluated together as one **factor** (over all their variables jointly). Two segments interact when any of these holds (computed over every line of the segments, whatever the outcome, and over the deltas of every outcome):
 
-- one sets a definition or header value the other sets or uses: `#BPMxx`, `#STOPxx`, `#SCROLLxx`, `#SPEEDxx`, `#EXRANKxx` (used by objects of `08`, `09`, `SC`, `SP`, `A0` with that value), `#BPM`, `#BASEBPM`, `#RANK` / `#DEFEXRANK`, `#TOTAL`, `#PLAYER`, the length of one measure, `#LNOBJ` / `#LNTYPE` / `#LNMODE` (used by every lane object), or, when `#LNTYPE` is inferred, any `5x` / `6x` object;
+- one sets a definition or header value the other sets or uses: `#BPMxx`, `#STOPxx`, `#SCROLLxx`, `#SPEEDxx`, `#EXRANKxx` (used by objects of `08`, `09`, `SC`, `SP`, `A0` with that value), `#BPM`, `#BASEBPM`, `#RANK` / `#DEFEXRANK`, `#TOTAL`, `#PLAYER`, the length of one measure, `#LNOBJ` / `#LNTYPE` / `#LNMODE` / valid initial HDX LONGMODE (used by every lane object), or, when `#LNTYPE` is inferred, any `5x` / `6x` object;
 - they have a timeline object or delta timeline event of one type at one time (same-time changes collapse, a BMS STOP replaces another, and bmson stops and `#STP`s add up);
 - they place an object on one lane at one position, or a delta note starts there (a lane keeps one judged note per position);
 - in a **pairing stream** — `obj:<lane>`, the `1x` / `2x` objects of a lane when some `#LNOBJ` exists, or `ln:<lane>`, the `5x` / `6x` objects of a lane when it has any — their **reach** overlaps. A segment's reach in a stream runs from the last object of the stream outside control flow strictly before the earliest time the segment touches in it (its own objects there, and the starts and ends of its delta notes on that lane) to the first such object strictly after the latest one, or to −∞ / +∞ when there is none; reaches are closed intervals.
@@ -334,3 +334,5 @@ bmcourse0:<lowercase hex SHA-256 of the RFC 8785 text of the document>
 Every value is a string or a list of strings, so the RFC 8785 text is the document with its keys sorted and no whitespace. Like `bmfp0`, `bmcourse0` is the development version and may change without a version bump; a course fingerprint also changes whenever a stage's chart fingerprint does. From the first stable version on, any change to the document of an existing course needs a new version. `packages/player-engine/src/replay/course-fingerprint.test.ts` pins golden values for this.
 
 `createCourseFingerprintDocument(input)` and `computeCourseFingerprint(input)` in `@be-music/player-engine/replay` implement this section, with `canonicalizeJSONValue` and `sha256Hex` from `@be-music/chart-model`; `computeCourseReplayFingerprint(log)` reads the input from a course replay.
+
+Initial HDX `charatbeatHDX:LONGMODE 0` / `1` contributes effective CN / HCN note types exactly as `#LNMODE 2` / `3`. Valid explicit LNMODE takes precedence. Conditional LONGMODE shares the LN dependency factor; raw OPTION spelling and HI-SPEED contribute no content. See [ADR 0027](./adr/0027-hdx-long-note-modes.md).

@@ -615,3 +615,51 @@ test('a previous arrangement is reused only under the judge rules it was played 
   expect(fresh.notes.map((note) => note.channel)).toEqual(original.notes.map((note) => note.channel));
   expect(() => prepare({ judgeRuleset: 'beatoraja', fixedArrangement: replay }, sp7)).toThrow(/other judgment rules/);
 });
+
+test('conditional HDX LONGMODE wins user defaults with and without a pre-resolved branch', () => {
+  const entry = {
+    ...chart,
+    chart: parseChart(
+      '#BPM 120\n#LNTYPE 1\n#00051:01\n#00151:01\n#RANDOM 2\n#IF 1\n#OPTION charatbeatHDX:LONGMODE 0\n#ELSE\n#OPTION charatbeatHDX:LONGMODE 1\n#ENDIF\n#ENDRANDOM',
+      'bms',
+    ),
+  };
+  const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+  try {
+    for (const preResolved of [undefined, resolvePlayChart(entry.chart, { random: () => 0.99 })]) {
+      const play = prepare({ judgeRuleset: 'beatoraja', longNoteMode: 'HCN', preResolved }, entry);
+      expect(play.notes[0]?.longNoteMode).toBe(preResolved ? 3 : 2);
+    }
+    const plain = { ...chart, chart: parseChart('#BPM 120\n#LNTYPE 1\n#00051:01\n#00151:01', 'bms') };
+    expect(
+      prepare({ judgeRuleset: 'beatoraja', longNoteMode: 'CN', preResolved: resolvePlayChart(plain.chart) }, plain)
+        .notes[0]?.longNoteMode,
+    ).toBe(2);
+  } finally {
+    random.mockRestore();
+  }
+});
+
+test('recorded LN mode retains old replay and previous-arrangement semantics after recognizing HDX', () => {
+  const plain = { ...chart, chart: parseChart('#BPM 120\n#LNTYPE 1\n#00051:01\n#00151:01', 'bms') };
+  const original = prepare({ judgeRuleset: 'beatoraja' }, plain);
+  const replay = parseReplay(
+    serializeReplay(
+      createReplayRecorder({
+        json: plain.chart,
+        chart: original.preparedChart!,
+        play: { mode: 'manual', autoScratch: false, judgeRuleset: 'beatoraja' },
+      }).finalize({ summary: { ...createEmptyScore(1), fast: 0, slow: 0 } }),
+    ),
+  );
+  expect(replay.chart.lnMode).toBe(1);
+  const entry = {
+    ...plain,
+    chart: parseChart('#OPTION charatbeatHDX:LONGMODE 1\n#BPM 120\n#LNTYPE 1\n#00051:01\n#00151:01', 'bms'),
+  };
+  expect(prepare({ judgeRuleset: 'beatoraja' }, entry).notes[0]?.longNoteMode).toBe(3);
+  for (const options of [{ replay }, { fixedArrangement: replay }])
+    expect(prepare({ judgeRuleset: 'beatoraja', longNoteMode: 'HCN', ...options }, entry).notes[0]?.longNoteMode).toBe(
+      1,
+    );
+});

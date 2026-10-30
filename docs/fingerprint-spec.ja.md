@@ -50,12 +50,12 @@ MIRROR / RANDOM / DP フリップなどのレーンオプションは譜面で�
 | 地雷（`Dx` / `Ex`、bmson の `mine_channels`）: 位置、レーン、ダメージ                    | BGA、レイヤー、POOR 画像、`#BMP`、`#BGA`、`#SWBGA`、`#ARGB`、`#STAGEFILE`、`#BANNER`、`#BACKBMP`、動画       |
 | 小節線（小節の長さ、小節線を描くかどうか）                                               | 不可視ノーツ（`3x` / `4x`、bmson の `key_channels`。判定されない）                                           |
 | 初期 BPM、BPM 変化、STOP、`#STP`                                                         | 表記としての `#LNTYPE`、`#LNOBJ`、`5x` / `6x`（解決後のロングノーツを含める）                                |
-| SCROLL（`SC`）と SPEED（`SP`）                                                           | `#OPTION`、`#MIDIFILE`、`#PATH_WAV`、`#MATERIALS`、`#BASE`、`#CHARSET`                                       |
+| SCROLL（`SC`）と SPEED（`SP`）                                                           | `#OPTION`（HDX LONGMODE を除く）、`#MIDIFILE`、`#PATH_WAV`、`#MATERIALS`、`#BASE`、`#CHARSET`                |
 | `#BASEBPM`（ハイスピードの基準 BPM を決めるので、ノーツの見かけの速さが変わる）          | `#CHANGEOPTION`（下記）                                                                                      |
 | 判定ランク: `#RANK`、`#DEFEXRANK`、bmson の `judge_rank`、`#EXRANKxx` による変化（`A0`） | レーンの中や上に描かれないもの                                                                               |
 | `#TOTAL` / bmson の `total`                                                              |                                                                                                              |
 
-`#CHANGEOPTION` は譜面の途中でレーンオプションを強制でき、プレイを変えうるものです。be-music はこれをパースしますが適用しないので、含めません。`#CHANGEOPTION` だけが違う 2 つの譜面は、be-music では同じように遊べます。be-music が適用するようになったら、バージョンを上げて fingerprint に含めます（5 章）。
+`#CHANGEOPTION` は現在、表示だけを変える HI-SPEED を実行し、ユーザーのハイスピードと同様に fingerprint から除外します。他の時刻付き系列は診断だけを出します。将来、ノート配置や判定を変える操作に対応する場合は、バージョンを上げて実効的な意味を含める必要があります（5 章）。
 
 ## 3. 正規化
 
@@ -115,7 +115,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
   - `#LNOBJ`: 終点は終端オブジェクト自身の時刻です。be-music と同じく、その `1x` / `2x` チャンネルの直前のオブジェクトと対になります（`5x` / `6x` のオブジェクトがあるティックのオブジェクトで対応づけはリセットされます）。
   - `5x` / `6x`: `#LNTYPE 1` はチャンネル内の連続する 2 つのオブジェクトを対にし、終点は 2 つ目の時刻です。`#LNTYPE 2` の連続は、最後のオブジェクトの直後のセルで終わります。`#LNTYPE` がないとき、be-music はある `5x` / `6x` チャンネルが連続 3 セルで同じ値を繰り返していれば 2、そうでなければ 1 と推定します。
   - bmson: 終点はパルス `y + l` で、他の位置と同じように対応づけます。
-  - モード: bmson のノーツごとの `t`、なければ `info.ln_type`、なければ 1（LN）。BMS は `#LNMODE` の 2 か 3、なければ 1。終点が始点より後でなければ通常ノーツです。
+  - モード: bmson のノーツごとの `t`、なければ `info.ln_type`、なければ 1（LN）。BMS は有効な明示的 `#LNMODE`、なければ初期 HDX LONGMODE（0 = CN、1 = HCN）、なければ 1。終点が始点より後でなければ通常ノーツです。
 - **FREE ZONE**: 9 / 24 / 48 KEY 以外のすべてのレーン構成で、be-music はレーン `17` / `27` のオブジェクト（`1x` / `2x` または bmson のもの。`57` / `67` のものは除く）を 1 拍の FREE ZONE ノーツとして扱い、`#LNOBJ` の終点や bmson の `l` は無視します。このノーツは `end` を持たない `{"m", "p", "lane", "fz": true, "ln": モード}` で、モードは bmson の `t`、なければ `info.ln_type`、なければ 1 です。
 - **地雷**（`Dx` / `Ex`、bmson の `mine_channels`）: レーン、位置、ダメージ。ダメージは bmson の `damage` があればその値、bmson でなければ `4`。BMS ではオブジェクトの値を 36 進数として読んだ値、それが 0 でない有効な 36 進 2 桁でなければ `4` です。
 - **BPM**: 初期 BPM はヘッダの値です。チャンネル `03`、`#BPMxx` を使うチャンネル `08`、bmson の `bpm_events` はどれも `bpm` イベントになります。be-music と同じく、0 の BPM と定義されていない `#BPMxx` は無視します。負の `#BPMxx` は符号付きのまま含めます。be-music はこれを LR2 の逆スクロールとして演奏するからです。逆スクロールの起点になるのは最初の負の変化だけですが、すべての負の変化の符号を残すので、後の負の変化の符号だけが違う 2 つの譜面は、同じように演奏されても別の fingerprint になります。fingerprint は譜面をまとめるより区別する側に倒しています。
@@ -170,7 +170,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
 
 結果が互いに影響しうるセグメントは、1 つの **因子** としてまとめて（すべての変数を合わせて）評価します。2 つのセグメントは、次のどれかが成り立つとき影響し合います（結果によらずセグメントのすべての行と、すべての結果の差分について調べます）。
 
-- 一方が設定する定義やヘッダの値を、もう一方が設定または使用する。`#BPMxx`、`#STOPxx`、`#SCROLLxx`、`#SPEEDxx`、`#EXRANKxx`（その値を持つ `08`、`09`、`SC`、`SP`、`A0` のオブジェクトが使用）、`#BPM`、`#BASEBPM`、`#RANK` / `#DEFEXRANK`、`#TOTAL`、`#PLAYER`、ある小節の長さ、`#LNOBJ` / `#LNTYPE` / `#LNMODE`（レーンのオブジェクトすべてが使用）、`#LNTYPE` を推定する場合は `5x` / `6x` のオブジェクトすべて
+- 一方が設定する定義やヘッダの値を、もう一方が設定または使用する。`#BPMxx`、`#STOPxx`、`#SCROLLxx`、`#SPEEDxx`、`#EXRANKxx`（その値を持つ `08`、`09`、`SC`、`SP`、`A0` のオブジェクトが使用）、`#BPM`、`#BASEBPM`、`#RANK` / `#DEFEXRANK`、`#TOTAL`、`#PLAYER`、ある小節の長さ、`#LNOBJ` / `#LNTYPE` / `#LNMODE` / 有効な初期 HDX LONGMODE（レーンのオブジェクトすべてが使用）、`#LNTYPE` を推定する場合は `5x` / `6x` のオブジェクトすべて
 - 同じ種類・同じ時刻のタイムラインオブジェクトか差分のタイムラインイベントを持つ（同じ時刻の変化は 1 つにまとまり、BMS の STOP は置き換わり、bmson の stop と `#STP` は足し合わされるため）
 - 同じレーンの同じ位置にオブジェクトを置くか、差分のノーツがそこから始まる（レーンは位置ごとに判定されるノーツを 1 つしか持たないため）
 - **対応づけの列**（`#LNOBJ` があるときのレーンの `1x` / `2x` オブジェクトの列 `obj:<lane>`、またはレーンに `5x` / `6x` があるときのその列 `ln:<lane>`）で **到達範囲** が重なる。セグメントのある列での到達範囲は、そのセグメントがその列で触れる最も早い時刻（そこにある自分のオブジェクトと、そのレーンの差分ノーツの始点と終点）より厳密に前にある、制御構文の外の列の最後のオブジェクトから、最も遅い時刻より厳密に後にある最初のオブジェクトまで（なければ −∞ / +∞）の閉区間です。
@@ -334,3 +334,5 @@ bmcourse0:<ドキュメントの RFC 8785 テキストの SHA-256（小文字 16
 値はすべて文字列か文字列のリストなので、RFC 8785 のテキストは、キーを並べ替えて空白をなくしたドキュメントになります。`bmfp0` と同じく `bmcourse0` は開発版で、バージョンを上げずに変わることがあります。ステージの譜面 fingerprint が変われば、コース fingerprint も変わります。最初の安定版からは、既存のコースのドキュメントを変える変更には新しいバージョンが必要です。`packages/player-engine/src/replay/course-fingerprint.test.ts` で golden の値を固定しています。
 
 この章は `@be-music/player-engine/replay` の `createCourseFingerprintDocument(input)` と `computeCourseFingerprint(input)` が実装し、`@be-music/chart-model` の `canonicalizeJSONValue` と `sha256Hex` を使います。`computeCourseReplayFingerprint(log)` はコースのリプレイから入力を読みます。
+
+初期 HDX `charatbeatHDX:LONGMODE 0` / `1` は `#LNMODE 2` / `3` と同じ実効 CN・HCN ノート種別を含めます。有効な明示的 LNMODE が優先します。条件付き LONGMODE は LN の依存関係の因子に含め、生の OPTION 表記と HI-SPEED は内容を増やしません。[ADR 0027](./adr/0027-hdx-long-note-modes.ja.md) を参照してください。

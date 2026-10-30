@@ -17,6 +17,7 @@ import {
   type RandomMode,
 } from '@be-music/player-scene-model';
 import {
+  resolveChartLongNoteMode,
   resolvePoorBGAMode,
   buildBGAOpacityTimelines,
   PLAY_MODE_LAYOUTS,
@@ -258,13 +259,15 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.
-  const { chart: resolved, randomDraws } =
-    arrangement === undefined && ctx.options.preResolved !== undefined
-      ? ctx.options.preResolved
-      : resolvePlayChart(
-          resolvePlayerLongNoteChart(ctx, chartEntry.chart, arrangement?.chart.lnMode),
-          arrangement?.play.randomDraws !== undefined ? { randomDraws: arrangement!.play.randomDraws } : {},
-        );
+  const preResolved = arrangement === undefined ? ctx.options.preResolved : undefined;
+  const { chart: branchResolved, randomDraws } =
+    preResolved ??
+    resolvePlayChart(
+      chartEntry.chart,
+      arrangement?.play.randomDraws !== undefined ? { randomDraws: arrangement.play.randomDraws } : {},
+    );
+  // A chart's conditional LONGMODE must be known before filling the user's default.
+  const resolved = resolvePlayerLongNoteChart(ctx, branchResolved, arrangement?.chart.lnMode);
   ctx.resolvedChart = resolved;
   ctx.randomDraws = randomDraws;
   ctx.randomSeeds = {};
@@ -1086,7 +1089,11 @@ function resolvePlayerLongNoteChart(
   chart: BeMusicJSON,
   recordedMode: 1 | 2 | 3 | undefined,
 ): BeMusicJSON {
-  if (recordedMode !== undefined) return recordedMode === 1 ? chart : applyUndefinedLongNoteMode(chart, recordedMode);
+  if (recordedMode !== undefined && resolveChartLongNoteMode(chart) === recordedMode) return chart;
+  if (recordedMode !== undefined)
+    return chart.sourceFormat === 'bms'
+      ? { ...chart, bms: { ...chart.bms, lnMode: recordedMode } }
+      : { ...chart, bmson: { ...chart.bmson, info: { ...chart.bmson.info, lnType: recordedMode } } };
   const mode = ctx.options.longNoteMode ?? 'LN';
   if (mode === 'LN') return chart;
   if (ctx.options.judgeRuleset !== 'beatoraja') throw new RangeError('LN MODE is available only for beatoraja.');
