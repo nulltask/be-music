@@ -229,3 +229,12 @@ export {
 } from './bmson-bga-sequences.ts';
 
 export { buildChartOptionTimeline, type ChartOptionCue, type ChartOptionTimeline } from './chart-options.ts';
+export {
+  compileChartOptions,
+  resolveChartOptionsAt,
+  type ChartOptionState,
+  type ChartOptionStateCue,
+  type ChartOptionProgram,
+  type ChartOptionDiagnostic,
+  type CompiledChartOptions,
+} from './chart-option-program.ts';

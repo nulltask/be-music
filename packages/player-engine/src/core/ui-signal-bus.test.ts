@@ -84,6 +84,7 @@ describe('player ui signal bus', () => {
         argb: { a: 255, r: 255, g: 255, b: 255 },
       },
       chartText: '譜面のテキスト',
+      chartOptions: { hiSpeed: 100 },
       bmsonBGA: { plane: 'poor', key: 'sequence.png', startedSeconds: 5.9, frameStartSeconds: 6 },
       judgedNoteCount: 3,
       totalSeconds: 10,
@@ -94,6 +95,7 @@ describe('player ui signal bus', () => {
     expect(uiBus.getFrame().hcnLanes).toEqual([{ channel: '11', gaining: false }]);
     expect(uiBus.getFrame().keyBoundBGA).toMatchObject({ definitionId: '61', bmpKey: '00' });
     expect(uiBus.getFrame().chartText).toBe('譜面のテキスト');
+    expect(uiBus.getFrame().chartOptions).toEqual({ hiSpeed: 100 });
     expect(uiBus.getFrame().bmsonBGA).toMatchObject({ plane: 'poor', key: 'sequence.png' });
     expect(uiBus.getFrame().judgedNoteCount).toBe(3);
     expect(uiBus.getFrame().reversalSeconds).toBe(4);
@@ -105,6 +107,7 @@ describe('player ui signal bus', () => {
     expect(uiBus.getFrame().keyBoundBGA).toBeUndefined();
     expect(uiBus.getFrame().bmsonBGA).toBeUndefined();
     expect(uiBus.getFrame().chartText).toBeUndefined();
+    expect(uiBus.getFrame().chartOptions).toBeUndefined();
     expect(uiBus.getFrame().judgedNoteCount).toBeUndefined();
     expect(uiBus.getFrame().reversalSeconds).toBeUndefined();
   });

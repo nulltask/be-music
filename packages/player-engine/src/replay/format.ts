@@ -1,3 +1,5 @@
+import type { ChartOptionProgram } from '@be-music/chart-model';
+import { parseChartOptionProgram } from './chart-options.ts';
 import {
   clampCustomJudgeRate,
   DEFAULT_BEATORAJA_CUSTOM_JUDGE,
@@ -145,6 +147,8 @@ export interface ReplayJudgeRank {
 }
 
 export interface ReplayChart {
+  /** Recorded effective display operations; never reinterprets unsupported source declarations. */
+  chartOptions?: ChartOptionProgram;
   /** Original header BPM, kept separately from the effective tempo map. */
   headerBPM?: number;
   /** Resolved chart BPM extrema, used for source option classification. */
@@ -550,6 +554,7 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
   ] as const) {
     if (parsed[key] === undefined) delete parsed[key];
   }
+  if (chart.chartOptions !== undefined) parsed.chartOptions = parseChartOptionProgram(chart.chartOptions);
   return parsed;
 }
 

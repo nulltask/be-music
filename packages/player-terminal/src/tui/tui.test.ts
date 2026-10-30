@@ -14,6 +14,7 @@ function renderOutputRaw(
   notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
   options: {
     chartText?: string;
+    chartOptions?: { hiSpeed?: number };
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
@@ -57,6 +58,7 @@ function renderOutputRaw(
     tui.start();
     tui.render({
       chartText: options.chartText,
+      chartOptions: options.chartOptions,
       currentBeat: options.currentBeat ?? 0,
       currentSeconds: options.currentSeconds ?? (options.currentBeat ?? 0) / 2,
       totalSeconds: options.totalSeconds ?? 10,
@@ -100,6 +102,7 @@ function renderOutput(
   notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
   options: {
     chartText?: string;
+    chartOptions?: { hiSpeed?: number };
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
@@ -598,4 +601,12 @@ test('chart text is visible as plain data and empty selections clear it without 
   expect(output).not.toContain('\u0007');
   expect(renderOutputRaw([], { chartText: '' }).join('\n')).not.toContain('譜面');
   expect(renderOutputRaw([]).join('\n')).not.toContain('TEXT  ');
+});
+
+test('terminal display uses exact authored hi-speed beyond user limits and restores the user value on clear', () => {
+  for (const value of [0.25, 0.77, 100]) {
+    const output = renderOutputRaw([], { highSpeed: 2, chartOptions: { hiSpeed: value } }).join('\n');
+    expect(stripANSI(output)).toContain(`HS x${value.toFixed(2)}`);
+  }
+  expect(stripANSI(renderOutputRaw([], { highSpeed: 2, chartOptions: {} }).join('\n'))).toContain('HS x2.0');
 });

@@ -1,4 +1,4 @@
-import type { BmsonBGAEventCue, KeyBoundBGACue } from '@be-music/chart-model';
+import type { ChartOptionProgram, BmsonBGAEventCue, KeyBoundBGACue } from '@be-music/chart-model';
 import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import type { RandomDraws } from '@be-music/chart-model';
@@ -15,6 +15,7 @@ import type { ImageResizeAlgorithm, TUINoteHeight } from '@be-music/player-engin
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
+  chartOptionProgram?: ChartOptionProgram;
   chartTextStages?: readonly ChartTextStage[];
   keyBoundBGACues?: readonly KeyBoundBGACue[];
   bmsonBGACues?: readonly BmsonBGAEventCue[];

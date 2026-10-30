@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createHiSpeedState } from './hi-speed.ts';
+import { createHiSpeedState, reduceHiSpeed } from './hi-speed.ts';
 import type { PlaySide } from './types.ts';
 import {
   BE_MUSIC_HI_SPEED_SCALE,
@@ -178,4 +178,13 @@ describe('resolveReplayView', () => {
     const view = captureReplayView({ hiSpeed: createHiSpeedState(), covers: [] }, { scale: 'beatoraja' });
     expect(view).toEqual({ hiSpeed: 2, hiSpeedScale: 'beatoraja', covers: [] });
   });
+});
+
+test('replay captures the user view underneath authored speed so clearing a program restores it', () => {
+  const base = createHiSpeedState({ hiSpeed: 3, multiplier: 0.5, locked: true });
+  const forced = reduceHiSpeed(base, { type: 'chart-hi-speed', value: 100 });
+  const settings = { scale: BE_MUSIC_HI_SPEED_SCALE, laneBeats: 4, mainBPM: 150 };
+  expect(captureReplayView({ hiSpeed: forced, covers: [] }, settings)).toEqual(
+    captureReplayView({ hiSpeed: base, covers: [] }, settings),
+  );
 });

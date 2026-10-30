@@ -26,7 +26,10 @@ BENCH_TEXT_CHART.events = [
 ];
 BENCH_TEXT_CHART.bms.options = ['774:HI-SPEED_x0.77', 'charatbeatHDX:BGAMODE 0'];
 BENCH_TEXT_CHART.bms.changeOption['01'] = '774:HIDDEN_STEALTH';
+BENCH_TEXT_CHART.bms.changeOption['02'] = '774:HI-SPEED_x100.00';
+BENCH_TEXT_CHART.events.push({ measure: 1, channel: 'A6', position: [0, 1], value: '02' });
 BENCH_TEXT_CHART.events.push({ measure: 1, channel: 'A6', position: [0, 1], value: '01' });
+const BENCH_CHART_OPTIONS = chartAPI.compileChartOptions(chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART));
 const BENCH_TEXT_TIMELINE = chartAPI.buildChartTextTimeline(BENCH_TEXT_CHART);
 BENCH_EXWAV_CHART.resources.wav = { '01': 'ordinary.wav' };
 BENCH_EXWAV_CHART.bms.exWAV = { '01': 'pvf 500 -600 48000 extended.wav', '02': 'v 0 only.wav' };
@@ -63,6 +66,16 @@ const BENCH_BMSON_BGA_SEQUENCE = chartAPI.buildBmsonBGAEventTimeline(BENCH_BMSON
   .sequences[0]!;
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
+  define('chart-model.compileChartOptions', {
+    run: () => {
+      chartAPI.compileChartOptions(chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART));
+    },
+  });
+  define('chart-model.resolveChartOptionsAt', {
+    run: () => {
+      chartAPI.resolveChartOptionsAt(BENCH_CHART_OPTIONS.program, 1_000_000);
+    },
+  });
   define('chart-model.buildChartOptionTimeline', {
     run: () => {
       chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART);

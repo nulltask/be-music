@@ -1,3 +1,4 @@
+import type { ChartOptionState } from '@be-music/chart-model';
 import type { BmsonBGAFrame } from './bmson-bga.ts';
 import { signal } from 'alien-signals';
 import type { KeyBoundBGAFrame } from './key-bound-bga.ts';
@@ -110,6 +111,8 @@ export interface PlayerHCNLaneState {
 }
 
 export interface PlayerUIFramePayload {
+  /** Effective compulsory chart-authored display state; absent fields restore user settings. */
+  chartOptions?: ChartOptionState;
   /** Active chart-authored text, including the engine's transient TEXT00 miss selection. */
   chartText?: string;
   /** Active input-driven SWBGA frame; absent while no key-bound animation is visible. */
@@ -224,6 +227,7 @@ export function createPlayerUISignalBus(initialFrame: PlayerUIFramePayload): Pla
 
   const publishFrame = (frame: PlayerUIFramePayload): void => {
     frameState.chartText = frame.chartText;
+    frameState.chartOptions = frame.chartOptions;
     frameState.keyBoundBGA = frame.keyBoundBGA;
     frameState.bmsonBGA = frame.bmsonBGA;
     frameState.currentBeat = frame.currentBeat;
