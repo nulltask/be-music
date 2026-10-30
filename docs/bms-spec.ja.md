@@ -294,6 +294,12 @@ runtime と round-trip の扱い:
 現実装では、これらの channel 自体は sample trigger としては扱いません。
 また、音量変更はその時点以後に新しく鳴る音の初期 gain にだけ反映し、すでに再生中の同系統 voice には反映しません。
 
+## 譜面テキストのモデル
+
+[TEXT 命令の観測資料](https://hitkey.nekokan.dyndns.info/cmdsJP.htm#TEXTXX)では、チャンネル `99` はテキストの選択、nanasigroove の TEXT00 はミス時のテキストです。`buildChartTextTimeline` は BPM・STOP を含む譜面時刻で選択を解決し、`pickChartText` は seek・restart に使える状態を持たない検索を行います。最初の選択前は空であり、TEXT00 を初期表示しません。空の定義と未定義参照は直前の選択を消去します。オブジェクト `00` は休符です。同時刻の選択は正規化済み IR 順の最後を使います。
+
+表示値は対応する外側の二重引用符を一組だけ外し、内部の空白と文字はそのまま残します。元の定義は IR と BMS・JSON の往復で変更しません。チャンネル `99` は同じリソース ID の WAV を鳴らしません。これはモデルの対応です。engine のミス状態との統合、browser・terminal の表示は #834 で追跡します。
+
 ## 実行時の対応範囲
 
 構文を保持することと、プレイヤーで実行することは別です。`#MIDIFILE` は `bms.midiFile` に保持しますが再生しません。`#WAVCMD` はピッチ・百分率音量・発音時間の上限を反映します。`#EXWAVxx` は音量・左右バランス・元レートに対する周波数を反映します。合成規則は [ADR 0024](./adr/0024-extended-bms-audio.ja.md) に定義します。[MacBeat の原仕様](http://harinezumi.s14.xrea.com/download/mbm.txt)では、ピッチの基準は 60、音量の基準は 100、コマンド `02` は 0.5 ms 単位の発音時間です。0 は原音の終端まで再生し、ループ指定ではありません。Be-Music は WAVCMD の百分率音量、EXWAV の減衰、VOLWAV、動的バス音量を掛け合わせます。WAVCMD の重複はスロット・パラメーターごとの後勝ちです。MacBeat が重複を定義していないため、これは Be-Music の規則です。EXWAV の再生音量は -10000..0 に制限し、-10000 は無音です。既存の `wavCmdVolumeByteToLinearGain` は `wavCmdVolumePercentToLinearGain` に委譲する非推奨 API とし、誤っていた 127 基準の動作を修正しました。既存の `volumeCentibels` フィールドと変換関数名は API 互換のため残しますが、単位は 1/100 dB です。`#TEXTxx` と `#CHANGEOPTIONxx` は IR に保持しますが、プレイ中のテキスト表示やオプション変更には使いません。

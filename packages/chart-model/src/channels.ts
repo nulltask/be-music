@@ -14,6 +14,7 @@ const PACKED_CHANNEL_08 = 0x3038;
 const PACKED_CHANNEL_09 = 0x3039;
 const PACKED_CHANNEL_97 = 0x3937;
 const PACKED_CHANNEL_98 = 0x3938;
+const PACKED_CHANNEL_99 = 0x3939;
 const PACKED_CHANNEL_SC = 0x5343;
 const PACKED_CHANNEL_SP = 0x5350;
 
@@ -76,7 +77,7 @@ export function isSampleTriggerChannel(channel: string): boolean {
     if (highCode === 0x30) {
       return lowCode === 0x31;
     }
-    if (highCode === 0x39 && (lowCode === 0x37 || lowCode === 0x38)) {
+    if (highCode === 0x39 && lowCode >= 0x37 && lowCode <= 0x39) {
       return false;
     }
     if ((highCode & 0xdf) === 0x41 && lowCode >= 0x30 && lowCode <= 0x36) {
@@ -257,6 +258,7 @@ function isSampleTriggerNormalizedChannel(normalized: string): boolean {
   return (
     normalized !== '97' &&
     normalized !== '98' &&
+    normalized !== '99' &&
     !/^A[0-6]$/u.test(normalized) &&
     normalized !== 'SC' &&
     normalized !== 'SP'
@@ -320,6 +322,7 @@ function isPackedSampleTriggerChannel(packed: number): boolean {
   if (
     packed === PACKED_CHANNEL_97 ||
     packed === PACKED_CHANNEL_98 ||
+    packed === PACKED_CHANNEL_99 ||
     packed === PACKED_CHANNEL_SC ||
     packed === PACKED_CHANNEL_SP
   ) {

@@ -10,6 +10,13 @@ import { type RenderResult, renderJSON, renderSingleSample } from './index.ts';
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const fixtureDir = resolve(rootDir, 'test/fixtures');
 
+test('TEXT channel 99 cannot sound a real WAV with the same resource id', async () => {
+  const chart = parseChart('#BPM 120\n#WAV01 sample.wav\n#TEXT01 "hello"\n#00099:01', 'bms');
+  const result = await renderJSON(chart, { baseDir: fixtureDir, normalize: false, gain: 1, tailSeconds: 0 });
+  expect(result.peak).toBe(0);
+  expect(result.left.every((sample) => sample === 0)).toBe(true);
+});
+
 test('offline rendering loads an EXWAV-only sample and applies percentage volume to actual WAV PCM', async () => {
   const baseline = parseChart('#BPM 120\n#WAV01 sample.wav\n#00111:01', 'bms');
   const extended = parseChart('#BPM 120\n#EXWAV01 v -600 sample.wav\n#WAVCMD 01 01 50\n#00111:01', 'bms');
