@@ -573,3 +573,22 @@ test.each([1, 2])('historical stitch %s keeps the old BMS LN interpretation', (s
   expect(result.chart.sourceFormat).toBe('bms');
   expect(resolveChart(result.chart).notes[0]?.lnMode).toBe(1);
 });
+
+test.each([1, 2])('historical mixed stitch %s does not activate newly recognized HDX declarations', (stitch) => {
+  const stage = bms(
+    '#OPTION charatbeatHDX:LONGMODE 1',
+    '#BPM 120',
+    '#WAV01 a.wav',
+    '#LNTYPE 1',
+    '#00151:01',
+    '#00251:01',
+  );
+  const result = stitchNonstopCourse([{ chart: stage }, { chart: bmsonStage() }], { connections: ['blank2'], stitch });
+  if (!result.ok) throw new Error('stitch failed');
+  expect(
+    resolveChart(result.chart)
+      .notes.filter((note) => note.kind === 'ln')
+      .map((note) => note.lnMode),
+  ).toEqual([1, 2]);
+  expect(stage.bms.lnMode).toBeUndefined();
+});
