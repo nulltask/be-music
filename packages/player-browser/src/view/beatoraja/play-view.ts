@@ -1,3 +1,4 @@
+import { ChartTextOverlay } from '../shared/chart-text.ts';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
@@ -212,6 +213,7 @@ interface PreparedChart {
 export class BeatorajaPlayView implements PlayView {
   private readonly displayInfo = new DisplayAreaInfoOverlay();
   private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
+  private readonly chartText = new ChartTextOverlay();
   public readonly family = 'beatoraja' as const;
   public readonly root: Container = new Container();
   public readonly timing: PlayViewTiming;
@@ -471,6 +473,7 @@ export class BeatorajaPlayView implements PlayView {
   public detach(): void {
     this.displayInfo.detach();
     this.bpmChangeWarning.detach();
+    this.chartText.detach();
     this.touchLanes.detach();
     if (typeof window !== 'undefined') window.removeEventListener('wheel', this.handleWheel);
     this.host = undefined;
@@ -484,6 +487,7 @@ export class BeatorajaPlayView implements PlayView {
     this.root.visible = frame.shown;
     if (!frame.shown) this.displayInfo.hide();
     if (!frame.shown) this.bpmChangeWarning.hide();
+    if (!frame.shown) this.chartText.hide();
     if (stage === undefined || bridge === undefined || host === undefined || !frame.shown || this.disposed) return;
     stage.fitTo(host);
     const play = this.play;
@@ -561,6 +565,8 @@ export class BeatorajaPlayView implements PlayView {
       host.app.screen,
       stage.canvas.alpha,
     );
+    this.chartText.attachCanvas(stage.canvas);
+    this.chartText.show(frame.chartText ?? '', stage, host.app.screen, stage.canvas.alpha);
     this.bpmChangeWarning.attachCanvas(stage.canvas);
     this.bpmChangeWarning.show({
       enabled: frame.playOptions.bpmChangeWarning,
@@ -636,6 +642,7 @@ export class BeatorajaPlayView implements PlayView {
   public dispose(): void {
     this.displayInfo.dispose();
     this.bpmChangeWarning.dispose();
+    this.chartText.dispose();
     if (this.disposed) return;
     this.detach();
     this.disposed = true;

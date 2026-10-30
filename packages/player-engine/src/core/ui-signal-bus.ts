@@ -110,6 +110,8 @@ export interface PlayerHCNLaneState {
 }
 
 export interface PlayerUIFramePayload {
+  /** Active chart-authored text, including the engine's transient TEXT00 miss selection. */
+  chartText?: string;
   /** Active input-driven SWBGA frame; absent while no key-bound animation is visible. */
   keyBoundBGA?: KeyBoundBGAFrame;
   /** Active conditional bmson animation, resolved on the engine chart clock. */
@@ -221,6 +223,7 @@ export function createPlayerUISignalBus(initialFrame: PlayerUIFramePayload): Pla
   const commandQueue: PlayerUICommand[] = [];
 
   const publishFrame = (frame: PlayerUIFramePayload): void => {
+    frameState.chartText = frame.chartText;
     frameState.keyBoundBGA = frame.keyBoundBGA;
     frameState.bmsonBGA = frame.bmsonBGA;
     frameState.currentBeat = frame.currentBeat;

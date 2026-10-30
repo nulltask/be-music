@@ -131,6 +131,7 @@ interface TUINote {
 }
 
 interface TUIFrame {
+  chartText?: string;
   currentBeat: number;
   currentSeconds: number;
   /** Mirrored display clock past the LR2 negative-BPM reversal (#134) — the lane grid scrolls from it when set. */
@@ -481,11 +482,14 @@ export class PlayerTUI {
       typeof this.options.randomPatternSummary === 'string' && this.options.randomPatternSummary.length > 0
         ? this.options.randomPatternSummary
         : undefined;
-    const rowCount = calculateTUIGridRowCount(terminalRows, {
-      showLaneChannels,
-      hasRandomPatternSummary: randomPatternSummary !== undefined,
-      hasAudioDebugLine: debugLineCount > 0,
-    });
+    const rowCount = calculateTUIGridRowCount(
+      terminalRows === undefined ? undefined : terminalRows - (frame.chartText === undefined ? 0 : 1),
+      {
+        showLaneChannels,
+        hasRandomPatternSummary: randomPatternSummary !== undefined,
+        hasAudioDebugLine: debugLineCount > 0,
+      },
+    );
     const laneCount = Math.max(1, this.options.lanes.length);
     const now = Date.now();
     const currentFPS = this.resolveFPS(now);
@@ -735,6 +739,15 @@ export class PlayerTUI {
     lines.push(`BMS PLAYER TUI [${this.options.mode}]  AUDIO ${audioBackendLabel}`);
     lines.push(`${this.options.title}${this.options.artist ? ` / ${this.options.artist}` : ''}`);
     lines.push(`GENRE ${formatGenreLabel(this.options.genre)}`);
+    if (frame.chartText !== undefined) {
+      // Chart text is data: never allow its controls to move the terminal cursor or inject ANSI commands.
+      const text = frame.chartText
+        // eslint-disable-next-line no-control-regex
+        .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
+      lines.push(`TEXT  ${text}`);
+    }
     lines.push(
       `${renderProgress(frame.currentSeconds, frame.totalSeconds)}  ${formatSeconds(frame.currentSeconds)} / ${formatSeconds(frame.totalSeconds)}`,
     );

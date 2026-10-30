@@ -1,4 +1,5 @@
 import type { BmsonBGAEventInput } from './bmson-bga.ts';
+import type { ChartTextInput } from './chart-text.ts';
 import type { ReplayPlay } from '../replay/format.ts';
 import type { PlayerInputCommand } from './input-signal-bus.ts';
 import type { PlayerUILongNoteMode, PlayerUISeekJudgment } from './ui-signal-bus.ts';
@@ -54,6 +55,7 @@ export interface PlayJudge {
 
 /** What a judge rebuilt when it sought ({@link PlayJudge.seek}). */
 export interface PlayJudgeSeek {
+  chartTextInputs?: readonly ChartTextInput[];
   bmsonBGAInputs?: readonly BmsonBGAEventInput[];
   /** The judgments before the second sought, in the order a play from the start made them. */
   judgments: PlayerUISeekJudgment[];

@@ -1,3 +1,4 @@
+import { ChartTextOverlay } from '../shared/chart-text.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
 /**
@@ -95,6 +96,7 @@ export class BuiltInPlayView
 {
   private readonly displayInfo = new DisplayAreaInfoOverlay();
   private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
+  private readonly chartText = new ChartTextOverlay();
   /** LIFT integration is currently enabled for Plain and Native. */
   public get drawsLift(): boolean {
     return LIFT_SKINS.has(this.kit.skin.id);
@@ -217,6 +219,8 @@ export class BuiltInPlayView
     else this.displayInfo.attach(host.domRoot);
     if (this.drawsOnCanvas) this.bpmChangeWarning.attachCanvas(this.designRoot);
     else this.bpmChangeWarning.attach(host.domRoot);
+    if (this.drawsOnCanvas) this.chartText.attachCanvas(this.designRoot);
+    else this.chartText.attach(host.domRoot);
   }
 
   public draw(frame: PlayFrame): void {
@@ -229,6 +233,7 @@ export class BuiltInPlayView
     this.root.visible = frame.shown;
     if (!frame.shown) this.displayInfo.hide();
     if (!frame.shown) this.bpmChangeWarning.hide();
+    if (!frame.shown) this.chartText.hide();
     if (!frame.shown) return;
     this.perf.beginTick();
     this.chromeRuntime = undefined;
@@ -254,6 +259,7 @@ export class BuiltInPlayView
       this.app.screen,
       this.designRoot.alpha,
     );
+    this.chartText.show(frame.chartText ?? '', this.playfieldSkin.stage, this.app.screen, this.designRoot.alpha);
     this.bpmChangeWarning.show({
       enabled: frame.playOptions.bpmChangeWarning,
       timing: this.play.timingResolver,
@@ -299,6 +305,7 @@ export class BuiltInPlayView
   public detach(): void {
     this.displayInfo.detach();
     this.bpmChangeWarning.detach();
+    this.chartText.detach();
     this.touchLanes.detach();
     this.dom?.detach();
   }
@@ -324,6 +331,7 @@ export class BuiltInPlayView
   public dispose(): void {
     this.displayInfo.dispose();
     this.bpmChangeWarning.dispose();
+    this.chartText.dispose();
     this.dom?.dispose();
     this.dom = undefined;
     // Drop every per-frame child pool before the scene graph so each pooled child is freed through its own `destroy()`.
