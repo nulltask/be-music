@@ -89,6 +89,7 @@ export function createUIFramePublisher(params: {
   resolveHCNLanes?: (seconds: number) => PlayerUIFramePayload['hcnLanes'];
   resolveKeyBoundBGA?: (seconds: number) => PlayerUIFramePayload['keyBoundBGA'];
   resolveBmsonBGA?: (seconds: number) => PlayerUIFramePayload['bmsonBGA'];
+  resolveChartText?: (seconds: number) => string;
   resolveJudgedNoteCount?: () => number;
 }): (seconds: number, beat: number) => void {
   const {
@@ -107,6 +108,7 @@ export function createUIFramePublisher(params: {
     resolveHCNLanes,
     resolveKeyBoundBGA,
     resolveBmsonBGA,
+    resolveChartText,
     resolveJudgedNoteCount,
   } = params;
   return (seconds: number, beat: number): void => {
@@ -130,6 +132,7 @@ export function createUIFramePublisher(params: {
       hcnLanes: resolveHCNLanes?.(seconds),
       ...(resolveKeyBoundBGA ? { keyBoundBGA: resolveKeyBoundBGA(seconds) } : {}),
       ...(resolveBmsonBGA ? { bmsonBGA: resolveBmsonBGA(seconds) } : {}),
+      ...(resolveChartText ? { chartText: resolveChartText(seconds) } : {}),
       judgedNoteCount: resolveJudgedNoteCount?.(),
       landmineNotes,
       invisibleNotes,

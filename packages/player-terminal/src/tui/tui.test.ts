@@ -13,6 +13,7 @@ const PLAY_PROGRESS_GROOVE_MARKER = '\u001b[38;2;18;18;18m┃\u001b[0m';
 function renderOutputRaw(
   notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
   options: {
+    chartText?: string;
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
@@ -55,6 +56,7 @@ function renderOutputRaw(
     tui.setTerminalSize(40, 24);
     tui.start();
     tui.render({
+      chartText: options.chartText,
       currentBeat: options.currentBeat ?? 0,
       currentSeconds: options.currentSeconds ?? (options.currentBeat ?? 0) / 2,
       totalSeconds: options.totalSeconds ?? 10,
@@ -97,6 +99,7 @@ function renderOutputRaw(
 function renderOutput(
   notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
   options: {
+    chartText?: string;
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
@@ -586,4 +589,13 @@ test('generic channel 16 and 17 notes use normal white keys rather than scratch 
   expect(output).toContain('\u001b[38;2;255;255;255;4m');
   expect(output).not.toContain('\u001b[38;2;255;95;95;4m');
   expect(output).not.toContain('\u001b[38;2;95;135;255;4m');
+});
+
+test('chart text is visible as plain data and empty selections clear it without interpreting controls', () => {
+  const output = renderOutputRaw([], { chartText: '譜面 <b>text</b>\n\u001b[31mRED\u0007' }).join('\n');
+  expect(stripANSI(output)).toContain('TEXT  譜面 <b>text</b> RED ');
+  expect(output).not.toContain('\u001b[31m');
+  expect(output).not.toContain('\u0007');
+  expect(renderOutputRaw([], { chartText: '' }).join('\n')).not.toContain('譜面');
+  expect(renderOutputRaw([]).join('\n')).not.toContain('TEXT  ');
 });

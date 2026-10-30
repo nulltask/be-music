@@ -1,4 +1,5 @@
 import { resolveBmsonBGAEventInput, type BmsonBGAEventInput } from './bmson-bga.ts';
+import { resolveChartTextInput, type ChartTextInput } from './chart-text.ts';
 import { formatSeconds } from '../utils.ts';
 import { writeRuntimeEventLog } from './engine-trace.ts';
 import type { PreparedPlaybackChartData } from './bootstrap.ts';
@@ -18,6 +19,7 @@ export interface SeekRebuildSink {
   readonly emit: JudgeCoreEffectSink;
   readonly judgments: PlayerUISeekJudgment[];
   readonly bmsonBGAInputs: BmsonBGAEventInput[];
+  readonly chartTextInputs: ChartTextInput[];
 }
 
 /**
@@ -27,13 +29,17 @@ export interface SeekRebuildSink {
 export function createSeekRebuildSink(summary: Readonly<PlayerUIFrameSummary>): SeekRebuildSink {
   const judgments: PlayerUISeekJudgment[] = [];
   const bmsonBGAInputs: BmsonBGAEventInput[] = [];
+  const chartTextInputs: ChartTextInput[] = [];
   let seconds = 0;
   return {
     judgments,
     bmsonBGAInputs,
+    chartTextInputs,
     emit: (effect) => {
       const bgaInput = resolveBmsonBGAEventInput(effect);
       if (bgaInput) bmsonBGAInputs.push(bgaInput);
+      const textInput = resolveChartTextInput(effect);
+      if (textInput) chartTextInputs.push(textInput);
       if ('seconds' in effect && effect.seconds !== undefined) seconds = effect.seconds;
       if (effect.kind !== 'judge-combo') return;
       judgments.push({
@@ -98,6 +104,7 @@ export function applySeek(session: PlaySession, judge: PlayJudge, seconds: numbe
   resetPlayNotes(session.playbackChart);
   const rebuilt = judge.seek(target);
   session.bmsonBGA?.reset(rebuilt.bmsonBGAInputs);
+  session.chartText?.reset(rebuilt.chartTextInputs);
 
   // What the buses still hold belongs to the old position.
   uiSignals.drainCommands();

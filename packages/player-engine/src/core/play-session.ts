@@ -1,4 +1,5 @@
 import { BmsonBGAController } from './bmson-bga.ts';
+import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
@@ -9,6 +10,7 @@ import {
   createBeatAtSecondsResolverFromTimingResolver,
   buildKeyBoundBGATimeline,
   buildBmsonBGAEventTimeline,
+  buildChartTextTimeline,
   isPlayLaneSoundChannel,
   type ResolvedChart,
 } from '@be-music/chart-model';
@@ -126,6 +128,7 @@ export interface PlaySession {
   readonly publishUIFrame: (seconds: number, beat: number) => void;
   readonly keyBoundBGA?: KeyBoundBGAController;
   readonly bmsonBGA?: BmsonBGAController;
+  readonly chartText?: ChartTextController;
   /** The judge supplies HCN display facts from its existing state; no second simulation. */
   readHCNLanes?: (seconds: number) => readonly PlayerHCNLaneState[];
   /** Maps the judge's effects onto audio, the UI buses, the replay and the trace. */
@@ -573,6 +576,11 @@ export async function createPlaySession(
       includeOrdinaryLayerClears: true,
     });
   const bmsonBGA = bmsonCues.length > 0 ? new BmsonBGAController(bmsonCues, freezeSeconds) : undefined;
+  const textTimeline = buildChartTextTimeline(resolvedChart.source, resolvedChart.timing);
+  const chartText =
+    textTimeline.cues.length || textTimeline.missText !== undefined
+      ? new ChartTextController(textTimeline, freezeSeconds)
+      : undefined;
   const publishUIFrame = createUIFramePublisher({
     uiEnabled,
     uiSignals,
@@ -584,6 +592,7 @@ export async function createPlaySession(
     audioBackend: audioBackendLabel,
     ...(secondPlayer !== undefined ? { summary2P: secondPlayer.summary } : {}),
     ...(bmsonBGA ? { resolveBmsonBGA: (seconds: number) => bmsonBGA.read(seconds) } : {}),
+    ...(chartText ? { resolveChartText: (seconds: number) => chartText.read(seconds) } : {}),
     resolveHCNLanes: (seconds) => session?.readHCNLanes?.(seconds),
     ...(keyBoundBGA ? { resolveKeyBoundBGA: (seconds: number) => keyBoundBGA.read(seconds) } : {}),
     resolveJudgedNoteCount: () =>
@@ -627,6 +636,7 @@ export async function createPlaySession(
     },
   });
   const applyJudgeEffect = createJudgeEffectHandler({
+    ...(chartText ? { onChartTextInput: (input) => chartText.addInput(input) } : {}),
     ...(bmsonBGA ? { onBmsonBGAInput: (input) => bmsonBGA.addInput(input) } : {}),
     ...(keyBoundBGA && !replay
       ? {
@@ -717,6 +727,7 @@ export async function createPlaySession(
     publishUIFrame,
     ...(keyBoundBGA ? { keyBoundBGA } : {}),
     ...(bmsonBGA ? { bmsonBGA } : {}),
+    ...(chartText ? { chartText } : {}),
     applyJudgeEffect,
     settleJudgeTiming: () => applyJudgeEffect.settleJudgeTiming(),
     volumeChanges,

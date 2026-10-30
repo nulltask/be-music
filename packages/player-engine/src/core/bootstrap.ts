@@ -10,7 +10,7 @@ import { prepareMineModifier, type MineModifier } from './mine-modifier.ts';
 import { addScrollChanges, removeScrollChanges, type ScrollModifier } from './scroll-modifier.ts';
 import { addLongNotes, clampLongNoteRate, removeLongNoteTails, type LongNoteModifier } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
-import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
+import { buildChartTextTimeline, resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import { normalizeChannel, type BeMusicJSON } from '@be-music/chart-source';
 import { type GrooveGaugeJudgmentKind } from './groove-gauge.ts';
 import {
@@ -333,7 +333,12 @@ export function preparePlaybackChart(
     : undefined;
   resolved = duplicateBattle?.chart ?? resolved;
   playVariant = resolved.playVariant;
-  let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds);
+  // Leave one chart second to present the final selection, even after the last playable note.
+  const lastTextCue = buildChartTextTimeline(resolved.source, resolved.timing)
+    .cues.filter((cue) => cue.seconds <= (resolved.reversal?.seconds ?? Infinity))
+    .at(-1);
+  const lastTextSeconds = lastTextCue === undefined ? 0 : lastTextCue.seconds + 1;
+  let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds, lastTextSeconds);
   for (const note of notes) totalSeconds = Math.max(totalSeconds, note.endSeconds ?? note.seconds);
   for (const mine of landmineNotes) totalSeconds = Math.max(totalSeconds, mine.seconds);
   const practiceRange =

@@ -200,6 +200,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       stage,
       ...(stage === 'loading' && this.loadProgress !== undefined ? { progress: this.loadProgress } : {}),
       seconds,
+      chartText: play.engineFrame?.chartText,
       seekable: canSeekPlay(play),
       beat: play.currentBeat(seconds),
       ...(bpm !== undefined ? { bpm } : {}),

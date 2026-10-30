@@ -96,6 +96,9 @@ export function createTwoPlayerJudge(strategy: JudgeStrategy, session: PlaySessi
               bmsonBGAInputs: rebuilt
                 .flatMap((part) => part.bmsonBGAInputs ?? [])
                 .sort((a, b) => a.seconds - b.seconds),
+              chartTextInputs: rebuilt
+                .flatMap((part) => part.chartTextInputs ?? [])
+                .sort((a, b) => a.seconds - b.seconds),
               judgments: rebuilt.flatMap((part) => part.judgments).sort((a, b) => a.seconds - b.seconds),
               heldLongNotes: rebuilt.flatMap((part) => part.heldLongNotes),
             };

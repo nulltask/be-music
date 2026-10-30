@@ -124,6 +124,7 @@ function createAutoJudge(session: PlaySession): PlayJudge {
     return {
       judgments: rebuild.judgments,
       bmsonBGAInputs: rebuild.bmsonBGAInputs,
+      chartTextInputs: rebuild.chartTextInputs,
       heldLongNotes: autoJudge.pendingLongNotes.map(({ note }) => ({
         channel: note.channel,
         beat: note.beat,
