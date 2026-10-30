@@ -181,7 +181,7 @@ flowchart LR
 - **ホスト向けの情報。** 結果のマップは各ステージについて次を返します：キー（ステージ別の音のバスと BGA レイヤー用）、担当区間、つなぎ方に応じた音のフェードと 3 秒の BGA クロスフェード、LR2 がステージの切り替わりを知らせるか（BLANK でつないだときだけ）。さらに BPM 表示（`tempo`）と判定ランクの切り替え（`stageRanks`）を返します。`stageRanks` はエンジンの `stageRanks` オプションに渡します。リプレイは `chart.judgeRank.stageRanks` として記録するので、リプレイと再シミュレーションでも同じ判定幅で判定します。`assetPath` で、ホストは各ステージのファイルパスに接頭辞を付けられます。
 - **未対応。** あるステージのオブジェクトが別のステージの STOP 中に鳴るときのスクロール。
 
-**bmson のステージ。** `placement: 'intended'` で1つでも bmson のステージを含むコースは、BMS と混在する場合も bmson の IR 譜面として出力します。LR2 の配置では bmson を拒否します。元の音声のスライス座標、継続フラグ、ロングノート種別、不可視キーサウンド、地雷ダメージ、BGA レイヤーを保持します。FIT 後も元の音声座標を保ち、ピッチ維持再生では伸縮済みバッファーの座標へ変換します。各ステージの判定ランクの単位（生の `judge_rank` は `bmson`、BMS `#RANK` は `chart`、`#DEFEXRANK` は `bms-exrank`）を LR2 と beatoraja が適用します。最後のステージの TOTAL も絶対値・百分率の単位を保ちます。コースの識別子には元のステージのフィンガープリントを使います。現在の結合バージョンは 2 で、以前のリプレイ向けにバージョン 1 も利用できます。[ADR 0017](./adr/0017-bmson-nonstop.ja.md) を参照してください。
+**bmson のステージ。** `placement: 'intended'` で1つでも bmson のステージを含むコースは、BMS と混在する場合も bmson の IR 譜面として出力します。LR2 の配置では bmson を拒否します。元の音声のスライス座標、継続フラグ、ロングノート種別、不可視キーサウンド、地雷ダメージ、BGA レイヤーを保持します。FIT 後も元の音声座標を保ち、ピッチ維持再生では伸縮済みバッファーの座標へ変換します。各ステージの判定ランクの単位（生の `judge_rank` は `bmson`、BMS `#RANK` は `chart`、`#DEFEXRANK` は `bms-exrank`）を LR2 と beatoraja が適用します。最後のステージの TOTAL も絶対値・百分率の単位を保ちます。コースの識別子には元のステージのフィンガープリントを使います。現在の結合バージョンは 3 で、以前のリプレイ向けにバージョン 1・2 も利用できます。[ADR 0017](./adr/0017-bmson-nonstop.ja.md) を参照してください。
 
 **処理の流れ**（`prepareNonstopCourse`、`resolveNonstopRun`、`buildNonstopCourseReplay`）。ホストが遊ぶためにコースを結合するときも、Leaderboard が確かめるためにプレイの結合譜面を作り直すときも、同じ手順を使います。そのため、遊んだ譜面について両者の結果が一致します。
 
@@ -347,3 +347,5 @@ stateDiagram-v2
 - **トロフィー**（beatoraja の `GradeBar.getTrophy`）：`missRate` ≥ BP × 100 / ノート数、かつ `scoreRate` ≤ EX スコア × 100 / (2 × ノート数) を満たす最後のトロフィー。
 
 ランプと BP は、どのプレイのランプも決める定義のうちコースの規則と BP です（`@be-music/player-engine/ruleset` の `resolveCourseClearLamp`、`resolveMissCount`）。ホストはプレイの自己ベストを、そのプレイを判定したルールセットで保ちます（`resolveCoursePlayedRuleset`。ステージごとに違うプレイは記録しません）。規則は `@be-music/player-engine/records` にあります。`courseRunRecordPlay` はプレイが記録に残すものを読み、`courseRunKeepsRecord` はオートプレイとテンポを変えたプレイを除き、`mergeCourseStageRecord` は LR2 と同じく EXPERT / GRADE のステージをその譜面の記録に反映します（最高の EX スコア・最大コンボ・最少の BP と、FULL COMBO 以上のランプ。クリアランプとプレイ回数は更新しません）。
+
+stitch バージョン3は CN・HCN を含む BMS だけのコースも内部 bmson に変換し、各ロングノートのステージ固有モードを保持します。明示的 LNMODE と HDX LONGMODE の両方が対象です。過去の stitch バージョンは以前の BMS 解釈を保持します。[ADR 0027](./adr/0027-hdx-long-note-modes.ja.md) を参照してください。

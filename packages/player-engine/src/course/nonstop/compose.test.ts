@@ -444,7 +444,7 @@ test('NONSTOP version 2 retains the last declared TOTAL, while version 1 preserv
   };
   const current = build(2),
     legacy = build(1);
-  expect(NONSTOP_STITCH_VERSION).toBe(2);
+  expect(NONSTOP_STITCH_VERSION).toBe(3);
   expect(current.chart.metadata.total).toBe(80);
   expect(legacy.chart.metadata.total).toBeUndefined();
   expect(resolveChart(current.chart).notes.map((note) => [note.seconds, note.endSeconds])).toEqual(
@@ -540,4 +540,36 @@ test('NONSTOP preserves source channels beyond the BMS capacity across bmson sta
   expect(triggers.filter((trigger) => trigger.samplePath?.endsWith('sample-3843.wav'))).toHaveLength(2);
   const finalTriggers = triggers.filter((trigger) => trigger.samplePath?.endsWith('sample-3843.wav'));
   expect(finalTriggers[0]!.sampleKey).not.toBe(finalTriggers[1]!.sampleKey);
+});
+
+test.each([false, true])('NONSTOP keeps each HDX stage mode (bmson output: %s)', (mixed) => {
+  const sources = [0, 1].map((argument) =>
+    bms(
+      `#OPTION charatbeatHDX:LONGMODE ${argument}`,
+      '#BPM 120',
+      '#WAV01 a.wav',
+      '#LNTYPE 1',
+      '#00151:01',
+      '#00251:01',
+    ),
+  );
+  if (mixed) sources.push(bmsonStage());
+  const result = stitchNonstopCourse(
+    sources.map((chart) => ({ chart })),
+    { connections: sources.slice(1).map(() => 'blank2' as const) },
+  );
+  if (!result.ok) throw new Error('stitch failed');
+  expect(
+    resolveChart(result.chart)
+      .notes.filter((note) => note.kind === 'ln')
+      .map((note) => note.lnMode),
+  ).toEqual(mixed ? [2, 3, 2] : [2, 3]);
+});
+
+test.each([1, 2])('historical stitch %s keeps the old BMS LN interpretation', (stitch) => {
+  const stage = bms('#BPM 120', '#LNMODE 3', '#LNTYPE 1', '#00151:01', '#00251:01');
+  const result = stitchNonstopCourse([{ chart: stage }], { connections: [], stitch });
+  if (!result.ok) throw new Error('stitch failed');
+  expect(result.chart.sourceFormat).toBe('bms');
+  expect(resolveChart(result.chart).notes[0]?.lnMode).toBe(1);
 });

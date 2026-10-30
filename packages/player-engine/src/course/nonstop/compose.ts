@@ -56,10 +56,10 @@ export interface NonstopStageInput {
  * (`ReplayNonstopRun.stitch`), so a stitched chart is rebuilt by the rules it was played on. Raise it whenever a change
  * moves a stitched note, sound, rank or timing, or changes gauge inputs; keep earlier rules reachable through `options.stitch`.
  */
-export const NONSTOP_STITCH_VERSION = 2;
+export const NONSTOP_STITCH_VERSION = 3;
 
 /** The stitching rule versions {@link stitchNonstopCourse} can follow. */
-export const NONSTOP_STITCH_VERSIONS: readonly number[] = [1, 2];
+export const NONSTOP_STITCH_VERSIONS: readonly number[] = [1, 2, 3];
 
 export interface StitchNonstopOptions extends NonstopPlanOptions {
   /** The stitching rules to follow ({@link NONSTOP_STITCH_VERSION} by default); one it does not know is refused. */
@@ -205,7 +205,7 @@ export function stitchNonstopCourse(
   const bmsonStage = stages.findIndex((stage) => stage.chart.sourceFormat === 'bmson');
   if (bmsonStage >= 0 && options.placement === 'lr2') return { ok: false, reason: 'bmson', stage: bmsonStage };
   const assetPath = options.assetPath ?? ((_stage, _kind, path) => path);
-  const resolved = stages.map((stage) =>
+  let resolved = stages.map((stage) =>
     resolveChart(stage.chart, bmsonStage >= 0 && stage.pms === true ? { chartPath: '.pms' } : {}),
   );
   if (resolved.some((chart) => chart.playVariant.startsWith('generic-'))) {
@@ -222,7 +222,13 @@ export function stitchNonstopCourse(
     placements[stage]!.offsetSeconds + seconds / placements[stage]!.rate;
   const stageOpacity = resolved.map((source, index) => placeNonstopBGAOpacity(source, placements[index]!));
 
-  const asBmson = bmsonStage >= 0;
+  // BMS has one global LNMODE. Version 3 uses per-note bmson types when a BMS stage needs CN/HCN.
+  const asBmson =
+    bmsonStage >= 0 ||
+    ((options.stitch ?? NONSTOP_STITCH_VERSION) >= 3 &&
+      resolved.some((stage) => stage.notes.some((note) => note.kind === 'ln' && note.lnMode !== 1)));
+  if (asBmson && bmsonStage < 0)
+    resolved = stages.map((stage) => resolveChart(stage.chart, stage.pms === true ? { chartPath: '.pms' } : {}));
   const wavKeys = new NonstopKeyAllocator(asBmson);
   const bmpKeys = new NonstopKeyAllocator(asBmson);
   const keyBoundBGA: KeyBoundBGACue[] = [];
