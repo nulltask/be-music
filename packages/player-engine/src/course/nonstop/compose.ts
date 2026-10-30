@@ -205,9 +205,15 @@ export function stitchNonstopCourse(
   const bmsonStage = stages.findIndex((stage) => stage.chart.sourceFormat === 'bmson');
   if (bmsonStage >= 0 && options.placement === 'lr2') return { ok: false, reason: 'bmson', stage: bmsonStage };
   const assetPath = options.assetPath ?? ((_stage, _kind, path) => path);
-  let resolved = stages.map((stage) =>
-    resolveChart(stage.chart, bmsonStage >= 0 && stage.pms === true ? { chartPath: '.pms' } : {}),
-  );
+  let resolved = stages.map((stage) => {
+    let source = stage.chart;
+    // Historical stitching predates HDX LONGMODE, including BMS stages in mixed bmson courses.
+    if ((options.stitch ?? NONSTOP_STITCH_VERSION) < 3 && source.sourceFormat === 'bms') {
+      const mode = source.bms.lnMode;
+      if (mode !== 1 && mode !== 2 && mode !== 3) source = { ...source, bms: { ...source.bms, lnMode: 1 } };
+    }
+    return resolveChart(source, bmsonStage >= 0 && stage.pms === true ? { chartPath: '.pms' } : {});
+  });
   if (resolved.some((chart) => chart.playVariant.startsWith('generic-'))) {
     const incompatible = resolved.findIndex((chart) => chart.playVariant !== resolved[0]!.playVariant);
     if (incompatible >= 0) return { ok: false, reason: 'generic-layout-mismatch', stage: incompatible };
