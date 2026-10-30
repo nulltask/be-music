@@ -1,6 +1,10 @@
+import { placeNonstopChartOptions, type NonstopChartOptionDiagnostic } from './chart-options.ts';
+export type { NonstopChartOptionDiagnostic } from './chart-options.ts';
 import type { ChartTextStage } from '../../core/chart-text.ts';
 import {
   buildChartTextTimeline,
+  type ChartOptionProgram,
+  type ChartOptionStateCue,
   resolvePoorBGAMode,
   type PoorBGAMode,
   resolveChart,
@@ -104,6 +108,10 @@ export interface NonstopStitchStage {
 }
 
 export interface NonstopStitchMap {
+  /** Stage-owned effective option program on the course microsecond clock. */
+  chartOptions?: ChartOptionProgram;
+  /** Unsupported or malformed stage declarations with source/course provenance. */
+  chartOptionDiagnostics?: NonstopChartOptionDiagnostic[];
   /** Source text programs with stage ownership and FIT time mapping. */
   chartText?: ChartTextStage[];
   /** Remapped input-bound BGA selections, with stage ownership windows on the stitched clock. */
@@ -220,6 +228,9 @@ export function stitchNonstopCourse(
   const keyBoundBGA: KeyBoundBGACue[] = [];
   const bmsonBGA: BmsonBGAEventCue[] = [];
   const chartText: ChartTextStage[] = [];
+  const chartOptionCues: ChartOptionStateCue[] = [];
+  const chartOptionDiagnostics: NonstopChartOptionDiagnostic[] = [];
+  let hasChartOptions = false;
   const stopKeys = new NonstopKeyAllocator(asBmson);
   const chart = createEmptyJSON(asBmson ? 'bmson' : 'bms');
   let totalStage = stages.length - 1;
@@ -317,6 +328,10 @@ export function stitchNonstopCourse(
       return true;
     };
 
+    const placedOptions = placeNonstopChartOptions(chartIndex, placements[index]!, window, index);
+    chartOptionCues.push(...placedOptions.cues);
+    chartOptionDiagnostics.push(...placedOptions.diagnostics);
+    hasChartOptions ||= placedOptions.hasOperations;
     chartText.push({
       startSeconds: Math.max(0, window.start),
       endSeconds: window.end,
@@ -424,6 +439,16 @@ export function stitchNonstopCourse(
     ok: true,
     chart,
     map: {
+      ...(hasChartOptions
+        ? {
+            chartOptions: {
+              version: 1 as const,
+              initial: { ...chartOptionCues[0]?.state },
+              cues: chartOptionCues.slice(1),
+            },
+          }
+        : {}),
+      ...(chartOptionDiagnostics.length > 0 ? { chartOptionDiagnostics } : {}),
       ...(chartText.some((stage) => stage.timeline.cues.length > 0 || stage.timeline.missText !== undefined)
         ? { chartText }
         : {}),

@@ -185,6 +185,9 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     [
       '#BPM 150',
       '#BPM01 180',
+      '#OPTION 774:HI-SPEED_x0.77',
+      '#CHANGEOPTION01 774:HI-SPEED_x100.00',
+      '#002A6:01',
       '#TEXT00 "MISS"',
       '#TEXT01 "stage text"',
       '#00099:01',
@@ -349,7 +352,21 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.splitNonstopReplay', {
     run: () => {
       replayAPI.splitNonstopReplay(
-        { replay: BENCH_REPLAY, stages: benchSplitStages, noteStages: benchSplitNoteStages },
+        {
+          replay: {
+            ...BENCH_REPLAY,
+            chart: {
+              ...BENCH_REPLAY.chart,
+              chartOptions: {
+                version: 1 as const,
+                initial: { hiSpeed: 0.77 },
+                cues: [{ timeUs: 1_000_000, state: { hiSpeed: 100 } }],
+              },
+            },
+          },
+          stages: benchSplitStages,
+          noteStages: benchSplitNoteStages,
+        },
         [{ title: 'A' }, { title: 'B' }],
         { ruleset: 'lr2' },
       );

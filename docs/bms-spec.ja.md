@@ -304,7 +304,7 @@ runtime と round-trip の扱い:
 
 複数の `#OPTION` 行は、ベンダー固有の宣言全体を組み合わせます。パーサは `bms.options` に順序を保持し、`bms.option` は最後の値を表す legacy 互換フィールドとして残します。charatbeatHDX の命令には数値引数があるため、空白では分割しません。制御構文のある譜面では、無条件の OPTION 行も含む完全なプログラムを分岐命令とともに保持します。選んだ分岐を解決するときに有効な宣言を再構築し、無条件の行を重複追加しません。canonical BMS と Be-Music JSON は、未知の ID を含めて順序と値を維持します。
 
-`buildChartOptionTimeline` は RANDOM・SWITCH 解決後の初期宣言と、チャンネル `A6` の時刻付き参照を収集します。BPM・STOP、有効な base-62 ID、同時刻での正規化済み IR 順を維持し、未定義参照は後の診断用に残します。オブジェクト `00` は休符です。タイムラインは宣言全体を収集します。`compileChartOptions` が対応する実効操作と診断に変換し、`resolveChartOptionsAt` が譜面マイクロ秒で状態を持たずに検索します。HI-SPEED は engine・browser・terminal で譜面指定の 0.25–100 を実行し、小数第2位と初期指定の数値 HSP 別名を保持します。[ADR 0026](./adr/0026-chart-authored-display-options.ja.md)に、強制指定の優先順位、同時刻の IR 順、replay プロファイル、解除・seek・反転、記録可否が変わらない方針を定義します。他の系列と NONSTOP のオプション合成は #835 で追跡します。
+`buildChartOptionTimeline` は RANDOM・SWITCH 解決後の初期宣言と、チャンネル `A6` の時刻付き参照を収集します。BPM・STOP、有効な base-62 ID、同時刻での正規化済み IR 順を維持し、未定義参照は後の診断用に残します。オブジェクト `00` は休符です。タイムラインは宣言全体を収集します。`compileChartOptions` が対応する実効操作と診断に変換し、`resolveChartOptionsAt` が譜面マイクロ秒で状態を持たずに検索します。HI-SPEED は engine・browser・terminal で譜面指定の 0.25–100 を実行し、小数第2位と初期指定の数値 HSP 別名を保持します。[ADR 0026](./adr/0026-chart-authored-display-options.ja.md)に、強制指定の優先順位、同時刻の IR 順、replay プロファイル、解除・seek・反転、記録可否が変わらない方針を定義します。NONSTOP は FIT 時刻・切り詰めた先頭・空ステージでの解除を含むステージ固有の実効プログラムを `NonstopStitchMap.chartOptions` に保持し、browser が自動で接続します。他の系列は #835 で追跡します。
 
 ## 実行時の対応範囲
 

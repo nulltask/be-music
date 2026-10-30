@@ -1,4 +1,4 @@
-import type { ChartOptionProgram } from '@be-music/chart-model';
+import type { ChartOptionProgram, ChartOptionDiagnostic } from '@be-music/chart-model';
 import type { ChartTextStage } from './chart-text.ts';
 export type { ChartTextStage } from './chart-text.ts';
 import type { BattleMode } from './battle-mode.ts';
@@ -226,6 +226,8 @@ export interface PlayerStageRank {
 export interface PlayerPlayRuntime {
   /** Versioned effective chart-authored display operations, e.g. a recorded replay or NONSTOP program. */
   chartOptionProgram?: ChartOptionProgram;
+  /** Diagnostics retained by a host compiling stage-owned programs before playback. */
+  chartOptionDiagnostics?: readonly ChartOptionDiagnostic[];
   /** Stage-owned chart text supplied by a NONSTOP host; overrides flattened TEXT definitions. */
   chartTextStages?: readonly ChartTextStage[];
   /** Host-remapped input-bound BGA selections, e.g. NonstopStitchMap.keyBoundBGA. Overrides chart A5 controls. */

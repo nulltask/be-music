@@ -738,7 +738,10 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         ? {
             chartOptionProgram: ctx.options.replay.chart.chartOptions ?? { version: 1 as const, initial: {}, cues: [] },
           }
-        : {}),
+        : {
+            chartOptionProgram: ctx.options.nonstop?.chartOptions,
+            chartOptionDiagnostics: ctx.options.nonstop?.chartOptionDiagnostics,
+          }),
       chartTextStages: ctx.options.nonstop?.chartText,
       // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
       ...(ctx.options.replay === undefined && ctx.options.nonstop !== undefined
