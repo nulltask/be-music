@@ -28,4 +28,4 @@ The stitched replay records this whole effective program. Cutting out a stage re
 
 Newly implemented source IDs cannot silently activate in an already recorded effective program. The UI can reproduce a compulsory value such as 0.77 or 100 without overwriting persistent user preferences. Empty effective states restore the user setting at NONSTOP stage boundaries.
 
-HI-SPEED executes in ordinary and NONSTOP playback. Other option families, course conflict rules for judging modifiers and their record/replay policy remain tracked by #835. No native HIDDEN/CHANGE-HS/CRAZY formula or visual parity is claimed.
+HI-SPEED executes in ordinary and NONSTOP playback. Other families are diagnosed without effect; the [support boundary](../research/chart-authored-options.md#support-boundary-decision) records why, and what implementing one would require. No native HIDDEN/CHANGE-HS/CRAZY formula or visual parity is claimed.

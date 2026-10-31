@@ -51,4 +51,19 @@ The following are integration judgments from the current repository, not native 
 - HIDDEN/CHANGE-HS/CRAZY visual families require explicit deterministic formulas and all-host presentation wiring before being claimed implemented. Mapping a name to a roughly similar lane cover is not native parity.
 - The native manual mentions option score bonuses but does not specify a reusable scoring algorithm. Its AUTOPLAY score exclusions describe user modes that chart IDs cannot request. Course constraints, score eligibility, effective-option recording and server simulation therefore need explicit Be-Music rules; preserving replay option snapshots alone does not prove judge reproduction.
 
+## Support boundary (decision)
+
+Usage in the local test corpus is **0 / 5,344** BMS-family files for `#OPTION`, `#CHANGEOPTIONxx` and channel `A6` alike. Be-Music therefore executes only the families with a confirmed, deterministic contract and diagnoses the rest:
+
+| Family                                   | Be-Music behavior                                      | Reason                                                                                                                                                            |
+| ---------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `774:HI-SPEED_`, legacy `HSP-*`          | Executed (initial and A6; legacy aliases initial only) | Confirmed range and step; see [ADR 0026](../adr/0026-chart-authored-display-options.md)                                                                           |
+| `charatbeatHDX:LONGMODE`                 | Executed when initial; timed use is diagnosed          | First-party contract; see [ADR 0027](../adr/0027-hdx-long-note-modes.md)                                                                                          |
+| `CHANGE-HS_`, `HIDDEN_`, `CRAZY_` visual | Diagnosed as `unsupported-option`; no effect           | No native formula for thresholds, curves, periods or randomness. A look-alike lane cover would be a parity claim the sources cannot support                       |
+| `RANDOM_`, `NOTES_`, `CRAZY_` gameplay   | Diagnosed as `unsupported-option`; no effect           | They change judged lanes, note counts or judgment. A compulsory chart value would override user options, course locks and record eligibility, for no observed use |
+| `GAMELEVEL_`, `EXTRA_`                   | Diagnosed as `unsupported-option`; no effect           | They select gauges and difficulty, which Be-Music leaves to the player and the ruleset                                                                            |
+| `charatbeatHDX:BGAMODE`                  | Diagnosed as `unsupported-option`; no effect           | BGA placement belongs to the skin; the browser and terminal BGA areas have no HDX top-center frame                                                                |
+
+Diagnostics never cancel accepted operations, never change notes, judgments, fingerprints or record eligibility, and are not recorded in replays: a replay keeps only the effective program, so a family implemented later cannot activate in an existing recording. Implementing one of the diagnosed families needs a new effective-program profile version, its replay and record rules, and an issue of its own.
+
 Local inspection material: `/tmp/chart-option-archive-0`, `/tmp/chart-option-archive-1`, `/tmp/chart-options-nanasi-manual/`, `/tmp/nanasi-primary-11_1_bms.txt`, `/tmp/nanasi-primary-05_8_3_playoption.txt`, `/tmp/chart-option-native-1-05.html`, `/tmp/chart-option-native-1-06.html`, `/tmp/hdx-primary-05.txt`, `/tmp/hdx-primary-06.txt`. These temporary archives contain third-party distributions and are not repository artifacts.
