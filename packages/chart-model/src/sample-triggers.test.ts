@@ -55,4 +55,14 @@ describe('bmson sound slices', () => {
     expect(triggers.map((t) => t.sampleOffsetSeconds)).toEqual([0, 0.5, 1.5]);
     expect(triggers.map((t) => t.sampleDurationSeconds)).toEqual([0.5, 1, undefined]);
   });
+
+  test('a BPM change inside a continuation run keeps offsets on elapsed time and shortens later slices', () => {
+    const json = chart([note(0, true), note(1, true), note(2, true), note(3, true)]);
+    json.resources.bpm['01'] = 240;
+    json.events.push({ measure: 0, channel: '08', position: [2, 4], value: '01' });
+    const triggers = collectSampleTriggers(json);
+    // Two beats at 120 BPM (0.5 s each), then beats at 240 BPM (0.25 s each).
+    expect(triggers.map((t) => t.sampleOffsetSeconds)).toEqual([0, 0.5, 1, 1.25]);
+    expect(triggers.map((t) => t.sampleDurationSeconds)).toEqual([0.5, 0.5, 0.25, undefined]);
+  });
 });
