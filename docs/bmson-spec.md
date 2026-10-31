@@ -63,9 +63,9 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [ ] Error policy when required information such as `info.title` / `artist` / `genre` is missing
 - [ ] `sound_channels[].name` extension fallback search (`.wav`/`.ogg`/`.m4a`)
 - [ ] `sound_channels[].name` path normalization (`\` and `/`) and directory traversal prevention
-- [ ] `sound_channels[].notes[]` Priority rules when `c=true/false` are mixed in the same pulse
-- [ ] `bpm_events` Same `y` Normalization of “last priority” when overloading
-- [ ] `stop_events` Same `y` "Addition" normalization when overloaded
+- [x] `sound_channels[].notes[]` with mixed `c=true/false` on one pulse restart the source once and share one slice (see the slicing rule below)
+- [x] `bpm_events` on the same `y`: the last one wins (applied during timing resolution)
+- [x] `stop_events` on the same `y` add up (applied during timing resolution)
 - [ ] When the same `id` of `bga.bga_header` is defined multiple times, it is interpreted as the winner.
 - [x] Acceptance of `info.title_image` and retention in IR
 - [x] Retention rules for `key:value` format (`music:`/`chart:` etc.) of `subartists`
@@ -124,9 +124,9 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] Shared BGA timeline extraction for `bga.poor_events`
 - [x] Browser player renders bmson BGA still/video assets through the shared BGA timeline
 - [x] CLI/TUI BGA resource loading for bmson header filenames
-- [ ] Fixed the processing order of the same pulse (Note/BGA → BPM → STOP) as specified.
-- [ ] Apply `bpm_events` of the same `y` with priority to the end
-- [ ] Add and apply `stop_events` of the same `y`
+- [x] One pulse is processed as notes/BGA, then BPM, then STOP, as specified (`bmson-same-pulse.test.ts`)
+- [x] Apply the last of several `bpm_events` on the same `y`
+- [x] Add up several `stop_events` on the same `y`; each STOP runs at the pulse's final BPM
 - [x] Playback based on sound channel slicing rules (`c` and restart)
 - [x] BGM discard when a playable note and a BGM note share the same `y` in one sound channel (applied at parse time; the BGM note is dropped)
 - [x] Layered notes (several sound channels with a note on the same `x` and `y`) form one judged note. Every constituent slice sounds on its input, including early/late presses and replay; a miss sounds none. All constituent lengths must match, otherwise resolution throws an error. NONSTOP preserves the input binding ([player spec — Duplicate notes](./player-spec.md#duplicate-notes))
