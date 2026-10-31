@@ -58,7 +58,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` はそのまま保持として扱う
 - [x] `info.init_bpm` 欠落、0、負値、非数値は parse error として扱う
 - [x] `mode_hint` のレーン表にない `x` の note を、beatoraja と同じく BGM (`01`) として解釈
-- [x] `version` を検証し、譜面データを読む前に `null`・不正な SemVer・未対応版を拒否する。バージョン省略の旧形式 v0.21 には変換方法を案内する
+- [x] `version` を検証し、譜面データを読む前に `null`・不正な SemVer・未対応版を拒否する。バージョン省略の旧形式 v0.21 は Bemuse と同じように読む
 - [x] 安定版 `1.0.0` と SemVer のビルドメタデータ付き表記（例: `1.0.0+local`）に対応する。プレリリースとその他の版は、形式への対応を明示するまで拒否する
 - [ ] `info.title` / `artist` / `genre` など必須情報の欠損時エラー方針
 - [ ] `sound_channels[].name` の拡張子フォールバック探索（`.wav`/`.ogg`/`.m4a`）
@@ -129,7 +129,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] 同一 `y` の `stop_events` を加算して適用し、各 STOP はその pulse の最終 BPM で進める
 - [x] sound channel スライス規則（`c` と restart）に基づく再生
 - [x] 同じ sound channel 内で playable ノートと BGM ノートが同じ `y` にある場合の BGM 破棄（parse 時に BGM ノートを捨てる）
-- [x] レイヤーノート（複数の sound channel が同じ `x` と `y` にノートを持つ場合）は 1 つの判定ノートにまとめます。早押し・遅押し・リプレイでも入力時に構成スライスをすべて鳴らし、ミス時は鳴らしません。構成ノートの長さが異なる場合は解決時にエラーとします。NONSTOP でも入力との結び付きを維持します（[player 仕様 — 重複ノート](./player-spec.ja.md#重複ノート)）
+- [x] レイヤーノート（複数の sound channel が同じ `x` と `y` にノートを持つ場合）は 1 つの判定ノートにまとめます。早押し・遅押し・リプレイでも入力時に構成スライスをすべて鳴らし、ミス時は鳴らしません。最初の sound channel のノートと長さが異なるノートは、beatoraja と同じく音ごと捨てます。NONSTOP でも入力との結び付きを維持します（[player 仕様 — 重複ノート](./player-spec.ja.md#重複ノート)）
 
 各 sound channel は異なる pulse ごとに独立したスライスへ切り出す。`c=true` は直前の再始動からの音源オフセットを継続し、ノートの発音を省略する指定ではない。同一 pulse のノートは一つのスライスを共有し、`c` が混在する場合は再始動する。異なるスライスは手動入力で独立して発音でき、後続ノートを見逃しても先行スライスがその音を鳴らし続けることはない。browser、Node、オフラインレンダラーでこの規則を共有する。
 
@@ -172,7 +172,7 @@ flowchart TD
 ```
 
 - `version` を `bmson.version` に保持
-- バージョン検証は [bmson のルート仕様](https://github.com/bemusic/bmson-spec/blob/668c4338cd7c64da2d2ec0f848c4ad58a3a881d9/doc/index.rst#top-level-object-bmson)と [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html)に従う。優先順位が安定版 `1.0.0` と等しい表記だけに対応し、ビルドメタデータは受け付けて保持する。数値部分とプレリリースの数値識別子には先頭ゼロを認めない。省略は未対応の旧形式 v0.21 を表し、フィールド名・時間単位が異なるため形式変換が必要で、`version` を足すだけでは移行できない。`null`・文字列以外・不正な表記には `TypeError`、旧形式・未対応の有効なバージョンには案内付きの `Error` を返す。bmson の直接読込・形式の自動判別・Node ファイル読込・Browser の譜面読込は同じ検証を使う。Be-Music JSON は別の内部文書形式として既存の正規化を使う。
+- バージョン検証は [bmson のルート仕様](https://github.com/bemusic/bmson-spec/blob/668c4338cd7c64da2d2ec0f848c4ad58a3a881d9/doc/index.rst#top-level-object-bmson)と [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html)に従う。優先順位が安定版 `1.0.0` と等しい表記だけに対応し、ビルドメタデータは受け付けて保持する。数値部分とプレリリースの数値識別子には先頭ゼロを認めない。省略かつ旧形式の名前（`soundChannel`・`bpmNotes`・`stopNotes`・`info.initBPM`）を持つ譜面は v0.21 とみなし、[Bemuse](https://github.com/bemusic/bemuse/blob/4bf3e7d98a44841b323741cc403ecb7b41618ade/packages/bmson/src/legacy.ts) と同じく入力時に変換する。`soundChannel` → `sound_channels`、`initBPM` → `init_bpm`、`bpmNotes {y, v}` → `bpm_events`、`stopNotes {y, v}` → `stop_events`（`floor(v)` pulse）、分解能は 240 とし、その他の旧フィールドは捨てて通常の 1.0.0 文書にする。1.0.0 のフィールドだけを持つ譜面の省略は判別できないため `Error` を返す。`null`・文字列以外・不正な表記には `TypeError`、未対応の有効なバージョンには案内付きの `Error` を返す。bmson の直接読込・形式の自動判別・Node ファイル読込・Browser の譜面読込は同じ検証を使う。Be-Music JSON は別の内部文書形式として既存の正規化を使う。
 - `lines[].y` を `preservation.bmson.lines` に保持
 - `info.resolution` を `bmson.info.resolution` に保持
 - 互換としてルート `resolution` も読み取り、`info.resolution` がなければ採用
@@ -190,7 +190,7 @@ flowchart TD
 - `notes[].x` は `info.mode_hint` に従って次の順で BMS チャンネルへ写像
   1. `mode_hint` が空または未指定なら `beat-7k`（bmson 1.0.0 の既定値）として扱う
   2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`、`keyboard-24k`、`keyboard-24k-double` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ。キーボードの表は後述）。bmson 仕様の正式な一覧や beatoraja と同じく、`beat-5k` もスクラッチを `x` 8 に置いて `x` 6 / 7 にはレーンを割り当てず、`beat-10k` は 2P の鍵を `x` 9〜13、2P のスクラッチを `x` 16 に置く。表は `@be-music/chart-model` の `BMSON_MODE_HINT_LAYOUTS` で、プレイモード表から作る（[Player 仕様 — プレイモード表](./player-spec.ja.md#プレイモード表) を参照）
-  3. `generic-Nkeys` は整数の 1〜70 キーに対応し、`x = 1..N` を左から順に `11..1Z`、続いて `21..2Z` へ写像する。ゼロと上限超過は `RangeError` にし、丸めない。形式が不正な `generic-` の hint は `TypeError` にし、beat のモードへフォールバックしない。単数形の `generic-Nkey` も引き続き受け付ける。`16`・`17`・`26`・`27` を含め、すべてを 1 つのキーボードの通常キーとして扱う。ほとんどの列が空でも、宣言したキー数から `generic-N` を選ぶ。
+  3. `generic-Nkeys` は整数の 1〜70 キーに対応し、`x = 1..N` を左から順に `11..1Z`、続いて `21..2Z` へ写像する。ゼロ・上限超過・形式が不正な `generic-` の hint は、丸めも拒否もせず未知の hint として扱う。beatoraja が未対応の `mode_hint` を警告して読むのと同じく、レーンが収まれば `beat-7k` として読む（下記の手順 4）。単数形の `generic-Nkey` も引き続き受け付ける。`16`・`17`・`26`・`27` を含め、すべてを 1 つのキーボードの通常キーとして扱う。ほとんどの列が空でも、宣言したキー数から `generic-N` を選ぶ。
   4. それ以外の hint は未知の hint とする。`sound_channels`・`key_channels`・`mine_channels` の正の `x` がすべて `beat-7k` の表（1〜8）に収まれば、beatoraja（警告つき）、Qwilight、Bemuse と同じく `beat-7k` として読む。収まらなければ正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番する。beatoraja では `x` 8 より先のレーンが BGM になるが、残すのが作者の意図だからである（be-music の判断）
 - `x` が未指定、または `x <= 0` のノートは BGM (`01`)
 - キーボード系 hint（beatoraja が読む Keyboardmania 風の 24 鍵 + ホイール）はすべての `x` に固定のレーンを与えるため、使わない鍵がある譜面でも別の鍵へずれない

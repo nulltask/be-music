@@ -2,6 +2,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vite-plus/test';
+import { createTimingResolver } from '../../chart-model/src/index.ts';
 import { parseBmson, parseChart, parseChartFile } from './index.ts';
 
 const document = (version: unknown) => JSON.stringify({ version, info: { init_bpm: 120 }, sound_channels: [] });
@@ -55,12 +56,35 @@ test.each([
   for (const read of readers) expect(() => read(document(version))).toThrow(/Unsupported bmson version/);
 });
 
-test('rejects missing-version legacy fields instead of quietly reading an empty modern chart', () => {
+test('reads a legacy v0.21 chart as Bemuse does', () => {
   const legacy = JSON.stringify({
-    info: { initBPM: 120 },
-    soundChannel: [{ name: 'stem.wav', notes: [{ x: 1, y: 960 }] }],
+    info: { title: 'Legacy', initBPM: 120 },
+    lines: [{ y: 0 }, { y: 960 }],
+    soundChannel: [{ name: 'stem.wav', notes: [{ x: 1, y: 960, l: 0, c: false }] }],
+    bpmNotes: [{ y: 960, v: 240 }],
+    stopNotes: [{ y: 1920, v: 240.9 }],
   });
-  for (const read of readers) expect(() => read(legacy)).toThrow(/legacy bmson v0.21.*format converter/);
+  for (const read of readers) {
+    const chart = read(legacy);
+    expect(chart.bmson.version).toBe('1.0.0');
+    expect(chart.bmson.info.resolution).toBe(240);
+    expect(chart.metadata.title).toBe('Legacy');
+    expect(chart.metadata.bpm).toBe(120);
+    expect(chart.resources.wav).toMatchObject({ '01': 'stem.wav' });
+    expect(chart.events.filter((event) => event.channel === '11')).toHaveLength(1);
+    // Legacy fields are converted, not retained as opaque annotations.
+    expect(chart.bmson.extraFields).toBeUndefined();
+    const timing = createTimingResolver(chart);
+    expect(timing.tempoPoints.map(({ beat, bpm }) => ({ beat, bpm }))).toEqual([
+      { beat: 0, bpm: 120 },
+      { beat: 4, bpm: 240 },
+    ]);
+    // floor(240.9) pulses = one beat at 240 BPM.
+    expect(timing.stopPoints.map((point) => point.seconds)).toEqual([0.25]);
+  }
+});
+
+test('rejects a missing version on a chart with only 1.0.0 fields', () => {
   for (const read of readers) expect(() => read(document(undefined))).toThrow(/version is missing/);
 });
 
@@ -75,7 +99,7 @@ test('Node file loading propagates version diagnostics and accepts valid input',
       const path = join(dir, `chart.${extension}`);
       for (const version of [null, undefined, 'broken', '2.0.0']) {
         await writeFile(path, document(version));
-        await expect(parseChartFile(path)).rejects.toThrow(/bmson.*version|legacy bmson/);
+        await expect(parseChartFile(path)).rejects.toThrow(/bmson.*version/);
       }
       await writeFile(path, document('1.0.0+local'));
       expect((await parseChartFile(path)).bmson.version).toBe('1.0.0+local');

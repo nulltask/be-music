@@ -203,8 +203,20 @@ describe('bmson layered sound events', () => {
   test.each([
     [0, 240],
     [240, 480],
-  ])('rejects unequal layer lengths %s / %s', (a, b) => {
-    expect(() => layered([a, b]).notes).toThrow('bmson layered notes must have equal lengths');
+    [240, 0],
+  ])('keeps the first channel and drops a layer of another length %s / %s, as beatoraja does', (a, b) => {
+    const resolved = layered([a, b]);
+    expect(resolved.notes).toHaveLength(1);
+    expect(resolved.notes[0]?.event.value).toBe('01');
+    expect(resolved.notes[0]?.endBeat).toBe(a ? a / 240 : undefined);
+    expect(resolved.notes[0]?.soundEvents?.map((event) => event.value)).toEqual(['01']);
+    expect(resolved.sampleTriggers.map((trigger) => trigger.sampleKey)).toEqual(['01']);
+  });
+
+  test('layers only the notes that match the first channel length', () => {
+    const resolved = layered([240, 0, 240]);
+    expect(resolved.notes[0]?.soundEvents?.map((event) => event.value)).toEqual(['01', '03']);
+    expect(resolved.sampleTriggers.map((trigger) => trigger.sampleKey).sort()).toEqual(['01', '03']);
   });
 });
 

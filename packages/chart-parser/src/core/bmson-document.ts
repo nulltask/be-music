@@ -25,8 +25,11 @@ import {
   normalizeBmsonStopEvents,
   resolveBmsonResolution,
 } from './bmson.ts';
+import { convertLegacyBmsonDocument, isLegacyBmsonDocument } from './bmson-legacy.ts';
 
-export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
+export function parseBmsonDocument(source: BmsonDocument): BeMusicJSON {
+  // Pre-1.0 charts are read as Bemuse reads them; the result is an ordinary 1.0.0 document.
+  const document = isLegacyBmsonDocument(source) ? convertLegacyBmsonDocument(source) : source;
   const version = requireSupportedBmsonVersion(document);
   const json = createEmptyJSON('bmson');
   Object.assign(json.bmson, readBmsonExtraFields(document, 'root'));
@@ -336,7 +339,7 @@ function requireSupportedBmsonVersion(document: BmsonDocument): string {
   }
   if (!Object.hasOwn(document, 'version')) {
     throw new Error(
-      'Unsupported legacy bmson v0.21: version is missing. Convert the chart to bmson 1.0.0 with a format converter; adding a version field alone does not convert legacy fields or timing units.',
+      'Invalid bmson: version is missing, but the chart uses bmson 1.0.0 fields rather than the legacy v0.21 ones. Add "version": "1.0.0".',
     );
   }
   const version: unknown = document.version;
