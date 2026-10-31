@@ -191,8 +191,9 @@ export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom, m
   const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
-  // A beam of light between head and tail: a translucent core, no line down its middle.
+  // A beam of light between head and tail: a translucent core with a bright centre filament.
   graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
+  graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 });
   drawNote(graphics, bodyX, bottom, bodyW, light);
   // An LN's tail is not judged, so it is drawn translucent: where to let go, not a note to hit. A CN / HCN tail is
   // judged on release and keeps the full cap.
