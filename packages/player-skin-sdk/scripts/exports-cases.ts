@@ -210,6 +210,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.holdSparks(5_000, 1234, 40);
     },
   });
+  define('player-skin-sdk.longNoteCentreLineAlpha', {
+    run: () => {
+      skinSdkAPI.longNoteCentreLineAlpha(150);
+    },
+  });
   define('player-skin-sdk.holdSeed', {
     run: () => {
       skinSdkAPI.holdSeed('11', 123_456);
