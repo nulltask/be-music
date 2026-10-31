@@ -35,7 +35,7 @@ import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import { previewArtworkPath } from './artwork.ts';
 import { findEmbedChart } from './chart-match.ts';
 import { createPreviewSkin, type PreviewChrome, type PreviewChromeState } from './preview-skin.ts';
-import type { EmbedMode, EmbedTrack } from './track-url.ts';
+import { embedStageTapPauses, type EmbedMode, type EmbedTrack } from './track-url.ts';
 
 /** How far ← / → seek. */
 const SEEK_STEP_SECONDS = 5;
@@ -202,7 +202,10 @@ export class PreviewApp {
   ): Promise<void> {
     await this.closeScene();
     const scene = createPlayScene(
-      { family: 'built-in', skin: createPreviewSkin(this.chrome) },
+      {
+        family: 'built-in',
+        skin: createPreviewSkin(this.chrome, { stageTapPauses: embedStageTapPauses(this.mode) }),
+      },
       {
         chart,
         ...this.sourceOf(chart),

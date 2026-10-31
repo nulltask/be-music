@@ -1,5 +1,12 @@
 # @be-music/player-ui
 
+## 0.4.0
+
+### Minor Changes
+
+- 1155634: `be-music-preview-hud` shows a **Back** button under the play button of a paused play; it emits `quit-request`.
+- 2768ab6: `be-music-preview-hud` gains a `stageTapPauses` property (on by default). Turned off, the stage takes no clicks, so only the controls bar pauses the play; the embed turns it off while the viewer plays.
+
 ## 0.3.0
 
 ### Minor Changes

@@ -94,6 +94,32 @@ test('?mode=play lets the viewer play: no seeking, and M is a lane rather than m
   await page.keyboard.press('KeyM');
   await expect(hud.getByRole('button', { name: 'Mute', exact: true })).toBeAttached();
   await expect(hud.getByRole('button', { name: 'Unmute' })).toHaveCount(0);
+  // A tap on the stage is part of playing, not a pause: only the controls bar pauses.
+  await expect(hud.locator('.stage-hit')).toHaveCount(0);
+  const stage = (await hud.boundingBox())!;
+  await page.mouse.click(stage.x + stage.width * 0.25, stage.y + stage.height * 0.4);
+  await expect(hud.locator('button.resume')).toHaveCount(0);
+  await expect(
+    hud.locator('be-music-playback-controls').getByRole('button', { name: 'Pause', exact: true }),
+  ).toBeAttached();
+});
+
+test('Back on a paused play leaves it for the replay button, the way back a touch screen has', async ({ page }) => {
+  await openEmbed(page, ['songs/fixA'], undefined, 'play');
+  await page.getByRole('button', { name: 'Play', exact: true }).click({ timeout: 60_000 });
+  const hud = page.locator('be-music-preview-hud');
+  const controls = hud.locator('be-music-playback-controls');
+  await controls.getByRole('button', { name: 'Pause', exact: true }).click({ timeout: 30_000 });
+  const back = hud.getByRole('button', { name: 'Back', exact: true });
+  await expect(back).toBeVisible();
+  // Under the play button, clear of it and of the controls bar.
+  const resume = (await hud.locator('button.resume').boundingBox())!;
+  const backBox = (await back.boundingBox())!;
+  const bar = (await controls.boundingBox())!;
+  expect(backBox.y).toBeGreaterThanOrEqual(resume.y + resume.height);
+  expect(backBox.y + backBox.height).toBeLessThanOrEqual(bar.y + bar.height / 2);
+  await back.click();
+  await expect(page.getByRole('button', { name: 'Replay', exact: true })).toBeVisible({ timeout: 30_000 });
 });
 
 test('seeks back and forth: the time follows the second sought, and the combo is the one reached by playing there', async ({

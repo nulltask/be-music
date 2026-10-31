@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { resolveGameplayLayout, validateBeMusicSkin } from '@be-music/player-skin-sdk';
-import { createPreviewSkin, createPreviewStage, resolvePreviewBGARect } from './preview-skin.ts';
+import { createPreviewSkin, createPreviewStage, quitPreviewPlay, resolvePreviewBGARect } from './preview-skin.ts';
 
 const chrome = {
   state: () => ({ volume: 1, muted: false, fullscreen: false }),
@@ -83,5 +83,24 @@ describe('createPreviewSkin', () => {
     expect(layout.orientation).toBe('portrait');
     expect(layout.bga!.y + layout.bga!.h).toBeLessThanOrEqual(layout.playfield.top);
     expect(layout.playfield.top).toBeLessThan(layout.playfield.judgementY);
+  });
+});
+
+describe('quitPreviewPlay', () => {
+  const record = () => {
+    const calls: string[] = [];
+    return { calls, actions: { pause: () => calls.push('pause'), quit: () => calls.push('quit') } };
+  };
+
+  it('quits a running play at once', () => {
+    const { calls, actions } = record();
+    quitPreviewPlay(actions, false);
+    expect(calls).toEqual(['quit']);
+  });
+
+  it('resumes a paused play before quitting, so its exit fade runs', () => {
+    const { calls, actions } = record();
+    quitPreviewPlay(actions, true);
+    expect(calls).toEqual(['pause', 'quit']);
   });
 });

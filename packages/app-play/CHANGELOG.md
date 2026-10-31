@@ -1,5 +1,13 @@
 # @be-music/app-play
 
+## 0.8.1
+
+### Patch Changes
+
+- 2768ab6: A tap or click on the stage no longer pauses the viewer's own play in the embed (`mode=play`): it is part of playing, not a request to stop. Pause with the controls bar or the play's pause key instead. The AUTO preview still pauses and resumes on a click.
+- 1155634: A phone or tablet had no way to leave an embed's play for the chart list before the chart ended, since Escape is its only exit. A paused play now shows **Back** under the play button, which leaves the play for the list (or the replay button).
+- Updated dependencies: `@be-music/player-browser@0.13.1`
+
 ## 0.8.0
 
 ### Minor Changes
