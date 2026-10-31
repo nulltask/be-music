@@ -40,7 +40,22 @@ export function registerPlayerTUIExportsCases(define: DefineBenchmarkCase): void
   });
   define('player-terminal.BgaANSIRenderer', {
     run: () => {
-      createBenchBgaANSIRenderer();
+      const renderer = createBenchBgaANSIRenderer();
+      const frame = {
+        definitionId: '61',
+        channel: '11',
+        bmpKey: '00',
+        startedSeconds: 0,
+        frameStartSeconds: 0,
+        argb: { a: 255, r: 255, g: 255, b: 255 },
+      };
+      renderer.getANSILines(0, frame);
+      renderer.getKittyImage(0, frame);
+      renderer.getKittyImage(0.1);
+      const bmson = { plane: 'layer' as const, key: 'sequence.png', startedSeconds: 0, frameStartSeconds: 0 };
+      renderer.getANSILines(0.2, undefined, bmson);
+      renderer.getKittyImage(0.2, undefined, bmson);
+      renderer.getKittyImage(0.3, undefined, { ...bmson, plane: 'poor' });
     },
   });
   define('player-terminal.createBgaANSIRenderer', {
@@ -128,6 +143,8 @@ export function registerPlayerTUIExportsCases(define: DefineBenchmarkCase): void
   define('player-terminal.resolveVisibleBeatsForTUIGrid', {
     run: () => {
       playerTuiAPI.resolveVisibleBeatsForTUIGrid(24, 2);
+      playerTuiAPI.resolveVisibleBeatsForTUIGrid(24, 0.77, true);
+      playerTuiAPI.resolveVisibleBeatsForTUIGrid(24, 100, true);
     },
   });
   define('player-terminal.resolveLaneDisplayMode', {
@@ -138,6 +155,9 @@ export function registerPlayerTUIExportsCases(define: DefineBenchmarkCase): void
   define('player-terminal.resolveInputTokenEvent', {
     run: () => {
       playerTuiAPI.resolveInputTokenEvent('z', BENCH_KEY);
+      playerTuiAPI.resolveInputTokenEvent('\u001b[57387;1:3u', BENCH_KEY);
+      playerTuiAPI.resolveInputTokenEvent('\u001b[15;1:1~', BENCH_KEY);
+      playerTuiAPI.resolveInputTokenEvent('\u001b[135;0;0;1;0;1_', BENCH_KEY);
     },
   });
 }
@@ -162,9 +182,14 @@ function createBenchBgaANSIRenderer(): playerTuiAPI.BgaANSIRenderer {
     layerTimeline: [],
     layer2Timeline: [],
     baseSourceFramesByKey: new Map(),
-    poorSourceFramesByKey: new Map(),
-    layerSourceFramesByKey: new Map(),
-    layer2SourceFramesByKey: new Map(),
+    poorSourceFramesByKey: new Map([['sequence.png', { kind: 'static', frame }]]),
+    layerSourceFramesByKey: new Map([['sequence.png', { kind: 'static', frame }]]),
+    layer2SourceFramesByKey: new Map([
+      [
+        String.fromCharCode(0) + 'swbga:61:00',
+        { kind: 'static', frame: { ...frame, rgb: new Uint8Array([255, 0, 0]), alpha: new Uint8Array([128]) } },
+      ],
+    ]),
     missingBaseSourceFrame: frame,
     missingPoorSourceFrame: frame,
     missingLayerSourceFrame: frame,

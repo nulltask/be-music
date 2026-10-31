@@ -591,6 +591,7 @@ function resolveChartAssetInFolder(
   source: BrowserAssetSource,
   chartPath: string,
   assetPath: string,
+  excludedEntries?: ReadonlySet<BrowserAssetEntry>,
 ): BrowserAssetEntry | undefined {
   // bmson 1.0.0 spec MUST: reject malicious paths at the chart-asset entry point. `lookupBytesCaseInsensitive` also
   // vets each candidate as defense-in-depth, but short-circuiting here means we don't even synthesize the joined
@@ -609,7 +610,7 @@ function resolveChartAssetInFolder(
   ];
   for (const candidate of candidates) {
     const entry = lookupBytesCaseInsensitive(source.files, candidate);
-    if (entry) {
+    if (entry && !excludedEntries?.has(entry)) {
       return entry;
     }
   }
@@ -637,6 +638,8 @@ export interface ResolveChartAudioAssetOptions {
    * `kick.wav` references resolves the file as `wav/kick.wav`.
    */
   pathPrefix?: string;
+  /** Assets already rejected by the decoder; lookup continues through codec and folder fallbacks. */
+  excludedEntries?: ReadonlySet<BrowserAssetEntry>;
 }
 
 export function resolveChartAudioAsset(
@@ -645,18 +648,22 @@ export function resolveChartAudioAsset(
   assetPath: string,
   options: ResolveChartAudioAssetOptions = {},
 ): BrowserAssetEntry | undefined {
+  if (isMaliciousAssetPath(assetPath)) return undefined;
+  const compositeCandidates = source.audioFallbacks?.get(normalizePath(assetPath));
+  if (compositeCandidates !== undefined)
+    return compositeCandidates.find((entry) => !options.excludedEntries?.has(entry));
   // Every codec in the chart's folder before any in its parent, as LR2 does.
   for (const folderChartPath of chartLookupFolders(chartPath)) {
-    for (const candidate of audioFallbackPaths(assetPath)) {
+    for (const candidate of audioFallbackPaths(assetPath.replaceAll('\\', '/'))) {
       // Try the `#PATH_WAV` prefixed form first when supplied; fall through to the bare name if the prefix-joined path
       // doesn't resolve. Charts that don't author `#PATH_WAV` pass `pathPrefix: undefined` and behave exactly as
       // before.
       const prefixed = joinPathWAVPrefix(options.pathPrefix, candidate);
       if (prefixed !== undefined) {
-        const entry = resolveChartAssetInFolder(source, folderChartPath, prefixed);
+        const entry = resolveChartAssetInFolder(source, folderChartPath, prefixed, options.excludedEntries);
         if (entry) return entry;
       }
-      const entry = resolveChartAssetInFolder(source, folderChartPath, candidate);
+      const entry = resolveChartAssetInFolder(source, folderChartPath, candidate, options.excludedEntries);
       if (entry) {
         return entry;
       }

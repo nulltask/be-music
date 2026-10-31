@@ -140,6 +140,8 @@ async function bootstrap(): Promise<void> {
     height: initialBGASize.height,
     imageResizeAlgorithm: initData.imageResizeAlgorithm,
     videoBGAStreaming: initData.videoBGAStreaming,
+    keyBoundBGACues: initData.keyBoundBGACues,
+    bmsonBGACues: initData.bmsonBGACues,
     signal: abortController.signal,
     onLoadProgress: (progress) => {
       postWorkerMessage({
@@ -247,8 +249,12 @@ async function bootstrap(): Promise<void> {
       }
       // The BGA renderer itself stops cue changes at an LR2 negative-BPM reversal (a playing movie keeps running), so
       // it is driven by the true clock.
-      const bgaANSILines = useKittyGraphicsForBGA ? undefined : bgaRenderer?.getANSILines(latestFrame.currentSeconds);
-      const bgaKittyImage = useKittyGraphicsForBGA ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds) : undefined;
+      const bgaANSILines = useKittyGraphicsForBGA
+        ? undefined
+        : bgaRenderer?.getANSILines(latestFrame.currentSeconds, latestFrame.keyBoundBGA, latestFrame.bmsonBGA);
+      const bgaKittyImage = useKittyGraphicsForBGA
+        ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds, latestFrame.keyBoundBGA, latestFrame.bmsonBGA)
+        : undefined;
       if (useKittyGraphicsForBGA) {
         if (bgaKittyImage && !loggedFirstKittyImageReady) {
           loggedFirstKittyImageReady = true;

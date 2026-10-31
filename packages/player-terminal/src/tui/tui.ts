@@ -131,6 +131,8 @@ interface TUINote {
 }
 
 interface TUIFrame {
+  chartOptions?: { hiSpeed?: number };
+  chartText?: string;
   currentBeat: number;
   currentSeconds: number;
   /** Mirrored display clock past the LR2 negative-BPM reversal (#134) — the lane grid scrolls from it when set. */
@@ -481,16 +483,23 @@ export class PlayerTUI {
       typeof this.options.randomPatternSummary === 'string' && this.options.randomPatternSummary.length > 0
         ? this.options.randomPatternSummary
         : undefined;
-    const rowCount = calculateTUIGridRowCount(terminalRows, {
-      showLaneChannels,
-      hasRandomPatternSummary: randomPatternSummary !== undefined,
-      hasAudioDebugLine: debugLineCount > 0,
-    });
+    const rowCount = calculateTUIGridRowCount(
+      terminalRows === undefined ? undefined : terminalRows - (frame.chartText === undefined ? 0 : 1),
+      {
+        showLaneChannels,
+        hasRandomPatternSummary: randomPatternSummary !== undefined,
+        hasAudioDebugLine: debugLineCount > 0,
+      },
+    );
     const laneCount = Math.max(1, this.options.lanes.length);
     const now = Date.now();
     const currentFPS = this.resolveFPS(now);
-    const displayHighSpeed = this.resolveDisplayHighSpeed(now);
-    const scrollWindowBeats = resolveVisibleBeatsForTUIGrid(rowCount, displayHighSpeed);
+    const displayHighSpeed = frame.chartOptions?.hiSpeed ?? this.resolveDisplayHighSpeed(now);
+    const scrollWindowBeats = resolveVisibleBeatsForTUIGrid(
+      rowCount,
+      displayHighSpeed,
+      frame.chartOptions?.hiSpeed !== undefined,
+    );
     const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => LANE_FILL_SYMBOL));
     const gridSourceChannels = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => ''));
     const measureLineRows = new Set<number>();
@@ -735,11 +744,20 @@ export class PlayerTUI {
     lines.push(`BMS PLAYER TUI [${this.options.mode}]  AUDIO ${audioBackendLabel}`);
     lines.push(`${this.options.title}${this.options.artist ? ` / ${this.options.artist}` : ''}`);
     lines.push(`GENRE ${formatGenreLabel(this.options.genre)}`);
+    if (frame.chartText !== undefined) {
+      // Chart text is data: never allow its controls to move the terminal cursor or inject ANSI commands.
+      const text = frame.chartText
+        // eslint-disable-next-line no-control-regex
+        .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
+      lines.push(`TEXT  ${text}`);
+    }
     lines.push(
       `${renderProgress(frame.currentSeconds, frame.totalSeconds)}  ${formatSeconds(frame.currentSeconds)} / ${formatSeconds(frame.totalSeconds)}`,
     );
     lines.push(
-      `TIMING  SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBPM(currentBPM)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}`,
+      `TIMING  SPEED x${this.options.speed.toFixed(2)}  HS x${frame.chartOptions?.hiSpeed !== undefined ? displayHighSpeed.toFixed(2) : formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBPM(currentBPM)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
@@ -771,11 +789,13 @@ export class PlayerTUI {
     }
     lines.push('');
     const laneLines: string[] = [];
+    const genericKeys = this.options.laneDisplayMode.endsWith(' KEY GENERIC');
+    const colorChannels = genericKeys ? this.laneChannels.map(() => '11') : this.laneChannels;
     if (showLaneChannels) {
       laneLines.push(
         renderLaneRow(
           this.options.lanes.map((lane) => lane.channel),
-          this.laneChannels,
+          colorChannels,
           this.laneWidths,
           this.options.splitAfterIndex,
           this.options.noteHeight,
@@ -790,12 +810,12 @@ export class PlayerTUI {
         laneLines.push(
           renderJudgeRow(
             row,
-            this.laneChannels,
+            colorChannels,
             this.laneWidths,
             this.options.splitAfterIndex,
             this.options.noteHeight,
             laneHighlightRatios,
-            gridSourceChannels[rowIndex],
+            genericKeys ? colorChannels : gridSourceChannels[rowIndex],
           ),
         );
         continue;
@@ -804,12 +824,12 @@ export class PlayerTUI {
         laneLines.push(
           renderMeasureRow(
             row,
-            this.laneChannels,
+            colorChannels,
             this.laneWidths,
             this.options.splitAfterIndex,
             this.options.noteHeight,
             laneHighlightRatios,
-            gridSourceChannels[rowIndex],
+            genericKeys ? colorChannels : gridSourceChannels[rowIndex],
           ),
         );
         continue;
@@ -817,12 +837,12 @@ export class PlayerTUI {
       laneLines.push(
         renderLaneRow(
           row,
-          this.laneChannels,
+          colorChannels,
           this.laneWidths,
           this.options.splitAfterIndex,
           this.options.noteHeight,
           laneHighlightRatios,
-          gridSourceChannels[rowIndex],
+          genericKeys ? colorChannels : gridSourceChannels[rowIndex],
         ),
       );
     }
@@ -832,7 +852,7 @@ export class PlayerTUI {
     laneLines.push(renderJudgeComboLine(judgeComboLabels, this.laneWidths, this.options.splitAfterIndex));
 
     const [blackKeyRow, whiteAndScratchKeyRow] = renderInputKeyRows(
-      this.options.lanes,
+      genericKeys ? this.options.lanes.map((lane) => ({ ...lane, tone: 'white' as const })) : this.options.lanes,
       this.laneWidths,
       this.options.splitAfterIndex,
       activeInputKeyChannels,

@@ -1,8 +1,10 @@
+import { getPlayModeLayouts } from '@be-music/chart-model';
+import { withChartOverrides } from './resolved-chart-overrides.ts';
 import { duplicateBattleChart } from './battle-chart.ts';
 import { applyPracticeRange, resolvePracticeRange } from './practice.ts';
 import { isDuplicatedBattleMode, resolveEffectiveBattleMode } from './battle-mode.ts';
 import { convertLR2SPToDPChart } from './lr2-sp-to-dp-chart.ts';
-import type { BattleMode } from './battle-mode.ts';
+import type { EffectiveBattleMode } from './battle-mode.ts';
 import { convertLR2ExtraChart } from './lr2-extra-chart.ts';
 import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
 import { addExtraNotes, clampExtraNoteDepth } from './extra-note-modifier.ts';
@@ -10,7 +12,7 @@ import { prepareMineModifier, type MineModifier } from './mine-modifier.ts';
 import { addScrollChanges, removeScrollChanges, type ScrollModifier } from './scroll-modifier.ts';
 import { addLongNotes, clampLongNoteRate, removeLongNoteTails, type LongNoteModifier } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
-import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
+import { buildChartTextTimeline, resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import { normalizeChannel, type BeMusicJSON } from '@be-music/chart-source';
 import { type GrooveGaugeJudgmentKind } from './groove-gauge.ts';
 import {
@@ -70,7 +72,7 @@ export interface PreparedPlaybackChartData {
   sevenToNineType?: import('./seven-to-nine.ts').SevenToNineType;
   sevenToNineThresholdBPM?: number;
   sevenToNineApplied?: boolean;
-  battleMode?: BattleMode;
+  battleMode?: EffectiveBattleMode;
   dBattleScratch?: boolean;
   /** beatoraja PRACTICE: the range played and the note counts before `PracticeModifier`. */
   practiceStartSeconds?: number;
@@ -267,7 +269,12 @@ export function preparePlaybackChart(
     options.judgeRuleset ?? 'lr2',
     battleSourceVariant,
     options.course !== undefined,
+    resolved.sourceFormat === 'bms' ? resolved.source.bms.player : undefined,
   );
+  if (battleMode === 'COUPLE' && (resolved.playVariant === '5' || resolved.playVariant === '7')) {
+    const playVariant = resolved.playVariant === '5' ? '10' : '14';
+    resolved = withChartOverrides(resolved, { playVariant, layouts: getPlayModeLayouts(playVariant) });
+  }
   const battleAssist1P = options.autoScratch1P ?? options.autoScratch ?? false;
   const battleAssist2P = options.autoScratch2P ?? options.autoScratch ?? false;
   const battle =
@@ -333,7 +340,12 @@ export function preparePlaybackChart(
     : undefined;
   resolved = duplicateBattle?.chart ?? resolved;
   playVariant = resolved.playVariant;
-  let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds);
+  // Leave one chart second to present the final selection, even after the last playable note.
+  const lastTextCue = buildChartTextTimeline(resolved.source, resolved.timing)
+    .cues.filter((cue) => cue.seconds <= (resolved.reversal?.seconds ?? Infinity))
+    .at(-1);
+  const lastTextSeconds = lastTextCue === undefined ? 0 : lastTextCue.seconds + 1;
+  let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds, lastTextSeconds);
   for (const note of notes) totalSeconds = Math.max(totalSeconds, note.endSeconds ?? note.seconds);
   for (const mine of landmineNotes) totalSeconds = Math.max(totalSeconds, mine.seconds);
   const practiceRange =
@@ -501,6 +513,8 @@ export async function initializePlayerUIRuntime({
     highSpeed,
     imageResizeAlgorithm: options.imageResizeAlgorithm ?? DEFAULT_IMAGE_RESIZE_ALGORITHM,
     videoBGAStreaming: options.videoBGAStreaming,
+    keyBoundBGACues: options.keyBoundBGACues,
+    bmsonBGACues: options.bmsonBGACues,
     showLaneChannels: Boolean(options.debugActiveAudio),
     randomPatternSummary,
     stateSignals,

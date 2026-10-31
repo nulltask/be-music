@@ -7,6 +7,10 @@ import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
  */
 export interface TimedPlayableNote {
   event: BeMusicEvent;
+  /** Constituent bmson source events, including `event`, sounded by the same input. */
+  soundEvents?: readonly BeMusicEvent[];
+  /** bmson up source slice attached to the long-note tail. */
+  endSoundEvent?: BeMusicEvent;
   channel: string;
   beat: number;
   endBeat?: number;
@@ -49,7 +53,8 @@ export interface ExtractTimedNotesResult {
   /**
    * Playable notes that start on the same lane and position as a note in `playableNotes`, with a different keysound.
    * Only one note per lane and position is judged (see {@link extractTimedNotes}); these are not judged or drawn, but
-   * their keysound still belongs to the chart, so a manual-play host sounds them as background audio at their time.
+   * their keysound still belongs to the chart: BMS plays it as background audio, while bmson binds it to the
+   * judged note through `soundEvents`.
    */
   shadowedNotes: TimedPlayableNote[];
 }
@@ -98,11 +103,13 @@ export function extractInvisiblePlayableNotes(json: BeMusicJSON): TimedPlayableN
 export function toTimedPlayableNote(note: ResolvedNote): TimedPlayableNote {
   return {
     event: note.event,
+    ...(note.soundEvents ? { soundEvents: note.soundEvents } : {}),
     channel: note.channel,
     beat: note.beat,
     endBeat: note.endBeat,
     endSeconds: note.endSeconds,
     longNoteMode: note.lnMode,
+    ...(note.endSoundEvent ? { endSoundEvent: note.endSoundEvent } : {}),
     seconds: note.seconds,
     judged: false,
   };

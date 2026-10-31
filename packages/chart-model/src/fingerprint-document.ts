@@ -63,8 +63,8 @@ export interface FingerprintLaneModeInputs {
   /** `".pms"`, or `null` for any other or unknown extension. */
   extension: LaneModeExtension;
   player3: boolean;
-  /** The bmson keyboard `mode_hint`; omitted when the chart has none (any other hint is not a lane-mode input). */
-  modeHint?: KeyboardModeHint;
+  /** The explicit bmson keyboard or generic hint; omitted for hints that do not determine lane identity. */
+  modeHint?: KeyboardModeHint | `generic-${number}keys`;
 }
 
 export interface FingerprintDeltaLists {

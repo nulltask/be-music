@@ -1,4 +1,5 @@
 import * as chartAPI from '@be-music/chart-model';
+import { createEmptyJSON } from '@be-music/chart-source';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_RANDOM_DRAWS_CACHE = new WeakMap<object, chartAPI.RandomDraws>();
@@ -12,7 +13,30 @@ function benchRandomDraws(source: chartAPI.ControlFlowSource): chartAPI.RandomDr
   return draws;
 }
 
-const BENCH_SWITCHING_BGA = chartAPI.parseBMSSwBGA('10:5:1:FF000000 02 03 04 05 06');
+const BENCH_COLOR_KEY_PIXELS = Uint8Array.from({ length: 256 * 256 * 4 }, (_, index) =>
+  (index & 3) === 3 ? 255 : ((index >>> 2) & 1) === 1 ? 127 : 32,
+);
+const BENCH_COLOR_KEY_CHART = createEmptyJSON('bms');
+const BENCH_EXWAV_CHART = createEmptyJSON('bms');
+const BENCH_TEXT_CHART = createEmptyJSON('bms');
+BENCH_TEXT_CHART.resources.text = { '00': '"MISS"', '01': '"Hello"', '02': '""' };
+BENCH_TEXT_CHART.events = [
+  { measure: 0, channel: '99', position: [0, 1], value: '01' },
+  { measure: 1, channel: '99', position: [0, 1], value: '02' },
+];
+BENCH_TEXT_CHART.bms.options = ['774:HI-SPEED_x0.77', 'charatbeatHDX:BGAMODE 0'];
+BENCH_TEXT_CHART.bms.changeOption['01'] = '774:HIDDEN_STEALTH';
+BENCH_TEXT_CHART.bms.changeOption['02'] = '774:HI-SPEED_x100.00';
+BENCH_TEXT_CHART.events.push({ measure: 1, channel: 'A6', position: [0, 1], value: '02' });
+BENCH_TEXT_CHART.events.push({ measure: 1, channel: 'A6', position: [0, 1], value: '01' });
+const BENCH_CHART_OPTIONS = chartAPI.compileChartOptions(chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART));
+const BENCH_HDX_CHART = createEmptyJSON('bms');
+BENCH_HDX_CHART.bms.options = ['774:HI-SPEED_x0.77', 'charatbeatHDX:LONGMODE 1'];
+const BENCH_TEXT_TIMELINE = chartAPI.buildChartTextTimeline(BENCH_TEXT_CHART);
+BENCH_EXWAV_CHART.resources.wav = { '01': 'ordinary.wav' };
+BENCH_EXWAV_CHART.bms.exWAV = { '01': 'pvf 500 -600 48000 extended.wav', '02': 'v 0 only.wav' };
+BENCH_COLOR_KEY_CHART.bms.exBMP['01'] = '0,127,127,127 image.png';
+
 const BENCH_FINGERPRINT_OPTIONS: chartAPI.BeMusicFingerprintOptions = { chartPath: 'sample.bms' };
 const BENCH_FINGERPRINT_DOCUMENTS = new WeakMap<object, chartAPI.BeMusicFingerprintDocument>();
 
@@ -27,7 +51,132 @@ function getBenchFingerprintDocument(
   return document;
 }
 
+const BENCH_BMSON_BGA = createEmptyJSON('bmson');
+BENCH_BMSON_BGA.bmson.bga = {
+  header: [
+    { id: 10, name: 'a.png' },
+    { id: 20, name: 'b.png' },
+  ],
+  events: [],
+  poorEvents: [{ y: 0, id: 1 }],
+  layerEvents: [{ y: 240, id: 1, idSet: [1, 20], condition: 'play', interval: 2 }],
+  sequences: [{ id: 1, sequence: [{ time: 0, id: 0 }, { time: 100, id: 1 }, { time: 500 }] }],
+};
+const BENCH_BMSON_BGA_TIMING = chartAPI.createTimingResolver(BENCH_BMSON_BGA);
+const BENCH_BMSON_BGA_SEQUENCE = chartAPI.buildBmsonBGAEventTimeline(BENCH_BMSON_BGA, BENCH_BMSON_BGA_TIMING)[0]!
+  .sequences[0]!;
+
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
+  define('chart-model.compileChartOptions', {
+    run: () => {
+      chartAPI.compileChartOptions(chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART));
+    },
+  });
+  define('chart-model.resolveChartOptionsAt', {
+    run: () => {
+      chartAPI.resolveChartOptionsAt(BENCH_CHART_OPTIONS.program, 1_000_000);
+    },
+  });
+  define('chart-model.buildChartOptionTimeline', {
+    run: () => {
+      chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART);
+    },
+  });
+  define('chart-model.buildChartTextTimeline', {
+    run: () => {
+      chartAPI.buildChartTextTimeline(BENCH_TEXT_CHART);
+    },
+  });
+  define('chart-model.pickChartText', {
+    run: () => {
+      chartAPI.pickChartText(BENCH_TEXT_TIMELINE, 1);
+    },
+  });
+  define('chart-model.buildBmsonBGAEventTimeline', {
+    run: () => {
+      chartAPI.buildBmsonBGAEventTimeline(BENCH_BMSON_BGA, BENCH_BMSON_BGA_TIMING);
+    },
+  });
+  define('chart-model.pickBmsonBGASequenceFrame', {
+    run: () => {
+      chartAPI.pickBmsonBGASequenceFrame(BENCH_BMSON_BGA_SEQUENCE, 0.2);
+    },
+  });
+  define('chart-model.parseBMSKeyBoundBGA', {
+    run: () => {
+      chartAPI.parseBMSKeyBoundBGA('100:400:16:0:255,255,255,255 00010203');
+    },
+  });
+  define('chart-model.pickKeyBoundBGAFrame', {
+    run: () => {
+      chartAPI.pickKeyBoundBGAFrame(
+        {
+          frameIntervalMs: 100,
+          durationMs: 400,
+          channel: '16',
+          loop: false,
+          argb: { a: 255, r: 255, g: 255, b: 255 },
+          frames: ['00', '01', '02', '03'],
+        },
+        250,
+      );
+    },
+  });
+  define('chart-model.buildKeyBoundBGATimeline', {
+    run: (fixtures) => {
+      const chart = {
+        ...fixtures.emptyBmsJSON,
+        bms: { ...fixtures.emptyBmsJSON.bms, swBGA: { '61': '100:400:16:0:255,255,255,255 00010203' } },
+        events: [{ measure: 0, position: [0, 1] as [number, number], channel: 'A5', value: '61' }],
+      };
+      chartAPI.buildKeyBoundBGATimeline(chart, chartAPI.createTimingResolver(chart));
+    },
+  });
+  define('chart-model.resolveBMSExBMPColorKey', {
+    run: () => {
+      chartAPI.resolveBMSExBMPColorKey(BENCH_COLOR_KEY_CHART, '01');
+    },
+  });
+  define('chart-model.applyBMSColorKey', {
+    run: () => {
+      chartAPI.applyBMSColorKey(BENCH_COLOR_KEY_PIXELS, { a: 0, r: 127, g: 127, b: 127 }, false);
+    },
+  });
+  define('chart-model.buildBGAOpacityTimelines', {
+    run: (fixtures) => {
+      const chart = {
+        ...fixtures.emptyBmsJSON,
+        bms: { ...fixtures.emptyBmsJSON.bms, argb: { '01': '128,40,175,48' } },
+        events: [
+          { measure: 0, position: [0, 1] as [number, number], channel: 'A2', value: '01' },
+          { measure: 1, position: [0, 1] as [number, number], channel: '0C', value: '80' },
+        ],
+      };
+      chartAPI.buildBGAOpacityTimelines(chart, chartAPI.createTimingResolver(chart));
+    },
+  });
+  define('chart-model.pickBGATint', {
+    run: () => {
+      chartAPI.pickBGATint(
+        [
+          { seconds: 0, opacity: 1, tint: 0x28af30 },
+          { seconds: 1, opacity: 0.5, tint: 0xead2ad },
+        ],
+        1.5,
+      );
+    },
+  });
+  define('chart-model.pickBGAOpacity', {
+    run: () => {
+      chartAPI.pickBGAOpacity(
+        [
+          { seconds: 0, opacity: 1 },
+          { seconds: 1, opacity: 128 / 255 },
+        ],
+        1.5,
+      );
+    },
+  });
   define('chart-model.resolvePoorBGAMode', {
     run: () => {
       chartAPI.resolvePoorBGAMode('1');
@@ -92,9 +241,16 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.resolvePlayLaneChannels('1A');
     },
   });
+  define('chart-model.resolveGenericBmsonKeyCount', {
+    run: () => {
+      chartAPI.resolveGenericBmsonKeyCount('generic-70keys');
+      chartAPI.resolveGenericBmsonKeyCount('beat-7k');
+    },
+  });
   define('chart-model.resolveBmsonModeHintLayout', {
     run: () => {
       chartAPI.resolveBmsonModeHintLayout(' beat-10k ');
+      chartAPI.resolveBmsonModeHintLayout('generic-70keys');
     },
   });
   define('chart-model.resolveChartReferenceBPM', {
@@ -114,9 +270,9 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.parseBMSExWAV('pvf 1024,-200,48000 sample.wav');
     },
   });
-  define('chart-model.exWAVVolumeCentibelsToLinearGain', {
+  define('chart-model.exWAVVolumeMillibelsToLinearGain', {
     run: () => {
-      chartAPI.exWAVVolumeCentibelsToLinearGain(-600);
+      chartAPI.exWAVVolumeMillibelsToLinearGain(-600);
     },
   });
   define('chart-model.collectBMSExWAVVolumeMultipliers', {
@@ -129,29 +285,13 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   });
   define('chart-model.parseBMSExBMP', {
     run: () => {
-      chartAPI.parseBMSExBMP('255,0,0,0,backdrop.bmp');
-    },
-  });
-  define('chart-model.resolveBmsBmpARGB', {
-    run: (fixtures) => {
-      chartAPI.resolveBmsBmpARGB(fixtures.sampleBmsJSON, '01');
-    },
-  });
-  define('chart-model.parseBMSSwBGA', {
-    run: () => {
-      chartAPI.parseBMSSwBGA('10:5:1:FF000000 02 03 04 05 06');
-    },
-  });
-  define('chart-model.pickSwitchingBGAFrame', {
-    run: () => {
-      if (BENCH_SWITCHING_BGA) {
-        chartAPI.pickSwitchingBGAFrame(BENCH_SWITCHING_BGA, 350);
-      }
+      chartAPI.parseBMSExBMP('255,0,0,0 backdrop.bmp');
     },
   });
   define('chart-model.parseBmsBGA', {
     run: () => {
       chartAPI.parseBmsBGA('02 0 0 256 256 0 0');
+      chartAPI.parseBmsBGA('100 0 0 64 64 0 0', 62, true);
     },
   });
   define('chart-model.parseBmsARGB', {
@@ -164,9 +304,24 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.volWAVToLinearGain(80);
     },
   });
-  define('chart-model.wavCmdVolumeByteToLinearGain', {
+  define('chart-model.wavCmdVolumePercentToLinearGain', {
     run: () => {
-      chartAPI.wavCmdVolumeByteToLinearGain(64);
+      chartAPI.wavCmdVolumePercentToLinearGain(64);
+    },
+  });
+  define('chart-model.resolveBmsWAVResources', {
+    run: () => {
+      chartAPI.resolveBmsWAVResources(BENCH_EXWAV_CHART);
+    },
+  });
+  define('chart-model.collectBmsWAVPlaybackModifiers', {
+    run: () => {
+      chartAPI.collectBmsWAVPlaybackModifiers(BENCH_EXWAV_CHART);
+    },
+  });
+  define('chart-model.resolveBmsWAVPlayback', {
+    run: () => {
+      chartAPI.resolveBmsWAVPlayback({ semitones: 12, frequencyHz: 22050, pan: -600, durationSeconds: 0.1 }, 44100);
     },
   });
   define('chart-model.parseBmsWAVCmd', {
@@ -177,6 +332,14 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.collectBmsWAVCmdVolumeMultipliers', {
     run: () => {
       chartAPI.collectBmsWAVCmdVolumeMultipliers(['01 0A 64', '00 0A 2', '01 0B 127']);
+    },
+  });
+  define('chart-model.collectBmsWAVVolumeMultipliers', {
+    run: () => {
+      chartAPI.collectBmsWAVVolumeMultipliers({
+        bms: { ...BENCH_EXWAV_CHART.bms, wavCmds: ['01 01 33'] },
+        resources: { ...BENCH_EXWAV_CHART.resources, wavGain: { '01': 0.77 } },
+      });
     },
   });
   define('chart-model.isTempoChannel', {
@@ -444,6 +607,7 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.resolveChartLongNoteMode', {
     run: (fixtures) => {
       chartAPI.resolveChartLongNoteMode(fixtures.sampleBmsJSON);
+      chartAPI.resolveChartLongNoteMode(BENCH_HDX_CHART);
     },
   });
   define('chart-model.resolveLandmineDamage', {

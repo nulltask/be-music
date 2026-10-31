@@ -189,6 +189,7 @@ describe('describeLeaderboardResult', () => {
 describe('describeSkippedSubmission', () => {
   test('names why a play was not sent', () => {
     expect(describeSkippedSubmission('auto-play')).toBe('Leaderboard: not submitted (an auto play is not sent)');
+    expect(describeSkippedSubmission('two-player')).toMatch(/two-player/);
     expect(describeSkippedSubmission('missing-fingerprint')).toMatch(/no chart fingerprint/);
     expect(describeSkippedSubmission('fingerprint-mismatch')).toMatch(/does not match/);
   });

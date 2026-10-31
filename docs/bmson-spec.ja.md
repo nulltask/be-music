@@ -30,9 +30,14 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] ルート: `stop_events`
 - [x] ルート: `scroll_events`（beatoraja 拡張）を BMS の `#SCROLL`（チャンネル `SC`）として読む
 - [x] ルート: `bga`
+- [x] beatoraja の `bga_sequence` とイベントの `id_set` / `condition` / `interval` をパース・複製・Be-Music JSON・bmson 出力で保持
+- [x] シーケンス／条件付きイベントの選択を engine の判定につなぎ、AUTO／リプレイの seek で復元する
+- [x] engine のシーケンス状態を Terminal の ANSI／Kitty 出力で描く
+- [x] Native・Canvas・LR2・beatoraja の Browser スキンで、画像セット・元画像の alpha・動画の再起動を含む engine のシーケンス状態を描く
+- [x] シーケンスプログラムをステージ固有の参照先・途中開始の位相・FIT の時計・境界での解除とともに NONSTOP へ配置する
 - [x] `info` 拡張項目: `subartists`
 - [x] `info` 拡張項目: `chart_name`
-- [x] `info` 拡張項目: `mode_hint`
+- [x] `info` 拡張項目: `mode_hint`（独立した `generic-Nkeys` キーボード、1〜70 個の通常キーを含む）
 - [x] `info` 拡張項目: `judge_rank`
 - [x] `info` 拡張項目: `total`
 - [x] beatoraja 拡張 `info.ln_type` と note 単位 `t`（1: LN / 2: CN / 3: HCN）を IR に保持し、プレイヤーの LN モード解決と chart-writer 出力に使用
@@ -53,18 +58,18 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` はそのまま保持として扱う
 - [x] `info.init_bpm` 欠落、0、負値、非数値は parse error として扱う
 - [x] `mode_hint` のレーン表にない `x` の note を、beatoraja と同じく BGM (`01`) として解釈
-- [ ] `version` の妥当性検証（`null` のエラー化、未指定時の legacy 扱い方針）
-- [ ] `version` の互換判定を SemVer で行う方針の明文化
+- [x] `version` を検証し、譜面データを読む前に `null`・不正な SemVer・未対応版を拒否する。バージョン省略の旧形式 v0.21 は Bemuse と同じように読む
+- [x] 安定版 `1.0.0` と SemVer のビルドメタデータ付き表記（例: `1.0.0+local`）に対応する。プレリリースとその他の版は、形式への対応を明示するまで拒否する
 - [ ] `info.title` / `artist` / `genre` など必須情報の欠損時エラー方針
 - [ ] `sound_channels[].name` の拡張子フォールバック探索（`.wav`/`.ogg`/`.m4a`）
 - [ ] `sound_channels[].name` のパス正規化（`\` と `/`）およびディレクトリトラバーサル防止
-- [ ] `sound_channels[].notes[]` 同一 pulse で `c=true/false` が混在する場合の優先規則
-- [ ] `bpm_events` 同一 `y` 多重定義時の「末尾優先」正規化
-- [ ] `stop_events` 同一 `y` 多重定義時の「加算」正規化
+- [x] `sound_channels[].notes[]` 同一 pulse で `c=true/false` が混在する場合は音源を一度だけ再始動し、一つのスライスを共有する（下記のスライス規則を参照）
+- [x] `bpm_events` 同一 `y` 多重定義時は末尾を優先する（時刻解決時に適用）
+- [x] `stop_events` 同一 `y` 多重定義時は加算する（時刻解決時に適用）
 - [ ] `bga.bga_header` の同一 `id` 多重定義時に後勝ちで解釈
-- [ ] `info.title_image` の受理と IR への保持
+- [x] `info.title_image` の受理と IR への保持
 - [x] `subartists` の `key:value` 形式（`music:`/`chart:` 等）の保持規則
-- [ ] 未知ルートキーの透過保持
+- [x] 未知ルートキーを不透明なデータとして保持
 
 ### chart-writer (`@be-music/chart-source` -> bmson)
 
@@ -88,6 +93,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `notes.l` 出力 (未指定時 `l=0`)
 - [x] `notes.c` 出力 (未指定時 `c=false`)
 - [x] `notes.t` 出力 (beatoraja 拡張、ロングノートのみ)
+- [x] `notes.up` 入出力と LN 終端の発音 (beatoraja 拡張)
 - [x] `info.ln_type` 出力 (beatoraja 拡張)
 - [x] `bga.bga_header` 出力
 - [x] `bga.bga_events` 出力
@@ -96,9 +102,9 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `bmson.barlinesSuppressed` により明示的な `lines: []` を保持
 - [ ] `bpm_events` 同一 `y` のイベントを「末尾優先」へ正規化して出力
 - [ ] `stop_events` 同一 `y` のイベントを加算正規化して出力
-- [ ] `info.title_image` の出力
+- [x] `info.title_image` の出力
 - [ ] `sound_channels[].name` のパス区切り正規化と危険パス除去
-- [ ] 未知ルートキーの透過再出力
+- [x] 不透明なルート注釈を再出力
 - [~] `notes.x` の元値を厳密保持 (IR で lanes を再割当するため完全同一は保証しない)
 
 ### player / chart-audio-renderer (bmson 再生挙動)
@@ -117,21 +123,28 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `bga.layer_events` の shared BGA timeline 抽出
 - [x] `bga.poor_events` の shared BGA timeline 抽出
 - [x] Browser player は shared BGA timeline 経由で bmson BGA の still / video asset を描画
-- [ ] CLI/TUI の bmson header filename 向け BGA resource loading
-- [ ] 同一 pulse の処理順（Note/BGA → BPM → STOP）を仕様通りに固定
-- [ ] 同一 `y` の `bpm_events` を末尾優先で適用
-- [ ] 同一 `y` の `stop_events` を加算して適用
-- [ ] sound channel スライス規則（`c` と restart）に基づく再生
+- [x] CLI/TUI の bmson header filename 向け BGA resource loading
+- [x] 同一 pulse を仕様どおり Note/BGA → BPM → STOP の順で処理する（`bmson-same-pulse.test.ts`）
+- [x] 同一 `y` の `bpm_events` を末尾優先で適用
+- [x] 同一 `y` の `stop_events` を加算して適用し、各 STOP はその pulse の最終 BPM で進める
+- [x] sound channel スライス規則（`c` と restart）に基づく再生
 - [x] 同じ sound channel 内で playable ノートと BGM ノートが同じ `y` にある場合の BGM 破棄（parse 時に BGM ノートを捨てる）
-- [x] レイヤーノート（複数の sound channel が同じ `x` と `y` にノートを持つ場合）は、beatoraja と同じく player では最初の sound channel のノート 1 つとして判定し、ほかの sound channel もその時刻に鳴らす（[player 仕様 — 重複ノート](./player-spec.ja.md#重複ノート)）
-- [ ] 異なる sound channel の同一 `(x,y)` ノートを Layered Note として合成再生
+- [x] レイヤーノート（複数の sound channel が同じ `x` と `y` にノートを持つ場合）は 1 つの判定ノートにまとめます。早押し・遅押し・リプレイでも入力時に構成スライスをすべて鳴らし、ミス時は鳴らしません。最初の sound channel のノートと長さが異なるノートは、beatoraja と同じく音ごと捨てます。NONSTOP でも入力との結び付きを維持します（[player 仕様 — 重複ノート](./player-spec.ja.md#重複ノート)）
+
+各 sound channel は異なる pulse ごとに独立したスライスへ切り出す。`c=true` は直前の再始動からの音源オフセットを継続し、ノートの発音を省略する指定ではない。同一 pulse のノートは一つのスライスを共有し、`c` が混在する場合は再始動する。異なるスライスは手動入力で独立して発音でき、後続ノートを見逃しても先行スライスがその音を鳴らし続けることはない。browser、Node、オフラインレンダラーでこの規則を共有する。
+
+`info.title_image` は `bmson.info.titleImage` に保持し、`metadata.titleImage` にも反映する。Native は決定画面で、デコード済みの画像をタイトル文字の代わりに表示する。画像が見つからない場合やデコードできない場合は文字を表示する。Canvas スキンは `chartImage(chart, 'titleImage')` で画像を取得でき、DOM の決定画面には `titleImage` の URL を渡す。読み込み用の `eyecatch_image` と背景用の `back_image` は別の役割を保つ。
+
+beatoraja の `up` 拡張は LN 終端キー音を表します。演奏レーンの `up=true` イベントは sound channel の順序によらず、同じレーン・同じ pulse で終わるロングノートに結び付け、自身の `l` から別ノートを作りません。複数ある場合は後の定義を採用します。対応する LN がない定義や置き換えられた定義はソースに保持し、スライスの境界には使いますが、判定・発音しません。BGM の `up` は BGM のままです。パース、Be-Music JSON、bmson 出力では明示的な `false` も含めて真偽値の `up` を保持し、編集時は保持済み出力を無効化します。BMS への非可逆変換では演奏レーンの終端音イベントを除外します。
+
+解決済みノートは `endSoundEvent` を保持します。手動演奏の LN は保持したまま終端を通過するか、離しが確定すると終端音を鳴らします。CN/HCN は離しが確定したときに鳴らし、早離しの失敗でも既存の離し猶予を経て鳴らします。始点を見逃した場合や、CN/HCN を離さず終端の判定期限を過ぎた場合は鳴らしません。AUTO と AUTO SCRATCH は譜面の終端時刻に鳴らします。AUTO のシークは終端からの経過時間で音声を再開し、手動の練習は開始位置より前の始点とその終端音をスキップします。リプレイの判定再構築中は発音しません。NONSTOP でも対応関係とソーススライスを維持します。[jbms-parser の対応付け](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/BMSONDecoder.java#L201-L218)と [beatoraja の離し処理](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java#L470-L565)を参照してください。
 
 ## 実装が読み込むフィールド (parser)
 
 - ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `key_channels` / `mine_channels` / `scroll_events` (beatoraja 拡張), `bpm_events`, `stop_events`, `bga`
 - `scroll_events[]`: `y`, `rate`
-- `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
-- `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
+- `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `title_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
+- `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t`, `up` (beatoraja extensions)
 - `key_channels[].notes[]`: `x`, `y`
 - `mine_channels[].notes[]`: `x`, `y`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
@@ -159,16 +172,17 @@ flowchart TD
 ```
 
 - `version` を `bmson.version` に保持
+- バージョン検証は [bmson のルート仕様](https://github.com/bemusic/bmson-spec/blob/668c4338cd7c64da2d2ec0f848c4ad58a3a881d9/doc/index.rst#top-level-object-bmson)と [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html)に従う。優先順位が安定版 `1.0.0` と等しい表記だけに対応し、ビルドメタデータは受け付けて保持する。数値部分とプレリリースの数値識別子には先頭ゼロを認めない。省略かつ旧形式の名前（`soundChannel`・`bpmNotes`・`stopNotes`・`info.initBPM`）を持つ譜面は v0.21 とみなし、[Bemuse](https://github.com/bemusic/bemuse/blob/4bf3e7d98a44841b323741cc403ecb7b41618ade/packages/bmson/src/legacy.ts) と同じく入力時に変換する。`soundChannel` → `sound_channels`、`initBPM` → `init_bpm`、`bpmNotes {y, v}` → `bpm_events`、`stopNotes {y, v}` → `stop_events`（`floor(v)` pulse）、分解能は 240 とし、その他の旧フィールドは捨てて通常の 1.0.0 文書にする。1.0.0 のフィールドだけを持つ譜面の省略は判別できないため `Error` を返す。`null`・文字列以外・不正な表記には `TypeError`、未対応の有効なバージョンには案内付きの `Error` を返す。bmson の直接読込・形式の自動判別・Node ファイル読込・Browser の譜面読込は同じ検証を使う。Be-Music JSON は別の内部文書形式として既存の正規化を使う。
 - `lines[].y` を `preservation.bmson.lines` に保持
 - `info.resolution` を `bmson.info.resolution` に保持
 - 互換としてルート `resolution` も読み取り、`info.resolution` がなければ採用
 - resolution が `0` や `null` なら既定値 `240` を使い、負の値は仕様のとおり絶対値として読む（beatoraja は `0` 以下の値をすべて `240` として扱う）。整数でない値は切り捨てる
 - `info.init_bpm` が欠落、または正の有限数ではない場合は document を reject
 - `info.total` が有限数なら使い（負値は仕様どおり絶対値へ正規化）、それ以外は bmson 既定値 `100` を適用
-- `info.total` はプレイヤー既定 TOTAL に対する百分率で、絶対 TOTAL ではない。プレイヤーの全ルールセット（`lr2`、`beatoraja`、`____`）はこれを各ルールセット自身の既定 TOTAL の `total / 100 ×` として扱い、0 以下は 100 % とみなす（beatoraja の `BMSPlayerRule.validate` と同じ）。仕様では `0` はライフバーが増えない意味だが、`total: 0` でもゲージは止まらない。詳細は [player-spec](./player-spec.ja.md#初期値と既定値lr2) を参照
+- `info.total` はプレイヤー既定 TOTAL に対する百分率。既定の `bmsonTotalMode: 'beatoraja'` は 0 でも従来の既定回復を維持する。明示的な `'spec'` は、正規化済み百分率 TOTAL 0 で全ゲージの正の回復を止め、ダメージ・開始 HP・コース引継ぎを保つ。PRACTICE の明示 TOTAL 置換を優先する。replay の省略値は互換動作を維持し、影響するプレイは保存のみとして通常のベスト記録に反映しない。[ADR 0030](./adr/0030-bmson-zero-total.ja.md) を参照。
 - `info.back_image`, `info.banner_image`, `info.eyecatch_image` を normalized metadata image field に mirror
 - `sound_channels[i].name` を `resources.wav[key]` に登録
-- サウンドチャンネルごとに 2 文字の WAV キーを割り当てる。番号はチャンネル順（`sound_channels`、`key_channels`、`mine_channels`）に `01` から
+- サウンドチャンネルごとに最低 2 文字の WAV キーを割り当てる。番号はチャンネル順（`sound_channels`、`key_channels`、`mine_channels`）に `01` から
 - `notes[].y` を分数位置へ変換してイベント化
 - `notes[].l/c` は `events[].bmson.l/c` として保持
 - `notes[].t`（1 = LN、2 = CN、3 = HCN）はロングノート（`l > 0`）のとき `events[].bmson.t` として保持し、`info.ln_type` は `bmson.info.lnType` に保持
@@ -176,7 +190,7 @@ flowchart TD
 - `notes[].x` は `info.mode_hint` に従って次の順で BMS チャンネルへ写像
   1. `mode_hint` が空または未指定なら `beat-7k`（bmson 1.0.0 の既定値）として扱う
   2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`、`keyboard-24k`、`keyboard-24k-double` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ。キーボードの表は後述）。bmson 仕様の正式な一覧や beatoraja と同じく、`beat-5k` もスクラッチを `x` 8 に置いて `x` 6 / 7 にはレーンを割り当てず、`beat-10k` は 2P の鍵を `x` 9〜13、2P のスクラッチを `x` 16 に置く。表は `@be-music/chart-model` の `BMSON_MODE_HINT_LAYOUTS` で、プレイモード表から作る（[Player 仕様 — プレイモード表](./player-spec.ja.md#プレイモード表) を参照）
-  3. `generic-Nkeys` は `x = 1..N` を左から順に `11` からの連続チャンネルへ写像
+  3. `generic-Nkeys` は整数の 1〜70 キーに対応し、`x = 1..N` を左から順に `11..1Z`、続いて `21..2Z` へ写像する。ゼロ・上限超過・形式が不正な `generic-` の hint は、丸めも拒否もせず未知の hint として扱う。beatoraja が未対応の `mode_hint` を警告して読むのと同じく、レーンが収まれば `beat-7k` として読む（下記の手順 4）。単数形の `generic-Nkey` も引き続き受け付ける。`16`・`17`・`26`・`27` を含め、すべてを 1 つのキーボードの通常キーとして扱う。ほとんどの列が空でも、宣言したキー数から `generic-N` を選ぶ。
   4. それ以外の hint は未知の hint とする。`sound_channels`・`key_channels`・`mine_channels` の正の `x` がすべて `beat-7k` の表（1〜8）に収まれば、beatoraja（警告つき）、Qwilight、Bemuse と同じく `beat-7k` として読む。収まらなければ正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番する。beatoraja では `x` 8 より先のレーンが BGM になるが、残すのが作者の意図だからである（be-music の判断）
 - `x` が未指定、または `x <= 0` のノートは BGM (`01`)
 - キーボード系 hint（beatoraja が読む Keyboardmania 風の 24 鍵 + ホイール）はすべての `x` に固定のレーンを与えるため、使わない鍵がある譜面でも別の鍵へずれない
@@ -197,7 +211,8 @@ flowchart TD
 - 表にないノートが同じ sound channel の playable ノートと同じ `y` にある場合は、`x = 0` のノートと同じく捨てる
 - `bpm_events` は `resources.bpm` + チャンネル `08` へ変換
 - `stop_events` は `resources.stop` + チャンネル `09` へ変換
-- BPM と STOP の値には、異なる値ごとに初出順で 1 つのキーを割り当てる。数千の変化が少数の値を繰り返すギミック譜面でもキーは数個で済む。2 文字のキーは base 36 で 1,295 個（`01`〜`ZZ`）。WAV チャンネルか 1 つの表の異なる値がそれを超える譜面は base 62 のキー（`bms.base = 62`、3,843 個）に切り替え、キーが一周して前の値を上書きすることはない。3,843 を超えた BPM / STOP の値は、キーを持つ最も近い値のキーを使い、それ以上の WAV チャンネルは捨てる。beatoraja にはこの上限がないが、そこまで達する既知の譜面はない
+- BPM・STOP・SCROLL は、異なる値ごとに初出順で正確なキーを 1 つ割り当て、同じ値ではキーを共有する。各リソース表が 1,295 件までは base 36、それを超えると base 62（`bms.base = 62`）を使う。3,843 件を超えた内部キーは 3 文字以上に延び、sound/key/mine チャンネルの欠落やタイミング・スクロール値の近似は行わない。Be-Music JSON と bmson 出力でも識別を保つ。BMS 出力では、リソースまたはイベントのキーが 2 文字を超えると `RangeError` を返す。bmson / Be-Music JSON を使うか、リソースを減らしてキーを振り直してから変換する。
+- STOP のフィンガープリントは、リソースキーを保持済みソース配列の番号として扱わず、解決済みの長さから計算する。同じ長さの繰り返しや base 62 の STOP 参照に誤りがあった譜面では、フィンガープリントが変わる場合がある。記録・リプレイのスキーマは変更しない。
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
 - `stop_events` の元配列は `preservation.bmson.stopEvents` に保持
 - beatoraja 拡張の `scroll_events` は `bms.scroll`（`#SCROLLxx` の表。異なる `rate` ごとに 1 キー）+ チャンネル `SC` へ変換し、BMS の SCROLL の仕組み（スクロールのタイムライン、レーン上の距離、緑数字）でそのまま再生する。速度は `#SCROLL` と同じく次のスクロールイベントまで続く。同じ `y` に複数あれば、beatoraja と同じくリストの最後のものが勝つ。有限の `rate` は 0 や負の値も含めて保持し、`y` か `rate` が有限数でない要素は読み飛ばす。元配列は `preservation.bmson.scrollEvents` に保持する（ない場合は省く）
@@ -267,9 +282,19 @@ bmson 仕様は `judge_rank` の判定幅をプレイヤーに委ねています
 
 be-music は NORMAL の解釈（`100` = NORMAL）に従います。仕様の説明例と多くのプレイヤーに沿い、be-music で bmson に変換して読み直したときに判定幅が保たれるためです。その代わり、変換した譜面は beatoraja では約 4/3 倍広い判定になります。配布されている bmson 譜面は、ほぼすべて既定値 `100` のままです。
 
-## 一次参照に対する未対応/非互換
+## 互換性と保持の方針
 
-- 未対応: bmson で未使用の未知ルートキーの透過保持
+未知の JSON データは、ルート・info・ノート・タイミング・BGA ノードの任意の `extraFields` envelope と、チャンネル・小節線のスロット・pulse マップに保持します。writer は正規化で省略された不正値も含めて対応済みの予約キーを除外してから合成し、注釈の編集で古い保存値を復活させません。未知フィールドは再生や fingerprint を変えず、hidden note の `damage` もデータとしてだけ保持します。ソースのバイト列、不正なレコード、native BMS への注釈、元コンテナメタデータの任意の合成は保証対象外です。契約は [ADR 0029](./adr/0029-opaque-bmson-fields.ja.md) に定義します。
+
+- 明示された generic の hint は、正規出力でも空の列の位置を保つ。BMS 変換時に生成する generic の hint は、使用レーンへ連続番号を振る。明示的な generic 配置を BMS に出力すると `RangeError` にする。キーボードの同一性を保つには bmson または Be-Music JSON を使う。
+
+### beatoraja の BGA シーケンスデータ
+
+`bmson.bga.sequences` は `bga_sequence` の定義を保持し、フレームはミリ秒の `time` と任意の `id` を持つ。id の省略と `-2147483648` は終端を表す。イベント配列は順序付きの `idSet`・`condition`・`interval` を保持する。画像セットだけのイベントでは、通常の `id` を beatoraja の整数既定値と同じゼロにし、明示的な空セットは空のまま保つ。外部出力では `id_set` を使う。
+
+モデルは `buildBmsonBGAEventTimeline` と `pickBmsonBGASequenceFrame` を公開する。キューの pulse は BPM・STOP のリゾルバーで解決し、フレーム時刻は経過ミリ秒のまま扱う。イベントレイヤーの参照では、画像 id よりシーケンス id を優先する。通常の画像参照はヘッダーの宣言 id を使うが、シーケンスのフレーム id は [上流のデコーダー](https://github.com/exch-bms2/jbms-parser/blob/master/src/bms/model/BMSONDecoder.java)と[描画処理](https://github.com/exch-bms2/beatoraja/blob/master/src/bms/player/beatoraja/play/bga/BGAProcessor.java)と同じく、ヘッダー配列の 0 始まりの位置を使う。未定義画像は画像なしとなり、終端後は新しいトリガーまで終了状態を保つ。通常の画像だけのレイヤーは既存の BGA タイムラインに残る。
+
+engine はアクティブなシーケンス状態を `PlayerUIFramePayload.bmsonBGA` に公開し、Browser／Terminal の描画はすべての候補の参照先を読み込んで、元画像の alpha・配置・動画フレーム時刻とともに描く。Browser の Native・Canvas・LR2・beatoraja は同じ engine フレームを使う。MISS は通常の 500 ms を超えて表示でき、動画には明示的なフレーム開始時刻を渡す。NO LAYER・NO POOR・POORBGA 2 の指定も反映する。PLAY／MISS の判定・ALWAYS の繰り返し・ミリ秒の interval・定義順の画像セット選択は [ADR 0022](./adr/0022-bmson-bga-events.ja.md) に従う。AUTO／リプレイの seek は正確なトリガーのエフェクトを再構成し、手動 seek はライブ履歴を消す。`buildBmsonBGAEventTimeline` は `includeOrdinaryLayerClears` を受け付け、後続の通常画像キューで古い条件付きプログラムを解除できる。NONSTOP は `NonstopStitchMap.bmsonBGA` により、ステージ固有のフレーム参照・途中開始した ALWAYS の位相・FIT の時刻・ステージ終了時刻での解除を保つ。ホストは engine とリソースローダーへ `bmsonBGACues` を渡す。これらは MISS イベントレイヤーだけを描き interval を参照しない上流を拡張する実行規則であり、完全な再生互換とは扱わない。
 
 ## y -> position 変換規則
 
@@ -281,3 +306,16 @@ be-music は NORMAL の解釈（`100` = NORMAL）に従います。仕様の説�
   - `beat = y / resolution`
   - `measure = floor(beat / 4)`
   - `position = [round(y) % (resolution * 4), resolution * 4]`
+
+## 出力 resolution の変更
+
+`stringifyBmson(chart, { resolution })` は、対応済みの pulse 単位のデータを指定したグリッドに変換します。1以上の有限な指定は整数に切り捨て、それ以外は元の resolution、未指定なら240を使います。resolution を明示した場合は、保存検証をスキップしても現在のイベントから再生成します。元のオブジェクトは変更しません。
+
+| データ                                            | 変換                                                                                 |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| ノートの開始点と LN 終端                          | 絶対 beat 位置をそれぞれ出力 pulse に丸め、丸めた終端から開始点を引いて `l` を求める |
+| base・layer・POOR イベントの `y` と小節線         | 元の pulse から倍率を変え、最も近い出力 pulse に丸める                               |
+| シーケンスのフレーム `time` と条件付き `interval` | ミリ秒の値を維持する                                                                 |
+| 不透明な注釈 payload                              | 単位を解釈せずデータを保持する                                                       |
+
+長さだけを独立に丸めると、丸めた終端から `up` キー音が外れる場合があります。正の LN が0 pulse になる場合は、より高い resolution を案内する `RangeError` を返します。粗いグリッドでは他のイベント位置も量子化されるため、時刻の完全な一致には pulse 位置を表現できることが必要です。明示的な `lines: []` は保存・再生成の両方の経路で空のまま出力し、小節線の非表示と fingerprint を維持します。

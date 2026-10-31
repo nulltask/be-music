@@ -116,31 +116,27 @@ export function resizeFrameSourceWithAspectMode(
   mode: 'contain' | 'cover',
   resizeAlgorithm: ImageResizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
 ): FrameSource {
-  if (source.kind === 'static') {
-    return {
-      kind: 'static',
-      frame: resizeANSIFrameWithAspectMode(source.frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
-    };
-  }
+  return mapFrameSource(source, (frame) =>
+    resizeANSIFrameWithAspectMode(frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
+  );
+}
 
-  const resizedFrames: TimedANSIFrame[] = [];
+/** Transform static and streamed frames once each, preserving the stream's clock and lazy startup. */
+export function mapFrameSource(source: FrameSource, transform: (frame: ANSIFrame) => ANSIFrame): FrameSource {
+  if (source.kind === 'static') return { kind: 'static', frame: transform(source.frame) };
+  const mappedFrames: TimedANSIFrame[] = [];
   return {
     kind: 'video',
     get durationSeconds() {
       return source.durationSeconds;
     },
-    ensureStreaming: () => {
-      source.ensureStreaming?.();
-    },
+    ensureStreaming: () => source.ensureStreaming?.(),
     get frames() {
-      for (let index = resizedFrames.length; index < source.frames.length; index += 1) {
+      for (let index = mappedFrames.length; index < source.frames.length; index += 1) {
         const entry = source.frames[index]!;
-        resizedFrames.push({
-          seconds: entry.seconds,
-          frame: resizeANSIFrameWithAspectMode(entry.frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
-        });
+        mappedFrames.push({ seconds: entry.seconds, frame: transform(entry.frame) });
       }
-      return resizedFrames;
+      return mappedFrames;
     },
   };
 }

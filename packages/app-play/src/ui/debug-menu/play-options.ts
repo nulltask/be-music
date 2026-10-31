@@ -143,6 +143,12 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
   });
   // Every ruleset reuses its own previous arrangement (#774); only the seeds stay beatoraja's.
   for (const controller of [reuse, fresh]) this.trackPlayOption(controller);
+  trackPlayOption(
+    selectBinding(folder, this.guiState, 'bmsonTotalMode', 'bmson TOTAL 0', {
+      'Native compatibility': 'beatoraja',
+      'No recovery (bmson spec)': 'spec',
+    }).on('change', ({ value }) => this.setPlayOptions({ bmsonTotalMode: value })),
+  );
   this.gaugeAutoShiftController = selectBinding(
     folder,
     this.guiState,

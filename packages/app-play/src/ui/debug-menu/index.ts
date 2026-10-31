@@ -484,8 +484,9 @@ export class DebugMenu {
     // chart constructions are offered under every ruleset.
     const battleChoices: Record<string, PlayOptions['battleMode']> = {
       OFF: 'OFF',
+      'CHART HEADER': 'AUTO',
       ...(this.guiState.judgeRuleset === 'lr2'
-        ? { BATTLE: 'TWO-PLAYER' as const }
+        ? { BATTLE: 'TWO-PLAYER' as const, COUPLE: 'COUPLE' as const }
         : this.guiState.judgeRuleset === 'beatoraja'
           ? { BATTLE: 'BATTLE' as const }
           : { BATTLE: 'BATTLE' as const, '2P PLAY': 'TWO-PLAYER' as const }),
@@ -502,7 +503,7 @@ export class DebugMenu {
       this.battleModeController.refresh();
     }
     if (this.dBattleScratchController) this.dBattleScratchController.hidden = this.guiState.battleMode !== 'D-BATTLE';
-    const twoPlayer = this.guiState.battleMode === 'TWO-PLAYER';
+    const twoPlayer = ['TWO-PLAYER', 'COUPLE', 'AUTO'].includes(this.guiState.battleMode);
     if (this.gauge2PController) this.gauge2PController.hidden = !twoPlayer;
     for (const controller of this.mRanControllers) controller.hidden = !twoPlayer;
     if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.hidden = !this.guiState.lr2ExtraMode;

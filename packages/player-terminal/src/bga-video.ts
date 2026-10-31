@@ -1,3 +1,4 @@
+import type { FrameMode } from './bga-frame.ts';
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { Worker } from 'node:worker_threads';
@@ -5,15 +6,10 @@ import { createAbortError, isAbortError, throwIfAborted } from '@be-music/shared
 import { loadOptionalNodeModule } from '@be-music/shared-utils/optional-node-module';
 import { createSEAWorker, isSEARuntime } from './node/sea-worker.ts';
 
-const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
 // Keep chunks small so ff_decode_multi never allocates too many full-size frames at once.
 const PACKET_READ_CHUNK_BYTES = 65_536;
 const MAX_PACKET_READ_ITERATIONS = 16_384;
 const FALLBACK_FPS = 30;
-// Mirror the `FrameMode` shape declared in `./bga.ts` — kept in sync so a bmson-source layer can be threaded through
-// the video decode worker without losing the spec-aware `'bmson-layer'` distinction (which suppresses the BMS-style
-// black chroma-key per the bmson 1.0.0 spec).
-type FrameMode = 'base' | 'layer' | 'bmson-layer';
 
 interface LibAVPlaneLayout {
   offset: number;
@@ -91,11 +87,12 @@ export interface DecodedVideoFrame {
 }
 
 export interface DecodedVideoStreamInfo {
-  codecName: 'mpeg1video' | 'h264' | 'mjpeg';
+  codecName: string;
   durationSeconds?: number;
 }
 
 export interface DecodedSourceVideoFrame {
+  alpha?: Uint8Array;
   seconds: number;
   width: number;
   height: number;
@@ -107,6 +104,7 @@ interface VideoDecodeWorkerInitData {
   videoPath: string;
   mode: FrameMode;
   stopAfterFirstFrame: boolean;
+  preserveVideoBorders: boolean;
 }
 
 interface VideoDecodeWorkerReadyMessage {
@@ -121,7 +119,7 @@ interface VideoDecodeWorkerFrameMessage {
 
 interface VideoDecodeWorkerDoneMessage {
   kind: 'done';
-  result?: { codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number };
+  result?: { codecName: string; frameCount: number; durationSeconds?: number };
 }
 
 interface VideoDecodeWorkerErrorMessage {
@@ -144,7 +142,7 @@ export async function decodeVideoFramesStream(
     onReady?: (info: DecodedVideoStreamInfo) => void;
     stopAfterFirstFrame?: boolean;
   } = {},
-): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
+): Promise<{ codecName: string; frameCount: number; durationSeconds?: number } | undefined> {
   return await decodeVideoFramesStreamDirect(videoPath, onFrame, signal, options);
 }
 
@@ -156,7 +154,7 @@ export async function decodeVideoFramesStreamDirect(
     onReady?: (info: DecodedVideoStreamInfo) => void;
     stopAfterFirstFrame?: boolean;
   } = {},
-): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
+): Promise<{ codecName: string; frameCount: number; durationSeconds?: number } | undefined> {
   let libav: LibAVInstance | undefined;
   try {
     throwIfAborted(signal);
@@ -175,9 +173,6 @@ export async function decodeVideoFramesStreamDirect(
     }
 
     const codecName = await libavInstance.avcodec_get_name(videoStream.codec_id);
-    if (!isSupportedVideoCodec(codecName)) {
-      return undefined;
-    }
     const durationSeconds = resolveStreamDurationSeconds(videoStream);
     options.onReady?.({
       codecName,
@@ -230,13 +225,15 @@ export async function decodeVideoFramesToSourceFramesInWorker(
   options: {
     onReady?: (info: DecodedVideoStreamInfo) => void;
     stopAfterFirstFrame?: boolean;
+    preserveVideoBorders?: boolean;
   } = {},
-): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
+): Promise<{ codecName: string; frameCount: number; durationSeconds?: number } | undefined> {
   throwIfAborted(signal);
   const workerInitData = {
     videoPath,
     mode,
     stopAfterFirstFrame: Boolean(options.stopAfterFirstFrame),
+    preserveVideoBorders: Boolean(options.preserveVideoBorders),
   } satisfies VideoDecodeWorkerInitData;
   const worker = isSEARuntime()
     ? createSEAWorker('bga-video-worker', workerInitData)
@@ -303,10 +300,6 @@ export async function decodeVideoFramesToSourceFramesInWorker(
   });
 }
 
-function isSupportedVideoCodec(codecName: string): codecName is 'mpeg1video' | 'h264' | 'mjpeg' {
-  return SUPPORTED_VIDEO_CODECS.has(codecName);
-}
-
 async function decodeVideoFramesWithCallback(
   libav: LibAVInstance,
   formatContext: number,
@@ -359,6 +352,7 @@ async function decodeVideoFramesWithCallback(
         rgba: converted.rgba,
       });
       frameCount += 1;
+      if (stopAfterFirstFrame) return;
     }
   };
 

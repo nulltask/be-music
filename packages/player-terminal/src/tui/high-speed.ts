@@ -13,11 +13,14 @@ export function normalizeHighSpeed(value: number): number {
   return Math.min(MAX_HIGH_SPEED, Math.max(MIN_HIGH_SPEED, value));
 }
 
-export function resolveVisibleBeatsForTUIGrid(rowCount: number, highSpeed: number): number {
+export function resolveVisibleBeatsForTUIGrid(rowCount: number, highSpeed: number, authored: boolean = false): number {
   const safeRows = Number.isFinite(rowCount) ? Math.max(MIN_GRID_ROWS, Math.floor(rowCount)) : MIN_GRID_ROWS;
-  const safeHighSpeed = normalizeHighSpeed(highSpeed);
+  const exactAuthored = authored && Number.isFinite(highSpeed) && highSpeed >= 0.25 && highSpeed <= 100;
+  const safeHighSpeed = exactAuthored ? highSpeed : normalizeHighSpeed(highSpeed);
   const visibleMeasures = safeRows / (_____MEASURE_ROWS_AT_HS1 * safeHighSpeed);
-  return Math.max(MIN_SCROLL_WINDOW_BEATS, visibleMeasures * _____MEASURE_BEATS);
+  return exactAuthored
+    ? visibleMeasures * _____MEASURE_BEATS
+    : Math.max(MIN_SCROLL_WINDOW_BEATS, visibleMeasures * _____MEASURE_BEATS);
 }
 
 export function resolveAnimatedHighSpeedValue(

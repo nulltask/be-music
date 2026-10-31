@@ -12,6 +12,9 @@ import {
   resolveBMSLongNotes,
   type BeatResolver,
 } from './index.ts';
+import { resolveJudgedNotes } from './resolved-notes.ts';
+import { resolveChartPlayVariant } from './play-variant.ts';
+import { resolveBmsWAVResources } from './wav-directives.ts';
 import {
   createTimingBuildContext,
   createTimingResolver,
@@ -78,9 +81,34 @@ export function collectSampleTriggersWithContext(
     json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events, beatResolver) : undefined;
 
   const idBase = resolveBMSBase(json);
+  const wavResources = resolveBmsWAVResources(json);
+  // Keep every up entry in the slicing pass, but only an attached LN-end sample is audible on a playable lane. A note
+  // of another length stacked on a bmson note is dropped with its sound, so it is not audible either.
+  const hasUp = json.sourceFormat === 'bmson' && events.some((event) => event.bmson?.up === true);
+  const judged =
+    hasUp || (json.sourceFormat === 'bmson' && hasStackedLaneEvents(selectedEvents, beatResolver))
+      ? resolveJudgedNotes({
+          json,
+          timing: resolver,
+          beatResolver,
+          sortedEvents,
+          idBase,
+          resolvePlayVariant: () => resolveChartPlayVariant(json),
+          inferBmsLNTypeWhenMissing: options.inferBmsLNTypeWhenMissing === true,
+        })
+      : undefined;
+  const endSounds = hasUp
+    ? new Set(judged!.notes.flatMap((note) => (note.endSoundEvent ? [note.endSoundEvent] : [])))
+    : undefined;
+  const layeredEvents = new Set(judged?.notes.flatMap((note) => note.soundEvents ?? []));
+  const droppedEvents = new Set(
+    judged?.shadowedNotes.map((note) => note.event).filter((event) => !layeredEvents.has(event)),
+  );
   const triggers: TimedSampleTrigger[] = [];
   for (const item of selectedEvents) {
     const event = item.event;
+    if (endSounds && item.normalizedChannel !== '01' && event.bmson?.up === true && !endSounds.has(event)) continue;
+    if (droppedEvents.has(event)) continue;
     const sampleKey = normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson');
     const playback = bmsonPlaybackMap?.get(event);
     const beat = beatResolver.eventToBeat(event);
@@ -90,13 +118,29 @@ export function collectSampleTriggersWithContext(
       seconds: resolver.beatToSeconds(beat),
       channel: item.normalizedChannel,
       sampleKey,
-      samplePath: json.resources.wav[sampleKey],
+      samplePath: wavResources[sampleKey],
       sampleOffsetSeconds: playback?.offsetSeconds ?? 0,
       sampleDurationSeconds: playback?.durationSeconds,
       sampleSliceId: playback?.sliceId,
     } satisfies TimedSampleTrigger);
   }
   return triggers;
+}
+
+/** Whether two playable-lane events share a lane and beat, the only case where a bmson note can be dropped. */
+function hasStackedLaneEvents(
+  items: ReadonlyArray<{ event: BeMusicEvent; normalizedChannel: string }>,
+  beatResolver: BeatResolver,
+): boolean {
+  const seen = new Set<string>();
+  for (const { event, normalizedChannel } of items) {
+    const side = normalizedChannel.charCodeAt(0);
+    if (side !== 0x31 && side !== 0x32) continue;
+    const key = `${normalizedChannel}:${beatResolver.eventToBeat(event)}`;
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  return false;
 }
 
 export function createBmsonSamplePlaybackMap(
@@ -128,6 +172,8 @@ export function createBmsonSamplePlaybackMap(
 
   const playbackMap = new Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>();
   for (const entries of perSampleKey.values()) {
+    // Hosts can concatenate playable and BGM lists; source order must not change slice boundaries.
+    entries.sort((left, right) => left.beat - right.beat);
     let anchorSeconds = 0;
     let hasAnchor = false;
     let sliceIndex = 0;
@@ -150,16 +196,8 @@ export function createBmsonSamplePlaybackMap(
       }
 
       const offsetSeconds = Math.max(0, firstEntry.seconds - anchorSeconds);
-      // bmson 1.0.0 spec: a `c=true` note must NOT restart playback — the previous `c=false` anchor's audio keeps
-      // streaming through it. So the slice's duration boundary is the next note that forces a restart (`c !== true`),
-      // not just the next note. Walking past every consecutive `c=true` chord here means the BufferSource scheduled for
-      // THIS slice plays long enough to cover them all, and the runtime's "skip retrigger when this sample is already
-      // active" path actually has an active sample to compare against.
-      let boundaryIndex = end;
-      while (boundaryIndex < entries.length && entries[boundaryIndex]!.event.bmson?.c === true) {
-        boundaryIndex += 1;
-      }
-      const boundary = boundaryIndex < entries.length ? entries[boundaryIndex]! : undefined;
+      // Every distinct pulse cuts the stem. `c` chooses the source offset, not whether the next note needs a trigger.
+      const boundary = entries[end];
       const durationSeconds = boundary ? Math.max(0, boundary.seconds - firstEntry.seconds) : undefined;
       const sliceId = `${firstEntry.sampleKey}:${sliceIndex}`;
       sliceIndex += 1;

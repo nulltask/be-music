@@ -325,3 +325,28 @@ it('keeps an LR2 full combo below the gauge border, using the same lamp rule as 
   expect(recordPlayFromSummary(summary, 10, 'lr2').lamp).toBe('FULL_COMBO');
   expect(recordPlayFromSummary(summary, 10, 'beatoraja').lamp).toBe('FAILED');
 });
+
+it('no-recovery plays leave ordinary bests alone', () => {
+  const play = { autoPlay: false, replay: false, tempo: 1, course: false, recoveryDisabled: true };
+  expect(playKeepsRecord(play)).toBe(false);
+  expect(courseStageKeepsRecord(play)).toBe(false);
+  type Log = Parameters<typeof courseRunKeepsRecord>[0];
+  const replay = { play: { mode: 'manual', bmsonTotalMode: 'spec' }, chart: { sourceFormat: 'bmson', total: 0 } };
+  const stages = [{ played: true, replay }] as unknown as Log['stages'];
+  expect(courseRunKeepsRecord({ stages })).toBe(false);
+  expect(courseRunKeepsRecord({ stages: [], nonstop: { replay } as unknown as NonNullable<Log['nonstop']> })).toBe(
+    false,
+  );
+  replay.chart.total = 100;
+  expect(courseRunKeepsRecord({ stages })).toBe(true);
+});
+
+it('NONSTOP records use the stitched TOTAL, without inheriting a source-stage policy', () => {
+  type Log = Parameters<typeof courseRunKeepsRecord>[0];
+  const source = { play: { mode: 'manual', bmsonTotalMode: 'spec' }, chart: { sourceFormat: 'bmson', total: 0 } };
+  const stitched = { play: { mode: 'manual', bmsonTotalMode: 'spec' }, chart: { sourceFormat: 'bmson', total: 100 } };
+  const log = { stages: [{ played: true, replay: source }], nonstop: { replay: stitched } } as unknown as Log;
+  expect(courseRunKeepsRecord(log)).toBe(true);
+  stitched.chart.total = 0;
+  expect(courseRunKeepsRecord(log)).toBe(false);
+});

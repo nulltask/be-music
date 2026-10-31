@@ -250,6 +250,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     ctx.requestExit();
     return;
   }
+  if (event.code === 'F5' && resolveLaneInputTokens(ctx.preparedChart?.laneBindings).has('f5')) return;
   if (event.code === 'F5') {
     event.preventDefault();
     ctx.requestRestart();

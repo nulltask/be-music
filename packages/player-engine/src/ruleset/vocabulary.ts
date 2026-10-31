@@ -6,6 +6,7 @@
  */
 export * from './clear-lamp.ts';
 export * from './gauge-type.ts';
+export * from './bmson-total.ts';
 export {
   clampCustomJudgeRate,
   DEFAULT_BEATORAJA_CUSTOM_JUDGE,

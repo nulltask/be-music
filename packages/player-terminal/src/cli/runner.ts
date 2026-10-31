@@ -852,6 +852,7 @@ function createPlayOptionsFromCLIArgs(args: CLIArgs, chartPath: string) {
     imageResizeAlgorithm: args.imageResizeAlgorithm,
     highSpeed: args.highSpeed,
     judgeWindowMs: args.judgeWindowMs,
+    bmsonTotalMode: args.bmsonTotalMode,
     judgeRuleset: args.judgeRuleset,
     gauge: args.gauge,
     endOnFailure: args.endOnFailure,

@@ -266,7 +266,7 @@ export const score = sqliteTable(
      * its own), null for a ranked play. Like a hidden play, it stays out of the rankings, the personal bests, the
      * figures and every list; unlike one, its page still opens for anyone the replay setting allows.
      */
-    unranked: text('unranked', { enum: ['tempo', 'course-stage'] }),
+    unranked: text('unranked', { enum: ['tempo', 'course-stage', 'bmson-total'] }),
     ...timestamps,
   },
   (table) => [
@@ -391,7 +391,7 @@ export const courseScore = sqliteTable(
      * Why the run is stored but not ranked, as `score.unranked` (`tempo`: a stage at another tempo; `unreleased`: a
      * course with `release: false`), null for a ranked run.
      */
-    unranked: text('unranked', { enum: ['tempo', 'unreleased'] }),
+    unranked: text('unranked', { enum: ['tempo', 'unreleased', 'bmson-total'] }),
     ...timestamps,
   },
   (table) => [

@@ -91,7 +91,7 @@ L5 (equivalence of replay notes and play-document timings) and input anomaly det
 
 ## 6. Scoring rules
 
-**What is sent.** Sending is opt-in: nothing goes to the Leaderboard until the player turns it on. Once it is on, every play is sent except a fully AUTO play and replay playback (a dropped replay, a replay slot, a course replay); whether a play is shown, and where, is the Leaderboard's decision, not the player's (#788). Partial assists (auto scratch and the like) are sent and ranked apart. A play the Leaderboard stores but does not rank is still sent, with the facts in its replay that classify it (`play.tempo`, `play.course`, the options and assists). Only a log without both fingerprints is refused outright, as it cannot be verified.
+**What is sent.** Sending is opt-in: nothing goes to the Leaderboard until the player turns it on. Once it is on, every play is sent except a two-player play (COUPLE/TWO-PLAYER), a fully AUTO play and replay playback (a dropped replay, a replay slot, a course replay); whether a play is shown, and where, is the Leaderboard's decision, not the player's (#788). Partial assists (auto scratch and the like) are sent and ranked apart. A play the Leaderboard stores but does not rank is still sent, with the facts in its replay that classify it (`play.tempo`, `play.course`, the options and assists). A log without both fingerprints is refused because it cannot be verified. Two-player recordings are refused with `two-player`: both player results remain local, and there is no single-player ranking for the combined or partial chart.
 
 A manual play that seeks is practice (`PlayResult.practice`). Its first seek discards the replay recorder, and beatoraja PRACTICE records none, so neither has a replay to send: the web app skips best-record writes, Leaderboard submission and replay auto-save for that result, even if a host supplies replay data alongside it. Seeking a course stage or NONSTOP run also excludes the entire course and every later stage; course results remain available without a replay. Sending practice plays needs their range in the replay, and is left to a later change.
 
@@ -338,3 +338,7 @@ Owners can hide their scores and course runs. Admin pages, report APIs and input
   the normal `vp test`.
 
 - Workers-only behaviour and the CPU limit are not covered by these tests; CPU time is measured separately.
+
+## Optional bmson zero-total policy
+
+Per-play `bmsonTotalMode` defaults to `beatoraja`; `spec` suppresses positive recovery only for normalized percentage TOTAL 0. Browser Play options exposes **bmson TOTAL 0** and terminal accepts `--bmson-total-mode spec`. The typed replay field is authoritative; absence means compatibility regardless of the viewer. Affected manual plays and courses remain stored and simulated with `unranked: 'bmson-total'`, without ordinary best-record or ranking updates. Positive-total opt-ins remain comparable. Damage, initial HP, carry and chart fingerprints stay unchanged. See [ADR 0030](./adr/0030-bmson-zero-total.md).

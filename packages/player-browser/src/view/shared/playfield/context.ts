@@ -1,3 +1,4 @@
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 /**
  * What the shared playfield's passes (`view/shared/playfield/*`) read and write: the layers and pools they draw into,
  * the skin's answers ({@link PlayfieldSkin}), the view's own drawing around them ({@link PlayChrome}) and its caches,
@@ -5,10 +6,10 @@
  * bombs). A play view passes itself.
  */
 
-import type { BMSSwitchingBGA, ResolvedChart, TimingResolver, ChartPlayVariant } from '@be-music/chart-model';
+import type { ResolvedChart, TimingResolver, ChartPlayVariant } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { ScrollDistanceMapperLike, TimedLandmineNote, TimedPlayableNote } from '@be-music/player-engine/display';
-import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
+import type { PlayerGaugeSummary, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { JudgmentKind, ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { HiSpeedTransition, LibraryChart, PlayState } from '@be-music/player-scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind, BeMusicLongNote } from '@be-music/player-skin-sdk';
@@ -119,18 +120,24 @@ export interface PlayfieldRuntime {
   readonly bombStartedAt: Map<string, number>;
   readonly bombJudge: Map<string, BeMusicJudgmentKind>;
   readonly hasBGA: boolean;
-  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  readonly bgaTimeline: {
+    base: BGACue[];
+    layer: BGACue[];
+    layer2?: BGACue[];
+    poor: BGACue[];
+    opacity?: BGAOpacityTimelines;
+  };
   readonly nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
   readonly poorBGAMode?: 0 | 1 | 2;
   readonly poorBGAFallbackKey: string | undefined;
   readonly poorBGAFallbackUntilSeconds: number;
   readonly lastPoorAt: number;
-  readonly switchingBGAs: Map<string, BMSSwitchingBGA>;
+  readonly engineFrame?: Pick<PlayerUIFramePayload, 'keyBoundBGA' | 'bmsonBGA' | 'currentSeconds'>;
   readonly bgaTextures: Map<string, Texture>;
   readonly bgaLayerTextures: Map<string, Texture>;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }>;
-  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
+  bgaActiveVideos: Record<string, { key: string; cueSeconds: number } | undefined>;
   readonly audioAnalyzer: AudioAnalyzer | undefined;
   readonly audioContextStartTime: number;
   readonly paused: boolean;

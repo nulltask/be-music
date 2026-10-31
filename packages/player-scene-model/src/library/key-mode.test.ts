@@ -82,3 +82,9 @@ describe('resolveLibraryChartKeyMode', () => {
     expect(resolveLibraryChartKeyMode(makeChartWith('g', 'x', { channels: ['11', '1A', '21'] }))).toBe(48);
   });
 });
+
+test.each([6, 8, 36, 70])('retains generic %s-key identity and declared count in a sparse library chart', (count) => {
+  const chart = makeChartWith('generic', 'Generic', { channels: ['11'], modeHint: `generic-${count}keys` });
+  expect(resolveLibraryChartPlayVariant(chart)).toBe(`generic-${count}`);
+  expect(resolveLibraryChartKeyMode(chart)).toBe(count);
+});

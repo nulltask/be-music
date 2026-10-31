@@ -1,5 +1,5 @@
 import { type ChartPlayVariant, resolveChartPlayVariant } from '@be-music/chart-model';
-import type { BattleMode } from '@be-music/player-engine/lanes';
+import { resolveEffectiveBattleMode, type BattleMode } from '@be-music/player-engine/lanes';
 import { normalizePath } from '@be-music/shared-utils/core';
 import { extractDxaArchivesAsFlatFiles } from './dxa.ts';
 import { asLoadedBytes, readFilesIntoBytesMap, type LR2SkinFileEntry } from './file-lookup.ts';
@@ -28,6 +28,7 @@ export type LR2ThemeLoadProgressCallback = (progress: LR2ThemeLoadProgress) => v
 export interface LR2PlaySkinChart {
   chartPath?: string;
   chart: {
+    sourceFormat?: string;
     events: ReadonlyArray<{ channel: string }>;
     bms?: { player?: number };
     bmson?: { info?: { modeHint?: string } };
@@ -528,6 +529,7 @@ export async function loadLR2SystemSound(
 export interface LR2PlaySkinBattle {
   readonly battleMode?: BattleMode;
   readonly course?: boolean;
+  readonly judgeRuleset?: import('@be-music/player-engine/ruleset').RulesetId;
 }
 
 export function pickLR2PlaySkin(
@@ -541,6 +543,7 @@ export function pickLR2PlaySkin(
 
 /** The play variant a battle mode turns a chart of `source` into: the copied or merged chart's lanes. */
 const BATTLE_PLAY_VARIANTS: Partial<Record<BattleMode, Partial<Record<ChartPlayVariant, ChartPlayVariant>>>> = {
+  COUPLE: { '5': '10', '7': '14' },
   'SP-TO-DP': { '5': '10', '7': '14', '9': '7', '10': '5', '14': '7' },
   'D-BATTLE': { '5': '10', '7': '14' },
   BATTLE: { '5': '10', '7': '14', '24': '48' },
@@ -560,7 +563,7 @@ function playSkinOrder(source: ChartPlayVariant, battle: LR2PlaySkinBattle | und
     return [...battleSkins, ...PLAY_SKIN_FALLBACKS[source === '7' ? '14' : '10']];
   }
   const converted = mode === 'SP-TO-DP' && course ? undefined : BATTLE_PLAY_VARIANTS[mode]?.[source];
-  return PLAY_SKIN_FALLBACKS[converted ?? source];
+  return PLAY_SKIN_FALLBACKS[converted ?? source] ?? PLAY_SKIN_FALLBACKS['7'];
 }
 
 /**
@@ -578,7 +581,20 @@ export function pickLR2PlaySkinVariant(
     bms: chartEntry.chart.bms,
     bmson: chartEntry.chart.bmson,
   });
-  return playSkinOrder(target, battle).find((variant) => playSkins[variant] !== undefined);
+  const effective =
+    battle?.battleMode === 'AUTO'
+      ? {
+          ...battle,
+          battleMode: resolveEffectiveBattleMode(
+            'AUTO',
+            battle.judgeRuleset ?? 'lr2',
+            target,
+            battle.course === true,
+            chartEntry.chart.sourceFormat !== 'bmson' ? chartEntry.chart.bms?.player : undefined,
+          ),
+        }
+      : battle;
+  return playSkinOrder(target, effective).find((variant) => playSkins[variant] !== undefined);
 }
 
 export function summarizeLR2PlaySkins(playSkins: LR2PlaySkinMap, separator = ','): string {

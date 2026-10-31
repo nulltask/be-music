@@ -300,6 +300,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     scrollSection: 4,
     scrollRate: 0.5,
     gaugeAutoShift: 'NONE',
+    bmsonTotalMode: 'beatoraja',
     bottomShiftableGauge: 'ASSIST-EASY',
     autoScratch1P: false,
     autoScratch2P: false,

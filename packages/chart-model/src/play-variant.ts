@@ -1,3 +1,4 @@
+import { resolveGenericBmsonKeyCount, type GenericBmsonPlayVariant } from './generic-bmson.ts';
 import { KEYBOARD_MODE_HINT_VARIANTS, resolveKeyboardModeHint } from './keyboard-mode-hint.ts';
 import { normalizeChannel } from '@be-music/chart-source';
 import { PLAY_MODE_LAYOUTS } from './play-modes.ts';
@@ -8,7 +9,8 @@ import { EXTENDED_LANE_CODE_MIN, isPlayableChannel, mapBMSLongNoteChannelToPlaya
  * past the classic `11..19` / `21..29` bank onto the extended `1A..1O` / `2A..2O` channels, plus the wheel up / down
  * on `1P` / `1Q` (`2P` / `2Q`).
  */
-export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14' | '24' | '48';
+/** Generic variants retain their declared key count and never infer a beat-mode family. */
+export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14' | '24' | '48' | GenericBmsonPlayVariant;
 
 export interface ChartPlayVariantInput {
   chartPath?: string;
@@ -17,8 +19,8 @@ export interface ChartPlayVariantInput {
     player?: number;
   };
   /**
-   * The bmson `mode_hint` (`json.bmson.info.modeHint`). Only the Keyboardmania hints are authoritative — see
-   * {@link resolveChartPlayVariant} — every other hint leaves the decision to the chart's lanes.
+   * The bmson `mode_hint` (`json.bmson.info.modeHint`). The Keyboardmania and generic hints are authoritative — see
+   * {@link resolveChartPlayVariant} — other hints leave the decision to the chart's lanes.
    */
   bmson?: {
     info?: {
@@ -57,6 +59,7 @@ const _____SIX_SEVEN_KEY_CHANNELS: readonly string[] = laneChannelsOf('14').filt
  *
  * Detection order — first match wins:
  *
+ *  -2. **bmson generic `mode_hint`** — `generic-Nkeys` selects `generic-N` for 1–70 ordinary keys, even in a sparse chart.
  *  -1. **bmson keyboard `mode_hint`** — `keyboard-24k` → `'24'`, `keyboard-24k-double` → `'48'`, whatever lanes the
  *      chart uses: its `x` values already went through the keyboard lane map, so a chart that only touches the first
  *      nine keys is still a 24-key chart. Other hints are not authoritative (`beat-7k` is also the spec default for a
@@ -86,6 +89,8 @@ const _____SIX_SEVEN_KEY_CHANNELS: readonly string[] = laneChannelsOf('14').filt
  *      `5` / `10` like beatoraja reads it (be-music decision, see docs/format-compat.md §5).
  */
 export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlayVariant {
+  const genericKeys = resolveGenericBmsonKeyCount(chart.bmson?.info?.modeHint);
+  if (genericKeys !== undefined) return `generic-${genericKeys}`;
   const keyboardHint = resolveKeyboardModeHint(chart.bmson?.info?.modeHint);
   const hintedVariant = keyboardHint !== undefined ? KEYBOARD_MODE_HINT_VARIANTS.get(keyboardHint) : undefined;
   if (hintedVariant !== undefined) {

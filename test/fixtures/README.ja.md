@@ -117,3 +117,27 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 | `retrigger_a.wav`, `retrigger_b.wav`       | リトリガー譜面が重なりを作るために必要な 2.2 秒サンプル。               |
 | `ogg-test.ogg`                             | `ogg-test.bms` が宣言する Vorbis サンプル。                            |
 | `render-codec-test.mp3` / `.ogg` / `.opus` | chart-audio-renderer のコーデック別デコードケースと、`.wav` 不在時のフォールバックケース。 |
+
+## 動画アセット
+
+`bga-hevc.mp4` と `bga-vp9.webm` は16×16ピクセルの赤い動画を生成したもの（1 fps、2フレーム）です。`player-terminal/src/bga-video.test.ts` で実際の HEVC／VP9 デコードと先頭1フレームの制限を検証します。第三者の素材は含みません。FFmpeg の color 入力に `-frames:v 2 -pix_fmt yuv420p` と、それぞれ `-c:v libx265 -tag:v hvc1` または `-c:v libvpx-vp9` を指定して再生成できます。
+
+`bga-bordered.webm` は黒枠の内側の16×16領域が赤から緑へ変わる32×32の VP9 動画を生成したものです（2 fps、2フレーム）。Terminal の元画像座標での切り出しと、再生中に届く後続フレームを検証します。FFmpeg で red と lime の16×16 color 入力をそれぞれ `r=2:d=0.5,pad=32:32:8:8:color=black` で生成し、`[0:v][1:v]concat=n=2:v=1:a=0` で連結して `-c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p` でエンコードできます。第三者の素材は含みません。
+
+`bga-crop-colors.webm` は生成した 512×256 の VP9 動画です（10 fps、16 秒、音声なし）。黒背景の `(256, 0)` に置いた 128×128 の領域が、4 秒で赤から緑へ変わります。Browser の E2E テストは元動画の座標から多段参照で 64×128 の領域を切り出し、2 枚のオーバーレイを別の時刻に開始して、1 枚目を再発火します。Canvas の切り出し更新と独立した再生位置により、想定した色の順序を保つ必要があります。第三者の素材は含みません。次のコマンドで再生成できます。
+
+```sh
+ffmpeg -f lavfi -i 'color=c=black:s=512x256:r=10:d=16' -vf "drawbox=x=256:y=0:w=128:h=128:color=0xed174b:t=fill:enable='lt(t,4)',drawbox=x=256:y=0:w=128:h=128:color=0x16cf63:t=fill:enable='gte(t,4)'" -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p -an bga-crop-colors.webm
+```
+
+`exbmp-video.webm` は生成した 256×256 の VP9 動画です（4 fps、4 秒、音声なし）。縦の 4 帯が白、赤／緑、黒、白となり、色の付いた帯が 2 秒で赤から緑へ変わります。Browser テストは切り出す前の白の透過処理、指定されていない黒の保持、配置付き部分領域から動画全体への切り替え、黒い表示領域の上へのベースの描画を検証します。第三者の素材は含みません。次のコマンドで再生成できます。
+
+```sh
+ffmpeg -f lavfi -i 'color=c=white:s=256x256:r=4:d=4,drawbox=x=64:y=0:w=64:h=256:color=0xed174b:t=fill:enable=lt(t\,2),drawbox=x=64:y=0:w=64:h=256:color=0x16cf63:t=fill:enable=gte(t\,2),drawbox=x=128:y=0:w=64:h=256:color=black:t=fill' -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv444p -an exbmp-video.webm
+```
+
+## 自作の EXBMP 画像
+
+`exbmp-rgb.png` は、アルファ情報を持たない 256×256・4 ビットパレット・Adam7 PNG。青い枠の内側に灰色・灰色・黒・緑の縦帯を配置する。最初の灰色は RGB の各成分 ±8 の境界に一致し、次の灰色は範囲外となる。
+
+`exbmp-alpha.png` は同じ枠と黒・緑の帯を持つ RGBA8 PNG。最初の二つの帯は RGB `(255, 228, 173)` が同じで、アルファをそれぞれ 64・65 とし、アルファの完全一致と隣接値の保持を検証する。どちらも第三者の素材を含まない自作画像。Browser テストは四つの描画系統、別名参照、全ゼロ指定による無効化、ベース面の透過部分に見える黒地を確認する。

@@ -413,3 +413,50 @@ function createKey(name?: string, sequence?: string, shift = false, ctrl = false
     shift,
   } satisfies readline.Key;
 }
+
+test.each(Array.from({ length: 24 }, (_, index) => index + 1))(
+  'maps kitty F%s press, repeat and release using its specified functional encoding',
+  (number) => {
+    const tilde = [11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 24];
+    const code = number <= 12 ? tilde[number - 1]! : 57364 + number - 1;
+    const final = number <= 12 ? '~' : 'u';
+    for (const [eventType, field] of [
+      [1, 'tokens'],
+      [2, 'repeatTokens'],
+      [3, 'releaseTokens'],
+    ] as const) {
+      const sequence = `\u001b[${code};1:${eventType}${final}`;
+      const result = resolveInputTokenEvent(sequence, createKey(undefined, sequence));
+      expect(result.protocol).toBe('kitty');
+      expect(result[field]).toEqual([`f${number}`]);
+    }
+  },
+);
+
+test.each([
+  ['P', 'f1'],
+  ['Q', 'f2'],
+  ['S', 'f4'],
+])('maps short kitty %s function-key events with state', (final, token) => {
+  const press = `\u001b[1;1:1${final}`,
+    release = `\u001b[1;1:3${final}`;
+  expect(resolveInputTokenEvent(press, createKey(undefined, press)).tokens).toEqual([token]);
+  expect(resolveInputTokenEvent(release, createKey(undefined, release)).releaseTokens).toEqual([token]);
+});
+
+test.each(Array.from({ length: 24 }, (_, index) => index + 1))(
+  'maps Win32 F%s press, repeat and release to the same lane token',
+  (number) => {
+    const virtualKey = 0x70 + number - 1;
+    for (const [down, repeat, field] of [
+      [1, 1, 'tokens'],
+      [1, 2, 'repeatTokens'],
+      [0, 1, 'releaseTokens'],
+    ] as const) {
+      const sequence = `\u001b[${virtualKey};0;0;${down};0;${repeat}_`;
+      const result = resolveInputTokenEvent(sequence, createKey(undefined, sequence));
+      expect(result.protocol).toBe('win32');
+      expect(result[field]).toEqual([`f${number}`]);
+    }
+  },
+);

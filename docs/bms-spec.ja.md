@@ -92,9 +92,9 @@
 - [x] チャンネル `17` / `27` を FREE ZONE として解釈 (9KEY / 24KEY 以外)
 - [x] 9KEY 判定時はチャンネル `17` を通常レーンノートとして解釈
 - [x] `#PLAYER=1` は SINGLE メタ情報として保持し、レーン判定はチャンネル構成を優先
-- [x] `#PLAYER=2` (COUPLE) はメタ情報として保持し、現状は専用の 1P/2P 分離プレイを実装しない
+- [x] `#PLAYER=2`（COUPLE）を保持し、明示的な CHART HEADER（AUTO）で LR2 の作者指定側ごとの独立プレイを選択する。互換性のため既定値は OFF を維持する。
 - [x] `#PLAYER=3` は `17` チャンネルが存在する場合のみ 9KEY 判定ヒントとして使用
-- [x] `#PLAYER=4` (BATTLE) はメタ情報として保持し、現状は専用の 2 人対戦プレイを実装しない
+- [x] `#PLAYER=4`（BATTLE）を保持し、明示的な CHART HEADER で LR2 の TWO-PLAYER を選択する。SP は複製し、二側配置は保持する。優先順位・実譜面の根拠・replay 方針は [ADR 0028](./adr/0028-player-header-selection.ja.md) を参照。
 - [x] チャンネル `D1-D9` (地雷) を解釈
 - [x] チャンネル `E1-E9` (地雷) を解釈
 - [x] LR2beta3 の地雷は早い側の GREAT 境界の手前の押下、または押したままの通過で爆発。beatoraja の通過時のみのモデルと、暫定 名前を言ってはいけないあのゲームの左右対称 PGREAT モデルを維持。
@@ -122,6 +122,7 @@
 - [x] チャンネル `07` を BGA layer として表示に使用
 - [x] チャンネル `0A` を BGA layer2 として表示に使用
 - [x] `04` / `07` / `0A` を合成表示（優先順位: `04` < `07` < `0A`）
+- ブラウザーの Native・Canvas・LR2・beatoraja は、クリア命令と NONSTOP のステージ別表示も含め、`07` と `0A` を独立して保持します。スキンのフレームには `layer` と `layer2` として渡します。複数の面で同じ動画 BMP を使う場合も動画の再生位置を分け、一時停止・再開・シークに両方のオーバーレイを含めます。
 - [x] layer (`07`) で黒 (`#000000`) を透過色として扱う
 - [x] layer2 (`0A`) でも layer (`07`) と同じ透過ルールを適用
 - [x] BGA 画像を 256x256 キャンバス前提で扱う
@@ -149,6 +150,7 @@
 - [x] 拡張ヘッダ `#LNTYPE` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#LNMODE` を `bms` 拡張領域へ保持（`1` = LN、`2` = CN、`3` = HCN）
 - [x] player は `beatoraja` ルールセットで `#LNMODE 2` / `3` のロングノートを CN / HCN として処理する。`____` はすべてのロングノートを CN（`#LNMODE 3` なら HCN）、`lr2` はすべて LN として処理する
+- [x] 初期 `#OPTION charatbeatHDX:LONGMODE 0` / `1` は、分岐選択後に CN・HCN を指定する。有効な明示的 `#LNMODE`、最後の有効な HDX 宣言、ユーザーの既定値の順で優先する。時刻付き A6 の LONGMODE は診断し、ノートを変更しない。fingerprint・replay・bmson 変換・NONSTOP stitch バージョン3も実効モードを保持する。[ADR 0027](./adr/0027-hdx-long-note-modes.ja.md) を参照。
 - [x] 拡張ヘッダ `#LNOBJ` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#VOLWAV` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#DEFEXRANK` を `bms` 拡張領域へ保持
@@ -156,6 +158,7 @@
 - [x] 拡張ヘッダ `#ARGBxx` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#PLAYER` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#PATH_WAV` を `bms` 拡張領域へ保持
+- [x] Node の演奏用サンプルと診断用の音声長読み込みに `#PATH_WAV` を適用し、共通リゾルバーで接頭辞付きパスを優先して、見つからなければ元のパスを探索する
 - [x] 拡張ヘッダ `#BASEBPM` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#STP` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#OPTION` を `bms` 拡張領域へ保持
@@ -182,10 +185,29 @@
 - [x] `#xxx98` を playable/key 側の動的音量変更として解釈
 - [x] `#EXRANKxx` と `#xxxA0` を プレイヤーの動的判定幅変更として解釈
 - [x] `#BPMxx` による LR2 100001倍 BPM 系ギミックを時刻解決でサポート
-- [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、chart-audio-renderer と browser WebAudio では `01` volume parameter を反映
-- [x] `#EXWAVxx` を parse し、`v` volume parameter を chart-audio-renderer と browser WebAudio で反映
+- [x] nanasi の `#EXBPMxx` を `#BPMxx` の別名として読む。`#BPMxx` として保存・書き出しするため、同じ番号では後の行が勝つ（[cmds](https://hitkey.nekokan.dyndns.info/cmds.htm#EXBPMXX)）
+- [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、browser・Node・オフライン再生で `01` の百分率音量を反映
+- [x] `#EXWAVxx` を parse し、`v` volume parameter を browser・Node・オフライン再生で反映
+
+`#EXWAVxx` は nanasigroove の空白区切りパラメーターをフラグ順に受け付けます。例は `pvf 0 -600 44100 sample.wav` です。従来の Be-Music のカンマ区切りも引き続き受け付けます。ファイル名はすべてのパラメーターの後から始まり、空白を含められます。有効な EXWAV は WAV がなくても読み込み、同じスロットに WAV がある場合も EXWAV のファイル名を優先します。不正な EXWAV は WAV を上書きしません。これは Be-Music の優先規則です。browser のデコード・再生、Node の再生・診断、オフライン描画で同じ解決関数を使います。NONSTOP は EXWAV のファイル名と WAVCMD のパラメーターをステージごとに変換します。browser・Node・オフラインは共通の[拡張音声規則](./adr/0024-extended-bms-audio.ja.md)でピッチ・発音時間の上限・pan/frequency を実行します。
+
 - [x] `#BASEBPM` を `@be-music/chart-model` 経由で browser HS-FIX calibration の reference BPM として使用
-- [x] Browser player で `#BGAxx` sub-region BGA、`#SWBGAxx` switching BGA、`#ARGBxx` / `#EXBMPxx` tint/alpha を反映
+- [x] Browser player は `#BGAxx` sub-region BGA を描画する。SWBGA はキー入力連動の A5 エンジン状態だけで描画し、以前のキュー駆動ヘルパーは削除した。 静止画の多段参照は定義順に依存せず解決し、各段の配置位置を 256×256 キャンバス上で合成して、切り出し元と配置先の端を切り取る。完全に画面外となるベース／POOR は黒、オーバーレイは透明になる。明示的な BMP／EXBMP 定義は、その画像を読み込めない場合も同じ ID の BGA 参照より優先する。
+- [x] Terminal の BMP／PNG／JPEG 静止画 EXBMP は、切り出し・縮小の前に透明色を適用する。RGB は各成分 ±8、アルファ付き画像のアルファ値は完全一致とし、アルファなし画像は指定との比較に 0 を使う。全ゼロ指定は色透過を無効にする。対象外の色と黒を残し、色の乗算はしない。異なる透明色のキャッシュを分け、暗黙の POOR と NONSTOP の参照先にも適用する。透過対象外の元画像アルファは、次項の合成に渡す。[実測に基づく仕様](https://bms.ms/~hitkey/diary1811.php)。共通 API は `resolveBMSExBMPColorKey` と `applyBMSColorKey`。
+- [x] Terminal の ANSI／Kitty は、PNG とアルファ付き BMP の半透明を、EXBMP の透過色処理、元座標の部分領域、nearest／Lanczos の縮小、ワーカーのフレーム転送まで保持する。元画像アルファと面の透明度を掛け合わせ、元の色に RGB tint を適用する。source-over 合成中はアルファを保持し、最終出力で黒い表示領域へ合成する。縮小はアルファを乗算した RGB とアルファを一緒にフィルターに通し、透明画素の隠れた色が縁に混ざることを防ぐ。二値画像は従来の軽いマスク表現を使い、必要な画像だけ中間のアルファ値を持つ。POOR の置換・重ね合わせ、SWBGA、シーク・リサイズ、NONSTOP のリソース読み込みも同じ経路を使う。[source-over の計算](https://www.w3.org/TR/compositing-1/#simplealphacompositing)に従う。アルファ付き動画のデコードと実機プレイヤーとの厳密な画素一致は未検証。
+- [x] Browser の Native・Canvas・LR2・beatoraja は、別名参照と NONSTOP を含む静止画に EXBMP 透過色を適用する。PNG は Canvas の乗算済みアルファへの変換前に処理し、パレット・低ビットグレースケール・Adam7・元の `tRNS` に対応する。TGA/DDS は元の RGBA、BMP/JPEG はファイルのアルファ情報を使う。透過対象外の画素は色とアルファを保ち、ベース面の透過部分には BGA 領域の黒地が見える。EXBMP を tint や全体の透明度として扱わない。`@be-music/shared-utils/png` のランタイム非依存 API `decodePNGToRGBA8` を terminal と共有する。DirectX のアルファ・乗算処理との厳密な一致は未検証。
+- [x] Browser の Native／Canvas／LR2／beatoraja と terminal の ANSI／Kitty は、不透明な動画フレームにも EXBMP の透過色を適用する。Be-Music はデコーダーが補ったアルファをアルファなしの画像として扱い、比較アルファを 0 とする。元の画素を切り出しや縮小の前に処理し、後続フレームでも部分領域を更新する。指定されていない黒を保持し、全成分ゼロは透過処理をせず、各面の再生位置を分け、透過したベースの下には黒い表示領域が見える。これは共通の透過色方針を動画へ適用する Be-Music の動作であり、アルファ付き動画と nanasigroove の動画動作との厳密な一致は未検証。不透明動画の透過処理だけでは、アルファ付き動画のデコード互換性は確定しない。
+- [x] `A1`〜`A4` は、base/layer/layer2/POOR ごとに十進数の `#ARGBxx a,r,g,b` 定義を選択する。RGB は元の色に乗算し、A は面の不透明度を置き換える。`0B`〜`0E` は RGB を保って同じアルファ値を置き換える。EXBMP の色透過とは別の処理で、[BGAEncAdvance の公開ソース](https://yaruki0.net/programs/bgaencadv.html)（`source/main.d`）の描画計算に従う。Browser の Native・Canvas・LR2・beatoraja と terminal の ANSI/Kitty に適用し、スキン・クロスフェードの透明度との積、シーク時の状態復元、NONSTOP 各ステージ独立の色履歴に対応する。Canvas スキンには色を適用した画像を渡す。BMP と同じ ID でも、選択されていない定義は描画に影響しない。`00`・未定義・不正な十進数・範囲外の値は現在の状態を保つ。同時刻の競合はイベント配列の順序（BMS のパース後はチャネル・値の正規順序）で後の指定を優先する。[実測資料](https://bms.ms/~hitkey/diary1811.php) でも競合時の優先順位は実装依存とされている。`buildBGAOpacityTimelines` が作る RGB 状態は `pickBGATint`、共有するアルファ値は既存の `pickBGAOpacity` で取得する。
+- [x] 標準 SWBGA の構文とエンジン状態：`parseBMSKeyBoundBGA` は `fr:time:line:loop:a,r,g,b pattern` を読み、時間をミリ秒、パターンを BMP 系 ID の連続したペアとして扱う。`00` も実フレームとなる。`buildKeyBoundBGATimeline` が有効な `A5` 選択を時刻に変換し、`pickKeyBoundBGAFrame` がループ・最終フレーム保持・指定時間での終了を処理する。決定的な `KeyBoundBGAController` は対象キーの新しい押下で開始し、時間ゼロなら離上まで、有限時間なら離上後も指定時間まで表示する。新しい対象入力のアニメーションだけが表示され、定義を選択しただけでは開始しない。疎な表示フレームや時刻の巻き戻しに対応し、手動シークではライブ入力履歴を消去、リプレイ／AUTO の履歴は再現する。エンジンの `PlayerUIFramePayload.keyBoundBGA` は有効な定義・BMP ID・フレーム開始時刻・未解釈の ARGB 値を渡す。AUTO／AUTO SCRATCH はタップを 100 ms、LN を終端まで仮想的に保持し、判定や記録入力は変更しない。既定プレイヤーの描画と NONSTOP への配置は次項を参照。[実測を含むコマンド資料](https://hitkey.bms.ms/cmds#SWBGAXX)を参照。
+- [x] `A0`〜`A6` の制御値と同じ ID の WAV があっても、制御命令でサンプルを再生しない。
+- [x] Browser の Native／Canvas／LR2／beatoraja と terminal の ANSI／Kitty は、`A5` で選択したキー入力連動 SWBGA を描画する。BMP00、EXBMP のみのリソース、配置付きの部分領域、動く動画の切り出しにも対応する。通常の BGA と POOR の上に重ね、離上または期限で消す。定義ごとに透過処理済みリソースと動画の再生位置を分け、新しい押下で選択中の動画フレームを最初から再生する。透過色はデコード後の RGBA と比較し、不透明な RGB 画像／動画の比較アルファは 255 とする。RGB は ±8、アルファは完全一致、全成分ゼロは透過処理なしとし、EXBMP の透過処理を先に行う。動画は各デコードフレームを切り出す前に処理する。この照合方針は EXBMP の実測モデルを再利用しており、nanasigroove／DirectX との厳密な一致は未検証。NONSTOP 対応は次項を参照。
+- [x] NONSTOP は SWBGA 定義と全画像の依存先をステージ別の名前空間へ変換する。`NonstopStitchMap.keyBoundBGA` はフレームを配列で持ち、bmson 混在コースの 2 文字を超える内部 ID も保持する。冒頭を切り詰めるステージは直前の有効な A5 選択を初期状態とし、ステージ所有区間の外の選択を捨て、逆走後は選択を固定する。FIT はフレーム間隔と有限の表示時間を変換し、キューとフレームの `playbackRate` が動画の時計も変換する。キューの `endSeconds` は、長い有限時間やステージをまたぐ押しっぱなしでも、ステージ境界で選択と表示を終了させる。設定のないステージは選択を引き継がず、次の開始には新しい押下が必要。LR2 は標準 SWBGA を実装しないため、これは Be-Music の連結規則となる。Browser はマップを自動的に渡す。他のホストは `map.keyBoundBGA` を `PlayerOptions.keyBoundBGACues`、`LoadPlayBGAOptions.keyBoundBGACues`、`BgaANSIOptions.keyBoundBGACues` へ渡し、Node UI アダプターも同じ情報を転送する。リプレイの再連結が元ステージからこの表示状態を再構築する。
+- [x] Browser の Native・Canvas・LR2・beatoraja と terminal の ANSI/Kitty は透明度チャンネル `0B` / `0C` / `0D` / `0E` を base / layer / layer2 / POOR に適用する。非ゼロの16進バイト値を `value / 255` の透明度として扱い、`00` は休符、初期値は不透明とする。譜面の時刻に従って次の指定まで値を保持し、シークでは以前の状態を復元する。置換型 POOR は黒地に、重ねる POOR は通常の BGA に合成する。NONSTOP は透明度イベントと各ステージの有効な初期値を引き継ぎ、クロスフェード用にステージ別の履歴も公開する。Browser の NONSTOP 描画は各ステージの履歴にクロスフェード率とスキンの透明度を掛けて使う。上記の ARGB チャンネルと不透明度の状態を共有する。
+- [x] Browser の動画切り出しは元動画の座標を保ち、多段参照でも各面の動画再生位置につなげ、指定位置で表示して同じキューの再発火で再開する。ベース、2 枚のオーバーレイ、POOR が同じ動画を参照しても再生位置を分け、POOR も pause／resume する。Canvas スキンには先頭フレームを固定したビットマップではなく、現在のフレームを切り出すキャンバスを渡す。切り出し元の動画では変換時の解像度上限を無効にし、指定座標を保つ。
+- [x] Native／Canvas／LR2／beatoraja は、NONSTOP クロスフェード中に見える全ステージの動画を同期する。各動画はそれぞれのキュー時刻を使い、主となるステージが切り替わっても再開せず、表示を終えたステージの動画は停止する。逆方向や停止中の seek は表示中の全ステージを復元し、resume もすべてのアクティブなステージを対象にする。開始待ち中は再生せず、キュー時刻が凍結しても選択済みの動画は再生クロックで進める。
+- [x] NONSTOP は EXBMP のみのファイル名と BGA 切り出しの依存先を変換し、ステージ別の ID・切り出し座標・配置を保持する。bmson 混在出力では内部の長い ID も保持する。Canvas と beatoraja のプレイ画面には、切り出した画像に加えて配置情報も渡す。
+- [x] Browser と terminal は `#EXBMPxx a,r,g,b filename` のみで定義したファイル名を、暗黙の POOR スロット `00` も含めて読み込む。明示的な `#BMPxx` のファイル名を優先する。ファイル名前の区切りがカンマの記法も引き続き受け付ける。標準 A5 SWBGA は前述の描画経路を使う。
+- [x] Terminal は base・両オーバーレイ・POOR で `#BGAxx` の切り出しを描画し、暗黙のスロット `00` にも対応する。座標はリサイズや動画の黒枠除去前の画像・動画を基準とし、`dx dy` で 256×256 キャンバスに配置して領域外を切る。base と置換型 POOR の周囲は黒、オーバーレイの周囲は透過にする。再生中に届く動画フレームにも同じ処理を適用する。明示的な BMP/EXBMP リソースを BGA 別名より優先し、未定義・循環する別名は欠落リソース用フレームにする。
 - [x] チャンネル `51-59` / `61-69`（拡張の `5A-5O` / `6A-6O` を含む）をロングノートとして解釈。`#LNTYPE` 省略時の既定である `#LNTYPE 1` はオブジェクトを始点 / 終点の組にし、`#LNTYPE 2`（MGQ）は `00` 以外が連続するセルの並びを 1 本のロングノートにする
 - [x] `#LNOBJ`: すべての宣言が有効で、宣言順に `bms.lnObjs` へ保持する。このオブジェクトは同じレーンの直前のノートから始まるロングノートを終わらせ、発音しない（HDX の Keyup 発音は採用しない）。直前にノートのない `#LNOBJ` オブジェクトは通常ノートになる
 - [x] `51-69` と `#LNOBJ` のロングノートが同じレーン・同じ位置から始まる場合は `51-69` を優先
@@ -274,9 +296,21 @@ runtime と round-trip の扱い:
 現実装では、これらの channel 自体は sample trigger としては扱いません。
 また、音量変更はその時点以後に新しく鳴る音の初期 gain にだけ反映し、すでに再生中の同系統 voice には反映しません。
 
+## 譜面テキストのモデル
+
+[TEXT 命令の観測資料](https://hitkey.nekokan.dyndns.info/cmdsJP.htm#TEXTXX)では、チャンネル `99` はテキストの選択、nanasigroove の TEXT00 はミス時のテキストです。`buildChartTextTimeline` は BPM・STOP を含む譜面時刻で選択を解決し、`pickChartText` は seek・restart に使える状態を持たない検索を行います。最初の選択前は空であり、TEXT00 を初期表示しません。空の定義と未定義参照は直前の選択を消去します。オブジェクト `00` は休符です。同時刻の選択は正規化済み IR 順の最後を使います。
+
+表示値は対応する外側の二重引用符を一組だけ外し、内部の空白と文字はそのまま残します。元の定義は IR と BMS・JSON の往復で変更しません。チャンネル `99` は同じリソース ID の WAV を鳴らしません。engine は `PlayerUIFramePayload.chartText` を公開し、native・Canvas・LR2・beatoraja・terminal が表示します。[ADR 0025](./adr/0025-chart-text-playback.ja.md) に、Be-Music の 0.5 譜面秒のミス上書き、pause・seek・restart・反転の規則、最後の命令から 1 秒の表示時間を定義します。NONSTOP のホストはステージごとの `NonstopStitchMap.chartText` を `chartTextStages` に渡します。FIT・先頭の切り詰め・空ステージでの消去・ステージごとの TEXT00 も、同じ元譜面の時計で解決します。browser は自動で接続します。
+
+## 譜面からのオプション宣言
+
+複数の `#OPTION` 行は、ベンダー固有の宣言全体を組み合わせます。パーサは `bms.options` に順序を保持し、`bms.option` は最後の値を表す legacy 互換フィールドとして残します。charatbeatHDX の命令には数値引数があるため、空白では分割しません。制御構文のある譜面では、無条件の OPTION 行も含む完全なプログラムを分岐命令とともに保持します。選んだ分岐を解決するときに有効な宣言を再構築し、無条件の行を重複追加しません。canonical BMS と Be-Music JSON は、未知の ID を含めて順序と値を維持します。
+
+`buildChartOptionTimeline` は RANDOM・SWITCH 解決後の初期宣言と、チャンネル `A6` の時刻付き参照を収集します。BPM・STOP、有効な base-62 ID、同時刻での正規化済み IR 順を維持し、未定義参照は後の診断用に残します。オブジェクト `00` は休符です。タイムラインは宣言全体を収集します。`compileChartOptions` が対応する実効操作と診断に変換し、`resolveChartOptionsAt` が譜面マイクロ秒で状態を持たずに検索します。HI-SPEED は engine・browser・terminal で譜面指定の 0.25–100 を実行し、小数第2位と初期指定の数値 HSP 別名を保持します。[ADR 0026](./adr/0026-chart-authored-display-options.ja.md)に、強制指定の優先順位、同時刻の IR 順、replay プロファイル、解除・seek・反転、記録可否が変わらない方針を定義します。NONSTOP は FIT 時刻・切り詰めた先頭・空ステージでの解除を含むステージ固有の実効プログラムを `NonstopStitchMap.chartOptions` に保持し、browser が自動で接続します。他の系列は効果なしで診断します。[対応範囲](./research/chart-authored-options.ja.md#対応範囲決定)を参照してください。
+
 ## 実行時の対応範囲
 
-構文を保持することと、プレイヤーで実行することは別です。`#MIDIFILE` は `bms.midiFile` に保持しますが再生しません。`#WAVCMD` は音量パラメーター `01` を扱い、ピッチとループ指定は実行しません。`#TEXTxx` と `#CHANGEOPTIONxx` は IR に保持しますが、プレイ中のテキスト表示やオプション変更には使いません。
+構文を保持することと、プレイヤーで実行することは別です。`#MIDIFILE` は `bms.midiFile` に保持しますが再生しません。`#WAVCMD` はピッチ・百分率音量・発音時間の上限を反映します。`#EXWAVxx` は音量・左右バランス・元レートに対する周波数を反映します。合成規則は [ADR 0024](./adr/0024-extended-bms-audio.ja.md) に定義します。[MacBeat の原仕様](http://harinezumi.s14.xrea.com/download/mbm.txt)では、ピッチの基準は 60、音量の基準は 100、コマンド `02` は 0.5 ms 単位の発音時間です。0 は原音の終端まで再生し、ループ指定ではありません。Be-Music は WAVCMD の百分率音量、EXWAV の減衰、VOLWAV、動的バス音量を掛け合わせます。WAVCMD の重複はスロット・パラメーターごとの後勝ちです。MacBeat が重複を定義していないため、これは Be-Music の規則です。EXWAV の再生音量は -10000..0 に制限し、-10000 は無音です。`BMSExWAV.volumeMillibels` と `exWAVVolumeMillibelsToLinearGain` の単位はミリベル（1/100 dB）です。`#TEXTxx` は上記の譜面テキスト表示に反映します。`#CHANGEOPTIONxx` は対応する HI-SPEED 操作を実行します。他の系列は現時点で診断だけを出します。
 
 ヘッダーとオブジェクトの解釈は上の対応表と本書の制御構文の節に従います。アセットの探索は[互換仕様](./format-compat.ja.md)、ブラウザー固有の描画は[ブラウザープレイヤー仕様](./player-web.ja.md)、ターミナル固有の描画と音声は[ターミナルプレイヤー仕様](./player-tui.ja.md)を参照してください。
 

@@ -1,4 +1,4 @@
-import { resolveChartPlayVariant, type ChartPlayVariant } from '@be-music/chart-model';
+import { resolveGenericBmsonKeyCount, resolveChartPlayVariant, type ChartPlayVariant } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { LibraryChart } from './entries.ts';
 
@@ -47,7 +47,7 @@ export function seedLibraryChartPlayVariant(
 }
 
 /** How many keys a chart is played with: the key mode a key-mode filter lists it under. */
-export type KeyMode = 5 | 7 | 9 | 10 | 14 | 24 | 48;
+export type KeyMode = number;
 
 /** The key counts a bmson `mode_hint` can name (`beat-7k`, `popn-9k`, `beat-14k`, …), in the order they are tried. */
 const MODE_HINT_KEY_MODES: ReadonlyArray<readonly [string, KeyMode]> = [
@@ -74,6 +74,8 @@ const PLAY_VARIANT_KEY_MODES: Readonly<Record<ChartPlayVariant, KeyMode>> = {
  * play) rather than folded onto 7 keys.
  */
 export function resolveLibraryChartKeyMode(entry: LibraryChart): KeyMode {
+  const genericKeys = resolveGenericBmsonKeyCount(entry.chart.bmson.info?.modeHint);
+  if (genericKeys !== undefined) return genericKeys;
   const hint = entry.chart.bmson.info?.modeHint?.toLowerCase() ?? '';
   for (const [needle, keyMode] of MODE_HINT_KEY_MODES) {
     if (hint.includes(needle)) return keyMode;

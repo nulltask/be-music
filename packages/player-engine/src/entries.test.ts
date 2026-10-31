@@ -73,6 +73,7 @@ describe('designed entries', () => {
       'randomizeSpiralNotes',
       'resolveAutoScratchChannels',
       'resolveAutoScratchSides',
+      'resolveEffectiveBattleMode',
       'resolveKeyChannel',
       'resolveLR2LaneIndex',
       'resolveLaneChannels',
@@ -87,11 +88,13 @@ describe('designed entries', () => {
 
   it('@be-music/player-engine/display exports what a host shows, and no chart-layer names', () => {
     expect(exportedValues(display)).toEqual([
+      'BmsonBGAController',
       'DEFAULT_IMAGE_RESIZE_ALGORITHM',
       'DEFAULT_POOR_BGA_DISPLAY_SECONDS',
       'DEFAULT_TUI_NOTE_HEIGHT',
       'IMAGE_RESIZE_ALGORITHMS',
       'JUDGE_TIMING_AUTO_ADJUST_MODES',
+      'KeyBoundBGAController',
       'MAX_TUI_NOTE_HEIGHT',
       'MIN_TUI_NOTE_HEIGHT',
       'ScrollDistanceMapper',

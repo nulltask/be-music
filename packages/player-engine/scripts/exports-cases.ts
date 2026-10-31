@@ -78,6 +78,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.resolvePlayChart(fixtures.controlFlowJSON, { random: () => 0.42 });
     },
   });
+  define('player-engine.lanes.resolveEffectiveBattleMode', {
+    run: () => {
+      lanesAPI.resolveEffectiveBattleMode('AUTO', 'lr2', '14', false, 2);
+    },
+  });
   define('player-engine.lanes.applySevenToNine', {
     run: (fixtures) => {
       const prepared = playerAPI.preparePlaybackChart(resolveChart(fixtures.sampleBmsJSON, { playVariant: '7' }));
@@ -182,7 +187,22 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   });
   const benchNonstopHeader = `0125${'0'.repeat(6)}1${'0'.repeat(21)}`;
   const benchNonstopChart = parseChart(
-    ['#BPM 150', '#BPM01 180', '#00002:0.75', '#00111:01010101', '#00301:01', '#00408:01', '#00512:0001'].join('\n'),
+    [
+      '#BPM 150',
+      '#BPM01 180',
+      '#OPTION 774:HI-SPEED_x0.77',
+      '#CHANGEOPTION01 774:HI-SPEED_x100.00',
+      '#002A6:01',
+      '#TEXT00 "MISS"',
+      '#TEXT01 "stage text"',
+      '#00099:01',
+      '#00002:0.75',
+      '#0000C:80',
+      '#00111:01010101',
+      '#00301:01',
+      '#00408:01',
+      '#00512:0001',
+    ].join('\n'),
     'bms',
   );
   const benchNonstopStage = courseAPI.createNonstopStageTiming(benchNonstopChart);
@@ -207,10 +227,19 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   const bmsonNonstopChart = cloneJSON(benchNonstopChart);
   bmsonNonstopChart.sourceFormat = 'bmson';
   bmsonNonstopChart.bmson.info.resolution = 240;
+  bmsonNonstopChart.bmson.bga.header = [{ id: 20, name: 'clip.webm' }];
+  bmsonNonstopChart.bmson.bga.sequences = [{ id: 10, sequence: [{ time: 0, id: 0 }, { time: 1000 }] }];
+  bmsonNonstopChart.bmson.bga.layerEvents = [{ y: 0, id: 10, condition: 'play' }];
+  const extendedBGAChart = cloneJSON(benchNonstopChart);
+  extendedBGAChart.bms.exBMP['03'] = ',,,,sheet.png';
+  extendedBGAChart.bms.bga['04'] = '03 0 0 64 64 32 48';
+  extendedBGAChart.events.push({ measure: 1, position: [0, 1], channel: '04', value: '04' });
+  extendedBGAChart.bms.swBGA['61'] = '100:0:11:1:255,255,255,255 0004';
+  extendedBGAChart.events.push({ measure: 0, position: [0, 1], channel: 'A5', value: '61' });
   define('player-engine.course.stitchNonstopCourse', {
     run: () => {
       courseAPI.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
-      courseAPI.stitchNonstopCourse([{ chart: benchNonstopChart }, { chart: bmsonNonstopChart }], {
+      courseAPI.stitchNonstopCourse([{ chart: extendedBGAChart }, { chart: bmsonNonstopChart }], {
         connections: ['cut'],
       });
     },
@@ -328,7 +357,21 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.splitNonstopReplay', {
     run: () => {
       replayAPI.splitNonstopReplay(
-        { replay: BENCH_REPLAY, stages: benchSplitStages, noteStages: benchSplitNoteStages },
+        {
+          replay: {
+            ...BENCH_REPLAY,
+            chart: {
+              ...BENCH_REPLAY.chart,
+              chartOptions: {
+                version: 1 as const,
+                initial: { hiSpeed: 0.77 },
+                cues: [{ timeUs: 1_000_000, state: { hiSpeed: 100 } }],
+              },
+            },
+          },
+          stages: benchSplitStages,
+          noteStages: benchSplitNoteStages,
+        },
         [{ title: 'A' }, { title: 'B' }],
         { ruleset: 'lr2' },
       );
@@ -601,6 +644,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.checkReplayEligibility', {
     run: () => {
       replayAPI.checkReplayEligibility(BENCH_REPLAY);
+      replayAPI.checkReplayEligibility(BENCH_COUPLE_REPLAY);
     },
   });
   define('player-engine.replay.resolveReplaySourceChannel', {
@@ -690,6 +734,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.simulateReplay', {
     run: () => {
       replayAPI.simulateReplay(BENCH_REPLAY, { ruleset: 'lr2' });
+      replayAPI.simulateReplay(BENCH_COUPLE_REPLAY, { ruleset: 'lr2', player: 2 });
     },
   });
   define('player-engine.replay.simulateReplayRulesets', {
@@ -858,6 +903,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.clampCustomJudgeRate', {
     run() {
       rulesetAPI.clampCustomJudgeRate('keyPerfectGreat', 10);
+    },
+  });
+  define('player-engine.ruleset.isBmsonRecoveryDisabled', {
+    run() {
+      rulesetAPI.isBmsonRecoveryDisabled({ sourceFormat: 'bmson', total: 0 }, 'spec');
     },
   });
   define('player-engine.ruleset.isCustomJudgeAssist', {
@@ -1499,6 +1549,7 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
   define('player-engine.lanes.createLaneBindings', {
     run: () => {
       lanesAPI.createLaneBindings(BENCH_7KEY_CHANNELS, { playVariant: '7', platform: 'linux' });
+      lanesAPI.createLaneBindings(['11', '2Z'], { playVariant: 'generic-70', platform: 'linux' });
     },
   });
   define('player-engine.lanes.appendFreeZoneInputChannels', {
@@ -1522,6 +1573,61 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
 
 /** `@be-music/player-engine/display`: play notes, scrolling, the BGA cue and the chart facts a host shows. */
 function registerDisplayCases(define: DefineBenchmarkCase): void {
+  define('player-engine.display.BmsonBGAController', {
+    run: () => {
+      const state = new displayAPI.BmsonBGAController([
+        {
+          seconds: 0,
+          stage: 1,
+          endSeconds: 2,
+          playbackRate: 2,
+          plane: 'layer',
+          condition: 'play',
+          interval: 100,
+          sequences: [
+            {
+              id: 1,
+              frames: [
+                { elapsedSeconds: 0, key: 'a.png' },
+                { elapsedSeconds: 0.1, key: 'b.png' },
+                { elapsedSeconds: 0.5, end: true },
+              ],
+            },
+          ],
+        },
+      ]);
+      state.addInput({ seconds: 1, condition: 'play' });
+      state.read(1.2);
+      state.read(2);
+      state.read(1.1);
+      state.reset([{ seconds: 1, condition: 'play' }]);
+      state.read(1.2);
+    },
+  });
+  define('player-engine.display.KeyBoundBGAController', {
+    run: () => {
+      const state = new displayAPI.KeyBoundBGAController([
+        {
+          seconds: 0,
+          definitionId: '61',
+          endSeconds: 1.3,
+          definition: {
+            frameIntervalMs: 100,
+            durationMs: 400,
+            channel: '16',
+            loop: false,
+            argb: { a: 255, r: 255, g: 255, b: 255 },
+            frames: ['00', '01', '02', '03'],
+          },
+        },
+      ]);
+      state.addInput({ seconds: 1, action: 'down', channels: ['16'] });
+      state.read(1.25);
+      state.read(1.3);
+      state.read(1.1);
+      state.reset();
+    },
+  });
   define('player-engine.display.extractTimedNotes', {
     run: (fixtures) => {
       displayAPI.extractTimedNotes(fixtures.sampleBmsJSON, {
@@ -1702,6 +1808,10 @@ const BENCH_REPLAY: BeMusicReplay = {
     channels: [`1${((index >> 1) % 7) + 1}`],
   })),
   play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+};
+const BENCH_COUPLE_REPLAY: BeMusicReplay = {
+  ...BENCH_REPLAY,
+  play: { ...BENCH_REPLAY.play, battleMode: 'COUPLE', gauge2P: 'HARD' },
 };
 const BENCH_REPLAY_JSON = JSON.stringify(BENCH_REPLAY);
 

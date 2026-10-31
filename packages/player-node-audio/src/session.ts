@@ -1,10 +1,13 @@
 import {
+  collectBmsWAVVolumeMultipliers,
+  collectBmsWAVPlaybackModifiers,
   collectLNOBJEndEvents,
   isBmsBGMVolumeChangeChannel,
   isBMSDynamicVolumeChangeChannel,
   isBMSKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   parseBMSDynamicVolumeGain,
+  resolveBmsWAVResources,
   usesMonophonicWAVPlayback,
   volWAVToLinearGain,
   type ResolvedChart,
@@ -88,6 +91,7 @@ export async function createNodeAudioSession({
   onLoadProgress,
 }: CreateAudioSessionContext): Promise<AudioSession | undefined> {
   const json = resolved.source;
+  const wavResources = resolveBmsWAVResources(json);
   throwIfAborted(options.signal);
   const writeOutput =
     options.writeOutput ??
@@ -259,7 +263,7 @@ export async function createNodeAudioSession({
       if (lnobjEndEvents.has(event)) {
         return;
       }
-      const normalized = normalizeObjectKey(event.value, runtimeSampleIdBase);
+      const normalized = normalizeObjectKey(event.value, runtimeSampleIdBase, json.sourceFormat === 'bmson');
       const sample = samplesByKey.get(normalized);
       if (!sample) {
         return;
@@ -278,8 +282,12 @@ export async function createNodeAudioSession({
       if (usesMonophonicWAVPlayback(json)) {
         removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
       }
-      if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
-        return;
+      const startSeconds = output.getClockState().outputSeconds;
+      if (playback?.sliceId) {
+        if (activeVoices.some((voice) => voice.sliceId === playback.sliceId && voice.startSeconds === startSeconds)) {
+          return;
+        }
+        removeActiveVoicesInPlace(activeVoices, (voice) => voice.sliceId === playback.sliceId);
       }
       const isPlayLaneSound = isPlayLaneSoundChannel(normalizedChannel);
       const voiceGain =
@@ -293,8 +301,9 @@ export async function createNodeAudioSession({
         endPosition,
         channel: normalizeChannel(event.channel),
         sampleKey: normalized,
-        samplePath: json.resources.wav[normalized],
+        samplePath: wavResources[normalized],
         sliceId: playback?.sliceId,
+        startSeconds,
         gain: voiceGain,
       });
     },
@@ -319,6 +328,7 @@ interface ActiveVoice {
   sampleKey?: string;
   samplePath?: string;
   sliceId?: string;
+  startSeconds?: number;
   gain: number;
 }
 
@@ -351,15 +361,18 @@ export async function loadNodeAudioSampleDurations(
   }
 
   const durations = new Map<string, number>();
+  const playbackModifiers = collectBmsWAVPlaybackModifiers(resolved.source);
   for (const trigger of uniqueTriggers.values()) {
     throwIfAborted(signal);
     const rendered = await renderSingleSample(trigger.sampleKey, trigger.samplePath, {
       baseDir: baseDir ?? resolveDefaultBaseDir(),
+      pathPrefix: resolved.source.bms.pathWAV,
       sampleRate: DEBUG_ACTIVE_AUDIO_SAMPLE_RATE,
       gain: 1,
       fallbackToneSeconds: DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS,
       signal,
       base,
+      playbackModifiers: playbackModifiers.get(trigger.sampleKey),
     });
     durations.set(trigger.sampleKey, rendered.durationSeconds);
   }
@@ -722,14 +735,18 @@ async function buildRuntimeSampleMap(
   }
 
   const idBase = resolveBMSBase(json);
+  const wavResources = resolveBmsWAVResources(json);
+  const volumeMultipliers = collectBmsWAVVolumeMultipliers(json);
+  const playbackModifiers = collectBmsWAVPlaybackModifiers(json);
   for (let index = 0; index < keys.length; index += 1) {
     throwIfAborted(signal);
     const key = keys[index];
-    const sourcePath = json.resources.wav[key];
+    const sourcePath = wavResources[key];
     const rendered = await renderSingleSample(key, sourcePath, {
       baseDir: options.audioBaseDir ?? resolveDefaultBaseDir(),
+      pathPrefix: json.bms.pathWAV,
       sampleRate,
-      gain: chartWAVGain,
+      gain: chartWAVGain * (volumeMultipliers.get(key) ?? 1),
       fallbackToneSeconds:
         typeof options.missingSampleToneSeconds === 'number' &&
         Number.isFinite(options.missingSampleToneSeconds) &&
@@ -738,6 +755,7 @@ async function buildRuntimeSampleMap(
           : 0,
       signal,
       base: idBase,
+      playbackModifiers: playbackModifiers.get(key),
     });
 
     sampleMap.set(key, rendered);
@@ -766,6 +784,7 @@ function buildEventPlaybackMap(resolved: ResolvedChart): Map<BeMusicEvent, Playa
 
 function collectRealtimeAudioSampleKeys(resolved: ResolvedChart): string[] {
   const json = resolved.source;
+  const wavResources = resolveBmsWAVResources(json);
   const keys = new Set<string>();
   for (const trigger of resolved.sampleTriggers) {
     keys.add(trigger.sampleKey);
@@ -773,8 +792,8 @@ function collectRealtimeAudioSampleKeys(resolved: ResolvedChart): string[] {
   // `#WAV00` sounds when a mine detonates: preload it when the chart has a mine on any lane, the extended 24 / 48 KEY
   // lanes (`DA`–`DO` / `EA`–`EO`) and bmson `mine_channels` included.
   if (
-    typeof json.resources.wav[LANDMINE_EXPLOSION_SAMPLE_KEY] === 'string' &&
-    json.resources.wav[LANDMINE_EXPLOSION_SAMPLE_KEY].length > 0 &&
+    typeof wavResources[LANDMINE_EXPLOSION_SAMPLE_KEY] === 'string' &&
+    wavResources[LANDMINE_EXPLOSION_SAMPLE_KEY].length > 0 &&
     resolved.mines.length > 0
   ) {
     keys.add(LANDMINE_EXPLOSION_SAMPLE_KEY);

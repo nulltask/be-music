@@ -142,12 +142,22 @@ export function registerLR2SkinExportsCases(define: DefineBenchmarkCase): void {
     run: () => {
       lr2SkinAPI.pickLR2PlaySkin({ '7': BENCH_SKIN }, BENCH_SONG);
       lr2SkinAPI.pickLR2PlaySkin({ '9': BENCH_SKIN }, BENCH_PMS_SONG);
+      lr2SkinAPI.pickLR2PlaySkin(
+        { '14': BENCH_SKIN },
+        { ...BENCH_SONG, chart: { ...BENCH_SONG.chart, bms: { player: 2 } } },
+        { battleMode: 'AUTO' },
+      );
     },
   });
   define('skin-lr2.pickLR2PlaySkinVariant', {
     run: () => {
       lr2SkinAPI.pickLR2PlaySkinVariant({ '7': BENCH_SKIN }, BENCH_SONG);
       lr2SkinAPI.pickLR2PlaySkinVariant({ '9': BENCH_SKIN }, BENCH_PMS_SONG);
+      lr2SkinAPI.pickLR2PlaySkinVariant(
+        { '14': BENCH_SKIN },
+        { ...BENCH_SONG, chart: { ...BENCH_SONG.chart, bms: { player: 2 } } },
+        { battleMode: 'AUTO' },
+      );
     },
   });
   define('skin-lr2.pickLR2SystemSoundFile', {

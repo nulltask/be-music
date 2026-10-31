@@ -13,6 +13,8 @@ const PLAY_PROGRESS_GROOVE_MARKER = '\u001b[38;2;18;18;18m┃\u001b[0m';
 function renderOutputRaw(
   notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
   options: {
+    chartText?: string;
+    chartOptions?: { hiSpeed?: number };
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
@@ -55,6 +57,8 @@ function renderOutputRaw(
     tui.setTerminalSize(40, 24);
     tui.start();
     tui.render({
+      chartText: options.chartText,
+      chartOptions: options.chartOptions,
       currentBeat: options.currentBeat ?? 0,
       currentSeconds: options.currentSeconds ?? (options.currentBeat ?? 0) / 2,
       totalSeconds: options.totalSeconds ?? 10,
@@ -97,6 +101,8 @@ function renderOutputRaw(
 function renderOutput(
   notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
   options: {
+    chartText?: string;
+    chartOptions?: { hiSpeed?: number };
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
@@ -566,4 +572,41 @@ describe('player-terminal', () => {
       expect(stripANSI(formatJudgeComboDisplay('GREAT', 0, NOW_MS, false))).not.toMatch(/GREAT\s+\d/);
     });
   });
+});
+
+test('generic channel 16 and 17 notes use normal white keys rather than scratch or FREE ZONE colors', () => {
+  const output = renderOutputRaw(
+    [
+      { channel: '16', beat: 0.1, seconds: 0.05 },
+      { channel: '17', beat: 0.2, seconds: 0.1 },
+    ],
+    {
+      laneDisplayMode: '8 KEY GENERIC',
+      lanes: [
+        { channel: '16', key: 'h', isScratch: false },
+        { channel: '17', key: 'j', isScratch: false },
+      ],
+    },
+  ).join('\n');
+  expect(output).toContain('8 KEY GENERIC');
+  expect(output).toContain('\u001b[38;2;255;255;255;4m');
+  expect(output).not.toContain('\u001b[38;2;255;95;95;4m');
+  expect(output).not.toContain('\u001b[38;2;95;135;255;4m');
+});
+
+test('chart text is visible as plain data and empty selections clear it without interpreting controls', () => {
+  const output = renderOutputRaw([], { chartText: '譜面 <b>text</b>\n\u001b[31mRED\u0007' }).join('\n');
+  expect(stripANSI(output)).toContain('TEXT  譜面 <b>text</b> RED ');
+  expect(output).not.toContain('\u001b[31m');
+  expect(output).not.toContain('\u0007');
+  expect(renderOutputRaw([], { chartText: '' }).join('\n')).not.toContain('譜面');
+  expect(renderOutputRaw([]).join('\n')).not.toContain('TEXT  ');
+});
+
+test('terminal display uses exact authored hi-speed beyond user limits and restores the user value on clear', () => {
+  for (const value of [0.25, 0.77, 100]) {
+    const output = renderOutputRaw([], { highSpeed: 2, chartOptions: { hiSpeed: value } }).join('\n');
+    expect(stripANSI(output)).toContain(`HS x${value.toFixed(2)}`);
+  }
+  expect(stripANSI(renderOutputRaw([], { highSpeed: 2, chartOptions: {} }).join('\n'))).toContain('HS x2.0');
 });

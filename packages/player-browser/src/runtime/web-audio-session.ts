@@ -3,6 +3,8 @@ import {
   isBMSKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   parseBMSDynamicVolumeGain,
+  resolveBmsWAVResources,
+  collectBmsWAVPlaybackModifiers,
   usesMonophonicWAVPlayback,
 } from '@be-music/chart-model';
 import type { WebAudioStageMixer } from './nonstop-audio.ts';
@@ -16,6 +18,7 @@ import {
 import type { AudioSession } from '@be-music/player-engine';
 import { normalizePath } from '@be-music/shared-utils/core';
 import { type AudioBusHandle } from './audio-bus.ts';
+import { prepareWAVPlaybackBuffer } from './wav-playback.ts';
 
 interface WebAudioSourceHandle {
   node: AudioBufferSourceNode;
@@ -23,6 +26,7 @@ interface WebAudioSourceHandle {
   gain: GainNode | undefined;
   /** The NONSTOP stage rate the sample plays at on top of the session's base rate (1 outside a stage). */
   stageRate: number;
+  startContextSeconds?: number;
 }
 
 /** How long a live tempo change glides the playback rate of the samples already playing, in seconds. */
@@ -36,6 +40,7 @@ export const LIVE_TEMPO_RAMP_SECONDS = 0.03;
 export interface WebAudioSessionSlicePlayback {
   offsetSeconds: number;
   durationSeconds?: number;
+  sliceId?: string;
 }
 
 /**
@@ -56,6 +61,8 @@ export interface WebAudioSessionContext {
   /** Decoded WAV cache, keyed by lower-cased `normalizePath(resourceWAVPath)`. The session reads from this map but
    *  never mutates it; the host keeps decoding ownership so cross-session caches stay possible. */
   decodedSamples: ReadonlyMap<string, AudioBuffer>;
+  /** Native encoded rates for externally decoded/resampled buffers with EXWAV frequency, keyed by decodedSampleKey(path). */
+  nativeSampleRates?: ReadonlyMap<string, number>;
   /** Per-`#WAVxx` slot gain multiplier produced by `collectBmsWAVCmdVolumeMultipliers` /
    *  `collectBMSExWAVVolumeMultipliers`. Slots without an entry play at unity gain. */
   wavCmdVolumeMultipliers: ReadonlyMap<string, number>;
@@ -137,9 +144,8 @@ export interface WebAudioSession extends AudioSession {
  * - **`#xxxD0` / `#xxxE0` (landmine explosions)** — route through `bgmMixer` (the engine fires these via
  *   `triggerEvent` on landmine hit; the explosion is BGM-style, not the player's keysound).
  *
- * **bmson `note.c = true` continuation** — when a previous instance of the same `#WAV` slot is still playing and the
- * incoming event carries `c = true`, the new trigger is suppressed so the sustained sample plays through. Tracked
- * via {@link tracking} — the active `BufferSourceNode` per slot is dropped on `onended`.
+ * **bmson slices** — each pulse plays its own source window. Different slices of one stem may overlap; simultaneous
+ * uses of one slice share a voice. `c` selects the window's offset and never suppresses a later slice's trigger.
  *
  * **Channel-targeted stop** (`stopChannel`) — when the engine retires an LN early (LNMODE 1 grace expired, LNMODE 2/3
  * mid-hold release), it expects the session to silence the keysound on that lane. The session keeps a per-channel map
@@ -169,9 +175,33 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     stageMixer?.retime?.(chartSeconds, (seconds) => now + (seconds - chartSeconds) / tempo);
   };
   const sampleIdBase = resolveBMSBase(chart);
-  /** Active BufferSource per `#WAVxx` slot. Used to honor bmson `c = true` (skip retrigger of a still-playing sample)
-   *  and to wipe the slot once the source ends naturally. */
+  const wavResources = resolveBmsWAVResources(chart);
+  const playbackModifiers = collectBmsWAVPlaybackModifiers(chart);
+  const preparedBuffers = new Map<string, AudioBuffer>();
+  const sampleBuffer = (path: string, key: string): AudioBuffer | undefined => {
+    const cacheKey = decodedSampleKey(path, key);
+    const prepared = decodedSamples.get(cacheKey) ?? preparedBuffers.get(cacheKey);
+    if (prepared) return prepared;
+    const raw = decodedSamples.get(decodedSampleKey(path));
+    const modifiers = playbackModifiers.get(key);
+    if (!raw || !modifiers) return raw;
+    if (modifiers.frequencyHz !== undefined && !context.nativeSampleRates?.has(decodedSampleKey(path))) {
+      throw new Error(
+        'EXWAV frequency requires a prepared slot buffer or nativeSampleRates for externally decoded audio',
+      );
+    }
+    const buffer = prepareWAVPlaybackBuffer(
+      audioContext,
+      raw,
+      modifiers,
+      context.nativeSampleRates?.get(decodedSampleKey(path)),
+    );
+    preparedBuffers.set(cacheKey, buffer);
+    return buffer;
+  };
+  /** The most recent source per WAV slot, for BMS monophonic retriggers. */
   const activeBySlot = new Map<string, WebAudioSourceHandle>();
+  const activeBySlice = new Map<string, WebAudioSourceHandle>();
   /** Active BufferSource per BMS channel (lane). Populated for player-input lanes so `stopChannel` can silence the
    *  most recent keysound when the engine releases an LN early. */
   const activeByChannel = new Map<string, WebAudioSourceHandle>();
@@ -207,7 +237,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
 
   const resolveSamplePath = (event: BeMusicEvent): { sampleKey: string; path: string } | undefined => {
     const sampleKey = normalizeObjectKey(event.value, sampleIdBase, chart.sourceFormat === 'bmson');
-    const path = chart.resources.wav[sampleKey];
+    const path = wavResources[sampleKey];
     if (typeof path !== 'string') return undefined;
     return { sampleKey, path };
   };
@@ -223,7 +253,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     bus: AudioNode,
     dynamicGain: number,
   ): WebAudioSourceHandle | undefined => {
-    const buffer = decodedSamples.get(decodedSampleKey(path));
+    const buffer = sampleBuffer(path, sampleKey);
     if (!buffer) return undefined;
     const node = audioContext.createBufferSource();
     node.buffer = buffer;
@@ -268,6 +298,9 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     for (const [slot, active] of activeBySlot) {
       if (active === handle) activeBySlot.delete(slot);
     }
+    for (const [slice, active] of activeBySlice) {
+      if (active === handle) activeBySlice.delete(slice);
+    }
     for (const [channel, active] of activeByChannel) {
       if (active === handle) activeByChannel.delete(channel);
     }
@@ -299,9 +332,17 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const { sampleKey, path } = resolved;
     if (elapsedSeconds > 0 && !isStillRinging(event, sampleKey, path, elapsedSeconds)) return;
 
-    // bmson `c = true` — a previous instance of this slot is still playing, so the chart asked for a sustained
-    // continuation rather than a fresh attack. Skip the retrigger and let the existing source ride through.
-    if (event.bmson?.c === true && activeBySlot.has(sampleKey)) return;
+    const slice = bmsonSlicePlayback?.get(event);
+    const sliceId =
+      chart.sourceFormat === 'bmson'
+        ? (slice?.sliceId ?? `${sampleKey}:${event.measure}:${event.position[0] / event.position[1]}`)
+        : undefined;
+    const startAt =
+      audioContextStartSeconds !== undefined
+        ? Math.max(audioContext.currentTime, audioContextStartSeconds)
+        : audioContext.currentTime;
+    const previousSlice = sliceId === undefined ? undefined : activeBySlice.get(sliceId);
+    if (previousSlice?.startContextSeconds === startAt) return;
 
     const channel = normalizeChannel(event.channel);
     const isPlayerLane = isPlayLaneSoundChannel(channel);
@@ -315,7 +356,6 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       disconnectSource(built);
     };
 
-    const slice = bmsonSlicePlayback?.get(event);
     const elapsed = elapsedSeconds > 0 ? elapsedInBuffer(sampleKey, elapsedSeconds) : 0;
     const sliceRate = sliceRateOf(sampleKey);
     const offsetSeconds = clampSampleOffset((slice?.offsetSeconds ?? 0) / sliceRate + elapsed, buffer.duration);
@@ -326,8 +366,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     );
     // Scheduled BGM cues clamp to "now" so a slightly-late polling tick still fires immediately rather than
     // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
-    const startAt =
-      audioContextStartSeconds !== undefined ? Math.max(audioContext.currentTime, audioContextStartSeconds) : undefined;
+    if (previousSlice) stopSource(previousSlice, startAt);
     if (usesMonophonicWAVPlayback(chart)) {
       const previous = activeBySlot.get(sampleKey);
       if (previous) {
@@ -337,13 +376,15 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     startSampleNode(node, startAt, offsetSeconds, durationSeconds);
 
     activeSources.add(built);
+    built.startContextSeconds = startAt;
     activeBySlot.set(sampleKey, built);
+    if (sliceId !== undefined) activeBySlice.set(sliceId, built);
     if (isPlayerLane) activeByChannel.set(channel, built);
   };
 
   /** Whether `event`'s sound, started `elapsedSeconds` ago, still has something left to play. */
   const isStillRinging = (event: BeMusicEvent, sampleKey: string, path: string, elapsedSeconds: number): boolean => {
-    const buffer = decodedSamples.get(decodedSampleKey(path));
+    const buffer = sampleBuffer(path, sampleKey);
     if (!buffer) return false;
     const slice = bmsonSlicePlayback?.get(event);
     const sliceRate = sliceRateOf(sampleKey);
@@ -414,6 +455,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // Engine finished playback gracefully — let any tail samples ring out naturally. Drop our tracking so a
       // post-finish `stopChannel` (defensive) doesn't try to silence an already-cleaned source.
       activeBySlot.clear();
+      activeBySlice.clear();
       activeByChannel.clear();
       activeSources.clear();
     },
@@ -427,8 +469,10 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
         stopSource(handle);
       }
       activeBySlot.clear();
+      activeBySlice.clear();
       activeByChannel.clear();
       activeSources.clear();
+      preparedBuffers.clear();
     },
     triggerEvent: (event: BeMusicEvent): void => {
       // Dynamic volume changes (`#xxx97` / `#xxx98`) reach the session through the same `triggerEvent` channel as
@@ -474,6 +518,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // What plays belongs to the old position; the engine starts what still rings at `seconds` partway.
       for (const handle of Array.from(activeSources)) stopSource(handle);
       activeBySlot.clear();
+      activeBySlice.clear();
       activeByChannel.clear();
       activeSources.clear();
       // The engine applies the volume changes before `seconds` again, from the chart's start values.
@@ -576,6 +621,7 @@ export function startSampleNode(
  * (`\\` → `/`, `.` / `..` / empty segments resolved) and lower-cased. Every host that fills `decodedSamples` uses it, so
  * `./kick.wav`, `../common/kick.wav` or a differently-cased path finds its buffer.
  */
-export function decodedSampleKey(path: string): string {
-  return normalizePath(path).toLowerCase();
+export function decodedSampleKey(path: string, slot?: string): string {
+  const key = normalizePath(path).toLowerCase();
+  return slot === undefined ? key : `${key}\0slot:${slot}`;
 }

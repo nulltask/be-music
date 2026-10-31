@@ -1,3 +1,10 @@
+import { parseChart } from '@be-music/chart-parser';
+import {
+  computeChartFingerprint,
+  computePlayFingerprint,
+  createChartFingerprintDocument,
+  createPlayFingerprintDocument,
+} from '@be-music/chart-model';
 import { gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import {
@@ -242,6 +249,13 @@ describe('POST /api/v0/scores', () => {
     const autoResponse = await submit(cookie, submissionBody(auto, chart.playDocument, chart.chartDocument));
     expect(autoResponse.status).toBe(422);
     expect(await autoResponse.json()).toEqual({ error: 'auto-play' });
+
+    for (const battleMode of ['COUPLE', 'TWO-PLAYER'] as const) {
+      const two = makeReplay(chart, { noteCount: 10, hits: 10, play: { battleMode } });
+      const response = await submit(cookie, submissionBody(two, chart.playDocument, chart.chartDocument));
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: 'two-player' });
+    }
 
     const malformed = await submit(cookie, submissionBody({ format: 'nope' }, chart.playDocument));
     expect(malformed.status).toBe(422);
@@ -555,4 +569,59 @@ describe('accounts', () => {
     expect(after.get(solo.chartFingerprint)).toBe('provisional');
     expect(after.get(withAnonymous.chartFingerprint)).toBe('provisional');
   });
+});
+
+test('stores an affected bmson zero-total play without moving ordinary rankings or bests', async () => {
+  const json = parseChart(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { title: 'zero TOTAL ranking', mode_hint: 'beat-7k', init_bpm: 120, resolution: 240, total: 0 },
+      sound_channels: [
+        {
+          name: 'key.wav',
+          notes: [
+            { x: 1, y: 480 },
+            { x: 1, y: 720 },
+          ],
+        },
+      ],
+    }),
+    'bmson',
+  );
+  const chart: TestChart = {
+    text: '',
+    json,
+    chartFingerprint: computeChartFingerprint(json, { chartPath: undefined }),
+    playFingerprint: computePlayFingerprint(json, { chartPath: undefined }),
+    chartDocument: createChartFingerprintDocument(json, { chartPath: undefined }),
+    playDocument: createPlayFingerprintDocument(json, { chartPath: undefined }),
+  };
+  const replay = makeReplay(chart, {
+    noteCount: 2,
+    hits: 2,
+    chart: { sourceFormat: 'bmson', total: 0 },
+    play: { bmsonTotalMode: 'spec', gauge: 'GROOVE' },
+  });
+  const cookie = await signInAnonymously(fetchApp);
+  const response = await submit(cookie, submissionBody(replay, chart.playDocument, chart.chartDocument));
+  expect(response.status).toBe(201);
+  const body = (await response.json()) as {
+    unranked?: string;
+    results: Array<{ exScore: number; rank: number; players: number; improved: Record<string, boolean> }>;
+  };
+  expect(body.unranked).toBe('bmson-total');
+  for (const result of body.results)
+    expect(result).toMatchObject({
+      exScore: 4,
+      rank: 0,
+      players: 0,
+      improved: { exScore: false, lamp: false, missCount: false },
+    });
+  const db = openDatabase(env.DB);
+  expect(await db.query.bestScore.findMany({ where: eq(bestScore.chartFingerprint, chart.chartFingerprint) })).toEqual(
+    [],
+  );
+  const stored = await db.query.score.findMany({ where: eq(score.chartFingerprint, chart.chartFingerprint) });
+  expect(stored).toHaveLength(1);
+  expect(stored[0]?.unranked).toBe('bmson-total');
 });

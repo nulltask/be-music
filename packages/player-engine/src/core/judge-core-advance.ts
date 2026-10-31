@@ -342,7 +342,8 @@ function startAutoScratchNote(
   if (!markScorableJudged(state, note)) {
     return;
   }
-  emit({ kind: 'sound', source: 'auto-scratch', event: note.event, seconds: note.seconds, channel: note.channel });
+  for (const event of note.soundEvents ?? [note.event])
+    emit({ kind: 'sound', source: 'auto-scratch', event, seconds: note.seconds, channel: note.channel });
   const endSeconds = resolveLongNoteEndSeconds(note);
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
   if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
@@ -420,6 +421,14 @@ function completeAutoScratchLongNote(
     event: pending.note.event,
     endSeconds: pending.endSeconds,
   });
+  if (pending.note.endSoundEvent)
+    emit({
+      kind: 'sound',
+      source: 'long-note-end',
+      event: pending.note.endSoundEvent,
+      seconds: pending.endSeconds,
+      channel: pending.note.channel,
+    });
   // The LN's one judgment, or a charge note's tail (its head was cleared at the head).
   applyAutoPerfect(state, pending.note.channel, referenceSeconds, emit);
   // Pair the `hold-lane-until-beat` emitted at the head so the LN-hold timer / lane laser fade out at the tail.
@@ -517,7 +526,11 @@ function finalizeActiveLongNote(
   atSeconds: number,
   emit: JudgeCoreEffectSink,
 ): void {
-  const heldNote = state.activeLongNotes.get(channel)?.note;
+  const hold = state.activeLongNotes.get(channel);
+  const heldNote = hold?.note;
+  // LN settles at its tail while held, or on release. CN/HCN require a release; a missed tail stays silent.
+  if (heldNote?.endSoundEvent && (hold?.mode === 1 || state.longHoldReleaseSeconds.has(channel)))
+    emit({ kind: 'sound', source: 'long-note-end', event: heldNote.endSoundEvent, seconds: atSeconds, channel });
   let passing = state.hcnPassing.get(channel);
   while (passing !== undefined && passing.note !== heldNote) {
     passing = passing.next;

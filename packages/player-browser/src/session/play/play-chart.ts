@@ -1,3 +1,4 @@
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 /**
  * Chart preparation for a play (`PlaySession`), whichever family draws it: resolves the chart's `#RANDOM` / `#SWITCH`
  * control flow, prepares the notes the engine judges and the view draws (one shared `PreparedPlaybackChartData`),
@@ -16,21 +17,21 @@ import {
   type RandomMode,
 } from '@be-music/player-scene-model';
 import {
+  resolveChartLongNoteMode,
   resolvePoorBGAMode,
+  buildBGAOpacityTimelines,
   PLAY_MODE_LAYOUTS,
-  parseBMSSwBGA,
+  buildKeyBoundBGATimeline,
   resolveChart,
   resolveChartReferenceBPM,
-  type BMSSwitchingBGA,
   type RandomDraws,
   type ResolvedChart,
-  createBmsonSamplePlaybackMap,
   type TimedSampleTrigger,
   type TimingResolver,
   type ChartPlayVariant,
   createBeatAtSecondsResolverFromTimingResolver,
 } from '@be-music/chart-model';
-import { resolveBMSBase, type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player-engine';
 import {
   isPlayableInputChannel,
@@ -183,7 +184,6 @@ export interface PlayChartContext {
   battleSourceVariant: ChartPlayVariant | undefined;
   touchTokenByChannel: Map<string, string> | undefined;
   wavCmdVolumeMultipliers: Map<string, number>;
-  switchingBGAs: Map<string, BMSSwitchingBGA>;
   bmsonSlicePlayback:
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
@@ -213,7 +213,7 @@ export interface PlayChartContext {
   fullComboFired: boolean;
   timingResolver: TimingResolver | undefined;
   nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
-  bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[]; opacity?: BGAOpacityTimelines };
   poorBGAMode: 0 | 1 | 2;
   poorBGAFallbackKey: string | undefined;
   poorBGAFallbackUntilSeconds: number;
@@ -256,29 +256,21 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.
-  const { chart: resolved, randomDraws } =
-    arrangement === undefined && ctx.options.preResolved !== undefined
-      ? ctx.options.preResolved
-      : resolvePlayChart(
-          resolvePlayerLongNoteChart(ctx, chartEntry.chart, arrangement?.chart.lnMode),
-          arrangement?.play.randomDraws !== undefined ? { randomDraws: arrangement!.play.randomDraws } : {},
-        );
+  const preResolved = arrangement === undefined ? ctx.options.preResolved : undefined;
+  const { chart: branchResolved, randomDraws } =
+    preResolved ??
+    resolvePlayChart(
+      chartEntry.chart,
+      arrangement?.play.randomDraws !== undefined ? { randomDraws: arrangement.play.randomDraws } : {},
+    );
+  // A chart's conditional LONGMODE must be known before filling the user's default.
+  const resolved = resolvePlayerLongNoteChart(ctx, branchResolved, arrangement?.chart.lnMode);
   ctx.resolvedChart = resolved;
   ctx.randomDraws = randomDraws;
   ctx.randomSeeds = {};
   // BMS spec — `#WAVCMD 01 xx vv` and `#EXWAVxx` per-slot volumes, collected once so every sample trigger is a single
   // Map lookup; slots without an entry take the unity-gain fast path.
   ctx.wavCmdVolumeMultipliers = collectChartVolumeMultipliers(resolved);
-  // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares an animated BGA slot. Pre-parse every entry now so
-  // per-frame BGA composition stays a single `Map.get` plus `pickSwitchingBGAFrame` (no per-frame regex / split).
-  ctx.switchingBGAs.clear();
-  const base = resolveBMSBase(resolved);
-  for (const [slot, raw] of Object.entries(resolved.bms.swBGA)) {
-    const parsed = parseBMSSwBGA(raw, base);
-    if (parsed) {
-      ctx.switchingBGAs.set(slot, parsed);
-    }
-  }
   // Build the chart's playable / landmine / invisible note arrays via the engine's own `preparePlaybackChartData`
   // so the renderer holds the exact same `TimedPlayableNote[]` / `TimedLandmineNote[]` instances the engine
   // will judge against. We keep a reference to the entire prepared bundle and forward it through
@@ -474,9 +466,11 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         : undefined;
     // Two players with the same lane option play one arrangement: LR2 copies 1P's lanes after shuffling them
     // (`battle == 1 && random[0] == random[1]`), as That-Which-Must-Not-Be-Named does for two players' equal options.
-    const twoPlayer = prepared.battleMode === 'TWO-PLAYER';
+    const twoPlayer = prepared.battleMode === 'TWO-PLAYER' || prepared.battleMode === 'COUPLE';
     // A DP chart's two players (LR2 COUPLE) keep their own sides.
-    const copied = prepared.battleSourceVariant === '5' || prepared.battleSourceVariant === '7';
+    const copied =
+      prepared.battleMode === 'TWO-PLAYER' &&
+      (prepared.battleSourceVariant === '5' || prepared.battleSourceVariant === '7');
     const twins =
       twoPlayer && copied && (ctx.options.random1P ?? 'OFF') === (ctx.options.random2P ?? 'OFF')
         ? pairTwoPlayerTwins([ctx.notes, ctx.mineNotes, ctx.invisibleNotes])
@@ -616,7 +610,6 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
   // Build the #SCROLL / #SPEED distance integrator. Skipped when the chart has no such events, or only ones at 1, so
   // the common case stays on the plain beat-diff path with no extra cost (and on its ruleset's drawing rules).
-  const beatResolver = resolvedPlay.beatResolver;
   const scrollTimeline = resolvedPlay.scroll;
   // CONSTANT ignores `#SPEED`, unless a NO_SPEED course turns it off.
   const constant = resolveConstantVisibility({
@@ -638,28 +631,19 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.autoSampleTriggers = resolvedPlay.sampleTriggers
     .filter((trigger) => !isPlayableInputChannel(trigger.channel))
     .sort((left, right) => left.seconds - right.seconds);
-  // bmson 1.0.0 slicing — for bmson charts, each `sound_channels[]` entry is a single audio file that gets sliced at
-  // every distinct pulse where any of its notes fire, and each note plays its assigned slice (`audio_offset` ..
-  // `audio_offset + slice_duration`) instead of the whole WAV from t=0. `@be-music/chart-model` computes the per-event
-  // slice playback table; we wire it up here so the `WebAudioSession` can look up the offset / duration by event
-  // identity at trigger time. BMS / json charts skip the build (the map stays undefined)
-  // since they have no slicing semantics — every note plays its WAV from the start.
+  // Use the model's source-channel slicing, including boundaries whose up event has no matching LN.
+  // Recomputing from displayed notes would omit those silent boundaries and lengthen the preceding slice.
   ctx.bmsonSlicePlayback =
     resolved.sourceFormat === 'bmson'
-      ? createBmsonSamplePlaybackMap(
-          resolved,
-          resolver,
-          // Include both playable notes and the auto-trigger BGM events so the {@link WebAudioSession} can resolve
-          // slice metadata for both code paths through a single Map lookup. Without the trigger events here, the
-          // session's `scheduleEvent` would fall back to "play whole WAV" for every BGM cue, regressing bmson
-          // sliced-WAV authoring intent (each note's `audio_offset` / `slice_duration` window).
-          [
-            ...ctx.notes.map((note) => note.event),
-            ...ctx.mineNotes.map((note) => note.event),
-            ...ctx.invisibleNotes.map((note) => note.event),
-            ...ctx.autoSampleTriggers.map((trigger) => trigger.event),
-          ],
-          beatResolver,
+      ? new Map(
+          resolvedPlay.sampleTriggers.map((trigger) => [
+            trigger.event,
+            {
+              offsetSeconds: trigger.sampleOffsetSeconds,
+              durationSeconds: trigger.sampleDurationSeconds,
+              sliceId: trigger.sampleSliceId ?? `${trigger.sampleKey}:beat:${trigger.beat}`,
+            },
+          ]),
         )
       : undefined;
   ctx.chartDurationSeconds = Math.max(ctx.chartLastNoteEndSeconds, ctx.autoSampleTriggers.at(-1)?.seconds ?? 0);
@@ -675,7 +659,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.playState = createChartPlayState(ctx, resolver, resolveChartReferenceBPM(resolved, ctx.chart?.bpm));
   // A two-player play's 2P player starts from the same clean slate; the engine's frames fill its gauge in.
   ctx.secondPlayer =
-    prepared.battleMode === 'TWO-PLAYER'
+    prepared.battleMode === 'TWO-PLAYER' || prepared.battleMode === 'COUPLE'
       ? {
           score: createEmptyScore(prepared.scorableNotes.filter((note) => note.channel.startsWith('2')).length),
           playState: createPlayState({ totalSeconds: ctx.chartDurationSeconds }),
@@ -695,6 +679,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
     : new Set();
   ctx.bgaTimeline = toBrowserBGATimeline(resolvedPlay.bga);
+  const opacity = buildBGAOpacityTimelines(resolvedPlay.source, resolvedPlay.timing);
+  if ([opacity.base, opacity.layer, opacity.layer2, opacity.poor].some((cues) => cues.length > 0)) {
+    ctx.bgaTimeline.opacity = opacity;
+  }
   ctx.nonstopBGATimelines =
     ctx.options.nonstop !== undefined
       ? splitNonstopBGATimeline(ctx.bgaTimeline, ctx.options.nonstop.stages)
@@ -708,7 +696,13 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // LR2's SILENT automatic judge timing loads no BGA.
   ctx.hasBGA =
     !isSilentJudgeTimingPlay(ctx.options) &&
-    (ctx.bgaTimeline.base.length > 0 || ctx.bgaTimeline.layer.length > 0 || ctx.bgaTimeline.poor.length > 0);
+    (ctx.bgaTimeline.base.length > 0 ||
+      ctx.bgaTimeline.layer.length > 0 ||
+      (ctx.bgaTimeline.layer2?.length ?? 0) > 0 ||
+      ctx.bgaTimeline.poor.length > 0 ||
+      (ctx.options.nonstop?.bmsonBGA?.some((cue) => cue.sequences.length > 0) ?? false) ||
+      (ctx.options.nonstop?.keyBoundBGA ?? buildKeyBoundBGATimeline(resolvedPlay.source, resolvedPlay.timing)).length >
+        0);
 }
 
 /**
@@ -1084,7 +1078,11 @@ function resolvePlayerLongNoteChart(
   chart: BeMusicJSON,
   recordedMode: 1 | 2 | 3 | undefined,
 ): BeMusicJSON {
-  if (recordedMode !== undefined) return recordedMode === 1 ? chart : applyUndefinedLongNoteMode(chart, recordedMode);
+  if (recordedMode !== undefined && resolveChartLongNoteMode(chart) === recordedMode) return chart;
+  if (recordedMode !== undefined)
+    return chart.sourceFormat === 'bms'
+      ? { ...chart, bms: { ...chart.bms, lnMode: recordedMode } }
+      : { ...chart, bmson: { ...chart.bmson, info: { ...chart.bmson.info, lnType: recordedMode } } };
   const mode = ctx.options.longNoteMode ?? 'LN';
   if (mode === 'LN') return chart;
   if (ctx.options.judgeRuleset !== 'beatoraja') throw new RangeError('LN MODE is available only for beatoraja.');
