@@ -1,4 +1,5 @@
 import {
+  configureBGAVideoWorkers,
   configureBrowserWorkers,
   setBrowserWorkerCount,
   disposeBrowserWorkers,
@@ -28,6 +29,11 @@ try {
 migratePlayerStorage(workerStorage);
 setBrowserWorkerCount(readWorkerCount(workerStorage, navigator.hardwareConcurrency));
 configureBrowserWorkers(() => new Worker(new URL('./compute-worker.ts', import.meta.url), { type: 'module' }));
+// A BGA video the browser can't play streams through these while ffmpeg.wasm transcodes it.
+configureBGAVideoWorkers({
+  createDecodeWorker: () => new Worker(new URL('./bga-decode-worker.ts', import.meta.url), { type: 'module' }),
+  createEncodeWorker: () => new Worker(new URL('./bga-encode-worker.ts', import.meta.url), { type: 'module' }),
+});
 window.addEventListener('pagehide', (event) => {
   void debugMenuSettingsSync.flush();
   if (!event.persisted) disposeBrowserWorkers();
