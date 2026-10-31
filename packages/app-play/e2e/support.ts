@@ -223,6 +223,52 @@ export class Player {
   }
 
   /**
+   * Holds `code` down and pauses in the same task, on the first frame at or past chart `atSeconds`, so the play stops on
+   * the press instant; returns the chart seconds it pressed at. Visuals that follow the chart clock (SWBGA, BGA
+   * sequences) freeze there, so a slow CI screenshot samples the frame of the press rather than a later one (#878).
+   * Space always toggles pause.
+   */
+  async pressPaused(code: string, atSeconds = 0, timeoutMs = 90_000): Promise<number> {
+    return this.page.evaluate(
+      ({ code, key, atSeconds, timeoutMs }) =>
+        new Promise<number>((resolve, reject) => {
+          const send = (type: string, keyCode: string, keyName: string) =>
+            window.dispatchEvent(
+              new KeyboardEvent(type, { code: keyCode, key: keyName, bubbles: true, cancelable: true }),
+            );
+          const deadline = performance.now() + timeoutMs;
+          const step = (): void => {
+            const seconds = window.__beMusicTest?.state().play?.seconds;
+            if (seconds !== undefined && seconds >= atSeconds) {
+              send('keydown', code, key);
+              send('keydown', 'Space', ' ');
+              send('keyup', 'Space', ' ');
+              resolve(window.__beMusicTest?.state().play?.seconds ?? seconds);
+            } else if (performance.now() > deadline) reject(new Error(`timed out waiting for ${atSeconds}s`));
+            else requestAnimationFrame(step);
+          };
+          step();
+        }),
+      { code, key: KEY_OF_CODE[code] ?? code, atSeconds, timeoutMs },
+    );
+  }
+
+  /** Releases a key held by {@link pressPaused}. */
+  async releaseKey(code: string): Promise<void> {
+    await this.page.evaluate(
+      ({ code, key }) =>
+        window.dispatchEvent(new KeyboardEvent('keyup', { code, key, bubbles: true, cancelable: true })),
+      { code, key: KEY_OF_CODE[code] ?? code },
+    );
+  }
+
+  /** Resumes a paused play and pauses again on the first frame at or past chart `seconds`. */
+  async resumeUntil(seconds: number, what: string): Promise<void> {
+    await this.key('Space');
+    await this.keyWhen((state, at) => (state.play?.seconds ?? 0) >= at, seconds, 'Space', what);
+  }
+
+  /**
    * Sets a Debug Menu control: `folder` is the folder titles from the top (`['Play options']`), `name` the control's
    * label. Checkboxes take a boolean, sliders a number, drop-downs the option's label.
    */
