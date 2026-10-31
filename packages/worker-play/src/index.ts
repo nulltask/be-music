@@ -18,6 +18,7 @@
 import { handleAuth, readSession, type OIDCEnv } from '@be-music/service-auth-client';
 import { isLeaderboardPath } from './leaderboard-paths.ts';
 import { handlePlayerSettings, PLAYER_SETTINGS_PATH } from './player-settings.ts';
+import { serveURLLoadProxy } from './url-load-proxy.ts';
 
 interface Env extends OIDCEnv {
   ASSETS: Fetcher;
@@ -67,56 +68,6 @@ async function serveFFmpegCore(request: Request, env: Env, pathname: string): Pr
   headers.set('cross-origin-resource-policy', 'same-origin');
 
   return new Response(request.method === 'HEAD' ? null : object.body, { headers });
-}
-
-function resolveURLLoadProxyTarget(rawURL: string | null): URL {
-  if (!rawURL) {
-    throw new Error('missing url query parameter');
-  }
-  const target = new URL(rawURL);
-  if (target.protocol !== 'https:') {
-    throw new Error('only https proxy targets are allowed');
-  }
-  if (target.username || target.password) {
-    throw new Error('proxy target credentials are not allowed');
-  }
-  return target;
-}
-
-async function serveURLLoadProxy(request: Request): Promise<Response> {
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
-  }
-
-  let target: URL;
-  try {
-    target = resolveURLLoadProxyTarget(new URL(request.url).searchParams.get('url'));
-  } catch (error) {
-    return new Response(error instanceof Error ? error.message : 'invalid proxy target', { status: 400 });
-  }
-
-  let upstream: Response;
-  try {
-    upstream = await fetch(target, {
-      method: request.method === 'HEAD' ? 'HEAD' : 'GET',
-      redirect: 'follow',
-    });
-  } catch (error) {
-    return new Response(`failed to fetch ${target.href}: ${error instanceof Error ? error.message : String(error)}`, {
-      status: 502,
-    });
-  }
-
-  const headers = new Headers();
-  headers.set('content-type', upstream.headers.get('content-type') ?? 'application/octet-stream');
-  headers.set('cache-control', 'no-store');
-  headers.set('cross-origin-resource-policy', 'same-origin');
-
-  return new Response(request.method === 'HEAD' ? null : upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers,
-  });
 }
 
 export default {
