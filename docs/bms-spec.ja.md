@@ -385,7 +385,7 @@ runtime と round-trip の扱い:
 - `position` の分母情報から小節内解像度を決定
 - 同一小節・同一チャンネルでは分母の最小公倍数を採用
 - `--maxResolution` 指定時は上限で打ち切り
-- bmson から読んだ譜面は、BMS で書き方が異なる部分を変換する: ロングノートは `5x` / `6x` 上の `#LNTYPE 1` のペアにして `ln_type` / `t` から `#LNMODE` を出力し、地雷の値は base36 のダメージに（サンプルは `#WAV00` に）、`judge_rank` は `#DEFEXRANK` にし、百分率の `total` は `#TOTAL` として出力しない。詳細は [bmson 仕様 — BMS と bmson の相互変換](./bmson-spec.ja.md#bms-と-bmson-の相互変換)
+- bmson から読んだ譜面は、BMS で書き方が異なる部分を変換する: ロングノートは `5x` / `6x` 上の `#LNTYPE 1` のペアにして `ln_type` / `t` から `#LNMODE` を出力し、地雷の値は base36 のダメージに（サンプルは `#WAV00` に）、`judge_rank` は `#DEFEXRANK` にし、百分率の `total` は `#TOTAL` として出力しない。bmson の BGA は、未使用の 2 文字キーの `#BMPxx` と、パルス位置の `04` / `07` / `06` オブジェクトにする。消去（id 0）とヘッダーのない id は 1 つの未定義キーを指す。bmson のシーケンス・`id_set`・条件・間隔は BMS に対応する表現がないため、レイヤーの黒抜きの違いとともに `onDiagnostic` で報告して出力しない（#840）。詳細は [bmson 仕様 — BMS と bmson の相互変換](./bmson-spec.ja.md#bms-と-bmson-の相互変換)
 
 ## 制御構文の評価ルール
 
