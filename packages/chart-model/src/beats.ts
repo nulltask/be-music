@@ -153,11 +153,19 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
   if (left.channel !== right.channel) {
     return left.channel < right.channel ? -1 : 1;
   }
+  // Duplicate timing objects on one channel and position keep their input (file) order, so the later line wins as in
+  // beatoraja; LR2 leaves the order undefined there (#133). Other channels stay sorted by value.
+  if (FILE_ORDER_CHANNELS.has(left.channel)) {
+    return 0;
+  }
   if (left.value !== right.value) {
     return left.value < right.value ? -1 : 1;
   }
   return 0;
 }
+
+/** BPM, STOP, SCROLL and SPEED channels, where the last object at a position takes effect. */
+const FILE_ORDER_CHANNELS: ReadonlySet<string> = new Set(['03', '08', '09', 'SC', 'SP']);
 
 function createExactMeasureLengthRecord(json: BeMusicJSON): Record<number, number> {
   const measureLengths: number[] = [];
