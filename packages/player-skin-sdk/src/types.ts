@@ -517,6 +517,11 @@ export interface BeMusicLongNote {
    * completed. LR2 draws a dropped long note at half alpha until it goes; the built-in skins do the same.
    */
   state?: BeMusicLongNoteState;
+  /**
+   * Milliseconds since the player let go of this long note early and it was judged dropped; omitted otherwise (also for a
+   * long note missed at the head). The built-in skins fade the body's centre line out over this time.
+   */
+  releasedElapsedMs?: number;
   /** True when autoplay (or auto-scratch) plays this long note. */
   autoplay?: boolean;
 }
