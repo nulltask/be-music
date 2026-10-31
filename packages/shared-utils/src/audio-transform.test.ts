@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { transformStereoPCM } from './audio-transform.ts';
+import { resolveSampleSliceEnvelope, sampleSliceEnvelopeGain, transformStereoPCM } from './audio-transform.ts';
 
 describe('sample PCM transform', () => {
   test('combines pitch rate with output resampling without changing the source', () => {
@@ -49,5 +49,44 @@ describe('sample PCM transform', () => {
     expect(() =>
       transformStereoPCM(Float32Array.of(1), Float32Array.of(1), 44100, 44100, { playbackRate: rate }),
     ).toThrow(RangeError);
+  });
+});
+
+describe('sample slice envelope', () => {
+  test('leaves a window that covers the whole file unfaded', () => {
+    expect(resolveSampleSliceEnvelope(0, undefined, 100, 3)).toEqual({ fadeIn: 0, fadeOut: 0 });
+    expect(resolveSampleSliceEnvelope(0, 100, 100, 3)).toEqual({ fadeIn: 0, fadeOut: 0 });
+    expect(resolveSampleSliceEnvelope(0, 250, 100, 3)).toEqual({ fadeIn: 0, fadeOut: 0 });
+  });
+  test('fades in a window that starts inside the file and out one that stops before its end', () => {
+    expect(resolveSampleSliceEnvelope(0, 40, 100, 3)).toEqual({ fadeIn: 0, fadeOut: 3 });
+    expect(resolveSampleSliceEnvelope(40, 30, 100, 3)).toEqual({ fadeIn: 3, fadeOut: 3 });
+    expect(resolveSampleSliceEnvelope(70, undefined, 100, 3)).toEqual({ fadeIn: 3, fadeOut: 0 });
+  });
+  test('clamps the fade-in to the window and the fade-out to the audio left after it', () => {
+    expect(resolveSampleSliceEnvelope(40, 2, 100, 3)).toEqual({ fadeIn: 2, fadeOut: 3 });
+    expect(resolveSampleSliceEnvelope(40, 59, 100, 3)).toEqual({ fadeIn: 3, fadeOut: 1 });
+  });
+  test('resolves no ramp for an empty window or a zero fade length', () => {
+    expect(resolveSampleSliceEnvelope(100, 10, 100, 3)).toEqual({ fadeIn: 0, fadeOut: 0 });
+    expect(resolveSampleSliceEnvelope(40, 30, 100, 0)).toEqual({ fadeIn: 0, fadeOut: 0 });
+  });
+  test('ramps the gain linearly in, holds it, and ramps it out past the window end', () => {
+    const envelope = { fadeIn: 4, fadeOut: 4 };
+    expect([0, 1, 2, 4, 9].map((position) => sampleSliceEnvelopeGain(position, 10, envelope))).toEqual([
+      0, 0.25, 0.5, 1, 1,
+    ]);
+    expect([10, 11, 13, 14, -1].map((position) => sampleSliceEnvelopeGain(position, 10, envelope))).toEqual([
+      1, 0.75, 0.25, 0, 0,
+    ]);
+    expect(sampleSliceEnvelopeGain(5, Infinity, { fadeIn: 0, fadeOut: 0 })).toBe(1);
+  });
+  test('crossfades a continuation with the slice before it to unity gain', () => {
+    const fade = 4;
+    const previous = resolveSampleSliceEnvelope(0, 10, 100, fade);
+    const next = resolveSampleSliceEnvelope(10, 10, 100, fade);
+    for (let frame = 10; frame < 10 + fade; frame += 1) {
+      expect(sampleSliceEnvelopeGain(frame, 10, previous) + sampleSliceEnvelopeGain(frame - 10, 10, next)).toBe(1);
+    }
   });
 });

@@ -46,6 +46,16 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       });
     },
   });
+  define('shared-utils.resolveSampleSliceEnvelope', {
+    run: () => {
+      utilsAPI.resolveSampleSliceEnvelope(4410, 2205, 44100, 132);
+    },
+  });
+  define('shared-utils.sampleSliceEnvelopeGain', {
+    run: () => {
+      utilsAPI.sampleSliceEnvelopeGain(2250, 2205, { fadeIn: 132, fadeOut: 132 });
+    },
+  });
   define('shared-utils.png.decodePNGToRGBA8', {
     run: () => {
       pngAPI.decodePNGToRGBA8(BENCH_PNG);
