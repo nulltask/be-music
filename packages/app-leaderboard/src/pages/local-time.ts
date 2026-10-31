@@ -8,6 +8,10 @@
  *
  * `data-local="relative"` writes how long ago the moment was, in the page's language (`<html lang>`): "now", then
  * minutes, hours and days ago, and the local date once it is 30 days old, where a count of months would be vague.
+ *
+ * A page updated in place (partial-swap.ts) brings new times, so the script runs again after each htmx swap. It marks
+ * what it has rewritten (`data-local-utc`) and leaves those alone; a swap that brings the server's text back drops the
+ * mark too.
  */
 export const LOCAL_TIME_SCRIPT = `(() => {
   const pad = (value) => String(value).padStart(2, '0');
@@ -30,8 +34,9 @@ export const LOCAL_TIME_SCRIPT = `(() => {
     const lang = document.documentElement && document.documentElement.lang;
     for (const element of document.querySelectorAll('time[data-local]')) {
       const date = new Date(element.dateTime);
-      if (Number.isNaN(date.getTime())) continue;
+      if (Number.isNaN(date.getTime()) || element.dataset.localUtc !== undefined) continue;
       const utc = element.title;
+      element.dataset.localUtc = utc;
       const precision = element.dataset.local;
       element.textContent =
         precision === 'relative' ? ago(date, now, lang) : format(date, precision === 'day' ? 'day' : 'minute');
@@ -40,4 +45,5 @@ export const LOCAL_TIME_SCRIPT = `(() => {
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();
+  document.addEventListener('htmx:after:settle', run);
 })();`;

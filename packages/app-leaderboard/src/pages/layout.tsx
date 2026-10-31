@@ -38,6 +38,7 @@ import type { Viewer } from './viewer.ts';
 import { LOCAL_TIME_SCRIPT } from './local-time.ts';
 import { APP_CSS_HASH } from './styles.generated.ts';
 import { speculationRules } from './speculation.ts';
+import { partialLinkAttributes, SITE_HEADER_ID } from './partial-swap.ts';
 
 /** Where the compiled stylesheet is served; the hash in the name lets browsers keep it forever. */
 export const STYLESHEET_PATH = `/assets/app.${APP_CSS_HASH}.css`;
@@ -428,7 +429,7 @@ function leaderboardSiteFooter(t: Messages): string {
 /**
  * The scoring rules every figure on the pages is shown under, as a menu in the header next to the account: the
  * current ruleset on the button, the three to pick from in its popover. A choice is kept in a cookie
- * (`/ruleset/:id`) and brings the viewer back to the page.
+ * (`/ruleset/:id`) and brings the viewer back to the page, which the client script updates in place (partial-swap.ts).
  */
 function RulesetMenu(props: { current: RulesetId; path: string }) {
   const t = useMessages();
@@ -457,21 +458,25 @@ function RulesetMenu(props: { current: RulesetId; path: string }) {
         style={headerMenuStyle('--ruleset-menu')}
       >
         <div class="text-muted-foreground px-2 pt-1.5 pb-1 text-xs">{t.rules.showUnder}</div>
-        {RULESET_IDS.map((id) => (
-          <a
-            class="hover:bg-muted flex items-start gap-2 rounded-md px-2 py-1.5"
-            href={`/ruleset/${id}?next=${encodeURIComponent(props.path)}`}
-            aria-current={id === props.current ? 'true' : undefined}
-          >
-            <span class={`mt-0.5 ${id === props.current ? '' : 'invisible'}`}>
-              <Icon svg={Check} />
-            </span>
-            <span>
-              <span class="block font-medium">{name(id)}</span>
-              <span class="text-muted-foreground block text-xs">{t.rules.notes[id]}</span>
-            </span>
-          </a>
-        ))}
+        {RULESET_IDS.map((id) => {
+          const href = `/ruleset/${id}?next=${encodeURIComponent(props.path)}`;
+          return (
+            <a
+              class="hover:bg-muted flex items-start gap-2 rounded-md px-2 py-1.5"
+              href={href}
+              {...partialLinkAttributes(href, { push: false })}
+              aria-current={id === props.current ? 'true' : undefined}
+            >
+              <span class={`mt-0.5 ${id === props.current ? '' : 'invisible'}`}>
+                <Icon svg={Check} />
+              </span>
+              <span>
+                <span class="block font-medium">{name(id)}</span>
+                <span class="text-muted-foreground block text-xs">{t.rules.notes[id]}</span>
+              </span>
+            </a>
+          );
+        })}
         <p class="text-muted-foreground border-t px-2 pt-2 pb-1.5 text-xs">
           {t.rules.meaning}{' '}
           <a class="text-foreground underline underline-offset-4" href={helpHref('rules')}>
@@ -689,6 +694,8 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         <script dangerouslySetInnerHTML={{ __html: TOOLTIP_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: LOCAL_TIME_SCRIPT }} />
         <link rel="stylesheet" href={STYLESHEET_PATH} />
+        {/* htmx (in the client script) reads this as it loads: the pages style its loading state themselves (app.css). */}
+        <meta name="htmx-config" content="includeIndicatorCSS:false" />
         <script src={CLIENT_SCRIPT_PATH} defer />
         {/* Fetches a page while its link is hovered (speculation.ts), so the navigation starts from a warm response. */}
         <script type="speculationrules" dangerouslySetInnerHTML={{ __html: speculationRules() }} />
@@ -702,7 +709,10 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         <MessagesContext.Provider value={t}>
           {/* Stays at the top while the page scrolls, over the rows (their links sit at z-10), the page showing faintly
             through. Named for the cross-page view transition (app.css): it stays put while the page below it changes. */}
-          <header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur [view-transition-name:site-header]">
+          <header
+            id={SITE_HEADER_ID}
+            class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur [view-transition-name:site-header]"
+          >
             <div class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6">
               <a href="/" class="shrink-0 font-semibold tracking-tight whitespace-nowrap">
                 Be-Music Leaderboard
