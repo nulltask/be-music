@@ -89,7 +89,9 @@ test('?mode=play lets the viewer play: no seeking, and M is a lane rather than m
   await expect(hud.getByRole('button', { name: 'Unmute' })).toBeAttached();
   await page.keyboard.press('KeyM');
   await play.click();
-  await expect(hud.getByRole('button', { name: 'Pause', exact: true })).toBeAttached({ timeout: 30_000 });
+  // The picture is a Pause button too: ask the controls bar's.
+  const controls = hud.locator('be-music-playback-controls');
+  await expect(controls.getByRole('button', { name: 'Pause', exact: true })).toBeAttached({ timeout: 30_000 });
   await expect(hud.getByRole('slider', { name: 'Seek' })).toBeDisabled();
   await page.keyboard.press('KeyM');
   await expect(hud.getByRole('button', { name: 'Mute', exact: true })).toBeAttached();
