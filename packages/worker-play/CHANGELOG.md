@@ -5,8 +5,7 @@
 ### Patch Changes
 
 - 4a4b111: Keep a browser's Debug Menu settings in R2, addressed by a server-set device cookie that Safari's seven-day storage cap does not delete. Preserve edit revisions independently of the server clock, use conditional writes to reject stale updates, and retain reset revisions without settings values.
-- Updated dependencies [00139f5]
-  - @be-music/service-auth-client@0.1.2
+- Updated dependencies: `@be-music/service-auth-client@0.1.2`
 
 ## 0.1.1
 
@@ -15,8 +14,7 @@
 - 325e7bb: Run browser page requests through the Worker so an existing Accounts login automatically signs the visitor into Play.
   
   Rename the package from `@be-music/play` to `@be-music/worker-play` to identify its role consistently. Update imports and package filters to the new name.
-- Updated dependencies [325e7bb]
-  - @be-music/service-auth-client@0.1.1
+- Updated dependencies: `@be-music/service-auth-client@0.1.1`
 
 ## 0.1.0
 
@@ -32,5 +30,4 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/service-auth-client@0.1.0
+- Updated dependencies: `@be-music/service-auth-client@0.1.0`

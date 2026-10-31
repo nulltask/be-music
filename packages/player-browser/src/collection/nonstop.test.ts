@@ -47,3 +47,24 @@ describe('createNonstopAssets', () => {
     expect(assetPath(0, 'wav', 'hat.wav')).toBe('s0/Song C/wav/hat.wav');
   });
 });
+
+test('NONSTOP retains codec retries across prefix, bare path and parent-folder candidates', () => {
+  const chart = createEmptyJSON('bms');
+  chart.bms.pathWAV = 'audio/';
+  const files = source('a', {
+    'Song/sub/audio/kick.opus': bytes(1),
+    'Song/sub/kick.opus': bytes(2),
+    'Song/kick.m4a': bytes(3),
+  });
+  const { source: stitched, assetPath } = createNonstopAssets([
+    { chart, source: files, chartPath: 'Song/sub/main.bms' },
+  ]);
+  const path = assetPath(0, 'wav', 'kick.wav');
+  const excludedEntries = new Set<Uint8Array>();
+  for (const name of ['Song/sub/audio/kick.opus', 'Song/sub/kick.opus', 'Song/kick.m4a']) {
+    const entry = resolveChartAudioAsset(stitched, NONSTOP_CHART_PATH, path, { excludedEntries });
+    expect(entry).toBe(files.files.get(name));
+    excludedEntries.add(entry as Uint8Array);
+  }
+  expect(resolveChartAudioAsset(stitched, NONSTOP_CHART_PATH, path, { excludedEntries })).toBeUndefined();
+});

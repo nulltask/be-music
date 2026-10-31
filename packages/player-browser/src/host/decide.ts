@@ -114,7 +114,7 @@ function createDecideView(
       };
     }
     case 'built-in': {
-      const view = kit.skin.dom?.decide ? new DOMDecideView(kit) : new BuiltInDecideView(kit, source);
+      const view = kit.skin.dom?.decide ? new DOMDecideView(kit, source) : new BuiltInDecideView(kit, source);
       return {
         view,
         updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),

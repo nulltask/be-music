@@ -1,3 +1,4 @@
+import { getANSIFrameAlpha, setANSIFrameAlpha } from './bga-alpha.ts';
 import { isAbortError } from '@be-music/shared-utils/core';
 // Worker-spawn helpers live behind the dedicated `/workerize` sub-path so the package root stays browser-safe
 // (the implementation file statically imports `node:sea`).
@@ -5,7 +6,6 @@ import { invokeWorkerizedFunction, workerize } from '@be-music/shared-utils/work
 import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player-engine/display';
 import type { ImageFormat, DecodedImage } from './bga-image.ts';
 
-const TRANSPARENT_ALPHA_THRESHOLD = 16;
 const VIDEO_BLACK_BORDER_THRESHOLD = 8;
 const SPEC_BGA_CANVAS_SIZE = 256;
 export const TERMINAL_PIXEL_ASPECT_X = 2;
@@ -16,20 +16,24 @@ const resizedANSIFrameCache = new WeakMap<ANSIFrame, Map<string, ANSIFrame>>();
 /**
  * Composition mode for a BGA frame.
  *
- * - `'base'` — bottommost track. Every pixel renders, including pure black, since there's nothing visible behind it.
+ * - `'exbmp'` — already-keyed RGBA image. Preserve its coverage and unkeyed black on every plane.
+ *
+ * - `'base'` — bottommost track. Keep pure black; source alpha composites against the black BGA viewport.
  * - `'layer'` — BMS-style overlay (`#xxx07`). Pure-black BMP / video pixels render transparent so the foreground
  *   composites over the base BGA, mirroring the BMS spec's chroma-key convention.
  * - `'bmson-layer'` — bmson 1.0.0 spec overlay. "Unlike BMS Layer Channel `#xxx07`, black pixels will not be made
  *   transparent." Honor the PNG alpha channel but render BMP / video black pixels as black, since bmson layer artwork
  *   ships with a real alpha channel (or pre-multiplied composite intent).
  */
-export type FrameMode = 'base' | 'layer' | 'bmson-layer';
+export type FrameMode = 'base' | 'layer' | 'bmson-layer' | 'exbmp';
 
 export interface ANSIFrame {
   width: number;
   height: number;
   rgb: Uint8Array;
   opaqueMask: Uint8Array;
+  /** Straight RGB coverage (0..255); omitted means the binary mask alone. */
+  alpha?: Uint8Array;
 }
 
 interface LanczosAxisContribution {
@@ -92,7 +96,9 @@ function createConvertImageToSpecFrameWorker(): WorkerizedSpecFrameConverter {
       convertImageToSpecFrame,
       createSolidANSIFrame,
       fitSizeWithinSpecCanvas,
-      isOpaquePixel,
+      resolveImagePixelAlpha,
+      getANSIFrameAlpha,
+      setANSIFrameAlpha,
       resolveNearestImageSampleOffset,
       resampleDecodedImageRGBALanczos,
       createLanczosAxisContributions,
@@ -101,9 +107,10 @@ function createConvertImageToSpecFrameWorker(): WorkerizedSpecFrameConverter {
       sinc,
       DEFAULT_IMAGE_RESIZE_ALGORITHM,
       SPEC_BGA_CANVAS_SIZE,
-      TRANSPARENT_ALPHA_THRESHOLD,
     ],
-    true,
+    // Plain image/frame records need only structured cloning. isoworker's argument serializer transfers their
+    // buffers, leaving fallback conversion with detached pixel data when worker startup or execution fails.
+    false,
   ) as WorkerizedSpecFrameConverter;
 }
 
@@ -166,7 +173,7 @@ function convertImageToSpecFrame(
   const offsetY = 0;
   const resizedRGBA =
     resizeAlgorithm === 'lanczos'
-      ? resampleDecodedImageRGBALanczos(image, fittedSize.width, fittedSize.height)
+      ? resampleDecodedImageRGBALanczos(image, fittedSize.width, fittedSize.height, mode)
       : undefined;
 
   for (let targetYWithinImage = 0; targetYWithinImage < fittedSize.height; targetYWithinImage += 1) {
@@ -196,7 +203,8 @@ function convertImageToSpecFrame(
       const g = (resizedRGBA ?? image.data)[sampleOffset + 1] ?? 0;
       const b = (resizedRGBA ?? image.data)[sampleOffset + 2] ?? 0;
       const a = (resizedRGBA ?? image.data)[sampleOffset + 3] ?? 255;
-      if (!isOpaquePixel(r, g, b, a, image.format, mode)) {
+      const alpha = resizedRGBA ? a : resolveImagePixelAlpha(r, g, b, a, image.format, mode, image.hasAlphaChannel);
+      if (alpha === 0) {
         continue;
       }
 
@@ -205,7 +213,7 @@ function convertImageToSpecFrame(
       specFrame.rgb[targetRGBOffset] = r;
       specFrame.rgb[targetRGBOffset + 1] = g;
       specFrame.rgb[targetRGBOffset + 2] = b;
-      specFrame.opaqueMask[targetPixelOffset] = 1;
+      setANSIFrameAlpha(specFrame, targetPixelOffset, alpha);
     }
   }
 
@@ -225,7 +233,12 @@ function resolveNearestImageSampleOffset(
   return (sourceY * sourceWidth + sourceX) * 4;
 }
 
-function resampleDecodedImageRGBALanczos(image: DecodedImage, targetWidth: number, targetHeight: number): Uint8Array {
+function resampleDecodedImageRGBALanczos(
+  image: DecodedImage,
+  targetWidth: number,
+  targetHeight: number,
+  mode: FrameMode,
+): Uint8Array {
   const horizontalPlan = createLanczosAxisContributions(image.width, targetWidth);
   const verticalPlan = createLanczosAxisContributions(image.height, targetHeight);
   const horizontal = new Float32Array(targetWidth * image.height * 4);
@@ -242,10 +255,22 @@ function resampleDecodedImageRGBALanczos(image: DecodedImage, targetWidth: numbe
       for (let index = 0; index < contribution.sourceIndices.length; index += 1) {
         const sourceOffset = sourceRowOffset + contribution.sourceIndices[index]! * 4;
         const weight = contribution.weights[index] ?? 0;
-        r += (image.data[sourceOffset] ?? 0) * weight;
-        g += (image.data[sourceOffset + 1] ?? 0) * weight;
-        b += (image.data[sourceOffset + 2] ?? 0) * weight;
-        a += (image.data[sourceOffset + 3] ?? 255) * weight;
+        const red = image.data[sourceOffset] ?? 0;
+        const green = image.data[sourceOffset + 1] ?? 0;
+        const blue = image.data[sourceOffset + 2] ?? 0;
+        const alpha = resolveImagePixelAlpha(
+          red,
+          green,
+          blue,
+          image.data[sourceOffset + 3] ?? 255,
+          image.format,
+          mode,
+          image.hasAlphaChannel,
+        );
+        r += red * (alpha / 255) * weight;
+        g += green * (alpha / 255) * weight;
+        b += blue * (alpha / 255) * weight;
+        a += alpha * weight;
       }
       const horizontalOffset = horizontalRowOffset + targetX * 4;
       horizontal[horizontalOffset] = r;
@@ -273,9 +298,9 @@ function resampleDecodedImageRGBALanczos(image: DecodedImage, targetWidth: numbe
         a += horizontal[sourceOffset + 3] * weight;
       }
       const outputOffset = outputRowOffset + targetX * 4;
-      output[outputOffset] = clampToByte(r);
-      output[outputOffset + 1] = clampToByte(g);
-      output[outputOffset + 2] = clampToByte(b);
+      output[outputOffset] = a > 0 ? clampToByte((r * 255) / a) : 0;
+      output[outputOffset + 1] = a > 0 ? clampToByte((g * 255) / a) : 0;
+      output[outputOffset + 2] = a > 0 ? clampToByte((b * 255) / a) : 0;
       output[outputOffset + 3] = clampToByte(a);
     }
   }
@@ -382,7 +407,11 @@ function lanczosKernel(value: number): number {
   return sinc(distance) * sinc(distance / 3);
 }
 
-export function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode): ANSIFrame {
+export function convertImageToSourceFrame(
+  image: DecodedImage,
+  mode: FrameMode,
+  preserveVideoBorders = false,
+): ANSIFrame {
   const safeWidth = Math.max(1, Math.floor(image.width));
   const safeHeight = Math.max(1, Math.floor(image.height));
   const sourceFrame = createSolidANSIFrame(safeWidth, safeHeight, 0, 0, 0, 0);
@@ -394,7 +423,8 @@ export function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode):
       const g = image.data[sourceOffset + 1] ?? 0;
       const b = image.data[sourceOffset + 2] ?? 0;
       const a = image.data[sourceOffset + 3] ?? 255;
-      if (!isOpaquePixel(r, g, b, a, image.format, mode)) {
+      const alpha = resolveImagePixelAlpha(r, g, b, a, image.format, mode, image.hasAlphaChannel);
+      if (alpha === 0) {
         continue;
       }
 
@@ -403,11 +433,11 @@ export function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode):
       sourceFrame.rgb[targetRGBOffset] = r;
       sourceFrame.rgb[targetRGBOffset + 1] = g;
       sourceFrame.rgb[targetRGBOffset + 2] = b;
-      sourceFrame.opaqueMask[targetPixelOffset] = 1;
+      setANSIFrameAlpha(sourceFrame, targetPixelOffset, alpha);
     }
   }
 
-  return image.format === 'video' ? trimBlackVideoFrameBorders(sourceFrame) : sourceFrame;
+  return image.format === 'video' && !preserveVideoBorders ? trimBlackVideoFrameBorders(sourceFrame) : sourceFrame;
 }
 
 function trimBlackVideoFrameBorders(source: ANSIFrame): ANSIFrame {
@@ -461,7 +491,7 @@ function trimBlackVideoFrameBorders(source: ANSIFrame): ANSIFrame {
       trimmed.rgb[targetRGBOffset] = source.rgb[sourceRGBOffset] ?? 0;
       trimmed.rgb[targetRGBOffset + 1] = source.rgb[sourceRGBOffset + 1] ?? 0;
       trimmed.rgb[targetRGBOffset + 2] = source.rgb[sourceRGBOffset + 2] ?? 0;
-      trimmed.opaqueMask[targetPixelOffset] = 1;
+      setANSIFrameAlpha(trimmed, targetPixelOffset, getANSIFrameAlpha(source, sourcePixelOffset));
     }
   }
 
@@ -548,6 +578,7 @@ export function resizeANSIFrameWithAspectMode(
     resizeAlgorithm === 'lanczos' ? resampleANSIFrameLanczos(source, fitted.width, fitted.height) : undefined;
   const rgb = new Uint8Array(canvasWidth * canvasHeight * 3);
   const opaqueMask = new Uint8Array(canvasWidth * canvasHeight);
+  const result: ANSIFrame = { width: canvasWidth, height: canvasHeight, rgb, opaqueMask };
 
   for (let y = 0; y < fitted.height; y += 1) {
     const targetY = y + offsetY;
@@ -579,16 +610,10 @@ export function resizeANSIFrameWithAspectMode(
       rgb[targetRGBOffset] = sourceRGB[sourceRGBOffset] ?? 0;
       rgb[targetRGBOffset + 1] = sourceRGB[sourceRGBOffset + 1] ?? 0;
       rgb[targetRGBOffset + 2] = sourceRGB[sourceRGBOffset + 2] ?? 0;
-      opaqueMask[targetPixelOffset] = 1;
+      setANSIFrameAlpha(result, targetPixelOffset, getANSIFrameAlpha(resizedFrame ?? source, sourcePixelOffset));
     }
   }
 
-  const result = {
-    width: canvasWidth,
-    height: canvasHeight,
-    rgb,
-    opaqueMask,
-  };
   setCachedResizedANSIFrame(source, cacheKey, result);
   return result;
 }
@@ -618,10 +643,11 @@ function resampleANSIFrameLanczos(source: ANSIFrame, targetWidth: number, target
           continue;
         }
         const sourceRGBOffset = sourcePixelOffset * 3;
-        premultipliedR += (source.rgb[sourceRGBOffset] ?? 0) * weight;
-        premultipliedG += (source.rgb[sourceRGBOffset + 1] ?? 0) * weight;
-        premultipliedB += (source.rgb[sourceRGBOffset + 2] ?? 0) * weight;
-        alpha += 255 * weight;
+        const coverage = getANSIFrameAlpha(source, sourcePixelOffset);
+        premultipliedR += (source.rgb[sourceRGBOffset] ?? 0) * (coverage / 255) * weight;
+        premultipliedG += (source.rgb[sourceRGBOffset + 1] ?? 0) * (coverage / 255) * weight;
+        premultipliedB += (source.rgb[sourceRGBOffset + 2] ?? 0) * (coverage / 255) * weight;
+        alpha += coverage * weight;
       }
       const horizontalOffset = horizontalRowOffset + targetX * 4;
       horizontal[horizontalOffset] = premultipliedR;
@@ -656,33 +682,26 @@ function resampleANSIFrameLanczos(source: ANSIFrame, targetWidth: number, target
       resized.rgb[targetRGBOffset] = clampToByte((premultipliedR * 255) / alpha);
       resized.rgb[targetRGBOffset + 1] = clampToByte((premultipliedG * 255) / alpha);
       resized.rgb[targetRGBOffset + 2] = clampToByte((premultipliedB * 255) / alpha);
-      resized.opaqueMask[targetPixelOffset] = alpha >= 128 ? 1 : 0;
+      setANSIFrameAlpha(resized, targetPixelOffset, alpha);
     }
   }
 
   return resized;
 }
 
-function isOpaquePixel(r: number, g: number, b: number, a: number, format: ImageFormat, mode: FrameMode): boolean {
-  if (mode === 'base') {
-    return true;
-  }
-  // bmson-layer skips the BMS-style black chroma-key entirely (per the spec's explicit break from `#xxx07`'s
-  // convention), but still honors the PNG alpha channel — the spec only forbids the black-key shortcut, not the
-  // legitimate alpha information bmson authors deliver.
-  if (mode === 'bmson-layer') {
-    if (format === 'png') {
-      return a > TRANSPARENT_ALPHA_THRESHOLD;
-    }
-    return true;
-  }
-  if (format === 'bmp' || format === 'video') {
-    return !(r === 0 && g === 0 && b === 0);
-  }
-  if (format === 'png') {
-    return a > TRANSPARENT_ALPHA_THRESHOLD;
-  }
-  return true;
+/** PNG and encoded-alpha images keep coverage; alpha-less BMP/video retain the BMS black-key convention. */
+function resolveImagePixelAlpha(
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  format: ImageFormat,
+  mode: FrameMode,
+  hasAlphaChannel = false,
+): number {
+  if (mode === 'exbmp' || format === 'png') return a;
+  if (mode === 'layer' && (format === 'bmp' || format === 'video') && r === 0 && g === 0 && b === 0) return 0;
+  return hasAlphaChannel ? a : 255;
 }
 
 function fitSizeKeepingAspect(

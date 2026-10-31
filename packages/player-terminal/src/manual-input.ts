@@ -316,18 +316,34 @@ function parseKittyKeyboardEvents(chunk: string, key: readline.Key): KittyKeyboa
   }
 
   const events: KittyKeyboardEvent[] = [];
-  const normalizedSequence = sequence.replaceAll('\u001b[', '');
-  const regex = /([0-9]+(?::[0-9]+){0,2})(?:;([0-9]+(?::[0-9]+)?))?u/g;
+  // Preserve prefixless Ghostty modifier chunks, including concatenated press/release events.
+  const normalizedSequence = sequence.replace(
+    /(^|u)(44[123789](?::[0-9]+){0,2}(?:;[0-9]+(?::[0-9]+)?)?)(?=u)/g,
+    '$1\u001b[$2',
+  );
+  // eslint-disable-next-line no-control-regex
+  const regex = /\u001b\[([0-9]*(?::[0-9]+){0,2})(?:;([0-9]+(?::[0-9]+)?))?([u~PQS])/g;
 
   for (const match of normalizedSequence.matchAll(regex)) {
     const keyPart = match[1];
     if (typeof keyPart !== 'string') {
       continue;
     }
-    const keyCodeParts = keyPart.split(':');
-    const keyCode = parseNumericPart(keyCodeParts[0]);
+    const keyCodeParts = (keyPart || '1').split(':');
+    let keyCode = parseNumericPart(keyCodeParts[0]);
     if (keyCode === undefined) {
       continue;
+    }
+    // kitty keeps the legacy encodings for F1–F12, including event-type suffixes on releases/repeats.
+    // https://sw.kovidgoyal.net/kitty/keyboard-protocol/#functional-key-definitions
+    if (match[3] === '~') {
+      const index = [11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 24].indexOf(keyCode);
+      if (index < 0) continue;
+      keyCode = 57364 + index;
+    } else if (match[3] !== 'u') {
+      const index = { P: 0, Q: 1, S: 3 }[match[3] as 'P' | 'Q' | 'S'];
+      if (keyCode !== 1) continue;
+      keyCode = 57364 + index;
     }
     const shiftedKeyCode = parseNumericPart(keyCodeParts[1]);
     const baseKeyCode = parseNumericPart(keyCodeParts[2]);
@@ -400,6 +416,10 @@ function parseNumericPart(value: string | undefined): number | undefined {
 
 function resolveKittyInputTokens(event: KittyKeyboardEvent): Set<string> {
   const tokens = new Set<string>();
+  if (event.keyCode >= 57364 && event.keyCode <= 57387) {
+    tokens.add(`f${event.keyCode - 57364 + 1}`);
+    return tokens;
+  }
   const modifierBits = Math.max(0, event.modifiers - 1);
   const hasShift = (modifierBits & KITTY_MODIFIER_SHIFT_MASK) !== 0;
   const hasAlt = (modifierBits & KITTY_MODIFIER_ALT_MASK) !== 0;
@@ -481,6 +501,11 @@ function resolveKittyInputTokens(event: KittyKeyboardEvent): Set<string> {
 
 function resolveWin32InputTokens(event: Win32InputEvent): Set<string> {
   const tokens = new Set<string>();
+  // Winuser.h VK_F1 through VK_F24: https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+  if (event.virtualKeyCode >= 0x70 && event.virtualKeyCode <= 0x87) {
+    tokens.add(`f${event.virtualKeyCode - 0x70 + 1}`);
+    return tokens;
+  }
   const hasLeftAlt = (event.controlState & WIN32_CONTROL_STATE_LEFT_ALT) !== 0;
   const hasRightAlt = (event.controlState & WIN32_CONTROL_STATE_RIGHT_ALT) !== 0;
   const hasLeftCtrl = (event.controlState & WIN32_CONTROL_STATE_LEFT_CTRL) !== 0;

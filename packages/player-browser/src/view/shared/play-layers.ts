@@ -67,7 +67,7 @@ export class PlayLayers {
   readonly background: Graphics = new Graphics();
   /**
    * BGA composite layer. Sits below `skinLayer` so the skin's "BGA frame" decoration draws on top, and above
-   * `background` so the BGA is visible inside the play screen. One `Sprite` per layer (base / layer1+2 / POOR override)
+   * `background` so the BGA is visible inside the play screen. Sprites per track (base / layer / layer2 / POOR override)
    * is reused frame-to-frame to avoid Pixi child churn.
    */
   readonly bgaLayer: Container = new Container();

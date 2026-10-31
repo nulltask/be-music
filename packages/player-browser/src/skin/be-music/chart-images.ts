@@ -13,10 +13,10 @@ const log = logger('be-music-chart-images');
  */
 export const DEFAULT_SONG_IMAGE_CAPACITY = 32;
 
-/** The chart-relative path of `song`'s `kind` image (`#STAGEFILE`, `#BANNER`, `#BACKBMP`), when the chart names one. */
+/** The chart-relative path of a named loading, banner, background or pre-play title image. */
 export function resolveChartImagePath(chartEntry: LibraryChart, kind: BeMusicChartImageKind): string | undefined {
   const metadata = chartEntry.chart.metadata;
-  const path = kind === 'stageFile' ? metadata.stageFile : kind === 'banner' ? metadata.banner : metadata.backBMP;
+  const path = metadata[kind];
   return path !== undefined && path.trim().length > 0 ? path : undefined;
 }
 
@@ -40,6 +40,7 @@ export interface ChartImageCacheOptions {
  */
 export class ChartImageCache {
   private readonly images = new Map<string, ImageBitmap>();
+  private readonly imageURLs = new WeakMap<ImageBitmap, string | undefined>();
   private readonly pending = new Set<string>();
   private readonly unavailable = new Set<string>();
   private readonly options: ChartImageCacheOptions;
@@ -78,6 +79,28 @@ export class ChartImageCache {
     void this.load(key, source, chartEntry, path, this.generation);
     return undefined;
   };
+
+  /** The same decoded artwork for a DOM image. Canvas conversion also supports formats decoded by our adapters. */
+  lookupURL(chartEntry: LibraryChart, kind: BeMusicChartImageKind): string | undefined {
+    const image = this.lookup(chartEntry, kind);
+    if (!image) return undefined;
+    if (this.imageURLs.has(image)) return this.imageURLs.get(image);
+    let url: string | undefined;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.drawImage(image, 0, 0);
+        url = canvas.toDataURL('image/png');
+      }
+    } catch (error) {
+      log.debug('chart image cannot be presented on DOM', error);
+    }
+    this.imageURLs.set(image, url);
+    return url;
+  }
 
   /** Closes every image and forgets what was missing (e.g. after the song collection was replaced). */
   clear(): void {

@@ -234,6 +234,8 @@ async function handleUIInit(
       baseDir: message.runtime.baseDir,
       kittyGraphics: message.runtime.kittyGraphics,
       videoBGAStreaming: message.runtime.videoBGAStreaming,
+      keyBoundBGACues: message.runtime.keyBoundBGACues,
+      bmsonBGACues: message.runtime.bmsonBGACues,
       initialFrame: message.runtime.initialFrame,
       initialPaused: message.runtime.initialPaused,
       initialJudgeCombo: message.runtime.initialJudgeCombo,

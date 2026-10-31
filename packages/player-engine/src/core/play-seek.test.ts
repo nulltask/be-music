@@ -60,3 +60,15 @@ describe('resetPlayNotes', () => {
     expect(prepared.landmineNotes.every((mine) => !mine.judged)).toBe(true);
   });
 });
+
+test('seek rebuild retains exact BGA triggers even when a mine emits no judge-combo readout', () => {
+  const sink = createSeekRebuildSink(structuredClone(SUMMARY));
+  sink.emit({ kind: 'combo', seconds: 1, value: 1, reason: 'judge', judge: 'PERFECT' });
+  sink.emit({ kind: 'poor-bga', seconds: 1.2, action: 'trigger' });
+  sink.emit({ kind: 'poor-bga', seconds: 1.3, action: 'clear' });
+  expect(sink.bmsonBGAInputs).toEqual([
+    { seconds: 1, condition: 'play' },
+    { seconds: 1.2, condition: 'miss' },
+  ]);
+  expect(sink.judgments).toEqual([]);
+});

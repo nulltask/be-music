@@ -1,5 +1,24 @@
 # @be-music/chart-parser
 
+## 0.6.0
+
+### Minor Changes
+
+- ceb5fcc: Read boolean bmson up fields and retain them through Be-Music JSON so consumers can distinguish LN end sounds from ordinary taps.
+- 410843c: Read and preserve bmson info.title_image, including through Be-Music JSON normalization.
+- c6f70f4: Preserve beatoraja bmson BGA sequences, end markers and conditional image sets through raw input and Be-Music JSON normalization, including events with no ordinary image id, which keep the id absent instead of reading it as `0`.
+- c3b783a: Preserve nonexecuted bmson fields on valid normalized root, info, channel, note, timing and BGA nodes, including hidden-note damage, through Be-Music JSON without changing playback semantics.
+
+### Patch Changes
+
+- e4d00c9: Reject null, malformed and unsupported bmson versions before interpreting chart data, and support stable 1.0.0 with optional SemVer build metadata. Read a missing-version legacy v0.21 chart by converting its fields and timing as Bemuse does, instead of treating it as the modern format; a missing version on a chart with only 1.0.0 fields is rejected as ambiguous.
+- e66f84f: Retain every bmson sound, key and mine channel and every distinct BPM, STOP and SCROLL value beyond the two-character BMS key capacity; preserve long keys through Be-Music JSON reloads.
+- 2cfc7ae: Read nanasi `#EXBPMxx` as an alias of `#BPMxx`. Channel `08` tempo changes that only `#EXBPMxx` defined were dropped as undefined references, so such charts kept the previous tempo. The alias is stored and written back as `#BPMxx`, follows the file-order rule for its index and applies inside control-flow branches; Be-Music JSON that kept it in `metadata.extras` migrates into `resources.bpm` unless `#BPMxx` defines the index.
+- 3e1855e: Validate and preserve optional intrinsic sample gain through Be-Music JSON round trips, including case-sensitive base-62 slot ids.
+- 07a8c75: Preserve repeated OPTION declarations and their vendor arguments instead of retaining only the last line. Resolve conditional and unconditional declarations in original order, and retain the ordered program through Be-Music JSON.
+- afc65fb: Use the shared generic lane table for `generic-Nkeys` bmson with 1–70 keys. Out-of-range or malformed `generic-` hints are read as unknown hints (`beat-7k` where the lanes fit, as beatoraja does) instead of clamping them or routing extra columns into unrelated channel families.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`
+
 ## 0.5.0
 
 ### Minor Changes
@@ -9,16 +28,7 @@
 ### Patch Changes
 
 - 69df53c: Preserve extended bmson resource keys, source-audio slice coordinates and explicit TOTAL units when reading Be-Music JSON for stitched NONSTOP charts.
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [2e435b9]
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/chart-model@0.7.0`, `@be-music/chart-source@0.5.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.4.0
 
@@ -28,12 +38,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/shared-utils@0.5.0
+- Updated dependencies: `@be-music/chart-model@0.6.0`, `@be-music/chart-source@0.4.0`, `@be-music/shared-utils@0.5.0`
 
 ## 0.3.0
 
@@ -52,16 +57,12 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/shared-utils@0.4.0`
 ## 0.2.4
 
 ### Patch Changes
 
-- Updated dependencies [202a28b]
-  - @be-music/chart-model@0.4.0
+- Updated dependencies: `@be-music/chart-model@0.4.0`
 
 ## 0.2.3
 
@@ -71,27 +72,19 @@
 - b9922cf: Preserve beatoraja bmson long-note type extensions in the IR: `info.ln_type` and per-note `t` (1: LN, 2: CN, 3: HCN).
 - 4d5a89e: Accept the real-world control-flow spelling variants `#END IF`, bare `#END`, and `#ELSE IF n` as `#ENDIF` / `#ELSEIF n`. Previously such charts left the `#IF` block unterminated, so a non-matching `#RANDOM` roll silently dropped every line after the misspelled directive.
 - cdc42a1: BMS object data lines (`#mmmcc:data`) are now truncated at the first whitespace character. Trailing text no longer fabricates note events (e.g. `junk` becoming `JU`/`NK` objects) or inflates the position denominator of the legitimate tokens before it.
-- Updated dependencies [b9922cf]
-- Updated dependencies [ca1012c]
-  - @be-music/chart-source@0.2.2
-  - @be-music/shared-utils@0.3.0
-  - @be-music/chart-model@0.3.2
+- Updated dependencies: `@be-music/chart-source@0.2.2`, `@be-music/shared-utils@0.3.0`, `@be-music/chart-model@0.3.2`
 
 ## 0.2.2
 
 ### Patch Changes
 
-- Updated dependencies [73dff9a]
-  - @be-music/shared-utils@0.2.1
-  - @be-music/chart-source@0.2.1
-  - @be-music/chart-model@0.3.1
+- Updated dependencies: `@be-music/shared-utils@0.2.1`, `@be-music/chart-source@0.2.1`, `@be-music/chart-model@0.3.1`
 
 ## 0.2.1
 
 ### Patch Changes
 
-- Updated dependencies [06a2db9]
-  - @be-music/chart-model@0.3.0
+- Updated dependencies: `@be-music/chart-model@0.3.0`
 
 ## 0.2.0
 
@@ -101,12 +94,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-- Updated dependencies [135f822]
-  - @be-music/chart-model@0.2.0
-  - @be-music/chart-source@0.2.0
-  - @be-music/shared-utils@0.2.0
+- Updated dependencies: `@be-music/chart-model@0.2.0`, `@be-music/chart-source@0.2.0`, `@be-music/shared-utils@0.2.0`
 
 ## 0.1.0
 
@@ -116,7 +104,4 @@
 
 ### Patch Changes
 
-- Updated dependencies
-  - @be-music/chart-model@0.1.0
-  - @be-music/chart-source@0.1.0
-  - @be-music/shared-utils@0.1.0
+- Updated dependencies: `@be-music/chart-model@0.1.0`, `@be-music/chart-source@0.1.0`, `@be-music/shared-utils@0.1.0`

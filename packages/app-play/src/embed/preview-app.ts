@@ -1,8 +1,8 @@
 // The embed's preview player: loads the `?track=` archive, lists its charts when it has several, and plays the one
-// picked in AUTO from the preview skin, with video controls. `?course=` selects an LR2 / beatoraja course file;
+// picked from the preview skin, with video controls: in AUTO, or played by the viewer with `?mode=play`. `?course=` selects an LR2 / beatoraja course file;
 // staged courses advance automatically, NONSTOP courses use the shared stitching pipeline. `?chart=` naming a chart
 // (`findEmbedChart`) plays it on its own, as a track of one chart does. A play ends back on the list, or — for a chart played on its own — on a
-// replay button. Nothing is judged from input and nothing is recorded.
+// replay button. Nothing is recorded.
 
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-browser/audio';
 import {
@@ -35,7 +35,7 @@ import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import { previewArtworkPath } from './artwork.ts';
 import { findEmbedChart } from './chart-match.ts';
 import { createPreviewSkin, type PreviewChrome, type PreviewChromeState } from './preview-skin.ts';
-import type { EmbedTrack } from './track-url.ts';
+import type { EmbedMode, EmbedTrack } from './track-url.ts';
 
 /** How far ← / → seek. */
 const SEEK_STEP_SECONDS = 5;
@@ -64,6 +64,8 @@ export class PreviewApp {
   private readonly host = new PixiSceneHost();
   private readonly audio: AudioService = createAudioService();
   private readonly chrome: PreviewChromeController;
+  /** AUTO (`'preview'`), or the viewer's own play (`'play'`). */
+  private mode: EmbedMode = 'preview';
   private collection: BrowserChartCollection | undefined;
   /** The track's name, from its archive's file name. */
   private trackName = '';
@@ -94,6 +96,7 @@ export class PreviewApp {
       this.showMessage('Add ?track= with the URL of a chart archive (.zip) to preview it.');
       return;
     }
+    this.mode = track.mode;
     this.trackName = track.fileName.replace(/\.zip$/iu, '');
     const progress = new LoadingProgress();
     this.showOverlay(progress.element);
@@ -204,7 +207,7 @@ export class PreviewApp {
         chart,
         ...this.sourceOf(chart),
         ...overrides,
-        settings: { ...overrides.settings, autoPlay: true, layoutMode: 'standard' },
+        settings: { ...overrides.settings, autoPlay: this.mode === 'preview', layoutMode: 'standard' },
         audio: this.audio,
         host: this.host,
         on: {
@@ -331,7 +334,8 @@ export class PreviewApp {
 
   /**
    * The preview's shortcuts, ahead of the play's own keys: Space plays a play not started yet (a started one pauses
-   * through the play itself), ← / → seek, M mutes and F toggles full screen.
+   * through the play itself), ← / → seek, M mutes and F toggles full screen. While the viewer plays (`?mode=play`), M and F
+   * are lanes, so they go to the play.
    */
   private readonly handleKey = (event: KeyboardEvent): void => {
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
@@ -365,17 +369,24 @@ export class PreviewApp {
         return;
       }
       case 'KeyM': {
+        if (this.playsLanes(current)) return;
         take();
         const { volume, muted } = this.chrome.state();
         this.chrome.setVolume(volume, !muted);
         return;
       }
       case 'KeyF':
+        if (this.playsLanes(current)) return;
         take();
         this.chrome.toggleFullscreen();
         return;
     }
   };
+
+  /** The viewer is playing `current` by hand: the letter keys are its lanes. */
+  private playsLanes(current: { started: boolean } | undefined): boolean {
+    return this.mode === 'play' && current?.started === true;
+  }
 }
 
 /** The page's volume, mute and full-screen state, shared with the preview HUD. */

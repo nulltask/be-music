@@ -1,3 +1,4 @@
+import { getANSIFrameAlpha, setANSIFrameAlpha } from './bga-alpha.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   composeANSILines,
@@ -5,6 +6,7 @@ import {
   cropANSIFrameToOpaqueBounds,
   fillANSIFrameBackground,
   mergeCompositeFrames,
+  mergeCompositeLayers,
 } from './bga-compose.ts';
 import { type ANSIFrame, createSolidANSIFrame } from './bga-frame.ts';
 
@@ -59,6 +61,46 @@ describe('mergeCompositeFrames', () => {
   });
 });
 
+describe('mergeCompositeLayers', () => {
+  test('blends both overlays over the lower tracks without mutating source pixels', () => {
+    const base = createFrame(1, 1, [[0, 0, 255]]);
+    const red = createFrame(1, 1, [[255, 0, 0]]);
+    const green = createFrame(1, 1, [[0, 255, 0]]);
+    const result = mergeCompositeLayers([
+      { frame: base, opacity: 1 },
+      { frame: red, opacity: 128 / 255 },
+      { frame: green, opacity: 64 / 255 },
+    ])!;
+    expect(Array.from(result.rgb)).toEqual([96, 64, 95]);
+    expect(Array.from(base.rgb)).toEqual([0, 0, 255]);
+    expect(Array.from(red.rgb)).toEqual([255, 0, 0]);
+  });
+
+  test('keeps masked holes transparent to lower layers and centers a smaller frame', () => {
+    const result = mergeCompositeLayers([
+      {
+        frame: createFrame(3, 1, [
+          [0, 0, 255],
+          [0, 0, 255],
+          [0, 0, 255],
+        ]),
+        opacity: 1,
+      },
+      { frame: createFrame(1, 1, [[255, 0, 0]]), opacity: 128 / 255 },
+      { frame: createFrame(1, 1, [null]), opacity: 0.5 },
+    ])!;
+    expect(Array.from(result.rgb)).toEqual([0, 0, 255, 128, 0, 127, 0, 0, 255]);
+  });
+
+  test('dims a single frame over black and supports zero opacity without shrinking the canvas', () => {
+    const frame = createFrame(1, 1, [[255, 0, 0]]);
+    expect(Array.from(mergeCompositeLayers([{ frame, opacity: 128 / 255 }])!.rgb)).toEqual([128, 0, 0]);
+    expect(Array.from(mergeCompositeLayers([{ frame, opacity: 0 }])!.rgb)).toEqual([0, 0, 0]);
+    expect(mergeCompositeLayers([{ frame, opacity: 1 }])).toBe(frame);
+    expect(mergeCompositeLayers([{ opacity: 0.5 }])).toBeUndefined();
+  });
+});
+
 describe('fillANSIFrameBackground', () => {
   test('fills the transparent pixels with the colour', () => {
     const filled = fillANSIFrameBackground(createFrame(2, 1, [[1, 2, 3], null]), 9, 9, 9);
@@ -81,4 +123,39 @@ describe('cropANSIFrameToOpaqueBounds', () => {
     expect([empty.width, empty.height]).toEqual([1, 1]);
     expect([...empty.opaqueMask]).toEqual([0]);
   });
+});
+
+test('source-over preserves fractional coverage until the result is flattened against its background', () => {
+  const red = createSolidANSIFrame(1, 1, 255, 0, 0, 1);
+  const green = createSolidANSIFrame(1, 1, 0, 255, 0, 1);
+  setANSIFrameAlpha(red, 0, 128);
+  setANSIFrameAlpha(green, 0, 128);
+  const original = structuredClone([red, green]);
+  const combined = mergeCompositeFrames(red, green)!;
+  expect([...combined.rgb]).toEqual([85, 170, 0]);
+  expect(getANSIFrameAlpha(combined, 0)).toBe(192);
+  expect([...fillANSIFrameBackground(combined, 0, 0, 0).rgb]).toEqual([64, 128, 0]);
+  expect([red, green]).toEqual(original);
+});
+
+test('multiplies source coverage by plane opacity and tint without dropping very faint pixels', () => {
+  const red = createSolidANSIFrame(1, 1, 255, 0, 0, 1);
+  const blue = createSolidANSIFrame(1, 1, 0, 0, 255, 1);
+  setANSIFrameAlpha(red, 0, 128);
+  const output = mergeCompositeLayers([
+    { frame: blue, opacity: 1 },
+    { frame: red, opacity: 128 / 255, tint: 0x80ffff },
+  ])!;
+  expect([...output.rgb]).toEqual([32, 0, 191]);
+  setANSIFrameAlpha(red, 0, 1);
+  expect([...mergeCompositeFrames(blue, red)!.rgb]).toEqual([1, 0, 254]);
+  expect([...fillANSIFrameBackground(red, 0, 0, 0).rgb]).toEqual([1, 0, 0]);
+});
+
+test('trims transparent bounds without changing the surviving source alpha', () => {
+  const source = createSolidANSIFrame(3, 1, 255, 0, 0, 0);
+  setANSIFrameAlpha(source, 1, 64);
+  const cropped = cropANSIFrameToOpaqueBounds(source);
+  expect([cropped.width, cropped.height]).toEqual([1, 1]);
+  expect(getANSIFrameAlpha(cropped, 0)).toBe(64);
 });

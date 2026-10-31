@@ -157,16 +157,15 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
         playOptions = { ...playOptions, judgeTimingMs: recorded.judgeTimingMs };
       }
     } else if (replay === undefined && play.sharedEngineInputSignals !== undefined) {
+      const userHiSpeed = play.playState.view.hiSpeed.chartBase ?? play.playState.view.hiSpeed;
       const liveOptions: PlayOptions = {
         ...playOptions,
-        hiSpeed: play.playState.view.hiSpeed.player,
-        floatingHiSpeed: play.playState.view.hiSpeed.floating !== undefined,
+        hiSpeed: userHiSpeed.player,
+        floatingHiSpeed: userHiSpeed.floating !== undefined,
         judgeTimingMs: play.options.judgeTimingMs ?? playOptions.judgeTimingMs,
         noteDurationMs: play.options.noteDurationMs ?? playOptions.noteDurationMs,
         constantFadeMs: play.options.constantFadeMs ?? playOptions.constantFadeMs,
-        ...(play.playState.view.hiSpeed.normalLevel !== undefined
-          ? { normalHiSpeedLevel: play.playState.view.hiSpeed.normalLevel }
-          : {}),
+        ...(userHiSpeed.normalLevel !== undefined ? { normalHiSpeedLevel: userHiSpeed.normalLevel } : {}),
       };
       for (const cover of play.playState.view.covers) {
         const heightKey = cover.side === '1P' ? 'lift1P' : 'lift2P';
@@ -200,6 +199,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       stage,
       ...(stage === 'loading' && this.loadProgress !== undefined ? { progress: this.loadProgress } : {}),
       seconds,
+      chartText: play.engineFrame?.chartText,
       seekable: canSeekPlay(play),
       beat: play.currentBeat(seconds),
       ...(bpm !== undefined ? { bpm } : {}),

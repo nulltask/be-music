@@ -47,6 +47,7 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - **metadata**: Descriptive data outside the note body, such as title, artist, genre, comments, `#STAGEFILE`, `#BACKBMP`, and `#BANNER`.
 - **resource**: External audio, image, video, or text file referenced by a chart or skin.
 - **keysound**: Audio resource used for notes and BGM. BMS usually uses `#WAVxx`; bmson uses `sound_channels`.
+- **intrinsic sample gain**: A linear gain attached to a keysound slot, independent of the playback bus and user volume. Composition uses it to preserve a source stage's level.
 - **audio preview**: Short audio played on Music Select. Qualify this as audio preview when deployment environments are also discussed. The runtime prefers `#PREVIEW` or bmson `info.preview_music`.
 - **BGA**: Background image or video displayed during gameplay. BGA timelines can have base, layer, layer2, and POOR cues.
 - **POOR BGA**: Dedicated visual shown during `POOR` judgment when the chart defines one.

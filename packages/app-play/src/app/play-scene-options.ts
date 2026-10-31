@@ -165,6 +165,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     extraNoteDepth: playOptions.extraNoteDepth,
     extraNoteScratch: playOptions.extraNoteScratch,
     gaugeAutoShift: playOptions.gaugeAutoShift,
+    bmsonTotalMode: playOptions.bmsonTotalMode,
     bottomShiftableGauge: playOptions.bottomShiftableGauge,
     hiddenSudden1P: lanes.hiddenSudden1P,
     hiddenSudden2P: lanes.hiddenSudden2P,

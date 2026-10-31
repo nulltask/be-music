@@ -16,7 +16,7 @@ function eventPulse(event: BeMusicEvent): number {
 }
 
 function lookup<T>(json: BeMusicJSON, table: Record<string, T>, event: BeMusicEvent): T | undefined {
-  return table[normalizeObjectKey(event.value, resolveBMSBase(json))];
+  return table[normalizeObjectKey(event.value, resolveBMSBase(json), true)];
 }
 
 function eventsOn(json: BeMusicJSON, channel: string): BeMusicEvent[] {
@@ -110,8 +110,8 @@ describe('bmson key space', () => {
     }
   });
 
-  test('gives each of more than 1,295 sound / key / mine channels its own WAV slot', () => {
-    const soundChannels = Array.from({ length: 1_300 }, (_, index) => ({
+  test('gives each of more than 3,843 sound / key / mine channels its own WAV slot', () => {
+    const soundChannels = Array.from({ length: 3_844 }, (_, index) => ({
       name: `s${index}.wav`,
       notes: [{ x: 1, y: (index + 1) * RESOLUTION }],
     }));
@@ -122,7 +122,7 @@ describe('bmson key space', () => {
     });
 
     expect(json.bms.base).toBe(62);
-    expect(Object.keys(json.resources.wav)).toHaveLength(1_302);
+    expect(Object.keys(json.resources.wav)).toHaveLength(3_846);
     for (const event of eventsOn(json, '11')) {
       expect(lookup(json, json.resources.wav, event)).toBe(`s${eventPulse(event) / RESOLUTION - 1}.wav`);
     }

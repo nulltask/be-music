@@ -213,3 +213,22 @@ describe('FamilyKits.resolvePlayKit', () => {
     expect(await lr2.kits.resolvePlayKit(chart(), {})).toEqual({ kit: BUILT_IN_KIT });
   });
 });
+
+test('header-mode skins use the same pre-resolved chart as gameplay and old replay absence stays OFF', async () => {
+  const play7 = skin('play7'),
+    play14 = skin('play14');
+  const { kits, guiState } = fakes({ playSkins: { '7': play7, '14': play14 } });
+  guiState.battleMode = 'AUTO';
+  const entry = chart();
+  const selected = { ...entry.chart, bms: { ...entry.chart.bms, player: 2 } };
+  expect(await kits.resolvePlayKit(entry, { preResolved: { chart: selected, randomDraws: [] } })).toEqual({
+    kit: { family: 'lr2', skin: play14 },
+  });
+  expect(
+    await kits.resolvePlayKit(entry, {
+      preResolved: { chart: selected, randomDraws: [] },
+      replay: { play: {} } as BeMusicReplay,
+    }),
+  ).toEqual({ kit: { family: 'lr2', skin: play7 } });
+  expect(entry.chart.bms.player).toBeUndefined();
+});

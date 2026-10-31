@@ -117,3 +117,27 @@ Regenerate them through the editor API rather than by hand — that is what keep
 | `retrigger_a.wav`, `retrigger_b.wav`                       | The 2.2 s samples the retrigger charts need in order to overlap at all.           |
 | `ogg-test.ogg`                                             | The Vorbis sample `ogg-test.bms` declares.                                        |
 | `render-codec-test.mp3` / `.ogg` / `.opus`                 | The chart-audio-renderer's per-codec decode cases, and its missing-`.wav` fallback case. |
+
+## Video assets
+
+`bga-hevc.mp4` and `bga-vp9.webm` are generated 16×16 red clips (two frames at 1 fps), used by `player-terminal/src/bga-video.test.ts` to exercise real HEVC and VP9 decoding and the first-frame limit. They contain no third-party media. Regenerate with FFmpeg color input, `-frames:v 2 -pix_fmt yuv420p`, and respectively `-c:v libx265 -tag:v hvc1` or `-c:v libvpx-vp9`.
+
+`bga-bordered.webm` is a generated 32×32 VP9 clip with a black border and a 16×16 center that changes from red to green (two frames at 2 fps). Terminal tests verify native crop coordinates and late streaming frames against it. Generate red and lime 16×16 FFmpeg color inputs, each with `r=2:d=0.5,pad=32:32:8:8:color=black`; concatenate with `[0:v][1:v]concat=n=2:v=1:a=0` and encode with `-c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p`. It contains no third-party media.
+
+`bga-crop-colors.webm` is a generated 512×256 VP9 sheet (10 fps, 16 seconds, no audio). A 128×128 tile at `(256, 0)` changes from red to green at four seconds against black. Browser E2E tests cut nested 64×128 views from its native coordinates, start the two overlays at different times and retrigger the first. The moving Canvas crop and independent playheads must preserve the expected color sequence. No third-party media is included. Regenerate it with:
+
+```sh
+ffmpeg -f lavfi -i 'color=c=black:s=512x256:r=10:d=16' -vf "drawbox=x=256:y=0:w=128:h=128:color=0xed174b:t=fill:enable='lt(t,4)',drawbox=x=256:y=0:w=128:h=128:color=0x16cf63:t=fill:enable='gte(t,4)'" -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv420p -an bga-crop-colors.webm
+```
+
+`exbmp-video.webm` is a generated 256×256 VP9 clip (4 fps, 4 seconds, no audio). Four vertical bands contain white, red/green, black and white; the colored band changes from red to green at two seconds. Browser tests key white before cropping, preserve unselected black, switch from a placed alias to the whole movie, and draw a keyed base against the black viewport. It contains no third-party media. Regenerate with:
+
+```sh
+ffmpeg -f lavfi -i 'color=c=white:s=256x256:r=4:d=4,drawbox=x=64:y=0:w=64:h=256:color=0xed174b:t=fill:enable=lt(t\,2),drawbox=x=64:y=0:w=64:h=256:color=0x16cf63:t=fill:enable=gte(t\,2),drawbox=x=128:y=0:w=64:h=256:color=black:t=fill' -c:v libvpx-vp9 -lossless 1 -pix_fmt yuv444p -an exbmp-video.webm
+```
+
+## Authored EXBMP images
+
+`exbmp-rgb.png` is a 256×256, 4-bit indexed Adam7 PNG without encoded alpha. A blue border surrounds four vertical gray/gray/black/green stripes. The first gray stripe lies on the inclusive ±8 RGB key boundary; the second is outside it.
+
+`exbmp-alpha.png` is an RGBA8 PNG with the same border and black/green stripes. Its first two stripes share RGB `(255, 228, 173)` with alpha 64 and 65, respectively, verifying exact alpha matching and preservation of the adjacent value. Both images are authored fixtures without third-party media. Browser tests cover all four renderer families, aliases, disabled all-zero keys and the black viewport behind a keyed base.

@@ -1,4 +1,9 @@
-import { layoutTabularRun, type BeMusicLaneKind, type BeMusicRect } from '@be-music/player-skin-sdk';
+import {
+  layoutTabularRun,
+  longNoteCentreLineAlpha,
+  type BeMusicLaneKind,
+  type BeMusicRect,
+} from '@be-music/player-skin-sdk';
 import type {
   BeMusicBGAData,
   BeMusicBombsData,
@@ -56,31 +61,61 @@ export function paintBGA(ctx: BeMusicPlayfieldPaintContext, data: BeMusicBGAData
   ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
   const frame = data.frame;
   if (!frame) return;
-  if (frame.poorActive && !frame.poorOverlays) {
-    if (frame.poor) drawBGAImage(ctx, frame.poor, rect);
-    return;
+  const inheritedAlpha = ctx.globalAlpha;
+  for (const stack of frame.stacks ?? [frame]) {
+    const alpha = inheritedAlpha * ('alpha' in stack ? stack.alpha : 1);
+    const draw = (track: 'base' | 'layer' | 'layer2' | 'poor'): void => {
+      const image = stack[track];
+      if (!image) return;
+      ctx.globalAlpha = alpha * (stack.opacity?.[track] ?? 1);
+      drawBGAImage(
+        ctx,
+        image,
+        rect,
+        frame.stacks !== undefined && (track === 'base' || (track === 'poor' && !stack.poorOverlays)),
+        stack.origins?.[track],
+      );
+    };
+    if (stack.poorActive && !stack.poorOverlays) draw('poor');
+    else {
+      draw('base');
+      draw('layer');
+      draw('layer2');
+      if (stack.poorActive && stack.poorOverlays) draw('poor');
+    }
   }
-  if (frame.base) drawBGAImage(ctx, frame.base, rect);
-  if (frame.layer) drawBGAImage(ctx, frame.layer, rect);
-  if (frame.poorActive && frame.poorOverlays && frame.poor) drawBGAImage(ctx, frame.poor, rect);
+  ctx.globalAlpha = inheritedAlpha;
 }
 
 /** Where `image` of `width` x `height` goes in the BGA `rect` (see {@link paintBGA}). */
-export function placeBGAImage(width: number, height: number, isVideo: boolean, rect: BeMusicRect): BeMusicRect {
+export function placeBGAImage(
+  width: number,
+  height: number,
+  isVideo: boolean,
+  rect: BeMusicRect,
+  origin?: { x: number; y: number },
+): BeMusicRect {
   if (isVideo || !(width > 0) || !(height > 0) || Math.max(width, height) > BGA_CANVAS_SIZE) return { ...rect };
   const scaleX = rect.w / BGA_CANVAS_SIZE;
   const scaleY = rect.h / BGA_CANVAS_SIZE;
   return {
-    x: rect.x + Math.floor((BGA_CANVAS_SIZE - width) / 2) * scaleX,
-    y: rect.y,
+    x: rect.x + (origin?.x ?? Math.floor((BGA_CANVAS_SIZE - width) / 2)) * scaleX,
+    y: rect.y + (origin?.y ?? 0) * scaleY,
     w: width * scaleX,
     h: height * scaleY,
   };
 }
 
-function drawBGAImage(ctx: BeMusicPlayfieldPaintContext, image: CanvasImageSource, rect: BeMusicRect): void {
+function drawBGAImage(
+  ctx: BeMusicPlayfieldPaintContext,
+  image: CanvasImageSource,
+  rect: BeMusicRect,
+  fillCanvas = false,
+  origin?: { x: number; y: number },
+): void {
   const { width, height, isVideo } = imageSize(image);
-  const placed = placeBGAImage(width, height, isVideo, rect);
+  const placed = placeBGAImage(width, height, isVideo, rect, origin);
+  if (fillCanvas && (placed.w < rect.w || placed.h < rect.h)) ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
   ctx.drawImage(image, placed.x, placed.y, placed.w, placed.h);
 }
 
@@ -125,6 +160,12 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
     ctx.fillStyle = NOTE_COLORS[note.kind];
     ctx.globalAlpha = (note.state === 'dropped' ? 0.15 : 0.35) * (note.alpha ?? 1);
     ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, Math.max(1, note.bottom - note.top));
+    // A white centre line down the body, the long-note shape every built-in skin shares; let go early, it fades out.
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha =
+      (note.state === 'dropped' ? 0.3 : 0.6) * (note.alpha ?? 1) * longNoteCentreLineAlpha(note.releasedElapsedMs);
+    ctx.fillRect(note.x + note.w / 2 - 1, note.top - NOTE_HEIGHT, 2, Math.max(1, note.bottom - note.top));
+    ctx.fillStyle = NOTE_COLORS[note.kind];
     ctx.globalAlpha = (note.state === 'dropped' ? 0.5 : 1) * (note.alpha ?? 1);
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
     if (note.mode === 'ln') ctx.globalAlpha *= 0.4;

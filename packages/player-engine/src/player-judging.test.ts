@@ -7,7 +7,7 @@ vi.mock('../../player-node-audio/src/audio-sink.ts', async () =>
 );
 
 import { createEmptyJSON } from '../../chart-source/src/index.ts';
-import { parseChart } from '../../chart-parser/src/index.ts';
+import { parseChart, parseBmson } from '../../chart-parser/src/index.ts';
 
 import { preparePlaybackChartData } from './core/bootstrap.ts';
 import { parseReplay, serializeReplay, type BeMusicReplay } from './replay/index.ts';
@@ -433,4 +433,48 @@ describe('player', () => {
     expect(summary.bad).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
   });
+});
+
+test('AUTO plays and logs a bmson sample beyond the two-character BMS capacity', async () => {
+  const json = parseBmson(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 120 },
+      sound_channels: Array.from({ length: 3_844 }, (_, index) => ({
+        name: `sample-${index}.wav`,
+        notes: index === 3_843 ? [{ x: 1, y: 0 }] : [],
+      })),
+    }),
+  );
+  const output: string[] = [];
+  const triggered: string[] = [];
+  await autoPlay(json, {
+    speed: 240,
+    leadInMs: 0,
+    audio: true,
+    tui: false,
+    writeOutput: (text) => {
+      output.push(text);
+    },
+    createAudioSession: async () => ({
+      backendLabel: 'recording-audio',
+      chartStartDelayMs: 0,
+      start: () => undefined,
+      pause: () => undefined,
+      resume: () => undefined,
+      finish: async () => undefined,
+      dispose: async () => undefined,
+      triggerEvent: (event) => {
+        triggered.push(event.value);
+      },
+      stopChannel: () => undefined,
+    }),
+  });
+  expect(triggered).toEqual(['100']);
+  expect(
+    output.some(
+      (line) =>
+        line.includes('kind:sample-trigger') && line.includes('sample:100') && line.includes('file:sample-3843.wav'),
+    ),
+  ).toBe(true);
 });

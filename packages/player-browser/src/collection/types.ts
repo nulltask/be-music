@@ -21,6 +21,8 @@ export interface BrowserAssetSource {
   kind: ChartSourceKind;
   label: string;
   files: ReadonlyMap<string, BrowserAssetEntry>;
+  /** Composite charts retain each stage's ordered codec/folder candidates under the stitched resource path. */
+  audioFallbacks?: ReadonlyMap<string, readonly BrowserAssetEntry[]>;
 }
 
 /** The charts loaded from every dropped source: a `Library` of `@be-music/player-scene-model` a select screen browses. */

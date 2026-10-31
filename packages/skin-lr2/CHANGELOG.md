@@ -1,5 +1,16 @@
 # @be-music/skin-lr2
 
+## 0.5.0
+
+### Minor Changes
+
+- 3928de4: Select the proper play skin for opt-in PLAYER header modes and label explicit COUPLE selections.
+
+### Patch Changes
+
+- afc65fb: Borrow a single-player theme frame for generic bmson keyboards while their note columns use the host fallback geometry. Keep unknown key counts from producing an invalid key-mode operation.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`, `@be-music/player-scene-model@0.4.0`
+
 ## 0.4.0
 
 ### Minor Changes
@@ -20,54 +31,7 @@
 ### Patch Changes
 
 - a83e326: Use the renamed That-Which-Must-Not-Be-Named rank helpers when resolving play and result skin state.
-- Updated dependencies [ba3cc20]
-- Updated dependencies [7fca9a9]
-- Updated dependencies [a9cc3d7]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [fcaef41]
-- Updated dependencies [7f0386b]
-- Updated dependencies [45aff53]
-- Updated dependencies [1c97afd]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [78faa63]
-- Updated dependencies [3d5e880]
-- Updated dependencies [21f705d]
-- Updated dependencies [a8896a9]
-- Updated dependencies [b1ca2ce]
-- Updated dependencies [6e676fe]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [9f41b30]
-- Updated dependencies [f994ec4]
-- Updated dependencies [4371c72]
-- Updated dependencies [acba3d5]
-- Updated dependencies [3e694df]
-- Updated dependencies [3e694df]
-- Updated dependencies [c35b845]
-- Updated dependencies [a83e326]
-- Updated dependencies [a8896a9]
-- Updated dependencies [85f13dc]
-- Updated dependencies [3c2ea6b]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [b09a6cf]
-- Updated dependencies [85e11f7]
-- Updated dependencies [d0939cc]
-- Updated dependencies [3e694df]
-- Updated dependencies [85250d8]
-- Updated dependencies [2e435b9]
-  - @be-music/player-engine@0.11.0
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/player-scene-model@0.3.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/player-engine@0.11.0`, `@be-music/chart-model@0.7.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-scene-model@0.3.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.3.0
 
@@ -79,16 +43,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [dca9a2f]
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/player-engine@0.10.0
-  - @be-music/player-scene-model@0.2.0
-  - @be-music/shared-utils@0.5.0
+- Updated dependencies: `@be-music/chart-model@0.6.0`, `@be-music/chart-source@0.4.0`, `@be-music/player-engine@0.10.0`, `@be-music/player-scene-model@0.2.0`, `@be-music/shared-utils@0.5.0`
 
 ## 0.2.0
 
@@ -104,12 +59,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/player-engine@0.9.0
-  - @be-music/player-scene-model@0.1.0
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/player-engine@0.9.0`, `@be-music/player-scene-model@0.1.0`, `@be-music/shared-utils@0.4.0`
 ## 0.1.6
 
 ### Patch Changes
@@ -117,8 +67,7 @@
 - 202a28b: Pick a play skin for 24-key charts instead of returning nothing.
   
   LR2 never shipped a keyboard-mode skin, so `pickLr2PlaySkin` now maps the `'24'` / `'48'` chart variants onto the SP / DP That-Which-Must-Not-Be-Named fallback chains (`play_7` first for 24 keys, `play_14` first for 48). The mounted skin supplies the frame, gauge, and judge graphics while the 24 lanes themselves render through the host's fallback playfield.
-- Updated dependencies [202a28b]
-  - @be-music/chart-model@0.4.0
+- Updated dependencies: `@be-music/chart-model@0.4.0`
 
 ## 0.1.5
 
@@ -130,11 +79,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [b9922cf]
-- Updated dependencies [ca1012c]
-  - @be-music/chart-source@0.2.2
-  - @be-music/shared-utils@0.3.0
-  - @be-music/chart-model@0.3.2
+- Updated dependencies: `@be-music/chart-source@0.2.2`, `@be-music/shared-utils@0.3.0`, `@be-music/chart-model@0.3.2`
 
 ## 0.1.3
 
@@ -148,28 +93,19 @@
   Fixes the LR2 default `decide.lr2skin` regression where slide-out keyframes flying elements off the right side dragged the detected canvas up to 1920×1080 and shrunk the on-screen chrome into the top-left quadrant.
 
 - 69f77d1: Cache a `BasenameIndex` per source map (WeakMap-keyed) bucketed by lowercase basename, with parent / grandparent path slices precomputed so `resolveLr2IncludePath` / `resolveLr2AssetBytes`'s suffix-match comparisons don't re-lower on every call. The LR2 default theme ships hundreds of files; the previous `[...sourceFiles.keys()].find(...)` pattern dominated theme load + every per-frame `#CUSTOMFILE` resolve.
-- Updated dependencies [73dff9a]
-  - @be-music/shared-utils@0.2.1
-  - @be-music/chart-source@0.2.1
-  - @be-music/chart-model@0.3.1
+- Updated dependencies: `@be-music/shared-utils@0.2.1`, `@be-music/chart-source@0.2.1`, `@be-music/chart-model@0.3.1`
 
 ## 0.1.2
 
 ### Patch Changes
 
-- Updated dependencies [06a2db9]
-  - @be-music/chart-model@0.3.0
+- Updated dependencies: `@be-music/chart-model@0.3.0`
 
 ## 0.1.1
 
 ### Patch Changes
 
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-- Updated dependencies [135f822]
-  - @be-music/chart-model@0.2.0
-  - @be-music/chart-source@0.2.0
-  - @be-music/shared-utils@0.2.0
+- Updated dependencies: `@be-music/chart-model@0.2.0`, `@be-music/chart-source@0.2.0`, `@be-music/shared-utils@0.2.0`
 
 ## 0.1.0
 
@@ -179,6 +115,4 @@
 
 ### Patch Changes
 
-- Updated dependencies
-  - @be-music/chart-source@0.1.0
-  - @be-music/shared-utils@0.1.0
+- Updated dependencies: `@be-music/chart-source@0.1.0`, `@be-music/shared-utils@0.1.0`

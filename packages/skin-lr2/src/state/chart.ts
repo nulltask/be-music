@@ -54,7 +54,7 @@ const KEY_MODE_OPS: Readonly<Record<KeyMode, number>> = {
 
 /** LR2's key-mode op (160-164) for a library chart: its key mode (`resolveLibraryChartKeyMode`), 24-key ones folded. */
 export function resolveLR2KeyModeOp(chart: LibraryChart): number {
-  return KEY_MODE_OPS[resolveLibraryChartKeyMode(chart)];
+  return KEY_MODE_OPS[resolveLibraryChartKeyMode(chart)] ?? LR2_OP.KEYS_7;
 }
 
 /** LR2's `#DIFFICULTY` op (150 undefined, 151 BEGINNER … 155 INSANE); a missing or unknown difficulty is undefined. */

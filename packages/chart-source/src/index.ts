@@ -1,3 +1,17 @@
+import { cloneJSONFields, type JSONFields } from './bmson-extra-fields.ts';
+export {
+  cloneJSONFields,
+  collectBmsonExtraFields,
+  type JSONValue,
+  type JSONFields,
+  type BmsonFieldScope,
+} from './bmson-extra-fields.ts';
+
+/** Opaque source annotations, excluded from playback and fingerprints. */
+export interface BmsonExtraFields {
+  extraFields?: JSONFields;
+}
+
 import { normalizeASCIIBase36Code, normalizeASCIIBase62Code } from '@be-music/shared-utils/core';
 
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
@@ -14,6 +28,8 @@ export interface BeMusicMetadata {
   comment?: string;
   /** `#STAGEFILE`: full-size loading screen image. */
   stageFile?: string;
+  /** bmson `info.title_image`: title artwork shown before play, distinct from the loading image. */
+  titleImage?: string;
   /** `#BACKBMP`: select-screen banner / preview image (typically 256×256). */
   backBMP?: string;
   /** `#BANNER`: small banner image (typically 300×80). */
@@ -28,6 +44,8 @@ export interface BeMusicMetadata {
 
 export interface BMSResources {
   wav: Record<string, string>;
+  /** Intrinsic per-slot linear gain, e.g. a composed NONSTOP stage's VOLWAV. Omitted slots use unity. */
+  wavGain?: Record<string, number>;
   bmp: Record<string, string>;
   bpm: Record<string, number>;
   stop: Record<string, number>;
@@ -41,10 +59,12 @@ export interface BeMusicMeasure {
 
 export type BeMusicPosition = readonly [numerator: number, denominator: number];
 
-export interface BmsonEventExtensions {
+export interface BmsonEventExtensions extends BmsonExtraFields {
   /** Source-audio slice coordinates retained by a stitched NONSTOP chart, independent of FIT placement. */
   sampleOffsetSeconds?: number;
   sampleDurationSeconds?: number;
+  /** beatoraja extension: the source slice belongs to the LN ending on this lane and pulse. */
+  up?: boolean;
   l?: number;
   c?: boolean;
   /**
@@ -69,7 +89,7 @@ export interface BeMusicEvent {
   bmson?: BmsonEventExtensions;
 }
 
-export interface BmsonInfoExtensions {
+export interface BmsonInfoExtensions extends BmsonExtraFields {
   title?: string;
   subtitle?: string;
   artist?: string;
@@ -96,33 +116,52 @@ export interface BmsonInfoExtensions {
   lnType?: number;
   backImage?: string;
   eyecatchImage?: string;
+  titleImage?: string;
   bannerImage?: string;
   previewMusic?: string;
 }
 
-export interface BmsonBGAHeaderEntry {
+export interface BmsonBGAHeaderEntry extends BmsonExtraFields {
   id: number;
   name: string;
 }
 
-export interface BmsonBGAEvent {
+export interface BmsonBGAEvent extends BmsonExtraFields {
   y: number;
-  id: number;
+  /** Absent when the source omits it, as an `id_set`-only layer event may; beatoraja then reads Java's default 0. */
+  id?: number;
+  /** beatoraja layer-event alternatives, in authored order; overrides id for layer_events when present. */
+  idSet?: number[];
+  condition?: string;
+  interval?: number;
 }
 
-export interface BmsonBGAExtensions {
+export interface BmsonBGASequenceFrame extends BmsonExtraFields {
+  /** Elapsed milliseconds from the sequence trigger, independent of pulse resolution. */
+  time: number;
+  /** Zero-based bga_header array index, as in beatoraja. Missing id (or -2147483648) ends the sequence. */
+  id?: number;
+}
+
+export interface BmsonBGASequence extends BmsonExtraFields {
+  id: number;
+  sequence: BmsonBGASequenceFrame[];
+}
+
+export interface BmsonBGAExtensions extends BmsonExtraFields {
+  sequences?: BmsonBGASequence[];
   header: BmsonBGAHeaderEntry[];
   events: BmsonBGAEvent[];
   layerEvents: BmsonBGAEvent[];
   poorEvents: BmsonBGAEvent[];
 }
 
-export interface BmsonBPMEventEntry {
+export interface BmsonBPMEventEntry extends BmsonExtraFields {
   y: number;
   bpm: number;
 }
 
-export interface BmsonStopEventEntry {
+export interface BmsonStopEventEntry extends BmsonExtraFields {
   y: number;
   duration: number;
 }
@@ -131,21 +170,23 @@ export interface BmsonStopEventEntry {
  * beatoraja extension — `scroll_events[]` shape. From pulse `y` on, the lane scrolls at `rate` times its normal speed
  * (BMS `#SCROLLxx`), until the next scroll event.
  */
-export interface BmsonScrollEventEntry {
+export interface BmsonScrollEventEntry extends BmsonExtraFields {
   y: number;
   rate: number;
 }
 
-export interface BmsonSoundNoteEntry {
+export interface BmsonSoundNoteEntry extends BmsonExtraFields {
   x?: number;
   y: number;
   l?: number;
   c?: boolean;
+  /** beatoraja extension: attach this source slice to an LN end instead of creating a tap. */
+  up?: boolean;
   /** beatoraja bmson extension — per-note long-note type (`1` = LN, `2` = CN, `3` = HCN) for notes with `l > 0`. */
   t?: number;
 }
 
-export interface BmsonSoundChannelEntry {
+export interface BmsonSoundChannelEntry extends BmsonExtraFields {
   name: string;
   notes: BmsonSoundNoteEntry[];
 }
@@ -155,7 +196,7 @@ export interface BmsonSoundChannelEntry {
  * on a lane that are never judged, which the parser turns into BMS invisible objects (`3x` / `4x`). beatoraja reads
  * only `x` and `y` from them.
  */
-export interface BmsonKeyNoteEntry {
+export interface BmsonKeyNoteEntry extends BmsonExtraFields {
   x?: number;
   y: number;
   /** @deprecated Not read: hidden notes have no length. Kept so older IR producers still type-check. */
@@ -169,7 +210,7 @@ export interface BmsonKeyNoteEntry {
   damage?: number;
 }
 
-export interface BmsonKeyChannelEntry {
+export interface BmsonKeyChannelEntry extends BmsonExtraFields {
   name: string;
   notes: BmsonKeyNoteEntry[];
 }
@@ -178,18 +219,23 @@ export interface BmsonKeyChannelEntry {
  * beatoraja extension — `mine_channels[].notes[]` shape. Each note is a mine on lane `x` at pulse `y`, with a gauge
  * `damage` (0..100 percent). The channel `name` is the sample played when the mine explodes.
  */
-export interface BmsonMineNoteEntry {
+export interface BmsonMineNoteEntry extends BmsonExtraFields {
   x?: number;
   y: number;
   damage?: number;
 }
 
-export interface BmsonMineChannelEntry {
+export interface BmsonMineChannelEntry extends BmsonExtraFields {
   name: string;
   notes: BmsonMineNoteEntry[];
 }
 
-export interface BmsonExtensions {
+export interface BmsonExtensions extends BmsonExtraFields {
+  /** Opaque channel annotations keyed by the parser-assigned WAV slot. */
+  channelExtraFields?: Record<string, JSONFields>;
+  channelKinds?: Record<string, 'sound' | 'key' | 'mine'>;
+  /** Barline annotations keyed by normalized pulse. */
+  lineExtraFields?: Record<string, JSONFields>;
   version?: string;
   info: BmsonInfoExtensions;
   bga: BmsonBGAExtensions;
@@ -277,7 +323,12 @@ export interface BMSExtensions {
   pathWAV?: string;
   baseBPM?: number;
   stp: string[];
+  /** Legacy last unconditional #OPTION declaration (last active declaration after resolving branches). */
   option?: string;
+  /** Whole #OPTION declaration payloads in source order, without splitting vendor arguments. */
+  options?: string[];
+  /** The control-flow program includes every #OPTION, including unconditional declarations, in source order. */
+  optionHeadersInControlFlow?: true;
   changeOption: Record<string, string>;
   wavCmd?: string;
   /**
@@ -415,17 +466,35 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
   const bmsSourceLines = json.preservation.bms.sourceLines.map(cloneControlFlowEntry);
   const objectLines = json.preservation.bms.objectLines.map(cloneBMSObjectLineEntry);
   const lines = [...json.preservation.bmson.lines];
-  const bpmEvents = json.preservation.bmson.bpmEvents.map((event) => ({ y: event.y, bpm: event.bpm }));
-  const stopEvents = json.preservation.bmson.stopEvents.map((event) => ({ y: event.y, duration: event.duration }));
-  const scrollEvents = json.preservation.bmson.scrollEvents?.map((event) => ({ y: event.y, rate: event.rate }));
+  const bpmEvents = json.preservation.bmson.bpmEvents.map((event) => ({
+    y: event.y,
+    bpm: event.bpm,
+    ...copyExtras(event),
+  }));
+  const stopEvents = json.preservation.bmson.stopEvents.map((event) => ({
+    y: event.y,
+    duration: event.duration,
+    ...copyExtras(event),
+  }));
+  const scrollEvents = json.preservation.bmson.scrollEvents?.map((event) => ({
+    y: event.y,
+    rate: event.rate,
+    ...copyExtras(event),
+  }));
   const soundChannels = json.preservation.bmson.soundChannels.map((channel) => ({
     name: channel.name,
-    notes: channel.notes.map((note) => ({ ...note })),
+    ...copyExtras(channel),
+    notes: channel.notes.map((note) => ({ ...note, ...copyExtras(note) })),
   }));
-  const header = json.bmson.bga.header.map((entry) => ({ id: entry.id, name: entry.name }));
-  const bgaEvents = json.bmson.bga.events.map((event) => ({ y: event.y, id: event.id }));
-  const layerEvents = json.bmson.bga.layerEvents.map((event) => ({ y: event.y, id: event.id }));
-  const poorEvents = json.bmson.bga.poorEvents.map((event) => ({ y: event.y, id: event.id }));
+  const header = json.bmson.bga.header.map((entry) => ({ id: entry.id, name: entry.name, ...copyExtras(entry) }));
+  const cloneBGAEvent = (event: BmsonBGAEvent): BmsonBGAEvent => ({
+    ...event,
+    ...copyExtras(event),
+    ...(event.idSet !== undefined ? { idSet: [...event.idSet] } : {}),
+  });
+  const bgaEvents = json.bmson.bga.events.map(cloneBGAEvent);
+  const layerEvents = json.bmson.bga.layerEvents.map(cloneBGAEvent);
+  const poorEvents = json.bmson.bga.poorEvents.map(cloneBGAEvent);
 
   return {
     format: json.format,
@@ -436,6 +505,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
     },
     resources: {
       wav: { ...json.resources.wav },
+      ...(json.resources.wavGain !== undefined ? { wavGain: { ...json.resources.wavGain } } : {}),
       bmp: { ...json.resources.bmp },
       bpm: { ...json.resources.bpm },
       stop: { ...json.resources.stop },
@@ -451,6 +521,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
       argb: { ...json.bms.argb },
       stp: [...json.bms.stp],
       wavCmds: [...json.bms.wavCmds],
+      ...(json.bms.options !== undefined ? { options: [...json.bms.options] } : {}),
       ...(json.bms.wavNameBytePrefixes !== undefined
         ? { wavNameBytePrefixes: { ...json.bms.wavNameBytePrefixes } }
         : {}),
@@ -464,11 +535,38 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
     },
     bmson: {
       ...json.bmson,
+      ...copyExtras(json.bmson),
+      ...(json.bmson.channelKinds ? { channelKinds: { ...json.bmson.channelKinds } } : {}),
+      ...(json.bmson.channelExtraFields
+        ? {
+            channelExtraFields: Object.fromEntries(
+              Object.entries(json.bmson.channelExtraFields).map(([key, fields]) => [key, cloneJSONFields(fields)!]),
+            ),
+          }
+        : {}),
+      ...(json.bmson.lineExtraFields
+        ? {
+            lineExtraFields: Object.fromEntries(
+              Object.entries(json.bmson.lineExtraFields).map(([key, fields]) => [key, cloneJSONFields(fields)!]),
+            ),
+          }
+        : {}),
       info: {
         ...json.bmson.info,
+        ...copyExtras(json.bmson.info),
         subartists: json.bmson.info.subartists ? [...json.bmson.info.subartists] : undefined,
       },
       bga: {
+        ...copyExtras(json.bmson.bga),
+        ...(json.bmson.bga.sequences !== undefined
+          ? {
+              sequences: json.bmson.bga.sequences.map((entry) => ({
+                id: entry.id,
+                ...copyExtras(entry),
+                sequence: entry.sequence.map((frame) => ({ ...frame, ...copyExtras(frame) })),
+              })),
+            }
+          : {}),
         header,
         events: bgaEvents,
         layerEvents,
@@ -706,7 +804,7 @@ function cloneEvent(event: BeMusicEvent): BeMusicEvent {
     channel: event.channel,
     position: [event.position[0], event.position[1]],
     value: event.value,
-    bmson: event.bmson ? { ...event.bmson } : undefined,
+    bmson: event.bmson ? { ...event.bmson, ...copyExtras(event.bmson) } : undefined,
   };
 }
 
@@ -725,4 +823,8 @@ function cloneBMSObjectLineEntry(entry: BMSObjectLineEntry): BMSObjectLineEntry 
     ...entry,
     events: entry.events.map(cloneEvent),
   };
+}
+
+function copyExtras(node: BmsonExtraFields): BmsonExtraFields {
+  return node.extraFields ? { extraFields: cloneJSONFields(node.extraFields) } : {};
 }

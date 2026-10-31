@@ -369,6 +369,8 @@ export type PlayViewSetting = 'hi-speed' | 'sudden' | 'lift' | 'hidden' | 'hidde
  * timeline, the BGA) goes to the view when the scene is made, not in every frame.
  */
 export interface PlayFrame {
+  /** Current engine-selected plain chart text; empty or absent clears it. */
+  readonly chartText?: string;
   readonly clock: SceneClock;
   readonly chart: LibraryChart;
   /** The course and the stage being played, for a course stage. */

@@ -58,6 +58,18 @@ export function parseJSONDocument(raw: Partial<BeMusicJSON>): BeMusicJSON {
   // hint here.
   const rawBMSBase = (rawBMS as { base?: unknown } | undefined)?.base;
   const reparseBase: 36 | 62 = rawBMSBase === 62 ? 62 : 36;
+  const rawGains: unknown = raw.resources?.wavGain;
+  if (rawGains !== undefined) {
+    if (rawGains === null || typeof rawGains !== 'object' || Array.isArray(rawGains))
+      throw new TypeError('resources.wavGain must be a slot-to-gain map');
+    const gains: Record<string, number> = {};
+    for (const [key, gain] of Object.entries(rawGains)) {
+      if (typeof gain !== 'number' || !Number.isFinite(gain) || gain < 0)
+        throw new TypeError(`resources.wavGain.${key} must be finite and nonnegative`);
+      gains[normalizeObjectKey(key, reparseBase, json.sourceFormat === 'bmson')] = gain;
+    }
+    json.resources.wavGain = gains;
+  }
   json.events = sortAndNormalizeEvents(
     rawEvents as Array<BeMusicEvent | Record<string, unknown>>,
     reparseBase,
@@ -66,7 +78,7 @@ export function parseJSONDocument(raw: Partial<BeMusicJSON>): BeMusicJSON {
   if (json.events.length !== rawEvents.length) {
     throw new Error('Invalid bms-json event: position [numerator, denominator] is required.');
   }
-  json.bms = normalizeBMSExtensions(rawBMS);
+  json.bms = normalizeBMSExtensions(rawBMS, json.sourceFormat === 'bmson');
   json.bmson = normalizeBmsonExtensions(rawBmson);
   json.preservation = normalizePreservation(structured.preservation, rawBMS, rawBmson);
   migrateBMSExtensionHeadersFromExtras(json);
@@ -154,6 +166,7 @@ function migrateBMSExtensionHeadersFromExtras(json: BeMusicJSON): void {
     if (upper === 'OPTION') {
       if (typeof json.bms.option !== 'string' && value.length > 0) {
         json.bms.option = value;
+        json.bms.options = [value];
       }
       continue;
     }
@@ -203,6 +216,17 @@ function migrateBMSExtensionHeadersFromExtras(json: BeMusicJSON): void {
     if (upper === 'CHARSET') {
       if (typeof json.bms.charset !== 'string' && value.length > 0) {
         json.bms.charset = value;
+      }
+      continue;
+    }
+
+    // Be-Music JSON written before `#EXBPMxx` became a `#BPMxx` alias kept it here; a `#BPMxx` definition still wins.
+    const exBPMMatch = command.match(/^EXBPM([0-9A-Za-z]{2})$/i);
+    if (exBPMMatch) {
+      const key = normalizeObjectKey(exBPMMatch[1]!, idBase);
+      const parsed = Number.parseFloat(value);
+      if (!(key in json.resources.bpm) && Number.isFinite(parsed)) {
+        json.resources.bpm[key] = parsed;
       }
       continue;
     }
@@ -296,7 +320,7 @@ function migrateBMSExtensionHeadersFromExtras(json: BeMusicJSON): void {
   json.metadata.extras = migratedExtras;
 }
 
-function normalizeBMSExtensions(input: unknown): BeMusicJSON['bms'] {
+function normalizeBMSExtensions(input: unknown, allowLongKeys: boolean): BeMusicJSON['bms'] {
   const normalized: BeMusicJSON['bms'] = {
     controlFlow: [],
     lnObjs: [],
@@ -363,8 +387,8 @@ function normalizeBMSExtensions(input: unknown): BeMusicJSON['bms'] {
     normalized.defExRank = defExRank;
   }
 
-  normalized.exRank = normalizeIndexedBMSExtensionMap(raw.exRank, idBase);
-  normalized.argb = normalizeIndexedBMSExtensionMap(raw.argb, idBase);
+  normalized.exRank = normalizeIndexedBMSExtensionMap(raw.exRank, idBase, allowLongKeys);
+  normalized.argb = normalizeIndexedBMSExtensionMap(raw.argb, idBase, allowLongKeys);
 
   const player = normalizeNumericBMSExtensionValue(raw.player);
   if (typeof player === 'number' && player > 0) {
@@ -387,6 +411,15 @@ function normalizeBMSExtensions(input: unknown): BeMusicJSON['bms'] {
     normalized.option = raw.option;
   }
 
+  if (raw.options !== undefined) {
+    if (!Array.isArray(raw.options) || raw.options.some((value) => typeof value !== 'string' || value.length === 0))
+      throw new TypeError('bms.options must be an array of nonempty declaration strings');
+    normalized.options = [...raw.options] as string[];
+    if (normalized.options.length > 0) normalized.option = normalized.options.at(-1);
+    else delete normalized.option;
+  }
+  if (raw.optionHeadersInControlFlow === true) normalized.optionHeadersInControlFlow = true;
+
   const wavCmd = raw.wavCmd ?? raw.wavcmd ?? raw.wav_cmd;
   if (typeof wavCmd === 'string' && wavCmd.length > 0) {
     normalized.wavCmd = wavCmd;
@@ -401,13 +434,26 @@ function normalizeBMSExtensions(input: unknown): BeMusicJSON['bms'] {
   normalized.changeOption = normalizeIndexedBMSExtensionMap(
     raw.changeOption ?? raw.change_option ?? raw.changeoption,
     idBase,
+    allowLongKeys,
   );
-  normalized.exWAV = normalizeIndexedBMSExtensionMap(raw.exWAV ?? raw.exWav ?? raw.ex_wav ?? raw.exwav, idBase);
-  normalized.exBMP = normalizeIndexedBMSExtensionMap(raw.exBMP ?? raw.exBmp ?? raw.ex_bmp ?? raw.exbmp, idBase);
-  normalized.bga = normalizeIndexedBMSExtensionMap(raw.bga, idBase);
-  normalized.scroll = normalizeIndexedBMSExtensionNumericMap(raw.scroll, idBase);
-  normalized.speed = normalizeIndexedBMSExtensionNumericMap(raw.speed, idBase);
-  normalized.swBGA = normalizeIndexedBMSExtensionMap(raw.swBGA ?? raw.swBga ?? raw.sw_bga ?? raw.swbga, idBase);
+  normalized.exWAV = normalizeIndexedBMSExtensionMap(
+    raw.exWAV ?? raw.exWav ?? raw.ex_wav ?? raw.exwav,
+    idBase,
+    allowLongKeys,
+  );
+  normalized.exBMP = normalizeIndexedBMSExtensionMap(
+    raw.exBMP ?? raw.exBmp ?? raw.ex_bmp ?? raw.exbmp,
+    idBase,
+    allowLongKeys,
+  );
+  normalized.bga = normalizeIndexedBMSExtensionMap(raw.bga, idBase, allowLongKeys);
+  normalized.scroll = normalizeIndexedBMSExtensionNumericMap(raw.scroll, idBase, allowLongKeys);
+  normalized.speed = normalizeIndexedBMSExtensionNumericMap(raw.speed, idBase, allowLongKeys);
+  normalized.swBGA = normalizeIndexedBMSExtensionMap(
+    raw.swBGA ?? raw.swBga ?? raw.sw_bga ?? raw.swbga,
+    idBase,
+    allowLongKeys,
+  );
 
   const poorBGA = raw.poorBGA ?? raw.poorBga ?? raw.poor_bga;
   if (typeof poorBGA === 'string' && poorBGA.length > 0) {
@@ -493,13 +539,16 @@ function normalizePreservation(input: unknown, bmsInput: unknown, bmsonInput: un
   }
 
   normalized.bmson.lines = normalizeBmsonLines(rawBmson?.lines);
-  normalized.bmson.bpmEvents = normalizeBmsonBPMEvents(rawBmson?.bpmEvents ?? rawBmson?.bpm_events);
-  normalized.bmson.stopEvents = normalizeBmsonStopEvents(rawBmson?.stopEvents ?? rawBmson?.stop_events);
-  const scrollEvents = normalizeBmsonScrollEvents(rawBmson?.scrollEvents ?? rawBmson?.scroll_events);
+  normalized.bmson.bpmEvents = normalizeBmsonBPMEvents(rawBmson?.bpmEvents ?? rawBmson?.bpm_events, true);
+  normalized.bmson.stopEvents = normalizeBmsonStopEvents(rawBmson?.stopEvents ?? rawBmson?.stop_events, true);
+  const scrollEvents = normalizeBmsonScrollEvents(rawBmson?.scrollEvents ?? rawBmson?.scroll_events, true);
   if (scrollEvents.length > 0) {
     normalized.bmson.scrollEvents = scrollEvents;
   }
-  normalized.bmson.soundChannels = normalizeBmsonSoundChannels(rawBmson?.soundChannels ?? rawBmson?.sound_channels);
+  normalized.bmson.soundChannels = normalizeBmsonSoundChannels(
+    rawBmson?.soundChannels ?? rawBmson?.sound_channels,
+    true,
+  );
 
   return normalized;
 }
@@ -515,14 +564,18 @@ function normalizeNumericBMSExtensionValue(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function normalizeIndexedBMSExtensionMap(input: unknown, base: 36 | 62 = 36): Record<string, string> {
+function normalizeIndexedBMSExtensionMap(
+  input: unknown,
+  base: 36 | 62 = 36,
+  allowLongKeys = false,
+): Record<string, string> {
   if (!input || typeof input !== 'object') {
     return {};
   }
 
   const normalized: Record<string, string> = {};
   for (const [rawKey, rawValue] of Object.entries(input as Record<string, unknown>)) {
-    const key = normalizeObjectKey(rawKey, base);
+    const key = normalizeObjectKey(rawKey, base, allowLongKeys);
     if (typeof rawValue === 'string' && rawValue.length > 0) {
       normalized[key] = rawValue;
       continue;
@@ -534,7 +587,11 @@ function normalizeIndexedBMSExtensionMap(input: unknown, base: 36 | 62 = 36): Re
   return normalized;
 }
 
-function normalizeIndexedBMSExtensionNumericMap(input: unknown, base: 36 | 62 = 36): Record<string, number> {
+function normalizeIndexedBMSExtensionNumericMap(
+  input: unknown,
+  base: 36 | 62 = 36,
+  allowLongKeys = false,
+): Record<string, number> {
   if (!input || typeof input !== 'object') {
     return {};
   }
@@ -543,7 +600,7 @@ function normalizeIndexedBMSExtensionNumericMap(input: unknown, base: 36 | 62 = 
   for (const [rawKey, rawValue] of Object.entries(input as Record<string, unknown>)) {
     const parsed = normalizeNumericBMSExtensionValue(rawValue);
     if (typeof parsed === 'number') {
-      normalized[normalizeObjectKey(rawKey, base)] = parsed;
+      normalized[normalizeObjectKey(rawKey, base, allowLongKeys)] = parsed;
     }
   }
   return normalized;

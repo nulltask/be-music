@@ -11,6 +11,15 @@ import {
 } from './index.ts';
 
 describe('json', () => {
+  test('cloneJSON copies optional intrinsic WAV gains independently without adding them to old charts', () => {
+    const source = createEmptyJSON();
+    expect(cloneJSON(source).resources.wavGain).toBeUndefined();
+    source.resources.wavGain = { '01': 0.77, '0a': 0.37 };
+    const cloned = cloneJSON(source);
+    expect(cloned.resources.wavGain).toEqual(source.resources.wavGain);
+    cloned.resources.wavGain!['01'] = 0;
+    expect(source.resources.wavGain['01']).toBe(0.77);
+  });
   test('json: createEmptyJSON initializes defaults and preservation layers', () => {
     const json = createEmptyJSON();
     expect(json.sourceFormat).toBe('bms');
@@ -155,4 +164,15 @@ test('bmson resource keys can exceed two characters without changing BMS token n
   expect(normalizeObjectKey(' abc ', 36, true)).toBe('ABC');
   expect(normalizeObjectKey('100', 62)).toBe('10');
   expect(normalizeObjectKey('a', 62, true)).toBe('0a');
+});
+
+test('cloneJSON owns ordered option declarations and does not add optional metadata to legacy charts', () => {
+  const source = createEmptyJSON();
+  expect(cloneJSON(source).bms.options).toBeUndefined();
+  source.bms.options = ['774:HI-SPEED_x2.00', 'charatbeatHDX:BGAMODE 0'];
+  source.bms.optionHeadersInControlFlow = true;
+  const cloned = cloneJSON(source);
+  expect(cloned.bms.optionHeadersInControlFlow).toBe(true);
+  cloned.bms.options![0] = '774:HIDDEN_STEALTH';
+  expect(source.bms.options[0]).toBe('774:HI-SPEED_x2.00');
 });

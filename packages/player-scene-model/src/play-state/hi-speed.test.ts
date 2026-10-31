@@ -86,3 +86,27 @@ describe('reduceHiSpeed', () => {
     expect(reduceHiSpeed(top, { type: 'hi-speed-step', delta: 0.1 })).toBe(top);
   });
 });
+
+test('compulsory chart speed bypasses user limits and restores the exact course/classic/floating baseline', () => {
+  for (const init of [
+    { hiSpeed: 3, multiplier: 0.5, locked: true },
+    { hiSpeed: 2, classic: true },
+    { hiSpeed: 2, floating: true, bpm: 150 },
+  ]) {
+    const base = createHiSpeedState(init);
+    const forced = reduceHiSpeed(base, { type: 'chart-hi-speed', value: 100 });
+    expect(forced).toMatchObject({ player: 100, drawn: 100, multiplier: 1, locked: true });
+    expect(reduceHiSpeed(forced, { type: 'hi-speed-set', value: 2 })).toBe(forced);
+    expect(reduceHiSpeed(forced, { type: 'hi-speed-step', delta: -1 })).toBe(forced);
+    expect(reduceHiSpeed(forced, { type: 'hi-speed-drawn', value: 2 })).toBe(forced);
+    expect(reduceHiSpeed(forced, { type: 'chart-hi-speed', value: 100 })).toBe(forced);
+    const changed = reduceHiSpeed(forced, { type: 'chart-hi-speed', value: 0.77 });
+    expect(changed.drawn).toBe(0.77);
+    expect(reduceHiSpeed(changed, { type: 'chart-hi-speed' })).toBe(base);
+  }
+});
+test('invalid chart speed cannot replace user state or a valid override', () => {
+  const base = createHiSpeedState();
+  for (const value of [NaN, Infinity, 0, 0.24, 100.01])
+    expect(reduceHiSpeed(base, { type: 'chart-hi-speed', value })).toBe(base);
+});

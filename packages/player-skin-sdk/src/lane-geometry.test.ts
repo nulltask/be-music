@@ -325,3 +325,19 @@ describe('resolveSkinlessLaneLayout fixed That-Which-Must-Not-Be-Named widths', 
     }
   });
 });
+
+test.each([6, 8, 36, 70])('draws a %s-key generic keyboard as equal normal keys on one continuous side', (count) => {
+  const variant = `generic-${count}` as const;
+  const channels = PLAY_MODE_LAYOUTS[variant].lanes.map((lane) => lane.channel);
+  const geometry = resolveSkinlessLaneLayout(channels, count, variant);
+  expect(geometry.lanes).toHaveLength(count);
+  expect(shouldPreserveFallbackSideWidth(channels, variant)).toBe(false);
+  expect(geometry.lanes.every((lane) => lane.side === '1P' && !lane.isScratch)).toBe(true);
+  for (let index = 0; index < count; index++) {
+    const rect = geometry.lanes[index]!;
+    expect(rect.w).toBeCloseTo(geometry.lanes[0]!.w);
+    expect(resolveBeMusicLaneKind(channels[index]!, -1, variant)).toBe('white');
+    if (index > 0) expect(rect.x).toBeCloseTo(geometry.lanes[index - 1]!.x + geometry.lanes[index - 1]!.w);
+  }
+  expect(geometry.lanes.at(-1)!.x + geometry.lanes.at(-1)!.w).toBeCloseTo(geometry.right);
+});

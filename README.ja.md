@@ -2,9 +2,54 @@
 
 # be-music
 
-[パッケージの命名と移行](./docs/packages.ja.md)
+[パッケージの責務](./docs/packages.ja.md)
 
 TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンです。
+
+## 特徴
+
+### どこでも動く
+
+- ブラウザで遊べます (WebGPU / WebGL、PWA としてインストール可)。タッチ操作と縦画面のレイアウトにも対応しています。
+- ターミナル版 (TUI、単体の実行ファイルもあり) は、kitty グラフィックスで BGA の画像・動画、ロード画面、バナーを描き、kitty キーボードプロトコルで左右の Shift を別々に読みます。
+- Web ページに埋め込めるプレビュー / プレイ画面は、どの縦横比のウィンドウでも画面を埋めます。
+
+### 1 つのエンジンで複数のルール
+
+- LR2、beatoraja、That-Which-Must-Not-Be-Named の判定・ゲージ・スコアを、1 つのエンジンの上で切り替えられます。
+- 3 つのプレイオプションをまとめて持っていて、譜面や表示を変えるだけのものはどのルールでも使えます。
+- オート、リプレイ、手動のどのプレイでも好きな位置にシークでき、2 人プレイ (BATTLE / COUPLE / 2P PLAY) もあります。
+
+### スキン
+
+- LR2 スキンと beatoraja スキン (JSON / Lua) をそのまま読み込めます。
+- 組み込みスキンは Plain、Native (DOM + Canvas)、Synesthesia です。Synesthesia は曲の音域ごとの音量に合わせて動く 3D の演出です。
+
+### リプレイ・記録・コース
+
+- すべてのプレイがリプレイとして記録され、どのルールでも再判定できます。判定は決定的なので、スコアの検証に使えます。
+- リプレイスロットと、ブラウザ内に保存されたデータのビューアがあります。
+- 譜面フィンガープリントは、ファイルのバイト列ではなく譜面の内容で譜面を識別します。`#RANDOM` を含む譜面にも対応しています。
+- LR2 のコースファイル、beatoraja の SQL フィルタによるランダムコース、NONSTOP コース (つないだ 1 本のプレイ) に対応し、コースのリプレイもあります。
+
+### 譜面・メディア・音声
+
+- フォルダや ZIP をドロップするだけで読み込めます。譜面と LR2 / beatoraja テーマが混ざったドロップにも対応し、大きな音声・動画は必要になったときに読み込みます。
+- BMS テキストの文字コード (Shift_JIS、UTF-8、EUC-JP など) を推定し、変わっていない元の行を残したまま BMS を書き出せます。
+- BGA の静止画・動画に対応し、ブラウザで再生できない形式はブラウザ内で変換します。WebCodecs でプレイを MP4 / WebM に録画できます。
+- キー音・BGM・マスターのバスごとにコンプレッサーとリミッターを調整でき、重い準備処理は Worker のプールで並列に動きます。
+- 譜面の編集、BMS・bmson・JSON の相互変換、譜面を音声ファイルに書き出すツールがあります。
+
+### オンラインサービス
+
+- プレイヤーと一体で作られた Leaderboard があります。送信はオプトインで、何を表示するかは Leaderboard が決めます。譜面のスコアとコースランにはシェアカードが付きます。
+- be-music 独自の OIDC プロバイダで、プレイヤー・Leaderboard・ダッシュボードを 1 つのアカウントでつなぎます。サービスは Cloudflare Workers 上で動いています。
+
+### オープンでモジュール式
+
+- MIT ライセンスのオープンソースです。
+- 再利用できるパッケージ (`@be-music/*`) の組み合わせでできています。譜面の解析と書き出し、譜面モデル、プレイエンジン、スキン、UI がそれぞれ独立していて、ブラウザでも Node でも動くので、プレイヤー以外のアプリからも使えます。
+- プレイヤー画面用の Lit Web Components と、その型付きの React / Vue ラッパー、フレームワークに依存しないスキン SDK があります。
 
 ## パッケージ
 
@@ -94,7 +139,7 @@ pnpm run check
 pnpm run test
 ```
 
-ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。`pnpm run test:e2e` は Web プレイヤーでコースのブラウザ確認を Playwright で端から端まで実行します（数分かかるため `pnpm run test` には含めていません）。[docs/course-checklist.ja.md](docs/course-checklist.ja.md#自動実行) を参照してください。
+ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。`pnpm run test:e2e` は Web プレイヤーでコースのブラウザ確認を Playwright で端から端まで実行します（数分かかるため `pnpm run test` には含めていません）。[docs/player-web.ja.md#ブラウザー検証](docs/player-web.ja.md#ブラウザー検証) を参照してください。
 
 ## package ごとの release
 
@@ -111,6 +156,7 @@ pnpm run release:version
 - その状態で `devel -> main` の release PR を merge すると、version が上がった公開 package だけ GitHub Release が個別に作成されます（プレイヤーのプレイヤーや Leaderboard などの private package は対象外です）
 - player SEA 実行ファイルは `@be-music/player-terminal` から build し、`@be-music/player-terminal` release に添付します。`@be-music/chart-audio-renderer` も SEA zip を添付します
 - private な repository root の `package.json` は `0.0.0` のままで、release 対象 version は `packages/*/package.json` で管理します
+- changelog の行は `scripts/release/changelog.ts` が書きます。changeset ごとに `- <commit>: <summary>`、workspace の依存が上がっただけの package には、依存の新しい version を並べた `- Updated dependencies: ...` を 1 行だけ書きます
 
 tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
@@ -122,7 +168,6 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [BMS 実装仕様](docs/bms-spec.ja.md)
 - [bmson 実装仕様](docs/bmson-spec.ja.md)
 - [Bemuse 実装仕様](docs/bemuse-spec.ja.md)
-- [LR2 と beatoraja のセマンティクス](docs/semantics-lr2-beatoraja.ja.md)
 - [Player 実装仕様](docs/player-spec.ja.md)
 - [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)

@@ -17,3 +17,22 @@ describe('parseBmsonDocument', () => {
     expect(json).toEqual(parseBmson(JSON.stringify(document)));
   });
 });
+
+test('normalizes boolean up flags at the bmson boundary without coercing malformed values', () => {
+  const source = parseBmsonDocument({
+    version: '1.0.0',
+    info: { init_bpm: 120 },
+    sound_channels: [
+      {
+        name: 'end.wav',
+        notes: [
+          { x: 1, y: 240, up: true },
+          { x: 2, y: 240, up: false },
+          { x: 3, y: 240, up: 'true' },
+        ],
+      },
+    ],
+  } as unknown as BmsonDocument);
+  expect(source.events.map((event) => event.bmson?.up)).toEqual([true, false, undefined]);
+  expect(source.preservation.bmson.soundChannels[0]?.notes.map((note) => note.up)).toEqual([true, false, undefined]);
+});

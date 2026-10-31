@@ -1,6 +1,25 @@
-import { resolvePoorBGAMode, type PoorBGAMode, resolveChart, type ResolvedChart } from '@be-music/chart-model';
+import { placeNonstopChartOptions, type NonstopChartOptionDiagnostic } from './chart-options.ts';
+export type { NonstopChartOptionDiagnostic } from './chart-options.ts';
+import type { ChartTextStage } from '../../core/chart-text.ts';
+import {
+  buildChartTextTimeline,
+  type ChartOptionProgram,
+  type ChartOptionStateCue,
+  resolvePoorBGAMode,
+  type PoorBGAMode,
+  resolveChart,
+  resolveBmsWAVResources,
+  parseBMSExWAV,
+  parseBmsWAVCmd,
+  volWAVToLinearGain,
+  type ResolvedChart,
+  type BGAOpacityTimelines,
+  type KeyBoundBGACue,
+  type BmsonBGAEventCue,
+} from '@be-music/chart-model';
 import {
   createEmptyJSON,
+  resolveBMSBase,
   normalizeChannel,
   normalizeObjectKey,
   type BeMusicEvent,
@@ -21,6 +40,10 @@ import {
   type NonstopTempoPoint,
 } from './readouts.ts';
 import { createNonstopStageTiming } from './stage.ts';
+import { flattenNonstopBGAOpacity, hasBGAOpacity, placeNonstopBGAOpacity } from './bga-opacity.ts';
+import { placeNonstopBmsonBGA } from './bmson-bga.ts';
+import { placeNonstopKeyBoundBGA } from './key-bound-bga.ts';
+import { createNonstopBMPAllocator } from './bga-resources.ts';
 
 /** One stage to stitch: its BMS or bmson chart with control flow resolved, and whether it is a `.pms` chart. */
 export interface NonstopStageInput {
@@ -33,10 +56,10 @@ export interface NonstopStageInput {
  * (`ReplayNonstopRun.stitch`), so a stitched chart is rebuilt by the rules it was played on. Raise it whenever a change
  * moves a stitched note, sound, rank or timing, or changes gauge inputs; keep earlier rules reachable through `options.stitch`.
  */
-export const NONSTOP_STITCH_VERSION = 2;
+export const NONSTOP_STITCH_VERSION = 3;
 
 /** The stitching rule versions {@link stitchNonstopCourse} can follow. */
-export const NONSTOP_STITCH_VERSIONS: readonly number[] = [1, 2];
+export const NONSTOP_STITCH_VERSIONS: readonly number[] = [1, 2, 3];
 
 export interface StitchNonstopOptions extends NonstopPlanOptions {
   /** The stitching rules to follow ({@link NONSTOP_STITCH_VERSION} by default); one it does not know is refused. */
@@ -72,6 +95,8 @@ export interface NonstopStitchStage {
   bmpKeys: string[];
   /** This stage’s miss-image mode; omitted means replacement. */
   poorBGAMode?: PoorBGAMode;
+  /** Independent stage opacity/RGB histories, on the stitched clock, for BGA crossfades. Omitted means opaque white. */
+  bgaOpacity?: BGAOpacityTimelines;
   /** Fades of the stage's background sound (LR2 fades the stage BGM channel; keysounds play at full level). */
   soundFadeIn?: NonstopFade;
   soundFadeOut?: NonstopFade;
@@ -83,6 +108,16 @@ export interface NonstopStitchStage {
 }
 
 export interface NonstopStitchMap {
+  /** Stage-owned effective option program on the course microsecond clock. */
+  chartOptions?: ChartOptionProgram;
+  /** Unsupported or malformed stage declarations with source/course provenance. */
+  chartOptionDiagnostics?: NonstopChartOptionDiagnostic[];
+  /** Source text programs with stage ownership and FIT time mapping. */
+  chartText?: ChartTextStage[];
+  /** Remapped input-bound BGA selections, with stage ownership windows on the stitched clock. */
+  keyBoundBGA?: KeyBoundBGACue[];
+  /** Resolved conditional animations, remapped to stage-owned resources and FIT time. */
+  bmsonBGA?: BmsonBGAEventCue[];
   stages: NonstopStitchStage[];
   /**
    * What the BPM readouts show over the play ({@link resolveNonstopTempo}, look it up with `nonstopBPMAt`): each
@@ -98,7 +133,11 @@ export interface NonstopStitchMap {
 
 export type StitchNonstopResult =
   | { ok: true; chart: BeMusicJSON; map: NonstopStitchMap }
-  | { ok: false; reason: 'bmson' | 'id-space' | 'no-stage' | 'stitch-version'; stage?: number };
+  | {
+      ok: false;
+      reason: 'bmson' | 'id-space' | 'no-stage' | 'stitch-version' | 'generic-layout-mismatch';
+      stage?: number;
+    };
 
 /** The stitched chart's tempo: LR2 scrolls a NONSTOP play at `realtime × 1.2` per 1920-unit measure, 150 BPM. */
 const STITCHED_BPM = 150;
@@ -166,9 +205,23 @@ export function stitchNonstopCourse(
   const bmsonStage = stages.findIndex((stage) => stage.chart.sourceFormat === 'bmson');
   if (bmsonStage >= 0 && options.placement === 'lr2') return { ok: false, reason: 'bmson', stage: bmsonStage };
   const assetPath = options.assetPath ?? ((_stage, _kind, path) => path);
-  const resolved = stages.map((stage) =>
-    resolveChart(stage.chart, bmsonStage >= 0 && stage.pms === true ? { chartPath: '.pms' } : {}),
-  );
+  let resolved = stages.map((stage) => {
+    let source = stage.chart;
+    // Historical stitching predates HDX LONGMODE, including BMS stages in mixed bmson courses.
+    if ((options.stitch ?? NONSTOP_STITCH_VERSION) < 3 && source.sourceFormat === 'bms') {
+      const mode = source.bms.lnMode;
+      if (mode !== 1 && mode !== 2 && mode !== 3) source = { ...source, bms: { ...source.bms, lnMode: 1 } };
+    }
+    // It also predates bmson `up`, which then left the slice an ordinary judged note.
+    if ((options.stitch ?? NONSTOP_STITCH_VERSION) < 3 && source.events.some((event) => event.bmson?.up === true)) {
+      source = { ...source, events: source.events.map(withoutBmsonUp) };
+    }
+    return resolveChart(source, bmsonStage >= 0 && stage.pms === true ? { chartPath: '.pms' } : {});
+  });
+  if (resolved.some((chart) => chart.playVariant.startsWith('generic-'))) {
+    const incompatible = resolved.findIndex((chart) => chart.playVariant !== resolved[0]!.playVariant);
+    if (incompatible >= 0) return { ok: false, reason: 'generic-layout-mismatch', stage: incompatible };
+  }
   const timings = stages.map((stage) => createNonstopStageTiming(stage.chart, { pms: stage.pms === true }));
   const placements = planNonstopCourse(timings, options.connections, options);
   const windows = placements.map((placement, index) => ({
@@ -177,10 +230,23 @@ export function stitchNonstopCourse(
   }));
   const stitchedSeconds = (stage: number, seconds: number): number =>
     placements[stage]!.offsetSeconds + seconds / placements[stage]!.rate;
+  const stageOpacity = resolved.map((source, index) => placeNonstopBGAOpacity(source, placements[index]!));
 
-  const asBmson = bmsonStage >= 0;
+  // BMS has one global LNMODE. Version 3 uses per-note bmson types when a BMS stage needs CN/HCN.
+  const asBmson =
+    bmsonStage >= 0 ||
+    ((options.stitch ?? NONSTOP_STITCH_VERSION) >= 3 &&
+      resolved.some((stage) => stage.notes.some((note) => note.kind === 'ln' && note.lnMode !== 1)));
+  if (asBmson && bmsonStage < 0)
+    resolved = stages.map((stage) => resolveChart(stage.chart, stage.pms === true ? { chartPath: '.pms' } : {}));
   const wavKeys = new NonstopKeyAllocator(asBmson);
   const bmpKeys = new NonstopKeyAllocator(asBmson);
+  const keyBoundBGA: KeyBoundBGACue[] = [];
+  const bmsonBGA: BmsonBGAEventCue[] = [];
+  const chartText: ChartTextStage[] = [];
+  const chartOptionCues: ChartOptionStateCue[] = [];
+  const chartOptionDiagnostics: NonstopChartOptionDiagnostic[] = [];
+  let hasChartOptions = false;
   const stopKeys = new NonstopKeyAllocator(asBmson);
   const chart = createEmptyJSON(asBmson ? 'bmson' : 'bms');
   let totalStage = stages.length - 1;
@@ -189,17 +255,19 @@ export function stitchNonstopCourse(
   if (asBmson) {
     chart.bmson.info.resolution = 2400;
     const variant = resolved[0]!.playVariant;
-    chart.bmson.info.modeHint = (
-      {
-        '5': 'beat-5k',
-        '7': 'beat-7k',
-        '9': 'popn-9k',
-        '10': 'beat-10k',
-        '14': 'beat-14k',
-        '24': 'keyboard-24k',
-        '48': 'keyboard-24k-double',
-      } as const
-    )[variant];
+    chart.bmson.info.modeHint = variant.startsWith('generic-')
+      ? `${variant}keys`
+      : (
+          {
+            '5': 'beat-5k',
+            '7': 'beat-7k',
+            '9': 'popn-9k',
+            '10': 'beat-10k',
+            '14': 'beat-14k',
+            '24': 'keyboard-24k',
+            '48': 'keyboard-24k-double',
+          } as const
+        )[variant as '5' | '7' | '9' | '10' | '14' | '24' | '48'];
     chart.bmson.info.totalUnit = resolved[totalStage < 0 ? stages.length - 1 : totalStage]!.total.unit;
   }
   chart.bms.base = 62;
@@ -211,6 +279,8 @@ export function stitchNonstopCourse(
 
   for (let index = 0; index < stages.length; index += 1) {
     const source = stages[index]!.chart;
+    const wavResources = resolveBmsWAVResources(source);
+    const wavCommands = source.bms.wavCmds.map((line) => parseBmsWAVCmd(line, resolveBMSBase(source)));
     const chartIndex = resolved[index]!;
     const window = windows[index]!;
     // Every source key gets its own stitched key, even one without a file (it then stays silent), so two stages'
@@ -222,23 +292,39 @@ export function stitchNonstopCourse(
       if (!known.has(`w${stitched}`)) {
         known.add(`w${stitched}`);
         stageWAV[index]!.push(stitched);
-        const path = source.resources.wav[key];
+        const path = wavResources[key];
         if (path !== undefined) chart.resources.wav[stitched] = assetPath(index, 'wav', path);
+        const intrinsicGain = (source.resources.wavGain?.[key] ?? 1) * volWAVToLinearGain(source.bms.volWAV);
+        if (!Number.isFinite(intrinsicGain) || intrinsicGain < 0)
+          throw new RangeError(`Invalid stage WAV gain: ${key}`);
+        if (intrinsicGain !== 1) (chart.resources.wavGain ??= {})[stitched] = intrinsicGain;
+        const rawExWAV = source.bms.exWAV[key];
+        const exWAV = rawExWAV === undefined ? undefined : parseBMSExWAV(rawExWAV);
+        if (exWAV && rawExWAV !== undefined) {
+          const parameters = [
+            ['p', exWAV.pan],
+            ['v', exWAV.volumeMillibels],
+            ['f', exWAV.frequencyHz],
+          ].filter((entry) => entry[1] !== undefined);
+          chart.bms.exWAV[stitched] =
+            `${parameters.map(([flag]) => flag).join('')} ${parameters.map(([, value]) => value).join(' ')} ${assetPath(index, 'wav', exWAV.filename)}`;
+        }
+        for (const command of wavCommands) {
+          if (command?.slot !== key) continue;
+          const parameter = command.param === 'pitch' ? '00' : command.param === 'volume' ? '01' : '02';
+          chart.bms.wavCmds.push(`${parameter} ${stitched} ${command.value}`);
+        }
       }
       return stitched;
     };
-    const bmp = (key: string): string | undefined => {
-      const stitched = bmpKeys.keyFor(index, key);
-      if (stitched === undefined) return undefined;
-      if (!known.has(`b${stitched}`)) {
-        known.add(`b${stitched}`);
-        stageBMP[index]!.push(stitched);
-        const path =
-          source.resources.bmp[key] ?? (source.bmson.bga.header.some((entry) => entry.name === key) ? key : undefined);
-        if (path !== undefined) chart.resources.bmp[stitched] = assetPath(index, 'bmp', path);
-      }
-      return stitched;
-    };
+    const bmp = createNonstopBMPAllocator({
+      source,
+      target: chart,
+      stage: index,
+      keys: bmpKeys,
+      stageKeys: stageBMP[index]!,
+      assetPath: (path) => assetPath(index, 'bmp', path),
+    });
     const push = (
       seconds: number,
       channel: string,
@@ -258,6 +344,24 @@ export function stitchNonstopCourse(
       return true;
     };
 
+    const placedOptions = placeNonstopChartOptions(chartIndex, placements[index]!, window, index);
+    chartOptionCues.push(...placedOptions.cues);
+    chartOptionDiagnostics.push(...placedOptions.diagnostics);
+    hasChartOptions ||= placedOptions.hasOperations;
+    chartText.push({
+      startSeconds: Math.max(0, window.start),
+      endSeconds: window.end,
+      offsetSeconds: placements[index]!.offsetSeconds,
+      rate: placements[index]!.rate,
+      timeline: buildChartTextTimeline(chartIndex.source, chartIndex.timing),
+      ...(chartIndex.reversal ? { freezeSeconds: chartIndex.reversal.seconds } : {}),
+    });
+    const keyBound = placeNonstopKeyBoundBGA(chartIndex, placements[index]!, window, index, bmp);
+    if (!keyBound) return { ok: false, reason: 'id-space', stage: index };
+    keyBoundBGA.push(...keyBound);
+    const bmson = placeNonstopBmsonBGA(chartIndex, placements[index]!, window, index, bmp);
+    if (!bmson) return { ok: false, reason: 'id-space', stage: index };
+    bmsonBGA.push(...bmson);
     if (!addStageObjects(chartIndex, push, wav, bmp, asBmson)) return { ok: false, reason: 'id-space', stage: index };
 
     for (const stop of chartIndex.timing.stopPoints) {
@@ -279,6 +383,30 @@ export function stitchNonstopCourse(
     }
   }
 
+  const planeControls = flattenNonstopBGAOpacity(
+    stageOpacity.map((opacity, index) => ({
+      opacity,
+      windowStart: windows[index]!.start,
+      windowEnd: windows[index]!.end,
+    })),
+  );
+  const argbKeys = new NonstopKeyAllocator(asBmson);
+  const argbValues = new Map<string, string>();
+  for (const control of planeControls) {
+    if (control.channel.startsWith('A')) {
+      let key = argbValues.get(control.value);
+      if (key === undefined) {
+        do {
+          key = argbKeys.fresh();
+        } while (key !== undefined && chart.bms.argb[key] !== undefined);
+        if (key === undefined) return { ok: false, reason: 'id-space', stage: control.stage };
+        chart.bms.argb[key] = control.value;
+        argbValues.set(control.value, key);
+      }
+      control.value = key;
+    }
+    objects.push(control);
+  }
   convertSeamNotes(objects, stages.length);
   layOnGrid(chart, objects, stops, barLines, stopKeys);
   if (chart.events.length === 0 && objects.length > 0) return { ok: false, reason: 'id-space' };
@@ -327,6 +455,21 @@ export function stitchNonstopCourse(
     ok: true,
     chart,
     map: {
+      ...(hasChartOptions
+        ? {
+            chartOptions: {
+              version: 1 as const,
+              initial: { ...chartOptionCues[0]?.state },
+              cues: chartOptionCues.slice(1),
+            },
+          }
+        : {}),
+      ...(chartOptionDiagnostics.length > 0 ? { chartOptionDiagnostics } : {}),
+      ...(chartText.some((stage) => stage.timeline.cues.length > 0 || stage.timeline.missText !== undefined)
+        ? { chartText }
+        : {}),
+      ...(keyBoundBGA.length > 0 ? { keyBoundBGA } : {}),
+      ...(bmsonBGA.some((cue) => cue.sequences.length > 0) ? { bmsonBGA } : {}),
       tempo: resolveNonstopTempo(readouts, placements, options),
       stageRanks,
       stages: placements.map((placement, index) => {
@@ -342,6 +485,7 @@ export function stitchNonstopCourse(
           windowEnd: windows[index]!.end,
           wavKeys: stageWAV[index]!,
           bmpKeys: stageBMP[index]!,
+          ...(hasBGAOpacity(stageOpacity[index]!) ? { bgaOpacity: stageOpacity[index]! } : {}),
           ...(resolvePoorBGAMode(stages[index]!.chart.bms.poorBGA) !== 0
             ? { poorBGAMode: resolvePoorBGAMode(stages[index]!.chart.bms.poorBGA) }
             : {}),
@@ -405,7 +549,10 @@ function addStageObjects(
     if (note.freeZone === true) continue;
     const key = wav(note.sampleKey);
     if (asBmson) {
-      add(note.seconds, note.channel, key, note.event, note.endSeconds, note.lnMode);
+      for (const event of note.soundEvents ?? [note.event])
+        add(note.seconds, note.channel, wav(event.value), event, note.endSeconds, note.lnMode);
+      if (note.endSoundEvent && note.endSeconds !== undefined)
+        add(note.endSeconds, note.channel, wav(note.endSoundEvent.value), note.endSoundEvent);
     } else if (note.kind === 'ln' && note.endSeconds !== undefined) {
       const lane = `${note.channel[0] === '2' ? '6' : '5'}${note.channel[1]}`;
       add(note.seconds, lane, key);
@@ -414,7 +561,8 @@ function addStageObjects(
       add(note.seconds, note.channel, key);
     }
   }
-  for (const note of chart.shadowedNotes) add(note.seconds, '01', wav(note.sampleKey), note.event);
+  if (chart.sourceFormat !== 'bmson')
+    for (const note of chart.shadowedNotes) add(note.seconds, '01', wav(note.sampleKey), note.event);
   for (const note of chart.invisibleNotes)
     add(note.seconds, normalizeChannel(note.event.channel), wav(note.sampleKey), note.event);
   for (const mine of chart.mines) {
@@ -601,4 +749,10 @@ function reduce(numerator: number, denominator: number): [number, number] {
   let b = denominator;
   while (b !== 0) [a, b] = [b, a % b];
   return numerator === 0 ? [0, 1] : [numerator / a, denominator / a];
+}
+
+function withoutBmsonUp(event: BeMusicEvent): BeMusicEvent {
+  if (event.bmson?.up === undefined) return event;
+  const { up: _up, ...bmson } = event.bmson;
+  return { ...event, bmson };
 }

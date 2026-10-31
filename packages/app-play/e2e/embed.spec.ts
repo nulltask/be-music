@@ -24,12 +24,13 @@ async function zipFolders(folders: readonly string[]): Promise<Uint8Array> {
   return zipSync(files);
 }
 
-/** Opens the embed on a track holding the fixture `folders`, with `?chart=` when `chart` is given. */
-async function openEmbed(page: Page, folders: readonly string[], chart?: string): Promise<void> {
+/** Opens the embed on a track holding the fixture `folders`, with `?chart=` and `?mode=` when given. */
+async function openEmbed(page: Page, folders: readonly string[], chart?: string, mode?: 'play'): Promise<void> {
   const name = `${folders.join('-')}.zip`;
   const body = Buffer.from(await zipFolders(folders));
   await page.route(`**${TRACK_ROUTE}${name}`, (route) => route.fulfill({ body, contentType: 'application/zip' }));
-  const query = chart === undefined ? '' : `&chart=${encodeURIComponent(chart)}`;
+  const query =
+    (chart === undefined ? '' : `&chart=${encodeURIComponent(chart)}`) + (mode === undefined ? '' : `&mode=${mode}`);
   await page.goto(`/embed/?track=${encodeURIComponent(`${TRACK_ROUTE}${name}`)}${query}`);
 }
 
@@ -77,6 +78,23 @@ test(
     await page.screenshot({ path: info.outputPath('embed-replay.png') });
   },
 );
+
+test('?mode=play lets the viewer play: no seeking, and M is a lane rather than mute', async ({ page }) => {
+  await openEmbed(page, ['songs/fixA'], undefined, 'play');
+  const play = page.getByRole('button', { name: 'Play', exact: true });
+  await expect(play).toBeEnabled({ timeout: 60_000 });
+  // Before the play starts, M still mutes.
+  const hud = page.locator('be-music-preview-hud');
+  await page.keyboard.press('KeyM');
+  await expect(hud.getByRole('button', { name: 'Unmute' })).toBeAttached();
+  await page.keyboard.press('KeyM');
+  await play.click();
+  await expect(hud.getByRole('button', { name: 'Pause', exact: true })).toBeAttached({ timeout: 30_000 });
+  await expect(hud.getByRole('slider', { name: 'Seek' })).toBeDisabled();
+  await page.keyboard.press('KeyM');
+  await expect(hud.getByRole('button', { name: 'Mute', exact: true })).toBeAttached();
+  await expect(hud.getByRole('button', { name: 'Unmute' })).toHaveCount(0);
+});
 
 test('seeks back and forth: the time follows the second sought, and the combo is the one reached by playing there', async ({
   page,

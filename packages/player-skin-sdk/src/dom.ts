@@ -106,6 +106,8 @@ export interface BeMusicDOMResultActions {
 
 export interface BeMusicDOMDecideFrame extends BeMusicDOMPresentation {
   readonly chart: LibraryChart;
+  /** Validated pre-play title artwork URL, owned by the host. Missing/undecodable images use the title text. */
+  readonly titleImage?: string;
   readonly progress: number | undefined;
   readonly inputReady: boolean;
 }

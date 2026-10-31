@@ -324,3 +324,36 @@ describe('BeatorajaNoteLayer Visual CONSTANT', () => {
     layer.dispose();
   });
 });
+
+it.each([8, 36, 70])(
+  'draws every key of a generic %s-key chart, including the last key, inside the borrowed area',
+  (count) => {
+    const codes = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const channels = Array.from({ length: count }, (_, index) => `${index < 35 ? '1' : '2'}${codes[index % 35]}`);
+    const layer = new BeatorajaNoteLayer({
+      noteSection: normalizeBeatorajaNote({ dst: [{ values: [{ x: 20, y: 200, w: 160, h: 600 }] }] }),
+      variant: `generic-${count}`,
+      images: new Map(),
+      textures: { get: () => undefined, values: () => [][Symbol.iterator](), pathOf: () => undefined },
+      canvasHeight: 1000,
+    });
+    const ops = new Set<number>();
+    const areas = layer.getDisplayAreaLanes(ops, channels);
+    expect(areas).toHaveLength(count);
+    expect(areas.every((lane) => lane.side === '1P')).toBe(true);
+    layer.update(
+      {
+        notes: channels.map((channel) => ({ channel, beat: 1, seconds: 0.5, judged: false })),
+        currentBeat: 0,
+        currentSeconds: 0,
+      },
+      1,
+      ops,
+    );
+    const visible = layer.container.children[2]!.children.filter((child) => child.visible);
+    expect(visible).toHaveLength(count);
+    expect(visible.at(-1)!.getBounds().maxX).toBeCloseTo(180);
+    expect(visible.at(-1)!.getBounds().minX).toBeCloseTo(180 - 160 / count);
+    layer.dispose();
+  },
+);

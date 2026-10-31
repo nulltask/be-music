@@ -1,3 +1,4 @@
+import { isBmsonRecoveryDisabled } from '@be-music/player-engine/ruleset';
 // The result route: the result screen (`createResultScene`) of a play, a course stage, a course run or a NONSTOP run,
 // on the LR2 theme's result (or course-result) skin, the be-music skin's, or the beatoraja theme's. The play behind it
 // exits as it enters and goes once it shows, its last samples ringing out. It keeps the play's record, saves its play
@@ -256,7 +257,11 @@ export class ResultRoute {
     const active = this.activeCourse;
     if (courseStage && active !== undefined) {
       recordCourseStage(active, data);
-      if (!data.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
+      if (
+        !data.practice &&
+        (data.replay === undefined || !isBmsonRecoveryDisabled(data.replay.chart, data.replay.play.bmsonTotalMode))
+      )
+        this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
       const mounted = await this.showBeatorajaResult(data, {
         run: 'stage',
         course: { info: activeCourseInfo(active) },
@@ -267,7 +272,11 @@ export class ResultRoute {
     }
     // LR2 saves no score from two-player BATTLE: its replay is kept, its record and ranking are not.
     const recorded = !data.practice && data.secondPlayer === undefined;
-    const kept = recorded ? this.records.recordActivePlay(recordPlayFromResult(data)) : undefined;
+    const kept =
+      recorded &&
+      (data.replay === undefined || !isBmsonRecoveryDisabled(data.replay.chart, data.replay.play.bmsonTotalMode))
+        ? this.records.recordActivePlay(recordPlayFromResult(data))
+        : undefined;
     const mounted = await this.showBeatorajaResult(data, {
       run: 'single',
       replaySlots: this.playReplaySlots(data, kept),
@@ -414,7 +423,11 @@ export class ResultRoute {
     const presentation = resolveResultPresentation(run);
     if (courseStage) {
       recordCourseStage(this.activeCourse!, data);
-      if (!data.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
+      if (
+        !data.practice &&
+        (data.replay === undefined || !isBmsonRecoveryDisabled(data.replay.chart, data.replay.play.bmsonTotalMode))
+      )
+        this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
     }
     // Family dispatch for result. Only the LR2 / default split is modelled here — a play on the beatoraja play screen
     // shows its result on the beatoraja skin (`showBeatorajaPlayResult`), a NONSTOP run on a beatoraja theme too
@@ -479,7 +492,11 @@ export class ResultRoute {
           };
     // LR2 saves no score from two-player BATTLE: its replay is kept, its record and ranking are not.
     const recorded = !data.practice && data.secondPlayer === undefined;
-    const kept = recorded ? this.records.recordActivePlay(recordPlayFromResult(data)) : undefined;
+    const kept =
+      recorded &&
+      (data.replay === undefined || !isBmsonRecoveryDisabled(data.replay.chart, data.replay.play.bmsonTotalMode))
+        ? this.records.recordActivePlay(recordPlayFromResult(data))
+        : undefined;
     // A single play's slots, or the course run's; a course stage has none (beatoraja saves the course as one run).
     const replaySlots = run === 'single' ? this.playReplaySlots(data, kept) : mode.replaySlots;
     const kit: ResultSceneKit =

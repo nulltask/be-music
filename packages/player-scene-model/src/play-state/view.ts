@@ -70,18 +70,20 @@ export function captureReplayView(
   view: PlayViewState,
   options: { scale: string; laneBeats?: number; mainBPM?: number },
 ): ReplayViewState {
+  // Authored display operations are stored separately; preserve the underlying user view for later clears.
+  const hiSpeed = view.hiSpeed.chartBase ?? view.hiSpeed;
   const covers = view.covers.map(resolveLaneCover);
   const replayView: ReplayViewState = {
-    hiSpeed: view.hiSpeed.drawn,
+    hiSpeed: hiSpeed.drawn,
     hiSpeedScale: options.scale,
     ...(view.hsFix !== undefined ? { hsFix: view.hsFix } : {}),
     covers,
   };
   const { laneBeats, mainBPM } = options;
-  if (laneBeats !== undefined && laneBeats > 0 && mainBPM !== undefined && mainBPM > 0 && view.hiSpeed.drawn > 0) {
+  if (laneBeats !== undefined && laneBeats > 0 && mainBPM !== undefined && mainBPM > 0 && hiSpeed.drawn > 0) {
     replayView.visibleMs = resolveWhiteNumber({
       laneBeats,
-      hiSpeed: view.hiSpeed.drawn,
+      hiSpeed: hiSpeed.drawn,
       sudden:
         (view.covers[0]?.suddenOn ? view.covers[0].sudden : 0) +
         (view.covers[0]?.absolute && (view.covers[0]?.liftOn ?? false) ? (view.covers[0]?.lift ?? 0) : 0),

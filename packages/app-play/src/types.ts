@@ -267,6 +267,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   scrollRate: number;
   gaugeAutoShift: PlayOptions['gaugeAutoShift'];
   bottomShiftableGauge: PlayOptions['bottomShiftableGauge'];
+  bmsonTotalMode: PlayOptions['bmsonTotalMode'];
   autoScratch1P: boolean;
   /** 2P auto scratch for the next play. Two-way synced with the LR2 select panel. */
   autoScratch2P: boolean;

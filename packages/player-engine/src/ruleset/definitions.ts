@@ -1,3 +1,4 @@
+import { isBmsonRecoveryDisabled, type BmsonTotalMode } from './bmson-total.ts';
 import { applyCustomJudgeTables, type BeatorajaCustomJudge } from './custom-judge.ts';
 import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeJudgeIndex } from './gauge.ts';
@@ -119,6 +120,8 @@ export interface GaugeGutsStep {
 }
 
 export interface GaugeSpec {
+  /** Suppress every positive delta, including HCN and raw deltas; damage and initial values are unchanged. */
+  recoveryDisabled?: boolean;
   /** Ruleset-scoped gauge label reported in the result. */
   id: string;
   min: number;
@@ -179,7 +182,8 @@ export interface RulesetConfig {
   noteCount: number;
   /**
    * The TOTAL the gauge runs on: BMS `#TOTAL` as is, bmson `info.total` as a percentage of this ruleset's default, or
-   * the default itself when the chart names none (or a value ≤ 0).
+   * the default itself when the chart names none (or a value ≤ 0). Spec-mode zero disables recovery separately,
+   * retaining this value for damage scaling.
    */
   effectiveTotal: number;
   /** LR2 money score (`(4PG + 2GR + GD) × 50000 / notes`, floored). */
@@ -197,6 +201,8 @@ export interface RulesetConfig {
 }
 
 export interface ResolveRulesetOptions {
+  /** bmson zero-total policy. Absent retains beatoraja-compatible recovery. */
+  bmsonTotalMode?: BmsonTotalMode;
   /** Forces a specific ruleset-scoped gauge id (see the gauge tables), bypassing {@link selectedGauge} mapping. */
   gauge?: string;
   /**
@@ -317,6 +323,7 @@ const BEATORAJA_MODES: Record<'FIVEKEYS' | 'SEVENKEYS' | 'PMS' | 'KEYBOARD', Bea
 };
 
 function resolveBeatorajaMode(laneMode: string): BeatorajaModeWindows {
+  if (laneMode.endsWith(' KEY GENERIC')) return BEATORAJA_MODES.KEYBOARD;
   if (laneMode.startsWith('5') || laneMode.startsWith('10')) return BEATORAJA_MODES.FIVEKEYS;
   if (laneMode.startsWith('9')) return BEATORAJA_MODES.PMS;
   if (laneMode.startsWith('24') || laneMode.startsWith('48')) return BEATORAJA_MODES.KEYBOARD;
@@ -844,7 +851,8 @@ function resolvePracticeGauge(
 /**
  * The TOTAL the gauge runs on. BMS `#TOTAL` is absolute; bmson `info.total` is a percentage of the ruleset's own
  * default TOTAL (bmson 1.0.0; beatoraja `BMSPlayerRule.validate`: `total > 0 ? total / 100 × default : default`).
- * Either way a value ≤ 0 means "use the default", so bmson `total: 0` does not freeze the gauge.
+ * Either way a value ≤ 0 supplies the default for arithmetic. The optional bmson spec policy suppresses
+ * recovery on final gauge tables separately, without changing this damage-scaling value.
  */
 function resolveEffectiveTotal(rulesetId: RulesetId, chart: RulesetChartFacts, baseNoteCount: number): number {
   const fallback = resolveDefaultTotal(rulesetId, baseNoteCount, chart.laneMode);
@@ -867,6 +875,36 @@ export function resolveRuleset(
   chart: RulesetChartFacts,
   rulesetId: RulesetId,
   options: ResolveRulesetOptions = {},
+): RulesetConfig {
+  if (
+    options.bmsonTotalMode === 'spec' &&
+    chart.total !== undefined &&
+    chart.total < 0 &&
+    (chart.totalUnit ?? (chart.sourceFormat === 'bmson' ? 'percent' : 'absolute')) === 'percent'
+  )
+    throw new RangeError('bmson spec TOTAL must be normalized to a non-negative percentage.');
+  const config = resolveRulesetTables(chart, rulesetId, options);
+  const disabled = isBmsonRecoveryDisabled(chart, options.bmsonTotalMode) && options.practice?.total === undefined;
+  if (!disabled) return config;
+  const suppress = (spec: GaugeSpec): GaugeSpec => ({
+    ...spec,
+    recoveryDisabled: true,
+    values: spec.values.map((delta) => Math.min(0, delta)) as unknown as GaugeSpec['values'],
+  });
+  return {
+    ...config,
+    gauge: suppress(config.gauge),
+    ...(config.gaugeFallback === undefined ? {} : { gaugeFallback: suppress(config.gaugeFallback) }),
+    ...(config.gaugeBank === undefined
+      ? {}
+      : { gaugeBank: { ...config.gaugeBank, specs: config.gaugeBank.specs.map(suppress) } }),
+  };
+}
+
+function resolveRulesetTables(
+  chart: RulesetChartFacts,
+  rulesetId: RulesetId,
+  options: ResolveRulesetOptions,
 ): RulesetConfig {
   const baseNotes = countBaseNotes(chart.notes);
   const { course } = options;

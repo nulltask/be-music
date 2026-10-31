@@ -228,6 +228,7 @@ export function createV0API(options: { now: () => number; newId: () => string; c
           errorResponse([
             'invalid-replay',
             'auto-play',
+            'two-player',
             'missing-fingerprint',
             'play-document-not-a-document',
             'play-document-fingerprint-mismatch',

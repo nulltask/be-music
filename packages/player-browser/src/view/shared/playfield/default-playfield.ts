@@ -3,7 +3,7 @@
  * (`notes.ts`, `long-notes.ts`, `lanes.ts`, `bombs.ts`), and an LR2 theme falls back to where it has no cell of its own.
  */
 import { Color, FillGradient, type Graphics } from 'pixi.js';
-import { type BeMusicLaneKind, resolveLaneRuns } from '@be-music/player-skin-sdk';
+import { type BeMusicLaneKind, longNoteCentreLineAlpha, resolveLaneRuns } from '@be-music/player-skin-sdk';
 import {
   type PixiBombsContext,
   type PixiLanesContext,
@@ -109,7 +109,15 @@ export function renderDefaultNote({ graphics, kind, x, w, y }: PixiNoteContext):
   drawNoteBody(graphics, x, y, Math.max(4, w), TONES[kind]);
 }
 
-export function renderDefaultLongNote({ graphics, kind, x, w, top, bottom }: PixiLongNoteContext): void {
+export function renderDefaultLongNote({
+  graphics,
+  kind,
+  x,
+  w,
+  top,
+  bottom,
+  releasedElapsedMs,
+}: PixiLongNoteContext): void {
   const tone = TONES[kind];
   const bodyX = x;
   const bodyW = Math.max(4, w);
@@ -118,7 +126,8 @@ export function renderDefaultLongNote({ graphics, kind, x, w, top, bottom }: Pix
   // The shared long-note shape (a translucent beam with a centre filament between the head and tail bars), in poster
   // tones: a denser ink of the lane colour and a paper-white filament.
   graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: tone.body, alpha: 0.3 });
-  graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: tone.top, alpha: 0.8 });
+  const line = longNoteCentreLineAlpha(releasedElapsedMs);
+  if (line > 0) graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: tone.top, alpha: 0.8 * line });
   drawNoteBody(graphics, bodyX, bottom, bodyW, tone);
   drawNoteBody(graphics, bodyX, top, bodyW, tone);
 }

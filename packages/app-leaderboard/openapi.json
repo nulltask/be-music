@@ -656,10 +656,11 @@
                     "unranked": {
                       "enum": [
                         "tempo",
-                        "course-stage"
+                        "course-stage",
+                        "bmson-total"
                       ],
                       "type": "string",
-                      "description": "Why the play was stored without ranking it: played at another tempo, or a course stage sent on its own. It moves no personal best and stays out of the rankings and lists."
+                      "description": "Why the play was stored without ranking it: another tempo, a standalone course stage, or bmson zero-total no recovery. It moves no personal best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -763,10 +764,11 @@
                     "unranked": {
                       "enum": [
                         "tempo",
-                        "course-stage"
+                        "course-stage",
+                        "bmson-total"
                       ],
                       "type": "string",
-                      "description": "Why the play was stored without ranking it: played at another tempo, or a course stage sent on its own. It moves no personal best and stays out of the rankings and lists."
+                      "description": "Why the play was stored without ranking it: another tempo, a standalone course stage, or bmson zero-total no recovery. It moves no personal best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -924,6 +926,7 @@
                       "enum": [
                         "invalid-replay",
                         "auto-play",
+                        "two-player",
                         "missing-fingerprint",
                         "play-document-not-a-document",
                         "play-document-fingerprint-mismatch",
@@ -2213,10 +2216,11 @@
                     "unranked": {
                       "enum": [
                         "tempo",
-                        "unreleased"
+                        "unreleased",
+                        "bmson-total"
                       ],
                       "type": "string",
-                      "description": "Why the run was stored without ranking it: a stage played at another tempo, or a course that is not released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists."
+                      "description": "Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, or a course that is not released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -2347,10 +2351,11 @@
                     "unranked": {
                       "enum": [
                         "tempo",
-                        "unreleased"
+                        "unreleased",
+                        "bmson-total"
                       ],
                       "type": "string",
-                      "description": "Why the run was stored without ranking it: a stage played at another tempo, or a course that is not released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists."
+                      "description": "Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, or a course that is not released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -2508,6 +2513,7 @@
                       "enum": [
                         "invalid-replay",
                         "auto-play",
+                        "two-player",
                         "aborted",
                         "missing-fingerprint",
                         "not-a-course-run",

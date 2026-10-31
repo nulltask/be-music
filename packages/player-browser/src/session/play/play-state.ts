@@ -36,7 +36,12 @@ export function applyPlayEvent(ctx: PlayStateContext, event: PlayEvent, nowMs: n
   ctx.playState = next;
   const drawn = next.view.hiSpeed.drawn;
   if (drawn !== previous.view.hiSpeed.drawn) {
-    if (next.view.hiSpeed.floating || next.view.hiSpeed.classic || next.view.hiSpeed.normalLevel !== undefined)
+    if (
+      event.type === 'chart-hi-speed' ||
+      next.view.hiSpeed.floating ||
+      next.view.hiSpeed.classic ||
+      next.view.hiSpeed.normalLevel !== undefined
+    )
       ctx.scrollHiSpeed.jump(drawn);
     else ctx.scrollHiSpeed.retarget(drawn, nowMs);
   }

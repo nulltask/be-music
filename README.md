@@ -2,9 +2,54 @@
 
 # be-music
 
-[Package naming and migration](./docs/packages.md)
+[Package responsibilities](./docs/packages.md)
 
 BMS/bmson toolchain composed of TypeScript + pnpm workspaces.
+
+## Features
+
+### Runs anywhere
+
+- Plays in the browser (WebGPU / WebGL, installable as a PWA), with touch play and portrait layouts.
+- A terminal player (TUI, also as a single executable) draws BGA images, videos, loading screens and banners with the kitty graphics protocol, and reads left and right Shift separately with the kitty keyboard protocol.
+- An embeddable preview / play view fills a window of any aspect ratio.
+
+### One engine, several rule sets
+
+- LR2, beatoraja and That-Which-Must-Not-Be-Named judgment, gauges and scoring, switchable on one engine.
+- The play options of all three in one place; options that only transform the chart or the view work under every rule set.
+- Seek to any point during AUTO, replay or manual play, and two-player modes (BATTLE / COUPLE / 2P PLAY).
+
+### Skins
+
+- Loads LR2 skins and beatoraja skins (JSON / Lua) as they are.
+- Built-in skins: Plain, Native (DOM + Canvas) and Synesthesia, a 3D scene that moves with each frequency band of the music.
+
+### Replays, records and courses
+
+- Every play records a replay that can be re-judged under any rule set; the judge is deterministic, so replays can verify scores.
+- Replay slots and a viewer for everything the player keeps in the browser.
+- Chart fingerprints identify charts by their content rather than their file bytes, including charts with `#RANDOM`.
+- LR2 course files, beatoraja's SQL-filtered random courses and NONSTOP courses (one stitched play), with course replays.
+
+### Charts, media and audio
+
+- Drop folders or ZIPs, including mixed chart and LR2 / beatoraja theme drops; large audio and video load on demand.
+- Guesses the text encoding of BMS files (Shift_JIS, UTF-8, EUC-JP and more), and writes BMS back keeping the source lines that did not change.
+- BGA images and videos, with in-browser transcoding for formats the browser cannot play, and MP4 / WebM recording of a play with WebCodecs.
+- Compressor and limiter controls for the key, BGM and master buses; heavy preparation runs on a worker pool.
+- Tools for editing charts, converting between BMS, bmson and JSON, and rendering a chart to an audio file.
+
+### Online services
+
+- A Leaderboard built with the player: sending is opt-in, and the Leaderboard decides what it shows. Chart scores and course runs get share cards.
+- One account across the player, the Leaderboard and the dashboard, through be-music's own OIDC provider; the services run on Cloudflare Workers.
+
+### Open and modular
+
+- Open source under the MIT License.
+- Built from reusable packages (`@be-music/*`): chart parsing and writing, chart models, the play engine, skins and UI each stand alone, and run in browsers and Node alike, so other applications can use them without the player.
+- Lit Web Components for player screens, with typed React and Vue wrappers, and a framework-free SDK for writing skins.
 
 ## Packages
 
@@ -94,7 +139,7 @@ pnpm run check
 pnpm run test
 ```
 
-The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files. `pnpm run test:e2e` plays the course browser checklist in the web player end to end with Playwright (a few minutes, so `pnpm run test` leaves it out); see [docs/course-checklist.md](docs/course-checklist.md#automated-run).
+The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files. `pnpm run test:e2e` plays the course browser checklist in the web player end to end with Playwright (a few minutes, so `pnpm run test` leaves it out); see [docs/player-web.md#browser-verification](docs/player-web.md#browser-verification).
 
 ## Package Releases
 
@@ -111,6 +156,7 @@ pnpm run release:version
 - In that state, merging the release PR of `devel -> main` creates a separate GitHub Release for each public package whose version has increased (private packages such as the player and the Leaderboard get none).
 - The player SEA executable is built from `@be-music/player-terminal` and attached to the `@be-music/player-terminal` release; `@be-music/chart-audio-renderer` also ships a SEA zip
 - The private repository root `package.json` stays at `0.0.0`; releasable versions are tracked in `packages/*/package.json`.
+- `scripts/release/changelog.ts` writes the changelog lines: each changeset as `- <commit>: <summary>`, and a package bumped only because its workspace dependencies moved gets one `- Updated dependencies: ...` line listing their new versions.
 
 The tag is created in the format `@be-music/package-name@x.y.z`.
 
@@ -122,7 +168,6 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [BMS implementation specification](./docs/bms-spec.md)
 - [bmson implementation specification](./docs/bmson-spec.md)
 - [Bemuse implementation specification](./docs/bemuse-spec.md)
-- [LR2 and beatoraja semantics](./docs/semantics-lr2-beatoraja.md)
 - [Player implementation specification](./docs/player-spec.md)
 - [Terminal player implementation notes](./docs/player-tui.md)
 - [Browser player implementation notes](./docs/player-web.md)

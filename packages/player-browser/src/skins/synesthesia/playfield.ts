@@ -24,6 +24,7 @@ import {
   holdSparks,
   resolveLaneRuns,
   type BeMusicLaneFrame,
+  longNoteCentreLineAlpha,
 } from '@be-music/player-skin-sdk';
 import {
   type PixiBombsContext,
@@ -185,14 +186,26 @@ export function renderSynesthesiaMine({ graphics, x, w, y, nowMs }: PixiNoteCont
   }
 }
 
-export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom, mode }: PixiLongNoteContext): void {
+export function renderSynesthesiaLongNote({
+  graphics,
+  kind,
+  x,
+  w,
+  top,
+  bottom,
+  mode,
+  releasedElapsedMs,
+}: PixiLongNoteContext): void {
   const light = LIGHTS[kind];
   const bodyX = x;
   const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
-  // A beam of light between head and tail: a translucent core, no line down its middle.
+  // A beam of light between head and tail: a translucent core with a bright centre filament.
   graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
+  // Let go early, the filament fades out with the hold.
+  const line = longNoteCentreLineAlpha(releasedElapsedMs);
+  if (line > 0) graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 * line });
   drawNote(graphics, bodyX, bottom, bodyW, light);
   // An LN's tail is not judged, so it is drawn translucent: where to let go, not a note to hit. A CN / HCN tail is
   // judged on release and keeps the full cap.

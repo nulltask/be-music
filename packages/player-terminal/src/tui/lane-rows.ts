@@ -14,6 +14,7 @@ export interface TUILane {
   channel: string;
   key: string;
   isScratch?: boolean;
+  tone?: 'white' | 'black';
 }
 
 export const MEASURE_LINE_SYMBOL = '▔';
@@ -651,6 +652,7 @@ function colorizeActiveInputKeyLabel(value: string): string {
 }
 
 function resolveInputKeyLaneGroup(lane: TUILane): 'white' | 'black' {
+  if (lane.tone !== undefined) return lane.tone;
   const normalized = lane.channel.toUpperCase();
   if (BLUE_NOTE_CHANNELS.has(normalized)) {
     return 'black';

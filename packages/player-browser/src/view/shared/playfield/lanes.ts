@@ -38,7 +38,10 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
     const w = themeLane ? themeLane.w : Math.max(4, (fallbackLane?.w ?? PLAYFIELD.w) * fallbackScaleX);
     const top = themeLane ? themeLane.top : fallbackTop * fallbackScaleY;
     const originalBottom = themeLane ? themeLane.bottom : fallbackBottom * fallbackScaleY;
-    const side = ctx.play.chartPlayVariant !== '9' && channel.startsWith('2') ? '2P' : '1P';
+    const side =
+      ctx.play.chartPlayVariant !== '9' && !ctx.play.chartPlayVariant?.startsWith('generic-') && channel.startsWith('2')
+        ? '2P'
+        : '1P';
     const lift = ctx.drawsLift ? (ctx.play.resolveLaneCovers().find((cover) => cover.side === side)?.lift ?? 0) : 0;
     const lane = ctx.drawsLift
       ? resolveLiftedLane(

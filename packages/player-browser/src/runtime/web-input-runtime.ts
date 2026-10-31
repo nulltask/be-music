@@ -15,7 +15,7 @@ export interface WebInputRuntimeOptions {
   inputSignals: PlayerInputSignalBus;
   /**
    * Map produced by {@link createInputTokenToChannelsMap} (re-exported through the engine's
-   * {@link CreatePlayerInputRuntimeContext}). Not read here: the runtime sends raw tokens and the engine owns the
+   * {@link CreatePlayerInputRuntimeContext}). Used to keep a bound F5 as a lane key; the runtime sends raw tokens and the engine owns the
    * lane resolution path.
    */
   inputTokenToChannels: ReadonlyMap<string, readonly string[]>;
@@ -67,7 +67,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
       options.inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
       return;
     }
-    if (keyEvent.code === 'F5') {
+    if (keyEvent.code === 'F5' && !options.inputTokenToChannels.has('f5')) {
       // F5 is the LR2 / beatoraja convention for restart. Block the browser's reload before the engine handles it.
       keyEvent.preventDefault();
       options.inputSignals.pushCommand({ kind: 'interrupt', reason: 'restart' });
@@ -173,6 +173,7 @@ export function keyboardEventToTokens(event: Pick<KeyboardEvent, 'code'>): strin
   if (code.length === 6 && code.startsWith('Digit')) {
     return [code.charAt(5)];
   }
+  if (/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(code)) return [code.toLowerCase()];
   switch (code) {
     case 'ShiftLeft':
       return ['shift-left', 'shift'];
@@ -194,6 +195,18 @@ export function keyboardEventToTokens(event: Pick<KeyboardEvent, 'code'>): strin
       return ['escape'];
     case 'Tab':
       return ['tab'];
+    case 'Minus':
+      return ['-'];
+    case 'Equal':
+      return ['='];
+    case 'BracketLeft':
+      return ['['];
+    case 'BracketRight':
+      return [']'];
+    case 'Backslash':
+      return ['\\'];
+    case 'Backquote':
+      return ['`'];
     case 'Semicolon':
       return [';'];
     case 'Comma':

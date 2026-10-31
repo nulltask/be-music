@@ -14,6 +14,8 @@ import { Container } from 'pixi.js';
 import type { BuiltInKit } from '../../host/family-kit.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { SkinDOMMount } from '../../skin/be-music/dom-mount.ts';
+import { ChartImageCache } from '../../skin/be-music/chart-images.ts';
+import type { BrowserAssetSource } from '../../collection/types.ts';
 import type {
   FamilyView,
   IntentSink,
@@ -198,8 +200,9 @@ export class DOMDecideView
   implements DecideView
 {
   public readonly timing;
+  private readonly chartImages: ChartImageCache;
 
-  public constructor(kit: BuiltInKit) {
+  public constructor(kit: BuiltInKit, options: { source?: BrowserAssetSource } = {}) {
     let send: IntentSink<DecideIntent> = () => {};
     super(
       kit,
@@ -212,6 +215,7 @@ export class DOMDecideView
     );
     send = (intent) => this.emit(intent);
     this.timing = resolveBuiltInDecideTiming(kit);
+    this.chartImages = new ChartImageCache({ resolveSource: () => options.source });
   }
 
   public draw(frame: DecideFrame): void {
@@ -219,8 +223,14 @@ export class DOMDecideView
     this.mount.update({
       ...this.presentation,
       chart: frame.chart,
+      titleImage: this.chartImages.lookupURL(frame.chart, 'titleImage'),
       progress: frame.progress,
       inputReady: frame.clock.nowMs >= frame.inputOpenAtMs,
     });
+  }
+
+  public override dispose(): void {
+    this.chartImages.dispose();
+    super.dispose();
   }
 }

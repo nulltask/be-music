@@ -6,7 +6,7 @@ import { crc32, deflateSync } from 'node:zlib';
 
 /**
  * Builds the tiny BMS library and `.lr2crs` course files the course browser checklist runs on
- * (`docs/course-checklist.md`): short charts with sine keysounds and a continuous BGM tone (so fades show), courses of
+ * (`docs/player-web.md#browser-verification`): short charts with sine keysounds and a continuous BGM tone (so fades show), courses of
  * every LR2 kind, a GRADE course with a dense stage that empties the gauge, a course with a stage missing from the
  * library, and a seven-stage file for the five-stage warning. It also writes two minimal skins made for the checklist
  * (`skins/`, no third-party assets): an LR2 theme with its sound set and a beatoraja JSON skin, each with the

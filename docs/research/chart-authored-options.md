@@ -1,0 +1,69 @@
+[日本語](./chart-authored-options.ja.md)
+
+# Chart-authored options: evidence for #835
+
+Investigated on 2026-10-30. This note separates native documentation, observed native behavior and proposed Be-Music integration. It is not an implementation support declaration.
+
+## Primary material
+
+- [nanasigroove 1.552 official download, archived 2013-12-28](https://web.archive.org/web/20131228034524/http://d11x.sakura.ne.jp/software/nanasigroove/nanasi_1552_full.zip): `nanasi/nanasi_manual.chm`, pages `_RESOURCE/11_1_bms.html` (format) and `_RESOURCE/05_8_3_playoption.html` (option descriptions). The current [author's page](https://d11x.sakura.ne.jp/asdf/ナナシグルーヴ/) still links this release, but its live download returned 404. The archived ZIP and CHM were read without running the game.
+- [charatbeatHDX 1.18 official download, archived 2021-12-14](https://web.archive.org/web/20211214030536/http://www.charatsoft.com/software/download/charatbeatHDX_v1.18.zip): `FILES/html/06.html` documents supported chart commands; `FILES/html/05.html` documents defaults. The HTML is UTF-8; the nanasigroove manual is Shift_JIS.
+- [hitkey's option catalog](https://hitkey.nekokan.dyndns.info/option.htm) supplies the complete old/new ID comparison; [command observations](https://hitkey.nekokan.dyndns.info/cmds.htm#OPTION) describe declaration precedence. These are observations, not native implementation source.
+- [hitkey's 2018-11-03 native experiment](https://hitkey.nekokan.dyndns.info/diary1811.php) explicitly tests conflicting simultaneous A6 events.
+
+## Syntax and lifecycle
+
+The nanasigroove format manual defines one string ID per `#OPTION` declaration, namespaced as `774:category_option`. CRAZY effects can coexist, with conflicts inside a subfamily. `#CHANGEOPTIONxx` assigns a declaration to `01`–`ZZ`; channel `A6` executes it. It permits HI-SPEED, CHANGE-HS, HIDDEN and CRAZY, excluding judgment modifiers and ADDMINE. Thus lane randomization is initial-only: dynamic remapping of held long notes is not required by this dialect. No native rule was found for case folding, whitespace-separated multiple IDs, course precedence, or seeking.
+
+The observation memo says repeated initial declarations retain different families and later source lines win within an exclusive family. Preserve each complete declaration and source order; splitting on whitespace corrupts HDX parameters. Native A6 conflicts do **not** establish a simple last-line rule: the 2018 test places STEALTH then OFF at the same position yet observes STEALTH. Be-Music must document its own stable order if it cannot reproduce the native ordering.
+
+## ID inventory
+
+These are format identifiers, not Be-Music support claims. Prefix each nanasigroove entry below with `774:`. The native option-description manual names the families; the [catalog](https://hitkey.nekokan.dyndns.info/option.htm) records exact IDs and aliases.
+
+| Family            | Modern suffixes / parameters                                                                                                                                                                                                                         | A6  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| `HI-SPEED_`       | `xY.ZZ`                                                                                                                                                                                                                                              | Yes |
+| `CHANGE-HS_`      | `OFF`, `ACCEL`, `BRAKE`, `LINE`, `NAZO`, `NAZO2`, `RANDOM`, `COMBO-UP`, `COMBO-DN`, `COMBO-RD`, `LINENAZO`, `WARP`, `S-WARP`, `LINE2`, `LINEACCEL`, `CHAOS`, `RANDOM2`                                                                               | Yes |
+| `HIDDEN_`         | `OFF`, `HIDDEN`, `HIDDEN2`, `HIDDEN3`, `SUDDEN`, `SUDDEN2`, `SUDDEN3`, `M-SUDDEN`, `HID-SUD`, `HID-SUD2`, `HID-SUD3`, `MIST`, `DEEPMIST`, `BLINK`, `BLINK2`, `STEALTH`                                                                               | Yes |
+| `RANDOM_`         | `OFF`, `MIRROR`, `RANDOM`, `RANDOM+`, `ALL`, `ALL+`                                                                                                                                                                                                  | No  |
+| `NOTES_`          | `OFF`, `DOUBLE`, `COPY`, `DBLCOPY`                                                                                                                                                                                                                   | No  |
+| `CRAZY_` visual   | `OFF`, `STAR`, `SPIN`, `CLONE`, `CLONE2`, `S-CLONE`, `LINEMOVE`, `LINEMOVE2`, `XWAVE`, `XWAVE2`, `YWAVE`, `YWAVE2`, `XYWAVE`, `XYWAVE2`, `3DWAVE`, `3DWAVE2`, `HIDJUDGE`, `DARK`, `DARK2`, `REVERSE`, `SMALL`, `BIG`, `FADEIN`, `FADEOUT`, `RD-SIZE` | Yes |
+| `CRAZY_` gameplay | `GOOD2BAD`, `GREAT2BAD`, `HELLJUDGE`, `ADDMINE`                                                                                                                                                                                                      | No  |
+| `GAMELEVEL_`      | `BEGINNER`, `NORMAL`, `HYPER`, `DANGER`                                                                                                                                                                                                              | No  |
+| `EXTRA_`          | `OFF`, `EASY`, `HARD`, `VERYHARD`                                                                                                                                                                                                                    | No  |
+
+The catalog additionally records legacy `HSP-*`, `HID-*`, `RND-*`, `CRA-*`, `GTP-*`, `GLV-*` IDs. Initial declarations accept legacy aliases; A6 ignores them. Legacy `CRA-RHS1/2/3` select playback rates 1.2/1.5/2.0. Do not infer that a displayed BASE-SPEED value is a valid modern chart ID: the catalog lists only those old chart IDs. AUTOPLAY IDs are not valid chart directives.
+
+The native manual gives HI-SPEED range **0.25–100.0** and identifies it as visual spacing rather than audio tempo. The catalog specifies **0.01 increments** and examples such as 0.77. Existing user controls have different limits: the [engine control helper](../../packages/player-engine/src/core/high-speed-control.ts) clamps to 0.5–10 and half-step increments, while the [browser scene option validator](../../packages/player-scene-model/src/play-options/hi-speed.ts) uses 0.1–6.0. Neither user-option path can faithfully accept the full authored range. Neither source supplies numerical HIDDEN thresholds, fade opacity, blink periods, acceleration curves, oscillation periods or random distributions. Native formulas cannot be inferred from their names.
+
+## charatbeatHDX: confirmed first-party contract
+
+The bundled format manual specifies `#OPTION charatbeatHDX:BGAMODE n`: 0 scales to the BGA area; 1 uses 100% source size at top-center; 2 uses 80% at top-center. `#OPTION charatbeatHDX:LONGMODE n` forces 0=CN or 1=HCN. Its configuration manual says the user LONG MODE default applies only when the chart does not specify it. The format support table marks `#CHANGEOPTION` unsupported. Neither manual defines prefix case insensitivity or repeated-header ordering.
+
+## Implementation implications and remaining evidence
+
+The following are integration judgments from the current repository, not native compatibility claims:
+
+- HI-SPEED can use engine display state, but needs its authored range preserved through browser, terminal, replay and seek. Keep it separate from tempo.
+- LONGMODE can resolve into the existing CN/HCN judge path before note extraction. Explicit per-note bmson types and mixed `LNMODE`/HDX declarations need a documented precedence policy and effective fingerprint/replay identity.
+- MIRROR/RANDOM have existing preparation machinery; cross-side ALL and inclusion of scratch/foot-pedal must be checked independently. NOTES doubling is not synonymous with an existing battle label.
+- HIDDEN/CHANGE-HS/CRAZY visual families require explicit deterministic formulas and all-host presentation wiring before being claimed implemented. Mapping a name to a roughly similar lane cover is not native parity.
+- The native manual mentions option score bonuses but does not specify a reusable scoring algorithm. Its AUTOPLAY score exclusions describe user modes that chart IDs cannot request. Course constraints, score eligibility, effective-option recording and server simulation therefore need explicit Be-Music rules; preserving replay option snapshots alone does not prove judge reproduction.
+
+## Support boundary (decision)
+
+Usage in the local test corpus is **0 / 5,344** BMS-family files for `#OPTION`, `#CHANGEOPTIONxx` and channel `A6` alike. Be-Music therefore executes only the families with a confirmed, deterministic contract and diagnoses the rest:
+
+| Family                                   | Be-Music behavior                                      | Reason                                                                                                                                                                                                                                |
+| ---------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `774:HI-SPEED_`, legacy `HSP-*`          | Executed (initial and A6; legacy aliases initial only) | Confirmed range and step; see [ADR 0026](../adr/0026-chart-authored-display-options.md)                                                                                                                                               |
+| `charatbeatHDX:LONGMODE`                 | Executed when initial; timed use is diagnosed          | First-party contract; see [ADR 0027](../adr/0027-hdx-long-note-modes.md)                                                                                                                                                              |
+| `CHANGE-HS_`, `HIDDEN_`, `CRAZY_` visual | Diagnosed as `unsupported-option`; no effect           | No native formula for thresholds, curves, periods or randomness. A look-alike lane cover would be a parity claim the sources cannot support Follow-up: [#843](https://github.com/nulltask/be-music/issues/843).                       |
+| `RANDOM_`, `NOTES_`, `CRAZY_` gameplay   | Diagnosed as `unsupported-option`; no effect           | They change judged lanes, note counts or judgment. A compulsory chart value would override user options, course locks and record eligibility, for no observed use Follow-up: [#844](https://github.com/nulltask/be-music/issues/844). |
+| `GAMELEVEL_`, `EXTRA_`                   | Diagnosed as `unsupported-option`; no effect           | They select gauges and difficulty, which Be-Music leaves to the player and the ruleset Follow-up: [#845](https://github.com/nulltask/be-music/issues/845).                                                                            |
+| `charatbeatHDX:BGAMODE`                  | Diagnosed as `unsupported-option`; no effect           | BGA placement belongs to the skin; the browser and terminal BGA areas have no HDX top-center frame Follow-up: [#846](https://github.com/nulltask/be-music/issues/846).                                                                |
+
+Diagnostics never cancel accepted operations, never change notes, judgments, fingerprints or record eligibility, and are not recorded in replays: a replay keeps only the effective program, so a family implemented later cannot activate in an existing recording. Implementing one of the diagnosed families needs a new effective-program profile version, its replay and record rules, and its own issue: [#843](https://github.com/nulltask/be-music/issues/843) (display), [#844](https://github.com/nulltask/be-music/issues/844) (judging), [#845](https://github.com/nulltask/be-music/issues/845) (gauge and difficulty) and [#846](https://github.com/nulltask/be-music/issues/846) (HDX BGAMODE) track them.
+
+Local inspection material: `/tmp/chart-option-archive-0`, `/tmp/chart-option-archive-1`, `/tmp/chart-options-nanasi-manual/`, `/tmp/nanasi-primary-11_1_bms.txt`, `/tmp/nanasi-primary-05_8_3_playoption.txt`, `/tmp/chart-option-native-1-05.html`, `/tmp/chart-option-native-1-06.html`, `/tmp/hdx-primary-05.txt`, `/tmp/hdx-primary-06.txt`. These temporary archives contain third-party distributions and are not repository artifacts.

@@ -2,6 +2,7 @@ import { createHiSpeedState, createPlayState } from '@be-music/player-scene-mode
 import { describe, expect, it } from 'vite-plus/test';
 import { PlaySession } from './play-session.ts';
 import { adjustHiSpeed } from './play-view-settings.ts';
+import { applyPlayEvent } from './play-state.ts';
 
 describe('PlaySession hi-speed under HS-FIX', () => {
   /** A play (not loaded) at the player's hi-speed 3.0 on a chart whose HS-FIX multiplier is 2/3. */
@@ -45,4 +46,19 @@ describe('PlaySession hi-speed under HS-FIX', () => {
     expect(view.getHiSpeed()).toBe(4.5);
     expect(view.playState.view.hiSpeed.drawn).toBe(3);
   });
+});
+
+it('authored speed changes and clears jump immediately without overwriting the user preference', () => {
+  const changes: number[] = [];
+  const session = new PlaySession({ initialHiSpeed: 3, onHiSpeedChange: (value) => changes.push(value) });
+  applyPlayEvent(session, { type: 'chart-hi-speed', value: 100 }, 100);
+  expect(session.getHiSpeed()).toBe(100);
+  expect(session.scrollHiSpeed.valueAt(100)).toBe(100);
+  expect(adjustHiSpeed(session, -0.1)).toBe(false);
+  applyPlayEvent(session, { type: 'chart-hi-speed', value: 0.77 }, 200);
+  expect(session.scrollHiSpeed.valueAt(200)).toBe(0.77);
+  applyPlayEvent(session, { type: 'chart-hi-speed' }, 300);
+  expect(session.getHiSpeed()).toBe(3);
+  expect(session.scrollHiSpeed.valueAt(300)).toBe(3);
+  expect(changes).toEqual([]);
 });

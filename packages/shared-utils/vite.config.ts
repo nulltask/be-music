@@ -17,6 +17,7 @@ export default defineConfig({
       'optional-node-module': 'src/optional-node-module.ts',
       path: 'src/path.ts',
       pcm: 'src/pcm.ts',
+      png: 'src/png.ts',
       workerize: 'src/workerize.ts',
     },
   }),

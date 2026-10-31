@@ -1,6 +1,8 @@
 import {
-  collectBMSExWAVVolumeMultipliers,
-  collectBmsWAVCmdVolumeMultipliers,
+  collectBmsWAVVolumeMultipliers,
+  collectBmsWAVPlaybackModifiers,
+  resolveBmsWAVPlayback,
+  type BmsWAVPlaybackModifiers,
   firesBeforeTempoReversal,
   isPlayLaneSoundChannel,
   resolveChart,
@@ -21,8 +23,16 @@ let nodeFSPromisesPromise: Promise<NodeFSPromises> | undefined;
 let nodePathPromise: Promise<NodePath> | undefined;
 const loadNodeFSPromises = (): Promise<NodeFSPromises> => (nodeFSPromisesPromise ??= import('node:fs/promises'));
 const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
-import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
-import { isAbortError, throwIfAborted } from '@be-music/shared-utils/core';
+import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
+import {
+  isAbortError,
+  resolveSampleSliceEnvelope,
+  sampleSliceEnvelopeGain,
+  SAMPLE_SLICE_FADE_SECONDS,
+  throwIfAborted,
+  transformStereoPCM,
+  type SampleSliceEnvelope,
+} from '@be-music/shared-utils/core';
 import { parseChartFile, resolveBMSControlFlow } from '@be-music/chart-parser';
 import { detectAudioFormat, encodeAIFF16, encodeWAV16 } from './file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
@@ -57,6 +67,8 @@ export interface RenderResult {
 }
 
 export interface RenderSingleSampleOptions {
+  /** Authored pitch, pan, frequency and sounding-time limit, applied before host tempo controls. */
+  playbackModifiers?: BmsWAVPlaybackModifiers;
   sampleRate?: number;
   gain?: number;
   baseDir?: string;
@@ -68,6 +80,8 @@ export interface RenderSingleSampleOptions {
    * charts that declared `#BASE 62` so a lowercase `0a` key isn't re-folded back to `0A` during validation.
    */
   base?: 36 | 62;
+  /** The chart's `#PATH_WAV` directory, tried before the bare sample path. */
+  pathPrefix?: string;
 }
 
 interface StereoSample {
@@ -95,11 +109,19 @@ interface ScheduledSampleRender {
   triggerGain: number;
   sampleOffsetFrames: number;
   sampleMaxFrames?: number;
+  slice?: ScheduledSampleSlice;
+}
+
+/** A slice window that cuts its source file, with the ramps that keep the cut from clicking. */
+interface ScheduledSampleSlice {
+  lengthFrames: number;
+  envelope: SampleSliceEnvelope;
 }
 
 interface ScheduledSampleFrameWindow {
   sampleOffsetFrames: number;
   sampleMaxFrames: number;
+  slice?: ScheduledSampleSlice;
 }
 
 const DEFAULT_SAMPLE_RATE = 44_100;
@@ -238,19 +260,9 @@ async function scheduleSampleRenders(params: {
   // `pathPrefix + samplePath` before the bare path so charts that organize their WAVs under a sub-folder (e.g.
   // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve correctly.
   const pathWAVPrefix = typeof json.bms.pathWAV === 'string' ? json.bms.pathWAV : undefined;
-  // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides as a 0..127 byte. Pre-collect into a Map<slotKey,
-  // 0..1 multiplier> so the per-trigger lookup is O(1); slots without a `#WAVCMD 01` line stay absent and skip the
-  // multiplication. Pitch / loop bytes (`pp = 00` / `02`) are intentionally not collected here — applying them would
-  // require resampling / loop-aware mixing that this offline renderer doesn't yet implement.
-  const wavCmdVolumeMultipliers = collectBmsWAVCmdVolumeMultipliers(json.bms.wavCmds, resolveBMSBase(json));
-  // BMS spec — `#EXWAVxx [flags] params filename` extended WAV declarations include an optional `v` (centibel) volume
-  // that composes multiplicatively with `#WAVCMD 01 xx vv`. Fold the extracted multipliers into the same Map so the
-  // per-trigger gain math stays a single lookup. Pan / freq fall to a future patch since they require resampling /
-  // stereo splitting in this offline renderer.
-  for (const [slot, multiplier] of collectBMSExWAVVolumeMultipliers(json.bms.exWAV)) {
-    const previous = wavCmdVolumeMultipliers.get(slot) ?? 1;
-    wavCmdVolumeMultipliers.set(slot, previous * multiplier);
-  }
+  // MacBeat WAVCMD volume is a percentage (100 = unity). Pitch and duration are handled separately.
+  const wavCmdVolumeMultipliers = collectBmsWAVVolumeMultipliers(json);
+  const playbackModifiers = collectBmsWAVPlaybackModifiers(json);
   for (const trigger of triggers) {
     throwIfAborted(signal);
     const sample = await getOrCreateSample({
@@ -264,6 +276,7 @@ async function scheduleSampleRenders(params: {
       signal,
       onSampleLoadProgress,
       pathPrefix: pathWAVPrefix,
+      playbackModifiers: playbackModifiers.get(trigger.sampleKey),
     });
     const frameWindow = resolveScheduledSampleFrameWindow(trigger, sampleRate, sample);
     if (!frameWindow) {
@@ -291,6 +304,7 @@ async function scheduleSampleRenders(params: {
         triggerGain,
         sampleOffsetFrames: frameWindow.sampleOffsetFrames,
         sampleMaxFrames: frameWindow.sampleMaxFrames,
+        slice: frameWindow.slice,
       }) - 1;
     if (usesMonophonicWAVPlayback(json)) {
       latestBMSScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
@@ -317,12 +331,26 @@ function resolveScheduledSampleFrameWindow(
     typeof trigger.sampleDurationSeconds === 'number' && Number.isFinite(trigger.sampleDurationSeconds)
       ? Math.max(1, Math.round(trigger.sampleDurationSeconds * sampleRate))
       : undefined;
-  const sampleMaxFrames =
+  const lengthFrames =
     requestedDurationFrames === undefined ? availableFrames : Math.min(availableFrames, requestedDurationFrames);
-  if (sampleMaxFrames <= 0) {
+  if (lengthFrames <= 0) {
     return undefined;
   }
-  return { sampleOffsetFrames, sampleMaxFrames };
+  const envelope = resolveSampleSliceEnvelope(
+    sampleOffsetFrames,
+    requestedDurationFrames,
+    sample.left.length,
+    Math.round(SAMPLE_SLICE_FADE_SECONDS * sampleRate),
+  );
+  if (envelope.fadeIn === 0 && envelope.fadeOut === 0) {
+    return { sampleOffsetFrames, sampleMaxFrames: lengthFrames };
+  }
+  // A cut slice rings on past its end while it fades out, so the window grows by the fade-out.
+  return {
+    sampleOffsetFrames,
+    sampleMaxFrames: lengthFrames + envelope.fadeOut,
+    slice: { lengthFrames, envelope },
+  };
 }
 
 function resolveScheduledTriggerGain(
@@ -354,15 +382,7 @@ function shouldScheduleTrigger(
   if (json.sourceFormat !== 'bmson') {
     return true;
   }
-  // bmson 1.0.0 spec: a `c=true` note MUST NOT restart playback — it's a continuation marker that rides on the previous
-  // `c=false` anchor's BufferSource. Scheduling a separate render for it would overlap with the still-running anchor
-  // sample (especially now that the slice's `durationSeconds` is walked out to the next genuine restart) and
-  // effectively double the mix gain at every `c=true` hit. The runtime side achieves the same outcome via its
-  // `activeSampleNodes` "skip when already playing" gate; the offline mixer has no such state, so the skip has to
-  // happen up front here.
-  if (trigger.event.bmson?.c === true) {
-    return false;
-  }
+  // Each pulse plays its assigned slice, including continuations. Only simultaneous uses of that slice share audio.
   if (!trigger.sampleSliceId) {
     return true;
   }
@@ -419,6 +439,7 @@ function mixScheduledSamples(
       item.sampleOffsetFrames,
       item.sampleMaxFrames,
       signal,
+      item.slice,
     );
   }
 }
@@ -441,11 +462,13 @@ export async function renderSingleSample(
     samplePath,
     sampleRate,
     baseDir,
+    pathPrefix: options.pathPrefix,
     fallbackToneSeconds,
     loadedSamples: new Map(),
     resolvedPathCache: new Map(),
     signal: options.signal,
     onSampleLoadProgress: options.onSampleLoadProgress,
+    playbackModifiers: options.playbackModifiers,
   });
   throwIfAborted(options.signal);
   return toRenderResult(sample, sampleRate, gain);
@@ -476,6 +499,7 @@ export async function writeAudioFile(outputPath: string, result: RenderResult): 
 }
 
 async function getOrCreateSample(params: {
+  playbackModifiers?: BmsWAVPlaybackModifiers;
   sampleKey: string;
   samplePath?: string;
   sampleRate: number;
@@ -498,6 +522,7 @@ async function getOrCreateSample(params: {
     signal,
     onSampleLoadProgress,
     pathPrefix,
+    playbackModifiers,
   } = params;
   throwIfAborted(signal);
 
@@ -511,7 +536,17 @@ async function getOrCreateSample(params: {
     return cached;
   }
 
-  const fallback = getFallbackSample(sampleKey, sampleRate, fallbackToneSeconds);
+  const originalFallback = getFallbackSample(sampleKey, sampleRate, fallbackToneSeconds);
+  const fallback = playbackModifiers
+    ? transformStereoPCM(
+        originalFallback.left,
+        originalFallback.right,
+        sampleRate,
+        sampleRate,
+        resolveBmsWAVPlayback(playbackModifiers, sampleRate),
+        signal,
+      )
+    : originalFallback;
   if (!samplePath) {
     loadedSamples.set(sampleKey, fallback);
     onSampleLoadProgress?.({
@@ -557,10 +592,20 @@ async function getOrCreateSample(params: {
     throwIfAborted(signal);
     const decoded = await decodeAudioSample(buffer, resolvedPath, signal);
     throwIfAborted(signal);
-    const left = resampleLinear(decoded.left, decoded.sampleRate, sampleRate, signal);
     const rightSource = decoded.right ?? decoded.left;
-    const right = resampleLinear(rightSource, decoded.sampleRate, sampleRate, signal);
-    const sample = { left, right };
+    const sample = playbackModifiers
+      ? transformStereoPCM(
+          decoded.left,
+          rightSource,
+          decoded.sampleRate,
+          sampleRate,
+          resolveBmsWAVPlayback(playbackModifiers, decoded.sampleRate),
+          signal,
+        )
+      : {
+          left: resampleLinear(decoded.left, decoded.sampleRate, sampleRate, signal),
+          right: resampleLinear(rightSource, decoded.sampleRate, sampleRate, signal),
+        };
     loadedSamples.set(sampleKey, sample);
     onSampleLoadProgress?.({
       stage: 'decoded',
@@ -631,6 +676,7 @@ function mixSample(
   sampleOffsetFrames = 0,
   sampleMaxFrames?: number,
   signal?: AbortSignal,
+  slice?: ScheduledSampleSlice,
 ): void {
   const sourceStart = Math.max(0, sampleOffsetFrames);
   const availableFrames = sample.left.length - sourceStart;
@@ -651,6 +697,19 @@ function mixSample(
   const framesToMix = Math.min(availableFrames, requestedFrames, destinationAvailable);
   const sourceLeft = sample.left;
   const sourceRight = sample.right;
+  if (slice) {
+    for (let index = 0; index < framesToMix; index += 1) {
+      if (signal && (index & 0x7ff) === 0) {
+        throwIfAborted(signal);
+      }
+      const source = sourceStart + index;
+      const target = startFrame + index;
+      const frameGain = gain * sampleSliceEnvelopeGain(index, slice.lengthFrames, slice.envelope);
+      destinationLeft[target] += sourceLeft[source] * frameGain;
+      destinationRight[target] += sourceRight[source] * frameGain;
+    }
+    return;
+  }
   if (!signal) {
     for (let index = 0; index < framesToMix; index += 1) {
       const source = sourceStart + index;

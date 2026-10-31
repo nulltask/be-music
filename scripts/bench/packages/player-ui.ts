@@ -47,6 +47,37 @@ const playfieldFrame: Parameters<typeof ui.resolvePlayfieldParts>[0] = {
   },
 };
 const playfieldParts = ui.resolvePlayfieldParts(playfieldFrame);
+const bgaImage = { width: 256, height: 256 } as CanvasImageSource;
+const bgaCropImage = { width: 128, height: 64 } as CanvasImageSource;
+const opacityPlayfieldParts: ui.BeMusicPlayfieldParts = {
+  ...playfieldParts,
+  bga: {
+    rect: { x: 600, y: 0, w: 240, h: 240 },
+    data: {
+      shown: true,
+      frame: {
+        poorActive: false,
+        stacks: [
+          {
+            base: bgaImage,
+            layer: bgaCropImage,
+            origins: { layer: { x: 32, y: 48 } },
+            poorActive: false,
+            alpha: 0.75,
+            opacity: { base: 1, layer: 0.5, layer2: 1, poor: 1 },
+          },
+          {
+            base: bgaImage,
+            layer2: bgaImage,
+            poorActive: false,
+            alpha: 0.25,
+            opacity: { base: 1, layer: 1, layer2: 0.25, poor: 1 },
+          },
+        ],
+      },
+    },
+  },
+};
 const gameplayFrame = {
   layout: { ...playfieldFrame.layout },
   settings: {},
@@ -76,7 +107,13 @@ const gameplayFrame = {
   replay: false,
   seekable: true,
 } as unknown as Parameters<typeof ui.resolveGameplayPanels>[0];
-const noopContext = new Proxy({}, { get: () => () => {}, set: () => true }) as ui.BeMusicPlayfieldPaintContext;
+const noopContext = new Proxy(
+  { globalAlpha: 1 },
+  {
+    get: (target, key) => Reflect.get(target, key) ?? (() => {}),
+    set: (target, key, value) => Reflect.set(target, key, value),
+  },
+) as ui.BeMusicPlayfieldPaintContext;
 const NON_ELEMENT_EXPORTS = new Set([
   'defineBeMusicElements',
   'resolvePlayfieldParts',
@@ -100,7 +137,7 @@ export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
         ui.resolvePlayfieldParts(playfieldFrame);
       },
     });
-    define('player-ui.paintPlayfieldParts', { run: () => ui.paintPlayfieldParts(noopContext, playfieldParts) });
+    define('player-ui.paintPlayfieldParts', { run: () => ui.paintPlayfieldParts(noopContext, opacityPlayfieldParts) });
     define('player-ui.formatPlaybackTime', {
       run: () => {
         ui.formatPlaybackTime(3725.4);

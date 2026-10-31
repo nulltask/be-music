@@ -54,7 +54,7 @@ test('ADD RANDOM uses the strict source probability, draws only for blank lanes,
   expect(resolved.mines).toEqual([]);
 });
 
-test('ADD RANDOM visits measure starts and BGM/BPM positions, but not fractional POOR/unknown channel positions', () => {
+test('ADD RANDOM visits measure starts and BGM/BPM positions, but not fractional POOR/text channel positions', () => {
   const resolved = resolveChart(
     parseChart('#BPM 120\n#00001:0001\n#00111:01\n#00103:0078\n#00106:000001\n#00199:000001', 'bms'),
     { playVariant: '7' },
@@ -62,7 +62,8 @@ test('ADD RANDOM visits measure starts and BGM/BPM positions, but not fractional
   const result = prepareMineModifier(resolved, 'ADD_RANDOM', { random: () => 0.99 });
   expect([...new Set(result.mines.map((mine) => mine.beat))]).toEqual([0, 2, 4, 6]);
   const prepared = preparePlaybackChart(resolved, { mineModifier: 'ADD_RANDOM' }, 0, () => 0.99);
-  expect(prepared.totalSeconds).toBe(3);
+  // The text clear extends presentation to 1 s after 10/3 s, without adding mine positions.
+  expect(prepared.totalSeconds).toBeCloseTo(13 / 3);
 });
 
 test('ADD RANDOM reserves LN heads, interiors and exact tails; a removed LN tail becomes a blank cell', () => {

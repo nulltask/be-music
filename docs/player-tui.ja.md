@@ -127,6 +127,7 @@ terminal resize event、pause state、high-speed change、judge/combo update、d
 terminal BGA renderer は共有 BGA timeline helper を使い、base、layer、layer2、POOR track に対応します。
 BMP、PNG、JPEG、対応 video frame を読み込み、active frame を ANSI color block または Kitty graphics image へ合成します。
 BMS layer channel は black pixel を transparent として扱います。bmson layer image は black pixel を画像データとして保持します。
+動画コーデックは同梱 LibAV のデコーダーで処理し、H.264、HEVC、VP9/WebM などに対応します。デコーダーや画素形式が非対応の場合、その素材は利用できません。先頭フレームの読み込みは、ファイル末尾で遅延フレームを取り出す場合も含め、変換した1フレームで停止します。
 
 `#STAGEFILE` は loading screen 専用です。
 terminal 全体に cover fit で描画し、画像が見つからない場合や非対応の場合は text loading へ fallback します。

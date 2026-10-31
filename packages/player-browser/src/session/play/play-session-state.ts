@@ -1,3 +1,4 @@
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 /**
  * The state of a play the play session works on, apart from what draws it: the chart and its notes, the audio graph,
  * the engine's handles, the play state (gauge, score, judgements, hi-speed and covers), the lane effects, the BGA's
@@ -47,7 +48,6 @@ import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
 import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import type {
-  BMSSwitchingBGA,
   RandomDraws,
   ResolvedChart,
   TimedSampleTrigger,
@@ -293,13 +293,6 @@ export class PlaySessionState extends PlayPresentation {
    * the dominant in-the-wild use of `#WAVCMD`, so this already covers the common case.
    */
   wavCmdVolumeMultipliers: Map<string, number> = new Map<string, number>();
-  /**
-   * Parsed `#SWBGAxx` directives keyed by slot id. Built once per chart by {@link prepareChart}, looked up on every BGA
-   * frame draw — `pickSwitchingBGAFrame(entry, elapsedMs)` resolves the currently-visible source `#BMPxx` key to swap
-   * into the layer draw. Slots without a `#SWBGAxx` declaration stay absent so the fast path (single texture lookup)
-   * takes over.
-   */
-  switchingBGAs: Map<string, BMSSwitchingBGA> = new Map<string, BMSSwitchingBGA>();
   /** `#BGAxx` sub-region slot → its authored `dx dy` on the 256x256 BGA canvas. */
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }> = new Map<string, { x: number; y: number }>();
   /**
@@ -416,7 +409,7 @@ export class PlaySessionState extends PlayPresentation {
    */
   /** A stitched NONSTOP chart's base / layer cues split by stage (`options.nonstop`). */
   nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
-  bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] } = {
+  bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[]; opacity?: BGAOpacityTimelines } = {
     base: [],
     layer: [],
     poor: [],
@@ -447,11 +440,12 @@ export class PlaySessionState extends PlayPresentation {
     { video: HTMLVideoElement; objectURL: string }
   >();
   /**
-   * Tracks which video is currently associated with each BGA layer and the chart-time it was seeded at. We use this to
+   * Tracks active BGA videos and the chart-time each cue was seeded at. Single charts use plane slots; NONSTOP
+   * slots include the stage-owned BMP key so both sides of a crossfade remain active. We use this to
    * detect cue transitions in `renderBGA` (start the new cue's video, pause the previous one) and to compute the
    * `currentTime` offset relative to the cue's start seconds.
    */
-  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } } = {};
+  bgaActiveVideos: Record<string, { key: string; cueSeconds: number } | undefined> = {};
   /**
    * BMS spec — when the chart omits `#POORBGA` and provides `#BMP00`, the BMP00 image acts as the implicit POOR
    * placeholder until an explicit `#xxx06` POOR cue takes over. Set during {@link prepareChart} so the renderer can

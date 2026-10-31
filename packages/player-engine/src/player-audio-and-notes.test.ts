@@ -669,6 +669,60 @@ describe('player', () => {
     expect(timed.shadowedNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '02']]);
   });
 
+  test.each([
+    ['early', 230],
+    ['late', 270],
+    ['miss', undefined],
+    ['seek', 230],
+    ['AUTO', undefined],
+  ] as const)('player: bmson layers follow the input (%s) instead of BGM time', async (mode, pressMs) => {
+    const json = parseChart(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 240, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [
+          { name: 'a.wav', notes: [{ x: 1, y: 240 }] },
+          { name: 'b.wav', notes: [{ x: 1, y: 240 }] },
+        ],
+      }),
+      'bmson',
+    );
+    const triggered: string[] = [];
+    const play = mode === 'AUTO' ? autoPlay : manualPlay;
+    const summary = await play(json, {
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      writeOutput: () => undefined,
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start() {},
+        pause() {},
+        resume() {},
+        async finish() {},
+        async dispose() {},
+        triggerEvent(event) {
+          triggered.push(event.value);
+        },
+      }),
+      createInputRuntime: createScheduledInputRuntime([
+        ...(pressMs === undefined
+          ? []
+          : [{ delayMs: pressMs, command: { kind: 'lane-input' as const, tokens: ['z'] } }]),
+        ...(mode === 'seek'
+          ? [
+              { delayMs: 300, command: { kind: 'seek' as const, seconds: 0 } },
+              { delayMs: 550, command: { kind: 'lane-input' as const, tokens: ['z'] } },
+            ]
+          : []),
+        { delayMs: 800, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+    expect(triggered).toEqual(mode === 'seek' ? ['01', '02', '01', '02'] : mode === 'miss' ? [] : ['01', '02']);
+    expect(summary.total).toBe(1);
+  });
+
   test('player: mines and invisible objects on a duplicated note position are untouched', () => {
     const json = parseChart(
       ['#BPM 120', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:01', '#00111:02', '#00131:01', '#001D1:10', ''].join('\n'),

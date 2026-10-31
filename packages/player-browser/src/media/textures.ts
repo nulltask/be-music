@@ -1,7 +1,12 @@
+import { applyBMSColorKey, type BmsARGB } from '@be-music/chart-model';
 import { Texture, VideoSource } from 'pixi.js';
 import { logger } from '../logger.ts';
 // Types only: the runtime module is imported on demand in `transcodeViaWebCodecsLocked`.
 import type { BufferTarget, Mp4OutputFormat, Output } from 'mediabunny';
+import { estimateBitrate } from './bga-stream/encode-worker.ts';
+import { buildScaleFilterArg, FFMPEG_CORE_URL, FFMPEG_WASM_URL } from './bga-stream/ffmpeg-args.ts';
+import { attachBGAVideoStream } from './bga-stream/media-source.ts';
+import { canStreamBGAVideo, openBGAVideoStream, pickInputExtension } from './bga-stream/stream.ts';
 
 const log = logger('bga-video');
 
@@ -114,14 +119,19 @@ export interface VideoTranscodeOptions {
  * Loads a video file (`mp4` / `webm` / etc.) into a Pixi `Texture` backed by an HTML `<video>` element. The video
  * starts paused and muted — the caller is expected to seek + `.play()` it on cue.
  *
- * Falls back to {@link transcodeVideoToBrowserCodec} (via libav / ffmpeg.wasm) when the browser refuses to decode the
- * original bytes — typical for legacy BMS BGA shipping `.mpg` / MPEG-1 containers that no modern browser plays
- * natively. The transcode pass writes a temporary H.264 / yuv420p MP4 in memory and feeds that back through the same
- * `<video>` path, so the rest of the BGA pipeline (Pixi `VideoSource`, frame polling) is identical regardless of
- * whether a transcode happened.
+ * When the browser refuses to decode the original bytes — typical for legacy BMS BGA shipping `.mpg` / `.wmv` / `.avi`
+ * that no modern browser plays natively — the video is transcoded to H.264 with ffmpeg.wasm:
  *
- * Returns `undefined` only when both the native decode AND the libav fallback fail — at that point we accept the asset
- * is unplayable and the BGA preloader simply skips it.
+ * - **Streaming** (when the host installed the workers, see `configureBGAVideoWorkers`, and the browser has Media
+ *   Source Extensions): the `<video>` plays fragmented MP4 through a `MediaSource` while the transcode is still
+ *   running, so this returns as soon as the first frame is decoded.
+ * - **Whole file** otherwise, or when the stream fails before its first frame: {@link transcodeVideoToBrowserCodec}
+ *   writes a complete MP4 in memory and feeds that back through the same `<video>` path.
+ *
+ * Either way the rest of the BGA pipeline (Pixi `VideoSource`, frame polling) is identical to a native video.
+ *
+ * Returns `undefined` only when the native decode and every transcode fail — at that point we accept the asset is
+ * unplayable and the BGA preloader simply skips it.
  */
 export async function loadVideoTextureFromBytes(
   path: string,
@@ -130,6 +140,11 @@ export async function loadVideoTextureFromBytes(
 ): Promise<VideoTextureHandle | undefined> {
   const direct = await tryLoadVideoTextureFromBytes(path, bytes);
   if (direct) return direct;
+  if (canStreamBGAVideo()) {
+    log.info(`native decode failed; streaming an ffmpeg.wasm transcode: ${path}`);
+    const streamed = await tryLoadStreamedVideoTexture(path, bytes, options);
+    if (streamed) return streamed;
+  }
   log.info(`native decode failed; falling back to ffmpeg.wasm transcode: ${path}`);
   let transcoded: Uint8Array | undefined;
   if (options?.useWebCodecs && isWebCodecsEncodeSupported()) {
@@ -170,8 +185,44 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
   // `file.arrayBuffer()` / `entry.arrayBuffer()`, so SAB is unreachable here and the runtime payload is identical.
   const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: guessVideoMIMEType(path) });
   const objectURL = URL.createObjectURL(blob);
-  const video = document.createElement('video');
+  const video = createBGAVideoElement();
   video.src = objectURL;
+  return wrapVideoTexture(path, video, objectURL, () => waitForVideoMetadata(video, 5000));
+}
+
+/**
+ * How long a streamed BGA may take to show its first frame. The first one in a session also downloads the ~30 MB
+ * ffmpeg.wasm core; a stream that fails says so at once (the video's `error`), so this only bounds a stuck one.
+ */
+const STREAM_FIRST_FRAME_TIMEOUT_MS = 120_000;
+
+/** Plays `bytes` through a streaming transcode (see {@link loadVideoTextureFromBytes}); `undefined` if it fails. */
+async function tryLoadStreamedVideoTexture(
+  path: string,
+  bytes: Uint8Array,
+  options?: VideoTranscodeOptions,
+): Promise<VideoTextureHandle | undefined> {
+  const maxLongEdge = resolveMaxLongEdge(options);
+  const stream = openBGAVideoStream(bytes, path, {
+    ...(maxLongEdge !== undefined ? { maxLongEdge } : {}),
+    useWebCodecs: options?.useWebCodecs ?? true,
+  });
+  const video = createBGAVideoElement();
+  // Subscribes to the stream before anything is awaited, so the stream can't be cancelled under this video.
+  const objectURL = attachBGAVideoStream(video, stream);
+  // The init segment (metadata) leaves before the first fragment is encoded, which a slow libx264 encode can take a
+  // while over.
+  return wrapVideoTexture(
+    path,
+    video,
+    objectURL,
+    () => Promise.race([waitForVideoMetadata(video, STREAM_FIRST_FRAME_TIMEOUT_MS), stream.failure]),
+    STREAM_FIRST_FRAME_TIMEOUT_MS,
+  );
+}
+
+function createBGAVideoElement(): HTMLVideoElement {
+  const video = document.createElement('video');
   // BMS BGA video has no soundtrack of its own — audio comes from `#WAV` samples on the chart timeline. Muting also
   // lets some browsers skip the autoplay-policy gating since silent media is exempt.
   video.muted = true;
@@ -181,9 +232,22 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
   // `loop` is left at false — BGA cues drive when the video starts; looping would replay forever after the cue ends,
   // which doesn't match BMS semantics.
   video.loop = false;
+  return video;
+}
 
+/**
+ * Waits for `video`'s first frame (`waitForMetadata`, then the decoded frame) and wraps it in a Pixi texture; releases
+ * the video and `objectURL` and returns `undefined` if it never comes.
+ */
+async function wrapVideoTexture(
+  path: string,
+  video: HTMLVideoElement,
+  objectURL: string,
+  waitForMetadata: () => Promise<void>,
+  frameTimeoutMs = 5000,
+): Promise<VideoTextureHandle | undefined> {
   try {
-    await waitForVideoMetadata(video, 5000);
+    await waitForMetadata();
     // WAIT FOR THE FIRST FRAME, not just metadata. Pixi's WebGPU renderer calls
     // `copyExternalImageToTexture(video)` at upload time and that fails with
     // "Failed to import texture from video element that doesn't have back resource"
@@ -192,7 +256,7 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
     // so on a paused-on-load BGA the very first render upload would crash. Holding for
     // `loadeddata` ensures frame 0 is decoded before the source goes anywhere near the
     // GPU.
-    await waitForVideoFrameData(video, 5000);
+    await waitForVideoFrameData(video, frameTimeoutMs);
   } catch {
     releaseVideoElement(video);
     URL.revokeObjectURL(objectURL);
@@ -330,17 +394,6 @@ function resolveMaxLongEdge(options: VideoTranscodeOptions | undefined): number 
   const raw = options?.maxLongEdgePx;
   if (raw === undefined || !Number.isFinite(raw) || raw <= 0) return undefined;
   return Math.floor(raw);
-}
-
-/**
- * Builds the `-vf scale=...` filter string for a target long-edge cap. We use `min(iw,N)` / `min(ih,N)` so small inputs
- * (legacy 256-px BGA) pass through unchanged, then `force_original_aspect_ratio=decrease` collapses one edge to
- * preserve aspect when the input originally exceeded the cap. `force_divisible_by=2` keeps yuv420p chroma aligned, and
- * `flags=fast_bilinear` picks the cheapest scaler. Commas inside `min()` are escaped (`\\,`) so the filter-graph parser
- * doesn't read them as filter-chain separators.
- */
-function buildScaleFilterArg(maxLongEdge: number): string {
-  return `scale='min(iw\\,${maxLongEdge})':'min(ih\\,${maxLongEdge})':force_original_aspect_ratio=decrease:force_divisible_by=2:flags=fast_bilinear`;
 }
 
 /**
@@ -705,18 +758,6 @@ export function isRawVideoStreamFormat(inputFormat: string | undefined): boolean
 }
 
 /**
- * Crude bitrate budget for the WebCodecs encoder, picked to land at roughly the same visual fidelity libx264's `-crf 30
- * -preset ultrafast` produces. The H.264 baseline profile we configure tops out around level 5.0 — enough headroom for
- * any BMS BGA dimensions we'd accept here.
- */
-function estimateBitrate(width: number, height: number, frameRate: number): number {
-  const pixelsPerSecond = width * height * frameRate;
-  // 0.08 bits per pixel-second lands around 4 Mb/s for 1080p30 and 1 Mb/s for 480p30 — comparable to libx264 ultrafast
-  // crf 30 outputs in the same range.
-  return Math.max(500_000, Math.round(pixelsPerSecond * 0.08));
-}
-
-/**
  * Yields control to the event loop until the encoder's queue shrinks under `target`. Without this throttle, a fast wasm
  * decode loop can pile thousands of `VideoFrame`s into the encoder's queue and exhaust GPU video memory.
  */
@@ -757,9 +798,8 @@ async function loadFFmpeg(): Promise<FFmpegInstance> {
     //
     // The player's Vite config installs a custom plugin (`be-music:ffmpeg-core`) that serves the ESM core
     // (`ffmpeg-core.js` / `.wasm`) at this stable URL prefix in dev and emits them as build assets in production.
-    const baseURL = '/ffmpeg-core';
-    const coreURL = `${baseURL}/ffmpeg-core.js`;
-    const wasmURL = `${baseURL}/ffmpeg-core.wasm`;
+    const coreURL = FFMPEG_CORE_URL;
+    const wasmURL = FFMPEG_WASM_URL;
     const ffmpeg = new FFmpeg();
     // `toBlobURL` re-fetches the core JS / WASM URLs into blob URLs so the spawned module worker's `await
     // import(coreURL)` succeeds even when the page sits behind a different origin (the worker's same-origin policy
@@ -797,20 +837,6 @@ interface FFmpegInstance {
    */
   on(event: 'log', listener: (event: { type: string; message: string }) => void): void;
   off(event: 'log', listener: (event: { type: string; message: string }) => void): void;
-}
-
-function pickInputExtension(path: string): string {
-  const lower = path.toLowerCase();
-  // Preserve the original extension so libav picks the right demuxer (`.mpg` → mpegps, `.avi` → avi, `.wmv` → asf, …).
-  const dotIndex = lower.lastIndexOf('.');
-  if (dotIndex < 0) return '.mpg';
-  const ext = lower.slice(dotIndex);
-  // Allow only a small allowlist of known video extensions to avoid passing arbitrary user-controlled strings into the
-  // VFS path.
-  if (['.mpg', '.mpeg', '.avi', '.wmv', '.mov', '.mp4', '.webm', '.mkv', '.ogv', '.ogg'].includes(ext)) {
-    return ext;
-  }
-  return '.mpg';
 }
 
 function stripVideoExtension(path: string): string {
@@ -936,6 +962,10 @@ function resolveImageDecoder(lowerPath: string): ImageDecoder | undefined {
 }
 
 export interface LoadTextureOptions {
+  /** EXBMP's alpha-aware transparent-color key, applied before Canvas premultiplication where raw pixels are available. */
+  bmsColorKey?: BmsARGB;
+  /** SWBGA transparent color compares decoded RGBA, including inserted opaque alpha. */
+  swBGAColorKey?: BmsARGB;
   /** Skin-declared `#TRANSCOLOR` chroma key (rare on BGA assets, common on UI sprites). */
   transparentColor?: { r: number; g: number; b: number };
   /**
@@ -961,6 +991,30 @@ export async function loadTextureFromBytes(
 ): Promise<Texture | undefined> {
   const options = normalizeLoadTextureOptions(transparentColorOrOptions);
   const lower = path.toLowerCase();
+  if (
+    (options.bmsColorKey || options.swBGAColorKey) &&
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    try {
+      const { decodePNGToRGBA8 } = await import('@be-music/shared-utils/png');
+      const image = decodePNGToRGBA8(bytes);
+      applyBGAColorKeys(image.data, options, image.hasAlphaChannel);
+      return loadTextureFromImageData(
+        new Uint8ClampedArray(image.data.buffer, image.data.byteOffset, image.data.byteLength),
+        image.width,
+        image.height,
+        path,
+        { ...options, bmsColorKey: undefined, swBGAColorKey: undefined, keyOutBlack: false },
+      );
+    } catch {
+      return undefined;
+    }
+  }
+  const hasAlphaChannel = sourceHasAlphaChannel(bytes, lower);
   if (lower.endsWith('.tga')) {
     return decodeTGATexture(bytes, options, path);
   }
@@ -973,7 +1027,7 @@ export async function loadTextureFromBytes(
     // fails gracefully via `createImageBitmap`'s exception handling.
     const decoded = decoder(bytes);
     if (decoded) {
-      return loadTextureFromImageData(decoded.rgba, decoded.width, decoded.height, path, options);
+      return loadTextureFromImageData(decoded.rgba, decoded.width, decoded.height, path, options, hasAlphaChannel);
     }
   }
   if (lower.endsWith('.avi')) {
@@ -990,7 +1044,7 @@ export async function loadTextureFromBytes(
   // array view) before the Blob makes its own internal copy — doubling the peak memory for skin / BGA bitmaps. See
   // `tryLoadVideoTextureFromBytes` for the matching `ArrayBuffer` cast rationale.
   const blob = new Blob([bytes as Uint8Array<ArrayBuffer>]);
-  return loadTextureFromBlob(blob, path, options);
+  return loadTextureFromBlob(blob, path, options, hasAlphaChannel);
 }
 
 /**
@@ -1007,18 +1061,29 @@ async function loadTextureFromImageData(
   height: number,
   label: string,
   options: LoadTextureOptions,
+  hasAlphaChannel = true,
 ): Promise<Texture | undefined> {
   try {
     // `new ImageData(rgba, width, height)` rejects a `Uint8ClampedArray` whose backing buffer is typed as
     // `ArrayBufferLike` (the DOM lib only narrows to `ArrayBuffer`-backed views). Copy into a fresh buffer that's
     // unambiguously typed as a regular `ArrayBuffer` — the bytes themselves are the same, just the type narrows.
     const ownedBuffer = new ArrayBuffer(rgba.byteLength);
-    new Uint8ClampedArray(ownedBuffer).set(rgba);
+    const pixels = new Uint8ClampedArray(ownedBuffer);
+    pixels.set(rgba);
+    if (options.bmsColorKey || options.swBGAColorKey) {
+      if (!hasAlphaChannel) for (let offset = 3; offset < pixels.length; offset += 4) pixels[offset] = 255;
+      applyBGAColorKeys(pixels, options, hasAlphaChannel);
+    }
     const imageData = new ImageData(new Uint8ClampedArray(ownedBuffer), width, height);
     const imageBitmap = await createImageBitmap(imageData);
     let finalBitmap = imageBitmap;
-    if (options.transparentColor || options.keyOutBlack) {
-      const keyedBitmap = await applyChromaKeyToBitmap(imageBitmap, options);
+    if (options.transparentColor || (options.keyOutBlack && !options.bmsColorKey && !options.swBGAColorKey)) {
+      const keyedBitmap = await applyChromaKeyToBitmap(
+        imageBitmap,
+        options.bmsColorKey || options.swBGAColorKey
+          ? { ...options, bmsColorKey: undefined, swBGAColorKey: undefined, keyOutBlack: false }
+          : options,
+      );
       if (keyedBitmap) {
         imageBitmap.close();
         finalBitmap = keyedBitmap;
@@ -1087,12 +1152,13 @@ async function loadTextureFromBlob(
   blob: Blob,
   label?: string,
   options: LoadTextureOptions = {},
+  hasAlphaChannel = true,
 ): Promise<Texture | undefined> {
   try {
     const imageBitmap = await createImageBitmap(blob);
     let finalBitmap = imageBitmap;
-    if (options.transparentColor || options.keyOutBlack) {
-      const keyedBitmap = await applyChromaKeyToBitmap(imageBitmap, options);
+    if (options.transparentColor || options.keyOutBlack || options.bmsColorKey || options.swBGAColorKey) {
+      const keyedBitmap = await applyChromaKeyToBitmap(imageBitmap, options, hasAlphaChannel);
       if (keyedBitmap) {
         imageBitmap.close();
         finalBitmap = keyedBitmap;
@@ -1122,6 +1188,7 @@ async function loadTextureFromBlob(
 async function applyChromaKeyToBitmap(
   imageBitmap: ImageBitmap,
   options: LoadTextureOptions,
+  hasAlphaChannel = true,
 ): Promise<ImageBitmap | undefined> {
   const canvas = document.createElement('canvas');
   canvas.width = imageBitmap.width;
@@ -1133,8 +1200,10 @@ async function applyChromaKeyToBitmap(
   context.drawImage(imageBitmap, 0, 0);
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const { data } = imageData;
+  applyBGAColorKeys(data, options, hasAlphaChannel);
   const transparent = options.transparentColor;
-  const keyOutBlack = options.keyOutBlack === true;
+  const keyOutBlack =
+    options.keyOutBlack === true && options.bmsColorKey === undefined && options.swBGAColorKey === undefined;
   for (let index = 0; index < data.length; index += 4) {
     const r = data[index] ?? 0;
     const g = data[index + 1] ?? 0;
@@ -1160,20 +1229,7 @@ async function decodeTGATexture(
   if (!imageData) {
     return undefined;
   }
-  const { width, height } = imageData;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return undefined;
-  }
-  context.putImageData(imageData, 0, 0);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) {
-    return undefined;
-  }
-  return loadTextureFromBlob(blob, label);
+  return loadTextureFromImageData(imageData.data, imageData.width, imageData.height, label ?? 'TGA', {});
 }
 
 /**
@@ -1182,7 +1238,8 @@ async function decodeTGATexture(
  */
 function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {}): ImageData | undefined {
   const transparentColor = options.transparentColor;
-  const keyOutBlack = options.keyOutBlack === true;
+  const keyOutBlack =
+    options.keyOutBlack === true && options.bmsColorKey === undefined && options.swBGAColorKey === undefined;
   if (bytes.length < 18) {
     return undefined;
   }
@@ -1235,7 +1292,10 @@ function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {})
       const r = bytes[source + 2] ?? 0;
       const g = bytes[source + 1] ?? 0;
       const b = bytes[source] ?? 0;
-      let a = bitsPerPixel === 32 ? (bytes[source + 3] ?? 255) : 255;
+      let a =
+        bitsPerPixel === 32 && (!(options.bmsColorKey || options.swBGAColorKey) || (descriptor & 15) !== 0)
+          ? (bytes[source + 3] ?? 255)
+          : 255;
       if (transparentColor && r === transparentColor.r && g === transparentColor.g && b === transparentColor.b) {
         a = 0;
       } else if (keyOutBlack && r === 0 && g === 0 && b === 0) {
@@ -1280,5 +1340,29 @@ function decodeTGAImageData(bytes: Uint8Array, options: LoadTextureOptions = {})
     }
   }
 
+  applyBGAColorKeys(imageData.data, options, bitsPerPixel === 32 && (descriptor & 15) !== 0);
   return imageData;
+}
+
+/** Known container metadata; custom RGBA decoders otherwise expose an alpha-bearing pixel buffer. */
+function sourceHasAlphaChannel(bytes: Uint8Array, path: string): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return false;
+  if (bytes.length >= 30 && bytes[0] === 0x42 && bytes[1] === 0x4d) {
+    return (
+      view.getUint16(28, true) === 32 &&
+      view.getUint32(14, true) >= 56 &&
+      bytes.length >= 70 &&
+      view.getUint32(66, true) !== 0
+    );
+  }
+  if (bytes.length >= 128 && view.getUint32(0, true) === 0x20534444)
+    return (view.getUint32(80, true) & 1) !== 0 && view.getUint32(104, true) !== 0;
+  if (path.endsWith('.tga') && bytes.length >= 18) return bytes[16] === 32 && (bytes[17]! & 15) !== 0;
+  return true;
+}
+
+function applyBGAColorKeys(data: Uint8Array | Uint8ClampedArray, options: LoadTextureOptions, hasAlpha: boolean): void {
+  if (options.bmsColorKey) applyBMSColorKey(data, options.bmsColorKey, hasAlpha);
+  if (options.swBGAColorKey) applyBMSColorKey(data, options.swBGAColorKey, true);
 }

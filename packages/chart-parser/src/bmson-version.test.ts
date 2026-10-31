@@ -1,0 +1,110 @@
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { expect, test } from 'vite-plus/test';
+import { createTimingResolver } from '../../chart-model/src/index.ts';
+import { parseBmson, parseChart, parseChartFile } from './index.ts';
+
+const document = (version: unknown) => JSON.stringify({ version, info: { init_bpm: 120 }, sound_channels: [] });
+const readers = [
+  parseBmson,
+  (text: string) => parseChart(text),
+  (text: string) => parseChart(text, 'bmson'),
+  (text: string) => parseChart(text, 'json'),
+];
+
+test.each(['1.0.0', '1.0.0+build.001', '1.0.0+ABC-xyz'])('accepts and preserves supported SemVer %s', (version) => {
+  for (const read of readers) expect(read(document(version)).bmson.version).toBe(version);
+});
+
+test.each([
+  null,
+  1,
+  false,
+  {},
+  [],
+  '',
+  '1',
+  '1.0',
+  'v1.0.0',
+  '01.0.0',
+  '1.00.0',
+  '1.0.00',
+  ' 1.0.0',
+  '1.0.0\n',
+  '1.0.0-',
+  '1.0.0+',
+  '1.0.0-a..b',
+  '1.0.0-01',
+  '1.0.0-a.01',
+  '1.0.0+a..b',
+])('rejects malformed version %j through every reader', (version) => {
+  for (const read of readers) expect(() => read(document(version))).toThrow(/Invalid bmson version/);
+});
+
+test.each([
+  '0.21.0',
+  '1.0.1',
+  '1.1.0',
+  '2.0.0',
+  '10.0.0',
+  '999999999999999999999.0.0',
+  '1.0.0-beta',
+  '1.0.0-rc.1+build',
+  '1.0.0-01a',
+])('rejects unsupported valid SemVer %s', (version) => {
+  for (const read of readers) expect(() => read(document(version))).toThrow(/Unsupported bmson version/);
+});
+
+test('reads a legacy v0.21 chart as Bemuse does', () => {
+  const legacy = JSON.stringify({
+    info: { title: 'Legacy', initBPM: 120 },
+    lines: [{ y: 0 }, { y: 960 }],
+    soundChannel: [{ name: 'stem.wav', notes: [{ x: 1, y: 960, l: 0, c: false }] }],
+    bpmNotes: [{ y: 960, v: 240 }],
+    stopNotes: [{ y: 1920, v: 240.9 }],
+  });
+  for (const read of readers) {
+    const chart = read(legacy);
+    expect(chart.bmson.version).toBe('1.0.0');
+    expect(chart.bmson.info.resolution).toBe(240);
+    expect(chart.metadata.title).toBe('Legacy');
+    expect(chart.metadata.bpm).toBe(120);
+    expect(chart.resources.wav).toMatchObject({ '01': 'stem.wav' });
+    expect(chart.events.filter((event) => event.channel === '11')).toHaveLength(1);
+    // Legacy fields are converted, not retained as opaque annotations.
+    expect(chart.bmson.extraFields).toBeUndefined();
+    const timing = createTimingResolver(chart);
+    expect(timing.tempoPoints.map(({ beat, bpm }) => ({ beat, bpm }))).toEqual([
+      { beat: 0, bpm: 120 },
+      { beat: 4, bpm: 240 },
+    ]);
+    // floor(240.9) pulses = one beat at 240 BPM.
+    expect(timing.stopPoints.map((point) => point.seconds)).toEqual([0.25]);
+  }
+});
+
+test('rejects a missing version on a chart with only 1.0.0 fields', () => {
+  for (const read of readers) expect(() => read(document(undefined))).toThrow(/version is missing/);
+});
+
+test.each(['null', '[]', '1', '"1.0.0"'])('rejects non-object bmson input %s explicitly', (input) => {
+  expect(() => parseBmson(input)).toThrow(/expected a JSON object/);
+});
+
+test('Node file loading propagates version diagnostics and accepts valid input', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'bmson-version-'));
+  try {
+    for (const extension of ['bmson', 'json']) {
+      const path = join(dir, `chart.${extension}`);
+      for (const version of [null, undefined, 'broken', '2.0.0']) {
+        await writeFile(path, document(version));
+        await expect(parseChartFile(path)).rejects.toThrow(/bmson.*version/);
+      }
+      await writeFile(path, document('1.0.0+local'));
+      expect((await parseChartFile(path)).bmson.version).toBe('1.0.0+local');
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

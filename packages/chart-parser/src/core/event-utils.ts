@@ -1,3 +1,4 @@
+import { cloneJSONFields } from '@be-music/chart-source';
 import { compareEvents } from '@be-music/chart-model';
 import {
   normalizeChannel,
@@ -246,6 +247,8 @@ function normalizeEventBmsonExtension(value: unknown): BeMusicEvent['bmson'] | u
   }
   const raw = value as Record<string, unknown>;
   const extension: NonNullable<BeMusicEvent['bmson']> = {};
+  const extraFields = cloneJSONFields(raw.extraFields);
+  if (extraFields) extension.extraFields = extraFields;
   for (const key of ['sampleOffsetSeconds', 'sampleDurationSeconds'] as const) {
     const seconds = raw[key];
     if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0) extension[key] = seconds;
@@ -254,6 +257,7 @@ function normalizeEventBmsonExtension(value: unknown): BeMusicEvent['bmson'] | u
   if (length !== undefined) {
     extension.l = length;
   }
+  if (typeof raw.up === 'boolean') extension.up = raw.up;
   if (typeof raw.c === 'boolean') {
     extension.c = raw.c;
   }

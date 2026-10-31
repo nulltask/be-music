@@ -1,3 +1,4 @@
+import { parseHDXLongNoteMode } from './hdx-long-note-mode.ts';
 /**
  * The chart fingerprint's model of a chart with control flow (`docs/fingerprint-spec.md`, sections 3.6.3 – 3.6.6):
  * segments are grouped into interacting factors, each factor becomes a reduced decision tree of deltas, what every
@@ -359,6 +360,9 @@ function collectStaticKeys(
         case 'RANK':
         case 'DEFEXRANK':
           model.sets.add('H:JUDGE');
+          break;
+        case 'OPTION':
+          if (parseHDXLongNoteMode(entry.value) !== undefined) model.sets.add('D:LN');
           break;
         case 'LNOBJ':
         case 'LNTYPE':
