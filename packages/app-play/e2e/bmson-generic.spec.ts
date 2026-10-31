@@ -102,7 +102,9 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
           'bound F5 instead of restart',
         );
       const result = await player.waitForResult(0);
-      expect(result.results[0]!.judged.pgreat + result.results[0]!.judged.great).toBe(count === 70 ? 5 : 3);
+      // Every bound key hits its note; a slow CI frame can land a page-timed press in GOOD (#792).
+      const judged = result.results[0]!.judged;
+      expect(judged.pgreat + judged.great + judged.good).toBe(count === 70 ? 5 : 3);
       expect(result.results[0]!.judged.poor).toBe(0);
       const replay = await player.lastReplay();
       expect(replay?.chart.laneMode).toBe(`${count} KEY GENERIC`);
