@@ -1,16 +1,19 @@
-import { css, html, svg, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
+import { css, html, nothing, svg, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
 import { BeMusicElement } from '../base.ts';
 import { structureStyles } from '../styles/structure.ts';
 import { renderAutoPlayCheck } from './auto-play-check.ts';
 
 /**
- * The large play button over a preview before it plays (`mode="play"`) or after it ended (`mode="replay"`). With
+ * The large play button over a preview before it plays (`mode="play"`) or after it ended (`mode="replay"`), or the
+ * button that starts downloading the track (`mode="load"`), with its file name as the `caption`. With
  * `autoPlay` set, an AUTO checkbox sits under it, whose change requests `auto-play-change`.
  */
 export class BeMusicPreviewStartElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
     mode: {},
     disabled: { type: Boolean },
+    /** A line of small type under the label, such as the file the button loads. */
+    caption: {},
     /** AUTO plays the chart by itself; off, the viewer plays it. No checkbox while unset. */
     autoPlay: { attribute: false },
   };
@@ -43,6 +46,14 @@ export class BeMusicPreviewStartElement extends BeMusicElement {
         white-space: nowrap;
         cursor: pointer;
       }
+      .caption {
+        max-width: 16rem;
+        overflow: hidden;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        opacity: 0.7;
+      }
       svg {
         width: 56px;
         height: 56px;
@@ -50,7 +61,8 @@ export class BeMusicPreviewStartElement extends BeMusicElement {
       }
     `,
   ];
-  declare mode: 'play' | 'replay';
+  declare mode: 'play' | 'replay' | 'load';
+  declare caption: string | undefined;
   declare disabled: boolean;
   declare autoPlay: boolean | undefined;
 
@@ -62,6 +74,7 @@ export class BeMusicPreviewStartElement extends BeMusicElement {
 
   protected override render(): TemplateResult {
     const replay = this.mode === 'replay';
+    const load = this.mode === 'load';
     return html`<button
         class="btn"
         data-size="lg"
@@ -70,9 +83,16 @@ export class BeMusicPreviewStartElement extends BeMusicElement {
         @click=${() => this.emit('play-request', { autoPlay: true })}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          ${replay ? svg`<path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" />` : svg`<path d="M8 5v14l11-7z" />`}
+          ${
+            replay
+              ? svg`<path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" />`
+              : load
+                ? svg`<path d="M11 4h2v8.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3zM5 18h14v2H5z" />`
+                : svg`<path d="M8 5v14l11-7z" />`
+          }
         </svg>
-        <span>${replay ? 'Replay' : 'Play'}</span>
+        <span>${replay ? 'Replay' : load ? 'Load' : 'Play'}</span>
+        ${this.caption ? html`<span class="caption" part="caption">${this.caption}</span>` : nothing}
       </button>
       ${renderAutoPlayCheck(this.autoPlay, (autoPlay) => this.emit('auto-play-change', { autoPlay }), this.disabled)}`;
   }

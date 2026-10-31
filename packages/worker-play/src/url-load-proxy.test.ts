@@ -57,6 +57,17 @@ describe('serveURLLoadProxy', () => {
     expect([...requests[0]!.headers.keys()]).toEqual([]);
   });
 
+  test('tells a HEAD request the archive size, unless it travels compressed', async () => {
+    const sized = async (encoding?: string) =>
+      serveURLLoadProxy(new Request(proxyURL(ARCHIVE), { method: 'HEAD' }), async () => {
+        const headers: Record<string, string> = { 'content-length': '12345678' };
+        if (encoding) headers['content-encoding'] = encoding;
+        return new Response(null, { headers });
+      });
+    expect((await sized()).headers.get('content-length')).toBe('12345678');
+    expect((await sized('gzip')).headers.get('content-length')).toBeNull();
+  });
+
   test('refuses other methods and targets it must not fetch', async () => {
     const { fetcher } = upstream('"v1"');
     expect((await serveURLLoadProxy(new Request(proxyURL(ARCHIVE), { method: 'POST' }), fetcher)).status).toBe(405);

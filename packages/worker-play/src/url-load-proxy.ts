@@ -66,6 +66,14 @@ export async function serveURLLoadProxy(
     if (value !== null) headers.set(name, value);
   }
 
+  // A HEAD request asks for the size before the download (the embed's Load button on a phone). Only there: a GET body
+  // may come decoded from a compressed transfer, which the upstream's length would not match.
+  if (request.method === 'HEAD') {
+    const length = upstream.headers.get('content-length');
+    const encoding = upstream.headers.get('content-encoding') ?? 'identity';
+    if (length !== null && encoding === 'identity') headers.set('content-length', length);
+  }
+
   const bodyless = request.method === 'HEAD' || upstream.status === 304;
   return new Response(bodyless ? null : upstream.body, {
     status: upstream.status,
