@@ -131,6 +131,15 @@ function drawPlayfield(
   paintPlayfieldParts(context as CanvasRenderingContext2D, resolvePlayfieldParts(frame));
 }
 
+/**
+ * Leaves the play for the list (or the replay button). A paused play resumes first: the exit fade runs on the play
+ * clock, so it would otherwise freeze on the pause.
+ */
+export function quitPreviewPlay(actions: Pick<BeMusicDOMGameplayActions, 'pause' | 'quit'>, paused: boolean): void {
+  if (paused) actions.pause();
+  actions.quit();
+}
+
 function mountPreviewGameplay(
   container: HTMLElement,
   actions: BeMusicDOMGameplayActions,
@@ -152,8 +161,11 @@ function mountPreviewGameplay(
   };
   showChrome();
   const unsubscribe = chrome.subscribe(showChrome);
+  /** The frame the HUD shows; a stage change shows at once, so its `stage` is current. */
+  let previous: BeMusicDOMGameplayFrame | undefined;
   const listeners: Record<string, EventListener> = {
     'pause-request': () => actions.pause(),
+    'quit-request': () => quitPreviewPlay(actions, previous?.stage === 'paused'),
     'seek-request': (event) => actions.seek((event as BeMusicUIEvent<'seek-request'>).detail.seconds),
     'volume-change': (event) => {
       const { volume, muted } = (event as BeMusicUIEvent<'volume-change'>).detail;
@@ -164,7 +176,6 @@ function mountPreviewGameplay(
   for (const [name, listener] of Object.entries(listeners)) hud.addEventListener(name, listener);
   container.append(playfield, hud);
   const idle = new ControlsIdleController(hud, document.defaultView!);
-  let previous: BeMusicDOMGameplayFrame | undefined;
   let shownAtMs = -Infinity;
   return {
     update(frame) {
