@@ -48,7 +48,7 @@ browser runtime は次の adapter module を使います。
 | `./collection`             | ライブラリの読み込み：`BrowserChartCollectionStore`、ドロップしたファイル、コースとコースメーカー、譜面のハッシュ、ブラウザの互換性チェック                                                                                               |
 | `./audio`                  | オーディオサービス（`createAudioService`）、オーディオバスとコンプレッサーのパラメーター、マスター音量、システムの audio session、`ChartPreviewEngine`                                                                                    |
 | `./recording`              | `GameplayRecorder`、録画の形式、`makeWebMSeekable`、`downloadBlob`、WebCodecs の helper                                                                                                                                                   |
-| `./compute`                | 共通 CPU Worker プール、並列数の設定、データのみの処理依頼、ホストによる Worker の登録。                                                                                                                                                  |
+| `./compute`                | 共通 CPU Worker プール、並列数の設定、データのみの処理依頼、ホストによる Worker の登録（処理プールと BGA 動画 transcode の Worker）。                                                                                                     |
 
 scene が受け取って返すモデルは、それぞれのパッケージから読み込みます。プレイオプション、`PlayResult`、`CourseView`、ハイスピードの範囲、ライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`、`LibraryEntry` など）とその helper（`groupChartsByFolder`、`resolveLibraryChartPlayVariant`）は `@be-music/player-scene-model` から、be-music スキンの契約は `@be-music/player-skin-sdk` から、リプレイの形式は `@be-music/player-engine/replay` から読み込みます。それ以外はパッケージの内部です。
 
@@ -805,13 +805,37 @@ pnpm bench -- --packages player-browser
 - default family は LR2 skin と同じ chart BGA layer stack を built-in BGA frame 内に描画します。
 - BMS rendering は `#BGAxx` の部分領域、EXBMP 静止画・不透明動画の透過色、面ごとの A1〜A4 ARGB、キー入力連動 A5 SWBGA を反映します。SWBGA は透過色付き動画の切り出しと NONSTOP のリソース変換にも対応します。選択と表示はステージ境界で終了し、アニメーションと動画の時計は FIT に合わせます。[BMS 対応範囲](bms-spec.ja.md)を参照してください。
 - bmson rendering は `bga.bga_events`、`bga.layer_events`、`bga.poor_events` を使います。BMS layer channel と異なり、bmson layer image は黒を透明化せず黒ピクセルとして保持します。
-- browser player は、未対応 video asset を playback 前に ffmpeg.wasm と single-threaded の `@ffmpeg/core` で transcode できます。現在の 0.12.x の multithreaded core は libx264 でクラッシュするため含めていません。一般的な BMS BGA の動画は transcode に数十秒かかります。
+- ブラウザが再生できない BGA 動画（`.wmv`、`.avi`、`.mpg` など）は、ffmpeg.wasm と single-threaded の `@ffmpeg/core` で H.264 に transcode し、transcode の途中から再生を始めます（[BGA 動画の transcode](#bga-動画の-transcode)）。現在の 0.12.x の multithreaded core は libx264 でクラッシュするため含めていません。BGA 動画の音声はいずれにしても扱いません。
 - chart の自然終了時は、短い post-chart delay を置いてから result scene を開きます。視覚的に result へ遷移しても、残っている gameplay audio tail は中断しません。
 - gameplay recorder は MP4 か WebM の output を書き出し、active recording が gameplay bus の破棄前に flush されるよう、scene disposal より前に stop / finalization を終えます。
 - リプレイ再生を除く毎プレイでリプレイ（`*.bmplay.json` 入力リプレイ — 解決済み譜面、生の押下/解放列、プレイ設定。[replay.ja.md](./replay.ja.md) 参照）を記録します。player は result scene のマウント時に自動ダウンロードし、Debug Menu の「Library & records」フォルダにある「Auto-save play history」チェックボックス（デフォルト OFF。曲開始時にラッチされ、プレイ中は disabled）で制御します。`bms-replay` CLI がこのファイルから LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザルトを再現します。リプレイをページへドロップすると、対応する楽曲がロード済みの場合に記録されたランをリプレイ再生します（なければ読み込むべき譜面をダイアログで示します）。ESC で諦めたランは、再シミュレーションと同じく諦めた所（`play.abortedAtUs`）までをリプレイします。
 - どのプレイ画面も、プレイヤーが見ていたもの（`play.view`、`play.viewChanges`）を記録します。そのスケールでのハイスピード、HS-FIX、メイン BPM での表示時間、各サイドの SUDDEN+ / HIDDEN+ / LIFT で、変更は `{ kind: 'view' }` コマンドとして 100 ms に高々 1 回送ります。リプレイは、`replayView` オプションが求める範囲でその表示設定を再生位置に沿って表示します。同じスケール（LR2 / default の画面は共通、beatoraja のスキンは独自）で遊ばれたなら記録されたハイスピード、そうでなければ記録された表示時間になるハイスピードと、記録されたカバーです（リフトを描く beatoraja のプレイのスキンではリフトも。`PlaySessionTheme.drawsLift`）。単位と規則は [replay.ja.md](./replay.ja.md#プレイヤーが見ていたもの) を参照してください。
 - Debug Menu の Leaderboard フォルダにある「Submit to Leaderboard」（デフォルト OFF。自動保存と同じく曲開始時にラッチ）をオンにすると、終了した手動プレイを result scene のマウント時に Leaderboard（[leaderboard.ja.md](./leaderboard.ja.md)）へ送信します。player は初回に匿名でログインし、楽曲の譜面からプレイの fingerprint ドキュメントを作り直してログと照合してから送り、サーバーに求められたら chart document を付けて再送し、順位をステータス行に表示します。デプロイ先の Worker は `/api/*` と `/leaderboard/*` を Service Binding で Leaderboard の Worker に転送し、`pnpm player:web` はローカルの Leaderboard（`pnpm --filter @be-music/app-leaderboard run dev`、または `LEADERBOARD_DEV_ORIGIN`）にプロキシします。
 - アカウントは匿名で始まります（最初の送信で匿名ログインします）。「Create passkey (keep this account)」でそのアカウントに passkey を登録すると、プレイは匿名フィルタの陰ではなく handle で一覧に載るようになります。「Sign in with passkey」で別のブラウザーからそのアカウントにログインすると、そのブラウザーの匿名のプレイはこのアカウントに移ります。
+
+### BGA 動画の transcode
+
+ブラウザが BGA 動画をデコードできないとき、`loadVideoTextureFromBytes` はそれを H.264 に transcode し、ネイティブの動画と同じ `<video>` / Pixi `VideoSource` の経路で再生します。ホストが Worker を登録し（`./compute` の `configureBGAVideoWorkers`。各エントリーは `runBGAVideoDecodeWorker()` / `runBGAVideoEncodeWorker()` を呼ぶ）、ブラウザに Media Source Extensions があれば、transcode は逐次的に進みます。動画は fragmented MP4 を `MediaSource`（iPhone のように `ManagedMediaSource` があればそちら）経由で届いた順に再生するため、BGA は最初のフレームができた時点で使えます。
+
+```mermaid
+flowchart LR
+  subgraph decode["デコード Worker"]
+    ffmpeg["ffmpeg.wasm"] --> device["出力デバイス"]
+  end
+  subgraph encode["エンコード Worker"]
+    webcodecs["WebCodecs H.264"] --> mux["Mediabunny fMP4"]
+  end
+  device -- "y4m フレーム" --> webcodecs
+  device -- "libx264 fMP4" --> main
+  mux -- "fMP4" --> main["メインスレッド<br/>MediaSource"]
+  main --> video["video 要素"]
+```
+
+- デコード Worker は無改造の ffmpeg.wasm コアを起動し、ffmpeg の出力先としてキャラクターデバイスを登録します。これで `exec` の実行中に出力が少しずつ JavaScript に届きます。出力は偶数の寸法に縮小し、最大 60 fps の固定フレームレートに揃えるため、可変フレームレートの素材も時刻がずれません。
+- cross-origin isolated なページでは、ffmpeg が y4m の生フレームを書き、エンコード Worker が WebCodecs（ハードウェア優先）で符号化して Mediabunny で多重化します。デコーダはエンコーダより数フレーム以上先行すると `SharedArrayBuffer` のカウンターで待つ（`Atomics.wait`）ため、フレームを捨てることも生フレームが溜まることもありません。
+- それ以外のページ（デプロイ版の player は isolated ではない）、「Use WebCodecs encoder」がオフのとき、WebCodecs のエンコーダが失敗したときは、ffmpeg 自身の libx264 で直接 fragmented MP4 を書きます。デコードと同じスレッドで符号化するので、デコードの速さは自然に抑えられます。
+- media source は stream が終わるまで仮の長さを宣言するため、まだ transcode されていない位置へシークした cue はそこでフレームを待ちます。複数のトラックで同じバイト列を使う動画は 1 つの transcode を共有し、transcode は同時に 2 本まで走り、それを使う最後の動画を閉じると取り消します。
+- Worker か MSE がないとき、または最初のフレームより前に stream が失敗したときは、従来どおりファイル全体を transcode してから再生します。
 
 ### オーディオサービス
 
