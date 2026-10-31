@@ -1,3 +1,4 @@
+import { isBmsonRecoveryDisabled } from '../ruleset/bmson-total.ts';
 import type { PlayerSummary } from '../core/engine-types.ts';
 import type { ScoreSummary } from '../ruleset/score.ts';
 import type { BeMusicCourseReplay } from '../replay/course.ts';
@@ -180,6 +181,8 @@ export function courseRunRecordPlay(result: RecordPlay): RecordPlay {
 /** How a play was played, as far as keeping a record goes. */
 export interface RecordPlayKind {
   autoPlay: boolean;
+  /** Effective no-recovery policy, not merely selecting spec mode for an ordinary chart. */
+  recoveryDisabled?: boolean;
   replay: boolean;
   /** The play's tempo (`play.tempo`): another tempo than 1 is practice. */
   tempo: number;
@@ -187,11 +190,12 @@ export interface RecordPlayKind {
 
 /**
  * Whether a single play counts for its chart's record: not an auto play, not a replay, not a course stage (NONSTOP
- * included: the course keeps the record) and not a play at another tempo (practice). The same rule holds whichever
+ * included: the course keeps the record), a play at another tempo (practice), or effective zero-total no-recovery.
+ * The same rule holds whichever
  * skin family plays the chart.
  */
 export function playKeepsRecord(play: RecordPlayKind & { course: boolean }): boolean {
-  return !play.autoPlay && !play.replay && !play.course && play.tempo === 1;
+  return !play.autoPlay && !play.replay && !play.course && play.tempo === 1 && play.recoveryDisabled !== true;
 }
 
 /**
@@ -220,7 +224,15 @@ export function isCourseRunAutoPlayed(courseLog: Pick<BeMusicCourseReplay, 'stag
   return courseLog.stages.some((entry) => entry.played && entry.replay.play.mode === 'auto');
 }
 
-/** Whether a course run counts for the course's record: not auto-played and not played at another tempo. */
+/** Whether a course run keeps an ordinary record: no autoplay, tempo training or affected zero-total policy. */
 export function courseRunKeepsRecord(courseLog: Pick<BeMusicCourseReplay, 'stages' | 'nonstop'>): boolean {
-  return !isCourseRunAutoPlayed(courseLog) && !isCourseRunAtAnotherTempo(courseLog);
+  const disabled = (replay: import('../replay/format.ts').BeMusicReplay): boolean =>
+    isBmsonRecoveryDisabled(replay.chart, replay.play.bmsonTotalMode);
+  return (
+    !isCourseRunAutoPlayed(courseLog) &&
+    !isCourseRunAtAnotherTempo(courseLog) &&
+    !(courseLog.nonstop !== undefined
+      ? disabled(courseLog.nonstop.replay)
+      : courseLog.stages.some((entry) => entry.played && disabled(entry.replay)))
+  );
 }

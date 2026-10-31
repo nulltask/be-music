@@ -466,3 +466,7 @@ Hosts pass this program as `PlayerOptions.chartOptionProgram` when replaying. Br
 Chart-authored HDX LONGMODE is resolved into the recorded chart and note modes, not `chartOptions`. Recorded mode 1 also overrides newly recognized source declarations. NONSTOP stitch version 3 preserves BMS CN/HCN using internal bmson per-note types; versions 1 and 2 remain available for historical runs. See [ADR 0027](./adr/0027-hdx-long-note-modes.md).
 
 CHART HEADER (AUTO) is recorded as an effective COUPLE/TWO-PLAYER/OFF mode, never as AUTO. A missing recorded mode continues to mean OFF. `simulateReplay` defaults to player 1 for a two-player recording; `player: 2` selects player 2 and its gauge. Two-player recordings are ineligible for single-player online submission (`two-player`); both local results and the shared replay remain available. See [ADR 0028](./adr/0028-player-header-selection.md).
+
+## Optional bmson zero-total policy
+
+Per-play `bmsonTotalMode` defaults to `beatoraja`; `spec` suppresses positive recovery only for normalized percentage TOTAL 0. Browser Play options exposes **bmson TOTAL 0** and terminal accepts `--bmson-total-mode spec`. The typed replay field is authoritative; absence means compatibility regardless of the viewer. Affected manual plays and courses remain stored and simulated with `unranked: 'bmson-total'`, without ordinary best-record or ranking updates. Positive-total opt-ins remain comparable. Damage, initial HP, carry and chart fingerprints stay unchanged. See [ADR 0030](./adr/0030-bmson-zero-total.md).

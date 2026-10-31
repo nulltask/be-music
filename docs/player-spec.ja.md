@@ -643,7 +643,7 @@ POOR カウンタに `poor` と `emptyPoor` の合計を表示するかは提示
   400 ノート未満は `(n / 5 + 200) × 0.8`、600 未満は `((n - 400) / 2.5 + 280) × 0.8`、
   それ以上は `((n - 600) / 5 + 360) × 0.8`。beatoraja は独自の既定値（`max(260, 7.605 n / (0.01 n + 6.5))`）を使います。
   名前を言ってはいけないあのゲームのゲージは TOTAL を参照せず（回復量はノート数から決まる）、報告する TOTAL は LR2 の式に従います。
-- bmson の `info.total` は絶対 TOTAL ではなく、ルールセット既定値に対する百分率です。どのルールセットも
+- 既定動作では bmson の `info.total` は絶対 TOTAL ではなく、ルールセット既定値に対する百分率です。どのルールセットも
   自身の既定値の `total / 100 ×` として扱い、0 以下は 100 % とみなします（beatoraja `BMSPlayerRule.validate`）。
   したがって `total` のない bmson 譜面は TOTAL 100 ではなく、ルールセットの既定値で演奏されます。
 - `summary.gauge.effectiveTotal` は解決後の値を報告し、beatoraja スキンの TOTAL 表示（ref 368）はプレイ中と
@@ -999,3 +999,7 @@ TUI が無効な場合は、モード開始メッセージ、レーン割り当�
   ライブプレイのオプションとしては公開していません（`bms-replay` のシミュレータでは `--algorithm=` で選べます）
 
 Battle 選択に CHART HEADER（AUTO）と COUPLE を追加します。実際の作者が SP・DP・PMS にも PLAYER 2 を使うため、既定値は OFF を維持します。ヘッダ解釈は明示的な選択を必要とし、LR2・単一譜面・beat 配置だけで有効です。明示的な選択と replay の記録モードを優先します。[ADR 0028](./adr/0028-player-header-selection.ja.md) を参照してください。
+
+## bmson TOTAL 0 の任意設定
+
+プレイ設定 `bmsonTotalMode` の既定は `beatoraja`。`spec` は正規化済み百分率 TOTAL 0 で正の回復だけを抑制する。Browser の Play options に **bmson TOTAL 0**、Terminal に `--bmson-total-mode spec` を用意する。型付き replay 値を優先し、省略時は再生側の選択にかかわらず互換動作を保つ。影響を受ける手動プレイ・コースは `unranked: 'bmson-total'` として保存・シミュレーションし、通常のベスト記録・ランキングを更新しない。正の TOTAL で設定を選ぶだけなら従来どおり比較する。ダメージ・開始 HP・引継ぎ・chart fingerprint は変わらない。[ADR 0030](./adr/0030-bmson-zero-total.ja.md) を参照。

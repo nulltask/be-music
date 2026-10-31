@@ -320,6 +320,8 @@ export function describeLeaderboardResult(result: LeaderboardSubmitResult, playe
 /** Why the Leaderboard stored a play without ranking it, for the status line. */
 function describeUnranked(reason: string): string {
   switch (reason) {
+    case 'bmson-total':
+      return 'bmson TOTAL 0 used no recovery';
     case 'tempo':
       return 'a play at another tempo is practice';
     case 'course-stage':

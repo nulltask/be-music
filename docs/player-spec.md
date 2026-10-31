@@ -660,7 +660,7 @@ split.
   400 notes, `((n - 400) / 2.5 + 280) × 0.8` below 600, `((n - 600) / 5 + 360) × 0.8` above. beatoraja uses its own
   default (`max(260, 7.605 n / (0.01 n + 6.5))`); the That-Which-Must-Not-Be-Named gauge does not read TOTAL at all (its recovery comes from
   the note count), and the TOTAL it reports follows the LR2 curve.
-- bmson `info.total` is not an absolute TOTAL but a percentage of the ruleset's default: every ruleset plays it as
+- By default, bmson `info.total` is not an absolute TOTAL but a percentage of the ruleset's default: every ruleset plays it as
   `total / 100 ×` its own default, and a value ≤ 0 means 100 % (beatoraja `BMSPlayerRule.validate`). A bmson chart
   without `total` therefore plays at the ruleset default, not at TOTAL 100.
 - `summary.gauge.effectiveTotal` reports the resolved value, and beatoraja skins' TOTAL readout (ref 368) shows it during
@@ -1030,3 +1030,7 @@ ruleset-scoped gauge id), `survival`, and `failedMidPlay`.
   exposed as a live-play option (the `bms-replay` simulator can select them with `--algorithm=`)
 
 The Battle selector adds CHART HEADER (AUTO) and COUPLE. OFF remains the default because actual authors use PLAYER 2 for SP/DP/PMS. Header interpretation is opt-in, LR2-only, single-chart and beat-layout only; explicit choices and recorded replay modes take precedence. See [ADR 0028](./adr/0028-player-header-selection.md).
+
+## Optional bmson zero-total policy
+
+Per-play `bmsonTotalMode` defaults to `beatoraja`; `spec` suppresses positive recovery only for normalized percentage TOTAL 0. Browser Play options exposes **bmson TOTAL 0** and terminal accepts `--bmson-total-mode spec`. The typed replay field is authoritative; absence means compatibility regardless of the viewer. Affected manual plays and courses remain stored and simulated with `unranked: 'bmson-total'`, without ordinary best-record or ranking updates. Positive-total opt-ins remain comparable. Damage, initial HP, carry and chart fingerprints stay unchanged. See [ADR 0030](./adr/0030-bmson-zero-total.md).

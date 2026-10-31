@@ -176,6 +176,8 @@ The de jure position ([`#TOTAL`][cmds-total]): the gauge rises by `TOTAL / notes
 | beatoraja | `max(260, 7.605 N / (0.01 N + 6.5))`; 24K: `max(300, 7.605 (N + 100) / (0.01 N + 6.5))` [V] ([BMSPlayerRule L68-88][b-rule])                                                                                                          | Same as missing [V] |
 | be-music  | Each ruleset applies its own default: `lr2` the LR2 curve above, `beatoraja` beatoraja's formula ([`definitions.ts`][bm-ruleset] `resolveEffectiveTotal`)                                                                             | Same as missing     |
 
+The table describes the default. Optional `bmsonTotalMode: 'spec'` implements zero-total no-recovery, including fixed-recovery and course gauges. Damage and starting/carry HP remain unchanged; affected runs are stored unranked. Replay absence always preserves compatibility. See [ADR 0030](./adr/0030-bmson-zero-total.md).
+
 ### 2.14 Control flow
 
 | Topic                                        | De jure                                                                                                                                                                           | LR2                                                                       | beatoraja                                                                                                                                                        | be-music                                                                                                                                                                                                                                                                                                         |

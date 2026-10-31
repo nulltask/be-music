@@ -327,3 +327,7 @@ SHA-256 で Mocha-Repository、MinIR、BMS Search（`/patterns/{sha256}`）を�
   本物の SQLite で動きます。これは通常の `vp test` の中で動きます。
 
 - Workers にだけある挙動と CPU の制限は、これらのテストでは確かめられません。CPU 時間は別に計測します。
+
+## bmson TOTAL 0 の任意設定
+
+プレイ設定 `bmsonTotalMode` の既定は `beatoraja`。`spec` は正規化済み百分率 TOTAL 0 で正の回復だけを抑制する。Browser の Play options に **bmson TOTAL 0**、Terminal に `--bmson-total-mode spec` を用意する。型付き replay 値を優先し、省略時は再生側の選択にかかわらず互換動作を保つ。影響を受ける手動プレイ・コースは `unranked: 'bmson-total'` として保存・シミュレーションし、通常のベスト記録・ランキングを更新しない。正の TOTAL で設定を選ぶだけなら従来どおり比較する。ダメージ・開始 HP・引継ぎ・chart fingerprint は変わらない。[ADR 0030](./adr/0030-bmson-zero-total.ja.md) を参照。

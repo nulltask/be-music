@@ -905,6 +905,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.clampCustomJudgeRate('keyPerfectGreat', 10);
     },
   });
+  define('player-engine.ruleset.isBmsonRecoveryDisabled', {
+    run() {
+      rulesetAPI.isBmsonRecoveryDisabled({ sourceFormat: 'bmson', total: 0 }, 'spec');
+    },
+  });
   define('player-engine.ruleset.isCustomJudgeAssist', {
     run() {
       rulesetAPI.isCustomJudgeAssist(rulesetAPI.DEFAULT_BEATORAJA_CUSTOM_JUDGE);

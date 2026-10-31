@@ -179,7 +179,7 @@ flowchart TD
 - resolution が `0` や `null` なら既定値 `240` を使い、負の値は仕様のとおり絶対値として読む（beatoraja は `0` 以下の値をすべて `240` として扱う）。整数でない値は切り捨てる
 - `info.init_bpm` が欠落、または正の有限数ではない場合は document を reject
 - `info.total` が有限数なら使い（負値は仕様どおり絶対値へ正規化）、それ以外は bmson 既定値 `100` を適用
-- `info.total` はプレイヤー既定 TOTAL に対する百分率で、絶対 TOTAL ではない。プレイヤーの全ルールセット（`lr2`、`beatoraja`、`____`）はこれを各ルールセット自身の既定 TOTAL の `total / 100 ×` として扱い、0 以下は 100 % とみなす（beatoraja の `BMSPlayerRule.validate` と同じ）。仕様では `0` はライフバーが増えない意味だが、`total: 0` でもゲージは止まらない。詳細は [player-spec](./player-spec.ja.md#初期値と既定値lr2) を参照
+- `info.total` はプレイヤー既定 TOTAL に対する百分率。既定の `bmsonTotalMode: 'beatoraja'` は 0 でも従来の既定回復を維持する。明示的な `'spec'` は、正規化済み百分率 TOTAL 0 で全ゲージの正の回復を止め、ダメージ・開始 HP・コース引継ぎを保つ。PRACTICE の明示 TOTAL 置換を優先する。replay の省略値は互換動作を維持し、影響するプレイは保存のみとして通常のベスト記録に反映しない。[ADR 0030](./adr/0030-bmson-zero-total.ja.md) を参照。
 - `info.back_image`, `info.banner_image`, `info.eyecatch_image` を normalized metadata image field に mirror
 - `sound_channels[i].name` を `resources.wav[key]` に登録
 - サウンドチャンネルごとに最低 2 文字の WAV キーを割り当てる。番号はチャンネル順（`sound_channels`、`key_channels`、`mine_channels`）に `01` から

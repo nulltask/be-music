@@ -178,3 +178,25 @@ function nonstopLog(stages: ReplayCourseStageEntry[], play: Partial<BeMusicRepla
   };
   return log;
 }
+
+test('an affected stage makes the whole course unranked', () => {
+  const entry = stage('bmfp0:zero', { bmsonTotalMode: 'spec' });
+  if (!entry.played) throw new Error('expected played stage');
+  entry.replay.chart.sourceFormat = 'bmson';
+  entry.replay.chart.total = 0;
+  const log = courseLog([stage('bmfp0:normal'), entry]);
+  expect(checkCourseReplayEligibility(log)).toMatchObject({ eligible: true, unranked: 'bmson-total' });
+  entry.replay.chart.total = 100;
+  expect(checkCourseReplayEligibility(log)).not.toHaveProperty('unranked');
+});
+
+test('NONSTOP ranking follows only its stitched TOTAL policy', () => {
+  const log = nonstopLog([stage('bmfp0:a'), stage('bmfp0:b')], { bmsonTotalMode: 'spec' });
+  const replay = log.nonstop!.replay;
+  replay.chart.sourceFormat = 'bmson';
+  replay.chart.total = 0;
+  replay.chart.totalUnit = 'percent';
+  expect(checkCourseReplayEligibility(log)).toMatchObject({ eligible: true, unranked: 'bmson-total' });
+  replay.chart.totalUnit = 'absolute';
+  expect(checkCourseReplayEligibility(log)).not.toHaveProperty('unranked');
+});

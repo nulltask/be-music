@@ -332,6 +332,7 @@ export async function createPlaySession(
     options.judgeRuleset ?? 'lr2',
     {
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
+      bmsonTotalMode: options.bmsonTotalMode,
       ...(options.customJudge !== undefined ? { customJudge: options.customJudge } : {}),
       ...(options.practice !== undefined
         ? {
@@ -390,6 +391,7 @@ export async function createPlaySession(
               mode,
               autoScratch,
               judgeAlgorithm: ruleset.rulesetId === 'beatoraja' ? (options.judgeAlgorithm ?? 'combo') : undefined,
+              ...(options.bmsonTotalMode !== undefined ? { bmsonTotalMode: options.bmsonTotalMode } : {}),
               ...(options.customJudge !== undefined ? { customJudge: { ...options.customJudge } } : {}),
               longNoteModifier: options.longNoteModifier,
               ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
@@ -827,6 +829,7 @@ function createSecondPlayer(
     rulesetChartFactsFromChart(resolvedJSON, selectPlaybackChartSide(playbackChart, 2), judgeRankChanges),
     options.judgeRuleset ?? 'lr2',
     {
+      bmsonTotalMode: options.bmsonTotalMode,
       ...(gauge !== undefined ? { selectedGauge: gauge } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
     },

@@ -47,3 +47,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0025: Chart text follows engine time and judgment effects](./0025-chart-text-playback.md)
 
 - [0026: Record effective chart display operations separately from user settings](./0026-chart-authored-display-options.md)
+
+- [0030: Make bmson zero-total recovery an explicit play policy](./0030-bmson-zero-total.md)

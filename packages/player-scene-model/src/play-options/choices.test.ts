@@ -403,3 +403,10 @@ test('battle arrangements follow a chart copied onto both sides, and CONVERGE st
   // CONVERGE names LR2's concentration and beatoraja's PMS arrangement, so it is not offered across rulesets.
   expect(resolveRandomModes('____')).not.toContain('CONVERGE');
 });
+
+test('bmson TOTAL mode is opt-in and validates both choices', () => {
+  expect(DEFAULT_PLAY_OPTIONS.bmsonTotalMode).toBe('beatoraja');
+  expect(resolvePlayOptionValue('bmsonTotalMode', 'spec')).toBe('spec');
+  expect(resolvePlayOptionValue('bmsonTotalMode', 'beatoraja')).toBe('beatoraja');
+  expect(resolvePlayOptionValue('bmsonTotalMode', 'SPEC')).toBeUndefined();
+});
