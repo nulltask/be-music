@@ -25,8 +25,9 @@ jobs:
       # An API token for the be-music account that can edit Workers, their custom domains and D1.
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 80d4b5fd75f07e61a637b6bb9774186e
-      # `deploy` scripts for production, `deploy:preview` for the preview.
-      SUFFIX: ${{ github.ref_name == 'main' && '' || ':preview' }}
+      # `deploy` scripts for production, `deploy:preview` for the preview. Test for the preview: `''` is falsy, so
+      # `main && '' || ':preview'` would always pick the preview.
+      SUFFIX: ${{ github.ref_name != 'main' && ':preview' || '' }}
       DB_ENV: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
 
     steps:
