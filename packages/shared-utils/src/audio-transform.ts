@@ -50,10 +50,10 @@ export function transformStereoPCM(
 
 /**
  * Length of the gain ramp at a sample-slice boundary, in source seconds. Long enough to turn the step of a cut
- * waveform into a ramp (a click needs well under a millisecond), short enough that the onset of a slice still sounds
- * immediate.
+ * waveform into a ramp (a click needs well under a millisecond), short enough to keep the attack of a drum hit that
+ * starts a slice: a 3 ms ramp audibly blunted it.
  */
-export const SAMPLE_SLICE_FADE_SECONDS = 0.003;
+export const SAMPLE_SLICE_FADE_SECONDS = 0.001;
 
 /** Gain ramps of a played sample window, in the caller's unit (seconds or frames). */
 export interface SampleSliceEnvelope {
