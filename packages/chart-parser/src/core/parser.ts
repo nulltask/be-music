@@ -17,7 +17,7 @@ import {
   type ControlFlowCaptureFrameType,
   updateControlFlowCaptureStack,
 } from './control-flow.ts';
-import { pushHeaderLine, resolveHeaderDefinitionKey } from './bms-headers.ts';
+import { pushHeaderLine, resolveHeaderCommandAlias, resolveHeaderDefinitionKey } from './bms-headers.ts';
 import { parseJSONDocument } from './bms-json-document.ts';
 import { parseBmsonDocument } from './bmson-document.ts';
 
@@ -111,7 +111,9 @@ export function parseBMS(input: string): BeMusicJSON {
     if (!headerLine) {
       return;
     }
-    const { command, commandRaw, value } = headerLine;
+    const { value } = headerLine;
+    // `#EXBPMxx` is stored as `#BPMxx`, so round-tripped output is normalized like the control-flow spellings below.
+    const { command, commandRaw } = resolveHeaderCommandAlias(headerLine.command, headerLine.commandRaw);
 
     // Spelling variants (`#END IF` / `#END` / `#ELSE IF n`) normalize onto the canonical control-flow commands —
     // captured entries store the canonical form, so round-tripped output is normalized too.
