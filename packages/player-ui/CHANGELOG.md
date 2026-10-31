@@ -1,5 +1,13 @@
 # @be-music/player-ui
 
+## 0.5.0
+
+### Minor Changes
+
+- 155bd8d: `be-music-preview-select` and `be-music-preview-start` gain an `autoPlay` property: set, they show an **AUTO** checkbox (in the list's header, under the play button) whose change emits the new `auto-play-change` event. Unset, nothing changes.
+- b9bc65c: The preview's lanes now reach down to just above the video controls without running under them: on a phone held upright they stopped well short, and on a phone held sideways (SP or DP) the judgement line sat under the seek bar. `resolvePreviewPortrait` and the new `previewJudgementInset` keep clear only the controls' height on the smallest (320 px) phone and a 16 px gap; `PREVIEW_CONTROLS_CSS_HEIGHT` is exported with it. `be-music-preview-hud` also puts the controls along the bottom of the screen rather than the stage, so a stage letterboxed into the screen keeps them off its lanes.
+- c6437bc: `be-music-preview-start` gains a `load` mode (a download icon and "Load") and a `caption` property, a line of small type under the label such as the file the button loads.
+
 ## 0.4.0
 
 ### Minor Changes

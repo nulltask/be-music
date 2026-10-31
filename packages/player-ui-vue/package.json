@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-ui-vue",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Typed Vue wrappers for Be-Music Web Components",
   "license": "MIT",
   "files": [

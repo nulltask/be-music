@@ -1,5 +1,11 @@
 # @be-music/player-browser
 
+## 0.13.2
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-ui@0.5.0`
+
 ## 0.13.1
 
 ### Patch Changes

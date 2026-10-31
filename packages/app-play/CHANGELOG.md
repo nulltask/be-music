@@ -1,5 +1,17 @@
 # @be-music/app-play
 
+## 0.9.0
+
+### Minor Changes
+
+- 155bd8d: The embed can switch between the AUTO preview and the viewer's own play without changing `?mode=`: an **AUTO** checkbox sits in the chart list's header and under the play button of a single chart, starting from `?mode=`. Changing it under the play button loads the play again in the other mode.
+- c6437bc: On a phone or tablet, and wherever the browser asks to save data, the embed no longer starts downloading the track as soon as it opens: it shows a **Load** button with the archive's file name and size, and downloads once it is pressed.
+
+### Patch Changes
+
+- b9bc65c: The embed's lanes now reach down to just above the seek bar without running under it: on a phone held upright they stopped well short, on a phone held sideways the judgement line sat under the seek bar, and a DP chart on a phone held upright had the controls over its lanes.
+- Updated dependencies: `@be-music/player-browser@0.13.2`
+
 ## 0.8.1
 
 ### Patch Changes
