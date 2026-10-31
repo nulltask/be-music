@@ -51,4 +51,19 @@ nanasigroove の書式説明は、`#OPTION` ごとに `774:カテゴリ_オプ�
 - HIDDEN・CHANGE-HS・CRAZY の表示系列は、決定的な式と全ホストの表示経路を作って初めて実装済みと言えます。近い名前の lane cover に置き換えるだけではネイティブとの一致を証明しません。
 - ネイティブ文書にはオプションのスコア加点がありますが、利用できる計算式は示しません。AUTOPLAY の記録除外は譜面から指定できないユーザーモードの説明です。コース制約・記録可否・有効オプションの保存・サーバーでの再計算には Be-Music の明示的な規則が必要で、replay に設定値を保存するだけでは判定再現を証明しません。
 
+## 対応範囲（決定）
+
+手元のテスト用コーパスでは、`#OPTION`・`#CHANGEOPTIONxx`・チャンネル `A6` のいずれも BMS 系 **0 / 5,344** ファイルでした。そのため Be-Music は、確定した決定的な規則を持つ系列だけを実行し、それ以外は診断します。
+
+| 系列                                     | Be-Music の挙動                             | 理由                                                                                                                             |
+| ---------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `774:HI-SPEED_`、旧 `HSP-*`              | 実行（初期宣言と A6。旧別名は初期宣言のみ） | 範囲と刻みが確定している。[ADR 0026](../adr/0026-chart-authored-display-options.ja.md) を参照                                    |
+| `charatbeatHDX:LONGMODE`                 | 初期宣言で実行。時刻付きは診断のみ          | 一次資料の規則がある。[ADR 0027](../adr/0027-hdx-long-note-modes.ja.md) を参照                                                   |
+| `CHANGE-HS_`・`HIDDEN_`・表示系 `CRAZY_` | `unsupported-option` として診断し、効果なし | しきい値・曲線・周期・乱数の本家の式がない。似た lane cover で代用すると、資料で裏付けられない一致を主張することになる           |
+| `RANDOM_`・`NOTES_`・判定系 `CRAZY_`     | `unsupported-option` として診断し、効果なし | 判定レーン・ノート数・判定を変える。使用例がないのに、譜面の強制値でユーザー設定・コースの固定・記録の可否を上書きすることになる |
+| `GAMELEVEL_`・`EXTRA_`                   | `unsupported-option` として診断し、効果なし | ゲージと難度を選ぶ系列で、Be-Music ではプレイヤーと ruleset に任せている                                                         |
+| `charatbeatHDX:BGAMODE`                  | `unsupported-option` として診断し、効果なし | BGA の配置はスキンの役割で、browser・terminal の BGA 領域には HDX の上中央の枠がない                                             |
+
+診断は受理済みの操作を取り消さず、ノート・判定・fingerprint・記録の可否を変えず、replay にも記録しません。replay は実効プログラムだけを保持するため、後から実装した系列が既存の記録で有効になることはありません。診断のみの系列を実装するときは、実効プログラムのプロファイル版、replay と記録の規則、専用の Issue が必要です。
+
 ローカルの閲覧資料: `/tmp/chart-option-archive-0`、`/tmp/chart-option-archive-1`、`/tmp/chart-options-nanasi-manual/`、`/tmp/nanasi-primary-11_1_bms.txt`、`/tmp/nanasi-primary-05_8_3_playoption.txt`、`/tmp/chart-option-native-1-05.html`、`/tmp/chart-option-native-1-06.html`、`/tmp/hdx-primary-05.txt`、`/tmp/hdx-primary-06.txt`。第三者の配布書庫は一時資料であり、リポジトリへ追加しません。

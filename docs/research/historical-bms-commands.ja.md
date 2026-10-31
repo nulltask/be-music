@@ -23,8 +23,8 @@
 | `#CHARFILE`（[`CHARFILE`][c]）                                                | pomu → pomu2、PMChr-V。Sonorous と TechnicalGroove は解析のみ              | ポップン風キャラクターアニメーション（`.chp`）                                                        | 0 / 5,344                       | 未対応。譜面の意味の外にある演出素材で、プレイ画面のキャラクターは Be-Music のスキンが担う                                                                                                            |
 | `#ExtChr`（[`EXTCHR`][x]）                                                    | BM98 → BM98k、DDR（一部）                                                  | BM98 のプレイ画面スプライトを `#BMP` 画像の一部で置き換える。チャンネル `05` で切り替え可能           | **2 / 5,344**（1 作品の SP/DP） | 未対応。スプライト番号は BM98 内部のキャラクターマップを指し、Be-Music・LR2・beatoraja のスキンに対応物がない。2 ファイルともチャンネル `05` は使っていない                                           |
 | `#CDDA`（[`CDDA`][d]）                                                        | DDR → DDR                                                                  | 音楽 CD のトラックを BGM として再生                                                                   | 0 / 5,344                       | 未対応。ブラウザーは音楽 CD を読めず、音源も譜面フォルダーの外にある                                                                                                                                  |
-| `#VIDEOf/s`（[`VIDEOFPS`][v]）                                                | bemaniaDX → bemaniaDX                                                      | `#VIDEOFILE` の再生フレームレート                                                                     | 0 / 5,344                       | [#836](https://github.com/nulltask/be-music/issues/836)（`#VIDEOFILE` アダプター）に含める。単独では意味がない                                                                                        |
-| `#VIDEODLY`（[`VIDEODLY`][v]）                                                | bemaniaDX → bemaniaDX                                                      | `#VIDEOFILE` の開始フレーム（遅延）                                                                   | 0 / 5,344                       | 同上、#836 に含める                                                                                                                                                                                   |
+| `#VIDEOf/s`（[`VIDEOFPS`][v]）                                                | bemaniaDX → bemaniaDX                                                      | `#VIDEOFILE` の再生フレームレート                                                                     | 0 / 5,344                       | `#VIDEOFILE` とともに未対応（下記を参照）。単独では意味がない                                                                                                                                         |
+| `#VIDEODLY`（[`VIDEODLY`][v]）                                                | bemaniaDX → bemaniaDX                                                      | `#VIDEOFILE` の開始フレーム（遅延）                                                                   | 0 / 5,344                       | 同上、`#VIDEOFILE` とともに未対応                                                                                                                                                                     |
 | `#VIDEOCOLORS`（[`VIDEOCOLORS`][v]）                                          | bemaniaDX → bemaniaDX                                                      | AVI パレットの色深度                                                                                  | 0 / 5,344                       | 未対応。出力形式は現代のデコーダーが決めるため、再現すべき効果がない                                                                                                                                  |
 | `#SEEKxx`（[`SEEKXX`][k]）                                                    | LR → LR。LR2 で削除された可能性あり。cmds でも詳細不明                     | チャンネル `05` で現在の動画の再生位置をミリ秒単位で移動                                              | 0 / 5,344（チャンネル `05`：0） | 未対応。信頼できる仕様も使用例もない                                                                                                                                                                  |
 | `MATERIALS`（[`MATERIALS`][m]）                                               | BM98de → BM98de、RDM、bemaniaDX、nanasi 1.00 未満                          | ヘッダーではない。`#WAVxx <folder> file` をプレイヤー実行ファイル横の `Materials` フォルダーから解決  | 0 / 5,344（`<folder>` 参照）    | 未対応。Be-Music には実行ファイル基準の共有フォルダーがなく、譜面は自己完結している必要がある。Be-Music が `bms.materials` に保持する `#MATERIALS` ヘッダーはこの機能ではない                         |
@@ -36,7 +36,15 @@
 ## 後続対応
 
 - `#EXBPMxx`（対応済み）：制御構文の別表記と同じく、parser が入力時に `#BPMxx` へ書き換える。そのためファイル順の規則・分岐・fingerprint・書き出しは両者を一つの定義として扱い、同じ番号では後の行が勝つ。`metadata.extras` に保持していた旧 Be-Music JSON は、`#BPMxx` がその番号を定義していなければ `resources.bpm` へ移行する。[フォーマット互換性](../format-compat.ja.md)を参照。
-- `#VIDEOf/s`／`#VIDEODLY`：#836 の `#VIDEOFILE` アダプターの一部として扱う。
+
+## `#MIDIFILE` と `#VIDEOFILE`（#836）
+
+| コマンド                         | 出自 → 対応（cmds）                                                            | LR2 / beatoraja                        | コーパスでの使用 | 判断   |
+| -------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------- | ---------------- | ------ |
+| `#MIDIFILE`（[`MIDIFILE`][d]）   | BM98 → BM98、BMSV、DDR、RDM、IIDXv、HDX。cmds はハードウェア依存で非推奨とする | 非対応 [C] / 非対応 [V]                | 0 / 5,344        | 未対応 |
+| `#VIDEOFILE`（[`VIDEOFILE`][f]） | bemaniaDX → bemaniaDX（`#VIDEOf/s`・`#VIDEODLY`・`#VIDEOCOLORS` と併用）       | 非対応。動画は `#BMPxx` で扱う [C] [V] | 0 / 5,344        | 未対応 |
+
+Be-Music は ruleset の外では LR2 に、LR2 にない挙動では beatoraja に従います。どちらのプレイヤーもこれらのコマンドを実行せず、動画 BGA は LR と両プレイヤーが使う `#BMPxx` で既に動きます。MIDI を鳴らすには、譜面側では音色を指定できない音源と音色セットの同梱も必要で、cmds が警告するハードウェア依存と同じ問題を抱えます。コーパスに使用例がないため、どちらの費用にも見合いません。往復で失わないよう値は `bms.midiFile`／`bms.videoFile` に、`#VIDEOf/s`／`#VIDEODLY` は `metadata.extras` に保持します。これらに頼る譜面は、その BGM や動画なしで再生されます。再検討には、使用している譜面と専用の Issue が必要です。
 
 それ以外は未対応のままとし、往復で失わないよう `metadata.extras` に保持するだけで、実行時の意味は持たせません。
 
@@ -49,3 +57,4 @@
 [k]: https://hitkey.nekokan.dyndns.info/cmds.htm#SEEKXX
 [m]: https://hitkey.nekokan.dyndns.info/cmds.htm#MATERIALS
 [p]: https://hitkey.nekokan.dyndns.info/cmds.htm#DIVIDEPROP
+[f]: https://hitkey.nekokan.dyndns.info/cmds.htm#VIDEOFILE
