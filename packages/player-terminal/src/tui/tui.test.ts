@@ -610,3 +610,12 @@ test('terminal display uses exact authored hi-speed beyond user limits and resto
   }
   expect(stripANSI(renderOutputRaw([], { highSpeed: 2, chartOptions: {} }).join('\n'))).toContain('HS x2.0');
 });
+
+test('long chart text is cut to the terminal width by display columns and never wraps the layout', () => {
+  // 40 columns: "TEXT  " (6) + 17 wide characters (34). A wide character that would straddle the edge is dropped.
+  const lines = renderOutputRaw([], { chartText: '譜'.repeat(30) + 'abc'.repeat(20) }).map(stripANSI);
+  const rows = lines.filter((line) => line.includes('TEXT'));
+  expect(rows).toEqual([`TEXT  ${'譜'.repeat(17)}`]);
+  // The text row replaces one lane row instead of adding a wrapped one.
+  expect(lines.length).toBe(renderOutputRaw([], { chartText: 'short' }).length);
+});
