@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-ui",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Reusable Lit Web Components for Be-Music player interfaces",
   "license": "MIT",
   "files": [
