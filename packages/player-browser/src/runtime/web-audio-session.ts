@@ -16,7 +16,12 @@ import {
   type BeMusicJSON,
 } from '@be-music/chart-source';
 import type { AudioSession } from '@be-music/player-engine';
-import { normalizePath } from '@be-music/shared-utils/core';
+import {
+  normalizePath,
+  resolveSampleSliceEnvelope,
+  SAMPLE_SLICE_FADE_SECONDS,
+  type SampleSliceEnvelope,
+} from '@be-music/shared-utils/core';
 import { type AudioBusHandle } from './audio-bus.ts';
 import { prepareWAVPlaybackBuffer } from './wav-playback.ts';
 
@@ -252,6 +257,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     path: string,
     bus: AudioNode,
     dynamicGain: number,
+    withGainNode: boolean,
   ): WebAudioSourceHandle | undefined => {
     const buffer = sampleBuffer(path, sampleKey);
     if (!buffer) return undefined;
@@ -267,7 +273,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     if (rate !== 1) node.playbackRate.value = rate;
     let gain: GainNode | undefined;
     const combinedGain = (wavCmdVolumeMultipliers.get(sampleKey) ?? 1) * dynamicGain;
-    if (combinedGain !== 1) {
+    if (combinedGain !== 1 || withGainNode) {
       gain = audioContext.createGain();
       gain.gain.value = combinedGain;
       node.connect(gain);
@@ -344,18 +350,8 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const previousSlice = sliceId === undefined ? undefined : activeBySlice.get(sliceId);
     if (previousSlice?.startContextSeconds === startAt) return;
 
-    const channel = normalizeChannel(event.channel);
-    const isPlayerLane = isPlayLaneSoundChannel(channel);
-    const bus = isPlayerLane ? audioBus.keyMixer : audioBus.bgmMixer;
-    const built = buildSourceNode(sampleKey, path, bus, isPlayerLane ? currentKeyDynamicGain : currentBGMDynamicGain);
-    if (!built) return;
-    const { node, buffer } = built;
-
-    node.onended = (): void => {
-      forgetSource(built);
-      disconnectSource(built);
-    };
-
+    const buffer = sampleBuffer(path, sampleKey);
+    if (!buffer) return;
     const elapsed = elapsedSeconds > 0 ? elapsedInBuffer(sampleKey, elapsedSeconds) : 0;
     const sliceRate = sliceRateOf(sampleKey);
     const offsetSeconds = clampSampleOffset((slice?.offsetSeconds ?? 0) / sliceRate + elapsed, buffer.duration);
@@ -364,6 +360,31 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       buffer.duration,
       offsetSeconds,
     );
+    const envelope = resolveSampleSliceEnvelope(
+      offsetSeconds,
+      durationSeconds,
+      buffer.duration,
+      SAMPLE_SLICE_FADE_SECONDS,
+    );
+    const hasEnvelope = envelope.fadeIn > 0 || envelope.fadeOut > 0;
+
+    const channel = normalizeChannel(event.channel);
+    const isPlayerLane = isPlayLaneSoundChannel(channel);
+    const bus = isPlayerLane ? audioBus.keyMixer : audioBus.bgmMixer;
+    const built = buildSourceNode(
+      sampleKey,
+      path,
+      bus,
+      isPlayerLane ? currentKeyDynamicGain : currentBGMDynamicGain,
+      hasEnvelope,
+    );
+    if (!built) return;
+    const { node } = built;
+
+    node.onended = (): void => {
+      forgetSource(built);
+      disconnectSource(built);
+    };
     // Scheduled BGM cues clamp to "now" so a slightly-late polling tick still fires immediately rather than
     // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
     if (previousSlice) stopSource(previousSlice, startAt);
@@ -373,7 +394,16 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
         stopSource(previous, startAt);
       }
     }
-    startSampleNode(node, startAt, offsetSeconds, durationSeconds);
+    if (hasEnvelope && built.gain) {
+      scheduleSliceEnvelope(built.gain.gain, startAt, durationSeconds, envelope, basePlaybackRate * built.stageRate);
+    }
+    // A cut slice rings on past its end while it fades out.
+    startSampleNode(
+      node,
+      startAt,
+      offsetSeconds,
+      durationSeconds === undefined ? undefined : durationSeconds + envelope.fadeOut,
+    );
 
     activeSources.add(built);
     built.startContextSeconds = startAt;
@@ -542,6 +572,30 @@ export function glidePlaybackRate(param: AudioParam, rate: number, now: number):
   param.cancelScheduledValues(now);
   param.setValueAtTime(param.value, now);
   param.linearRampToValueAtTime(rate, now + LIVE_TEMPO_RAMP_SECONDS);
+}
+
+/**
+ * Schedules the ramps of a bmson slice that cuts its source file (see `resolveSampleSliceEnvelope`) on the voice's
+ * gain, from its level now. `lengthSeconds` and the envelope are buffer time; `rate` turns them into context time.
+ * A live tempo change later glides the rate, which moves the end of a slice by a fraction of the ramp at most.
+ */
+export function scheduleSliceEnvelope(
+  param: AudioParam,
+  startAt: number,
+  lengthSeconds: number | undefined,
+  envelope: SampleSliceEnvelope,
+  rate: number,
+): void {
+  const level = param.value;
+  if (envelope.fadeIn > 0) {
+    param.setValueAtTime(0, startAt);
+    param.linearRampToValueAtTime(level, startAt + envelope.fadeIn / rate);
+  }
+  if (envelope.fadeOut > 0 && lengthSeconds !== undefined) {
+    const endAt = startAt + lengthSeconds / rate;
+    param.setValueAtTime(level, endAt);
+    param.linearRampToValueAtTime(0, endAt + envelope.fadeOut / rate);
+  }
 }
 
 /**

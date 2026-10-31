@@ -13,7 +13,14 @@ import {
   type ResolvedChart,
   type TimedSampleTrigger,
 } from '@be-music/chart-model';
-import { floatToInt16, throwIfAborted } from '@be-music/shared-utils/core';
+import {
+  floatToInt16,
+  resolveSampleSliceEnvelope,
+  sampleSliceEnvelopeGain,
+  SAMPLE_SLICE_FADE_SECONDS,
+  throwIfAborted,
+  type SampleSliceEnvelope,
+} from '@be-music/shared-utils/core';
 import { type BeMusicEvent, normalizeChannel, normalizeObjectKey, resolveBMSBase } from '@be-music/chart-source';
 import { type RenderResult, renderSingleSample } from '@be-music/chart-audio-renderer';
 import { createNodeAudioSink, type AudioSink } from './audio-sink.ts';
@@ -269,14 +276,8 @@ export async function createNodeAudioSession({
         return;
       }
       const playback = eventPlaybackMap.get(event);
-      const offsetSeconds = playback?.offsetSeconds ?? 0;
-      const offsetFrames = Math.max(0, Math.round(offsetSeconds * sample.sampleRate));
-      const durationFrames =
-        typeof playback?.durationSeconds === 'number' && Number.isFinite(playback.durationSeconds)
-          ? Math.max(1, Math.round(playback.durationSeconds * sample.sampleRate))
-          : sample.left.length - offsetFrames;
-      const endPosition = Math.min(sample.left.length, offsetFrames + durationFrames);
-      if (offsetFrames >= endPosition) {
+      const window = resolveVoiceFrameWindow(sample.left.length, sample.sampleRate, playback);
+      if (!window) {
         return;
       }
       if (usesMonophonicWAVPlayback(json)) {
@@ -297,8 +298,7 @@ export async function createNodeAudioSession({
       }
       activeVoices.push({
         sample,
-        position: offsetFrames,
-        endPosition,
+        ...window,
         channel: normalizeChannel(event.channel),
         sampleKey: normalized,
         samplePath: wavResources[normalized],
@@ -320,16 +320,99 @@ export async function createNodeAudioSession({
   };
 }
 
-interface ActiveVoice {
+export interface ActiveVoice {
   sample: RenderResult;
+  /** Source frame the voice started at, which a slice envelope is measured from. */
+  startPosition: number;
   position: number;
   endPosition: number;
+  slice?: VoiceSlice;
   channel?: string;
   sampleKey?: string;
   samplePath?: string;
   sliceId?: string;
   startSeconds?: number;
   gain: number;
+}
+
+/** A slice window that cuts its source file, with the ramps that keep the cut from clicking. */
+interface VoiceSlice {
+  lengthFrames: number;
+  envelope: SampleSliceEnvelope;
+}
+
+/**
+ * The source frames a triggered sample plays. A bmson slice that cuts its file fades in where it starts inside the
+ * file and rings on past its end while it fades out, so the window grows by the fade-out.
+ */
+export function resolveVoiceFrameWindow(
+  sampleLength: number,
+  sampleRate: number,
+  playback: PlayableNotePlayback | undefined,
+): Pick<ActiveVoice, 'startPosition' | 'position' | 'endPosition' | 'slice'> | undefined {
+  const offsetFrames = Math.max(0, Math.round((playback?.offsetSeconds ?? 0) * sampleRate));
+  const requestedFrames =
+    typeof playback?.durationSeconds === 'number' && Number.isFinite(playback.durationSeconds)
+      ? Math.max(1, Math.round(playback.durationSeconds * sampleRate))
+      : undefined;
+  const lengthFrames = Math.min(sampleLength - offsetFrames, requestedFrames ?? sampleLength);
+  if (lengthFrames <= 0) {
+    return undefined;
+  }
+  const window = { startPosition: offsetFrames, position: offsetFrames, endPosition: offsetFrames + lengthFrames };
+  const envelope = resolveSampleSliceEnvelope(
+    offsetFrames,
+    requestedFrames,
+    sampleLength,
+    Math.round(SAMPLE_SLICE_FADE_SECONDS * sampleRate),
+  );
+  if (envelope.fadeIn === 0 && envelope.fadeOut === 0) {
+    return window;
+  }
+  return { ...window, endPosition: window.endPosition + envelope.fadeOut, slice: { lengthFrames, envelope } };
+}
+
+/** Adds up to `chunkFrames` of every active voice, from its current position, onto the mix. */
+export function mixActiveVoices(
+  mixedLeft: Float32Array,
+  mixedRight: Float32Array,
+  activeVoices: readonly ActiveVoice[],
+  chunkFrames: number,
+): void {
+  // Voice-major accumulation removes a per-sample boundary branch from the hot path.
+  for (let voiceIndex = 0; voiceIndex < activeVoices.length; voiceIndex += 1) {
+    const voice = activeVoices[voiceIndex]!;
+    const voiceFrames = Math.min(chunkFrames, voice.endPosition - voice.position);
+    if (voiceFrames <= 0) {
+      continue;
+    }
+    const voiceLeft = voice.sample.left;
+    const voiceRight = voice.sample.right;
+    const voiceGain = voice.gain;
+    let sourceFrame = voice.position;
+    const slice = voice.slice;
+    if (slice) {
+      for (let frame = 0; frame < voiceFrames; frame += 1) {
+        const frameGain =
+          voiceGain * sampleSliceEnvelopeGain(sourceFrame - voice.startPosition, slice.lengthFrames, slice.envelope);
+        mixedLeft[frame] += voiceLeft[sourceFrame] * frameGain;
+        mixedRight[frame] += voiceRight[sourceFrame] * frameGain;
+        sourceFrame += 1;
+      }
+    } else if (Math.abs(voiceGain - 1) <= 1e-9) {
+      for (let frame = 0; frame < voiceFrames; frame += 1) {
+        mixedLeft[frame] += voiceLeft[sourceFrame];
+        mixedRight[frame] += voiceRight[sourceFrame];
+        sourceFrame += 1;
+      }
+    } else {
+      for (let frame = 0; frame < voiceFrames; frame += 1) {
+        mixedLeft[frame] += voiceLeft[sourceFrame] * voiceGain;
+        mixedRight[frame] += voiceRight[sourceFrame] * voiceGain;
+        sourceFrame += 1;
+      }
+    }
+  }
 }
 
 function collectActiveAudioFileNames(activeVoices: ActiveVoice[]): string[] {
@@ -467,31 +550,7 @@ async function playMixedPCMThroughOutput(params: {
       }
     }
 
-    // Voice-major accumulation removes a per-sample boundary branch from the hot path.
-    for (let voiceIndex = 0; voiceIndex < activeVoices.length; voiceIndex += 1) {
-      const voice = activeVoices[voiceIndex]!;
-      const voiceFrames = Math.min(chunkFrames, voice.endPosition - voice.position);
-      if (voiceFrames <= 0) {
-        continue;
-      }
-      const voiceLeft = voice.sample.left;
-      const voiceRight = voice.sample.right;
-      const voiceGain = voice.gain;
-      let sourceFrame = voice.position;
-      if (Math.abs(voiceGain - 1) <= 1e-9) {
-        for (let frame = 0; frame < voiceFrames; frame += 1) {
-          mixedLeft[frame] += voiceLeft[sourceFrame];
-          mixedRight[frame] += voiceRight[sourceFrame];
-          sourceFrame += 1;
-        }
-      } else {
-        for (let frame = 0; frame < voiceFrames; frame += 1) {
-          mixedLeft[frame] += voiceLeft[sourceFrame] * voiceGain;
-          mixedRight[frame] += voiceRight[sourceFrame] * voiceGain;
-          sourceFrame += 1;
-        }
-      }
-    }
+    mixActiveVoices(mixedLeft, mixedRight, activeVoices, chunkFrames);
 
     for (let frame = 0; frame < chunkFrames; frame += 1) {
       const sampleOffset = frame * 2;
