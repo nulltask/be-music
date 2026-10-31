@@ -50,7 +50,7 @@ The browser host installs one shared worker pool for chart parsing/counting/pack
 | `./collection`             | Library loading: `BrowserChartCollectionStore`, dropped files, courses and the course maker, chart hashes, and the browser compatibility check                                                                                                             |
 | `./audio`                  | The audio service (`createAudioService`), the audio bus and its compressor parameters, the master volume, the system audio session, and `ChartPreviewEngine`                                                                                               |
 | `./recording`              | `GameplayRecorder`, the recording formats, `makeWebMSeekable`, `downloadBlob` and the WebCodecs helpers                                                                                                                                                    |
-| `./compute`                | Shared CPU worker pool, count settings, data-only task dispatch, and host worker setup.                                                                                                                                                                    |
+| `./compute`                | Shared CPU worker pool, count settings, data-only task dispatch, and host worker setup (the task pool and the BGA video transcode workers).                                                                                                                |
 
 The models the scenes take and hand back come from their own packages: the play options, `PlayResult`, `CourseView`, the hi-speed range, the library entries (`LibraryChart`, `LibraryFolder`, `LibraryCourse`, `LibraryEntry`, …) and their helpers (`groupChartsByFolder`, `resolveLibraryChartPlayVariant`) from `@be-music/player-scene-model`, the be-music skin contract from `@be-music/player-skin-sdk`, and the replay format from `@be-music/player-engine/replay`. Everything else in the package is internal.
 
@@ -807,7 +807,7 @@ pnpm bench -- --packages player-browser
 - The default family renders the same chart BGA layer stack as LR2 skins inside its built-in BGA frame.
 - BMS rendering applies `#BGAxx` sub-regions, EXBMP still-image/opaque-video transparent-color keys, channel-scoped A1–A4 ARGB and input-bound A5 SWBGA. SWBGA includes keyed video crops and remapped NONSTOP resources, with selection/animation ending at the stage boundary and FIT-adjusted animation/movie clocks. See [BMS support](bms-spec.md).
 - bmson rendering uses `bga.bga_events`, `bga.layer_events`, and `bga.poor_events`; unlike BMS layer channels, bmson layer images preserve black pixels instead of treating black as transparent.
-- The browser player can transcode unsupported video assets before playback with ffmpeg.wasm and its single-threaded `@ffmpeg/core`. The multithreaded core is not installed because its current 0.12.x build crashes in libx264; typical BMS BGA videos take tens of seconds to transcode.
+- A BGA video the browser can't play (`.wmv`, `.avi`, `.mpg`, …) is transcoded to H.264 with ffmpeg.wasm and its single-threaded `@ffmpeg/core`, and starts playing while the transcode is still running ([BGA video transcode](#bga-video-transcode)). The multithreaded core is not installed because its current 0.12.x build crashes in libx264. BGA video has no sound in any case.
 - Natural chart completion waits for a short post-chart delay before opening the result scene. The visual transition
   does not cut off the remaining gameplay audio tail.
 - The gameplay recorder writes MP4 or WebM output and coordinates stop/finalization before scene disposal so active recordings are flushed before the gameplay bus is torn down.
@@ -815,6 +815,30 @@ pnpm bench -- --packages player-browser
 - Every play screen also records what the player saw (`play.view`, `play.viewChanges`): the hi-speed on its scale, HS-FIX, the visible time at the main BPM and each side's SUDDEN+ / HIDDEN+ / LIFT, sending each change as a `{ kind: 'view' }` command, coalesced to at most one per 100 ms. A replay shows that view along the playhead as far as the `replayView` option asks: the recorded hi-speed when it was played on the same scale (the LR2 / default screens share one, and beatoraja skins have their own), else the hi-speed showing the recorded visible time, and the recorded covers (the LIFT too on the beatoraja play skin, which draws one; `PlaySessionTheme.drawsLift`). See [replay.md](./replay.md#what-the-player-saw) for the units and the rule.
 - With "Submit to Leaderboard" on (Debug Menu → Leaderboard, OFF by default, latched like the auto-save), a finished manual play is sent to the Leaderboard ([leaderboard.md](./leaderboard.md)) when the result scene mounts: the player signs in anonymously the first time, rebuilds the play's fingerprint documents from the song's chart and checks them against the log before sending, resends with the chart document when the server asks for it, and shows the rank in the status line. The deployed Worker forwards `/api/*` and `/leaderboard/*` to the Leaderboard Worker through a Service Binding; `pnpm player:web` proxies them to a local one (`pnpm --filter @be-music/app-leaderboard run dev`, or `LEADERBOARD_DEV_ORIGIN`).
 - The account starts anonymous (the first submission signs in anonymously). "Create passkey (keep this account)" registers a passkey for it, which also lists its plays under its handle instead of behind the anonymous filter; "Sign in with passkey" brings the account to another browser and moves that browser's anonymous plays into it.
+
+### BGA video transcode
+
+When the browser can't decode a BGA video, `loadVideoTextureFromBytes` transcodes it to H.264 and plays the result in the same `<video>` / Pixi `VideoSource` path as a native video. With the host's workers installed (`configureBGAVideoWorkers` from `./compute`, whose entries call `runBGAVideoDecodeWorker()` / `runBGAVideoEncodeWorker()`) and Media Source Extensions in the browser, the transcode streams: the video plays fragmented MP4 through a `MediaSource` (`ManagedMediaSource` where there is one, as on iPhone) as the fragments come, so the BGA is ready as soon as its first frame is.
+
+```mermaid
+flowchart LR
+  subgraph decode["Decode worker"]
+    ffmpeg["ffmpeg.wasm"] --> device["Output device"]
+  end
+  subgraph encode["Encode worker"]
+    webcodecs["WebCodecs H.264"] --> mux["Mediabunny fMP4"]
+  end
+  device -- "y4m frames" --> webcodecs
+  device -- "libx264 fMP4" --> main
+  mux -- "fMP4" --> main["Main thread<br/>MediaSource"]
+  main --> video["video element"]
+```
+
+- The decode worker boots the stock ffmpeg.wasm core and registers a character device as ffmpeg's output, so each piece of output reaches JavaScript while `exec` is still running. The output is scaled to even dimensions and resampled to a constant frame rate of at most 60 fps, which keeps a variable-rate source in time.
+- On a cross-origin isolated page, ffmpeg writes raw y4m frames that the encode worker encodes with WebCodecs (hardware first) and muxes with Mediabunny. The decoder waits on a `SharedArrayBuffer` counter (`Atomics.wait`) while it is more than a few frames ahead of the encoder, so no frame is dropped and raw frames don't pile up.
+- Elsewhere (the deployed player is not isolated), or with "Use WebCodecs encoder" off, or when the WebCodecs encoder fails, ffmpeg encodes with its own libx264 straight to fragmented MP4. Encoding on the decoding thread paces the decode by itself.
+- The media source declares a provisional duration until the stream ends, so a cue seeking past what has been transcoded waits there for the frames. The same bytes on several tracks share one transcode, two transcodes run at a time, and closing the last video using one cancels it.
+- Without the workers or MSE, or when the stream fails before its first frame, the whole file is transcoded before it plays (the earlier path).
 
 ### Audio service
 

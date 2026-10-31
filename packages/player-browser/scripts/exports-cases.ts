@@ -243,6 +243,24 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       });
     },
   });
+  define('player-browser.configureBGAVideoWorkers', {
+    interactive: true,
+    run: () => {
+      playerWebCoreAPI.configureBGAVideoWorkers(undefined);
+    },
+  });
+  define('player-browser.runBGAVideoDecodeWorker', {
+    interactive: true,
+    run: () => {
+      playerWebCoreAPI.runBGAVideoDecodeWorker({ onmessage: null, postMessage: () => undefined });
+    },
+  });
+  define('player-browser.runBGAVideoEncodeWorker', {
+    interactive: true,
+    run: () => {
+      playerWebCoreAPI.runBGAVideoEncodeWorker({ onmessage: null, postMessage: () => undefined });
+    },
+  });
   define('player-browser.disposeBrowserWorkers', {
     interactive: true,
     run: () => {
