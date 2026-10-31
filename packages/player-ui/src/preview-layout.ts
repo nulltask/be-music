@@ -21,8 +21,25 @@ const PORTRAIT_LANE_MIN = 260;
 const PORTRAIT_LANE_GAP = 16;
 /** Gap between the BGA and the facts under it. */
 const PORTRAIT_INFO_GAP = 12;
-/** The judgement line sits this far above the video controls. */
-const PORTRAIT_JUDGEMENT_INSET = 36;
+/** The video controls' height in CSS px (`be-music-playback-controls`: the 16 px seek bar, 32 px buttons, 6 px below). */
+export const PREVIEW_CONTROLS_CSS_HEIGHT = 54;
+/**
+ * The shortest side of the smallest phone a stage is drawn on, in CSS px. A stage keeps its 480 px short side across
+ * that of the screen, so the controls take the most stage pixels there.
+ */
+const NARROWEST_CSS_SHORT_SIDE = 320;
+/** Between the bottom of the lanes and the top of the seek bar on the smallest phone, in stage px. */
+const CONTROLS_GAP = 16;
+
+/**
+ * How far the bottom of the lanes (the judgement line) sits above the bottom of a stage that fills the screen: the
+ * video controls as tall as they get in stage pixels on the smallest phone, and a gap, so the lanes reach down to the
+ * controls without running under them in either orientation.
+ */
+export function previewJudgementInset(stage: PreviewLayout['stage']): number {
+  const shortSide = Math.min(stage.width, stage.height);
+  return Math.ceil((PREVIEW_CONTROLS_CSS_HEIGHT * shortSide) / NARROWEST_CSS_SHORT_SIDE) + CONTROLS_GAP;
+}
 
 /**
  * Where a tall stage puts the BGA, the chart's facts and the lanes: the BGA square on top with the facts under it or
@@ -57,7 +74,7 @@ export function previewContentBottom(stageHeight: number): number {
 
 /**
  * A stage taller than it is wide: the BGA square across the top, the chart's facts in a band under it or in a column
- * beside it, whichever leaves the larger BGA, and the lanes under both, above the video controls. A stage close to
+ * beside it, whichever leaves the larger BGA, and the lanes under both, down to just above the video controls. A stage close to
  * square (a tablet held upright) gets the facts beside the BGA; a phone's gets them under it. `undefined` on a
  * landscape stage.
  */
@@ -71,7 +88,7 @@ export function resolvePreviewPortrait(stage: PreviewLayout['stage']): PreviewPo
   const roomHeight = contentBottom - top - PORTRAIT_LANE_MIN - PORTRAIT_LANE_GAP;
   const under = Math.max(0, Math.min(roomWidth, roomHeight - PORTRAIT_INFO_GAP - PREVIEW_PORTRAIT_INFO_HEIGHT));
   const beside = Math.max(0, Math.min(roomWidth - PREVIEW_GUTTER - PREVIEW_INFO_MIN_WIDTH, roomHeight));
-  const judgementY = contentBottom - PORTRAIT_JUDGEMENT_INSET;
+  const judgementY = stage.height - previewJudgementInset(stage);
   if (under >= beside) {
     const infoTop = top + under + PORTRAIT_INFO_GAP;
     const infoBottom = infoTop + PREVIEW_PORTRAIT_INFO_HEIGHT;

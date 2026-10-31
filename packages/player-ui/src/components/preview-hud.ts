@@ -7,8 +7,9 @@ import { structureStyles } from '../styles/structure.ts';
 
 /**
  * The HUD of a preview: the chart's facts, score, combo, gauge and judgments beside or under the BGA
- * (`resolvePreviewInfoBox`), and video-player controls
- * along the bottom of the stage. Lay it over `be-music-playfield`; the volume, mute and full-screen state are the
+ * (`resolvePreviewInfoBox`), and video-player controls along the bottom of the screen (the host), not of the stage, so
+ * a stage letterboxed into a screen turned the other way (a DP chart on a phone held upright) keeps its lanes clear of
+ * them. Lay it over `be-music-playfield`; the volume, mute and full-screen state are the
  * host's, set as properties, and so is hiding the controls (`controlsHidden`) while the viewer is idle. A click on the
  * stage pauses and resumes the play unless the host turns it off (`stageTapPauses`), as it does while the viewer plays.
  * A paused play shows a centred play button and, under it, Back (`quit-request`), which leaves the play.
@@ -174,80 +175,81 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
     const rate = score.maximum > 0 ? `${((score.exScore / score.maximum) * 100).toFixed(2)}%` : '—';
     const playing = f.stage !== 'paused' && f.stage !== 'ending';
     return html`<section
-      class="stage"
-      part="stage"
-      data-orientation=${stage.height > stage.width ? 'portrait' : 'landscape'}
-      style=${`--stage-ratio:${stage.width / stage.height};--portrait-font-ratio:${PREVIEW_PORTRAIT_FONT_RATIO}`}
-    >
-      ${
-        this.stageTapPauses
-          ? html`<button
-              class="stage-hit"
-              part="stage-hit"
-              aria-label=${playing ? 'Pause' : 'Play'}
-              @click=${() => this.emit('pause-request', undefined)}
-            ></button>`
-          : nothing
-      }
-      <div class="info" part="info" style=${box} aria-label="Chart and play status">
+        class="stage"
+        part="stage"
+        data-orientation=${stage.height > stage.width ? 'portrait' : 'landscape'}
+        style=${`--stage-ratio:${stage.width / stage.height};--portrait-font-ratio:${PREVIEW_PORTRAIT_FONT_RATIO}`}
+      >
         ${
-          f.course === undefined
-            ? nothing
-            : html`<p class="line muted" part="course">
-                ${f.course.title} ·
-                ${f.course.stageIndex === undefined ? `${f.course.stages.length} stages` : `Stage ${f.course.stageIndex + 1} / ${f.course.stages.length}`}
-              </p>`
-        }
-        <h2 title=${title}>${title}</h2>
-        <p class="line muted">${f.chart?.artist ?? ''}</p>
-        <p class="line muted">${[facts, bpm].filter(Boolean).join(' · ')}</p>
-        <p class="line">
-          EX SCORE <b>${score.exScore}</b> · ${score.rank ?? '—'} · ${rate} · Combo <b>${score.combo}</b> /
-          ${score.maxCombo}
-        </p>
-        <be-music-gauge-panel compact exportparts="meter:gauge-meter" .data=${gauge}></be-music-gauge-panel>
-        <dl class="judgments" part="judgments">
-          ${(
-            [
-              ['PG', judgments.perfect],
-              ['GR', judgments.great],
-              ['GD', judgments.good],
-              ['BD', judgments.bad],
-              ['PR', judgments.poor + judgments.emptyPoor],
-              ['FAST', judgments.fast],
-              ['SLOW', judgments.slow],
-            ] as const
-          ).map(
-            ([label, value]) =>
-              html`<div>
-                <dt>${label}</dt>
-                <dd>${value}</dd>
-              </div>`,
-          )}
-        </dl>
-      </div>
-      ${
-        f.stage === 'paused'
-          ? html`<button
-                class="btn resume"
-                data-size="icon-lg"
-                part="resume"
-                aria-label="Play"
+          this.stageTapPauses
+            ? html`<button
+                class="stage-hit"
+                part="stage-hit"
+                aria-label=${playing ? 'Pause' : 'Play'}
                 @click=${() => this.emit('pause-request', undefined)}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
-              </button>
-              <button
-                class="btn back"
-                data-size="sm"
-                data-variant="outline"
-                part="back"
-                @click=${() => this.emit('quit-request', undefined)}
-              >
-                Back
-              </button>`
-          : nothing
-      }
+              ></button>`
+            : nothing
+        }
+        <div class="info" part="info" style=${box} aria-label="Chart and play status">
+          ${
+            f.course === undefined
+              ? nothing
+              : html`<p class="line muted" part="course">
+                  ${f.course.title} ·
+                  ${f.course.stageIndex === undefined ? `${f.course.stages.length} stages` : `Stage ${f.course.stageIndex + 1} / ${f.course.stages.length}`}
+                </p>`
+          }
+          <h2 title=${title}>${title}</h2>
+          <p class="line muted">${f.chart?.artist ?? ''}</p>
+          <p class="line muted">${[facts, bpm].filter(Boolean).join(' · ')}</p>
+          <p class="line">
+            EX SCORE <b>${score.exScore}</b> · ${score.rank ?? '—'} · ${rate} · Combo <b>${score.combo}</b> /
+            ${score.maxCombo}
+          </p>
+          <be-music-gauge-panel compact exportparts="meter:gauge-meter" .data=${gauge}></be-music-gauge-panel>
+          <dl class="judgments" part="judgments">
+            ${(
+              [
+                ['PG', judgments.perfect],
+                ['GR', judgments.great],
+                ['GD', judgments.good],
+                ['BD', judgments.bad],
+                ['PR', judgments.poor + judgments.emptyPoor],
+                ['FAST', judgments.fast],
+                ['SLOW', judgments.slow],
+              ] as const
+            ).map(
+              ([label, value]) =>
+                html`<div>
+                  <dt>${label}</dt>
+                  <dd>${value}</dd>
+                </div>`,
+            )}
+          </dl>
+        </div>
+        ${
+          f.stage === 'paused'
+            ? html`<button
+                  class="btn resume"
+                  data-size="icon-lg"
+                  part="resume"
+                  aria-label="Play"
+                  @click=${() => this.emit('pause-request', undefined)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+                </button>
+                <button
+                  class="btn back"
+                  data-size="sm"
+                  data-variant="outline"
+                  part="back"
+                  @click=${() => this.emit('quit-request', undefined)}
+                >
+                  Back
+                </button>`
+            : nothing
+        }
+      </section>
       <be-music-playback-controls
         exportparts="bar:controls,seek,play,mute,volume,time,fullscreen"
         .data=${{
@@ -259,7 +261,6 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
           muted: this.muted,
           fullscreen: this.fullscreen,
         }}
-      ></be-music-playback-controls>
-    </section>`;
+      ></be-music-playback-controls>`;
   }
 }
