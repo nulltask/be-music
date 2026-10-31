@@ -101,25 +101,27 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
       'SWBGA NONSTOP play',
     );
     await expect.poll(() => colors(player)).toEqual(['blue', 'blue']);
-    await player.page.keyboard.down('z');
-    try {
-      await expect.poll(() => colors(player), { timeout: 3000, intervals: [50] }).toEqual(['red', 'blue']);
-      await expect.poll(() => colors(player), { timeout: 3000, intervals: [50] }).toEqual(['blue', 'red']);
-      await player.page.screenshot({ path: info.outputPath('first-stage.png') });
-      await player.waitFor((state) => (state.play?.seconds ?? 0) > 8.2, 'SWBGA stage boundary');
-      await expect.poll(() => colors(player), { timeout: 3000 }).toEqual(['blue', 'blue']);
-      await player.page.screenshot({ path: info.outputPath('held-at-boundary.png') });
-    } finally {
-      await player.page.keyboard.up('z');
-    }
-    await player.page.keyboard.down('z');
-    try {
-      await expect.poll(() => colors(player), { timeout: 3000, intervals: [50] }).toEqual(['green', 'blue']);
-      await expect.poll(() => colors(player), { timeout: 3000, intervals: [50] }).toEqual(['blue', 'green']);
-      await player.page.screenshot({ path: info.outputPath('second-stage.png') });
-    } finally {
-      await player.page.keyboard.up('z');
-    }
+    // Sample each 500 ms frame paused at a known chart time; a running chart outpaces CI screenshots (#878).
+    const sample = (expected: string[]) =>
+      expect.poll(() => colors(player), { timeout: 5000, intervals: [100] }).toEqual(expected);
+    let pressed = await player.pressPaused('KeyZ');
+    await sample(['red', 'blue']);
+    await player.resumeUntil(pressed + 0.6, 'aliased red frame');
+    await sample(['blue', 'red']);
+    await player.page.screenshot({ path: info.outputPath('first-stage.png') });
+    // Still held across the boundary: the next stage's binding needs a fresh press.
+    await player.resumeUntil(8.4, 'SWBGA stage boundary');
+    await sample(['blue', 'blue']);
+    await player.page.screenshot({ path: info.outputPath('held-at-boundary.png') });
+    await player.releaseKey('KeyZ');
+    await player.key('Space');
+    pressed = await player.pressPaused('KeyZ');
+    await sample(['green', 'blue']);
+    await player.resumeUntil(pressed + 0.6, 'aliased green frame');
+    await sample(['blue', 'green']);
+    await player.page.screenshot({ path: info.outputPath('second-stage.png') });
+    await player.releaseKey('KeyZ');
+    await player.key('Space');
     await expect.poll(() => colors(player), { timeout: 3000 }).toEqual(['blue', 'blue']);
   });
 }
