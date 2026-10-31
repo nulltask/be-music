@@ -185,6 +185,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Interpret `#xxx98` as dynamic volume change on playable/key side
 - [x] Interpret `#EXRANKxx` and `#xxxA0` as dynamic decision width changes of player
 - [x] Supports LR2 100001x BPM gimmick by `#BPMxx` with time resolution
+- [x] Read nanasi `#EXBPMxx` as an alias of `#BPMxx`: it is stored and written as `#BPMxx`, so the later line for one index wins ([cmds](https://hitkey.nekokan.dyndns.info/cmds.htm#EXBPMXX))
 - [x] Keep every `#WAVCMD` line in `bms.wavCmds`; browser, Node and offline playback apply the `01` percentage-volume parameter
 - [x] Parse `#EXWAVxx` and apply its `v` volume parameter in browser, Node and offline playback
 

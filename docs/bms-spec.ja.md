@@ -185,6 +185,7 @@
 - [x] `#xxx98` を playable/key 側の動的音量変更として解釈
 - [x] `#EXRANKxx` と `#xxxA0` を プレイヤーの動的判定幅変更として解釈
 - [x] `#BPMxx` による LR2 100001倍 BPM 系ギミックを時刻解決でサポート
+- [x] nanasi の `#EXBPMxx` を `#BPMxx` の別名として読む。`#BPMxx` として保存・書き出しするため、同じ番号では後の行が勝つ（[cmds](https://hitkey.nekokan.dyndns.info/cmds.htm#EXBPMXX)）
 - [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、browser・Node・オフライン再生で `01` の百分率音量を反映
 - [x] `#EXWAVxx` を parse し、`v` volume parameter を browser・Node・オフライン再生で反映
 

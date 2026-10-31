@@ -220,6 +220,17 @@ function migrateBMSExtensionHeadersFromExtras(json: BeMusicJSON): void {
       continue;
     }
 
+    // Be-Music JSON written before `#EXBPMxx` became a `#BPMxx` alias kept it here; a `#BPMxx` definition still wins.
+    const exBPMMatch = command.match(/^EXBPM([0-9A-Za-z]{2})$/i);
+    if (exBPMMatch) {
+      const key = normalizeObjectKey(exBPMMatch[1]!, idBase);
+      const parsed = Number.parseFloat(value);
+      if (!(key in json.resources.bpm) && Number.isFinite(parsed)) {
+        json.resources.bpm[key] = parsed;
+      }
+      continue;
+    }
+
     const exRankMatch = upper.match(/^EXRANK([0-9A-Z]{2})$/);
     if (exRankMatch) {
       const key = normalizeObjectKey(exRankMatch[1]);
