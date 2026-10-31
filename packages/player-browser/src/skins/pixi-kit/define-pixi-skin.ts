@@ -234,6 +234,7 @@ class GameplayScreen {
         bottom: note.bottom,
         nowMs,
         mode: note.mode,
+        releasedElapsedMs: note.releasedElapsedMs,
       });
     }
     for (const note of frame.notes) {

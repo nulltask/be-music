@@ -29,6 +29,8 @@ interface LaneLongNotes {
   activeStartedAtMs: number;
   /** How each long note that finished on the lane ended, by head beat. */
   readonly outcomes: Map<number, PlayerUILongNoteOutcome>;
+  /** Play-clock ms each long note that did not complete was let go, by head beat. */
+  readonly releasedAtMs: Map<number, number>;
 }
 
 /**
@@ -43,7 +45,13 @@ export class LongNoteTracker {
   start(channel: string, beat: number, mode: PlayerUILongNoteMode, atMs: number): void {
     let lane = this.lanes.get(channel);
     if (!lane) {
-      lane = { activeBeat: undefined, activeMode: mode, activeStartedAtMs: 0, outcomes: new Map() };
+      lane = {
+        activeBeat: undefined,
+        activeMode: mode,
+        activeStartedAtMs: 0,
+        outcomes: new Map(),
+        releasedAtMs: new Map(),
+      };
       this.lanes.set(channel, lane);
     }
     lane.activeBeat = beat;
@@ -51,11 +59,12 @@ export class LongNoteTracker {
     lane.activeStartedAtMs = atMs;
   }
 
-  /** The long note held on `channel` finished. Ignored when none is held there. */
-  end(channel: string, outcome: PlayerUILongNoteOutcome): void {
+  /** The long note held on `channel` finished at play-clock `atMs`. Ignored when none is held there. */
+  end(channel: string, outcome: PlayerUILongNoteOutcome, atMs: number): void {
     const lane = this.lanes.get(channel);
     if (!lane || lane.activeBeat === undefined) return;
     lane.outcomes.set(lane.activeBeat, outcome);
+    if (outcome !== 'complete') lane.releasedAtMs.set(lane.activeBeat, atMs);
     lane.activeBeat = undefined;
   }
 
@@ -72,6 +81,11 @@ export class LongNoteTracker {
   holdStartedAtMs(channel: string): number | undefined {
     const lane = this.lanes.get(channel);
     return lane?.activeBeat === undefined ? undefined : lane.activeStartedAtMs;
+  }
+
+  /** Play-clock ms the long note with its head at `beat` on `channel` was let go early, once it ended dropped. */
+  releasedAtMs(channel: string, beat: number): number | undefined {
+    return this.lanes.get(channel)?.releasedAtMs.get(beat);
   }
 
   /** The mode the engine announced for the long note at `beat` on `channel`, while it is held. */
