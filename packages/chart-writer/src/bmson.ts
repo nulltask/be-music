@@ -582,9 +582,9 @@ function createBmsonBGAForOutput(
   | {
       bga_header: Array<{ id: number; name: string }>;
       bga_sequence?: BmsonBGASequence[];
-      bga_events: Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }>;
-      layer_events: Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }>;
-      poor_events: Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }>;
+      bga_events: Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }>;
+      layer_events: Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }>;
+      poor_events: Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }>;
     }
   | undefined {
   const header: Array<{ id: number; name: string }> = [];
@@ -710,13 +710,13 @@ function mapBmsonLineValues(
 function normalizeBmsonBGAEventEntries(
   entries: ReadonlyArray<BmsonBGAEvent>,
   scale: number,
-): Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }> {
-  const normalized: Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }> = [];
+): Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }> {
+  const normalized: Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }> = [];
   for (const entry of entries) {
     normalized.push({
       ...collectBmsonExtraFields(entry.extraFields, 'bgaEvent'),
       y: Math.max(0, Math.round(entry.y * scale)),
-      id: Math.max(0, Math.floor(entry.id)),
+      ...(entry.id !== undefined ? { id: Math.max(0, Math.floor(entry.id)) } : {}),
       ...(entry.idSet !== undefined ? { id_set: [...entry.idSet] } : {}),
       ...(entry.condition !== undefined ? { condition: entry.condition } : {}),
       ...(entry.interval !== undefined ? { interval: entry.interval } : {}),

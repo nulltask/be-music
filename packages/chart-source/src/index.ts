@@ -128,7 +128,8 @@ export interface BmsonBGAHeaderEntry extends BmsonExtraFields {
 
 export interface BmsonBGAEvent extends BmsonExtraFields {
   y: number;
-  id: number;
+  /** Absent when the source omits it, as an `id_set`-only layer event may; beatoraja then reads Java's default 0. */
+  id?: number;
   /** beatoraja layer-event alternatives, in authored order; overrides id for layer_events when present. */
   idSet?: number[];
   condition?: string;

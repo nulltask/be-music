@@ -40,9 +40,9 @@ function chart() {
 test('retains sequences, end markers and id-only or set-only conditional events through JSON and bmson', () => {
   const source = chart();
   expect(source.bmson.bga.layerEvents).toEqual([
-    { y: 0, id: 0, idSet: [10, 11], condition: 'play', interval: 2 },
+    { y: 0, idSet: [10, 11], condition: 'play', interval: 2 },
     { y: 240, id: 2, condition: 'miss', interval: 0 },
-    { y: 480, id: 0, idSet: [], condition: 'future-condition' },
+    { y: 480, idSet: [], condition: 'future-condition' },
   ]);
   expect(source.bmson.bga.sequences?.[0]?.sequence.at(-1)).toEqual({ time: 250 });
   expect(source.bmson.bga.sequences?.[1]?.sequence.at(-1)).toEqual({ time: 500, id: -2147483648 });
@@ -89,7 +89,7 @@ test('normalizes external aliases on Be-Music JSON input and ignores malformed s
   raw.bmson.bga.layerEvents = [{ y: 0, id_set: [1, -1, '2', 2], condition: 'miss', interval: -1 }];
   const json = parseChart(JSON.stringify(raw), 'json');
   expect(json.bmson.bga.sequences).toEqual([{ id: 3, sequence: [{ time: 1, id: 2 }, { time: 2 }] }]);
-  expect(json.bmson.bga.layerEvents).toEqual([{ y: 0, id: 0, idSet: [1, 2], condition: 'miss' }]);
+  expect(json.bmson.bga.layerEvents).toEqual([{ y: 0, idSet: [1, 2], condition: 'miss' }]);
 });
 
 test.each(['sequence', 'idSet', 'condition', 'interval'])('equivalence detects edits to %s', (field) => {
