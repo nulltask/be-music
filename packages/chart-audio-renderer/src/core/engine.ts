@@ -24,7 +24,15 @@ let nodePathPromise: Promise<NodePath> | undefined;
 const loadNodeFSPromises = (): Promise<NodeFSPromises> => (nodeFSPromisesPromise ??= import('node:fs/promises'));
 const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
 import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
-import { isAbortError, throwIfAborted, transformStereoPCM } from '@be-music/shared-utils/core';
+import {
+  isAbortError,
+  resolveSampleSliceEnvelope,
+  sampleSliceEnvelopeGain,
+  SAMPLE_SLICE_FADE_SECONDS,
+  throwIfAborted,
+  transformStereoPCM,
+  type SampleSliceEnvelope,
+} from '@be-music/shared-utils/core';
 import { parseChartFile, resolveBMSControlFlow } from '@be-music/chart-parser';
 import { detectAudioFormat, encodeAIFF16, encodeWAV16 } from './file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
@@ -101,11 +109,19 @@ interface ScheduledSampleRender {
   triggerGain: number;
   sampleOffsetFrames: number;
   sampleMaxFrames?: number;
+  slice?: ScheduledSampleSlice;
+}
+
+/** A slice window that cuts its source file, with the ramps that keep the cut from clicking. */
+interface ScheduledSampleSlice {
+  lengthFrames: number;
+  envelope: SampleSliceEnvelope;
 }
 
 interface ScheduledSampleFrameWindow {
   sampleOffsetFrames: number;
   sampleMaxFrames: number;
+  slice?: ScheduledSampleSlice;
 }
 
 const DEFAULT_SAMPLE_RATE = 44_100;
@@ -288,6 +304,7 @@ async function scheduleSampleRenders(params: {
         triggerGain,
         sampleOffsetFrames: frameWindow.sampleOffsetFrames,
         sampleMaxFrames: frameWindow.sampleMaxFrames,
+        slice: frameWindow.slice,
       }) - 1;
     if (usesMonophonicWAVPlayback(json)) {
       latestBMSScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
@@ -314,12 +331,26 @@ function resolveScheduledSampleFrameWindow(
     typeof trigger.sampleDurationSeconds === 'number' && Number.isFinite(trigger.sampleDurationSeconds)
       ? Math.max(1, Math.round(trigger.sampleDurationSeconds * sampleRate))
       : undefined;
-  const sampleMaxFrames =
+  const lengthFrames =
     requestedDurationFrames === undefined ? availableFrames : Math.min(availableFrames, requestedDurationFrames);
-  if (sampleMaxFrames <= 0) {
+  if (lengthFrames <= 0) {
     return undefined;
   }
-  return { sampleOffsetFrames, sampleMaxFrames };
+  const envelope = resolveSampleSliceEnvelope(
+    sampleOffsetFrames,
+    requestedDurationFrames,
+    sample.left.length,
+    Math.round(SAMPLE_SLICE_FADE_SECONDS * sampleRate),
+  );
+  if (envelope.fadeIn === 0 && envelope.fadeOut === 0) {
+    return { sampleOffsetFrames, sampleMaxFrames: lengthFrames };
+  }
+  // A cut slice rings on past its end while it fades out, so the window grows by the fade-out.
+  return {
+    sampleOffsetFrames,
+    sampleMaxFrames: lengthFrames + envelope.fadeOut,
+    slice: { lengthFrames, envelope },
+  };
 }
 
 function resolveScheduledTriggerGain(
@@ -408,6 +439,7 @@ function mixScheduledSamples(
       item.sampleOffsetFrames,
       item.sampleMaxFrames,
       signal,
+      item.slice,
     );
   }
 }
@@ -644,6 +676,7 @@ function mixSample(
   sampleOffsetFrames = 0,
   sampleMaxFrames?: number,
   signal?: AbortSignal,
+  slice?: ScheduledSampleSlice,
 ): void {
   const sourceStart = Math.max(0, sampleOffsetFrames);
   const availableFrames = sample.left.length - sourceStart;
@@ -664,6 +697,19 @@ function mixSample(
   const framesToMix = Math.min(availableFrames, requestedFrames, destinationAvailable);
   const sourceLeft = sample.left;
   const sourceRight = sample.right;
+  if (slice) {
+    for (let index = 0; index < framesToMix; index += 1) {
+      if (signal && (index & 0x7ff) === 0) {
+        throwIfAborted(signal);
+      }
+      const source = sourceStart + index;
+      const target = startFrame + index;
+      const frameGain = gain * sampleSliceEnvelopeGain(index, slice.lengthFrames, slice.envelope);
+      destinationLeft[target] += sourceLeft[source] * frameGain;
+      destinationRight[target] += sourceRight[source] * frameGain;
+    }
+    return;
+  }
   if (!signal) {
     for (let index = 0; index < framesToMix; index += 1) {
       const source = sourceStart + index;
