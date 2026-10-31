@@ -64,3 +64,26 @@ test('missing references and unrepresentable cue time are diagnosed without chan
   expect(result.diagnostics.map((value) => value.code)).toEqual(['missing-reference', 'invalid-time']);
   expect(resolveChartOptionsAt(result.program, 10000000)).toEqual({});
 });
+// The documented support boundary (docs/research/chart-authored-options.md): every other family is diagnosed and has
+// no effect, initially or on A6, so a program never carries an operation the engine cannot reproduce.
+test.each([
+  '774:CHANGE-HS_ACCEL',
+  '774:HIDDEN_SUDDEN',
+  '774:CRAZY_SPIN',
+  '774:RANDOM_MIRROR',
+  '774:NOTES_DOUBLE',
+  '774:CRAZY_HELLJUDGE',
+  '774:GAMELEVEL_HYPER',
+  '774:EXTRA_HARD',
+  'charatbeatHDX:BGAMODE 1',
+])('diagnoses %s without changing the effective program', (declaration) => {
+  const result = compileChartOptions({
+    initial: ['774:HI-SPEED_x1.50', declaration],
+    cues: [{ seconds: 1, key: '01', declaration }],
+  });
+  expect(result.program).toEqual({ version: 1, initial: { hiSpeed: 1.5 }, cues: [] });
+  expect(result.diagnostics).toEqual([
+    { code: 'unsupported-option', declaration },
+    { code: 'unsupported-option', declaration, key: '01', seconds: 1 },
+  ]);
+});
