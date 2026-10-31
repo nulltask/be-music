@@ -37,7 +37,6 @@ BENCH_EXWAV_CHART.resources.wav = { '01': 'ordinary.wav' };
 BENCH_EXWAV_CHART.bms.exWAV = { '01': 'pvf 500 -600 48000 extended.wav', '02': 'v 0 only.wav' };
 BENCH_COLOR_KEY_CHART.bms.exBMP['01'] = '0,127,127,127 image.png';
 
-const BENCH_SWITCHING_BGA = chartAPI.parseBMSSwBGA('10:5:1:FF000000 02 03 04 05 06');
 const BENCH_FINGERPRINT_OPTIONS: chartAPI.BeMusicFingerprintOptions = { chartPath: 'sample.bms' };
 const BENCH_FINGERPRINT_DOCUMENTS = new WeakMap<object, chartAPI.BeMusicFingerprintDocument>();
 
@@ -271,9 +270,9 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.parseBMSExWAV('pvf 1024,-200,48000 sample.wav');
     },
   });
-  define('chart-model.exWAVVolumeCentibelsToLinearGain', {
+  define('chart-model.exWAVVolumeMillibelsToLinearGain', {
     run: () => {
-      chartAPI.exWAVVolumeCentibelsToLinearGain(-600);
+      chartAPI.exWAVVolumeMillibelsToLinearGain(-600);
     },
   });
   define('chart-model.collectBMSExWAVVolumeMultipliers', {
@@ -287,23 +286,6 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.parseBMSExBMP', {
     run: () => {
       chartAPI.parseBMSExBMP('255,0,0,0 backdrop.bmp');
-    },
-  });
-  define('chart-model.resolveBmsBmpARGB', {
-    run: (fixtures) => {
-      chartAPI.resolveBmsBmpARGB(fixtures.sampleBmsJSON, '01');
-    },
-  });
-  define('chart-model.parseBMSSwBGA', {
-    run: () => {
-      chartAPI.parseBMSSwBGA('10:5:1:FF000000 02 03 04 05 06');
-    },
-  });
-  define('chart-model.pickSwitchingBGAFrame', {
-    run: () => {
-      if (BENCH_SWITCHING_BGA) {
-        chartAPI.pickSwitchingBGAFrame(BENCH_SWITCHING_BGA, 350);
-      }
     },
   });
   define('chart-model.parseBmsBGA', {
@@ -320,11 +302,6 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.volWAVToLinearGain', {
     run: () => {
       chartAPI.volWAVToLinearGain(80);
-    },
-  });
-  define('chart-model.wavCmdVolumeByteToLinearGain', {
-    run: () => {
-      chartAPI.wavCmdVolumeByteToLinearGain(64);
     },
   });
   define('chart-model.wavCmdVolumePercentToLinearGain', {

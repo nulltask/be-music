@@ -8,7 +8,7 @@ import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
  * positionally. Be-Music also accepts its earlier comma-separated parameter spelling.
  *
  * Supported flags (hitkey BMS Memo): - `p` — stereo pan (`-10000..10000`, where 0 is center). - `v` —
- * playback attenuation in hundredths of a dB (the legacy field name is `volumeCentibels`). Negative values attenuate, `0` is unity. - `f`
+ * playback attenuation in millibels (hundredths of a dB). Negative values attenuate, `0` is unity. - `f`
  * — playback frequency in Hz. The sample is resampled (or replayed at a different rate) so its native sample rate maps
  * onto this output rate.
  *
@@ -18,8 +18,8 @@ export interface BMSExWAV {
   filename: string;
   /** Pan, when the `p` flag was present. */
   pan?: number;
-  /** Volume in centibels (1/100 dB), when the `v` flag was present. */
-  volumeCentibels?: number;
+  /** Volume in millibels (1/100 dB), when the `v` flag was present. */
+  volumeMillibels?: number;
   /** Playback frequency in Hz, when the `f` flag was present. */
   frequencyHz?: number;
 }
@@ -57,24 +57,24 @@ export function parseBMSExWAV(raw: string): BMSExWAV | undefined {
     const value = Number.parseInt(valueRaw.trim(), 10);
     if (!Number.isSafeInteger(value)) return undefined;
     if (flag === 'p') out.pan = value;
-    else if (flag === 'v') out.volumeCentibels = value;
+    else if (flag === 'v') out.volumeMillibels = value;
     else if (flag === 'f') out.frequencyHz = value;
   }
   return out;
 }
 
 /**
- * Maps a centibel volume value (`#EXWAVxx v` parameter, `1/100 dB`) to a 0..N linear gain multiplier. `0 cB`
+ * Maps a millibel volume value (`#EXWAVxx v` parameter, `1/100 dB`) to a 0..N linear gain multiplier. `0 mB`
  * round-trips to `1.0` (unity); negative values attenuate; positive values boost. We clamp the output below `8.0` (≈
  * +18 dB) so a malformed chart can't blow the bus, and at `0` so very-negative inputs collapse to silence rather than
  * producing a denormal.
  *
- * The public function name is retained for compatibility; the unit is a hundredth of a decibel, as in DirectSound.
+ * The unit is the millibel (a hundredth of a decibel), as in DirectSound.
  * `v -200` is −2 dB and `v -600` is −6 dB. Playback collectors enforce the dialect's attenuation-only bounds.
  */
-export function exWAVVolumeCentibelsToLinearGain(centibels: number): number {
-  if (!Number.isFinite(centibels)) return 1;
-  const dB = centibels / 100;
+export function exWAVVolumeMillibelsToLinearGain(millibels: number): number {
+  if (!Number.isFinite(millibels)) return 1;
+  const dB = millibels / 100;
   const gain = 10 ** (dB / 20);
   if (!Number.isFinite(gain) || gain < 0) return 0;
   return Math.min(8, gain);
@@ -93,10 +93,10 @@ export function collectBMSExWAVVolumeMultipliers(entries: Readonly<Record<string
   for (const [slot, raw] of Object.entries(entries)) {
     const parsed = parseBMSExWAV(raw);
     if (parsed === undefined) continue;
-    if (parsed.volumeCentibels === undefined) continue;
+    if (parsed.volumeMillibels === undefined) continue;
     // nanasigroove defines attenuation only; its minimum is explicitly silent.
-    const volume = Math.max(-10000, Math.min(0, parsed.volumeCentibels));
-    out.set(slot, volume === -10000 ? 0 : exWAVVolumeCentibelsToLinearGain(volume));
+    const volume = Math.max(-10000, Math.min(0, parsed.volumeMillibels));
+    out.set(slot, volume === -10000 ? 0 : exWAVVolumeMillibelsToLinearGain(volume));
   }
   return out;
 }
@@ -155,11 +155,6 @@ export function volWAVToLinearGain(volWAV: number | undefined): number {
 /** Convert MacBeat percentage volume to linear gain. Values above 100 amplify; negative inputs mute. */
 export function wavCmdVolumePercentToLinearGain(percent: number): number {
   return Number.isFinite(percent) ? Math.max(0, percent) / 100 : 1;
-}
-
-/** @deprecated Use {@link wavCmdVolumePercentToLinearGain}; WAVCMD volume is a percentage, not a byte. */
-export function wavCmdVolumeByteToLinearGain(value: number): number {
-  return wavCmdVolumePercentToLinearGain(value);
 }
 
 /**

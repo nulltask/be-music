@@ -299,7 +299,7 @@ export function stitchNonstopCourse(
         if (exWAV && rawExWAV !== undefined) {
           const parameters = [
             ['p', exWAV.pan],
-            ['v', exWAV.volumeCentibels],
+            ['v', exWAV.volumeMillibels],
             ['f', exWAV.frequencyHz],
           ].filter((entry) => entry[1] !== undefined);
           chart.bms.exWAV[stitched] =

@@ -82,7 +82,7 @@ test('EXWAV playback volume respects attenuation-only bounds and the silent endp
 describe('EXWAV whitespace parameters', () => {
   test('reads the published nanasigroove vfp example without treating parameters as the filename', () => {
     expect(parseBMSExWAV('vfp -50 100 -10000 aaa.wav')).toEqual({
-      volumeCentibels: -50,
+      volumeMillibels: -50,
       frequencyHz: 100,
       pan: -10000,
       filename: 'aaa.wav',
@@ -92,7 +92,7 @@ describe('EXWAV whitespace parameters', () => {
   test('accepts mixed-case flags, tabs and a filename containing spaces', () => {
     expect(parseBMSExWAV('PvF\t500\t-600\t48000\tmy sample.wav')).toEqual({
       pan: 500,
-      volumeCentibels: -600,
+      volumeMillibels: -600,
       frequencyHz: 48000,
       filename: 'my sample.wav',
     });
@@ -110,7 +110,7 @@ describe('EXWAV whitespace parameters', () => {
       );
       expect(parsed?.filename).toBe('a b.wav');
       expect(parsed?.pan).toBe(flags.includes('p') ? -500 : undefined);
-      expect(parsed?.volumeCentibels).toBe(flags.includes('v') ? -200 : undefined);
+      expect(parsed?.volumeMillibels).toBe(flags.includes('v') ? -200 : undefined);
       expect(parsed?.frequencyHz).toBe(flags.includes('f') ? 44100 : undefined);
     },
   );

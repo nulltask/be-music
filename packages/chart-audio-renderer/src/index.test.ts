@@ -185,8 +185,8 @@ test('audio-renderer: scales individual sample triggers with #WAVCMD 01 xx vv', 
 });
 
 test('audio-renderer: scales individual sample triggers with #EXWAVxx v', async () => {
-  // BMS spec — `#EXWAVxx [flags] params filename` exposes a centibel-units `v` (volume) trim that composes with the bus
-  // / `#WAVCMD` chain. -600 cB = -6 dB ≈ 0.501 linear gain.
+  // BMS spec — `#EXWAVxx [flags] params filename` exposes a millibel-units `v` (volume) trim that composes with the bus
+  // / `#WAVCMD` chain. -600 mB = -6 dB ≈ 0.501 linear gain.
   const baseline = createSingleTriggerBMSChart('not-found.wav');
   const attenuated = createSingleTriggerBMSChart('not-found.wav');
   attenuated.bms.exWAV['01'] = 'pvf 0 -600 44100 not-found.wav';

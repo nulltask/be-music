@@ -174,13 +174,12 @@ export {
   collectBMSExWAVVolumeMultipliers,
   collectBmsWAVCmdVolumeMultipliers,
   collectBmsWAVVolumeMultipliers,
-  exWAVVolumeCentibelsToLinearGain,
+  exWAVVolumeMillibelsToLinearGain,
   parseBMSExWAV,
   parseBmsWAVCmd,
   resolveBMSWAVResources,
   usesMonophonicWAVPlayback,
   volWAVToLinearGain,
-  wavCmdVolumeByteToLinearGain,
   wavCmdVolumePercentToLinearGain,
   type BMSExWAV,
   type BmsWAVCmdEntry,
@@ -191,13 +190,9 @@ export {
   parseBmsARGB,
   parseBmsBGA,
   parseBMSExBMP,
-  parseBMSSwBGA,
-  pickSwitchingBGAFrame,
-  resolveBmsBmpARGB,
   type BmsARGB,
   type BMSExBMP,
   type BMSSubRegionBGA,
-  type BMSSwitchingBGA,
 } from './bmp-directives.ts';
 
 export {

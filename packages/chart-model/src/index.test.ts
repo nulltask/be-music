@@ -19,17 +19,13 @@ import {
   measureToBeat,
   collectBMSExWAVVolumeMultipliers,
   collectBmsWAVCmdVolumeMultipliers,
-  exWAVVolumeCentibelsToLinearGain,
+  exWAVVolumeMillibelsToLinearGain,
   parseBmsARGB,
   parseBmsBGA,
   parseBMSDynamicVolumeGain,
   parseBMSExBMP,
   parseBMSExWAV,
-  parseBMSSwBGA,
   parseBmsWAVCmd,
-  pickSwitchingBGAFrame,
-  resolveBmsBmpARGB,
-  wavCmdVolumeByteToLinearGain,
   parseBPMFrom03Token,
   resolveChartPlayVariant,
   resolveChartReferenceBPM,
@@ -179,11 +175,11 @@ describe('chart', () => {
   });
 
   test('parseBMSExWAV parses the standard pvf flag layout', () => {
-    // Hitkey BMS Memo: `#EXWAVxx [flags] params filename`. `pvf 1024,-200,48000 sample.wav` → pan=1024, vol=-200 cB (≈
+    // Hitkey BMS Memo: `#EXWAVxx [flags] params filename`. `pvf 1024,-200,48000 sample.wav` → pan=1024, vol=-200 mB (≈
     // −2 dB), freq=48 kHz, filename `sample.wav`.
     expect(parseBMSExWAV('pvf 1024,-200,48000 sample.wav')).toEqual({
       pan: 1024,
-      volumeCentibels: -200,
+      volumeMillibels: -200,
       frequencyHz: 48000,
       filename: 'sample.wav',
     });
@@ -192,14 +188,14 @@ describe('chart', () => {
   test('parseBMSExWAV matches each flag character to its positional param', () => {
     // Flags can appear in any order; the values follow positionally.
     expect(parseBMSExWAV('vp -100,500 hat.wav')).toMatchObject({
-      volumeCentibels: -100,
+      volumeMillibels: -100,
       pan: 500,
       filename: 'hat.wav',
     });
     const onlyVol = parseBMSExWAV('v 0 only-vol.wav');
-    expect(onlyVol?.volumeCentibels).toBe(0);
+    expect(onlyVol?.volumeMillibels).toBe(0);
     // Absent flags must remain undefined so the consumer can distinguish "explicitly authored 0" from "not authored at
-    // all" — pan: 0 = center, vol: 0 cB = unity.
+    // all" — pan: 0 = center, vol: 0 mB = unity.
     expect(onlyVol?.pan).toBeUndefined();
     expect(onlyVol?.frequencyHz).toBeUndefined();
   });
@@ -232,24 +228,24 @@ describe('chart', () => {
     expect(volWAVToLinearGain(Number.NaN)).toBe(1);
   });
 
-  test('exWAVVolumeCentibelsToLinearGain treats 0 cB as unity', () => {
-    expect(exWAVVolumeCentibelsToLinearGain(0)).toBe(1);
+  test('exWAVVolumeMillibelsToLinearGain treats 0 mB as unity', () => {
+    expect(exWAVVolumeMillibelsToLinearGain(0)).toBe(1);
   });
 
-  test('exWAVVolumeCentibelsToLinearGain attenuates negative cB and boosts positive cB', () => {
-    // -600 cB = -6 dB → ≈ 0.501 linear gain.
-    expect(exWAVVolumeCentibelsToLinearGain(-600)).toBeCloseTo(0.501, 3);
-    // -2000 cB = -20 dB → ≈ 0.1.
-    expect(exWAVVolumeCentibelsToLinearGain(-2000)).toBeCloseTo(0.1, 3);
-    // +600 cB = +6 dB → ≈ 1.995 linear gain.
-    expect(exWAVVolumeCentibelsToLinearGain(600)).toBeCloseTo(1.995, 3);
+  test('exWAVVolumeMillibelsToLinearGain attenuates negative mB and boosts positive mB', () => {
+    // -600 mB = -6 dB → ≈ 0.501 linear gain.
+    expect(exWAVVolumeMillibelsToLinearGain(-600)).toBeCloseTo(0.501, 3);
+    // -2000 mB = -20 dB → ≈ 0.1.
+    expect(exWAVVolumeMillibelsToLinearGain(-2000)).toBeCloseTo(0.1, 3);
+    // +600 mB = +6 dB → ≈ 1.995 linear gain.
+    expect(exWAVVolumeMillibelsToLinearGain(600)).toBeCloseTo(1.995, 3);
   });
 
-  test('exWAVVolumeCentibelsToLinearGain clamps absurd inputs', () => {
+  test('exWAVVolumeMillibelsToLinearGain clamps absurd inputs', () => {
     // Pathological boost should clamp at +18 dB linear (≈ 8x).
-    expect(exWAVVolumeCentibelsToLinearGain(10_000)).toBe(8);
+    expect(exWAVVolumeMillibelsToLinearGain(10_000)).toBe(8);
     // Non-finite input falls back to unity (no surprise change).
-    expect(exWAVVolumeCentibelsToLinearGain(Number.NaN)).toBe(1);
+    expect(exWAVVolumeMillibelsToLinearGain(Number.NaN)).toBe(1);
   });
 
   test('collectBMSExWAVVolumeMultipliers ignores entries without a v flag', () => {
@@ -264,68 +260,6 @@ describe('chart', () => {
     expect(map.get('01')).toBeCloseTo(0.501, 3);
     expect(map.has('02')).toBe(false);
     expect(map.get('03')).toBeCloseTo(1, 6);
-  });
-
-  test('parseBMSSwBGA decodes "fr:tot:lp:ARGB N1 N2 …" animation directives', () => {
-    // Hitkey BMS Memo: `fr` is in 1/100 sec, so `fr=10` → 100ms per frame. The optional ARGB field round-trips as a raw
-    // string for downstream `parseBmsARGB` use.
-    const parsed = parseBMSSwBGA('10:5:1:FF000000 02 03 04 05 06');
-    expect(parsed).toEqual({
-      frameIntervalMs: 100,
-      totalFrames: 5,
-      loop: true,
-      argbRaw: 'FF000000',
-      frames: ['02', '03', '04', '05', '06'],
-    });
-  });
-
-  test('parseBMSSwBGA treats lp=0 as no-loop and ARGB as optional', () => {
-    const parsed = parseBMSSwBGA('5:3:0 0a 0b 0c');
-    expect(parsed?.loop).toBe(false);
-    expect(parsed?.argbRaw).toBeUndefined();
-    expect(parsed?.frames).toEqual(['0A', '0B', '0C']);
-  });
-
-  test('parseBMSSwBGA rejects malformed / non-positive headers', () => {
-    expect(parseBMSSwBGA('')).toBeUndefined();
-    // No frame list.
-    expect(parseBMSSwBGA('10:5:1')).toBeUndefined();
-    // Header missing fields.
-    expect(parseBMSSwBGA('10 02 03')).toBeUndefined();
-    // Non-positive `fr` would divide by zero downstream.
-    expect(parseBMSSwBGA('0:5:1 02 03')).toBeUndefined();
-    // Non-positive `tot`.
-    expect(parseBMSSwBGA('10:0:1 02 03')).toBeUndefined();
-  });
-
-  test('pickSwitchingBGAFrame walks the frame list at the authored interval', () => {
-    const swBGA = parseBMSSwBGA('10:5:1 02 03 04 05 06')!;
-    expect(pickSwitchingBGAFrame(swBGA, 0)).toBe('02');
-    expect(pickSwitchingBGAFrame(swBGA, 99)).toBe('02'); // 99 ms < 100 ms threshold
-    expect(pickSwitchingBGAFrame(swBGA, 100)).toBe('03');
-    expect(pickSwitchingBGAFrame(swBGA, 350)).toBe('05');
-    // After totalFrames the loop wraps back to frame 0.
-    expect(pickSwitchingBGAFrame(swBGA, 500)).toBe('02');
-  });
-
-  test('pickSwitchingBGAFrame holds the last frame when lp=0', () => {
-    // With looping disabled, an `elapsedMs` past the authored duration must hold the final frame instead of wrapping to
-    // frame 0 (which would cause a visual glitch at end).
-    const swBGA = parseBMSSwBGA('10:3:0 02 03 04')!;
-    expect(pickSwitchingBGAFrame(swBGA, 0)).toBe('02');
-    expect(pickSwitchingBGAFrame(swBGA, 250)).toBe('04');
-    expect(pickSwitchingBGAFrame(swBGA, 5000)).toBe('04');
-  });
-
-  test('pickSwitchingBGAFrame cycles a slot list shorter than totalFrames', () => {
-    // Author shipped only two frames but advertised tot=4. The hitkey-style behavior is to cycle within the authored
-    // slot list while honoring the total-frame loop boundary.
-    const swBGA = parseBMSSwBGA('10:4:1 02 03')!;
-    expect(pickSwitchingBGAFrame(swBGA, 0)).toBe('02');
-    expect(pickSwitchingBGAFrame(swBGA, 100)).toBe('03');
-    expect(pickSwitchingBGAFrame(swBGA, 200)).toBe('02');
-    expect(pickSwitchingBGAFrame(swBGA, 300)).toBe('03');
-    expect(pickSwitchingBGAFrame(swBGA, 400)).toBe('02');
   });
 
   test('parseBmsBGA decodes "YY x1 y1 x2 y2 dx dy" sub-region directives', () => {
@@ -412,26 +346,6 @@ describe('chart', () => {
     expect(parseBMSExBMP('255,0,0,0,   ')).toBeUndefined();
   });
 
-  test('resolveBmsBmpARGB prefers an explicit #ARGBxx value over the embedded #EXBMPxx tuple', () => {
-    // Both directives can target the same slot. `#ARGBxx` is the newer, more flexible form so chart authors expect it
-    // to win when both are present.
-    const json = createEmptyJSON();
-    json.bms.argb['01'] = 'FF112233';
-    json.bms.exBMP['01'] = '255,0,0,0,backdrop.bmp';
-    expect(resolveBmsBmpARGB(json, '01')).toEqual({ a: 255, r: 0x11, g: 0x22, b: 0x33 });
-  });
-
-  test('resolveBmsBmpARGB falls back to the #EXBMPxx tuple when #ARGBxx is absent', () => {
-    const json = createEmptyJSON();
-    json.bms.exBMP['02'] = '128,255,0,0,red-tint.bmp';
-    expect(resolveBmsBmpARGB(json, '02')).toEqual({ a: 128, r: 255, g: 0, b: 0 });
-  });
-
-  test('resolveBmsBmpARGB returns undefined when neither directive applies to the slot', () => {
-    const json = createEmptyJSON();
-    expect(resolveBmsBmpARGB(json, '03')).toBeUndefined();
-  });
-
   test('parseBmsARGB decodes the AARRGGBB hex format the parser stores', () => {
     // Parser-level normalization lands `#ARGB01 FF000000` here as the bare hex string, since that's the dominant
     // in-the-wild format. AA = alpha (FF = fully opaque), then RR/GG/BB.
@@ -478,17 +392,6 @@ describe('chart', () => {
     expect(parseBmsWAVCmd('not even close')).toBeUndefined();
     expect(parseBmsWAVCmd('01 01')).toBeUndefined();
     expect(parseBmsWAVCmd('')).toBeUndefined();
-  });
-
-  test('legacy volume helper follows the corrected percentage semantics', () => {
-    expect(wavCmdVolumeByteToLinearGain(0)).toBe(0);
-    expect(wavCmdVolumeByteToLinearGain(127)).toBe(1.27);
-    expect(wavCmdVolumeByteToLinearGain(50)).toBeCloseTo(0.5);
-    // Negative volume mutes; positive amplification is allowed by MacBeat.
-    expect(wavCmdVolumeByteToLinearGain(-10)).toBe(0);
-    expect(wavCmdVolumeByteToLinearGain(255)).toBe(2.55);
-    // Non-finite inputs default to unity (no-op).
-    expect(wavCmdVolumeByteToLinearGain(Number.NaN)).toBe(1);
   });
 
   test('collectBmsWAVCmdVolumeMultipliers builds slot → gain map from volume lines only', () => {
