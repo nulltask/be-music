@@ -889,7 +889,11 @@ PixiJS scene wiring can remain in `player-browser` when the behavior depends on 
 ></iframe>
 ```
 
-The preview plays in AUTO; it judges no input and records no replay.
+By default the preview plays in AUTO and judges no input. Add `mode=play` to let the viewer play the chart with the keyboard instead: the default lane keys judge it as a normal play, without seeking. M and F are lanes then, so they mute and toggle full screen only before the play starts; use the controls bar while playing. Touch lanes are not available in the embed. Neither mode records a replay or a score.
+
+| Parameter | Meaning                                                                       |
+| --------- | ----------------------------------------------------------------------------- |
+| `mode`    | `preview` (the default) plays in AUTO; `play` lets the viewer play the chart. |
 
 ### Select a chart or course
 
