@@ -1,5 +1,24 @@
 # @be-music/chart-parser
 
+## 0.6.0
+
+### Minor Changes
+
+- ceb5fcc: Read boolean bmson up fields and retain them through Be-Music JSON so consumers can distinguish LN end sounds from ordinary taps.
+- 410843c: Read and preserve bmson info.title_image, including through Be-Music JSON normalization.
+- c6f70f4: Preserve beatoraja bmson BGA sequences, end markers and conditional image sets through raw input and Be-Music JSON normalization, including events with no ordinary image id, which keep the id absent instead of reading it as `0`.
+- c3b783a: Preserve nonexecuted bmson fields on valid normalized root, info, channel, note, timing and BGA nodes, including hidden-note damage, through Be-Music JSON without changing playback semantics.
+
+### Patch Changes
+
+- e4d00c9: Reject null, malformed and unsupported bmson versions before interpreting chart data, and support stable 1.0.0 with optional SemVer build metadata. Read a missing-version legacy v0.21 chart by converting its fields and timing as Bemuse does, instead of treating it as the modern format; a missing version on a chart with only 1.0.0 fields is rejected as ambiguous.
+- e66f84f: Retain every bmson sound, key and mine channel and every distinct BPM, STOP and SCROLL value beyond the two-character BMS key capacity; preserve long keys through Be-Music JSON reloads.
+- 2cfc7ae: Read nanasi `#EXBPMxx` as an alias of `#BPMxx`. Channel `08` tempo changes that only `#EXBPMxx` defined were dropped as undefined references, so such charts kept the previous tempo. The alias is stored and written back as `#BPMxx`, follows the file-order rule for its index and applies inside control-flow branches; Be-Music JSON that kept it in `metadata.extras` migrates into `resources.bpm` unless `#BPMxx` defines the index.
+- 3e1855e: Validate and preserve optional intrinsic sample gain through Be-Music JSON round trips, including case-sensitive base-62 slot ids.
+- 07a8c75: Preserve repeated OPTION declarations and their vendor arguments instead of retaining only the last line. Resolve conditional and unconditional declarations in original order, and retain the ordered program through Be-Music JSON.
+- afc65fb: Use the shared generic lane table for `generic-Nkeys` bmson with 1–70 keys. Out-of-range or malformed `generic-` hints are read as unknown hints (`beat-7k` where the lanes fit, as beatoraja does) instead of clamping them or routing extra columns into unrelated channel families.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`
+
 ## 0.5.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @be-music/app-leaderboard
 
+## 0.4.0
+
+### Minor Changes
+
+- e8fe0d7: Update pages in place instead of loading a new page: the filter switches, the chart page's file choice and the ruleset menu now fetch the page with htmx 4 and morph only the page body and the header, so the scroll position and focus stay, the switch slides over and the body dims only while a slow answer loads. Filter URLs still go into the history, and Back restores them in place. Signing out, hiding or showing a play and saving the profile or icon update the page the same way instead of reloading it. Without the client script the links work as before.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/shared-utils@0.7.0`
+
 ## 0.3.0
 
 ### Minor Changes

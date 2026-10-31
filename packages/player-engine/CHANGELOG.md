@@ -1,5 +1,34 @@
 # @be-music/player-engine
 
+## 0.12.0
+
+### Minor Changes
+
+- 206afe9: Trigger every bmson layer on the judged note's input instead of playing shadowed layers as BGM. Preserve layered sound events through NONSTOP composition and expose them on timed notes.
+- ceb5fcc: Play bmson LN end keysounds on resolved manual releases or held LN tails, and at authored tails in AUTO and AUTO SCRATCH. Preserve tail audio through seeks, replay and NONSTOP without adding judgments. NONSTOP stitch versions 1 and 2 keep an `up` slice as an ordinary judged note, so existing course replays rebuild the same note set.
+- 87461c3: Add a deterministic input-driven SWBGA controller and publish its active frame in `PlayerUIFramePayload.keyBoundBGA`. Handle fresh presses, timed and held lifetimes, replay frame spacing, manual seek resets and AUTO/AUTO SCRATCH visual inputs without changing judging or recording.
+- 5c820d9: Preserve each NONSTOP stage's BGA RGB and alpha history through FIT timing and crossfades. Allocate independent ARGB definitions in the stitched chart, retain alpha zero and reset unconfigured stages to opaque white.
+- 458b6f3: Preserve SWBGA frames, image dependencies and selection windows through NONSTOP composition, including long internal bmson ids. Seed trimmed stages, apply FIT to animation and movie clocks, and expire bindings and animations at stage boundaries. Accept host-remapped selections and forward them to UI adapters without changing judging or recorded input.
+- afc65fb: Bind and judge generic bmson keyboards as 1–70 normal keys on one side, preserving the declared layout through AUTO, replay parsing, fingerprinting and same-layout NONSTOP composition. Keep beat-specific conversions unavailable and diagnose incompatible generic course stages.
+- a22dbc6: Preserve BGA opacity channels `0B`–`0E` when stitching NONSTOP stages, carry effective values from trimmed leading intervals, and restore opaque defaults for stages without commands. Expose independent stage histories as `NonstopStitchStage.bgaOpacity` on the stitched clock for BGA crossfades, retaining FIT/STOP timing without changing judged notes or rank inputs.
+- cae8368: Expose deterministic bmson BGA event playback driven by real judgments, ordered image alternatives and chart-time intervals. Publish active frames to hosts and rebuild exact AUTO/replay trigger history on seek without changing score, audio or replay input data. Compose NONSTOP event programs with stage-specific resources, trimmed ALWAYS phase, FIT time and stage-boundary expiry.
+- 3f3de70: Add an opt-in bmson zero-total no-recovery policy shared by live play, replay simulation and course gauges. Preserve legacy replay defaults and keep affected runs out of ordinary best records and ranking comparisons.
+- 274133e: Publish chart text on UI frames, including judgment-driven TEXT00 overrides and deterministic pause, seek, restart and reversal behavior. Keep playback open for late text cues.
+  
+  NONSTOP retains stage-owned text programs, including trimmed selections, per-stage TEXT00, FIT timing and empty-stage clears. Hosts pass the stitch map’s text program through `chartTextStages`.
+- 5992a52: Publish chart-authored HI-SPEED on chart-time frames and preserve accepted effective operations in replays. Pause, seek and reversal reproduce the display state without changing judgments, audio tempo or record eligibility; unsupported declarations emit diagnostics.
+- 86f4978: Honor chart-authored HDX CN/HCN before filling undefined user or course modes. NONSTOP stitch version 3 preserves BMS CN/HCN through per-note types while retaining historical stitch versions for replays.
+- 460823d: Preserve stage-owned effective chart options and diagnostics through NONSTOP composition, including FIT timing, trimmed initial selections, source reversal and empty-stage clears. Cut-out stage replays retain the owned display program on their local clock without scaling FIT twice.
+- 3928de4: Add opt-in PLAYER header execution and COUPLE without duplicating authored banks. Record effective modes, simulate each two-player side with its own gauge, and exclude two-player recordings from single-player submissions.
+
+### Patch Changes
+
+- 4480fe0: Preserve EXBMP-only filenames and BGA sub-region dependencies when stitching NONSTOP courses. Remap each stage's resource ids and asset paths, retain authored color fields and crop placement, and include dependency ids in the stage map. Resolve dependency graphs iteratively, isolate cycles and report id-space exhaustion when a referenced source cannot be allocated.
+- e66f84f: Keep full bmson resource identities in playback diagnostics for samples beyond the two-character BMS key capacity.
+- 10951d6: Keep effective EXWAV filenames and remap WAVCMD parameters and EXWAV definitions into separate NONSTOP stage resource slots.
+- 3e1855e: Preserve each NONSTOP stage's VOLWAV and existing intrinsic slot gain in the stitched chart instead of dropping it or rounding fractional percentages.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/chart-parser@0.6.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`
+
 ## 0.11.0
 
 ### Minor Changes

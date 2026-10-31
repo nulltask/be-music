@@ -1,5 +1,20 @@
 # @be-music/player-skin-sdk
 
+## 0.6.0
+
+### Minor Changes
+
+- 410843c: Expose titleImage as a chart-image kind and provide a title artwork URL on DOM decide frames.
+- d3ba8d2: Add `BeMusicLongNote.releasedElapsedMs`, the time since the player let go of a long note early and it was judged dropped, and `longNoteCentreLineAlpha` / `LONG_NOTE_CENTRE_LINE_FADE_MS` so skins can fade a long note's centre line out after the release.
+- 17a4096: Expose the independent channel 0A overlay as the optional BGA frame layer2 image so custom skins can composite both overlays above the base.
+- 5cc0094: Add optional per-plane `opacity` and ordered NONSTOP `stacks` to `BeMusicBGAFrame`, including each stack's crossfade alpha. Existing top-level layer fields remain available to skins that do not consume the new data.
+- 4480fe0: Expose optional per-plane `BeMusicBGAFrame.origins` for authored sub-region placement on the 256×256 BGA canvas, including each NONSTOP stack.
+
+### Patch Changes
+
+- afc65fb: Lay out generic bmson keyboards as equal-width normal keys on one continuous side, without scratch widths or a double-play gap.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`, `@be-music/player-scene-model@0.4.0`
+
 ## 0.5.0
 
 ### Minor Changes

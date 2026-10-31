@@ -1,5 +1,11 @@
 # @be-music/app-accounts
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/shared-utils@0.7.0`
+
 ## 0.1.2
 
 ### Patch Changes

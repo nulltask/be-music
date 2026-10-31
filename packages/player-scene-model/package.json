@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-scene-model",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Runtime-neutral models for chart browsing, play options, gameplay, and result scenes",
   "license": "MIT",
   "files": [

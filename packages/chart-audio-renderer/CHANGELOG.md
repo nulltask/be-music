@@ -1,5 +1,21 @@
 # @be-music/chart-audio-renderer
 
+## 0.5.0
+
+### Minor Changes
+
+- c13f3fa: Apply WAVCMD pitch/sounding-time and EXWAV pan/frequency before output-rate conversion. Expose playbackModifiers on renderSingleSample so realtime Node preparation and offline rendering share PCM behavior.
+- 6e14d72: Add a path prefix option to single-sample rendering so Node gameplay can apply the chart's PATH_WAV directory with the shared bare-path fallback rules.
+
+### Patch Changes
+
+- ceb5fcc: Render paired bmson LN end slices at their authored tails while leaving unmatched or replaced up entries silent.
+- 3259b06: Fix clicks at bmson sound-slice boundaries in offline rendering: a slice that starts inside its file fades in over 1 ms, and one cut before the file's end rings on past its end while it fades out over 1 ms, so a continuation crossfades with the slice before it. Note timing and slice deduplication are unchanged.
+- 87e176d: Render every bmson continuation slice, including a first c=true note, while deduplicating simultaneous uses of the same slice.
+- 10951d6: Render EXWAV-only samples and apply WAVCMD volume as a percentage with 100 as unity. Respect EXWAV attenuation bounds, including its silent minimum.
+- 3e1855e: Render intrinsic slot gain with the same volume composition as browser and Node playback, preserving exact NONSTOP stage levels through Be-Music JSON.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/chart-parser@0.6.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`
+
 ## 0.4.1
 
 ### Patch Changes
