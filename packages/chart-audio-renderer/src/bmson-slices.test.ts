@@ -87,3 +87,49 @@ test('offline rendering keeps channels beyond the BMS key capacity audible', asy
   expect(rendered.left[2000]).toBeCloseTo(0.25, 4);
   expect(rendered.left[6000]).toBeCloseTo(0.5, 4);
 });
+
+// 3 ms at 8 kHz: the slice-boundary ramp is 24 frames long.
+const FADE_FRAMES = 24;
+
+test('a continuation crossfades with the slice before it instead of cutting it', async () => {
+  const json = createEmptyJSON('bmson');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'stem.wav';
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
+    { measure: 0, channel: '12', position: [1, 8], value: '01', bmson: { c: true } },
+  ];
+  const rendered = await renderJSON(json, options());
+  for (let frame = 2000; frame <= 2000 + FADE_FRAMES; frame += 1) {
+    expect(rendered.left[frame]).toBeCloseTo(0.125, 4);
+  }
+});
+
+test('a cut slice fades out past its end while a restarted slice plays from the beginning', async () => {
+  const json = createEmptyJSON('bmson');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'stem.wav';
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
+    { measure: 0, channel: '12', position: [1, 4], value: '01', bmson: { c: false } },
+  ];
+  const rendered = await renderJSON(json, options());
+  // The restart plays 0.125 from the top of the file unfaded; the cut slice adds its own 0.25 as it fades out.
+  expect(rendered.left[4000]).toBeCloseTo(0.375, 4);
+  expect(rendered.left[4000 + FADE_FRAMES / 2]).toBeCloseTo(0.25, 4);
+  expect(rendered.left[4000 + FADE_FRAMES]).toBeCloseTo(0.125, 4);
+});
+
+test('a slice that starts inside its file fades in, and one that starts at the top does not', async () => {
+  const json = createEmptyJSON('bmson');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'stem.wav';
+  json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { sampleOffsetSeconds: 0.25 } }];
+  const rendered = await renderJSON(json, options());
+  expect(rendered.left[0]).toBe(0);
+  expect(rendered.left[FADE_FRAMES / 2]).toBeCloseTo(0.0625, 4);
+  expect(rendered.left[FADE_FRAMES]).toBeCloseTo(0.125, 4);
+
+  json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } }];
+  expect((await renderJSON(json, options())).left[0]).toBeCloseTo(0.125, 4);
+});
