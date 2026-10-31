@@ -3,18 +3,20 @@ import { LOCAL_TIME_SCRIPT } from './local-time.ts';
 
 /** A stand-in for the page's `<time data-local>` elements. */
 function timeElement(iso: string, local: string, utcText: string) {
-  return { dateTime: iso, dataset: { local }, title: utcText, textContent: utcText };
+  return { dateTime: iso, dataset: { local } as Record<string, string>, title: utcText, textContent: utcText };
 }
 
-/** Runs the page script as the browser would, against a fake document. */
+/** Runs the page script as the browser would, against a fake document; returns the listeners it added. */
 function run(elements: ReturnType<typeof timeElement>[], lang = 'en') {
+  const listeners = new Map<string, () => void>();
   const document = {
     readyState: 'complete',
     documentElement: { lang },
     querySelectorAll: () => elements,
-    addEventListener: () => undefined,
+    addEventListener: (type: string, listener: () => void) => listeners.set(type, listener),
   };
   new Function('document', LOCAL_TIME_SCRIPT)(document);
+  return listeners;
 }
 
 describe('LOCAL_TIME_SCRIPT', () => {
@@ -70,6 +72,18 @@ describe('LOCAL_TIME_SCRIPT', () => {
     run([month, almost]);
     expect(month.textContent).toBe('2026-09-15');
     expect(almost.textContent).toBe('29 days ago');
+  });
+
+  test('rewrites the times an htmx swap brings, once each', () => {
+    const kept = timeElement('2026-10-13T06:20:00.000Z', 'minute', '2026-10-13 06:20 UTC');
+    const elements = [kept];
+    const listeners = run(elements);
+    const swapped = timeElement('2026-10-13T07:00:00.000Z', 'minute', '2026-10-13 07:00 UTC');
+    elements.push(swapped);
+    listeners.get('htmx:after:settle')?.();
+    expect(swapped.textContent).toBe('2026-10-13 16:00');
+    // Already in local time: the title is not wrapped a second time.
+    expect(kept.title).toBe('2026-10-13 15:20 Asia/Tokyo · 2026-10-13 06:20 UTC');
   });
 
   test('leaves a time it cannot read as it is', () => {

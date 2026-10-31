@@ -314,7 +314,13 @@ cookie; a play's own ruleset is shown alongside as "played with". The switch is 
 changing the setting of whoever opens them. Since a page depends on that cookie, pages are `Cache-Control: private,
 max-age=0`. The chart page links to the chart elsewhere, once per file it is known by, in the formats BMS Search itself
 uses: Mocha-Repository, MinIR and BMS Search (`/patterns/{sha256}`) by the file SHA-256, and LR2IR by the MD5 once it
-is recorded. A chart with no known hash gets a title search on BMS Search. Browser-side interactions use `hono/jsx/dom` components.
+is recorded. A chart with no known hash gets a title search on BMS Search.
+
+Browser-side behaviour is one plain client script (`client/main.ts`) bundled with htmx 4. The filter switches, the chart
+page's file choice and the ruleset menu keep their plain links, and htmx fetches the same page and morphs only `<main>`
+and the header into the page in view (`src/pages/partial-swap.ts`): scroll position, focus and open popovers stay, and
+the filter URL goes into the history (the ruleset switch adds no entry). Signing out, hiding a play and saving the
+profile update the page the same way instead of reloading it. Without the script, the links navigate as before.
 
 ## 11. OG images and sharing
 
