@@ -878,7 +878,7 @@ PixiJS scene wiring can remain in `player-browser` when the behavior depends on 
 
 ## Embedded preview
 
-`/embed/?track=<URL>` (`play.be-music.app`, and `play.preview.be-music.app` for the preview environment) previews a chart archive inside an iframe. It is a second entry of `@be-music/app-play` (`embed/index.html`, `src/embed/`), served by the same Worker; the Worker starts no automatic sign-in for an iframe. The archive is fetched like `?music=`: directly from this origin, through `/__url-load-proxy` from another https origin.
+`/embed/?track=<URL>` (`play.be-music.app`, and `play.preview.be-music.app` for the preview environment) previews a chart archive inside an iframe. It is a second entry of `@be-music/app-play` (`embed/index.html`, `src/embed/`), served by the same Worker; the Worker starts no automatic sign-in for an iframe. The archive is fetched like `?music=`: directly from this origin, through `/__url-load-proxy` from another https origin. The browser keeps the archive and revalidates it on each load: the proxy marks it `no-cache` and passes the host's `ETag` / `Last-Modified` and the browser's conditional request through, so an unchanged archive is not downloaded again. A host that sends neither validator is downloaded every time.
 
 ```html
 <iframe
