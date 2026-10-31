@@ -211,7 +211,7 @@ test('Node preloads and resolves a paired up source slice without treating it as
 });
 
 describe('bmson slice fades', () => {
-  // 3 ms at 8 kHz: the slice-boundary ramp is 24 frames long.
+  // 1 ms at 8 kHz: the slice-boundary ramp is 8 frames long.
   const sampleRate = 8000;
   const constant = new Float32Array(8000).fill(0.5);
   const sample = { sampleRate, left: constant, right: constant, durationSeconds: 1, peak: 0.5 };
@@ -237,21 +237,21 @@ describe('bmson slice fades', () => {
 
   test('a slice inside the file fades in and rings on past its cut end while it fades out', () => {
     const sliced = voice({ offsetSeconds: 0.25, durationSeconds: 0.25 });
-    expect(sliced).toMatchObject({ startPosition: 2000, position: 2000, endPosition: 4024 });
-    expect(sliced.slice).toEqual({ lengthFrames: 2000, envelope: { fadeIn: 24, fadeOut: 24 } });
-    const fadeIn = mix([sliced], 25);
+    expect(sliced).toMatchObject({ startPosition: 2000, position: 2000, endPosition: 4008 });
+    expect(sliced.slice).toEqual({ lengthFrames: 2000, envelope: { fadeIn: 8, fadeOut: 8 } });
+    const fadeIn = mix([sliced], 9);
     expect(fadeIn[0]).toBe(0);
-    expect(fadeIn[12]).toBeCloseTo(0.25, 6);
-    expect(fadeIn[24]).toBe(0.5);
-    sliced.position = 2000 + 2000 + 12;
-    expect(mix([sliced], 12)[0]).toBeCloseTo(0.25, 6);
+    expect(fadeIn[4]).toBeCloseTo(0.25, 6);
+    expect(fadeIn[8]).toBe(0.5);
+    sliced.position = 2000 + 2000 + 4;
+    expect(mix([sliced], 4)[0]).toBeCloseTo(0.25, 6);
   });
 
   test('a continuation crossfades with the slice before it to the uncut level', () => {
     const previous = voice({ offsetSeconds: 0, durationSeconds: 0.25 });
     const next = voice({ offsetSeconds: 0.25, durationSeconds: 0.25 });
     previous.position = 2000;
-    const mixed = mix([previous, next], 24);
+    const mixed = mix([previous, next], 8);
     for (const value of mixed) expect(value).toBeCloseTo(0.5, 6);
   });
 });

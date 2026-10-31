@@ -88,8 +88,8 @@ test('offline rendering keeps channels beyond the BMS key capacity audible', asy
   expect(rendered.left[6000]).toBeCloseTo(0.5, 4);
 });
 
-// 3 ms at 8 kHz: the slice-boundary ramp is 24 frames long.
-const FADE_FRAMES = 24;
+// 1 ms at 8 kHz: the slice-boundary ramp is 8 frames long.
+const FADE_FRAMES = 8;
 
 test('a continuation crossfades with the slice before it instead of cutting it', async () => {
   const json = createEmptyJSON('bmson');
