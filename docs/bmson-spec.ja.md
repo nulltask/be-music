@@ -63,9 +63,9 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [ ] `info.title` / `artist` / `genre` など必須情報の欠損時エラー方針
 - [ ] `sound_channels[].name` の拡張子フォールバック探索（`.wav`/`.ogg`/`.m4a`）
 - [ ] `sound_channels[].name` のパス正規化（`\` と `/`）およびディレクトリトラバーサル防止
-- [ ] `sound_channels[].notes[]` 同一 pulse で `c=true/false` が混在する場合の優先規則
-- [ ] `bpm_events` 同一 `y` 多重定義時の「末尾優先」正規化
-- [ ] `stop_events` 同一 `y` 多重定義時の「加算」正規化
+- [x] `sound_channels[].notes[]` 同一 pulse で `c=true/false` が混在する場合は音源を一度だけ再始動し、一つのスライスを共有する（下記のスライス規則を参照）
+- [x] `bpm_events` 同一 `y` 多重定義時は末尾を優先する（時刻解決時に適用）
+- [x] `stop_events` 同一 `y` 多重定義時は加算する（時刻解決時に適用）
 - [ ] `bga.bga_header` の同一 `id` 多重定義時に後勝ちで解釈
 - [x] `info.title_image` の受理と IR への保持
 - [x] `subartists` の `key:value` 形式（`music:`/`chart:` 等）の保持規則
@@ -124,9 +124,9 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `bga.poor_events` の shared BGA timeline 抽出
 - [x] Browser player は shared BGA timeline 経由で bmson BGA の still / video asset を描画
 - [x] CLI/TUI の bmson header filename 向け BGA resource loading
-- [ ] 同一 pulse の処理順（Note/BGA → BPM → STOP）を仕様通りに固定
-- [ ] 同一 `y` の `bpm_events` を末尾優先で適用
-- [ ] 同一 `y` の `stop_events` を加算して適用
+- [x] 同一 pulse を仕様どおり Note/BGA → BPM → STOP の順で処理する（`bmson-same-pulse.test.ts`）
+- [x] 同一 `y` の `bpm_events` を末尾優先で適用
+- [x] 同一 `y` の `stop_events` を加算して適用し、各 STOP はその pulse の最終 BPM で進める
 - [x] sound channel スライス規則（`c` と restart）に基づく再生
 - [x] 同じ sound channel 内で playable ノートと BGM ノートが同じ `y` にある場合の BGM 破棄（parse 時に BGM ノートを捨てる）
 - [x] レイヤーノート（複数の sound channel が同じ `x` と `y` にノートを持つ場合）は 1 つの判定ノートにまとめます。早押し・遅押し・リプレイでも入力時に構成スライスをすべて鳴らし、ミス時は鳴らしません。構成ノートの長さが異なる場合は解決時にエラーとします。NONSTOP でも入力との結び付きを維持します（[player 仕様 — 重複ノート](./player-spec.ja.md#重複ノート)）
