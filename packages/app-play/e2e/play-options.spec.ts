@@ -341,8 +341,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   });
 }
 
-// Option semantics, not skin drawing: Synesthesia's software rendering on CI misses the timing these need (#792).
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`fixed display area ignores cover keys and restores floating time on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('fixed-area.bme', '#TITLE Fixed display area\n#BPM 120\n#00103:F0\n#00811:01\n');
@@ -420,8 +419,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   }
 }
 
-// Option semantics, not skin drawing: Synesthesia's software rendering on CI misses the timing these need (#792).
-for (const skin of ['plain', 'native'] as const) {
+for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`beatoraja automatic display timing is recorded and replayed on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('auto-timing.bms', '#TITLE Auto timing\n#BPM 120\n#RANK 3\n#00111:01\n#00311:01\n');
