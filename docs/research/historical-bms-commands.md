@@ -1,0 +1,51 @@
+# Historical BMS dialect commands
+
+[日本語](./historical-bms-commands.ja.md)
+
+This note classifies the historical dialect commands listed in [#837](https://github.com/nulltask/be-music/issues/837) by origin, player support and actual use, and records what Be-Music does with each. It is the basis for the "Partially supported and unsupported commands" table in the [player specification](../player-spec.md#partially-supported-and-unsupported-commands).
+
+## Sources
+
+- Command descriptions, origin and support lists: hitkey's [BMS command memo](https://hitkey.nekokan.dyndns.info/cmds.htm) (the live host was unreachable on 2026-10-31; read through the [Web Archive copy](https://web.archive.org/web/2024/https://hitkey.nekokan.dyndns.info/cmds.htm)). Anchors are given per command below.
+- Be-Music behavior: `packages/chart-parser/src/core/bms-headers.ts` (`pushHeaderLine`) and `packages/chart-writer/src/bms.ts`.
+- Usage: a line-start scan of the local test corpus. It holds **5,344 BMS-family files (5,142 unique by SHA-256)**: the BMS Starter Pack and gdbg packages 2022–2025 used in earlier #822 counts (2,720 files), plus other artist and event collections. bmson files are not relevant here. Charts are not committed.
+
+## Current parser behavior
+
+None of the commands below has a dedicated parser branch. A non-empty value falls into the default case of `pushHeaderLine` and is kept verbatim in `metadata.extras` under its uppercased command (`#ExtChr` becomes `EXTCHR`). The BMS writer writes `metadata.extras` back as header lines, so they survive BMS and Be-Music JSON round trips. No player, renderer or fingerprint reads them. `#MATERIALS`, `#DIVIDEPROP` and `#VIDEOFILE` have their own `bms` fields with the same "kept, not executed" status.
+
+## Classification
+
+| Command                                                                      | Origin → support (cmds)                                                    | Meaning                                                                                                     | Corpus use (files)                 | Decision                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `#SONGxx` ([`SONGXX`][s])                                                    | pomu → pomu2; Sonorous parses only. Marked obsolete                        | Old name of `#TEXTxx` for channel `99`. `#TEXTxx` wins when both define one index                           | 0 / 5,344                          | Unsupported. Obsolete alias with no use; `#TEXTxx` covers the feature. Kept in `metadata.extras`                                                                                                                         |
+| `#EXBPMxx` ([`EXBPMXX`][e])                                                  | nanasi → nanasi, pomu2, PMSee-V, Sonorous, BGAEncAdv, TechnicalGroove, HDX | Exact alias of `#BPMxx` for channel `08`, introduced to avoid a BMSC bug that confused `#BPMxx` with `#BPM` | 0 / 5,344                          | **Accepted as a follow-up**: it changes timing, is widely supported and costs little. Until then, channel `08` objects that only `#EXBPMxx` defines are dropped as undefined references and the previous tempo continues |
+| `#CHARFILE` ([`CHARFILE`][c])                                                | pomu → pomu2, PMChr-V; Sonorous and TechnicalGroove parse only             | pop'n-style character animation file (`.chp`)                                                               | 0 / 5,344                          | Unsupported. A presentation asset outside chart semantics; Be-Music skins own the play-screen characters                                                                                                                 |
+| `#ExtChr` ([`EXTCHR`][x])                                                    | BM98 → BM98k, DDR (partial)                                                | Replaces BM98 play-screen sprites with regions of `#BMP` images, optionally switched by channel `05`        | **2 / 5,344** (1 work, SP/DP pair) | Unsupported. Sprite numbers address BM98's internal character map, which has no counterpart in Be-Music, LR2 or beatoraja skins. Neither file uses channel `05`                                                          |
+| `#CDDA` ([`CDDA`][d])                                                        | DDR → DDR                                                                  | Plays an audio-CD track as BGM                                                                              | 0 / 5,344                          | Unsupported. Browsers cannot read audio CDs, and the source is not part of the chart folder                                                                                                                              |
+| `#VIDEOf/s` ([`VIDEOFPS`][v])                                                | bemaniaDX → bemaniaDX                                                      | Playback frame rate for `#VIDEOFILE`                                                                        | 0 / 5,344                          | Folded into [#836](https://github.com/nulltask/be-music/issues/836) (`#VIDEOFILE` adapter); meaningless without it                                                                                                       |
+| `#VIDEODLY` ([`VIDEODLY`][v])                                                | bemaniaDX → bemaniaDX                                                      | Start frame (delay) for `#VIDEOFILE`                                                                        | 0 / 5,344                          | Folded into #836, as above                                                                                                                                                                                               |
+| `#VIDEOCOLORS` ([`VIDEOCOLORS`][v])                                          | bemaniaDX → bemaniaDX                                                      | Colour depth of the AVI palette                                                                             | 0 / 5,344                          | Unsupported. Modern decoders choose the output format; no observable effect to reproduce                                                                                                                                 |
+| `#SEEKxx` ([`SEEKXX`][k])                                                    | LR → LR; possibly removed in LR2. cmds: details unknown                    | Moves the current video's playback position in milliseconds through channel `05`                            | 0 / 5,344 (channel `05`: 0)        | Unsupported. No reliable specification and no use                                                                                                                                                                        |
+| `MATERIALS` ([`MATERIALS`][m])                                               | BM98de → BM98de, RDM, bemaniaDX, nanasi < 1.00                             | Not a header: `#WAVxx <folder> file` resolves from a `Materials` folder next to the player executable       | 0 / 5,344 (`<folder>` references)  | Unsupported. Be-Music has no executable-relative shared folder; charts must be self-contained. The `#MATERIALS` header that Be-Music keeps in `bms.materials` is not this feature                                        |
+| `#MATERIALSBMP` / `#MATERIALSWAV` ([`MATERIALSBMP`][m], [`MATERIALSWAV`][m]) | nanasi < 1.00 → removed in nanasi 1.00. Marked obsolete                    | Default `Materials` sub-folder for all image / sound definitions                                            | 0 / 5,344                          | Unsupported, for the same reason as `MATERIALS`                                                                                                                                                                          |
+| `#DIVIDEPROP` ([`DIVIDEPROP`][p])                                            | nanasi < 0.98 → removed. Marked obsolete                                   | Measure resolution for nanasi                                                                               | 0 / 5,344                          | No-op by design. Be-Music positions objects with exact fractions, so a resolution hint has nothing to change. Kept in `bms.divideProp`                                                                                   |
+
+The scan also counted `#BASEBPM` in **12 / 5,344** files. It is already executed as the HS-FIX reference BPM and is listed with the supported commands.
+
+## Follow-ups
+
+- `#EXBPMxx`: parse it into the same definition slot as `#BPMxx`, so that the file-order rule picks the later of `#BPMxx` / `#EXBPMxx` for one index, and migrate legacy Be-Music JSON that holds it in `metadata.extras`. Needs a parser test, a fingerprint check and an update to [format compatibility](../format-compat.md).
+- `#VIDEOf/s` / `#VIDEODLY`: part of the `#VIDEOFILE` adapter in #836.
+
+Everything else stays unsupported. It is kept in `metadata.extras` for lossless round trips, with no runtime meaning.
+
+[s]: https://hitkey.nekokan.dyndns.info/cmds.htm#SONGXX
+[e]: https://hitkey.nekokan.dyndns.info/cmds.htm#EXBPMXX
+[c]: https://hitkey.nekokan.dyndns.info/cmds.htm#CHARFILE
+[x]: https://hitkey.nekokan.dyndns.info/cmds.htm#EXTCHR
+[d]: https://hitkey.nekokan.dyndns.info/cmds.htm#CDDA
+[v]: https://hitkey.nekokan.dyndns.info/cmds.htm#VIDEOFPS
+[k]: https://hitkey.nekokan.dyndns.info/cmds.htm#SEEKXX
+[m]: https://hitkey.nekokan.dyndns.info/cmds.htm#MATERIALS
+[p]: https://hitkey.nekokan.dyndns.info/cmds.htm#DIVIDEPROP
