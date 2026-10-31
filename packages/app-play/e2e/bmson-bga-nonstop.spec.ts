@@ -17,7 +17,12 @@ async function colors(player: Player): Promise<string[]> {
       for (let y = 0; y < canvas.height; y++)
         for (let x = 0; x < canvas.width; x++) {
           const at = (y * canvas.width + x) * 4;
-          if (data[at] === 21 && data[at + 1] === 79 && data[at + 2] === 227) {
+          // Software rendering can shift the blue base by a step, so find it with the same tolerance as the samples.
+          if (
+            Math.abs(data[at]! - 21) <= 4 &&
+            Math.abs(data[at + 1]! - 79) <= 4 &&
+            Math.abs(data[at + 2]! - 227) <= 4
+          ) {
             bounds[0] = Math.min(bounds[0]!, x);
             bounds[1] = Math.min(bounds[1]!, y);
             bounds[2] = Math.max(bounds[2]!, x);
