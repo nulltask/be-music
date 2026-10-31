@@ -9,6 +9,7 @@ import {
   type BeMusicGameplayFrame,
   type BeMusicGameplayRuntime,
   type BeMusicSurface,
+  longNoteCentreLineAlpha,
 } from '@be-music/player-skin-sdk';
 import {
   ACCENT,
@@ -142,8 +143,9 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.globalAlpha = 0.25 * alpha;
     ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
+    // Let go early, the centre line fades out with the hold.
     ctx.fillStyle = '#ffffff';
-    ctx.globalAlpha = 0.6 * alpha;
+    ctx.globalAlpha = 0.6 * alpha * longNoteCentreLineAlpha(note.releasedElapsedMs);
     ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = NOTE_FILL[note.kind];

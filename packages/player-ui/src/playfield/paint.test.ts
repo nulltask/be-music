@@ -211,6 +211,17 @@ describe('playfield painters', () => {
     ]);
   });
 
+  it('fades the centre line out after an early release', () => {
+    const ctx = recorder();
+    paintNotes(ctx, {
+      measureLines: [],
+      longNotes: [{ kind: 'white', x: 0, w: 10, top: 20, bottom: 60, state: 'dropped', releasedElapsedMs: 150 }],
+      notes: [],
+      mines: [],
+    });
+    expect(ctx.calls[1]).toBe('fillRect 4,14,2,40 #ffffff 0.15');
+  });
+
   it('dims a dropped long note', () => {
     const ctx = recorder();
     paintNotes(ctx, {

@@ -1065,7 +1065,7 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
       ctx.longNotes.start(command.channel, command.beat, command.mode, ctx.playClock());
       break;
     case 'long-note-end':
-      ctx.longNotes.end(command.channel, command.outcome);
+      ctx.longNotes.end(command.channel, command.outcome, ctx.playClock());
       break;
   }
   ctx.theme.moment({ kind: 'lane-command', command });

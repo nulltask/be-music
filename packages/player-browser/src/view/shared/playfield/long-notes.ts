@@ -27,6 +27,8 @@ export function renderLongNote(
   const channel = note.channel;
   const state = ctx.play.longNotes.stateOf(channel, note.beat, note.judged);
   const alpha = resolveLongNoteAlpha(state);
+  const releasedAtMs = state === 'dropped' ? ctx.play.longNotes.releasedAtMs(channel, note.beat) : undefined;
+  const releasedElapsedMs = releasedAtMs === undefined ? undefined : Math.max(0, ctx.play.playClock() - releasedAtMs);
   // `yStart` / `yEnd` are the chart-time intersections with the judgement line. With the bottom-edge anchor
   // convention (matching LR2 / BMS): - LN_START's *bottom edge* sits at `yStart` (just-timing of the head) - LN_END's
   // *bottom edge* sits at `yEnd` (just-timing of the tail) The body fills the band between them; we clamp the bottom
@@ -63,6 +65,7 @@ export function renderLongNote(
         bottom,
         mode: ctx.play.resolveLongNoteMode(note),
         state,
+        ...(releasedElapsedMs !== undefined ? { releasedElapsedMs } : {}),
         autoplay: ctx.play.isAutoplayedChannel(channel),
       });
     } else {
@@ -76,6 +79,7 @@ export function renderLongNote(
         top,
         bottom,
         nowMs: ctx.play.playClock(),
+        releasedElapsedMs,
       });
       graphic.alpha = alpha;
     }

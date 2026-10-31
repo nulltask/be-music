@@ -67,3 +67,15 @@ export function holdSeed(channel: string, startedAtMs: number): number {
   for (let index = 0; index < channel.length; index += 1) seed = (seed * 31 + channel.charCodeAt(index)) % 1_000_003;
   return seed;
 }
+
+/** How long a long note's centre line takes to fade out after the player lets go early. */
+export const LONG_NOTE_CENTRE_LINE_FADE_MS = 300;
+
+/**
+ * Opacity factor (0..1) of a long note's centre line `releasedElapsedMs` after the player let go early: full while the
+ * note is held or untouched (`undefined`), then a linear fade to nothing over {@link LONG_NOTE_CENTRE_LINE_FADE_MS}.
+ */
+export function longNoteCentreLineAlpha(releasedElapsedMs: number | undefined): number {
+  if (releasedElapsedMs === undefined || !(releasedElapsedMs > 0)) return 1;
+  return Math.max(0, 1 - releasedElapsedMs / LONG_NOTE_CENTRE_LINE_FADE_MS);
+}
