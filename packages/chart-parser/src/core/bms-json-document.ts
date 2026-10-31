@@ -528,13 +528,16 @@ function normalizePreservation(input: unknown, bmsInput: unknown, bmsonInput: un
   }
 
   normalized.bmson.lines = normalizeBmsonLines(rawBmson?.lines);
-  normalized.bmson.bpmEvents = normalizeBmsonBPMEvents(rawBmson?.bpmEvents ?? rawBmson?.bpm_events);
-  normalized.bmson.stopEvents = normalizeBmsonStopEvents(rawBmson?.stopEvents ?? rawBmson?.stop_events);
-  const scrollEvents = normalizeBmsonScrollEvents(rawBmson?.scrollEvents ?? rawBmson?.scroll_events);
+  normalized.bmson.bpmEvents = normalizeBmsonBPMEvents(rawBmson?.bpmEvents ?? rawBmson?.bpm_events, true);
+  normalized.bmson.stopEvents = normalizeBmsonStopEvents(rawBmson?.stopEvents ?? rawBmson?.stop_events, true);
+  const scrollEvents = normalizeBmsonScrollEvents(rawBmson?.scrollEvents ?? rawBmson?.scroll_events, true);
   if (scrollEvents.length > 0) {
     normalized.bmson.scrollEvents = scrollEvents;
   }
-  normalized.bmson.soundChannels = normalizeBmsonSoundChannels(rawBmson?.soundChannels ?? rawBmson?.sound_channels);
+  normalized.bmson.soundChannels = normalizeBmsonSoundChannels(
+    rawBmson?.soundChannels ?? rawBmson?.sound_channels,
+    true,
+  );
 
   return normalized;
 }

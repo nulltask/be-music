@@ -69,7 +69,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [ ] `bga.bga_header` の同一 `id` 多重定義時に後勝ちで解釈
 - [x] `info.title_image` の受理と IR への保持
 - [x] `subartists` の `key:value` 形式（`music:`/`chart:` 等）の保持規則
-- [ ] 未知ルートキーの透過保持
+- [x] 未知ルートキーを不透明なデータとして保持
 
 ### chart-writer (`@be-music/chart-source` -> bmson)
 
@@ -104,7 +104,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [ ] `stop_events` 同一 `y` のイベントを加算正規化して出力
 - [x] `info.title_image` の出力
 - [ ] `sound_channels[].name` のパス区切り正規化と危険パス除去
-- [ ] 未知ルートキーの透過再出力
+- [x] 不透明なルート注釈を再出力
 - [~] `notes.x` の元値を厳密保持 (IR で lanes を再割当するため完全同一は保証しない)
 
 ### player / chart-audio-renderer (bmson 再生挙動)
@@ -282,9 +282,9 @@ bmson 仕様は `judge_rank` の判定幅をプレイヤーに委ねています
 
 be-music は NORMAL の解釈（`100` = NORMAL）に従います。仕様の説明例と多くのプレイヤーに沿い、be-music で bmson に変換して読み直したときに判定幅が保たれるためです。その代わり、変換した譜面は beatoraja では約 4/3 倍広い判定になります。配布されている bmson 譜面は、ほぼすべて既定値 `100` のままです。
 
-## 一次参照に対する未対応/非互換
+## 互換性と保持の方針
 
-- 未対応: bmson で未使用の未知ルートキーの透過保持
+未知の JSON データは、ルート・info・ノート・タイミング・BGA ノードの任意の `extraFields` envelope と、チャンネル・小節線のスロット・pulse マップに保持します。writer は正規化で省略された不正値も含めて対応済みの予約キーを除外してから合成し、注釈の編集で古い保存値を復活させません。未知フィールドは再生や fingerprint を変えず、hidden note の `damage` もデータとしてだけ保持します。ソースのバイト列、不正なレコード、native BMS への注釈、元コンテナメタデータの任意の合成は保証対象外です。契約は [ADR 0029](./adr/0029-opaque-bmson-fields.ja.md) に定義します。
 
 - 明示された generic の hint は、正規出力でも空の列の位置を保つ。BMS 変換時に生成する generic の hint は、使用レーンへ連続番号を振る。明示的な generic 配置を BMS に出力すると `RangeError` にする。キーボードの同一性を保つには bmson または Be-Music JSON を使う。
 
