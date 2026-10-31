@@ -33,7 +33,7 @@ describe('createPreviewStage', () => {
     const layout = resolveGameplayLayout({ laneChannels: SP7, playVariant: '7' }, stage);
     expect(layout.stage).toEqual({ width, height });
     expect(layout.playfield.right).toBeLessThanOrEqual(width / 2);
-    expect(layout.playfield.judgementY).toBe(height - 60);
+    expect(layout.playfield.judgementY).toBe(height - 97);
     expect(layout.bga!.x).toBeGreaterThanOrEqual(layout.playfield.right);
     expect(layout.bga!.x + layout.bga!.w).toBeLessThanOrEqual(width - 16);
     expect(layout.bga!.w).toBeGreaterThan(0);

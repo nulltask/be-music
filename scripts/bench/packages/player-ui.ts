@@ -122,6 +122,7 @@ const NON_ELEMENT_EXPORTS = new Set([
   'resolveSeekTarget',
   'resolveGameplayPanels',
   'previewContentBottom',
+  'previewJudgementInset',
   'resolvePreviewBGARect',
   'resolvePreviewInfoBox',
   'resolvePreviewPortrait',
@@ -157,6 +158,11 @@ export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
     define('player-ui.previewContentBottom', {
       run: () => {
         ui.previewContentBottom(previewStage.height);
+      },
+    });
+    define('player-ui.previewJudgementInset', {
+      run: () => {
+        ui.previewJudgementInset(previewStage);
       },
     });
     define('player-ui.resolvePreviewBGARect', {
