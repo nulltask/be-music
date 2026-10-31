@@ -875,7 +875,7 @@ PixiJS scene wiring は browser rendering や WebAudio resource に依存する�
 
 ## 埋め込みプレビュー
 
-`/embed/?track=<URL>`（`play.be-music.app`、プレビュー環境は `play.preview.be-music.app`）は、譜面のアーカイブを iframe の中でプレビューする。`@be-music/app-play` の 2 つ目のエントリ（`embed/index.html`、`src/embed/`）で、同じ Worker が配信する。Worker は iframe では自動サインインを始めない。アーカイブは `?music=` と同じく、同じオリジンからは直接、別の https オリジンからは `/__url-load-proxy` を経由して取得する。
+`/embed/?track=<URL>`（`play.be-music.app`、プレビュー環境は `play.preview.be-music.app`）は、譜面のアーカイブを iframe の中でプレビューする。`@be-music/app-play` の 2 つ目のエントリ（`embed/index.html`、`src/embed/`）で、同じ Worker が配信する。Worker は iframe では自動サインインを始めない。アーカイブは `?music=` と同じく、同じオリジンからは直接、別の https オリジンからは `/__url-load-proxy` を経由して取得する。ブラウザはアーカイブを保存し、読み込むたびに再検証する。プロキシは `no-cache` を付け、配信元の `ETag` / `Last-Modified` とブラウザの条件付きリクエストを中継するので、変わっていないアーカイブはダウンロードし直さない。どちらの検証子も送らない配信元からは毎回ダウンロードする。
 
 ```html
 <iframe
