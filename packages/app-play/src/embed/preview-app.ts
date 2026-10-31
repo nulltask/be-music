@@ -35,7 +35,15 @@ import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import { previewArtworkPath } from './artwork.ts';
 import { findEmbedChart } from './chart-match.ts';
 import { createPreviewSkin, type PreviewChrome, type PreviewChromeState } from './preview-skin.ts';
-import { embedModeOfAutoPlay, embedStageTapPauses, type EmbedMode, type EmbedTrack } from './track-url.ts';
+import {
+  embedModeOfAutoPlay,
+  embedStageTapPauses,
+  embedWaitsToDownload,
+  type EmbedMode,
+  type EmbedTrack,
+} from './track-url.ts';
+import { readDeviceSignals, resolveDeviceProfile } from '../device-profile.ts';
+import { describeDownload, readDownloadSize } from './download-size.ts';
 
 /** How far ← / → seek. */
 const SEEK_STEP_SECONDS = 5;
@@ -98,6 +106,8 @@ export class PreviewApp {
     }
     this.mode = track.mode;
     this.trackName = track.fileName.replace(/\.zip$/iu, '');
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+    if (embedWaitsToDownload(resolveDeviceProfile(readDeviceSignals()), saveData)) await this.waitForLoad(track);
     const progress = new LoadingProgress();
     this.showOverlay(progress.element);
     try {
@@ -136,6 +146,22 @@ export class PreviewApp {
     } else {
       this.showSelect();
     }
+  }
+
+  /**
+   * Shows the Load button with the track's file name, and its size once a HEAD request tells it, and resolves once the
+   * button is pressed.
+   */
+  private waitForLoad(track: EmbedTrack): Promise<void> {
+    const load = document.createElement('be-music-preview-start');
+    Object.assign(load, { mode: 'load', caption: describeDownload(track.fileName, undefined) });
+    this.showOverlay(load);
+    void fetch(track.fetchURL, { method: 'HEAD', redirect: 'follow' })
+      .then((response) => {
+        if (response.ok) load.caption = describeDownload(track.fileName, readDownloadSize(response.headers));
+      })
+      .catch(() => undefined);
+    return new Promise((resolve) => load.addEventListener('play-request', () => resolve(), { once: true }));
   }
 
   private showSelect(): void {

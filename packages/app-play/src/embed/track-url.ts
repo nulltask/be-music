@@ -3,6 +3,14 @@ import { resolveURLLoadFetchURL } from '../url-load.ts';
 /** How the embed plays a chart: `'preview'` plays it in AUTO like a video, `'play'` lets the viewer play it. */
 export type EmbedMode = 'preview' | 'play';
 
+/**
+ * Whether the embed waits for a tap before downloading the track: on a phone or tablet (`touchFirst`), whose data may
+ * be metered, and wherever the browser asks to save data. A desktop downloads at once.
+ */
+export function embedWaitsToDownload(device: { touchFirst: boolean }, saveData: boolean | undefined): boolean {
+  return device.touchFirst || saveData === true;
+}
+
 /** The mode the embed's AUTO checkbox picks: checked plays in AUTO (`'preview'`), cleared lets the viewer play. */
 export function embedModeOfAutoPlay(autoPlay: boolean): EmbedMode {
   return autoPlay ? 'preview' : 'play';

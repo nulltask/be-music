@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { embedModeOfAutoPlay, embedStageTapPauses, parseEmbedTrack } from './track-url.ts';
+import { embedModeOfAutoPlay, embedStageTapPauses, embedWaitsToDownload, parseEmbedTrack } from './track-url.ts';
 
 const PAGE = 'https://play.be-music.app/embed/';
 
@@ -37,6 +37,13 @@ describe('parseEmbedTrack', () => {
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&mode=preview`)?.mode).toBe('preview');
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&mode=auto`)?.mode).toBe('preview');
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip`)?.mode).toBe('preview');
+  });
+
+  it('waits for a tap before downloading on a phone or tablet, or when the browser saves data', () => {
+    expect(embedWaitsToDownload({ touchFirst: true }, undefined)).toBe(true);
+    expect(embedWaitsToDownload({ touchFirst: false }, true)).toBe(true);
+    expect(embedWaitsToDownload({ touchFirst: false }, false)).toBe(false);
+    expect(embedWaitsToDownload({ touchFirst: false }, undefined)).toBe(false);
   });
 
   it("turns the AUTO checkbox into the AUTO preview or the viewer's play", () => {
