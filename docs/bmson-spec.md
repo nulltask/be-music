@@ -99,6 +99,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [x] `bga.bga_events` output
 - [x] `bga.layer_events` output
 - [x] `bga.poor_events` output
+- [x] Ordinary BMS BGA becomes native bmson BGA: each `#BMPxx` gets a header id after any native id (never 0, which bmson reads as a clear), and `04` / `07` / `06` cues become base / layer / POOR events at the output resolution. A cue to an undefined image keeps an id without a header and shows nothing. `#BMP00` becomes a POOR event at y = 0, as Be-Music shows it until the first POOR cue; `#POORBGA 2` writes no POOR events. `0A`, `#BGAxx` crops, `#EXBMPxx` keys, `#ARGBxx` / `#SWBGAxx` and channels `0B`–`0E` / `A1`–`A5` have no native form and are reported through `onDiagnostic`, as are layer black transparency and `#POORBGA 1` (#839)
 - [x] Preserve explicit `lines: []` through `bmson.barlinesSuppressed`
 - [ ] `bpm_events` Normalize and output events with the same `y` to "last priority"
 - [ ] `stop_events` Add and normalize events of the same `y` and output

@@ -388,7 +388,7 @@ Header and object interpretation follows the support tables above and this docum
 - Determine intra-measure resolution from denominator information of `position`
 - For the same measure and same channel, the least common multiple of the denominator is used.
 - If `--maxResolution` is specified, it will be aborted at the upper limit.
-- A chart read from bmson is converted where BMS spells things differently: long notes become `#LNTYPE 1` pairs on `5x` / `6x` with `#LNMODE` from `ln_type` / `t`, a mine's value becomes its damage in base 36 (its sample becomes `#WAV00`), `judge_rank` becomes `#DEFEXRANK`, and the percentage `total` is not written as `#TOTAL`. Details: [bmson spec — Converting between BMS and bmson](./bmson-spec.md#converting-between-bms-and-bmson)
+- A chart read from bmson is converted where BMS spells things differently: long notes become `#LNTYPE 1` pairs on `5x` / `6x` with `#LNMODE` from `ln_type` / `t`, a mine's value becomes its damage in base 36 (its sample becomes `#WAV00`), `judge_rank` becomes `#DEFEXRANK`, and the percentage `total` is not written as `#TOTAL`. Native bmson BGA becomes `#BMPxx` resources on unused two-character keys and `04` / `07` / `06` objects at their pulses; a clear (id 0) or an id without a header points at one undefined key. bmson sequences, `id_set`, conditions and intervals have no BMS form and are reported through `onDiagnostic` and skipped, as is the difference in layer black transparency (#840). Details: [bmson spec — Converting between BMS and bmson](./bmson-spec.md#converting-between-bms-and-bmson)
 
 ## Evaluation rules for control constructs
 
