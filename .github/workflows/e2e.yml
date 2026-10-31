@@ -51,20 +51,27 @@ jobs:
               - '!**/*.md'
 
   e2e:
-    name: E2E (${{ github.event_name == 'pull_request' && 'smoke' || inputs.scope || 'full' }})
+    name: E2E (${{ github.event_name == 'pull_request' && 'smoke' || inputs.scope || 'full' }}${{ matrix.shards > 1 && format(' {0}/{1}', matrix.shard, matrix.shards) || '' }})
     needs: changes
     # `changes` is skipped outside pull requests; run regardless of that, but only on a player change in a pull request.
     if: |
       always() &&
       (github.event_name != 'pull_request' || needs.changes.outputs.player == 'true')
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 30 || 150 }}
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 30 || 90 }}
+    # The 4-vCPU runner renders in software: several browsers at once space frames far enough apart that tests pressing
+    # keys at a time on the page miss their windows or race the end of a short chart (#792). The full run is split over
+    # four runners with one browser each; the smoke run stays on one runner with four.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON((github.event_name == 'pull_request' || inputs.scope == 'smoke' || inputs.grep != '' && inputs.grep != null) && '[1]' || '[1, 2, 3, 4]') }}
+        shards: ${{ fromJSON((github.event_name == 'pull_request' || inputs.scope == 'smoke' || inputs.grep != '' && inputs.grep != null) && '[1]' || '[4]') }}
     env:
       CI: 'true'
-      # The 4-vCPU runner renders in software: four browsers at once space frames far enough apart that tests pressing
-      # keys at a time on the page miss their windows or race the end of a short chart (#792). The smoke run keeps 4.
-      E2E_WORKERS: ${{ (github.event_name == 'pull_request' || inputs.scope == 'smoke') && 4 || 2 }}
+      E2E_WORKERS: ${{ (github.event_name == 'pull_request' || inputs.scope == 'smoke') && 4 || 1 }}
       E2E_GREP: ${{ inputs.grep || ((github.event_name == 'pull_request' || inputs.scope == 'smoke') && '@smoke' || '') }}
+      E2E_SHARD: ${{ matrix.shard }}/${{ matrix.shards }}
 
     steps:
       - name: Checkout
@@ -89,17 +96,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "$E2E_GREP" ]; then
-            pnpm run test:e2e --grep "$E2E_GREP"
-          else
-            pnpm run test:e2e
-          fi
+          args=(--shard "$E2E_SHARD")
+          if [ -n "$E2E_GREP" ]; then args+=(--grep "$E2E_GREP"); fi
+          pnpm run test:e2e "${args[@]}"
 
       - name: Upload report
         if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-report-${{ github.run_id }}
+          name: e2e-report-${{ github.run_id }}-${{ matrix.shard }}
           path: |
             packages/app-play/e2e-report/
             packages/app-play/e2e-results/
