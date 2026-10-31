@@ -20,6 +20,15 @@ describe('areEventBmsonExtensionsEqual', () => {
     expect(areEventBmsonExtensionsEqual({ c: true }, undefined)).toBe(false);
     expect(areEventBmsonExtensionsEqual({ up: true }, { up: false })).toBe(false);
     expect(areEventBmsonExtensionsEqual({ t: 1 }, { t: 2 })).toBe(false);
+    expect(
+      areEventBmsonExtensionsEqual(
+        { extraFields: { vendor: { a: [null, 1], b: false } } },
+        { extraFields: { vendor: { b: false, a: [null, 1] } } },
+      ),
+    ).toBe(true);
+    expect(
+      areEventBmsonExtensionsEqual({ extraFields: { vendor: [null, 1] } }, { extraFields: { vendor: [1, null] } }),
+    ).toBe(false);
   });
 });
 

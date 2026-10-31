@@ -16,6 +16,10 @@ export function registerStringifierExportsCases(define: DefineBenchmarkCase): vo
   define('chart-writer.stringifyBmson', {
     run: (fixtures) => {
       stringifierAPI.stringifyBmson(fixtures.sampleBmsonJSON);
+      stringifierAPI.stringifyBmson({
+        ...fixtures.sampleBmsonJSON,
+        bmson: { ...fixtures.sampleBmsonJSON.bmson, extraFields: { vendor: { tags: [null, 1] } } },
+      });
     },
   });
 }

@@ -12,7 +12,13 @@ import {
 } from '@be-music/chart-source';
 
 export function areEventBmsonExtensionsEqual(left: BeMusicEvent['bmson'], right: BeMusicEvent['bmson']): boolean {
-  return left?.l === right?.l && left?.c === right?.c && left?.up === right?.up && left?.t === right?.t;
+  return (
+    left?.l === right?.l &&
+    left?.c === right?.c &&
+    left?.up === right?.up &&
+    left?.t === right?.t &&
+    areJSONValuesEqual(left?.extraFields, right?.extraFields)
+  );
 }
 
 export function areBMSChartsEquivalent(left: BeMusicJSON, right: BeMusicJSON): boolean {
@@ -142,7 +148,13 @@ function areBMSExtensionsEqual(left: BeMusicJSON['bms'], right: BeMusicJSON['bms
 
 function areBmsonExtensionsEqual(left: BeMusicJSON['bmson'], right: BeMusicJSON['bmson']): boolean {
   return (
-    left.version === right.version && areBmsonInfoEqual(left.info, right.info) && areBmsonBGAEqual(left.bga, right.bga)
+    left.version === right.version &&
+    areJSONValuesEqual(left.extraFields, right.extraFields) &&
+    areJSONValuesEqual(left.channelExtraFields, right.channelExtraFields) &&
+    areJSONValuesEqual(left.channelKinds, right.channelKinds) &&
+    areJSONValuesEqual(left.lineExtraFields, right.lineExtraFields) &&
+    areBmsonInfoEqual(left.info, right.info) &&
+    areBmsonBGAEqual(left.bga, right.bga)
   );
 }
 
@@ -231,6 +243,7 @@ function areBMSObjectLineEqual(left: BMSObjectLineEntry, right: BMSObjectLineEnt
 
 function areBmsonInfoEqual(left: BeMusicJSON['bmson']['info'], right: BeMusicJSON['bmson']['info']): boolean {
   return (
+    areJSONValuesEqual(left.extraFields, right.extraFields) &&
     left.title === right.title &&
     left.subtitle === right.subtitle &&
     left.artist === right.artist &&
@@ -252,7 +265,8 @@ function areBmsonInfoEqual(left: BeMusicJSON['bmson']['info'], right: BeMusicJSO
 
 function areBmsonBGAEqual(left: BeMusicJSON['bmson']['bga'], right: BeMusicJSON['bmson']['bga']): boolean {
   return (
-    JSON.stringify(left.sequences ?? []) === JSON.stringify(right.sequences ?? []) &&
+    areJSONValuesEqual(left.extraFields, right.extraFields) &&
+    areJSONValuesEqual(left.sequences ?? [], right.sequences ?? []) &&
     areBmsonBGAHeadersEqual(left.header, right.header) &&
     areBmsonBGAEventsEqual(left.events, right.events) &&
     areBmsonBGAEventsEqual(left.layerEvents, right.layerEvents) &&
@@ -264,6 +278,13 @@ function areBmsonBGAHeadersEqual(
   left: BeMusicJSON['bmson']['bga']['header'],
   right: BeMusicJSON['bmson']['bga']['header'],
 ): boolean {
+  if (
+    !areJSONValuesEqual(
+      left.map((item) => item.extraFields),
+      right.map((item) => item.extraFields),
+    )
+  )
+    return false;
   if (left.length !== right.length) {
     return false;
   }
@@ -279,6 +300,13 @@ function areBmsonBGAEventsEqual(
   left: BeMusicJSON['bmson']['bga']['events'],
   right: BeMusicJSON['bmson']['bga']['events'],
 ): boolean {
+  if (
+    !areJSONValuesEqual(
+      left.map((item) => item.extraFields),
+      right.map((item) => item.extraFields),
+    )
+  )
+    return false;
   if (left.length !== right.length) {
     return false;
   }
@@ -297,6 +325,13 @@ function areBmsonBGAEventsEqual(
 }
 
 function areBmsonBPMEventsEqual(left: BmsonBPMEventEntry[], right: BmsonBPMEventEntry[]): boolean {
+  if (
+    !areJSONValuesEqual(
+      left.map((item) => item.extraFields),
+      right.map((item) => item.extraFields),
+    )
+  )
+    return false;
   if (left.length !== right.length) {
     return false;
   }
@@ -309,6 +344,13 @@ function areBmsonBPMEventsEqual(left: BmsonBPMEventEntry[], right: BmsonBPMEvent
 }
 
 function areBmsonStopEventsEqual(left: BmsonStopEventEntry[], right: BmsonStopEventEntry[]): boolean {
+  if (
+    !areJSONValuesEqual(
+      left.map((item) => item.extraFields),
+      right.map((item) => item.extraFields),
+    )
+  )
+    return false;
   if (left.length !== right.length) {
     return false;
   }
@@ -321,6 +363,13 @@ function areBmsonStopEventsEqual(left: BmsonStopEventEntry[], right: BmsonStopEv
 }
 
 function areBmsonScrollEventsEqual(left: BmsonScrollEventEntry[], right: BmsonScrollEventEntry[]): boolean {
+  if (
+    !areJSONValuesEqual(
+      left.map((item) => item.extraFields),
+      right.map((item) => item.extraFields),
+    )
+  )
+    return false;
   if (left.length !== right.length) {
     return false;
   }
@@ -333,6 +382,13 @@ function areBmsonScrollEventsEqual(left: BmsonScrollEventEntry[], right: BmsonSc
 }
 
 function areBmsonSoundChannelsEqual(left: BmsonSoundChannelEntry[], right: BmsonSoundChannelEntry[]): boolean {
+  if (
+    !areJSONValuesEqual(
+      left.map((item) => item.extraFields),
+      right.map((item) => item.extraFields),
+    )
+  )
+    return false;
   if (left.length !== right.length) {
     return false;
   }
@@ -348,6 +404,13 @@ function areBmsonSoundNotesEqual(
   left: BmsonSoundChannelEntry['notes'],
   right: BmsonSoundChannelEntry['notes'],
 ): boolean {
+  if (
+    !areJSONValuesEqual(
+      left.map((item) => item.extraFields),
+      right.map((item) => item.extraFields),
+    )
+  )
+    return false;
   if (left.length !== right.length) {
     return false;
   }
@@ -418,4 +481,23 @@ function areNumberArraysEqual(left: number[], right: number[]): boolean {
     }
   }
   return true;
+}
+
+/** Object order is immaterial; array order and all opaque values remain significant. */
+function areJSONValuesEqual(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  if (Array.isArray(left) || Array.isArray(right))
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => areJSONValuesEqual(value, right[index]))
+    );
+  const a = left as Record<string, unknown>,
+    b = right as Record<string, unknown>;
+  return (
+    Object.keys(a).length === Object.keys(b).length &&
+    Object.keys(a).every((key) => Object.hasOwn(b, key) && areJSONValuesEqual(a[key], b[key]))
+  );
 }

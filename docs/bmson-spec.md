@@ -69,7 +69,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [ ] When the same `id` of `bga.bga_header` is defined multiple times, it is interpreted as the winner.
 - [x] Acceptance of `info.title_image` and retention in IR
 - [x] Retention rules for `key:value` format (`music:`/`chart:` etc.) of `subartists`
-- [ ] Transparent preservation of unknown root keys
+- [x] Preserve unknown root fields as opaque data
 
 ### chart-writer (`@be-music/chart-source` -> bmson)
 
@@ -104,7 +104,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - [ ] `stop_events` Add and normalize events of the same `y` and output
 - [x] Output of `info.title_image`
 - [ ] Path-separated normalization and dangerous path removal for `sound_channels[].name`
-- [ ] Transparent reoutput of unknown root key
+- [x] Re-emit opaque root fields
 - [~] Strictly maintain the original value of `notes.x` (exact identity is not guaranteed as lanes are reallocated in IR)
 
 ### player / chart-audio-renderer (bmson playback behavior)
@@ -292,9 +292,9 @@ The model exports `buildBmsonBGAEventTimeline` and `pickBmsonBGASequenceFrame`. 
 
 The engine now publishes active sequence state as `PlayerUIFramePayload.bmsonBGA`, and browser/terminal rendering loads every referenced alternative and draws that state with native alpha, placement and movie frame clocks. Browser Native, Canvas, LR2 and beatoraja share the same engine frame; MISS can outlive the ordinary 500 ms window and uses an explicit movie frame start. NO LAYER, NO POOR and POORBGA 2 still apply. PLAY/MISS judgments, ALWAYS repeats, millisecond intervals and ordered image-set choices follow [ADR 0022](./adr/0022-bmson-bga-events.md). AUTO/replay seek rebuilds the exact trigger effects; manual seek clears live history. `buildBmsonBGAEventTimeline` accepts `includeOrdinaryLayerClears` so the engine cancels an old conditional program at a later ordinary image cue. NONSTOP preserves stage-owned frame references, trimmed ALWAYS phase, FIT timing and exclusive stage ends through `NonstopStitchMap.bmsonBGA`; hosts supply `bmsonBGACues` to the engine and resource loaders. These execution rules extend the upstream renderer, which currently draws only MISS event layers and does not consume event intervals; complete upstream playback parity is not claimed.
 
-## Unsupported/incompatible for primary references
+## Compatibility and retention policies
 
-- Not supported: transparent retention of unused unknown root keys in bmson
+Unknown JSON data uses optional `extraFields` envelopes on root/info, notes, timing and BGA nodes; channel and barline annotations use slot/pulse maps. The writer filters reserved supported keys before merging, including invalid known values omitted by normalization. Annotation edits invalidate stale preservation. Unknown fields never change playback or fingerprints; hidden-note `damage` remains inert data. Exact source-byte retention, discarded invalid records, native BMS annotations and arbitrary composition of source-container metadata are outside this policy. [ADR 0029](./adr/0029-opaque-bmson-fields.md) defines the contract.
 
 ## y -> position conversion rule
 

@@ -450,3 +450,7 @@ flowchart LR
 - `chart-writer` は `position` 分母情報を使って小節内解像度を決定します
 - `parseJson` は `position` タプルを必須とし、欠損イベントはエラー扱いにします
 - beat 変換やイベント順序などの譜面意味論 helper は `@be-music/chart-model` が提供します
+
+## 不透明な bmson データ
+
+任意の `extraFields: JSONFields` は、bmson ノードの対応済みの意味を持たないソースキーを保持します。ノート・タイミング注釈は `BeMusicEvent.bmson` に付けます。`bmson.channelExtraFields` は WAV スロットごとのチャンネルデータ、`channelKinds` は sound・key・mine の所属、`lineExtraFields` は正規化済み pulse ごとの小節線データです。`JSONValue` は有限の JSON データを表し、`cloneJSONFields` が独立したコピーを作り、`collectBmsonExtraFields` が型ごとに対応済みの予約キーを除外します。parser は JSON 再読込でこれらを保持し、実行・fingerprint には使いません。外部 bmson の `extraFields` というキー自体は、IR 境界ではなく envelope の内側に保持します。[ADR 0029](./adr/0029-opaque-bmson-fields.ja.md) を参照してください。
