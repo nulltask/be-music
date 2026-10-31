@@ -148,6 +148,62 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
 }
 
 for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
+  // A standard SWBGA only animates through A5 input. One sharing its id with a cued BMP must not swap that plane, as
+  // the former cue-driven helper did in the browser families.
+  test(`${family} keeps a cued BMP when an unselected SWBGA shares its id`, async ({ player }) => {
+    await player.open({ 'be-music.built-in-skin': family === 'native' ? 'native' : 'plain' });
+    if (family === 'lr2' || family === 'beatoraja') await player.drop(`skins/${family}`);
+    const before = (await player.state()).loads;
+    await player.page.evaluate(async () => {
+      const files: File[] = [];
+      for (const name of ['blue.png', 'strip.png']) {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 256;
+        const context = canvas.getContext('2d')!;
+        context.fillStyle = name === 'blue.png' ? '#154fe3' : '#ed174b';
+        context.fillRect(0, 0, 256, 256);
+        const blob = await new Promise<Blob>((resolve) => canvas.toBlob((value) => resolve(value!), 'image/png'));
+        files.push(new File([blob], name));
+      }
+      files.push(
+        new File(
+          [
+            [
+              '#TITLE SWBGA id collision',
+              '#BPM 120',
+              '#POORBGA 2',
+              '#BMP05 blue.png',
+              '#BMP00 strip.png',
+              '#SWBGA05 100:500:11:1:255,255,255,255 0000',
+              '#00004:05',
+              '#00411:01',
+              '',
+            ].join('\n'),
+          ],
+          'collision.bms',
+        ),
+      );
+      for (const file of files) Object.defineProperty(file, 'webkitRelativePath', { value: file.name });
+      const event = new Event('drop', { cancelable: true });
+      Object.defineProperty(event, 'dataTransfer', { value: { items: [], files, types: ['Files'] } });
+      window.dispatchEvent(event);
+    });
+    await player.waitFor((state) => state.loads > before && !state.loading, 'SWBGA collision chart');
+    await player.key('Enter');
+    await player.waitFor(
+      (state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.2,
+      'SWBGA collision play',
+    );
+    await expect.poll(() => correctPixels(player, 'base')).toBe(true);
+    // The legacy path showed frame 00 (red) from 0.1 s after the cue; the base must stay blue.
+    for (let sample = 0; sample < 6; sample++) {
+      expect(await correctPixels(player, 'base')).toBe(true);
+      await player.page.waitForTimeout(150);
+    }
+  });
+}
+
+for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
   test(`${family} updates keyed SWBGA video crops and restarts them on fresh input`, async ({ player }, info) => {
     await player.open({ 'be-music.built-in-skin': family === 'native' ? 'native' : 'plain' });
     if (family === 'lr2' || family === 'beatoraja') await player.drop(`skins/${family}`);

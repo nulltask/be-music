@@ -579,7 +579,6 @@ export class PlaySession extends PlaySessionState {
     this.bombJudge.clear();
     this.keyBeamFadeStartedAt.clear();
     this.wavCmdVolumeMultipliers.clear();
-    this.switchingBGAs.clear();
     this.bgaSubRegionOrigins.clear();
     this.playState = createPlayState();
     this.notes = [];
