@@ -11,6 +11,7 @@ import { structureStyles } from '../styles/structure.ts';
  * along the bottom of the stage. Lay it over `be-music-playfield`; the volume, mute and full-screen state are the
  * host's, set as properties, and so is hiding the controls (`controlsHidden`) while the viewer is idle. A click on the
  * stage pauses and resumes the play unless the host turns it off (`stageTapPauses`), as it does while the viewer plays.
+ * A paused play shows a centred play button and, under it, Back (`quit-request`), which leaves the play.
  */
 export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFrame> {
   static override properties: PropertyDeclarations = {
@@ -123,6 +124,14 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
         background: none;
         fill: currentColor;
       }
+      /* Leaves a paused play: the way back to the list for a phone or tablet, which has no Escape key. */
+      .back {
+        position: absolute;
+        left: 50%;
+        top: calc(50% + clamp(30px, 10cqh, 52px) / 2 + 2.4em);
+        transform: translateX(-50%);
+        pointer-events: auto;
+      }
       be-music-playback-controls {
         position: absolute;
         left: 0;
@@ -220,14 +229,23 @@ export class BeMusicPreviewHUDElement extends FrameElement<BeMusicDOMGameplayFra
       ${
         f.stage === 'paused'
           ? html`<button
-              class="btn resume"
-              data-size="icon-lg"
-              part="resume"
-              aria-label="Play"
-              @click=${() => this.emit('pause-request', undefined)}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
-            </button>`
+                class="btn resume"
+                data-size="icon-lg"
+                part="resume"
+                aria-label="Play"
+                @click=${() => this.emit('pause-request', undefined)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+              </button>
+              <button
+                class="btn back"
+                data-size="sm"
+                data-variant="outline"
+                part="back"
+                @click=${() => this.emit('quit-request', undefined)}
+              >
+                Back
+              </button>`
           : nothing
       }
       <be-music-playback-controls
