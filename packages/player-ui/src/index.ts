@@ -28,6 +28,7 @@ export { BeMusicPreviewSelectElement } from './components/preview-select.ts';
 export { BeMusicPreviewStartElement } from './components/preview-start.ts';
 export { formatPlaybackTime, resolveSeekTarget } from './playback.ts';
 export {
+  PREVIEW_CONTROLS_CSS_HEIGHT,
   PREVIEW_CONTROLS_RATIO,
   PREVIEW_GUTTER,
   PREVIEW_INFO_BELOW_HEIGHT,
@@ -35,6 +36,7 @@ export {
   PREVIEW_PORTRAIT_FONT_RATIO,
   PREVIEW_PORTRAIT_INFO_HEIGHT,
   previewContentBottom,
+  previewJudgementInset,
   resolvePreviewBGARect,
   resolvePreviewInfoBox,
   resolvePreviewPortrait,

@@ -4,6 +4,19 @@ import { resolveURLLoadFetchURL } from '../url-load.ts';
 export type EmbedMode = 'preview' | 'play';
 
 /**
+ * Whether the embed waits for a tap before downloading the track: on a phone or tablet (`touchFirst`), whose data may
+ * be metered, and wherever the browser asks to save data. A desktop downloads at once.
+ */
+export function embedWaitsToDownload(device: { touchFirst: boolean }, saveData: boolean | undefined): boolean {
+  return device.touchFirst || saveData === true;
+}
+
+/** The mode the embed's AUTO checkbox picks: checked plays in AUTO (`'preview'`), cleared lets the viewer play. */
+export function embedModeOfAutoPlay(autoPlay: boolean): EmbedMode {
+  return autoPlay ? 'preview' : 'play';
+}
+
+/**
  * Whether a click or tap on the stage pauses the play, as it does a video. Not while the viewer plays (`'play'`): a tap
  * there is part of playing, not a request to stop, so only the controls bar and the play's own keys pause it.
  */

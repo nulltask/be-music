@@ -1,5 +1,17 @@
 # @be-music/worker-play
 
+## 0.1.4
+
+### Patch Changes
+
+- c6437bc: `/__url-load-proxy` now answers a `HEAD` request with the archive's `Content-Length` (unless it travels compressed), so the embed can show the download size before downloading.
+
+## 0.1.3
+
+### Patch Changes
+
+- afcbc07: An embed `?track=` or player `?music=` archive from another origin was downloaded in full on every load, because `/__url-load-proxy` answered `no-store` and dropped the host's validators. The proxy now answers `no-cache` and passes `ETag` / `Last-Modified` and the browser's `If-None-Match` / `If-Modified-Since` through, so an unchanged archive comes back as a 304 from the browser's cache.
+
 ## 0.1.2
 
 ### Patch Changes

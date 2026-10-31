@@ -3,12 +3,16 @@ import { repeat } from 'lit/directives/repeat.js';
 import type { LibraryChart, LibraryCourse } from '@be-music/player-skin-sdk';
 import { BeMusicElement } from '../base.ts';
 import { structureStyles } from '../styles/structure.ts';
+import { renderAutoPlayCheck } from './auto-play-check.ts';
 
 type PreviewRow = Pick<LibraryChart, 'id' | 'title' | 'subtitle' | 'artist' | 'genre' | 'playLevel'> & {
   disabled: boolean;
 };
 
-/** The charts or courses of a previewed track; picking one requests it (`activate-request`, by index). */
+/**
+ * The charts or courses of a previewed track; picking one requests it (`activate-request`, by index). With `autoPlay`
+ * set, the header has an AUTO checkbox, whose change requests `auto-play-change`.
+ */
 export class BeMusicPreviewSelectElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
     charts: { attribute: false },
@@ -16,6 +20,8 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
     heading: {},
     /** Object URLs of each chart's `#STAGEFILE`, or its `#BANNER` when it has no stage file. Keyed by chart id. */
     images: { attribute: false },
+    /** AUTO plays the pick by itself; off, the viewer plays it. No checkbox while unset. */
+    autoPlay: { attribute: false },
   };
   static override styles: CSSResultGroup = [
     structureStyles,
@@ -30,6 +36,28 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
         gap: 10px;
         height: 100%;
         padding: 16px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-width: 0;
+        /* Ends where the rows do, short of the list's scrollbar gutter. */
+        padding-right: 12px;
+      }
+      h2 {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .auto-play {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.9em;
+        white-space: nowrap;
+        cursor: pointer;
       }
       ul {
         display: grid;
@@ -100,6 +128,7 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
   declare charts: readonly LibraryChart[] | undefined;
   declare heading: string | undefined;
   declare images: ReadonlyMap<string, string> | undefined;
+  declare autoPlay: boolean | undefined;
 
   protected override render(): TemplateResult {
     const courses = this.courses;
@@ -116,7 +145,10 @@ export class BeMusicPreviewSelectElement extends BeMusicElement {
           }))
         : (this.charts ?? []).map((chart) => ({ ...chart, disabled: false }));
     return html`<div class="layout">
-      <h2 part="heading">${this.heading ?? (courses !== undefined ? 'Choose a course' : 'Choose a chart')}</h2>
+      <header part="header">
+        <h2 part="heading">${this.heading ?? (courses !== undefined ? 'Choose a course' : 'Choose a chart')}</h2>
+        ${renderAutoPlayCheck(this.autoPlay, (autoPlay) => this.emit('auto-play-change', { autoPlay }))}
+      </header>
       <ul part="list" aria-label=${courses !== undefined ? 'Courses' : 'Charts'}>
         ${repeat(
           rows,
