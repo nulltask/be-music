@@ -624,7 +624,7 @@ function normalizeBmsonBGAEventEntries(input: unknown, fromIR = false): BeMusicJ
     const interval = normalizePositiveInteger(raw.interval);
     entries.push({
       y,
-      id: id ?? 0,
+      ...(id !== undefined ? { id } : {}),
       ...readBmsonExtraFields(raw, 'bgaEvent', fromIR),
       ...(idSet !== undefined ? { idSet } : {}),
       ...(typeof raw.condition === 'string' ? { condition: raw.condition } : {}),

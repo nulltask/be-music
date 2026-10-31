@@ -71,10 +71,8 @@ test.each([false, true])('all populated scopes survive direct and Be-Music JSON 
   );
   expect(output.key_channels[0]).toMatchObject(source.key_channels[0]!);
   expect(output.mine_channels[0]).toMatchObject(source.mine_channels[0]!);
-  expect(output.bga).toEqual({
-    ...source.bga,
-    layer_events: source.bga.layer_events.map((entry) => ({ id: 0, ...entry })),
-  });
+  // An omitted event id stays omitted (#855).
+  expect(output.bga).toEqual(source.bga);
 });
 
 test('annotations follow edited notes, removed notes disappear, and channel containers keep their own data', () => {
