@@ -34,6 +34,8 @@ async function downloadedText(download: Download): Promise<string> {
 }
 
 test('makes, saves, cancels, renames, deletes and exports courses', async ({ player }) => {
+  // Hundreds of UI steps: the CI runner spends seconds per click (#792).
+  test.setTimeout(360_000);
   const { page } = player;
   await openWithLibrary(player);
   const card = page.locator('aside.course-maker-card');
