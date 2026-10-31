@@ -17,6 +17,7 @@ import {
   defineBeMusicElements,
   paintPlayfieldParts,
   PREVIEW_GUTTER,
+  previewJudgementInset,
   resolvePreviewBGARect as resolvePreviewBGARectOnStage,
   resolvePreviewPortrait,
   resolvePlayfieldParts,
@@ -25,8 +26,6 @@ import {
 import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import { ControlsIdleController } from './controls-idle.ts';
 
-/** The controls bar along the bottom of the stage takes this much below the judge line. */
-const CONTROLS_BELOW_JUDGEMENT = 60;
 /** Between HUD redraws (12 a second); a stage, view or seekability change redraws at once. */
 const HUD_INTERVAL_MS = 80;
 
@@ -74,7 +73,7 @@ export function createPreviewStage(size: { width: number; height: number }): BeM
       resize: createPreviewStage,
     };
   }
-  const playfield = { top: 0, judgementY: height - CONTROLS_BELOW_JUDGEMENT, maxRight: width / 2 - PREVIEW_GUTTER };
+  const playfield = { top: 0, judgementY: height - previewJudgementInset(size), maxRight: width / 2 - PREVIEW_GUTTER };
   return {
     width,
     height,

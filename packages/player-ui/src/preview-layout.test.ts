@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { resolvePreviewBGARect, resolvePreviewInfoBox, resolvePreviewPortrait } from './preview-layout.ts';
+import {
+  PREVIEW_CONTROLS_CSS_HEIGHT,
+  previewJudgementInset,
+  resolvePreviewBGARect,
+  resolvePreviewInfoBox,
+  resolvePreviewPortrait,
+} from './preview-layout.ts';
 
 const stage = { width: 854, height: 480 };
 
@@ -37,7 +43,7 @@ describe('resolvePreviewPortrait', () => {
       bga: { x: 55, y: 16, w: 370, h: 370 },
       info: { left: 16, top: 398, right: 464, bottom: 618 },
       laneTop: 634,
-      judgementY: 858,
+      judgementY: 942,
     });
     expect(resolvePreviewBGARect(stage, 427)).toEqual({ x: 55, y: 16, w: 370, h: 370 });
   });
@@ -48,7 +54,7 @@ describe('resolvePreviewPortrait', () => {
       bga: { x: 16, y: 16, w: 224, h: 224 },
       info: { left: 264, top: 16, right: 464, bottom: 240 },
       laneTop: 256,
-      judgementY: 514,
+      judgementY: 543,
     });
   });
 
@@ -60,8 +66,20 @@ describe('resolvePreviewPortrait', () => {
       if (!besideBGA) expect(bga.y + bga.h).toBeLessThan(info.top);
       expect(Math.max(bga.y + bga.h, info.bottom)).toBeLessThan(laneTop);
       expect(laneTop).toBeLessThan(judgementY);
-      expect(judgementY).toBeLessThan(Math.round(height * 0.86));
+      // Lower than the 36 px above the controls' 14 % share of the height the lanes used to stop at.
+      expect(judgementY).toBeGreaterThan(Math.round(height * 0.86) - 36);
+      // On every phone from 320 CSS px wide up, the lanes end at least 16 stage px above the seek bar.
+      for (const cssWidth of [320, 375, 430, 768]) {
+        const controlsTop = height - (PREVIEW_CONTROLS_CSS_HEIGHT * 480) / cssWidth;
+        expect(judgementY).toBeLessThanOrEqual(controlsTop - 16);
+      }
     }
+  });
+
+  it('keeps the lanes clear of the controls by their height on the smallest phone, and a gap, either way up', () => {
+    // 54 CSS px × 480 / 320 = 81 stage px, and 16 more.
+    expect(previewJudgementInset({ width: 480, height: 1039 })).toBe(97);
+    expect(previewJudgementInset({ width: 1039, height: 480 })).toBe(97);
   });
 
   it('is unused on a landscape stage', () => {
