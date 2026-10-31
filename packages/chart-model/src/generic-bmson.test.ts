@@ -30,13 +30,39 @@ test('recognizes numeric generic hints without accepting unsupported counts or t
   expect(resolveGenericBmsonKeyCount('generic-1key')).toBe(1);
   expect(resolveGenericBmsonKeyCount('generic-070keys')).toBe(70);
   for (const value of [undefined, null, 8, 'beat-7k']) expect(resolveGenericBmsonKeyCount(value)).toBeUndefined();
-  for (const value of ['generic-0keys', 'generic-71keys', 'generic-99keys', `generic-${'9'.repeat(1000)}keys`]) {
-    expect(() => resolveGenericBmsonKeyCount(value)).toThrow(RangeError);
-    expect(() =>
-      parseBmson(JSON.stringify({ version: '1.0.0', info: { init_bpm: 120, mode_hint: value }, sound_channels: [] })),
-    ).toThrow(RangeError);
-  }
 });
+
+test.each([
+  'generic-0keys',
+  'generic-71keys',
+  'generic-99keys',
+  `generic-${'9'.repeat(1000)}keys`,
+  'generic-7k',
+  'generic-',
+])(
+  'reads the malformed or unsupported hint %s as an unknown hint (beat-7k where its lanes fit), as beatoraja does',
+  (value) => {
+    expect(resolveGenericBmsonKeyCount(value)).toBeUndefined();
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, mode_hint: value },
+        sound_channels: [
+          {
+            name: 'note.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 7, y: 240 },
+            ],
+          },
+        ],
+      }),
+    );
+    const resolved = resolveChart(json);
+    expect(resolved.playVariant).toBe('7');
+    expect(resolved.notes.map((note) => note.channel)).toEqual(['11', '19']);
+  },
+);
 
 test.each([1, 6, 7, 8, 9, 10, 14, 24, 35, 36, 48, 70])(
   'retains a sparse %s-key generic keyboard as its own variant with every key and no FREE ZONE',
@@ -92,13 +118,3 @@ test('rejects unsupported generic host variants explicitly', () => {
   for (const variant of ['generic-0', 'generic-71', 'generic-1.5'] as const)
     expect(() => getPlayModeLayouts(variant)).toThrow();
 });
-
-test.each(['generic-foo', 'generic-1.5keys', 'generic--1keys', 'generic-Infinitykeys'])(
-  'rejects malformed generic syntax %s without beat-mode fallback',
-  (hint) => {
-    expect(() => resolveGenericBmsonKeyCount(hint)).toThrow(TypeError);
-    expect(() =>
-      parseBmson(JSON.stringify({ version: '1.0.0', info: { init_bpm: 120, mode_hint: hint }, sound_channels: [] })),
-    ).toThrow(TypeError);
-  },
-);

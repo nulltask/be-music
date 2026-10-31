@@ -305,7 +305,8 @@ function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boo
  * keysound differs from every note kept or returned before them at that position.
  *
  * Long notes are resolved first, so a `5x` / `6x` or `#LNOBJ` long note and a tap on its start compete here and the
- * long note wins — beatoraja also replaces a tap at a `5x` start with the long note. Between notes of the same kind the
+ * long note wins — beatoraja also replaces a tap at a `5x` start with the long note. bmson keeps the first sound
+ * channel's note whatever its length and layers only notes of the same length onto it. Between notes of the same kind the
  * first in sort order wins: beatoraja keeps the later line of a BMS file, but the IR no longer records line order, so
  * the lowest object ID stands in; for bmson this is the first sound channel, which is the note beatoraja judges.
  */
@@ -330,7 +331,8 @@ function collapseSamePositionNotes(notes: MutableNote[], layered: boolean): Muta
       continue;
     }
     let keptIndex = groupStart;
-    for (let index = groupStart; index < groupEnd; index += 1) {
+    // bmson keeps the first sound channel's note, as beatoraja does; BMS prefers a long note over a tap.
+    for (let index = groupStart; !layered && index < groupEnd; index += 1) {
       if (notes[index]!.endBeat !== undefined) {
         keptIndex = index;
         break;
@@ -338,17 +340,12 @@ function collapseSamePositionNotes(notes: MutableNote[], layered: boolean): Muta
     }
     const kept = notes[keptIndex]!;
     if (layered) {
-      for (let index = groupStart; index < groupEnd; index += 1) {
-        if (notes[index]!.endBeat !== kept.endBeat) {
-          throw new RangeError(
-            `bmson layered notes must have equal lengths (lane ${kept.channel}, beat ${kept.beat}).`,
-          );
-        }
-      }
+      // Only notes of the kept length layer onto it. beatoraja warns about and drops a note of another length, sound
+      // included (BMSONDecoder); it stays in `shadowed`, which bmson hosts never schedule.
       const events = new Map<string, BeMusicEvent>();
       for (let index = groupStart; index < groupEnd; index += 1) {
-        const event = notes[index]!.event;
-        if (!events.has(event.value)) events.set(event.value, event);
+        const note = notes[index]!;
+        if (note.endBeat === kept.endBeat && !events.has(note.event.value)) events.set(note.event.value, note.event);
       }
       kept.soundEvents = [...events.values()];
     }

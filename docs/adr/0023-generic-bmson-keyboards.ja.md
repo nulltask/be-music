@@ -8,7 +8,7 @@
 
 ## 決定
 
-対応する generic キーボードを `ChartPlayVariant` の `generic-N`、表示名を `N KEY GENERIC` とする。整数の N は 1〜70 に対応し、ゼロや上限超過は丸めず明示的に拒否する。予約した `generic-` 接頭辞の不正な hint は `TypeError` にする。既存の単数形 `generic-Nkey` も保持する。各キー数の共通レイアウトと bmson 表を生成する。位置 1〜35 は `11..1Z`、36〜70 は `21..2Z` を使うが、すべての列を連続した 1P のキーボードに置く。全列を通常の白キーとし、slot は全体で 1〜N とする。格納バンクの接頭辞や使用ノート数からゲームのモードを決めない。
+対応する generic キーボードを `ChartPlayVariant` の `generic-N`、表示名を `N KEY GENERIC` とする。整数の N は 1〜70 に対応し、丸めない。ゼロ・上限超過・不正な `generic-` の hint は未知の hint とし、beatoraja が未対応の `mode_hint` を読むのと同じく、レーンが収まれば `beat-7k` として読む（#838 のレビューで改訂。当初の ADR は拒否していた）。既存の単数形 `generic-Nkey` も保持する。各キー数の共通レイアウトと bmson 表を生成する。位置 1〜35 は `11..1Z`、36〜70 は `21..2Z` を使うが、すべての列を連続した 1P のキーボードに置く。全列を通常の白キーとし、slot は全体で 1〜N とする。格納バンクの接頭辞や使用ノート数からゲームのモードを決めない。
 
 engine は空の列も含め、宣言されたキーボード全体を入力へ結び付ける。scratch の補助と FREE ZONE の別名は適用しない。beatoraja ruleset はすべての generic のキー数に keyboard の判定と既定 TOTAL の区分を使う。上流のモード列挙には generic がないため、これは Be-Music の規則である。beat 固有の battle／変換操作は利用できない。NONSTOP は宣言した generic のキー数を保ち、異なる配置との混在を拒否する。
 
