@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { parseEmbedTrack } from './track-url.ts';
+import { embedStageTapPauses, parseEmbedTrack } from './track-url.ts';
 
 const PAGE = 'https://play.be-music.app/embed/';
 
@@ -37,6 +37,11 @@ describe('parseEmbedTrack', () => {
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&mode=preview`)?.mode).toBe('preview');
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&mode=auto`)?.mode).toBe('preview');
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip`)?.mode).toBe('preview');
+  });
+
+  it("lets a tap on the stage pause the AUTO preview but not the viewer's own play", () => {
+    expect(embedStageTapPauses('preview')).toBe(true);
+    expect(embedStageTapPauses('play')).toBe(false);
   });
 
   it('reads course file and course name selectors, preserving chart selection when both are supplied', () => {
