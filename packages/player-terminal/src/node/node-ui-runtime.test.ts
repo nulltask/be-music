@@ -216,6 +216,39 @@ describe('node ui runtime', () => {
     expect(messagesOfKind(worker, 'dispose')).toHaveLength(1);
   });
 
+  test('passes remapped SWBGA selections through the UI worker initialization', async () => {
+    const keyBoundBGACues = [
+      {
+        seconds: 2,
+        endSeconds: 4,
+        definitionId: 'stage:0:61',
+        definition: {
+          frameIntervalMs: 100,
+          durationMs: 0,
+          channel: '11',
+          loop: true,
+          argb: { a: 255, r: 255, g: 255, b: 255 },
+          frames: ['longImage'],
+        },
+      },
+    ];
+    const uiSignals = createPlayerUISignalBus(createFrame());
+    const bmsonBGACues = [
+      {
+        seconds: 2,
+        stage: 0,
+        endSeconds: 4,
+        condition: 'play' as const,
+        plane: 'layer' as const,
+        interval: 0,
+        sequences: [{ id: 10, frames: [{ elapsedSeconds: 0, key: 'longImage' }] }],
+      },
+    ];
+    const runtime = await createNodeUIRuntime({ ...createContext(uiSignals), keyBoundBGACues, bmsonBGACues });
+    expect(workerState.lastWorkerOptions?.workerData).toMatchObject({ keyBoundBGACues, bmsonBGACues });
+    await runtime.dispose();
+  });
+
   test('passes the source-conditions exec flag to the UI worker in source runs', async () => {
     const uiSignals = createPlayerUISignalBus(createFrame());
     const runtime = await createNodeUIRuntime(createContext(uiSignals));

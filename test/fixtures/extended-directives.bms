@@ -37,8 +37,8 @@
 * Per-slot playback trims. `01` uses the full `pvf` layout, `02` reorders the
 * flags to prove they are matched positionally, `03` authors an explicit 0 cB
 * (unity) so "authored 0" stays distinguishable from "not authored".
-#EXWAV01 pvf 1024,-200,48000 sample.wav
-#EXWAV02 vp -600,-500 branch.wav
+#EXWAV01 pvf 1024 -200 48000 sample.wav
+#EXWAV02 vp -600 -500 branch.wav
 #EXWAV03 v 0 right.wav
 
 * Opaque backdrop keyed to transparent black, plus a half-alpha layer tint.

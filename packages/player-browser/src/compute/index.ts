@@ -33,3 +33,10 @@ export function runBrowserTask<T>(name: string, input: unknown, fallback: () => 
   return pool.run(name, input, fallback);
 }
 export { executeBrowserTask, type ParseChartTaskInput, type ParseChartTaskResult, type ZipTaskInput } from './tasks.ts';
+export {
+  configureBGAVideoWorkers,
+  type BGAVideoWorker,
+  type BGAVideoWorkerFactories,
+} from '../media/bga-stream/stream.ts';
+export { runBGAVideoDecodeWorker } from '../media/bga-stream/decode-worker.ts';
+export { runBGAVideoEncodeWorker } from '../media/bga-stream/encode-worker.ts';

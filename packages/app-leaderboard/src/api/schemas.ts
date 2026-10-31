@@ -148,8 +148,8 @@ export const submissionResponse = v.object({
   results: described(v.array(rulesetOutcome), 'The play under every ruleset.'),
   unranked: v.optional(
     described(
-      v.picklist(['tempo', 'course-stage']),
-      'Why the play was stored without ranking it: played at another tempo, or a course stage sent on its own. ' +
+      v.picklist(['tempo', 'course-stage', 'bmson-total']),
+      'Why the play was stored without ranking it: another tempo, a standalone course stage, or bmson zero-total no recovery. ' +
         'It moves no personal best and stays out of the rankings and lists.',
     ),
   ),
@@ -251,8 +251,8 @@ export const courseSubmissionResponse = v.object({
   results: described(v.array(courseRulesetOutcome), 'The run under every ruleset.'),
   unranked: v.optional(
     described(
-      v.picklist(['tempo', 'unreleased']),
-      'Why the run was stored without ranking it: a stage played at another tempo, or a course that is not ' +
+      v.picklist(['tempo', 'unreleased', 'bmson-total']),
+      'Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, or a course that is not ' +
         'released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists.',
     ),
   ),

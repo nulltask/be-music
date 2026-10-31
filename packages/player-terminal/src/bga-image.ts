@@ -1,6 +1,6 @@
 import { extname } from 'node:path';
 import { decode as decodeBmpFast } from 'fast-bmp';
-import { decode as decodePngFast } from 'fast-png';
+import { decodePNGToRGBA8 } from '@be-music/shared-utils/png';
 import jpeg from 'jpeg-js';
 
 export type ImageFormat = 'bmp' | 'png' | 'jpeg' | 'video';
@@ -10,6 +10,8 @@ export interface DecodedImage {
   height: number;
   data: Uint8Array;
   format: ImageFormat;
+  /** Whether the encoded image carries alpha, independently of inserted opaque RGBA bytes. */
+  hasAlphaChannel?: boolean;
 }
 
 export function decodeImageBuffer(buffer: Buffer, pathHint: string): DecodedImage {
@@ -46,13 +48,7 @@ export function decodeImageBuffer(buffer: Buffer, pathHint: string): DecodedImag
 }
 
 function decodePNG(buffer: Buffer): DecodedImage {
-  const decoded = decodePngFast(buffer);
-  return {
-    width: decoded.width,
-    height: decoded.height,
-    data: convertToRGBA8(decoded.data, decoded.width, decoded.height, decoded.channels, decoded.depth),
-    format: 'png',
-  };
+  return { ...decodePNGToRGBA8(buffer), format: 'png' };
 }
 
 function decodeJPEG(buffer: Buffer): DecodedImage {
@@ -65,6 +61,7 @@ function decodeJPEG(buffer: Buffer): DecodedImage {
     height: decoded.height,
     data: decoded.data,
     format: 'jpeg',
+    hasAlphaChannel: false,
   };
 }
 
@@ -78,12 +75,23 @@ function decodeBMP(buffer: Buffer): DecodedImage {
   const channels = decoded.channels > 0 ? decoded.channels : 4;
   const depth = Math.max(1, Math.floor(decoded.bitsPerPixel / channels));
   const rgba = convertToRGBA8(toSampleArray(decoded.data), decoded.width, decoded.height, channels, depth);
+  const declaresAlpha =
+    bitsPerPixel === 32 && buffer.readUInt32LE(14) >= 56 && buffer.length >= 70 && buffer.readUInt32LE(66) !== 0;
   return {
     width: decoded.width,
     height: decoded.height,
     data: rgba,
     format: 'bmp',
+    // Tools often write an alpha mask with every alpha byte zero; such a file is opaque, as browsers decode it.
+    hasAlphaChannel: declaresAlpha && hasNonZeroAlpha(rgba),
   };
+}
+
+function hasNonZeroAlpha(rgba: Uint8Array): boolean {
+  for (let offset = 3; offset < rgba.length; offset += 4) {
+    if (rgba[offset] !== 0) return true;
+  }
+  return false;
 }
 
 function readBMPBitsPerPixel(buffer: Buffer): number {
@@ -156,6 +164,7 @@ function decodeIndexedBMP(buffer: Buffer, bitsPerPixel: number): DecodedImage {
     height,
     data: rgba,
     format: 'bmp',
+    hasAlphaChannel: false,
   };
 }
 

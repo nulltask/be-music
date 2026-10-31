@@ -146,6 +146,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
       longNoteModifier: 'OFF',
       // The play options added by later options, at their defaults.
       battleMode: 'OFF',
+      bmsonTotalMode: 'beatoraja',
       bottomShiftableGauge: 'ASSIST-EASY',
       constantFadeMs: 100,
       dBattleScratch: false,

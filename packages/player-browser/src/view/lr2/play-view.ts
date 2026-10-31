@@ -1,3 +1,4 @@
+import { ChartTextOverlay } from '../shared/chart-text.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
 /**
@@ -122,6 +123,7 @@ export type LR2PlayViewOptions = Pick<
 export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContext, LR2PlayElementsContext {
   private readonly displayInfo = new DisplayAreaInfoOverlay();
   private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
+  private readonly chartText = new ChartTextOverlay();
   public readonly family = 'lr2' as const;
   public readonly timing: PlayViewTiming;
   /** The play options the view draws with; the setters change them during the play. */
@@ -273,6 +275,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.touchLanes.attach(host, emit);
     this.displayInfo.attachCanvas(this.designRoot);
     this.bpmChangeWarning.attachCanvas(this.designRoot);
+    this.chartText.attachCanvas(this.designRoot);
   }
 
   public draw(frame: PlayFrame): void {
@@ -283,6 +286,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.root.visible = frame.shown;
     if (!frame.shown) this.displayInfo.hide();
     if (!frame.shown) this.bpmChangeWarning.hide();
+    if (!frame.shown) this.chartText.hide();
     if (!frame.shown || this.disposed) return;
     this.perf.beginTick();
     this.perf.time('updateFPS', () => this.updateFPS());
@@ -318,6 +322,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       this.app.screen,
       this.designRoot.alpha,
     );
+    this.chartText.show(frame.chartText ?? '', this.playfieldSkin.stage, this.app.screen, this.designRoot.alpha);
     this.bpmChangeWarning.show({
       enabled: frame.playOptions.bpmChangeWarning,
       timing: this.play.timingResolver,
@@ -343,6 +348,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   public detach(): void {
     this.displayInfo.detach();
     this.bpmChangeWarning.detach();
+    this.chartText.detach();
     this.touchLanes.detach();
   }
 
@@ -359,6 +365,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   public dispose(): void {
     this.displayInfo.dispose();
     this.bpmChangeWarning.dispose();
+    this.chartText.dispose();
     if (this.disposed) return;
     this.disposed = true;
     this.timers.dispose();

@@ -17,8 +17,8 @@ export type {
   LibraryFolder,
 } from '@be-music/player-scene-model';
 
-/** A song image a host can hand a skin: the chart's `#STAGEFILE`, `#BANNER`, or `#BACKBMP`. */
-export type BeMusicChartImageKind = 'stageFile' | 'banner' | 'backBMP';
+/** Chart artwork a host can hand a skin: loading, banner, background, or pre-play title image. */
+export type BeMusicChartImageKind = 'stageFile' | 'banner' | 'backBMP' | 'titleImage';
 
 /**
  * Clear lamp of a play or a best record, worst first: not played, failed, then the gauge the chart was cleared on

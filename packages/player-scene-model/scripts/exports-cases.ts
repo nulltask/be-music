@@ -430,6 +430,7 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.reduceHiSpeed', {
     run: () => {
       sceneModelAPI.reduceHiSpeed(BENCH_HI_SPEED, { type: 'hi-speed-step', delta: 0.1 });
+      sceneModelAPI.reduceHiSpeed(BENCH_HI_SPEED, { type: 'chart-hi-speed', value: 100 });
     },
   });
   define('player-scene-model.laneCoversFromPlayOptions', {
@@ -493,11 +494,17 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   });
   define('player-scene-model.captureReplayView', {
     run: () => {
-      sceneModelAPI.captureReplayView(BENCH_PLAYED.view, {
-        scale: sceneModelAPI.BE_MUSIC_HI_SPEED_SCALE,
-        laneBeats: 4,
-        mainBPM: 150,
-      });
+      sceneModelAPI.captureReplayView(
+        {
+          ...BENCH_PLAYED.view,
+          hiSpeed: sceneModelAPI.reduceHiSpeed(BENCH_PLAYED.view.hiSpeed, { type: 'chart-hi-speed', value: 100 }),
+        },
+        {
+          scale: sceneModelAPI.BE_MUSIC_HI_SPEED_SCALE,
+          laneBeats: 4,
+          mainBPM: 150,
+        },
+      );
     },
   });
   define('player-scene-model.ReplayViewCursor', {

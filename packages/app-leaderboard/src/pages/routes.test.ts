@@ -473,6 +473,8 @@ describe('Leaderboard pages', () => {
     expect(ranking.html).toContain('aria-label="Play of');
     // The filters are switches, and say whether they are on.
     expect(ranking.html).toMatch(/role="switch" aria-checked="false"[^>]*>.*?Every play/);
+    // With the client script, a switch updates the page in place and puts its URL in the history (partial-swap.ts).
+    expect(ranking.html).toMatch(/role="switch"[^>]*hx-get="[^"]*every=1"[^>]*hx-push-url="true"/);
     expect(ranking.html).toContain('popovertarget="info-');
     expect(ranking.html).toContain('popover="auto"');
     // The card is a tooltip anchored to its icon.
@@ -525,7 +527,10 @@ describe('Leaderboard pages', () => {
     const top = await page('/', cookie);
     expect(top.html).toContain('scored under beatoraja');
     expect(top.html).toContain('aria-label="Scoring rules: beatoraja rules"');
-    expect(top.html).toMatch(/href="\/ruleset\/beatoraja[^"]*" aria-current="true"/);
+    expect(top.html).toMatch(/href="\/ruleset\/beatoraja[^"]*"[^>]*aria-current="true"/);
+    // The switch updates the page in place too, without a history entry of its own: the page's URL stays.
+    expect(top.html).toMatch(/hx-get="\/ruleset\/beatoraja\?next=%2F"/);
+    expect(top.html).not.toMatch(/hx-get="\/ruleset\/[^"]*"[^>]*hx-push-url/);
     const score = await page(`/scores/${firstScore}`, cookie);
     expect(score.html).toMatch(/aria-label="beatoraja rules" data-state="selected">.*?>selected<\/span>/);
     expect(score.html).toContain('>played with</span>');

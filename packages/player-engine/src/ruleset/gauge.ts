@@ -86,6 +86,7 @@ export class RulesetGauge {
         }
       }
     }
+    if (this.spec.recoveryDisabled === true && delta > 0) delta = 0;
     this.set(this.value + delta);
     this.selectFallback();
   }
@@ -102,6 +103,7 @@ export class RulesetGauge {
     }
     this.fallback?.applyRawDelta(delta);
     if (this.dead) return;
+    if (this.spec.recoveryDisabled === true && delta > 0) delta = 0;
     this.set(this.value + delta);
     this.selectFallback();
   }

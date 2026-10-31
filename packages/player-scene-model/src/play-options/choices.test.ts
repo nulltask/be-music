@@ -370,6 +370,8 @@ test('LR2 EXTRA keeps source minimum levels separate from beatoraja depth', () =
 
 test('SP TO DP is a mutually exclusive battle choice with an OFF default', () => {
   expect(DEFAULT_PLAY_OPTIONS.battleMode).toBe('OFF');
+  expect(resolvePlayOptionValue('battleMode', 'AUTO')).toBe('AUTO');
+  expect(resolvePlayOptionValue('battleMode', 'COUPLE')).toBe('COUPLE');
   expect(resolvePlayOptionValue('battleMode', 'SP-TO-DP')).toBe('SP-TO-DP');
   expect(resolvePlayOptionValue('battleMode', 'D-BATTLE')).toBe('D-BATTLE');
   expect(resolvePlayOptionValue('battleMode', 'BATTLE-AS')).toBe('BATTLE-AS');
@@ -400,4 +402,11 @@ test('battle arrangements follow a chart copied onto both sides, and CONVERGE st
     expect(isDuplicatedBattleChoice(mode)).toBe(false);
   // CONVERGE names LR2's concentration and beatoraja's PMS arrangement, so it is not offered across rulesets.
   expect(resolveRandomModes('____')).not.toContain('CONVERGE');
+});
+
+test('bmson TOTAL mode is opt-in and validates both choices', () => {
+  expect(DEFAULT_PLAY_OPTIONS.bmsonTotalMode).toBe('beatoraja');
+  expect(resolvePlayOptionValue('bmsonTotalMode', 'spec')).toBe('spec');
+  expect(resolvePlayOptionValue('bmsonTotalMode', 'beatoraja')).toBe('beatoraja');
+  expect(resolvePlayOptionValue('bmsonTotalMode', 'SPEC')).toBeUndefined();
 });

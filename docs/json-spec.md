@@ -25,6 +25,14 @@ Also, as it is still in the early stages of development, backward compatibility 
 - Surface information that is not explicitly maintained by the IR, such as blank lines, comments, white space, line breaks, character codes, etc., is not subject to this principle.
 - As a result of editing the IR, if the retained structural information and the normalized `events` / `measures` / extension information no longer match, the chart-writer will prioritize consistency and regenerate it.
 
+## Intrinsic sample gain
+
+`resources.wavGain` is an optional map from WAV slot ids to finite, nonnegative linear gain. Missing slots use 1. The map belongs to Be-Music JSON and is not a BMS or bmson field. It preserves composition gain without rounding authored WAVCMD parameters. NONSTOP stores each stage's effective VOLWAV multiplied by any existing intrinsic slot gain; its target chart has no global VOLWAV. Cloning and JSON parsing copy the map independently and retain base-62 slot case.
+
+`collectBmsWAVVolumeMultipliers` multiplies WAVCMD percentage volume, EXWAV attenuation and intrinsic gain. The backend applies the target chart's VOLWAV and dynamic bus gain separately. Browser, Node and offline playback share this calculation. Gain affects audio only; timing, scoring and fingerprints are unchanged.
+
+BMS export converts intrinsic gain into a final integer WAVCMD volume only when that volume reproduces the combined gain exactly. It never rounds, and unresolved BMS control flow must be resolved first. bmson has no supported per-channel gain field, so non-unity intrinsic gain cannot be exported to bmson. These checks also apply when preservation validation is skipped; export Be-Music JSON to retain unrepresentable gain. Unity-only maps do not change native output.
+
 ## Identifier and key naming
 
 Abbreviations in code identifiers and Be-Music JSON keys use uppercase, while the first segment of lowerCamelCase stays lowercase: `BeMusicJSON`, `backBMP`, `initBPM`, `poorBGA`, and `bpm`. In consecutive abbreviations, only the last is uppercase (`BmsJSON`, `inferBmsLNTypeWhenMissing`). `Id` / `Ids` and `bmson` / `Bmson` keep their conventional spelling. External BMS and bmson keys, database schemas, and external tool and API contract keys retain their required spelling.
@@ -280,6 +288,7 @@ A full example:
 
 `metadata` is the normalized, format-neutral metadata area.
 
+- `titleImage`: bmson `info.title_image`, the pre-play title artwork, independent of the loading image
 - `stageFile`: BMS `#STAGEFILE`; bmson mirrors `info.eyecatch_image` here when present
 - `backBMP`: BMS `#BACKBMP`; bmson mirrors `info.back_image` here when present
 - `banner`: BMS `#BANNER`; bmson mirrors `info.banner_image` here when present
@@ -305,7 +314,9 @@ A full example:
 - `base`: `62` when the chart declares `#BASE 62`; omitted otherwise, which means `36`.
 - `baseBPM`: value of `#BASEBPM`
 - `stp`: `#STP` value array
-- `option`: value of `#OPTION`
+- `option`: legacy last unconditional `#OPTION` payload; after branch resolution, the last active declaration
+- `options`: optional ordered array of whole `#OPTION` payloads, including vendor arguments with spaces; when present it owns the declarations and an empty array clears the legacy alias
+- `optionHeadersInControlFlow`: optional `true` when `controlFlow` includes every `#OPTION` in whole-file order, including unconditional lines; branch resolution rebuilds `options` from the active program once and removes this marker
 - `changeOption`: Map of `#CHANGEOPTIONxx`
 - `wavCmd`: first value of `#WAVCMD`, kept for legacy compatibility
 - `wavCmds`: all `#WAVCMD` lines as raw post-directive text in declaration order
@@ -321,9 +332,9 @@ A full example:
 - `materials`: value of `#MATERIALS`
 - `divideProp`: value of `#DIVIDEPROP`
 - `charset`: value of `#CHARSET`
-- `controlFlow`: Control syntax (`#RANDOM`/`#IF`/`#SWITCH` series) and the header/object lines inside it
+- `controlFlow`: Control syntax (`#RANDOM`/`#IF`/`#SWITCH` series) and the header/object lines inside it (plus unconditional OPTION declarations when marked above)
 - `controlFlow.kind = "object"` is kept in the same `events` format as normal events (with `measureLength` if necessary)
-- `controlFlow.kind = "header"` has `overriddenByLaterHeader: true` when a top-level line later in the file defines the same header; header lines apply in file order, so resolving the control flow skips it
+- `controlFlow.kind = "header"` has `overriddenByLaterHeader: true` when a top-level line later in the file defines the same nonrepeatable header; replacing headers apply in file order, so resolving the control flow skips it
 - Parser keeps control syntax in this array and branches are executed at playback/render time
 - `scroll` values ​​allow finite numbers, `0` and negative values ​​are also retained
 
@@ -439,3 +450,9 @@ flowchart LR
 - `chart-writer` uses `position` denominator information to determine intra-bar resolution
 - `parseJson` requires `position` tuple and treats missing events as errors
 - Score semantics helpers such as beat conversion and event order are provided by `@be-music/chart-model`
+
+## Opaque bmson data
+
+Optional `extraFields: JSONFields` stores source keys without supported semantics on bmson nodes, including `BeMusicEvent.bmson` for note/timing annotations. `bmson.channelExtraFields` keys channel data by WAV slot, `channelKinds` records sound/key/mine ownership, and `lineExtraFields` keys barline data by normalized pulse. `JSONValue` accepts finite JSON data; `cloneJSONFields` makes independent copies and `collectBmsonExtraFields` removes reserved supported keys by scope. The parser preserves these envelopes on JSON reparse; they do not participate in execution or fingerprints. An external bmson key named `extraFields` lives inside the envelope, not at the IR boundary. See [ADR 0029](./adr/0029-opaque-bmson-fields.md).
+
+Pulse-valued bmson extensions, including note `l`, BGA cue `y` and preserved barlines, use `bmson.info.resolution` or the bmson default 240. Changing the writer output resolution changes native pulse values while preserving representable beat positions; it does not modify the IR. `bmson.barlinesSuppressed` remains authoritative for explicit `lines: []`.

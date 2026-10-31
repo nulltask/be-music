@@ -1,3 +1,6 @@
+import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
+import { keyBoundBGAResourceKey } from '../../../chart/key-bound-bga.ts';
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 // BGA (background animation) rendering layer for a beatoraja play skin.
 //
 // The skin's `bga` block holds an `id` referencing one of the destination[] groups; that group's
@@ -11,7 +14,7 @@
 //
 // Layering rules, as beatoraja's `BGAProcessor.drawBGA` draws them:
 //   - `base` (chart channel `04`) is the always-active BGA.
-//   - `layer` (channels `07` / `0A`) draws on top of base, its black keyed out.
+//   - `layer` (channel `07`) and `layer2` (channel `0A`) independently draw above base, black keyed out.
 //   - `poor` (channel `06`) replaces both while the miss layer shows (`misslayerDuration` from the last miss).
 //
 // A stitched NONSTOP chart draws one such stack per stage at the opacity of its crossfade
@@ -36,6 +39,7 @@ import {
 
 export interface BeatorajaBGALayerOptions {
   skin: BeatorajaSkin;
+  subRegionOrigins?: ReadonlyMap<string, { x: number; y: number }>;
   poorBGAMode?: 0 | 1 | 2;
   /**
    * Decoded BGA textures keyed by `#BMPxx` slot label (`'00'`..`'ZZ'`). Same map the LR2 path's BGA
@@ -50,7 +54,13 @@ export interface BeatorajaBGALayerOptions {
    * Chart-time BGA cue lists. Built via `buildBGATimeline(chart, resolver)` in `chart/bga-timeline.ts`.
    * Pass an empty `{ base: [], layer: [], poor: [] }` if the chart has no BGA — the layer hides itself.
    */
-  cues: { base: ReadonlyArray<BGACue>; layer: ReadonlyArray<BGACue>; poor: ReadonlyArray<BGACue> };
+  cues: {
+    opacity?: BGAOpacityTimelines;
+    base: ReadonlyArray<BGACue>;
+    layer: ReadonlyArray<BGACue>;
+    layer2?: ReadonlyArray<BGACue>;
+    poor: ReadonlyArray<BGACue>;
+  };
   /**
    * Optional video-element map for keys whose BMPxx resolves to a video file. The layer
    * pauses / plays / seeks these elements when their texture becomes the active cue.
@@ -77,6 +87,7 @@ interface BGASpritePair {
   readonly canvas: Sprite;
   readonly sprite: Sprite;
   readonly layer: Sprite;
+  readonly layer2: Sprite;
   readonly poor: Sprite;
 }
 
@@ -84,6 +95,8 @@ type BGADestinationProps = ReturnType<typeof destinationToSpriteProps>;
 
 export class BeatorajaBGALayer {
   readonly container: Container = new Container();
+  private background: Sprite | undefined;
+  private keyBoundSprite = new Sprite({ visible: false, label: 'bga/key-bound' });
   /**
    * One sprite set per stack drawn (one, or a NONSTOP chart's stages at a seam), earlier stacks behind. Each set is a
    * black fill behind a base image smaller than the BGA canvas, which beatoraja leaves black around it, the base image
@@ -92,9 +105,16 @@ export class BeatorajaBGALayer {
   private readonly pairs: BGASpritePair[] = [];
   private readonly group: BeatorajaDestinationGroup | undefined;
   private readonly textures: ReadonlyMap<string, Texture>;
+  private readonly subRegionOrigins: ReadonlyMap<string, { x: number; y: number }>;
   private readonly layerTextures: ReadonlyMap<string, Texture>;
   private readonly videoElements: ReadonlyMap<string, HTMLVideoElement>;
-  private readonly cues: { base: ReadonlyArray<BGACue>; layer: ReadonlyArray<BGACue>; poor: ReadonlyArray<BGACue> };
+  private readonly cues: {
+    opacity?: BGAOpacityTimelines;
+    base: ReadonlyArray<BGACue>;
+    layer: ReadonlyArray<BGACue>;
+    layer2?: ReadonlyArray<BGACue>;
+    poor: ReadonlyArray<BGACue>;
+  };
   private readonly nonstop: BeatorajaBGALayerOptions['nonstop'];
   /**
    * Skin canvas height in skin-pixel units. Read from `skin.h` at construction so we can flip
@@ -109,6 +129,7 @@ export class BeatorajaBGALayer {
   constructor(options: BeatorajaBGALayerOptions) {
     this.poorBGAMode = options.poorBGAMode ?? 0;
     this.textures = options.textures;
+    this.subRegionOrigins = options.subRegionOrigins ?? new Map();
     this.layerTextures = options.layerTextures ?? new Map();
     this.videoElements = options.videoElements ?? new Map();
     this.cues = options.cues;
@@ -130,13 +151,23 @@ export class BeatorajaBGALayer {
     seconds: number,
     context: BeatorajaRenderContext,
     poorBGAActive: boolean,
-    playback: { seconds?: number; tempo?: number; paused?: boolean; started?: boolean } = {},
+    playback: {
+      seconds?: number;
+      tempo?: number;
+      paused?: boolean;
+      started?: boolean;
+      keyBoundBGA?: KeyBoundBGAFrame;
+      bmsonBGA?: BmsonBGAFrame;
+    } = {},
   ): void {
     if (this.disposed) return;
+    this.keyBoundSprite.visible = false;
+    if (this.background) this.background.visible = false;
     for (const pair of this.pairs) {
       pair.canvas.visible = false;
       pair.sprite.visible = false;
       pair.layer.visible = false;
+      pair.layer2.visible = false;
       pair.poor.visible = false;
     }
     if (this.group === undefined) return;
@@ -148,41 +179,119 @@ export class BeatorajaBGALayer {
       nonstop: this.nonstop,
       seconds,
       inPoorWindow: poorBGAActive,
+      bmsonBGA: playback.bmsonBGA,
     });
+    if (props.visible) {
+      if (this.background === undefined) {
+        this.background = new Sprite({
+          texture: Texture.WHITE,
+          tint: 0x000000,
+          visible: false,
+          label: 'bga/background',
+        });
+        this.container.addChildAt(this.background, 0);
+      }
+      Object.assign(this.background, {
+        visible: true,
+        x: props.x,
+        y: props.y,
+        width: props.width,
+        height: props.height,
+        alpha: props.alpha,
+        angle: props.angle,
+        blendMode: props.blendMode,
+      });
+    }
     const keys = new Map<string, number>();
     stacks.forEach((stack, index) => {
       const pair = this.pairAt(index);
       // The miss layer replaces both the base and the layer; outside it the layer draws over the base.
       if (stack.poorKey !== undefined && !stack.poorOverlays) {
-        let cueSeconds = seconds;
+        let cueSeconds = stack.poorCue?.seconds ?? seconds;
         for (const cue of this.cues.poor) {
           if (cue.seconds > seconds) break;
-          if (cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
+          if (stack.poorCue === undefined && cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
         }
-        keys.set(stack.poorKey, cueSeconds);
-        this.drawImage(pair.sprite, pair.canvas, stack.poorKey, this.textures, props, stack.alpha);
+        const poorKey = this.videoKey(stack.poorKey, 'poor')!;
+        keys.set(poorKey, cueSeconds);
+        this.drawImage(
+          pair.sprite,
+          pair.canvas,
+          poorKey,
+          this.textures,
+          props,
+          stack.alpha * (stack.opacity?.poor ?? 1),
+          stack.tint?.poor,
+        );
         return;
       }
       const baseKey = stack.baseCue?.bmpKey;
       if (baseKey !== undefined) {
         keys.set(baseKey, stack.baseCue!.seconds);
-        this.drawImage(pair.sprite, pair.canvas, baseKey, this.textures, props, stack.alpha);
+        this.drawImage(
+          pair.sprite,
+          pair.canvas,
+          baseKey,
+          this.textures,
+          props,
+          stack.alpha * (stack.opacity?.base ?? 1),
+          stack.tint?.base,
+        );
       }
-      const layerKey = stack.layerCue?.bmpKey;
+      const layerKey = this.videoKey(stack.layerCue?.bmpKey, 'layer');
       if (layerKey !== undefined) {
         keys.set(layerKey, stack.layerCue!.seconds);
-        this.drawImage(pair.layer, undefined, layerKey, this.layerTextures, props, stack.alpha);
+        this.drawImage(
+          pair.layer,
+          undefined,
+          layerKey,
+          this.layerTextures,
+          props,
+          stack.alpha * (stack.opacity?.layer ?? 1),
+          stack.tint?.layer,
+        );
+      }
+      const layer2Key = this.videoKey(stack.layer2Cue?.bmpKey, 'layer2');
+      if (layer2Key !== undefined) {
+        keys.set(layer2Key, stack.layer2Cue!.seconds);
+        this.drawImage(
+          pair.layer2,
+          undefined,
+          layer2Key,
+          this.layerTextures,
+          props,
+          stack.alpha * (stack.opacity?.layer2 ?? 1),
+          stack.tint?.layer2,
+        );
       }
       if (stack.poorKey !== undefined && stack.poorOverlays) {
-        let cueSeconds = seconds;
+        let cueSeconds = stack.poorCue?.seconds ?? seconds;
         for (const cue of this.cues.poor) {
           if (cue.seconds > seconds) break;
-          if (cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
+          if (stack.poorCue === undefined && cue.bmpKey === stack.poorKey) cueSeconds = cue.seconds;
         }
-        keys.set(stack.poorKey, cueSeconds);
-        this.drawImage(pair.poor, undefined, stack.poorKey, this.textures, props, stack.alpha);
+        const poorKey = this.videoKey(stack.poorKey, 'poor')!;
+        keys.set(poorKey, cueSeconds);
+        this.drawImage(
+          pair.poor,
+          undefined,
+          poorKey,
+          this.textures,
+          props,
+          stack.alpha * (stack.opacity?.poor ?? 1),
+          stack.tint?.poor,
+        );
       }
     });
+    this.keyBoundSprite.visible = false;
+    const keyBound = playback.keyBoundBGA;
+    if (keyBound) {
+      const key = keyBoundBGAResourceKey(keyBound.definitionId, keyBound.bmpKey);
+      keys.set(key, keyBound.frameStartSeconds);
+      if (this.keyBoundSprite.parent !== this.container) this.container.addChild(this.keyBoundSprite);
+      else this.container.setChildIndex(this.keyBoundSprite, this.container.children.length - 1);
+      this.drawImage(this.keyBoundSprite, undefined, key, this.layerTextures, props, 1);
+    }
     this.syncVideos(keys, playback.seconds ?? seconds, playback);
   }
 
@@ -214,9 +323,15 @@ export class BeatorajaBGALayer {
         // Already paused / disposed.
       }
     }
+    if (!this.keyBoundSprite.destroyed) this.keyBoundSprite.destroy();
     if (!this.container.destroyed) {
       this.container.destroy({ children: true });
     }
+  }
+
+  private videoKey(key: string | undefined, track: 'layer' | 'layer2' | 'poor'): string | undefined {
+    const videoKey = String.fromCharCode(0) + track + ':' + key;
+    return this.videoElements.has(videoKey) ? videoKey : key;
   }
 
   /** The sprite set of the stack at `index`, mounted on first use. */
@@ -226,10 +341,11 @@ export class BeatorajaBGALayer {
         canvas: new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false, label: 'bga/canvas' }),
         sprite: new Sprite({ visible: false, label: 'bga/base' }),
         layer: new Sprite({ visible: false, label: 'bga/layer' }),
+        layer2: new Sprite({ visible: false, label: 'bga/layer2' }),
         poor: new Sprite({ visible: false, label: 'bga/poor' }),
       };
       this.pairs.push(pair);
-      this.container.addChild(pair.canvas, pair.sprite, pair.layer, pair.poor);
+      this.container.addChild(pair.canvas, pair.sprite, pair.layer, pair.layer2, pair.poor);
     }
     return this.pairs[index]!;
   }
@@ -246,6 +362,7 @@ export class BeatorajaBGALayer {
     textures: ReadonlyMap<string, Texture>,
     props: BGADestinationProps,
     alpha: number,
+    tint = 0xffffff,
   ): void {
     const texture = textures.get(key) ?? this.textures.get(key);
     // No decoded texture (or Pixi's source-less EMPTY singleton) must not enter the renderer's
@@ -260,9 +377,10 @@ export class BeatorajaBGALayer {
     // top-aligned at its pixel size on a black canvas (beatoraja's `BGImageProcessor`), anything larger and videos
     // fill the rect.
     const rect = { x: props.x, y: props.y, w: props.width, h: props.height };
-    const placed = this.videoElements.has(key)
-      ? rect
-      : resolveBGAImageRect(texture.frame.width, texture.frame.height, rect);
+    const placed =
+      this.videoElements.has(key) && !this.subRegionOrigins.has(key)
+        ? rect
+        : resolveBGAImageRect(texture.frame.width, texture.frame.height, rect, this.subRegionOrigins.get(key));
     if (canvas !== undefined && (placed.w < rect.w || placed.h < rect.h)) {
       canvas.visible = true;
       canvas.x = rect.x;
@@ -279,7 +397,11 @@ export class BeatorajaBGALayer {
     sprite.width = placed.w;
     sprite.height = placed.h;
     sprite.alpha = props.alpha * alpha;
-    sprite.tint = props.tint;
+    sprite.tint = [16, 8, 0].reduce(
+      (value, shift) =>
+        value | (Math.round((((props.tint >>> shift) & 255) * ((tint >>> shift) & 255)) / 255) << shift),
+      0,
+    );
     sprite.angle = props.angle;
     sprite.blendMode = props.blendMode;
   }
@@ -288,7 +410,13 @@ export class BeatorajaBGALayer {
   private syncVideos(
     keys: Map<string, number>,
     seconds: number,
-    playback: { tempo?: number; paused?: boolean; started?: boolean },
+    playback: {
+      tempo?: number;
+      paused?: boolean;
+      started?: boolean;
+      keyBoundBGA?: KeyBoundBGAFrame;
+      bmsonBGA?: BmsonBGAFrame;
+    },
   ): void {
     for (const key of this.currentKeys.keys()) {
       if (keys.has(key) && playback.started !== false) continue;
@@ -301,8 +429,16 @@ export class BeatorajaBGALayer {
     for (const [key, cueSeconds] of keys) {
       const video = this.videoElements.get(key);
       if (video === undefined) continue;
-      video.playbackRate = playback.tempo ?? 1;
-      const expected = Math.max(0, seconds - cueSeconds);
+      const frame = playback.keyBoundBGA;
+      const rate =
+        frame && key === keyBoundBGAResourceKey(frame.definitionId, frame.bmpKey)
+          ? (frame.playbackRate ?? 1)
+          : playback.bmsonBGA !== undefined &&
+              key === this.videoKey(playback.bmsonBGA.key, playback.bmsonBGA.plane === 'poor' ? 'poor' : 'layer')
+            ? (playback.bmsonBGA.playbackRate ?? 1)
+            : 1;
+      video.playbackRate = (playback.tempo ?? 1) * rate;
+      const expected = Math.max(0, (seconds - cueSeconds) * rate);
       const changedCue = this.currentKeys.get(key) !== cueSeconds;
       const offset = changedCue
         ? Math.min(expected, Math.max(0, video.duration - 0.05) || expected)

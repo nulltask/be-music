@@ -251,6 +251,8 @@ export function describeNonstopPrepareFailure(
   failure: { reason: NonstopPlayFailure; stage?: number },
 ): string {
   const stage = failure.stage !== undefined ? ` (stage ${failure.stage + 1})` : '';
+  if (failure.reason === 'generic-layout-mismatch')
+    return `${name}: all NONSTOP stages must use the same generic keyboard layout${stage}`;
   return `${name}: cannot stitch the NONSTOP course: ${failure.reason}${stage}`;
 }
 

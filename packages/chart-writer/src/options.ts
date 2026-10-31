@@ -1,5 +1,9 @@
+import type { ChartExportDiagnosticHandler } from './bga-export.ts';
+
 export interface BMSStringifyOptions {
   eol?: '\n' | '\r\n';
+  /** Called for each part of a bmson chart that BMS cannot represent and the output leaves out. */
+  onDiagnostic?: ChartExportDiagnosticHandler;
   maxResolution?: number;
   /**
    * When `true`, skip the round-trip re-parse that normally verifies the preserved source / object lines still encode
@@ -13,8 +17,14 @@ export interface BMSStringifyOptions {
 }
 
 export interface BmsonStringifyOptions {
+  /**
+   * Output pulses per beat. Finite values >= 1 are floored; invalid values use the source resolution (default 240).
+   * Positions and LN endpoints round to the output grid. A positive LN that would become a tap raises RangeError.
+   */
   resolution?: number;
   indent?: number;
+  /** Called for each part of a BMS chart that native bmson cannot represent and the output leaves out. */
+  onDiagnostic?: ChartExportDiagnosticHandler;
   /** See {@link BMSStringifyOptions.skipPreservationValidation}. */
   skipPreservationValidation?: boolean;
 }

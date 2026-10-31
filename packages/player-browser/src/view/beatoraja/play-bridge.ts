@@ -387,7 +387,8 @@ export class BeatorajaPlayBridge {
     };
     this.refreshClock();
     const startOps = resolveBeatorajaPlayStartOps({
-      playVariant: this.chartPlayVariant,
+      // Generic keyboards borrow an SP theme frame; their note geometry and judging keep the generic variant.
+      playVariant: this.chartPlayVariant.startsWith('generic-') ? '7' : this.chartPlayVariant,
       autoPlay: options.autoPlay === true,
       ...(this.startTraits !== undefined ? { traits: this.startTraits } : {}),
     });
@@ -688,7 +689,9 @@ export class BeatorajaPlayBridge {
     let placement = this.placements.get(channel);
     if (placement === undefined) {
       const slot = resolveSideKeySlot(channel, this.chartPlayVariant);
-      placement = resolveBeatorajaLanePlacement(channel, this.chartPlayVariant, slot);
+      placement = this.chartPlayVariant.startsWith('generic-')
+        ? { side: 1, plate: 1, ...(slot >= 0 ? { lane: slot } : {}) }
+        : resolveBeatorajaLanePlacement(channel, this.chartPlayVariant, slot);
       this.placements.set(channel, placement);
     }
     return placement;

@@ -34,8 +34,10 @@ const workspacePackages = [
  */
 const runtimeNeutralSources = [
   'packages/shared-utils/src/core.ts',
+  'packages/shared-utils/src/audio-transform.ts',
   'packages/shared-utils/src/hash.ts',
   'packages/shared-utils/src/async.ts',
+  'packages/shared-utils/src/png.ts',
   'packages/skin-beatoraja/src/scene/**/*.ts',
   'packages/chart-model/src/**/*.ts',
   'packages/chart-source/src/**/*.ts',

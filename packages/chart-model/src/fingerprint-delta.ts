@@ -1,3 +1,4 @@
+import { parseHDXLongNoteMode } from './hdx-long-note-mode.ts';
 /**
  * Deltas of the chart fingerprint (`docs/fingerprint-spec.md`, section 3.6.2): what the lines one `#RANDOM` / `#SWITCH`
  * outcome applies change in the content outside control flow, and how deltas are applied, formatted and read back.
@@ -320,6 +321,7 @@ function replayEntries(
     bms: {
       ...top.bms,
       lnObjs: [...(top.bms.lnObjs ?? [])],
+      ...(top.bms.options !== undefined ? { options: [...top.bms.options] } : {}),
       exRank: { ...top.bms.exRank },
       scroll: { ...top.bms.scroll },
       speed: { ...top.bms.speed },
@@ -474,6 +476,14 @@ function applyFingerprintHeader(
     case 'LNTYPE':
       if (Number.isFinite(numeric) && numeric > 0) {
         json.bms.lnType = Math.floor(numeric);
+        touched.add(ALL_LANES);
+      }
+      return;
+    case 'OPTION':
+      if (parseHDXLongNoteMode(value) !== undefined) {
+        const declarations = (json.bms.options ??= json.bms.option ? [json.bms.option] : []);
+        declarations.push(value);
+        json.bms.option = value;
         touched.add(ALL_LANES);
       }
       return;

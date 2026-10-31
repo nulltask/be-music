@@ -70,3 +70,29 @@ describe('checkReplayEligibility', () => {
     expect(result).toMatchObject({ eligible: true, assistFlags: ['auto-scratch', 'judge-window-override'] });
   });
 });
+
+test.each(['COUPLE', 'TWO-PLAYER'] as const)(
+  '%s retains its replay without entering single-player rankings',
+  (battleMode) => {
+    expect(checkReplayEligibility(replay({ battleMode }))).toEqual({ eligible: false, reason: 'two-player' });
+  },
+);
+
+test('only an affected no-recovery play is stored unranked; fingerprints remain chart identities', () => {
+  const chart = { sourceFormat: 'bmson' as const, total: 0 };
+  expect(checkReplayEligibility(replay({ bmsonTotalMode: 'spec' }, chart))).toMatchObject({
+    eligible: true,
+    unranked: 'bmson-total',
+    chartFingerprint: 'bmfp0:c',
+  });
+  for (const total of [100, undefined, -100]) {
+    expect(checkReplayEligibility(replay({ bmsonTotalMode: 'spec' }, { ...chart, total }))).not.toHaveProperty(
+      'unranked',
+    );
+  }
+  expect(checkReplayEligibility(replay({}, chart))).not.toHaveProperty('unranked');
+  expect(checkReplayEligibility(replay({ bmsonTotalMode: 'beatoraja' }, chart))).not.toHaveProperty('unranked');
+  expect(
+    checkReplayEligibility(replay({ bmsonTotalMode: 'spec' }, { ...chart, totalUnit: 'absolute' })),
+  ).not.toHaveProperty('unranked');
+});

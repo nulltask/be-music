@@ -180,6 +180,7 @@ export interface PlaySessionOptions {
   scrollRate?: number;
   gaugeAutoShift?: import('@be-music/player-scene-model').PlayOptions['gaugeAutoShift'];
   bottomShiftableGauge?: import('@be-music/player-scene-model').PlayOptions['bottomShiftableGauge'];
+  bmsonTotalMode?: import('@be-music/player-engine/ruleset').BmsonTotalMode;
   /**
    * 1P side auto-scratch flag — when true, the scratch lane (channel 16) auto-judges as PERFECT at every note's
    * scheduled time even when {@link autoPlay} is off. The player only has to play the keys.

@@ -1,5 +1,11 @@
 # @be-music/player-ui-react
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-ui@0.3.0`
+
 ## 0.2.0
 
 ### Minor Changes
@@ -8,5 +14,4 @@
 
 ### Patch Changes
 
-- Updated dependencies [3e694df]
-  - @be-music/player-ui@0.2.0
+- Updated dependencies: `@be-music/player-ui@0.2.0`

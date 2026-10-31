@@ -71,6 +71,8 @@ export function resolveRulesetConfig(
       : {}),
     ...(course === undefined ? {} : { course: courseStageRulesetOptions(course) }),
     ...options,
+    // A legacy replay always uses compatibility, regardless of the viewer's current choice.
+    bmsonTotalMode: replay.play.bmsonTotalMode ?? 'beatoraja',
   });
 }
 

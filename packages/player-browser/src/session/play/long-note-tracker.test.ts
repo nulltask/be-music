@@ -43,8 +43,9 @@ describe('LongNoteTracker', () => {
     expect(tracker.isHolding('12')).toBe(false);
     expect(tracker.stateOf('11', 8, false)).toBe('pending');
 
-    tracker.end('11', 'complete');
+    tracker.end('11', 'complete', 2000);
     expect(tracker.stateOf('11', 4, true)).toBe('done');
+    expect(tracker.releasedAtMs('11', 4)).toBeUndefined();
     expect(tracker.isHolding('11')).toBe(false);
     expect(tracker.holdStartedAtMs('11')).toBeUndefined();
     expect(tracker.heldMode('11', 4)).toBeUndefined();
@@ -53,18 +54,21 @@ describe('LongNoteTracker', () => {
   it('remembers each finished long note on a lane', () => {
     const tracker = new LongNoteTracker();
     tracker.start('16', 4, 'ln', 0);
-    tracker.end('16', 'dropped');
+    tracker.end('16', 'dropped', 1500);
     tracker.start('16', 12, 'ln', 3000);
     expect(tracker.stateOf('16', 4, true)).toBe('dropped');
     expect(tracker.stateOf('16', 12, true)).toBe('held');
-    tracker.end('16', 'complete');
+    tracker.end('16', 'complete', 4000);
     expect(tracker.stateOf('16', 4, true)).toBe('dropped');
     expect(tracker.stateOf('16', 12, true)).toBe('done');
+    // Only the early release keeps its time, for the centre line's fade-out.
+    expect(tracker.releasedAtMs('16', 4)).toBe(1500);
+    expect(tracker.releasedAtMs('16', 12)).toBeUndefined();
   });
 
   it('ignores an end without a hold, and forgets everything on clear', () => {
     const tracker = new LongNoteTracker();
-    tracker.end('11', 'complete');
+    tracker.end('11', 'complete', 0);
     expect(tracker.stateOf('11', 4, false)).toBe('pending');
     tracker.start('11', 4, 'hcn', 10);
     tracker.clear();

@@ -22,10 +22,13 @@ describe('encodeBmsonKey', () => {
     expect(encodeBmsonKey(BMSON_BASE62_KEY_CAPACITY, 62)).toBe('zz');
   });
 
-  test('returns undefined instead of wrapping around past the key space', () => {
+  test('extends keys beyond the BMS export capacities and rejects invalid slots', () => {
     expect(encodeBmsonKey(0, 36)).toBeUndefined();
-    expect(encodeBmsonKey(BMSON_BASE36_KEY_CAPACITY + 1, 36)).toBeUndefined();
-    expect(encodeBmsonKey(BMSON_BASE62_KEY_CAPACITY + 1, 62)).toBeUndefined();
+    expect(encodeBmsonKey(BMSON_BASE36_KEY_CAPACITY + 1, 36)).toBe('100');
+    expect(encodeBmsonKey(BMSON_BASE62_KEY_CAPACITY + 1, 62)).toBe('100');
+    for (const slot of [-1, 0.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(encodeBmsonKey(slot, 62)).toBeUndefined();
+    }
   });
 });
 
@@ -67,16 +70,12 @@ describe('createBmsonValueKeyTable', () => {
     expect(keys.map((key) => table[key])).toEqual(values);
   });
 
-  test('past the base-62 key space, reuses the key of the nearest kept value rather than overwriting one', () => {
+  test('keeps exact distinct values beyond the base-62 BMS export capacity', () => {
     const values = Array.from({ length: BMSON_BASE62_KEY_CAPACITY + 2 }, (_, index) => index + 1);
+    values.push(values[BMSON_BASE62_KEY_CAPACITY]!);
     const { keys, table } = createBmsonValueKeyTable(values, 62);
-    expect(Object.keys(table)).toHaveLength(BMSON_BASE62_KEY_CAPACITY);
-    // Every value inside the key space still resolves to itself.
-    expect(keys.slice(0, BMSON_BASE62_KEY_CAPACITY).map((key) => table[key])).toEqual(
-      values.slice(0, BMSON_BASE62_KEY_CAPACITY),
-    );
-    // The two that do not fit fall back to the closest value that did.
-    expect(table[keys[BMSON_BASE62_KEY_CAPACITY]!]).toBe(BMSON_BASE62_KEY_CAPACITY);
-    expect(table[keys[BMSON_BASE62_KEY_CAPACITY + 1]!]).toBe(BMSON_BASE62_KEY_CAPACITY);
+    expect(Object.keys(table)).toHaveLength(BMSON_BASE62_KEY_CAPACITY + 2);
+    expect(keys.map((key) => table[key])).toEqual(values);
+    expect(keys.at(-1)).toBe('100');
   });
 });

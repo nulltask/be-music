@@ -1,3 +1,4 @@
+import { readBmsonExtraFields, normalizeBmsonExtraFieldMap } from './bmson-extra-fields.ts';
 import type {
   BeMusicJSON,
   BeMusicPosition,
@@ -29,6 +30,7 @@ export interface BmsonInfo {
   ln_type?: number;
   back_image?: string;
   eyecatch_image?: string;
+  title_image?: string;
   banner_image?: string;
   preview_music?: string;
 }
@@ -58,6 +60,7 @@ export interface BmsonSoundNote {
   y: number;
   l?: number;
   c?: boolean;
+  up?: boolean;
 }
 
 export interface BmsonSoundChannel {
@@ -102,10 +105,11 @@ export interface BmsonDocument {
    */
   mine_channels?: BmsonExtensionChannel[];
   bga?: {
+    bga_sequence?: Array<{ id: number; sequence: Array<{ time: number; id?: number }> }>;
     bga_header?: Array<{ id: number; name: string }>;
-    bga_events?: Array<{ y: number; id: number }>;
-    layer_events?: Array<{ y: number; id: number }>;
-    poor_events?: Array<{ y: number; id: number }>;
+    bga_events?: Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }>;
+    layer_events?: Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }>;
+    poor_events?: Array<{ y: number; id?: number; id_set?: number[]; condition?: string; interval?: number }>;
   };
 }
 
@@ -124,13 +128,6 @@ const BMS_LANE_CODES = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
  * next in numeric order).
  */
 const BMSON_DEFAULT_MODE_HINT = 'beat-7k';
-
-/**
- * `generic-Nkeys` template pattern — bmson allows arbitrary key counts via this naming convention ("a layout for a
- * generic symmetrical keyboard layout, ordered left to right"). The numeric prefix is the key count; we route it as a
- * positional left-to-right `x=1..N → 11, 12, …` map.
- */
-const BMSON_GENERIC_KEYS_PATTERN = /^generic-(\d+)keys?$/;
 
 /**
  * Resolves the `x` → BMS channel mapping for a chart's playable lanes. Order of resolution:
@@ -152,15 +149,6 @@ export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?:
   const hinted = resolveBmsonModeHintLayout(effectiveHint);
   if (hinted) {
     return new Map(hinted.channelByX);
-  }
-  const genericMatch = effectiveHint.match(BMSON_GENERIC_KEYS_PATTERN);
-  if (genericMatch) {
-    const keyCount = Math.max(0, Math.min(99, Number.parseInt(genericMatch[1]!, 10)));
-    const map = new Map<number, string>();
-    for (let index = 0; index < keyCount; index += 1) {
-      map.set(index + 1, laneIndexToChannel(index));
-    }
-    return map;
   }
   const xValues = new Set<number>();
   for (const soundChannel of soundChannels) {
@@ -261,7 +249,7 @@ export function normalizeBmsonLines(lines: unknown): number[] {
   return sorted;
 }
 
-export function normalizeBmsonBPMEvents(input: unknown): BmsonBPMEventEntry[] {
+export function normalizeBmsonBPMEvents(input: unknown, fromIR = false): BmsonBPMEventEntry[] {
   if (!Array.isArray(input)) {
     return [];
   }
@@ -286,12 +274,13 @@ export function normalizeBmsonBPMEvents(input: unknown): BmsonBPMEventEntry[] {
     events.push({
       y: Math.max(0, Math.round(raw.y)),
       bpm: raw.bpm,
+      ...readBmsonExtraFields(raw, 'bpm', fromIR),
     });
   }
   return events;
 }
 
-export function normalizeBmsonStopEvents(input: unknown): BmsonStopEventEntry[] {
+export function normalizeBmsonStopEvents(input: unknown, fromIR = false): BmsonStopEventEntry[] {
   if (!Array.isArray(input)) {
     return [];
   }
@@ -316,6 +305,7 @@ export function normalizeBmsonStopEvents(input: unknown): BmsonStopEventEntry[] 
     events.push({
       y: Math.max(0, Math.round(raw.y)),
       duration: raw.duration,
+      ...readBmsonExtraFields(raw, 'stop', fromIR),
     });
   }
   return events;
@@ -325,7 +315,7 @@ export function normalizeBmsonStopEvents(input: unknown): BmsonStopEventEntry[] 
  * beatoraja extension `scroll_events`. jbms-parser accepts any `rate` (a zero rate stops the lane, a negative one
  * reverses it), so only entries without a finite `y` or `rate` are dropped.
  */
-export function normalizeBmsonScrollEvents(input: unknown): BmsonScrollEventEntry[] {
+export function normalizeBmsonScrollEvents(input: unknown, fromIR = false): BmsonScrollEventEntry[] {
   if (!Array.isArray(input)) {
     return [];
   }
@@ -347,12 +337,13 @@ export function normalizeBmsonScrollEvents(input: unknown): BmsonScrollEventEntr
     events.push({
       y: Math.max(0, Math.round(raw.y)),
       rate: raw.rate,
+      ...readBmsonExtraFields(raw, 'scroll', fromIR),
     });
   }
   return events;
 }
 
-export function normalizeBmsonSoundChannels(input: unknown): BmsonSoundChannelEntry[] {
+export function normalizeBmsonSoundChannels(input: unknown, fromIR = false): BmsonSoundChannelEntry[] {
   if (!Array.isArray(input)) {
     return [];
   }
@@ -368,7 +359,8 @@ export function normalizeBmsonSoundChannels(input: unknown): BmsonSoundChannelEn
     }
     channels.push({
       name: raw.name,
-      notes: normalizeBmsonSoundNotes(raw.notes),
+      notes: normalizeBmsonSoundNotes(raw.notes, fromIR),
+      ...readBmsonExtraFields(raw, 'channel', fromIR),
     });
   }
   return channels;
@@ -399,6 +391,7 @@ function normalizeBmsonExtensionChannels(input: unknown, keepDamage: boolean): B
     channels.push({
       name: raw.name,
       notes: normalizeBmsonExtensionNotes(raw.notes, keepDamage),
+      ...readBmsonExtraFields(raw, 'channel'),
     });
   }
   return channels;
@@ -480,7 +473,7 @@ function normalizeBmsonLongNoteType(value: unknown): 1 | 2 | 3 | undefined {
 }
 
 export function normalizeBmsonInfoForIR(info: BmsonInfo, resolution: number): BeMusicJSON['bmson']['info'] {
-  const normalized: BeMusicJSON['bmson']['info'] = {};
+  const normalized: BeMusicJSON['bmson']['info'] = { ...readBmsonExtraFields(info, 'info') };
   copyIfString(normalized, 'title', info.title);
   copyIfString(normalized, 'subtitle', info.subtitle);
   copyIfString(normalized, 'artist', info.artist);
@@ -489,6 +482,7 @@ export function normalizeBmsonInfoForIR(info: BmsonInfo, resolution: number): Be
   copyIfString(normalized, 'modeHint', info.mode_hint);
   copyIfString(normalized, 'backImage', info.back_image);
   copyIfString(normalized, 'eyecatchImage', info.eyecatch_image);
+  copyIfString(normalized, 'titleImage', info.title_image);
   copyIfString(normalized, 'bannerImage', info.banner_image);
   copyIfString(normalized, 'previewMusic', info.preview_music);
 
@@ -537,6 +531,8 @@ export function normalizeBmsonBGAForIR(input: BmsonDocument['bga'] | undefined):
     };
   }
   return {
+    ...readBmsonExtraFields(input, 'bga'),
+    ...(input.bga_sequence !== undefined ? { sequences: normalizeBmsonBGASequences(input.bga_sequence) } : {}),
     header: normalizeBmsonBGAHeaderEntries(input.bga_header),
     events: normalizeBmsonBGAEventEntries(input.bga_events),
     layerEvents: normalizeBmsonBGAEventEntries(input.layer_events),
@@ -563,6 +559,17 @@ export function normalizeBmsonExtensions(input: unknown): BeMusicJSON['bmson'] {
     normalized.version = raw.version;
   }
 
+  Object.assign(normalized, readBmsonExtraFields(raw, 'root', true));
+  const channelExtraFields = normalizeBmsonExtraFieldMap(raw.channelExtraFields);
+  const lineExtraFields = normalizeBmsonExtraFieldMap(raw.lineExtraFields);
+  if (channelExtraFields) normalized.channelExtraFields = channelExtraFields;
+  if (raw.channelKinds && typeof raw.channelKinds === 'object') {
+    const entries = Object.entries(raw.channelKinds).filter((entry): entry is [string, 'sound' | 'key' | 'mine'] =>
+      ['sound', 'key', 'mine'].includes(entry[1] as string),
+    );
+    if (entries.length) normalized.channelKinds = Object.fromEntries(entries);
+  }
+  if (lineExtraFields) normalized.lineExtraFields = lineExtraFields;
   normalized.info = normalizeBmsonInfoFromIR(raw.info);
   normalized.bga = normalizeBmsonBGAFromIR(raw.bga);
   if (raw.barlinesSuppressed === true) {
@@ -578,7 +585,7 @@ function laneIndexToChannel(index: number): string {
   return `${first}${second}`;
 }
 
-function normalizeBmsonBGAHeaderEntries(input: unknown): BeMusicJSON['bmson']['bga']['header'] {
+function normalizeBmsonBGAHeaderEntries(input: unknown, fromIR = false): BeMusicJSON['bmson']['bga']['header'] {
   if (!Array.isArray(input)) {
     return [];
   }
@@ -595,30 +602,67 @@ function normalizeBmsonBGAHeaderEntries(input: unknown): BeMusicJSON['bmson']['b
     entries.push({
       id,
       name: raw.name,
+      ...readBmsonExtraFields(raw, 'bgaHeader', fromIR),
     });
   }
   return entries;
 }
 
-function normalizeBmsonBGAEventEntries(input: unknown): BeMusicJSON['bmson']['bga']['events'] {
-  if (!Array.isArray(input)) {
-    return [];
-  }
+function normalizeBmsonBGAEventEntries(input: unknown, fromIR = false): BeMusicJSON['bmson']['bga']['events'] {
+  if (!Array.isArray(input)) return [];
   const entries: BeMusicJSON['bmson']['bga']['events'] = [];
   for (const item of input) {
-    if (!item || typeof item !== 'object') {
-      continue;
-    }
+    if (!item || typeof item !== 'object') continue;
     const raw = item as Record<string, unknown>;
     const id = normalizePositiveInteger(raw.id);
+    const rawIdSet = raw.idSet ?? raw.id_set;
+    const idSet = Array.isArray(rawIdSet)
+      ? rawIdSet.map(normalizePositiveInteger).filter((value): value is number => value !== undefined)
+      : undefined;
     const y = normalizePositiveInteger(raw.y);
-    if (id === undefined || y === undefined) {
-      continue;
-    }
+    if (y === undefined || (id === undefined && idSet === undefined)) continue;
+    const interval = normalizePositiveInteger(raw.interval);
     entries.push({
       y,
-      id,
+      ...(id !== undefined ? { id } : {}),
+      ...readBmsonExtraFields(raw, 'bgaEvent', fromIR),
+      ...(idSet !== undefined ? { idSet } : {}),
+      ...(typeof raw.condition === 'string' ? { condition: raw.condition } : {}),
+      ...(interval !== undefined ? { interval } : {}),
     });
+  }
+  return entries;
+}
+
+function normalizeBmsonBGASequences(
+  input: unknown,
+  fromIR = false,
+): NonNullable<BeMusicJSON['bmson']['bga']['sequences']> {
+  if (!Array.isArray(input)) return [];
+  const entries: NonNullable<BeMusicJSON['bmson']['bga']['sequences']> = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as Record<string, unknown>;
+    const id = normalizePositiveInteger(raw.id);
+    if (id === undefined || !Array.isArray(raw.sequence)) continue;
+    const sequence: (typeof entries)[number]['sequence'] = [];
+    for (const item of raw.sequence) {
+      if (!item || typeof item !== 'object') continue;
+      const frame = item as Record<string, unknown>;
+      const time = normalizePositiveInteger(frame.time);
+      if (time === undefined) continue;
+      if (frame.id === undefined || frame.id === -2147483648) {
+        sequence.push({
+          time,
+          ...readBmsonExtraFields(frame, 'bgaFrame', fromIR),
+          ...(frame.id === -2147483648 ? { id: -2147483648 } : {}),
+        });
+      } else {
+        const id = normalizePositiveInteger(frame.id);
+        if (id !== undefined) sequence.push({ time, id, ...readBmsonExtraFields(frame, 'bgaFrame', fromIR) });
+      }
+    }
+    entries.push({ id, sequence, ...readBmsonExtraFields(raw, 'bgaSequence', fromIR) });
   }
   return entries;
 }
@@ -666,7 +710,7 @@ function canonicalizeSubartistEntry(entry: string): string {
   return `${role}:${name}`;
 }
 
-function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
+function normalizeBmsonSoundNotes(input: unknown, fromIR = false): BmsonSoundNoteEntry[] {
   if (!Array.isArray(input)) {
     return [];
   }
@@ -682,6 +726,7 @@ function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
     }
 
     const note: BmsonSoundNoteEntry = {
+      ...readBmsonExtraFields(raw, 'note', fromIR),
       y: Math.max(0, Math.round(raw.y)),
     };
     if (typeof raw.x === 'number' && Number.isFinite(raw.x)) {
@@ -693,6 +738,7 @@ function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
     if (typeof raw.c === 'boolean') {
       note.c = raw.c;
     }
+    if (typeof raw.up === 'boolean') note.up = raw.up;
     const noteType = normalizeBmsonLongNoteType(raw.t);
     if (noteType !== undefined) {
       note.t = noteType;
@@ -718,6 +764,7 @@ function normalizeBmsonExtensionNotes(input: unknown, keepDamage: boolean): Bmso
     }
 
     const note: BmsonMineNoteEntry = {
+      ...readBmsonExtraFields(raw, keepDamage ? 'mineNote' : 'keyNote'),
       y: Math.max(0, Math.round(raw.y)),
     };
     if (typeof raw.x === 'number' && Number.isFinite(raw.x)) {
@@ -801,6 +848,7 @@ function normalizeBmsonInfoFromIR(input: unknown): BeMusicJSON['bmson']['info'] 
   }
 
   const raw = input as Record<string, unknown>;
+  Object.assign(info, readBmsonExtraFields(raw, 'info', true));
   if (raw.totalUnit === 'absolute' || raw.totalUnit === 'percent') info.totalUnit = raw.totalUnit;
   copyIfString(info, 'title', raw.title);
   copyIfString(info, 'subtitle', raw.subtitle);
@@ -810,6 +858,7 @@ function normalizeBmsonInfoFromIR(input: unknown): BeMusicJSON['bmson']['info'] 
   copyIfString(info, 'modeHint', raw.modeHint ?? raw.mode_hint);
   copyIfString(info, 'backImage', raw.backImage ?? raw.back_image);
   copyIfString(info, 'eyecatchImage', raw.eyecatchImage ?? raw.eyecatch_image);
+  copyIfString(info, 'titleImage', raw.titleImage ?? raw.title_image);
   copyIfString(info, 'bannerImage', raw.bannerImage ?? raw.banner_image);
   copyIfString(info, 'previewMusic', raw.previewMusic ?? raw.preview_music);
 
@@ -848,10 +897,14 @@ function normalizeBmsonBGAFromIR(input: unknown): BeMusicJSON['bmson']['bga'] {
   }
   const raw = input as Record<string, unknown>;
   return {
-    header: normalizeBmsonBGAHeaderEntries(raw.header ?? raw.bga_header),
-    events: normalizeBmsonBGAEventEntries(raw.events ?? raw.bga_events),
-    layerEvents: normalizeBmsonBGAEventEntries(raw.layerEvents ?? raw.layer_events),
-    poorEvents: normalizeBmsonBGAEventEntries(raw.poorEvents ?? raw.poor_events),
+    ...readBmsonExtraFields(raw, 'bga', true),
+    ...((raw.sequences ?? raw.bga_sequence) !== undefined
+      ? { sequences: normalizeBmsonBGASequences(raw.sequences ?? raw.bga_sequence, true) }
+      : {}),
+    header: normalizeBmsonBGAHeaderEntries(raw.header ?? raw.bga_header, true),
+    events: normalizeBmsonBGAEventEntries(raw.events ?? raw.bga_events, true),
+    layerEvents: normalizeBmsonBGAEventEntries(raw.layerEvents ?? raw.layer_events, true),
+    poorEvents: normalizeBmsonBGAEventEntries(raw.poorEvents ?? raw.poor_events, true),
   };
 }
 

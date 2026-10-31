@@ -165,7 +165,7 @@ configuration:
 - Donations, the donation site and the be-music name and logo belong to the official instance; links to them in the
   player are configurable.
 
-## 6. Today and migration
+## 6. Deployment
 
 | Service     | Today                                                                                  |
 | ----------- | -------------------------------------------------------------------------------------- |
@@ -178,21 +178,6 @@ configuration:
 The monorepo Workers deploy with `cf` from `cloudflare.config.ts`; Donate uses Wrangler in its private content repository. `.github/workflows/deploy.yml` deploys `main` to
 production and `devel` to the preview. All of them run in the be-music Cloudflare account, which bills only be-music.
 Its `workers.dev` subdomain is `be-music.workers.dev`.
-
-Next:
-
-1. Build the Registry, with the user content domain, visibility settings and terms of use.
-2. Build the Editor.
-
-**No redirects** are kept from the old URLs: links to `be-music.app/...` (the old Player) and
-`be-music.app/leaderboard/...` no longer work.
-
-## 7. Open questions
-
-- **Donations**: whether the donation site takes payments itself through Stripe (one-time and monthly, signed in), keeps
-  the external platforms, or both. Stripe's restricted business list and Japan's Specified Commercial Transactions Act
-  must be checked before taking payments directly.
-- **User content domain**: the name of the separate domain for uploaded files.
 
 ## Storage ownership
 

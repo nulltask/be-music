@@ -45,6 +45,8 @@ function createReplayJudge(session: PlaySession): PlayJudge {
       }
       return {
         judgments: rebuilt.judgments,
+        bmsonBGAInputs: rebuilt.bmsonBGAInputs,
+        chartTextInputs: rebuilt.chartTextInputs,
         heldLongNotes: [
           ...[...judgeCore.activeLongNotes.values()]
             .filter(({ note }) => judgeCore.heldChannels.has(note.channel))

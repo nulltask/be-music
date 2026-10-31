@@ -1,3 +1,4 @@
+import { readBmsonExtraFields } from './bmson-extra-fields.ts';
 import {
   createEmptyJSON,
   type BmsonMineChannelEntry,
@@ -24,14 +25,17 @@ import {
   normalizeBmsonStopEvents,
   resolveBmsonResolution,
 } from './bmson.ts';
+import { convertLegacyBmsonDocument, isLegacyBmsonDocument } from './bmson-legacy.ts';
 
-export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
+export function parseBmsonDocument(source: BmsonDocument): BeMusicJSON {
+  // Pre-1.0 charts are read as Bemuse reads them; the result is an ordinary 1.0.0 document.
+  const document = isLegacyBmsonDocument(source) ? convertLegacyBmsonDocument(source) : source;
+  const version = requireSupportedBmsonVersion(document);
   const json = createEmptyJSON('bmson');
+  Object.assign(json.bmson, readBmsonExtraFields(document, 'root'));
 
   const info = document.info ?? {};
-  if (typeof document.version === 'string' && document.version.length > 0) {
-    json.bmson.version = document.version;
-  }
+  json.bmson.version = version;
 
   const resolution = resolveBmsonResolution(document);
   json.bmson.info = normalizeBmsonInfoForIR(info, resolution);
@@ -44,6 +48,11 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
     json.bmson.barlinesSuppressed = true;
   }
   const lines = normalizeBmsonLines(document.lines);
+  for (const line of document.lines ?? []) {
+    if (!line || typeof line !== 'object' || !Number.isFinite(line.y) || line.y < 0) continue;
+    const fields = readBmsonExtraFields(line, 'line').extraFields;
+    if (fields) (json.bmson.lineExtraFields ??= {})[String(Math.round(line.y))] = fields;
+  }
   const positionResolver = createBmsonPositionResolver(resolution, lines);
   if (lines.length > 0) {
     json.preservation.bmson.lines = lines;
@@ -96,6 +105,7 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
   if (json.bmson.info.eyecatchImage && !json.metadata.stageFile) {
     json.metadata.stageFile = json.bmson.info.eyecatchImage;
   }
+  if (json.bmson.info.titleImage) json.metadata.titleImage = json.bmson.info.titleImage;
 
   const soundChannels = normalizeBmsonSoundChannels(document.sound_channels);
   json.preservation.bmson.soundChannels = soundChannels;
@@ -127,6 +137,7 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
     bpmByPulse.delete(bpmEvent.y);
     bpmByPulse.set(bpmEvent.y, bpmEvent.bpm);
   }
+  const bpmFieldsByPulse = new Map(bpmEvents.map((event) => [event.y, readBmsonExtraFields(event, 'bpm', true)]));
   const bpmValues = [...bpmByPulse.values()];
   // beatoraja extension: `scroll_events` set the lane's scroll rate from `y` on, as BMS `#SCROLLxx` on channel `SC`,
   // and the rate holds until the next event, as in BMS. jbms-parser sets the rate on the timeline at `y`, so of several
@@ -138,6 +149,9 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
     scrollRateByPulse.delete(scrollEvent.y);
     scrollRateByPulse.set(scrollEvent.y, scrollEvent.rate);
   }
+  const scrollFieldsByPulse = new Map(
+    scrollEvents.map((event) => [event.y, readBmsonExtraFields(event, 'scroll', true)]),
+  );
   const scrollRates = [...scrollRateByPulse.values()];
   // BPM / STOP get one key per distinct value (a gimmick chart with thousands of changes usually repeats a handful of
   // values) and every sound / key / mine channel its own WAV slot. A resource that still needs more than the 1,295
@@ -154,12 +168,13 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
   }
   for (let index = 0; index < soundChannels.length; index += 1) {
     const soundChannel = soundChannels[index]!;
-    const key = encodeBmsonKey(index + 1, keyBase);
-    if (key === undefined) {
-      // Past the 3,843 base-62 WAV slots: drop the channel rather than overwrite an earlier channel's sample.
-      break;
-    }
+    const key = encodeBmsonKey(index + 1, keyBase)!;
     json.resources.wav[key] = soundChannel.name;
+    const channelFields = readBmsonExtraFields(soundChannel, 'channel', true).extraFields;
+    if (channelFields) {
+      (json.bmson.channelExtraFields ??= {})[key] = channelFields;
+      (json.bmson.channelKinds ??= {})[key] = 'sound';
+    }
     const notes = soundChannel.notes ?? [];
     const playableTicks = new Set<number>();
     const bgmCandidates: Array<{ pulse: number; event: BeMusicEvent }> = [];
@@ -193,8 +208,15 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
         (note.t === 1 || note.t === 2 || note.t === 3) && noteLength !== undefined && noteLength > 0
           ? note.t
           : undefined;
-      if (noteLength !== undefined || noteContinue !== undefined || noteLongNoteType !== undefined) {
-        event.bmson = {};
+      if (
+        noteLength !== undefined ||
+        noteContinue !== undefined ||
+        noteLongNoteType !== undefined ||
+        typeof note.up === 'boolean' ||
+        note.extraFields !== undefined
+      ) {
+        event.bmson = { ...readBmsonExtraFields(note, 'note', true) };
+        if (typeof note.up === 'boolean') event.bmson.up = note.up;
         if (noteLength !== undefined) {
           event.bmson.l = noteLength;
         }
@@ -233,12 +255,14 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
     keepDamage: boolean,
   ): void => {
     for (const extensionChannel of channels) {
-      const wavKey = encodeBmsonKey(nextWAVIndex, keyBase);
+      const wavKey = encodeBmsonKey(nextWAVIndex, keyBase)!;
       nextWAVIndex += 1;
-      if (wavKey === undefined) {
-        return;
-      }
       json.resources.wav[wavKey] = extensionChannel.name;
+      const channelFields = readBmsonExtraFields(extensionChannel, 'channel', true).extraFields;
+      if (channelFields) {
+        (json.bmson.channelExtraFields ??= {})[wavKey] = channelFields;
+        (json.bmson.channelKinds ??= {})[wavKey] = keepDamage ? 'mine' : 'key';
+      }
       for (const note of extensionChannel.notes) {
         const lane = Number.isFinite(note.x) ? Math.floor(note.x!) : 0;
         const playableChannel = lane > 0 ? laneMap.get(lane) : undefined;
@@ -248,8 +272,9 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
         }
         const { measure, position } = positionResolver(note.y);
         const event: BeMusicEvent = { measure, position, channel, value: wavKey };
+        if (note.extraFields) event.bmson = { ...readBmsonExtraFields(note, 'note', true) };
         if (keepDamage && note.damage !== undefined) {
-          event.bmson = { damage: note.damage };
+          event.bmson = { ...event.bmson, damage: note.damage };
         }
         json.events.push(event);
       }
@@ -263,7 +288,13 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
   Object.assign(json.resources.bpm, bpmKeys.table);
   [...bpmByPulse.keys()].forEach((y, index) => {
     const { measure, position } = positionResolver(y);
-    json.events.push({ measure, position, channel: '08', value: bpmKeys.keys[index]! });
+    json.events.push({
+      measure,
+      position,
+      channel: '08',
+      value: bpmKeys.keys[index]!,
+      ...(bpmFieldsByPulse.get(y)?.extraFields ? { bmson: { ...bpmFieldsByPulse.get(y) } } : {}),
+    });
   });
 
   // STOPs on one pulse add up (bmson spec), so their order on the pulse does not matter.
@@ -272,7 +303,13 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
   Object.assign(json.resources.stop, stopKeys.table);
   stopEvents.forEach((stopEvent, index) => {
     const { measure, position } = positionResolver(stopEvent.y);
-    json.events.push({ measure, position, channel: '09', value: stopKeys.keys[index]! });
+    json.events.push({
+      measure,
+      position,
+      channel: '09',
+      value: stopKeys.keys[index]!,
+      ...(stopEvent.extraFields ? { bmson: { ...readBmsonExtraFields(stopEvent, 'stop', true) } } : {}),
+    });
   });
 
   if (scrollEvents.length > 0) {
@@ -282,9 +319,48 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
   Object.assign(json.bms.scroll, scrollKeys.table);
   [...scrollRateByPulse.keys()].forEach((y, index) => {
     const { measure, position } = positionResolver(y);
-    json.events.push({ measure, position, channel: 'SC', value: scrollKeys.keys[index]! });
+    json.events.push({
+      measure,
+      position,
+      channel: 'SC',
+      value: scrollKeys.keys[index]!,
+      ...(scrollFieldsByPulse.get(y)?.extraFields ? { bmson: { ...scrollFieldsByPulse.get(y) } } : {}),
+    });
   });
 
-  json.events = sortAndNormalizeEvents(json.events, keyBase);
+  json.events = sortAndNormalizeEvents(json.events, keyBase, true);
   return json;
+}
+
+/** Only the stable 1.0.0 format is implemented; build metadata has no SemVer precedence. */
+function requireSupportedBmsonVersion(document: BmsonDocument): string {
+  if (document === null || typeof document !== 'object' || Array.isArray(document)) {
+    throw new TypeError('Invalid bmson document: expected a JSON object with version "1.0.0".');
+  }
+  if (!Object.hasOwn(document, 'version')) {
+    throw new Error(
+      'Invalid bmson: version is missing, but the chart uses bmson 1.0.0 fields rather than the legacy v0.21 ones. Add "version": "1.0.0".',
+    );
+  }
+  const version: unknown = document.version;
+  if (version === null) {
+    throw new TypeError("Invalid bmson version: null is not allowed. Supply the chart's actual format version.");
+  }
+  if (typeof version !== 'string') {
+    throw new TypeError('Invalid bmson version: expected a Semantic Versioning 2.0.0 string such as "1.0.0".');
+  }
+  // Validate SemVer syntax before checking support; compare decimal components as strings to avoid precision loss.
+  const match =
+    /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(
+      version,
+    );
+  if (!match || match[4]?.split('.').some((part) => /^0[0-9]+$/.test(part))) {
+    throw new TypeError('Invalid bmson version: expected a Semantic Versioning 2.0.0 string such as "1.0.0".');
+  }
+  if (match[1] !== '1' || match[2] !== '0' || match[3] !== '0' || match[4] !== undefined) {
+    throw new Error(
+      `Unsupported bmson version "${version}". This reader supports stable 1.0.0 (with optional build metadata); convert the chart to that format or use a reader for its declared version.`,
+    );
+  }
+  return version;
 }

@@ -32,3 +32,9 @@ describe('shouldSkipPlayKey', () => {
     expect(shouldSkipPlayKey(keyEvent('KeyZ', { tagName: 'CANVAS' }))).toBe(false);
   });
 });
+
+test('lets a bound F5 reach its lane while preserving field focus and the unbound restart key', () => {
+  expect(shouldSkipPlayKey(keyEvent('F5'), new Set(['f5']))).toBe(false);
+  expect(shouldSkipPlayKey(keyEvent('F5'), new Set(['z']))).toBe(true);
+  expect(shouldSkipPlayKey(keyEvent('F5', { tagName: 'INPUT' }), new Set(['f5']))).toBe(true);
+});

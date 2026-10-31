@@ -9,7 +9,6 @@
 - [BMS 実装仕様](bms-spec.ja.md)
 - [bmson 実装仕様](bmson-spec.ja.md)
 - [BMS / bmson 互換性ノート（de jure と de facto）](format-compat.ja.md)
-- [LR2 と beatoraja のセマンティクス](semantics-lr2-beatoraja.ja.md)
 - [Bemuse 実装仕様](bemuse-spec.ja.md)
 - [Player 実装仕様](player-spec.ja.md)
 - [Terminal player 実装メモ](player-tui.ja.md)
@@ -17,9 +16,9 @@
 - [シーンモデル（`@be-music/player-scene-model`）](scene-model.ja.md)
 - [リプレイ（プレイ履歴）仕様](replay.ja.md)
 - [コースと段位認定](course.ja.md)
-- [コースのブラウザ確認](course-checklist.ja.md)
+- [ブラウザー検証](player-web.ja.md#ブラウザー検証)
 - [Be-Music Fingerprint 仕様](fingerprint-spec.ja.md)
-- [Leaderboard 設計](leaderboard.ja.md)
+- [Leaderboard 仕様](leaderboard.ja.md)
 - [サービスと環境](services.ja.md)
 - [LR2 skin 実装メモ](lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](beatoraja-skin.ja.md)
@@ -40,4 +39,4 @@
 - `@be-music/player-scene-model` は、スキンの種類によらず各画面が何を見せ、どう振る舞うかを持ちます（[シーンモデル](scene-model.ja.md)）。`@be-music/player-browser` ではシーンセッションがそれを動かし、ファミリービューが描きます。
 - `@be-music/skin-lr2` と `@be-music/skin-beatoraja` は skin parsing を renderer 非依存に保ちます。browser PixiJS rendering は `@be-music/player-browser` 側に記述します。
 
-- [ブラウザ Worker のベンチマーク（2026-10-21）](./benchmarks/browser-workers-2026-10-21.ja.md)
+- [ブラウザープレイヤーの性能と計測](./player-performance.ja.md)

@@ -57,7 +57,11 @@ export function resolveGameplayPanels(frame: BeMusicDOMGameplayFrame): BeMusicGa
     title: [chart?.title ?? 'Preparing chart', chart?.subtitle].filter(Boolean).join(' '),
     facts: [
       chart?.genre,
-      r.playVariant ? `${r.playVariant} KEY` : undefined,
+      r.playVariant?.startsWith('generic-')
+        ? `${r.playVariant.slice(8)} KEY GENERIC`
+        : r.playVariant
+          ? `${r.playVariant} KEY`
+          : undefined,
       chart?.playLevel !== undefined ? `Lv. ${chart.playLevel}` : undefined,
     ]
       .filter(Boolean)

@@ -1,10 +1,12 @@
+import type { ChartOptionProgram } from '@be-music/chart-model';
+import { parseChartOptionProgram } from './chart-options.ts';
 import {
   clampCustomJudgeRate,
   DEFAULT_BEATORAJA_CUSTOM_JUDGE,
   type BeatorajaCustomJudge,
 } from '../ruleset/custom-judge.ts';
-import type { BattleMode } from '../core/battle-mode.ts';
-import type { ChartPlayVariant } from '@be-music/chart-model';
+import type { EffectiveBattleMode } from '../core/battle-mode.ts';
+import { getPlayModeLayouts, type ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
 import type { ScrollModifier } from '../core/scroll-modifier.ts';
@@ -145,6 +147,8 @@ export interface ReplayJudgeRank {
 }
 
 export interface ReplayChart {
+  /** Recorded effective display operations; never reinterprets unsupported source declarations. */
+  chartOptions?: ChartOptionProgram;
   /** Original header BPM, kept separately from the effective tempo map. */
   headerBPM?: number;
   /** Resolved chart BPM extrema, used for source option classification. */
@@ -197,6 +201,8 @@ export interface ReplayChart {
 }
 
 export interface ReplayPlay {
+  /** Absent retains beatoraja-compatible bmson zero-total recovery. */
+  bmsonTotalMode?: import('../ruleset/bmson-total.ts').BmsonTotalMode;
   /** Selected source options at the start; typed effective play/chart fields remain authoritative for judging. */
   options?: ReplayOptionState;
   /** Every later selected-option change, on the same chart clock as inputs and view changes. */
@@ -213,7 +219,7 @@ export interface ReplayPlay {
   sevenToNineType?: import('../core/seven-to-nine.ts').SevenToNineType;
   sevenToNineThresholdBPM?: number;
   sevenToNineApplied?: boolean;
-  battleMode?: BattleMode;
+  battleMode?: EffectiveBattleMode;
   battleSourceVariant?: ChartPlayVariant;
   battleTempo?: number;
   battleAssist1P?: boolean;
@@ -456,6 +462,13 @@ export function parseReplay(source: unknown): BeMusicReplay {
   const chart = parseChart(expectRecord(root.chart, 'chart'));
   const inputs = parseInputs(root.inputs);
   const play = parsePlay(expectRecord(root.play, 'play'));
+  if (
+    play.bmsonTotalMode === 'spec' &&
+    chart.total !== undefined &&
+    chart.total < 0 &&
+    (chart.totalUnit ?? (chart.sourceFormat === 'bmson' ? 'percent' : 'absolute')) === 'percent'
+  )
+    throw new ReplayParseError('chart.total: bmson spec mode requires a normalized non-negative percentage.');
   const results = root.results === undefined ? undefined : parseResults(expectRecord(root.results, 'results'));
   const recorder = root.recorder === undefined ? undefined : parseRecorder(expectRecord(root.recorder, 'recorder'));
 
@@ -550,6 +563,7 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
   ] as const) {
     if (parsed[key] === undefined) delete parsed[key];
   }
+  if (chart.chartOptions !== undefined) parsed.chartOptions = parseChartOptionProgram(chart.chartOptions);
   return parsed;
 }
 
@@ -716,6 +730,11 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
+  if (play.bmsonTotalMode !== undefined) {
+    if (play.bmsonTotalMode !== 'beatoraja' && play.bmsonTotalMode !== 'spec')
+      throw new ReplayParseError('play.bmsonTotalMode: expected beatoraja or spec');
+    parsed.bmsonTotalMode = play.bmsonTotalMode;
+  }
   if (play.bottomShiftableGauge !== undefined) {
     if (!['ASSIST-EASY', 'EASY', 'GROOVE'].includes(play.bottomShiftableGauge as string))
       throw new ReplayParseError('play.bottomShiftableGauge: expected ASSIST-EASY, EASY or GROOVE');
@@ -836,13 +855,28 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.sevenToNineApplied = play.sevenToNineApplied;
   }
   if (play.battleMode !== undefined) {
-    if (!['OFF', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS', 'TWO-PLAYER'].includes(play.battleMode as string))
-      throw new ReplayParseError('play.battleMode: expected OFF, SP-TO-DP, D-BATTLE, BATTLE, BATTLE-AS or TWO-PLAYER');
-    parsed.battleMode = play.battleMode as BattleMode;
+    if (
+      !['OFF', 'COUPLE', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS', 'TWO-PLAYER'].includes(
+        play.battleMode as string,
+      )
+    )
+      throw new ReplayParseError(
+        'play.battleMode: expected OFF, COUPLE, SP-TO-DP, D-BATTLE, BATTLE, BATTLE-AS or TWO-PLAYER',
+      );
+    parsed.battleMode = play.battleMode as EffectiveBattleMode;
   }
   if (play.battleSourceVariant !== undefined) {
-    if (!['5', '7', '9', '10', '14', '24', '48'].includes(play.battleSourceVariant as string))
-      throw new ReplayParseError('play.battleSourceVariant: unknown play variant');
+    let knownVariant = false;
+    try {
+      knownVariant =
+        typeof play.battleSourceVariant === 'string' &&
+        getPlayModeLayouts(play.battleSourceVariant as ChartPlayVariant).some(
+          (layout) => layout.variant === play.battleSourceVariant,
+        );
+    } catch {
+      // Numeric generic variants outside the supported domain are malformed replay input.
+    }
+    if (!knownVariant) throw new ReplayParseError('play.battleSourceVariant: unknown play variant');
     parsed.battleSourceVariant = play.battleSourceVariant as ChartPlayVariant;
   }
   if (play.battleTempo !== undefined) {

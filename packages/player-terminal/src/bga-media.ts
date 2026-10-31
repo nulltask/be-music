@@ -1,10 +1,12 @@
+import { getANSIFrameAlpha } from './bga-alpha.ts';
+import { applyBMSColorKey, type BmsARGB } from '@be-music/chart-model';
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { isAbortError, throwIfAborted } from '@be-music/shared-utils/core';
 import { resolveFirstExistingPath } from '@be-music/shared-utils/path';
 import { decodeVideoFramesStream, decodeVideoFramesToSourceFramesInWorker } from './bga-video.ts';
 import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player-engine/display';
-import { decodeImageBuffer } from './bga-image.ts';
+import { decodeImageBuffer, type DecodedImage } from './bga-image.ts';
 import {
   type FrameMode,
   type ANSIFrame,
@@ -16,6 +18,7 @@ import {
   type VideoFrameSource,
   type FrameSource,
   createStaticFrameSource,
+  mapFrameSource,
 } from './bga-frame-source.ts';
 
 async function loadImageAsSpecFrame(
@@ -23,6 +26,8 @@ async function loadImageAsSpecFrame(
   mode: FrameMode,
   resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
   signal?: AbortSignal,
+  colorKey?: BmsARGB,
+  swBGAColorKey?: BmsARGB,
 ): Promise<ANSIFrame | undefined> {
   const extension = extname(imagePath).toLowerCase();
   if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
@@ -33,8 +38,18 @@ async function loadImageAsSpecFrame(
     const buffer = await readFile(imagePath, { signal });
     throwIfAborted(signal);
     const decoded = decodeImageBuffer(buffer, imagePath);
+    if ((colorKey || swBGAColorKey) && !decoded.hasAlphaChannel) {
+      for (let offset = 3; offset < decoded.data.length; offset += 4) decoded.data[offset] = 255;
+    }
+    if (colorKey) applyImageColorKey(decoded, colorKey);
+    if (swBGAColorKey) applyBMSColorKey(decoded.data, swBGAColorKey, true);
     throwIfAborted(signal);
-    return await convertImageToSpecFrameOffThread(decoded, mode, resizeAlgorithm, signal);
+    return await convertImageToSpecFrameOffThread(
+      decoded,
+      colorKey || swBGAColorKey ? 'exbmp' : mode,
+      resizeAlgorithm,
+      signal,
+    );
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -47,6 +62,8 @@ async function loadImageAsSourceFrame(
   imagePath: string,
   mode: FrameMode,
   signal?: AbortSignal,
+  colorKey?: BmsARGB,
+  swBGAColorKey?: BmsARGB,
 ): Promise<ANSIFrame | undefined> {
   const extension = extname(imagePath).toLowerCase();
   if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
@@ -57,14 +74,24 @@ async function loadImageAsSourceFrame(
     const buffer = await readFile(imagePath, { signal });
     throwIfAborted(signal);
     const decoded = decodeImageBuffer(buffer, imagePath);
+    if ((colorKey || swBGAColorKey) && !decoded.hasAlphaChannel) {
+      for (let offset = 3; offset < decoded.data.length; offset += 4) decoded.data[offset] = 255;
+    }
+    if (colorKey) applyImageColorKey(decoded, colorKey);
+    if (swBGAColorKey) applyBMSColorKey(decoded.data, swBGAColorKey, true);
     throwIfAborted(signal);
-    return convertImageToSourceFrame(decoded, mode);
+    return convertImageToSourceFrame(decoded, colorKey || swBGAColorKey ? 'exbmp' : mode);
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
     }
     return undefined;
   }
+}
+
+/** Key native pixels before scaling and before the terminal's binary alpha-mask conversion. */
+function applyImageColorKey(image: DecodedImage, colorKey: BmsARGB): void {
+  applyBMSColorKey(image.data, colorKey, image.hasAlphaChannel === true);
 }
 
 export async function loadFrameSource(
@@ -75,14 +102,40 @@ export async function loadFrameSource(
   imageResizeAlgorithm: ImageResizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
   videoBGAStreaming = true,
   signal?: AbortSignal,
+  preserveSourceGeometry = false,
+  colorKey?: BmsARGB,
+  swBGAColorKey?: BmsARGB,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
-  const imageFrame = await loadImageAsSpecFrame(resourcePath, mode, imageResizeAlgorithm, signal);
+  const imageFrame = preserveSourceGeometry
+    ? await loadImageAsSourceFrame(resourcePath, mode, signal, colorKey, swBGAColorKey)
+    : await loadImageAsSpecFrame(resourcePath, mode, imageResizeAlgorithm, signal, colorKey, swBGAColorKey);
   if (imageFrame) {
     return createStaticFrameSource(imageFrame);
   }
 
-  return loadVideoAsFrameSource(resourcePath, mode, videoBGAStreaming, signal);
+  const video = await loadVideoAsFrameSource(
+    resourcePath,
+    swBGAColorKey || colorKey ? 'exbmp' : mode,
+    videoBGAStreaming,
+    signal,
+    preserveSourceGeometry || swBGAColorKey !== undefined || colorKey !== undefined,
+  );
+  if (!video || (!swBGAColorKey && !colorKey)) return video;
+  return mapFrameSource(video, (frame) => {
+    const rgba = new Uint8Array(frame.width * frame.height * 4);
+    for (let pixel = 0; pixel < frame.opaqueMask.length; pixel++) {
+      rgba.set(frame.rgb.subarray(pixel * 3, pixel * 3 + 3), pixel * 4);
+      rgba[pixel * 4 + 3] = getANSIFrameAlpha(frame, pixel);
+    }
+    if (colorKey) applyBMSColorKey(rgba, colorKey, false);
+    if (swBGAColorKey) applyBMSColorKey(rgba, swBGAColorKey, true);
+    return {
+      ...frame,
+      opaqueMask: Uint8Array.from(frame.opaqueMask, (_, pixel) => (rgba[pixel * 4 + 3] ? 1 : 0)),
+      ...(frame.alpha ? { alpha: Uint8Array.from(frame.alpha, (_, pixel) => rgba[pixel * 4 + 3]!) } : {}),
+    };
+  });
 }
 
 async function loadVideoAsFrameSource(
@@ -90,6 +143,7 @@ async function loadVideoAsFrameSource(
   mode: FrameMode,
   videoBGAStreaming = true,
   signal?: AbortSignal,
+  preserveVideoBorders = false,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
   const frames: TimedANSIFrame[] = [];
@@ -125,6 +179,7 @@ async function loadVideoAsFrameSource(
         format: 'video',
       },
       mode,
+      preserveVideoBorders,
     );
     frames.push({
       seconds: frame.seconds,
@@ -214,11 +269,13 @@ async function loadVideoAsFrameSource(
                 height: frame.height,
                 rgb: frame.rgb,
                 opaqueMask: frame.opaqueMask,
+                ...(frame.alpha ? { alpha: frame.alpha } : {}),
               },
             });
           },
           signal,
           {
+            preserveVideoBorders,
             onReady: (info) => {
               source.durationSeconds = info.durationSeconds;
             },

@@ -27,9 +27,7 @@ browser runtime は次の adapter module を使います。
 | [`web-ui-runtime.ts`](../packages/player-browser/src/runtime/web-ui-runtime.ts)       | engine UI signal をプレイのセッションへ流します。frame snapshot は note、score、gauge、result state を更新し、command は lane flash、key hold、POOR BGA、judge/combo effect を駆動します。                                                    |
 | [`engine-driver.ts`](../packages/player-browser/src/runtime/engine-driver.ts)         | audio、input、UI adapter を組み立て、1 譜面分の `manualPlay` / `autoPlay` を呼び出します。                                                                                                                                                    |
 
-engine（`@be-music/player-engine`）は `node:path` / `node:timers/promises` 依存を排除済みで、 browser bundle にそのまま
-含められます。 `createNodeAudioSink` (Node 専用 audio backend) も lazy import なので、 host が
-`PlayerOptions.createAudioSession` factory (= `createWebAudioSession`) を渡す経路では一切到達しません。
+エンジンは実行環境に依存しません。ホストは `PlayerOptions.createAudioSession` を渡します。ブラウザーは `createWebAudioSession`、ターミナルは `@be-music/player-node-audio` を使い、エンジン自身は Node の音声バックエンドを読み込みません。
 
 ## 対象範囲
 
@@ -50,7 +48,7 @@ engine（`@be-music/player-engine`）は `node:path` / `node:timers/promises` �
 | `./collection`             | ライブラリの読み込み：`BrowserChartCollectionStore`、ドロップしたファイル、コースとコースメーカー、譜面のハッシュ、ブラウザの互換性チェック                                                                                               |
 | `./audio`                  | オーディオサービス（`createAudioService`）、オーディオバスとコンプレッサーのパラメーター、マスター音量、システムの audio session、`ChartPreviewEngine`                                                                                    |
 | `./recording`              | `GameplayRecorder`、録画の形式、`makeWebMSeekable`、`downloadBlob`、WebCodecs の helper                                                                                                                                                   |
-| `./compute`                | 共通 CPU Worker プール、並列数の設定、データのみの処理依頼、ホストによる Worker の登録。                                                                                                                                                  |
+| `./compute`                | 共通 CPU Worker プール、並列数の設定、データのみの処理依頼、ホストによる Worker の登録（処理プールと BGA 動画 transcode の Worker）。                                                                                                     |
 
 scene が受け取って返すモデルは、それぞれのパッケージから読み込みます。プレイオプション、`PlayResult`、`CourseView`、ハイスピードの範囲、ライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`、`LibraryEntry` など）とその helper（`groupChartsByFolder`、`resolveLibraryChartPlayVariant`）は `@be-music/player-scene-model` から、be-music スキンの契約は `@be-music/player-skin-sdk` から、リプレイの形式は `@be-music/player-engine/replay` から読み込みます。それ以外はパッケージの内部です。
 
@@ -155,7 +153,7 @@ flowchart TD
 
 矢印は、モジュールから、それが作るもの・使うものへ向かいます。シーンルーターとサービスもアプリが作り、ルートと Debug Menu に渡します。
 
-**起動処理。** `main.ts` はページのマークアップを書き、ブラウザーの互換性チェックを最初に行い（レンダラーを起動できないブラウザーでも理由を表示するためです）、スマートフォンとタブレットを判別して印を付け、Help のモーダルをつなぎます。UI のフォントの準備ができたらアプリを作り、その上に[テスト用フック](./course-checklist.ja.md#テスト用フック)を取り付けてから始めます。
+**起動処理。** `main.ts` はページのマークアップを書き、ブラウザーの互換性チェックを最初に行い（レンダラーを起動できないブラウザーでも理由を表示するためです）、スマートフォンとタブレットを判別して印を付け、Help のモーダルをつなぎます。UI のフォントの準備ができたらアプリを作り、その上に[テスト用フック](./player-web.ja.md#テスト用フック)を取り付けてから始めます。
 
 **構成の根。** `app/app.ts`（`PlayerWebApp`）はサービス、シーンルーター、ルートを作り、それらどうし、Debug Menu、Leaderboard をつなぎます。プレイ中のロックもここが持ちます。プレイが始まるときに Auto-save play history の設定を確定し、プレイが確定したオプション、Skin system 以外のスキンの操作、Submit to Leaderboard を無効にします。リザルトが出るか選曲画面に戻ると解除します。Skin system は譜面を続けたまま描画する family を切り替えます。`app/shell.ts` は、stage を載せたあと、stage のまわりのページをシーンに合わせます。シェルの `in-gameplay` の状態とそれで止めるピンチズーム、タッチ用の一時停止と Quit のボタン、キャンバスのダブルクリックでのフルスクリーンとその `Esc` の扱いです。
 
@@ -175,7 +173,7 @@ flowchart TD
 
 **リプレイ、録画、ステータス。** `services/replays.ts` は、player が書くリプレイの記録者として プレイヤーの名前（`REPLAY_RECORDER`: `be-music-web`、そのバージョンとビルド元のコミット）を持ち、リプレイを自動保存します。プレイのログはリザルトが出たとき、コースのログはコースリザルトが出たときに、そのプレイ（コースなら最後のステージ）を始めたときの Auto-save play history の設定に従って保存します。`services/recording.ts` は、Capture フォルダーの録画とスクリーンショットがプレイをまたいで使うものを持ちます。選曲画面で予約した録画（次のプレイと一緒に始まります）、次の録画を保存するファイル名（譜面のタイトル）、選んだ動画の形式です。録画そのものは `recording-controller.ts` が行い、録画中のものはシーンルーターが遷移のたびに確定させます。`services/status.ts` はステータス行を持ちます。Debug Menu の Status の行で、テスト用のフックが記録するものです。その行がプレイやリザルトを説明しているかどうかも持ちます。説明している行は、選曲画面に戻るとライブラリの要約に置き換わります。
 
-**テスト用フック。** E2E テストの[テスト用フック](./course-checklist.ja.md#テスト用フック)（`window.__beMusicTest`）に答えるのは `services/test-hook.ts` です。読まれるたびに、シーンルーターが出しているシーン、選曲画面のカーソルとその下のバーの自己ベスト、stage のプレイ、ライブラリ、コースのプレイ、作成中のコースを読みます。結果、リプレイ、読み込みの完了など、アプリが渡すものは `test-hook.ts` が足します。読むだけで何も始めず、アプリがすでに持っているものからすぐに答えます。バーの自己ベストは選曲画面と同じく今の判定ルールのものです。譜面の自己ベストは、選曲画面がその譜面のハッシュを計算したあとはハッシュで、それまではパスで探すので、読んでも譜面のハッシュは計算しません。
+**テスト用フック。** E2E テストの[テスト用フック](./player-web.ja.md#テスト用フック)（`window.__beMusicTest`）に答えるのは `services/test-hook.ts` です。読まれるたびに、シーンルーターが出しているシーン、選曲画面のカーソルとその下のバーの自己ベスト、stage のプレイ、ライブラリ、コースのプレイ、作成中のコースを読みます。結果、リプレイ、読み込みの完了など、アプリが渡すものは `test-hook.ts` が足します。読むだけで何も始めず、アプリがすでに持っているものからすぐに答えます。バーの自己ベストは選曲画面と同じく今の判定ルールのものです。譜面の自己ベストは、選曲画面がその譜面のハッシュを計算したあとはハッシュで、それまではパスで探すので、読んでも譜面のハッシュは計算しません。
 
 **Debug Menu。** [Debug Menu](#debug-menu) は `ui/debug-menu/` にあります。`DebugMenu`（`index.ts`）がフォルダーごとのモジュールでメニューを組み立て、アプリには `DebugMenuDeps` を通してだけ触れます。アプリが設定、ライブラリ・記録・コースメーカーのサービス、アプリの状態を読む関数、アプリの操作をそこに渡します。フォルダー名と開閉状態の記憶は `folders.ts`、プレイ中に確定したオプションとスキンの操作にかけるロックは `play-lock.ts` です。beatoraja のスキンオプションのパネルは `ui/beatoraja-skin-options.ts` です。
 
@@ -187,6 +185,8 @@ flowchart TD
 - 大きな audio / video file は既定で lazy な `File` reference のまま保持します。image、skin、chart、小さな metadata file は collection loading 中に bytes として読み込みます。
 - folder walking と file read は bounded concurrency と progress callback を使い、大きな folder でも browser の FileSystem API や UI update loop を過剰に詰まらせないようにします。
 - parse error は drop 全体を abort せず、collection に蓄積します。
+
+演奏と選曲プレビューは、候補音声の読み込みやデコードに失敗すると、次の異なる素材を試します。探索順は既存の Opus → Ogg → MP3 → WAV → M4A → 宣言されたパスを維持し、フォルダー探索・大文字小文字を区別しない照合・`#PATH_WAV` も適用します。読み込みが中断されたり選曲が変わったりした場合は、次の候補を試しません。NONSTOP の音声は、連結後のリソースパスをキーとする `BrowserAssetSource.audioFallbacks` に各ステージの候補列を保持し、元のステージの別フォルダーにある形式にも切り替えます。デコード結果は引き続き譜面で宣言されたリソース名をキーに保持します。
 
 ## コースと段位認定
 
@@ -241,7 +241,7 @@ flowchart TD
   - `no_speed` では、beatoraja の `ControlInputProcessor` と同じく、ハイスピード、レーンカバー、リフト、HIDDEN カバーを固定します。矢印キー、PageUp / PageDown、Home / End、H / J / K、ホイール、スキンのカバーのボタン（act 330-332）は効きません。何も変わらないので、次のプレイ用に保存されるものもありません。
   - コースの結果は、テーマに `COURSE_RESULT` スキン（type 15）があればそれで、なければ結果のスキンで表示します。`MODE_COURSE` を点け、タイトルの文字列（10 / 12）はコース名になります。BGM は `course_clear` / `course_fail` を流し、なければ `clear` / `fail` を流します。
 
-- **NONSTOP：** プレイヤーは LR2 の NONSTOP コースを 1 本の譜面として遊びます。始めると、共通の NONSTOP の処理でステージをつなぎます（`@be-music/player-engine/course` の `prepareNonstopCourse`。Leaderboard もこれでプレイを作り直します。各ステージの `#RANDOM` を引き、コースのロングノーツ制約を適用します。プレイヤーの `prepareNonstopPlay` はアセットの扱いを加えます）。つないだ譜面はゲームプレイの種類自身のプレイ画面で遊び（beatoraja のテーマならそのプレイのスキン）、結果はつないだプレイのコースのログ（`buildNonstopCourseReplay`）から出します。このログはほかのコースと同じく記録し、自動保存します。LR2 には NONSTOP のコースの結果の段階がない（OpenLR2 `Main.cpp` M1406-M1412）ので、結果はコースリザルト用ではなく結果のスキンで表示し、BGM は `clear` / `fail` を流します。LR2 と同じくクイックリトライができ（L2854）、プレイ中の F5 と結果画面の R でつなぎ直して遊び直します。Debug Menu → Course → **NONSTOP placement** で、意図どおりの配置（既定）か LR2 どおりの配置かを選べます。**Pitch**（[プレイテンポ](#プレイテンポ)と共通）では、FIT のステージが前のステージのテンポに合わせる方法を選べます。**Pitch follows tempo (LR2)**（既定）はサンプルを速く・遅く再生するので、テンポと一緒にピッチも変わります。**Keep pitch** は読み込み時にサンプルを時間方向に伸縮し、ピッチを保ちます。伸縮の方式は **Keep-pitch stretcher** で選べます。**Signalsmith Stretch**（MIT ライセンスの `signalsmith-stretch` の WASM AudioWorklet で、サンプルを並べて倍率ごとに 1 回オフラインでレンダリングします）か **WSOLA**（既定。`timeStretchChannels`。内蔵で軽い）です。前者が動かないブラウザでは WSOLA に切り替えます。いずれも次のプレイから反映されます。テンポを変えて遊ぶ NONSTOP コースでは、すべてのステージがそのテンポで進み、FIT の倍率はその上に掛かります。シーン側の扱い： つないだ NONSTOP の譜面は、合成したアセットソース（`createNonstopAssets`）から鳴らします。各ステージのファイルは、そのステージ単体と同じ探し方（`#PATH_WAV`、コーデックと画像拡張子の代替、LR2 の親フォルダ）で見つけ、`s<ステージ>/<キー>` の名前にします。譜面は `NONSTOP_CHART_PATH` として遊びます。プレイのシーンの `settings.nonstop`（結合のマップ）を渡すと、各ステージのサンプルを FIT の再生レートで鳴らし、背景音はステージごとのゲインを通して、つなぎ目で LR2 と同じ `音量²` の曲線でフェードします。プレイヤーのキー音はフェードしません。一時停止はオーディオコンテキストを止めるので、フェードも一緒に止まります。LR2 スキンでは、LR2 と同じく、最初のステージの op でプレイ全体を 1 回だけ解析します。その後、ステージの op（280-289）と曲名テキスト 10 が次のステージに移るのは、BLANK でつないだステージに入ったときだけです（`resolveLR2NonstopStage`）。FADE や CUT の後は前のステージの表示のままで、それまで曲名テキスト 10 にはコース名が出ます。LR2 の選曲画面のテキスト 171-179 には、選んだ NONSTOP コースのつなぎ方（`FADE`、`FADE+FIT`、`CUT`、`CUT+FIT`、`BLANK1`、`BLANK2`）を出し、それ以外のバーでは `DISABLE` を出します。ボタン 240-248 は、プレイヤーが作ったコースのつなぎ方を変えます。BGA はステージごとに base / layer / POOR の重なりを 1 組ずつ持ちます。キューは BMP キーを持つステージごとに分け、つなぎ目の前後 3 秒で直線的にクロスフェードします。POOR の間は、各ステージの base と layer の代わりにそのステージ自身の POOR 画像を出します。`#BMP00` による代替はしません。LR2 は毎フレーム、クロスフェードの重みを使ってランダムに 1 つのステージを選び、その 3 枚の画像を描きます（`LR2body.exe` 0x4350df）。クロスフェードはその平均にあたります。beatoraja のテーマのプレイのスキンも、同じ重なりを同じクロスフェードで描きます（`resolveBGAStacks`）。その BGA レイヤーと同じく、重なりはそれぞれ 1 枚の画像（POOR、layer、base の順に優先）にまとめます。BPM の表示（LR2 の NOWBPM と組み込みの HUD）は、各ステージ自身の BPM に FIT の倍率を掛けた値を出します（`map.tempo`）。スクロールは結合後の 150 BPM のままです。エンジンには `map.stageRanks` を渡すので、後のステージはそのステージの `#RANK` で判定します（リプレイではログに記録した切り替えを使います）。
+- **NONSTOP：** プレイヤーは LR2 の NONSTOP コースを 1 本の譜面として遊びます。始めると、共通の NONSTOP の処理でステージをつなぎます（`@be-music/player-engine/course` の `prepareNonstopCourse`。Leaderboard もこれでプレイを作り直します。各ステージの `#RANDOM` を引き、コースのロングノーツ制約を適用します。プレイヤーの `prepareNonstopPlay` はアセットの扱いを加えます）。つないだ譜面はゲームプレイの種類自身のプレイ画面で遊び（beatoraja のテーマならそのプレイのスキン）、結果はつないだプレイのコースのログ（`buildNonstopCourseReplay`）から出します。このログはほかのコースと同じく記録し、自動保存します。LR2 には NONSTOP のコースの結果の段階がない（OpenLR2 `Main.cpp` M1406-M1412）ので、結果はコースリザルト用ではなく結果のスキンで表示し、BGM は `clear` / `fail` を流します。LR2 と同じくクイックリトライができ（L2854）、プレイ中の F5 と結果画面の R でつなぎ直して遊び直します。Debug Menu → Course → **NONSTOP placement** で、意図どおりの配置（既定）か LR2 どおりの配置かを選べます。**Pitch**（[プレイテンポ](#プレイテンポ)と共通）では、FIT のステージが前のステージのテンポに合わせる方法を選べます。**Pitch follows tempo (LR2)**（既定）はサンプルを速く・遅く再生するので、テンポと一緒にピッチも変わります。**Keep pitch** は読み込み時にサンプルを時間方向に伸縮し、ピッチを保ちます。伸縮の方式は **Keep-pitch stretcher** で選べます。**Signalsmith Stretch**（MIT ライセンスの `signalsmith-stretch` の WASM AudioWorklet で、サンプルを並べて倍率ごとに 1 回オフラインでレンダリングします）か **WSOLA**（既定。`timeStretchChannels`。内蔵で軽い）です。前者が動かないブラウザでは WSOLA に切り替えます。いずれも次のプレイから反映されます。テンポを変えて遊ぶ NONSTOP コースでは、すべてのステージがそのテンポで進み、FIT の倍率はその上に掛かります。シーン側の扱い： つないだ NONSTOP の譜面は、合成したアセットソース（`createNonstopAssets`）から鳴らします。各ステージのファイルは、そのステージ単体と同じ探し方（`#PATH_WAV`、コーデックと画像拡張子の代替、LR2 の親フォルダ）で見つけ、`s<ステージ>/<キー>` の名前にします。譜面は `NONSTOP_CHART_PATH` として遊びます。プレイのシーンの `settings.nonstop`（結合のマップ）を渡すと、各ステージのサンプルを FIT の再生レートで鳴らし、背景音はステージごとのゲインを通して、つなぎ目で LR2 と同じ `音量²` の曲線でフェードします。プレイヤーのキー音はフェードしません。一時停止はオーディオコンテキストを止めるので、フェードも一緒に止まります。LR2 スキンでは、LR2 と同じく、最初のステージの op でプレイ全体を 1 回だけ解析します。その後、ステージの op（280-289）と曲名テキスト 10 が次のステージに移るのは、BLANK でつないだステージに入ったときだけです（`resolveLR2NonstopStage`）。FADE や CUT の後は前のステージの表示のままで、それまで曲名テキスト 10 にはコース名が出ます。LR2 の選曲画面のテキスト 171-179 には、選んだ NONSTOP コースのつなぎ方（`FADE`、`FADE+FIT`、`CUT`、`CUT+FIT`、`BLANK1`、`BLANK2`）を出し、それ以外のバーでは `DISABLE` を出します。ボタン 240-248 は、プレイヤーが作ったコースのつなぎ方を変えます。BGA はステージごとに base / layer / POOR の重なりを 1 組ずつ持ちます。キューは BMP キーを持つステージごとに分け、つなぎ目の前後 3 秒で直線的にクロスフェードします。POOR の間は、各ステージの base と layer の代わりにそのステージ自身の POOR 画像を出します。`#BMP00` による代替はしません。LR2 は毎フレーム、クロスフェードの重みを使ってランダムに 1 つのステージを選び、その 3 枚の画像を描きます（`LR2body.exe` 0x4350df）。クロスフェードはその平均にあたります。beatoraja のテーマのプレイのスキンも、同じ重なりを同じクロスフェードで描きます（`resolveBGAStacks`）。各重なりでは base、07 のオーバーレイ、0A のオーバーレイを順に合成し、ミス時は POOR 画像を使います。BPM の表示（LR2 の NOWBPM と組み込みの HUD）は、各ステージ自身の BPM に FIT の倍率を掛けた値を出します（`map.tempo`）。スクロールは結合後の 150 BPM のままです。エンジンには `map.stageRanks` を渡すので、後のステージはそのステージの `#RANK` で判定します（リプレイではログに記録した切り替えを使います）。
 - **コースを作る：** LR2 と同じく、選曲画面で自分のコースを作れます（`CourseMaker`。[コースを作る](./course.ja.md#コースを作る) を参照）。
   - ルートに `MY COURSES`（LR2 の EXPERT コース）、`MY NONSTOP`、`MY DAN`（GRADE、段位）のフォルダが並びます（`resolveCourseMakerFolders`）。中には自分のコースと、最後に NEW COURSE バーがあります。NEW COURSE を決定すると、その種類のコースの作成が始まります。それ以降は、曲を決定すると遊ぶ代わりにコースへ追加し、5 曲あるところでさらに決定するとコースを保存します。
   - `MY COURSES` と `MY NONSTOP` の最後には、LR2 と同じく RANDOM MIX バーがあります（[RANDOM MIX](./course.ja.md#random-mix) を参照）。決定すると、キーフィルタのキーモード（ALL では 7）でその種類のコースをライブラリから抽選し、前回の抽選と置き換えてフォルダのいちばん新しいコース `RANDOM MIX` として残し、遊ばせます。AUTO で始めると抽選したコースを AUTO で遊びます。1 曲目が見つからないときはステータス行に知らせ、何も始めません。
@@ -803,15 +803,39 @@ pnpm bench -- --packages player-browser
 - BGA は chart BGA event が参照する still image と video asset を扱います。
 - BGA rect（LR2 の `#DST_BGA`、beatoraja の `bga`、built-in frame）はいずれも 256x256 の BMS キャンバスとして扱います。長辺 256 px 以下の静止画は等倍のまま X 軸中央・上詰めで黒地の上に置き、それより大きい画像と動画は rect いっぱいに描きます（[フォーマット互換性](./format-compat.ja.md#217-bga)）。
 - default family は LR2 skin と同じ chart BGA layer stack を built-in BGA frame 内に描画します。
-- BMS rendering は、実装済み subset として `#BGAxx` sub-region、`#SWBGAxx` switching、`#ARGBxx` / `#EXBMPxx` tint / alpha を反映します。
+- BMS rendering は `#BGAxx` の部分領域、EXBMP 静止画・不透明動画の透過色、面ごとの A1〜A4 ARGB、キー入力連動 A5 SWBGA を反映します。SWBGA は透過色付き動画の切り出しと NONSTOP のリソース変換にも対応します。選択と表示はステージ境界で終了し、アニメーションと動画の時計は FIT に合わせます。[BMS 対応範囲](bms-spec.ja.md)を参照してください。
 - bmson rendering は `bga.bga_events`、`bga.layer_events`、`bga.poor_events` を使います。BMS layer channel と異なり、bmson layer image は黒を透明化せず黒ピクセルとして保持します。
-- browser player は、未対応 video asset を playback 前に ffmpeg.wasm と single-threaded の `@ffmpeg/core` で transcode できます。現在の 0.12.x の multithreaded core は libx264 でクラッシュするため含めていません。一般的な BMS BGA の動画は transcode に数十秒かかります。
+- ブラウザが再生できない BGA 動画（`.wmv`、`.avi`、`.mpg` など）は、ffmpeg.wasm と single-threaded の `@ffmpeg/core` で H.264 に transcode し、transcode の途中から再生を始めます（[BGA 動画の transcode](#bga-動画の-transcode)）。現在の 0.12.x の multithreaded core は libx264 でクラッシュするため含めていません。BGA 動画の音声はいずれにしても扱いません。
 - chart の自然終了時は、短い post-chart delay を置いてから result scene を開きます。視覚的に result へ遷移しても、残っている gameplay audio tail は中断しません。
 - gameplay recorder は MP4 か WebM の output を書き出し、active recording が gameplay bus の破棄前に flush されるよう、scene disposal より前に stop / finalization を終えます。
 - リプレイ再生を除く毎プレイでリプレイ（`*.bmplay.json` 入力リプレイ — 解決済み譜面、生の押下/解放列、プレイ設定。[replay.ja.md](./replay.ja.md) 参照）を記録します。player は result scene のマウント時に自動ダウンロードし、Debug Menu の「Library & records」フォルダにある「Auto-save play history」チェックボックス（デフォルト OFF。曲開始時にラッチされ、プレイ中は disabled）で制御します。`bms-replay` CLI がこのファイルから LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザルトを再現します。リプレイをページへドロップすると、対応する楽曲がロード済みの場合に記録されたランをリプレイ再生します（なければ読み込むべき譜面をダイアログで示します）。ESC で諦めたランは、再シミュレーションと同じく諦めた所（`play.abortedAtUs`）までをリプレイします。
 - どのプレイ画面も、プレイヤーが見ていたもの（`play.view`、`play.viewChanges`）を記録します。そのスケールでのハイスピード、HS-FIX、メイン BPM での表示時間、各サイドの SUDDEN+ / HIDDEN+ / LIFT で、変更は `{ kind: 'view' }` コマンドとして 100 ms に高々 1 回送ります。リプレイは、`replayView` オプションが求める範囲でその表示設定を再生位置に沿って表示します。同じスケール（LR2 / default の画面は共通、beatoraja のスキンは独自）で遊ばれたなら記録されたハイスピード、そうでなければ記録された表示時間になるハイスピードと、記録されたカバーです（リフトを描く beatoraja のプレイのスキンではリフトも。`PlaySessionTheme.drawsLift`）。単位と規則は [replay.ja.md](./replay.ja.md#プレイヤーが見ていたもの) を参照してください。
 - Debug Menu の Leaderboard フォルダにある「Submit to Leaderboard」（デフォルト OFF。自動保存と同じく曲開始時にラッチ）をオンにすると、終了した手動プレイを result scene のマウント時に Leaderboard（[leaderboard.ja.md](./leaderboard.ja.md)）へ送信します。player は初回に匿名でログインし、楽曲の譜面からプレイの fingerprint ドキュメントを作り直してログと照合してから送り、サーバーに求められたら chart document を付けて再送し、順位をステータス行に表示します。デプロイ先の Worker は `/api/*` と `/leaderboard/*` を Service Binding で Leaderboard の Worker に転送し、`pnpm player:web` はローカルの Leaderboard（`pnpm --filter @be-music/app-leaderboard run dev`、または `LEADERBOARD_DEV_ORIGIN`）にプロキシします。
 - アカウントは匿名で始まります（最初の送信で匿名ログインします）。「Create passkey (keep this account)」でそのアカウントに passkey を登録すると、プレイは匿名フィルタの陰ではなく handle で一覧に載るようになります。「Sign in with passkey」で別のブラウザーからそのアカウントにログインすると、そのブラウザーの匿名のプレイはこのアカウントに移ります。
+
+### BGA 動画の transcode
+
+ブラウザが BGA 動画をデコードできないとき、`loadVideoTextureFromBytes` はそれを H.264 に transcode し、ネイティブの動画と同じ `<video>` / Pixi `VideoSource` の経路で再生します。ホストが Worker を登録し（`./compute` の `configureBGAVideoWorkers`。各エントリーは `runBGAVideoDecodeWorker()` / `runBGAVideoEncodeWorker()` を呼ぶ）、ブラウザに Media Source Extensions があれば、transcode は逐次的に進みます。動画は fragmented MP4 を `MediaSource`（iPhone のように `ManagedMediaSource` があればそちら）経由で届いた順に再生するため、BGA は最初のフレームができた時点で使えます。
+
+```mermaid
+flowchart LR
+  subgraph decode["デコード Worker"]
+    ffmpeg["ffmpeg.wasm"] --> device["出力デバイス"]
+  end
+  subgraph encode["エンコード Worker"]
+    webcodecs["WebCodecs H.264"] --> mux["Mediabunny fMP4"]
+  end
+  device -- "y4m フレーム" --> webcodecs
+  device -- "libx264 fMP4" --> main
+  mux -- "fMP4" --> main["メインスレッド<br/>MediaSource"]
+  main --> video["video 要素"]
+```
+
+- デコード Worker は無改造の ffmpeg.wasm コアを起動し、ffmpeg の出力先としてキャラクターデバイスを登録します。これで `exec` の実行中に出力が少しずつ JavaScript に届きます。出力は偶数の寸法に縮小し、最大 60 fps の固定フレームレートに揃えるため、可変フレームレートの素材も時刻がずれません。
+- cross-origin isolated なページでは、ffmpeg が y4m の生フレームを書き、エンコード Worker が WebCodecs（ハードウェア優先）で符号化して Mediabunny で多重化します。デコーダはエンコーダより数フレーム以上先行すると `SharedArrayBuffer` のカウンターで待つ（`Atomics.wait`）ため、フレームを捨てることも生フレームが溜まることもありません。
+- それ以外のページ（デプロイ版の player は isolated ではない）、「Use WebCodecs encoder」がオフのとき、WebCodecs のエンコーダが失敗したときは、ffmpeg 自身の libx264 で直接 fragmented MP4 を書きます。デコードと同じスレッドで符号化するので、デコードの速さは自然に抑えられます。
+- media source は stream が終わるまで仮の長さを宣言するため、まだ transcode されていない位置へシークした cue はそこでフレームを待ちます。複数のトラックで同じバイト列を使う動画は 1 つの transcode を共有し、transcode は同時に 2 本まで走り、それを使う最後の動画を閉じると取り消します。
+- Worker か MSE がないとき、または最初のフレームより前に stream が失敗したときは、従来どおりファイル全体を transcode してから再生します。
 
 ### オーディオサービス
 
@@ -862,7 +886,11 @@ PixiJS scene wiring は browser rendering や WebAudio resource に依存する�
 ></iframe>
 ```
 
-プレビューは AUTO で再生し、入力を判定せず、リプレイも記録しない。
+既定ではプレビューは AUTO で再生し、入力を判定しない。`mode=play` を付けると、閲覧者がキーボードで譜面をプレイできる。既定のレーンキーで通常のプレイと同じく判定し、シークはできない。このとき M と F はレーンなので、ミュートと全画面の切り替えはプレイ開始前だけ効く。プレイ中はコントロールバーを使う。埋め込みではタッチレーンは使えない。どちらのモードでもリプレイとスコアは記録しない。
+
+| パラメーター | 意味                                                                     |
+| ------------ | ------------------------------------------------------------------------ |
+| `mode`       | `preview`（既定）は AUTO で再生する。`play` は閲覧者が譜面をプレイする。 |
 
 ### 譜面・コースの指定
 
@@ -933,4 +961,35 @@ controller.dispose();
 
 Native の各画面は `@be-music/player-ui` の Lit 製 Web Components で組み立て、スキン側はフレームと操作イベントの受け渡しを担当します。同じ画面とパネルを `@be-music/player-ui-react`・`@be-music/player-ui-vue` からも使えます。[Player UI ガイド](../packages/player-ui/README.ja.md) と [ADR 0013](./adr/0013-player-ui-components.ja.md) を参照してください。
 
-計測手順、Lua キャッシュを見送った理由、プレイ中のメモリ確保の比較は[ブラウザプレイヤーのパフォーマンス計測](./player-performance.ja.md)を参照してください。
+描画の契約と計測手順は[性能仕様](./player-performance.ja.md)を参照してください。
+
+## ブラウザー検証
+
+`pnpm run test:e2e` は `packages/app-play/e2e/*.spec.ts` を Playwright の Chromium で実行します。設定は `packages/app-play/e2e/playwright.config.ts` です。プレイヤーをビルドし、専用の空きポートで配信し、一時ディレクトリに作った譜面・コース・スキンをドロップして操作します。通常の `pnpm test` とは別に実行します。
+
+初回は `pnpm exec playwright install chromium` でブラウザーを準備します。`E2E_WORKERS` は並列数（既定 4）、`E2E_PORT` はポートを指定します。`pnpm run test:e2e --list` で現在のテスト一覧を表示できます。失敗時の trace は `packages/app-play/e2e-results/` に残ります。
+
+コースの期待動作は本書の「コースと段位認定」と[コース仕様](./course.ja.md)に従います。テスト用スキンは `scripts/course-checklist/skins/`、手動確認用データの生成は `node scripts/course-checklist/fixtures.ts <dir>` です。実際のスキンの描画と音声は、そのスキンを読み込んで確認します。
+
+- **CI では**（[`e2e.yml`](../.github/workflows/e2e.yml)）、プレイヤーかそれが取り込むパッケージを変えるプルリクエストでスモークを実行します。`@smoke` のタグ（`support.ts` の `SMOKE`）を付けたテストで、領域とスキンの種類ごとに 1 つの流れを確かめます（手元では `pnpm run test:e2e --grep @smoke`）。毎晩 3 時（日本時間）には `devel` で全件を実行し、手動の実行ではどちらかを選べます。CI では失敗したテストをもう一度実行し、そこで通れば不安定なテスト（flaky）として数えます。失敗した実行は HTML のレポートとトレースを残します。新しいテストに `@smoke` を付けるのは、スモークがまだ通っていない流れを確かめるときだけにします。
+
+`bmson-bga-sequences.spec.ts` は Native・Canvas・LR2・beatoraja で、判定連動 PLAY の画像セット選択・半透明合成・一時停止・500 ms を超えるシーケンス付き MISS・終端・短い MISS の終了後に古い POOR が再表示されないこと・ALWAYS 動画の再起動を確認します。作成した bmson／PNG と所有する VP9 fixture をドロップし、スクリーンショットのピクセルを検証します。シーケンスの候補は実際の表示面に読み込み、base／layer／POOR の動画ハンドルは独立させます。シーケンスの NONSTOP 配置は #826 で継続します。
+
+### テスト用フック
+
+URL に `?e2e=1` を付けるか開発ビルドで動かすと、プレイヤーの起動処理（`main.ts`）が、アプリを始める前に `window.__beMusicTest` を置きます。[`test-hook.ts`](../packages/app-play/src/test-hook.ts) が契約とアプリから渡されたものの記録を持ち、[`services/test-hook.ts`](../packages/app-play/src/services/test-hook.ts) がアプリの今の状態を読みます。フックは表示しているものを読むだけのもので、読んでも何も始めません（譜面のハッシュを計算することもありません）。バーの自己ベストのランプとトロフィーは、選曲画面と同じく今の判定ルールのものです。ホストが持っている状態と、ホストが渡す結果画面とリプレイの中身を読み、プレイヤーを操作することはありません。ファイルはページのドロップの処理から読み込みます。
+
+項目の意味を変えるときは `version` を上げます。
+
+| メンバー                          | 内容                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`                         | 契約のバージョン（1）。                                                                                                                                                                                                                                                                                                                                                       |
+| `state().scene`                   | `{ kind, family }`：`select`、`decide`、`play`、`result`、`none`（画面の切り替えの途中）と、描いているスキンの種類（`built-in`、`lr2`、`beatoraja`）。                                                                                                                                                                                                                        |
+| `state().status`、`statusLog`     | ステータス行と、これまでに出たすべてのステータス行。                                                                                                                                                                                                                                                                                                                          |
+| `state().loading`、`loads`        | ドロップしたファイルを読んでいる最中かどうかと、読み込みを終えたドロップ（とファイルの選択）の数。                                                                                                                                                                                                                                                                            |
+| `state().library`                 | 譜面の数とコースのフォルダの名前。                                                                                                                                                                                                                                                                                                                                            |
+| `state().cursor`                  | 選曲画面で開いているフォルダとカーソルの下のバー（種類、タイトル。コースなら種類、ステージのタイトル、欠けたステージの数、遊べるかどうか、LR2 の NEW COURSE かどうか。そのバーの自己ベストのランプとトロフィー）。標準と LR2 の画面では一覧の形も（`list`：ソート、キーモードフィルター、難易度フィルターを `@be-music/player-scene-model` の名前で、検索を入力したままで）。 |
+| `state().play`                    | 表示中のプレイ：タイトル、AUTO、リプレイかどうか、テンポ、HIGH-SPEED（LR2 と標準）、譜面の秒数、ここまでの判定とゲージ、コースのステージ（コース名、何曲目か、曲数）。                                                                                                                                                                                                        |
+| `state().courseDraft`             | 作っているコースの種類と曲。                                                                                                                                                                                                                                                                                                                                                  |
+| `state().results`                 | これまでに出た結果画面（古い順）：プレイの種類（`single`、`stage`、`course`、`nonstop`）、スキンの種類、タイトル、ランプ、クリアかどうか、EX スコア、判定、ゲージ、PLAY TIME、結果の曲の取得元（`lr2:courseClear`、`beatoraja:fail` など）。コースなら、各ステージの判定、持ち越したゲージと最後のゲージ、投げたかどうか、到達したステージの数。                              |
+| `state().replays`、`lastReplay()` | 終わったプレイが記録したリプレイの数と、最後のリプレイ（1 曲のプレイ、コースのステージ、NONSTOP のプレイ）。                                                                                                                                                                                                                                                                  |

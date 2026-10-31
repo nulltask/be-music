@@ -1,3 +1,5 @@
+import { ChartTextOverlay } from '../shared/chart-text.ts';
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
@@ -149,10 +151,17 @@ export interface BeatorajaPlayRuntime {
   readonly gaugeState: PlayerGaugeSummary;
   readonly scrollHiSpeed: HiSpeedTransition;
   readonly bgaTextures: ReadonlyMap<string, Texture>;
+  readonly bgaSubRegionOrigins?: ReadonlyMap<string, { x: number; y: number }>;
   readonly bgaLayerTextures: ReadonlyMap<string, Texture>;
   readonly bgaVideos: ReadonlyMap<string, { video: HTMLVideoElement }>;
   readonly poorBGAMode?: 0 | 1 | 2;
-  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  readonly bgaTimeline: {
+    base: BGACue[];
+    layer: BGACue[];
+    layer2?: BGACue[];
+    poor: BGACue[];
+    opacity?: BGAOpacityTimelines;
+  };
   /** A stitched NONSTOP chart's cues split by stage (`splitNonstopBGATimeline`), for the BGA's crossfade at a seam. */
   readonly nonstopBGATimelines: readonly NonstopStageBGATimeline[] | undefined;
   readonly assetsLoading: boolean;
@@ -204,6 +213,7 @@ interface PreparedChart {
 export class BeatorajaPlayView implements PlayView {
   private readonly displayInfo = new DisplayAreaInfoOverlay();
   private readonly bpmChangeWarning = new BPMChangeWarningOverlay();
+  private readonly chartText = new ChartTextOverlay();
   public readonly family = 'beatoraja' as const;
   public readonly root: Container = new Container();
   public readonly timing: PlayViewTiming;
@@ -439,6 +449,7 @@ export class BeatorajaPlayView implements PlayView {
     const nonstop = this.options.nonstop;
     return {
       textures: play.bgaTextures,
+      subRegionOrigins: play.bgaSubRegionOrigins,
       layerTextures: play.bgaLayerTextures,
       videos: new Map([...play.bgaVideos].map(([key, { video }]) => [key, video] as const)),
       cues: play.bgaTimeline,
@@ -462,6 +473,7 @@ export class BeatorajaPlayView implements PlayView {
   public detach(): void {
     this.displayInfo.detach();
     this.bpmChangeWarning.detach();
+    this.chartText.detach();
     this.touchLanes.detach();
     if (typeof window !== 'undefined') window.removeEventListener('wheel', this.handleWheel);
     this.host = undefined;
@@ -475,6 +487,7 @@ export class BeatorajaPlayView implements PlayView {
     this.root.visible = frame.shown;
     if (!frame.shown) this.displayInfo.hide();
     if (!frame.shown) this.bpmChangeWarning.hide();
+    if (!frame.shown) this.chartText.hide();
     if (stage === undefined || bridge === undefined || host === undefined || !frame.shown || this.disposed) return;
     stage.fitTo(host);
     const play = this.play;
@@ -552,6 +565,8 @@ export class BeatorajaPlayView implements PlayView {
       host.app.screen,
       stage.canvas.alpha,
     );
+    this.chartText.attachCanvas(stage.canvas);
+    this.chartText.show(frame.chartText ?? '', stage, host.app.screen, stage.canvas.alpha);
     this.bpmChangeWarning.attachCanvas(stage.canvas);
     this.bpmChangeWarning.show({
       enabled: frame.playOptions.bpmChangeWarning,
@@ -627,6 +642,7 @@ export class BeatorajaPlayView implements PlayView {
   public dispose(): void {
     this.displayInfo.dispose();
     this.bpmChangeWarning.dispose();
+    this.chartText.dispose();
     if (this.disposed) return;
     this.detach();
     this.disposed = true;

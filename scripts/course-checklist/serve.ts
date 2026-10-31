@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { join, relative, resolve, sep } from 'node:path';
 
 /**
- * Serves local folders to the web player for the course browser checklist (`docs/course-checklist.md`), since browser
+ * Serves local folders to the web player for the course browser checklist (`docs/player-web.md#browser-verification`), since browser
  * automation cannot drop real files: `GET /__list?root=<name>` lists a root's files, `GET /__file?root=<name>&path=<p>`
  * returns one, both with CORS open so the player page can fetch them and dispatch a synthetic drop.
  *

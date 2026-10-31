@@ -215,7 +215,10 @@ export function createCourseChartRecord(
     let value: CourseChartRecord[K] | undefined;
     Object.defineProperty(record, key, { enumerable: true, get: () => (value ??= read()) });
   };
-  lazy('mode', () => MODE_IDS[resolveLibraryChartPlayVariant(chartEntry)]);
+  lazy('mode', () => {
+    const variant = resolveLibraryChartPlayVariant(chartEntry);
+    return variant.startsWith('generic-') ? 0 : MODE_IDS[variant as keyof typeof MODE_IDS];
+  });
   lazy('minbpm', () => Math.trunc(resolveChartBPMRange(chart).min));
   lazy('maxbpm', () => Math.trunc(resolveChartBPMRange(chart).max));
   lazy('length', () => {

@@ -181,3 +181,53 @@ describe('resolveChart', () => {
     ]);
   });
 });
+
+describe('bmson layered sound events', () => {
+  function layered(lengths: number[]) {
+    const json = createEmptyJSON('bmson');
+    json.metadata.bpm = 120;
+    json.bmson.info.resolution = 240;
+    json.events = lengths.map((l, index) => ({ ...event(0, '11', `0${index + 1}`), bmson: { l, c: index === 1 } }));
+    return resolveChart(json);
+  }
+
+  test.each([0, 240])('keeps all source slices on one judged note of length %s', (length) => {
+    const resolved = layered([length, length]);
+    expect(resolved.notes).toHaveLength(1);
+    expect(resolved.notes[0]?.soundEvents?.map((event) => event.value)).toEqual(['01', '02']);
+    expect(resolved.shadowedNotes).toHaveLength(1);
+    expect(resolved.sampleTriggers).toHaveLength(2);
+    expect(resolved.notes[0]?.endBeat).toBe(length ? 1 : undefined);
+  });
+
+  test.each([
+    [0, 240],
+    [240, 480],
+    [240, 0],
+  ])('keeps the first channel and drops a layer of another length %s / %s, as beatoraja does', (a, b) => {
+    const resolved = layered([a, b]);
+    expect(resolved.notes).toHaveLength(1);
+    expect(resolved.notes[0]?.event.value).toBe('01');
+    expect(resolved.notes[0]?.endBeat).toBe(a ? a / 240 : undefined);
+    expect(resolved.notes[0]?.soundEvents?.map((event) => event.value)).toEqual(['01']);
+    expect(resolved.sampleTriggers.map((trigger) => trigger.sampleKey)).toEqual(['01']);
+  });
+
+  test('layers only the notes that match the first channel length', () => {
+    const resolved = layered([240, 0, 240]);
+    expect(resolved.notes[0]?.soundEvents?.map((event) => event.value)).toEqual(['01', '03']);
+    expect(resolved.sampleTriggers.map((trigger) => trigger.sampleKey).sort()).toEqual(['01', '03']);
+  });
+});
+
+test('pairs bmson LN end sounds by pulse despite floating-point beat addition', () => {
+  const source = createEmptyJSON('bmson');
+  source.bmson.info.resolution = 10;
+  source.events = [
+    { ...event(0, '11', '01', [1, 40]), bmson: { l: 2 } },
+    { ...event(0, '11', '02', [3, 40]), bmson: { up: true } },
+  ];
+  const note = resolveChart(source).notes[0]!;
+  expect(note.endBeat).not.toBe(0.3);
+  expect(note.endSoundEvent).toBe(source.events[1]);
+});

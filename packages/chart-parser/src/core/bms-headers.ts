@@ -19,8 +19,26 @@ type IndexedHeaderDirective =
   | 'SPEED'
   | 'SWBGA';
 
+const EXBPM_HEADER_COMMAND = /^EXBPM([0-9A-Za-z]{2})$/;
+
+/**
+ * Maps a header alias onto its canonical command, so file order, control flow, fingerprints and output all see one
+ * definition. `#EXBPMxx` is nanasi's alias of `#BPMxx`, added to dodge a BMSC bug that confused `#BPMxx` with `#BPM`
+ * (https://hitkey.nekokan.dyndns.info/cmds.htm#EXBPMXX).
+ */
+export function resolveHeaderCommandAlias(
+  command: string,
+  commandRaw: string,
+): { readonly command: string; readonly commandRaw: string } {
+  const exBPM = command.match(EXBPM_HEADER_COMMAND);
+  if (exBPM) {
+    return { command: `BPM${exBPM[1]!}`, commandRaw: `BPM${commandRaw.slice('EXBPM'.length)}` };
+  }
+  return { command, commandRaw };
+}
+
 /** Header commands whose lines add up instead of replacing each other, so file order never makes one override another. */
-const REPEATABLE_HEADER_COMMANDS: ReadonlySet<string> = new Set(['STP', 'WAVCMD', 'LNOBJ']);
+const REPEATABLE_HEADER_COMMANDS: ReadonlySet<string> = new Set(['STP', 'WAVCMD', 'LNOBJ', 'OPTION']);
 
 /**
  * Which definition a header line sets, for the file-order rule: the command, plus the normalized object key of an
@@ -167,6 +185,8 @@ export function pushHeaderLine(
       return;
     case 'OPTION':
       if (value.length > 0) {
+        const declarations = (json.bms.options ??= json.bms.option ? [json.bms.option] : []);
+        declarations.push(value);
         json.bms.option = value;
       }
       return;

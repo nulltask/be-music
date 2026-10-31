@@ -1,5 +1,11 @@
 # @be-music/skin-beatoraja
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-engine@0.12.0`, `@be-music/shared-utils@0.7.0`, `@be-music/player-scene-model@0.4.0`, `@be-music/skin-lr2@0.5.0`
+
 ## 0.5.0
 
 ### Minor Changes
@@ -21,56 +27,7 @@
 - cc6b4b4: Stop the GAUGE_MAX timer when the gauge drops below its actual maximum and restart it on each return to full, so skin effects follow the current gauge instead of remaining active for the rest of the play.
 - bd5f119: Restore delayed Lua draw predicates such as WMII_FHD lasers and key flashes by exposing `os.clock()` in seconds from the host-provided scene clock.
 - 0bee40e: JSON skins load faster: `relaxBeatorajaJSON` copies the untouched runs between its edits as slices instead of rebuilding the text one character at a time, and returns well-formed JSON unchanged, about 2.3× faster on the bundled play skin.
-- Updated dependencies [ba3cc20]
-- Updated dependencies [7fca9a9]
-- Updated dependencies [a9cc3d7]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [fcaef41]
-- Updated dependencies [7f0386b]
-- Updated dependencies [45aff53]
-- Updated dependencies [582ad35]
-- Updated dependencies [7ab40af]
-- Updated dependencies [1c97afd]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [78faa63]
-- Updated dependencies [3d5e880]
-- Updated dependencies [21f705d]
-- Updated dependencies [a8896a9]
-- Updated dependencies [b1ca2ce]
-- Updated dependencies [6e676fe]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [9f41b30]
-- Updated dependencies [f994ec4]
-- Updated dependencies [4371c72]
-- Updated dependencies [acba3d5]
-- Updated dependencies [3e694df]
-- Updated dependencies [3e694df]
-- Updated dependencies [c35b845]
-- Updated dependencies [a83e326]
-- Updated dependencies [a8896a9]
-- Updated dependencies [85f13dc]
-- Updated dependencies [3c2ea6b]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [b09a6cf]
-- Updated dependencies [85e11f7]
-- Updated dependencies [d0939cc]
-- Updated dependencies [3e694df]
-- Updated dependencies [85250d8]
-- Updated dependencies [2e435b9]
-- Updated dependencies [a83e326]
-- Updated dependencies [85f13dc]
-- Updated dependencies [b506535]
-- Updated dependencies [3d2bc84]
-- Updated dependencies [77d8ec1]
-- Updated dependencies [3ffc4f8]
-- Updated dependencies [affc51c]
-  - @be-music/player-engine@0.11.0
-  - @be-music/player-scene-model@0.3.0
-  - @be-music/skin-lr2@0.4.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/player-engine@0.11.0`, `@be-music/player-scene-model@0.3.0`, `@be-music/skin-lr2@0.4.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.4.0
 
@@ -82,14 +39,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [dca9a2f]
-  - @be-music/skin-lr2@0.3.0
-  - @be-music/player-engine@0.10.0
-  - @be-music/player-scene-model@0.2.0
-  - @be-music/shared-utils@0.5.0
+- Updated dependencies: `@be-music/skin-lr2@0.3.0`, `@be-music/player-engine@0.10.0`, `@be-music/player-scene-model@0.2.0`, `@be-music/shared-utils@0.5.0`
 
 ## 0.3.0
 
@@ -106,11 +56,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/skin-lr2@0.2.0
-  - @be-music/player-engine@0.9.0
-  - @be-music/player-scene-model@0.1.0
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/skin-lr2@0.2.0`, `@be-music/player-engine@0.9.0`, `@be-music/player-scene-model@0.1.0`, `@be-music/shared-utils@0.4.0`
 ## 0.2.0
 
 ### Minor Changes
@@ -138,16 +84,14 @@
 
 ### Patch Changes
 
-- Updated dependencies [ca1012c]
-  - @be-music/shared-utils@0.3.0
+- Updated dependencies: `@be-music/shared-utils@0.3.0`
 
 ## 0.1.1
 
 ### Patch Changes
 
 - 69f77d1: Cache a `BeatorajaPathIndex` per source map (WeakMap-keyed) that groups files by lowercased parent directory. `expandBeatorajaWildcard` used to walk every key in the source map and re-run `path.toLowerCase()` + `lastIndexOf('/')` per call — once per `source[]` entry in `bundleBeatorajaSources`. Now resolves in `O(filesInTargetDir)` via the precomputed directory bucket. `describeMissingWildcardDirectory` shares the same index instead of running two more full scans.
-- Updated dependencies [73dff9a]
-  - @be-music/shared-utils@0.2.1
+- Updated dependencies: `@be-music/shared-utils@0.2.1`
 
 ## 0.1.0
 

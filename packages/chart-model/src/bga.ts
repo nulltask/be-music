@@ -49,9 +49,42 @@ export function buildBGATimelines(chart: BeMusicJSON, resolver: BGATimingResolve
       const seconds = resolver.beatToSeconds(beat);
       return { seconds, key: entry.id === 0 ? undefined : headerById.get(entry.id) };
     };
-    for (const event of bgaSection.events) timelines.base.push(toCue(event));
-    for (const event of bgaSection.layerEvents) timelines.layer.push(toCue(event));
-    for (const event of bgaSection.poorEvents) timelines.poor.push(toCue(event));
+    // beatoraja reads an omitted id as Java's default 0 and resolves it against the header; an unresolved id leaves the
+    // timeline's BGA unset (-1), so the event changes nothing (BMSONDecoder, TimeLine).
+    const omittedIdCue = (entry: { y: number }): BGACue | undefined => {
+      const key = headerById.get(0);
+      return key === undefined ? undefined : { seconds: resolver.beatToSeconds(entry.y / resolution), key };
+    };
+    for (const event of bgaSection.events) {
+      const cue = event.id === undefined ? omittedIdCue(event) : toCue({ y: event.y, id: event.id });
+      if (cue) timelines.base.push(cue);
+    }
+    const sequenceIds = new Set((bgaSection.sequences ?? []).map((entry) => entry.id));
+    for (const event of bgaSection.layerEvents) {
+      const cue = toCue({ y: event.y, id: event.id ?? 0 });
+      if (
+        event.idSet !== undefined ||
+        event.condition !== undefined ||
+        event.interval !== undefined ||
+        sequenceIds.has(event.id ?? 0)
+      )
+        cue.key = undefined;
+      timelines.layer.push(cue);
+      // A conditional MISS selection replaces the old POOR definition even after its sequence ends.
+      // Ordinary image-only layers keep the independent standard bmson POOR channel unchanged.
+      if (event.condition === 'miss') timelines.poor.push({ seconds: cue.seconds, key: undefined });
+    }
+    for (const event of bgaSection.poorEvents) {
+      if (event.id === undefined && !sequenceIds.has(0) && !headerById.has(0)) continue;
+      const cue = event.id === undefined ? omittedIdCue(event) : toCue({ y: event.y, id: event.id });
+      if (!cue) {
+        // A sequence 0 drives the POOR plane through the sequence program; clear the plain image cue.
+        timelines.poor.push({ seconds: resolver.beatToSeconds(event.y / resolution), key: undefined });
+        continue;
+      }
+      if (sequenceIds.has(event.id ?? 0)) cue.key = undefined;
+      timelines.poor.push(cue);
+    }
   }
 
   sortBGATimelines(timelines);

@@ -579,7 +579,6 @@ export class PlaySession extends PlaySessionState {
     this.bombJudge.clear();
     this.keyBeamFadeStartedAt.clear();
     this.wavCmdVolumeMultipliers.clear();
-    this.switchingBGAs.clear();
     this.bgaSubRegionOrigins.clear();
     this.playState = createPlayState();
     this.notes = [];
@@ -800,12 +799,11 @@ export class PlaySession extends PlaySessionState {
   }
 
   /**
-   * Resumes only the videos tied to currently-active base / layer cues. Avoids touching videos that were paused for a
+   * Resumes only the videos tied to currently-active base / layer / layer2 / POOR cues. Avoids touching videos that were paused for a
    * different reason (e.g. an earlier cue switched away from them in `syncBGAVideo`).
    */
   resumeActiveBGAVideos(): void {
-    for (const track of ['base', 'layer'] as const) {
-      const active = this.bgaActiveVideos[track];
+    for (const active of Object.values(this.bgaActiveVideos)) {
       if (!active) continue;
       const handle = this.bgaVideos.get(active.key);
       if (!handle || !handle.video.paused) continue;
@@ -913,7 +911,7 @@ export class PlaySession extends PlaySessionState {
     if (!this.chart) {
       return 0;
     }
-    return this.chartDurationSeconds;
+    return Math.max(this.chartDurationSeconds, this.engineFrame?.totalSeconds ?? 0);
   }
 
   /**

@@ -1,3 +1,5 @@
+import { resolveBmsonBGAEventInput, type BmsonBGAEventInput } from './bmson-bga.ts';
+import { resolveChartTextInput, type ChartTextInput } from './chart-text.ts';
 import {
   adjustBeatorajaJudgeTiming,
   createLR2JudgeTimingSamples,
@@ -26,6 +28,9 @@ import { type AudioSession } from './engine-types.ts';
 /** What a driver hands {@link createJudgeEffectHandler}: the host side of every judge-core effect. */
 interface JudgeEffectHost {
   uiEnabled: boolean;
+  onBmsonBGAInput?: (input: BmsonBGAEventInput) => void;
+  onChartTextInput?: (input: ChartTextInput) => void;
+  onInput?: (input: Extract<Parameters<JudgeCoreEffectSink>[0], { kind: 'record-input' }>) => void;
   /**
    * The automatic judge-timing adjustment this play runs (`OFF` for none: AUTO, replays, or a mode the play skips), and
    * the live timing it moves. `currentSeconds` is the chart time an LR2 step is recorded at.
@@ -81,8 +86,15 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeEffectHand
     uiSignals.pushCommand({ kind: 'judge-timing', value: next });
   };
   const sink: JudgeCoreEffectSink = (effect) => {
+    const textInput = host.onChartTextInput ? resolveChartTextInput(effect) : undefined;
+    if (textInput) host.onChartTextInput!(textInput);
+    if (host.onBmsonBGAInput) {
+      const input = resolveBmsonBGAEventInput(effect);
+      if (input) host.onBmsonBGAInput(input);
+    }
     switch (effect.kind) {
       case 'record-input':
+        host.onInput?.(effect);
         replayRecorder?.recordInput(effect.action, effect.seconds, effect.tokens, effect.channels, effect.inferred);
         return;
       case 'record-empty-poor':

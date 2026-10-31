@@ -1,5 +1,48 @@
 # @be-music/player-browser
 
+## 0.13.0
+
+### Minor Changes
+
+- 38f2990: A BGA video the browser can't play (`.wmv`, `.avi`, `.mpg`, …) now starts playing while ffmpeg.wasm is still transcoding it, instead of after the whole file is done: the transcode streams fragmented MP4 into the `<video>` through Media Source Extensions (`ManagedMediaSource` on iPhone). Hosts opt in by installing two workers with the new `configureBGAVideoWorkers` from `./compute`, whose entries call the new `runBGAVideoDecodeWorker()` / `runBGAVideoEncodeWorker()`. On a cross-origin isolated page the frames are encoded with WebCodecs under `SharedArrayBuffer` flow control; elsewhere ffmpeg's own libx264 encodes them. Without the workers or MSE the whole-file transcode runs as before.
+- 410843c: Load pre-play title artwork for Native decide screens with a text fallback, and expose the separate image to Canvas skins.
+- 6e14d72: Retry distinct codec candidates after read or decode failure during gameplay and select previews. Preserve stage candidate chains in NONSTOP asset sources, including prefix and parent-folder fallbacks, while keeping cancellation and declared sample keys.
+- 5cc0094: Apply BGA opacity channels `0B`–`0E` across Native, Canvas, LR2 and beatoraja gameplay, combining each plane's value with skin opacity and NONSTOP crossfades. Use each NONSTOP stage's own opacity history and expose all visible stage stacks to Canvas skins instead of only the leading stage. Restore prior values on seek and freeze cue changes at LR2 reversal.
+- 5c820d9: Apply A1–A4 ARGB definitions to their selected BGA planes across Native, Canvas, LR2 and beatoraja. Share alpha with opacity controls, multiply skin colors, tint Canvas skin images and retain independent NONSTOP stage colors instead of applying definitions to BMP slots with matching ids.
+- 9572a31: Apply EXBMP transparent-color keys to still-image pixels before cropping, preserving unkeyed colors and source alpha across Native, Canvas, LR2 and beatoraja scenes. Add `LoadTextureOptions.bmsColorKey` for keyed image loading and keep a black viewport behind transparent BGA base images.
+- 4324783: Render input-driven SWBGA above normal and POOR BGA across Native, Canvas, LR2 and beatoraja skins. Load BMP00, EXBMP-only resources and placed aliases with definition-specific transparent-color keys, update keyed video crops on decoded frames, and restart video playback on fresh input.
+- 458b6f3: Load and play remapped NONSTOP SWBGA across Native, Canvas, LR2 and beatoraja. Keep stage resources distinct, end held animations at boundaries and apply the FIT source-video rate to seeking, drift correction and playback.
+- 17a4096: Keep BMS channels 07 and 0A as independent overlays across Native, Canvas, LR2 and beatoraja scenes, including NONSTOP stacks and POOR composition. Give reused video BMPs separate per-track playheads and resume both overlays after pausing.
+- 3f3de70: Forward the bmson zero-total play policy through every skin family and restore the typed replay policy independently of the viewer’s current preference.
+- 274133e: Carry engine-selected chart text in play frames and display it across native, Canvas, LR2 and beatoraja skins as literal, wrapping text.
+  
+  Connect NONSTOP stage text programs automatically, clearing previous-stage selections and miss text at ownership boundaries.
+- d869b05: Apply EXBMP transparent-color keys to opaque movie frames across Native, Canvas, LR2 and beatoraja. Key each decoded frame before alias cropping, retain independent plane playback and preserve unselected black pixels and the black base viewport. Clean up keyed video callbacks and native textures with their owning play.
+
+### Patch Changes
+
+- 206afe9: Include every layered bmson source event in the browser slice map so manual inputs play each constituent at its authored source offset and duration.
+- ceb5fcc: Use resolved source-channel slice metadata for bmson audio, including LN end keysounds and silent orphan boundaries, so browser playback matches Node and offline rendering.
+- 3259b06: Fix clicks at bmson sound-slice boundaries in browser playback: a slice that starts inside its file, or a sound resumed partway after a seek, fades in over 1 ms on its own gain node, and a slice cut before the file's end rings on past its end while it fades out over 1 ms, so a continuation crossfades with the slice before it. Note timing and slice deduplication are unchanged.
+- 87e176d: Play bmson continuation slices independently instead of suppressing them while the same stem is active; keep one voice per simultaneous chord slice.
+- b13249a: Resolve static BGA sub-region dependencies independently of declaration order, compose nested placements and clip the source and destination edges. Preserve explicit BMP/EXBMP precedence and render fully clipped base/POOR images as black and overlays as transparent, including Canvas skins and NONSTOP courses.
+- 4480fe0: Pass authored BGA sub-region placement to Canvas and beatoraja play views instead of centering the cropped image. Retain long internal resource ids in mixed NONSTOP dependencies and Canvas BGA frame metadata.
+- df001aa: Draw engine-driven bmson BGA sequences across Native, Canvas, LR2 and beatoraja. Preload every image-set alternative, honor authored MISS lifetimes and frame clocks, and keep shared base/layer/POOR movies on independent playheads while preserving source alpha and opaque black. Load NONSTOP sidecars and apply sequence frames only to their owning stage during crossfades, with FIT movie playback.
+- c781901: Stop applying `#SWBGAxx` as a cue-driven animation in Native, Canvas and LR2. A standard SWBGA whose id matched a cued `#BMPxx` replaced that BGA plane with its frames even without an `A5` selection or key input, unlike beatoraja and the terminal. SWBGA now animates only through the input-bound `A5` controller in every family.
+- 12c1567: Connect chained BGA video sub-region cues to independent base, overlay and POOR playheads, preserve native crop coordinates through transcoding and honor cropped placement. Refresh Canvas skin video crops as playback advances, include POOR in pause/resume and release shared alias handles only once.
+- 916e04c: Restore the white centre line down long-note bodies in the Synesthesia and Plain skins, which the translucent LN tail change had removed along with it, and fade it out over 300 ms when the player lets go early and the note is judged dropped, in Synesthesia, Plain and the default Pixi playfield. Long-note frames now carry `releasedElapsedMs` from the play session.
+- b1cb060: Load referenced EXBMP-only image resources and the implicit EXBMP00 POOR image, preserving explicit BMP filename precedence.
+- afc65fb: Render generic bmson keys in uniform columns across skin families, preserving second-bank columns as one keyboard. Map their printable and F1–F24 default bindings and use normal fallback notes in borrowed beatoraja note areas. Let a bound F5 reach its lane instead of restarting.
+- 783422a: Keep every visible NONSTOP stage video playing through crossfades in Native, Canvas and LR2 views. Retain each stage's cue offset when the leading stage changes, pause departed videos and restore all active stage videos after seek or resume.
+- 5992a52: Apply chart-authored HI-SPEED immediately across native, Canvas, LR2 and beatoraja views without clamping or changing saved preferences. Replay uses its recorded effective display program; older replays keep their original behavior.
+- c13f3fa: Prepare separate WAVCMD/EXWAV effect buffers per sample slot before tempo stretching. Read encoded native sample rates for frequency effects, preserve base-62 slot identity and reuse the resulting duration through seek/retrigger. Host decoding supplies native sample rates for unprepared frequency-effect buffers; a sample whose container cannot report its native rate still plays instead of being discarded.
+- 10951d6: Load and play EXWAV-only sample declarations, including in the select-screen preview, and prefer valid EXWAV filenames over shared WAV slots. Keep tempo preparation and audio-tail lookup on the same resource selection; apply corrected WAVCMD percentage volume.
+- 86f4978: Apply long-note defaults after conditional branch selection, and keep replays recorded before HDX LONGMODE support on the long-note modes they recorded.
+- 3e1855e: Apply intrinsic slot gain with authored WAVCMD and EXWAV volume so NONSTOP stages keep their original level.
+- 460823d: Connect NONSTOP effective option programs and stage diagnostics automatically. Authored HI-SPEED follows each stage and restores the saved user speed when the next stage has no forced value; replay continues using its recorded program.
+- 3928de4: Prepare independent COUPLE player state and preserve recorded or absent replay modes ahead of current header preferences.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-parser@0.6.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`, `@be-music/player-skin-sdk@0.6.0`, `@be-music/player-ui@0.3.0`, `@be-music/player-scene-model@0.4.0`, `@be-music/skin-lr2@0.5.0`, `@be-music/skin-beatoraja@0.5.1`
+
 ## 0.12.0
 
 ### Minor Changes
@@ -62,92 +105,7 @@
 - 85250d8: S-RANDOM no longer places new notes inside held long notes. Select the active judge ruleset's arrangement constraints, preserve both LN endpoints and mode/side boundaries, and continue recording final channels for unchanged replay playback.
 - 9065e03: Synesthesia projects its point clouds, bomb grains, light rivers and manta schools without allocating per point: rotation bases are computed once per object or frame and each point is written into a reused result, so the play loop spends less time per frame and produces far less garbage.
 - 00139f5: Update mediabunny to the latest release.
-- Updated dependencies [1b3e0bd]
-- Updated dependencies [ba3cc20]
-- Updated dependencies [dff4d15]
-- Updated dependencies [cc6b4b4]
-- Updated dependencies [166f2d2]
-- Updated dependencies [1cb4d60]
-- Updated dependencies [bd5f119]
-- Updated dependencies [7fca9a9]
-- Updated dependencies [b6f6a72]
-- Updated dependencies [a9cc3d7]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [fcaef41]
-- Updated dependencies [7f0386b]
-- Updated dependencies [45aff53]
-- Updated dependencies [582ad35]
-- Updated dependencies [7ab40af]
-- Updated dependencies [1c97afd]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [74127d3]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [78faa63]
-- Updated dependencies [3d5e880]
-- Updated dependencies [21f705d]
-- Updated dependencies [a8896a9]
-- Updated dependencies [b1ca2ce]
-- Updated dependencies [6e676fe]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [9f41b30]
-- Updated dependencies [f994ec4]
-- Updated dependencies [4371c72]
-- Updated dependencies [acba3d5]
-- Updated dependencies [3e694df]
-- Updated dependencies [3e694df]
-- Updated dependencies [c35b845]
-- Updated dependencies [a83e326]
-- Updated dependencies [a8896a9]
-- Updated dependencies [85f13dc]
-- Updated dependencies [3c2ea6b]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [b09a6cf]
-- Updated dependencies [85e11f7]
-- Updated dependencies [d0939cc]
-- Updated dependencies [3e694df]
-- Updated dependencies [a83e326]
-- Updated dependencies [01cd4cd]
-- Updated dependencies [29e69c6]
-- Updated dependencies [f994ec4]
-- Updated dependencies [6fc13f5]
-- Updated dependencies [a8896a9]
-- Updated dependencies [3e694df]
-- Updated dependencies [85250d8]
-- Updated dependencies [2e435b9]
-- Updated dependencies [3ab8eac]
-- Updated dependencies [85f13dc]
-- Updated dependencies [b09a6cf]
-- Updated dependencies [0bee40e]
-- Updated dependencies [d0939cc]
-- Updated dependencies [edc1112]
-- Updated dependencies [a83e326]
-- Updated dependencies [85f13dc]
-- Updated dependencies [b506535]
-- Updated dependencies [3d2bc84]
-- Updated dependencies [77d8ec1]
-- Updated dependencies [3ffc4f8]
-- Updated dependencies [affc51c]
-- Updated dependencies [2e435b9]
-  - @be-music/skin-beatoraja@0.5.0
-  - @be-music/player-engine@0.11.0
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-parser@0.5.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/player-scene-model@0.3.0
-  - @be-music/skin-lr2@0.4.0
-  - @be-music/player-skin-sdk@0.5.0
-  - @be-music/player-ui@0.2.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/skin-beatoraja@0.5.0`, `@be-music/player-engine@0.11.0`, `@be-music/chart-model@0.7.0`, `@be-music/chart-parser@0.5.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-scene-model@0.3.0`, `@be-music/skin-lr2@0.4.0`, `@be-music/player-skin-sdk@0.5.0`, `@be-music/player-ui@0.2.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.11.0
 
@@ -159,24 +117,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-  - @be-music/skin-beatoraja@0.4.0
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-parser@0.4.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/skin-lr2@0.3.0
-  - @be-music/player-engine@0.10.0
-  - @be-music/player-scene-model@0.2.0
-  - @be-music/shared-utils@0.5.0
-  - @be-music/player-skin-sdk@0.4.0
+- Updated dependencies: `@be-music/skin-beatoraja@0.4.0`, `@be-music/chart-model@0.6.0`, `@be-music/chart-parser@0.4.0`, `@be-music/chart-source@0.4.0`, `@be-music/skin-lr2@0.3.0`, `@be-music/player-engine@0.10.0`, `@be-music/player-scene-model@0.2.0`, `@be-music/shared-utils@0.5.0`, `@be-music/player-skin-sdk@0.4.0`
 
 ## 0.10.0
 
@@ -197,16 +138,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/skin-beatoraja@0.3.0
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/skin-lr2@0.2.0
-  - @be-music/chart-parser@0.3.0
-  - @be-music/player-engine@0.9.0
-  - @be-music/player-scene-model@0.1.0
-  - @be-music/player-skin-sdk@0.3.0
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/skin-beatoraja@0.3.0`, `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/skin-lr2@0.2.0`, `@be-music/chart-parser@0.3.0`, `@be-music/player-engine@0.9.0`, `@be-music/player-scene-model@0.1.0`, `@be-music/player-skin-sdk@0.3.0`, `@be-music/shared-utils@0.4.0`
 ## 0.9.0
 
 ### Minor Changes
@@ -281,14 +213,7 @@
   
   - The 100-combo cut-in no longer covers the bottom HUD when there is no BGA monitor (the landscape touch layout, 48 KEY): it plays in the side column under the judgement tally.
   - The play header keeps its top corners clear for the host's controls, so a touch pause button no longer covers the PLAY label and a menu tab no longer covers the ruleset label.
-- Updated dependencies [73fd398]
-- Updated dependencies [7260b23]
-- Updated dependencies [3f1b6b3]
-- Updated dependencies [d2f7f82]
-- Updated dependencies [9a79565]
-- Updated dependencies [7f01985]
-  - @be-music/player-engine@0.8.0
-  - @be-music/player-skin-sdk@0.2.0
+- Updated dependencies: `@be-music/player-engine@0.8.0`, `@be-music/player-skin-sdk@0.2.0`
 
 ## 0.8.0
 
@@ -410,29 +335,7 @@
 - 8b07494: Fix gameplay recordings dropping below 60 fps.
   
   `captureStream(fps)` samples the canvas on its own timer, which drifts against the render loop: a 60 fps capture of a 60 fps scene measured about 54 fps, with regular one-frame gaps. The recorder now captures with frame rate 0 and requests a frame on every animation frame (thinned to the `fps` option), so it takes exactly the frames the scene painted — measured at 60.0 fps with no gaps. Browsers without `requestFrame` keep the timer-driven capture.
-- Updated dependencies [202a28b]
-- Updated dependencies [d9958ac]
-- Updated dependencies [202a28b]
-- Updated dependencies [f24ed8b]
-- Updated dependencies [202a28b]
-- Updated dependencies [750c47d]
-- Updated dependencies [b3fa635]
-- Updated dependencies [2d7652c]
-- Updated dependencies [0103435]
-- Updated dependencies [9505684]
-- Updated dependencies [1589105]
-- Updated dependencies [1c6e7aa]
-- Updated dependencies [08e62d0]
-- Updated dependencies [41f5efb]
-- Updated dependencies [40f1050]
-- Updated dependencies [872c26c]
-  - @be-music/chart-model@0.4.0
-  - @be-music/player-engine@0.7.0
-  - @be-music/skin-lr2@0.1.6
-  - @be-music/skin-beatoraja@0.2.0
-  - @be-music/player-skin-sdk@0.1.0
-  - @be-music/chart-audio-renderer@0.2.4
-  - @be-music/chart-parser@0.2.4
+- Updated dependencies: `@be-music/chart-model@0.4.0`, `@be-music/player-engine@0.7.0`, `@be-music/skin-lr2@0.1.6`, `@be-music/skin-beatoraja@0.2.0`, `@be-music/player-skin-sdk@0.1.0`, `@be-music/chart-audio-renderer@0.2.4`, `@be-music/chart-parser@0.2.4`
 
 ## 0.7.0
 
@@ -445,11 +348,7 @@
 ### Patch Changes
 
 - Emit declaration-compatible types for the beatoraja theme's playable-variant constant so consumers building under `isolatedDeclarations` no longer fail on the inferred `as const satisfies ...` type.
-- Updated dependencies
-- Updated dependencies
-- Updated dependencies [ab210cb]
-  - @be-music/skin-lr2@0.1.5
-  - @be-music/player-engine@0.6.0
+- Updated dependencies: `@be-music/skin-lr2@0.1.5`, `@be-music/player-engine@0.6.0`
 
 ## 0.6.2
 
@@ -457,27 +356,7 @@
 
 - f07ff77: Match the LR2 groove gauge bar rendering: remove the peak-hold / afterimage bead (LR2 has none — the bar tracks only the live value) and suppress the green clear-zone split for survival gauges (HARD / DEATH render the whole bar red in LR2, since they have no 80% clear border). GROOVE / EASY keep the green ≥80% zone. The per-bead cell selection is now the pure, tested `resolveGrooveGaugeBeads` helper.
 - 99324e8: `#xxx97` / `#xxx98` dynamic volume changes in the WebAudio session now apply only to voices triggered after the event, matching the documented semantics and the Node engine. Previously the web runtime wrote the new gain onto the shared bus mixers, retroactively changing the volume of already-playing voices.
-- Updated dependencies [b2c4f9b]
-- Updated dependencies [b9922cf]
-- Updated dependencies [4d5a89e]
-- Updated dependencies [254e213]
-- Updated dependencies [7bbf052]
-- Updated dependencies [811cdfc]
-- Updated dependencies [d0bb321]
-- Updated dependencies [ebfdba7]
-- Updated dependencies [ca1012c]
-- Updated dependencies [6ce9173]
-- Updated dependencies [7802f98]
-- Updated dependencies [cdc42a1]
-- Updated dependencies [ca1012c]
-  - @be-music/chart-parser@0.2.3
-  - @be-music/chart-source@0.2.2
-  - @be-music/player-engine@0.5.0
-  - @be-music/chart-audio-renderer@0.2.3
-  - @be-music/shared-utils@0.3.0
-  - @be-music/chart-model@0.3.2
-  - @be-music/skin-lr2@0.1.4
-  - @be-music/skin-beatoraja@0.1.2
+- Updated dependencies: `@be-music/chart-parser@0.2.3`, `@be-music/chart-source@0.2.2`, `@be-music/player-engine@0.5.0`, `@be-music/chart-audio-renderer@0.2.3`, `@be-music/shared-utils@0.3.0`, `@be-music/chart-model@0.3.2`, `@be-music/skin-lr2@0.1.4`, `@be-music/skin-beatoraja@0.1.2`
 
 ## 0.6.1
 
@@ -491,8 +370,7 @@
   - Rebalanced the Web Audio bus gain staging: a -3 dB input trim ahead of the per-bus / master compressors with a matching +3 dB makeup after, plus retuned compressor params (higher thresholds, gentler ratios, softer knees), so hot source files keep headroom and the compressors act on real overloads instead of smashing normal hits. `off` mode still bypasses trim, compressors, and makeup.
   - Bump pixi.js to 8.19.0.
 
-- Updated dependencies [9b7f269]
-  - @be-music/player-engine@0.4.3
+- Updated dependencies: `@be-music/player-engine@0.4.3`
 
 ## 0.6.0
 
@@ -508,8 +386,7 @@
 
 - eb92249: Bump `fflate` from 0.8.2 to 0.8.3.
 - eb92249: Cap beatoraja texture decoding at four concurrent jobs through `runWithConcurrency` instead of dispatching every asset in parallel via `Promise.all`. Themes that ship hundreds of bitmaps (the LITONE families, several Hi-Speed packs) used to allocate every decoded `ImageBitmap` plus its backing `ArrayBuffer` at the same time, peaking gameplay heap by several hundred MB before the GC could reclaim the input buffers. The bounded scheduler keeps memory pressure proportional to the worker count.
-- Updated dependencies [eb92249]
-  - @be-music/player-engine@0.4.2
+- Updated dependencies: `@be-music/player-engine@0.4.2`
 
 ## 0.5.0
 
@@ -534,20 +411,7 @@
 - 69f77d1: Serialize BGA video FFmpeg transcodes through a single-flight queue so charts that reference several `.mpg` / `.avi` BGAs no longer launch parallel `ffmpeg.wasm` workers and exhaust browser memory.
 - 69f77d1: Yield to macrotasks while parsing a large chart so the page stays responsive (loading overlay animation, scrollbar, click handlers) and the browser doesn't flag the tab as unresponsive on multi-MB BMS / BMSON files.
 - 69f77d1: Precompute `sortedChromeEntries` (tagged union over image / number / text / button / onMouse / slider) once per LR2 select-scene skin reference. The previous render path merged six arrays into `work[]` and called `.sort()` every frame; the underlying skin is frozen after parse so the order is static. Per-frame visibility (op gating, panel-open gating, DST keyframe evaluation) still happens during the switch dispatch — only the merge / sort step is hoisted out.
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [69f77d1]
-- Updated dependencies [956fd01]
-- Updated dependencies [73dff9a]
-  - @be-music/skin-lr2@0.1.3
-  - @be-music/skin-beatoraja@0.1.1
-  - @be-music/player-engine@0.4.1
-  - @be-music/shared-utils@0.2.1
-  - @be-music/chart-audio-renderer@0.2.2
-  - @be-music/chart-source@0.2.1
-  - @be-music/chart-parser@0.2.2
-  - @be-music/chart-model@0.3.1
+- Updated dependencies: `@be-music/skin-lr2@0.1.3`, `@be-music/skin-beatoraja@0.1.1`, `@be-music/player-engine@0.4.1`, `@be-music/shared-utils@0.2.1`, `@be-music/chart-audio-renderer@0.2.2`, `@be-music/chart-source@0.2.1`, `@be-music/chart-parser@0.2.2`, `@be-music/chart-model@0.3.1`
 
 ## 0.4.0
 
@@ -563,13 +427,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [06a2db9]
-  - @be-music/skin-beatoraja@0.1.0
-  - @be-music/chart-model@0.3.0
-  - @be-music/player-engine@0.4.0
-  - @be-music/skin-lr2@0.1.2
-  - @be-music/chart-audio-renderer@0.2.1
-  - @be-music/chart-parser@0.2.1
+- Updated dependencies: `@be-music/skin-beatoraja@0.1.0`, `@be-music/chart-model@0.3.0`, `@be-music/player-engine@0.4.0`, `@be-music/skin-lr2@0.1.2`, `@be-music/chart-audio-renderer@0.2.1`, `@be-music/chart-parser@0.2.1`
 
 ## 0.3.1
 
@@ -580,8 +438,7 @@
   - AUTO LN lane laser no longer fades out ~150 ms into the sustain: `hold-lane-until-beat` now keeps the lane in `pressedChannels` so the same-tick `flash-lane` auto-release is skipped.
   - MANUAL LN-hold effects (sustain glow / hold sparkles) now show: the renderer starts the LR2 LN-hold timer (70..89) for every LN start and fades it at the tail.
 
-- Updated dependencies [b9a5f51]
-  - @be-music/player-engine@0.3.1
+- Updated dependencies: `@be-music/player-engine@0.3.1`
 
 ## 0.3.0
 
@@ -593,8 +450,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [5ea9072]
-  - @be-music/player-engine@0.3.0
+- Updated dependencies: `@be-music/player-engine@0.3.0`
 
 ## 0.2.0
 
@@ -618,16 +474,4 @@
 
 ### Patch Changes
 
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-- Updated dependencies [135f822]
-  - @be-music/chart-parser@0.2.0
-  - @be-music/chart-model@0.2.0
-  - @be-music/player-engine@0.2.0
-  - @be-music/chart-audio-renderer@0.2.0
-  - @be-music/chart-source@0.2.0
-  - @be-music/shared-utils@0.2.0
-  - @be-music/skin-lr2@0.1.1
+- Updated dependencies: `@be-music/chart-parser@0.2.0`, `@be-music/chart-model@0.2.0`, `@be-music/player-engine@0.2.0`, `@be-music/chart-audio-renderer@0.2.0`, `@be-music/chart-source@0.2.0`, `@be-music/shared-utils@0.2.0`, `@be-music/skin-lr2@0.1.1`

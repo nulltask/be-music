@@ -1,10 +1,20 @@
+import { BmsonBGAController } from './bmson-bga.ts';
+import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
-import { resolveAutoScratchSides } from './auto-scratch.ts';
+import { buildAutoKeyBoundBGAInputs, KeyBoundBGAController } from './key-bound-bga.ts';
+import { resolveAutoScratchChannels, resolveAutoScratchSides } from './auto-scratch.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
+  buildKeyBoundBGATimeline,
+  buildBmsonBGAEventTimeline,
+  buildChartTextTimeline,
+  buildChartOptionTimeline,
+  compileChartOptions,
+  resolveChartOptionsAt,
+  type ChartOptionProgram,
   isPlayLaneSoundChannel,
   type ResolvedChart,
 } from '@be-music/chart-model';
@@ -120,6 +130,10 @@ export interface PlaySession {
   readonly tracer: NoTUIPlaybackEventTracer;
   readonly stateLogger: PlaybackStateLogger;
   readonly publishUIFrame: (seconds: number, beat: number) => void;
+  readonly keyBoundBGA?: KeyBoundBGAController;
+  readonly bmsonBGA?: BmsonBGAController;
+  readonly chartText?: ChartTextController;
+  readonly chartOptions: ChartOptionProgram;
   /** The judge supplies HCN display facts from its existing state; no second simulation. */
   readHCNLanes?: (seconds: number) => readonly PlayerHCNLaneState[];
   /** Maps the judge's effects onto audio, the UI buses, the replay and the trace. */
@@ -239,6 +253,7 @@ export async function createPlaySession(
     options.judgeRuleset ?? 'lr2',
     playbackChart.battleSourceVariant ?? resolvedChart.playVariant,
     options.course !== undefined,
+    resolvedChart.sourceFormat === 'bms' ? resolvedChart.source.bms.player : undefined,
   );
   if ((playbackChart.battleMode ?? 'OFF') !== expectedBattle)
     throw new RangeError('The shared prepared chart must include the selected battle mode.');
@@ -259,6 +274,13 @@ export async function createPlaySession(
   )
     throw new RangeError('Prepared 7-to-9 conversion does not match selected options.');
   resolvedChart = playbackChart.resolvedChart;
+  const compiledOptions =
+    options.chartOptionProgram === undefined
+      ? compileChartOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing))
+      : { program: structuredClone(options.chartOptionProgram), diagnostics: [] };
+  const chartOptions = compiledOptions.program;
+  for (const diagnostic of [...compiledOptions.diagnostics, ...(options.chartOptionDiagnostics ?? [])])
+    emitPlayerLog(options, 'warn', 'chart.option', { ...diagnostic });
   const extraDepth = clampExtraNoteDepth(options.extraNoteDepth ?? playbackChart.extraNoteDepth ?? 0);
   const extraScratch = options.extraNoteScratch ?? playbackChart.extraNoteScratch ?? false;
   if ((playbackChart.extraNoteDepth ?? 0) !== extraDepth || (playbackChart.extraNoteScratch ?? false) !== extraScratch)
@@ -281,9 +303,9 @@ export async function createPlaySession(
     // Keep the shared array identity when the host prepared the chart before choosing REMOVE.
     playbackChart.landmineNotes.length = 0;
   }
-  // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds, as
-  // background audio at its own time.
-  appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
+  // BMS duplicate keysounds play as BGM. bmson layers belong to the judged note's input instead.
+  if (resolvedJSON.sourceFormat !== 'bmson')
+    appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
   // Constant for the whole play and read on every tick and judgment: hoisted out of the hot paths.
   const idBase = resolveBMSBase(resolvedJSON);
   const wavResources = resolvedJSON.resources.wav;
@@ -299,7 +321,7 @@ export async function createPlaySession(
     throw new RangeError('Selectable judgment algorithms belong to beatoraja 0.8.9.');
   }
   // Two players judge one side each: each side's notes make its own judgment count and TOTAL.
-  const twoPlayer = playbackChart.battleMode === 'TWO-PLAYER';
+  const twoPlayer = playbackChart.battleMode === 'TWO-PLAYER' || playbackChart.battleMode === 'COUPLE';
   const ruleset = resolveRuleset(
     rulesetChartFactsFromChart(
       resolvedJSON,
@@ -310,6 +332,7 @@ export async function createPlaySession(
     options.judgeRuleset ?? 'lr2',
     {
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
+      bmsonTotalMode: options.bmsonTotalMode,
       ...(options.customJudge !== undefined ? { customJudge: options.customJudge } : {}),
       ...(options.practice !== undefined
         ? {
@@ -352,6 +375,7 @@ export async function createPlaySession(
           const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
           return createReplayRecorder({
             json: resolvedJSON,
+            chartOptions,
             moneyScore: ruleset.moneyScore,
             chart: playbackChart,
             chartSHA256,
@@ -367,6 +391,7 @@ export async function createPlaySession(
               mode,
               autoScratch,
               judgeAlgorithm: ruleset.rulesetId === 'beatoraja' ? (options.judgeAlgorithm ?? 'combo') : undefined,
+              ...(options.bmsonTotalMode !== undefined ? { bmsonTotalMode: options.bmsonTotalMode } : {}),
               ...(options.customJudge !== undefined ? { customJudge: { ...options.customJudge } } : {}),
               longNoteModifier: options.longNoteModifier,
               ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
@@ -472,10 +497,23 @@ export async function createPlaySession(
   const stateSignals = createPlayerStateSignals(highSpeed);
   const { landmineNotes, invisibleNotes, renderNotes, laneBindings, laneDisplayMode, inputTokenToChannels } =
     playbackChart;
+  const finalOptionCue = chartOptions.cues
+    .filter((cue) => cue.timeUs <= (resolvedChart.reversal?.seconds ?? Infinity) * 1_000_000)
+    .at(-1);
+  let textPlaybackEndSeconds =
+    options.practice === undefined && finalOptionCue ? finalOptionCue.timeUs / 1_000_000 + 1 : 0;
+  for (const stage of options.practice === undefined ? (options.chartTextStages ?? []) : []) {
+    const last = stage.timeline.cues.filter((cue) => cue.seconds <= (stage.freezeSeconds ?? Infinity)).at(-1);
+    if (last)
+      textPlaybackEndSeconds = Math.max(
+        textPlaybackEndSeconds,
+        Math.min(stage.endSeconds, stage.offsetSeconds + (last.seconds + 1) / stage.rate),
+      );
+  }
   const uiSignals = createPlayerUISignalBus({
     currentBeat: 0,
     currentSeconds: 0,
-    totalSeconds: playbackChart.totalSeconds,
+    totalSeconds: Math.max(playbackChart.totalSeconds, textPlaybackEndSeconds),
     summary,
     notes: renderNotes,
     landmineNotes,
@@ -497,7 +535,7 @@ export async function createPlaySession(
       randomPatternSummary,
       stateSignals,
       uiSignals,
-      totalSeconds: playbackChart.totalSeconds,
+      totalSeconds: Math.max(playbackChart.totalSeconds, textPlaybackEndSeconds),
       audioMode: mode,
     });
 
@@ -537,6 +575,41 @@ export async function createPlaySession(
   const clockSource = createAudioPlaybackClockSource(audioSession);
   // `session` is returned below; the frames read its clock and seek generation as they are published.
   let session: PlaySession | undefined;
+  const keyBoundCues = options.keyBoundBGACues ?? buildKeyBoundBGATimeline(resolvedChart.source, resolvedChart.timing);
+  const assistedChannels = resolveAutoScratchChannels(
+    options,
+    playbackChart.laneBindings.filter((lane) => lane.isScratch).map((lane) => lane.channel),
+  );
+  const freezeSeconds = resolvedChart.reversal?.seconds ?? Infinity;
+  const keyBoundBGA =
+    keyBoundCues.length === 0
+      ? undefined
+      : new KeyBoundBGAController(keyBoundCues, {
+          freezeSeconds,
+          inputs: [
+            ...(options.replayInputs ?? []).map((input) => ({
+              seconds: input.timeUs / 1e6,
+              action: input.action,
+              channels: input.channels,
+            })),
+            ...buildAutoKeyBoundBGAInputs(
+              playbackChart.scorableNotes.filter(
+                (note) => note.seconds <= freezeSeconds && (mode === 'auto' || assistedChannels.has(note.channel)),
+              ),
+            ),
+          ],
+        });
+  const bmsonCues =
+    options.bmsonBGACues ??
+    buildBmsonBGAEventTimeline(resolvedChart.source, resolvedChart.timing, {
+      includeOrdinaryLayerClears: true,
+    });
+  const bmsonBGA = bmsonCues.length > 0 ? new BmsonBGAController(bmsonCues, freezeSeconds) : undefined;
+  const textTimeline = buildChartTextTimeline(resolvedChart.source, resolvedChart.timing);
+  const chartText =
+    options.chartTextStages !== undefined || textTimeline.cues.length || textTimeline.missText !== undefined
+      ? new ChartTextController(textTimeline, freezeSeconds, options.chartTextStages)
+      : undefined;
   const publishUIFrame = createUIFramePublisher({
     uiEnabled,
     uiSignals,
@@ -547,7 +620,16 @@ export async function createPlaySession(
     invisibleNotes,
     audioBackend: audioBackendLabel,
     ...(secondPlayer !== undefined ? { summary2P: secondPlayer.summary } : {}),
+    ...(bmsonBGA ? { resolveBmsonBGA: (seconds: number) => bmsonBGA.read(seconds) } : {}),
+    ...(chartOptions.initial.hiSpeed !== undefined || chartOptions.cues.length > 0
+      ? {
+          resolveChartOptions: (seconds: number) =>
+            resolveChartOptionsAt(chartOptions, Math.round(Math.min(seconds, freezeSeconds) * 1_000_000)),
+        }
+      : {}),
+    ...(chartText ? { resolveChartText: (seconds: number) => chartText.read(seconds) } : {}),
     resolveHCNLanes: (seconds) => session?.readHCNLanes?.(seconds),
+    ...(keyBoundBGA ? { resolveKeyBoundBGA: (seconds: number) => keyBoundBGA.read(seconds) } : {}),
     resolveJudgedNoteCount: () =>
       Math.max(
         0,
@@ -589,6 +671,14 @@ export async function createPlaySession(
     },
   });
   const applyJudgeEffect = createJudgeEffectHandler({
+    ...(chartText ? { onChartTextInput: (input) => chartText.addInput(input) } : {}),
+    ...(bmsonBGA ? { onBmsonBGAInput: (input) => bmsonBGA.addInput(input) } : {}),
+    ...(keyBoundBGA && !replay
+      ? {
+          onInput: (input: { seconds: number; action: 'down' | 'up'; channels: ReadonlySet<string> }) =>
+            keyBoundBGA.addInput({ seconds: input.seconds, action: input.action, channels: [...input.channels] }),
+        }
+      : {}),
     judgeTiming: {
       // Manual play only, under any judge rules; LR2 skips its own adjustment in a two-player BATTLE (`battle` 1).
       mode:
@@ -670,6 +760,10 @@ export async function createPlaySession(
     tracer,
     stateLogger,
     publishUIFrame,
+    ...(keyBoundBGA ? { keyBoundBGA } : {}),
+    ...(bmsonBGA ? { bmsonBGA } : {}),
+    ...(chartText ? { chartText } : {}),
+    chartOptions,
     applyJudgeEffect,
     settleJudgeTiming: () => applyJudgeEffect.settleJudgeTiming(),
     volumeChanges,
@@ -735,6 +829,7 @@ function createSecondPlayer(
     rulesetChartFactsFromChart(resolvedJSON, selectPlaybackChartSide(playbackChart, 2), judgeRankChanges),
     options.judgeRuleset ?? 'lr2',
     {
+      bmsonTotalMode: options.bmsonTotalMode,
       ...(gauge !== undefined ? { selectedGauge: gauge } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
     },

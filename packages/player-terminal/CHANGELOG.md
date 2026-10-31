@@ -1,5 +1,35 @@
 # @be-music/player-terminal
 
+## 0.9.0
+
+### Minor Changes
+
+- afc65fb: Display generic bmson note columns and input labels with normal white-key styling, including storage channels otherwise used for scratch and FREE ZONE. Preserve F1–F24 press, repeat and release across kitty functional encodings and Win32 input mode.
+- 5992a52: Apply exact chart-authored HI-SPEED to terminal note spacing and readouts. Extend `resolveVisibleBeatsForTUIGrid` with authored mode, preserving the full native range while keeping user-mode limits unchanged.
+- cae8368: Render engine-driven bmson BGA sequence frames through ANSI and Kitty, loading all referenced alternatives and preserving source alpha, frame clocks and authored sequence lifetimes beyond the ordinary POOR window. Forward NONSTOP program sidecars through Node workers and apply FIT movie clocks to stage-owned resources.
+- 3f3de70: Add --bmson-total-mode spec to disable recovery for bmson percentage TOTAL 0 while preserving the existing default.
+- d869b05: Apply EXBMP transparent-color keys to opaque video frames before cropping and resizing. Preserve unselected black pixels and native borders across base, both overlays, POOR and implicit BMP00, including later streaming frames and resize/seek cache changes.
+- dcb4256: Apply independent BGA opacity channels `0B`–`0E` to base, both overlays and POOR in ANSI and Kitty output. Blend over lower layers or the black canvas, refresh static-image caches on opacity changes, and restore the correct state after seeking or resizing. Allow renderer callers to supply precomputed opacity timelines.
+- 4324783: Render engine-selected SWBGA frames in ANSI and Kitty output, including BMP00, placed aliases, EXBMP resources and keyed video frames. Accept optional input-bound frame state in the renderer, preserve normal BGA resources and restore the underlying planes after release or expiry.
+- 458b6f3: Accept host-remapped NONSTOP SWBGA selections in the BGA loader and carry them through Node UI workers. Render stage frames with the FIT source-video rate and restore normal BGA when the animation ends.
+- b14b94b: Renderer source frames accept optional per-pixel alpha coverage. Semi-transparent PNG and encoded-alpha BMP BGA pixels now blend with lower planes instead of becoming opaque or disappearing. Preserve source coverage through EXBMP keying, sub-region crops, nearest/Lanczos scaling and worker transfers, combine it with plane opacity and tint, and flatten the final result against the BGA background for ANSI and Kitty. Filter associated RGB during resizing to avoid transparent-color fringes. A 32-bit BMP whose alpha bytes are all zero stays opaque, as browsers decode it.
+
+### Patch Changes
+
+- b33db20: Load bmson BGA header filenames for base, layer and POOR images and videos instead of looking them up as BMS BMP slots.
+- 274133e: Display chart text in a dedicated terminal row, clearing replaced selections and preventing embedded control characters from changing the screen layout.
+  
+  Forward structured NONSTOP text programs through gameplay-worker play options; the terminal displays the engine’s selected stage text.
+- 460823d: Carry host-compiled NONSTOP option diagnostics through gameplay-worker options alongside the effective display program, retaining stage and source-time provenance.
+- 4480fe0: Keep long sub-region source ids in internal mixed-NONSTOP bmson charts instead of truncating them to a different resource.
+- 5c820d9: Apply channel-scoped BGA RGB multipliers and shared alpha controls in ANSI and Kitty output. Include color changes in render caches and preserve the source frame through POOR composition, resizing and backward seeks.
+- de8a8d3: Render `#BGAxx` sub-region cues on base, both overlays and POOR instead of displaying missing-resource frames. Crop original image/video coordinates before fitting the BMS canvas, preserve authored placement and transparency, and apply the crop to streamed video frames without shifting coordinates through automatic black-border removal.
+- 4b09c06: Apply EXBMP transparent-color keys to native still-image pixels before resizing and sub-region cropping. Preserve unkeyed black pixels, distinguish encoded alpha from inserted RGBA bytes and separate caches for different keys of the same image, including implicit POOR and stitched resources. Expand indexed PNG palettes, packed grayscale and encoded PNG transparency before keying.
+- 8586109: Load BGA images declared only through `#EXBMPxx`, including the implicit POOR image in slot `00`, instead of displaying a missing-resource frame. Preserve explicit `#BMPxx` filenames when both declarations exist.
+- ca29ca8: Keep image pixel buffers intact when worker conversion fails, so fallback BGA conversion displays the original colors instead of a black image.
+- 27dba16: Decode BGA codecs supported by the bundled LibAV build, including HEVC and VP9/WebM, instead of rejecting every codec except MPEG-1, H.264 and MJPEG. Stop the loading pass after its first converted frame.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-parser@0.6.0`, `@be-music/chart-audio-renderer@0.5.0`, `@be-music/chart-source@0.6.0`, `@be-music/player-node-audio@0.2.1`, `@be-music/shared-utils@0.7.0`
+
 ## 0.8.0
 
 ### Minor Changes
@@ -10,50 +40,7 @@
 
 - a83e326: Use `____` for the That-Which-Must-Not-Be-Named ruleset CLI argument and `????` in replay comparison reports.
 - f994ec4: Honor POOR BGA overlay and hidden modes in ANSI and Kitty rendering. Preserve PNG transparency for overlays and keep the normal BGA cache intact when POOR display is disabled.
-- Updated dependencies [ba3cc20]
-- Updated dependencies [7fca9a9]
-- Updated dependencies [a9cc3d7]
-- Updated dependencies [69df53c]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [fcaef41]
-- Updated dependencies [7f0386b]
-- Updated dependencies [45aff53]
-- Updated dependencies [1c97afd]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [7f0386b]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [78faa63]
-- Updated dependencies [3d5e880]
-- Updated dependencies [21f705d]
-- Updated dependencies [a8896a9]
-- Updated dependencies [b1ca2ce]
-- Updated dependencies [6e676fe]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [9f41b30]
-- Updated dependencies [f994ec4]
-- Updated dependencies [4371c72]
-- Updated dependencies [acba3d5]
-- Updated dependencies [3e694df]
-- Updated dependencies [3e694df]
-- Updated dependencies [c35b845]
-- Updated dependencies [85250d8]
-- Updated dependencies [2e435b9]
-  - @be-music/player-engine@0.11.0
-  - @be-music/chart-audio-renderer@0.4.1
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-parser@0.5.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/player-node-audio@0.2.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/player-engine@0.11.0`, `@be-music/chart-audio-renderer@0.4.1`, `@be-music/chart-model@0.7.0`, `@be-music/chart-parser@0.5.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-node-audio@0.2.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.7.0
 
@@ -65,18 +52,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [dca9a2f]
-  - @be-music/chart-audio-renderer@0.4.0
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-parser@0.4.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/player-engine@0.10.0
-  - @be-music/shared-utils@0.5.0
+- Updated dependencies: `@be-music/chart-audio-renderer@0.4.0`, `@be-music/chart-model@0.6.0`, `@be-music/chart-parser@0.4.0`, `@be-music/chart-source@0.4.0`, `@be-music/player-engine@0.10.0`, `@be-music/shared-utils@0.5.0`
 
 ## 0.6.0
 
@@ -93,20 +69,13 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/chart-audio-renderer@0.3.0
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/chart-parser@0.3.0
-  - @be-music/player-engine@0.9.0
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/chart-audio-renderer@0.3.0`, `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/chart-parser@0.3.0`, `@be-music/player-engine@0.9.0`, `@be-music/shared-utils@0.4.0`
 ## 0.5.1
 
 ### Patch Changes
 
 - 63bea3f: Fix `bms-playlog` rejecting `--` with "unknown option '--'", which broke `pnpm playlog -- <file>`. `--` now ends the options, and every argument after it is read as a file.
-- Updated dependencies [73fd398]
-  - @be-music/player-engine@0.8.0
+- Updated dependencies: `@be-music/player-engine@0.8.0`
 
 ## 0.5.0
 
@@ -127,24 +96,7 @@
   miss-BGA default, so the previous 2-second window held the miss layer four times longer than LR2.
   `DEFAULT_POOR_BGA_DISPLAY_SECONDS` is shared by the TUI compositor and the web LR2 scene, so both
   runtimes pick up the corrected timing.
-- Updated dependencies [202a28b]
-- Updated dependencies [d9958ac]
-- Updated dependencies [f24ed8b]
-- Updated dependencies [202a28b]
-- Updated dependencies [750c47d]
-- Updated dependencies [b3fa635]
-- Updated dependencies [2d7652c]
-- Updated dependencies [0103435]
-- Updated dependencies [9505684]
-- Updated dependencies [1589105]
-- Updated dependencies [1c6e7aa]
-- Updated dependencies [08e62d0]
-- Updated dependencies [41f5efb]
-- Updated dependencies [40f1050]
-  - @be-music/chart-model@0.4.0
-  - @be-music/player-engine@0.7.0
-  - @be-music/chart-audio-renderer@0.2.4
-  - @be-music/chart-parser@0.2.4
+- Updated dependencies: `@be-music/chart-model@0.4.0`, `@be-music/player-engine@0.7.0`, `@be-music/chart-audio-renderer@0.2.4`, `@be-music/chart-parser@0.2.4`
 
 ## 0.4.0
 
@@ -154,9 +106,7 @@
 
 ### Patch Changes
 
-- Updated dependencies
-- Updated dependencies [ab210cb]
-  - @be-music/player-engine@0.6.0
+- Updated dependencies: `@be-music/player-engine@0.6.0`
 
 ## 0.3.0
 
@@ -171,77 +121,43 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2c4f9b]
-- Updated dependencies [b9922cf]
-- Updated dependencies [4d5a89e]
-- Updated dependencies [254e213]
-- Updated dependencies [7bbf052]
-- Updated dependencies [811cdfc]
-- Updated dependencies [d0bb321]
-- Updated dependencies [ebfdba7]
-- Updated dependencies [ca1012c]
-- Updated dependencies [6ce9173]
-- Updated dependencies [7802f98]
-- Updated dependencies [cdc42a1]
-- Updated dependencies [ca1012c]
-  - @be-music/chart-parser@0.2.3
-  - @be-music/chart-source@0.2.2
-  - @be-music/player-engine@0.5.0
-  - @be-music/chart-audio-renderer@0.2.3
-  - @be-music/shared-utils@0.3.0
-  - @be-music/chart-model@0.3.2
+- Updated dependencies: `@be-music/chart-parser@0.2.3`, `@be-music/chart-source@0.2.2`, `@be-music/player-engine@0.5.0`, `@be-music/chart-audio-renderer@0.2.3`, `@be-music/shared-utils@0.3.0`, `@be-music/chart-model@0.3.2`
 
 ## 0.2.6
 
 ### Patch Changes
 
-- Updated dependencies [9b7f269]
-  - @be-music/player-engine@0.4.3
+- Updated dependencies: `@be-music/player-engine@0.4.3`
 
 ## 0.2.5
 
 ### Patch Changes
 
-- Updated dependencies [eb92249]
-  - @be-music/player-engine@0.4.2
+- Updated dependencies: `@be-music/player-engine@0.4.2`
 
 ## 0.2.4
 
 ### Patch Changes
 
-- Updated dependencies [69f77d1]
-- Updated dependencies [956fd01]
-- Updated dependencies [73dff9a]
-  - @be-music/player-engine@0.4.1
-  - @be-music/shared-utils@0.2.1
-  - @be-music/chart-audio-renderer@0.2.2
-  - @be-music/chart-source@0.2.1
-  - @be-music/chart-parser@0.2.2
-  - @be-music/chart-model@0.3.1
+- Updated dependencies: `@be-music/player-engine@0.4.1`, `@be-music/shared-utils@0.2.1`, `@be-music/chart-audio-renderer@0.2.2`, `@be-music/chart-source@0.2.1`, `@be-music/chart-parser@0.2.2`, `@be-music/chart-model@0.3.1`
 
 ## 0.2.3
 
 ### Patch Changes
 
-- Updated dependencies [06a2db9]
-  - @be-music/chart-model@0.3.0
-  - @be-music/player-engine@0.4.0
-  - @be-music/chart-audio-renderer@0.2.1
-  - @be-music/chart-parser@0.2.1
+- Updated dependencies: `@be-music/chart-model@0.3.0`, `@be-music/player-engine@0.4.0`, `@be-music/chart-audio-renderer@0.2.1`, `@be-music/chart-parser@0.2.1`
 
 ## 0.2.2
 
 ### Patch Changes
 
-- Updated dependencies [b9a5f51]
-  - @be-music/player-engine@0.3.1
+- Updated dependencies: `@be-music/player-engine@0.3.1`
 
 ## 0.2.1
 
 ### Patch Changes
 
-- Updated dependencies [5ea9072]
-  - @be-music/player-engine@0.3.0
+- Updated dependencies: `@be-music/player-engine@0.3.0`
 
 ## 0.2.0
 
@@ -262,18 +178,7 @@
   - POOR / BAD verdict plates no longer pair with the running combo number (would otherwise display `POOR 5` after EMPTY POOR preserves combo).
   - In-play key input is no longer swallowed in the TUI worker-thread engine — `pressedAt` is wall-clock-ms-based so the main-thread input runtime and the worker-thread engine share a comparable clock domain.
 
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-- Updated dependencies [135f822]
-  - @be-music/chart-parser@0.2.0
-  - @be-music/chart-model@0.2.0
-  - @be-music/player-engine@0.2.0
-  - @be-music/chart-audio-renderer@0.2.0
-  - @be-music/chart-source@0.2.0
-  - @be-music/shared-utils@0.2.0
+- Updated dependencies: `@be-music/chart-parser@0.2.0`, `@be-music/chart-model@0.2.0`, `@be-music/player-engine@0.2.0`, `@be-music/chart-audio-renderer@0.2.0`, `@be-music/chart-source@0.2.0`, `@be-music/shared-utils@0.2.0`
 
 ## 0.1.0
 
@@ -283,9 +188,4 @@
 
 ### Patch Changes
 
-- Updated dependencies
-  - @be-music/chart-audio-renderer@0.1.0
-  - @be-music/chart-model@0.1.0
-  - @be-music/chart-source@0.1.0
-  - @be-music/chart-parser@0.1.0
-  - @be-music/shared-utils@0.1.0
+- Updated dependencies: `@be-music/chart-audio-renderer@0.1.0`, `@be-music/chart-model@0.1.0`, `@be-music/chart-source@0.1.0`, `@be-music/chart-parser@0.1.0`, `@be-music/shared-utils@0.1.0`

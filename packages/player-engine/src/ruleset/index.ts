@@ -6,6 +6,7 @@
  * constants and their primary sources are documented in `definitions.ts`.
  */
 export * from './facts.ts';
+export * from './bmson-total.ts';
 export * from './clear-lamp.ts';
 export * from './course.ts';
 export * from './definitions.ts';

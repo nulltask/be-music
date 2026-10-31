@@ -1,6 +1,6 @@
 {
   "name": "@be-music/app-leaderboard",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Chart and course rankings, score APIs, and web pages for be-music",
   "license": "MIT",
@@ -51,6 +51,7 @@
     "cf": "1.0.0-beta.20",
     "drizzle-kit": "^0.31.11",
     "esbuild": "0.28.2",
+    "htmx.org": "4.0.0",
     "miniflare": "5.20261006.1-alpha",
     "tailwindcss": "^4.3.3",
     "wrangler": "^4.151.3"

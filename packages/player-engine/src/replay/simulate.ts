@@ -45,6 +45,8 @@ export {
 
 export interface SimulateReplayOptions extends ResolveRulesetOptions {
   ruleset: RulesetId;
+  /** Side of a recorded two-player play; defaults to player 1. Player 2 uses its recorded gauge. */
+  player?: 1 | 2;
   /** Overrides the log's `play.endOnFailure`: whether judging stops the moment a survival gauge empties. */
   endOnFailure?: boolean;
 }
@@ -61,6 +63,25 @@ export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____'] = 
  * where no measurement exists — see `rulesets.ts`).
  */
 export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOptions): ReplayRulesetResult {
+  const twoPlayer = replay.play.battleMode === 'TWO-PLAYER' || replay.play.battleMode === 'COUPLE';
+  if (options.player === 2 && !twoPlayer) throw new RangeError('Player 2 requires a recorded two-player play.');
+  if (twoPlayer) {
+    const player = options.player ?? 1;
+    const own = (channel: string): boolean => channel.startsWith(String(player));
+    const notes = replay.chart.notes.filter((note) => own(note.channel));
+    replay = {
+      ...replay,
+      chart: {
+        ...replay.chart,
+        notes,
+        noteCount: notes.filter((note) => note.type === 'normal' || note.type === 'long').length,
+      },
+      play: { ...replay.play, ...(player === 2 ? { gauge: replay.play.gauge2P ?? replay.play.gauge } : {}) },
+      inputs: replay.inputs
+        .map((input) => ({ ...input, channels: input.channels.filter(own) }))
+        .filter((input) => input.channels.length > 0),
+    };
+  }
   const config = resolveRulesetConfig(replay, options.ruleset, options);
   const endOnFailure =
     options.endOnFailure ??

@@ -25,7 +25,7 @@ export function convertLR2SPToDPChart(
   if (source.sourceFormat !== 'bms' || source.idBase !== 36)
     throw new RangeError('LR2 SP TO DP requires a base-36 BMS source.');
   const sourceVariant = source.playVariant;
-  if (sourceVariant === '24' || sourceVariant === '48')
+  if (sourceVariant.startsWith('generic-') || sourceVariant === '24' || sourceVariant === '48')
     throw new RangeError('SP TO DP requires a 5, 7, 9, 10 or 14KEY source chart.');
   const tempo = options.tempo ?? 1;
   if (!Number.isFinite(tempo) || tempo <= 0) throw new RangeError('SP TO DP requires a positive finite tempo.');
@@ -122,7 +122,7 @@ export function convertLR2SPToDPChart(
   }
   const compare = (a: ResolvedNote, b: ResolvedNote): number =>
     a.seconds - b.seconds || a.channel.localeCompare(b.channel);
-  const playVariant = OUTPUT_VARIANTS[sourceVariant];
+  const playVariant = OUTPUT_VARIANTS[sourceVariant as keyof typeof OUTPUT_VARIANTS];
   return {
     chart: withChartOverrides(source, {
       playVariant,

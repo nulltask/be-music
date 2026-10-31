@@ -1,5 +1,34 @@
 # @be-music/player-engine
 
+## 0.12.0
+
+### Minor Changes
+
+- 206afe9: Trigger every bmson layer on the judged note's input instead of playing shadowed layers as BGM. Preserve layered sound events through NONSTOP composition and expose them on timed notes.
+- ceb5fcc: Play bmson LN end keysounds on resolved manual releases or held LN tails, and at authored tails in AUTO and AUTO SCRATCH. Preserve tail audio through seeks, replay and NONSTOP without adding judgments. NONSTOP stitch versions 1 and 2 keep an `up` slice as an ordinary judged note, so existing course replays rebuild the same note set.
+- 87461c3: Add a deterministic input-driven SWBGA controller and publish its active frame in `PlayerUIFramePayload.keyBoundBGA`. Handle fresh presses, timed and held lifetimes, replay frame spacing, manual seek resets and AUTO/AUTO SCRATCH visual inputs without changing judging or recording.
+- 5c820d9: Preserve each NONSTOP stage's BGA RGB and alpha history through FIT timing and crossfades. Allocate independent ARGB definitions in the stitched chart, retain alpha zero and reset unconfigured stages to opaque white.
+- 458b6f3: Preserve SWBGA frames, image dependencies and selection windows through NONSTOP composition, including long internal bmson ids. Seed trimmed stages, apply FIT to animation and movie clocks, and expire bindings and animations at stage boundaries. Accept host-remapped selections and forward them to UI adapters without changing judging or recorded input.
+- afc65fb: Bind and judge generic bmson keyboards as 1–70 normal keys on one side, preserving the declared layout through AUTO, replay parsing, fingerprinting and same-layout NONSTOP composition. Keep beat-specific conversions unavailable and diagnose incompatible generic course stages.
+- a22dbc6: Preserve BGA opacity channels `0B`–`0E` when stitching NONSTOP stages, carry effective values from trimmed leading intervals, and restore opaque defaults for stages without commands. Expose independent stage histories as `NonstopStitchStage.bgaOpacity` on the stitched clock for BGA crossfades, retaining FIT/STOP timing without changing judged notes or rank inputs.
+- cae8368: Expose deterministic bmson BGA event playback driven by real judgments, ordered image alternatives and chart-time intervals. Publish active frames to hosts and rebuild exact AUTO/replay trigger history on seek without changing score, audio or replay input data. Compose NONSTOP event programs with stage-specific resources, trimmed ALWAYS phase, FIT time and stage-boundary expiry.
+- 3f3de70: Add an opt-in bmson zero-total no-recovery policy shared by live play, replay simulation and course gauges. Preserve legacy replay defaults and keep affected runs out of ordinary best records and ranking comparisons.
+- 274133e: Publish chart text on UI frames, including judgment-driven TEXT00 overrides and deterministic pause, seek, restart and reversal behavior. Keep playback open for late text cues.
+  
+  NONSTOP retains stage-owned text programs, including trimmed selections, per-stage TEXT00, FIT timing and empty-stage clears. Hosts pass the stitch map’s text program through `chartTextStages`.
+- 5992a52: Publish chart-authored HI-SPEED on chart-time frames and preserve accepted effective operations in replays. Pause, seek and reversal reproduce the display state without changing judgments, audio tempo or record eligibility; unsupported declarations emit diagnostics.
+- 86f4978: Honor chart-authored HDX CN/HCN before filling undefined user or course modes. NONSTOP stitch version 3 preserves BMS CN/HCN through per-note types while retaining historical stitch versions for replays.
+- 460823d: Preserve stage-owned effective chart options and diagnostics through NONSTOP composition, including FIT timing, trimmed initial selections, source reversal and empty-stage clears. Cut-out stage replays retain the owned display program on their local clock without scaling FIT twice.
+- 3928de4: Add opt-in PLAYER header execution and COUPLE without duplicating authored banks. Record effective modes, simulate each two-player side with its own gauge, and exclude two-player recordings from single-player submissions.
+
+### Patch Changes
+
+- 4480fe0: Preserve EXBMP-only filenames and BGA sub-region dependencies when stitching NONSTOP courses. Remap each stage's resource ids and asset paths, retain authored color fields and crop placement, and include dependency ids in the stage map. Resolve dependency graphs iteratively, isolate cycles and report id-space exhaustion when a referenced source cannot be allocated.
+- e66f84f: Keep full bmson resource identities in playback diagnostics for samples beyond the two-character BMS key capacity.
+- 10951d6: Keep effective EXWAV filenames and remap WAVCMD parameters and EXWAV definitions into separate NONSTOP stage resource slots.
+- 3e1855e: Preserve each NONSTOP stage's VOLWAV and existing intrinsic slot gain in the stitched chart instead of dropping it or rounding fractional percentages.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/chart-parser@0.6.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`
+
 ## 0.11.0
 
 ### Minor Changes
@@ -51,19 +80,7 @@
 - aeac0d3: LR2 full combos now receive FULL COMBO before the gauge check, matching LR2 even when empty POORs or a low TOTAL leave the gauge below its clear border. Replay and local record lamp derivation use the same rule.
 - acba3d5: Replay re-simulation is about 13% faster: each time advance walks the lanes as an array instead of a map iterator, skips sorting when it has fewer than two events, checks a mine's due points inline instead of through a fresh closure, and works out each mine's PGREAT reach once instead of on every advance. Results are unchanged.
 - c35b845: The play loop no longer busy-waits: each 60 Hz tick sleeps its whole remainder in one timer (re-armed if the host fires it early) instead of sleeping 4 ms short and polling the rest with zero-delay timers. The polling kept the thread busy for the last milliseconds of every tick, about 5% of the browser's main thread on a dense chart; a JUDGE is timed by its `pressedAt` and audio is queued ahead of the write head, so nothing depended on the tick landing exactly. Inputs still wake the loop at once.
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [2e435b9]
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-parser@0.5.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/chart-model@0.7.0`, `@be-music/chart-parser@0.5.0`, `@be-music/chart-source@0.5.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.10.0
 
@@ -75,16 +92,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-  - @be-music/chart-audio-renderer@0.4.0
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-parser@0.4.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/shared-utils@0.5.0
+- Updated dependencies: `@be-music/chart-audio-renderer@0.4.0`, `@be-music/chart-model@0.6.0`, `@be-music/chart-parser@0.4.0`, `@be-music/chart-source@0.4.0`, `@be-music/shared-utils@0.5.0`
 
 ## 0.9.0
 
@@ -105,12 +113,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/chart-audio-renderer@0.3.0
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/chart-parser@0.3.0
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/chart-audio-renderer@0.3.0`, `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/chart-parser@0.3.0`, `@be-music/shared-utils@0.4.0`
 ## 0.8.0
 
 ### Minor Changes
@@ -258,10 +261,7 @@
   
   Resolve each note's miss deadline from the judge rank in force at that note's own time instead of the live window. The LR2 BAD gate is rank-invariant, so this is behaviour-neutral today; it stops a rank change from retroactively moving the deadline of already-passed notes once a ruleset whose BAD width scales with judgerank is wired in.
 - 40f1050: Move the LR2 / beatoraja / That-Which-Must-Not-Be-Named ruleset tables out of the play-log simulator into a shared `src/ruleset/` module so the live engine and the simulator can resolve behaviour from one source of truth. The tables now take a neutral `RulesetChartFacts` record instead of reading a `PlaylogChart` directly, and each caller supplies an adapter — `rulesetChartFactsFromPlaylog` for recorded plays. `@be-music/player-engine/playlog` re-exports the ruleset surface unchanged, so this is behaviour-neutral for consumers.
-- Updated dependencies [202a28b]
-  - @be-music/chart-model@0.4.0
-  - @be-music/chart-audio-renderer@0.2.4
-  - @be-music/chart-parser@0.2.4
+- Updated dependencies: `@be-music/chart-model@0.4.0`, `@be-music/chart-audio-renderer@0.2.4`, `@be-music/chart-parser@0.2.4`
 
 ## 0.6.0
 
@@ -297,17 +297,7 @@
   - bmson `key_channels[].notes[].damage` is now applied as the mine's gauge damage, taking precedence over the BMS `value / 2` rule.
   - `#SPEEDxx` now holds the first keyframe's value before its beat (Bemuse reference semantics) instead of ramping linearly from 1.0.
 
-- Updated dependencies [b2c4f9b]
-- Updated dependencies [b9922cf]
-- Updated dependencies [4d5a89e]
-- Updated dependencies [6ce9173]
-- Updated dependencies [cdc42a1]
-- Updated dependencies [ca1012c]
-  - @be-music/chart-parser@0.2.3
-  - @be-music/chart-source@0.2.2
-  - @be-music/chart-audio-renderer@0.2.3
-  - @be-music/shared-utils@0.3.0
-  - @be-music/chart-model@0.3.2
+- Updated dependencies: `@be-music/chart-parser@0.2.3`, `@be-music/chart-source@0.2.2`, `@be-music/chart-audio-renderer@0.2.3`, `@be-music/shared-utils@0.3.0`, `@be-music/chart-model@0.3.2`
 
 ## 0.4.3
 
@@ -333,12 +323,7 @@
   - `core/engine.ts`: hoist `resolveBmsBase(resolvedJson)` and `resolvedJson.resources.wav` out of the autoplay tick into local constants. Both fields are immutable from the autoplay entry point on, but were re-walked dozens of times per second (LN body, every triggered sample, mine resolution).
   - `judging.ts`: `lowerBoundBySeconds` now binary-searches `startIndex` when the caller declares `sortedBySeconds: true` and doesn't supply an explicit `startIndex`. Drops the per-call prefix scan from O(N) to O(log N) once the judge window opens deep into the chart.
 
-- Updated dependencies [73dff9a]
-  - @be-music/shared-utils@0.2.1
-  - @be-music/chart-audio-renderer@0.2.2
-  - @be-music/chart-source@0.2.1
-  - @be-music/chart-parser@0.2.2
-  - @be-music/chart-model@0.3.1
+- Updated dependencies: `@be-music/shared-utils@0.2.1`, `@be-music/chart-audio-renderer@0.2.2`, `@be-music/chart-source@0.2.1`, `@be-music/chart-parser@0.2.2`, `@be-music/chart-model@0.3.1`
 
 ## 0.4.0
 
@@ -350,10 +335,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [06a2db9]
-  - @be-music/chart-model@0.3.0
-  - @be-music/chart-audio-renderer@0.2.1
-  - @be-music/chart-parser@0.2.1
+- Updated dependencies: `@be-music/chart-model@0.3.0`, `@be-music/chart-audio-renderer@0.2.1`, `@be-music/chart-parser@0.2.1`
 
 ## 0.3.1
 
@@ -396,14 +378,7 @@
 ### Patch Changes
 
 - 632f274: Resume cleanly after a `Space` pause that overlaps a `#STOP` segment. Previously the playhead froze for the rest of the stop's duration on resume because the stop-clock baseline wasn't rolled forward across the pause.
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-- Updated dependencies [135f822]
-  - @be-music/chart-parser@0.2.0
-  - @be-music/chart-model@0.2.0
-  - @be-music/chart-audio-renderer@0.2.0
-  - @be-music/chart-source@0.2.0
-  - @be-music/shared-utils@0.2.0
+- Updated dependencies: `@be-music/chart-parser@0.2.0`, `@be-music/chart-model@0.2.0`, `@be-music/chart-audio-renderer@0.2.0`, `@be-music/chart-source@0.2.0`, `@be-music/shared-utils@0.2.0`
 
 ## 0.1.0
 
@@ -413,9 +388,4 @@
 
 ### Patch Changes
 
-- Updated dependencies
-  - @be-music/chart-audio-renderer@0.1.0
-  - @be-music/chart-model@0.1.0
-  - @be-music/chart-source@0.1.0
-  - @be-music/chart-parser@0.1.0
-  - @be-music/shared-utils@0.1.0
+- Updated dependencies: `@be-music/chart-audio-renderer@0.1.0`, `@be-music/chart-model@0.1.0`, `@be-music/chart-source@0.1.0`, `@be-music/chart-parser@0.1.0`, `@be-music/shared-utils@0.1.0`

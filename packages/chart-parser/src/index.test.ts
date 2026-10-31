@@ -1372,7 +1372,7 @@ describe('parser', () => {
     expect(json.resources.wav['03']).toBe('hidden.wav');
   });
 
-  test('bmson: key_channels only carry x / y — damage, l and c are ignored like beatoraja does', () => {
+  test('bmson: key_channels only execute x / y while unused damage, l and c remain opaque', () => {
     const json = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -1401,9 +1401,20 @@ describe('parser', () => {
 
     // A lane-less (`x` 0) hidden note or mine has nowhere to go and is dropped, as in beatoraja.
     expect(json.events.filter((event) => event.channel !== '11')).toEqual([
-      { measure: 0, channel: '31', position: [240, 960], value: '02' },
-      { measure: 0, channel: 'D2', position: [480, 960], value: '03' },
+      {
+        measure: 0,
+        channel: '31',
+        position: [240, 960],
+        value: '02',
+        bmson: { extraFields: { l: 240, c: true, damage: 30 } },
+      },
+      { measure: 0, channel: 'D2', position: [480, 960], value: '03', bmson: { extraFields: { l: 240, c: true } } },
     ]);
+    for (const event of json.events) {
+      expect(event.bmson?.l).toBeUndefined();
+      expect(event.bmson?.c).toBeUndefined();
+      expect(event.bmson?.damage).toBeUndefined();
+    }
   });
 
   test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and rejects invalid positions', () => {

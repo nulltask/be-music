@@ -1,23 +1,27 @@
 # @be-music/chart-audio-renderer
 
+## 0.5.0
+
+### Minor Changes
+
+- c13f3fa: Apply WAVCMD pitch/sounding-time and EXWAV pan/frequency before output-rate conversion. Expose playbackModifiers on renderSingleSample so realtime Node preparation and offline rendering share PCM behavior.
+- 6e14d72: Add a path prefix option to single-sample rendering so Node gameplay can apply the chart's PATH_WAV directory with the shared bare-path fallback rules.
+
+### Patch Changes
+
+- ceb5fcc: Render paired bmson LN end slices at their authored tails while leaving unmatched or replaced up entries silent.
+- 3259b06: Fix clicks at bmson sound-slice boundaries in offline rendering: a slice that starts inside its file fades in over 1 ms, and one cut before the file's end rings on past its end while it fades out over 1 ms, so a continuation crossfades with the slice before it. Note timing and slice deduplication are unchanged.
+- 87e176d: Render every bmson continuation slice, including a first c=true note, while deduplicating simultaneous uses of the same slice.
+- 10951d6: Render EXWAV-only samples and apply WAVCMD volume as a percentage with 100 as unity. Respect EXWAV attenuation bounds, including its silent minimum.
+- 3e1855e: Render intrinsic slot gain with the same volume composition as browser and Node playback, preserving exact NONSTOP stage levels through Be-Music JSON.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/chart-parser@0.6.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`
+
 ## 0.4.1
 
 ### Patch Changes
 
 - 69df53c: Render stitched bmson audio using retained source-slice coordinates and resource identifiers longer than two characters.
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [2e435b9]
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-parser@0.5.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/chart-model@0.7.0`, `@be-music/chart-parser@0.5.0`, `@be-music/chart-source@0.5.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.4.0
 
@@ -27,14 +31,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-parser@0.4.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/shared-utils@0.5.0
+- Updated dependencies: `@be-music/chart-model@0.6.0`, `@be-music/chart-parser@0.4.0`, `@be-music/chart-source@0.4.0`, `@be-music/shared-utils@0.5.0`
 
 ## 0.3.0
 
@@ -46,51 +43,31 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/chart-parser@0.3.0
-  - @be-music/shared-utils@0.4.0
+- Updated dependencies: `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/chart-parser@0.3.0`, `@be-music/shared-utils@0.4.0`
 ## 0.2.4
 
 ### Patch Changes
 
-- Updated dependencies [202a28b]
-  - @be-music/chart-model@0.4.0
-  - @be-music/chart-parser@0.2.4
+- Updated dependencies: `@be-music/chart-model@0.4.0`, `@be-music/chart-parser@0.2.4`
 
 ## 0.2.3
 
 ### Patch Changes
 
 - 6ce9173: Missing, undefined, or undecodable `#WAVxx` references are now silent by default, matching LR2 / beatoraja. The synthesized sine fallback tone is opt-in via `fallbackToneSeconds`.
-- Updated dependencies [b2c4f9b]
-- Updated dependencies [b9922cf]
-- Updated dependencies [4d5a89e]
-- Updated dependencies [cdc42a1]
-- Updated dependencies [ca1012c]
-  - @be-music/chart-parser@0.2.3
-  - @be-music/chart-source@0.2.2
-  - @be-music/shared-utils@0.3.0
-  - @be-music/chart-model@0.3.2
+- Updated dependencies: `@be-music/chart-parser@0.2.3`, `@be-music/chart-source@0.2.2`, `@be-music/shared-utils@0.3.0`, `@be-music/chart-model@0.3.2`
 
 ## 0.2.2
 
 ### Patch Changes
 
-- Updated dependencies [73dff9a]
-  - @be-music/shared-utils@0.2.1
-  - @be-music/chart-source@0.2.1
-  - @be-music/chart-parser@0.2.2
-  - @be-music/chart-model@0.3.1
+- Updated dependencies: `@be-music/shared-utils@0.2.1`, `@be-music/chart-source@0.2.1`, `@be-music/chart-parser@0.2.2`, `@be-music/chart-model@0.3.1`
 
 ## 0.2.1
 
 ### Patch Changes
 
-- Updated dependencies [06a2db9]
-  - @be-music/chart-model@0.3.0
-  - @be-music/chart-parser@0.2.1
+- Updated dependencies: `@be-music/chart-model@0.3.0`, `@be-music/chart-parser@0.2.1`
 
 ## 0.2.0
 
@@ -100,13 +77,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [632f274]
-- Updated dependencies [135f822]
-- Updated dependencies [135f822]
-  - @be-music/chart-parser@0.2.0
-  - @be-music/chart-model@0.2.0
-  - @be-music/chart-source@0.2.0
-  - @be-music/shared-utils@0.2.0
+- Updated dependencies: `@be-music/chart-parser@0.2.0`, `@be-music/chart-model@0.2.0`, `@be-music/chart-source@0.2.0`, `@be-music/shared-utils@0.2.0`
 
 ## 0.1.0
 
@@ -116,8 +87,4 @@
 
 ### Patch Changes
 
-- Updated dependencies
-  - @be-music/chart-model@0.1.0
-  - @be-music/chart-source@0.1.0
-  - @be-music/chart-parser@0.1.0
-  - @be-music/shared-utils@0.1.0
+- Updated dependencies: `@be-music/chart-model@0.1.0`, `@be-music/chart-source@0.1.0`, `@be-music/chart-parser@0.1.0`, `@be-music/shared-utils@0.1.0`

@@ -1,5 +1,18 @@
 # @be-music/player-scene-model
 
+## 0.4.0
+
+### Minor Changes
+
+- afc65fb: Preserve declared generic bmson play variants and key counts in the library even when only a few keys contain notes.
+- 5992a52: Add compulsory chart hi-speed state that bypasses user limits and temporarily overrides user, course and replay speed controls. Preserve the underlying user view for exact restoration and separate replay recording.
+- 3f3de70: Expose the bmson zero-total policy in shared play options, with validated choices and a beatoraja-compatible default.
+- 3928de4: Offer AUTO and COUPLE battle selections while retaining OFF as the compatibility default.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`
+
 ## 0.3.0
 
 ### Minor Changes
@@ -28,43 +41,7 @@
 
 - a83e326: Resolve course results using the `____` identifier for the That-Which-Must-Not-Be-Named ruleset.
 - aeac0d3: LR2 full combos now show a cleared result even below the gauge border, keeping the result verdict consistent with its FULL COMBO lamp.
-- Updated dependencies [ba3cc20]
-- Updated dependencies [7fca9a9]
-- Updated dependencies [a9cc3d7]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [69df53c]
-- Updated dependencies [29e69c6]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [fcaef41]
-- Updated dependencies [7f0386b]
-- Updated dependencies [45aff53]
-- Updated dependencies [1c97afd]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [78faa63]
-- Updated dependencies [3d5e880]
-- Updated dependencies [21f705d]
-- Updated dependencies [a8896a9]
-- Updated dependencies [b1ca2ce]
-- Updated dependencies [6e676fe]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [9f41b30]
-- Updated dependencies [f994ec4]
-- Updated dependencies [4371c72]
-- Updated dependencies [acba3d5]
-- Updated dependencies [3e694df]
-- Updated dependencies [3e694df]
-- Updated dependencies [c35b845]
-- Updated dependencies [85250d8]
-- Updated dependencies [2e435b9]
-  - @be-music/player-engine@0.11.0
-  - @be-music/chart-model@0.7.0
-  - @be-music/chart-source@0.5.0
-  - @be-music/shared-utils@0.6.0
+- Updated dependencies: `@be-music/player-engine@0.11.0`, `@be-music/chart-model@0.7.0`, `@be-music/chart-source@0.5.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.2.0
 
@@ -76,12 +53,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [dca9a2f]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-  - @be-music/chart-model@0.6.0
-  - @be-music/chart-source@0.4.0
-  - @be-music/player-engine@0.10.0
+- Updated dependencies: `@be-music/chart-model@0.6.0`, `@be-music/chart-source@0.4.0`, `@be-music/player-engine@0.10.0`
 
 ## 0.1.0
 
@@ -97,7 +69,4 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/chart-model@0.5.0
-  - @be-music/chart-source@0.3.0
-  - @be-music/player-engine@0.9.0
+- Updated dependencies: `@be-music/chart-model@0.5.0`, `@be-music/chart-source@0.3.0`, `@be-music/player-engine@0.9.0`

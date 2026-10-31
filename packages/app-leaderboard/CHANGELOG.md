@@ -1,5 +1,15 @@
 # @be-music/app-leaderboard
 
+## 0.4.0
+
+### Minor Changes
+
+- e8fe0d7: Update pages in place instead of loading a new page: the filter switches, the chart page's file choice and the ruleset menu now fetch the page with htmx 4 and morph only the page body and the header, so the scroll position and focus stay, the switch slides over and the body dims only while a slow answer loads. Filter URLs still go into the history, and Back restores them in place. Signing out, hiding or showing a play and saving the profile or icon update the page the same way instead of reloading it. Without the client script the links work as before.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/shared-utils@0.7.0`
+
 ## 0.3.0
 
 ### Minor Changes
@@ -14,46 +24,7 @@
 - 9474feb: A play's BP now counts the notes it never judged because it failed or was given up mid-way, under every ruleset, so a play that dies early no longer lowers a player's fewest BP. A single play given up with ESC is accepted and ranked as a failed play instead of being refused as `aborted`. BP stored before this change is left as it was.
 - 17aebd5: Use the shared service footer on the Leaderboard, and keep About, Help, the API, GitHub and the beta notice in this site's own row.
 - aeac0d3: Correct stored LR2 full-combo lamps and recompute best-lamp references from visible scores, preserving other rulesets, gauge measurements, EX scores and BP.
-- Updated dependencies [ba3cc20]
-- Updated dependencies [7fca9a9]
-- Updated dependencies [a9cc3d7]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [f994ec4]
-- Updated dependencies [c52d77d]
-- Updated dependencies [3a5d9c3]
-- Updated dependencies [fcaef41]
-- Updated dependencies [7f0386b]
-- Updated dependencies [45aff53]
-- Updated dependencies [1c97afd]
-- Updated dependencies [d08fdf9]
-- Updated dependencies [a83e326]
-- Updated dependencies [69df53c]
-- Updated dependencies [78faa63]
-- Updated dependencies [3d5e880]
-- Updated dependencies [21f705d]
-- Updated dependencies [a8896a9]
-- Updated dependencies [b1ca2ce]
-- Updated dependencies [6e676fe]
-- Updated dependencies [aeac0d3]
-- Updated dependencies [9f41b30]
-- Updated dependencies [f994ec4]
-- Updated dependencies [4371c72]
-- Updated dependencies [acba3d5]
-- Updated dependencies [3e694df]
-- Updated dependencies [3e694df]
-- Updated dependencies [c35b845]
-- Updated dependencies [85250d8]
-- Updated dependencies [17aebd5]
-- Updated dependencies [051e0c0]
-- Updated dependencies [6f94ff0]
-- Updated dependencies [2e435b9]
-- Updated dependencies [00139f5]
-  - @be-music/player-engine@0.11.0
-  - @be-music/chart-model@0.7.0
-  - @be-music/service-web-theme@0.3.0
-  - @be-music/shared-utils@0.6.0
-  - @be-music/service-auth-client@0.1.2
+- Updated dependencies: `@be-music/player-engine@0.11.0`, `@be-music/chart-model@0.7.0`, `@be-music/service-web-theme@0.3.0`, `@be-music/shared-utils@0.6.0`, `@be-music/service-auth-client@0.1.2`
 
 ## 0.2.0
 
@@ -69,14 +40,7 @@
 
 - 325e7bb: Automatically reuse an existing Accounts login when opening Leaderboard pages, without requiring a separate sign-in click.
 - ebff0e7: Display the fixed build timestamp and source revision in the service footer.
-- Updated dependencies [325e7bb]
-- Updated dependencies [dca9a2f]
-- Updated dependencies [9a0c3f9]
-- Updated dependencies [ebff0e7]
-  - @be-music/service-auth-client@0.1.1
-  - @be-music/chart-model@0.6.0
-  - @be-music/player-engine@0.10.0
-  - @be-music/service-web-theme@0.2.0
+- Updated dependencies: `@be-music/service-auth-client@0.1.1`, `@be-music/chart-model@0.6.0`, `@be-music/player-engine@0.10.0`, `@be-music/service-web-theme@0.2.0`
 
 ## 0.1.0
 
@@ -94,7 +58,4 @@
 
 ### Patch Changes
 
-- Updated dependencies [b2818d0]
-  - @be-music/service-auth-client@0.1.0
-  - @be-music/chart-model@0.5.0
-  - @be-music/player-engine@0.9.0
+- Updated dependencies: `@be-music/service-auth-client@0.1.0`, `@be-music/chart-model@0.5.0`, `@be-music/player-engine@0.9.0`

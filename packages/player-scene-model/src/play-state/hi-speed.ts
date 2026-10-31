@@ -16,6 +16,8 @@ import type { HSFix } from '../play-options/options.ts';
  * `locked` while a course forbids the player changing it (`no_speed`).
  */
 export interface HiSpeedState {
+  /** User state hidden by a compulsory authored spacing multiplier; restored when the override ends. */
+  readonly chartBase?: HiSpeedState;
   readonly player: number;
   readonly drawn: number;
   /** The chart's HS-FIX multiplier ({@link resolveHSFixMultiplier}); 1 without HS-FIX. */
@@ -109,6 +111,7 @@ export function createHiSpeedState(
 
 /** A change of the hi-speed during a play. */
 export type HiSpeedCommand =
+  | { type: 'chart-hi-speed'; value?: number }
   /** The player's hi-speed keys: step the player's hi-speed (ignored while locked). */
   | { type: 'hi-speed-step'; delta: number; bpm?: number }
   /** The host sets the player's hi-speed (a settings menu); HS-FIX applies on top. */
@@ -131,6 +134,23 @@ export type HiSpeedCommand =
  * recorded hi-speed are taken even then.
  */
 export function reduceHiSpeed(state: HiSpeedState, command: HiSpeedCommand): HiSpeedState {
+  if (command.type === 'chart-hi-speed') {
+    if (command.value === undefined) return state.chartBase ?? state;
+    if (!Number.isFinite(command.value) || command.value < 0.25 || command.value > 100) return state;
+    if (state.chartBase && state.drawn === command.value) return state;
+    const base = state.chartBase ?? state;
+    const {
+      classic: _classic,
+      normalLevel: _level,
+      normalBPM: _bpm,
+      floating: _floating,
+      floatingInitial: _initial,
+      ...kept
+    } = base;
+    return { ...kept, chartBase: base, player: command.value, drawn: command.value, multiplier: 1, locked: true };
+  }
+  // Mandatory chart settings own display while active, including over course/user/replay view changes.
+  if (state.chartBase) return state;
   switch (command.type) {
     case 'floating-speed-mode': {
       if (state.locked || command.enabled === (state.floating !== undefined)) return state;

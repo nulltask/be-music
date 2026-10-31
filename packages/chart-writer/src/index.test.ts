@@ -533,7 +533,8 @@ describe('chart-writer', () => {
     };
 
     expect(document.version).toBe('1.0.0');
-    expect(document.lines.map((line) => line.y)).toEqual([0, 960]);
+    // Missing source resolution means 240: the retained 960-pulse barline stays four beats at output 480.
+    expect(document.lines.map((line) => line.y)).toEqual([0, 1920]);
     expect(document.info).toMatchObject({
       title: 'Fallback',
       artist: 'Composer',

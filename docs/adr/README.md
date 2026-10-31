@@ -26,8 +26,6 @@ Decisions that shape the code and would be costly to reverse, with why they were
 
 - [Native draws its playfield with canvas components](./0014-native-playfield-components.md)
 
-- [Previews seek by starting AUTO play partway](./0015-preview-seek.md) (superseded by 0016)
-
 - [Seek is a play-loop command](./0016-seek-play-loop-command.md)
 
 - [Mixed NONSTOP courses retain source units in the bmson IR](./0017-bmson-nonstop.md)
@@ -39,3 +37,15 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0020: Player UI elements are headless; themes and skins supply the look](./0020-headless-player-ui.md)
 
 - [0021: A skin's stage may be fluid](./0021-fluid-stage.md)
+
+- [0022: Conditional bmson BGA events follow deterministic chart time](./0022-bmson-bga-events.md)
+
+- [0023: Generic bmson keyboards retain their declared layout](./0023-generic-bmson-keyboards.md)
+
+- [0024: Extended BMS audio effects are prepared before host tempo changes](./0024-extended-bms-audio.md)
+
+- [0025: Chart text follows engine time and judgment effects](./0025-chart-text-playback.md)
+
+- [0026: Record effective chart display operations separately from user settings](./0026-chart-authored-display-options.md)
+
+- [0030: Make bmson zero-total recovery an explicit play policy](./0030-bmson-zero-total.md)

@@ -92,9 +92,9 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret channels `17` / `27` as FREE ZONE (other than 9KEY / 24KEY)
 - [x] When judging 9KEY, channel `17` is interpreted as a normal lane note.
 - [x] `#PLAYER=1` is retained as SINGLE meta information, and lane determination prioritizes channel configuration.
-- [x] `#PLAYER=2` (COUPLE) is retained as meta information, and dedicated 1P/2P separation play is not currently implemented.
+- [x] `#PLAYER=2` (COUPLE) is retained. Explicit CHART HEADER (AUTO) selects independent authored sides under LR2; OFF remains the compatibility default.
 - [x] `#PLAYER=3` is used as a 9KEY determination hint only when `17` channel exists
-- [x] `#PLAYER=4` (BATTLE) will be retained as meta information, and dedicated two-player competitive play will not be implemented at this time.
+- [x] `#PLAYER=4` (BATTLE) is retained. Explicit CHART HEADER selects TWO-PLAYER under LR2: copy SP or preserve authored double-side banks. See [ADR 0028](./adr/0028-player-header-selection.md) for precedence, corpus evidence and replay policy.
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
 - [x] Detonate LR2beta3 mines on a key-down strictly inside ahead-only GREAT, or a held crossing; retain hold-only beatoraja and the provisional That-Which-Must-Not-Be-Named symmetric-PGREAT model.
@@ -122,6 +122,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Channel `07` is used for display as BGA layer
 - [x] Use channel `0A` for display as BGA layer2
 - [x] Combine display of `04` / `07` / `0A` (priority: `04` < `07` < `0A`)
+- Browser Native, Canvas, LR2 and beatoraja scenes keep `07` and `0A` independent, including their clear cues and NONSTOP stage stacks. The skin frame exposes them as `layer` and `layer2`. A video BMP reused on multiple tracks receives separate video playheads, and pause/resume and seek include both overlays.
 - [x] Treat black (`#000000`) as a transparent color in layer (`07`)
 - [x] Apply the same transparency rules to layer2 (`0A`) as layer (`07`)
 - [x] Handle BGA images assuming a 256x256 canvas
@@ -149,6 +150,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Keep extension header `#LNTYPE` in `bms` extension area
 - [x] Keep extension header `#LNMODE` in `bms` extension area (`1` = LN, `2` = CN, `3` = HCN)
 - [x] The player plays `#LNMODE 2` / `3` long notes as CN / HCN under the `beatoraja` ruleset; `____` plays every long note as CN (HCN for `#LNMODE 3`), and `lr2` plays every long note as LN
+- [x] Initial `#OPTION charatbeatHDX:LONGMODE 0` / `1` selects CN / HCN after branch selection. Valid explicit `#LNMODE` wins, followed by the last valid HDX declaration, then the user default. Timed A6 LONGMODE is diagnosed without changing notes. Fingerprints, replay modes, bmson conversion and NONSTOP stitch version 3 retain the effective mode. See [ADR 0027](./adr/0027-hdx-long-note-modes.md).
 - [x] Keep extension header `#LNOBJ` in `bms` extension area
 - [x] Keep extension header `#VOLWAV` in `bms` extension area
 - [x] Keep extension header `#DEFEXRANK` in `bms` extension area
@@ -156,6 +158,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Keep extension header `#ARGBxx` in `bms` extension area
 - [x] Keep extension header `#PLAYER` in `bms` extension area
 - [x] Keep extension header `#PATH_WAV` in `bms` extension area
+- [x] Apply `#PATH_WAV` when loading Node gameplay samples and diagnostic durations, using the shared prefix-first / bare-path fallback resolver
 - [x] Keep extension header `#BASEBPM` in `bms` extension area
 - [x] Keep extension header `#STP` in `bms` extension area
 - [x] Keep extension header `#OPTION` in `bms` extension area
@@ -182,10 +185,29 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Interpret `#xxx98` as dynamic volume change on playable/key side
 - [x] Interpret `#EXRANKxx` and `#xxxA0` as dynamic decision width changes of player
 - [x] Supports LR2 100001x BPM gimmick by `#BPMxx` with time resolution
-- [x] Keep every `#WAVCMD` line in `bms.wavCmds`; chart-audio-renderer and browser WebAudio apply the `01` volume parameter
-- [x] Parse `#EXWAVxx` and apply its `v` volume parameter in chart-audio-renderer and browser WebAudio
+- [x] Read nanasi `#EXBPMxx` as an alias of `#BPMxx`: it is stored and written as `#BPMxx`, so the later line for one index wins ([cmds](https://hitkey.nekokan.dyndns.info/cmds.htm#EXBPMXX))
+- [x] Keep every `#WAVCMD` line in `bms.wavCmds`; browser, Node and offline playback apply the `01` percentage-volume parameter
+- [x] Parse `#EXWAVxx` and apply its `v` volume parameter in browser, Node and offline playback
+
+`#EXWAVxx` accepts the nanasigroove whitespace-separated parameters in flag order, such as `pvf 0 -600 44100 sample.wav`. Earlier Be-Music comma-separated parameters remain accepted. The filename starts after all flag parameters and may contain spaces. A valid EXWAV definition supplies the effective filename, even without WAV, and takes precedence over WAV for a shared slot. Invalid EXWAV leaves WAV intact. This is Be-Music's explicit precedence policy. Browser decoding/playback, Node playback/diagnostics and offline rendering use the same resolver. NONSTOP remaps EXWAV filenames and WAVCMD parameters per stage. Browser, Node and offline playback execute pitch, sounding-time limits and pan/frequency through the shared [extended-audio policy](./adr/0024-extended-bms-audio.md).
+
 - [x] Use `#BASEBPM` as the chart reference BPM for browser HS-FIX calibration through `@be-music/chart-model`
-- [x] Browser player reflects `#BGAxx` sub-region BGA, `#SWBGAxx` switching BGA, and `#ARGBxx` / `#EXBMPxx` tint and alpha
+- [x] Browser player renders `#BGAxx` sub-region BGA. Static alias chains resolve independently of declaration order, compose each intermediate placement on the 256×256 canvas and clip source/destination edges. Fully clipped base/POOR images become black, while overlay images become transparent. Explicit BMP/EXBMP declarations override aliases even when the declared asset fails to load. SWBGA renders only through the input-bound A5 engine controller; the former cue-driven helper is removed.
+- [x] Terminal BMP/PNG/JPEG EXBMP keying runs before cropping/resizing: RGB matches within ±8, source alpha matches exactly, alpha-less images compare as zero, and the all-zero tuple disables keying. Other colors and black survive without tinting. Keys have separate caches and follow implicit POOR/NONSTOP resources. Unkeyed source coverage is retained for the composition described below. See the [experimental specification](https://bms.ms/~hitkey/diary1811.php). Shared APIs are `resolveBMSExBMPColorKey` and `applyBMSColorKey`.
+- [x] Terminal ANSI/Kitty preserves fractional PNG and encoded BMP source alpha through EXBMP keying, native sub-region crops, nearest/Lanczos resizing and worker frame transfer. Source coverage multiplies plane opacity, with RGB tint applied to source colors; source-over composition retains alpha until output is flattened against the black viewport. Resampling filters associated RGB and alpha together, preventing hidden transparent colors from bleeding into visible edges. Binary frames keep their compact mask representation; fractional coverage is allocated when needed. POOR replacement/overlay, SWBGA, seek/resize and NONSTOP resource loading use the same path. The composition follows [source-over](https://www.w3.org/TR/compositing-1/#simplealphacompositing); encoded-alpha video decoding and exact native-player pixel parity remain unverified.
+- [x] Browser Native, Canvas, LR2 and beatoraja apply EXBMP transparent-color keys to still images, including aliases and NONSTOP resources. Key PNG pixels before Canvas premultiplication, including indexed, packed grayscale, Adam7 and native `tRNS`; use native RGBA for TGA/DDS and encoded alpha metadata for BMP/JPEG. Unkeyed pixels retain their source alpha and color; a keyed base reveals the black BGA viewport. The browser no longer interprets EXBMP as tint or global alpha. `@be-music/shared-utils/png` exposes the runtime-neutral `decodePNGToRGBA8` decoder shared with terminal output. Exact DirectX alpha/premultiplication parity remains unverified.
+- [x] Browser Native/Canvas/LR2/beatoraja and terminal ANSI/Kitty also apply EXBMP transparent-color keys to opaque video frames. Be-Music treats their decoder-inserted alpha as an alpha-less source (comparison alpha 0), keys native pixels before cropping/resizing and updates moving aliases for subsequent frames. Unselected black survives, all-zero tuples disable keying, each plane retains its own playhead, and a keyed base reveals the black viewport. This is Be-Music's video application of the shared keying policy; encoded-alpha video and exact nanasigroove video behavior remain unverified. Opaque movie keying does not establish encoded-alpha video compatibility.
+- [x] `A1`–`A4` select decimal `#ARGBxx a,r,g,b` definitions independently for base/layer/layer2/POOR. RGB multiplies source colors and A replaces the plane opacity; `0B`–`0E` replace that same alpha while retaining RGB. This follows the drawing math in [BGAEncAdvance source](https://yaruki0.net/programs/bgaencadv.html) (`source/main.d`), separately from EXBMP color keys. Browser Native/Canvas/LR2/beatoraja and terminal ANSI/Kitty apply these controls, retain skin/crossfade alpha, restore them on seek and preserve each NONSTOP stage's color history. Canvas skins receive tinted images. Unselected definitions have no rendering effect, even when their ids equal BMP ids. `00`, missing definitions and malformed/out-of-range decimal tuples leave the current state unchanged. Equal-time conflicts use event-array order (canonical channel/value order for parsed BMS), with the last control winning; the [experimental reference](https://bms.ms/~hitkey/diary1811.php) leaves conflict priority implementation-dependent. `pickBGATint` reads the RGB state from `buildBGAOpacityTimelines`; the existing `pickBGAOpacity` reads their shared alpha.
+- [x] Standard SWBGA parsing and engine state: `parseBMSKeyBoundBGA` reads `fr:time:line:loop:a,r,g,b pattern`, with millisecond intervals and packed BMP-family ids including real frame `00`. `buildKeyBoundBGATimeline` times valid `A5` selections; `pickKeyBoundBGAFrame` loops or holds the last frame and enforces finite duration. The deterministic `KeyBoundBGAController` starts on a fresh matching press, keeps duration-zero sequences until release, lets finite-duration sequences outlive release and gives the newest matching press exclusive visibility. Selecting a new definition does not itself trigger an animation. Its `read` supports sparse frames and backward queries; manual seeks discard live history while replay/AUTO history remains reproducible. Engine `PlayerUIFramePayload.keyBoundBGA` carries the active definition, BMP id, frame start and raw ARGB fields. AUTO/AUTO SCRATCH synthesize 100 ms tap holds and authored LN holds without altering judgments or recorded inputs. Stock-player rendering and NONSTOP placement are described below. See the [tested command reference](https://hitkey.bms.ms/cmds#SWBGAXX).
+- [x] `A0`–`A6` controls do not trigger a WAV sample whose id happens to match the control value.
+- [x] Browser Native/Canvas/LR2/beatoraja and terminal ANSI/Kitty render input-bound SWBGA selected by `A5`, including BMP00, EXBMP-only resources, placed aliases and moving video crops. The animation overlays normal and POOR planes and disappears on release or expiry. Each definition owns its keyed resources and video playhead; a fresh press restarts the selected video frame. SWBGA matches its transparent-color tuple against decoded RGBA (opaque RGB images/videos compare alpha 255), with RGB ±8, exact alpha and all-zero disabling; EXBMP keying runs first. Video keying runs before cropping on every decoded frame. This matching policy reuses the EXBMP experimental model; exact nanasigroove/DirectX parity remains unverified. NONSTOP support is described below.
+- [x] NONSTOP remaps SWBGA definitions and every image dependency into stage-owned namespaces. `NonstopStitchMap.keyBoundBGA` keeps structured frame arrays, preserving internal ids longer than two characters in mixed bmson courses. Trimmed stages start with their latest preceding A5 selection; selections outside the stage window are dropped, and reversal freezes later selections. FIT scales animation intervals and finite durations; cue/frame `playbackRate` scales source movie time. Cue `endSeconds` ends both selection and active animation at the exclusive stage boundary, even for long timed animations or keys held across stages. An unconfigured stage inherits no binding; the next animation requires a fresh press. These are Be-Music composition rules because LR2 does not implement standard SWBGA. Browser sessions pass the map automatically. Other hosts pass `map.keyBoundBGA` as `PlayerOptions.keyBoundBGACues`, `LoadPlayBGAOptions.keyBoundBGACues` and/or `BgaANSIOptions.keyBoundBGACues`; Node UI adapters forward the same data. Replay restitching rebuilds this presentation state from source stages.
+- [x] Browser Native, Canvas, LR2 and beatoraja, and terminal ANSI/Kitty output apply opacity channels `0B` / `0C` / `0D` / `0E` to base / layer / layer2 / POOR. A nonzero hexadecimal byte sets opacity to `value / 255`; `00` is a rest, and the default is opaque. Changes use chart timing, retain the last value until replaced, and restore prior state on seek. Replacement POOR dims over black; overlay POOR blends over the normal BGA. NONSTOP stitching retains opacity events, restores each stage's effective initial values, and exposes stage-owned histories for crossfades. Browser NONSTOP rendering uses each stage's own histories, multiplied by its crossfade and the skin opacity. ARGB channels share this opacity state as described above.
+- [x] Browser video sub-regions keep native source coordinates, share the plane's video playhead through chained aliases, preserve authored placement and restart on repeated cues. Base, both overlays and POOR use independent playheads when they share a source; pause/resume includes POOR. Canvas skins receive a live cropped canvas instead of a cached first-frame bitmap. Videos used as sub-region sources disable the transcode resolution cap so authored coordinates remain valid.
+- [x] Native, Canvas, LR2 and beatoraja keep every visible NONSTOP stage video synchronized through a crossfade. Each video uses its own cue time; changing the leading stage does not restart it, and a departed stage pauses. Backward/paused seek restores all visible stage videos, resume includes every active stage, and the intro gate still holds playback. A frozen cue clock keeps the selected movies running on the playback clock.
+- [x] NONSTOP stitching remaps EXBMP-only filenames and BGA sub-region dependencies, preserving per-stage ids, crop coordinates and placement; mixed bmson output retains long internal ids. Canvas and beatoraja play views receive sub-region origins as well as the cropped images.
+- [x] Browser and terminal load filenames declared only by `#EXBMPxx a,r,g,b filename`, including implicit POOR slot `00`; an explicit `#BMPxx` filename takes precedence. The comma-before-filename spelling remains accepted. Standard A5 SWBGA uses the rendering path described above.
+- [x] Terminal renders `#BGAxx` sub-regions on base, both overlays and POOR, including implicit slot `00`. Crop coordinates refer to the original image or video before resizing or video-border trimming; `dx dy` places the crop on the 256×256 canvas, clipped at its edges. Base/replacement POOR uses black outside the crop; overlays retain transparency. Streamed video frames keep the same transform. Explicit BMP/EXBMP resources take precedence over a BGA alias; missing or cyclic aliases use the missing-resource frame.
 - [x] Interpret channels `51-59` / `61-69` (and the extended `5A-5O` / `6A-6O`) as long notes. `#LNTYPE 1`, the default when `#LNTYPE` is omitted, pairs objects as start / end; `#LNTYPE 2` (MGQ) makes a run of consecutive non-`00` cells one long note
 - [x] `#LNOBJ`: every declaration is active and kept in declaration order in `bms.lnObjs`; the object ends the long note started by the previous note on its lane and is not sounded (the HDX key-up sound is not adopted). A `#LNOBJ` object with no note before it becomes an ordinary note
 - [x] Where `51-69` and `#LNOBJ` long notes start on the same lane and position, the `51-69` long note wins
@@ -277,67 +299,23 @@ The value converts the hex integer `1-255` to the gain of `value / 255` and appl
 In actual implementation, these channels themselves are not treated as sample triggers.
 Also, volume changes will only be reflected in the initial gain of new sounds that are played after that point, and will not be reflected in the voices of the same type that are already playing.
 
-## Not supported (difference to primary reference)
+## Chart text model
 
-- [ ] Playback of `#MIDIFILE` (kept in `bms.midiFile`; not played)
-- [ ] Dedicated interpretation of header `#MAKER`
-- [ ] Interpretation of multiple line definition (Multiplex) of `#SUBTITLE` / `#SUBARTIST` / `#COMMENT`
-- [ ] Rules for treating the old-style compatible header `#SONGxx` as equivalent to `#TEXTxx`
-- [ ] Compatible header `#EXBPMxx` reading policy (difference with `#BPMxx`)
-- [ ] Handling of BM98 extension `#CHARFILE` / `#ExtChr` (policy of ignoring, retaining, and replaying)
-- [ ] Handling of header `#CDDA` (policy of ignoring, retaining, and replaying)
-- [ ] Handling of old video headers `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK`
-- [ ] Handling of material separation header `#MATERIALSBMP` / `#MATERIALSWAV`
-- [ ] `#WAVCMD` pitch and loop execution. Current runtime support only applies the `01` volume parameter in chart-audio-renderer and browser WebAudio.
-- [ ] `#OPTION` Simultaneous application rule for multiple lines (currently holds a single value)
-- [ ] Runtime reflection of object channel `#xxxA6` (`#CHANGEOPTIONxx`)
-- [ ] `#TEXTxx` / `#TEXT00` display behavior during play (currently only retained)
-- [ ] Clarification of compatibility policy for inputs containing negative numbers and decimal numbers for `#STOPxx`
-- [ ] `#EXBPM` Compatible header reading policy (including priority with `#BPMxx`)
-- [ ] Clarification of index range of `#BPMxx` / `#STOPxx` (`01-FF` / `01-ZZ`) and handling of `00`
-- [ ] Index range of `#WAVxx` / `#BMPxx` (operational difference including `01-FF` / `01-ZZ` / `00`) and case handling
-- [ ] Conflict priority between `#xxx03` and `#xxx08` on the same timeline
-- [ ] Conflict priority between `#xxx08` and `#xxx09` on the same timeline
-- [ ] Runtime reflection of `#@BGAxx` (branch/conditional BGA definition)
-- [ ] CLI/TUI reflection of `#BGAxx`, `#SWBGAxx`, `#ARGBxx`, and `#EXBMPxx`
-- [ ] Decision width interpretation of boundary values ​​including `#DEFEXRANK 0`
-- [ ] Apply `#PATH_WAV` when the terminal player loads samples for play (browser gameplay, the offline renderer and the song selection preview already try it as a directory prefix)
-- [ ] Acceptance policy for compatible directives `#RONDAM` / `#SETRONDAM` / `#IFEND`
-- [ ] Acceptance policy for mixed input of full-width commands and full-width spaces
-- [ ] Compatible with control syntax evaluation for CRLF+LF mixed files (line end shaking)
-- [ ] Strict compatibility for files without trailing newlines (parser/control syntax)
-- [ ] Evaluation stability of scores containing large numbers/nested `#RANDOM` and `#SWITCH`
-- [ ] Fixed random number generation specifications for musical scores that use a large upper limit of `#RANDOM`
-- [ ] `#000` Time/judgment compatibility for musical scores containing measure performance objects
-- [ ] Accuracy verification and upper limit policy for high-resolution musical scores (e.g. measure resolution 4032 or higher)
-- [ ] Upper limit of measure number (near `#999`) and handling when inputting after `#1000`
-- [ ] Policy for audio format compatibility (μ-law WAV, etc.)
-- [ ] Compatibility policy for treating `00` object tokens as ordinary `#WAV00` references outside landmine playback
-- [x] Search for alternative files when extension omitted/mismatches for `#WAVxx` (extension fallback; see [BMS / bmson compatibility notes §2.19](./format-compat.md#219-asset-file-lookup))
-- [x] Search for alternative files when extension omitted/mismatches for `#BMPxx` (extension fallback; see [BMS / bmson compatibility notes §2.19](./format-compat.md#219-asset-file-lookup))
-- [ ] Compatible behavior when referencing undefined `#BPMxx` / `#STOPxx` (ignored, default value, error)
-- [ ] `#STOPxx` Compatibility behavior when empty definition reference (e.g. undefined token of `#05209:`)
-- [ ] EOF completion rules when `#IF` / `#SWITCH` block is unterminated (`#ENDIF` / `#ENDSW` is missing)
-- [ ] Acceptance rules for Bemuse extension line `#EXT #xxxyy:...` (differences from normal objects)
-- [ ] Whether to apply `#ARGBxx` / `#BGAxx` parameters to video BGA
-- [ ] `#BASEBPM` core time-resolution reflection policy. Browser HS-FIX uses it as a visual reference BPM, but internal chart timing still follows BPM events.
-- [ ] player: `#PLAYER` When not specified, the default value `1` is reflected on the song selection screen, TUI, and result display.
-- [ ] player: Match the display of `#PLAYER=2` / `#PLAYER=4` with the actual implementation (meta only explicit or dedicated mode implementation)
-- [ ] editor: `setMetadata` / `set-meta` write `#PLAYER` to `bms.player` instead of `metadata.extras`
-- [ ] editor: Allow dedicated BMS extension headers to be exported without save/load roundtrips after API/CLI editing
-- [ ] Acceptance limit and error handling when inputting extremely long lines (e.g. 100KB class)
-- [ ] Upper limit and performance guarantee policy for musical scores with hundreds of thousands of performance/internal objects
+The [TEXT command observations](https://hitkey.nekokan.dyndns.info/cmds.htm#TEXTXX) describe channel `99` as text selection and nanasigroove `TEXT00` as miss text. `buildChartTextTimeline` resolves these selections on chart time, including BPM/STOP timing, and `pickChartText` performs stateless lookup for seek/restart. Before the first selection the timeline is empty; TEXT00 is not initial text. An empty definition or missing reference clears the previous selection. Zero object `00` remains a rest. Equal-time selections use the last cue in normalized IR order.
 
-### TODO (SCROLL/BPM/STOP) from reference materials
+Display values remove one matching outer pair of double quotes, retaining inner whitespace and literal characters. Raw definitions stay unchanged in the IR and BMS/JSON round trips. Channel `99` never triggers a WAV with the same resource id. The engine publishes `PlayerUIFramePayload.chartText` for native, Canvas, LR2, beatoraja and terminal display. [ADR 0025](./adr/0025-chart-text-playback.md) defines Be-Music’s 0.5-chart-second miss override, pause/seek/restart/reversal rules and one-second final-cue presentation tail. NONSTOP hosts pass the stage-owned `NonstopStitchMap.chartText` program as `chartTextStages`; FIT, trimmed starts, empty-stage clears and per-stage TEXT00 use the same source-clock rules. Browser hosts connect this automatically.
 
-| TODO                                                                                                                                       | current situation | remarks                                                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [x] `#SCROLL 0` Specify the display priority of notes that overlap in the same lane in the section before and after.                       | correspondence    | If they overlap in the same cell, place the note that comes first on the reference line, and stack subsequent notes in the direction away from the judgment line.                                                                    |
-| [x] `#SCROLL < 0`'s reverse running display (direction, near the judgment line, off-screen) is fixed as a compatible specification.        | correspondence    | The web player runs notes backwards as beatoraja does, drawing them below the judgement line while they are still ahead; the terminal player keeps "proximity display priority" and treats the drawing distance as an absolute value |
-| [x] `#SCROLL 0` Specify the upper limit of lookahead and visible range in long intervals                                                   | correspondence    | Read-ahead is discontinued at `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 measures), and notes outside the visible range are excluded from drawing.                                                                                           |
-| [x] BPM×`100001` + `#STOPxx` Clarified "display BPM" compatibility policy when correcting                                                  | correspondence    | The same BPM value as the time resolution is displayed as is, and LR2 compatible display replacement and rounding are not performed.                                                                                                 |
-| [x] SCROLL/BPM/STOP Added regression test for complex gimmicks (partial warp, blank keystroke, reverse run)                                | correspondence    | Add complex cases to `timeline` and continue to verify POOR system with existing `bga` test group                                                                                                                                    |
-| [x] Determined the handling of beatoraja-specific appearance/disappearance bug-dependent scores (unsupported clearly or reproduction mode) | correspondence    | Specify that it is not compatible and consider reproducing mode with another option if necessary in the future.                                                                                                                      |
+## Chart-authored option declarations
+
+Repeated `#OPTION` lines combine whole vendor-specific declarations. The parser retains them in `bms.options`; `bms.option` remains a legacy last-value alias. Never split these payloads on whitespace: charatbeatHDX declarations can contain numeric arguments. For charts with control flow, the complete ordered OPTION program is interleaved with the branch directives; resolving the chosen outcome rebuilds the active declaration list without appending unconditional lines twice. Canonical BMS and Be-Music JSON preserve the order and payloads, as well as unknown option IDs.
+
+`buildChartOptionTimeline` collects initial declarations and timed channel `A6` references after RANDOM/SWITCH resolution. It follows BPM/STOP timing, preserves base-62 IDs and normalized-IR order at equal times, and retains undefined references for later diagnostics. Object `00` is a rest. The timeline collects whole declarations. `compileChartOptions` compiles supported effective operations and diagnostics; `resolveChartOptionsAt` performs stateless lookup at chart microseconds. HI-SPEED now executes across engine, browser and terminal at its authored 0.25–100 range, preserving hundredths and initial legacy numeric HSP aliases. [ADR 0026](./adr/0026-chart-authored-display-options.md) defines compulsory precedence, equal-time IR order, replay profiles, clear/seek/reversal and unchanged rank eligibility. NONSTOP retains stage-owned effective programs in `NonstopStitchMap.chartOptions`, including FIT time, trimmed starts and empty-stage clears. Browser hosts connect them automatically. Other families are diagnosed without effect; see the [support boundary](./research/chart-authored-options.md#support-boundary-decision).
+
+## Runtime support boundary
+
+Preserving syntax does not imply player execution. `#MIDIFILE` is retained in `bms.midiFile` but not played. `#WAVCMD` applies pitch, percentage volume and playback-duration limits. `#EXWAVxx` applies volume, stereo balance and native-rate frequency; [ADR 0024](./adr/0024-extended-bms-audio.md) defines their composition. The [original MacBeat specification](http://harinezumi.s14.xrea.com/download/mbm.txt) defines pitch 60 as unity, volume 100 as unity and command `02` as duration in 0.5 ms units (zero plays to the original end), not looping. Be-Music multiplies WAVCMD percentage gain, EXWAV attenuation, VOLWAV and dynamic bus gain. For duplicate WAVCMD parameters, the last value for each slot/parameter wins; this is Be-Music policy because MacBeat leaves duplication undefined. EXWAV playback clamps volume to -10000..0, with -10000 silent. `BMSExWAV.volumeMillibels` and `exWAVVolumeMillibelsToLinearGain` use millibels (hundredths of a decibel). `#TEXTxx` drives chart text as described above. `#CHANGEOPTIONxx` executes supported HI-SPEED operations; other families currently produce diagnostics rather than effects.
+
+Header and object interpretation follows the support tables above and this document’s control-flow rules. Asset lookup is defined in [format compatibility](./format-compat.md), browser-specific rendering in the [browser player specification](./player-web.md), and terminal rendering and audio in the [terminal player specification](./player-tui.md).
 
 ## Player-Specific Behavior
 
@@ -410,7 +388,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - Determine intra-measure resolution from denominator information of `position`
 - For the same measure and same channel, the least common multiple of the denominator is used.
 - If `--maxResolution` is specified, it will be aborted at the upper limit.
-- A chart read from bmson is converted where BMS spells things differently: long notes become `#LNTYPE 1` pairs on `5x` / `6x` with `#LNMODE` from `ln_type` / `t`, a mine's value becomes its damage in base 36 (its sample becomes `#WAV00`), `judge_rank` becomes `#DEFEXRANK`, and the percentage `total` is not written as `#TOTAL`. Details: [bmson spec — Converting between BMS and bmson](./bmson-spec.md#converting-between-bms-and-bmson)
+- A chart read from bmson is converted where BMS spells things differently: long notes become `#LNTYPE 1` pairs on `5x` / `6x` with `#LNMODE` from `ln_type` / `t`, a mine's value becomes its damage in base 36 (its sample becomes `#WAV00`), `judge_rank` becomes `#DEFEXRANK`, and the percentage `total` is not written as `#TOTAL`. Native bmson BGA becomes `#BMPxx` resources on unused two-character keys and `04` / `07` / `06` objects at their pulses; a clear (id 0) or an id without a header points at one undefined key. bmson sequences, `id_set`, conditions and intervals have no BMS form and are reported through `onDiagnostic` and skipped, as is the difference in layer black transparency (#840). Details: [bmson spec — Converting between BMS and bmson](./bmson-spec.md#converting-between-bms-and-bmson)
 
 ## Evaluation rules for control constructs
 

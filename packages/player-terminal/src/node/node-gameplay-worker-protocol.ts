@@ -1,3 +1,9 @@
+import type {
+  ChartOptionDiagnostic,
+  ChartOptionProgram,
+  BmsonBGAEventCue,
+  KeyBoundBGACue,
+} from '@be-music/chart-model';
 import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/shared-utils/log';
 import type { RandomDraws } from '@be-music/chart-model';
@@ -8,12 +14,17 @@ import type {
   PlayerUICommand,
   PlayerUIFramePayload,
 } from '@be-music/player-engine/signals';
-import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player-engine';
+import type { ChartTextStage, PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player-engine';
 import type { LaneBinding } from '../manual-input.ts';
 import type { ImageResizeAlgorithm, TUINoteHeight } from '@be-music/player-engine/display';
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
+  chartOptionProgram?: ChartOptionProgram;
+  chartOptionDiagnostics?: readonly ChartOptionDiagnostic[];
+  chartTextStages?: readonly ChartTextStage[];
+  keyBoundBGACues?: readonly KeyBoundBGACue[];
+  bmsonBGACues?: readonly BmsonBGAEventCue[];
   inferBmsLNTypeWhenMissing?: boolean;
   showInvisibleNotes?: boolean;
   compressor?: boolean;
@@ -69,6 +80,8 @@ export interface NodeGameplayWorkerInitData {
 }
 
 export interface NodeGameplayUIRuntimeInit {
+  keyBoundBGACues?: readonly KeyBoundBGACue[];
+  bmsonBGACues?: readonly BmsonBGAEventCue[];
   json: BeMusicJSON;
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   laneDisplayMode: string;

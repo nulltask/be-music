@@ -27,6 +27,7 @@ export function createNonstopAssets(stages: readonly NonstopAssetStage[]): {
   assetPath: (stage: number, kind: 'wav' | 'bmp', path: string) => string;
 } {
   const files = new Map<string, BrowserAssetEntry>();
+  const audioFallbacks = new Map<string, readonly BrowserAssetEntry[]>();
   const keyOf = stages.map(() => undefined as Map<BrowserAssetEntry, string> | undefined);
   const keyIn = (stage: number, entry: BrowserAssetEntry): string | undefined => {
     let index = keyOf[stage];
@@ -42,6 +43,7 @@ export function createNonstopAssets(stages: readonly NonstopAssetStage[]): {
     kind: 'files',
     label: 'NONSTOP',
     files,
+    audioFallbacks,
   };
   const assetPath = (index: number, kind: 'wav' | 'bmp', path: string): string => {
     const stage = stages[index];
@@ -64,6 +66,20 @@ export function createNonstopAssets(stages: readonly NonstopAssetStage[]): {
       return normalizePath(`s${index}/${folder}${path}`);
     }
     const name = `s${index}/${key}`;
+    if (kind === 'wav') {
+      const candidates: BrowserAssetEntry[] = [];
+      const excludedEntries = new Set<BrowserAssetEntry>();
+      let candidate: BrowserAssetEntry | undefined = entry;
+      while (candidate !== undefined && !excludedEntries.has(candidate)) {
+        candidates.push(candidate);
+        excludedEntries.add(candidate);
+        candidate = resolveChartAudioAsset(stage.source, stage.chartPath, path, {
+          pathPrefix: pathWAV,
+          excludedEntries,
+        });
+      }
+      audioFallbacks.set(normalizePath(name), candidates);
+    }
     files.set(name, entry);
     return name;
   };

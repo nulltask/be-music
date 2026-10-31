@@ -643,6 +643,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       extraNoteDepth: playOptions.extraNoteDepth,
       extraNoteScratch: playOptions.extraNoteScratch,
       gaugeAutoShift: playOptions.gaugeAutoShift,
+      bmsonTotalMode: playOptions.bmsonTotalMode,
       bottomShiftableGauge: playOptions.bottomShiftableGauge,
       randomSeed1P: playOptions.randomSeed1P,
       randomSeed2P: playOptions.randomSeed2P,

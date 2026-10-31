@@ -9,7 +9,6 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [BMS implementation specification](./bms-spec.md)
 - [bmson implementation specification](./bmson-spec.md)
 - [BMS / bmson compatibility notes (de jure vs de facto)](./format-compat.md)
-- [LR2 and beatoraja semantics](./semantics-lr2-beatoraja.md)
 - [Bemuse implementation specification](./bemuse-spec.md)
 - [Player implementation specification](./player-spec.md)
 - [Terminal player implementation notes](./player-tui.md)
@@ -17,9 +16,9 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [Scene models (`@be-music/player-scene-model`)](./scene-model.md)
 - [Replay (play history) specification](./replay.md)
 - [Courses and dan certification](./course.md)
-- [Course browser checklist](./course-checklist.md)
+- [Browser verification](./player-web.md#browser-verification)
 - [Be-Music Fingerprint specification](./fingerprint-spec.md)
-- [Leaderboard design](./leaderboard.md)
+- [Leaderboard specification](./leaderboard.md)
 - [Services and environments](./services.md)
 - [LR2 skin implementation notes](./lr2-skin.md)
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
@@ -40,4 +39,4 @@ Supplement:
 - `@be-music/player-scene-model` holds what every screen shows and how it behaves, independent of the skin family ([Scene models](./scene-model.md)); in `@be-music/player-browser`, scene sessions run it and family views draw it.
 - `@be-music/skin-lr2` and `@be-music/skin-beatoraja` keep skin parsing renderer-independent. Browser PixiJS rendering is documented under `@be-music/player-browser`.
 
-- [Browser worker benchmark (2026-10-21)](./benchmarks/browser-workers-2026-10-21.md)
+- [Browser player performance and measurement](./player-performance.md)

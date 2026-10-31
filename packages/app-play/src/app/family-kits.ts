@@ -1,3 +1,4 @@
+import type { ResolvedPlayChart } from '@be-music/player-engine';
 // Which family draws each screen, and the kit it draws with: the Debug Menu's "Skin system" pick, or the auto chain
 // (beatoraja → LR2 → built-in), over what the theme services have loaded (`family-dispatch.ts`).
 
@@ -32,7 +33,8 @@ export interface FamilyKitsOptions {
   /** The be-music skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'beMusicSkin' | 'builtInKit'>;
   /** The Debug Menu's "Skin system" pick (`skinFamilyOverride`) and the battle mode, which picks the LR2 play skin. */
-  readonly guiState: Pick<PlayerGUIState, 'skinFamilyOverride' | 'battleMode'>;
+  readonly guiState: Pick<PlayerGUIState, 'skinFamilyOverride' | 'battleMode'> &
+    Partial<Pick<PlayerGUIState, 'judgeRuleset'>>;
 }
 
 /** The kit a play is drawn with, and on a beatoraja theme the play entry it was loaded from. */
@@ -119,6 +121,7 @@ export class FamilyKits {
       courseStage?: CourseStagePlay;
       nonstop?: { readonly course: LibraryCourse };
       replay?: BeMusicReplay;
+      preResolved?: ResolvedPlayChart;
     },
   ): Promise<ResolvedPlayKit | undefined> {
     if (this.playsOnBeatoraja(chartEntry)) {
@@ -134,19 +137,21 @@ export class FamilyKits {
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', chartEntry);
     // A battle mode plays on the converted chart's skin (LR2's BATTLE play skin for two players); a replay on its own.
     const battle = {
-      battleMode: overrides.replay?.play.battleMode ?? this.guiState.battleMode,
+      battleMode: overrides.replay ? (overrides.replay.play.battleMode ?? 'OFF') : this.guiState.battleMode,
+      judgeRuleset: overrides.replay?.play.judgeRuleset ?? this.guiState.judgeRuleset,
       course: overrides.courseStage !== undefined || overrides.nonstop !== undefined,
     };
+    const skinChart = overrides.preResolved ? { ...chartEntry, chart: overrides.preResolved.chart } : chartEntry;
     const playSkin =
       gameplayFamily !== 'lr2'
         ? undefined
         : overrides.courseStage !== undefined || overrides.nonstop !== undefined
           ? this.lr2.courseLR2Skin(
-              pickLR2PlaySkin(this.lr2.playSkins, chartEntry, battle),
+              pickLR2PlaySkin(this.lr2.playSkins, skinChart, battle),
               overrides.courseStage?.courseInfo ?? resolveCourseView(overrides.nonstop!.course, 0),
-              { kind: 'play', playVariant: pickLR2PlaySkinVariant(this.lr2.playSkins, chartEntry, battle) },
+              { kind: 'play', playVariant: pickLR2PlaySkinVariant(this.lr2.playSkins, skinChart, battle) },
             )
-          : pickLR2PlaySkin(this.lr2.playSkins, chartEntry, battle);
+          : pickLR2PlaySkin(this.lr2.playSkins, skinChart, battle);
     if (playSkin === undefined) return { kit: this.builtIn.builtInKit };
     const invisibleNoteSkin = this.lr2.playSkins['9'];
     return {

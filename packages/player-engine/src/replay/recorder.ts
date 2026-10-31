@@ -1,5 +1,6 @@
+import type { ChartOptionProgram } from '@be-music/chart-model';
 import type { BeatorajaCustomJudge } from '../ruleset/custom-judge.ts';
-import type { BattleMode } from '../core/battle-mode.ts';
+import type { EffectiveBattleMode } from '../core/battle-mode.ts';
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
@@ -63,6 +64,8 @@ export type ReplayRecorderChartData = Pick<
   Partial<Pick<PreparedPlaybackChartData, 'resolvedChart'>>;
 
 export interface ReplayRecorderPlaySettings {
+  /** Absent retains beatoraja-compatible bmson zero-total recovery. */
+  bmsonTotalMode?: import('../ruleset/bmson-total.ts').BmsonTotalMode;
   options?: ReplayOptionState;
   mode: 'manual' | 'auto';
   autoScratch: boolean;
@@ -74,7 +77,7 @@ export interface ReplayRecorderPlaySettings {
   sevenToNineType?: import('../core/seven-to-nine.ts').SevenToNineType;
   sevenToNineThresholdBPM?: number;
   sevenToNineApplied?: boolean;
-  battleMode?: BattleMode;
+  battleMode?: EffectiveBattleMode;
   battleSourceVariant?: ChartPlayVariant;
   battleTempo?: number;
   battleAssist1P?: boolean;
@@ -144,6 +147,7 @@ export type ReplayRecordingOptions = Pick<
 };
 
 export interface ReplayRecorderOptions {
+  chartOptions?: ChartOptionProgram;
   /** Resolved chart JSON (post `#RANDOM` control flow) — metadata source. */
   json: BeMusicJSON;
   chart: ReplayRecorderChartData;
@@ -303,6 +307,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         play.aborted = true;
         if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
       }
+      if (options.play.bmsonTotalMode !== undefined) play.bmsonTotalMode = options.play.bmsonTotalMode;
       if (options.play.bottomShiftableGauge !== undefined)
         play.bottomShiftableGauge = options.play.bottomShiftableGauge;
       if (options.play.gaugeAutoShift !== undefined) play.gaugeAutoShift = options.play.gaugeAutoShift;
@@ -516,6 +521,11 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
   if (resolved.total.value !== undefined) {
     result.total = resolved.total.value;
   }
+  if (
+    options.chartOptions &&
+    (options.chartOptions.initial.hiSpeed !== undefined || options.chartOptions.cues.length > 0)
+  )
+    result.chartOptions = structuredClone(options.chartOptions);
   return result;
 }
 

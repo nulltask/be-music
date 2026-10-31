@@ -409,3 +409,20 @@ describe('ruleset helpers', () => {
     expect(resolveBeatorajaHardRecoverMultiplier(160, 100)).toBe(0); // 2 × TOTAL − 320 = 0
   });
 });
+
+test.each(['lr2', 'beatoraja', '____'] as const)(
+  '%s re-simulates strict zero-total from the typed play setting',
+  (ruleset) => {
+    const replay = makeReplay({
+      chart: { sourceFormat: 'bmson', total: 0 },
+      notes: [note(500_000)],
+      inputs: [down(500_000)],
+    });
+    const legacy = simulateReplay(replay, { ruleset });
+    replay.play.bmsonTotalMode = 'spec';
+    const strict = simulateReplay(parseReplay(serializeReplay(replay)), { ruleset });
+    expect(strict.gauge.final).toBe(ruleset === '____' ? 22 : 20);
+    expect(strict.gauge.final).toBeLessThan(legacy.gauge.final);
+    expect(strict.exScore).toBe(legacy.exScore);
+  },
+);
