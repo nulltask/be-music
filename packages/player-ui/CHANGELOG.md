@@ -1,5 +1,20 @@
 # @be-music/player-ui
 
+## 0.3.0
+
+### Minor Changes
+
+- 410843c: Display decoded title artwork in the Native decide heading while retaining accessible title text and the fallback for missing images.
+- 5cc0094: Render per-plane BGA opacity and all NONSTOP stage stacks in Canvas playfields, combining chart opacity, stage crossfades and inherited Canvas alpha while restoring the caller's alpha after drawing.
+- 4480fe0: Apply per-plane BGA origins when painting cropped images, preserving chart-authored placement through Canvas skins and NONSTOP stage stacks.
+
+### Patch Changes
+
+- 916e04c: Draw a white centre line down long-note bodies, the long-note shape the built-in skins share, so the Native skin matches Synesthesia and Plain. The line fades out after an early release.
+- afc65fb: Show the declared generic key count and keyboard identity in gameplay facts.
+- 17a4096: Composite the optional second BGA overlay above the first in shared playfield painting, preserving both in Native and Canvas skins and keeping POOR replacement and overlay modes.
+- Updated dependencies: `@be-music/player-skin-sdk@0.6.0`
+
 ## 0.2.0
 
 ### Minor Changes

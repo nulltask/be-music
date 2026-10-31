@@ -1,5 +1,16 @@
 # @be-music/skin-lr2
 
+## 0.5.0
+
+### Minor Changes
+
+- 3928de4: Select the proper play skin for opt-in PLAYER header modes and label explicit COUPLE selections.
+
+### Patch Changes
+
+- afc65fb: Borrow a single-player theme frame for generic bmson keyboards while their note columns use the host fallback geometry. Keep unknown key counts from producing an invalid key-mode operation.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`, `@be-music/player-scene-model@0.4.0`
+
 ## 0.4.0
 
 ### Minor Changes

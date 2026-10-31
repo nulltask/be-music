@@ -1,6 +1,6 @@
 {
   "name": "@be-music/chart-model",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Resolved chart models, timing, note semantics, and fingerprints for be-music",
   "license": "MIT",
   "files": [

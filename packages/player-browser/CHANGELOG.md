@@ -1,5 +1,48 @@
 # @be-music/player-browser
 
+## 0.13.0
+
+### Minor Changes
+
+- 38f2990: A BGA video the browser can't play (`.wmv`, `.avi`, `.mpg`, …) now starts playing while ffmpeg.wasm is still transcoding it, instead of after the whole file is done: the transcode streams fragmented MP4 into the `<video>` through Media Source Extensions (`ManagedMediaSource` on iPhone). Hosts opt in by installing two workers with the new `configureBGAVideoWorkers` from `./compute`, whose entries call the new `runBGAVideoDecodeWorker()` / `runBGAVideoEncodeWorker()`. On a cross-origin isolated page the frames are encoded with WebCodecs under `SharedArrayBuffer` flow control; elsewhere ffmpeg's own libx264 encodes them. Without the workers or MSE the whole-file transcode runs as before.
+- 410843c: Load pre-play title artwork for Native decide screens with a text fallback, and expose the separate image to Canvas skins.
+- 6e14d72: Retry distinct codec candidates after read or decode failure during gameplay and select previews. Preserve stage candidate chains in NONSTOP asset sources, including prefix and parent-folder fallbacks, while keeping cancellation and declared sample keys.
+- 5cc0094: Apply BGA opacity channels `0B`–`0E` across Native, Canvas, LR2 and beatoraja gameplay, combining each plane's value with skin opacity and NONSTOP crossfades. Use each NONSTOP stage's own opacity history and expose all visible stage stacks to Canvas skins instead of only the leading stage. Restore prior values on seek and freeze cue changes at LR2 reversal.
+- 5c820d9: Apply A1–A4 ARGB definitions to their selected BGA planes across Native, Canvas, LR2 and beatoraja. Share alpha with opacity controls, multiply skin colors, tint Canvas skin images and retain independent NONSTOP stage colors instead of applying definitions to BMP slots with matching ids.
+- 9572a31: Apply EXBMP transparent-color keys to still-image pixels before cropping, preserving unkeyed colors and source alpha across Native, Canvas, LR2 and beatoraja scenes. Add `LoadTextureOptions.bmsColorKey` for keyed image loading and keep a black viewport behind transparent BGA base images.
+- 4324783: Render input-driven SWBGA above normal and POOR BGA across Native, Canvas, LR2 and beatoraja skins. Load BMP00, EXBMP-only resources and placed aliases with definition-specific transparent-color keys, update keyed video crops on decoded frames, and restart video playback on fresh input.
+- 458b6f3: Load and play remapped NONSTOP SWBGA across Native, Canvas, LR2 and beatoraja. Keep stage resources distinct, end held animations at boundaries and apply the FIT source-video rate to seeking, drift correction and playback.
+- 17a4096: Keep BMS channels 07 and 0A as independent overlays across Native, Canvas, LR2 and beatoraja scenes, including NONSTOP stacks and POOR composition. Give reused video BMPs separate per-track playheads and resume both overlays after pausing.
+- 3f3de70: Forward the bmson zero-total play policy through every skin family and restore the typed replay policy independently of the viewer’s current preference.
+- 274133e: Carry engine-selected chart text in play frames and display it across native, Canvas, LR2 and beatoraja skins as literal, wrapping text.
+  
+  Connect NONSTOP stage text programs automatically, clearing previous-stage selections and miss text at ownership boundaries.
+- d869b05: Apply EXBMP transparent-color keys to opaque movie frames across Native, Canvas, LR2 and beatoraja. Key each decoded frame before alias cropping, retain independent plane playback and preserve unselected black pixels and the black base viewport. Clean up keyed video callbacks and native textures with their owning play.
+
+### Patch Changes
+
+- 206afe9: Include every layered bmson source event in the browser slice map so manual inputs play each constituent at its authored source offset and duration.
+- ceb5fcc: Use resolved source-channel slice metadata for bmson audio, including LN end keysounds and silent orphan boundaries, so browser playback matches Node and offline rendering.
+- 3259b06: Fix clicks at bmson sound-slice boundaries in browser playback: a slice that starts inside its file, or a sound resumed partway after a seek, fades in over 1 ms on its own gain node, and a slice cut before the file's end rings on past its end while it fades out over 1 ms, so a continuation crossfades with the slice before it. Note timing and slice deduplication are unchanged.
+- 87e176d: Play bmson continuation slices independently instead of suppressing them while the same stem is active; keep one voice per simultaneous chord slice.
+- b13249a: Resolve static BGA sub-region dependencies independently of declaration order, compose nested placements and clip the source and destination edges. Preserve explicit BMP/EXBMP precedence and render fully clipped base/POOR images as black and overlays as transparent, including Canvas skins and NONSTOP courses.
+- 4480fe0: Pass authored BGA sub-region placement to Canvas and beatoraja play views instead of centering the cropped image. Retain long internal resource ids in mixed NONSTOP dependencies and Canvas BGA frame metadata.
+- df001aa: Draw engine-driven bmson BGA sequences across Native, Canvas, LR2 and beatoraja. Preload every image-set alternative, honor authored MISS lifetimes and frame clocks, and keep shared base/layer/POOR movies on independent playheads while preserving source alpha and opaque black. Load NONSTOP sidecars and apply sequence frames only to their owning stage during crossfades, with FIT movie playback.
+- c781901: Stop applying `#SWBGAxx` as a cue-driven animation in Native, Canvas and LR2. A standard SWBGA whose id matched a cued `#BMPxx` replaced that BGA plane with its frames even without an `A5` selection or key input, unlike beatoraja and the terminal. SWBGA now animates only through the input-bound `A5` controller in every family.
+- 12c1567: Connect chained BGA video sub-region cues to independent base, overlay and POOR playheads, preserve native crop coordinates through transcoding and honor cropped placement. Refresh Canvas skin video crops as playback advances, include POOR in pause/resume and release shared alias handles only once.
+- 916e04c: Restore the white centre line down long-note bodies in the Synesthesia and Plain skins, which the translucent LN tail change had removed along with it, and fade it out over 300 ms when the player lets go early and the note is judged dropped, in Synesthesia, Plain and the default Pixi playfield. Long-note frames now carry `releasedElapsedMs` from the play session.
+- b1cb060: Load referenced EXBMP-only image resources and the implicit EXBMP00 POOR image, preserving explicit BMP filename precedence.
+- afc65fb: Render generic bmson keys in uniform columns across skin families, preserving second-bank columns as one keyboard. Map their printable and F1–F24 default bindings and use normal fallback notes in borrowed beatoraja note areas. Let a bound F5 reach its lane instead of restarting.
+- 783422a: Keep every visible NONSTOP stage video playing through crossfades in Native, Canvas and LR2 views. Retain each stage's cue offset when the leading stage changes, pause departed videos and restore all active stage videos after seek or resume.
+- 5992a52: Apply chart-authored HI-SPEED immediately across native, Canvas, LR2 and beatoraja views without clamping or changing saved preferences. Replay uses its recorded effective display program; older replays keep their original behavior.
+- c13f3fa: Prepare separate WAVCMD/EXWAV effect buffers per sample slot before tempo stretching. Read encoded native sample rates for frequency effects, preserve base-62 slot identity and reuse the resulting duration through seek/retrigger. Host decoding supplies native sample rates for unprepared frequency-effect buffers; a sample whose container cannot report its native rate still plays instead of being discarded.
+- 10951d6: Load and play EXWAV-only sample declarations, including in the select-screen preview, and prefer valid EXWAV filenames over shared WAV slots. Keep tempo preparation and audio-tail lookup on the same resource selection; apply corrected WAVCMD percentage volume.
+- 86f4978: Apply long-note defaults after conditional branch selection, and keep replays recorded before HDX LONGMODE support on the long-note modes they recorded.
+- 3e1855e: Apply intrinsic slot gain with authored WAVCMD and EXWAV volume so NONSTOP stages keep their original level.
+- 460823d: Connect NONSTOP effective option programs and stage diagnostics automatically. Authored HI-SPEED follows each stage and restores the saved user speed when the next stage has no forced value; replay continues using its recorded program.
+- 3928de4: Prepare independent COUPLE player state and preserve recorded or absent replay modes ahead of current header preferences.
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-parser@0.6.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`, `@be-music/player-skin-sdk@0.6.0`, `@be-music/player-ui@0.3.0`, `@be-music/player-scene-model@0.4.0`, `@be-music/skin-lr2@0.5.0`, `@be-music/skin-beatoraja@0.5.1`
+
 ## 0.12.0
 
 ### Minor Changes

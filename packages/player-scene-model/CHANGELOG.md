@@ -1,5 +1,18 @@
 # @be-music/player-scene-model
 
+## 0.4.0
+
+### Minor Changes
+
+- afc65fb: Preserve declared generic bmson play variants and key counts in the library even when only a few keys contain notes.
+- 5992a52: Add compulsory chart hi-speed state that bypasses user limits and temporarily overrides user, course and replay speed controls. Preserve the underlying user view for exact restoration and separate replay recording.
+- 3f3de70: Expose the bmson zero-total policy in shared play options, with validated choices and a beatoraja-compatible default.
+- 3928de4: Offer AUTO and COUPLE battle selections while retaining OFF as the compatibility default.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`
+
 ## 0.3.0
 
 ### Minor Changes

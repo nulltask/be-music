@@ -1,5 +1,11 @@
 # @be-music/skin-beatoraja
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-engine@0.12.0`, `@be-music/shared-utils@0.7.0`, `@be-music/player-scene-model@0.4.0`, `@be-music/skin-lr2@0.5.0`
+
 ## 0.5.0
 
 ### Minor Changes

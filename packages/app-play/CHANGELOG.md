@@ -1,5 +1,15 @@
 # @be-music/app-play
 
+## 0.8.0
+
+### Minor Changes
+
+- bcece14: The embed can now let the viewer play a chart instead of only previewing it: add `mode=play` to `/embed/?track=…` to play with the default lane keys, judged as a normal play without seeking. While playing, M and F are lanes, so the mute and full-screen shortcuts apply only before the play starts. `mode=preview` or no `mode` keeps the AUTO preview. Neither mode records a replay or score.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-browser@0.13.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-parser@0.6.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`, `@be-music/player-skin-sdk@0.6.0`, `@be-music/player-scene-model@0.4.0`, `@be-music/skin-lr2@0.5.0`, `@be-music/skin-beatoraja@0.5.1`
+
 ## 0.7.0
 
 ### Minor Changes

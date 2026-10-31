@@ -1,5 +1,13 @@
 # @be-music/shared-utils
 
+## 0.7.0
+
+### Minor Changes
+
+- d88e81c: Add `resolveSampleSliceEnvelope`, `sampleSliceEnvelopeGain` and `SAMPLE_SLICE_FADE_SECONDS`, which compute the short linear ramps that keep a bmson sound slice from clicking where it cuts its source file. A continuation slice crossfades with the one before it and sums back to the uncut waveform.
+- c13f3fa: Add runtime-neutral stereo PCM transformation with pitch-rate resampling, independent channel gain, sounding-time limits and cancellation.
+- 9572a31: Add the runtime-neutral `@be-music/shared-utils/png` entry point with `decodePNGToRGBA8`, preserving native color samples and encoded alpha metadata before Canvas premultiplication. Decode indexed palettes, packed grayscale, low-bit Adam7 and PNG transparency into owned RGBA8 pixels.
+
 ## 0.6.0
 
 ### Minor Changes
