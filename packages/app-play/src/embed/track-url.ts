@@ -1,5 +1,8 @@
 import { resolveURLLoadFetchURL } from '../url-load.ts';
 
+/** How the embed plays a chart: `'preview'` plays it in AUTO like a video, `'play'` lets the viewer play it. */
+export type EmbedMode = 'preview' | 'play';
+
 /** The archive an embed previews: the page's `?track=` URL, resolved against the page and fetched through the proxy. */
 export interface EmbedTrack {
   /** The URL as given, resolved against the page. */
@@ -8,6 +11,8 @@ export interface EmbedTrack {
   readonly fetchURL: string;
   /** The archive's file name, for the collection's source label. */
   readonly fileName: string;
+  /** `?mode=`: `play` lets the viewer play with the keyboard; `preview` (the default, and any other value) plays in AUTO. */
+  readonly mode: EmbedMode;
   /** `?chart=`: the chart to play on its own (`findEmbedChart`); the whole track's list without one. */
   readonly chart?: string;
   /** `?course=`: an LR2 or beatoraja course file inside the archive. Takes precedence over `chart`. */
@@ -17,7 +22,7 @@ export interface EmbedTrack {
 }
 
 /**
- * Reads `?track=`, `?chart=` and the course selectors from `href`; `undefined` without a track, or when it is not an http(s) URL the embed
+ * Reads `?track=`, `?mode=`, `?chart=` and the course selectors from `href`; `undefined` without a track, or when it is not an http(s) URL the embed
  * can fetch.
  */
 export function parseEmbedTrack(href: string): EmbedTrack | undefined {
@@ -53,6 +58,7 @@ export function parseEmbedTrack(href: string): EmbedTrack | undefined {
     url: url.href,
     fetchURL,
     fileName,
+    mode: params.get('mode')?.trim().toLowerCase() === 'play' ? 'play' : 'preview',
     ...(chart ? { chart } : {}),
     ...(course ? { course, ...(courseName ? { courseName } : {}) } : {}),
   };

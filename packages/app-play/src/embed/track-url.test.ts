@@ -9,6 +9,7 @@ describe('parseEmbedTrack', () => {
       url: 'https://example.com/packs/My%20Song.zip',
       fetchURL: 'https://play.be-music.app/__url-load-proxy?url=https%3A%2F%2Fexample.com%2Fpacks%2FMy%2520Song.zip',
       fileName: 'My Song.zip',
+      mode: 'preview',
     });
   });
 
@@ -28,6 +29,14 @@ describe('parseEmbedTrack', () => {
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&chart=codebmp.bms`)?.chart).toBe('codebmp.bms');
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&chart=%20`)).not.toHaveProperty('chart');
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip`)).not.toHaveProperty('chart');
+  });
+
+  it('reads ?mode=play as a manual play and anything else as the AUTO preview', () => {
+    expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&mode=play`)?.mode).toBe('play');
+    expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&mode=%20PLAY%20`)?.mode).toBe('play');
+    expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&mode=preview`)?.mode).toBe('preview');
+    expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&mode=auto`)?.mode).toBe('preview');
+    expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip`)?.mode).toBe('preview');
   });
 
   it('reads course file and course name selectors, preserving chart selection when both are supplied', () => {
