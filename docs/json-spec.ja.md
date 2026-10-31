@@ -454,3 +454,5 @@ flowchart LR
 ## 不透明な bmson データ
 
 任意の `extraFields: JSONFields` は、bmson ノードの対応済みの意味を持たないソースキーを保持します。ノート・タイミング注釈は `BeMusicEvent.bmson` に付けます。`bmson.channelExtraFields` は WAV スロットごとのチャンネルデータ、`channelKinds` は sound・key・mine の所属、`lineExtraFields` は正規化済み pulse ごとの小節線データです。`JSONValue` は有限の JSON データを表し、`cloneJSONFields` が独立したコピーを作り、`collectBmsonExtraFields` が型ごとに対応済みの予約キーを除外します。parser は JSON 再読込でこれらを保持し、実行・fingerprint には使いません。外部 bmson の `extraFields` というキー自体は、IR 境界ではなく envelope の内側に保持します。[ADR 0029](./adr/0029-opaque-bmson-fields.ja.md) を参照してください。
+
+ノートの `l`・BGA キューの `y`・保存した小節線など、pulse 単位の bmson 拡張は `bmson.info.resolution`、または bmson の既定値240を使います。writer の出力 resolution を変更すると、IR を変更せず、表現可能な beat 位置を保って native pulse 値を変換します。明示的な `lines: []` では `bmson.barlinesSuppressed` を優先します。

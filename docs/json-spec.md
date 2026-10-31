@@ -454,3 +454,5 @@ flowchart LR
 ## Opaque bmson data
 
 Optional `extraFields: JSONFields` stores source keys without supported semantics on bmson nodes, including `BeMusicEvent.bmson` for note/timing annotations. `bmson.channelExtraFields` keys channel data by WAV slot, `channelKinds` records sound/key/mine ownership, and `lineExtraFields` keys barline data by normalized pulse. `JSONValue` accepts finite JSON data; `cloneJSONFields` makes independent copies and `collectBmsonExtraFields` removes reserved supported keys by scope. The parser preserves these envelopes on JSON reparse; they do not participate in execution or fingerprints. An external bmson key named `extraFields` lives inside the envelope, not at the IR boundary. See [ADR 0029](./adr/0029-opaque-bmson-fields.md).
+
+Pulse-valued bmson extensions, including note `l`, BGA cue `y` and preserved barlines, use `bmson.info.resolution` or the bmson default 240. Changing the writer output resolution changes native pulse values while preserving representable beat positions; it does not modify the IR. `bmson.barlinesSuppressed` remains authoritative for explicit `lines: []`.

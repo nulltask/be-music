@@ -13,6 +13,10 @@ export interface BMSStringifyOptions {
 }
 
 export interface BmsonStringifyOptions {
+  /**
+   * Output pulses per beat. Finite values >= 1 are floored; invalid values use the source resolution (default 240).
+   * Positions and LN endpoints round to the output grid. A positive LN that would become a tap raises RangeError.
+   */
   resolution?: number;
   indent?: number;
   /** See {@link BMSStringifyOptions.skipPreservationValidation}. */

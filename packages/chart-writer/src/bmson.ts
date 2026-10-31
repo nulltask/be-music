@@ -37,6 +37,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   if (intrinsicWAVGains(json).length)
     throw new RangeError('Intrinsic WAV gain cannot be represented by bmson; export Be-Music JSON.');
   const resolution = resolveBmsonResolutionForOutput(json, options);
+  const sourceResolution = resolveBmsonResolutionForOutput(json, {});
   const indent = options.indent ?? 2;
   const skipValidation = options.skipPreservationValidation === true;
   const preservedDocument =
@@ -89,7 +90,8 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
       continue;
     }
 
-    const y = Math.round(beatResolver.eventToBeat(event) * resolution);
+    const beat = beatResolver.eventToBeat(event);
+    const y = Math.round(beat * resolution);
     if (isSampleChannel && isLandmineChannel(channel)) {
       const lane = landmineChannelToPlayableChannel(channel);
       const x = lane ? xMap.get(lane) : undefined;
@@ -139,13 +141,17 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
       const fileName = json.resources.wav[key] ?? key;
       const lane = mapBMSLongNoteChannelToPlayable(channel) ?? channel;
       const x = channel === '01' ? 0 : (xMap.get(lane) ?? 0);
-      const longNoteEndBeat = bmsLongNotes.startToEndBeat.get(event);
-      const length =
-        longNoteEndBeat !== undefined
-          ? Math.max(0, Math.round(longNoteEndBeat * resolution) - y)
-          : typeof event.bmson?.l === 'number' && Number.isFinite(event.bmson.l) && event.bmson.l >= 0
-            ? Math.floor(event.bmson.l)
-            : 0;
+      const sourceLength = event.bmson?.l;
+      const longNoteEndBeat =
+        bmsLongNotes.startToEndBeat.get(event) ??
+        (typeof sourceLength === 'number' && Number.isFinite(sourceLength) && sourceLength > 0
+          ? beat + sourceLength / sourceResolution
+          : undefined);
+      // Round both absolute endpoints, just as the separate `up` event is rounded. Scaling l alone can put the
+      // tail one pulse away from its release keysound when the requested ratio is not an integer.
+      const length = longNoteEndBeat === undefined ? 0 : Math.max(0, Math.round(longNoteEndBeat * resolution) - y);
+      if (longNoteEndBeat !== undefined && longNoteEndBeat > beat && length === 0)
+        throw new RangeError('The long note collapses at the output pulse grid; choose a higher resolution.');
       const continuation = event.bmson?.c === true;
       // beatoraja bmson extension — per-note long-note type rides along only on actual long notes.
       const longNoteType =
@@ -219,7 +225,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
     lines: mapBmsonLineValues(
       resolveBmsonLinesForOutput(json, resolution),
       json.bmson.lineExtraFields,
-      resolution / (json.bmson.info.resolution ?? resolution),
+      resolution / sourceResolution,
     ),
     bpm_events: bpmEvents,
     stop_events: stopEvents,
@@ -232,7 +238,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   if (mineChannels.size > 0) {
     bmson.mine_channels = [...mineChannels.values()];
   }
-  const bga = createBmsonBGAForOutput(json);
+  const bga = createBmsonBGAForOutput(json, resolution);
   if (bga) {
     bmson.bga = bga;
   }
@@ -283,7 +289,8 @@ function createPreservedBmsonDocumentForOutput(json: BeMusicJSON, resolution: nu
   if (typeof json.bmson.version === 'string' && json.bmson.version.length > 0) {
     document.version = json.bmson.version;
   }
-  if (json.preservation.bmson.lines.length > 0) {
+  if (json.bmson.barlinesSuppressed === true) document.lines = [];
+  else if (json.preservation.bmson.lines.length > 0) {
     document.lines = mapBmsonLineValues(json.preservation.bmson.lines, json.bmson.lineExtraFields);
   }
   if (json.preservation.bmson.bpmEvents.length > 0) {
@@ -299,7 +306,7 @@ function createPreservedBmsonDocumentForOutput(json: BeMusicJSON, resolution: nu
   if (json.preservation.bmson.soundChannels.length > 0) {
     document.sound_channels = json.preservation.bmson.soundChannels.map(mapBmsonSoundChannelForOutput);
   }
-  const bga = createBmsonBGAForOutput(json);
+  const bga = createBmsonBGAForOutput(json, resolution);
   if (bga) {
     document.bga = bga;
   }
@@ -419,12 +426,12 @@ function mapBmsonSoundChannelForOutput(channel: BmsonSoundChannelEntry): {
 }
 
 function resolveBmsonResolutionForOutput(json: BeMusicJSON, options: BmsonStringifyOptions): number {
-  if (typeof options.resolution === 'number' && Number.isFinite(options.resolution) && options.resolution > 0) {
+  if (typeof options.resolution === 'number' && Number.isFinite(options.resolution) && options.resolution >= 1) {
     return Math.floor(options.resolution);
   }
 
   const irResolution = json.bmson.info.resolution;
-  if (typeof irResolution === 'number' && Number.isFinite(irResolution) && irResolution > 0) {
+  if (typeof irResolution === 'number' && Number.isFinite(irResolution) && irResolution >= 1) {
     return Math.floor(irResolution);
   }
 
@@ -568,7 +575,10 @@ function resolveBmsonCompatiblePlayLevel(value: BeMusicJSON['metadata']['playLev
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function createBmsonBGAForOutput(json: BeMusicJSON):
+function createBmsonBGAForOutput(
+  json: BeMusicJSON,
+  resolution: number,
+):
   | {
       bga_header: Array<{ id: number; name: string }>;
       bga_sequence?: BmsonBGASequence[];
@@ -585,9 +595,10 @@ function createBmsonBGAForOutput(json: BeMusicJSON):
       name: entry.name,
     });
   }
-  const events = normalizeBmsonBGAEventEntries(json.bmson.bga.events ?? []);
-  const layerEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.layerEvents ?? []);
-  const poorEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.poorEvents ?? []);
+  const scale = resolution / resolveBmsonResolutionForOutput(json, {});
+  const events = normalizeBmsonBGAEventEntries(json.bmson.bga.events ?? [], scale);
+  const layerEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.layerEvents ?? [], scale);
+  const poorEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.poorEvents ?? [], scale);
 
   if (
     header.length === 0 &&
@@ -630,28 +641,19 @@ function normalizeBmsonSubartistsForOutput(value: string[] | undefined): string[
 }
 
 function resolveBmsonLinesForOutput(json: BeMusicJSON, resolution: number): number[] {
+  if (json.bmson.barlinesSuppressed === true) return [];
   if (json.preservation.bmson.lines.length > 0) {
     return normalizeBmsonLines(
-      rescaleBmsonLines(json.preservation.bmson.lines, json.bmson.info.resolution, resolution),
+      rescaleBmsonLines(json.preservation.bmson.lines, resolveBmsonResolutionForOutput(json, {}), resolution),
     );
   }
   return createDefaultBmsonLines(json, resolution);
 }
 
-/**
- * Preserved `lines` are pulses at the source chart's resolution; notes are re-emitted at the output resolution, so the
- * bar lines have to follow or every note lands in the wrong measure. Without a known source resolution they are kept.
- */
-function rescaleBmsonLines(lines: number[], sourceResolution: number | undefined, resolution: number): number[] {
-  if (
-    typeof sourceResolution !== 'number' ||
-    !Number.isFinite(sourceResolution) ||
-    sourceResolution <= 0 ||
-    Math.floor(sourceResolution) === resolution
-  ) {
-    return lines;
-  }
-  const scale = resolution / Math.floor(sourceResolution);
+/** Preserved barlines use the normalized source resolution (240 when absent), just like notes and BGA cues. */
+function rescaleBmsonLines(lines: number[], sourceResolution: number, resolution: number): number[] {
+  if (sourceResolution === resolution) return lines;
+  const scale = resolution / sourceResolution;
   return lines.map((y) => Math.round(y * scale));
 }
 
@@ -707,12 +709,13 @@ function mapBmsonLineValues(
 
 function normalizeBmsonBGAEventEntries(
   entries: ReadonlyArray<BmsonBGAEvent>,
+  scale: number,
 ): Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }> {
   const normalized: Array<{ y: number; id: number; id_set?: number[]; condition?: string; interval?: number }> = [];
   for (const entry of entries) {
     normalized.push({
       ...collectBmsonExtraFields(entry.extraFields, 'bgaEvent'),
-      y: Math.max(0, Math.floor(entry.y)),
+      y: Math.max(0, Math.round(entry.y * scale)),
       id: Math.max(0, Math.floor(entry.id)),
       ...(entry.idSet !== undefined ? { id_set: [...entry.idSet] } : {}),
       ...(entry.condition !== undefined ? { condition: entry.condition } : {}),

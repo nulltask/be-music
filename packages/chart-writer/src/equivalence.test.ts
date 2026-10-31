@@ -43,6 +43,10 @@ describe('areBmsonChartsEquivalent', () => {
   test('holds for the same bmson source and fails when the chart differs', () => {
     expect(areBmsonChartsEquivalent(parseBmson(bmson(150)), parseBmson(bmson(150)))).toBe(true);
     expect(areBmsonChartsEquivalent(parseBmson(bmson(150)), parseBmson(bmson(180)))).toBe(false);
+    const source = parseBmson(bmson(150));
+    const suppressed = structuredClone(source);
+    suppressed.bmson.barlinesSuppressed = true;
+    expect(areBmsonChartsEquivalent(source, suppressed)).toBe(false);
   });
 });
 

@@ -149,6 +149,7 @@ function areBMSExtensionsEqual(left: BeMusicJSON['bms'], right: BeMusicJSON['bms
 function areBmsonExtensionsEqual(left: BeMusicJSON['bmson'], right: BeMusicJSON['bmson']): boolean {
   return (
     left.version === right.version &&
+    (left.barlinesSuppressed === true) === (right.barlinesSuppressed === true) &&
     areJSONValuesEqual(left.extraFields, right.extraFields) &&
     areJSONValuesEqual(left.channelExtraFields, right.channelExtraFields) &&
     areJSONValuesEqual(left.channelKinds, right.channelKinds) &&
