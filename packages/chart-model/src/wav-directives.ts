@@ -106,7 +106,7 @@ export function collectBMSExWAVVolumeMultipliers(entries: Readonly<Record<string
  * This is Be-Music's explicit cross-dialect precedence; invalid EXWAV leaves the ordinary WAV definition intact.
  * Neither the authored resource map nor the raw EXWAV declarations are mutated.
  */
-export function resolveBMSWAVResources(json: Pick<BeMusicJSON, 'resources' | 'bms'>): Record<string, string> {
+export function resolveBmsWAVResources(json: Pick<BeMusicJSON, 'resources' | 'bms'>): Record<string, string> {
   const resources = { ...json.resources.wav };
   for (const [key, raw] of Object.entries(json.bms.exWAV)) {
     const parsed = parseBMSExWAV(raw);

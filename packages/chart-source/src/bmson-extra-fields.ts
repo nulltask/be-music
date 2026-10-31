@@ -73,10 +73,14 @@ function isRecord(input: unknown): input is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+/** Deeper opaque values are invalid, so a hostile document cannot exhaust the stack of the recursive copy. */
+const MAX_JSON_DEPTH = 256;
+
 function cloneValue(input: unknown, ancestors: Set<object>): JSONValue | typeof INVALID {
   if (input === null || typeof input === 'boolean' || typeof input === 'string') return input;
   if (typeof input === 'number') return Number.isFinite(input) ? input : INVALID;
   if (typeof input !== 'object' || (!Array.isArray(input) && !isRecord(input)) || ancestors.has(input)) return INVALID;
+  if (ancestors.size >= MAX_JSON_DEPTH) return INVALID;
   ancestors.add(input);
   let result: JSONValue;
   if (Array.isArray(input)) {

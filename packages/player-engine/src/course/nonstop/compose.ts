@@ -8,7 +8,7 @@ import {
   resolvePoorBGAMode,
   type PoorBGAMode,
   resolveChart,
-  resolveBMSWAVResources,
+  resolveBmsWAVResources,
   parseBMSExWAV,
   parseBmsWAVCmd,
   volWAVToLinearGain,
@@ -212,6 +212,10 @@ export function stitchNonstopCourse(
       const mode = source.bms.lnMode;
       if (mode !== 1 && mode !== 2 && mode !== 3) source = { ...source, bms: { ...source.bms, lnMode: 1 } };
     }
+    // It also predates bmson `up`, which then left the slice an ordinary judged note.
+    if ((options.stitch ?? NONSTOP_STITCH_VERSION) < 3 && source.events.some((event) => event.bmson?.up === true)) {
+      source = { ...source, events: source.events.map(withoutBmsonUp) };
+    }
     return resolveChart(source, bmsonStage >= 0 && stage.pms === true ? { chartPath: '.pms' } : {});
   });
   if (resolved.some((chart) => chart.playVariant.startsWith('generic-'))) {
@@ -275,7 +279,7 @@ export function stitchNonstopCourse(
 
   for (let index = 0; index < stages.length; index += 1) {
     const source = stages[index]!.chart;
-    const wavResources = resolveBMSWAVResources(source);
+    const wavResources = resolveBmsWAVResources(source);
     const wavCommands = source.bms.wavCmds.map((line) => parseBmsWAVCmd(line, resolveBMSBase(source)));
     const chartIndex = resolved[index]!;
     const window = windows[index]!;
@@ -745,4 +749,10 @@ function reduce(numerator: number, denominator: number): [number, number] {
   let b = denominator;
   while (b !== 0) [a, b] = [b, a % b];
   return numerator === 0 ? [0, 1] : [numerator / a, denominator / a];
+}
+
+function withoutBmsonUp(event: BeMusicEvent): BeMusicEvent {
+  if (event.bmson?.up === undefined) return event;
+  const { up: _up, ...bmson } = event.bmson;
+  return { ...event, bmson };
 }

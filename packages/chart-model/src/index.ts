@@ -177,7 +177,7 @@ export {
   exWAVVolumeMillibelsToLinearGain,
   parseBMSExWAV,
   parseBmsWAVCmd,
-  resolveBMSWAVResources,
+  resolveBmsWAVResources,
   usesMonophonicWAVPlayback,
   volWAVToLinearGain,
   wavCmdVolumePercentToLinearGain,
@@ -205,7 +205,7 @@ export {
   type ResolveBMSLongNotesOptions,
 } from './long-notes.ts';
 
-export { applyBMSColorKey, resolveBmsExBMPColorKey } from './bga-color-key.ts';
+export { applyBMSColorKey, resolveBMSExBMPColorKey } from './bga-color-key.ts';
 
 export {
   parseBMSKeyBoundBGA,

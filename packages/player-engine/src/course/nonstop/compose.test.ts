@@ -520,6 +520,29 @@ test('NONSTOP keeps an up sound on its LN tail with its source slice coordinates
   expect(resolved.notes.filter((note) => result.chart.resources.wav[note.sampleKey] === 's0/end.wav')).toEqual([]);
 });
 
+test('NONSTOP stitch rules before version 3 keep an up slice as the judged note they predate', () => {
+  const source = bmsonStage();
+  source.resources.wav['ZZ'] = 'end.wav';
+  source.events.push({ measure: 0, channel: '13', position: [3, 4], value: 'ZZ', bmson: { up: true, c: true } });
+  for (const stitch of [1, 2] as const) {
+    const result = stitchNonstopCourse([{ chart: source }, { chart: bmsonStage() }], {
+      connections: ['blank2'],
+      placement: 'intended',
+      assetPath: (stage, _kind, path) => `s${stage}/${path}`,
+      stitch,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const resolved = resolveChart(result.chart);
+    expect(resolved.notes.some((note) => note.endSoundEvent !== undefined)).toBe(false);
+    expect(resolved.notes.filter((note) => result.chart.resources.wav[note.sampleKey] === 's0/end.wav')).toHaveLength(
+      1,
+    );
+  }
+  // The source chart keeps its flag for current rules.
+  expect(source.events.at(-1)!.bmson).toMatchObject({ up: true });
+});
+
 test('NONSTOP preserves source channels beyond the BMS capacity across bmson stages', () => {
   const source = parseChart(
     JSON.stringify({

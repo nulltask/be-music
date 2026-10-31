@@ -10,7 +10,7 @@ import {
   parseBMSExBMP,
   buildKeyBoundBGATimeline,
   createTimingResolver,
-  resolveBmsExBMPColorKey,
+  resolveBMSExBMPColorKey,
   resolvePoorBGAMode,
   type BmsARGB,
   type KeyBoundBGACue,
@@ -231,7 +231,7 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
           }
           let texture = handle.texture;
           let dispose: (() => void) | undefined;
-          const bmsColorKey = resolveBmsExBMPColorKey(chart, key);
+          const bmsColorKey = resolveBMSExBMPColorKey(chart, key);
           if (swBGAColorKey || bmsColorKey) {
             try {
               const keyed = createColorKeyVideoTexture(handle.video, { swBGAColorKey, bmsColorKey });
@@ -262,7 +262,7 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
         }
         return;
       }
-      const bmsColorKey = resolveBmsExBMPColorKey(chart, key);
+      const bmsColorKey = resolveBMSExBMPColorKey(chart, key);
       if (base.has(key)) {
         const texture = bmsColorKey
           ? await loadTextureFromBytes(path, bytes, { bmsColorKey })

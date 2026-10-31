@@ -7,7 +7,7 @@ import {
   isBMSKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   parseBMSDynamicVolumeGain,
-  resolveBMSWAVResources,
+  resolveBmsWAVResources,
   usesMonophonicWAVPlayback,
   volWAVToLinearGain,
   type ResolvedChart,
@@ -91,7 +91,7 @@ export async function createNodeAudioSession({
   onLoadProgress,
 }: CreateAudioSessionContext): Promise<AudioSession | undefined> {
   const json = resolved.source;
-  const wavResources = resolveBMSWAVResources(json);
+  const wavResources = resolveBmsWAVResources(json);
   throwIfAborted(options.signal);
   const writeOutput =
     options.writeOutput ??
@@ -735,7 +735,7 @@ async function buildRuntimeSampleMap(
   }
 
   const idBase = resolveBMSBase(json);
-  const wavResources = resolveBMSWAVResources(json);
+  const wavResources = resolveBmsWAVResources(json);
   const volumeMultipliers = collectBmsWAVVolumeMultipliers(json);
   const playbackModifiers = collectBmsWAVPlaybackModifiers(json);
   for (let index = 0; index < keys.length; index += 1) {
@@ -784,7 +784,7 @@ function buildEventPlaybackMap(resolved: ResolvedChart): Map<BeMusicEvent, Playa
 
 function collectRealtimeAudioSampleKeys(resolved: ResolvedChart): string[] {
   const json = resolved.source;
-  const wavResources = resolveBMSWAVResources(json);
+  const wavResources = resolveBmsWAVResources(json);
   const keys = new Set<string>();
   for (const trigger of resolved.sampleTriggers) {
     keys.add(trigger.sampleKey);

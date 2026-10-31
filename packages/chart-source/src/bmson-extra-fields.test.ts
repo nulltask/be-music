@@ -35,6 +35,13 @@ test('non-JSON maps and cycles are rejected, while empty maps remain absent', ()
     expect(cloneJSONFields(input)).toBeUndefined();
 });
 
+test('opaque values nested past 256 levels are rejected instead of overflowing the stack', () => {
+  const nest = (depth: number) => JSON.parse('['.repeat(depth) + ']'.repeat(depth));
+  expect(cloneJSONFields({ ok: nest(255) })).toEqual({ ok: nest(255) });
+  expect(cloneJSONFields({ deep: nest(256) })).toBeUndefined();
+  expect(cloneJSONFields({ hostile: nest(200_000) })).toBeUndefined();
+});
+
 test.each([
   ['root', 'sound_channels'],
   ['info', 'init_bpm'],

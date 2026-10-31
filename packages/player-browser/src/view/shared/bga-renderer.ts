@@ -147,10 +147,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           .find((cue) => cue?.bmpKey === stack.poorKey);
         add('poor', {
           bmpKey: stack.poorKey,
-          seconds:
-            stack.poorCue?.seconds ??
-            poorCue?.seconds ??
-            seconds - Math.max(0, (ctx.play.playClock() - ctx.play.lastPoorAt) / 1000),
+          seconds: stack.poorCue?.seconds ?? poorCue?.seconds ?? resolvePoorFallbackStart(ctx, seconds),
         });
       }
     }
@@ -373,6 +370,22 @@ function resolveBGAStacks(
     noPoor: ctx.bgaTargetsScratch[0]?.noPoor === true,
     bmsonBGA: ctx.play.engineFrame?.bmsonBGA,
   });
+}
+
+/** Chart-second start of each play's miss window, fixed when the window opens. */
+const poorFallbackStarts = new WeakMap<object, { lastPoorAt: number; seconds: number }>();
+
+/**
+ * Where a POOR image with no authored cue started on the chart clock. The miss time is on the wall clock, so convert it
+ * once per miss: recomputing every frame drifts with the audio clock and tempo, and the video sync would treat each
+ * frame as a new cue and seek again.
+ */
+function resolvePoorFallbackStart(ctx: BGARendererContext, seconds: number): number {
+  const cached = poorFallbackStarts.get(ctx.play);
+  if (cached?.lastPoorAt === ctx.play.lastPoorAt) return cached.seconds;
+  const start = seconds - Math.max(0, (ctx.play.playClock() - ctx.play.lastPoorAt) / 1000);
+  poorFallbackStarts.set(ctx.play, { lastPoorAt: ctx.play.lastPoorAt, seconds: start });
+  return start;
 }
 
 /** The texture key for the BGA slot `key` on `track`: its per-track video instance when one exists, else `key`. */

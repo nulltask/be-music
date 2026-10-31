@@ -1,5 +1,5 @@
 import { getANSIFrameAlpha, setANSIFrameAlpha } from './bga-alpha.ts';
-import { parseBmsBGA, resolveBmsExBMPColorKey, type BmsARGB, type BMSSubRegionBGA } from '@be-music/chart-model';
+import { parseBmsBGA, resolveBMSExBMPColorKey, type BmsARGB, type BMSSubRegionBGA } from '@be-music/chart-model';
 import { resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import { createSolidANSIFrame, type ANSIFrame, type FrameMode } from './bga-frame.ts';
 import { mapFrameSource, type FrameSource } from './bga-frame-source.ts';
@@ -31,7 +31,7 @@ export function resolveBGAResource(
     regions.push(region);
     current = region.sourceBMP;
   }
-  const colorKey = resolveBmsExBMPColorKey(chart, current);
+  const colorKey = resolveBMSExBMPColorKey(chart, current);
   return { path: resources[current]!, regions: regions.reverse(), ...(colorKey ? { colorKey } : {}) };
 }
 

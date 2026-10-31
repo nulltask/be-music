@@ -1,4 +1,4 @@
-import { resolveBMSWAVResources, type TimingResolver, type TimedSampleTrigger } from '@be-music/chart-model';
+import { resolveBmsWAVResources, type TimingResolver, type TimedSampleTrigger } from '@be-music/chart-model';
 import { type BeMusicEvent, type BeMusicJSON, normalizeObjectKey, resolveBMSBase } from '@be-music/chart-source';
 import type { TimedPlayableNote } from '@be-music/player-engine/display';
 import {
@@ -45,7 +45,7 @@ export function resolveGameplayAudioTailCleanupDelayMs(options: {
   bmsonSlicePlayback?: ReadonlyMap<BeMusicEvent, WebAudioSessionSlicePlayback>;
   currentSeconds: number;
 }): number {
-  const wavResources = resolveBMSWAVResources(options.chart);
+  const wavResources = resolveBmsWAVResources(options.chart);
   const latestEndSeconds = Math.max(
     resolveLatestSampleEndSeconds(options.notes, options, wavResources),
     resolveLatestSampleEndSeconds(options.autoSampleTriggers, options, wavResources),
