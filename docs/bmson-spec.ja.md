@@ -99,6 +99,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `bga.bga_events` 出力
 - [x] `bga.layer_events` 出力
 - [x] `bga.poor_events` 出力
+- [x] BMS の通常の BGA を bmson の BGA に変換する。各 `#BMPxx` には既存の bmson の id の後ろからヘッダー id を割り当て（bmson では 0 は消去なので使わない）、`04` / `07` / `06` のキューを出力分解能の base / layer / POOR イベントにする。未定義の画像へのキューはヘッダーのない id を保ち、何も表示しない。`#BMP00` は Be-Music が最初の POOR キューまで表示するのと同じく y = 0 の POOR イベントにし、`#POORBGA 2` では POOR イベントを書かない。`0A`・`#BGAxx` の切り出し・`#EXBMPxx` の透過色・`#ARGBxx` / `#SWBGAxx`・`0B`〜`0E` / `A1`〜`A5` は bmson に対応する表現がないため、レイヤーの黒抜きの違いや `#POORBGA 1` とともに `onDiagnostic` で報告する（#839）
 - [x] `bmson.barlinesSuppressed` により明示的な `lines: []` を保持
 - [ ] `bpm_events` 同一 `y` のイベントを「末尾優先」へ正規化して出力
 - [ ] `stop_events` 同一 `y` のイベントを加算正規化して出力

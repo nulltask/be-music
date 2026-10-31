@@ -30,6 +30,7 @@ import {
 } from '@be-music/chart-source';
 import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/shared-utils/core';
 import { areBmsonChartsEquivalent } from './equivalence.ts';
+import { convertBmsBGAToBmson, type ChartExportDiagnosticHandler } from './bga-export.ts';
 import type { BmsonStringifyOptions } from './options.ts';
 import { intrinsicWAVGains } from './wav-gain.ts';
 
@@ -238,7 +239,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   if (mineChannels.size > 0) {
     bmson.mine_channels = [...mineChannels.values()];
   }
-  const bga = createBmsonBGAForOutput(json, resolution);
+  const bga = createBmsonBGAForOutput(json, resolution, options.onDiagnostic);
   if (bga) {
     bmson.bga = bga;
   }
@@ -578,6 +579,7 @@ function resolveBmsonCompatiblePlayLevel(value: BeMusicJSON['metadata']['playLev
 function createBmsonBGAForOutput(
   json: BeMusicJSON,
   resolution: number,
+  report?: ChartExportDiagnosticHandler,
 ):
   | {
       bga_header: Array<{ id: number; name: string }>;
@@ -599,6 +601,19 @@ function createBmsonBGAForOutput(
   const events = normalizeBmsonBGAEventEntries(json.bmson.bga.events ?? [], scale);
   const layerEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.layerEvents ?? [], scale);
   const poorEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.poorEvents ?? [], scale);
+  // Ordinary BMS BGA (image resources and 04 / 07 / 06 cues) joins after the native lists, on ids of its own (#839).
+  const nativeIds = [...header.map((entry) => entry.id), ...(json.bmson.bga.sequences ?? []).map((entry) => entry.id)];
+  const fromBMS = convertBmsBGAToBmson(json, resolution, Math.max(0, ...nativeIds) + 1, report);
+  if (fromBMS) {
+    header.push(...fromBMS.header);
+    const byPulse = (left: { y: number }, right: { y: number }) => left.y - right.y;
+    events.push(...fromBMS.events);
+    layerEvents.push(...fromBMS.layerEvents);
+    poorEvents.push(...fromBMS.poorEvents);
+    events.sort(byPulse);
+    layerEvents.sort(byPulse);
+    poorEvents.sort(byPulse);
+  }
 
   if (
     header.length === 0 &&

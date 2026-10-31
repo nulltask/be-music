@@ -28,6 +28,7 @@ import { BMS_MINE_SAMPLE_KEY, BMSON_LONG_NOTE_TYPES } from './bmson.ts';
 import { areBMSChartsEquivalent, areEventBmsonExtensionsEqual } from './equivalence.ts';
 import type { BMSStringifyOptions } from './options.ts';
 import { applyIntrinsicWAVGainForBMS } from './wav-gain.ts';
+import { convertBmsonBGAToBMS, type ChartExportDiagnosticHandler } from './bga-export.ts';
 
 export function stringifyBMS(json: BeMusicJSON, options: BMSStringifyOptions = {}): string {
   json = applyIntrinsicWAVGainForBMS(json);
@@ -45,7 +46,7 @@ export function stringifyBMS(json: BeMusicJSON, options: BMSStringifyOptions = {
   const preservedObjectLines =
     maxResolution === undefined ? resolvePreservedObjectLinesForOutput(json, skipValidation) : undefined;
   if (!preservedObjectLines) {
-    json = convertChartForBMSOutput(json);
+    json = convertChartForBMSOutput(json, options.onDiagnostic);
   }
   const lines: string[] = [];
 
@@ -681,7 +682,7 @@ const MAX_BMS_MINE_DAMAGE = 36 * 36 - 1;
  * - bmson `total` is a percentage of the player's default TOTAL, which depends on the note count and the player, so it
  *   is not written as an absolute `#TOTAL`; the BMS default applies, which equals bmson's default `100`.
  */
-function convertChartForBMSOutput(json: BeMusicJSON): BeMusicJSON {
+function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnosticHandler): BeMusicJSON {
   const isBmsonSource = json.sourceFormat === 'bmson';
   const events: BeMusicEvent[] = [];
   const longNoteTypes: Array<number | undefined> = [];
@@ -748,8 +749,12 @@ function convertChartForBMSOutput(json: BeMusicJSON): BeMusicJSON {
   if (mineSample && !wav[BMS_MINE_SAMPLE_KEY]) {
     wav[BMS_MINE_SAMPLE_KEY] = mineSample;
   }
+  // Native bmson BGA becomes BMS image resources and 04 / 07 / 06 objects (#840).
+  const bga = isBmsonSource ? convertBmsonBGAToBMS(json, report) : undefined;
+  const bmp = bga ? { ...json.resources.bmp, ...bga.bmp } : json.resources.bmp;
+  if (bga) events.push(...bga.events);
 
-  return { ...json, metadata, bms, resources: { ...json.resources, wav }, events };
+  return { ...json, metadata, bms, resources: { ...json.resources, wav, bmp }, events };
 }
 
 /**
