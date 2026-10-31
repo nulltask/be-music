@@ -100,6 +100,8 @@ export interface PixiLongNoteContext {
    * `'hcn'` judge the release too. Lets a skin draw an LN's tail apart from a tail that is judged.
    */
   mode?: 'ln' | 'cn' | 'hcn';
+  /** Milliseconds since the player let go early and the note was judged dropped (`BeMusicLongNote.releasedElapsedMs`). */
+  releasedElapsedMs?: number;
 }
 
 export interface PixiBombsContext {
