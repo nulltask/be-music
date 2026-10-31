@@ -898,3 +898,28 @@ test.each(['built-in', 'lr2', 'beatoraja'] as const)(
     play.load.resolve();
   },
 );
+
+test('CHART HEADER resolves once before picking a kit and hands the same branch to gameplay', async () => {
+  const h = await harness();
+  const options = { ...h.deps.playOptions.current, battleMode: 'AUTO' as const };
+  vi.spyOn(h.deps.playOptions, 'current', 'get').mockReturnValue(options);
+  const entry = chartEntry('header');
+  const play = await playing(h, entry);
+  const passed = h.deps.familyKits.resolvePlayKit.mock.calls[0]![1].preResolved;
+  expect(passed).toBeDefined();
+  expect(play.options.preResolved).toBe(passed);
+});
+
+test('Escape from a zero-total spec play keeps no local best but still submits its replay', async () => {
+  const h = await harness();
+  h.deps.playOptions.update({ bmsonTotalMode: 'spec' });
+  const play = await started(h, chartEntry('zero'));
+  play.resolved.chart.sourceFormat = 'bmson';
+  play.resolved.chart.metadata.total = 0;
+  play.progress.mockReturnValue(resultOf(chartEntry('zero')));
+  const replay = { play: { mode: 'manual', aborted: true, bmsonTotalMode: 'spec' } } as unknown as BeMusicReplay;
+  play.waitForReplay.mockResolvedValue(replay);
+  play.options.on.exit();
+  await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('zero')));
+  expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+});

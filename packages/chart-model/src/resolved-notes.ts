@@ -1,6 +1,11 @@
 import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
 import { resolveBMSLongNotes, resolveLNOBJLongNotes, type BeatResolver, type ChartPlayVariant } from './index.ts';
-import { DEFAULT_LONG_NOTE_MODE, resolveLandmineDamage, type LongNoteMode } from './note-rules.ts';
+import {
+  DEFAULT_LONG_NOTE_MODE,
+  resolveChartLongNoteMode,
+  resolveLandmineDamage,
+  type LongNoteMode,
+} from './note-rules.ts';
 import type { TimingResolver } from './timing.ts';
 
 /** What a resolved note is: a judged tap, a judged long note, a landmine, or an invisible (keysound-only) object. */
@@ -30,6 +35,10 @@ export interface ResolvedNote {
   readonly damage?: number;
   /** The source event the note was resolved from, for keysound lookup and diagnostics. */
   readonly event: BeMusicEvent;
+  /** bmson layered note: every constituent source event, including `event`, triggered by one press. */
+  readonly soundEvents?: readonly BeMusicEvent[];
+  /** bmson `up`: source slice played when this long note's tail is resolved. */
+  readonly endSoundEvent?: BeMusicEvent;
 }
 
 export interface ResolvedNoteLists {
@@ -37,7 +46,8 @@ export interface ResolvedNoteLists {
   notes: ResolvedNote[];
   /**
    * Notes that lost their lane and position to a note in `notes` and carry a different keysound: not judged or drawn,
-   * but their keysound still belongs to the chart, so a manual-play host sounds them as background audio.
+   * but their keysound still belongs to the chart. BMS hosts sound them as background audio; bmson keeps
+   * them on the judged note in `soundEvents`.
    */
   shadowedNotes: ResolvedNote[];
 }
@@ -94,6 +104,8 @@ interface MutableNote {
   lnMode?: LongNoteMode;
   freeZone?: true;
   tail?: JudgedNoteTail;
+  soundEvents?: BeMusicEvent[];
+  endSoundEvent?: BeMusicEvent;
 }
 
 /**
@@ -137,6 +149,7 @@ function resolveMutableJudgedNotes(context: ResolvedNoteContext): { notes: Mutab
     if (!isLaneChannel(channel) || (channel.charCodeAt(0) !== 0x31 && channel.charCodeAt(0) !== 0x32)) {
       continue;
     }
+    if (json.sourceFormat === 'bmson' && event.bmson?.up === true) continue;
     const beat = beatResolver.eventToBeat(event);
     const note: MutableNote = { event, channel, beat, seconds: timing.beatToSeconds(beat) };
     if (freeZoneActive && (channel === '17' || channel === '27')) {
@@ -158,7 +171,19 @@ function resolveMutableJudgedNotes(context: ResolvedNoteContext): { notes: Mutab
   const withLNOBJ = applyLNOBJLongNotes(json, notes, timing, bmsLongNoteMode);
   appendLNTypeLongNotes(context, withLNOBJ, bmsLongNoteMode);
   withLNOBJ.sort(compareNotes);
-  const shadowed = collapseSamePositionNotes(withLNOBJ);
+  const shadowed = collapseSamePositionNotes(withLNOBJ, json.sourceFormat === 'bmson');
+  if (json.sourceFormat === 'bmson') {
+    const endSounds = new Map<string, BeMusicEvent>();
+    const endKey = (channel: string, beat: number): string => `${channel}:${Math.round(beat * bmsonResolution!)}`;
+    // Source-channel order is retained by the parser's slot keys: later definitions replace earlier ones.
+    for (const event of context.sortedEvents) {
+      if (event.bmson?.up === true)
+        endSounds.set(endKey(normalizeChannel(event.channel), beatResolver.eventToBeat(event)), event);
+    }
+    for (const note of withLNOBJ) {
+      if (note.endBeat !== undefined) note.endSoundEvent = endSounds.get(endKey(note.channel, note.endBeat));
+    }
+  }
   return { notes: withLNOBJ, shadowed };
 }
 
@@ -215,7 +240,7 @@ export function resolveInvisibleNotes(context: ResolvedNoteContext): ResolvedNot
  * would shadow a genuine `#LNOBJ` tail authored on the same channel. Every That-Which-Must-Not-Be-Named family keeps them as FREE ZONE.
  */
 export function variantUsesFreeZone(variant: ChartPlayVariant): boolean {
-  return variant !== '9' && variant !== '24' && variant !== '48';
+  return ['5', '7', '10', '14'].includes(variant);
 }
 
 /**
@@ -244,7 +269,15 @@ function isLaneChannel(normalizedChannel: string): boolean {
 function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boolean): ResolvedNote {
   const sampleKey = normalizeObjectKey(note.event.value, idBase, allowLongKeys);
   if (note.endBeat === undefined) {
-    return { kind: 'tap', channel: note.channel, beat: note.beat, seconds: note.seconds, sampleKey, event: note.event };
+    return {
+      kind: 'tap',
+      channel: note.channel,
+      beat: note.beat,
+      seconds: note.seconds,
+      sampleKey,
+      event: note.event,
+      ...(note.soundEvents ? { soundEvents: note.soundEvents } : {}),
+    };
   }
   const resolved: {
     -readonly [K in keyof ResolvedNote]: ResolvedNote[K];
@@ -256,8 +289,10 @@ function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boo
     endBeat: note.endBeat,
     endSeconds: note.endSeconds,
     lnMode: note.lnMode,
+    ...(note.endSoundEvent ? { endSoundEvent: note.endSoundEvent } : {}),
     sampleKey,
     event: note.event,
+    ...(note.soundEvents ? { soundEvents: note.soundEvents } : {}),
   };
   if (note.freeZone) {
     resolved.freeZone = true;
@@ -270,11 +305,12 @@ function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boo
  * keysound differs from every note kept or returned before them at that position.
  *
  * Long notes are resolved first, so a `5x` / `6x` or `#LNOBJ` long note and a tap on its start compete here and the
- * long note wins — beatoraja also replaces a tap at a `5x` start with the long note. Between notes of the same kind the
+ * long note wins — beatoraja also replaces a tap at a `5x` start with the long note. bmson keeps the first sound
+ * channel's note whatever its length and layers only notes of the same length onto it. Between notes of the same kind the
  * first in sort order wins: beatoraja keeps the later line of a BMS file, but the IR no longer records line order, so
  * the lowest object ID stands in; for bmson this is the first sound channel, which is the note beatoraja judges.
  */
-function collapseSamePositionNotes(notes: MutableNote[]): MutableNote[] {
+function collapseSamePositionNotes(notes: MutableNote[], layered: boolean): MutableNote[] {
   const shadowed: MutableNote[] = [];
   let writeIndex = 0;
   let groupStart = 0;
@@ -295,13 +331,24 @@ function collapseSamePositionNotes(notes: MutableNote[]): MutableNote[] {
       continue;
     }
     let keptIndex = groupStart;
-    for (let index = groupStart; index < groupEnd; index += 1) {
+    // bmson keeps the first sound channel's note, as beatoraja does; BMS prefers a long note over a tap.
+    for (let index = groupStart; !layered && index < groupEnd; index += 1) {
       if (notes[index]!.endBeat !== undefined) {
         keptIndex = index;
         break;
       }
     }
     const kept = notes[keptIndex]!;
+    if (layered) {
+      // Only notes of the kept length layer onto it. beatoraja warns about and drops a note of another length, sound
+      // included (BMSONDecoder); it stays in `shadowed`, which bmson hosts never schedule.
+      const events = new Map<string, BeMusicEvent>();
+      for (let index = groupStart; index < groupEnd; index += 1) {
+        const note = notes[index]!;
+        if (note.endBeat === kept.endBeat && !events.has(note.event.value)) events.set(note.event.value, note.event);
+      }
+      kept.soundEvents = [...events.values()];
+    }
     const soundedValues = new Set<string>([kept.event.value]);
     for (let index = groupStart; index < groupEnd; index += 1) {
       const note = notes[index]!;
@@ -396,12 +443,9 @@ function appendLNTypeLongNotes(context: ResolvedNoteContext, notes: MutableNote[
   }
 }
 
-/** Long-note mode of a BMS `#LNOBJ` / `#LNTYPE` long note: `#LNMODE`, otherwise LN. */
+/** BMS #LNOBJ / #LNTYPE use the same chart-level LNMODE / HDX LONGMODE precedence. */
 function resolveBMSLongNoteMode(json: BeMusicJSON): LongNoteMode {
-  if (json.sourceFormat === 'bms' && (json.bms.lnMode === 2 || json.bms.lnMode === 3)) {
-    return json.bms.lnMode;
-  }
-  return DEFAULT_LONG_NOTE_MODE;
+  return json.sourceFormat === 'bms' ? resolveChartLongNoteMode(json) : DEFAULT_LONG_NOTE_MODE;
 }
 
 /**

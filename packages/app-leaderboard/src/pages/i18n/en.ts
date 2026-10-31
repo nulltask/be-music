@@ -206,6 +206,8 @@ export const en = {
       'Only you can see it. It is out of the course rankings, your personal bests and every list until you show it again.',
     unrankedTitle: 'This run is not ranked',
     unrankedReasons: {
+      'bmson-total':
+        'The bmson zero-total no-recovery policy was used. The play is kept without changing rankings or personal bests.',
       tempo:
         'A stage was played at another tempo, which is practice. The run is kept, but out of the course rankings, the personal bests and every list.',
       unreleased:
@@ -382,6 +384,8 @@ export const en = {
       'Only you can see it. It is out of the rankings, your personal bests, your figures and every list until you show it again.',
     unrankedTitle: 'This play is not ranked',
     unrankedReasons: {
+      'bmson-total':
+        'The bmson zero-total no-recovery policy was used. The play is kept without changing rankings or personal bests.',
       tempo:
         'It was played at another tempo, which is practice. It is kept, but out of the rankings, the personal bests and every list.',
       'course-stage':

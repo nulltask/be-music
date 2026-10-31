@@ -504,3 +504,4 @@ export function basename(path: string): string {
 }
 
 export * from './abort.ts';
+export * from './audio-transform.ts';

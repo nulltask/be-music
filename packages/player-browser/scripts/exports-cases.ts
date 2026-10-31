@@ -719,6 +719,16 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.loadTextureFromBytes', {
     run: async () => {
       await playerWebCoreAPI.loadTextureFromBytes('bench.png', BENCH_BYTES);
+      await playerWebCoreAPI.loadTextureFromBytes(
+        'keyed.png',
+        Uint8Array.from(
+          atob(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAMAAAAoyzS7AAAAA1BMVEV/f3+QyhsjAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==',
+          ),
+          (character) => character.charCodeAt(0),
+        ),
+        { bmsColorKey: { a: 0, r: 127, g: 127, b: 127 }, swBGAColorKey: { a: 255, r: 255, g: 255, b: 255 } },
+      );
     },
     interactive: true,
   });

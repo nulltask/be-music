@@ -48,6 +48,7 @@ export function registerParserExportsCases(define: DefineBenchmarkCase): void {
   define('chart-parser.parseBmson', {
     run: (fixtures) => {
       parserAPI.parseBmson(fixtures.bmsonText);
+      parserAPI.parseBmson(JSON.stringify({ ...JSON.parse(fixtures.bmsonText), vendor: { tags: [null, 1] } }));
     },
   });
   define('chart-parser.parseChart', {

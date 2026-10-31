@@ -1,3 +1,5 @@
+export { MAX_GENERIC_BMSON_KEYS, resolveGenericBmsonKeyCount, type GenericBmsonPlayVariant } from './generic-bmson.ts';
+
 export {
   BMSON_MODE_HINT_LAYOUTS,
   PLAY_MODE_LAYOUTS,
@@ -158,16 +160,27 @@ export {
 } from './channels.ts';
 
 export { resolveChartReferenceBPM } from './reference-bpm.ts';
+export { buildChartTextTimeline, pickChartText, type ChartTextCue, type ChartTextTimeline } from './chart-text.ts';
+export { collectBmsWAVPlaybackModifiers, resolveBmsWAVPlayback, type BmsWAVPlaybackModifiers } from './wav-playback.ts';
+export {
+  buildBGAOpacityTimelines,
+  pickBGAOpacity,
+  pickBGATint,
+  type BGAOpacityCue,
+  type BGAOpacityTimelines,
+} from './bga-opacity.ts';
 
 export {
   collectBMSExWAVVolumeMultipliers,
   collectBmsWAVCmdVolumeMultipliers,
-  exWAVVolumeCentibelsToLinearGain,
+  collectBmsWAVVolumeMultipliers,
+  exWAVVolumeMillibelsToLinearGain,
   parseBMSExWAV,
   parseBmsWAVCmd,
+  resolveBmsWAVResources,
   usesMonophonicWAVPlayback,
   volWAVToLinearGain,
-  wavCmdVolumeByteToLinearGain,
+  wavCmdVolumePercentToLinearGain,
   type BMSExWAV,
   type BmsWAVCmdEntry,
   type BmsWAVCmdParam,
@@ -177,13 +190,9 @@ export {
   parseBmsARGB,
   parseBmsBGA,
   parseBMSExBMP,
-  parseBMSSwBGA,
-  pickSwitchingBGAFrame,
-  resolveBmsBmpARGB,
   type BmsARGB,
   type BMSExBMP,
   type BMSSubRegionBGA,
-  type BMSSwitchingBGA,
 } from './bmp-directives.ts';
 
 export {
@@ -195,3 +204,32 @@ export {
   type LNOBJLongNoteResolution,
   type ResolveBMSLongNotesOptions,
 } from './long-notes.ts';
+
+export { applyBMSColorKey, resolveBMSExBMPColorKey } from './bga-color-key.ts';
+
+export {
+  parseBMSKeyBoundBGA,
+  buildKeyBoundBGATimeline,
+  pickKeyBoundBGAFrame,
+  type BMSKeyBoundBGA,
+  type KeyBoundBGACue,
+} from './key-bound-bga.ts';
+
+export {
+  buildBmsonBGAEventTimeline,
+  pickBmsonBGASequenceFrame,
+  type BmsonBGAEventCue,
+  type ResolvedBmsonBGASequence,
+  type ResolvedBmsonBGASequenceFrame,
+} from './bmson-bga-sequences.ts';
+
+export { buildChartOptionTimeline, type ChartOptionCue, type ChartOptionTimeline } from './chart-options.ts';
+export {
+  compileChartOptions,
+  resolveChartOptionsAt,
+  type ChartOptionState,
+  type ChartOptionStateCue,
+  type ChartOptionProgram,
+  type ChartOptionDiagnostic,
+  type CompiledChartOptions,
+} from './chart-option-program.ts';

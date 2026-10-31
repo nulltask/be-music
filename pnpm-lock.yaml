@@ -668,6 +668,12 @@ importers:
 
   packages/shared-utils:
     dependencies:
+      fast-png:
+        specifier: ^8.0.0
+        version: 8.0.0
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       isoworker:
         specifier: ^0.2.4
         version: 0.2.4

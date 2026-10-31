@@ -4,6 +4,8 @@ import type { RulesetId } from '../ruleset/index.ts';
 /**
  * Mutually exclusive source battle/conversion choices.
  *
+ * - `AUTO` — opt into BMS PLAYER 2/4 interpretation; never changes an explicit selection.
+ * - `COUPLE` — two players keep authored sides, including an empty second side.
  * - `SP-TO-DP` — LR2 SP TO DP (`battle` 3)
  * - `D-BATTLE` — LR2 DOUBLE BATTLE (`battle` 2): one player, the SP chart on both sides
  * - `BATTLE` — beatoraja BATTLE (`doubleoption` 2) and That-Which-Must-Not-Be-Named DP BATTLE
@@ -11,7 +13,10 @@ import type { RulesetId } from '../ruleset/index.ts';
  * - `TWO-PLAYER` — two players on the SP chart, each judged on its own side: LR2 BATTLE (`battle` 1) and
  *   That-Which-Must-Not-Be-Named two-player play
  */
-export type BattleMode = 'OFF' | 'SP-TO-DP' | 'D-BATTLE' | 'BATTLE' | 'BATTLE-AS' | 'TWO-PLAYER';
+export type BattleMode = 'AUTO' | 'COUPLE' | 'OFF' | 'SP-TO-DP' | 'D-BATTLE' | 'BATTLE' | 'BATTLE-AS' | 'TWO-PLAYER';
+
+/** A resolved execution mode; AUTO is a source selection, never a recorded arrangement. */
+export type EffectiveBattleMode = Exclude<BattleMode, 'AUTO'>;
 
 /** The battle modes that copy one SP chart onto both sides. */
 export function isDuplicatedBattleMode(mode: BattleMode | undefined, sourceVariant?: ChartPlayVariant): boolean {
@@ -25,8 +30,16 @@ export function resolveEffectiveBattleMode(
   ruleset: RulesetId,
   sourceVariant: ChartPlayVariant,
   course: boolean,
-): BattleMode {
-  if (selected === 'OFF') return 'OFF';
+  player?: number,
+): EffectiveBattleMode {
+  // Header interpretation is opt-in: corpus authors commonly use PLAYER 2 for SP/DP/PMS.
+  if (selected === 'AUTO')
+    selected = ruleset === 'lr2' && !course ? (player === 2 ? 'COUPLE' : player === 4 ? 'TWO-PLAYER' : 'OFF') : 'OFF';
+  if (selected === 'COUPLE') {
+    if (ruleset !== 'lr2') throw new RangeError('COUPLE is available only for LR2.');
+    return !course && ['5', '7', '10', '14'].includes(sourceVariant) ? 'COUPLE' : 'OFF';
+  }
+  if (selected === 'OFF' || sourceVariant.startsWith('generic-')) return 'OFF';
   // SP TO DP, D-BATTLE (LR2) and BATTLE AS (beatoraja) build a chart and judge nothing themselves, so every judge ruleset
   // offers them (#774), each with its source's chart support.
   if (selected === 'SP-TO-DP' || selected === 'D-BATTLE') {

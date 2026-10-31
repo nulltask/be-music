@@ -11,7 +11,6 @@
 import {
   DEFAULT_BPM,
   normalizeChannel,
-  normalizeObjectKey,
   resolveBMSBase,
   type BeMusicEvent,
   type BeMusicJSON,
@@ -29,6 +28,7 @@ import {
   resolveChartPlayVariant,
   type ChartPlayVariant,
 } from './index.ts';
+import { resolveGenericBmsonKeyCount } from './generic-bmson.ts';
 import { resolveKeyboardModeHint, type KeyboardModeHint } from './keyboard-mode-hint.ts';
 import { collectExRankChanges, resolveJudgeRankFacts, resolveTotalFacts } from './resolved-chart.ts';
 import {
@@ -113,8 +113,8 @@ export interface HeaderItems {
   total: TotalItem;
   /** `#PLAYER 3`, one of the lane-mode inputs. */
   player3: boolean;
-  /** The bmson keyboard `mode_hint` (`keyboard-24k` / `keyboard-24k-double`), one of the lane-mode inputs. */
-  modeHint: KeyboardModeHint | null;
+  /** The explicit bmson keyboard or generic hint, one of the lane-mode inputs. */
+  modeHint: KeyboardModeHint | `generic-${number}keys` | null;
   /** `false` only for a bmson chart with an explicit `lines: []` (no bar lines drawn). */
   barLines: boolean;
 }
@@ -749,13 +749,18 @@ function computeStops(context: ItemContext, events: BeMusicEvent[]): TimelineIte
   const { json, bmson } = context;
   const items: TimelineItem[] = [];
   const beatResolver = createBeatResolver(json);
+  // Resource keys deduplicate durations and use the chart's radix; they are not source-event indices.
+  const preservedDurationByUnits = new Map<number, number>();
+  if (bmson) {
+    for (const stop of json.preservation.bmson.stopEvents) {
+      preservedDurationByUnits.set((stop.duration * 48) / bmson.resolution, stop.duration);
+    }
+  }
   for (const stop of collectStopChanges(json, events, beatResolver)) {
     let beats: Rational | undefined;
-    const bmsonStop = bmson
-      ? json.preservation.bmson.stopEvents[Number.parseInt(normalizeObjectKey(stop.event.value, context.base), 36) - 1]
-      : undefined;
-    if (bmson && bmsonStop && bmsonStop.duration > 0) {
-      const pulses = rationalFromNumber(bmsonStop.duration);
+    const duration = preservedDurationByUnits.get(stop.duration);
+    if (bmson && duration !== undefined && duration > 0) {
+      const pulses = rationalFromNumber(duration);
       beats = pulses && divideRational(snapValue(pulses), createRational(BigInt(bmson.resolution)));
     } else {
       const units = rationalFromNumber(stop.duration);
@@ -840,6 +845,7 @@ function optionalSnapped(value: number | undefined): Rational | undefined {
 /** Header values, from the same chart facts the Resolved layer exposes (`judgeRank`, `total`, `barLinesSuppressed`). */
 function computeHeader(json: BeMusicJSON): HeaderItems {
   const bpm = optionalSnapped(json.metadata.bpm);
+  const genericKeys = resolveGenericBmsonKeyCount(json.bmson?.info?.modeHint);
   return {
     bpm: bpm !== undefined && bpm.n > 0n ? bpm : createRational(BigInt(DEFAULT_BPM)),
     baseBPM:
@@ -847,7 +853,10 @@ function computeHeader(json: BeMusicJSON): HeaderItems {
     judge: resolveJudge(json),
     total: resolveTotal(json),
     player3: json.bms.player === 3,
-    modeHint: resolveKeyboardModeHint(json.bmson?.info?.modeHint) ?? null,
+    modeHint:
+      genericKeys !== undefined
+        ? `generic-${genericKeys}keys`
+        : (resolveKeyboardModeHint(json.bmson?.info?.modeHint) ?? null),
     barLines: json.bmson.barlinesSuppressed !== true,
   };
 }
@@ -1125,7 +1134,7 @@ export function resolveFingerprintLaneMode(
   notes: ReadonlyArray<NoteItem>,
   extension: LaneModeExtension,
   player3: boolean,
-  modeHint: KeyboardModeHint | null,
+  modeHint: KeyboardModeHint | `generic-${number}keys` | null,
 ): ChartPlayVariant {
   const lanes = new Set<string>();
   for (const note of notes) {

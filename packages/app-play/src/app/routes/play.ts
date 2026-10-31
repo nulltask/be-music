@@ -1,3 +1,5 @@
+import { resolveChart } from '@be-music/chart-model';
+import { isBmsonRecoveryDisabled } from '@be-music/player-engine/ruleset';
 import { clampFloatingHiSpeed } from '@be-music/player-scene-model';
 // The play route: the play screen (`createPlayScene`), whichever family draws it. A chart plays at once (no decide
 // screen, a retry, F5, a course stage, a NONSTOP run or a replay): the select screen goes off the stage, kept, the play
@@ -6,6 +8,7 @@ import { clampFloatingHiSpeed } from '@be-music/player-scene-model';
 // of a course, or back to the select screen.
 
 import type { ResolvedPlayChart } from '@be-music/player-engine';
+import { resolvePlayChart } from '@be-music/player-engine/replay';
 import type { AudioService } from '@be-music/player-browser/audio';
 import { resolveChartSource, type ChartFileHashes } from '@be-music/player-browser/collection';
 import {
@@ -156,7 +159,15 @@ export class PlayRoute {
    * The chart the latest play was made for, and the course it belongs to, so a family change during that play can
    * resolve the same chart's kit without starting the play again.
    */
-  private liveDrawing: { chart: LibraryChart; courseStage?: CourseStagePlay; nonstop?: NonstopPlay } | undefined;
+  private liveDrawing:
+    | {
+        chart: LibraryChart;
+        courseStage?: CourseStagePlay;
+        nonstop?: NonstopPlay;
+        preResolved?: ResolvedPlayChart;
+        replay?: BeMusicReplay;
+      }
+    | undefined;
   private readonly router: PlayRouteDeps['router'];
   private readonly selectRoute: PlayRouteDeps['selectRoute'];
   private readonly elements: PlayRouteDeps['elements'];
@@ -254,6 +265,8 @@ export class PlayRoute {
   ): PlayScene {
     this.liveDrawing = {
       chart: chartEntry,
+      preResolved: overrides.preResolved,
+      replay: overrides.replay,
       ...(overrides.courseStage !== undefined ? { courseStage: overrides.courseStage } : {}),
       ...(overrides.nonstop !== undefined ? { nonstop: overrides.nonstop } : {}),
     };
@@ -368,7 +381,11 @@ export class PlayRoute {
         // never reached counted in its BP) and its Leaderboard entry. One that judged no note yet saves nothing. One
         // that keeps no record but is the player's own (at another tempo) still goes to the Leaderboard, which decides
         // whether it ranks; an AUTO play and a replay go nowhere.
-        const keepsRecord = !practicing && this.records.activePlayRecordKey !== undefined;
+        const source = this.gameplayView?.resolved?.chart;
+        const total = source === undefined ? undefined : resolveChart(source).total;
+        const recoveryDisabled =
+          playOptions.bmsonTotalMode === 'spec' && total?.value === 0 && total.unit === 'percent';
+        const keepsRecord = !practicing && !recoveryDisabled && this.records.activePlayRecordKey !== undefined;
         const sends = !practicing && !autoPlay && replay === undefined;
         const progress = keepsRecord || sends ? view?.progress() : undefined;
         const aborted =
@@ -412,7 +429,12 @@ export class PlayRoute {
           void (async () => {
             this.testHook?.recordReplay(result.replay);
             if (this.activeCourse !== undefined) recordCourseStage(this.activeCourse, result);
-            if (!result.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
+            if (
+              !result.practice &&
+              (result.replay === undefined ||
+                !isBmsonRecoveryDisabled(result.replay.chart, result.replay.play.bmsonTotalMode))
+            )
+              this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             // No screen comes between the stages: the play leaves the stage, its last samples ringing out, and the next
             // stage (or the course result) shows.
             if (!(await this.router.leave({ playDispose: disposeKeepingAudioTail, continuesRun: true }))) return;
@@ -505,6 +527,8 @@ export class PlayRoute {
     const drawing = this.liveDrawing;
     if (drawing === undefined || this.router.play !== view || view.disposed) return;
     const resolved = await this.familyKits.resolvePlayKit(drawing.chart, {
+      ...(drawing.preResolved ? { preResolved: drawing.preResolved } : {}),
+      ...(drawing.replay ? { replay: drawing.replay } : {}),
       ...(drawing.courseStage !== undefined ? { courseStage: drawing.courseStage } : {}),
       ...(drawing.nonstop !== undefined ? { nonstop: { course: drawing.nonstop.course } } : {}),
     });
@@ -551,6 +575,8 @@ export class PlayRoute {
     // The kit for the gameplay family the Debug Menu's "Skin family" pick (or the auto chain, beatoraja → LR2 →
     // default) gives the chart, a replay and a NONSTOP run included (`playsOnBeatoraja`). `preloadGameplay` asks the
     // same.
+    if (this.playOptions.current.battleMode === 'AUTO' && !overrides.replay && !overrides.preResolved)
+      overrides = { ...overrides, preResolved: resolvePlayChart(chartEntry.chart) };
     const kit = await this.familyKits.resolvePlayKit(chartEntry, overrides);
     if (kit === undefined) {
       void this.showSelect();

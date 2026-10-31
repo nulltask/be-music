@@ -4,6 +4,24 @@ import { parseJSONDocument } from './bms-json-document.ts';
 import { parseBMS, parseChart } from './parser.ts';
 
 describe('parseJSONDocument', () => {
+  test('preserves exact gain values, clones the map and keeps base-62 slot case through JSON', () => {
+    const source = createEmptyJSON('bms');
+    source.bms.base = 62;
+    source.resources.wavGain = { '0a': 0.77 * 0.37, '0A': 1.41, '01': 0 };
+    const parsed = parseJSONDocument(source);
+    expect(parsed.resources.wavGain).toEqual(source.resources.wavGain);
+    expect(parseChart(JSON.stringify(parsed), 'json').resources.wavGain).toEqual(source.resources.wavGain);
+    parsed.resources.wavGain!['0a'] = 1;
+    expect(source.resources.wavGain['0a']).toBe(0.77 * 0.37);
+  });
+  test.each([null, [], '0.77', { '01': -1 }, { '01': Infinity }, { '01': '0.77' }])(
+    'rejects invalid intrinsic gain metadata: %j',
+    (gain) => {
+      const source = createEmptyJSON();
+      (source.resources as unknown as Record<string, unknown>).wavGain = gain;
+      expect(() => parseJSONDocument(source)).toThrow(TypeError);
+    },
+  );
   test('re-reads an emitted BMS-JSON document the way parseChart reads its text', () => {
     const text = JSON.stringify(parseBMS(['#TITLE Doc', '#BPM 150', '#WAV01 kick.wav', '#00111:01'].join('\n')));
     const json = parseJSONDocument(JSON.parse(text) as Partial<BeMusicJSON>);

@@ -83,20 +83,28 @@ function createAutoJudge(session: PlaySession): PlayJudge {
   };
   // Note keysounds freeze with the judge pump at an LR2 negative-BPM reversal (#134).
   const noteKeysounds = createRealtimeAudioCursor(
-    scorableNotes,
+    scorableNotes
+      .flatMap((note) =>
+        note.endSoundEvent && note.endSeconds !== undefined
+          ? [note, { ...note, seconds: note.endSeconds, event: note.endSoundEvent, soundEvents: undefined }]
+          : [note],
+      )
+      .sort((left, right) => left.seconds - right.seconds),
     (note) => {
-      if (!uiEnabled) {
-        writePlayableSampleTriggerEventLog(
-          writeOutput,
-          note.event,
-          note.seconds,
-          wavResources,
-          'auto-note',
-          note.channel,
-          idBase,
-        );
+      for (const event of note.soundEvents ?? [note.event]) {
+        if (!uiEnabled) {
+          writePlayableSampleTriggerEventLog(
+            writeOutput,
+            event,
+            note.seconds,
+            wavResources,
+            'auto-note',
+            note.channel,
+            idBase,
+          );
+        }
+        audioSession?.triggerEvent?.(event);
       }
-      audioSession?.triggerEvent?.(note.event);
     },
     (seconds) => clampToReversal(autoJudge.config, seconds),
   );
@@ -109,10 +117,14 @@ function createAutoJudge(session: PlaySession): PlayJudge {
     for (const at of [...rebuildSteps(config, seconds), seconds]) {
       runAutoJudgeStep(autoJudge, { kind: 'advance', nowSec: at }, rebuild.emit);
     }
-    noteKeysounds.seek(seconds, (note, offsetSeconds) => audioSession?.triggerEventAt?.(note.event, offsetSeconds));
+    noteKeysounds.seek(seconds, (note, offsetSeconds) => {
+      for (const event of note.soundEvents ?? [note.event]) audioSession?.triggerEventAt?.(event, offsetSeconds);
+    });
     judgedThroughSeconds = seconds;
     return {
       judgments: rebuild.judgments,
+      bmsonBGAInputs: rebuild.bmsonBGAInputs,
+      chartTextInputs: rebuild.chartTextInputs,
       heldLongNotes: autoJudge.pendingLongNotes.map(({ note }) => ({
         channel: note.channel,
         beat: note.beat,

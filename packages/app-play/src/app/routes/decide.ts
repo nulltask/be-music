@@ -257,7 +257,10 @@ export class DecideRoute {
     this.setRecordingFilenameBase(sanitizeFilenameStem(chartEntry.title) || `gameplay-${Date.now()}`);
     // The same kit as `playChart` picks, so the decide → gameplay preload path stays consistent with the no-decide
     // fast-path.
-    const kit = await this.familyKits.resolvePlayKit(chartEntry, {});
+    const kit = await this.familyKits.resolvePlayKit(
+      chartEntry,
+      overrides.preResolved ? { preResolved: overrides.preResolved } : {},
+    );
     if (kit === undefined) throw new Error(`no play skin for ${chartEntry.title}`);
     const chartHashes = await this.records.resolveChartHashes(chartEntry);
     const view = this.buildPlayScene(chartEntry, kit, { ...overrides, chartHashes });

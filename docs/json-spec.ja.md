@@ -25,6 +25,14 @@
 - 空行、コメント、空白、改行コード、文字コードなど、IR が明示的に保持しない表層情報はこの原則の対象外です
 - IR を編集した結果、保持していた構造情報と正規化済みの `events` / `measures` / 拡張情報が一致しなくなった場合、chart-writer は整合性を優先して再生成を行います
 
+## スロット固有ゲイン
+
+`resources.wavGain` は WAV スロット ID から有限・非負の線形ゲインへの任意のマップです。省略したスロットは 1 とします。Be-Music JSON の情報であり、BMS や bmson のフィールドではありません。譜面が指定した WAVCMD を丸めずに合成ゲインを保持します。NONSTOP は各ステージの有効な VOLWAV と既存のスロット固有ゲインを掛けて格納し、合成先の全体 VOLWAV は設定しません。clone と JSON パースはマップを独立にコピーし、base-62 の大文字・小文字を保持します。
+
+`collectBmsWAVVolumeMultipliers` は WAVCMD の百分率音量、EXWAV の減衰、スロット固有ゲインを掛け合わせます。合成先の全体 VOLWAV と動的バス音量はバックエンドで別に適用します。browser・Node・オフラインはこの計算を共用します。影響は音声だけで、時刻・判定・フィンガープリントは変えません。
+
+BMS 出力は、合成ゲインを正確に再現できる場合だけ、末尾の整数 WAVCMD 音量へ変換します。丸めは行わず、BMS 制御構文は先に解決する必要があります。bmson には対応するチャンネル別ゲインのフィールドがないため、1 以外のスロット固有ゲインは出力できません。保存検証を省略してもこれらの検査を行います。表現できないゲインは Be-Music JSON で保持してください。1 のみのマップはネイティブ出力を変えません。
+
 ## 識別子とキーの命名
 
 コードの識別子とBe-Music独自JSONのキーに含まれる略語は大文字にし、lowerCamelCaseの先頭は小文字を保ちます。例は `BeMusicJSON`、`backBMP`、`initBPM`、`poorBGA`、`bpm` です。略語が連続する場合は最後だけ大文字にし、それ以前はUpperCamelCase相当にします（`BmsJSON`、`inferBmsLNTypeWhenMissing`）。`Id` / `Ids` と `bmson` / `Bmson` は慣例表記を維持します。外部のBMS・bmson仕様、DBスキーマ、外部ツール・APIの契約キーは要求される表記を維持します。
@@ -280,6 +288,7 @@ classDiagram
 
 `metadata` は、format に依存しない normalized metadata 領域です。
 
+- `titleImage`: bmson の `info.title_image`。読み込み画像とは別の、演奏前のタイトル画像
 - `stageFile`: BMS `#STAGEFILE`。bmson では `info.eyecatch_image` が存在する場合にここへ mirror します
 - `backBMP`: BMS `#BACKBMP`。bmson では `info.back_image` が存在する場合にここへ mirror します
 - `banner`: BMS `#BANNER`。bmson では `info.banner_image` が存在する場合にここへ mirror します
@@ -305,7 +314,9 @@ classDiagram
 - `base`: 譜面が `#BASE 62` を宣言している場合は `62`。それ以外は省略し、省略時は `36`
 - `baseBPM`: `#BASEBPM` の値
 - `stp`: `#STP` の値配列
-- `option`: `#OPTION` の値
+- `option`: legacy 互換の最後の無条件 `#OPTION` 値。分岐解決後は最後に有効な宣言
+- `options`: `#OPTION` の値全体を宣言順で保持する省略可能な配列。空白を含むベンダー引数も分割しません。存在する場合はこちらが宣言を管理し、空配列は legacy 値を消去します
+- `optionHeadersInControlFlow`: 無条件の行も含め、すべての `#OPTION` をファイル順の `controlFlow` に保持するときだけ `true`。分岐解決は有効なプログラムから `options` を一度だけ再構築し、この印を削除します
 - `changeOption`: `#CHANGEOPTIONxx` のマップ
 - `wavCmd`: legacy compatibility のために保持する最初の `#WAVCMD` 値
 - `wavCmds`: すべての `#WAVCMD` 行の directive 後テキスト。宣言順で保持します
@@ -321,9 +332,9 @@ classDiagram
 - `materials`: `#MATERIALS` の値
 - `divideProp`: `#DIVIDEPROP` の値
 - `charset`: `#CHARSET` の値
-- `controlFlow`: 制御構文 (`#RANDOM`/`#IF`/`#SWITCH` 系) と、その内側のヘッダ/オブジェクト行
+- `controlFlow`: 制御構文 (`#RANDOM`/`#IF`/`#SWITCH` 系) と、その内側のヘッダ/オブジェクト行（上記の印がある場合は無条件の OPTION 宣言も含む）
 - `controlFlow.kind = "object"` は通常イベントと同じ `events` 形式（必要に応じて `measureLength`）で保持
-- `controlFlow.kind = "header"` は、ファイルの後のほうに同じヘッダのトップレベル行があるとき `overriddenByLaterHeader: true` を持つ。ヘッダ行はファイル順に適用するため、制御構文の解決ではこれを適用しない
+- `controlFlow.kind = "header"` は、ファイルの後のほうに同じ非反復ヘッダのトップレベル行があるとき `overriddenByLaterHeader: true` を持つ。ヘッダ行はファイル順に適用するため、制御構文の解決ではこれを適用しない
 - パーサは制御構文をこの配列へ保持し、分岐の実行は再生/レンダリング時に行います
 - `scroll` の値は有限数を許可し、`0` および負値も保持対象です
 
@@ -439,3 +450,9 @@ flowchart LR
 - `chart-writer` は `position` 分母情報を使って小節内解像度を決定します
 - `parseJson` は `position` タプルを必須とし、欠損イベントはエラー扱いにします
 - beat 変換やイベント順序などの譜面意味論 helper は `@be-music/chart-model` が提供します
+
+## 不透明な bmson データ
+
+任意の `extraFields: JSONFields` は、bmson ノードの対応済みの意味を持たないソースキーを保持します。ノート・タイミング注釈は `BeMusicEvent.bmson` に付けます。`bmson.channelExtraFields` は WAV スロットごとのチャンネルデータ、`channelKinds` は sound・key・mine の所属、`lineExtraFields` は正規化済み pulse ごとの小節線データです。`JSONValue` は有限の JSON データを表し、`cloneJSONFields` が独立したコピーを作り、`collectBmsonExtraFields` が型ごとに対応済みの予約キーを除外します。parser は JSON 再読込でこれらを保持し、実行・fingerprint には使いません。外部 bmson の `extraFields` というキー自体は、IR 境界ではなく envelope の内側に保持します。[ADR 0029](./adr/0029-opaque-bmson-fields.ja.md) を参照してください。
+
+ノートの `l`・BGA キューの `y`・保存した小節線など、pulse 単位の bmson 拡張は `bmson.info.resolution`、または bmson の既定値240を使います。writer の出力 resolution を変更すると、IR を変更せず、表現可能な beat 位置を保って native pulse 値を変換します。明示的な `lines: []` では `bmson.barlinesSuppressed` を優先します。

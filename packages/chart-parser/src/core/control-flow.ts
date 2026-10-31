@@ -45,6 +45,12 @@ export function resolveControlFlow(
     return json;
   }
 
+  if (json.bms.optionHeadersInControlFlow) {
+    // This complete program owns option declaration order; do not append its unconditional base twice.
+    delete json.bms.option;
+    delete json.bms.options;
+    delete json.bms.optionHeadersInControlFlow;
+  }
   const measureByIndex = new Map<number, MeasureLengthEntry>();
   for (const measure of json.measures) {
     measureByIndex.set(measure.index, measure);

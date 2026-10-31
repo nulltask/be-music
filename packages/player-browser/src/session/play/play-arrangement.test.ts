@@ -615,3 +615,79 @@ test('a previous arrangement is reused only under the judge rules it was played 
   expect(fresh.notes.map((note) => note.channel)).toEqual(original.notes.map((note) => note.channel));
   expect(() => prepare({ judgeRuleset: 'beatoraja', fixedArrangement: replay }, sp7)).toThrow(/other judgment rules/);
 });
+
+test('conditional HDX LONGMODE wins user defaults with and without a pre-resolved branch', () => {
+  const entry = {
+    ...chart,
+    chart: parseChart(
+      '#BPM 120\n#LNTYPE 1\n#00051:01\n#00151:01\n#RANDOM 2\n#IF 1\n#OPTION charatbeatHDX:LONGMODE 0\n#ELSE\n#OPTION charatbeatHDX:LONGMODE 1\n#ENDIF\n#ENDRANDOM',
+      'bms',
+    ),
+  };
+  const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+  try {
+    for (const preResolved of [undefined, resolvePlayChart(entry.chart, { random: () => 0.99 })]) {
+      const play = prepare({ judgeRuleset: 'beatoraja', longNoteMode: 'HCN', preResolved }, entry);
+      expect(play.notes[0]?.longNoteMode).toBe(preResolved ? 3 : 2);
+    }
+    const plain = { ...chart, chart: parseChart('#BPM 120\n#LNTYPE 1\n#00051:01\n#00151:01', 'bms') };
+    expect(
+      prepare({ judgeRuleset: 'beatoraja', longNoteMode: 'CN', preResolved: resolvePlayChart(plain.chart) }, plain)
+        .notes[0]?.longNoteMode,
+    ).toBe(2);
+  } finally {
+    random.mockRestore();
+  }
+});
+
+test('recorded LN mode retains old replay and previous-arrangement semantics after recognizing HDX', () => {
+  const plain = { ...chart, chart: parseChart('#BPM 120\n#LNTYPE 1\n#00051:01\n#00151:01', 'bms') };
+  const original = prepare({ judgeRuleset: 'beatoraja' }, plain);
+  const replay = parseReplay(
+    serializeReplay(
+      createReplayRecorder({
+        json: plain.chart,
+        chart: original.preparedChart!,
+        play: { mode: 'manual', autoScratch: false, judgeRuleset: 'beatoraja' },
+      }).finalize({ summary: { ...createEmptyScore(1), fast: 0, slow: 0 } }),
+    ),
+  );
+  expect(replay.chart.lnMode).toBe(1);
+  const entry = {
+    ...plain,
+    chart: parseChart('#OPTION charatbeatHDX:LONGMODE 1\n#BPM 120\n#LNTYPE 1\n#00051:01\n#00151:01', 'bms'),
+  };
+  expect(prepare({ judgeRuleset: 'beatoraja' }, entry).notes[0]?.longNoteMode).toBe(3);
+  for (const options of [{ replay }, { fixedArrangement: replay }])
+    expect(prepare({ judgeRuleset: 'beatoraja', longNoteMode: 'HCN', ...options }, entry).notes[0]?.longNoteMode).toBe(
+      1,
+    );
+});
+
+test('header COUPLE follows branch draws while old replay and explicit OFF keep single-player execution', () => {
+  const entry = {
+    ...chart,
+    chart: parseChart(
+      '#BPM 120\n#00011:01\n#00021:0101\n#RANDOM 2\n#IF 1\n#PLAYER 2\n#ELSE\n#PLAYER 1\n#ENDIF\n#ENDRANDOM',
+      'bms',
+    ),
+  };
+  const auto = prepare(
+    { judgeRuleset: 'lr2', battleMode: 'AUTO', preResolved: resolvePlayChart(entry.chart, { random: () => 0 }) },
+    entry,
+  );
+  expect(auto.preparedChart!.battleMode).toBe('COUPLE');
+  expect(auto.secondPlayer).toBeDefined();
+  const off = prepare({ judgeRuleset: 'lr2', battleMode: 'OFF' }, entry);
+  const replay = createReplayRecorder({
+    json: entry.chart,
+    chart: off.preparedChart!,
+    play: { mode: 'manual', autoScratch: false, judgeRuleset: 'lr2', randomDraws: off.randomDraws },
+  }).finalize({ summary: { ...createEmptyScore(3), fast: 0, slow: 0 } });
+  delete replay.play.battleMode;
+  for (const options of [{ replay }, { fixedArrangement: replay }]) {
+    const restored = prepare({ judgeRuleset: 'lr2', battleMode: 'AUTO', ...options }, entry);
+    expect(restored.preparedChart!.battleMode).toBe('OFF');
+    expect(restored.secondPlayer).toBeUndefined();
+  }
+});

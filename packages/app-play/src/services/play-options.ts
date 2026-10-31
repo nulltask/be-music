@@ -43,6 +43,7 @@ export type GUIPlayOptions = Pick<
   | 'scrollModifier'
   | 'mineModifier'
   | 'gaugeAutoShift'
+  | 'bmsonTotalMode'
   | 'bottomShiftableGauge'
   | 'longNoteModifier'
   | 'longNoteRate'
@@ -153,6 +154,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     scrollSection: state.scrollSection,
     scrollRate: state.scrollRate,
     gaugeAutoShift: state.gaugeAutoShift,
+    bmsonTotalMode: state.bmsonTotalMode,
     bottomShiftableGauge: state.bottomShiftableGauge,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
@@ -242,6 +244,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.scrollSection = options.scrollSection;
   state.scrollRate = options.scrollRate;
   state.gaugeAutoShift = options.gaugeAutoShift;
+  state.bmsonTotalMode = options.bmsonTotalMode;
   state.bottomShiftableGauge = options.bottomShiftableGauge;
   state.autoScratch1P = options.autoScratch1P;
   state.autoScratch2P = options.autoScratch2P;

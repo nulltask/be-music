@@ -1731,3 +1731,14 @@ describe('BeatorajaPlayBridge — GAUGE_MAX intervals', () => {
     expect(fresh.bridge.getTimerStart(44)).toBeUndefined();
   });
 });
+
+it('generic keyboards borrow SP theme gates and keep second-bank judgments on the first player plate', () => {
+  const harness = createHarness({ chartPlayVariant: 'generic-70' });
+  expect(harness.bridge.hasOp(BEATORAJA_OP.KEYSONG_7K)).toBe(true);
+  harness.advance(100);
+  harness.judge({ judge: 'PERFECT', combo: 1, channel: '2Z' });
+  expect(harness.bridge.getTimerStart(judgeTimerId(1))).toBe(100);
+  expect(harness.bridge.getTimerStart(judgeTimerId(2))).toBeUndefined();
+  expect(harness.bridge.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(true);
+  expect(harness.bridge.hasOp(BEATORAJA_OP.P2_JUDGE_PERFECT)).toBe(false);
+});

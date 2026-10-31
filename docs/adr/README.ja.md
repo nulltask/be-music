@@ -37,3 +37,15 @@
 - [0020: Player UI の要素は headless にし、見た目はテーマとスキンが与える](./0020-headless-player-ui.ja.md)
 
 - [0021: スキンのステージは可変にできる](./0021-fluid-stage.ja.md)
+
+- [0022: bmson の条件付き BGA イベントは決定的な譜面時刻で動かす](./0022-bmson-bga-events.ja.md)
+
+- [0023: generic bmson キーボードは宣言した配置を保持する](./0023-generic-bmson-keyboards.ja.md)
+
+- [0024: BMS の拡張音声効果はホストのテンポ変更より前に準備する](./0024-extended-bms-audio.ja.md)
+
+- [0025: 譜面テキストは engine の時刻と判定エフェクトに従う](./0025-chart-text-playback.ja.md)
+
+- [0026: 譜面の実効表示操作をユーザー設定と分けて記録する](./0026-chart-authored-display-options.ja.md)
+
+- [0030: bmson の TOTAL 0 を明示的なプレイ設定で扱う](./0030-bmson-zero-total.ja.md)

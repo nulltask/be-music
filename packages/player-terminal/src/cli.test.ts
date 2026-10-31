@@ -977,3 +977,10 @@ describe('player cli', () => {
     };
   }
 });
+
+test('bmson TOTAL zero policy is explicit and validates its mode', () => {
+  expect(parseArgs(['chart.bmson']).bmsonTotalMode).toBeUndefined();
+  expect(parseArgs(['chart.bmson', '--bmson-total-mode', 'spec']).bmsonTotalMode).toBe('spec');
+  expect(parseArgs(['chart.bmson', '--bmson-total-mode', 'beatoraja']).bmsonTotalMode).toBe('beatoraja');
+  expect(() => parseArgs(['chart.bmson', '--bmson-total-mode', 'invalid'])).toThrow(/bmson-total-mode/);
+});

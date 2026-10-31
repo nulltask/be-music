@@ -203,3 +203,29 @@ describe('NONSTOP replays', () => {
     ).toThrow(/nonstop\.stages\[0\]\.randomDraws\[0\]\.value/);
   });
 });
+
+test('split NONSTOP replay preserves each stage display program on its local clock', async () => {
+  const { stitched, replay } = await playStitched();
+  const stages = resolveNonstopReplayStages(stitched.map);
+  const second = stages[1]!;
+  replay.chart.chartOptions = {
+    version: 1,
+    initial: { hiSpeed: 0.77 },
+    cues: [
+      { timeUs: second.windowStartUs, state: { hiSpeed: 100 } },
+      { timeUs: second.windowStartUs + 100000, state: { hiSpeed: 0.25 } },
+    ],
+  };
+  const stageLogs = splitNonstopReplay(
+    { replay, stages, noteStages: resolveNonstopNoteStages(stitched.chart, stitched.map, replay.chart.notes) },
+    [{}, {}],
+    { ruleset: 'lr2' },
+  );
+  const program = stageLogs[1]!.chart.chartOptions!;
+  expect(program).toBeDefined();
+  expect(program.cues).toContainEqual({ timeUs: second.windowStartUs - second.offsetUs, state: { hiSpeed: 100 } });
+  expect(program.cues).toContainEqual({
+    timeUs: second.windowStartUs + 100000 - second.offsetUs,
+    state: { hiSpeed: 0.25 },
+  });
+});

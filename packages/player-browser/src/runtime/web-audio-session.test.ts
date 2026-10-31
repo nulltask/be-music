@@ -129,6 +129,68 @@ const mkEvent = (channel: string, value: string, extra: Partial<BeMusicEvent> = 
 });
 
 describe('createWebAudioSession', () => {
+  test('prepared slot effects survive repeated triggers, seek, pause and live tempo changes', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const chart = makeChartWithSamples();
+    chart.bms.wavCmds = ['00 01 72', '02 01 2000'];
+    const prepared = makeMockAudioBuffer(1);
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart,
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer(2)],
+        [decodedSampleKey('kick.wav', '01'), prepared],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+      playbackRate: 1,
+      playbackRateFollowsTempo: true,
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.triggerEvent?.(mkEvent('11', '01'));
+    expect(trackedBufferSources.map((source) => source.buffer)).toEqual([prepared, prepared]);
+    expect(trackedBufferSources[0]!.node.stop).toHaveBeenCalled();
+    session.pause?.();
+    session.resume?.();
+    expect(audioContext.suspend).toHaveBeenCalledOnce();
+    expect(audioContext.resume).toHaveBeenCalledOnce();
+    session.setTempo?.(1.2);
+    expect(trackedBufferSources[1]!.node.playbackRate.linearRampToValueAtTime).toHaveBeenCalled();
+    session.seek?.(0);
+    expect(trackedBufferSources[1]!.node.stop).toHaveBeenCalled();
+    session.triggerEventAt?.(mkEvent('11', '01'), 0.3);
+    expect(trackedBufferSources[2]!.node.start).toHaveBeenCalledWith(0, 0.3);
+    expect(trackedBufferSources[2]!.node.playbackRate.value).toBe(1.2);
+    session.triggerEventAt?.(mkEvent('11', '01'), 1.1);
+    expect(trackedBufferSources).toHaveLength(3);
+  });
+
+  test('prepared cache keys preserve base-62 slot case on one shared file', () => {
+    expect(decodedSampleKey('A.WAV', '0a')).not.toBe(decodedSampleKey('a.wav', '0A'));
+  });
+  test('plays the effective EXWAV filename rather than an overridden WAV declaration', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const chart = makeChartWithSamples();
+    chart.bms.exWAV = { '01': 'v 0 extended.wav', '02': 'p 0 only.wav' };
+    delete chart.resources.wav['02'];
+    const extended = makeMockAudioBuffer();
+    const only = makeMockAudioBuffer();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart,
+      decodedSamples: new Map([
+        ['extended.wav', extended],
+        ['only.wav', only],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.triggerEvent?.(mkEvent('12', '02'));
+    expect(trackedBufferSources.map((source) => source.buffer)).toEqual([extended, only]);
+  });
   test('routes player-input lane events to keyMixer and BGM-style channels to bgmMixer', () => {
     const { audioContext, audioBus, trackedBufferSources, keyMixer, bgmMixer } = createMocks();
     const session = createWebAudioSession({
@@ -406,21 +468,41 @@ describe('createWebAudioSession', () => {
     expect(createdGains[0]!.disconnect).toHaveBeenCalled();
   });
 
-  test('honours bmson c=true continuation by suppressing retriggers of an in-flight slot', () => {
+  test('plays different continuation slices independently and deduplicates one chord slice', () => {
     const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const chart = makeChartWithSamples();
+    chart.sourceFormat = 'bmson';
+    const first = mkEvent('11', '01');
+    const continuation = mkEvent('12', '01', { position: [1, 4], bmson: { c: true } });
+    const chord = mkEvent('13', '01', { position: [1, 4], bmson: { c: true } });
     const session = createWebAudioSession({
       audioContext,
       audioBus,
-      chart: makeChartWithSamples(),
-      decodedSamples: new Map([['kick.wav', makeMockAudioBuffer()]]),
+      chart,
+      decodedSamples: new Map([['kick.wav', makeMockAudioBuffer(5)]]),
       wavCmdVolumeMultipliers: new Map(),
+      bmsonSlicePlayback: new Map([
+        [first, { offsetSeconds: 0, durationSeconds: 0.5 }],
+        [continuation, { offsetSeconds: 0.5, durationSeconds: 0.5 }],
+        [chord, { offsetSeconds: 0.5, durationSeconds: 0.5 }],
+      ]),
     });
 
-    session.triggerEvent?.(mkEvent('11', '01'));
-    // Same slot, c=true, sample still in-flight (onended hasn't fired) — must not allocate a fresh source.
-    session.triggerEvent?.(mkEvent('11', '01', { bmson: { c: true } }));
+    session.triggerEvent?.(first);
+    session.triggerEvent?.(continuation);
+    session.triggerEvent?.(chord);
 
-    expect(trackedBufferSources).toHaveLength(1);
+    expect(trackedBufferSources).toHaveLength(2);
+    expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 0, 0.5);
+    expect(trackedBufferSources[1]!.node.start).toHaveBeenCalledWith(0, 0.5, 0.5);
+    expect(trackedBufferSources[0]!.node.stop).not.toHaveBeenCalled();
+    // A miss never invokes triggerEvent; the first slice's duration already prevents audio leaking into that note.
+    trackedBufferSources[1]!.node.onended?.(new Event('ended'));
+    session.triggerEvent?.(chord);
+    expect(trackedBufferSources).toHaveLength(3);
+    session.seek?.(0);
+    session.triggerEvent?.(continuation);
+    expect(trackedBufferSources).toHaveLength(4);
   });
 
   test('stops the previous BMS source when the same #WAV slot is retriggered', () => {

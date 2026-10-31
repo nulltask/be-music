@@ -1,5 +1,6 @@
 import {
   compareEvents,
+  resolveGenericBmsonKeyCount,
   createBeatResolver,
   isLandmineChannel,
   isPlayableChannel,
@@ -26,8 +27,13 @@ import {
 import { BMS_MINE_SAMPLE_KEY, BMSON_LONG_NOTE_TYPES } from './bmson.ts';
 import { areBMSChartsEquivalent, areEventBmsonExtensionsEqual } from './equivalence.ts';
 import type { BMSStringifyOptions } from './options.ts';
+import { applyIntrinsicWAVGainForBMS } from './wav-gain.ts';
 
 export function stringifyBMS(json: BeMusicJSON, options: BMSStringifyOptions = {}): string {
+  json = applyIntrinsicWAVGainForBMS(json);
+  if (resolveGenericBmsonKeyCount(json.bmson.info.modeHint) !== undefined)
+    throw new RangeError('Generic bmson layouts cannot be represented by BMS; export bmson or Be-Music JSON.');
+  assertBmsonKeysFitBMS(json);
   const eol = options.eol ?? '\n';
   const maxResolution = options.maxResolution;
   const skipValidation = options.skipPreservationValidation === true;
@@ -57,6 +63,45 @@ export function stringifyBMS(json: BeMusicJSON, options: BMSStringifyOptions = {
   pushControlFlowLines(lines, json);
 
   return lines.join(eol);
+}
+
+/** BMS object IDs are exactly two characters; truncating bmson keys would alias unrelated resources. */
+function assertBmsonKeysFitBMS(json: BeMusicJSON): void {
+  if (json.sourceFormat !== 'bmson') {
+    return;
+  }
+  const fail = (key: string): never => {
+    throw new RangeError(
+      `Cannot export bmson resource key "${key}" to two-character BMS IDs. Keep bmson or Be-Music JSON, or reduce and remap resources before exporting BMS.`,
+    );
+  };
+  for (const table of [
+    json.resources.wav,
+    json.resources.bmp,
+    json.resources.bpm,
+    json.resources.stop,
+    json.resources.text,
+    json.bms.exRank,
+    json.bms.argb,
+    json.bms.changeOption,
+    json.bms.exWAV,
+    json.bms.exBMP,
+    json.bms.bga,
+    json.bms.scroll,
+    json.bms.speed,
+    json.bms.swBGA,
+  ]) {
+    for (const key of Object.keys(table)) {
+      if (key.length > 2) {
+        fail(key);
+      }
+    }
+  }
+  for (const event of json.events) {
+    if (event.value.length > 2) {
+      fail(event.value);
+    }
+  }
 }
 
 function resolvePreservedBMSSourceLinesForOutput(json: BeMusicJSON, skipValidation: boolean): string[] | undefined {
@@ -174,8 +219,11 @@ function pushBMSExtensionLines(lines: string[], json: BeMusicJSON): void {
     }
   }
 
-  if (typeof json.bms.option === 'string' && json.bms.option.length > 0) {
-    lines.push(`#OPTION ${json.bms.option}`);
+  const optionDeclarations = json.bms.optionHeadersInControlFlow
+    ? []
+    : (json.bms.options ?? (json.bms.option ? [json.bms.option] : []));
+  for (const option of optionDeclarations) {
+    if (option.length > 0) lines.push(`#OPTION ${option}`);
   }
   pushIndexedStringLines(lines, 'CHANGEOPTION', json.bms.changeOption, base);
 
@@ -644,6 +692,10 @@ function convertChartForBMSOutput(json: BeMusicJSON): BeMusicJSON {
 
   for (const event of json.events) {
     const channel = normalizeChannel(event.channel);
+    if (isBmsonSource && event.bmson?.up === true && isPlayableChannel(channel)) {
+      changed = true;
+      continue;
+    }
     const length = event.bmson?.l;
     if (isPlayableChannel(channel) && typeof length === 'number' && Number.isFinite(length) && length > 0) {
       const longNoteChannel = `${channel[0] === '1' ? '5' : '6'}${channel[1]}`;

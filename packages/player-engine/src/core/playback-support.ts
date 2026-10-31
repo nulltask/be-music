@@ -87,6 +87,10 @@ export function createUIFramePublisher(params: {
   /** The seek generation and the clock a frame at `seconds` holds at (`PlayerUIFramePayload.generation` / `clock`). */
   resolveClock?: (seconds: number) => Pick<PlayerUIFramePayload, 'generation' | 'clock'>;
   resolveHCNLanes?: (seconds: number) => PlayerUIFramePayload['hcnLanes'];
+  resolveKeyBoundBGA?: (seconds: number) => PlayerUIFramePayload['keyBoundBGA'];
+  resolveBmsonBGA?: (seconds: number) => PlayerUIFramePayload['bmsonBGA'];
+  resolveChartText?: (seconds: number) => string;
+  resolveChartOptions?: (seconds: number) => PlayerUIFramePayload['chartOptions'];
   resolveJudgedNoteCount?: () => number;
 }): (seconds: number, beat: number) => void {
   const {
@@ -103,6 +107,10 @@ export function createUIFramePublisher(params: {
     reversal,
     resolveClock,
     resolveHCNLanes,
+    resolveKeyBoundBGA,
+    resolveBmsonBGA,
+    resolveChartText,
+    resolveChartOptions,
     resolveJudgedNoteCount,
   } = params;
   return (seconds: number, beat: number): void => {
@@ -116,6 +124,7 @@ export function createUIFramePublisher(params: {
         : undefined;
     uiSignals.publishFrame({
       currentBeat: beat,
+      ...(resolveChartOptions ? { chartOptions: resolveChartOptions(seconds) } : {}),
       currentSeconds: seconds,
       displayBeat,
       reversalSeconds: reversal?.seconds,
@@ -124,6 +133,9 @@ export function createUIFramePublisher(params: {
       ...(summary2P !== undefined ? { summary2P } : {}),
       notes,
       hcnLanes: resolveHCNLanes?.(seconds),
+      ...(resolveKeyBoundBGA ? { keyBoundBGA: resolveKeyBoundBGA(seconds) } : {}),
+      ...(resolveBmsonBGA ? { bmsonBGA: resolveBmsonBGA(seconds) } : {}),
+      ...(resolveChartText ? { chartText: resolveChartText(seconds) } : {}),
       judgedNoteCount: resolveJudgedNoteCount?.(),
       landmineNotes,
       invisibleNotes,

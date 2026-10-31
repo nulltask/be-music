@@ -1,3 +1,5 @@
+import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
+import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { resolveConstantAlpha, resolveNoteDisplaySeconds, type ConstantVisibility } from '@be-music/player-scene-model';
 /**
  * One beatoraja play skin on the stage: the skin's elements (`BeatorajaPlaySkinView`) with the play's layers spliced in
@@ -54,13 +56,20 @@ export interface BeatorajaPlayChartLayout {
  * chart's stages with each stage's own cues.
  */
 export interface BeatorajaPlayBGA {
+  readonly subRegionOrigins?: ReadonlyMap<string, { x: number; y: number }>;
   /** Base and POOR track textures (black kept). */
   readonly textures: ReadonlyMap<string, Texture>;
   /** Layer track textures (black keyed out for a BMS chart). */
   readonly layerTextures: ReadonlyMap<string, Texture>;
   readonly videos: ReadonlyMap<string, HTMLVideoElement>;
   readonly poorBGAMode?: 0 | 1 | 2;
-  readonly cues: { base: readonly BGACue[]; layer: readonly BGACue[]; poor: readonly BGACue[] };
+  readonly cues: {
+    base: readonly BGACue[];
+    layer: readonly BGACue[];
+    layer2?: readonly BGACue[];
+    poor: readonly BGACue[];
+    opacity?: BGAOpacityTimelines;
+  };
   readonly nonstop?: {
     readonly stages: readonly NonstopBGAStage[];
     readonly timelines: readonly NonstopStageBGATimeline[];
@@ -68,7 +77,11 @@ export interface BeatorajaPlayBGA {
 }
 
 /** Where the engine is, as the layers scroll: its notes, chart time and beat. */
-export type BeatorajaPlayLayerClock = BeatorajaNoteClock & { readonly reversalSeconds?: number };
+export type BeatorajaPlayLayerClock = BeatorajaNoteClock & {
+  readonly reversalSeconds?: number;
+  readonly keyBoundBGA?: KeyBoundBGAFrame;
+  readonly bmsonBGA?: BmsonBGAFrame;
+};
 
 /** One beatoraja play skin on the stage. See the module comment. */
 export class BeatorajaPlayStage {
@@ -161,6 +174,7 @@ export class BeatorajaPlayStage {
     const view = this.stage.view;
     this.bgaLayer = new BeatorajaBGALayer({
       skin: this.kit.skin,
+      subRegionOrigins: bga.subRegionOrigins,
       textures: bga.textures,
       layerTextures: bga.layerTextures,
       videoElements: bga.videos,
@@ -300,7 +314,7 @@ export class BeatorajaPlayStage {
       Math.min(clock.currentSeconds, clock.reversalSeconds ?? Number.POSITIVE_INFINITY),
       context,
       lanes.isPoorBGAActive(clock.currentSeconds),
-      { ...playback, seconds: clock.currentSeconds },
+      { ...playback, seconds: clock.currentSeconds, keyBoundBGA: clock.keyBoundBGA, bmsonBGA: clock.bmsonBGA },
     );
   }
 

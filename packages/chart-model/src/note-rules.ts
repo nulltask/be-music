@@ -1,3 +1,4 @@
+import { resolveHDXLongNoteMode } from './hdx-long-note-mode.ts';
 import {
   normalizeObjectKey,
   type BeMusicEvent,
@@ -14,10 +15,12 @@ export type LongNoteMode = 1 | 2 | 3;
  */
 export const DEFAULT_LONG_NOTE_MODE: LongNoteMode = 1;
 
-/** Chart-level long-note mode after `#LNMODE` / bmson `info.ln_type` resolution. */
+/** Chart-level mode: valid #LNMODE > initial HDX LONGMODE > LN; bmson retains its own ln_type rules. */
 export function resolveChartLongNoteMode(json: BeMusicJSON): LongNoteMode {
   if (json.sourceFormat === 'bms') {
-    return json.bms.lnMode === 2 || json.bms.lnMode === 3 ? json.bms.lnMode : DEFAULT_LONG_NOTE_MODE;
+    const mode = json.bms.lnMode;
+    if (mode === 1 || mode === 2 || mode === 3) return mode;
+    return resolveHDXLongNoteMode(json) ?? DEFAULT_LONG_NOTE_MODE;
   }
   const lnType = json.bmson.info.lnType;
   return lnType === 2 || lnType === 3 ? lnType : DEFAULT_LONG_NOTE_MODE;

@@ -1,3 +1,4 @@
+import * as pngAPI from '@be-music/shared-utils/png';
 import * as hashAPI from '@be-music/shared-utils/hash';
 import * as asyncAPI from '@be-music/shared-utils/async';
 import * as cliAPI from '@be-music/shared-utils/cli';
@@ -9,6 +10,7 @@ import type { BenchmarkPackageDefinition } from '../exports.types.ts';
 
 export const utilsBenchmarkPackage: BenchmarkPackageDefinition = {
   module: {
+    ...Object.fromEntries(Object.entries(pngAPI).map(([name, value]) => [`png.${name}`, value])),
     ...(utilsAPI as Record<string, unknown>),
     ...Object.fromEntries(Object.entries(hashAPI).map(([name, value]) => [`hash.${name}`, value])),
     ...Object.fromEntries(Object.entries(asyncAPI).map(([name, value]) => [`async.${name}`, value])),

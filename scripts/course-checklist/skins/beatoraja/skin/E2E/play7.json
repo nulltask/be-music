@@ -30,6 +30,7 @@
     { "id": "course2", "font": 0, "size": 16, "ref": 151 },
     { "id": "course3", "font": 0, "size": 16, "ref": 152 }
   ],
+  "bga": { "id": "chart-bga" },
   "note": {
     "id": "notes",
     "note": ["note-w", "note-b", "note-w", "note-b", "note-w", "note-b", "note-w", "note-s"],
@@ -63,6 +64,7 @@
   },
   "destination": [
     { "id": "bg", "dst": [{ "x": 0, "y": 0, "w": 640, "h": 480 }] },
+    { "id": "chart-bga", "dst": [{ "x": 320, "y": 100, "w": 256, "h": 256 }] },
     { "id": "notes" },
     { "id": 2001, "dst": [{ "time": 0, "x": 20, "y": 30, "w": 264, "h": 16 }] },
     { "id": "course1", "op": [290], "dst": [{ "x": 320, "y": 440, "w": 300, "h": 18 }] },

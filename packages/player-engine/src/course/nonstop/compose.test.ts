@@ -8,6 +8,48 @@ import { NONSTOP_STITCH_VERSION, stitchNonstopCourse } from './compose.ts';
 
 const bms = (...lines: string[]) => parseChart(lines.join('\n'), 'bms');
 
+test('NONSTOP retains exact stage VOLWAV independently of authored slot volume and intrinsic gain', () => {
+  const first = bms('#BPM 120', '#VOLWAV 77', '#WAV01 a.wav', '#WAVCMD 01 01 33', '#00111:01');
+  first.resources.wavGain = { '01': 0.37 };
+  const second = bms('#BPM 120', '#VOLWAV 141', '#WAV01 a.wav', '#WAVCMD 01 01 50', '#00111:01');
+  const result = stitchNonstopCourse([{ chart: first }, { chart: second }], { connections: ['cut'] });
+  if (!result.ok) throw new Error('stitch failed');
+  const [a, b] = result.map.stages.map((stage) => stage.wavKeys[0]!);
+  expect(result.chart.resources.wavGain).toEqual({ [a!]: 0.77 * 0.37, [b!]: 1.41 });
+  expect(result.chart.bms.volWAV).toBeUndefined();
+  expect(result.chart.bms.wavCmds).toEqual([`01 ${a} 33`, `01 ${b} 50`]);
+  expect(first.resources.wavGain).toEqual({ '01': 0.37 });
+});
+
+test.each([undefined, 0, 200, -1])('NONSTOP leaves ignored/unity VOLWAV %s implicit', (volume) => {
+  const stage = bms('#BPM 120', '#WAV01 a.wav', '#00111:01');
+  stage.bms.volWAV = volume;
+  const result = stitchNonstopCourse([{ chart: stage }], { connections: [] });
+  if (!result.ok) throw new Error('stitch failed');
+  expect(result.chart.resources.wavGain).toBeUndefined();
+});
+
+test('NONSTOP retains EXWAV-only filenames and stage-owned audio modifiers', () => {
+  const stage = bms('#BPM 120', '#EXWAV01 pv 500 -600 only.wav', '#WAVCMD 01 01 50', '#00111:01');
+  const result = stitchNonstopCourse([{ chart: stage }, { chart: stage }], {
+    connections: ['cut'],
+    assetPath: (index, _kind, path) => `stage${index}/${path}`,
+  });
+  if (!result.ok) throw new Error('stitch failed');
+  const keys = result.map.stages.map((entry) => entry.wavKeys[0]!);
+  expect(new Set(keys).size).toBe(2);
+  for (const [index, key] of keys.entries()) {
+    expect(result.chart.resources.wav[key]).toBe(`stage${index}/only.wav`);
+    expect(result.chart.bms.exWAV[key]).toBe(`pv 500 -600 stage${index}/only.wav`);
+    expect(result.chart.bms.wavCmds).toContain(`01 ${key} 50`);
+  }
+  expect(
+    resolveChart(result.chart)
+      .sampleTriggers.map((trigger) => trigger.samplePath)
+      .sort((left, right) => (left ?? '').localeCompare(right ?? '')),
+  ).toEqual(['stage0/only.wav', 'stage1/only.wav']);
+});
+
 /** Stage A: 120 BPM, a note every measure on lanes 1 / 2, BGM at measure 1, last note at measure 4. */
 const stageA = bms(
   '#BPM 120',
@@ -402,7 +444,7 @@ test('NONSTOP version 2 retains the last declared TOTAL, while version 1 preserv
   };
   const current = build(2),
     legacy = build(1);
-  expect(NONSTOP_STITCH_VERSION).toBe(2);
+  expect(NONSTOP_STITCH_VERSION).toBe(3);
   expect(current.chart.metadata.total).toBe(80);
   expect(legacy.chart.metadata.total).toBeUndefined();
   expect(resolveChart(current.chart).notes.map((note) => [note.seconds, note.endSeconds])).toEqual(
@@ -436,4 +478,140 @@ test('an inherited TOTAL keeps its original unit in a mixed NONSTOP chart', () =
   });
   if (!result.ok) throw new Error(result.reason);
   expect(resolveChart(result.chart).total).toEqual({ value: 100, unit: 'percent' });
+});
+
+test('bmson NONSTOP keeps layered slices attached to one input note, with no shadow BGM', () => {
+  const source = bmsonStage();
+  const first = source.events.find((event) => event.channel === '11')!;
+  source.resources.wav['ZZ'] = 'layer.wav';
+  source.events.push({ ...first, value: 'ZZ', bmson: { ...first.bmson } });
+  const result = stitchNonstopCourse([{ chart: source }, { chart: bmsonStage() }], {
+    connections: ['blank2'],
+    placement: 'intended',
+    assetPath: (stage, _kind, path) => `s${stage}/${path}`,
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const resolved = resolveChart(result.chart);
+  const note = resolved.notes.find((note) => note.soundEvents?.length === 2);
+  expect(note?.soundEvents?.map((event) => result.chart.resources.wav[event.value])).toEqual([
+    's0/sliced.wav',
+    's0/layer.wav',
+  ]);
+  expect(resolved.sampleTriggers.filter((trigger) => trigger.channel === '01')).toEqual([]);
+});
+
+test('NONSTOP keeps an up sound on its LN tail with its source slice coordinates', () => {
+  const source = bmsonStage();
+  source.resources.wav['ZZ'] = 'end.wav';
+  source.events.push({ measure: 0, channel: '13', position: [3, 4], value: 'ZZ', bmson: { up: true, c: true } });
+  const result = stitchNonstopCourse([{ chart: source }, { chart: bmsonStage() }], {
+    connections: ['blank2'],
+    placement: 'intended',
+    assetPath: (stage, _kind, path) => `s${stage}/${path}`,
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const resolved = resolveChart(result.chart);
+  const note = resolved.notes.find((note) => note.endSoundEvent !== undefined)!;
+  expect(note).toBeDefined();
+  expect(result.chart.resources.wav[note.endSoundEvent!.value]).toBe('s0/end.wav');
+  expect(note.endSoundEvent!.bmson).toMatchObject({ up: true, sampleOffsetSeconds: 0 });
+  expect(resolved.notes.filter((note) => result.chart.resources.wav[note.sampleKey] === 's0/end.wav')).toEqual([]);
+});
+
+test('NONSTOP stitch rules before version 3 keep an up slice as the judged note they predate', () => {
+  const source = bmsonStage();
+  source.resources.wav['ZZ'] = 'end.wav';
+  source.events.push({ measure: 0, channel: '13', position: [3, 4], value: 'ZZ', bmson: { up: true, c: true } });
+  for (const stitch of [1, 2] as const) {
+    const result = stitchNonstopCourse([{ chart: source }, { chart: bmsonStage() }], {
+      connections: ['blank2'],
+      placement: 'intended',
+      assetPath: (stage, _kind, path) => `s${stage}/${path}`,
+      stitch,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const resolved = resolveChart(result.chart);
+    expect(resolved.notes.some((note) => note.endSoundEvent !== undefined)).toBe(false);
+    expect(resolved.notes.filter((note) => result.chart.resources.wav[note.sampleKey] === 's0/end.wav')).toHaveLength(
+      1,
+    );
+  }
+  // The source chart keeps its flag for current rules.
+  expect(source.events.at(-1)!.bmson).toMatchObject({ up: true });
+});
+
+test('NONSTOP preserves source channels beyond the BMS capacity across bmson stages', () => {
+  const source = parseChart(
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 120 },
+      sound_channels: Array.from({ length: 3_844 }, (_, index) => ({
+        name: `sample-${index}.wav`,
+        notes: [{ x: 1, y: index * 240 }],
+      })),
+    }),
+    'bmson',
+  );
+  const result = stitchNonstopCourse([{ chart: source }, { chart: source }], { connections: ['blank2'] });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const triggers = resolveChart(result.chart).sampleTriggers;
+  expect(triggers).toHaveLength(7_688);
+  expect(triggers.filter((trigger) => trigger.samplePath?.endsWith('sample-3843.wav'))).toHaveLength(2);
+  const finalTriggers = triggers.filter((trigger) => trigger.samplePath?.endsWith('sample-3843.wav'));
+  expect(finalTriggers[0]!.sampleKey).not.toBe(finalTriggers[1]!.sampleKey);
+});
+
+test.each([false, true])('NONSTOP keeps each HDX stage mode (bmson output: %s)', (mixed) => {
+  const sources = [0, 1].map((argument) =>
+    bms(
+      `#OPTION charatbeatHDX:LONGMODE ${argument}`,
+      '#BPM 120',
+      '#WAV01 a.wav',
+      '#LNTYPE 1',
+      '#00151:01',
+      '#00251:01',
+    ),
+  );
+  if (mixed) sources.push(bmsonStage());
+  const result = stitchNonstopCourse(
+    sources.map((chart) => ({ chart })),
+    { connections: sources.slice(1).map(() => 'blank2' as const) },
+  );
+  if (!result.ok) throw new Error('stitch failed');
+  expect(
+    resolveChart(result.chart)
+      .notes.filter((note) => note.kind === 'ln')
+      .map((note) => note.lnMode),
+  ).toEqual(mixed ? [2, 3, 2] : [2, 3]);
+});
+
+test.each([1, 2])('historical stitch %s keeps the old BMS LN interpretation', (stitch) => {
+  const stage = bms('#BPM 120', '#LNMODE 3', '#LNTYPE 1', '#00151:01', '#00251:01');
+  const result = stitchNonstopCourse([{ chart: stage }], { connections: [], stitch });
+  if (!result.ok) throw new Error('stitch failed');
+  expect(result.chart.sourceFormat).toBe('bms');
+  expect(resolveChart(result.chart).notes[0]?.lnMode).toBe(1);
+});
+
+test.each([1, 2])('historical mixed stitch %s does not activate newly recognized HDX declarations', (stitch) => {
+  const stage = bms(
+    '#OPTION charatbeatHDX:LONGMODE 1',
+    '#BPM 120',
+    '#WAV01 a.wav',
+    '#LNTYPE 1',
+    '#00151:01',
+    '#00251:01',
+  );
+  const result = stitchNonstopCourse([{ chart: stage }, { chart: bmsonStage() }], { connections: ['blank2'], stitch });
+  if (!result.ok) throw new Error('stitch failed');
+  expect(
+    resolveChart(result.chart)
+      .notes.filter((note) => note.kind === 'ln')
+      .map((note) => note.lnMode),
+  ).toEqual([1, 2]);
+  expect(stage.bms.lnMode).toBeUndefined();
 });

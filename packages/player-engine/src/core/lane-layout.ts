@@ -1,6 +1,7 @@
 import {
   PLAY_MODE_LAYOUTS,
   findPlayModeLane,
+  getPlayModeLayouts,
   resolveChartPlayVariant,
   type ChartPlayVariant,
   type PlayLane,
@@ -81,6 +82,21 @@ const KEY_LAYOUT = [
   '/',
 ];
 
+/** Generic layouts use only real keyboard tokens; the 70th lane must not acquire a fictional F42 key. */
+const GENERIC_KEY_LAYOUT = [
+  ...KEY_LAYOUT,
+  ...'1234567890'.split(''),
+  't',
+  'y',
+  '-',
+  '=',
+  '[',
+  ']',
+  '\\',
+  '`',
+  ...Array.from({ length: 24 }, (_, index) => `f${index + 1}`),
+];
+
 interface FixedLaneDefinition {
   channel: string;
   keyLabel: string;
@@ -112,6 +128,7 @@ export function resolveKeyChannel(event: KeyboardCodeLike, channels: ReadonlyArr
 }
 
 export function resolveSideKeySlot(channel: string, playVariant?: ChartPlayVariant): number {
+  if (playVariant?.startsWith('generic-')) return findPlayModeLane(playVariant, channel)?.slot ?? -1;
   if (playVariant === '24' || playVariant === '48') {
     // Keyboard modes have no scratch, so slot `0` is never produced and `isScratchLaneForVariant` stays false for
     // every channel. Lanes are the plain 1-based column index within the side (`11` → 1, `19` → 9, `1A` → 10, …,
@@ -161,7 +178,7 @@ export function resolveLR2LaneIndex(channel: string, playVariant?: ChartPlayVari
   // LR2 skins only define the 20 That-Which-Must-Not-Be-Named lane rects (`0`/`10` scratch + `1..9`/`11..19` keys) — there is no
   // `play_24.lr2skin`. Returning `-1` routes keyboard-mode charts through the caller's fallback playfield instead of
   // squeezing 26 lanes into the 7-key rect table.
-  if (playVariant === '24' || playVariant === '48') return -1;
+  if (playVariant === '24' || playVariant === '48' || playVariant?.startsWith('generic-')) return -1;
   if (playVariant === '9') return slot;
   return channel.startsWith('2') ? 10 + slot : slot;
 }
@@ -246,6 +263,7 @@ export function resolveLaneChannels(notes: ReadonlyArray<ChannelLike>, playVaria
  * on the outer edge when they draw.
  */
 function preferredLaneOrder(playVariant?: ChartPlayVariant): readonly string[] {
+  if (playVariant?.startsWith('generic-')) return layoutChannels(getPlayModeLayouts(playVariant)[0]!);
   if (playVariant === '24' || playVariant === '48') return KEYBOARD_LANE_ORDER[playVariant];
   if (playVariant === '9') return POPN_9KEY_LANE_ORDER;
   return _____LANE_ORDER;
@@ -335,6 +353,11 @@ const KEYBOARD_WHEEL_DEFAULT_KEYS: Record<string, { keyLabel: string; token: str
 function createFixedBindings(layout: PlayModeLayout): FixedLaneDefinition[] {
   let poolIndex = 0;
   const defaultKey = (lane: PlayLane): { keyLabel: string; token: string } => {
+    if (layout.variant.startsWith('generic-')) {
+      const token = GENERIC_KEY_LAYOUT[poolIndex]!;
+      poolIndex++;
+      return { keyLabel: token, token };
+    }
     if (layout.variant === '24' || layout.variant === '48') {
       const wheel = KEYBOARD_WHEEL_DEFAULT_KEYS[lane.channel];
       if (wheel !== undefined) return wheel;
@@ -373,11 +396,12 @@ const FIXED_BINDINGS_BY_LAYOUT: Record<PlayModeLayoutId, FixedLaneDefinition[]> 
 
 export function createLaneBindings(channels: string[], options: LaneModeOptions = {}): LaneBinding[] {
   const existing = new Set(channels.map((channel) => normalizeChannel(channel)));
-  if (existing.size === 0) {
+  if (existing.size === 0 && !options.playVariant?.startsWith('generic-')) {
     return [];
   }
 
-  const modeBindings = FIXED_BINDINGS_BY_LAYOUT[resolveLaneLayout(existing, options)];
+  const layoutId = resolveLaneLayout(existing, options);
+  const modeBindings = FIXED_BINDINGS_BY_LAYOUT[layoutId] ?? createFixedBindings(PLAY_MODE_LAYOUTS[layoutId]);
   const scratchReverseTokensByChannel = createScratchReverseTokensByChannel(modeBindings, options.platform);
   const bindings: LaneBinding[] = [];
   const usedTokens = new Set<string>();
@@ -461,7 +485,7 @@ export function appendFreeZoneInputChannels(
 
 export function resolveLaneDisplayMode(channels: string[], options: LaneModeOptions = {}): string {
   const existing = new Set(channels.map((channel) => normalizeChannel(channel)));
-  if (existing.size === 0) {
+  if (existing.size === 0 && !options.playVariant?.startsWith('generic-')) {
     return 'UNKNOWN';
   }
   return PLAY_MODE_LAYOUTS[resolveLaneLayout(existing, options)].label;
@@ -482,6 +506,7 @@ function resolveLaneLayout(existing: ReadonlySet<string>, options: LaneModeOptio
       events: Array.from(existing, (channel) => ({ channel })),
       bms: { player: options.player },
     });
+  if (variant.startsWith('generic-')) return getPlayModeLayouts(variant)[0]!.id;
   if (variant !== '9') {
     return variant;
   }

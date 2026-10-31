@@ -1,10 +1,10 @@
-import type { LongNoteMode } from '@be-music/chart-model';
+import { resolveChartLongNoteMode, type LongNoteMode } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { CourseConstraint } from './definition.ts';
 
 /**
  * Applies a course's long-note constraint (`ln` / `cn` / `hcn`) to a stage chart that leaves its long-note mode
- * undefined, as beatoraja forces `lnmode` for such charts. A chart that names its own mode (`#LNMODE`, bmson `ln_type`)
+ * undefined, as beatoraja forces `lnmode` for such charts. A chart that names its own mode (`#LNMODE`, HDX LONGMODE, bmson `ln_type`)
  * keeps it. Returns the chart unchanged when nothing applies, else a copy. Hosts apply it to each stage chart they play,
  * and the Leaderboard to the stage charts it stitches a NONSTOP run from again, so both get the same chart.
  */
@@ -28,7 +28,7 @@ export function applyCourseLongNoteConstraint(
  */
 export function applyUndefinedLongNoteMode(json: BeMusicJSON, mode: LongNoteMode): BeMusicJSON {
   if (json.sourceFormat === 'bms') {
-    if (json.bms.lnMode !== undefined) return json;
+    if (json.bms.lnMode !== undefined || resolveChartLongNoteMode(json) !== 1) return json;
     return { ...json, bms: { ...json.bms, lnMode: mode } };
   }
   const lnType = json.bmson.info.lnType;

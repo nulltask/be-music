@@ -1,3 +1,4 @@
+import { resolveChartOptionsAt } from '@be-music/chart-model';
 import { formatSeconds } from '../utils.ts';
 import {
   applyPlaybackHighSpeedAction,
@@ -128,6 +129,13 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
         },
         onTogglePause: togglePause,
         onHighSpeedAction: (action) => {
+          if (
+            resolveChartOptionsAt(
+              session.chartOptions,
+              Math.round(Math.min(commandSeconds(), session.resolvedChart.reversal?.seconds ?? Infinity) * 1_000_000),
+            ).hiSpeed !== undefined
+          )
+            return;
           highSpeed = applyPlaybackHighSpeedAction({
             action,
             currentHighSpeed: highSpeed,

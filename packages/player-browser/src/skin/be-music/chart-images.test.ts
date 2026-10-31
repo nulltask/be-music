@@ -5,7 +5,7 @@ import type { BrowserAssetSource } from '../../collection/types.ts';
 
 function chartEntry(
   chartPath: string,
-  metadata: { stageFile?: string; banner?: string; backBMP?: string },
+  metadata: { stageFile?: string; banner?: string; backBMP?: string; titleImage?: string },
 ): LibraryChart {
   return { sourceId: 'src', chartPath, chart: { metadata } } as unknown as LibraryChart;
 }
@@ -37,10 +37,16 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('resolveChartImagePath', () => {
   it('maps each kind to its chart header', () => {
-    const entry = chartEntry('a.bms', { stageFile: 'stage.png', banner: 'banner.bmp', backBMP: 'back.jpg' });
+    const entry = chartEntry('a.bms', {
+      stageFile: 'stage.png',
+      banner: 'banner.bmp',
+      backBMP: 'back.jpg',
+      titleImage: 'title.png',
+    });
     expect(resolveChartImagePath(entry, 'stageFile')).toBe('stage.png');
     expect(resolveChartImagePath(entry, 'banner')).toBe('banner.bmp');
     expect(resolveChartImagePath(entry, 'backBMP')).toBe('back.jpg');
+    expect(resolveChartImagePath(entry, 'titleImage')).toBe('title.png');
   });
 
   it('treats a missing or blank header as no image', () => {
@@ -50,6 +56,30 @@ describe('resolveChartImagePath', () => {
 });
 
 describe('ChartImageCache', () => {
+  it('converts title artwork for DOM once, and keeps missing artwork on the text fallback', async () => {
+    const { load, calls } = deferredLoader();
+    const drawImage = vi.fn();
+    const toDataURL = vi.fn(() => 'data:image/png;base64,test');
+    const createElement = vi.fn(() => ({ getContext: () => ({ drawImage }), toDataURL }));
+    vi.stubGlobal('document', { createElement });
+    const cache = new ChartImageCache({ resolveSource: () => SOURCE, load });
+    try {
+      const entry = chartEntry('a.bmson', { titleImage: 'title.png', stageFile: 'loading.png' });
+      expect(cache.lookupURL(entry, 'titleImage')).toBeUndefined();
+      expect(calls[0]!.path).toBe('title.png');
+      calls[0]!.resolve(fakeBitmap('title.png'));
+      await flush();
+      expect(cache.lookupURL(entry, 'titleImage')).toBe('data:image/png;base64,test');
+      expect(cache.lookupURL(entry, 'titleImage')).toBe('data:image/png;base64,test');
+      expect(createElement).toHaveBeenCalledTimes(1);
+      expect(drawImage).toHaveBeenCalledTimes(1);
+      expect(cache.lookupURL(chartEntry('b.bmson', {}), 'titleImage')).toBeUndefined();
+    } finally {
+      cache.dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('loads on the first miss, notifies, and then answers from the cache', async () => {
     const { load, calls } = deferredLoader();
     const onLoaded = vi.fn();

@@ -557,22 +557,31 @@ export interface BeMusicMeasureLine {
 /**
  * The BGA layers showing this frame, for a skin that composites the BGA itself ({@link BeMusicGameplaySkin.drawsBGA}).
  * Following the BMS convention, the host hands {@link layer} with pure black (`#000000`) already turned transparent,
- * while {@link base} and {@link poor} are opaque: draw all three with plain alpha blending, without keying them again.
+ * while {@link base} and {@link poor} are opaque: draw the base and both overlays with plain alpha blending, without keying them again.
  * A bmson layer (whose spec keeps black opaque) and a video layer come as authored. `#SWBGA` animation frames are
- * already picked; a slot's `#ARGB` tint and opacity are left to the skin.
+ * already picked. Channel opacity (0B–0E) is supplied in `opacity`; the legacy per-slot ARGB tint interpretation
+ * remains separate from nanasi's channel-scoped ARGB commands.
  *
  * Images come at their authored size. The BGA rect stands for a 256x256 canvas: to match other BMS players, draw a
  * still image whose long edge is at most 256 px at its own size on that canvas, centered horizontally and against the
  * top edge, and stretch a larger image or a video over the whole rect.
  */
 export interface BeMusicBGAFrame {
+  /** Authored BGA sub-region placement on the 256×256 canvas; other images retain normal placement. */
+  origins?: Partial<Record<'base' | 'layer' | 'layer2' | 'poor', { x: number; y: number }>>;
+  /** Authored channel opacity (0..1) for each plane; omitted means opaque. */
+  opacity?: { base: number; layer: number; layer2: number; poor: number };
+  /** NONSTOP stages in back-to-front order, each with its own layers, opacity and crossfade weight. */
+  stacks?: Array<Omit<BeMusicBGAFrame, 'stacks'> & { alpha: number }>;
   /** The base layer (`#BMP` on channel 04), or a video frame. */
   base?: BeMusicImage;
   /** The layer drawn over the base (channel 07). */
   layer?: BeMusicImage;
+  /** The second overlay (channel 0A), drawn above layer. */
+  layer2?: BeMusicImage;
   /** The miss image (channel 06), shown while {@link poorActive}. */
   poor?: BeMusicImage;
-  /** True while a POOR is being shown: replace the base/layer unless {@link poorOverlays} is true. */
+  /** True while a POOR is being shown: replace the base and both overlays unless {@link poorOverlays} is true. */
   poorActive: boolean;
   /** Draw the miss image over the normal layers (`#POORBGA 1`), instead of replacing them. */
   poorOverlays?: boolean;

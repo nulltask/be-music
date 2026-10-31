@@ -63,6 +63,7 @@ import { beginExitSequence, resolvePlayEnding, type PlayEndingContext } from './
 import type { PlayPresentation } from './play-presentation.ts';
 import { resolveSeekWaiters, settleSeekWaiters } from './play-seek.ts';
 import { applyPlayEvent } from './play-state.ts';
+import { resolveLaneInputTokens } from './play-cover-keys.ts';
 import { shouldSkipPlayKey } from './play-keys.ts';
 import { samplePlaybackRate } from './play-media.ts';
 import {
@@ -104,6 +105,7 @@ export interface PlayEngineContext
       | 'scrollModifier'
       | 'mineModifier'
       | 'gaugeAutoShift'
+      | 'bmsonTotalMode'
       | 'bottomShiftableGauge'
       | 'autoScratch1P'
       | 'autoScratch2P'
@@ -177,7 +179,7 @@ export interface PlayEngineContext
   engineStartRequested: boolean;
   readonly paused: boolean;
   readonly seekWaiters: Array<{ seconds: number; resolve: () => void }>;
-  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
+  bgaActiveVideos: Record<string, { key: string; cueSeconds: number } | undefined>;
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
   chartEndGate?: (seconds: number) => void;
@@ -475,6 +477,7 @@ export function resolveReplayRecording(
     | 'scrollModifier'
     | 'mineModifier'
     | 'gaugeAutoShift'
+    | 'bmsonTotalMode'
     | 'bottomShiftableGauge'
     | 'autoScratch1P'
     | 'autoScratch2P'
@@ -549,6 +552,7 @@ export function resolveReplayRecording(
     scrollSection: options.scrollSection,
     scrollRate: options.scrollRate,
     gaugeAutoShift: options.gaugeAutoShift,
+    bmsonTotalMode: options.bmsonTotalMode,
     bottomShiftableGauge: options.bottomShiftableGauge,
     autoScratch1P: options.autoScratch1P,
     autoScratch2P: options.autoScratch2P,
@@ -595,6 +599,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     },
   };
   ctx.engineFrame = undefined;
+  applyPlayEvent(ctx, { type: 'chart-hi-speed' });
   // A replay shows its recorded view along the playhead; a recorded replays its own from the start.
   ctx.replayViewCoalescer = undefined;
   ctx.replayViewCursor =
@@ -630,7 +635,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
     // canvas's `tabIndex = 0` only makes it focusable, not auto-focused, so a canvas-scoped listener would
     // only fire after the user clicked the canvas first.
-    shouldSkipKey: shouldSkipPlayKey,
+    shouldSkipKey: (event) => shouldSkipPlayKey(event, resolveLaneInputTokens(ctx.preparedChart?.laneBindings)),
     engineOptions: {
       // The draws `resolvedChart` was resolved with; the engine plays that chart as is and names them in its summary.
       ...(ctx.randomDraws !== undefined ? { randomDraws: ctx.randomDraws } : {}),
@@ -647,6 +652,9 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       gaugeAutoShift:
         ctx.options.replay !== undefined ? ctx.options.replay.play.gaugeAutoShift : ctx.options.gaugeAutoShift,
       judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,
+      bmsonTotalMode: ctx.options.replay
+        ? (ctx.options.replay.play.bmsonTotalMode ?? 'beatoraja')
+        : ctx.options.bmsonTotalMode,
       customJudge: ctx.options.replay ? ctx.options.replay.play.customJudge : ctx.options.customJudge,
       judgeTimingAutoAdjust: ctx.options.replay === undefined ? (ctx.options.judgeTimingAutoAdjust ?? 'OFF') : 'OFF',
       judgeTimingMs: ctx.options.judgeTimingMs,
@@ -730,6 +738,17 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
           ? { gauge2P: ctx.options.gauge2P }
           : {}),
       ...(ctx.options.replay === undefined && ctx.options.course !== undefined ? { course: ctx.options.course } : {}),
+      keyBoundBGACues: ctx.options.nonstop?.keyBoundBGA,
+      bmsonBGACues: ctx.options.nonstop?.bmsonBGA,
+      ...(ctx.options.replay
+        ? {
+            chartOptionProgram: ctx.options.replay.chart.chartOptions ?? { version: 1 as const, initial: {}, cues: [] },
+          }
+        : {
+            chartOptionProgram: ctx.options.nonstop?.chartOptions,
+            chartOptionDiagnostics: ctx.options.nonstop?.chartOptionDiagnostics,
+          }),
+      chartTextStages: ctx.options.nonstop?.chartText,
       // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
       ...(ctx.options.replay === undefined && ctx.options.nonstop !== undefined
         ? { stageRanks: ctx.options.nonstop.stageRanks }
@@ -877,6 +896,7 @@ function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUIFrameP
   // The signal bus reuses its frame object. Keep the applied clock metadata owned by this
   // session, so publishing a seek cannot move time before its score snapshot is drained.
   ctx.engineFrame = { ...frame };
+  applyPlayEvent(ctx, { type: 'chart-hi-speed', value: frame.chartOptions?.hiSpeed });
   applyEngineSummary(ctx, frame.summary);
   if (frame.summary2P !== undefined) applySecondPlayerSummary(ctx, frame.summary2P);
   ctx.chartEndGate?.(frame.currentSeconds);

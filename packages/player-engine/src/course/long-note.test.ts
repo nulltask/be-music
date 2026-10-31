@@ -17,3 +17,11 @@ test('a course constraint is applied first, so the player mode no longer applies
   const constrained = applyCourseLongNoteConstraint(parseBMS(LN), ['cn']);
   expect(resolveChart(applyUndefinedLongNoteMode(constrained, 3)).notes[0]!.lnMode).toBe(2);
 });
+
+test('authored HDX LONGMODE outranks player and course defaults without rewriting source headers', () => {
+  const source = parseBMS(`#OPTION charatbeatHDX:LONGMODE 1\n${LN}`);
+  expect(applyUndefinedLongNoteMode(source, 2)).toBe(source);
+  expect(applyCourseLongNoteConstraint(source, ['ln'])).toBe(source);
+  expect(resolveChart(source).notes[0]?.lnMode).toBe(3);
+  expect(source.bms.lnMode).toBeUndefined();
+});

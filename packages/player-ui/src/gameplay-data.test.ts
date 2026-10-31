@@ -51,3 +51,8 @@ it('uses the host source label for P.ATTACK while retaining the state gauge id',
   });
   expect(panels.gauge.label).toBe('P.ATTACK');
 });
+
+it('names generic keyboards explicitly in the gameplay facts', () => {
+  const value = frame({ runtime: { ...frame().runtime, playVariant: 'generic-36' } });
+  expect(resolveGameplayPanels(value).facts).toBe('TRANCE · 36 KEY GENERIC · Lv. 12');
+});
