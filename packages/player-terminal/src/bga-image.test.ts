@@ -81,6 +81,25 @@ describe('decodeImageBuffer', () => {
     expect(Array.from(image.data.subarray(4, 7))).toEqual([40, 50, 60]);
   });
 
+  test.each([
+    [[0, 0], false],
+    [[128, 0], true],
+  ] as const)('treats a 32-bit BMP alpha mask with alpha bytes %j as alpha=%s', (alphas, hasAlpha) => {
+    const bmp = Buffer.from(
+      encodeBmp({
+        width: 2,
+        height: 1,
+        data: new Uint8Array([10, 20, 30, alphas[0], 40, 50, 60, alphas[1]]),
+        channels: 4,
+        components: 3,
+        bitsPerPixel: 32,
+      }),
+    );
+    expect(bmp.readUInt32LE(14)).toBeGreaterThanOrEqual(56);
+    expect(bmp.readUInt32LE(66)).not.toBe(0);
+    expect(decodeImageBuffer(bmp, 'image.bmp').hasAlphaChannel).toBe(hasAlpha);
+  });
+
   test('decodes a JPEG', () => {
     const data = Buffer.alloc(4 * 4 * 4, 128);
     const encoded = jpeg.encode({ width: 4, height: 4, data }, 90);

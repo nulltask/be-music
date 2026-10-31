@@ -2,7 +2,7 @@ import type { BeMusicJSON } from '@be-music/chart-source';
 import { parseBMSExBMP, type BmsARGB } from './bmp-directives.ts';
 
 /** Resolve a selected EXBMP image's strict decimal color key, without the legacy tint parser's defaults/clamping. */
-export function resolveBmsExBMPColorKey(chart: BeMusicJSON, slot: string): BmsARGB | undefined {
+export function resolveBMSExBMPColorKey(chart: BeMusicJSON, slot: string): BmsARGB | undefined {
   const definition = parseBMSExBMP(chart.bms.exBMP[slot] ?? '');
   if (!definition) return undefined;
   const explicit = chart.resources.bmp[slot];

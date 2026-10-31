@@ -6,7 +6,7 @@
 import { runWithConcurrency } from '@be-music/shared-utils/core';
 import {
   collectBmsWAVVolumeMultipliers,
-  resolveBMSWAVResources,
+  resolveBmsWAVResources,
   collectBmsWAVPlaybackModifiers,
 } from '@be-music/chart-model';
 import { type BeMusicJSON } from '@be-music/chart-source';
@@ -69,7 +69,7 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   const { audioContext, chart, source, chartPath, samples } = options;
   const isCancelled = options.isCancelled ?? (() => false);
   // Every declared path: a `#WAVxx` slot is base-36, so a dense chart can use well over 256 samples.
-  const wavResources = resolveBMSWAVResources(chart);
+  const wavResources = resolveBmsWAVResources(chart);
   const playbackModifiers = collectBmsWAVPlaybackModifiers(chart);
   const nativeRatePaths = new Set(
     [...playbackModifiers].filter(([, value]) => value.frequencyHz !== undefined).map(([key]) => wavResources[key]),
@@ -94,7 +94,14 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
         if (isCancelled()) return;
         if (!bytes) continue;
         const decoded = await audioContext.decodeAudioData(bytes.slice().buffer);
-        if (nativeRatePaths.has(path)) nativeRates.set(path, await readNativeAudioSampleRate(bytes));
+        if (nativeRatePaths.has(path)) {
+          // The PCM decoded; an unreadable container header only loses the EXWAV native-rate reference.
+          try {
+            nativeRates.set(path, await readNativeAudioSampleRate(bytes));
+          } catch (error) {
+            log.debug('native sample rate unavailable', { path, error });
+          }
+        }
         if (isCancelled()) return;
         // Keep the declared WAV name as the key even when an alternate codec supplied the PCM.
         samples.set(decodedSampleKey(path), decoded);

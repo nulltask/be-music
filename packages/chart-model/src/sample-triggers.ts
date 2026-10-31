@@ -14,7 +14,7 @@ import {
 } from './index.ts';
 import { resolveJudgedNotes } from './resolved-notes.ts';
 import { resolveChartPlayVariant } from './play-variant.ts';
-import { resolveBMSWAVResources } from './wav-directives.ts';
+import { resolveBmsWAVResources } from './wav-directives.ts';
 import {
   createTimingBuildContext,
   createTimingResolver,
@@ -81,7 +81,7 @@ export function collectSampleTriggersWithContext(
     json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events, beatResolver) : undefined;
 
   const idBase = resolveBMSBase(json);
-  const wavResources = resolveBMSWAVResources(json);
+  const wavResources = resolveBmsWAVResources(json);
   // Keep every up entry in the slicing pass, but only an attached LN-end sample is audible on a playable lane.
   const endSounds =
     json.sourceFormat === 'bmson' && events.some((event) => event.bmson?.up === true)

@@ -272,6 +272,21 @@ describe('ChartPreviewEngine', () => {
     expect(collectionMocks.resolveChartAudioAsset.mock.calls.map((call) => call[2])).not.toContain('invisible.wav');
   });
 
+  test('plays a slot that only #EXWAV declares', async () => {
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [{ index: 0, length: 1 }];
+    chart.events = [{ measure: 0, channel: '01', position: [0, 1], value: 'AA' }];
+    chart.bms.exWAV = { AA: 'v 0 extended.wav' };
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0, fallbackDurationSeconds: 3 });
+
+    engine.focus(makePreviewTarget(chart));
+
+    await vi.waitFor(() => expect(sources).toHaveLength(1));
+    expect(collectionMocks.resolveChartAudioAsset.mock.calls.map((call) => call[2])).toContain('extended.wav');
+  });
+
   test('stops the previous BMS source when the same WAV slot retriggers', async () => {
     const chart = createEmptyJSON('bms');
     chart.metadata.bpm = 120;

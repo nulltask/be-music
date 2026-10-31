@@ -75,14 +75,23 @@ function decodeBMP(buffer: Buffer): DecodedImage {
   const channels = decoded.channels > 0 ? decoded.channels : 4;
   const depth = Math.max(1, Math.floor(decoded.bitsPerPixel / channels));
   const rgba = convertToRGBA8(toSampleArray(decoded.data), decoded.width, decoded.height, channels, depth);
+  const declaresAlpha =
+    bitsPerPixel === 32 && buffer.readUInt32LE(14) >= 56 && buffer.length >= 70 && buffer.readUInt32LE(66) !== 0;
   return {
     width: decoded.width,
     height: decoded.height,
     data: rgba,
     format: 'bmp',
-    hasAlphaChannel:
-      bitsPerPixel === 32 && buffer.readUInt32LE(14) >= 56 && buffer.length >= 70 && buffer.readUInt32LE(66) !== 0,
+    // Tools often write an alpha mask with every alpha byte zero; such a file is opaque, as browsers decode it.
+    hasAlphaChannel: declaresAlpha && hasNonZeroAlpha(rgba),
   };
+}
+
+function hasNonZeroAlpha(rgba: Uint8Array): boolean {
+  for (let offset = 3; offset < rgba.length; offset += 4) {
+    if (rgba[offset] !== 0) return true;
+  }
+  return false;
 }
 
 function readBMPBitsPerPixel(buffer: Buffer): number {

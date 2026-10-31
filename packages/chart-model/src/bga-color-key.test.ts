@@ -1,18 +1,18 @@
 import { createEmptyJSON } from '@be-music/chart-source';
 import { describe, expect, test } from 'vite-plus/test';
-import { applyBMSColorKey, resolveBmsExBMPColorKey } from './bga-color-key.ts';
+import { applyBMSColorKey, resolveBMSExBMPColorKey } from './bga-color-key.ts';
 
-describe('resolveBmsExBMPColorKey', () => {
+describe('resolveBMSExBMPColorKey', () => {
   test('reads strict decimal tuples and keeps zero as a meaningful no-key instruction', () => {
     const chart = createEmptyJSON('bms');
     chart.bms.exBMP['01'] = ' 000, 127, 128, 129 image name,1.png';
-    expect(resolveBmsExBMPColorKey(chart, '01')).toEqual({ a: 0, r: 127, g: 128, b: 129 });
+    expect(resolveBMSExBMPColorKey(chart, '01')).toEqual({ a: 0, r: 127, g: 128, b: 129 });
     chart.bms.exBMP['01'] = '0,0,0,0 image.png';
-    expect(resolveBmsExBMPColorKey(chart, '01')).toEqual({ a: 0, r: 0, g: 0, b: 0 });
+    expect(resolveBMSExBMPColorKey(chart, '01')).toEqual({ a: 0, r: 0, g: 0, b: 0 });
     chart.resources.bmp['01'] = 'override.png';
-    expect(resolveBmsExBMPColorKey(chart, '01')).toBeUndefined();
+    expect(resolveBMSExBMPColorKey(chart, '01')).toBeUndefined();
     chart.resources.bmp['01'] = 'image.png'; // NONSTOP promotes an EXBMP filename into the BMP resource map.
-    expect(resolveBmsExBMPColorKey(chart, '01')).toEqual({ a: 0, r: 0, g: 0, b: 0 });
+    expect(resolveBMSExBMPColorKey(chart, '01')).toEqual({ a: 0, r: 0, g: 0, b: 0 });
   });
   test.each([
     '',
@@ -25,7 +25,7 @@ describe('resolveBmsExBMPColorKey', () => {
   ])('rejects malformed color fields: %s', (raw) => {
     const chart = createEmptyJSON('bms');
     chart.bms.exBMP['01'] = raw;
-    expect(resolveBmsExBMPColorKey(chart, '01')).toBeUndefined();
+    expect(resolveBMSExBMPColorKey(chart, '01')).toBeUndefined();
   });
 });
 

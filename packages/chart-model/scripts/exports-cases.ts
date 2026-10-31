@@ -132,9 +132,9 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.buildKeyBoundBGATimeline(chart, chartAPI.createTimingResolver(chart));
     },
   });
-  define('chart-model.resolveBmsExBMPColorKey', {
+  define('chart-model.resolveBMSExBMPColorKey', {
     run: () => {
-      chartAPI.resolveBmsExBMPColorKey(BENCH_COLOR_KEY_CHART, '01');
+      chartAPI.resolveBMSExBMPColorKey(BENCH_COLOR_KEY_CHART, '01');
     },
   });
   define('chart-model.applyBMSColorKey', {
@@ -309,9 +309,9 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.wavCmdVolumePercentToLinearGain(64);
     },
   });
-  define('chart-model.resolveBMSWAVResources', {
+  define('chart-model.resolveBmsWAVResources', {
     run: () => {
-      chartAPI.resolveBMSWAVResources(BENCH_EXWAV_CHART);
+      chartAPI.resolveBmsWAVResources(BENCH_EXWAV_CHART);
     },
   });
   define('chart-model.collectBmsWAVPlaybackModifiers', {

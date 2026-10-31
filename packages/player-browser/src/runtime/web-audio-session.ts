@@ -3,7 +3,7 @@ import {
   isBMSKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   parseBMSDynamicVolumeGain,
-  resolveBMSWAVResources,
+  resolveBmsWAVResources,
   collectBmsWAVPlaybackModifiers,
   usesMonophonicWAVPlayback,
 } from '@be-music/chart-model';
@@ -175,7 +175,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     stageMixer?.retime?.(chartSeconds, (seconds) => now + (seconds - chartSeconds) / tempo);
   };
   const sampleIdBase = resolveBMSBase(chart);
-  const wavResources = resolveBMSWAVResources(chart);
+  const wavResources = resolveBmsWAVResources(chart);
   const playbackModifiers = collectBmsWAVPlaybackModifiers(chart);
   const preparedBuffers = new Map<string, AudioBuffer>();
   const sampleBuffer = (path: string, key: string): AudioBuffer | undefined => {

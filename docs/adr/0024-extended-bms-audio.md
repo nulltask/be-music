@@ -21,7 +21,7 @@ Use these Be-Music rules consistently in browser, Node and offline playback:
 
 The [DirectSound pan reference](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ee418148%28v%3Dvs.85%29) defines attenuation without stereo crossfeed: right panning cannot transfer a left-only recording into the right channel. Duplicate WAVCMD parameters resolve last-wins independently. Compose frequency and pitch multiplicatively, then limit sounding time. These cross-dialect and duration-order rules are Be-Music policy rather than verified native-player parity.
 
-Resolve filenames through `resolveBMSWAVResources`: valid EXWAV owns a shared WAV slot, including EXWAV-only declarations; malformed EXWAV retains WAV. Keep authored maps unchanged. NONSTOP allocates separate slots and remaps raw declarations into stage-owned asset paths.
+Resolve filenames through `resolveBmsWAVResources`: valid EXWAV owns a shared WAV slot, including EXWAV-only declarations; malformed EXWAV retains WAV. Keep authored maps unchanged. NONSTOP allocates separate slots and remaps raw declarations into stage-owned asset paths.
 
 Resolve effect parameters in chart-model and transform PCM with the runtime-neutral `transformStereoPCM`. Offline and Node decoding use the decoder's native rate before output-rate conversion. The browser reads native metadata with Mediabunny when frequency is present, then prepares separate slot buffers before keep-pitch stretching. A path alone cannot identify an effected sample: two slots can share a file with different pitch, duration or balance. Prepared cache keys retain slot case for base-62 charts. Raw buffers are not mutated.
 

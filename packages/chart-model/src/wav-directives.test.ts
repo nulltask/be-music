@@ -3,7 +3,7 @@ import {
   collectBMSExWAVVolumeMultipliers,
   collectBmsWAVVolumeMultipliers,
   parseBMSExWAV,
-  resolveBMSWAVResources,
+  resolveBmsWAVResources,
   wavCmdVolumePercentToLinearGain,
 } from './wav-directives.ts';
 import { createEmptyJSON } from '@be-music/chart-source';
@@ -36,7 +36,7 @@ test('EXWAV owns a shared slot, supplies EXWAV-only slots and preserves the auth
   chart.resources.wav = { '01': 'ordinary.wav', '03': 'fallback.wav' };
   chart.bms.exWAV = { '01': 'v -600 extended.wav', '02': 'p 0 only.wav', '03': 'broken' };
   chart.events = ['01', '02', '03'].map((value) => ({ measure: 0, channel: '01', position: [0, 1], value }));
-  expect(resolveBMSWAVResources(chart)).toEqual({ '01': 'extended.wav', '02': 'only.wav', '03': 'fallback.wav' });
+  expect(resolveBmsWAVResources(chart)).toEqual({ '01': 'extended.wav', '02': 'only.wav', '03': 'fallback.wav' });
   expect(resolveChart(chart).sampleTriggers.map((trigger) => trigger.samplePath)).toEqual([
     'extended.wav',
     'only.wav',
@@ -52,7 +52,7 @@ test.each(['v nope bad.wav', 'pv 0 bad.wav', 'p 3oops bad.wav', 'pp 0 1 bad.wav'
     chart.resources.wav['01'] = 'fallback.wav';
     chart.bms.exWAV['01'] = raw;
     expect(parseBMSExWAV(raw)).toBeUndefined();
-    expect(resolveBMSWAVResources(chart)['01']).toBe('fallback.wav');
+    expect(resolveBmsWAVResources(chart)['01']).toBe('fallback.wav');
   },
 );
 

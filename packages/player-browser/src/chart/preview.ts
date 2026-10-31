@@ -1,6 +1,7 @@
 import {
   firesBeforeTempoReversal,
   isInvisibleNoteChannel,
+  resolveBmsWAVResources,
   resolveChart,
   usesMonophonicWAVPlayback,
   type TimedSampleTrigger,
@@ -426,9 +427,11 @@ export class ChartPreviewEngine {
     if (triggers.length === 0) return;
     // Unique #WAVxx slots referenced inside the preview window — the only WAVs we need to bother decoding for this
     // preview.
+    // EXWAV can declare a slot's file without #WAVxx.
+    const wavResources = resolveBmsWAVResources(chart);
     const sampleKeys = new Set<string>();
     for (const trigger of triggers) {
-      if (typeof chart.resources.wav[trigger.sampleKey] === 'string') {
+      if (typeof wavResources[trigger.sampleKey] === 'string') {
         sampleKeys.add(trigger.sampleKey);
       }
     }
@@ -436,7 +439,7 @@ export class ChartPreviewEngine {
     await Promise.all(
       [...sampleKeys].map(async (key) => {
         if (this.isStale(sequence)) return;
-        const path = chart.resources.wav[key];
+        const path = wavResources[key];
         if (typeof path !== 'string') return;
         const buffer = await this.decodeChartAudio(target, path, sequence);
         if (buffer) buffers.set(key, buffer);

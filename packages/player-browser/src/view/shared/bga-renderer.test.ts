@@ -579,4 +579,54 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     expect(state.ctx.play.bgaActiveVideos.poor).toBeUndefined();
     state.dispose();
   });
+
+  test('seeks a fallback POOR video once per miss while the clocks drift', () => {
+    const state = setup(1);
+    let seeks = 0;
+    let currentTime = 0;
+    const fallback = {
+      paused: false,
+      seeking: false,
+      duration: 60,
+      get currentTime() {
+        return currentTime;
+      },
+      set currentTime(value: number) {
+        currentTime = value;
+        seeks += 1;
+      },
+      play: vi.fn(async () => {}),
+      pause: vi.fn(),
+    };
+    const key = String.fromCharCode(0) + 'poor:fallback';
+    let nowMs = 1000;
+    Object.assign(state.play, {
+      poorBGAFallbackKey: 'fallback',
+      poorBGAFallbackUntilSeconds: Number.POSITIVE_INFINITY,
+      lastPoorAt: 1000,
+      playClock: () => nowMs,
+    });
+    state.play.bgaTimeline.poor = [];
+    state.play.bgaVideos.set(key, { video: fallback, objectURL: 'blob:fallback' });
+    state.play.bgaTextures.set(key, state.textures[3]!);
+    renderBGA(state.ctx, 3);
+    expect(seeks).toBe(1);
+    // The chart clock runs slightly faster than the wall clock; the cue must not look new on every frame.
+    for (const [chartSeconds, wallMs] of [
+      [3.0172, 1016],
+      [3.0341, 1033],
+      [3.0507, 1049],
+    ] as const) {
+      nowMs = wallMs;
+      currentTime = chartSeconds - 3;
+      renderBGA(state.ctx, chartSeconds);
+    }
+    expect(seeks).toBe(1);
+    // A new miss starts a new window.
+    state.play.lastPoorAt = 1500;
+    nowMs = 1500;
+    renderBGA(state.ctx, 3.5);
+    expect(seeks).toBe(2);
+    state.dispose();
+  });
 });

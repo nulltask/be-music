@@ -8,12 +8,19 @@ const mocks = vi.hoisted(() => ({
   loadAssetBytes: vi.fn(),
   resolveChartAudioAsset: vi.fn(),
   stretchDecodedSamples: vi.fn(),
+  readNativeAudioSampleRate: vi.fn(),
 }));
 
 vi.mock('../collection/collection.ts', () => ({
   loadAssetBytes: mocks.loadAssetBytes,
   resolveChartAudioAsset: mocks.resolveChartAudioAsset,
 }));
+
+vi.mock('../runtime/wav-playback.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../runtime/wav-playback.ts')>();
+  mocks.readNativeAudioSampleRate.mockImplementation(actual.readNativeAudioSampleRate);
+  return { ...actual, readNativeAudioSampleRate: mocks.readNativeAudioSampleRate };
+});
 
 vi.mock('../runtime/play-tempo.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../runtime/play-tempo.ts')>()),
@@ -94,6 +101,27 @@ describe('loadPlaySamples', () => {
     });
     expect(context.decoded.sort()).toEqual(['extended.wav', 'only.wav']);
     expect([...samples.keys()].sort()).toEqual(['extended.wav', 'only.wav', 'only.wav\0slot:02']);
+  });
+
+  test('keeps a decoded EXWAV sample whose native rate cannot be read', async () => {
+    const chart = chartWithWAVs({});
+    chart.bms.exWAV = { '01': 'f 44100 pitched.wav' };
+    mocks.readNativeAudioSampleRate.mockRejectedValueOnce(new Error('unknown container'));
+    const samples = new Map<string, AudioBuffer>();
+    const context = fakeAudioContext();
+    await loadPlaySamples({
+      audioContext: context,
+      chart,
+      source: SOURCE,
+      chartPath: 'main.bms',
+      samples,
+      tempo: 1,
+      tempoPitchMode: 'pitch',
+      tempoStretchAlgorithm: 'signalsmith',
+    });
+    expect(context.decoded).toEqual(['pitched.wav']);
+    expect(mocks.readNativeAudioSampleRate).toHaveBeenCalledOnce();
+    expect(samples.has('pitched.wav')).toBe(true);
   });
 
   test('keys every decoded sample as the audio session looks it up and skips undecodable ones', async () => {
