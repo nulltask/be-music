@@ -16,7 +16,8 @@ async function textPixels(player: Player): Promise<number> {
       for (let y = 0; y < image.height * 0.35; y++)
         for (let x = image.width * 0.1; x < image.width * 0.9; x++) {
           const offset = (y * image.width + Math.floor(x)) * 4;
-          if (data[offset]! > 235 && data[offset + 1]! > 235 && data[offset + 2]! > 235) count++;
+          // Bright, not pure white: Linux renders the thin text with fewer fully white pixels (#792).
+          if (data[offset]! > 160 && data[offset + 1]! > 160 && data[offset + 2]! > 160) count++;
         }
       return count;
     },
@@ -45,6 +46,7 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     const before = await textPixels(player);
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 2.2, 'text selection');
     await expect.poll(() => textPixels(player), { timeout: 2000, intervals: [100] }).toBeGreaterThan(before + 500);
+    const shown = await textPixels(player);
     await player.key('Space');
     const paused = (await player.state()).play?.seconds;
     await player.page.screenshot({ path: info.outputPath('chart-text.png') });
@@ -53,7 +55,8 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     expect((await player.state()).play?.seconds).toBeCloseTo(paused!, 2);
     await player.key('Space');
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 6.2, 'text clear');
-    await expect.poll(() => textPixels(player), { timeout: 2000, intervals: [100] }).toBeLessThan(before + 300);
+    // Cleared: back nearer the empty count than the shown one (other HUD text keeps changing).
+    await expect.poll(() => textPixels(player), { timeout: 2000, intervals: [100] }).toBeLessThan((before + shown) / 2);
     if (family === 'native') await expect(player.page.locator('[data-chart-text]')).toBeHidden();
   });
 }
