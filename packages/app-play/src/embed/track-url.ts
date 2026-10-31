@@ -3,6 +3,11 @@ import { resolveURLLoadFetchURL } from '../url-load.ts';
 /** How the embed plays a chart: `'preview'` plays it in AUTO like a video, `'play'` lets the viewer play it. */
 export type EmbedMode = 'preview' | 'play';
 
+/** The mode the embed's AUTO checkbox picks: checked plays in AUTO (`'preview'`), cleared lets the viewer play. */
+export function embedModeOfAutoPlay(autoPlay: boolean): EmbedMode {
+  return autoPlay ? 'preview' : 'play';
+}
+
 /**
  * Whether a click or tap on the stage pauses the play, as it does a video. Not while the viewer plays (`'play'`): a tap
  * there is part of playing, not a request to stop, so only the controls bar and the play's own keys pause it.

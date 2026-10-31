@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { embedStageTapPauses, parseEmbedTrack } from './track-url.ts';
+import { embedModeOfAutoPlay, embedStageTapPauses, parseEmbedTrack } from './track-url.ts';
 
 const PAGE = 'https://play.be-music.app/embed/';
 
@@ -37,6 +37,11 @@ describe('parseEmbedTrack', () => {
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&mode=preview`)?.mode).toBe('preview');
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip&mode=auto`)?.mode).toBe('preview');
     expect(parseEmbedTrack(`${PAGE}?track=/tracks/demo.zip`)?.mode).toBe('preview');
+  });
+
+  it("turns the AUTO checkbox into the AUTO preview or the viewer's play", () => {
+    expect(embedModeOfAutoPlay(true)).toBe('preview');
+    expect(embedModeOfAutoPlay(false)).toBe('play');
   });
 
   it("lets a tap on the stage pause the AUTO preview but not the viewer's own play", () => {
