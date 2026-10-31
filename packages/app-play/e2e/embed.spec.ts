@@ -106,6 +106,42 @@ test('?mode=play lets the viewer play: no seeking, and M is a lane rather than m
   ).toBeAttached();
 });
 
+test("the AUTO checkbox switches between the AUTO preview and the viewer's play without a ?mode=", async ({ page }) => {
+  await openEmbed(page, ['songs/fixA']);
+  const start = page.locator('be-music-preview-start');
+  const auto = start.getByRole('checkbox', { name: 'AUTO' });
+  await expect(start.getByRole('button', { name: 'Play', exact: true })).toBeEnabled({ timeout: 60_000 });
+  await expect(auto).toBeChecked();
+  await auto.uncheck();
+  const play = start.getByRole('button', { name: 'Play', exact: true });
+  await expect(play).toBeEnabled({ timeout: 60_000 });
+  await expect(auto).not.toBeChecked();
+  await play.click();
+  // The viewer's play: no seeking, and no tap-to-pause layer over the stage.
+  const hud = page.locator('be-music-preview-hud');
+  await expect(hud.getByRole('slider', { name: 'Seek' })).toBeDisabled({ timeout: 30_000 });
+  await expect(hud.locator('.stage-hit')).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get('mode')).toBeNull();
+});
+
+test('a phone waits for Load, which shows the archive size, before downloading the track', async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  let downloads = 0;
+  page.on('request', (request) => {
+    if (request.url().includes(TRACK_ROUTE) && request.method() === 'GET') downloads += 1;
+  });
+  await openEmbed(page, ['songs/fixA']);
+  const load = page.locator('be-music-preview-start').getByRole('button');
+  await expect(load).toContainText('Load');
+  await expect(load).toContainText(/fixA\.zip · \d+ KB/);
+  expect(downloads).toBe(0);
+  await load.click();
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled({ timeout: 60_000 });
+  expect(downloads).toBe(1);
+  await context.close();
+});
+
 test('Back on a paused play leaves it for the replay button, the way back a touch screen has', async ({ page }) => {
   await openEmbed(page, ['songs/fixA'], undefined, 'play');
   await page.getByRole('button', { name: 'Play', exact: true }).click({ timeout: 60_000 });

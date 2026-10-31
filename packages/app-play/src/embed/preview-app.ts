@@ -1,5 +1,5 @@
 // The embed's preview player: loads the `?track=` archive, lists its charts when it has several, and plays the one
-// picked from the preview skin, with video controls: in AUTO, or played by the viewer with `?mode=play`. `?course=` selects an LR2 / beatoraja course file;
+// picked from the preview skin, with video controls: in AUTO, or played by the viewer with `?mode=play` or the AUTO checkbox cleared. `?course=` selects an LR2 / beatoraja course file;
 // staged courses advance automatically, NONSTOP courses use the shared stitching pipeline. `?chart=` naming a chart
 // (`findEmbedChart`) plays it on its own, as a track of one chart does. A play ends back on the list, or — for a chart played on its own — on a
 // replay button. Nothing is recorded.
@@ -35,7 +35,15 @@ import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import { previewArtworkPath } from './artwork.ts';
 import { findEmbedChart } from './chart-match.ts';
 import { createPreviewSkin, type PreviewChrome, type PreviewChromeState } from './preview-skin.ts';
-import { embedStageTapPauses, type EmbedMode, type EmbedTrack } from './track-url.ts';
+import {
+  embedModeOfAutoPlay,
+  embedStageTapPauses,
+  embedWaitsToDownload,
+  type EmbedMode,
+  type EmbedTrack,
+} from './track-url.ts';
+import { readDeviceSignals, resolveDeviceProfile } from '../device-profile.ts';
+import { describeDownload, readDownloadSize } from './download-size.ts';
 
 /** How far ← / → seek. */
 const SEEK_STEP_SECONDS = 5;
@@ -64,7 +72,7 @@ export class PreviewApp {
   private readonly host = new PixiSceneHost();
   private readonly audio: AudioService = createAudioService();
   private readonly chrome: PreviewChromeController;
-  /** AUTO (`'preview'`), or the viewer's own play (`'play'`). */
+  /** AUTO (`'preview'`), or the viewer's own play (`'play'`): `?mode=` at first, then the AUTO checkbox. */
   private mode: EmbedMode = 'preview';
   private collection: BrowserChartCollection | undefined;
   /** The track's name, from its archive's file name. */
@@ -98,6 +106,8 @@ export class PreviewApp {
     }
     this.mode = track.mode;
     this.trackName = track.fileName.replace(/\.zip$/iu, '');
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+    if (embedWaitsToDownload(resolveDeviceProfile(readDeviceSignals()), saveData)) await this.waitForLoad(track);
     const progress = new LoadingProgress();
     this.showOverlay(progress.element);
     try {
@@ -138,6 +148,22 @@ export class PreviewApp {
     }
   }
 
+  /**
+   * Shows the Load button with the track's file name, and its size once a HEAD request tells it, and resolves once the
+   * button is pressed.
+   */
+  private waitForLoad(track: EmbedTrack): Promise<void> {
+    const load = document.createElement('be-music-preview-start');
+    Object.assign(load, { mode: 'load', caption: describeDownload(track.fileName, undefined) });
+    this.showOverlay(load);
+    void fetch(track.fetchURL, { method: 'HEAD', redirect: 'follow' })
+      .then((response) => {
+        if (response.ok) load.caption = describeDownload(track.fileName, readDownloadSize(response.headers));
+      })
+      .catch(() => undefined);
+    return new Promise((resolve) => load.addEventListener('play-request', () => resolve(), { once: true }));
+  }
+
   private showSelect(): void {
     this.revokeArtwork();
     const list = document.createElement('be-music-preview-select');
@@ -145,6 +171,10 @@ export class PreviewApp {
     list.charts = this.courses === undefined ? this.charts : [];
     list.courses = this.courses;
     list.heading = this.trackName;
+    list.autoPlay = this.mode === 'preview';
+    list.addEventListener('auto-play-change', (event) => {
+      this.mode = embedModeOfAutoPlay((event as BeMusicUIEvent<'auto-play-change'>).detail.autoPlay);
+    });
     const images = new Map<string, string>();
     list.images = images;
     list.addEventListener('activate-request', (event) => {
@@ -226,8 +256,13 @@ export class PreviewApp {
     let start: HTMLElement | undefined;
     if (button !== undefined) {
       start = document.createElement('be-music-preview-start');
-      Object.assign(start, { mode: button, disabled: true });
+      Object.assign(start, { mode: button, disabled: true, autoPlay: this.mode === 'preview' });
       start.addEventListener('play-request', () => this.begin());
+      // The scene was made for the other mode: make it again, behind the same button.
+      start.addEventListener('auto-play-change', (event) => {
+        this.mode = embedModeOfAutoPlay((event as BeMusicUIEvent<'auto-play-change'>).detail.autoPlay);
+        void this.tryPlay(() => this.prepare(chart, button, overrides));
+      });
       this.showOverlay(start);
     }
     await scene.prepare();

@@ -15,6 +15,7 @@ export interface BeMusicUIEventMap {
   'readme-request': undefined;
   'gesture-request': undefined;
   'play-request': { autoPlay: boolean };
+  'auto-play-change': { autoPlay: boolean };
   'selection-change': { index: number };
   'activate-request': { index: number };
   'search-change': { value: string };
