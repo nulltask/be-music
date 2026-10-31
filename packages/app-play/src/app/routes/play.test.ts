@@ -909,3 +909,17 @@ test('CHART HEADER resolves once before picking a kit and hands the same branch 
   expect(passed).toBeDefined();
   expect(play.options.preResolved).toBe(passed);
 });
+
+test('Escape from a zero-total spec play keeps no local best but still submits its replay', async () => {
+  const h = await harness();
+  h.deps.playOptions.update({ bmsonTotalMode: 'spec' });
+  const play = await started(h, chartEntry('zero'));
+  play.resolved.chart.sourceFormat = 'bmson';
+  play.resolved.chart.metadata.total = 0;
+  play.progress.mockReturnValue(resultOf(chartEntry('zero')));
+  const replay = { play: { mode: 'manual', aborted: true, bmsonTotalMode: 'spec' } } as unknown as BeMusicReplay;
+  play.waitForReplay.mockResolvedValue(replay);
+  play.options.on.exit();
+  await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('zero')));
+  expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+});

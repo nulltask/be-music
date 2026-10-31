@@ -435,3 +435,7 @@ beatoraja/0    1174   82.68%   AA   ...
 譜面指定の HDX LONGMODE は `chartOptions` ではなく、記録する譜面・ノートのモードに解決します。記録されたモード1も、新たに対応した元譜面の宣言より優先します。NONSTOP stitch バージョン3は内部 bmson のノート別種別で BMS の CN・HCN を保持し、過去のプレイにはバージョン1・2を引き続き使えます。[ADR 0027](./adr/0027-hdx-long-note-modes.ja.md) を参照してください。
 
 CHART HEADER（AUTO）は AUTO 自体ではなく、実効 COUPLE・TWO-PLAYER・OFF として記録します。記録されたモードが未指定なら引き続き OFF です。二人用録画の `simulateReplay` は既定で1Pを計算し、`player: 2` で2Pとそのゲージを選びます。二人用録画は一人用オンライン送信の対象外（`two-player`）とし、二人分のローカル結果と共通 replay は保持します。[ADR 0028](./adr/0028-player-header-selection.ja.md) を参照してください。
+
+## bmson TOTAL 0 の任意設定
+
+プレイ設定 `bmsonTotalMode` の既定は `beatoraja`。`spec` は正規化済み百分率 TOTAL 0 で正の回復だけを抑制する。Browser の Play options に **bmson TOTAL 0**、Terminal に `--bmson-total-mode spec` を用意する。型付き replay 値を優先し、省略時は再生側の選択にかかわらず互換動作を保つ。影響を受ける手動プレイ・コースは `unranked: 'bmson-total'` として保存・シミュレーションし、通常のベスト記録・ランキングを更新しない。正の TOTAL で設定を選ぶだけなら従来どおり比較する。ダメージ・開始 HP・引継ぎ・chart fingerprint は変わらない。[ADR 0030](./adr/0030-bmson-zero-total.ja.md) を参照。

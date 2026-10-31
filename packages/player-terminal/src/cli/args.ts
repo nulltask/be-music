@@ -38,6 +38,7 @@ export interface CLIArgs {
   judgeWindowMs?: number;
   /** Compat ruleset the engine judges under (`PlayerOptions.judgeRuleset`). Defaults to LR2. */
   judgeRuleset?: RulesetId;
+  bmsonTotalMode?: import('@be-music/player-engine/ruleset').BmsonTotalMode;
   /** Gauge pick, in LR2's names; each ruleset maps it onto its own line-up. Defaults to `GROOVE`. */
   gauge?: GaugeType;
   /** `false` keeps judging after a survival gauge empties (`PlayerOptions.endOnFailure`); omitted ends the play there. */
@@ -251,6 +252,11 @@ function consumeCLIValueArg(args: CLIArgs, rawArgs: string[], index: number): nu
     case '--ruleset':
       args.judgeRuleset = parseCLIRuleset(rawValue);
       return index + 1;
+    case '--bmson-total-mode':
+      if (rawValue !== 'beatoraja' && rawValue !== 'spec')
+        throw new Error('Expected --bmson-total-mode beatoraja or spec.');
+      args.bmsonTotalMode = rawValue;
+      return index + 1;
     case '--gauge':
       args.gauge = parseCLIGauge(rawValue);
       return index + 1;
@@ -453,6 +459,7 @@ export function printUsage(): void {
       '',
       'Developer/debug:',
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
+      '  --bmson-total-mode <mode>  bmson TOTAL 0: beatoraja (default) | spec (no recovery)',
       '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | ____',
       '  --gauge <name>         Gauge: GROOVE (default) | EASY | HARD | DEATH',
       '  --no-end-on-failure    Keep playing after a survival gauge empties (default: the play ends there)',

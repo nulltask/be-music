@@ -338,3 +338,7 @@ Owners can hide their scores and course runs. Admin pages, report APIs and input
   the normal `vp test`.
 
 - Workers-only behaviour and the CPU limit are not covered by these tests; CPU time is measured separately.
+
+## Optional bmson zero-total policy
+
+Per-play `bmsonTotalMode` defaults to `beatoraja`; `spec` suppresses positive recovery only for normalized percentage TOTAL 0. Browser Play options exposes **bmson TOTAL 0** and terminal accepts `--bmson-total-mode spec`. The typed replay field is authoritative; absence means compatibility regardless of the viewer. Affected manual plays and courses remain stored and simulated with `unranked: 'bmson-total'`, without ordinary best-record or ranking updates. Positive-total opt-ins remain comparable. Damage, initial HP, carry and chart fingerprints stay unchanged. See [ADR 0030](./adr/0030-bmson-zero-total.md).

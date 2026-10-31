@@ -181,6 +181,7 @@ describe('captureDebugMenuSettings', () => {
       scrollSection: 8,
       scrollRate: 0.25,
       gaugeAutoShift: 'NONE',
+      bmsonTotalMode: 'beatoraja',
       bottomShiftableGauge: 'ASSIST-EASY',
       autoScratch1P: true,
       autoScratch2P: true,

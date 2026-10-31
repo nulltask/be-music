@@ -12,6 +12,8 @@ import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-op
  * Several fields mirror an LR2 `#SRC_BUTTON` type, noted per field.
  */
 export interface PlayOptions {
+  /** bmson zero-total recovery policy, shared by every skin family. */
+  bmsonTotalMode: import('@be-music/player-engine/ruleset').BmsonTotalMode;
   /**
    * Visual scroll-speed multiplier. The chart's note-to-second mapping is unchanged; only the on-screen pixels-per-beat
    * scaling moves. Range matches gameplay's runtime adjust hotkeys (`ArrowUp` / `ArrowDown` during play).

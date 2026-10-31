@@ -176,6 +176,8 @@ de jure の立場（[`#TOTAL`][cmds-total]）：最良判定 1 回ごとにゲ�
 | beatoraja  | `max(260, 7.605 N / (0.01 N + 6.5))`。24K は `max(300, 7.605 (N + 100) / (0.01 N + 6.5))` [V]（[BMSPlayerRule L68-88][b-rule]）                                                                                               | ない場合と同じ [V] |
 | be-music   | ルールセットごとの既定値：`lr2` は上の LR2 の曲線、`beatoraja` は beatoraja の式（[`definitions.ts`][bm-ruleset] `resolveEffectiveTotal`）                                                                                    | ない場合と同じ     |
 
+表は既定動作を示す。明示的な `bmsonTotalMode: 'spec'` は固定回復・コースゲージを含め TOTAL 0 の回復を止める。ダメージ・開始 HP・引継ぎは保ち、影響するプレイは保存のみとする。replay の省略値は常に互換動作を維持する。[ADR 0030](./adr/0030-bmson-zero-total.ja.md) を参照。
+
 ### 2.14 制御構文
 
 | 項目                              | de jure                                                                                                                                                                             | LR2                                                                        | beatoraja                                                                                                                                              | be-music                                                                                                                                                                                                                                                                                            |

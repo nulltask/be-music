@@ -460,3 +460,31 @@ describe('practice results', () => {
     });
   }
 });
+
+for (const family of ['none', 'lr2', 'beatoraja'] as const) {
+  test(`${family}: zero-total no-recovery keeps replay/submission without updating ordinary bests`, async () => {
+    const h = await harness({ family });
+    const data = resultOf(chartEntry('a'));
+    data.replay = {
+      format: 'be-music-replay',
+      version: 0,
+      clock: { unit: 'us', origin: 'chart-zero' },
+      chart: {
+        sourceFormat: 'bmson',
+        total: 0,
+        laneMode: '7keys',
+        lnMode: 1,
+        judgeRank: { percent: 100 },
+        noteCount: 0,
+        notes: [],
+      },
+      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', bmsonTotalMode: 'spec' },
+      inputs: [],
+    };
+    if (family === 'beatoraja') await h.route.showBeatorajaPlayResult(data, false);
+    else await h.route.showResult(data);
+    expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.replayAutoSave.savePlay).toHaveBeenCalledWith(data.replay);
+    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, data.chart);
+  });
+}

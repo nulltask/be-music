@@ -105,6 +105,7 @@ export interface PlayEngineContext
       | 'scrollModifier'
       | 'mineModifier'
       | 'gaugeAutoShift'
+      | 'bmsonTotalMode'
       | 'bottomShiftableGauge'
       | 'autoScratch1P'
       | 'autoScratch2P'
@@ -476,6 +477,7 @@ export function resolveReplayRecording(
     | 'scrollModifier'
     | 'mineModifier'
     | 'gaugeAutoShift'
+    | 'bmsonTotalMode'
     | 'bottomShiftableGauge'
     | 'autoScratch1P'
     | 'autoScratch2P'
@@ -550,6 +552,7 @@ export function resolveReplayRecording(
     scrollSection: options.scrollSection,
     scrollRate: options.scrollRate,
     gaugeAutoShift: options.gaugeAutoShift,
+    bmsonTotalMode: options.bmsonTotalMode,
     bottomShiftableGauge: options.bottomShiftableGauge,
     autoScratch1P: options.autoScratch1P,
     autoScratch2P: options.autoScratch2P,
@@ -649,6 +652,9 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       gaugeAutoShift:
         ctx.options.replay !== undefined ? ctx.options.replay.play.gaugeAutoShift : ctx.options.gaugeAutoShift,
       judgeAlgorithm: ctx.options.replay?.play.judgeAlgorithm ?? ctx.options.judgeAlgorithm,
+      bmsonTotalMode: ctx.options.replay
+        ? (ctx.options.replay.play.bmsonTotalMode ?? 'beatoraja')
+        : ctx.options.bmsonTotalMode,
       customJudge: ctx.options.replay ? ctx.options.replay.play.customJudge : ctx.options.customJudge,
       judgeTimingAutoAdjust: ctx.options.replay === undefined ? (ctx.options.judgeTimingAutoAdjust ?? 'OFF') : 'OFF',
       judgeTimingMs: ctx.options.judgeTimingMs,

@@ -179,7 +179,7 @@ flowchart TD
 - A resolution of `0` or `null` means the default `240`; a negative resolution is read as its absolute value, as the spec says (beatoraja uses `240` for any value `<= 0`). A non-integer is floored.
 - Reject the document when `info.init_bpm` is missing or not a positive finite number.
 - Use `info.total` when finite (normalizing a negative value to its absolute value per the spec), otherwise apply the bmson default `100`.
-- `info.total` is a percentage of the player's default TOTAL, not an absolute TOTAL. Every player ruleset (`lr2`, `beatoraja`, `____`) plays it as `total / 100 ×` its own default TOTAL, and a value ≤ 0 means 100 % — the beatoraja behaviour (`BMSPlayerRule.validate`) — so `total: 0` does not freeze the gauge even though the spec says the lifebar then does not increase. See [player-spec](./player-spec.md#initial-and-default-values-lr2).
+- `info.total` is a percentage of the player's default TOTAL. The default `bmsonTotalMode: 'beatoraja'` preserves native-compatible zero fallback. Opt-in `'spec'` disables positive recovery for normalized percentage TOTAL 0 across all gauge families, retaining damage, initial HP and course carry. A PRACTICE TOTAL replacement takes precedence. Replay absence keeps compatibility; affected runs are stored unranked and leave ordinary best records alone. See [ADR 0030](./adr/0030-bmson-zero-total.md).
 - Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into normalized metadata image fields.
 - Register `sound_channels[i].name` in `resources.wav[key]`
 - Each sound channel gets its own WAV key of at least two characters, numbered from `01` in channel order (`sound_channels`, then `key_channels`, then `mine_channels`)

@@ -19,9 +19,10 @@ export type CourseReplayIneligibleReason =
 /**
  * Why a submitted course run is stored but not ranked. `tempo` is a run with a stage (or a NONSTOP run's stitched play)
  * played at another tempo: practice, as for a single play. `unreleased` is a course with `release: false` (beatoraja's
- * flag, also set on a drawn random course).
+ * flag, also set on a drawn random course). `bmson-total` is a run with any played stage using
+ * zero-total no-recovery, or a stitched NONSTOP play using that policy.
  */
-export type CourseReplayUnrankedReason = 'tempo' | 'unreleased';
+export type CourseReplayUnrankedReason = 'tempo' | 'unreleased' | 'bmson-total';
 
 export type CourseReplayEligibility =
   | {
@@ -70,6 +71,7 @@ function checkStagesEligibility(courseLog: BeMusicCourseReplay): CourseReplayEli
   const stages: Array<{ chartFingerprint: string; playFingerprint: string }> = [];
   const assistFlags = new Set<ReplayAssistFlag>();
   let tempo = false;
+  let zeroTotal = false;
   const lastPlayed = courseLog.stages.reduce((last, entry, index) => (entry.played ? index : last), -1);
   for (const [index, entry] of courseLog.stages.entries()) {
     if (!entry.played) continue;
@@ -86,6 +88,7 @@ function checkStagesEligibility(courseLog: BeMusicCourseReplay): CourseReplayEli
     stages.push({ chartFingerprint: single.chartFingerprint, playFingerprint: single.playFingerprint });
     for (const flag of single.assistFlags) assistFlags.add(flag);
     if (single.unranked === 'tempo') tempo = true;
+    if (single.unranked === 'bmson-total') zeroTotal = true;
   }
   const courseFingerprint = computeCourseReplayFingerprint(courseLog);
   if (courseFingerprint === undefined) return { eligible: false, reason: 'missing-fingerprint' };
@@ -94,7 +97,7 @@ function checkStagesEligibility(courseLog: BeMusicCourseReplay): CourseReplayEli
     courseFingerprint,
     stages,
     assistFlags: [...assistFlags],
-    ...(tempo ? { unranked: 'tempo' as const } : {}),
+    ...(tempo ? { unranked: 'tempo' as const } : zeroTotal ? { unranked: 'bmson-total' as const } : {}),
   };
 }
 
@@ -142,6 +145,6 @@ function checkNonstopEligibility(courseLog: BeMusicCourseReplay): CourseReplayEl
     stages: [],
     nonstop: { chartFingerprint: single.chartFingerprint, playFingerprint: single.playFingerprint },
     assistFlags: single.assistFlags,
-    ...(single.unranked === 'tempo' ? { unranked: 'tempo' as const } : {}),
+    ...(single.unranked === 'tempo' || single.unranked === 'bmson-total' ? { unranked: single.unranked } : {}),
   };
 }

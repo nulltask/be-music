@@ -201,6 +201,8 @@ export interface ReplayChart {
 }
 
 export interface ReplayPlay {
+  /** Absent retains beatoraja-compatible bmson zero-total recovery. */
+  bmsonTotalMode?: import('../ruleset/bmson-total.ts').BmsonTotalMode;
   /** Selected source options at the start; typed effective play/chart fields remain authoritative for judging. */
   options?: ReplayOptionState;
   /** Every later selected-option change, on the same chart clock as inputs and view changes. */
@@ -460,6 +462,13 @@ export function parseReplay(source: unknown): BeMusicReplay {
   const chart = parseChart(expectRecord(root.chart, 'chart'));
   const inputs = parseInputs(root.inputs);
   const play = parsePlay(expectRecord(root.play, 'play'));
+  if (
+    play.bmsonTotalMode === 'spec' &&
+    chart.total !== undefined &&
+    chart.total < 0 &&
+    (chart.totalUnit ?? (chart.sourceFormat === 'bmson' ? 'percent' : 'absolute')) === 'percent'
+  )
+    throw new ReplayParseError('chart.total: bmson spec mode requires a normalized non-negative percentage.');
   const results = root.results === undefined ? undefined : parseResults(expectRecord(root.results, 'results'));
   const recorder = root.recorder === undefined ? undefined : parseRecorder(expectRecord(root.recorder, 'recorder'));
 
@@ -721,6 +730,11 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
+  if (play.bmsonTotalMode !== undefined) {
+    if (play.bmsonTotalMode !== 'beatoraja' && play.bmsonTotalMode !== 'spec')
+      throw new ReplayParseError('play.bmsonTotalMode: expected beatoraja or spec');
+    parsed.bmsonTotalMode = play.bmsonTotalMode;
+  }
   if (play.bottomShiftableGauge !== undefined) {
     if (!['ASSIST-EASY', 'EASY', 'GROOVE'].includes(play.bottomShiftableGauge as string))
       throw new ReplayParseError('play.bottomShiftableGauge: expected ASSIST-EASY, EASY or GROOVE');

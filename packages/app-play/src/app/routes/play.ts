@@ -1,3 +1,5 @@
+import { resolveChart } from '@be-music/chart-model';
+import { isBmsonRecoveryDisabled } from '@be-music/player-engine/ruleset';
 import { clampFloatingHiSpeed } from '@be-music/player-scene-model';
 // The play route: the play screen (`createPlayScene`), whichever family draws it. A chart plays at once (no decide
 // screen, a retry, F5, a course stage, a NONSTOP run or a replay): the select screen goes off the stage, kept, the play
@@ -379,7 +381,11 @@ export class PlayRoute {
         // never reached counted in its BP) and its Leaderboard entry. One that judged no note yet saves nothing. One
         // that keeps no record but is the player's own (at another tempo) still goes to the Leaderboard, which decides
         // whether it ranks; an AUTO play and a replay go nowhere.
-        const keepsRecord = !practicing && this.records.activePlayRecordKey !== undefined;
+        const source = this.gameplayView?.resolved?.chart;
+        const total = source === undefined ? undefined : resolveChart(source).total;
+        const recoveryDisabled =
+          playOptions.bmsonTotalMode === 'spec' && total?.value === 0 && total.unit === 'percent';
+        const keepsRecord = !practicing && !recoveryDisabled && this.records.activePlayRecordKey !== undefined;
         const sends = !practicing && !autoPlay && replay === undefined;
         const progress = keepsRecord || sends ? view?.progress() : undefined;
         const aborted =
@@ -423,7 +429,12 @@ export class PlayRoute {
           void (async () => {
             this.testHook?.recordReplay(result.replay);
             if (this.activeCourse !== undefined) recordCourseStage(this.activeCourse, result);
-            if (!result.practice) this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
+            if (
+              !result.practice &&
+              (result.replay === undefined ||
+                !isBmsonRecoveryDisabled(result.replay.chart, result.replay.play.bmsonTotalMode))
+            )
+              this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             // No screen comes between the stages: the play leaves the stage, its last samples ringing out, and the next
             // stage (or the course result) shows.
             if (!(await this.router.leave({ playDispose: disposeKeepingAudioTail, continuesRun: true }))) return;

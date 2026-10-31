@@ -47,3 +47,5 @@
 - [0025: 譜面テキストは engine の時刻と判定エフェクトに従う](./0025-chart-text-playback.ja.md)
 
 - [0026: 譜面の実効表示操作をユーザー設定と分けて記録する](./0026-chart-authored-display-options.ja.md)
+
+- [0030: bmson の TOTAL 0 を明示的なプレイ設定で扱う](./0030-bmson-zero-total.ja.md)

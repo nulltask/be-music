@@ -796,3 +796,26 @@ test('7-to-9 descriptors round-trip and reject invalid source settings', () => {
       ReplayParseError,
     );
 });
+
+test('bmson zero-total policy round-trips, preserves legacy absence and rejects invalid modes', () => {
+  for (const bmsonTotalMode of ['beatoraja', 'spec'] as const) {
+    const replay = makeReplay();
+    replay.play.bmsonTotalMode = bmsonTotalMode;
+    expect(parseReplay(serializeReplay(replay)).play.bmsonTotalMode).toBe(bmsonTotalMode);
+  }
+  expect(parseReplay(serializeReplay(makeReplay())).play).not.toHaveProperty('bmsonTotalMode');
+  for (const bmsonTotalMode of ['SPEC', '', null, 0, true, {}]) {
+    const replay = makeReplay();
+    expect(() => parseReplay({ ...replay, play: { ...replay.play, bmsonTotalMode } })).toThrow(/play.bmsonTotalMode/);
+  }
+});
+
+test('strict replay facts require normalized percentage TOTAL', () => {
+  const replay = makeReplay();
+  replay.play.bmsonTotalMode = 'spec';
+  replay.chart.sourceFormat = 'bmson';
+  replay.chart.total = -100;
+  expect(() => parseReplay(serializeReplay(replay))).toThrow(/chart.total.*normalized/);
+  delete replay.play.bmsonTotalMode;
+  expect(() => parseReplay(serializeReplay(replay))).not.toThrow();
+});

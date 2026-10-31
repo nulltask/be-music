@@ -1,3 +1,4 @@
+import { isBmsonRecoveryDisabled } from '../ruleset/bmson-total.ts';
 import { playedAtAnotherTempo } from './view.ts';
 import type { BeMusicReplay } from './format.ts';
 
@@ -9,9 +10,10 @@ export type ReplayIneligibleReason = 'auto-play' | 'two-player' | 'missing-finge
 
 /**
  * Why a submitted play is stored but not ranked: a play at another tempo (`tempo`), and a course stage played on its
- * own submission (`course-stage`). The Leaderboard decides what to show; these are the facts it decides on.
+ * own submission (`course-stage`), or bmson zero-total no-recovery (`bmson-total`).
+ * The Leaderboard decides what to show; these are the facts it decides on.
  */
-export type ReplayUnrankedReason = 'tempo' | 'course-stage';
+export type ReplayUnrankedReason = 'tempo' | 'course-stage' | 'bmson-total';
 
 export type ReplayEligibility =
   | {
@@ -51,7 +53,9 @@ export function checkReplayEligibility(replay: BeMusicReplay): ReplayEligibility
     ? 'tempo'
     : replay.play.course !== undefined
       ? 'course-stage'
-      : undefined;
+      : isBmsonRecoveryDisabled(replay.chart, replay.play.bmsonTotalMode)
+        ? 'bmson-total'
+        : undefined;
   return {
     eligible: true,
     chartFingerprint,

@@ -64,6 +64,8 @@ export type ReplayRecorderChartData = Pick<
   Partial<Pick<PreparedPlaybackChartData, 'resolvedChart'>>;
 
 export interface ReplayRecorderPlaySettings {
+  /** Absent retains beatoraja-compatible bmson zero-total recovery. */
+  bmsonTotalMode?: import('../ruleset/bmson-total.ts').BmsonTotalMode;
   options?: ReplayOptionState;
   mode: 'manual' | 'auto';
   autoScratch: boolean;
@@ -305,6 +307,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         play.aborted = true;
         if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
       }
+      if (options.play.bmsonTotalMode !== undefined) play.bmsonTotalMode = options.play.bmsonTotalMode;
       if (options.play.bottomShiftableGauge !== undefined)
         play.bottomShiftableGauge = options.play.bottomShiftableGauge;
       if (options.play.gaugeAutoShift !== undefined) play.gaugeAutoShift = options.play.gaugeAutoShift;

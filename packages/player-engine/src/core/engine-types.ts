@@ -92,6 +92,8 @@ export interface CreatePlayerInputRuntimeContext {
  * `autoPlay` or `manualPlay`.
  */
 export interface PlayerPlaySettings {
+  /** Absent retains beatoraja-compatible bmson zero-total recovery. */
+  bmsonTotalMode?: import('../ruleset/bmson-total.ts').BmsonTotalMode;
   /** beatoraja scroll modifier; REMOVE changes coordinates and ADD replaces the scroll-rate timeline. Event times stay fixed. */
   scrollModifier?: import('./scroll-modifier.ts').ScrollModifier;
   scrollSection?: number;
