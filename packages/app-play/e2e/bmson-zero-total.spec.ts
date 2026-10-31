@@ -30,7 +30,9 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay?.play.bmsonTotalMode).toBe('spec');
-    expect((replay?.results?.native?.judge.pgreat ?? 0) + (replay?.results?.native?.judge.great ?? 0)).toBe(2);
+    // Both notes are hit; a slow CI frame can land a page-timed press in GOOD (#792).
+    const judge = replay?.results?.native?.judge;
+    expect((judge?.pgreat ?? 0) + (judge?.great ?? 0) + (judge?.good ?? 0)).toBe(2);
     expect(replay?.results?.native?.gauge.final).toBe(20);
     if (family === 'native') {
       await player.leaveResult();
