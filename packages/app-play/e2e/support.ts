@@ -60,9 +60,7 @@ export class Player {
 
   /**
    * Opens the player with the test hook on the empty select screen. `storage` seeds `localStorage` (the settings the
-   * player remembers) before it starts; the built-in skin's effects are off unless a spec asks for them. A spec that
-   * names no built-in skin gets Plain: the CI runner renders in software, and Synesthesia there spaces frames far
-   * enough apart to starve timing-sensitive tests (#792). Specs that test a skin name it.
+   * player remembers) before it starts; the built-in skin's effects are off unless a spec asks for them.
    */
   async open(storage: Readonly<Record<string, string>> = {}): Promise<TestHookState> {
     await this.page.route(`**${FILE_ROUTE}**`, async (route) => {
@@ -73,7 +71,7 @@ export class Player {
       (entries) => {
         for (const [key, value] of Object.entries(entries)) window.localStorage.setItem(key, value);
       },
-      { 'be-music.skin-effects': 'off', 'be-music.built-in-skin': 'plain', ...storage },
+      { 'be-music.skin-effects': 'off', ...storage },
     );
     await this.page.goto('/?e2e=1');
     return this.waitFor((state) => state.scene.kind === 'select', 'the select screen');
