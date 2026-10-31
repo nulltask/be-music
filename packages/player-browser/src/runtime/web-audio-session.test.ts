@@ -8,6 +8,7 @@ import {
   decodedSampleKey,
   LIVE_TEMPO_RAMP_SECONDS,
 } from './web-audio-session.ts';
+import { SAMPLE_SLICE_FADE_SECONDS } from '@be-music/shared-utils/core';
 
 /**
  * Stubs the Web Audio API surface that {@link createWebAudioSession} touches. The session never reaches
@@ -33,6 +34,7 @@ function createMocks(): {
     const gain = {
       value: 1,
       setValueAtTime: vi.fn(),
+      linearRampToValueAtTime: vi.fn(),
     };
     return {
       connect: vi.fn(),
@@ -493,8 +495,9 @@ describe('createWebAudioSession', () => {
     session.triggerEvent?.(chord);
 
     expect(trackedBufferSources).toHaveLength(2);
-    expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 0, 0.5);
-    expect(trackedBufferSources[1]!.node.start).toHaveBeenCalledWith(0, 0.5, 0.5);
+    // Each cut slice rings on past its end for the fade-out that overlaps the next slice's fade-in.
+    expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 0, 0.5 + SAMPLE_SLICE_FADE_SECONDS);
+    expect(trackedBufferSources[1]!.node.start).toHaveBeenCalledWith(0, 0.5, 0.5 + SAMPLE_SLICE_FADE_SECONDS);
     expect(trackedBufferSources[0]!.node.stop).not.toHaveBeenCalled();
     // A miss never invokes triggerEvent; the first slice's duration already prevents audio leaking into that note.
     trackedBufferSources[1]!.node.onended?.(new Event('ended'));
@@ -503,6 +506,49 @@ describe('createWebAudioSession', () => {
     session.seek?.(0);
     session.triggerEvent?.(continuation);
     expect(trackedBufferSources).toHaveLength(4);
+  });
+
+  test('ramps a slice that cuts its file in and out on its own gain, and leaves a whole-file slice alone', () => {
+    const { audioContext, audioBus, trackedBufferSources, createdGains } = createMocks();
+    const chart = makeChartWithSamples();
+    chart.sourceFormat = 'bmson';
+    const first = mkEvent('11', '01');
+    const continuation = mkEvent('12', '01', { position: [1, 4], bmson: { c: true } });
+    const whole = mkEvent('13', '02');
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart,
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer(1)],
+        ['snare.wav', makeMockAudioBuffer(1)],
+      ]),
+      wavCmdVolumeMultipliers: new Map([['01', 0.5]]),
+      bmsonSlicePlayback: new Map([
+        [first, { offsetSeconds: 0, durationSeconds: 0.5 }],
+        [continuation, { offsetSeconds: 0.5 }],
+        [whole, { offsetSeconds: 0 }],
+      ]),
+      playbackRate: 2,
+    });
+    (audioContext as { currentTime: number }).currentTime = 1;
+
+    session.triggerEvent?.(first);
+    session.triggerEvent?.(continuation);
+    session.triggerEvent?.(whole);
+
+    // The first slice starts at the top of the file and only fades out, past its end, from its #WAVCMD level.
+    const firstGain = createdGains[0]!.gain as unknown as Record<string, ReturnType<typeof vi.fn>>;
+    expect(firstGain.setValueAtTime.mock.calls).toEqual([[0.5, 1.25]]);
+    expect(firstGain.linearRampToValueAtTime.mock.calls).toEqual([[0, 1.25 + SAMPLE_SLICE_FADE_SECONDS / 2]]);
+    // The last slice plays to the file's end and only fades in.
+    const lastGain = createdGains[1]!.gain as unknown as Record<string, ReturnType<typeof vi.fn>>;
+    expect(lastGain.setValueAtTime.mock.calls).toEqual([[0, 1]]);
+    expect(lastGain.linearRampToValueAtTime.mock.calls).toEqual([[0.5, 1 + SAMPLE_SLICE_FADE_SECONDS / 2]]);
+    expect(trackedBufferSources[1]!.node.start).toHaveBeenCalledWith(1, 0.5);
+    // A whole-file voice at unity gain needs no gain node.
+    expect(createdGains).toHaveLength(2);
+    expect(trackedBufferSources[2]!.node.start).toHaveBeenCalledWith(1);
   });
 
   test('stops the previous BMS source when the same #WAV slot is retriggered', () => {
@@ -688,6 +734,6 @@ test('maps extended bmson resource keys and source slices into keep-pitch FIT bu
   });
   session.start();
   session.triggerEvent?.(event);
-  expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 1, 0.5);
+  expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 1, 0.5 + SAMPLE_SLICE_FADE_SECONDS);
   await session.dispose();
 });

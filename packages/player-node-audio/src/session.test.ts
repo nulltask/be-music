@@ -1,9 +1,10 @@
-import { expect, test, vi } from 'vite-plus/test';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart-model';
 import { createEmptyJSON } from '@be-music/chart-source';
 import { createNodeAudioSession, loadNodeAudioSampleDurations } from './index.ts';
 import { renderSingleSample } from '@be-music/chart-audio-renderer';
 import { createNodeAudioSink } from './audio-sink.ts';
+import { mixActiveVoices, resolveVoiceFrameWindow, type ActiveVoice } from './session.ts';
 
 vi.mock('@be-music/chart-audio-renderer', () => ({
   renderSingleSample: vi.fn(async () => ({
@@ -207,4 +208,50 @@ test('Node preloads and resolves a paired up source slice without treating it as
   session!.triggerEvent?.(resolved.notes[0]!.endSoundEvent!);
   expect(session!.getActiveAudioVoiceCount?.()).toBe(1);
   await session!.dispose();
+});
+
+describe('bmson slice fades', () => {
+  // 3 ms at 8 kHz: the slice-boundary ramp is 24 frames long.
+  const sampleRate = 8000;
+  const constant = new Float32Array(8000).fill(0.5);
+  const sample = { sampleRate, left: constant, right: constant, durationSeconds: 1, peak: 0.5 };
+  const voice = (playback?: { offsetSeconds: number; durationSeconds?: number }): ActiveVoice => ({
+    sample,
+    gain: 1,
+    ...resolveVoiceFrameWindow(constant.length, sampleRate, playback)!,
+  });
+  const mix = (voices: ActiveVoice[], frames: number): Float32Array => {
+    const left = new Float32Array(frames);
+    mixActiveVoices(left, new Float32Array(frames), voices, frames);
+    return left;
+  };
+
+  test('a whole-file voice and a first slice at the top of the file start without a ramp', () => {
+    expect(resolveVoiceFrameWindow(8000, sampleRate, undefined)).toEqual({
+      startPosition: 0,
+      position: 0,
+      endPosition: 8000,
+    });
+    expect(mix([voice({ offsetSeconds: 0 })], 4)[0]).toBe(0.5);
+  });
+
+  test('a slice inside the file fades in and rings on past its cut end while it fades out', () => {
+    const sliced = voice({ offsetSeconds: 0.25, durationSeconds: 0.25 });
+    expect(sliced).toMatchObject({ startPosition: 2000, position: 2000, endPosition: 4024 });
+    expect(sliced.slice).toEqual({ lengthFrames: 2000, envelope: { fadeIn: 24, fadeOut: 24 } });
+    const fadeIn = mix([sliced], 25);
+    expect(fadeIn[0]).toBe(0);
+    expect(fadeIn[12]).toBeCloseTo(0.25, 6);
+    expect(fadeIn[24]).toBe(0.5);
+    sliced.position = 2000 + 2000 + 12;
+    expect(mix([sliced], 12)[0]).toBeCloseTo(0.25, 6);
+  });
+
+  test('a continuation crossfades with the slice before it to the uncut level', () => {
+    const previous = voice({ offsetSeconds: 0, durationSeconds: 0.25 });
+    const next = voice({ offsetSeconds: 0.25, durationSeconds: 0.25 });
+    previous.position = 2000;
+    const mixed = mix([previous, next], 24);
+    for (const value of mixed) expect(value).toBeCloseTo(0.5, 6);
+  });
 });
