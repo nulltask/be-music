@@ -1,5 +1,5 @@
 // The embed's preview player: loads the `?track=` archive, lists its charts when it has several, and plays the one
-// picked from the preview skin, with video controls: in AUTO, or played by the viewer with `?mode=play`. `?course=` selects an LR2 / beatoraja course file;
+// picked from the preview skin, with video controls: in AUTO, or played by the viewer with `?mode=play` or the AUTO checkbox cleared. `?course=` selects an LR2 / beatoraja course file;
 // staged courses advance automatically, NONSTOP courses use the shared stitching pipeline. `?chart=` naming a chart
 // (`findEmbedChart`) plays it on its own, as a track of one chart does. A play ends back on the list, or — for a chart played on its own — on a
 // replay button. Nothing is recorded.
@@ -35,7 +35,7 @@ import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import { previewArtworkPath } from './artwork.ts';
 import { findEmbedChart } from './chart-match.ts';
 import { createPreviewSkin, type PreviewChrome, type PreviewChromeState } from './preview-skin.ts';
-import { embedStageTapPauses, type EmbedMode, type EmbedTrack } from './track-url.ts';
+import { embedModeOfAutoPlay, embedStageTapPauses, type EmbedMode, type EmbedTrack } from './track-url.ts';
 
 /** How far ← / → seek. */
 const SEEK_STEP_SECONDS = 5;
@@ -64,7 +64,7 @@ export class PreviewApp {
   private readonly host = new PixiSceneHost();
   private readonly audio: AudioService = createAudioService();
   private readonly chrome: PreviewChromeController;
-  /** AUTO (`'preview'`), or the viewer's own play (`'play'`). */
+  /** AUTO (`'preview'`), or the viewer's own play (`'play'`): `?mode=` at first, then the AUTO checkbox. */
   private mode: EmbedMode = 'preview';
   private collection: BrowserChartCollection | undefined;
   /** The track's name, from its archive's file name. */
@@ -145,6 +145,10 @@ export class PreviewApp {
     list.charts = this.courses === undefined ? this.charts : [];
     list.courses = this.courses;
     list.heading = this.trackName;
+    list.autoPlay = this.mode === 'preview';
+    list.addEventListener('auto-play-change', (event) => {
+      this.mode = embedModeOfAutoPlay((event as BeMusicUIEvent<'auto-play-change'>).detail.autoPlay);
+    });
     const images = new Map<string, string>();
     list.images = images;
     list.addEventListener('activate-request', (event) => {
@@ -226,8 +230,13 @@ export class PreviewApp {
     let start: HTMLElement | undefined;
     if (button !== undefined) {
       start = document.createElement('be-music-preview-start');
-      Object.assign(start, { mode: button, disabled: true });
+      Object.assign(start, { mode: button, disabled: true, autoPlay: this.mode === 'preview' });
       start.addEventListener('play-request', () => this.begin());
+      // The scene was made for the other mode: make it again, behind the same button.
+      start.addEventListener('auto-play-change', (event) => {
+        this.mode = embedModeOfAutoPlay((event as BeMusicUIEvent<'auto-play-change'>).detail.autoPlay);
+        void this.tryPlay(() => this.prepare(chart, button, overrides));
+      });
       this.showOverlay(start);
     }
     await scene.prepare();
