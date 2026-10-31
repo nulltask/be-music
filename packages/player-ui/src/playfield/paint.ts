@@ -155,6 +155,11 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
     ctx.fillStyle = NOTE_COLORS[note.kind];
     ctx.globalAlpha = (note.state === 'dropped' ? 0.15 : 0.35) * (note.alpha ?? 1);
     ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, Math.max(1, note.bottom - note.top));
+    // A white centre line down the body, the long-note shape every built-in skin shares.
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = (note.state === 'dropped' ? 0.3 : 0.6) * (note.alpha ?? 1);
+    ctx.fillRect(note.x + note.w / 2 - 1, note.top - NOTE_HEIGHT, 2, Math.max(1, note.bottom - note.top));
+    ctx.fillStyle = NOTE_COLORS[note.kind];
     ctx.globalAlpha = (note.state === 'dropped' ? 0.5 : 1) * (note.alpha ?? 1);
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
     if (note.mode === 'ln') ctx.globalAlpha *= 0.4;

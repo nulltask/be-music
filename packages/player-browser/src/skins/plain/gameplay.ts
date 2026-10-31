@@ -130,8 +130,8 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
 }
 
 /**
- * Tap notes as flat bars. Long notes: a translucent body between the head and tail bars; an LN's tail (not judged)
- * is translucent, a CN / HCN tail (judged on release) solid. A long note missed at the head or let go early draws at
+ * Tap notes as flat bars. Long notes: a translucent body with a white centre line between the head and tail bars; an
+ * LN's tail (not judged) is translucent, a CN / HCN tail (judged on release) solid. A long note missed at the head or let go early draws at
  * LR2's half alpha.
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
@@ -142,6 +142,9 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.globalAlpha = 0.25 * alpha;
     ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.6 * alpha;
+    ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);

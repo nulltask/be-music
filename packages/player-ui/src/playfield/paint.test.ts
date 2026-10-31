@@ -156,6 +156,7 @@ describe('playfield painters', () => {
     expect(ctx.calls).toEqual([
       'fillRect 0,39,50,1 #e5efff 0.125',
       'fillRect 0,14,10,40 #e5efff 0.075',
+      'fillRect 4,14,2,40 #ffffff 0.15',
       'fillRect 0,54,10,6 #e5efff 0.25',
       'fillRect 0,14,10,6 #e5efff 0.25',
       'fillRect 10,54,20,6 #88b9ff 0.5',
@@ -194,6 +195,22 @@ describe('playfield painters', () => {
     ]);
   });
 
+  it('draws a white centre line down a long note body', () => {
+    const ctx = recorder();
+    paintNotes(ctx, {
+      measureLines: [],
+      longNotes: [{ kind: 'white', x: 0, w: 10, top: 20, bottom: 60, mode: 'cn' }],
+      notes: [],
+      mines: [],
+    });
+    expect(ctx.calls).toEqual([
+      'fillRect 0,14,10,40 #e5efff 0.35',
+      'fillRect 4,14,2,40 #ffffff 0.6',
+      'fillRect 0,54,10,6 #e5efff 1',
+      'fillRect 0,14,10,6 #e5efff 1',
+    ]);
+  });
+
   it('dims a dropped long note', () => {
     const ctx = recorder();
     paintNotes(ctx, {
@@ -204,6 +221,7 @@ describe('playfield painters', () => {
     });
     expect(ctx.calls).toEqual([
       'fillRect 0,14,10,40 #e5efff 0.15',
+      'fillRect 4,14,2,40 #ffffff 0.3',
       'fillRect 0,54,10,6 #e5efff 0.5',
       'fillRect 0,14,10,6 #e5efff 0.5',
     ]);
