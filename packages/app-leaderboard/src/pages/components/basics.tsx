@@ -5,6 +5,7 @@ import type { HelpId } from '../help-topics.ts';
 import { HelpTip } from './help-tip.tsx';
 import { formatTimestamp, lampStyle } from '../format.ts';
 import { useMessages } from '../i18n/index.ts';
+import { partialLinkAttributes } from '../partial-swap.ts';
 
 export const scoreHref = (scoreId: string): string => `/scores/${encodeURIComponent(scoreId)}`;
 export const chartHref = (chartFingerprint: string): string => `/charts/${encodeURIComponent(chartFingerprint)}`;
@@ -51,7 +52,8 @@ export function Lamp(props: { lamp: number }) {
 
 /**
  * An on/off switch for a filter: a link to the same page with one query flag flipped. It looks like a switch (a track
- * with a knob) rather than a button, so its state reads at a glance, and says so to assistive technology.
+ * with a knob) rather than a button, so its state reads at a glance, and says so to assistive technology. With the
+ * client script it updates the page in place (partial-swap.ts), the knob sliding over.
  */
 export function Toggle(props: { label: string; on: boolean; href: string; description?: string; help?: HelpId }) {
   const toggle = (
@@ -59,6 +61,7 @@ export function Toggle(props: { label: string; on: boolean; href: string; descri
       role="switch"
       aria-checked={props.on ? 'true' : 'false'}
       href={props.href}
+      {...partialLinkAttributes(props.href)}
       title={props.help === undefined ? props.description : undefined}
       class={`inline-flex items-center gap-2 rounded-md py-1 text-sm transition-colors ${props.on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
     >
@@ -84,7 +87,7 @@ export function Toggle(props: { label: string; on: boolean; href: string; descri
   );
 }
 
-/** One choice among a few, as joined buttons (the scoring rules, a chart's files). */
+/** One choice among a few, as joined buttons (a chart's files), updating the page in place like a Toggle. */
 export function Segmented(props: {
   label: string;
   options: Array<{ label: Child; href: string; current: boolean; title?: string }>;
@@ -98,6 +101,7 @@ export function Segmented(props: {
           data-variant={option.current ? 'primary' : 'outline'}
           aria-current={option.current ? 'true' : undefined}
           href={option.href}
+          {...partialLinkAttributes(option.href)}
           title={option.title}
         >
           {option.label}

@@ -1,9 +1,12 @@
 /**
  * The Leaderboard pages' client script, bundled by scripts/build-client.ts into src/pages/client.generated.ts. It wires
- * what needs the browser: passkey sign-in and sign-out in the header, and the settings page (profile form, icon upload,
- * passkey creation). The pages work without it, minus these actions.
+ * what needs the browser: passkey sign-in and sign-out in the header, the settings page (profile form, icon upload,
+ * passkey creation), and htmx, which updates a page in place when a filter changes or an action is done
+ * (src/pages/partial-swap.ts). The pages work without it, minus these actions.
  */
+import htmx from 'htmx.org';
 import type { CourseCardData } from '../src/pages/course-card-data.ts';
+import { PARTIAL_SELECT_OOB, PARTIAL_SWAP, PARTIAL_TARGET } from '../src/pages/partial-swap.ts';
 import type { ScoreCardData } from '../src/pages/score-card-data.ts';
 import { drawCourseCard } from './course-card.ts';
 import { clientMessages } from './messages.ts';
@@ -24,6 +27,39 @@ function say(message: string | undefined, selector = '[data-account-status]'): v
   target.hidden = message === undefined;
 }
 
+/**
+ * Loads the page in view again and updates it in place, as a filter switch does: after an action that changes what the
+ * page shows (signing out, hiding a play, saving the profile). A full reload is the fallback (the htmx:error listener).
+ */
+async function refresh(): Promise<void> {
+  await htmx.ajax('GET', location.pathname + location.search, {
+    target: PARTIAL_TARGET,
+    select: PARTIAL_TARGET,
+    swap: PARTIAL_SWAP,
+    selectOOB: PARTIAL_SELECT_OOB,
+  });
+}
+
+/**
+ * A partial update that fails (the network, a swap error) falls back to opening the page the plain way. A request that
+ * a newer one replaced (`hx-sync`) is aborted on purpose and left alone.
+ */
+document.addEventListener('htmx:error', (event) => {
+  const { ctx, error } = (
+    event as CustomEvent<{ ctx?: { request?: { method?: string; action?: string } }; error?: unknown }>
+  ).detail;
+  if (error instanceof DOMException && error.name === 'AbortError') return;
+  const request = ctx?.request;
+  if (request?.method !== 'GET' || request.action === undefined) return;
+  location.assign(request.action);
+});
+
+/** A choice in a header menu (the ruleset) closes the menu as its update starts; the morph would keep it open. */
+document.addEventListener('htmx:before:request', (event) => {
+  const menu = event.target instanceof Element ? event.target.closest<HTMLElement>('[popover]') : null;
+  if (menu?.matches(':popover-open')) menu.hidePopover();
+});
+
 /** Answers of the account API: the body on success, a message otherwise. */
 async function callAccountAPI(path: string, init: RequestInit): Promise<{ ok: true } | { ok: false; message: string }> {
   const response = await fetch(path, { credentials: 'same-origin', ...init });
@@ -38,7 +74,7 @@ const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
   },
   async 'sign-out'() {
     await fetch('/api/auth/sign-out', { method: 'POST' });
-    location.reload();
+    await refresh();
   },
   async 'open-sign-in'() {
     location.assign('/api/auth/sign-in');
@@ -61,11 +97,11 @@ const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
   async 'remove-avatar'() {
     const result = await callAccountAPI('/api/v0/me/avatar', { method: 'DELETE' });
     if (!result.ok) return say(result.message, '[data-settings-status]');
-    location.reload();
+    await refresh();
   },
 };
 
-/** Hides the play or the course run the button names, or shows it again, then reloads its page. */
+/** Hides the play or the course run the button names, or shows it again, then updates its page. */
 async function setScoreHidden(button: HTMLButtonElement, hidden: boolean): Promise<void> {
   const { scoreId, courseScoreId } = button.dataset;
   const path =
@@ -81,7 +117,7 @@ async function setScoreHidden(button: HTMLButtonElement, hidden: boolean): Promi
     body: JSON.stringify({ hidden }),
   });
   if (!result.ok) return say(result.message, '[data-visibility-status]');
-  location.reload();
+  await refresh();
 }
 
 document.addEventListener('click', (event) => {
@@ -116,10 +152,7 @@ document.addEventListener('submit', (event) => {
       displayName: formText(data, 'displayName'),
     }),
   })
-    .then((result) => {
-      if (result.ok) location.reload();
-      else say(result.message, '[data-settings-status]');
-    })
+    .then((result) => (result.ok ? refresh() : say(result.message, '[data-settings-status]')))
     .finally(() => {
       if (submit !== null) submit.disabled = false;
     });
@@ -152,7 +185,7 @@ async function toAvatar(file: File): Promise<Blob> {
   return jpeg;
 }
 
-/** The icon picker: shrink, upload with PUT /api/v0/me/avatar, reload. */
+/** The icon picker: shrink, upload with PUT /api/v0/me/avatar, update the page. */
 document.addEventListener('change', (event) => {
   const input = event.target;
   if (!(input instanceof HTMLInputElement) || !input.matches('[data-avatar-input]')) return;
@@ -164,10 +197,7 @@ document.addEventListener('change', (event) => {
     .then((blob) =>
       callAccountAPI('/api/v0/me/avatar', { method: 'PUT', headers: { 'content-type': blob.type }, body: blob }),
     )
-    .then((result) => {
-      if (result.ok) location.reload();
-      else say(result.message, '[data-settings-status]');
-    })
+    .then((result) => (result.ok ? refresh() : say(result.message, '[data-settings-status]')))
     .catch((error: unknown) => say(error instanceof Error ? error.message : String(error), '[data-settings-status]'))
     .finally(() => {
       input.disabled = false;
@@ -230,10 +260,23 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+/** Card uploads started on this page: an update in place sets up sharing again, and must not upload twice. */
+const cardUploads = new Set<string>();
+
 /** The play's or the run's own player: draw the card and upload it when there is none yet. */
 async function ensureShareCard(source: HTMLScriptElement): Promise<void> {
   const upload = source.dataset.upload;
-  if (upload === undefined || source.dataset.hasCard === 'true') return;
+  if (upload === undefined || source.dataset.hasCard === 'true' || cardUploads.has(upload)) return;
+  cardUploads.add(upload);
+  try {
+    await uploadShareCard(source, upload);
+  } catch (error) {
+    cardUploads.delete(upload);
+    throw error;
+  }
+}
+
+async function uploadShareCard(source: HTMLScriptElement, upload: string): Promise<void> {
   const data: unknown = JSON.parse(source.textContent ?? '{}');
   const card: CardSource =
     source.dataset.cardKind === 'course'
@@ -256,22 +299,28 @@ async function ensureShareCard(source: HTMLScriptElement): Promise<void> {
   say(t.cardReady, '[data-share-status]');
 }
 
+/** The share buttons, listened for on the document so they keep working when the page is updated in place. */
+document.addEventListener('click', (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest('[data-share-native]') != null) {
+    const source = document.querySelector<HTMLScriptElement>('script[data-score-card]');
+    void navigator
+      .share({ title: document.title, text: source?.dataset.shareText, url: location.href })
+      .catch(() => undefined);
+  } else if (target?.closest('[data-share-copy]') != null) {
+    void navigator.clipboard
+      .writeText(location.href)
+      .then(() => say(t.linkCopied, '[data-share-status]'))
+      .catch(() => say(t.copyNotAllowed, '[data-share-status]'));
+  }
+});
+
+/** Shows the system share button where there is one, and makes the card. Runs again after an update in place. */
 function setUpSharing(): void {
   const source = document.querySelector<HTMLScriptElement>('script[data-score-card]');
   if (source === null) return;
   const native = document.querySelector<HTMLButtonElement>('[data-share-native]');
   if (native !== null && typeof navigator.share === 'function') native.hidden = false;
-  native?.addEventListener('click', () => {
-    void navigator
-      .share({ title: document.title, text: source.dataset.shareText, url: location.href })
-      .catch(() => undefined);
-  });
-  document.querySelector('[data-share-copy]')?.addEventListener('click', () => {
-    void navigator.clipboard
-      .writeText(location.href)
-      .then(() => say(t.linkCopied, '[data-share-status]'))
-      .catch(() => say(t.copyNotAllowed, '[data-share-status]'));
-  });
   void ensureShareCard(source).catch((error: unknown) =>
     say(t.cardFailed(error instanceof Error ? error.message : String(error)), '[data-share-status]'),
   );
@@ -291,4 +340,5 @@ function whenShown(start: () => void): void {
 whenShown(() => {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setUpSharing);
   else setUpSharing();
+  document.addEventListener('htmx:after:settle', setUpSharing);
 });

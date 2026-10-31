@@ -33,3 +33,11 @@
 ::view-transition-new(site-header) {
   animation: none;
 }
+
+/* A page updating in place (partial-swap.ts) dims its body while the new one loads. The fade waits a moment, so a
+   quick answer never shows it. */
+main.htmx-request {
+  opacity: 0.6;
+  cursor: progress;
+  transition: opacity 150ms ease-in 150ms;
+}
