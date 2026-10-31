@@ -6,7 +6,7 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
  * bombs). A play view passes itself.
  */
 
-import type { BMSSwitchingBGA, ResolvedChart, TimingResolver, ChartPlayVariant } from '@be-music/chart-model';
+import type { ResolvedChart, TimingResolver, ChartPlayVariant } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { ScrollDistanceMapperLike, TimedLandmineNote, TimedPlayableNote } from '@be-music/player-engine/display';
 import type { PlayerGaugeSummary, PlayerUIFramePayload } from '@be-music/player-engine/signals';
@@ -133,7 +133,6 @@ export interface PlayfieldRuntime {
   readonly poorBGAFallbackUntilSeconds: number;
   readonly lastPoorAt: number;
   readonly engineFrame?: Pick<PlayerUIFramePayload, 'keyBoundBGA' | 'bmsonBGA' | 'currentSeconds'>;
-  readonly switchingBGAs: Map<string, BMSSwitchingBGA>;
   readonly bgaTextures: Map<string, Texture>;
   readonly bgaLayerTextures: Map<string, Texture>;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;

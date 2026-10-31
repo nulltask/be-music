@@ -48,7 +48,6 @@ import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
 import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import type {
-  BMSSwitchingBGA,
   RandomDraws,
   ResolvedChart,
   TimedSampleTrigger,
@@ -294,13 +293,6 @@ export class PlaySessionState extends PlayPresentation {
    * the dominant in-the-wild use of `#WAVCMD`, so this already covers the common case.
    */
   wavCmdVolumeMultipliers: Map<string, number> = new Map<string, number>();
-  /**
-   * Parsed `#SWBGAxx` directives keyed by slot id. Built once per chart by {@link prepareChart}, looked up on every BGA
-   * frame draw — `pickSwitchingBGAFrame(entry, elapsedMs)` resolves the currently-visible source `#BMPxx` key to swap
-   * into the layer draw. Slots without a `#SWBGAxx` declaration stay absent so the fast path (single texture lookup)
-   * takes over.
-   */
-  switchingBGAs: Map<string, BMSSwitchingBGA> = new Map<string, BMSSwitchingBGA>();
   /** `#BGAxx` sub-region slot → its authored `dx dy` on the 256x256 BGA canvas. */
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }> = new Map<string, { x: number; y: number }>();
   /**

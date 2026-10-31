@@ -21,11 +21,9 @@ import {
   resolvePoorBGAMode,
   buildBGAOpacityTimelines,
   PLAY_MODE_LAYOUTS,
-  parseBMSSwBGA,
   buildKeyBoundBGATimeline,
   resolveChart,
   resolveChartReferenceBPM,
-  type BMSSwitchingBGA,
   type RandomDraws,
   type ResolvedChart,
   type TimedSampleTrigger,
@@ -33,7 +31,7 @@ import {
   type ChartPlayVariant,
   createBeatAtSecondsResolverFromTimingResolver,
 } from '@be-music/chart-model';
-import { resolveBMSBase, type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player-engine';
 import {
   isPlayableInputChannel,
@@ -186,7 +184,6 @@ export interface PlayChartContext {
   battleSourceVariant: ChartPlayVariant | undefined;
   touchTokenByChannel: Map<string, string> | undefined;
   wavCmdVolumeMultipliers: Map<string, number>;
-  switchingBGAs: Map<string, BMSSwitchingBGA>;
   bmsonSlicePlayback:
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
@@ -274,16 +271,6 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // BMS spec — `#WAVCMD 01 xx vv` and `#EXWAVxx` per-slot volumes, collected once so every sample trigger is a single
   // Map lookup; slots without an entry take the unity-gain fast path.
   ctx.wavCmdVolumeMultipliers = collectChartVolumeMultipliers(resolved);
-  // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares an animated BGA slot. Pre-parse every entry now so
-  // per-frame BGA composition stays a single `Map.get` plus `pickSwitchingBGAFrame` (no per-frame regex / split).
-  ctx.switchingBGAs.clear();
-  const base = resolveBMSBase(resolved);
-  for (const [slot, raw] of Object.entries(resolved.bms.swBGA)) {
-    const parsed = parseBMSSwBGA(raw, base);
-    if (parsed) {
-      ctx.switchingBGAs.set(slot, parsed);
-    }
-  }
   // Build the chart's playable / landmine / invisible note arrays via the engine's own `preparePlaybackChartData`
   // so the renderer holds the exact same `TimedPlayableNote[]` / `TimedLandmineNote[]` instances the engine
   // will judge against. We keep a reference to the entire prepared bundle and forward it through

@@ -89,7 +89,6 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
       bgaActiveVideos: {},
       bgaVideos: new Map(),
       bgaSubRegionOrigins: new Map(),
-      switchingBGAs: new Map(),
       bgaTimeline: {
         base: [{ seconds: 0, bmpKey: 'base' }],
         layer: [

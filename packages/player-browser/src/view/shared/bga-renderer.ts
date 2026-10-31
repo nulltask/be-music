@@ -8,7 +8,6 @@ import { isColorKeyVideoCanvas } from '../../media/color-key-video.ts';
  * The functions read and write the scene's state through {@link BGARendererContext}; the play view passes itself.
  */
 
-import { pickSwitchingBGAFrame } from '@be-music/chart-model';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/display';
 import { Texture } from 'pixi.js';
 import {
@@ -180,22 +179,14 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
     const skinFrame = (stack: BGAStack) =>
       buildSkinBGAFrame(
         {
-          base:
-            stack.baseCue?.bmpKey !== undefined
-              ? resolveBGAFrameKey(ctx, stack.baseCue.bmpKey, stack.baseCue.seconds, seconds)
-              : undefined,
+          base: stack.baseCue?.bmpKey !== undefined ? resolveBGAFrameKey(ctx, stack.baseCue.bmpKey) : undefined,
           layer:
-            stack.layerCue?.bmpKey !== undefined
-              ? resolveBGAFrameKey(ctx, stack.layerCue.bmpKey, stack.layerCue.seconds, seconds, 'layer')
-              : undefined,
+            stack.layerCue?.bmpKey !== undefined ? resolveBGAFrameKey(ctx, stack.layerCue.bmpKey, 'layer') : undefined,
           layer2:
             stack.layer2Cue?.bmpKey !== undefined
-              ? resolveBGAFrameKey(ctx, stack.layer2Cue.bmpKey, stack.layer2Cue.seconds, seconds, 'layer2')
+              ? resolveBGAFrameKey(ctx, stack.layer2Cue.bmpKey, 'layer2')
               : undefined,
-          poor:
-            stack.poorKey !== undefined
-              ? resolveBGAFrameKey(ctx, stack.poorKey, stack.poorCue?.seconds, seconds, 'poor')
-              : undefined,
+          poor: stack.poorKey !== undefined ? resolveBGAFrameKey(ctx, stack.poorKey, 'poor') : undefined,
           poorOverlays: stack.poorOverlays,
           opacity: stack.opacity,
           tint: stack.tint,
@@ -254,13 +245,12 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       key: string | undefined,
       textures: ReadonlyMap<string, Texture>,
       layerName: 'base' | 'layer' | 'layer2' | 'poor',
-      cueSeconds: number | undefined,
       alpha = 1,
       overlay = false,
       tint = 0xffffff,
     ): void => {
       if (!key) return;
-      const resolvedKey = resolveBGAFrameKey(ctx, key, cueSeconds, seconds, layerName);
+      const resolvedKey = resolveBGAFrameKey(ctx, key, layerName);
       const texture = textures.get(resolvedKey);
       if (!texture) return;
       // The rect stands for the 256x256 BMS canvas: an image that fits it keeps its pixel size there, centered
@@ -312,20 +302,16 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           stack.poorKey,
           ctx.play.bgaTextures,
           'poor',
-          stack.poorCue?.seconds,
           stack.alpha * (stack.opacity?.poor ?? 1),
           false,
           stack.tint?.poor,
         );
         continue;
       }
-      // `cue.seconds` anchors switching-BGA frame timing — `pickSwitchingBGAFrame` advances frames relative to when
-      // the cue fired, not relative to the chart origin.
       drawLayer(
         stack.baseCue?.bmpKey,
         ctx.play.bgaTextures,
         'base',
-        stack.baseCue?.seconds,
         stack.alpha * (stack.opacity?.base ?? 1),
         false,
         stack.tint?.base,
@@ -336,7 +322,6 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         stack.layerCue?.bmpKey,
         ctx.play.bgaLayerTextures,
         'layer',
-        stack.layerCue?.seconds,
         stack.alpha * (stack.opacity?.layer ?? 1),
         false,
         stack.tint?.layer,
@@ -345,7 +330,6 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         stack.layer2Cue?.bmpKey,
         ctx.play.bgaLayerTextures,
         'layer2',
-        stack.layer2Cue?.seconds,
         stack.alpha * (stack.opacity?.layer2 ?? 1),
         false,
         stack.tint?.layer2,
@@ -355,13 +339,12 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           stack.poorKey,
           ctx.play.bgaTextures,
           'poor',
-          stack.poorCue?.seconds,
           stack.alpha * (stack.opacity?.poor ?? 1),
           true,
           stack.tint?.poor,
         );
     }
-    if (keyBoundKey && !bga.noLayer) drawLayer(keyBoundKey, ctx.play.bgaLayerTextures, 'layer2', undefined, 1, true);
+    if (keyBoundKey && !bga.noLayer) drawLayer(keyBoundKey, ctx.play.bgaLayerTextures, 'layer2', 1, true);
   }
   ctx.bgaLayerPool.end();
 }
@@ -392,23 +375,14 @@ function resolveBGAStacks(
   });
 }
 
-/**
- * The slot to show for the BGA cue `key` that fired at `cueSeconds`. BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...`
- * declares an animated BGA: when the cue's slot matches a parsed entry, advance through its frame list at the
- * authored interval and show the source `#BMPxx` of the currently-visible frame. Otherwise (no `#SWBGAxx` entry, or
- * no cue time as for POOR) `key` itself.
- */
+/** The texture key for the BGA slot `key` on `track`: its per-track video instance when one exists, else `key`. */
 function resolveBGAFrameKey(
   ctx: BGARendererContext,
   key: string,
-  cueSeconds: number | undefined,
-  seconds: number,
   track: 'base' | 'layer' | 'layer2' | 'poor' = 'base',
 ): string {
-  const swBGA = cueSeconds === undefined ? undefined : ctx.play.switchingBGAs.get(key);
-  const frameKey = swBGA ? pickSwitchingBGAFrame(swBGA, Math.max(0, (seconds - cueSeconds!) * 1000)) || key : key;
-  const videoKey = String.fromCharCode(0) + track + ':' + frameKey;
-  return ctx.play.bgaVideos?.has(videoKey) ? videoKey : frameKey;
+  const videoKey = String.fromCharCode(0) + track + ':' + key;
+  return ctx.play.bgaVideos?.has(videoKey) ? videoKey : key;
 }
 
 /** Video crops remain live canvases; their Texture keys disappear with the play session. */
