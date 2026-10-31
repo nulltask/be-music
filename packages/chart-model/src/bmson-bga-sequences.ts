@@ -71,7 +71,7 @@ export function buildBmsonBGAEventTimeline(
     condition:
       plane === 'poor' ? 'miss' : event.condition === 'play' || event.condition === 'miss' ? event.condition : 'always',
     interval: plane === 'poor' ? 1 : (event.interval ?? 0),
-    sequences: (plane === 'poor' ? [event.id] : (event.idSet ?? [event.id])).map(resolve),
+    sequences: (plane === 'poor' ? [event.id ?? 0] : (event.idSet ?? [event.id ?? 0])).map(resolve),
   });
   return [
     ...bga.layerEvents.flatMap((event) => {
@@ -79,7 +79,7 @@ export function buildBmsonBGAEventTimeline(
         event.idSet !== undefined ||
         event.condition !== undefined ||
         event.interval !== undefined ||
-        definitions.has(event.id);
+        definitions.has(event.id ?? 0);
       if (extended) return [cue(event, 'layer')];
       return options.includeOrdinaryLayerClears ? [{ ...cue(event, 'layer'), sequences: [] }] : [];
     }),
