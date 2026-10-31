@@ -94,6 +94,14 @@ test('?mode=play lets the viewer play: no seeking, and M is a lane rather than m
   await page.keyboard.press('KeyM');
   await expect(hud.getByRole('button', { name: 'Mute', exact: true })).toBeAttached();
   await expect(hud.getByRole('button', { name: 'Unmute' })).toHaveCount(0);
+  // A tap on the stage is part of playing, not a pause: only the controls bar pauses.
+  await expect(hud.locator('.stage-hit')).toHaveCount(0);
+  const stage = (await hud.boundingBox())!;
+  await page.mouse.click(stage.x + stage.width * 0.25, stage.y + stage.height * 0.4);
+  await expect(hud.locator('button.resume')).toHaveCount(0);
+  await expect(
+    hud.locator('be-music-playback-controls').getByRole('button', { name: 'Pause', exact: true }),
+  ).toBeAttached();
 });
 
 test('seeks back and forth: the time follows the second sought, and the combo is the one reached by playing there', async ({

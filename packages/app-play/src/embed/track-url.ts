@@ -3,6 +3,14 @@ import { resolveURLLoadFetchURL } from '../url-load.ts';
 /** How the embed plays a chart: `'preview'` plays it in AUTO like a video, `'play'` lets the viewer play it. */
 export type EmbedMode = 'preview' | 'play';
 
+/**
+ * Whether a click or tap on the stage pauses the play, as it does a video. Not while the viewer plays (`'play'`): a tap
+ * there is part of playing, not a request to stop, so only the controls bar and the play's own keys pause it.
+ */
+export function embedStageTapPauses(mode: EmbedMode): boolean {
+  return mode !== 'play';
+}
+
 /** The archive an embed previews: the page's `?track=` URL, resolved against the page and fetched through the proxy. */
 export interface EmbedTrack {
   /** The URL as given, resolved against the page. */
