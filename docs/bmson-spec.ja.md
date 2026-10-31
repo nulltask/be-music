@@ -290,7 +290,7 @@ be-music は NORMAL の解釈（`100` = NORMAL）に従います。仕様の説�
 
 ### beatoraja の BGA シーケンスデータ
 
-`bmson.bga.sequences` は `bga_sequence` の定義を保持し、フレームはミリ秒の `time` と任意の `id` を持つ。id の省略と `-2147483648` は終端を表す。イベント配列は順序付きの `idSet`・`condition`・`interval` を保持する。画像セットだけのイベントでは、通常の `id` を beatoraja の整数既定値と同じゼロにし、明示的な空セットは空のまま保つ。外部出力では `id_set` を使う。
+`bmson.bga.sequences` は `bga_sequence` の定義を保持し、フレームはミリ秒の `time` と任意の `id` を持つ。id の省略と `-2147483648` は終端を表す。イベント配列は順序付きの `idSet`・`condition`・`interval` を保持する。画像セットだけのイベントは、Be-Music JSON と bmson 出力でも `id` を省略したまま保つ。`id` が必要な場面では beatoraja の整数既定値と同じゼロとして読む。`id` のない base・POOR のイベントは、0 番のヘッダーがあればそれを表示し、なければ何も変えない（beatoraja では解決できない id はタイムラインの BGA を未設定のままにするため）。明示的な空セットは空のまま保つ。外部出力では `id_set` を使う。
 
 モデルは `buildBmsonBGAEventTimeline` と `pickBmsonBGASequenceFrame` を公開する。キューの pulse は BPM・STOP のリゾルバーで解決し、フレーム時刻は経過ミリ秒のまま扱う。イベントレイヤーの参照では、画像 id よりシーケンス id を優先する。通常の画像参照はヘッダーの宣言 id を使うが、シーケンスのフレーム id は [上流のデコーダー](https://github.com/exch-bms2/jbms-parser/blob/master/src/bms/model/BMSONDecoder.java)と[描画処理](https://github.com/exch-bms2/beatoraja/blob/master/src/bms/player/beatoraja/play/bga/BGAProcessor.java)と同じく、ヘッダー配列の 0 始まりの位置を使う。未定義画像は画像なしとなり、終端後は新しいトリガーまで終了状態を保つ。通常の画像だけのレイヤーは既存の BGA タイムラインに残る。
 
