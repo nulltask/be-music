@@ -14,7 +14,6 @@ import {
   parseBMSDynamicVolumeGain,
   parseBMSExBMP,
   parseBMSExWAV,
-  parseBMSSwBGA,
   parseBmsWAVCmd,
   resolveBMSLongNotes,
   resolveChartPlayVariant,
@@ -97,18 +96,18 @@ describe('test/fixtures corpus', () => {
     // `#EXWAVxx <flags> <params> <filename>` — flags are matched positionally, in any order.
     expect(parseBMSExWAV(json.bms.exWAV['01'] ?? '')).toEqual({
       pan: 1024,
-      volumeCentibels: -200,
+      volumeMillibels: -200,
       frequencyHz: 48_000,
       filename: 'sample.wav',
     });
     expect(parseBMSExWAV(json.bms.exWAV['02'] ?? '')).toMatchObject({
-      volumeCentibels: -600,
+      volumeMillibels: -600,
       pan: -500,
       filename: 'branch.wav',
     });
     // An explicitly authored 0 cB is unity, and must stay distinguishable from an unauthored flag.
     const unity = parseBMSExWAV(json.bms.exWAV['03'] ?? '');
-    expect(unity?.volumeCentibels).toBe(0);
+    expect(unity?.volumeMillibels).toBe(0);
     expect(unity?.pan).toBeUndefined();
 
     // `#EXBMPxx a,r,g,b,filename`
@@ -134,17 +133,8 @@ describe('test/fixtures corpus', () => {
     });
     expect(parseBmsBGA(json.bms.bga['06'] ?? '')).toMatchObject({ sourceBMP: '02', sx: 64, sy: 32, dx: 16, dy: 8 });
 
-    // `#SWBGAxx fr:tot:lp[:ARGB] N1 N2 …` — `fr` is in 1/100 s, so 10 is a 100 ms frame interval.
-    expect(parseBMSSwBGA(json.bms.swBGA['01'] ?? '')).toEqual({
-      frameIntervalMs: 100,
-      totalFrames: 5,
-      loop: true,
-      argbRaw: 'FF000000',
-      frames: ['01', '02', '03', '04', '05'],
-    });
-    const holdLast = parseBMSSwBGA(json.bms.swBGA['02'] ?? '');
-    expect(holdLast?.loop).toBe(false);
-    expect(holdLast?.argbRaw).toBeUndefined();
+    // `#SWBGAxx` stays raw; `parseBMSKeyBoundBGA` reads the standard A5 grammar.
+    expect(json.bms.swBGA['01']).toBeDefined();
 
     // One `#WAVCMD pp xx vv` line per parameter byte.
     const wavCmds = json.bms.wavCmds.map((line) => parseBmsWAVCmd(line));
