@@ -19,7 +19,12 @@ async function colors(player: Player): Promise<string[]> {
         for (let y = 0; y < canvas.height; y++)
           for (let x = 0; x < canvas.width; x++) {
             const at = (y * canvas.width + x) * 4;
-            if (data[at] === 21 && data[at + 1] === 79 && data[at + 2] === 227) {
+            // Software rendering can shift the blue base by a step, so find it with the same tolerance as the samples.
+            if (
+              Math.abs(data[at]! - 21) <= 4 &&
+              Math.abs(data[at + 1]! - 79) <= 4 &&
+              Math.abs(data[at + 2]! - 227) <= 4
+            ) {
               box[0] = Math.min(box[0]!, x);
               box[1] = Math.min(box[1]!, y);
               box[2] = Math.max(box[2]!, x);
@@ -140,41 +145,43 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
       'manual bmson sequence play',
     );
     await expect.poll(() => colors(player)).toEqual(['blue', 'blue', 'blue', 'blue']);
-    await player.keyWhen((state) => (state.play?.seconds ?? 0) >= 3.98, undefined, 'KeyZ', 'first successful note');
-    await expect
-      .poll(() => colors(player), { timeout: 4000, intervals: [50] })
-      .toEqual(['purple', 'purple', 'purple', 'purple']);
+    // Sequences follow the chart clock, so each frame is sampled paused inside its window (#878).
+    const sample = (expected: string) =>
+      expect
+        .poll(() => colors(player), { timeout: 5000, intervals: [100] })
+        .toEqual([expected, expected, expected, expected]);
+    let pressed = await player.pressPaused('KeyZ', 3.98);
+    await player.releaseKey('KeyZ');
+    await sample('purple');
     await player.page.screenshot({ path: info.outputPath('play-alpha.png') });
-    await expect
-      .poll(() => colors(player), { timeout: 4000, intervals: [50] })
-      .toEqual(['green', 'green', 'green', 'green']);
-    await player.key('Space');
+    await player.resumeUntil(pressed + 1.05, 'second frame of the first sequence');
+    await sample('green');
     const paused = (await player.state()).play?.seconds;
     await player.page.waitForTimeout(250);
     expect((await player.state()).play?.seconds).toBeCloseTo(paused!, 2);
-    await expect.poll(() => colors(player)).toEqual(['green', 'green', 'green', 'green']);
+    await sample('green');
+    await player.resumeUntil(pressed + 1.6, 'end of the first sequence');
+    await sample('blue');
     await player.key('Space');
-    await expect
-      .poll(() => colors(player), { timeout: 3000, intervals: [50] })
-      .toEqual(['blue', 'blue', 'blue', 'blue']);
-    await player.keyWhen((state) => (state.play?.seconds ?? 0) >= 5.98, undefined, 'KeyZ', 'second successful note');
-    await expect
-      .poll(() => colors(player), { timeout: 3000, intervals: [50] })
-      .toEqual(['black', 'black', 'black', 'black']);
-    await expect
-      .poll(() => colors(player), { timeout: 3000, intervals: [50] })
-      .toEqual(['blue', 'blue', 'blue', 'blue']);
-    await player.waitFor((state) => (state.play?.seconds ?? 0) >= 11.9, 'sequence-backed MISS selection');
-    await expect
-      .poll(() => colors(player), { timeout: 5000, intervals: [50] })
-      .toEqual(['dark-red', 'dark-red', 'dark-red', 'dark-red']);
-    await expect
-      .poll(() => colors(player), { timeout: 4000, intervals: [50] })
-      .toEqual(['green', 'green', 'green', 'green']);
-    await player.page.screenshot({ path: info.outputPath('miss-after-500ms.png') });
-    await expect
-      .poll(() => colors(player), { timeout: 3000, intervals: [50] })
-      .toEqual(['blue', 'blue', 'blue', 'blue']);
+    pressed = await player.pressPaused('KeyZ', 5.98);
+    await player.releaseKey('KeyZ');
+    await sample('black');
+    await player.resumeUntil(pressed + 1, 'end of the second sequence');
+    await sample('blue');
+    await player.key('Space');
+    const missed = await player.keyWhen(
+      (state) => (state.play?.judged?.poor ?? 0) >= 1,
+      undefined,
+      'Space',
+      'sequence-backed MISS selection',
+    );
+    const missedAt = missed.play?.seconds ?? 0;
+    await sample('dark-red');
+    await player.resumeUntil(missedAt + 1.05, 'second frame of the MISS sequence');
+    await sample('green');
+    await player.page.screenshot({ path: info.outputPath('miss-second-frame.png') });
+    await player.resumeUntil(missedAt + 1.6, 'end of the MISS sequence');
+    await sample('blue');
   });
 
   test(`${family} plays and restarts ALWAYS bmson movie sequences while retaining unkeyed white and black`, async ({

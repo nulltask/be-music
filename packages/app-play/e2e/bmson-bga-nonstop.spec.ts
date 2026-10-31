@@ -17,7 +17,12 @@ async function colors(player: Player): Promise<string[]> {
       for (let y = 0; y < canvas.height; y++)
         for (let x = 0; x < canvas.width; x++) {
           const at = (y * canvas.width + x) * 4;
-          if (data[at] === 21 && data[at + 1] === 79 && data[at + 2] === 227) {
+          // Software rendering can shift the blue base by a step, so find it with the same tolerance as the samples.
+          if (
+            Math.abs(data[at]! - 21) <= 4 &&
+            Math.abs(data[at + 1]! - 79) <= 4 &&
+            Math.abs(data[at + 2]! - 227) <= 4
+          ) {
             bounds[0] = Math.min(bounds[0]!, x);
             bounds[1] = Math.min(bounds[1]!, y);
             bounds[2] = Math.max(bounds[2]!, x);
@@ -120,13 +125,21 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
       'sequence NONSTOP play',
     );
     await expect.poll(() => colors(player)).toEqual(['blue', 'blue']);
-    await player.keyWhen((state) => (state.play?.seconds ?? 0) >= 3.98, undefined, 'KeyZ', 'first stage judgment');
-    await expect.poll(() => colors(player), { timeout: 3000, intervals: [50] }).toEqual(['red', 'blue']);
+    // The sequence follows the chart clock, so it is sampled paused inside its window (#878).
+    const sample = (expected: string[]) =>
+      expect.poll(() => colors(player), { timeout: 5000, intervals: [100] }).toEqual(expected);
+    let pressed = await player.pressPaused('KeyZ', 3.98);
+    await player.releaseKey('KeyZ');
+    await sample(['red', 'blue']);
     await player.page.screenshot({ path: info.outputPath('first-sequence.png') });
-    await expect.poll(() => colors(player), { timeout: 4000, intervals: [50] }).toEqual(['blue', 'blue']);
-    await player.keyWhen((state) => (state.play?.seconds ?? 0) >= 8.02, undefined, 'KeyZ', 'second stage judgment');
-    await expect.poll(() => colors(player), { timeout: 4000, intervals: [50] }).toEqual(['green', 'blue']);
+    await player.resumeUntil(pressed + 3.5, 'end of the first stage sequence');
+    await sample(['blue', 'blue']);
+    await player.key('Space');
+    pressed = await player.pressPaused('KeyZ', 8.02);
+    await player.releaseKey('KeyZ');
+    await sample(['green', 'blue']);
     await player.page.screenshot({ path: info.outputPath('second-sequence.png') });
-    await expect.poll(() => colors(player), { timeout: 4000, intervals: [50] }).toEqual(['blue', 'blue']);
+    await player.resumeUntil(pressed + 3.5, 'end of the second stage sequence');
+    await sample(['blue', 'blue']);
   });
 }
