@@ -306,3 +306,16 @@ Unknown JSON data uses optional `extraFields` envelopes on root/info, notes, tim
   - `beat = y/resolution`
   - `measure = floor(beat / 4)`
   - `position = [round(y) % (resolution * 4), resolution * 4]`
+
+## Changing output resolution
+
+`stringifyBmson(chart, { resolution })` converts supported pulse-valued data to the requested grid. A finite option of at least 1 is floored; other values use the source resolution, or 240 when absent. An explicit resolution request regenerates from current events even when preservation validation is skipped. Source objects are not mutated.
+
+| Data                                             | Conversion                                                                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Note onset and LN endpoint                       | Round each absolute beat position to output pulses; `l` is the rounded endpoint minus the rounded onset |
+| Base/layer/POOR event `y` and barlines           | Scale from source pulses and round to the nearest output pulse                                          |
+| Sequence frame `time` and conditional `interval` | Keep milliseconds unchanged                                                                             |
+| Opaque annotation payloads                       | Retain data without interpreting their units                                                            |
+
+Rounding a length independently can detach an `up` keysound from the rounded tail. If a positive LN would collapse to zero pulses, export raises `RangeError` with advice to choose a higher resolution. Coarser grids can still quantize other event positions; exact timing equality requires representable pulse positions. Explicit `lines: []` stays empty on preserved and regenerated output, retaining barline suppression and its fingerprint.
