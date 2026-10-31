@@ -118,32 +118,40 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
       'manual SWBGA play',
     );
     await expect.poll(() => correctPixels(player, 'base')).toBe(true);
-    await player.page.keyboard.down('z');
-    try {
-      for (const phase of ['first', 'alias', 'combined'] as const) {
-        await expect.poll(() => correctPixels(player, phase), { timeout: 5000, intervals: [50] }).toBe(true);
-        await player.page.screenshot({ path: info.outputPath(`${phase}.png`) });
-      }
-    } finally {
-      await player.page.keyboard.up('z');
-    }
+    // SWBGA frames follow the chart clock, so pausing freezes them: sample each frame paused at a known chart time.
+    // Sampling a running chart misses 500 ms frames on CI, where one screenshot takes about as long (#878).
+    const sample = async (phase: 'base' | 'first' | 'alias' | 'combined') =>
+      expect.poll(() => correctPixels(player, phase), { timeout: 5000, intervals: [100] }).toBe(true);
+
+    // Held, the looped 500 ms frames advance first → alias → combined from the press.
+    let pressed = await player.pressPaused('KeyZ');
+    await sample('first');
+    await player.page.screenshot({ path: info.outputPath('first.png') });
+    await player.resumeUntil(pressed + 0.6, 'alias frame');
+    await sample('alias');
+    await player.page.screenshot({ path: info.outputPath('alias.png') });
+    await player.resumeUntil(pressed + 1.1, 'combined frame');
+    await sample('combined');
+    await player.page.screenshot({ path: info.outputPath('combined.png') });
+    await player.releaseKey('KeyZ');
+    await player.key('Space');
     await expect.poll(() => correctPixels(player, 'base'), { timeout: 3000 }).toBe(true);
-    await player.page.keyboard.down('z');
-    try {
-      await expect.poll(() => correctPixels(player, 'first'), { timeout: 3000, intervals: [50] }).toBe(true);
-    } finally {
-      await player.page.keyboard.up('z');
-    }
+    // A fresh press starts again from the first frame.
+    pressed = await player.pressPaused('KeyZ');
+    await sample('first');
+    await player.releaseKey('KeyZ');
+    await player.key('Space');
+    // The finite binding from measure 4 outlives its release, then expires 1 s after the press.
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 8.2, 'finite SWBGA binding');
-    await player.page.keyboard.down('s');
-    try {
-      await expect.poll(() => correctPixels(player, 'first'), { timeout: 3000, intervals: [50] }).toBe(true);
-    } finally {
-      await player.page.keyboard.up('s');
-    }
-    await expect.poll(() => correctPixels(player, 'first'), { timeout: 500, intervals: [50] }).toBe(true);
-    await expect.poll(() => correctPixels(player, 'base'), { timeout: 3000, intervals: [50] }).toBe(true);
+    pressed = await player.pressPaused('KeyS');
+    await sample('first');
+    await player.releaseKey('KeyS');
+    await player.resumeUntil(pressed + 0.6, 'finite frame after release');
+    await sample('first');
+    await player.resumeUntil(pressed + 1.3, 'expired finite binding');
+    await sample('base');
     await player.page.screenshot({ path: info.outputPath('expired.png') });
+    await player.key('Space');
   });
 }
 
