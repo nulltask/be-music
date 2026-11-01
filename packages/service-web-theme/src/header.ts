@@ -87,8 +87,9 @@ export function serviceSkipLink(locale: Locale): string {
  * button between Play's slot and the language menu. `title` is the fixed brand (`Be-Music Dashboard`), not translated,
  * with one Beta badge beside it. The account control links to `accountHref` (these pages have no account menu).
  * `settings` replaces the Play link with a Settings button (`data-service-header="settings"`); the page wires the
- * click. Play uses that button for its Debug Menu. The two are never both shown. `fullscreen` adds a button beside
- * Settings (`data-service-header="fullscreen"`). Only Play sets it; the page toggles fullscreen from the click.
+ * click. Play's button toggles its Debug Menu, and `settingsOpen` sets `aria-expanded`. The two are never both shown.
+ * `fullscreen` adds a button beside Settings (`data-service-header="fullscreen"`). Only Play sets it; the page toggles
+ * fullscreen from the click.
  */
 export function renderServiceHeader(input: {
   locale: Locale;
@@ -97,6 +98,8 @@ export function renderServiceHeader(input: {
   playHref?: string;
   /** Settings button in the Play slot. `playHref` is ignored. */
   settings?: boolean;
+  /** The Settings button's menu is open. */
+  settingsOpen?: boolean;
   /** Fullscreen toggle beside Settings. The page handles the click. */
   fullscreen?: boolean;
   /** The page is fullscreen, so the button offers to leave. */
@@ -108,7 +111,7 @@ export function renderServiceHeader(input: {
   const t = TEXT[input.locale];
   const play =
     input.settings === true
-      ? `<button type="button" class="btn" data-size="sm" data-service-header="settings" title="${escapeHTML(t.settingsTitle)}" aria-label="${escapeHTML(t.settings)}">${headerIcon(SETTINGS_ICON)}<span class="hidden md:inline">${t.settings}</span></button>`
+      ? `<button type="button" class="btn" data-size="sm" data-service-header="settings" title="${escapeHTML(t.settingsTitle)}" aria-label="${escapeHTML(t.settings)}" aria-expanded="${input.settingsOpen === true ? 'true' : 'false'}">${headerIcon(SETTINGS_ICON)}<span class="hidden md:inline">${t.settings}</span></button>`
       : input.playHref === undefined
         ? ''
         : `<a class="btn" data-size="sm" href="${escapeHTML(input.playHref)}" title="${escapeHTML(t.playTitle)}" aria-label="${escapeHTML(t.play)}">${headerIcon(PLAY_ICON)}<span class="hidden md:inline">${t.play}</span></a>`;

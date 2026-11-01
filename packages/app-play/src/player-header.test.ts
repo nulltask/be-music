@@ -7,6 +7,7 @@ import {
   playerServiceHeaderHTML,
   runPlayerHeaderAction,
   setPlayerHeaderAccount,
+  setPlayerHeaderSettingsOpen,
   togglePlayerHeaderFullscreen,
   type PlayerHeaderFullscreenDocument,
 } from './player-header.ts';
@@ -14,8 +15,9 @@ import {
 afterEach(() => {
   setPlayerLang('en');
   setPlayerHeaderAccount(undefined);
+  setPlayerHeaderSettingsOpen(false);
   bindPlayerHeader({
-    openDebugMenu: null,
+    toggleDebugMenu: null,
     openSignIn: null,
     selectLanguage: setPlayerLang,
   });
@@ -26,8 +28,15 @@ test('renders the shared header with Settings where Play would be', () => {
   expect(html).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
   expect(html.match(/<span class="badge"/g)).toHaveLength(1);
   expect(html).toContain('data-service-header="settings"');
-  expect(html).toContain('aria-label="Settings"');
+  expect(html).toContain('aria-label="Settings" aria-expanded="false"');
   expect(html).toContain('title="Debug Menu"');
+  const open = playerServiceHeaderHTML({
+    locale: 'en',
+    hostname: 'localhost',
+    requestURL: '/',
+    settingsOpen: true,
+  });
+  expect(open).toContain('aria-label="Settings" aria-expanded="true"');
   expect(html).toContain('data-service-header="fullscreen" title="Full screen" aria-label="Full screen"');
   expect(html).toContain('aria-pressed="false"');
   expect(html).toContain('lucide-maximize');
@@ -55,7 +64,7 @@ test('renders the shared header with Settings where Play would be', () => {
   );
 });
 
-test('Settings opens the Debug Menu and a signed-out account opens sign-in', () => {
+test('Settings toggles the Debug Menu and a signed-out account opens sign-in', () => {
   const hit = (selector: string) => ({
     closest: (query: string) =>
       query === selector ? { lang: selector === '#language-menu a' ? 'ja' : undefined } : null,
@@ -66,21 +75,38 @@ test('Settings opens the Debug Menu and a signed-out account opens sign-in', () 
   expect(classifyPlayerHeaderClick(hit('[data-service-header="account"]'), false)).toBeUndefined();
   expect(classifyPlayerHeaderClick(hit('#language-menu a'), true)).toBe('ja');
 
-  const opened = { menu: 0, signIn: 0 };
+  const opened = { open: false, toggles: 0, signIn: 0 };
   runPlayerHeaderAction('settings');
   runPlayerHeaderAction('sign-in');
   bindPlayerHeader({
-    openDebugMenu: () => {
-      opened.menu += 1;
+    toggleDebugMenu: () => {
+      opened.toggles += 1;
+      opened.open = !opened.open;
     },
     openSignIn: () => {
       opened.signIn += 1;
     },
     selectLanguage: setPlayerLang,
   });
-  expect(opened).toEqual({ menu: 1, signIn: 1 });
+  expect(opened).toEqual({ open: true, toggles: 1, signIn: 1 });
   runPlayerHeaderAction('settings');
-  expect(opened.menu).toBe(2);
+  expect(opened).toEqual({ open: false, toggles: 2, signIn: 1 });
+  runPlayerHeaderAction('settings');
+  expect(opened.open).toBe(true);
+  bindPlayerHeader({
+    toggleDebugMenu: null,
+    openSignIn: null,
+    selectLanguage: setPlayerLang,
+  });
+  runPlayerHeaderAction('settings');
+  runPlayerHeaderAction('settings');
+  bindPlayerHeader({
+    toggleDebugMenu: () => {
+      opened.toggles += 1;
+    },
+    selectLanguage: setPlayerLang,
+  });
+  expect(opened.toggles).toBe(3);
   runPlayerHeaderAction('ja');
   expect(playerLang()).toBe('ja');
 });

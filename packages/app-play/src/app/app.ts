@@ -9,7 +9,7 @@ import { downloadBlob } from '@be-music/player-browser/recording';
 import { logger } from '@be-music/player-browser';
 import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from '../ui/beatoraja-skin-options.ts';
 import { LeaderboardPanel } from '../leaderboard-ui.ts';
-import { bindPlayerHeader } from '../player-header.ts';
+import { bindPlayerHeader, setPlayerHeaderSettingsOpen } from '../player-header.ts';
 import { SceneRouter } from './scene-router.ts';
 import { DropTarget } from './drop-target.ts';
 import { CourseRoute } from './routes/course.ts';
@@ -611,9 +611,10 @@ export class PlayerWebApp {
   }
 
   public start(): void {
+    this.debugMenu.watchExpanded((open) => setPlayerHeaderSettingsOpen(open));
     this.debugMenu.buildGUI();
     bindPlayerHeader({
-      openDebugMenu: () => this.debugMenu.open(),
+      toggleDebugMenu: () => this.debugMenu.toggle(),
       openSignIn: () => this.leaderboard.openSignIn(),
     });
     this.courseMaker.start();
