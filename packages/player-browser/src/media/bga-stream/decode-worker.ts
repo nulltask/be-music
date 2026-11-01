@@ -18,7 +18,9 @@ interface FFmpegCore {
     makedev(major: number, minor: number): number;
     registerDevice(device: number, ops: Record<string, unknown>): void;
     mkdev(path: string, device: number): void;
-    writeFile(path: string, data: Uint8Array): void;
+    mkdir(path: string): void;
+    mount(type: unknown, options: { blobs: Array<{ name: string; data: Blob }> }, mountPoint: string): void;
+    filesystems: { WORKERFS: unknown };
     ErrnoError: new (errno: number) => Error;
   };
   setLogger(logger: (data: { type: string; message: string }) => void): void;
@@ -33,6 +35,8 @@ interface WorkerScope {
 }
 
 const OUTPUT_DEVICE = '/dev/bga-stream';
+/** Where the source file is mounted. */
+const INPUT_DIRECTORY = '/bga-input';
 /** ffmpeg's stderr lines kept for the error report. */
 const LOG_TAIL_LINES = 12;
 /** `ESPIPE`: the device can't seek, which tells ffmpeg the output is a pipe. */
@@ -112,10 +116,12 @@ async function decode(scope: WorkerScope, message: BGADecodeStartMessage): Promi
       },
     });
     FS.mkdev(OUTPUT_DEVICE, device);
-    FS.writeFile(message.inputName, new Uint8Array(message.input));
+    // WORKERFS reads the blob in slices (`FileReaderSync`) as ffmpeg asks, instead of copying the file into the heap.
+    FS.mkdir(INPUT_DIRECTORY);
+    FS.mount(FS.filesystems.WORKERFS, { blobs: [{ name: message.inputName, data: message.input }] }, INPUT_DIRECTORY);
 
     const args = buildBGAStreamArgs({
-      input: message.inputName,
+      input: `${INPUT_DIRECTORY}/${message.inputName}`,
       output: OUTPUT_DEVICE,
       mode: message.mode,
       ...(message.maxLongEdge !== undefined ? { maxLongEdge: message.maxLongEdge } : {}),

@@ -14,18 +14,49 @@ import { i420FrameBytes } from './y4m.ts';
 const coreDir = resolve(dirname(dirname(dirname(createRequire(import.meta.url).resolve('@ffmpeg/core')))), 'dist/esm');
 const fixture = readFileSync(new URL('./__fixtures__/vfr-66x50.wmv', import.meta.url));
 let wasmModule: WebAssembly.Module;
-const scope = globalThis as { self?: unknown; location?: unknown };
-const saved = { self: scope.self, location: scope.location };
+const scope = globalThis as { self?: unknown; location?: unknown; FileReaderSync?: unknown };
+const saved = { self: scope.self, location: scope.location, FileReaderSync: scope.FileReaderSync };
+
+/**
+ * A blob whose bytes a test can read synchronously: WORKERFS reads its source through `FileReaderSync`, which only
+ * workers have, so the test installs one that reads these.
+ */
+class TestBlob {
+  private readonly bytes: Uint8Array;
+  public constructor(bytes: Uint8Array) {
+    this.bytes = bytes;
+  }
+  public get size(): number {
+    return this.bytes.byteLength;
+  }
+  public slice(start = 0, end = this.size): TestBlob {
+    return new TestBlob(this.bytes.subarray(start, end));
+  }
+  public read(): ArrayBuffer {
+    return this.bytes.slice().buffer;
+  }
+}
+
+function testBlob(bytes: Uint8Array): TestBlob & Blob {
+  // A plain copy: a Node `Buffer`'s `slice` is a view, whose `buffer` is the whole pool.
+  return new TestBlob(Uint8Array.from(bytes)) as TestBlob & Blob;
+}
 
 beforeAll(async () => {
   scope.self = globalThis;
   scope.location = { href: pathToFileURL(`${coreDir}/`).href };
+  scope.FileReaderSync = class {
+    public readAsArrayBuffer(blob: TestBlob): ArrayBuffer {
+      return blob.read();
+    }
+  };
   wasmModule = await WebAssembly.compile(readFileSync(resolve(coreDir, 'ffmpeg-core.wasm')));
 }, 60_000);
 
 afterAll(() => {
   scope.self = saved.self;
   scope.location = saved.location;
+  scope.FileReaderSync = saved.FileReaderSync;
 });
 
 async function runDecode(
@@ -49,7 +80,7 @@ async function runDecode(
     },
   };
   runBGAVideoDecodeWorker(workerScope);
-  const input = fixture.buffer.slice(fixture.byteOffset, fixture.byteOffset + fixture.byteLength);
+  const input = testBlob(fixture);
   const start: BGADecodeStartMessage = {
     type: 'start',
     coreURL: pathToFileURL(resolve(coreDir, 'ffmpeg-core.js')).href,
@@ -127,7 +158,7 @@ describe('runBGAVideoDecodeWorker', () => {
         type: 'start',
         coreURL: pathToFileURL(resolve(coreDir, 'ffmpeg-core.js')).href,
         wasmModule,
-        input: new Uint8Array(64).buffer,
+        input: testBlob(new Uint8Array(64)),
         inputName: 'bga-input.wmv',
         mode: 'h264',
       } satisfies BGADecodeStartMessage,
