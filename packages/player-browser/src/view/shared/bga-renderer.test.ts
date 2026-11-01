@@ -629,4 +629,47 @@ describe('two BMS overlays on the built-in/LR2 renderer', () => {
     expect(seeks).toBe(2);
     state.dispose();
   });
+
+  test('plays a video again after the first play was interrupted, and not while seeking, ended, or paused', () => {
+    const state = setup();
+    let attempts = 0;
+    const video = {
+      paused: true,
+      seeking: false,
+      ended: false,
+      currentTime: 0,
+      duration: 60,
+      playbackRate: 1,
+      play: vi.fn(async () => {
+        attempts += 1;
+        if (attempts === 1) return;
+        video.paused = false;
+      }),
+      pause: vi.fn(() => {
+        video.paused = true;
+      }),
+    };
+    state.play.bgaVideos.set('base', { video, objectURL: 'blob:base' });
+    renderBGA(state.ctx, 3);
+    expect(video.currentTime).toBe(3);
+    expect(video.play).toHaveBeenCalledOnce();
+    // The seek aborted play(); the element is still paused on the black canvas behind the texture.
+    renderBGA(state.ctx, 3.05);
+    expect(video.play).toHaveBeenCalledTimes(2);
+    renderBGA(state.ctx, 3.1);
+    expect(video.play).toHaveBeenCalledTimes(2);
+    video.paused = true;
+    video.seeking = true;
+    renderBGA(state.ctx, 3.2);
+    expect(video.play).toHaveBeenCalledTimes(2);
+    video.seeking = false;
+    video.ended = true;
+    renderBGA(state.ctx, 3.3);
+    expect(video.play).toHaveBeenCalledTimes(2);
+    video.ended = false;
+    state.play.paused = true;
+    renderBGA(state.ctx, 3.4);
+    expect(video.play).toHaveBeenCalledTimes(2);
+    state.dispose();
+  });
 });
