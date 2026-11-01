@@ -73,7 +73,7 @@ export function destroyTextureAndRevokeBlobURL(texture: Texture, destroySource =
 }
 
 /**
- * Result of `loadVideoTextureFromBytes`. The texture is a Pixi `Texture` whose source is a `VideoSource` wrapping the
+ * Result of `loadVideoTexture`. The texture is a Pixi `Texture` whose source is a `VideoSource` wrapping the
  * same `<video>` element returned alongside it. Callers seek / play the video element directly to drive frame updates;
  * the Pixi source polls `requestVideoFrameCallback` (or a rAF fallback) to push fresh frames into the GL texture.
  *
@@ -130,22 +130,27 @@ export interface VideoTranscodeOptions {
  *
  * Either way the rest of the BGA pipeline (Pixi `VideoSource`, frame polling) is identical to a native video.
  *
+ * `file` is a dropped `File` or an archive entry's bytes. A `File` is played and streamed from where it lies, without
+ * reading it into memory; only the whole-file transcode reads it.
+ *
  * Returns `undefined` only when the native decode and every transcode fail — at that point we accept the asset is
  * unplayable and the BGA preloader simply skips it.
  */
-export async function loadVideoTextureFromBytes(
+export async function loadVideoTexture(
   path: string,
-  bytes: Uint8Array,
+  file: Blob | Uint8Array,
   options?: VideoTranscodeOptions,
 ): Promise<VideoTextureHandle | undefined> {
-  const direct = await tryLoadVideoTextureFromBytes(path, bytes);
+  const source = videoBlobOf(file);
+  const direct = await tryLoadVideoTextureFromBlob(path, source);
   if (direct) return direct;
   if (canStreamBGAVideo()) {
     log.info(`native decode failed; streaming an ffmpeg.wasm transcode: ${path}`);
-    const streamed = await tryLoadStreamedVideoTexture(path, bytes, options);
+    const streamed = await tryLoadStreamedVideoTexture(path, source, options);
     if (streamed) return streamed;
   }
   log.info(`native decode failed; falling back to ffmpeg.wasm transcode: ${path}`);
+  const bytes = file instanceof Uint8Array ? file : new Uint8Array(await file.arrayBuffer());
   let transcoded: Uint8Array | undefined;
   if (options?.useWebCodecs && isWebCodecsEncodeSupported()) {
     transcoded = await transcodeViaWebCodecs(bytes, path, options).catch((error) => {
@@ -162,7 +167,25 @@ export async function loadVideoTextureFromBytes(
   if (!transcoded) return undefined;
   // The transcoded payload is always MP4 / H.264 (whether it came out of libx264 or the WebCodecs encoder); pass an
   // explicit name so `guessVideoMIMEType` picks `video/mp4` and the browser's H.264 decoder takes the fast path.
-  return tryLoadVideoTextureFromBytes(`${stripVideoExtension(path)}.transcoded.mp4`, transcoded);
+  return tryLoadVideoTextureFromBlob(`${stripVideoExtension(path)}.transcoded.mp4`, videoBlobOf(transcoded));
+}
+
+/**
+ * The blob behind each in-memory video, made once: the same bytes on several tracks then share one blob, which keys the
+ * stream that transcodes them once (`openBGAVideoStream`).
+ */
+const videoBlobs = new WeakMap<Uint8Array, Blob>();
+
+function videoBlobOf(file: Blob | Uint8Array): Blob {
+  if (file instanceof Blob) return file;
+  let blob = videoBlobs.get(file);
+  if (!blob) {
+    // The `Uint8Array<ArrayBuffer>` cast narrows away the lib's `ArrayBufferLike` (which includes
+    // `SharedArrayBuffer`): every caller decodes regular `ArrayBuffer`s, so the runtime payload is identical.
+    blob = new Blob([file as Uint8Array<ArrayBuffer>]);
+    videoBlobs.set(file, blob);
+  }
+  return blob;
 }
 
 /**
@@ -177,13 +200,9 @@ function isWebCodecsEncodeSupported(): boolean {
   return typeof globalThis !== 'undefined' && 'VideoEncoder' in globalThis;
 }
 
-async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Promise<VideoTextureHandle | undefined> {
-  // Pass `bytes` straight through — wrapping it in `new Uint8Array(bytes)` would force a full copy of the source
-  // bytes before the Blob internally copies them again, doubling peak memory for BGA video assets (which can be tens
-  // of megabytes). The `Uint8Array<ArrayBuffer>` cast narrows away the lib's `Uint8Array<ArrayBufferLike>` (which
-  // includes `SharedArrayBuffer`) — every caller in this package decodes regular `ArrayBuffer`s through
-  // `file.arrayBuffer()` / `entry.arrayBuffer()`, so SAB is unreachable here and the runtime payload is identical.
-  const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: guessVideoMIMEType(path) });
+async function tryLoadVideoTextureFromBlob(path: string, file: Blob): Promise<VideoTextureHandle | undefined> {
+  // A slice of the whole blob shares its data (a `File` stays on disk) and carries the MIME type guessed from the path.
+  const blob = file.slice(0, file.size, guessVideoMIMEType(path));
   const objectURL = URL.createObjectURL(blob);
   const video = createBGAVideoElement();
   video.src = objectURL;
@@ -196,14 +215,14 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
  */
 const STREAM_FIRST_FRAME_TIMEOUT_MS = 120_000;
 
-/** Plays `bytes` through a streaming transcode (see {@link loadVideoTextureFromBytes}); `undefined` if it fails. */
+/** Plays `source` through a streaming transcode (see {@link loadVideoTexture}); `undefined` if it fails. */
 async function tryLoadStreamedVideoTexture(
   path: string,
-  bytes: Uint8Array,
+  source: Blob,
   options?: VideoTranscodeOptions,
 ): Promise<VideoTextureHandle | undefined> {
   const maxLongEdge = resolveMaxLongEdge(options);
-  const stream = openBGAVideoStream(bytes, path, {
+  const stream = openBGAVideoStream(source, path, {
     ...(maxLongEdge !== undefined ? { maxLongEdge } : {}),
     useWebCodecs: options?.useWebCodecs ?? true,
   });
@@ -310,7 +329,7 @@ async function transcodeVideoToBrowserCodecLocked(
   try {
     // Clone before handing to ffmpeg.wasm: the worker channel posts the buffer with `transfer` ownership (detaching the
     // source ArrayBuffer), which would brick any caller that wants to retry the same bytes through a different
-    // transcode path (e.g. the WebCodecs → ffmpeg fallback chain in `loadVideoTextureFromBytes`).
+    // transcode path (e.g. the WebCodecs → ffmpeg fallback chain in `loadVideoTexture`).
     await ffmpeg.writeFile(inputName, new Uint8Array(bytes));
     // libx264 fast path. Encoder-side flags chosen for the fastest possible single-threaded encode while keeping the
     // output universally browser-decodable:
@@ -923,7 +942,7 @@ function guessVideoMIMEType(path: string): string {
   if (lower.endsWith('.ogv') || lower.endsWith('.ogg')) return 'video/ogg';
   if (lower.endsWith('.mov')) return 'video/quicktime';
   // Older BMS archives sometimes ship `.mpg` / `.mpeg` / `.avi` / `.wmv` — modern browsers won't decode those so the
-  // video element will fire `error` and `loadVideoTextureFromBytes` returns `undefined`. We still tag a sensible MIME
+  // video element will fire `error` and `loadVideoTexture` returns `undefined`. We still tag a sensible MIME
   // type so the rare browser-supported codec works.
   if (lower.endsWith('.mpg') || lower.endsWith('.mpeg')) return 'video/mpeg';
   return 'video/mp4';
