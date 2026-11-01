@@ -24,7 +24,7 @@ import type {
   BeMusicJudgmentState,
   BeMusicStage,
 } from '../../skin/be-music/types.ts';
-import type { PlayfieldBGATarget, PlayfieldStage } from '../types.ts';
+import type { PlayFrame, PlayfieldBGATarget, PlayfieldStage } from '../types.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
 import { BGA } from '../shared/play-constants.ts';
 
@@ -91,6 +91,8 @@ export interface PlayChromeContext {
   readonly play: PlayfieldRuntime;
   readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects' | 'judgeTimingAutoAdjust'>>;
   readonly audioFrame: AudioFeatures | undefined;
+  /** The frame being drawn, for what it carries beside the play: the best record, the course and the player. */
+  readonly playFrame?: Pick<PlayFrame, 'scoreTargets' | 'course' | 'playerName' | 'playOptions'>;
 }
 
 /** Lane rects, playfield bounds, and judgement line of the built-in playfield for the loaded chart. */
@@ -151,7 +153,16 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const bpm = ctx.play.nowBPM(seconds) ?? ctx.play.chart?.bpm;
   const laneCovers = ctx.play.resolveLaneCovers();
   const visibleMs = ctx.play.resolveVisibleMs(laneCovers[0], bpm, ctx.play.scrollMapper?.rateAt?.(currentBeat) ?? 1);
+  const frame = ctx.playFrame;
+  const best = frame?.scoreTargets?.bestEXScore;
+  const target = frame?.scoreTargets?.targetEXScore;
   return {
+    ...(best !== undefined && best > 0 ? { bestEXScore: best } : {}),
+    ...(target !== undefined && target > 0 ? { targetEXScore: target } : {}),
+    ...(frame?.course !== undefined ? { course: frame.course } : {}),
+    ...(frame?.playerName !== undefined ? { playerName: frame.playerName } : {}),
+    ...(frame !== undefined ? { random1P: frame.playOptions.random1P } : {}),
+    tempo: ctx.play.tempo,
     chartTitle: ctx.play.chart?.title,
     chartArtist: ctx.play.chart?.artist,
     chartGenre: ctx.play.chart?.genre,
@@ -264,7 +275,7 @@ export function collectBGATargets(ctx: BGATargetsContext, out: PlayfieldBGATarge
   const geometry = resolveLaneGeometry(ctx);
   // The landscape touch layout gives the BGA's room to the lanes.
   if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return;
-  const rect = stage.resolveBGARect(geometry.right);
+  const rect = stage.resolveBGARect(geometry.right, geometry.left);
   const cached = ctx.stageBGATarget;
   if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
     out.push(cached);

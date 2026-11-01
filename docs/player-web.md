@@ -119,6 +119,16 @@ A live change (`setTempo(tempo)` on a play screen, `pitch` mode only) goes to th
 
 Everything runs `tempo` times as fast: the engine's clock (`PlayerOptions.speed`), the scheduled and triggered samples, the scroll and judge line, the BGA images and videos (`playbackRate`), the NONSTOP stage fades and the chart-time lead-out before the result. Skin animation timers stay on the wall clock. Judging stays in chart time, so a play's inputs and judgments do not depend on the tempo; the replay records it as `play.tempo` ([replay.md](./replay.md)) and a replay plays back at it. A play at another tempo is practice, as with beatoraja's frequency trainer: it leaves the best records alone, while the replay is still auto-saved and the play is still sent to the Leaderboard, which stores it without ranking it (`unranked: 'tempo'`; the status line says so, see [leaderboard.md](./leaderboard.md)). A course can be played at another tempo too: every stage plays at it, and the run is then sent, stored unranked, and leaves the course record alone. Every family's play screen supports it: `createPlayScene` takes `tempo`, `tempoPitchMode` and `tempoStretchAlgorithm` in its settings.
 
+### Built-in play screen
+
+On a landscape screen the built-in skins (Synesthesia, Plain and Native) lay the play out as a cabinet, each in its own look. The skin SDK's `resolveCabinetLayout` places it on `cabinetStage`:
+
+- **Play area:** the lanes, with the lane cover (SUDDEN+) over their top. The keys sit under the judgement line, then the gauge, the score and the hi-speed.
+- **Score graph:** your EX score against the pacemaker (the AAA line) and your best record, each held to the notes judged so far. The lane option and the pacemaker are named under it.
+- **Right-hand column:** the stage name (`FREE PLAY`, or a course's `1ST STAGE` … `FINAL STAGE`), the player's name with the chart's difficulty and level, the title and the artist, then the BGA. Under it are the judgement counts with FAST / SLOW and the last timing, the BPM with its range, and the tempo, shown where a cabinet shows its effector.
+
+The player hands the skins the best record (`PlaySceneOptions.scoreTargets`), the course stage, the signed-in Leaderboard account's name (`playerName`), the lane option and the tempo. A double-play chart (10 / 14 KEY, and a two-player battle) is centred on the stage, with the turntables on the outer edges. The stage name, the chart, the BGA and the judgement details move to a left column, and the graph stays on the right. The score, the gauge both sides share, the hi-speed and the BPM sit under the lanes, and the box between the two banks of keys shows the gauge. The touch layout and portrait screens keep their own HUDs.
+
 ### Phones and tablets
 
 The player treats a device whose primary pointer is a finger (`(pointer: coarse)`, or a touch pointer on a phone-sized screen) as touch-first:
