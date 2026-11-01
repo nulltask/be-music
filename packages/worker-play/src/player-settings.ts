@@ -2,8 +2,9 @@
 //
 // `__Host-be-music.device` is set with `Set-Cookie`, so it is not script-writable storage. Safari's seven-day cap
 // deletes `localStorage` and IndexedDB after seven days of Safari use without a visit; this cookie stays, and the
-// next visit reads the document back from R2. The bytes share the play bucket with the ffmpeg core, under
-// `player-settings/`, which `/ffmpeg-core/` refuses because that route rejects nested keys.
+// next visit reads the document back from R2. New objects are gzip-compressed JSON; a plain JSON object written
+// earlier still reads. The bytes share the play bucket with the ffmpeg core, under `player-settings/`, which
+// `/ffmpeg-core/` refuses because that route rejects nested keys.
 
 export const PLAYER_SETTINGS_PATH = '/api/player-settings';
 const DEVICE_COOKIE = '__Host-be-music.device';
@@ -35,12 +36,21 @@ function debugMenuSettingsDocument(value: unknown): DebugMenuSettingsDocument | 
   return { version: DOCUMENT_VERSION, updatedAt, settings: settings as Record<string, unknown> };
 }
 
+export interface PlayerSettingsObject {
+  etag: string;
+  arrayBuffer(): Promise<ArrayBuffer>;
+  httpMetadata?: { contentEncoding?: string };
+}
+
 export interface PlayerSettingsBucket {
-  get(key: string): Promise<{ etag: string; text(): Promise<string> } | null>;
+  get(key: string): Promise<PlayerSettingsObject | null>;
   put(
     key: string,
-    value: string,
-    options?: { onlyIf: { etagMatches?: string; etagDoesNotMatch?: string } },
+    value: ArrayBuffer | string,
+    options?: {
+      onlyIf: { etagMatches?: string; etagDoesNotMatch?: string };
+      httpMetadata?: { contentType?: string; contentEncoding?: string };
+    },
   ): Promise<{ etag: string } | null>;
   delete(key: string): Promise<unknown>;
 }
@@ -100,7 +110,7 @@ async function snapshots(bucket: PlayerSettingsBucket, paths: string[]): Promise
       if (!object) return { key };
       let document: DebugMenuSettingsDocument | undefined;
       try {
-        document = debugMenuSettingsDocument(JSON.parse(await object.text()));
+        document = debugMenuSettingsDocument(JSON.parse(await storedText(object)));
       } catch {
         /* Replace invalid data conditionally. */
       }
@@ -143,11 +153,14 @@ async function storeNewer(
             };
     } else if (current && current.updatedAt >= candidate.updatedAt) candidate = current;
     const body = JSON.stringify(candidate);
+    let compressed: ArrayBuffer | undefined;
     let conflict = false;
     for (const entry of entries) {
       if (JSON.stringify(entry.document) === body) continue;
-      const written = await bucket.put(entry.key, body, {
+      compressed ??= await gzipText(body);
+      const written = await bucket.put(entry.key, compressed, {
         onlyIf: entry.etag === undefined ? { etagDoesNotMatch: '*' } : { etagMatches: entry.etag },
+        httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
       });
       if (!written) {
         conflict = true;
@@ -157,6 +170,20 @@ async function storeNewer(
     if (!conflict) return candidate;
   }
   return undefined;
+}
+
+/** gzip of the JSON stored in R2. Objects written as plain JSON still read. */
+async function gzipText(text: string): Promise<ArrayBuffer> {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  return await new Response(stream).arrayBuffer();
+}
+
+async function storedText(object: PlayerSettingsObject): Promise<string> {
+  const bytes = new Uint8Array(await object.arrayBuffer());
+  const gzip =
+    object.httpMetadata?.contentEncoding === 'gzip' || (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b);
+  if (!gzip) return new TextDecoder().decode(bytes);
+  return await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
 }
 
 function deviceKey(id: string): string {
