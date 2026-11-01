@@ -11,7 +11,8 @@ import { debugMenuSettingsSync } from './debug-menu-settings-sync.ts';
 // (`app/app.ts`) once the UI fonts are ready, with the test hook installed over it before it starts.
 import { checkBrowserCompat } from '@be-music/player-browser/collection';
 import { PlayerWebApp } from './app/app.ts';
-import { wireHelpModal } from './help-modal.ts';
+import { wireHelpModal, applyPlayerLanguage } from './help-modal.ts';
+import { bindPlayerHeader, mountPlayerHeader } from './player-header.ts';
 import { PLAYER_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { readDeviceSignals, resolveDeviceProfile } from './device-profile.ts';
@@ -54,11 +55,17 @@ renderBrowserCompatPanel(checkBrowserCompat());
 // Phones and tablets: lighter chrome over the stage, touch play controls, and a rotate prompt on phones held upright
 // (see the `html.touch-first` / `html.phone` rules in styles.css).
 const deviceProfile = resolveDeviceProfile(readDeviceSignals());
+document.documentElement.classList.add('dark');
 document.documentElement.classList.toggle('touch-first', deviceProfile.touchFirst);
 document.documentElement.classList.toggle('phone', deviceProfile.phone);
 
 // Wire up the bottom-right Help button + unified Help / OSS modal. The acknowledgement list is rendered lazily on first
 // open of the OSS tab, so the initial paint isn't blocked on rendering ~30 dependency cards.
+const header = document.querySelector<HTMLElement>('#player-service-header');
+if (header !== null) {
+  mountPlayerHeader(header);
+  bindPlayerHeader({ selectLanguage: applyPlayerLanguage });
+}
 wireHelpModal();
 
 void waitForDefaultUIFonts()

@@ -3,6 +3,7 @@
 @import 'tailwindcss' source(none);
 @source './';
 @source '../../service-web-theme/src/footer.ts';
+@source '../../service-web-theme/src/header.ts';
 @import 'basecoat-css';
 
 /* The system faces: Basecoat names Geist, which the player does not load. */
@@ -16,4 +17,16 @@
   html {
     color-scheme: dark;
   }
+}
+
+/* The last place a header menu tries (header.ts): under its button across the whole width, kept a page gutter in
+   from either edge, for when neither side of the button has room. */
+@position-try --header-menu-span {
+  position-area: block-end span-all;
+  margin: 6px 1rem;
+}
+
+/* The header's account, Settings and language controls stay put when pressed. */
+header nav :is(a, button).btn:active {
+  translate: none;
 }

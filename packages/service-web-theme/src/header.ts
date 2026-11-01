@@ -12,6 +12,8 @@ export interface ServiceHeaderAccount {
 /** Lucide icons, the same markup `lucide-static` gives the Leaderboard (`Icon` in app-leaderboard). */
 const PLAY_ICON =
   '<svg class="lucide lucide-play" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>';
+const SETTINGS_ICON =
+  '<svg class="lucide lucide-settings" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>';
 const LANGUAGES_ICON =
   '<svg class="lucide lucide-languages" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>';
 const CHECK_ICON =
@@ -29,6 +31,8 @@ const TEXT = {
     signIn: 'Sign in',
     play: 'Play',
     playTitle: 'Play in the browser',
+    settings: 'Settings',
+    settingsTitle: 'Debug Menu',
     guest: 'guest',
     language: 'Language',
     languageAria: (name: string) => `Language: ${name}`,
@@ -39,6 +43,8 @@ const TEXT = {
     signIn: 'ログイン',
     play: 'プレイ',
     playTitle: 'ブラウザでプレイ',
+    settings: '設定',
+    settingsTitle: 'デバッグメニュー',
     guest: 'ゲスト',
     language: '言語',
     languageAria: (name: string) => `言語: ${name}`,
@@ -68,25 +74,31 @@ export function serviceSkipLink(locale: Locale): string {
 }
 
 /**
- * The header shared by every service page except Play. The trailing cluster follows the Leaderboard's: the account
- * (avatar and @handle, or Sign in), then Play, then the language menu, in that order. `title` is the fixed brand
- * (`Be-Music Dashboard`), not translated, with a small Beta badge beside it. The account control links to
- * `accountHref` (these pages have no account menu).
+ * The header shared by Dashboard, Accounts, Leaderboard and Play. The trailing cluster follows the Leaderboard's: the
+ * account (avatar and @handle, or Sign in), then Play, then the language menu, in that order. `title` is the fixed
+ * brand (`Be-Music Dashboard`), not translated, with one Beta badge beside it. The account control links to
+ * `accountHref` (these pages have no account menu). `settings` replaces the Play link with a Settings button
+ * (`data-service-header="settings"`); the page wires the click. Play uses that button for its Debug Menu. The two are
+ * never both shown.
  */
 export function renderServiceHeader(input: {
   locale: Locale;
   title: string;
   homeHref: string;
   playHref?: string;
+  /** Settings button in the Play slot. `playHref` is ignored. */
+  settings?: boolean;
   accountHref: string;
   account?: ServiceHeaderAccount;
   requestURL: string;
 }): string {
   const t = TEXT[input.locale];
   const play =
-    input.playHref === undefined
-      ? ''
-      : `<a class="btn" data-size="sm" href="${escapeHTML(input.playHref)}" title="${escapeHTML(t.playTitle)}" aria-label="${escapeHTML(t.play)}">${headerIcon(PLAY_ICON)}<span class="hidden md:inline">${t.play}</span></a>`;
+    input.settings === true
+      ? `<button type="button" class="btn" data-size="sm" data-service-header="settings" title="${escapeHTML(t.settingsTitle)}" aria-label="${escapeHTML(t.settings)}">${headerIcon(SETTINGS_ICON)}<span class="hidden md:inline">${t.settings}</span></button>`
+      : input.playHref === undefined
+        ? ''
+        : `<a class="btn" data-size="sm" href="${escapeHTML(input.playHref)}" title="${escapeHTML(t.playTitle)}" aria-label="${escapeHTML(t.play)}">${headerIcon(PLAY_ICON)}<span class="hidden md:inline">${t.play}</span></a>`;
   const account = renderAccount(input.account, input.accountHref, t);
   const languages = LOCALES.map((locale) => {
     const current = locale === input.locale;
@@ -103,7 +115,7 @@ function renderAccount(
 ): string {
   const href = escapeHTML(accountHref);
   if (account === undefined) {
-    return `<a class="btn" data-size="sm" data-variant="ghost" href="${href}">${t.signIn}</a>`;
+    return `<a class="btn" data-size="sm" data-variant="ghost" data-service-header="account" href="${href}">${t.signIn}</a>`;
   }
   const avatar =
     account.avatarURL === undefined
@@ -113,5 +125,5 @@ function renderAccount(
   const visible = handle === '' ? escapeHTML(account.displayName) : handle;
   const label = account.handle === '' ? account.displayName : t.accountOf(account.handle);
   const title = account.anonymous ? `${account.displayName} (${t.guest})` : account.displayName;
-  return `<a class="btn" data-size="sm" data-variant="ghost" href="${href}" title="${escapeHTML(title)}" aria-label="${escapeHTML(label)}">${avatar}<span class="hidden max-w-[12ch] truncate sm:inline">${visible}</span>${headerIcon(CHEVRON_ICON, 'text-muted-foreground')}</a>`;
+  return `<a class="btn" data-size="sm" data-variant="ghost" data-service-header="account" href="${href}" title="${escapeHTML(title)}" aria-label="${escapeHTML(label)}">${avatar}<span class="hidden max-w-[12ch] truncate sm:inline">${visible}</span>${headerIcon(CHEVRON_ICON, 'text-muted-foreground')}</a>`;
 }

@@ -313,6 +313,10 @@ export class DebugMenu {
   public setPlayOptions(changes: Partial<PlayOptions>): void {
     this.deps.setPlayOptions(changes);
   }
+  /** Unfolds the Debug Menu the header's Settings button opens. No second panel. */
+  public open(): void {
+    if (this.gui !== undefined) this.gui.expanded = true;
+  }
   /**
    * Builds the floating Tweakpane control panel and wires every controller to the gameplay / scene state. Centralizing
    * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageFolder`)
@@ -361,9 +365,7 @@ export class DebugMenu {
     this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
     this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
     this.buildCaptureFolder(addFolder(gui, DEBUG_MENU_FOLDERS.capture));
-    this.deps.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard), () => {
-      gui.expanded = true;
-    });
+    this.deps.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
     this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
     this.refreshCompressorStageVisibility();
     rememberFolderOpenStates(gui, undefined, () => this.scheduleSettingsSave());
