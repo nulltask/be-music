@@ -52,3 +52,14 @@ flowchart LR
 - Each option in `docs/play-options.md` names its source and its re-judging behavior. A new option is not merged without them.
 - The `PlayOptions` types and the replay parser accept qualified strings. A reader that predates this ADR refuses a replay with a qualified gauge (an unknown gauge type), which is the intended failure; a qualified lane value it reads as an opaque label, which is harmless because the arrangement is recorded.
 - The settings migration and the "not simulated" / "truncated" outcomes are the hard-to-reverse parts. The record and Leaderboard policy for cross-source plays is decided separately in [#602](https://github.com/nulltask/be-music/issues/602).
+
+## Amendment: implementation for RANDOM, S-RANDOM, CONVERGE and BATTLE (#774)
+
+Implementing the decision settled four details:
+
+- **BATTLE collides twice.** Besides LR2's two-player BATTLE (`TWO-PLAYER`), beatoraja's and AC's one-player BATTLE differ in chart support (5 / 7 / 24KEY against 7KEY) and in what a play keeps (LIGHT_ASSIST against no score saved). The one-player copy is therefore qualified as `beatoraja:BATTLE` and `____:BATTLE`. `TWO-PLAYER` stays bare and is offered under every ruleset; under beatoraja rules, which have no two-player play, LR2's construction builds the chart and each player is judged by beatoraja's rules.
+- **AC's RANDOM and S-RANDOM are qualified too** (`____:RANDOM`, `____:S-RANDOM`), although they run LR2's algorithm for now, so a later AC algorithm does not change what a stored value means. AC defines no CONVERGE.
+- **Settings migrate as they are read.** The settings document is still at version 0, whose shape may change without a bump, so no version is added: a bare value takes the document's stored judge ruleset (LR2 when absent), and the next save writes the qualified value.
+- **Skin buttons.** beatoraja's lane and `optiondp` buttons step beatoraja's own values. LR2's RANDOM buttons keep stepping through every lane option, as they did before; both read another source's value by its bare name.
+
+The registry is `QUALIFIED_OPTION_SOURCES` in `@be-music/player-engine/ruleset`.
