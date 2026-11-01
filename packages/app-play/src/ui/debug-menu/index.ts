@@ -17,6 +17,7 @@ import {
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 // Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
 import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
+import { playerFullscreenElement } from '../../fullscreen.ts';
 import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
 import { resolveGaugeTypes, type GaugeType } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
@@ -75,7 +76,10 @@ export interface DebugMenuDeps {
   readonly beatorajaSkinOverridesByType: Map<number, string>;
   /** The compressor architecture every play mounts with (`?compressor=`), read once at boot. */
   readonly compressorMode: 'split' | 'legacy';
-  /** The player shell, which "Toggle fullscreen" takes fullscreen. */
+  /**
+   * The player shell. "Toggle fullscreen" covers the play surface inside it (`#main`), where this menu is mounted, so
+   * the site header and the site footer stay outside fullscreen.
+   */
   readonly shell: HTMLElement;
   /** The play: loading behind a decide screen, or on the stage. */
   gameplayView(): PlayScene | undefined;
@@ -338,10 +342,12 @@ export class DebugMenu {
     // on the player.
     const container = document.createElement('div');
     container.className = 'debug-pane-container';
-    // The shell is the fullscreen element (double-click and "Toggle fullscreen"). A menu on `document.body` sits
-    // outside that top layer, so the browser hides it until fullscreen ends. The shell does not create a fixed
-    // containing block, so the windowed top-right position is unchanged.
-    this.deps.shell.append(container);
+    // The play surface (`#main`) is the fullscreen element (double-click, the header button, and "Toggle fullscreen").
+    // A menu outside that element sits under the top layer, so the browser hides it until fullscreen ends. The surface
+    // does not create a fixed containing block, so the windowed top-right position is unchanged.
+    const surface = playerFullscreenElement(document);
+    if (surface instanceof HTMLElement) surface.append(container);
+    else this.deps.shell.append(container);
     const gui = new Pane({ title: 'Debug Menu', container, expanded: false });
     gui.element.classList.add('debug-pane');
     gui.element.dataset.pane = 'debug';

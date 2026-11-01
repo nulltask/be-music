@@ -27,6 +27,13 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   expect(footer).not.toContain('>beta</span>');
   expect(footer).not.toContain('>Beta</span>');
   expect(PLAYER_APP_HTML).toContain('id="player-service-header"');
+  const mainStart = PLAYER_APP_HTML.indexOf('<main id="main"');
+  const mainEnd = PLAYER_APP_HTML.lastIndexOf('</main>');
+  const main = PLAYER_APP_HTML.slice(mainStart, mainEnd);
+  expect(mainStart).toBeGreaterThan(PLAYER_APP_HTML.indexOf('id="player-service-header"'));
+  expect(main).not.toContain('service-page-footer');
+  expect(main).not.toContain('id="player-service-header"');
+  expect(PLAYER_APP_HTML.indexOf('service-page-footer')).toBeGreaterThan(mainEnd);
   const header = PLAYER_APP_HTML.slice(
     PLAYER_APP_HTML.indexOf('id="player-service-header"'),
     PLAYER_APP_HTML.indexOf('<main id="main"'),
