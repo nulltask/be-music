@@ -13,6 +13,7 @@ export {
   type ServiceName,
 } from './footer.ts';
 export { renderServiceHeader, serviceSkipLink, type ServiceHeaderAccount } from './header.ts';
+export { PUBLIC_BETA_DELETION, PUBLIC_BETA_LABEL, publicBetaNotice, renderPublicBetaNotice } from './public-beta.ts';
 export {
   LOCALE_COOKIE,
   LOCALE_NAMES,

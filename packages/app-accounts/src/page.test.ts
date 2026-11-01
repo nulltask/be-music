@@ -36,9 +36,14 @@ describe('Accounts page', () => {
     });
     expect(page.split('</main>')[0]).not.toContain('https://donate.example');
     expect(page).toContain(
-      '<footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs"><nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Services"><a class="underline underline-offset-4 hover:text-foreground" data-service="dashboard" href="https://be-music.app/">Dashboard</a><span aria-current="page">Accounts</span><a class="underline underline-offset-4 hover:text-foreground" data-service="play" href="https://play.be-music.app/">Play</a><a class="underline underline-offset-4 hover:text-foreground" data-service="leaderboard" href="https://leaderboard.be-music.app/">Leaderboard</a></nav><div class="space-y-2"><a class="underline underline-offset-4 hover:text-foreground" href="https://donate.example/api/auth/sign-in">Donate</a></div><p>© 2026 nulltask · MIT License</p></footer>',
+      '<footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs"><p lang="en">Public Beta. Data may be deleted without notice.</p><nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Services"><a class="underline underline-offset-4 hover:text-foreground" data-service="dashboard" href="https://be-music.app/">Dashboard</a><span aria-current="page">Accounts</span><a class="underline underline-offset-4 hover:text-foreground" data-service="play" href="https://play.be-music.app/">Play</a><a class="underline underline-offset-4 hover:text-foreground" data-service="leaderboard" href="https://leaderboard.be-music.app/">Leaderboard</a></nav><div class="space-y-2"><a class="underline underline-offset-4 hover:text-foreground" href="https://donate.example/api/auth/sign-in">Donate</a></div><p>© 2026 nulltask · MIT License</p></footer>',
     );
     expect(page).not.toContain('>Accounts</a>');
+    expect(page).not.toContain('>beta</span>');
+    const japanese = renderAccountPage({ ...input, locale: 'ja' });
+    expect(japanese).toContain('<p lang="ja">パブリックベータ。データは予告なく削除されることがあります。</p>');
+    expect(japanese).toContain('lang="ja"');
+    expect(japanese).not.toContain('Public Beta');
   });
   test('hides Donate unless explicitly enabled', () => {
     for (const showDonateLink of [undefined, false]) {

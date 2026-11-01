@@ -18,6 +18,13 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   expect(footer).toContain('href="https://accounts.be-music.app/">Accounts</a>');
   expect(footer).toContain('href="https://leaderboard.be-music.app/">Leaderboard</a>');
   expect(footer).toContain('© 2026 nulltask · MIT License');
+  expect(footer).toContain(
+    '<p data-public-beta-notice="en" lang="en">Public Beta. Data may be deleted without notice.</p>',
+  );
+  expect(footer).toContain(
+    '<p data-public-beta-notice="ja" lang="ja" hidden>パブリックベータ。データは予告なく削除されることがあります。</p>',
+  );
+  expect(footer).not.toContain('>beta</span>');
 });
 
 test('uses chart and replay vocabulary in bilingual help', async () => {
@@ -28,4 +35,11 @@ test('uses chart and replay vocabulary in bilingual help', async () => {
   expect(PLAYER_APP_HTML).toContain('リプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>)');
   expect(PLAYER_APP_HTML).not.toContain('チャート');
   expect(PLAYER_APP_HTML).not.toContain('Loading songs');
+  expect(PLAYER_APP_HTML).toContain('is a Public Beta: its rankings may be reset.');
+  expect(PLAYER_APP_HTML).toContain('Data may be deleted without notice.');
+  expect(PLAYER_APP_HTML).toContain(
+    'はパブリックベータで、ランキングはリセットされることがあります。データは予告なく削除されることがあります。',
+  );
+  expect(PLAYER_APP_HTML).not.toContain('is a beta:');
+  expect(PLAYER_APP_HTML).not.toContain('ベータ版');
 });

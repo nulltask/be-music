@@ -49,16 +49,17 @@ export const OPENAPI_DOCUMENTATION = {
     title: 'be-music Leaderboard API',
     version: '0',
     description:
-      'Version 0 is the beta: it may still change incompatibly (docs/leaderboard.md section 8). Requests are ' +
-      'authenticated with a host-only OIDC app session or a resource-bound Accounts access token; reads are public.',
+      'Version 0 is a Public Beta: it may still change incompatibly (docs/leaderboard.md section 8). Data may be ' +
+      'deleted without notice. Requests are authenticated with a host-only OIDC app session or a resource-bound ' +
+      'Accounts access token; reads are public.',
   },
   servers: [{ url: '/api/v0' }],
 };
 
 /**
- * Version 0 of the Leaderboard API, mounted at `/api/v0` (docs/leaderboard.md section 8). Version 0 is the beta: it may
- * still change incompatibly. Once stable it becomes `/api/v1`, and breaking changes after that go into a new version
- * mounted next to the old one.
+ * Version 0 of the Leaderboard API, mounted at `/api/v0` (docs/leaderboard.md section 8). Version 0 is a Public Beta:
+ * it may still change incompatibly, and data may be deleted without notice. Once stable it becomes `/api/v1`, and
+ * breaking changes after that go into a new version mounted next to the old one.
  */
 export function createV0API(options: { now: () => number; newId: () => string; chartsetLookup: ChartsetLookup }) {
   const { now, newId, chartsetLookup } = options;
