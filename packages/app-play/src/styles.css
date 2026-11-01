@@ -2389,11 +2389,11 @@ html.touch-first .search-input.search-inline:focus {
   display: none;
 }
 .shell.empty .drop {
-  padding-bottom: 11rem;
+  padding-bottom: 13rem;
 }
 .shell.empty .help-button,
 .shell.empty .account-chip {
-  bottom: calc(11rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(13rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* A DOM skin owns a real search input; remove the Canvas overlay from focus and accessibility as well. */

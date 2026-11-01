@@ -1,4 +1,9 @@
-import { renderBuildInfo, renderServiceFooter } from '@be-music/service-web-theme';
+import {
+  PUBLIC_BETA_DELETION,
+  PUBLIC_BETA_LABEL,
+  renderBuildInfo,
+  renderServiceFooter,
+} from '@be-music/service-web-theme';
 
 function playBuildInfo(): { builtAt: string; revision: string } | undefined {
   return typeof __BE_MUSIC_BUILD_TIME__ === 'string'
@@ -551,7 +556,8 @@ export const PLAYER_APP_HTML = `
                 <li>Some features are still missing or incomplete — expect rough edges.</li>
                 <li>
                   <strong>Best records stay in this browser.</strong> The Leaderboard (off by
-                  default, Debug Menu → Leaderboard) is a beta: its rankings may be reset.
+                  default, Debug Menu → Leaderboard) is a ${PUBLIC_BETA_LABEL.en}: its rankings may be reset.
+                  ${PUBLIC_BETA_DELETION.en}
                 </li>
                 <li>
                   <strong>Verified skins:</strong> the Lunatic Rave 2 default skin, plus the
@@ -684,7 +690,7 @@ export const PLAYER_APP_HTML = `
                 <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
                 <li>
                   <strong>ベスト記録はこのブラウザに保存されます。</strong>
-                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) はベータ版で、ランキングはリセットされることがあります。
+                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) は${PUBLIC_BETA_LABEL.ja}で、ランキングはリセットされることがあります。${PUBLIC_BETA_DELETION.ja}
                 </li>
                 <li>
                   <strong>動作確認済みのスキン:</strong> Lunatic Rave 2 デフォルトスキンに加え、beatoraja デフォルトスキン (<code>skin/default</code>)、<code>ModernChic</code>、<code>GdbG Original Skin</code> の四種類です。
@@ -1352,6 +1358,7 @@ export const PLAYER_APP_HTML = `
     hostname: playHostname(),
     className: 'service-page-footer',
     buildInfo: playBuildInfo(),
+    locale: 'both',
   })}
   </div>
 `;
