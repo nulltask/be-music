@@ -301,6 +301,8 @@ A course stage runs on the ruleset's course gauge, not on the single-chart gauge
 
 **`beatoraja`** plays every course on its class gauges (`GrooveGauge.create`): GROOVE and EASY map to `CLASS`, HARD to `EXCLASS`, DEATH to `EXHARDCLASS`. The table set comes from the course's `gauge_*` constraint, or from the play mode when it names none (5 / 10 keys → `5k`, PMS → `9k`, 24 / 48 keys → `24k`, otherwise `7k`). They start at 100 with no TOTAL modifier. **`____`** has no published class gauge, so it uses beatoraja's.
 
+lr2oraja and LR2oraja Endless Dream play courses on beatoraja's `GAUGE_LR2` class gauges with LR2's death border and damage-reduction threshold; how that compares with these rules, and why be-music does not follow it, is in [lr2oraja courses](./research/lr2oraja-courses.md).
+
 ### Judgment constraints
 
 `no_good` gives GOOD the GREAT window, and `no_great` gives GREAT and GOOD the PGREAT window, on every window table (beatoraja `JudgeManager` L175-L184 sets the window rates to 0, and `JudgeWindowRule.create` widens a window narrower than the one inside it). Under these constraints a press just outside the remaining windows is a BAD. They apply under every ruleset.
