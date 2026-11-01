@@ -18,9 +18,9 @@
     "@be-music/service-auth-client": "workspace:*",
     "@be-music/service-web-theme": "workspace:*",
     "@be-music/shared-utils": "workspace:*",
-    "@better-auth/oauth-provider": "1.7.12",
-    "@better-auth/passkey": "1.7.12",
-    "better-auth": "1.7.12",
+    "@better-auth/oauth-provider": "1.7.14",
+    "@better-auth/passkey": "1.7.14",
+    "better-auth": "1.7.14",
     "drizzle-orm": "^0.45.4"
   },
   "devDependencies": {
