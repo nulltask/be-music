@@ -121,10 +121,30 @@ export function resizeFrameSourceWithAspectMode(
   );
 }
 
-/** Transform static and streamed frames once each, preserving the stream's clock and lazy startup. */
+/** How many transformed frames a mapped video keeps; the rest are transformed again when they are shown again. */
+export const MAPPED_FRAME_CACHE_SIZE = 8;
+
+/**
+ * Transform static frames once, and streamed frames when they are shown, preserving the stream's clock and lazy
+ * startup. A mapped video keeps only its {@link MAPPED_FRAME_CACHE_SIZE} most recently shown frames, so a chain of maps
+ * (colour key, `#BGA` crop, resize) holds no copy of the whole movie beside the decoded one.
+ */
 export function mapFrameSource(source: FrameSource, transform: (frame: ANSIFrame) => ANSIFrame): FrameSource {
   if (source.kind === 'static') return { kind: 'static', frame: transform(source.frame) };
   const mappedFrames: TimedANSIFrame[] = [];
+  const recent = new Map<number, ANSIFrame>();
+  const frameAt = (index: number, upstream: TimedANSIFrame): ANSIFrame => {
+    let frame = recent.get(index);
+    if (frame) {
+      // Most recently shown last, so the oldest is first to go.
+      recent.delete(index);
+    } else {
+      frame = transform(upstream.frame);
+      if (recent.size >= MAPPED_FRAME_CACHE_SIZE) recent.delete(recent.keys().next().value!);
+    }
+    recent.set(index, frame);
+    return frame;
+  };
   return {
     kind: 'video',
     get durationSeconds() {
@@ -133,8 +153,14 @@ export function mapFrameSource(source: FrameSource, transform: (frame: ANSIFrame
     ensureStreaming: () => source.ensureStreaming?.(),
     get frames() {
       for (let index = mappedFrames.length; index < source.frames.length; index += 1) {
-        const entry = source.frames[index]!;
-        mappedFrames.push({ seconds: entry.seconds, frame: transform(entry.frame) });
+        const upstream = source.frames[index]!;
+        const at = index;
+        mappedFrames.push({
+          seconds: upstream.seconds,
+          get frame() {
+            return frameAt(at, upstream);
+          },
+        });
       }
       return mappedFrames;
     },

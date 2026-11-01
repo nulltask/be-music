@@ -1,12 +1,16 @@
 import { applyBMSColorKey, type BmsARGB } from '@be-music/chart-model';
 import { Texture } from 'pixi.js';
+import { canDrawBGAPixelsOnGPU, drawBGAPixelsOnGPU } from './bga-gpu-pixels.ts';
 
 const dynamicCanvases = new WeakSet<object>();
 export function isColorKeyVideoCanvas(resource: object): boolean {
   return dynamicCanvases.has(resource);
 }
 
-/** Key decoded video pixels before sub-region views are cut; every alias shares the live native-size canvas. */
+/**
+ * Key decoded video pixels before sub-region views are cut; every alias shares the live native-size canvas. Each frame
+ * is keyed on the shared GPU context (`bga-gpu-pixels.ts`), or on the CPU where WebGL2 is unavailable.
+ */
 export function createColorKeyVideoTexture(
   video: HTMLVideoElement,
   keys: { bmsColorKey?: BmsARGB; swBGAColorKey?: BmsARGB },
@@ -17,7 +21,9 @@ export function createColorKeyVideoTexture(
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, video.videoWidth);
   canvas.height = Math.max(1, video.videoHeight);
-  const context = canvas.getContext('2d', { willReadFrequently: true })!;
+  const onGPU = canDrawBGAPixelsOnGPU();
+  // Only the CPU path reads the pixels back; on the GPU path the canvas stays on the GPU.
+  const context = canvas.getContext('2d', { willReadFrequently: !onGPU })!;
   const texture = Texture.from(canvas);
   texture.source.scaleMode = 'nearest';
   dynamicCanvases.add(canvas);
@@ -30,6 +36,10 @@ export function createColorKeyVideoTexture(
       canvas.height = video.videoHeight;
     }
     try {
+      if (onGPU && drawBGAPixelsOnGPU(video, canvas.width, canvas.height, keys, context)) {
+        texture.source.update();
+        return;
+      }
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.drawImage(video, 0, 0);
       const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
