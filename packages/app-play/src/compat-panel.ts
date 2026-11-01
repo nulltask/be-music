@@ -1,4 +1,5 @@
 import { summarizeBrowserCompat, type BrowserCompatReport } from '@be-music/player-browser/collection';
+import { playerText } from './player-copy.ts';
 
 /**
  * Renders the browser-compatibility check, folded inside the drop card under the Leaderboard row. Feature support
@@ -23,14 +24,16 @@ export function renderBrowserCompatPanel(report: BrowserCompatReport): void {
   // Folded while everything required works; a missing feature opens it, since that is what the player needs to see.
   if (panel instanceof HTMLDetailsElement) panel.open = !report.ok;
 
+  const shell = playerText().shell;
   if (report.ok) {
     // Distinguish "everything works" from "core works but you're missing some optional niceties" — the latter is still
     // a green verdict but the count tells power users at a glance whether Web­Codecs / WebGPU / etc. are reachable.
     const missingOptional = report.items.filter((item) => !item.required && !item.supported).length;
-    statusLabel.textContent =
-      missingOptional > 0 ? `Browser ready · ${missingOptional} optional missing` : 'Browser ready';
+    statusLabel.textContent = missingOptional > 0 ? shell.optionalMissing(missingOptional) : shell.browserReady;
   } else {
-    statusLabel.textContent = summarizeBrowserCompat(report) ?? 'Browser not supported';
+    const summary = summarizeBrowserCompat(report);
+    const missing = summary?.startsWith('Missing required: ') ? summary.slice('Missing required: '.length) : undefined;
+    statusLabel.textContent = missing !== undefined ? shell.missingRequired(missing) : (summary ?? shell.browserUnsupported);
   }
 
   requiredList.replaceChildren();
@@ -52,7 +55,8 @@ function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIEleme
   // split (Required vs Optional) above, not from a distinction here.
   const status = item.supported ? 'ok' : item.required ? 'fail' : 'warn';
   li.className = `compat-row compat-row--${status}`;
-  li.title = item.note;
+  const notes = playerText().compatNotes;
+  li.title = item.id in notes ? notes[item.id as keyof typeof notes] : item.note;
 
   const icon = document.createElement('span');
   icon.className = 'compat-row-icon';
@@ -71,7 +75,8 @@ function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIEleme
   sr.className = 'compat-row-sr';
   // Read-aloud text for assistive tech — `✓` / `✕` / `–` carry visual semantics but no name on their own. `aria-hidden`
   // on the icon hands the verdict to this hidden label instead.
-  sr.textContent = item.supported ? 'supported' : item.required ? 'missing (required)' : 'missing (optional)';
+  const shell = playerText().shell;
+  sr.textContent = item.supported ? shell.supported : item.required ? shell.missingRequiredItem : shell.missingOptionalItem;
   li.appendChild(sr);
 
   return li;

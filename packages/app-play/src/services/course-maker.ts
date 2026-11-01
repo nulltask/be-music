@@ -8,6 +8,7 @@ import type { SelectScene } from '@be-music/player-browser/host';
 import { LR2_COURSE_MAKER_MAX_STAGES } from '@be-music/player-engine/course';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import { CourseMakerPanel } from '../course-maker-panel.ts';
+import { playerText } from '../player-copy.ts';
 import { loadMadeCourses, saveMadeCourses } from '../course-maker-store.ts';
 
 const dropLog = logger('drop');
@@ -74,7 +75,7 @@ export class CourseMakerService {
         randomMixes: [...this.maker.randomMixes],
       });
     } catch (error) {
-      this.setStatus('Could not save your courses in this browser; they last until the page is closed');
+      this.setStatus(playerText().course.unsaved);
       dropLog.warn('course save failed', error);
     }
     if (change === 'courses') await this.refreshMadeCourses();
@@ -90,21 +91,15 @@ export class CourseMakerService {
     if (draft === undefined) return false;
     if (draft.stages.length >= LR2_COURSE_MAKER_MAX_STAGES) {
       const saved = this.maker.finish();
-      if (saved !== undefined) this.setStatus(`Saved the course "${saved.name}"`);
+      if (saved !== undefined) this.setStatus(playerText().course.saved(saved.name));
       return true;
     }
     void this.maker.append(chartEntry).then((result) => {
       if (result.ok) {
-        this.setStatus(`Added ${chartEntry.title} to the course (${this.maker.draft?.stages.length ?? 0} / 5)`);
+        this.setStatus(playerText().course.added(chartEntry.title, this.maker.draft?.stages.length ?? 0));
         return;
       }
-      const reasons = {
-        full: 'the course already has 5 charts',
-        'key-mode': 'its key mode differs from the first chart’s',
-        'no-md5': 'its chart could not be hashed',
-        'not-making': 'no course is being made',
-      } as const;
-      this.setStatus(`Could not add ${chartEntry.title}: ${reasons[result.reason]}`);
+      this.setStatus(playerText().course.couldNotAdd(chartEntry.title, playerText().course.addReasons[result.reason]));
     });
     return true;
   }

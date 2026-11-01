@@ -131,7 +131,7 @@ ${renderServiceHeader({
 <section class="grid gap-4"><p class="text-muted-foreground text-sm" data-state="${input.account === undefined ? 'signed-out' : input.account.anonymous ? 'anonymous' : 'signed-in'}">${escapeHTML(status)}</p>
 <div class="flex flex-wrap gap-2"><a class="btn no-underline" data-size="sm" href="${accountHref}">${accountLabel}</a>${signOut}</div></section></section>
 <section aria-labelledby="services-heading"><h2 class="mb-4 text-lg font-semibold tracking-tight" id="services-heading">${input.locale === 'ja' ? 'サービス' : 'Services'}</h2><nav class="grid gap-4 sm:grid-cols-2" aria-label="${input.locale === 'ja' ? 'サービス' : 'Services'}">
-${serviceCard(links.play, 'Play', input.locale === 'ja' ? 'BMS・Bmson の譜面をブラウザでプレイ。' : 'Play BMS and Bmson charts in your browser.', t.play)}
+${serviceCard(links.play, 'Play', input.locale === 'ja' ? 'BMS・bmson の譜面をブラウザでプレイ。' : 'Play BMS and bmson charts in your browser.', t.play)}
 ${serviceCard(links.leaderboard, 'Leaderboard', input.locale === 'ja' ? 'スコアやプレイヤーの記録をチェック。' : 'Explore scores, rankings and player records.', t.leaderboard)}
 </nav></section>
 </main>

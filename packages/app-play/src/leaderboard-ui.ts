@@ -12,9 +12,10 @@ import {
   loadLeaderboardAccount,
   signInWithLeaderboardPasskey,
   signOutOfLeaderboard,
-  START_ACCOUNT_ACTION_LABELS,
+  startAccountActionLabels,
   type AccountActionResult,
 } from './account.ts';
+import { playerText } from './player-copy.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
 import { leaderboardLink } from './service-links.ts';
 import type { BeMusicCourseReplay } from '@be-music/player-engine/replay';
@@ -171,7 +172,7 @@ export class LeaderboardPanel {
       })
       .catch((error: unknown) => {
         this.host.warn('leaderboard submission failed', error);
-        this.host.setStatus('Leaderboard: not submitted (network error)');
+        this.host.setStatus(playerText().lb.network);
       });
   }
   /**
@@ -201,7 +202,7 @@ export class LeaderboardPanel {
       })
       .catch((error: unknown) => {
         this.host.warn('leaderboard course submission failed', error);
-        this.host.setStatus('Leaderboard: course not submitted (network error)');
+        this.host.setStatus(playerText().lb.courseNetwork);
       });
   }
   /** Re-reads the account into the Debug Menu's "Account" row and the account chip. */
@@ -241,7 +242,7 @@ export class LeaderboardPanel {
       link.href = leaderboardLink(view.href, location.hostname);
       link.target = '_blank';
       link.rel = 'noopener';
-      link.title = 'Your Leaderboard page (opens in a new tab)';
+      link.title = playerText().shell.yourPage;
       link.textContent = view.label;
       label.replaceChildren(link);
     } else {
@@ -255,12 +256,13 @@ export class LeaderboardPanel {
         button.className = 'btn';
         button.dataset.size = 'sm';
         if (action !== 'sign-up' && action !== 'keep') button.dataset.variant = 'outline';
-        button.textContent = START_ACCOUNT_ACTION_LABELS[action];
+        button.textContent = startAccountActionLabels()[action];
         button.addEventListener('click', () => {
+          const copy = playerText();
           // Signing out needs nothing more; the rest open the dialogs the Leaderboard's own pages use.
-          if (action === 'sign-out') void this.runAccountAction('Sign out', signOutOfLeaderboard);
-          else if (action === 'keep') void this.runAccountAction('Manage account', createLeaderboardPasskey);
-          else void this.runAccountAction('Sign in', signInWithLeaderboardPasskey);
+          if (action === 'sign-out') void this.runAccountAction(copy.account.signOut, signOutOfLeaderboard);
+          else if (action === 'keep') void this.runAccountAction(copy.account.manage, createLeaderboardPasskey);
+          else void this.runAccountAction(copy.shell.signIn, signInWithLeaderboardPasskey);
         });
         return button;
       }),

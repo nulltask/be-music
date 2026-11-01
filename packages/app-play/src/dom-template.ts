@@ -45,6 +45,7 @@ export const PLAYER_APP_HTML = `
       class="input search-input"
       type="search"
       placeholder="Search title / artist / genre... (? for a filter)"
+      data-i18n-placeholder="search"
       aria-describedby="search-error"
     />
     <p id="search-error" class="search-error" role="status" hidden></p>
@@ -99,9 +100,9 @@ export const PLAYER_APP_HTML = `
               opacity="0.55"
             />
           </svg>
-          <div class="drop-title">Drop to load</div>
+          <div class="drop-title" data-i18n="dropTitle">Drop to load</div>
           <div class="drop-subtitle">
-            <span>BMS folder</span>
+            <span data-i18n="dropFolder">BMS folder</span>
           </div>
           <!--
             Leaderboard: whether this browser's plays are sent, and the
@@ -109,14 +110,14 @@ export const PLAYER_APP_HTML = `
             (leaderboard-ui.ts) from the account state; the checkbox is
             the Debug Menu's "Submit to Leaderboard" setting.
           -->
-          <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard">
+          <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard" data-i18n-aria="leaderboard">
             <label class="start-check">
               <input class="input" type="checkbox" id="start-submit" />
-              <span>Submit my plays to the Leaderboard</span>
+              <span data-i18n="submitPlays">Submit my plays to the Leaderboard</span>
             </label>
             <!-- \`loading\` until the account has been read, so a signed-in player never sees "Not signed in". -->
             <div class="start-account" id="start-account" data-state="loading">
-              <span class="start-account-label" id="start-account-label">Checking account…</span>
+              <span class="start-account-label" id="start-account-label" data-i18n="checkingAccount">Checking account…</span>
               <div class="start-account-actions" id="start-account-actions"></div>
             </div>
             <p class="start-account-hint" id="start-account-hint"></p>
@@ -129,7 +130,7 @@ export const PLAYER_APP_HTML = `
             browser's language and shows it. The checkbox is the Debug
             Menu's "Play in silent mode" setting.
           -->
-          <section class="start-audio" id="start-silent-mode" aria-label="Sound" hidden>
+          <section class="start-audio" id="start-silent-mode" aria-label="Sound" data-i18n-aria="sound" hidden>
             <label class="start-check">
               <input class="input" type="checkbox" id="start-silent-mode-input" checked />
               <span data-silent-mode-label>Play in silent mode</span>
@@ -167,17 +168,17 @@ export const PLAYER_APP_HTML = `
                   />
                 </svg>
               </span>
-              <span class="compat-panel-eyebrow">System check</span>
-              <span class="compat-panel-status" id="compat-panel-status">Browser ready</span>
+              <span class="compat-panel-eyebrow" data-i18n="systemCheck">System check</span>
+              <span class="compat-panel-status" id="compat-panel-status" data-i18n="browserReady">Browser ready</span>
               <span class="compat-panel-chevron" aria-hidden="true"></span>
             </summary>
             <div class="compat-panel-sections">
               <section class="compat-panel-section">
-                <h3 class="compat-panel-section-title">Required</h3>
+                <h3 class="compat-panel-section-title" data-i18n="required">Required</h3>
                 <ul class="compat-panel-list" id="compat-panel-required"></ul>
               </section>
               <section class="compat-panel-section">
-                <h3 class="compat-panel-section-title">Optional</h3>
+                <h3 class="compat-panel-section-title" data-i18n="optional">Optional</h3>
                 <ul class="compat-panel-list" id="compat-panel-optional"></ul>
               </section>
             </div>
@@ -194,57 +195,57 @@ export const PLAYER_APP_HTML = `
     <dialog class="dialog account-dialog" id="leaderboard-sign-in" aria-labelledby="leaderboard-sign-in-title">
       <div class="account-dialog-body">
         <header>
-          <h2 id="leaderboard-sign-in-title">Sign in</h2>
-          <p>Use the passkey of your Leaderboard account.</p>
+          <h2 id="leaderboard-sign-in-title" data-i18n="signIn">Sign in</h2>
+          <p data-i18n="signInLead">Use the passkey of your Leaderboard account.</p>
         </header>
         <section class="grid gap-3">
-        <button type="button" class="btn w-full" data-account-dialog-action="sign-in">
+        <button type="button" class="btn w-full" data-account-dialog-action="sign-in" data-i18n="signInPasskey">
           Sign in with a passkey
         </button>
-        <div class="text-muted-foreground text-center text-xs" role="separator">or</div>
+        <div class="text-muted-foreground text-center text-xs" role="separator" data-i18n="or">or</div>
         <div class="account-providers">
-          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign in with Google is coming soon">
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign in with Google is coming soon" data-i18n-title="signInGoogleSoon">
             <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
-            Sign in with Google
-            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
+            <span data-i18n="signInGoogle">Sign in with Google</span>
+            <span class="text-muted-foreground ms-auto text-xs" data-i18n="comingSoon">Coming soon</span>
           </button>
-          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign in with Discord is coming soon">
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign in with Discord is coming soon" data-i18n-title="signInDiscordSoon">
             <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
-            Sign in with Discord
-            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
+            <span data-i18n="signInDiscord">Sign in with Discord</span>
+            <span class="text-muted-foreground ms-auto text-xs" data-i18n="comingSoon">Coming soon</span>
           </button>
         </div>
         <p class="text-destructive text-sm" data-account-dialog-status role="status" hidden></p>
         </section>
         <footer>
-          <button type="button" class="btn" data-variant="link" data-account-dialog-action="open-sign-up">
+          <button type="button" class="btn" data-variant="link" data-account-dialog-action="open-sign-up" data-i18n="noAccount">
             No account yet? Sign up
           </button>
-          <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close">Cancel</button>
+          <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close" data-i18n="cancel">Cancel</button>
         </footer>
       </div>
     </dialog>
     <dialog class="dialog account-dialog" id="leaderboard-sign-up" aria-labelledby="leaderboard-sign-up-title">
       <form class="account-dialog-body" method="dialog" data-account-sign-up-form>
         <header>
-          <h2 id="leaderboard-sign-up-title">Create your account</h2>
-          <p data-account-sign-up-lead>Pick a handle and a name. Your browser then makes a passkey for it.</p>
+          <h2 id="leaderboard-sign-up-title" data-i18n="signUpTitle">Create your account</h2>
+          <p data-account-sign-up-lead data-i18n="signUpLead">Pick a handle and a name. Your browser then makes a passkey for it.</p>
         </header>
         <div class="account-providers">
-          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign up with Google is coming soon">
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign up with Google is coming soon" data-i18n-title="signUpGoogleSoon">
             <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
-            Sign up with Google
-            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
+            <span data-i18n="signUpGoogle">Sign up with Google</span>
+            <span class="text-muted-foreground ms-auto text-xs" data-i18n="comingSoon">Coming soon</span>
           </button>
-          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign up with Discord is coming soon">
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign up with Discord is coming soon" data-i18n-title="signUpDiscordSoon">
             <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
-            Sign up with Discord
-            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
+            <span data-i18n="signUpDiscord">Sign up with Discord</span>
+            <span class="text-muted-foreground ms-auto text-xs" data-i18n="comingSoon">Coming soon</span>
           </button>
         </div>
-        <div class="text-muted-foreground text-center text-xs" role="separator">or with a passkey</div>
+        <div class="text-muted-foreground text-center text-xs" role="separator" data-i18n="orPasskey">or with a passkey</div>
         <label class="field">
-          <span>Handle</span>
+          <span data-i18n="handle">Handle</span>
           <input
             class="input"
             name="handle"
@@ -255,19 +256,19 @@ export const PLAYER_APP_HTML = `
             autocomplete="username"
             spellcheck="false"
           />
-          <small>3 to 15 letters, digits or _. It names your page.</small>
+          <small data-i18n="handleHint">3 to 15 letters, digits or _. It names your page.</small>
         </label>
         <label class="field">
-          <span>Name</span>
+          <span data-i18n="displayName">Name</span>
           <input class="input" name="displayName" required maxlength="64" autocomplete="nickname" />
-          <small>Up to 32 characters, in any script. The rankings show it.</small>
+          <small data-i18n="nameHint">Up to 32 characters, in any script. The rankings show it.</small>
         </label>
         <p class="text-destructive text-sm" data-account-dialog-status role="status" hidden></p>
         <footer>
           <span></span>
           <span class="account-dialog-buttons">
-            <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close">Cancel</button>
-            <button type="submit" class="btn">Create passkey</button>
+            <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close" data-i18n="cancel">Cancel</button>
+            <button type="submit" class="btn" data-i18n="createPasskey">Create passkey</button>
           </span>
         </footer>
       </form>
@@ -285,24 +286,24 @@ export const PLAYER_APP_HTML = `
         <path d="M14 22 L24 32 L34 22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
         <path d="M10 38 L38 38" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55" />
       </svg>
-      <h2 class="drop-title" id="skin-drop-title">Drop an LR2 skin</h2>
+      <h2 class="drop-title" id="skin-drop-title" data-i18n="skinDropLr2">Drop an LR2 skin</h2>
       <p class="text-muted-foreground text-sm" data-skin-drop-hint></p>
       <footer>
-        <button type="button" class="btn" data-variant="outline" data-skin-drop-cancel>Cancel</button>
+        <button type="button" class="btn" data-variant="outline" data-skin-drop-cancel data-i18n="cancel">Cancel</button>
       </footer>
       </div>
     </dialog>
     <dialog class="dialog account-dialog" id="skin-switch" aria-labelledby="skin-switch-title" aria-describedby="skin-switch-hint">
       <form method="dialog" class="account-dialog-body">
         <header>
-          <h2 id="skin-switch-title">Use the dropped skin?</h2>
-          <p id="skin-switch-hint">Switch to this skin? Cancel keeps your current skin. Charts in the drop will still be imported.</p>
+          <h2 id="skin-switch-title" data-i18n="skinSwitchTitle">Use the dropped skin?</h2>
+          <p id="skin-switch-hint" data-i18n="skinSwitchHint">Switch to this skin? Cancel keeps your current skin. Charts in the drop will still be imported.</p>
         </header>
         <footer>
-          <button type="submit" value="" class="btn" data-variant="outline" autofocus>Cancel</button>
+          <button type="submit" value="" class="btn" data-variant="outline" autofocus data-i18n="cancel">Cancel</button>
           <span class="account-dialog-buttons">
-            <button type="submit" value="lr2" class="btn" data-skin-family="lr2">Use LR2 skin</button>
-            <button type="submit" value="beatoraja" class="btn" data-skin-family="beatoraja">Use beatoraja skin</button>
+            <button type="submit" value="lr2" class="btn" data-skin-family="lr2" data-i18n="useLr2">Use LR2 skin</button>
+            <button type="submit" value="beatoraja" class="btn" data-skin-family="beatoraja" data-i18n="useBeatoraja">Use beatoraja skin</button>
           </span>
         </footer>
       </form>
@@ -316,12 +317,12 @@ export const PLAYER_APP_HTML = `
     <dialog class="dialog account-dialog" id="replay-missing" aria-labelledby="replay-missing-title" aria-describedby="replay-missing-hint">
       <form method="dialog" class="account-dialog-body">
         <header>
-          <h2 id="replay-missing-title">Charts missing</h2>
+          <h2 id="replay-missing-title" data-i18n="chartsMissing">Charts missing</h2>
           <p id="replay-missing-hint" data-replay-missing-hint></p>
         </header>
         <ul class="replay-missing-list" data-replay-missing-list></ul>
         <footer>
-          <button type="submit" class="btn" autofocus>OK</button>
+          <button type="submit" class="btn" autofocus data-i18n="ok">OK</button>
         </footer>
       </form>
     </dialog>
@@ -334,12 +335,12 @@ export const PLAYER_APP_HTML = `
     <dialog class="dialog account-dialog" id="play-option-mismatch" aria-labelledby="play-option-mismatch-title" aria-describedby="play-option-mismatch-hint">
       <form method="dialog" class="account-dialog-body">
         <header>
-          <h2 id="play-option-mismatch-title">Option not available</h2>
-          <p id="play-option-mismatch-hint">The selected play options cannot be used with this chart. Change them and start the chart again.</p>
+          <h2 id="play-option-mismatch-title" data-i18n="optionUnavailable">Option not available</h2>
+          <p id="play-option-mismatch-hint" data-i18n="optionUnavailableHint">The selected play options cannot be used with this chart. Change them and start the chart again.</p>
         </header>
         <ul class="replay-missing-list" data-play-option-mismatch-list></ul>
         <footer>
-          <button type="submit" class="btn" autofocus>OK</button>
+          <button type="submit" class="btn" autofocus data-i18n="ok">OK</button>
         </footer>
       </form>
     </dialog>
@@ -354,7 +355,7 @@ export const PLAYER_APP_HTML = `
     -->
     <div class="loading-overlay" id="loading-overlay" aria-hidden="true">
       <div class="card loading-card gap-3 px-6" role="status" aria-live="polite">
-        <div class="loading-label" id="loading-label">Loading…</div>
+        <div class="loading-label" id="loading-label" data-i18n="loading">Loading…</div>
         <div class="progress loading-bar"><span class="loading-bar-fill" id="loading-bar-fill"></span></div>
         <div class="loading-counter" id="loading-counter"></div>
       </div>
@@ -380,7 +381,7 @@ export const PLAYER_APP_HTML = `
         />
         <circle cx="12" cy="17.2" r="1.1" fill="currentColor" />
       </svg>
-      <span class="help-button-label">Help</span>
+      <span class="help-button-label" data-i18n="help">Help</span>
     </button>
     <!--
       Bottom-right Leaderboard account chip: the sign-in state at a glance
@@ -398,10 +399,10 @@ export const PLAYER_APP_HTML = `
       it shows Resume and Quit. Hidden on desktops and outside play.
     -->
     <div class="touch-controls" id="touch-controls">
-      <button class="btn touch-control" data-size="icon" id="touch-pause" type="button" aria-label="Pause">
+      <button class="btn touch-control" data-size="icon" id="touch-pause" type="button" aria-label="Pause" data-i18n-aria="pause">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round" /></svg>
       </button>
-      <button class="btn touch-control touch-control--text" data-size="sm" data-variant="outline" id="touch-quit" type="button">Quit</button>
+      <button class="btn touch-control touch-control--text" data-size="sm" data-variant="outline" id="touch-quit" type="button" data-i18n="quit">Quit</button>
     </div>
     <!--
       Shown on phones held upright: the play field is laid out for
@@ -414,8 +415,8 @@ export const PLAYER_APP_HTML = `
           <path d="M8 34a17 17 0 0 0 17 9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
           <path d="M21 40l4 3-3 4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <div class="rotate-hint-title">Rotate your device</div>
-        <div class="rotate-hint-subtitle">The player is laid out for landscape.</div>
+        <div class="rotate-hint-title" data-i18n="rotateTitle">Rotate your device</div>
+        <div class="rotate-hint-subtitle" data-i18n="rotateSubtitle">The player is laid out for landscape.</div>
       </div>
     </div>
     <!--
@@ -435,10 +436,10 @@ export const PLAYER_APP_HTML = `
       <div class="card help-modal-card gap-4 overflow-hidden p-6">
         <header class="help-modal-header">
           <div>
-            <div class="help-modal-eyebrow">Help &amp; About</div>
+            <div class="help-modal-eyebrow" data-i18n="helpAbout">Help &amp; About</div>
             <h2 class="help-modal-title" id="help-modal-title">be-music player</h2>
           </div>
-          <button class="btn help-modal-close" data-size="icon-sm" data-variant="ghost" id="help-modal-close" type="button" aria-label="Close">
+          <button class="btn help-modal-close" data-size="icon-sm" data-variant="ghost" id="help-modal-close" type="button" aria-label="Close" data-i18n-aria="close">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
                 d="M7 7 L17 17 M17 7 L7 17"
@@ -459,6 +460,7 @@ export const PLAYER_APP_HTML = `
             aria-selected="true"
             aria-controls="help-pane-usage"
             data-pane="usage"
+            data-i18n="usage"
           >
             Usage
           </button>
@@ -470,6 +472,7 @@ export const PLAYER_APP_HTML = `
             aria-selected="false"
             aria-controls="help-pane-options"
             data-pane="options"
+            data-i18n="options"
           >
             Options
           </button>
@@ -481,6 +484,7 @@ export const PLAYER_APP_HTML = `
             aria-selected="false"
             aria-controls="help-pane-oss"
             data-pane="oss"
+            data-i18n="openSource"
           >
             Open source
           </button>
@@ -499,7 +503,7 @@ export const PLAYER_APP_HTML = `
             at boot — \`ja-*\` users land on Japanese, everyone else
             on English.
           -->
-          <div class="help-lang-switch" role="group" aria-label="Language">
+          <div class="help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
             <button
               class="btn help-lang-toggle is-active" data-size="sm" data-variant="ghost"
               type="button"
@@ -773,7 +777,7 @@ export const PLAYER_APP_HTML = `
           hidden
         >
           <!-- The language switch follows the Usage one: every \`.help-lang-toggle\` and \`.help-lang\` share one state. -->
-          <div class="help-lang-switch" role="group" aria-label="Language">
+          <div class="help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
             <button
               class="btn help-lang-toggle is-active" data-size="sm" data-variant="ghost"
               type="button"
@@ -1337,7 +1341,7 @@ export const PLAYER_APP_HTML = `
           tabindex="0"
           hidden
         >
-          <p class="help-pane-intro">
+          <p class="help-pane-intro" data-i18n="ossIntro">
             This player is built on the open source libraries listed below: every third-party package
             this build includes. Each entry keeps the copyright / license text the package ships, or its
             upstream text where the package ships none; open it to read.

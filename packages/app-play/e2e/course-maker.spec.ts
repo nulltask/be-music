@@ -24,7 +24,7 @@ async function startMaking(player: Player, folder: string, kind: string): Promis
   await player.cursorTo((bar) => bar.course?.newCourse === true, 'the NEW COURSE bar');
   await player.key('Enter');
   const state = await player.waitFor((current) => current.courseDraft?.kind === kind, `a ${kind} course being made`);
-  expect(state.status).toBe('Making a course: decide songs to add them, then save');
+  expect(state.status).toBe('Making a course: decide charts to add them, then save');
 }
 
 /** The text of a file the page offered as a download. */
@@ -64,7 +64,7 @@ test('makes, saves, cancels, renames, deletes and exports courses', async ({ pla
   await startMaking(player, 'MY DAN', 'grade');
   await expect(card).toBeVisible();
   await card.locator('input.course-maker-name').fill('E2E DAN');
-  await card.locator('label', { hasText: 'JudgmentKind' }).locator('select').selectOption({ label: 'No GOOD' });
+  await card.locator('label', { hasText: 'Judgment' }).locator('select').selectOption({ label: 'No GOOD' });
   expect(await decide(player, 'Fixture A')).toBe('Added Fixture A to the course (1 / 5)');
   await card.getByRole('button', { name: 'Cancel' }).click();
   state = await player.waitFor((current) => current.courseDraft === undefined, 'the course to be dropped');
@@ -74,7 +74,7 @@ test('makes, saves, cancels, renames, deletes and exports courses', async ({ pla
   // GRADE again, saved from the card with its constraint; NONSTOP saved from the card too.
   await startMaking(player, 'MY DAN', 'grade');
   await card.locator('input.course-maker-name').fill('E2E DAN');
-  await card.locator('label', { hasText: 'JudgmentKind' }).locator('select').selectOption({ label: 'No GOOD' });
+  await card.locator('label', { hasText: 'Judgment' }).locator('select').selectOption({ label: 'No GOOD' });
   await decide(player, 'Fixture B');
   await card.getByRole('button', { name: 'Save' }).click();
   state = await player.waitFor((current) => current.courseDraft === undefined, 'the GRADE course to be saved');

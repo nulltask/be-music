@@ -1,3 +1,5 @@
+import { playerText } from './player-copy.ts';
+
 /** The player's Leaderboard account as `GET /api/v0/me` reports it. */
 export interface LeaderboardAccount {
   handle: string;
@@ -6,7 +8,7 @@ export interface LeaderboardAccount {
   passkeys: number;
 }
 
-export type AccountActionResult = { ok: true } | { ok: false; error: string };
+export type AccountActionResult = { ok: true } | { ok: false; error: string; code?: string };
 
 /**
  * The signed-in account, or `undefined` without a session (or when the Leaderboard cannot be reached). The session is
@@ -47,7 +49,7 @@ export async function signUpForLeaderboard(
   doFetch: typeof fetch = fetch,
 ): Promise<AccountActionResult> {
   const saved = await saveProfile(details, doFetch);
-  if (!saved.ok && saved.error !== 'Sign in first.') return saved;
+  if (!saved.ok && saved.code !== 'sign-in-required') return saved;
   location.assign('/api/auth/sign-in');
   return { ok: true };
 }
@@ -62,40 +64,41 @@ export async function saveProfile(details: SignUpDetails, doFetch: typeof fetch 
   });
   if (response.ok) return { ok: true };
   const body = (await response.json().catch(() => ({}))) as { error?: string; detail?: string };
-  return { ok: false, error: describeProfileError(body.error ?? `http-${response.status}`, body.detail) };
+  const code = body.error ?? `http-${response.status}`;
+  return { ok: false, error: describeProfileError(code, body.detail), code };
 }
 
 /** A message for an error the account API answered when saving a handle and name (`{ error, detail? }`). */
 export function describeProfileError(error: string, detail?: string): string {
+  const copy = playerText().account;
   switch (error) {
     case 'invalid-handle':
-      return detail === 'reserved'
-        ? 'That handle is reserved. Pick another.'
-        : 'Handles are 3 to 15 letters, digits or _.';
+      return detail === 'reserved' ? copy.handleReserved : copy.handleFormat;
     case 'invalid-display-name':
-      if (detail === 'empty') return 'The name cannot be empty.';
-      if (detail === 'length') return 'Names are at most 32 characters.';
-      return 'Names cannot contain line breaks or control characters.';
+      if (detail === 'empty') return copy.nameEmpty;
+      if (detail === 'length') return copy.nameLength;
+      return copy.nameCharacters;
     case 'handle-taken':
-      return 'That handle is taken.';
+      return copy.handleTaken;
     case 'sign-in-required':
-      return 'Sign in first.';
+      return copy.signInFirst;
     default:
-      return `Something went wrong (${error}).`;
+      return copy.somethingWrong(error);
   }
 }
 
 export async function signOutOfLeaderboard(): Promise<AccountActionResult> {
   const response = await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin' });
-  return response.ok ? { ok: true } : { ok: false, error: 'Could not sign out.' };
+  return response.ok ? { ok: true } : { ok: false, error: playerText().account.couldNotSignOut };
 }
 
 /** One status-line summary of the account. */
 export function describeLeaderboardAccount(account: LeaderboardAccount | undefined): string {
-  if (account === undefined) return 'Not signed in';
+  const copy = playerText().account;
+  if (account === undefined) return copy.notSignedIn;
   // Short enough for the Debug Menu row; the "Create passkey (keep this account)" button carries the hint.
-  if (account.anonymous) return `${account.handle} (anonymous)`;
-  return `${account.displayName} @${account.handle} · ${account.passkeys} passkey${account.passkeys === 1 ? '' : 's'}`;
+  if (account.anonymous) return `${account.handle} (${copy.anonymous})`;
+  return `${account.displayName} @${account.handle} · ${copy.passkey(account.passkeys)}`;
 }
 
 /** What the account chip on the select screens shows: the sign-in state at a glance. */
@@ -109,11 +112,12 @@ export interface AccountChip {
 }
 
 export function describeAccountChip(account: LeaderboardAccount | undefined): AccountChip {
+  const copy = playerText().account;
   if (account === undefined) {
     return {
       state: 'signed-out',
-      label: 'Not signed in',
-      title: 'Not signed in to the Leaderboard. Open the Debug Menu’s Leaderboard folder to sign in with a passkey.',
+      label: copy.notSignedIn,
+      title: copy.chipSignedOutTitle,
       href: undefined,
     };
   }
@@ -121,15 +125,15 @@ export function describeAccountChip(account: LeaderboardAccount | undefined): Ac
   if (account.anonymous) {
     return {
       state: 'anonymous',
-      label: `@${account.handle} · anonymous`,
-      title: 'Signed in anonymously: create a passkey to keep this account and show its plays on the Leaderboard.',
+      label: `@${account.handle} · ${copy.anonymous}`,
+      title: copy.chipAnonymousTitle,
       href,
     };
   }
   return {
     state: 'signed-in',
     label: `@${account.handle}`,
-    title: `Signed in as ${account.displayName} (@${account.handle}). Opens your Leaderboard page.`,
+    title: copy.chipSignedInTitle(account.displayName, account.handle),
     href,
   };
 }
@@ -151,13 +155,17 @@ export interface StartAccountView {
   hint: string | undefined;
 }
 
-/** The button text of each start card action. */
-export const START_ACCOUNT_ACTION_LABELS: Readonly<Record<StartAccountAction, string>> = {
-  'sign-in': 'Sign in',
-  'sign-up': 'Sign up',
-  keep: 'Keep this account',
-  'sign-out': 'Sign out',
-};
+/** The button text of each start card action, in the player's language. */
+export function startAccountActionLabels(): Readonly<Record<StartAccountAction, string>> {
+  const copy = playerText().account;
+  const shell = playerText().shell;
+  return {
+    'sign-in': shell.signIn,
+    'sign-up': copy.signUp,
+    keep: copy.keep,
+    'sign-out': copy.signOut,
+  };
+}
 
 /**
  * The start card's account row. Signed out: sign in with a passkey, or sign up (an account kept by a new passkey).
@@ -165,23 +173,24 @@ export const START_ACCOUNT_ACTION_LABELS: Readonly<Record<StartAccountAction, st
  * this browser's plays along. Signed in: the player's page and signing out.
  */
 export function describeStartAccount(account: LeaderboardAccount | undefined): StartAccountView {
+  const copy = playerText().account;
   if (account === undefined) {
     return {
       state: 'signed-out',
-      label: 'Not signed in',
+      label: copy.notSignedIn,
       href: undefined,
       actions: ['sign-in', 'sign-up'],
-      hint: 'Sign in through Accounts before submitting plays. You can start with a guest account.',
+      hint: copy.startSignedOutHint,
     };
   }
   const href = `/players/${encodeURIComponent(account.handle)}`;
   if (account.anonymous) {
     return {
       state: 'anonymous',
-      label: `@${account.handle} · anonymous`,
+      label: `@${account.handle} · ${copy.anonymous}`,
       href,
       actions: ['keep', 'sign-in', 'sign-out'],
-      hint: 'This account lives only in this browser, and rankings leave it out. Keep it with a passkey to join them.',
+      hint: copy.startAnonymousHint,
     };
   }
   return {

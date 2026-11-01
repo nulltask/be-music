@@ -1,5 +1,6 @@
 // Virtual module produced by the `be-music:acknowledgements` Vite plugin (see `vite.config.ts`).
 import loadAcknowledgements, { type Acknowledgement } from 'virtual:acknowledgements';
+import { detectPlayerLang, playerText, setPlayerLang, type PlayerLang } from './player-copy.ts';
 
 export function wireHelpModal(): void {
   const button = document.querySelector<HTMLButtonElement>('#help-button');
@@ -65,30 +66,34 @@ export function wireHelpModal(): void {
 function wireUsageLanguageSwitch(): void {
   const toggles = Array.from(document.querySelectorAll<HTMLButtonElement>('.help-lang-toggle'));
   const blocks = Array.from(document.querySelectorAll<HTMLElement>('.help-lang'));
-  if (toggles.length === 0 || blocks.length === 0) return;
-
-  const activate = (lang: string): void => {
-    for (const toggle of toggles) {
-      const matches = toggle.dataset.lang === lang;
-      toggle.classList.toggle('is-active', matches);
-      toggle.setAttribute('aria-pressed', matches ? 'true' : 'false');
-    }
-    for (const block of blocks) {
-      const matches = block.dataset.lang === lang;
-      block.classList.toggle('is-active', matches);
-      block.toggleAttribute('hidden', !matches);
-    }
-  };
-
-  const initial = typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('ja') ? 'ja' : 'en';
+  const initial = detectPlayerLang();
+  if (toggles.length === 0 || blocks.length === 0) {
+    setPlayerLang(initial);
+    return;
+  }
   activate(initial);
-
   for (const toggle of toggles) {
     toggle.addEventListener('click', () => {
-      const lang = toggle.dataset.lang;
-      if (lang) activate(lang);
+      const next = toggle.dataset.lang;
+      if (next === 'ja' || next === 'en') activate(next);
     });
   }
+}
+
+function activate(lang: PlayerLang): void {
+  const toggles = Array.from(document.querySelectorAll<HTMLButtonElement>('.help-lang-toggle'));
+  const blocks = Array.from(document.querySelectorAll<HTMLElement>('.help-lang'));
+  for (const toggle of toggles) {
+    const matches = toggle.dataset.lang === lang;
+    toggle.classList.toggle('is-active', matches);
+    toggle.setAttribute('aria-pressed', matches ? 'true' : 'false');
+  }
+  for (const block of blocks) {
+    const matches = block.dataset.lang === lang;
+    block.classList.toggle('is-active', matches);
+    block.toggleAttribute('hidden', !matches);
+  }
+  setPlayerLang(lang);
 }
 
 async function renderAcknowledgementsList(list: HTMLOListElement): Promise<void> {
@@ -98,16 +103,16 @@ async function renderAcknowledgementsList(list: HTMLOListElement): Promise<void>
     item.textContent = text;
     list.replaceChildren(item);
   };
-  message('Loading…');
+  message(playerText().shell.ackLoading);
   let acknowledgements: Acknowledgement[];
   try {
     acknowledgements = await loadAcknowledgements();
   } catch {
-    message('Could not load the list.');
+    message(playerText().shell.ackFailed);
     return;
   }
   if (acknowledgements.length === 0) {
-    message('No third-party packages were found in this build.');
+    message(playerText().shell.ackEmpty);
     return;
   }
   list.replaceChildren(...acknowledgements.map(buildAcknowledgementCard));
@@ -162,7 +167,7 @@ function buildAcknowledgementCard(entry: Acknowledgement): HTMLLIElement {
     const details = document.createElement('details');
     details.className = 'ack-card-license-details';
     const summary = document.createElement('summary');
-    summary.textContent = 'Copyright and license text';
+    summary.textContent = playerText().shell.ackLicense;
     const pre = document.createElement('pre');
     pre.className = 'ack-card-license-text';
     pre.textContent = entry.licenseText;
@@ -171,7 +176,7 @@ function buildAcknowledgementCard(entry: Acknowledgement): HTMLLIElement {
   } else {
     const note = document.createElement('div');
     note.className = 'ack-card-license-missing';
-    note.textContent = 'No LICENSE file shipped with this package.';
+    note.textContent = playerText().shell.ackNoLicense;
     card.appendChild(note);
   }
 

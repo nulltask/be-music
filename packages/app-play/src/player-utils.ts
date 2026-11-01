@@ -1,18 +1,15 @@
 import type { BeatorajaPlayableVariant } from '@be-music/player-browser/skin';
 import type { LoadProgress } from '@be-music/player-browser/collection';
 import { BEATORAJA_SKIN_TYPE } from '@be-music/skin-beatoraja';
+import { playerText } from './player-copy.ts';
 
 /**
- * Human-readable labels shown alongside the loading-overlay progress bar. Keyed by the `LoadProgressPhase`
- * discriminator the `player-web` loaders emit. The web UI is English-only, so these strings stay in English even though
- * the surrounding project conversation is in Japanese.
+ * Human-readable labels shown alongside the loading-overlay progress bar, in the player's language.
+ * Keyed by the `LoadProgressPhase` discriminator the loaders emit.
  */
-export const phaseLabels: Record<LoadProgress['phase'], string> = {
-  enumerating: 'Collecting files…',
-  reading: 'Reading files…',
-  parsing: 'Parsing charts…',
-  theme: 'Loading LR2 theme…',
-};
+export function phaseLabels(): Record<LoadProgress['phase'], string> {
+  return playerText().phases;
+}
 
 /**
  * Produces a filesystem-safe base for the auto-downloaded recording filename. Strips characters that browsers / OSes

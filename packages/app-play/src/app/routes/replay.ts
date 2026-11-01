@@ -5,6 +5,7 @@
 
 import { computeChartFingerprint } from '@be-music/chart-model';
 import { logger } from '@be-music/player-browser';
+import { playerText } from '../../player-copy.ts';
 import type { BrowserDroppedFile } from '@be-music/player-browser/collection';
 import {
   COURSE_REPLAY_FILE_SUFFIX,
@@ -96,26 +97,26 @@ export class ReplayRoute {
       dropLog.warn('replay parse failed', error);
       // The drop took the select screen off the stage: it comes back, with the status.
       await this.showSelect();
-      this.setStatus(`Replay: invalid replay (${(error as Error).message})`);
+      this.setStatus(playerText().replay.invalid((error as Error).message));
       return;
     }
     const chartEntry = await this.findSongForReplay(replay);
     if (!chartEntry) {
       await this.showSelect();
-      this.setStatus(`Replay: song not loaded (${replay.chart.title ?? 'untitled'})`);
-      this.showMissingReplayCharts('Load this chart to watch the replay, then drop the replay again.', [
+      this.setStatus(playerText().replay.notLoaded(replay.chart.title ?? playerText().replay.untitled));
+      this.showMissingReplayCharts(playerText().replay.loadChart, [
         describeReplayChart(replay),
       ]);
       return;
     }
-    this.setPlayStatus(`Replaying: ${chartEntry.title}`);
+    this.setPlayStatus(playerText().replay.replaying(chartEntry.title));
     try {
       // A replay plays on the gameplay family's own play screen, whichever family recorded it: the play session
       // re-applies the recorded arrangement and the engine replays the inputs the same way on every family.
       await this.playChart(chartEntry, { autoPlay: replay.play.mode === 'auto', replay: replay });
     } catch (error) {
       gamereplay.warn('replay replay failed', error);
-      this.setStatus(`Replay failed: ${(error as Error).message}`);
+      this.setStatus(playerText().replay.failed((error as Error).message));
       await this.showSelect();
     }
   }
@@ -136,13 +137,13 @@ export class ReplayRoute {
         gamereplay.warn('replay slot read failed', error);
       }
       if (payload === undefined) {
-        this.setStatus(`Replay slot ${slot + 1} could not be read`);
+        this.setStatus(playerText().replay.slotUnreadable(slot + 1));
         await this.showSelect();
         return;
       }
       try {
         if (payload.kind === 'chart' && entry.kind === 'chart') {
-          this.setPlayStatus(`Replaying slot ${slot + 1}: ${entry.chart.title}`);
+          this.setPlayStatus(playerText().replay.replayingSlot(slot + 1, entry.chart.title));
           await this.playChart(entry.chart, { autoPlay: payload.replay.play.mode === 'auto', replay: payload.replay });
         } else if (payload.kind === 'course' && entry.kind === 'course') {
           // As a dropped course replay plays: every stage's chart found, a NONSTOP course stitched again.
@@ -150,7 +151,7 @@ export class ReplayRoute {
         }
       } catch (error) {
         gamereplay.warn('replay slot replay failed', error);
-        this.setStatus(`Replay failed: ${(error as Error).message}`);
+        this.setStatus(playerText().replay.failed((error as Error).message));
         await this.showSelect();
       }
     })();
@@ -171,7 +172,7 @@ export class ReplayRoute {
       dropLog.warn('course replay parse failed', error);
       // The drop took the select screen off the stage: it comes back, with the status.
       await this.showSelect();
-      this.setStatus(`Course replay: invalid course replay (${(error as Error).message})`);
+      this.setStatus(playerText().replay.invalidCourse((error as Error).message));
       return;
     }
     await this.startCourseReplayFromLog(courseLog);
@@ -191,9 +192,9 @@ export class ReplayRoute {
     const missing = matched.filter((stage) => stage.chart === undefined);
     if (missing.length > 0) {
       await this.showSelect();
-      this.setStatus(`Course replay: ${missing.length} of ${matched.length} stage charts are not loaded`);
+      this.setStatus(playerText().replay.stagesMissing(missing.length, matched.length));
       this.showMissingReplayCharts(
-        `Load these charts of ${courseLog.course.name} to replay the course, then drop its course replay again.`,
+        playerText().replay.loadStages(courseLog.course.name),
         missing.map(({ stage }) => describeCourseReplayStage(stage)),
       );
       return;
@@ -212,7 +213,7 @@ export class ReplayRoute {
     } catch (error) {
       gamereplay.warn('course replay failed', error);
       await this.showSelect();
-      this.setStatus(`Course replay failed: ${(error as Error).message}`);
+      this.setStatus(playerText().replay.courseFailed((error as Error).message));
     }
   }
 
@@ -252,7 +253,7 @@ export function describeReplayChart(replay: Pick<BeMusicReplay, 'chart' | 'play'
   const { title, artist, sha256 } = replay.chart;
   if (title !== undefined && title.length > 0) return artist !== undefined ? `${title} / ${artist}` : title;
   const chartPath = replay.play.native?.chartPath;
-  return sha256 ?? (typeof chartPath === 'string' && chartPath.length > 0 ? chartPath : 'untitled chart');
+  return sha256 ?? (typeof chartPath === 'string' && chartPath.length > 0 ? chartPath : playerText().replay.untitledChart);
 }
 
 /** A loaded chart's Be-Music chart fingerprint, for a course replay stage named by it alone. */

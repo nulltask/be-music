@@ -72,6 +72,35 @@ test('explains a failed provider link without echoing the query', () => {
   expect(accountNotice(null)).toBe('');
   expect(accountNotice('account_already_linked_to_different_user')).toContain('another be-music account');
   expect(accountNotice('<script>')).toBe('Could not link that account.');
+  expect(accountNotice('access_denied', 'ja')).toBe('連携を取り消しました。');
+  expect(accountNotice('account_already_linked_to_different_user', 'ja')).toContain('別の be-music アカウント');
+});
+
+test('renders the sign-in page in Japanese when the locale is ja', () => {
+  const input = { signedIn: false, anonymous: false, name: '', login: true, discord: false, google: false };
+  const page = renderAccountPage({ ...input, locale: 'ja' });
+  expect(page).toContain('lang="ja"');
+  expect(page).toContain('パスキーでログイン');
+  expect(page).toContain('ゲストアカウントで始める');
+  expect(page).toContain('>ログイン</h1>');
+  expect(page).not.toContain('Sign in with a passkey');
+  expect(page).not.toContain('Start a guest account');
+  const signedIn = renderAccountPage({
+    ...input,
+    locale: 'ja',
+    signedIn: true,
+    login: false,
+    name: '太郎',
+    discord: true,
+    linkedDiscord: true,
+    profile: { handle: 'taro', displayName: '太郎', avatarURL: '/a.png' },
+  });
+  expect(signedIn).toContain('ユーザー名');
+  expect(signedIn).toContain('表示名');
+  expect(signedIn).toContain('プロフィールを保存');
+  expect(signedIn).toContain('アバター');
+  expect(signedIn).toContain('Discord は連携済みです。');
+  expect(signedIn).not.toContain('Discord is linked.');
 });
 
 test('includes stable build information in the account footer', () => {

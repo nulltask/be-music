@@ -1,3 +1,4 @@
+import { clientMessages, describeClientError } from './client-messages.ts';
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
 import { passkeyClient } from '@better-auth/passkey/client';
@@ -9,11 +10,12 @@ const auth = createAuthClient({
 });
 const query = location.pathname === '/login' ? location.search.slice(1) : '';
 const status = document.querySelector<HTMLElement>('#status')!;
+const messages = clientMessages(document.documentElement.lang);
 
 async function done(result: unknown): Promise<void> {
   const value = result as { error?: { message?: string }; data?: { url?: string; redirect?: boolean } } | undefined;
   if (value?.error) {
-    status.textContent = value.error.message ?? 'Request failed';
+    status.textContent = value.error.message ?? messages.requestFailed;
     return;
   }
   if (value?.data?.url) {
@@ -30,7 +32,7 @@ async function done(result: unknown): Promise<void> {
       return;
     }
     status.textContent =
-      continued.error?.message ?? 'Sign-in could not be continued. Return to the app and start again.';
+      continued.error?.message ?? messages.continueFailed;
   } else location.assign('/account');
 }
 document.addEventListener('click', (event) => {
@@ -70,7 +72,7 @@ document.addEventListener('click', (event) => {
     }
   })()
     .catch(() => {
-      status.textContent = 'Request failed. Please try again.';
+      status.textContent = messages.tryAgain;
     })
     .finally(() => {
       button.disabled = false;
@@ -83,7 +85,7 @@ async function saveProfile(path: string, init: RequestInit): Promise<void> {
   const response = await fetch(path, init);
   if (!response.ok) {
     const body = (await response.json()) as { error?: string };
-    throw new Error(body.error ?? 'Profile update failed');
+    throw new Error(describeClientError(body.error, messages.profileFailed, messages));
   }
   location.reload();
 }
@@ -116,11 +118,11 @@ document.querySelector<HTMLInputElement>('#avatar-input')?.addEventListener('cha
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = 256;
       const context = canvas.getContext('2d');
-      if (!context) throw new Error('Cannot prepare image');
+      if (!context) throw new Error(messages.cannotPrepare);
       const size = Math.min(image.width, image.height);
       context.drawImage(image, (image.width - size) / 2, (image.height - size) / 2, size, size, 0, 0, 256, 256);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.9));
-      if (!blob) throw new Error('Cannot encode image');
+      if (!blob) throw new Error(messages.cannotEncode);
       await saveProfile('/api/profile/avatar', { method: 'PUT', body: blob });
     } finally {
       image.close();
