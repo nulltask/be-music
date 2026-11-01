@@ -1,31 +1,48 @@
-import { resolveChartOptionsAt } from '@be-music/chart-model';
+import { CHART_VISUAL_OPTION_FIELDS, isChartVisualOptionValue, resolveChartOptionsAt } from '@be-music/chart-model';
 import type { ChartOptionProgram, ChartOptionState } from '@be-music/chart-model';
 import { expectRecord, ReplayParseError } from './parse.ts';
 
-/** Parse only supported effective profile fields, independently of current source-command compilation. */
+/**
+ * Parse only supported effective profile fields, independently of current source-command compilation. Version 1 holds
+ * HI-SPEED only; version 2 adds the HIDDEN, CHANGE-HS and CRAZY size / wave fields. A version-1 recording that carries a
+ * version-2 field is rejected, so an old replay can never activate a family implemented after it.
+ */
 export function parseChartOptionProgram(raw: unknown): ChartOptionProgram {
   const program = expectRecord(raw, 'chart.chartOptions');
   if (Object.keys(program).some((key) => !['version', 'initial', 'cues'].includes(key)))
     throw new ReplayParseError('chart.chartOptions: unknown program field');
-  if (program.version !== 1) throw new ReplayParseError('chart.chartOptions.version: expected 1');
+  if (program.version !== 1 && program.version !== 2)
+    throw new ReplayParseError('chart.chartOptions.version: expected 1 or 2');
+  const version = program.version;
+  const fields: readonly string[] = version === 1 ? ['hiSpeed'] : ['hiSpeed', ...CHART_VISUAL_OPTION_FIELDS];
   const state = (rawState: unknown): ChartOptionState => {
     const value = expectRecord(rawState, 'chart.chartOptions state');
-    if (Object.keys(value).some((key) => key !== 'hiSpeed'))
+    if (Object.keys(value).some((key) => !fields.includes(key)))
       throw new ReplayParseError('chart.chartOptions: unknown effective state field');
-    if (value.hiSpeed === undefined) return {};
-    if (
-      typeof value.hiSpeed !== 'number' ||
-      !Number.isFinite(value.hiSpeed) ||
-      value.hiSpeed < 0.25 ||
-      value.hiSpeed > 100
-    )
-      throw new ReplayParseError('chart.chartOptions.hiSpeed: expected 0.25..100');
-    return { hiSpeed: value.hiSpeed };
+    const parsed: ChartOptionState = {};
+    if (value.hiSpeed !== undefined) {
+      if (
+        typeof value.hiSpeed !== 'number' ||
+        !Number.isFinite(value.hiSpeed) ||
+        value.hiSpeed < 0.25 ||
+        value.hiSpeed > 100
+      )
+        throw new ReplayParseError('chart.chartOptions.hiSpeed: expected 0.25..100');
+      parsed.hiSpeed = value.hiSpeed;
+    }
+    for (const field of CHART_VISUAL_OPTION_FIELDS) {
+      const fieldValue = value[field];
+      if (fieldValue === undefined) continue;
+      if (!isChartVisualOptionValue(field, fieldValue))
+        throw new ReplayParseError(`chart.chartOptions.${field}: unknown value`);
+      (parsed as Record<string, unknown>)[field] = fieldValue;
+    }
+    return parsed;
   };
   if (!Array.isArray(program.cues)) throw new ReplayParseError('chart.chartOptions.cues: expected an array');
   let previous = 0;
   return {
-    version: 1,
+    version,
     initial: state(program.initial),
     cues: program.cues.map((rawCue) => {
       const cue = expectRecord(rawCue, 'chart.chartOptions cue');
@@ -53,5 +70,5 @@ export function shiftChartOptionProgram(
   if (startUs > 0) cues.unshift({ timeUs: startUs, state: seed });
   const endUs = window.windowEndUs === undefined ? undefined : window.windowEndUs - window.offsetUs;
   if (endUs !== undefined && endUs >= startUs) cues.push({ timeUs: endUs, state: {} });
-  return { version: 1, initial: startUs === 0 ? seed : {}, cues };
+  return { version: program.version, initial: startUs === 0 ? seed : {}, cues };
 }
