@@ -18,8 +18,10 @@ export interface BMSStringifyOptions {
 
 export interface BmsonStringifyOptions {
   /**
-   * Output pulses per beat. Finite values >= 1 are floored; invalid values use the source resolution (default 240).
-   * Positions and LN endpoints round to the output grid. A positive LN that would become a tap raises RangeError.
+   * Output pulses per beat. Finite values >= 1 are floored. Otherwise a bmson source keeps its own resolution, and a BMS
+   * chart gets the least multiple of 240 at which every object and measure boundary lands on a whole pulse, capped at
+   * 61,440 (past the cap, positions round to it). Positions and LN endpoints round to the output grid. A positive LN that
+   * would become a tap raises RangeError.
    */
   resolution?: number;
   indent?: number;
