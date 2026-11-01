@@ -23,7 +23,7 @@ function bucket(): PlayerSettingsBucket & { values: Map<string, string> } {
 }
 
 const document = {
-  version: 1,
+  version: 0,
   updatedAt: 20,
   settings: { gauge: 'HARD', peakGain: true },
 };
@@ -107,7 +107,7 @@ test('does not replace client edit ordering with a faster server clock', async (
     new Request('https://play.be-music.app/api/player-settings', {
       method: 'PUT',
       headers: { origin: 'https://play.be-music.app', cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ version: 1, updatedAt, settings: { gauge } }),
+      body: JSON.stringify({ version: 0, updatedAt, settings: { gauge } }),
     });
   await handlePlayerSettings(request(20, 'HARD'), store, undefined, 10000);
   const response = await handlePlayerSettings(request(21, 'EASY'), store, undefined, 10001);
@@ -155,6 +155,22 @@ test('retries a concurrent write without overwriting its newer version', async (
   expect(JSON.parse(store.values.get(key)!)).toMatchObject({ updatedAt: 100 });
 });
 
+test('treats a document stamped with an older version as absent', async () => {
+  const store = bucket();
+  expect((await put(store, { ...document, version: 1 })).status).toBe(400);
+  const id = 'c'.repeat(32);
+  const key = `player-settings/device/${id}`;
+  store.values.set(key, JSON.stringify({ version: 1, updatedAt: 40, settings: { gauge: 'EASY' } }));
+  const read = await handlePlayerSettings(
+    new Request('https://play.be-music.app/api/player-settings', {
+      headers: { cookie: `__Host-be-music.device=${id}` },
+    }),
+    store,
+    undefined,
+  );
+  expect(read.status).toBe(204);
+});
+
 test('reset retains no setting values and rejects delayed pre-reset saves', async () => {
   const store = bucket();
   const id = 'a'.repeat(32),
@@ -171,7 +187,7 @@ test('reset retains no setting values and rejects delayed pre-reset saves', asyn
     99999,
   );
   const deleted = await reset.json();
-  expect(deleted).toEqual({ version: 1, updatedAt: 21, settings: {}, deleted: true });
+  expect(deleted).toEqual({ version: 0, updatedAt: 21, settings: {}, deleted: true });
   expect(await (await put(store, document, cookie)).json()).toEqual(deleted);
   for (const value of store.values.values()) expect(JSON.parse(value)).toEqual(deleted);
   const read = await handlePlayerSettings(
@@ -189,7 +205,7 @@ test('repeated reset retries keep the same empty revision barrier', async () => 
     new Request('https://play.be-music.app/api/player-settings', {
       method: 'DELETE',
       headers: { origin: 'https://play.be-music.app', cookie },
-      body: JSON.stringify({ version: 1, updatedAt: 30, settings: {}, deleted: true }),
+      body: JSON.stringify({ version: 0, updatedAt: 30, settings: {}, deleted: true }),
     });
   const first = await (await handlePlayerSettings(request(), store, undefined)).json();
   expect(await (await handlePlayerSettings(request(), store, undefined)).json()).toEqual(first);
