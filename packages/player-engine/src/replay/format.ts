@@ -1,5 +1,5 @@
-import type { ChartOptionProgram } from '@be-music/chart-model';
-import { parseChartOptionProgram } from './chart-options.ts';
+import type { ChartOptionProgram, ChartPlayOptionProgram } from '@be-music/chart-model';
+import { parseChartOptionProgram, parseChartPlayOptionProgram } from './chart-options.ts';
 import {
   clampCustomJudgeRate,
   DEFAULT_BEATORAJA_CUSTOM_JUDGE,
@@ -149,6 +149,11 @@ export interface ReplayJudgeRank {
 export interface ReplayChart {
   /** Recorded effective display operations; never reinterprets unsupported source declarations. */
   chartOptions?: ChartOptionProgram;
+  /**
+   * The chart-authored gameplay options the play ran with (#844): the forced lane arrangement and ADDMINE (whose
+   * result `notes` already holds) and the judge modifiers a re-simulation applies. Absent when the chart forced none.
+   */
+  chartPlayOptions?: ChartPlayOptionProgram;
   /** Original header BPM, kept separately from the effective tempo map. */
   headerBPM?: number;
   /** Resolved chart BPM extrema, used for source option classification. */
@@ -564,6 +569,8 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
     if (parsed[key] === undefined) delete parsed[key];
   }
   if (chart.chartOptions !== undefined) parsed.chartOptions = parseChartOptionProgram(chart.chartOptions);
+  if (chart.chartPlayOptions !== undefined)
+    parsed.chartPlayOptions = parseChartPlayOptionProgram(chart.chartPlayOptions);
   return parsed;
 }
 

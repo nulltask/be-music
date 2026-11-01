@@ -39,6 +39,7 @@ import type {
 } from '../../runtime/audio-bus.ts';
 import type { GameplayRecorder } from '../../recording/gameplay-recorder.ts';
 import type { PlayTempoRange } from './tempo-range.ts';
+import type { PlayChartContext } from './play-chart.ts';
 import { PlayPresentation } from './play-presentation.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
@@ -85,6 +86,8 @@ export class PlaySessionState extends PlayPresentation {
   /** The `#RANDOM` / `#SWITCH` draws {@link resolvedChart} was resolved with; handed to the engine with it. */
   randomDraws: RandomDraws | undefined;
   randomSeeds: { p1?: string; p2?: string } = {};
+  /** The chart's own gameplay options and the lane / mine selection they leave (#844); set by `prepareChart`. */
+  chartPlay: PlayChartContext['chartPlay'] = undefined;
   /**
    * `seconds → beat` resolver that properly accounts for `#STOP` windows. During a STOP, this returns the same beat
    * across the window's duration so the playfield freezes in place. Without it the previous hand-rolled `currentBeat`

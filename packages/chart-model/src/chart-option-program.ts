@@ -1,6 +1,7 @@
 import { parseHDXLongNoteMode } from './hdx-long-note-mode.ts';
 import { findLastIndexAtOrBefore } from '@be-music/shared-utils/core';
 import type { ChartOptionTimeline } from './chart-options.ts';
+import { isChartPlayOptionDeclaration } from './chart-play-options.ts';
 
 export interface ChartOptionState {
   /** Compulsory visual spacing multiplier, independent of audio tempo and user hi-speed limits. */
@@ -75,6 +76,8 @@ function compileDeclaration(declaration: string, timed: boolean): number | Chart
   if (legacy && LEGACY_HI_SPEED_VALUES.has(legacy[1]!))
     return timed ? 'initial-only-alias' : Math.max(0.25, Number(legacy[1]));
   if (parseHDXLongNoteMode(declaration) !== undefined) return 'initial-only-option';
+  // RANDOM and gameplay CRAZY are initial-only in nanasigroove; `compileChartPlayOptions` consumes the initial ones.
+  if (isChartPlayOptionDeclaration(declaration)) return 'initial-only-option';
   if (declaration.startsWith('charatbeatHDX:LONGMODE')) return 'invalid-parameter';
   return 'unsupported-option';
 }
@@ -89,6 +92,8 @@ export function compileChartOptions(timeline: ChartOptionTimeline): CompiledChar
   for (const declaration of timeline.initial) {
     // LONGMODE is resolved by note-rules before note extraction, not a display/replay-profile operation.
     if (parseHDXLongNoteMode(declaration) !== undefined) continue;
+    // RANDOM and gameplay CRAZY are play options (`compileChartPlayOptions`), not display operations.
+    if (isChartPlayOptionDeclaration(declaration)) continue;
     const value = compileDeclaration(declaration, false);
     if (typeof value === 'number') state = { ...state, hiSpeed: value };
     else diagnostics.push({ code: value, declaration });

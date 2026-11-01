@@ -1,4 +1,4 @@
-import type { ChartOptionProgram, ChartOptionDiagnostic } from '@be-music/chart-model';
+import type { ChartOptionProgram, ChartOptionDiagnostic, ChartPlayOptionProgram } from '@be-music/chart-model';
 import type { ChartTextStage } from './chart-text.ts';
 export type { ChartTextStage } from './chart-text.ts';
 import type { BattleMode } from './battle-mode.ts';
@@ -228,6 +228,12 @@ export interface PlayerStageRank {
 export interface PlayerPlayRuntime {
   /** Versioned effective chart-authored display operations, e.g. a recorded replay or NONSTOP program. */
   chartOptionProgram?: ChartOptionProgram;
+  /**
+   * Chart-authored gameplay options (RANDOM, judgment CRAZY, #844) the play runs with, e.g. a recorded replay's. Absent:
+   * compiled from the chart's initial `#OPTION`s. A host applies the arrangement and ADDMINE before preparing the chart;
+   * the engine applies the judge modifiers and records the program.
+   */
+  chartPlayOptionProgram?: ChartPlayOptionProgram;
   /** Diagnostics retained by a host compiling stage-owned programs before playback. */
   chartOptionDiagnostics?: readonly ChartOptionDiagnostic[];
   /** Stage-owned chart text supplied by a NONSTOP host; overrides flattened TEXT definitions. */

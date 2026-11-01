@@ -1,6 +1,7 @@
 import {
   buildChartOptionTimeline,
   compileChartOptions,
+  isChartPlayOptionDeclaration,
   type ChartOptionDiagnostic,
   type ChartOptionState,
   type ChartOptionStateCue,
@@ -21,9 +22,15 @@ export function placeNonstopChartOptions(
   window: { start: number; end: number },
   stage: number,
 ): { cues: ChartOptionStateCue[]; diagnostics: NonstopChartOptionDiagnostic[]; hasOperations: boolean } {
-  const { program, diagnostics: sourceDiagnostics } = compileChartOptions(
-    buildChartOptionTimeline(chart.source, chart.timing),
-  );
+  const timeline = buildChartOptionTimeline(chart.source, chart.timing);
+  const { program, diagnostics: compiledDiagnostics } = compileChartOptions(timeline);
+  // One stitched play runs one ruleset and one arrangement, so a stage's RANDOM and gameplay CRAZY (#844) do not apply.
+  const sourceDiagnostics: ChartOptionDiagnostic[] = [
+    ...timeline.initial
+      .filter(isChartPlayOptionDeclaration)
+      .map((declaration) => ({ code: 'unsupported-option' as const, declaration })),
+    ...compiledDiagnostics,
+  ];
   const place = (seconds: number) => placement.offsetSeconds + seconds / placement.rate;
   const startUs = Math.max(0, Math.round(window.start * 1_000_000));
   const endUs = Number.isFinite(window.end) ? Math.round(window.end * 1_000_000) : Infinity;
