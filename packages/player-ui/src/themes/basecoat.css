@@ -3,3 +3,10 @@
 @source '../components';
 @source '../styles';
 @import 'basecoat-css';
+
+/* The system faces: Basecoat names Geist, which the player does not load. */
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
