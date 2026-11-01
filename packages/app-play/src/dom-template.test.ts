@@ -22,7 +22,7 @@ test('shows fixed build metadata in the page footer and the help overlay', async
     '<p data-public-beta-notice="en" lang="en">Public Beta. Data may be deleted without notice.</p>',
   );
   expect(footer).toContain(
-    '<p data-public-beta-notice="ja" lang="ja" hidden>パブリックベータ。データは予告なく削除されることがあります。</p>',
+    '<p data-public-beta-notice="ja" lang="ja" hidden>パブリックベータのためデータは予告なく削除されることがあります。</p>',
   );
   expect(footer).not.toContain('>beta</span>');
   expect(footer).not.toContain('>Beta</span>');

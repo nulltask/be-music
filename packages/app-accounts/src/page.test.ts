@@ -44,7 +44,7 @@ describe('Accounts page', () => {
     expect(page.slice(page.lastIndexOf('<footer'))).not.toContain('>Beta</span>');
     const japanese = renderAccountPage({ ...input, locale: 'ja' });
     expect(japanese).toContain('>Be-Music Accounts</a><span class="badge" data-variant="outline">Beta</span>');
-    expect(japanese).toContain('<p lang="ja">パブリックベータ。データは予告なく削除されることがあります。</p>');
+    expect(japanese).toContain('<p lang="ja">パブリックベータのためデータは予告なく削除されることがあります。</p>');
     expect(japanese).toContain('lang="ja"');
     expect(japanese).not.toContain('Public Beta');
   });
