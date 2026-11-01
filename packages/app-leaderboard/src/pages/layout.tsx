@@ -185,9 +185,9 @@ function headerMenuStyle(anchor: string): string {
 }
 
 /**
- * The header's account area. Signed out: Sign in (a passkey) and Sign up (a handle and a name, then a passkey). Signed
- * in: the player's icon, opening a menu with their page, Settings and Sign out. The buttons are wired by the client
- * script (client/main.ts); `data-account-status` shows what went wrong.
+ * The header's account area. Signed out: Sign in (a passkey, Google, or Discord) and Sign up. Signed in: the
+ * player's icon, opening a menu with their page, Settings and Sign out. The buttons are wired by the client script
+ * (client/main.ts); `data-account-status` shows what went wrong.
  */
 function AccountMenu(props: { viewer: Viewer | null }) {
   const t = useMessages();
@@ -269,8 +269,8 @@ const GOOGLE_LOGO = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
 const DISCORD_LOGO = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg>`;
 
 /**
- * Google and Discord, shown where they will go but not usable yet: the buttons are disabled and say they are in
- * development. Sign-in with a provider turns on once its secrets are set (src/auth.ts).
+ * Google and Discord. Each button starts Accounts sign-in for that provider (client/main.ts). The provider is
+ * offered on the Accounts page only when its client id and secret are set.
  */
 function ProviderButtons(props: { action: 'sign-in' | 'sign-up' }) {
   const t = useMessages();
@@ -279,16 +279,14 @@ function ProviderButtons(props: { action: 'sign-in' | 'sign-up' }) {
   return (
     <div class="grid gap-2">
       {[
-        { name: 'Google', logo: GOOGLE_LOGO },
-        { name: 'Discord', logo: DISCORD_LOGO },
+        { name: 'Google', method: 'google', logo: GOOGLE_LOGO },
+        { name: 'Discord', method: 'discord', logo: DISCORD_LOGO },
       ].map((provider) => (
         <button
           type="button"
           class="btn w-full justify-start"
           data-variant="outline"
-          disabled
-          aria-disabled="true"
-          title={t.dialogs.providerTitle(label(provider.name))}
+          data-account-action={`${props.action}-${provider.method}`}
         >
           <span
             class="inline-flex size-4 shrink-0 [&>svg]:size-4"
@@ -296,9 +294,6 @@ function ProviderButtons(props: { action: 'sign-in' | 'sign-up' }) {
             dangerouslySetInnerHTML={{ __html: provider.logo }}
           />
           {label(provider.name)}
-          <span class="badge ms-auto" data-variant="secondary">
-            {t.dialogs.inDevelopment}
-          </span>
         </button>
       ))}
     </div>
@@ -316,7 +311,7 @@ function OrDivider(props: { label: string }) {
   );
 }
 
-/** Sign-in: a passkey now; Google and Discord in development. */
+/** Sign-in with a passkey, Google, or Discord. Each button starts Accounts and returns here. */
 function SignInDialog() {
   const t = useMessages();
   return (

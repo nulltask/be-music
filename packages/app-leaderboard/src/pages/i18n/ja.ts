@@ -51,7 +51,7 @@ export const ja: Messages = {
   },
   dialogs: {
     signInTitle: 'ログイン',
-    signInLead: 'アカウントに登録したパスキー（端末の指紋認証や PIN）でログインします。',
+    signInLead: 'パスキー、Google、または Discord でログインします。',
     signInWithPasskey: 'パスキーでログイン',
     or: 'または',
     orWithPasskey: 'またはパスキーで',
@@ -65,10 +65,8 @@ export const ja: Messages = {
     name: '表示名',
     nameHint: '32 文字まで。ランキングに表示されます。',
     createPasskey: 'パスキーを作成して登録',
-    inDevelopment: '準備中',
     signInWith: (provider) => `${provider} でログイン`,
     signUpWith: (provider) => `${provider} で登録`,
-    providerTitle: (action) => `${action}は準備中です`,
   },
   footer: {
     label: 'Leaderboard について',
