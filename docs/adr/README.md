@@ -51,3 +51,7 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0030: Make bmson zero-total recovery an explicit play policy](./0030-bmson-zero-total.md)
 
 - [0031: Classify assists by option source, decide consequences by judge ruleset, and append lamps](./0031-assist-record-policy.md)
+
+- [0032: Execute chart-authored HIDDEN, CHANGE-HS and CRAZY size / wave with Be-Music formulas](./0032-chart-authored-visual-families.md)
+
+- [0033: Chart-authored RANDOM and judgment CRAZY options replace the player's, and are not assists](./0033-chart-authored-gameplay-options.md)

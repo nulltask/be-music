@@ -70,7 +70,7 @@ test('initial LONGMODE is consumed as a note rule while timed changes are diagno
     `#OPTION charatbeatHDX:LONGMODE 1\n#CHANGEOPTION01 charatbeatHDX:LONGMODE 0\n#001A6:01\n${PAIR}`,
   );
   const compiled = compileChartOptions(buildChartOptionTimeline(chart));
-  expect(compiled.program).toEqual({ version: 1, initial: {}, cues: [] });
+  expect(compiled.program).toEqual({ version: 2, initial: {}, cues: [] });
   expect(compiled.diagnostics).toEqual([
     { code: 'initial-only-option', declaration: 'charatbeatHDX:LONGMODE 0', key: '01', seconds: 2 },
   ]);
