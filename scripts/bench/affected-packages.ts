@@ -1,5 +1,6 @@
 // Select changed packages and their transitive benchmarked dependents for both PR and push comparisons.
-// Documentation and test-only changes need no measurement. Shared tooling and dependency manifests measure all.
+// Documentation, test-only and other workflow changes need no measurement. Shared tooling, dependency manifests and
+// the CI workflow that runs the benchmark measure all.
 // Usage: git diff --name-only BASE HEAD | node --conditions=source scripts/bench/affected-packages.ts
 // Prints a comma-separated --packages list; an empty result means CI must skip measurement.
 import { readdirSync, readFileSync } from 'node:fs';
@@ -20,7 +21,9 @@ export function resolveAffectedBenchPackages(
       path === '' ||
       path.endsWith('.md') ||
       /^(docs|\.changeset)\//.test(path) ||
-      /\.(test|spec)\.[cm]?[jt]sx?$/.test(path)
+      /\.(test|spec)\.[cm]?[jt]sx?$/.test(path) ||
+      // Workflows, issue templates and the like run no package code; `ci.yml` holds the benchmark steps themselves.
+      (path.startsWith('.github/') && path !== '.github/workflows/ci.yml')
     )
       continue;
     // A removed dependency edge is absent from the head graph. Measuring all manifest changes also covers its
