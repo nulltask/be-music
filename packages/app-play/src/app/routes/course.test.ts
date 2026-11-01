@@ -189,7 +189,7 @@ describe('CourseRoute: starting a course', () => {
     const h = harness();
     await h.route.startCourse(grade(['a'], { newCourse: true }));
     expect(h.deps.courseMaker.maker.start).toHaveBeenCalledWith('grade');
-    expect(h.deps.setStatus).toHaveBeenLastCalledWith('Making a course: decide songs to add them, then save');
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('Making a course: decide charts to add them, then save');
 
     await h.route.startCourse(
       grade(['a'], { playable: false, stages: [{ title: 'a', chart: chartEntry('a') }, { title: 'x' }] }),
