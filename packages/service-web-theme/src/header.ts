@@ -70,7 +70,8 @@ export function serviceSkipLink(locale: Locale): string {
 /**
  * The header shared by every service page except Play. The trailing cluster follows the Leaderboard's: the account
  * (avatar and @handle, or Sign in), then Play, then the language menu, in that order. `title` is the fixed brand
- * (`Be-Music Dashboard`), not translated. The account control links to `accountHref` (these pages have no account menu).
+ * (`Be-Music Dashboard`), not translated, with a small Beta badge beside it. The account control links to
+ * `accountHref` (these pages have no account menu).
  */
 export function renderServiceHeader(input: {
   locale: Locale;
@@ -92,7 +93,7 @@ export function renderServiceHeader(input: {
     return `<a class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5" href="${escapeHTML(withLocale(input.requestURL, locale))}" lang="${locale}" hreflang="${locale}"${current ? ' aria-current="true"' : ''}><span${current ? '' : ' class="invisible"'}>${headerIcon(CHECK_ICON)}</span>${LOCALE_NAMES[locale]}</a>`;
   }).join('');
   const languageMenu = `<div class="relative"><button type="button" class="btn" data-size="sm" data-variant="ghost" popovertarget="language-menu" aria-label="${escapeHTML(t.languageAria(LOCALE_NAMES[input.locale]))}" title="${escapeHTML(t.language)}" style="anchor-name:--language-menu">${headerIcon(LANGUAGES_ICON, 'text-muted-foreground')}</button><div id="language-menu" popover="auto" class="${HEADER_MENU_CLASS} w-44" style="position-anchor:--language-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline,--header-menu-span">${languages}</div></div>`;
-  return `<header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur"><div class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6"><a class="shrink-0 font-semibold tracking-tight whitespace-nowrap no-underline" href="${escapeHTML(input.homeHref)}">${escapeHTML(input.title)}</a><nav class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2" aria-label="${t.nav}">${account}${play}${languageMenu}</nav></div></header>`;
+  return `<header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur"><div class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6"><div class="flex shrink-0 items-center gap-1"><a class="font-semibold tracking-tight whitespace-nowrap no-underline" href="${escapeHTML(input.homeHref)}">${escapeHTML(input.title)}</a><span class="badge" data-variant="outline">Beta</span></div><nav class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2" aria-label="${t.nav}">${account}${play}${languageMenu}</nav></div></header>`;
 }
 
 function renderAccount(

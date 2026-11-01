@@ -1237,11 +1237,18 @@ textarea {
 }
 
 .help-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 4px 0 0;
   font-size: 24px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: #f8fafc;
+}
+
+.help-modal-title .badge {
+  letter-spacing: 0;
 }
 
 .help-modal-close {
@@ -2441,4 +2448,20 @@ html.touch-first .search-input.search-inline:focus {
   justify-content: flex-end;
   gap: 6px;
   padding-top: 8px;
+}
+
+/* Site title. With the other page chrome: on the start and select screens, off the playfield during play. */
+.player-brand {
+  position: absolute;
+  z-index: 8;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: max(12px, env(safe-area-inset-left, 0px));
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.shell.in-gameplay .player-brand {
+  visibility: hidden;
 }

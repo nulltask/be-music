@@ -25,6 +25,16 @@ test('shows fixed build metadata in the page footer and the help overlay', async
     '<p data-public-beta-notice="ja" lang="ja" hidden>パブリックベータ。データは予告なく削除されることがあります。</p>',
   );
   expect(footer).not.toContain('>beta</span>');
+  expect(footer).not.toContain('>Beta</span>');
+  const brand = PLAYER_APP_HTML.indexOf('class="player-brand"');
+  expect(brand).toBeGreaterThan(-1);
+  expect(brand).toBeLessThan(PLAYER_APP_HTML.lastIndexOf('<footer'));
+  expect(PLAYER_APP_HTML).toMatch(
+    /<div class="player-brand">\s*<span class="font-semibold tracking-tight whitespace-nowrap">be-music player<\/span>\s*<span class="badge" data-variant="outline">Beta<\/span>\s*<\/div>/,
+  );
+  expect(PLAYER_APP_HTML).toContain(
+    '<h2 class="help-modal-title" id="help-modal-title"><span>be-music player</span><span class="badge" data-variant="outline">Beta</span></h2>',
+  );
 });
 
 test('uses chart and replay vocabulary in bilingual help', async () => {
