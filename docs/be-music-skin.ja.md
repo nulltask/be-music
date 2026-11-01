@@ -230,10 +230,11 @@ export default defineBeMusicSkin({
 
 ## ステージとレイアウト
 
-- **ステージ:** スキンが描くデザインキャンバスです。`wideStage` は組み込みスキンが使う 16:9 のステージ（854×480）で、既定値でもあります。
+- **ステージ:** スキンが描くデザインキャンバスです。`wideStage` は 16:9 のステージ（854×480）で、既定値でもあります。
+- **筐体レイアウト:** 組み込みスキンのプレイ画面は `cabinetStage` を使います。`wideStage` の BGA を右の列に置いたステージです。`resolveCabinetLayout(layout)` が標準のレーンのまわりに残りを配置します。レーンの下には鍵盤、ゲージ、スコア、ハイスピードが並びます。その横がスコアグラフです。右の列にはステージ名の帯、プレイヤーと譜面、BGA、判定パネル、BPM、テンポが入ります。パネルは `layout.playfield.right` に従うので、幅の広い譜面では右の列が狭まります。DP（10 / 14 KEY と 2 人対戦）は、ステージの `playfield.standard.doublePlayCenterX` でステージの中央に置きます。このときステージ名の帯、譜面、BGA、判定パネルは左の列に、グラフとテンポは右の列に入ります。スコア、共通のゲージ、ハイスピード、BPM はレーンの下に並び、`center`（左右の鍵盤の間）がゲージを示します。どちらの配置かは `doublePlay` でわかります。`controls` は、狭いステージ名の帯に入りきらないものを置く、メニューの角の横の帯です。ステージ名の帯は、ホストがメニューのタブを置く右上の角を空けます。横向きの標準レイアウトで使ってください。タッチレイアウトではレーンがステージを占めるので、軽い HUD のままにします。
 - **縦向きステージ:** スキンは `portraitStage` も宣言できます。画面が横より縦に長いあいだ描くキャンバスです。組み込みの `tallStage` は 480×854（9:16）で、`wideStage` を横倒しにしたものなので文字の大きさは変わりません。スマートフォンのブラウザの表示領域（ツールバーを除くと 9:16〜9:19.5 程度）では上下にわずかな余白が、3:4 のタブレットでは左右に余白が出ます。ホストは `resolveBeMusicStage(skin, screen, chart?)` でフレームごとにステージを選びます。スキンが縦向きステージを持ち、画面が縦向きならそちらを、それ以外は `stage` を使います。縦向きのプレイフィールドに収まらない譜面のゲームプレイは `stage` のままです。縦向きにするのは 9 レーンまでの SP（5 / 7 KEY、9 KEY）だけで（`supportsPortraitLayout`）、DP（10 / 14 KEY）と鍵盤モード（24 / 48 KEY）は横向きステージを縮小して描きます（プレイヤーはスマートフォンに回転を促します）。`portraitStage` の無いスキンは常に `stage` で描かれます。
 - **可変ステージ:** ステージは `resize(size)` を宣言すると、画面に黒帯付きで収まる代わりに画面に追従します。`resolveBeMusicStage` は `resolveFluidStageSize` で寸法を決めます。短辺（組み込みステージなら 480 px）を保ち、長辺を画面の縦横比に合わせ（4:3 なら 640×480、21:9 なら 1138×480）、その寸法で `resize` が返したステージに描きます。配置は固定座標ではなく、そのステージ（`layout.stage`）から決めてください。画面と向きが逆のステージは寸法を変えません。組み込み・LR2・beatoraja のステージは固定で、埋め込みプレビューのステージが可変です。[ADR 0021](./adr/0021-fluid-stage.ja.md) を参照。
-- **BGA の配置:** `BeMusicStage.resolveBGARect(playfieldRight)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
+- **BGA の配置:** `BeMusicStage.resolveBGARect(playfieldRight, playfieldLeft)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
 - **フレームごとのレイアウト:** ゲームプレイの各フレームには、ホストが解決した `layout`（`BeMusicGameplayLayout`）が付きます。
   - `mode`: `'standard'` または `'touch'`（省略可。無ければ `'standard'`）。下のタッチレイアウトを参照してください。
   - `orientation`: `'landscape'` または `'portrait'`（省略可。無ければ `'landscape'`）。下の縦向きレイアウトを参照してください。
@@ -353,6 +354,8 @@ flowchart LR
 - **曲の経過時間:** `songLengthMs` と `songElapsedMs`。オーディオのクロックで、曲の開始とともに 0 から進み、ポーズ中は止まります。残り時間は `songLengthMs - songElapsedMs` です。`chartMs` は譜面の最初の拍から測り、カウントイン中は負になる点が異なります。
 - **1 プレイに 1 度の瞬間:** `failedAtMs`（プレイ中にゲージが尽きた）、`allNotesDoneAtMs`（最後のノーツが判定された）、`outroAtMs`（譜面が終わった）、`gaugeRiseAtMs`（ゲージが初めて上がった）、`gaugeMaxAtMs`（初めて最大に達した）。どれもその瞬間に固定されるプレイクロック時刻で、それまでは `undefined` です。
 - **推移:** `scoreHistory` と `gaugeHistory`。リザルト画面が受け取るのと同じサンプルです。ホストが更新中の配列そのものなので、読むだけにして変更しないでください。
+- **ペースメーカーと自己ベスト:** `bestEXScore`（このプレイより前のその譜面の自己ベストの EX スコア）と、ホストが決めるペースメーカーの `targetEXScore` と `targetLabel`。`resolveScorePace(runtime)` はそれぞれを判定済みのノーツの割合に合わせ、ホストがペースメーカーを決めていないときは AAA のラインを使います。`formatScoreDiff` は差を表示します（`+0168`）。
+- **ステージとプレイヤー:** `course`（プレイ中のコースとステージ。`resolveStageLabel` が `1ST STAGE` … `FINAL STAGE`、単曲では `FREE PLAY` と名付けます）、`playerName`（サインイン中のプレイヤー）、`random1P`（1P のレーンオプション）、`tempo`（プレイのテンポ。譜面どおりの速さで 1）。`resolveDifficultyName(runtime.chart)` は `#DIFFICULTY` の名前を返します。
 
 runtime のフィールドはすべて省略可能です。ホストが提供できない値は `undefined` になるので、適切な代替表示を用意してください。
 
@@ -446,7 +449,8 @@ settings: [
 
 | 分野         | ヘルパー                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ステージ     | `wideStage`、`resolveStageBGARect`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`、`tallStage`、`TALL_STAGE_WIDTH`、`TALL_STAGE_HEIGHT`、`TALL_STAGE_BGA`、`resolveBeMusicStage`、`resolveStageOrientation`                                                                                                                                   |
+| ステージ     | `wideStage`、`resolveStageBGARect`、`cabinetStage`、`resolveCabinetBGARect`、`resolveCabinetLayout`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`、`tallStage`、`TALL_STAGE_WIDTH`、`TALL_STAGE_HEIGHT`、`TALL_STAGE_BGA`、`resolveBeMusicStage`、`resolveStageOrientation`                                                                  |
+| スコアグラフ | `resolveScorePace`、`formatScoreDiff`、`resolveStageLabel`、`resolveDifficultyName`                                                                                                                                                                                                                                                                                                  |
 | レイアウト   | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`（高さ 480 px のステージを前提にしているため横向きステージ専用）、`MILESTONE_MIN_WIDTH`、`PLAYFIELD`、`resolveGameplayLaneGeometry`、`resolveTouchLaneLayout`、`supportsTouchLayout`、`TOUCH_PLAYFIELD`、`resolvePortraitLaneLayout`、`supportsPortraitLayout`、`PORTRAIT_PLAYFIELD`、`resolveBeMusicSelectLayout` |
 | 判定         | `judgeDisplayWord`（PERFECT は GREAT と表示）、`isFlashingGreat`、`flashingGreatColor`、`FLASHING_GREAT_STEP_MS`                                                                                                                                                                                                                                                                     |
 | 演出         | `trackMoments` / `createMomentState` + `updateMoments`（100 コンボごと、クリアライン、フルコンボ、コンボ切れ。カウントインは `runtime.chartMs` が負かどうかで判定）、`COMBO_MILESTONE`、`COMBO_BREAK_MIN`、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile`                                                                                                   |

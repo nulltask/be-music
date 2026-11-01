@@ -65,8 +65,8 @@ export interface BeMusicDOMSelectActions {
 
 /** Small HUD state: note arrays, textures and rendering caches stay with the Canvas renderer. */
 export interface BeMusicDOMGameplayFrame extends BeMusicDOMPresentation {
-  /** Design stage, lane bounds and BGA rect, for placing DOM controls clear of the playfield. */
-  readonly layout: Pick<BeMusicGameplayLayout, 'stage' | 'orientation' | 'playfield' | 'bga'>;
+  /** Design stage, layout mode, lanes, lane bounds and BGA rect, for placing DOM controls clear of the playfield. */
+  readonly layout: Pick<BeMusicGameplayLayout, 'mode' | 'stage' | 'orientation' | 'lanes' | 'playfield' | 'bga'>;
   readonly chart: LibraryChart | undefined;
   readonly state: Readonly<PlayState>;
   /** The 2P player's play state of a two-player play (LR2 BATTLE); `runtime.secondPlayer` has its figures. */
