@@ -47,6 +47,7 @@ import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { PlayViewTiming } from '../../view/types.ts';
 import { prepareChart } from './play-chart.ts';
+import { prepareGhost } from './ghost/prepare-ghost.ts';
 import { toPlayOptionMismatch } from './play-option-mismatch.ts';
 import { beginExitSequence, getResultData } from './play-ending.ts';
 import { interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
@@ -217,7 +218,8 @@ export class PlaySession extends PlaySessionState {
     this.bgaReadyPromise = prepareBGA(this).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
-    return this.bgaReadyPromise;
+    // The ghost's replay is read and simulated while the BGA loads; the chart waits for both.
+    return Promise.all([this.bgaReadyPromise, prepareGhost(this)]).then(() => undefined);
   }
 
   /**
@@ -626,6 +628,7 @@ export class PlaySession extends PlaySessionState {
     this.hasBGA = false;
     this.bgaReadyPromise = undefined;
     this.assetsReadyPromise = undefined;
+    this.ghost = undefined;
     this.samplesDecoded = false;
     this.chart = undefined;
     this.source = undefined;
