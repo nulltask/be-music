@@ -368,6 +368,25 @@ describe('resolveLR2SelectState sliders and buttons', () => {
     expect(state.button(LR2_BUTTON.COURSE_CONNECTION1)).toBe(2);
     expect(state.button(LR2_BUTTON.COURSE_DEFAULT_CONNECTION)).toBe(4);
   });
+
+  it('shows the selected course’s IR flag on text 183 and button 253, OFF on any other bar', () => {
+    const course = makeCourse();
+    const flagged = { ...course, definition: { ...course.definition, release: true } };
+    const onFlagged = resolveLR2SelectState({
+      focused: { kind: 'course', course: flagged },
+      options: DEFAULT_PLAY_OPTIONS,
+    });
+    expect(onFlagged.text(LR2_TEXT.COURSE_IR)).toBe('ON');
+    expect(onFlagged.button(LR2_BUTTON.COURSE_IR)).toBe(1);
+    const onUnflagged = resolveLR2SelectState({ focused: { kind: 'course', course }, options: DEFAULT_PLAY_OPTIONS });
+    expect(onUnflagged.text(LR2_TEXT.COURSE_IR)).toBe('OFF');
+    expect(onUnflagged.button(LR2_BUTTON.COURSE_IR)).toBe(0);
+    const onChart = resolveLR2SelectState({
+      focused: { kind: 'chart', chart: makeChart() },
+      options: DEFAULT_PLAY_OPTIONS,
+    });
+    expect(onChart.text(LR2_TEXT.COURSE_IR)).toBe('OFF');
+  });
 });
 
 describe('resolveLR2SelectButton', () => {
