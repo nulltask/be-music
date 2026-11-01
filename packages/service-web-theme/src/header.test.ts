@@ -18,7 +18,8 @@ describe('renderServiceHeader', () => {
       },
       requestURL: 'https://be-music.app/',
     });
-    expect(html).toContain('>Be-Music Dashboard</a>');
+    expect(html).toContain('>Be-Music Dashboard</a><span class="badge" data-variant="outline">Beta</span>');
+    expect(html).not.toContain('>beta</span>');
     expect(html).not.toContain('ダッシュボード');
     expect(html).toContain('class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2"');
     const account = html.indexOf('aria-label="@alice のアカウント"');
@@ -60,9 +61,9 @@ describe('renderServiceHeader', () => {
       accountHref: '/login',
       requestURL: '/login',
     });
-    expect(signedOut).toContain('>Be-Music Accounts</a>');
+    expect(signedOut).toContain('>Be-Music Accounts</a><span class="badge" data-variant="outline">Beta</span>');
     expect(signedOut).toContain('class="btn" data-size="sm" data-variant="ghost" href="/login">Sign in</a>');
-    expect(signedOut).not.toContain('data-variant="outline"');
+    expect(signedOut).not.toMatch(/<(?:a|button)[^>]*data-variant="outline"/);
     expect(signedOut).not.toContain('class="account-chip"');
     const guest = renderServiceHeader({
       locale: 'en',

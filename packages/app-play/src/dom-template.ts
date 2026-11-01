@@ -363,6 +363,16 @@ export const PLAYER_APP_HTML = `
       </div>
     </div>
     <!--
+      Site title. The shell has no service header, so the name from Help
+      (\`be-music player\`) sits top-left, where the other sites put their
+      title, with the Beta badge beside it. Off the playfield during play
+      (the shell's in-gameplay class).
+    -->
+    <div class="player-brand">
+      <span class="font-semibold tracking-tight whitespace-nowrap">be-music player</span>
+      <span class="badge" data-variant="outline">Beta</span>
+    </div>
+    <!--
       Bottom-right floating Help button. Pinned so it stays
       reachable from every scene (select / gameplay / result)
       without having to compete with Tweakpane (top-right) or the
@@ -439,7 +449,7 @@ export const PLAYER_APP_HTML = `
         <header class="help-modal-header">
           <div>
             <div class="help-modal-eyebrow" data-i18n="helpAbout">Help &amp; About</div>
-            <h2 class="help-modal-title" id="help-modal-title">be-music player</h2>
+            <h2 class="help-modal-title" id="help-modal-title"><span>be-music player</span><span class="badge" data-variant="outline">Beta</span></h2>
           </div>
           <button class="btn help-modal-close" data-size="icon-sm" data-variant="ghost" id="help-modal-close" type="button" aria-label="Close" data-i18n-aria="close">
             <svg viewBox="0 0 24 24" aria-hidden="true">

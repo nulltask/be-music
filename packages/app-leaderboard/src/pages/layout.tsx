@@ -709,9 +709,14 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
             class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur [view-transition-name:site-header]"
           >
             <div class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6">
-              <a href="/" class="shrink-0 font-semibold tracking-tight whitespace-nowrap">
-                Be-Music Leaderboard
-              </a>
+              <div class="flex shrink-0 items-center gap-1">
+                <a href="/" class="font-semibold tracking-tight whitespace-nowrap">
+                  Be-Music Leaderboard
+                </a>
+                <span class="badge" data-variant="outline">
+                  Beta
+                </span>
+              </div>
               <nav class="text-muted-foreground hidden items-center gap-4 text-sm sm:flex" aria-label={t.nav.label}>
                 <a
                   class="hover:text-foreground inline-flex items-center gap-1.5 whitespace-nowrap"
