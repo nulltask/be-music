@@ -243,16 +243,13 @@ textarea {
 }
 
 /*
- * Drop overlay — three layers stacked over the stage:
+ * Drop overlay — two layers stacked over the stage:
  *
  *   1. `.drop`            — full-stage container, hidden by default.
  *                           Becomes a placement grid when active so
  *                           `.drop-card` lands centred without an
  *                           extra wrapper.
- *   2. `.drop-frame`      — hairline ring at rest. Hidden
- *                           during a drag; the card is that
- *                           feedback.
- *   3. `.drop-card`       — frosted-glass content panel: icon,
+ *   2. `.drop-card`       — frosted-glass content panel: icon,
  *                           title, subtitle. Letter-spaced uppercase
  *                           typography pulls the centre of mass
  *                           upward; slow scale + glow animations on
@@ -262,7 +259,7 @@ textarea {
  * Visible whenever the shell carries `.empty` (no songs loaded
  * yet) so first-time visitors see the affordance, and during a
  * live drag (`.dragging`) where the card's heavier glow
- * tier kicks in. The stage ring stays hidden then.
+ * tier kicks in. The card is the only drop feedback.
  */
 .drop {
   position: absolute;
@@ -302,19 +299,6 @@ textarea {
  */
 .dragging .drop {
   background: radial-gradient(circle at center, rgb(8 9 13 / 0.72) 0%, rgb(4 5 9 / 0.92) 70%, rgb(0 0 0 / 0.96) 100%);
-}
-
-.drop-frame {
-  position: absolute;
-  inset: 24px;
-  border: 1px solid color-mix(in oklch, var(--primary) 18%, transparent);
-  border-radius: 14px;
-  pointer-events: none;
-}
-
-/* A drag's feedback is the card. Keep this ring from lighting up for the gesture. */
-.dragging .drop-frame {
-  visibility: hidden;
 }
 
 .drop-card {
