@@ -629,12 +629,13 @@ export const PLAYER_APP_HTML = `
               </div>
             </div>
             <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed.</li>
+              <li><kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed; hold to keep adjusting.</li>
               <li>
                 Lane covers (Plain, Native, Synesthesia and beatoraja skins): <kbd>PageUp</kbd> / <kbd>PageDown</kbd>
                 move SUDDEN+, <kbd>Home</kbd> / <kbd>End</kbd> the LIFT, <kbd>H</kbd> switches HIDDEN+ and
                 <kbd>J</kbd> / <kbd>K</kbd> move it; hold <kbd>Shift</kbd> for larger steps. A key that a lane of the
-                chart uses stays a lane key.
+                chart uses stays a lane key. Hold an adjustment key to keep moving; H toggles once per press.
+                With FLOATING HI-SPEED, PageUp / PageDown fine-adjust hi-speed when SUDDEN+ and LIFT are both off.
               </li>
               <li>In AUTO play, a replay or a practice play, <kbd>←</kbd> / <kbd>→</kbd> seek 5 s back / forward.</li>
               <li><kbd>Space</kbd> pauses / resumes.</li>
@@ -742,9 +743,10 @@ export const PLAYER_APP_HTML = `
               <div class="help-keymap-note">左 Shift = 1P スクラッチ · 右 Shift = 2P スクラッチ · 9 ボタン (PMS) の譜面は Z S X D C F V G B。</div>
             </div>
             <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。</li>
+              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。長押しで連続調整できます。</li>
               <li>
                 レーンカバー (Plain / Native / Synesthesia と beatoraja スキン): <kbd>PageUp</kbd> / <kbd>PageDown</kbd> で SUDDEN+、<kbd>Home</kbd> / <kbd>End</kbd> で LIFT を動かし、<kbd>H</kbd> で HIDDEN+ を切り替え、<kbd>J</kbd> / <kbd>K</kbd> で動かします。<kbd>Shift</kbd> を押しながらだと大きく動きます。譜面のレーンに使われているキーはレーンの入力になります。
+                調整キーは長押しで連続して動きます。H は押すたびに 1 回だけ切り替わります。FLOATING HI-SPEED では、SUDDEN+ と LIFT が両方 OFF のとき、PageUp / PageDown でハイスピードを微調整します。
               </li>
               <li>AUTO プレイ、リプレイ、練習のプレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
               <li><kbd>Space</kbd> でポーズ / 再開。</li>
