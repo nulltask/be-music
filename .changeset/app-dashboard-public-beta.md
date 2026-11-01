@@ -2,4 +2,4 @@
 '@be-music/app-dashboard': patch
 ---
 
-The dashboard footer says Public Beta and that data may be deleted without notice, in the language of the page. The Japanese notice reads as one sentence.
+The Dashboard header shows a Beta badge beside Be-Music Dashboard, and the footer says Public Beta and that data may be deleted without notice, in the language of the page.
