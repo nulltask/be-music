@@ -1,4 +1,4 @@
-import type { BestRecord } from '@be-music/player-engine/records';
+import type { BestRecord, DanRank } from '@be-music/player-engine/records';
 import type { ClearLamp } from '@be-music/player-engine/ruleset';
 
 /**
@@ -42,4 +42,17 @@ export type BeMusicChartBestRecord = BestRecord;
 export interface BeMusicCourseBestRecord extends BeMusicChartBestRecord {
   /** The best trophy's name (e.g. `goldmedal`), when the course has trophies and the bests earn one. */
   trophy?: string;
+}
+
+/**
+ * The player's dan rank in one key mode: the highest dan they have cleared a GRADE course of, read from the course's name
+ * (`DanRank` and `formatDanRank` of `@be-music/player-engine/records`).
+ */
+export interface BeMusicDanRank {
+  /** The key mode the rank is held in (`7`, `5`, `14`, `10`, `9`, …). */
+  keyMode: number;
+  /** The rank on be-music's dan ladder, `kyu-10` up to `overjoy`. */
+  rank: DanRank;
+  /** The rank as dan courses name it: `七段`, `発狂皆伝`, `Overjoy`. */
+  label: string;
 }

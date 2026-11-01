@@ -13,6 +13,7 @@ import type { BeMusicResultData, GaugeHistorySample, ScoreHistorySample } from '
 import type { BeMusicSkinSetting, BeMusicSkinSettingValues } from './settings.ts';
 import type {
   BeMusicCourseBestRecord,
+  BeMusicDanRank,
   BeMusicChartImageKind,
   BeMusicChartBestRecord,
   LibraryChart,
@@ -780,6 +781,11 @@ export interface BeMusicSelectFrame {
    * played, or it is a random course or a NEW COURSE bar. Absent from hosts that predate it.
    */
   courseBestRecord?(course: LibraryCourse): BeMusicCourseBestRecord | undefined;
+  /**
+   * The player's dan rank in each key mode they hold one in, fewest keys first, under the judge ruleset whose records
+   * the screen shows. Empty before any GRADE course is cleared; absent from hosts that keep none.
+   */
+  danRanks?: readonly BeMusicDanRank[];
   chartImage: BeMusicChartImageLookup;
   /** The player's values for the skin's {@link BeMusicSkin.settings}. */
   settings: BeMusicSkinSettingValues;

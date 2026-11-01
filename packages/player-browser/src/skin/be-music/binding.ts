@@ -28,6 +28,7 @@ import type {
   BeMusicChartImageLookup,
   BeMusicChartBestRecord,
   BeMusicCourseBestRecord,
+  BeMusicDanRank,
   BeMusicStage,
   BeMusicSurface,
   BeMusicSurfaceContextMap,
@@ -48,6 +49,7 @@ const NO_SONG_IMAGE: BeMusicChartImageLookup = () => undefined;
 /** Hosts that keep no play records report every song as never played. */
 const NO_SONG_RECORD = (): BeMusicChartBestRecord | undefined => undefined;
 const NO_COURSE_RECORD = (): BeMusicCourseBestRecord | undefined => undefined;
+const NO_DAN_RANKS = (): readonly BeMusicDanRank[] => [];
 
 /**
  * The player's stored values for a skin's settings, keyed by setting id, as a host persisted them. Bindings check them
@@ -417,6 +419,7 @@ export type BeMusicSelectSceneFrame = Omit<
   | 'pointer'
   | 'chartBestRecord'
   | 'courseBestRecord'
+  | 'danRanks'
   | 'chartImage'
   | 'settings'
   | 'listScroll'
@@ -438,6 +441,7 @@ export class BeMusicSelectBinding {
   private settings: BeMusicSkinSettingValues;
   private readonly chartBestRecord: BeMusicSelectFrame['chartBestRecord'];
   private readonly courseBestRecord: NonNullable<BeMusicSelectFrame['courseBestRecord']>;
+  private readonly danRanks: () => readonly BeMusicDanRank[];
   private readonly chartImage: BeMusicChartImageLookup;
   /** `frame.listScroll`: how far the list is pulled past its resting place, in design pixels (see `setListScroll`). */
   private listScroll = 0;
@@ -453,7 +457,7 @@ export class BeMusicSelectBinding {
 
   /**
    * `resolveChartBestRecord` looks up the player's best record on a song for `frame.chartBestRecord`; without one every song
-   * reads as never played; `resolveCourseBestRecord` does the same for a course bar (`frame.courseBestRecord`). `chartImage` resolves song images for `frame.chartImage` (call {@link invalidate} when one
+   * reads as never played; `resolveCourseBestRecord` does the same for a course bar (`frame.courseBestRecord`), and `resolveDanRanks` gives the player's dan ranks (`frame.danRanks`, none without it). `chartImage` resolves song images for `frame.chartImage` (call {@link invalidate} when one
    * arrives); without one every image reads as unavailable. `settings` are the player's stored values for the skin's
    * settings; without them the skin draws with its defaults.
    * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
@@ -463,6 +467,7 @@ export class BeMusicSelectBinding {
     options: {
       resolveChartBestRecord?: BeMusicSelectFrame['chartBestRecord'];
       resolveCourseBestRecord?: BeMusicSelectFrame['courseBestRecord'];
+      resolveDanRanks?: () => readonly BeMusicDanRank[];
       chartImage?: BeMusicChartImageLookup;
       settings?: BeMusicStoredSkinSettings;
       renderer?: Renderer;
@@ -473,6 +478,7 @@ export class BeMusicSelectBinding {
     this.outroMs = skin.select.outroMs ?? 0;
     this.chartBestRecord = options.resolveChartBestRecord ?? NO_SONG_RECORD;
     this.courseBestRecord = options.resolveCourseBestRecord ?? NO_COURSE_RECORD;
+    this.danRanks = options.resolveDanRanks ?? NO_DAN_RANKS;
     this.chartImage = options.chartImage ?? NO_SONG_IMAGE;
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.backLayer.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
@@ -543,6 +549,7 @@ export class BeMusicSelectBinding {
       pointer,
       chartBestRecord: this.chartBestRecord,
       courseBestRecord: this.courseBestRecord,
+      danRanks: this.danRanks(),
       chartImage: this.chartImage,
       settings: this.settings,
       hit: (x, y, w, h, action, cursor = 'pointer') => {

@@ -356,3 +356,28 @@ The course result sums the stages (see [Replay — Course replays](./replay.md#c
 The lamp and BP are the course rule and BP of the vocabulary every play is lamped with (`resolveCourseClearLamp`, `resolveMissCount` in `@be-music/player-engine/ruleset`). A host keeps a run's best record under the judge ruleset it was played on (`resolveCoursePlayedRuleset`; a run whose stages differ keeps none), by the rules of `@be-music/player-engine/records`: `courseRunRecordPlay` reads what the run contributes, `courseRunKeepsRecord` refuses auto-played runs and runs at another tempo, and `mergeCourseStageRecord` folds an EXPERT / GRADE stage into its chart's record as LR2 does (the best EX score, max combo and BP, and a FULL COMBO or better lamp, but no clear lamp or play count).
 
 Stitch version 3 also promotes BMS-only courses containing CN/HCN to internal bmson so each long note retains its stage mode. This covers both explicit LNMODE and HDX LONGMODE. Historical stitch versions preserve their earlier BMS interpretation. See [ADR 0027](./adr/0027-hdx-long-note-modes.md).
+
+## The player's dan rank
+
+be-music keeps the player's **dan rank**: the highest dan they have cleared a GRADE course of, one per judge ruleset and key mode. LR2 keeps one dan per key mode too (`grade_7` … `grade_9`), but neither LR2 nor beatoraja ever sets one from a course clear or shows one on a skin, so how a course maps to a dan is be-music's own. See [Research — player dan rank](./research/dan-rank.md) for the sources.
+
+```mermaid
+flowchart TD
+  run["Course run ends"] --> keeps{"Keeps a best record?"}
+  keeps -->|no| none["No rank"]
+  keeps -->|yes| grade{"GRADE and cleared?"}
+  grade -->|no| none
+  grade -->|yes| name{"Name names a dan?"}
+  name -->|no| none
+  name -->|yes| mode{"Key mode known?"}
+  mode -->|no| none
+  mode -->|yes| keep["Keep the higher rank<br/>(ruleset, key mode)"]
+```
+
+- **Which runs count.** A run that keeps a best record (`resolveCourseBestRecordUpdate`: not auto-played, not at another tempo, every stage judged under one ruleset), of a GRADE course, cleared (any lamp but FAILED). An EXPERT or NONSTOP course certifies nothing, whatever it is named.
+- **Which dan.** Read from the course name (`resolveCourseDanRank` in `@be-music/player-engine/records`), after NFKC normalisation: Overjoy; 発狂 (or `insane`) with 皆伝 or a dan; 皆伝; 中伝; a dan (`初段`, `七段`, `7段`, `7th dan`); a kyu (`十級`, `1st kyu`). 段位 (as in 段位認定) is not a dan. A name that names none certifies nothing.
+- **The ladder** (`DAN_RANKS`), lowest first: 十級 … 一級, 初段 … 十段, 中伝, 皆伝, 発狂初段 … 発狂十段, 発狂皆伝, Overjoy. A higher rank replaces a lower one; a lower clear leaves the rank alone.
+- **Key mode.** The one the course names (LR2 `line`, a table's `mode`), else the one all its stages' charts share (`resolveDanCourseKeyMode`). A course whose stages differ keeps no rank.
+- **New plays only.** Ranks come from runs played from now on; course records kept before are not read back into ranks.
+
+The web player stores the ranks in `localStorage` (`be-music.dan-ranks`, keyed `<ruleset>:<keyMode>`); a missing or unreadable store reads as no rank. be-music skins get them as `frame.danRanks` on the select screen, and the built-in Plain skin shows them in its header (`7K 七段 · 14K 初段`). No LR2 op or beatoraja property shows a dan, so LR2 and beatoraja themes show none.
