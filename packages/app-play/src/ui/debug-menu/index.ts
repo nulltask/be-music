@@ -328,7 +328,10 @@ export class DebugMenu {
     // on the player.
     const container = document.createElement('div');
     container.className = 'debug-pane-container';
-    document.body.append(container);
+    // The shell is the fullscreen element (double-click and "Toggle fullscreen"). A menu on `document.body` sits
+    // outside that top layer, so the browser hides it until fullscreen ends. The shell does not create a fixed
+    // containing block, so the windowed top-right position is unchanged.
+    this.deps.shell.append(container);
     const gui = new Pane({ title: 'Debug Menu', container, expanded: false });
     gui.element.classList.add('debug-pane');
     gui.element.dataset.pane = 'debug';

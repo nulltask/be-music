@@ -39,14 +39,14 @@ describe('parseStoredSkinSettings', () => {
       ['phantom', { glow: true }],
     ]);
     expect(JSON.parse(serializeStoredSkinSettings(settings))).toEqual({
-      version: 1,
+      version: 0,
       skins: { phantom: { glow: true } },
     });
   });
 
   it('drops values that are not a string, a finite number, or a boolean', () => {
     const raw = JSON.stringify({
-      version: 1,
+      version: 0,
       skins: { a: { ok: 'x', n: 3, b: false, nested: { x: 1 }, list: [1], nil: null }, broken: 'nope', arr: [1] },
     });
     expect(parseStoredSkinSettings(raw)).toEqual(new Map([['a', { ok: 'x', n: 3, b: false }]]));
@@ -56,6 +56,7 @@ describe('parseStoredSkinSettings', () => {
     expect(parseStoredSkinSettings(null).size).toBe(0);
     expect(parseStoredSkinSettings('{').size).toBe(0);
     expect(parseStoredSkinSettings('"text"').size).toBe(0);
+    expect(parseStoredSkinSettings(JSON.stringify({ version: 1, skins: { a: { x: 1 } } })).size).toBe(0);
     expect(parseStoredSkinSettings(JSON.stringify({ version: 2, skins: { a: { x: 1 } } })).size).toBe(0);
   });
 });

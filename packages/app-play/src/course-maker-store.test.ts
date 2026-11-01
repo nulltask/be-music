@@ -37,6 +37,23 @@ describe('made courses storage', () => {
     );
     expect(read.defaultConnection).toBe('cut');
     expect(read.courses).toEqual([nonstop, grade]);
+    const legacy = JSON.parse(
+      JSON.stringify(
+        serializeMadeCourses({
+          courses: [nonstop],
+          defaultConnection: 'cut',
+          randomMixSettings: MIX,
+          randomMixes: [],
+        }),
+      ),
+    );
+    legacy.version = 1;
+    expect(parseMadeCourses(legacy)).toEqual({
+      courses: [],
+      defaultConnection: 'fade',
+      randomMixSettings: MIX,
+      randomMixes: [],
+    });
   });
 
   test('keeps each course unranked or ranked across a reload', () => {
@@ -84,7 +101,7 @@ describe('made courses storage', () => {
   test('reads nothing from a missing, foreign or older record', () => {
     const empty = { courses: [], defaultConnection: 'fade', randomMixSettings: MIX, randomMixes: [] };
     expect(parseMadeCourses(undefined)).toEqual(empty);
-    expect(parseMadeCourses({ version: 0, lr2crs: '' })).toEqual(empty);
-    expect(parseMadeCourses({ version: 1, lr2crs: '<courselist/>', defaultConnection: 'warp' })).toEqual(empty);
+    expect(parseMadeCourses({ version: 2, lr2crs: '<courselist/>', defaultConnection: 'cut' })).toEqual(empty);
+    expect(parseMadeCourses({ version: 1, lr2crs: '<courselist/>', defaultConnection: 'blank1' })).toEqual(empty);
   });
 });

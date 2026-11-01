@@ -4,8 +4,11 @@
 import type { BeMusicSkinSetting } from '@be-music/player-skin-sdk';
 
 const STORAGE_KEY = 'be-music.skin-settings';
-/** Bumped when the stored shape changes; a stored map with another version is ignored. */
-const STORAGE_VERSION = 1;
+/**
+ * The stored map's revision. `0` while the shape is still being defined: it may change incompatibly without the
+ * number moving. Any other stamp is unreadable.
+ */
+const STORAGE_VERSION = 0;
 
 /** One stored setting value: a choice's option value, a number, or a toggle's state. */
 export type StoredSkinSettingValue = string | number | boolean;
@@ -47,7 +50,7 @@ export function parseStoredSkinSettings(raw: string | null | undefined): StoredS
   return settings;
 }
 
-/** Serializes skin settings as `{ version: 1, skins: { [skinId]: { [settingId]: value } } }`. */
+/** Serializes skin settings as `{ version: 0, skins: { [skinId]: { [settingId]: value } } }`. */
 export function serializeStoredSkinSettings(settings: StoredSkinSettings): string {
   return JSON.stringify({ version: STORAGE_VERSION, skins: Object.fromEntries(settings) });
 }

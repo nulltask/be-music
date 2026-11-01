@@ -216,8 +216,11 @@ textarea {
  * Fullscreen target is `.shell` (not the canvas itself) so Pixi's
  * `resizeTo: #stage` still sees a 100%-of-viewport container after
  * the browser chrome disappears, and so the floating debug / help /
- * search overlays stay reachable. The background fill covers Safari's
- * brief unstyled flash as the element is promoted.
+ * search overlays stay reachable. The Debug Menu
+ * (`.debug-pane-container`) is mounted inside `.shell` for that
+ * reason; on `document.body` the browser would hide it while `.shell`
+ * is fullscreen. The background fill covers Safari's brief unstyled
+ * flash as the element is promoted.
  */
 .shell:fullscreen,
 .shell:-webkit-full-screen {
@@ -233,9 +236,9 @@ textarea {
  *                           Becomes a placement grid when active so
  *                           `.drop-card` lands centred without an
  *                           extra wrapper.
- *   2. `.drop-frame`      — subtle outer ring. Hairline border at
- *                           rest, full accent + breathing glow on
- *                           active drag.
+ *   2. `.drop-frame`      — hairline ring at rest. Hidden
+ *                           during a drag; the card is that
+ *                           feedback.
  *   3. `.drop-card`       — frosted-glass content panel: icon,
  *                           title, subtitle. Letter-spaced uppercase
  *                           typography pulls the centre of mass
@@ -245,8 +248,8 @@ textarea {
  *
  * Visible whenever the shell carries `.empty` (no songs loaded
  * yet) so first-time visitors see the affordance, and during a
- * live drag (`.dragging`) where the heavier glow / pulse tier
- * kicks in.
+ * live drag (`.dragging`) where the card's heavier glow
+ * tier kicks in. The stage ring stays hidden then.
  */
 .drop {
   position: absolute;
@@ -293,17 +296,12 @@ textarea {
   inset: 24px;
   border: 1px solid color-mix(in oklch, var(--primary) 18%, transparent);
   border-radius: 14px;
-  /*
-   * Hair-thin ring at rest — present but quiet. The active
-   * drag tier below replaces it with a thick luminous accent
-   * that nearly fills the dashed-frame slot.
-   */
-  transition:
-    inset 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 220ms ease-out,
-    border-width 220ms ease-out,
-    box-shadow 220ms ease-out;
   pointer-events: none;
+}
+
+/* A drag's feedback is the card. Keep this ring from lighting up for the gesture. */
+.dragging .drop-frame {
+  visibility: hidden;
 }
 
 .drop-card {
@@ -805,32 +803,13 @@ textarea {
 }
 
 /*
- * Active-drag tier — every visual property shifts so the
- * delta from resting is immediately legible: card swells in
- * size, frame thickens and pulls inward, accent colour
- * floods the typography, the icon doubles in glow, and the
- * surrounding scrim deepens nearly to black. The empty /
- * resting tier (`.shell.empty` without `.dragging`) keeps
- * the calmer baseline so the contrast between the two
- * states is the message.
+ * Active-drag tier — the card swells, accent colour floods the
+ * typography, the icon doubles in glow, and the surrounding
+ * scrim deepens nearly to black. The stage ring stays out of
+ * this gesture. The empty / resting tier (`.shell.empty`
+ * without `.dragging`) keeps the calmer baseline so the
+ * contrast between the two states is the message.
  */
-.dragging .drop-frame {
-  /*
-   * Frame contracts inward AND thickens — the inset shrinks
-   * from 24px to 12px and the border grows from a hairline
-   * to a clearly visible 3px luminous accent, so the screen's
-   * "frame" deltas in two channels at once (geometry + colour).
-   */
-  inset: 12px;
-  border-width: 3px;
-  border-color: color-mix(in oklch, var(--primary) 85%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in oklch, var(--primary) 35%, transparent),
-    0 0 32px color-mix(in oklch, var(--primary) 45%, transparent),
-    inset 0 0 48px color-mix(in oklch, var(--primary) 18%, transparent);
-  animation: drop-frame-pulse 1.8s ease-in-out infinite;
-}
-
 .dragging .drop-card {
   /*
    * Card scales to 1.14 to deliver the visible "size up" that
@@ -952,22 +931,6 @@ textarea {
   }
 }
 
-@keyframes drop-frame-pulse {
-  0%,
-  100% {
-    border-color: color-mix(in oklch, var(--primary) 40%, transparent);
-    box-shadow:
-      0 0 0 1px color-mix(in oklch, var(--primary) 8%, transparent),
-      0 0 0 8px color-mix(in oklch, var(--primary) 0%, transparent) inset;
-  }
-  50% {
-    border-color: color-mix(in oklch, var(--primary) 70%, transparent);
-    box-shadow:
-      0 0 0 1px color-mix(in oklch, var(--primary) 18%, transparent),
-      0 0 0 24px color-mix(in oklch, var(--primary) 6%, transparent) inset;
-  }
-}
-
 @keyframes drop-icon-float {
   0%,
   100% {
@@ -1000,15 +963,13 @@ textarea {
 
 /*
  * Respect the user's reduced-motion preference — strip the
- * breathing / pulse loops and let only the entry fade play.
- * The visual change is still clear (border-color / glow
- * deltas remain) but nothing keeps animating in the
- * background.
+ * breathing loops and let only the entry fade play. The
+ * visual change is still clear (border-colour / glow deltas
+ * remain) but nothing keeps animating in the background.
  */
 @media (prefers-reduced-motion: reduce) {
   .drop-card,
   .dragging .drop-card,
-  .dragging .drop-frame,
   .drop-icon,
   .dragging .drop-icon,
   .dragging .drop-icon-head {
@@ -1233,7 +1194,15 @@ textarea {
 .help-modal-card {
   position: relative;
   width: min(720px, 100%);
-  max-height: min(80vh, 720px);
+  /*
+   * Fixed height, not a max-height cap. The Open source pane
+   * is only the intro plus "Loading…" until the license list
+   * arrives. A content-sized card shrinks and recenters for
+   * that moment, then jumps back when the cards land. The
+   * pane scrolls inside this height, so the list shows up
+   * without moving the dialog.
+   */
+  height: min(80vh, 720px);
   /*
    * Slide-in entry that reads as "the dialog rose into focus"
    * rather than "popped instantly". Matches the drop card's
@@ -1680,8 +1649,8 @@ textarea {
 
 /*
  * Scrollable dependency list. `min-height: 0` lets the flex
- * parent collapse the list when the dialog hits its
- * `max-height` cap — without it the inner `<ol>` would push
+ * parent collapse the list inside the dialog's fixed
+ * height — without it the inner `<ol>` would push
  * the modal taller than the viewport.
  *
  * Block layout (NOT flex column). When the list itself was a
@@ -2389,11 +2358,11 @@ html.touch-first .search-input.search-inline:focus {
   display: none;
 }
 .shell.empty .drop {
-  padding-bottom: 11rem;
+  padding-bottom: 13rem;
 }
 .shell.empty .help-button,
 .shell.empty .account-chip {
-  bottom: calc(11rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(13rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* A DOM skin owns a real search input; remove the Canvas overlay from focus and accessibility as well. */
