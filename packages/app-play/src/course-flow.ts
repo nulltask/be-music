@@ -1,3 +1,4 @@
+import { playerText } from './player-copy.ts';
 import {
   CourseRun,
   type CourseConstraint,
@@ -234,15 +235,16 @@ export function courseDecideSong(course: LibraryCourse, first: LibraryChart): Li
 /** The status line for a course that cannot start because some of its stages are not in the collection. */
 export function describeUnplayableCourse(course: LibraryCourse): string {
   const missing = course.stages.filter((stage) => stage.chart === undefined).length;
-  const count = missing === 1 ? '1 stage is' : `${missing} stages are`;
-  return `${course.definition.name}: ${count} not in the collection`;
+  return playerText().course.stageMissing(course.definition.name, missing);
 }
 
 /** The status line for a random course whose stages could not be drawn. */
 export function describeRandomCourseDrawFailure(name: string, failure: RandomCourseDrawFailure): string {
-  const why =
-    failure.reason === 'no-candidates' ? 'matches no chart' : `has an invalid filter (${failure.error ?? ''})`;
-  return `${name}: stage ${failure.stage + 1} ${why}`;
+  const copy = playerText().course;
+  const stage = failure.stage + 1;
+  return failure.reason === 'no-candidates'
+    ? copy.randomNoChart(name, stage)
+    : copy.randomBadFilter(name, stage, failure.error ?? '');
 }
 
 /** The status line for a NONSTOP course that could not be stitched. */
@@ -250,10 +252,10 @@ export function describeNonstopPrepareFailure(
   name: string,
   failure: { reason: NonstopPlayFailure; stage?: number },
 ): string {
-  const stage = failure.stage !== undefined ? ` (stage ${failure.stage + 1})` : '';
-  if (failure.reason === 'generic-layout-mismatch')
-    return `${name}: all NONSTOP stages must use the same generic keyboard layout${stage}`;
-  return `${name}: cannot stitch the NONSTOP course: ${failure.reason}${stage}`;
+  const copy = playerText().course;
+  const stage = failure.stage !== undefined ? copy.stageNote(failure.stage + 1) : '';
+  if (failure.reason === 'generic-layout-mismatch') return copy.nonstopLayout(name, stage);
+  return copy.nonstopStitch(name, failure.reason, stage);
 }
 
 /**

@@ -125,7 +125,7 @@ test('a dropped GRADE course replay plays the run back to where it failed, with 
   await expect(dialog.locator(':scope > form')).toBeVisible();
   await expect(dialog.locator('li')).toHaveText([`Not Loaded${artist !== undefined ? ` / ${artist}` : ''}`]);
   state = await player.state();
-  expect(state.status).toBe('Replay: song not loaded (Not Loaded)');
+  expect(state.status).toBe('Replay: chart not loaded (Not Loaded)');
   expect(state.scene.kind).toBe('select');
   await dialog.getByRole('button', { name: 'OK' }).click();
   await expect(dialog.locator(':scope > form')).toBeHidden();

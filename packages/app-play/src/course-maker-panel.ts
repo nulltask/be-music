@@ -19,6 +19,7 @@ import {
 } from '@be-music/player-engine/course';
 import { COURSE_NAME_PROMPT, type CourseMaker } from '@be-music/player-browser/collection';
 import { formatLR2RandomMixSetting } from '@be-music/skin-lr2/state';
+import { playerText } from './player-copy.ts';
 
 /** LR2's names of the NONSTOP connections. */
 export const CONNECTION_LABELS: Readonly<Record<NonstopConnection, string>> = {
@@ -42,56 +43,56 @@ export function madeCourseConnections(course: CourseDefinition): NonstopConnecti
 /** The constraint choices of each group, as beatoraja's course editor offers them; the first one is "none". */
 const CONSTRAINT_FIELDS: readonly {
   group: CourseConstraintGroup;
-  label: string;
-  choices: readonly (readonly [CourseConstraint | '', string])[];
+  label: () => string;
+  choices: readonly (readonly [CourseConstraint | '', () => string])[];
 }[] = [
   {
     group: 'option',
-    label: 'Lane option',
+    label: () => playerText().course.constraints.option,
     choices: [
-      ['', 'Free'],
-      ['grade', 'Off only (CLASS)'],
-      ['grade_mirror', 'Off or MIRROR'],
-      ['grade_random', 'Random family'],
+      ['', () => playerText().course.choices.free],
+      ['grade', () => playerText().course.choices.offOnly],
+      ['grade_mirror', () => playerText().course.choices.offOrMirror],
+      ['grade_random', () => playerText().course.choices.randomFamily],
     ],
   },
   {
     group: 'speed',
-    label: 'Hi-speed',
+    label: () => playerText().course.constraints.speed,
     choices: [
-      ['', 'Free'],
-      ['no_speed', 'Locked'],
+      ['', () => playerText().course.choices.free],
+      ['no_speed', () => playerText().course.choices.locked],
     ],
   },
   {
     group: 'judge',
-    label: 'JudgmentKind',
+    label: () => playerText().course.constraints.judge,
     choices: [
-      ['', 'Normal'],
-      ['no_great', 'No GREAT'],
-      ['no_good', 'No GOOD'],
+      ['', () => playerText().course.choices.normal],
+      ['no_great', () => playerText().course.choices.noGreat],
+      ['no_good', () => playerText().course.choices.noGood],
     ],
   },
   {
     group: 'gauge',
-    label: 'Gauge',
+    label: () => playerText().course.constraints.gauge,
     choices: [
-      ['', 'Player’s choice'],
-      ['gauge_lr2', 'LR2'],
-      ['gauge_5k', '5 keys'],
-      ['gauge_7k', '7 keys'],
-      ['gauge_9k', '9 keys'],
-      ['gauge_24k', '24 keys'],
+      ['', () => playerText().course.choices.playersChoice],
+      ['gauge_lr2', () => 'LR2'],
+      ['gauge_5k', () => playerText().course.choices.keys5],
+      ['gauge_7k', () => playerText().course.choices.keys7],
+      ['gauge_9k', () => playerText().course.choices.keys9],
+      ['gauge_24k', () => playerText().course.choices.keys24],
     ],
   },
   {
     group: 'longNote',
-    label: 'Long notes',
+    label: () => playerText().course.constraints.longNote,
     choices: [
-      ['', 'As charted'],
-      ['ln', 'LN'],
-      ['cn', 'CN'],
-      ['hcn', 'HCN'],
+      ['', () => playerText().course.choices.asCharted],
+      ['ln', () => 'LN'],
+      ['cn', () => 'CN'],
+      ['hcn', () => 'HCN'],
     ],
   },
 ];
@@ -113,7 +114,7 @@ function constraintEditor(
       const current = constraints.find((constraint) => courseConstraintGroup(constraint) === field.group) ?? '';
       const select = element('select', { className: 'select course-maker-select' });
       for (const [value, label] of field.choices) {
-        const option = element('option', { text: label });
+        const option = element('option', { text: label() });
         option.value = value;
         option.selected = value === current;
         select.append(option);
@@ -122,7 +123,7 @@ function constraintEditor(
         const others = constraints.filter((constraint) => courseConstraintGroup(constraint) !== field.group);
         onChange(select.value === '' ? others : [...others, select.value as CourseConstraint]);
       });
-      return element('label', { className: 'course-maker-field', text: field.label }, [select]);
+      return element('label', { className: 'course-maker-field', text: field.label() }, [select]);
     }),
   );
 }
@@ -171,14 +172,14 @@ function connectionSelect(value: NonstopConnection, onChange: (value: NonstopCon
 }
 
 /** The RANDOM MIX settings in LR2's button order (260-266), with what the dialog calls each. */
-const RANDOM_MIX_FIELDS: readonly { readonly setting: LR2RandomMixSetting; readonly label: string }[] = [
-  { setting: 'preferredLevel', label: 'Favorite level' },
-  { setting: 'maxLevel', label: 'Max level' },
-  { setting: 'minLevel', label: 'Min level' },
-  { setting: 'bpmRange', label: 'BPM range' },
-  { setting: 'maxBPM', label: 'Max BPM' },
-  { setting: 'minBPM', label: 'Min BPM' },
-  { setting: 'stageCount', label: 'Stages' },
+const RANDOM_MIX_FIELDS: readonly { readonly setting: LR2RandomMixSetting; readonly label: () => string }[] = [
+  { setting: 'preferredLevel', label: () => playerText().course.randomMix.preferredLevel },
+  { setting: 'maxLevel', label: () => playerText().course.randomMix.maxLevel },
+  { setting: 'minLevel', label: () => playerText().course.randomMix.minLevel },
+  { setting: 'bpmRange', label: () => playerText().course.randomMix.bpmRange },
+  { setting: 'maxBPM', label: () => playerText().course.randomMix.maxBPM },
+  { setting: 'minBPM', label: () => playerText().course.randomMix.minBPM },
+  { setting: 'stageCount', label: () => playerText().course.randomMix.stageCount },
 ];
 
 /** A select of every value of a RANDOM MIX setting, written as LR2's texts 190-196 write them. */
@@ -270,7 +271,7 @@ export class CourseMakerPanel {
 
   /** Asks before deleting a saved course, as LR2 does. */
   confirmDelete(course: CourseDefinition): void {
-    if (window.confirm(`Delete the course "${course.name}"?`)) this.maker.deleteCourse(course);
+    if (window.confirm(playerText().course.confirmDelete(course.name))) this.maker.deleteCourse(course);
   }
 
   dispose(): void {
@@ -283,11 +284,9 @@ export class CourseMakerPanel {
     this.card.hidden = draft === undefined;
     if (draft === undefined) return;
     const parts = (this.cardParts ??= this.buildCard());
-    parts.title.textContent = `New ${KIND_LABELS[draft.kind]} course`;
-    parts.hint.textContent =
-      draft.stages.length === 0
-        ? 'Decide songs to add them (up to 5, in the first song’s key mode).'
-        : `${draft.stages.length} / 5 songs`;
+    const copy = playerText().course;
+    parts.title.textContent = copy.newCourse(KIND_LABELS[draft.kind]);
+    parts.hint.textContent = draft.stages.length === 0 ? copy.decideCharts : copy.chartCount(draft.stages.length);
     // The name field stays in place across redraws: moving it would drop its focus mid-typing.
     if (document.activeElement !== parts.name) parts.name.value = draft.name;
     parts.stages.replaceChildren(
@@ -296,7 +295,7 @@ export class CourseMakerPanel {
     parts.connection.replaceChildren(
       ...(draft.kind === 'nonstop'
         ? [
-            element('label', { className: 'course-maker-field', text: 'Connection' }, [
+            element('label', { className: 'course-maker-field', text: playerText().course.connection }, [
               connectionSelect(this.maker.defaultConnection, (value) =>
                 this.maker.stepDefaultConnection(connectionDelta(this.maker.defaultConnection, value)),
               ),
@@ -316,7 +315,7 @@ export class CourseMakerPanel {
     const name = element('input', { className: 'input course-maker-name' });
     name.maxLength = 64;
     name.placeholder = COURSE_NAME_PROMPT;
-    name.setAttribute('aria-label', 'Course name');
+    name.setAttribute('aria-label', playerText().course.courseName);
     isolateKeys(name);
     name.addEventListener('input', () => this.maker.rename(name.value));
     const parts: CardParts = {
@@ -326,10 +325,10 @@ export class CourseMakerPanel {
       stages: element('ol', { className: 'course-maker-stages' }),
       connection: element('div'),
       constraints: element('div'),
-      removeLast: button('Remove last', 'btn', () => this.maker.removeLast(), 'outline'),
-      save: button('Save', 'btn', () => {
+      removeLast: button(playerText().course.removeLast, 'btn', () => this.maker.removeLast(), 'outline'),
+      save: button(playerText().course.save, 'btn', () => {
         const saved = this.maker.finish();
-        if (saved !== undefined) this.onStatus?.(`Saved the course "${saved.name}"`);
+        if (saved !== undefined) this.onStatus?.(playerText().course.saved(saved.name));
       }),
     };
     this.card.replaceChildren(
@@ -340,9 +339,9 @@ export class CourseMakerPanel {
       parts.constraints,
       element('div', { className: 'course-maker-buttons' }, [
         parts.removeLast,
-        button('Cancel', 'btn', () => {
+        button(playerText().shell.cancel, 'btn', () => {
           this.maker.cancel();
-          this.onStatus?.('Stopped making the course');
+          this.onStatus?.(playerText().course.stopped);
         }),
         parts.save,
       ]),
@@ -356,11 +355,11 @@ export class CourseMakerPanel {
       'div',
       { className: 'course-maker-list' },
       courses.length === 0
-        ? [element('p', { text: 'No course yet. Decide NEW COURSE in a course folder to make one.' })]
+        ? [element('p', { text: playerText().course.empty })]
         : courses.map((course) => this.renderCourse(course)),
     );
     const exportButton = button(
-      'Export .lr2crs',
+      playerText().course.exportLr2,
       'btn',
       () => download('my-courses.lr2crs', serializeLR2CourseFile(this.maker.courses)),
       'outline',
@@ -368,7 +367,7 @@ export class CourseMakerPanel {
     exportButton.disabled = courses.length === 0;
     // beatoraja's course file keeps the constraints, which `.lr2crs` cannot hold; it has no NONSTOP courses.
     const exportBeatoraja = button(
-      'Export beatoraja .json',
+      playerText().course.exportBeatoraja,
       'btn',
       () => download('my-courses.json', serializeBeatorajaCourseFile(this.maker.courses), 'application/json'),
       'outline',
@@ -377,15 +376,15 @@ export class CourseMakerPanel {
     this.dialog.replaceChildren(
       element('div', {}, [
         element('header', {}, [
-          element('h2', { text: 'My courses' }),
-          element('p', { text: 'Courses you made, kept in this browser.' }),
+          element('h2', { text: playerText().course.myCourses }),
+          element('p', { text: playerText().course.myCoursesLead }),
         ]),
         list,
         this.renderRandomMixSettings(),
         element('div', { className: 'course-maker-buttons' }, [
           exportButton,
           exportBeatoraja,
-          button('Close', 'btn', () => this.dialog.close()),
+          button(playerText().shell.close, 'btn', () => this.dialog.close()),
         ]),
       ]),
     );
@@ -400,7 +399,7 @@ export class CourseMakerPanel {
         'div',
         {},
         RANDOM_MIX_FIELDS.map(({ setting, label }) =>
-          element('label', { className: 'course-maker-field', text: label }, [
+          element('label', { className: 'course-maker-field', text: label() }, [
             randomMixSelect(setting, settings[setting], (value) =>
               this.maker.stepRandomMixSetting(
                 setting,
@@ -417,7 +416,7 @@ export class CourseMakerPanel {
     const name = element('input', { className: 'input course-maker-name' });
     name.value = course.name;
     name.maxLength = 64;
-    name.setAttribute('aria-label', 'Course name');
+    name.setAttribute('aria-label', playerText().course.courseName);
     isolateKeys(name);
     name.addEventListener('change', () => this.maker.renameCourse(course, name.value));
     const connections = madeCourseConnections(course);
@@ -441,7 +440,7 @@ export class CourseMakerPanel {
       element('div', { className: 'course-maker-course-head' }, [
         name,
         element('span', { className: 'course-maker-kind', text: KIND_LABELS[course.kind] }),
-        button('Delete', 'btn', () => this.confirmDelete(course), 'outline'),
+        button(playerText().course.delete, 'btn', () => this.confirmDelete(course), 'outline'),
       ]),
       stages,
       constraintEditor(course.kind, course.constraints, (constraints) =>

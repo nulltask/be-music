@@ -1,3 +1,4 @@
+import { playerText } from './player-copy.ts';
 import {
   computeChartFingerprint,
   computeFingerprintOfDocument,
@@ -282,17 +283,8 @@ export async function submitCourseToLeaderboard(
 
 /** {@link describeLeaderboardResult} for a course run: the course rank under the ruleset the run was played with. */
 export function describeCourseLeaderboardResult(result: CourseLeaderboardSubmitResult, playedRuleset: string): string {
-  if (result.status === 'failed') return `Leaderboard: course not submitted (${result.error})`;
-  const summary = describeLeaderboardResult(
-    {
-      status: result.status,
-      scoreId: result.courseScoreId,
-      results: result.results,
-      ...(result.unranked !== undefined ? { unranked: result.unranked } : {}),
-    },
-    playedRuleset,
-  );
-  return summary.replace(/^Leaderboard /, 'Leaderboard course ');
+  if (result.status === 'failed') return playerText().lb.courseNotSubmitted(result.error);
+  return describeRankedResult(result, playedRuleset, true);
 }
 
 /**
@@ -300,71 +292,50 @@ export function describeCourseLeaderboardResult(result: CourseLeaderboardSubmitR
  * which personal bests it improved.
  */
 export function describeLeaderboardResult(result: LeaderboardSubmitResult, playedRuleset: string): string {
-  if (result.status === 'failed') {
-    return `Leaderboard: not submitted (${result.error})`;
-  }
-  const again = result.status === 'duplicate' ? ' (already submitted)' : '';
-  if (result.unranked !== undefined)
-    return `Leaderboard: stored, not ranked (${describeUnranked(result.unranked)})${again}`;
+  if (result.status === 'failed') return playerText().lb.notSubmitted(result.error);
+  return describeRankedResult(result, playedRuleset, false);
+}
+
+function describeRankedResult(
+  result: {
+    status: 'accepted' | 'duplicate';
+    results: readonly LeaderboardRulesetResult[];
+    unranked?: string;
+  },
+  playedRuleset: string,
+  course: boolean,
+): string {
+  const copy = playerText().lb;
+  const again = result.status === 'duplicate' ? copy.already : '';
+  if (result.unranked !== undefined) return copy.stored(describeUnranked(result.unranked), again);
   const mine = result.results.find((entry) => entry.ruleset === playedRuleset) ?? result.results[0];
-  if (mine === undefined) return 'Leaderboard: submitted';
+  if (mine === undefined) return copy.submitted;
   const improved = [
     mine.improved.exScore ? 'EX' : undefined,
-    mine.improved.lamp ? 'lamp' : undefined,
+    mine.improved.lamp ? copy.lamp : undefined,
     mine.improved.missCount ? 'BP' : undefined,
   ].filter((part) => part !== undefined);
-  const best = result.status === 'accepted' && improved.length > 0 ? ` · new best ${improved.join(' / ')}` : '';
-  return `Leaderboard ${mine.ruleset}: #${mine.rank} / ${mine.players} · EX ${mine.exScore}${best}${again}`;
+  const best = result.status === 'accepted' && improved.length > 0 ? copy.newBest(improved.join(' / ')) : '';
+  const line = course ? copy.courseRanked : copy.ranked;
+  return line(mine.ruleset, mine.rank, mine.players, mine.exScore, best, again);
 }
 
 /** Why the Leaderboard stored a play without ranking it, for the status line. */
 function describeUnranked(reason: string): string {
-  switch (reason) {
-    case 'bmson-total':
-      return 'bmson TOTAL 0 used no recovery';
-    case 'tempo':
-      return 'a play at another tempo is practice';
-    case 'course-stage':
-      return 'a course stage ranks with its course';
-    case 'unreleased':
-      return 'made and random courses are not ranked';
-    default:
-      return reason;
-  }
+  const reasons = playerText().lb.unranked;
+  return reason in reasons ? reasons[reason as keyof typeof reasons] : reason;
 }
 
 /** Why a play was not sent, for the status line (a skipped play must never pass silently). */
 export function describeSkippedSubmission(reason: Exclude<SubmissionPreparation, { ok: true }>['reason']): string {
-  switch (reason) {
-    case 'two-player':
-      return 'Leaderboard: not submitted (two-player plays have no single-player ranking)';
-    case 'auto-play':
-      return 'Leaderboard: not submitted (an auto play is not sent)';
-    case 'missing-fingerprint':
-      return 'Leaderboard: not submitted (this replay has no chart fingerprint)';
-    case 'fingerprint-mismatch':
-      return 'Leaderboard: not submitted (the chart does not match the recorded play)';
-  }
+  return playerText().lb.skipped[reason];
 }
 
 /** Why a course run was not sent, for the status line. */
 export function describeSkippedCourseSubmission(
   reason: Exclude<CourseSubmissionPreparation, { ok: true }>['reason'],
 ): string {
-  switch (reason) {
-    case 'two-player':
-      return 'Leaderboard: course not submitted (two-player plays have no single-player ranking)';
-    case 'auto-play':
-      return 'Leaderboard: course not submitted (an auto play is not sent)';
-    case 'aborted':
-      return 'Leaderboard: course not submitted (a stage before the last was given up)';
-    case 'not-a-course-run':
-      return 'Leaderboard: course not submitted (the stages do not make one run)';
-    case 'missing-fingerprint':
-      return 'Leaderboard: course not submitted (a stage chart has no fingerprint)';
-    case 'fingerprint-mismatch':
-      return 'Leaderboard: course not submitted (a stage chart does not match the recorded play)';
-  }
+  return playerText().lb.courseSkipped[reason];
 }
 
 async function gzipJSON(value: unknown): Promise<Blob> {

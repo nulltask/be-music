@@ -123,6 +123,7 @@ describe('saveProfile', () => {
     expect(await saveProfile({ handle: 'x', displayName: 'Taro' }, answer(409, { error: 'handle-taken' }))).toEqual({
       ok: false,
       error: 'That handle is taken.',
+      code: 'handle-taken',
     });
   });
 });
