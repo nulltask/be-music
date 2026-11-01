@@ -1,7 +1,6 @@
 import { selectBinding } from '../../pane-controls.ts';
 // The Debug Menu's Library & records folder. It is built with the menu as `this` (`DebugMenu`).
 import type { FolderApi } from 'tweakpane';
-import { storeChartBestRecords } from '../../chart-best-records.ts';
 import { LocalDataPanel } from '../../local-data-panel.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
 import type { ReplayAutoSaveRule } from '../../services/replay-slots.ts';
@@ -66,19 +65,20 @@ export function buildLibraryFolder(
     selectBinding(slots, this.guiState, `replaySlotAutoSave${slot}`, `Slot ${slot} auto-save`, REPLAY_AUTO_SAVE_LABELS);
   }
   library.addButton({ title: 'Clear best records' }).on('click', () => {
-    if (this.records.chartBestRecords.size === 0) {
+    const { chartBestRecords, danRanks } = this.records;
+    if (chartBestRecords.size === 0 && danRanks.size === 0) {
       this.setStatus('No best records to clear');
       return;
     }
+    const ranks = danRanks.size > 0 ? ` and ${danRanks.size} dan rank(s)` : '';
     if (
       !window.confirm(
-        `Clear ${this.records.chartBestRecords.size} best record(s), of every judge ruleset? This cannot be undone.`,
+        `Clear ${chartBestRecords.size} best record(s)${ranks}, of every judge ruleset? This cannot be undone.`,
       )
     ) {
       return;
     }
-    this.records.chartBestRecords.clear();
-    storeChartBestRecords(this.records.chartBestRecords);
+    this.records.clearAll();
     this.setStatus('Best records cleared');
   });
   // What the player keeps in this browser, read-only; built on first use.

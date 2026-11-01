@@ -19,6 +19,7 @@ import {
 } from '@be-music/player-engine/replay';
 import {
   resolveCourseView,
+  resolveLibraryChartKeyMode,
   type CourseView,
   type LibraryChart,
   type LibraryCourse,
@@ -26,8 +27,15 @@ import {
 } from '@be-music/player-scene-model';
 import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
 import type { NonstopPlayFailure } from './nonstop-course.ts';
-import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-music/player-engine/records';
+import {
+  courseRunKeepsRecord,
+  courseRunRecordPlay,
+  resolveCourseRunDanRank,
+  type DanRankRecord,
+  type RecordPlay,
+} from '@be-music/player-engine/records';
 import { rulesetRecordKey } from './chart-best-records.ts';
+import { danRankRecordKey } from './dan-rank-records.ts';
 
 /**
  * The decisions the player's course flow takes, kept apart from the scenes that act on them so they can be tested: what
@@ -272,6 +280,29 @@ export function resolveCourseBestRecordUpdate(
   const ruleset = resolveCoursePlayedRuleset(courseLog);
   if (ruleset === undefined || !courseRunKeepsRecord(courseLog)) return undefined;
   return { key: rulesetRecordKey(ruleset, key), play: courseRunRecordPlay(result) };
+}
+
+/**
+ * The dan rank a course run earns the player, kept under the judge ruleset the run was played on and the course's key
+ * mode ({@link danRankRecordKey}), or `undefined` when it earns none: a run that keeps no record (as
+ * {@link resolveCourseBestRecordUpdate} refuses it), one that is not a cleared GRADE course, or one whose name names no
+ * rank (`resolveCourseRunDanRank`). The key mode is the course's own (`definition.keyMode`), else its first stage's
+ * chart's; a course with neither earns none.
+ */
+export function resolveCourseDanRankUpdate(
+  course: Pick<LibraryCourse, 'definition' | 'stages'>,
+  courseLog: Pick<BeMusicCourseReplay, 'stages' | 'nonstop'>,
+  result: Pick<ReplayCourseResult, 'lamp'>,
+): { key: string; record: DanRankRecord } | undefined {
+  const ruleset = resolveCoursePlayedRuleset(courseLog);
+  if (ruleset === undefined || !courseRunKeepsRecord(courseLog)) return undefined;
+  const { definition } = course;
+  const rank = resolveCourseRunDanRank({ kind: definition.kind, name: definition.name, lamp: result.lamp });
+  if (rank === undefined) return undefined;
+  const firstChart = course.stages[0]?.chart;
+  const keyMode = definition.keyMode ?? (firstChart !== undefined ? resolveLibraryChartKeyMode(firstChart) : undefined);
+  if (keyMode === undefined) return undefined;
+  return { key: danRankRecordKey(ruleset, keyMode), record: { rank, course: definition.name } };
 }
 
 /** What a play is, for the gameplay exits below. */

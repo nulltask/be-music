@@ -53,6 +53,7 @@ describe('local data viewer', () => {
       description: 'Every Debug Menu setting',
     });
     expect(entries[2]).not.toHaveProperty('description');
+    expect(describeLocalStorageKey('be-music.dan-ranks')).toBe('Dan rank per key mode, per judge ruleset');
     expect(describeLocalStorageKey('be-music.chart-best-records')).toBe(
       'Best records of each chart, per judge ruleset',
     );

@@ -81,6 +81,7 @@ describe('DebugMenuSettingsSync', () => {
     const storage = memory(),
       first = deferred<Response>();
     storage.setItem('be-music.chart-best-records', 'keep');
+    storage.setItem('be-music.dan-ranks', 'keep');
     const doFetch = vi
       .fn<typeof fetch>()
       .mockImplementationOnce(() => first.promise)
@@ -101,6 +102,7 @@ describe('DebugMenuSettingsSync', () => {
     expect(doFetch.mock.calls.map(([, init]) => init?.method)).toEqual(['PUT', 'DELETE']);
     expect(storage.getItem(DEBUG_MENU_SETTINGS_STORAGE_KEY)).toBeNull();
     expect(storage.getItem('be-music.chart-best-records')).toBe('keep');
+    expect(storage.getItem('be-music.dan-ranks')).toBe('keep');
     expect(storage.getItem(RESET_PENDING_KEY)).toBeNull();
   });
 

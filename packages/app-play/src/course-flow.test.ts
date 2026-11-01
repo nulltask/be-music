@@ -1,7 +1,7 @@
 import { createEmptyJSON } from '@be-music/chart-source';
 import { parseBeatorajaCourseData } from '@be-music/player-engine/course';
 import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player-engine/replay';
-import type { LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
+import { resolveLibraryChartKeyMode, type LibraryChart, type LibraryCourse } from '@be-music/player-scene-model';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
 import { describe, expect, test } from 'vite-plus/test';
 import {
@@ -20,6 +20,7 @@ import {
   planCourseStart,
   playAgainOverrides,
   resolveCourseBestRecordUpdate,
+  resolveCourseDanRankUpdate,
   resolveGameplayExit,
   resolveGameplayRestart,
   resolveResultRetry,
@@ -165,6 +166,45 @@ describe('resolveCourseBestRecordUpdate', () => {
   test('keeps nothing for an auto-played run or one at another tempo', () => {
     expect(resolveCourseBestRecordUpdate(courseLog({ mode: 'auto' }), RESULT, 'course:k')).toBeUndefined();
     expect(resolveCourseBestRecordUpdate(courseLog({ tempo: 1.1 }), RESULT, 'course:k')).toBeUndefined();
+  });
+});
+
+describe('resolveCourseDanRankUpdate', () => {
+  function gradeCourse(name: string, keyMode?: number): LibraryCourse {
+    const base = course();
+    const definition = { ...base.definition, name, kind: 'grade' as const };
+    return { ...base, definition: keyMode !== undefined ? { ...definition, keyMode } : definition };
+  }
+
+  test('keeps the rank a cleared GRADE course names under its judge ruleset and key mode', () => {
+    expect(resolveCourseDanRankUpdate(gradeCourse('発狂三段', 14), courseLog({}), RESULT)).toEqual({
+      key: 'lr2:14',
+      record: { rank: 'INSANE_3', course: '発狂三段' },
+    });
+    expect(
+      resolveCourseDanRankUpdate(gradeCourse('十段', 5), courseLog({ judgeRuleset: 'beatoraja' }), RESULT),
+    ).toEqual({ key: 'beatoraja:5', record: { rank: 'DAN_10', course: '十段' } });
+  });
+
+  test('takes the key mode from the first stage’s chart when the course names none', () => {
+    const keyMode = resolveLibraryChartKeyMode(chartEntry('a'));
+    expect(resolveCourseDanRankUpdate(gradeCourse('初段'), courseLog({}), RESULT)?.key).toBe(`lr2:${keyMode}`);
+  });
+
+  test('keeps nothing for a failed run, another kind, an unranked name or a run that keeps no record', () => {
+    expect(resolveCourseDanRankUpdate(gradeCourse('十段', 7), courseLog({}), { lamp: 'FAILED' })).toBeUndefined();
+    expect(resolveCourseDanRankUpdate(gradeCourse('Dan', 7), courseLog({}), RESULT)).toBeUndefined();
+    const expert = { ...course(), definition: { ...course().definition, name: '十段', kind: 'expert' as const } };
+    expect(resolveCourseDanRankUpdate(expert, courseLog({}), RESULT)).toBeUndefined();
+    expect(resolveCourseDanRankUpdate(gradeCourse('十段', 7), courseLog({ mode: 'auto' }), RESULT)).toBeUndefined();
+    expect(resolveCourseDanRankUpdate(gradeCourse('十段', 7), courseLog({ tempo: 1.1 }), RESULT)).toBeUndefined();
+    const mixed = courseLog({ judgeRuleset: 'lr2' }, { judgeRuleset: '____' });
+    expect(resolveCourseDanRankUpdate(gradeCourse('十段', 7), mixed, RESULT)).toBeUndefined();
+  });
+
+  test('keeps nothing for a course with neither a key mode nor a stage chart', () => {
+    const noChart = { ...gradeCourse('十段'), stages: [{ title: 'a' }] };
+    expect(resolveCourseDanRankUpdate(noChart, courseLog({}), RESULT)).toBeUndefined();
   });
 });
 

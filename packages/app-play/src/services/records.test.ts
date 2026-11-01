@@ -224,3 +224,43 @@ describe('RecordsService record latches', () => {
     });
   });
 });
+
+describe('RecordsService dan ranks', () => {
+  test('keeps the highest rank per judge ruleset and key mode, and reads it back on the next visit', () => {
+    const stored = stubStorage();
+    const ruleset = { current: 'lr2' as RulesetId };
+    const service = records(library({}), ruleset);
+    expect(service.recordCourseDanRank(undefined)).toBeUndefined();
+    expect(stored.size).toBe(0);
+    expect(service.recordCourseDanRank({ key: 'lr2:7', record: { rank: 'DAN_5', course: '五段' } })).toEqual({
+      previous: undefined,
+    });
+    service.recordCourseDanRank({ key: 'lr2:7', record: { rank: 'DAN_3', course: '三段' } });
+    expect(service.currentDanRank(7)).toEqual({ rank: 'DAN_5', course: '五段' });
+    service.recordCourseDanRank({ key: 'lr2:7', record: { rank: 'KAIDEN', course: '皆伝' } });
+    expect(service.currentDanRank(7)).toEqual({ rank: 'KAIDEN', course: '皆伝' });
+    expect(service.currentDanRank(14)).toBeUndefined();
+    ruleset.current = 'beatoraja';
+    expect(service.currentDanRank(7)).toBeUndefined();
+
+    expect(stored.has('be-music.dan-ranks')).toBe(true);
+    expect(records(library({})).currentDanRank(7)).toEqual({ rank: 'KAIDEN', course: '皆伝' });
+  });
+
+  test('reads storage from before dan ranks were kept as no rank', () => {
+    stubStorage({ 'be-music.chart-best-records': JSON.stringify({ version: 0, records: {} }) });
+    expect(records(library({})).danRanks.size).toBe(0);
+  });
+
+  test('clearAll forgets the best records and the dan ranks', () => {
+    const stored = stubStorage();
+    const service = records(library({}));
+    service.recordCourseResult({ key: 'lr2:course:abc', play: PLAY });
+    service.recordCourseDanRank({ key: 'lr2:7', record: { rank: 'DAN_1', course: '初段' } });
+    service.clearAll();
+    expect(service.chartBestRecords.size).toBe(0);
+    expect(service.danRanks.size).toBe(0);
+    expect(records(library({})).danRanks.size).toBe(0);
+    expect(stored.get('be-music.chart-best-records')).toContain('"records":{}');
+  });
+});

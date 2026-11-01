@@ -66,8 +66,8 @@ export interface DebugMenuDeps {
   readonly leaderboard: Pick<LeaderboardPanel, 'buildFolder'>;
   /** The library service: "Import table courses" and "Load from URLs" add to the library through it. */
   readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
-  /** The records service, whose best records "Clear best records" empties. */
-  readonly records: Pick<RecordsService, 'chartBestRecords'>;
+  /** The records service, whose best records and dan ranks "Clear best records" empties. */
+  readonly records: Pick<RecordsService, 'chartBestRecords' | 'danRanks' | 'clearAll'>;
   /** The course-maker service, whose card "My courses…" opens. */
   readonly courseMaker: Pick<CourseMakerService, 'panel'>;
   /** Each be-music skin's stored settings by skin id, which the "Skin settings" folder edits. */
@@ -147,7 +147,7 @@ export class DebugMenu {
   public readonly sceneHost: PixiSceneHost;
   public readonly silentMode: SilentModeSetting;
   public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
-  public readonly records: Pick<RecordsService, 'chartBestRecords'>;
+  public readonly records: Pick<RecordsService, 'chartBestRecords' | 'danRanks' | 'clearAll'>;
   public readonly courseMaker: Pick<CourseMakerService, 'panel'>;
   public readonly skinSettings: StoredSkinSettings;
   public readonly beatorajaSkinOverridesByType: Map<number, string>;

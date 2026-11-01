@@ -7,10 +7,13 @@ export const PLAYER_STORAGE_PREFIX = 'be-music.';
 export const DEBUG_MENU_FOLDERS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}debug-menu-folders`;
 
 /**
- * Stored keys "Reset settings" leaves alone: the best records are play data, not settings, and have their own
- * "Clear best records" button.
+ * Stored keys "Reset settings" leaves alone: the best records and dan ranks are play data, not settings, and have their
+ * own "Clear best records" button.
  */
-export const PLAYER_STORAGE_KEYS_KEPT_ON_RESET: readonly string[] = [`${PLAYER_STORAGE_PREFIX}chart-best-records`];
+export const PLAYER_STORAGE_KEYS_KEPT_ON_RESET: readonly string[] = [
+  `${PLAYER_STORAGE_PREFIX}chart-best-records`,
+  `${PLAYER_STORAGE_PREFIX}dan-ranks`,
+];
 
 /** Folder path → open, for the folders the user has opened or closed. */
 export type FolderOpenStates = Record<string, boolean>;

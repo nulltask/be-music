@@ -11,7 +11,9 @@ import {
 import {
   mergeBestRecord,
   mergeCourseStageRecord,
+  mergeDanRankRecord,
   type BestRecord,
+  type DanRankRecord,
   type RecordPlay,
 } from '@be-music/player-engine/records';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
@@ -24,6 +26,7 @@ import {
   chartBestRecordKey,
   storeChartBestRecords,
 } from '../chart-best-records.ts';
+import { danRankRecordKey, readStoredDanRankRecords, storeDanRankRecords } from '../dan-rank-records.ts';
 
 export interface RecordsServiceOptions {
   /** The library the charts are hashed from: the sources their files are in. */
@@ -36,6 +39,11 @@ export interface RecordsServiceOptions {
 export class RecordsService {
   /** Best record per chart ({@link chartBestRecordKey}), persisted in `localStorage` and shown to be-music select skins. */
   public readonly chartBestRecords: Map<string, BestRecord> = readStoredChartBestRecords();
+  /**
+   * The player's dan rank per judge ruleset and key mode ({@link danRankRecordKey}), earned by clearing GRADE courses
+   * from now on and persisted in `localStorage`. Records kept before dan ranks were are not read back for one.
+   */
+  public readonly danRanks: Map<string, DanRankRecord> = readStoredDanRankRecords();
   /**
    * Record key of the play in flight when it counts towards the chart's best record, latched at song start. `undefined`
    * for autoplay and replay plays, which never touch the records.
@@ -164,5 +172,35 @@ export class RecordsService {
     this.chartBestRecords.set(update.key, mergeBestRecord(previous, update.play));
     storeChartBestRecords(this.chartBestRecords);
     return { previous };
+  }
+
+  /**
+   * Keeps the dan rank a course run earned (`resolveCourseDanRankUpdate`) when it is above the player's rank in
+   * that key mode under that ruleset. Returns the rank as it was before the run, or `undefined` when the run earned none.
+   */
+  public recordCourseDanRank(
+    update: { key: string; record: DanRankRecord } | undefined,
+  ): { previous: DanRankRecord | undefined } | undefined {
+    if (update === undefined) return undefined;
+    const previous = this.danRanks.get(update.key);
+    const merged = mergeDanRankRecord(previous, update.record);
+    if (merged !== previous) {
+      this.danRanks.set(update.key, merged);
+      storeDanRankRecords(this.danRanks);
+    }
+    return { previous };
+  }
+
+  /** The player's dan rank in `keyMode` under the current judge ruleset, or `undefined` before they earn one. */
+  public currentDanRank(keyMode: number): DanRankRecord | undefined {
+    return this.danRanks.get(danRankRecordKey(this.judgeRuleset(), keyMode));
+  }
+
+  /** Forgets every best record and dan rank, of every judge ruleset, and persists the empty stores. */
+  public clearAll(): void {
+    this.chartBestRecords.clear();
+    this.danRanks.clear();
+    storeChartBestRecords(this.chartBestRecords);
+    storeDanRankRecords(this.danRanks);
   }
 }
