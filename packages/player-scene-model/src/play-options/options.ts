@@ -1,6 +1,6 @@
 import type { BattleMode, LR2ExtraLevel } from '@be-music/player-engine/lanes';
 import type { MineModifier, LongNoteModifier, ScrollModifier } from '@be-music/player-engine/lanes';
-import type { GaugeType, GaugeAutoShift } from '@be-music/player-engine/ruleset';
+import type { GaugeType, GaugeAutoShift, QualifiedOptionValue } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 
@@ -219,6 +219,9 @@ export interface PlayOptions {
    * - `SCATTER-CORRECTED` — explicitly corrected 9KEY SCATTER, excluding LR2 beta3's tenth destination
    * - `SYNCHRONIZE-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, identical on both sides
    * - `SYMMETRY-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, mirrored on the 2P side
+   *
+   * RANDOM, S-RANDOM and CONVERGE name a different algorithm in each source, so they carry it (`lr2:RANDOM`,
+   * `beatoraja:S-RANDOM`); a bare one runs the judge ruleset's own (ADR 0019).
    */
   random1P: RandomMode;
   /** beatoraja H-RANDOM jack threshold in 16th-note BPM units (1..1000, default 120). */
@@ -249,8 +252,12 @@ export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT' | 'STAR
 /** Allowed values for {@link PlayOptions.hiddenSudden1P} / `hiddenSudden2P`: which ends of the lanes are covered. */
 export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 
-/** Lane-option names; resolveRandomModes supplies the choices for the active source ruleset. */
+/**
+ * Lane-option values; resolveRandomModes supplies the choices. A source-qualified RANDOM, S-RANDOM or CONVERGE runs its
+ * source's algorithm under every ruleset, and a bare one the judge ruleset's own (ADR 0019).
+ */
 export type RandomMode =
+  | QualifiedOptionValue<'RANDOM' | 'S-RANDOM' | 'CONVERGE'>
   | 'OFF'
   | 'MIRROR'
   | 'RANDOM'
