@@ -31,8 +31,7 @@ async function done(result: unknown): Promise<void> {
       location.assign(continued.data.url);
       return;
     }
-    status.textContent =
-      continued.error?.message ?? messages.continueFailed;
+    status.textContent = continued.error?.message ?? messages.continueFailed;
   } else location.assign('/account');
 }
 document.addEventListener('click', (event) => {

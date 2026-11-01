@@ -33,7 +33,8 @@ export function renderBrowserCompatPanel(report: BrowserCompatReport): void {
   } else {
     const summary = summarizeBrowserCompat(report);
     const missing = summary?.startsWith('Missing required: ') ? summary.slice('Missing required: '.length) : undefined;
-    statusLabel.textContent = missing !== undefined ? shell.missingRequired(missing) : (summary ?? shell.browserUnsupported);
+    statusLabel.textContent =
+      missing !== undefined ? shell.missingRequired(missing) : (summary ?? shell.browserUnsupported);
   }
 
   requiredList.replaceChildren();
@@ -76,7 +77,11 @@ function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIEleme
   // Read-aloud text for assistive tech — `✓` / `✕` / `–` carry visual semantics but no name on their own. `aria-hidden`
   // on the icon hands the verdict to this hidden label instead.
   const shell = playerText().shell;
-  sr.textContent = item.supported ? shell.supported : item.required ? shell.missingRequiredItem : shell.missingOptionalItem;
+  sr.textContent = item.supported
+    ? shell.supported
+    : item.required
+      ? shell.missingRequiredItem
+      : shell.missingOptionalItem;
   li.appendChild(sr);
 
   return li;

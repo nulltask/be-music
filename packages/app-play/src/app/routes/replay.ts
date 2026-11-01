@@ -104,9 +104,7 @@ export class ReplayRoute {
     if (!chartEntry) {
       await this.showSelect();
       this.setStatus(playerText().replay.notLoaded(replay.chart.title ?? playerText().replay.untitled));
-      this.showMissingReplayCharts(playerText().replay.loadChart, [
-        describeReplayChart(replay),
-      ]);
+      this.showMissingReplayCharts(playerText().replay.loadChart, [describeReplayChart(replay)]);
       return;
     }
     this.setPlayStatus(playerText().replay.replaying(chartEntry.title));
@@ -253,7 +251,9 @@ export function describeReplayChart(replay: Pick<BeMusicReplay, 'chart' | 'play'
   const { title, artist, sha256 } = replay.chart;
   if (title !== undefined && title.length > 0) return artist !== undefined ? `${title} / ${artist}` : title;
   const chartPath = replay.play.native?.chartPath;
-  return sha256 ?? (typeof chartPath === 'string' && chartPath.length > 0 ? chartPath : playerText().replay.untitledChart);
+  return (
+    sha256 ?? (typeof chartPath === 'string' && chartPath.length > 0 ? chartPath : playerText().replay.untitledChart)
+  );
 }
 
 /** A loaded chart's Be-Music chart fingerprint, for a course replay stage named by it alone. */

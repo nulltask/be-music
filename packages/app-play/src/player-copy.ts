@@ -62,8 +62,7 @@ const en = {
     skinDropHintBeatoraja:
       'Drop the folder that holds your beatoraja skin (its <code>.luaskin</code> or <code>.json</code> skin files).',
     skinSwitchTitle: 'Use the dropped skin?',
-    skinSwitchHint:
-      'Switch to this skin? Cancel keeps your current skin. Charts in the drop will still be imported.',
+    skinSwitchHint: 'Switch to this skin? Cancel keeps your current skin. Charts in the drop will still be imported.',
     useLr2: 'Use LR2 skin',
     useBeatoraja: 'Use beatoraja skin',
     chartsMissing: 'Charts missing',
@@ -341,13 +340,15 @@ const ja: typeof en = {
     skinDropHintBeatoraja:
       'beatoraja スキンのフォルダ（<code>.luaskin</code> または <code>.json</code>）をドロップしてください。',
     skinSwitchTitle: 'ドロップしたスキンを使いますか？',
-    skinSwitchHint: 'このスキンに切り替えますか？キャンセルすると今のスキンのままです。ドロップ内の譜面は読み込まれます。',
+    skinSwitchHint:
+      'このスキンに切り替えますか？キャンセルすると今のスキンのままです。ドロップ内の譜面は読み込まれます。',
     useLr2: 'LR2 スキンを使う',
     useBeatoraja: 'beatoraja スキンを使う',
     chartsMissing: '譜面がありません',
     ok: 'OK',
     optionUnavailable: '使えないオプション',
-    optionUnavailableHint: '選んだプレイオプションはこの譜面では使えません。変更してから、もう一度譜面を始めてください。',
+    optionUnavailableHint:
+      '選んだプレイオプションはこの譜面では使えません。変更してから、もう一度譜面を始めてください。',
     loading: '読み込み中…',
     help: 'ヘルプ',
     helpAbout: 'ヘルプとこのプレイヤーについて',
@@ -391,7 +392,8 @@ const ja: typeof en = {
     notSignedIn: 'ログインしていません',
     anonymous: '匿名',
     passkey: (count) => `パスキー ${count}`,
-    chipSignedOutTitle: 'Leaderboard にログインしていません。デバッグメニューの Leaderboard からパスキーでログインできます。',
+    chipSignedOutTitle:
+      'Leaderboard にログインしていません。デバッグメニューの Leaderboard からパスキーでログインできます。',
     chipAnonymousTitle: '匿名でログイン中です。パスキーを作ると、このアカウントとプレイを Leaderboard に残せます。',
     chipSignedInTitle: (name, handle) => `${name}（@${handle}）でログイン中です。Leaderboard のページを開きます。`,
     startSignedOutHint: 'プレイを送る前に Accounts でログインしてください。ゲストアカウントから始められます。',
@@ -472,8 +474,10 @@ const ja: typeof en = {
       'auto-play': 'Leaderboard: コースを送信しませんでした（オートプレイは送りません）',
       aborted: 'Leaderboard: コースを送信しませんでした（最後より前のステージでリタイアしています）',
       'not-a-course-run': 'Leaderboard: コースを送信しませんでした（ステージが 1 回のコースランになっていません）',
-      'missing-fingerprint': 'Leaderboard: コースを送信しませんでした（ステージの譜面にフィンガープリントがありません）',
-      'fingerprint-mismatch': 'Leaderboard: コースを送信しませんでした（ステージの譜面が記録されたプレイと一致しません）',
+      'missing-fingerprint':
+        'Leaderboard: コースを送信しませんでした（ステージの譜面にフィンガープリントがありません）',
+      'fingerprint-mismatch':
+        'Leaderboard: コースを送信しませんでした（ステージの譜面が記録されたプレイと一致しません）',
     },
   },
   course: {

@@ -44,7 +44,8 @@ const TEXT = {
     services: 'サービス',
     signIn: 'ログイン',
     yourAccount: 'アカウント',
-    signedIn: (name: string, guest: boolean) => (guest ? `${name}（ゲスト）でログイン中です。` : `${name} でログイン中です。`),
+    signedIn: (name: string, guest: boolean) =>
+      guest ? `${name}（ゲスト）でログイン中です。` : `${name} でログイン中です。`,
     lead: 'be-music の各サービスで共通のアカウントです。',
     continue: 'このアカウントで続ける',
     passkey: 'パスキーでログイン',
@@ -174,8 +175,6 @@ export function renderAccountPage(input: {
   }${providerControl('discord', 'Discord', input.discord, input.linkedDiscord === true)}${providerControl('google', 'Google', input.google, input.linkedGoogle === true)}${
     !input.signedIn ? button('guest', t.guestStart) : ''
   }${
-    input.signedIn
-      ? button('add-passkey', t.addPasskey, !input.login) + button('sign-out', t.signOut)
-      : ''
+    input.signedIn ? button('add-passkey', t.addPasskey, !input.login) + button('sign-out', t.signOut) : ''
   }</section>${profile}<section><p class="text-destructive min-h-6 text-sm" id="status" role="status" aria-live="polite">${escape(input.notice ?? '')}</p></section>${services}</section><p class="text-muted-foreground mt-6 text-xs">${t.footnote}</p></main>${footer}<script type="module" src="/assets/client.js"></script></body></html>`;
 }

@@ -132,7 +132,8 @@ export class ReplaySlotsPanel {
         element('span', { className: 'replay-slots-name', text: copy.slot(slot + 1) }),
         element('span', {
           className: 'replay-slots-detail',
-          text: state === 'saved' ? copy.savedNow : record !== undefined ? describeReplaySlotRecord(record) : copy.empty,
+          text:
+            state === 'saved' ? copy.savedNow : record !== undefined ? describeReplaySlotRecord(record) : copy.empty,
         }),
         save,
       ]);
