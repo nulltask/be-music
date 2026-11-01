@@ -57,6 +57,7 @@ describe('renderServiceFooter', () => {
     expect(html).toContain('<p lang="en">Public Beta. Data may be deleted without notice.</p>');
     expect(html.indexOf('Public Beta. Data may be deleted without notice.')).toBeLessThan(html.indexOf('<nav'));
     expect(html).not.toContain('>beta</span>');
+    expect(html).not.toContain('>Beta</span>');
     expect(html).not.toContain('パブリックベータ');
   });
 
