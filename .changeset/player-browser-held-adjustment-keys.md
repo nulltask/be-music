@@ -2,4 +2,4 @@
 '@be-music/player-browser': patch
 ---
 
-Allow holding the hi-speed arrows to repeat adjustments, prevent Fn navigation keys from triggering arrow shortcuts, and toggle HIDDEN+ only once per press.
+Holding a hi-speed arrow repeats the adjustment, Fn navigation keys no longer trigger arrow shortcuts, and HIDDEN+ toggles only once per press.
