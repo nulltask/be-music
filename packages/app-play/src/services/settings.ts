@@ -306,6 +306,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     bottomShiftableGauge: 'ASSIST-EASY',
     autoScratch1P: false,
     autoScratch2P: false,
+    anyKey: false,
     sort: 'OFF',
     keysFilter: 'ALL',
     difficultyFilter: 'ALL',

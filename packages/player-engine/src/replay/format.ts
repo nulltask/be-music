@@ -248,6 +248,11 @@ export interface ReplayPlay {
   mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
+  /**
+   * ANY KEY (That-Which-Must-Not-Be-Named PC, #751): each press took the nearest unjudged note in reach on any lane.
+   * `inputs` keep the keys' own lanes, and replays and simulators route them again. Absent = off.
+   */
+  anyKey?: boolean;
   /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
   gauge: GaugeType;
   /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`); `results.secondPlayer` is its result. */
@@ -953,7 +958,7 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     }
     parsed.longNoteModifier = play.longNoteModifier as LongNoteModifier;
   }
-  for (const key of ['autoScratch1P', 'autoScratch2P'] as const) {
+  for (const key of ['autoScratch1P', 'autoScratch2P', 'anyKey'] as const) {
     if (play[key] !== undefined) {
       if (typeof play[key] !== 'boolean') throw new ReplayParseError(`play.${key}: expected a boolean`);
       parsed[key] = play[key];

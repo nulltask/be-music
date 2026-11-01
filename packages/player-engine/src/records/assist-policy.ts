@@ -13,7 +13,8 @@ import { splitOptionSource } from '../ruleset/option-source.ts';
  *   That-Which-Must-Not-Be-Named's assist options.
  * - `assist`: beatoraja's ASSIST options (and the debug judge-window override, which widens the windows as CUSTOM JUDGE
  *   does).
- * - `no-save`: an option whose source saves no data from the play (That-Which-Must-Not-Be-Named's BATTLE, beatoraja PRACTICE).
+ * - `no-save`: an option whose source saves no data from the play (That-Which-Must-Not-Be-Named's BATTLE and the PC
+ *   edition's ANY KEY, beatoraja PRACTICE).
  */
 export const ASSIST_CLASSES = ['none', 'light', 'assist', 'no-save'] as const;
 
@@ -31,7 +32,7 @@ export type AssistSource = RulesetId | 'be-music';
 /** One assisted option a play used, with the source that classifies it. */
 export interface AssistFinding {
   /**
-   * What the option is: `auto-scratch`, `judge-window-override`, `custom-judge`, `bpm-guide`, `hs-fix-constant`,
+   * What the option is: `auto-scratch`, `any-key`, `judge-window-override`, `custom-judge`, `bpm-guide`, `hs-fix-constant`,
    * `practice`, `extra-notes`, `lr2-extra-mode`, `seven-to-nine`, `mine-remove`, `scroll-remove`, `long-note:<modifier>`
    * or a lane or battle option's value (`H-RANDOM`, `SCATTER`, `BATTLE`, `D-BATTLE`, …).
    */
@@ -133,6 +134,8 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
   if (autoScratch1P || autoScratch2P)
     add({ option: 'auto-scratch', source: playedRuleset === '____' ? '____' : 'lr2', assistClass: 'light' });
 
+  // ANY KEY is the PC edition's assist, and the PC edition saves no play data from it (NO PLAY).
+  if (play.anyKey === true) add({ option: 'any-key', source: '____', assistClass: 'no-save' });
   if (play.judgeWindowOverrideMs !== undefined)
     add({ option: 'judge-window-override', source: 'be-music', assistClass: 'assist' });
   if (play.customJudge !== undefined && isCustomJudgeAssist(play.customJudge))

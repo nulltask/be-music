@@ -5,6 +5,7 @@ import type { RulesetConfig } from '../ruleset/definitions.ts';
 import type { GaugeJudgeIndex } from '../ruleset/gauge.ts';
 import type { HCNTickCounter } from '../ruleset/long-note.ts';
 import type { GrooveGaugeJudgmentKind } from './groove-gauge.ts';
+import type { AnyKeyRoutes } from './any-key.ts';
 import type { LaneHoldHistory } from './lane-hold.ts';
 import { type PendingAutoLongNoteState, type TimedManualJudge } from './judge-rules.ts';
 import { type ScoreSummary, type ScoreTracker } from './scoring.ts';
@@ -34,6 +35,11 @@ export interface JudgeCoreConfig {
   autoScratch: boolean;
   /** The assisted subset of scratchChannels; absent means the legacy combined switch. */
   autoScratchChannels?: ReadonlySet<string>;
+  /**
+   * ANY KEY (#751): a press takes the nearest unjudged note in reach on any lane and holds that lane until its key comes
+   * up (`any-key.ts`). Inputs keep naming the keys' own lanes; the core routes them.
+   */
+  anyKey?: boolean;
   /**
    * Scale of the millisecond domain (`nowMs`, release-margin deadlines, lane press / release stamps) per chart second.
    * Live play runs it on the playback clock (`1000 / speed`, wall-clock milliseconds); a replay runs it on chart time
@@ -131,6 +137,8 @@ export interface JudgeCoreState {
   readonly longHoldReleaseSeconds: Map<string, number>;
   /** Each lane's press and release instants, for asking whether it was down when a mine crossed the line. */
   readonly laneHolds: Map<string, LaneHoldHistory>;
+  /** ANY KEY: the lane each pressed key was routed to (empty without {@link JudgeCoreConfig.anyKey}). */
+  readonly anyKeyRoutes: AnyKeyRoutes;
   /** The latest instant (true clock, seconds) the timed judgments were advanced to — an ESC abort stops there. */
   advancedThroughSeconds: number;
   readonly pendingAutoScratchLongNotes: PendingAutoLongNoteState[];
@@ -161,9 +169,9 @@ export type JudgeCoreInput =
   | { kind: 'press'; channels: ReadonlySet<string>; tokens: readonly string[]; nowSec: number; nowMs: number }
   /**
    * Keys went down and stay down (key-state input): the lanes count as held until released. `inferred`: the driver
-   * inferred it from input without releases, so no lane cue shows it.
+   * inferred it from input without releases, so no lane cue shows it. `tokens` name the keys, which ANY KEY routes by.
    */
-  | { kind: 'hold'; channels: ReadonlySet<string>; inferred?: boolean }
+  | { kind: 'hold'; channels: ReadonlySet<string>; tokens?: readonly string[]; inferred?: boolean }
   /**
    * Keys came up. `recordSec` is the instant the replay records for the release. `inferred`: the driver inferred it
    * from input without releases (the replay marks it), so no lane cue shows it.

@@ -137,6 +137,7 @@ export interface DebugMenuSettings {
   bmsonTotalMode: PlayerGUIState['bmsonTotalMode'];
   autoScratch1P: boolean;
   autoScratch2P: boolean;
+  anyKey: boolean;
   sort: BrowseSort;
   keysFilter: KeysFilter;
   difficultyFilter: DifficultyFilter;
@@ -366,6 +367,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'longNoteModifier', resolvePlayOptionValue('longNoteModifier', raw.longNoteModifier));
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
   assign(settings, 'autoScratch2P', booleanOf(raw.autoScratch2P));
+  assign(settings, 'anyKey', booleanOf(raw.anyKey));
   assign(settings, 'playInSilentMode', booleanOf(raw.playInSilentMode));
   assign(settings, 'muted', booleanOf(raw.muted));
   assign(settings, 'tempoEnabled', booleanOf(raw.tempoEnabled));
@@ -622,6 +624,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('bottomShiftableGauge');
   assignState('autoScratch1P');
   assignState('autoScratch2P');
+  assignState('anyKey');
   assignState('sort');
   assignState('keysFilter');
   assignState('difficultyFilter');
@@ -749,6 +752,7 @@ export function captureDebugMenuSettings(
     bottomShiftableGauge: state.bottomShiftableGauge,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
+    anyKey: state.anyKey,
     sort: state.sort,
     keysFilter: state.keysFilter,
     difficultyFilter: state.difficultyFilter,

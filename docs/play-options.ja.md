@@ -54,8 +54,9 @@ flowchart LR
 | デバッグ用の判定幅上書き                                                                     | be-music  | `assist`  | CUSTOM JUDGE と同じく判定幅を広げる                                  |                                                           |
 | BATTLE                                                                                       | AC 34     | `no-save` | `____:BATTLE`、または `____` のルールでの参照元のない BATTLE         | AC 34 のプレイオプション「スコアデータは保存されません」  |
 | PRACTICE                                                                                     | beatoraja | `no-save` |                                                                      | beatoraja の PRACTICE は何も保存しない                    |
+| ANY KEY                                                                                      | PC        | `no-save` | すべてのルール                                                       | PC 版：ANY KEY のプレイは NO PLAY                         |
 
-アシストにならないもの: MIRROR、RANDOM、S-RANDOM、R-RANDOM、SYNCHRONIZE / SYMMETRY RANDOM、M-RAN、DP FLIP、カバーと LIFT、ハイスピードのオプション、表示の CONSTANT（beatoraja の `enableConstant` は描画の設定）、地雷の ADD、スクロールの ADD、ADD LN、判定アルゴリズム、ゲージ（ASSIST EASY と ASSISTED EASY はゲージのランプで、アシストではありません）、ゲージの自動切り替え。PC 版の NO PLAY になるオプション（KEY ASSIST、ANY KEY、PC 版自身の H-RANDOM と BATTLE）は PC 版の規則で、ほかの参照元には当てはめません。ここでの H-RANDOM は beatoraja のアルゴリズムなので、beatoraja のものとして区分します。PC 版を参照元とするオプションは `____` のルールで `no-save` になります。
+アシストにならないもの: MIRROR、RANDOM、S-RANDOM、R-RANDOM、SYNCHRONIZE / SYMMETRY RANDOM、M-RAN、DP FLIP、カバーと LIFT、ハイスピードのオプション、表示の CONSTANT（beatoraja の `enableConstant` は描画の設定）、地雷の ADD、スクロールの ADD、ADD LN、判定アルゴリズム、ゲージ（ASSIST EASY と ASSISTED EASY はゲージのランプで、アシストではありません）、ゲージの自動切り替え。PC 版の NO PLAY になるオプション（KEY ASSIST、ANY KEY、PC 版自身の H-RANDOM と BATTLE）は PC 版の規則で、ほかの参照元には当てはめません。ここでの H-RANDOM は beatoraja のアルゴリズムなので、beatoraja のものとして区分します。PC 版を参照元とするオプションは `____` のルールで `no-save` になります。Be-Music が提供するのは ANY KEY です（[ANY KEY](#any-key)）。
 
 **判定ルールごとの結果:**
 
@@ -93,6 +94,17 @@ Debug Menu の **Display area info** で **OFF**（既定）、**ON**、**SUDDEN
 ## 左右別 AUTO SCRATCH
 
 Debug Menu の **Auto scratch 1P / 2P** は、各側のスクラッチノートを独立して自動化します。反対側はロングスクラッチを含めて手動のままです。[#708](https://github.com/nulltask/be-music/issues/708) の左右別 AUTO SCRATCH に従います。リプレイは選択した設定一式と実効的な左右のスイッチを保持します。全体のスイッチだけを持つ旧リプレイでは両側に適用します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+
+## ANY KEY
+
+Debug Menu の Developer で **Judgment windows → ????** を選び、**Play options → ANY KEY (PC)** をオンにします。既定はオフで、ほかの判定ルールでは表示しません。PC 版のアシストで、PC 版のページは名前を挙げるだけなので、Be-Music は次のように読みます（[#751](https://github.com/nulltask/be-music/issues/751)）。
+
+- **1 回の押下で 1 ノート。** どのキーを押しても、判定幅の内にある未判定のノートのうち最も近いものを、スクラッチを含むどのレーンからでも取ります。同じ近さなら早いノート、次に小さいレーンを取ります。AUTO SCRATCH が演奏するレーンと、ロングノートを押し続けているレーンは除きます。届くノートがない押下は、そのキー自身のレーンのままです。
+- **同時押し**は、ノートの数だけ押して取ります。
+- **ロングノート**は、始点を取ったキーを離すまで押し続けたままです。その間もほかのキーはほかのレーンのノートを取ります。
+- **キービーム**は、押下を割り当てたレーンを光らせます。
+
+押下はそのレーンで、ルールセット自身の規則で判定します。リプレイはスイッチを `play.anyKey` に記録し、`inputs` には各キー自身のレーンを残します。エンジンのリプレイ再生と `simulateReplay` は同じ規則（`core/any-key.ts`）で押下を割り当て直すので、両者は一致します。これは `replay/any-key-equivalence.test.ts` が確かめます。PC 版と同じく、ANY KEY のプレイはプレイデータを保存しません。どのルールでも `no-save` に区分し、ローカルの記録を残さず、Leaderboard ではランキング外として保存します（[アシストと記録の方針](#アシストと記録の方針)）。プレイ中はスイッチを変更できません。
 
 ## LEGACY NOTE と LN REMOVE
 

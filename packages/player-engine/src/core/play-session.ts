@@ -114,6 +114,8 @@ export interface PlaySession {
   readonly wavResources: Readonly<Record<string, string>>;
   /** AUTO SCRATCH in a manual play: the judge plays the scratch lanes. */
   readonly autoScratch: boolean;
+  /** ANY KEY in a manual play: the judge routes each press to the nearest note on any lane. */
+  readonly anyKey: boolean;
   readonly endOnFailure: boolean;
   /** The play re-drives a recorded play (`PlayerOptions.replayInputs`). */
   readonly replay: boolean;
@@ -187,6 +189,7 @@ export async function createPlaySession(
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
   const scratchSides = resolveAutoScratchSides(options);
   const autoScratch = mode === 'manual' && (scratchSides.autoScratch1P || scratchSides.autoScratch2P);
+  const anyKey = mode === 'manual' && options.anyKey === true;
   const speed = options.speed ?? 1;
   const tempoClock = createTempoClock(speed);
   const leadInMs = options.leadInMs ?? 1500;
@@ -400,6 +403,7 @@ export async function createPlaySession(
                     autoScratch2P: mode === 'manual' && scratchSides.autoScratch2P,
                   }
                 : {}),
+              ...(anyKey ? { anyKey: true } : {}),
               judgeWindowOverrideMs: options.judgeWindowMs,
               judgeRuleset: options.judgeRuleset,
               ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
@@ -746,6 +750,7 @@ export async function createPlaySession(
     idBase,
     wavResources,
     autoScratch,
+    anyKey,
     endOnFailure,
     replay,
     replayRecorder,
