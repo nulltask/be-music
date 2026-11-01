@@ -7,6 +7,7 @@ import { runWithConcurrency } from '@be-music/shared-utils/core';
 import {
   collectBmsWAVVolumeMultipliers,
   resolveBmsWAVResources,
+  resolveReferencedBmsWAVResources,
   collectBmsWAVPlaybackModifiers,
 } from '@be-music/chart-model';
 import { type BeMusicJSON } from '@be-music/chart-source';
@@ -61,21 +62,27 @@ export interface LoadPlaySamplesOptions {
 }
 
 /**
- * Decodes every `#WAVxx` sample of the chart into `samples` (codec fallbacks via `resolveChartAudioAsset`, honouring
+ * Decodes every `#WAVxx` sample the chart plays into `samples` (codec fallbacks via `resolveChartAudioAsset`, honouring
  * `#PATH_WAV`) and, for keep pitch, stretches them to the play tempo once so they then play at their own pitch.
  * Decode or read failures advance to the next distinct asset; a sample with no playable candidate is skipped. Resolves `true` when the samples were stretched.
  */
 export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<boolean> {
   const { audioContext, chart, source, chartPath, samples } = options;
   const isCancelled = options.isCancelled ?? (() => false);
-  // Every declared path: a `#WAVxx` slot is base-36, so a dense chart can use well over 256 samples.
+  // Every declared slot: a `#WAVxx` slot is base-36, so a dense chart can use well over 256 samples.
   const wavResources = resolveBmsWAVResources(chart);
   const playbackModifiers = collectBmsWAVPlaybackModifiers(chart);
   const nativeRatePaths = new Set(
     [...playbackModifiers].filter(([, value]) => value.frequencyHz !== undefined).map(([key]) => wavResources[key]),
   );
   const nativeRates = new Map<string, number>();
-  const wavPaths = Object.values(wavResources).filter((path): path is string => typeof path === 'string');
+  // Only what some sample event names: a chart can declare hundreds of slots it never plays (a short cut of a long
+  // track), and each decoded sample costs its whole PCM. One path behind several slots decodes once.
+  const wavPaths = [
+    ...new Set(
+      Object.values(resolveReferencedBmsWAVResources(chart)).filter((path): path is string => typeof path === 'string'),
+    ),
+  ];
   // `#PATH_WAV <prefix>`: the chart's samples live under that directory; the resolver tries the prefixed path first.
   const pathPrefix = typeof chart.bms.pathWAV === 'string' ? chart.bms.pathWAV : undefined;
   await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {

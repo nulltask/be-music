@@ -47,6 +47,7 @@ export {
   collectSampleTriggers,
   collectSampleTriggersWithContext,
   createBmsonSamplePlaybackMap,
+  resolveReferencedBmsWAVResources,
   type CollectSampleTriggersOptions,
   type TimedSampleTrigger,
 } from './sample-triggers.ts';
