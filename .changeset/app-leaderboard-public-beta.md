@@ -2,4 +2,4 @@
 '@be-music/app-leaderboard': patch
 ---
 
-The Leaderboard footer and About page say Public Beta, and say that data may be deleted without notice, in English and Japanese. The Japanese footer notice reads as one sentence.
+The Leaderboard header shows a Beta badge beside Be-Music Leaderboard, and the footer and About page say Public Beta and that data may be deleted without notice, in English and Japanese.
