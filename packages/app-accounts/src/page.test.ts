@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { accountNotice, renderAccountPage } from './page.ts';
+
+function buttonHTML(page: string, action: string): string {
+  const button = page.match(new RegExp(`<button[^>]*data-action="${action}"[^>]*>[\\s\\S]*?</button>`));
+  expect(button, action).not.toBeNull();
+  return button![0];
+}
 describe('Accounts page', () => {
   const input = { signedIn: false, anonymous: false, name: '', login: true, discord: false, google: false };
   test('only offers configured providers and a guest account when signed out', () => {
@@ -40,6 +46,24 @@ describe('Accounts page', () => {
       expect(page).not.toContain('https://donate.example');
       expect(page).not.toContain('>Donate<');
     }
+  });
+  test('shows a mark on Google, Discord, and passkey actions', () => {
+    const page = renderAccountPage({ ...input, google: true, discord: true });
+    expect(buttonHTML(page, 'passkey')).toContain('M2.586 17.414');
+    expect(buttonHTML(page, 'google')).toContain('#4285F4');
+    expect(buttonHTML(page, 'discord')).toContain('#5865F2');
+    expect(buttonHTML(page, 'guest')).not.toContain('<svg');
+    const linked = renderAccountPage({
+      ...input,
+      signedIn: true,
+      login: false,
+      discord: true,
+      google: true,
+    });
+    expect(buttonHTML(linked, 'add-passkey')).toContain('M2.586 17.414');
+    expect(buttonHTML(linked, 'link-google')).toContain('#4285F4');
+    expect(buttonHTML(linked, 'link-discord')).toContain('#5865F2');
+    expect(buttonHTML(linked, 'sign-out')).not.toContain('<svg');
   });
   test('lets a signed-in account link each configured provider once', () => {
     const linked = renderAccountPage({
