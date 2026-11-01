@@ -7,7 +7,6 @@ import {
   rulesetRecords,
   serializeChartBestRecords,
   chartBestRecordKey,
-  toLR2RecordLamp,
 } from './chart-best-records.ts';
 
 describe('chartBestRecordKey', () => {
@@ -42,76 +41,31 @@ describe('parseChartBestRecords / serializeChartBestRecords', () => {
       ['beatoraja:sha256:abc', { lamp: 'MAX' as const, exScore: 910, playCount: 1 }],
       ['____:path:x.bms', { lamp: 'FAILED' as const, playCount: 1 }],
     ]);
-    expect(JSON.parse(serializeChartBestRecords(records)).version).toBe(3);
+    expect(JSON.parse(serializeChartBestRecords(records)).version).toBe(0);
     expect(parseChartBestRecords(serializeChartBestRecords(records))).toEqual(records);
-  });
-
-  it('yields no records for missing, unreadable, or foreign-version data', () => {
-    expect(parseChartBestRecords(null).size).toBe(0);
-    expect(parseChartBestRecords('{not json').size).toBe(0);
-    expect(parseChartBestRecords('[]').size).toBe(0);
-    expect(parseChartBestRecords(JSON.stringify({ version: 4, records: { 'lr2:a': { lamp: 'MAX' } } })).size).toBe(0);
-  });
-
-  it('drops version-3 records whose key names no judge ruleset', () => {
-    const raw = JSON.stringify({ version: 3, records: { 'sha256:abc': { lamp: 'HARD' }, 'lr2:a': { lamp: 'EASY' } } });
-    expect([...parseChartBestRecords(raw)]).toEqual([['lr2:a', { lamp: 'EASY' }]]);
-  });
-
-  it('reads version-2 records as LR2 records', () => {
-    const raw = JSON.stringify({
-      version: 2,
-      records: {
-        'sha256:abc': { lamp: 'EX_HARD', exScore: 10, playCount: 3 },
-        'course:grade::a,b': { lamp: 'MAX' },
-      },
-    });
-    expect(Object.fromEntries(parseChartBestRecords(raw))).toEqual({
-      'lr2:sha256:abc': { lamp: 'EX_HARD', exScore: 10, playCount: 3 },
-      'lr2:course:grade::a,b': { lamp: 'MAX' },
-    });
-  });
-
-  it('reads version-1 records as LR2 records, with the lamps LR2 awards', () => {
-    const raw = JSON.stringify({
-      version: 1,
-      records: {
-        max: { lamp: 'MAX' },
-        perfect: { lamp: 'PERFECT' },
-        death: { lamp: 'EX_HARD', exScore: 10 },
-        hard: { lamp: 'HARD' },
-      },
-    });
-    expect(Object.fromEntries(parseChartBestRecords(raw))).toEqual({
-      'lr2:max': { lamp: 'FULL_COMBO' },
-      'lr2:perfect': { lamp: 'FULL_COMBO' },
-      'lr2:death': { lamp: 'NORMAL', exScore: 10 },
-      'lr2:hard': { lamp: 'HARD' },
-    });
-    // Records written now keep their lamps as they are.
     const current = new Map([['beatoraja:a', { lamp: 'EX_HARD' as const }]]);
     expect(parseChartBestRecords(serializeChartBestRecords(current))).toEqual(current);
   });
 
-  it('drops entries with an unknown lamp and leaves out malformed counts', () => {
+  it('yields no records for missing, unreadable, or older data', () => {
+    expect(parseChartBestRecords(null).size).toBe(0);
+    expect(parseChartBestRecords('{not json').size).toBe(0);
+    expect(parseChartBestRecords('[]').size).toBe(0);
+    for (const version of [1, 2, 3, 4]) {
+      expect(parseChartBestRecords(JSON.stringify({ version, records: { 'lr2:a': { lamp: 'MAX' } } })).size).toBe(0);
+    }
+  });
+
+  it('drops entries whose key names no judge ruleset, whose lamp is unknown, or whose counts are malformed', () => {
     const raw = JSON.stringify({
-      version: 1,
+      version: 0,
       records: {
-        bad: { lamp: 'SUPER_CLEAR', exScore: 10 },
-        ok: { lamp: 'HARD', exScore: -1, maxCombo: 1.5, missCount: '3', playCount: 4 },
+        'sha256:abc': { lamp: 'HARD' },
+        'lr2:bad': { lamp: 'SUPER_CLEAR', exScore: 10 },
+        'lr2:ok': { lamp: 'HARD', exScore: -1, maxCombo: 1.5, missCount: '3', playCount: 4 },
       },
     });
     expect([...parseChartBestRecords(raw)]).toEqual([['lr2:ok', { lamp: 'HARD', playCount: 4 }]]);
-  });
-});
-
-describe('toLR2RecordLamp', () => {
-  it('keeps LR2’s own lamps and maps the ones LR2 does not award', () => {
-    expect(
-      ['FAILED', 'EASY', 'NORMAL', 'HARD', 'FULL_COMBO', 'ASSIST_EASY'].map((lamp) => toLR2RecordLamp(lamp as never)),
-    ).toEqual(['FAILED', 'EASY', 'NORMAL', 'HARD', 'FULL_COMBO', 'ASSIST_EASY']);
-    expect(toLR2RecordLamp('MAX')).toBe('FULL_COMBO');
-    expect(toLR2RecordLamp('EX_HARD')).toBe('NORMAL');
   });
 });
 

@@ -112,7 +112,7 @@ export class DebugMenuSettingsSync {
   /** Clears locally first, invalidates queued saves, then deletes remotely after any in-flight request finishes. */
   public async reset(): Promise<void> {
     const reset: DebugMenuSettingsDocument = {
-      version: 1,
+      version: 0,
       updatedAt: this.nextTimestamp(this.now()),
       settings: {},
       deleted: true,
