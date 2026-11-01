@@ -1,5 +1,6 @@
 import { computeChartFileHashes, type BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { RecordPlay } from '@be-music/player-engine/records';
+import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
@@ -206,6 +207,46 @@ describe('RecordsService record latches', () => {
     });
     service.recordActiveCourseStage({ ...PLAY, exScore: 300 });
     expect(service.chartBestRecords.get('lr2:path:a.bms')?.exScore).toBe(100);
+  });
+
+  test("records an assisted play by its ruleset's policy: lamp only, limited, or nothing", () => {
+    stubStorage();
+    const service = records(library({}));
+    const previous = { lamp: 'EASY' as const, exScore: 80, maxCombo: 60, missCount: 5, playCount: 2 };
+    const assisted = (play: object): BeMusicReplay =>
+      ({ chart: { notes: [] }, play: { mode: 'manual', autoScratch: false, ...play } }) as unknown as BeMusicReplay;
+    // beatoraja: H-RANDOM is LIGHT_ASSIST, so a HARD clear is LIGHT ASSIST EASY and the score fields stay.
+    service.chartBestRecords.set('beatoraja:path:a.bms', previous);
+    service.activePlayRecordKey = 'beatoraja:path:a.bms';
+    service.recordActivePlay(PLAY, assisted({ randomLane: { p1: 'H-RANDOM' }, judgeRuleset: 'beatoraja' }));
+    expect(service.chartBestRecords.get('beatoraja:path:a.bms')).toEqual({ ...previous, playCount: 3 });
+    // LR2: AUTO SCRATCH caps the lamp at EASY.
+    service.activePlayRecordKey = 'lr2:path:b.bms';
+    service.recordActivePlay(PLAY, assisted({ autoScratch1P: true }));
+    expect(service.chartBestRecords.get('lr2:path:b.bms')).toEqual({ lamp: 'EASY', playCount: 1 });
+    // LR2 D-BATTLE keeps its own lamp slot.
+    service.activePlayRecordKey = 'lr2:path:c.bms';
+    service.recordActivePlay(PLAY, assisted({ battleMode: 'D-BATTLE' }));
+    expect(service.chartBestRecords.get('lr2:d-battle:path:c.bms')).toEqual({ lamp: 'HARD', playCount: 1 });
+    expect(service.chartBestRecords.has('lr2:path:c.bms')).toBe(false);
+    // That-Which-Must-Not-Be-Named's BATTLE saves nothing.
+    service.activePlayRecordKey = '____:path:d.bms';
+    expect(service.recordActivePlay(PLAY, assisted({ battleMode: 'BATTLE', judgeRuleset: '____' }))).toBeUndefined();
+    expect(service.chartBestRecords.has('____:path:d.bms')).toBe(false);
+    // An assisted course stage writes nothing into its chart's record.
+    service.activeStageRecordKey = 'lr2:path:e.bms';
+    service.recordActiveCourseStage(PLAY, assisted({ autoScratch1P: true }));
+    expect(service.chartBestRecords.has('lr2:path:e.bms')).toBe(false);
+  });
+
+  test('records a play given up under the key it took, once its replay is there', () => {
+    stubStorage();
+    const service = records(library({}));
+    service.activePlayRecordKey = 'lr2:path:a.bms';
+    const key = service.takeActivePlayRecordKey();
+    expect(service.activePlayRecordKey).toBeUndefined();
+    service.recordPlayUnder(key!, { ...PLAY, lamp: 'FAILED' });
+    expect(service.chartBestRecords.get('lr2:path:a.bms')).toEqual({ ...PLAY, lamp: 'FAILED', playCount: 1 });
   });
 
   test("keeps a course run's record when the run keeps one", () => {

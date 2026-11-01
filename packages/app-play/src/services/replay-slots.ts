@@ -14,7 +14,7 @@ import {
   type BeMusicCourseReplay,
   type BeMusicReplay,
 } from '@be-music/player-engine/replay';
-import { clearLampRank, type ClearLamp } from '@be-music/player-engine/ruleset';
+import { clearLampOrder, type ClearLamp } from '@be-music/player-engine/ruleset';
 import type { BestRecord, RecordPlay } from '@be-music/player-engine/records';
 import { REPLAY_SLOT_COUNT, type LibraryChart, type LibraryCourse } from '@be-music/player-scene-model';
 
@@ -216,7 +216,7 @@ export function qualifiesReplayAutoSave(
 ): boolean {
   const exScore = previous?.exScore ?? 0;
   const maxCombo = previous?.maxCombo ?? 0;
-  const lamp = clearLampRank(previous?.lamp ?? 'NO_PLAY');
+  const lamp = clearLampOrder(previous?.lamp ?? 'NO_PLAY');
   const unplayed = previous === undefined || previous.lamp === 'NO_PLAY';
   const missCount = previous?.missCount ?? Number.POSITIVE_INFINITY;
   switch (rule) {
@@ -235,12 +235,12 @@ export function qualifiesReplayAutoSave(
     case 'max-combo-update-or-equal':
       return play.maxCombo >= maxCombo;
     case 'clear-update':
-      return clearLampRank(play.lamp) > lamp;
+      return clearLampOrder(play.lamp) > lamp;
     case 'clear-update-or-equal':
-      return clearLampRank(play.lamp) >= lamp;
+      return clearLampOrder(play.lamp) >= lamp;
     case 'any-update':
       return (
-        clearLampRank(play.lamp) > lamp ||
+        clearLampOrder(play.lamp) > lamp ||
         play.maxCombo > maxCombo ||
         play.missCount < missCount ||
         play.exScore > exScore

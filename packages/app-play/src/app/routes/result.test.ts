@@ -242,7 +242,7 @@ describe('ResultRoute.showResult: a single play', () => {
     expect(h.deps.testHook.recordReplay).toHaveBeenCalledWith(data.replay);
     expect(h.deps.nameResultJingle).toHaveBeenCalledWith(LR2_JINGLES.clear);
     expect(h.deps.testHook.recordResult).toHaveBeenCalledWith(resultFromData(data, 'single', 'built-in', 'jingle'));
-    expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith(recordPlayFromResult(data));
+    expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith(recordPlayFromResult(data), data.replay);
     expect(h.deps.replayAutoSave.savePlay).toHaveBeenCalledWith(data.replay);
     expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, chartEntry('a'));
     expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();
@@ -304,7 +304,10 @@ describe('ResultRoute.showResult: a course', () => {
     const active = h.deps.courses.beginRun(course());
     const data = resultOf(chartEntry('a'));
     await h.route.showResult(data);
-    expect(h.deps.records.recordActiveCourseStage).toHaveBeenCalledWith(courseStageRecordPlayFromResult(data));
+    expect(h.deps.records.recordActiveCourseStage).toHaveBeenCalledWith(
+      courseStageRecordPlayFromResult(data),
+      data.replay,
+    );
     const info = activeCourseInfo(active);
     expect(h.deps.lr2.courseLR2Skin).toHaveBeenCalledWith(LR2_RESULT, info, { kind: 'result' });
     const result = shown(h);
@@ -421,7 +424,7 @@ describe('ResultRoute: the beatoraja result', () => {
     const data = resultOf(chartEntry('a'));
     await h.route.showBeatorajaPlayResult(data, false);
     expect(h.deps.testHook.recordReplay).toHaveBeenCalledWith(data.replay);
-    expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith(recordPlayFromResult(data));
+    expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith(recordPlayFromResult(data), data.replay);
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
     expect(h.deps.replayAutoSave.savePlay).toHaveBeenCalledWith(data.replay);
     expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, chartEntry('a'));
@@ -433,7 +436,10 @@ describe('ResultRoute: the beatoraja result', () => {
     h.deps.courses.beginRun(course());
     const data = resultOf(chartEntry('a'));
     await h.route.showBeatorajaPlayResult(data, true);
-    expect(h.deps.records.recordActiveCourseStage).toHaveBeenCalledWith(courseStageRecordPlayFromResult(data));
+    expect(h.deps.records.recordActiveCourseStage).toHaveBeenCalledWith(
+      courseStageRecordPlayFromResult(data),
+      data.replay,
+    );
     expect(h.deps.courseRoute.continueCourse).toHaveBeenCalledOnce();
     expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
     expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();

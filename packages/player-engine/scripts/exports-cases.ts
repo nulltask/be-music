@@ -900,6 +900,43 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.courseRunKeepsRecord(benchCourseLog);
     },
   });
+  define('player-engine.records.resolveCourseRunAssistClass', {
+    run: () => {
+      recordsAPI.resolveCourseRunAssistClass(benchCourseLog);
+    },
+  });
+  const benchAssistedReplay = {
+    ...BENCH_REPLAY,
+    play: { ...BENCH_REPLAY.play, randomLane: { p1: 'H-RANDOM' }, autoScratch1P: true },
+  };
+  const benchAssistFindings = recordsAPI.classifyReplayAssists(benchAssistedReplay);
+  const benchRecordPolicy = recordsAPI.resolveRecordPolicy(benchAssistFindings, 'beatoraja');
+  define('player-engine.records.classifyReplayAssists', {
+    run: () => {
+      recordsAPI.classifyReplayAssists(benchAssistedReplay);
+    },
+  });
+  define('player-engine.records.resolveAssistClass', {
+    run: () => {
+      recordsAPI.resolveAssistClass(benchAssistFindings);
+    },
+  });
+  define('player-engine.records.resolveRecordPolicy', {
+    run: () => {
+      recordsAPI.resolveRecordPolicy(benchAssistFindings, 'lr2');
+      recordsAPI.resolveRecordPolicy(benchAssistFindings, 'beatoraja');
+    },
+  });
+  define('player-engine.records.resolveReplayRecordPolicy', {
+    run: () => {
+      recordsAPI.resolveReplayRecordPolicy(benchAssistedReplay);
+    },
+  });
+  define('player-engine.records.applyRecordPolicyLamp', {
+    run: () => {
+      recordsAPI.applyRecordPolicyLamp('HARD', benchRecordPolicy);
+    },
+  });
   define('player-engine.ruleset.clampCustomJudgeRate', {
     run() {
       rulesetAPI.clampCustomJudgeRate('keyPerfectGreat', 10);
@@ -928,6 +965,21 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.clearLampAtRank', {
     run: () => {
       rulesetAPI.clearLampAtRank(7);
+    },
+  });
+  define('player-engine.ruleset.clearLampOrder', {
+    run: () => {
+      rulesetAPI.clearLampOrder('LIGHT_ASSIST_EASY');
+    },
+  });
+  define('player-engine.ruleset.compareClearLamps', {
+    run: () => {
+      rulesetAPI.compareClearLamps('LIGHT_ASSIST_EASY', 'EASY');
+    },
+  });
+  define('player-engine.ruleset.compareClearLampRanks', {
+    run: () => {
+      rulesetAPI.compareClearLampRanks(10, 3);
     },
   });
   define('player-engine.ruleset.betterClearLamp', {

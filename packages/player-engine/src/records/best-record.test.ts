@@ -13,9 +13,11 @@ import {
   playKeepsRecord,
   recordPlayFromResult,
   recordPlayFromSummary,
+  resolveCourseRunAssistClass,
   type RecordPlayResult,
   type RecordPlaySummary,
 } from './best-record.ts';
+import { resolveRecordPolicy } from './assist-policy.ts';
 
 describe('mergeBestRecord', () => {
   const play = { lamp: 'HARD' as const, exScore: 1500, maxCombo: 400, missCount: 12 };
@@ -349,4 +351,56 @@ it('NONSTOP records use the stitched TOTAL, without inheriting a source-stage po
   expect(courseRunKeepsRecord(log)).toBe(true);
   stitched.chart.total = 0;
   expect(courseRunKeepsRecord(log)).toBe(false);
+});
+
+describe('mergeBestRecord under a record policy', () => {
+  const play = { lamp: 'HARD' as const, exScore: 1500, maxCombo: 400, missCount: 12 };
+  const previous = { lamp: 'EASY' as const, exScore: 1400, maxCombo: 500, missCount: 20, playCount: 3 };
+
+  it('moves only the limited lamp and the play count of an assisted play', () => {
+    const lr2 = resolveRecordPolicy([{ option: 'auto-scratch', source: 'lr2', assistClass: 'light' }], 'lr2');
+    expect(mergeBestRecord(previous, play, lr2)).toEqual({ ...previous, playCount: 4 });
+    const beatoraja = resolveRecordPolicy(
+      [{ option: 'H-RANDOM', source: 'beatoraja', assistClass: 'light' }],
+      'beatoraja',
+    );
+    expect(mergeBestRecord({ lamp: 'FAILED', exScore: 10 }, play, beatoraja)).toEqual({
+      lamp: 'LIGHT_ASSIST_EASY',
+      exScore: 10,
+      playCount: 1,
+    });
+    // A first assisted play starts a record with its lamp alone.
+    expect(mergeBestRecord(undefined, play, beatoraja)).toEqual({ lamp: 'LIGHT_ASSIST_EASY', playCount: 1 });
+    // A better lamp already kept stays.
+    expect(mergeBestRecord({ lamp: 'HARD' }, play, beatoraja).lamp).toBe('HARD');
+  });
+
+  it('merges an unassisted play whole', () => {
+    expect(mergeBestRecord(previous, play, resolveRecordPolicy([], 'beatoraja'))).toEqual(
+      mergeBestRecord(previous, play),
+    );
+  });
+});
+
+describe('resolveCourseRunAssistClass / courseRunKeepsRecord with assists', () => {
+  type Log = Parameters<typeof courseRunKeepsRecord>[0];
+  const played = (play: object = {}) =>
+    ({
+      played: true,
+      replay: { chart: { notes: [] }, play: { mode: 'manual', ...play } },
+    }) as unknown as Log['stages'][number];
+
+  it('takes the highest class of the played stages, or of a NONSTOP run’s stitched play', () => {
+    expect(resolveCourseRunAssistClass({ stages: [played(), played()] })).toBe('none');
+    expect(resolveCourseRunAssistClass({ stages: [played(), played({ randomLane: { p1: 'H-RANDOM' } })] })).toBe(
+      'light',
+    );
+    const nonstop = { replay: { chart: { notes: [] }, play: { mode: 'manual', judgeWindowOverrideMs: 1 } } };
+    expect(resolveCourseRunAssistClass({ stages: [played()], nonstop } as unknown as Log)).toBe('assist');
+  });
+
+  it('keeps no course record for a run with an assisted stage, as LR2 and beatoraja keep none', () => {
+    expect(courseRunKeepsRecord({ stages: [played(), played()] })).toBe(true);
+    expect(courseRunKeepsRecord({ stages: [played(), played({ autoScratch1P: true })] })).toBe(false);
+  });
 });

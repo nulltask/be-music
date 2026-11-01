@@ -1,5 +1,6 @@
 import type { BeMusicReplay, ReplayRulesetResult } from '@be-music/player-engine/replay';
-import { resolveClearLamp, type ClearLamp, type ScoreSummary } from '@be-music/player-engine/ruleset';
+import { applyRecordPolicyLamp, resolveReplayRecordPolicy } from '@be-music/player-engine/records';
+import { isRulesetId, resolveClearLamp, type ClearLamp, type ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { CourseView } from '../course-view/course-view.ts';
 import type { LibraryChart } from '../library/entries.ts';
 import type { EarlyLateCount, PlayState } from '../play-state/state.ts';
@@ -143,15 +144,26 @@ export interface PlayResultFacts {
 /**
  * The result of a play from its final play state: the score and gauge, the graphs with a last sample at the end of the
  * play (so they reach the right edge when the last judgment came well before the end), the clear lamp by the one
- * clear-lamp rule (`resolveClearLamp`), the timed judgments and their early / late counts.
+ * clear-lamp rule (`resolveClearLamp`), the timed judgments and their early / late counts. A single play's lamp is limited
+ * by its assisted options (`resolveReplayRecordPolicy`, #602): an assisted clear is LIGHT ASSIST EASY or ASSIST EASY
+ * under beatoraja rules, at most EASY under LR2's and ASSIST EASY under That-Which-Must-Not-Be-Named's.
  */
 export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts): PlayResult {
-  const lamp = resolveClearLamp({
+  const gaugeLamp = resolveClearLamp({
     cleared: state.cleared,
     score: facts.score,
     ...(state.gaugeType !== undefined ? { gauge: state.gaugeType } : {}),
     ...(facts.judgeRuleset !== undefined ? { ruleset: facts.judgeRuleset } : {}),
   });
+  const ruleset = facts.judgeRuleset !== undefined && isRulesetId(facts.judgeRuleset) ? facts.judgeRuleset : undefined;
+  const lamp =
+    facts.practice !== true &&
+    facts.replay !== undefined &&
+    facts.replay.play.course === undefined &&
+    facts.course === undefined &&
+    (facts.run === undefined || facts.run === 'single')
+      ? applyRecordPolicyLamp(gaugeLamp, resolveReplayRecordPolicy(facts.replay, ruleset))
+      : gaugeLamp;
   const progress = state.totalSeconds > 0 ? Math.max(0, Math.min(1, facts.seconds / state.totalSeconds)) : 1;
   return {
     score: { ...facts.score },

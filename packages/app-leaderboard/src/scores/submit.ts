@@ -16,6 +16,7 @@ import type { Database } from '../db/client.ts';
 import { bestScore, score, scoreResult } from '../db/schema.ts';
 import { rankOfExScore, countPlayers } from '../ranking.ts';
 import { mergeBestScores } from '../scoring/best.ts';
+import { applyRecordPolicyLamp, resolveReplayRecordPolicy } from '@be-music/player-engine/records';
 import { clearLampRank } from '@be-music/player-engine/ruleset';
 import { sha256HexAsync as sha256Hex } from '@be-music/shared-utils/hash';
 import { playedFileOf } from './played-file.ts';
@@ -77,8 +78,9 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   if (!eligibility.eligible) {
     return { status: 'rejected', httpStatus: 422, reason: eligibility.reason };
   }
-  const { chartFingerprint, playFingerprint, assistFlags, unranked } = eligibility;
-  const assisted = assistFlags.length > 0;
+  const { chartFingerprint, playFingerprint, assistFlags, assistClass, unranked } = eligibility;
+  // A light or assist play ranks on the assisted board; a no-save play is stored unranked (#602).
+  const assisted = assistClass !== 'none';
 
   const submissionId = await sha256Hex(identifyPlay(input.replay, playFingerprint));
   const existing = await db.query.score.findFirst({ where: eq(score.submissionId, submissionId) });
@@ -131,7 +133,13 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   ]);
   const playedRuleset = input.replay.play.judgeRuleset ?? 'lr2';
   const figures = simulated.map(({ ruleset, result }) => {
-    const lamp = clearLampRank(resolveRulesetResultLamp(result, ruleset));
+    // The lamp each ruleset gives the play, limited by its assisted options under that ruleset's rules (#602).
+    const lamp = clearLampRank(
+      applyRecordPolicyLamp(
+        resolveRulesetResultLamp(result, ruleset),
+        resolveReplayRecordPolicy(input.replay, ruleset),
+      ),
+    );
     const missCount = resolveRulesetResultMissCount(result);
     const current = currentBests.get(ruleset);
     const update = mergeBestScores(current, { scoreId, playedAt: now, exScore: result.exScore, lamp, missCount });
