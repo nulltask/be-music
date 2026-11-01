@@ -69,6 +69,7 @@ function wireUsageLanguageSwitch(): void {
   const initial = detectPlayerLang();
   if (toggles.length === 0 || blocks.length === 0) {
     setPlayerLang(initial);
+    syncPublicBetaNotice(initial);
     return;
   }
   activate(initial);
@@ -93,7 +94,14 @@ function activate(lang: PlayerLang): void {
     block.classList.toggle('is-active', matches);
     block.toggleAttribute('hidden', !matches);
   }
+  syncPublicBetaNotice(lang);
   setPlayerLang(lang);
+}
+
+function syncPublicBetaNotice(lang: PlayerLang): void {
+  for (const notice of document.querySelectorAll<HTMLElement>('[data-public-beta-notice]')) {
+    notice.toggleAttribute('hidden', notice.dataset.publicBetaNotice !== lang);
+  }
 }
 
 async function renderAcknowledgementsList(list: HTMLOListElement): Promise<void> {

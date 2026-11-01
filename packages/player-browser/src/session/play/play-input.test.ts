@@ -59,6 +59,35 @@ describe('play adjustment keys', () => {
     expect(repeat.preventDefault).toHaveBeenCalled();
   });
 
+  test('left and right arrows seek five seconds only while AUTO play is on', () => {
+    const auto = new PlaySession({ autoPlay: true });
+    vi.spyOn(auto, 'currentSeconds').mockReturnValue(12);
+    const seek = vi.spyOn(auto, 'seek').mockResolvedValue();
+    const left = key('ArrowLeft');
+    const right = key('ArrowRight');
+    handleSharedEngineExitKey(auto, left);
+    handleSharedEngineExitKey(auto, right);
+    expect(seek).toHaveBeenNthCalledWith(1, 7);
+    expect(seek).toHaveBeenNthCalledWith(2, 17);
+    expect(left.preventDefault).toHaveBeenCalledOnce();
+    expect(right.preventDefault).toHaveBeenCalledOnce();
+
+    const manual = new PlaySession({ autoPlay: false });
+    const practice = new PlaySession({ autoPlay: false, allowSeek: 'practice' });
+    const replay = new PlaySession({ autoPlay: false });
+    Object.assign(replay.options, { replay: { play: {} } });
+    for (const play of [manual, practice, replay]) {
+      const blocked = vi.spyOn(play, 'seek').mockResolvedValue();
+      const back = key('ArrowLeft');
+      const forward = key('ArrowRight');
+      handleSharedEngineExitKey(play, back);
+      handleSharedEngineExitKey(play, forward);
+      expect(blocked).not.toHaveBeenCalled();
+      expect(back.preventDefault).not.toHaveBeenCalled();
+      expect(forward.preventDefault).not.toHaveBeenCalled();
+    }
+  });
+
   test('Fn navigation keys never fall through to hi-speed or seek when cover keys are disabled', () => {
     const play = new PlaySession({ initialHiSpeed: 2, autoPlay: true });
     const seek = vi.spyOn(play, 'seek').mockResolvedValue();

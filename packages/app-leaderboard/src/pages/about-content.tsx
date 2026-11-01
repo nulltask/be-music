@@ -1,6 +1,7 @@
 /** @jsxImportSource hono/jsx */
 /** The About page's text, one version per page language. */
 import type { Child } from 'hono/jsx';
+import { PUBLIC_BETA_DELETION, PUBLIC_BETA_LABEL } from '@be-music/service-web-theme';
 import { PROSE_LINK, ProseSection as Section } from './components/prose.tsx';
 import type { Locale } from './i18n/index.ts';
 import { SOURCE_URL } from './layout.tsx';
@@ -163,10 +164,10 @@ const en: AboutContent = {
           is open too.
         </p>
       </Section>
-      <Section id="beta" title="Beta">
+      <Section id="beta" title={PUBLIC_BETA_LABEL.en}>
         <p>
           The fingerprint (<code>bmfp0</code>) and the scoring rules are still version 0. While they settle, rankings
-          may be reset.
+          may be reset. {PUBLIC_BETA_DELETION.en}
         </p>
       </Section>
     </>
@@ -313,10 +314,10 @@ const ja: AboutContent = {
           も公開しています。
         </p>
       </Section>
-      <Section id="beta" title="ベータ版">
+      <Section id="beta" title={PUBLIC_BETA_LABEL.ja}>
         <p>
           譜面 ID（<code>bmfp0</code>）と採点ルールはまだバージョン 0
-          です。内容が固まるまでの間、ランキングがリセットされることがあります。
+          です。内容が固まるまでの間、ランキングがリセットされることがあります。{PUBLIC_BETA_DELETION.ja}
         </p>
       </Section>
     </>

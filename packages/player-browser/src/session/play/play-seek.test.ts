@@ -228,16 +228,30 @@ describe('PlaySession.seek (a play-loop command)', () => {
     await manual.seek(3);
   });
 
-  test('a replay can seek with the scene arrows', async () => {
+  test('scene arrows seek an AUTO play and not a replay or practice play', () => {
     const context = createSeekablePlay();
     playFirstThreeSeconds(context);
-    Object.assign(context.play.options, { autoPlay: false, replay: { play: {} } });
-    expect(canSeekPlay(context.play)).toBe(true);
     const event = { code: 'ArrowLeft', preventDefault: vi.fn() } as unknown as KeyboardEvent;
     handleSharedEngineExitKey(context.play, event);
     context.runs[0]!.tick();
     expect(context.runs[0]!.seeks).toEqual([-2]);
     expect(event.preventDefault).toHaveBeenCalledOnce();
+
+    Object.assign(context.play.options, { autoPlay: false, replay: { play: {} } });
+    expect(canSeekPlay(context.play)).toBe(true);
+    const replayArrow = { code: 'ArrowRight', preventDefault: vi.fn() } as unknown as KeyboardEvent;
+    handleSharedEngineExitKey(context.play, replayArrow);
+    context.runs[0]!.tick();
+    expect(context.runs[0]!.seeks).toEqual([-2]);
+    expect(replayArrow.preventDefault).not.toHaveBeenCalled();
+
+    Object.assign(context.play.options, { replay: undefined, allowSeek: 'practice' });
+    expect(canSeekPlay(context.play)).toBe(true);
+    const practiceArrow = { code: 'ArrowLeft', preventDefault: vi.fn() } as unknown as KeyboardEvent;
+    handleSharedEngineExitKey(context.play, practiceArrow);
+    context.runs[0]!.tick();
+    expect(context.runs[0]!.seeks).toEqual([-2]);
+    expect(practiceArrow.preventDefault).not.toHaveBeenCalled();
   });
 
   test.each([

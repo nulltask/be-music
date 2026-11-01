@@ -1,4 +1,9 @@
-import { renderBuildInfo, renderServiceFooter } from '@be-music/service-web-theme';
+import {
+  PUBLIC_BETA_DELETION,
+  PUBLIC_BETA_LABEL,
+  renderBuildInfo,
+  renderServiceFooter,
+} from '@be-music/service-web-theme';
 
 function playBuildInfo(): { builtAt: string; revision: string } | undefined {
   return typeof __BE_MUSIC_BUILD_TIME__ === 'string'
@@ -58,8 +63,8 @@ export const PLAYER_APP_HTML = `
         once charts are loaded. Falls behind the canvas otherwise.
 
         Structured as three layers:
-        - \`.drop-frame\`: subtle outer ring spanning the whole
-          stage, lights up during a live drag.
+        - \`.drop-frame\`: hairline ring around the stage at rest.
+          Hidden during a live drag; the card is that feedback.
         - \`.drop-card\`: centered glassmorphism panel hosting the
           actual content; hosts the entry / hover animations.
         - icon + title + subtitle for the hierarchy.
@@ -199,18 +204,19 @@ export const PLAYER_APP_HTML = `
           <p data-i18n="signInLead">Use the passkey of your Leaderboard account.</p>
         </header>
         <section class="grid gap-3">
-        <button type="button" class="btn w-full" data-account-dialog-action="sign-in" data-i18n="signInPasskey">
-          Sign in with a passkey
+        <button type="button" class="btn w-full" data-account-dialog-action="sign-in">
+          <span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></span>
+          <span data-i18n="signInPasskey">Sign in with a passkey</span>
         </button>
         <div class="text-muted-foreground text-center text-xs" role="separator" data-i18n="or">or</div>
-        <div class="account-providers">
+        <div class="account-providers grid gap-3">
           <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign in with Google is coming soon" data-i18n-title="signInGoogleSoon">
-            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+            <span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
             <span data-i18n="signInGoogle">Sign in with Google</span>
             <span class="text-muted-foreground ms-auto text-xs" data-i18n="comingSoon">Coming soon</span>
           </button>
           <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign in with Discord is coming soon" data-i18n-title="signInDiscordSoon">
-            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+            <span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
             <span data-i18n="signInDiscord">Sign in with Discord</span>
             <span class="text-muted-foreground ms-auto text-xs" data-i18n="comingSoon">Coming soon</span>
           </button>
@@ -231,14 +237,14 @@ export const PLAYER_APP_HTML = `
           <h2 id="leaderboard-sign-up-title" data-i18n="signUpTitle">Create your account</h2>
           <p data-account-sign-up-lead data-i18n="signUpLead">Pick a handle and a name. Your browser then makes a passkey for it.</p>
         </header>
-        <div class="account-providers">
+        <div class="account-providers grid gap-3">
           <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign up with Google is coming soon" data-i18n-title="signUpGoogleSoon">
-            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+            <span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
             <span data-i18n="signUpGoogle">Sign up with Google</span>
             <span class="text-muted-foreground ms-auto text-xs" data-i18n="comingSoon">Coming soon</span>
           </button>
           <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign up with Discord is coming soon" data-i18n-title="signUpDiscordSoon">
-            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+            <span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
             <span data-i18n="signUpDiscord">Sign up with Discord</span>
             <span class="text-muted-foreground ms-auto text-xs" data-i18n="comingSoon">Coming soon</span>
           </button>
@@ -268,7 +274,7 @@ export const PLAYER_APP_HTML = `
           <span></span>
           <span class="account-dialog-buttons">
             <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close" data-i18n="cancel">Cancel</button>
-            <button type="submit" class="btn" data-i18n="createPasskey">Create passkey</button>
+            <button type="submit" class="btn"><span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></span><span data-i18n="createPasskey">Create passkey</span></button>
           </span>
         </footer>
       </form>
@@ -555,7 +561,8 @@ export const PLAYER_APP_HTML = `
                 <li>Some features are still missing or incomplete — expect rough edges.</li>
                 <li>
                   <strong>Best records stay in this browser.</strong> The Leaderboard (off by
-                  default, Debug Menu → Leaderboard) is a beta: its rankings may be reset.
+                  default, Debug Menu → Leaderboard) is a ${PUBLIC_BETA_LABEL.en}: its rankings may be reset.
+                  ${PUBLIC_BETA_DELETION.en}
                 </li>
                 <li>
                   <strong>Verified skins:</strong> the Lunatic Rave 2 default skin, plus the
@@ -641,7 +648,7 @@ export const PLAYER_APP_HTML = `
                 chart uses stays a lane key. Hold an adjustment key to keep moving; H toggles once per press.
                 With FLOATING HI-SPEED, PageUp / PageDown fine-adjust hi-speed when SUDDEN+ and LIFT are both off.
               </li>
-              <li>In AUTO play, a replay or a practice play, <kbd>←</kbd> / <kbd>→</kbd> seek 5 s back / forward.</li>
+              <li>In AUTO play, <kbd>←</kbd> / <kbd>→</kbd> seek 5 s back / forward.</li>
               <li><kbd>Space</kbd> pauses / resumes.</li>
               <li><kbd>F5</kbd> restarts the current chart.</li>
               <li><kbd>Esc</kbd> exits to the result screen (or back to chart select).</li>
@@ -688,7 +695,7 @@ export const PLAYER_APP_HTML = `
                 <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
                 <li>
                   <strong>ベスト記録はこのブラウザに保存されます。</strong>
-                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) はベータ版で、ランキングはリセットされることがあります。
+                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) は${PUBLIC_BETA_LABEL.ja}で、ランキングはリセットされることがあります。${PUBLIC_BETA_DELETION.ja}
                 </li>
                 <li>
                   <strong>動作確認済みのスキン:</strong> Lunatic Rave 2 デフォルトスキンに加え、beatoraja デフォルトスキン (<code>skin/default</code>)、<code>ModernChic</code>、<code>GdbG Original Skin</code> の四種類です。
@@ -752,7 +759,7 @@ export const PLAYER_APP_HTML = `
                 レーンカバー (Plain / Native / Synesthesia と beatoraja スキン): <kbd>PageUp</kbd> / <kbd>PageDown</kbd> で SUDDEN+、<kbd>Home</kbd> / <kbd>End</kbd> で LIFT を動かし、<kbd>H</kbd> で HIDDEN+ を切り替え、<kbd>J</kbd> / <kbd>K</kbd> で動かします。<kbd>Shift</kbd> を押しながらだと大きく動きます。譜面のレーンに使われているキーはレーンの入力になります。
                 調整キーは長押しで連続して動きます。H は押すたびに 1 回だけ切り替わります。FLOATING HI-SPEED では、SUDDEN+ と LIFT が両方 OFF のとき、PageUp / PageDown でハイスピードを微調整します。
               </li>
-              <li>AUTO プレイ、リプレイ、練習のプレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
+              <li>AUTO プレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
               <li><kbd>Space</kbd> でポーズ / 再開。</li>
               <li><kbd>F5</kbd> で現在の譜面をリスタート。</li>
               <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
@@ -1356,6 +1363,7 @@ export const PLAYER_APP_HTML = `
     hostname: playHostname(),
     className: 'service-page-footer',
     buildInfo: playBuildInfo(),
+    locale: 'both',
   })}
   </div>
 `;

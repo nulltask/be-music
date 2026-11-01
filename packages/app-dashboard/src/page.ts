@@ -83,6 +83,7 @@ export function renderDashboard(input: {
     navLabel: input.locale === 'ja' ? 'サービス' : 'Services',
     siteHTML: `be-music${donate}`,
     buildInfo: input.buildInfo,
+    locale: input.locale,
   });
   const status =
     input.account === undefined
