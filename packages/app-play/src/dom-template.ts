@@ -57,8 +57,8 @@ export const PLAYER_APP_HTML = `
         once charts are loaded. Falls behind the canvas otherwise.
 
         Structured as three layers:
-        - \`.drop-frame\`: subtle outer ring spanning the whole
-          stage, lights up during a live drag.
+        - \`.drop-frame\`: hairline ring around the stage at rest.
+          Hidden during a live drag; the card is that feedback.
         - \`.drop-card\`: centered glassmorphism panel hosting the
           actual content; hosts the entry / hover animations.
         - icon + title + subtitle for the hierarchy.
