@@ -1959,7 +1959,7 @@ textarea {
  *
  * The page chrome steps off the stage: the stage is fitted to the screen's height on a landscape phone, so any overlay
  * sits on top of the skin's own text. The search box only shows while it is being typed in (the skins' search area
- * focuses it), the Help button shrinks to an icon in the corner, and the Debug Menu collapses to a short tab.
+ * focuses it), and the Help button shrinks to an icon in the corner. The Debug Menu keeps its usual size.
  */
 @supports (height: 100dvh) {
   html.touch-first body,
@@ -1998,10 +1998,6 @@ html.phone .help-button-label {
   display: none;
 }
 
-html.phone .debug-pane-container:has(> .debug-pane:not(.tp-rotv-expanded)) {
-  width: 116px;
-}
-
 /* Keep help and a collapsed pane out of touch lanes. */
 html.touch-first .shell.in-gameplay .help-button {
   visibility: hidden;
@@ -2009,15 +2005,6 @@ html.touch-first .shell.in-gameplay .help-button {
 html.touch-first:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) {
   opacity: 0.35;
 }
-html:has(.shell.in-gameplay) .debug-pane-container:has(> .debug-pane:not(.tp-rotv-expanded)) {
-  width: 40px;
-}
-html:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) > .tp-rotv_b .tp-rotv_t {
-  overflow: hidden;
-  white-space: nowrap;
-  color: transparent;
-}
-
 /* Touch play controls: a pause button during play; Resume / Quit while paused. */
 .touch-controls {
   position: absolute;
