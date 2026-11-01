@@ -3,6 +3,7 @@ export type { NonstopChartOptionDiagnostic } from './chart-options.ts';
 import type { ChartTextStage } from '../../core/chart-text.ts';
 import {
   buildChartTextTimeline,
+  CHART_OPTION_PROGRAM_VERSION,
   type ChartOptionProgram,
   type ChartOptionStateCue,
   resolvePoorBGAMode,
@@ -458,7 +459,7 @@ export function stitchNonstopCourse(
       ...(hasChartOptions
         ? {
             chartOptions: {
-              version: 1 as const,
+              version: CHART_OPTION_PROGRAM_VERSION,
               initial: { ...chartOptionCues[0]?.state },
               cues: chartOptionCues.slice(1),
             },

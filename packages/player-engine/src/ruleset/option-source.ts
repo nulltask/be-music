@@ -7,7 +7,12 @@ import { isRulesetId, type RulesetId } from './definitions.ts';
  */
 
 /** The names two sources define with different behavior, with the sources that define each. */
-export const QUALIFIED_OPTION_SOURCES = {
+export const QUALIFIED_OPTION_SOURCES: {
+  readonly RANDOM: readonly ['lr2', 'beatoraja', '____'];
+  readonly 'S-RANDOM': readonly ['lr2', 'beatoraja', '____'];
+  readonly CONVERGE: readonly ['lr2', 'beatoraja'];
+  readonly BATTLE: readonly ['beatoraja', '____'];
+} = {
   /** LR2's randFix shuffle, beatoraja's per-lane draw on Java `Random`, and AC's (LR2's, provisionally). */
   RANDOM: ['lr2', 'beatoraja', '____'],
   /** LR2's free-lane draw, beatoraja's 40 ms jack avoidance, and AC's (LR2's, provisionally). */

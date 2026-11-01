@@ -42,6 +42,8 @@ import {
 import { resolveBeatorajaNoteDstBlockIndex } from './note-dst-block.ts';
 import { resolveBeatorajaScrollPlacement } from './scroll-placement.ts';
 import type { NoteDrawWindow } from '../../../chart/note-draw-window.ts';
+import type { ChartOptionState } from '@be-music/chart-model';
+import { hasChartNoteVisual, placeChartNoteVisual } from '../../shared/playfield/chart-note-visual.ts';
 
 /** How far above a lane's top a note still draws: the lead-in band notes scroll in through. */
 const TAP_LEAD_IN_PX = 24;
@@ -141,6 +143,10 @@ export interface BeatorajaNoteClock {
   readonly currentSeconds: number;
   readonly currentBeat: number;
   readonly displayBeat?: number;
+  /** The chart-authored display state (#843): HIDDEN, CHANGE-HS and CRAZY move, fade and size the notes. */
+  readonly chartOptions?: ChartOptionState;
+  /** The running combo, for the CHANGE-HS COMBO-* families. */
+  readonly summary?: { readonly combo?: number };
 }
 
 /** Fallback palette when the skin omits a per-lane sprite or texture decode fails. */
@@ -429,6 +435,20 @@ export class BeatorajaNoteLayer {
     }
 
     const notes = this.drawingNotes(frame);
+    const chartOptions = frame.chartOptions;
+    const chartVisual = hasChartNoteVisual(chartOptions)
+      ? (y: number, rect: BeatorajaNoteRect, note: PlayerUIFrameNote) =>
+          placeChartNoteVisual(chartOptions, {
+            y,
+            judgementY,
+            laneTopY,
+            laneWidth: rect.w,
+            channel: note.channel,
+            beat: note.beat,
+            seconds: frame.currentSeconds,
+            combo: frame.summary?.combo,
+          })
+      : undefined;
     const firstIndex = this.advanceLR2DrawCursor(frame, drawWindow, notes);
     const lr2LastBeat = lr2LastWalkedBeat(drawWindow, pixelsPerBeat);
     for (let noteIndex = firstIndex; noteIndex < notes.length; noteIndex += 1) {
@@ -452,16 +472,23 @@ export class BeatorajaNoteLayer {
       if (lane === undefined) continue;
       const rect = rects[lane];
       if (rect === undefined) continue;
-      const alpha = constant === undefined ? 1 : resolveConstantAlpha(note.seconds, frame.currentSeconds, constant);
-      if (alpha <= 0) continue;
+      const constantAlpha =
+        constant === undefined ? 1 : resolveConstantAlpha(note.seconds, frame.currentSeconds, constant);
+      if (constantAlpha <= 0) continue;
 
       // LR2's rules hold a passed note on the judgement line.
-      const y = resolveDrawY(drawWindow, judgementY - distance(note.beat) * pixelsPerBeat, judgementY);
+      const rawY = judgementY - distance(note.beat) * pixelsPerBeat;
+      const visual = chartVisual?.(rawY, rect, note);
+      const y = resolveDrawY(drawWindow, visual?.y ?? rawY, judgementY);
+      const alpha = constantAlpha * (visual?.alpha ?? 1);
+      if (alpha <= 0) continue;
 
       if (isLongNote) {
         // beatoraja keeps a long note while its end is ahead (the frame carries no end time, so its beat stands in).
         if (scrolling && note.endBeat! < drawWindow.currentBeat) continue;
-        const yEnd = resolveDrawY(drawWindow, judgementY - distance(note.endBeat!) * pixelsPerBeat, judgementY);
+        // A long note keeps its lane geometry: only CHANGE-HS moves its tail, and its head's HIDDEN opacity applies.
+        const rawEndY = judgementY - distance(note.endBeat!) * pixelsPerBeat;
+        const yEnd = resolveDrawY(drawWindow, chartVisual?.(rawEndY, rect, note).y ?? rawEndY, judgementY);
         // Under beatoraja's rules a tail below the stage bottom has nothing left to draw (LR2's hold it on the line).
         if (yEnd > drawBottom) continue;
         // Cull when the entire LN has scrolled past the top of the lane. Both head AND
@@ -508,7 +535,15 @@ export class BeatorajaNoteLayer {
       // rules hold a passed note there), or under beatoraja's rules the stage bottom while the note's time is ahead.
       if (y < rect.y - TAP_LEAD_IN_PX || y > drawBottom) continue;
       if (scrolling && !isDrawnAtTime(drawWindow, note.seconds)) continue;
-      const r = this.paintTapNote(usedG, usedS, rect, lane, note, y, alpha);
+      const tapRect =
+        visual === undefined || (visual.scale === 1 && visual.xOffset === 0)
+          ? rect
+          : {
+              ...rect,
+              x: rect.x + (rect.w - rect.w * visual.scale) / 2 + visual.xOffset,
+              w: rect.w * visual.scale,
+            };
+      const r = this.paintTapNote(usedG, usedS, tapRect, lane, note, y, alpha, visual?.scale);
       usedG = r.g;
       usedS = r.s;
     }
@@ -678,6 +713,8 @@ export class BeatorajaNoteLayer {
     note: PlayerUIFrameNote,
     y: number,
     alpha: number,
+    /** CRAZY size: the cell height follows the rect's width scale. */
+    scale = 1,
   ): { g: number; s: number } {
     const imageId = note.mine ? this.noteSection.mine[lane] : this.noteSection.note[lane];
     const cropped = this.resolveLaneSprite(imageId);
@@ -691,7 +728,7 @@ export class BeatorajaNoteLayer {
       // px. Scaling H by `lane.w / cellW` (the obvious "preserve aspect ratio" choice)
       // produced 22-23 px tall notes — the user reported the notes were visibly taller
       // than in upstream beatoraja. The pinned bottom edge stays at the judgement line via `y - drawH`.
-      const drawH = cropped.cellH;
+      const drawH = cropped.cellH * scale;
       // Apply the skin's `note.expansionrate` (default `[100, 100]` = no scaling). 9K's
       // `play9.json` authors `[115, 112]` (1.15× wider, 1.12× taller) for chunkier popn-style
       // notes. The expansion is applied around the rect's centre so notes stay aligned to the

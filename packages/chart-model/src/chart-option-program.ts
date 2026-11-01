@@ -1,11 +1,19 @@
 import { parseHDXLongNoteMode } from './hdx-long-note-mode.ts';
 import { findLastIndexAtOrBefore } from '@be-music/shared-utils/core';
 import type { ChartOptionTimeline } from './chart-options.ts';
+import { isChartPlayOptionDeclaration } from './chart-play-options.ts';
+import { parseChartVisualOption, type ChartVisualOptionFields } from './chart-option-visual.ts';
 
-export interface ChartOptionState {
+export interface ChartOptionState extends ChartVisualOptionFields {
   /** Compulsory visual spacing multiplier, independent of audio tempo and user hi-speed limits. */
   hiSpeed?: number;
 }
+/**
+ * The effective-program profile this build compiles. Version 1 holds HI-SPEED only; version 2 adds HIDDEN, CHANGE-HS
+ * and the CRAZY size / X-wave subfamilies (#843). A replay keeps the version it was recorded with, so a version-1
+ * recording never activates a version-2 family.
+ */
+export const CHART_OPTION_PROGRAM_VERSION = 2;
 export interface ChartOptionStateCue {
   timeUs: number;
   /** Complete effective authored state at this instant. Empty restores user display settings. */
@@ -13,7 +21,7 @@ export interface ChartOptionStateCue {
 }
 /** Versioned effective operations, safe to retain in a replay without reinterpreting unsupported source IDs later. */
 export interface ChartOptionProgram {
-  version: 1;
+  version: 1 | 2;
   initial: ChartOptionState;
   cues: ChartOptionStateCue[];
 }
@@ -64,7 +72,22 @@ const LEGACY_HI_SPEED_VALUES = new Set([
   '100.0',
 ]);
 
-function compileDeclaration(declaration: string, timed: boolean): number | ChartOptionDiagnostic['code'] {
+type StateChange = (state: ChartOptionState) => ChartOptionState;
+
+function compileDeclaration(declaration: string, timed: boolean): StateChange | ChartOptionDiagnostic['code'] {
+  const hiSpeed = compileHiSpeed(declaration, timed);
+  if (typeof hiSpeed === 'number') return (state) => ({ ...state, hiSpeed });
+  if (hiSpeed !== 'unsupported-option') return hiSpeed;
+  const visual = parseChartVisualOption(declaration);
+  if (visual === undefined) return 'unsupported-option';
+  return (state) => {
+    const next: ChartOptionState = { ...state, ...visual.set };
+    for (const field of visual.clear) delete next[field];
+    return next;
+  };
+}
+
+function compileHiSpeed(declaration: string, timed: boolean): number | ChartOptionDiagnostic['code'] {
   const modern = /^774:HI-SPEED_x(\d+(?:\.\d{1,2})?)$/.exec(declaration);
   if (modern) {
     const value = Number(modern[1]);
@@ -75,6 +98,10 @@ function compileDeclaration(declaration: string, timed: boolean): number | Chart
   if (legacy && LEGACY_HI_SPEED_VALUES.has(legacy[1]!))
     return timed ? 'initial-only-alias' : Math.max(0.25, Number(legacy[1]));
   if (parseHDXLongNoteMode(declaration) !== undefined) return 'initial-only-option';
+  // RANDOM and gameplay CRAZY are initial-only in nanasigroove; `compileChartPlayOptions` consumes the initial ones.
+  // `CRAZY_OFF` also clears the visual CRAZY subfamilies, so it stays a display operation too.
+  if (isChartPlayOptionDeclaration(declaration) && parseChartVisualOption(declaration) === undefined)
+    return 'initial-only-option';
   if (declaration.startsWith('charatbeatHDX:LONGMODE')) return 'invalid-parameter';
   return 'unsupported-option';
 }
@@ -89,8 +116,10 @@ export function compileChartOptions(timeline: ChartOptionTimeline): CompiledChar
   for (const declaration of timeline.initial) {
     // LONGMODE is resolved by note-rules before note extraction, not a display/replay-profile operation.
     if (parseHDXLongNoteMode(declaration) !== undefined) continue;
+    // RANDOM and gameplay CRAZY are play options (`compileChartPlayOptions`), not display operations; `CRAZY_OFF` is both.
+    if (isChartPlayOptionDeclaration(declaration) && parseChartVisualOption(declaration) === undefined) continue;
     const value = compileDeclaration(declaration, false);
-    if (typeof value === 'number') state = { ...state, hiSpeed: value };
+    if (typeof value === 'function') state = value(state);
     else diagnostics.push({ code: value, declaration });
   }
   const initial = { ...state };
@@ -107,14 +136,14 @@ export function compileChartOptions(timeline: ChartOptionTimeline): CompiledChar
       continue;
     }
     const value = compileDeclaration(cue.declaration, true);
-    if (typeof value !== 'number') {
+    if (typeof value !== 'function') {
       diagnostics.push({ code: value, declaration: cue.declaration, ...context });
       continue;
     }
-    state = { ...state, hiSpeed: value };
+    state = value(state);
     cues.push({ timeUs, state });
   }
-  return { program: { version: 1, initial, cues }, diagnostics };
+  return { program: { version: CHART_OPTION_PROGRAM_VERSION, initial, cues }, diagnostics };
 }
 
 /** Active effective authored options at integer replay/chart microseconds; stateless across pause and seek. */

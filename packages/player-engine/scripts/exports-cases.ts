@@ -1017,6 +1017,15 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.isKnownOptionSource('____:CONVERGE');
     },
   });
+  define('player-engine.applyChartPlayOptions', {
+    run() {
+      playerAPI.applyChartPlayOptions(
+        { random1P: 'S-RANDOM', random2P: 'OFF', mineModifier: 'OFF' },
+        { version: 1, options: { random: 'ALL+', addMine: true } },
+        { doublePlay: true, hasScratch: true },
+      );
+    },
+  });
   define('player-engine.ruleset.clampCustomJudgeRate', {
     run() {
       rulesetAPI.clampCustomJudgeRate('keyPerfectGreat', 10);

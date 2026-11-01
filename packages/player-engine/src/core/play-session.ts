@@ -1,4 +1,5 @@
 import { BmsonBGAController } from './bmson-bga.ts';
+import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
 import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
@@ -13,6 +14,7 @@ import {
   buildChartTextTimeline,
   buildChartOptionTimeline,
   compileChartOptions,
+  compileChartPlayOptions,
   resolveChartOptionsAt,
   type ChartOptionProgram,
   isPlayLaneSoundChannel,
@@ -282,6 +284,11 @@ export async function createPlaySession(
       ? compileChartOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing))
       : { program: structuredClone(options.chartOptionProgram), diagnostics: [] };
   const chartOptions = compiledOptions.program;
+  const chartPlayOptions =
+    options.chartPlayOptionProgram !== undefined
+      ? structuredClone(options.chartPlayOptionProgram)
+      : compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing));
+  const chartJudge = resolveChartJudgeOption(chartPlayOptions);
   for (const diagnostic of [...compiledOptions.diagnostics, ...(options.chartOptionDiagnostics ?? [])])
     emitPlayerLog(options, 'warn', 'chart.option', { ...diagnostic });
   const extraDepth = clampExtraNoteDepth(options.extraNoteDepth ?? playbackChart.extraNoteDepth ?? 0);
@@ -356,6 +363,7 @@ export async function createPlaySession(
       ...(options.gaugeAutoShift !== undefined ? { gaugeAutoShift: options.gaugeAutoShift } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
       ...(options.course !== undefined ? { course: courseStageRulesetOptions(options.course) } : {}),
+      ...chartJudge,
     },
   );
   reportResolvedRuleset(options, ruleset);
@@ -364,7 +372,7 @@ export async function createPlaySession(
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
   const { score, summary, resetScore: resetPrimaryScore } = createPlayerScore(ruleset, courseCarry);
   const secondPlayer = twoPlayer
-    ? createSecondPlayer(resolvedJSON, playbackChart, judgeRankChanges, options, selectedGauge)
+    ? createSecondPlayer(resolvedJSON, playbackChart, judgeRankChanges, options, selectedGauge, chartJudge)
     : undefined;
   if (secondPlayer !== undefined) summary.secondPlayer = secondPlayer.summary;
   const resetScore = (): void => {
@@ -379,6 +387,7 @@ export async function createPlaySession(
           return createReplayRecorder({
             json: resolvedJSON,
             chartOptions,
+            chartPlayOptions,
             moneyScore: ruleset.moneyScore,
             chart: playbackChart,
             chartSHA256,
@@ -625,7 +634,7 @@ export async function createPlaySession(
     audioBackend: audioBackendLabel,
     ...(secondPlayer !== undefined ? { summary2P: secondPlayer.summary } : {}),
     ...(bmsonBGA ? { resolveBmsonBGA: (seconds: number) => bmsonBGA.read(seconds) } : {}),
-    ...(chartOptions.initial.hiSpeed !== undefined || chartOptions.cues.length > 0
+    ...(Object.keys(chartOptions.initial).length > 0 || chartOptions.cues.length > 0
       ? {
           resolveChartOptions: (seconds: number) =>
             resolveChartOptionsAt(chartOptions, Math.round(Math.min(seconds, freezeSeconds) * 1_000_000)),
@@ -828,6 +837,7 @@ function createSecondPlayer(
   judgeRankChanges: ResolvedChart['judgeRank']['changes'],
   options: PlayerOptions,
   selectedGauge: string | undefined,
+  chartJudge: ReturnType<typeof resolveChartJudgeOption>,
 ): SecondPlayer {
   const gauge = options.gauge2P ?? selectedGauge;
   const ruleset = resolveRuleset(
@@ -837,6 +847,7 @@ function createSecondPlayer(
       bmsonTotalMode: options.bmsonTotalMode,
       ...(gauge !== undefined ? { selectedGauge: gauge } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
+      ...chartJudge,
     },
   );
   const { score, summary, resetScore } = createPlayerScore(ruleset, undefined);

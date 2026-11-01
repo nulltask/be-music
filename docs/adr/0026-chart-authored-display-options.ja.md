@@ -29,3 +29,5 @@ NONSTOP は合成した実効プログラムを `NonstopStitchMap.chartOptions`�
 新しく対応した ID が、記録済みの実効プログラムで勝手に有効になることを防ぎます。0.77 や 100 の強制値を表示しつつ、永続的なユーザー設定を上書きしません。NONSTOP のステージ境界でも、空の実効状態で元の設定へ戻します。
 
 通常再生と NONSTOP で HI-SPEED を実行します。他の系列は効果なしで診断します。理由と、実装する場合に必要なものは[対応範囲](../research/chart-authored-options.ja.md#対応範囲決定)に記録しています。HIDDEN・CHANGE-HS・CRAZY のネイティブ数式や表示一致は主張しません。
+
+[ADR 0032](./0032-chart-authored-visual-families.ja.md) は、HIDDEN・CHANGE-HS・CRAZY のサイズ / 揺れを加えてプログラムをプロファイル version 2 に拡張します。

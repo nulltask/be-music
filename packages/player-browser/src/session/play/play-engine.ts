@@ -52,6 +52,7 @@ import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { supportsLiveTempoChange, type ReplayTempo } from '../../runtime/play-tempo.ts';
 import { drainWebUISignals, type WebUIRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
+import type { PlayChartContext } from './play-chart.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
@@ -151,6 +152,8 @@ export interface PlayEngineContext
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly randomDraws: RandomDraws | undefined;
   readonly randomSeeds?: { p1?: string; p2?: string };
+  /** The chart's own gameplay options and the lane / mine selection they leave (#844). */
+  readonly chartPlay?: PlayChartContext['chartPlay'];
   readonly preparedChart: PreparedPlaybackChartData | undefined;
   readonly notes: TimedPlayableNote[];
   readonly timingResolver: TimingResolver | undefined;
@@ -711,7 +714,12 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       mineModifier:
         ctx.options.replay?.play.mineModifier ??
         ctx.options.fixedArrangement?.play.mineModifier ??
+        ctx.chartPlay?.selection.mineModifier ??
         ctx.options.mineModifier,
+      // The chart's gameplay program (#844): a replay's recorded one, or none for an older replay without it.
+      chartPlayOptionProgram: ctx.options.replay
+        ? (ctx.options.replay.chart.chartPlayOptions ?? { version: 1 as const, options: {} })
+        : ctx.chartPlay?.program,
       autoScratch1P: ctx.options.autoScratch1P === true,
       autoScratch2P: ctx.options.autoScratch2P === true,
       anyKey: ctx.options.replay ? ctx.options.replay.play.anyKey === true : ctx.options.anyKey === true,
@@ -809,8 +817,9 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // back through `getResultData().replay` for the result screen's auto-save.
             // What the player sees at the start; the changes during the play go in as `view` commands. A play that
             // seeks records none: the engine discards its recorder at the first seek.
+            // A chart's RANDOM / ADDMINE (#844) replaced the player's lane and mine options: record what was played.
             recordReplay: resolveReplayRecording(
-              ctx.options,
+              { ...ctx.options, ...ctx.chartPlay?.selection } as typeof ctx.options,
               ctx.chart,
               startReplayView(ctx),
               ctx.playState.view.hiSpeed.player,
