@@ -85,6 +85,7 @@ function assertBmsonKeysFitBMS(json: BeMusicJSON): void {
     json.bms.exRank,
     json.bms.argb,
     json.bms.changeOption,
+    json.bms.songText,
     json.bms.exWAV,
     json.bms.exBMP,
     json.bms.bga,
@@ -293,6 +294,8 @@ function pushResourceLines(lines: string[], json: BeMusicJSON): void {
   pushIndexedNumberLines(lines, 'BPM', json.resources.bpm, base);
   pushIndexedNumberLines(lines, 'STOP', json.resources.stop, base);
   pushIndexedStringLines(lines, 'TEXT', json.resources.text, base);
+  // pomu's obsolete name for `#TEXTxx`, written back as the chart had it.
+  pushIndexedStringLines(lines, 'SONG', json.bms.songText, base);
 }
 
 function resolveJSONBase(json: BeMusicJSON): 36 | 62 {

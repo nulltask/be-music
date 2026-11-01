@@ -1,7 +1,7 @@
 import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
 
 const INDEXED_HEADER_COMMAND =
-  /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Za-z]{2})$/;
+  /^(WAV|BMP|BPM|STOP|TEXT|SONG|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Za-z]{2})$/;
 
 type IndexedHeaderDirective =
   | 'WAV'
@@ -9,6 +9,7 @@ type IndexedHeaderDirective =
   | 'BPM'
   | 'STOP'
   | 'TEXT'
+  | 'SONG'
   | 'EXRANK'
   | 'ARGB'
   | 'CHANGEOPTION'
@@ -273,6 +274,9 @@ function applyIndexedHeaderLine(
       return;
     case 'TEXT':
       applyIndexedStringValue(json.resources.text, key, value);
+      return;
+    case 'SONG':
+      applyIndexedStringValue(json.bms.songText, key, value);
       return;
     case 'EXRANK':
       applyIndexedStringValue(json.bms.exRank, key, value);

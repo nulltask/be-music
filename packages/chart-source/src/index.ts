@@ -330,6 +330,11 @@ export interface BMSExtensions {
   /** The control-flow program includes every #OPTION, including unconditional declarations, in source order. */
   optionHeadersInControlFlow?: true;
   changeOption: Record<string, string>;
+  /**
+   * pomu `#SONGxx`: the obsolete name of `#TEXTxx` for channel `99`. Kept apart so it round-trips as written; the chart
+   * text timeline reads it only for indices `resources.text` leaves undefined.
+   */
+  songText: Record<string, string>;
   wavCmd?: string;
   /**
    * Every `#WAVCMD pp xx vv` line as the raw post-directive text (one entry per source line, in declaration order). The
@@ -428,6 +433,7 @@ export function createEmptyJSON(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
       stp: [],
       wavCmds: [],
       changeOption: {},
+      songText: {},
       exWAV: {},
       exBMP: {},
       bga: {},
@@ -526,6 +532,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
         ? { wavNameBytePrefixes: { ...json.bms.wavNameBytePrefixes } }
         : {}),
       changeOption: { ...json.bms.changeOption },
+      songText: { ...json.bms.songText },
       exWAV: { ...json.bms.exWAV },
       exBMP: { ...json.bms.exBMP },
       bga: { ...json.bms.bga },
