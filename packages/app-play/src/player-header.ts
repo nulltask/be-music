@@ -74,7 +74,10 @@ export async function togglePlayerHeaderFullscreen(
   await toggleFullscreen(target, doc);
 }
 
-/** The shared header for Play: Settings sits where other services put the Play link, with fullscreen beside it. */
+/**
+ * The shared header for Play: it spans the viewport, Settings sits where other services put the Play link, and
+ * fullscreen sits beside Settings.
+ */
 export function playerServiceHeaderHTML(input: {
   locale: PlayerLang;
   hostname: string;
@@ -105,6 +108,7 @@ export function playerServiceHeaderHTML(input: {
     settingsOpen: input.settingsOpen === true,
     fullscreen: true,
     fullscreenActive: input.fullscreenActive === true,
+    spanViewport: true,
     accountHref,
     account: signedIn,
     requestURL: input.requestURL,

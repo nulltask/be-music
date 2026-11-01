@@ -27,6 +27,13 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   expect(footer).not.toContain('>beta</span>');
   expect(footer).not.toContain('>Beta</span>');
   expect(PLAYER_APP_HTML).toContain('id="player-service-header"');
+  const header = PLAYER_APP_HTML.slice(
+    PLAYER_APP_HTML.indexOf('id="player-service-header"'),
+    PLAYER_APP_HTML.indexOf('<main id="main"'),
+  );
+  expect(header).toContain('class="flex items-center gap-x-3 px-4 py-2.5 sm:gap-x-6"');
+  expect(header).not.toContain('max-w-5xl');
+  expect(header).not.toContain('mx-auto');
   expect(PLAYER_APP_HTML).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
   expect(PLAYER_APP_HTML).toContain('data-service-header="settings"');
   expect(PLAYER_APP_HTML).toContain('aria-label="Settings"');

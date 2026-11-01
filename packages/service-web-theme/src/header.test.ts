@@ -18,6 +18,7 @@ describe('renderServiceHeader', () => {
       },
       requestURL: 'https://be-music.app/',
     });
+    expect(html).toContain('class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6"');
     expect(html).toContain('>Be-Music Dashboard</a><span class="badge" data-variant="outline">Beta</span>');
     expect(html).not.toContain('>beta</span>');
     expect(html).not.toContain('ダッシュボード');
@@ -157,6 +158,25 @@ describe('renderServiceHeader', () => {
     expect(active).not.toContain('lucide-maximize');
     expect(active).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
     expect(active.match(/<span class="badge"/g)).toHaveLength(1);
+    expect(active).toContain('class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6"');
+  });
+
+  test('spans the viewport when asked and keeps the centered column otherwise', () => {
+    const spanned = renderServiceHeader({
+      locale: 'en',
+      title: 'Be-Music Play',
+      homeHref: '/',
+      settings: true,
+      fullscreen: true,
+      spanViewport: true,
+      accountHref: '#sign-in',
+      requestURL: '/',
+    });
+    expect(spanned).toContain('class="flex items-center gap-x-3 px-4 py-2.5 sm:gap-x-6"');
+    expect(spanned).not.toContain('max-w-5xl');
+    expect(spanned).not.toContain('mx-auto');
+    expect(spanned).toContain('data-service-header="settings"');
+    expect(spanned).toContain('data-service-header="fullscreen"');
   });
 });
 
