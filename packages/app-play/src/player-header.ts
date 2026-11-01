@@ -17,8 +17,8 @@ export interface PlayerHeaderAccount {
 }
 
 export interface PlayerHeaderActions {
-  /** Unfolds the existing Debug Menu. `null` clears a binding. */
-  openDebugMenu?: (() => void) | null;
+  /** Opens the existing Debug Menu when it is closed, and closes it when it is open. `null` clears a binding. */
+  toggleDebugMenu?: (() => void) | null;
   /** Opens the player's sign-in dialog. `null` clears a binding. */
   openSignIn?: (() => void) | null;
   /** Switches the player language in place, the same path as Help. */
@@ -26,7 +26,7 @@ export interface PlayerHeaderActions {
 }
 
 const actions: {
-  openDebugMenu?: () => void;
+  toggleDebugMenu?: () => void;
   openSignIn?: () => void;
   selectLanguage: (lang: PlayerLang) => void;
 } = {
@@ -35,8 +35,11 @@ const actions: {
 
 let account: PlayerHeaderAccount | undefined;
 let host: HTMLElement | undefined;
+/** An odd number of Settings clicks arrived before the menu existed, so the first bind should open it. */
 let pendingMenu = false;
 let pendingSignIn = false;
+/** Whether the Debug Menu pane is expanded. The gear's `aria-expanded` follows it. */
+let settingsOpen = false;
 
 /** The document the header's fullscreen button reads. A phone fullscreens `documentElement`; a desktop, `.shell`. */
 export interface PlayerHeaderFullscreenDocument extends FullscreenDocumentLike {
@@ -79,6 +82,8 @@ export function playerServiceHeaderHTML(input: {
   account?: PlayerHeaderAccount;
   /** The page is fullscreen, so the button offers to leave. */
   fullscreenActive?: boolean;
+  /** The Debug Menu is open, so the gear is expanded. */
+  settingsOpen?: boolean;
 }): string {
   const signedIn: ServiceHeaderAccount | undefined =
     input.account === undefined
@@ -97,6 +102,7 @@ export function playerServiceHeaderHTML(input: {
     title: 'Be-Music Play',
     homeHref: '/',
     settings: true,
+    settingsOpen: input.settingsOpen === true,
     fullscreen: true,
     fullscreenActive: input.fullscreenActive === true,
     accountHref,
@@ -130,19 +136,27 @@ export function setPlayerHeaderAccount(next: PlayerHeaderAccount | undefined): v
   paint();
 }
 
+/** The gear's `aria-expanded` follows the existing Debug Menu pane. */
+export function setPlayerHeaderSettingsOpen(open: boolean): void {
+  if (settingsOpen === open) return;
+  settingsOpen = open;
+  paint();
+}
+
 /**
  * Wires Settings, Sign in and the language menu. Settings and Sign in can arrive after the menu and the dialogs exist;
- * a click before that waits for them. Fullscreen calls {@link togglePlayerHeaderFullscreen} itself.
+ * a click before that waits. A second Settings click before the menu exists cancels the first. Fullscreen calls
+ * {@link togglePlayerHeaderFullscreen} itself.
  */
 export function bindPlayerHeader(next: PlayerHeaderActions): void {
-  if (next.openDebugMenu === null) {
-    actions.openDebugMenu = undefined;
+  if (next.toggleDebugMenu === null) {
+    actions.toggleDebugMenu = undefined;
     pendingMenu = false;
-  } else if (next.openDebugMenu !== undefined) {
-    actions.openDebugMenu = next.openDebugMenu;
+  } else if (next.toggleDebugMenu !== undefined) {
+    actions.toggleDebugMenu = next.toggleDebugMenu;
     if (pendingMenu) {
       pendingMenu = false;
-      next.openDebugMenu();
+      next.toggleDebugMenu();
     }
   }
   if (next.openSignIn === null) {
@@ -179,6 +193,7 @@ function paint(): void {
     requestURL,
     account,
     fullscreenActive: getFullscreenElement(document) !== null,
+    settingsOpen,
   });
 }
 
@@ -205,8 +220,8 @@ export function runPlayerHeaderAction(kind: 'settings' | 'fullscreen' | 'sign-in
     return;
   }
   if (kind === 'settings') {
-    if (actions.openDebugMenu !== undefined) actions.openDebugMenu();
-    else pendingMenu = true;
+    if (actions.toggleDebugMenu !== undefined) actions.toggleDebugMenu();
+    else pendingMenu = !pendingMenu;
     return;
   }
   if (kind === 'sign-in') {

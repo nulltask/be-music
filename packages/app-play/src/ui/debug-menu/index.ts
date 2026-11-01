@@ -313,9 +313,15 @@ export class DebugMenu {
   public setPlayOptions(changes: Partial<PlayOptions>): void {
     this.deps.setPlayOptions(changes);
   }
-  /** Unfolds the Debug Menu the header's Settings button opens. No second panel. */
-  public open(): void {
-    if (this.gui !== undefined) this.gui.expanded = true;
+  /** The header gear follows this pane, including a click on the pane's own title. */
+  private reportExpanded: ((open: boolean) => void) | undefined;
+  /** Reports when the existing pane opens or closes. */
+  public watchExpanded(report: (open: boolean) => void): void {
+    this.reportExpanded = report;
+  }
+  /** Opens the existing Debug Menu when it is closed, and closes it when it is open. No second panel. */
+  public toggle(): void {
+    if (this.gui !== undefined) this.gui.expanded = !this.gui.expanded;
   }
   /**
    * Builds the floating Tweakpane control panel and wires every controller to the gameplay / scene state. Centralizing
@@ -341,6 +347,7 @@ export class DebugMenu {
     gui.element.dataset.pane = 'debug';
     gui.expanded = false;
     this.gui = gui;
+    gui.on('fold', (event) => this.reportExpanded?.(event.expanded));
     const addFolder = (parent: Pick<FolderApi, 'addFolder'>, folder: DebugMenuFolder): FolderApi =>
       parent.addFolder({ title: folder.title, expanded: folder.open });
     // The native read-only monitor shows long load and playback messages without making them editable.

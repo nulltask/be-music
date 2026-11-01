@@ -99,7 +99,9 @@ describe('renderServiceHeader', () => {
     });
     expect(html).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
     expect(html.match(/<span class="badge"/g)).toHaveLength(1);
-    expect(html).toContain('data-service-header="settings" title="デバッグメニュー" aria-label="設定"');
+    expect(html).toContain(
+      'data-service-header="settings" title="デバッグメニュー" aria-label="設定" aria-expanded="false"',
+    );
     expect(html).toContain('class="lucide lucide-settings"');
     expect(html).toContain('<span class="hidden md:inline">設定</span>');
     expect(html).not.toContain('href="https://play.be-music.app/"');
