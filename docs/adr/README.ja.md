@@ -53,3 +53,5 @@
 - [0031: アシストはオプションの参照元で区分し、結果は判定ルールで決め、ランプは追加専用にする](./0031-assist-record-policy.ja.md)
 
 - [0032: 譜面指定の HIDDEN・CHANGE-HS・CRAZY のサイズ / 揺れを Be-Music の式で実行する](./0032-chart-authored-visual-families.ja.md)
+
+- [0034: 譜面指定の GAMELEVEL と EXTRA を各 ruleset のゲージに対応させる](./0034-chart-authored-gauge-options.ja.md)

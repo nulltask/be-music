@@ -73,8 +73,6 @@ test.each([
   '774:RANDOM_MIRROR',
   '774:NOTES_DOUBLE',
   '774:CRAZY_HELLJUDGE',
-  '774:GAMELEVEL_HYPER',
-  '774:EXTRA_HARD',
   'charatbeatHDX:BGAMODE 1',
 ])('diagnoses %s without changing the effective program', (declaration) => {
   const result = compileChartOptions({
@@ -120,4 +118,11 @@ test('a later declaration of an exclusive family replaces the earlier one; other
     cues: [],
   });
   expect(program.initial).toEqual({ hidden: 'BLINK2', crazySize: 'RD-SIZE', crazyWave: 'XWAVE2' });
+});
+test('initial GAMELEVEL and EXTRA choose the gauge; timed uses are diagnosed initial-only', () => {
+  for (const declaration of ['774:GAMELEVEL_HYPER', '774:EXTRA_HARD', '774:EXTRA_OFF']) {
+    const result = compileChartOptions({ initial: [declaration], cues: [{ seconds: 1, key: '01', declaration }] });
+    expect(result.program).toEqual({ version: 2, initial: {}, cues: [] });
+    expect(result.diagnostics).toEqual([{ code: 'initial-only-option', declaration, key: '01', seconds: 1 }]);
+  }
 });
