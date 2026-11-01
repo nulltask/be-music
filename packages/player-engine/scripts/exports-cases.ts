@@ -737,6 +737,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.simulateReplay(BENCH_COUPLE_REPLAY, { ruleset: 'lr2', player: 2 });
     },
   });
+  define('player-engine.replay.resolveReplayJudgmentTimeline', {
+    run: () => {
+      replayAPI.resolveReplayJudgmentTimeline(BENCH_REPLAY, { ruleset: 'lr2' });
+    },
+  });
   define('player-engine.replay.simulateReplayRulesets', {
     run: () => {
       replayAPI.simulateReplayRulesets(BENCH_REPLAY);
@@ -935,6 +940,41 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.records.applyRecordPolicyLamp', {
     run: () => {
       recordsAPI.applyRecordPolicyLamp('HARD', benchRecordPolicy);
+    },
+  });
+  define('player-engine.records.isDanRank', {
+    run: () => {
+      recordsAPI.isDanRank('dan-7');
+    },
+  });
+  define('player-engine.records.danRankOrder', {
+    run: () => {
+      recordsAPI.danRankOrder('insane-3');
+    },
+  });
+  define('player-engine.records.higherDanRank', {
+    run: () => {
+      recordsAPI.higherDanRank('dan-7', 'insane-1');
+    },
+  });
+  define('player-engine.records.resolveCourseDanRank', {
+    run: () => {
+      recordsAPI.resolveCourseDanRank('GENOCIDE 2018 発狂八段');
+    },
+  });
+  define('player-engine.records.formatDanRank', {
+    run: () => {
+      recordsAPI.formatDanRank('insane-8');
+    },
+  });
+  define('player-engine.records.resolveDanCourseKeyMode', {
+    run: () => {
+      recordsAPI.resolveDanCourseKeyMode(undefined, [7, 7, 7, 7]);
+    },
+  });
+  define('player-engine.records.resolveCourseRunDanRank', {
+    run: () => {
+      recordsAPI.resolveCourseRunDanRank({ kind: 'grade', name: '七段', lamp: 'NORMAL' });
     },
   });
   define('player-engine.ruleset.clampCustomJudgeRate', {

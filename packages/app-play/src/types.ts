@@ -146,6 +146,11 @@ export interface PlayerGUIState extends PlayTempoSettings {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
+   * The replay ghost shown beside the play (`services/ghost.ts`): `'OFF'` (default), or `'OWN_BEST'` — the replay of the
+   * player's best on the chart, replayed as a second playfield on the built-in skins. Latched at song start.
+   */
+  ghost: import('./services/ghost.ts').GhostMode;
+  /**
    * When true (off by default), the replay (`*.bmplay.json` input replay — see `@be-music/player-engine/replay`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
    * beatoraja result paths. Toggled from the Debug Menu's "Auto-save replays" checkbox.

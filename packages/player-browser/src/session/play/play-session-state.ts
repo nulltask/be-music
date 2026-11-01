@@ -58,6 +58,7 @@ import type { BGACue, NonstopStageBGATimeline } from '../../chart/bga-timeline.t
 
 import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
+import type { GhostPresentation } from './ghost/ghost.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 
 export class PlaySessionState extends PlayPresentation {
@@ -490,6 +491,11 @@ export class PlaySessionState extends PlayPresentation {
   assetsReadyPromise: Promise<void> | undefined;
   /** True once the samples have decoded and the engine may be built on them. */
   samplesDecoded = false;
+  /**
+   * The replay ghost shown beside the play (`ghost/ghost.ts`), once its replay is read and placed; absent without one.
+   * It only draws, through the frames the scene session hands the view.
+   */
+  ghost: GhostPresentation | undefined;
   /**
    * Latches at the moment the engine's `manualPlay` / `autoPlay` Promise resolves so the `onChartFinished` /
    * `onExit` callback fires at most once. {@link handleSharedEngineChartFinished} is the only writer.

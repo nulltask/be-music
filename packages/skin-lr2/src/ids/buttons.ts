@@ -123,6 +123,12 @@ export const LR2_BUTTON = {
   COURSE_CONNECTION8: 247,
   /** Steps the connection after stage 9. */
   COURSE_CONNECTION9: 248,
+  /**
+   * Flags the selected course for IR (its `ir` column): a click turns an unflagged course's flag on, plays
+   * `option_change` and makes the course read-only; on a flagged course it draws cell 1 and does nothing (OpenLR2
+   * L11141-L11153).
+   */
+  COURSE_IR: 253,
   /** Steps the RANDOM MIX preferred level (`optimumlevel_7`, FAVORITE), 0-99. */
   RANDOM_MIX_PREFERRED_LEVEL: 260,
   /** Steps the RANDOM MIX max level, 0-99. */

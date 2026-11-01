@@ -14,6 +14,7 @@ import { resolveChartSource, type ChartFileHashes } from '@be-music/player-brows
 import {
   createPlayScene,
   PlayOptionMismatchError,
+  type GhostSource,
   type PixiSceneHost,
   type PlayScene,
   type SelectScene,
@@ -40,8 +41,10 @@ import { startArmedRecording, type RecordingDeps } from '../../recording-control
 import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
+import { createOwnBestGhostSource } from '../../services/ghost.ts';
 import type { PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
+import { libraryChartReplaySlotTarget, type ReplaySlotStore } from '../../services/replay-slots.ts';
 import type { BeatorajaPlayEntry, BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import { courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
@@ -115,7 +118,9 @@ export interface PlayRouteDeps {
   readonly playOptions: Pick<PlayOptionsService, 'current'> &
     Partial<Pick<PlayOptionsService, 'arrangementFor' | 'rememberArrangement'>>;
   /** The Debug Menu's state: the lane, gauge, tempo, audio and debug options the play is made with. */
-  readonly guiState: PlaySceneGUIState & Pick<PlayerGUIState, 'courseAutoAdvance' | 'playLayout'>;
+  readonly guiState: PlaySceneGUIState & Pick<PlayerGUIState, 'courseAutoAdvance' | 'playLayout' | 'ghost'>;
+  /** The replay slots a ghost of the player's own best is read from; without them a play shows no ghost. */
+  readonly ghostReplays?: Pick<ReplaySlotStore, 'slots' | 'read'>;
   /** The Debug Menu: the compressor's tuned parameters, and the hi-speed slider. */
   readonly debugMenu: DebugMenu;
   /** The compressor architecture every play mounts with (`?compressor=`). */
@@ -184,6 +189,7 @@ export class PlayRoute {
   private readonly results: PlayRouteDeps['results'];
   private readonly playOptions: PlayRouteDeps['playOptions'];
   private readonly guiState: PlayRouteDeps['guiState'];
+  private readonly ghostReplays: PlayRouteDeps['ghostReplays'];
   private readonly debugMenu: PlayRouteDeps['debugMenu'];
   private readonly compressorMode: PlayRouteDeps['compressorMode'];
   private readonly deviceProfile: PlayRouteDeps['deviceProfile'];
@@ -215,6 +221,7 @@ export class PlayRoute {
     this.results = deps.results;
     this.playOptions = deps.playOptions;
     this.guiState = deps.guiState;
+    this.ghostReplays = deps.ghostReplays;
     this.debugMenu = deps.debugMenu;
     this.compressorMode = deps.compressorMode;
     this.deviceProfile = deps.deviceProfile;
@@ -235,6 +242,20 @@ export class PlayRoute {
   /** The select screen (`createSelectScene`), whichever family draws it, kept by the router across the other screens. */
   private get selectView(): SelectScene | undefined {
     return this.router.select;
+  }
+
+  /**
+   * The ghost a built-in play of `chartEntry` shows (`services/ghost.ts`): the player's own best when "Ghost" asks for
+   * it, outside a replay, a course stage and a NONSTOP run. The play itself leaves it out where it has no room.
+   */
+  private resolveGhost(
+    chartEntry: LibraryChart,
+    play: { replay?: BeMusicReplay; courseStage?: CourseStagePlay; nonstop?: NonstopPlay },
+  ): { ghost?: GhostSource } {
+    if (this.guiState.ghost !== 'OWN_BEST' || this.ghostReplays === undefined) return {};
+    if (play.replay !== undefined || play.courseStage !== undefined || play.nonstop !== undefined) return {};
+    const target = libraryChartReplaySlotTarget(chartEntry);
+    return target !== undefined ? { ghost: createOwnBestGhostSource(this.ghostReplays, target) } : {};
   }
 
   /** The play (`createPlayScene`), whichever family draws it: loading behind a decide screen, or on the stage. */
@@ -490,7 +511,11 @@ export class PlayRoute {
       ...(source !== undefined ? { source } : {}),
       settings:
         kit.family === 'built-in'
-          ? { ...settings, layoutMode: resolvePlayLayoutMode(this.guiState.playLayout, this.deviceProfile) }
+          ? {
+              ...settings,
+              layoutMode: resolvePlayLayoutMode(this.guiState.playLayout, this.deviceProfile),
+              ...this.resolveGhost(chartEntry, { replay, courseStage, nonstop }),
+            }
           : settings,
       ...(course !== undefined
         ? { course: { ...course, ...(this.activeCourse?.run.practice === true ? { practice: true } : {}) } }

@@ -265,3 +265,28 @@ describe('RecordsService record latches', () => {
     });
   });
 });
+
+describe('RecordsService dan ranks', () => {
+  test('keeps the highest dan per key mode, persists it, and lists the current ruleset’s', () => {
+    const storage = stubStorage();
+    const ruleset: { current: RulesetId } = { current: 'lr2' };
+    const service = records(library({}), ruleset);
+    expect(service.currentDanRanks()).toEqual([]);
+    expect(service.recordDanRank(undefined)).toBeUndefined();
+    expect(service.recordDanRank({ key: 'lr2:7', rank: 'dan-7' })).toEqual({ previous: undefined });
+    expect(service.recordDanRank({ key: 'lr2:7', rank: 'dan-3' })).toEqual({ previous: 'dan-7' });
+    service.recordDanRank({ key: 'lr2:14', rank: 'dan-1' });
+    service.recordDanRank({ key: 'beatoraja:7', rank: 'insane-2' });
+    expect(service.currentDanRanks()).toEqual([
+      { keyMode: 7, rank: 'dan-7', label: '七段' },
+      { keyMode: 14, rank: 'dan-1', label: '初段' },
+    ]);
+    ruleset.current = 'beatoraja';
+    expect(service.currentDanRanks()).toEqual([{ keyMode: 7, rank: 'insane-2', label: '発狂二段' }]);
+    // A reload reads the ranks back.
+    stubStorage(Object.fromEntries(storage));
+    expect(records(library({}), ruleset).currentDanRanks()).toEqual([
+      { keyMode: 7, rank: 'insane-2', label: '発狂二段' },
+    ]);
+  });
+});

@@ -164,6 +164,8 @@ export const LR2_TEXT = {
   COURSE_CONNECTION8: 178,
   /** The connection after stage 9. */
   COURSE_CONNECTION9: 179,
+  /** The selected course's IR flag: `ON` or `OFF` (`optionstr.csv` `#COURSE_IR`); `OFF` on any other bar. */
+  COURSE_IR: 183,
   /** The RANDOM MIX preferred level: `OFF` or `LEVEL n`. */
   RANDOM_MIX_PREFERRED_LEVEL: 190,
   /** The RANDOM MIX max level: `NO LIMIT` or `LEVEL n`. */

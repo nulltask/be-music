@@ -200,6 +200,18 @@ describe('BeatorajaPlayBridge — construction', () => {
     bridge.update({ nowMs: 32, state, events: [], visualConstant: false });
     expect(bridge.hasOp(BEATORAJA_OP.CONSTANT)).toBe(false);
   });
+
+  it('hides the judge[] display while the frame carries LR2 SILENT', () => {
+    const bridge = new BeatorajaPlayBridge({ chartPlayVariant: '7', baseOps: new Set() });
+    const state = createPlayState();
+    bridge.update({ nowMs: 0, state, events: [], judgeTimingAutoAdjust: 'LR2-ON' });
+    expect(bridge.hasOp(BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN)).toBe(false);
+    bridge.update({ nowMs: 16, state, events: [], judgeTimingAutoAdjust: 'LR2-SILENT' });
+    expect(bridge.hasOp(BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN)).toBe(true);
+    // A replay's mode can change back mid-play; the display returns with it.
+    bridge.update({ nowMs: 32, state, events: [], judgeTimingAutoAdjust: 'OFF' });
+    expect(bridge.hasOp(BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN)).toBe(false);
+  });
 });
 
 describe('BeatorajaPlayBridge — built-in timers', () => {

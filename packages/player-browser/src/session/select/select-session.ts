@@ -132,7 +132,14 @@ export interface SelectSessionOptions {
 /** The part of the course maker the select screen drives. */
 export type SelectCourseMaker = Pick<
   CourseMaker,
-  'draft' | 'defaultConnection' | 'owns' | 'finish' | 'cancel' | 'stepDefaultConnection' | 'stepConnection'
+  | 'draft'
+  | 'defaultConnection'
+  | 'owns'
+  | 'finish'
+  | 'cancel'
+  | 'stepDefaultConnection'
+  | 'stepConnection'
+  | 'releaseCourse'
 > &
   /** The RANDOM MIX settings and their buttons, for a host that lists RANDOM MIX bars. */
   Partial<Pick<CourseMaker, 'randomMixSettings' | 'stepRandomMixSetting'>>;
@@ -760,8 +767,8 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   /**
    * Runs a course-maker action: finishing or cancelling the course being made, stepping the default connection and a
    * RANDOM MIX setting run
-   * on the course maker; deleting a course, or stepping one of its connections, only on a course of the player's own
-   * under the cursor; naming the course being made (or the player's course under the cursor) is the host's.
+   * on the course maker; deleting a course, flagging it for IR, or stepping one of its connections, only on a course of
+   * the player's own under the cursor; naming the course being made (or the player's course under the cursor) is the host's.
    */
   private runCourseMaker(action: SelectCourseMakerAction): void {
     const maker = this.options.courseMaker;
@@ -776,6 +783,12 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         // LR2 asks before it deletes: the host confirms.
         if (own !== undefined) this.options.on.courseMaker?.('delete', own);
         return;
+      case 'ir':
+        // LR2's button 253 turns the flag on and plays `option_change`; on a flagged course it does nothing (OpenLR2
+        // L11141-L11153).
+        if (own === undefined || maker?.releaseCourse(own.definition) === undefined) return;
+        this.playCue('optionChange');
+        break;
       case 'finish':
         maker?.finish();
         break;

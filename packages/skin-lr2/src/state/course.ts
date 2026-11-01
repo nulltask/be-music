@@ -159,6 +159,7 @@ export type LR2CourseMakerAction =
   | { kind: 'finish' }
   | { kind: 'cancel' }
   | { kind: 'delete' }
+  | { kind: 'ir' }
   | { kind: 'connection'; slot: number }
   | { kind: 'default-connection' }
   | { kind: 'random-mix'; setting: LR2RandomMixSetting };
@@ -218,13 +219,14 @@ export function resolveLR2RandomMixButtonState(type: number, settings: LR2Random
 
 /**
  * The course-maker action of an LR2 select button type: 230 finishes the course being made, 231 cancels it, 233 deletes
- * the selected course, 240-248 step the connection after stage 1-9 of the selected NONSTOP course, 260-266 a RANDOM MIX
+ * the selected course, 253 flags it for IR, 240-248 step the connection after stage 1-9 of the selected NONSTOP course, 260-266 a RANDOM MIX
  * setting and 268 the default connection. `undefined` for any other button.
  */
 export function resolveLR2CourseMakerAction(type: number): LR2CourseMakerAction | undefined {
   if (type === LR2_BUTTON.COURSE_FINISH) return { kind: 'finish' };
   if (type === LR2_BUTTON.COURSE_CANCEL) return { kind: 'cancel' };
   if (type === LR2_BUTTON.COURSE_DELETE) return { kind: 'delete' };
+  if (type === LR2_BUTTON.COURSE_IR) return { kind: 'ir' };
   if (type >= LR2_BUTTON.COURSE_CONNECTION1 && type <= LR2_BUTTON.COURSE_CONNECTION9) {
     return { kind: 'connection', slot: type - LR2_BUTTON.COURSE_CONNECTION1 };
   }
@@ -252,3 +254,22 @@ export function resolveLR2CourseMakerButtonState(
 }
 
 const LR2_CONNECTION_ORDER = Object.keys(LR2_CONNECTION_LABELS) as NonstopConnection[];
+
+/**
+ * LR2 text 183: the selected course's IR flag, `ON` or `OFF` as `optionstr.csv` row 24 (`#COURSE_IR,OFF,ON`) writes it
+ * (OpenLR2 L8406). be-music's flag is the course's `release`. LR2 sets the text for every bar, so a bar that is not a
+ * course (`release` undefined) reads `OFF`. `undefined` for other text ids.
+ */
+export function resolveLR2CourseIRText(st: number, release: boolean | undefined): string | undefined {
+  if (st !== LR2_TEXT.COURSE_IR) return undefined;
+  return release === true ? 'ON' : 'OFF';
+}
+
+/**
+ * The cell LR2 button 253 draws: 1 while the selected course is flagged for IR (`release`), else 0 (OpenLR2
+ * L11141-L11153). `undefined` for other buttons.
+ */
+export function resolveLR2CourseIRButtonState(type: number, release: boolean | undefined): number | undefined {
+  if (type !== LR2_BUTTON.COURSE_IR) return undefined;
+  return release === true ? 1 : 0;
+}

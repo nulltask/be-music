@@ -495,6 +495,7 @@ export class PlayerWebApp {
       results: this.resultRoute,
       playOptions: this.playOptions,
       guiState: this.guiState,
+      ghostReplays: this.replaySlots.store,
       debugMenu: this.debugMenu,
       compressorMode: this.compressorMode,
       deviceProfile,

@@ -147,6 +147,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     records: {
       lookupChartBestRecord: vi.fn<SelectRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
       currentRulesetRecords: vi.fn<SelectRouteDeps['records']['currentRulesetRecords']>(() => new Map()),
+      currentDanRanks: vi.fn<SelectRouteDeps['records']['currentDanRanks']>(() => []),
     },
     courses,
     courseRoute: { startCourse: vi.fn<SelectRouteDeps['courseRoute']['startCourse']>(async () => {}) },
@@ -184,7 +185,11 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     },
     audio: {} as AudioService,
     search: { openFromPointer: vi.fn() },
-    debugMenu: { refreshPlayOptionControllers: vi.fn(), scheduleFirstRunResolutionDetect: vi.fn() },
+    debugMenu: {
+      refreshPlayOptionControllers: vi.fn(),
+      scheduleFirstRunResolutionDetect: vi.fn(),
+      setGhostAvailability: vi.fn(),
+    },
     beatorajaSkinOptions: { refreshBeatorajaSelectSkinOptions: vi.fn(), clear: vi.fn() },
     playStatusShown: vi.fn(() => false),
     setStatus: vi.fn<SelectRouteDeps['setStatus']>(),
@@ -585,6 +590,8 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.deps.records.lookupChartBestRecord).toHaveBeenCalledWith(chartEntry('a'));
     expect(records!.course(course())).toBeUndefined();
     expect(h.deps.records.currentRulesetRecords).toHaveBeenCalled();
+    expect(records!.danRanks!()).toEqual([]);
+    expect(h.deps.records.currentDanRanks).toHaveBeenCalled();
     on.search!();
     expect(h.deps.search.openFromPointer).toHaveBeenCalledOnce();
   });

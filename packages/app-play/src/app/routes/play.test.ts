@@ -528,6 +528,30 @@ describe('PlayRoute.playChart: a chart played at once', () => {
     }
   });
 
+  test('"Ghost: Own best" hands a built-in play the own-best source, and a replay or another family none', async () => {
+    const ghostReplays = { slots: vi.fn(() => []), read: vi.fn(async () => undefined) };
+    /** A harness whose Debug Menu asks for the ghost. */
+    async function withGhost(family: Family = 'built-in'): Promise<Harness> {
+      const h = await harness({ family });
+      const route = new PlayRoute({
+        ...h.deps,
+        guiState: { ...h.deps.guiState, ghost: 'OWN_BEST' },
+        ghostReplays,
+        debugMenu: h.deps.debugMenu as unknown as DebugMenu,
+      });
+      return { ...h, route };
+    }
+    const play = await playing(await withGhost(), chartEntry('a'));
+    expect(play.options.settings.ghost?.kind).toBe('own-best');
+    await expect(play.options.settings.ghost?.load()).resolves.toBeUndefined();
+    expect(ghostReplays.slots).toHaveBeenCalledOnce();
+    const replayed = await playing(await withGhost(), chartEntry('a'), { autoPlay: true, replay: REPLAY });
+    expect(replayed.options.settings).not.toHaveProperty('ghost');
+    expect((await playing(await withGhost('lr2'), chartEntry('a'))).options.settings).not.toHaveProperty('ghost');
+    // Off by default.
+    expect((await playing(await harness(), chartEntry('a'))).options.settings).not.toHaveProperty('ghost');
+  });
+
   test('a course stage carries its run on, with its course handed to the play', async () => {
     const h = await harness();
     const active = h.deps.courses.beginRun(course());

@@ -114,6 +114,7 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
       resolveChartHashes: vi.fn<CourseRouteDeps['records']['resolveChartHashes']>(async () => undefined),
       peekChartBestRecord: vi.fn<CourseRouteDeps['records']['peekChartBestRecord']>(() => undefined),
       recordCourseResult: vi.fn<CourseRouteDeps['records']['recordCourseResult']>(),
+      recordDanRank: vi.fn<CourseRouteDeps['records']['recordDanRank']>(),
     },
     courseMaker: {
       maker: {
@@ -299,12 +300,26 @@ describe('CourseRoute: the stages and the course result', () => {
     expect(courseLog).toMatchObject({ course: { name: 'Dan', kind: 'grade' }, recorder: { name: 'be-music-web' } });
     expect(courseLog.stages.map((stage) => stage.played)).toEqual([true, true]);
     expect(h.deps.records.recordCourseResult.mock.calls[0]![0]?.key).toMatch(/^lr2:course:grade:/);
+    // `Dan` names no dan rank, so the run certifies none.
+    expect(h.deps.records.recordDanRank).toHaveBeenCalledWith(undefined);
     expect(h.deps.leaderboard.maybeSubmitCourse).toHaveBeenCalledWith(courseLog, active.run.stages);
     const [data, mode] = h.deps.showResult.mock.calls[0]!;
     expect(data).toMatchObject({ run: 'course', chart: { title: 'Dan' }, cleared: true });
     expect(mode.course).toMatchObject({ title: 'Dan' });
     expect(mode.courseLog!.log).toBe(courseLog);
     expect(h.deps.showBeatorajaResult).not.toHaveBeenCalled();
+  });
+
+  test('a cleared GRADE course named after a dan raises the dan rank of its key mode', async () => {
+    const h = harness();
+    const base = grade();
+    await startFirstStage(h, { ...base, definition: { ...base.definition, name: 'GENOCIDE 2018 七段' } });
+    h.courses.active!.run.recordStage(stageLog(70));
+    h.courses.active!.run.recordStage(stageLog(60));
+    expect(h.route.continueCourse()).toBe(true);
+    await vi.waitFor(() => expect(h.deps.showResult).toHaveBeenCalled());
+    // The stages' empty charts are 5-key charts.
+    expect(h.deps.records.recordDanRank).toHaveBeenCalledWith({ key: 'lr2:5', rank: 'dan-7' });
   });
 
   test('a course given up with ESC shows its course result as a failed run', async () => {

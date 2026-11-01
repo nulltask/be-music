@@ -4,6 +4,7 @@ import {
   browseEntryCount,
   browseEntryTitle,
   describeCourseCard,
+  describeDanRanks,
   selectListRows,
 } from './select-list.ts';
 import type { LibraryChart, LibraryCourse } from './chart.ts';
@@ -124,5 +125,21 @@ describe('browse entry row text', () => {
         folder: { label: 'mine', charts: [], courses: [course, newCourse, randomMix] },
       }),
     ).toBe('1 course');
+  });
+});
+
+describe('describeDanRanks', () => {
+  it('lists the ranks fewest keys first', () => {
+    expect(
+      describeDanRanks([
+        { keyMode: 14, rank: 'dan-1', label: '初段' },
+        { keyMode: 7, rank: 'insane-3', label: '発狂三段' },
+      ]),
+    ).toBe('7K 発狂三段 · 14K 初段');
+  });
+
+  it('is empty without ranks', () => {
+    expect(describeDanRanks(undefined)).toBe('');
+    expect(describeDanRanks([])).toBe('');
   });
 });
