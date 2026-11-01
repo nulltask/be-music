@@ -32,7 +32,7 @@
     "@be-music/shared-utils": "workspace:*",
     "@better-auth/passkey": "^1.7.14",
     "@hono/standard-validator": "^0.4.0",
-    "@scalar/hono-api-reference": "^0.12.13",
+    "@scalar/hono-api-reference": "^0.12.16",
     "@valibot/to-json-schema": "^1.8.0",
     "better-auth": "^1.7.14",
     "drizzle-orm": "^0.45.4",
