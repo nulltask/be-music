@@ -91,7 +91,9 @@ export interface CourseMakerOptions {
  * `expert` / `nonstop` / `grade` tables). Making a course: {@link start} it from a NEW COURSE bar, {@link append}
  * songs (decide on a song bar), {@link removeLast} (LR2's right click), then {@link finish} (button 230) or
  * {@link cancel} (231). A saved course can be renamed (text 170), deleted (button 233) and, when NONSTOP, have each
- * connection stepped (buttons 240-248). A RANDOM MIX bar {@link drawRandomMix draws} a course by the
+ * connection stepped (buttons 240-248). {@link releaseCourse} flags a saved course for IR (button 253, its `release`),
+ * once and for good, and the flagged course is then read-only: its connections and constraints, which key its ranking,
+ * no longer change, though it can still be renamed and deleted, as in LR2. A RANDOM MIX bar {@link drawRandomMix draws} a course by the
  * {@link randomMixSettings} and keeps it as the newest course of its kind, in place of the previous draw.
  */
 export class CourseMaker {
@@ -273,18 +275,42 @@ export class CourseMaker {
   }
 
   /**
+   * Whether `course` is a saved course flagged for IR (`release`), and so read-only: LR2 reads a course whose `ir` is 1
+   * as `courseReadOnly` (OpenLR2 L18078-L18080), and `WriteCourse` and the connection buttons refuse it (L17580-L17584,
+   * L11126-L11129).
+   */
+  isReadOnly(course: CourseDefinition): boolean {
+    return this.owns(course) && course.release;
+  }
+
+  /**
+   * Flags a saved course for IR (LR2's button 253): sets its `release`, so its runs are ranked, and makes it read-only
+   * ({@link isReadOnly}). The flag only turns on, as LR2's button does (OpenLR2 L11141-L11153). A RANDOM MIX flagged
+   * becomes a course of the player's own, which the next draw keeps. Returns the flagged course, or `undefined` when
+   * `course` is not a saved course or is flagged already.
+   */
+  releaseCourse(course: CourseDefinition): CourseDefinition | undefined {
+    if (!this.owns(course) || course.release) return undefined;
+    const edited = this.replace(course, { ...course, release: true });
+    this.lastRandomMixes.delete(edited);
+    return edited;
+  }
+
+  /**
    * Steps the connection after stage `slot + 1` of a saved NONSTOP course (LR2's buttons 240-248). Returns the edited
-   * course, or `undefined` when `course` is not a saved NONSTOP course.
+   * course, or `undefined` when `course` is not a saved NONSTOP course or is read-only.
    */
   stepConnection(course: CourseDefinition, slot: number, delta: number): CourseDefinition | undefined {
-    if (!this.owns(course) || course.kind !== 'nonstop' || course.source.format !== 'lr2crs') return undefined;
+    if (!this.owns(course) || course.release || course.kind !== 'nonstop' || course.source.format !== 'lr2crs')
+      return undefined;
     const current = parseLR2NonstopConnections(course.source.header)[slot] ?? 'fade';
     const edited = withNonstopConnection(course, slot, stepLR2NonstopConnection(current, delta));
     return this.replace(course, edited);
   }
 
   /**
-   * Renames a saved course. A RANDOM MIX renamed becomes a course of the player's own, which the next draw keeps, as
+   * Renames a saved course, read-only or not (the name does not key a course's ranking, and LR2's `ChangeCourseTitle`
+   * renames an IR course too). A RANDOM MIX renamed becomes a course of the player's own, which the next draw keeps, as
    * LR2's draw only deletes the course titled `RANDOM MIX`.
    */
   renameCourse(course: CourseDefinition, name: string): CourseDefinition | undefined {
@@ -295,12 +321,12 @@ export class CourseMaker {
     return edited;
   }
 
-  /** Replaces a saved course's constraints. */
+  /** Replaces a saved course's constraints; refused (`undefined`) for a read-only course. */
   setCourseConstraints(
     course: CourseDefinition,
     constraints: readonly CourseConstraint[],
   ): CourseDefinition | undefined {
-    if (!this.owns(course)) return undefined;
+    if (!this.owns(course) || course.release) return undefined;
     return this.replace(course, withCourseConstraints(course, constraints));
   }
 
