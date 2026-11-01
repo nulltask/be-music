@@ -138,9 +138,9 @@ export class PlayerShell {
     stage.addEventListener('pointerdown', (event) => {
       lastPointerType = event.pointerType;
       // A phone gives the stage the whole screen on the first tap: the browser bars eat a large share of a landscape
-      // phone's height, and the stage is fitted to that height. The whole page goes fullscreen (not just the shell) so the
-      // Debug Menu stays reachable. Once only, so leaving fullscreen sticks. iPhone Safari has no element fullscreen and
-      // simply stays windowed.
+      // phone's height, and the stage is fitted to that height. The document element goes fullscreen. It contains the
+      // shell, where the Debug Menu is mounted, so the menu stays reachable, along with the page's other overlays.
+      // Once only, so leaving fullscreen sticks. iPhone Safari has no element fullscreen and simply stays windowed.
       if (this.deviceProfile.phone && event.pointerType === 'touch' && !autoFullscreenTried) {
         autoFullscreenTried = true;
         void enterTouchFullscreen(document.documentElement);
