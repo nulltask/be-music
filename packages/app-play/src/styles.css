@@ -1236,7 +1236,15 @@ textarea {
 .help-modal-card {
   position: relative;
   width: min(720px, 100%);
-  max-height: min(80vh, 720px);
+  /*
+   * Fixed height, not a max-height cap. The Open source pane
+   * is only the intro plus "Loading…" until the license list
+   * arrives. A content-sized card shrinks and recenters for
+   * that moment, then jumps back when the cards land. The
+   * pane scrolls inside this height, so the list shows up
+   * without moving the dialog.
+   */
+  height: min(80vh, 720px);
   /*
    * Slide-in entry that reads as "the dialog rose into focus"
    * rather than "popped instantly". Matches the drop card's
@@ -1683,8 +1691,8 @@ textarea {
 
 /*
  * Scrollable dependency list. `min-height: 0` lets the flex
- * parent collapse the list when the dialog hits its
- * `max-height` cap — without it the inner `<ol>` would push
+ * parent collapse the list inside the dialog's fixed
+ * height — without it the inner `<ol>` would push
  * the modal taller than the viewport.
  *
  * Block layout (NOT flex column). When the list itself was a
