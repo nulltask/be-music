@@ -8,18 +8,13 @@ import type { TunableCompressor } from '@be-music/player-browser/audio';
 import { getBrowserWorkerCount } from '@be-music/player-browser/compute';
 import type { PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-browser/host';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
-import {
-  formatGaugeLabel,
-  isDuplicatedBattleChoice,
-  resolveRandomModes,
-  type PlayOptions,
-} from '@be-music/player-scene-model';
+import { formatGaugeLabel, isDuplicatedBattleChoice, type PlayOptions } from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 // Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
 import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
 import { playerFullscreenElement } from '../../fullscreen.ts';
 import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
-import { resolveGaugeTypes, type GaugeType } from '@be-music/player-engine/ruleset';
+import { migrateOptionValue, resolveGaugeTypes, type GaugeType } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
 import { readStoredCourseTableURLs } from '../../course-table-import.ts';
 import { captureDebugMenuSettings } from '../../debug-menu-settings.ts';
@@ -47,6 +42,7 @@ import { buildDeveloperFolder } from './developer.ts';
 import { DEBUG_MENU_FOLDERS, readFolderOpenStates, rememberFolderOpenStates, type DebugMenuFolder } from './folders.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
+import { battleModeItems, laneOptionItems } from './play-option-items.ts';
 import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
 import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './render-resolution.ts';
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
@@ -475,6 +471,15 @@ export class DebugMenu {
     await debugMenuSettingsSync.reset();
     window.location.reload();
   }
+  /**
+   * `value` when it is one of `choices`; a bare colliding value from before ADR 0019 as the judge ruleset's own
+   * qualified one; `OFF` otherwise.
+   */
+  private keepChoice<T extends string>(value: T, choices: readonly T[]): T {
+    if (choices.includes(value)) return value;
+    const migrated = migrateOptionValue(value, this.guiState.judgeRuleset) as T;
+    return choices.includes(migrated) ? migrated : ('OFF' as T);
+  }
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
   public refreshRulesetChoices(): void {
     // Options that only transform the chart or the view are offered under every judge ruleset (#774): HS-FIX CONSTANT,
@@ -496,47 +501,23 @@ export class DebugMenu {
     if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
     if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
     if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
-    const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
-    if (!beatoraja && this.guiState.longNoteModifier.startsWith('ADD_')) {
-      this.guiState.longNoteModifier = 'OFF';
-      this.setPlayOptions({ longNoteModifier: 'OFF' });
-    }
-    if (this.longNoteModifierController) {
-      this.longNoteModifierController.options = paneOptions({
-        OFF: 'OFF' as const,
-        'LEGACY NOTE (AC 34)': 'LEGACY' as const,
-        'LN REMOVE (beatoraja)': 'REMOVE' as const,
-        ...(beatoraja
-          ? {
-              'ADD LN (beatoraja)': 'ADD_LN' as const,
-              'ADD CN (beatoraja)': 'ADD_CN' as const,
-              'ADD HCN (beatoraja)': 'ADD_HCN' as const,
-              'ADD ALL (beatoraja)': 'ADD_ALL' as const,
-            }
-          : {}),
-      });
-      this.longNoteModifierController.refresh();
-    }
-    // BATTLE names LR2's two-player play and the beatoraja / ???? one-player copy, so it follows the ruleset; the other
-    // chart constructions are offered under every ruleset.
-    const battleChoices: Record<string, PlayOptions['battleMode']> = {
-      OFF: 'OFF',
-      'CHART HEADER': 'AUTO',
-      ...(this.guiState.judgeRuleset === 'lr2'
-        ? { BATTLE: 'TWO-PLAYER' as const, COUPLE: 'COUPLE' as const }
-        : this.guiState.judgeRuleset === 'beatoraja'
-          ? { BATTLE: 'BATTLE' as const }
-          : { BATTLE: 'BATTLE' as const, '2P PLAY': 'TWO-PLAYER' as const }),
-      'BATTLE AS': 'BATTLE-AS',
-      'D-BATTLE': 'D-BATTLE',
-      'SP TO DP': 'SP-TO-DP',
-    };
-    if (!Object.values(battleChoices).includes(this.guiState.battleMode)) {
-      this.guiState.battleMode = 'OFF';
-      this.setPlayOptions({ battleMode: 'OFF' });
+    const ruleset = this.guiState.judgeRuleset;
+    const beatoraja = ruleset === 'beatoraja';
+    // Long-note addition is offered under every ruleset (#774): the added long notes are judged as the ruleset's long
+    // notes, so ADD CN / ADD HCN differ from ADD LN only under beatoraja rules.
+    // BATTLE names LR2's two-player play and the beatoraja / ???? one-player copy, so each carries its source
+    // (ADR 0019); the choices are grouped by source, the judge ruleset's own first.
+    const battleChoices = battleModeItems(ruleset);
+    const battleMode = this.keepChoice(
+      this.guiState.battleMode,
+      battleChoices.map((item) => item.value),
+    );
+    if (battleMode !== this.guiState.battleMode) {
+      this.guiState.battleMode = battleMode;
+      this.setPlayOptions({ battleMode });
     }
     if (this.battleModeController) {
-      this.battleModeController.options = paneOptions(battleChoices);
+      this.battleModeController.options = battleChoices;
       this.battleModeController.refresh();
     }
     if (this.dBattleScratchController) this.dBattleScratchController.hidden = this.guiState.battleMode !== 'D-BATTLE';
@@ -564,7 +545,7 @@ export class DebugMenu {
     for (const controller of this.customJudgeRateControllers)
       controller.hidden = !beatoraja || !this.guiState.customJudge;
     if (this.longNoteRateController)
-      this.longNoteRateController.hidden = !beatoraja || !this.guiState.longNoteModifier.startsWith('ADD_');
+      this.longNoteRateController.hidden = !this.guiState.longNoteModifier.startsWith('ADD_');
     for (const controller of this.randomSeedControllers) controller.hidden = !beatoraja;
     for (const side of ['1P', '2P'] as const) {
       const controller = side === '1P' ? this.randomSeed1PController : this.randomSeed2PController;
@@ -588,27 +569,22 @@ export class DebugMenu {
         : paneOptions({ 'Source default': 'combo' as const });
       this.judgeAlgorithmController.refresh();
     }
+    // Every lane option is offered under every ruleset, grouped by source; RANDOM, S-RANDOM and CONVERGE once per
+    // source (ADR 0019).
     for (const side of ['1P', '2P'] as const) {
-      const randomModes = resolveRandomModes(
-        this.guiState.judgeRuleset,
-        side === '1P' && isDuplicatedBattleChoice(this.guiState.battleMode),
-      );
+      const items = laneOptionItems(ruleset, side === '1P' && isDuplicatedBattleChoice(this.guiState.battleMode));
       const key = `random${side}` as const;
-      if (!randomModes.includes(this.guiState[key])) {
-        this.guiState[key] = 'OFF';
-        this.setPlayOptions({ [key]: 'OFF' });
+      const mode = this.keepChoice(
+        this.guiState[key],
+        items.map((item) => item.value),
+      );
+      if (mode !== this.guiState[key]) {
+        this.guiState[key] = mode;
+        this.setPlayOptions({ [key]: mode });
       }
       const controller = side === '1P' ? this.random1PController : this.random2PController;
       if (controller) {
-        controller.options = paneOptions(randomModes).map((item) =>
-          item.value === 'SCATTER'
-            ? { ...item, text: 'SCATTER (LR2 beta3)' }
-            : item.value === 'SCATTER-CORRECTED'
-              ? { ...item, text: 'SCATTER (9KEY corrected)' }
-              : item.value === 'SYNCHRONIZE-RANDOM' || item.value === 'SYMMETRY-RANDOM'
-                ? { ...item, text: item.value.replace('-', ' ') }
-                : item,
-        );
+        controller.options = items;
         controller.refresh();
       }
     }

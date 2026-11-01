@@ -828,7 +828,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Judge algorithm</dt>
                 <dd>With beatoraja rules, which note a press is judged against when several are in reach: Combo (default), Duration or Lowest.</dd>
                 <dt>Random 1P / Random 2P</dt>
-                <dd>The lane option for each side. RANDOM and S-RANDOM run the rules' own algorithm; options from one source (R-RANDOM, SPIRAL, H-RANDOM, SCATTER and more) are offered under every ruleset and run that source's. CONVERGE follows the rules.</dd>
+                <dd>The lane option for each side. Every option is offered under every ruleset and runs its source's algorithm, grouped by source with the rules' own first. RANDOM, S-RANDOM and CONVERGE differ per source, so each is listed once per source, for example RANDOM (LR2) and RANDOM (beatoraja).</dd>
                 <dt>H-RANDOM threshold BPM (beatoraja)</dt>
                 <dd>The BPM whose 16th note counts as a too-fast repeat for H-RANDOM, ALL-SCR and the 7-to-9 scratch.</dd>
                 <dt>Fixed key 1P / 2P (LR2; 0=default)</dt>
@@ -858,13 +858,13 @@ export const PLAYER_APP_HTML = `
                 <dt>Auto scratch 1P / 2P</dt>
                 <dd>Plays that side's scratch notes for you.</dd>
                 <dt>Long notes</dt>
-                <dd>LEGACY NOTE turns charge notes into normal notes, LN REMOVE turns every long note into its head, and ADD LN / CN / HCN / ALL (beatoraja) make long notes.</dd>
+                <dd>LEGACY NOTE turns charge notes into normal notes, LN REMOVE turns every long note into its head, and ADD LN / CN / HCN / ALL (beatoraja) make long notes under every ruleset. The added notes are judged as the rules' long notes, so CN and HCN differ from LN only under beatoraja rules.</dd>
                 <dt>Battle</dt>
-                <dd>Battle and conversion modes. BATTLE follows the rules (two-player play under LR2, one player on both sides under beatoraja and ????), ???? adds 2P PLAY, and BATTLE AS (beatoraja), D-BATTLE and SP TO DP (LR2) are offered under every ruleset.</dd>
+                <dd>Battle and conversion modes, grouped by source and offered under every ruleset. BATTLE (LR2) is two-player play, each player judged by the rules (???? calls it 2P PLAY); BATTLE (beatoraja) and BATTLE (????) put one player on both sides. COUPLE stays with LR2 rules.</dd>
                 <dt>Gauge 2P</dt>
-                <dd><em class="help-menu-when">Shown with Battle set to BATTLE (LR2) or 2P PLAY (????).</em> The second player's gauge.</dd>
+                <dd><em class="help-menu-when">Shown with two-player play: Battle set to BATTLE (LR2), COUPLE or 2P PLAY (????).</em> The second player's gauge.</dd>
                 <dt>M-RAN 1P / 2P</dt>
-                <dd><em class="help-menu-when">Shown with two-player play: Battle set to BATTLE (LR2) or 2P PLAY (????).</em> Mirrors that player's side after a RANDOM-type option.</dd>
+                <dd><em class="help-menu-when">Shown with two-player play: Battle set to BATTLE (LR2), COUPLE or 2P PLAY (????).</em> Mirrors that player's side after a RANDOM-type option.</dd>
                 <dt>D-BATTLE scratch (LR2)</dt>
                 <dd><em class="help-menu-when">Shown with Battle set to D-BATTLE.</em> Keeps scratch notes playable instead of turning them into background sound.</dd>
                 <dt>EXTRA MODE (LR2)</dt>
@@ -888,7 +888,7 @@ export const PLAYER_APP_HTML = `
                 <dt>EXTRA depth (beatoraja) / EXTRA scratch</dt>
                 <dd>beatoraja EXTRA: how many background keysounds per row become notes (0 is off), and whether scratch lanes get them.</dd>
                 <dt>Long-note add rate (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules and an ADD choice in Long notes.</em> How many of the notes become long notes, 0 to 1.</dd>
+                <dd><em class="help-menu-when">Shown with an ADD choice in Long notes.</em> How many of the notes become long notes, 0 to 1.</dd>
                 <dt>A-SCR &amp; LEGACY NOTE (AC 34)</dt>
                 <dd>One button for both Auto scratch sides and LEGACY NOTE.</dd>
                 <dt>Sort / Key filter / Difficulty filter</dt>
@@ -1099,7 +1099,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Judge algorithm</dt>
                 <dd>beatoraja のルールで、近くに複数のノーツがあるときにどれを判定するか。Combo (既定)、Duration、Lowest。</dd>
                 <dt>Random 1P / Random 2P</dt>
-                <dd>各サイドのレーンのオプション。RANDOM と S-RANDOM はルールのアルゴリズムで動きます。片方の出典にしかないもの (R-RANDOM、SPIRAL、H-RANDOM、SCATTER など) はどのルールでも選べ、その出典のアルゴリズムで動きます。CONVERGE はルールに従います。</dd>
+                <dd>各サイドのレーンのオプション。どのオプションもどのルールでも選べ、その出典のアルゴリズムで動きます。出典ごとにまとめ、ルール自身の出典を先頭に並べます。RANDOM、S-RANDOM、CONVERGE は出典ごとに中身が違うため、RANDOM (LR2) と RANDOM (beatoraja) のように出典ごとに 1 つずつ並びます。</dd>
                 <dt>H-RANDOM threshold BPM (beatoraja)</dt>
                 <dd>H-RANDOM、ALL-SCR、7-to-9 のスクラッチで、連打とみなす 16 分音符の BPM。</dd>
                 <dt>Fixed key 1P / 2P (LR2; 0=default)</dt>
@@ -1129,13 +1129,13 @@ export const PLAYER_APP_HTML = `
                 <dt>Auto scratch 1P / 2P</dt>
                 <dd>そのサイドのスクラッチを自動で処理します。</dd>
                 <dt>Long notes</dt>
-                <dd>LEGACY NOTE はチャージノートを通常ノーツに、LN REMOVE はすべてのロングノートを始点だけにし、ADD LN / CN / HCN / ALL (beatoraja) はロングノートを作ります。</dd>
+                <dd>LEGACY NOTE はチャージノートを通常ノーツに、LN REMOVE はすべてのロングノートを始点だけにし、ADD LN / CN / HCN / ALL (beatoraja) はどのルールでもロングノートを作ります。足したノーツはルールのロングノートとして判定するので、CN と HCN が LN と違うのは beatoraja のルールのときだけです。</dd>
                 <dt>Battle</dt>
-                <dd>バトルと変換のモード。BATTLE はルールに従います (LR2 では 2 人プレイ、beatoraja と ???? では 1 人で両側)。???? には 2P PLAY もあります。BATTLE AS (beatoraja)、D-BATTLE、SP TO DP (LR2) はどのルールでも選べます。</dd>
+                <dd>バトルと変換のモード。出典ごとにまとめ、どのルールでも選べます。BATTLE (LR2) は 2 人プレイで、各プレイヤーはルールで判定します (???? では 2P PLAY)。BATTLE (beatoraja) と BATTLE (????) は 1 人で両側を遊びます。COUPLE は LR2 のルールだけです。</dd>
                 <dt>Gauge 2P</dt>
-                <dd><em class="help-menu-when">Battle が BATTLE (LR2) か 2P PLAY (????) のときに表示。</em> 2 人目のゲージ。</dd>
+                <dd><em class="help-menu-when">2 人プレイ (Battle が BATTLE (LR2)、COUPLE、2P PLAY (????)) のときに表示。</em> 2 人目のゲージ。</dd>
                 <dt>M-RAN 1P / 2P</dt>
-                <dd><em class="help-menu-when">2 人プレイ (Battle が BATTLE (LR2) か 2P PLAY (????)) のときに表示。</em> RANDOM 系のオプションのあと、そのプレイヤーの側を左右反転します。</dd>
+                <dd><em class="help-menu-when">2 人プレイ (Battle が BATTLE (LR2)、COUPLE、2P PLAY (????)) のときに表示。</em> RANDOM 系のオプションのあと、そのプレイヤーの側を左右反転します。</dd>
                 <dt>D-BATTLE scratch (LR2)</dt>
                 <dd><em class="help-menu-when">Battle が D-BATTLE のときに表示。</em> スクラッチを BGM にせず、叩くノーツのまま残します。</dd>
                 <dt>EXTRA MODE (LR2)</dt>
@@ -1159,7 +1159,7 @@ export const PLAYER_APP_HTML = `
                 <dt>EXTRA depth (beatoraja) / EXTRA scratch</dt>
                 <dd>beatoraja の EXTRA。1 行あたり何個の BGM のキー音をノーツにするか (0 でオフ) と、スクラッチにも置くか。</dd>
                 <dt>Long-note add rate (beatoraja)</dt>
-                <dd><em class="help-menu-when">beatoraja のルールで Long notes が ADD のどれかのときに表示。</em> ロングノートにする割合 (0〜1)。</dd>
+                <dd><em class="help-menu-when">Long notes が ADD のどれかのときに表示。</em> ロングノートにする割合 (0〜1)。</dd>
                 <dt>A-SCR &amp; LEGACY NOTE (AC 34)</dt>
                 <dd>両サイドのオートスクラッチと LEGACY NOTE をまとめてオンにするボタン。</dd>
                 <dt>Sort / Key filter / Difficulty filter</dt>
