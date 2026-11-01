@@ -6,6 +6,7 @@ export * from './course-fingerprint.ts';
 export type { RulesetChartFacts } from '../ruleset/facts.ts';
 export * from './eligibility.ts';
 export * from './format.ts';
+export * from './judgment-timeline.ts';
 export * from './nonstop.ts';
 export * from './recorder.ts';
 export * from './result-lamp.ts';

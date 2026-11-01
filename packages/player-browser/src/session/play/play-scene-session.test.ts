@@ -63,6 +63,26 @@ describe('PlaySceneSession', () => {
     expect(session.frame(10).scoreTargets).toBe(targets);
   });
 
+  test('a view that shows the ghost draws the playfield it presents, brought to the frame’s second', () => {
+    const play = new PlaySession();
+    const presented = { presented: true } as never;
+    const ghost = { update: vi.fn(), present: vi.fn(() => presented) };
+    play.ghost = ghost;
+    let shows = false;
+    const session = new PlaySceneSession(play, {
+      chart: CHART,
+      playOptions: DEFAULT_PLAY_OPTIONS,
+      showsGhost: () => shows,
+    });
+    // Another family's view has no field for it: the play draws as it is, and the ghost stands still.
+    expect(session.frame(0).playfield).toBe(play);
+    expect(ghost.update).not.toHaveBeenCalled();
+    shows = true;
+    expect(session.frame(10).playfield).toBe(presented);
+    expect(ghost.present).toHaveBeenCalledWith(play);
+    expect(ghost.update).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
+  });
+
   test('reports the load progress while the play loads', () => {
     const { play, session } = createSceneSession();
     play.assetsLoading = true;

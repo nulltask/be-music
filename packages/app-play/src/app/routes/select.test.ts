@@ -185,7 +185,11 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     },
     audio: {} as AudioService,
     search: { openFromPointer: vi.fn() },
-    debugMenu: { refreshPlayOptionControllers: vi.fn(), scheduleFirstRunResolutionDetect: vi.fn() },
+    debugMenu: {
+      refreshPlayOptionControllers: vi.fn(),
+      scheduleFirstRunResolutionDetect: vi.fn(),
+      setGhostAvailability: vi.fn(),
+    },
     beatorajaSkinOptions: { refreshBeatorajaSelectSkinOptions: vi.fn(), clear: vi.fn() },
     playStatusShown: vi.fn(() => false),
     setStatus: vi.fn<SelectRouteDeps['setStatus']>(),

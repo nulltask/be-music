@@ -216,6 +216,13 @@ export interface PlaySessionOptions {
    * different chart file).
    */
   replay?: BeMusicReplay;
+  /**
+   * A replay ghost to show beside the play (`ghost/ghost.ts`): the source of the replay it plays, read while the play
+   * loads. The built-in family shows it as a second playfield on the 2P side of a 5 / 7 KEY single-play chart; it is
+   * left out of a replay, a course stage and a NONSTOP run, and wherever there is no room for it. It only draws: the
+   * play's judging, records, replay and Leaderboard submission are its own.
+   */
+  ghost?: import('./ghost/ghost.ts').GhostSource;
   /** Reuse the resolved chart layout while playing fresh input and recording a new replay. */
   fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
   /**
