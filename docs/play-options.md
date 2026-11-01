@@ -45,8 +45,9 @@ flowchart LR
 | Debug judge-window override                                                              | be-music  | `assist`  | Widens the windows as CUSTOM JUDGE does |                                                           |
 | BATTLE                                                                                   | AC 34     | `no-save` | BATTLE under `____` rules               | AC 34 play options: "スコアデータは保存されません"        |
 | PRACTICE                                                                                 | beatoraja | `no-save` |                                         | beatoraja PRACTICE saves nothing                          |
+| ANY KEY                                                                                  | PC        | `no-save` | Under every ruleset                     | PC edition: ANY KEY plays count as NO PLAY                |
 
-Unassisted: MIRROR, RANDOM, S-RANDOM, R-RANDOM, SYNCHRONIZE / SYMMETRY RANDOM, M-RAN, DP FLIP, covers and LIFT, the hi-speed options, visual CONSTANT (beatoraja's `enableConstant` is a rendering setting), mine ADD, scroll ADD, ADD LN, the judge algorithm, the gauges (ASSIST EASY and ASSISTED EASY are gauge lamps, not assists) and gauge auto-shift. The PC edition's NO PLAY options (KEY ASSIST, ANY KEY, and its own H-RANDOM and BATTLE) are that edition's rules. They are not applied to other sources: H-RANDOM here is beatoraja's algorithm and is classified as beatoraja's. A PC-sourced option would be `no-save` under `____` rules.
+Unassisted: MIRROR, RANDOM, S-RANDOM, R-RANDOM, SYNCHRONIZE / SYMMETRY RANDOM, M-RAN, DP FLIP, covers and LIFT, the hi-speed options, visual CONSTANT (beatoraja's `enableConstant` is a rendering setting), mine ADD, scroll ADD, ADD LN, the judge algorithm, the gauges (ASSIST EASY and ASSISTED EASY are gauge lamps, not assists) and gauge auto-shift. The PC edition's NO PLAY options (KEY ASSIST, ANY KEY, and its own H-RANDOM and BATTLE) are that edition's rules. They are not applied to other sources: H-RANDOM here is beatoraja's algorithm and is classified as beatoraja's. A PC-sourced option is `no-save` under `____` rules; ANY KEY is the one Be-Music offers ([ANY KEY](#any-key)).
 
 **Consequences per judge ruleset:**
 
@@ -84,6 +85,17 @@ Source: AC 34 [BPM-change options](https://p.eagate.573.jp/game/2dx/34/howto/new
 ## Per-side AUTO SCRATCH
 
 Debug Menu's **Auto scratch 1P / 2P** switches independently automate each side's scratch notes. The other side remains manual, including long scratch notes. This follows the per-side AUTO SCRATCH setting tracked in [#708](https://github.com/nulltask/be-music/issues/708). Replays retain the effective side switches as well as the selected option snapshot; old replays with only the combined switch apply it to both sides. Its record policy is in [Assist and record policy](#assist-and-record-policy).
+
+## ANY KEY
+
+With **Judgment windows → ????** in Debug Menu's Developer folder, turn on **Play options → ANY KEY (PC)**; it is off by default and hidden under the other judge rules. It is the PC edition's assist, which that edition's page names without describing, so Be-Music reads it this way ([#751](https://github.com/nulltask/be-music/issues/751)):
+
+- **One press takes one note.** Whichever key is pressed takes the nearest unjudged note inside the judgment window, on any lane, the scratch included. A tie goes to the earlier note, then to the lower lane. Lanes AUTO SCRATCH plays and lanes whose long note is still held are skipped. A press with no note in reach stays on the key's own lane.
+- **Chords** are taken by as many presses as they have notes.
+- **A long note** stays held until the key that took its head is released. Other keys go on taking notes on the other lanes meanwhile.
+- **The key beam** lights the lane the press was routed to.
+
+The press is then judged on that lane by the ruleset's own rules. Replays record the switch as `play.anyKey` and keep each key's own lane in `inputs`. The engine's replay playback and `simulateReplay` route the presses again with the same rule (`core/any-key.ts`), so the two agree, as `replay/any-key-equivalence.test.ts` checks. As on the PC edition, a play with ANY KEY saves no play data: it is classified `no-save` under every ruleset, keeps no local record, and is stored unranked on the Leaderboard ([Assist and record policy](#assist-and-record-policy)). The switch is locked during play.
 
 ## LEGACY NOTE and LN REMOVE
 

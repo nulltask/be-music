@@ -54,6 +54,7 @@ export function createPlayJudgeCore(
         session.options,
         playbackChart.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
       ),
+      ...(session.anyKey ? { anyKey: true } : {}),
       judgeMsPerChartSecond,
       wavResources: session.wavResources,
       idBase: session.idBase,
@@ -220,7 +221,11 @@ function createManualJudge(session: PlaySession): PlayJudge {
           if (command.repeatTokens.length > 0) traceInput(commandSeconds(), 'repeat', command.repeatTokens);
           if (command.releaseTokens.length > 0) traceInput(commandSeconds(), 'release', command.releaseTokens);
         }
-        step({ kind: 'hold', channels: mapInputChannels(command.pressTokens, command.repeatTokens) });
+        step({
+          kind: 'hold',
+          channels: mapInputChannels(command.pressTokens, command.repeatTokens),
+          tokens: [...command.pressTokens, ...command.repeatTokens],
+        });
         const releasedChannels = mapInputChannels(command.releaseTokens);
         if (releasedChannels.size > 0) {
           const releaseNowMs = clock.nowMs();

@@ -10,10 +10,25 @@ test('effective chart options retain exact display values and own all nested rep
   expect(raw.initial.hiSpeed).toBe(0.77);
   expect(raw.cues[0]!.state.hiSpeed).toBe(100);
 });
+test('version 2 programs keep HIDDEN, CHANGE-HS and CRAZY fields and cut stages keep their version', () => {
+  const raw = {
+    version: 2,
+    initial: { hidden: 'SUDDEN', changeHS: 'CHAOS', crazySize: 'RD-SIZE', crazyWave: 'XWAVE', hiSpeed: 2 },
+    cues: [{ timeUs: 4, state: { hidden: 'STEALTH' } }],
+  };
+  const parsed = parseChartOptionProgram(raw);
+  expect(parsed).toEqual(raw);
+  expect(shiftChartOptionProgram(parsed, { windowStartUs: 0, offsetUs: 0 }).version).toBe(2);
+});
 test.each([
   { ...program(), unknown: 1 },
   { ...program(), cues: [{ timeUs: 1, state: {}, unknown: 1 }] },
-  { ...program(), version: 2 },
+  { ...program(), version: 3 },
+  // A version-1 recording cannot carry a family implemented in version 2.
+  { ...program(), initial: { hidden: 'STEALTH' } },
+  { ...program(), version: 2, initial: { hidden: 'M-SUDDEN' } },
+  { ...program(), version: 2, initial: { changeHS: 'accel' } },
+  { ...program(), version: 2, initial: { crazySize: 1 } },
   { ...program(), initial: { unknown: 1 } },
   { ...program(), initial: { hiSpeed: 0.24 } },
   { ...program(), initial: { hiSpeed: 100.01 } },

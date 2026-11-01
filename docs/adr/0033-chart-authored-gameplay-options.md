@@ -8,7 +8,7 @@ nanasigroove lets a chart's initial `#OPTION` force `774:RANDOM_*` (MIRROR, RAND
 
 ## Decision
 
-**Compilation.** `compileChartPlayOptions` reads the exact-case modern IDs from the resolved chart's initial declarations, in source order, the later one winning within a family. `RANDOM_OFF` clears the arrangement. `CRAZY_OFF` clears every gameplay CRAZY declared before it. The display compiler stops diagnosing these initial declarations, and diagnoses an A6 use as `initial-only-option`. `NOTES_*` stays `unsupported-option`: DOUBLE and COPY change the play variant (COPY turns a single-play chart into a double-play one) and the lane layout every host draws, which is a separate change.
+**Compilation.** `compileChartPlayOptions` reads the exact-case modern IDs from the resolved chart's initial declarations, in source order, the later one winning within a family. `RANDOM_OFF` clears the arrangement. `CRAZY_OFF` clears every gameplay CRAZY declared before it; it also stays the display operation that clears the visual CRAZY subfamilies ([ADR 0032](./0032-chart-authored-visual-families.md)), on A6 too. The display compiler stops diagnosing these initial declarations, and diagnoses an A6 use as `initial-only-option`. `NOTES_*` stays `unsupported-option`: DOUBLE and COPY change the play variant (COPY turns a single-play chart into a double-play one) and the lane layout every host draws, which is a separate change.
 
 **Readings** (Be-Music formulas; no native parity is claimed):
 

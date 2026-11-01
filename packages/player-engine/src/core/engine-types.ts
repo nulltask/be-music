@@ -139,6 +139,11 @@ export interface PlayerPlaySettings {
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
   /**
+   * ANY KEY (That-Which-Must-Not-Be-Named PC, #751): a press takes the nearest unjudged note in reach on any lane and
+   * holds that lane until its key comes up. Manual play only; the replay records it as `play.anyKey`.
+   */
+  anyKey?: boolean;
+  /**
    * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
    * Defaults to `recordReplay.gauge`, then `'GROOVE'`. The replay records the gauge the play ran on.

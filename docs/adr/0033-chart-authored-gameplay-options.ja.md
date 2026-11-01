@@ -8,7 +8,7 @@ nanasigroove では、譜面の初期 `#OPTION` で `774:RANDOM_*`（MIRROR・RA
 
 ## 決定
 
-**コンパイル。** `compileChartPlayOptions` は、解決済み譜面の初期宣言から大文字小文字が一致する現行 ID をソース順に読み、同じ系列では後のものが勝ちます。`RANDOM_OFF` は配置を解除します。`CRAZY_OFF` はそれより前に宣言した判定系 CRAZY をすべて解除します。表示側のコンパイラはこれらの初期宣言を診断しなくなり、A6 での使用は `initial-only-option` と診断します。`NOTES_*` は `unsupported-option` のままです。DOUBLE と COPY はプレイ形式（COPY はシングル譜面をダブルにする）と、すべてのホストが描くレーン配置を変えるため、別の変更とします。
+**コンパイル。** `compileChartPlayOptions` は、解決済み譜面の初期宣言から大文字小文字が一致する現行 ID をソース順に読み、同じ系列では後のものが勝ちます。`RANDOM_OFF` は配置を解除します。`CRAZY_OFF` はそれより前に宣言した判定系 CRAZY をすべて解除します。表示系 CRAZY のサブ系列を解除する表示操作でもあり続けます（[ADR 0032](./0032-chart-authored-visual-families.ja.md)）。A6 でも同じです。表示側のコンパイラはこれらの初期宣言を診断しなくなり、A6 での使用は `initial-only-option` と診断します。`NOTES_*` は `unsupported-option` のままです。DOUBLE と COPY はプレイ形式（COPY はシングル譜面をダブルにする）と、すべてのホストが描くレーン配置を変えるため、別の変更とします。
 
 **解釈**（Be-Music の式で、ネイティブとの一致は主張しません）：
 
