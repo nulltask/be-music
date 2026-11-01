@@ -74,6 +74,8 @@ export {
   lr2ShowsCourseCombo,
   resolveLR2CourseConnectionText,
   resolveLR2CourseDraftInfo,
+  resolveLR2CourseIRButtonState,
+  resolveLR2CourseIRText,
   resolveLR2CourseMakerAction,
   resolveLR2CourseMakerButtonState,
   resolveLR2CourseMakerOps,

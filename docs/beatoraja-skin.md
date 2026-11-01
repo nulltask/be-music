@@ -257,6 +257,9 @@ sequenceDiagram
   [Visual CONSTANT](./play-options.md#visual-constant) on (`resolveBeatorajaConstantOps`). As beatoraja's
   `BooleanPropertyFactory` reads the player's play config, it stays lit in a course whose `NO_SPEED` constraint stops
   CONSTANT drawing (#776).
+- A play with LR2 SILENT [automatic judge timing](./play-options.md#judge-timing-and-automatic-adjustment) draws no
+  `judge[]` display, judgment words or combo digits, as the built-in and LR2 play screens draw none
+  (`resolveBeatorajaJudgeDisplayOps`). beatoraja has no SILENT; LR2 hides NOWJUDGE / NOWCOMBO there (#917).
 
 ### Known gaps
 

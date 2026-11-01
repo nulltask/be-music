@@ -49,6 +49,7 @@ import {
   beatorajaWallClockOf,
   createBeatorajaJudgeStateGraph,
   resolveBeatorajaConstantOps,
+  resolveBeatorajaJudgeDisplayOps,
   resolveBeatorajaCoverOps,
   resolveBeatorajaFrameTimers,
   resolveBeatorajaSeekTimers,
@@ -162,6 +163,8 @@ export interface BeatorajaPlayBridgeFrame {
   readonly judgeTimingMs?: number;
   /** The player's Visual CONSTANT setting, which lights `OPTION_CONSTANT` (400) even where a course stops it drawing. */
   readonly visualConstant?: boolean;
+  /** The play's automatic judge timing mode: LR2's SILENT (`'LR2-SILENT'`) hides the skin's judgment display. */
+  readonly judgeTimingAutoAdjust?: string;
   readonly exiting?: boolean;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
   /** The host's clock, in ms, for the frame rate; the play clock without it. */
@@ -435,6 +438,8 @@ export class BeatorajaPlayBridge {
     this.play.judgeTimingMs = frame.judgeTimingMs ?? 0;
     this.activeOps.delete(BEATORAJA_OP.CONSTANT);
     for (const op of resolveBeatorajaConstantOps(frame.visualConstant)) this.activeOps.add(op);
+    this.activeOps.delete(BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN);
+    for (const op of resolveBeatorajaJudgeDisplayOps(frame.judgeTimingAutoAdjust)) this.activeOps.add(op);
     this.judgeWindows = frame.judgeWindows;
     return this.renderContextAt(frame.nowMs);
   }

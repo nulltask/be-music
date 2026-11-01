@@ -218,10 +218,15 @@ stateDiagram-v2
 ```
 
 - **Adding songs.** `appendCourseDraftStage` adds a song to the end of a `CourseDraft`: at most five songs (`LR2_COURSE_MAKER_MAX_STAGES`), all in the first song's key mode, keyed by the chart's MD5. The same song may appear twice. `removeLastCourseDraftStage` drops the last one, as LR2's right click does.
-- **Saving.** `finishCourseDraft` turns the draft into a `CourseDefinition` shaped as `parseLR2CourseFile` would read it back. A NONSTOP course gets the default connection (LR2's button 268) after each of stages 1-5. A GRADE course reads as an LR2 grade (`grade`, `gauge_lr2`). A made course starts unranked (`release: false`): LR2 inserts it with `ir = 0` ([L17588-L17603](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L17588-L17603)) and beatoraja's course editor starts a new course with `release = false`, so its runs stay off the Leaderboard until the player opts in (LR2's IR flag, button 253, is not built yet).
+- **Saving.** `finishCourseDraft` turns the draft into a `CourseDefinition` shaped as `parseLR2CourseFile` would read it back. A NONSTOP course gets the default connection (LR2's button 268) after each of stages 1-5. A GRADE course reads as an LR2 grade (`grade`, `gauge_lr2`). A made course starts unranked (`release: false`): LR2 inserts it with `ir = 0` ([L17588-L17603](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L17588-L17603)) and beatoraja's course editor starts a new course with `release = false`, so its runs stay off the Leaderboard until the player flags it for IR (below).
 - **The hash.** `buildLR2CourseHash` writes LR2's 32-character header (the connection after each of stages 1-10, `0`-`5`; the type at character 10; zeros elsewhere) and each stage's MD5. LR2 puts the first four characters of the player's password MD5 at characters 28-31; a browser has no password, so they stay `0`.
 - **Editing.** `withNonstopConnection` changes the connection after one stage (LR2's buttons 240-248, which step through `stepLR2NonstopConnection`'s order: +1 on the right half, -1 on the left half). LR2 keeps a connection for each of stages 1-9 whatever the course's length.
 - **Constraints.** LR2's maker has none to set (its option-ban buttons were never built), so a made course takes `defaultCourseMakerConstraints` (a GRADE course reads as an LR2 grade, no lane option with the LR2 gauge; the others have none) unless the host sets them, as beatoraja's course editor does: `CourseDraft.constraints` while making, `withCourseConstraints` afterwards (one per group, normalized).
+- **IR flag.** LR2 marks a course for IR in the `ir` column of its course tables, not in the `.lr2crs` file ([L19281-L19283](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L19281-L19283)): `LR2.exe` imports every course with `ir = 1`, and a course made in game starts at `ir = 0`. be-music's flag is the course's `release` (beatoraja's "publish" flag, which gates only the course result's IR send), so a flagged course's runs go to the Leaderboard as any released course's do.
+  - Text 183 reads the selected bar's flag, `ON` or `OFF` (`optionstr.csv` `#COURSE_IR,OFF,ON`, [L8406](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L8406)). LR2 sets it for every bar, so a song bar, a folder bar, NEW COURSE and RANDOM MIX read `OFF`. `resolveLR2CourseIRText` (`@be-music/skin-lr2/state`).
+  - Button 253 flags the selected course: on an unflagged course a click turns the flag on and plays `option_change`; on a flagged course it draws cell 1 and does nothing ([L11141-L11153](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11141-L11153)). The flag is one-way, as in LR2: once on, it cannot be turned off. `resolveLR2CourseIRButtonState` gives the cell; `CourseMaker.releaseCourse` flags a course of the player's own (a course from a file or a table is not theirs to flag).
+  - A flagged course is read-only, as LR2 reads `ir = 1` as `courseReadOnly` ([L18078-L18080](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18078-L18080)): `WriteCourse` returns at once ([L17580-L17584](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L17580-L17584)) and buttons 240-248 are locked ([L11126-L11129](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11126-L11129)). `CourseMaker.isReadOnly` tells, and `stepConnection` and `setCourseConstraints` refuse such a course, so its stages, connections and constraints, which key its ranking (the course fingerprint), stay fixed. Renaming (text 170) and deleting (button 233) still work, as LR2's `ChangeCourseTitle` and `DeleteCourse` do; the name is not part of the fingerprint. A flagged RANDOM MIX becomes the player's own course, which the next draw keeps.
+  - The flag is kept with the player's courses; a course stored without one (saved before the flag was kept) reads back unflagged, so no course turns read-only unless the player flagged it.
 - **Sharing.** `serializeLR2CourseFile` writes courses as a UTF-8 `.lr2crs` that `parseLR2CourseFile` reads back into the same courses, but the format has no room for constraints or `release` (every course reads back released). `serializeBeatorajaCourseFile` writes a beatoraja `course/*.json` that keeps both (NONSTOP courses, which beatoraja lacks, are left out).
 
 `CourseMaker` (`@be-music/player-browser/collection`) holds the player's courses and the course being made for a host, and `resolveCourseMakerFolders` lists them as LR2 does: one course folder per kind, each with its courses, then a NEW COURSE bar and, in EXPERT and NONSTOP, a [RANDOM MIX](#random-mix) bar.
@@ -301,6 +306,8 @@ A course stage runs on the ruleset's course gauge, not on the single-chart gauge
 
 **`beatoraja`** plays every course on its class gauges (`GrooveGauge.create`): GROOVE and EASY map to `CLASS`, HARD to `EXCLASS`, DEATH to `EXHARDCLASS`. The table set comes from the course's `gauge_*` constraint, or from the play mode when it names none (5 / 10 keys → `5k`, PMS → `9k`, 24 / 48 keys → `24k`, otherwise `7k`). They start at 100 with no TOTAL modifier. **`____`** has no published class gauge, so it uses beatoraja's.
 
+lr2oraja and LR2oraja Endless Dream play courses on beatoraja's `GAUGE_LR2` class gauges with LR2's death border and damage-reduction threshold; how that compares with these rules, and why be-music does not follow it, is in [lr2oraja courses](./research/lr2oraja-courses.md).
+
 ### Judgment constraints
 
 `no_good` gives GOOD the GREAT window, and `no_great` gives GREAT and GOOD the PGREAT window, on every window table (beatoraja `JudgeManager` L175-L184 sets the window rates to 0, and `JudgeWindowRule.create` widens a window narrower than the one inside it). Under these constraints a press just outside the remaining windows is a BAD. They apply under every ruleset.
@@ -349,3 +356,28 @@ The course result sums the stages (see [Replay — Course replays](./replay.md#c
 The lamp and BP are the course rule and BP of the vocabulary every play is lamped with (`resolveCourseClearLamp`, `resolveMissCount` in `@be-music/player-engine/ruleset`). A host keeps a run's best record under the judge ruleset it was played on (`resolveCoursePlayedRuleset`; a run whose stages differ keeps none), by the rules of `@be-music/player-engine/records`: `courseRunRecordPlay` reads what the run contributes, `courseRunKeepsRecord` refuses auto-played runs and runs at another tempo, and `mergeCourseStageRecord` folds an EXPERT / GRADE stage into its chart's record as LR2 does (the best EX score, max combo and BP, and a FULL COMBO or better lamp, but no clear lamp or play count).
 
 Stitch version 3 also promotes BMS-only courses containing CN/HCN to internal bmson so each long note retains its stage mode. This covers both explicit LNMODE and HDX LONGMODE. Historical stitch versions preserve their earlier BMS interpretation. See [ADR 0027](./adr/0027-hdx-long-note-modes.md).
+
+## The player's dan rank
+
+be-music keeps the player's **dan rank**: the highest dan they have cleared a GRADE course of, one per judge ruleset and key mode. LR2 keeps one dan per key mode too (`grade_7` … `grade_9`), but neither LR2 nor beatoraja ever sets one from a course clear or shows one on a skin, so how a course maps to a dan is be-music's own. See [Research — player dan rank](./research/dan-rank.md) for the sources.
+
+```mermaid
+flowchart TD
+  run["Course run ends"] --> keeps{"Keeps a best record?"}
+  keeps -->|no| none["No rank"]
+  keeps -->|yes| grade{"GRADE and cleared?"}
+  grade -->|no| none
+  grade -->|yes| name{"Name names a dan?"}
+  name -->|no| none
+  name -->|yes| mode{"Key mode known?"}
+  mode -->|no| none
+  mode -->|yes| keep["Keep the higher rank<br/>(ruleset, key mode)"]
+```
+
+- **Which runs count.** A run that keeps a best record (`resolveCourseBestRecordUpdate`: not auto-played, not at another tempo, every stage judged under one ruleset), of a GRADE course, cleared (any lamp but FAILED). An EXPERT or NONSTOP course certifies nothing, whatever it is named.
+- **Which dan.** Read from the course name (`resolveCourseDanRank` in `@be-music/player-engine/records`), after NFKC normalisation: Overjoy; 発狂 (or `insane`) with 皆伝 or a dan; 皆伝; 中伝; a dan (`初段`, `七段`, `7段`, `7th dan`); a kyu (`十級`, `1st kyu`). 段位 (as in 段位認定) is not a dan. A name that names none certifies nothing.
+- **The ladder** (`DAN_RANKS`), lowest first: 十級 … 一級, 初段 … 十段, 中伝, 皆伝, 発狂初段 … 発狂十段, 発狂皆伝, Overjoy. A higher rank replaces a lower one; a lower clear leaves the rank alone.
+- **Key mode.** The one the course names (LR2 `line`, a table's `mode`), else the one all its stages' charts share (`resolveDanCourseKeyMode`). A course whose stages differ keeps no rank.
+- **New plays only.** Ranks come from runs played from now on; course records kept before are not read back into ranks.
+
+The web player stores the ranks in `localStorage` (`be-music.dan-ranks`, keyed `<ruleset>:<keyMode>`); a missing or unreadable store reads as no rank. be-music skins get them as `frame.danRanks` on the select screen, and the built-in Plain skin shows them in its header (`7K 七段 · 14K 初段`). No LR2 op or beatoraja property shows a dan, so LR2 and beatoraja themes show none.

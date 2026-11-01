@@ -20,6 +20,7 @@ import {
   planCourseStart,
   playAgainOverrides,
   resolveCourseBestRecordUpdate,
+  resolveCourseDanRankUpdate,
   resolveGameplayExit,
   resolveGameplayRestart,
   resolveResultRetry,
@@ -165,6 +166,50 @@ describe('resolveCourseBestRecordUpdate', () => {
   test('keeps nothing for an auto-played run or one at another tempo', () => {
     expect(resolveCourseBestRecordUpdate(courseLog({ mode: 'auto' }), RESULT, 'course:k')).toBeUndefined();
     expect(resolveCourseBestRecordUpdate(courseLog({ tempo: 1.1 }), RESULT, 'course:k')).toBeUndefined();
+  });
+});
+
+describe('resolveCourseDanRankUpdate', () => {
+  const graded = (name: string): LibraryCourse => {
+    const base = course();
+    return { ...base, definition: { ...base.definition, kind: 'grade', name } };
+  };
+
+  // The stages' empty charts are 5-key charts.
+  test('a cleared GRADE course named after a dan certifies it in its stages’ key mode, under its ruleset', () => {
+    expect(resolveCourseDanRankUpdate(graded('七段'), courseLog({}), RESULT)).toEqual({ key: 'lr2:5', rank: 'dan-7' });
+    expect(resolveCourseDanRankUpdate(graded('発狂初段'), courseLog({ judgeRuleset: 'beatoraja' }), RESULT)).toEqual({
+      key: 'beatoraja:5',
+      rank: 'insane-1',
+    });
+    const declared = graded('皆伝');
+    expect(
+      resolveCourseDanRankUpdate(
+        { ...declared, definition: { ...declared.definition, keyMode: 14 } },
+        courseLog({}),
+        RESULT,
+      ),
+    ).toEqual({ key: 'lr2:14', rank: 'kaiden' });
+  });
+
+  test('certifies nothing for a failed run, a course named after no dan, or a run that keeps no record', () => {
+    expect(resolveCourseDanRankUpdate(graded('七段'), courseLog({}), { lamp: 'FAILED' })).toBeUndefined();
+    expect(resolveCourseDanRankUpdate(graded('Dan'), courseLog({}), RESULT)).toBeUndefined();
+    const expert = graded('七段');
+    expect(
+      resolveCourseDanRankUpdate(
+        { ...expert, definition: { ...expert.definition, kind: 'expert' } },
+        courseLog({}),
+        RESULT,
+      ),
+    ).toBeUndefined();
+    expect(resolveCourseDanRankUpdate(graded('七段'), courseLog({ mode: 'auto' }), RESULT)).toBeUndefined();
+    expect(resolveCourseDanRankUpdate(graded('七段'), courseLog({}, { judgeRuleset: '____' }), RESULT)).toBeUndefined();
+  });
+
+  test('certifies nothing when the key mode is unknown', () => {
+    const missing = { ...graded('七段'), stages: [{ title: 'a' }] };
+    expect(resolveCourseDanRankUpdate(missing, courseLog({}), RESULT)).toBeUndefined();
   });
 });
 

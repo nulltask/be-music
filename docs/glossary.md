@@ -144,6 +144,7 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - **structured log**: NDJSON execution log written separately from TUI output, usually under `~/.be-music/logs/player.ndjson`.
 - **video BGA streaming**: Policy that prepares only the first video frame before gameplay starts, then decodes remaining frames progressively.
 - **replay**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-replay` re-simulates it under the LR2, beatoraja, and That-Which-Must-Not-Be-Named rulesets.
+- **ghost**: A recorded play shown beside the live one, re-derived from its replay; it only draws, and the live play's judging, records and replay never see it. A ghost's **source** says which replay it plays (the player's own best for now), its **presentation** how it shows (a second playfield for now). See [replay.md](./replay.md#ghost).
 - **PlayerSummary**: Final playback summary containing judgment counts, FAST/SLOW, EX-SCORE, SCORE, gauge, and clear state.
 
 ## Courses, Records And View
@@ -153,12 +154,14 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - **carry-in**: The gauge value, course combo and course max combo a stage starts from, left by the stage before it.
 - **give up**: Leaving a course run with ESC. A run given up is a failed run.
 - **stitched play**: The single chart a NONSTOP course is played as, built by stitching its stages with their connections and placement.
+- **IR flag**: Whether a course's runs are ranked, LR2's `ir` column (IR: LR2's internet ranking, not the chart IR above) and beatoraja's `release`; code names it `release`. A course the player made starts unflagged; flagging it is one-way and makes the course read-only.
 - **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `____`.
 - **gauge type**: The gauge the player picks, in LR2's names: `GROOVE`, `HARD`, `DEATH` or `EASY` (`GaugeType`). Each judge ruleset plays it on a gauge of its own line-up, named by its gauge id (`NORMAL`, `HAZARD`, `CLASS`, ...).
 - **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`), stored by an append-only rank that is not its order (LIGHT ASSIST EASY, between ASSIST EASY and EASY, is rank 10). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player-engine/ruleset`).
 - **assist class**: How assisted a play is, by the rules of each option's source: `none`, `light`, `assist` or `no-save` (`AssistClass`, `classifyReplayAssists` in `@be-music/player-engine/records`). The judge ruleset decides what follows from it (`resolveRecordPolicy`).
 - **BP**: The miss count: BADs, POORs and empty POORs, plus the notes the play never judged because it failed or was given up mid-way (for a course, the notes the run never reached too) (`resolveMissCount`).
 - **best record**: The independently retained best clear lamp, highest EX-SCORE, highest max combo, and lowest BP across a player’s plays of a chart or course under one judge ruleset (`BestRecord`). These values can come from different plays; a best record is not a single play result.
+- **dan rank**: The highest dan a player has cleared a GRADE course of, kept per judge ruleset and key mode (`DanRank`, `resolveCourseDanRank` in `@be-music/player-engine/records`). The dan a course certifies is read from its name. _Avoid_: grade (the course kind), class.
 - **view settings**: What the player saw, apart from what was judged: hi-speed, hi-speed fix, visible time and each side's SUDDEN+, HIDDEN+ and LIFT. _Avoid_: display options.
 - **play tempo**: How fast a play runs relative to the chart (`speed`). A play at another tempo is practice.
 

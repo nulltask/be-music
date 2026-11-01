@@ -1,3 +1,4 @@
+import type { CourseDefinition } from '@be-music/player-engine/course';
 import type { BestRecord } from '@be-music/player-engine/records';
 import {
   DEFAULT_PLAY_OPTIONS,
@@ -479,6 +480,7 @@ describe('SelectSession course maker', () => {
       cancel: vi.fn(),
       stepDefaultConnection: vi.fn(),
       stepConnection: vi.fn(),
+      releaseCourse: vi.fn((course: CourseDefinition) => (course.release ? undefined : { ...course, release: true })),
     };
   }
 
@@ -539,6 +541,38 @@ describe('SelectSession course maker', () => {
     intent({ type: 'course-maker', action: { kind: 'name' } });
     expect(courseMaker.stepConnection).toHaveBeenCalledTimes(1);
     expect(courseMakerEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it('flags the player’s own course under the cursor for IR with the option-change cue, and only once', () => {
+    const courseMaker = createMaker(false);
+    const flagged = makeCourse('flagged', { editable: true });
+    const library = makeCollection(
+      [makeChart('a', 'pack')],
+      [
+        makeCourseFolder('mine', [
+          makeCourse('own', { editable: true }),
+          { ...flagged, definition: { ...flagged.definition, release: true } },
+          makeCourse('other'),
+        ]),
+      ],
+    );
+    const { intent, key, cues } = createSession({
+      library,
+      browse: { folderPath: ['mine'], cursors: [1, 0] },
+      courseMaker,
+    });
+    intent({ type: 'course-maker', action: { kind: 'ir' } });
+    expect(courseMaker.releaseCourse).toHaveBeenCalledWith(expect.objectContaining({ name: 'own' }));
+    expect(cues()).toEqual(['optionChange']);
+    // A flagged course: the maker refuses, and no cue plays (LR2 draws cell 1 and does nothing).
+    key('ArrowDown');
+    intent({ type: 'course-maker', action: { kind: 'ir' } });
+    expect(courseMaker.releaseCourse).toHaveBeenCalledTimes(2);
+    expect(cues().filter((cue) => cue === 'optionChange')).toHaveLength(1);
+    // Not the player's own course: the maker is not asked.
+    key('ArrowDown');
+    intent({ type: 'course-maker', action: { kind: 'ir' } });
+    expect(courseMaker.releaseCourse).toHaveBeenCalledTimes(2);
   });
 });
 

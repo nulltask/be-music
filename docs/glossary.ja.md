@@ -144,6 +144,7 @@
 - **structured log**: TUI 出力とは分離して書き出す NDJSON 実行ログです。通常は `~/.be-music/logs/player.ndjson` に出力します。
 - **video BGA streaming**: gameplay 開始前には動画 BGA の最初の frame だけを確保し、残りを gameplay 開始後に段階的に decode する方針です。
 - **リプレイ（replay）**: 1 回のプレイを決定的に再現するための記録（`*.bmplay.json`）です。解決済み譜面・入力イベント・プレイ設定を持ち、プレイ結果の集計や、複数のプレイからなるプレイ履歴とは区別します。`bms-replay` は LR2、beatoraja、名前を言ってはいけないあのゲームのルールセットでこれを再シミュレーションします。
+- **ゴースト（ghost）**: 記録されたプレイを今のプレイの横に見せるもので、そのリプレイから導き直します。描くだけで、今のプレイの判定、記録、リプレイはゴーストを見ません。ゴーストの **ソース（source）** はどのリプレイを再生するか（今は自己ベスト）、**見せ方（presentation）** はどう見せるか（今は 2 つ目のプレイフィールド）を決めます。[replay.ja.md](./replay.ja.md#ゴースト) を参照してください。
 - **PlayerSummary**: 再生終了後の集計結果です。判定数、FAST/SLOW、EX-SCORE、SCORE、gauge、clear state などを含みます。
 
 ## コース・記録・表示
@@ -153,12 +154,14 @@
 - **持ち越し（carry-in）**: ステージが始まるときのゲージ値・コースのコンボ・コースの最大コンボ。前のステージが残したものです。
 - **投げ（give up）**: コースの実行を ESC で抜けること。投げた実行は落ちた実行です。
 - **結合したプレイ（stitched play）**: NONSTOP のコースを遊ぶ 1 本の譜面。ステージをつなぎ方と配置に従って結合して作ります。
+- **IR フラグ（IR flag）**: コースの実行をランキングに入れるかどうか。LR2 の `ir` 列（ここでの IR は LR2 のインターネットランキングで、譜面の IR ではありません）、beatoraja の `release` にあたり、コードでは `release` と呼びます。プレイヤーが作ったコースは未登録で始まり、登録は一方向で、登録したコースは読み取り専用になります。
 - **判定ルールセット（judge ruleset）**: プレイを判定し順位付けする基準のゲーム。判定幅・ゲージ・ランプが決まります。`lr2`・`beatoraja`・`____`。
 - **ゲージの種類（gauge type）**: プレイヤーが選ぶゲージ。LR2 の名前で `GROOVE`・`HARD`・`DEATH`・`EASY`（`GaugeType`）。判定ルールセットはそれぞれ自分のゲージで遊ばせ、そのゲージはゲージ ID（`NORMAL`・`HAZARD`・`CLASS` など）で呼びます。
 - **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。保存する番号は追加専用で、順序ではありません（ASSIST EASY と EASY の間の LIGHT ASSIST EASY は 10）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player-engine/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
 - **アシスト区分（assist class）**: プレイがどれだけアシストを受けたかを、各オプションの参照元の規則で表したもの。`none`・`light`・`assist`・`no-save`（`@be-music/player-engine/records` の `AssistClass`、`classifyReplayAssists`）。その結果どうなるかは判定ルールセットが決めます（`resolveRecordPolicy`）。
 - **BP**: ミスの数。BAD・POOR・空 POOR に、途中で落ちたり ESC で投げたりして判定されなかったノート（コースでは到達しなかったノートも）を加えたもの（`resolveMissCount`）。
 - **自己ベスト（best record）**: 同じ判定ルールセット・譜面またはコースについて、最良のランプ・最高 EX-SCORE・最大コンボ・最少 BP を項目ごとに保持したものです（`BestRecord`）。各値は異なるプレイから得られることがあり、1 回のプレイ結果とは区別します。
+- **段位（dan rank）**: プレイヤーが GRADE コースをクリアした最高の段位。判定ルールセットとキーモードごとに保持します（`@be-music/player-engine/records` の `DanRank`、`resolveCourseDanRank`）。コースが認定する段位はコース名から読みます。_避ける語_: grade（コースの種類）、class。
 - **表示設定（view settings）**: 判定とは別に、プレイヤーが見ていたもの。ハイスピード、ハイスピード固定、表示時間、各サイドの SUDDEN+・HIDDEN+・LIFT です。_避ける語_: display options。
 - **プレイテンポ（play tempo）**: 譜面に対してプレイがどれだけ速く進むか（`speed`）。テンポを変えたプレイは練習扱いです。
 

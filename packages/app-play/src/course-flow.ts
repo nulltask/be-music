@@ -19,6 +19,7 @@ import {
 } from '@be-music/player-engine/replay';
 import {
   resolveCourseView,
+  resolveLibraryChartKeyMode,
   type CourseView,
   type LibraryChart,
   type LibraryCourse,
@@ -28,6 +29,8 @@ import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-re
 import type { NonstopPlayFailure } from './nonstop-course.ts';
 import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-music/player-engine/records';
 import { rulesetRecordKey } from './chart-best-records.ts';
+import { resolveDanRankUpdate } from './dan-ranks.ts';
+import type { DanRank } from '@be-music/player-engine/records';
 
 /**
  * The decisions the player's course flow takes, kept apart from the scenes that act on them so they can be tested: what
@@ -272,6 +275,31 @@ export function resolveCourseBestRecordUpdate(
   const ruleset = resolveCoursePlayedRuleset(courseLog);
   if (ruleset === undefined || !courseRunKeepsRecord(courseLog)) return undefined;
   return { key: rulesetRecordKey(ruleset, key), play: courseRunRecordPlay(result) };
+}
+
+/**
+ * The dan rank a course run certifies and the key it is kept under (`resolveDanRankUpdate`), or `undefined`: only a run
+ * that keeps a best record ({@link resolveCourseBestRecordUpdate}) can certify one, under the judge ruleset it was played
+ * on, in the key mode the course names or its stages' charts share. Existing records are never read back into ranks: a
+ * rank comes from runs played from now on.
+ */
+export function resolveCourseDanRankUpdate(
+  course: Pick<LibraryCourse, 'definition' | 'stages'>,
+  courseLog: Pick<BeMusicCourseReplay, 'stages' | 'nonstop'>,
+  result: Pick<ReplayCourseResult, 'lamp'>,
+): { key: string; rank: DanRank } | undefined {
+  const ruleset = resolveCoursePlayedRuleset(courseLog);
+  if (ruleset === undefined || !courseRunKeepsRecord(courseLog)) return undefined;
+  return resolveDanRankUpdate(
+    {
+      definition: course.definition,
+      stageKeyModes: course.stages.map((stage) =>
+        stage.chart !== undefined ? resolveLibraryChartKeyMode(stage.chart) : undefined,
+      ),
+      lamp: result.lamp,
+    },
+    ruleset,
+  );
 }
 
 /** What a play is, for the gameplay exits below. */

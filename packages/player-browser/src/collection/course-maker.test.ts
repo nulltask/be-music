@@ -8,6 +8,7 @@ import {
   type CourseMakerChange,
 } from './course-maker.ts';
 import { createChartHashLookup } from './course.ts';
+import type { CourseDefinition } from '@be-music/player-engine/course';
 import type { LibraryChart } from '@be-music/player-scene-model';
 
 function chartEntry(id: string, text: string): LibraryChart {
@@ -90,6 +91,49 @@ describe('CourseMaker', () => {
     courses.deleteCourse(renamed);
     expect(courses.courses).toEqual([]);
   });
+
+  test('flags a saved course for IR once, then keeps its connections and constraints fixed', async () => {
+    const changes: CourseMakerChange[] = [];
+    const courses = maker(changes);
+    courses.start('nonstop');
+    await courses.append(SEVEN[0]!);
+    await courses.append(SEVEN[1]!);
+    const saved = courses.finish()!;
+    expect(saved.release).toBe(false);
+    expect(courses.isReadOnly(saved)).toBe(false);
+    changes.length = 0;
+    const flagged = courses.releaseCourse(saved)!;
+    expect(flagged.release).toBe(true);
+    expect(changes).toEqual(['courses']);
+    expect(courses.courses).toEqual([flagged]);
+    expect(courses.isReadOnly(flagged)).toBe(true);
+    // One-way, as LR2's button 253: a flagged course stays flagged.
+    expect(courses.releaseCourse(flagged)).toBeUndefined();
+    expect(courses.releaseCourse(saved)).toBeUndefined();
+    expect(courses.stepConnection(flagged, 0, 1)).toBeUndefined();
+    expect(courses.setCourseConstraints(flagged, ['no_speed'])).toBeUndefined();
+    expect(courses.courses).toEqual([flagged]);
+    // Renaming and deleting still work, as LR2's ChangeCourseTitle and DeleteCourse do.
+    const renamed = courses.renameCourse(flagged, 'Ranked')!;
+    expect(renamed).toMatchObject({ name: 'Ranked', release: true });
+    courses.deleteCourse(renamed);
+    expect(courses.courses).toEqual([]);
+  });
+
+  test('reads a course it does not own as not read-only and refuses to flag it', () => {
+    const courses = maker();
+    const foreign: CourseDefinition = {
+      name: 'Table course',
+      kind: 'expert',
+      stages: [],
+      constraints: [],
+      trophies: [],
+      release: true,
+      source: { format: 'beatoraja-json' },
+    };
+    expect(courses.isReadOnly(foreign)).toBe(false);
+    expect(courses.releaseCourse({ ...foreign, release: false })).toBeUndefined();
+  });
 });
 
 test('restores saved courses without reporting a change', async () => {
@@ -167,8 +211,15 @@ describe('RANDOM MIX', () => {
     courses.drawRandomMix('expert', 7, charts, () => 0);
     expect(courses.courses).toHaveLength(3);
     expect(courses.courses).toContain(renamed);
+    // A flagged draw becomes the player's own too: the next draw keeps it.
+    const kept = courses.courses[0]!;
+    const flaggedDraw = courses.releaseCourse(kept)!;
+    expect(courses.randomMixes).not.toContain(flaggedDraw);
+    courses.drawRandomMix('expert', 7, charts, () => 0);
+    expect(courses.courses).toHaveLength(4);
+    expect(courses.courses).toContain(flaggedDraw);
     expect(courses.drawRandomMix('expert', 9, charts, () => 0)).toEqual({ ok: false, reason: 'no-candidates' });
-    expect(courses.courses).toHaveLength(3);
+    expect(courses.courses).toHaveLength(4);
     expect(changes).toContain('settings');
     expect(changes).toContain('courses');
     const entry = createDrawnRandomMixEntry(second.course, second.charts);

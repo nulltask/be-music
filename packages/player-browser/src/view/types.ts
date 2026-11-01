@@ -14,7 +14,12 @@ import type {
   LR2RandomMixSettings,
   NonstopConnection,
 } from '@be-music/player-engine/course';
-import type { BeMusicAudioFrame, BeMusicCourseBestRecord, BeMusicChartBestRecord } from '@be-music/player-skin-sdk';
+import type {
+  BeMusicAudioFrame,
+  BeMusicCourseBestRecord,
+  BeMusicChartBestRecord,
+  BeMusicDanRank,
+} from '@be-music/player-skin-sdk';
 import type {
   BrowseCommand,
   BrowseEvent,
@@ -109,6 +114,8 @@ export interface SceneViewTiming {
 export interface SelectRecords {
   chart(chart: LibraryChart): BeMusicChartBestRecord | undefined;
   course(course: LibraryCourse): BeMusicCourseBestRecord | undefined;
+  /** The player's dan rank per key mode (`frame.danRanks` of a be-music skin), when the host keeps them. */
+  danRanks?(): readonly BeMusicDanRank[];
   /**
    * Which of a chart's or course's replay slots hold a replay (`REPLAY_SLOT_COUNT` of them), when the host keeps replay
    * slots: the screen picks one for REPLAY, and a beatoraja skin lights their ops.
@@ -143,12 +150,13 @@ export interface SelectCourseMakerState {
 
 /**
  * What the player asks of the course maker: name the course being made (or their own course under the cursor),
- * delete their course under the cursor, finish or cancel the course being made, or step a connection of their NONSTOP
+ * delete their course under the cursor or flag it for IR (`ir`, LR2's button 253), finish or cancel the course being made, or step a connection of their NONSTOP
  * course under the cursor (`slot`, after stage `slot + 1`) or the default one, or step a RANDOM MIX setting.
  */
 export type SelectCourseMakerAction =
   | { readonly kind: 'name' }
   | { readonly kind: 'delete' }
+  | { readonly kind: 'ir' }
   | { readonly kind: 'finish' }
   | { readonly kind: 'cancel' }
   | { readonly kind: 'connection'; readonly slot: number; readonly step: 1 | -1 }
