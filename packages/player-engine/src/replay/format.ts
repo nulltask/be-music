@@ -252,7 +252,10 @@ export interface ReplayPlay {
   gauge: GaugeType;
   /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`); `results.secondPlayer` is its result. */
   gauge2P?: GaugeType;
-  /** Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / ...). */
+  /**
+   * Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'lr2:RANDOM'` / ...). A bare
+   * colliding name (`'RANDOM'`, `'S-RANDOM'`, `'CONVERGE'`) is the played ruleset's own (ADR 0019).
+   */
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
   /** Debug BAD-window override (`PlayerOptions.judgeWindowMs`) — simulations of such plays are non-standard. */
@@ -856,12 +859,20 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   }
   if (play.battleMode !== undefined) {
     if (
-      !['OFF', 'COUPLE', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS', 'TWO-PLAYER'].includes(
-        play.battleMode as string,
-      )
+      ![
+        'OFF',
+        'COUPLE',
+        'SP-TO-DP',
+        'D-BATTLE',
+        'BATTLE',
+        'beatoraja:BATTLE',
+        '____:BATTLE',
+        'BATTLE-AS',
+        'TWO-PLAYER',
+      ].includes(play.battleMode as string)
     )
       throw new ReplayParseError(
-        'play.battleMode: expected OFF, COUPLE, SP-TO-DP, D-BATTLE, BATTLE, BATTLE-AS or TWO-PLAYER',
+        'play.battleMode: expected OFF, COUPLE, SP-TO-DP, D-BATTLE, BATTLE (bare, beatoraja: or ____:), BATTLE-AS or TWO-PLAYER',
       );
     parsed.battleMode = play.battleMode as EffectiveBattleMode;
   }

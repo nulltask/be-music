@@ -7,7 +7,7 @@ import { observePlay } from './characterization/harness.ts';
 const chart = (): ReturnType<typeof parseBMS> =>
   parseBMS('#PLAYER 1\n#BPM 120\n#TOTAL 200\n#WAV01 a.wav\n#00011:00010100');
 
-test.each(['lr2', '____'] as const)(
+test.each(['lr2', 'beatoraja', '____'] as const)(
   '%s: two players judge their own side with their own score, combo and gauge',
   async (ruleset) => {
     const play = await observePlay({
@@ -51,13 +51,16 @@ test.each(['lr2', '____'] as const)(
   },
 );
 
-test('beatoraja has no two-player play', async () => {
+test('beatoraja two-player play builds LR2 BATTLE and judges each player with beatoraja windows and gauges', async () => {
   const play = await observePlay({
     driver: 'auto',
     chart: chart(),
-    options: { judgeRuleset: 'beatoraja', battleMode: 'TWO-PLAYER' },
+    options: { judgeRuleset: 'beatoraja', battleMode: 'TWO-PLAYER', gauge: 'HARD', gauge2P: 'ASSIST-EASY' },
   });
-  expect(play.outcome).toMatch(/^error: .*two-player/);
+  expect(play.outcome).toBe('completed');
+  expect(play.summary?.secondPlayer?.total).toBe(2);
+  expect(play.summary?.secondPlayer?.gauge?.type).toBe('ASSIST-EASY');
+  expect(play.replay?.play).toMatchObject({ judgeRuleset: 'beatoraja', battleMode: 'TWO-PLAYER' });
 });
 
 test('LR2 BATTLE on a double-play chart gives each player one side (COUPLE)', async () => {
