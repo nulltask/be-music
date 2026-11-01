@@ -1,7 +1,7 @@
 // The course maker's DOM surfaces, for every skin: a card shown while a course is being made (its name, songs and
 // finish / cancel, standing in for an LR2 skin's buttons 230 / 231 and texts 150-170), and a dialog that manages the
-// saved courses (rename, NONSTOP connections, delete, export as `.lr2crs`) and the RANDOM MIX settings (LR2's buttons
-// 260-266).
+// saved courses (rename, NONSTOP connections, delete, IR flag as LR2's button 253 / text 183, export as `.lr2crs`) and
+// the RANDOM MIX settings (LR2's buttons 260-266).
 
 import {
   courseConstraintGroup,
@@ -105,6 +105,7 @@ function constraintEditor(
   kind: CourseKind,
   constraints: readonly CourseConstraint[],
   onChange: (constraints: CourseConstraint[]) => void,
+  disabled = false,
 ): HTMLElement {
   const fields = CONSTRAINT_FIELDS.filter((field) => kind !== 'nonstop' || field.group !== 'longNote');
   return element(
@@ -113,6 +114,7 @@ function constraintEditor(
     fields.map((field) => {
       const current = constraints.find((constraint) => courseConstraintGroup(constraint) === field.group) ?? '';
       const select = element('select', { className: 'select course-maker-select' });
+      select.disabled = disabled;
       for (const [value, label] of field.choices) {
         const option = element('option', { text: label() });
         option.value = value;
@@ -159,8 +161,13 @@ function button(label: string, className: string, onClick: () => void, variant?:
   return node;
 }
 
-function connectionSelect(value: NonstopConnection, onChange: (value: NonstopConnection) => void): HTMLSelectElement {
+function connectionSelect(
+  value: NonstopConnection,
+  onChange: (value: NonstopConnection) => void,
+  disabled = false,
+): HTMLSelectElement {
   const select = element('select', { className: 'select course-maker-select' });
+  select.disabled = disabled;
   for (const connection of LR2_NONSTOP_CONNECTIONS) {
     const option = element('option', { text: CONNECTION_LABELS[connection] });
     option.value = connection;
@@ -267,6 +274,14 @@ export class CourseMakerPanel {
   openManager(): void {
     this.renderDialog();
     if (!this.dialog.open) this.dialog.showModal();
+  }
+
+  /**
+   * Asks before flagging a saved course for IR (LR2's button 253): the flag cannot be turned off, and the course is
+   * read-only from then on.
+   */
+  confirmRelease(course: CourseDefinition): void {
+    if (window.confirm(playerText().course.confirmIR(course.name))) this.maker.releaseCourse(course);
   }
 
   /** Asks before deleting a saved course, as LR2 does. */
@@ -419,6 +434,8 @@ export class CourseMakerPanel {
     name.setAttribute('aria-label', playerText().course.courseName);
     isolateKeys(name);
     name.addEventListener('change', () => this.maker.renameCourse(course, name.value));
+    // A course flagged for IR is read-only (its connections and constraints key its ranking); its name is not.
+    const readOnly = this.maker.isReadOnly(course);
     const connections = madeCourseConnections(course);
     const stages = element(
       'ol',
@@ -428,8 +445,10 @@ export class CourseMakerPanel {
         const connection = connections[index];
         if (connection !== undefined) {
           item.append(
-            connectionSelect(connection, (value) =>
-              this.maker.stepConnection(course, index, connectionDelta(connection, value)),
+            connectionSelect(
+              connection,
+              (value) => this.maker.stepConnection(course, index, connectionDelta(connection, value)),
+              readOnly,
             ),
           );
         }
@@ -443,9 +462,15 @@ export class CourseMakerPanel {
         button(playerText().course.delete, 'btn', () => this.confirmDelete(course), 'outline'),
       ]),
       stages,
-      constraintEditor(course.kind, course.constraints, (constraints) =>
-        this.maker.setCourseConstraints(course, constraints),
+      constraintEditor(
+        course.kind,
+        course.constraints,
+        (constraints) => this.maker.setCourseConstraints(course, constraints),
+        readOnly,
       ),
+      readOnly
+        ? element('p', { className: 'course-maker-ir', text: playerText().course.irOn })
+        : button(playerText().course.registerIR, 'btn', () => this.confirmRelease(course), 'outline'),
     ]);
   }
 }
