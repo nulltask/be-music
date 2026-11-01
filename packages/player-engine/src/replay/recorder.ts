@@ -1,4 +1,4 @@
-import type { ChartOptionProgram } from '@be-music/chart-model';
+import { hasChartPlayOptions, type ChartOptionProgram, type ChartPlayOptionProgram } from '@be-music/chart-model';
 import type { BeatorajaCustomJudge } from '../ruleset/custom-judge.ts';
 import type { EffectiveBattleMode } from '../core/battle-mode.ts';
 import type { ChartPlayVariant } from '@be-music/chart-model';
@@ -150,6 +150,8 @@ export type ReplayRecordingOptions = Pick<
 
 export interface ReplayRecorderOptions {
   chartOptions?: ChartOptionProgram;
+  /** The chart-authored gameplay options the play ran with; recorded when it forces anything. */
+  chartPlayOptions?: ChartPlayOptionProgram;
   /** Resolved chart JSON (post `#RANDOM` control flow) — metadata source. */
   json: BeMusicJSON;
   chart: ReplayRecorderChartData;
@@ -529,6 +531,8 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
     (Object.keys(options.chartOptions.initial).length > 0 || options.chartOptions.cues.length > 0)
   )
     result.chartOptions = structuredClone(options.chartOptions);
+  if (hasChartPlayOptions(options.chartPlayOptions))
+    result.chartPlayOptions = structuredClone(options.chartPlayOptions);
   return result;
 }
 
