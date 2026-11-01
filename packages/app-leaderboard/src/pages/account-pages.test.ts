@@ -24,11 +24,14 @@ describe('signing in on the site', () => {
     const top = await html('/');
     expect(top).toContain('data-account-action="sign-in"');
     expect(top).not.toContain('href="/settings"');
-    // Sign in and Sign up open dialogs; Google and Discord are shown but disabled, in development.
+    // Sign in opens the dialog. Passkey, Google and Discord each start Accounts; none are marked coming soon.
     expect(top).toContain('data-account-action="open-sign-in"');
     expect(top).toContain('data-account-action="open-sign-up"');
-    expect(top).toMatch(/<button[^>]*disabled[^>]*title="Sign in with Google is coming soon"/);
-    expect(top).toMatch(/<button[^>]*disabled[^>]*title="Sign up with Discord is coming soon"/);
+    expect(top).toContain('data-account-action="sign-in-google"');
+    expect(top).toContain('data-account-action="sign-up-discord"');
+    expect(top).not.toContain('Coming soon');
+    expect(top).not.toContain('coming soon');
+    expect(top).not.toMatch(/data-account-action="sign-in-google"[^>]*disabled/);
     const settings = await html('/settings');
     expect(settings).toContain('Sign in with a passkey');
     expect(settings).not.toContain('data-profile-form');

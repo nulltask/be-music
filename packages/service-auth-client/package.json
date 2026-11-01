@@ -5,7 +5,8 @@
   "description": "Shared OIDC client, service sessions, and API token verification for be-music services",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./social-sign-in": "./src/social-sign-in.ts"
   },
   "scripts": {
     "bench": "node scripts/bench.ts"
