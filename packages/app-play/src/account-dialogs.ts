@@ -1,4 +1,10 @@
-import { signInWithLeaderboardPasskey, signUpForLeaderboard, type AccountActionResult } from './account.ts';
+import {
+  accountProviderFromAction,
+  signInWithAccountProvider,
+  signInWithLeaderboardPasskey,
+  signUpForLeaderboard,
+  type AccountActionResult,
+} from './account.ts';
 import { playerText } from './player-copy.ts';
 
 /** Which account dialog to open: sign-in, sign-up, or sign-up for the anonymous account already in this browser. */
@@ -51,6 +57,18 @@ export function wireAccountDialogs(handlers: AccountDialogHandlers): (dialog: Ac
     else if (action === 'sign-in') {
       const dialog = button.closest('dialog');
       void run(button, dialog, signInWithLeaderboardPasskey, () => playerText().account.signInFailed, handlers);
+    } else {
+      const provider = accountProviderFromAction(action);
+      if (provider !== undefined) {
+        const dialog = button.closest('dialog');
+        void run(
+          button,
+          dialog,
+          () => signInWithAccountProvider(provider),
+          () => playerText().account.signInFailed,
+          handlers,
+        );
+      }
     }
   });
 

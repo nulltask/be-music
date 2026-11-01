@@ -4,6 +4,7 @@
  * passkey creation), and htmx, which updates a page in place when a filter changes or an action is done
  * (src/pages/partial-swap.ts). The pages work without it, minus these actions.
  */
+import { accountSignInPath } from '@be-music/service-auth-client/social-sign-in';
 import htmx from 'htmx.org';
 import type { CourseCardData } from '../src/pages/course-card-data.ts';
 import { PARTIAL_SELECT_OOB, PARTIAL_SWAP, PARTIAL_TARGET } from '../src/pages/partial-swap.ts';
@@ -68,19 +69,43 @@ async function callAccountAPI(path: string, init: RequestInit): Promise<{ ok: tr
   return { ok: false, message: describeAccountError(body.error ?? `http-${response.status}`, body.detail, t) };
 }
 
+/** This page, so Accounts sends the player back here after sign-in. */
+function returnHere(): string {
+  return `${location.pathname}${location.search}`;
+}
+
+/** Opens one account dialog and closes any other that is already up. */
+function openAccountDialog(id: string): void {
+  for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]')) dialog.close();
+  const dialog = document.getElementById(id);
+  if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
+}
+
 const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
   async 'sign-in'() {
-    location.assign(`/api/auth/sign-in?returnTo=${encodeURIComponent(location.pathname + location.search)}`);
+    location.assign(accountSignInPath(returnHere()));
+  },
+  async 'sign-in-google'() {
+    location.assign(accountSignInPath(returnHere(), 'google'));
+  },
+  async 'sign-in-discord'() {
+    location.assign(accountSignInPath(returnHere(), 'discord'));
   },
   async 'sign-out'() {
     await fetch('/api/auth/sign-out', { method: 'POST' });
     await refresh();
   },
   async 'open-sign-in'() {
-    location.assign('/api/auth/sign-in');
+    openAccountDialog('sign-in');
   },
   async 'open-sign-up'() {
-    location.assign('/api/auth/sign-in?returnTo=/settings');
+    location.assign(accountSignInPath('/settings'));
+  },
+  async 'sign-up-google'() {
+    location.assign(accountSignInPath('/settings', 'google'));
+  },
+  async 'sign-up-discord'() {
+    location.assign(accountSignInPath('/settings', 'discord'));
   },
   async 'close-dialogs'() {
     for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]')) dialog.close();

@@ -3,6 +3,7 @@ import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
 import { passkeyClient } from '@better-auth/passkey/client';
 import { oauthProviderClient } from '@better-auth/oauth-provider/client';
+import { socialSignInToStart } from '@be-music/service-auth-client/social-sign-in';
 // Handle redirects once here: a duplicate navigation can consume a single-use authorization code twice.
 const auth = createAuthClient({
   disableDefaultFetchPlugins: true,
@@ -79,6 +80,27 @@ document.addEventListener('click', (event) => {
 });
 
 document.documentElement.dataset.authReady = 'true';
+
+/** Starts Google or Discord when this login was opened from that button on another service. */
+function startRequestedProvider(): void {
+  const requested = new URLSearchParams(location.search).get('sign_in_method');
+  const method = socialSignInToStart({
+    pathname: location.pathname,
+    search: location.search,
+    providerConfigured: document.querySelector(`button[data-action="${requested}"]`) !== null,
+    alreadyContinuing: document.querySelector('[data-action="continue"]') !== null,
+  });
+  if (method === undefined) return;
+  const guard = `be-music.sign-in.${method}`;
+  try {
+    if (sessionStorage.getItem(guard) === location.search) return;
+    sessionStorage.setItem(guard, location.search);
+  } catch {
+    // Private mode can reject storage. One attempt is still made.
+  }
+  document.querySelector<HTMLButtonElement>(`button[data-action="${method}"]`)?.click();
+}
+startRequestedProvider();
 
 async function saveProfile(path: string, init: RequestInit): Promise<void> {
   const response = await fetch(path, init);
