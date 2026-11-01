@@ -1,5 +1,6 @@
 import { and, count, countDistinct, eq, isNull, max, min, sql, type SQL } from 'drizzle-orm';
 import {
+  compareClearLampRanks,
   computeScoreRate,
   _____RANK_LABELS,
   type ____RankLabel,
@@ -18,10 +19,10 @@ export interface Distribution<Key> {
   buckets: Array<{ key: Key; count: number }>;
 }
 
-/** Every lamp, highest first; a distribution lists them all so bars line up from page to page. */
+/** Every lamp, highest first by the lamp order (stored ranks are not one); a distribution lists them all so bars line up. */
 const LAMPS_HIGH_TO_LOW = Object.keys(LAMP_STYLES)
   .map(Number)
-  .sort((a, b) => b - a);
+  .sort((a, b) => compareClearLampRanks(b, a));
 
 export type DjRank = ____RankLabel;
 

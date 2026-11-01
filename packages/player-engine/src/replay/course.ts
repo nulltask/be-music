@@ -88,8 +88,9 @@ export type ReplayCourseStageEntry =
       facts: RulesetChartFacts;
     };
 
-/** The lamps a course run earns: every `ClearLamp` but NO PLAY and ASSIST EASY (no course gauge is an assist gauge). */
-export type CourseClearLamp = Exclude<ClearLamp, 'NO_PLAY' | 'ASSIST_EASY'>;
+/** The lamps a course run earns: every `ClearLamp` but NO PLAY, ASSIST EASY and LIGHT ASSIST EASY (no course gauge is an assist
+ * gauge, and an assisted run keeps no course record). */
+export type CourseClearLamp = Exclude<ClearLamp, 'NO_PLAY' | 'ASSIST_EASY' | 'LIGHT_ASSIST_EASY'>;
 
 export interface ReplayCourseResult {
   ruleset: string;
@@ -495,7 +496,7 @@ export function resolveCourseReplayFilename(courseLog: BeMusicCourseReplay, when
 const COURSE_KINDS: ReadonlySet<string> = new Set(['grade', 'expert', 'nonstop']);
 /** The lamps a course run can earn ({@link CourseClearLamp}). */
 const COURSE_LAMPS: ReadonlySet<string> = new Set(
-  CLEAR_LAMPS.filter((lamp) => lamp !== 'NO_PLAY' && lamp !== 'ASSIST_EASY'),
+  CLEAR_LAMPS.filter((lamp) => lamp !== 'NO_PLAY' && lamp !== 'ASSIST_EASY' && lamp !== 'LIGHT_ASSIST_EASY'),
 );
 
 function parseJudgeRankFacts(judgeRank: Record<string, unknown>, path: string): RulesetChartFacts['judgeRank'] {

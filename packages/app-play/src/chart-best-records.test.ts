@@ -3,9 +3,11 @@ import {
   courseStageRecordKey,
   parseChartBestRecords,
   playRecordKey,
+  recordKeyRuleset,
   rulesetRecordKey,
   rulesetRecords,
   serializeChartBestRecords,
+  slotRecordKey,
   chartBestRecordKey,
 } from './chart-best-records.ts';
 
@@ -21,6 +23,23 @@ describe('rulesetRecordKey / rulesetRecords', () => {
   it('keys a chart’s or course’s record by the judge ruleset first', () => {
     expect(rulesetRecordKey('lr2', 'sha256:abc')).toBe('lr2:sha256:abc');
     expect(rulesetRecordKey('beatoraja', 'course:grade::a,b')).toBe('beatoraja:course:grade::a,b');
+  });
+
+  it('reads the ruleset back, and keys an LR2 separate lamp beside the ordinary record', () => {
+    expect(recordKeyRuleset('lr2:sha256:abc')).toBe('lr2');
+    expect(recordKeyRuleset('____:path:a.bms')).toBe('____');
+    expect(recordKeyRuleset('sha256:abc')).toBeUndefined();
+    expect(slotRecordKey('lr2:sha256:abc', 'main')).toBe('lr2:sha256:abc');
+    expect(slotRecordKey('lr2:sha256:abc', 'd-battle')).toBe('lr2:d-battle:sha256:abc');
+    expect(slotRecordKey('lr2:path:a.bms', 'extra')).toBe('lr2:extra:path:a.bms');
+    // A slot key still parses as its ruleset's record.
+    const stored = serializeChartBestRecords(new Map([['lr2:sp-to-dp:sha256:abc', { lamp: 'HARD' as const }]]));
+    expect(parseChartBestRecords(stored).get('lr2:sp-to-dp:sha256:abc')).toEqual({ lamp: 'HARD' });
+    expect(
+      parseChartBestRecords(
+        serializeChartBestRecords(new Map([['beatoraja:sha256:abc', { lamp: 'LIGHT_ASSIST_EASY' as const }]])),
+      ).get('beatoraja:sha256:abc'),
+    ).toEqual({ lamp: 'LIGHT_ASSIST_EASY' });
   });
 
   it('reads one ruleset’s records by the chart’s or course’s own key', () => {

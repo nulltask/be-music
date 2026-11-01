@@ -30,6 +30,7 @@ describe('checkReplayEligibility', () => {
       chartFingerprint: 'bmfp0:c',
       playFingerprint: 'bmfp0:p',
       assistFlags: [],
+      assistClass: 'none',
     });
   });
 
@@ -67,7 +68,32 @@ describe('checkReplayEligibility', () => {
 
   test('flags assists instead of rejecting them', () => {
     const result = checkReplayEligibility(replay({ autoScratch: true, judgeWindowOverrideMs: 500 }));
-    expect(result).toMatchObject({ eligible: true, assistFlags: ['auto-scratch', 'judge-window-override'] });
+    expect(result).toMatchObject({
+      eligible: true,
+      assistFlags: ['auto-scratch', 'judge-window-override'],
+      assistClass: 'assist',
+    });
+    expect(result).not.toHaveProperty('unranked');
+  });
+
+  test('classifies an option by its source: a light one ranks apart, a no-save one is stored unranked', () => {
+    expect(checkReplayEligibility(replay({ randomLane: { p1: 'H-RANDOM' } }))).toMatchObject({
+      eligible: true,
+      assistFlags: ['H-RANDOM'],
+      assistClass: 'light',
+    });
+    // That-Which-Must-Not-Be-Named's BATTLE saves no score data; beatoraja's is a light assist.
+    expect(checkReplayEligibility(replay({ battleMode: 'BATTLE', judgeRuleset: '____' }))).toMatchObject({
+      eligible: true,
+      assistClass: 'no-save',
+      unranked: 'no-save',
+    });
+    expect(checkReplayEligibility(replay({ battleMode: 'BATTLE', judgeRuleset: 'beatoraja' }))).toMatchObject({
+      assistClass: 'light',
+    });
+    expect(checkReplayEligibility(replay({ battleMode: 'BATTLE', judgeRuleset: 'beatoraja' }))).not.toHaveProperty(
+      'unranked',
+    );
   });
 });
 

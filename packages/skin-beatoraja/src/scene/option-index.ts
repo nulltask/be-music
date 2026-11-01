@@ -6,7 +6,8 @@ import { beatorajaClearLampOp } from './clear-lamp.ts';
 const CLEAR_INDICES: Readonly<Record<ClearLamp, number>> = {
   NO_PLAY: 0,
   FAILED: 1,
-  ASSIST_EASY: 3,
+  ASSIST_EASY: 2,
+  LIGHT_ASSIST_EASY: 3,
   EASY: 4,
   NORMAL: 5,
   HARD: 6,

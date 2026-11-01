@@ -99,7 +99,8 @@ export const errorResponse = (codes: readonly [string, ...string[]]) =>
 
 const clearLamp = described(
   v.pipe(v.number(), v.integer(), v.minValue(0)),
-  'Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.',
+  'Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, ' +
+    '10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY.',
 );
 const epochMs = (description: string) => described(v.pipe(v.number(), v.integer()), `${description} (epoch ms).`);
 const player = v.object({ handle: v.string(), displayName: v.string() });
@@ -148,8 +149,9 @@ export const submissionResponse = v.object({
   results: described(v.array(rulesetOutcome), 'The play under every ruleset.'),
   unranked: v.optional(
     described(
-      v.picklist(['tempo', 'course-stage', 'bmson-total']),
-      'Why the play was stored without ranking it: another tempo, a standalone course stage, or bmson zero-total no recovery. ' +
+      v.picklist(['tempo', 'course-stage', 'bmson-total', 'no-save']),
+      'Why the play was stored without ranking it: another tempo, a standalone course stage, bmson zero-total no recovery, ' +
+        'or an option whose source saves no data from the play (no-save). ' +
         'It moves no personal best and stays out of the rankings and lists.',
     ),
   ),
@@ -251,9 +253,9 @@ export const courseSubmissionResponse = v.object({
   results: described(v.array(courseRulesetOutcome), 'The run under every ruleset.'),
   unranked: v.optional(
     described(
-      v.picklist(['tempo', 'unreleased', 'bmson-total']),
-      'Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, or a course that is not ' +
-        'released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists.',
+      v.picklist(['tempo', 'unreleased', 'bmson-total', 'assist']),
+      'Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, a course that is not ' +
+        'released (a made or a drawn random course), or a stage played with an assist option (assist). It moves no course best and stays out of the rankings and lists.',
     ),
   ),
 });

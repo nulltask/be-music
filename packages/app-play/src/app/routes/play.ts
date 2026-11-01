@@ -97,6 +97,8 @@ export interface PlayRouteDeps {
     | 'activeStageRecordKey'
     | 'recordActivePlay'
     | 'recordActiveCourseStage'
+    | 'takeActivePlayRecordKey'
+    | 'recordPlayUnder'
   >;
   /** The Leaderboard: a single play given up with ESC is sent as a failed play. */
   readonly leaderboard: Pick<LeaderboardPanel, 'maybeSubmit'> & Partial<Pick<LeaderboardPanel, 'playerName'>>;
@@ -414,9 +416,14 @@ export class PlayRoute {
             ? abortedRecordPlayFromResult(progress)
             : undefined;
         if (aborted !== undefined) {
-          if (keepsRecord) this.records.recordActivePlay(aborted);
-          if (sends) {
-            void view?.waitForReplay().then((abortedReplay) => this.leaderboard.maybeSubmit(abortedReplay, chartEntry));
+          // The record waits for the replay, whose options decide what the play keeps (#602); its key is taken now, so
+          // the next play's cannot replace it meanwhile.
+          const recordKey = keepsRecord ? this.records.takeActivePlayRecordKey() : undefined;
+          if (recordKey !== undefined || sends) {
+            void view?.waitForReplay().then((abortedReplay) => {
+              if (recordKey !== undefined) this.records.recordPlayUnder(recordKey, aborted, abortedReplay);
+              if (sends) this.leaderboard.maybeSubmit(abortedReplay, chartEntry);
+            });
           }
         }
         void this.showSelect();
@@ -455,7 +462,7 @@ export class PlayRoute {
               (result.replay === undefined ||
                 !isBmsonRecoveryDisabled(result.replay.chart, result.replay.play.bmsonTotalMode))
             )
-              this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
+              this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result), result.replay);
             // No screen comes between the stages: the play leaves the stage, its last samples ringing out, and the next
             // stage (or the course result) shows.
             if (!(await this.router.leave({ playDispose: disposeKeepingAudioTail, continuesRun: true }))) return;

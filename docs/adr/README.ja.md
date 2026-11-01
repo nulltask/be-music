@@ -49,3 +49,5 @@
 - [0026: 譜面の実効表示操作をユーザー設定と分けて記録する](./0026-chart-authored-display-options.ja.md)
 
 - [0030: bmson の TOTAL 0 を明示的なプレイ設定で扱う](./0030-bmson-zero-total.ja.md)
+
+- [0031: アシストはオプションの参照元で区分し、結果は判定ルールで決め、ランプは追加専用にする](./0031-assist-record-policy.ja.md)

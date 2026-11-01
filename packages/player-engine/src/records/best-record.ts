@@ -5,12 +5,18 @@ import type { BeMusicCourseReplay } from '../replay/course.ts';
 import { playedAtAnotherTempo } from '../replay/view.ts';
 import {
   betterClearLamp,
-  clearLampRank,
+  compareClearLamps,
   resolveClearLamp,
   resolveMissCount,
   type ClearLamp,
 } from '../ruleset/clear-lamp.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
+import {
+  applyRecordPolicyLamp,
+  classifyReplayAssists,
+  resolveAssistClass,
+  type RecordPolicy,
+} from './assist-policy.ts';
 
 /**
  * A player's best record on a chart or a course under one judge ruleset: the best clear lamp, EX-SCORE, max combo and BP
@@ -40,8 +46,25 @@ export interface RecordPlay {
 /**
  * Merges `play` into `previous`: the better lamp, the higher EX score and max combo, the lower BP, and one more play.
  * Every best is kept on its own, as LR2 and beatoraja do. A record that lacks a field takes the play's.
+ *
+ * With a record policy (`resolveRecordPolicy`), the play's lamp is limited first (`applyRecordPolicyLamp`), and a play
+ * whose policy blocks score updates (an assisted play) moves only the lamp and the play count, as LR2 and beatoraja
+ * keep an assisted play: the record's EX score, max combo and BP stay as they were (absent on a first play).
  */
-export function mergeBestRecord(previous: BestRecord | undefined, play: RecordPlay): BestRecord {
+export function mergeBestRecord(
+  previous: BestRecord | undefined,
+  play: RecordPlay,
+  policy?: Pick<RecordPolicy, 'updatesScore' | 'lamp'>,
+): BestRecord {
+  if (policy !== undefined && !policy.updatesScore) {
+    const lamp = applyRecordPolicyLamp(play.lamp, policy);
+    return {
+      ...previous,
+      lamp: previous === undefined ? lamp : betterClearLamp(previous.lamp, lamp),
+      playCount: (previous?.playCount ?? 0) + 1,
+    };
+  }
+  if (policy !== undefined) play = { ...play, lamp: applyRecordPolicyLamp(play.lamp, policy) };
   if (previous === undefined) {
     return { lamp: play.lamp, exScore: play.exScore, maxCombo: play.maxCombo, missCount: play.missCount, playCount: 1 };
   }
@@ -67,7 +90,7 @@ export function mergeCourseStageRecord(previous: BestRecord | undefined, play: R
   const lamp = previous?.lamp ?? 'NO_PLAY';
   return {
     ...previous,
-    lamp: FULL_COMBO_LAMPS.has(play.lamp) && clearLampRank(play.lamp) > clearLampRank(lamp) ? play.lamp : lamp,
+    lamp: FULL_COMBO_LAMPS.has(play.lamp) && compareClearLamps(play.lamp, lamp) > 0 ? play.lamp : lamp,
     exScore: Math.max(previous?.exScore ?? 0, play.exScore),
     maxCombo: Math.max(previous?.maxCombo ?? 0, play.maxCombo),
     missCount: previous?.missCount === undefined ? play.missCount : Math.min(previous.missCount, play.missCount),
@@ -224,13 +247,32 @@ export function isCourseRunAutoPlayed(courseLog: Pick<BeMusicCourseReplay, 'stag
   return courseLog.stages.some((entry) => entry.played && entry.replay.play.mode === 'auto');
 }
 
-/** Whether a course run keeps an ordinary record: no autoplay, tempo training or affected zero-total policy. */
+/**
+ * The assist class of a course run (`resolveAssistClass`): the highest class of its played stages, or of a NONSTOP run's
+ * stitched play.
+ */
+export function resolveCourseRunAssistClass(
+  courseLog: Pick<BeMusicCourseReplay, 'stages' | 'nonstop'>,
+): ReturnType<typeof resolveAssistClass> {
+  const replays =
+    courseLog.nonstop !== undefined
+      ? [courseLog.nonstop.replay]
+      : courseLog.stages.flatMap((entry) => (entry.played ? [entry.replay] : []));
+  return resolveAssistClass(replays.flatMap((replay) => classifyReplayAssists(replay)));
+}
+
+/**
+ * Whether a course run keeps an ordinary record: no autoplay, tempo training, affected zero-total policy or assisted
+ * stage (`resolveCourseRunAssistClass`): LR2 saves no course stage with an assist on (`CheckScoreSaveConditon`), and
+ * beatoraja turns `updateCourseScore` off and leaves an assisted course clear FAILED.
+ */
 export function courseRunKeepsRecord(courseLog: Pick<BeMusicCourseReplay, 'stages' | 'nonstop'>): boolean {
   const disabled = (replay: import('../replay/format.ts').BeMusicReplay): boolean =>
     isBmsonRecoveryDisabled(replay.chart, replay.play.bmsonTotalMode);
   return (
     !isCourseRunAutoPlayed(courseLog) &&
     !isCourseRunAtAnotherTempo(courseLog) &&
+    resolveCourseRunAssistClass(courseLog) === 'none' &&
     !(courseLog.nonstop !== undefined
       ? disabled(courseLog.nonstop.replay)
       : courseLog.stages.some((entry) => entry.played && disabled(entry.replay)))
