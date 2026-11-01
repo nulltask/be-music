@@ -605,7 +605,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer",
@@ -657,10 +657,11 @@
                       "enum": [
                         "tempo",
                         "course-stage",
-                        "bmson-total"
+                        "bmson-total",
+                        "no-save"
                       ],
                       "type": "string",
-                      "description": "Why the play was stored without ranking it: another tempo, a standalone course stage, or bmson zero-total no recovery. It moves no personal best and stays out of the rankings and lists."
+                      "description": "Why the play was stored without ranking it: another tempo, a standalone course stage, bmson zero-total no recovery, or an option whose source saves no data from the play (no-save). It moves no personal best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -713,7 +714,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer",
@@ -765,10 +766,11 @@
                       "enum": [
                         "tempo",
                         "course-stage",
-                        "bmson-total"
+                        "bmson-total",
+                        "no-save"
                       ],
                       "type": "string",
-                      "description": "Why the play was stored without ranking it: another tempo, a standalone course stage, or bmson zero-total no recovery. It moves no personal best and stays out of the rankings and lists."
+                      "description": "Why the play was stored without ranking it: another tempo, a standalone course stage, bmson zero-total no recovery, or an option whose source saves no data from the play (no-save). It moves no personal best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -1084,7 +1086,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer"
@@ -1676,7 +1678,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer"
@@ -2139,7 +2141,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer",
@@ -2217,10 +2219,11 @@
                       "enum": [
                         "tempo",
                         "unreleased",
-                        "bmson-total"
+                        "bmson-total",
+                        "assist"
                       ],
                       "type": "string",
-                      "description": "Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, or a course that is not released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists."
+                      "description": "Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, a course that is not released (a made or a drawn random course), or a stage played with an assist option (assist). It moves no course best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -2274,7 +2277,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer",
@@ -2352,10 +2355,11 @@
                       "enum": [
                         "tempo",
                         "unreleased",
-                        "bmson-total"
+                        "bmson-total",
+                        "assist"
                       ],
                       "type": "string",
-                      "description": "Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, or a course that is not released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists."
+                      "description": "Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, a course that is not released (a made or a drawn random course), or a stage played with an assist option (assist). It moves no course best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -2657,7 +2661,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer"
@@ -2904,7 +2908,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer"
@@ -3724,7 +3728,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer"

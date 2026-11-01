@@ -7,7 +7,13 @@ export const LAMP_STYLES: Readonly<Record<number, { label: string; color: string
   [clearLampRank('ASSIST_EASY')]: {
     label: 'ASSIST EASY',
     color: '#8a5cf6',
-    meaning: 'Cleared on the ASSIST EASY gauge.',
+    meaning:
+      'Cleared with an ASSIST option (beatoraja) or on the ASSISTED EASY gauge (That-Which-Must-Not-Be-Named), or before #603 on the ASSIST EASY gauge.',
+  },
+  [clearLampRank('LIGHT_ASSIST_EASY')]: {
+    label: 'LIGHT ASSIST EASY',
+    color: '#d946ef',
+    meaning: 'Cleared on the ASSIST EASY gauge, or with a LIGHT ASSIST option (beatoraja).',
   },
   [clearLampRank('EASY')]: { label: 'EASY CLEAR', color: '#3fb950', meaning: 'Cleared on the EASY gauge.' },
   [clearLampRank('NORMAL')]: {

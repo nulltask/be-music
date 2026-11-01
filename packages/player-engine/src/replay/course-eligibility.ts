@@ -1,6 +1,7 @@
 import type { BeMusicCourseReplay } from './course.ts';
 import { computeCourseReplayFingerprint } from './course-fingerprint.ts';
 import { checkReplayEligibility, type ReplayAssistFlag } from './eligibility.ts';
+import { resolveAssistClass, type AssistClass } from '../records/assist-policy.ts';
 
 /**
  * Why a course run cannot be submitted. `auto-play`, `aborted` and `missing-fingerprint` mean what they mean for a
@@ -20,9 +21,10 @@ export type CourseReplayIneligibleReason =
  * Why a submitted course run is stored but not ranked. `tempo` is a run with a stage (or a NONSTOP run's stitched play)
  * played at another tempo: practice, as for a single play. `unreleased` is a course with `release: false` (beatoraja's
  * flag, also set on a drawn random course). `bmson-total` is a run with any played stage using
- * zero-total no-recovery, or a stitched NONSTOP play using that policy.
+ * zero-total no-recovery, or a stitched NONSTOP play using that policy. `assist` is a run with an assisted stage (any
+ * assist class but `none`): LR2 saves no course stage with an assist on and beatoraja no assisted course (#602).
  */
-export type CourseReplayUnrankedReason = 'tempo' | 'unreleased' | 'bmson-total';
+export type CourseReplayUnrankedReason = 'tempo' | 'unreleased' | 'bmson-total' | 'assist';
 
 export type CourseReplayEligibility =
   | {
@@ -38,6 +40,8 @@ export type CourseReplayEligibility =
       nonstop?: { chartFingerprint: string; playFingerprint: string };
       /** Every assist any stage used, once each. */
       assistFlags: ReplayAssistFlag[];
+      /** The run's assist class: the highest of its stages'. */
+      assistClass: AssistClass;
       /** Set when the run is stored but left out of the course rankings. */
       unranked?: CourseReplayUnrankedReason;
     }
@@ -48,8 +52,8 @@ type Ineligible = Extract<CourseReplayEligibility, { eligible: false }>;
 /**
  * Decides whether a course run can be submitted and whether it ranks (docs/leaderboard.md, course rankings), for the
  * client that submits it and the server that stores it. Each played stage must pass the single-play check, except that
- * being a course stage is what it must be here; assists of any stage flag the run, and a stage at another tempo, or an
- * unreleased course, marks it `unranked`. The last stage played may have been given up (ESC): a course
+ * being a course stage is what it must be here; assists of any stage flag the run and mark it `unranked` (`assist`), as a
+ * stage at another tempo or an unreleased course does. The last stage played may have been given up (ESC): a course
  * given up is ranked as a failed run, as LR2 records it, so only an earlier stage's abort refuses the run.
  *
  * A NONSTOP run (`courseLog.nonstop`) was one play of the stitched chart: that play passes the single-play check
@@ -63,13 +67,18 @@ export function checkCourseReplayEligibility(courseLog: BeMusicCourseReplay): Co
     courseLog.nonstop !== undefined ? checkNonstopEligibility(courseLog) : checkStagesEligibility(courseLog);
   if (!result.eligible) return result;
   // A course that is not released (beatoraja's `release: false`, a drawn random course) is stored, never ranked.
-  const unranked = courseLog.course.release === false ? 'unreleased' : result.unranked;
+  // A run with an assisted stage is stored unranked: neither LR2 nor beatoraja saves an assisted course.
+  const unranked =
+    courseLog.course.release === false
+      ? 'unreleased'
+      : (result.unranked ?? (result.assistClass === 'none' ? undefined : ('assist' as const)));
   return unranked !== undefined ? { ...result, unranked } : result;
 }
 
 function checkStagesEligibility(courseLog: BeMusicCourseReplay): CourseReplayEligibility {
   const stages: Array<{ chartFingerprint: string; playFingerprint: string }> = [];
   const assistFlags = new Set<ReplayAssistFlag>();
+  const assistClasses: Array<{ assistClass: AssistClass }> = [];
   let tempo = false;
   let zeroTotal = false;
   const lastPlayed = courseLog.stages.reduce((last, entry, index) => (entry.played ? index : last), -1);
@@ -87,6 +96,7 @@ function checkStagesEligibility(courseLog: BeMusicCourseReplay): CourseReplayEli
     if (play.aborted === true && index !== lastPlayed) return { eligible: false, reason: 'aborted', stage: index };
     stages.push({ chartFingerprint: single.chartFingerprint, playFingerprint: single.playFingerprint });
     for (const flag of single.assistFlags) assistFlags.add(flag);
+    assistClasses.push({ assistClass: single.assistClass });
     if (single.unranked === 'tempo') tempo = true;
     if (single.unranked === 'bmson-total') zeroTotal = true;
   }
@@ -97,6 +107,7 @@ function checkStagesEligibility(courseLog: BeMusicCourseReplay): CourseReplayEli
     courseFingerprint,
     stages,
     assistFlags: [...assistFlags],
+    assistClass: resolveAssistClass(assistClasses),
     ...(tempo ? { unranked: 'tempo' as const } : zeroTotal ? { unranked: 'bmson-total' as const } : {}),
   };
 }
@@ -145,6 +156,7 @@ function checkNonstopEligibility(courseLog: BeMusicCourseReplay): CourseReplayEl
     stages: [],
     nonstop: { chartFingerprint: single.chartFingerprint, playFingerprint: single.playFingerprint },
     assistFlags: single.assistFlags,
+    assistClass: single.assistClass,
     ...(single.unranked === 'tempo' || single.unranked === 'bmson-total' ? { unranked: single.unranked } : {}),
   };
 }

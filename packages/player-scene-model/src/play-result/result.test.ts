@@ -22,6 +22,20 @@ describe('playResultFromPlayState', () => {
     atMs: seconds * 1000,
   });
 
+  test("limits a single play's lamp by its assisted options under the judge ruleset", () => {
+    const state = played(frame(7, 82, true));
+    const replay = {
+      chart: { notes: [] },
+      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', randomLane: { p1: 'H-RANDOM' } },
+    } as unknown as NonNullable<import('./result.ts').PlayResult['replay']>;
+    const facts = { chart: chartEntry, score: { ...score, perfect: 2, great: 1, total: 4 }, seconds: 90, replay };
+    expect(playResultFromPlayState(state, { ...facts, judgeRuleset: 'beatoraja' }).lamp).toBe('LIGHT_ASSIST_EASY');
+    expect(playResultFromPlayState(state, { ...facts, judgeRuleset: 'lr2' }).lamp).toBe('EASY');
+    expect(playResultFromPlayState(state, { ...facts, judgeRuleset: '____' }).lamp).toBe('ASSIST_EASY');
+    // A course stage keeps the course's rules; its lamp is the gauge's.
+    expect(playResultFromPlayState(state, { ...facts, judgeRuleset: 'beatoraja', run: 'stage' }).lamp).toBe('NORMAL');
+  });
+
   test('reads the score, gauge, combo and graphs, ending the graphs where the play ended', () => {
     const state = played(frame(2, 24), judge(1, 10, -3), frame(7, 82, true), judge(4, 60, 5));
     const result = playResultFromPlayState(state, { chart: chartEntry, score, seconds: 90, judgeRuleset: 'lr2' });

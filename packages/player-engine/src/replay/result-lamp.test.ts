@@ -44,7 +44,8 @@ describe('resolveRulesetResultLamp', () => {
   });
 
   test.each([
-    ['ASSIST-EASY', 'beatoraja', 'ASSIST_EASY'],
+    ['ASSIST-EASY', 'beatoraja', 'LIGHT_ASSIST_EASY'],
+    ['ASSISTED-EASY', '____', 'ASSIST_EASY'],
     ['ASSISTED-EASY', '____', 'ASSIST_EASY'],
     ['EASY', 'lr2', 'EASY'],
     ['GROOVE', 'lr2', 'NORMAL'],

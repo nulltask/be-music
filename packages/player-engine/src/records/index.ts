@@ -6,4 +6,5 @@
  * stores its records is its own business.
  */
 export * from './best-record.ts';
+export * from './assist-policy.ts';
 export * from './dan-rank.ts';

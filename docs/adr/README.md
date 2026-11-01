@@ -49,3 +49,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0026: Record effective chart display operations separately from user settings](./0026-chart-authored-display-options.md)
 
 - [0030: Make bmson zero-total recovery an explicit play policy](./0030-bmson-zero-total.md)
+
+- [0031: Classify assists by option source, decide consequences by judge ruleset, and append lamps](./0031-assist-record-policy.md)

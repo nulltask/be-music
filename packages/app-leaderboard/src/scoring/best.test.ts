@@ -14,6 +14,14 @@ const current: BestScores = {
 };
 
 describe('mergeBestScores', () => {
+  test('orders lamps by the lamp order, not their stored ranks: LIGHT ASSIST EASY (10) is below EASY (3)', () => {
+    const easy = { ...current, bestLamp: clearLampRank('EASY') };
+    const play = { scoreId: 'c', playedAt: 200, exScore: 0, lamp: clearLampRank('LIGHT_ASSIST_EASY'), missCount: 99 };
+    expect(mergeBestScores(easy, play).improved.lamp).toBe(false);
+    const assistEasy = { ...current, bestLamp: clearLampRank('ASSIST_EASY') };
+    expect(mergeBestScores(assistEasy, play).next.bestLamp).toBe(clearLampRank('LIGHT_ASSIST_EASY'));
+  });
+
   test('the first play sets every best', () => {
     const { next, improved } = mergeBestScores(undefined, {
       scoreId: 'x',
