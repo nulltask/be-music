@@ -54,6 +54,24 @@ describe('renderServiceFooter', () => {
     expect(html).toContain('href="https://leaderboard.preview.be-music.app/">Leaderboard</a>');
     expect(html).not.toContain('Donate');
     expect(html).toContain(`<p>${SERVICE_COPYRIGHT}</p>`);
+    expect(html).toContain('<p lang="en">Public Beta. Data may be deleted without notice.</p>');
+    expect(html.indexOf('Public Beta. Data may be deleted without notice.')).toBeLessThan(html.indexOf('<nav'));
+    expect(html).not.toContain('>beta</span>');
+    expect(html).not.toContain('パブリックベータ');
+  });
+
+  test('states Public Beta in the page language, or both languages for the player', () => {
+    const japanese = renderServiceFooter({ current: 'dashboard', locale: 'ja' });
+    expect(japanese).toContain('<p lang="ja">パブリックベータ。データは予告なく削除されることがあります。</p>');
+    expect(japanese).not.toContain('Public Beta');
+    const both = renderServiceFooter({ current: 'play', locale: 'both' });
+    expect(both).toContain(
+      '<p data-public-beta-notice="en" lang="en">Public Beta. Data may be deleted without notice.</p>',
+    );
+    expect(both).toContain(
+      '<p data-public-beta-notice="ja" lang="ja" hidden>パブリックベータ。データは予告なく削除されることがあります。</p>',
+    );
+    expect(both.indexOf('data-public-beta-notice="en"')).toBeLessThan(both.indexOf('data-public-beta-notice="ja"'));
   });
 
   test('keeps a configured origin and escapes it', () => {

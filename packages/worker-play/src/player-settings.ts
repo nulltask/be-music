@@ -11,9 +11,14 @@ const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 400;
 const MAX_BODY_BYTES = 64 * 1024;
 const KEY_PREFIX = 'player-settings';
 
-/** The document the player stores. Field checks happen when the browser reads it back. */
+/**
+ * The document the player stores. Field checks happen when the browser reads it back. `0` while the shape is still
+ * being defined: any other stamp is unreadable. The browser copy uses the same number.
+ */
+const DOCUMENT_VERSION = 0;
+
 interface DebugMenuSettingsDocument {
-  version: 1;
+  version: 0;
   updatedAt: number;
   settings: Record<string, unknown>;
   deleted?: true;
@@ -22,10 +27,12 @@ interface DebugMenuSettingsDocument {
 function debugMenuSettingsDocument(value: unknown): DebugMenuSettingsDocument | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const { version, updatedAt, settings } = value as { version?: unknown; updatedAt?: unknown; settings?: unknown };
-  if (version !== 1 || typeof updatedAt !== 'number' || !Number.isFinite(updatedAt) || updatedAt < 0) return undefined;
+  if (version !== DOCUMENT_VERSION || typeof updatedAt !== 'number' || !Number.isFinite(updatedAt) || updatedAt < 0)
+    return undefined;
   if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) return undefined;
-  if ((value as { deleted?: unknown }).deleted === true) return { version: 1, updatedAt, settings: {}, deleted: true };
-  return { version: 1, updatedAt, settings: settings as Record<string, unknown> };
+  if ((value as { deleted?: unknown }).deleted === true)
+    return { version: DOCUMENT_VERSION, updatedAt, settings: {}, deleted: true };
+  return { version: DOCUMENT_VERSION, updatedAt, settings: settings as Record<string, unknown> };
 }
 
 export interface PlayerSettingsBucket {
@@ -62,7 +69,7 @@ export async function handlePlayerSettings(
   try {
     body =
       text === '' && request.method === 'DELETE'
-        ? { version: 1, updatedAt: now, settings: {}, deleted: true }
+        ? { version: DOCUMENT_VERSION, updatedAt: now, settings: {}, deleted: true }
         : JSON.parse(text);
   } catch {
     return json({ error: 'json' }, 400, device.id);
@@ -129,7 +136,7 @@ async function storeNewer(
         current?.deleted && current.updatedAt >= candidate.updatedAt
           ? current
           : {
-              version: 1,
+              version: DOCUMENT_VERSION,
               updatedAt: Math.max(candidate.updatedAt, (current?.updatedAt ?? -1) + 1),
               settings: {},
               deleted: true,

@@ -15,8 +15,12 @@ import {
   type NonstopConnection,
 } from '@be-music/player-engine/course';
 
-/** Bumped when the stored shape changes; a record with another version is ignored. */
-const STORE_VERSION = 1;
+/**
+ * The stored record's revision. `0` while the shape is still being defined: it may change incompatibly without the
+ * number moving. Any other stamp is unreadable. IndexedDB's database version stays {@link DB_VERSION}: `open` cannot
+ * be 0.
+ */
+const STORE_VERSION = 0;
 const DB_NAME = 'be-music';
 const DB_VERSION = 1;
 const STORE_NAME = 'courses';

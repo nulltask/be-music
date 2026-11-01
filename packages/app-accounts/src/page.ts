@@ -82,6 +82,20 @@ export function accountNotice(code: string | null, locale: Locale = 'en'): strin
 
 const LINK_CLASS = SERVICE_FOOTER_LINK_CLASS;
 
+const PASSKEY_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>';
+const GOOGLE_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg>';
+const DISCORD_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg>';
+
+function actionIcon(action: string): string {
+  if (action === 'passkey' || action === 'add-passkey') return PASSKEY_ICON;
+  if (action === 'google' || action === 'link-google') return GOOGLE_ICON;
+  if (action === 'discord' || action === 'link-discord') return DISCORD_ICON;
+  return '';
+}
+
 function requestHostname(requestURL: string | undefined): string {
   if (requestURL === undefined) return 'localhost';
   try {
@@ -112,8 +126,11 @@ export function renderAccountPage(input: {
     /[&<>"']/g,
     (s) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[s]!,
   );
-  const button = (action: string, label: string, primary = false) =>
-    `<button class="btn w-full whitespace-normal" type="button" data-action="${action}"${primary ? '' : ' data-variant="outline"'}>${label}</button>`;
+  const button = (action: string, label: string, primary = false) => {
+    const icon = actionIcon(action);
+    const mark = icon === '' ? '' : `<span class="inline-flex size-4 shrink-0">${icon}</span>`;
+    return `<button class="btn w-full whitespace-normal" type="button" data-action="${action}"${primary ? '' : ' data-variant="outline"'}>${mark}${label}</button>`;
+  };
   const escape = (value: string) =>
     value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
   const home = input.apps?.dashboard ?? '/account';
@@ -157,6 +174,7 @@ export function renderAccountPage(input: {
     navLabel: t.services,
     siteHTML: donate === '' ? undefined : donate,
     buildInfo: input.buildInfo,
+    locale,
   });
   return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Be-Music Accounts</title><style>${SERVICE_CSS}</style></head><body class="bg-background text-foreground min-h-svh antialiased">${serviceSkipLink(locale)}${renderServiceHeader(
     {
