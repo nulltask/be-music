@@ -77,6 +77,26 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.resolveChartOptionsAt(BENCH_CHART_OPTIONS.program, 1_000_000);
     },
   });
+  define('chart-model.compileChartPlayOptions', {
+    run: () => {
+      chartAPI.compileChartPlayOptions({ initial: ['774:RANDOM_ALL+', '774:CRAZY_GREAT2BAD', '774:CRAZY_ADDMINE'] });
+    },
+  });
+  define('chart-model.parseChartPlayOption', {
+    run: () => {
+      chartAPI.parseChartPlayOption('774:CRAZY_HELLJUDGE');
+    },
+  });
+  define('chart-model.isChartPlayOptionDeclaration', {
+    run: () => {
+      chartAPI.isChartPlayOptionDeclaration('774:RANDOM_MIRROR');
+    },
+  });
+  define('chart-model.hasChartPlayOptions', {
+    run: () => {
+      chartAPI.hasChartPlayOptions({ version: 1, options: { random: 'RANDOM' } });
+    },
+  });
   define('chart-model.buildChartOptionTimeline', {
     run: () => {
       chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART);

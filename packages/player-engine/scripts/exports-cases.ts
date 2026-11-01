@@ -977,6 +977,15 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.resolveCourseRunDanRank({ kind: 'grade', name: '七段', lamp: 'NORMAL' });
     },
   });
+  define('player-engine.applyChartPlayOptions', {
+    run() {
+      playerAPI.applyChartPlayOptions(
+        { random1P: 'S-RANDOM', random2P: 'OFF', mineModifier: 'OFF' },
+        { version: 1, options: { random: 'ALL+', addMine: true } },
+        { doublePlay: true, hasScratch: true },
+      );
+    },
+  });
   define('player-engine.ruleset.clampCustomJudgeRate', {
     run() {
       rulesetAPI.clampCustomJudgeRate('keyPerfectGreat', 10);

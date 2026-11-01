@@ -70,9 +70,7 @@ test.each([
   '774:CHANGE-HS_ACCEL',
   '774:HIDDEN_SUDDEN',
   '774:CRAZY_SPIN',
-  '774:RANDOM_MIRROR',
   '774:NOTES_DOUBLE',
-  '774:CRAZY_HELLJUDGE',
   '774:GAMELEVEL_HYPER',
   '774:EXTRA_HARD',
   'charatbeatHDX:BGAMODE 1',
@@ -86,4 +84,15 @@ test.each([
     { code: 'unsupported-option', declaration },
     { code: 'unsupported-option', declaration, key: '01', seconds: 1 },
   ]);
+});
+
+test('initial RANDOM and gameplay CRAZY belong to the play options; timed uses are diagnosed initial-only', () => {
+  for (const declaration of ['774:RANDOM_MIRROR', '774:CRAZY_HELLJUDGE', '774:CRAZY_ADDMINE', '774:CRAZY_OFF']) {
+    const result = compileChartOptions({
+      initial: [declaration],
+      cues: [{ seconds: 1, key: '01', declaration }],
+    });
+    expect(result.program).toEqual({ version: 1, initial: {}, cues: [] });
+    expect(result.diagnostics).toEqual([{ code: 'initial-only-option', declaration, key: '01', seconds: 1 }]);
+  }
 });

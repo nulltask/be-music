@@ -1,5 +1,11 @@
 import { resolveChartOptionsAt } from '@be-music/chart-model';
-import type { ChartOptionProgram, ChartOptionState } from '@be-music/chart-model';
+import { CHART_JUDGE_MODIFIERS, CHART_RANDOM_OPTIONS } from '@be-music/chart-model';
+import type {
+  ChartOptionProgram,
+  ChartOptionState,
+  ChartPlayOptionProgram,
+  ChartPlayOptions,
+} from '@be-music/chart-model';
 import { expectRecord, ReplayParseError } from './parse.ts';
 
 /** Parse only supported effective profile fields, independently of current source-command compilation. */
@@ -54,4 +60,24 @@ export function shiftChartOptionProgram(
   const endUs = window.windowEndUs === undefined ? undefined : window.windowEndUs - window.offsetUs;
   if (endUs !== undefined && endUs >= startUs) cues.push({ timeUs: endUs, state: {} });
   return { version: 1, initial: startUs === 0 ? seed : {}, cues };
+}
+
+/** Parse a recorded chart gameplay program (#844) strictly: version 1, known fields and values only. */
+export function parseChartPlayOptionProgram(raw: unknown): ChartPlayOptionProgram {
+  const program = expectRecord(raw, 'chart.chartPlayOptions');
+  if (Object.keys(program).some((key) => key !== 'version' && key !== 'options'))
+    throw new ReplayParseError('chart.chartPlayOptions: unknown program field');
+  if (program.version !== 1) throw new ReplayParseError('chart.chartPlayOptions.version: expected 1');
+  const options = expectRecord(program.options, 'chart.chartPlayOptions.options');
+  const parsed: ChartPlayOptions = {};
+  for (const [key, value] of Object.entries(options)) {
+    if (key === 'random' && (CHART_RANDOM_OPTIONS as readonly unknown[]).includes(value))
+      parsed.random = value as ChartPlayOptions['random'];
+    else if (key === 'judge' && (CHART_JUDGE_MODIFIERS as readonly unknown[]).includes(value))
+      parsed.judge = value as ChartPlayOptions['judge'];
+    else if (key === 'hellJudge' && value === true) parsed.hellJudge = true;
+    else if (key === 'addMine' && value === true) parsed.addMine = true;
+    else throw new ReplayParseError(`chart.chartPlayOptions.options.${key}: unsupported value`);
+  }
+  return { version: 1, options: parsed };
 }

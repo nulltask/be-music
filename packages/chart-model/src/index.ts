@@ -226,6 +226,19 @@ export {
 
 export { buildChartOptionTimeline, type ChartOptionCue, type ChartOptionTimeline } from './chart-options.ts';
 export {
+  CHART_JUDGE_MODIFIERS,
+  CHART_PLAY_OPTION_PROGRAM_VERSION,
+  CHART_RANDOM_OPTIONS,
+  compileChartPlayOptions,
+  hasChartPlayOptions,
+  isChartPlayOptionDeclaration,
+  parseChartPlayOption,
+  type ChartJudgeModifier,
+  type ChartPlayOptionProgram,
+  type ChartPlayOptions,
+  type ChartRandomOption,
+} from './chart-play-options.ts';
+export {
   compileChartOptions,
   resolveChartOptionsAt,
   type ChartOptionState,
