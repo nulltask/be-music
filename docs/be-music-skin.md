@@ -580,6 +580,16 @@ A skin shares each frame with the player's judging, audio scheduling, and BGA de
 
 List every face you draw with in `fontLoads`. The host loads them with `document.fonts.load` (the web player waits for its registered skins' faces at start-up and loads an added skin's in the background), so the first frame does not rasterize with a fallback face. Make sure the host can obtain the face itself, either from a font service or bundled with your skin.
 
+A skin that draws with the system's faces needs no web fonts: `DEFAULT_TEXT_FONT` is the system sans-serif, which covers Japanese, and `fontLoads` stays empty. The built-in skins show both approaches:
+
+| Skin        | Latin labels and figures | Japanese and other text | `fontLoads`            |
+| ----------- | ------------------------ | ----------------------- | ---------------------- |
+| Synesthesia | Orbitron                 | M PLUS 1p               | Orbitron and M PLUS 1p |
+| Plain       | System sans-serif        | System sans-serif       | Empty                  |
+| Native      | System sans-serif        | System sans-serif       | Empty                  |
+
+A face without Japanese (such as Orbitron) is followed in its stack by one that has it, so titles and artists still show.
+
 ## Packaging and loading
 
 - **Install:** add `@be-music/player-skin-sdk` as a dependency of your skin (`npm install @be-music/player-skin-sdk`), along with the rendering framework you use. You don't need `@be-music/player-browser`.
