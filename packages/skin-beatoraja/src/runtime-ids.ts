@@ -695,7 +695,7 @@ export const BEATORAJA_OP = {
   /** Same as {@link GAUGE_NOW_AT_MAX_1P} but for the 2P side. Synthetic. */
   GAUGE_NOW_AT_MAX_2P: 90101,
   /** {@link SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN}: lit while the play hides the `judge[]` display. Synthetic. */
-  JUDGE_DISPLAY_HIDDEN: SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN,
+  JUDGE_DISPLAY_HIDDEN: SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN as typeof SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN,
 } as const;
 
 /**
