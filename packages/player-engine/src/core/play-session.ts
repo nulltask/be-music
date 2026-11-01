@@ -625,7 +625,7 @@ export async function createPlaySession(
     audioBackend: audioBackendLabel,
     ...(secondPlayer !== undefined ? { summary2P: secondPlayer.summary } : {}),
     ...(bmsonBGA ? { resolveBmsonBGA: (seconds: number) => bmsonBGA.read(seconds) } : {}),
-    ...(chartOptions.initial.hiSpeed !== undefined || chartOptions.cues.length > 0
+    ...(Object.keys(chartOptions.initial).length > 0 || chartOptions.cues.length > 0
       ? {
           resolveChartOptions: (seconds: number) =>
             resolveChartOptionsAt(chartOptions, Math.round(Math.min(seconds, freezeSeconds) * 1_000_000)),

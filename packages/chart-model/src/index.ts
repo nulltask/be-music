@@ -226,6 +226,7 @@ export {
 
 export { buildChartOptionTimeline, type ChartOptionCue, type ChartOptionTimeline } from './chart-options.ts';
 export {
+  CHART_OPTION_PROGRAM_VERSION,
   compileChartOptions,
   resolveChartOptionsAt,
   type ChartOptionState,
@@ -234,3 +235,29 @@ export {
   type ChartOptionDiagnostic,
   type CompiledChartOptions,
 } from './chart-option-program.ts';
+export {
+  CHART_CHANGE_HS_OPTIONS,
+  CHART_CRAZY_SIZE_OPTIONS,
+  CHART_CRAZY_WAVE_OPTIONS,
+  CHART_HIDDEN_FADE,
+  CHART_HIDDEN_OPTIONS,
+  CHART_VISUAL_OPTION_FIELDS,
+  chartVisualHash01,
+  hasChartVisualOptions,
+  isChartVisualOptionValue,
+  parseChartVisualOption,
+  resolveChartChangeHSProgress,
+  resolveChartCrazyScale,
+  resolveChartCrazyXOffset,
+  resolveChartHiddenAlpha,
+  resolveChartNoteVisual,
+  type ChartChangeHSOption,
+  type ChartCrazySizeOption,
+  type ChartCrazyWaveOption,
+  type ChartHiddenOption,
+  type ChartNoteVisual,
+  type ChartNoteVisualInput,
+  type ChartVisualOptionField,
+  type ChartVisualOptionFields,
+  type ChartVisualOptionPatch,
+} from './chart-option-visual.ts';

@@ -57,5 +57,5 @@ export function placeNonstopChartOptions(
       },
     ];
   });
-  return { cues, diagnostics, hasOperations: cues.some((cue) => cue.state.hiSpeed !== undefined) };
+  return { cues, diagnostics, hasOperations: cues.some((cue) => Object.keys(cue.state).length > 0) };
 }
