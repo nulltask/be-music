@@ -1,4 +1,11 @@
 import { renderServiceHeader, serviceSkipLink, type ServiceHeaderAccount } from '@be-music/service-web-theme';
+import {
+  enterTouchFullscreen,
+  getFullscreenElement,
+  toggleFullscreen,
+  type FullscreenDocumentLike,
+  type FullscreenElementLike,
+} from './fullscreen.ts';
 import { onPlayerLangChange, playerLang, setPlayerLang, type PlayerLang } from './player-copy.ts';
 import { leaderboardLink } from './service-links.ts';
 
@@ -31,12 +38,47 @@ let host: HTMLElement | undefined;
 let pendingMenu = false;
 let pendingSignIn = false;
 
-/** The shared header for Play: Settings sits where other services put the Play link. */
+/** The document the header's fullscreen button reads. A phone fullscreens `documentElement`; a desktop, `.shell`. */
+export interface PlayerHeaderFullscreenDocument extends FullscreenDocumentLike {
+  documentElement: FullscreenElementLike & { classList: { contains(token: string): boolean } };
+  querySelector(selector: string): FullscreenElementLike | null;
+}
+
+/**
+ * The element the header toggles, matching the stage: the shell on a desktop, the document element on a phone
+ * (`html.phone`, the same target as the phone's first tap).
+ */
+export function playerHeaderFullscreenTarget(doc: PlayerHeaderFullscreenDocument): FullscreenElementLike {
+  if (doc.documentElement.classList.contains('phone')) return doc.documentElement;
+  return doc.querySelector('.shell') ?? doc.documentElement;
+}
+
+/**
+ * Enters or leaves fullscreen with the player's existing helpers. A phone that is still windowed uses
+ * {@link enterTouchFullscreen} (document element, then landscape). Anything else uses {@link toggleFullscreen}.
+ */
+export async function togglePlayerHeaderFullscreen(
+  doc: PlayerHeaderFullscreenDocument,
+  screenLike?: { orientation?: { lock?: (orientation: string) => Promise<void> } },
+): Promise<void> {
+  const target = playerHeaderFullscreenTarget(doc);
+  const enteringOnPhone = doc.documentElement.classList.contains('phone') && getFullscreenElement(doc) === null;
+  if (enteringOnPhone) {
+    if (screenLike === undefined) await enterTouchFullscreen(target, doc);
+    else await enterTouchFullscreen(target, doc, screenLike);
+    return;
+  }
+  await toggleFullscreen(target, doc);
+}
+
+/** The shared header for Play: Settings sits where other services put the Play link, with fullscreen beside it. */
 export function playerServiceHeaderHTML(input: {
   locale: PlayerLang;
   hostname: string;
   requestURL: string;
   account?: PlayerHeaderAccount;
+  /** The page is fullscreen, so the button offers to leave. */
+  fullscreenActive?: boolean;
 }): string {
   const signedIn: ServiceHeaderAccount | undefined =
     input.account === undefined
@@ -55,6 +97,8 @@ export function playerServiceHeaderHTML(input: {
     title: 'Be-Music Play',
     homeHref: '/',
     settings: true,
+    fullscreen: true,
+    fullscreenActive: input.fullscreenActive === true,
     accountHref,
     account: signedIn,
     requestURL: input.requestURL,
@@ -71,7 +115,8 @@ export function playerServiceHeaderHTML(input: {
 export function classifyPlayerHeaderClick(
   target: { closest(selector: string): { lang?: string } | null },
   signedOut: boolean,
-): 'settings' | 'sign-in' | PlayerLang | undefined {
+): 'settings' | 'fullscreen' | 'sign-in' | PlayerLang | undefined {
+  if (target.closest('[data-service-header="fullscreen"]') !== null) return 'fullscreen';
   if (target.closest('[data-service-header="settings"]') !== null) return 'settings';
   const language = target.closest('#language-menu a');
   if (language?.lang === 'en' || language?.lang === 'ja') return language.lang;
@@ -87,7 +132,7 @@ export function setPlayerHeaderAccount(next: PlayerHeaderAccount | undefined): v
 
 /**
  * Wires Settings, Sign in and the language menu. Settings and Sign in can arrive after the menu and the dialogs exist;
- * a click before that waits for them.
+ * a click before that waits for them. Fullscreen calls {@link togglePlayerHeaderFullscreen} itself.
  */
 export function bindPlayerHeader(next: PlayerHeaderActions): void {
   if (next.openDebugMenu === null) {
@@ -118,6 +163,8 @@ export function mountPlayerHeader(root: HTMLElement): void {
   host = root;
   root.addEventListener('click', onClick);
   onPlayerLangChange(() => paint());
+  document.addEventListener('fullscreenchange', paint);
+  document.addEventListener('webkitfullscreenchange', paint);
   paint();
 }
 
@@ -126,7 +173,13 @@ function paint(): void {
   if (root === undefined) return;
   const hostname = typeof location === 'undefined' ? 'localhost' : location.hostname;
   const requestURL = typeof location === 'undefined' ? '/' : `${location.pathname}${location.search}`;
-  root.innerHTML = playerServiceHeaderHTML({ locale: playerLang(), hostname, requestURL, account });
+  root.innerHTML = playerServiceHeaderHTML({
+    locale: playerLang(),
+    hostname,
+    requestURL,
+    account,
+    fullscreenActive: getFullscreenElement(document) !== null,
+  });
 }
 
 function onClick(event: Event): void {
@@ -146,7 +199,11 @@ function onClick(event: Event): void {
   runPlayerHeaderAction(kind);
 }
 
-export function runPlayerHeaderAction(kind: 'settings' | 'sign-in' | PlayerLang): void {
+export function runPlayerHeaderAction(kind: 'settings' | 'fullscreen' | 'sign-in' | PlayerLang): void {
+  if (kind === 'fullscreen') {
+    if (typeof document !== 'undefined') void togglePlayerHeaderFullscreen(document);
+    return;
+  }
   if (kind === 'settings') {
     if (actions.openDebugMenu !== undefined) actions.openDebugMenu();
     else pendingMenu = true;

@@ -26,7 +26,7 @@
   margin: 6px 1rem;
 }
 
-/* The header's account, Settings and language controls stay put when pressed. */
+/* The header's account, Settings, fullscreen and language controls stay put when pressed. */
 header nav :is(a, button).btn:active {
   translate: none;
 }

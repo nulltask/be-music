@@ -22,6 +22,7 @@ describe('renderServiceHeader', () => {
     expect(html).not.toContain('>beta</span>');
     expect(html).not.toContain('ダッシュボード');
     expect(html).not.toContain('data-service-header="settings"');
+    expect(html).not.toContain('data-service-header="fullscreen"');
     expect(html).toContain('class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2"');
     const account = html.indexOf('aria-label="@alice のアカウント"');
     const play = html.indexOf('href="https://play.be-music.app/"');
@@ -109,6 +110,51 @@ describe('renderServiceHeader', () => {
     expect(account).toBeGreaterThan(-1);
     expect(account).toBeLessThan(settings);
     expect(settings).toBeLessThan(language);
+    expect(html).not.toContain('data-service-header="fullscreen"');
+  });
+
+  test('adds a fullscreen button beside Settings only when asked', () => {
+    const windowed = renderServiceHeader({
+      locale: 'en',
+      title: 'Be-Music Play',
+      homeHref: '/',
+      settings: true,
+      fullscreen: true,
+      accountHref: '#sign-in',
+      requestURL: '/',
+    });
+    expect(windowed).toContain(
+      'data-service-header="fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false"',
+    );
+    expect(windowed).toContain('class="lucide lucide-maximize"');
+    expect(windowed).toContain('<span class="hidden md:inline">Full screen</span>');
+    expect(windowed).not.toContain('lucide-minimize');
+    expect(windowed).not.toContain('aria-label="Play"');
+    const settings = windowed.indexOf('data-service-header="settings"');
+    const fullscreen = windowed.indexOf('data-service-header="fullscreen"');
+    const language = windowed.indexOf('popovertarget="language-menu"');
+    expect(settings).toBeGreaterThan(-1);
+    expect(settings).toBeLessThan(fullscreen);
+    expect(fullscreen).toBeLessThan(language);
+
+    const active = renderServiceHeader({
+      locale: 'ja',
+      title: 'Be-Music Play',
+      homeHref: '/',
+      settings: true,
+      fullscreen: true,
+      fullscreenActive: true,
+      accountHref: '#sign-in',
+      requestURL: '/',
+    });
+    expect(active).toContain(
+      'data-service-header="fullscreen" title="フルスクリーン解除" aria-label="フルスクリーン解除" aria-pressed="true"',
+    );
+    expect(active).toContain('class="lucide lucide-minimize"');
+    expect(active).toContain('<span class="hidden md:inline">フルスクリーン解除</span>');
+    expect(active).not.toContain('lucide-maximize');
+    expect(active).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
+    expect(active.match(/<span class="badge"/g)).toHaveLength(1);
   });
 });
 

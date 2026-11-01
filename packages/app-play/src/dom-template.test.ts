@@ -30,6 +30,8 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   expect(PLAYER_APP_HTML).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
   expect(PLAYER_APP_HTML).toContain('data-service-header="settings"');
   expect(PLAYER_APP_HTML).toContain('aria-label="Settings"');
+  expect(PLAYER_APP_HTML).toContain('data-service-header="fullscreen"');
+  expect(PLAYER_APP_HTML).toContain('aria-label="Full screen"');
   expect(PLAYER_APP_HTML).not.toContain('lucide-play');
   expect(PLAYER_APP_HTML).not.toContain('id="account-chip"');
   expect(PLAYER_APP_HTML).not.toContain('player-brand');
