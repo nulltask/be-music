@@ -44,10 +44,22 @@ test('BATTLE availability follows each source', () => {
   expect(resolveEffectiveBattleMode('BATTLE', '____', '7', false)).toBe('BATTLE');
   expect(resolveEffectiveBattleMode('BATTLE', '____', '5', false)).toBe('OFF');
   expect(() => resolveEffectiveBattleMode('BATTLE', 'lr2', '7', false)).toThrow(RangeError);
+  // A source-qualified BATTLE builds its source's chart under every ruleset (ADR 0019).
+  expect(resolveEffectiveBattleMode('beatoraja:BATTLE', 'lr2', '5', false)).toBe('beatoraja:BATTLE');
+  expect(resolveEffectiveBattleMode('beatoraja:BATTLE', '____', '24', false)).toBe('beatoraja:BATTLE');
+  expect(resolveEffectiveBattleMode('____:BATTLE', 'lr2', '7', false)).toBe('____:BATTLE');
+  expect(resolveEffectiveBattleMode('____:BATTLE', 'beatoraja', '5', false)).toBe('OFF');
   // The chart constructions are offered under every ruleset (#774); BATTLE keeps its LR2 meaning (TWO-PLAYER).
   expect(resolveEffectiveBattleMode('SP-TO-DP', 'beatoraja', '7', false)).toBe('SP-TO-DP');
   expect(resolveEffectiveBattleMode('SP-TO-DP', '____', '14', false)).toBe('SP-TO-DP');
   expect(resolveEffectiveBattleMode('SP-TO-DP', 'lr2', '7', true)).toBe('OFF');
+});
+
+test('a source-qualified BATTLE copies the chart onto both sides under another ruleset', () => {
+  const source = resolveChart(parseBMS('#BPM 120\n#00111:01'), { playVariant: '7' });
+  const prepared = preparePlaybackChart(source, { battleMode: 'beatoraja:BATTLE', judgeRuleset: 'lr2' });
+  expect(prepared.battleMode).toBe('beatoraja:BATTLE');
+  expect(prepared.notes.map((note) => note.channel)).toEqual(['11', '21']);
 });
 
 test('a DP source keeps its chart under BATTLE', () => {
@@ -134,5 +146,13 @@ test('two-player play copies the chart for the second player, with mines under T
   expect(ac.landmineNotes.map((mine) => mine.channel)).toEqual(['13', '23']);
   expect(resolveEffectiveBattleMode('TWO-PLAYER', 'lr2', '7', true)).toBe('OFF');
   expect(resolveEffectiveBattleMode('TWO-PLAYER', '____', '9', false)).toBe('OFF');
-  expect(() => resolveEffectiveBattleMode('TWO-PLAYER', 'beatoraja', '7', false)).toThrow(RangeError);
+  // beatoraja has no two-player play of its own; LR2's BATTLE builds the chart under its rules (#774).
+  expect(resolveEffectiveBattleMode('TWO-PLAYER', 'beatoraja', '7', false)).toBe('TWO-PLAYER');
+  expect(resolveEffectiveBattleMode('TWO-PLAYER', 'beatoraja', '14', false)).toBe('TWO-PLAYER');
+  expect(resolveEffectiveBattleMode('TWO-PLAYER', 'beatoraja', '7', true)).toBe('OFF');
+  const beatoraja = preparePlaybackChart(resolveChart(parseBMS(SOURCE), { playVariant: '7' }), {
+    battleMode: 'TWO-PLAYER',
+    judgeRuleset: 'beatoraja',
+  });
+  expect(beatoraja.landmineNotes.map((mine) => mine.channel)).toEqual(['13']);
 });

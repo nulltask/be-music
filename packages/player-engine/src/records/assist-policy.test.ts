@@ -35,6 +35,8 @@ describe('classifyReplayAssists', () => {
   test('finds nothing in a play without assisted options', () => {
     expect(classifyReplayAssists(replay())).toEqual([]);
     expect(classOf({ randomLane: { p1: 'RANDOM', p2: 'MIRROR' }, dpFlip: true })).toBe('none');
+    // RANDOM and S-RANDOM set no assist in any source, qualified or not.
+    expect(classOf({ randomLane: { p1: 'beatoraja:RANDOM', p2: 'lr2:S-RANDOM' }, judgeRuleset: '____' })).toBe('none');
     // R-RANDOM (beatoraja ROTATE), SYNCHRONIZE / SYMMETRY RANDOM and M-RAN set no assist in their sources.
     expect(classOf({ randomLane: { p1: 'R-RANDOM' } })).toBe('none');
     expect(classOf({ randomLane: { p1: 'SYNCHRONIZE-RANDOM' } })).toBe('none');
@@ -93,6 +95,16 @@ describe('classifyReplayAssists', () => {
     ['S_RANDOM_PLAYABLE', { randomLane: { p1: 'S_RANDOM_PLAYABLE' } }, {}, 'S_RANDOM_PLAYABLE', 'beatoraja', 'light'],
     ['beatoraja BATTLE', { battleMode: 'BATTLE', judgeRuleset: 'beatoraja' }, {}, 'BATTLE', 'beatoraja', 'light'],
     ['AC BATTLE', { battleMode: 'BATTLE', judgeRuleset: '____' }, {}, 'BATTLE', '____', 'no-save'],
+    // A source-qualified BATTLE is classified by its own source, whatever the judge rules (ADR 0019).
+    ['AC BATTLE under LR2 rules', { battleMode: '____:BATTLE', judgeRuleset: 'lr2' }, {}, 'BATTLE', '____', 'no-save'],
+    [
+      'beatoraja BATTLE under AC rules',
+      { battleMode: 'beatoraja:BATTLE', judgeRuleset: '____' },
+      {},
+      'BATTLE',
+      'beatoraja',
+      'light',
+    ],
     ['BATTLE AS', { battleMode: 'BATTLE-AS' }, {}, 'BATTLE-AS', 'beatoraja', 'light'],
     ['7 TO 9', { sevenToNineApplied: true }, {}, 'seven-to-nine', 'beatoraja', 'light'],
     [

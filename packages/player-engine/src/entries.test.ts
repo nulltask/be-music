@@ -58,6 +58,7 @@ describe('designed entries', () => {
       'createInputTokenToChannelsMap',
       'createLaneBindings',
       'drawLaneRandomIndex',
+      'isOnePlayerBattleMode',
       'isPlayableInputChannel',
       'isScratch',
       'parseLaneRandomSeed',
