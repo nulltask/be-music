@@ -104,5 +104,56 @@ export const basecoatTheme: BeMusicTheme = [
       background: var(--muted, #0c1018);
       border-radius: calc(var(--radius, 0.625rem) - 4px);
     }
+    /* The cabinet arrangement of the gameplay HUD. */
+    .cabinet .play-frame {
+      border: 1px solid var(--border, #ffffff1a);
+      border-radius: var(--radius, 0.625rem);
+    }
+    .cabinet .chart-progress {
+      background: var(--muted, #27272a);
+      border-radius: 999px;
+    }
+    .cabinet .progress-fill {
+      background: var(--primary, #edf2fa);
+      opacity: 1;
+    }
+    .cabinet .key {
+      color: var(--foreground, #edf2fa);
+    }
+    .cabinet .key[data-kind='black'],
+    .cabinet .key[data-kind='scratch'],
+    .cabinet .key[data-kind='wheel-up'],
+    .cabinet .key[data-kind='wheel-down'] {
+      color: var(--muted-foreground, #9baac0);
+    }
+    .cabinet .bar[data-kind='you'] {
+      color: var(--primary, #edf2fa);
+    }
+    .cabinet .bar[data-kind='best'] {
+      color: var(--chart-2, #34d399);
+    }
+    .cabinet .bar[data-kind='target'] {
+      color: var(--destructive, #f87171);
+    }
+    .cabinet .difficulty {
+      background: var(--primary, #edf2fa);
+      color: var(--primary-foreground, #18181b);
+    }
+    .cabinet .fast,
+    .cabinet .timing-mark[data-side='early'] {
+      color: var(--chart-1, #60a5fa);
+    }
+    .cabinet .slow,
+    .cabinet .timing-mark[data-side='late'] {
+      color: var(--destructive, #f87171);
+    }
+    .cabinet .pacemaker {
+      border-color: var(--border, #ffffff1a);
+    }
+    .cabinet .cabinet-details {
+      background: color-mix(in oklch, var(--background, #09090b) 96%, transparent);
+      border: 1px solid var(--border, #ffffff1a);
+      border-radius: var(--radius, 0.625rem);
+    }
   `,
 ];
