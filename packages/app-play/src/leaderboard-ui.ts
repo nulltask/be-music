@@ -257,10 +257,12 @@ export class LeaderboardPanel {
         if (action !== 'sign-up' && action !== 'keep') button.dataset.variant = 'outline';
         button.textContent = START_ACCOUNT_ACTION_LABELS[action];
         button.addEventListener('click', () => {
-          // Signing out needs nothing more; the rest open the dialogs the Leaderboard's own pages use.
+          // Signing out needs nothing more. Keeping an anonymous account enrolls a passkey on Accounts.
+          // Sign in and Sign up open the dialogs, where a passkey, Google, or Discord each start Accounts.
           if (action === 'sign-out') void this.runAccountAction('Sign out', signOutOfLeaderboard);
           else if (action === 'keep') void this.runAccountAction('Manage account', createLeaderboardPasskey);
-          else void this.runAccountAction('Sign in', signInWithLeaderboardPasskey);
+          else if (action === 'sign-up') this.openDialog('sign-up');
+          else this.openDialog('sign-in');
         });
         return button;
       }),

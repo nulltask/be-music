@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  accountProviderFromAction,
+  accountSignInPath,
   describeAccountChip,
   describeLeaderboardAccount,
   describeProfileError,
@@ -8,6 +10,7 @@ import {
   shouldTurnOnSubmitting,
   loadLeaderboardAccount,
 } from './account.ts';
+import { PLAYER_APP_HTML } from './dom-template.ts';
 
 describe('describeLeaderboardAccount', () => {
   test('summarizes the session state', () => {
@@ -134,6 +137,27 @@ describe('describeProfileError', () => {
       'Names cannot contain line breaks or control characters.',
     );
     expect(describeProfileError('http-500')).toBe('Something went wrong (http-500).');
+  });
+});
+
+describe('account sign-in', () => {
+  test('sends Google and Discord through the same Accounts URL as a passkey', () => {
+    expect(accountSignInPath('/play?chart=1')).toBe('/api/auth/sign-in?returnTo=%2Fplay%3Fchart%3D1');
+    expect(accountSignInPath('/play?chart=1', 'google')).toBe(
+      '/api/auth/sign-in?returnTo=%2Fplay%3Fchart%3D1&method=google',
+    );
+    expect(accountSignInPath('/settings', 'discord')).toBe('/api/auth/sign-in?returnTo=%2Fsettings&method=discord');
+    expect(accountProviderFromAction('sign-in-google')).toBe('google');
+    expect(accountProviderFromAction('sign-up-discord')).toBe('discord');
+    expect(accountProviderFromAction('sign-in')).toBeUndefined();
+  });
+
+  test('the sign-in dialog offers Google and Discord as actions', () => {
+    expect(PLAYER_APP_HTML).toContain('data-account-dialog-action="sign-in-google"');
+    expect(PLAYER_APP_HTML).toContain('data-account-dialog-action="sign-up-discord"');
+    expect(PLAYER_APP_HTML).toContain('Sign in with a passkey');
+    expect(PLAYER_APP_HTML).not.toContain('Coming soon');
+    expect(PLAYER_APP_HTML).not.toContain('coming soon');
   });
 });
 
