@@ -35,6 +35,6 @@
     "tailwindcss": "^4.3.3",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "wrangler": "^4.151.3"
+    "wrangler": "^4.155.0"
   }
 }
