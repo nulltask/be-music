@@ -20,10 +20,12 @@ export type FullscreenElementLike = {
  * The play surface (`#main`). Fullscreen covers this element: it holds the stage and the Debug Menu, and the site
  * header and the site footer sit outside it. A missing surface falls back to the document element.
  */
-export function playerFullscreenElement(doc: {
-  querySelector(selector: string): FullscreenElementLike | null;
-  documentElement: FullscreenElementLike;
-} = document): FullscreenElementLike {
+export function playerFullscreenElement(
+  doc: {
+    querySelector(selector: string): FullscreenElementLike | null;
+    documentElement: FullscreenElementLike;
+  } = document,
+): FullscreenElementLike {
   return doc.querySelector('#main') ?? doc.documentElement;
 }
 

@@ -43,9 +43,7 @@ test('renders the shared header with Settings where Play would be', () => {
   expect(html).toContain('data-service-header="fullscreen" title="Full screen" aria-label="Full screen"');
   expect(html).toContain('aria-pressed="false"');
   expect(html).toContain('lucide-maximize');
-  expect(html.indexOf('data-service-header="settings"')).toBeLessThan(
-    html.indexOf('data-service-header="fullscreen"'),
-  );
+  expect(html.indexOf('data-service-header="settings"')).toBeLessThan(html.indexOf('data-service-header="fullscreen"'));
   expect(html).toContain('>Sign in</a>');
   expect(html).toContain('href="#main"');
   expect(html).not.toContain('aria-label="Play"');
