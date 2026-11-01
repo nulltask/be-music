@@ -216,8 +216,11 @@ textarea {
  * Fullscreen target is `.shell` (not the canvas itself) so Pixi's
  * `resizeTo: #stage` still sees a 100%-of-viewport container after
  * the browser chrome disappears, and so the floating debug / help /
- * search overlays stay reachable. The background fill covers Safari's
- * brief unstyled flash as the element is promoted.
+ * search overlays stay reachable. The Debug Menu
+ * (`.debug-pane-container`) is mounted inside `.shell` for that
+ * reason; on `document.body` the browser would hide it while `.shell`
+ * is fullscreen. The background fill covers Safari's brief unstyled
+ * flash as the element is promoted.
  */
 .shell:fullscreen,
 .shell:-webkit-full-screen {
