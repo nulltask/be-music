@@ -264,7 +264,7 @@ describe('BeatorajaSelectView', () => {
     internals.handleButtonAction(54, false);
     expect(draw().playOptions).toMatchObject({ battleMode: 'OFF', dpFlip: true });
     internals.handleButtonAction(54, false);
-    expect(draw().playOptions).toMatchObject({ battleMode: 'BATTLE', dpFlip: false });
+    expect(draw().playOptions).toMatchObject({ battleMode: 'beatoraja:BATTLE', dpFlip: false });
     expect(internals.skinState.resolveSelectionRefValue(54)).toBe(2);
   });
 

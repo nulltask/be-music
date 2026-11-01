@@ -303,8 +303,8 @@ export async function createPlaySession(
     playbackChart.longNoteModifierApplied !== options.longNoteModifier
   )
     throw new RangeError('The shared prepared chart must include the selected long-note modifier.');
-  if (options.longNoteModifier?.startsWith('ADD_') && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
-    throw new RangeError('Long-note addition is available only for beatoraja.');
+  // Long-note addition builds a chart and is offered under every judge ruleset (#774): the added long notes are judged
+  // as the ruleset's long notes, so ADD CN / ADD HCN keep their CN / HCN distinction only under beatoraja rules.
   if (options.mineModifier?.startsWith('ADD_') && playbackChart.mineModifierApplied !== options.mineModifier)
     throw new RangeError('The shared prepared chart must include the selected mine modifier.');
   if (options.mineModifier === 'REMOVE') {

@@ -149,7 +149,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`R-RANDOM is selectable and recorded on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
-    await player.setOption(['Play options'], 'Random 1P', 'R-RANDOM');
+    await player.setOption(['Play options'], 'Random 1P', 'R-RANDOM (beatoraja)');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.browseTo(SONGS, 'Fixture A');
     await player.key('Enter');
@@ -160,7 +160,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.leaveResult();
     // R-RANDOM is offered under every ruleset (#774), so LR2 rules keep the choice.
     await player.setOption(['Developer'], 'Judgment windows', 'LR2');
-    expect(await player.readOption(['Play options'], 'Random 1P')).toBe('R-RANDOM');
+    expect(await player.readOption(['Play options'], 'Random 1P')).toBe('R-RANDOM (beatoraja)');
   });
 }
 
@@ -169,7 +169,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     // beatoraja's SPIRAL and scroll REMOVE under LR2 rules: options that only transform the chart or the view (#774).
     await player.setOption(['Developer'], 'Judgment windows', 'LR2');
-    await player.setOption(['Play options'], 'Random 1P', 'SPIRAL');
+    await player.setOption(['Play options'], 'Random 1P', 'SPIRAL (beatoraja)');
     await player.setOption(['Play options'], 'Scroll (beatoraja)', 'REMOVE');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.browseTo(SONGS, 'Fixture A');
@@ -181,7 +181,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.leaveResult();
     // Switching rules keeps both choices.
     await player.setOption(['Developer'], 'Judgment windows', '????');
-    expect(await player.readOption(['Play options'], 'Random 1P')).toBe('SPIRAL');
+    expect(await player.readOption(['Play options'], 'Random 1P')).toBe('SPIRAL (beatoraja)');
     expect(await player.readOption(['Play options'], 'Scroll (beatoraja)')).toBe('REMOVE');
   });
 }
@@ -190,7 +190,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`source seeds and previous arrangements work for fresh input on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
-    await player.setOption(['Play options'], 'Random 1P', 'RANDOM');
+    await player.setOption(['Play options'], 'Random 1P', 'RANDOM (beatoraja)');
     await player.setOption(['Play options'], 'Seed 1P (-1=random)', '9223372036854775807');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.browseTo(SONGS, 'Fixture A');
@@ -610,7 +610,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       await player.setOption(
         ['Play options'],
         'Random 1P',
-        mode === 'SCATTER' ? 'SCATTER (LR2 beta3)' : 'SCATTER (9KEY corrected)',
+        mode === 'SCATTER' ? 'SCATTER (LR2)' : 'SCATTER 9KEY corrected (LR2)',
       );
       await player.cursorTo((bar) => bar.title === 'SCATTER PMS', 'PMS chart');
       await player.key('Enter');
@@ -877,7 +877,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const)
         `#TITLE ${title}\n#BPM 240\n#LNOBJ ZZ\n#00111:01\n#00112:02\n#00212:ZZ\n#00311:01${sourceKeys === 7 ? '\n#00418:01' : ''}`,
       );
       await player.setOption(['Developer'], 'Judgment windows', 'LR2');
-      await player.setOption(['Play options'], 'Battle', 'SP TO DP');
+      await player.setOption(['Play options'], 'Battle', 'SP TO DP (LR2)');
       await player.setOption(['Play options'], 'Auto play', true);
       await player.cursorTo((bar) => bar.title === title, 'SP TO DP source chart');
       await player.key('Enter');
@@ -903,10 +903,10 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const)
       await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'SP TO DP replay');
       await player.waitForResult(1);
       await player.leaveResult();
-      await player.setOption(['Play options'], 'Battle', 'SP TO DP');
+      await player.setOption(['Play options'], 'Battle', 'SP TO DP (LR2)');
       await player.page.reload();
       await player.waitFor((state) => state.scene.kind === 'select', 'select after reload');
-      expect(await player.readOption(['Play options'], 'Battle')).toBe('SP TO DP');
+      expect(await player.readOption(['Play options'], 'Battle')).toBe('SP TO DP (LR2)');
     });
   }
 
@@ -955,7 +955,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     const title = `Two players ${skin}`;
     await player.dropText('two-players.bme', `#TITLE ${title}\n#BPM 240\n#00111:01010101\n#00116:0001\n#00212:01`);
     await player.setOption(['Developer'], 'Judgment windows', 'LR2');
-    await player.setOption(['Play options'], 'Battle', 'BATTLE');
+    await player.setOption(['Play options'], 'Battle', 'BATTLE (LR2)');
     await player.setOption(['Play options'], 'Gauge 2P', 'HARD');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.cursorTo((bar) => bar.title === title, 'two-player chart');
@@ -984,9 +984,9 @@ test('That-Which-Must-Not-Be-Named 2P PLAY with M-RAN mirrors one player of a sh
   const title = 'M-RAN';
   await player.dropText('m-ran.bme', `#TITLE ${title}\n#BPM 240\n#00111:01\n#00112:0001\n#00113:000001`);
   await player.setOption(['Developer'], 'Judgment windows', '????');
-  await player.setOption(['Play options'], 'Battle', '2P PLAY');
-  await player.setOption(['Play options'], 'Random 1P', 'RANDOM');
-  await player.setOption(['Play options'], 'Random 2P', 'RANDOM');
+  await player.setOption(['Play options'], 'Battle', '2P PLAY (????)');
+  await player.setOption(['Play options'], 'Random 1P', 'RANDOM (????)');
+  await player.setOption(['Play options'], 'Random 2P', 'RANDOM (????)');
   await player.setOption(['Play options'], 'M-RAN 2P', true);
   await player.setOption(['Play options'], 'Auto play', true);
   await player.cursorTo((bar) => bar.title === title, 'M-RAN chart');
@@ -1010,17 +1010,17 @@ test('a lane option that does not fit the chart names itself in a dialog and goe
   await openWithLibrary(player);
   // beatoraja's CONVERGE is a PMS arrangement; Fixture A is a 7KEY chart.
   await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
-  await player.setOption(['Play options'], 'Random 1P', 'CONVERGE');
+  await player.setOption(['Play options'], 'Random 1P', 'CONVERGE (beatoraja)');
   await player.browseTo(SONGS, 'Fixture A');
   await player.key('Enter');
   const dialog = player.page.locator('dialog#play-option-mismatch');
   // A Basecoat dialog is an empty box; its panel, the child, is what shows.
   await expect(dialog.locator(':scope > form')).toBeVisible();
-  await expect(dialog.locator('li')).toHaveText(['Random 1P: CONVERGE']);
-  expect((await player.state()).status).toBe('Cannot play Fixture A with Random 1P: CONVERGE');
+  await expect(dialog.locator('li')).toHaveText(['Random 1P: CONVERGE (beatoraja)']);
+  expect((await player.state()).status).toBe('Cannot play Fixture A with Random 1P: CONVERGE (beatoraja)');
   await dialog.getByRole('button', { name: 'OK' }).click();
   await expect(dialog.locator(':scope > form')).toBeHidden();
   await player.waitFor((state) => state.scene.kind === 'select', 'select after the dialog');
   // The option stays as the player set it, to change on the select screen.
-  expect(await player.readOption(['Play options'], 'Random 1P')).toBe('CONVERGE');
+  expect(await player.readOption(['Play options'], 'Random 1P')).toBe('CONVERGE (beatoraja)');
 });

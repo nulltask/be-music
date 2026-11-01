@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   resolveRandomModes,
   isDuplicatedBattleChoice,
+  isRandomModeChoice,
   formatGaugeLabel,
   RANDOM_CYCLE,
   clampHiSpeed,
@@ -166,7 +167,8 @@ test('offers the three confirmed beatoraja launcher algorithms only', () => {
 });
 
 test('R-RANDOM is offered under every ruleset without changing LR2 button indices', () => {
-  expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM']);
+  // An LR2 button cycles LR2's own RANDOM and S-RANDOM (ADR 0019).
+  expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'lr2:RANDOM', 'lr2:S-RANDOM']);
   expect(resolveRandomModes('lr2')).toContain('R-RANDOM');
   for (const source of ['beatoraja', '____'] as const) expect(resolveRandomModes(source)).toContain('R-RANDOM');
   expect(resolvePlayOptions({ random1P: 'R-RANDOM', random2P: 'R-RANDOM' })).toMatchObject({
@@ -192,9 +194,15 @@ test('H-RANDOM is offered under every ruleset and the source threshold is valida
 });
 
 test('LR2 CONVERGE and fixed-lane source settings are selectable and validated', () => {
-  expect(resolveRandomModes('lr2')).toContain('CONVERGE');
-  expect(resolveRandomModes('beatoraja')).toContain('CONVERGE');
-  expect(resolveRandomModes('____')).not.toContain('CONVERGE');
+  // CONVERGE names LR2's concentration and beatoraja's PMS arrangement: each is offered with its source under every
+  // ruleset (ADR 0019), and the bare name of older settings stays valid as the ruleset's own.
+  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    expect(resolveRandomModes(ruleset)).toContain('lr2:CONVERGE');
+    expect(resolveRandomModes(ruleset)).toContain('beatoraja:CONVERGE');
+    expect(resolveRandomModes(ruleset)).not.toContain('CONVERGE');
+  }
+  expect(resolvePlayOptionValue('random1P', 'lr2:CONVERGE')).toBe('lr2:CONVERGE');
+  expect(resolvePlayOptionValue('random1P', '____:CONVERGE')).toBeUndefined();
   expect(resolvePlayOptions({ random1P: 'CONVERGE', randomFixedLane1P: 4, randomFixedLane2P: 0 })).toMatchObject({
     random1P: 'CONVERGE',
     randomFixedLane1P: 4,
@@ -409,4 +417,36 @@ test('bmson TOTAL mode is opt-in and validates both choices', () => {
   expect(resolvePlayOptionValue('bmsonTotalMode', 'spec')).toBe('spec');
   expect(resolvePlayOptionValue('bmsonTotalMode', 'beatoraja')).toBe('beatoraja');
   expect(resolvePlayOptionValue('bmsonTotalMode', 'SPEC')).toBeUndefined();
+});
+
+test('RANDOM and S-RANDOM are offered once per source, the judge ruleset own first (ADR 0019)', () => {
+  expect(resolveRandomModes('beatoraja').filter((mode) => mode.endsWith(':RANDOM'))).toEqual([
+    'beatoraja:RANDOM',
+    'lr2:RANDOM',
+    '____:RANDOM',
+  ]);
+  expect(resolveRandomModes('____').filter((mode) => mode.endsWith(':S-RANDOM'))).toEqual([
+    '____:S-RANDOM',
+    'lr2:S-RANDOM',
+    'beatoraja:S-RANDOM',
+  ]);
+  expect(resolveRandomModes('lr2')).not.toContain('RANDOM');
+  // Bare values from before the qualification still validate; an unknown source does not.
+  expect(isRandomModeChoice('S-RANDOM')).toBe(true);
+  expect(isRandomModeChoice('pms:RANDOM')).toBe(false);
+  expect(isRandomModeChoice('SYNCHRONIZE-RANDOM')).toBe(false);
+  expect(isRandomModeChoice('SYNCHRONIZE-RANDOM', true)).toBe(true);
+  expect(resolvePlayOptions({ random1P: 'RANDOM', random2P: 'beatoraja:S-RANDOM' })).toMatchObject({
+    random1P: 'RANDOM',
+    random2P: 'beatoraja:S-RANDOM',
+  });
+});
+
+test('BATTLE is offered with its source, and a bare BATTLE of older settings stays valid', () => {
+  expect(PLAY_OPTION_CHOICES.battleMode).toEqual(expect.arrayContaining(['beatoraja:BATTLE', '____:BATTLE']));
+  expect(PLAY_OPTION_CHOICES.battleMode).not.toContain('BATTLE');
+  expect(resolvePlayOptionValue('battleMode', 'BATTLE')).toBe('BATTLE');
+  expect(resolvePlayOptionValue('battleMode', 'lr2:BATTLE')).toBeUndefined();
+  for (const mode of ['BATTLE', 'beatoraja:BATTLE', '____:BATTLE'] as const)
+    expect(isDuplicatedBattleChoice(mode)).toBe(true);
 });

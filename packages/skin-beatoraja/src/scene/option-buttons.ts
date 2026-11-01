@@ -1,3 +1,4 @@
+import { optionValueName } from '@be-music/player-engine/ruleset';
 import { nextChoice, type PlayOptions, type RandomMode } from '@be-music/player-scene-model';
 
 /**
@@ -36,16 +37,17 @@ const EXTRA_NOTE_DEPTH_BUTTON = 350;
 /**
  * beatoraja's `option1p` (42) and `option2p` (43) step the 1P / 2P lane option through ten slots, which name the
  * `Random.OPTION_GENERAL` options outside PMS and the `Random.OPTION_PMS` ones in PMS (where S-RANDOM is beatoraja's
- * `S_RANDOM_NO_THRESHOLD`). The slot is the label's image index.
+ * `S_RANDOM_NO_THRESHOLD`). The slot is the label's image index. The buttons step beatoraja's own RANDOM, S-RANDOM and
+ * CONVERGE, and another source's reads as the slot of its bare name (ADR 0019).
  */
 const RANDOM_BUTTONS: Readonly<Record<number, 'random1P' | 'random2P'>> = { 42: 'random1P', 43: 'random2P' };
 
 const RANDOM_OPTIONS: readonly RandomMode[] = [
   'OFF',
   'MIRROR',
-  'RANDOM',
+  'beatoraja:RANDOM',
   'R-RANDOM',
-  'S-RANDOM',
+  'beatoraja:S-RANDOM',
   'SPIRAL',
   'H-RANDOM',
   'ALL-SCR',
@@ -56,12 +58,12 @@ const RANDOM_OPTIONS: readonly RandomMode[] = [
 const PMS_RANDOM_OPTIONS: readonly RandomMode[] = [
   'OFF',
   'MIRROR',
-  'RANDOM',
+  'beatoraja:RANDOM',
   'R-RANDOM',
-  'S-RANDOM',
+  'beatoraja:S-RANDOM',
   'SPIRAL',
   'H-RANDOM',
-  'CONVERGE',
+  'beatoraja:CONVERGE',
   'RANDOM_PLAYABLE',
   'S_RANDOM_PLAYABLE',
 ];
@@ -72,8 +74,14 @@ const PMS_RANDOM_OPTIONS: readonly RandomMode[] = [
  * beatoraja reads a slot out of range as OFF.
  */
 function randomSlot(mode: RandomMode | undefined): number {
-  const slot = RANDOM_OPTIONS.indexOf(mode ?? 'OFF');
-  return slot >= 0 ? slot : Math.max(0, PMS_RANDOM_OPTIONS.indexOf(mode ?? 'OFF'));
+  const name = optionValueName(mode ?? 'OFF');
+  const slot = RANDOM_OPTIONS.findIndex((option) => optionValueName(option) === name);
+  return slot >= 0
+    ? slot
+    : Math.max(
+        0,
+        PMS_RANDOM_OPTIONS.findIndex((option) => optionValueName(option) === name),
+      );
 }
 
 /** The play mode an option button steps the lane options for: PMS, or any other mode. */
@@ -87,12 +95,13 @@ type DoubleOptions = Pick<PlayOptions, 'battleMode' | 'dpFlip'>;
 const DOUBLE_OPTIONS: readonly DoubleOptions[] = [
   { battleMode: 'OFF', dpFlip: false },
   { battleMode: 'OFF', dpFlip: true },
-  { battleMode: 'BATTLE', dpFlip: false },
+  { battleMode: 'beatoraja:BATTLE', dpFlip: false },
   { battleMode: 'BATTLE-AS', dpFlip: false },
 ];
 
+/** The `doubleoption` slot: any source's one-player BATTLE reads as beatoraja's BATTLE (ADR 0019). */
 function doubleOptionIndex(options: Partial<DoubleOptions>): number {
-  if (options.battleMode === 'BATTLE') return 2;
+  if (options.battleMode !== undefined && optionValueName(options.battleMode) === 'BATTLE') return 2;
   if (options.battleMode === 'BATTLE-AS') return 3;
   return options.dpFlip === true ? 1 : 0;
 }
