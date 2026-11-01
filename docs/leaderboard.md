@@ -100,8 +100,11 @@ A manual play that seeks is practice (`PlayResult.practice`). Its first seek dis
   can be filtered to "played under this ruleset" only.
 - **Gauges** map across rulesets as the replay already does (`GROOVE` is beatoraja's `NORMAL`, `DEATH` its
   `HAZARD`, and so on).
-- **Assists** (auto scratch, a debug judge-window override, ...) are stored with flags and ranked separately from
-  unassisted plays.
+- **Assists** are classified by their option's source (`classifyReplayAssists`, [Assist and record policy](./play-options.md#assist-and-record-policy)) and stored with their flags.
+  A `light` or `assist` play is ranked separately from unassisted plays. Under each ruleset its lamp is limited by
+  that ruleset's rule: EASY at most under `lr2`, LIGHT ASSIST EASY or ASSIST EASY under `beatoraja`, ASSIST EASY under
+  `____`. A `no-save` play (BATTLE under `____` rules, beatoraja PRACTICE) is stored unranked as `no-save`. Lamps are
+  stored by their append-only rank (LIGHT ASSIST EASY is 10) and ordered by the lamp order, not the number.
 - **Unranked plays** are stored, simulated under every ruleset and answered with their figures (rank and players 0,
   `unranked` naming why), but they move no personal best and stay out of the rankings, the figures and every list;
   their own page still opens and says why (`score.unranked`). A **course stage** sent on its own is one
@@ -167,6 +170,8 @@ with its own rankings per ruleset, and never as single-chart plays.
 - **Unreleased courses are not ranked.** A course with beatoraja's `release: false`, which a drawn random course and a
   course made in the course maker also have, is recorded so in the course log (`course.release: false`), and its runs
   are stored unranked as `unreleased`, as beatoraja keeps them off IR.
+- **Assisted runs are not ranked.** A run with any assisted stage (any assist class but `none`) is stored unranked as
+  `assist`: LR2 saves no stage with an assist on, and beatoraja saves no assisted course.
 - **NONSTOP runs.** A NONSTOP course is played as one stitched chart, and that play (`nonstop.replay`) is what is
   judged and ranked. The server rebuilds the stitched chart from the stage charts exactly as the client built it: both
   take the same deterministic pipeline (`prepareNonstopCourse` in `@be-music/player-engine/course`, see

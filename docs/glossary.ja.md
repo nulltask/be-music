@@ -155,7 +155,8 @@
 - **結合したプレイ（stitched play）**: NONSTOP のコースを遊ぶ 1 本の譜面。ステージをつなぎ方と配置に従って結合して作ります。
 - **判定ルールセット（judge ruleset）**: プレイを判定し順位付けする基準のゲーム。判定幅・ゲージ・ランプが決まります。`lr2`・`beatoraja`・`____`。
 - **ゲージの種類（gauge type）**: プレイヤーが選ぶゲージ。LR2 の名前で `GROOVE`・`HARD`・`DEATH`・`EASY`（`GaugeType`）。判定ルールセットはそれぞれ自分のゲージで遊ばせ、そのゲージはゲージ ID（`NORMAL`・`HAZARD`・`CLASS` など）で呼びます。
-- **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player-engine/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
+- **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。保存する番号は追加専用で、順序ではありません（ASSIST EASY と EASY の間の LIGHT ASSIST EASY は 10）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player-engine/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
+- **アシスト区分（assist class）**: プレイがどれだけアシストを受けたかを、各オプションの参照元の規則で表したもの。`none`・`light`・`assist`・`no-save`（`@be-music/player-engine/records` の `AssistClass`、`classifyReplayAssists`）。その結果どうなるかは判定ルールセットが決めます（`resolveRecordPolicy`）。
 - **BP**: ミスの数。BAD・POOR・空 POOR に、途中で落ちたり ESC で投げたりして判定されなかったノート（コースでは到達しなかったノートも）を加えたもの（`resolveMissCount`）。
 - **自己ベスト（best record）**: 同じ判定ルールセット・譜面またはコースについて、最良のランプ・最高 EX-SCORE・最大コンボ・最少 BP を項目ごとに保持したものです（`BestRecord`）。各値は異なるプレイから得られることがあり、1 回のプレイ結果とは区別します。
 - **表示設定（view settings）**: 判定とは別に、プレイヤーが見ていたもの。ハイスピード、ハイスピード固定、表示時間、各サイドの SUDDEN+・HIDDEN+・LIFT です。_避ける語_: display options。
