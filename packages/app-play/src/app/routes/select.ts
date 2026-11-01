@@ -13,13 +13,19 @@ import {
   type SelectSceneKit,
   type SelectStartEntry,
 } from '@be-music/player-browser/host';
-import type { BrowseSnapshot, LibraryChart, LibraryEntry } from '@be-music/player-scene-model';
+import {
+  resolveLibraryChartPlayVariant,
+  type BrowseSnapshot,
+  type LibraryChart,
+  type LibraryEntry,
+} from '@be-music/player-scene-model';
 import { lookupCourseBestRecord } from '../../course-result.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
 import type { InlineSearch } from '../../inline-search.ts';
 import type { CourseMakerService } from '../../services/course-maker.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
+import { resolveGhostUnavailableReason } from '../../services/ghost.ts';
 import { copyPlayOptionsToGUI, type GUIPlayOptions, type PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { ReplaySlotService } from '../../services/replay-slot-service.ts';
@@ -237,6 +243,18 @@ export class SelectRoute {
         // The card lists the bar's replays where the skin has no replay-slot UI (a beatoraja skin draws its own).
         focus: (entry) => {
           if (kit.family !== 'beatoraja') this.replaySlotsPanel.showSelect(entry);
+          // "Ghost" is enabled only where a play of the bar would show one.
+          const chart = entry?.kind === 'chart' ? entry : undefined;
+          const playFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'gameplay', chart?.chart);
+          this.debugMenu.setGhostAvailability(
+            resolveGhostUnavailableReason({
+              family: playFamily === 'default' ? 'built-in' : playFamily,
+              ...(chart !== undefined ? { playVariant: resolveLibraryChartPlayVariant(chart.chart) } : {}),
+              course: entry?.kind === 'course',
+              battle: this.playOptions.current.battleMode !== 'OFF',
+              hasBestReplay: chart !== undefined && this.replaySlots.exists(chart).some(Boolean),
+            }),
+          );
         },
         playOptions: (options) => {
           // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Debug Menu
