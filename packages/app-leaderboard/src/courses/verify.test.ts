@@ -57,6 +57,11 @@ describe('checkCourseRun', () => {
     expect(checkCourseRun(mirror.log, mirror.simulated)).toEqual({ ok: true });
     const random = run(['grade'], [stage({ kind: 'grade' }, { randomLane: { p1: 'MIRROR' } })]);
     expect(checkCourseRun(random.log, random.simulated)).toMatchObject({ reason: 'course-constraint-mismatch' });
+    // A chart-forced arrangement (#844) wins over the lane lock.
+    const forced = stage({ kind: 'grade' }, { randomLane: { p1: 'MIRROR', p2: 'MIRROR' } });
+    forced.chart.chartPlayOptions = { version: 1, options: { random: 'MIRROR' } };
+    const chartMirror = run(['grade'], [forced]);
+    expect(checkCourseRun(chartMirror.log, chartMirror.simulated)).toEqual({ ok: true });
   });
 
   test('refuses a first stage with a carry-in and a later one without the right one', () => {

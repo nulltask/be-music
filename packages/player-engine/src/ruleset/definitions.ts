@@ -1,4 +1,5 @@
 import { isBmsonRecoveryDisabled, type BmsonTotalMode } from './bmson-total.ts';
+import { applyChartJudgeModifiers, type ChartJudgeModifiers } from './chart-judge.ts';
 import { applyCustomJudgeTables, type BeatorajaCustomJudge } from './custom-judge.ts';
 import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeJudgeIndex } from './gauge.ts';
@@ -225,6 +226,8 @@ export interface ResolveRulesetOptions {
    * value carried in, and under the course's judge constraint.
    */
   course?: RulesetCourseOptions;
+  /** The chart's judgment CRAZY options (`GOOD2BAD`, `GREAT2BAD`, `HELLJUDGE`, #844), applied before a course constraint. */
+  chartJudge?: ChartJudgeModifiers;
 }
 
 const scale = (windows: { pgreat: number; great: number; good: number; bad: number }): JudgeWindowSetUs => ({
@@ -928,7 +931,7 @@ function resolveRulesetTables(
   if (options.practice !== undefined && (rulesetId !== 'beatoraja' || course !== undefined))
     throw new RangeError('PRACTICE is available only for a beatoraja single play.');
   const constrain = (tables: RulesetWindowTables): RulesetWindowTables =>
-    applyCourseJudgeConstraint(tables, course?.judge);
+    applyCourseJudgeConstraint(applyChartJudgeModifiers(tables, options.chartJudge), course?.judge);
   const courseGauge = (total: number): GaugeSpec | undefined =>
     course === undefined
       ? undefined

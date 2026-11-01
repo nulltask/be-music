@@ -14,6 +14,7 @@ describe('designed entries', () => {
   it('@be-music/player-engine exports the engine and nothing the other entries carry', () => {
     expect(exportedValues(engine)).toEqual([
       'PlayerInterruptedError',
+      'applyChartPlayOptions',
       'autoPlay',
       'createTempoClock',
       'manualPlay',
@@ -58,6 +59,7 @@ describe('designed entries', () => {
       'createInputTokenToChannelsMap',
       'createLaneBindings',
       'drawLaneRandomIndex',
+      'isOnePlayerBattleMode',
       'isPlayableInputChannel',
       'isScratch',
       'parseLaneRandomSeed',

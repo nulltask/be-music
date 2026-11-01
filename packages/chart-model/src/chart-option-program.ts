@@ -2,6 +2,7 @@ import { parseHDXLongNoteMode } from './hdx-long-note-mode.ts';
 import { findLastIndexAtOrBefore } from '@be-music/shared-utils/core';
 import type { ChartOptionTimeline } from './chart-options.ts';
 import { isChartGaugeOptionDeclaration } from './chart-gauge-options.ts';
+import { isChartPlayOptionDeclaration } from './chart-play-options.ts';
 import { parseChartVisualOption, type ChartVisualOptionFields } from './chart-option-visual.ts';
 
 export interface ChartOptionState extends ChartVisualOptionFields {
@@ -100,6 +101,10 @@ function compileHiSpeed(declaration: string, timed: boolean): number | ChartOpti
   if (parseHDXLongNoteMode(declaration) !== undefined) return 'initial-only-option';
   // GAMELEVEL and EXTRA are initial-only in nanasigroove; `compileChartGaugeOptions` consumes the initial ones.
   if (isChartGaugeOptionDeclaration(declaration)) return 'initial-only-option';
+  // RANDOM and gameplay CRAZY are initial-only in nanasigroove; `compileChartPlayOptions` consumes the initial ones.
+  // `CRAZY_OFF` also clears the visual CRAZY subfamilies, so it stays a display operation too.
+  if (isChartPlayOptionDeclaration(declaration) && parseChartVisualOption(declaration) === undefined)
+    return 'initial-only-option';
   if (declaration.startsWith('charatbeatHDX:LONGMODE')) return 'invalid-parameter';
   return 'unsupported-option';
 }
@@ -116,6 +121,8 @@ export function compileChartOptions(timeline: ChartOptionTimeline): CompiledChar
     if (parseHDXLongNoteMode(declaration) !== undefined) continue;
     // GAMELEVEL and EXTRA choose the play's gauge (`compileChartGaugeOptions`), not a display operation.
     if (isChartGaugeOptionDeclaration(declaration)) continue;
+    // RANDOM and gameplay CRAZY are play options (`compileChartPlayOptions`), not display operations; `CRAZY_OFF` is both.
+    if (isChartPlayOptionDeclaration(declaration) && parseChartVisualOption(declaration) === undefined) continue;
     const value = compileDeclaration(declaration, false);
     if (typeof value === 'function') state = value(state);
     else diagnostics.push({ code: value, declaration });

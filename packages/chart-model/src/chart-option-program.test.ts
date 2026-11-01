@@ -66,26 +66,31 @@ test('missing references and unrepresentable cue time are diagnosed without chan
 });
 // The documented support boundary (docs/research/chart-authored-options.md): every other family is diagnosed and has
 // no effect, initially or on A6, so a program never carries an operation the engine cannot reproduce.
-test.each([
-  '774:CRAZY_SPIN',
-  '774:HIDDEN_M-SUDDEN',
-  '774:HID-HIDDEN1',
-  '774:RANDOM_MIRROR',
-  '774:NOTES_DOUBLE',
-  '774:CRAZY_HELLJUDGE',
-  'charatbeatHDX:BGAMODE 1',
-])('diagnoses %s without changing the effective program', (declaration) => {
-  const result = compileChartOptions({
-    initial: ['774:HI-SPEED_x1.50', declaration],
-    cues: [{ seconds: 1, key: '01', declaration }],
-  });
-  expect(result.program).toEqual({ version: 2, initial: { hiSpeed: 1.5 }, cues: [] });
-  expect(result.diagnostics).toEqual([
-    { code: 'unsupported-option', declaration },
-    { code: 'unsupported-option', declaration, key: '01', seconds: 1 },
-  ]);
-});
+test.each(['774:CRAZY_SPIN', '774:HIDDEN_M-SUDDEN', '774:HID-HIDDEN1', '774:NOTES_DOUBLE', 'charatbeatHDX:BGAMODE 1'])(
+  'diagnoses %s without changing the effective program',
+  (declaration) => {
+    const result = compileChartOptions({
+      initial: ['774:HI-SPEED_x1.50', declaration],
+      cues: [{ seconds: 1, key: '01', declaration }],
+    });
+    expect(result.program).toEqual({ version: 2, initial: { hiSpeed: 1.5 }, cues: [] });
+    expect(result.diagnostics).toEqual([
+      { code: 'unsupported-option', declaration },
+      { code: 'unsupported-option', declaration, key: '01', seconds: 1 },
+    ]);
+  },
+);
 
+test('initial RANDOM and gameplay CRAZY belong to the play options; timed uses are diagnosed initial-only', () => {
+  for (const declaration of ['774:RANDOM_MIRROR', '774:CRAZY_HELLJUDGE', '774:CRAZY_ADDMINE']) {
+    const result = compileChartOptions({
+      initial: [declaration],
+      cues: [{ seconds: 1, key: '01', declaration }],
+    });
+    expect(result.program).toEqual({ version: 2, initial: {}, cues: [] });
+    expect(result.diagnostics).toEqual([{ code: 'initial-only-option', declaration, key: '01', seconds: 1 }]);
+  }
+});
 test('version 2 executes HIDDEN, CHANGE-HS and CRAZY size / wave declarations alongside HI-SPEED', () => {
   const { program, diagnostics } = compileChartOptions({
     initial: ['774:HIDDEN_SUDDEN', '774:CHANGE-HS_ACCEL', '774:CRAZY_SMALL', '774:CRAZY_XWAVE', '774:HI-SPEED_x2.00'],
@@ -125,4 +130,13 @@ test('initial GAMELEVEL and EXTRA choose the gauge; timed uses are diagnosed ini
     expect(result.program).toEqual({ version: 2, initial: {}, cues: [] });
     expect(result.diagnostics).toEqual([{ code: 'initial-only-option', declaration, key: '01', seconds: 1 }]);
   }
+});
+test('CRAZY_OFF clears the visual CRAZY subfamilies as a display operation, initially and on A6', () => {
+  const result = compileChartOptions({
+    initial: ['774:CRAZY_SMALL', '774:CRAZY_HELLJUDGE', '774:CRAZY_OFF', '774:CRAZY_XWAVE'],
+    cues: [{ seconds: 1, key: '01', declaration: '774:CRAZY_OFF' }],
+  });
+  expect(result.diagnostics).toEqual([]);
+  expect(result.program.initial).toEqual({ crazyWave: 'XWAVE' });
+  expect(resolveChartOptionsAt(result.program, 1_000_000)).toEqual({});
 });

@@ -1,4 +1,4 @@
-import { clampExtraNoteDepth } from '@be-music/player-engine/lanes';
+import { clampExtraNoteDepth, isOnePlayerBattleMode } from '@be-music/player-engine/lanes';
 import { clampScrollSection, clampScrollRate } from '@be-music/player-engine/lanes';
 import { clampFloatingHiSpeed } from './floating-hi-speed.ts';
 import { clampLongNoteRate, clampHRandomThresholdBPM, parseLaneRandomSeed } from '@be-music/player-engine/lanes';
@@ -11,6 +11,8 @@ import {
   LR2_GAUGE_TYPES,
   clampCustomJudgeRate,
   isGaugeType,
+  isQualifiedOptionName,
+  splitOptionSource,
   type RulesetId,
 } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
@@ -81,25 +83,35 @@ export function formatGaugeLabel(id: string | undefined): string | undefined {
 
 /**
  * Cycle order for {@link PlayOptions.random1P} / `random2P`. LR2 button cells 0..3 on `#SRC_BUTTON,type=42 / 43`: off /
- * mirror / random / s-random. Additional source choices are returned by resolveRandomModes.
+ * mirror / random / s-random. An LR2 button cycles LR2's own RANDOM and S-RANDOM (ADR 0019); its label reads the bare
+ * name of any value. Additional source choices are returned by resolveRandomModes.
  */
-export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM'];
+export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'lr2:RANDOM', 'lr2:S-RANDOM'];
+
+/** The sources of each colliding lane option, the judge ruleset's own first. */
+function sourcesFirst<Name extends 'RANDOM' | 'S-RANDOM' | 'CONVERGE'>(
+  name: Name,
+  sources: readonly RulesetId[],
+  ruleset: RulesetId,
+): RandomMode[] {
+  const ordered = sources.includes(ruleset) ? [ruleset, ...sources.filter((source) => source !== ruleset)] : sources;
+  return ordered.map((source) => `${source}:${name}` as RandomMode);
+}
 
 /**
- * Available lane options under `ruleset`; LR2's sprite cycle stays separate. An option only one source defines (R-RANDOM,
- * SPIRAL, H-RANDOM, ALL-SCR, RANDOM-EX, S-RANDOM-EX and the PMS arrangements from beatoraja, SCATTER from LR2) is offered
- * under every ruleset and runs that source's algorithm (#774). RANDOM and S-RANDOM run the ruleset's own algorithm, and
- * CONVERGE names LR2's concentration and beatoraja's PMS arrangement, so it stays with those two rulesets.
- * `duplicatedBattle1P` is the 1P side of a chart copied onto both sides (BATTLE, BATTLE AS, D-BATTLE), which also takes
- * SYNCHRONIZE RANDOM and SYMMETRY RANDOM.
+ * The lane options offered under `ruleset`; LR2's sprite cycle stays separate. Every lane option is offered under every
+ * ruleset and runs its own source's algorithm (#774). RANDOM, S-RANDOM and CONVERGE name a different algorithm in each
+ * source, so they are offered once per source, qualified (`lr2:RANDOM`, `beatoraja:RANDOM`, `____:RANDOM`; CONVERGE is
+ * LR2's and beatoraja's), with the judge ruleset's own first (ADR 0019). `duplicatedBattle1P` is the 1P side of a chart
+ * copied onto both sides (BATTLE, BATTLE AS, D-BATTLE), which also takes SYNCHRONIZE RANDOM and SYMMETRY RANDOM.
  */
 export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = false): readonly RandomMode[] {
   return [
     'OFF',
     'MIRROR',
-    'RANDOM',
+    ...sourcesFirst('RANDOM', ['lr2', 'beatoraja', '____'], ruleset),
     'R-RANDOM',
-    'S-RANDOM',
+    ...sourcesFirst('S-RANDOM', ['lr2', 'beatoraja', '____'], ruleset),
     'SPIRAL',
     'H-RANDOM',
     'ALL-SCR',
@@ -109,14 +121,25 @@ export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = fals
     'S_RANDOM_PLAYABLE',
     'SCATTER',
     'SCATTER-CORRECTED',
-    ...(ruleset === '____' ? [] : (['CONVERGE'] as const)),
+    ...sourcesFirst('CONVERGE', ['lr2', 'beatoraja'], ruleset),
     ...(duplicatedBattle1P ? (['SYNCHRONIZE-RANDOM', 'SYMMETRY-RANDOM'] as const) : []),
   ];
 }
 
+/**
+ * Whether `mode` is one of {@link resolveRandomModes}'s choices, or a bare colliding name (RANDOM, S-RANDOM, CONVERGE)
+ * that stored settings and replays from before ADR 0019 hold, read as the judge ruleset's own.
+ */
+export function isRandomModeChoice(mode: unknown, duplicatedBattle1P = false): mode is RandomMode {
+  if (typeof mode !== 'string') return false;
+  if (resolveRandomModes('lr2', duplicatedBattle1P).includes(mode as RandomMode)) return true;
+  const parts = splitOptionSource(mode);
+  return parts.source === undefined && isQualifiedOptionName(parts.name) && parts.name !== 'BATTLE';
+}
+
 /** The battle modes that copy one SP chart onto both sides, whose 1P side takes the battle arrangements. */
 export function isDuplicatedBattleChoice(mode: PlayOptions['battleMode'] | undefined): boolean {
-  return mode === 'BATTLE' || mode === 'BATTLE-AS' || mode === 'D-BATTLE';
+  return isOnePlayerBattleMode(mode) || mode === 'BATTLE-AS' || mode === 'D-BATTLE';
 }
 
 /** The play options a player starts with. */
@@ -242,7 +265,17 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   extraNoteScratch: BOOLEAN_CYCLE,
   sevenToNinePattern: [0, 1, 2, 3, 4, 5, 6],
   sevenToNineType: [0, 1, 2],
-  battleMode: ['OFF', 'AUTO', 'COUPLE', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS', 'TWO-PLAYER'],
+  battleMode: [
+    'OFF',
+    'AUTO',
+    'COUPLE',
+    'SP-TO-DP',
+    'D-BATTLE',
+    'beatoraja:BATTLE',
+    '____:BATTLE',
+    'BATTLE-AS',
+    'TWO-PLAYER',
+  ],
   dBattleScratch: BOOLEAN_CYCLE,
   mRan1P: BOOLEAN_CYCLE,
   mRan2P: BOOLEAN_CYCLE,
@@ -324,6 +357,10 @@ export function resolvePlayOptionValue<K extends keyof PlayOptions>(
   if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
   if (key === 'randomSeed1P' || key === 'randomSeed2P') return parseLaneRandomSeed(value) as PlayOptions[K] | undefined;
   if (key === 'gauge1P' || key === 'gauge2P') return isGaugeType(value) ? (value as PlayOptions[K]) : undefined;
+  // A bare colliding name from before ADR 0019 stays valid: it is the judge ruleset's own.
+  if (key === 'random1P' || key === 'random2P')
+    return isRandomModeChoice(value, true) ? (value as PlayOptions[K]) : undefined;
+  if (key === 'battleMode' && value === 'BATTLE') return value as PlayOptions[K];
   // Settings and replays from before the modes store beatoraja's switch as a boolean.
   if (key === 'judgeTimingAutoAdjust' && typeof value === 'boolean')
     return (value ? 'BEATORAJA' : 'OFF') as PlayOptions[K];

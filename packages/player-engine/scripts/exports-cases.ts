@@ -78,6 +78,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.resolvePlayChart(fixtures.controlFlowJSON, { random: () => 0.42 });
     },
   });
+  define('player-engine.lanes.isOnePlayerBattleMode', {
+    run() {
+      lanesAPI.isOnePlayerBattleMode('beatoraja:BATTLE');
+    },
+  });
   define('player-engine.lanes.resolveEffectiveBattleMode', {
     run: () => {
       lanesAPI.resolveEffectiveBattleMode('AUTO', 'lr2', '14', false, 2);
@@ -980,6 +985,50 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.resolveChartGaugeType', {
     run() {
       rulesetAPI.resolveChartGaugeType({ gameLevel: 'DANGER', extra: 'HARD' }, '____');
+    },
+  });
+  define('player-engine.ruleset.isQualifiedOptionName', {
+    run() {
+      rulesetAPI.isQualifiedOptionName('S-RANDOM');
+    },
+  });
+  define('player-engine.ruleset.splitOptionSource', {
+    run() {
+      rulesetAPI.splitOptionSource('beatoraja:S-RANDOM');
+    },
+  });
+  define('player-engine.ruleset.optionValueName', {
+    run() {
+      rulesetAPI.optionValueName('lr2:RANDOM');
+    },
+  });
+  define('player-engine.ruleset.resolveOptionSource', {
+    run() {
+      rulesetAPI.resolveOptionSource('RANDOM', 'beatoraja');
+    },
+  });
+  define('player-engine.ruleset.qualifyOptionValue', {
+    run() {
+      rulesetAPI.qualifyOptionValue('lr2', 'CONVERGE');
+    },
+  });
+  define('player-engine.ruleset.migrateOptionValue', {
+    run() {
+      rulesetAPI.migrateOptionValue('BATTLE', 'beatoraja');
+    },
+  });
+  define('player-engine.ruleset.isKnownOptionSource', {
+    run() {
+      rulesetAPI.isKnownOptionSource('____:CONVERGE');
+    },
+  });
+  define('player-engine.applyChartPlayOptions', {
+    run() {
+      playerAPI.applyChartPlayOptions(
+        { random1P: 'S-RANDOM', random2P: 'OFF', mineModifier: 'OFF' },
+        { version: 1, options: { random: 'ALL+', addMine: true } },
+        { doublePlay: true, hasScratch: true },
+      );
     },
   });
   define('player-engine.ruleset.clampCustomJudgeRate', {

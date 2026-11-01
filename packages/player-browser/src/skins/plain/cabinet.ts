@@ -229,7 +229,8 @@ function drawGraph(
   });
 
   panel(ctx, footer, 'OPTION');
-  text(ctx, runtime.random1P ?? 'OFF', footer.x + footer.w - 8, footer.y + 10, {
+  // A source-qualified lane option shows its bare name (`lr2:RANDOM` as RANDOM, ADR 0019).
+  text(ctx, (runtime.random1P ?? 'OFF').replace(/^[^:]*:/, ''), footer.x + footer.w - 8, footer.y + 10, {
     size: 11,
     weight: 700,
     align: 'right',

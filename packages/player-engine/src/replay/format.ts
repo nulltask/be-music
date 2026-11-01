@@ -1,5 +1,5 @@
-import type { ChartOptionProgram } from '@be-music/chart-model';
-import { parseChartOptionProgram } from './chart-options.ts';
+import type { ChartOptionProgram, ChartPlayOptionProgram } from '@be-music/chart-model';
+import { parseChartOptionProgram, parseChartPlayOptionProgram } from './chart-options.ts';
 import {
   clampCustomJudgeRate,
   DEFAULT_BEATORAJA_CUSTOM_JUDGE,
@@ -149,6 +149,11 @@ export interface ReplayJudgeRank {
 export interface ReplayChart {
   /** Recorded effective display operations; never reinterprets unsupported source declarations. */
   chartOptions?: ChartOptionProgram;
+  /**
+   * The chart-authored gameplay options the play ran with (#844): the forced lane arrangement and ADDMINE (whose
+   * result `notes` already holds) and the judge modifiers a re-simulation applies. Absent when the chart forced none.
+   */
+  chartPlayOptions?: ChartPlayOptionProgram;
   /** Original header BPM, kept separately from the effective tempo map. */
   headerBPM?: number;
   /** Resolved chart BPM extrema, used for source option classification. */
@@ -257,7 +262,10 @@ export interface ReplayPlay {
   gauge: GaugeType;
   /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`); `results.secondPlayer` is its result. */
   gauge2P?: GaugeType;
-  /** Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / ...). */
+  /**
+   * Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'lr2:RANDOM'` / ...). A bare
+   * colliding name (`'RANDOM'`, `'S-RANDOM'`, `'CONVERGE'`) is the played ruleset's own (ADR 0019).
+   */
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
   /** Debug BAD-window override (`PlayerOptions.judgeWindowMs`) — simulations of such plays are non-standard. */
@@ -569,6 +577,8 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
     if (parsed[key] === undefined) delete parsed[key];
   }
   if (chart.chartOptions !== undefined) parsed.chartOptions = parseChartOptionProgram(chart.chartOptions);
+  if (chart.chartPlayOptions !== undefined)
+    parsed.chartPlayOptions = parseChartPlayOptionProgram(chart.chartPlayOptions);
   return parsed;
 }
 
@@ -861,12 +871,20 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   }
   if (play.battleMode !== undefined) {
     if (
-      !['OFF', 'COUPLE', 'SP-TO-DP', 'D-BATTLE', 'BATTLE', 'BATTLE-AS', 'TWO-PLAYER'].includes(
-        play.battleMode as string,
-      )
+      ![
+        'OFF',
+        'COUPLE',
+        'SP-TO-DP',
+        'D-BATTLE',
+        'BATTLE',
+        'beatoraja:BATTLE',
+        '____:BATTLE',
+        'BATTLE-AS',
+        'TWO-PLAYER',
+      ].includes(play.battleMode as string)
     )
       throw new ReplayParseError(
-        'play.battleMode: expected OFF, COUPLE, SP-TO-DP, D-BATTLE, BATTLE, BATTLE-AS or TWO-PLAYER',
+        'play.battleMode: expected OFF, COUPLE, SP-TO-DP, D-BATTLE, BATTLE (bare, beatoraja: or ____:), BATTLE-AS or TWO-PLAYER',
       );
     parsed.battleMode = play.battleMode as EffectiveBattleMode;
   }
