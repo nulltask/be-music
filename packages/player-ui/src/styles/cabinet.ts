@@ -154,6 +154,7 @@ export const cabinetStyles: CSSResult = css`
   }
   .cabinet[data-double-play] .bpm-range > :first-child {
     grid-area: min;
+    justify-self: start;
   }
   .cabinet[data-double-play] .bpm-range > .eyebrow {
     grid-area: label;
@@ -161,6 +162,7 @@ export const cabinetStyles: CSSResult = css`
   }
   .cabinet[data-double-play] .bpm-range > :last-child {
     grid-area: max;
+    justify-self: end;
   }
   .graph-header dl {
     margin-top: calc(var(--px) * 3);
