@@ -565,6 +565,16 @@ export type PlayerCopy = typeof en;
 
 let lang: PlayerLang = 'en';
 
+const langListeners = new Set<() => void>();
+
+/** Runs after {@link setPlayerLang} has written the new copy, so views built in code can rebuild. */
+export function onPlayerLangChange(listener: () => void): () => void {
+  langListeners.add(listener);
+  return () => {
+    langListeners.delete(listener);
+  };
+}
+
 export function playerLang(): PlayerLang {
   return lang;
 }
@@ -587,6 +597,7 @@ export function setPlayerLang(next: PlayerLang, root?: ParentNode): void {
   if (typeof document !== 'undefined') document.documentElement.lang = next;
   const scope = root ?? (typeof document === 'undefined' ? undefined : document);
   if (scope !== undefined) applyPlayerCopy(scope);
+  for (const listener of langListeners) listener();
 }
 
 export function applyPlayerCopy(root: ParentNode): void {
