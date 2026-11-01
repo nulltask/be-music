@@ -2008,6 +2008,18 @@ html.touch-first .shell.in-gameplay .help-button {
 html.touch-first:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) {
   opacity: 0.35;
 }
+/*
+ * During play the collapsed Debug Menu is the corner tab the cabinet layout leaves open. A full-width title covers
+ * the Pause button in that band.
+ */
+html:has(.shell.in-gameplay) .debug-pane-container:has(> .debug-pane:not(.tp-rotv-expanded)) {
+  width: 40px;
+}
+html:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) > .tp-rotv_b .tp-rotv_t {
+  overflow: hidden;
+  white-space: nowrap;
+  color: transparent;
+}
 /* Touch play controls: a pause button during play; Resume / Quit while paused. */
 .touch-controls {
   position: absolute;
