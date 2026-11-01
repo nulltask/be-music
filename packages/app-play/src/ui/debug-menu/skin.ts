@@ -92,7 +92,9 @@ export function buildSkinFolder(
     this.gameplayView?.setJudgedNoteDisplay(value);
   });
   // The same toggle as double-clicking the playfield, for pointers where a double click is awkward.
-  skin.addButton({ title: 'Toggle fullscreen' }).on('click', () => void toggleFullscreen(playerFullscreenElement(document)));
+  skin
+    .addButton({ title: 'Toggle fullscreen' })
+    .on('click', () => void toggleFullscreen(playerFullscreenElement(document)));
   // Per-scene beatoraja skin picker, hidden until a beatoraja theme is dropped — `rebuildBeatorajaSkinPickers()`
   // re-populates it on each load. Selecting a non-default entry for a scene records it on
   // `beatorajaSkinOverridesByType`; the next mount picks it up via `pickBeatorajaSkinEntryWithOverride`.
