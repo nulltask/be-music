@@ -249,6 +249,15 @@ function migrateBMSExtensionHeadersFromExtras(json: BeMusicJSON): void {
       continue;
     }
 
+    const songMatch = command.match(/^SONG([0-9A-Za-z]{2})$/i);
+    if (songMatch) {
+      const key = normalizeObjectKey(songMatch[1]!, idBase);
+      if (!(key in json.bms.songText) && value.length > 0) {
+        json.bms.songText[key] = value;
+      }
+      continue;
+    }
+
     const changeOptionMatch = upper.match(/^CHANGEOPTION([0-9A-Z]{2})$/);
     if (changeOptionMatch) {
       const key = normalizeObjectKey(changeOptionMatch[1]);
@@ -329,6 +338,7 @@ function normalizeBMSExtensions(input: unknown, allowLongKeys: boolean): BeMusic
     stp: [],
     wavCmds: [],
     changeOption: {},
+    songText: {},
     exWAV: {},
     exBMP: {},
     bga: {},
@@ -436,6 +446,7 @@ function normalizeBMSExtensions(input: unknown, allowLongKeys: boolean): BeMusic
     idBase,
     allowLongKeys,
   );
+  normalized.songText = normalizeIndexedBMSExtensionMap(raw.songText ?? raw.song_text, idBase, allowLongKeys);
   normalized.exWAV = normalizeIndexedBMSExtensionMap(
     raw.exWAV ?? raw.exWav ?? raw.ex_wav ?? raw.exwav,
     idBase,

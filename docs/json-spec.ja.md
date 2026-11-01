@@ -155,6 +155,9 @@ classDiagram
     "changeOption": {
       "01": "MIRROR"
     },
+    "songText": {
+      "01": "\"Old title\""
+    },
     "wavCmd": "legacy",
     "wavCmds": ["01 01 64"],
     "exWAV": {
@@ -318,6 +321,7 @@ classDiagram
 - `options`: `#OPTION` の値全体を宣言順で保持する省略可能な配列。空白を含むベンダー引数も分割しません。存在する場合はこちらが宣言を管理し、空配列は legacy 値を消去します
 - `optionHeadersInControlFlow`: 無条件の行も含め、すべての `#OPTION` をファイル順の `controlFlow` に保持するときだけ `true`。分岐解決は有効なプログラムから `options` を一度だけ再構築し、この印を削除します
 - `changeOption`: `#CHANGEOPTIONxx` のマップ
+- `songText`: pomu の `#SONGxx`（`#TEXTxx` の旧名）のマップ。譜面テキストは `resources.text` に定義がない番号に限ってこれを読み、BMS の書き出しは `#SONGxx` のまま出力します。`#SONGxx` を `metadata.extras` に保持していた旧 JSON は、読み込み時にここへ移します
 - `wavCmd`: legacy compatibility のために保持する最初の `#WAVCMD` 値
 - `wavCmds`: すべての `#WAVCMD` 行の directive 後テキスト。宣言順で保持します
 - `exWAV`: `#EXWAVxx` のマップ
