@@ -8,8 +8,9 @@ describe('beatoraja option buttons', () => {
       battleMode: 'OFF',
       dpFlip: true,
     });
+    // The button steps beatoraja's own BATTLE (ADR 0019).
     expect(resolveBeatorajaOptionButton(54, { battleMode: 'OFF', dpFlip: true }, false)).toEqual({
-      battleMode: 'BATTLE',
+      battleMode: 'beatoraja:BATTLE',
       dpFlip: false,
     });
     expect(resolveBeatorajaOptionButton(54, { battleMode: 'BATTLE-AS' }, false)).toEqual({
@@ -21,6 +22,12 @@ describe('beatoraja option buttons', () => {
       dpFlip: false,
     });
     expect(resolveBeatorajaPlayOptionIndex(54, { battleMode: 'BATTLE' })).toBe(2);
+    // Any source's one-player BATTLE shows on the BATTLE slot.
+    expect(resolveBeatorajaPlayOptionIndex(54, { battleMode: '____:BATTLE' })).toBe(2);
+    expect(resolveBeatorajaOptionButton(54, { battleMode: '____:BATTLE' }, false)).toEqual({
+      battleMode: 'BATTLE-AS',
+      dpFlip: false,
+    });
     expect(resolveBeatorajaPlayOptionIndex(54, { dpFlip: true })).toBe(1);
     // An LR2 battle mode is no doubleoption.
     expect(resolveBeatorajaPlayOptionIndex(54, { battleMode: 'TWO-PLAYER' })).toBe(0);
@@ -65,9 +72,9 @@ describe('beatoraja option buttons', () => {
     const order = [
       'OFF',
       'MIRROR',
-      'RANDOM',
+      'beatoraja:RANDOM',
       'R-RANDOM',
-      'S-RANDOM',
+      'beatoraja:S-RANDOM',
       'SPIRAL',
       'H-RANDOM',
       'ALL-SCR',
@@ -96,12 +103,12 @@ describe('beatoraja option buttons', () => {
     const order = [
       'OFF',
       'MIRROR',
-      'RANDOM',
+      'beatoraja:RANDOM',
       'R-RANDOM',
-      'S-RANDOM',
+      'beatoraja:S-RANDOM',
       'SPIRAL',
       'H-RANDOM',
-      'CONVERGE',
+      'beatoraja:CONVERGE',
       'RANDOM_PLAYABLE',
       'S_RANDOM_PLAYABLE',
     ];
@@ -123,6 +130,12 @@ describe('beatoraja option buttons', () => {
       random1P: 'RANDOM_PLAYABLE',
     });
     expect(resolveBeatorajaOptionButton(42, { random1P: 'CONVERGE' }, true)).toEqual({ random1P: 'H-RANDOM' });
+    // Another source's RANDOM keeps the RANDOM slot and steps on to beatoraja's own options (ADR 0019).
+    expect(resolveBeatorajaPlayOptionIndex(42, { random1P: 'lr2:RANDOM' })).toBe(2);
+    expect(resolveBeatorajaOptionButton(42, { random1P: 'lr2:S-RANDOM' }, true)).toEqual({ random1P: 'R-RANDOM' });
+    expect(resolveBeatorajaOptionButton(42, { random1P: 'lr2:CONVERGE' }, false, { pms: true })).toEqual({
+      random1P: 'RANDOM_PLAYABLE',
+    });
     // An option beatoraja does not offer reads as slot 0 (OFF).
     expect(resolveBeatorajaOptionButton(42, { random1P: 'SCATTER' }, false)).toEqual({ random1P: 'MIRROR' });
   });
