@@ -129,17 +129,23 @@ export function resolveGameplayLaneGeometry(
   if (!bounds) return geometry;
   const right = bounds.maxRight === undefined ? geometry.right : Math.min(geometry.right, bounds.maxRight);
   const scale = (right - geometry.left) / (geometry.right - geometry.left || 1);
+  const doublePlay = supportsTouchLayout(playVariant) && geometry.lanes.some((lane) => lane.side === '2P');
+  const shift =
+    bounds.doublePlayCenterX !== undefined && doublePlay
+      ? Math.round(bounds.doublePlayCenterX - (geometry.left + right) / 2)
+      : 0;
   return {
     ...geometry,
     top: bounds.top,
     judgementY: bounds.judgementY,
-    right,
+    left: geometry.left + shift,
+    right: right + shift,
     lanes:
-      scale === 1
+      scale === 1 && shift === 0
         ? geometry.lanes
         : geometry.lanes.map((lane) => ({
             ...lane,
-            x: geometry.left + (lane.x - geometry.left) * scale,
+            x: geometry.left + (lane.x - geometry.left) * scale + shift,
             w: lane.w * scale,
           })),
   };

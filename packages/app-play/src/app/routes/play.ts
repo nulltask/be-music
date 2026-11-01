@@ -96,7 +96,7 @@ export interface PlayRouteDeps {
     | 'recordActiveCourseStage'
   >;
   /** The Leaderboard: a single play given up with ESC is sent as a failed play. */
-  readonly leaderboard: Pick<LeaderboardPanel, 'maybeSubmit'>;
+  readonly leaderboard: Pick<LeaderboardPanel, 'maybeSubmit'> & Partial<Pick<LeaderboardPanel, 'playerName'>>;
   /** The kit the play is drawn with. */
   readonly familyKits: Pick<FamilyKits, 'resolvePlayKit' | 'selectSoundSet'>;
   /** The beatoraja play entry in force, which the Debug Menu's skin pickers and the skin-options panel apply to. */
@@ -495,6 +495,7 @@ export class PlayRoute {
       host: this.sceneHost,
       playOptions,
       scoreTargets: { bestEXScore: this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0 },
+      ...(this.leaderboard.playerName !== undefined ? { playerName: this.leaderboard.playerName } : {}),
       on: {
         exit: onExit,
         finish: (result) => onChartFinished(result),

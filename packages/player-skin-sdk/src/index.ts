@@ -4,9 +4,12 @@
  * WebGPU, or a framework such as PixiJS or three.js. The SDK itself imports no rendering framework.
  *
  * - Declaring a skin: {@link defineBeMusicSkin}, {@link BE_MUSIC_SKIN_API_VERSION}, and the `BeMusicSkin` types.
- * - Stage and layout: {@link wideStage} (the 16:9 stage the built-ins use) and {@link tallStage} (its 9:16 portrait
- *   counterpart, picked with {@link resolveBeMusicStage}), the `BeMusicGameplayLayout` each gameplay frame carries,
- *   {@link resolveLaneRuns}, and {@link resolveMilestoneArea} for placing cut-ins clear of the lanes.
+ * - Stage and layout: {@link wideStage} (the 16:9 stage), {@link cabinetStage} with {@link resolveCabinetLayout} (the
+ *   play screen the built-ins draw) and {@link tallStage} (the 9:16 portrait counterpart, picked with
+ *   {@link resolveBeMusicStage}), the `BeMusicGameplayLayout` each gameplay frame carries, {@link resolveLaneRuns}, and
+ *   {@link resolveMilestoneArea} for placing cut-ins clear of the lanes.
+ * - Score graph and stage: {@link resolveScorePace} (the player against the pacemaker and the best record),
+ *   {@link resolveStageLabel} and {@link resolveDifficultyName}.
  * - Play state: judgment words (`judgeDisplayWord`, the flashing GREAT of a PERFECT), moments (combo milestones, the
  *   clear line, full combo, count-in progress), effect levels, input impulses, and the loading caption.
  * - Sound: `audioDrive` turns the frame's audio analysis into ready-to-use drive values.
@@ -30,6 +33,7 @@ export * from './define.ts';
 export * from './settings.ts';
 export * from './judge-timing.ts';
 export * from './stage.ts';
+export * from './cabinet.ts';
 export * from './layout.ts';
 export * from './touch-layout.ts';
 export * from './portrait.ts';

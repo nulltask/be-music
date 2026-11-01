@@ -117,6 +117,16 @@ flowchart LR
 
 すべてが `tempo` 倍の速さで進みます。エンジンのクロック（`PlayerOptions.speed`）、予約・発音するサンプル、スクロールと判定ライン、BGA の画像と動画（`playbackRate`）、NONSTOP のステージのフェード、結果画面までの譜面時刻での待ちです。スキンのアニメーションのタイマーは実時間のままです。判定は譜面時刻のままなので、プレイの入力と判定はテンポに左右されません。リプレイには `play.tempo` として記録し（[replay.ja.md](./replay.ja.md)）、リプレイはそのテンポで再生します。テンポを変えたプレイは、beatoraja の周波数トレーナーと同じく練習として扱います。ベスト記録は更新しませんが、リプレイの自動保存はし、Leaderboard にも送ります。Leaderboard は順位付けせずに保存します（`unranked: 'tempo'`。状態表示にそう出します。[leaderboard.ja.md](./leaderboard.ja.md) を参照）。コースもテンポを変えて遊べます。すべてのステージがそのテンポで進み、そのプレイは送ってランキング対象外で保存し、コースの記録も更新しません。どの種類のプレイ画面でも使えます。`createPlayScene` の settings に `tempo`、`tempoPitchMode`、`tempoStretchAlgorithm` を渡します。
 
+### 組み込みスキンのプレイ画面
+
+横向きの画面では、組み込みスキン（Synesthesia、Plain、Native）はそれぞれの見た目で、プレイ画面を筐体の配置で表示します。スキン SDK の `resolveCabinetLayout` が `cabinetStage` 上に配置します。
+
+- **プレイエリア:** レーンの上部にレーンカバー（SUDDEN+）が重なります。判定ラインの下に鍵盤、その下にゲージ、スコア、ハイスピードが並びます。
+- **スコアグラフ:** 自分の EX スコアを、ペースメーカー（AAA のライン）と自己ベストのそれぞれ判定済みのノーツ分と比べます。その下にレーンオプションとペースメーカーを表示します。
+- **右の列:** ステージ名（`FREE PLAY`、コースでは `1ST STAGE` … `FINAL STAGE`）、プレイヤー名と譜面の難易度・レベル、タイトルとアーティスト、その下に BGA を置きます。さらにその下に、判定数と FAST / SLOW と直近のタイミング、BPM とその範囲、テンポが並びます。テンポは筐体のエフェクターの位置に表示します。
+
+プレイヤーは自己ベスト（`PlaySceneOptions.scoreTargets`）、コースのステージ、サインイン中の Leaderboard アカウントの名前（`playerName`）、レーンオプション、テンポをスキンに渡します。DP の譜面（10 / 14 KEY と 2 人対戦）はステージの中央に置き、スクラッチを外側にします。ステージ名、譜面、BGA、判定の詳細は左の列に移り、グラフは右に残ります。スコア、左右で共通のゲージ、ハイスピード、BPM はレーンの下に並び、左右の鍵盤の間の枠がゲージを示します。タッチレイアウトと縦向きの画面はそれぞれの HUD のままです。
+
 ### スマートフォンとタブレット
 
 主ポインターが指の端末（`(pointer: coarse)`、またはスマートフォン大の画面でタッチポインターを持つ端末）を、player はタッチ優先として扱います。
@@ -292,7 +302,7 @@ LR2 のプレイビューは be-music の renderer を import せず、LR2 skin 
 
 default gameplay chrome は `@be-music/player-skin-sdk` の lane geometry helper（`lane-geometry.ts`）を使います。
 scratch lane は key lane より幅広く、2P scratch は右側に表示し、DP layout では両 side を SP 幅へ押し込んで全 lane を縮小するのではなく、片側分の lane 幅を保持します。
-default family は通常テキストに LINE Seed JP、判定と combo 表示に Azeret Mono を使います。
+プレイヤー自身のテキスト（LR2 の代わりのフォント、重ね表示、読み込み中の表示）はシステムのサンセリフ、判定と combo 表示はシステムの等幅フォントを使います。プレイヤー自身は Web フォントを読み込みません。
 
 ## beatoraja skin と theme support
 
