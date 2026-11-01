@@ -224,6 +224,7 @@ export class DebugMenu {
   public gauge2PController: ListInputBindingApi<PlayOptions['gauge2P']> | undefined;
   public mRanControllers: PaneBinding[] = [];
   public lr2ExtraModeController: PaneBinding | undefined;
+  public anyKeyController: PaneBinding | undefined;
   public lr2ExtraLevelController: ListInputBindingApi<PlayOptions['lr2ExtraLevel']> | undefined;
   public extraNoteDepthController: PaneBinding | undefined;
   public customJudgeController: PaneBinding | undefined;
@@ -496,6 +497,7 @@ export class DebugMenu {
     if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
     if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
     if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
+    if (this.anyKeyController) this.anyKeyController.hidden = this.guiState.judgeRuleset !== '____';
     const beatoraja = this.guiState.judgeRuleset === 'beatoraja';
     if (!beatoraja && this.guiState.longNoteModifier.startsWith('ADD_')) {
       this.guiState.longNoteModifier = 'OFF';
