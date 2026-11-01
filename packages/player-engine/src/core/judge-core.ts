@@ -1,7 +1,8 @@
 import type { ReplayInputEvent } from '../replay/format.ts';
 import { advanceJudgeState, finishJudgeState, nextTimedJudgmentUs } from './judge-core-advance.ts';
 import { markScorableJudged, markLandmineJudged, markInvisibleJudged } from './judge-core-score.ts';
-import { handleLanePress, handleLaneRelease } from './judge-core-press.ts';
+import { handleLanePress, handleLaneRelease, resolveAnyKeyPressChannels } from './judge-core-press.ts';
+import { AnyKeyRoutes, anyKeyRouteKeys } from './any-key.ts';
 import {
   type JudgeCoreConfig,
   type JudgeCoreEffect,
@@ -40,7 +41,7 @@ export {
   toJudgeClock,
 } from './judge-core-score.ts';
 export { resolveLandmineExplosionEvent } from './judge-core-advance.ts';
-export { hasPressCandidate } from './judge-core-press.ts';
+export { hasPressCandidate, resolveAnyKeyPressChannels } from './judge-core-press.ts';
 
 /** Builds the initial judge state of a play. */
 export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreScore): JudgeCoreState {
@@ -67,6 +68,7 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     longNoteSettleMs: new Map(),
     longHoldReleaseSeconds: new Map(),
     laneHolds: new Map(),
+    anyKeyRoutes: new AnyKeyRoutes(),
     advancedThroughSeconds: 0,
     pendingAutoScratchLongNotes: [],
     autoScratchNotes: config.autoScratch
@@ -106,23 +108,71 @@ export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, e
       advanceJudgeState(state, input.nowSec, input.nowMs, emit);
       return;
     case 'press':
+      if (state.config.anyKey === true) {
+        pressAnyKey(state, input, emit);
+        return;
+      }
       handleLanePress(state, input.channels, input.tokens, input.nowMs, input.nowSec, emit);
       return;
     case 'hold':
-      for (const channel of input.channels) {
-        state.heldChannels.add(channel);
-        if (input.inferred !== true) {
-          emit({ kind: 'ui', command: { kind: 'press-lane', channel } });
-        }
-      }
+      holdLanes(
+        state,
+        state.config.anyKey === true
+          ? state.anyKeyRoutes.routedLanes(anyKeyRouteKeys(input.tokens ?? [], input.channels))
+          : input.channels,
+        input.inferred === true,
+        emit,
+      );
       return;
     case 'release':
+      if (state.config.anyKey === true) {
+        const keys = anyKeyRouteKeys(input.tokens, input.channels);
+        handleLaneRelease(
+          state,
+          { ...input, channels: state.anyKeyRoutes.release(keys, input.channels) },
+          emit,
+          input.channels,
+        );
+        return;
+      }
       handleLaneRelease(state, input, emit);
       return;
     case 'finish':
       finishJudgeState(state, input.totalSeconds, emit);
       return;
   }
+}
+
+/** Holds `channels` down until their release; `inferred` holds show no lane cue. */
+function holdLanes(
+  state: JudgeCoreState,
+  channels: ReadonlySet<string>,
+  inferred: boolean,
+  emit: JudgeCoreEffectSink,
+): void {
+  for (const channel of channels) {
+    state.heldChannels.add(channel);
+    if (!inferred) {
+      emit({ kind: 'ui', command: { kind: 'press-lane', channel } });
+    }
+  }
+}
+
+/**
+ * An ANY KEY press (#751): routed to the lane of the nearest note in reach (`resolveAnyKeyPressChannels`), which its keys
+ * then hold down until they come up. The key's own `hold` may arrive before the press (a replay) or after it (live
+ * input), so the press holds the routed lane itself and a `hold` holds only lanes its keys were already routed to. The
+ * replay records the keys' own lanes, so a simulation routes the press again.
+ */
+function pressAnyKey(
+  state: JudgeCoreState,
+  input: Extract<JudgeCoreInput, { kind: 'press' }>,
+  emit: JudgeCoreEffectSink,
+): void {
+  const lanes = resolveAnyKeyPressChannels(state, input.channels, input.nowSec);
+  state.anyKeyRoutes.route(anyKeyRouteKeys(input.tokens, input.channels), lanes);
+  holdLanes(state, lanes, false, emit);
+  handleLanePress(state, lanes, input.tokens, input.nowMs, input.nowSec, emit, input.channels);
 }
 
 /** {@link runJudgeCoreStep} collecting the effects into an array — `step(state, input) → effects`. */
@@ -225,7 +275,7 @@ function processReplayEventsUntil(
     if (channels.size === 0) continue;
     const eventMs = eventSec * config.judgeMsPerChartSecond;
     if (event.action === 'down') {
-      runJudgeCoreStep(state, { kind: 'hold', channels }, emit);
+      runJudgeCoreStep(state, { kind: 'hold', channels, tokens: event.tokens ?? [] }, emit);
       emit({ kind: 'input-time', seconds: eventSec });
       runJudgeCoreStep(
         state,

@@ -277,6 +277,11 @@ export interface PlayerGUIState extends PlayTempoSettings {
   /** 2P auto scratch for the next play. Two-way synced with the LR2 select panel. */
   autoScratch2P: boolean;
   /**
+   * ANY KEY (That-Which-Must-Not-Be-Named PC, #751) for the next play: each press takes the nearest note on any lane.
+   * Offered with the `____` judge rules only; a play with it saves no record.
+   */
+  anyKey: boolean;
+  /**
    * The built-in and LR2 select screens' sort, key filter and difficulty filter. Two-way synced with an LR2 select
    * skin's sort and filter buttons; the beatoraja select screen has its own MODE and SORT buttons.
    */
