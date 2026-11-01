@@ -42,7 +42,7 @@ export interface SelectRouteDeps {
   /** The library the screen lists. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The best records the screen shows on its bars. */
-  readonly records: Pick<RecordsService, 'lookupChartBestRecord' | 'currentRulesetRecords'>;
+  readonly records: Pick<RecordsService, 'lookupChartBestRecord' | 'currentRulesetRecords' | 'currentDanRanks'>;
   /** The course run: where the cursor goes back to once a course is over. */
   readonly courses: Pick<CourseRunService, 'takeReturnNavigation'>;
   /** Starts a course bar's run. */
@@ -224,6 +224,7 @@ export class SelectRoute {
         chart: (chartEntry) => this.records.lookupChartBestRecord(chartEntry),
         course: (course) =>
           lookupCourseBestRecord(course, this.records.currentRulesetRecords(), this.guiState.nonstopPlacement),
+        danRanks: () => this.records.currentDanRanks(),
         replaySlots: (entry) => this.replaySlots.exists(entry),
       },
       sounds,

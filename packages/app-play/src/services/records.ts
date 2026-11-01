@@ -12,11 +12,12 @@ import {
   mergeBestRecord,
   mergeCourseStageRecord,
   type BestRecord,
+  type DanRank,
   type RecordPlay,
 } from '@be-music/player-engine/records';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
 import type { LibraryChart } from '@be-music/player-scene-model';
-import type { BeMusicChartBestRecord } from '@be-music/player-skin-sdk';
+import type { BeMusicChartBestRecord, BeMusicDanRank } from '@be-music/player-skin-sdk';
 import {
   readStoredChartBestRecords,
   rulesetRecordKey,
@@ -24,6 +25,7 @@ import {
   chartBestRecordKey,
   storeChartBestRecords,
 } from '../chart-best-records.ts';
+import { listDanRanks, mergeDanRank, readStoredDanRanks, storeDanRanks } from '../dan-ranks.ts';
 
 export interface RecordsServiceOptions {
   /** The library the charts are hashed from: the sources their files are in. */
@@ -36,6 +38,10 @@ export interface RecordsServiceOptions {
 export class RecordsService {
   /** Best record per chart ({@link chartBestRecordKey}), persisted in `localStorage` and shown to be-music select skins. */
   public readonly chartBestRecords: Map<string, BestRecord> = readStoredChartBestRecords();
+  /** The highest dan cleared per judge ruleset and key mode (`danRankKey`), persisted in `localStorage`. */
+  public readonly danRanks: Map<string, DanRank> = readStoredDanRanks();
+  /** {@link currentDanRanks}'s answer, kept until a rank changes or the judge ruleset does. */
+  private danRankList: { ruleset: RulesetId; list: readonly BeMusicDanRank[] } | undefined;
   /**
    * Record key of the play in flight when it counts towards the chart's best record, latched at song start. `undefined`
    * for autoplay and replay plays, which never touch the records.
@@ -164,5 +170,28 @@ export class RecordsService {
     this.chartBestRecords.set(update.key, mergeBestRecord(previous, update.play));
     storeChartBestRecords(this.chartBestRecords);
     return { previous };
+  }
+
+  /**
+   * Keeps the dan rank a GRADE course run certified (`resolveDanRankUpdate`), when it is higher than the one held in its
+   * key mode. Returns the rank as it was before, or `undefined` when the run certified none.
+   */
+  public recordDanRank(
+    update: { key: string; rank: DanRank } | undefined,
+  ): { previous: DanRank | undefined } | undefined {
+    if (update === undefined) return undefined;
+    const kept = mergeDanRank(this.danRanks, update);
+    this.danRankList = undefined;
+    storeDanRanks(this.danRanks);
+    return kept;
+  }
+
+  /** The dan ranks of the current judge ruleset, by key mode: the ones the select screen shows. */
+  public currentDanRanks(): readonly BeMusicDanRank[] {
+    const ruleset = this.judgeRuleset();
+    if (this.danRankList?.ruleset !== ruleset) {
+      this.danRankList = { ruleset, list: listDanRanks(this.danRanks, ruleset) };
+    }
+    return this.danRankList.list;
   }
 }

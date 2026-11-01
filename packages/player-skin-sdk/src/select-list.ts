@@ -1,4 +1,4 @@
-import type { BeMusicCourseBestRecord, LibraryCourse, LibraryEntry } from './chart.ts';
+import type { BeMusicCourseBestRecord, BeMusicDanRank, LibraryCourse, LibraryEntry } from './chart.ts';
 
 /** One row of the select list to draw this frame. */
 export interface SelectListRow {
@@ -109,4 +109,15 @@ export function describeCourseCard(
     detail: [`${kind} · ${count}`, ...best].join(' · '),
     stages: course.stages.map((stage) => stage.title),
   };
+}
+
+/**
+ * The player's dan ranks (`frame.danRanks`) on one line, fewest keys first: `7K 七段 · 14K 初段`. Empty without any.
+ */
+export function describeDanRanks(ranks: readonly BeMusicDanRank[] | undefined): string {
+  if (ranks === undefined || ranks.length === 0) return '';
+  return [...ranks]
+    .sort((a, b) => a.keyMode - b.keyMode)
+    .map((rank) => `${rank.keyMode}K ${rank.label}`)
+    .join(' · ');
 }
