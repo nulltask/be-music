@@ -105,6 +105,10 @@ describe('page language', () => {
     const about = await html('/about', ja);
     expect(about).toContain('<title>このサイトについて');
     expect(about).toContain('プレイの採点');
+    expect(about).toContain('パブリックベータ');
+    expect(about).toContain('データは予告なく削除されることがあります。');
+    expect(about).not.toContain('Public Beta');
+    expect(about).not.toContain('ベータ版');
     expect(about).toContain('href="#replays"');
     expect(about).toContain('id="replays"');
     const help = await html('/help', ja);
@@ -127,6 +131,11 @@ describe('about and help pages', () => {
     expect(about.html).toContain('One play, three sets of rules');
     expect(about.html).toContain('id="replays"');
     expect(about.html).toContain('href="#replays"');
+    expect(about.html).toContain('Public Beta');
+    expect(about.html).toContain('Data may be deleted without notice.');
+    expect(about.html).toContain('Rankings may be reset while scoring rules settle.');
+    expect(about.html).not.toContain('パブリックベータ');
+    expect(about.html).not.toContain('>beta</span>');
     expect(about.html).toContain('href="https://github.com/nulltask/be-music"');
     expect((await page('/')).html).toContain('href="/about"');
   });
@@ -571,4 +580,6 @@ test('renders deployment metadata in the shared page footer', async () => {
   expect(footer).toContain('href="https://play.be-music.app/">Play</a>');
   expect(footer).toContain('href="/about"');
   expect(footer).toContain('© 2026 nulltask · MIT License');
+  expect(footer).toContain('<p lang="en">Public Beta. Data may be deleted without notice.</p>');
+  expect(footer.indexOf('Public Beta. Data may be deleted without notice.')).toBeLessThan(footer.indexOf('<nav'));
 });

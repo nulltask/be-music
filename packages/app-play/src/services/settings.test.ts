@@ -266,7 +266,7 @@ describe('createPlayerGUIState', () => {
     const state = create(
       memoryStorage({
         [DEBUG_MENU_SETTINGS_STORAGE_KEY]: JSON.stringify({
-          version: 1,
+          version: 0,
           updatedAt: 1,
           settings: { gauge: 'HARD', autoPlay: true, peakGain: true, judgeRuleset: 'beatoraja' },
         }),

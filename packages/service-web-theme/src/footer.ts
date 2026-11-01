@@ -1,4 +1,6 @@
 import { renderBuildInfo, type BuildInfo } from './build-info.ts';
+import type { Locale } from './locale.ts';
+import { renderPublicBetaNotice } from './public-beta.ts';
 
 /** Dashboard, Accounts, Play, then Leaderboard. Donate is not in this row. */
 export const SERVICE_NAMES = ['dashboard', 'accounts', 'play', 'leaderboard'] as const;
@@ -43,6 +45,11 @@ export interface ServiceFooterInput {
   navLabel?: string;
   /** Extra class on the footer element, for a site that positions it. */
   className?: string;
+  /**
+   * Language of the Public Beta line. `both` includes English and Japanese, for the player, which keeps both on the
+   * page. Omitted means English.
+   */
+  locale?: Locale | 'both';
 }
 
 function escapeHTML(value: string): string {
@@ -89,8 +96,8 @@ function footerOrigins(input: ServiceFooterInput): Record<ServiceName, string> {
 }
 
 /**
- * The shared service footer, in order: links to the other services (the current one is text), this site's own content,
- * the copyright line, then the build timestamp and source revision.
+ * The shared service footer, in order: the Public Beta line, links to the other services (the current one is text),
+ * this site's own content, the copyright line, then the build timestamp and source revision.
  */
 export function renderServiceFooter(input: ServiceFooterInput = {}): string {
   const origins = footerOrigins(input);
@@ -105,5 +112,6 @@ export function renderServiceFooter(input: ServiceFooterInput = {}): string {
     input.className === undefined || input.className === ''
       ? SERVICE_FOOTER_CLASS
       : `${SERVICE_FOOTER_CLASS} ${escapeHTML(input.className)}`;
-  return `<footer class="${footerClass}"><nav class="${SERVICE_FOOTER_NAV_CLASS}" aria-label="${escapeHTML(input.navLabel ?? 'Services')}">${links}</nav>${site}<p>${escapeHTML(input.copyright ?? SERVICE_COPYRIGHT)}</p>${renderBuildInfo(input.buildInfo)}</footer>`;
+  const notice = renderPublicBetaNotice(input.locale ?? 'en');
+  return `<footer class="${footerClass}">${notice}<nav class="${SERVICE_FOOTER_NAV_CLASS}" aria-label="${escapeHTML(input.navLabel ?? 'Services')}">${links}</nav>${site}<p>${escapeHTML(input.copyright ?? SERVICE_COPYRIGHT)}</p>${renderBuildInfo(input.buildInfo)}</footer>`;
 }

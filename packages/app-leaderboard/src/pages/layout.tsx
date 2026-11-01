@@ -416,7 +416,7 @@ function footerIcon(svg: string): string {
   return `<span class="inline-flex shrink-0 [&>svg]:size-4 [&>svg]:size-3" aria-hidden="true">${svg.trim()}</span>`;
 }
 
-/** About, Help, the API and the source, then the beta notice. Copyright and the build line are the shared footer. */
+/** About, Help, the API and the source, then the note that rankings may be reset. Public Beta is the shared footer. */
 function leaderboardSiteFooter(t: Messages): string {
   return `<nav class="${SERVICE_FOOTER_NAV_CLASS}" aria-label="${escapeFooter(t.footer.label)}"><a class="${FOOTER_LINK}" href="/about">${escapeFooter(t.footer.about)}</a><a class="${FOOTER_LINK}" href="/help">${escapeFooter(t.footer.help)}</a><a class="${FOOTER_LINK}" href="/api-reference" target="_blank" rel="noopener" title="${escapeFooter(t.footer.apiTitle)}">${escapeFooter(t.footer.api)}${footerIcon(ExternalLink)}</a><a class="${FOOTER_LINK}" href="${SOURCE_URL}" target="_blank" rel="noopener noreferrer" title="${escapeFooter(t.footer.githubTitle)}">${escapeFooter(t.footer.github)}${footerIcon(ExternalLink)}</a></nav><p>${escapeFooter(t.footer.beta)}</p>`;
 }
@@ -772,6 +772,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
               siteHTML: leaderboardSiteFooter(t),
               copyright: t.footer.copyright,
               buildInfo: props.meta.buildInfo,
+              locale: props.meta.locale,
             }),
           )}
         </MessagesContext.Provider>

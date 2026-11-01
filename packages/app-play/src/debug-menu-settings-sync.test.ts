@@ -24,7 +24,7 @@ function memory(): Storage {
   };
 }
 const doc = (updatedAt = 20, gauge: 'HARD' | 'EASY' = 'HARD'): DebugMenuSettingsDocument => ({
-  version: 1,
+  version: 0,
   updatedAt,
   settings: { gauge },
 });
@@ -142,7 +142,7 @@ describe('DebugMenuSettingsSync', () => {
     }).reset();
     const doFetch = vi.fn<typeof fetch>(async (_url, init) =>
       init?.method === 'DELETE'
-        ? result({ version: 1, updatedAt: 500, settings: {}, deleted: true })
+        ? result({ version: 0, updatedAt: 500, settings: {}, deleted: true })
         : result(JSON.parse(init?.body as string)),
     );
     const next = new DebugMenuSettingsSync({ storage, fetch: doFetch });
@@ -152,6 +152,16 @@ describe('DebugMenuSettingsSync', () => {
     expect(readStoredDebugMenuSettings(storage)).toMatchObject({ settings: { gauge: 'EASY' } });
     expect(readStoredDebugMenuSettings(storage)!.updatedAt).toBeGreaterThan(500);
     expect(JSON.parse(doFetch.mock.calls[1]![1]!.body as string).updatedAt).toBeGreaterThan(500);
+  });
+
+  test('ignores a remote document stamped with an older version', async () => {
+    const storage = memory();
+    storage.setItem(DEBUG_MENU_SETTINGS_STORAGE_KEY, JSON.stringify(doc()));
+    await new DebugMenuSettingsSync({
+      storage,
+      fetch: async () => result({ version: 1, updatedAt: 500, settings: { gauge: 'EASY' } }),
+    }).reconcile();
+    expect(readStoredDebugMenuSettings(storage)?.settings.gauge).toBe('HARD');
   });
 
   test('restores a newer remote document before boot', async () => {
@@ -168,7 +178,7 @@ describe('DebugMenuSettingsSync', () => {
     storage.setItem('be-music.chart-best-records', 'keep');
     const doFetch = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(result({ version: 1, updatedAt: 500, settings: {}, deleted: true }))
+      .mockResolvedValueOnce(result({ version: 0, updatedAt: 500, settings: {}, deleted: true }))
       .mockImplementation(async (_url, init) => result(JSON.parse(init?.body as string)));
     const sync = new DebugMenuSettingsSync({ storage, fetch: doFetch });
     await sync.reconcile();

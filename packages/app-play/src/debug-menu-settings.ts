@@ -37,8 +37,11 @@ import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
 
 /** `localStorage` key of the whole Debug Menu document. Reset deletes it with the other `be-music.*` settings. */
 export const DEBUG_MENU_SETTINGS_STORAGE_KEY = 'be-music.debug-menu-settings';
-/** Bumped when the stored shape changes; another version is ignored. */
-const DOCUMENT_VERSION = 1;
+/**
+ * The stored document's revision. `0` while the shape is still being defined: it may change incompatibly without the
+ * number moving. Any other stamp is unreadable. The worker copy uses the same number.
+ */
+const DOCUMENT_VERSION = 0;
 
 type RandomMode = PlayerGUIState['random1P'];
 type SkinEffects = PlayerGUIState['skinEffects'];
@@ -165,7 +168,7 @@ export interface DebugMenuSettings {
 
 /** The document in `localStorage` and on the player origin. `settings` holds only the fields that were saved. */
 export interface DebugMenuSettingsDocument {
-  version: 1;
+  version: 0;
   updatedAt: number;
   settings: Partial<DebugMenuSettings>;
   /** Reset barrier kept remotely without retaining any settings values. */
@@ -413,7 +416,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   }
   if (typeof raw.skinSettings === 'object' && raw.skinSettings !== null && !Array.isArray(raw.skinSettings)) {
     settings.skinSettings = Object.fromEntries(
-      parseStoredSkinSettings(JSON.stringify({ version: 1, skins: raw.skinSettings })),
+      parseStoredSkinSettings(JSON.stringify({ version: 0, skins: raw.skinSettings })),
     );
   }
   if (Array.isArray(raw.courseTableURLs)) {

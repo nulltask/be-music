@@ -31,7 +31,7 @@ describe('parseDebugMenuSettingsDocument', () => {
   test('keeps a known setting and drops an unknown one', () => {
     const document = parseDebugMenuSettingsDocument(
       JSON.stringify({
-        version: 1,
+        version: 0,
         updatedAt: 10,
         settings: { gauge: 'HARD', autoPlay: true, judgedNoteDisplay: 'NOPE', peakGain: true },
       }),
@@ -40,7 +40,10 @@ describe('parseDebugMenuSettingsDocument', () => {
     expect(document?.settings.judgedNoteDisplay).toBeUndefined();
   });
 
-  test('ignores another version', () => {
+  test('ignores an older or foreign version', () => {
+    expect(
+      parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings: { gauge: 'HARD' } })),
+    ).toBeUndefined();
     expect(parseDebugMenuSettingsDocument(JSON.stringify({ version: 2, updatedAt: 1, settings: {} }))).toBeUndefined();
   });
 });
@@ -63,7 +66,7 @@ describe('writeDebugMenuSettings', () => {
     const storage = memory();
     writeDebugMenuSettings(
       {
-        version: 1,
+        version: 0,
         updatedAt: 8,
         settings: { masterVolume: 12, muted: false, keyVolume: 100, bgmVolume: 80, gauge: 'EASY' },
       },
@@ -228,7 +231,7 @@ describe('captureDebugMenuSettings', () => {
       skinSettings: new Map(Object.entries(expected.skinSettings)),
       updatedAt: 42,
     });
-    expect(captured).toEqual({ version: 1, updatedAt: 42, settings: expected });
+    expect(captured).toEqual({ version: 0, updatedAt: 42, settings: expected });
     writeDebugMenuSettings(captured, storage);
     expect(readStoredDebugMenuSettings(storage)).toEqual(captured);
     const restored = create();
@@ -244,24 +247,24 @@ describe('captureDebugMenuSettings', () => {
   test('normalizes a reset to metadata only and rejects negative revisions', () => {
     expect(
       parseDebugMenuSettingsDocument(
-        JSON.stringify({ version: 1, updatedAt: 42, settings: { gauge: 'HARD' }, deleted: true }),
+        JSON.stringify({ version: 0, updatedAt: 42, settings: { gauge: 'HARD' }, deleted: true }),
       ),
-    ).toEqual({ version: 1, updatedAt: 42, settings: {}, deleted: true });
-    expect(parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: -1, settings: {} }))).toBeUndefined();
+    ).toEqual({ version: 0, updatedAt: 42, settings: {}, deleted: true });
+    expect(parseDebugMenuSettingsDocument(JSON.stringify({ version: 0, updatedAt: -1, settings: {} }))).toBeUndefined();
   });
 });
 
 test('persists both sides of R-RANDOM in Debug Menu settings', () => {
   const settings = { random1P: 'R-RANDOM', random2P: 'R-RANDOM' };
   expect(
-    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);
 });
 
 test('persists and validates the H-RANDOM source configuration', () => {
   expect(
     parseDebugMenuSettingsDocument(
-      JSON.stringify({ version: 1, updatedAt: 1, settings: { random1P: 'H-RANDOM', hRandomThresholdBPM: 300 } }),
+      JSON.stringify({ version: 0, updatedAt: 1, settings: { random1P: 'H-RANDOM', hRandomThresholdBPM: 300 } }),
     )?.settings,
   ).toMatchObject({ random1P: 'H-RANDOM', hRandomThresholdBPM: 300 });
 });
@@ -269,21 +272,21 @@ test('persists and validates the H-RANDOM source configuration', () => {
 test('persists per-side LR2 CONVERGE targets', () => {
   const settings = { random1P: 'CONVERGE', randomFixedLane1P: 3, randomFixedLane2P: 7 };
   expect(
-    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);
 });
 
 test('persists large seed values as decimal strings', () => {
   const settings = { randomSeed1P: '9223372036854775807', randomSeed2P: '-1' };
   expect(
-    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);
 });
 
 test('persists mine REMOVE independently of note drawing preferences', () => {
   expect(
     parseDebugMenuSettingsDocument(
-      JSON.stringify({ version: 1, updatedAt: 1, settings: { mineModifier: 'REMOVE', showInvisibleNotes: true } }),
+      JSON.stringify({ version: 0, updatedAt: 1, settings: { mineModifier: 'REMOVE', showInvisibleNotes: true } }),
     )?.settings,
   ).toMatchObject({ mineModifier: 'REMOVE', showInvisibleNotes: true });
 });
@@ -291,7 +294,7 @@ test('persists mine REMOVE independently of note drawing preferences', () => {
 test('gauge auto-shift CONTINUE is retained in saved settings', () => {
   expect(
     parseDebugMenuSettingsDocument(
-      JSON.stringify({ version: 1, updatedAt: 1, settings: { gaugeAutoShift: 'CONTINUE' } }),
+      JSON.stringify({ version: 0, updatedAt: 1, settings: { gaugeAutoShift: 'CONTINUE' } }),
     )?.settings,
   ).toMatchObject({ gaugeAutoShift: 'CONTINUE' });
 });
@@ -299,28 +302,28 @@ test('gauge auto-shift CONTINUE is retained in saved settings', () => {
 test('floating speed persistence keeps source precision and values above the generic speed cap', () => {
   const settings = { floatingHiSpeed: true, hiSpeed: 8 + 1 / 300 };
   expect(
-    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);
 });
 
 test('fixed display area persists independently from floating mode', () => {
   const settings = { fixedDisplayArea: true, floatingHiSpeed: false };
   expect(
-    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);
 });
 
 test('ADD LN and its generation probability persist independently of the original modifier choices', () => {
   const settings = { longNoteModifier: 'ADD_LN', longNoteRate: 0.375 };
   expect(
-    parseDebugMenuSettingsDocument(JSON.stringify({ version: 1, updatedAt: 1, settings }))?.settings,
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);
 });
 
 test('persists the automatic judge-timing mode, migrating the earlier beatoraja switch, without coercing invalid values', () => {
   const read = (value: unknown) =>
     parseDebugMenuSettingsDocument(
-      JSON.stringify({ version: 1, updatedAt: 1, settings: { judgeTimingAutoAdjust: value } }),
+      JSON.stringify({ version: 0, updatedAt: 1, settings: { judgeTimingAutoAdjust: value } }),
     )?.settings;
   for (const mode of ['OFF', 'BEATORAJA', 'LR2-ON', 'LR2-SILENT'])
     expect(read(mode)).toMatchObject({ judgeTimingAutoAdjust: mode });
@@ -334,7 +337,7 @@ test('persists the automatic judge-timing mode, migrating the earlier beatoraja 
 test('persists the source SURVIVAL TO GROOVE policy', () => {
   expect(
     parseDebugMenuSettingsDocument(
-      JSON.stringify({ version: 1, updatedAt: 1, settings: { gaugeAutoShift: 'SURVIVAL_TO_GROOVE' } }),
+      JSON.stringify({ version: 0, updatedAt: 1, settings: { gaugeAutoShift: 'SURVIVAL_TO_GROOVE' } }),
     )?.settings,
   ).toMatchObject({ gaugeAutoShift: 'SURVIVAL_TO_GROOVE' });
 });
@@ -343,13 +346,13 @@ test('persists BEST CLEAR and validates the three source lower-bound choices', (
   for (const bottomShiftableGauge of ['ASSIST-EASY', 'EASY', 'GROOVE']) {
     expect(
       parseDebugMenuSettingsDocument(
-        JSON.stringify({ version: 1, updatedAt: 1, settings: { gaugeAutoShift: 'BEST_CLEAR', bottomShiftableGauge } }),
+        JSON.stringify({ version: 0, updatedAt: 1, settings: { gaugeAutoShift: 'BEST_CLEAR', bottomShiftableGauge } }),
       )?.settings,
     ).toMatchObject({ gaugeAutoShift: 'BEST_CLEAR', bottomShiftableGauge });
   }
   expect(
     parseDebugMenuSettingsDocument(
-      JSON.stringify({ version: 1, updatedAt: 1, settings: { bottomShiftableGauge: 'HARD' } }),
+      JSON.stringify({ version: 0, updatedAt: 1, settings: { bottomShiftableGauge: 'HARD' } }),
     )?.settings,
   ).not.toHaveProperty('bottomShiftableGauge');
 });
@@ -358,7 +361,7 @@ test('persists SELECT TO UNDER with its independent lower bound', () => {
   expect(
     parseDebugMenuSettingsDocument(
       JSON.stringify({
-        version: 1,
+        version: 0,
         updatedAt: 1,
         settings: { gaugeAutoShift: 'SELECT_TO_UNDER', bottomShiftableGauge: 'GROOVE' },
       }),
@@ -368,7 +371,7 @@ test('persists SELECT TO UNDER with its independent lower bound', () => {
 
 test('scroll REMOVE parses and restores independently of visual CONSTANT', () => {
   const document = parseDebugMenuSettingsDocument(
-    JSON.stringify({ version: 1, updatedAt: 1, settings: { scrollModifier: 'REMOVE', visualConstant: false } }),
+    JSON.stringify({ version: 0, updatedAt: 1, settings: { scrollModifier: 'REMOVE', visualConstant: false } }),
   );
   expect(document?.settings.scrollModifier).toBe('REMOVE');
   const state = { scrollModifier: 'OFF', visualConstant: false } as PlayerGUIState;
@@ -379,21 +382,21 @@ test('scroll REMOVE parses and restores independently of visual CONSTANT', () =>
 
 test('scroll ADD parameters persist with source bounds', () => {
   const settings = parseDebugMenuSettingsDocument(
-    JSON.stringify({ version: 1, updatedAt: 1, settings: { scrollModifier: 'ADD', scrollSection: 0, scrollRate: 5 } }),
+    JSON.stringify({ version: 0, updatedAt: 1, settings: { scrollModifier: 'ADD', scrollSection: 0, scrollRate: 5 } }),
   )!.settings;
   expect(settings).toMatchObject({ scrollModifier: 'ADD', scrollSection: 1, scrollRate: 1 });
 });
 
 test('P.ATTACK survives settings parsing with its canonical recorded identifier', () => {
   const document = parseDebugMenuSettingsDocument(
-    JSON.stringify({ version: 1, updatedAt: 1, settings: { judgeRuleset: 'lr2', gauge: 'P-ATTACK' } }),
+    JSON.stringify({ version: 0, updatedAt: 1, settings: { judgeRuleset: 'lr2', gauge: 'P-ATTACK' } }),
   );
   expect(document?.settings).toMatchObject({ judgeRuleset: 'lr2', gauge: 'P-ATTACK' });
 });
 
 test('G.ATTACK keeps its canonical identifier through stored settings', () => {
   const document = parseDebugMenuSettingsDocument(
-    JSON.stringify({ version: 1, updatedAt: 1, settings: { judgeRuleset: 'lr2', gauge: 'G-ATTACK' } }),
+    JSON.stringify({ version: 0, updatedAt: 1, settings: { judgeRuleset: 'lr2', gauge: 'G-ATTACK' } }),
   );
   expect(document?.settings).toMatchObject({ judgeRuleset: 'lr2', gauge: 'G-ATTACK' });
 });
@@ -401,7 +404,7 @@ test('G.ATTACK keeps its canonical identifier through stored settings', () => {
 test('EXTRA depth and scratch persist with source validation', () => {
   const document = parseDebugMenuSettingsDocument(
     JSON.stringify({
-      version: 1,
+      version: 0,
       updatedAt: 1,
       settings: {
         judgeRuleset: 'beatoraja',
@@ -419,7 +422,7 @@ test('EXTRA depth and scratch persist with source validation', () => {
 test('LR2 EXTRA selection and source minimum level survive settings round trips', () => {
   const parsed = parseDebugMenuSettingsDocument(
     JSON.stringify({
-      version: 1,
+      version: 0,
       updatedAt: 1,
       settings: { judgeRuleset: 'lr2', lr2ExtraMode: true, lr2ExtraLevel: 2 },
     }),
@@ -457,14 +460,14 @@ test('LR2 EXTRA selection and source minimum level survive settings round trips'
   expect(state).toMatchObject({ lr2ExtraMode: true, lr2ExtraLevel: 2 });
   expect(
     parseDebugMenuSettingsDocument(
-      JSON.stringify({ version: 1, updatedAt: 1, settings: { lr2ExtraMode: 'yes', lr2ExtraLevel: 3 } }),
+      JSON.stringify({ version: 0, updatedAt: 1, settings: { lr2ExtraMode: 'yes', lr2ExtraLevel: 3 } }),
     )!.settings,
   ).not.toHaveProperty('lr2ExtraLevel');
 });
 
 test('SP TO DP persists as a source battle mode', () => {
   const document = parseDebugMenuSettingsDocument(
-    JSON.stringify({ version: 1, updatedAt: 1, settings: { judgeRuleset: 'lr2', battleMode: 'SP-TO-DP' } }),
+    JSON.stringify({ version: 0, updatedAt: 1, settings: { judgeRuleset: 'lr2', battleMode: 'SP-TO-DP' } }),
   );
   expect(document?.settings.battleMode).toBe('SP-TO-DP');
   const state = { battleMode: 'OFF' } as PlayerGUIState;
@@ -474,7 +477,7 @@ test('SP TO DP persists as a source battle mode', () => {
 
 test('7-to-9 pattern and scratch type persist through settings parsing and GUI restore', () => {
   const document = parseDebugMenuSettingsDocument(
-    JSON.stringify({ version: 1, updatedAt: 1, settings: { sevenToNinePattern: 6, sevenToNineType: 2 } }),
+    JSON.stringify({ version: 0, updatedAt: 1, settings: { sevenToNinePattern: 6, sevenToNineType: 2 } }),
   );
   expect(document?.settings).toMatchObject({ sevenToNinePattern: 6, sevenToNineType: 2 });
   const state = { sevenToNinePattern: 0, sevenToNineType: 0 } as PlayerGUIState;
