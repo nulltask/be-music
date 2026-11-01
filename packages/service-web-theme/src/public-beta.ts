@@ -12,9 +12,9 @@ export const PUBLIC_BETA_DELETION: Readonly<Record<Locale, string>> = {
   ja: 'データは予告なく削除されることがあります。',
 };
 
-/** The label and the deletion warning as one line. Japanese uses an ideographic full stop and no space. */
+/** The label and the deletion warning as one line. Japanese joins them with のため and no space. */
 export function publicBetaNotice(locale: Locale): string {
-  if (locale === 'ja') return `${PUBLIC_BETA_LABEL.ja}。${PUBLIC_BETA_DELETION.ja}`;
+  if (locale === 'ja') return `${PUBLIC_BETA_LABEL.ja}のため${PUBLIC_BETA_DELETION.ja}`;
   return `${PUBLIC_BETA_LABEL.en}. ${PUBLIC_BETA_DELETION.en}`;
 }
 
