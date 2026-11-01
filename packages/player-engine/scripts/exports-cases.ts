@@ -900,6 +900,41 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.courseRunKeepsRecord(benchCourseLog);
     },
   });
+  define('player-engine.records.isDanRank', {
+    run: () => {
+      recordsAPI.isDanRank('INSANE_3');
+    },
+  });
+  define('player-engine.records.danRankOrder', {
+    run: () => {
+      recordsAPI.danRankOrder('KAIDEN');
+    },
+  });
+  define('player-engine.records.betterDanRank', {
+    run: () => {
+      recordsAPI.betterDanRank('DAN_9', 'INSANE_1');
+    },
+  });
+  define('player-engine.records.recognizeDanRank', {
+    run: () => {
+      recordsAPI.recognizeDanRank('GENOSIDE 2018 段位認定 発狂初段');
+    },
+  });
+  define('player-engine.records.formatDanRank', {
+    run: () => {
+      recordsAPI.formatDanRank('INSANE_5');
+    },
+  });
+  define('player-engine.records.resolveCourseRunDanRank', {
+    run: () => {
+      recordsAPI.resolveCourseRunDanRank({ kind: 'grade', name: '十段', lamp: 'NORMAL' });
+    },
+  });
+  define('player-engine.records.mergeDanRankRecord', {
+    run: () => {
+      recordsAPI.mergeDanRankRecord({ rank: 'DAN_9', course: '九段' }, { rank: 'DAN_10', course: '十段' });
+    },
+  });
   define('player-engine.ruleset.clampCustomJudgeRate', {
     run() {
       rulesetAPI.clampCustomJudgeRate('keyPerfectGreat', 10);
