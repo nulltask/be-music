@@ -5,6 +5,7 @@ import {
   createBmsonSamplePlaybackMap,
   createTimingResolver,
   createBeatResolver,
+  resolveReferencedBmsWAVResources,
 } from './index.ts';
 
 function chart(events: BeMusicEvent[]) {
@@ -64,5 +65,46 @@ describe('bmson sound slices', () => {
     // Two beats at 120 BPM (0.5 s each), then beats at 240 BPM (0.25 s each).
     expect(triggers.map((t) => t.sampleOffsetSeconds)).toEqual([0, 0.5, 1, 1.25]);
     expect(triggers.map((t) => t.sampleDurationSeconds)).toEqual([0.5, 0.5, 0.25, undefined]);
+  });
+});
+
+describe('resolveReferencedBmsWAVResources', () => {
+  test('keeps the slots a sample event names and drops declared-only, landmine and tweak-only slots', () => {
+    const json = createEmptyJSON('bms');
+    json.resources.wav = {
+      '01': 'bgm.wav',
+      '02': 'note.wav',
+      '03': 'invisible.wav',
+      '04': 'ln.wav',
+      '05': 'unused.wav',
+    };
+    json.resources.wav['0A'] = 'mine-value.wav';
+    json.bms.exWAV = { '02': 'v 0 extended.wav', '06': 'v 0 only-exwav.wav' };
+    json.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: '01' },
+      { measure: 0, channel: '11', position: [0, 1], value: '02' },
+      { measure: 0, channel: '31', position: [0, 1], value: '03' },
+      { measure: 0, channel: '51', position: [0, 1], value: '04' },
+      // A landmine's value is its damage, not a sample.
+      { measure: 0, channel: 'D1', position: [0, 1], value: '0A' },
+      // A BGA cue shares the key space but plays no sound.
+      { measure: 0, channel: '04', position: [0, 1], value: '05' },
+    ];
+    expect(resolveReferencedBmsWAVResources(json)).toEqual({
+      '01': 'bgm.wav',
+      '02': 'extended.wav',
+      '03': 'invisible.wav',
+      '04': 'ln.wav',
+    });
+  });
+
+  test('matches lower-case base-36 values and bmson sound channel names', () => {
+    const bms = createEmptyJSON('bms');
+    bms.resources.wav = { AB: 'kick.wav' };
+    bms.events = [{ measure: 0, channel: '11', position: [0, 1], value: 'ab' }];
+    expect(resolveReferencedBmsWAVResources(bms)).toEqual({ AB: 'kick.wav' });
+    const bmson = chart([note(0, false)]);
+    bmson.resources.wav['02'] = 'silent.wav';
+    expect(resolveReferencedBmsWAVResources(bmson)).toEqual({ '01': 'stem.wav' });
   });
 });
