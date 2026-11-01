@@ -26,6 +26,9 @@ afterEach(() => {
 test('renders the shared header with Settings where Play would be', () => {
   const html = playerServiceHeaderHTML({ locale: 'en', hostname: 'localhost', requestURL: '/' });
   expect(html).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
+  expect(html).toContain('class="flex items-center gap-x-3 px-4 py-2.5 sm:gap-x-6"');
+  expect(html).not.toContain('max-w-5xl');
+  expect(html).not.toContain('mx-auto');
   expect(html.match(/<span class="badge"/g)).toHaveLength(1);
   expect(html).toContain('data-service-header="settings"');
   expect(html).toContain('aria-label="Settings" aria-expanded="false"');
