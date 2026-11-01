@@ -27,8 +27,15 @@ import { applyChartPeakGain } from './peak-gain.ts';
 
 const log = logger('play-audio');
 
-/** Samples decoded at once: bounded so hundreds of browser audio decoders don't allocate PCM together. */
-const AUDIO_DECODE_CONCURRENCY = 8;
+/**
+ * Samples decoded at once: one per core, as the browser decodes them in parallel and the wall time stops falling there
+ * (a 1,300-sample chart on 10 cores: 1.45 s at 4, 0.99 s at 8, 0.86 s at 16, 0.88 s at 32). At least 4, and at most 16
+ * so hundreds of decoders don't allocate PCM together.
+ */
+export function resolveAudioDecodeConcurrency(hardwareConcurrency: number | undefined): number {
+  const cores = hardwareConcurrency !== undefined && Number.isFinite(hardwareConcurrency) ? hardwareConcurrency : 8;
+  return Math.min(16, Math.max(4, Math.floor(cores)));
+}
 
 /**
  * Per-slot volume multipliers of a chart: `#WAVCMD 01 xx vv` and the volume of `#EXWAVxx`, multiplied together when a
@@ -85,7 +92,10 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   ];
   // `#PATH_WAV <prefix>`: the chart's samples live under that directory; the resolver tries the prefixed path first.
   const pathPrefix = typeof chart.bms.pathWAV === 'string' ? chart.bms.pathWAV : undefined;
-  await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
+  const concurrency = resolveAudioDecodeConcurrency(
+    typeof navigator === 'undefined' ? undefined : navigator.hardwareConcurrency,
+  );
+  await runWithConcurrency(wavPaths, concurrency, async (path) => {
     if (isCancelled()) return;
     const attempted = new Set<BrowserAssetEntry>();
     while (!isCancelled()) {

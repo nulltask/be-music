@@ -61,7 +61,7 @@ import {
   handleWindowFocus,
   togglePause,
 } from './play-input.ts';
-import { disposeBGAVideos, disposePlayAudio, prepareAudio, prepareBGA } from './play-media.ts';
+import { decodePlayAudio, disposeBGAVideos, disposePlayAudio, openPlayAudio, prepareBGA } from './play-media.ts';
 import { PlaySessionState } from './play-session-state.ts';
 import type { PlaySessionTheme } from './play-session-theme.ts';
 import { applyPlayEvent } from './play-state.ts';
@@ -159,11 +159,12 @@ export class PlaySession extends PlaySessionState {
   }
 
   /**
-   * Loads the play: parses the chart, and decodes every audio sample the chart references — the slow part of going from
-   * "song picked" to "gameplay can begin". It touches no stage and adds no listeners. Returns once chart audio is
-   * decoded; the BGA preload runs on in the background and {@link start} waits for it before the chart begins (the
-   * ffmpeg.wasm fallback for unsupported codecs can take tens of seconds, and the play should show its LOADING
-   * animation meanwhile instead of freezing the decide screen).
+   * Loads the play: parses the chart, opens its audio graph and decodes every audio sample the chart references — the
+   * slow part of going from "song picked" to "gameplay can begin". It touches no stage and adds no listeners. Behind a
+   * splash it returns once chart audio is decoded; a play already on the stage returns once the audio graph is open and
+   * decodes on through its intro. The BGA preload runs on in the background either way, and {@link start} waits for the
+   * samples and the BGA before the chart begins (the ffmpeg.wasm fallback for unsupported codecs can take tens of
+   * seconds, and the play should show its LOADING animation meanwhile instead of freezing the decide screen).
    */
   public async load(chartEntry: LibraryChart, source?: BrowserAssetSource): Promise<void> {
     this.chart = chartEntry;
@@ -186,16 +187,37 @@ export class PlaySession extends PlaySessionState {
     // The view's own assets (an LR2 skin's images, fonts and timer spans) load now, before the samples decode.
     await this.theme.prepareView?.();
     if (this.disposed) return;
-    await prepareAudio(this);
-    if (this.disposed) return;
+    // The graph opens now, so the play has its AudioContext when load returns (a recording starts on it).
+    const samplesDecoded = openPlayAudio(this) ? decodePlayAudio(this) : Promise.resolve();
+    if (this.entered) {
+      // Nothing covers this play's load: its intro runs while the samples decode, and START holds the chart until they
+      // are in, so the wait is the longer of the two instead of both.
+      this.assetsReadyPromise = samplesDecoded
+        .catch((error: unknown) => {
+          log.warn('sample decoding failed; playing what decoded', error);
+        })
+        .then(() => this.loadAfterSamples());
+    } else {
+      // Behind a splash the samples decode before the play takes the stage.
+      await samplesDecoded;
+      if (this.disposed) return;
+      this.assetsReadyPromise = this.loadAfterSamples();
+    }
+    void this.assetsReadyPromise.then(() => {
+      this.assetsLoading = false;
+    });
+  }
+
+  /** Builds the engine on the decoded samples and preloads the BGA; resolves once the BGA is in. */
+  private loadAfterSamples(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.samplesDecoded = true;
     // Build the engine while BGA and the skin intro are still loading; START opens its chart gate.
     launchSharedEngine(this);
     this.bgaReadyPromise = prepareBGA(this).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
-    void this.bgaReadyPromise.then(() => {
-      this.assetsLoading = false;
-    });
+    return this.bgaReadyPromise;
   }
 
   /**
@@ -252,11 +274,13 @@ export class PlaySession extends PlaySessionState {
     // later via the `Promise.all` gates below so they wait for the BGA preload too. Exit-phase events are deliberately
     // NOT raised here: `beginExitSequence` raises them at the actual transition moment (ESC / chart end / failure).
     this.theme.moment({ kind: 'scene-start', at: now });
-    launchSharedEngine(this);
+    // A play still decoding builds its engine once the samples are in (`loadAfterSamples`).
+    if (this.samplesDecoded) launchSharedEngine(this);
     // The `start()` invocation we belong to — captured so the gate handlers below can detect a dispose-and-re-mount and
     // bail out instead of mutating a fresh play's state.
     const sceneEpoch = this.sceneStartTime;
-    const bgaReady = this.bgaReadyPromise ?? Promise.resolve();
+    // The samples (on a play that decodes through its intro) and the BGA.
+    const bgaReady = this.assetsReadyPromise ?? Promise.resolve();
     // LOAD END gate — both the configured load-end delay AND the BGA preload need to finish.
     const isCurrent = () => !this.disposed && !this.exiting && this.sceneStartTime === sceneEpoch;
     if (inputStartOffsetMs !== undefined) {
@@ -601,6 +625,8 @@ export class PlaySession extends PlaySessionState {
     this.poorBGAFallbackUntilSeconds = Number.POSITIVE_INFINITY;
     this.hasBGA = false;
     this.bgaReadyPromise = undefined;
+    this.assetsReadyPromise = undefined;
+    this.samplesDecoded = false;
     this.chart = undefined;
     this.source = undefined;
     this.host = undefined;
