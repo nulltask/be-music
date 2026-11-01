@@ -525,7 +525,18 @@ function syncBGAVideo(
     // Same cue still active: the video plays forward on its own and the Pixi VideoSource pulls fresh frames each tick;
     // one that drifted from the chart is set back in step.
     const video = handle.video;
-    if (video.paused || video.seeking) return;
+    // A seek, or a buffer that is not ready yet, aborts play() and leaves the element paused. Stopping there keeps
+    // the black canvas behind the texture: the chart has a BGA, so the skin does not fall back to SOUND ONLY.
+    // Retry until it plays. A seek still in progress, an ended video, and a paused play stay as they are.
+    if (video.seeking) return;
+    if (video.paused) {
+      if (!ctx.play.paused && !video.ended) {
+        void video.play().catch(() => {
+          // The next frame tries again.
+        });
+      }
+      return;
+    }
     const resync = resolveBGAVideoResync(
       video.currentTime,
       (seconds - previous.cueSeconds) * playbackRate,
@@ -551,13 +562,13 @@ function syncBGAVideo(
   try {
     handle.video.currentTime = Math.min(offset, Math.max(0, handle.video.duration - 0.05) || offset);
   } catch {
-    // Some browsers throw on currentTime assignment before the video has its initial buffer. Best-effort — play()
-    // below will retry once the buffer arrives.
+    // Some browsers throw on currentTime assignment before the video has its initial buffer. The play() below, and
+    // the same-cue path on the following frames, retry once the buffer arrives.
   }
   // A paused play (one sought while paused) shows the cue's frame; resuming plays the active videos.
   if (ctx.play.paused) return;
   void handle.video.play().catch(() => {
-    // Autoplay policy / codec rejections — silently swallow so the still-image fallback keeps working.
+    // A rejection leaves the element paused. The same-cue path retries on the following frames.
   });
 }
 
