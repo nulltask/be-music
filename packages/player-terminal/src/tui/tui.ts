@@ -85,6 +85,8 @@ import {
 export { resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTUIGrid } from './high-speed.ts';
 export { formatMeasureSignature } from './timeline.ts';
 export { formatJudgeComboDisplay } from './hud.ts';
+import type { ChartOptionState } from '@be-music/chart-model';
+import { placeTUIChartNote } from './chart-note-visual.ts';
 
 interface TUIOptions {
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
@@ -131,7 +133,7 @@ interface TUINote {
 }
 
 interface TUIFrame {
-  chartOptions?: { hiSpeed?: number };
+  chartOptions?: ChartOptionState;
   chartText?: string;
   currentBeat: number;
   currentSeconds: number;
@@ -524,6 +526,19 @@ export class PlayerTUI {
     }
 
     const nextVisibleNoteRows = new Map<string, number>();
+    // Chart-authored HIDDEN / CHANGE-HS (#843) on the grid: a note's distance after CHANGE-HS, and whether it shows.
+    const combo = Math.max(this.leftJudgeComboDisplay.combo, this.rightJudgeComboDisplay.combo);
+    const placeChartNote = (distance: number, note: TUINote, keyPrefix: string) =>
+      keyPrefix === 'invisible'
+        ? { distance, visible: true }
+        : placeTUIChartNote(frame.chartOptions, {
+            distance,
+            windowBeats: scrollWindowBeats,
+            channel: note.channel,
+            beat: note.beat,
+            seconds: frame.currentSeconds,
+            combo,
+          });
     const renderNoteCollection = (
       notes: TUINote[],
       keyPrefix: 'main' | 'landmine' | 'invisible',
@@ -570,8 +585,13 @@ export class PlayerTUI {
 
         if (note.mine) {
           const distance = this.scrollDistanceMapper.distanceBetween(scrollBeat, note.beat);
-          const visibleDistance = normalizeNoteApproachDistance(distance, scrollBeat, note.beat);
-          if (!isDistanceWithinWindow(visibleDistance, scrollWindowBeats)) {
+          const minePlacement = placeChartNote(
+            normalizeNoteApproachDistance(distance, scrollBeat, note.beat),
+            note,
+            keyPrefix,
+          );
+          const visibleDistance = minePlacement.distance;
+          if (!minePlacement.visible || !isDistanceWithinWindow(visibleDistance, scrollWindowBeats)) {
             continue;
           }
           const row = distanceToNoteRow(visibleDistance, rowCount, scrollWindowBeats, previousRow);
@@ -589,6 +609,17 @@ export class PlayerTUI {
           continue;
         }
 
+        const headPlacement = placeChartNote(
+          normalizeNoteApproachDistance(
+            this.scrollDistanceMapper.distanceBetween(scrollBeat, note.beat),
+            scrollBeat,
+            note.beat,
+          ),
+          note,
+          keyPrefix,
+        );
+        // A long note follows its head's HIDDEN visibility, as in the browser playfield.
+        if (!headPlacement.visible) continue;
         let headSymbol = note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL;
         if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
           headSymbol = note.invisible ? INVISIBLE_LONG_NOTE_HEAD_SYMBOL : LONG_NOTE_HEAD_SYMBOL;
@@ -598,8 +629,16 @@ export class PlayerTUI {
           const bodyEndBeat = note.endBeat;
           const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(scrollBeat, bodyStartBeat);
           const bodyEndDistance = this.scrollDistanceMapper.distanceBetween(scrollBeat, bodyEndBeat);
-          const normalizedBodyStart = normalizeNoteApproachDistance(bodyStartDistance, scrollBeat, bodyStartBeat);
-          const normalizedBodyEnd = normalizeNoteApproachDistance(bodyEndDistance, scrollBeat, bodyEndBeat);
+          const normalizedBodyStart = placeChartNote(
+            normalizeNoteApproachDistance(bodyStartDistance, scrollBeat, bodyStartBeat),
+            note,
+            keyPrefix,
+          ).distance;
+          const normalizedBodyEnd = placeChartNote(
+            normalizeNoteApproachDistance(bodyEndDistance, scrollBeat, bodyEndBeat),
+            note,
+            keyPrefix,
+          ).distance;
           const hasBodyStart = Number.isFinite(normalizedBodyStart);
           const hasBodyEnd = Number.isFinite(normalizedBodyEnd);
 
@@ -629,7 +668,11 @@ export class PlayerTUI {
           }
 
           const tailDistance = this.scrollDistanceMapper.distanceBetween(scrollBeat, note.endBeat);
-          const tailVisibleDistance = normalizeNoteApproachDistance(tailDistance, scrollBeat, note.endBeat);
+          const tailVisibleDistance = placeChartNote(
+            normalizeNoteApproachDistance(tailDistance, scrollBeat, note.endBeat),
+            note,
+            keyPrefix,
+          ).distance;
           if (isDistanceWithinWindow(tailVisibleDistance, scrollWindowBeats)) {
             const tailRow = distanceToNoteRow(tailVisibleDistance, rowCount, scrollWindowBeats);
             if (tailRow >= 0 && tailRow < rowCount) {
@@ -647,8 +690,7 @@ export class PlayerTUI {
           }
         }
 
-        const headDistance = this.scrollDistanceMapper.distanceBetween(scrollBeat, note.beat);
-        const headVisibleDistance = normalizeNoteApproachDistance(headDistance, scrollBeat, note.beat);
+        const headVisibleDistance = headPlacement.distance;
         if (!isDistanceWithinWindow(headVisibleDistance, scrollWindowBeats)) {
           continue;
         }

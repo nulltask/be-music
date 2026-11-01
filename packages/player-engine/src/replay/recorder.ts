@@ -523,7 +523,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
   }
   if (
     options.chartOptions &&
-    (options.chartOptions.initial.hiSpeed !== undefined || options.chartOptions.cues.length > 0)
+    (Object.keys(options.chartOptions.initial).length > 0 || options.chartOptions.cues.length > 0)
   )
     result.chartOptions = structuredClone(options.chartOptions);
   return result;

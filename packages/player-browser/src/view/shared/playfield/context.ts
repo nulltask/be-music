@@ -132,7 +132,10 @@ export interface PlayfieldRuntime {
   readonly poorBGAFallbackKey: string | undefined;
   readonly poorBGAFallbackUntilSeconds: number;
   readonly lastPoorAt: number;
-  readonly engineFrame?: Pick<PlayerUIFramePayload, 'keyBoundBGA' | 'bmsonBGA' | 'currentSeconds'>;
+  readonly engineFrame?: Pick<
+    PlayerUIFramePayload,
+    'keyBoundBGA' | 'bmsonBGA' | 'currentSeconds' | 'chartOptions' | 'summary'
+  >;
   readonly bgaTextures: Map<string, Texture>;
   readonly bgaLayerTextures: Map<string, Texture>;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
