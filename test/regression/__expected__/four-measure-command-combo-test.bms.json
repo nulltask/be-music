@@ -95,6 +95,7 @@
         "01": "MIRROR",
         "02": "RANDOM"
       },
+      "songText": {},
       "exWAV": {
         "01": "ex_sample.wav"
       },

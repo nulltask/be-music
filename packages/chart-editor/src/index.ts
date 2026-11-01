@@ -271,6 +271,7 @@ function hasFastCloneBMSState(json: BeMusicJSON): boolean {
     json.bms.argb !== undefined &&
     Array.isArray(json.bms.stp) &&
     json.bms.changeOption !== undefined &&
+    json.bms.songText !== undefined &&
     json.bms.exWAV !== undefined &&
     json.bms.exBMP !== undefined &&
     json.bms.bga !== undefined &&
