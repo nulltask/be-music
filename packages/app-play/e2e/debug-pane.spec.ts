@@ -71,7 +71,7 @@ for (const hasCurrentCourses of [false, true]) {
     await player.page.goto('/?e2e=1');
     await player.waitFor((state) => state.scene.kind === 'select', 'initial select');
     const result = await player.page.evaluate(async (hasCurrent) => {
-      const oldCourses = { version: 1, lr2crs: '<courselist/>', titles: [], defaultConnection: 'cut' };
+      const oldCourses = { version: 0, lr2crs: '<courselist/>', titles: [], defaultConnection: 'cut' };
       const currentCourses = { ...oldCourses, defaultConnection: 'blank1' };
       const write = (name: string, value: unknown) =>
         new Promise<void>((resolve, reject) => {
@@ -96,7 +96,7 @@ for (const hasCurrentCourses of [false, true]) {
       if (hasCurrent) await write('be-music', currentCourses);
       localStorage.setItem(
         'be-music-demo.debug-menu-settings',
-        JSON.stringify({ version: 1, updatedAt: Date.now(), settings: { autoPlay: true } }),
+        JSON.stringify({ version: 0, updatedAt: Date.now(), settings: { autoPlay: true } }),
       );
       localStorage.setItem('be-music-demo.chart-best-records', 'saved records');
       return hasCurrent ? currentCourses : oldCourses;

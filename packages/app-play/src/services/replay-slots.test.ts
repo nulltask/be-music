@@ -59,7 +59,7 @@ function score(exScore: number, noteCount = 100): RecordPlay & { noteCount: numb
 
 function record(key: string, size: number, exRate: number, savedAt = '2026-10-26T00:00:00.000Z'): ReplaySlotRecord {
   return {
-    version: 1,
+    version: 0,
     key,
     target: CHART,
     slot: 0,
@@ -163,6 +163,7 @@ describe('parseReplaySlotRecord', () => {
   test('reads a record of this version back, and nothing else', () => {
     const stored = { ...record(replaySlotKey(CHART, 0), 10, 0.5) };
     expect(parseReplaySlotRecord(JSON.parse(JSON.stringify(stored)))).toEqual(stored);
+    expect(parseReplaySlotRecord({ ...stored, version: 1 })).toBeUndefined();
     expect(parseReplaySlotRecord({ ...stored, version: 2 })).toBeUndefined();
     expect(parseReplaySlotRecord({ ...stored, slot: 4 })).toBeUndefined();
     expect(parseReplaySlotRecord({ ...stored, key: 'chart:other#0' })).toBeUndefined();
