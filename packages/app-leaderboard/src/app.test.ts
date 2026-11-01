@@ -141,7 +141,11 @@ describe('POST /api/v0/scores', () => {
     const stored = await env.BLOBS.get(`replays/${body.scoreId}.bmplay.json.gz`);
     const replay = JSON.parse(gunzipSync(Buffer.from(await stored!.arrayBuffer())).toString('utf8'));
     expect(replay.chart.chartFingerprint).toBe(chart.chartFingerprint);
-    expect(await env.BLOBS.head(`charts/${chart.chartFingerprint}.json`)).not.toBeNull();
+    const chartObject = await env.BLOBS.get(`charts/${chart.chartFingerprint}.json`);
+    expect(chartObject?.httpMetadata?.contentEncoding).toBe('gzip');
+    expect(JSON.parse(gunzipSync(Buffer.from(await chartObject!.arrayBuffer())).toString('utf8'))).toEqual(
+      chart.chartDocument,
+    );
 
     // The play's length is kept: to the last input, 50 ms after the tenth note at 5.5 s.
     const db = openDatabase(env.DB);
