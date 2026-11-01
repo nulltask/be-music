@@ -159,6 +159,7 @@
 - **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player-engine/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
 - **BP**: ミスの数。BAD・POOR・空 POOR に、途中で落ちたり ESC で投げたりして判定されなかったノート（コースでは到達しなかったノートも）を加えたもの（`resolveMissCount`）。
 - **自己ベスト（best record）**: 同じ判定ルールセット・譜面またはコースについて、最良のランプ・最高 EX-SCORE・最大コンボ・最少 BP を項目ごとに保持したものです（`BestRecord`）。各値は異なるプレイから得られることがあり、1 回のプレイ結果とは区別します。
+- **段位（dan rank）**: プレイヤーが GRADE コースをクリアした最高の段位。判定ルールセットとキーモードごとに保持します（`@be-music/player-engine/records` の `DanRank`、`resolveCourseDanRank`）。コースが認定する段位はコース名から読みます。_避ける語_: grade（コースの種類）、class。
 - **表示設定（view settings）**: 判定とは別に、プレイヤーが見ていたもの。ハイスピード、ハイスピード固定、表示時間、各サイドの SUDDEN+・HIDDEN+・LIFT です。_避ける語_: display options。
 - **プレイテンポ（play tempo）**: 譜面に対してプレイがどれだけ速く進むか（`speed`）。テンポを変えたプレイは練習扱いです。
 

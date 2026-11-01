@@ -155,6 +155,14 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.describeCourseCard(BENCH_COURSE_ENTRY.course);
     },
   });
+  define('player-skin-sdk.describeDanRanks', {
+    run: () => {
+      skinSdkAPI.describeDanRanks([
+        { keyMode: 14, rank: 'dan-1', label: '初段' },
+        { keyMode: 7, rank: 'dan-7', label: '七段' },
+      ]);
+    },
+  });
   define('player-skin-sdk.comboTier', {
     run: () => {
       skinSdkAPI.comboTier(120);

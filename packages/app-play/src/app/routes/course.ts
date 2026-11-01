@@ -36,6 +36,7 @@ import {
   nextCourseStagePlay,
   planCourseStart,
   resolveCourseBestRecordUpdate,
+  resolveCourseDanRankUpdate,
   type CourseStagePlay,
 } from '../../course-flow.ts';
 import { buildCourseResultData, courseBestRecordKey, joinCourseStageHistories } from '../../course-result.ts';
@@ -61,7 +62,10 @@ export interface CourseRouteDeps {
   /** The library: the charts a random course draws its stages from. */
   readonly library: Pick<LibraryService, 'collection' | 'prepareDrawnCourse'>;
   /** The chart hashes a random course's stage filters match, and the course's best record. */
-  readonly records: Pick<RecordsService, 'resolveChartHashes' | 'peekChartBestRecord' | 'recordCourseResult'>;
+  readonly records: Pick<
+    RecordsService,
+    'resolveChartHashes' | 'peekChartBestRecord' | 'recordCourseResult' | 'recordDanRank'
+  >;
   /** The course maker, which a NEW COURSE bar starts and a RANDOM MIX bar draws a course with. */
   readonly courseMaker: { readonly maker: Pick<CourseMaker, 'start' | 'drawRandomMix'> };
   /** The select screen's key filter, whose key mode a RANDOM MIX draws. */
@@ -356,6 +360,8 @@ export class CourseRoute {
     if (courseLog !== undefined && !replay) {
       const update = resolveCourseBestRecordUpdate(courseLog, result, courseBestRecordKey(course));
       const kept = this.records.recordCourseResult(update);
+      // A cleared GRADE course named after a dan raises the player's dan rank in its key mode.
+      this.records.recordDanRank(resolveCourseDanRankUpdate(course, courseLog, result));
       // The run saves into its course's replay slots only when it kept a record, as beatoraja's `CourseResult` does.
       replaySlots = this.courseReplaySlots(
         courseLog,
