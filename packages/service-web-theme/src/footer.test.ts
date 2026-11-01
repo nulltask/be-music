@@ -63,14 +63,14 @@ describe('renderServiceFooter', () => {
 
   test('states Public Beta in the page language, or both languages for the player', () => {
     const japanese = renderServiceFooter({ current: 'dashboard', locale: 'ja' });
-    expect(japanese).toContain('<p lang="ja">パブリックベータ。データは予告なく削除されることがあります。</p>');
+    expect(japanese).toContain('<p lang="ja">パブリックベータのためデータは予告なく削除されることがあります。</p>');
     expect(japanese).not.toContain('Public Beta');
     const both = renderServiceFooter({ current: 'play', locale: 'both' });
     expect(both).toContain(
       '<p data-public-beta-notice="en" lang="en">Public Beta. Data may be deleted without notice.</p>',
     );
     expect(both).toContain(
-      '<p data-public-beta-notice="ja" lang="ja" hidden>パブリックベータ。データは予告なく削除されることがあります。</p>',
+      '<p data-public-beta-notice="ja" lang="ja" hidden>パブリックベータのためデータは予告なく削除されることがあります。</p>',
     );
     expect(both.indexOf('data-public-beta-notice="en"')).toBeLessThan(both.indexOf('data-public-beta-notice="ja"'));
   });
