@@ -60,16 +60,16 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: ${{ github.event_name == 'pull_request' && 30 || 90 }}
     # The 4-vCPU runner renders in software: several browsers at once space frames far enough apart that tests pressing
-    # keys at a time on the page miss their windows or race the end of a short chart (#792). The full run is split over
-    # four runners with one browser each; the smoke run stays on one runner with four.
+    # keys at a time on the page miss their windows or race the end of a short chart (#792). Both runs are split over
+    # four runners: the full run with one browser each, the smoke run (13 tests) with two. A grep run stays on one.
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJSON((github.event_name == 'pull_request' || inputs.scope == 'smoke' || inputs.grep != '' && inputs.grep != null) && '[1]' || '[1, 2, 3, 4]') }}
-        shards: ${{ fromJSON((github.event_name == 'pull_request' || inputs.scope == 'smoke' || inputs.grep != '' && inputs.grep != null) && '[1]' || '[4]') }}
+        shard: ${{ fromJSON((inputs.grep != '' && inputs.grep != null) && '[1]' || '[1, 2, 3, 4]') }}
+        shards: ${{ fromJSON((inputs.grep != '' && inputs.grep != null) && '[1]' || '[4]') }}
     env:
       CI: 'true'
-      E2E_WORKERS: ${{ (github.event_name == 'pull_request' || inputs.scope == 'smoke') && 4 || 1 }}
+      E2E_WORKERS: ${{ (github.event_name == 'pull_request' || inputs.scope == 'smoke') && 2 || 1 }}
       E2E_GREP: ${{ inputs.grep || ((github.event_name == 'pull_request' || inputs.scope == 'smoke') && '@smoke' || '') }}
       E2E_SHARD: ${{ matrix.shard }}/${{ matrix.shards }}
 
@@ -89,8 +89,25 @@ jobs:
       - name: Install dependencies
         run: vp install
 
+      # The browser is cached per Playwright version; its system libraries are installed on every runner either way.
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Chromium
+        id: chromium-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+
       - name: Install Chromium
+        if: steps.chromium-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Chromium system dependencies
+        if: steps.chromium-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
 
       - name: Run E2E
         shell: bash
