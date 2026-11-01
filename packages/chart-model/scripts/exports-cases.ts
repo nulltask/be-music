@@ -124,6 +124,21 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.resolveChartNoteVisual(visualState, visualInput);
     },
   });
+  define('chart-model.compileChartGaugeOptions', {
+    run: () => {
+      chartAPI.compileChartGaugeOptions({ initial: ['774:GAMELEVEL_HYPER', '774:EXTRA_VERYHARD'] });
+    },
+  });
+  define('chart-model.parseChartGaugeOption', {
+    run: () => {
+      chartAPI.parseChartGaugeOption('774:EXTRA_EASY');
+    },
+  });
+  define('chart-model.isChartGaugeOptionDeclaration', {
+    run: () => {
+      chartAPI.isChartGaugeOptionDeclaration('774:GAMELEVEL_DANGER');
+    },
+  });
   define('chart-model.buildChartOptionTimeline', {
     run: () => {
       chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART);

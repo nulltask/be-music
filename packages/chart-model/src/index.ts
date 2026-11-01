@@ -226,6 +226,16 @@ export {
 
 export { buildChartOptionTimeline, type ChartOptionCue, type ChartOptionTimeline } from './chart-options.ts';
 export {
+  CHART_GAME_LEVELS,
+  CHART_GAUGE_EXTRAS,
+  compileChartGaugeOptions,
+  isChartGaugeOptionDeclaration,
+  parseChartGaugeOption,
+  type ChartGameLevel,
+  type ChartGaugeExtra,
+  type ChartGaugeOptions,
+} from './chart-gauge-options.ts';
+export {
   CHART_OPTION_PROGRAM_VERSION,
   compileChartOptions,
   resolveChartOptionsAt,

@@ -127,6 +127,10 @@ The existing beatoraja tables retain their mode-specific recovery, damage and cl
 
 Sources: beatoraja 0.8.9 [`GaugeProperty`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GaugeProperty.java), AC 34 [ASSISTED EASY](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#725](https://github.com/nulltask/be-music/issues/725).
 
+## Chart-selected gauge
+
+A chart whose `#OPTION` sets nanasigroove's `774:GAMELEVEL_*` or `774:EXTRA_*` selects the gauge itself, in place of the player's **Gauge** pick (both players' in a two-player play). Each ruleset plays the gauge closest to the pair: for example HYPER is HARD, NORMAL with EXTRA VERYHARD is EX-HARD (HARD under LR2), DANGER is DEATH (EX-HARD under ????). A course stage keeps its course gauge, beatoraja PRACTICE keeps its own, and gauge auto-shift still applies. The replay records the gauge played, so its lamp is that gauge's. See [ADR 0034](./adr/0034-chart-authored-gauge-options.md) for the whole table.
+
 ## Judgment algorithms
 
 With beatoraja rules, choose **Judge algorithm → Combo**, **Duration** or **Lowest** in Debug Menu; **Combo** is the default. The algorithm decides which note a press is judged against when several are in reach. Combo, beatoraja's default, moves to a later note only once the earlier one has passed the late edge of its GOOD window while the later one is inside its own; Duration takes the note closest in time; Lowest always takes the earliest note in reach. beatoraja's internal Score variant is not offered. LR2 and AC always judge the earliest note, so with their rules the control shows only **Source default**, and the engine rejects any other choice.

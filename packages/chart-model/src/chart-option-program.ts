@@ -1,6 +1,7 @@
 import { parseHDXLongNoteMode } from './hdx-long-note-mode.ts';
 import { findLastIndexAtOrBefore } from '@be-music/shared-utils/core';
 import type { ChartOptionTimeline } from './chart-options.ts';
+import { isChartGaugeOptionDeclaration } from './chart-gauge-options.ts';
 import { parseChartVisualOption, type ChartVisualOptionFields } from './chart-option-visual.ts';
 
 export interface ChartOptionState extends ChartVisualOptionFields {
@@ -97,6 +98,8 @@ function compileHiSpeed(declaration: string, timed: boolean): number | ChartOpti
   if (legacy && LEGACY_HI_SPEED_VALUES.has(legacy[1]!))
     return timed ? 'initial-only-alias' : Math.max(0.25, Number(legacy[1]));
   if (parseHDXLongNoteMode(declaration) !== undefined) return 'initial-only-option';
+  // GAMELEVEL and EXTRA are initial-only in nanasigroove; `compileChartGaugeOptions` consumes the initial ones.
+  if (isChartGaugeOptionDeclaration(declaration)) return 'initial-only-option';
   if (declaration.startsWith('charatbeatHDX:LONGMODE')) return 'invalid-parameter';
   return 'unsupported-option';
 }
@@ -111,6 +114,8 @@ export function compileChartOptions(timeline: ChartOptionTimeline): CompiledChar
   for (const declaration of timeline.initial) {
     // LONGMODE is resolved by note-rules before note extraction, not a display/replay-profile operation.
     if (parseHDXLongNoteMode(declaration) !== undefined) continue;
+    // GAMELEVEL and EXTRA choose the play's gauge (`compileChartGaugeOptions`), not a display operation.
+    if (isChartGaugeOptionDeclaration(declaration)) continue;
     const value = compileDeclaration(declaration, false);
     if (typeof value === 'function') state = value(state);
     else diagnostics.push({ code: value, declaration });
