@@ -97,9 +97,18 @@ export function isSilentJudgeTimingPlay(
   return mode === 'LR2-SILENT';
 }
 
+/** Opens the play's audio graph ({@link openPlayAudio}) and decodes its samples into it ({@link decodePlayAudio}). */
 export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
+  if (openPlayAudio(ctx)) await decodePlayAudio(ctx);
+}
+
+/**
+ * Opens the play's AudioContext and bus, synchronously, so the play has them before its samples decode. False when
+ * the play has no chart or source to sound.
+ */
+export function openPlayAudio(ctx: PlayMediaContext): boolean {
   if (!ctx.source || !ctx.chart) {
-    return;
+    return false;
   }
   // Build the audio bus. See `audio-bus.ts` for the full architecture; in short:
   //
@@ -135,6 +144,13 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
     ctx.audioAnalyzer = new AudioAnalyzer(ctx.audioContext);
     ctx.audioBus.outputNode.connect(ctx.audioAnalyzer.input);
   }
+  return true;
+}
+
+/** Decodes the chart's samples into the graph {@link openPlayAudio} opened, then builds the play's audio session. */
+export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
+  if (!ctx.source || !ctx.chart || !ctx.audioContext) return;
+  const chart = ctx.resolvedChart ?? ctx.chart.chart;
   const pitchMode = ctx.options.tempoPitchMode ?? 'pitch';
   // Keep pitch: the samples are stretched to the play tempo (times a NONSTOP FIT stage's rate) once, here, and then
   // play at their own pitch. LR2's SILENT loads none: the play runs without its keysounds and BGM.
