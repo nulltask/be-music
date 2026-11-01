@@ -14,14 +14,16 @@ import {
 
 const mocks = vi.hoisted(() => ({
   loadAssetBytes: vi.fn(),
+  loadAssetFile: vi.fn(),
   resolveChartBGAAsset: vi.fn(),
   loadTextureFromBytes: vi.fn(),
-  loadVideoTextureFromBytes: vi.fn(),
+  loadVideoTexture: vi.fn(),
   createColorKeyVideoTexture: vi.fn(),
 }));
 
 vi.mock('../collection/collection.ts', () => ({
   loadAssetBytes: mocks.loadAssetBytes,
+  loadAssetFile: mocks.loadAssetFile,
   resolveChartBGAAsset: mocks.resolveChartBGAAsset,
 }));
 
@@ -29,7 +31,7 @@ vi.mock('../media/color-key-video.ts', () => ({ createColorKeyVideoTexture: mock
 
 vi.mock('../media/textures.ts', () => ({
   loadTextureFromBytes: mocks.loadTextureFromBytes,
-  loadVideoTextureFromBytes: mocks.loadVideoTextureFromBytes,
+  loadVideoTexture: mocks.loadVideoTexture,
 }));
 
 const SOURCE = {} as BrowserAssetSource;
@@ -196,6 +198,7 @@ describe('loadPlayBGA', () => {
     for (const mock of Object.values(mocks)) mock.mockReset();
     mocks.resolveChartBGAAsset.mockImplementation((_source, _chartPath, path: string) => ({ entry: path, path }));
     mocks.loadAssetBytes.mockImplementation(async (path: string) => new TextEncoder().encode(path));
+    mocks.loadAssetFile.mockImplementation(async (path: string) => new TextEncoder().encode(path));
     mocks.loadTextureFromBytes.mockImplementation(async () => new Texture());
   });
 
@@ -216,7 +219,7 @@ describe('loadPlayBGA', () => {
       objectURL: `blob:${index}`,
       video: { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 },
     }));
-    for (const handle of handles) mocks.loadVideoTextureFromBytes.mockResolvedValueOnce(handle);
+    for (const handle of handles) mocks.loadVideoTexture.mockResolvedValueOnce(handle);
     const into = emptyResources();
     await loadPlayBGA({
       chart,
@@ -226,7 +229,7 @@ describe('loadPlayBGA', () => {
       into,
       timeline: { base: [{ seconds: 0, bmpKey: 'clip.webm' }], layer: [], poor: [] },
     });
-    expect(mocks.loadVideoTextureFromBytes).toHaveBeenCalledTimes(3);
+    expect(mocks.loadVideoTexture).toHaveBeenCalledTimes(3);
     expect(into.videos.get('clip.webm')?.video).toBe(handles[0]!.video);
     expect(into.videos.get(String.fromCharCode(0) + 'layer:clip.webm')?.video).toBe(handles[1]!.video);
     expect(into.videos.get(String.fromCharCode(0) + 'poor:clip.webm')?.video).toBe(handles[2]!.video);
@@ -244,7 +247,7 @@ describe('loadPlayBGA', () => {
         video: { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 },
       }));
       const canvases = handles.map(() => ({ texture: sourceTexture(), dispose: vi.fn() }));
-      for (const handle of handles) mocks.loadVideoTextureFromBytes.mockResolvedValueOnce(handle);
+      for (const handle of handles) mocks.loadVideoTexture.mockResolvedValueOnce(handle);
       for (const canvas of canvases) mocks.createColorKeyVideoTexture.mockReturnValueOnce(canvas);
       const into = emptyResources();
       await loadPlayBGA({
@@ -282,7 +285,7 @@ describe('loadPlayBGA', () => {
     const video = { pause: vi.fn(), removeAttribute: vi.fn(), load: vi.fn() };
     const texture = sourceTexture();
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    mocks.loadVideoTextureFromBytes.mockResolvedValue({ video, texture, objectURL: 'blob:failed-key' });
+    mocks.loadVideoTexture.mockResolvedValue({ video, texture, objectURL: 'blob:failed-key' });
     mocks.createColorKeyVideoTexture.mockImplementation(() => {
       throw new Error('Canvas unavailable');
     });
@@ -423,7 +426,7 @@ describe('loadPlayBGA', () => {
       objectURL: `blob:${index}`,
       video: { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 },
     }));
-    for (const handle of handles) mocks.loadVideoTextureFromBytes.mockResolvedValueOnce(handle);
+    for (const handle of handles) mocks.loadVideoTexture.mockResolvedValueOnce(handle);
     const into = emptyResources();
     await loadPlayBGA({
       chart,
@@ -453,9 +456,11 @@ describe('loadPlayBGA', () => {
     expect(into.layerTextures.get(layer2)?.frame).toMatchObject({ x: 320, y: 0, width: 64, height: 128 });
     expect(into.textures.get(poor)?.source).toBe(handles[3]!.texture.source);
     expect(into.subRegionOrigins.get(layer2)).toEqual({ x: 128, y: 64 });
-    expect(mocks.loadAssetBytes).toHaveBeenCalledOnce();
-    expect(mocks.loadVideoTextureFromBytes).toHaveBeenCalledTimes(4);
-    expect(mocks.loadVideoTextureFromBytes).toHaveBeenCalledWith('sheet.webm', expect.any(Uint8Array), {
+    // The video is handed over as its file, read once for every track and never into bytes here.
+    expect(mocks.loadAssetFile).toHaveBeenCalledOnce();
+    expect(mocks.loadAssetBytes).not.toHaveBeenCalled();
+    expect(mocks.loadVideoTexture).toHaveBeenCalledTimes(4);
+    expect(mocks.loadVideoTexture).toHaveBeenCalledWith('sheet.webm', expect.any(Uint8Array), {
       maxLongEdgePx: 0,
       useWebCodecs: true,
     });
@@ -495,7 +500,7 @@ describe('loadPlayBGA', () => {
     const video = { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 };
     const texture = new Texture();
     mocks.resolveChartBGAAsset.mockReturnValue({ entry: 'bga.mp4', path: 'bga.mp4' });
-    mocks.loadVideoTextureFromBytes.mockResolvedValue({ video, texture, objectURL: 'blob:1' });
+    mocks.loadVideoTexture.mockResolvedValue({ video, texture, objectURL: 'blob:1' });
     const into = emptyResources();
     await loadPlayBGA({
       chart: bmsChart({ '01': 'bga.mpg' }),
@@ -506,7 +511,7 @@ describe('loadPlayBGA', () => {
       transcode: { maxLongEdgePx: 640 },
       tempo: 1.25,
     });
-    expect(mocks.loadVideoTextureFromBytes).toHaveBeenCalledWith('bga.mp4', expect.any(Uint8Array), {
+    expect(mocks.loadVideoTexture).toHaveBeenCalledWith('bga.mp4', expect.any(Uint8Array), {
       maxLongEdgePx: 640,
     });
     expect(video.pause).toHaveBeenCalled();
@@ -523,7 +528,7 @@ describe('loadPlayBGA', () => {
       objectURL: `blob:${index}`,
       video: { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 },
     }));
-    for (const handle of handles) mocks.loadVideoTextureFromBytes.mockResolvedValueOnce(handle);
+    for (const handle of handles) mocks.loadVideoTexture.mockResolvedValueOnce(handle);
     const into = emptyResources();
     mocks.resolveChartBGAAsset.mockReturnValue({ entry: 'movie.mp4', path: 'movie.mp4' });
     await loadPlayBGA({
@@ -559,6 +564,7 @@ describe('loadPlayBGA', () => {
       isCancelled: () => true,
     });
     expect(mocks.loadAssetBytes).not.toHaveBeenCalled();
+    expect(mocks.loadAssetFile).not.toHaveBeenCalled();
     expect(into.textures.size).toBe(0);
   });
 });

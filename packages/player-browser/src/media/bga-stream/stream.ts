@@ -72,12 +72,12 @@ export class BGAVideoStream {
   private rejectFailure: (error: Error) => void = () => {};
   private stopAttempt: (() => void) | undefined;
   private chunkBytes = 0;
-  private readonly bytes: Uint8Array;
+  private readonly source: Blob;
   private readonly path: string;
   private readonly options: BGAVideoStreamOptions;
 
-  public constructor(bytes: Uint8Array, path: string, options: BGAVideoStreamOptions) {
-    this.bytes = bytes;
+  public constructor(source: Blob, path: string, options: BGAVideoStreamOptions) {
+    this.source = source;
     this.path = path;
     this.options = options;
     this.failure = new Promise<never>((_, reject) => {
@@ -158,13 +158,12 @@ export class BGAVideoStream {
       try {
         const decoder = factories.createDecodeWorker();
         workers.push(decoder);
-        // The input is copied for each attempt: transferring it hands the copy to the worker.
-        const input = this.bytes.slice().buffer;
         const start: BGADecodeStartMessage = {
           type: 'start',
           coreURL: assets.coreURL,
           wasmModule: assets.wasmModule,
-          input,
+          // A blob crosses to the worker as a handle: its data is neither copied nor read here.
+          input: this.source,
           inputName: `bga-input${pickInputExtension(this.path)}`,
           mode,
           ...(this.options.maxLongEdge !== undefined ? { maxLongEdge: this.options.maxLongEdge } : {}),
@@ -202,7 +201,7 @@ export class BGAVideoStream {
           event.preventDefault();
           settle({ ok: false, message: event.message || 'worker error' });
         };
-        decoder.postMessage(start, start.framePort ? [input, start.framePort] : [input]);
+        decoder.postMessage(start, start.framePort ? [start.framePort] : []);
       } catch (error) {
         settle({ ok: false, message: error instanceof Error ? error.message : String(error) });
       }
@@ -235,8 +234,8 @@ export class BGAVideoStream {
   }
 }
 
-/** One stream per source bytes and transcode settings, so the same BGA on several tracks transcodes once. */
-const streams = new WeakMap<Uint8Array, Map<string, BGAVideoStream>>();
+/** One stream per source file and transcode settings, so the same BGA on several tracks transcodes once. */
+const streams = new WeakMap<Blob, Map<string, BGAVideoStream>>();
 
 /** Whether {@link openBGAVideoStream} can run here: the host installed its workers and the browser has MSE. */
 export function canStreamBGAVideo(): boolean {
@@ -244,31 +243,31 @@ export function canStreamBGAVideo(): boolean {
 }
 
 /**
- * The stream transcoding `bytes`, started on first use. Subscribe to it before awaiting anything, or a stream nobody
+ * The stream transcoding `source`, started on first use. Subscribe to it before awaiting anything, or a stream nobody
  * holds may be cancelled by its last other subscriber leaving.
  */
-export function openBGAVideoStream(bytes: Uint8Array, path: string, options: BGAVideoStreamOptions): BGAVideoStream {
+export function openBGAVideoStream(source: Blob, path: string, options: BGAVideoStreamOptions): BGAVideoStream {
   const key = `${options.maxLongEdge ?? 0}:${options.useWebCodecs ? 'webcodecs' : 'libx264'}`;
-  let byOptions = streams.get(bytes);
+  let byOptions = streams.get(source);
   if (!byOptions) {
     byOptions = new Map();
-    streams.set(bytes, byOptions);
+    streams.set(source, byOptions);
   }
   const existing = byOptions.get(key);
   if (existing) return existing;
-  const stream = new BGAVideoStream(bytes, path, options);
+  const stream = new BGAVideoStream(source, path, options);
   byOptions.set(key, stream);
-  streamKeys.set(stream, { bytes, key });
+  streamKeys.set(stream, { source, key });
   void stream.run();
   return stream;
 }
 
-const streamKeys = new WeakMap<BGAVideoStream, { bytes: Uint8Array; key: string }>();
+const streamKeys = new WeakMap<BGAVideoStream, { source: Blob; key: string }>();
 
 function forgetStream(stream: BGAVideoStream): void {
   const entry = streamKeys.get(stream);
   if (!entry) return;
-  const byOptions = streams.get(entry.bytes);
+  const byOptions = streams.get(entry.source);
   if (byOptions?.get(entry.key) === stream) byOptions.delete(entry.key);
 }
 

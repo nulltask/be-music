@@ -5,6 +5,7 @@ import {
   loadFileEntryBytes,
   lookupCaseInsensitiveMapEntry,
 } from '@be-music/shared-utils/core';
+import { DeferredDroppedFile } from './dropped-file.ts';
 import type { BrowserAssetEntry } from './types.ts';
 
 export { isMaliciousAssetPath } from '@be-music/shared-utils/core';
@@ -66,6 +67,15 @@ export function lookupBytesCaseInsensitive(
  */
 export async function loadAssetBytes(entry: BrowserAssetEntry | undefined): Promise<Uint8Array | undefined> {
   return loadFileEntryBytes(entry);
+}
+
+/**
+ * The entry as something a media element can play without reading it: bytes already in memory as they are, and a lazy
+ * file as its `File` (opening a deferred one), which stays on disk until the browser reads it.
+ */
+export async function loadAssetFile(entry: BrowserAssetEntry | undefined): Promise<Blob | Uint8Array | undefined> {
+  if (entry === undefined || entry instanceof Uint8Array) return entry;
+  return entry instanceof DeferredDroppedFile ? entry.getFile() : entry;
 }
 
 /**

@@ -5,7 +5,7 @@ import {
   materializeDroppedFiles,
   withRelativePath,
 } from './dropped-file.ts';
-import { loadAssetBytes } from './file-lookup.ts';
+import { loadAssetBytes, loadAssetFile } from './file-lookup.ts';
 
 function stubEntry(name: string, body: string): DroppedFileEntryLike & { opens: number } {
   const stub = {
@@ -63,6 +63,21 @@ describe('DeferredDroppedFile', () => {
     await expect(file.getFile()).rejects.toThrow('stale entry');
     expect(await file.text()).toBe('ok');
     expect(entry.opens).toBe(2);
+  });
+});
+
+describe('loadAssetFile', () => {
+  test('hands back a file without reading it, opening a deferred one, and bytes as they are', async () => {
+    const entry = stubEntry('movie.mpg', 'MPEG');
+    const deferred = new DeferredDroppedFile(entry, 'song/movie.mpg');
+    const opened = await loadAssetFile(deferred);
+    expect(opened).toBeInstanceOf(File);
+    expect(entry.opens).toBe(1);
+    const file = new File(['x'], 'clip.mp4');
+    expect(await loadAssetFile(file)).toBe(file);
+    const bytes = new Uint8Array([1, 2, 3]);
+    expect(await loadAssetFile(bytes)).toBe(bytes);
+    expect(await loadAssetFile(undefined)).toBeUndefined();
   });
 });
 
