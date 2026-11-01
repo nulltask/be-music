@@ -69,15 +69,13 @@ export const PLAYER_APP_HTML = `
         an active drag (\`.dragging\`) so the hint reappears even
         once charts are loaded. Falls behind the canvas otherwise.
 
-        Structured as three layers:
-        - \`.drop-frame\`: hairline ring around the stage at rest.
-          Hidden during a live drag; the card is that feedback.
+        Structured as two layers:
         - \`.drop-card\`: centered glassmorphism panel hosting the
           actual content; hosts the entry / hover animations.
+          It is the only drop feedback.
         - icon + title + subtitle for the hierarchy.
       -->
       <div class="drop">
-        <div class="drop-frame"></div>
         <div class="card drop-card px-8">
           <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
             <!--
