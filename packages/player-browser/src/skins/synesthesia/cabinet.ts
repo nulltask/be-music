@@ -363,6 +363,7 @@ function drawPlayers(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): vo
     );
   }
   const level = runtime.chart?.playLevel;
+  // A level does not change during a play, so its figures keep their natural spacing.
   addHUDText(
     layer,
     level === undefined ? 'Lv.-' : `Lv.${level}`,
@@ -558,7 +559,7 @@ function drawBPM(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): void {
 function drawTempo(draw: CabinetDraw, rect: BeMusicRect, tempo: number): void {
   frame(draw, rect);
   addHUDText(draw.layer, 'TEMPO', rect.x + 10, rect.y + rect.h / 2 - 4, labelStyle(), draw.pool);
-  addHUDText(
+  addHUDNumber(
     draw.layer,
     tempo === 1 ? 'OFF' : `x${tempo.toFixed(2)}`,
     rect.x + rect.w - 10,

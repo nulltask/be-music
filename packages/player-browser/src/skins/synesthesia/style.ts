@@ -4,7 +4,7 @@ import type { HUDTextOptions } from '../pixi-kit/index.ts';
 /**
  * Synesthesia skin tokens, after a cosmic particle world: a true-black void, a world built from ember / gold particles,
  * electric blue and magenta as the only cool accents, and hairline frames with lock-on corners instead of glass.
- * Type is wide and light — Michroma for Latin labels and numerals, M PLUS 1p Light for Japanese and titles.
+ * Type is wide and technical — Orbitron for Latin labels and numerals, M PLUS 1p Light for Japanese and titles.
  */
 export const SYN_VOID = 0x010000;
 export const SYN_DEEP = 0x0c0402;
@@ -23,8 +23,9 @@ export const SYN_WHITE = 0xffffff;
 export const SYN_MIST = 0xf1dcc8;
 export const SYN_DIM = 0x9a7a66;
 
-export const SYN_DISPLAY_FONT = 'Michroma, Exo 2, M PLUS 1p, LINE Seed JP, sans-serif';
-export const SYN_TEXT_FONT = 'M PLUS 1p, LINE Seed JP, ui-sans-serif, system-ui, sans-serif';
+/** Orbitron has no Japanese: a Japanese label falls through to M PLUS 1p. */
+export const SYN_DISPLAY_FONT = 'Orbitron, M PLUS 1p, sans-serif';
+export const SYN_TEXT_FONT = 'M PLUS 1p, ui-sans-serif, system-ui, sans-serif';
 
 /**
  * Base hue of the whole scene at `seconds`: a slow drift through the red-orange → amber band (the world's ember light),
@@ -66,12 +67,12 @@ export function synGlowTexture(): Texture {
 /** Radius (px) of the visible glow for a sprite of `displaySize` px — the texture fades out well before its edge. */
 export const SYN_GLOW_SIZE = 64;
 
-/** The HUD's small label type: dim, wide Michroma. */
+/** The HUD's small label type: dim, wide Orbitron. */
 export function labelStyle(): HUDTextOptions {
   return { size: 9, fill: SYN_DIM, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 0.8 };
 }
 
-/** The HUD's figures: Michroma at `size` in `fill`. */
+/** The HUD's figures: Orbitron at `size` in `fill`. */
 export function displayStyle(size: number, fill: number): HUDTextOptions {
   return { size, fill, fontFamily: SYN_DISPLAY_FONT, weight: '400' };
 }

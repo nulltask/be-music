@@ -37,7 +37,8 @@ import {
   type ResultTrackRow,
 } from '@be-music/player-skin-sdk';
 import { resolveResultGrid } from './result-grid.ts';
-import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
+import type { PixiResultFrame, PixiResultSkin, SkinTextOptions } from '../pixi-kit/index.ts';
+import { addSynesthesiaText } from './figures.ts';
 
 /** How fast the entrance timeline plays: the choreography below is authored at 1x and runs 1.3x, so the card settles
  * sooner without changing its order or easing. */
@@ -81,7 +82,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     return { root, g };
   };
   const text = (target: Container, value: string, x: number, y: number, options: SkinTextOptions) =>
-    addSkinText(target, value, x, y, options);
+    addSynesthesiaText(target, value, x, y, options);
   /** Fade + rise a group in. */
   const rise = (root: Container, delayMs: number, distance = 18, durationMs = 520): void => {
     const eased = easeOutCubic(stageProgress(elapsed, delayMs, durationMs));
