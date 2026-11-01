@@ -187,7 +187,7 @@ const en = {
       'bmson-total': 'bmson TOTAL 0 used no recovery',
       tempo: 'a play at another tempo is practice',
       'course-stage': 'a course stage ranks with its course',
-      unreleased: 'made and random courses are not ranked',
+      unreleased: 'a made course is ranked only once flagged for IR, and a random course never is',
     },
     skipped: {
       'two-player': 'Leaderboard: not submitted (two-player plays have no single-player ranking)',
@@ -231,6 +231,10 @@ const en = {
     myCoursesLead: 'Courses you made, kept in this browser.',
     delete: 'Delete',
     confirmDelete: (name: string) => `Delete the course "${name}"?`,
+    registerIR: 'Register for IR',
+    confirmIR: (name: string) =>
+      `Register the course "${name}" for IR? Its runs are then ranked, and its connections and constraints can no longer be changed. This cannot be undone.`,
+    irOn: 'IR ON: ranked; connections and constraints are fixed',
     close: 'Close',
     stageMissing: (name: string, count: number) =>
       count === 1 ? `${name}: 1 stage is not in the collection` : `${name}: ${count} stages are not in the collection`,
@@ -461,7 +465,7 @@ const ja: typeof en = {
       'bmson-total': 'bmson の TOTAL 0 で回復なし',
       tempo: '別のテンポでのプレイは練習です',
       'course-stage': 'コースの 1 ステージはコースといっしょに順位が付きます',
-      unreleased: '自作コースとランダムコースはランキングに入りません',
+      unreleased: '自作コースは IR に登録するまで、ランダムコースは常にランキングに入りません',
     },
     skipped: {
       'two-player': 'Leaderboard: 送信しませんでした（2 人プレイには 1 人用の順位がありません）',
@@ -507,6 +511,10 @@ const ja: typeof en = {
     myCoursesLead: 'このブラウザに保存した、自分で作ったコースです。',
     delete: '削除',
     confirmDelete: (name) => `コース「${name}」を削除しますか？`,
+    registerIR: 'IR に登録',
+    confirmIR: (name) =>
+      `コース「${name}」を IR に登録しますか？ 登録するとランキングに入り、つなぎ方と制限は変更できなくなります。取り消せません。`,
+    irOn: 'IR ON: ランキング対象。つなぎ方と制限は変更できません',
     close: '閉じる',
     stageMissing: (name, count) => `${name}: ${count} ステージがコレクションにありません`,
     randomNoChart: (name, stage) => `${name}: ステージ ${stage} に一致する譜面がありません`,

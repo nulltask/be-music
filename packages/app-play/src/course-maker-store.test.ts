@@ -56,7 +56,7 @@ describe('made courses storage', () => {
     });
   });
 
-  test('keeps each course unranked or ranked across a reload', () => {
+  test('keeps each course flagged for IR or not across a reload', () => {
     const unranked = made('nonstop', 'Mine');
     const ranked = { ...made('grade', 'Dan'), release: true };
     expect(unranked.release).toBe(false);
@@ -71,9 +71,15 @@ describe('made courses storage', () => {
       ),
     );
     expect(parseMadeCourses(stored).courses.map((course) => course.release)).toEqual([false, true]);
-    // A record saved before the flag was kept reads its courses back released, as they were made then.
+    // A record saved before the flag was kept reads its courses back unflagged: an absent flag is not an IR flag, so no
+    // course turns read-only without the player flagging it.
     const { release: _release, ...older } = stored;
-    expect(parseMadeCourses(older).courses.map((course) => course.release)).toEqual([true, true]);
+    expect(parseMadeCourses(older).courses.map((course) => course.release)).toEqual([false, false]);
+    // So does a course the flags do not reach, or a flag that is not a boolean.
+    expect(parseMadeCourses({ ...stored, release: ['yes'] }).courses.map((course) => course.release)).toEqual([
+      false,
+      false,
+    ]);
   });
 
   test('keeps the RANDOM MIX settings and which courses are a folder last RANDOM MIX', () => {

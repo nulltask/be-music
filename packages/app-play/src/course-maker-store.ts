@@ -1,6 +1,6 @@
 // The player's own courses (made on the select screen) kept across reloads in IndexedDB, as LR2 keeps them in its
 // database: the courses as `.lr2crs` text plus what that format has no room for (the stage titles, the constraints,
-// whether each course is ranked and which are a folder's last RANDOM MIX), the default NONSTOP connection and the
+// whether each course is flagged for IR (`release`, LR2's `ir` column) and which are a folder's last RANDOM MIX), the default NONSTOP connection and the
 // RANDOM MIX settings (LR2's `config.xml` `<course>`).
 
 import {
@@ -44,8 +44,9 @@ interface StoredMadeCourses {
   /** Each course's constraints, which `.lr2crs` has no room for (absent in records saved before they were kept). */
   constraints?: string[][];
   /**
-   * Each course's `release` flag, which `.lr2crs` has no room for either (absent in records saved before it was kept;
-   * those courses read back released, as they were made).
+   * Each course's IR flag (`release`), which `.lr2crs` has no room for either. An absent flag (the whole array in records
+   * saved before it was kept, or a course's entry) reads back as not flagged, so a course is only ever read-only after
+   * the player flagged it.
    */
   release?: boolean[];
   /** Whether each course is its folder's last RANDOM MIX (absent in records saved before RANDOM MIX). */
@@ -93,7 +94,8 @@ export function parseMadeCourses(value: unknown): MadeCourses {
     return {
       ...course,
       ...(Array.isArray(kept) ? { constraints: normalizeCourseConstraints(kept) } : {}),
-      ...(typeof release === 'boolean' ? { release } : {}),
+      // `parseLR2CourseFile` reads every course released (LR2.exe imports with `ir = 1`); a made course is not.
+      release: release === true,
       stages: course.stages.map((stage, stageIndex) => {
         const title = Array.isArray(names) ? names[stageIndex] : undefined;
         return typeof title === 'string' && title.length > 0 ? { ...stage, title } : stage;

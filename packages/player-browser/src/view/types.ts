@@ -143,12 +143,13 @@ export interface SelectCourseMakerState {
 
 /**
  * What the player asks of the course maker: name the course being made (or their own course under the cursor),
- * delete their course under the cursor, finish or cancel the course being made, or step a connection of their NONSTOP
+ * delete their course under the cursor or flag it for IR (`ir`, LR2's button 253), finish or cancel the course being made, or step a connection of their NONSTOP
  * course under the cursor (`slot`, after stage `slot + 1`) or the default one, or step a RANDOM MIX setting.
  */
 export type SelectCourseMakerAction =
   | { readonly kind: 'name' }
   | { readonly kind: 'delete' }
+  | { readonly kind: 'ir' }
   | { readonly kind: 'finish' }
   | { readonly kind: 'cancel' }
   | { readonly kind: 'connection'; readonly slot: number; readonly step: 1 | -1 }
