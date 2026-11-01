@@ -5,6 +5,7 @@ import type { TimedPlayableNote } from '../playable-notes.ts';
 import { classifyRulesetJudge, RULESET_JUDGE_NONE, type RulesetJudgeIndex } from '../ruleset/judge.ts';
 import { ignoresLateLongNoteHeadBad, isChargeLongNoteMode } from '../ruleset/long-note.ts';
 import { preferJudgeCandidate, type JudgeSelectionCandidate } from '../ruleset/selection.ts';
+import { selectAnyKeyLane, type AnyKeyCandidate } from './any-key.ts';
 import {
   isLongPlayableNote,
   judgeDeltaUs,
@@ -58,30 +59,27 @@ function isBeyondScanReach(note: TimedPlayableNote, inputTimeUs: number, reachSe
 }
 
 /**
- * The note a press resolves against, chosen by the ruleset's own selection algorithm. Reachability is per note: the
- * note's own lane (key vs scratch) and its own chart time (the `#EXRANKxx` rank in force there) pick its window set,
- * and both legs are checked separately. A note inside the coarse scan radius but outside its own windows is not a
- * candidate, so the press falls through to the lane keysound / empty-POOR path instead of consuming it as a POOR.
+ * Visits each unjudged note a press at `nowSec` reaches on a lane `accepts` takes, in ascending time order, with the
+ * judgment it would get. Reachability is per note: the note's own lane (key vs scratch) and its own chart time (the
+ * `#EXRANKxx` rank in force there) pick its window set, and both legs are checked separately. A note inside the coarse
+ * scan radius but outside its own windows is not visited, nor an LR2 long-note head a late press would BAD.
  */
-function selectPressCandidate(
+function forEachReachableNote(
   state: JudgeCoreState,
   nowSec: number,
-  candidateChannels: ReadonlySet<string>,
-): { note: TimedPlayableNote; judge: RulesetJudgeIndex } | undefined {
+  accepts: (channel: string) => boolean,
+  visit: (note: TimedPlayableNote, selection: JudgeSelectionCandidate) => void,
+): void {
   const { config } = state;
   const { ruleset, scorableNotes } = config;
   const reachSeconds = maxJudgeReachSeconds(config, nowSec);
   const inputTimeUs = Math.round(nowSec * 1e6);
-  let best: TimedPlayableNote | undefined;
-  let bestSelection: JudgeSelectionCandidate | undefined;
-  // `scorableNotes` is sorted by time, so the scan visits candidates in the ascending order the selection algorithms
-  // assume (`lowest` keeps the first, the others may displace it).
   for (let index = scanStartIndex(scorableNotes, nowSec, reachSeconds); index < scorableNotes.length; index += 1) {
     const note = scorableNotes[index]!;
     if (isBeyondScanReach(note, inputTimeUs, reachSeconds)) {
       break;
     }
-    if (note.judged || !candidateChannels.has(note.channel)) {
+    if (note.judged || !accepts(note.channel)) {
       continue;
     }
     // The windows in force at the press, as LR2 reads its judge widths (`#EXRANK` can change them mid-chart).
@@ -99,18 +97,66 @@ function selectPressCandidate(
       // one the ruleset plays, not the chart's `#LNMODE`: LR2 plays a `#LNMODE 2` note as a plain LN too.
       continue;
     }
-    const selection: JudgeSelectionCandidate = {
+    visit(note, {
       noteTimeUs: Math.round(note.seconds * 1e6),
       dmUs: judgeDeltaUs(note.seconds, nowSec),
       judge,
       windows,
-    };
-    if (bestSelection === undefined || preferJudgeCandidate(ruleset.selection, bestSelection, selection, inputTimeUs)) {
-      best = note;
-      bestSelection = selection;
-    }
+    });
   }
-  return best === undefined || bestSelection === undefined ? undefined : { note: best, judge: bestSelection.judge };
+}
+
+/**
+ * The note a press resolves against, chosen by the ruleset's own selection algorithm among the notes it reaches
+ * ({@link forEachReachableNote}). With none, the press falls through to the lane keysound / empty-POOR path instead of
+ * consuming a note as a POOR.
+ */
+function selectPressCandidate(
+  state: JudgeCoreState,
+  nowSec: number,
+  candidateChannels: ReadonlySet<string>,
+): { note: TimedPlayableNote; judge: RulesetJudgeIndex } | undefined {
+  const { ruleset } = state.config;
+  const inputTimeUs = Math.round(nowSec * 1e6);
+  let best: { note: TimedPlayableNote; selection: JudgeSelectionCandidate } | undefined;
+  // `scorableNotes` is sorted by time, so the scan visits candidates in the ascending order the selection algorithms
+  // assume (`lowest` keeps the first, the others may displace it).
+  forEachReachableNote(
+    state,
+    nowSec,
+    (channel) => candidateChannels.has(channel),
+    (note, selection) => {
+      if (best === undefined || preferJudgeCandidate(ruleset.selection, best.selection, selection, inputTimeUs)) {
+        best = { note, selection };
+      }
+    },
+  );
+  const selected = best as { note: TimedPlayableNote; selection: JudgeSelectionCandidate } | undefined;
+  return selected === undefined ? undefined : { note: selected.note, judge: selected.selection.judge };
+}
+
+/**
+ * The lanes an ANY KEY press on `channels` at chart second `nowSec` goes to (#751): the lane of the nearest unjudged
+ * note it reaches on any lane but an auto-played one or one whose long note is still held ({@link selectAnyKeyLane}),
+ * or the keys' own lanes when it reaches none. Reads the state only.
+ */
+export function resolveAnyKeyPressChannels(
+  state: JudgeCoreState,
+  channels: ReadonlySet<string>,
+  nowSec: number,
+): ReadonlySet<string> {
+  const { config } = state;
+  const autoChannels = config.autoScratch ? (config.autoScratchChannels ?? config.scratchChannels) : undefined;
+  const candidates: AnyKeyCandidate[] = [];
+  forEachReachableNote(
+    state,
+    toJudgeClock(config, nowSec),
+    (channel) => !state.activeLongNotes.has(channel) && autoChannels?.has(channel) !== true,
+    (note, selection) =>
+      candidates.push({ channel: note.channel, noteTimeUs: selection.noteTimeUs, dmUs: selection.dmUs }),
+  );
+  const lane = selectAnyKeyLane(candidates);
+  return lane === undefined ? channels : new Set([lane]);
 }
 
 /**
@@ -188,6 +234,10 @@ export function hasPressCandidate(state: JudgeCoreState, channels: ReadonlySet<s
   return selectPressCandidate(state, toJudgeClock(state.config, nowSec), channels) !== undefined;
 }
 
+/**
+ * A press on `candidateChannels`. `recordedChannels` are the lanes the replay records for it: the keys' own lanes, which
+ * differ from the lanes judged only when ANY KEY routed the press.
+ */
 export function handleLanePress(
   state: JudgeCoreState,
   candidateChannels: ReadonlySet<string>,
@@ -195,11 +245,12 @@ export function handleLanePress(
   nowMs: number,
   nowSec: number,
   emit: JudgeCoreEffectSink,
+  recordedChannels: ReadonlySet<string> = candidateChannels,
 ): void {
   const { config } = state;
   const { ruleset } = config;
   // Replay press event — recorded BEFORE any judging so the log stays a raw input replay.
-  emit({ kind: 'record-input', action: 'down', seconds: nowSec, tokens, channels: candidateChannels });
+  emit({ kind: 'record-input', action: 'down', seconds: nowSec, tokens, channels: recordedChannels });
 
   for (const mappedChannel of candidateChannels) {
     emit({ kind: 'ui', command: { kind: 'flash-lane', channel: mappedChannel } });
@@ -439,18 +490,20 @@ function chargeEmptyPoor(state: JudgeCoreState, nowSec: number, emit: JudgeCoreE
   emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo });
 }
 
+/** A release of `input.channels`; `recordedChannels` are the lanes the replay records (see {@link handleLanePress}). */
 export function handleLaneRelease(
   state: JudgeCoreState,
   input: Extract<JudgeCoreInput, { kind: 'release' }>,
   emit: JudgeCoreEffectSink,
+  recordedChannels: ReadonlySet<string> = input.channels,
 ): void {
-  if (input.channels.size > 0) {
+  if (recordedChannels.size > 0) {
     emit({
       kind: 'record-input',
       action: 'up',
       seconds: input.recordSec,
       tokens: input.tokens,
-      channels: input.channels,
+      channels: recordedChannels,
       ...(input.inferred === true ? { inferred: true } : {}),
     });
   }

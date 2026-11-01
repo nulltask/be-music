@@ -1,3 +1,4 @@
+import { AnyKeyRoutes, anyKeyRouteKeys, selectAnyKeyLane, type AnyKeyCandidate } from '../core/any-key.ts';
 import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
 import { resolve____RankLabel } from '../ruleset/score.ts';
@@ -273,6 +274,8 @@ class ReplaySimulation {
   private judgeAtUs = 0;
   private judgeLane: SimLane | undefined;
   private judgeNote: SimNote | undefined;
+  /** ANY KEY (`play.anyKey`): the lanes each pressed key was routed to; absent when the play did not use it. */
+  private readonly anyKeyRoutes: AnyKeyRoutes | undefined;
 
   constructor(replay: BeMusicReplay, config: RulesetConfig, endOnFailure: boolean, observer?: ReplayJudgmentObserver) {
     this.replay = replay;
@@ -282,6 +285,7 @@ class ReplaySimulation {
     this.course = replay.play.course === undefined ? undefined : courseStageCarryCombo(replay.play.course);
     this.scratchChannels = resolveScratchChannels(replay.chart.laneMode);
     this.gauge = new RulesetGauge(config.gauge, config.gaugeFallback, config.gaugeBank);
+    this.anyKeyRoutes = replay.play.anyKey === true && replay.play.mode !== 'auto' ? new AnyKeyRoutes() : undefined;
     this.buildLanes();
   }
 
@@ -713,7 +717,7 @@ class ReplaySimulation {
   private handleDown(input: ReplayInputEvent, minePressLegLive: boolean): void {
     const timeUs = input.timeUs;
     const windows = this.config.windowsAt(timeUs);
-    const pressed = this.resolveInputLanes(input);
+    const pressed = this.anyKeyRoutes ? this.routeAnyKeyPress(input, windows) : this.resolveInputLanes(input);
     for (const lane of pressed) {
       lane.held = true;
       if (input.tokens === undefined || input.tokens.length === 0) {
@@ -789,7 +793,7 @@ class ReplaySimulation {
 
   private handleUp(input: ReplayInputEvent): void {
     const timeUs = input.timeUs;
-    for (const lane of this.resolveInputLanes(input)) {
+    for (const lane of this.anyKeyRoutes ? this.releaseAnyKey(input) : this.resolveInputLanes(input)) {
       lane.held = false;
       if (input.tokens === undefined || input.tokens.length === 0) {
         lane.downTokens.clear();
@@ -860,6 +864,58 @@ class ReplaySimulation {
       }
     }
     return lanes;
+  }
+
+  /**
+   * The lanes an ANY KEY press goes to, as the engine's judge core routes it (`resolveAnyKeyPressChannels`): the lane of
+   * the nearest unjudged note it reaches on any lane but an auto-played one or one whose long note is held, or the
+   * keys' own lanes when it reaches none. Its keys hold the lane until they come up.
+   */
+  private routeAnyKeyPress(input: ReplayInputEvent, windows: RulesetWindowTables): SimLane[] {
+    const own = this.resolveInputLanes(input);
+    const timeUs = input.timeUs;
+    const candidates: AnyKeyCandidate[] = [];
+    for (const lane of this.laneList) {
+      if (lane.auto || lane.hold !== undefined) continue;
+      const set = selectJudgeWindowSet(windows, { scratch: lane.scratch });
+      // The widest legs of the four windows: nothing guarantees the tables are monotonic.
+      const scanLate = Math.min(...set.judges.map((window) => window[0]));
+      const scanEarly = Math.max(...set.judges.map((window) => window[1]));
+      for (let index = firstNoteInReach(lane.notes, timeUs, scanLate); index < lane.notes.length; index += 1) {
+        const note = lane.notes[index]!;
+        const dmUs = note.timeUs - timeUs;
+        if (dmUs > scanEarly) break;
+        if (note.judged || note.holding) continue;
+        const judge = classifyJudge(dmUs, set);
+        if (judge === JUDGE_NONE) continue;
+        if (ignoresLateLongNoteHeadBad(this.config, judge, dmUs < 0, note.isLong ? (note.longStyle ?? 1) : undefined))
+          continue;
+        candidates.push({ channel: lane.channel, noteTimeUs: note.timeUs, dmUs });
+      }
+    }
+    const routed = selectAnyKeyLane(candidates);
+    const lanes = routed === undefined ? own : [this.lanes.get(routed)!];
+    this.anyKeyRoutes!.route(
+      anyKeyRouteKeys(input.tokens ?? [], this.ownChannels(input)),
+      lanes.map((lane) => lane.channel),
+    );
+    return lanes;
+  }
+
+  /** The lanes an ANY KEY release lets go: those its keys were routed to, or its own lanes for keys never routed. */
+  private releaseAnyKey(input: ReplayInputEvent): SimLane[] {
+    const own = this.ownChannels(input);
+    const lanes: SimLane[] = [];
+    for (const channel of this.anyKeyRoutes!.release(anyKeyRouteKeys(input.tokens ?? [], own), own)) {
+      const lane = this.lanes.get(channel);
+      if (lane && !lane.auto) lanes.push(lane);
+    }
+    return lanes;
+  }
+
+  /** The input's own lanes without the auto-played ones, as the engine hands them to its judge core. */
+  private ownChannels(input: ReplayInputEvent): string[] {
+    return input.channels.filter((channel) => this.lanes.get(channel)?.auto !== true);
   }
 
   private startLongNote(lane: SimLane, note: SimNote, judge: GaugeJudgeIndex, dmUs: number): void {
