@@ -505,6 +505,7 @@ export class BeatorajaPlayView implements PlayView {
     const context = bridge.update({
       judgeTimingMs: frame.playOptions.judgeTimingMs,
       visualConstant: frame.playOptions.visualConstant,
+      judgeTimingAutoAdjust: frame.playOptions.judgeTimingAutoAdjust,
       nowMs: play.playClock(),
       hostNowMs: frame.clock.nowMs,
       state: frame.state,

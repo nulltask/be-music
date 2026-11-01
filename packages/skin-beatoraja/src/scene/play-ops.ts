@@ -117,6 +117,16 @@ export function resolveBeatorajaConstantOps(constant: boolean | undefined): numb
   return constant === true ? [BEATORAJA_OP.CONSTANT] : [];
 }
 
+/**
+ * The judgment display ops: `JUDGE_DISPLAY_HIDDEN` (synthetic) while the play runs LR2's SILENT automatic judge timing,
+ * which draws no judgment or combo (OpenLR2 `LR2f.cpp` 2513), so the skin's `judge[]` display goes as the built-in and
+ * LR2 play screens' does. `judgeTimingAutoAdjust` is the play's mode (`PlayOptions.judgeTimingAutoAdjust`, a replay's
+ * as it recorded it).
+ */
+export function resolveBeatorajaJudgeDisplayOps(judgeTimingAutoAdjust: string | undefined): number[] {
+  return judgeTimingAutoAdjust === 'LR2-SILENT' ? [BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN] : [];
+}
+
 /** The lane cover ops a play skin keeps up to date (`LANECOVER1_CHANGING`, `LANECOVER1_ON`, `LIFT1_ON`). */
 export const BEATORAJA_COVER_OPS: readonly number[] = [
   BEATORAJA_OP.LANECOVER1_CHANGING,

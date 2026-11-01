@@ -215,6 +215,7 @@ sequenceDiagram
 - テーマの `resultclose` と `course_close`（`pickBeatorajaThemeBGMPaths` の `resultClose` / `courseClose`）は、リザルトとコースのリザルトを閉じる音です。beatoraja にはリプレイを保存したときの音はありません。
 - beatoraja にとって別の意味を持つ LR2 の番号がいくつかあります（`IntegerPropertyFactory`、`BooleanPropertyFactory`、`StringPropertyFactory`）。number 92 はメイン BPM（LR2 ではインターネットランキングの順位）、op 400 は CONSTANT のオプション（LR2 ではキーコンフィグのページ）です。beatoraja には number 38-41・93-94、text 17-29、op 34 がないので、何も読みません（result と decide の画面では 0）（#430）。
 - op 400（CONSTANT）は、プレイヤーが[表示用 CONSTANT](./play-options.ja.md#表示用-constant)をオンにしている間、選曲画面とプレイ画面で点きます（`resolveBeatorajaConstantOps`）。beatoraja の `BooleanPropertyFactory` がプレイヤーのプレイ設定を読むとおり、`NO_SPEED` 制約で CONSTANT を描画しないコースでも点いたままです（#776）。
+- [判定タイミングの自動調整](./play-options.ja.md#判定タイミングと自動調整)が LR2 SILENT のプレイでは、組み込みと LR2 のプレイ画面と同じく、`judge[]` の表示（判定の文字とコンボの数字）を描きません（`resolveBeatorajaJudgeDisplayOps`）。beatoraja に SILENT はなく、LR2 は SILENT で NOWJUDGE / NOWCOMBO を隠します（#917）。
 
 ### 既知の未対応
 

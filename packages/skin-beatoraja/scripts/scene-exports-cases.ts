@@ -286,6 +286,11 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
       sceneAPI.resolveBeatorajaConstantOps(true);
     },
   });
+  define('skin-beatoraja.scene.resolveBeatorajaJudgeDisplayOps', {
+    run: () => {
+      sceneAPI.resolveBeatorajaJudgeDisplayOps('LR2-SILENT');
+    },
+  });
   define('skin-beatoraja.scene.resolveBeatorajaCoverOps', {
     run: () => {
       sceneAPI.resolveBeatorajaCoverOps(BENCH_COVER, true);

@@ -303,6 +303,13 @@ export function endOfNoteTimerId(side: BeatorajaSide): number {
 // during gameplay; option ops (the user's confirmed `skin_config.option` picks) flow separately through
 // `buildBaseOpSet`.
 
+/**
+ * Synthetic op lit while the play hides the judgment and combo display of the skin's `judge[]` entries, as LR2's SILENT
+ * automatic judge timing hides NOWJUDGE / NOWCOMBO (OpenLR2 `LR2f.cpp` 2513). `expandBeatorajaJudgeDestinations` gates
+ * every judge image and combo digit on its negation. Not in beatoraja's prop.lua; picked next to the gauge-max ops.
+ */
+export const SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN = 90102;
+
 export const BEATORAJA_OP = {
   /** prop.lua `now_loading = 80`. */
   NOW_LOADING: LR2_OP.LOADING as typeof LR2_OP.LOADING,
@@ -687,6 +694,8 @@ export const BEATORAJA_OP = {
   GAUGE_NOW_AT_MAX_1P: 90100,
   /** Same as {@link GAUGE_NOW_AT_MAX_1P} but for the 2P side. Synthetic. */
   GAUGE_NOW_AT_MAX_2P: 90101,
+  /** {@link SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN}: lit while the play hides the `judge[]` display. Synthetic. */
+  JUDGE_DISPLAY_HIDDEN: SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN,
 } as const;
 
 /**

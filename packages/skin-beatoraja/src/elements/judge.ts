@@ -24,6 +24,7 @@ import {
   SYNTHETIC_NUM_JUDGE_COMBO_3P,
   SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_1P,
   SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_2P,
+  SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN,
 } from '../runtime-ids.ts';
 import type { BeatorajaValueElement } from './value.ts';
 
@@ -122,6 +123,9 @@ const SIDE_GAUGE_MAX_OPS: Record<1 | 2 | 3, number> = { 1: 90100, 2: 90101, 3: 9
  * the standard `judgef-pg` simultaneously on a PERFECT verdict. Without this aliasing the
  * 7th entry was silently dropped (`i < ops.length` cap), so 9K plays missed half of the
  * authored PG splash.
+ *
+ * Every image and number is also gated on NOT `SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN`, so a play that hides the judgment
+ * display (LR2's SILENT automatic judge timing) lights that op and the whole `judge[]` display goes.
  *
  * Returns the freshly-allocated destination records; caller concats them with `skin.destination`
  * before passing to `normalizeBeatorajaDestinations`.
@@ -235,7 +239,7 @@ export function expandBeatorajaJudgeDestinations(
       if (judgeWordShiftOffsetId !== undefined) {
         withGate = appendOffset(withGate, judgeWordShiftOffsetId);
       }
-      out.push(withGate);
+      out.push(addOpGate(withGate, -SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN));
     }
     // judge.numbers[] (the ms / count readouts paired with each judge tier) are only emitted
     // for the top three tiers (PG / GR / GD) per beatoraja's `SkinJudge.java:96`:
@@ -307,7 +311,7 @@ export function expandBeatorajaJudgeDestinations(
         foldedId !== undefined && foldedId !== (folded as { id?: unknown }).id
           ? ({ ...folded, id: foldedId } as Readonly<Record<string, unknown>>)
           : folded;
-      out.push(addOpGate(idStamped, gate));
+      out.push(addOpGate(addOpGate(idStamped, gate), -SYNTHETIC_OP_JUDGE_DISPLAY_HIDDEN));
     }
   }
   return out;
