@@ -4,6 +4,7 @@ import {
   renderBuildInfo,
   renderServiceFooter,
 } from '@be-music/service-web-theme';
+import { playerServiceHeaderHTML } from './player-header.ts';
 
 function playBuildInfo(): { builtAt: string; revision: string } | undefined {
   return typeof __BE_MUSIC_BUILD_TIME__ === 'string'
@@ -25,8 +26,8 @@ function playHostname(): string {
  * stays self-documenting.
  *
  * Sub-elements wired up elsewhere:
+ *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings toggles the Debug Menu. Fullscreen covers `#main`, so this header and the site footer stay on the page.
  *  - `#help-button` / `#help-modal` — `help-modal.ts` (`wireHelpModal`)
- *  - `#account-chip` — `leaderboard-ui.ts` (`LeaderboardPanel.refreshAccount`)
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
  *  - `#start-silent-mode` — `silent-mode-playback.ts` (`mountStartSilentModeOption`), from `services/silent-mode.ts`
@@ -34,6 +35,12 @@ function playHostname(): string {
  */
 export const PLAYER_APP_HTML = `
   <div class="shell empty">
+    <div id="player-service-header" class="player-service-header">${playerServiceHeaderHTML({
+      locale: 'en',
+      hostname: playHostname(),
+      requestURL: typeof location === 'undefined' ? '/' : `${location.pathname}${location.search}`,
+    })}</div>
+    <main id="main" class="player-main">
     <!--
       Hidden file input — triggered by the GUI's "Open folder"
       button. Tweakpane has no native file controller, so we
@@ -62,15 +69,13 @@ export const PLAYER_APP_HTML = `
         an active drag (\`.dragging\`) so the hint reappears even
         once charts are loaded. Falls behind the canvas otherwise.
 
-        Structured as three layers:
-        - \`.drop-frame\`: hairline ring around the stage at rest.
-          Hidden during a live drag; the card is that feedback.
+        Structured as two layers:
         - \`.drop-card\`: centered glassmorphism panel hosting the
           actual content; hosts the entry / hover animations.
+          It is the only drop feedback.
         - icon + title + subtitle for the hierarchy.
       -->
       <div class="drop">
-        <div class="drop-frame"></div>
         <div class="card drop-card px-8">
           <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
             <!--
@@ -363,16 +368,6 @@ export const PLAYER_APP_HTML = `
       </div>
     </div>
     <!--
-      Site title. The shell has no service header, so the name from Help
-      (\`be-music player\`) sits top-left, where the other sites put their
-      title, with the Beta badge beside it. Off the playfield during play
-      (the shell's in-gameplay class).
-    -->
-    <div class="player-brand">
-      <span class="font-semibold tracking-tight whitespace-nowrap">be-music player</span>
-      <span class="badge" data-variant="outline">Beta</span>
-    </div>
-    <!--
       Bottom-right floating Help button. Pinned so it stays
       reachable from every scene (select / gameplay / result)
       without having to compete with Tweakpane (top-right) or the
@@ -395,16 +390,6 @@ export const PLAYER_APP_HTML = `
       </svg>
       <span class="help-button-label" data-i18n="help">Help</span>
     </button>
-    <!--
-      Bottom-right Leaderboard account chip: the sign-in state at a glance
-      (a green dot when signed in, amber when anonymous, grey when signed
-      out). Signed in, it opens the player's Leaderboard page; signed out,
-      it opens the Debug Menu's Leaderboard folder. Wired in \`leaderboard-ui.ts\`.
-    -->
-    <a class="btn account-chip no-underline" data-size="sm" data-variant="ghost" id="account-chip" data-state="loading" href="https://leaderboard.be-music.app/" target="_blank" rel="noopener">
-      <span class="account-chip-dot" aria-hidden="true"></span>
-      <span class="account-chip-label" id="account-chip-label"></span>
-    </a>
     <!--
       Touch play controls. Phones and tablets have no Space / Esc key, so
       during play a pause button sits in the top-left corner; while paused
@@ -1364,6 +1349,7 @@ export const PLAYER_APP_HTML = `
       </div>
       <footer class="service-build-footer">${renderBuildInfo(playBuildInfo())}</footer>
     </div>
+  </main>
   ${renderServiceFooter({
     current: 'play',
     hostname: playHostname(),

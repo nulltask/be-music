@@ -17,6 +17,7 @@ import {
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 // Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
 import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
+import { playerFullscreenElement } from '../../fullscreen.ts';
 import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
 import { resolveGaugeTypes, type GaugeType } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
@@ -75,7 +76,10 @@ export interface DebugMenuDeps {
   readonly beatorajaSkinOverridesByType: Map<number, string>;
   /** The compressor architecture every play mounts with (`?compressor=`), read once at boot. */
   readonly compressorMode: 'split' | 'legacy';
-  /** The player shell, which "Toggle fullscreen" takes fullscreen. */
+  /**
+   * The player shell. "Toggle fullscreen" covers the play surface inside it (`#main`), where this menu is mounted, so
+   * the site header and the site footer stay outside fullscreen.
+   */
   readonly shell: HTMLElement;
   /** The play: loading behind a decide screen, or on the stage. */
   gameplayView(): PlayScene | undefined;
@@ -313,6 +317,16 @@ export class DebugMenu {
   public setPlayOptions(changes: Partial<PlayOptions>): void {
     this.deps.setPlayOptions(changes);
   }
+  /** The header gear follows this pane, including a click on the pane's own title. */
+  private reportExpanded: ((open: boolean) => void) | undefined;
+  /** Reports when the existing pane opens or closes. */
+  public watchExpanded(report: (open: boolean) => void): void {
+    this.reportExpanded = report;
+  }
+  /** Opens the existing Debug Menu when it is closed, and closes it when it is open. No second panel. */
+  public toggle(): void {
+    if (this.gui !== undefined) this.gui.expanded = !this.gui.expanded;
+  }
   /**
    * Builds the floating Tweakpane control panel and wires every controller to the gameplay / scene state. Centralizing
    * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageFolder`)
@@ -328,15 +342,18 @@ export class DebugMenu {
     // on the player.
     const container = document.createElement('div');
     container.className = 'debug-pane-container';
-    // The shell is the fullscreen element (double-click and "Toggle fullscreen"). A menu on `document.body` sits
-    // outside that top layer, so the browser hides it until fullscreen ends. The shell does not create a fixed
-    // containing block, so the windowed top-right position is unchanged.
-    this.deps.shell.append(container);
+    // The play surface (`#main`) is the fullscreen element (double-click, the header button, and "Toggle fullscreen").
+    // A menu outside that element sits under the top layer, so the browser hides it until fullscreen ends. The surface
+    // does not create a fixed containing block, so the windowed top-right position is unchanged.
+    const surface = playerFullscreenElement(document);
+    if (surface instanceof HTMLElement) surface.append(container);
+    else this.deps.shell.append(container);
     const gui = new Pane({ title: 'Debug Menu', container, expanded: false });
     gui.element.classList.add('debug-pane');
     gui.element.dataset.pane = 'debug';
     gui.expanded = false;
     this.gui = gui;
+    gui.on('fold', (event) => this.reportExpanded?.(event.expanded));
     const addFolder = (parent: Pick<FolderApi, 'addFolder'>, folder: DebugMenuFolder): FolderApi =>
       parent.addFolder({ title: folder.title, expanded: folder.open });
     // The native read-only monitor shows long load and playback messages without making them editable.
@@ -361,9 +378,7 @@ export class DebugMenu {
     this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
     this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
     this.buildCaptureFolder(addFolder(gui, DEBUG_MENU_FOLDERS.capture));
-    this.deps.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard), () => {
-      gui.expanded = true;
-    });
+    this.deps.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
     this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
     this.refreshCompressorStageVisibility();
     rememberFolderOpenStates(gui, undefined, () => this.scheduleSettingsSave());
