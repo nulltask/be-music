@@ -61,3 +61,12 @@ body {
 .preview:has(be-music-preview-hud[controls-hidden]) {
   cursor: none;
 }
+
+/* Product label. Stays in the corner over the stage and the chart list. */
+.preview-beta {
+  position: absolute;
+  z-index: 3;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  left: max(8px, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+}
