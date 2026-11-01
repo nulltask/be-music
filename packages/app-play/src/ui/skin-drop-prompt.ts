@@ -1,4 +1,5 @@
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
+import { playerText } from '../player-copy.ts';
 
 // The "Drop a skin" prompt the Debug Menu's Skin system picker opens for a skin system with no skin loaded.
 
@@ -18,13 +19,9 @@ export function promptSkinDrop(family: SkinDropFamily, setPending: (family: Skin
   setPending(family);
   const title = dialog.querySelector('h2');
   const hint = dialog.querySelector('[data-skin-drop-hint]');
-  if (title !== null) title.textContent = family === 'lr2' ? 'Drop an LR2 skin' : 'Drop a beatoraja skin';
-  if (hint !== null) {
-    hint.innerHTML =
-      family === 'lr2'
-        ? 'Drop the folder that holds your LR2 theme (<code>LR2files/Theme/…</code>, with its <code>.lr2skin</code> files).'
-        : 'Drop the folder that holds your beatoraja skin (its <code>.luaskin</code> or <code>.json</code> skin files).';
-  }
+  const shell = playerText().shell;
+  if (title !== null) title.textContent = family === 'lr2' ? shell.skinDropLr2 : shell.skinDropBeatoraja;
+  if (hint !== null) hint.innerHTML = family === 'lr2' ? shell.skinDropHintLr2 : shell.skinDropHintBeatoraja;
   // Cancel or Escape withdraws the request; a drop closes the prompt but keeps it, for the drop to answer.
   const withdraw = () => {
     setPending(undefined);

@@ -5,6 +5,7 @@ import {
   signUpForLeaderboard,
   type AccountActionResult,
 } from './account.ts';
+import { playerText } from './player-copy.ts';
 
 /** Which account dialog to open: sign-in, sign-up, or sign-up for the anonymous account already in this browser. */
 export type AccountDialog = 'sign-in' | 'sign-up' | 'keep';
@@ -12,16 +13,12 @@ export type AccountDialog = 'sign-in' | 'sign-up' | 'keep';
 const DIALOG_IDS = { 'sign-in': '#leaderboard-sign-in', 'sign-up': '#leaderboard-sign-up' } as const;
 
 /** What the sign-up dialog says: a new account, or keeping the anonymous one this browser already has. */
-const SIGN_UP_COPY = {
-  'sign-up': {
-    title: 'Create your account',
-    lead: 'Pick a handle and a name. Your browser then makes a passkey for it.',
-  },
-  keep: {
-    title: 'Keep this account',
-    lead: 'Give your anonymous account a handle and a name. Your browser then makes a passkey, so its plays join the rankings.',
-  },
-} as const;
+function signUpCopy(which: 'sign-up' | 'keep'): { title: string; lead: string } {
+  const shell = playerText().shell;
+  return which === 'keep'
+    ? { title: shell.keepTitle, lead: shell.keepLead }
+    : { title: shell.signUpTitle, lead: shell.signUpLead };
+}
 
 /** What the dialogs report back: any change to the account, and a sign-in or sign-up that went through. */
 export interface AccountDialogHandlers {
@@ -42,7 +39,7 @@ export function wireAccountDialogs(handlers: AccountDialogHandlers): (dialog: Ac
     if (dialog === null) return;
     say(dialog, undefined);
     if (which !== 'sign-in') {
-      const copy = SIGN_UP_COPY[which];
+      const copy = signUpCopy(which);
       const title = dialog.querySelector('h2');
       const lead = dialog.querySelector('[data-account-sign-up-lead]');
       if (title !== null) title.textContent = copy.title;
@@ -59,12 +56,18 @@ export function wireAccountDialogs(handlers: AccountDialogHandlers): (dialog: Ac
     else if (action === 'open-sign-up') open('sign-up');
     else if (action === 'sign-in') {
       const dialog = button.closest('dialog');
-      void run(button, dialog, signInWithLeaderboardPasskey, 'Sign-in failed', handlers);
+      void run(button, dialog, signInWithLeaderboardPasskey, () => playerText().account.signInFailed, handlers);
     } else {
       const provider = accountProviderFromAction(action);
       if (provider !== undefined) {
         const dialog = button.closest('dialog');
-        void run(button, dialog, () => signInWithAccountProvider(provider), 'Sign-in failed', handlers);
+        void run(
+          button,
+          dialog,
+          () => signInWithAccountProvider(provider),
+          () => playerText().account.signInFailed,
+          handlers,
+        );
       }
     }
   });
@@ -83,7 +86,7 @@ export function wireAccountDialogs(handlers: AccountDialogHandlers): (dialog: Ac
       submit,
       form.closest('dialog'),
       () => signUpForLeaderboard({ handle: text('handle'), displayName: text('displayName') }),
-      'Sign-up failed',
+      () => playerText().account.signUpFailed,
       handlers,
     );
   });
@@ -96,7 +99,7 @@ async function run(
   button: HTMLButtonElement | null,
   dialog: HTMLDialogElement | null,
   action: () => Promise<AccountActionResult>,
-  failure: string,
+  failure: () => string,
   handlers: AccountDialogHandlers,
 ): Promise<void> {
   if (button !== null) button.disabled = true;
@@ -108,12 +111,15 @@ async function run(
       handlers.onSignedIn();
       handlers.onChanged();
     } else {
-      say(dialog, result.error.startsWith('Your account is ready') ? result.error : `${failure}: ${result.error}`);
+      const ready =
+        result.error.startsWith(playerText().account.accountReadyPrefix) ||
+        result.error.startsWith('Your account is ready');
+      say(dialog, ready ? result.error : `${failure()}: ${result.error}`);
       // A half-made account (saved, no passkey yet) is still an account: show it.
       handlers.onChanged();
     }
   } catch (error) {
-    say(dialog, `${failure}: ${error instanceof Error ? error.message : String(error)}`);
+    say(dialog, `${failure()}: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     if (button !== null) button.disabled = false;
   }

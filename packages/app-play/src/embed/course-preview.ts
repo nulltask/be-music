@@ -1,3 +1,4 @@
+import { playerText } from '../player-copy.ts';
 import {
   computeChartFileHashes,
   createChartHashLookup,
@@ -46,7 +47,7 @@ export async function loadEmbedCourses(collection: BrowserChartCollection, query
   if (found.length === 0) throw new Error(`Course file not found: ${query}`);
   if (found.length > 1) throw new Error(`More than one course file matches ${query}; specify its full path.`);
   const { source, path } = found[0]!;
-  if (!/\.(lr2crs|json)$/iu.test(path)) throw new Error('Choose an LR2 .lr2crs or beatoraja .json course file.');
+  if (!/\.(lr2crs|json)$/iu.test(path)) throw new Error(playerText().embed.badCourseFile);
   const bytes = await loadAssetBytes(source.files.get(path));
   if (bytes === undefined) throw new Error(`Could not read the course file: ${path}`);
   const groups = readCourseFile(path, bytes);
