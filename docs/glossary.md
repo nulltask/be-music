@@ -153,6 +153,7 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - **carry-in**: The gauge value, course combo and course max combo a stage starts from, left by the stage before it.
 - **give up**: Leaving a course run with ESC. A run given up is a failed run.
 - **stitched play**: The single chart a NONSTOP course is played as, built by stitching its stages with their connections and placement.
+- **IR flag**: Whether a course's runs are ranked, LR2's `ir` column (IR: LR2's internet ranking, not the chart IR above) and beatoraja's `release`; code names it `release`. A course the player made starts unflagged; flagging it is one-way and makes the course read-only.
 - **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `____`.
 - **gauge type**: The gauge the player picks, in LR2's names: `GROOVE`, `HARD`, `DEATH` or `EASY` (`GaugeType`). Each judge ruleset plays it on a gauge of its own line-up, named by its gauge id (`NORMAL`, `HAZARD`, `CLASS`, ...).
 - **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player-engine/ruleset`).

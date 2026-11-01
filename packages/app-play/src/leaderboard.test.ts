@@ -305,7 +305,7 @@ describe('course submissions', () => {
       'Leaderboard course beatoraja: #3 / 7 · EX 8 · new best EX',
     );
     expect(describeCourseLeaderboardResult({ ...result, unranked: 'unreleased' } as typeof result, 'lr2')).toBe(
-      'Leaderboard: stored, not ranked (made and random courses are not ranked)',
+      'Leaderboard: stored, not ranked (a made course is ranked only once flagged for IR, and a random course never is)',
     );
     expect(describeCourseLeaderboardResult({ status: 'failed', httpStatus: 422, error: 'aborted' }, 'lr2')).toBe(
       'Leaderboard: course not submitted (aborted)',
