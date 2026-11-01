@@ -629,6 +629,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreAPI.loadAssetBytes(BENCH_BYTES);
     },
   });
+  define('player-browser.loadAssetFile', {
+    run: async () => {
+      await playerWebCoreAPI.loadAssetFile(BENCH_BYTES);
+    },
+  });
   define('player-browser.loadBeatorajaChartImages', {
     run: async () => {
       // The bench chart has no images, so the source is walked without decoding anything.
