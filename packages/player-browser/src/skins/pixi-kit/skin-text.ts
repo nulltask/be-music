@@ -1,6 +1,6 @@
-import { type Color, type Container, Text, TextStyle } from 'pixi.js';
-import { DEFAULT_TEXT_FONT } from '@be-music/player-skin-sdk';
-import { rememberStyle } from './hud-text.ts';
+import { type Color, Container, Text, TextStyle } from 'pixi.js';
+import { DEFAULT_TEXT_FONT, layoutTabularRun } from '@be-music/player-skin-sdk';
+import { measureGlyph, rememberStyle } from './hud-text.ts';
 import { fitTextToWidth } from './marquee.ts';
 import { textResolution } from './resolution.ts';
 import { alignCapCenter } from './text-metrics.ts';
@@ -53,6 +53,38 @@ export function addSkinText(layer: Container, text: string, x: number, y: number
     });
   }
   return node;
+}
+
+/**
+ * {@link addSkinText} with tabular figures, as {@link addHUDNumber} lays them out: every glyph its own text centred in a
+ * cell, each digit's cell as wide as the widest digit, so figures line up down a list and keep their place as they
+ * change. A run wider than `maxWidth` is squeezed to fit; it does not scroll. Returns the group holding the glyphs.
+ */
+export function addSkinNumber(
+  layer: Container,
+  text: string,
+  x: number,
+  y: number,
+  options: SkinTextOptions = {},
+): Container {
+  const style = resolveSkinTextStyle(options);
+  const run = layoutTabularRun(text, (char) => measureGlyph(char, style));
+  const squeeze = options.maxWidth !== undefined && run.width > options.maxWidth ? options.maxWidth / run.width : 1;
+  const group = new Container();
+  for (const glyph of run.glyphs) {
+    if (glyph.char === ' ') continue;
+    const node = new Text({ text: glyph.char, resolution: textResolution(), style });
+    node.anchor.set(0.5, options.anchorY ?? 0);
+    alignCapCenter(node, options.fontFamily ?? DEFAULT_TEXT_FONT, options.weight ?? '400', options.size ?? 10);
+    node.position.set(glyph.x + glyph.w / 2, 0);
+    group.addChild(node);
+  }
+  group.scale.set(squeeze, 1);
+  group.position.set(x - run.width * squeeze * (options.anchorX ?? 0), y);
+  group.skew.set(options.skewX ?? 0, 0);
+  group.alpha = options.alpha ?? 1;
+  layer.addChild(group);
+  return group;
 }
 
 const SKIN_TEXT_STYLES = new Map<string, TextStyle>();

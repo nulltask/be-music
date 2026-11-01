@@ -3,7 +3,7 @@ import { normalizeRect } from './render.ts';
 import type { LR2DestinationRect, LR2TextElement } from '@be-music/skin-lr2';
 import { makeLR2BitmapTextSprite, type LR2LoadedFont } from './bitmap-text.ts';
 
-const FALLBACK_TEXT_FONT = 'LINE Seed JP, system-ui, sans-serif';
+const FALLBACK_TEXT_FONT = 'ui-sans-serif, system-ui, sans-serif';
 
 export { resolveScaledViewport, type ScaledViewport } from '../../stage/viewport.ts';
 

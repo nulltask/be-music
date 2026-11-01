@@ -25,6 +25,8 @@ export function mountElement<Frame>(
   element.dataset.nativeScreen =
     tag === 'be-music-gameplay-hud' ? 'gameplay' : tag.slice('be-music-'.length).replace('-screen', '');
   Object.assign(element.style, { position: 'absolute', inset: '0', width: '100%', height: '100%' });
+  // Native's landscape play HUD is the cabinet arrangement.
+  if (tag === 'be-music-gameplay-hud') element.toggleAttribute('cabinet', true);
   if (tag === 'be-music-select-screen') {
     const eyebrow = container.ownerDocument.createElement('span');
     eyebrow.slot = 'eyebrow';

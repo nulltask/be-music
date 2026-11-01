@@ -382,6 +382,8 @@ export interface PlayFrame {
   readonly state2P?: PlayState;
   /** Optional personal best and target EX scores for skin comparison animations; missing values mean zero. */
   readonly scoreTargets?: { readonly bestEXScore?: number; readonly targetEXScore?: number };
+  /** The signed-in player's name, when the host has one. */
+  readonly playerName?: string;
   readonly stage: PlayStage;
   /** How far the play has loaded, 0..1, while loading. */
   readonly progress?: number;

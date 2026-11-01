@@ -1,31 +1,143 @@
-import { html, nothing, type CSSResultGroup, type PropertyValues, type TemplateResult } from 'lit';
+import {
+  html,
+  nothing,
+  type CSSResultGroup,
+  type PropertyDeclarations,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import type { BeMusicDOMGameplayFrame } from '@be-music/player-skin-sdk';
 import { FrameElement } from '../base.ts';
-import { resolveGameplayPanels, resolveSecondPlayerPanels } from '../gameplay-data.ts';
+import { resolveGameplayPanels, resolveSecondPlayerPanels, type BeMusicGameplayPanels } from '../gameplay-data.ts';
+import { cabinetStyles } from '../styles/cabinet.ts';
 import { screenStyles } from '../styles/screen.ts';
 import { gameplayStyles } from '../styles/gameplay.ts';
 import { stats } from '../templates.ts';
+import { renderGameplayCabinet } from './gameplay-cabinet.ts';
 
-/** Layout composition only; the individual panels can also be mounted independently. */
+type SecondPlayerPanels = ReturnType<typeof resolveSecondPlayerPanels>;
+
+/**
+ * Layout composition only; the individual panels can also be mounted independently. With `cabinet` set, a landscape
+ * play in the standard layout is arranged as the skin SDK's cabinet layout (`resolveCabinetLayout`) instead of a column
+ * beside the lanes.
+ */
 export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFrame> {
-  static override styles: CSSResultGroup = [screenStyles, gameplayStyles];
+  static override properties: PropertyDeclarations = {
+    ...FrameElement.properties,
+    cabinet: { type: Boolean, reflect: true },
+  };
+  static override styles: CSSResultGroup = [screenStyles, gameplayStyles, cabinetStyles];
+  declare cabinet: boolean;
   private orientation: string | undefined;
   private detailsOpen = true;
+  /** The cabinet's play information, shown over the BGA: closed until asked for. */
+  private cabinetDetailsOpen = false;
+
+  constructor() {
+    super();
+    this.cabinet = false;
+  }
+
   protected override willUpdate(_changed: PropertyValues): void {
     if (this.frame && this.orientation !== this.frame.layout.orientation) {
       this.orientation = this.frame.layout.orientation;
       this.detailsOpen = this.orientation === 'landscape';
     }
   }
+
   protected override render(): TemplateResult | typeof nothing {
     const f = this.frame;
     if (!f) return nothing;
-    const { state: s, runtime: r, chart } = f;
-    const { score, gauge, judgments, title, facts, totalNotes: total, seconds } = resolveGameplayPanels(f);
+    const panels = resolveGameplayPanels(f);
+    const r = f.runtime;
     const second = r.secondPlayer === undefined ? undefined : resolveSecondPlayerPanels(r.secondPlayer, f.state2P);
-    const course = f.course
-      ? `${f.course.title} · Stage ${(f.course.stageIndex ?? 0) + 1}/${f.course.stages.length}`
-      : 'Single chart';
+    if (this.cabinet && f.layout.orientation === 'landscape' && f.layout.mode === 'standard') {
+      const toggle = html`<button
+        class="btn"
+        data-size="sm"
+        data-variant="outline"
+        aria-expanded=${String(this.cabinetDetailsOpen)}
+        @click=${() => {
+          this.cabinetDetailsOpen = !this.cabinetDetailsOpen;
+          this.requestUpdate();
+        }}
+      >
+        Info
+      </button>`;
+      return renderGameplayCabinet({
+        frame: f,
+        panels,
+        second,
+        actions: this.renderActions(f, toggle),
+        details: this.cabinetDetailsOpen
+          ? html`<div class="hud-extra" part="details">${this.renderDetails(f, panels, second)}</div>`
+          : nothing,
+      });
+    }
+    return this.renderColumn(f, panels, second);
+  }
+
+  private renderActions(f: BeMusicDOMGameplayFrame, extra: TemplateResult | typeof nothing = nothing): TemplateResult {
+    return html`<div class="actions" part="actions">
+      <button class="btn" data-size="sm" @click=${() => this.emit('pause-request', undefined)}>
+        ${f.stage === 'paused' ? 'Resume' : 'Pause'}</button
+      ><button class="btn" data-size="sm" data-variant="outline" @click=${() => this.emit('retry-request', undefined)}>
+        Retry</button
+      ><button class="btn" data-size="sm" data-variant="outline" @click=${() => this.emit('quit-request', undefined)}>
+        Back</button
+      >${extra}<slot name="actions"></slot>
+    </div>`;
+  }
+
+  /** Every panel of the play: the score, the judgments, the gauge, the timing, the settings and the chart. */
+  private renderDetails(
+    f: BeMusicDOMGameplayFrame,
+    panels: BeMusicGameplayPanels,
+    second: SecondPlayerPanels,
+  ): TemplateResult {
+    const { state: s, runtime: r, chart } = f;
+    const { score, gauge, judgments, facts, totalNotes: total, seconds } = panels;
+    return html`<be-music-score-summary exportparts="panel:score-panel" .data=${score}></be-music-score-summary>
+      <be-music-judgment-table
+        exportparts="panel:judgment-panel,table:judgment-table"
+        .data=${judgments}
+      ></be-music-judgment-table>
+      ${
+        second
+          ? html`<be-music-judgment-table
+              exportparts="panel:judgment-panel,table:judgment-table"
+              .data=${second.judgments}
+            ></be-music-judgment-table>`
+          : nothing
+      }
+      <be-music-gauge-panel exportparts="panel:gauge-panel,graph:gauge-graph" .data=${gauge}></be-music-gauge-panel>
+      <be-music-timing-graph
+        exportparts="panel:timing-panel,graph:timing-graph"
+        .data=${{ timings: s.judgeTimings }}
+      ></be-music-timing-graph>
+      <be-music-play-settings
+        exportparts="panel:settings-panel"
+        .data=${{ view: s.view, options: f.playOptions, runtime: r }}
+      ></be-music-play-settings>
+      <section class="panel" part="chart-panel">
+        <h3>Chart &amp; course</h3>
+        <p class="muted">${chart?.artist ?? ''} · ${facts} · ${total} notes</p>
+        <p class="muted">${chart?.chartPath ?? ''}</p>
+        <p class="muted">${courseLine(f)}</p>
+        ${stats([['Time left', `${Math.ceil(Math.max(0, s.totalSeconds - seconds))} s`]])}
+      </section>
+      <slot></slot>`;
+  }
+
+  /** The column beside the lanes: the heading, the live figures, the actions and the play information below. */
+  private renderColumn(
+    f: BeMusicDOMGameplayFrame,
+    panels: BeMusicGameplayPanels,
+    second: SecondPlayerPanels,
+  ): TemplateResult {
+    const { state: s, runtime: r, chart } = f;
+    const { score, gauge, title, facts, seconds } = panels;
     const style = `--stage-ratio:${f.layout.stage.width / f.layout.stage.height};--hud-left:${((f.layout.playfield.right + 20) / f.layout.stage.width) * 100}%;--playfield-center:${(f.layout.playfield.centerX / f.layout.stage.width) * 100}%;--be-music-compact-combo-display:none`;
     return html`<section
       class="gameplay"
@@ -44,7 +156,7 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
           <h2 title=${title}>${title}</h2>
           <p class="muted">${chart?.artist ?? ''}</p>
           <p class="muted">${facts}</p>
-          <p class="muted">${f.course ? course : ''}</p>
+          <p class="muted">${f.course ? courseLine(f) : ''}</p>
         </div>
         <div class="hud-primary" part="primary">
           <be-music-score-summary
@@ -84,25 +196,7 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
             aria-label="Chart progress"
           ></progress>
         </div>
-        <div class="actions" part="actions">
-          <button class="btn" data-size="sm" @click=${() => this.emit('pause-request', undefined)}>
-            ${f.stage === 'paused' ? 'Resume' : 'Pause'}</button
-          ><button
-            class="btn"
-            data-size="sm"
-            data-variant="outline"
-            @click=${() => this.emit('retry-request', undefined)}
-          >
-            Retry</button
-          ><button
-            class="btn"
-            data-size="sm"
-            data-variant="outline"
-            @click=${() => this.emit('quit-request', undefined)}
-          >
-            Back</button
-          ><slot name="actions"></slot>
-        </div>
+        ${this.renderActions(f)}
         <details
           class="hud-details"
           .open=${this.detailsOpen}
@@ -111,44 +205,16 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
           }}
         >
           <summary>All play information</summary>
-          <div class="hud-extra" part="details">
-            <be-music-score-summary exportparts="panel:score-panel" .data=${score}></be-music-score-summary>
-            <be-music-judgment-table
-              exportparts="panel:judgment-panel,table:judgment-table"
-              .data=${judgments}
-            ></be-music-judgment-table>
-            ${
-              second
-                ? html`<be-music-judgment-table
-                    exportparts="panel:judgment-panel,table:judgment-table"
-                    .data=${second.judgments}
-                  ></be-music-judgment-table>`
-                : nothing
-            }
-            <be-music-gauge-panel
-              exportparts="panel:gauge-panel,graph:gauge-graph"
-              .data=${gauge}
-            ></be-music-gauge-panel>
-            <be-music-timing-graph
-              exportparts="panel:timing-panel,graph:timing-graph"
-              .data=${{ timings: s.judgeTimings }}
-            ></be-music-timing-graph>
-            <be-music-play-settings
-              exportparts="panel:settings-panel"
-              .data=${{ view: s.view, options: f.playOptions, runtime: r }}
-            ></be-music-play-settings>
-            <section class="panel" part="chart-panel">
-              <h3>Chart &amp; course</h3>
-              <p class="muted">${chart?.artist ?? ''} · ${facts} · ${total} notes</p>
-              <p class="muted">${chart?.chartPath ?? ''}</p>
-              <p class="muted">${course}</p>
-              ${stats([['Time left', `${Math.ceil(Math.max(0, s.totalSeconds - seconds))} s`]])}
-            </section>
-            <slot></slot>
-          </div>
+          <div class="hud-extra" part="details">${this.renderDetails(f, panels, second)}</div>
         </details>
       </aside>
       ${f.stage === 'paused' ? html`<p class="paused" part="paused" role="status">Paused</p>` : nothing}
     </section>`;
   }
+}
+
+function courseLine(f: BeMusicDOMGameplayFrame): string {
+  return f.course
+    ? `${f.course.title} · Stage ${(f.course.stageIndex ?? 0) + 1}/${f.course.stages.length}`
+    : 'Single chart';
 }

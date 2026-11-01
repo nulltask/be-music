@@ -51,7 +51,7 @@ export function resolveGameplayLayout(input: GameplayLayoutInput, stage: BeMusic
     };
   });
   // The landscape touch layout gives the BGA's room to the lanes; a portrait stage keeps it above them.
-  const bga = mode === 'touch' && orientation === 'landscape' ? undefined : stage.resolveBGARect(right);
+  const bga = mode === 'touch' && orientation === 'landscape' ? undefined : stage.resolveBGARect(right, left);
   return {
     mode,
     orientation,

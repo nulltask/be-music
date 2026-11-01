@@ -24,7 +24,7 @@ import {
   STAGE_WIDTH as DESIGN_WIDTH,
   stageProgress,
 } from '@be-music/player-skin-sdk';
-import { addHUDText, type ChildPool } from '../pixi-kit/index.ts';
+import { addHUDNumber, addHUDText, type ChildPool } from '../pixi-kit/index.ts';
 
 /** Stand-in for a layout without a BGA (a page-wide keyboard field): milestones then play in their area. */
 const NO_MONITOR: BeMusicRect = { x: 0, y: 0, w: 0, h: 0 };
@@ -198,7 +198,7 @@ function drawMilestone(
   // A spot narrower than the compact lock-on shrinks the whole cut-in to fit it.
   const fit = !onMonitor && spot ? Math.min(1, spot.w / 120) : 1;
   const alpha = Math.min(1, t / 0.12) * (1 - Math.max(0, (t - 0.7) / 0.3));
-  const count = addHUDText(
+  const count = addHUDNumber(
     layer,
     String(value),
     cx,
@@ -212,11 +212,11 @@ function drawMilestone(
       anchorX: 0.5,
       anchorY: 0.5,
       dropShadow: { color, alpha: 1, blur: 18, distance: 0 },
+      scale: 1.25 - 0.25 * easeOutCubic(Math.min(1, t / 0.25)),
     },
     pool,
   );
-  count.alpha = alpha;
-  count.scale.set(1.25 - 0.25 * easeOutCubic(Math.min(1, t / 0.25)));
+  for (const glyph of count) glyph.alpha = alpha;
   const snap = easeOutCubic(Math.min(1, t / 0.2));
   const lockW = (compact ? 120 : 190) * fit * (1.6 - 0.6 * snap);
   const lockH = (compact ? 74 : 110) * fit * (1.6 - 0.6 * snap);

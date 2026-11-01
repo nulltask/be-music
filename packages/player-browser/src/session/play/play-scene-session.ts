@@ -32,6 +32,7 @@ export interface PlaySceneFacts {
   readonly course?: CourseView;
   readonly playOptions: PlayOptions;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
+  readonly playerName?: string;
   readonly audio?: Pick<AudioService, 'stopOwned' | 'playCue'>;
   readonly sounds?: SystemSoundSet;
 }
@@ -194,6 +195,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       ...(this.facts.course !== undefined ? { course: this.facts.course } : {}),
       playOptions,
       ...(this.facts.scoreTargets !== undefined ? { scoreTargets: this.facts.scoreTargets } : {}),
+      ...(this.facts.playerName !== undefined ? { playerName: this.facts.playerName } : {}),
       state: play.playState,
       ...(play.secondPlayer !== undefined ? { state2P: play.secondPlayer.playState } : {}),
       stage,
