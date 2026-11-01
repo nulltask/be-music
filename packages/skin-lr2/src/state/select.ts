@@ -22,6 +22,8 @@ import {
 import {
   resolveLR2CourseConnectionText,
   resolveLR2CourseDraftInfo,
+  resolveLR2CourseIRButtonState,
+  resolveLR2CourseIRText,
   resolveLR2CourseMakerButtonState,
   resolveLR2CourseMakerOps,
   resolveLR2CourseMakerText,
@@ -177,6 +179,11 @@ function noCourseConnectionText(st: number): string | undefined {
   return st >= LR2_TEXT.COURSE_CONNECTION1 && st <= LR2_TEXT.COURSE_CONNECTION9 ? 'DISABLE' : undefined;
 }
 
+/** The IR flag (`release`) of the course bar under the cursor; `undefined` on any other bar. */
+function focusedCourseRelease(input: LR2SelectInput): boolean | undefined {
+  return input.focused?.kind === 'course' ? input.focused.course.definition.release : undefined;
+}
+
 function selectText(
   st: number,
   input: LR2SelectInput,
@@ -203,6 +210,7 @@ function selectText(
   return (
     (textCourse !== undefined ? resolveLR2CourseText(st, textCourse) : undefined) ??
     (course !== undefined ? resolveLR2CourseConnectionText(st, course) : noCourseConnectionText(st)) ??
+    resolveLR2CourseIRText(st, focusedCourseRelease(input)) ??
     (maker !== undefined ? resolveLR2CourseMakerText(st, maker.defaultConnection) : undefined) ??
     (maker?.randomMixSettings !== undefined ? resolveLR2RandomMixText(st, maker.randomMixSettings) : undefined) ??
     resolveLR2OptionText(st, input.options, chart !== undefined ? resolveLR2KeyModeOp(chart) : undefined) ??
@@ -320,6 +328,7 @@ export function resolveLR2SelectState(input: LR2SelectInput): LR2SelectState {
     slider: (type) =>
       type === LR2_SLIDER.SELECT_POSITION ? input.listPosition : resolveLR2OptionSlider(type, input.options),
     button: (type) =>
+      resolveLR2CourseIRButtonState(type, focusedCourseRelease(input)) ??
       (maker !== undefined ? resolveLR2CourseMakerButtonState(type, course, maker.defaultConnection) : undefined) ??
       (maker?.randomMixSettings !== undefined
         ? resolveLR2RandomMixButtonState(type, maker.randomMixSettings)

@@ -304,6 +304,17 @@ export function registerLR2SkinStateExportsCases(define: DefineBenchmarkCase): v
       lr2StateAPI.resolveLR2RandomMixButtonState(264, BENCH_RANDOM_MIX);
     },
   });
+  define('skin-lr2.state.resolveLR2CourseIRText', {
+    run: () => {
+      lr2StateAPI.resolveLR2CourseIRText(183, true);
+      lr2StateAPI.resolveLR2CourseIRText(183, undefined);
+    },
+  });
+  define('skin-lr2.state.resolveLR2CourseIRButtonState', {
+    run: () => {
+      lr2StateAPI.resolveLR2CourseIRButtonState(253, false);
+    },
+  });
   define('skin-lr2.state.resolveLR2CourseNumber', {
     run: () => {
       lr2StateAPI.resolveLR2CourseNumber(250, BENCH_COURSE);
