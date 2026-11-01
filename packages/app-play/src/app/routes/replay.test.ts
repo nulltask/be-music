@@ -129,7 +129,7 @@ describe('ReplayRoute', () => {
     const h = harness();
     vi.mocked(parseReplay).mockReturnValueOnce(replay({ title: 'Twin', artist: 'three' }));
     await h.route.startReplayReplayFromFile(FILE);
-    expect(h.deps.setStatus).toHaveBeenLastCalledWith('Replay: song not loaded (Twin)');
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('Replay: chart not loaded (Twin)');
     // The select screen comes back, and a dialog names the chart.
     expect(h.deps.showMissingReplayCharts).toHaveBeenLastCalledWith(
       'Load this chart to watch the replay, then drop the replay again.',
@@ -137,7 +137,7 @@ describe('ReplayRoute', () => {
     );
     vi.mocked(parseReplay).mockReturnValueOnce(replay({}));
     await h.route.startReplayReplayFromFile(FILE);
-    expect(h.deps.setStatus).toHaveBeenLastCalledWith('Replay: song not loaded (untitled)');
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('Replay: chart not loaded (untitled)');
     expect(h.deps.showMissingReplayCharts).toHaveBeenLastCalledWith(expect.any(String), ['untitled chart']);
     expect(h.deps.showSelect).toHaveBeenCalledTimes(2);
     expect(h.deps.playChart).not.toHaveBeenCalled();

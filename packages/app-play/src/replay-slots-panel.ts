@@ -3,6 +3,7 @@
 // and on the select screen it replays, downloads or deletes the replays of the chart or course under the cursor.
 
 import { downloadBlob } from '@be-music/player-browser/recording';
+import { playerText } from './player-copy.ts';
 import { REPLAY_SLOT_COUNT, type LibraryEntry } from '@be-music/player-scene-model';
 import type { ReplaySlotRecord, ReplaySlotTarget } from './services/replay-slots.ts';
 import type { ReplaySlotService, ResultReplaySlots } from './services/replay-slot-service.ts';
@@ -123,14 +124,15 @@ export class ReplaySlotsPanel {
     const rows = Array.from({ length: REPLAY_SLOT_COUNT }, (_, slot) => {
       const state = states[slot];
       const record = records[slot];
-      const save = button(state === 'saved' ? 'Saved' : 'Save', () => void slots.save(slot));
+      const copy = playerText().replay;
+      const save = button(state === 'saved' ? copy.saved : copy.save, () => void slots.save(slot));
       save.disabled = !slots.saveable || state === 'saved';
       save.dataset.slot = String(slot + 1);
       return element('li', { className: 'replay-slots-row' }, [
-        element('span', { className: 'replay-slots-name', text: `Slot ${slot + 1}` }),
+        element('span', { className: 'replay-slots-name', text: copy.slot(slot + 1) }),
         element('span', {
           className: 'replay-slots-detail',
-          text: state === 'saved' ? 'Saved now' : record !== undefined ? describeReplaySlotRecord(record) : 'Empty',
+          text: state === 'saved' ? copy.savedNow : record !== undefined ? describeReplaySlotRecord(record) : copy.empty,
         }),
         save,
       ]);
@@ -138,11 +140,9 @@ export class ReplaySlotsPanel {
     this.card.dataset.mode = 'result';
     this.card.replaceChildren(
       element('header', {}, [
-        element('h2', { text: 'Replay slots' }),
+        element('h2', { text: playerText().replay.slotsTitle }),
         element('p', {
-          text: slots.saveable
-            ? 'Save this play to a slot (keys 1-4). A slot keeps one replay.'
-            : 'This play cannot be saved to a slot.',
+          text: slots.saveable ? playerText().replay.saveHint : playerText().replay.cannotSave,
         }),
       ]),
       element('ol', { className: 'replay-slots-list' }, rows),
@@ -160,23 +160,24 @@ export class ReplaySlotsPanel {
     const rows: HTMLElement[] = [];
     records.forEach((record, slot) => {
       if (record === undefined) return;
-      const replay = button('Replay', () => this.options.replay(slot));
+      const copy = playerText().replay;
+      const replay = button(copy.replay, () => this.options.replay(slot));
       replay.dataset.slot = String(slot + 1);
       rows.push(
         element('li', { className: 'replay-slots-row' }, [
-          element('span', { className: 'replay-slots-name', text: `Slot ${slot + 1}` }),
+          element('span', { className: 'replay-slots-name', text: copy.slot(slot + 1) }),
           element('span', { className: 'replay-slots-detail', text: describeReplaySlotRecord(record) }),
           element('span', { className: 'replay-slots-actions' }, [
             replay,
-            button('Download', () => void this.download(target, record), 'outline'),
-            button('Delete', () => void this.remove(target, record), 'outline'),
+            button(copy.download, () => void this.download(target, record), 'outline'),
+            button(copy.delete, () => void this.remove(target, record), 'outline'),
           ]),
         ]),
       );
     });
     this.card.dataset.mode = 'select';
     this.card.replaceChildren(
-      element('header', {}, [element('h2', { text: 'Replay slots' })]),
+      element('header', {}, [element('h2', { text: playerText().replay.slotsTitle })]),
       element('ol', { className: 'replay-slots-list' }, rows),
     );
     this.card.hidden = false;
@@ -186,7 +187,7 @@ export class ReplaySlotsPanel {
   private async download(target: ReplaySlotTarget, record: ReplaySlotRecord): Promise<void> {
     const text = await this.options.service.store.readText(target, record.slot).catch(() => undefined);
     if (text === undefined) {
-      this.options.setStatus(`Replay slot ${record.slot + 1} could not be read`);
+      this.options.setStatus(playerText().replay.slotUnreadable(record.slot + 1));
       return;
     }
     const stem = record.title.normalize('NFKC').replace(/[\\/:*?"<>|\s]+/g, '_') || 'replay';
@@ -199,9 +200,9 @@ export class ReplaySlotsPanel {
     if (!window.confirm(`Delete the replay in slot ${record.slot + 1} of "${record.title}"?`)) return;
     try {
       await this.options.service.store.remove(target, record.slot);
-      this.options.setStatus(`Deleted the replay in slot ${record.slot + 1}`);
+      this.options.setStatus(playerText().replay.slotDeleted(record.slot + 1));
     } catch {
-      this.options.setStatus(`Replay slot ${record.slot + 1} could not be deleted`);
+      this.options.setStatus(playerText().replay.slotNotDeleted(record.slot + 1));
     }
   }
 }

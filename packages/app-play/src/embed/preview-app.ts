@@ -4,6 +4,7 @@
 // (`findEmbedChart`) plays it on its own, as a track of one chart does. A play ends back on the list, or — for a chart played on its own — on a
 // replay button. Nothing is recorded.
 
+import { playerText } from '../player-copy.ts';
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-browser/audio';
 import {
   BrowserChartCollectionStore,
@@ -101,7 +102,7 @@ export class PreviewApp {
   /** Loads `track` and shows its list, or its single chart behind a play button. */
   public async open(track: EmbedTrack | undefined): Promise<void> {
     if (track === undefined) {
-      this.showMessage('Add ?track= with the URL of a chart archive (.zip) to preview it.');
+      this.showMessage(playerText().embed.needTrack);
       return;
     }
     this.mode = track.mode;
@@ -120,7 +121,7 @@ export class PreviewApp {
         onProgress: ({ current, total }) => progress.reading(current, total),
       });
     } catch (error) {
-      this.showMessage(`Could not load the track: ${error instanceof Error ? error.message : String(error)}`);
+      this.showMessage(playerText().embed.loadFailed(error instanceof Error ? error.message : String(error)));
       return;
     }
     const coursePath = track.course;
@@ -142,7 +143,7 @@ export class PreviewApp {
     if (this.single !== undefined) {
       await this.prepare(this.single, 'play');
     } else if (this.charts.length === 0) {
-      this.showMessage('The track holds no playable chart.');
+      this.showMessage(playerText().embed.noChart);
     } else {
       this.showSelect();
     }
@@ -290,7 +291,7 @@ export class PreviewApp {
     } else {
       this.courseRun = new PreviewCourseRun(course);
       const plan = this.courseRun.next();
-      if (plan === undefined) throw new Error('The course holds no playable stage.');
+      if (plan === undefined) throw new Error(playerText().embed.noStage);
       await this.prepareCourseStage(plan, button);
     }
     if (button === undefined) this.begin();
@@ -512,7 +513,7 @@ class LoadingProgress {
     this.label.className = 'text-muted-foreground text-sm';
     this.bar = document.createElement('progress');
     this.bar.className = 'progress';
-    this.bar.setAttribute('aria-label', 'Loading track');
+    this.bar.setAttribute('aria-label', playerText().embed.loadingTrack);
     this.element.append(this.label, this.bar);
     this.downloading(0, 0);
   }
@@ -520,11 +521,11 @@ class LoadingProgress {
   public downloading(loaded: number, total: number): void {
     const size =
       total > 0 ? `${formatMegabytes(loaded)} / ${formatMegabytes(total)} MB` : `${formatMegabytes(loaded)} MB`;
-    this.show(`Downloading track… ${size}`, loaded, total);
+    this.show(playerText().embed.downloading(size), loaded, total);
   }
 
   public reading(current: number, total: number): void {
-    this.show(total > 0 ? `Reading charts… ${current} / ${total}` : 'Reading charts…', current, total);
+    this.show(playerText().embed.reading(current, total), current, total);
   }
 
   /** An indeterminate bar while the total is unknown. */

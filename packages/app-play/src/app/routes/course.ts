@@ -11,6 +11,7 @@ import {
   type CourseMaker,
 } from '@be-music/player-browser/collection';
 import { LR2_RANDOM_MIX_NAME } from '@be-music/player-engine/course';
+import { playerText } from '../../player-copy.ts';
 import type {
   BeMusicCourseReplay,
   BeMusicReplay,
@@ -168,7 +169,7 @@ export class CourseRoute {
     // A NEW COURSE bar starts making a course of its folder's kind; songs decided from now on join it.
     if (plan.action === 'make') {
       this.courseMaker.maker.start(plan.kind);
-      this.setStatus('Making a course: decide songs to add them, then save');
+      this.setStatus(playerText().course.making);
       return;
     }
     if (plan.action === 'unplayable') {
