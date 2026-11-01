@@ -15,7 +15,7 @@ import {
   startAccountActionLabels,
   type AccountActionResult,
 } from './account.ts';
-import { playerText } from './player-copy.ts';
+import { onPlayerLangChange, playerText } from './player-copy.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
 import { leaderboardLink } from './service-links.ts';
 import type { BeMusicCourseReplay } from '@be-music/player-engine/replay';
@@ -64,6 +64,9 @@ export class LeaderboardPanel {
   });
   /** The account state last shown, so signing in (or arriving signed in) can be told from a refresh. */
   private shownState: 'signed-in' | 'anonymous' | 'signed-out' | undefined;
+  /** The account last painted, so a Help language switch can paint it again. */
+  private shownAccount: Awaited<ReturnType<typeof loadLeaderboardAccount>> | undefined;
+  private accountReady = false;
   private signedInName: string | undefined;
   /** The name of the account kept with a passkey, which a play shows; `undefined` signed out or anonymous. */
   get playerName(): string | undefined {
@@ -74,6 +77,13 @@ export class LeaderboardPanel {
   private readonly host: LeaderboardPanelHost;
   constructor(host: LeaderboardPanelHost) {
     this.host = host;
+    onPlayerLangChange(() => {
+      if (!this.accountReady) return;
+      this.accountState.status = describeLeaderboardAccount(this.shownAccount);
+      this.accountController?.refresh();
+      this.renderStartAccount(this.shownAccount);
+      this.paintAccountChip(this.shownAccount);
+    });
   }
   /** Fills the Debug Menu's Leaderboard folder and wires the account chip. */
   buildFolder(folder: FolderApi, openPane: () => void = () => undefined): void {
@@ -208,6 +218,8 @@ export class LeaderboardPanel {
   /** Re-reads the account into the Debug Menu's "Account" row and the account chip. */
   async refreshAccount(): Promise<void> {
     const account = await loadLeaderboardAccount();
+    this.shownAccount = account;
+    this.accountReady = true;
     this.signedInName = account !== undefined && !account.anonymous ? account.displayName : undefined;
     const state = describeAccountChip(account).state;
     // A player who is signed in takes part: submitting turns on when they arrive signed in or sign in, not on every
@@ -217,13 +229,17 @@ export class LeaderboardPanel {
     this.accountState.status = describeLeaderboardAccount(account);
     this.accountController?.refresh();
     this.renderStartAccount(account);
+    this.paintAccountChip(account);
+  }
+  /** Paints the account chip from the current language. */
+  private paintAccountChip(account: Awaited<ReturnType<typeof loadLeaderboardAccount>>): void {
     const chip = document.querySelector<HTMLAnchorElement>('#account-chip');
     if (chip === null) return;
     const view = describeAccountChip(account);
     chip.dataset.state = view.state;
     chip.title = view.title;
     chip.href = leaderboardLink(view.href ?? '/', location.hostname);
-    chip.setAttribute('aria-label', `Leaderboard account: ${view.label}`);
+    chip.setAttribute('aria-label', view.title);
     const label = chip.querySelector('#account-chip-label');
     if (label !== null) label.textContent = view.label;
   }
@@ -248,6 +264,9 @@ export class LeaderboardPanel {
     } else {
       label.textContent = view.label;
     }
+    // The template's `data-i18n` is the "checking" placeholder. Leaving it would put that string back on the next
+    // language switch, over the account this row is actually showing.
+    label.removeAttribute('data-i18n');
     actions.replaceChildren(
       ...view.actions.map((action) => {
         const button = document.createElement('button');

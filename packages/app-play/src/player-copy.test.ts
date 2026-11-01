@@ -1,10 +1,22 @@
 import { afterEach, expect, test } from 'vite-plus/test';
 import { describeProfileError, describeStartAccount } from './account.ts';
 import { describeLeaderboardResult } from './leaderboard.ts';
-import { playerText, resolvePlayerLang, setPlayerLang } from './player-copy.ts';
+import { onPlayerLangChange, playerText, resolvePlayerLang, setPlayerLang } from './player-copy.ts';
 
 afterEach(() => {
   setPlayerLang('en');
+});
+
+test('rebuilds views that listen when the language changes', () => {
+  let seen = '';
+  const stop = onPlayerLangChange(() => {
+    seen = playerText().shell.help;
+  });
+  setPlayerLang('ja');
+  expect(seen).toBe('ヘルプ');
+  stop();
+  setPlayerLang('en');
+  expect(seen).toBe('ヘルプ');
 });
 
 test('treats ja locales as Japanese and everything else as English', () => {
