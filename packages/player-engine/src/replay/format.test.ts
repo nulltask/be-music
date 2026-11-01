@@ -458,6 +458,16 @@ test('preserves independent AUTO SCRATCH sides and rejects non-boolean switches'
   }
 });
 
+test('preserves the ANY KEY switch and rejects a non-boolean one', () => {
+  const replay = makeReplay();
+  expect(parseReplay(serializeReplay(replay)).play.anyKey).toBeUndefined();
+  replay.play.anyKey = true;
+  expect(parseReplay(serializeReplay(replay)).play.anyKey).toBe(true);
+  const invalid = JSON.parse(serializeReplay(replay));
+  invalid.play.anyKey = 'yes';
+  expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+});
+
 test('round-trips source long-note modifiers and rejects unknown variants', () => {
   for (const longNoteModifier of ['OFF', 'LEGACY', 'REMOVE'] as const) {
     const replay = makeReplay();
