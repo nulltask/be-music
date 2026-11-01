@@ -26,15 +26,33 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   );
   expect(footer).not.toContain('>beta</span>');
   expect(footer).not.toContain('>Beta</span>');
-  const brand = PLAYER_APP_HTML.indexOf('class="player-brand"');
-  expect(brand).toBeGreaterThan(-1);
-  expect(brand).toBeLessThan(PLAYER_APP_HTML.lastIndexOf('<footer'));
-  expect(PLAYER_APP_HTML).toMatch(
-    /<div class="player-brand">\s*<span class="font-semibold tracking-tight whitespace-nowrap">be-music player<\/span>\s*<span class="badge" data-variant="outline">Beta<\/span>\s*<\/div>/,
+  expect(PLAYER_APP_HTML).toContain('id="player-service-header"');
+  const mainStart = PLAYER_APP_HTML.indexOf('<main id="main"');
+  const mainEnd = PLAYER_APP_HTML.lastIndexOf('</main>');
+  const main = PLAYER_APP_HTML.slice(mainStart, mainEnd);
+  expect(mainStart).toBeGreaterThan(PLAYER_APP_HTML.indexOf('id="player-service-header"'));
+  expect(main).not.toContain('service-page-footer');
+  expect(main).not.toContain('id="player-service-header"');
+  expect(PLAYER_APP_HTML.indexOf('service-page-footer')).toBeGreaterThan(mainEnd);
+  const header = PLAYER_APP_HTML.slice(
+    PLAYER_APP_HTML.indexOf('id="player-service-header"'),
+    PLAYER_APP_HTML.indexOf('<main id="main"'),
   );
+  expect(header).toContain('class="flex items-center gap-x-3 px-4 py-2.5 sm:gap-x-6"');
+  expect(header).not.toContain('max-w-5xl');
+  expect(header).not.toContain('mx-auto');
+  expect(PLAYER_APP_HTML).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
+  expect(PLAYER_APP_HTML).toContain('data-service-header="settings"');
+  expect(PLAYER_APP_HTML).toContain('aria-label="Settings"');
+  expect(PLAYER_APP_HTML).toContain('data-service-header="fullscreen"');
+  expect(PLAYER_APP_HTML).toContain('aria-label="Full screen"');
+  expect(PLAYER_APP_HTML).not.toContain('lucide-play');
+  expect(PLAYER_APP_HTML).not.toContain('id="account-chip"');
+  expect(PLAYER_APP_HTML).not.toContain('player-brand');
   expect(PLAYER_APP_HTML).toContain(
     '<h2 class="help-modal-title" id="help-modal-title"><span>be-music player</span><span class="badge" data-variant="outline">Beta</span></h2>',
   );
+  expect(PLAYER_APP_HTML.match(/<span class="badge"/g)).toHaveLength(2);
 });
 
 test('uses chart and replay vocabulary in bilingual help', async () => {

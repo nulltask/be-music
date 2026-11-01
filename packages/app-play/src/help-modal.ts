@@ -81,6 +81,11 @@ function wireUsageLanguageSwitch(): void {
   }
 }
 
+/** Switches Help, the Public Beta line and the shell copy together. The header's language menu uses this too. */
+export function applyPlayerLanguage(lang: PlayerLang): void {
+  activate(lang);
+}
+
 function activate(lang: PlayerLang): void {
   const toggles = Array.from(document.querySelectorAll<HTMLButtonElement>('.help-lang-toggle'));
   const blocks = Array.from(document.querySelectorAll<HTMLElement>('.help-lang'));

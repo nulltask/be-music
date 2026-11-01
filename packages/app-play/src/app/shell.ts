@@ -11,6 +11,7 @@ import {
   FullscreenEscapeLock,
   getFullscreenElement,
   type KeyboardLockNavigatorLike,
+  playerFullscreenElement,
   shouldCaptureFullscreenEscape,
   toggleFullscreen,
 } from '../fullscreen.ts';
@@ -138,12 +139,12 @@ export class PlayerShell {
     stage.addEventListener('pointerdown', (event) => {
       lastPointerType = event.pointerType;
       // A phone gives the stage the whole screen on the first tap: the browser bars eat a large share of a landscape
-      // phone's height, and the stage is fitted to that height. The document element goes fullscreen. It contains the
-      // shell, where the Debug Menu is mounted, so the menu stays reachable, along with the page's other overlays.
-      // Once only, so leaving fullscreen sticks. iPhone Safari has no element fullscreen and simply stays windowed.
+      // phone's height, and the stage is fitted to that height. The play surface (`#main`) goes fullscreen. It holds
+      // the Debug Menu, and the site header and the site footer sit outside it. Once only, so leaving fullscreen
+      // sticks. iPhone Safari has no element fullscreen and simply stays windowed.
       if (this.deviceProfile.phone && event.pointerType === 'touch' && !autoFullscreenTried) {
         autoFullscreenTried = true;
-        void enterTouchFullscreen(document.documentElement);
+        void enterTouchFullscreen(playerFullscreenElement(document));
       }
     });
     stage.addEventListener('dblclick', (event) => {
@@ -151,7 +152,7 @@ export class PlayerShell {
       event.preventDefault();
       // Double taps are lane presses during play, not a fullscreen toggle.
       if (lastPointerType !== 'mouse' && this.elements.shell.classList.contains('in-gameplay')) return;
-      void toggleFullscreen(this.elements.shell);
+      void toggleFullscreen(playerFullscreenElement(document));
     });
     // Every way in or out of fullscreen (double-click, the Debug Menu toggle, the phone's first tap, the browser's own
     // exit) fires `fullscreenchange`, so the lock follows it from here.

@@ -29,8 +29,31 @@ textarea {
 
 .shell {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
   width: 100%;
   height: 100%;
+  padding: 0;
+  border: 0;
+  text-align: start;
+  text-wrap: wrap;
+}
+
+/* The shared header stays off the playfield. The stage fills whatever height is left. */
+.player-service-header {
+  flex: none;
+  width: 100%;
+}
+.shell.in-gameplay .player-service-header {
+  display: none;
+}
+.player-main {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Native buttons activate hidden directory/file inputs. */
@@ -41,13 +64,19 @@ textarea {
 /* Tweakpane's public theme variables keep controls legible over the stage. */
 .debug-pane-container {
   position: fixed;
-  top: max(8px, env(safe-area-inset-top, 0px));
+  top: calc(3rem + max(8px, env(safe-area-inset-top, 0px)));
   right: max(8px, env(safe-area-inset-right, 0px));
   width: 300px;
   max-width: calc(100vw - 16px);
-  max-height: calc(100dvh - 16px);
+  max-height: calc(100dvh - 3rem - 16px);
   overflow-y: auto;
   z-index: 40;
+}
+.shell.in-gameplay .debug-pane-container,
+.player-main:fullscreen .debug-pane-container,
+.player-main:-webkit-full-screen .debug-pane-container {
+  top: max(8px, env(safe-area-inset-top, 0px));
+  max-height: calc(100dvh - 16px);
 }
 .debug-pane,
 .skin-config-pane {
@@ -164,33 +193,19 @@ textarea {
 }
 
 /*
- * Render stage. Fills the shell's full viewport so PixiJS's
- * `resizeTo: container` sees the entire window size and the
- * `resolveScaledViewport` math can scale the LR2 design space
- * (640×480 / 1280×720 etc.) up as far as the aspect-correct fit
- * allows.
- *
- * Both `width` and `height` need to be explicit `100%`: the shell
- * itself is `position: relative` (no grid / flex) since the
- * toolbar is absolute-positioned, so a default `display: block`
- * stage would have `height: auto` and collapse to its (zero)
- * content height — which would in turn shrink the canvas inside
- * down to nothing.
+ * Render stage. Fills the space under the shared header (`inset: 0` of `.player-main`). Pixi's `resizeTo` follows that
+ * box, and a ResizeObserver on it refits the skin when the header hides during play.
  */
 .stage {
-  position: relative;
+  position: absolute;
+  inset: 0;
   /*
    * Keep the stage clear of a landscape phone's notch / rounded corners. Only the sides: the stage is height-bound on a
    * phone, so giving up the bottom inset (home indicator) would shrink the whole play field. Zero on desktops.
    */
   width: auto;
-  /*
-   * The empty shell is also Basecoat's `.empty` state, a centring flex column: stretch, or the stage shrinks to its
-   * canvas and the first screen is drawn at the canvas's default size.
-   */
-  align-self: stretch;
+  height: auto;
   margin: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
-  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -203,43 +218,41 @@ textarea {
 
 /*
  * The canvas takes keyboard focus (tabindex 0) so the scenes get their keys, but it is the whole play surface: a focus
- * ring would frame the screen, most visibly in fullscreen. The fullscreen shell gets none either.
+ * ring would frame the screen, most visibly in fullscreen. The fullscreen play surface gets none either.
  */
 .stage canvas:focus,
 .stage canvas:focus-visible,
-.shell:fullscreen,
-.shell:-webkit-full-screen {
+.player-main:fullscreen,
+.player-main:-webkit-full-screen {
   outline: none;
 }
 
 /*
- * Fullscreen target is `.shell` (not the canvas itself) so Pixi's
+ * Fullscreen target is `#main` (not the canvas, and not `.shell`) so Pixi's
  * `resizeTo: #stage` still sees a 100%-of-viewport container after
  * the browser chrome disappears, and so the floating debug / help /
- * search overlays stay reachable. The Debug Menu
- * (`.debug-pane-container`) is mounted inside `.shell` for that
- * reason; on `document.body` the browser would hide it while `.shell`
+ * search overlays stay reachable. The site header and the site footer
+ * sit outside `#main`, so fullscreen leaves them on the page. The Debug
+ * Menu (`.debug-pane-container`) is mounted inside `#main` for that
+ * reason; outside it, the browser would hide the menu while `#main`
  * is fullscreen. The background fill covers Safari's brief unstyled
  * flash as the element is promoted.
  */
-.shell:fullscreen,
-.shell:-webkit-full-screen {
+.player-main:fullscreen,
+.player-main:-webkit-full-screen {
   width: 100%;
   height: 100%;
   background: #08090d;
 }
 
 /*
- * Drop overlay — three layers stacked over the stage:
+ * Drop overlay — two layers stacked over the stage:
  *
  *   1. `.drop`            — full-stage container, hidden by default.
  *                           Becomes a placement grid when active so
  *                           `.drop-card` lands centred without an
  *                           extra wrapper.
- *   2. `.drop-frame`      — hairline ring at rest. Hidden
- *                           during a drag; the card is that
- *                           feedback.
- *   3. `.drop-card`       — frosted-glass content panel: icon,
+ *   2. `.drop-card`       — frosted-glass content panel: icon,
  *                           title, subtitle. Letter-spaced uppercase
  *                           typography pulls the centre of mass
  *                           upward; slow scale + glow animations on
@@ -249,7 +262,7 @@ textarea {
  * Visible whenever the shell carries `.empty` (no songs loaded
  * yet) so first-time visitors see the affordance, and during a
  * live drag (`.dragging`) where the card's heavier glow
- * tier kicks in. The stage ring stays hidden then.
+ * tier kicks in. The card is the only drop feedback.
  */
 .drop {
   position: absolute;
@@ -289,19 +302,6 @@ textarea {
  */
 .dragging .drop {
   background: radial-gradient(circle at center, rgb(8 9 13 / 0.72) 0%, rgb(4 5 9 / 0.92) 70%, rgb(0 0 0 / 0.96) 100%);
-}
-
-.drop-frame {
-  position: absolute;
-  inset: 24px;
-  border: 1px solid color-mix(in oklch, var(--primary) 18%, transparent);
-  border-radius: 14px;
-  pointer-events: none;
-}
-
-/* A drag's feedback is the card. Keep this ring from lighting up for the gesture. */
-.dragging .drop-frame {
-  visibility: hidden;
 }
 
 .drop-card {
@@ -1864,52 +1864,6 @@ textarea {
 }
 
 /*
- * Leaderboard account chip, bottom-right. Same glass pill as the Help button; the dot carries the state (green signed
- * in, amber anonymous, grey signed out) so it reads at a glance without the label.
- */
-.account-chip {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  z-index: 8;
-  max-width: min(40vw, 260px);
-}
-
-.account-chip-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #6b7280;
-}
-
-.account-chip[data-state='signed-in'] .account-chip-dot {
-  background: #3fb950;
-  box-shadow: 0 0 6px rgb(63 185 80 / 0.7);
-}
-
-.account-chip[data-state='anonymous'] .account-chip-dot {
-  background: #f5a524;
-}
-
-.account-chip-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 480px) {
-  .account-chip-label {
-    display: none;
-  }
-}
-
-.shell.in-gameplay .account-chip {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/*
  * During play the select-screen overlays step aside so they never cover the skin's track plate; the Help button stays
  * reachable by hovering where it sits. The search field shows on the select screen only (`off-select` elsewhere).
  */
@@ -2171,10 +2125,7 @@ html.touch-first .search-input.search-inline:focus {
   transform: none;
 }
 
-/* Until the account has been read, the chip stays out of sight and the start card says it is checking. */
-.account-chip[data-state='loading'] {
-  visibility: hidden;
-}
+/* Until the account has been read, the start card says it is checking. */
 .start-account[data-state='loading'] .start-account-label {
   color: rgb(170 180 194 / 0.7);
 }
@@ -2367,8 +2318,7 @@ html.touch-first .search-input.search-inline:focus {
 .shell.empty .drop {
   padding-bottom: 13rem;
 }
-.shell.empty .help-button,
-.shell.empty .account-chip {
+.shell.empty .help-button {
   bottom: calc(13rem + env(safe-area-inset-bottom, 0px));
 }
 
@@ -2448,20 +2398,4 @@ html.touch-first .search-input.search-inline:focus {
   justify-content: flex-end;
   gap: 6px;
   padding-top: 8px;
-}
-
-/* Site title. With the other page chrome: on the start and select screens, off the playfield during play. */
-.player-brand {
-  position: absolute;
-  z-index: 8;
-  top: max(12px, env(safe-area-inset-top, 0px));
-  left: max(12px, env(safe-area-inset-left, 0px));
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  pointer-events: none;
-}
-
-.shell.in-gameplay .player-brand {
-  visibility: hidden;
 }
