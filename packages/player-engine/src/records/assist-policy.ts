@@ -44,7 +44,7 @@ export interface AssistFinding {
 
 /** The facts of a play the classification reads: its recorded options and chart. */
 export type AssistReplay = Pick<BeMusicReplay, 'play'> & {
-  chart: Pick<BeMusicReplay['chart'], 'notes' | 'bpmRange'>;
+  chart: Pick<BeMusicReplay['chart'], 'notes' | 'bpmRange'> & Partial<Pick<BeMusicReplay['chart'], 'chartPlayOptions'>>;
 };
 
 /** beatoraja's lane options that declare LIGHT_ASSIST (0.8.9 `Random`, `LaneShuffleModifier`, `NoteShuffleModifier`). */
@@ -159,8 +159,12 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
   if (play.options?.practice === true && playedRuleset === 'beatoraja')
     add({ option: 'practice', source: 'beatoraja', assistClass: 'no-save' });
 
-  add(laneFinding(play.randomLane?.p1, playedRuleset));
-  add(laneFinding(play.randomLane?.p2, playedRuleset));
+  // A lane arrangement the chart forced (#844) is nanasigroove's, which has no assist class, and every play of the chart
+  // gets it: it is not the player's assist, whatever lane value the host recorded for it.
+  if (replay.chart?.chartPlayOptions?.options.random === undefined) {
+    add(laneFinding(play.randomLane?.p1, playedRuleset));
+    add(laneFinding(play.randomLane?.p2, playedRuleset));
+  }
 
   switch (play.battleMode) {
     case 'BATTLE':

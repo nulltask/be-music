@@ -5,6 +5,7 @@
  * this module only turns a {@link BeMusicReplay} into the neutral {@link RulesetChartFacts} the tables take, and
  * re-exports the ruleset surface the replay API has always exposed.
  */
+import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
 import {
   createEmptyRulesetNoteCounts,
   resolveRuleset,
@@ -70,6 +71,7 @@ export function resolveRulesetConfig(
       ? { judgeWindowOverrideMs: replay.play.judgeWindowOverrideMs }
       : {}),
     ...(course === undefined ? {} : { course: courseStageRulesetOptions(course) }),
+    ...resolveChartJudgeOption(replay.chart.chartPlayOptions),
     ...options,
     // A legacy replay always uses compatibility, regardless of the viewer's current choice.
     bmsonTotalMode: replay.play.bmsonTotalMode ?? 'beatoraja',

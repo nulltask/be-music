@@ -218,6 +218,14 @@ describe('classifyReplayAssists', () => {
     expect(classOf({ options: { visualConstant: true } })).toBe('none');
   });
 
+  test("a chart-forced arrangement is not the player's lane assist (#844)", () => {
+    const forced = { chartPlayOptions: { version: 1 as const, options: { random: 'RANDOM+' as const } } };
+    expect(classOf({ randomLane: { p1: 'RANDOM-EX', p2: 'RANDOM-EX' } })).toBe('light');
+    expect(classOf({ randomLane: { p1: 'RANDOM-EX', p2: 'RANDOM-EX' } }, forced)).toBe('none');
+    // Other assists of the player still count.
+    expect(classOf({ randomLane: { p1: 'RANDOM-EX' }, autoScratch: true }, forced)).toBe('light');
+  });
+
   test('counts the 2P AUTO SCRATCH only on a chart with a 2P side', () => {
     expect(classOf({ autoScratch1P: false, autoScratch2P: true })).toBe('none');
     expect(classOf({ autoScratch1P: false, autoScratch2P: true }, { notes: [note('11'), note('26')] })).toBe('light');

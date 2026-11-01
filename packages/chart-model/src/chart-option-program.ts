@@ -1,6 +1,7 @@
 import { parseHDXLongNoteMode } from './hdx-long-note-mode.ts';
 import { findLastIndexAtOrBefore } from '@be-music/shared-utils/core';
 import type { ChartOptionTimeline } from './chart-options.ts';
+import { isChartPlayOptionDeclaration } from './chart-play-options.ts';
 import { parseChartVisualOption, type ChartVisualOptionFields } from './chart-option-visual.ts';
 
 export interface ChartOptionState extends ChartVisualOptionFields {
@@ -97,6 +98,10 @@ function compileHiSpeed(declaration: string, timed: boolean): number | ChartOpti
   if (legacy && LEGACY_HI_SPEED_VALUES.has(legacy[1]!))
     return timed ? 'initial-only-alias' : Math.max(0.25, Number(legacy[1]));
   if (parseHDXLongNoteMode(declaration) !== undefined) return 'initial-only-option';
+  // RANDOM and gameplay CRAZY are initial-only in nanasigroove; `compileChartPlayOptions` consumes the initial ones.
+  // `CRAZY_OFF` also clears the visual CRAZY subfamilies, so it stays a display operation too.
+  if (isChartPlayOptionDeclaration(declaration) && parseChartVisualOption(declaration) === undefined)
+    return 'initial-only-option';
   if (declaration.startsWith('charatbeatHDX:LONGMODE')) return 'invalid-parameter';
   return 'unsupported-option';
 }
@@ -111,6 +116,8 @@ export function compileChartOptions(timeline: ChartOptionTimeline): CompiledChar
   for (const declaration of timeline.initial) {
     // LONGMODE is resolved by note-rules before note extraction, not a display/replay-profile operation.
     if (parseHDXLongNoteMode(declaration) !== undefined) continue;
+    // RANDOM and gameplay CRAZY are play options (`compileChartPlayOptions`), not display operations; `CRAZY_OFF` is both.
+    if (isChartPlayOptionDeclaration(declaration) && parseChartVisualOption(declaration) === undefined) continue;
     const value = compileDeclaration(declaration, false);
     if (typeof value === 'function') state = value(state);
     else diagnostics.push({ code: value, declaration });
