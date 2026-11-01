@@ -72,7 +72,9 @@ textarea {
   overflow-y: auto;
   z-index: 40;
 }
-.shell.in-gameplay .debug-pane-container {
+.shell.in-gameplay .debug-pane-container,
+.player-main:fullscreen .debug-pane-container,
+.player-main:-webkit-full-screen .debug-pane-container {
   top: max(8px, env(safe-area-inset-top, 0px));
   max-height: calc(100dvh - 16px);
 }
@@ -216,27 +218,28 @@ textarea {
 
 /*
  * The canvas takes keyboard focus (tabindex 0) so the scenes get their keys, but it is the whole play surface: a focus
- * ring would frame the screen, most visibly in fullscreen. The fullscreen shell gets none either.
+ * ring would frame the screen, most visibly in fullscreen. The fullscreen play surface gets none either.
  */
 .stage canvas:focus,
 .stage canvas:focus-visible,
-.shell:fullscreen,
-.shell:-webkit-full-screen {
+.player-main:fullscreen,
+.player-main:-webkit-full-screen {
   outline: none;
 }
 
 /*
- * Fullscreen target is `.shell` (not the canvas itself) so Pixi's
+ * Fullscreen target is `#main` (not the canvas, and not `.shell`) so Pixi's
  * `resizeTo: #stage` still sees a 100%-of-viewport container after
  * the browser chrome disappears, and so the floating debug / help /
- * search overlays stay reachable. The Debug Menu
- * (`.debug-pane-container`) is mounted inside `.shell` for that
- * reason; on `document.body` the browser would hide it while `.shell`
+ * search overlays stay reachable. The site header and the site footer
+ * sit outside `#main`, so fullscreen leaves them on the page. The Debug
+ * Menu (`.debug-pane-container`) is mounted inside `#main` for that
+ * reason; outside it, the browser would hide the menu while `#main`
  * is fullscreen. The background fill covers Safari's brief unstyled
  * flash as the element is promoted.
  */
-.shell:fullscreen,
-.shell:-webkit-full-screen {
+.player-main:fullscreen,
+.player-main:-webkit-full-screen {
   width: 100%;
   height: 100%;
   background: #08090d;

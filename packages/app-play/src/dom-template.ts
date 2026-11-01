@@ -26,7 +26,7 @@ function playHostname(): string {
  * stays self-documenting.
  *
  * Sub-elements wired up elsewhere:
- *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings toggles the Debug Menu. Fullscreen toggles the shell, or the document on a phone.
+ *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings toggles the Debug Menu. Fullscreen covers `#main`, so this header and the site footer stay on the page.
  *  - `#help-button` / `#help-modal` — `help-modal.ts` (`wireHelpModal`)
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
@@ -1349,6 +1349,7 @@ export const PLAYER_APP_HTML = `
       </div>
       <footer class="service-build-footer">${renderBuildInfo(playBuildInfo())}</footer>
     </div>
+  </main>
   ${renderServiceFooter({
     current: 'play',
     hostname: playHostname(),
@@ -1356,6 +1357,5 @@ export const PLAYER_APP_HTML = `
     buildInfo: playBuildInfo(),
     locale: 'both',
   })}
-  </main>
   </div>
 `;

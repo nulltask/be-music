@@ -120,7 +120,7 @@ function resolved() {
 
 function fullscreenDocument(input: {
   phone: boolean;
-  shell?: { requestFullscreen: ReturnType<typeof resolved> } | null;
+  surface?: { requestFullscreen: ReturnType<typeof resolved> } | null;
   rootRequest?: ReturnType<typeof resolved>;
   fullscreenElement?: Element;
   exitFullscreen?: ReturnType<typeof resolved>;
@@ -132,29 +132,31 @@ function fullscreenDocument(input: {
       classList: { contains: (token) => input.phone && token === 'phone' },
       requestFullscreen: input.rootRequest ?? resolved(),
     },
-    querySelector: (selector) => (selector === '.shell' ? (input.shell ?? null) : null),
+    querySelector: (selector) => (selector === '#main' ? (input.surface ?? null) : null),
   };
 }
 
-test('fullscreen toggles the shell on a desktop and the document on a phone', async () => {
-  const shellRequest = resolved();
-  const desktop = fullscreenDocument({ phone: false, shell: { requestFullscreen: shellRequest } });
-  expect(playerHeaderFullscreenTarget(desktop)).toBe(desktop.querySelector('.shell'));
+test('fullscreen toggles the play surface on a desktop and on a phone', async () => {
+  const surfaceRequest = resolved();
+  const desktop = fullscreenDocument({ phone: false, surface: { requestFullscreen: surfaceRequest } });
+  expect(playerHeaderFullscreenTarget(desktop)).toBe(desktop.querySelector('#main'));
+  expect(playerHeaderFullscreenTarget(desktop)).not.toBe(desktop.documentElement);
   await togglePlayerHeaderFullscreen(desktop);
-  expect(shellRequest).toHaveBeenCalledOnce();
+  expect(surfaceRequest).toHaveBeenCalledOnce();
 
   const rootRequest = resolved();
-  const phoneShell = resolved();
+  const phoneSurface = resolved();
   const lock = vi.fn().mockResolvedValue(undefined);
   const phone = fullscreenDocument({
     phone: true,
-    shell: { requestFullscreen: phoneShell },
+    surface: { requestFullscreen: phoneSurface },
     rootRequest,
   });
-  expect(playerHeaderFullscreenTarget(phone)).toBe(phone.documentElement);
+  expect(playerHeaderFullscreenTarget(phone)).toBe(phone.querySelector('#main'));
+  expect(playerHeaderFullscreenTarget(phone)).not.toBe(phone.documentElement);
   await togglePlayerHeaderFullscreen(phone, { orientation: { lock } });
-  expect(rootRequest).toHaveBeenCalledOnce();
-  expect(phoneShell).not.toHaveBeenCalled();
+  expect(phoneSurface).toHaveBeenCalledOnce();
+  expect(rootRequest).not.toHaveBeenCalled();
   expect(lock).toHaveBeenCalledWith('landscape');
 
   const exit = resolved();
@@ -171,6 +173,6 @@ test('fullscreen toggles the shell on a desktop and the document on a phone', as
   expect(activeRoot).not.toHaveBeenCalled();
 
   const fallback = resolved();
-  await togglePlayerHeaderFullscreen(fullscreenDocument({ phone: false, shell: null, rootRequest: fallback }));
+  await togglePlayerHeaderFullscreen(fullscreenDocument({ phone: false, surface: null, rootRequest: fallback }));
   expect(fallback).toHaveBeenCalledOnce();
 });

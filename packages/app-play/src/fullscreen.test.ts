@@ -4,10 +4,23 @@ import {
   exitFullscreen,
   FullscreenEscapeLock,
   getFullscreenElement,
+  playerFullscreenElement,
   requestFullscreen,
   shouldCaptureFullscreenEscape,
   toggleFullscreen,
 } from './fullscreen.ts';
+
+test('playerFullscreenElement is the play surface, outside the site header and footer', () => {
+  const surface = { requestFullscreen: vi.fn() };
+  const root = { requestFullscreen: vi.fn() };
+  const doc = {
+    documentElement: root,
+    querySelector: (selector: string) => (selector === '#main' ? surface : null),
+  };
+  expect(playerFullscreenElement(doc)).toBe(surface);
+  expect(playerFullscreenElement(doc)).not.toBe(root);
+  expect(playerFullscreenElement({ documentElement: root, querySelector: () => null })).toBe(root);
+});
 
 describe('getFullscreenElement', () => {
   test('prefers the unprefixed Fullscreen API', () => {

@@ -2,6 +2,7 @@ import { renderServiceHeader, serviceSkipLink, type ServiceHeaderAccount } from 
 import {
   enterTouchFullscreen,
   getFullscreenElement,
+  playerFullscreenElement,
   toggleFullscreen,
   type FullscreenDocumentLike,
   type FullscreenElementLike,
@@ -41,24 +42,23 @@ let pendingSignIn = false;
 /** Whether the Debug Menu pane is expanded. The gear's `aria-expanded` follows it. */
 let settingsOpen = false;
 
-/** The document the header's fullscreen button reads. A phone fullscreens `documentElement`; a desktop, `.shell`. */
+/** The document the header's fullscreen button reads. Fullscreen covers the play surface (`#main`) on every device. */
 export interface PlayerHeaderFullscreenDocument extends FullscreenDocumentLike {
   documentElement: FullscreenElementLike & { classList: { contains(token: string): boolean } };
   querySelector(selector: string): FullscreenElementLike | null;
 }
 
 /**
- * The element the header toggles, matching the stage: the shell on a desktop, the document element on a phone
- * (`html.phone`, the same target as the phone's first tap).
+ * The element the header toggles: the play surface (`#main`), the same target as a double-click and a phone's first
+ * tap. The site header and the site footer sit outside it.
  */
 export function playerHeaderFullscreenTarget(doc: PlayerHeaderFullscreenDocument): FullscreenElementLike {
-  if (doc.documentElement.classList.contains('phone')) return doc.documentElement;
-  return doc.querySelector('.shell') ?? doc.documentElement;
+  return playerFullscreenElement(doc);
 }
 
 /**
  * Enters or leaves fullscreen with the player's existing helpers. A phone that is still windowed uses
- * {@link enterTouchFullscreen} (document element, then landscape). Anything else uses {@link toggleFullscreen}.
+ * {@link enterTouchFullscreen} (the play surface, then landscape). Anything else uses {@link toggleFullscreen}.
  */
 export async function togglePlayerHeaderFullscreen(
   doc: PlayerHeaderFullscreenDocument,
