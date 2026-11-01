@@ -21,7 +21,9 @@ function displayText(raw: string): string {
 
 /**
  * Resolve pomu/nanasigroove channel 99 on the chart clock. Missing references clear text, like an empty definition.
- * Equal-time cues retain IR order and the last cue wins. Raw definitions remain unchanged for native round trips.
+ * pomu's obsolete `#SONGxx` defines an index `#TEXTxx` leaves undefined, whichever line comes first; the miss text is
+ * nanasigroove's `#TEXT00` only. Equal-time cues retain IR order and the last cue wins. Raw definitions remain
+ * unchanged for native round trips.
  */
 export function buildChartTextTimeline(
   json: BeMusicJSON,
@@ -35,7 +37,7 @@ export function buildChartTextTimeline(
     if (key === '00' || key.length === 0) continue;
     const seconds = timing.eventToSeconds(event);
     if (!Number.isFinite(seconds)) continue;
-    cues.push({ seconds, key, text: displayText(json.resources.text[key] ?? '') });
+    cues.push({ seconds, key, text: displayText(json.resources.text[key] ?? json.bms.songText[key] ?? '') });
   }
   cues.sort((left, right) => left.seconds - right.seconds);
   const miss = json.resources.text['00'];

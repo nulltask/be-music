@@ -310,7 +310,7 @@ runtime と round-trip の扱い:
 
 ## 実行時の対応範囲
 
-構文を保持することと、プレイヤーで実行することは別です。`#MIDIFILE` は `bms.midiFile` に保持しますが再生しません。`#WAVCMD` はピッチ・百分率音量・発音時間の上限を反映します。`#EXWAVxx` は音量・左右バランス・元レートに対する周波数を反映します。合成規則は [ADR 0024](./adr/0024-extended-bms-audio.ja.md) に定義します。[MacBeat の原仕様](http://harinezumi.s14.xrea.com/download/mbm.txt)では、ピッチの基準は 60、音量の基準は 100、コマンド `02` は 0.5 ms 単位の発音時間です。0 は原音の終端まで再生し、ループ指定ではありません。Be-Music は WAVCMD の百分率音量、EXWAV の減衰、VOLWAV、動的バス音量を掛け合わせます。WAVCMD の重複はスロット・パラメーターごとの後勝ちです。MacBeat が重複を定義していないため、これは Be-Music の規則です。EXWAV の再生音量は -10000..0 に制限し、-10000 は無音です。`BMSExWAV.volumeMillibels` と `exWAVVolumeMillibelsToLinearGain` の単位はミリベル（1/100 dB）です。`#TEXTxx` は上記の譜面テキスト表示に反映します。`#CHANGEOPTIONxx` は対応する HI-SPEED 操作を実行します。他の系列は現時点で診断だけを出します。
+構文を保持することと、プレイヤーで実行することは別です。`#MIDIFILE` は `bms.midiFile` に保持しますが再生しません。`#WAVCMD` はピッチ・百分率音量・発音時間の上限を反映します。`#EXWAVxx` は音量・左右バランス・元レートに対する周波数を反映します。合成規則は [ADR 0024](./adr/0024-extended-bms-audio.ja.md) に定義します。[MacBeat の原仕様](http://harinezumi.s14.xrea.com/download/mbm.txt)では、ピッチの基準は 60、音量の基準は 100、コマンド `02` は 0.5 ms 単位の発音時間です。0 は原音の終端まで再生し、ループ指定ではありません。Be-Music は WAVCMD の百分率音量、EXWAV の減衰、VOLWAV、動的バス音量を掛け合わせます。WAVCMD の重複はスロット・パラメーターごとの後勝ちです。MacBeat が重複を定義していないため、これは Be-Music の規則です。EXWAV の再生音量は -10000..0 に制限し、-10000 は無音です。`BMSExWAV.volumeMillibels` と `exWAVVolumeMillibelsToLinearGain` の単位はミリベル（1/100 dB）です。`#TEXTxx` は上記の譜面テキスト表示に反映します。pomu の旧名 `#SONGxx`（`bms.songText`）は、行の順序によらず `#TEXTxx` に定義がない番号だけを補い、書き出しでは `#SONGxx` のまま出力します。`#CHANGEOPTIONxx` は対応する HI-SPEED 操作を実行します。他の系列は現時点で診断だけを出します。
 
 ヘッダーとオブジェクトの解釈は上の対応表と本書の制御構文の節に従います。アセットの探索は[互換仕様](./format-compat.ja.md)、ブラウザー固有の描画は[ブラウザープレイヤー仕様](./player-web.ja.md)、ターミナル固有の描画と音声は[ターミナルプレイヤー仕様](./player-tui.ja.md)を参照してください。
 
