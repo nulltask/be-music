@@ -270,7 +270,14 @@ test.each(['ADD_LN', 'ADD_CN', 'ADD_HCN', 'ADD_ALL'] as const)(
         );
         expect(restored.preparedChart!.longNoteModifierChangeCount).toBe(2);
       }
-      expect(() => prepare({ judgeRuleset: 'lr2', longNoteModifier }, entry)).toThrow(/only for beatoraja/);
+      // Long-note addition is offered under every judge ruleset (#774); the source's generated type is kept, and the
+      // judge reads it as the ruleset's own long notes.
+      random.mockReturnValue(0);
+      for (const judgeRuleset of ['lr2', '____'] as const) {
+        const other = prepare({ judgeRuleset, longNoteModifier, longNoteRate: 0.5 }, entry);
+        expect(other.preparedChart!.longNoteModifierChangeCount).toBe(2);
+        expect(other.notes.filter((note) => note.generatedLongNote)).toHaveLength(2);
+      }
     } finally {
       random.mockRestore();
     }

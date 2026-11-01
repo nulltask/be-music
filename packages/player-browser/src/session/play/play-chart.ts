@@ -12,7 +12,7 @@ import { applySevenToNine } from '@be-music/player-engine/lanes';
 
 import {
   isDuplicatedBattleChoice,
-  resolveRandomModes,
+  isRandomModeChoice,
   normalizeFloatingLaneCover,
   type RandomMode,
 } from '@be-music/player-scene-model';
@@ -60,6 +60,7 @@ import {
 import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
 import {
   createEmptyScore,
+  resolveOptionSource,
   type GaugeType,
   type RulesetId,
   type JudgmentKind,
@@ -99,8 +100,9 @@ import type { SecondPlayerState } from './play-state.ts';
 import { isSilentJudgeTimingPlay } from './play-media.ts';
 import { applyUndefinedLongNoteMode } from '@be-music/player-engine/course';
 
-/** The battle modes that copy one SP chart onto both sides (each copy keeps a 2P source channel). */
-const DUPLICATED_BATTLE_MODES: ReadonlySet<string> = new Set(['D-BATTLE', 'BATTLE', 'BATTLE-AS']);
+/** Whether a battle mode copies one SP chart onto both sides (each copy keeps a 2P source channel). */
+const isDuplicatedBattle = (mode: string): boolean =>
+  isDuplicatedBattleChoice(mode as Parameters<typeof isDuplicatedBattleChoice>[0]);
 
 /** The play state {@link prepareChart} resets and fills for a new chart: the play session's fields of these names. */
 
@@ -231,8 +233,6 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     sevenToNineType: arrangement ? (arrangement.play.sevenToNineType ?? 0) : ctx.options.sevenToNineType,
     hRandomThresholdBPM: arrangement ? arrangement.play.sevenToNineThresholdBPM : ctx.options.hRandomThresholdBPM,
   };
-  if (!arrangement && ctx.options.longNoteModifier?.startsWith('ADD_') && ctx.options.judgeRuleset !== 'beatoraja')
-    throw new RangeError('Long-note addition is available only for beatoraja.');
   if (ctx.options.fixedArrangement !== undefined && ctx.options.replay === undefined) {
     if ((ctx.options.judgeRuleset ?? 'lr2') !== (ctx.options.fixedArrangement.play.judgeRuleset ?? 'lr2'))
       throw new RangeError('The previous arrangement was played under other judgment rules.');
@@ -245,12 +245,12 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   }
   if (ctx.options.replay === undefined) {
     const ruleset = ctx.options.judgeRuleset ?? 'lr2';
-    for (const [mode, modes] of [
-      [ctx.options.random1P, resolveRandomModes(ruleset, isDuplicatedBattleChoice(ctx.options.battleMode))],
-      [ctx.options.random2P, resolveRandomModes(ruleset)],
+    for (const [mode, duplicated1P] of [
+      [ctx.options.random1P, isDuplicatedBattleChoice(ctx.options.battleMode)],
+      [ctx.options.random2P, false],
     ] as const) {
-      if (mode !== undefined && !modes.includes(mode))
-        throw new RangeError(`${mode} is unavailable for ${ctx.options.judgeRuleset ?? 'lr2'}.`);
+      if (mode !== undefined && !isRandomModeChoice(mode, duplicated1P))
+        throw new RangeError(`${String(mode)} is unavailable for ${ruleset}.`);
     }
   }
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
@@ -295,9 +295,14 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // re-running its own heuristic. Classify the RESOLVED chart: lanes that only a chosen `#RANDOM` / `#SWITCH`
   // branch adds are not in `song.chart.events`, and missing them would lay out (and judge) a 7 KEY play as 5 KEY.
   let playVariant = arrangement?.play.battleSourceVariant ?? resolveLibraryChartPlayVariant(chartEntry, resolved);
+  // A source-qualified lane option runs its source's algorithm; a bare RANDOM, S-RANDOM or CONVERGE is the judge
+  // ruleset's own (ADR 0019).
+  const laneSources = [ctx.options.random1P, ctx.options.random2P].map((mode) =>
+    resolveOptionSource(mode ?? 'OFF', ctx.options.judgeRuleset ?? 'lr2'),
+  );
   if (
     ctx.options.replay === undefined &&
-    (ctx.options.random1P === 'CONVERGE' || ctx.options.random2P === 'CONVERGE') &&
+    laneSources.some(({ source, name }) => name === 'CONVERGE' && source === 'lr2') &&
     !['5', '7', '9', '10', '14'].includes(playVariant)
   )
     throw new RangeError('LR2 CONVERGE supports 5/7/9/10/14 KEY charts.');
@@ -313,10 +318,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     );
   if (
     ctx.options.replay === undefined &&
-    ctx.options.judgeRuleset === 'beatoraja' &&
     playVariant !== '9' &&
-    [ctx.options.random1P, ctx.options.random2P].some(
-      (mode) => mode === 'CONVERGE' || mode === 'RANDOM_PLAYABLE' || mode === 'S_RANDOM_PLAYABLE',
+    laneSources.some(
+      ({ source, name }) =>
+        (name === 'CONVERGE' && source === 'beatoraja') || name === 'RANDOM_PLAYABLE' || name === 'S_RANDOM_PLAYABLE',
     )
   )
     throw new RangeError('beatoraja CONVERGE and playable RANDOM/S-RANDOM are PMS arrangements.');
@@ -337,7 +342,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   )
     throw new RangeError('A recorded scroll ADD requires its effective timeline.');
   const modifierNotes =
-    arrangement !== undefined && DUPLICATED_BATTLE_MODES.has(arrangement.play.battleMode ?? 'OFF')
+    arrangement !== undefined && isDuplicatedBattle(arrangement.play.battleMode ?? 'OFF')
       ? arrangement.chart.notes.filter((note) => !(note.sourceChannel ?? note.channel).startsWith('2'))
       : arrangement?.chart.notes;
   const prepared = preparePlaybackChart(
@@ -428,7 +433,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // charts skip every entry (no `2x` channels exist). Mine notes are flipped together so they stay anchored to the
     // same visual lane after the flip.
     // A duplicated BATTLE chart has identical sides; its source applies no DP FLIP to it.
-    const battleDuplicated = DUPLICATED_BATTLE_MODES.has(prepared.battleMode ?? 'OFF');
+    const battleDuplicated = isDuplicatedBattle(prepared.battleMode ?? 'OFF');
     if (ctx.options.dpFlip && !battleDuplicated && ['10', '14', '48'].includes(playVariant)) {
       for (const note of ctx.notes) {
         note.channel = flipDPChannel(note.channel);
@@ -540,8 +545,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       for (const [second, first] of twins ?? []) second.channel = `2${first.channel.slice(1)}`;
       // M-RAN mirrors a player's side after its RANDOM-type option, under every ruleset with two-player play (#774).
       for (const side of ['1P', '2P'] as const) {
-        const mode = side === '1P' ? ctx.options.random1P : ctx.options.random2P;
-        if ((side === '1P' ? ctx.options.mRan1P : ctx.options.mRan2P) && M_RAN_RANDOM_MODES.has(mode ?? 'OFF'))
+        const mode = laneSources[side === '1P' ? 0 : 1]!.name;
+        if ((side === '1P' ? ctx.options.mRan1P : ctx.options.mRan2P) && M_RAN_RANDOM_MODES.has(mode))
           applyRandomMode(
             ctx.notes as Array<{ channel: string }>,
             resolveLaneOptionChannels(side, playVariant, prepared.laneBindings),
@@ -858,14 +863,20 @@ export function flipDPChannel(channel: string): string {
  *
  * - `MIRROR` — deterministic reversal of the full mode key set
  * - `RANDOM` — chart-wide permutation of the full mode key set (Fisher-Yates with the supplied RNG)
- * - `S-RANDOM` — ruleset-specific pure randomizer with active-LN reservations and beatoraja jack avoidance
+ * - `S-RANDOM` — source-specific pure randomizer with active-LN reservations and beatoraja jack avoidance
+ *
+ * RANDOM, S-RANDOM and CONVERGE run their qualified source's algorithm (`lr2:RANDOM`, `beatoraja:CONVERGE`), and a bare
+ * one `options.ruleset`'s own (ADR 0019). AC's RANDOM and S-RANDOM are LR2's, provisionally.
  * - `SCATTER` — LR2 previous-row avoidance with active-LN reservations and source DP scratch masks
 
  */
+/** A lane option without its source qualifier. */
+type BareRandomMode = Exclude<RandomMode, `${string}:${string}`>;
+
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
   allLanes: readonly string[],
-  mode: RandomMode,
+  selectedMode: RandomMode,
   rng: () => number,
   options: {
     ruleset?: RulesetId;
@@ -882,6 +893,9 @@ export function applyRandomMode(
   // S-RANDOM applies the active ruleset's policy for each event kind.
   ...secondary: Array<Array<{ channel: string }>>
 ): void {
+  const resolvedMode = resolveOptionSource(selectedMode, options.ruleset ?? 'lr2');
+  const mode = resolvedMode.name as BareRandomMode;
+  const source = resolvedMode.source ?? options.ruleset ?? 'lr2';
   if (
     (mode === 'SCATTER' || mode === 'SCATTER-CORRECTED') &&
     options.playVariant &&
@@ -890,9 +904,8 @@ export function applyRandomMode(
     throw new RangeError('LR2 SCATTER requires a five-, seven- or nine-key domain.');
   if (mode === 'SCATTER-CORRECTED' && options.playVariant !== '9')
     throw new RangeError('Corrected SCATTER is a nine-key arrangement.');
-  if (mode === 'CONVERGE' && options.ruleset === '____')
-    throw new RangeError('CONVERGE is unavailable for this ruleset.');
-  if (mode === 'CONVERGE' && options.ruleset === 'beatoraja' && options.playVariant !== '9')
+  if (mode === 'CONVERGE' && source === '____') throw new RangeError('CONVERGE is unavailable for this ruleset.');
+  if (mode === 'CONVERGE' && source === 'beatoraja' && options.playVariant !== '9')
     throw new RangeError('beatoraja CONVERGE is a PMS arrangement.');
   if ((mode === 'RANDOM_PLAYABLE' || mode === 'S_RANDOM_PLAYABLE') && options.playVariant !== '9')
     throw new RangeError(`${mode} is a PMS arrangement.`);
@@ -967,7 +980,7 @@ export function applyRandomMode(
                     side: options.side,
                   })
                 : mode === 'CONVERGE'
-                  ? options.ruleset === 'beatoraja'
+                  ? source === 'beatoraja'
                     ? randomizePMSConvergeNotes(timedNotes, allLanes, {
                         random: rng,
                         thresholdBPM: options.hRandomThresholdBPM,
@@ -985,7 +998,7 @@ export function applyRandomMode(
                           thresholdBPM: options.hRandomThresholdBPM,
                         })
                       : randomizeSRandomNotes(timedNotes, allLanes, {
-                          ruleset: options.ruleset ?? 'lr2',
+                          ruleset: source,
                           random: rng,
                           ...(options.playVariant === '9' ? { mode: 'pms' as const } : {}),
                         });
@@ -1037,7 +1050,7 @@ export function applyRandomMode(
 
   if (mode === 'RANDOM' || mode === 'RANDOM-EX') {
     // RANDOM-EX is beatoraja's whatever the judge rules: only beatoraja defines a scratch-inclusive shuffle.
-    if (options.ruleset === 'beatoraja' || mode === 'RANDOM-EX') {
+    if (source === 'beatoraja' || mode === 'RANDOM-EX') {
       const available = [...domainLanes];
       const map = new Map<string, string>();
       for (const target of domainLanes) {
