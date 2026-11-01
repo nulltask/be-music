@@ -78,6 +78,7 @@
 - **groove gauge**: クリア判定に使うゲージです。shared core の既定は LR2 互換の `GROOVE` (`NORMAL`) で、export された helper は browser play option 向けに `HARD`、`DEATH`、`EASY` も扱います。
 - **ハイスピード（hi-speed）**: ノートのスクロール表示を調整する設定です。表示や見える時間の範囲を変えますが、ノートの時刻や再生テンポは変えません。外部スキンの `HI-SPEED`・`HIGH-SPEED` や既存の `hiSpeed` という名前は維持します。
 - **MANUAL / AUTO SCRATCH / AUTO**: 再生モードです。`MANUAL` は手動、`AUTO SCRATCH` は scratch だけ自動、`AUTO` は全自動です。
+- **段位 (dan rank)**: プレイヤーが、その段位（七段、皆伝、発狂初段など）を名前に持つ GRADE コースをクリアして得た、キーモードごとの最高の段位です。判定ルールセットごとに保持します。コードでは `DanRank`・`danRank` と書き、LR2 の `grade_7` などの列名はそのまま扱います。[コース](./course.ja.md#プレイヤーの段位) を参照してください。
 - **制御構文 (control flow)**: BMS の `#RANDOM`、`#IF`、`#SWITCH` などの分岐命令です。parser は保持し、ホストが再生/レンダリング前に、明示的な `RandomDraws` でプレイごとに 1 回解決します。
 - **RandomDraws**: 1 回のプレイでの譜面の制御構文の結果です。`#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の行ごとにファイル順で 1 項目（コマンド、range、value）を持ちます。`drawRandomOutcomes` で 1 回引き、resolver、エンジン、リプレイで共有します。
 - **Source レイヤー / Resolved レイヤー**: 譜面を読む 2 つのレイヤーです。Source レイヤー（`BeMusicJSON`）はファイルに書いてあること、Resolved レイヤー（`@be-music/chart-model` の `resolveChart` が作る `ResolvedChart`）は、フォーマットの既定値と de facto の規則をすべて適用した、プレイヤーが演奏するものです。[アーキテクチャ](./architecture.ja.md) を参照してください。

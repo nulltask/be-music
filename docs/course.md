@@ -349,3 +349,53 @@ The course result sums the stages (see [Replay — Course replays](./replay.md#c
 The lamp and BP are the course rule and BP of the vocabulary every play is lamped with (`resolveCourseClearLamp`, `resolveMissCount` in `@be-music/player-engine/ruleset`). A host keeps a run's best record under the judge ruleset it was played on (`resolveCoursePlayedRuleset`; a run whose stages differ keeps none), by the rules of `@be-music/player-engine/records`: `courseRunRecordPlay` reads what the run contributes, `courseRunKeepsRecord` refuses auto-played runs and runs at another tempo, and `mergeCourseStageRecord` folds an EXPERT / GRADE stage into its chart's record as LR2 does (the best EX score, max combo and BP, and a FULL COMBO or better lamp, but no clear lamp or play count).
 
 Stitch version 3 also promotes BMS-only courses containing CN/HCN to internal bmson so each long note retains its stage mode. This covers both explicit LNMODE and HDX LONGMODE. Historical stitch versions preserve their earlier BMS interpretation. See [ADR 0027](./adr/0027-hdx-long-note-modes.md).
+
+## The player's dan rank
+
+be-music keeps the player's **dan rank** (段位): the highest dan they have earned in each key mode by clearing a GRADE course, under each judge ruleset. It is derived from course clears from now on; records kept before it existed are not read back for one.
+
+### What LR2 and beatoraja do
+
+Sources: OpenLR2 [`LR2f.cpp@583a385`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp) and beatoraja [`0.8.9` (`8357404`)](https://github.com/exch-bms2/beatoraja/tree/83574048ba489082eb46df7fe9806b464bf1f526).
+
+**LR2 keeps the columns but never fills them.**
+
+- The `player` table of the score database has `grade_7`, `grade_5`, `grade_14`, `grade_10` and `grade_9` beside a `gradeversion` ([L19212](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L19212)).
+- They are only read and written back as they are: `ReadPlayerScore` loads them ([L18318-L18326](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18318-L18326)), `UpdatePlayerStat` saves them ([L16977-L16984](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L16977-L16984)) and `MakePlayerStatHash` folds them into the tamper hash ([L16969-L16974](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L16969-L16974)).
+- A broken hash resets them to 0, and so does any `gradeversion` other than 0, with the log line 「段位認定が更新されたのでデータを初期化しました」 ("dan certification was updated, so the data was reset", [L18337-L18380](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18337-L18380)). This hints at a built-in dan certification with versioned course data that the client was meant to grade **(unverified)**.
+- Nothing in OpenLR2 assigns them: the course result (`CheckClear`, the GRADE save path around [L9042-L9192](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9042-L9192)) keeps the course's own score under its hash and never touches them.
+- No skin op reads them. The player-statistics numbers are 30-39 (play count, clears, judgments, combo) and 40 / 41 (`trial`, LR2's built-in mission level, not a dan, [L496-L519](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L496-L519)). No text, image or option op uses them either.
+- So LR2's mapping from a GRADE clear to a rank cannot be traced from OpenLR2. Whether `LR2body.exe` fills them somewhere OpenLR2 does not decompile was not checked against the binary **(unverified)**. The dan players see is LR2IR's: the IR site assigns it from the IR's own dan courses (☆ for the normal ladder, ★ for the insane one) **(community knowledge, unverified)**.
+
+**beatoraja stores a rank string from the IR and shows it nowhere.**
+
+- `PlayerInformation` has `rank` (「段位」, [`PlayerInformation.java` L18-L21](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerInformation.java#L18-L21)), stored in the score database's `info` table ([`ScoreDatabaseAccessor.java` L31-L36](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/ScoreDatabaseAccessor.java#L31-L36)).
+- The only writer copies `IRPlayerData.rank` (「段位」, [`IRPlayerData.java` L18-L21](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/ir/IRPlayerData.java#L18-L21)) into a rival's information ([`RivalDataAccessor.java` L143-L149](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/RivalDataAccessor.java#L143-L149)). The IR decides the string; the client never derives one from a course clear.
+- Nothing calls `getRank()`. No skin property shows it: the rival string (`STRING_RIVAL`, id 1) is the rival's name ([`StringPropertyFactory.java` L174-L181](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/skin/property/StringPropertyFactory.java#L174-L181)), and `SkinProperty` has no dan id.
+- A class course (`grade`, `grade_mirror`, `grade_random`; `CourseData.isClassCourse`, [L84](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/CourseData.java#L84)) keeps its own score and trophy (`CourseResult` [L272](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/result/CourseResult.java#L272), `GradeBar.getTrophy`), and nothing more.
+
+**Where skins show it.** Neither LR2 skins (no number, text, image or option op) nor beatoraja skins (no skin id) have a place for the player's dan rank, on the select screen or the result screen. be-music therefore exposes it to no LR2 or beatoraja skin. The built-in skins draw no player panel and no course trophy, so they show none either; the rank is visible in Debug Menu → Library & records → Local data (`be-music.dan-ranks`).
+
+### be-music's rule
+
+Since neither player defines a mapping, be-music reads the rank from the course's name (`@be-music/player-engine/records`):
+
+```mermaid
+flowchart TD
+  run[Course run ends] --> keeps{Keeps a record?}
+  keeps -->|no: AUTO, other tempo, mixed rulesets| none[No rank]
+  keeps -->|yes| grade{GRADE and cleared?}
+  grade -->|no| none
+  grade -->|yes| name{Name names a dan?}
+  name -->|no| none
+  name -->|yes| merge[Keep the higher rank<br/>per ruleset and key mode]
+```
+
+- **Which runs count** (`resolveCourseRunDanRank`): a GRADE course (`kind: 'grade'`) whose run cleared (any lamp above FAILED), and that keeps a record by the same rule as the course's best record (`courseRunKeepsRecord`, one judge ruleset across the stages). EXPERT and NONSTOP courses earn none.
+- **Reading the name** (`recognizeDanRank`): `N級`, `N段` (初段 … 十段), `中伝`, `皆伝`, `発狂N段`, `発狂皆伝` and `Overjoy`, with kanji, full-width or ASCII numerals, anywhere in the name (`GENOSIDE 2018 段位認定 発狂初段`). The `段` of `段位` is not a grade. A course whose name names none, such as Satellite's skill analyzers (`sl0` … `sl12`), earns no rank. This is a heuristic: a course named only `初段` inside an insane table reads as 初段, not 発狂初段.
+- **The ladder** (`DAN_RANKS`, lowest first): 十級 … 一級, 初段 … 十段, 中伝, 皆伝, 発狂初段 … 発狂十段, 発狂皆伝, Overjoy. Putting the insane ladder above 皆伝 follows LR2IR's ☆ / ★ display **(community knowledge, unverified)**; it is be-music's choice, not a rule taken from either player.
+- **Key mode**: the course's own (`.lr2crs` `line`, a table's `mode`), else its first stage's chart's. LR2 keeps 5 / 7 / 9 / 10 / 14; be-music keeps whichever key mode the course is played in.
+- **Keeping it** (`mergeDanRankRecord`): the higher rank wins and keeps the name of the course that earned it; a tie keeps the earlier course. A rank is never lowered by a later failed or lower run.
+- **Storage**: `localStorage` `be-music.dan-ranks`, `{ version: 0, ranks: { "<ruleset>:<keyMode>": { rank, course } } }`. Absent storage (from before dan ranks were kept) reads as no rank. "Reset settings" keeps it; "Clear best records" clears it with the best records.
+
+Open: the Leaderboard profile does not show the rank yet, and no skin draws it.

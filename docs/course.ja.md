@@ -349,3 +349,53 @@ stateDiagram-v2
 ランプと BP は、どのプレイのランプも決める定義のうちコースの規則と BP です（`@be-music/player-engine/ruleset` の `resolveCourseClearLamp`、`resolveMissCount`）。ホストはプレイの自己ベストを、そのプレイを判定したルールセットで保ちます（`resolveCoursePlayedRuleset`。ステージごとに違うプレイは記録しません）。規則は `@be-music/player-engine/records` にあります。`courseRunRecordPlay` はプレイが記録に残すものを読み、`courseRunKeepsRecord` はオートプレイとテンポを変えたプレイを除き、`mergeCourseStageRecord` は LR2 と同じく EXPERT / GRADE のステージをその譜面の記録に反映します（最高の EX スコア・最大コンボ・最少の BP と、FULL COMBO 以上のランプ。クリアランプとプレイ回数は更新しません）。
 
 stitch バージョン3は CN・HCN を含む BMS だけのコースも内部 bmson に変換し、各ロングノートのステージ固有モードを保持します。明示的 LNMODE と HDX LONGMODE の両方が対象です。過去の stitch バージョンは以前の BMS 解釈を保持します。[ADR 0027](./adr/0027-hdx-long-note-modes.ja.md) を参照してください。
+
+## プレイヤーの段位
+
+be-music はプレイヤーの**段位**（dan rank）を保持します。GRADE コースをクリアして得た、キーモードごとの最高の段位で、判定ルールセットごとに分けて持ちます。これからのクリアから導き、段位を保持する前の記録からは遡って導きません。
+
+### LR2 と beatoraja の挙動
+
+出典：OpenLR2 [`LR2f.cpp@583a385`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp) と beatoraja [`0.8.9`（`8357404`）](https://github.com/exch-bms2/beatoraja/tree/83574048ba489082eb46df7fe9806b464bf1f526)。
+
+**LR2 は列を持つが、値を入れない。**
+
+- スコアデータベースの `player` テーブルには `grade_7`・`grade_5`・`grade_14`・`grade_10`・`grade_9` と `gradeversion` があります（[L19212](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L19212)）。
+- これらは読んでそのまま書き戻すだけです。`ReadPlayerScore` が読み込み（[L18318-L18326](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18318-L18326)）、`UpdatePlayerStat` が保存し（[L16977-L16984](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L16977-L16984)）、`MakePlayerStatHash` が改ざん検出用のハッシュに含めます（[L16969-L16974](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L16969-L16974)）。
+- ハッシュが合わないと 0 に戻り、`gradeversion` が 0 以外でも 「段位認定が更新されたのでデータを初期化しました」 と記録して 0 に戻します（[L18337-L18380](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18337-L18380)）。バージョン付きのコースデータでクライアントが段位を判定する、組み込みの段位認定が想定されていたことをうかがわせます **（未検証）**。
+- OpenLR2 にはこれらへ値を入れるコードがありません。コースの結果（`CheckClear` と、[L9042-L9192](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9042-L9192) 付近の GRADE の保存処理）はコース自身のスコアをそのハッシュで保存するだけで、これらには触れません。
+- これらを読むスキン命令もありません。プレイヤー統計の数値は 30-39（プレイ回数、クリア数、判定、コンボ）と 40 / 41（`trial`。段位ではなく LR2 組み込みのミッションの段階、[L496-L519](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L496-L519)）で、テキスト・画像・オプションの命令でも使いません。
+- したがって、GRADE のクリアから段位への対応は OpenLR2 からはたどれません。OpenLR2 が逆コンパイルしていない部分で `LR2body.exe` が値を入れているかは、バイナリでは確かめていません **（未検証）**。プレイヤーが目にする段位は LR2IR のもので、IR サイトが IR 側の段位コースから決めます（通常段位は ☆、発狂段位は ★） **（コミュニティの知識、未検証）**。
+
+**beatoraja は IR から受け取った段位の文字列を保存し、どこにも表示しない。**
+
+- `PlayerInformation` には `rank`（「段位」、[`PlayerInformation.java` L18-L21](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerInformation.java#L18-L21)）があり、スコアデータベースの `info` テーブルに保存されます（[`ScoreDatabaseAccessor.java` L31-L36](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/ScoreDatabaseAccessor.java#L31-L36)）。
+- 書き込むのは、`IRPlayerData.rank`（「段位」、[`IRPlayerData.java` L18-L21](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/ir/IRPlayerData.java#L18-L21)）をライバルの情報へ写す処理だけです（[`RivalDataAccessor.java` L143-L149](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/RivalDataAccessor.java#L143-L149)）。文字列は IR が決め、クライアントがコースのクリアから導くことはありません。
+- `getRank()` を呼ぶ箇所はなく、スキンのプロパティにもありません。ライバルの文字列（`STRING_RIVAL`、id 1）はライバルの名前で（[`StringPropertyFactory.java` L174-L181](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/skin/property/StringPropertyFactory.java#L174-L181)）、`SkinProperty` に段位の id はありません。
+- 段位コース（`grade`・`grade_mirror`・`grade_random`。`CourseData.isClassCourse`、[L84](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/CourseData.java#L84)）が残すのは、コース自身のスコアとトロフィーだけです（`CourseResult` [L272](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/result/CourseResult.java#L272)、`GradeBar.getTrophy`）。
+
+**スキンでの表示箇所。** LR2 スキン（数値・テキスト・画像・オプションの命令がない）にも beatoraja スキン（スキン id がない）にも、選曲画面・リザルト画面ともにプレイヤーの段位を表示する場所はありません。そのため be-music は LR2 / beatoraja のスキンには段位を渡しません。組み込みスキンもプレイヤーのパネルやコースのトロフィーを描かないので表示しません。段位は Debug Menu → Library & records → Local data（`be-music.dan-ranks`）で確認できます。
+
+### be-music の規則
+
+どちらのプレイヤーも対応を定めていないので、be-music はコースの名前から段位を読みます（`@be-music/player-engine/records`）。
+
+```mermaid
+flowchart TD
+  run[コースのプレイが終わる] --> keeps{記録を残すか}
+  keeps -->|いいえ: AUTO、テンポ変更、ルールセット混在| none[段位なし]
+  keeps -->|はい| grade{GRADE でクリアか}
+  grade -->|いいえ| none
+  grade -->|はい| name{名前が段位を示すか}
+  name -->|いいえ| none
+  name -->|はい| merge[ルールセットとキーモードごとに<br/>高い方の段位を残す]
+```
+
+- **数えるプレイ**（`resolveCourseRunDanRank`）：GRADE コース（`kind: 'grade'`）をクリアした（ランプが FAILED より上の）プレイで、コースの自己ベストと同じ規則で記録を残すもの（`courseRunKeepsRecord`、全ステージが同じ判定ルールセット）。EXPERT と NONSTOP のコースでは段位を得ません。
+- **名前の読み方**（`recognizeDanRank`）：`N級`、`N段`（初段 … 十段）、`中伝`、`皆伝`、`発狂N段`、`発狂皆伝`、`Overjoy` を、漢数字・全角・半角の数字で、名前のどこにあっても読みます（`GENOSIDE 2018 段位認定 発狂初段`）。`段位` の `段` は段位として読みません。段位を示さない名前のコース、たとえば Satellite のスキルアナライザー（`sl0` … `sl12`）では段位を得ません。これは経験則で、発狂の表の中で `初段` とだけ名付けられたコースは発狂初段ではなく初段と読みます。
+- **段位の並び**（`DAN_RANKS`、低い順）：十級 … 一級、初段 … 十段、中伝、皆伝、発狂初段 … 発狂十段、発狂皆伝、Overjoy。発狂段位を皆伝より上に置くのは LR2IR の ☆ / ★ の表示にならったもので **（コミュニティの知識、未検証）**、どちらのプレイヤーの規則でもなく be-music の選択です。
+- **キーモード**：コース自身のもの（`.lr2crs` の `line`、表の `mode`）、なければ最初のステージの譜面のもの。LR2 は 5 / 7 / 9 / 10 / 14 を持ちますが、be-music はコースを遊んだキーモードをそのまま使います。
+- **残し方**（`mergeDanRankRecord`）：高い方の段位を、それを得たコースの名前とともに残します。同じ段位なら先に得たコースのままです。後のプレイが失敗したり低かったりしても下がりません。
+- **保存先**：`localStorage` の `be-music.dan-ranks`、`{ version: 0, ranks: { "<ruleset>:<keyMode>": { rank, course } } }`。保存がない（段位を保持する前の）場合は段位なしと読みます。「Reset settings」では残り、「Clear best records」で自己ベストと一緒に消えます。
+
+未対応：Leaderboard のプロフィールにはまだ段位を出しておらず、段位を描くスキンもありません。
