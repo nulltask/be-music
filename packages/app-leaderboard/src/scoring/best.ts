@@ -1,3 +1,5 @@
+import { compareClearLampRanks } from '@be-music/player-engine/ruleset';
+
 /** One player's personal bests on one chart, ruleset and assist class (a `best_scores` row). */
 export interface BestScores {
   bestEx: number;
@@ -50,7 +52,7 @@ export function mergeBestScores(current: BestScores | undefined, play: PlayFigur
     };
   }
   const exScore = play.exScore > current.bestEx;
-  const lamp = play.lamp > current.bestLamp;
+  const lamp = compareClearLampRanks(play.lamp, current.bestLamp) > 0;
   const missCount = play.missCount < current.minMiss;
   return {
     next: {

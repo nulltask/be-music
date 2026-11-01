@@ -98,8 +98,9 @@ export async function submitCourseScore(
   if (!eligibility.eligible) {
     return { status: 'rejected', httpStatus: 422, reason: eligibility.reason, ...stageOf(eligibility.stage) };
   }
-  const { courseFingerprint, assistFlags, unranked } = eligibility;
-  const assisted = assistFlags.length > 0;
+  const { courseFingerprint, assistFlags, assistClass, unranked } = eligibility;
+  // A run with an assisted stage is stored unranked (`assist`, #602); `assisted` keeps which board it would be on.
+  const assisted = assistClass !== 'none';
   const playedLogs = courseLog.stages.flatMap((entry) => (entry.played ? [entry.replay] : []));
   const nonstop =
     courseLog.nonstop !== undefined && eligibility.nonstop !== undefined ? eligibility.nonstop : undefined;

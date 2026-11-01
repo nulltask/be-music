@@ -3,13 +3,13 @@ import type { ClearLamp } from '../ruleset/clear-lamp.ts';
 import type { CourseChartScore } from './filter.ts';
 
 /**
- * beatoraja's `ClearType.id` for each lamp. be-music's ASSIST EASY is the ASSIST EASY gauge's clear, which beatoraja
- * calls LIGHT ASSIST EASY (3); beatoraja's ASSIST EASY (2), a clear with an assist option on, has no be-music lamp.
+ * beatoraja's `ClearType.id` for each lamp: ASSIST EASY is AssistEasy (2) and LIGHT ASSIST EASY is LightAssistEasy (3).
  */
 const BEATORAJA_CLEAR_TYPES: Readonly<Record<ClearLamp, number>> = {
   NO_PLAY: 0,
   FAILED: 1,
-  ASSIST_EASY: 3,
+  ASSIST_EASY: 2,
+  LIGHT_ASSIST_EASY: 3,
   EASY: 4,
   NORMAL: 5,
   HARD: 6,

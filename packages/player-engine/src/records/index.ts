@@ -5,3 +5,4 @@
  * record. Where and how a host stores its records is its own business.
  */
 export * from './best-record.ts';
+export * from './assist-policy.ts';

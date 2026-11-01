@@ -35,7 +35,8 @@ describe('beatoraja image-index properties', () => {
     for (const [lamp, index] of [
       ['NO_PLAY', 0],
       ['FAILED', 1],
-      ['ASSIST_EASY', 3],
+      ['ASSIST_EASY', 2],
+      ['LIGHT_ASSIST_EASY', 3],
       ['EASY', 4],
       ['NORMAL', 5],
       ['HARD', 6],

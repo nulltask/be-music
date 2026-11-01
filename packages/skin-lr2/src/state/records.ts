@@ -7,6 +7,7 @@ const LR2_LAMP_KINDS: Readonly<Record<ClearLamp, LR2BarLampKind>> = {
   NO_PLAY: 'noplay',
   FAILED: 'failed',
   ASSIST_EASY: 'easy',
+  LIGHT_ASSIST_EASY: 'easy',
   EASY: 'easy',
   NORMAL: 'clear',
   HARD: 'hard',
@@ -18,7 +19,7 @@ const LR2_LAMP_KINDS: Readonly<Record<ClearLamp, LR2BarLampKind>> = {
 
 /**
  * The LR2 clear lamp of a record (`#SRC_BAR_LAMP` kind): LR2 has one lamp below NORMAL (EASY, which ASSIST EASY
- * joins), one above it (HARD, which EX HARD joins) and FULL COMBO for PERFECT and MAX too. No record reads `noplay`.
+ * and LIGHT ASSIST EASY join), one above it (HARD, which EX HARD joins) and FULL COMBO for PERFECT and MAX too. No record reads `noplay`.
  */
 export function resolveLR2BarLamp(lamp: ClearLamp | undefined): LR2BarLampKind {
   return lamp === undefined ? 'noplay' : LR2_LAMP_KINDS[lamp];

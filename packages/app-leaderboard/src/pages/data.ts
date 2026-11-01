@@ -1,4 +1,5 @@
 import { and, asc, countDistinct, desc, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { clearLampRank } from '@be-music/player-engine/ruleset';
 import { avatarURL } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import type { RulesetId } from '../rulesets.ts';
@@ -16,6 +17,8 @@ import {
 import { byRulesetOrder } from '../rulesets.ts';
 import type { ChartAlias } from './external.ts';
 import { PLAY_INFO_COLUMNS, toPlayInfo, type PlayInfo } from '../play-info.ts';
+
+const LIGHT_ASSIST_EASY_RANK = clearLampRank('LIGHT_ASSIST_EASY');
 
 export interface RecentScore {
   scoreId: string;
@@ -192,7 +195,13 @@ function previousBest(ruleset: RulesetId) {
   )`;
   return {
     previousEx: sql<number | null>`${earlier(sql`max(pr.ex_score)`)}`,
-    previousLamp: sql<number | null>`${earlier(sql`max(pr.clear_lamp)`)}`,
+    // Stored lamp ranks are append-only, not an order: LIGHT ASSIST EASY (10) sits between ASSIST EASY (2) and EASY
+    // (3), so the best lamp is the maximum by a sort key that puts it at 2.5, read back as its rank.
+    previousLamp: sql<
+      number | null
+    >`(select case when m = 2.5 then ${LIGHT_ASSIST_EASY_RANK} else m end from (select ${earlier(
+      sql`max(case pr.clear_lamp when ${LIGHT_ASSIST_EASY_RANK} then 2.5 else pr.clear_lamp end)`,
+    )} as m))`,
     previousMiss: sql<number | null>`${earlier(sql`min(pr.miss_count)`)}`,
   };
 }

@@ -180,6 +180,14 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       activeStageRecordKey: undefined as string | undefined,
       recordActivePlay: vi.fn<PlayRouteDeps['records']['recordActivePlay']>(),
       recordActiveCourseStage: vi.fn<PlayRouteDeps['records']['recordActiveCourseStage']>(),
+      takeActivePlayRecordKey: vi.fn<PlayRouteDeps['records']['takeActivePlayRecordKey']>(function (this: {
+        activePlayRecordKey: string | undefined;
+      }) {
+        const key = this.activePlayRecordKey;
+        this.activePlayRecordKey = undefined;
+        return key;
+      }),
+      recordPlayUnder: vi.fn<PlayRouteDeps['records']['recordPlayUnder']>(),
     },
     leaderboard: { maybeSubmit: vi.fn<PlayRouteDeps['leaderboard']['maybeSubmit']>() },
     familyKits: {
@@ -649,16 +657,20 @@ describe('PlayRoute: where a play leads', () => {
     play.progress.mockReturnValue(progress);
     const replay = { play: { mode: 'manual', aborted: true } } as unknown as BeMusicReplay;
     play.waitForReplay.mockResolvedValueOnce(replay);
-    expect(h.deps.records.activePlayRecordKey).toBeDefined();
+    const key = h.deps.records.activePlayRecordKey;
+    expect(key).toBeDefined();
     play.options.on.exit();
-    // BP: 1 BAD + 1 POOR + 2 empty POORs + the 4 notes never reached.
-    expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith({
-      lamp: 'FAILED',
-      exScore: 7,
-      maxCombo: 4,
-      missCount: 8,
-    });
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    // The record waits for the replay, under the key the play had: its options decide what it keeps.
+    expect(h.deps.records.activePlayRecordKey).toBeUndefined();
+    // BP: 1 BAD + 1 POOR + 2 empty POORs + the 4 notes never reached.
+    await vi.waitFor(() =>
+      expect(h.deps.records.recordPlayUnder).toHaveBeenCalledWith(
+        key,
+        { lamp: 'FAILED', exScore: 7, maxCombo: 4, missCount: 8 },
+        replay,
+      ),
+    );
     await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
   });
 
@@ -673,6 +685,7 @@ describe('PlayRoute: where a play leads', () => {
     play.options.on.exit();
     await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
     expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.records.recordPlayUnder).not.toHaveBeenCalled();
   });
 
   test('Escape from a play that keeps no record (a replay) saves and sends nothing', async () => {
@@ -683,6 +696,7 @@ describe('PlayRoute: where a play leads', () => {
     play.options.on.exit();
     await settle();
     expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.records.recordPlayUnder).not.toHaveBeenCalled();
     expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
   });
@@ -699,6 +713,7 @@ describe('PlayRoute: where a play leads', () => {
     play.options.on.exit();
     await settle();
     expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.records.recordPlayUnder).not.toHaveBeenCalled();
     expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
   });
 
@@ -922,4 +937,5 @@ test('Escape from a zero-total spec play keeps no local best but still submits i
   play.options.on.exit();
   await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('zero')));
   expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+  expect(h.deps.records.recordPlayUnder).not.toHaveBeenCalled();
 });

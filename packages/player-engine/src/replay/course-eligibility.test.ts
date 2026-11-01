@@ -64,6 +64,9 @@ describe('checkCourseReplayEligibility', () => {
         { chartFingerprint: 'bmfp0:b', playFingerprint: 'bmfp0:b-play' },
       ],
       assistFlags: ['auto-scratch', 'judge-window-override'],
+      assistClass: 'assist',
+      // Neither LR2 nor beatoraja saves an assisted course run.
+      unranked: 'assist',
     });
   });
 
@@ -132,6 +135,8 @@ describe('checkCourseReplayEligibility', () => {
       stages: [],
       nonstop: { chartFingerprint: 'bmfp0:stitched', playFingerprint: 'bmfp0:stitched' },
       assistFlags: ['auto-scratch'],
+      assistClass: 'light',
+      unranked: 'assist',
     });
     // A NONSTOP play given up with ESC is a failed run.
     expect(

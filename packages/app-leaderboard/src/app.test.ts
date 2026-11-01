@@ -23,7 +23,7 @@ import { bestScore, score } from './db/schema.ts';
 import { loadChartFiles, loadPlayRanking } from './ranking-plays.ts';
 import { backfillPlayedFiles } from './scores/backfill.ts';
 import type { Env } from './env.ts';
-import { clearLampRank } from '@be-music/player-engine/ruleset';
+import { clearLampAtRank, clearLampRank } from '@be-music/player-engine/ruleset';
 
 // Tests never reach BMS Search: a submission's background chartset lookup finds nothing.
 const noChartsets = async () => undefined;
@@ -375,6 +375,37 @@ describe('rankings', () => {
     const base = `/api/v0/charts/${encodeURIComponent(assistedChart.chartFingerprint)}/leaderboard?ruleset=lr2&anonymous=1`;
     expect(((await (await fetchApp(base)).json()) as { players: number }).players).toBe(0);
     expect(((await (await fetchApp(`${base}&assisted=1`)).json()) as { players: number }).players).toBe(1);
+  });
+
+  test("lamps an assisted play by each ruleset's own rule, and stores a no-save play unranked", async () => {
+    const assistedChart = makeChart(['#00111:0101', '#00211:0101', '#00311:0101', '#00411:0101', '#00611:0101']);
+    const cookie = await signInAnonymously(fetchApp);
+    // beatoraja's H-RANDOM: LIGHT_ASSIST, whatever the ruleset the play is lamped under.
+    const replay = makeReplay(assistedChart, { noteCount: 10, hits: 10, play: { randomLane: { p1: 'H-RANDOM' } } });
+    const response = await submit(
+      cookie,
+      submissionBody(replay, assistedChart.playDocument, assistedChart.chartDocument),
+    );
+    expect(response.status).toBe(201);
+    const { results } = (await response.json()) as { results: Array<{ ruleset: string; clearLamp: number }> };
+    const lampOf = (ruleset: string) =>
+      clearLampAtRank(results.find((result) => result.ruleset === ruleset)!.clearLamp);
+    expect(lampOf('lr2')).toBe('EASY');
+    expect(lampOf('beatoraja')).toBe('LIGHT_ASSIST_EASY');
+    expect(lampOf('____')).toBe('ASSIST_EASY');
+
+    // That-Which-Must-Not-Be-Named's BATTLE saves no score data: the play is stored, not ranked.
+    const battle = makeReplay(assistedChart, {
+      noteCount: 10,
+      hits: 9,
+      play: { battleMode: 'BATTLE', judgeRuleset: '____' },
+    });
+    const stored = await submit(
+      cookie,
+      submissionBody(battle, assistedChart.playDocument, assistedChart.chartDocument),
+    );
+    expect(stored.status).toBe(201);
+    expect(await stored.json()).toMatchObject({ unranked: 'no-save' });
   });
 });
 

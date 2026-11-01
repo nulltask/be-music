@@ -1,15 +1,22 @@
 import type { GaugeType } from './gauge-type.ts';
 
 /**
- * Clear lamps, worst first: not played, failed, the gauge a play cleared on (ASSIST EASY … EX HARD), FULL COMBO (every
- * note judged GOOD or better), PERFECT (GREAT or better) and MAX (every note a PGREAT). A lamp's index is its rank
- * ({@link clearLampRank}): a better lamp ranks higher, and the Leaderboard stores lamps by their rank. Each judge ruleset
- * awards its own subset: LR2 and That-Which-Must-Not-Be-Named stop at FULL COMBO, LR2 has no ASSIST EASY or EX HARD, beatoraja goes up to MAX.
+ * Clear lamps, worst first: not played, failed, the clears below EASY (ASSIST EASY, LIGHT ASSIST EASY), the gauge a play
+ * cleared on (EASY … EX HARD), FULL COMBO (every note judged GOOD or better), PERFECT (GREAT or better) and MAX (every
+ * note a PGREAT). This is the lamps' order: a later lamp is better ({@link compareClearLamps}). Each judge ruleset awards
+ * its own subset: LR2 and That-Which-Must-Not-Be-Named stop at FULL COMBO, LR2 has no ASSIST EASY, LIGHT ASSIST EASY or
+ * EX HARD, beatoraja goes up to MAX.
+ *
+ * - ASSIST EASY: beatoraja's `ClearType.AssistEasy` (a clear with an ASSIST-level option) and That-Which-Must-Not-Be-Named's
+ *   ASSIST CLEAR (its ASSISTED EASY gauge, and an assist option under its rules).
+ * - LIGHT ASSIST EASY: beatoraja's `ClearType.LightAssistEasy`, the ASSIST EASY gauge's clear and a clear with a
+ *   LIGHT_ASSIST-level option (beatoraja 0.8.9 `ClearType`, `BMSPlayer.createScoreData`).
  */
 export const CLEAR_LAMPS = [
   'NO_PLAY',
   'FAILED',
   'ASSIST_EASY',
+  'LIGHT_ASSIST_EASY',
   'EASY',
   'NORMAL',
   'HARD',
@@ -22,24 +29,65 @@ export const CLEAR_LAMPS = [
 /** The class of clear a play earned, or a best record's best one (see {@link CLEAR_LAMPS}). */
 export type ClearLamp = (typeof CLEAR_LAMPS)[number];
 
+/**
+ * Each lamp's stored rank, the number the Leaderboard stores it as. The table is append-only: a new lamp takes the next
+ * free rank, so a stored rank never changes meaning. Ranks 0-9 are the lamps that predate LIGHT ASSIST EASY, which took
+ * 10 (#603). A stored rank names a lamp; it is not an order.
+ */
+const CLEAR_LAMP_RANKS: Readonly<Record<ClearLamp, number>> = {
+  NO_PLAY: 0,
+  FAILED: 1,
+  ASSIST_EASY: 2,
+  EASY: 3,
+  NORMAL: 4,
+  HARD: 5,
+  EX_HARD: 6,
+  FULL_COMBO: 7,
+  PERFECT: 8,
+  MAX: 9,
+  LIGHT_ASSIST_EASY: 10,
+};
+
+const LAMPS_BY_RANK: ReadonlyMap<number, ClearLamp> = new Map(
+  Object.entries(CLEAR_LAMP_RANKS).map(([lamp, rank]) => [rank, lamp as ClearLamp]),
+);
+
 /** Whether `value` names a clear lamp. */
 export function isClearLamp(value: unknown): value is ClearLamp {
   return typeof value === 'string' && (CLEAR_LAMPS as readonly string[]).includes(value);
 }
 
-/** The rank of `lamp` in {@link CLEAR_LAMPS}: `NO_PLAY` 0 up to `MAX` 9, higher is better. An unknown lamp ranks 0. */
+/**
+ * The stored rank of `lamp`: `NO_PLAY` 0 … `MAX` 9 and `LIGHT_ASSIST_EASY` 10. The ranks are append-only, so a stored rank
+ * keeps its lamp; they are not an order ({@link compareClearLampRanks} orders them). An unknown lamp ranks 0.
+ */
 export function clearLampRank(lamp: ClearLamp): number {
+  return CLEAR_LAMP_RANKS[lamp] ?? 0;
+}
+
+/** The lamp of a stored {@link clearLampRank}, or `undefined` for a rank no lamp has. */
+export function clearLampAtRank(rank: number): ClearLamp | undefined {
+  return Number.isInteger(rank) ? LAMPS_BY_RANK.get(rank) : undefined;
+}
+
+/** The position of `lamp` in the lamp order ({@link CLEAR_LAMPS}): higher is better. An unknown lamp is 0. */
+export function clearLampOrder(lamp: ClearLamp): number {
   return Math.max(0, CLEAR_LAMPS.indexOf(lamp));
 }
 
-/** The lamp of a {@link clearLampRank}, or `undefined` for a rank no lamp has. */
-export function clearLampAtRank(rank: number): ClearLamp | undefined {
-  return Number.isInteger(rank) ? CLEAR_LAMPS[rank] : undefined;
+/** Negative when `a` is the worse lamp, positive when it is the better one, 0 when they are the same. */
+export function compareClearLamps(a: ClearLamp, b: ClearLamp): number {
+  return clearLampOrder(a) - clearLampOrder(b);
+}
+
+/** {@link compareClearLamps} for two stored ranks; a rank no lamp has orders as `NO_PLAY`. */
+export function compareClearLampRanks(a: number, b: number): number {
+  return compareClearLamps(clearLampAtRank(a) ?? 'NO_PLAY', clearLampAtRank(b) ?? 'NO_PLAY');
 }
 
 /** The better of two lamps; `current` on a tie. */
 export function betterClearLamp(current: ClearLamp, candidate: ClearLamp): ClearLamp {
-  return clearLampRank(candidate) > clearLampRank(current) ? candidate : current;
+  return compareClearLamps(candidate, current) > 0 ? candidate : current;
 }
 
 /**
@@ -56,7 +104,9 @@ export function topClearLamp(ruleset: string | undefined): ClearLamp {
  * `ASSISTED-EASY` … under That-Which-Must-Not-Be-Named). DEATH and HAZARD clear on the strictest lamp below the full-combo ones.
  */
 const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
-  'ASSIST-EASY': 'ASSIST_EASY',
+  // beatoraja 0.8.9 `ClearType`: the ASSIST EASY gauge (gauge type 0) clears on LightAssistEasy.
+  'ASSIST-EASY': 'LIGHT_ASSIST_EASY',
+  // That-Which-Must-Not-Be-Named's ASSISTED EASY gauge clears on its own lamp below EASY.
   'ASSISTED-EASY': 'ASSIST_EASY',
   EASY: 'EASY',
   GROOVE: 'NORMAL',
@@ -134,7 +184,7 @@ function finishClearLamp(play: {
       : play.great > 0
         ? 'PERFECT'
         : 'MAX';
-  return clearLampRank(lamp) > clearLampRank(play.top) ? play.top : lamp;
+  return compareClearLamps(lamp, play.top) > 0 ? play.top : lamp;
 }
 
 /**

@@ -261,7 +261,7 @@ export class ResultRoute {
         !data.practice &&
         (data.replay === undefined || !isBmsonRecoveryDisabled(data.replay.chart, data.replay.play.bmsonTotalMode))
       )
-        this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
+        this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data), data.replay);
       const mounted = await this.showBeatorajaResult(data, {
         run: 'stage',
         course: { info: activeCourseInfo(active) },
@@ -275,7 +275,7 @@ export class ResultRoute {
     const kept =
       recorded &&
       (data.replay === undefined || !isBmsonRecoveryDisabled(data.replay.chart, data.replay.play.bmsonTotalMode))
-        ? this.records.recordActivePlay(recordPlayFromResult(data))
+        ? this.records.recordActivePlay(recordPlayFromResult(data), data.replay)
         : undefined;
     const mounted = await this.showBeatorajaResult(data, {
       run: 'single',
@@ -427,7 +427,7 @@ export class ResultRoute {
         !data.practice &&
         (data.replay === undefined || !isBmsonRecoveryDisabled(data.replay.chart, data.replay.play.bmsonTotalMode))
       )
-        this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
+        this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data), data.replay);
     }
     // Family dispatch for result. Only the LR2 / default split is modelled here — a play on the beatoraja play screen
     // shows its result on the beatoraja skin (`showBeatorajaPlayResult`), a NONSTOP run on a beatoraja theme too
@@ -495,7 +495,7 @@ export class ResultRoute {
     const kept =
       recorded &&
       (data.replay === undefined || !isBmsonRecoveryDisabled(data.replay.chart, data.replay.play.bmsonTotalMode))
-        ? this.records.recordActivePlay(recordPlayFromResult(data))
+        ? this.records.recordActivePlay(recordPlayFromResult(data), data.replay)
         : undefined;
     // A single play's slots, or the course run's; a course stage has none (beatoraja saves the course as one run).
     const replaySlots = run === 'single' ? this.playReplaySlots(data, kept) : mode.replaySlots;

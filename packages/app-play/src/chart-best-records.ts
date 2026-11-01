@@ -7,6 +7,7 @@ import {
   playKeepsRecord,
   type BestRecord,
   type RecordPlayKind,
+  type RecordSlot,
 } from '@be-music/player-engine/records';
 import { isClearLamp, type RulesetId } from '@be-music/player-engine/ruleset';
 import type { LibraryChart } from '@be-music/player-scene-model';
@@ -34,6 +35,21 @@ export type RecordedPlayKind = RecordPlayKind & {
  */
 export function rulesetRecordKey(ruleset: RulesetId, key: string): string {
   return `${ruleset}:${key}`;
+}
+
+/** The judge ruleset a {@link rulesetRecordKey} keeps its record under, or `undefined` for a key that names none. */
+export function recordKeyRuleset(key: string): RulesetId | undefined {
+  return JUDGE_RULESETS.find((ruleset) => key.startsWith(`${ruleset}:`));
+}
+
+/**
+ * The key of a record slot beside a chart's ordinary record (`RecordPolicy.recordSlot`): an LR2 separate lamp (D-BATTLE,
+ * SP TO DP, EXTRA MODE) as `lr2:d-battle:sha256:…`. The ordinary slot keeps the key itself.
+ */
+export function slotRecordKey(key: string, slot: RecordSlot): string {
+  const ruleset = recordKeyRuleset(key);
+  if (slot === 'main' || ruleset === undefined) return key;
+  return `${ruleset}:${slot}:${key.slice(ruleset.length + 1)}`;
 }
 
 /** The records of one judge ruleset, looked up by a chart's or a course's own key (as `lookupCourseBestRecord` reads them). */
