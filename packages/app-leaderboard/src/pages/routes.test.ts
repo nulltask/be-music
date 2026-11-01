@@ -107,6 +107,8 @@ describe('page language', () => {
     expect(about).toContain('プレイの採点');
     expect(about).toContain('パブリックベータ');
     expect(about).toContain('データは予告なく削除されることがあります。');
+    expect(about).toMatch(/Be-Music Leaderboard<\/a>\s*<span class="badge" data-variant="outline">\s*Beta\s*<\/span>/);
+    expect(about).not.toContain('>beta</span>');
     expect(about).not.toContain('Public Beta');
     expect(about).not.toContain('ベータ版');
     expect(about).toContain('href="#replays"');
@@ -135,6 +137,9 @@ describe('about and help pages', () => {
     expect(about.html).toContain('Data may be deleted without notice.');
     expect(about.html).toContain('Rankings may be reset while scoring rules settle.');
     expect(about.html).not.toContain('パブリックベータ');
+    expect(about.html).toMatch(
+      /Be-Music Leaderboard<\/a>\s*<span class="badge" data-variant="outline">\s*Beta\s*<\/span>/,
+    );
     expect(about.html).not.toContain('>beta</span>');
     expect(about.html).toContain('href="https://github.com/nulltask/be-music"');
     expect((await page('/')).html).toContain('href="/about"');

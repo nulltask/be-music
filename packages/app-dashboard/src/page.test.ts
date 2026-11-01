@@ -65,6 +65,9 @@ describe('renderDashboard', () => {
       '<footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs"><p lang="ja">パブリックベータ。データは予告なく削除されることがあります。</p><nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="サービス"><span aria-current="page">Dashboard</span><a class="underline underline-offset-4 hover:text-foreground" data-service="accounts" href="https://accounts.preview.be-music.app/">Accounts</a><a class="underline underline-offset-4 hover:text-foreground" data-service="play" href="https://play.preview.be-music.app/">Play</a><a class="underline underline-offset-4 hover:text-foreground" data-service="leaderboard" href="https://leaderboard.preview.be-music.app/">Leaderboard</a></nav><div class="space-y-2">be-music · <a class="underline underline-offset-4 hover:text-foreground" href="https://donate.preview.be-music.app/">寄付</a></div><p>© 2026 nulltask · MIT License</p></footer>',
     );
     expect(html).not.toContain('>Dashboard</a>');
+    expect(html).toContain('>Be-Music Dashboard</a><span class="badge" data-variant="outline">Beta</span>');
+    expect(html).not.toContain('>beta</span>');
+    expect(html.slice(html.lastIndexOf('<footer'))).not.toContain('>Beta</span>');
     expect(html).toContain('class="btn no-underline" data-size="sm" href="/api/auth/sign-in"');
   });
 
@@ -72,6 +75,7 @@ describe('renderDashboard', () => {
     for (const showDonateLink of [undefined, false]) {
       const html = renderDashboard({ account: undefined, hostname: 'be-music.app', locale: 'en', showDonateLink });
       expect(html).not.toContain('https://donate.');
+      expect(html).toContain('>Be-Music Dashboard</a><span class="badge" data-variant="outline">Beta</span>');
       expect(html).toContain(
         '<footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs"><p lang="en">Public Beta. Data may be deleted without notice.</p><nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Services"><span aria-current="page">Dashboard</span><a class="underline underline-offset-4 hover:text-foreground" data-service="accounts" href="https://accounts.be-music.app/">Accounts</a><a class="underline underline-offset-4 hover:text-foreground" data-service="play" href="https://play.be-music.app/">Play</a><a class="underline underline-offset-4 hover:text-foreground" data-service="leaderboard" href="https://leaderboard.be-music.app/">Leaderboard</a></nav><div class="space-y-2">be-music</div><p>© 2026 nulltask · MIT License</p></footer>',
       );
