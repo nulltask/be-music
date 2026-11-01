@@ -442,12 +442,18 @@ export class LibraryService {
    * Hashing the whole library is cheap (chart files are small) and cached per song.
    */
   private async refreshCourseFolders(): Promise<void> {
-    const hashed = await Promise.all(
-      this.collection.charts.map(async (chartEntry) => ({
-        chart: chartEntry,
-        ...(await this.resolveChartHashes(chartEntry)),
-      })),
-    );
+    // Only a course with fixed stages finds its charts by hash. Without one, hashing every chart (reading each file
+    // again) would only slow the drop down; a chart is still hashed when its record or replay needs it.
+    const needsHashes =
+      this.courseGroups.some((group) => group.courses.length > 0) || this.courseMaker.courses.length > 0;
+    const hashed = needsHashes
+      ? await Promise.all(
+          this.collection.charts.map(async (chartEntry) => ({
+            chart: chartEntry,
+            ...(await this.resolveChartHashes(chartEntry)),
+          })),
+        )
+      : [];
     this.collection = {
       ...this.collection,
       courseFolders: [

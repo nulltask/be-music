@@ -1,7 +1,7 @@
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { BrowserAssetSource } from '../collection/types.ts';
-import { collectChartVolumeMultipliers, loadPlaySamples } from './play-audio.ts';
+import { collectChartVolumeMultipliers, loadPlaySamples, resolveAudioDecodeConcurrency } from './play-audio.ts';
 import { PEAK_GAIN_TARGET_LINEAR } from './peak-gain.ts';
 
 const mocks = vi.hoisted(() => ({
@@ -260,5 +260,15 @@ describe('loadPlaySamples', () => {
     expect(audioContext.decoded).toEqual([]);
     expect(samples.size).toBe(0);
     expect(mocks.stretchDecodedSamples).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveAudioDecodeConcurrency', () => {
+  test('decodes one sample per core, between 4 and 16', () => {
+    expect(resolveAudioDecodeConcurrency(10)).toBe(10);
+    expect(resolveAudioDecodeConcurrency(2)).toBe(4);
+    expect(resolveAudioDecodeConcurrency(64)).toBe(16);
+    expect(resolveAudioDecodeConcurrency(undefined)).toBe(8);
+    expect(resolveAudioDecodeConcurrency(Number.NaN)).toBe(8);
   });
 });

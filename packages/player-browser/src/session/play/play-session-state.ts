@@ -484,6 +484,13 @@ export class PlaySessionState extends PlayPresentation {
    */
   bgaReadyPromise: Promise<void> | undefined;
   /**
+   * Resolves once the samples have decoded and {@link bgaReadyPromise} has: what {@link start} gates the chart on. A
+   * play already on the stage when it loads decodes through its intro, so this can still be pending when it starts.
+   */
+  assetsReadyPromise: Promise<void> | undefined;
+  /** True once the samples have decoded and the engine may be built on them. */
+  samplesDecoded = false;
+  /**
    * Latches at the moment the engine's `manualPlay` / `autoPlay` Promise resolves so the `onChartFinished` /
    * `onExit` callback fires at most once. {@link handleSharedEngineChartFinished} is the only writer.
    */
