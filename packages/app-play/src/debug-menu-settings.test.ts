@@ -271,10 +271,32 @@ test('persists and validates the H-RANDOM source configuration', () => {
 });
 
 test('persists per-side LR2 CONVERGE targets', () => {
-  const settings = { random1P: 'CONVERGE', randomFixedLane1P: 3, randomFixedLane2P: 7 };
+  const settings = { random1P: 'lr2:CONVERGE', randomFixedLane1P: 3, randomFixedLane2P: 7 };
   expect(
     parseDebugMenuSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings,
   ).toMatchObject(settings);
+});
+
+test('migrates bare RANDOM, S-RANDOM, CONVERGE and BATTLE to the stored ruleset source (ADR 0019)', () => {
+  const read = (settings: Record<string, unknown>) =>
+    parseDebugMenuSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings;
+  expect(
+    read({ judgeRuleset: 'beatoraja', random1P: 'RANDOM', random2P: 'S-RANDOM', battleMode: 'BATTLE' }),
+  ).toMatchObject({ random1P: 'beatoraja:RANDOM', random2P: 'beatoraja:S-RANDOM', battleMode: 'beatoraja:BATTLE' });
+  expect(read({ judgeRuleset: '____', random1P: 'S-RANDOM', battleMode: 'BATTLE' })).toMatchObject({
+    random1P: '____:S-RANDOM',
+    battleMode: '____:BATTLE',
+  });
+  // Without a stored ruleset the document was saved under LR2 rules, the default.
+  expect(read({ random1P: 'CONVERGE', random2P: 'RANDOM' })).toMatchObject({
+    random1P: 'lr2:CONVERGE',
+    random2P: 'lr2:RANDOM',
+  });
+  // A qualified value is kept, and a source that does not define the name is dropped.
+  expect(read({ judgeRuleset: 'lr2', random1P: 'beatoraja:S-RANDOM', random2P: '____:CONVERGE' })).toEqual({
+    judgeRuleset: 'lr2',
+    random1P: 'beatoraja:S-RANDOM',
+  });
 });
 
 test('persists large seed values as decimal strings', () => {

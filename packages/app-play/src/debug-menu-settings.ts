@@ -3,7 +3,7 @@
 // and the next visit still restores it (`debug-menu-settings-sync.ts`).
 
 import type { TunableCompressor } from '@be-music/player-browser/audio';
-import { isGaugeType, isRulesetId } from '@be-music/player-engine/ruleset';
+import { isGaugeType, isRulesetId, migrateOptionValue, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
@@ -40,7 +40,9 @@ import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
 export const DEBUG_MENU_SETTINGS_STORAGE_KEY = 'be-music.debug-menu-settings';
 /**
  * The stored document's revision. `0` while the shape is still being defined: it may change incompatibly without the
- * number moving. Any other stamp is unreadable. The worker copy uses the same number.
+ * number moving. Any other stamp is unreadable. The worker copy uses the same number. Values are migrated as they are
+ * read instead (`pickSettings`): a bare RANDOM, S-RANDOM, CONVERGE or BATTLE becomes the stored ruleset's qualified one
+ * (ADR 0019).
  */
 const DOCUMENT_VERSION = 0;
 
@@ -179,7 +181,6 @@ export interface DebugMenuSettingsDocument {
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 
-const RANDOM_MODES: readonly RandomMode[] = [...PLAY_OPTION_CHOICES.random1P!, 'SCATTER'];
 const SKIN_FAMILIES: readonly SkinFamilyOverride[] = ['auto', 'default', 'lr2', 'beatoraja'];
 const SKIN_EFFECTS: readonly SkinEffects[] = ['full', 'reduced', 'off'];
 const PLAY_LAYOUTS: readonly PlayLayout[] = ['auto', 'standard', 'touch'];
@@ -253,8 +254,26 @@ export function debugMenuSettingsDocument(value: unknown): DebugMenuSettingsDocu
   return { version: DOCUMENT_VERSION, updatedAt, settings: pickSettings(settings as Record<string, unknown>) };
 }
 
+/**
+ * A stored lane option or battle mode, valid and source-qualified: a bare colliding value (RANDOM, S-RANDOM, CONVERGE,
+ * BATTLE) from before ADR 0019 is the ruleset the document was saved with, as it meant then. The migration runs once in
+ * effect: the qualified value is what the next save writes.
+ */
+function migrateStoredOption<K extends 'random1P' | 'random2P' | 'battleMode'>(
+  key: K,
+  value: unknown,
+  ruleset: RulesetId,
+): DebugMenuSettings[K] | undefined {
+  const valid = resolvePlayOptionValue(key, value);
+  if (valid === undefined) return undefined;
+  const migrated = migrateOptionValue(valid, ruleset);
+  return (resolvePlayOptionValue(key, migrated) ?? valid) as DebugMenuSettings[K];
+}
+
 function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> {
   const settings: Partial<DebugMenuSettings> = {};
+  // The settings this document was saved with default to LR2 rules, as a fresh visit does.
+  const storedRuleset: RulesetId = isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : 'lr2';
   assign(settings, 'autoPlay', booleanOf(raw.autoPlay));
   assign(settings, 'autoPauseOnBlur', booleanOf(raw.autoPauseOnBlur));
   assign(settings, 'peakGain', booleanOf(raw.peakGain));
@@ -297,7 +316,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
   assign(settings, 'sevenToNinePattern', resolvePlayOptionValue('sevenToNinePattern', raw.sevenToNinePattern));
   assign(settings, 'sevenToNineType', resolvePlayOptionValue('sevenToNineType', raw.sevenToNineType));
-  assign(settings, 'battleMode', resolvePlayOptionValue('battleMode', raw.battleMode));
+  assign(settings, 'battleMode', migrateStoredOption('battleMode', raw.battleMode, storedRuleset));
   assign(settings, 'dBattleScratch', resolvePlayOptionValue('dBattleScratch', raw.dBattleScratch));
   assign(settings, 'gauge2P', resolvePlayOptionValue('gauge2P', raw.gauge2P));
   assign(settings, 'mRan1P', resolvePlayOptionValue('mRan1P', raw.mRan1P));
@@ -359,8 +378,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'hRandomThresholdBPM', resolvePlayOptionValue('hRandomThresholdBPM', raw.hRandomThresholdBPM));
   for (const key of ['randomFixedLane1P', 'randomFixedLane2P', 'randomSeed1P', 'randomSeed2P'] as const)
     assign(settings, key, resolvePlayOptionValue(key, raw[key]));
-  assign(settings, 'random1P', oneOf(raw.random1P, RANDOM_MODES));
-  assign(settings, 'random2P', oneOf(raw.random2P, RANDOM_MODES));
+  assign(settings, 'random1P', migrateStoredOption('random1P', raw.random1P, storedRuleset));
+  assign(settings, 'random2P', migrateStoredOption('random2P', raw.random2P, storedRuleset));
   assign(settings, 'sort', oneOf(raw.sort, SORT_CYCLE));
   assign(settings, 'keysFilter', oneOf(raw.keysFilter, KEYS_FILTER_CYCLE));
   assign(settings, 'difficultyFilter', oneOf(raw.difficultyFilter, DIFFICULTY_FILTER_CYCLE));

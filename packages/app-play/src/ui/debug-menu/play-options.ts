@@ -12,12 +12,12 @@ import {
   HISPEED_MIN,
   HISPEED_STEP,
   KEYS_FILTER_CYCLE,
-  resolveRandomModes,
   PLAY_OPTION_CHOICES,
   SORT_CYCLE,
 } from '@be-music/player-scene-model';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { DebugMenu } from './index.ts';
+import { laneOptionItems } from './play-option-items.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
@@ -60,7 +60,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.guiState,
       key,
       `Random ${side}`,
-      resolveRandomModes(this.guiState.judgeRuleset),
+      Object.fromEntries(laneOptionItems(this.guiState.judgeRuleset).map((item) => [item.text, item.value])),
     );
     if (side === '1P') this.random1PController = controller;
     else this.random2PController = controller;
