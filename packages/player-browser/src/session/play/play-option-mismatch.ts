@@ -5,7 +5,14 @@
  * chart, so the host can tell the player which ones to change instead of leaving the play screen black.
  */
 
+import { splitOptionSource } from '@be-music/player-engine/ruleset';
 import type { PlaySessionOptions } from './play-options.ts';
+
+/** How a source-qualified value reads: `beatoraja:CONVERGE` as `CONVERGE (beatoraja)`, `____:BATTLE` as `BATTLE (????)`. */
+function optionLabel(value: string): string {
+  const { source, name } = splitOptionSource(value);
+  return source === undefined ? value : `${name} (${source === 'lr2' ? 'LR2' : source === '____' ? '????' : source})`;
+}
 
 /** The play options that convert the chart, as the Debug Menu labels them. */
 export type PlayOptionMismatchSource = Pick<
@@ -28,9 +35,12 @@ export class PlayOptionMismatchError extends RangeError {
 /** The selected options that convert the chart, labelled as the Debug Menu shows them. */
 export function describeChartConvertingOptions(options: PlayOptionMismatchSource): string[] {
   const labels: string[] = [];
-  if (options.random1P !== undefined && options.random1P !== 'OFF') labels.push(`Random 1P: ${options.random1P}`);
-  if (options.random2P !== undefined && options.random2P !== 'OFF') labels.push(`Random 2P: ${options.random2P}`);
-  if (options.battleMode !== undefined && options.battleMode !== 'OFF') labels.push(`Battle: ${options.battleMode}`);
+  if (options.random1P !== undefined && options.random1P !== 'OFF')
+    labels.push(`Random 1P: ${optionLabel(options.random1P)}`);
+  if (options.random2P !== undefined && options.random2P !== 'OFF')
+    labels.push(`Random 2P: ${optionLabel(options.random2P)}`);
+  if (options.battleMode !== undefined && options.battleMode !== 'OFF')
+    labels.push(`Battle: ${optionLabel(options.battleMode)}`);
   if (options.lr2ExtraMode === true) labels.push('EXTRA MODE (LR2)');
   if (options.longNoteModifier !== undefined && options.longNoteModifier !== 'OFF')
     labels.push(`Long notes: ${options.longNoteModifier}`);

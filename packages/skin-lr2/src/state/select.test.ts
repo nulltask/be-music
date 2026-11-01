@@ -352,6 +352,26 @@ describe('resolveLR2SelectState sliders and buttons', () => {
     expect(battle('SP-TO-DP', LR2_OP.KEYS_10)).toBe('DP-TO-SP');
     expect(battle('SP-TO-DP', LR2_OP.KEYS_9)).toBe('9-TO-7');
     expect(resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, battleMode: 'SP-TO-DP' } }).button(56)).toBe(3);
+    // Another source's one-player BATTLE reads as LR2's nearest label (ADR 0019).
+    expect(battle('beatoraja:BATTLE', LR2_OP.KEYS_7)).toBe('BATTLE');
+    expect(battle('____:BATTLE', LR2_OP.KEYS_14)).toBe('DISABLE');
+  });
+
+  it('reads any source lane option by its bare name on the RANDOM buttons and labels', () => {
+    const state = (random1P: (typeof DEFAULT_PLAY_OPTIONS)['random1P']) =>
+      resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, random1P, random2P: random1P } });
+    for (const [mode, label, cell] of [
+      ['lr2:RANDOM', 'RANDOM', 2],
+      ['beatoraja:RANDOM', 'RANDOM', 2],
+      ['____:S-RANDOM', 'S-RANDOM', 3],
+      ['S-RANDOM', 'S-RANDOM', 3],
+      ['beatoraja:CONVERGE', 'CONVERGE', 0],
+    ] as const) {
+      expect(state(mode).text(LR2_TEXT.OPTION_RANDOM_1P)).toBe(label);
+      expect(state(mode).text(LR2_TEXT.OPTION_RANDOM_2P)).toBe(label);
+      expect(state(mode).button(LR2_BUTTON.RANDOM_1P)).toBe(cell);
+      expect(state(mode).button(LR2_BUTTON.RANDOM_2P)).toBe(cell);
+    }
   });
 
   it('draws the course maker’s connection buttons', () => {

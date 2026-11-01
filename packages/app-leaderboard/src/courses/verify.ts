@@ -35,23 +35,23 @@ function expectedStageSettings(constraints: readonly string[]) {
   return { gaugeSet, judge, lane };
 }
 
-function laneAllowed(play: BeMusicReplay['play'], allowed: readonly string[] | undefined): boolean {
+function laneAllowed(replay: BeMusicReplay, allowed: readonly string[] | undefined): boolean {
   if (allowed === undefined) return true;
+  // A chart that forces its own arrangement (#844) wins over the course's lane lock, as over the player's choice.
+  if (replay.chart.chartPlayOptions?.options.random !== undefined) return true;
+  const { play } = replay;
   const sides = [play.randomLane?.p1, play.randomLane?.p2].map((side) => (side ?? 'OFF').toUpperCase());
   return sides.every((side) => allowed.includes(side));
 }
 
 /** Whether a play ran on the course's gauge set and judge constraint, with a lane option the course allows. */
-function playsUnderConstraints(
-  play: BeMusicReplay['play'],
-  expected: ReturnType<typeof expectedStageSettings>,
-): boolean {
-  const course = play.course;
+function playsUnderConstraints(replay: BeMusicReplay, expected: ReturnType<typeof expectedStageSettings>): boolean {
+  const course = replay.play.course;
   return (
     course !== undefined &&
     course.gaugeSet === expected.gaugeSet &&
     course.judge === expected.judge &&
-    laneAllowed(play, expected.lane)
+    laneAllowed(replay, expected.lane)
   );
 }
 
@@ -65,7 +65,8 @@ function stageFailed(result: ReplayRulesetResult): boolean {
  * under the ruleset it was played with (`simulateCourseReplay`):
  *
  * - every stage played under the course's constraints: the gauge set and judge constraint in `play.course`, and a lane
- *   option the course allows (`grade` OFF only, `grade_mirror` OFF or MIRROR);
+ *   option the course allows (`grade` OFF only, `grade_mirror` OFF or MIRROR), unless the stage's chart forced its own
+ *   arrangement (`chart.chartPlayOptions.options.random`, which wins over the lock);
  * - every stage after the first carried in exactly the state the previous stage, re-simulated, left (gauge, course
  *   combo and max combo), and the first carried in nothing;
  * - no stage was played after one that failed, and a run that stopped before the last stage stopped because its last
@@ -77,12 +78,13 @@ function stageFailed(result: ReplayRulesetResult): boolean {
 export function checkCourseRun(courseLog: BeMusicCourseReplay, simulated: ReplayCourseResult): CourseRunCheck {
   const expected = expectedStageSettings(courseLog.course.constraints);
   if (courseLog.nonstop !== undefined) {
-    const { play } = courseLog.nonstop.replay;
-    return playsUnderConstraints(play, expected) ? { ok: true } : { ok: false, reason: 'course-constraint-mismatch' };
+    return playsUnderConstraints(courseLog.nonstop.replay, expected)
+      ? { ok: true }
+      : { ok: false, reason: 'course-constraint-mismatch' };
   }
   const played = courseLog.stages.filter((entry) => entry.played).map((entry) => entry.replay);
   for (const [index, stage] of played.entries()) {
-    if (!playsUnderConstraints(stage.play, expected)) {
+    if (!playsUnderConstraints(stage, expected)) {
       return { ok: false, reason: 'course-constraint-mismatch', stage: index };
     }
   }

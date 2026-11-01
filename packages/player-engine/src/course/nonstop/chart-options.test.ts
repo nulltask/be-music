@@ -96,3 +96,12 @@ test('unsupported-only and option-free courses do not invent effective display o
   expect(plain.map.chartOptions).toBeUndefined();
   expect(plain.map.chartOptionDiagnostics).toBeUndefined();
 });
+test('a stage chart forcing RANDOM or gameplay CRAZY is diagnosed: one stitched play keeps one ruleset and arrangement', () => {
+  const source = parseBMS('#BPM 120\n#OPTION 774:RANDOM_MIRROR\n#OPTION 774:CRAZY_HELLJUDGE\n#00211:01');
+  const result = placeNonstopChartOptions(resolveChart(source), { offsetSeconds: 4, rate: 1 }, { start: 4, end: 8 }, 1);
+  expect(result.hasOperations).toBe(false);
+  expect(result.diagnostics).toEqual([
+    { code: 'unsupported-option', declaration: '774:RANDOM_MIRROR', stage: 1, seconds: 4 },
+    { code: 'unsupported-option', declaration: '774:CRAZY_HELLJUDGE', stage: 1, seconds: 4 },
+  ]);
+});

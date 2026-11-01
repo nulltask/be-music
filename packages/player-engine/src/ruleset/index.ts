@@ -17,3 +17,4 @@ export * from './selection.ts';
 export * from './chart-facts.ts';
 export * from './long-note.ts';
 export * from './custom-judge.ts';
+export * from './chart-judge.ts';
