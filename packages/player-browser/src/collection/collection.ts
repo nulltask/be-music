@@ -21,7 +21,7 @@ import {
 import { isMaliciousAssetPath, loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import { logger } from '../logger.ts';
 
-export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
+export { loadAssetBytes, loadAssetFile, asLoadedBytes } from './file-lookup.ts';
 export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles } from './dropped-file.ts';
 
 const log = logger('drop');

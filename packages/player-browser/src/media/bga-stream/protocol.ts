@@ -14,8 +14,11 @@ export interface BGADecodeStartMessage {
   coreURL: string;
   /** The core's wasm, compiled once on the main thread and shared by every decode worker. */
   wasmModule: WebAssembly.Module;
-  /** The source file's bytes; transferred. */
-  input: ArrayBuffer;
+  /**
+   * The source file. The worker mounts it read-only (Emscripten's WORKERFS) and ffmpeg reads the parts it needs, so the
+   * file is never held in memory as a whole: a dropped `File` stays on disk.
+   */
+  input: Blob;
   /** Name inside ffmpeg's file system; its extension picks the demuxer. */
   inputName: string;
   mode: BGAStreamOutput;

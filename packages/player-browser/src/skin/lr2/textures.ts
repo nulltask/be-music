@@ -8,7 +8,7 @@ export {
   attachBlobURLToTexture,
   destroyTextureAndRevokeBlobURL,
   loadTextureFromBytes,
-  loadVideoTextureFromBytes,
+  loadVideoTexture,
   type LoadTextureOptions,
   type VideoTextureHandle,
   type VideoTranscodeOptions,
