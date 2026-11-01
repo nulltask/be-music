@@ -372,8 +372,8 @@ export class PreviewApp {
 
   /**
    * The preview's shortcuts, ahead of the play's own keys: Space plays a play not started yet (a started one pauses
-   * through the play itself), ← / → seek, M mutes and F toggles full screen. While the viewer plays (`?mode=play`), M and F
-   * are lanes, so they go to the play.
+   * through the play itself), ← / → seek five seconds during AUTO play, M mutes and F toggles full screen. While the
+   * viewer plays (`?mode=play`), M and F are lanes, so they go to the play, and the arrows do not seek.
    */
   private readonly handleKey = (event: KeyboardEvent): void => {
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
@@ -400,8 +400,10 @@ export class PreviewApp {
       case 'ArrowRight': {
         if (scene === undefined || !current?.started) return;
         take();
+        // The same rule as the main play: arrows seek only while AUTO (`preview`) is on.
+        if (this.mode !== 'preview') return;
         const frame = scene.controller.getSnapshot();
-        if (frame === undefined || !frame.seekable) return;
+        if (frame === undefined || frame.autoPlay !== true || !frame.seekable) return;
         const step = event.code === 'ArrowLeft' ? -SEEK_STEP_SECONDS : SEEK_STEP_SECONDS;
         void scene.seek(resolveSeekTarget(frame.seconds, step, frame.state.totalSeconds));
         return;
