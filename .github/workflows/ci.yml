@@ -96,11 +96,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task:
+        include:
           # `check` runs format, lint, and type checks in one pass from the root Vite+ config.
-          - check
-          - build
-          - test
+          - task: check
+            run: vp run check
+          - task: build
+            run: vp run build
+          # The unit tests are the longest job; two runners take half of the test files each.
+          - task: test 1/2
+            run: vp test run --shard=1/2
+          - task: test 2/2
+            run: vp test run --shard=2/2
 
     steps:
       - name: Checkout
@@ -118,7 +124,7 @@ jobs:
         run: vp install
 
       - name: Run ${{ matrix.task }}
-        run: vp run ${{ matrix.task }}
+        run: ${{ matrix.run }}
 
   # Base and head share one VM. Split jobs land on different ubuntu-24.04-arm
   # machines, and that host delta dominates the 8% regression threshold.
