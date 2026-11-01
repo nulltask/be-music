@@ -16,6 +16,7 @@ import {
   type AccountActionResult,
 } from './account.ts';
 import { onPlayerLangChange, playerText } from './player-copy.ts';
+import { setPlayerHeaderAccount } from './player-header.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
 import { leaderboardLink } from './service-links.ts';
 import type { BeMusicCourseReplay } from '@be-music/player-engine/replay';
@@ -45,14 +46,12 @@ export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'eng
 }
 /**
  * Everything the player shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
- * sign-up buttons), the Debug Menu folder (the same toggle, account row and passkey buttons), the account chip in the
- * corner, and submitting a finished play. An account starts anonymous (the first
+ * sign-up buttons), the Debug Menu folder (the same toggle, account row and passkey buttons), the shared header's
+ * account control, and submitting a finished play. An account starts anonymous (the first
  * submission signs in anonymously); creating a passkey keeps it, and "Sign in with passkey" brings it to another device,
  * moving that device's anonymous plays into it.
  */
 export class LeaderboardPanel {
-  private folder: FolderApi | undefined;
-  private openPane: () => void = () => undefined;
   private submitController: PaneBinding | undefined;
   private accountController: PaneBinding | undefined;
   private readonly accountState = { status: 'Not signed in' };
@@ -82,19 +81,10 @@ export class LeaderboardPanel {
       this.accountState.status = describeLeaderboardAccount(this.shownAccount);
       this.accountController?.refresh();
       this.renderStartAccount(this.shownAccount);
-      this.paintAccountChip(this.shownAccount);
     });
   }
-  /** Fills the Debug Menu's Leaderboard folder and wires the account chip. */
-  buildFolder(folder: FolderApi, openPane: () => void = () => undefined): void {
-    this.folder = folder;
-    this.openPane = openPane;
-    // Signed out, the account chip has no page to open: it opens this folder instead.
-    document.querySelector<HTMLAnchorElement>('#account-chip')?.addEventListener('click', (event) => {
-      if (event.currentTarget instanceof HTMLElement && event.currentTarget.dataset.state !== 'signed-out') return;
-      event.preventDefault();
-      this.openFolder();
-    });
+  /** Fills the Debug Menu's Leaderboard folder. */
+  buildFolder(folder: FolderApi): void {
     // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
     // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
     const settings = this.host.settings();
@@ -215,7 +205,7 @@ export class LeaderboardPanel {
         this.host.setStatus(playerText().lb.courseNetwork);
       });
   }
-  /** Re-reads the account into the Debug Menu's "Account" row and the account chip. */
+  /** Re-reads the account into the Debug Menu's "Account" row and the shared header. */
   async refreshAccount(): Promise<void> {
     const account = await loadLeaderboardAccount();
     this.shownAccount = account;
@@ -229,19 +219,15 @@ export class LeaderboardPanel {
     this.accountState.status = describeLeaderboardAccount(account);
     this.accountController?.refresh();
     this.renderStartAccount(account);
-    this.paintAccountChip(account);
+    setPlayerHeaderAccount(
+      account === undefined
+        ? undefined
+        : { handle: account.handle, displayName: account.displayName, anonymous: account.anonymous },
+    );
   }
-  /** Paints the account chip from the current language. */
-  private paintAccountChip(account: Awaited<ReturnType<typeof loadLeaderboardAccount>>): void {
-    const chip = document.querySelector<HTMLAnchorElement>('#account-chip');
-    if (chip === null) return;
-    const view = describeAccountChip(account);
-    chip.dataset.state = view.state;
-    chip.title = view.title;
-    chip.href = leaderboardLink(view.href ?? '/', location.hostname);
-    chip.setAttribute('aria-label', view.title);
-    const label = chip.querySelector('#account-chip-label');
-    if (label !== null) label.textContent = view.label;
+  /** Opens the sign-in dialog. The header's Sign in control calls this. */
+  public openSignIn(): void {
+    this.openDialog('sign-in');
   }
   /** Fills the start card's account row: who the plays go to, a link to their page, and the actions that fit. */
   private renderStartAccount(account: Awaited<ReturnType<typeof loadLeaderboardAccount>>): void {
@@ -294,13 +280,5 @@ export class LeaderboardPanel {
     const checkbox = document.querySelector<HTMLInputElement>('#start-submit');
     if (checkbox) checkbox.checked = value;
     this.submitController?.refresh();
-  }
-  /** Opens the Debug Menu with the Leaderboard folder unfolded. */
-  private openFolder(): void {
-    const folder = this.folder;
-    if (folder === undefined) return;
-    folder.expanded = true;
-    this.openPane();
-    folder.element.scrollIntoView({ block: 'nearest' });
   }
 }

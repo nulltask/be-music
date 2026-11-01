@@ -6,9 +6,9 @@ Private stylesheet for Accounts and Dashboard. `src/theme.css` imports Tailwind 
 
 Dark colors follow the system color scheme. Leaderboard toggles a `.dark` class from a script; these pages cannot, because their content security policy blocks inline scripts. The build repeats Basecoat's dark tokens under `prefers-color-scheme`.
 
-The private donation site keeps its own copy in `src/service-theme.ts`. Update that copy separately when this stylesheet changes. Play has its own skin-driven interface and does not use this theme.
+The private donation site keeps its own copy in `src/service-theme.ts`. Update that copy separately when this stylesheet changes. Play draws its stage with skins and builds its own stylesheet, so it does not use this compiled CSS, which follows the system scheme. Play does use the shared header and forces dark mode on its own page.
 
-`renderServiceHeader` is the header for every service except Play. It shows who is signed in, a link to Play, and English / 日本語. `resolveLocale` picks the language from `?lang=`, the `be-music-lang` cookie, then `Accept-Language`.
+`renderServiceHeader` is the header for Dashboard, Accounts, Leaderboard and Play. It shows who is signed in, then either a link to Play or, when `settings` is set, a Settings button in that place, then English / 日本語. One Beta badge sits beside the title. Play sets `settings` and opens its Debug Menu from that button. The other services pass `playHref` and leave `settings` unset. `resolveLocale` picks the language from `?lang=`, the `be-music-lang` cookie, then `Accept-Language`.
 
 `renderServiceFooter` is the footer for Dashboard, Accounts, Play and Leaderboard. It links those four services and leaves the current one as text. A site then adds its own footer content, the copyright line (`© 2026 nulltask · MIT License`), and `renderBuildInfo`. Pass the page hostname so a preview site links to the preview siblings. An unknown host uses production, as the Player does.
 

@@ -21,6 +21,7 @@ describe('renderServiceHeader', () => {
     expect(html).toContain('>Be-Music Dashboard</a><span class="badge" data-variant="outline">Beta</span>');
     expect(html).not.toContain('>beta</span>');
     expect(html).not.toContain('ダッシュボード');
+    expect(html).not.toContain('data-service-header="settings"');
     expect(html).toContain('class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2"');
     const account = html.indexOf('aria-label="@alice のアカウント"');
     const play = html.indexOf('href="https://play.be-music.app/"');
@@ -62,7 +63,9 @@ describe('renderServiceHeader', () => {
       requestURL: '/login',
     });
     expect(signedOut).toContain('>Be-Music Accounts</a><span class="badge" data-variant="outline">Beta</span>');
-    expect(signedOut).toContain('class="btn" data-size="sm" data-variant="ghost" href="/login">Sign in</a>');
+    expect(signedOut).toContain(
+      'class="btn" data-size="sm" data-variant="ghost" data-service-header="account" href="/login">Sign in</a>',
+    );
     expect(signedOut).not.toMatch(/<(?:a|button)[^>]*data-variant="outline"/);
     expect(signedOut).not.toContain('class="account-chip"');
     const guest = renderServiceHeader({
@@ -81,6 +84,31 @@ describe('renderServiceHeader', () => {
     expect(guest).not.toContain('<x>');
     expect(guest.indexOf('aria-label="Account of @x1"')).toBeLessThan(guest.indexOf('href="https://play.example/"'));
     expect(guest.indexOf('href="https://play.example/"')).toBeLessThan(guest.indexOf('popovertarget="language-menu"'));
+  });
+
+  test('puts Settings in the Play slot and leaves the Play link out', () => {
+    const html = renderServiceHeader({
+      locale: 'ja',
+      title: 'Be-Music Play',
+      homeHref: '/',
+      playHref: 'https://play.be-music.app/',
+      settings: true,
+      accountHref: '#sign-in',
+      requestURL: '/',
+    });
+    expect(html).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
+    expect(html.match(/<span class="badge"/g)).toHaveLength(1);
+    expect(html).toContain('data-service-header="settings" title="デバッグメニュー" aria-label="設定"');
+    expect(html).toContain('class="lucide lucide-settings"');
+    expect(html).toContain('<span class="hidden md:inline">設定</span>');
+    expect(html).not.toContain('href="https://play.be-music.app/"');
+    expect(html).not.toContain('aria-label="プレイ"');
+    const account = html.indexOf('data-service-header="account"');
+    const settings = html.indexOf('data-service-header="settings"');
+    const language = html.indexOf('popovertarget="language-menu"');
+    expect(account).toBeGreaterThan(-1);
+    expect(account).toBeLessThan(settings);
+    expect(settings).toBeLessThan(language);
   });
 });
 
