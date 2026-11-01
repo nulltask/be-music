@@ -53,7 +53,7 @@ export const en = {
   },
   dialogs: {
     signInTitle: 'Sign in',
-    signInLead: 'Use the passkey of your Leaderboard account.',
+    signInLead: 'Sign in with a passkey, Google, or Discord.',
     signInWithPasskey: 'Sign in with a passkey',
     or: 'or',
     orWithPasskey: 'or with a passkey',
@@ -67,10 +67,8 @@ export const en = {
     name: 'Display name',
     nameHint: 'Up to 32 characters, in any script. The rankings show it.',
     createPasskey: 'Create passkey',
-    inDevelopment: 'Coming soon',
     signInWith: (provider: string) => `Sign in with ${provider}`,
     signUpWith: (provider: string) => `Sign up with ${provider}`,
-    providerTitle: (action: string) => `${action} is coming soon`,
   },
   footer: {
     label: 'About the Leaderboard',
