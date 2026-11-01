@@ -65,6 +65,7 @@ export function wireHelpModal(): void {
 function wireUsageLanguageSwitch(): void {
   const toggles = Array.from(document.querySelectorAll<HTMLButtonElement>('.help-lang-toggle'));
   const blocks = Array.from(document.querySelectorAll<HTMLElement>('.help-lang'));
+  const notices = Array.from(document.querySelectorAll<HTMLElement>('[data-public-beta-notice]'));
   if (toggles.length === 0 || blocks.length === 0) return;
 
   const activate = (lang: string): void => {
@@ -77,6 +78,9 @@ function wireUsageLanguageSwitch(): void {
       const matches = block.dataset.lang === lang;
       block.classList.toggle('is-active', matches);
       block.toggleAttribute('hidden', !matches);
+    }
+    for (const notice of notices) {
+      notice.toggleAttribute('hidden', notice.dataset.publicBetaNotice !== lang);
     }
   };
 

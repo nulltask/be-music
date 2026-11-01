@@ -78,7 +78,7 @@ export const ja: Messages = {
     apiTitle: '新しいタブで開きます',
     github: 'GitHub',
     githubTitle: 'GitHub を開きます',
-    beta: 'ベータ版です。計算ルールが固まるまで、ランキングはリセットされることがあります。',
+    beta: '計算ルールが固まるまで、ランキングはリセットされることがあります。',
     copyright: '© 2026 nulltask · MIT License',
   },
   help: {

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "be-music Leaderboard API",
-    "description": "Version 0 is the beta: it may still change incompatibly (docs/leaderboard.md section 8). Requests are authenticated with a host-only OIDC app session or a resource-bound Accounts access token; reads are public.",
+    "description": "Version 0 is a Public Beta: it may still change incompatibly (docs/leaderboard.md section 8). Data may be deleted without notice. Requests are authenticated with a host-only OIDC app session or a resource-bound Accounts access token; reads are public.",
     "version": "0"
   },
   "servers": [

@@ -80,7 +80,7 @@ export const en = {
     apiTitle: 'Opens in a new tab',
     github: 'GitHub',
     githubTitle: 'Opens GitHub',
-    beta: 'Beta — rankings may be reset while scoring rules settle.',
+    beta: 'Rankings may be reset while scoring rules settle.',
     copyright: '© 2026 nulltask · MIT License',
   },
   help: {
