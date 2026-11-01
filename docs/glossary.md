@@ -158,6 +158,7 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player-engine/ruleset`).
 - **BP**: The miss count: BADs, POORs and empty POORs, plus the notes the play never judged because it failed or was given up mid-way (for a course, the notes the run never reached too) (`resolveMissCount`).
 - **best record**: The independently retained best clear lamp, highest EX-SCORE, highest max combo, and lowest BP across a player’s plays of a chart or course under one judge ruleset (`BestRecord`). These values can come from different plays; a best record is not a single play result.
+- **dan rank**: The highest dan a player has cleared a GRADE course of, kept per judge ruleset and key mode (`DanRank`, `resolveCourseDanRank` in `@be-music/player-engine/records`). The dan a course certifies is read from its name. _Avoid_: grade (the course kind), class.
 - **view settings**: What the player saw, apart from what was judged: hi-speed, hi-speed fix, visible time and each side's SUDDEN+, HIDDEN+ and LIFT. _Avoid_: display options.
 - **play tempo**: How fast a play runs relative to the chart (`speed`). A play at another tempo is practice.
 

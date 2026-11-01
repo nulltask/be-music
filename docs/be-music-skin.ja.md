@@ -374,6 +374,7 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
   - `playOptions`（`BeMusicPlayOptions`: ハイスピード、ランダム、ゲージ、HIDDEN / SUDDEN、レーンカバー、BGA、リストのフィルタなど）と `playOptionChoices`（列挙型・オンオフのオプションが取りうる値）。選択肢にない値は無視されます。`hiSpeed` と `shutter` は任意の数値を受け付けて範囲内に丸められ、`cyclePlayOption` では変わりません。
   - `chartBestRecord(song)`: ホストが遊ぶ判定ルールセットでの、その譜面のプレイヤーのベスト記録（`BeMusicChartBestRecord`。`@be-music/player-engine/records` の `BestRecord`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`）。ホストが記録を持たなければ `undefined`。`lamp` は `BeMusicClearLamp`（`@be-music/player-engine/ruleset` の `ClearLamp`）で、悪い順に `NO_PLAY`、`FAILED`、`ASSIST_EASY`、`EASY`、`NORMAL`、`HARD`、`EX_HARD`、`FULL_COMBO`、`PERFECT`、`MAX`
   - `courseBestRecord?(course)`: コースバーでのプレイヤーのベスト記録（`BeMusicCourseBestRecord`: `BeMusicChartBestRecord` に、ベストの値で取れる最高のトロフィー `trophy?` を加えたもの）。遊んだことのないコース、ランダムコース、NEW COURSE バーでは `undefined`。これより古いホストにはありません。`describeCourseCard(course, record)` は、コースカードの説明行にベストのランプとトロフィーを加えます
+  - `danRanks?`: ホストが遊ぶ判定ルールセットでの、プレイヤーが段位を持つキーモードごとの段位。鍵数の少ない順です（`BeMusicDanRank`: `{ keyMode, rank, label }`。`rank` は `@be-music/player-engine/records` の `DanRank`、`label` は段位コースの名前と同じ表記の `七段` など）。GRADE コースをクリアするまでは空です。段位を持たないホストにはありません。`describeDanRanks(ranks)` は 1 行にまとめます（`7K 七段 · 14K 初段`）。[コース — プレイヤーの段位](./course.ja.md#プレイヤーの段位)を参照
   - `pointer`: デザインピクセルでのポインタ位置。なければ `undefined`
   - `settings` と `chartImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照
   - `revision`: 選曲の状態（カーソル、フォルダ、検索、リスト内容、プレイオプション、readme の開閉）が変わるたびに増えます。保持型のシーングラフは、これが変わったときだけ作り直せば済みます。

@@ -349,3 +349,28 @@ stateDiagram-v2
 ランプと BP は、どのプレイのランプも決める定義のうちコースの規則と BP です（`@be-music/player-engine/ruleset` の `resolveCourseClearLamp`、`resolveMissCount`）。ホストはプレイの自己ベストを、そのプレイを判定したルールセットで保ちます（`resolveCoursePlayedRuleset`。ステージごとに違うプレイは記録しません）。規則は `@be-music/player-engine/records` にあります。`courseRunRecordPlay` はプレイが記録に残すものを読み、`courseRunKeepsRecord` はオートプレイとテンポを変えたプレイを除き、`mergeCourseStageRecord` は LR2 と同じく EXPERT / GRADE のステージをその譜面の記録に反映します（最高の EX スコア・最大コンボ・最少の BP と、FULL COMBO 以上のランプ。クリアランプとプレイ回数は更新しません）。
 
 stitch バージョン3は CN・HCN を含む BMS だけのコースも内部 bmson に変換し、各ロングノートのステージ固有モードを保持します。明示的 LNMODE と HDX LONGMODE の両方が対象です。過去の stitch バージョンは以前の BMS 解釈を保持します。[ADR 0027](./adr/0027-hdx-long-note-modes.ja.md) を参照してください。
+
+## プレイヤーの段位
+
+be-music はプレイヤーの **段位** を保持します。GRADE コースをクリアした最高の段位で、判定ルールセットとキーモードごとに 1 つです。LR2 もキーモードごとに段位を 1 つ持ちます（`grade_7` … `grade_9`）が、LR2 も beatoraja もコースのクリアから段位を設定せず、スキンにも出しません。そのため、コースと段位の対応は be-music 独自です。根拠は[調査 — プレイヤーの段位](./research/dan-rank.ja.md)を参照してください。
+
+```mermaid
+flowchart TD
+  run["コースの実行が終わる"] --> keeps{"自己ベストを残すか"}
+  keeps -->|いいえ| none["段位なし"]
+  keeps -->|はい| grade{"GRADE でクリアしたか"}
+  grade -->|いいえ| none
+  grade -->|はい| name{"名前が段位を表すか"}
+  name -->|いいえ| none
+  name -->|はい| mode{"キーモードが分かるか"}
+  mode -->|いいえ| none
+  mode -->|はい| keep["高いほうの段位を保持<br/>（ルールセット、キーモード）"]
+```
+
+- **数える実行。** 自己ベストを残す実行（`resolveCourseBestRecordUpdate`。オートプレイでなく、テンポを変えておらず、全ステージを 1 つのルールセットで判定したもの）のうち、GRADE コースをクリアしたもの（FAILED 以外のランプ）。EXPERT と NONSTOP のコースは、名前にかかわらず何も認定しません。
+- **何段か。** コース名から読みます（`@be-music/player-engine/records` の `resolveCourseDanRank`）。NFKC 正規化のあと、Overjoy、発狂（または `insane`）と皆伝か段、皆伝、中伝、段（`初段`、`七段`、`7段`、`7th dan`）、級（`十級`、`1st kyu`）の順に読みます。段位認定の「段位」は段ではありません。何も表さない名前は何も認定しません。
+- **段位表**（`DAN_RANKS`）。低い順に 十級 … 一級、初段 … 十段、中伝、皆伝、発狂初段 … 発狂十段、発狂皆伝、Overjoy。高い段位が低い段位を置き換え、低い段位のクリアでは変わりません。
+- **キーモード。** コースが指定するもの（LR2 の `line`、表の `mode`）、なければ全ステージの譜面に共通するもの（`resolveDanCourseKeyMode`）。ステージごとに違うコースは段位を残しません。
+- **新しいプレイだけ。** 段位はこれから遊ぶ実行から決まります。以前に残したコースの記録から段位を導き直すことはしません。
+
+Web プレイヤーは段位を `localStorage`（`be-music.dan-ranks`、キーは `<ruleset>:<keyMode>`）に保存します。保存がないか読めないときは段位なしとして読みます。be-music スキンは選曲画面で `frame.danRanks` として受け取り、組み込みの Plain スキンはヘッダに出します（`7K 七段 · 14K 初段`）。段位を出す LR2 の op も beatoraja のプロパティもないので、LR2 と beatoraja のテーマは出しません。
