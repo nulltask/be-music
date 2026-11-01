@@ -189,6 +189,7 @@ describe('captureDebugMenuSettings', () => {
       bottomShiftableGauge: 'ASSIST-EASY',
       autoScratch1P: true,
       autoScratch2P: true,
+      anyKey: true,
       sort: 'OFF',
       keysFilter: 'ALL',
       difficultyFilter: 'ALL',

@@ -189,6 +189,11 @@ export interface PlaySessionOptions {
   /** 2P side auto-scratch (channel 26). */
   autoScratch2P?: boolean;
   /**
+   * ANY KEY (That-Which-Must-Not-Be-Named PC, #751): each press takes the nearest unjudged note in reach on any lane and
+   * holds that lane until its key comes up. A replay plays with its own recorded switch instead.
+   */
+  anyKey?: boolean;
+  /**
    * DP FLIP — when true, swaps every note's 1P / 2P channel at chart-prepare time. Only DP charts have notes on both
    * sides so SP charts are unaffected. Mirrors LR2's `#SRC_BUTTON,type=54`.
    */

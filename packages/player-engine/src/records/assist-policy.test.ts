@@ -105,6 +105,8 @@ describe('classifyReplayAssists', () => {
       'beatoraja',
       'light',
     ],
+    ['PC ANY KEY', { anyKey: true, judgeRuleset: '____' }, {}, 'any-key', '____', 'no-save'],
+    ['PC ANY KEY under LR2 rules', { anyKey: true, judgeRuleset: 'lr2' }, {}, 'any-key', '____', 'no-save'],
     ['BATTLE AS', { battleMode: 'BATTLE-AS' }, {}, 'BATTLE-AS', 'beatoraja', 'light'],
     ['7 TO 9', { sevenToNineApplied: true }, {}, 'seven-to-nine', 'beatoraja', 'light'],
     [
