@@ -71,7 +71,8 @@ function inputsOf(replay: BeMusicReplay) {
 
 const LONG_NOTE_CHARTS = ['7key-longnote.bml', 'ln-mode-1-long-note.bms', 'ln-mode-2-charge-note.bms'];
 
-describe('engine replay determinism', () => {
+// Each test plays its own engine on wall-clock timers at 16x and shares no state, so they wait out their charts together.
+describe.concurrent('engine replay determinism', () => {
   test.each(LONG_NOTE_CHARTS)(
     '%s: repeated replays at speeds 4, 16 and 64 reach the same summary and replay',
     async (file) => {

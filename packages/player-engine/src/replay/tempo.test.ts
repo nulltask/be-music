@@ -52,7 +52,8 @@ async function playAt(speed: number, schedule: Array<{ delayMs: number; command:
   return { summary, replay: replay! };
 }
 
-describe('play tempo', () => {
+// Each test plays its own engine on wall-clock timers at 16x and shares no state, so they wait out their charts together.
+describe.concurrent('play tempo', () => {
   test('a play at tempo 0.5 records its tempo and chart-time inputs, and re-simulates to the same judgments', async () => {
     // At tempo 0.5 a note at chart t is due at wall clock 2t: on time, 30 ms of chart time late, 50 ms early, and one
     // left to pass, so the comparison spans several judges.

@@ -83,7 +83,8 @@ function reversalScenarioChart(): BeMusicJSON {
 
 const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
 
-describe('engine / simulator equivalence', () => {
+// Each test plays its own engine on wall-clock timers at 16x and shares no state, so they wait out their charts together.
+describe.concurrent('engine / simulator equivalence', () => {
   test.each(RULESETS)('%s: a mixed-timing pass over a key cluster agrees judge for judge', async (ruleset) => {
     const json = chart([
       { measure: 1, channel: '11', position: [0, 1], value: '01' }, // 1.000
