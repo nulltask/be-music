@@ -267,6 +267,46 @@ flowchart LR
 - **Sounds.** Neither LR2 nor beatoraja plays a sound for saving a replay, so a save plays none. A beatoraja theme's
   `resultclose` / `course_close` sound plays as a result starts to fade out ([player-web.md](./player-web.md#the-result-screen)).
 
+## Ghost
+
+A ghost is a recorded play shown beside the live one. The first kind the browser player shows is the player's own
+best, replayed as a second playfield on the built-in skins (Native and the canvas skins). The other kinds discussed in
+[#418](https://github.com/nulltask/be-music/issues/418) (a pacemaker alone, the recorded inputs over the player's own
+lanes, other sources than the own best) are not built yet; the code keeps the source and the presentation apart so they
+can be swapped in and compared.
+
+```mermaid
+flowchart LR
+  slots[(Replay slots)] -->|"highest EX"| source[GhostSource]
+  source -->|replay| timeline["Judgment timeline<br/>(re-simulated)"]
+  timeline --> field[Second playfield]
+  live[Live play] --> field
+  field --> view[Built-in play view]
+```
+
+- **Option.** Debug Menu → Play options → **Replay / ghost** → **Ghost**: OFF (default) or OWN BEST. It is latched at
+  song start and disabled during a play. It is also disabled on the select screen where the bar under the cursor would
+  show none: no replay of the chart is kept, the play would be drawn by the LR2 or beatoraja family, the bar is a course,
+  a battle mode is on, or the chart is not a single-play 5 / 7 KEY one. A replay, a course stage and a NONSTOP run show
+  no ghost.
+- **Source.** The own best is the chart's replay slot with the highest EX score (the latest save among equals), which
+  the default rule of slot 1 keeps up to date. The play reads it while it loads; the chart waits for it as it waits for
+  the BGA. A chart without one plays without a ghost.
+- **Timeline.** The replay is re-simulated under its own ruleset with the replay simulator
+  (`resolveReplayJudgmentTimeline` in `@be-music/player-engine/replay`), which lists every judgment in the order it
+  scores them, with its lane, its note, the time and the running combo, EX score and gauge. The ghost's notes are the
+  replay's own (its lane options), and each goes at the second the simulation settled it. Nothing reads the clock or
+  draws a random number, so the same replay always gives the same ghost.
+- **Second playfield.** A single-play chart lays the live field and the ghost's out like the two sides of a
+  double-play chart: 7 KEY as 14 KEY and 5 KEY as 10 KEY, the ghost on the 2P lanes. Its notes scroll with the live
+  play's hi-speed, so a ghost note and the live note it matches reach their judgment lines together. Its key beams and
+  bombs follow its recorded presses and judgments, its judgment plate shows on the 2P side, and its score, combo and gauge
+  show as the second player's HUD. A seek back rewinds it; a jump ahead catches it up without replaying the effects on
+  the way.
+- **What it never does.** The ghost plays no sound and takes no input (a touch on its lanes goes nowhere). The live
+  play's judging, best record, replay recording, replay slots and Leaderboard submission do not see it: the engine is
+  handed only the live notes.
+
 ## What the player saw
 
 `play.view` and `play.viewChanges` record the view, apart from what was judged, in units every scene shares:
@@ -305,7 +345,7 @@ flowchart TD
   visible -->|no| recorded
 ```
 
-On the same scale (or a log without `hiSpeedScale`) the replay draws the recorded hi-speed as it was drawn, HS-FIX included, and does not apply the viewer's HS-FIX on top. Across scales a hi-speed number means another speed, so the replay works out the hi-speed that shows the recorded visible time with its own lane and the SUDDEN+ it shows (`resolveHiSpeedForWhiteNumber`, over the built-in and LR2 lanes laid out or the beatoraja lane of four beats). Replays run on every family's play screen. The beatoraja one draws the LIFT, so it shows the recorded one (with HIDDEN+ set over the lane above it, so the cover draws the recorded fraction of the lane); the built-in and LR2 screens draw none, so the `lift` toggle has nothing to show there; the `tempo` toggle governs the recorded tempo (`play.tempo`, `play.tempoChanges`). The browser player has no ghost display yet; a ghost would read the view the same way.
+On the same scale (or a log without `hiSpeedScale`) the replay draws the recorded hi-speed as it was drawn, HS-FIX included, and does not apply the viewer's HS-FIX on top. Across scales a hi-speed number means another speed, so the replay works out the hi-speed that shows the recorded visible time with its own lane and the SUDDEN+ it shows (`resolveHiSpeedForWhiteNumber`, over the built-in and LR2 lanes laid out or the beatoraja lane of four beats). Replays run on every family's play screen. The beatoraja one draws the LIFT, so it shows the recorded one (with HIDDEN+ set over the lane above it, so the cover draws the recorded fraction of the lane); the built-in and LR2 screens draw none, so the `lift` toggle has nothing to show there; the `tempo` toggle governs the recorded tempo (`play.tempo`, `play.tempoChanges`). A [ghost](#ghost) does not read the recorded view: its field scrolls with the live play's hi-speed.
 
 ## Re-deriving LR2 / beatoraja / That-Which-Must-Not-Be-Named results
 

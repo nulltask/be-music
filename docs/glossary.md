@@ -144,6 +144,7 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - **structured log**: NDJSON execution log written separately from TUI output, usually under `~/.be-music/logs/player.ndjson`.
 - **video BGA streaming**: Policy that prepares only the first video frame before gameplay starts, then decodes remaining frames progressively.
 - **replay**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-replay` re-simulates it under the LR2, beatoraja, and That-Which-Must-Not-Be-Named rulesets.
+- **ghost**: A recorded play shown beside the live one, re-derived from its replay; it only draws, and the live play's judging, records and replay never see it. A ghost's **source** says which replay it plays (the player's own best for now), its **presentation** how it shows (a second playfield for now). See [replay.md](./replay.md#ghost).
 - **PlayerSummary**: Final playback summary containing judgment counts, FAST/SLOW, EX-SCORE, SCORE, gauge, and clear state.
 
 ## Courses, Records And View
