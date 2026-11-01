@@ -273,10 +273,8 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     togglePause(ctx);
     return;
   }
-  if (
-    (event.code === 'ArrowLeft' || event.code === 'ArrowRight') &&
-    (ctx.options.autoPlay === true || ctx.options.replay !== undefined || ctx.options.allowSeek === 'practice')
-  ) {
+  // ← / → move five seconds only while AUTO play is on. A replay or a practice play does not.
+  if ((event.code === 'ArrowLeft' || event.code === 'ArrowRight') && ctx.options.autoPlay === true) {
     const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
     if (
       event.defaultPrevented ||
