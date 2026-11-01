@@ -118,6 +118,7 @@ describe('captureDebugMenuSettings', () => {
       bgaUseWebCodecs: false,
       showInvisibleNotes: true,
       judgedNoteDisplay: 'HIDE',
+      ghost: 'OWN_BEST',
       autoSaveReplay: true,
       courseAutoAdvance: true,
       nonstopPlacement: 'lr2',

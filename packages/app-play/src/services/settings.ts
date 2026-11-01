@@ -218,6 +218,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     // LR2's and beatoraja's own behaviour: a judged note stays until its time, so one hit early keeps scrolling down
     // to the judgement line. The dropdown offers `'HIDE'` (gone the moment it is judged) as a preference.
     judgedNoteDisplay: 'KEEP_SCROLLING',
+    // No ghost unless the player asks for one.
+    ghost: 'OFF',
     // Play-history auto-save defaults OFF, so plays don't pile up downloaded files. Users who want every play's
     // replay (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
     // scene mounts.

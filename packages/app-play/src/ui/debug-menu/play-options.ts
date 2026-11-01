@@ -607,7 +607,8 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
 }
 /**
  * Replay / ghost: which of what a replay recorded the player seeing a replay shows (the tempo, the hi-speed,
- * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own. Read when a play starts, so disabled during one.
+ * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own; and the ghost shown beside a play. Read when a play
+ * starts, so disabled during one.
  */
 export function buildReplayViewFolder(this: DebugMenu, folder: FolderApi): void {
   const remember = () => storeReplayView(this.guiState.replayView);
@@ -617,6 +618,22 @@ export function buildReplayViewFolder(this: DebugMenu, folder: FolderApi): void 
       folder.addBinding(this.guiState.replayView, key, { label: labels[key] }).on('change', remember),
     );
   }
+  // The ghost beside the play (`services/ghost.ts`): the player's own best replayed as a second playfield on the
+  // built-in skins. Disabled during a play like the other options, and where the chart under the cursor shows none.
+  this.ghostController = selectBinding(folder, this.guiState, 'ghost', 'Ghost', {
+    OFF: 'OFF',
+    'OWN BEST': 'OWN_BEST',
+  });
+  const menu = this;
+  this.trackPlayOption({
+    get disabled(): boolean {
+      return menu.ghostLocked;
+    },
+    set disabled(locked: boolean) {
+      menu.ghostLocked = locked;
+      menu.refreshGhostAvailability();
+    },
+  });
 }
 
 /**
