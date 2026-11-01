@@ -22,13 +22,11 @@ export function loadSkinFonts(skin: BeMusicSkin): void {
   for (const font of skin.fontLoads) void document.fonts.load(font).catch(() => {});
 }
 
-const DEFAULT_UI_FONT_LOADS: readonly string[] = [
-  '400 22px "LINE Seed JP"',
-  '700 18px "LINE Seed JP"',
-  '900 32px "Azeret Mono"',
-  // Every registered skin's faces, so switching skins never rasterizes a first frame with a fallback font.
-  ...new Set(BE_MUSIC_SKINS.skins.flatMap((skin) => skin.fontLoads)),
-];
+/**
+ * Every registered skin's faces, so switching skins never rasterizes a first frame with a fallback font. The player's
+ * own text uses the system faces and needs none.
+ */
+const DEFAULT_UI_FONT_LOADS: readonly string[] = [...new Set(BE_MUSIC_SKINS.skins.flatMap((skin) => skin.fontLoads))];
 
 export async function waitForDefaultUIFonts(): Promise<void> {
   if (!('fonts' in document)) return;

@@ -302,7 +302,7 @@ LR2 のプレイビューは be-music の renderer を import せず、LR2 skin 
 
 default gameplay chrome は `@be-music/player-skin-sdk` の lane geometry helper（`lane-geometry.ts`）を使います。
 scratch lane は key lane より幅広く、2P scratch は右側に表示し、DP layout では両 side を SP 幅へ押し込んで全 lane を縮小するのではなく、片側分の lane 幅を保持します。
-default family は通常テキストに LINE Seed JP、判定と combo 表示に Azeret Mono を使います。
+プレイヤー自身のテキスト（LR2 の代わりのフォント、重ね表示、読み込み中の表示）はシステムのサンセリフ、判定と combo 表示はシステムの等幅フォントを使います。プレイヤー自身は Web フォントを読み込みません。
 
 ## beatoraja skin と theme support
 

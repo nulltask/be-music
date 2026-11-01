@@ -309,8 +309,9 @@ its chrome. The LR2 play view does not import the be-music renderer, and LR2 ski
 
 Default gameplay chrome uses the lane geometry helpers of `@be-music/player-skin-sdk` (`lane-geometry.ts`). Scratch lanes are
 wider than key lanes, 2P scratch lanes render on the right side, and DP layouts preserve the single-side lane width
-instead of shrinking every lane to fit both sides into the original SP footprint. The default family uses LINE Seed JP
-for general text and Azeret Mono for judgment and combo readouts.
+instead of shrinking every lane to fit both sides into the original SP footprint. The player's own text (the LR2
+fallback, overlays and the loading caption) uses the system sans-serif, and its judgment and combo readouts the system
+monospace; the player loads no web fonts of its own.
 
 ## beatoraja skin and theme support
 
