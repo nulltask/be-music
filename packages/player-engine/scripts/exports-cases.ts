@@ -737,6 +737,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.simulateReplay(BENCH_COUPLE_REPLAY, { ruleset: 'lr2', player: 2 });
     },
   });
+  define('player-engine.replay.resolveReplayJudgmentTimeline', {
+    run: () => {
+      replayAPI.resolveReplayJudgmentTimeline(BENCH_REPLAY, { ruleset: 'lr2' });
+    },
+  });
   define('player-engine.replay.simulateReplayRulesets', {
     run: () => {
       replayAPI.simulateReplayRulesets(BENCH_REPLAY);
