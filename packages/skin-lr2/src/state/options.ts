@@ -1,4 +1,4 @@
-import { LR2_GAUGE_TYPES, type GaugeType } from '@be-music/player-engine/ruleset';
+import { LR2_GAUGE_TYPES, optionValueName, type GaugeType } from '@be-music/player-engine/ruleset';
 import {
   BGA_CYCLE,
   BGA_SIZE_CYCLE,
@@ -67,6 +67,12 @@ function battleLabel(battle: PlayOptions['battleMode'], keyModeOp: number | unde
       return double ? 'COUPLE' : nine ? 'DISABLE' : 'BATTLE';
     case 'D-BATTLE':
       return double || nine ? 'DISABLE' : 'D-BATTLE';
+    case 'BATTLE':
+    case 'beatoraja:BATTLE':
+    case '____:BATTLE':
+      // beatoraja's and That-Which-Must-Not-Be-Named's one-player BATTLE, picked from the Debug Menu: the nearest LR2
+      // label is its own BATTLE (ADR 0019).
+      return double || nine ? 'DISABLE' : 'BATTLE';
     case 'SP-TO-DP':
       return double ? 'DP-TO-SP' : nine ? '9-TO-7' : 'SP-TO-DP';
     default:
@@ -164,10 +170,11 @@ export function resolveLR2OptionText(
       return options.sort;
     case LR2_TEXT.OPTION_DIFFICULTY_FILTER:
       return options.difficultyFilter;
+    // A source-qualified lane option reads as its bare name (`beatoraja:S-RANDOM` as S-RANDOM, ADR 0019).
     case LR2_TEXT.OPTION_RANDOM_1P:
-      return options.random1P;
+      return optionValueName(options.random1P);
     case LR2_TEXT.OPTION_RANDOM_2P:
-      return options.random2P;
+      return optionValueName(options.random2P);
     case LR2_TEXT.OPTION_GAUGE_1P:
       return options.gauge1P;
     case LR2_TEXT.OPTION_GAUGE_2P:
@@ -268,6 +275,11 @@ function cell<T>(choices: readonly T[], value: T): number {
   return Math.max(0, choices.indexOf(value));
 }
 
+/** The lane option cell of LR2's RANDOM buttons (42 / 43): by the bare name, so any source's S-RANDOM draws S-RANDOM. */
+function laneCell(value: PlayOptions['random1P'] | undefined): number {
+  return value === undefined ? 0 : cell(RANDOM_CYCLE.map(optionValueName), optionValueName(value));
+}
+
 /**
  * The cell an option button draws (`#SRC_BUTTON` types 10-12, 40-46, 50-55, 70-73, 75, 91-96): the index of the option's
  * value in its LR2 cycle order (an on / off option: 0 off, 1 on; a direct difficulty button: 1 while its difficulty
@@ -306,9 +318,9 @@ export function resolveLR2OptionButton(type: number, options: PlayOptions): numb
     case LR2_BUTTON.JUDGE_AUTO_ADJUST:
       return cell(LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE, options.judgeTimingAutoAdjust);
     case LR2_BUTTON.RANDOM_1P:
-      return cell(RANDOM_CYCLE, options.random1P);
+      return laneCell(options.random1P);
     case LR2_BUTTON.RANDOM_2P:
-      return cell(RANDOM_CYCLE, options.random2P);
+      return laneCell(options.random2P);
     case LR2_BUTTON.GAUGE_1P:
       return cell(
         LR2_GAUGE_TYPES,

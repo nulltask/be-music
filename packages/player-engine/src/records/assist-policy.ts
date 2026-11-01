@@ -3,6 +3,7 @@ import type { ReplayOptionChange, ReplayOptionState } from '../replay/options.ts
 import { isCustomJudgeAssist } from '../ruleset/custom-judge.ts';
 import { compareClearLamps, type ClearLamp } from '../ruleset/clear-lamp.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
+import { splitOptionSource } from '../ruleset/option-source.ts';
 
 /**
  * How assisted a play is, mildest first (#602). A play takes the highest class of its options.
@@ -61,15 +62,6 @@ const BEATORAJA_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set([
 /** LR2's lane options that cap the lamp at EASY and save no score (OpenLR2 `LR2f.cpp` L9334, `random > 3`). */
 const LR2_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set(['SCATTER', 'SCATTER-CORRECTED']);
 
-/** A lane or battle value as `[source, name]`: a qualified value (ADR 0019) keeps its source, a bare one has none. */
-function splitSource(value: string): [RulesetId | undefined, string] {
-  const colon = value.indexOf(':');
-  if (colon < 0) return [undefined, value];
-  const source = value.slice(0, colon);
-  const name = value.slice(colon + 1);
-  return source === 'lr2' || source === 'beatoraja' || source === '____' ? [source, name] : [undefined, value];
-}
-
 /** Whether a selected option took `value` at any point of the play: at the start or in a later change. */
 function optionEverTook(
   options: Readonly<ReplayOptionState> | undefined,
@@ -108,7 +100,7 @@ function sourceOf(qualified: RulesetId | undefined, playedRuleset: RulesetId): R
 /** The lane-option findings of one side's recorded value. */
 function laneFinding(value: string | undefined, playedRuleset: RulesetId): AssistFinding | undefined {
   if (value === undefined) return undefined;
-  const [qualified, name] = splitSource(value);
+  const { source: qualified, name } = splitOptionSource(value);
   if (BEATORAJA_LIGHT_LANE_OPTIONS.has(name)) return { option: name, source: 'beatoraja', assistClass: 'light' };
   if (LR2_LIGHT_LANE_OPTIONS.has(name)) return { option: name, source: 'lr2', assistClass: 'light' };
   if (name === 'CONVERGE') {
@@ -166,11 +158,13 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
     add(laneFinding(play.randomLane?.p2, playedRuleset));
   }
 
-  switch (play.battleMode) {
+  const battle = play.battleMode === undefined ? undefined : splitOptionSource(play.battleMode);
+  switch (battle?.name) {
     case 'BATTLE':
-      // beatoraja's BATTLE is LIGHT_ASSIST (`BMSPlayer` L252); That-Which-Must-Not-Be-Named's saves no score data.
+      // beatoraja's BATTLE is LIGHT_ASSIST (`BMSPlayer` L252); That-Which-Must-Not-Be-Named's saves no score data. A
+      // qualified value keeps its source; a bare one is the played ruleset's (LR2 defines no one-player BATTLE).
       add(
-        playedRuleset === '____'
+        sourceOf(battle.source, playedRuleset) === '____'
           ? { option: 'BATTLE', source: '____', assistClass: 'no-save' }
           : { option: 'BATTLE', source: 'beatoraja', assistClass: 'light' },
       );

@@ -66,7 +66,12 @@ export { clampExtraNoteDepth } from './core/extra-note-modifier.ts';
 
 export type { LR2ExtraLevel } from './core/lr2-extra-lanes.ts';
 
-export { resolveEffectiveBattleMode, type BattleMode, type EffectiveBattleMode } from './core/battle-mode.ts';
+export {
+  isOnePlayerBattleMode,
+  resolveEffectiveBattleMode,
+  type BattleMode,
+  type EffectiveBattleMode,
+} from './core/battle-mode.ts';
 
 export {
   applySevenToNine,
