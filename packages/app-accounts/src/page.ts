@@ -109,6 +109,7 @@ export function renderAccountPage(input: {
     navLabel: locale === 'ja' ? 'サービス' : 'Services',
     siteHTML: donate === '' ? undefined : donate,
     buildInfo: input.buildInfo,
+    locale,
   });
   return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Be-Music Accounts</title><style>${SERVICE_CSS}</style></head><body class="bg-background text-foreground min-h-svh antialiased">${serviceSkipLink(locale)}${renderServiceHeader(
     {
