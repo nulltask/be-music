@@ -26,7 +26,7 @@ function playHostname(): string {
  * stays self-documenting.
  *
  * Sub-elements wired up elsewhere:
- *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings opens the Debug Menu.
+ *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings opens the Debug Menu. Fullscreen toggles the shell, or the document on a phone.
  *  - `#help-button` / `#help-modal` — `help-modal.ts` (`wireHelpModal`)
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
