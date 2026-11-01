@@ -1,7 +1,26 @@
 import { describe, expect, it } from 'vite-plus/test';
+import { BEATORAJA_OP } from '../runtime-ids.ts';
 import { expandBeatorajaJudgeDestinations, normalizeBeatorajaJudges } from './judge.ts';
 
+/** The gate every expanded judge image and number carries: off while the play hides the judgment display. */
+const HIDDEN = -BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN;
+
 describe('expandBeatorajaJudgeDestinations', () => {
+  it('gates every judge image and combo digit on the judgment display not being hidden (LR2 SILENT)', () => {
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2010,
+        index: 0,
+        images: [{ id: 'judgef-pg' }, { id: 'judgef-ms' }],
+        numbers: [{ id: 'judgen-pg', dst: [{ x: 10, y: 0, w: 20, h: 20 }] }],
+      },
+      { id: 2011, index: 1, images: [{ id: 'judgef-pg-2p' }], numbers: [] },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
+    expect(expanded).toHaveLength(4);
+    for (const destination of expanded) expect((destination.op as number[]).at(-1)).toBe(HIDDEN);
+  });
+
   it('appends the matching per-judge op for each PG/GR/GD/BD/PR/MS slot', () => {
     const judges = normalizeBeatorajaJudges([
       {
@@ -20,12 +39,12 @@ describe('expandBeatorajaJudgeDestinations', () => {
     ]);
     const expanded = expandBeatorajaJudgeDestinations(judges);
     expect(expanded.map((d) => ({ id: d.id, op: d.op }))).toEqual([
-      { id: 'judgef-pg', op: [241] }, // _1p_perfect
-      { id: 'judgef-gr', op: [242] }, // _1p_great
-      { id: 'judgef-gd', op: [243] }, // _1p_good
-      { id: 'judgef-bd', op: [244] }, // _1p_bad
-      { id: 'judgef-pr', op: [245] }, // _1p_poor
-      { id: 'judgef-ms', op: [246] }, // _1p_miss
+      { id: 'judgef-pg', op: [241, HIDDEN] }, // _1p_perfect
+      { id: 'judgef-gr', op: [242, HIDDEN] }, // _1p_great
+      { id: 'judgef-gd', op: [243, HIDDEN] }, // _1p_good
+      { id: 'judgef-bd', op: [244, HIDDEN] }, // _1p_bad
+      { id: 'judgef-pr', op: [245, HIDDEN] }, // _1p_poor
+      { id: 'judgef-ms', op: [246, HIDDEN] }, // _1p_miss
     ]);
   });
 
@@ -58,9 +77,9 @@ describe('expandBeatorajaJudgeDestinations', () => {
       },
     ]);
     const expanded = expandBeatorajaJudgeDestinations(judges);
-    expect(expanded[0]).toMatchObject({ id: 'judgef-pg', op: [241, -90100] });
-    expect(expanded[1]).toMatchObject({ id: 'judgef-gr', op: [242] });
-    expect(expanded[6]).toMatchObject({ id: 'judgef-pg2', op: [241, 90100] });
+    expect(expanded[0]).toMatchObject({ id: 'judgef-pg', op: [241, -90100, HIDDEN] });
+    expect(expanded[1]).toMatchObject({ id: 'judgef-gr', op: [242, HIDDEN] });
+    expect(expanded[6]).toMatchObject({ id: 'judgef-pg2', op: [241, 90100, HIDDEN] });
   });
 
   it('does NOT gate judge[0] on gauge-max when no fullgauge substitute is authored', () => {
@@ -83,12 +102,12 @@ describe('expandBeatorajaJudgeDestinations', () => {
       },
     ]);
     const expanded = expandBeatorajaJudgeDestinations(judges);
-    expect(expanded[0]).toMatchObject({ id: 'judgef-pg', op: [241] });
+    expect(expanded[0]).toMatchObject({ id: 'judgef-pg', op: [241, HIDDEN] });
   });
 
   it('uses the 2P op block when index === 1', () => {
     const judges = normalizeBeatorajaJudges([{ id: 2011, index: 1, images: [{ id: 'pg2' }], numbers: [] }]);
-    expect(expandBeatorajaJudgeDestinations(judges)[0]).toMatchObject({ op: [261] }); // _2p_perfect
+    expect(expandBeatorajaJudgeDestinations(judges)[0]).toMatchObject({ op: [261, HIDDEN] }); // _2p_perfect
   });
 
   it('uses the 3P op block when index === 2 (POPN-9 third judge plate)', () => {
@@ -112,13 +131,13 @@ describe('expandBeatorajaJudgeDestinations', () => {
       },
     ]);
     const expanded = expandBeatorajaJudgeDestinations(judges);
-    expect(expanded[0]).toMatchObject({ id: 'judgef-pg', op: [361] });
-    expect(expanded[1]).toMatchObject({ id: 'judgef-gr', op: [362] });
-    expect(expanded[2]).toMatchObject({ id: 'judgef-gd', op: [363] });
+    expect(expanded[0]).toMatchObject({ id: 'judgef-pg', op: [361, HIDDEN] });
+    expect(expanded[1]).toMatchObject({ id: 'judgef-gr', op: [362, HIDDEN] });
+    expect(expanded[2]).toMatchObject({ id: 'judgef-gd', op: [363, HIDDEN] });
     // BAD / POOR / MISS borrow the 1P ops since the 3P plate has no per-tier op upstream.
-    expect(expanded[3]).toMatchObject({ id: 'judgef-bd', op: [244] });
-    expect(expanded[4]).toMatchObject({ id: 'judgef-pr', op: [245] });
-    expect(expanded[5]).toMatchObject({ id: 'judgef-ms', op: [246] });
+    expect(expanded[3]).toMatchObject({ id: 'judgef-bd', op: [244, HIDDEN] });
+    expect(expanded[4]).toMatchObject({ id: 'judgef-pr', op: [245, HIDDEN] });
+    expect(expanded[5]).toMatchObject({ id: 'judgef-ms', op: [246, HIDDEN] });
   });
 
   it('clones the combo value with SYNTHETIC_NUM_JUDGE_COMBO_3P for plate 3 (per-plate ref)', () => {
@@ -189,7 +208,7 @@ describe('expandBeatorajaJudgeDestinations', () => {
     const judges = normalizeBeatorajaJudges([
       { id: 2010, index: 0, images: [{ id: 'judgef-pg', op: [920] }], numbers: [] },
     ]);
-    expect(expandBeatorajaJudgeDestinations(judges)[0]).toMatchObject({ op: [920, 241] });
+    expect(expandBeatorajaJudgeDestinations(judges)[0]).toMatchObject({ op: [920, 241, HIDDEN] });
   });
 
   it('only emits judge.numbers[0..2] (PG/GR/GD) — drops BD/PR/MS slots (audit 1.3)', () => {
@@ -215,9 +234,9 @@ describe('expandBeatorajaJudgeDestinations', () => {
     ]);
     const expanded = expandBeatorajaJudgeDestinations(judges);
     expect(expanded.map((d) => d.id)).toEqual(['count-pg', 'count-gr', 'count-gd']);
-    expect(expanded[0]).toMatchObject({ op: [241] }); // _1p_perfect
-    expect(expanded[1]).toMatchObject({ op: [242] }); // _1p_great
-    expect(expanded[2]).toMatchObject({ op: [243] }); // _1p_good
+    expect(expanded[0]).toMatchObject({ op: [241, HIDDEN] }); // _1p_perfect
+    expect(expanded[1]).toMatchObject({ op: [242, HIDDEN] }); // _1p_great
+    expect(expanded[2]).toMatchObject({ op: [243, HIDDEN] }); // _1p_good
   });
 
   it('emits all authored numbers when fewer than 3 are present', () => {
@@ -226,7 +245,7 @@ describe('expandBeatorajaJudgeDestinations', () => {
     const judges = normalizeBeatorajaJudges([{ id: 2010, index: 0, images: [], numbers: [{ id: 'pg-count-only' }] }]);
     const expanded = expandBeatorajaJudgeDestinations(judges);
     expect(expanded).toHaveLength(1);
-    expect(expanded[0]).toMatchObject({ id: 'pg-count-only', op: [241] });
+    expect(expanded[0]).toMatchObject({ id: 'pg-count-only', op: [241, HIDDEN] });
   });
 
   it('folds judge.numbers[i].dst into judge.images[i].dst per layout variant', () => {
