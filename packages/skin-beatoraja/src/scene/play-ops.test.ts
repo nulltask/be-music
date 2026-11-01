@@ -9,6 +9,7 @@ import {
   resolveBeatorajaChartTraitOps,
   resolveBeatorajaConstantOps,
   resolveBeatorajaCoverOps,
+  resolveBeatorajaJudgeDisplayOps,
   resolveBeatorajaPlayStartOps,
   resolveBeatorajaGaugeTypeOps,
 } from './play-ops.ts';
@@ -81,6 +82,14 @@ describe('resolveBeatorajaConstantOps', () => {
     expect(resolveBeatorajaConstantOps(true)).toEqual([400]);
     expect(resolveBeatorajaConstantOps(false)).toEqual([]);
     expect(resolveBeatorajaConstantOps(undefined)).toEqual([]);
+  });
+});
+
+describe('resolveBeatorajaJudgeDisplayOps', () => {
+  it('hides the judgment display only while the play runs LR2 SILENT', () => {
+    expect(resolveBeatorajaJudgeDisplayOps('LR2-SILENT')).toEqual([BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN]);
+    for (const mode of ['OFF', 'BEATORAJA', 'LR2-ON', undefined])
+      expect(resolveBeatorajaJudgeDisplayOps(mode)).toEqual([]);
   });
 });
 
