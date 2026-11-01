@@ -63,6 +63,11 @@ export class LeaderboardPanel {
   });
   /** The account state last shown, so signing in (or arriving signed in) can be told from a refresh. */
   private shownState: 'signed-in' | 'anonymous' | 'signed-out' | undefined;
+  private signedInName: string | undefined;
+  /** The name of the account kept with a passkey, which a play shows; `undefined` signed out or anonymous. */
+  get playerName(): string | undefined {
+    return this.signedInName;
+  }
   /** The toggle as it was when the current play started: a play is sent only if it was on at song start. */
   private submitThisPlay = false;
   private readonly host: LeaderboardPanelHost;
@@ -202,6 +207,7 @@ export class LeaderboardPanel {
   /** Re-reads the account into the Debug Menu's "Account" row and the account chip. */
   async refreshAccount(): Promise<void> {
     const account = await loadLeaderboardAccount();
+    this.signedInName = account !== undefined && !account.anonymous ? account.displayName : undefined;
     const state = describeAccountChip(account).state;
     // A player who is signed in takes part: submitting turns on when they arrive signed in or sign in, not on every
     // refresh, so unticking it during a session sticks.

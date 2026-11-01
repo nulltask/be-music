@@ -115,6 +115,8 @@ export class BuiltInPlayView
   private kit: BuiltInKit;
   /** Shared only within one draw; published snapshots from earlier frames stay untouched. */
   private chromeRuntime: SkinlessGameplayChromeRuntime | undefined;
+  /** The frame being drawn: the chrome's runtime reads its best record, course and player from it. */
+  public playFrame: PlayFrame | undefined;
   private dom: SkinDOMMount<BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions, BeMusicDOMGameplayScreen> | undefined;
 
   public constructor(kit: BuiltInKit, play: PlayfieldRuntime, options: BuiltInPlayViewOptions = {}) {
@@ -225,6 +227,7 @@ export class BuiltInPlayView
 
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
+    this.playFrame = frame;
     this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
     this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
     this.options.visualConstant = frame.playOptions.visualConstant;

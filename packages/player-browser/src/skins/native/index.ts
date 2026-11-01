@@ -1,8 +1,8 @@
 import {
   BE_MUSIC_SKIN_API_VERSION,
   defineBeMusicSkin,
+  cabinetStage,
   tallStage,
-  wideStage,
   type BeMusicSkin,
   type BeMusicSurface,
 } from '@be-music/player-skin-sdk';
@@ -22,13 +22,10 @@ export const nativeSkin: BeMusicSkin = defineBeMusicSkin({
   license: 'MIT',
   fontLoads: [],
   context: '2d',
+  // Landscape play in the cabinet layout; the touch layout keeps its lanes and HUD column.
   stage: {
-    ...wideStage,
-    playfield: {
-      standard: { top: 8, judgementY: 464, maxRight: 540 },
-      touch: { top: 8, judgementY: 424, maxRight: 540 },
-    },
-    resolveBGARect: () => ({ x: 724, y: 8, w: 106, h: 106 }),
+    ...cabinetStage,
+    playfield: { ...cabinetStage.playfield, touch: { top: 8, judgementY: 424, maxRight: 540 } },
   },
   portraitStage: {
     ...tallStage,
