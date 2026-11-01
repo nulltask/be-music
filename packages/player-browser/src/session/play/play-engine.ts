@@ -109,6 +109,7 @@ export interface PlayEngineContext
       | 'bottomShiftableGauge'
       | 'autoScratch1P'
       | 'autoScratch2P'
+      | 'anyKey'
       | 'chartMD5'
       | 'chartSHA256'
       | 'course'
@@ -713,6 +714,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         ctx.options.mineModifier,
       autoScratch1P: ctx.options.autoScratch1P === true,
       autoScratch2P: ctx.options.autoScratch2P === true,
+      anyKey: ctx.options.replay ? ctx.options.replay.play.anyKey === true : ctx.options.anyKey === true,
       // Hand the engine the same `PreparedPlaybackChartData` instance the renderer is already pointing at
       // (`this.notes` / `this.mineNotes` / `this.invisibleNotes` are references into this bundle). The
       // engine's `autoPlay` / `manualPlay` use it verbatim instead of running their own

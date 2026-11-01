@@ -228,6 +228,8 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ autoScratch2P: value });
     }),
   );
+  // The PC edition's ANY KEY (#751), offered with the `____` judge rules (`refreshRulesetChoices`); saves no record.
+  this.anyKeyController = trackPlayOption(folder.addBinding(this.guiState, 'anyKey', { label: 'ANY KEY (PC)' }));
   this.longNoteModifierController = selectBinding(folder, this.guiState, 'longNoteModifier', 'Long notes', {
     OFF: 'OFF',
     'LEGACY NOTE (AC 34)': 'LEGACY',
