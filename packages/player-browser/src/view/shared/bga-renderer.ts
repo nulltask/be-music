@@ -1,4 +1,5 @@
 import { keyBoundBGAResourceKey } from '../../chart/key-bound-bga.ts';
+import { canDrawBGAPixelsOnGPU, drawBGAPixelsOnGPU } from '../../media/bga-gpu-pixels.ts';
 import { isColorKeyVideoCanvas } from '../../media/color-key-video.ts';
 /**
  * The chart's BGA on the built-in and LR2 play screens: composites the base, layer and POOR
@@ -573,7 +574,11 @@ function syncBGAVideo(
 }
 
 const tintedSkinImages = new WeakMap<BeMusicImage, Map<number, HTMLCanvasElement>>();
-/** Canvas skins receive already-tinted pixels, so existing skins honor the same plane controls as Pixi scenes. */
+/**
+ * Canvas skins receive already-tinted pixels, so existing skins honor the same plane controls as Pixi scenes. A still
+ * image is tinted once per colour; a live source (video, keyed or cropped canvas) each frame, on the shared GPU context
+ * where it can (`bga-gpu-pixels.ts`), so the frame is not read back.
+ */
 function tintSkinBGAImage(image: BeMusicImage | undefined, tint = 0xffffff): BeMusicImage | undefined {
   if (!image || tint === 0xffffff) return image;
   let colors = tintedSkinImages.get(image);
@@ -604,9 +609,12 @@ function tintSkinBGAImage(image: BeMusicImage | undefined, tint = 0xffffff): BeM
     canvas.width = width;
     canvas.height = height;
   }
-  const context = canvas.getContext('2d', { willReadFrequently: true });
+  const onGPU = canDrawBGAPixelsOnGPU();
+  // Only the CPU path reads the pixels back; on the GPU path the canvas stays on the GPU.
+  const context = canvas.getContext('2d', { willReadFrequently: !onGPU });
   if (!context) return undefined;
   try {
+    if (onGPU && drawBGAPixelsOnGPU(image as TexImageSource, width, height, { tint }, context)) return canvas;
     context.clearRect(0, 0, width, height);
     context.drawImage(image, 0, 0);
     const pixels = context.getImageData(0, 0, width, height);
