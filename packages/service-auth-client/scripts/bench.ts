@@ -1,5 +1,6 @@
 import { Bench } from 'tinybench';
 import { handleAuth, readSession, returnPath, verifyAccess, type OIDCEnv } from '../src/index.ts';
+import { socialSignInMethod } from '../src/social-sign-in.ts';
 const env: OIDCEnv = {
   AUTH_ISSUER: 'https://accounts.example/api/auth',
   PUBLIC_ORIGIN: 'https://play.example',
@@ -37,6 +38,9 @@ bench.add('handleAuth: browser visit suppressed after explicit sign-out', async 
     }),
     env,
   );
+});
+bench.add('socialSignInMethod: google', () => {
+  sink = socialSignInMethod('google');
 });
 await bench.run();
 console.table(bench.table());

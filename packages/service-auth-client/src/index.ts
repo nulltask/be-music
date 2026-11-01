@@ -1,5 +1,6 @@
 import * as oauth from 'oauth4webapi';
 import { EncryptJWT, jwtDecrypt, jwtVerify, createRemoteJWKSet } from 'jose';
+import { applySocialSignInMethod } from './social-sign-in.ts';
 
 /** One relying party. Cookies never leave PUBLIC_ORIGIN; the issuer may be on an unrelated domain. */
 export interface OIDCEnv {
@@ -240,6 +241,7 @@ export async function handleAuth(request: Request, env: OIDCEnv): Promise<Respon
       code_challenge_method: 'S256',
     }).toString();
     if (automatic) target.searchParams.set('prompt', 'none');
+    else applySocialSignInMethod(target, url.searchParams.get('method'));
     // Back off after a failed silent attempt; also prevent a navigation loop if the provider is unavailable.
     headers.append('set-cookie', cookie(SSO_CHECK_COOKIE, 'checked', 60));
     headers.append(

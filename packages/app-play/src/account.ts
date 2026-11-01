@@ -29,9 +29,37 @@ export async function createLeaderboardPasskey(): Promise<AccountActionResult> {
   return { ok: true };
 }
 
+/** Google or Discord. A passkey stays a separate click because WebAuthn needs the Accounts origin. */
+export type AccountProvider = 'google' | 'discord';
+
+/**
+ * Accounts sign-in for this page. `method` asks Accounts to start Google or Discord; omitted, the
+ * login page offers a passkey, as {@link signInWithLeaderboardPasskey} does.
+ */
+export function accountSignInPath(returnTo: string, method?: AccountProvider): string {
+  const params = new URLSearchParams();
+  if (returnTo !== '') params.set('returnTo', returnTo);
+  if (method !== undefined) params.set('method', method);
+  const query = params.toString();
+  return query === '' ? '/api/auth/sign-in' : `/api/auth/sign-in?${query}`;
+}
+
+/** The provider a sign-in or sign-up button names, if it is Google or Discord. */
+export function accountProviderFromAction(action: string | undefined): AccountProvider | undefined {
+  if (action === 'sign-in-google' || action === 'sign-up-google') return 'google';
+  if (action === 'sign-in-discord' || action === 'sign-up-discord') return 'discord';
+  return undefined;
+}
+
 /** Open Accounts to sign in; the OIDC callback returns to this player. */
 export async function signInWithLeaderboardPasskey(): Promise<AccountActionResult> {
-  location.assign(`/api/auth/sign-in?returnTo=${encodeURIComponent(location.pathname + location.search)}`);
+  location.assign(accountSignInPath(`${location.pathname}${location.search}`));
+  return { ok: true };
+}
+
+/** Open Accounts and start Google or Discord. The session and return path match a passkey sign-in. */
+export async function signInWithAccountProvider(method: AccountProvider): Promise<AccountActionResult> {
+  location.assign(accountSignInPath(`${location.pathname}${location.search}`, method));
   return { ok: true };
 }
 
