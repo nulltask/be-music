@@ -259,7 +259,7 @@ The D1 source of truth is [`src/db/schema.ts`](../packages/app-leaderboard/src/d
     after their last check and linked charts a month after theirs, since a link may be added or changed.
   - A chart BMS Search does not know, or has not linked, stays on its own. Calls identify the Leaderboard in their
     `User-Agent`.
-- R2 stores single and course replays, canonical chart documents, and score share images. Download authorization is enforced by the replay routes; ghost storage and APIs are not implemented.
+- R2 stores single and course replays and canonical chart documents as gzip-compressed JSON (`Content-Encoding: gzip`). Score share images stay uncompressed. Download authorization is enforced by the replay routes; ghost storage and APIs are not implemented.
 
 ## 8. API (`/api/v0`)
 
