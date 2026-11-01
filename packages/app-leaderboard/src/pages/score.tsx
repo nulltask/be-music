@@ -3,6 +3,7 @@ import { HelpTip } from './components/help-tip.tsx';
 import type { Child } from 'hono/jsx';
 import { openDatabase } from '../db/client.ts';
 import { loadScoreDetail } from '../scores/detail.ts';
+import { readStoredJSON } from '../scores/stored-json.ts';
 import { ResultCards } from './components/lists.tsx';
 import { Details } from './components/cards.tsx';
 import { EntityIcon } from './components/entity-icon.tsx';
@@ -92,7 +93,7 @@ async function loadCardExcerpt(c: PageContext, documentKey: string, laneMode: st
   if (laneMode === null) return null;
   try {
     const object = await c.env.BLOBS.get(documentKey);
-    return object === null ? null : scoreCardExcerpt(await object.json(), laneMode);
+    return object === null ? null : scoreCardExcerpt(await readStoredJSON(object), laneMode);
   } catch (error) {
     console.warn('could not read the chart document for a score card', error);
     return null;
