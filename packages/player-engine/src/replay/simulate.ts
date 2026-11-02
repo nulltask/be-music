@@ -55,6 +55,11 @@ export interface SimulateReplayOptions extends ResolveRulesetOptions {
    * replay's judgment timeline from them). Observing changes nothing the simulation derives.
    */
   onJudgment?: ReplayJudgmentObserver;
+  /**
+   * Hears the chart µs of the judgment that first empties the survival gauge mid-play, once (`rejudgeReplay` stops
+   * the other rulesets there). Observing changes nothing the simulation derives.
+   */
+  onFailure?: (atUs: number) => void;
 }
 
 /** A judgment's kind in a {@link ReplayJudgmentEvent}: a scored window, a missed POOR, or an empty POOR. */
@@ -124,7 +129,7 @@ export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOpt
       options.ruleset,
       replay.play.endOnFailure === true,
     );
-  return new ReplaySimulation(replay, config, endOnFailure, options.onJudgment).run();
+  return new ReplaySimulation(replay, config, endOnFailure, options.onJudgment, options.onFailure).run();
 }
 
 /** Runs {@link simulateReplay} for each requested ruleset (default: LR2, beatoraja, That-Which-Must-Not-Be-Named). */
@@ -272,12 +277,22 @@ class ReplaySimulation {
   private readonly observer: ReplayJudgmentObserver | undefined;
   /** Where the next judgment happens, for the {@link observer}: its time, and the lane and note it judges. */
   private judgeAtUs = 0;
+  /** Hears where the survival gauge first emptied mid-play ({@link SimulateReplayOptions.onFailure}). */
+  private readonly onFailure: ((atUs: number) => void) | undefined;
+  private failed = false;
   private judgeLane: SimLane | undefined;
   private judgeNote: SimNote | undefined;
   /** ANY KEY (`play.anyKey`): the lanes each pressed key was routed to; absent when the play did not use it. */
   private readonly anyKeyRoutes: AnyKeyRoutes | undefined;
 
-  constructor(replay: BeMusicReplay, config: RulesetConfig, endOnFailure: boolean, observer?: ReplayJudgmentObserver) {
+  constructor(
+    replay: BeMusicReplay,
+    config: RulesetConfig,
+    endOnFailure: boolean,
+    observer?: ReplayJudgmentObserver,
+    onFailure?: (atUs: number) => void,
+  ) {
+    this.onFailure = onFailure;
     this.replay = replay;
     this.config = config;
     this.endOnFailure = endOnFailure;
@@ -656,6 +671,7 @@ class ReplaySimulation {
       this.minePoor += 1;
     }
     this.gauge.applyRawDelta(-mine.damage);
+    this.noteFailure();
   }
 
   /** LR2beta3 uses strict ahead-only GREAT; the provisional That-Which-Must-Not-Be-Named model keeps symmetric PGREAT. */
@@ -710,12 +726,14 @@ class ReplaySimulation {
       (gain ? tick.heldJudge : tick.releasedJudge) as GaugeJudgeIndex,
       gain ? tick.heldRate : tick.releasedRate,
     );
+    this.noteFailure();
   }
 
   // ---- input handling ----------------------------------------------------------------------------------------
 
   private handleDown(input: ReplayInputEvent, minePressLegLive: boolean): void {
     const timeUs = input.timeUs;
+    this.judgeAtUs = timeUs;
     const windows = this.config.windowsAt(timeUs);
     const pressed = this.anyKeyRoutes ? this.routeAnyKeyPress(input, windows) : this.resolveInputLanes(input);
     for (const lane of pressed) {
@@ -793,6 +811,7 @@ class ReplaySimulation {
 
   private handleUp(input: ReplayInputEvent): void {
     const timeUs = input.timeUs;
+    this.judgeAtUs = timeUs;
     for (const lane of this.anyKeyRoutes ? this.releaseAnyKey(input) : this.resolveInputLanes(input)) {
       lane.held = false;
       if (input.tokens === undefined || input.tokens.length === 0) {
@@ -1105,7 +1124,15 @@ class ReplaySimulation {
       }
     }
     this.gauge.applyJudge(judgeIndex);
+    this.noteFailure();
     if (this.observer !== undefined) this.notifyJudgment(judgeIndex, dmUs);
+  }
+
+  /** Tells {@link onFailure} where the survival gauge first emptied mid-play. */
+  private noteFailure(): void {
+    if (this.failed || !this.gauge.failedMidPlay) return;
+    this.failed = true;
+    this.onFailure?.(this.judgeAtUs);
   }
 
   private notifyJudgment(judgeIndex: GaugeJudgeIndex, dmUs: number | undefined): void {

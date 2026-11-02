@@ -281,6 +281,19 @@ function laneCell(value: PlayOptions['random1P'] | undefined): number {
 }
 
 /**
+ * The lane option a click on LR2's RANDOM button (42 / 43) moves to: the next of LR2's own values (`RANDOM_CYCLE`), one
+ * step from the cell `current` draws, in `step`'s direction. Another source's RANDOM, S-RANDOM or CONVERGE steps from the
+ * cell of its bare name, and a value LR2 does not have (SPIRAL, H-RANDOM, ...) moves to OFF (ADR 0019).
+ */
+export function stepLR2LaneOption(current: PlayOptions['random1P'] | undefined, step: number): PlayOptions['random1P'] {
+  const names = RANDOM_CYCLE.map(optionValueName);
+  const index = current === undefined ? 0 : names.indexOf(optionValueName(current));
+  if (index < 0) return RANDOM_CYCLE[0]!;
+  const delta = step < 0 ? -1 : 1;
+  return RANDOM_CYCLE[(index + delta + RANDOM_CYCLE.length) % RANDOM_CYCLE.length]!;
+}
+
+/**
  * The cell an option button draws (`#SRC_BUTTON` types 10-12, 40-46, 50-55, 70-73, 75, 91-96): the index of the option's
  * value in its LR2 cycle order (an on / off option: 0 off, 1 on; a direct difficulty button: 1 while its difficulty
  * is the filter). `undefined` for any other button; the caller clamps it to the button's cells.

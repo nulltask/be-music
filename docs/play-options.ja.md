@@ -6,7 +6,7 @@ Debug Menu の **Play options** と選曲画面は、実際に使う設定を共
 
 ## オプションと判定ルール
 
-Debug Menu の Developer にある **Judgment windows** は判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）を選びます。譜面または表示を変えるだけのオプションは、どのルールでも選べます。それぞれ判定ルールに関係なく参照元のアルゴリズムで動き、ルールを切り替えても維持し、参照元の譜面の種類の制限はそのまま残ります。対象は HS-FIX CONSTANT、CLASSIC と通常の HI-SPEED、FLOATING HI-SPEED と表示エリア固定、BPM 変化予告、判定タイミングの自動調整、レーンオプションの R-RANDOM・SPIRAL・H-RANDOM・ALL-SCR・RANDOM-EX・S-RANDOM-EX・RANDOM_PLAYABLE・S_RANDOM_PLAYABLE と 2 種類の SCATTER、SYNCHRONIZE RANDOM・SYMMETRY RANDOM・M-RAN、地雷とスクロールの変換、EXTRA と LR2 EXTRA MODE、ADD LN / CN / HCN / ALL、SP TO DP、7 TO 9、BATTLE AS、D-BATTLE、2 人プレイです。beatoraja ルール以外では、beatoraja のレーンオプションとロングノートの追加はブラウザの乱数で抽選します。シードは beatoraja ルールだけのままです。
+Debug Menu の Developer にある **Judgment windows** は判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）を選びます。譜面または表示を変えるだけのオプションは、どのルールでも選べます。それぞれ判定ルールに関係なく参照元のアルゴリズムで動き、ルールを切り替えても維持し、参照元の譜面の種類の制限はそのまま残ります。対象は HS-FIX CONSTANT、CLASSIC と通常の HI-SPEED、FLOATING HI-SPEED と表示エリア固定、BPM 変化予告、判定タイミングの自動調整、レーンオプションの R-RANDOM・SPIRAL・H-RANDOM・ALL-SCR・RANDOM-EX・S-RANDOM-EX・RANDOM_PLAYABLE・S_RANDOM_PLAYABLE と 2 種類の SCATTER、SYNCHRONIZE RANDOM・SYMMETRY RANDOM・M-RAN、地雷とスクロールの変換、EXTRA と LR2 EXTRA MODE、ADD LN / CN / HCN / ALL、SP TO DP、7 TO 9、BATTLE AS、D-BATTLE、2 人プレイです。レーンオプションはどのルールでもその側のシードで抽選します（[参照元のシードと前回の配置](#参照元のシードと前回の配置)）。ロングノートの追加はブラウザの乱数で抽選します。
 
 **参照元つきの値。** RANDOM・S-RANDOM・CONVERGE と 1 人用の BATTLE は参照元ごとに別のアルゴリズムや規則を指すため、値に参照元を付けます（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。`lr2:RANDOM`・`beatoraja:RANDOM`・`____:RANDOM`（AC の RANDOM と S-RANDOM は当面 LR2 のアルゴリズムで動きます）、`lr2:CONVERGE`・`beatoraja:CONVERGE`、`beatoraja:BATTLE`・`____:BATTLE` です。どれもどのルールでも選べ、その参照元の動作をします。Debug Menu はレーンとバトルの選択肢を参照元ごとにまとめて判定ルール自身の参照元を先頭に並べ、ラベルに **RANDOM (LR2)**・**S-RANDOM (beatoraja)**・**BATTLE (????)** のように参照元を示します。古いリプレイや設定にある参照元のない値は、判定ルール自身のものとして読みます。保存した設定は読み込むときに移行し、参照元のない値を保存時のルールの参照元つきの値にします。リプレイは書き換えません。参照元のないリプレイは記録したルールのものとして読みます。
 
@@ -252,15 +252,15 @@ beatoraja の `PracticeModifier` と同様に、範囲外の判定対象はす�
 
 ## R-RANDOM
 
-どのルールでも、Debug Menu の **Play options → Random 1P / Random 2P → R-RANDOM** を選択します。R-RANDOM は片側の鍵盤レーン全体を正順または逆順に回転させ、スクラッチは固定します。beatoraja 0.8.9 の `LaneRotateShuffleModifier` と同様に元の並びと MIRROR を除外し、残りの回転を等確率で選びます。どのルールでもこの回転の集合を使い、ルールを切り替えても選択を維持します。beatoraja ルールではその側のシードで抽選します（「参照元のシードと前回の配置」を参照）。beatoraja は R-RANDOM をアシストなしのオプションとして扱い、`grade_random` 制約のコースでは beatoraja が先頭 6 種類のランダムを維持するのと同様に維持します。
+どのルールでも、Debug Menu の **Play options → Random 1P / Random 2P → R-RANDOM** を選択します。R-RANDOM は片側の鍵盤レーン全体を正順または逆順に回転させ、スクラッチは固定します。beatoraja 0.8.9 の `LaneRotateShuffleModifier` と同様に元の並びと MIRROR を除外し、残りの回転を等確率で選びます。どのルールでもこの回転の集合を使い、ルールを切り替えても選択を維持します。その側のシードで抽選します（「参照元のシードと前回の配置」を参照）。beatoraja は R-RANDOM をアシストなしのオプションとして扱い、`grade_random` 制約のコースでは beatoraja が先頭 6 種類のランダムを維持するのと同様に維持します。
 
-リプレイは選択を `play.randomLane` と `play.options.random1P` / `random2P` に、各ノートの最終的なレーンを元のレーン（`sourceChannel`）とともに記録します。そのためリプレイは再抽選せず、記録したレーンを適用します。内蔵の選曲画面の **Lanes** と共通のプレイオプション API はすべてのレーンオプション名を列挙し、実行中のルールにない選択でプレイを始めると明示的にエラーにします。LR2 スキンでは RANDOM のオプションテキストに選択した名前を参照元なしで表示し、RANDOM ボタンは従来の 4 セル（OFF / MIRROR / RANDOM / S-RANDOM）を維持して、どの参照元の RANDOM と S-RANDOM もそのセルに、それ以外の選択では最初のセルを表示します。beatoraja スキンの RANDOM 1P / 2P ボタン（42 / 43）は、フォーカスした譜面のプレイモード（PMS かどうか）に応じた beatoraja 0.8.9 の 10 個のレーンオプション（RANDOM・S-RANDOM・CONVERGE は beatoraja 自身のもの）を切り替え、ラベルにはその枠を表示します。ほかの参照元の RANDOM と S-RANDOM はその名前の枠に表示します（[beatoraja スキン](./beatoraja-skin.ja.md)を参照）。それ以外の選択は Debug Menu で選びます。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+リプレイは選択を `play.randomLane` と `play.options.random1P` / `random2P` に、各ノートの最終的なレーンを元のレーン（`sourceChannel`）とともに記録します。そのためリプレイは再抽選せず、記録したレーンを適用します。内蔵の選曲画面の **Lanes** と共通のプレイオプション API はすべてのレーンオプション名を列挙し、実行中のルールにない選択でプレイを始めると明示的にエラーにします。LR2 スキンでは RANDOM のオプションテキストに選択した名前を参照元なしで表示し、RANDOM ボタン（42 / 43）は、ADR 0019 のとおりスキンが自分の参照元の値だけを切り替えるため、LR2 自身の 6 つのレーンオプション、OFF / MIRROR / RANDOM / S-RANDOM / SCATTER / CONVERGE のセル（`lr2:RANDOM`、`lr2:S-RANDOM`、`SCATTER`、`lr2:CONVERGE`）だけを切り替えます。ほかの参照元の RANDOM・S-RANDOM・CONVERGE はその名前のセルに表示し、そこから次へ進みます。それ以外の選択は最初のセルに表示し、クリックすると OFF になります。beatoraja スキンの RANDOM 1P / 2P ボタン（42 / 43）は、フォーカスした譜面のプレイモード（PMS かどうか）に応じた beatoraja 0.8.9 の 10 個のレーンオプション（RANDOM・S-RANDOM・CONVERGE は beatoraja 自身のもの）を切り替え、ラベルにはその枠を表示します。ほかの参照元の RANDOM と S-RANDOM はその名前の枠に表示します（[beatoraja スキン](./beatoraja-skin.ja.md)を参照）。それ以外の選択は Debug Menu で選びます。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java) と [`LaneShuffleModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LaneShuffleModifier.java)、AC 34 の[プレイオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#693](https://github.com/nulltask/be-music/issues/693) です。
 
 ## SPIRAL
 
-どのルールでも **Random 1P / Random 2P → SPIRAL** を選択します。SPIRAL は 1〜N−1 レーンの刻みを 1 つ抽選し、タイムラインごとに鍵盤レーンを前のタイムラインよりその刻みだけ多く回転させます。ロングノートを押している間は、終点を過ぎるまで回転を止めます。beatoraja 0.8.9 の `SpiralRandomizer` と同様に、スクラッチ・地雷・不可視オブジェクト・反対側のオブジェクトだけのタイムラインや、ロングノートの終点だけのタイムラインもすべて数えます。スクラッチは固定し、beatoraja ルールでは刻みをその側のシードで抽選します。
+どのルールでも **Random 1P / Random 2P → SPIRAL** を選択します。SPIRAL は 1〜N−1 レーンの刻みを 1 つ抽選し、タイムラインごとに鍵盤レーンを前のタイムラインよりその刻みだけ多く回転させます。ロングノートを押している間は、終点を過ぎるまで回転を止めます。beatoraja 0.8.9 の `SpiralRandomizer` と同様に、スクラッチ・地雷・不可視オブジェクト・反対側のオブジェクトだけのタイムラインや、ロングノートの終点だけのタイムラインもすべて数えます。スクラッチは固定し、刻みをその側のシードで抽選します。
 
 beatoraja は SPIRAL を LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。`grade_random` 制約のコースでは維持します。リプレイは SPIRAL を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録するため、リプレイで再抽選しません。
 
@@ -268,7 +268,7 @@ beatoraja は SPIRAL を LIGHT_ASSIST とします。記録の扱いは[アシ�
 
 ## H-RANDOM
 
-どのルールでも **Random 1P / Random 2P → H-RANDOM** を選び、**H-RANDOM threshold BPM (beatoraja)** を設定します。範囲は beatoraja 0.8.9 の `PlayerConfig` と同じ 1〜1000、既定は 120 です。H-RANDOM は S-RANDOM と同様にタイムラインごとにノートを配置しますが、各ノートは直前のノートがしきい値 BPM の 16 分音符 1 つ分（`ceil(15000 / BPM)` ミリ秒）より前にあるレーンを優先します。条件を満たす空きレーンがない場合は、最も長く空いているレーンを使います。押しているロングノートは終点までレーンを維持し、スクラッチは固定します。beatoraja ルールでは抽選にその側のシードを使います。beatoraja の `Randomizer.create` と同様に、同じしきい値を ALL-SCR、beatoraja の CONVERGE、S_RANDOM_PLAYABLE でも使います。
+どのルールでも **Random 1P / Random 2P → H-RANDOM** を選び、**H-RANDOM threshold BPM (beatoraja)** を設定します。範囲は beatoraja 0.8.9 の `PlayerConfig` と同じ 1〜1000、既定は 120 です。H-RANDOM は S-RANDOM と同様にタイムラインごとにノートを配置しますが、各ノートは直前のノートがしきい値 BPM の 16 分音符 1 つ分（`ceil(15000 / BPM)` ミリ秒）より前にあるレーンを優先します。条件を満たす空きレーンがない場合は、最も長く空いているレーンを使います。押しているロングノートは終点までレーンを維持し、スクラッチは固定します。抽選にその側のシードを使います。beatoraja の `Randomizer.create` と同様に、同じしきい値を ALL-SCR、beatoraja の CONVERGE、S_RANDOM_PLAYABLE でも使います。
 
 beatoraja は H-RANDOM を LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。リプレイは選択を `play.randomLane` と `play.options` に、範囲内に収めたしきい値を `play.options.hRandomThresholdBPM` に、各ノートの最終的なレーンとともに記録します。
 
@@ -278,13 +278,13 @@ beatoraja は H-RANDOM を LIGHT_ASSIST とします。記録の扱いは[アシ
 
 どのルールでも **Random 1P / Random 2P → CONVERGE (LR2)**（`lr2:CONVERGE`）を選び、**Fixed key 1P / Fixed key 2P (LR2; 0=default)** で集める先のレーンを選びます。1〜9 は鍵盤を、0 はモードの既定値（スクラッチ、9 鍵盤の譜面では鍵盤 5）を選びます。LR2 beta3 に従い、各ノートはまず集める先のレーンを試し、同じタイムラインのノートや押しているロングノート（終点まで）がすでにある場合は、空いている鍵盤レーンからランダムに選びます。スクラッチのノートはスクラッチに残し、鍵盤のノートが集まる前にスクラッチを確保します。LR2 の CONVERGE は 5・7・9・10・14 鍵盤の譜面で使え、それ以外の譜面では明示的にエラーにします。LR2 beta3 は CONVERGE でスコアを保存しません（`CheckScoreSaveConditon`）。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
-同じくどのルールでも選べる **CONVERGE (beatoraja)**（`beatoraja:CONVERGE`）は、beatoraja 0.8.9 の別の PMS 用配置（`Random.OPTION_PMS`、`ConvergeRandomizer`）で、PMS 以外の譜面では明示的にエラーにします。H-RANDOM のしきい値を過ぎた空きレーンのうち、現在の連続回数が最も多いレーンにノートを置き、しきい値の 2 倍を超えて空いたレーンの連続回数はリセットします。beatoraja ルールではその側のシードを使い、beatoraja はこれを LIGHT_ASSIST とします。AC に CONVERGE はありません。古いリプレイや設定にある参照元のない `CONVERGE` は判定ルール自身のものです。リプレイは選択を `play.randomLane` と `play.options` に、LR2 の集める先を `play.options.randomFixedLane1P` / `randomFixedLane2P` に、各ノートの最終的なレーンとともに記録します。
+同じくどのルールでも選べる **CONVERGE (beatoraja)**（`beatoraja:CONVERGE`）は、beatoraja 0.8.9 の別の PMS 用配置（`Random.OPTION_PMS`、`ConvergeRandomizer`）で、PMS 以外の譜面では明示的にエラーにします。H-RANDOM のしきい値を過ぎた空きレーンのうち、現在の連続回数が最も多いレーンにノートを置き、しきい値の 2 倍を超えて空いたレーンの連続回数はリセットします。その側のシードを使い、beatoraja はこれを LIGHT_ASSIST とします。AC に CONVERGE はありません。古いリプレイや設定にある参照元のない `CONVERGE` は判定ルール自身のものです。リプレイは選択を `play.randomLane` と `play.options` に、LR2 の集める先を `play.options.randomFixedLane1P` / `randomFixedLane2P` に、各ノートの最終的なレーンとともに記録します。
 
 参照元：OpenLR2 の [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27322-L27404) と[スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L68-L79)、beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java) と [`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#695](https://github.com/nulltask/be-music/issues/695) と [#701](https://github.com/nulltask/be-music/issues/701) です。
 
 ## ALL-SCR
 
-どのルールでも **Random 1P / Random 2P → ALL-SCR** を選択します。beatoraja 0.8.9 の `AllScratchRandomizer` に従い、各タイムラインでスクラッチが空いていて直前のノートが 40 ミリ秒より前にある場合、鍵盤のノートを 1 つスクラッチへ移します。残りのノートは H-RANDOM と同様に、そのしきい値で鍵盤とスクラッチに配置します。DP では各側が自分のスクラッチを使い、残りのノートはランダムではなく参照元の固定の側別順序でレーンを選びます。ALL-SCR にはスクラッチレーンが必要なため、PMS の譜面では明示的にエラーにします。beatoraja ルールでは抽選にその側のシードを使います。
+どのルールでも **Random 1P / Random 2P → ALL-SCR** を選択します。beatoraja 0.8.9 の `AllScratchRandomizer` に従い、各タイムラインでスクラッチが空いていて直前のノートが 40 ミリ秒より前にある場合、鍵盤のノートを 1 つスクラッチへ移します。残りのノートは H-RANDOM と同様に、そのしきい値で鍵盤とスクラッチに配置します。DP では各側が自分のスクラッチを使い、残りのノートはランダムではなく参照元の固定の側別順序でレーンを選びます。ALL-SCR にはスクラッチレーンが必要なため、PMS の譜面では明示的にエラーにします。抽選にその側のシードを使います。
 
 beatoraja は ALL-SCR を LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりで、`grade_random` のコースでは OFF にします。リプレイは選択を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録します。
 
@@ -292,7 +292,7 @@ beatoraja は ALL-SCR を LIGHT_ASSIST とします。記録の扱いは[アシ�
 
 ## RANDOM-EX と S-RANDOM-EX
 
-どのルールでも **Random 1P / Random 2P → RANDOM-EX** または **S-RANDOM-EX** を選択します。どちらも RANDOM と S-RANDOM が動かすレーンに、その側のスクラッチレーンを加えます。RANDOM-EX は、beatoraja 0.8.9 の `LaneRandomShuffleModifier` がスクラッチを含める場合と同様に、鍵盤とスクラッチの譜面全体の並べ替えを 1 つ抽選します。判定ルールに関係なく常に beatoraja の並べ替えです。S-RANDOM-EX は、beatoraja の S-RANDOM の 40 ミリ秒の縦連しきい値でタイムラインごとに鍵盤とスクラッチへノートを配置し、条件を満たさない場合は最も長く空いているレーンを使います。どちらもスクラッチレーンが必要なため PMS の譜面では明示的にエラーにし、beatoraja ルールではその側のシードを使います。
+どのルールでも **Random 1P / Random 2P → RANDOM-EX** または **S-RANDOM-EX** を選択します。どちらも RANDOM と S-RANDOM が動かすレーンに、その側のスクラッチレーンを加えます。RANDOM-EX は、beatoraja 0.8.9 の `LaneRandomShuffleModifier` がスクラッチを含める場合と同様に、鍵盤とスクラッチの譜面全体の並べ替えを 1 つ抽選します。判定ルールに関係なく常に beatoraja の並べ替えです。S-RANDOM-EX は、beatoraja の S-RANDOM の 40 ミリ秒の縦連しきい値でタイムラインごとに鍵盤とスクラッチへノートを配置し、条件を満たさない場合は最も長く空いているレーンを使います。どちらもスクラッチレーンが必要なため PMS の譜面では明示的にエラーにし、その側のシードを使います。
 
 beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりで、`grade_random` のコースでは OFF にします。リプレイは選択を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録するため、移動したスクラッチのノートも記録したレーンで再生します。
 
@@ -302,13 +302,13 @@ beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシ�
 
 どのルールでも **Random 1P / Random 2P → RANDOM_PLAYABLE** または **S_RANDOM_PLAYABLE** を選択します。どちらも beatoraja 0.8.9 の `Random.OPTION_PMS` にある PMS 用の配置で、他の譜面では明示的にエラーにします。RANDOM_PLAYABLE（`LanePlayableRandomShuffleModifier`）は、どの同時押しも参照元の 10 種類の無理な 3 鍵の形にならない並べ替えから、元の並びと MIRROR を除いて 9 鍵の譜面全体の並べ替えを等確率で 1 つ選びます。7 鍵以上の同時押しがある場合や条件を満たす並べ替えがない場合は、元の並びか MIRROR をランダムに使います。参照元の処理は変換のシードを使わないため、RANDOM_PLAYABLE ではその側の Seed を Debug Menu に表示しません。
 
-S_RANDOM_PLAYABLE（`NoMurioshiRandomizer`）はタイムラインごとにノートを配置し、押しているロングノートを含めて 3〜6 個のノートがあるタイムラインでは、押しているレーンを含む参照元の 10 種類の 6 鍵の押せる形のいずれかに、H-RANDOM のしきい値とあわせて収めます。しきい値を過ぎたレーンが足りる形がない場合、固定した版の参照元は例外を投げます。be-music は独自の代替処理を作らず、プレイを明示的にエラーにします。beatoraja ルールでは抽選にその側のシードを使います。beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。リプレイは選択を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録します。
+S_RANDOM_PLAYABLE（`NoMurioshiRandomizer`）はタイムラインごとにノートを配置し、押しているロングノートを含めて 3〜6 個のノートがあるタイムラインでは、押しているレーンを含む参照元の 10 種類の 6 鍵の押せる形のいずれかに、H-RANDOM のしきい値とあわせて収めます。しきい値を過ぎたレーンが足りる形がない場合、固定した版の参照元は例外を投げます。be-music は独自の代替処理を作らず、プレイを明示的にエラーにします。抽選にその側のシードを使います。beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。リプレイは選択を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録します。
 
 参照元：beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java)、[`LaneShuffleModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LaneShuffleModifier.java)、[`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#702](https://github.com/nulltask/be-music/issues/702) と [#703](https://github.com/nulltask/be-music/issues/703) です。
 
 ## 参照元のシードと前回の配置
 
-**Judgment windows → beatoraja** では、Debug Menu に **Seed 1P / Seed 2P (-1=random)** を表示します。シードは 0〜9223372036854775807 の Java の long 値で、beatoraja 0.8.9 の変換と同様に `java.util.Random` でレーンオプションを抽選します。そのため同じ譜面・レーンオプション・シードでは同じ配置になります。-1 はプレイごとに 16,777,216 未満の新しいシードを抽選します。リプレイは各側で実際に使ったシードを `play.options.randomSeed1P` / `randomSeed2P` に記録します。LR2 と ???? のルールではシードを表示せず、beatoraja のレーンオプションも含めてシードを使わずに配置を抽選します。
+Debug Menu はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示します。シードは 0〜9223372036854775807 の Java の long 値で、LR2 と AC のものも含めてすべてのレーンオプションを、beatoraja 0.8.9 の変換と同様に `java.util.Random` で抽選します。そのため判定ルールに関係なく、同じ譜面・レーンオプション・シードでは同じ配置になります。-1 はプレイごとに 16,777,216 未満の新しいシードを抽選します。リプレイは各側で実際に使ったシードを `play.options.randomSeed1P` / `randomSeed2P` に記録します。LR2 と AC には入力できる独自のシードがないため、それらのアルゴリズムも同じ Java の `Random` の乱数列を使います。シードで配置を再現できるのは be-music の中だけで、LR2 では再現しません。譜面自身の ALL / ALL+ の並べ替えは 1P のシードで抽選します。RANDOM_PLAYABLE は参照元と同様にシードを使わず、beatoraja の地雷の ADD RANDOM とロングノートの追加もシードを使いません。[#933](https://github.com/nulltask/be-music/issues/933) で追跡しています。
 
 **Reuse previous arrangement** と **New arrangement** ボタンはどのルールでも表示します。Reuse は、リプレイ・コース・NONSTOP を除く直前のプレイを対象に、そのレーンオプション（Random 1P / 2P、シード、Fixed key、DP flip、H-RANDOM のしきい値、Long notes）を選択します。次に同じ譜面をプレイすると、beatoraja の譜面オプションの再現が譜面のレーンオプション・シード・分岐を復元するのと同様に、記録したレーンと `#RANDOM` の結果をそのまま使い、入力は通常どおり受け付けて新しいリプレイを記録します。これらのオプションを変更するか **New arrangement** を押すと再利用を解除し、New arrangement は両側のシードも -1 に戻します。別の譜面のプレイには影響しません。再利用には直前のプレイと同じ判定ルールが必要です。ほかのルールでは何も選択せず、ほかのルールで再利用の配置をプレイした場合は「The previous arrangement was played under other judgment rules.」というエラーにします。譜面のハッシュが異なる配置を再利用した場合も明示的にエラーにします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
