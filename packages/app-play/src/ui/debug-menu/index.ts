@@ -205,7 +205,6 @@ export class DebugMenu {
   public classicSpeedController: PaneBinding | undefined;
   public randomSeed1PController: PaneBinding | undefined;
   public randomSeed2PController: PaneBinding | undefined;
-  public readonly randomSeedControllers: Array<{ hidden: boolean }> = [];
   public random1PController: ListInputBindingApi<PlayOptions['random1P']> | undefined;
   public random2PController: ListInputBindingApi<PlayOptions['random2P']> | undefined;
   public gaugeController: ListInputBindingApi<GaugeType> | undefined;
@@ -548,10 +547,10 @@ export class DebugMenu {
       controller.hidden = !beatoraja || !this.guiState.customJudge;
     if (this.longNoteRateController)
       this.longNoteRateController.hidden = !this.guiState.longNoteModifier.startsWith('ADD_');
-    for (const controller of this.randomSeedControllers) controller.hidden = !beatoraja;
+    // Every ruleset seeds its lane randoms (#933); only the PMS playable randomizer ignores its seed, as in the source.
     for (const side of ['1P', '2P'] as const) {
       const controller = side === '1P' ? this.randomSeed1PController : this.randomSeed2PController;
-      if (controller) controller.hidden = !beatoraja || this.guiState[`random${side}`] === 'RANDOM_PLAYABLE';
+      if (controller) controller.hidden = this.guiState[`random${side}`] === 'RANDOM_PLAYABLE';
     }
     if (!beatoraja && this.guiState.gaugeAutoShift !== 'NONE') {
       this.guiState.gaugeAutoShift = 'NONE';
