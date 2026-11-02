@@ -69,6 +69,40 @@ export function resolveLaneCover(cover: LaneCoverState): LaneCover {
   };
 }
 
+/** The highest a chart's LINEMOVE may raise the judgement line with the player's LIFT, as a fraction of the lane. */
+export const CHART_LINE_LIFT_MAX = 0.9;
+
+/**
+ * What a chart-authored display option asks of the lane covers as drawn (#931, `resolveChartPlayfieldVisual` in
+ * `@be-music/chart-model`): HIDDEN_M-SUDDEN shows the player's SUDDEN+ cover at its own height whether or not it is
+ * switched on, and LINEMOVE raises the judgement line by `lineLift` (a fraction of the lane) on top of the player's
+ * LIFT, up to {@link CHART_LINE_LIFT_MAX}.
+ */
+export interface ChartLaneCoverEffect {
+  readonly manualSudden: boolean;
+  readonly lineLift: number;
+}
+
+/**
+ * The covers to draw under a chart's {@link ChartLaneCoverEffect}. The player's own covers stay as they are (a replay
+ * records those); only the drawing changes. Returns `covers` itself when the chart changes nothing.
+ */
+export function applyChartLaneCovers(
+  covers: readonly LaneCoverState[],
+  effect: ChartLaneCoverEffect,
+): readonly LaneCoverState[] {
+  const lineLift = Number.isFinite(effect.lineLift) ? Math.max(0, effect.lineLift) : 0;
+  if (!effect.manualSudden && lineLift === 0) return covers;
+  return covers.map((cover) => {
+    const playerLift = cover.liftOn === false ? 0 : clampFraction(cover.lift);
+    return {
+      ...cover,
+      ...(effect.manualSudden ? { suddenOn: true } : {}),
+      ...(lineLift > 0 ? { lift: Math.min(CHART_LINE_LIFT_MAX, playerLift + lineLift), liftOn: true } : {}),
+    };
+  });
+}
+
 /** The part of a lane cover a command changes. */
 export type LaneCoverPart = 'sudden' | 'hidden' | 'lift';
 

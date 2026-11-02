@@ -448,6 +448,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolveLaneCover(BENCH_COVERS[0]!);
     },
   });
+  define('player-scene-model.applyChartLaneCovers', {
+    run: () => {
+      sceneModelAPI.applyChartLaneCovers(BENCH_COVERS, { manualSudden: true, lineLift: 0.15 });
+    },
+  });
   define('player-scene-model.reduceLaneCovers', {
     run: () => {
       sceneModelAPI.reduceLaneCovers(BENCH_COVERS, { type: 'cover-adjust', part: 'sudden', delta: 0.05 });

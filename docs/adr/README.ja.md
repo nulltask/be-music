@@ -59,3 +59,5 @@
 - [0034: 譜面指定の GAMELEVEL と EXTRA を各 ruleset のゲージに対応させる](./0034-chart-authored-gauge-options.ja.md)
 
 - [0035: 譜面指定の NOTES オプションはエンジンで譜面を変換し、フィンガープリントがゲームプレイオプションを持つ](./0035-chart-authored-notes-options.ja.md)
+
+- [0036: 譜面指定の M-SUDDEN・スキン水準の CRAZY・旧別名をプレイフィールドの水準で実行する](./0036-chart-authored-skin-level-options.ja.md)
