@@ -12,10 +12,10 @@ import { clampJudgeTimingMs, resolvePlayOptionValue } from '@be-music/player-sce
  * play view of the kit's family (built-in or LR2) and reads a `PlayFrame` off it every tick.
  */
 
-import { mirrorBeatAtTempoReversal } from '@be-music/chart-model';
+import { compileChartGaugeOptions, mirrorBeatAtTempoReversal } from '@be-music/chart-model';
 import { nonstopBPMAt } from '@be-music/player-engine/course';
 import { DEFAULT_REPLAY_PLAYBACK_OPTIONS, type BeMusicReplay } from '@be-music/player-engine/replay';
-import type { GaugeType } from '@be-music/player-engine/ruleset';
+import { resolveChartGaugeType, type GaugeType } from '@be-music/player-engine/ruleset';
 import { createHiSpeedState, createPlayState, type LibraryChart, type PlayResult } from '@be-music/player-scene-model';
 import type { BeMusicLongNote } from '@be-music/player-skin-sdk';
 import type { Application, Texture } from 'pixi.js';
@@ -637,10 +637,20 @@ export class PlaySession extends PlaySessionState {
 
   /**
    * The gauge this run actually plays on. A replay restores the recorded pick so the played-back run judges, drains,
-   * and clears exactly as the original did; otherwise it is the host's selection, defaulting to LR2 GROOVE.
+   * and clears exactly as the original did. Otherwise a chart's GAMELEVEL / EXTRA (#845) wins outside a course and
+   * PRACTICE, as the engine decides; then the host's selection, defaulting to LR2 GROOVE.
    */
   resolveSelectedGauge(): GaugeType {
-    return this.options.replay?.play.gauge ?? this.options.gauge ?? 'GROOVE';
+    if (this.options.replay !== undefined) return this.options.replay.play.gauge ?? 'GROOVE';
+    const chart = this.resolvedChart ?? this.chart?.chart;
+    const chartGauge =
+      chart !== undefined && this.options.course === undefined && this.options.practiceRange === undefined
+        ? resolveChartGaugeType(
+            compileChartGaugeOptions({ initial: chart.bms.options ?? (chart.bms.option ? [chart.bms.option] : []) }),
+            this.options.judgeRuleset ?? 'lr2',
+          )
+        : undefined;
+    return chartGauge ?? this.options.gauge ?? 'GROOVE';
   }
 
   /**

@@ -49,6 +49,26 @@ test('manual source seeds reproduce each side independently, including LN channe
   );
 });
 
+test.each([
+  ['lr2', 'lr2:RANDOM', 'lr2:S-RANDOM'],
+  ['____', '____:RANDOM', 'SCATTER'],
+  ['lr2', 'beatoraja:RANDOM', 'SPIRAL'],
+] as const)('%s rules seed the %s and %s arrangements too (#933)', (judgeRuleset, random1P, random2P) => {
+  const options = { judgeRuleset, random1P, random2P, randomSeed1P: '12345', randomSeed2P: '67890' } as const;
+  const random = vi.spyOn(Math, 'random');
+  const first = prepare(options);
+  expect(random).not.toHaveBeenCalled();
+  random.mockRestore();
+  const second = prepare(options);
+  expect(second.notes.map((note) => note.channel)).toEqual(first.notes.map((note) => note.channel));
+  expect(first.randomSeeds).toEqual({ p1: '12345', p2: '67890' });
+  // -1 draws a fresh seed below 2^24, as beatoraja does, and records the one it drew.
+  const fresh = prepare({ ...options, randomSeed1P: '-1', randomSeed2P: '-1' });
+  for (const seed of [fresh.randomSeeds.p1, fresh.randomSeeds.p2]) expect(Number(seed)).toBeLessThan(16777216);
+  const replayed = prepare({ ...options, randomSeed1P: fresh.randomSeeds.p1!, randomSeed2P: fresh.randomSeeds.p2! });
+  expect(replayed.notes.map((note) => note.channel)).toEqual(fresh.notes.map((note) => note.channel));
+});
+
 test('previous arrangement reproduces exact channels while retaining fresh live input and replay recording', () => {
   const original = prepare({
     judgeRuleset: 'beatoraja',

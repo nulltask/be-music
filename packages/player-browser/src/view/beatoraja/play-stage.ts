@@ -26,6 +26,8 @@ import { BeatorajaPlaySkinView, type BeatorajaPlaySkinViewOptions } from './skin
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import { BeatorajaBGALayer } from './play/bga.ts';
+import { resolveChartPlayfieldVisual } from '@be-music/chart-model';
+import { applyChartReverse } from '../shared/playfield/chart-note-visual.ts';
 import type { BeatorajaMarkerBeats } from '../../chart/beatoraja/markers.ts';
 import { BeatorajaMarkerLayer } from './play/markers.ts';
 import {
@@ -246,6 +248,11 @@ export class BeatorajaPlayStage {
     // The markers scroll with the notes' per-beat distance (`rxhs / 4 * hispeed`, `LaneRenderer.java:271-276`) on the
     // lane the active dst block resolves; skin-canvas defaults when no lane matched.
     const laneBounds = this.noteLayer.getLaneBounds(activeOps) ?? { topY: 0, bottomY: view.height };
+    // Chart-authored playfield options (#931): REVERSE mirrors the notes and bar lines in the lane area, DARK hides the
+    // BGA. The skin's own judgement line, covers and bombs stay where the skin draws them.
+    const chartPlayfield = resolveChartPlayfieldVisual(clock.chartOptions, displaySeconds);
+    applyChartReverse(this.noteLayer.container, chartPlayfield.reverse, laneBounds.topY, laneBounds.bottomY);
+    applyChartReverse(this.markerLayer.container, chartPlayfield.reverse, laneBounds.topY, laneBounds.bottomY);
     const laneHeight = Math.max(0, laneBounds.bottomY - laneBounds.topY);
     // Past an LR2 negative-BPM reversal both layers scroll from the mirrored display beat.
     const currentBeat = beatorajaDisplayScrollBeat(noteClock);
@@ -309,6 +316,8 @@ export class BeatorajaPlayStage {
       });
     }
     this.guidePool.end();
+    if (this.bgaLayer !== undefined) this.bgaLayer.container.visible = !chartPlayfield.hideBGA;
+    if (chartPlayfield.hideBGA) return;
     // The BGA freezes on what showed at a reversal (clamped, not mirrored), as LR2 stops its cues there.
     this.bgaLayer?.update(
       Math.min(clock.currentSeconds, clock.reversalSeconds ?? Number.POSITIVE_INFINITY),

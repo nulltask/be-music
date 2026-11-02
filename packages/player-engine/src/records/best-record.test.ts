@@ -3,6 +3,7 @@ import {
   abortedRecordPlayFromResult,
   courseRunKeepsRecord,
   courseRunRecordPlay,
+  chartProgramCopiesChart,
   courseStageKeepsRecord,
   courseStageRecordPlayFromResult,
   courseStageRecordPlayFromSummary,
@@ -254,6 +255,20 @@ describe('playKeepsRecord / courseStageKeepsRecord', () => {
     expect(courseStageKeepsRecord({ ...stage, autoPlay: true })).toBe(false);
     expect(courseStageKeepsRecord({ ...stage, replay: true })).toBe(false);
     expect(courseStageKeepsRecord({ ...stage, tempo: 0.9 })).toBe(false);
+  });
+
+  it('knows which chart programs copy the chart outside a course (#932)', () => {
+    expect(chartProgramCopiesChart({ version: 1, options: { notes: 'COPY' } }, '7')).toBe(true);
+    expect(chartProgramCopiesChart({ version: 1, options: { notes: 'DBLCOPY' } }, '5')).toBe(true);
+    expect(chartProgramCopiesChart({ version: 1, options: { notes: 'DOUBLE' } }, '7')).toBe(false);
+    expect(chartProgramCopiesChart({ version: 1, options: { notes: 'COPY' } }, '14')).toBe(false);
+    expect(chartProgramCopiesChart({ version: 1, options: {} }, '7')).toBe(false);
+  });
+
+  it('leaves the chart record alone for a stage that left out its chart NOTES COPY (#932)', () => {
+    const stage = { autoPlay: false, replay: false, tempo: 1 };
+    expect(courseStageKeepsRecord({ ...stage, chartCopyLeftOut: true })).toBe(false);
+    expect(courseStageKeepsRecord({ ...stage, chartCopyLeftOut: false })).toBe(true);
   });
 });
 

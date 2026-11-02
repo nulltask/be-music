@@ -52,7 +52,7 @@ test('HIDDEN, CHANGE-HS and CRAZY reach engine frames and leave judging, audio, 
   expect(checkReplayEligibility(result.replay!)).toEqual(checkReplayEligibility(baseline.replay!));
   const saved = parseReplay(serializeReplay(result.replay!));
   expect(saved.chart.chartOptions).toEqual({
-    version: 2,
+    version: 3,
     initial: { hidden: 'SUDDEN', changeHS: 'NAZO' },
     cues: [
       { timeUs: 2000000, state: { hidden: 'STEALTH', changeHS: 'NAZO' } },
@@ -97,7 +97,7 @@ test('NONSTOP places a visual-only stage program and releases it at the next sta
   const plain = parseBMS('#BPM 120\n#00211:01');
   const stitched = stitchNonstopCourse([{ chart: first }, { chart: plain }], { connections: ['cut'] });
   if (!stitched.ok) throw new Error(stitched.reason);
-  expect(stitched.map.chartOptions?.version).toBe(2);
+  expect(stitched.map.chartOptions?.version).toBe(3);
   expect(stitched.map.chartOptions?.initial).toEqual({ hidden: 'HIDDEN' });
   const next = stitched.map.stages[1]!.windowStart;
   const states: { seconds: number; hidden?: string }[] = [];

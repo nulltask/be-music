@@ -3,8 +3,8 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import {
   checkCourseReplayEligibility,
   REPLAY_ENGINE_VERSION,
+  rejudgeCourseReplay,
   resolveCoursePlayedRuleset,
-  simulateCourseReplay,
   type BeMusicCourseReplay,
   type BeMusicReplay,
   type CourseReplayUnrankedReason,
@@ -23,7 +23,8 @@ import {
   putChartDocument,
   type PlayedChart,
 } from '../scores/played-chart.ts';
-import { identifyPlay, type SubmissionDeps } from '../scores/submit.ts';
+import { checkChartPlayOptions } from '../scores/chart-play-options.ts';
+import { identifyPlay, type NotSimulatedOutcome, type SubmissionDeps } from '../scores/submit.ts';
 import { mergeBestScores } from '../scoring/best.ts';
 import { clearLampRank } from '@be-music/player-engine/ruleset';
 import { loadCourseBestScores, toCourseBestScoreRow } from './bests.ts';
@@ -64,6 +65,8 @@ export interface CourseRulesetOutcome {
   rank: number;
   players: number;
   improved: { exScore: boolean; lamp: boolean; missCount: boolean; trophy: boolean };
+  /** `truncated` when the run stopped at a failed stage this ruleset's gauge would have survived (ADR 0019). */
+  outcome?: 'truncated';
 }
 
 export type CourseSubmissionOutcome =
@@ -72,6 +75,8 @@ export type CourseSubmissionOutcome =
       courseScoreId: string;
       courseFingerprint: string;
       results: CourseRulesetOutcome[];
+      /** The rulesets the run cannot be judged under; absent when it is judged under every one. */
+      notSimulated?: NotSimulatedOutcome[];
       /** Why the run was stored without ranking it; its results then carry rank and players 0. */
       unranked?: CourseReplayUnrankedReason;
     }
@@ -138,9 +143,15 @@ export async function submitCourseScore(
   for (const [index, stage] of eligibility.stages.entries()) {
     const check = await checkPlayedChart(db, { ...stage, ...input.stages[index]! });
     if (!check.ok) return { status: 'rejected', httpStatus: check.httpStatus, reason: check.reason, stage: index };
+    const chartOptions = checkChartPlayOptions(playedLogs[index]!, input.stages[index]!.playDocument);
+    if (!chartOptions.ok) return { status: 'rejected', httpStatus: 422, reason: chartOptions.reason, stage: index };
     playedCharts.push(check);
   }
 
+  // A NONSTOP run's stitched play runs no stage's gameplay options.
+  if (nonstop !== undefined && !checkChartPlayOptions(courseLog.nonstop!.replay, undefined).ok) {
+    return { status: 'rejected', httpStatus: 422, reason: 'chart-play-options-mismatch' };
+  }
   const playedRuleset = resolveCoursePlayedRuleset(courseLog);
   if (playedRuleset === undefined) {
     return { status: 'rejected', httpStatus: 422, reason: 'course-ruleset-mismatch' };
@@ -154,10 +165,18 @@ export async function submitCourseScore(
         })
       : checkUnreachedStageCharts(courseLog, stageCharts);
   if (!charts.ok) return { status: 'rejected', httpStatus: 422, reason: charts.reason, ...stageOf(charts.stage) };
-  const simulated = new Map<RulesetId, ReplayCourseResult>(
-    RULESET_IDS.map((ruleset) => [ruleset, simulateCourseReplay(courseLog, { ruleset })]),
-  );
-  const run = checkCourseRun(courseLog, simulated.get(playedRuleset)!);
+  // Each ruleset re-judges the run by ADR 0019's rules, as a single play's: a ruleset that cannot read it stores nothing,
+  // and a truncated run stores its figures unranked.
+  const simulated = new Map<RulesetId, { result: ReplayCourseResult; truncated: boolean }>();
+  const notSimulated: NotSimulatedOutcome[] = [];
+  for (const ruleset of RULESET_IDS) {
+    const outcome = rejudgeCourseReplay(courseLog, { ruleset });
+    if (outcome.status === 'not-simulated') notSimulated.push({ ruleset, reason: outcome.reason });
+    else simulated.set(ruleset, { result: outcome.result, truncated: outcome.status === 'truncated' });
+  }
+  const playedRun = simulated.get(playedRuleset);
+  if (playedRun === undefined) return { status: 'rejected', httpStatus: 422, reason: 'course-ruleset-mismatch' };
+  const run = checkCourseRun(courseLog, playedRun.result);
   if (!run.ok) return { status: 'rejected', httpStatus: 422, reason: run.reason, ...stageOf(run.stage) };
 
   const now = deps.now();
@@ -173,8 +192,7 @@ export async function submitCourseScore(
     ...uniqueRegistrations(playedCharts).map((played) => putChartDocument(blobs, played)),
   ]);
 
-  const figures = RULESET_IDS.map((ruleset) => {
-    const result = simulated.get(ruleset)!;
+  const figures = [...simulated].map(([ruleset, { result, truncated }]) => {
     const lamp = clearLampRank(result.lamp);
     const current = currentBests.get(ruleset);
     const update = mergeBestScores(current, {
@@ -191,8 +209,10 @@ export async function submitCourseScore(
       rank: trophyRank,
     });
     const playedHere = (current?.playedHere ?? false) || playedRuleset === ruleset;
-    return { ruleset, result, lamp, update, trophyRank, trophy, playedHere };
+    return { ruleset, result, truncated, lamp, update, trophyRank, trophy, playedHere };
   });
+  // A truncated run moves no course best and takes no place in a ranking.
+  const ranked = figures.filter(({ truncated }) => !truncated);
 
   // A NONSTOP run's gauge is its stitched play's.
   const lastPlayed = courseLog.nonstop?.replay ?? playedLogs.at(-1)!;
@@ -237,7 +257,7 @@ export async function submitCourseScore(
       createdAt: new Date(now),
       updatedAt: new Date(now),
     }),
-    ...figures.map(({ ruleset, result, lamp, trophyRank }) =>
+    ...figures.map(({ ruleset, result, truncated, lamp, trophyRank }) =>
       db.insert(courseScoreResult).values({
         courseScoreId,
         ruleset,
@@ -254,10 +274,11 @@ export async function submitCourseScore(
         gaugeType: result.gauge.type,
         gaugeFinal: result.gauge.final,
         judges: { ...result.judge, fast: result.fast, slow: result.slow },
+        outcome: truncated ? 'truncated' : null,
       }),
     ),
     // An unranked run moves no course best.
-    ...(unranked !== undefined ? [] : figures).map(({ ruleset, update, trophy, playedHere }) => {
+    ...(unranked !== undefined ? [] : ranked).map(({ ruleset, update, trophy, playedHere }) => {
       const row = toCourseBestScoreRow(
         { userId: input.userId, courseFingerprint, ruleset, assisted },
         update.next,
@@ -282,9 +303,12 @@ export async function submitCourseScore(
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
 
   const results = await Promise.all(
-    figures.map(async ({ ruleset, result, lamp, update, trophy }): Promise<CourseRulesetOutcome> => {
-      if (unranked !== undefined) {
-        return unrankedCourseOutcome({ ...result, ruleset, rulesetRevision: result.ruleset, clearLamp: lamp });
+    figures.map(async ({ ruleset, result, truncated, lamp, update, trophy }): Promise<CourseRulesetOutcome> => {
+      if (unranked !== undefined || truncated) {
+        return {
+          ...unrankedCourseOutcome({ ...result, ruleset, rulesetRevision: result.ruleset, clearLamp: lamp }),
+          ...(truncated ? { outcome: 'truncated' as const } : {}),
+        };
       }
       const filter = { courseFingerprint, ruleset, assisted, includeAnonymous: true, playedHereOnly: false };
       const [rank, players] = await Promise.all([
@@ -312,6 +336,7 @@ export async function submitCourseScore(
     courseScoreId,
     courseFingerprint,
     results,
+    ...(notSimulated.length > 0 ? { notSimulated } : {}),
     ...(unranked !== undefined ? { unranked } : {}),
   };
 }
@@ -389,7 +414,9 @@ async function loadCourseOutcomes(
   const rows = await db.select().from(courseScoreResult).where(eq(courseScoreResult.courseScoreId, courseScoreId));
   const outcomes = await Promise.all(
     rows.map(async (row): Promise<CourseRulesetOutcome> => {
-      if (unranked !== null) return unrankedCourseOutcome(row);
+      if (unranked !== null || row.outcome !== null) {
+        return { ...unrankedCourseOutcome(row), ...(row.outcome === 'truncated' ? { outcome: row.outcome } : {}) };
+      }
       const filter = {
         courseFingerprint,
         ruleset: row.ruleset,

@@ -752,6 +752,22 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.simulateReplayRulesets(BENCH_REPLAY);
     },
   });
+  define('player-engine.replay.findReplayNotSimulatedReason', {
+    run: () => {
+      replayAPI.findReplayNotSimulatedReason(BENCH_REPLAY, 'beatoraja');
+      replayAPI.findReplayNotSimulatedReason(BENCH_COUPLE_REPLAY, '____', 2);
+    },
+  });
+  define('player-engine.replay.rejudgeReplay', {
+    run: () => {
+      replayAPI.rejudgeReplay(BENCH_REPLAY, { ruleset: 'beatoraja' });
+    },
+  });
+  define('player-engine.replay.rejudgeReplayRulesets', {
+    run: () => {
+      replayAPI.rejudgeReplayRulesets(BENCH_REPLAY, ['lr2', 'beatoraja', '____']);
+    },
+  });
   const benchCourseInfo = {
     name: 'Dan',
     kind: 'grade' as const,
@@ -895,6 +911,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.courseStageKeepsRecord(benchRecordKind);
     },
   });
+  define('player-engine.records.chartProgramCopiesChart', {
+    run: () => {
+      recordsAPI.chartProgramCopiesChart({ version: 1, options: { notes: 'DBLCOPY' } }, '7');
+    },
+  });
   define('player-engine.records.isCourseRunAtAnotherTempo', {
     run: () => {
       recordsAPI.isCourseRunAtAnotherTempo(benchCourseLog);
@@ -982,6 +1003,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.resolveCourseRunDanRank({ kind: 'grade', name: '七段', lamp: 'NORMAL' });
     },
   });
+  define('player-engine.ruleset.resolveChartGaugeType', {
+    run() {
+      rulesetAPI.resolveChartGaugeType({ gameLevel: 'DANGER', extra: 'HARD' }, '____');
+    },
+  });
   define('player-engine.ruleset.isQualifiedOptionName', {
     run() {
       rulesetAPI.isQualifiedOptionName('S-RANDOM');
@@ -1024,6 +1050,19 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         { version: 1, options: { random: 'ALL+', addMine: true } },
         { doublePlay: true, hasScratch: true },
       );
+    },
+  });
+  define('player-engine.resolveEffectiveChartPlayOptions', {
+    run() {
+      playerAPI.resolveEffectiveChartPlayOptions(
+        { version: 1, options: { random: 'MIRROR', notes: 'DBLCOPY' } },
+        { playVariant: '7', course: true },
+      );
+    },
+  });
+  define('player-engine.resolveChartNotesPlayVariant', {
+    run() {
+      playerAPI.resolveChartNotesPlayVariant('7', 'COPY');
     },
   });
   define('player-engine.ruleset.clampCustomJudgeRate', {
@@ -1210,6 +1249,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.simulateCourseReplay', {
     run: () => {
       replayAPI.simulateCourseReplay(benchCourseLog, { ruleset: 'lr2' });
+    },
+  });
+  define('player-engine.replay.rejudgeCourseReplay', {
+    run: () => {
+      replayAPI.rejudgeCourseReplay(benchCourseLog, { ruleset: 'beatoraja' });
     },
   });
   const benchKeyedCourseLog = replayAPI.createCourseReplay({

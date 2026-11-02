@@ -55,3 +55,9 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0032: Execute chart-authored HIDDEN, CHANGE-HS and CRAZY size / wave with Be-Music formulas](./0032-chart-authored-visual-families.md)
 
 - [0033: Chart-authored RANDOM and judgment CRAZY options replace the player's, and are not assists](./0033-chart-authored-gameplay-options.md)
+
+- [0034: Map chart-authored GAMELEVEL and EXTRA onto each ruleset's own gauges](./0034-chart-authored-gauge-options.md)
+
+- [0035: Chart-authored NOTES options convert the chart in the engine, and the fingerprint carries the gameplay options](./0035-chart-authored-notes-options.md)
+
+- [0036: Execute chart-authored M-SUDDEN, the skin-level CRAZY options and the legacy aliases at the playfield level](./0036-chart-authored-skin-level-options.md)

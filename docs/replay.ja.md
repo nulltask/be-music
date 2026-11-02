@@ -345,6 +345,39 @@ EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は 
 ルールセットはロングノートの始点・終端を 2 判定ノートとして数えます（各ルールセットの分母は
 `result.noteCount` が報告します）。
 
+### ほかのルールセットでの再判定
+
+`simulateReplay` は与えられたものをそのまま判定します。`rejudgeReplay(replay, { ruleset })`（複数のルールセットには
+`rejudgeReplayRulesets`、コースリプレイには `rejudgeCourseReplay`）は先に [ADR 0019](./adr/0019-source-qualified-option-values.ja.md)
+の規則を適用し、3 つの結果のどれかを返します。Leaderboard と `bms-replay` はこれを使います。
+
+```mermaid
+flowchart TD
+  replay["リプレイと対象ルールセット"] --> readable{"対象が読める?"}
+  readable -->|いいえ| skipped["not-simulated と理由"]
+  readable -->|はい| failed{"プレイは失敗で終了?"}
+  failed -->|いいえ| full["simulated"]
+  failed -->|はい| cut["失敗した所まで判定"]
+  cut --> survives{"対象のゲージは残る?"}
+  survives -->|いいえ| full
+  survives -->|はい| truncated["truncated"]
+```
+
+- **not-simulated** と理由（`findReplayNotSimulatedReason`）: 参照元のないゲージが対象に定義されていない場合は
+  `gauge` です（beatoraja での `P-ATTACK`、LR2 での `EX-HARD` と `ASSIST-EASY`、コース以外の ???? での
+  `DEATH`）。似たゲージには読み替えません。CUSTOM JUDGE やゲージオートシフトを使ったリプレイは、beatoraja
+  以外での読み方がまだ決まっていないため `custom-judge` と `gauge-auto-shift` です。プレイしたルールセットは
+  常に自分のゲージで判定します。
+- **truncated**: サバイバルゲージが空になった所でプレイが終わり（`play.endOnFailure`）、対象のゲージならそこを
+  生き残る場合です。判定はその時点（`stoppedAtUs`、プレイしたルールセットのゲージが空になった時刻）までで、
+  入力を補ったり、その後のノートを見逃しにしたりしません。コースも、プレイしたルールセットで失敗した
+  ステージで止まり、対象のゲージならそこを生き残る場合に同じく truncated になります。truncated の結果は
+  順位が付きません。
+- **simulated**: それ以外です。同じ時点までに対象のゲージも空になる場合を含みます。
+
+`SimulateReplayOptions.onFailure` は、サバイバルゲージを最初に空にした判定の譜面上の時刻を受け取ります。
+[#933](https://github.com/nulltask/be-music/issues/933) で追跡しています。
+
 ### 再現度に関する注意
 
 - LR2 ルールセットは lr2oraja に従い、OpenLR2 の書き起こしと相互検証しています。両者が食い違う LN 頭の
@@ -475,9 +508,9 @@ beatoraja/0    1174   82.68%   AA   ...
 
 ## 譜面の実効表示オプション
 
-省略可能な `chart.chartOptions` は、元のプレイで受理した実効表示プログラムを記録します。version 1 の形は `{ version: 1, initial: { hiSpeed? }, cues: [{ timeUs, state: { hiSpeed? } }] }` です。各命令は完全な譜面側の状態であり、空の状態は強制速度を解除して保存されたユーザーの view へ戻します。時刻は非負の安全な整数マイクロ秒で、非減少順です。HI-SPEED は 0.25–100 の有限数とし、未知のプロファイルバージョンや状態フィールドを拒否します。version 2 は省略可能な状態フィールド `hidden`・`changeHS`・`crazySize`・`crazyWave` を加えます。値はそれぞれ [ADR 0032](./adr/0032-chart-authored-visual-families.ja.md) に挙げた ID です（例：`{ hidden: 'SUDDEN', changeHS: 'ACCEL' }`）。これらを持つ version 1 のプログラムは拒否するため、古い記録が後から実装した系列を有効にすることはありません。新しい記録は version 2 で書きます。
+省略可能な `chart.chartOptions` は、元のプレイで受理した実効表示プログラムを記録します。version 1 の形は `{ version: 1, initial: { hiSpeed? }, cues: [{ timeUs, state: { hiSpeed? } }] }` です。各命令は完全な譜面側の状態であり、空の状態は強制速度を解除して保存されたユーザーの view へ戻します。時刻は非負の安全な整数マイクロ秒で、非減少順です。HI-SPEED は 0.25–100 の有限数とし、未知のプロファイルバージョンや状態フィールドを拒否します。version 2 は省略可能な状態フィールド `hidden`・`changeHS`・`crazySize`・`crazyWave` を加えます。値はそれぞれ [ADR 0032](./adr/0032-chart-authored-visual-families.ja.md) に挙げた ID です（例：`{ hidden: 'SUDDEN', changeHS: 'ACCEL' }`）。これらを持つ version 1 のプログラムは拒否するため、古い記録が後から実装した系列を有効にすることはありません。version 3 は `hidden: 'M-SUDDEN'`、`crazyWave` の値 `YWAVE`・`YWAVE2`・`XYWAVE`・`XYWAVE2`・`3DWAVE`・`3DWAVE2`、フィールド `crazyColor`・`crazySpin`・`crazyClone`・`crazyLine`・`crazyJudge`・`crazyDark`・`crazyReverse` を加えます（[ADR 0036](./adr/0036-chart-authored-skin-level-options.ja.md)）。これらを持つ version 2 のプログラムも同じく拒否します。新しい記録は version 3 で書きます。M-SUDDEN の間にプレイヤーが動かした SUDDEN+ カバーの高さは、ほかのカバーの変更と同じく `play.view` に記録します。
 
-省略可能な `chart.chartPlayOptions` は、プレイで使った譜面指定のゲームプレイオプションを記録します。形は `{ version: 1, options: { random?, judge?, hellJudge?, addMine? } }` で、`random` は `MIRROR`・`RANDOM`・`RANDOM+`・`ALL`・`ALL+`、`judge` は `GOOD2BAD` か `GREAT2BAD` です。配置と地雷の結果はすでに `chart.notes` にあります。シミュレーションは記録した判定変更を適用し、ソースを再コンパイルしないため、このフィールドのないリプレイは元の判定を保ちます。未知のバージョン・フィールド・値は拒否します。[ADR 0033](./adr/0033-chart-authored-gameplay-options.ja.md)を参照してください。
+省略可能な `chart.chartPlayOptions` は、プレイで使った譜面指定のゲームプレイオプションを記録します。形は `{ version: 1, options: { random?, judge?, hellJudge?, addMine?, notes? } }` で、`random` は `MIRROR`・`RANDOM`・`RANDOM+`・`ALL`・`ALL+`、`judge` は `GOOD2BAD` か `GREAT2BAD`、`notes` は `DOUBLE`・`COPY`・`DBLCOPY` です。効いたものだけを持ちます。コースのステージは NOTES COPY を外すため、プログラムに `notes` はありません（DBLCOPY なら `DOUBLE`）。写した譜面の `chart.laneMode` はダブルプレイのモードで、再生は記録した `notes` でノーツを再び変換します（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)）。配置と地雷の結果はすでに `chart.notes` にあります。シミュレーションは記録した判定変更を適用し、ソースを再コンパイルしないため、このフィールドのないリプレイは元の判定を保ちます。未知のバージョン・フィールド・値は拒否します。[ADR 0033](./adr/0033-chart-authored-gameplay-options.ja.md)を参照してください。
 
 ホストは再生時に `PlayerOptions.chartOptionProgram` として渡します。browser はフィールドのない古い記録には空のプログラムを明示し、元の動作を維持します。既存の実効プロファイルへソース宣言を再解釈して追加しません。`play.options`・`play.view` とその変更には元のユーザー速度を保持し、強制表示は譜面プロファイルで再現します。譜面の値を永続的なユーザー設定へ書き込まず、解除時に正確なユーザー view を復元できます。シミュレーションは表示操作を無視し、スコア・入力 replay・fingerprint・記録可否は変えません。[ADR 0026](./adr/0026-chart-authored-display-options.ja.md)を参照してください。NONSTOP は合成した実効プログラムを記録します。切り出したステージの記録には所有する範囲だけを残し、ステージ offset を引きます。FIT を二重に適用せず、遊んだ先頭の状態を復元し、有限のステージ終了で解除します。切り詰めた未プレイの前方区間には、未観測の強制状態を作りません。
 

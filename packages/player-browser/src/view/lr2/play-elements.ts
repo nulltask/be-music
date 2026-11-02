@@ -315,8 +315,9 @@ export function drawLR2PlaySkin(ctx: LR2PlayElementsContext, width: number, heig
     if (!isLR2DestinationVisible(ctx, text.destination)) continue;
     drawText(ctx, text);
   }
-  // LR2's SILENT automatic judge timing draws no judgment or combo (OpenLR2 `LR2f.cpp` 2513).
-  if (ctx.options.judgeTimingAutoAdjust !== 'LR2-SILENT') {
+  // LR2's SILENT automatic judge timing draws no judgment or combo (OpenLR2 `LR2f.cpp` 2513); nor does a chart's
+  // HIDJUDGE (#931).
+  if (!hidesLR2Judge(ctx)) {
     drawJudgeAndCombo(ctx, '1P');
     // A 9 KEY (PMS) chart can keep lanes in the 2x channels but is single-side: only DP shows a 2P judge and combo.
     const usesPlayer2 =
@@ -328,12 +329,20 @@ export function drawLR2PlaySkin(ctx: LR2PlayElementsContext, width: number, heig
   ctx.text.endFrame(ctx.skinLayer);
 }
 
+/** LR2's SILENT automatic judge timing and a chart's HIDJUDGE (#931) draw no judgment or combo. */
+function hidesLR2Judge(ctx: Pick<LR2PlayElementsContext, 'options' | 'play'>): boolean {
+  return (
+    ctx.options.judgeTimingAutoAdjust === 'LR2-SILENT' || ctx.play.engineFrame?.chartOptions?.crazyJudge === 'HIDJUDGE'
+  );
+}
+
 /**
  * The late text pass, after the bombs: the judgement as text when the skin draws none for it, where LR2's
  * `#DST_NOWJUDGE_1P,...,73,230,...` parks the judge graphic (91 px above the judgement line).
  */
 export function drawLR2FallbackJudge(ctx: LR2PlayElementsContext, seconds: number): void {
   const play = ctx.play;
+  if (hidesLR2Judge(ctx)) return;
   if (!play.lastJudge || seconds > play.lastJudgeUntil || hasSkinnedJudge(ctx.skin, play.lastJudge)) return;
   const judge = ctx.textLayerPool.acquireText();
   const style = ctx.text.fallbackJudgeStyle();
