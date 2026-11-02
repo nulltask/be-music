@@ -3,6 +3,7 @@ import { findLastIndexAtOrBefore } from '@be-music/shared-utils/core';
 import type { ChartOptionTimeline } from './chart-options.ts';
 import { isChartPlayOptionDeclaration } from './chart-play-options.ts';
 import { parseChartVisualOption, type ChartVisualOptionFields } from './chart-option-visual.ts';
+import { resolveChartLegacyOptionAlias } from './chart-option-legacy.ts';
 
 export interface ChartOptionState extends ChartVisualOptionFields {
   /** Compulsory visual spacing multiplier, independent of audio tempo and user hi-speed limits. */
@@ -10,10 +11,11 @@ export interface ChartOptionState extends ChartVisualOptionFields {
 }
 /**
  * The effective-program profile this build compiles. Version 1 holds HI-SPEED only; version 2 adds HIDDEN, CHANGE-HS
- * and the CRAZY size / X-wave subfamilies (#843). A replay keeps the version it was recorded with, so a version-1
- * recording never activates a version-2 family.
+ * and the CRAZY size / X-wave subfamilies (#843); version 3 adds HIDDEN_M-SUDDEN and the other visual CRAZY options
+ * (STAR, SPIN, CLONE, LINEMOVE, the Y / XY / 3D waves, HIDJUDGE, DARK, REVERSE; #931). A replay keeps the version it
+ * was recorded with, so an older recording never activates a family implemented after it.
  */
-export const CHART_OPTION_PROGRAM_VERSION = 2;
+export const CHART_OPTION_PROGRAM_VERSION = 3;
 export interface ChartOptionStateCue {
   timeUs: number;
   /** Complete effective authored state at this instant. Empty restores user display settings. */
@@ -21,7 +23,7 @@ export interface ChartOptionStateCue {
 }
 /** Versioned effective operations, safe to retain in a replay without reinterpreting unsupported source IDs later. */
 export interface ChartOptionProgram {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   initial: ChartOptionState;
   cues: ChartOptionStateCue[];
 }
@@ -74,7 +76,11 @@ const LEGACY_HI_SPEED_VALUES = new Set([
 
 type StateChange = (state: ChartOptionState) => ChartOptionState;
 
-function compileDeclaration(declaration: string, timed: boolean): StateChange | ChartOptionDiagnostic['code'] {
+function compileDeclaration(source: string, timed: boolean): StateChange | ChartOptionDiagnostic['code'] {
+  // Legacy HID-* / CRA-* IDs are initial-only, like the legacy HSP values: A6 disregards old IDs.
+  const legacy = resolveChartLegacyOptionAlias(source);
+  if (legacy !== undefined && timed) return 'initial-only-alias';
+  const declaration = legacy ?? source;
   const hiSpeed = compileHiSpeed(declaration, timed);
   if (typeof hiSpeed === 'number') return (state) => ({ ...state, hiSpeed });
   if (hiSpeed !== 'unsupported-option') return hiSpeed;
@@ -113,14 +119,15 @@ function compileHiSpeed(declaration: string, timed: boolean): number | ChartOpti
 export function compileChartOptions(timeline: ChartOptionTimeline): CompiledChartOptions {
   const diagnostics: ChartOptionDiagnostic[] = [];
   let state: ChartOptionState = {};
-  for (const declaration of timeline.initial) {
+  for (const source of timeline.initial) {
+    const declaration = resolveChartLegacyOptionAlias(source) ?? source;
     // LONGMODE is resolved by note-rules before note extraction, not a display/replay-profile operation.
     if (parseHDXLongNoteMode(declaration) !== undefined) continue;
     // RANDOM and gameplay CRAZY are play options (`compileChartPlayOptions`), not display operations; `CRAZY_OFF` is both.
     if (isChartPlayOptionDeclaration(declaration) && parseChartVisualOption(declaration) === undefined) continue;
     const value = compileDeclaration(declaration, false);
     if (typeof value === 'function') state = value(state);
-    else diagnostics.push({ code: value, declaration });
+    else diagnostics.push({ code: value, declaration: source });
   }
   const initial = { ...state };
   const cues: ChartOptionStateCue[] = [];

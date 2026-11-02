@@ -1,0 +1,5 @@
+---
+'@be-music/chart-model': minor
+---
+
+Charts can now use nanasigroove's `774:HIDDEN_M-SUDDEN`, the remaining visual CRAZY options (`STAR`, `SPIN`, `CLONE`, `CLONE2`, `S-CLONE`, `LINEMOVE`, `LINEMOVE2`, `YWAVE`, `YWAVE2`, `XYWAVE`, `XYWAVE2`, `3DWAVE`, `3DWAVE2`, `HIDJUDGE`, `DARK`, `DARK2`, `REVERSE`) and the legacy `774:HID-*` / `774:CRA-*` IDs; before, they were diagnosed as `unsupported-option` without effect. `compileChartOptions` emits effective-program version 3 with the new `crazyColor`, `crazySpin`, `crazyClone`, `crazyLine`, `crazyJudge`, `crazyDark` and `crazyReverse` fields, and legacy IDs are accepted initially only (`initial-only-alias` on A6); `compileChartPlayOptions` takes the legacy judgment aliases. New exports implement the documented Be-Music formulas deterministically: `resolveChartCrazyYProgress`, `resolveChartCrazyWaveScale`, `resolveChartCrazyTint`, `resolveChartCrazyRotation`, `resolveChartCrazyClones`, `resolveChartLineLift`, `resolveChartPlayfieldVisual`, `hasChartPlayfieldVisual`, `chartVisualOptionFieldsOf` and `resolveChartLegacyOptionAlias`; `resolveChartNoteVisual` also returns `tint`, `rotation` and `clones`.
