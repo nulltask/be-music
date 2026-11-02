@@ -341,6 +341,14 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       const service = playerWebCoreAPI.createAudioService({ createContext: () => BENCH_SYSTEM_AUDIO_CONTEXT });
       service.setTheme({ sounds: { cursor: { bytes: BENCH_BYTES } } });
       await service.playCue('cursor', { owner: BENCH_AUDIO_OWNER });
+      // The chart sample cache a quick retry reuses: claimed by a play, released on the way back to select.
+      service.chartSamples.claim({
+        source: BENCH_AUDIO_OWNER,
+        chartPath: 'a.bms',
+        pathPrefix: undefined,
+        sampleRate: 48_000,
+      });
+      service.chartSamples.release();
       service.stopOwned(BENCH_AUDIO_OWNER);
       service.dispose();
     },
