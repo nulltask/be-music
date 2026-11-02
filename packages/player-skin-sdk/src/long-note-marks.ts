@@ -132,7 +132,7 @@ export function resolveHellChargeLook(state: BeMusicLongNoteState | undefined, n
 export interface HellChargeZigzagOptions {
   /** How far the zigzag swings to each side of the centre, in pixels. Default: about a fifth of the lane, 2..6 px. */
   amplitude?: number;
-  /** Length of one full swing (left, right, left) along the lane, in pixels. Default 42. */
+  /** Length of one full swing (left, right, left) along the lane, in pixels. Default 28. */
   wavelength?: number;
   /** Play time, for the flow. */
   nowMs?: number;
@@ -159,7 +159,7 @@ export function hellChargeZigzag(
   bottom: number,
   options: HellChargeZigzagOptions = {},
 ): number[] {
-  const wavelength = options.wavelength ?? 42;
+  const wavelength = options.wavelength ?? 28;
   const amplitude = options.amplitude ?? Math.max(2, Math.min(6, w * 0.18));
   const centre = x + w / 2;
   if (!(wavelength > 0) || !(bottom > top)) return [];
