@@ -5,11 +5,12 @@
  *
  * - **LN**: only the head is judged, so the tail cap is drawn faint — where to let go, not a note to hit.
  * - **CN**: the release is judged too, so the tail keeps a full cap.
- * - **HCN**: the gauge drains while it is not held, so rungs cross the body ({@link hellChargeRungs}). How it stands
- *   ({@link resolveHellChargeLook}) pairs a colour with a glow strength and the rungs' motion, so none of it rests on
- *   colour alone: a HELL colour with still rungs before it is reached, a bright orange glow with rungs flowing into
- *   the judgement line while it fills the gauge, a dim red with rungs flowing back up while it drains (let go), and
- *   the glow again once pressed back.
+ * - **HCN**: the gauge drains while it is not held, so the centre line every long note carries zigzags
+ *   ({@link hellChargeZigzag}) where the other kinds keep it straight. How it stands ({@link resolveHellChargeLook})
+ *   pairs a colour with a glow strength and the zigzag's motion, so none of it rests on colour alone: a HELL colour
+ *   with a still zigzag before it is reached, a bright orange glow with the zigzag flowing into the judgement line
+ *   while it fills the gauge, a dim red with the zigzag flowing back up while it drains (let go), and the glow again
+ *   once pressed back.
  * - **BSS**: a charge note on a scratch lane, whose tail is judged on a spin the other way, so a chevron pointing back
  *   up the lane sits on the tail cap ({@link backSpinChevron}). A hell-charge BSS carries both marks.
  */
@@ -19,7 +20,7 @@ import type { BeMusicLaneKind, BeMusicLongNote, BeMusicLongNoteMode, BeMusicLong
 export interface BeMusicLongNoteMarks {
   /** The tail is judged (CN / HCN / BSS): draw the full tail cap. An LN's tail is drawn faint. */
   judgedTail: boolean;
-  /** Hell charge: rungs across the body. */
+  /** Hell charge: the centre line zigzags. */
   hellCharge: boolean;
   /** Back-spin scratch: a chevron on the tail cap. */
   backSpin: boolean;
@@ -58,19 +59,26 @@ export interface BeMusicHellChargeLook {
    */
   color: number;
   /**
+   * The zigzag centre line's colour as `0xRRGGBB` ({@link hellChargeZigzag}): white-hot while charging, a light tint of
+   * {@link color} otherwise, so it stands out of the body.
+   */
+  lineColor: number;
+  /**
    * How strongly the note glows, 0..1: steady and low on standby, bright and pulsing while charging, dim and throbbing
    * while draining, none once spent. A skin scales its halo and its body's opacity by it.
    */
   glow: number;
   /**
-   * The rungs' motion ({@link HellChargeRungOptions.flow}): `1` flowing down into the judgement line while charging,
-   * `-1` flowing back up while draining, `0` still otherwise.
+   * The zigzag's motion ({@link HellChargeZigzagOptions.flow}): `1` flowing down into the judgement line while
+   * charging, `-1` flowing back up while draining, `0` still otherwise.
    */
   flow: -1 | 0 | 1;
 }
 
 /** The HELL colour: a hell charge note not yet reached, or over. */
 const HELL_CHARGE_STANDBY_COLOR = 0xa65cff;
+/** The HELL colour's light tint, for the zigzag centre line. */
+const HELL_CHARGE_STANDBY_LINE_COLOR = 0xd9bcff;
 /** A hell charge note filling the gauge. */
 const HELL_CHARGE_CHARGING_COLOR = 0xff9a1f;
 /** A hell charge note emptying the gauge. */
@@ -78,7 +86,7 @@ const HELL_CHARGE_DRAINING_COLOR = 0xff2e3e;
 
 /**
  * The look of a hell charge note in `state` at play time `nowMs` (see {@link BeMusicHellChargeLook}). Each phase
- * differs in colour, glow and rung motion together, so the phases read apart without colour.
+ * differs in colour, glow and zigzag motion together, so the phases read apart without colour.
  */
 export function resolveHellChargeLook(state: BeMusicLongNoteState | undefined, nowMs = 0): BeMusicHellChargeLook {
   const seconds = nowMs / 1000;
@@ -88,6 +96,7 @@ export function resolveHellChargeLook(state: BeMusicLongNoteState | undefined, n
       return {
         phase: 'charging',
         color: HELL_CHARGE_CHARGING_COLOR,
+        lineColor: 0xfff4dc,
         glow: 0.8 + 0.2 * (0.5 + 0.5 * Math.sin(seconds * Math.PI * 4)),
         flow: 1,
       };
@@ -96,27 +105,40 @@ export function resolveHellChargeLook(state: BeMusicLongNoteState | undefined, n
       return {
         phase: 'draining',
         color: HELL_CHARGE_DRAINING_COLOR,
+        lineColor: 0xff9aa2,
         glow: 0.15 + 0.15 * (0.5 + 0.5 * Math.sin(seconds * Math.PI * 6)),
         flow: -1,
       };
     case 'done':
     case 'dropped':
-      return { phase: 'spent', color: HELL_CHARGE_STANDBY_COLOR, glow: 0, flow: 0 };
+      return {
+        phase: 'spent',
+        color: HELL_CHARGE_STANDBY_COLOR,
+        lineColor: HELL_CHARGE_STANDBY_LINE_COLOR,
+        glow: 0,
+        flow: 0,
+      };
     default:
-      return { phase: 'standby', color: HELL_CHARGE_STANDBY_COLOR, glow: 0.3, flow: 0 };
+      return {
+        phase: 'standby',
+        color: HELL_CHARGE_STANDBY_COLOR,
+        lineColor: HELL_CHARGE_STANDBY_LINE_COLOR,
+        glow: 0.3,
+        flow: 0,
+      };
   }
 }
 
-export interface HellChargeRungOptions {
-  /** Distance between rungs in pixels. Default 14. */
-  spacing?: number;
-  /** Play time, for the flow while {@link flowing} or {@link flow}. */
+export interface HellChargeZigzagOptions {
+  /** How far the zigzag swings to each side of the centre, in pixels. Default: about a fifth of the lane, 2..6 px. */
+  amplitude?: number;
+  /** Length of one full swing (left, right, left) along the lane, in pixels. Default 14. */
+  wavelength?: number;
+  /** Play time, for the flow. */
   nowMs?: number;
-  /** The note is held (charging): the rungs flow down toward the judgement line. Default false. */
-  flowing?: boolean;
   /**
-   * Which way the rungs flow, over {@link flowing}: `1` down toward the judgement line, `-1` back up the lane, `0`
-   * still. {@link BeMusicHellChargeLook.flow} gives it.
+   * Which way the zigzag flows: `1` down toward the judgement line, `-1` back up the lane, `0` still (the default).
+   * {@link BeMusicHellChargeLook.flow} gives it.
    */
   flow?: -1 | 0 | 1;
   /** Flow speed in pixels per second. Default 60. */
@@ -124,21 +146,40 @@ export interface HellChargeRungOptions {
 }
 
 /**
- * The y of each rung across a hell charge note's body between `top` (the tail, upper) and `bottom` (the head, lower),
- * `spacing` apart and inset half a spacing from both ends, top to bottom. While they flow
- * ({@link HellChargeRungOptions.flow}, or {@link HellChargeRungOptions.flowing} for down) they move by `speed` px/s and
- * wrap, so a held note reads as charging and a draining one as leaking; otherwise they stand still.
+ * A hell charge note's centre line: a zigzag down the middle of the lane run `x`..`x + w`, from `top` (the tail, upper)
+ * to `bottom` (the head, lower), as a polyline `[x0, y0, x1, y1, …]` to stroke, top to bottom. It starts at `top` and ends at `bottom`, with a corner
+ * every half {@link HellChargeZigzagOptions.wavelength} between. While it flows it moves by `speed` px/s and wraps, so
+ * a held note reads as charging and a draining one as leaking; otherwise it stands still. Empty when the span is
+ * empty.
  */
-export function hellChargeRungs(top: number, bottom: number, options: HellChargeRungOptions = {}): number[] {
-  const spacing = options.spacing ?? 14;
-  if (!(spacing > 0) || !(bottom - top > spacing)) return [];
-  const speed = options.speed ?? 60;
-  const flow = options.flow ?? (options.flowing === true ? 1 : 0);
-  const travel = flow * ((((options.nowMs ?? 0) / 1000) * speed) % spacing);
-  const phase = ((travel % spacing) + spacing) % spacing;
-  const rungs: number[] = [];
-  for (let y = top + spacing / 2 + phase; y < bottom - spacing / 2; y += spacing) rungs.push(y);
-  return rungs;
+export function hellChargeZigzag(
+  x: number,
+  w: number,
+  top: number,
+  bottom: number,
+  options: HellChargeZigzagOptions = {},
+): number[] {
+  const wavelength = options.wavelength ?? 14;
+  const amplitude = options.amplitude ?? Math.max(2, Math.min(6, w * 0.18));
+  const centre = x + w / 2;
+  if (!(wavelength > 0) || !(bottom > top)) return [];
+  const half = wavelength / 2;
+  const travel = (options.flow ?? 0) * ((((options.nowMs ?? 0) / 1000) * (options.speed ?? 60)) % wavelength);
+  const phase = ((travel % wavelength) + wavelength) % wavelength;
+  // A triangle wave: at the left edge where (y - top - phase) is a whole number of wavelengths, at the right half a
+  // wavelength later.
+  const at = (y: number): number => {
+    const u = (((y - top - phase) % wavelength) + wavelength) % wavelength;
+    return u < half
+      ? centre - amplitude + (4 * amplitude * u) / wavelength
+      : centre + amplitude - (4 * amplitude * (u - half)) / wavelength;
+  };
+  const points = [at(top), top];
+  for (let corner = top + phase - wavelength; corner < bottom; corner += half) {
+    if (corner > top) points.push(at(corner), corner);
+  }
+  points.push(at(bottom), bottom);
+  return points;
 }
 
 /**
