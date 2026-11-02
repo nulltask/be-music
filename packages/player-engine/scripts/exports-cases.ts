@@ -895,6 +895,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.courseStageKeepsRecord(benchRecordKind);
     },
   });
+  define('player-engine.records.chartProgramCopiesChart', {
+    run: () => {
+      recordsAPI.chartProgramCopiesChart({ version: 1, options: { notes: 'DBLCOPY' } }, '7');
+    },
+  });
   define('player-engine.records.isCourseRunAtAnotherTempo', {
     run: () => {
       recordsAPI.isCourseRunAtAnotherTempo(benchCourseLog);
@@ -1029,6 +1034,19 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         { version: 1, options: { random: 'ALL+', addMine: true } },
         { doublePlay: true, hasScratch: true },
       );
+    },
+  });
+  define('player-engine.resolveEffectiveChartPlayOptions', {
+    run() {
+      playerAPI.resolveEffectiveChartPlayOptions(
+        { version: 1, options: { random: 'MIRROR', notes: 'DBLCOPY' } },
+        { playVariant: '7', course: true },
+      );
+    },
+  });
+  define('player-engine.resolveChartNotesPlayVariant', {
+    run() {
+      playerAPI.resolveChartNotesPlayVariant('7', 'COPY');
     },
   });
   define('player-engine.ruleset.clampCustomJudgeRate', {

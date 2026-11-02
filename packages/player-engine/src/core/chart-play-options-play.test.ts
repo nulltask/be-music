@@ -50,10 +50,48 @@ test('a recorded program wins over the source, so an older replay without one ke
   expect(result.replay?.chart.chartPlayOptions).toBeUndefined();
 });
 
-test('arrangement-only programs are recorded and change no judge window', async () => {
-  const result = await observePlay({ driver: 'manual', chart: chart('774:RANDOM_MIRROR'), script });
+test('arrangement-only programs are recorded, arrange the engine-prepared chart and change no judge window', async () => {
+  // The engine prepares the chart itself (as the terminal plays): the 5 KEY note on key 1 is mirrored onto key 5.
+  const result = await observePlay({ driver: 'manual', chart: chart('774:RANDOM_MIRROR'), script: tap(2055, '15') });
   expect(result.summary?.good).toBe(1);
+  expect(result.replay?.chart.notes.map((note) => note.channel)).toEqual(['15']);
   expect(result.replay?.chart.chartPlayOptions).toEqual({ version: 1, options: { random: 'MIRROR' } });
+});
+
+test('the engine-prepared chart takes the chart ADDMINE in place of the mine option (#932)', async () => {
+  const result = await observePlay({
+    driver: 'auto',
+    chart: parseBMS(['#BPM 120', '#OPTION 774:CRAZY_ADDMINE', '#00111:01010101', '#00212:01010101', ''].join('\n')),
+    options: { mineModifier: 'REMOVE' },
+  });
+  expect(result.outcome).toBe('completed');
+  expect(result.replay?.play.mineModifier).toBe('ADD_RANDOM');
+  expect(result.replay?.chart.notes.some((note) => note.type === 'mine')).toBe(true);
+});
+
+test('NOTES COPY plays the chart as double play, and the replay re-simulates it (#932)', async () => {
+  const copied = parseBMS(['#BPM 120', '#OPTION 774:NOTES_COPY', '#00111:01', '#00116:01', ''].join('\n'));
+  const result = await observePlay({ driver: 'manual', chart: copied, script: tap(2000, ['11', '16', '25', '26']) });
+  expect(result.outcome).toBe('completed');
+  const saved = parseReplay(serializeReplay(result.replay!));
+  expect(saved.chart.laneMode).toBe('5 KEY DP');
+  expect(saved.chart.notes.map((note) => note.channel).sort()).toEqual(['11', '16', '25', '26']);
+  expect(saved.chart.chartPlayOptions).toEqual({ version: 1, options: { notes: 'COPY' } });
+  expect(result.summary?.perfect).toBe(4);
+  expect(simulateReplay(saved, { ruleset: 'lr2' }).judge).toMatchObject({ pgreat: 4 });
+  expect(classifyReplayAssists(saved)).toEqual([]);
+});
+
+test('a course keeps its key mode: NOTES COPY is diagnosed and not recorded there (#932)', async () => {
+  const copied = parseBMS(['#BPM 120', '#OPTION 774:NOTES_COPY', '#00111:01', ''].join('\n'));
+  const result = await observePlay({
+    driver: 'auto',
+    chart: copied,
+    options: { course: { kind: 'grade' } },
+  });
+  expect(result.replay?.chart.laneMode).not.toMatch(/DP/);
+  expect(result.replay?.chart.chartPlayOptions).toBeUndefined();
+  expect(result.log.some((entry) => entry.includes('774:NOTES_COPY'))).toBe(true);
 });
 
 test('a course judge constraint and a chart modifier compose', async () => {
