@@ -60,6 +60,13 @@ flowchart LR
 - **BATTLE は 2 か所で衝突します。** LR2 の 2 人用 BATTLE（`TWO-PLAYER`）のほかに、beatoraja と AC の 1 人用 BATTLE も対応譜面（5 / 7 / 24KEY と 7KEY）とプレイが残すもの（LIGHT_ASSIST とスコア非保存）が違います。そのため 1 人用の複製は `beatoraja:BATTLE` と `____:BATTLE` として参照元を付けます。`TWO-PLAYER` は参照元を付けず、どの ruleset でも選べます。2 人プレイのない beatoraja のルールでは、LR2 の作り方で譜面を作り、各プレイヤーを beatoraja のルールで判定します。
 - **AC の RANDOM と S-RANDOM にも参照元を付けます**（`____:RANDOM`・`____:S-RANDOM`）。当面は LR2 のアルゴリズムで動きますが、あとで AC のアルゴリズムを入れても保存済みの値の意味は変わりません。AC に CONVERGE はありません。
 - **設定は読み込むときに移行します。** 設定ドキュメントはまだバージョン 0 で、番号を上げずに形を変えてよいため、バージョンは追加しません。参照元のない値はドキュメントに保存した判定ルール（ないときは LR2）のものとし、次の保存で参照元付きの値を書きます。
-- **スキンのボタン。** beatoraja のレーンと `optiondp` のボタンは beatoraja 自身の値を切り替えます。LR2 の RANDOM ボタンはこれまでどおりすべてのレーンオプションを切り替えます。どちらも、ほかの参照元の値は参照元を除いた名前で表示します。
+- **スキンのボタン。** beatoraja のレーンと `optiondp` のボタンは beatoraja 自身の値を切り替えます。LR2 の RANDOM ボタンは #933 から LR2 自身のレーンの値、OFF・MIRROR・`lr2:RANDOM`・`lr2:S-RANDOM`・`SCATTER`・`lr2:CONVERGE`（OpenLR2 の `random` 0〜5）を切り替えます。それまではすべてのレーンオプションを切り替えていました。どちらも、ほかの参照元の値は参照元を除いた名前で表示し、LR2 のボタンはその名前のセルから次へ進みます（LR2 にない値は OFF になります）。
 
 一覧は `@be-music/player-engine/ruleset` の `QUALIFIED_OPTION_SOURCES` です。
+
+## 追補：シードと再判定の結果（#933）
+
+- **レーンのランダムはすべてシードで抽選します。** LR2 と AC のアルゴリズムも、beatoraja と同じく Java の `Random` の移植でその側のシードから抽選し、どの判定ルールでも同じです。シード（抽選したときは 0〜16777215、入力したときは任意の Java の long 値）は `play.options.randomSeed1P` / `randomSeed2P` に記録し、どのルールでも入力と再利用ができます。シードで LR2 と AC の配置を再現できるのは be-music の中だけで、LR2 では再現しません。beatoraja の地雷の ADD RANDOM、PMS の RANDOM PLAYABLE、ロングノートの追加は参照元と同様にシードを使いません。リプレイと Leaderboard はこれまでどおり記録した配置を適用するため、シードはプレイの再現のためのもので、判定には使いません。
+- **結果。** `@be-music/player-engine/replay` の `rejudgeReplay` と `rejudgeCourseReplay` は `simulated`・`truncated`・理由（`gauge`・`custom-judge`・`gauge-auto-shift`）付きの `not-simulated` のどれかを返します。`simulateReplay` はそのままのシミュレーターで、ルールセットにないゲージでは引き続き例外を投げます。AC のルールでの参照元のない `DEATH` は、EX-HARD として読まず、コース以外では `not-simulated` です。コースのステージはコースのゲージの対応を使い、LR2 以外での LR2 のアタックゲージと LR2 での EX-HARD・ASSIST EASY を除くすべての選択を定義します。
+- **truncated** は、先にプレイしたルールセットで再判定して決めます。そのサバイバルゲージが空になった時刻（`SimulateReplayOptions.onFailure`）でほかのルールセットも止め、入力も後のノートの期限もそこまでです。Leaderboard は truncated の結果を `outcome = 'truncated'` として保存し、自己ベスト・ランキング・一覧には含めません。`not-simulated` のルールセットは行を保存せず、送信の応答の `notSimulated` で返します。
+- **リビジョンはまだ上げません。** ルールセットは開発用のリビジョン `/0` のままで、その規則は番号を上げずに変わります（[リプレイのバージョニング](../replay.ja.md#バージョニング)）。`/1` はそれ以前のリリースがすでに書いています。そのためこれらの読み方は `/0` のまま出し、この ADR が求める番号の更新は最初の安定版のリビジョンから適用します。Leaderboard には保存済みの結果を再計算する処理がまだありません。
