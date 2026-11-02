@@ -34,6 +34,7 @@ export interface WebUIRuntimeCallbacks {
    * - `clear-poor-bga` — POOR BGA window ended (next note hit, or the timeout elapsed).
    * - `long-note-start` / `long-note-end` — a long note's hold began (with the mode it plays in) / finished
    *   (`complete` or `dropped`).
+   * - `hell-charge` — a hell charge note passing the judgement line started gaining or draining the gauge, or passed.
    *
    * The host should switch on `command.kind` and apply the matching visual effect.
    */

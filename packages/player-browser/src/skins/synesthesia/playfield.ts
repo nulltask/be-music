@@ -27,6 +27,7 @@ import {
   backSpinChevron,
   hellChargeRungs,
   longNoteCentreLineAlpha,
+  resolveHellChargeLook,
   resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
 import {
@@ -208,15 +209,35 @@ export function renderSynesthesiaLongNote({
   const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
-  // A beam of light between head and tail: a translucent core with a bright centre filament.
-  graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
+  // A hell charge note shows how it stands (`resolveHellChargeLook`): its colour, its glow and its rungs' motion change
+  // together — HELL violet with still rungs before it is reached, a bright orange glow with rungs flowing into the line
+  // while it charges, a dim red with rungs flowing back up while it drains.
+  const look = marks.hellCharge ? resolveHellChargeLook(state, nowMs) : undefined;
+  if (look) {
+    if (look.glow > 0)
+      graphics.rect(bodyX - 3, bodyTop, bodyW + 6, bodyH).fill({ color: look.color, alpha: 0.3 * look.glow });
+    graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: look.color, alpha: 0.16 + 0.3 * look.glow });
+    // Rails down both edges keep the note's HELL identity readable on a narrow lane.
+    graphics.rect(bodyX, bodyTop, 1, bodyH).fill({ color: look.color, alpha: 0.5 + 0.5 * look.glow });
+    graphics.rect(bodyX + bodyW - 1, bodyTop, 1, bodyH).fill({ color: look.color, alpha: 0.5 + 0.5 * look.glow });
+  } else {
+    // A beam of light between head and tail: a translucent core with a bright centre filament.
+    graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
+  }
   // Let go early, the filament fades out with the hold.
   const line = longNoteCentreLineAlpha(releasedElapsedMs);
   if (line > 0) graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 * line });
-  if (marks.hellCharge) {
-    // A hell charge note: rungs of light across the beam, flowing into the line while it charges (held).
-    for (const y of hellChargeRungs(bodyTop, bodyTop + bodyH, { nowMs, flowing: state === 'held' })) {
-      graphics.rect(bodyX + 2, y - 1, bodyW - 4, 2).fill({ color: 0xffffff, alpha: 0.45 });
+  if (look) {
+    // Rungs of light across the beam: white-hot while it charges, in its colour otherwise.
+    const rungColor = look.phase === 'charging' ? 0xfff4dc : look.color;
+    for (const y of hellChargeRungs(bodyTop, bodyTop + bodyH, { nowMs, flow: look.flow })) {
+      graphics.rect(bodyX + 2, y - 1, bodyW - 4, 2).fill({ color: rungColor, alpha: 0.4 + 0.5 * look.glow });
+    }
+    // The head on the judgement line glows with the note: brightest while charging, gone once it is over.
+    if (look.glow > 0) {
+      graphics
+        .rect(bodyX - 4, bottom - NOTE_HEIGHT - 4, bodyW + 8, NOTE_HEIGHT + 8)
+        .fill({ color: look.color, alpha: 0.45 * look.glow });
     }
   }
   drawNote(graphics, bodyX, bottom, bodyW, light);

@@ -12,6 +12,7 @@ import {
   backSpinChevron,
   hellChargeRungs,
   longNoteCentreLineAlpha,
+  resolveHellChargeLook,
   resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
 import {
@@ -153,29 +154,45 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
 
 /**
  * Tap notes as flat bars. Long notes: a translucent body with a white centre line between the head and tail bars; an
- * LN's tail (not judged) is translucent, a CN / HCN tail (judged on release) solid. An HCN's body carries rungs that
- * flow while it is held, a back-spin scratch's tail a chevron pointing back up the lane. A long note missed at the head
- * or let go early draws at LR2's half alpha.
+ * LN's tail (not judged) is translucent, a CN / HCN tail (judged on release) solid. An HCN's body carries rungs and
+ * shows how it stands (HELL violet before it is reached, an orange glow while held, a dim red while let go), a back-spin
+ * scratch's tail a chevron pointing back up the lane. A long note missed at the head or let go early draws at LR2's half
+ * alpha.
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
     const alpha = (note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1) * (note.alpha ?? 1);
     const bodyTop = note.top - NOTE_HEIGHT;
     const bodyHeight = Math.max(1, note.bottom - note.top);
-    ctx.fillStyle = NOTE_FILL[note.kind];
-    ctx.globalAlpha = 0.25 * alpha;
-    ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
+    const marks = resolveLongNoteMarks(note);
+    // A hell charge note shows how it stands: colour, glow and rung motion change together (`resolveHellChargeLook`).
+    const look = marks.hellCharge ? resolveHellChargeLook(note.state, frame.nowMs) : undefined;
+    if (look) {
+      ctx.fillStyle = css(look.color);
+      if (look.glow > 0) {
+        ctx.globalAlpha = 0.3 * look.glow * alpha;
+        ctx.fillRect(note.x - 3, bodyTop, note.w + 6, bodyHeight);
+        ctx.fillRect(note.x - 3, note.bottom - NOTE_HEIGHT - 3, note.w + 6, NOTE_HEIGHT + 6);
+      }
+      ctx.globalAlpha = (0.2 + 0.3 * look.glow) * alpha;
+      ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
+      ctx.globalAlpha = (0.5 + 0.5 * look.glow) * alpha;
+      ctx.fillRect(note.x, bodyTop, 1, bodyHeight);
+      ctx.fillRect(note.x + note.w - 1, bodyTop, 1, bodyHeight);
+    } else {
+      ctx.fillStyle = NOTE_FILL[note.kind];
+      ctx.globalAlpha = 0.25 * alpha;
+      ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
+    }
     // Let go early, the centre line fades out with the hold.
     ctx.fillStyle = '#ffffff';
     ctx.globalAlpha = 0.6 * alpha * longNoteCentreLineAlpha(note.releasedElapsedMs);
     ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
-    const marks = resolveLongNoteMarks(note);
-    if (marks.hellCharge) {
-      ctx.globalAlpha = 0.5 * alpha;
-      const rungs = hellChargeRungs(bodyTop, bodyTop + bodyHeight, {
-        nowMs: frame.nowMs,
-        flowing: note.state === 'held',
-      });
+    if (look) {
+      // Rungs flow into the judgement line while it charges, back up while it drains, and stand still otherwise.
+      ctx.fillStyle = look.phase === 'charging' ? '#ffffff' : css(look.color);
+      ctx.globalAlpha = (0.45 + 0.45 * look.glow) * alpha;
+      const rungs = hellChargeRungs(bodyTop, bodyTop + bodyHeight, { nowMs: frame.nowMs, flow: look.flow });
       for (const y of rungs) ctx.fillRect(note.x + 2, y - 1, note.w - 4, 2);
     }
     ctx.globalAlpha = alpha;

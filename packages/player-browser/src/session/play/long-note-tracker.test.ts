@@ -75,4 +75,56 @@ describe('LongNoteTracker', () => {
     expect(tracker.isHolding('11')).toBe(false);
     expect(tracker.stateOf('11', 4, false)).toBe('pending');
   });
+
+  it('follows a hell charge note through held, draining and held again, to its outcome at the tail', () => {
+    const tracker = new LongNoteTracker();
+    tracker.start('11', 4, 'hcn', 1000);
+    tracker.hellCharge('11', 4, 'gaining');
+    expect(tracker.stateOf('11', 4, true)).toBe('held');
+    // Let go early: the tail is judged a miss, but the note drains rather than dropping for good.
+    tracker.hellCharge('11', 4, 'draining');
+    tracker.end('11', 'dropped', 1300);
+    expect(tracker.stateOf('11', 4, true)).toBe('draining');
+    expect(tracker.holdStateOf('11', 4, true)).toBe('dropped');
+    expect(tracker.isHolding('11')).toBe(false);
+    // Pressed back: it gains again.
+    tracker.hellCharge('11', 4, 'gaining');
+    expect(tracker.stateOf('11', 4, true)).toBe('held');
+    // Past the tail it reads as its outcome.
+    tracker.hellCharge('11', 4, 'passed');
+    expect(tracker.stateOf('11', 4, true)).toBe('dropped');
+    expect(tracker.releasedAtMs('11', 4)).toBe(1300);
+  });
+
+  it('reads a hell charge note missed at the head as draining until pressed, and a well-released one as held', () => {
+    const tracker = new LongNoteTracker();
+    tracker.hellCharge('11', 4, 'draining');
+    expect(tracker.stateOf('11', 4, true)).toBe('draining');
+    tracker.hellCharge('11', 4, 'gaining');
+    expect(tracker.stateOf('11', 4, true)).toBe('held');
+    tracker.hellCharge('11', 4, 'passed');
+    expect(tracker.stateOf('11', 4, true)).toBe('dropped');
+
+    tracker.start('11', 8, 'hcn', 2000);
+    tracker.hellCharge('11', 8, 'gaining');
+    // Released at GOOD or better just before the tail: it keeps gaining until the tail passes, then is done.
+    tracker.end('11', 'complete', 2900);
+    expect(tracker.stateOf('11', 8, true)).toBe('held');
+    tracker.hellCharge('11', 8, 'passed');
+    expect(tracker.stateOf('11', 8, true)).toBe('done');
+  });
+
+  it('keeps a hell charge note held past its tail held until it ends, and forgets it on clear', () => {
+    const tracker = new LongNoteTracker();
+    tracker.start('11', 4, 'hcn', 1000);
+    tracker.hellCharge('11', 4, 'gaining');
+    tracker.hellCharge('11', 4, 'passed');
+    expect(tracker.stateOf('11', 4, true)).toBe('held');
+    tracker.hellCharge('12', 4, 'draining');
+    tracker.clear();
+    expect(tracker.stateOf('12', 4, false)).toBe('pending');
+    // A pass for a lane never seen is ignored.
+    tracker.hellCharge('13', 4, 'passed');
+    expect(tracker.stateOf('13', 4, false)).toBe('pending');
+  });
 });

@@ -27,7 +27,8 @@ export function renderLongNote(
 ): void {
   const channel = note.channel;
   const state = ctx.play.longNotes.stateOf(channel, note.beat, note.judged);
-  const alpha = resolveLongNoteAlpha(state);
+  // LR2 has no draining hell charge note: a note let go stays at half alpha whatever its gauge does after.
+  const alpha = resolveLongNoteAlpha(ctx.play.longNotes.holdStateOf(channel, note.beat, note.judged));
   const releasedAtMs = state === 'dropped' ? ctx.play.longNotes.releasedAtMs(channel, note.beat) : undefined;
   const releasedElapsedMs = releasedAtMs === undefined ? undefined : Math.max(0, ctx.play.playClock() - releasedAtMs);
   // `yStart` / `yEnd` are the chart-time intersections with the judgement line. With the bottom-edge anchor

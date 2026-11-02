@@ -348,6 +348,13 @@ export type PlayViewEvent =
       readonly mode: 'ln' | 'cn' | 'hcn';
     }
   | { readonly kind: 'long-note-end'; readonly channel: string; readonly outcome: 'complete' | 'dropped' }
+  /** A hell charge note (its head at `beat`) started gaining or draining the gauge, or passed the judgement line. */
+  | {
+      readonly kind: 'hell-charge';
+      readonly channel: string;
+      readonly beat: number;
+      readonly state: 'gaining' | 'draining' | 'passed';
+    }
   /** The POOR image shows (a miss at chart time `seconds`) or clears. */
   | { readonly kind: 'poor-bga'; readonly shown: boolean; readonly seconds?: number }
   /** The player's keys changed a view setting (the hi-speed, a lane cover): the frame's state has the new value. */
