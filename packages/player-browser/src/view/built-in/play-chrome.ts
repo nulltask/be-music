@@ -137,13 +137,16 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const usesPlayer2 =
     ctx.play.chartPlayVariant !== '9' && ctx.play.laneChannels.some((channel) => channel.startsWith('2'));
   const judgeSides: SkinlessGameplayJudgeState[] = [];
+  // A chart's HIDJUDGE (#931) hides the judgment display as LR2's SILENT does.
+  const hidesJudge =
+    ctx.options.judgeTimingAutoAdjust === 'LR2-SILENT' || ctx.play.engineFrame?.chartOptions?.crazyJudge === 'HIDJUDGE';
   for (const side of ['1P', '2P'] as const) {
     if (side === '2P' && !usesPlayer2) {
       continue;
     }
     const state = ctx.play.judgeSideState[side];
     // LR2's SILENT automatic judge timing shows no judgment or combo.
-    if (state.judge && seconds <= state.until && ctx.options.judgeTimingAutoAdjust !== 'LR2-SILENT') {
+    if (state.judge && seconds <= state.until && !hidesJudge) {
       judgeSides.push({ side, judge: state.judge, combo: state.combo });
     }
   }
@@ -186,7 +189,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     laneCount: ctx.play.laneChannels.length,
     laneChannels: ctx.play.laneChannels,
     playVariant: ctx.play.chartPlayVariant,
-    lastJudge: seconds <= ctx.play.lastJudgeUntil ? ctx.play.lastJudge : undefined,
+    lastJudge: seconds <= ctx.play.lastJudgeUntil && !hidesJudge ? ctx.play.lastJudge : undefined,
     judgeSides,
     rank: total <= 0 ? undefined : resolve____RankLabel(ctx.play.score.exScore, total),
     ...(ctx.play.secondPlayer !== undefined ? { secondPlayer: secondPlayerRuntime(ctx.play.secondPlayer) } : {}),

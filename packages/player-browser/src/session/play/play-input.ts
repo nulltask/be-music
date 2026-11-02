@@ -15,7 +15,7 @@ import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
 import type { PlayEngineContext } from './play-engine.ts';
-import { adjustHiSpeed, changePlayView } from './play-view-settings.ts';
+import { adjustHiSpeed, changePlayView, handleChartManualSuddenKey } from './play-view-settings.ts';
 
 const log = logger('gameplay');
 
@@ -220,7 +220,16 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     (event.altKey || event.ctrlKey || event.metaKey || event.isComposing)
   )
     return;
-  // A held cover key keeps moving its cover, so the cover keys come before the repeat filter.
+  // A held cover key keeps moving its cover, so the cover keys come before the repeat filter. A chart's M-SUDDEN takes F3
+  // / F4 on every play screen (#931), unless a lane is bound to the key.
+  if (
+    !resolveLaneInputTokens(ctx.preparedChart?.laneBindings).has(event.code.toLowerCase()) &&
+    handleChartManualSuddenKey(ctx, event)
+  ) {
+    event.preventDefault();
+    ctx.theme.moment({ kind: 'view-setting', setting: 'sudden', at: ctx.playClock() });
+    return;
+  }
   if (ctx.options.coverKeys === true && handleCoverKey(ctx, event)) return;
   // Fn + arrows can report an arrow `code` with a navigation `key` on compact keyboards.
   // A disabled cover shortcut must not fall through to hi-speed or seek.

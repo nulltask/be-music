@@ -535,15 +535,38 @@ export class BeatorajaNoteLayer {
       // rules hold a passed note there), or under beatoraja's rules the stage bottom while the note's time is ahead.
       if (y < rect.y - TAP_LEAD_IN_PX || y > drawBottom) continue;
       if (scrolling && !isDrawnAtTime(drawWindow, note.seconds)) continue;
-      const tapRect =
-        visual === undefined || (visual.scale === 1 && visual.xOffset === 0)
+      const scaledRect = (xOffset: number): BeatorajaNoteRect =>
+        visual === undefined || (visual.scale === 1 && xOffset === 0)
           ? rect
-          : {
-              ...rect,
-              x: rect.x + (rect.w - rect.w * visual.scale) / 2 + visual.xOffset,
-              w: rect.w * visual.scale,
-            };
-      const r = this.paintTapNote(usedG, usedS, tapRect, lane, note, y, alpha, visual?.scale);
+          : { ...rect, x: rect.x + (rect.w - rect.w * visual.scale) / 2 + xOffset, w: rect.w * visual.scale };
+      // CLONE afterimages first, so the note paints over them; STAR and SPIN apply to both (#931).
+      for (const clone of note.mine ? [] : (visual?.clones ?? [])) {
+        if (clone.y < rect.y - TAP_LEAD_IN_PX || clone.y > judgementY) continue;
+        const c = this.paintTapNote(
+          usedG,
+          usedS,
+          scaledRect(clone.xOffset),
+          lane,
+          note,
+          clone.y,
+          alpha * clone.alpha,
+          visual?.scale,
+          visual,
+        );
+        usedG = c.g;
+        usedS = c.s;
+      }
+      const r = this.paintTapNote(
+        usedG,
+        usedS,
+        scaledRect(visual?.xOffset ?? 0),
+        lane,
+        note,
+        y,
+        alpha,
+        visual?.scale,
+        visual,
+      );
       usedG = r.g;
       usedS = r.s;
     }
@@ -715,6 +738,8 @@ export class BeatorajaNoteLayer {
     alpha: number,
     /** CRAZY size: the cell height follows the rect's width scale. */
     scale = 1,
+    /** STAR's colour and SPIN's rotation (#931); a mine keeps its own colour. */
+    style?: { readonly tint?: number; readonly rotation: number },
   ): { g: number; s: number } {
     const imageId = note.mine ? this.noteSection.mine[lane] : this.noteSection.note[lane];
     const cropped = this.resolveLaneSprite(imageId);
@@ -741,8 +766,16 @@ export class BeatorajaNoteLayer {
       sprite.y = y - drawHExpanded;
       sprite.width = drawW;
       sprite.height = drawHExpanded;
-      sprite.tint = note.mine ? FALLBACK_COLOR_BY_KEY.red! : 0xffffff;
+      sprite.tint = note.mine ? FALLBACK_COLOR_BY_KEY.red! : (style?.tint ?? 0xffffff);
       sprite.alpha = alpha;
+      // SPIN turns a note about its centre; `acquireSprite` stands a reused sprite straight again.
+      const rotation = note.mine ? 0 : (style?.rotation ?? 0);
+      if (rotation !== 0) {
+        sprite.anchor.set(0.5);
+        sprite.x += drawW / 2;
+        sprite.y += drawHExpanded / 2;
+        sprite.rotation = rotation;
+      }
       return { g: usedG, s: usedS + 1 };
     }
     // Fallback Graphics — the skin didn't ship a per-lane sprite for this slot or the cell-crop
@@ -751,6 +784,7 @@ export class BeatorajaNoteLayer {
     const g = this.acquireGraphics(usedG);
     g.clear();
     g.alpha = alpha;
+    g.tint = note.mine ? 0xffffff : (style?.tint ?? 0xffffff);
     g.rect(rect.x, y - 6, rect.w, 12).fill({ color });
     return { g: usedG + 1, s: usedS };
   }
@@ -979,6 +1013,11 @@ export class BeatorajaNoteLayer {
       this.noteLayer.addChild(s);
     } else {
       s.visible = true;
+      // A tap note SPIN turned last frame may come back as a long-note cap: stand it straight (#931).
+      if (s.rotation !== 0) {
+        s.rotation = 0;
+        s.anchor.set(0);
+      }
     }
     return s;
   }

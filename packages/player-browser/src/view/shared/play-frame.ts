@@ -7,6 +7,7 @@
  */
 
 import { resolveStageOrientation } from '@be-music/player-skin-sdk';
+import { resolveChartPlayfieldVisual } from '@be-music/chart-model';
 import type { Application, Container, Graphics, Text } from 'pixi.js';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
@@ -24,6 +25,7 @@ import { renderBombs } from './playfield/bombs.ts';
 import type { PlayfieldContext } from './playfield/context.ts';
 import { renderLanes } from './playfield/lanes.ts';
 import { renderNotes } from './playfield/notes.ts';
+import { applyChartReverse } from './playfield/chart-note-visual.ts';
 import { renderShutter } from './playfield/shutter.ts';
 import { renderText } from './playfield/text.ts';
 import type { PlayfieldStage } from '../types.ts';
@@ -213,9 +215,22 @@ export function render(
   // (progress ratio, time readouts, judge-until comparisons) stay on the true clock.
   const reversalSeconds = ctx.play.timingResolver?.reversal?.seconds;
   const bgaCueSeconds = reversalSeconds === undefined ? seconds : Math.min(seconds, reversalSeconds);
-  ctx.perf.time('renderBGA', () => renderBGA(ctx, seconds, bgaCueSeconds));
+  // Chart-authored playfield options (#931): DARK hides the BGA, REVERSE mirrors the note stream in the lane area.
+  const engineFrame = ctx.play.engineFrame;
+  const chartPlayfield = resolveChartPlayfieldVisual(engineFrame?.chartOptions, engineFrame?.currentSeconds ?? seconds);
+  ctx.bgaLayer.visible = !chartPlayfield.hideBGA;
+  if (!chartPlayfield.hideBGA) ctx.perf.time('renderBGA', () => renderBGA(ctx, seconds, bgaCueSeconds));
   ctx.perf.time('renderLanes', () => renderLanes(ctx, designWidth, designHeight));
   ctx.perf.time('renderNotes', () => renderNotes(ctx, seconds, designHeight));
+  let laneTop = Number.POSITIVE_INFINITY;
+  let laneBottom = Number.NEGATIVE_INFINITY;
+  if (chartPlayfield.reverse) {
+    for (const lane of ctx.play.laneX.values()) {
+      laneTop = Math.min(laneTop, lane.top);
+      laneBottom = Math.max(laneBottom, lane.bottom);
+    }
+  }
+  applyChartReverse(ctx.noteLayer, chartPlayfield.reverse, laneTop, laneBottom);
   ctx.perf.time('renderShutter', () => renderShutter(ctx));
   ctx.perf.time('renderBombs', () => renderBombs(ctx));
   ctx.perf.time('renderText', () => renderText(ctx, designWidth, designHeight, seconds));

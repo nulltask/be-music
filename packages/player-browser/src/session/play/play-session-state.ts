@@ -351,7 +351,9 @@ export class PlaySessionState extends PlayPresentation {
    * The lane covers as drawn ({@link resolveLaneCover} of the play state's covers), handed to skins as
    * `runtime.laneCovers`; rebuilt only when the play state's covers change.
    */
-  drawnLaneCovers: { covers: readonly LaneCoverState[]; drawn: LaneCover[] } | undefined;
+  drawnLaneCovers:
+    | { covers: readonly LaneCoverState[]; manualSudden: boolean; lineLift: number; drawn: LaneCover[] }
+    | undefined;
   /** Folds the live view into the recorded replay's view changes ({@link updateReplayView}); unset in a replay. */
   replayViewCoalescer: ReplayViewCoalescer | undefined;
   /** A replay's recorded view along the playhead ({@link updateReplayView}). */

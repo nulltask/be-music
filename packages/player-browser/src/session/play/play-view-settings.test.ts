@@ -15,6 +15,7 @@ import type { PlayTempoRange } from './tempo-range.ts';
 import {
   resolveLaneCovers,
   changePlayView,
+  handleChartManualSuddenKey,
   resolveVisibleMs,
   startReplayView,
   updateReplayView,
@@ -231,4 +232,37 @@ test('LR2 CONSTANT visible-time readouts and replay units use the fixed 150-BPM 
   // At reversal the display BPM stays frozen while the converted playhead crosses an earlier BPM.
   expect(resolveVisibleMs(ctx, cover, 240, 1.25)).toBe(1200);
   expect(startReplayView(ctx)).toMatchObject({ hsFix: 'CONSTANT', visibleMs: 1200 });
+});
+
+describe('chart-authored M-SUDDEN and LINEMOVE (#931)', () => {
+  const withChart = (chartOptions: object, currentSeconds = 2) => {
+    const view = createView();
+    // The player's SUDDEN+ starts switched off at a quarter of the lane.
+    (view as { playState: unknown }).playState = reducePlayState(view.playState, {
+      type: 'cover-toggle',
+      part: 'sudden',
+    });
+    (view as { engineFrame: unknown }).engineFrame = { chartOptions, currentSeconds };
+    return view;
+  };
+
+  test('M-SUDDEN draws the player cover at its height and LINEMOVE raises the line, the play state untouched', () => {
+    const view = withChart({ hidden: 'M-SUDDEN', crazyLine: 'LINEMOVE' });
+    expect(view.playState.view.covers[0]!.suddenOn).toBe(false);
+    const [drawn] = resolveLaneCovers(view);
+    expect(drawn!.lift).toBeCloseTo(0.15);
+    expect(drawn!.sudden).toBeCloseTo(0.25 * (1 - 0.15));
+    expect(view.playState.view.covers[0]!.lift).toBe(0.1);
+  });
+
+  test('F3 lowers and F4 raises the cover only while M-SUDDEN is in force, keeping it switched off', () => {
+    const view = withChart({ hidden: 'M-SUDDEN' });
+    expect(handleChartManualSuddenKey(view, { code: 'F3', shiftKey: false })).toBe(true);
+    expect(view.playState.view.covers[0]).toMatchObject({ sudden: 0.26, suddenOn: false });
+    expect(handleChartManualSuddenKey(view, { code: 'F4', shiftKey: true })).toBe(true);
+    expect(view.playState.view.covers[0]!.sudden).toBeCloseTo(0.21);
+    expect(handleChartManualSuddenKey(view, { code: 'F5', shiftKey: false })).toBe(false);
+    const plain = withChart({});
+    expect(handleChartManualSuddenKey(plain, { code: 'F3', shiftKey: false })).toBe(false);
+  });
 });
