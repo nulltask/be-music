@@ -669,7 +669,12 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         : ctx.options.fixedArrangement
           ? (ctx.options.fixedArrangement.play.battleMode ?? 'OFF')
           : ctx.options.battleMode,
-      practice: ctx.options.replay ? undefined : ctx.options.practiceRange,
+      // A PRACTICE play loops its range in place until ESC (#949): the engine goes back to the start where the play would
+      // end, and the scene takes it as a seek, keeping its samples, BGA and skin.
+      practice:
+        ctx.options.replay || ctx.options.practiceRange === undefined
+          ? undefined
+          : { ...ctx.options.practiceRange, loop: true },
       dBattleScratch: ctx.options.replay
         ? (ctx.options.replay.play.dBattleScratch ?? false)
         : ctx.options.fixedArrangement
