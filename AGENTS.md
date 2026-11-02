@@ -15,6 +15,7 @@
 - Use `chart` for a playable score and `track` for the musical work. Keep external `song` names unchanged.
 - Use `replay` / `Replay` for recorded playback data and verb-led names such as `parseReplay` for operations. Reserve `log` for diagnostic and execution logs.
 - Write `bmson` in prose, `replay` for a recorded replay, and `avatar` for a user's profile image. Keep externally required identifiers and format keys unchanged. Rename persisted schema fields through explicit migrations.
+- Write the product name `Be-Music` in prose and user-facing text (service names such as `Be-Music Play` and `Be-Music Leaderboard`, and `Be-Music Skin` with a capital S). Keep lowercase `be-music` only for identifiers and machine-read values: package names, domains and URLs, file and format names, custom element and CSS names, OAuth scopes, storage keys and other persisted ids. See [the glossary](docs/glossary.md).
 
 # Commit Rules
 
