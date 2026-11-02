@@ -47,7 +47,8 @@ import {
   type LoadingOverlayElements,
 } from '../loading-overlay.ts';
 import type { PlayerWebElements } from '../types.ts';
-import { fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
+import { expandZipToFiles, fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
+import { isZipArchiveName, sortDroppedArchives } from './drop-archives.ts';
 
 const dropLog = logger('drop');
 
@@ -228,6 +229,28 @@ export class LibraryService {
     if (files.length === 0) {
       return;
     }
+    // Dropped ZIP archives: one that holds a chart goes to the collection whole, as the Open files picker sends it;
+    // any other (a skin, replays, course files) is expanded and joins the drop, as a `?skin=` archive does.
+    const archives = files.filter((file) => isZipArchiveName(file.name));
+    if (archives.length > 0) {
+      files = files.filter((file) => !isZipArchiveName(file.name));
+      const sorted = await sortDroppedArchives(
+        await materializeDroppedFiles(archives, {
+          onError: (file, error) => dropLog.warn(`skipped (open failed): ${file.webkitRelativePath}`, error),
+        }),
+        expandZipToFiles,
+      );
+      files.push(...sorted.expandedFiles);
+      if (sorted.chartArchives.length > 0) {
+        await this.loadCharts(sorted.chartArchives);
+        if (files.length === 0) {
+          if (this.courseGroups.length > 0) await this.refreshCourseFolders();
+          await this.showSelect();
+          if (this.collection.charts.length > 0) this.setStatus(describeChartCollection(this.collection));
+          return;
+        }
+      }
+    }
     // Replay files ride their own path: they are replay inputs, not chart / theme assets. They are peeled off
     // BEFORE the song/theme split so a stray `.bmplay.json` (or a course's `.bmcourse.json`) never classifies as a
     // theme candidate — and handled AFTER the split's loaders ran, so dropping a song folder together with its replay
@@ -340,24 +363,11 @@ export class LibraryService {
   }
 
   /**
-   * Loads what the Debug Menu's "Open files" picker returned: chart archives (`.zip`) go to the song collection whole,
-   * the way `?music=` archives do (the collection expands them itself), and anything else — replays — takes the
-   * drop pipeline, which starts the replay once the archives are listed.
+   * Loads what the Debug Menu's "Open files" picker returned, as a drop of the same files: a chart archive (`.zip`) goes
+   * to the song collection whole, another archive is expanded, and replays start once the archives are listed.
    */
   public async loadPickedFiles(files: File[]): Promise<void> {
-    const isZip = (file: File) => file.name.toLowerCase().endsWith('.zip');
-    const archives = files.filter(isZip);
-    const others = files.filter((file) => !isZip(file));
-    if (archives.length > 0) {
-      await this.loadCharts(archives);
-      await this.showSelect();
-      if (this.collection.charts.length > 0) {
-        this.setStatus(describeChartCollection(this.collection));
-      }
-    }
-    if (others.length > 0) {
-      await this.processIncomingFiles(others);
-    }
+    await this.processIncomingFiles(files);
   }
 
   /** Reads dropped `header.json` files that are difficulty-table headers into `courseGroups`; returns the ones read. */
