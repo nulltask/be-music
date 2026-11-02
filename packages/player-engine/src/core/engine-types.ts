@@ -107,10 +107,11 @@ export interface PlayerPlaySettings {
   /** beatoraja CUSTOM JUDGE rates; absent while the option is off. Recorded into the replay. */
   customJudge?: import('../ruleset/custom-judge.ts').BeatorajaCustomJudge;
   /**
-   * beatoraja PRACTICE: plays only the range, with its gauge, TOTAL and judgerank, from 1000 ms before the range. The
-   * source applies no chart modifier in PRACTICE; a practice play records no replay.
+   * PRACTICE (beatoraja's mode, under every ruleset): plays only the range, with its gauge, TOTAL and judgerank read under
+   * the judge ruleset, from 1000 ms before the range. The source applies no chart modifier in PRACTICE; a practice play
+   * records no replay.
    */
-  practice?: import('./practice.ts').BeatorajaPractice;
+  practice?: import('./practice.ts').PlayPractice;
   /**
    * The automatic judge-timing adjustment of a manual play (default `'OFF'`): beatoraja's calibration or LR2's ON /
    * SILENT. Display-only: it moves {@link judgeTimingMs}, never the input or audio clocks. AUTO and replays never adjust.
@@ -193,8 +194,12 @@ export interface PlayerPlaySettings {
    * dead (`failedMidPlay`). Recorded into the replay (`play.endOnFailure`) so re-simulations stop at the same point.
    */
   endOnFailure?: boolean;
-  /** Source-defined beatoraja policy; when present, takes precedence over endOnFailure. */
+  /**
+   * Gauge auto-shift (beatoraja's policies, along the judge ruleset's own gauge ladder); when present, takes precedence
+   * over endOnFailure. Applies to both players of a two-player play.
+   */
   gaugeAutoShift?: GaugeAutoShift;
+  /** The lowest gauge BEST CLEAR / SELECT TO UNDER shift to. */
   bottomShiftableGauge?: import('../ruleset/gauge-type.ts').GaugeShiftBottom;
   /**
    * This play is one stage of a course: the stage runs on the ruleset's course gauge under the course's judge

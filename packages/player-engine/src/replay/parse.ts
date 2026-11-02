@@ -1,5 +1,7 @@
 import type { RandomDraw } from '@be-music/chart-model';
 import type { ReplayRecorderInfo, ReplayRulesetResult } from './format.ts';
+import { RULESET_IDS } from '../ruleset/definitions.ts';
+import { resolveGaugeShiftLadder } from '../ruleset/gauge-shift.ts';
 
 /** Structural problem in a serialized replay (or course replay), with the field path in the message. */
 export class ReplayParseError extends Error {
@@ -140,20 +142,36 @@ export function parseRandomDraws(value: unknown, at: string): RandomDraw[] {
   });
 }
 
-/** Source gauge snapshots; course carries require the complete class family, including dead slots. */
+/** Every ruleset's auto-shift ladders: a single play's, and each course kind's. */
+const COURSE_GAUGE_LADDERS = RULESET_IDS.flatMap((ruleset) =>
+  (['grade', 'expert'] as const).map((kind) => resolveGaugeShiftLadder(ruleset, kind)),
+);
+const SHIFT_GAUGE_IDS = new Set([
+  ...RULESET_IDS.flatMap((ruleset) => resolveGaugeShiftLadder(ruleset)),
+  ...COURSE_GAUGE_LADDERS.flat(),
+]);
+
+/**
+ * Auto-shift gauge snapshots, keyed by gauge id of any ruleset's ladder (`resolveGaugeShiftLadder`); a course carry
+ * holds one course ladder complete, dead gauges included.
+ */
 export function parseGaugeValues(raw: unknown, path: string, courseOnly = false): Record<string, number> {
   const record = expectRecord(raw, path);
-  const courseKeys = ['CLASS', 'EXCLASS', 'EXHARDCLASS'];
-  const keys = courseOnly ? courseKeys : ['ASSIST-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD', 'HAZARD', ...courseKeys];
+  const keys: ReadonlySet<string> = courseOnly ? new Set(COURSE_GAUGE_LADDERS.flat()) : SHIFT_GAUGE_IDS;
   const values: Record<string, number> = {};
   for (const [key, rawValue] of Object.entries(record)) {
-    if (!keys.includes(key)) throw new ReplayParseError(`${path}.${key}: unknown source gauge`);
+    if (!keys.has(key)) throw new ReplayParseError(`${path}.${key}: unknown source gauge`);
     const value = expectFiniteNumber(rawValue, `${path}.${key}`);
     if (value < 0 || value > (courseOnly ? 100 : 120))
       throw new ReplayParseError(`${path}.${key}: gauge outside source range`);
     values[key] = value;
   }
-  if (courseOnly && courseKeys.some((key) => values[key] === undefined))
-    throw new ReplayParseError(`${path}: expected all three class gauges`);
+  if (
+    courseOnly &&
+    !COURSE_GAUGE_LADDERS.some(
+      (ladder) => ladder.length === Object.keys(values).length && ladder.every((key) => values[key] !== undefined),
+    )
+  )
+    throw new ReplayParseError(`${path}: expected every gauge of one course ladder`);
   return values;
 }

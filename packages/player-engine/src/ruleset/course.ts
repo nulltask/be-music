@@ -31,7 +31,7 @@ export interface RulesetCourseOptions {
    * the gauge's range.
    */
   initialGauge?: number;
-  /** Independent class-gauge values carried by source gauge auto-shift. */
+  /** Every course gauge of the ladder, carried independently by gauge auto-shift (keyed by gauge id). */
   initialGauges?: Readonly<Record<string, number>>;
 }
 
