@@ -1,5 +1,14 @@
 # @be-music/app-accounts
 
+## 0.1.4
+
+### Patch Changes
+
+- c69a154: The sign-in page, account page and their status messages follow the page language, in Japanese and English.
+- 9300c75: The Accounts header shows a Beta badge beside Be-Music Accounts, and the footer says Public Beta and that data may be deleted without notice, in the language of the page.
+- 6e6aeeb: A login opened from a Google or Discord button stayed on the Accounts page, so the requested provider now starts the social sign-in, and the Google, Discord and passkey buttons show the same provider marks as the player.
+- Updated dependencies: `@be-music/service-auth-client@0.2.0`, `@be-music/service-web-theme@0.3.1`
+
 ## 0.1.3
 
 ### Patch Changes

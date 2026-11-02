@@ -1,5 +1,56 @@
 # @be-music/player-browser
 
+## 0.14.0
+
+### Minor Changes
+
+- 6e9df4a: A play takes `anyKey` (ANY KEY, #751) and hands it to the engine; a replay plays with its own recorded switch. The key beam lights the lane each press was routed to.
+- 603bc4c: The built-in skins lay the landscape play screen out as a cabinet:
+  
+  - The keys, gauge, score and hi-speed sit under the lanes, with a score graph against the pacemaker and the best record beside them, and the stage, players, BGA, judgement panel, BPM and tempo on the right.
+  - A double-play chart is centred, with the chart, BGA and judgement panel on its left and the graph on its right.
+  - `PlaySceneOptions` takes a `playerName`, and the built-in skins receive the best record, course stage, player name, lane option and tempo.
+- 7969b53: Let the player flag a course they made for IR, as LR2's button 253 does: `CourseMaker.releaseCourse` sets the course's `release` (one-way), and `CourseMaker.isReadOnly` tells a flagged course, whose connections and constraints `stepConnection` and `setCourseConstraints` then refuse so its ranking key stays fixed (renaming and deleting still work, as in LR2). The select session runs the new `ir` course-maker action on the player's own course under the cursor and plays the option-change cue, and a flagged RANDOM MIX is kept by the next draw.
+- fcfc355: `SelectRecords` takes `danRanks`, which a be-music skin receives as `frame.danRanks`, and the built-in Plain skin shows the player's dan ranks in its select header.
+- c5011d3: A play can show a replay ghost: `PlaySceneSettings.ghost` takes a `GhostSource` (exported from `@be-music/player-browser/host`, with an optional `label` the pacemaker is named after), and `PlaySceneSettings.ghostMode` (`GhostPresentationMode`) picks how it shows:
+  
+  - `'side-playfield'` (the default): the built-in play view replays it as a second playfield on the 2P side of a 5 / 7 KEY single-play chart, laid out like a double-play chart, with its own notes, key beams, bombs, judgment plate and score.
+  - `'pacemaker'`: the frame's `scoreTargets` carry the ghost's EX score once it had judged as many notes as the play has (`targetEXScore`, `targetPaceEXScore`, `targetLabel`), which the built-in score graph, the LR2 target numbers and bar graphs (151 / 153, 14 / 15) and the beatoraja target numbers (121-123) read, so it runs on every family and any chart.
+  - `'lane-overlay'`: the pacemaker plus the ghost's recorded key presses and judgments over the play's own lanes on the built-in view, drawn as outlines in a colour of their own.
+  
+  The ghost only draws: it plays no sound, takes no input, and leaves the play's judging, records and replay alone. It is left out of replays, course stages and NONSTOP runs.
+
+### Patch Changes
+
+- 6e6aeeb: ← / → seek five seconds only while AUTO play is on; a replay or a practice play no longer seeks with the arrows.
+- ebe2fc2: EXBMP / SWBGA colour-keyed video and the plane tint given to Canvas skins read every frame back with `getImageData`, about 2.6 ms of main-thread time per 640×480 frame and 3.2 ms at 1280×720. They now run through one shared WebGL2 shader and copy the result on the GPU (about 0.015 ms per frame), falling back to the CPU where WebGL2 is unavailable or its context is lost. The keying rules and the tinted colours are unchanged.
+- 93450ac: A video BGA no longer sits in memory while it plays: it plays, and transcodes through ffmpeg.wasm, straight from the dropped file instead of a copy of its bytes. A legacy BGA the browser cannot play (MPEG-1, WMV, AVI) was held three times over during its transcode and once for the rest of the play, so an 85 MB MPEG-1 BGA cut about 90 MB from the page's JavaScript memory.
+- 8cbf7df: A video BGA whose first play() was interrupted stayed paused on the black canvas, so the monitor went dark instead of showing the movie or SOUND ONLY. Later frames now call play() again until the video is actually playing.
+- 9604a26: A chart's gameplay options now apply in the browser, and the replay records what was played:
+  
+  - `774:RANDOM_*` and `774:CRAZY_ADDMINE` replace the player's lane and mine options, including the cross-side `ALL` / `ALL+` shuffle on double-play charts.
+  - `774:NOTES_*`: a COPY chart is laid out, drawn and judged as 10 / 14 KEY (DP FLIP and the player's battle conversion leave it as authored), the chart's RANDOM maps onto the converted chart, a replay rebuilds the recorded conversion, and a course stage's dropped COPY is reported as a chart option diagnostic.
+  - The gauge display follows a chart's `GAMELEVEL` / `EXTRA` options, matching the gauge the engine runs.
+- 7188106: The play screens draw chart-authored display options from the engine frame's effective chart options:
+  
+  - Notes fade, move and resize under HIDDEN, CHANGE-HS and the CRAZY sizes and waves (X / Y / XY / 3D), take STAR colours, SPIN rotation and CLONE afterimages.
+  - REVERSE mirrors the note stream and HIDJUDGE hides the judgment display. DARK hides the BGA, and DARK2 the bombs as well.
+  - LINEMOVE raises the judgement line through LIFT on views that draw it, and M-SUDDEN shows the player's SUDDEN+ cover, which F3 and F4 move.
+  - LR2 and beatoraja skins keep their own judgement line under REVERSE, and LR2 skins, which have no LIFT, ignore LINEMOVE.
+- c0cf68e: A play with no decide screen decoded every sample before its intro began, so the wait was the decode plus the intro. It now opens its audio graph, starts the intro and decodes alongside it, holding the chart until the samples are in, so the wait is the longer of the two: a 1,285-sample chart went from about 4.8 s to 3.4 s between picking it and its first note. Samples also decode one per core (4 to 16) instead of eight at a time.
+- 9dfa8d2: A play decoded every declared `#WAV` sample, including ones no note or BGM ever plays, and each decoded sample costs its whole PCM. It now decodes only the samples some event plays, and a file behind several slots once. A short cut that declares the full track's 1,041 samples but plays 578 of them took about 210 MB less memory during play and started sooner.
+- bfc5187: Holding a hi-speed arrow repeats the adjustment, Fn navigation keys no longer trigger arrow shortcuts, and HIDDEN+ toggles only once per press.
+- f6d805d: A beatoraja play skin still drew its judgment and combo display during an LR2 SILENT play; it now draws none, as the built-in and LR2 play screens do, so SILENT looks the same on every skin family.
+- 9af8d65: The built-in skins' typefaces are reworked: Synesthesia draws its labels and figures in Orbitron (with M PLUS 1p for Japanese), each figure in a tabular cell so numbers line up and keep their place, and Plain and the player's own text (the LR2 fallback, overlays and the loading caption) use the system faces, so they load no web fonts.
+- 8659f5f: Play options work under every judge ruleset (ADR 0019):
+  
+  - A source-qualified RANDOM, S-RANDOM or CONVERGE runs its source's algorithm, and a bare one keeps running the ruleset's own. ADD LN / CN / HCN / ALL and two-player play are prepared instead of failing.
+  - Every lane option draws from the side's seed instead of `Math.random`, so the recorded `randomSeed1P` / `randomSeed2P` reproduce the arrangement; a chart's own ALL / ALL+ shuffle draws from the 1P seed.
+  - PRACTICE starts under LR2 and AC rules too: the host passes the practice range and the rules read under the judge ruleset.
+  - LR2 skins' RANDOM buttons step only through LR2's own lane options (OFF, MIRROR, RANDOM, S-RANDOM, SCATTER, CONVERGE).
+  - The chart-mismatch dialog names a qualified value's source (`CONVERGE (beatoraja)`), and the Plain and Synesthesia cabinets show a lane option without its source.
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-engine@0.13.0`, `@be-music/player-scene-model@0.5.0`, `@be-music/player-skin-sdk@0.7.0`, `@be-music/player-ui@0.6.0`, `@be-music/skin-beatoraja@0.6.0`, `@be-music/skin-lr2@0.6.0`
+
 ## 0.13.2
 
 ### Patch Changes

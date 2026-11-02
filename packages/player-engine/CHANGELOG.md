@@ -1,5 +1,44 @@
 # @be-music/player-engine
 
+## 0.13.0
+
+### Minor Changes
+
+- 08acc02: Add ANY KEY (That-Which-Must-Not-Be-Named PC's assist, #751) as `PlayerOptions.anyKey`: each press takes the nearest unjudged note in reach on any lane, the scratch included, a chord takes as many presses as it has notes, and a long note stays held until the key that took its head comes up. The replay records `play.anyKey` and keeps each key's own lane in `inputs`, and replay playback and `simulateReplay` route the presses again by the same rule, so they agree. `classifyReplayAssists` classifies it `any-key` from the `____` source as `no-save`, so a play with it keeps no record and is stored unranked.
+- cf0df8c: Assisted plays no longer count as ordinary records. `@be-music/player-engine/records` adds one deterministic resolver: `classifyReplayAssists` classifies each recorded option by its own source (LR2, beatoraja or That-Which-Must-Not-Be-Named) as `light`, `assist` or `no-save`, and `resolveRecordPolicy` / `resolveReplayRecordPolicy` give each judge ruleset's consequences. LR2 caps the lamp at EASY and keeps separate lamps for D-BATTLE, SP TO DP and EXTRA MODE, beatoraja awards LIGHT ASSIST EASY or ASSIST EASY, `____` awards ASSIST EASY, and all three keep only the lamp and play count. `applyRecordPolicyLamp`, `resolveAssistClass` and `resolveCourseRunAssistClass` are exported too. `mergeBestRecord` takes an optional policy, `courseRunKeepsRecord` refuses a run with an assisted stage, `checkReplayEligibility` returns the play's `assistClass` and marks a `no-save` play unranked, and `checkCourseReplayEligibility` marks an assisted run unranked as `assist`.
+  
+  LIGHT ASSIST EASY is a clear lamp of its own, between ASSIST EASY and EASY, and beatoraja's ASSIST EASY gauge now clears on it, as beatoraja does. Stored lamp ranks are append-only: ranks 0 to 9 keep their lamps and LIGHT ASSIST EASY is 10. Compare lamps with the new `clearLampOrder`, `compareClearLamps` and `compareClearLampRanks`, because `clearLampRank` is no longer an order.
+- 9604a26: A chart's gameplay options now take effect, and the play records them in `chart.chartPlayOptions` (`PlayerOptions.chartPlayOptionProgram` replays a recorded program):
+  
+  - `GOOD2BAD`, `GREAT2BAD` and `HELLJUDGE` narrow the judge windows in live play and in replay simulation.
+  - The new `applyChartPlayOptions` puts a chart's RANDOM and ADDMINE in place of the player's lane and mine options for a host; when no host prepares the chart (the terminal), the engine applies them itself. A chart-forced arrangement is not counted as the player's lane assist.
+  - NOTES: DOUBLE adds a partner on each key note's mirror lane, COPY plays a 5 / 7 KEY chart as 10 / 14 KEY with the 2P side its mirror image (in place of the player's battle conversion), and DBLCOPY does both. `preparePlaybackChart` takes the conversion as `chartNotes`; a course stage leaves COPY out to keep its key mode, and `chartProgramCopiesChart` with `RecordPlayKind.chartCopyLeftOut` keeps such a stage out of the chart's record. `resolveEffectiveChartPlayOptions` narrows a chart's program to what takes effect, and `resolveChartNotesPlayVariant` gives the variant it plays as.
+  - `GAMELEVEL` / `EXTRA` select the gauge of a live play in place of the player's pick (both players' in a two-player play), except in a course stage, PRACTICE and a replay. The new `resolveChartGaugeType` in `@be-music/player-engine/ruleset` maps each pair onto the ruleset's own gauges, and the replay records the gauge played.
+  - NONSTOP diagnoses these options per stage instead of applying them.
+- 7188106: Replays record chart-authored HIDDEN (including M-SUDDEN), CHANGE-HS and the visual CRAZY options in `chart.chartOptions` version 3, and engine frames publish them in `chartOptions`. Replay parsing accepts versions 1 to 3 and rejects a field or value of a later version than the recording's own, so an older recording never activates them. NONSTOP stage programs carry them too. They change no judgments, score or record eligibility.
+- c0d4044: Add the player's dan rank to `@be-music/player-engine/records`, so a host can keep the highest dan cleared per key mode:
+  
+  - `DAN_RANKS`, `DanRank`, `isDanRank`, `danRankOrder` and `higherDanRank` define be-music's dan ladder, from 十級 through 初段 … 十段, 中伝, 皆伝 and the 発狂 dans up to Overjoy.
+  - `resolveCourseDanRank` reads the dan a course certifies from its name, and `formatDanRank` names a rank the same way.
+  - `resolveCourseRunDanRank` grants that dan only for a cleared GRADE course, and `resolveDanCourseKeyMode` picks the key mode it counts for.
+- ee42038: PRACTICE and gauge auto-shift work under every judge ruleset instead of throwing outside beatoraja:
+  
+  - PRACTICE reads its settings under the judge ruleset: `PracticeRules.gauge` is one of the ruleset's own gauges (`resolvePracticeGaugeTypes`), LR2 reads JUDGERANK on its `#RANK` table and uses TOTAL as is, and AC sets only the gauge. `BeatorajaPractice` / `BeatorajaPracticeRules` are renamed `PlayPractice` / `PracticeRules`, and `BEATORAJA_PRACTICE_GAUGE_TYPES` moves beside `LR2_PRACTICE_GAUGE_TYPES`, `PRACTICE_GAUGE_TYPES`, `isPracticeGaugeType`, `resolveDefaultPracticeGauge` and `practiceReadsJudgeRankAndTotal`.
+  - Gauge auto-shift shifts along each ruleset's own gauge ladder (`resolveGaugeShiftLadder`): LR2 EASY, GROOVE, HARD, DEATH and its course gauges, AC ASSISTED EASY to EX-HARD and the class gauges in a course. SURVIVAL TO GROOVE falls back to the ruleset's default recovery gauge from a survival gauge only, and both players of a two-player play shift.
+  - `resolveGaugeEndOnFailure` drops its ruleset parameter, and `GAUGE_AUTO_SHIFTS` lists the policies.
+  - The replay parser accepts every ruleset's ladder gauges in `gauge.values` and a course carry, so a gauge auto-shift play re-judges under every ruleset.
+- a64cfef: Re-judging a replay under another ruleset no longer throws or silently drops an option it cannot read, as ADR 0019 decides. `@be-music/player-engine/replay` adds `rejudgeReplay`, `rejudgeReplayRulesets`, `rejudgeCourseReplay` and `findReplayNotSimulatedReason`, which answer `simulated`, `truncated` (a run that ended where its gauge emptied, judged only up to that point under a ruleset whose gauge would have survived) or `not-simulated` with the reason (`gauge`, `custom-judge`). `SimulateReplayOptions` adds `onFailure`, which hears when the survival gauge empties.
+- 215a435: Add `resolveReplayJudgmentTimeline` to `@be-music/player-engine/replay`: it re-simulates a replay and lists every judgment in scoring order with its lane, note, time and the running combo, EX score and gauge. `simulateReplay` takes an `onJudgment` observer for the same events; observing changes nothing it derives. A replay ghost plays back from this timeline.
+- ff5e643: Play options that name a different algorithm in each source can now carry it, as ADR 0019 decides. `@be-music/player-engine/ruleset` adds the registry `QUALIFIED_OPTION_SOURCES` (RANDOM, S-RANDOM, CONVERGE and the one-player BATTLE) and `splitOptionSource`, `optionValueName`, `resolveOptionSource`, `qualifyOptionValue`, `migrateOptionValue`, `isQualifiedOptionName` and `isKnownOptionSource`; `@be-music/player-engine/lanes` adds `isOnePlayerBattleMode`. A bare value stays the judge ruleset's own, so existing replays keep their meaning.
+  
+  `beatoraja:BATTLE` and `____:BATTLE` build their source's chart under every judge ruleset, and the assist resolver classifies them by their own source (beatoraja's is LIGHT_ASSIST, That-Which-Must-Not-Be-Named's saves nothing). Replays accept the qualified battle modes, and a course's `grade_random` keeps a qualified RANDOM or S-RANDOM.
+  
+  Two-player play (`TWO-PLAYER`) no longer fails under beatoraja rules: LR2's BATTLE builds the chart and each player is judged with beatoraja's windows and gauges. Long-note addition (ADD LN / CN / HCN / ALL) no longer fails outside beatoraja rules; the added long notes are judged as the ruleset's own, so CN and HCN differ from LN only under beatoraja rules.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`
+
 ## 0.12.0
 
 ### Minor Changes

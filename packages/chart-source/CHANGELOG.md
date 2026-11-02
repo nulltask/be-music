@@ -1,5 +1,11 @@
 # @be-music/chart-source
 
+## 0.7.0
+
+### Minor Changes
+
+- e8cd9c2: Add `bms.songText` to `BeMusicJSON`: pomu's `#SONGxx` definitions, kept apart from `resources.text` so they round-trip as written.
+
 ## 0.6.0
 
 ### Minor Changes
