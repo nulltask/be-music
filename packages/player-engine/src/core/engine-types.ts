@@ -108,7 +108,7 @@ export interface PlayerPlaySettings {
   customJudge?: import('../ruleset/custom-judge.ts').BeatorajaCustomJudge;
   /**
    * PRACTICE (beatoraja's mode, under every ruleset): plays only the range, with its gauge, TOTAL and judgerank read under
-   * the judge ruleset, from 1000 ms before the range. The source applies no chart modifier in PRACTICE; a practice play
+   * the judge ruleset, from the head of the bar before the range's (`resolvePracticePlayWindow`). The source applies no chart modifier in PRACTICE; a practice play
    * records no replay.
    */
   practice?: import('./practice.ts').PlayPractice;

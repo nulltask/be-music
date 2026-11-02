@@ -8,7 +8,7 @@ import {
 } from './chart-notes-options.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
 import { duplicateBattleChart } from './battle-chart.ts';
-import { applyPracticeRange, resolvePracticeRange } from './practice.ts';
+import { applyPracticeRange, resolvePracticePlayWindow, resolvePracticeRange } from './practice.ts';
 import { isDuplicatedBattleMode, resolveEffectiveBattleMode } from './battle-mode.ts';
 import { convertLR2SPToDPChart } from './lr2-sp-to-dp-chart.ts';
 import type { EffectiveBattleMode } from './battle-mode.ts';
@@ -83,6 +83,8 @@ export interface PreparedPlaybackChartData {
   dBattleScratch?: boolean;
   /** beatoraja PRACTICE: the range played and the note counts before `PracticeModifier`. */
   practiceStartSeconds?: number;
+  /** Where a PRACTICE play starts: the head of the bar before the range's (`resolvePracticePlayWindow`). */
+  practicePlayStartSeconds?: number;
   practiceEndSeconds?: number;
   practiceSourceNotes?: import('../ruleset/facts.ts').RulesetNoteCounts;
   practiceChangedObjectCount?: number;
@@ -390,8 +392,12 @@ export function preparePlaybackChart(
       : undefined;
   const practice = practiceRange ? applyPracticeRange(resolved, notes, landmineNotes, practiceRange) : undefined;
   resolved = practice?.chart ?? resolved;
-  // The source plays a practice range until 1000 ms past its end, as an ordinary play runs past its last note.
-  if (practiceRange) totalSeconds = (practiceRange.endMs + 1000) / 1000;
+  // A practice play runs from the head of the bar before its range to the head of the bar after it (#954).
+  const practiceWindow =
+    practiceRange && options.practice
+      ? resolvePracticePlayWindow(resolved, options.practice, practiceRange)
+      : undefined;
+  if (practiceWindow) totalSeconds = practiceWindow.endSeconds;
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
   const renderNotes = notes;
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
@@ -423,6 +429,7 @@ export function preparePlaybackChart(
       : {}),
     ...(practiceRange && practice
       ? {
+          practicePlayStartSeconds: practiceWindow?.startSeconds ?? 0,
           practiceStartSeconds: practiceRange.startMs / 1000,
           practiceEndSeconds: practiceRange.endMs / 1000,
           practiceSourceNotes: practice.sourceNotes,

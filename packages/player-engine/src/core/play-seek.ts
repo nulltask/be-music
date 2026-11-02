@@ -156,7 +156,7 @@ export function applySeek(session: PlaySession, judge: PlayJudge, seconds: numbe
 export interface PracticeLoopTick {
   /** The chart second of the tick. */
   nowSec: number;
-  /** The play's end: a practice play's is its range's end + 1000 ms (`PreparedPlaybackChartData.totalSeconds`). */
+  /** The play's end: a practice play's is the head of the bar after its range (`PreparedPlaybackChartData.totalSeconds`). */
   totalSeconds: number;
   /** Nothing is left to judge ({@link PlayJudge.isSettled}). */
   settled: boolean;
@@ -177,8 +177,8 @@ export function isPracticeLoopDue(tick: Readonly<PracticeLoopTick>): boolean {
 }
 
 /**
- * PRACTICE's loop (#949): moves the play back to where it started (`PlaySession.startAtSeconds`, 1000 ms before the
- * range) at play-clock time `nowMs`, as a seek there does (`applySeek`): the audio stops what still rings, the judge,
+ * PRACTICE's loop (#949): moves the play back to where it started (`PlaySession.startAtSeconds`, the head of the bar
+ * before the range's) at play-clock time `nowMs`, as a seek there does (`applySeek`): the audio stops what still rings, the judge,
  * the score, the combo and the gauge go back to the practice settings, the notes are judged again, and the host gets a
  * `seek` UI command and a frame of the next generation, keeping the samples, the BGA and the skin it loaded. Returns
  * the second it went to, or `undefined` when the judge cannot seek.
