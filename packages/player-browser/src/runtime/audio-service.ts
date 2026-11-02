@@ -16,6 +16,8 @@
  * - **The play graph.** A play keeps its own `interactive` context and audio bus ({@link createPlayAudioGraph}) for the
  *   lowest key-to-sound latency and so a play's hundreds of sources and its compressors stay apart from the system
  *   sounds; {@link AudioService.openPlayGraph} opens and tracks it. See ADR 0007.
+ * - **The chart played last.** {@link AudioService.chartSamples} keeps the decoded samples of one chart past its play,
+ *   so a quick retry of it does not decode them again (`runtime/chart-sample-cache.ts`).
  *
  * Routing on the system context:
  *
@@ -38,6 +40,7 @@ import { logger } from '../logger.ts';
 import type { BeatorajaSkinAudio } from '../skin/beatoraja/audio.ts';
 import { AudioAnalyzer, SILENT_AUDIO, type AudioFeatures } from './audio-analysis.ts';
 import type { BuildAudioBusOptions, CompressorMode } from './audio-bus.ts';
+import { createChartSampleCache, type ChartSampleCache } from './chart-sample-cache.ts';
 import { masterOutput } from './master-volume.ts';
 import { createPlayAudioGraph, type PlayAudioGraph } from './play-audio-graph.ts';
 
@@ -177,6 +180,12 @@ export interface AudioService {
     options?: { readonly owner?: AudioOwner },
   ): PlayAudioHandle;
   /**
+   * The decoded samples of the chart played last, for a quick retry of it (`loadPlaySamples` reads and fills it). One
+   * chart at most: a play of another chart releases them. The host calls `release()` when a retry is no longer likely
+   * (back on the select screen, `pagehide`); `dispose()` releases them too.
+   */
+  readonly chartSamples: ChartSampleCache;
+  /**
    * Stops everything `owner` started: its BGM, jingles, cues and skin sounds (loops included), the preview it
    * focused, and its play graphs that are not closing yet (closed at once).
    */
@@ -270,6 +279,7 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
   let previewOwner: AudioOwner | undefined;
   let previewAudible = false;
   const playGraphs = new Set<OpenPlayGraph>();
+  const chartSamples = createChartSampleCache();
 
   function ensureSystem(): SystemGraph | undefined {
     if (disposed) return undefined;
@@ -645,6 +655,7 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
         },
       };
     },
+    chartSamples,
     stopOwned(owner) {
       for (const voice of Array.from(voices)) {
         if (voice.owner === owner) stopVoice(voice);
@@ -670,6 +681,7 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
         closePlayGraph(entry);
       }
       theme = {};
+      chartSamples.release();
       if (system !== undefined) {
         const { context, musicBus, bgmDuck, previewBus, cueBus, analyzer } = system;
         system = undefined;

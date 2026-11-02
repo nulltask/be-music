@@ -1,6 +1,7 @@
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import { beforeEach, expect, test, vi } from 'vite-plus/test';
 import { loadPlaySamples } from '../../chart/play-audio.ts';
+import { createChartSampleCache, type ChartSampleCache } from '../../runtime/chart-sample-cache.ts';
 import { isSilentJudgeTimingPlay, prepareAudio, type PlayMediaContext } from './play-media.ts';
 
 vi.mock('../../chart/play-audio.ts', () => ({ loadPlaySamples: vi.fn(async () => false) }));
@@ -11,10 +12,13 @@ function replayWith(judgeTimingAutoAdjust: unknown): BeMusicReplay {
 }
 
 /** A media context whose audio graph comes from a fake audio service. */
-function context(options: Partial<PlayMediaContext['options']>): PlayMediaContext {
+function context(
+  options: Partial<PlayMediaContext['options']>,
+  chartSamples: ChartSampleCache = createChartSampleCache(),
+): PlayMediaContext {
   const handle = { audioContext: {}, audioBus: { bgmMixer: {} }, analyzer: undefined };
   return {
-    options: { audio: { openPlayGraph: () => handle } as never, ...options },
+    options: { audio: { openPlayGraph: () => handle, chartSamples } as never, ...options },
     chart: { chart: {}, chartPath: 'a/chart.bms' } as never,
     source: {} as never,
     resolvedChart: {} as never,
@@ -48,4 +52,19 @@ test('LR2 SILENT loads none of the chart’s samples, and still builds the audio
   expect(silent.webAudioSession).toBeDefined();
   await prepareAudio(context({ judgeTimingAutoAdjust: 'LR2-ON' }));
   expect(loadPlaySamples).toHaveBeenCalledTimes(1);
+});
+
+test('a play decodes through the audio service’s chart sample cache', async () => {
+  const chartSamples = createChartSampleCache();
+  await prepareAudio(context({}, chartSamples));
+  expect(vi.mocked(loadPlaySamples).mock.calls[0]![0].sampleCache).toBe(chartSamples);
+});
+
+test('LR2 SILENT releases the samples kept for another chart', async () => {
+  const chartSamples = createChartSampleCache();
+  chartSamples
+    .claim({ source: {}, chartPath: 'b/chart.bms', pathPrefix: undefined, sampleRate: 48_000 })
+    .set('kick.wav', { buffer: {} as AudioBuffer });
+  await prepareAudio(context({ judgeTimingAutoAdjust: 'LR2-SILENT' }, chartSamples));
+  expect(chartSamples.size).toBe(0);
 });

@@ -2,6 +2,7 @@ import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { BrowserAssetSource } from '../collection/types.ts';
 import { collectChartVolumeMultipliers, loadPlaySamples, resolveAudioDecodeConcurrency } from './play-audio.ts';
+import { createChartSampleCache } from '../runtime/chart-sample-cache.ts';
 import { PEAK_GAIN_TARGET_LINEAR } from './peak-gain.ts';
 
 const mocks = vi.hoisted(() => ({
@@ -241,6 +242,100 @@ describe('loadPlaySamples', () => {
     const gain = PEAK_GAIN_TARGET_LINEAR / 0.5;
     expect(channels.get('kick.wav')![0]).toBeCloseTo(PEAK_GAIN_TARGET_LINEAR);
     expect(channels.get('snare.wav')![0]).toBeCloseTo(0.1 * gain);
+  });
+
+  describe('with a chart sample cache', () => {
+    function load(
+      overrides: Partial<Parameters<typeof loadPlaySamples>[0]> & { audioContext: BaseAudioContext },
+    ): Promise<boolean> {
+      return loadPlaySamples({
+        chart: chartWithWAVs({ '01': 'kick.wav', '02': 'snare.wav' }),
+        source: SOURCE,
+        chartPath: 'Songs/a/main.bms',
+        samples: new Map(),
+        tempo: 1,
+        tempoPitchMode: 'pitch',
+        tempoStretchAlgorithm: 'signalsmith',
+        ...overrides,
+      });
+    }
+
+    test('a retry of the same chart decodes nothing again and gets the same buffers', async () => {
+      const sampleCache = createChartSampleCache();
+      const first = fakeAudioContext();
+      const firstSamples = new Map<string, AudioBuffer>();
+      await load({ audioContext: first, samples: firstSamples, sampleCache });
+      expect(first.decoded.sort()).toEqual(['kick.wav', 'snare.wav']);
+      const retry = fakeAudioContext();
+      const retrySamples = new Map<string, AudioBuffer>();
+      await load({ audioContext: retry, samples: retrySamples, sampleCache });
+      expect(retry.decoded).toEqual([]);
+      expect(mocks.loadAssetBytes).toHaveBeenCalledTimes(2);
+      expect(retrySamples.get('kick.wav')).toBe(firstSamples.get('kick.wav'));
+    });
+
+    test('another chart decodes its own samples and releases the last chart', async () => {
+      const sampleCache = createChartSampleCache();
+      await load({ audioContext: fakeAudioContext(), sampleCache });
+      const other = fakeAudioContext();
+      await load({
+        audioContext: other,
+        chart: chartWithWAVs({ '01': 'kick.wav' }),
+        chartPath: 'Songs/a/hyper.bms',
+        sampleCache,
+      });
+      expect(other.decoded).toEqual(['kick.wav']);
+      expect(sampleCache.key?.chartPath).toBe('Songs/a/hyper.bms');
+      expect(sampleCache.size).toBe(1);
+    });
+
+    test('decodes again at another context sample rate', async () => {
+      const sampleCache = createChartSampleCache();
+      await load({ audioContext: Object.assign(fakeAudioContext(), { sampleRate: 48_000 }), sampleCache });
+      const resampled = Object.assign(fakeAudioContext(), { sampleRate: 44_100 });
+      await load({ audioContext: resampled, sampleCache });
+      expect(resampled.decoded.sort()).toEqual(['kick.wav', 'snare.wav']);
+    });
+
+    test('keeps only the samples the latest play used', async () => {
+      const sampleCache = createChartSampleCache();
+      await load({ audioContext: fakeAudioContext(), sampleCache });
+      const chart = chartWithWAVs({ '01': 'kick.wav', '02': 'snare.wav' });
+      chart.events = chart.events.filter((event) => event.value === '01');
+      const retry = fakeAudioContext();
+      await load({ audioContext: retry, chart, sampleCache });
+      expect(retry.decoded).toEqual([]);
+      expect(sampleCache.size).toBe(1);
+    });
+
+    test('peak gain scales copies and leaves the cached decodes as they were', async () => {
+      const raw = Float32Array.from([0.5, -0.25]);
+      const audioContext = {
+        sampleRate: 48_000,
+        decodeAudioData: async () =>
+          ({ sampleRate: 48_000, numberOfChannels: 1, length: 2, getChannelData: () => raw }) as unknown as AudioBuffer,
+        createBuffer: (channels: number, length: number, sampleRate: number) => {
+          const data = Array.from({ length: channels }, () => new Float32Array(length));
+          return {
+            sampleRate,
+            numberOfChannels: channels,
+            length,
+            getChannelData: (channel: number) => data[channel]!,
+            copyToChannel: (source: Float32Array, channel: number) => data[channel]!.set(source),
+          } as unknown as AudioBuffer;
+        },
+      } as unknown as BaseAudioContext;
+      const sampleCache = createChartSampleCache();
+      const samples = new Map<string, AudioBuffer>();
+      const chart = chartWithWAVs({ '01': 'kick.wav' });
+      await load({ audioContext, chart, samples, sampleCache, peakGain: true });
+      expect(raw[0]).toBe(0.5);
+      expect(samples.get('kick.wav')!.getChannelData(0)[0]).toBeCloseTo(PEAK_GAIN_TARGET_LINEAR);
+      const retrySamples = new Map<string, AudioBuffer>();
+      await load({ audioContext, chart, samples: retrySamples, sampleCache, peakGain: true });
+      expect(raw[0]).toBe(0.5);
+      expect(retrySamples.get('kick.wav')!.getChannelData(0)[0]).toBeCloseTo(PEAK_GAIN_TARGET_LINEAR);
+    });
   });
 
   test('stops decoding once the play is cancelled', async () => {
