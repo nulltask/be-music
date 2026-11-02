@@ -2399,3 +2399,36 @@ html.touch-first .search-input.search-inline:focus {
   gap: 6px;
   padding-top: 8px;
 }
+
+/* The PRACTICE range picker (#948): a density graph with two handles, in a separator row of the Debug Menu. */
+.debug-pane .practice-range-row {
+  padding: 2px var(--cnt-hp, 4px) 4px;
+}
+.practice-range {
+  --practice-range-accent: var(--primary);
+  --practice-range-muted: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+  --practice-range-tick: color-mix(in oklch, var(--foreground) 10%, transparent);
+  --practice-range-selection: color-mix(in oklch, var(--primary) 18%, transparent);
+  display: grid;
+  gap: 4px;
+}
+.practice-range-graph {
+  display: block;
+  width: 100%;
+  border-radius: 4px;
+  background: var(--tp-input-background-color);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.practice-range-caption {
+  color: var(--tp-label-foreground-color);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.practice-range.disabled {
+  opacity: 0.5;
+}
+.practice-range.disabled .practice-range-graph {
+  cursor: default;
+}
