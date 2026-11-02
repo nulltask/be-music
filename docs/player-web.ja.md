@@ -187,6 +187,35 @@ flowchart TD
 
 **Debug Menu。** [Debug Menu](#debug-menu) は `ui/debug-menu/` にあります。`DebugMenu`（`index.ts`）がフォルダーごとのモジュールでメニューを組み立て、アプリには `DebugMenuDeps` を通してだけ触れます。アプリが設定、ライブラリ・記録・コースメーカーのサービス、アプリの状態を読む関数、アプリの操作をそこに渡します。フォルダー名と開閉状態の記憶は `folders.ts`、プレイ中に確定したオプションとスキンの操作にかけるロックは `play-lock.ts` です。beatoraja のスキンオプションのパネルは `ui/beatoraja-skin-options.ts` です。
 
+## プレイヤーのインストール
+
+プレイヤーはインストールできる Web アプリです。Chrome と Edge（デスクトップと Android）はインストールを提案し、iOS / iPadOS Safari の「ホーム画面に追加」ではアイコンと名前が付きます。インストールすると専用のウィンドウで開き、一度オンラインで開いたあとはネットワークなしでも起動します。譜面とテーマはドロップしたファイルから読むので、オフラインで起動してもいつもどおりプレイできます。ネットワークが要るもの（サインイン、Leaderboard、`?music=` / `?skin=` のリンク、BMS Search）はオフラインでは使えません。
+
+- **マニフェスト:** `public/manifest.webmanifest`。プレイヤーのページから、iOS 向けの `apple-touch-icon` と `apple-mobile-web-app-*` のタグと一緒にリンクします。アプリ名は "Be-Music Play"（短い名前は "Be-Music"）、背景色はプレイヤーの背景色です。表示は `standalone` で、`display_override` を読むブラウザ（Chromium。Android ではシステムバーも隠れます）では `fullscreen` です。`orientation` は `any` で、縦に持ったスマートフォンには今までどおり回転のお願いが出ます。埋め込みページはマニフェストをリンクしません。
+- **アイコン:** Leaderboard と同じプレイフィールドの絵（`public/favicon.svg`）を、`pnpm --filter @be-music/app-play run build:icons` が `public/icons/` に書き出します。iOS 用の 180 px、マニフェスト用の 192 / 512 px と、同じ絵をセーフゾーンに収めた `scripts/icons/maskable.svg` から作る 192 / 512 px の maskable 版です。
+- **Service Worker:** `src/service-worker/service-worker.ts` を `/sw.js` としてスコープ `/` で配信します。ビルドはこれを入口の一つとして束ね、precache のマニフェストを書き込みます（`scripts/service-worker-plugin.ts`）。ルールは純粋なモジュール `src/service-worker/routes.ts` です。登録するのは本番ビルドだけで、ページの読み込みが終わってから登録します（`src/service-worker/register.ts`）。開発サーバーとテスト用フック（`?e2e=1`）の実行では登録しません。
+
+Service Worker がリクエストをどう扱うか:
+
+```mermaid
+flowchart TD
+  request[リクエスト] --> dynamic{"GET 以外、Range、<br/>/api/*、/__url-load-proxy、<br/>/embed/、/sw.js?"}
+  dynamic -- はい --> network[ネットワークのみ]
+  dynamic -- いいえ --> page{ページの読み込み?}
+  page -- はい --> shell["ネットワーク優先。<br/>オフラインか 5 秒でキャッシュのシェル"]
+  page -- いいえ --> kind{何か}
+  kind -- "/assets/*、precache 済みのファイル" --> cacheFirst[キャッシュ優先]
+  kind -- "/ffmpeg-core/*" --> ffmpeg["キャッシュ優先。<br/>初回の利用時に保存"]
+  kind -- "Google Fonts" --> fonts[フォントのキャッシュ]
+  kind -- "それ以外" --> network
+```
+
+- **インストール時に precache するもの:** プレイヤーのページ（`/` として保存）、そこから読み込むすべてのチャンク・スタイルシート・Worker、ヘルプの `acknowledgements.json`、public のファイル（アイコンとマニフェスト）。合わせて約 5 MB です。埋め込みページだけが読み込むファイルは含めません。
+- **使ったときに保存するもの:** Google Fonts のスタイルシート（キャッシュから返し、裏でネットワークから更新）とそのフォントファイル、`/ffmpeg-core/` の ffmpeg.wasm core（約 31 MB）。core はブラウザが再生できない BGA 動画にしか使わない（[BGA 動画の transcode](#bga-動画の-transcode)）ので、precache するとほとんどのプレイヤーが使わない 31 MB をインストールのたびにダウンロードさせることになります。初めて transcode が読み込んだときに保存し、それ以降はオフラインでも transcode できます。キャッシュ名に `@ffmpeg/core` のバージョンが入るので、バージョンが上がれば新しい core を取得します。
+- **保存しないもの:** Worker のルート（サインイン・アカウント・プレイヤー設定・Leaderboard API を含む `/api/*` と `/__url-load-proxy`）、埋め込みページ、`POST` などの書き込み、Range リクエスト、その他すべてのクロスオリジンのリクエスト（`?music=` / `?skin=` のリンクが読み込むアーカイブ、コースのテーブル、BMS Search）。
+
+**更新。** ページの読み込みはネットワーク優先なので、オンラインで起動すれば常に最新のデプロイが届きます。デプロイで precache するファイルの中身が変わると `sw.js` のマニフェストのバージョンも変わり、ブラウザはその Worker を裏でインストールして、新しいシェルを専用のキャッシュに precache します。新しい Worker はプレイヤーのタブやウィンドウがすべて閉じたあとの次の起動から働き、そのときに以前のデプロイのキャッシュを消します。再読み込みを促す表示はありません。プレイ中に再読み込みするとそのプレイが失われますし、開いているページはその間もネットワークから動き続けるからです。プレイヤーの Worker は `/sw.js` を `Cache-Control: no-cache` で配信し、登録は `updateViaCache: 'none'` で行うので、更新の確認に HTTP キャッシュが答えることはありません。
+
 ## Browser loading model
 
 - dropped path は共有の `@be-music/shared-utils/core` path helper で normalize します。

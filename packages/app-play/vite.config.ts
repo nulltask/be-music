@@ -1,7 +1,9 @@
 import tailwindcss from '@tailwindcss/vite';
 import { getBuildInfo } from '../../scripts/release/build-info.ts';
 import { acknowledgementsPlugins } from './scripts/acknowledgements.ts';
+import { serviceWorkerPlugin } from './scripts/service-worker-plugin.ts';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { defaultClientConditions, defineConfig, type Plugin } from 'vite-plus';
@@ -29,6 +31,9 @@ const buildInfo = getBuildInfo(repositoryDir);
 const playerWebCoreRequire = createRequire(resolve(repositoryDir, 'packages/player-browser/package.json'));
 const ffmpegCorePackageRoot = dirname(dirname(dirname(playerWebCoreRequire.resolve('@ffmpeg/core'))));
 const ffmpegCoreESMDir = resolve(ffmpegCorePackageRoot, 'dist/esm');
+const ffmpegCoreVersion = (
+  JSON.parse(readFileSync(resolve(ffmpegCorePackageRoot, 'package.json'), 'utf8')) as { version: string }
+).version;
 const URL_LOAD_PROXY_PATH = '/__url-load-proxy';
 
 const appPackageJSON = resolve(import.meta.dirname, 'package.json');
@@ -181,6 +186,12 @@ export default defineConfig({
     urlLoadProxyPlugin(),
     // The Help's Open source list, from what the build bundles (`scripts/acknowledgements.ts`).
     acknowledgements.main,
+    // `/sw.js`, the installable player's offline shell, with the precache list of this build.
+    serviceWorkerPlugin({
+      entry: resolve(import.meta.dirname, 'src/service-worker/service-worker.ts'),
+      excludedPages: ['embed/index.html'],
+      ffmpegCoreVersion,
+    }),
   ],
   worker: {
     plugins: () => [acknowledgements.worker()],
