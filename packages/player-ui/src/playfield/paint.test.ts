@@ -210,10 +210,10 @@ describe('playfield painters', () => {
     const zigzag = (calls: string[]): string[] => calls.filter((call) => call.startsWith('lineTo'));
     const halo = (calls: string[]): string[] => calls.filter((call) => call.startsWith('fillRect -3,'));
     // Before it is reached: the HELL colour, a low steady glow and a still zigzag (swinging 6 px about x = 20, a corner
-    // every 7 px from the tail at 14).
+    // every 14 px from the tail at 14).
     const standby = paint('pending');
     expect(standby.some((call) => call.startsWith('fillRect 0,14,40,80 #a65cff 0.29'))).toBe(true);
-    expect(zigzag(standby)).toContain('lineTo 26,21');
+    expect(zigzag(standby)).toContain('lineTo 26,28');
     expect(zigzag(paint('pending', 100))).toEqual(zigzag(standby));
     // Held: an orange glow, brighter than on standby, and the zigzag flowing down into the line (50 ms at 60 px/s is
     // 3 px: the corner at 14 moves down to 17).
@@ -221,11 +221,11 @@ describe('playfield painters', () => {
     expect(held.some((call) => call.includes('#ff9a1f'))).toBe(true);
     expect(Number(halo(held)[0]!.split(' ').at(-1))).toBeGreaterThan(Number(halo(standby)[0]!.split(' ').at(-1)));
     expect(zigzag(paint('held', 50))).toContain('lineTo 14,17');
-    // Let go: a dim red, dimmer than on standby, with the zigzag flowing back up the lane (the corner at 21 up to 18).
+    // Let go: a dim red, dimmer than on standby, with the zigzag flowing back up the lane (the corner at 28 up to 25).
     const draining = paint('draining');
     expect(draining.some((call) => call.includes('#ff2e3e'))).toBe(true);
     expect(Number(halo(draining)[0]!.split(' ').at(-1))).toBeLessThan(Number(halo(standby)[0]!.split(' ').at(-1)));
-    expect(zigzag(paint('draining', 50))).toContain('lineTo 26,18');
+    expect(zigzag(paint('draining', 50))).toContain('lineTo 26,25');
     // Over: the glow is gone.
     expect(halo(paint('done'))).toEqual([]);
   });
