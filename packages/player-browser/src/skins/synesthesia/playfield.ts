@@ -25,7 +25,7 @@ import {
   resolveLaneRuns,
   type BeMusicLaneFrame,
   backSpinChevron,
-  hellChargeRungs,
+  hellChargeZigzag,
   longNoteCentreLineAlpha,
   resolveHellChargeLook,
   resolveLongNoteMarks,
@@ -209,29 +209,34 @@ export function renderSynesthesiaLongNote({
   const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
-  // A hell charge note shows how it stands (`resolveHellChargeLook`): its colour, its glow and its rungs' motion change
-  // together — HELL violet with still rungs before it is reached, a bright orange glow with rungs flowing into the line
-  // while it charges, a dim red with rungs flowing back up while it drains.
+  // A hell charge note shows how it stands (`resolveHellChargeLook`): its colour, its glow and its zigzag filament's
+  // motion change together — HELL violet with a still zigzag before it is reached, a bright orange glow with the zigzag
+  // flowing into the line while it charges, a dim red with the zigzag flowing back up while it drains.
   const look = marks.hellCharge ? resolveHellChargeLook(state, nowMs) : undefined;
   if (look) {
     if (look.glow > 0)
       graphics.rect(bodyX - 3, bodyTop, bodyW + 6, bodyH).fill({ color: look.color, alpha: 0.3 * look.glow });
     graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: look.color, alpha: 0.16 + 0.3 * look.glow });
-    // Rails down both edges keep the note's HELL identity readable on a narrow lane.
-    graphics.rect(bodyX, bodyTop, 1, bodyH).fill({ color: look.color, alpha: 0.5 + 0.5 * look.glow });
-    graphics.rect(bodyX + bodyW - 1, bodyTop, 1, bodyH).fill({ color: look.color, alpha: 0.5 + 0.5 * look.glow });
   } else {
     // A beam of light between head and tail: a translucent core with a bright centre filament.
     graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
   }
   // Let go early, the filament fades out with the hold.
   const line = longNoteCentreLineAlpha(releasedElapsedMs);
-  if (line > 0) graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 * line });
+  if (!look && line > 0) {
+    graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 * line });
+  }
   if (look) {
-    // Rungs of light across the beam: white-hot while it charges, in its colour otherwise.
-    const rungColor = look.phase === 'charging' ? 0xfff4dc : look.color;
-    for (const y of hellChargeRungs(bodyTop, bodyTop + bodyH, { nowMs, flow: look.flow })) {
-      graphics.rect(bodyX + 2, y - 1, bodyW - 4, 2).fill({ color: rungColor, alpha: 0.4 + 0.5 * look.glow });
+    // A hell charge note's filament zigzags: white-hot while it charges, a light tint of its colour otherwise.
+    const zigzag = hellChargeZigzag(bodyX, bodyW, bodyTop, bodyTop + bodyH, { nowMs, flow: look.flow });
+    if (line > 0 && zigzag.length >= 4) {
+      graphics.moveTo(zigzag[0]!, zigzag[1]!);
+      for (let index = 2; index < zigzag.length; index += 2) graphics.lineTo(zigzag[index]!, zigzag[index + 1]!);
+      graphics.stroke({
+        color: look.lineColor,
+        width: 2,
+        alpha: (0.55 + 0.45 * look.glow) * line,
+      });
     }
     // The head on the judgement line glows with the note: brightest while charging, gone once it is over.
     if (look.glow > 0) {
