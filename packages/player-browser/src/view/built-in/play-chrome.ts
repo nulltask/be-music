@@ -1,6 +1,6 @@
 /**
  * The built-in play screen's chrome inputs (`BuiltInPlayView`): the lane geometry of the built-in playfield for the
- * loaded chart and the stage, and the runtime the skinless chrome (`skinlessChromeRenderer`, or a be-music skin's
+ * loaded chart and the stage, and the runtime the skinless chrome (`skinlessChromeRenderer`, or a Be-Music Skin's
  * `gameplay.renderChrome`) draws from each frame.
  *
  * The functions read the scene's state through {@link LaneGeometryContext} and {@link PlayChromeContext}; the scene
@@ -28,10 +28,10 @@ import type { PlayFrame, PlayfieldBGATarget, PlayfieldStage } from '../types.ts'
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
 import { BGA } from '../shared/play-constants.ts';
 
-/** One side's recent judgement state for skinless chrome renderers (the be-music skin type). */
+/** One side's recent judgement state for skinless chrome renderers (the Be-Music Skin type). */
 export type SkinlessGameplayJudgeState = BeMusicJudgmentState;
 
-/** Live gameplay values a skinless chrome renderer can paint (the be-music skin type). */
+/** Live gameplay values a skinless chrome renderer can paint (the Be-Music Skin type). */
 export type SkinlessGameplayChromeRuntime = BeMusicGameplayRuntime;
 
 export interface SkinlessGameplayChromeRenderContext {
@@ -259,7 +259,7 @@ export interface BGATargetsContext extends LaneGeometryContext {
   stageBGATarget: PlayfieldBGATarget | undefined;
 }
 
-/** What the be-music chrome's layout is worked out from, and its cache: a play view's members of these names. */
+/** What the Be-Music chrome's layout is worked out from, and its cache: a play view's members of these names. */
 export interface BeMusicLayoutContext extends LaneGeometryContext {
   readonly drawsLift?: boolean;
   beMusicLayout:
@@ -293,7 +293,7 @@ export function collectBGATargets(ctx: BGATargetsContext, out: PlayfieldBGATarge
 }
 
 /**
- * The gameplay layout handed to the be-music skin's chrome: stage, lanes, playfield bounds, judgement line, and BGA
+ * The gameplay layout handed to the Be-Music Skin's chrome: stage, lanes, playfield bounds, judgement line, and BGA
  * rect. Lane geometry only changes with the chart and the stage, so it is rebuilt when the lane channels, the play
  * variant, or the stage (a rotation) change.
  */
@@ -316,7 +316,7 @@ export function resolveBeMusicLayout(ctx: BeMusicLayoutContext): BeMusicGameplay
   return withLiftLines(ctx, layout);
 }
 
-/** What {@link renderBuiltInChrome} draws into: the chrome layers and pools, the BGA layer and the be-music binding. */
+/** What {@link renderBuiltInChrome} draws into: the chrome layers and pools, the BGA layer and the Be-Music binding. */
 export interface BuiltInChromeContext extends PlayChromeContext, BeMusicLayoutContext {
   readonly skinLayer: Container;
   readonly overlayLayer: Container;
@@ -328,7 +328,7 @@ export interface BuiltInChromeContext extends PlayChromeContext, BeMusicLayoutCo
 
 /**
  * Paints the built-in chrome layers (`skinLayer` / `overlayLayer`) for this frame and resets their transforms together
- * with the BGA layer's: the skinless chrome through a host's `skinlessChromeRenderer`, else the be-music skin's
+ * with the BGA layer's: the skinless chrome through a host's `skinlessChromeRenderer`, else the Be-Music Skin's
  * `gameplay.renderChrome`, in raw design coordinates.
  */
 export function renderBuiltInChrome(

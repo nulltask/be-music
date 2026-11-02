@@ -1,6 +1,6 @@
 [Japanese version](./README.ja.md)
 
-# be-music
+# Be-Music
 
 [Package responsibilities](./docs/packages.md)
 
@@ -43,7 +43,7 @@ BMS/bmson toolchain composed of TypeScript + pnpm workspaces.
 ### Online services
 
 - A Leaderboard built with the player: sending is opt-in, and the Leaderboard decides what it shows. Chart scores and course runs get share cards.
-- One account across the player, the Leaderboard and the dashboard, through be-music's own OIDC provider; the services run on Cloudflare Workers.
+- One account across the player, the Leaderboard and the dashboard, through Be-Music's own OIDC provider; the services run on Cloudflare Workers.
 
 ### Open and modular
 
@@ -65,7 +65,7 @@ BMS/bmson toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/player-scene-model`: Runtime-neutral scene models — library entries, browsing, play options, play state and results, course views, system sounds — shared by every skin family
 - `@be-music/skin-lr2`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/skin-beatoraja`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
-- `@be-music/player-skin-sdk`: Framework-free SDK for writing be-music skins for the browser player
+- `@be-music/player-skin-sdk`: Framework-free SDK for writing Be-Music Skins for the browser player
 - `@be-music/player-ui`, `@be-music/player-ui-react`, `@be-music/player-ui-vue`: [Reusable Lit Web Components, with typed React and Vue wrappers](./packages/player-ui/README.md)
 - `@be-music/player-browser`: Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
 - `@be-music/app-play`: Private Vite player that wires folder/ZIP drops, LR2/beatoraja themes, the Debug Menu and browser playback together, as services behind one scene router
@@ -174,7 +174,7 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [Scene models (`@be-music/player-scene-model`)](./docs/scene-model.md)
 - [Replay (play history) specification](./docs/replay.md)
 - [Courses and dan certification](./docs/course.md)
-- [Writing a be-music skin](./docs/be-music-skin.md)
+- [Writing a Be-Music Skin](./docs/be-music-skin.md)
 - [LR2 skin implementation notes](./docs/lr2-skin.md)
 - [beatoraja skin implementation notes](./docs/beatoraja-skin.md)
 - [BMS/bmson intermediate representation (`@be-music/chart-source`) implementation specification](./docs/json-spec.md)
@@ -272,12 +272,12 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 - Resolves `property[]`, `filepath[]`, category groups, custom offsets, wildcard source paths, and case-insensitive assets
 - Normalizes image, imageset, value, float-value, text, slider, note, judge, gauge, graph, BPM graph, timing graph, song-list, custom event, destination, and PM character elements
 
-### be-music skin SDK (`@be-music/player-skin-sdk`)
+### Be-Music Skin SDK (`@be-music/player-skin-sdk`)
 
 - Skin contract for the browser player's built-in family: the skin composes Canvas rendering and optional DOM screens from presentation data
 - Imports no rendering framework; a skin brings its own (Canvas 2D, WebGL / WebGPU, PixiJS, three.js, …)
 - Stage, lane layout, touch / portrait layout, moment, judgement word, loading, audio drive, song fact, result track, skin settings, and motion helpers
-- See [Writing a be-music skin](./docs/be-music-skin.md)
+- See [Writing a Be-Music Skin](./docs/be-music-skin.md)
 
 ### Reusable player UI
 
@@ -287,7 +287,7 @@ The semantics helper of the score is separated into `@be-music/chart-model`, and
 
 - Browser song library for dropped folders, ZIPs, and mixed song/LR2/beatoraja theme drops
 - Lazy browser asset loading for large audio/video files, with case-insensitive path lookup
-- Built-in be-music skins (Synesthesia by default, Plain, and Native (DOM + Canvas)) for select, gameplay, and result, and for a decide screen when the skin declares one
+- Built-in Be-Music Skins (Synesthesia by default, Plain, and Native (DOM + Canvas)) for select, gameplay, and result, and for a decide screen when the skin declares one
 - Touch play and a touch gameplay layout on touch-first devices, portrait stages for skins that provide one, and per-skin settings
 - LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
 - beatoraja select / decide / gameplay / result skin parsing and rendering on PixiJS

@@ -19,7 +19,7 @@ export function layoutOfLaneMode(laneMode: string): PlayModeLayout | undefined {
 
 /**
  * The lanes of a lane mode, left to right as skins draw them, each with the colour of its notes: blue for black keys,
- * red for the scratch (and the keyboard wheel), white for the other keys. Empty for a mode be-music does not know.
+ * red for the scratch (and the keyboard wheel), white for the other keys. Empty for a mode Be-Music does not know.
  */
 export function excerptLanes(laneMode: string): Array<{ channel: string } & ExcerptLane> {
   const layout = layoutOfLaneMode(laneMode);

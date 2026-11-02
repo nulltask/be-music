@@ -755,7 +755,7 @@ function normalizeBmsonBGAEventEntries(
  * play-mode layout (from the play-mode table in `@be-music/chart-model`) — always for the 24 / 48 KEY keyboard layouts, whose
  * wheel and extended lanes only have a home there, and for the other layouts when every lane in use has a place in the
  * hint's table — else the spec's `generic-<lanes>keys`, a layout ordered left to right. (A made-up `beat-<lanes>k` would be
- * an unknown hint, which beatoraja, Qwilight, Bemuse and the be-music parser read as `beat-7k`.)
+ * an unknown hint, which beatoraja, Qwilight, Bemuse and the Be-Music parser read as `beat-7k`.)
  */
 function resolveBmsonModeHintForOutput(json: BeMusicJSON, playableChannels: readonly string[]): string {
   if (json.bmson.info.modeHint !== undefined) {
@@ -839,7 +839,7 @@ interface BMSLongNotesForBmsonOutput {
 }
 
 /**
- * The long notes of a BMS chart as be-music plays them — `#LNOBJ` pairs and `5x` / `6x` long notes (`#LNTYPE 1` /
+ * The long notes of a BMS chart as Be-Music plays them — `#LNOBJ` pairs and `5x` / `6x` long notes (`#LNTYPE 1` /
  * `2`, inferred like the web player when `#LNTYPE` is missing) — so bmson can write each as one note with `l`.
  */
 function resolveBMSLongNotesForBmsonOutput(json: BeMusicJSON): BMSLongNotesForBmsonOutput {
@@ -859,7 +859,7 @@ function resolveBMSLongNotesForBmsonOutput(json: BeMusicJSON): BMSLongNotesForBm
 }
 
 /**
- * The bmson `damage` of a mine, as be-music's player resolves it: an authored `bmson.damage` wins; a BMS (or JSON)
+ * The bmson `damage` of a mine, as Be-Music's player resolves it: an authored `bmson.damage` wins; a BMS (or JSON)
  * mine's value is its damage read in base 36 (LR2 / beatoraja, no halving); otherwise `damage` is left out, which
  * deals the same default as an invalid BMS value.
  */

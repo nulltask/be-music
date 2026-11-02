@@ -54,7 +54,7 @@ import {
 export { ReplayParseError } from './parse.ts';
 
 /**
- * be-music replay ("replay") format.
+ * Be-Music replay ("replay") format.
  *
  * A replay is an INPUT REPLAY, not a result log: the canonical payload is the resolved chart that actually
  * scrolled past the player (post `#RANDOM`, post lane-shuffle / DP-flip), the raw key press / release stream, and

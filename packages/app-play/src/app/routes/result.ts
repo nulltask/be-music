@@ -1,6 +1,6 @@
 import { isBmsonRecoveryDisabled } from '@be-music/player-engine/ruleset';
 // The result route: the result screen (`createResultScene`) of a play, a course stage, a course run or a NONSTOP run,
-// on the LR2 theme's result (or course-result) skin, the be-music skin's, or the beatoraja theme's. The play behind it
+// on the LR2 theme's result (or course-result) skin, the Be-Music Skin's, or the beatoraja theme's. The play behind it
 // exits as it enters and goes once it shows, its last samples ringing out. It keeps the play's record, saves its play
 // log and ranks it, and leads on: the next stage of a course, R's retry, or back to the select screen.
 
@@ -92,7 +92,7 @@ export interface ResultRouteDeps {
   readonly lr2: Pick<LR2ThemeService, 'resultSkin' | 'courseResultSkin' | 'courseLR2Skin' | 'resultJingles'>;
   /** The beatoraja theme's result entries, loaded as kits, and its jingles. */
   readonly beatoraja: Pick<BeatorajaThemeService, 'loadBeatorajaResultKit' | 'beatorajaThemeBGM'>;
-  /** The be-music skin the built-in family draws with. */
+  /** The Be-Music Skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'builtInKit'>;
   /** A single play's replay auto-save, by the setting latched at the play's start. */
   readonly replayAutoSave: Pick<ReplayAutoSave, 'savePlay'>;

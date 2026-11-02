@@ -22,7 +22,7 @@
 - [サービスと環境](services.ja.md)
 - [LR2 skin 実装メモ](lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](beatoraja-skin.ja.md)
-- [be-music スキンの作り方](be-music-skin.ja.md)
+- [Be-Music Skin の作り方](be-music-skin.ja.md)
 - [BMS/bmson 中間表現 (`@be-music/chart-source`) 実装仕様](json-spec.ja.md)
 - [パッケージの命名と責務](./packages.ja.md)
 - [共有ユーティリティ](./shared-utils.ja.md)

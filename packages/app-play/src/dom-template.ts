@@ -434,7 +434,7 @@ export const PLAYER_APP_HTML = `
         <header class="help-modal-header">
           <div>
             <div class="help-modal-eyebrow" data-i18n="helpAbout">Help &amp; About</div>
-            <h2 class="help-modal-title" id="help-modal-title"><span>be-music player</span><span class="badge" data-variant="outline">Beta</span></h2>
+            <h2 class="help-modal-title" id="help-modal-title"><span>Be-Music Play</span><span class="badge" data-variant="outline">Beta</span></h2>
           </div>
           <button class="btn help-modal-close" data-size="icon-sm" data-variant="ghost" id="help-modal-close" type="button" aria-label="Close" data-i18n-aria="close">
             <svg viewBox="0 0 24 24" aria-hidden="true">

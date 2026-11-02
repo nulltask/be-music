@@ -86,7 +86,7 @@ describe('resolveTimingVisualizerBands', () => {
 });
 
 describe('beatorajaTimingOffsetMs', () => {
-  it("turns be-music's offset (> 0 late) into beatoraja's (note minus press time, > 0 early)", () => {
+  it("turns Be-Music's offset (> 0 late) into beatoraja's (note minus press time, > 0 early)", () => {
     expect(beatorajaTimingOffsetMs(12)).toBe(-12);
     expect(beatorajaTimingOffsetMs(-30.5)).toBe(30.5);
     expect(beatorajaTimingOffsetMs(0)).toBe(0);

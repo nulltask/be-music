@@ -100,7 +100,7 @@ export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
 }
 
 /**
- * Declares a be-music skin. Returns the skin unchanged after checking its declaration (see {@link validateBeMusicSkin}),
+ * Declares a Be-Music Skin. Returns the skin unchanged after checking its declaration (see {@link validateBeMusicSkin}),
  * so a malformed skin fails where it is defined rather than when a host first mounts it.
  *
  * ```ts

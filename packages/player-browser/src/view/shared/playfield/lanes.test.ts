@@ -13,7 +13,7 @@ const lanesOf = (playVariant: ChartPlayVariant, pms = false): string[] =>
   resolvePlayVariantLaneChannels(pms ? [{ channel: '22' }] : [], playVariant);
 
 /**
- * The lanes the shared playfield hands a be-music skin for `channels` of `playVariant` (every lane of its layout by
+ * The lanes the shared playfield hands a Be-Music Skin for `channels` of `playVariant` (every lane of its layout by
  * default), with the play's key beams as `beams` sets them, at `nowMs` on the play clock.
  */
 function drawLanes(

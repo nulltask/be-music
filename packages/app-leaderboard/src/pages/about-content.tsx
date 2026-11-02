@@ -29,14 +29,14 @@ export interface AboutContent {
 
 const en: AboutContent = {
   title: 'About',
-  description: 'What the be-music Leaderboard is and how it scores a play.',
-  lead: 'Rankings for BMS charts played in be-music.',
+  description: 'What the Be-Music Leaderboard is and how it scores a play.',
+  lead: 'Rankings for BMS charts played in Be-Music.',
   apart: 'What sets it apart',
   moreBelow: 'More below',
   highlights: [
     {
       title: 'The server counts the score',
-      text: 'The player sends the key presses, not a score. The server replays them on the be-music engine and counts the result itself, so an edited number never reaches a ranking.',
+      text: 'The player sends the key presses, not a score. The server replays them on the Be-Music engine and counts the result itself, so an edited number never reaches a ranking.',
       more: 'scoring',
     },
     {
@@ -78,7 +78,7 @@ const en: AboutContent = {
       <Section id="scoring" title="How a play is scored">
         <p>
           When a play ends, the player sends its <strong>replay</strong>: the chart’s notes and every key press with its
-          time. The server does not take the score the player saw; it replays the log on the be-music engine and counts
+          time. The server does not take the score the player saw; it replays the log on the Be-Music engine and counts
           the result itself.
         </p>
         <p>
@@ -149,11 +149,11 @@ const en: AboutContent = {
       </Section>
       <Section id="open" title="In the browser, in the open">
         <p>
-          be-music runs in the browser: play a BMS folder you drop on it, and send the play from there. Nothing to
+          Be-Music runs in the browser: play a BMS folder you drop on it, and send the play from there. Nothing to
           install.
         </p>
         <p>
-          be-music is open source:{' '}
+          Be-Music is open source:{' '}
           <a class={PROSE_LINK} href={SOURCE_URL} rel="noopener noreferrer" target="_blank">
             nulltask/be-music on GitHub
           </a>
@@ -176,14 +176,14 @@ const en: AboutContent = {
 
 const ja: AboutContent = {
   title: 'このサイトについて',
-  description: 'be-music Leaderboard の特長と、プレイの採点方法。',
-  lead: 'be-music で遊んだ BMS 譜面のランキング。',
+  description: 'Be-Music Leaderboard の特長と、プレイの採点方法。',
+  lead: 'Be-Music で遊んだ BMS 譜面のランキング。',
   apart: 'ほかのランキングとの違い',
   moreBelow: '詳しくは下へ',
   highlights: [
     {
       title: 'スコアはサーバーが計算',
-      text: 'プレイヤーが送るのはスコアではなく打鍵の記録です。サーバーがそれを be-music エンジンで再生してスコアを計算し直すので、ランキングには正しく計算されたスコアだけが並びます。',
+      text: 'プレイヤーが送るのはスコアではなく打鍵の記録です。サーバーがそれを Be-Music エンジンで再生してスコアを計算し直すので、ランキングには正しく計算されたスコアだけが並びます。',
       more: 'scoring',
     },
     {
@@ -230,7 +230,7 @@ const ja: AboutContent = {
         <p>
           プレイが終わると、プレイヤーは<strong>リプレイ</strong>
           （譜面のノーツと、すべての打鍵とその時刻）を送ります。サーバーはプレイヤーの画面に出たスコアを使わず、ログを
-          be-music エンジンで再生してスコアを計算し直します。
+          Be-Music エンジンで再生してスコアを計算し直します。
         </p>
         <p>
           この計算を <strong>LR2</strong>・<strong>beatoraja</strong>・<strong>名前を言ってはいけないあのゲーム</strong>{' '}
@@ -299,11 +299,11 @@ const ja: AboutContent = {
       </Section>
       <Section id="open" title="ブラウザで、オープンに">
         <p>
-          be-music はブラウザで動きます。BMS
+          Be-Music はブラウザで動きます。BMS
           のフォルダをドロップして遊び、そのままプレイを送信できます。インストールは要りません。
         </p>
         <p>
-          be-music はオープンソースです:{' '}
+          Be-Music はオープンソースです:{' '}
           <a class={PROSE_LINK} href={SOURCE_URL} rel="noopener noreferrer" target="_blank">
             GitHub の nulltask/be-music
           </a>

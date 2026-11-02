@@ -7,8 +7,8 @@ import type { Messages } from './en.ts';
 export const ja: Messages = {
   locale: 'ja',
   site: {
-    name: 'be-music Leaderboard',
-    previewAlt: 'be-music Leaderboard: BMS プレイヤーのためのランキング、リプレイ、ライバル',
+    name: 'Be-Music Leaderboard',
+    previewAlt: 'Be-Music Leaderboard: BMS プレイヤーのためのランキング、リプレイ、ライバル',
   },
   nav: {
     label: 'Leaderboard',
@@ -37,7 +37,7 @@ export const ja: Messages = {
       ____: '名前を言ってはいけないあのゲームのもの。チャージノートあり',
     },
     meaning:
-      'すべてのプレイを各ルールで採点しています。LR2・beatoraja・名前を言ってはいけないあのゲームの判定幅、ゲージ、クリアランプを、be-music のエンジンがリプレイに当てはめたものです。スコアの計算方法を表すもので、プレイしたソフトとは関係ありません。',
+      'すべてのプレイを各ルールで採点しています。LR2・beatoraja・名前を言ってはいけないあのゲームの判定幅、ゲージ、クリアランプを、Be-Music のエンジンがリプレイに当てはめたものです。スコアの計算方法を表すもので、プレイしたソフトとは関係ありません。',
     playedWith: (name) => `${name}でプレイ`,
     playedWithTitle: 'プレイヤーが実際に遊んだルール',
   },
@@ -91,7 +91,7 @@ export const ja: Messages = {
   },
   latest: {
     title: '最新',
-    description: 'be-music Leaderboard の最新のプレイ。',
+    description: 'Be-Music Leaderboard の最新のプレイ。',
     lead: (rules) => `最新のプレイ（${rules}で計算）。`,
     rowsLabel: 'プレイの行',
     rowsHelp:
@@ -278,7 +278,7 @@ export const ja: Messages = {
     recordedWith: '記録したアプリ',
     sentFrom: '送信したアプリ',
     scoredBy: '採点',
-    engine: (version) => `be-music エンジン ${version}`,
+    engine: (version) => `Be-Music エンジン ${version}`,
     unknown: '不明',
     unknownApp: '不明なアプリ',
     verification: {
@@ -298,7 +298,7 @@ export const ja: Messages = {
     page: 'このページ',
   },
   player: {
-    description: (name, handle) => `be-music Leaderboard の ${name}（@${handle}）。`,
+    description: (name, handle) => `Be-Music Leaderboard の ${name}（@${handle}）。`,
     stats: {
       plays: 'プレイ数',
       charts: '譜面数',
@@ -329,7 +329,7 @@ export const ja: Messages = {
     emptyPoor: '空 POOR（空打ち）',
   },
   chartset: {
-    description: (title, charts) => `${title} — be-music Leaderboard の ${charts} 譜面。`,
+    description: (title, charts) => `${title} — Be-Music Leaderboard の ${charts} 譜面。`,
     charts: (count) => `${count} 譜面`,
     grouping:
       '譜面は BMS Search が手作業で登録したとおりにまとめています。まだ登録されていない譜面は単独で表示されます。',
@@ -394,7 +394,7 @@ export const ja: Messages = {
   },
   settings: {
     title: '設定',
-    description: 'be-music Leaderboard のプロフィール。',
+    description: 'Be-Music Leaderboard のプロフィール。',
     signedOutLead: 'ログインすると、ユーザー名・表示名・アバターを変更できます。',
     signIn: 'ログイン',
     signInLead: 'アカウントに登録したパスキー（端末の指紋認証や PIN）でログインします。',

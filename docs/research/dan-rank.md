@@ -2,7 +2,7 @@
 
 # Player dan rank
 
-Investigated 2026-11-02 for #552 (a follow-up of #373). The question: how do LR2 and beatoraja turn a GRADE (class) course clear into the player's dan rank, and where do skins show it? The answer decides what be-music keeps and shows. See [Courses and dan certification](../course.md#the-players-dan-rank) for what be-music does.
+Investigated 2026-11-02 for #552 (a follow-up of #373). The question: how do LR2 and beatoraja turn a GRADE (class) course clear into the player's dan rank, and where do skins show it? The answer decides what Be-Music keeps and shows. See [Courses and dan certification](../course.md#the-players-dan-rank) for what Be-Music does.
 
 Sources read: OpenLR2 at [`583a385`](https://github.com/GOMazk/OpenLR2/tree/583a38503555e59c4bafa49d60b9d0714c9007c2) (a decompilation of `LR2body.exe`) and beatoraja [0.8.9](https://github.com/exch-bms2/beatoraja/tree/0.8.9). OpenLR2 is a decompilation, so "OpenLR2 never does X" means the converted code never does it. The binary itself was not run.
 
@@ -12,7 +12,7 @@ Sources read: OpenLR2 at [`583a385`](https://github.com/GOMazk/OpenLR2/tree/583a
 - **beatoraja 0.8.9** keeps no dan rank of its own. `PlayerInformation.rank` (段位) is a free-form string an Internet Ranking server sends for a rival. No skin property shows it, and a course clear never writes it. `CourseData.isClassCourse()` exists but nothing calls it.
 - Neither player maps a course to a dan. A course is a dan course only by kind (LR2 `type` 2, beatoraja's `grade` / `grade_mirror` / `grade_random` constraints). The dan a course stands for is only in its name (`七段`, `発狂皆伝`, …).
 
-So the mapping from a course to a dan and the order of the dans are be-music's own design. Nothing in either player can be matched for them.
+So the mapping from a course to a dan and the order of the dans are Be-Music's own design. Nothing in either player can be matched for them.
 
 ## LR2 (OpenLR2)
 
@@ -47,14 +47,14 @@ CREATE TABLE player(..., grade_7 INTEGER, grade_5 INTEGER, grade_14 INTEGER, gra
 - A course result writes the course's score under its stage hashes, long-note mode and constraints, like any score ([CourseResult.java L272](https://github.com/exch-bms2/beatoraja/blob/0.8.9/src/bms/player/beatoraja/result/CourseResult.java#L272)). It sets no dan.
 - `CourseData.isClassCourse()` says whether a course has a `CLASS` / `MIRROR` / `RANDOM` constraint ([CourseData.java L84-L91](https://github.com/exch-bms2/beatoraja/blob/0.8.9/src/bms/player/beatoraja/CourseData.java#L84-L91)). Nothing in 0.8.9 calls it. Skins tell a dan course apart by the constraint options 1002-1004 (`OPTION_GRADEBAR_CLASS` …).
 
-## What this means for be-music
+## What this means for Be-Music
 
-| Question                       | LR2                             | beatoraja 0.8.9                       | be-music                                                                                                      |
+| Question                       | LR2                             | beatoraja 0.8.9                       | Be-Music                                                                                                      |
 | ------------------------------ | ------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | Is a dan kept?                 | Columns per key mode, never set | Only an IR-supplied string for rivals | Highest cleared dan per judge ruleset and key mode                                                            |
 | Which course counts?           | —                               | —                                     | A cleared GRADE course run that keeps a best record                                                           |
 | Which dan does a course grant? | —                               | —                                     | Read from the course name (`resolveCourseDanRank`); unverified against either player                          |
-| How are dans ordered?          | —                               | —                                     | be-music's ladder: 十級 … 一級, 初段 … 十段, 中伝, 皆伝, 発狂初段 … 発狂十段, 発狂皆伝, Overjoy (`DAN_RANKS`) |
-| Which skin shows it?           | No op                           | No property                           | be-music skins' `frame.danRanks`; the built-in Plain skin's select header                                     |
+| How are dans ordered?          | —                               | —                                     | Be-Music's ladder: 十級 … 一級, 初段 … 十段, 中伝, 皆伝, 発狂初段 … 発狂十段, 発狂皆伝, Overjoy (`DAN_RANKS`) |
+| Which skin shows it?           | No op                           | No property                           | Be-Music Skins' `frame.danRanks`; the built-in Plain skin's select header                                     |
 
-The per-key-mode split follows LR2's columns. Keeping one rank per judge ruleset follows how be-music keeps best records. Because neither player shows a dan, no LR2 op or beatoraja property is added. A theme that wants one would need an extension, which is left open.
+The per-key-mode split follows LR2's columns. Keeping one rank per judge ruleset follows how Be-Music keeps best records. Because neither player shows a dan, no LR2 op or beatoraja property is added. A theme that wants one would need an extension, which is left open.

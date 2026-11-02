@@ -101,7 +101,7 @@ function createFakeHost() {
     removeEventListener: (type: string, listener: unknown) => listeners.get(type)?.delete(listener),
   });
   vi.stubGlobal('window', { ...target(), setTimeout, clearTimeout, setInterval, clearInterval });
-  // The be-music skin's surface asks for a canvas; one without a context leaves the skin undrawn.
+  // The Be-Music Skin's surface asks for a canvas; one without a context leaves the skin undrawn.
   const createElement = () => ({ width: 0, height: 0, style: {}, getContext: () => null });
   vi.stubGlobal('document', {
     ...target(),
@@ -247,7 +247,7 @@ describe('createPlayScene', () => {
     expect(fake.canvas.focus).toHaveBeenCalled();
     fake.tick();
     expect(scene.root.visible).toBe(true);
-    // Escape's way out: the be-music fade-out, then the host hears of it.
+    // Escape's way out: the Be-Music fade-out, then the host hears of it.
     scene.requestExit();
     fake.tick();
     expect(on.exit).not.toHaveBeenCalled();

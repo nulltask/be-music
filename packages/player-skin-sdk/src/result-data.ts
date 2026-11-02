@@ -17,7 +17,7 @@ export type GaugeHistorySample = SceneGaugeHistorySample;
 export type ScoreHistorySample = SceneScoreHistorySample;
 
 /**
- * A play's result, as the result screen draws it (LR2 skin, beatoraja skin or be-music skin): the one result payload of
+ * A play's result, as the result screen draws it (LR2 skin, beatoraja skin or Be-Music Skin): the one result payload of
  * `@be-music/player-scene-model` (`PlayResult`) for a single play, a course stage, a course run or a NONSTOP run. `run` says
  * which; `courseRun` carries a course run's stages reached and trophy.
  */

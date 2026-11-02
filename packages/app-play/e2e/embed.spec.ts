@@ -34,7 +34,7 @@ async function openEmbed(page: Page, folders: readonly string[], chart?: string,
   await page.goto(`/embed/?track=${encodeURIComponent(`${TRACK_ROUTE}${name}`)}${query}`);
 }
 
-const stageCanvas = (page: Page) => page.locator('canvas[aria-label="be-music stage"]');
+const stageCanvas = (page: Page) => page.locator('canvas[aria-label="Be-Music stage"]');
 
 /** Fails when `inner` sticks out of `outer`, as a theme's fixed button height once cut the content of a row or a button. */
 async function expectInside(outer: Locator, inner: Locator): Promise<void> {
