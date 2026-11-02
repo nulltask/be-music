@@ -752,6 +752,22 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.simulateReplayRulesets(BENCH_REPLAY);
     },
   });
+  define('player-engine.replay.findReplayNotSimulatedReason', {
+    run: () => {
+      replayAPI.findReplayNotSimulatedReason(BENCH_REPLAY, 'beatoraja');
+      replayAPI.findReplayNotSimulatedReason(BENCH_COUPLE_REPLAY, '____', 2);
+    },
+  });
+  define('player-engine.replay.rejudgeReplay', {
+    run: () => {
+      replayAPI.rejudgeReplay(BENCH_REPLAY, { ruleset: 'beatoraja' });
+    },
+  });
+  define('player-engine.replay.rejudgeReplayRulesets', {
+    run: () => {
+      replayAPI.rejudgeReplayRulesets(BENCH_REPLAY, ['lr2', 'beatoraja', '____']);
+    },
+  });
   const benchCourseInfo = {
     name: 'Dan',
     kind: 'grade' as const,
@@ -1215,6 +1231,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.simulateCourseReplay', {
     run: () => {
       replayAPI.simulateCourseReplay(benchCourseLog, { ruleset: 'lr2' });
+    },
+  });
+  define('player-engine.replay.rejudgeCourseReplay', {
+    run: () => {
+      replayAPI.rejudgeCourseReplay(benchCourseLog, { ruleset: 'beatoraja' });
     },
   });
   const benchKeyedCourseLog = replayAPI.createCourseReplay({

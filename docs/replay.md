@@ -369,6 +369,36 @@ long-note semantics, empty-POOR behavior, and gauge tables — the constants are
 EX-SCORE is PGREAT × 2 + GREAT × 1 everywhere; DJ LEVEL uses the That-Which-Must-Not-Be-Named ninths table. Charge-note rulesets count a
 long note's head and tail as two judgment notes (`result.noteCount` reports each ruleset's denominator).
 
+### Re-judging under another ruleset
+
+`simulateReplay` judges whatever it is given. `rejudgeReplay(replay, { ruleset })` (`rejudgeReplayRulesets` for
+several rulesets, `rejudgeCourseReplay` for a course replay) applies [ADR 0019](./adr/0019-source-qualified-option-values.md)'s rules
+first and answers one of three outcomes; the Leaderboard and `bms-replay` use it.
+
+```mermaid
+flowchart TD
+  replay["Replay, target ruleset"] --> readable{"Target reads it?"}
+  readable -->|no| skipped["not-simulated + reason"]
+  readable -->|yes| failed{"Played run ended on failure?"}
+  failed -->|no| full["simulated"]
+  failed -->|yes| cut["Judge up to the failure"]
+  cut --> survives{"Target gauge survives?"}
+  survives -->|no| full
+  survives -->|yes| truncated["truncated"]
+```
+
+- **not-simulated**, with a reason (`findReplayNotSimulatedReason`): `gauge` when the bare gauge is not one the target
+  defines (`P-ATTACK` under beatoraja, `EX-HARD` or `ASSIST-EASY` under LR2, `DEATH` under ???? outside a course); it is
+  never mapped to a lookalike. `custom-judge` and `gauge-auto-shift` when the replay used CUSTOM JUDGE or gauge
+  auto-shift, whose reading outside beatoraja is not defined yet. The played ruleset always simulates its own gauge.
+- **truncated**: the play ended where its survival gauge emptied (`play.endOnFailure`), and the target's gauge would have
+  survived that point. The run is judged only up to it (`stoppedAtUs`, where the played ruleset's gauge emptied): no input
+  is synthesized and no later note is missed. A course is truncated the same way when its played run stopped at a failed
+  stage the target's gauge survives. A truncated result is not ranked.
+- **simulated**: everything else, including a target whose gauge empties by the same point.
+
+`SimulateReplayOptions.onFailure` hears the chart time of the judgment that first empties a survival gauge. Tracked in [#933](https://github.com/nulltask/be-music/issues/933).
+
 ### Fidelity notes
 
 - The LR2 ruleset follows lr2oraja, cross-checked against the OpenLR2 transcription; where the two disagree on the
