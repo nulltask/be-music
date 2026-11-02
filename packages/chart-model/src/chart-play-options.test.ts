@@ -15,6 +15,9 @@ test.each([
   ['774:CRAZY_GREAT2BAD', { judge: 'GREAT2BAD' }],
   ['774:CRAZY_HELLJUDGE', { hellJudge: true }],
   ['774:CRAZY_ADDMINE', { addMine: true }],
+  ['774:NOTES_DOUBLE', { notes: 'DOUBLE' }],
+  ['774:NOTES_COPY', { notes: 'COPY' }],
+  ['774:NOTES_DBLCOPY', { notes: 'DBLCOPY' }],
 ])('compiles %s', (declaration, options) => {
   expect(compileChartPlayOptions({ initial: [declaration] })).toEqual({ version: 1, options });
 });
@@ -35,9 +38,22 @@ test('later declarations win within a family, OFF clears it, and other families 
   });
 });
 
-test('ignores other families, NOTES, legacy aliases and wrong case', () => {
+test('NOTES_OFF clears the note conversion; CRAZY_OFF does not', () => {
+  expect(compileChartPlayOptions({ initial: ['774:NOTES_COPY', '774:NOTES_DOUBLE'] }).options).toEqual({
+    notes: 'DOUBLE',
+  });
+  expect(compileChartPlayOptions({ initial: ['774:NOTES_DBLCOPY', '774:NOTES_OFF'] }).options).toEqual({});
+  expect(compileChartPlayOptions({ initial: ['774:NOTES_COPY', '774:CRAZY_OFF'] }).options).toEqual({
+    notes: 'COPY',
+  });
+});
+
+test('ignores other families, legacy aliases and wrong case', () => {
   for (const declaration of [
-    '774:NOTES_DOUBLE',
+    '774:NOTES_TRIPLE',
+    '774:CRA-HYPER',
+    '774:CRA-CPDOUBLE',
+    '774:notes_COPY',
     '774:RANDOM_S-RANDOM',
     '774:random_MIRROR',
     '774:RND-MIRROR',
@@ -47,7 +63,7 @@ test('ignores other families, NOTES, legacy aliases and wrong case', () => {
     expect(parseChartPlayOption(declaration)).toBeUndefined();
     expect(isChartPlayOptionDeclaration(declaration)).toBe(false);
   }
-  expect(compileChartPlayOptions({ initial: ['774:NOTES_DOUBLE'] }).options).toEqual({});
+  expect(compileChartPlayOptions({ initial: ['774:CRA-HYPER'] }).options).toEqual({});
 });
 
 test('hasChartPlayOptions', () => {

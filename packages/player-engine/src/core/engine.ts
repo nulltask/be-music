@@ -25,5 +25,10 @@ export {
   type ChartPlayLayout,
   type ChartPlaySelection,
 } from './chart-play-options.ts';
+export {
+  resolveChartNotesPlayVariant,
+  resolveEffectiveChartPlayOptions,
+  type ChartPlayOptionContext,
+} from './chart-notes-options.ts';
 
 export type { AudioSinkClockState } from '../audio-clock.ts';
