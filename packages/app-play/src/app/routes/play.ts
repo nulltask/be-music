@@ -445,7 +445,8 @@ export class PlayRoute {
       },
       onChartFinished: (result: PlayResult) => {
         if (practicing) {
-          // As beatoraja does, a finished PRACTICE play returns to its practice setup, where START plays the range again.
+          // The play loops its range in place until ESC (#949), so it only finishes when its judge cannot go back to
+          // the start; it is then made again, as the range would play again from beatoraja's practice setup.
           void this.playChart(chartEntry, playAgainOverrides({ autoPlay, replay }));
           return;
         }
