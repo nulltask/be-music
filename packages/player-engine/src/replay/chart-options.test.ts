@@ -97,7 +97,10 @@ test('a stage starting at local zero records its active initial state and preser
 });
 
 test('chart gameplay programs keep only known options', () => {
-  const raw = { version: 1, options: { random: 'ALL+', judge: 'GREAT2BAD', hellJudge: true, addMine: true } };
+  const raw = {
+    version: 1,
+    options: { random: 'ALL+', judge: 'GREAT2BAD', hellJudge: true, addMine: true, notes: 'DBLCOPY' },
+  };
   expect(parseChartPlayOptionProgram(raw)).toEqual(raw);
   expect(parseChartPlayOptionProgram({ version: 1, options: {} })).toEqual({ version: 1, options: {} });
 });
@@ -108,7 +111,8 @@ test.each([
   { version: 1, options: { random: 'S-RANDOM' } },
   { version: 1, options: { judge: 'BAD2POOR' } },
   { version: 1, options: { hellJudge: false } },
-  { version: 1, options: { notes: 'DOUBLE' } },
+  { version: 1, options: { notes: 'TRIPLE' } },
+  { version: 1, options: { notes: 'OFF' } },
 ])('rejects malformed chart gameplay programs: %j', (value) => {
   expect(() => parseChartPlayOptionProgram(value)).toThrow();
 });

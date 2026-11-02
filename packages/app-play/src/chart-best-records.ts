@@ -3,14 +3,16 @@
 // rules they are kept by — merging a play, what a play contributes, which plays count — are `@be-music/player-engine/records`.
 
 import {
+  chartProgramCopiesChart,
   courseStageKeepsRecord,
   playKeepsRecord,
   type BestRecord,
   type RecordPlayKind,
   type RecordSlot,
 } from '@be-music/player-engine/records';
+import { compileChartPlayOptions } from '@be-music/chart-model';
 import { isClearLamp, type RulesetId } from '@be-music/player-engine/ruleset';
-import type { LibraryChart } from '@be-music/player-scene-model';
+import { resolveLibraryChartPlayVariant, type LibraryChart } from '@be-music/player-scene-model';
 
 const STORAGE_KEY = 'be-music.chart-best-records';
 /**
@@ -88,6 +90,19 @@ export function courseStageRecordKey(
   return courseStageKeepsRecord(play)
     ? rulesetRecordKey(play.judgeRuleset, chartBestRecordKey(chartEntry, chartSHA256))
     : undefined;
+}
+
+/**
+ * Whether a chart's own `774:NOTES_COPY` / `DBLCOPY` makes it a double-play chart outside a course (#932): its record is
+ * then of the double-play chart, which a course stage (keeping its key mode, without the copy) must not update
+ * (`RecordPlayKind.chartCopyLeftOut`). Read from the declarations outside `#RANDOM`, as a stage starts.
+ */
+export function chartCopiesItself(chartEntry: LibraryChart): boolean {
+  const { bms } = chartEntry.chart;
+  const program = compileChartPlayOptions({ initial: bms.options ?? (bms.option ? [bms.option] : []) });
+  return (
+    program.options.notes !== undefined && chartProgramCopiesChart(program, resolveLibraryChartPlayVariant(chartEntry))
+  );
 }
 
 /**

@@ -19,7 +19,9 @@ describe('designed entries', () => {
       'createTempoClock',
       'manualPlay',
       'preparePlaybackChart',
+      'resolveChartNotesPlayVariant',
       'resolveChartRulesetFacts',
+      'resolveEffectiveChartPlayOptions',
       'resolvePlayChart',
     ]);
   });
