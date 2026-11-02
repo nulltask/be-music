@@ -486,6 +486,12 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     const seconds = play.currentSeconds();
     const bpm = play.displayBPM(seconds);
     const second = play.secondPlayer;
+    // A replay ghost paced as the target (its EX score now and over the chart): numbers 151 / 153, bar graphs 14 / 15.
+    const targets = frame?.scoreTargets;
+    const target =
+      targets?.targetPaceEXScore !== undefined
+        ? { exScore: targets.targetPaceEXScore, finalEXScore: targets.targetEXScore ?? targets.targetPaceEXScore }
+        : undefined;
     this.lr2State = resolveLR2PlayState(setup, {
       play: frame?.state ?? play.playState,
       score: play.score,
@@ -503,6 +509,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
         '1P': play.judgeSideState['1P'].judge || 'EMPTY_POOR',
         '2P': play.judgeSideState['2P'].judge || 'EMPTY_POOR',
       },
+      ...(target !== undefined ? { target } : {}),
     });
   }
 

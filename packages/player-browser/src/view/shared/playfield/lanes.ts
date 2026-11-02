@@ -13,6 +13,7 @@ import { renderDefaultLanes } from './default-playfield.ts';
 import { resolveLaneGeometry } from '../../built-in/play-chrome.ts';
 import type { PlayfieldContext } from './context.ts';
 import { resolveKeyBeamAlpha } from './key-beam.ts';
+import { renderGhostLanes } from './ghost-lanes.ts';
 
 export function renderLanes(ctx: PlayfieldContext, width: number, height: number): void {
   ctx.laneLayer.clear();
@@ -81,20 +82,21 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
   if (!skinOwnsLanes && skinlessLanes.length > 0) {
     const beat = ctx.play.currentBeat(ctx.play.currentSeconds());
     const binding = ctx.skinBinding;
-    if (binding) {
-      binding.addLanes(skinlessLanes);
-      return;
-    }
-    renderDefaultLanes({
-      graphics: ctx.laneLayer,
-      lanes: skinlessLanes,
-      beatPhase: beat - Math.floor(beat),
-      nowMs: ctx.play.playClock(),
-      combo: ctx.play.playState.combo,
-      effects: ctx.options.beMusicEffects ?? 'full',
-      audio: ctx.audioFrame,
-    });
+    if (binding) binding.addLanes(skinlessLanes);
+    else
+      renderDefaultLanes({
+        graphics: ctx.laneLayer,
+        lanes: skinlessLanes,
+        beatPhase: beat - Math.floor(beat),
+        nowMs: ctx.play.playClock(),
+        combo: ctx.play.playState.combo,
+        effects: ctx.options.beMusicEffects ?? 'full',
+        audio: ctx.audioFrame,
+      });
   }
+  // A lane-overlay ghost's marks go over the lanes, whoever drew them.
+  const ghostLanes = ctx.play.ghostLanes;
+  if (ghostLanes !== undefined) renderGhostLanes(ctx.laneLayer, ctx.play.laneX, ghostLanes, ctx.play.playClock());
 }
 
 /** How bright `channel`'s key beam is: every lane's, whatever the play variant. */

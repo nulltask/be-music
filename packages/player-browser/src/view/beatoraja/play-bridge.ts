@@ -436,6 +436,10 @@ export class BeatorajaPlayBridge {
     this.applyAnimationTimers(frame);
     this.applyState(frame.state);
     this.play.judgeTimingMs = frame.judgeTimingMs ?? 0;
+    // A replay ghost paced as the target: numbers 121-123.
+    const targetEXScore = frame.scoreTargets?.targetEXScore;
+    if (targetEXScore !== undefined && targetEXScore > 0) this.play.targetEXScore = targetEXScore;
+    else delete this.play.targetEXScore;
     this.activeOps.delete(BEATORAJA_OP.CONSTANT);
     for (const op of resolveBeatorajaConstantOps(frame.visualConstant)) this.activeOps.add(op);
     this.activeOps.delete(BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN);

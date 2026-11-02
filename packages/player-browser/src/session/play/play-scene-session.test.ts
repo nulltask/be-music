@@ -2,7 +2,7 @@ import { createEmptyJSON } from '@be-music/chart-source';
 import { createPlayerInputSignalBus, type PlayerInputCommand } from '@be-music/player-engine/signals';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { PlaySceneSession, resolvePlayStage } from './play-scene-session.ts';
+import { PlaySceneSession, resolveFrameScoreTargets, resolvePlayStage } from './play-scene-session.ts';
 import { PlaySession } from './play-session.ts';
 
 const CHART: LibraryChart = {
@@ -17,6 +17,8 @@ const CHART: LibraryChart = {
   totalNotes: 0,
   chart: createEmptyJSON('bms'),
 };
+
+const play0 = () => ({ perfect: 0, great: 0, good: 0, bad: 0, poor: 0 });
 
 function createSceneSession(options: ConstructorParameters<typeof PlaySession>[0] = {}) {
   const play = new PlaySession(options);
@@ -66,7 +68,7 @@ describe('PlaySceneSession', () => {
   test('a view that shows the ghost draws the playfield it presents, brought to the frame’s second', () => {
     const play = new PlaySession();
     const presented = { presented: true } as never;
-    const ghost = { update: vi.fn(), present: vi.fn(() => presented) };
+    const ghost = { drawsOnPlayfield: true, update: vi.fn(), present: vi.fn(() => presented) };
     play.ghost = ghost;
     let shows = false;
     const session = new PlaySceneSession(play, {
@@ -81,6 +83,42 @@ describe('PlaySceneSession', () => {
     expect(session.frame(10).playfield).toBe(presented);
     expect(ghost.present).toHaveBeenCalledWith(play);
     expect(ghost.update).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
+  });
+
+  test('a pacemaker ghost runs on any view and stands as the frame’s target, the field drawn only where it shows', () => {
+    const play = new PlaySession();
+    const pacemaker = { targetEXScore: 300, targetPaceEXScore: 12, targetLabel: 'GHOST' };
+    const ghost = {
+      drawsOnPlayfield: false,
+      update: vi.fn(),
+      present: vi.fn(() => ({ presented: true }) as never),
+      scoreTarget: vi.fn(() => pacemaker),
+    };
+    play.ghost = ghost;
+    const session = new PlaySceneSession(play, {
+      chart: CHART,
+      playOptions: DEFAULT_PLAY_OPTIONS,
+      scoreTargets: { bestEXScore: 120, targetEXScore: 144 },
+      showsGhost: () => false,
+    });
+    const frame = session.frame(0);
+    expect(ghost.update).toHaveBeenCalled();
+    expect(frame.playfield).toBe(play);
+    expect(frame.scoreTargets).toEqual({ bestEXScore: 120, ...pacemaker });
+    expect(ghost.scoreTarget).toHaveBeenCalledWith(play.score);
+  });
+
+  test('resolveFrameScoreTargets keeps the host’s targets without a pacemaker', () => {
+    const host = { bestEXScore: 1 };
+    expect(resolveFrameScoreTargets(host, undefined, play0())).toBe(host);
+    expect(resolveFrameScoreTargets(host, {}, play0())).toBe(host);
+    expect(
+      resolveFrameScoreTargets(
+        undefined,
+        { scoreTarget: () => ({ targetEXScore: 4, targetPaceEXScore: 2, targetLabel: 'X' }) },
+        play0(),
+      ),
+    ).toEqual({ targetEXScore: 4, targetPaceEXScore: 2, targetLabel: 'X' });
   });
 
   test('reports the load progress while the play loads', () => {
