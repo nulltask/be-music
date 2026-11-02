@@ -179,6 +179,8 @@ The monorepo Workers deploy with `cf` from `cloudflare.config.ts`; Donate uses W
 production and `devel` to the preview. All of them run in the Be-Music Cloudflare account, which bills only Be-Music.
 Its `workers.dev` subdomain is `be-music.workers.dev`.
 
+The Player is an installable web app with a service worker ([player-web.md](./player-web.md#installing-the-player)). The `play` Worker serves the service worker (`/sw.js`) with `Cache-Control: no-cache` and the web app manifest (`/manifest.webmanifest`) with `application/manifest+json`, whatever the Static Assets defaults are (`packages/worker-play/src/pwa-assets.ts`). The service worker never caches the Worker's own routes (`/api/*`, `/__url-load-proxy`), so sign-in, player settings and the Leaderboard API always reach the Worker; it keeps the ffmpeg core from R2 once a transcode has loaded it.
+
 ## Storage ownership
 
 Accounts owns public profiles and avatars; all edits take place there. Leaderboard retains only its public ranking projection, player identity mappings and score data. See [ADR 0009](./adr/0009-accounts-profiles.md) for synchronization and the migration sequence.
