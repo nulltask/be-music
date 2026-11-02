@@ -26,6 +26,7 @@ import {
   stat,
   text,
 } from './theme.ts';
+import { drawCabinetHUD } from './cabinet.ts';
 import { resolvePortraitGameplayHUD } from './layout.ts';
 
 const NOTE_HEIGHT = 6;
@@ -38,7 +39,8 @@ const COLUMN_TOP = 66;
 const MARGIN = 16;
 
 /**
- * The play screen. Landscape: lanes and notes on the left, the BGA beside them, the HUD around them. Portrait: the host
+ * The play screen. Landscape: lanes and notes on the left, the BGA beside them, the HUD in the cabinet layout around
+ * them (`cabinet.ts`); the landscape touch layout, whose lanes take the stage, keeps a lighter HUD. Portrait: the host
  * puts the lanes across the lower part of the stage and the BGA at the top left; the HUD fills the band above the lanes
  * (see {@link resolvePortraitGameplayHUD}). The lanes, notes, bombs and BGA are drawn the same way in both — they come
  * placed in `frame.layout` — so only the HUD and the judgement's height depend on `layout.orientation`.
@@ -71,11 +73,18 @@ export function drawGameplay({ context: ctx, width, height }: BeMusicSurface<'2d
     const hud = resolvePortraitGameplayHUD(layout);
     drawJudgement(ctx, frame, hud.judgeY);
     drawPortraitHUD(ctx, frame, hud);
+  } else if (layout.mode === 'standard') {
+    const { top, judgementY } = layout.playfield;
+    drawJudgement(ctx, frame, Math.round(top + (judgementY - top) * CABINET_JUDGE_SHARE));
+    drawCabinetHUD(ctx, frame);
   } else {
     drawJudgement(ctx, frame, 220);
     drawHUD(ctx, frame, width, height);
   }
 }
+
+/** How far down the lanes the judgement word sits on the cabinet layout: low, just above the judgement line. */
+const CABINET_JUDGE_SHARE = 0.68;
 
 /** Lane backgrounds, a light column for each held key, and the judgement line. */
 function drawLanes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {

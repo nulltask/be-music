@@ -25,7 +25,7 @@ import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
 import type { BeatorajaPlayEntry } from '../../services/themes/beatoraja.ts';
 import { courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
-import type { PlayerScene, PlayerWebElements } from '../../types.ts';
+import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { ResolvedPlayKit } from '../family-kits.ts';
 import { SceneRouter } from '../scene-router.ts';
@@ -180,6 +180,14 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       activeStageRecordKey: undefined as string | undefined,
       recordActivePlay: vi.fn<PlayRouteDeps['records']['recordActivePlay']>(),
       recordActiveCourseStage: vi.fn<PlayRouteDeps['records']['recordActiveCourseStage']>(),
+      takeActivePlayRecordKey: vi.fn<PlayRouteDeps['records']['takeActivePlayRecordKey']>(function (this: {
+        activePlayRecordKey: string | undefined;
+      }) {
+        const key = this.activePlayRecordKey;
+        this.activePlayRecordKey = undefined;
+        return key;
+      }),
+      recordPlayUnder: vi.fn<PlayRouteDeps['records']['recordPlayUnder']>(),
     },
     leaderboard: { maybeSubmit: vi.fn<PlayRouteDeps['leaderboard']['maybeSubmit']>() },
     familyKits: {
@@ -520,6 +528,55 @@ describe('PlayRoute.playChart: a chart played at once', () => {
     }
   });
 
+  test('"Ghost" hands a built-in play the picked source in its mode, and a replay or another family none', async () => {
+    const replays = { slots: vi.fn(() => []), read: vi.fn(async () => undefined) };
+    /** A harness whose Debug Menu asks for a ghost. */
+    async function withGhost(
+      family: Family = 'built-in',
+      ghost: Pick<PlayerGUIState, 'ghost' | 'ghostMode'> = { ghost: 'OWN_BEST', ghostMode: 'PLAYFIELD' },
+    ): Promise<Harness> {
+      const h = await harness({ family });
+      const route = new PlayRoute({
+        ...h.deps,
+        guiState: { ...h.deps.guiState, ...ghost },
+        ghostSources: { replays },
+        debugMenu: h.deps.debugMenu as unknown as DebugMenu,
+      });
+      return { ...h, route };
+    }
+    const play = await playing(await withGhost(), chartEntry('a'));
+    expect(play.options.settings.ghost?.kind).toBe('own-best');
+    expect(play.options.settings.ghostMode).toBe('side-playfield');
+    await expect(play.options.settings.ghost?.load()).resolves.toBeUndefined();
+    expect(replays.slots).toHaveBeenCalledOnce();
+    const replayed = await playing(await withGhost(), chartEntry('a'), { autoPlay: true, replay: REPLAY });
+    expect(replayed.options.settings).not.toHaveProperty('ghost');
+    expect((await playing(await withGhost('lr2'), chartEntry('a'))).options.settings).not.toHaveProperty('ghost');
+    // Off by default.
+    expect((await playing(await harness(), chartEntry('a'))).options.settings).not.toHaveProperty('ghost');
+  });
+
+  test('a pacemaker ghost goes to every family; a source without a reader gives none', async () => {
+    const replays = { slots: vi.fn(() => []), read: vi.fn(async () => undefined) };
+    async function withGhost(family: Family, ghost: PlayerGUIState['ghost']): Promise<Harness> {
+      const h = await harness({ family });
+      const route = new PlayRoute({
+        ...h.deps,
+        guiState: { ...h.deps.guiState, ghost, ghostMode: 'PACEMAKER' },
+        ghostSources: { replays },
+        debugMenu: h.deps.debugMenu as unknown as DebugMenu,
+      });
+      return { ...h, route };
+    }
+    const lr2 = await playing(await withGhost('lr2', 'REPLAY_SLOT_2'), chartEntry('a'));
+    expect(lr2.options.settings.ghost?.kind).toBe('replay-slot');
+    expect(lr2.options.settings.ghost?.label).toBe('SLOT 2');
+    expect(lr2.options.settings.ghostMode).toBe('pacemaker');
+    // No Leaderboard reader was given.
+    const top = await playing(await withGhost('beatoraja', 'LEADERBOARD_TOP'), chartEntry('a'));
+    expect(top.options.settings).not.toHaveProperty('ghost');
+  });
+
   test('a course stage carries its run on, with its course handed to the play', async () => {
     const h = await harness();
     const active = h.deps.courses.beginRun(course());
@@ -649,16 +706,20 @@ describe('PlayRoute: where a play leads', () => {
     play.progress.mockReturnValue(progress);
     const replay = { play: { mode: 'manual', aborted: true } } as unknown as BeMusicReplay;
     play.waitForReplay.mockResolvedValueOnce(replay);
-    expect(h.deps.records.activePlayRecordKey).toBeDefined();
+    const key = h.deps.records.activePlayRecordKey;
+    expect(key).toBeDefined();
     play.options.on.exit();
-    // BP: 1 BAD + 1 POOR + 2 empty POORs + the 4 notes never reached.
-    expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith({
-      lamp: 'FAILED',
-      exScore: 7,
-      maxCombo: 4,
-      missCount: 8,
-    });
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    // The record waits for the replay, under the key the play had: its options decide what it keeps.
+    expect(h.deps.records.activePlayRecordKey).toBeUndefined();
+    // BP: 1 BAD + 1 POOR + 2 empty POORs + the 4 notes never reached.
+    await vi.waitFor(() =>
+      expect(h.deps.records.recordPlayUnder).toHaveBeenCalledWith(
+        key,
+        { lamp: 'FAILED', exScore: 7, maxCombo: 4, missCount: 8 },
+        replay,
+      ),
+    );
     await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
   });
 
@@ -673,6 +734,7 @@ describe('PlayRoute: where a play leads', () => {
     play.options.on.exit();
     await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
     expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.records.recordPlayUnder).not.toHaveBeenCalled();
   });
 
   test('Escape from a play that keeps no record (a replay) saves and sends nothing', async () => {
@@ -683,6 +745,7 @@ describe('PlayRoute: where a play leads', () => {
     play.options.on.exit();
     await settle();
     expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.records.recordPlayUnder).not.toHaveBeenCalled();
     expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
   });
@@ -699,6 +762,7 @@ describe('PlayRoute: where a play leads', () => {
     play.options.on.exit();
     await settle();
     expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+    expect(h.deps.records.recordPlayUnder).not.toHaveBeenCalled();
     expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
   });
 
@@ -922,4 +986,5 @@ test('Escape from a zero-total spec play keeps no local best but still submits i
   play.options.on.exit();
   await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('zero')));
   expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
+  expect(h.deps.records.recordPlayUnder).not.toHaveBeenCalled();
 });

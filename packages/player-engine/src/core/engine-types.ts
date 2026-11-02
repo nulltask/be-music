@@ -1,4 +1,4 @@
-import type { ChartOptionProgram, ChartOptionDiagnostic } from '@be-music/chart-model';
+import type { ChartOptionProgram, ChartOptionDiagnostic, ChartPlayOptionProgram } from '@be-music/chart-model';
 import type { ChartTextStage } from './chart-text.ts';
 export type { ChartTextStage } from './chart-text.ts';
 import type { BattleMode } from './battle-mode.ts';
@@ -107,10 +107,11 @@ export interface PlayerPlaySettings {
   /** beatoraja CUSTOM JUDGE rates; absent while the option is off. Recorded into the replay. */
   customJudge?: import('../ruleset/custom-judge.ts').BeatorajaCustomJudge;
   /**
-   * beatoraja PRACTICE: plays only the range, with its gauge, TOTAL and judgerank, from 1000 ms before the range. The
-   * source applies no chart modifier in PRACTICE; a practice play records no replay.
+   * PRACTICE (beatoraja's mode, under every ruleset): plays only the range, with its gauge, TOTAL and judgerank read under
+   * the judge ruleset, from 1000 ms before the range. The source applies no chart modifier in PRACTICE; a practice play
+   * records no replay.
    */
-  practice?: import('./practice.ts').BeatorajaPractice;
+  practice?: import('./practice.ts').PlayPractice;
   /**
    * The automatic judge-timing adjustment of a manual play (default `'OFF'`): beatoraja's calibration or LR2's ON /
    * SILENT. Display-only: it moves {@link judgeTimingMs}, never the input or audio clocks. AUTO and replays never adjust.
@@ -138,6 +139,11 @@ export interface PlayerPlaySettings {
   /** Independently assist the source play side; explicit values override autoScratch for that side. */
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
+  /**
+   * ANY KEY (That-Which-Must-Not-Be-Named PC, #751): a press takes the nearest unjudged note in reach on any lane and
+   * holds that lane until its key comes up. Manual play only; the replay records it as `play.anyKey`.
+   */
+  anyKey?: boolean;
   /**
    * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
@@ -188,8 +194,12 @@ export interface PlayerPlaySettings {
    * dead (`failedMidPlay`). Recorded into the replay (`play.endOnFailure`) so re-simulations stop at the same point.
    */
   endOnFailure?: boolean;
-  /** Source-defined beatoraja policy; when present, takes precedence over endOnFailure. */
+  /**
+   * Gauge auto-shift (beatoraja's policies, along the judge ruleset's own gauge ladder); when present, takes precedence
+   * over endOnFailure. Applies to both players of a two-player play.
+   */
   gaugeAutoShift?: GaugeAutoShift;
+  /** The lowest gauge BEST CLEAR / SELECT TO UNDER shift to. */
   bottomShiftableGauge?: import('../ruleset/gauge-type.ts').GaugeShiftBottom;
   /**
    * This play is one stage of a course: the stage runs on the ruleset's course gauge under the course's judge
@@ -228,6 +238,12 @@ export interface PlayerStageRank {
 export interface PlayerPlayRuntime {
   /** Versioned effective chart-authored display operations, e.g. a recorded replay or NONSTOP program. */
   chartOptionProgram?: ChartOptionProgram;
+  /**
+   * Chart-authored gameplay options (RANDOM, judgment CRAZY, #844) the play runs with, e.g. a recorded replay's. Absent:
+   * compiled from the chart's initial `#OPTION`s. A host applies the arrangement and ADDMINE before preparing the chart;
+   * the engine applies the judge modifiers and records the program.
+   */
+  chartPlayOptionProgram?: ChartPlayOptionProgram;
   /** Diagnostics retained by a host compiling stage-owned programs before playback. */
   chartOptionDiagnostics?: readonly ChartOptionDiagnostic[];
   /** Stage-owned chart text supplied by a NONSTOP host; overrides flattened TEXT definitions. */

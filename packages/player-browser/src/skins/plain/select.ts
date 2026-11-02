@@ -1,5 +1,6 @@
 import {
   describeCourseCard,
+  describeDanRanks,
   formatPlayVariantLabel,
   resolveStageOrientation,
   resolveChartRowFacts,
@@ -36,11 +37,18 @@ export function drawSelect(surface: BeMusicSurface<'2d'>, frame: BeMusicSelectFr
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, width, height);
   text(ctx, 'MUSIC SELECT', MARGIN, 24, { size: 14, weight: 800 });
+  // The player's dan ranks after the heading (`7K 七段 · 14K 初段`), sharing the strip with the folder label.
+  const danRanks = describeDanRanks(frame.danRanks);
+  const headerW = width - MARGIN * 2 - 140;
+  if (danRanks !== '') {
+    text(ctx, 'DAN', MARGIN + 132, 24, { size: 9, weight: 800, color: MUTED });
+    text(ctx, danRanks, MARGIN + 158, 24, { size: 11, weight: 800, maxWidth: headerW / 2 - 26, nowMs: frame.nowMs });
+  }
   text(ctx, frame.folderLabel ?? `${frame.totalCharts} charts`, width - MARGIN, 24, {
     size: 11,
     color: MUTED,
     align: 'right',
-    maxWidth: width - MARGIN * 2 - 140,
+    maxWidth: danRanks !== '' ? headerW / 2 - 8 : headerW,
     nowMs: frame.nowMs,
   });
 

@@ -1,5 +1,12 @@
 # @be-music/service-web-theme
 
+## 0.3.1
+
+### Patch Changes
+
+- fe5cf63: The shared header can show a Settings button in place of the Play link, and a fullscreen button beside it. The Settings button reports whether its menu is open. Play asks for both, and its header spans the viewport instead of the centered column the other services keep. The other services still link to Play.
+- 9300c75: The shared header shows a Beta badge beside the site title, and the shared footer labels each service Public Beta and says that data may be deleted without notice, in English and Japanese.
+
 ## 0.3.0
 
 ### Minor Changes

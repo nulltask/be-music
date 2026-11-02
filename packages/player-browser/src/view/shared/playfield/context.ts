@@ -26,6 +26,7 @@ import type { BeMusicJudgmentKind, BeMusicLaneCover } from '../../../skin/be-mus
 import type { LaneGeometryContext } from '../../built-in/play-chrome.ts';
 import type { PlayfieldLaneRect, PlayfieldSkin } from '../../types.ts';
 import type { SideLaneRun } from './measure-line-runs.ts';
+import type { GhostLaneOverlay } from './ghost-lanes.ts';
 
 /**
  * View-side runtime note alias. Used to keep `this.notes` typed even though the view no longer extends
@@ -119,6 +120,11 @@ export interface PlayfieldRuntime {
   readonly touchLiftCount: number;
   readonly bombStartedAt: Map<string, number>;
   readonly bombJudge: Map<string, BeMusicJudgmentKind>;
+  /**
+   * A ghost's recorded presses and judgments to draw over the lanes (`ghost-lanes.ts`): present only on a playfield a
+   * lane-overlay ghost presents over the play, never on the play itself.
+   */
+  readonly ghostLanes?: GhostLaneOverlay;
   readonly hasBGA: boolean;
   readonly bgaTimeline: {
     base: BGACue[];
@@ -132,7 +138,10 @@ export interface PlayfieldRuntime {
   readonly poorBGAFallbackKey: string | undefined;
   readonly poorBGAFallbackUntilSeconds: number;
   readonly lastPoorAt: number;
-  readonly engineFrame?: Pick<PlayerUIFramePayload, 'keyBoundBGA' | 'bmsonBGA' | 'currentSeconds'>;
+  readonly engineFrame?: Pick<
+    PlayerUIFramePayload,
+    'keyBoundBGA' | 'bmsonBGA' | 'currentSeconds' | 'chartOptions' | 'summary'
+  >;
   readonly bgaTextures: Map<string, Texture>;
   readonly bgaLayerTextures: Map<string, Texture>;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;

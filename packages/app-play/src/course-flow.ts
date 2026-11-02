@@ -1,3 +1,4 @@
+import { playerText } from './player-copy.ts';
 import {
   CourseRun,
   type CourseConstraint,
@@ -18,6 +19,7 @@ import {
 } from '@be-music/player-engine/replay';
 import {
   resolveCourseView,
+  resolveLibraryChartKeyMode,
   type CourseView,
   type LibraryChart,
   type LibraryCourse,
@@ -27,6 +29,8 @@ import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-re
 import type { NonstopPlayFailure } from './nonstop-course.ts';
 import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-music/player-engine/records';
 import { rulesetRecordKey } from './chart-best-records.ts';
+import { resolveDanRankUpdate } from './dan-ranks.ts';
+import type { DanRank } from '@be-music/player-engine/records';
 
 /**
  * The decisions the player's course flow takes, kept apart from the scenes that act on them so they can be tested: what
@@ -234,15 +238,16 @@ export function courseDecideSong(course: LibraryCourse, first: LibraryChart): Li
 /** The status line for a course that cannot start because some of its stages are not in the collection. */
 export function describeUnplayableCourse(course: LibraryCourse): string {
   const missing = course.stages.filter((stage) => stage.chart === undefined).length;
-  const count = missing === 1 ? '1 stage is' : `${missing} stages are`;
-  return `${course.definition.name}: ${count} not in the collection`;
+  return playerText().course.stageMissing(course.definition.name, missing);
 }
 
 /** The status line for a random course whose stages could not be drawn. */
 export function describeRandomCourseDrawFailure(name: string, failure: RandomCourseDrawFailure): string {
-  const why =
-    failure.reason === 'no-candidates' ? 'matches no chart' : `has an invalid filter (${failure.error ?? ''})`;
-  return `${name}: stage ${failure.stage + 1} ${why}`;
+  const copy = playerText().course;
+  const stage = failure.stage + 1;
+  return failure.reason === 'no-candidates'
+    ? copy.randomNoChart(name, stage)
+    : copy.randomBadFilter(name, stage, failure.error ?? '');
 }
 
 /** The status line for a NONSTOP course that could not be stitched. */
@@ -250,10 +255,10 @@ export function describeNonstopPrepareFailure(
   name: string,
   failure: { reason: NonstopPlayFailure; stage?: number },
 ): string {
-  const stage = failure.stage !== undefined ? ` (stage ${failure.stage + 1})` : '';
-  if (failure.reason === 'generic-layout-mismatch')
-    return `${name}: all NONSTOP stages must use the same generic keyboard layout${stage}`;
-  return `${name}: cannot stitch the NONSTOP course: ${failure.reason}${stage}`;
+  const copy = playerText().course;
+  const stage = failure.stage !== undefined ? copy.stageNote(failure.stage + 1) : '';
+  if (failure.reason === 'generic-layout-mismatch') return copy.nonstopLayout(name, stage);
+  return copy.nonstopStitch(name, failure.reason, stage);
 }
 
 /**
@@ -270,6 +275,31 @@ export function resolveCourseBestRecordUpdate(
   const ruleset = resolveCoursePlayedRuleset(courseLog);
   if (ruleset === undefined || !courseRunKeepsRecord(courseLog)) return undefined;
   return { key: rulesetRecordKey(ruleset, key), play: courseRunRecordPlay(result) };
+}
+
+/**
+ * The dan rank a course run certifies and the key it is kept under (`resolveDanRankUpdate`), or `undefined`: only a run
+ * that keeps a best record ({@link resolveCourseBestRecordUpdate}) can certify one, under the judge ruleset it was played
+ * on, in the key mode the course names or its stages' charts share. Existing records are never read back into ranks: a
+ * rank comes from runs played from now on.
+ */
+export function resolveCourseDanRankUpdate(
+  course: Pick<LibraryCourse, 'definition' | 'stages'>,
+  courseLog: Pick<BeMusicCourseReplay, 'stages' | 'nonstop'>,
+  result: Pick<ReplayCourseResult, 'lamp'>,
+): { key: string; rank: DanRank } | undefined {
+  const ruleset = resolveCoursePlayedRuleset(courseLog);
+  if (ruleset === undefined || !courseRunKeepsRecord(courseLog)) return undefined;
+  return resolveDanRankUpdate(
+    {
+      definition: course.definition,
+      stageKeyModes: course.stages.map((stage) =>
+        stage.chart !== undefined ? resolveLibraryChartKeyMode(stage.chart) : undefined,
+      ),
+      lamp: result.lamp,
+    },
+    ruleset,
+  );
 }
 
 /** What a play is, for the gameplay exits below. */

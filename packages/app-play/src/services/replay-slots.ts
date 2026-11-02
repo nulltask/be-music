@@ -14,7 +14,7 @@ import {
   type BeMusicCourseReplay,
   type BeMusicReplay,
 } from '@be-music/player-engine/replay';
-import { clearLampRank, type ClearLamp } from '@be-music/player-engine/ruleset';
+import { clearLampOrder, type ClearLamp } from '@be-music/player-engine/ruleset';
 import type { BestRecord, RecordPlay } from '@be-music/player-engine/records';
 import { REPLAY_SLOT_COUNT, type LibraryChart, type LibraryCourse } from '@be-music/player-scene-model';
 
@@ -23,8 +23,11 @@ export { REPLAY_SLOT_COUNT };
 /** The budget every slot shares, in compressed bytes: past it, the worst-scoring replays are removed. */
 export const REPLAY_SLOT_BUDGET_BYTES = 500 * 1024 * 1024;
 
-/** Bumped when a stored record's shape changes; a record of another version is ignored. */
-const RECORD_VERSION = 1;
+/**
+ * The stored record's revision. `0` while the shape is still being defined: it may change incompatibly without the
+ * number moving. Any other stamp is unreadable.
+ */
+const RECORD_VERSION = 0;
 
 /**
  * What a slot belongs to: a chart, by its chart fingerprint (`bmfp0:…`, or `sha256:<file hash>` for a chart that cannot
@@ -213,7 +216,7 @@ export function qualifiesReplayAutoSave(
 ): boolean {
   const exScore = previous?.exScore ?? 0;
   const maxCombo = previous?.maxCombo ?? 0;
-  const lamp = clearLampRank(previous?.lamp ?? 'NO_PLAY');
+  const lamp = clearLampOrder(previous?.lamp ?? 'NO_PLAY');
   const unplayed = previous === undefined || previous.lamp === 'NO_PLAY';
   const missCount = previous?.missCount ?? Number.POSITIVE_INFINITY;
   switch (rule) {
@@ -232,12 +235,12 @@ export function qualifiesReplayAutoSave(
     case 'max-combo-update-or-equal':
       return play.maxCombo >= maxCombo;
     case 'clear-update':
-      return clearLampRank(play.lamp) > lamp;
+      return clearLampOrder(play.lamp) > lamp;
     case 'clear-update-or-equal':
-      return clearLampRank(play.lamp) >= lamp;
+      return clearLampOrder(play.lamp) >= lamp;
     case 'any-update':
       return (
-        clearLampRank(play.lamp) > lamp ||
+        clearLampOrder(play.lamp) > lamp ||
         play.maxCombo > maxCombo ||
         play.missCount < missCount ||
         play.exScore > exScore
@@ -319,7 +322,7 @@ export function parseReplaySlotRecord(value: unknown): ReplaySlotRecord | undefi
   ) {
     return undefined;
   }
-  return record as ReplaySlotRecord;
+  return { ...(record as ReplaySlotRecord), version: RECORD_VERSION };
 }
 
 /** Gzips `text` (`CompressionStream`). */

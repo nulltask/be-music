@@ -9,6 +9,10 @@ import { downloadBlob } from '@be-music/player-browser/recording';
 import { logger } from '@be-music/player-browser';
 import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from '../ui/beatoraja-skin-options.ts';
 import { LeaderboardPanel } from '../leaderboard-ui.ts';
+import { fetchLeaderboardTopReplay } from '../leaderboard.ts';
+import { GhostReplayFile } from '../services/ghost.ts';
+import { playerFullscreenElement } from '../fullscreen.ts';
+import { bindPlayerHeader, setPlayerHeaderSettingsOpen } from '../player-header.ts';
 import { SceneRouter } from './scene-router.ts';
 import { DropTarget } from './drop-target.ts';
 import { CourseRoute } from './routes/course.ts';
@@ -229,6 +233,8 @@ export class PlayerWebApp {
     // Read on use: `guiState` is initialized after this field.
     nonstopPlacement: () => this.guiState.nonstopPlacement,
   });
+  /** The replay file picked as a ghost (Debug Menu → Replay / ghost → "Ghost replay file…"), for this visit. */
+  private readonly ghostReplayFile = new GhostReplayFile();
   /** The replay slots' card, on the skins without a replay-slot UI of their own (`replay-slots-panel.ts`). */
   private readonly replaySlotsPanel = new ReplaySlotsPanel({
     service: this.replaySlots,
@@ -493,6 +499,13 @@ export class PlayerWebApp {
       results: this.resultRoute,
       playOptions: this.playOptions,
       guiState: this.guiState,
+      ghostSources: {
+        replays: this.replaySlots.store,
+        replayFile: this.ghostReplayFile,
+        // The top run under the ruleset the play is judged by.
+        fetchLeaderboardTopReplay: (chartFingerprint) =>
+          fetchLeaderboardTopReplay(chartFingerprint, this.guiState.judgeRuleset),
+      },
       debugMenu: this.debugMenu,
       compressorMode: this.compressorMode,
       deviceProfile,
@@ -535,6 +548,7 @@ export class PlayerWebApp {
   private debugMenuDeps(): DebugMenuDeps {
     return {
       settings: this.guiState,
+      ghostReplayFile: this.ghostReplayFile,
       sceneHost: this.sceneHost,
       silentMode: this.silentMode,
       leaderboard: this.leaderboard,
@@ -579,8 +593,9 @@ export class PlayerWebApp {
 
   /** What the beatoraja skin-options panel reaches of the app: the screens showing, their entries' options, applying. */
   private beatorajaSkinOptionsDeps(): BeatorajaSkinOptionsPanelDeps {
+    const surface = playerFullscreenElement(document);
     return {
-      container: this.elements.shell,
+      container: surface instanceof HTMLElement ? surface : this.elements.shell,
       beatorajaKitCaches: this.beatoraja.beatorajaKitCaches,
       gameplayView: () => this.gameplayView,
       activeBeatorajaPlay: () => this.beatoraja.activeBeatorajaPlay,
@@ -610,7 +625,12 @@ export class PlayerWebApp {
   }
 
   public start(): void {
+    this.debugMenu.watchExpanded((open) => setPlayerHeaderSettingsOpen(open));
     this.debugMenu.buildGUI();
+    bindPlayerHeader({
+      toggleDebugMenu: () => this.debugMenu.toggle(),
+      openSignIn: () => this.leaderboard.openSignIn(),
+    });
     this.courseMaker.start();
     // The replay slots load once; the select screen draws them again whenever they change.
     void this.replaySlots.store.load();

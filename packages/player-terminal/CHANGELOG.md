@@ -1,5 +1,14 @@
 # @be-music/player-terminal
 
+## 0.9.1
+
+### Patch Changes
+
+- ebe2fc2: A keyed, `#BGA`-cropped or resized video kept a transformed copy of every frame it had decoded, one per transform, so long movies held several copies. Mapped videos now transform a frame when it is shown and keep only the eight most recent.
+- 7188106: The terminal grid applies chart-authored display options: CHANGE-HS and the Y waves move notes along the lane, notes a HIDDEN option makes less than half opaque are hidden, REVERSE flips the grid so the judge row is on top, HIDJUDGE blanks the judge line, and DARK hides the BGA. The sprite-only CRAZY effects and M-SUDDEN have no grid form and are not drawn.
+- d268b7e: `bms-replay` no longer stops on a replay a ruleset cannot read: it prints that ruleset as not simulated with the reason, and marks a result judged only up to the played run's failure as TRUNCATED.
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-engine@0.13.0`, `@be-music/chart-audio-renderer@0.5.1`, `@be-music/player-node-audio@0.2.2`
+
 ## 0.9.0
 
 ### Minor Changes

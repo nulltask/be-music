@@ -74,7 +74,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 ### chart-writer (`@be-music/chart-source` -> bmson)
 
 - [x] `version` output (`bmson.version`, `1.0.0` if not specified)
-- [x] `info.resolution` output (`240` if not specified)
+- [x] `info.resolution` output (a bmson source's own; for a BMS chart, the least multiple of `240` that keeps positions exact)
 - [x] `info` Extended item `subartists` output
 - [x] `info` Extended item `chart_name` output
 - [x] `info` Extended item `mode_hint` output
@@ -231,7 +231,7 @@ flowchart TD
 
 - Generate `y = round(beat * resolution)` from beat resolution equivalent to `eventToBeat` of `@be-music/chart-model`
 - Output `bmson.version` to `version` (`1.0.0` if not specified)
-- Output `bmson.info.resolution` to `info.resolution` (`240` if not specified)
+- Output `bmson.info.resolution` to `info.resolution`; a BMS chart, which has none, gets the exact resolution described under `stringifyBmson` below
 - Output extended items of `bmson.info` (`subartists`, `chart_name`, `judge_rank`, `total`, image/preview etc.)
 - Write `info.total` from `bmson.info.total`, or from `metadata.total` for a bmson source. A BMS / JSON chart's `metadata.total` is an absolute gauge TOTAL while bmson `total` is a percentage of the player's default TOTAL (which depends on the note count and the ruleset), so it is not written and the bmson default `100` applies
 - Write `info.judge_rank` from `bmson.info.judge_rank`, or from `metadata.rank` for a bmson source. For a BMS / JSON chart, bmson `judge_rank` shares `#DEFEXRANK`'s unit (`100` = NORMAL), so a positive `#DEFEXRANK` is written verbatim; otherwise an integer `#RANK 0`–`4` (`metadata.rank`, a rank index) maps to `33` / `67` / `100` / `133` / `167` — the `#DEFEXRANK` value that judges like that rank (VERY EASY follows beatoraja's judgerank `125`; LR2 plays it as NORMAL). Any other `#RANK` (out of range or fractional) judges as NORMAL, so `judge_rank` is not written and the bmson default `100` applies. Under be-music's rulesets the conversion keeps That-Which-Must-Not-Be-Named's windows, keeps LR2's for NORMAL and `#DEFEXRANK` (within `0.4ms` for `#RANK 0`, `1`, `3`; `#RANK 4` is wider), and under beatoraja judges about 4/3 wider for every rank, because beatoraja reads bmson `judge_rank` as the judgerank itself rather than scaling it like `#DEFEXRANK`
@@ -312,7 +312,7 @@ Unknown JSON data uses optional `extraFields` envelopes on root/info, notes, tim
 
 ## Changing output resolution
 
-`stringifyBmson(chart, { resolution })` converts supported pulse-valued data to the requested grid. A finite option of at least 1 is floored; other values use the source resolution, or 240 when absent. An explicit resolution request regenerates from current events even when preservation validation is skipped. Source objects are not mutated.
+`stringifyBmson(chart, { resolution })` converts supported pulse-valued data to the requested grid. A finite option of at least 1 is floored. Otherwise a bmson source keeps its own resolution (240 when absent), and a BMS chart gets the least multiple of 240 at which every object position and measure boundary lands on a whole pulse, read from the position fractions and measure lengths (a measure length is read back to a fraction with a denominator up to 1,000,000). The resolution is capped at 61,440 (240 × 256; beatoraja reads `y` as a 32-bit integer); a chart whose grid needs more, or whose measure length is no exact fraction, rounds to that grid, under 0.5 / 61,440 beat. On 1,862 local BMS charts, 1,596 stay at 240, 158 rise to an exact grid (480, 960, 7,440, …) with every note time unchanged, and 108 reach the cap, moving notes by at most 0.03 ms; at a fixed 240 those charts had moved notes by up to 400 ms. An explicit resolution request regenerates from current events even when preservation validation is skipped. Source objects are not mutated.
 
 | Data                                             | Conversion                                                                                              |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |

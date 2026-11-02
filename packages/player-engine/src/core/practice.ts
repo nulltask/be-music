@@ -1,36 +1,35 @@
 import type { ResolvedChart } from '@be-music/chart-model';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
-import type { BeatorajaGaugeCategory, BEATORAJA_PRACTICE_GAUGE_TYPES } from '../ruleset/definitions.ts';
+import type { BeatorajaGaugeCategory } from '../ruleset/definitions.ts';
+import type { PracticeGaugeType } from '../ruleset/practice-gauge.ts';
 import type { RulesetNoteCounts } from '../ruleset/facts.ts';
 import { moveNotesToBackground } from './background-notes.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
 
 /**
- * beatoraja 0.8.9 PRACTICE (`PracticeConfiguration.PracticeProperty`): the range played and the play rules set for it.
- * Its frequency is the play's tempo and its lane options are the play's own.
+ * PRACTICE, beatoraja 0.8.9's mode (`PracticeConfiguration.PracticeProperty`), under every judge ruleset (#933): the
+ * range played and the play rules set for it, read under the judge ruleset (`PracticeRules`). Its frequency is the
+ * play's tempo and its lane options are the play's own.
  */
-export interface BeatorajaPractice {
+export interface PlayPractice {
   /** `START TIME` in chart milliseconds. */
   startMs: number;
   /** `END TIME` in chart milliseconds; absent is the source default, the chart's last timeline + 1000. */
   endMs?: number;
-  /** `GAUGE TYPE`. */
-  gauge: (typeof BEATORAJA_PRACTICE_GAUGE_TYPES)[number];
-  /** `GAUGE CATEGORY`; absent uses the play mode's. */
+  /** `GAUGE TYPE`: one of the judge ruleset's `resolvePracticeGaugeTypes`. */
+  gauge: PracticeGaugeType;
+  /** `GAUGE CATEGORY` (beatoraja only); absent uses the play mode's. */
   gaugeCategory?: BeatorajaGaugeCategory;
   /** `GAUGE VALUE`. */
   startGauge: number;
-  /** `JUDGERANK`; absent keeps the chart's. */
+  /** `JUDGERANK`, a judgerank percent read on the ruleset's own table; absent keeps the chart's. */
   judgeRank?: number;
   /** `TOTAL`; absent keeps the chart's. */
   total?: number;
 }
 
 /** The range `PracticeModifier` keeps, in milliseconds, after the source's limits on the two times. */
-export function resolvePracticeRange(
-  practice: BeatorajaPractice,
-  chartEndMs: number,
-): { startMs: number; endMs: number } {
+export function resolvePracticeRange(practice: PlayPractice, chartEndMs: number): { startMs: number; endMs: number } {
   const startMs = Math.max(0, Math.trunc(practice.startMs));
   const endMs = Math.max(startMs + 1000, Math.trunc(practice.endMs ?? chartEndMs + 1000));
   return { startMs, endMs };

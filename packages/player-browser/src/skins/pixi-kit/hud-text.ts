@@ -85,7 +85,8 @@ export function addHUDText(
 
 /**
  * Numeric readout with tabular figures: each glyph is its own pooled text centred in a fixed-width cell (see
- * `layoutTabularRun`), so a changing score or combo never shifts sideways as its digits change.
+ * `layoutTabularRun`), so a changing score or combo never shifts sideways as its digits change. Returns the glyphs'
+ * nodes, for a caller that fades them.
  */
 export function addHUDNumber(
   layer: Container,
@@ -94,12 +95,13 @@ export function addHUDNumber(
   y: number,
   opts: HUDTextOptions = {},
   pool?: ChildPool,
-): void {
+): Text[] {
   const style = resolveTextStyle(opts, isTintable(opts));
   const run = layoutTabularRun(text, (char) => measureGlyph(char, style));
   const squeeze = opts.maxWidth !== undefined && run.width > opts.maxWidth ? opts.maxWidth / run.width : 1;
   const scale = opts.scale ?? 1;
   const left = x - run.width * squeeze * scale * (opts.anchorX ?? 0);
+  const nodes: Text[] = [];
   for (const glyph of run.glyphs) {
     if (glyph.char === ' ') continue;
     const node = addHUDText(
@@ -111,12 +113,15 @@ export function addHUDNumber(
       pool,
     );
     node.scale.set(squeeze * scale, scale);
+    nodes.push(node);
   }
+  return nodes;
 }
 
 const GLYPH_WIDTH_CACHE = new WeakMap<TextStyle, Map<string, number>>();
 
-function measureGlyph(char: string, style: TextStyle): number {
+/** The advance of `char` in `style`, cached per style, for laying glyphs out in tabular cells. */
+export function measureGlyph(char: string, style: TextStyle): number {
   let widths = GLYPH_WIDTH_CACHE.get(style);
   if (!widths) {
     widths = new Map();

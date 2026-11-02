@@ -1,6 +1,7 @@
 /** @jsxImportSource hono/jsx */
 /** The About page's text, one version per page language. */
 import type { Child } from 'hono/jsx';
+import { PUBLIC_BETA_DELETION, PUBLIC_BETA_LABEL } from '@be-music/service-web-theme';
 import { PROSE_LINK, ProseSection as Section } from './components/prose.tsx';
 import type { Locale } from './i18n/index.ts';
 import { SOURCE_URL } from './layout.tsx';
@@ -58,7 +59,7 @@ const en: AboutContent = {
     { title: 'Every play a replay', text: 'download any replay and watch it judged again.', more: 'replays' },
     {
       title: 'No sign-up to start',
-      text: 'play anonymously, and create an account whenever you like.',
+      text: 'start as a guest, and create an account whenever you like.',
       more: 'accounts',
     },
     {
@@ -82,9 +83,11 @@ const en: AboutContent = {
         </p>
         <p>
           It does so three times, under the <strong>LR2</strong>, <strong>beatoraja</strong> and{' '}
-          <strong>That-Which-Must-Not-Be-Named</strong> scoring rules: their judgment windows, gauges and clear lamps.
-          Every play is in all three rankings. The rules a play was <em>played with</em> are marked on it; the rules the
-          pages show are yours to pick in the header. They are how a play is counted, not the software it came from.
+          <strong>That-Which-Must-Not-Be-Named</strong> scoring rules: their judgment windows, gauges and clear lamps. A
+          play that ranks is in all three rankings. A play at another tempo, a course stage on its own, or a bmson play
+          with TOTAL 0 and no recovery is kept but not ranked, and so is a run of a course that is not released (a made
+          or a random course). The rules a play was <em>played with</em> are marked on it; the rules the pages show are
+          yours to pick in the header. They are how a play is counted, not the software it came from.
         </p>
       </Section>
       <Section id="charts" title="Charts">
@@ -100,19 +103,21 @@ const en: AboutContent = {
       </Section>
       <Section id="accounts" title="Accounts">
         <p>
-          Playing needs no sign-up: your plays are recorded <strong>anonymously</strong> in that browser. Rankings show
-          anonymous plays when you turn them on.
+          Submitting a play needs a sign-in. A <strong>guest</strong> needs no passkey: those plays stay{' '}
+          <strong>anonymous</strong> in that browser. Rankings show anonymous plays when you turn them on.
         </p>
         <p>
-          <strong>Create an account</strong> and your plays so far come with you and join the rankings, and you can sign
-          in on another device. Signing in uses a passkey (your device’s fingerprint, face or PIN). Sign-in with Google
-          and Discord is coming soon.
+          <strong>Create an account</strong> with a passkey (your device’s fingerprint, face or PIN), Google or Discord,
+          and your plays so far come with you and join the rankings. You can then sign in on another device.
         </p>
       </Section>
       <Section id="checks" title="What is checked">
         <ul class="space-y-1">
           <li>The score is always recounted from the inputs, never read from the log.</li>
-          <li>Auto play and plays quit with ESC are not recorded; failed plays are.</li>
+          <li>
+            Auto play is not recorded. A play that fails, and a play quit with ESC, are recorded; one quit with ESC
+            ranks as a failed play.
+          </li>
           <li>
             Plays with an assist (auto scratch, a widened judgment window) are <strong>ranked apart</strong>.
           </li>
@@ -122,8 +127,7 @@ const en: AboutContent = {
           </li>
         </ul>
         <p>
-          Machine-generated inputs cannot always be told from a person’s, so such plays are handled through reports and
-          moderation.
+          Machine-generated inputs cannot always be told from a person’s, and the Leaderboard does not check for them.
         </p>
       </Section>
       <Section id="bests" title="Personal bests">
@@ -160,10 +164,10 @@ const en: AboutContent = {
           is open too.
         </p>
       </Section>
-      <Section id="beta" title="Beta">
+      <Section id="beta" title={PUBLIC_BETA_LABEL.en}>
         <p>
           The fingerprint (<code>bmfp0</code>) and the scoring rules are still version 0. While they settle, rankings
-          may be reset.
+          may be reset. {PUBLIC_BETA_DELETION.en}
         </p>
       </Section>
     </>
@@ -204,7 +208,11 @@ const ja: AboutContent = {
       text: 'どのプレイもリプレイをダウンロードして、もう一度見られます。',
       more: 'replays',
     },
-    { title: '登録なしで始められる', text: '匿名ですぐに遊べて、あとからアカウントを作れます。', more: 'accounts' },
+    {
+      title: '登録なしで始められる',
+      text: 'ゲストとして始められて、あとからアカウントを作れます。',
+      more: 'accounts',
+    },
     {
       title: '自己ベストは項目ごと',
       text: 'EX スコア・クリアランプ・最少ミスのベストを、それぞれ記録したプレイから取ります。',
@@ -226,8 +234,10 @@ const ja: AboutContent = {
         </p>
         <p>
           この計算を <strong>LR2</strong>・<strong>beatoraja</strong>・<strong>名前を言ってはいけないあのゲーム</strong>{' '}
-          の採点ルール（判定幅・ゲージ・クリアランプ）でそれぞれ行うので、どのプレイも 3
-          つのランキングすべてに載ります。プレイヤーが<em>実際に遊んだ</em>
+          の採点ルール（判定幅・ゲージ・クリアランプ）でそれぞれ行います。順位が付くプレイは 3
+          つのランキングすべてに載ります。別のテンポで遊んだプレイ、単体で送られたコースのステージ、bmson の TOTAL 0
+          で回復しないプレイは保存されますがランキングには載りません。公開されていないコース（自作またはランダム）のプレイも同じです。プレイヤーが
+          <em>実際に遊んだ</em>
           ルールはプレイごとに表示され、ページに表示するルールはヘッダーで切り替えられます。ルールはスコアの計算方法を表すもので、プレイしたソフトとは関係ありません。
         </p>
       </Section>
@@ -245,19 +255,22 @@ const ja: AboutContent = {
       </Section>
       <Section id="accounts" title="アカウント">
         <p>
-          遊ぶのに登録は要りません。最初にプレイを送信すると、そのブラウザで<strong>匿名</strong>
-          のまま記録されます。ランキングは、設定でオンにしない限り匿名のプレイを表示しません。
+          プレイを送るにはログインが要ります。パスキーのない<strong>ゲスト</strong>
+          として始めると、そのブラウザでは<strong>匿名</strong>
+          のまま記録されます。ランキングは「匿名プレイヤー」をオンにしたときだけ、匿名のプレイを表示します。
         </p>
         <p>
-          <strong>アカウントを作る</strong>
-          と、それまでのプレイも引き継いでランキングに載り、ほかの端末からもログインできます。ログインにはパスキー（端末の指紋認証や
-          PIN）を使います。Google と Discord でのログインも準備中です。
+          パスキー（端末の指紋認証、顔認証、PIN）、Google、Discord で<strong>アカウントを作る</strong>
+          と、それまでのプレイも引き継いでランキングに載り、ほかの端末からもログインできます。
         </p>
       </Section>
       <Section id="checks" title="確認していること">
         <ul class="space-y-1">
           <li>スコアは常に打鍵の記録から計算し直し、ログに書かれた値は使いません。</li>
-          <li>オートプレイと、ESC で途中終了したプレイは記録されません。FAILED のプレイは記録されます。</li>
+          <li>
+            オートプレイは記録されません。FAILED のプレイと、ESC で途中終了したプレイは記録されます。ESC
+            で途中終了したプレイは FAILED として順位が付きます。
+          </li>
           <li>
             アシスト（オートスクラッチ、判定幅の拡大）を使ったプレイは<strong>別枠のランキング</strong>になります。
           </li>
@@ -266,9 +279,7 @@ const ja: AboutContent = {
             <strong>L4</strong>: <code>#RANDOM</code> がない、または既に確認済みの分岐）を確認します。
           </li>
         </ul>
-        <p>
-          機械的に作られた打鍵を人の打鍵と確実に見分けることはできないため、そうしたプレイには通報とモデレーションで対応します。
-        </p>
+        <p>機械的に作られた打鍵を人の打鍵と確実に見分けることはできず、Leaderboard もそれを確かめません。</p>
       </Section>
       <Section id="bests" title="自己ベスト">
         <p>
@@ -303,10 +314,10 @@ const ja: AboutContent = {
           も公開しています。
         </p>
       </Section>
-      <Section id="beta" title="ベータ版">
+      <Section id="beta" title={PUBLIC_BETA_LABEL.ja}>
         <p>
           譜面 ID（<code>bmfp0</code>）と採点ルールはまだバージョン 0
-          です。内容が固まるまでの間、ランキングがリセットされることがあります。
+          です。内容が固まるまでの間、ランキングがリセットされることがあります。{PUBLIC_BETA_DELETION.ja}
         </p>
       </Section>
     </>

@@ -48,8 +48,9 @@ describe('page formatting', () => {
     expect(lampStyle(0).label).toBe('NO PLAY');
   });
 
-  test('keys lamps by the ranks results are stored with: FAILED 1 up to MAX 9', () => {
-    expect(Object.keys(LAMP_STYLES).map(Number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  test('keys lamps by the ranks results are stored with: FAILED 1 up to MAX 9, LIGHT ASSIST EASY 10', () => {
+    expect(Object.keys(LAMP_STYLES).map(Number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(lampStyle(10).label).toBe('LIGHT ASSIST EASY');
     expect(lampStyle(1).label).toBe('FAILED');
     expect(lampStyle(5).label).toBe('HARD CLEAR');
     expect(lampStyle(9).label).toBe('MAX');

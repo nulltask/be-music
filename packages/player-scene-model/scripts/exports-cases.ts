@@ -255,6 +255,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolveRandomModes('beatoraja');
     },
   });
+  define('player-scene-model.isRandomModeChoice', {
+    run() {
+      sceneModelAPI.isRandomModeChoice('beatoraja:S-RANDOM');
+    },
+  });
   define('player-scene-model.isDuplicatedBattleChoice', {
     run: () => {
       sceneModelAPI.isDuplicatedBattleChoice('BATTLE-AS');
@@ -276,6 +281,18 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
     run: () => {
       sceneModelAPI.resolvePlayOptionValue('random1P', 'MIRROR');
       sceneModelAPI.resolvePlayOptionValue('hiSpeed', 99);
+    },
+  });
+  define('player-scene-model.keepPracticeGauge', {
+    run: () => {
+      sceneModelAPI.keepPracticeGauge('HAZARD', 'beatoraja');
+      sceneModelAPI.keepPracticeGauge('HAZARD', 'lr2');
+    },
+  });
+  define('player-scene-model.resolvePracticeSelection', {
+    run: () => {
+      sceneModelAPI.resolvePracticeSelection(sceneModelAPI.DEFAULT_PLAY_OPTIONS, 'lr2');
+      sceneModelAPI.resolvePracticeSelection(sceneModelAPI.DEFAULT_PLAY_OPTIONS, '____');
     },
   });
   define('player-scene-model.cyclePlayOptionValue', {
@@ -441,6 +458,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.resolveLaneCover', {
     run: () => {
       sceneModelAPI.resolveLaneCover(BENCH_COVERS[0]!);
+    },
+  });
+  define('player-scene-model.applyChartLaneCovers', {
+    run: () => {
+      sceneModelAPI.applyChartLaneCovers(BENCH_COVERS, { manualSudden: true, lineLift: 0.15 });
     },
   });
   define('player-scene-model.reduceLaneCovers', {

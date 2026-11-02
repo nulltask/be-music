@@ -1,6 +1,6 @@
 {
   "name": "@be-music/app-leaderboard",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Chart and course rankings, score APIs, and web pages for be-music",
   "license": "MIT",
@@ -30,11 +30,11 @@
     "@be-music/service-auth-client": "workspace:*",
     "@be-music/service-web-theme": "workspace:*",
     "@be-music/shared-utils": "workspace:*",
-    "@better-auth/passkey": "^1.7.12",
+    "@better-auth/passkey": "^1.7.14",
     "@hono/standard-validator": "^0.4.0",
-    "@scalar/hono-api-reference": "^0.12.13",
+    "@scalar/hono-api-reference": "^0.12.16",
     "@valibot/to-json-schema": "^1.8.0",
-    "better-auth": "^1.7.12",
+    "better-auth": "^1.7.14",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.13",
     "hono-openapi": "^1.5.0",
@@ -48,12 +48,12 @@
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/cli": "^4.3.3",
     "basecoat-css": "^1.0.2",
-    "cf": "1.0.0-beta.20",
+    "cf": "1.0.0-beta.25",
     "drizzle-kit": "^0.31.11",
     "esbuild": "0.28.2",
     "htmx.org": "4.0.0",
     "miniflare": "5.20261006.1-alpha",
     "tailwindcss": "^4.3.3",
-    "wrangler": "^4.151.3"
+    "wrangler": "^4.155.0"
   }
 }

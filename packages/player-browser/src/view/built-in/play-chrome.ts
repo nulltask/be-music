@@ -24,7 +24,7 @@ import type {
   BeMusicJudgmentState,
   BeMusicStage,
 } from '../../skin/be-music/types.ts';
-import type { PlayfieldBGATarget, PlayfieldStage } from '../types.ts';
+import type { PlayFrame, PlayfieldBGATarget, PlayfieldStage } from '../types.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
 import { BGA } from '../shared/play-constants.ts';
 
@@ -91,6 +91,8 @@ export interface PlayChromeContext {
   readonly play: PlayfieldRuntime;
   readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects' | 'judgeTimingAutoAdjust'>>;
   readonly audioFrame: AudioFeatures | undefined;
+  /** The frame being drawn, for what it carries beside the play: the best record, the course and the player. */
+  readonly playFrame?: Pick<PlayFrame, 'scoreTargets' | 'course' | 'playerName' | 'playOptions'>;
 }
 
 /** Lane rects, playfield bounds, and judgement line of the built-in playfield for the loaded chart. */
@@ -135,13 +137,16 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const usesPlayer2 =
     ctx.play.chartPlayVariant !== '9' && ctx.play.laneChannels.some((channel) => channel.startsWith('2'));
   const judgeSides: SkinlessGameplayJudgeState[] = [];
+  // A chart's HIDJUDGE (#931) hides the judgment display as LR2's SILENT does.
+  const hidesJudge =
+    ctx.options.judgeTimingAutoAdjust === 'LR2-SILENT' || ctx.play.engineFrame?.chartOptions?.crazyJudge === 'HIDJUDGE';
   for (const side of ['1P', '2P'] as const) {
     if (side === '2P' && !usesPlayer2) {
       continue;
     }
     const state = ctx.play.judgeSideState[side];
     // LR2's SILENT automatic judge timing shows no judgment or combo.
-    if (state.judge && seconds <= state.until && ctx.options.judgeTimingAutoAdjust !== 'LR2-SILENT') {
+    if (state.judge && seconds <= state.until && !hidesJudge) {
       judgeSides.push({ side, judge: state.judge, combo: state.combo });
     }
   }
@@ -151,7 +156,20 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const bpm = ctx.play.nowBPM(seconds) ?? ctx.play.chart?.bpm;
   const laneCovers = ctx.play.resolveLaneCovers();
   const visibleMs = ctx.play.resolveVisibleMs(laneCovers[0], bpm, ctx.play.scrollMapper?.rateAt?.(currentBeat) ?? 1);
+  const frame = ctx.playFrame;
+  const best = frame?.scoreTargets?.bestEXScore;
+  const target = frame?.scoreTargets?.targetEXScore;
+  const targetPace = frame?.scoreTargets?.targetPaceEXScore;
+  const targetLabel = frame?.scoreTargets?.targetLabel;
   return {
+    ...(best !== undefined && best > 0 ? { bestEXScore: best } : {}),
+    ...(target !== undefined && target > 0 ? { targetEXScore: target } : {}),
+    ...(target !== undefined && target > 0 && targetPace !== undefined ? { targetPaceEXScore: targetPace } : {}),
+    ...(targetLabel !== undefined ? { targetLabel } : {}),
+    ...(frame?.course !== undefined ? { course: frame.course } : {}),
+    ...(frame?.playerName !== undefined ? { playerName: frame.playerName } : {}),
+    ...(frame !== undefined ? { random1P: frame.playOptions.random1P } : {}),
+    tempo: ctx.play.tempo,
     chartTitle: ctx.play.chart?.title,
     chartArtist: ctx.play.chart?.artist,
     chartGenre: ctx.play.chart?.genre,
@@ -175,7 +193,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     laneCount: ctx.play.laneChannels.length,
     laneChannels: ctx.play.laneChannels,
     playVariant: ctx.play.chartPlayVariant,
-    lastJudge: seconds <= ctx.play.lastJudgeUntil ? ctx.play.lastJudge : undefined,
+    lastJudge: seconds <= ctx.play.lastJudgeUntil && !hidesJudge ? ctx.play.lastJudge : undefined,
     judgeSides,
     rank: total <= 0 ? undefined : resolve____RankLabel(ctx.play.score.exScore, total),
     ...(ctx.play.secondPlayer !== undefined ? { secondPlayer: secondPlayerRuntime(ctx.play.secondPlayer) } : {}),
@@ -264,7 +282,7 @@ export function collectBGATargets(ctx: BGATargetsContext, out: PlayfieldBGATarge
   const geometry = resolveLaneGeometry(ctx);
   // The landscape touch layout gives the BGA's room to the lanes.
   if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return;
-  const rect = stage.resolveBGARect(geometry.right);
+  const rect = stage.resolveBGARect(geometry.right, geometry.left);
   const cached = ctx.stageBGATarget;
   if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
     out.push(cached);

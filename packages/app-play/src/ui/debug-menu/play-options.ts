@@ -12,12 +12,13 @@ import {
   HISPEED_MIN,
   HISPEED_STEP,
   KEYS_FILTER_CYCLE,
-  resolveRandomModes,
   PLAY_OPTION_CHOICES,
   SORT_CYCLE,
 } from '@be-music/player-scene-model';
+import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { DebugMenu } from './index.ts';
+import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
@@ -60,7 +61,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.guiState,
       key,
       `Random ${side}`,
-      resolveRandomModes(this.guiState.judgeRuleset),
+      Object.fromEntries(laneOptionItems(this.guiState.judgeRuleset).map((item) => [item.text, item.value])),
     );
     if (side === '1P') this.random1PController = controller;
     else this.random2PController = controller;
@@ -102,7 +103,6 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     this.trackPlayOption(controller);
     if (side === '1P') this.randomSeed1PController = controller;
     else this.randomSeed2PController = controller;
-    this.randomSeedControllers.push(controller);
   }
   this.sevenToNinePatternController = selectBinding(folder, this.guiState, 'sevenToNinePattern', '7-to-9 (beatoraja)', {
     OFF: 0,
@@ -141,7 +141,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     this.refreshPlayOptionControllers();
     this.setStatus('A new arrangement will be drawn for the next play.');
   });
-  // Every ruleset reuses its own previous arrangement (#774); only the seeds stay beatoraja's.
+  // Every ruleset reuses its own previous arrangement (#774) and seeds its lane randoms (#933).
   for (const controller of [reuse, fresh]) this.trackPlayOption(controller);
   trackPlayOption(
     selectBinding(folder, this.guiState, 'bmsonTotalMode', 'bmson TOTAL 0', {
@@ -149,19 +149,13 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       'No recovery (bmson spec)': 'spec',
     }).on('change', ({ value }) => this.setPlayOptions({ bmsonTotalMode: value })),
   );
-  this.gaugeAutoShiftController = selectBinding(
-    folder,
-    this.guiState,
-    'gaugeAutoShift',
-    'Gauge auto-shift (beatoraja)',
-    {
-      NONE: 'NONE',
-      CONTINUE: 'CONTINUE',
-      'SURVIVAL TO GROOVE': 'SURVIVAL_TO_GROOVE',
-      'BEST CLEAR': 'BEST_CLEAR',
-      'SELECT TO UNDER': 'SELECT_TO_UNDER',
-    },
-  );
+  this.gaugeAutoShiftController = selectBinding(folder, this.guiState, 'gaugeAutoShift', 'Gauge auto-shift', {
+    NONE: 'NONE',
+    CONTINUE: 'CONTINUE',
+    'SURVIVAL TO GROOVE': 'SURVIVAL_TO_GROOVE',
+    'BEST CLEAR': 'BEST_CLEAR',
+    'SELECT TO UNDER': 'SELECT_TO_UNDER',
+  });
   trackPlayOption(
     this.gaugeAutoShiftController.on('change', ({ value }) => this.setPlayOptions({ gaugeAutoShift: value })),
   );
@@ -170,11 +164,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     this.guiState,
     'bottomShiftableGauge',
     'Lowest auto-shift gauge',
-    {
-      'ASSIST EASY': 'ASSIST-EASY',
-      EASY: 'EASY',
-      NORMAL: 'GROOVE',
-    },
+    bottomShiftableGaugeItems(this.guiState.judgeRuleset).map((item) => item.value),
   );
   trackPlayOption(
     this.bottomShiftableGaugeController.on('change', ({ value }) =>
@@ -228,6 +218,8 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ autoScratch2P: value });
     }),
   );
+  // The PC edition's ANY KEY (#751), offered with the `____` judge rules (`refreshRulesetChoices`); saves no record.
+  this.anyKeyController = trackPlayOption(folder.addBinding(this.guiState, 'anyKey', { label: 'ANY KEY (PC)' }));
   this.longNoteModifierController = selectBinding(folder, this.guiState, 'longNoteModifier', 'Long notes', {
     OFF: 'OFF',
     'LEGACY NOTE (AC 34)': 'LEGACY',
@@ -321,10 +313,11 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
   );
-  // beatoraja PRACTICE (PracticeConfiguration): a 0 END TIME is the chart's end, a 0 JUDGERANK / TOTAL the chart's.
+  // PRACTICE (beatoraja's PracticeConfiguration), under every ruleset (#933): a 0 END TIME is the chart's end, a 0
+  // JUDGERANK / TOTAL the chart's.
   this.practiceControllers = [
     trackPlayOption(
-      folder.addBinding(this.guiState, 'practice', { label: 'PRACTICE (beatoraja)' }).on('change', ({ value }) => {
+      folder.addBinding(this.guiState, 'practice', { label: 'PRACTICE' }).on('change', ({ value }) => {
         this.setPlayOptions({ practice: value });
         this.refreshRulesetChoices();
       }),
@@ -345,17 +338,15 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       ),
     ),
   ];
-  const practiceGauge = selectBinding(folder, this.guiState, 'practiceGauge', 'GAUGE TYPE', {
-    'ASSIST EASY': 'ASSIST-EASY',
-    EASY: 'EASY',
-    NORMAL: 'NORMAL',
-    HARD: 'HARD',
-    'EX-HARD': 'EX-HARD',
-    HAZARD: 'HAZARD',
-    GRADE: 'CLASS',
-    'EX GRADE': 'EXCLASS',
-    'EXHARD GRADE': 'EXHARDCLASS',
-  });
+  // The judge ruleset's own gauges; refreshRulesetChoices relists them when the ruleset changes.
+  const practiceGauge = selectBinding(
+    folder,
+    this.guiState,
+    'practiceGauge',
+    'GAUGE TYPE',
+    practiceGaugeItems(this.guiState.judgeRuleset).map((item) => item.value),
+  );
+  this.practiceGaugeController = practiceGauge;
   trackPlayOption(practiceGauge.on('change', ({ value }) => this.setPlayOptions({ practiceGauge: value })));
   const practiceCategory = selectBinding(folder, this.guiState, 'practiceGaugeCategory', 'GAUGE CATEGORY', {
     'Play mode': 'MODE',
@@ -366,7 +357,10 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     LR2: 'LR2',
   });
   trackPlayOption(practiceCategory.on('change', ({ value }) => this.setPlayOptions({ practiceGaugeCategory: value })));
-  this.practiceControllers.push(practiceGauge, practiceCategory);
+  this.practiceGaugeCategoryController = practiceCategory;
+  // JUDGERANK and TOTAL, after START TIME, END TIME and GAUGE VALUE.
+  this.practiceJudgeRankAndTotalControllers = this.practiceControllers.slice(4, 6);
+  this.practiceControllers.push(practiceGauge);
   this.extraNoteDepthController = trackPlayOption(
     folder
       .addBinding(this.guiState, 'extraNoteDepth', { label: 'EXTRA depth (beatoraja)', min: 0, max: 100, step: 1 })
@@ -607,7 +601,8 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
 }
 /**
  * Replay / ghost: which of what a replay recorded the player seeing a replay shows (the tempo, the hi-speed,
- * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own. Read when a play starts, so disabled during one.
+ * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own; and the ghost shown beside a play. Read when a play
+ * starts, so disabled during one.
  */
 export function buildReplayViewFolder(this: DebugMenu, folder: FolderApi): void {
   const remember = () => storeReplayView(this.guiState.replayView);
@@ -617,6 +612,64 @@ export function buildReplayViewFolder(this: DebugMenu, folder: FolderApi): void 
       folder.addBinding(this.guiState.replayView, key, { label: labels[key] }).on('change', remember),
     );
   }
+  // The ghost with the play (`services/ghost.ts`): which replay it plays and how it shows. Disabled during a play like
+  // the other options, and on a course bar; "Ghost status" says whether the bar under the cursor would show it.
+  const refresh = () => this.refreshGhostAvailability();
+  this.ghostController = selectBinding(folder, this.guiState, 'ghost', 'Ghost', {
+    OFF: 'OFF',
+    'OWN BEST': 'OWN_BEST',
+    'REPLAY SLOT 1': 'REPLAY_SLOT_1',
+    'REPLAY SLOT 2': 'REPLAY_SLOT_2',
+    'REPLAY SLOT 3': 'REPLAY_SLOT_3',
+    'REPLAY SLOT 4': 'REPLAY_SLOT_4',
+    'LEADERBOARD TOP': 'LEADERBOARD_TOP',
+    'REPLAY FILE': 'REPLAY_FILE',
+  });
+  this.ghostController.on('change', refresh);
+  this.ghostModeController = selectBinding(folder, this.guiState, 'ghostMode', 'Ghost mode', {
+    'SECOND PLAYFIELD': 'PLAYFIELD',
+    PACEMAKER: 'PACEMAKER',
+    'PACEMAKER + LANES': 'LANE_OVERLAY',
+  });
+  this.ghostModeController.on('change', refresh);
+  this.ghostStatusController = folder.addBinding(this.ghostStatus, 'text', { label: 'Ghost status', readonly: true });
+  const fileButton = folder.addButton({ title: 'Ghost replay file…' });
+  fileButton.on('click', () => {
+    void pickReplayFile().then(async (file) => {
+      if (file === undefined) return;
+      try {
+        this.deps.ghostReplayFile.set(parseReplay(await file.text()), file.name);
+        fileButton.title = `Ghost file: ${file.name}`;
+        this.setStatus(`Ghost replay file: ${file.name}`);
+      } catch (error) {
+        this.setStatus(`Ghost replay file could not be read: ${(error as Error).message}`);
+      }
+      refresh();
+    });
+  });
+  const menu = this;
+  this.trackPlayOption({
+    get disabled(): boolean {
+      return menu.ghostLocked;
+    },
+    set disabled(locked: boolean) {
+      menu.ghostLocked = locked;
+      menu.refreshGhostAvailability();
+    },
+  });
+  refresh();
+}
+
+/** Asks the player for one replay file (`*.bmplay.json`); `undefined` when none is picked. */
+function pickReplayFile(): Promise<File | undefined> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.addEventListener('change', () => resolve(input.files?.[0]), { once: true });
+    input.addEventListener('cancel', () => resolve(undefined), { once: true });
+    input.click();
+  });
 }
 
 /**

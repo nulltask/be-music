@@ -1,6 +1,7 @@
 import type { GaugeType } from '../ruleset/gauge-type.ts';
 import type { ReplayCourseStage } from '../replay/format.ts';
 import type { CourseConstraint, CourseDefinition } from './definition.ts';
+import { optionValueName, type QualifiedOptionValue } from '../ruleset/option-source.ts';
 
 /*
  * The rules a course sets for each of its stages: the course settings the engine plays a stage under, the lane options
@@ -20,8 +21,9 @@ export function resolveCourseStageSettings(definition: CourseDefinition): Omit<R
   return settings;
 }
 
-/** The lane options a host offers, as the select screen names them. */
+/** The lane options a host offers, as the select screen names them; RANDOM, S-RANDOM and CONVERGE may carry a source. */
 export type CourseLaneOption =
+  | QualifiedOptionValue<'RANDOM' | 'S-RANDOM' | 'CONVERGE'>
   | 'OFF'
   | 'MIRROR'
   | 'RANDOM'
@@ -49,7 +51,7 @@ export interface CourseLaneOptions {
 
 /** beatoraja's random options up to index 5 (`grade_random` keeps them): OFF, MIRROR, RANDOM, R-RANDOM S-RANDOM and SPIRAL here. */
 function isPlainRandomFamily(option: CourseLaneOption): boolean {
-  return ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM', 'SPIRAL'].includes(option);
+  return ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM', 'SPIRAL'].includes(optionValueName(option));
 }
 
 /**

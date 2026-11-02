@@ -52,3 +52,39 @@ flowchart LR
 - `docs/play-options.md` の各オプションに、参照元と再判定の扱いを書きます。新しいオプションは、これがないとマージしません。
 - `PlayOptions` の型とリプレイの読み込みは参照元付きの文字列を受け付けます。この ADR より前の読み込み側は、参照元付きのゲージを知らないゲージとして拒否します。これは意図した失敗です。参照元付きのレーンの値はただのラベルとして読みますが、配置は記録してあるので問題ありません。
 - 元に戻しにくいのは、設定の移行と「再判定不可」「途中まで」という結果です。参照元をまたいだプレイの記録と Leaderboard の扱いは、[#602](https://github.com/nulltask/be-music/issues/602) で別に決めます。
+
+## 追補：RANDOM・S-RANDOM・CONVERGE・BATTLE での実装（#774）
+
+この決定を実装する際に、次の 4 点を決めました。
+
+- **BATTLE は 2 か所で衝突します。** LR2 の 2 人用 BATTLE（`TWO-PLAYER`）のほかに、beatoraja と AC の 1 人用 BATTLE も対応譜面（5 / 7 / 24KEY と 7KEY）とプレイが残すもの（LIGHT_ASSIST とスコア非保存）が違います。そのため 1 人用の複製は `beatoraja:BATTLE` と `____:BATTLE` として参照元を付けます。`TWO-PLAYER` は参照元を付けず、どの ruleset でも選べます。2 人プレイのない beatoraja のルールでは、LR2 の作り方で譜面を作り、各プレイヤーを beatoraja のルールで判定します。
+- **AC の RANDOM と S-RANDOM にも参照元を付けます**（`____:RANDOM`・`____:S-RANDOM`）。当面は LR2 のアルゴリズムで動きますが、あとで AC のアルゴリズムを入れても保存済みの値の意味は変わりません。AC に CONVERGE はありません。
+- **設定は読み込むときに移行します。** 設定ドキュメントはまだバージョン 0 で、番号を上げずに形を変えてよいため、バージョンは追加しません。参照元のない値はドキュメントに保存した判定ルール（ないときは LR2）のものとし、次の保存で参照元付きの値を書きます。
+- **スキンのボタン。** beatoraja のレーンと `optiondp` のボタンは beatoraja 自身の値を切り替えます。LR2 の RANDOM ボタンは #933 から LR2 自身のレーンの値、OFF・MIRROR・`lr2:RANDOM`・`lr2:S-RANDOM`・`SCATTER`・`lr2:CONVERGE`（OpenLR2 の `random` 0〜5）を切り替えます。それまではすべてのレーンオプションを切り替えていました。どちらも、ほかの参照元の値は参照元を除いた名前で表示し、LR2 のボタンはその名前のセルから次へ進みます（LR2 にない値は OFF になります）。
+
+一覧は `@be-music/player-engine/ruleset` の `QUALIFIED_OPTION_SOURCES` です。
+
+## 追補：シードと再判定の結果（#933）
+
+- **レーンのランダムはすべてシードで抽選します。** LR2 と AC のアルゴリズムも、beatoraja と同じく Java の `Random` の移植でその側のシードから抽選し、どの判定ルールでも同じです。シード（抽選したときは 0〜16777215、入力したときは任意の Java の long 値）は `play.options.randomSeed1P` / `randomSeed2P` に記録し、どのルールでも入力と再利用ができます。シードで LR2 と AC の配置を再現できるのは be-music の中だけで、LR2 では再現しません。beatoraja の地雷の ADD RANDOM、PMS の RANDOM PLAYABLE、ロングノートの追加は参照元と同様にシードを使いません。リプレイと Leaderboard はこれまでどおり記録した配置を適用するため、シードはプレイの再現のためのもので、判定には使いません。
+- **結果。** `@be-music/player-engine/replay` の `rejudgeReplay` と `rejudgeCourseReplay` は `simulated`・`truncated`・理由（`gauge`・`custom-judge`。`gauge-auto-shift` は、下記のとおりゲージオートシフトがどのルールセットでも読めるようになるまで理由でした）付きの `not-simulated` のどれかを返します。`simulateReplay` はそのままのシミュレーターで、ルールセットにないゲージでは引き続き例外を投げます。AC のルールでの参照元のない `DEATH` は、EX-HARD として読まず、コース以外では `not-simulated` です。コースのステージはコースのゲージの対応を使い、LR2 以外での LR2 のアタックゲージと LR2 での EX-HARD・ASSIST EASY を除くすべての選択を定義します。
+- **truncated** は、先にプレイしたルールセットで再判定して決めます。そのサバイバルゲージが空になった時刻（`SimulateReplayOptions.onFailure`）でほかのルールセットも止め、入力も後のノートの期限もそこまでです。Leaderboard は truncated の結果を `outcome = 'truncated'` として保存し、自己ベスト・ランキング・一覧には含めません。`not-simulated` のルールセットは行を保存せず、送信の応答の `notSimulated` で返します。
+- **リビジョンはまだ上げません。** ルールセットは開発用のリビジョン `/0` のままで、その規則は番号を上げずに変わります（[リプレイのバージョニング](../replay.ja.md#バージョニング)）。`/1` はそれ以前のリリースがすでに書いています。そのためこれらの読み方は `/0` のまま出し、この ADR が求める番号の更新は最初の安定版のリビジョンから適用します。Leaderboard には保存済みの結果を再計算する処理がまだありません。
+
+## 追補：どのルールセットでも使える PRACTICE とゲージオートシフト（#933）
+
+- **PRACTICE** はどのルールセットでも使え、設定は判定ルールが読みます。GAUGE TYPE はそのルールセットのゲージを並べ（LR2：GROOVE・HARD・HAZARD・EASY・P.ATTACK・G.ATTACK、AC：ASSISTED EASY・EASY・NORMAL・HARD・EX-HARD、beatoraja はこれまでどおり）、GAUGE CATEGORY は beatoraja だけのものです。JUDGERANK はそのルールセットの表での judgerank（%）で（LR2 では `#RANK` の表で、25 / 50 / 75 / 100 が `#RANK` 0〜3）、LR2 では TOTAL をそのまま使います。AC は判定幅が固定でゲージが TOTAL を使わないため、どちらも読みません。練習のプレイはこれまでどおり何も保存せず Leaderboard にも送らないため、再判定での扱いはありません。
+- **ゲージオートシフトは「持ち越す」** 扱いで、上の決定の表のとおりどのルールセットでも適用し、`gauge-auto-shift` は `not-simulated` の理由ではなくなります。beatoraja の方式は意味を変えず、各ルールセットのゲージの並び（`@be-music/player-engine/ruleset` の `resolveGaugeShiftLadder`、緩い順）で読みます。
+
+  | ルールセット | 単曲                                             | 段位コース                     | EXPERT / NONSTOP コース                        |
+  | ------------ | ------------------------------------------------ | ------------------------------ | ---------------------------------------------- |
+  | beatoraja    | ASSIST EASY・EASY・NORMAL・HARD・EX-HARD・HAZARD | CLASS・EXCLASS・EXHARDCLASS    | CLASS・EXCLASS・EXHARDCLASS                    |
+  | LR2          | EASY・GROOVE・HARD・DEATH（LR2 の HAZARD）       | GRADE・GRADE-HARD・GRADE-DEATH | COURSE-EASY・COURSE・COURSE-HARD・COURSE-DEATH |
+  | AC           | ASSISTED EASY・EASY・NORMAL・HARD・EX-HARD       | CLASS・EXCLASS・EXHARDCLASS    | CLASS・EXCLASS・EXHARDCLASS                    |
+  - CONTINUE は並びを使いません。空になったゲージのまま最後まで遊びます。
+  - SURVIVAL TO GROOVE は、コース以外でサバイバルゲージから、ルールセットの既定の回復ゲージ（NORMAL、LR2 では GROOVE）に切り替えます。
+  - BEST CLEAR と SELECT TO UNDER は並びを並行して動かします。最低ゲージはその並びで読み（LR2 には ASSIST EASY がないため、ASSIST EASY は EASY と読みます）、コースでは最も緩いコースのゲージから始め、各コースのゲージはそれぞれの値を次のステージへ持ち越します。
+  - AC にはコース以外で HAZARD がないため、並びの最上位は EX-HARD です。LR2 の P.ATTACK と G.ATTACK は並びにありません（より難しいクリアではなく別のものを判定します）。BEST CLEAR と SELECT TO UNDER ではそのゲージだけで、CONTINUE と同じく最後まで遊びます。そうしたリプレイは、ゲージのためにほかのルールセットではもともと `not-simulated` です。
+  - 2 人プレイでは両プレイヤーのゲージを切り替えるため、どちらの側のリプレイも同じ切り替えを再現します。
+
+- **リプレイには方式と最低ゲージを記録し**（`play.gaugeAutoShift`・`play.bottomShiftableGauge`）、結果の `gauge.values` とコースのステージの `play.course.carryIn.gauges` は並行するゲージをそのルールセット自身のゲージ ID で記録します。シミュレーターは同じ並びを組み立てるため、リプレイは切り替えを決定的に再現します。これらの読み方は、前の追補のとおり開発用のリビジョン `/0` のまま出します。

@@ -218,10 +218,15 @@ stateDiagram-v2
 ```
 
 - **曲の追加。** `appendCourseDraftStage` は `CourseDraft` の末尾に曲を足します。曲は 5 曲まで（`LR2_COURSE_MAKER_MAX_STAGES`）で、すべて 1 曲目と同じキーモードである必要があり、譜面の MD5 で記録します。同じ曲を 2 回入れても構いません。`removeLastCourseDraftStage` は、LR2 の右クリックと同じく最後の曲を外します。
-- **保存。** `finishCourseDraft` は、作成中のコースを `parseLR2CourseFile` が読み戻すのと同じ形の `CourseDefinition` にします。NONSTOP コースには、ステージ 1-5 の後ろに既定のつなぎ方（LR2 のボタン 268）が入ります。GRADE コースは LR2 の段位として読みます（`grade`、`gauge_lr2`）。作ったコースはランキング対象外（`release: false`）で始まります。LR2 は `ir = 0` で登録し（[L17588-L17603](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L17588-L17603)）、beatoraja のコースエディタも新しいコースを `release = false` で始めるため、プレイヤーが有効にするまでそのプレイは Leaderboard に載りません（LR2 の IR フラグ、ボタン 253 はまだ作っていません）。
+- **保存。** `finishCourseDraft` は、作成中のコースを `parseLR2CourseFile` が読み戻すのと同じ形の `CourseDefinition` にします。NONSTOP コースには、ステージ 1-5 の後ろに既定のつなぎ方（LR2 のボタン 268）が入ります。GRADE コースは LR2 の段位として読みます（`grade`、`gauge_lr2`）。作ったコースはランキング対象外（`release: false`）で始まります。LR2 は `ir = 0` で登録し（[L17588-L17603](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L17588-L17603)）、beatoraja のコースエディタも新しいコースを `release = false` で始めるため、プレイヤーが IR に登録する（下記）までそのプレイは Leaderboard に載りません。
 - **ハッシュ。** `buildLR2CourseHash` は、LR2 の 32 文字のヘッダー（ステージ 1-10 それぞれの後のつなぎ方を `0`-`5` で、10 文字目に種類、残りは 0）と各ステージの MD5 を書きます。LR2 は 28-31 文字目にプレイヤーのパスワードの MD5 の先頭 4 文字を入れますが、ブラウザにはパスワードがないので `0` のままです。
 - **編集。** `withNonstopConnection` は、あるステージの後のつなぎ方を変えます（LR2 のボタン 240-248。`stepLR2NonstopConnection` の順に、右半分で +1、左半分で -1 進みます）。LR2 はコースの長さにかかわらず、ステージ 1-9 のつなぎ方を持ちます。
 - **縛り。** LR2 のコース作成には縛りを設定する手段がありません（オプション禁止のボタンは実装されませんでした）。そのため、作ったコースは `defaultCourseMakerConstraints` の縛りになります（GRADE は LR2 の段位としてレーンオプションなし・LR2 ゲージ、ほかは縛りなし）。ホストが beatoraja のコースエディタのように縛りを設定することもできます。作成中は `CourseDraft.constraints`、作った後は `withCourseConstraints` で、グループごとに 1 つに正規化します。
+- **IR フラグ。** LR2 はコースを IR 対象にするかどうかを `.lr2crs` ではなく、コースのテーブルの `ir` 列に持ちます（[L19281-L19283](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L19281-L19283)）。`LR2.exe` は取り込むコースをすべて `ir = 1` で登録し、ゲーム内で作ったコースは `ir = 0` で始まります。be-music ではこのフラグをコースの `release`（beatoraja の「公開するかどうか」。コースリザルトを IR に送るかどうかだけを決めます）とするので、登録したコースのプレイは、ほかの `release` のコースと同じく Leaderboard に送られます。
+  - テキスト 183 は選んだバーのフラグを `ON` か `OFF` で表します（`optionstr.csv` の `#COURSE_IR,OFF,ON`、[L8406](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L8406)）。LR2 はどのバーでも設定するので、曲バー、フォルダバー、NEW COURSE、RANDOM MIX では `OFF` です。`resolveLR2CourseIRText`（`@be-music/skin-lr2/state`）。
+  - ボタン 253 は選んだコースを登録します。未登録のコースではクリックでフラグを立てて `option_change` を鳴らし、登録済みのコースではセル 1 を描いて何もしません（[L11141-L11153](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11141-L11153)）。LR2 と同じく一方向で、一度立てたフラグは戻せません。セルは `resolveLR2CourseIRButtonState`、登録は `CourseMaker.releaseCourse` で、プレイヤー自身のコースだけが対象です（ファイルや表から読んだコースは対象外です）。
+  - 登録したコースは読み取り専用になります。LR2 は `ir = 1` を `courseReadOnly` として読み（[L18078-L18080](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18078-L18080)）、`WriteCourse` はすぐに戻り（[L17580-L17584](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L17580-L17584)）、ボタン 240-248 はロックされます（[L11126-L11129](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11126-L11129)）。`CourseMaker.isReadOnly` がそれを表し、`stepConnection` と `setCourseConstraints` はそのコースを拒むので、ランキングのキー（コースのフィンガープリント）になるステージ・つなぎ方・縛りは変わりません。名前の変更（テキスト 170）と削除（ボタン 233）は、LR2 の `ChangeCourseTitle` と `DeleteCourse` と同じくできます。名前はフィンガープリントに含まれません。登録した RANDOM MIX はプレイヤーのコースになり、次の抽選でも残ります。
+  - フラグはプレイヤーのコースとともに保存します。フラグなしで保存されたコース（フラグを保存する前のもの）は未登録として読み戻すので、プレイヤーが登録しない限りコースが読み取り専用になることはありません。
 - **共有。** `serializeLR2CourseFile` は、コースを UTF-8 の `.lr2crs` に書きます。`parseLR2CourseFile` で読み戻すと同じコースになりますが、この形式には縛りと `release` を書く場所がありません（どのコースもランキング対象として読み戻されます）。`serializeBeatorajaCourseFile` は両方を残したまま beatoraja の `course/*.json` を書きます（beatoraja にない NONSTOP コースは含めません）。
 
 `CourseMaker`（`@be-music/player-browser/collection`）は、ホストのためにプレイヤーのコースと作成中のコースを持ちます。`resolveCourseMakerFolders` は、LR2 と同じくそれらを並べます。種類ごとにコースフォルダが 1 つあり、その中にコースが並んで、その後に NEW COURSE バーと、EXPERT と NONSTOP では [RANDOM MIX](#random-mix) バーが来ます。
@@ -301,6 +306,8 @@ flowchart LR
 
 **`beatoraja`** は、どのコースも段位ゲージで遊びます（`GrooveGauge.create`）。GROOVE と EASY は `CLASS`、HARD は `EXCLASS`、DEATH は `EXHARDCLASS` に対応します。ゲージの表の組はコースの `gauge_*` 制約で決まり、なければプレイモードで決まります（5 / 10 鍵は `5k`、PMS は `9k`、24 / 48 鍵は `24k`、それ以外は `7k`）。どれも 100 から始まり、TOTAL による補正はありません。**`____`** には公表された段位ゲージがないので、beatoraja のものを使います。
 
+lr2oraja と LR2oraja Endless Dream は、beatoraja の `GAUGE_LR2` の段位ゲージに LR2 の死亡ラインと被ダメージ軽減の境目を加えてコースを遊びます。これらの規則との比較と、be-music が従わない理由は [lr2oraja のコース](./research/lr2oraja-courses.ja.md)にまとめています。
+
 ### 判定の制約
 
 `no_good` は GOOD の判定幅を GREAT と同じにし、`no_great` は GREAT と GOOD の判定幅を PGREAT と同じにします。すべての判定幅の表に適用します（beatoraja の `JudgeManager` L175-L184 が判定幅の倍率を 0 にし、`JudgeWindowRule.create` が内側の判定幅より狭くなった判定幅を内側に合わせて広げるため）。この制約の下では、残った判定幅のすぐ外側の押下は BAD になります。どのルールセットでも適用します。
@@ -349,3 +356,28 @@ stateDiagram-v2
 ランプと BP は、どのプレイのランプも決める定義のうちコースの規則と BP です（`@be-music/player-engine/ruleset` の `resolveCourseClearLamp`、`resolveMissCount`）。ホストはプレイの自己ベストを、そのプレイを判定したルールセットで保ちます（`resolveCoursePlayedRuleset`。ステージごとに違うプレイは記録しません）。規則は `@be-music/player-engine/records` にあります。`courseRunRecordPlay` はプレイが記録に残すものを読み、`courseRunKeepsRecord` はオートプレイとテンポを変えたプレイを除き、`mergeCourseStageRecord` は LR2 と同じく EXPERT / GRADE のステージをその譜面の記録に反映します（最高の EX スコア・最大コンボ・最少の BP と、FULL COMBO 以上のランプ。クリアランプとプレイ回数は更新しません）。
 
 stitch バージョン3は CN・HCN を含む BMS だけのコースも内部 bmson に変換し、各ロングノートのステージ固有モードを保持します。明示的 LNMODE と HDX LONGMODE の両方が対象です。過去の stitch バージョンは以前の BMS 解釈を保持します。[ADR 0027](./adr/0027-hdx-long-note-modes.ja.md) を参照してください。
+
+## プレイヤーの段位
+
+be-music はプレイヤーの **段位** を保持します。GRADE コースをクリアした最高の段位で、判定ルールセットとキーモードごとに 1 つです。LR2 もキーモードごとに段位を 1 つ持ちます（`grade_7` … `grade_9`）が、LR2 も beatoraja もコースのクリアから段位を設定せず、スキンにも出しません。そのため、コースと段位の対応は be-music 独自です。根拠は[調査 — プレイヤーの段位](./research/dan-rank.ja.md)を参照してください。
+
+```mermaid
+flowchart TD
+  run["コースの実行が終わる"] --> keeps{"自己ベストを残すか"}
+  keeps -->|いいえ| none["段位なし"]
+  keeps -->|はい| grade{"GRADE でクリアしたか"}
+  grade -->|いいえ| none
+  grade -->|はい| name{"名前が段位を表すか"}
+  name -->|いいえ| none
+  name -->|はい| mode{"キーモードが分かるか"}
+  mode -->|いいえ| none
+  mode -->|はい| keep["高いほうの段位を保持<br/>（ルールセット、キーモード）"]
+```
+
+- **数える実行。** 自己ベストを残す実行（`resolveCourseBestRecordUpdate`。オートプレイでなく、テンポを変えておらず、全ステージを 1 つのルールセットで判定したもの）のうち、GRADE コースをクリアしたもの（FAILED 以外のランプ）。EXPERT と NONSTOP のコースは、名前にかかわらず何も認定しません。
+- **何段か。** コース名から読みます（`@be-music/player-engine/records` の `resolveCourseDanRank`）。NFKC 正規化のあと、Overjoy、発狂（または `insane`）と皆伝か段、皆伝、中伝、段（`初段`、`七段`、`7段`、`7th dan`）、級（`十級`、`1st kyu`）の順に読みます。段位認定の「段位」は段ではありません。何も表さない名前は何も認定しません。
+- **段位表**（`DAN_RANKS`）。低い順に 十級 … 一級、初段 … 十段、中伝、皆伝、発狂初段 … 発狂十段、発狂皆伝、Overjoy。高い段位が低い段位を置き換え、低い段位のクリアでは変わりません。
+- **キーモード。** コースが指定するもの（LR2 の `line`、表の `mode`）、なければ全ステージの譜面に共通するもの（`resolveDanCourseKeyMode`）。ステージごとに違うコースは段位を残しません。
+- **新しいプレイだけ。** 段位はこれから遊ぶ実行から決まります。以前に残したコースの記録から段位を導き直すことはしません。
+
+Web プレイヤーは段位を `localStorage`（`be-music.dan-ranks`、キーは `<ruleset>:<keyMode>`）に保存します。保存がないか読めないときは段位なしとして読みます。be-music スキンは選曲画面で `frame.danRanks` として受け取り、組み込みの Plain スキンはヘッダに出します（`7K 七段 · 14K 初段`）。段位を出す LR2 の op も beatoraja のプロパティもないので、LR2 と beatoraja のテーマは出しません。

@@ -10,7 +10,12 @@ import {
   resolveLR2SelectState,
   resolveLR2SelectTimers,
 } from './select.ts';
-import { LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE, resolveLR2OptionText, stepLR2JudgeTiming } from './options.ts';
+import {
+  LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
+  resolveLR2OptionText,
+  stepLR2JudgeTiming,
+  stepLR2LaneOption,
+} from './options.ts';
 import { makeChart, makeChartWith, makeCourse } from './test-support.ts';
 
 const CLOCK = { year: 2026, month: 10, day: 16, hour: 9, minute: 5, second: 30 };
@@ -352,6 +357,41 @@ describe('resolveLR2SelectState sliders and buttons', () => {
     expect(battle('SP-TO-DP', LR2_OP.KEYS_10)).toBe('DP-TO-SP');
     expect(battle('SP-TO-DP', LR2_OP.KEYS_9)).toBe('9-TO-7');
     expect(resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, battleMode: 'SP-TO-DP' } }).button(56)).toBe(3);
+    // Another source's one-player BATTLE reads as LR2's nearest label (ADR 0019).
+    expect(battle('beatoraja:BATTLE', LR2_OP.KEYS_7)).toBe('BATTLE');
+    expect(battle('____:BATTLE', LR2_OP.KEYS_14)).toBe('DISABLE');
+  });
+
+  it('reads any source lane option by its bare name on the RANDOM buttons and labels', () => {
+    const state = (random1P: (typeof DEFAULT_PLAY_OPTIONS)['random1P']) =>
+      resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, random1P, random2P: random1P } });
+    for (const [mode, label, cell] of [
+      ['lr2:RANDOM', 'RANDOM', 2],
+      ['beatoraja:RANDOM', 'RANDOM', 2],
+      ['____:S-RANDOM', 'S-RANDOM', 3],
+      ['S-RANDOM', 'S-RANDOM', 3],
+      ['beatoraja:CONVERGE', 'CONVERGE', 5],
+      ['SCATTER', 'SCATTER', 4],
+      ['SPIRAL', 'SPIRAL', 0],
+    ] as const) {
+      expect(state(mode).text(LR2_TEXT.OPTION_RANDOM_1P)).toBe(label);
+      expect(state(mode).text(LR2_TEXT.OPTION_RANDOM_2P)).toBe(label);
+      expect(state(mode).button(LR2_BUTTON.RANDOM_1P)).toBe(cell);
+      expect(state(mode).button(LR2_BUTTON.RANDOM_2P)).toBe(cell);
+    }
+  });
+
+  it('steps LR2’s RANDOM buttons through LR2’s own lane options (ADR 0019)', () => {
+    const cycle = ['OFF', 'MIRROR', 'lr2:RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE'] as const;
+    for (const [index, mode] of cycle.entries()) {
+      expect(stepLR2LaneOption(mode, 1)).toBe(cycle[(index + 1) % cycle.length]);
+      expect(stepLR2LaneOption(mode, -1)).toBe(cycle[(index + cycle.length - 1) % cycle.length]);
+    }
+    expect(stepLR2LaneOption('____:S-RANDOM', 1)).toBe('SCATTER');
+    expect(stepLR2LaneOption('S-RANDOM', -1)).toBe('lr2:RANDOM');
+    expect(stepLR2LaneOption('beatoraja:CONVERGE', 1)).toBe('OFF');
+    expect(stepLR2LaneOption('H-RANDOM', -1)).toBe('OFF');
+    expect(stepLR2LaneOption(undefined, 1)).toBe('MIRROR');
   });
 
   it('draws the course maker’s connection buttons', () => {
@@ -367,6 +407,25 @@ describe('resolveLR2SelectState sliders and buttons', () => {
     });
     expect(state.button(LR2_BUTTON.COURSE_CONNECTION1)).toBe(2);
     expect(state.button(LR2_BUTTON.COURSE_DEFAULT_CONNECTION)).toBe(4);
+  });
+
+  it('shows the selected course’s IR flag on text 183 and button 253, OFF on any other bar', () => {
+    const course = makeCourse();
+    const flagged = { ...course, definition: { ...course.definition, release: true } };
+    const onFlagged = resolveLR2SelectState({
+      focused: { kind: 'course', course: flagged },
+      options: DEFAULT_PLAY_OPTIONS,
+    });
+    expect(onFlagged.text(LR2_TEXT.COURSE_IR)).toBe('ON');
+    expect(onFlagged.button(LR2_BUTTON.COURSE_IR)).toBe(1);
+    const onUnflagged = resolveLR2SelectState({ focused: { kind: 'course', course }, options: DEFAULT_PLAY_OPTIONS });
+    expect(onUnflagged.text(LR2_TEXT.COURSE_IR)).toBe('OFF');
+    expect(onUnflagged.button(LR2_BUTTON.COURSE_IR)).toBe(0);
+    const onChart = resolveLR2SelectState({
+      focused: { kind: 'chart', chart: makeChart() },
+      options: DEFAULT_PLAY_OPTIONS,
+    });
+    expect(onChart.text(LR2_TEXT.COURSE_IR)).toBe('OFF');
   });
 });
 

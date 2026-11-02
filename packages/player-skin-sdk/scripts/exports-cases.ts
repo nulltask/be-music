@@ -155,6 +155,14 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.describeCourseCard(BENCH_COURSE_ENTRY.course);
     },
   });
+  define('player-skin-sdk.describeDanRanks', {
+    run: () => {
+      skinSdkAPI.describeDanRanks([
+        { keyMode: 14, rank: 'dan-1', label: '初段' },
+        { keyMode: 7, rank: 'dan-7', label: '七段' },
+      ]);
+    },
+  });
   define('player-skin-sdk.comboTier', {
     run: () => {
       skinSdkAPI.comboTier(120);
@@ -420,6 +428,44 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   define('player-skin-sdk.resolveStageBGARect', {
     run: () => {
       skinSdkAPI.resolveStageBGARect(260);
+    },
+  });
+  const cabinetLayout = skinSdkAPI.resolveGameplayLayout(BENCH_LAYOUT_INPUT, skinSdkAPI.cabinetStage);
+  define('player-skin-sdk.resolveCabinetBGARect', {
+    run: () => {
+      skinSdkAPI.resolveCabinetBGARect(227);
+    },
+  });
+  define('player-skin-sdk.resolveCabinetLayout', {
+    run: () => {
+      skinSdkAPI.resolveCabinetLayout(cabinetLayout);
+    },
+  });
+  define('player-skin-sdk.resolveScorePace', {
+    run: () => {
+      skinSdkAPI.resolveScorePace({
+        exScore: 400,
+        exScoreMax: 1000,
+        totalNotes: 500,
+        perfect: 200,
+        great: 50,
+        bestEXScore: 760,
+      });
+    },
+  });
+  define('player-skin-sdk.formatScoreDiff', {
+    run: () => {
+      skinSdkAPI.formatScoreDiff(-168);
+    },
+  });
+  define('player-skin-sdk.resolveStageLabel', {
+    run: () => {
+      skinSdkAPI.resolveStageLabel({ kind: 'grade', title: 'Bench Dan', stages: [{ title: 'a' }], stageIndex: 0 });
+    },
+  });
+  define('player-skin-sdk.resolveDifficultyName', {
+    run: () => {
+      skinSdkAPI.resolveDifficultyName(BENCH_SONG);
     },
   });
   define('player-skin-sdk.rollUpValue', {

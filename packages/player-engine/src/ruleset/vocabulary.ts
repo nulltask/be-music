@@ -7,14 +7,16 @@
 export * from './clear-lamp.ts';
 export * from './gauge-type.ts';
 export * from './bmson-total.ts';
+export * from './option-source.ts';
 export {
   clampCustomJudgeRate,
   DEFAULT_BEATORAJA_CUSTOM_JUDGE,
   isCustomJudgeAssist,
   type BeatorajaCustomJudge,
 } from './custom-judge.ts';
+export * from './practice-gauge.ts';
+export { resolveGaugeShiftLadder } from './gauge-shift.ts';
 export {
-  BEATORAJA_PRACTICE_GAUGE_TYPES,
   isRulesetId,
   RULESET_IDS,
   type BeatorajaGaugeCategory,
@@ -25,6 +27,7 @@ export {
   type WindowPairUs,
 } from './definitions.ts';
 export { resolveJudgeWindowsMs, type JudgeWindowsMs } from '../core/judge-window.ts';
+export { resolveChartGaugeType } from './chart-gauge.ts';
 export {
   computeScoreRate,
   createEmptyScore,

@@ -64,6 +64,13 @@ describe('resolveAffectedBenchPackages', () => {
     ]);
   });
 
+  test('measures nothing for other workflow changes, and everything for the benchmark workflow', () => {
+    expect(resolveAffectedBenchPackages(['.github/workflows/e2e.yml', '.github/dependabot.yml'], DEPENDENCIES)).toEqual(
+      [],
+    );
+    expect(resolveAffectedBenchPackages(['.github/workflows/ci.yml'], DEPENDENCIES)).toEqual([...PACKAGE_NAMES]);
+  });
+
   test('skips changes that reach no measured package, including an empty change list', () => {
     expect(resolveAffectedBenchPackages(['packages/app-leaderboard/src/app.ts'], DEPENDENCIES)).toEqual([]);
     expect(resolveAffectedBenchPackages([], DEPENDENCIES)).toEqual([]);

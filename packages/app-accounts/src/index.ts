@@ -82,7 +82,7 @@ export default {
           google: !!env.GOOGLE_CLIENT_ID && !!env.GOOGLE_CLIENT_SECRET,
           linkedDiscord,
           linkedGoogle,
-          notice: accountNotice(url.searchParams.get('error')),
+          notice: accountNotice(url.searchParams.get('error'), locale),
           apps: JSON.parse(env.OIDC_CLIENTS) as Record<string, string>,
         }),
         {

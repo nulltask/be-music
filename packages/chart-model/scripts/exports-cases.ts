@@ -77,6 +77,142 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.resolveChartOptionsAt(BENCH_CHART_OPTIONS.program, 1_000_000);
     },
   });
+  define('chart-model.compileChartPlayOptions', {
+    run: () => {
+      chartAPI.compileChartPlayOptions({
+        initial: ['774:RANDOM_ALL+', '774:CRAZY_GREAT2BAD', '774:CRAZY_ADDMINE', '774:NOTES_DBLCOPY'],
+      });
+    },
+  });
+  define('chart-model.parseChartPlayOption', {
+    run: () => {
+      chartAPI.parseChartPlayOption('774:CRAZY_HELLJUDGE');
+    },
+  });
+  define('chart-model.isChartPlayOptionDeclaration', {
+    run: () => {
+      chartAPI.isChartPlayOptionDeclaration('774:RANDOM_MIRROR');
+    },
+  });
+  define('chart-model.hasChartPlayOptions', {
+    run: () => {
+      chartAPI.hasChartPlayOptions({ version: 1, options: { random: 'RANDOM' } });
+    },
+  });
+  const visualInput = { progress: 0.5, channel: '11', beat: 12.5, seconds: 3.25, combo: 120 };
+  const visualState = { hidden: 'HID-SUD', changeHS: 'CHAOS', crazySize: 'RD-SIZE', crazyWave: 'XWAVE2' } as const;
+  define('chart-model.parseChartVisualOption', {
+    run: () => {
+      chartAPI.parseChartVisualOption('774:CHANGE-HS_LINEACCEL');
+    },
+  });
+  define('chart-model.isChartVisualOptionValue', {
+    run: () => {
+      chartAPI.isChartVisualOptionValue('hidden', 'STEALTH');
+    },
+  });
+  define('chart-model.hasChartVisualOptions', {
+    run: () => {
+      chartAPI.hasChartVisualOptions(visualState);
+    },
+  });
+  define('chart-model.chartVisualHash01', {
+    run: () => {
+      chartAPI.chartVisualHash01(17, 12_500_000, 3);
+    },
+  });
+  define('chart-model.resolveChartChangeHSProgress', {
+    run: () => {
+      chartAPI.resolveChartChangeHSProgress('CHAOS', visualInput);
+    },
+  });
+  define('chart-model.resolveChartHiddenAlpha', {
+    run: () => {
+      chartAPI.resolveChartHiddenAlpha('BLINK', 0.5, 3.25);
+    },
+  });
+  define('chart-model.resolveChartCrazyScale', {
+    run: () => {
+      chartAPI.resolveChartCrazyScale('RD-SIZE', visualInput);
+    },
+  });
+  define('chart-model.resolveChartCrazyXOffset', {
+    run: () => {
+      chartAPI.resolveChartCrazyXOffset('XWAVE2', 0.5);
+    },
+  });
+  define('chart-model.resolveChartNoteVisual', {
+    run: () => {
+      chartAPI.resolveChartNoteVisual(visualState, visualInput);
+    },
+  });
+  const crazyNote = { channel: '11', beat: 12.5, seconds: 3.25 };
+  const playfieldState = { hidden: 'M-SUDDEN', crazyLine: 'LINEMOVE2', crazyDark: 'DARK2' } as const;
+  define('chart-model.chartVisualOptionFieldsOf', {
+    run: () => {
+      chartAPI.chartVisualOptionFieldsOf(2);
+    },
+  });
+  define('chart-model.resolveChartCrazyYProgress', {
+    run: () => {
+      chartAPI.resolveChartCrazyYProgress('YWAVE2', 0.5);
+    },
+  });
+  define('chart-model.resolveChartCrazyWaveScale', {
+    run: () => {
+      chartAPI.resolveChartCrazyWaveScale('3DWAVE2', 0.5);
+    },
+  });
+  define('chart-model.resolveChartCrazyTint', {
+    run: () => {
+      chartAPI.resolveChartCrazyTint('STAR', crazyNote);
+    },
+  });
+  define('chart-model.resolveChartCrazyRotation', {
+    run: () => {
+      chartAPI.resolveChartCrazyRotation('SPIN', crazyNote);
+    },
+  });
+  define('chart-model.resolveChartCrazyClones', {
+    run: () => {
+      chartAPI.resolveChartCrazyClones('S-CLONE', 0.5);
+    },
+  });
+  define('chart-model.resolveChartLineLift', {
+    run: () => {
+      chartAPI.resolveChartLineLift('LINEMOVE2', 3.25);
+    },
+  });
+  define('chart-model.resolveChartPlayfieldVisual', {
+    run: () => {
+      chartAPI.resolveChartPlayfieldVisual(playfieldState, 3.25);
+    },
+  });
+  define('chart-model.hasChartPlayfieldVisual', {
+    run: () => {
+      chartAPI.hasChartPlayfieldVisual(playfieldState);
+    },
+  });
+  define('chart-model.resolveChartLegacyOptionAlias', {
+    run: () => {
+      chartAPI.resolveChartLegacyOptionAlias('774:CRA-3DWAVE2');
+    },
+  });
+  define('chart-model.compileChartGaugeOptions', {
+    run: () => {
+      chartAPI.compileChartGaugeOptions({ initial: ['774:GAMELEVEL_HYPER', '774:EXTRA_VERYHARD'] });
+    },
+  });
+  define('chart-model.parseChartGaugeOption', {
+    run: () => {
+      chartAPI.parseChartGaugeOption('774:EXTRA_EASY');
+    },
+  });
+  define('chart-model.isChartGaugeOptionDeclaration', {
+    run: () => {
+      chartAPI.isChartGaugeOptionDeclaration('774:GAMELEVEL_DANGER');
+    },
+  });
   define('chart-model.buildChartOptionTimeline', {
     run: () => {
       chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART);
@@ -312,6 +448,11 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.resolveBmsWAVResources', {
     run: () => {
       chartAPI.resolveBmsWAVResources(BENCH_EXWAV_CHART);
+    },
+  });
+  define('chart-model.resolveReferencedBmsWAVResources', {
+    run: () => {
+      chartAPI.resolveReferencedBmsWAVResources(BENCH_EXWAV_CHART);
     },
   });
   define('chart-model.collectBmsWAVPlaybackModifiers', {

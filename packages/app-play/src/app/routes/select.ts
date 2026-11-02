@@ -13,7 +13,12 @@ import {
   type SelectSceneKit,
   type SelectStartEntry,
 } from '@be-music/player-browser/host';
-import type { BrowseSnapshot, LibraryChart, LibraryEntry } from '@be-music/player-scene-model';
+import {
+  resolveLibraryChartPlayVariant,
+  type BrowseSnapshot,
+  type LibraryChart,
+  type LibraryEntry,
+} from '@be-music/player-scene-model';
 import { lookupCourseBestRecord } from '../../course-result.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
 import type { InlineSearch } from '../../inline-search.ts';
@@ -42,7 +47,7 @@ export interface SelectRouteDeps {
   /** The library the screen lists. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The best records the screen shows on its bars. */
-  readonly records: Pick<RecordsService, 'lookupChartBestRecord' | 'currentRulesetRecords'>;
+  readonly records: Pick<RecordsService, 'lookupChartBestRecord' | 'currentRulesetRecords' | 'currentDanRanks'>;
   /** The course run: where the cursor goes back to once a course is over. */
   readonly courses: Pick<CourseRunService, 'takeReturnNavigation'>;
   /** Starts a course bar's run. */
@@ -84,7 +89,7 @@ export interface SelectRouteDeps {
    * The replay slots: which slots a bar has, and the card that lists them on the skins without a replay-slot UI of
    * their own (every family but beatoraja).
    */
-  readonly replaySlots: Pick<ReplaySlotService, 'exists'>;
+  readonly replaySlots: Pick<ReplaySlotService, 'exists' | 'targetOf'>;
   readonly replaySlotsPanel: Pick<ReplaySlotsPanel, 'showSelect'>;
   /** Plays a bar's replay slot (`ReplayRoute.startReplayFromSlot`); returns whether a play starts. */
   readonly startReplayFromSlot: (entry: Exclude<LibraryEntry, { kind: 'folder' }>, slot: number) => boolean;
@@ -224,6 +229,7 @@ export class SelectRoute {
         chart: (chartEntry) => this.records.lookupChartBestRecord(chartEntry),
         course: (course) =>
           lookupCourseBestRecord(course, this.records.currentRulesetRecords(), this.guiState.nonstopPlacement),
+        danRanks: () => this.records.currentDanRanks(),
         replaySlots: (entry) => this.replaySlots.exists(entry),
       },
       sounds,
@@ -237,6 +243,23 @@ export class SelectRoute {
         // The card lists the bar's replays where the skin has no replay-slot UI (a beatoraja skin draws its own).
         focus: (entry) => {
           if (kit.family !== 'beatoraja') this.replaySlotsPanel.showSelect(entry);
+          // "Ghost status" says whether a play of the bar would show the picked ghost.
+          const chart = entry?.kind === 'chart' ? entry : undefined;
+          const playFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'gameplay', chart?.chart);
+          const target = chart !== undefined ? this.replaySlots.targetOf(chart) : undefined;
+          // No bar, or a folder: nothing to say.
+          this.debugMenu.setGhostAvailability(
+            entry === undefined || entry.kind === 'folder'
+              ? undefined
+              : {
+                  family: playFamily === 'default' ? 'built-in' : playFamily,
+                  ...(chart !== undefined ? { playVariant: resolveLibraryChartPlayVariant(chart.chart) } : {}),
+                  course: entry.kind === 'course',
+                  battle: this.playOptions.current.battleMode !== 'OFF',
+                  ...(target !== undefined ? { target } : {}),
+                  slotsKept: chart !== undefined ? this.replaySlots.exists(chart) : [],
+                },
+          );
         },
         playOptions: (options) => {
           // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Debug Menu

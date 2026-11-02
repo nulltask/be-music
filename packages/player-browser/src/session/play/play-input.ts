@@ -15,7 +15,7 @@ import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
 import type { PlayEngineContext } from './play-engine.ts';
-import { adjustHiSpeed, changePlayView } from './play-view-settings.ts';
+import { adjustHiSpeed, changePlayView, handleChartManualSuddenKey } from './play-view-settings.ts';
 
 const log = logger('gameplay');
 
@@ -220,8 +220,29 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     (event.altKey || event.ctrlKey || event.metaKey || event.isComposing)
   )
     return;
-  // A held cover key keeps moving its cover, so the cover keys come before the repeat filter.
+  // A held cover key keeps moving its cover, so the cover keys come before the repeat filter. A chart's M-SUDDEN takes F3
+  // / F4 on every play screen (#931), unless a lane is bound to the key.
+  if (
+    !resolveLaneInputTokens(ctx.preparedChart?.laneBindings).has(event.code.toLowerCase()) &&
+    handleChartManualSuddenKey(ctx, event)
+  ) {
+    event.preventDefault();
+    ctx.theme.moment({ kind: 'view-setting', setting: 'sudden', at: ctx.playClock() });
+    return;
+  }
   if (ctx.options.coverKeys === true && handleCoverKey(ctx, event)) return;
+  // Fn + arrows can report an arrow `code` with a navigation `key` on compact keyboards.
+  // A disabled cover shortcut must not fall through to hi-speed or seek.
+  if (['PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) return;
+  // Hi-speed belongs to the view. Like cover adjustments, it follows keyboard auto-repeat;
+  // one-shot actions (pause, restart, mode switches and seek) still use the repeat filter below.
+  if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
+    event.preventDefault();
+    if (adjustHiSpeed(ctx, event.code === 'ArrowUp' ? HISPEED_STEP : -HISPEED_STEP, event.shiftKey)) {
+      ctx.theme.moment({ kind: 'view-setting', setting: 'hi-speed', at: ctx.playClock() });
+    }
+    return;
+  }
   if (event.repeat) return;
   if (event.code === 'Enter' && ctx.playState.view.fixedDisplayArea) {
     event.preventDefault();
@@ -261,10 +282,8 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     togglePause(ctx);
     return;
   }
-  if (
-    (event.code === 'ArrowLeft' || event.code === 'ArrowRight') &&
-    (ctx.options.autoPlay === true || ctx.options.replay !== undefined || ctx.options.allowSeek === 'practice')
-  ) {
+  // ← / → move five seconds only while AUTO play is on. A replay or a practice play does not.
+  if ((event.code === 'ArrowLeft' || event.code === 'ArrowRight') && ctx.options.autoPlay === true) {
     const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
     if (
       event.defaultPrevented ||
@@ -280,16 +299,6 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     void ctx.seek(ctx.currentSeconds() + (event.code === 'ArrowLeft' ? -5 : 5));
     return;
   }
-  // HiSpeed adjustment runs entirely on the view side — the engine has its own `high-speed` input command but
-  // the value it tracks is decoupled from the visual scroll speed (`PIXELS_PER_BEAT * this.hiSpeed`) the
-  // renderer applies. The WebInputRuntime's lane-input dispatch ignores arrow tokens, so the engine has no
-  // way to push HiSpeed changes back to the renderer; we handle them directly here.
-  if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
-    event.preventDefault();
-    if (adjustHiSpeed(ctx, event.code === 'ArrowUp' ? HISPEED_STEP : -HISPEED_STEP, event.shiftKey)) {
-      ctx.theme.moment({ kind: 'view-setting', setting: 'hi-speed', at: ctx.playClock() });
-    }
-  }
 }
 
 /**
@@ -301,6 +310,7 @@ function handleCoverKey(ctx: PlayInputContext, event: KeyboardEvent): boolean {
   const key = resolvePlayCoverKey(event, resolveLaneInputTokens(ctx.preparedChart?.laneBindings));
   if (key === undefined) return false;
   event.preventDefault();
+  if (event.repeat && key.command.type === 'cover-toggle') return true;
   if (ctx.playState.view.hiSpeed.locked) return true;
   const floating = ctx.playState.view.hiSpeed.floating;
   if (floating && key.command.type === 'cover-adjust' && key.command.part === 'sudden') {

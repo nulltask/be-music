@@ -1,7 +1,7 @@
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { BrowserAssetSource } from '../collection/types.ts';
-import { collectChartVolumeMultipliers, loadPlaySamples } from './play-audio.ts';
+import { collectChartVolumeMultipliers, loadPlaySamples, resolveAudioDecodeConcurrency } from './play-audio.ts';
 import { PEAK_GAIN_TARGET_LINEAR } from './peak-gain.ts';
 
 const mocks = vi.hoisted(() => ({
@@ -30,6 +30,13 @@ vi.mock('../runtime/play-tempo.ts', async (importOriginal) => ({
 function chartWithWAVs(wav: Record<string, string>): BeMusicJSON {
   const chart = createEmptyJSON('bms');
   chart.resources.wav = wav;
+  return playEverySlot(chart);
+}
+
+/** BGM events naming every `#WAV` and `#EXWAV` slot, so each is a sample the play decodes. */
+function playEverySlot(chart: BeMusicJSON): BeMusicJSON {
+  const slots = new Set([...Object.keys(chart.resources.wav), ...Object.keys(chart.bms.exWAV)]);
+  chart.events = [...slots].map((value) => ({ measure: 0, channel: '01', position: [0, 1], value }));
   return chart;
 }
 
@@ -87,6 +94,7 @@ describe('loadPlaySamples', () => {
   test('loads EXWAV-only resources and prefers EXWAV over WAV for a shared slot', async () => {
     const chart = chartWithWAVs({ '01': 'ordinary.wav' });
     chart.bms.exWAV = { '01': 'v -600 extended.wav', '02': 'p 0 only.wav' };
+    playEverySlot(chart);
     const samples = new Map<string, AudioBuffer>();
     const context = fakeAudioContext();
     await loadPlaySamples({
@@ -106,6 +114,7 @@ describe('loadPlaySamples', () => {
   test('keeps a decoded EXWAV sample whose native rate cannot be read', async () => {
     const chart = chartWithWAVs({});
     chart.bms.exWAV = { '01': 'f 44100 pitched.wav' };
+    playEverySlot(chart);
     mocks.readNativeAudioSampleRate.mockRejectedValueOnce(new Error('unknown container'));
     const samples = new Map<string, AudioBuffer>();
     const context = fakeAudioContext();
@@ -122,6 +131,30 @@ describe('loadPlaySamples', () => {
     expect(context.decoded).toEqual(['pitched.wav']);
     expect(mocks.readNativeAudioSampleRate).toHaveBeenCalledOnce();
     expect(samples.has('pitched.wav')).toBe(true);
+  });
+
+  test('decodes only the samples some event plays, once per path', async () => {
+    const chart = createEmptyJSON('bms');
+    chart.resources.wav = { '01': 'kick.wav', '02': 'declared-only.wav', '03': 'kick.wav', '04': 'mine.wav' };
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: '01' },
+      { measure: 0, channel: '11', position: [0, 1], value: '03' },
+      { measure: 0, channel: 'D1', position: [0, 1], value: '04' },
+    ];
+    const context = fakeAudioContext();
+    const samples = new Map<string, AudioBuffer>();
+    await loadPlaySamples({
+      audioContext: context,
+      chart,
+      source: SOURCE,
+      chartPath: 'main.bms',
+      samples,
+      tempo: 1,
+      tempoPitchMode: 'pitch',
+      tempoStretchAlgorithm: 'signalsmith',
+    });
+    expect(context.decoded).toEqual(['kick.wav']);
+    expect([...samples.keys()]).toEqual(['kick.wav']);
   });
 
   test('keys every decoded sample as the audio session looks it up and skips undecodable ones', async () => {
@@ -227,5 +260,15 @@ describe('loadPlaySamples', () => {
     expect(audioContext.decoded).toEqual([]);
     expect(samples.size).toBe(0);
     expect(mocks.stretchDecodedSamples).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveAudioDecodeConcurrency', () => {
+  test('decodes one sample per core, between 4 and 16', () => {
+    expect(resolveAudioDecodeConcurrency(10)).toBe(10);
+    expect(resolveAudioDecodeConcurrency(2)).toBe(4);
+    expect(resolveAudioDecodeConcurrency(64)).toBe(16);
+    expect(resolveAudioDecodeConcurrency(undefined)).toBe(8);
+    expect(resolveAudioDecodeConcurrency(Number.NaN)).toBe(8);
   });
 });

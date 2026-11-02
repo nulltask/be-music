@@ -1,4 +1,10 @@
-import { renderBuildInfo, renderServiceFooter } from '@be-music/service-web-theme';
+import {
+  PUBLIC_BETA_DELETION,
+  PUBLIC_BETA_LABEL,
+  renderBuildInfo,
+  renderServiceFooter,
+} from '@be-music/service-web-theme';
+import { playerServiceHeaderHTML } from './player-header.ts';
 
 function playBuildInfo(): { builtAt: string; revision: string } | undefined {
   return typeof __BE_MUSIC_BUILD_TIME__ === 'string'
@@ -20,8 +26,8 @@ function playHostname(): string {
  * stays self-documenting.
  *
  * Sub-elements wired up elsewhere:
+ *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings toggles the Debug Menu. Fullscreen covers `#main`, so this header and the site footer stay on the page.
  *  - `#help-button` / `#help-modal` — `help-modal.ts` (`wireHelpModal`)
- *  - `#account-chip` — `leaderboard-ui.ts` (`LeaderboardPanel.refreshAccount`)
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
  *  - `#start-silent-mode` — `silent-mode-playback.ts` (`mountStartSilentModeOption`), from `services/silent-mode.ts`
@@ -29,6 +35,12 @@ function playHostname(): string {
  */
 export const PLAYER_APP_HTML = `
   <div class="shell empty">
+    <div id="player-service-header" class="player-service-header">${playerServiceHeaderHTML({
+      locale: 'en',
+      hostname: playHostname(),
+      requestURL: typeof location === 'undefined' ? '/' : `${location.pathname}${location.search}`,
+    })}</div>
+    <main id="main" class="player-main">
     <!--
       Hidden file input — triggered by the GUI's "Open folder"
       button. Tweakpane has no native file controller, so we
@@ -45,6 +57,7 @@ export const PLAYER_APP_HTML = `
       class="input search-input"
       type="search"
       placeholder="Search title / artist / genre... (? for a filter)"
+      data-i18n-placeholder="search"
       aria-describedby="search-error"
     />
     <p id="search-error" class="search-error" role="status" hidden></p>
@@ -56,15 +69,13 @@ export const PLAYER_APP_HTML = `
         an active drag (\`.dragging\`) so the hint reappears even
         once charts are loaded. Falls behind the canvas otherwise.
 
-        Structured as three layers:
-        - \`.drop-frame\`: subtle outer ring spanning the whole
-          stage, lights up during a live drag.
+        Structured as two layers:
         - \`.drop-card\`: centered glassmorphism panel hosting the
           actual content; hosts the entry / hover animations.
+          It is the only drop feedback.
         - icon + title + subtitle for the hierarchy.
       -->
       <div class="drop">
-        <div class="drop-frame"></div>
         <div class="card drop-card px-8">
           <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
             <!--
@@ -99,9 +110,9 @@ export const PLAYER_APP_HTML = `
               opacity="0.55"
             />
           </svg>
-          <div class="drop-title">Drop to load</div>
+          <div class="drop-title" data-i18n="dropTitle">Drop to load</div>
           <div class="drop-subtitle">
-            <span>BMS folder</span>
+            <span data-i18n="dropFolder">BMS folder</span>
           </div>
           <!--
             Leaderboard: whether this browser's plays are sent, and the
@@ -109,14 +120,14 @@ export const PLAYER_APP_HTML = `
             (leaderboard-ui.ts) from the account state; the checkbox is
             the Debug Menu's "Submit to Leaderboard" setting.
           -->
-          <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard">
+          <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard" data-i18n-aria="leaderboard">
             <label class="start-check">
               <input class="input" type="checkbox" id="start-submit" />
-              <span>Submit my plays to the Leaderboard</span>
+              <span data-i18n="submitPlays">Submit my plays to the Leaderboard</span>
             </label>
             <!-- \`loading\` until the account has been read, so a signed-in player never sees "Not signed in". -->
             <div class="start-account" id="start-account" data-state="loading">
-              <span class="start-account-label" id="start-account-label">Checking account…</span>
+              <span class="start-account-label" id="start-account-label" data-i18n="checkingAccount">Checking account…</span>
               <div class="start-account-actions" id="start-account-actions"></div>
             </div>
             <p class="start-account-hint" id="start-account-hint"></p>
@@ -129,7 +140,7 @@ export const PLAYER_APP_HTML = `
             browser's language and shows it. The checkbox is the Debug
             Menu's "Play in silent mode" setting.
           -->
-          <section class="start-audio" id="start-silent-mode" aria-label="Sound" hidden>
+          <section class="start-audio" id="start-silent-mode" aria-label="Sound" data-i18n-aria="sound" hidden>
             <label class="start-check">
               <input class="input" type="checkbox" id="start-silent-mode-input" checked />
               <span data-silent-mode-label>Play in silent mode</span>
@@ -167,17 +178,17 @@ export const PLAYER_APP_HTML = `
                   />
                 </svg>
               </span>
-              <span class="compat-panel-eyebrow">System check</span>
-              <span class="compat-panel-status" id="compat-panel-status">Browser ready</span>
+              <span class="compat-panel-eyebrow" data-i18n="systemCheck">System check</span>
+              <span class="compat-panel-status" id="compat-panel-status" data-i18n="browserReady">Browser ready</span>
               <span class="compat-panel-chevron" aria-hidden="true"></span>
             </summary>
             <div class="compat-panel-sections">
               <section class="compat-panel-section">
-                <h3 class="compat-panel-section-title">Required</h3>
+                <h3 class="compat-panel-section-title" data-i18n="required">Required</h3>
                 <ul class="compat-panel-list" id="compat-panel-required"></ul>
               </section>
               <section class="compat-panel-section">
-                <h3 class="compat-panel-section-title">Optional</h3>
+                <h3 class="compat-panel-section-title" data-i18n="optional">Optional</h3>
                 <ul class="compat-panel-list" id="compat-panel-optional"></ul>
               </section>
             </div>
@@ -187,64 +198,61 @@ export const PLAYER_APP_HTML = `
     </div>
     <!--
       Leaderboard sign-in and sign-up, as on the Leaderboard's own pages:
-      a passkey now, Google and Discord shown but in development. Opened
-      from the start card's account row; wired by \`wireAccountDialogs\`
-      (account-dialogs.ts).
+      a passkey, Google, or Discord. Each button starts Accounts sign-in
+      and the OIDC callback returns here. Opened from the start card's
+      account row; wired by \`wireAccountDialogs\` (account-dialogs.ts).
     -->
     <dialog class="dialog account-dialog" id="leaderboard-sign-in" aria-labelledby="leaderboard-sign-in-title">
       <div class="account-dialog-body">
         <header>
-          <h2 id="leaderboard-sign-in-title">Sign in</h2>
-          <p>Use the passkey of your Leaderboard account.</p>
+          <h2 id="leaderboard-sign-in-title" data-i18n="signIn">Sign in</h2>
+          <p data-i18n="signInLead">Sign in with a passkey, Google, or Discord.</p>
         </header>
         <section class="grid gap-3">
         <button type="button" class="btn w-full" data-account-dialog-action="sign-in">
-          Sign in with a passkey
+          <span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></span>
+          <span data-i18n="signInPasskey">Sign in with a passkey</span>
         </button>
-        <div class="text-muted-foreground text-center text-xs" role="separator">or</div>
-        <div class="account-providers">
-          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign in with Google is coming soon">
-            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
-            Sign in with Google
-            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
+        <div class="text-muted-foreground text-center text-xs" role="separator" data-i18n="or">or</div>
+        <div class="account-providers grid gap-3">
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" data-account-dialog-action="sign-in-google">
+            <span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+            <span data-i18n="signInGoogle">Sign in with Google</span>
           </button>
-          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign in with Discord is coming soon">
-            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
-            Sign in with Discord
-            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" data-account-dialog-action="sign-in-discord">
+            <span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+            <span data-i18n="signInDiscord">Sign in with Discord</span>
           </button>
         </div>
         <p class="text-destructive text-sm" data-account-dialog-status role="status" hidden></p>
         </section>
         <footer>
-          <button type="button" class="btn" data-variant="link" data-account-dialog-action="open-sign-up">
+          <button type="button" class="btn" data-variant="link" data-account-dialog-action="open-sign-up" data-i18n="noAccount">
             No account yet? Sign up
           </button>
-          <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close">Cancel</button>
+          <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close" data-i18n="cancel">Cancel</button>
         </footer>
       </div>
     </dialog>
     <dialog class="dialog account-dialog" id="leaderboard-sign-up" aria-labelledby="leaderboard-sign-up-title">
       <form class="account-dialog-body" method="dialog" data-account-sign-up-form>
         <header>
-          <h2 id="leaderboard-sign-up-title">Create your account</h2>
-          <p data-account-sign-up-lead>Pick a handle and a name. Your browser then makes a passkey for it.</p>
+          <h2 id="leaderboard-sign-up-title" data-i18n="signUpTitle">Create your account</h2>
+          <p data-account-sign-up-lead data-i18n="signUpLead">Pick a handle and a name. Your browser then makes a passkey for it.</p>
         </header>
-        <div class="account-providers">
-          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign up with Google is coming soon">
-            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
-            Sign up with Google
-            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
+        <div class="account-providers grid gap-3">
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" data-account-dialog-action="sign-up-google">
+            <span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+            <span data-i18n="signUpGoogle">Sign up with Google</span>
           </button>
-          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" disabled title="Sign up with Discord is coming soon">
-            <span class="inline-flex size-4"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
-            Sign up with Discord
-            <span class="text-muted-foreground ms-auto text-xs">Coming soon</span>
+          <button type="button" class="btn w-full whitespace-normal" data-variant="outline" data-account-dialog-action="sign-up-discord">
+            <span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+            <span data-i18n="signUpDiscord">Sign up with Discord</span>
           </button>
         </div>
-        <div class="text-muted-foreground text-center text-xs" role="separator">or with a passkey</div>
+        <div class="text-muted-foreground text-center text-xs" role="separator" data-i18n="orPasskey">or with a passkey</div>
         <label class="field">
-          <span>Handle</span>
+          <span data-i18n="handle">Handle</span>
           <input
             class="input"
             name="handle"
@@ -255,19 +263,19 @@ export const PLAYER_APP_HTML = `
             autocomplete="username"
             spellcheck="false"
           />
-          <small>3 to 15 letters, digits or _. It names your page.</small>
+          <small data-i18n="handleHint">3 to 15 letters, digits or _. It names your page.</small>
         </label>
         <label class="field">
-          <span>Name</span>
+          <span data-i18n="displayName">Name</span>
           <input class="input" name="displayName" required maxlength="64" autocomplete="nickname" />
-          <small>Up to 32 characters, in any script. The rankings show it.</small>
+          <small data-i18n="nameHint">Up to 32 characters, in any script. The rankings show it.</small>
         </label>
         <p class="text-destructive text-sm" data-account-dialog-status role="status" hidden></p>
         <footer>
           <span></span>
           <span class="account-dialog-buttons">
-            <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close">Cancel</button>
-            <button type="submit" class="btn">Create passkey</button>
+            <button type="button" class="btn" data-variant="outline" data-account-dialog-action="close" data-i18n="cancel">Cancel</button>
+            <button type="submit" class="btn"><span class="inline-flex size-4 shrink-0"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></span><span data-i18n="createPasskey">Create passkey</span></button>
           </span>
         </footer>
       </form>
@@ -285,24 +293,24 @@ export const PLAYER_APP_HTML = `
         <path d="M14 22 L24 32 L34 22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
         <path d="M10 38 L38 38" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55" />
       </svg>
-      <h2 class="drop-title" id="skin-drop-title">Drop an LR2 skin</h2>
+      <h2 class="drop-title" id="skin-drop-title" data-i18n="skinDropLr2">Drop an LR2 skin</h2>
       <p class="text-muted-foreground text-sm" data-skin-drop-hint></p>
       <footer>
-        <button type="button" class="btn" data-variant="outline" data-skin-drop-cancel>Cancel</button>
+        <button type="button" class="btn" data-variant="outline" data-skin-drop-cancel data-i18n="cancel">Cancel</button>
       </footer>
       </div>
     </dialog>
     <dialog class="dialog account-dialog" id="skin-switch" aria-labelledby="skin-switch-title" aria-describedby="skin-switch-hint">
       <form method="dialog" class="account-dialog-body">
         <header>
-          <h2 id="skin-switch-title">Use the dropped skin?</h2>
-          <p id="skin-switch-hint">Switch to this skin? Cancel keeps your current skin. Charts in the drop will still be imported.</p>
+          <h2 id="skin-switch-title" data-i18n="skinSwitchTitle">Use the dropped skin?</h2>
+          <p id="skin-switch-hint" data-i18n="skinSwitchHint">Switch to this skin? Cancel keeps your current skin. Charts in the drop will still be imported.</p>
         </header>
         <footer>
-          <button type="submit" value="" class="btn" data-variant="outline" autofocus>Cancel</button>
+          <button type="submit" value="" class="btn" data-variant="outline" autofocus data-i18n="cancel">Cancel</button>
           <span class="account-dialog-buttons">
-            <button type="submit" value="lr2" class="btn" data-skin-family="lr2">Use LR2 skin</button>
-            <button type="submit" value="beatoraja" class="btn" data-skin-family="beatoraja">Use beatoraja skin</button>
+            <button type="submit" value="lr2" class="btn" data-skin-family="lr2" data-i18n="useLr2">Use LR2 skin</button>
+            <button type="submit" value="beatoraja" class="btn" data-skin-family="beatoraja" data-i18n="useBeatoraja">Use beatoraja skin</button>
           </span>
         </footer>
       </form>
@@ -316,12 +324,12 @@ export const PLAYER_APP_HTML = `
     <dialog class="dialog account-dialog" id="replay-missing" aria-labelledby="replay-missing-title" aria-describedby="replay-missing-hint">
       <form method="dialog" class="account-dialog-body">
         <header>
-          <h2 id="replay-missing-title">Charts missing</h2>
+          <h2 id="replay-missing-title" data-i18n="chartsMissing">Charts missing</h2>
           <p id="replay-missing-hint" data-replay-missing-hint></p>
         </header>
         <ul class="replay-missing-list" data-replay-missing-list></ul>
         <footer>
-          <button type="submit" class="btn" autofocus>OK</button>
+          <button type="submit" class="btn" autofocus data-i18n="ok">OK</button>
         </footer>
       </form>
     </dialog>
@@ -334,12 +342,12 @@ export const PLAYER_APP_HTML = `
     <dialog class="dialog account-dialog" id="play-option-mismatch" aria-labelledby="play-option-mismatch-title" aria-describedby="play-option-mismatch-hint">
       <form method="dialog" class="account-dialog-body">
         <header>
-          <h2 id="play-option-mismatch-title">Option not available</h2>
-          <p id="play-option-mismatch-hint">The selected play options cannot be used with this chart. Change them and start the chart again.</p>
+          <h2 id="play-option-mismatch-title" data-i18n="optionUnavailable">Option not available</h2>
+          <p id="play-option-mismatch-hint" data-i18n="optionUnavailableHint">The selected play options cannot be used with this chart. Change them and start the chart again.</p>
         </header>
         <ul class="replay-missing-list" data-play-option-mismatch-list></ul>
         <footer>
-          <button type="submit" class="btn" autofocus>OK</button>
+          <button type="submit" class="btn" autofocus data-i18n="ok">OK</button>
         </footer>
       </form>
     </dialog>
@@ -354,7 +362,7 @@ export const PLAYER_APP_HTML = `
     -->
     <div class="loading-overlay" id="loading-overlay" aria-hidden="true">
       <div class="card loading-card gap-3 px-6" role="status" aria-live="polite">
-        <div class="loading-label" id="loading-label">Loading…</div>
+        <div class="loading-label" id="loading-label" data-i18n="loading">Loading…</div>
         <div class="progress loading-bar"><span class="loading-bar-fill" id="loading-bar-fill"></span></div>
         <div class="loading-counter" id="loading-counter"></div>
       </div>
@@ -380,28 +388,18 @@ export const PLAYER_APP_HTML = `
         />
         <circle cx="12" cy="17.2" r="1.1" fill="currentColor" />
       </svg>
-      <span class="help-button-label">Help</span>
+      <span class="help-button-label" data-i18n="help">Help</span>
     </button>
-    <!--
-      Bottom-right Leaderboard account chip: the sign-in state at a glance
-      (a green dot when signed in, amber when anonymous, grey when signed
-      out). Signed in, it opens the player's Leaderboard page; signed out,
-      it opens the Debug Menu's Leaderboard folder. Wired in \`leaderboard-ui.ts\`.
-    -->
-    <a class="btn account-chip no-underline" data-size="sm" data-variant="ghost" id="account-chip" data-state="loading" href="https://leaderboard.be-music.app/" target="_blank" rel="noopener">
-      <span class="account-chip-dot" aria-hidden="true"></span>
-      <span class="account-chip-label" id="account-chip-label"></span>
-    </a>
     <!--
       Touch play controls. Phones and tablets have no Space / Esc key, so
       during play a pause button sits in the top-left corner; while paused
       it shows Resume and Quit. Hidden on desktops and outside play.
     -->
     <div class="touch-controls" id="touch-controls">
-      <button class="btn touch-control" data-size="icon" id="touch-pause" type="button" aria-label="Pause">
+      <button class="btn touch-control" data-size="icon" id="touch-pause" type="button" aria-label="Pause" data-i18n-aria="pause">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round" /></svg>
       </button>
-      <button class="btn touch-control touch-control--text" data-size="sm" data-variant="outline" id="touch-quit" type="button">Quit</button>
+      <button class="btn touch-control touch-control--text" data-size="sm" data-variant="outline" id="touch-quit" type="button" data-i18n="quit">Quit</button>
     </div>
     <!--
       Shown on phones held upright: the play field is laid out for
@@ -414,8 +412,8 @@ export const PLAYER_APP_HTML = `
           <path d="M8 34a17 17 0 0 0 17 9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
           <path d="M21 40l4 3-3 4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <div class="rotate-hint-title">Rotate your device</div>
-        <div class="rotate-hint-subtitle">The player is laid out for landscape.</div>
+        <div class="rotate-hint-title" data-i18n="rotateTitle">Rotate your device</div>
+        <div class="rotate-hint-subtitle" data-i18n="rotateSubtitle">The player is laid out for landscape.</div>
       </div>
     </div>
     <!--
@@ -435,10 +433,10 @@ export const PLAYER_APP_HTML = `
       <div class="card help-modal-card gap-4 overflow-hidden p-6">
         <header class="help-modal-header">
           <div>
-            <div class="help-modal-eyebrow">Help &amp; About</div>
-            <h2 class="help-modal-title" id="help-modal-title">be-music player</h2>
+            <div class="help-modal-eyebrow" data-i18n="helpAbout">Help &amp; About</div>
+            <h2 class="help-modal-title" id="help-modal-title"><span>be-music player</span><span class="badge" data-variant="outline">Beta</span></h2>
           </div>
-          <button class="btn help-modal-close" data-size="icon-sm" data-variant="ghost" id="help-modal-close" type="button" aria-label="Close">
+          <button class="btn help-modal-close" data-size="icon-sm" data-variant="ghost" id="help-modal-close" type="button" aria-label="Close" data-i18n-aria="close">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
                 d="M7 7 L17 17 M17 7 L7 17"
@@ -459,6 +457,7 @@ export const PLAYER_APP_HTML = `
             aria-selected="true"
             aria-controls="help-pane-usage"
             data-pane="usage"
+            data-i18n="usage"
           >
             Usage
           </button>
@@ -470,6 +469,7 @@ export const PLAYER_APP_HTML = `
             aria-selected="false"
             aria-controls="help-pane-options"
             data-pane="options"
+            data-i18n="options"
           >
             Options
           </button>
@@ -481,6 +481,7 @@ export const PLAYER_APP_HTML = `
             aria-selected="false"
             aria-controls="help-pane-oss"
             data-pane="oss"
+            data-i18n="openSource"
           >
             Open source
           </button>
@@ -499,7 +500,7 @@ export const PLAYER_APP_HTML = `
             at boot — \`ja-*\` users land on Japanese, everyone else
             on English.
           -->
-          <div class="help-lang-switch" role="group" aria-label="Language">
+          <div class="help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
             <button
               class="btn help-lang-toggle is-active" data-size="sm" data-variant="ghost"
               type="button"
@@ -551,7 +552,8 @@ export const PLAYER_APP_HTML = `
                 <li>Some features are still missing or incomplete — expect rough edges.</li>
                 <li>
                   <strong>Best records stay in this browser.</strong> The Leaderboard (off by
-                  default, Debug Menu → Leaderboard) is a beta: its rankings may be reset.
+                  default, Debug Menu → Leaderboard) is a ${PUBLIC_BETA_LABEL.en}: its rankings may be reset.
+                  ${PUBLIC_BETA_DELETION.en}
                 </li>
                 <li>
                   <strong>Verified skins:</strong> the Lunatic Rave 2 default skin, plus the
@@ -629,14 +631,15 @@ export const PLAYER_APP_HTML = `
               </div>
             </div>
             <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed.</li>
+              <li><kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed; hold to keep adjusting.</li>
               <li>
                 Lane covers (Plain, Native, Synesthesia and beatoraja skins): <kbd>PageUp</kbd> / <kbd>PageDown</kbd>
                 move SUDDEN+, <kbd>Home</kbd> / <kbd>End</kbd> the LIFT, <kbd>H</kbd> switches HIDDEN+ and
                 <kbd>J</kbd> / <kbd>K</kbd> move it; hold <kbd>Shift</kbd> for larger steps. A key that a lane of the
-                chart uses stays a lane key.
+                chart uses stays a lane key. Hold an adjustment key to keep moving; H toggles once per press.
+                With FLOATING HI-SPEED, PageUp / PageDown fine-adjust hi-speed when SUDDEN+ and LIFT are both off.
               </li>
-              <li>In AUTO play, a replay or a practice play, <kbd>←</kbd> / <kbd>→</kbd> seek 5 s back / forward.</li>
+              <li>In AUTO play, <kbd>←</kbd> / <kbd>→</kbd> seek 5 s back / forward.</li>
               <li><kbd>Space</kbd> pauses / resumes.</li>
               <li><kbd>F5</kbd> restarts the current chart.</li>
               <li><kbd>Esc</kbd> exits to the result screen (or back to chart select).</li>
@@ -683,7 +686,7 @@ export const PLAYER_APP_HTML = `
                 <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
                 <li>
                   <strong>ベスト記録はこのブラウザに保存されます。</strong>
-                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) はベータ版で、ランキングはリセットされることがあります。
+                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) は${PUBLIC_BETA_LABEL.ja}で、ランキングはリセットされることがあります。${PUBLIC_BETA_DELETION.ja}
                 </li>
                 <li>
                   <strong>動作確認済みのスキン:</strong> Lunatic Rave 2 デフォルトスキンに加え、beatoraja デフォルトスキン (<code>skin/default</code>)、<code>ModernChic</code>、<code>GdbG Original Skin</code> の四種類です。
@@ -742,11 +745,12 @@ export const PLAYER_APP_HTML = `
               <div class="help-keymap-note">左 Shift = 1P スクラッチ · 右 Shift = 2P スクラッチ · 9 ボタン (PMS) の譜面は Z S X D C F V G B。</div>
             </div>
             <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。</li>
+              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。長押しで連続調整できます。</li>
               <li>
                 レーンカバー (Plain / Native / Synesthesia と beatoraja スキン): <kbd>PageUp</kbd> / <kbd>PageDown</kbd> で SUDDEN+、<kbd>Home</kbd> / <kbd>End</kbd> で LIFT を動かし、<kbd>H</kbd> で HIDDEN+ を切り替え、<kbd>J</kbd> / <kbd>K</kbd> で動かします。<kbd>Shift</kbd> を押しながらだと大きく動きます。譜面のレーンに使われているキーはレーンの入力になります。
+                調整キーは長押しで連続して動きます。H は押すたびに 1 回だけ切り替わります。FLOATING HI-SPEED では、SUDDEN+ と LIFT が両方 OFF のとき、PageUp / PageDown でハイスピードを微調整します。
               </li>
-              <li>AUTO プレイ、リプレイ、練習のプレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
+              <li>AUTO プレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
               <li><kbd>Space</kbd> でポーズ / 再開。</li>
               <li><kbd>F5</kbd> で現在の譜面をリスタート。</li>
               <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
@@ -771,7 +775,7 @@ export const PLAYER_APP_HTML = `
           hidden
         >
           <!-- The language switch follows the Usage one: every \`.help-lang-toggle\` and \`.help-lang\` share one state. -->
-          <div class="help-lang-switch" role="group" aria-label="Language">
+          <div class="help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
             <button
               class="btn help-lang-toggle is-active" data-size="sm" data-variant="ghost"
               type="button"
@@ -824,13 +828,13 @@ export const PLAYER_APP_HTML = `
                 <dt>Judge algorithm</dt>
                 <dd>With beatoraja rules, which note a press is judged against when several are in reach: Combo (default), Duration or Lowest.</dd>
                 <dt>Random 1P / Random 2P</dt>
-                <dd>The lane option for each side. RANDOM and S-RANDOM run the rules' own algorithm; options from one source (R-RANDOM, SPIRAL, H-RANDOM, SCATTER and more) are offered under every ruleset and run that source's. CONVERGE follows the rules.</dd>
+                <dd>The lane option for each side. Every option is offered under every ruleset and runs its source's algorithm, grouped by source with the rules' own first. RANDOM, S-RANDOM and CONVERGE differ per source, so each is listed once per source, for example RANDOM (LR2) and RANDOM (beatoraja).</dd>
                 <dt>H-RANDOM threshold BPM (beatoraja)</dt>
                 <dd>The BPM whose 16th note counts as a too-fast repeat for H-RANDOM, ALL-SCR and the 7-to-9 scratch.</dd>
                 <dt>Fixed key 1P / 2P (LR2; 0=default)</dt>
                 <dd>The lane LR2 CONVERGE gathers notes on. 0 picks the mode default.</dd>
                 <dt>Seed 1P / 2P (-1=random)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Fixes the seed of the lane random; -1 draws a new one each play.</dd>
+                <dd>Fixes the seed of the lane random under every ruleset; -1 draws a new one each play. Hidden for RANDOM_PLAYABLE, which ignores it.</dd>
                 <dt>7-to-9 (beatoraja)</dt>
                 <dd>Plays a 7KEY chart on nine lanes, in the chosen layout.</dd>
                 <dt>7-to-9 scratch</dt>
@@ -839,10 +843,10 @@ export const PLAYER_APP_HTML = `
                 <dd>Plays the same chart again with the last play's exact lanes, when that play had the same judge rules.</dd>
                 <dt>New arrangement</dt>
                 <dd>Drops the reused arrangement and resets both seeds to -1.</dd>
-                <dt>Gauge auto-shift (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> What happens when the gauge would fail: NONE, CONTINUE, SURVIVAL TO GROOVE, BEST CLEAR or SELECT TO UNDER.</dd>
+                <dt>Gauge auto-shift</dt>
+                <dd>What happens when the gauge would fail: NONE, CONTINUE, SURVIVAL TO GROOVE, BEST CLEAR or SELECT TO UNDER (beatoraja's policies). Each ruleset shifts along its own gauges, for example LR2 from HAZARD to HARD, GROOVE and EASY.</dd>
                 <dt>Lowest auto-shift gauge</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to.</dd>
+                <dd>The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to. LR2 has no ASSIST EASY, so its lowest is EASY.</dd>
                 <dt>Scroll (beatoraja)</dt>
                 <dd>REMOVE draws the chart without its BPM and scroll changes; ADD adds random scroll changes. Judgment is unchanged.</dd>
                 <dt>Scroll section lines / Scroll rate</dt>
@@ -854,13 +858,13 @@ export const PLAYER_APP_HTML = `
                 <dt>Auto scratch 1P / 2P</dt>
                 <dd>Plays that side's scratch notes for you.</dd>
                 <dt>Long notes</dt>
-                <dd>LEGACY NOTE turns charge notes into normal notes, LN REMOVE turns every long note into its head, and ADD LN / CN / HCN / ALL (beatoraja) make long notes.</dd>
+                <dd>LEGACY NOTE turns charge notes into normal notes, LN REMOVE turns every long note into its head, and ADD LN / CN / HCN / ALL (beatoraja) make long notes under every ruleset. The added notes are judged as the rules' long notes, so CN and HCN differ from LN only under beatoraja rules.</dd>
                 <dt>Battle</dt>
-                <dd>Battle and conversion modes. BATTLE follows the rules (two-player play under LR2, one player on both sides under beatoraja and ????), ???? adds 2P PLAY, and BATTLE AS (beatoraja), D-BATTLE and SP TO DP (LR2) are offered under every ruleset.</dd>
+                <dd>Battle and conversion modes, grouped by source and offered under every ruleset. BATTLE (LR2) is two-player play, each player judged by the rules (???? calls it 2P PLAY); BATTLE (beatoraja) and BATTLE (????) put one player on both sides. COUPLE stays with LR2 rules.</dd>
                 <dt>Gauge 2P</dt>
-                <dd><em class="help-menu-when">Shown with Battle set to BATTLE (LR2) or 2P PLAY (????).</em> The second player's gauge.</dd>
+                <dd><em class="help-menu-when">Shown with two-player play: Battle set to BATTLE (LR2), COUPLE or 2P PLAY (????).</em> The second player's gauge.</dd>
                 <dt>M-RAN 1P / 2P</dt>
-                <dd><em class="help-menu-when">Shown with two-player play: Battle set to BATTLE (LR2) or 2P PLAY (????).</em> Mirrors that player's side after a RANDOM-type option.</dd>
+                <dd><em class="help-menu-when">Shown with two-player play: Battle set to BATTLE (LR2), COUPLE or 2P PLAY (????).</em> Mirrors that player's side after a RANDOM-type option.</dd>
                 <dt>D-BATTLE scratch (LR2)</dt>
                 <dd><em class="help-menu-when">Shown with Battle set to D-BATTLE.</em> Keeps scratch notes playable instead of turning them into background sound.</dd>
                 <dt>EXTRA MODE (LR2)</dt>
@@ -873,18 +877,18 @@ export const PLAYER_APP_HTML = `
                 <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Scales the judgment windows with the rates below.</dd>
                 <dt>Key / Scratch PGREAT, GREAT, GOOD % · LN margin %</dt>
                 <dd><em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of each window for keys and scratches, and the long-note release margin.</dd>
-                <dt>PRACTICE (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Plays a range of the chart again and again until Esc. A practice play saves no replay and no record.</dd>
+                <dt>PRACTICE</dt>
+                <dd>beatoraja's PRACTICE, under every ruleset: plays a range of the chart again and again until Esc. A practice play saves no replay and no record, and is never sent to the Leaderboard.</dd>
                 <dt>START TIME ms / END TIME ms</dt>
                 <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The range to practise, in chart milliseconds; 0 as the end means the chart's end.</dd>
                 <dt>GAUGE TYPE / GAUGE CATEGORY / GAUGE VALUE</dt>
-                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The gauge, its category and its starting value.</dd>
+                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The gauge, one of the rules' own gauges; its category (beatoraja rules only); and its starting value.</dd>
                 <dt>JUDGERANK / TOTAL</dt>
-                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The judge rank and TOTAL to practise with; 0 keeps the chart's.</dd>
+                <dd><em class="help-menu-when">Shown with PRACTICE on, except under ???? rules.</em> The judge rank and TOTAL to practise with; 0 keeps the chart's. Under LR2 rules JUDGERANK reads on LR2's #RANK table (25, 50, 75 and 100 are VERY HARD to EASY) and TOTAL is used as is.</dd>
                 <dt>EXTRA depth (beatoraja) / EXTRA scratch</dt>
                 <dd>beatoraja EXTRA: how many background keysounds per row become notes (0 is off), and whether scratch lanes get them.</dd>
                 <dt>Long-note add rate (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules and an ADD choice in Long notes.</em> How many of the notes become long notes, 0 to 1.</dd>
+                <dd><em class="help-menu-when">Shown with an ADD choice in Long notes.</em> How many of the notes become long notes, 0 to 1.</dd>
                 <dt>A-SCR &amp; LEGACY NOTE (AC 34)</dt>
                 <dd>One button for both Auto scratch sides and LEGACY NOTE.</dd>
                 <dt>Sort / Key filter / Difficulty filter</dt>
@@ -927,6 +931,8 @@ export const PLAYER_APP_HTML = `
               <dl class="help-menu-items">
                 <dt>Tempo · Hi-speed · SUDDEN+ / HIDDEN+ · LIFT</dt>
                 <dd>When on, a replay uses what the recorded player had; when off, your own settings.</dd>
+                <dt>Ghost · Ghost mode</dt>
+                <dd>Shows a recorded play with yours: your best, a replay slot, the Leaderboard's top run or a replay file, as a second playfield, a pacemaker, or a pacemaker with its key presses over your lanes. Ghost status says whether the chart under the cursor shows it.</dd>
               </dl>
             </section>
             <section class="help-menu-folder">
@@ -1095,13 +1101,13 @@ export const PLAYER_APP_HTML = `
                 <dt>Judge algorithm</dt>
                 <dd>beatoraja のルールで、近くに複数のノーツがあるときにどれを判定するか。Combo (既定)、Duration、Lowest。</dd>
                 <dt>Random 1P / Random 2P</dt>
-                <dd>各サイドのレーンのオプション。RANDOM と S-RANDOM はルールのアルゴリズムで動きます。片方の出典にしかないもの (R-RANDOM、SPIRAL、H-RANDOM、SCATTER など) はどのルールでも選べ、その出典のアルゴリズムで動きます。CONVERGE はルールに従います。</dd>
+                <dd>各サイドのレーンのオプション。どのオプションもどのルールでも選べ、その出典のアルゴリズムで動きます。出典ごとにまとめ、ルール自身の出典を先頭に並べます。RANDOM、S-RANDOM、CONVERGE は出典ごとに中身が違うため、RANDOM (LR2) と RANDOM (beatoraja) のように出典ごとに 1 つずつ並びます。</dd>
                 <dt>H-RANDOM threshold BPM (beatoraja)</dt>
                 <dd>H-RANDOM、ALL-SCR、7-to-9 のスクラッチで、連打とみなす 16 分音符の BPM。</dd>
                 <dt>Fixed key 1P / 2P (LR2; 0=default)</dt>
                 <dd>LR2 の CONVERGE でノーツを集めるレーン。0 はモードの既定。</dd>
                 <dt>Seed 1P / 2P (-1=random)</dt>
-                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> レーンのランダムのシード。-1 ならプレイごとに新しく決めます。</dd>
+                <dd>どのルールでも使うレーンのランダムのシード。-1 ならプレイごとに新しく決めます。シードを使わない RANDOM_PLAYABLE では隠れます。</dd>
                 <dt>7-to-9 (beatoraja)</dt>
                 <dd>7 鍵の譜面を、選んだ配置で 9 レーンで遊びます。</dd>
                 <dt>7-to-9 scratch</dt>
@@ -1110,10 +1116,10 @@ export const PLAYER_APP_HTML = `
                 <dd>前回のプレイ (同じルールで遊んだもの) とまったく同じ配置で、同じ譜面をもう一度遊びます。</dd>
                 <dt>New arrangement</dt>
                 <dd>再利用している配置をやめ、シードを両方 -1 に戻します。</dd>
-                <dt>Gauge auto-shift (beatoraja)</dt>
-                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> ゲージが尽きたときの扱い。NONE、CONTINUE、SURVIVAL TO GROOVE、BEST CLEAR、SELECT TO UNDER。</dd>
+                <dt>Gauge auto-shift</dt>
+                <dd>ゲージが尽きたときの扱い。NONE、CONTINUE、SURVIVAL TO GROOVE、BEST CLEAR、SELECT TO UNDER (beatoraja の方式)。ルールごとに自分のゲージの並びで切り替えます。たとえば LR2 では HAZARD から HARD、GROOVE、EASY の順です。</dd>
                 <dt>Lowest auto-shift gauge</dt>
-                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> BEST CLEAR と SELECT TO UNDER で下げてよい一番下のゲージ。</dd>
+                <dd>BEST CLEAR と SELECT TO UNDER で下げてよい一番下のゲージ。LR2 には ASSIST EASY がないので、一番下は EASY です。</dd>
                 <dt>Scroll (beatoraja)</dt>
                 <dd>REMOVE は BPM やスクロールの変化をなくして描き、ADD はランダムなスクロールの変化を加えます。判定は変わりません。</dd>
                 <dt>Scroll section lines / Scroll rate</dt>
@@ -1125,13 +1131,13 @@ export const PLAYER_APP_HTML = `
                 <dt>Auto scratch 1P / 2P</dt>
                 <dd>そのサイドのスクラッチを自動で処理します。</dd>
                 <dt>Long notes</dt>
-                <dd>LEGACY NOTE はチャージノートを通常ノーツに、LN REMOVE はすべてのロングノートを始点だけにし、ADD LN / CN / HCN / ALL (beatoraja) はロングノートを作ります。</dd>
+                <dd>LEGACY NOTE はチャージノートを通常ノーツに、LN REMOVE はすべてのロングノートを始点だけにし、ADD LN / CN / HCN / ALL (beatoraja) はどのルールでもロングノートを作ります。足したノーツはルールのロングノートとして判定するので、CN と HCN が LN と違うのは beatoraja のルールのときだけです。</dd>
                 <dt>Battle</dt>
-                <dd>バトルと変換のモード。BATTLE はルールに従います (LR2 では 2 人プレイ、beatoraja と ???? では 1 人で両側)。???? には 2P PLAY もあります。BATTLE AS (beatoraja)、D-BATTLE、SP TO DP (LR2) はどのルールでも選べます。</dd>
+                <dd>バトルと変換のモード。出典ごとにまとめ、どのルールでも選べます。BATTLE (LR2) は 2 人プレイで、各プレイヤーはルールで判定します (???? では 2P PLAY)。BATTLE (beatoraja) と BATTLE (????) は 1 人で両側を遊びます。COUPLE は LR2 のルールだけです。</dd>
                 <dt>Gauge 2P</dt>
-                <dd><em class="help-menu-when">Battle が BATTLE (LR2) か 2P PLAY (????) のときに表示。</em> 2 人目のゲージ。</dd>
+                <dd><em class="help-menu-when">2 人プレイ (Battle が BATTLE (LR2)、COUPLE、2P PLAY (????)) のときに表示。</em> 2 人目のゲージ。</dd>
                 <dt>M-RAN 1P / 2P</dt>
-                <dd><em class="help-menu-when">2 人プレイ (Battle が BATTLE (LR2) か 2P PLAY (????)) のときに表示。</em> RANDOM 系のオプションのあと、そのプレイヤーの側を左右反転します。</dd>
+                <dd><em class="help-menu-when">2 人プレイ (Battle が BATTLE (LR2)、COUPLE、2P PLAY (????)) のときに表示。</em> RANDOM 系のオプションのあと、そのプレイヤーの側を左右反転します。</dd>
                 <dt>D-BATTLE scratch (LR2)</dt>
                 <dd><em class="help-menu-when">Battle が D-BATTLE のときに表示。</em> スクラッチを BGM にせず、叩くノーツのまま残します。</dd>
                 <dt>EXTRA MODE (LR2)</dt>
@@ -1144,18 +1150,18 @@ export const PLAYER_APP_HTML = `
                 <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 下の倍率で判定の幅を変えます。</dd>
                 <dt>Key / Scratch PGREAT, GREAT, GOOD % · LN margin %</dt>
                 <dd><em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> 鍵盤とスクラッチの判定ごとの幅と、ロングノートを離すときの余裕。</dd>
-                <dt>PRACTICE (beatoraja)</dt>
-                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 譜面の一部の範囲を Esc を押すまで繰り返します。練習のプレイはリプレイも記録も残しません。</dd>
+                <dt>PRACTICE</dt>
+                <dd>beatoraja の PRACTICE を、どのルールでも使えます。譜面の一部の範囲を Esc を押すまで繰り返します。練習のプレイはリプレイも記録も残さず、Leaderboard にも送りません。</dd>
                 <dt>START TIME ms / END TIME ms</dt>
                 <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習する範囲 (譜面のミリ秒)。終わりの 0 は譜面の最後。</dd>
                 <dt>GAUGE TYPE / GAUGE CATEGORY / GAUGE VALUE</dt>
-                <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> ゲージの種類、カテゴリ、開始時の値。</dd>
+                <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> ゲージの種類 (そのルールのゲージ)、カテゴリ (beatoraja のルールのときだけ)、開始時の値。</dd>
                 <dt>JUDGERANK / TOTAL</dt>
-                <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習で使う判定ランクと TOTAL。0 なら譜面の値。</dd>
+                <dd><em class="help-menu-when">PRACTICE がオンのときに表示 (???? のルールでは表示しません)。</em> 練習で使う判定ランクと TOTAL。0 なら譜面の値。LR2 のルールでは JUDGERANK を LR2 の #RANK の表で読み (25・50・75・100 が VERY HARD〜EASY)、TOTAL はそのまま使います。</dd>
                 <dt>EXTRA depth (beatoraja) / EXTRA scratch</dt>
                 <dd>beatoraja の EXTRA。1 行あたり何個の BGM のキー音をノーツにするか (0 でオフ) と、スクラッチにも置くか。</dd>
                 <dt>Long-note add rate (beatoraja)</dt>
-                <dd><em class="help-menu-when">beatoraja のルールで Long notes が ADD のどれかのときに表示。</em> ロングノートにする割合 (0〜1)。</dd>
+                <dd><em class="help-menu-when">Long notes が ADD のどれかのときに表示。</em> ロングノートにする割合 (0〜1)。</dd>
                 <dt>A-SCR &amp; LEGACY NOTE (AC 34)</dt>
                 <dd>両サイドのオートスクラッチと LEGACY NOTE をまとめてオンにするボタン。</dd>
                 <dt>Sort / Key filter / Difficulty filter</dt>
@@ -1198,6 +1204,8 @@ export const PLAYER_APP_HTML = `
               <dl class="help-menu-items">
                 <dt>Tempo · Hi-speed · SUDDEN+ / HIDDEN+ · LIFT</dt>
                 <dd>オンならリプレイは録画したプレイヤーの設定で、オフなら自分の設定で再生します。</dd>
+                <dt>Ghost · Ghost mode</dt>
+                <dd>記録されたプレイを自分のプレイと一緒に見せます。自己ベスト、リプレイスロット、Leaderboard の 1 位、リプレイファイルのどれかを、2 つ目のプレイフィールド、ペースメーカー、押下を自分のレーンに重ねるペースメーカーのどれかで見せます。Ghost status はカーソルの譜面で見せられるかを示します。</dd>
               </dl>
             </section>
             <section class="help-menu-folder">
@@ -1335,7 +1343,7 @@ export const PLAYER_APP_HTML = `
           tabindex="0"
           hidden
         >
-          <p class="help-pane-intro">
+          <p class="help-pane-intro" data-i18n="ossIntro">
             This player is built on the open source libraries listed below: every third-party package
             this build includes. Each entry keeps the copyright / license text the package ships, or its
             upstream text where the package ships none; open it to read.
@@ -1345,11 +1353,13 @@ export const PLAYER_APP_HTML = `
       </div>
       <footer class="service-build-footer">${renderBuildInfo(playBuildInfo())}</footer>
     </div>
+  </main>
   ${renderServiceFooter({
     current: 'play',
     hostname: playHostname(),
     className: 'service-page-footer',
     buildInfo: playBuildInfo(),
+    locale: 'both',
   })}
   </div>
 `;

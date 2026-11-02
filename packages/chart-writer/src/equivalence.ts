@@ -129,6 +129,7 @@ function areBMSExtensionsEqual(left: BeMusicJSON['bms'], right: BeMusicJSON['bms
     ) &&
     left.optionHeadersInControlFlow === right.optionHeadersInControlFlow &&
     areStringMapsEqual(left.changeOption, right.changeOption) &&
+    areStringMapsEqual(left.songText, right.songText) &&
     left.wavCmd === right.wavCmd &&
     areStringArraysEqual(left.wavCmds, right.wavCmds) &&
     areStringMapsEqual(left.exWAV, right.exWAV) &&

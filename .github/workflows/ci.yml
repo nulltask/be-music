@@ -96,11 +96,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task:
+        include:
           # `check` runs format, lint, and type checks in one pass from the root Vite+ config.
-          - check
-          - build
-          - test
+          - task: check
+            run: vp run check
+          - task: build
+            run: vp run build
+          # The unit tests are the longest job; two runners take half of the test files each.
+          - task: test 1/2
+            run: vp test run --shard=1/2
+          - task: test 2/2
+            run: vp test run --shard=2/2
 
     steps:
       - name: Checkout
@@ -108,7 +114,7 @@ jobs:
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        uses: voidzero-dev/setup-vp@cab1ab9eaff52d4857875f4f2c016e36af8f2c76 # v1.22.0
         with:
           node-version-file: .node-version
           cache: true
@@ -118,7 +124,7 @@ jobs:
         run: vp install
 
       - name: Run ${{ matrix.task }}
-        run: vp run ${{ matrix.task }}
+        run: ${{ matrix.run }}
 
   # Base and head share one VM. Split jobs land on different ubuntu-24.04-arm
   # machines, and that host delta dominates the 8% regression threshold.
@@ -152,7 +158,7 @@ jobs:
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        uses: voidzero-dev/setup-vp@cab1ab9eaff52d4857875f4f2c016e36af8f2c76 # v1.22.0
         with:
           node-version-file: .node-version
           cache: true
@@ -331,7 +337,7 @@ jobs:
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        uses: voidzero-dev/setup-vp@cab1ab9eaff52d4857875f4f2c016e36af8f2c76 # v1.22.0
         with:
           node-version-file: .node-version
           cache: true
@@ -516,7 +522,7 @@ jobs:
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        uses: voidzero-dev/setup-vp@cab1ab9eaff52d4857875f4f2c016e36af8f2c76 # v1.22.0
         with:
           node-version-file: .node-version
           cache: true

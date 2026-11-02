@@ -99,7 +99,8 @@ export const errorResponse = (codes: readonly [string, ...string[]]) =>
 
 const clearLamp = described(
   v.pipe(v.number(), v.integer(), v.minValue(0)),
-  'Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.',
+  'Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, ' +
+    '10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY.',
 );
 const epochMs = (description: string) => described(v.pipe(v.number(), v.integer()), `${description} (epoch ms).`);
 const player = v.object({ handle: v.string(), displayName: v.string() });
@@ -140,16 +141,37 @@ const rulesetOutcome = v.object({
     v.object({ exScore: v.boolean(), lamp: v.boolean(), missCount: v.boolean() }),
     'Which personal bests this play improved.',
   ),
+  outcome: v.optional(
+    described(
+      v.picklist(['truncated']),
+      'The play stopped where its played gauge emptied, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a play simulated in full.',
+    ),
+  ),
 });
+
+const notSimulated = described(
+  v.array(
+    v.object({
+      ruleset: rulesetSchema,
+      reason: described(
+        v.picklist(['gauge', 'custom-judge']),
+        'Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE (beatoraja only) has no reading under it.',
+      ),
+    }),
+  ),
+  'The rulesets the play cannot be judged under, with no figures (ADR 0019); absent when every ruleset judged it.',
+);
 
 export const submissionResponse = v.object({
   scoreId: v.string(),
   chartFingerprint: described(v.string(), 'Chart fingerprint (`bmfp0:…`), the ranking key.'),
-  results: described(v.array(rulesetOutcome), 'The play under every ruleset.'),
+  results: described(v.array(rulesetOutcome), 'The play under every ruleset that could judge it.'),
+  notSimulated: v.optional(notSimulated),
   unranked: v.optional(
     described(
-      v.picklist(['tempo', 'course-stage', 'bmson-total']),
-      'Why the play was stored without ranking it: another tempo, a standalone course stage, or bmson zero-total no recovery. ' +
+      v.picklist(['tempo', 'course-stage', 'bmson-total', 'no-save']),
+      'Why the play was stored without ranking it: another tempo, a standalone course stage, bmson zero-total no recovery, ' +
+        'or an option whose source saves no data from the play (no-save). ' +
         'It moves no personal best and stays out of the rankings and lists.',
     ),
   ),
@@ -188,6 +210,10 @@ export const scoreResponse = v.object({
       gaugeType: v.string(),
       gaugeFinal: described(v.nullable(v.number()), 'Gauge at the end of the play, in percent.'),
       judges: described(v.record(v.string(), v.number()), 'Judgment counts.'),
+      outcome: described(
+        v.nullable(v.picklist(['truncated'])),
+        '`truncated` for figures judged only up to where the play stopped (ADR 0019); null for a full simulation.',
+      ),
     }),
   ),
 });
@@ -243,17 +269,24 @@ const courseRulesetOutcome = v.object({
     v.object({ exScore: v.boolean(), lamp: v.boolean(), missCount: v.boolean(), trophy: v.boolean() }),
     'Which personal bests on the course this run improved.',
   ),
+  outcome: v.optional(
+    described(
+      v.picklist(['truncated']),
+      'The run stopped at a failed stage, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a run simulated in full.',
+    ),
+  ),
 });
 
 export const courseSubmissionResponse = v.object({
   courseScoreId: v.string(),
   courseFingerprint: described(v.string(), 'Course fingerprint (`bmcourse0:…`), the ranking key.'),
-  results: described(v.array(courseRulesetOutcome), 'The run under every ruleset.'),
+  results: described(v.array(courseRulesetOutcome), 'The run under every ruleset that could judge it.'),
+  notSimulated: v.optional(notSimulated),
   unranked: v.optional(
     described(
-      v.picklist(['tempo', 'unreleased', 'bmson-total']),
-      'Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, or a course that is not ' +
-        'released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists.',
+      v.picklist(['tempo', 'unreleased', 'bmson-total', 'assist']),
+      'Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, a course that is not ' +
+        'released (a made or a drawn random course), or a stage played with an assist option (assist). It moves no course best and stays out of the rankings and lists.',
     ),
   ),
 });
@@ -319,6 +352,10 @@ export const courseScoreResponse = v.object({
       stages: described(
         v.nullable(v.array(courseStageFigures)),
         'Each reached stage’s own figures, in order; null for runs stored before they were kept.',
+      ),
+      outcome: described(
+        v.nullable(v.picklist(['truncated'])),
+        '`truncated` for figures judged only up to where the run stopped (ADR 0019); null for a full simulation.',
       ),
     }),
   ),

@@ -9,7 +9,7 @@ import {
 } from './playfield.ts';
 import { synesthesiaResultSkin } from './result.ts';
 import { synesthesiaSelectSkin } from './select.ts';
-import { BE_MUSIC_SKIN_API_VERSION, tallStage, wideStage, type BeMusicSkin } from '@be-music/player-skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, cabinetStage, tallStage, type BeMusicSkin } from '@be-music/player-skin-sdk';
 import { definePixiSkin } from '../pixi-kit/index.ts';
 
 /**
@@ -27,8 +27,8 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
     'A cosmic particle world in ember and gold with electric blue and magenta accents, where the space flies, flocks, and bursts with the music.',
   homepage: 'https://github.com/nulltask/be-music',
   license: 'MIT',
-  fontLoads: ['400 16px "Michroma"', '300 12px "M PLUS 1p"', '500 12px "M PLUS 1p"'],
-  stage: wideStage,
+  fontLoads: ['400 16px "Orbitron"', '500 16px "Orbitron"', '300 12px "M PLUS 1p"', '500 12px "M PLUS 1p"'],
+  stage: cabinetStage,
   portraitStage: tallStage,
   gameplay: {
     renderChrome: renderSynesthesiaChrome,

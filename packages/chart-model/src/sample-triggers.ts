@@ -40,6 +40,27 @@ export interface CollectSampleTriggersOptions {
 
 const EMPTY_EVENT_SET = new Set<BeMusicEvent>();
 
+/**
+ * The chart's effective WAV resources ({@link resolveBmsWAVResources}) that some sample event names: a BGM, note,
+ * invisible note or long-note object, whatever becomes of it in play. Slots only declared, or named only by landmines
+ * (whose value is damage) or by `#WAVCMD` / `#EXWAV` tweaks, are left out, so a player need not decode them.
+ */
+export function resolveReferencedBmsWAVResources(json: BeMusicJSON): Record<string, string> {
+  const base = resolveBMSBase(json);
+  const longKeys = json.sourceFormat === 'bmson';
+  const referenced = new Set<string>();
+  for (const event of json.events) {
+    const channel = normalizeChannel(event.channel);
+    if (!isSampleTriggerChannel(channel) || isLandmineChannel(channel)) continue;
+    referenced.add(normalizeObjectKey(event.value, base, longKeys));
+  }
+  const resources: Record<string, string> = {};
+  for (const [key, path] of Object.entries(resolveBmsWAVResources(json))) {
+    if (referenced.has(normalizeObjectKey(key, base, longKeys))) resources[key] = path;
+  }
+  return resources;
+}
+
 export function collectSampleTriggers(
   json: BeMusicJSON,
   resolver: TimingResolver = createTimingResolver(json),

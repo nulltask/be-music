@@ -15,6 +15,7 @@ async function load(
 ) {
   const chart = createEmptyJSON('bmson');
   chart.resources.wav = { '01': path };
+  chart.events = [{ measure: 0, channel: '01', position: [0, 1], value: '01' }];
   chart.bms.pathWAV = prefix;
   let cancelled = false;
   const decode = vi.fn(async (buffer: ArrayBuffer) => {

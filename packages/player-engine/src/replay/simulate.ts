@@ -1,3 +1,4 @@
+import { AnyKeyRoutes, anyKeyRouteKeys, selectAnyKeyLane, type AnyKeyCandidate } from '../core/any-key.ts';
 import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
 import { resolve____RankLabel } from '../ruleset/score.ts';
@@ -49,7 +50,45 @@ export interface SimulateReplayOptions extends ResolveRulesetOptions {
   player?: 1 | 2;
   /** Overrides the log's `play.endOnFailure`: whether judging stops the moment a survival gauge empties. */
   endOnFailure?: boolean;
+  /**
+   * Hears every judgment as the simulation scores it, in the order it scores them (`judgment-timeline.ts` builds a
+   * replay's judgment timeline from them). Observing changes nothing the simulation derives.
+   */
+  onJudgment?: ReplayJudgmentObserver;
+  /**
+   * Hears the chart µs of the judgment that first empties the survival gauge mid-play, once (`rejudgeReplay` stops
+   * the other rulesets there). Observing changes nothing the simulation derives.
+   */
+  onFailure?: (atUs: number) => void;
 }
+
+/** A judgment's kind in a {@link ReplayJudgmentEvent}: a scored window, a missed POOR, or an empty POOR. */
+export type ReplayJudgmentKind = 'pgreat' | 'great' | 'good' | 'bad' | 'poor' | 'empty-poor';
+
+/** One judgment a replay simulation scored, with the running totals just after it. */
+export interface ReplayJudgmentEvent {
+  /** Chart µs the judgment happened at: the press or release that made it, or the deadline that settled it. */
+  readonly atUs: number;
+  readonly judgment: ReplayJudgmentKind;
+  /** The lane judged; absent for an empty POOR no lane is known for. */
+  readonly channel?: string;
+  /** The judged note's head time (µs); absent for an empty POOR, which takes no note. */
+  readonly noteTimeUs?: number;
+  /** Whether the note is done with this judgment (a tap, a long note's last judgment); false for a charge head. */
+  readonly settlesNote: boolean;
+  /** Note time minus input time (µs) for a timed judgment: positive is early (FAST). */
+  readonly deltaUs?: number;
+  readonly combo: number;
+  readonly maxCombo: number;
+  readonly exScore: number;
+  /** The gauge after the judgment, in percent of its maximum. */
+  readonly gauge: number;
+}
+
+/** Hears a replay simulation's judgments ({@link SimulateReplayOptions.onJudgment}). */
+export type ReplayJudgmentObserver = (event: ReplayJudgmentEvent) => void;
+
+const JUDGMENT_KINDS: readonly ReplayJudgmentKind[] = ['pgreat', 'great', 'good', 'bad', 'poor', 'empty-poor'];
 
 /** The rulesets `simulateReplay` scores under, in display order. */
 export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____'] = ['lr2', 'beatoraja', '____'];
@@ -84,13 +123,8 @@ export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOpt
   }
   const config = resolveRulesetConfig(replay, options.ruleset, options);
   const endOnFailure =
-    options.endOnFailure ??
-    resolveGaugeEndOnFailure(
-      options.ruleset === 'beatoraja' ? replay.play.gaugeAutoShift : undefined,
-      options.ruleset,
-      replay.play.endOnFailure === true,
-    );
-  return new ReplaySimulation(replay, config, endOnFailure).run();
+    options.endOnFailure ?? resolveGaugeEndOnFailure(replay.play.gaugeAutoShift, replay.play.endOnFailure === true);
+  return new ReplaySimulation(replay, config, endOnFailure, options.onJudgment, options.onFailure).run();
 }
 
 /** Runs {@link simulateReplay} for each requested ruleset (default: LR2, beatoraja, That-Which-Must-Not-Be-Named). */
@@ -235,14 +269,33 @@ class ReplaySimulation {
   private readonly config: RulesetConfig;
   /** The scratch lanes of the play mode the log was played in (none in PMS and the keyboard modes). */
   private readonly scratchChannels: ReadonlySet<string>;
+  private readonly observer: ReplayJudgmentObserver | undefined;
+  /** Where the next judgment happens, for the {@link observer}: its time, and the lane and note it judges. */
+  private judgeAtUs = 0;
+  /** Hears where the survival gauge first emptied mid-play ({@link SimulateReplayOptions.onFailure}). */
+  private readonly onFailure: ((atUs: number) => void) | undefined;
+  private failed = false;
+  private judgeLane: SimLane | undefined;
+  private judgeNote: SimNote | undefined;
+  /** ANY KEY (`play.anyKey`): the lanes each pressed key was routed to; absent when the play did not use it. */
+  private readonly anyKeyRoutes: AnyKeyRoutes | undefined;
 
-  constructor(replay: BeMusicReplay, config: RulesetConfig, endOnFailure: boolean) {
+  constructor(
+    replay: BeMusicReplay,
+    config: RulesetConfig,
+    endOnFailure: boolean,
+    observer?: ReplayJudgmentObserver,
+    onFailure?: (atUs: number) => void,
+  ) {
+    this.onFailure = onFailure;
     this.replay = replay;
     this.config = config;
     this.endOnFailure = endOnFailure;
+    this.observer = observer;
     this.course = replay.play.course === undefined ? undefined : courseStageCarryCombo(replay.play.course);
     this.scratchChannels = resolveScratchChannels(replay.chart.laneMode);
     this.gauge = new RulesetGauge(config.gauge, config.gaugeFallback, config.gaugeBank);
+    this.anyKeyRoutes = replay.play.anyKey === true && replay.play.mode !== 'auto' ? new AnyKeyRoutes() : undefined;
     this.buildLanes();
   }
 
@@ -523,6 +576,7 @@ class ReplaySimulation {
       );
 
     for (const event of events) {
+      this.judgingAt(event.timeUs, event.lane, event.note);
       if (event.kind === 'auto') {
         const note = event.note!;
         if (note.judged) continue;
@@ -612,6 +666,7 @@ class ReplaySimulation {
       this.minePoor += 1;
     }
     this.gauge.applyRawDelta(-mine.damage);
+    this.noteFailure();
   }
 
   /** LR2beta3 uses strict ahead-only GREAT; the provisional That-Which-Must-Not-Be-Named model keeps symmetric PGREAT. */
@@ -666,14 +721,16 @@ class ReplaySimulation {
       (gain ? tick.heldJudge : tick.releasedJudge) as GaugeJudgeIndex,
       gain ? tick.heldRate : tick.releasedRate,
     );
+    this.noteFailure();
   }
 
   // ---- input handling ----------------------------------------------------------------------------------------
 
   private handleDown(input: ReplayInputEvent, minePressLegLive: boolean): void {
     const timeUs = input.timeUs;
+    this.judgeAtUs = timeUs;
     const windows = this.config.windowsAt(timeUs);
-    const pressed = this.resolveInputLanes(input);
+    const pressed = this.anyKeyRoutes ? this.routeAnyKeyPress(input, windows) : this.resolveInputLanes(input);
     for (const lane of pressed) {
       lane.held = true;
       if (input.tokens === undefined || input.tokens.length === 0) {
@@ -709,11 +766,13 @@ class ReplaySimulation {
     }
     if (selected.judge >= JUDGE_MISS_POOR) {
       // Empty POOR — the note is never consumed.
+      this.judgingAt(timeUs, selected.lane, undefined);
       this.applyJudge(JUDGE_EMPTY_POOR, undefined);
       return;
     }
 
     const { note, lane, dmUs } = selected;
+    this.judgingAt(timeUs, lane, note);
     if (note.isLong) {
       this.startLongNote(lane, note, selected.judge, dmUs);
       this.startHCNPassing(lane, note, timeUs);
@@ -741,12 +800,14 @@ class ReplaySimulation {
         return;
       }
     }
+    this.judgingAt(timeUs, lane, undefined);
     this.applyJudge(JUDGE_EMPTY_POOR, undefined);
   }
 
   private handleUp(input: ReplayInputEvent): void {
     const timeUs = input.timeUs;
-    for (const lane of this.resolveInputLanes(input)) {
+    this.judgeAtUs = timeUs;
+    for (const lane of this.anyKeyRoutes ? this.releaseAnyKey(input) : this.resolveInputLanes(input)) {
       lane.held = false;
       if (input.tokens === undefined || input.tokens.length === 0) {
         lane.downTokens.clear();
@@ -796,6 +857,7 @@ class ReplaySimulation {
       lane.hold = undefined;
       note.holding = false;
       note.judged = true;
+      this.judgingAt(timeUs, lane, note);
       this.applyJudge(released.judge, released.dmUs);
       for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
         if (passing.note === note && released.judge <= JUDGE_GOOD) {
@@ -818,6 +880,58 @@ class ReplaySimulation {
     return lanes;
   }
 
+  /**
+   * The lanes an ANY KEY press goes to, as the engine's judge core routes it (`resolveAnyKeyPressChannels`): the lane of
+   * the nearest unjudged note it reaches on any lane but an auto-played one or one whose long note is held, or the
+   * keys' own lanes when it reaches none. Its keys hold the lane until they come up.
+   */
+  private routeAnyKeyPress(input: ReplayInputEvent, windows: RulesetWindowTables): SimLane[] {
+    const own = this.resolveInputLanes(input);
+    const timeUs = input.timeUs;
+    const candidates: AnyKeyCandidate[] = [];
+    for (const lane of this.laneList) {
+      if (lane.auto || lane.hold !== undefined) continue;
+      const set = selectJudgeWindowSet(windows, { scratch: lane.scratch });
+      // The widest legs of the four windows: nothing guarantees the tables are monotonic.
+      const scanLate = Math.min(...set.judges.map((window) => window[0]));
+      const scanEarly = Math.max(...set.judges.map((window) => window[1]));
+      for (let index = firstNoteInReach(lane.notes, timeUs, scanLate); index < lane.notes.length; index += 1) {
+        const note = lane.notes[index]!;
+        const dmUs = note.timeUs - timeUs;
+        if (dmUs > scanEarly) break;
+        if (note.judged || note.holding) continue;
+        const judge = classifyJudge(dmUs, set);
+        if (judge === JUDGE_NONE) continue;
+        if (ignoresLateLongNoteHeadBad(this.config, judge, dmUs < 0, note.isLong ? (note.longStyle ?? 1) : undefined))
+          continue;
+        candidates.push({ channel: lane.channel, noteTimeUs: note.timeUs, dmUs });
+      }
+    }
+    const routed = selectAnyKeyLane(candidates);
+    const lanes = routed === undefined ? own : [this.lanes.get(routed)!];
+    this.anyKeyRoutes!.route(
+      anyKeyRouteKeys(input.tokens ?? [], this.ownChannels(input)),
+      lanes.map((lane) => lane.channel),
+    );
+    return lanes;
+  }
+
+  /** The lanes an ANY KEY release lets go: those its keys were routed to, or its own lanes for keys never routed. */
+  private releaseAnyKey(input: ReplayInputEvent): SimLane[] {
+    const own = this.ownChannels(input);
+    const lanes: SimLane[] = [];
+    for (const channel of this.anyKeyRoutes!.release(anyKeyRouteKeys(input.tokens ?? [], own), own)) {
+      const lane = this.lanes.get(channel);
+      if (lane && !lane.auto) lanes.push(lane);
+    }
+    return lanes;
+  }
+
+  /** The input's own lanes without the auto-played ones, as the engine hands them to its judge core. */
+  private ownChannels(input: ReplayInputEvent): string[] {
+    return input.channels.filter((channel) => this.lanes.get(channel)?.auto !== true);
+  }
+
   private startLongNote(lane: SimLane, note: SimNote, judge: GaugeJudgeIndex, dmUs: number): void {
     const style = note.longStyle ?? 1;
     if (style === 1) {
@@ -830,13 +944,12 @@ class ReplaySimulation {
       };
       return;
     }
-    // Charge styles score the head immediately.
+    // Charge styles score the head immediately. That-Which-Must-Not-Be-Named: a BAD head cancels the tail judgment
+    // entirely, so the head settles the note.
+    const skipsTail = this.config.headBadSkipsTail && judge >= JUDGE_BAD;
+    if (skipsTail) note.judged = true;
     this.applyJudge(judge, dmUs);
-    if (this.config.headBadSkipsTail && judge >= JUDGE_BAD) {
-      // That-Which-Must-Not-Be-Named: a BAD head cancels the tail judgment entirely.
-      note.judged = true;
-      return;
-    }
+    if (skipsTail) return;
     note.holding = true;
     // The tail's late window as it stands at the tail, like a note's miss deadline at the note.
     const endWindows = selectJudgeWindowSet(this.config.windowsAt(note.endTimeUs!), {
@@ -950,6 +1063,7 @@ class ReplaySimulation {
       const judge = classifyRulesetJudge(deltaUs, set);
       if (judge === RULESET_JUDGE_NONE || judge > JUDGE_BAD) break;
       note.judged = true;
+      this.judgingAt(timeUs, lane, note);
       this.applyJudge(judge, deltaUs);
       if (judge !== JUDGE_BAD || this.closed()) break;
     }
@@ -961,6 +1075,13 @@ class ReplaySimulation {
    */
   private closed(): boolean {
     return this.endOnFailure && this.gauge.failedMidPlay;
+  }
+
+  /** Where the next judgment happens, for the {@link observer}. */
+  private judgingAt(atUs: number, lane: SimLane | undefined, note: SimNote | undefined): void {
+    this.judgeAtUs = atUs;
+    this.judgeLane = lane;
+    this.judgeNote = note;
   }
 
   private applyJudge(judgeIndex: GaugeJudgeIndex, dmUs: number | undefined): void {
@@ -998,6 +1119,32 @@ class ReplaySimulation {
       }
     }
     this.gauge.applyJudge(judgeIndex);
+    this.noteFailure();
+    if (this.observer !== undefined) this.notifyJudgment(judgeIndex, dmUs);
+  }
+
+  /** Tells {@link onFailure} where the survival gauge first emptied mid-play. */
+  private noteFailure(): void {
+    if (this.failed || !this.gauge.failedMidPlay) return;
+    this.failed = true;
+    this.onFailure?.(this.judgeAtUs);
+  }
+
+  private notifyJudgment(judgeIndex: GaugeJudgeIndex, dmUs: number | undefined): void {
+    const note = judgeIndex === JUDGE_EMPTY_POOR ? undefined : this.judgeNote;
+    const max = this.gauge.spec.max;
+    this.observer!({
+      atUs: this.judgeAtUs,
+      judgment: JUDGMENT_KINDS[judgeIndex]!,
+      ...(this.judgeLane !== undefined ? { channel: this.judgeLane.channel } : {}),
+      ...(note !== undefined ? { noteTimeUs: note.timeUs } : {}),
+      settlesNote: note?.judged === true,
+      ...(dmUs !== undefined ? { deltaUs: dmUs } : {}),
+      combo: this.combo,
+      maxCombo: this.maxCombo,
+      exScore: this.exScore,
+      gauge: max === 100 ? this.gauge.value : max > 0 ? (this.gauge.value / max) * 100 : 0,
+    });
   }
 }
 

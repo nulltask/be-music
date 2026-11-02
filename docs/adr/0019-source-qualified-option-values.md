@@ -52,3 +52,39 @@ flowchart LR
 - Each option in `docs/play-options.md` names its source and its re-judging behavior. A new option is not merged without them.
 - The `PlayOptions` types and the replay parser accept qualified strings. A reader that predates this ADR refuses a replay with a qualified gauge (an unknown gauge type), which is the intended failure; a qualified lane value it reads as an opaque label, which is harmless because the arrangement is recorded.
 - The settings migration and the "not simulated" / "truncated" outcomes are the hard-to-reverse parts. The record and Leaderboard policy for cross-source plays is decided separately in [#602](https://github.com/nulltask/be-music/issues/602).
+
+## Amendment: implementation for RANDOM, S-RANDOM, CONVERGE and BATTLE (#774)
+
+Implementing the decision settled four details:
+
+- **BATTLE collides twice.** Besides LR2's two-player BATTLE (`TWO-PLAYER`), beatoraja's and AC's one-player BATTLE differ in chart support (5 / 7 / 24KEY against 7KEY) and in what a play keeps (LIGHT_ASSIST against no score saved). The one-player copy is therefore qualified as `beatoraja:BATTLE` and `____:BATTLE`. `TWO-PLAYER` stays bare and is offered under every ruleset; under beatoraja rules, which have no two-player play, LR2's construction builds the chart and each player is judged by beatoraja's rules.
+- **AC's RANDOM and S-RANDOM are qualified too** (`____:RANDOM`, `____:S-RANDOM`), although they run LR2's algorithm for now, so a later AC algorithm does not change what a stored value means. AC defines no CONVERGE.
+- **Settings migrate as they are read.** The settings document is still at version 0, whose shape may change without a bump, so no version is added: a bare value takes the document's stored judge ruleset (LR2 when absent), and the next save writes the qualified value.
+- **Skin buttons.** beatoraja's lane and `optiondp` buttons step beatoraja's own values. LR2's RANDOM buttons step LR2's own lane values, OFF, MIRROR, `lr2:RANDOM`, `lr2:S-RANDOM`, `SCATTER` and `lr2:CONVERGE` (OpenLR2's `random` 0–5), since #933; until then they stepped through every lane option. Both read another source's value by its bare name, and an LR2 button steps on from the cell of that name (a value LR2 lacks moves to OFF).
+
+The registry is `QUALIFIED_OPTION_SOURCES` in `@be-music/player-engine/ruleset`.
+
+## Amendment: seeds and re-judging outcomes (#933)
+
+- **Every lane random is seeded.** The LR2 and AC algorithms draw from the side's seed through the Java `Random` port, as beatoraja's do, under every judge ruleset; the seed (0–16777215 when drawn, any Java long when entered) is recorded in `play.options.randomSeed1P` / `randomSeed2P` and can be entered and reused under every ruleset. A seed reproduces an LR2 or AC arrangement in be-music, not in LR2. beatoraja's mine ADD RANDOM, PMS RANDOM PLAYABLE and the long-note addition stay unseeded, as in the source. Replays and the Leaderboard still re-apply the recorded arrangement, so the seed is for reproducing a play, not for judging it.
+- **Outcomes.** `rejudgeReplay` and `rejudgeCourseReplay` in `@be-music/player-engine/replay` answer `simulated`, `truncated` or `not-simulated` with a reason (`gauge`, `custom-judge`; `gauge-auto-shift` was a reason until gauge auto-shift got a reading under every ruleset, below). `simulateReplay` stays the plain simulator, which still throws on a gauge its ruleset lacks. A bare `DEATH` under AC rules is `not-simulated` outside a course, instead of being read as EX-HARD; a course stage keeps the course gauge mapping, which defines every pick but LR2's attack gauges outside LR2 and EX-HARD and ASSIST EASY under LR2.
+- **Truncated** is decided by re-judging the played ruleset first: the time its survival gauge emptied (`SimulateReplayOptions.onFailure`) is where the other rulesets stop, inputs and the deadlines of later notes included. The Leaderboard stores a truncated result with `outcome = 'truncated'`, outside the personal bests, rankings and lists, and stores no row for a `not-simulated` ruleset (the submission answers it in `notSimulated`).
+- **No revision bump yet.** The rulesets are still at the development revision `/0`, whose rules change without a bump ([Replays, Versioning](../replay.md#versioning)); `/1` was already written by releases before it. These readings therefore ship under `/0`, and the bump this ADR asks for applies from the first stable revision. The Leaderboard has no job that recomputes stored results yet.
+
+## Amendment: PRACTICE and gauge auto-shift under every ruleset (#933)
+
+- **PRACTICE** is offered under every ruleset, and the judge ruleset reads its settings. GAUGE TYPE lists the ruleset's own gauges (LR2: GROOVE, HARD, HAZARD, EASY, P.ATTACK, G.ATTACK; AC: ASSISTED EASY, EASY, NORMAL, HARD, EX-HARD; beatoraja's own list as before), and GAUGE CATEGORY stays beatoraja's. JUDGERANK is a judgerank percent on the ruleset's own table (under LR2 the `#RANK` table, where 25 / 50 / 75 / 100 are `#RANK` 0–3), and TOTAL is used as is under LR2; AC reads neither, since its windows are fixed and its gauges do not use TOTAL. A practice play still saves nothing and is never sent to the Leaderboard, so it has no re-judging behavior.
+- **Gauge auto-shift is carried** under every ruleset, as the decision table above already lists it, and `gauge-auto-shift` is no longer a reason for `not-simulated`. beatoraja's policies keep their meaning, read on each ruleset's own gauge ladder (`resolveGaugeShiftLadder` in `@be-music/player-engine/ruleset`), gentlest first:
+
+  | Ruleset   | Single play                                      | Grade course                   | EXPERT / NONSTOP course                        |
+  | --------- | ------------------------------------------------ | ------------------------------ | ---------------------------------------------- |
+  | beatoraja | ASSIST EASY, EASY, NORMAL, HARD, EX-HARD, HAZARD | CLASS, EXCLASS, EXHARDCLASS    | CLASS, EXCLASS, EXHARDCLASS                    |
+  | LR2       | EASY, GROOVE, HARD, DEATH (LR2's HAZARD)         | GRADE, GRADE-HARD, GRADE-DEATH | COURSE-EASY, COURSE, COURSE-HARD, COURSE-DEATH |
+  | AC        | ASSISTED EASY, EASY, NORMAL, HARD, EX-HARD       | CLASS, EXCLASS, EXHARDCLASS    | CLASS, EXCLASS, EXHARDCLASS                    |
+  - CONTINUE needs no ladder: the emptied gauge plays on to the end.
+  - SURVIVAL TO GROOVE falls back to the ruleset's default recovery gauge (NORMAL; GROOVE under LR2), from a survival gauge, outside a course.
+  - BEST CLEAR and SELECT TO UNDER run the ladder in parallel; the lowest auto-shift gauge is read on it (LR2 has no ASSIST EASY, so ASSIST EASY reads as EASY), and a course starts from its gentlest course gauge, each course gauge carrying its own value into the next stage.
+  - AC has no HAZARD outside a course, so its ladder tops out at EX-HARD. LR2's P.ATTACK and G.ATTACK are not on the ladder (they judge something other than a harder clear): BEST CLEAR and SELECT TO UNDER keep them alone, to the end, as CONTINUE does. Such a replay is `not-simulated` under the other rulesets anyway, for its gauge.
+  - Two-player play shifts both players' gauges, so a replay of either side re-simulates the same shift.
+
+- **Replays record the policy and the lowest gauge** (`play.gaugeAutoShift`, `play.bottomShiftableGauge`), and the result's `gauge.values` and a course stage's `play.course.carryIn.gauges` key the parallel gauges by the ruleset's own gauge ids; the simulator rebuilds the same ladder, so a replay reproduces the shift deterministically. These readings ship under the development revision `/0`, as the previous amendment explains.

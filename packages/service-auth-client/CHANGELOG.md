@@ -1,5 +1,11 @@
 # @be-music/service-auth-client
 
+## 0.2.0
+
+### Minor Changes
+
+- f3c4ac4: Add a social sign-in path that puts `sign_in_method` on the Accounts authorization request when sign-in is opened with Google or Discord.
+
 ## 0.1.2
 
 ### Patch Changes

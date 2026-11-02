@@ -229,6 +229,16 @@ describe('resolveBeatorajaPlayNumber — judge popup and records', () => {
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.COMBO, input({ combo: 9 }))).toBe(9);
     expect(resolveBeatorajaPlayNumber(99_999, input())).toBeUndefined();
   });
+
+  it('reads a fed target’s EX score and its rate over the chart’s notes', () => {
+    const score = { total: 300, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0, score: 0 };
+    const paced = input({ targetEXScore: 455, score });
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.TARGET_SCORE, paced)).toBe(455);
+    // 455 / 600 = 75.83 %.
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.TARGET_SCORE_RATE, paced)).toBe(75);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.TARGET_SCORE_RATE_AFTERDOT, paced)).toBe(83);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.TARGET_SCORE_RATE, input({ score }))).toBe(0);
+  });
 });
 
 describe('beatorajaBPMAt', () => {

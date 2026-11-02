@@ -1,7 +1,11 @@
 import { BmsonBGAController } from './bmson-bga.ts';
+import { resolveChartGaugeType } from '../ruleset/chart-gauge.ts';
+import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
 import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
+import { chartNotesCopies, resolveEffectiveChartPlayOptions } from './chart-notes-options.ts';
+import { arrangeChartPlayLanes } from './chart-play-lanes.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { buildAutoKeyBoundBGAInputs, KeyBoundBGAController } from './key-bound-bga.ts';
@@ -12,7 +16,9 @@ import {
   buildBmsonBGAEventTimeline,
   buildChartTextTimeline,
   buildChartOptionTimeline,
+  compileChartGaugeOptions,
   compileChartOptions,
+  compileChartPlayOptions,
   resolveChartOptionsAt,
   type ChartOptionProgram,
   isPlayLaneSoundChannel,
@@ -114,6 +120,8 @@ export interface PlaySession {
   readonly wavResources: Readonly<Record<string, string>>;
   /** AUTO SCRATCH in a manual play: the judge plays the scratch lanes. */
   readonly autoScratch: boolean;
+  /** ANY KEY in a manual play: the judge routes each press to the nearest note on any lane. */
+  readonly anyKey: boolean;
   readonly endOnFailure: boolean;
   /** The play re-drives a recorded play (`PlayerOptions.replayInputs`). */
   readonly replay: boolean;
@@ -187,6 +195,7 @@ export async function createPlaySession(
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
   const scratchSides = resolveAutoScratchSides(options);
   const autoScratch = mode === 'manual' && (scratchSides.autoScratch1P || scratchSides.autoScratch2P);
+  const anyKey = mode === 'manual' && options.anyKey === true;
   const speed = options.speed ?? 1;
   const tempoClock = createTempoClock(speed);
   const leadInMs = options.leadInMs ?? 1500;
@@ -199,6 +208,20 @@ export async function createPlaySession(
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
   let resolvedChart = options.preparedChart?.resolvedChart ?? resolveEngineChart(resolvedJSON, options);
+  // The chart's gameplay program (#844, #932): the host's (a replay's recorded one), or compiled here and narrowed to what
+  // takes effect in this play (`resolveEffectiveChartPlayOptions`).
+  const chartPlay =
+    options.chartPlayOptionProgram !== undefined
+      ? { program: structuredClone(options.chartPlayOptionProgram), diagnostics: [] }
+      : resolveEffectiveChartPlayOptions(
+          compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing)),
+          { playVariant: resolvedChart.playVariant, course: options.course !== undefined },
+        );
+  const chartPlayOptions = chartPlay.program;
+  // Without a host-prepared chart (the terminal) the engine applies the chart's ADDMINE and arrangement itself, in place
+  // of the player's options, as the browser host does (#932). A replay's recorded notes already hold them.
+  const preparesChartPlayOptions = options.preparedChart === undefined && !replay;
+  if (preparesChartPlayOptions && chartPlayOptions.options.addMine === true) options.mineModifier = 'ADD_RANDOM';
   // Dynamic `#EXRANKxx` changes are a chart fact, recorded whatever the ruleset: LR2 applies them, while beatoraja and
   // That-Which-Must-Not-Be-Named keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
   // be re-simulated under LR2 with the windows LR2 would have used.
@@ -241,20 +264,31 @@ export async function createPlaySession(
         scrollSection: options.scrollSection,
         scrollRate: options.scrollRate,
         scrollModifierTimeline: options.scrollModifierTimeline,
+        chartNotes: chartPlayOptions.options.notes,
       },
       realtimeAudioEndSeconds,
+      Math.random,
+    );
+  if (preparesChartPlayOptions && chartPlayOptions.options.random !== undefined)
+    arrangeChartPlayLanes(
+      [playbackChart.notes, playbackChart.landmineNotes, playbackChart.invisibleNotes],
+      chartPlayOptions.options.random,
+      playbackChart.resolvedChart.playVariant,
       Math.random,
     );
   resolvedChart = playbackChart.resolvedChart;
   backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
   const battleRequested = options.battleMode ?? playbackChart.battleMode ?? 'OFF';
-  const expectedBattle = resolveEffectiveBattleMode(
-    battleRequested,
-    options.judgeRuleset ?? 'lr2',
-    playbackChart.battleSourceVariant ?? resolvedChart.playVariant,
-    options.course !== undefined,
-    resolvedChart.sourceFormat === 'bms' ? resolvedChart.source.bms.player : undefined,
-  );
+  // A chart that copies itself onto the 2P side replaced the player's battle conversion (#932).
+  const expectedBattle = chartNotesCopies(playbackChart.chartNotes)
+    ? 'OFF'
+    : resolveEffectiveBattleMode(
+        battleRequested,
+        options.judgeRuleset ?? 'lr2',
+        playbackChart.battleSourceVariant ?? resolvedChart.playVariant,
+        options.course !== undefined,
+        resolvedChart.sourceFormat === 'bms' ? resolvedChart.source.bms.player : undefined,
+      );
   if ((playbackChart.battleMode ?? 'OFF') !== expectedBattle)
     throw new RangeError('The shared prepared chart must include the selected battle mode.');
   const lr2ExtraRequested = options.lr2ExtraMode ?? playbackChart.lr2ExtraMode ?? false;
@@ -279,7 +313,12 @@ export async function createPlaySession(
       ? compileChartOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing))
       : { program: structuredClone(options.chartOptionProgram), diagnostics: [] };
   const chartOptions = compiledOptions.program;
-  for (const diagnostic of [...compiledOptions.diagnostics, ...(options.chartOptionDiagnostics ?? [])])
+  const chartJudge = resolveChartJudgeOption(chartPlayOptions);
+  for (const diagnostic of [
+    ...compiledOptions.diagnostics,
+    ...chartPlay.diagnostics,
+    ...(options.chartOptionDiagnostics ?? []),
+  ])
     emitPlayerLog(options, 'warn', 'chart.option', { ...diagnostic });
   const extraDepth = clampExtraNoteDepth(options.extraNoteDepth ?? playbackChart.extraNoteDepth ?? 0);
   const extraScratch = options.extraNoteScratch ?? playbackChart.extraNoteScratch ?? false;
@@ -293,8 +332,8 @@ export async function createPlaySession(
     playbackChart.longNoteModifierApplied !== options.longNoteModifier
   )
     throw new RangeError('The shared prepared chart must include the selected long-note modifier.');
-  if (options.longNoteModifier?.startsWith('ADD_') && (options.judgeRuleset ?? 'lr2') !== 'beatoraja')
-    throw new RangeError('Long-note addition is available only for beatoraja.');
+  // Long-note addition builds a chart and is offered under every judge ruleset (#774): the added long notes are judged
+  // as the ruleset's long notes, so ADD CN / ADD HCN keep their CN / HCN distinction only under beatoraja rules.
   if (options.mineModifier?.startsWith('ADD_') && playbackChart.mineModifierApplied !== options.mineModifier)
     throw new RangeError('The shared prepared chart must include the selected mine modifier.');
   if (options.mineModifier === 'REMOVE') {
@@ -312,7 +351,16 @@ export async function createPlaySession(
 
   // The gauge the play runs on and the replay records: one value, so a re-simulation runs the same gauge. A host that
   // only declared it for the log (`recordReplay.gauge`) gets it played too.
-  const selectedGauge = options.gauge ?? options.recordReplay?.gauge;
+  // A chart's GAMELEVEL / EXTRA (#845) wins over the player's gauge pick, outside a course (which keeps its course gauge),
+  // PRACTICE (which sets its own) and a replay (whose recorded gauge already is the one played).
+  const chartGauge =
+    options.course === undefined && options.practice === undefined && !replay
+      ? resolveChartGaugeType(
+          compileChartGaugeOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing)),
+          options.judgeRuleset ?? 'lr2',
+        )
+      : undefined;
+  const selectedGauge = chartGauge ?? options.gauge ?? options.recordReplay?.gauge;
   if (
     options.judgeAlgorithm !== undefined &&
     options.judgeAlgorithm !== 'combo' &&
@@ -353,15 +401,16 @@ export async function createPlaySession(
       ...(options.gaugeAutoShift !== undefined ? { gaugeAutoShift: options.gaugeAutoShift } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
       ...(options.course !== undefined ? { course: courseStageRulesetOptions(options.course) } : {}),
+      ...chartJudge,
     },
   );
   reportResolvedRuleset(options, ruleset);
-  const endOnFailure = resolveGaugeEndOnFailure(options.gaugeAutoShift, ruleset.rulesetId, options.endOnFailure);
+  const endOnFailure = resolveGaugeEndOnFailure(options.gaugeAutoShift, options.endOnFailure);
 
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
   const { score, summary, resetScore: resetPrimaryScore } = createPlayerScore(ruleset, courseCarry);
   const secondPlayer = twoPlayer
-    ? createSecondPlayer(resolvedJSON, playbackChart, judgeRankChanges, options, selectedGauge)
+    ? createSecondPlayer(resolvedJSON, playbackChart, judgeRankChanges, options, selectedGauge, chartGauge, chartJudge)
     : undefined;
   if (secondPlayer !== undefined) summary.secondPlayer = secondPlayer.summary;
   const resetScore = (): void => {
@@ -376,6 +425,7 @@ export async function createPlaySession(
           return createReplayRecorder({
             json: resolvedJSON,
             chartOptions,
+            chartPlayOptions,
             moneyScore: ruleset.moneyScore,
             chart: playbackChart,
             chartSHA256,
@@ -400,6 +450,7 @@ export async function createPlaySession(
                     autoScratch2P: mode === 'manual' && scratchSides.autoScratch2P,
                   }
                 : {}),
+              ...(anyKey ? { anyKey: true } : {}),
               judgeWindowOverrideMs: options.judgeWindowMs,
               judgeRuleset: options.judgeRuleset,
               ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
@@ -621,7 +672,7 @@ export async function createPlaySession(
     audioBackend: audioBackendLabel,
     ...(secondPlayer !== undefined ? { summary2P: secondPlayer.summary } : {}),
     ...(bmsonBGA ? { resolveBmsonBGA: (seconds: number) => bmsonBGA.read(seconds) } : {}),
-    ...(chartOptions.initial.hiSpeed !== undefined || chartOptions.cues.length > 0
+    ...(Object.keys(chartOptions.initial).length > 0 || chartOptions.cues.length > 0
       ? {
           resolveChartOptions: (seconds: number) =>
             resolveChartOptionsAt(chartOptions, Math.round(Math.min(seconds, freezeSeconds) * 1_000_000)),
@@ -746,6 +797,7 @@ export async function createPlaySession(
     idBase,
     wavResources,
     autoScratch,
+    anyKey,
     endOnFailure,
     replay,
     replayRecorder,
@@ -823,15 +875,22 @@ function createSecondPlayer(
   judgeRankChanges: ResolvedChart['judgeRank']['changes'],
   options: PlayerOptions,
   selectedGauge: string | undefined,
+  chartGauge: string | undefined,
+  chartJudge: ReturnType<typeof resolveChartJudgeOption>,
 ): SecondPlayer {
-  const gauge = options.gauge2P ?? selectedGauge;
+  const gauge = chartGauge ?? options.gauge2P ?? selectedGauge;
   const ruleset = resolveRuleset(
     rulesetChartFactsFromChart(resolvedJSON, selectPlaybackChartSide(playbackChart, 2), judgeRankChanges),
     options.judgeRuleset ?? 'lr2',
     {
       bmsonTotalMode: options.bmsonTotalMode,
       ...(gauge !== undefined ? { selectedGauge: gauge } : {}),
+      // Gauge auto-shift is the play's, so the second player's gauge shifts as the first's does (and as a replay of
+      // either side re-simulates it).
+      ...(options.bottomShiftableGauge !== undefined ? { bottomShiftableGauge: options.bottomShiftableGauge } : {}),
+      ...(options.gaugeAutoShift !== undefined ? { gaugeAutoShift: options.gaugeAutoShift } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
+      ...chartJudge,
     },
   );
   const { score, summary, resetScore } = createPlayerScore(ruleset, undefined);
@@ -840,13 +899,16 @@ function createSecondPlayer(
     score,
     summary,
     resetScore,
-    endOnFailure: resolveGaugeEndOnFailure(undefined, ruleset.rulesetId, options.endOnFailure),
+    endOnFailure: resolveGaugeEndOnFailure(options.gaugeAutoShift, options.endOnFailure),
+    ...(gauge !== undefined ? { gauge } : {}),
   };
 }
 
-/** PRACTICE is a beatoraja single play without chart modifiers (they apply only in PLAY / AUTOPLAY). */
+/**
+ * PRACTICE is a single play without chart modifiers, under every ruleset (#933): beatoraja applies them only in PLAY /
+ * AUTOPLAY.
+ */
 function assertPracticeOptions(options: Readonly<PlayerOptions>): void {
-  if (options.judgeRuleset !== 'beatoraja') throw new RangeError('PRACTICE is available only for beatoraja.');
   if (options.course !== undefined) throw new RangeError('PRACTICE plays a single chart.');
   if (
     (options.battleMode ?? 'OFF') !== 'OFF' ||

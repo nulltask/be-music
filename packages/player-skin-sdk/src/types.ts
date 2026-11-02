@@ -1,5 +1,6 @@
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import type {
+  CourseView,
   JudgmentKind,
   JudgmentTiming,
   LaneCover,
@@ -12,6 +13,7 @@ import type { BeMusicResultData, GaugeHistorySample, ScoreHistorySample } from '
 import type { BeMusicSkinSetting, BeMusicSkinSettingValues } from './settings.ts';
 import type {
   BeMusicCourseBestRecord,
+  BeMusicDanRank,
   BeMusicChartImageKind,
   BeMusicChartBestRecord,
   LibraryChart,
@@ -155,15 +157,21 @@ export interface BeMusicStage {
         readonly judgementY: number;
         /** Shrinks wide lane banks to leave room for a side HUD; narrower banks retain their widths. */
         readonly maxRight?: number;
+        /**
+         * Centres a double-play playfield (10 / 14 KEY, and a two-player battle) on this x, so the HUD can sit on both
+         * sides of it. The keyboard modes (24 / 48 KEY) and single play keep their place.
+         */
+        readonly doublePlayCenterX?: number;
       }
     >
   >;
 
   /**
-   * The gameplay BGA rect for a playfield whose rightmost lane ends at `playfieldRight`. The scene composites the BGA
-   * here and the skin frames the same rect, so the BGA can make room for wide (double play / keyboard) playfields.
+   * The gameplay BGA rect for a playfield whose rightmost lane ends at `playfieldRight` and leftmost starts at
+   * `playfieldLeft`. The scene composites the BGA here and the skin frames the same rect, so the BGA can make room for
+   * wide (double play / keyboard) playfields.
    */
-  resolveBGARect(playfieldRight: number): BeMusicRect;
+  resolveBGARect(playfieldRight: number, playfieldLeft?: number): BeMusicRect;
 
   /**
    * Makes the stage fluid: the host calls it with a design size of the screen's aspect ratio
@@ -415,6 +423,27 @@ export interface BeMusicGameplayRuntime {
    * `#EXRANK` change is not reflected.
    */
   judgeWindows?: BeMusicJudgeWindows;
+  /** The player's best EX score on the chart before this play (MY BEST); omitted without a best record. */
+  bestEXScore?: number;
+  /**
+   * The pacemaker's EX score over the whole chart and its name, when the host sets one; without it a score graph paces
+   * against the AAA line ({@link resolveScorePace}).
+   */
+  targetEXScore?: number;
+  /**
+   * The pacemaker's EX score at this point of the play, when the host knows it (a replay ghost, at the notes the play
+   * has judged); without it a score graph holds {@link targetEXScore} to the share of the chart's notes judged.
+   */
+  targetPaceEXScore?: number;
+  targetLabel?: string;
+  /** The course and the stage being played, for a course stage or a NONSTOP run. */
+  course?: CourseView;
+  /** The signed-in player's name, when the host has one. */
+  playerName?: string;
+  /** The play tempo: 1 at the chart's own speed; a play at another tempo is practice. */
+  tempo?: number;
+  /** The 1P lane option (`OFF`, `RANDOM`, `MIRROR`, ...); the 2P player's is not shown. */
+  random1P?: string;
 }
 
 /**
@@ -757,6 +786,11 @@ export interface BeMusicSelectFrame {
    * played, or it is a random course or a NEW COURSE bar. Absent from hosts that predate it.
    */
   courseBestRecord?(course: LibraryCourse): BeMusicCourseBestRecord | undefined;
+  /**
+   * The player's dan rank in each key mode they hold one in, fewest keys first, under the judge ruleset whose records
+   * the screen shows. Empty before any GRADE course is cleared; absent from hosts that keep none.
+   */
+  danRanks?: readonly BeMusicDanRank[];
   chartImage: BeMusicChartImageLookup;
   /** The player's values for the skin's {@link BeMusicSkin.settings}. */
   settings: BeMusicSkinSettingValues;

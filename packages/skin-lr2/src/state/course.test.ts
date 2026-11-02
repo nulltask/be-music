@@ -8,6 +8,8 @@ import {
   resolveLR2CourseStageDifficultyOps,
   resolveLR2CourseConnectionText,
   resolveLR2CourseDraftInfo,
+  resolveLR2CourseIRButtonState,
+  resolveLR2CourseIRText,
   resolveLR2CourseMakerAction,
   resolveLR2CourseMakerButtonState,
   resolveLR2CourseMakerOps,
@@ -144,6 +146,7 @@ describe('LR2 course maker', () => {
     expect(resolveLR2CourseMakerAction(231)).toEqual({ kind: 'cancel' });
     expect(resolveLR2CourseMakerAction(232)).toBeUndefined();
     expect(resolveLR2CourseMakerAction(233)).toEqual({ kind: 'delete' });
+    expect(resolveLR2CourseMakerAction(253)).toEqual({ kind: 'ir' });
     expect(resolveLR2CourseMakerAction(240)).toEqual({ kind: 'connection', slot: 0 });
     expect(resolveLR2CourseMakerAction(248)).toEqual({ kind: 'connection', slot: 8 });
     expect(resolveLR2CourseMakerAction(268)).toEqual({ kind: 'default-connection' });
@@ -227,5 +230,21 @@ describe('resolveLR2CourseStageDifficultyOps', () => {
       resolveLR2CourseStageDifficultyOps({ kind: 'expert', title: 'x', stages: [{ title: 'a', difficulty: 1 }] }),
     ).toEqual([701, 710, 720, 730, 740]);
     expect(resolveLR2CourseStageDifficultyOps(undefined)).toEqual([700, 710, 720, 730, 740]);
+  });
+});
+
+describe('the course IR flag (text 183, button 253)', () => {
+  it('writes the flag as optionstr.csv #COURSE_IR does, OFF on a bar that is not a course', () => {
+    expect(resolveLR2CourseIRText(183, true)).toBe('ON');
+    expect(resolveLR2CourseIRText(183, false)).toBe('OFF');
+    expect(resolveLR2CourseIRText(183, undefined)).toBe('OFF');
+    expect(resolveLR2CourseIRText(182, true)).toBeUndefined();
+  });
+
+  it('draws button 253 at cell 1 once the course is flagged', () => {
+    expect(resolveLR2CourseIRButtonState(253, true)).toBe(1);
+    expect(resolveLR2CourseIRButtonState(253, false)).toBe(0);
+    expect(resolveLR2CourseIRButtonState(253, undefined)).toBe(0);
+    expect(resolveLR2CourseIRButtonState(252, true)).toBeUndefined();
   });
 });

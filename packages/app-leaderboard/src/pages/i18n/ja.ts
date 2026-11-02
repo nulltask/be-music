@@ -51,7 +51,7 @@ export const ja: Messages = {
   },
   dialogs: {
     signInTitle: 'ログイン',
-    signInLead: 'アカウントに登録したパスキー（端末の指紋認証や PIN）でログインします。',
+    signInLead: 'パスキー、Google、または Discord でログインします。',
     signInWithPasskey: 'パスキーでログイン',
     or: 'または',
     orWithPasskey: 'またはパスキーで',
@@ -65,10 +65,8 @@ export const ja: Messages = {
     name: '表示名',
     nameHint: '32 文字まで。ランキングに表示されます。',
     createPasskey: 'パスキーを作成して登録',
-    inDevelopment: '準備中',
     signInWith: (provider) => `${provider} でログイン`,
     signUpWith: (provider) => `${provider} で登録`,
-    providerTitle: (action) => `${action}は準備中です`,
   },
   footer: {
     label: 'Leaderboard について',
@@ -78,7 +76,7 @@ export const ja: Messages = {
     apiTitle: '新しいタブで開きます',
     github: 'GitHub',
     githubTitle: 'GitHub を開きます',
-    beta: 'ベータ版です。計算ルールが固まるまで、ランキングはリセットされることがあります。',
+    beta: '計算ルールが固まるまで、ランキングはリセットされることがあります。',
     copyright: '© 2026 nulltask · MIT License',
   },
   help: {
@@ -207,6 +205,8 @@ export const ja: Messages = {
         '別のテンポで遊んだステージがある練習のプレイです。保存されていますが、コースのランキング・自己ベスト・すべてのリストには載りません。',
       unreleased:
         '公開されていないコース（自作またはランダムのコース）です。保存されていますが、コースのランキング・自己ベスト・すべてのリストには載りません。',
+      assist:
+        'アシストオプションを使ったステージがあるプレイです。LR2 も beatoraja もアシストを使ったコースは保存しません。保存されていますが、コースのランキング・自己ベスト・すべてのリストには載りません。',
     },
     notPublicTitle: 'このプレイは公開されていません',
     visibility: '表示',
@@ -382,6 +382,8 @@ export const ja: Messages = {
         '別のテンポで遊んだ練習のプレイです。保存されていますが、ランキング・自己ベスト・すべてのリストには載りません。',
       'course-stage':
         'コースのステージです。コースとしてランキングに載ります。保存されていますが、ランキング・自己ベスト・すべてのリストには載りません。',
+      'no-save':
+        '元のゲームではデータが保存されないオプション（That-Which-Must-Not-Be-Named ルールの BATTLE や PRACTICE など）を使ったプレイです。保存されていますが、ランキング・自己ベスト・すべてのリストには載りません。',
     },
     visibility: '表示',
     visibilityShownLead:
@@ -421,7 +423,8 @@ export const ja: Messages = {
   },
   lampMeanings: {
     1: 'クリアに届かなかった。',
-    2: 'ASSIST EASY ゲージでクリア。',
+    2: 'ASSIST オプションを使ってクリア（beatoraja）、または ASSISTED EASY ゲージでクリア（名前を言ってはいけないあのゲーム）。#603 より前の ASSIST EASY ゲージのクリアも含む。',
+    10: 'ASSIST EASY ゲージでクリア、または LIGHT ASSIST オプションを使ってクリア（beatoraja）。',
     3: 'EASY ゲージでクリア。',
     4: '通常のゲージ（GROOVE / NORMAL）でクリア。',
     5: 'HARD ゲージでクリア。',

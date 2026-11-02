@@ -39,6 +39,7 @@ import type {
 } from '../../runtime/audio-bus.ts';
 import type { GameplayRecorder } from '../../recording/gameplay-recorder.ts';
 import type { PlayTempoRange } from './tempo-range.ts';
+import type { PlayChartContext } from './play-chart.ts';
 import { PlayPresentation } from './play-presentation.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
@@ -58,6 +59,7 @@ import type { BGACue, NonstopStageBGATimeline } from '../../chart/bga-timeline.t
 
 import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
+import type { GhostPresentation } from './ghost/ghost.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 
 export class PlaySessionState extends PlayPresentation {
@@ -84,6 +86,8 @@ export class PlaySessionState extends PlayPresentation {
   /** The `#RANDOM` / `#SWITCH` draws {@link resolvedChart} was resolved with; handed to the engine with it. */
   randomDraws: RandomDraws | undefined;
   randomSeeds: { p1?: string; p2?: string } = {};
+  /** The chart's own gameplay options and the lane / mine selection they leave (#844); set by `prepareChart`. */
+  chartPlay: PlayChartContext['chartPlay'] = undefined;
   /**
    * `seconds → beat` resolver that properly accounts for `#STOP` windows. During a STOP, this returns the same beat
    * across the window's duration so the playfield freezes in place. Without it the previous hand-rolled `currentBeat`
@@ -347,7 +351,9 @@ export class PlaySessionState extends PlayPresentation {
    * The lane covers as drawn ({@link resolveLaneCover} of the play state's covers), handed to skins as
    * `runtime.laneCovers`; rebuilt only when the play state's covers change.
    */
-  drawnLaneCovers: { covers: readonly LaneCoverState[]; drawn: LaneCover[] } | undefined;
+  drawnLaneCovers:
+    | { covers: readonly LaneCoverState[]; manualSudden: boolean; lineLift: number; drawn: LaneCover[] }
+    | undefined;
   /** Folds the live view into the recorded replay's view changes ({@link updateReplayView}); unset in a replay. */
   replayViewCoalescer: ReplayViewCoalescer | undefined;
   /** A replay's recorded view along the playhead ({@link updateReplayView}). */
@@ -483,6 +489,18 @@ export class PlaySessionState extends PlayPresentation {
    * promise so the chart itself doesn't begin until the BGA is actually ready.
    */
   bgaReadyPromise: Promise<void> | undefined;
+  /**
+   * Resolves once the samples have decoded and {@link bgaReadyPromise} has: what {@link start} gates the chart on. A
+   * play already on the stage when it loads decodes through its intro, so this can still be pending when it starts.
+   */
+  assetsReadyPromise: Promise<void> | undefined;
+  /** True once the samples have decoded and the engine may be built on them. */
+  samplesDecoded = false;
+  /**
+   * The replay ghost shown beside the play (`ghost/ghost.ts`), once its replay is read and placed; absent without one.
+   * It only draws, through the frames the scene session hands the view.
+   */
+  ghost: GhostPresentation | undefined;
   /**
    * Latches at the moment the engine's `manualPlay` / `autoPlay` Promise resolves so the `onChartFinished` /
    * `onExit` callback fires at most once. {@link handleSharedEngineChartFinished} is the only writer.

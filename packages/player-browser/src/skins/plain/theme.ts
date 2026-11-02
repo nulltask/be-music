@@ -28,7 +28,8 @@ export const NOTE_FILL = {
 /** Colours the PERFECT judgement (shown as GREAT) cycles through. */
 export const FLASHING_GREAT = [0xffffff, 0x5b8cff, 0xffd84d] as const;
 
-export const FONT = '"M PLUS 1p", system-ui, sans-serif';
+/** The system's sans-serif: Plain loads no web fonts, so it draws the same on any host. */
+export const FONT = 'ui-sans-serif, system-ui, sans-serif';
 
 const FONTS = new Map<string, string>();
 

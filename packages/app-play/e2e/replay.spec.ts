@@ -153,7 +153,7 @@ test(
   },
 );
 
-test('manual seeking stays paused, resets judgments and finishes without a replay', async ({ player }) => {
+test('the arrows do not seek a manual play, which keeps its judgments and records a replay', async ({ player }) => {
   await openWithLibrary(player);
   await player.setOption(['Play options'], 'Auto play', false);
   await player.browseTo(SONGS, 'Fixture A');
@@ -163,16 +163,16 @@ test('manual seeking stays paused, resets judgments and finishes without a repla
     'manual play under way',
   );
   await player.key('Space');
+  const paused = await player.state();
+  // ← / → seek five seconds only during AUTO play: a manual play stays where it was paused, judgments and all.
   await player.key('ArrowLeft');
-  let state = await player.waitFor((current) => current.play?.seconds === 0, 'practice sought to the start');
-  expect(state.play?.judged?.pgreat).toBe(0);
   await player.key('ArrowRight');
-  state = await player.waitFor(
-    (current) => Math.abs((current.play?.seconds ?? -1) - 5) < 0.01,
-    'practice sought forwards while paused',
-  );
-  expect(state.play?.judged?.pgreat).toBe(0);
+  await player.page.waitForTimeout(300);
+  const after = await player.state();
+  expect(after.play?.seconds).toBeCloseTo(paused.play!.seconds!, 2);
+  expect(after.play?.judged).toEqual(paused.play?.judged);
   await player.key('Space');
   await player.waitForResult(0);
-  expect(await player.lastReplay()).toBeUndefined();
+  // Not sought, so not practice: the play keeps its replay.
+  expect(await player.lastReplay()).toBeDefined();
 });

@@ -5,9 +5,11 @@
 
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
+import type { RulesetId } from '@be-music/player-engine/ruleset';
 import {
   DEFAULT_PLAY_OPTIONS,
   resolvePlayOptions,
+  resolvePracticeSelection,
   type CourseView,
   type LibraryChart,
   type PlayOptions,
@@ -112,6 +114,8 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   /** The play options as the select screen set them, for the frames a view reads. Defaults to `DEFAULT_PLAY_OPTIONS`. */
   readonly playOptions?: PlayOptions;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
+  /** The signed-in player's name, which a skin may show beside the chart. */
+  readonly playerName?: string;
   /**
    * The host the scene will show on. With it the scene builds its layers as it loads, so the BGA uploads to the GPU
    * behind a decide screen instead of on its first cue.
@@ -699,8 +703,11 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     ...(course?.view !== undefined ? { course: course.view } : {}),
     playOptions,
     ...(options.scoreTargets !== undefined ? { scoreTargets: options.scoreTargets } : {}),
+    ...(options.playerName !== undefined ? { playerName: options.playerName } : {}),
     audio: options.audio,
     ...(options.sounds !== undefined ? { sounds: options.sounds } : {}),
+    // A ghost draws a field of its own (a second playfield, marks over the lanes) only on a built-in family view.
+    showsGhost: () => familySlot.current?.view.family === 'built-in',
   });
   // The views draw with the session's settings: the host's, with what the session resolved from them.
   viewOptions.settings = play.options;
@@ -736,26 +743,19 @@ const BEATORAJA_PLAY_SETTINGS: Pick<PlaySessionOptions, 'coverKeys'> = {
 };
 
 /**
- * beatoraja PRACTICE for a single fresh play: the range and rules (`practiceRange`), a practice play saving nothing,
- * and no chart modifier, as the source applies them only in PLAY / AUTOPLAY.
+ * PRACTICE for a single fresh play, under every judge ruleset (#933): the range and the rules read under the ruleset
+ * (`resolvePracticeSelection`), a practice play saving nothing, and no chart modifier, as beatoraja applies them only in
+ * PLAY / AUTOPLAY.
  */
 function resolvePracticeSessionOptions(
   playOptions: Readonly<PlayOptions>,
-  ruleset: string | undefined,
+  ruleset: RulesetId | undefined,
   single: boolean,
 ): Partial<PlaySessionOptions> {
-  if (!playOptions.practice || ruleset !== 'beatoraja' || !single) return {};
+  if (!playOptions.practice || !single) return {};
   return {
     practice: true,
-    practiceRange: {
-      startMs: playOptions.practiceStartMs,
-      ...(playOptions.practiceEndMs > 0 ? { endMs: playOptions.practiceEndMs } : {}),
-      gauge: playOptions.practiceGauge,
-      ...(playOptions.practiceGaugeCategory !== 'MODE' ? { gaugeCategory: playOptions.practiceGaugeCategory } : {}),
-      startGauge: playOptions.practiceStartGauge,
-      ...(playOptions.practiceJudgeRank > 0 ? { judgeRank: playOptions.practiceJudgeRank } : {}),
-      ...(playOptions.practiceTotal > 0 ? { total: playOptions.practiceTotal } : {}),
-    },
+    practiceRange: resolvePracticeSelection(playOptions, ruleset ?? 'lr2'),
     battleMode: 'OFF',
     longNoteModifier: 'OFF',
     mineModifier: 'OFF',

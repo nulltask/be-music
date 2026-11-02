@@ -1,5 +1,13 @@
 # @be-music/worker-play
 
+## 0.1.5
+
+### Patch Changes
+
+- 1a6400b: Player settings stored in R2 are gzip-compressed. A plain JSON object written earlier still loads.
+- 51dd4c6: Old local saves are ignored: a stored player-settings document is written as version 0, and any other version is treated as absent.
+- Updated dependencies: `@be-music/service-auth-client@0.2.0`
+
 ## 0.1.4
 
 ### Patch Changes

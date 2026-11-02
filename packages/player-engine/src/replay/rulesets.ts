@@ -5,6 +5,7 @@
  * this module only turns a {@link BeMusicReplay} into the neutral {@link RulesetChartFacts} the tables take, and
  * re-exports the ruleset surface the replay API has always exposed.
  */
+import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
 import {
   createEmptyRulesetNoteCounts,
   resolveRuleset,
@@ -54,12 +55,11 @@ export function resolveRulesetConfig(
   const { course } = replay.play;
   return resolveRuleset(rulesetChartFactsFromReplay(replay), rulesetId, {
     selectedGauge: replay.play.gauge,
-    ...(rulesetId === 'beatoraja' && replay.play.bottomShiftableGauge !== undefined
+    // Gauge auto-shift is carried (ADR 0019): it shifts along the target ruleset's own ladder.
+    ...(replay.play.bottomShiftableGauge !== undefined
       ? { bottomShiftableGauge: replay.play.bottomShiftableGauge }
       : {}),
-    ...(rulesetId === 'beatoraja' && replay.play.gaugeAutoShift !== undefined
-      ? { gaugeAutoShift: replay.play.gaugeAutoShift }
-      : {}),
+    ...(replay.play.gaugeAutoShift !== undefined ? { gaugeAutoShift: replay.play.gaugeAutoShift } : {}),
     ...(rulesetId === 'beatoraja' && replay.play.judgeAlgorithm !== undefined
       ? { judgeAlgorithm: replay.play.judgeAlgorithm }
       : {}),
@@ -70,6 +70,7 @@ export function resolveRulesetConfig(
       ? { judgeWindowOverrideMs: replay.play.judgeWindowOverrideMs }
       : {}),
     ...(course === undefined ? {} : { course: courseStageRulesetOptions(course) }),
+    ...resolveChartJudgeOption(replay.chart.chartPlayOptions),
     ...options,
     // A legacy replay always uses compatibility, regardless of the viewer's current choice.
     bmsonTotalMode: replay.play.bmsonTotalMode ?? 'beatoraja',

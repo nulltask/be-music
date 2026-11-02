@@ -17,6 +17,7 @@ import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { drainSharedEngineSignals } from './play-engine.ts';
 import { handleTouchLaneIntent } from './play-input.ts';
 import type { PlaySession } from './play-session.ts';
+import type { GhostPaceScore, GhostPresentation } from './ghost/ghost.ts';
 import { canSeekPlay } from './play-seek.ts';
 import type { PlayMoment } from './play-session-theme.ts';
 import { playViewEventFromMoment } from './play-view-events.ts';
@@ -32,8 +33,14 @@ export interface PlaySceneFacts {
   readonly course?: CourseView;
   readonly playOptions: PlayOptions;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
+  readonly playerName?: string;
   readonly audio?: Pick<AudioService, 'stopOwned' | 'playCue'>;
   readonly sounds?: SystemSoundSet;
+  /**
+   * Whether the view drawing the play now shows the play's ghost (`PlaySession.ghost`): a built-in family view does,
+   * the LR2 and beatoraja ones have no second field to draw it in. Without it the ghost is not shown.
+   */
+  readonly showsGhost?: () => boolean;
 }
 
 /** A play session driven by a `SessionScene`. See the module comment. */
@@ -122,7 +129,9 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
         void play.seek(intent.seconds);
         return;
       case 'lane':
-        // A touch lane the view's fingers pressed or let go: the engine takes it as the keyboard's lane keys.
+        // A touch lane the view's fingers pressed or let go: the engine takes it as the keyboard's lane keys. A
+        // ghost's lane takes nothing.
+        if (play.ghost !== undefined && !play.laneChannels.includes(intent.channel)) return;
         handleTouchLaneIntent(play, intent.channel, intent.pressed, intent.atMs);
         return;
     }
@@ -188,12 +197,20 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     this.pending = [];
     const stage = resolvePlayStage(play);
     const bpm = play.displayBPM(seconds);
+    // The ghost draws through the playfield the view reads, and only on a view that shows one; a ghost with no field of
+    // its own (a pacemaker) keeps running on any view.
+    const shows = this.facts.showsGhost?.() === true;
+    const ghost = play.ghost;
+    const running = ghost !== undefined && (shows || !ghost.drawsOnPlayfield) ? ghost : undefined;
+    running?.update(seconds, play.playClock());
+    const scoreTargets = resolveFrameScoreTargets(this.facts.scoreTargets, running, play.score);
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
       chart: play.chart ?? this.facts.chart,
       ...(this.facts.course !== undefined ? { course: this.facts.course } : {}),
       playOptions,
-      ...(this.facts.scoreTargets !== undefined ? { scoreTargets: this.facts.scoreTargets } : {}),
+      ...(scoreTargets !== undefined ? { scoreTargets } : {}),
+      ...(this.facts.playerName !== undefined ? { playerName: this.facts.playerName } : {}),
       state: play.playState,
       ...(play.secondPlayer !== undefined ? { state2P: play.secondPlayer.playState } : {}),
       stage,
@@ -210,9 +227,22 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       events,
       audio: play.audioAnalyzer?.sample(play.playClock()) ?? SILENT_AUDIO,
       shown: play.shown,
-      playfield: play,
+      playfield: running !== undefined && shows ? running.present(play) : play,
     };
   }
+}
+
+/**
+ * A frame's score targets: the host's (the best record's EX score), with a running ghost's pacemaker in place of the
+ * target when it shows one. The host's object comes back as it is without one.
+ */
+export function resolveFrameScoreTargets(
+  host: PlayFrame['scoreTargets'],
+  ghost: Pick<GhostPresentation, 'scoreTarget'> | undefined,
+  score: GhostPaceScore,
+): PlayFrame['scoreTargets'] {
+  const pacemaker = ghost?.scoreTarget?.(score);
+  return pacemaker === undefined ? host : { ...host, ...pacemaker };
 }
 
 /** Where a play is: paused, ending (the lead-out and fade), loading its assets, in its intro, or playing. */

@@ -263,10 +263,11 @@ export const score = sqliteTable(
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
     /**
      * Why the play is stored but not ranked (`tempo`: played at another tempo; `course-stage`: a course stage sent on
-     * its own), null for a ranked play. Like a hidden play, it stays out of the rankings, the personal bests, the
-     * figures and every list; unlike one, its page still opens for anyone the replay setting allows.
+     * its own; `bmson-total`: zero-total no-recovery; `no-save`: an option whose source saves no data from the play,
+     * #602), null for a ranked play. Like a hidden play, it stays out of the rankings, the personal bests, the figures
+     * and every list; unlike one, its page still opens for anyone the replay setting allows.
      */
-    unranked: text('unranked', { enum: ['tempo', 'course-stage', 'bmson-total'] }),
+    unranked: text('unranked', { enum: ['tempo', 'course-stage', 'bmson-total', 'no-save'] }),
     ...timestamps,
   },
   (table) => [
@@ -304,6 +305,12 @@ export const scoreResult = sqliteTable(
     /** Gauge at the end of the play, in percent. Null for plays stored before it was recorded. */
     gaugeFinal: real('gauge_final'),
     judges: text('judges', { mode: 'json' }).$type<Record<string, number>>().notNull(),
+    /**
+     * `truncated` when the play stopped where its played gauge emptied and this ruleset's gauge would have carried on: its
+     * figures go only up to that point, and it moves no personal best (ADR 0019). Null for a play simulated in full. A
+     * ruleset the play cannot be judged under ("not simulated") has no row.
+     */
+    outcome: text('outcome', { enum: ['truncated'] }),
   },
   (table) => [primaryKey({ columns: [table.scoreId, table.ruleset] })],
 );
@@ -389,9 +396,10 @@ export const courseScore = sqliteTable(
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
     /**
      * Why the run is stored but not ranked, as `score.unranked` (`tempo`: a stage at another tempo; `unreleased`: a
-     * course with `release: false`), null for a ranked run.
+     * course with `release: false`; `bmson-total`: zero-total no-recovery; `assist`: a run with an assisted stage, #602),
+     * null for a ranked run.
      */
-    unranked: text('unranked', { enum: ['tempo', 'unreleased', 'bmson-total'] }),
+    unranked: text('unranked', { enum: ['tempo', 'unreleased', 'bmson-total', 'assist'] }),
     ...timestamps,
   },
   (table) => [
@@ -433,6 +441,8 @@ export const courseScoreResult = sqliteTable(
     gaugeType: text('gauge_type').notNull(),
     gaugeFinal: real('gauge_final').notNull(),
     judges: text('judges', { mode: 'json' }).$type<Record<string, number>>().notNull(),
+    /** `truncated` when the run stopped at a failed stage this ruleset's gauge would have survived, as for a play. */
+    outcome: text('outcome', { enum: ['truncated'] }),
   },
   (table) => [primaryKey({ columns: [table.courseScoreId, table.ruleset] })],
 );

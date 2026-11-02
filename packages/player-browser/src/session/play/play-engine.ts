@@ -52,6 +52,7 @@ import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { supportsLiveTempoChange, type ReplayTempo } from '../../runtime/play-tempo.ts';
 import { drainWebUISignals, type WebUIRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
+import type { PlayChartContext } from './play-chart.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
@@ -109,6 +110,7 @@ export interface PlayEngineContext
       | 'bottomShiftableGauge'
       | 'autoScratch1P'
       | 'autoScratch2P'
+      | 'anyKey'
       | 'chartMD5'
       | 'chartSHA256'
       | 'course'
@@ -150,6 +152,8 @@ export interface PlayEngineContext
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly randomDraws: RandomDraws | undefined;
   readonly randomSeeds?: { p1?: string; p2?: string };
+  /** The chart's own gameplay options and the lane / mine selection they leave (#844). */
+  readonly chartPlay?: PlayChartContext['chartPlay'];
   readonly preparedChart: PreparedPlaybackChartData | undefined;
   readonly notes: TimedPlayableNote[];
   readonly timingResolver: TimingResolver | undefined;
@@ -273,9 +277,11 @@ function releaseKeyBeam(ctx: PlayEngineContext, channel: string): void {
 
 /**
  * Starts a bomb (hit explosion) on `channel`. The core scene draws it from `bombStartedAt`; themes react through the
- * `bomb` event (the LR2 family stamps its per-lane bomb timer at the same instant).
+ * `bomb` event (the LR2 family stamps its per-lane bomb timer at the same instant). A chart's `774:CRAZY_DARK2` (#931)
+ * draws no bombs; the beatoraja family leaves its bomb timers out the same way.
  */
 function triggerBomb(ctx: PlayEngineContext, channel: string, judge?: BeMusicJudgmentKind): void {
+  if (ctx.engineFrame?.chartOptions?.crazyDark === 'DARK2') return;
   const now = ctx.playClock();
   ctx.bombStartedAt.set(channel, now);
   if (judge) ctx.bombJudge.set(channel, judge);
@@ -710,9 +716,15 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       mineModifier:
         ctx.options.replay?.play.mineModifier ??
         ctx.options.fixedArrangement?.play.mineModifier ??
+        ctx.chartPlay?.selection.mineModifier ??
         ctx.options.mineModifier,
+      // The chart's gameplay program (#844): a replay's recorded one, or none for an older replay without it.
+      chartPlayOptionProgram: ctx.options.replay
+        ? (ctx.options.replay.chart.chartPlayOptions ?? { version: 1 as const, options: {} })
+        : ctx.chartPlay?.program,
       autoScratch1P: ctx.options.autoScratch1P === true,
       autoScratch2P: ctx.options.autoScratch2P === true,
+      anyKey: ctx.options.replay ? ctx.options.replay.play.anyKey === true : ctx.options.anyKey === true,
       // Hand the engine the same `PreparedPlaybackChartData` instance the renderer is already pointing at
       // (`this.notes` / `this.mineNotes` / `this.invisibleNotes` are references into this bundle). The
       // engine's `autoPlay` / `manualPlay` use it verbatim instead of running their own
@@ -746,7 +758,10 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
           }
         : {
             chartOptionProgram: ctx.options.nonstop?.chartOptions,
-            chartOptionDiagnostics: ctx.options.nonstop?.chartOptionDiagnostics,
+            chartOptionDiagnostics: [
+              ...(ctx.options.nonstop?.chartOptionDiagnostics ?? []),
+              ...(ctx.chartPlay?.diagnostics ?? []),
+            ],
           }),
       chartTextStages: ctx.options.nonstop?.chartText,
       // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
@@ -807,8 +822,9 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // back through `getResultData().replay` for the result screen's auto-save.
             // What the player sees at the start; the changes during the play go in as `view` commands. A play that
             // seeks records none: the engine discards its recorder at the first seek.
+            // A chart's RANDOM / ADDMINE (#844) replaced the player's lane and mine options: record what was played.
             recordReplay: resolveReplayRecording(
-              ctx.options,
+              { ...ctx.options, ...ctx.chartPlay?.selection } as typeof ctx.options,
               ctx.chart,
               startReplayView(ctx),
               ctx.playState.view.hiSpeed.player,

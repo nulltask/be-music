@@ -74,7 +74,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 ### chart-writer (`@be-music/chart-source` -> bmson)
 
 - [x] `version` 出力 (`bmson.version`, 未指定時 `1.0.0`)
-- [x] `info.resolution` 出力 (未指定時 `240`)
+- [x] `info.resolution` 出力（bmson はその値、BMS は位置を正確に保つ最小の `240` の倍数）
 - [x] `info` 拡張項目 `subartists` の出力
 - [x] `info` 拡張項目 `chart_name` の出力
 - [x] `info` 拡張項目 `mode_hint` の出力
@@ -231,7 +231,7 @@ flowchart TD
 
 - `@be-music/chart-model` の `eventToBeat` 相当の beat 解決から `y = round(beat * resolution)` を生成
 - `bmson.version` を `version` に出力 (未指定時は `1.0.0`)
-- `bmson.info.resolution` を `info.resolution` に出力 (未指定時は `240`)
+- `bmson.info.resolution` を `info.resolution` に出力。値を持たない BMS 譜面には、下記 `stringifyBmson` の正確な分解能を使う
 - `bmson.info` の拡張項目 (`subartists`, `chart_name`, `judge_rank`, `total`, 画像/プレビュー系など) を出力
 - `info.total` は `bmson.info.total`、bmson ソースなら `metadata.total` から出力する。BMS / JSON 譜面の `metadata.total` はゲージの絶対 TOTAL であり、bmson の `total` はプレイヤー既定 TOTAL（ノーツ数とルールセットに依存）に対する百分率なので出力せず、bmson 既定値 `100` に委ねる
 - `info.judge_rank` は `bmson.info.judge_rank`、bmson ソースなら `metadata.rank` から出力する。BMS / JSON 譜面では、bmson の `judge_rank` が `#DEFEXRANK` と同じ単位（`100` = NORMAL）なので正の `#DEFEXRANK` をそのまま出力し、なければ整数の `#RANK 0`〜`4`（`metadata.rank`、ランク番号）を `33` / `67` / `100` / `133` / `167`（そのランクと同じ判定幅になる `#DEFEXRANK` 値。VERY EASY は beatoraja の judgerank `125` に合わせる。LR2 は NORMAL 扱い）へ変換する。それ以外の `#RANK`（範囲外や小数）は NORMAL 判定なので出力せず、bmson 既定値 `100` に委ねる。be-music の ruleset では、名前を言ってはいけないあのゲームの判定幅は一致し、LR2 は NORMAL と `#DEFEXRANK` で一致（`#RANK 0`・`1`・`3` は `0.4ms` 以内、`#RANK 4` は広くなる）、beatoraja は bmson の `judge_rank` を `#DEFEXRANK` のように換算せず judgerank として直接使うため、どのランクも約 4/3 倍広くなる
@@ -312,7 +312,7 @@ engine はアクティブなシーケンス状態を `PlayerUIFramePayload.bmson
 
 ## 出力 resolution の変更
 
-`stringifyBmson(chart, { resolution })` は、対応済みの pulse 単位のデータを指定したグリッドに変換します。1以上の有限な指定は整数に切り捨て、それ以外は元の resolution、未指定なら240を使います。resolution を明示した場合は、保存検証をスキップしても現在のイベントから再生成します。元のオブジェクトは変更しません。
+`stringifyBmson(chart, { resolution })` は、対応済みの pulse 単位のデータを指定したグリッドに変換します。1以上の有限な指定は整数に切り捨てます。指定がなければ、bmson はその resolution（なければ240）を保ち、BMS は位置の分数と小節長から、すべてのオブジェクト位置と小節境界が整数 pulse に乗る最小の240の倍数を選びます（小節長は分母100万までの分数として読み戻します）。上限は61,440（240 × 256。beatoraja は `y` を32ビット整数で読むため）で、それを超える格子が必要な譜面や、小節長が厳密な分数にならない譜面は、その格子に丸めます（誤差は0.5 / 61,440拍未満）。手元の BMS 1,862譜面では、1,596譜面が240のまま、158譜面が正確な格子（480・960・7,440 など）に上がってノート時刻が変わらず、108譜面が上限に達してノートのずれは最大0.03 msでした。240固定ではこれらの譜面で最大400 msずれていました。resolution を明示した場合は、保存検証をスキップしても現在のイベントから再生成します。元のオブジェクトは変更しません。
 
 | データ                                            | 変換                                                                                 |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------ |

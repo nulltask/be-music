@@ -7,6 +7,7 @@ import { runWithConcurrency } from '@be-music/shared-utils/core';
 import {
   collectBmsWAVVolumeMultipliers,
   resolveBmsWAVResources,
+  resolveReferencedBmsWAVResources,
   collectBmsWAVPlaybackModifiers,
 } from '@be-music/chart-model';
 import { type BeMusicJSON } from '@be-music/chart-source';
@@ -26,8 +27,15 @@ import { applyChartPeakGain } from './peak-gain.ts';
 
 const log = logger('play-audio');
 
-/** Samples decoded at once: bounded so hundreds of browser audio decoders don't allocate PCM together. */
-const AUDIO_DECODE_CONCURRENCY = 8;
+/**
+ * Samples decoded at once: one per core, as the browser decodes them in parallel and the wall time stops falling there
+ * (a 1,300-sample chart on 10 cores: 1.45 s at 4, 0.99 s at 8, 0.86 s at 16, 0.88 s at 32). At least 4, and at most 16
+ * so hundreds of decoders don't allocate PCM together.
+ */
+export function resolveAudioDecodeConcurrency(hardwareConcurrency: number | undefined): number {
+  const cores = hardwareConcurrency !== undefined && Number.isFinite(hardwareConcurrency) ? hardwareConcurrency : 8;
+  return Math.min(16, Math.max(4, Math.floor(cores)));
+}
 
 /**
  * Per-slot volume multipliers of a chart: `#WAVCMD 01 xx vv` and the volume of `#EXWAVxx`, multiplied together when a
@@ -61,24 +69,33 @@ export interface LoadPlaySamplesOptions {
 }
 
 /**
- * Decodes every `#WAVxx` sample of the chart into `samples` (codec fallbacks via `resolveChartAudioAsset`, honouring
+ * Decodes every `#WAVxx` sample the chart plays into `samples` (codec fallbacks via `resolveChartAudioAsset`, honouring
  * `#PATH_WAV`) and, for keep pitch, stretches them to the play tempo once so they then play at their own pitch.
  * Decode or read failures advance to the next distinct asset; a sample with no playable candidate is skipped. Resolves `true` when the samples were stretched.
  */
 export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<boolean> {
   const { audioContext, chart, source, chartPath, samples } = options;
   const isCancelled = options.isCancelled ?? (() => false);
-  // Every declared path: a `#WAVxx` slot is base-36, so a dense chart can use well over 256 samples.
+  // Every declared slot: a `#WAVxx` slot is base-36, so a dense chart can use well over 256 samples.
   const wavResources = resolveBmsWAVResources(chart);
   const playbackModifiers = collectBmsWAVPlaybackModifiers(chart);
   const nativeRatePaths = new Set(
     [...playbackModifiers].filter(([, value]) => value.frequencyHz !== undefined).map(([key]) => wavResources[key]),
   );
   const nativeRates = new Map<string, number>();
-  const wavPaths = Object.values(wavResources).filter((path): path is string => typeof path === 'string');
+  // Only what some sample event names: a chart can declare hundreds of slots it never plays (a short cut of a long
+  // track), and each decoded sample costs its whole PCM. One path behind several slots decodes once.
+  const wavPaths = [
+    ...new Set(
+      Object.values(resolveReferencedBmsWAVResources(chart)).filter((path): path is string => typeof path === 'string'),
+    ),
+  ];
   // `#PATH_WAV <prefix>`: the chart's samples live under that directory; the resolver tries the prefixed path first.
   const pathPrefix = typeof chart.bms.pathWAV === 'string' ? chart.bms.pathWAV : undefined;
-  await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
+  const concurrency = resolveAudioDecodeConcurrency(
+    typeof navigator === 'undefined' ? undefined : navigator.hardwareConcurrency,
+  );
+  await runWithConcurrency(wavPaths, concurrency, async (path) => {
     if (isCancelled()) return;
     const attempted = new Set<BrowserAssetEntry>();
     while (!isCancelled()) {

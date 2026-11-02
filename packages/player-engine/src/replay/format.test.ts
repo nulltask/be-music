@@ -458,6 +458,16 @@ test('preserves independent AUTO SCRATCH sides and rejects non-boolean switches'
   }
 });
 
+test('preserves the ANY KEY switch and rejects a non-boolean one', () => {
+  const replay = makeReplay();
+  expect(parseReplay(serializeReplay(replay)).play.anyKey).toBeUndefined();
+  replay.play.anyKey = true;
+  expect(parseReplay(serializeReplay(replay)).play.anyKey).toBe(true);
+  const invalid = JSON.parse(serializeReplay(replay));
+  invalid.play.anyKey = 'yes';
+  expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+});
+
 test('round-trips source long-note modifiers and rejects unknown variants', () => {
   for (const longNoteModifier of ['OFF', 'LEGACY', 'REMOVE'] as const) {
     const replay = makeReplay();
@@ -628,6 +638,33 @@ test('BEST CLEAR round-trips independent class gauges and the configured lower b
   expect(() =>
     parseReplay(JSON.stringify({ ...replay, play: { ...replay.play, bottomShiftableGauge: 'HARD' } })),
   ).toThrow(ReplayParseError);
+});
+
+test('auto-shift gauge values take any ruleset’s ladder, and a course carry one course ladder whole (#933)', () => {
+  const replay = makeReplay();
+  replay.play.judgeRuleset = 'lr2';
+  replay.play.gaugeAutoShift = 'BEST_CLEAR';
+  replay.play.course = {
+    kind: 'expert',
+    carryIn: {
+      gauge: 40,
+      combo: 0,
+      maxCombo: 0,
+      gauges: { 'COURSE-EASY': 70, COURSE: 50, 'COURSE-HARD': 40, 'COURSE-DEATH': 0 },
+    },
+  };
+  expect(parseReplay(serializeReplay(replay)).play.course?.carryIn?.gauges).toEqual(replay.play.course.carryIn!.gauges);
+  for (const gauges of [
+    { 'COURSE-EASY': 70, COURSE: 50, 'COURSE-HARD': 40 },
+    { GRADE: 70, 'GRADE-HARD': 40, 'GRADE-DEATH': 0, CLASS: 50 },
+    { GROOVE: 70, HARD: 40 },
+  ]) {
+    const altered = {
+      ...replay,
+      play: { ...replay.play, course: { ...replay.play.course, carryIn: { ...replay.play.course.carryIn!, gauges } } },
+    };
+    expect(() => parseReplay(JSON.stringify(altered))).toThrow(ReplayParseError);
+  }
 });
 
 test('scroll modifier selection and actual-change fact round trip independently', () => {

@@ -146,6 +146,18 @@ export interface PlayerGUIState extends PlayTempoSettings {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
+   * The replay ghost shown with the play (`services/ghost.ts`): `'OFF'` (default), or the replay it plays — `'OWN_BEST'`
+   * (the player's best on the chart), a replay slot, the Leaderboard's top run, or a picked replay file. Latched at song
+   * start.
+   */
+  ghost: import('./services/ghost.ts').GhostSourceSetting;
+  /**
+   * How the ghost shows (`services/ghost.ts`): `'PLAYFIELD'` (default, a second playfield on the built-in skins),
+   * `'PACEMAKER'` (a pacemaker alone, on every family) or `'LANE_OVERLAY'` (the pacemaker with the recorded inputs over
+   * the player's own lanes, on the built-in skins). Latched at song start.
+   */
+  ghostMode: import('./services/ghost.ts').GhostModeSetting;
+  /**
    * When true (off by default), the replay (`*.bmplay.json` input replay — see `@be-music/player-engine/replay`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
    * beatoraja result paths. Toggled from the Debug Menu's "Auto-save replays" checkbox.
@@ -271,6 +283,11 @@ export interface PlayerGUIState extends PlayTempoSettings {
   autoScratch1P: boolean;
   /** 2P auto scratch for the next play. Two-way synced with the LR2 select panel. */
   autoScratch2P: boolean;
+  /**
+   * ANY KEY (That-Which-Must-Not-Be-Named PC, #751) for the next play: each press takes the nearest note on any lane.
+   * Offered with the `____` judge rules only; a play with it saves no record.
+   */
+  anyKey: boolean;
   /**
    * The built-in and LR2 select screens' sort, key filter and difficulty filter. Two-way synced with an LR2 select
    * skin's sort and filter buttons; the beatoraja select screen has its own MODE and SORT buttons.

@@ -1,4 +1,5 @@
 import { keyBoundBGAResourceKey } from '../../chart/key-bound-bga.ts';
+import { canDrawBGAPixelsOnGPU, drawBGAPixelsOnGPU } from '../../media/bga-gpu-pixels.ts';
 import { isColorKeyVideoCanvas } from '../../media/color-key-video.ts';
 /**
  * The chart's BGA on the built-in and LR2 play screens: composites the base, layer and POOR
@@ -525,7 +526,18 @@ function syncBGAVideo(
     // Same cue still active: the video plays forward on its own and the Pixi VideoSource pulls fresh frames each tick;
     // one that drifted from the chart is set back in step.
     const video = handle.video;
-    if (video.paused || video.seeking) return;
+    // A seek, or a buffer that is not ready yet, aborts play() and leaves the element paused. Stopping there keeps
+    // the black canvas behind the texture: the chart has a BGA, so the skin does not fall back to SOUND ONLY.
+    // Retry until it plays. A seek still in progress, an ended video, and a paused play stay as they are.
+    if (video.seeking) return;
+    if (video.paused) {
+      if (!ctx.play.paused && !video.ended) {
+        void video.play().catch(() => {
+          // The next frame tries again.
+        });
+      }
+      return;
+    }
     const resync = resolveBGAVideoResync(
       video.currentTime,
       (seconds - previous.cueSeconds) * playbackRate,
@@ -551,18 +563,22 @@ function syncBGAVideo(
   try {
     handle.video.currentTime = Math.min(offset, Math.max(0, handle.video.duration - 0.05) || offset);
   } catch {
-    // Some browsers throw on currentTime assignment before the video has its initial buffer. Best-effort — play()
-    // below will retry once the buffer arrives.
+    // Some browsers throw on currentTime assignment before the video has its initial buffer. The play() below, and
+    // the same-cue path on the following frames, retry once the buffer arrives.
   }
   // A paused play (one sought while paused) shows the cue's frame; resuming plays the active videos.
   if (ctx.play.paused) return;
   void handle.video.play().catch(() => {
-    // Autoplay policy / codec rejections — silently swallow so the still-image fallback keeps working.
+    // A rejection leaves the element paused. The same-cue path retries on the following frames.
   });
 }
 
 const tintedSkinImages = new WeakMap<BeMusicImage, Map<number, HTMLCanvasElement>>();
-/** Canvas skins receive already-tinted pixels, so existing skins honor the same plane controls as Pixi scenes. */
+/**
+ * Canvas skins receive already-tinted pixels, so existing skins honor the same plane controls as Pixi scenes. A still
+ * image is tinted once per colour; a live source (video, keyed or cropped canvas) each frame, on the shared GPU context
+ * where it can (`bga-gpu-pixels.ts`), so the frame is not read back.
+ */
 function tintSkinBGAImage(image: BeMusicImage | undefined, tint = 0xffffff): BeMusicImage | undefined {
   if (!image || tint === 0xffffff) return image;
   let colors = tintedSkinImages.get(image);
@@ -593,9 +609,12 @@ function tintSkinBGAImage(image: BeMusicImage | undefined, tint = 0xffffff): BeM
     canvas.width = width;
     canvas.height = height;
   }
-  const context = canvas.getContext('2d', { willReadFrequently: true });
+  const onGPU = canDrawBGAPixelsOnGPU();
+  // Only the CPU path reads the pixels back; on the GPU path the canvas stays on the GPU.
+  const context = canvas.getContext('2d', { willReadFrequently: !onGPU });
   if (!context) return undefined;
   try {
+    if (onGPU && drawBGAPixelsOnGPU(image as TexImageSource, width, height, { tint }, context)) return canvas;
     context.clearRect(0, 0, width, height);
     context.drawImage(image, 0, 0);
     const pixels = context.getImageData(0, 0, width, height);
