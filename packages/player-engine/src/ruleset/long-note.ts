@@ -37,6 +37,17 @@ export function isChargeLongNoteMode(mode: RulesetLongNoteMode): boolean {
 }
 
 /**
+ * True when a long note is a back-spin scratch (BSS, #940): a charge note (CN / HCN, as the ruleset plays it) on a
+ * scratch lane. Its tail is judged on a spin the other way (`core/scratch-spin.ts`) instead of on the release, and a
+ * release alone settles nothing: the tail waits for the reverse spin or is missed once its late window closes, as in
+ * beatoraja (`JudgeManager`, "BSS終端処理"). Only the rulesets that judge a long note's tail have one — beatoraja's CN /
+ * HCN and every That-Which-Must-Not-Be-Named long note; LR2 plays every long note as an LN, released without a tail judgment.
+ */
+export function isBackSpinScratch(playedMode: RulesetLongNoteMode | undefined, scratch: boolean): boolean {
+  return scratch && playedMode !== undefined && isChargeLongNoteMode(playedMode);
+}
+
+/**
  * True when a long note the player never held owes a SECOND miss for its tail. Charge modes score head and tail
  * separately, so a note missed at the head owes two POORs — except under That-Which-Must-Not-Be-Named, where a broken head cancels the tail
  * outright (`headBadSkipsTail`). `playedMode` is the mode the ruleset plays the note as, `undefined` for a tap.

@@ -19,6 +19,7 @@ import {
   type ReplayOptionChange,
 } from './options.ts';
 import type { LongNoteMode, RandomDraw } from '@be-music/chart-model';
+import { isScratchSpin, type ScratchSpin } from '../core/scratch-spin.ts';
 import {
   GAUGE_TYPES,
   isGaugeType,
@@ -118,6 +119,12 @@ export interface ReplayInputEvent {
   channels: string[];
   /** Raw input tokens (`'z'`, `'shift-left'`, ...) — diagnostic only; simulators use `channels`. */
   tokens?: string[];
+  /**
+   * The way a scratch press turned the turntable (`'cw'` / `'ccw'`): the direction a controller reported, or the
+   * keyboard's odd-even key. A back-spin scratch's tail is judged on a press spinning the other way from the press
+   * that hit its head, so simulators read it. Only on a `down`; absent when the press reported no spin.
+   */
+  spin?: ScratchSpin;
   /**
    * An `up` the engine inferred: the input reported no key releases (a terminal without the kitty keyboard protocol),
    * so this is the instant the engine took the key as let go — when its repeats stopped for longer than the hold
@@ -692,6 +699,12 @@ function parseInputs(value: unknown): ReplayInputEvent[] {
         throw new ReplayParseError(`inputs[${index}].tokens: expected string[]`);
       }
       event.tokens = record.tokens as string[];
+    }
+    if (record.spin !== undefined) {
+      if (!isScratchSpin(record.spin) || action !== 'down') {
+        throw new ReplayParseError(`inputs[${index}].spin: expected 'cw' | 'ccw' on a 'down'`);
+      }
+      event.spin = record.spin;
     }
     if (record.inferred !== undefined) {
       if (record.inferred !== true || action !== 'up') {

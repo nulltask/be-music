@@ -1045,7 +1045,7 @@
           }
         },
         "perfect": {
-          "inputs": 184,
+          "inputs": 192,
           "lr2": {
             "ruleset": "lr2/0",
             "judge": {
@@ -1054,7 +1054,7 @@
               "good": 0,
               "bad": 0,
               "poor": 2,
-              "emptyPoor": 0
+              "emptyPoor": 1
             },
             "fast": 0,
             "slow": 0,
@@ -1078,7 +1078,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 1
             },
             "fast": 0,
             "slow": 0,
@@ -1124,7 +1124,7 @@
               "good": 0,
               "bad": 0,
               "poor": 2,
-              "emptyPoor": 0,
+              "emptyPoor": 1,
               "exScore": 168,
               "score": 200000,
               "combo": 84,
@@ -1151,7 +1151,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0,
+              "emptyPoor": 1,
               "exScore": 168,
               "score": 168,
               "combo": 84,
@@ -1197,7 +1197,7 @@
           }
         },
         "offset": {
-          "inputs": 158,
+          "inputs": 164,
           "lr2": {
             "ruleset": "lr2/0",
             "judge": {
@@ -1771,7 +1771,7 @@
           }
         },
         "perfect": {
-          "inputs": 184,
+          "inputs": 192,
           "lr2": {
             "ruleset": "lr2/0",
             "judge": {
@@ -1780,7 +1780,7 @@
               "good": 0,
               "bad": 0,
               "poor": 2,
-              "emptyPoor": 0
+              "emptyPoor": 1
             },
             "fast": 0,
             "slow": 0,
@@ -1804,7 +1804,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 1
             },
             "fast": 0,
             "slow": 0,
@@ -1850,7 +1850,7 @@
               "good": 0,
               "bad": 0,
               "poor": 2,
-              "emptyPoor": 0,
+              "emptyPoor": 1,
               "exScore": 168,
               "score": 200000,
               "combo": 84,
@@ -1877,7 +1877,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0,
+              "emptyPoor": 1,
               "exScore": 168,
               "score": 168,
               "combo": 84,
@@ -1923,7 +1923,7 @@
           }
         },
         "offset": {
-          "inputs": 158,
+          "inputs": 164,
           "lr2": {
             "ruleset": "lr2/0",
             "judge": {

@@ -95,7 +95,14 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeEffectHand
     switch (effect.kind) {
       case 'record-input':
         host.onInput?.(effect);
-        replayRecorder?.recordInput(effect.action, effect.seconds, effect.tokens, effect.channels, effect.inferred);
+        replayRecorder?.recordInput(
+          effect.action,
+          effect.seconds,
+          effect.tokens,
+          effect.channels,
+          effect.inferred,
+          effect.spin,
+        );
         return;
       case 'record-empty-poor':
         replayRecorder?.recordEmptyPoor();
