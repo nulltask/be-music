@@ -23,6 +23,7 @@ import {
   putChartDocument,
   type PlayedChart,
 } from '../scores/played-chart.ts';
+import { checkChartPlayOptions } from '../scores/chart-play-options.ts';
 import { identifyPlay, type SubmissionDeps } from '../scores/submit.ts';
 import { mergeBestScores } from '../scoring/best.ts';
 import { clearLampRank } from '@be-music/player-engine/ruleset';
@@ -138,9 +139,15 @@ export async function submitCourseScore(
   for (const [index, stage] of eligibility.stages.entries()) {
     const check = await checkPlayedChart(db, { ...stage, ...input.stages[index]! });
     if (!check.ok) return { status: 'rejected', httpStatus: check.httpStatus, reason: check.reason, stage: index };
+    const chartOptions = checkChartPlayOptions(playedLogs[index]!, input.stages[index]!.playDocument);
+    if (!chartOptions.ok) return { status: 'rejected', httpStatus: 422, reason: chartOptions.reason, stage: index };
     playedCharts.push(check);
   }
 
+  // A NONSTOP run's stitched play runs no stage's gameplay options.
+  if (nonstop !== undefined && !checkChartPlayOptions(courseLog.nonstop!.replay, undefined).ok) {
+    return { status: 'rejected', httpStatus: 422, reason: 'chart-play-options-mismatch' };
+  }
   const playedRuleset = resolveCoursePlayedRuleset(courseLog);
   if (playedRuleset === undefined) {
     return { status: 'rejected', httpStatus: 422, reason: 'course-ruleset-mismatch' };

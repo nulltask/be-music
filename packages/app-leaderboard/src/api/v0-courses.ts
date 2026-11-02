@@ -52,6 +52,7 @@ const COURSE_REJECTIONS = [
   'play-document-fingerprint-mismatch',
   'chart-document-not-a-document',
   'chart-document-fingerprint-mismatch',
+  'chart-play-options-mismatch',
   'course-ruleset-mismatch',
   'stage-chart-required',
   'stage-chart-invalid',

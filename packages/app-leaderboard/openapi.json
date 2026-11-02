@@ -918,7 +918,7 @@
             }
           },
           "422": {
-            "description": "The play cannot be stored: an auto play, a malformed replay, a replay without fingerprints, or a fingerprint document that does not hash to the replay’s fingerprint.",
+            "description": "The play cannot be stored: an auto play, a malformed replay, a replay without fingerprints, a fingerprint document that does not hash to the replay’s fingerprint, or a replay whose chart gameplay options are not the ones its chart runs.",
             "content": {
               "application/json": {
                 "schema": {
@@ -933,7 +933,8 @@
                         "play-document-not-a-document",
                         "play-document-fingerprint-mismatch",
                         "chart-document-not-a-document",
-                        "chart-document-fingerprint-mismatch"
+                        "chart-document-fingerprint-mismatch",
+                        "chart-play-options-mismatch"
                       ],
                       "type": "string",
                       "description": "Error code."
@@ -2525,6 +2526,7 @@
                         "play-document-fingerprint-mismatch",
                         "chart-document-not-a-document",
                         "chart-document-fingerprint-mismatch",
+                        "chart-play-options-mismatch",
                         "course-ruleset-mismatch",
                         "stage-chart-required",
                         "stage-chart-invalid",
