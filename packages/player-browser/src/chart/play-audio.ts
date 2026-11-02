@@ -20,6 +20,7 @@ import {
   type TempoPitchMode,
   type TimeStretchAlgorithm,
 } from '../runtime/play-tempo.ts';
+import type { ChartSampleCache, ChartSampleLease } from '../runtime/chart-sample-cache.ts';
 import { decodedSampleKey } from '../runtime/web-audio-session.ts';
 import { prepareWAVPlaybackBuffer, readNativeAudioSampleRate } from '../runtime/wav-playback.ts';
 import { logger } from '../logger.ts';
@@ -66,6 +67,12 @@ export interface LoadPlaySamplesOptions {
    * keep the level they were authored at.
    */
   peakGain?: boolean;
+  /**
+   * The decoded samples of the chart played last (`AudioService.chartSamples`). A play of the same chart takes its
+   * decodes from there and decodes only what is missing; a play of another chart releases them first. Without it,
+   * every sample decodes.
+   */
+  sampleCache?: ChartSampleCache;
 }
 
 /**
@@ -95,8 +102,21 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   const concurrency = resolveAudioDecodeConcurrency(
     typeof navigator === 'undefined' ? undefined : navigator.hardwareConcurrency,
   );
+  const lease = options.sampleCache?.claim({
+    source,
+    chartPath,
+    pathPrefix,
+    sampleRate: audioContext.sampleRate,
+  });
   await runWithConcurrency(wavPaths, concurrency, async (path) => {
     if (isCancelled()) return;
+    const cached = lease?.get(path);
+    // A path that needs its native rate decodes again when the cached decode has none (its `#EXWAV` changed branch).
+    if (cached !== undefined && (!nativeRatePaths.has(path) || cached.nativeSampleRate !== undefined)) {
+      if (cached.nativeSampleRate !== undefined) nativeRates.set(path, cached.nativeSampleRate);
+      samples.set(decodedSampleKey(path), cached.buffer);
+      return;
+    }
     const attempted = new Set<BrowserAssetEntry>();
     while (!isCancelled()) {
       const entry = resolveChartAudioAsset(source, chartPath, path, {
@@ -111,14 +131,18 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
         if (isCancelled()) return;
         if (!bytes) continue;
         const decoded = await audioContext.decodeAudioData(bytes.slice().buffer);
+        let nativeSampleRate: number | undefined;
         if (nativeRatePaths.has(path)) {
           // The PCM decoded; an unreadable container header only loses the EXWAV native-rate reference.
           try {
-            nativeRates.set(path, await readNativeAudioSampleRate(bytes));
+            nativeSampleRate = await readNativeAudioSampleRate(bytes);
+            nativeRates.set(path, nativeSampleRate);
           } catch (error) {
             log.debug('native sample rate unavailable', { path, error });
           }
         }
+        // Kept even when the play was abandoned meanwhile: an F5 during loading picks up from here.
+        lease?.set(path, nativeSampleRate !== undefined ? { buffer: decoded, nativeSampleRate } : { buffer: decoded });
         if (isCancelled()) return;
         // Keep the declared WAV name as the key even when an alternate codec supplied the PCM.
         samples.set(decodedSampleKey(path), decoded);
@@ -129,6 +153,8 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
       }
     }
   });
+  // A play that loaded every sample leaves the cache with only those: no other `#RANDOM` branch's samples stay behind.
+  if (!isCancelled()) lease?.retain(wavPaths);
   const stretchResources: Record<string, string> = {};
   for (const [key, path] of Object.entries(wavResources)) {
     const modifiers = playbackModifiers.get(key);
@@ -149,6 +175,8 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   }
   // After stretch, so a keep-pitch resample's new peak is what the gain sees. `#VOLWAV` still applies at playback.
   if (options.peakGain === true && !isCancelled()) {
+    // The gain scales in place, so a cached decode the play would scale is copied first.
+    if (lease !== undefined) copyCachedBuffers(audioContext, samples, new Set(Object.values(stretchResources)), lease);
     const audibleBuffers = new Set(
       Object.values(stretchResources)
         .map((key) => samples.get(key))
@@ -157,4 +185,27 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
     applyChartPeakGain(audibleBuffers);
   }
   return stretched;
+}
+
+/** Replaces each of `keys`' buffers that `lease` holds with a copy of it in `samples`, one copy per buffer. */
+function copyCachedBuffers(
+  context: BaseAudioContext,
+  samples: Map<string, AudioBuffer>,
+  keys: ReadonlySet<string>,
+  lease: ChartSampleLease,
+): void {
+  const copies = new Map<AudioBuffer, AudioBuffer>();
+  for (const key of keys) {
+    const buffer = samples.get(key);
+    if (buffer === undefined || !lease.holds(buffer)) continue;
+    let copy = copies.get(buffer);
+    if (copy === undefined) {
+      copy = context.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+      for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+        copy.copyToChannel(buffer.getChannelData(channel), channel);
+      }
+      copies.set(buffer, copy);
+    }
+    samples.set(key, copy);
+  }
 }

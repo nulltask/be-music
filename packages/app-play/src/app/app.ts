@@ -638,6 +638,8 @@ export class PlayerWebApp {
     // The first scene shown mounts the Pixi host (`mountStage`). Keep its promise so URL auto-load (below) drives its own
     // `showSelect` only once the first select screen is up.
     const initialSelectReady = this.showSelect();
+    // A page put away (closed, or into the back/forward cache) keeps no decoded samples for a retry.
+    window.addEventListener('pagehide', () => this.audio.chartSamples.release());
 
     // The Debug Menu's file pickers, and files dragged onto the page.
     this.dropTarget.wire();
@@ -761,8 +763,13 @@ export class PlayerWebApp {
     else this.beatorajaSkinOptions.clear();
   }
 
-  /** Shows the select screen (`SelectRoute.showSelect`): at start-up, and on every way back to it. */
+  /**
+   * Shows the select screen (`SelectRoute.showSelect`): at start-up, and on every way back to it. The decoded samples
+   * kept for a quick retry go: the next play is most likely another chart, and they would sit through the select
+   * screen.
+   */
   private showSelect(): Promise<void> {
+    this.audio.chartSamples.release();
     return this.selectRoute.showSelect();
   }
 
