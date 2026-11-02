@@ -246,6 +246,8 @@ beatoraja ルールでは Debug Menu の **CUSTOM JUDGE (beatoraja)** をオン�
 
 どのルールでも、Debug Menu の **PRACTICE** をオンにするか、beatoraja の選曲スキンの PRACTICE ボタン（315）を押します。PLAY ボタンは通常のモードで始めます。設定は beatoraja の `PracticeConfiguration` に従います。**START TIME ms** と **END TIME ms (0 = end)** は 100 ms 単位、**GAUGE TYPE**、**GAUGE CATEGORY**、**GAUGE VALUE** は 1〜120（既定 20、ゲージの範囲に収めます）、ほかに **JUDGERANK (0 = chart)** と **TOTAL (0 = chart)** があります。対象は単一の譜面で、コース・NONSTOP・リプレイには適用しません。
 
+2 つの時間の下には範囲ピッカーがあり、選曲画面のカーソル位置の譜面のノーツ密度グラフ（譜面の始まりから最後の小節を閉じる小節線まで、譜面全体）を、開始と終了の 2 つのハンドルとともに描きます（[#948](https://github.com/nulltask/be-music/issues/948)）。マウスか指でドラッグします。押した位置に近いほうのハンドルをつかみ、範囲を 1000 ms 以上に保てる最も近い小節の頭に吸着します。終了のハンドルを最後の小節線に合わせると END TIME は 0（最後まで）になります。キャプションには範囲を `m:ss.s` と両端の BMS の小節番号（`#009`）で表示し、START TIME / END TIME はハンドルに追従し、入力した時間にはハンドルが追従します。ピッカーは PRACTICE がオンのときだけ表示し、ほかの PRACTICE の設定と同様にプレイ中は操作できません。選曲画面が解決済みの譜面（小節のタイムラインと判定対象のノーツ）を読むため、`#RANDOM` のある譜面では曲リストと同じく条件なしの内容を表示します。
+
 PRACTICE は beatoraja のモードで、設定は判定ルールが読みます（[#933](https://github.com/nulltask/be-music/issues/933)）。
 
 | 設定           | beatoraja                                                                       | LR2                                                                                        | AC（`????`）                               |
