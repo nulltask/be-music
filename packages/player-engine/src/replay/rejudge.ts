@@ -17,10 +17,12 @@ import { simulateReplay, type SimulateReplayOptions } from './simulate.ts';
  *
  * - `gauge` — the replay's bare gauge is not one the ruleset defines (`P-ATTACK` under beatoraja, `EX-HARD` under LR2,
  *   `DEATH` under AC outside a course). It is never mapped to a lookalike.
- * - `custom-judge` — CUSTOM JUDGE has no reading outside beatoraja yet.
- * - `gauge-auto-shift` — gauge auto-shift has no reading outside beatoraja yet.
+ * - `custom-judge` — CUSTOM JUDGE stays beatoraja's (#933): it has no reading under another ruleset.
+ *
+ * Gauge auto-shift is carried under every ruleset, along the target's own gauge ladder (`resolveGaugeShiftLadder`), so
+ * it is no reason by itself (#933).
  */
-export type ReplayNotSimulatedReason = 'gauge' | 'custom-judge' | 'gauge-auto-shift';
+export type ReplayNotSimulatedReason = 'gauge' | 'custom-judge';
 
 /** One ruleset's outcome of re-judging a replay (ADR 0019). */
 export type ReplayRejudgeOutcome =
@@ -73,7 +75,6 @@ export function findReplayNotSimulatedReason(
     return 'gauge';
   if (ruleset === 'beatoraja') return undefined;
   if (replay.play.customJudge !== undefined) return 'custom-judge';
-  if (replay.play.gaugeAutoShift !== undefined && replay.play.gaugeAutoShift !== 'NONE') return 'gauge-auto-shift';
   return undefined;
 }
 

@@ -284,6 +284,13 @@ test('gauge auto-shift defaults to source NONE and accepts CONTINUE', () => {
   expect(resolvePlayOptionValue('gaugeAutoShift', 'REVIVE')).toBeUndefined();
 });
 
+test('a stored PRACTICE gauge may be any ruleset’s own (#933)', () => {
+  expect(DEFAULT_PLAY_OPTIONS.practiceGauge).toBe('NORMAL');
+  for (const gauge of ['HAZARD', 'EXHARDCLASS', 'GROOVE', 'DEATH', 'P-ATTACK', 'ASSISTED-EASY'])
+    expect(resolvePlayOptionValue('practiceGauge', gauge)).toBe(gauge);
+  expect(resolvePlayOptionValue('practiceGauge', 'GRADE')).toBeUndefined();
+});
+
 test('ADD LN has the source default rate and clamps the configurable source probability', () => {
   expect(DEFAULT_PLAY_OPTIONS.longNoteRate).toBe(1);
   expect(resolvePlayOptionValue('longNoteModifier', 'ADD_LN')).toBe('ADD_LN');

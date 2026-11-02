@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import {
+  GAUGE_AUTO_SHIFTS,
   GAUGE_TYPES,
   LR2_GAUGE_TYPES,
   isGaugeType,
@@ -36,41 +37,15 @@ it('separates source ASSIST EASY from the original LR2 gauge choices', () => {
   expect(resolveGaugeTypes('____')).toContain('ASSIST-EASY');
 });
 
-it('CONTINUE keeps the same dead gauge and NONE ends judging, with an explicit source gate', () => {
-  expect(resolveGaugeEndOnFailure('CONTINUE', 'beatoraja', true)).toBe(false);
-  expect(resolveGaugeEndOnFailure('NONE', 'beatoraja', false)).toBe(true);
-  expect(resolveGaugeEndOnFailure(undefined, 'beatoraja', false)).toBe(false);
-  expect(resolveGaugeEndOnFailure(undefined, 'lr2')).toBe(true);
-  for (const ruleset of ['lr2', '____'] as const)
-    expect(() => resolveGaugeEndOnFailure('CONTINUE', ruleset)).toThrow(/only for beatoraja/);
+it('NONE ends judging when a survival gauge empties and every other policy keeps judging, under every ruleset', () => {
+  expect(resolveGaugeEndOnFailure('NONE', false)).toBe(true);
+  for (const policy of ['CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER'] as const)
+    expect(resolveGaugeEndOnFailure(policy, true)).toBe(false);
+  expect(GAUGE_AUTO_SHIFTS).toEqual(['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER']);
 });
 
-it('SURVIVAL TO GROOVE continues after survival failure only for beatoraja', () => {
-  expect(resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'beatoraja')).toBe(false);
-  expect(() => resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'lr2')).toThrow(/beatoraja/);
-  expect(() => resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', '____')).toThrow(/beatoraja/);
-});
-
-it('BEST CLEAR keeps judging while the parallel gauges determine the effective outcome', () => {
-  expect(resolveGaugeEndOnFailure('BEST_CLEAR', 'beatoraja')).toBe(false);
-  expect(() => resolveGaugeEndOnFailure('BEST_CLEAR', 'lr2')).toThrow(/beatoraja/);
-});
-
-it('SELECT TO UNDER keeps judging without granting another source ruleset gauge shifting', () => {
-  expect(resolveGaugeEndOnFailure('SELECT_TO_UNDER', 'beatoraja')).toBe(false);
-  expect(() => resolveGaugeEndOnFailure('SELECT_TO_UNDER', '____')).toThrow(/beatoraja/);
-});
-
-it('offers P.ATTACK only for LR2 while preserving its recorded identifier', () => {
-  expect(isGaugeType('P-ATTACK')).toBe(true);
-  expect(resolveGaugeTypes('lr2')).toContain('P-ATTACK');
-  expect(resolveGaugeTypes('beatoraja')).not.toContain('P-ATTACK');
-  expect(resolveGaugeTypes('____')).not.toContain('P-ATTACK');
-});
-
-it('G.ATTACK is the sixth LR2 gauge and absent from other reference menus', () => {
-  expect(isGaugeType('G-ATTACK')).toBe(true);
-  expect(resolveGaugeTypes('lr2')[5]).toBe('G-ATTACK');
-  expect(resolveGaugeTypes('beatoraja')).not.toContain('G-ATTACK');
-  expect(resolveGaugeTypes('____')).not.toContain('G-ATTACK');
+it('keeps the host-level contract without a policy and rejects an unknown one', () => {
+  expect(resolveGaugeEndOnFailure(undefined, false)).toBe(false);
+  expect(resolveGaugeEndOnFailure(undefined)).toBe(true);
+  expect(() => resolveGaugeEndOnFailure('SOMETIMES' as never)).toThrow(RangeError);
 });

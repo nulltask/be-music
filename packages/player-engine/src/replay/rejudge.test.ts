@@ -67,18 +67,21 @@ describe('findReplayNotSimulatedReason', () => {
     expect(findReplayNotSimulatedReason(couple, 'beatoraja', 2)).toBe('gauge');
   });
 
-  test('CUSTOM JUDGE and gauge auto-shift have no reading outside beatoraja yet', () => {
+  test('CUSTOM JUDGE has no reading outside beatoraja', () => {
     const customJudge = makeReplay({
       judgeRuleset: 'beatoraja',
       customJudge: { ...DEFAULT_BEATORAJA_CUSTOM_JUDGE },
     });
     expect(findReplayNotSimulatedReason(customJudge, 'beatoraja')).toBeUndefined();
     expect(findReplayNotSimulatedReason(customJudge, 'lr2')).toBe('custom-judge');
-    const autoShift = makeReplay({ judgeRuleset: 'beatoraja', gaugeAutoShift: 'CONTINUE' });
-    expect(findReplayNotSimulatedReason(autoShift, '____')).toBe('gauge-auto-shift');
-    expect(
-      findReplayNotSimulatedReason({ ...autoShift, play: { ...autoShift.play, gaugeAutoShift: 'NONE' } }, 'lr2'),
-    ).toBe(undefined);
+  });
+
+  test('gauge auto-shift is carried under every ruleset (#933)', () => {
+    for (const gaugeAutoShift of ['CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER'] as const) {
+      const autoShift = makeReplay({ judgeRuleset: 'beatoraja', gaugeAutoShift });
+      for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+        expect(findReplayNotSimulatedReason(autoShift, ruleset)).toBeUndefined();
+    }
   });
 });
 

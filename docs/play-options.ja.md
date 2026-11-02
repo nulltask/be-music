@@ -17,7 +17,7 @@ flowchart LR
   q -->|"S-RANDOM"| rules["判定ルール自身のもの"]
 ```
 
-それ以外はルールに従います。判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）はルールそのものです。LN MODE、PRACTICE、CUSTOM JUDGE、ゲージの自動切り替え、ゲージの種類、判定アルゴリズムも当面はルールに従います。参照元が混ざったプレイを記録でどう扱うかは[アシストと記録の方針](#アシストと記録の方針)で説明します。[#774](https://github.com/nulltask/be-music/issues/774) で管理しています。
+それ以外はルールに従います。判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）はルールそのものです。LN MODE、CUSTOM JUDGE、ゲージの種類、判定アルゴリズムもルールに従います。[PRACTICE](#practice) と[ゲージオートシフト](#ゲージオートシフト)はどのルールでも使え、そのルールで読みます。PRACTICE はそのルールのゲージを並べ、自動切り替えはそのルールのゲージの並びに沿って切り替えます（[#933](https://github.com/nulltask/be-music/issues/933)）。参照元が混ざったプレイを記録でどう扱うかは[アシストと記録の方針](#アシストと記録の方針)で説明します。[#774](https://github.com/nulltask/be-music/issues/774) で管理しています。
 
 ## アシストと記録の方針
 
@@ -53,7 +53,7 @@ flowchart LR
 | CUSTOM JUDGE                                                                                 | beatoraja | `assist`  | 100 % を超える倍率がある                                             | `BMSPlayer` L208-L213                                     |
 | デバッグ用の判定幅上書き                                                                     | be-music  | `assist`  | CUSTOM JUDGE と同じく判定幅を広げる                                  |                                                           |
 | BATTLE                                                                                       | AC 34     | `no-save` | `____:BATTLE`、または `____` のルールでの参照元のない BATTLE         | AC 34 のプレイオプション「スコアデータは保存されません」  |
-| PRACTICE                                                                                     | beatoraja | `no-save` |                                                                      | beatoraja の PRACTICE は何も保存しない                    |
+| PRACTICE                                                                                     | beatoraja | `no-save` | どのルールでも                                                       | beatoraja の PRACTICE は何も保存しない                    |
 | ANY KEY                                                                                      | PC        | `no-save` | すべてのルール                                                       | PC 版：ANY KEY のプレイは NO PLAY                         |
 
 アシストにならないもの: MIRROR、RANDOM、S-RANDOM、R-RANDOM、SYNCHRONIZE / SYMMETRY RANDOM、M-RAN、DP FLIP、カバーと LIFT、ハイスピードのオプション、表示の CONSTANT（beatoraja の `enableConstant` は描画の設定）、地雷の ADD、スクロールの ADD、ADD LN、判定アルゴリズム、ゲージ（ASSIST EASY と ASSISTED EASY はゲージのランプで、アシストではありません）、ゲージの自動切り替え。PC 版の NO PLAY になるオプション（KEY ASSIST、ANY KEY、PC 版自身の H-RANDOM と BATTLE）は PC 版の規則で、ほかの参照元には当てはめません。ここでの H-RANDOM は beatoraja のアルゴリズムなので、beatoraja のものとして区分します。PC 版を参照元とするオプションは `____` のルールで `no-save` になります。Be-Music が提供するのは ANY KEY です（[ANY KEY](#any-key)）。
@@ -138,7 +138,7 @@ beatoraja ルールでは Debug Menu の **Gauge → ASSIST EASY**、???? ルー
 
 ## 譜面が選ぶゲージ
 
-`#OPTION` で nanasigroove の `774:GAMELEVEL_*` か `774:EXTRA_*` を指定した譜面は、プレイヤーの **Gauge** の選択の代わりに自らゲージを選びます（2 人プレイでは両プレイヤーの選択を置き換えます）。各 ruleset は組み合わせに最も近いゲージで遊びます。たとえば HYPER は HARD、NORMAL と EXTRA VERYHARD は EX-HARD（LR2 では HARD）、DANGER は DEATH（???? では EX-HARD）です。コースのステージはコースのゲージを、beatoraja PRACTICE は自身のゲージを保ち、ゲージオートシフトは引き続き働きます。リプレイには遊んだゲージを記録し、ランプはそのゲージのものになります。対応表全体は [ADR 0034](./adr/0034-chart-authored-gauge-options.ja.md) にあります。
+`#OPTION` で nanasigroove の `774:GAMELEVEL_*` か `774:EXTRA_*` を指定した譜面は、プレイヤーの **Gauge** の選択の代わりに自らゲージを選びます（2 人プレイでは両プレイヤーの選択を置き換えます）。各 ruleset は組み合わせに最も近いゲージで遊びます。たとえば HYPER は HARD、NORMAL と EXTRA VERYHARD は EX-HARD（LR2 では HARD）、DANGER は DEATH（???? では EX-HARD）です。コースのステージはコースのゲージを、PRACTICE は自身のゲージを保ち、ゲージオートシフトは引き続き働きます。リプレイには遊んだゲージを記録し、ランプはそのゲージのものになります。対応表全体は [ADR 0034](./adr/0034-chart-authored-gauge-options.ja.md) にあります。
 
 ## 判定アルゴリズム
 
@@ -244,9 +244,20 @@ beatoraja ルールでは Debug Menu の **CUSTOM JUDGE (beatoraja)** をオン�
 
 ## PRACTICE
 
-beatoraja ルールでは Debug Menu の **PRACTICE (beatoraja)** をオンにするか、beatoraja の選曲スキンの PRACTICE ボタン（315）を押します。PLAY ボタンは通常のモードで始めます。設定は beatoraja の `PracticeConfiguration` に従います。**START TIME ms** と **END TIME ms (0 = end)** は 100 ms 単位、**GAUGE TYPE** は ASSIST EASY〜EXHARD GRADE、**GAUGE CATEGORY** は **Play mode** または beatoraja のカテゴリー、**GAUGE VALUE** は 1〜120（既定 20）、ほかに **JUDGERANK (0 = chart)** と **TOTAL (0 = chart)** があります。対象は単一の譜面で、コース・NONSTOP・リプレイには適用しません。
+どのルールでも、Debug Menu の **PRACTICE** をオンにするか、beatoraja の選曲スキンの PRACTICE ボタン（315）を押します。PLAY ボタンは通常のモードで始めます。設定は beatoraja の `PracticeConfiguration` に従います。**START TIME ms** と **END TIME ms (0 = end)** は 100 ms 単位、**GAUGE TYPE**、**GAUGE CATEGORY**、**GAUGE VALUE** は 1〜120（既定 20、ゲージの範囲に収めます）、ほかに **JUDGERANK (0 = chart)** と **TOTAL (0 = chart)** があります。対象は単一の譜面で、コース・NONSTOP・リプレイには適用しません。
 
-beatoraja の `PracticeModifier` と同様に、範囲外の判定対象はすべて背景に移すため、そのキー音は鳴り続けます。どちらかの端が範囲外のロングノートも背景に移します。範囲の終わりは開始から少なくとも 1000 ms 後で、プレイは範囲の 1000 ms 前から始まり、終わりの 1000 ms 後まで続きます。TOTAL は範囲で切り出す前のノート数を基準にします。プレイテンポとレーンのオプションは通常どおり適用しますが、beatoraja が譜面の変換を PLAY と AUTOPLAY でだけ適用するのに合わせ、BATTLE、ロングノート・地雷・スクロールの変換、EXTRA、LR2 の EXTRA MODE はオフにします。範囲が終わると ESC を押すまですぐに繰り返します。練習のプレイはリプレイを記録せず、記録も更新しません。
+PRACTICE は beatoraja のモードで、設定は判定ルールが読みます（[#933](https://github.com/nulltask/be-music/issues/933)）。
+
+| 設定           | beatoraja                                                                       | LR2                                                                                        | AC（`????`）                               |
+| -------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| GAUGE TYPE     | ASSIST EASY・EASY・NORMAL・HARD・EX-HARD・HAZARD・GRADE・EX GRADE・EXHARD GRADE | GROOVE・HARD・HAZARD・EASY・P.ATTACK・G.ATTACK                                             | ASSISTED EASY・EASY・NORMAL・HARD・EX-HARD |
+| GAUGE CATEGORY | **Play mode** または beatoraja のカテゴリー                                     | 隠す（ゲージの表が 1 つ）                                                                  | 隠す（ゲージの表が 1 つ）                  |
+| JUDGERANK      | beatoraja の judgerank（`NORMAL` ルールで rank 2 = 75）                         | LR2 の `#RANK` の表での judgerank（%）。25・50・75・100 が `#RANK` 0〜3（VERY HARD〜EASY） | 隠す（判定幅が固定）                       |
+| TOTAL          | NORMAL 以下のゲージでは範囲内に残ったノーツ数で換算                             | そのまま使う。0 なら譜面全体の TOTAL                                                       | 隠す（ゲージが TOTAL を使わない）          |
+
+ルールを切り替えたとき、選んでいたゲージがほかのルールのものなら、そのルールの既定のゲージ（NORMAL、LR2 では GROOVE）に戻します。
+
+beatoraja の `PracticeModifier` と同様に、範囲外の判定対象はすべて背景に移すため、そのキー音は鳴り続けます。どちらかの端が範囲外のロングノートも背景に移します。範囲の終わりは開始から少なくとも 1000 ms 後で、プレイは範囲の 1000 ms 前から始まり、終わりの 1000 ms 後まで続きます。beatoraja のルールでは TOTAL を範囲で切り出す前のノート数を基準に換算します。プレイテンポとレーンのオプションは通常どおり適用しますが、beatoraja が譜面の変換を PLAY と AUTOPLAY でだけ適用するのに合わせ、BATTLE、ロングノート・地雷・スクロールの変換、EXTRA、LR2 の EXTRA MODE はオフにします。範囲が終わると ESC を押すまですぐに繰り返します。練習のプレイはどのルールでもリプレイを記録せず、記録も更新せず、Leaderboard にも送りません。
 
 参照元：beatoraja 0.8.9 の [`PracticeConfiguration`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/PracticeConfiguration.java) と [`PracticeModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/PracticeModifier.java)。対応 Issue は [#749](https://github.com/nulltask/be-music/issues/749) です。
 
@@ -364,9 +375,31 @@ Debug Menu はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示�
 
 ## ゲージオートシフト
 
-beatoraja ルールでは、Debug Menu の **Gauge auto-shift (beatoraja)** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge**（**ASSIST EASY**（既定）、**EASY**、**NORMAL**）は後の 2 つに適用します。いずれも beatoraja 0.8.9 の `BMSPlayer` に従います。NONE はサバイバルゲージがゼロになった時点でプレイを終了します。CONTINUE はゼロになったゲージのまま最後までプレイを続け、ゲージはゼロのままです。SURVIVAL TO GROOVE は譜面の開始から NORMAL ゲージを並行して動かし、サバイバルゲージがゼロになると NORMAL の現在値で続行します。コースのクラスゲージでは切り替えません。BEST CLEAR は ASSIST EASY・EASY・NORMAL・HARD・EX-HARD・HAZARD を並行して動かし、ゼロより大きくクリア条件を満たす最も上のゲージを使います。最低ゲージ（選択したゲージの方が下ならそのゲージ）より下には移らず、条件を満たすゲージがなければ最低ゲージのままです。SELECT TO UNDER は選択したゲージを上限として同じ処理をします。コースではどちらも CLASS から上の CLASS・EXCLASS・EXHARDCLASS から選び、各クラスゲージはそれぞれの値を次のステージへ持ち越します。ほかのルールでは両方の項目を隠し、切り替えると NONE に戻し、直接指定した場合はエラーにします。
+どのルールでも、Debug Menu の **Gauge auto-shift** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge** は後の 2 つに適用します。方式は beatoraja 0.8.9 の `BMSPlayer` に従い、各ルールは自分のゲージに、自分のゲージの並びに沿って適用します（[#933](https://github.com/nulltask/be-music/issues/933)）。
 
-リプレイには `play.gaugeAutoShift` と `play.bottomShiftableGauge` を記録します。NONE では `play.endOnFailure` も記録し、ほかの方式では最後まで判定を続けます。結果の `gauge.type` はプレイ終了時のゲージを示します。BEST CLEAR と SELECT TO UNDER では `gauge.values` に並行するすべてのゲージの値を保持し、コースのステージの `play.course.carryIn.gauges` に引き継いだクラスゲージを保持します。beatoraja スキンのゲージオートシフト（78）と最低シフトゲージ（341）のボタンは選択肢を参照元の順で巡回します。Native スキンのプレイ設定パネルには方式・最低ゲージ・実効ゲージを表示します。方式から入力アシストを推測しません。シフト後のクリアの順位付けは Leaderboard 側で決めます。
+| ルール       | 単曲（緩い順）                                   | 段位コース                     | EXPERT / NONSTOP コース                        |
+| ------------ | ------------------------------------------------ | ------------------------------ | ---------------------------------------------- |
+| beatoraja    | ASSIST EASY・EASY・NORMAL・HARD・EX-HARD・HAZARD | CLASS・EXCLASS・EXHARDCLASS    | CLASS・EXCLASS・EXHARDCLASS                    |
+| LR2          | EASY・GROOVE・HARD・HAZARD（`DEATH`）            | GRADE・GRADE-HARD・GRADE-DEATH | COURSE-EASY・COURSE・COURSE-HARD・COURSE-DEATH |
+| AC（`????`） | ASSISTED EASY・EASY・NORMAL・HARD・EX-HARD       | CLASS・EXCLASS・EXHARDCLASS    | CLASS・EXCLASS・EXHARDCLASS                    |
+
+```mermaid
+flowchart LR
+  death["HAZARD"] --> hard["HARD"] --> groove["GROOVE"] --> easy["EASY"]
+```
+
+図は LR2 の単曲の並びで、BEST CLEAR が下げていく順です。AC にはコース以外で HAZARD がなく、コースのゲージは beatoraja のクラスゲージです。
+
+- NONE はサバイバルゲージがゼロになった時点でプレイを終了します。
+- CONTINUE はゼロになったゲージのまま最後までプレイを続け、ゲージはゼロのままです。
+- SURVIVAL TO GROOVE は譜面の開始からルールの既定の回復ゲージ（NORMAL、LR2 では GROOVE）をサバイバルゲージと並行して動かし、サバイバルゲージがゼロになるとその現在値で続行します。コースのゲージでは切り替えず、サバイバルゲージでないゲージには切り替える元がありません。
+- BEST CLEAR は並び全体を並行して動かし、ゼロより大きくクリア条件を満たす最も上のゲージを使います。最低ゲージ（選択したゲージの方が下ならそのゲージ）より下には移らず、条件を満たすゲージがなければ最低ゲージのままです。
+- SELECT TO UNDER は選択したゲージを上限として同じ処理をします。
+- コースではどちらもルールのコースのゲージから緩い方から上へ選び、各コースのゲージはそれぞれの値を次のステージへ持ち越します。
+
+**Lowest auto-shift gauge** は **ASSIST EASY**（既定）・**EASY**・**NORMAL** で、ルールの並びで読みます。AC では ASSIST EASY を ASSISTED EASY と読み、ASSIST EASY がない LR2 では **EASY** か **GROOVE** です（保存済みの ASSIST EASY は EASY と読みます）。LR2 の P.ATTACK と G.ATTACK は並びにありません。より難しいクリアではなく別のものを判定するゲージなので、BEST CLEAR と SELECT TO UNDER ではそのゲージだけで CONTINUE と同じく最後まで遊びます。どの方式もどのルールで読めるので、方式を使ったリプレイはほかのルールでもそのルールの並びで再判定します（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。
+
+リプレイには `play.gaugeAutoShift` と `play.bottomShiftableGauge` を記録します。NONE では `play.endOnFailure` も記録し、ほかの方式では最後まで判定を続けます。結果の `gauge.type` はプレイ終了時のゲージを示します。BEST CLEAR と SELECT TO UNDER では `gauge.values` に並行するすべてのゲージの値を保持し、コースのステージの `play.course.carryIn.gauges` に引き継いだコースのゲージを保持します。2 人プレイでは両プレイヤーのゲージがそれぞれ切り替わります。beatoraja スキンのゲージオートシフト（78）と最低シフトゲージ（341）のボタンは選択肢を参照元の順で巡回します。Native スキンのプレイ設定パネルには方式・最低ゲージ・実効ゲージを表示します。方式から入力アシストを推測しません。シフト後のクリアの順位付けは Leaderboard 側で決めます。
 
 参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java#L641-L674)、[`GrooveGauge`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GrooveGauge.java)、[`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)。対応 Issue は [#729](https://github.com/nulltask/be-music/issues/729)、[#730](https://github.com/nulltask/be-music/issues/730)、[#731](https://github.com/nulltask/be-music/issues/731)、[#732](https://github.com/nulltask/be-music/issues/732) です。
 

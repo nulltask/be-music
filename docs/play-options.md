@@ -17,7 +17,7 @@ flowchart LR
   q -->|"S-RANDOM"| rules["The judge ruleset's own"]
 ```
 
-The rest stays with the ruleset. Judge rules are what the ruleset is: windows, gauges, note selection, long-note style, mine trigger and score. LN MODE, PRACTICE, CUSTOM JUDGE, gauge auto-shift, the gauge types and the judgment algorithm also remain ruleset-bound for now. How records treat a play that mixes sources is described in [Assist and record policy](#assist-and-record-policy). Tracked in [#774](https://github.com/nulltask/be-music/issues/774).
+The rest stays with the ruleset. Judge rules are what the ruleset is: windows, gauges, note selection, long-note style, mine trigger and score. LN MODE, CUSTOM JUDGE, the gauge types and the judgment algorithm also remain ruleset-bound. [PRACTICE](#practice) and [gauge auto-shift](#gauge-auto-shift) are offered under every ruleset and read under it: PRACTICE lists the ruleset's own gauges, and auto-shift shifts along the ruleset's own gauge ladder ([#933](https://github.com/nulltask/be-music/issues/933)). How records treat a play that mixes sources is described in [Assist and record policy](#assist-and-record-policy). Tracked in [#774](https://github.com/nulltask/be-music/issues/774).
 
 ## Assist and record policy
 
@@ -53,7 +53,7 @@ flowchart LR
 | CUSTOM JUDGE                                                                             | beatoraja | `assist`  | A rate over 100 %                                          | `BMSPlayer` L208-L213                                     |
 | Debug judge-window override                                                              | be-music  | `assist`  | Widens the windows as CUSTOM JUDGE does                    |                                                           |
 | BATTLE                                                                                   | AC 34     | `no-save` | `____:BATTLE`, or a bare BATTLE under `____` rules         | AC 34 play options: "スコアデータは保存されません"        |
-| PRACTICE                                                                                 | beatoraja | `no-save` |                                                            | beatoraja PRACTICE saves nothing                          |
+| PRACTICE                                                                                 | beatoraja | `no-save` | Under every ruleset                                        | beatoraja PRACTICE saves nothing                          |
 | ANY KEY                                                                                  | PC        | `no-save` | Under every ruleset                                        | PC edition: ANY KEY plays count as NO PLAY                |
 
 Unassisted: MIRROR, RANDOM, S-RANDOM, R-RANDOM, SYNCHRONIZE / SYMMETRY RANDOM, M-RAN, DP FLIP, covers and LIFT, the hi-speed options, visual CONSTANT (beatoraja's `enableConstant` is a rendering setting), mine ADD, scroll ADD, ADD LN, the judge algorithm, the gauges (ASSIST EASY and ASSISTED EASY are gauge lamps, not assists) and gauge auto-shift. The PC edition's NO PLAY options (KEY ASSIST, ANY KEY, and its own H-RANDOM and BATTLE) are that edition's rules. They are not applied to other sources: H-RANDOM here is beatoraja's algorithm and is classified as beatoraja's. A PC-sourced option is `no-save` under `____` rules; ANY KEY is the one Be-Music offers ([ANY KEY](#any-key)).
@@ -138,7 +138,7 @@ Sources: beatoraja 0.8.9 [`GaugeProperty`](https://github.com/exch-bms2/beatoraj
 
 ## Chart-selected gauge
 
-A chart whose `#OPTION` sets nanasigroove's `774:GAMELEVEL_*` or `774:EXTRA_*` selects the gauge itself, in place of the player's **Gauge** pick (both players' in a two-player play). Each ruleset plays the gauge closest to the pair: for example HYPER is HARD, NORMAL with EXTRA VERYHARD is EX-HARD (HARD under LR2), DANGER is DEATH (EX-HARD under ????). A course stage keeps its course gauge, beatoraja PRACTICE keeps its own, and gauge auto-shift still applies. The replay records the gauge played, so its lamp is that gauge's. See [ADR 0034](./adr/0034-chart-authored-gauge-options.md) for the whole table.
+A chart whose `#OPTION` sets nanasigroove's `774:GAMELEVEL_*` or `774:EXTRA_*` selects the gauge itself, in place of the player's **Gauge** pick (both players' in a two-player play). Each ruleset plays the gauge closest to the pair: for example HYPER is HARD, NORMAL with EXTRA VERYHARD is EX-HARD (HARD under LR2), DANGER is DEATH (EX-HARD under ????). A course stage keeps its course gauge, PRACTICE keeps its own, and gauge auto-shift still applies. The replay records the gauge played, so its lamp is that gauge's. See [ADR 0034](./adr/0034-chart-authored-gauge-options.md) for the whole table.
 
 ## Judgment algorithms
 
@@ -244,9 +244,20 @@ Sources: beatoraja 0.8.9 [`PlayerConfig`](https://github.com/exch-bms2/beatoraja
 
 ## PRACTICE
 
-With beatoraja rules, turn on **PRACTICE (beatoraja)** in Debug Menu, or press a beatoraja select skin's PRACTICE button (315); its PLAY button starts the regular mode. The settings follow beatoraja's `PracticeConfiguration`: **START TIME ms** and **END TIME ms (0 = end)** in 100 ms steps, **GAUGE TYPE** (ASSIST EASY to EXHARD GRADE), **GAUGE CATEGORY** (**Play mode** or a beatoraja category), **GAUGE VALUE** (1–120, default 20), and **JUDGERANK (0 = chart)** and **TOTAL (0 = chart)**. It applies to a single chart, not to a course, NONSTOP or replay.
+Under every ruleset, turn on **PRACTICE** in Debug Menu, or press a beatoraja select skin's PRACTICE button (315); its PLAY button starts the regular mode. The settings follow beatoraja's `PracticeConfiguration`: **START TIME ms** and **END TIME ms (0 = end)** in 100 ms steps, **GAUGE TYPE**, **GAUGE CATEGORY**, **GAUGE VALUE** (1–120, default 20, clamped to the gauge's range), and **JUDGERANK (0 = chart)** and **TOTAL (0 = chart)**. It applies to a single chart, not to a course, NONSTOP or replay.
 
-As beatoraja's `PracticeModifier` does, every judged object outside the range moves to the background, so its keysound still plays; a long note with either end outside leaves with it. The range ends at least 1000 ms after its start, the play starts 1000 ms before it and runs until 1000 ms past its end, and TOTAL scales against the note count before the cut. The play tempo and lane options apply as usual, but BATTLE, the long-note, mine and scroll modifiers, EXTRA and LR2 EXTRA MODE are turned off, as beatoraja applies chart modifiers only in PLAY and AUTOPLAY. When the range ends, it plays again at once until ESC. A practice play records no replay and changes no records.
+PRACTICE is beatoraja's mode, and the judge rules read its settings ([#933](https://github.com/nulltask/be-music/issues/933)):
+
+| Setting        | beatoraja                                                                          | LR2                                                                                                | AC (`????`)                                   |
+| -------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| GAUGE TYPE     | ASSIST EASY, EASY, NORMAL, HARD, EX-HARD, HAZARD, GRADE, EX GRADE and EXHARD GRADE | GROOVE, HARD, HAZARD, EASY, P.ATTACK and G.ATTACK                                                  | ASSISTED EASY, EASY, NORMAL, HARD and EX-HARD |
+| GAUGE CATEGORY | **Play mode** or a beatoraja category                                              | Hidden (one gauge table)                                                                           | Hidden (one gauge table)                      |
+| JUDGERANK      | beatoraja's judgerank (`NORMAL` rule, rank 2 = 75)                                 | A judgerank percent on LR2's `#RANK` table: 25, 50, 75 and 100 are `#RANK` 0–3 (VERY HARD to EASY) | Hidden: the windows are fixed                 |
+| TOTAL          | Scaled by the notes left in the range for NORMAL and gentler gauges                | Used as is; 0 keeps the whole chart's TOTAL                                                        | Hidden: the gauges do not use TOTAL           |
+
+Changing the ruleset restores its default gauge (NORMAL, or GROOVE under LR2) when the chosen one is another ruleset's.
+
+As beatoraja's `PracticeModifier` does, every judged object outside the range moves to the background, so its keysound still plays; a long note with either end outside leaves with it. The range ends at least 1000 ms after its start, the play starts 1000 ms before it and runs until 1000 ms past its end, and Under beatoraja rules, TOTAL scales against the note count before the cut. The play tempo and lane options apply as usual, but BATTLE, the long-note, mine and scroll modifiers, EXTRA and LR2 EXTRA MODE are turned off, as beatoraja applies chart modifiers only in PLAY and AUTOPLAY. When the range ends, it plays again at once until ESC. A practice play records no replay, changes no records and is never sent to the Leaderboard, under every ruleset.
 
 Sources: beatoraja 0.8.9 [`PracticeConfiguration`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/PracticeConfiguration.java) and [`PracticeModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/PracticeModifier.java). Tracked in [#749](https://github.com/nulltask/be-music/issues/749).
 
@@ -364,9 +375,31 @@ Source: beatoraja 0.8.9 [`ScrollSpeedModifier`](https://github.com/exch-bms2/bea
 
 ## Gauge auto-shift
 
-With beatoraja rules, choose **Gauge auto-shift (beatoraja)** in Debug Menu: **NONE** (default), **CONTINUE**, **SURVIVAL TO GROOVE**, **BEST CLEAR** or **SELECT TO UNDER**. **Lowest auto-shift gauge** (**ASSIST EASY**, the default, **EASY** or **NORMAL**) applies to the last two. The policies follow beatoraja 0.8.9's `BMSPlayer`. NONE ends the play when a survival gauge empties. CONTINUE keeps playing to the end on the emptied gauge, which stays at zero. SURVIVAL TO GROOVE runs a NORMAL gauge alongside from the chart's start and, when the survival gauge empties, continues on NORMAL at its own value; course class gauges do not switch. BEST CLEAR runs ASSIST EASY, EASY, NORMAL, HARD, EX-HARD and HAZARD in parallel and plays on the highest one that is above zero and would clear, never below the lowest auto-shift gauge (or the selected gauge, when that is lower); when none qualifies, it stays on that lowest gauge. SELECT TO UNDER does the same up to the selected gauge. In a course both choose among CLASS, EXCLASS and EXHARDCLASS from CLASS upwards, and each class gauge carries its own value into the next stage. The other rulesets hide both controls; changing to one restores NONE, and a direct request fails.
+Under every ruleset, choose **Gauge auto-shift** in Debug Menu: **NONE** (default), **CONTINUE**, **SURVIVAL TO GROOVE**, **BEST CLEAR** or **SELECT TO UNDER**. **Lowest auto-shift gauge** applies to the last two. The policies follow beatoraja 0.8.9's `BMSPlayer`, and each ruleset applies them to its own gauges, along its own gauge ladder ([#933](https://github.com/nulltask/be-music/issues/933)):
 
-Replays record `play.gaugeAutoShift` and `play.bottomShiftableGauge`; NONE also records `play.endOnFailure`, while the other policies keep judging to the end. The result's `gauge.type` names the gauge the play ended on; under BEST CLEAR and SELECT TO UNDER, `gauge.values` keeps every parallel gauge's raw value, and a course stage's `play.course.carryIn.gauges` keeps the class gauges it inherited. beatoraja skins' gauge auto-shift (78) and bottom shiftable gauge (341) buttons cycle the choices in source order. The Native skin's play settings panel shows the policy, the lowest gauge and the effective gauge. No input assist is inferred from a policy; how a shifted clear is ranked is the Leaderboard's decision.
+| Ruleset     | Single play (gentlest first)                     | Grade course                   | EXPERT / NONSTOP course                        |
+| ----------- | ------------------------------------------------ | ------------------------------ | ---------------------------------------------- |
+| beatoraja   | ASSIST EASY, EASY, NORMAL, HARD, EX-HARD, HAZARD | CLASS, EXCLASS, EXHARDCLASS    | CLASS, EXCLASS, EXHARDCLASS                    |
+| LR2         | EASY, GROOVE, HARD, HAZARD (`DEATH`)             | GRADE, GRADE-HARD, GRADE-DEATH | COURSE-EASY, COURSE, COURSE-HARD, COURSE-DEATH |
+| AC (`????`) | ASSISTED EASY, EASY, NORMAL, HARD, EX-HARD       | CLASS, EXCLASS, EXHARDCLASS    | CLASS, EXCLASS, EXHARDCLASS                    |
+
+```mermaid
+flowchart LR
+  death["HAZARD"] --> hard["HARD"] --> groove["GROOVE"] --> easy["EASY"]
+```
+
+The diagram is LR2's single-play ladder, the order BEST CLEAR shifts down. AC has no HAZARD outside a course, and its course gauges are beatoraja's class gauges.
+
+- NONE ends the play when a survival gauge empties.
+- CONTINUE keeps playing to the end on the emptied gauge, which stays at zero.
+- SURVIVAL TO GROOVE runs the ruleset's default recovery gauge (NORMAL, or GROOVE under LR2) alongside a survival gauge from the chart's start and, when the survival gauge empties, continues on it at its own value. Course gauges do not switch, and a gauge that is not a survival gauge has nothing to fall back from.
+- BEST CLEAR runs the whole ladder in parallel and plays on the highest gauge that is above zero and would clear, never below the lowest auto-shift gauge (or the selected gauge, when that is lower); when none qualifies, it stays on that lowest gauge.
+- SELECT TO UNDER does the same up to the selected gauge.
+- In a course, both choose among the ruleset's course gauges from the gentlest upwards, and each course gauge carries its own value into the next stage.
+
+**Lowest auto-shift gauge** is **ASSIST EASY** (the default), **EASY** or **NORMAL**, read on the ruleset's ladder: AC's ASSISTED EASY for ASSIST EASY, and under LR2, which has no ASSIST EASY, **EASY** or **GROOVE** (a stored ASSIST EASY reads as EASY). LR2's P.ATTACK and G.ATTACK are not on the ladder: they judge something other than a harder clear, so BEST CLEAR and SELECT TO UNDER keep them alone and play to the end, as CONTINUE does. Every policy has a reading under every ruleset, so a replay that used one is re-judged under the others along their own ladders ([ADR 0019](./adr/0019-source-qualified-option-values.md)).
+
+Replays record `play.gaugeAutoShift` and `play.bottomShiftableGauge`; NONE also records `play.endOnFailure`, while the other policies keep judging to the end. The result's `gauge.type` names the gauge the play ended on; under BEST CLEAR and SELECT TO UNDER, `gauge.values` keeps every parallel gauge's raw value, and a course stage's `play.course.carryIn.gauges` keeps the course gauges it inherited. In a two-player play both players' gauges shift, each on its own gauge. beatoraja skins' gauge auto-shift (78) and bottom shiftable gauge (341) buttons cycle the choices in source order. The Native skin's play settings panel shows the policy, the lowest gauge and the effective gauge. No input assist is inferred from a policy; how a shifted clear is ranked is the Leaderboard's decision.
 
 Sources: beatoraja 0.8.9 [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java#L641-L674), [`GrooveGauge`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GrooveGauge.java) and [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java). Tracked in [#729](https://github.com/nulltask/be-music/issues/729), [#730](https://github.com/nulltask/be-music/issues/730), [#731](https://github.com/nulltask/be-music/issues/731) and [#732](https://github.com/nulltask/be-music/issues/732).
 

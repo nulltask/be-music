@@ -283,7 +283,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.dropText('continue.bme', '#TITLE Continue gauge\n#BPM 240\n#00111:01\n#00212:01\n');
     await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'Gauge', 'HAZARD');
-    await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', 'CONTINUE');
+    await player.setOption(['Play options'], 'Gauge auto-shift', 'CONTINUE');
     await player.cursorTo((bar) => bar.title === 'Continue gauge', 'continue chart');
     await player.key('Enter');
     await player.waitForResult(0);
@@ -299,7 +299,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       failedMidPlay: true,
     });
     await player.leaveResult();
-    await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', 'NONE');
+    await player.setOption(['Play options'], 'Gauge auto-shift', 'NONE');
     await player.dropText('continue.bmplay.json', JSON.stringify(replay));
     await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'CONTINUE replay');
     await player.waitForResult(1);
@@ -516,7 +516,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.dropText('survival-to-groove.bms', '#TITLE Survival to groove\n#BPM 240\n#00111:01\n#00212:01\n');
     await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'Gauge', 'HAZARD');
-    await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', 'SURVIVAL TO GROOVE');
+    await player.setOption(['Play options'], 'Gauge auto-shift', 'SURVIVAL TO GROOVE');
     await player.cursorTo((bar) => bar.title === 'Survival to groove', 'survival chart');
     await player.key('Enter');
     await player.waitForResult(0);
@@ -549,7 +549,7 @@ for (const [label, policy, effective] of [
       );
       await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
       await player.setOption(['Play options'], 'Gauge', 'NORMAL');
-      await player.setOption(['Play options'], 'Gauge auto-shift (beatoraja)', label);
+      await player.setOption(['Play options'], 'Gauge auto-shift', label);
       await player.setOption(['Play options'], 'Lowest auto-shift gauge', 'EASY');
       await player.cursorTo((bar) => bar.title === 'Gauge selection', 'gauge selection chart');
       await player.key('Enter');

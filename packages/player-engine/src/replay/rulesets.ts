@@ -55,12 +55,11 @@ export function resolveRulesetConfig(
   const { course } = replay.play;
   return resolveRuleset(rulesetChartFactsFromReplay(replay), rulesetId, {
     selectedGauge: replay.play.gauge,
-    ...(rulesetId === 'beatoraja' && replay.play.bottomShiftableGauge !== undefined
+    // Gauge auto-shift is carried (ADR 0019): it shifts along the target ruleset's own ladder.
+    ...(replay.play.bottomShiftableGauge !== undefined
       ? { bottomShiftableGauge: replay.play.bottomShiftableGauge }
       : {}),
-    ...(rulesetId === 'beatoraja' && replay.play.gaugeAutoShift !== undefined
-      ? { gaugeAutoShift: replay.play.gaugeAutoShift }
-      : {}),
+    ...(replay.play.gaugeAutoShift !== undefined ? { gaugeAutoShift: replay.play.gaugeAutoShift } : {}),
     ...(rulesetId === 'beatoraja' && replay.play.judgeAlgorithm !== undefined
       ? { judgeAlgorithm: replay.play.judgeAlgorithm }
       : {}),

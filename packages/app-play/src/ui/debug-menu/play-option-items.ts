@@ -1,5 +1,10 @@
-import { splitOptionSource, type RulesetId } from '@be-music/player-engine/ruleset';
-import { resolveRandomModes, type PlayOptions, type RandomMode } from '@be-music/player-scene-model';
+import { resolvePracticeGaugeTypes, splitOptionSource, type RulesetId } from '@be-music/player-engine/ruleset';
+import {
+  resolveRandomModes,
+  type PlayOptions,
+  type PracticeGaugeType,
+  type RandomMode,
+} from '@be-music/player-scene-model';
 
 /** One choice of a Debug Menu list: its label and the value it sets. */
 export interface PlayOptionItem<T> {
@@ -91,5 +96,44 @@ export function battleModeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions[
     { text: 'OFF', value: 'OFF' },
     { text: 'CHART HEADER', value: 'AUTO' },
     ...sourceOrder(ruleset).flatMap((source) => groups[source]),
+  ];
+}
+
+/** How the Debug Menu spells each PRACTICE gauge id. */
+const PRACTICE_GAUGE_NAMES: Readonly<Partial<Record<PracticeGaugeType, string>>> = {
+  'ASSIST-EASY': 'ASSIST EASY',
+  'ASSISTED-EASY': 'ASSISTED EASY',
+  CLASS: 'GRADE',
+  EXCLASS: 'EX GRADE',
+  EXHARDCLASS: 'EXHARD GRADE',
+  'P-ATTACK': 'P.ATTACK',
+  'G-ATTACK': 'G.ATTACK',
+};
+
+/**
+ * PRACTICE's GAUGE TYPE under `ruleset`: the judge ruleset's own gauges (#933), named as that ruleset names them (LR2's
+ * DEATH is its HAZARD).
+ */
+export function practiceGaugeItems(ruleset: RulesetId): PlayOptionItem<PracticeGaugeType>[] {
+  return resolvePracticeGaugeTypes(ruleset).map((value) => ({
+    text: ruleset === 'lr2' && value === 'DEATH' ? 'HAZARD' : (PRACTICE_GAUGE_NAMES[value] ?? value),
+    value,
+  }));
+}
+
+/**
+ * The lowest auto-shift gauge under `ruleset`, named as the ruleset's own gauges (#933). LR2 has no ASSIST EASY, so its
+ * lowest choice is EASY.
+ */
+export function bottomShiftableGaugeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions['bottomShiftableGauge']>[] {
+  if (ruleset === 'lr2')
+    return [
+      { text: 'EASY', value: 'EASY' },
+      { text: 'GROOVE', value: 'GROOVE' },
+    ];
+  return [
+    { text: ruleset === '____' ? 'ASSISTED EASY' : 'ASSIST EASY', value: 'ASSIST-EASY' },
+    { text: 'EASY', value: 'EASY' },
+    { text: 'NORMAL', value: 'GROOVE' },
   ];
 }
