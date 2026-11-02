@@ -3,7 +3,7 @@ import { findFirstIndexNumberAtOrAfter } from '@be-music/shared-utils/core';
 import { findLaneSoundCandidate, lowerBoundBySeconds } from '../judging.ts';
 import type { TimedPlayableNote } from '../playable-notes.ts';
 import { classifyRulesetJudge, RULESET_JUDGE_NONE, type RulesetJudgeIndex } from '../ruleset/judge.ts';
-import { ignoresLateLongNoteHeadBad, isChargeLongNoteMode } from '../ruleset/long-note.ts';
+import { ignoresLateLongNoteHeadBad, isBackSpinScratch, isChargeLongNoteMode } from '../ruleset/long-note.ts';
 import { preferJudgeCandidate, type JudgeSelectionCandidate } from '../ruleset/selection.ts';
 import { selectAnyKeyLane, type AnyKeyCandidate } from './any-key.ts';
 import {
@@ -18,12 +18,14 @@ import {
 import {
   advanceJudgeState,
   detonateLandminesOnPress,
+  finalizeActiveLongNote,
   laneHoldHistory,
   processLandminePassage,
   setHCNGaining,
   startHCNPassing,
 } from './judge-core-advance.ts';
 import { recordLaneDown, recordLaneUp } from './lane-hold.ts';
+import { isReverseScratchSpin, type ScratchSpin } from './scratch-spin.ts';
 import {
   applyGaugeJudge,
   applyResolvedManualJudge,
@@ -236,7 +238,8 @@ export function hasPressCandidate(state: JudgeCoreState, channels: ReadonlySet<s
 
 /**
  * A press on `candidateChannels`. `recordedChannels` are the lanes the replay records for it: the keys' own lanes, which
- * differ from the lanes judged only when ANY KEY routed the press.
+ * differ from the lanes judged only when ANY KEY routed the press. `spin` is the way a scratch press turned the
+ * turntable (`scratch-spin.ts`).
  */
 export function handleLanePress(
   state: JudgeCoreState,
@@ -246,11 +249,19 @@ export function handleLanePress(
   nowSec: number,
   emit: JudgeCoreEffectSink,
   recordedChannels: ReadonlySet<string> = candidateChannels,
+  spin?: ScratchSpin,
 ): void {
   const { config } = state;
   const { ruleset } = config;
   // Replay press event — recorded BEFORE any judging so the log stays a raw input replay.
-  emit({ kind: 'record-input', action: 'down', seconds: nowSec, tokens, channels: recordedChannels });
+  emit({
+    kind: 'record-input',
+    action: 'down',
+    seconds: nowSec,
+    tokens,
+    channels: recordedChannels,
+    ...(spin !== undefined ? { spin } : {}),
+  });
 
   for (const mappedChannel of candidateChannels) {
     emit({ kind: 'ui', command: { kind: 'flash-lane', channel: mappedChannel } });
@@ -296,7 +307,12 @@ export function handleLanePress(
     (channel) => state.activeLongNotes.has(channel) && !resumedChannels.has(channel),
   );
   for (const channel of heldLongNoteChannels) {
-    applyPressDuringLongNote(state, channel, judgeSec, nowSec, emit);
+    const hold = state.activeLongNotes.get(channel)!;
+    if (hold.backSpinScratch === true && isReverseScratchSpin(hold.headSpin, spin)) {
+      judgeBackSpinScratchTail(state, channel, judgeSec, nowSec, emit);
+    } else {
+      applyPressDuringLongNote(state, channel, judgeSec, nowSec, emit);
+    }
   }
   const judgedChannels =
     resumedChannels.size === 0 && heldLongNoteChannels.length === 0
@@ -393,6 +409,9 @@ export function handleLanePress(
         headJudge,
         headScored: true,
         audioStopped: false,
+        ...(isBackSpinScratch(longNoteMode, config.scratchChannels.has(channel))
+          ? { backSpinScratch: true as const, ...(spin !== undefined ? { headSpin: spin } : {}) }
+          : {}),
       });
       state.longNoteSettleMs.delete(channel);
       state.longHoldReleaseSeconds.delete(channel);
@@ -429,6 +448,37 @@ export function handleLanePress(
     emit,
   );
   rejudgeAfterBad();
+}
+
+/**
+ * A back-spin scratch's tail, judged on the press that spun the turntable the other way (beatoraja's "BSS終端処理"): the
+ * press's timing against the tail's long-scratch-end windows, POOR outside them. It settles at once — no release
+ * margin — and plays the tail's keysound like a released charge tail.
+ */
+function judgeBackSpinScratchTail(
+  state: JudgeCoreState,
+  channel: string,
+  judgeSec: number,
+  nowSec: number,
+  emit: JudgeCoreEffectSink,
+): void {
+  const hold = state.activeLongNotes.get(channel)!;
+  emit({
+    kind: 'long-note',
+    seconds: nowSec,
+    channel,
+    state: 'complete',
+    mode: hold.mode,
+    event: hold.note.event,
+    endSeconds: hold.endSeconds,
+  });
+  const tail = resolveManualTimedJudge(
+    (judgeSec - hold.endSeconds) * 1000,
+    judgeWindowsFor(state.config, channel, judgeSec, true),
+  );
+  // The tail resolves on this press as a charge tail does on its release.
+  state.longHoldReleaseSeconds.set(channel, nowSec);
+  finalizeActiveLongNote(state, channel, tail, nowSec, emit);
 }
 
 /**
@@ -516,6 +566,10 @@ export function handleLaneRelease(
     state.heldChannels.delete(channel);
     if (input.inferred !== true) {
       emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
+    }
+    if (state.activeLongNotes.get(channel)?.backSpinScratch === true) {
+      // A back-spin scratch is not settled by a release: its tail waits for the reverse spin.
+      continue;
     }
     if (state.activeLongNotes.has(channel)) {
       state.longHoldReleaseSeconds.set(channel, input.nowSec);

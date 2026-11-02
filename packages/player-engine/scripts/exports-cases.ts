@@ -1534,6 +1534,34 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.resolveWheelLaneDirection('1P', '24');
     },
   });
+  const benchScratchBindings = lanesAPI.createLaneBindings(['11', '16', '21', '26'], {
+    platform: 'linux',
+    playVariant: '14',
+  });
+  const benchScratchSpins = lanesAPI.createScratchSpinByToken(benchScratchBindings);
+  define('player-engine.lanes.createScratchSpinByToken', {
+    run: () => {
+      lanesAPI.createScratchSpinByToken(benchScratchBindings);
+    },
+  });
+  define('player-engine.lanes.resolveScratchSpin', {
+    run: () => {
+      lanesAPI.resolveScratchSpin(['ctrl-left', 'ctrl'], benchScratchSpins);
+      lanesAPI.resolveScratchSpin(['z'], benchScratchSpins);
+    },
+  });
+  define('player-engine.lanes.isReverseScratchSpin', {
+    run: () => {
+      lanesAPI.isReverseScratchSpin('cw', 'ccw');
+      lanesAPI.isReverseScratchSpin('cw', undefined);
+    },
+  });
+  define('player-engine.lanes.isScratchSpin', {
+    run: () => {
+      lanesAPI.isScratchSpin('ccw');
+      lanesAPI.isScratchSpin('left');
+    },
+  });
   define('player-engine.lanes.clampHRandomThresholdBPM', {
     run: () => {
       lanesAPI.clampHRandomThresholdBPM(120);

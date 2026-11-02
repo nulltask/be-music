@@ -748,6 +748,13 @@ The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's
   keep running after an early release, so pressing the lane again before the end point gains once more. Only the note
   crossing the judge line ticks (`JudgeManager` L235-L242): one judged early waits until the one ahead of it on the
   lane has passed, and a head missed only after its end point passed has no ticks. AUTO SCRATCH lanes have none.
+- Back-spin scratch (BSS): a mode `2` / `3` long note on a scratch lane (`isBackSpinScratch`) has its tail judged on a
+  reverse spin instead of the release, as beatoraja does ("BSS終端処理"). The press that hits the head records its
+  scratch spin (`'cw'` / `'ccw'`); a later press on the lane spinning the other way judges the tail at once, its timing
+  against the long-scratch-end windows (`POOR` outside them, no release margin), and plays the tail's keysound. Letting
+  go settles nothing — the gauge ticks of a hell-charge BSS still follow whether the lane is down — and a press spinning
+  the same way is a re-press. A tail never spun back is a missed `POOR` once its late window closes, held or not. LR2
+  plays every long note as an LN, so it has no BSS. Where the spin comes from is in [Scratch spin](#scratch-spin).
 
 A release is settled at its own instant. The one exception is the ruleset's long-note release margin
 (`longNoteReleaseMarginUs`, beatoraja's `longnoteMargin` / `longscratchMargin`): under beatoraja's PMS rule a release
@@ -758,10 +765,24 @@ keyboard protocol) the engine infers the release: 120 ms after the key's last re
 hit the long note's head when no repeat followed.
 
 A press on a lane whose long note is held (a second key bound to the lane, such as the turntable's other direction)
-never judges another note on that lane: the lane's current note is the long note. What it does instead is the
-ruleset's (`pressDuringLongNote`): `lr2` judges the LN's head again when the press falls within its `BAD` window and
-charges an empty `POOR` otherwise (OpenLR2 `ProcLongnote`); `beatoraja` ignores it as a re-press (`JudgeManager`
-L355-377), and `____` does the same.
+never judges another note on that lane: the lane's current note is the long note. A reverse spin on a back-spin scratch
+judges its tail (above). What any other press does is the ruleset's (`pressDuringLongNote`): `lr2` judges the LN's head
+again when the press falls within its `BAD` window and charges an empty `POOR` otherwise (OpenLR2 `ProcLongnote`);
+`beatoraja` ignores it as a re-press (`JudgeManager` L355-377), and `____` does the same.
+
+#### Scratch spin
+
+Each scratch press carries the way it turned the turntable, `'cw'` or `'ccw'` (`ScratchSpin`, recorded as the replay
+input's `spin`), so the judge core, a replay and the replay simulator all read a reverse spin from the input:
+
+- A controller that reports rotation (a turntable or an analog axis) sends the direction it actually turned, as the
+  `spin` of its `lane-input` command.
+- A keyboard uses odd-even: a scratch lane's keys alternate as the two directions (`LaneBinding.inputKeys`,
+  `createScratchSpinByToken`). Each scratch has two keys by default — Shift (`'cw'`) and Ctrl, or Option / Alt in a
+  macOS terminal (`'ccw'`) — so pressing the scratch key other than the one that hit a BSS head spins it back.
+- A press with no spin (a touch lane) never reverses a BSS.
+
+See [ADR 0037](./adr/0037-scratch-spin-input.md) for the trade-off.
 
 A long note the player never touched owes one `POOR` for the head, plus a second for the tail under charge modes —
 except under That-Which-Must-Not-Be-Named, where the cancelled tail owes nothing.
@@ -785,6 +806,7 @@ stateDiagram-v2
   Held --> Done: LN let go early
   Held --> Done: LN reaches its tail
   Held --> Done: CN / HCN released
+  Held --> Done: BSS spun back
   Held --> Done: CN / HCN tail window closes
   Missed --> [*]
   Done --> [*]

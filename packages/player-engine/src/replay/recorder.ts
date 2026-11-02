@@ -8,6 +8,7 @@ import type { ScrollModifier } from '../core/scroll-modifier.ts';
 import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import { resolveReplaySourceChannel } from './source-channel.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
+import type { ScratchSpin } from '../core/scratch-spin.ts';
 import {
   diffReplayOptions,
   parseReplayOptionState,
@@ -201,13 +202,17 @@ export interface ReplayRecorderFinalizeInput {
 export interface ReplayRecorder {
   /** Discards recorded data and ignores later input after a practice seek. Finalization is no longer allowed. */
   discard(): void;
-  /** Records a press or release; `inferred` marks a release the engine inferred from input without releases. */
+  /**
+   * Records a press or release; `inferred` marks a release the engine inferred from input without releases, `spin` the
+   * way a scratch press turned the turntable.
+   */
   recordInput(
     action: ReplayInputAction,
     timeSeconds: number,
     tokens: readonly string[],
     channels: Iterable<string>,
     inferred?: boolean,
+    spin?: ScratchSpin,
   ): void;
   /** Counts an LR2-style empty POOR — cached into the native result for diagnostics. */
   recordEmptyPoor(): void;
@@ -242,7 +247,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       tempoChanges.length = 0;
       emptyPoorCount = 0;
     },
-    recordInput: (action, timeSeconds, tokens, channels, inferred): void => {
+    recordInput: (action, timeSeconds, tokens, channels, inferred, spin): void => {
       if (discarded) return;
       const channelList = [...channels];
       if (channelList.length === 0) {
@@ -259,6 +264,9 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       }
       if (inferred === true && action === 'up') {
         event.inferred = true;
+      }
+      if (spin !== undefined && action === 'down') {
+        event.spin = spin;
       }
       inputs.push(event);
     },

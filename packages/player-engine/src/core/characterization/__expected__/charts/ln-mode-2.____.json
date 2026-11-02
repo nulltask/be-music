@@ -4,16 +4,16 @@
     "endedAtMs": 4790,
     "summary": {
       "total": 10,
-      "perfect": 6,
+      "perfect": 5,
       "fast": 1,
       "slow": 0,
       "great": 1,
       "good": 0,
       "bad": 0,
-      "poor": 2,
+      "poor": 3,
       "emptyPoor": 0,
-      "exScore": 13,
-      "score": 13,
+      "exScore": 11,
+      "score": 11,
       "combo": 1,
       "maxCombo": 4,
       "gauge": {
@@ -60,7 +60,7 @@
         {"seq":3,"timeUs":1310000,"action":"up","channels":["13"],"tokens":["x"]},
         {"seq":4,"timeUs":1500000,"action":"up","channels":["11"],"tokens":["z"]},
         {"seq":5,"timeUs":1600000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":6,"timeUs":2000000,"action":"down","channels":["16"],"tokens":["shift-left"]},
+        {"seq":6,"timeUs":2000000,"action":"down","channels":["16"],"tokens":["shift-left"],"spin":"cw"},
         {"seq":7,"timeUs":2540000,"action":"up","channels":["16"],"tokens":["shift-left"]},
         {"seq":8,"timeUs":3480000,"action":"down","channels":["15"],"tokens":["c"]},
         {"seq":9,"timeUs":3540000,"action":"up","channels":["15"],"tokens":["c"]}
@@ -69,13 +69,13 @@
       "results": {
         "native": {
           "ruleset": "be-music/native",
-          "judge": {"pgreat":6,"great":1,"good":0,"bad":0,"poor":2,"emptyPoor":0},
+          "judge": {"pgreat":5,"great":1,"good":0,"bad":0,"poor":3,"emptyPoor":0},
           "fast": 1,
           "slow": 0,
-          "exScore": 13,
+          "exScore": 11,
           "noteCount": 10,
           "maxCombo": 4,
-          "djLevel": "B",
+          "djLevel": "C",
           "gauge": {"type":"NORMAL","final":100,"cleared":true}
         }
       }
@@ -95,24 +95,24 @@
       },
       "beatoraja": {
         "ruleset": "beatoraja/0",
-        "judge": {"pgreat":6,"great":1,"good":0,"bad":0,"poor":3,"emptyPoor":0},
+        "judge": {"pgreat":5,"great":1,"good":0,"bad":0,"poor":4,"emptyPoor":0},
         "fast": 1,
         "slow": 0,
-        "exScore": 13,
+        "exScore": 11,
         "noteCount": 10,
         "maxCombo": 4,
-        "djLevel": "B",
+        "djLevel": "C",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       },
       "____": {
         "ruleset": "____/0",
-        "judge": {"pgreat":6,"great":1,"good":0,"bad":0,"poor":2,"emptyPoor":0},
+        "judge": {"pgreat":5,"great":1,"good":0,"bad":0,"poor":3,"emptyPoor":0},
         "fast": 1,
         "slow": 0,
-        "exScore": 13,
+        "exScore": 11,
         "noteCount": 10,
         "maxCombo": 4,
-        "djLevel": "B",
+        "djLevel": "C",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       }
     },
@@ -137,8 +137,8 @@
       "1500.000 PERFECT combo=4 ch=11 delta=0 gauge=100",
       "1600.000 POOR combo=0 ch=12 delta=-400 gauge=94",
       "2000.000 PERFECT combo=1 ch=16 delta=0 gauge=100",
-      "2540.000 PERFECT combo=2 ch=16 delta=40 gauge=100",
       "2756.667 POOR combo=0 ch=14 delta=256.666667 gauge=94",
+      "2790.000 POOR combo=0 ch=16 delta=290 gauge=88",
       "3480.000 GREAT combo=1 ch=15 delta=-20 gauge=100"
     ],
     "ui": [
@@ -174,10 +174,10 @@
       "2000.000 clear-poor-bga",
       "2000.000 press-lane 16",
       "2540.000 release-lane 16",
-      "2540.000 long-note-end 16 outcome=complete",
-      "2540.000 release-lane 16",
-      "2540.000 clear-poor-bga",
       "2756.667 trigger-poor-bga seconds=2.756667",
+      "2790.000 long-note-end 16 outcome=dropped",
+      "2790.000 release-lane 16",
+      "2790.000 trigger-poor-bga seconds=2.79",
       "3480.000 flash-lane 15",
       "3480.000 flash-lane 15",
       "3480.000 clear-poor-bga",
@@ -217,15 +217,15 @@
       "--- Result ---",
       "TOTAL  : 10",
       "GAUGE  : 100.00 / 100.00 CLEAR (TOTAL 160.96)",
-      "PGREAT : 6",
+      "PGREAT : 5",
       "GREAT  : 1",
       "GOOD   : 0",
       "BAD    : 0",
-      "POOR   : 2",
+      "POOR   : 3",
       "EMPTY  : 0",
       "FAST   : 1",
       "SLOW   : 0",
-      "EX-SCORE: 13 / 20 (65.00%)"
+      "EX-SCORE: 11 / 20 (55.00%)"
     ]
   },
   "replay": {
@@ -233,16 +233,16 @@
     "endedAtMs": 4783.333,
     "summary": {
       "total": 10,
-      "perfect": 6,
+      "perfect": 5,
       "fast": 1,
       "slow": 0,
       "great": 1,
       "good": 0,
       "bad": 0,
-      "poor": 2,
+      "poor": 3,
       "emptyPoor": 0,
-      "exScore": 13,
-      "score": 13,
+      "exScore": 11,
+      "score": 11,
       "combo": 1,
       "maxCombo": 4,
       "gauge": {
@@ -288,8 +288,8 @@
       "1500.000 PERFECT combo=4 ch=11 delta=0 gauge=100",
       "1600.000 POOR combo=0 ch=12 delta=-400 gauge=94",
       "2000.000 PERFECT combo=1 ch=16 delta=0 gauge=100",
-      "2550.000 PERFECT combo=2 ch=16 delta=40 gauge=100",
       "2766.667 POOR combo=0 ch=14 delta=250.001 gauge=94",
+      "2783.333 POOR combo=0 ch=16 delta=280.001 gauge=88",
       "3483.333 GREAT combo=1 ch=15 delta=-20 gauge=100"
     ],
     "ui": [
@@ -325,10 +325,10 @@
       "2000.000 long-note-start 16 beat=4 mode=cn",
       "2000.000 clear-poor-bga",
       "2550.000 release-lane 16",
-      "2550.000 long-note-end 16 outcome=complete",
-      "2550.000 release-lane 16",
-      "2550.000 clear-poor-bga",
       "2766.667 trigger-poor-bga seconds=2.750001",
+      "2783.333 long-note-end 16 outcome=dropped",
+      "2783.333 release-lane 16",
+      "2783.333 trigger-poor-bga seconds=2.780001",
       "3483.333 press-lane 15",
       "3483.333 flash-lane 15",
       "3483.333 flash-lane 15",

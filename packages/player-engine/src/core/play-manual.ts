@@ -15,6 +15,7 @@ import {
 import { resolveJudgeNowMsFromPressedAt } from './engine-clock.ts';
 import { formatJudgeWindowSet, printLaneMap, writeRuntimeEventLog } from './engine-trace.ts';
 import { createKeyStateInference } from './play-key-inference.ts';
+import { createScratchSpinByToken, resolveScratchSpin } from './scratch-spin.ts';
 import type { PlaySession } from './play-session.ts';
 import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
 
@@ -134,6 +135,8 @@ export function writeManualIntro(session: PlaySession): void {
 function createManualJudge(session: PlaySession): PlayJudge {
   const { tempoClock, uiEnabled, writeOutput, tracer, applyJudgeEffect } = session;
   const { inputTokenToChannels } = session.playbackChart;
+  // The odd-even rule: each scratch key's spin, for presses whose input reports none.
+  const scratchSpinByToken = createScratchSpinByToken(session.playbackChart.laneBindings);
   let judgeCore = createPlayJudgeCore(session, 1000 / tempoClock.initialTempo);
   let coreJudge = judgeCoreJudge(session, judgeCore);
   // Input that reports its key releases: declared by the input runtime before the play, or else detected from the first
@@ -260,11 +263,19 @@ function createManualJudge(session: PlaySession): PlayJudge {
         return;
       }
       const nowMs = tempoClock.initialTempoMsAt(pressedAtMs);
+      const spin = command.spin ?? resolveScratchSpin(command.tokens, scratchSpinByToken);
       if (!inputReportsReleases) {
-        keyState.press(candidateChannels, command.tokens, nowSec, nowMs);
+        keyState.press(candidateChannels, command.tokens, nowSec, nowMs, spin);
         return;
       }
-      step({ kind: 'press', channels: candidateChannels, tokens: command.tokens, nowSec, nowMs });
+      step({
+        kind: 'press',
+        channels: candidateChannels,
+        tokens: command.tokens,
+        nowSec,
+        nowMs,
+        ...(spin !== undefined ? { spin } : {}),
+      });
     },
   };
 }

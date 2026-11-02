@@ -61,3 +61,5 @@
 - [0035: 譜面指定の NOTES オプションはエンジンで譜面を変換し、フィンガープリントがゲームプレイオプションを持つ](./0035-chart-authored-notes-options.ja.md)
 
 - [0036: 譜面指定の M-SUDDEN・スキン水準の CRAZY・旧別名をプレイフィールドの水準で実行する](./0036-chart-authored-skin-level-options.ja.md)
+
+- [0037: バックスピンスクラッチの終点を、記録したスクラッチの回転方向で判定する](./0037-scratch-spin-input.ja.md)
