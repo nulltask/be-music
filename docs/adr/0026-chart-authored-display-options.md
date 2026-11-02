@@ -30,4 +30,4 @@ Newly implemented source IDs cannot silently activate in an already recorded eff
 
 HI-SPEED executes in ordinary and NONSTOP playback. Other families are diagnosed without effect; the [support boundary](../research/chart-authored-options.md#support-boundary-decision) records why, and what implementing one would require. No native HIDDEN/CHANGE-HS/CRAZY formula or visual parity is claimed.
 
-[ADR 0032](./0032-chart-authored-visual-families.md) extends the program to profile version 2 with HIDDEN, CHANGE-HS and CRAZY size / wave.
+[ADR 0032](./0032-chart-authored-visual-families.md) extends the program to profile version 2 with HIDDEN, CHANGE-HS and CRAZY size / wave, and [ADR 0034](./0034-chart-authored-skin-level-options.md) to version 3 with M-SUDDEN, the remaining visual CRAZY options and the legacy aliases.

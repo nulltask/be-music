@@ -30,4 +30,4 @@ NONSTOP は合成した実効プログラムを `NonstopStitchMap.chartOptions`�
 
 通常再生と NONSTOP で HI-SPEED を実行します。他の系列は効果なしで診断します。理由と、実装する場合に必要なものは[対応範囲](../research/chart-authored-options.ja.md#対応範囲決定)に記録しています。HIDDEN・CHANGE-HS・CRAZY のネイティブ数式や表示一致は主張しません。
 
-[ADR 0032](./0032-chart-authored-visual-families.ja.md) は、HIDDEN・CHANGE-HS・CRAZY のサイズ / 揺れを加えてプログラムをプロファイル version 2 に拡張します。
+[ADR 0032](./0032-chart-authored-visual-families.ja.md) は、HIDDEN・CHANGE-HS・CRAZY のサイズ / 揺れを加えてプログラムをプロファイル version 2 に拡張し、[ADR 0034](./0034-chart-authored-skin-level-options.ja.md) は、M-SUDDEN・残りの表示系 CRAZY・旧別名を加えて version 3 に拡張します。
