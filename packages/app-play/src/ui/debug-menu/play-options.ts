@@ -19,6 +19,7 @@ import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { DebugMenu } from './index.ts';
 import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
+import { buildPracticeRangePicker } from './practice-range.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
@@ -322,22 +323,38 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
         this.refreshRulesetChoices();
       }),
     ),
-    ...(
-      [
-        ['practiceStartMs', 'START TIME ms', 0, 3_600_000, 100],
-        ['practiceEndMs', 'END TIME ms (0 = end)', 0, 3_600_000, 100],
-        ['practiceStartGauge', 'GAUGE VALUE', 1, 120, 1],
-        ['practiceJudgeRank', 'JUDGERANK (0 = chart)', 0, 400, 1],
-        ['practiceTotal', 'TOTAL (0 = chart)', 0, 5000, 1],
-      ] as const
-    ).map(([key, label, min, max, step]) =>
-      trackPlayOption(
-        folder
-          .addBinding(this.guiState, key, { label, min, max, step })
-          .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
-      ),
-    ),
   ];
+  const addPracticeNumbers = (
+    entries: readonly (readonly [
+      'practiceStartMs' | 'practiceEndMs' | 'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal',
+      string,
+      number,
+      number,
+      number,
+    ])[],
+  ): void => {
+    for (const [key, label, min, max, step] of entries) {
+      this.practiceControllers.push(
+        trackPlayOption(
+          folder.addBinding(this.guiState, key, { label, min, max, step }).on('change', ({ value }) => {
+            this.setPlayOptions({ [key]: value });
+            if (key === 'practiceStartMs' || key === 'practiceEndMs') this.practiceRangePicker?.refresh();
+          }),
+        ),
+      );
+    }
+  };
+  addPracticeNumbers([
+    ['practiceStartMs', 'START TIME ms', 0, 3_600_000, 100],
+    ['practiceEndMs', 'END TIME ms (0 = end)', 0, 3_600_000, 100],
+  ]);
+  // The range picker under the two times (#948), which writes them as its handles move.
+  buildPracticeRangePicker.call(this, folder);
+  addPracticeNumbers([
+    ['practiceStartGauge', 'GAUGE VALUE', 1, 120, 1],
+    ['practiceJudgeRank', 'JUDGERANK (0 = chart)', 0, 400, 1],
+    ['practiceTotal', 'TOTAL (0 = chart)', 0, 5000, 1],
+  ]);
   // The judge ruleset's own gauges; refreshRulesetChoices relists them when the ruleset changes.
   const practiceGauge = selectBinding(
     folder,

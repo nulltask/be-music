@@ -12,6 +12,7 @@ import {
   formatGaugeLabel,
   isDuplicatedBattleChoice,
   keepPracticeGauge,
+  type LibraryChart,
   type PlayOptions,
 } from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
@@ -65,6 +66,7 @@ import {
   practiceGaugeItems,
 } from './play-option-items.ts';
 import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
+import type { PracticeRangePicker } from './practice-range.ts';
 import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './render-resolution.ts';
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
 import { buildSkinFolder, rebuildLR2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
@@ -248,6 +250,10 @@ export class DebugMenu {
   public customJudgeController: PaneBinding | undefined;
   /** PRACTICE toggle first, then its settings. */
   public practiceControllers: PaneBinding[] = [];
+  /** The row carrying the PRACTICE range picker, shown while PRACTICE is on. */
+  public practiceRangeBlade: BladeApi | undefined;
+  /** The PRACTICE range picker (#948), which follows the chart under the select screen's cursor. */
+  public practiceRangePicker: PracticeRangePicker | undefined;
   /** PRACTICE's GAUGE TYPE: the judge ruleset's own gauges. */
   public practiceGaugeController: ListInputBindingApi<PlayOptions['practiceGauge']> | undefined;
   /** PRACTICE's GAUGE CATEGORY, which only beatoraja has. */
@@ -456,6 +462,10 @@ export class DebugMenu {
     this.ghostBar = facts;
     this.refreshGhostAvailability();
   }
+  /** Tells the PRACTICE range picker the chart under the cursor: `undefined` on a folder, a course or no bar. */
+  public setPracticeChart(chart: LibraryChart | undefined): void {
+    this.practiceRangePicker?.setChart(chart);
+  }
   /** Repaints "Ghost", "Ghost mode" and "Ghost status": disabled during a play and on a course bar. */
   public refreshGhostAvailability(): void {
     const disabled = this.ghostLocked || this.ghostBar?.course === true;
@@ -581,6 +591,8 @@ export class DebugMenu {
     this.practiceControllers.forEach((controller, index) => {
       controller.hidden = index > 0 && !practice;
     });
+    if (this.practiceRangeBlade) this.practiceRangeBlade.hidden = !practice;
+    this.practiceRangePicker?.setShown(practice);
     const practiceGauge = keepPracticeGauge(this.guiState.practiceGauge, ruleset);
     if (practiceGauge !== this.guiState.practiceGauge) {
       this.guiState.practiceGauge = practiceGauge;
