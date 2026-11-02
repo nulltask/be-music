@@ -84,7 +84,7 @@ Accounts はゲスト、パスキー、設定済みの Discord / Google を提�
 
 - L1: 入力から結果を再計算し、リプレイの結果キャッシュは使いません。
 - L2: AUTO を拒否し、アシストを分類します。テンポ変更と単独のコースステージはランキング対象外として保存し、ESC 中断は失敗として順位付けします。
-- L3: play document と、登録時の chart document が申告した fingerprint と一致するか確認します。
+- L3: play document と、登録時の chart document が申告した fingerprint と一致するか確認します。続けて play document でリプレイの譜面指定ゲームプレイプログラムも確認します。`chart.chartPlayOptions` は、文書の `playOptions` をそのプレイに合わせて絞ったもの（コースのステージは NOTES COPY を外し、NONSTOP は何も適用しない）でなければならず、違えば `chart-play-options-mismatch` で拒否します（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、`src/scores/chart-play-options.ts`）。
 - L4: chart と play の fingerprint が同一、または検証済みの play fingerprint と一致する場合に成立します。新しい制御構文の分岐結果の合成は未実装です。
 
 L5（リプレイのノーツと play document の時刻の同値性）と、入力の異常検知は未実装です。実装は `src/scores/played-chart.ts` を参照してください。
@@ -216,7 +216,7 @@ sequenceDiagram
     A->>A: checkCourseReplayEligibility<br/>(オート、中断、フィンガープリント、1 回のプレイか)
     A->>D: 送信 ID は保存済みか
     loop 遊んだステージごと
-        A->>A: プレイドキュメントが playFingerprint になるか (L3)
+        A->>A: プレイドキュメントが playFingerprint になるか (L3)<br/>chart.chartPlayOptions と合うか
         A->>D: 譜面は既知か。未知なら 409 chart_document_required
     end
     loop 到達しなかったステージごと

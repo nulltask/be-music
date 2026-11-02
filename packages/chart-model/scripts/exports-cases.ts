@@ -79,7 +79,9 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   });
   define('chart-model.compileChartPlayOptions', {
     run: () => {
-      chartAPI.compileChartPlayOptions({ initial: ['774:RANDOM_ALL+', '774:CRAZY_GREAT2BAD', '774:CRAZY_ADDMINE'] });
+      chartAPI.compileChartPlayOptions({
+        initial: ['774:RANDOM_ALL+', '774:CRAZY_GREAT2BAD', '774:CRAZY_ADDMINE', '774:NOTES_DBLCOPY'],
+      });
     },
   });
   define('chart-model.parseChartPlayOption', {

@@ -38,22 +38,22 @@ flowchart TD
 
 A chart whose every outcome plays the same — in particular a chart without control flow — has equal chart and play fingerprints.
 
-Lane options such as MIRROR / RANDOM / DP flip are play options, not part of the chart, and are in neither fingerprint. A replay records them separately.
+Lane options such as MIRROR / RANDOM / DP flip are play options, not part of the chart, and are in neither fingerprint. A replay records them separately. The gameplay options a chart itself declares (`#OPTION 774:RANDOM_*`, judgment `774:CRAZY_*`, `774:NOTES_*`) are the chart's, so both documents carry them as `playOptions` (section 4).
 
 ## 2. What is included
 
-| Included (affects play or what the lanes show)                                           | Excluded                                                                                               |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Lane mode (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY)                                            | Title, subtitle, artist, genre, `#PLAYLEVEL`, `#DIFFICULTY`, `#COMMENT`, `#TEXT`, `#PREVIEW`           |
-| Visible notes: position and lane                                                         | The sample a note plays (keysound assignment)                                                          |
-| Long notes: start, end, and mode (LN / CN / HCN); FREE ZONE notes                        | BGM (channel `01`), `#WAV`, `#EXWAV`, `#VOLWAV`, `#WAVCMD`, volume-change channels                     |
-| Mines (`Dx` / `Ex`, bmson `mine_channels`): position, lane, and damage                   | BGA, layers, POOR image, `#BMP`, `#BGA`, `#SWBGA`, `#ARGB`, `#STAGEFILE`, `#BANNER`, `#BACKBMP`, video |
-| Bar lines (measure lengths, and whether bar lines are drawn at all)                      | Invisible notes (`3x` / `4x`, bmson `key_channels`; not judged)                                        |
-| Initial BPM, BPM changes, STOP, `#STP`                                                   | `#LNTYPE`, `#LNOBJ`, and `5x` / `6x` as notations (the resolved long notes are included instead)       |
-| SCROLL (`SC`) and SPEED (`SP`)                                                           | `#OPTION` except HDX LONGMODE, `#MIDIFILE`, `#PATH_WAV`, `#MATERIALS`, `#BASE`, `#CHARSET`             |
-| `#BASEBPM` (sets the reference BPM for hi-speed, so it changes how fast notes look)      | `#CHANGEOPTION` (see below)                                                                            |
-| Judgment rank: `#RANK`, `#DEFEXRANK`, bmson `judge_rank`, and `#EXRANKxx` changes (`A0`) | Anything a player does not draw in or over the lanes                                                   |
-| `#TOTAL` / bmson `total`                                                                 |                                                                                                        |
+| Included (affects play or what the lanes show)                                           | Excluded                                                                                                        |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Lane mode (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY)                                            | Title, subtitle, artist, genre, `#PLAYLEVEL`, `#DIFFICULTY`, `#COMMENT`, `#TEXT`, `#PREVIEW`                    |
+| Visible notes: position and lane                                                         | The sample a note plays (keysound assignment)                                                                   |
+| Long notes: start, end, and mode (LN / CN / HCN); FREE ZONE notes                        | BGM (channel `01`), `#WAV`, `#EXWAV`, `#VOLWAV`, `#WAVCMD`, volume-change channels                              |
+| Mines (`Dx` / `Ex`, bmson `mine_channels`): position, lane, and damage                   | BGA, layers, POOR image, `#BMP`, `#BGA`, `#SWBGA`, `#ARGB`, `#STAGEFILE`, `#BANNER`, `#BACKBMP`, video          |
+| Bar lines (measure lengths, and whether bar lines are drawn at all)                      | Invisible notes (`3x` / `4x`, bmson `key_channels`; not judged)                                                 |
+| Initial BPM, BPM changes, STOP, `#STP`                                                   | `#LNTYPE`, `#LNOBJ`, and `5x` / `6x` as notations (the resolved long notes are included instead)                |
+| SCROLL (`SC`) and SPEED (`SP`)                                                           | `#OPTION` except HDX LONGMODE and gameplay options, `#MIDIFILE`, `#PATH_WAV`, `#MATERIALS`, `#BASE`, `#CHARSET` |
+| `#BASEBPM` (sets the reference BPM for hi-speed, so it changes how fast notes look)      | `#CHANGEOPTION` (see below)                                                                                     |
+| Judgment rank: `#RANK`, `#DEFEXRANK`, bmson `judge_rank`, and `#EXRANKxx` changes (`A0`) | Anything a player does not draw in or over the lanes                                                            |
+| `#TOTAL` / bmson `total`                                                                 |                                                                                                                 |
 
 `#CHANGEOPTION` currently executes display-only HI-SPEED, which is excluded like user hi-speed. Other timed families are diagnosed without effects. If a future operation changes note placement or judging, its effective semantics must join the fingerprint with a version bump (section 5).
 
@@ -170,7 +170,7 @@ The content outside control flow plays in every outcome. For one outcome of a se
 
 Segments whose outcomes can interact are evaluated together as one **factor** (over all their variables jointly). Two segments interact when any of these holds (computed over every line of the segments, whatever the outcome, and over the deltas of every outcome):
 
-- one sets a definition or header value the other sets or uses: `#BPMxx`, `#STOPxx`, `#SCROLLxx`, `#SPEEDxx`, `#EXRANKxx` (used by objects of `08`, `09`, `SC`, `SP`, `A0` with that value), `#BPM`, `#BASEBPM`, `#RANK` / `#DEFEXRANK`, `#TOTAL`, `#PLAYER`, the length of one measure, `#LNOBJ` / `#LNTYPE` / `#LNMODE` / valid initial HDX LONGMODE (used by every lane object), or, when `#LNTYPE` is inferred, any `5x` / `6x` object;
+- one sets a definition or header value the other sets or uses: `#BPMxx`, `#STOPxx`, `#SCROLLxx`, `#SPEEDxx`, `#EXRANKxx` (used by objects of `08`, `09`, `SC`, `SP`, `A0` with that value), `#BPM`, `#BASEBPM`, `#RANK` / `#DEFEXRANK`, `#TOTAL`, `#PLAYER`, the length of one measure, `#LNOBJ` / `#LNTYPE` / `#LNMODE` / valid initial HDX LONGMODE (used by every lane object), a gameplay `#OPTION` (they compile in declaration order), or, when `#LNTYPE` is inferred, any `5x` / `6x` object;
 - they have a timeline object or delta timeline event of one type at one time (same-time changes collapse, a BMS STOP replaces another, and bmson stops and `#STP`s add up);
 - they place an object on one lane at one position, or a delta note starts there (a lane keeps one judged note per position);
 - in a **pairing stream** — `obj:<lane>`, the `1x` / `2x` objects of a lane when some `#LNOBJ` exists, or `ln:<lane>`, the `5x` / `6x` objects of a lane when it has any — their **reach** overlaps. A segment's reach in a stream runs from the last object of the stream outside control flow strictly before the earliest time the segment touches in it (its own objects there, and the starts and ends of its delta notes on that lane) to the first such object strictly after the latest one, or to −∞ / +∞ when there is none; reaches are closed intervals.
@@ -264,6 +264,7 @@ Chart document of a chart with control flow:
 - Every number, including counts and indexes, is a string: an integer as `"n"`, any other rational as `"p/q"` in lowest terms with a positive denominator and the sign on the numerator (`"-3/4"`). No floats, exponents, or `+` signs. Flags (`fz` in play documents, `player3`, `barLines`) are JSON booleans.
 - `notes` are sorted by `(m, p, lane)`, then by `end` (a note without one first), `ln`, and `fz`; `mines` by `(m, p, lane, damage)`; `timeline` by `(m, p, type, v)`; `lengths` by measure. `lane` and `type` compare as strings; numeric fields sort by value, not as text. Delta lists are sorted the same way.
 - A field with no value is omitted (`end` / `ln` on a normal note, an empty delta list), except `baseBPM` and `total`, which are always present and may be `null`.
+- `playOptions` holds the chart's compiled gameplay options (`compileChartPlayOptions` of its initial declarations: `random`, `judge`, `hellJudge`, `addMine`, `notes`), strings and `true` flags. It is omitted when the chart declares none, so such a chart keeps its fingerprint. In a chart document it is a header value: the top level holds the options outside control flow, and a branch's `header.playOptions` holds its outcome's options in full (`{}` for none). The Leaderboard reads it to check a replay's `chart.chartPlayOptions` ([ADR 0035](./adr/0035-chart-authored-notes-options.md)).
 - The document is serialized with the JSON Canonicalization Scheme ([RFC 8785](https://www.rfc-editor.org/rfc/rfc8785)): object keys sorted, no whitespace, UTF-8.
 
 ## 5. Output and versioning

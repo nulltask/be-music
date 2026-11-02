@@ -1,3 +1,5 @@
+import type { ChartPlayOptionProgram, ChartPlayVariant } from '@be-music/chart-model';
+import { chartNotesCopies, resolveChartNotesOption } from '../core/chart-notes-options.ts';
 import { isBmsonRecoveryDisabled } from '../ruleset/bmson-total.ts';
 import type { PlayerSummary } from '../core/engine-types.ts';
 import type { ScoreSummary } from '../ruleset/score.ts';
@@ -209,6 +211,11 @@ export interface RecordPlayKind {
   replay: boolean;
   /** The play's tempo (`play.tempo`): another tempo than 1 is practice. */
   tempo: number;
+  /**
+   * A course stage played without its chart's NOTES COPY (#932), which a course leaves out to keep its key mode: the
+   * chart's record is of the double-play chart COPY makes, so this single-play stage does not update it.
+   */
+  chartCopyLeftOut?: boolean;
 }
 
 /**
@@ -222,12 +229,22 @@ export function playKeepsRecord(play: RecordPlayKind & { course: boolean }): boo
 }
 
 /**
+ * Whether a chart's gameplay program copies the chart onto the 2P side outside a course (`774:NOTES_COPY` / `DBLCOPY` on
+ * a 5 / 7 KEY chart, #932): its record is then of the double-play chart, and a course stage, which leaves the copy out,
+ * plays it with `RecordPlayKind.chartCopyLeftOut`.
+ */
+export function chartProgramCopiesChart(program: ChartPlayOptionProgram, playVariant: ChartPlayVariant): boolean {
+  return chartNotesCopies(resolveChartNotesOption(program.options.notes, { playVariant, course: false }));
+}
+
+/**
  * Whether an EXPERT / GRADE course stage also updates its chart's record ({@link mergeCourseStageRecord}): not when it
- * is auto-played, replayed or played at another tempo, as for a single play. A NONSTOP run's stitched play has no stage
+ * is auto-played, replayed or played at another tempo, as for a single play, nor when it left out its chart's NOTES COPY
+ * (the chart's record is of another key mode). A NONSTOP run's stitched play has no stage
  * chart to record.
  */
 export function courseStageKeepsRecord(play: RecordPlayKind): boolean {
-  return playKeepsRecord({ ...play, course: false });
+  return playKeepsRecord({ ...play, course: false }) && play.chartCopyLeftOut !== true;
 }
 
 /**

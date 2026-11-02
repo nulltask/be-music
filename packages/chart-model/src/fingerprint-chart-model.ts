@@ -1,4 +1,5 @@
 import { parseHDXLongNoteMode } from './hdx-long-note-mode.ts';
+import { isChartPlayOptionDeclaration } from './chart-play-options.ts';
 /**
  * The chart fingerprint's model of a chart with control flow (`docs/fingerprint-spec.md`, sections 3.6.3 – 3.6.6):
  * segments are grouped into interacting factors, each factor becomes a reduced decision tree of deltas, what every
@@ -58,6 +59,7 @@ import {
   type FingerprintRandomNode,
   assemblePlayDocument,
   canonicalizeJSONValue,
+  formatPlayOptionsField,
 } from './fingerprint-document.ts';
 import {
   HEADER_FIELDS,
@@ -363,6 +365,8 @@ function collectStaticKeys(
           break;
         case 'OPTION':
           if (parseHDXLongNoteMode(entry.value) !== undefined) model.sets.add('D:LN');
+          // Gameplay options compile in declaration order, so two segments declaring them depend on each other.
+          else if (isChartPlayOptionDeclaration(entry.value)) model.sets.add('H:OPTION');
           break;
         case 'LNOBJ':
         case 'LNTYPE':
@@ -879,6 +883,7 @@ function assembleChartDocument(
     mines: [...top.mines].sort(compareMineItems).map(formatMine),
     timeline: timeline.map(formatTimeline),
     random: sortByCanonicalText(random),
+    ...formatPlayOptionsField(header.playOptions),
   };
 }
 

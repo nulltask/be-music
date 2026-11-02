@@ -224,8 +224,9 @@ export function createV0API(options: { now: () => number; newId: () => string; c
         413: json('The body is too large.', errorResponse(['body-too-large'])),
         415: json('Not gzip-compressed JSON.', errorResponse(['expected-json', 'unsupported-encoding'])),
         422: json(
-          'The play cannot be stored: an auto play, a malformed replay, a replay without fingerprints, or a ' +
-            'fingerprint document that does not hash to the replay’s fingerprint.',
+          'The play cannot be stored: an auto play, a malformed replay, a replay without fingerprints, a ' +
+            'fingerprint document that does not hash to the replay’s fingerprint, or a replay whose chart gameplay ' +
+            'options are not the ones its chart runs.',
           errorResponse([
             'invalid-replay',
             'auto-play',
@@ -235,6 +236,7 @@ export function createV0API(options: { now: () => number; newId: () => string; c
             'play-document-fingerprint-mismatch',
             'chart-document-not-a-document',
             'chart-document-fingerprint-mismatch',
+            'chart-play-options-mismatch',
           ]),
         ),
         429: json('Too many submissions; retry after `Retry-After` seconds.', errorResponse(['rate-limited'])),

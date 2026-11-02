@@ -57,3 +57,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0033: Chart-authored RANDOM and judgment CRAZY options replace the player's, and are not assists](./0033-chart-authored-gameplay-options.md)
 
 - [0034: Map chart-authored GAMELEVEL and EXTRA onto each ruleset's own gauges](./0034-chart-authored-gauge-options.md)
+
+- [0035: Chart-authored NOTES options convert the chart in the engine, and the fingerprint carries the gameplay options](./0035-chart-authored-notes-options.md)
