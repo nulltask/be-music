@@ -245,6 +245,8 @@ export class SelectRoute {
           if (kit.family !== 'beatoraja') this.replaySlotsPanel.showSelect(entry);
           // "Ghost status" says whether a play of the bar would show the picked ghost.
           const chart = entry?.kind === 'chart' ? entry : undefined;
+          // The PRACTICE range picker draws the chart under the cursor.
+          this.debugMenu.setPracticeChart(chart?.chart);
           const playFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'gameplay', chart?.chart);
           const target = chart !== undefined ? this.replaySlots.targetOf(chart) : undefined;
           // No bar, or a folder: nothing to say.
