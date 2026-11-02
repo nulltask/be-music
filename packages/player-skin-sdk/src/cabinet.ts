@@ -278,6 +278,8 @@ function aaaLine(max: number): number {
  * The score graph's figures for a gameplay `runtime`: the player's EX score, the pacemaker's ({@link
  * BeMusicGameplayRuntime.targetEXScore}, else the AAA line) and the best record's ({@link
  * BeMusicGameplayRuntime.bestEXScore}), each held to the share of the chart's notes judged so far, as a pacemaker reads.
+ * A host that knows where its target stands now ({@link BeMusicGameplayRuntime.targetPaceEXScore}, a replay ghost) gives
+ * that in place of the share.
  */
 export function resolveScorePace(
   runtime: Pick<
@@ -292,6 +294,7 @@ export function resolveScorePace(
     | 'poor'
     | 'bestEXScore'
     | 'targetEXScore'
+    | 'targetPaceEXScore'
     | 'targetLabel'
   >,
 ): ScorePace {
@@ -306,12 +309,20 @@ export function resolveScorePace(
     return { label, exScore: score, pace, diff: exScore - pace };
   };
   const hostTarget = runtime.targetEXScore !== undefined && runtime.targetEXScore > 0;
+  const hostPace = runtime.targetPaceEXScore;
   return {
     exScore,
     max,
     progress,
     target: hostTarget
-      ? against(runtime.targetLabel ?? 'TARGET', runtime.targetEXScore!)
+      ? hostPace !== undefined
+        ? {
+            label: runtime.targetLabel ?? 'TARGET',
+            exScore: runtime.targetEXScore!,
+            pace: hostPace,
+            diff: exScore - hostPace,
+          }
+        : against(runtime.targetLabel ?? 'TARGET', runtime.targetEXScore!)
       : against(runtime.targetLabel ?? 'AAA', aaaLine(max)),
     ...(runtime.bestEXScore !== undefined && runtime.bestEXScore > 0
       ? { best: against('MY BEST', runtime.bestEXScore) }

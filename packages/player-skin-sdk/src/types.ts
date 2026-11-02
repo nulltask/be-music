@@ -430,6 +430,11 @@ export interface BeMusicGameplayRuntime {
    * against the AAA line ({@link resolveScorePace}).
    */
   targetEXScore?: number;
+  /**
+   * The pacemaker's EX score at this point of the play, when the host knows it (a replay ghost, at the notes the play
+   * has judged); without it a score graph holds {@link targetEXScore} to the share of the chart's notes judged.
+   */
+  targetPaceEXScore?: number;
   targetLabel?: string;
   /** The course and the stage being played, for a course stage or a NONSTOP run. */
   course?: CourseView;
