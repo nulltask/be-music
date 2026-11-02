@@ -429,7 +429,7 @@ flowchart TD
 ```
 
 - `runtime/play-audio-graph.ts` は、プレイの AudioContext と bus を作ります（`#VOLWAV` を含む）。オーディオサービスがこれをプレイのために開きます（[オーディオサービス](#オーディオサービス)）。
-- `chart/play-audio.ts` は、`#WAV` のサンプルを audio session が引くキーでそこへデコードし、ピッチを保つテンポのときは伸縮し、`#WAVCMD` / `#EXWAV` の音量をまとめます。
+- `chart/play-audio.ts` は、`#WAV` のサンプルを audio session が引くキーでそこへデコードし、ピッチを保つテンポのときは伸縮し、`#WAVCMD` / `#EXWAV` の音量をまとめます。同じ譜面のプレイでは、直前に遊んだ譜面のサンプルをオーディオサービスの `chartSamples` から使います（[オーディオサービス](#オーディオサービス)）。
 - `chart/play-bga.ts` は、プレイに要る BGA リソース（`#BMPxx`、bmson の `bga.header`、`#BGAxx` の切り出し元、LR2 view では暗黙の `#BMP00` POOR 画像）を選び、静止画は共通のテクスチャローダーで、動画は動画ローダーでデコードし、BMS の layer の黒を抜き、切り出し領域のビューを作ります。
 - `session/play/play-ending.ts` は、プレイの終わりの時間を決めます（`resolvePlayEnding`、`beginExitSequence`）。最後まで進んだプレイは、最後のノートのあと譜面時刻で約 2 小節の余韻を置き、`exit-fade-out`（LR2 のタイマー 2、beatoraja の `TIMER_FADEOUT`）を出して、テーマや skin のフェードアウト（LR2 の `#FADEOUT`、beatoraja の `fadeout`）のあとに次の画面へ移ります。Escape と F5 も同じフェードアウトです。ゲージが尽きて途中で終わったプレイは、LR2 と beatoraja と同じくその場で止まります。`exit-close`（LR2 のタイマー 3、beatoraja の `TIMER_FAILED`）を出し、フェードアウトは出さず、音を切り、スキンの close の時間（LR2 の `#CLOSE`、beatoraja の `close`）のあとに結果を出します。close の時間がないテーマ（組み込みスキン）は 1.5 秒待ち、その間に画面をフェードします。画面のフェードは各ビューが `playEndingFadeAlpha`（`view/shared/play-frame.ts`）で行います。
 
@@ -885,6 +885,19 @@ flowchart LR
 - `skinSounds.play` / `loop` / `stop` は beatoraja スキンの `main_state.audio_*` です。`skinSounds.owned(owner)` は同じ呼び出しをオーナー付きで行います。
 - `preview.focus(target, owner)` は 1 つの `ChartPreviewEngine` を動かします。`analyzer.sample(now)` は、音に反応する Be-Music Skin のために音楽バスを解析します。
 - `openPlayGraph(chart, mode, busOptions, { owner })` は、プレイ専用の `interactive` な AudioContext と、`#VOLWAV` を反映したオーディオバスを開き、バスの出力に解析を付けます。`close({ delayMs, beforeClose })` で、余韻を鳴らしきってから閉じます。
+- `chartSamples` は、直前に遊んだ譜面のデコード済みサンプルを持ちます。クイックリトライ（F5、リザルトでの R）で、サンプルをデコードし直しません（[#953](https://github.com/nulltask/be-music/issues/953)）。`chart/play-audio.ts` はプレイの読み込みでこれを確保します。同じ譜面のプレイは持っているデコード結果を使い、足りない分だけをデコードします。別の譜面のプレイは先にそれを手放すので、キャッシュが 2 つの譜面を持つことはありません。ソース（ドロップしたフォルダーやアーカイブ。同一のオブジェクトか）、譜面のパス、`#PATH_WAV`、プレイのコンテキストのサンプルレートがすべて一致すれば同じ譜面です。キャッシュが持つのはデコードしたままのものだけです。プレイごとに RANDOM を引き直し、ピッチを保つ伸縮、`#WAVCMD` / `#EXWAV`、ピークゲインは新しいバッファーに施し（ピークゲインは複製を拡大縮小します）、新しいリプレイを記録します。読み込みを終えたプレイは、使ったパスだけを残すので、別の `#RANDOM` 分岐で増えることはありません。Web プレイヤーは、選曲画面へ戻るたびと `pagehide` で `chartSamples.release()` を呼びます。SILENT のプレイと `dispose()` も手放します。
+
+  ```mermaid
+  stateDiagram-v2
+    state "空" as Empty
+    state "保持" as Holding
+    [*] --> Empty
+    Empty --> Holding: 譜面のプレイ
+    Holding --> Holding: 同じ譜面のリトライ
+    Holding --> Holding: 別の譜面（先に手放す）
+    Holding --> Empty: 選曲画面、pagehide、SILENT、dispose
+  ```
+
 - `stopOwned(owner)` は、そのオーナーが鳴らしたものをすべて止めます。BGM、ジングル、効果音、スキンの音、そのオーナーがフォーカスしたプレビュー、まだ閉じ始めていないプレイのグラフです。AudioContext を閉じても音は止まらなくなったので、scene は画面を出るときにこれを呼びます。オーナーなしで鳴らした音は最後まで鳴ります（選曲画面を出るときの決定音など）。`dispose()` はすべてを止め、すべての AudioContext を閉じます。
 
 ## Compatibility boundary

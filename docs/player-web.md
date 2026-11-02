@@ -439,7 +439,7 @@ flowchart TD
 ```
 
 - `runtime/play-audio-graph.ts` builds the play's AudioContext and bus (with `#VOLWAV`); the audio service opens it for the play ([Audio service](#audio-service)).
-- `chart/play-audio.ts` decodes the `#WAV` samples into it under the key the audio session looks them up by, stretches them for a keep-pitch tempo, and folds the `#WAVCMD` / `#EXWAV` volumes.
+- `chart/play-audio.ts` decodes the `#WAV` samples into it under the key the audio session looks them up by, stretches them for a keep-pitch tempo, and folds the `#WAVCMD` / `#EXWAV` volumes. It takes the samples of the chart played last from the audio service's `chartSamples` when the play is of the same chart ([Audio service](#audio-service)).
 - `chart/play-bga.ts` picks the BGA resources a play needs (`#BMPxx`, bmson `bga.header`, the sources of `#BGAxx` sub-regions, the implicit `#BMP00` POOR image for the LR2 view), decodes stills through the shared texture loader and videos through the video loader, keys the BMS layer track's black out, and cuts the sub-region views.
 - `session/play/play-ending.ts` times the end of a play (`resolvePlayEnding`, `beginExitSequence`). A play that reaches its end holds a lead-out of about two measures after the last note, in chart time, then raises `exit-fade-out` (LR2 timer 2, beatoraja `TIMER_FADEOUT`) and leaves after the theme or skin fade-out (LR2 `#FADEOUT`, beatoraja `fadeout`); Escape and F5 run the same fade-out. A play cut short by its gauge emptying stops at once, as LR2 and beatoraja do: it raises `exit-close` (LR2 timer 3, beatoraja `TIMER_FAILED`) and no fade-out, cuts the sound, and shows the result after the skin's close time (LR2 `#CLOSE`, beatoraja `close`); a theme without one (the built-in skins) holds 1.5 s and fades its picture. The views fade the picture with `playEndingFadeAlpha` (`view/shared/play-frame.ts`).
 
@@ -889,6 +889,17 @@ flowchart LR
 - `skinSounds.play` / `loop` / `stop` are a beatoraja skin's `main_state.audio_*` calls; `skinSounds.owned(owner)` makes the same calls with an owner.
 - `preview.focus(target, owner)` drives the one `ChartPreviewEngine`. `analyzer.sample(now)` reads the music bus for audio-reactive Be-Music Skins.
 - `openPlayGraph(chart, mode, busOptions, { owner })` opens a play's own `interactive` context and audio bus with `#VOLWAV` applied, and an analyzer on the bus output. `close({ delayMs, beforeClose })` ends it once the tail has rung out.
+- `chartSamples` keeps the decoded samples of the chart played last, so a quick retry (F5, R on the result) does not decode them again ([#953](https://github.com/nulltask/be-music/issues/953)). `chart/play-audio.ts` claims it as a play loads: a play of the same chart takes the decodes it holds and decodes only what is missing, and a play of another chart releases them first, so the cache never holds two charts. A chart is the same when its source (the dropped folder or archive, by identity), chart path, `#PATH_WAV` and the play context's sample rate all match. The cache keeps the raw decodes only: each play still draws its own RANDOM, stretches for keep pitch, applies `#WAVCMD` / `#EXWAV` and peak gain to new buffers (peak gain scales a copy), and records a new replay. A play that finished loading leaves only the paths it used, so another `#RANDOM` branch does not add to it. The web player calls `chartSamples.release()` on every way back to the select screen and on `pagehide`; a SILENT play releases it, and `dispose()` does too.
+
+  ```mermaid
+  stateDiagram-v2
+    [*] --> Empty
+    Empty --> Holding: play of a chart
+    Holding --> Holding: retry of the same chart
+    Holding --> Holding: another chart (released first)
+    Holding --> Empty: select screen, pagehide, SILENT, dispose
+  ```
+
 - `stopOwned(owner)` stops everything an owner started: its BGM, jingles, cues and skin sounds, the preview it focused, and its play graphs that are not closing yet. A scene calls it on exit, since closing a context no longer stops its sounds. A sound started without an owner plays out, such as the decide cue as the select screen leaves. `dispose()` stops everything and closes every context.
 
 ## Compatibility boundary

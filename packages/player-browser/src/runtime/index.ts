@@ -9,6 +9,13 @@
  */
 export * from './audio-bus.ts';
 export * from './audio-service.ts';
+// The decoded samples of the chart played last (`AudioService.chartSamples`).
+export type {
+  CachedChartSample,
+  ChartSampleCache,
+  ChartSampleCacheKey,
+  ChartSampleLease,
+} from './chart-sample-cache.ts';
 export * from './master-volume.ts';
 // The platform audio session (`navigator.audioSession`) — distinct from the internal engine `WebAudioSession` noted above.
 export * from './system-audio-session.ts';
