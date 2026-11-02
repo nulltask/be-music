@@ -84,7 +84,7 @@ Resubmitting the same play from its owner returns the stored result; submission 
 
 - L1 re-simulates inputs instead of trusting the replay’s result cache.
 - L2 rejects AUTO and classifies assists. Tempo changes and standalone course stages are stored as unranked; ESC aborts are ranked as failed plays.
-- L3 checks that the play document and, on registration, chart document hash to the claimed fingerprints.
+- L3 checks that the play document and, on registration, chart document hash to the claimed fingerprints. The play document then also checks the replay's chart gameplay program: `chart.chartPlayOptions` must be the document's `playOptions` narrowed to the play (a course stage leaves out NOTES COPY; a NONSTOP run applies none), or the play is rejected with `chart-play-options-mismatch` ([ADR 0035](./adr/0035-chart-authored-notes-options.md), `src/scores/chart-play-options.ts`).
 - L4 holds when chart and play fingerprints are identical or the play fingerprint is already verified for the chart. Composing new control-flow outcomes is not implemented.
 
 L5 (equivalence of replay notes and play-document timings) and input anomaly detection are not implemented. See `src/scores/played-chart.ts` for document verification.
@@ -215,7 +215,7 @@ sequenceDiagram
     A->>A: checkCourseReplayEligibility<br/>(auto, aborted, fingerprints, one run)
     A->>D: submission id already stored?
     loop each played stage
-        A->>A: play document hashes to playFingerprint (L3)
+        A->>A: play document hashes to playFingerprint (L3)<br/>and matches chart.chartPlayOptions
         A->>D: chart known? else 409 chart_document_required
     end
     loop each unreached stage
