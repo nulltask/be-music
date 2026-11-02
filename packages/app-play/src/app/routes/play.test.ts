@@ -25,7 +25,7 @@ import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
 import type { BeatorajaPlayEntry } from '../../services/themes/beatoraja.ts';
 import { courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
-import type { PlayerScene, PlayerWebElements } from '../../types.ts';
+import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { ResolvedPlayKit } from '../family-kits.ts';
 import { SceneRouter } from '../scene-router.ts';
@@ -528,28 +528,53 @@ describe('PlayRoute.playChart: a chart played at once', () => {
     }
   });
 
-  test('"Ghost: Own best" hands a built-in play the own-best source, and a replay or another family none', async () => {
-    const ghostReplays = { slots: vi.fn(() => []), read: vi.fn(async () => undefined) };
-    /** A harness whose Debug Menu asks for the ghost. */
-    async function withGhost(family: Family = 'built-in'): Promise<Harness> {
+  test('"Ghost" hands a built-in play the picked source in its mode, and a replay or another family none', async () => {
+    const replays = { slots: vi.fn(() => []), read: vi.fn(async () => undefined) };
+    /** A harness whose Debug Menu asks for a ghost. */
+    async function withGhost(
+      family: Family = 'built-in',
+      ghost: Pick<PlayerGUIState, 'ghost' | 'ghostMode'> = { ghost: 'OWN_BEST', ghostMode: 'PLAYFIELD' },
+    ): Promise<Harness> {
       const h = await harness({ family });
       const route = new PlayRoute({
         ...h.deps,
-        guiState: { ...h.deps.guiState, ghost: 'OWN_BEST' },
-        ghostReplays,
+        guiState: { ...h.deps.guiState, ...ghost },
+        ghostSources: { replays },
         debugMenu: h.deps.debugMenu as unknown as DebugMenu,
       });
       return { ...h, route };
     }
     const play = await playing(await withGhost(), chartEntry('a'));
     expect(play.options.settings.ghost?.kind).toBe('own-best');
+    expect(play.options.settings.ghostMode).toBe('side-playfield');
     await expect(play.options.settings.ghost?.load()).resolves.toBeUndefined();
-    expect(ghostReplays.slots).toHaveBeenCalledOnce();
+    expect(replays.slots).toHaveBeenCalledOnce();
     const replayed = await playing(await withGhost(), chartEntry('a'), { autoPlay: true, replay: REPLAY });
     expect(replayed.options.settings).not.toHaveProperty('ghost');
     expect((await playing(await withGhost('lr2'), chartEntry('a'))).options.settings).not.toHaveProperty('ghost');
     // Off by default.
     expect((await playing(await harness(), chartEntry('a'))).options.settings).not.toHaveProperty('ghost');
+  });
+
+  test('a pacemaker ghost goes to every family; a source without a reader gives none', async () => {
+    const replays = { slots: vi.fn(() => []), read: vi.fn(async () => undefined) };
+    async function withGhost(family: Family, ghost: PlayerGUIState['ghost']): Promise<Harness> {
+      const h = await harness({ family });
+      const route = new PlayRoute({
+        ...h.deps,
+        guiState: { ...h.deps.guiState, ghost, ghostMode: 'PACEMAKER' },
+        ghostSources: { replays },
+        debugMenu: h.deps.debugMenu as unknown as DebugMenu,
+      });
+      return { ...h, route };
+    }
+    const lr2 = await playing(await withGhost('lr2', 'REPLAY_SLOT_2'), chartEntry('a'));
+    expect(lr2.options.settings.ghost?.kind).toBe('replay-slot');
+    expect(lr2.options.settings.ghost?.label).toBe('SLOT 2');
+    expect(lr2.options.settings.ghostMode).toBe('pacemaker');
+    // No Leaderboard reader was given.
+    const top = await playing(await withGhost('beatoraja', 'LEADERBOARD_TOP'), chartEntry('a'));
+    expect(top.options.settings).not.toHaveProperty('ghost');
   });
 
   test('a course stage carries its run on, with its course handed to the play', async () => {

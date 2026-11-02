@@ -704,7 +704,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     ...(options.playerName !== undefined ? { playerName: options.playerName } : {}),
     audio: options.audio,
     ...(options.sounds !== undefined ? { sounds: options.sounds } : {}),
-    // A ghost has a second field to be drawn in only on a built-in family view.
+    // A ghost draws a field of its own (a second playfield, marks over the lanes) only on a built-in family view.
     showsGhost: () => familySlot.current?.view.family === 'built-in',
   });
   // The views draw with the session's settings: the host's, with what the session resolved from them.

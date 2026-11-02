@@ -156,9 +156,13 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const frame = ctx.playFrame;
   const best = frame?.scoreTargets?.bestEXScore;
   const target = frame?.scoreTargets?.targetEXScore;
+  const targetPace = frame?.scoreTargets?.targetPaceEXScore;
+  const targetLabel = frame?.scoreTargets?.targetLabel;
   return {
     ...(best !== undefined && best > 0 ? { bestEXScore: best } : {}),
     ...(target !== undefined && target > 0 ? { targetEXScore: target } : {}),
+    ...(target !== undefined && target > 0 && targetPace !== undefined ? { targetPaceEXScore: targetPace } : {}),
+    ...(targetLabel !== undefined ? { targetLabel } : {}),
     ...(frame?.course !== undefined ? { course: frame.course } : {}),
     ...(frame?.playerName !== undefined ? { playerName: frame.playerName } : {}),
     ...(frame !== undefined ? { random1P: frame.playOptions.random1P } : {}),

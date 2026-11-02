@@ -931,6 +931,8 @@ export const PLAYER_APP_HTML = `
               <dl class="help-menu-items">
                 <dt>Tempo · Hi-speed · SUDDEN+ / HIDDEN+ · LIFT</dt>
                 <dd>When on, a replay uses what the recorded player had; when off, your own settings.</dd>
+                <dt>Ghost · Ghost mode</dt>
+                <dd>Shows a recorded play with yours: your best, a replay slot, the Leaderboard's top run or a replay file, as a second playfield, a pacemaker, or a pacemaker with its key presses over your lanes. Ghost status says whether the chart under the cursor shows it.</dd>
               </dl>
             </section>
             <section class="help-menu-folder">
@@ -1202,6 +1204,8 @@ export const PLAYER_APP_HTML = `
               <dl class="help-menu-items">
                 <dt>Tempo · Hi-speed · SUDDEN+ / HIDDEN+ · LIFT</dt>
                 <dd>オンならリプレイは録画したプレイヤーの設定で、オフなら自分の設定で再生します。</dd>
+                <dt>Ghost · Ghost mode</dt>
+                <dd>記録されたプレイを自分のプレイと一緒に見せます。自己ベスト、リプレイスロット、Leaderboard の 1 位、リプレイファイルのどれかを、2 つ目のプレイフィールド、ペースメーカー、押下を自分のレーンに重ねるペースメーカーのどれかで見せます。Ghost status はカーソルの譜面で見せられるかを示します。</dd>
               </dl>
             </section>
             <section class="help-menu-folder">

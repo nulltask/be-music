@@ -15,6 +15,7 @@ import {
   resolveCourseStageChartFingerprints,
   type BeMusicCourseReplay,
   type BeMusicReplay,
+  parseReplay,
   type CourseReplayIneligibleReason,
   type RulesetId,
 } from '@be-music/player-engine/replay';
@@ -125,6 +126,32 @@ export async function submitToLeaderboard(
     return { status: response.status === 201 ? 'accepted' : 'duplicate', ...body };
   }
   return { status: 'failed', httpStatus: response.status, error: (await readError(response)) ?? 'unknown' };
+}
+
+/**
+ * Fetches the replay of the top run on a chart's Leaderboard ranking under `ruleset` (unassisted plays): the ranking's
+ * first entry (`GET /api/v0/charts/:chartFingerprint/leaderboard?limit=1`), then the replay of the score that set it
+ * (`GET /api/v0/scores/:id/replay`, gzip-compressed on the wire). `undefined` when the chart has no ranked run or its
+ * replay cannot be read; a replay ghost then plays without one. No session is needed for a public replay.
+ */
+export async function fetchLeaderboardTopReplay(
+  chartFingerprint: string,
+  ruleset: RulesetId,
+  options: Pick<LeaderboardClientOptions, 'fetch'> = {},
+): Promise<BeMusicReplay | undefined> {
+  const doFetch = options.fetch ?? fetch.bind(globalThis);
+  const query = new URLSearchParams({ ruleset, limit: '1' });
+  const ranking = await doFetch(`/api/v0/charts/${encodeURIComponent(chartFingerprint)}/leaderboard?${query}`, {
+    credentials: 'same-origin',
+  });
+  if (!ranking.ok) return undefined;
+  const body = (await ranking.json().catch(() => undefined)) as { entries?: { exScoreId?: unknown }[] } | undefined;
+  const scoreId = body?.entries?.[0]?.exScoreId;
+  if (typeof scoreId !== 'string' || scoreId.length === 0) return undefined;
+  const replay = await doFetch(`/api/v0/scores/${encodeURIComponent(scoreId)}/replay`, { credentials: 'same-origin' });
+  if (!replay.ok) return undefined;
+  // The browser undoes the `content-encoding: gzip` the replay is served with.
+  return parseReplay(await replay.text());
 }
 
 /**

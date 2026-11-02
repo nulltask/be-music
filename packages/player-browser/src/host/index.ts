@@ -38,7 +38,12 @@ export {
   type PlaySceneSettings,
 } from './play.ts';
 export { PlayOptionMismatchError } from '../session/play/play-option-mismatch.ts';
-export type { GhostPresentation, GhostSource } from '../session/play/ghost/ghost.ts';
+export type {
+  GhostPresentation,
+  GhostPresentationMode,
+  GhostScoreTarget,
+  GhostSource,
+} from '../session/play/ghost/ghost.ts';
 export {
   createSelectScene,
   type SelectScene,

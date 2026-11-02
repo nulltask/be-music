@@ -145,6 +145,13 @@ describe('resolveScorePace', () => {
     expect(pace.best).toEqual({ label: 'MY BEST', exScore: 760, pace: 380, diff: 20 });
   });
 
+  it('takes where the host target stands now in place of the share, when the host knows it', () => {
+    const pace = resolveScorePace({ ...half, targetEXScore: 700, targetPaceEXScore: 420, targetLabel: 'GHOST' });
+    expect(pace.target).toEqual({ label: 'GHOST', exScore: 700, pace: 420, diff: -20 });
+    // Without a target the AAA line paces by share, whatever pace is given.
+    expect(resolveScorePace({ ...half, targetPaceEXScore: 420 }).target.pace).toBe(445);
+  });
+
   it('holds everything at zero before the first judgement', () => {
     const pace = resolveScorePace({ exScoreMax: 1000, totalNotes: 500, bestEXScore: 0 });
     expect(pace.progress).toBe(0);

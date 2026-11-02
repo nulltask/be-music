@@ -269,43 +269,81 @@ flowchart LR
 
 ## Ghost
 
-A ghost is a recorded play shown beside the live one. The first kind the browser player shows is the player's own
-best, replayed as a second playfield on the built-in skins (Native and the canvas skins). The other kinds discussed in
-[#418](https://github.com/nulltask/be-music/issues/418) (a pacemaker alone, the recorded inputs over the player's own
-lanes, other sources than the own best) are not built yet; the code keeps the source and the presentation apart so they
-can be swapped in and compared.
+A ghost is a recorded play shown beside the live one. The browser player builds several kinds side by side so they can
+be compared before one is chosen ([#418](https://github.com/nulltask/be-music/issues/418),
+[#934](https://github.com/nulltask/be-music/issues/934)). Each is a **source** (which replay it plays) and a
+**presentation** (how it shows), picked apart.
 
 ```mermaid
 flowchart LR
-  slots[(Replay slots)] -->|"highest EX"| source[GhostSource]
-  source -->|replay| timeline["Judgment timeline<br/>(re-simulated)"]
+  subgraph sources[Sources]
+    best[(Own best)]
+    slot[(Replay slot)]
+    top[(Leaderboard top)]
+    file[(Replay file)]
+  end
+  sources --> timeline["Judgment timeline<br/>(re-simulated)"]
   timeline --> field[Second playfield]
-  live[Live play] --> field
-  field --> view[Built-in play view]
+  timeline --> pace[Pacemaker]
+  pace --> overlay[Lane overlay]
+  field --> builtin[Built-in view]
+  overlay --> builtin
+  pace --> skins[Every view]
 ```
 
-- **Option.** Debug Menu → Play options → **Replay / ghost** → **Ghost**: OFF (default) or OWN BEST. It is latched at
-  song start and disabled during a play. It is also disabled on the select screen where the bar under the cursor would
-  show none: no replay of the chart is kept, the play would be drawn by the LR2 or beatoraja family, the bar is a course,
-  a battle mode is on, or the chart is not a single-play 5 / 7 KEY one. A replay, a course stage and a NONSTOP run show
-  no ghost.
-- **Source.** The own best is the chart's replay slot with the highest EX score (the latest save among equals), which
-  the default rule of slot 1 keeps up to date. The play reads it while it loads; the chart waits for it as it waits for
-  the BGA. A chart without one plays without a ghost.
+- **Options.** Debug Menu → Play options → **Replay / ghost**:
+  - **Ghost** picks the source: OFF (default), OWN BEST, REPLAY SLOT 1-4, LEADERBOARD TOP or REPLAY FILE.
+  - **Ghost mode** picks the presentation: SECOND PLAYFIELD (default), PACEMAKER, or PACEMAKER + LANES.
+  - **Ghost status** says whether the bar under the cursor would show the pick, or why not: the mode needs the built-in
+    skins, the chart has no room for a second playfield, or the source keeps no replay of the chart.
+  - **Ghost replay file…** picks a `*.bmplay.json` for REPLAY FILE. It is held for the visit and is the ghost of the
+    chart it was recorded on only.
+
+  All are latched at song start and disabled during a play; Ghost and Ghost mode are also disabled on a course bar. A
+  replay, a course stage and a NONSTOP run show no ghost.
+
+- **Sources.**
+  - OWN BEST is the chart's replay slot with the highest EX score (the latest save among equals), which the default rule
+    of slot 1 keeps up to date.
+  - REPLAY SLOT n is that slot of the chart.
+  - LEADERBOARD TOP is the replay of the first run on the chart's Leaderboard ranking under the ruleset the play is
+    judged by (unassisted plays): `GET /api/v0/charts/:chartFingerprint/leaderboard?limit=1`, then
+    `GET /api/v0/scores/:id/replay`. A chart that is not on the Leaderboard, or a replay that cannot be read, plays
+    without a ghost.
+  - REPLAY FILE is the picked file, when it was recorded on the chart.
+
+  The play reads the source while it loads; the chart waits for it as it waits for the BGA.
+
 - **Timeline.** The replay is re-simulated under its own ruleset with the replay simulator
   (`resolveReplayJudgmentTimeline` in `@be-music/player-engine/replay`), which lists every judgment in the order it
-  scores them, with its lane, its note, the time and the running combo, EX score and gauge. The ghost's notes are the
-  replay's own (its lane options), and each goes at the second the simulation settled it. Nothing reads the clock or
+  scores them, with its lane, its note, the time and the running combo, EX score and gauge. Nothing reads the clock or
   draws a random number, so the same replay always gives the same ghost.
-- **Second playfield.** A single-play chart lays the live field and the ghost's out like the two sides of a
-  double-play chart: 7 KEY as 14 KEY and 5 KEY as 10 KEY, the ghost on the 2P lanes. Its notes scroll with the live
-  play's hi-speed, so a ghost note and the live note it matches reach their judgment lines together. Its key beams and
-  bombs follow its recorded presses and judgments, its judgment plate shows on the 2P side, and its score, combo and gauge
-  show as the second player's HUD. A seek back rewinds it; a jump ahead catches it up without replaying the effects on
-  the way.
+- **Second playfield** (SECOND PLAYFIELD, built-in skins only). A single-play chart lays the live field and the ghost's
+  out like the two sides of a double-play chart: 7 KEY as 14 KEY and 5 KEY as 10 KEY, the ghost on the 2P lanes. The
+  ghost's notes are the replay's own (its lane options), and each goes at the second the simulation settled it. They
+  scroll with the live play's hi-speed, so a ghost note and the live note it matches reach their judgment lines
+  together. Its key beams and bombs follow its recorded presses and judgments, its judgment plate shows on the 2P side,
+  and its score, combo and gauge show as the second player's HUD. A seek back rewinds it; a jump ahead catches it up
+  without replaying the effects on the way. Only 5 / 7 KEY single-play charts without a battle mode have room for it.
+- **Pacemaker** (PACEMAKER, every family, any chart). The ghost has no field of its own. It stands where the replay
+  stood when it had judged as many notes as the live play has (empty POORs take none), as LR2 and beatoraja pace a
+  ghost, so it holds whatever hi-speed, covers or timing the live player uses. It is the play's target:
+  - the built-in skins' score graph shows it as the pacemaker bar, named after the source (MY GHOST, SLOT n, TOP, FILE),
+    and the TARGET difference counts against it;
+  - LR2 skins read it as numbers 151 (target EX now) and 153 (EX minus it) and bar graphs 14 / 15 (target now and over
+    the chart);
+  - beatoraja skins read numbers 121-123 (the target's EX score over the chart and its rate).
+- **Lane overlay** (PACEMAKER + LANES, built-in skins only, any chart). The pacemaker, with the replay's recorded key
+  presses drawn over the player's own lanes as hollow violet beams and its judgments as short bars in the judgment's
+  colour just above the judgment line. They are outlines and bars, never filled lanes, so the player's own beams, bombs
+  and notes stay readable. The replay's lanes are its own: a ghost recorded under another RANDOM presses other lanes
+  than the live notes ask for.
 - **What it never does.** The ghost plays no sound and takes no input (a touch on its lanes goes nowhere). The live
   play's judging, best record, replay recording, replay slots and Leaderboard submission do not see it: the engine is
   handed only the live notes.
+- **Open points.** The ghost is re-simulated under the replay's recorded ruleset, not the viewer's. The second playfield
+  ignores the recorded hi-speed and covers and shows no hold state for long notes. In touch mode the second playfield
+  takes the double-play lane split; the pacemaker and the lane overlay keep the touch layout.
 
 ## What the player saw
 

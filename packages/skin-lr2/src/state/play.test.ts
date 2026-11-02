@@ -280,6 +280,22 @@ describe('resolveLR2PlayState texts, sliders and bar graphs', () => {
     expect(state.bargraph(10)).toBe(0.25);
     expect(state.bargraph(99)).toBe(0);
   });
+
+  it('paces numbers 151 / 153 and bar graphs 14 / 15 against a target, and holds them empty without one', () => {
+    const none = resolveLR2PlayState(SETUP, frame({ score: score({ exScore: 50 }) }));
+    expect(none.number(LR2_NUM.TARGET_SCORE)).toBe(0);
+    expect(none.number(LR2_NUM.TARGET_SCORE_DIFF)).toBe(50);
+    expect(none.bargraph(14)).toBe(0);
+    expect(none.bargraph(15)).toBe(0);
+    const paced = resolveLR2PlayState(
+      SETUP,
+      frame({ score: score({ exScore: 50 }), target: { exScore: 60, finalEXScore: 150 } }),
+    );
+    expect(paced.number(LR2_NUM.TARGET_SCORE)).toBe(60);
+    expect(paced.number(LR2_NUM.TARGET_SCORE_DIFF)).toBe(-10);
+    expect(paced.bargraph(14)).toBe(0.3);
+    expect(paced.bargraph(15)).toBe(0.75);
+  });
 });
 
 describe('play ops', () => {

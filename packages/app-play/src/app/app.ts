@@ -9,6 +9,8 @@ import { downloadBlob } from '@be-music/player-browser/recording';
 import { logger } from '@be-music/player-browser';
 import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from '../ui/beatoraja-skin-options.ts';
 import { LeaderboardPanel } from '../leaderboard-ui.ts';
+import { fetchLeaderboardTopReplay } from '../leaderboard.ts';
+import { GhostReplayFile } from '../services/ghost.ts';
 import { playerFullscreenElement } from '../fullscreen.ts';
 import { bindPlayerHeader, setPlayerHeaderSettingsOpen } from '../player-header.ts';
 import { SceneRouter } from './scene-router.ts';
@@ -231,6 +233,8 @@ export class PlayerWebApp {
     // Read on use: `guiState` is initialized after this field.
     nonstopPlacement: () => this.guiState.nonstopPlacement,
   });
+  /** The replay file picked as a ghost (Debug Menu → Replay / ghost → "Ghost replay file…"), for this visit. */
+  private readonly ghostReplayFile = new GhostReplayFile();
   /** The replay slots' card, on the skins without a replay-slot UI of their own (`replay-slots-panel.ts`). */
   private readonly replaySlotsPanel = new ReplaySlotsPanel({
     service: this.replaySlots,
@@ -495,7 +499,13 @@ export class PlayerWebApp {
       results: this.resultRoute,
       playOptions: this.playOptions,
       guiState: this.guiState,
-      ghostReplays: this.replaySlots.store,
+      ghostSources: {
+        replays: this.replaySlots.store,
+        replayFile: this.ghostReplayFile,
+        // The top run under the ruleset the play is judged by.
+        fetchLeaderboardTopReplay: (chartFingerprint) =>
+          fetchLeaderboardTopReplay(chartFingerprint, this.guiState.judgeRuleset),
+      },
       debugMenu: this.debugMenu,
       compressorMode: this.compressorMode,
       deviceProfile,
@@ -538,6 +548,7 @@ export class PlayerWebApp {
   private debugMenuDeps(): DebugMenuDeps {
     return {
       settings: this.guiState,
+      ghostReplayFile: this.ghostReplayFile,
       sceneHost: this.sceneHost,
       silentMode: this.silentMode,
       leaderboard: this.leaderboard,

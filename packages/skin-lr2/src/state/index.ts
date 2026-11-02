@@ -45,6 +45,7 @@ export {
   type LR2PlayLanes,
   type LR2PlaySetup,
   type LR2PlayState,
+  type LR2PlayTarget,
   type LR2PlayTimerEvent,
   type LR2PlayView,
 } from './play.ts';

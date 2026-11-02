@@ -100,6 +100,16 @@ export interface LR2PlayFrame {
   readonly secondPlayer?: LR2SecondPlayerFrame;
   /** Latest displayed judgment per side; retained after the judge plate fades. */
   readonly judgments?: Readonly<Partial<Record<PlaySide, JudgmentKind | 'EMPTY_POOR'>>>;
+  /** The target the play paces against (a replay ghost): numbers 151 / 153 and bar graphs 14 / 15. */
+  readonly target?: LR2PlayTarget;
+}
+
+/** A target's EX score at this point of the play and over the whole chart (OpenLR2 `targetScore`). */
+export interface LR2PlayTarget {
+  /** The EX score it holds now. */
+  readonly exScore: number;
+  /** Its EX score over the whole chart. */
+  readonly finalEXScore: number;
 }
 
 /** The LR2 play screen's state: a {@link LR2SceneState} and the fill of each bar graph. */
@@ -340,11 +350,13 @@ function playNumber(num: number, setup: LR2PlaySetup, frame: LR2PlayFrame): numb
     case LR2_NUM.POOR:
       return score.poor;
     case LR2_NUM.HIGH_SCORE:
-    case LR2_NUM.TARGET_SCORE:
       return 0;
+    case LR2_NUM.TARGET_SCORE:
+      return frame.target?.exScore ?? 0;
     case LR2_NUM.HIGH_SCORE_DIFF:
-    case LR2_NUM.TARGET_SCORE_DIFF:
       return score.exScore;
+    case LR2_NUM.TARGET_SCORE_DIFF:
+      return score.exScore - (frame.target?.exScore ?? 0);
     case LR2_NUM.NEXT_RANK_DIFF:
     case LR2_NUM.NEXT_RANK_DIFF_ALT:
       return nextRankDiff(score);
@@ -412,9 +424,19 @@ function playBargraph(type: number, frame: LR2PlayFrame): number {
     case 12:
     case 13:
       return computeScoreRate(frame.score);
+    // The target now and over the whole chart, each over the chart's highest EX score (OpenLR2 L6874-L6909).
+    case 14:
+      return targetRate(frame, frame.target?.exScore);
+    case 15:
+      return targetRate(frame, frame.target?.finalEXScore);
     default:
       return 0;
   }
+}
+
+function targetRate(frame: LR2PlayFrame, exScore: number | undefined): number {
+  const max = frame.score.total * 2;
+  return exScore === undefined || max <= 0 ? 0 : Math.max(0, Math.min(1, exScore / max));
 }
 
 const JUDGMENT_OPS: Record<JudgmentKind | 'EMPTY_POOR', number> = {

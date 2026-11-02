@@ -7,7 +7,9 @@ import {
 } from '@be-music/player-engine/replay';
 import type { BeMusicEvent } from '@be-music/chart-source';
 import type { GhostSource } from './ghost.ts';
-import { canShowGhost, prepareGhost, type GhostPlayContext } from './prepare-ghost.ts';
+import { LaneOverlayGhost } from './lane-overlay-ghost.ts';
+import { PacemakerGhost } from './pacemaker-ghost.ts';
+import { canShowGhost, prepareGhost, resolveGhostMode, type GhostPlayContext } from './prepare-ghost.ts';
 import { SidePlayfieldGhost } from './side-playfield-ghost.ts';
 
 const EVENT: BeMusicEvent = { measure: 0, channel: '11', position: [0, 1], value: '01' };
@@ -66,6 +68,19 @@ describe('canShowGhost', () => {
     expect(canShowGhost(context({ ghost: source(replay()), nonstop: {} as never }))).toBe(false);
     expect(canShowGhost(context({ ghost: source(replay()) }, [...SEVEN_KEY, '21']))).toBe(false);
   });
+
+  test('a pacemaker, alone or over the lanes, needs no free side: any chart but a replay, course or NONSTOP run', () => {
+    for (const ghostMode of ['pacemaker', 'lane-overlay'] as const) {
+      expect(canShowGhost(context({ ghost: source(replay()), ghostMode }, [...SEVEN_KEY, '21']))).toBe(true);
+      expect(canShowGhost(context({ ghost: source(replay()), ghostMode, replay: replay() }))).toBe(false);
+      expect(canShowGhost(context({ ghostMode }))).toBe(false);
+    }
+  });
+
+  test('the mode is the second playfield unless the play names another', () => {
+    expect(resolveGhostMode({})).toBe('side-playfield');
+    expect(resolveGhostMode({ ghostMode: 'pacemaker' })).toBe('pacemaker');
+  });
 });
 
 describe('prepareGhost', () => {
@@ -73,6 +88,21 @@ describe('prepareGhost', () => {
     const ctx = context({ ghost: source(replay()) });
     await prepareGhost(ctx);
     expect(ctx.ghost).toBeInstanceOf(SidePlayfieldGhost);
+  });
+
+  test('builds the pacemaker or the lane overlay the mode names, on a double-play chart and a 2P replay too', async () => {
+    const pacemaker = context({ ghost: { ...source(replay('21')), label: 'SLOT 1' }, ghostMode: 'pacemaker' }, [
+      ...SEVEN_KEY,
+      '21',
+    ]);
+    await prepareGhost(pacemaker);
+    expect(pacemaker.ghost).toBeInstanceOf(PacemakerGhost);
+    expect(pacemaker.ghost?.scoreTarget?.({ perfect: 0, great: 0, good: 0, bad: 0, poor: 0 }).targetLabel).toBe(
+      'SLOT 1',
+    );
+    const overlay = context({ ghost: source(replay()), ghostMode: 'lane-overlay' });
+    await prepareGhost(overlay);
+    expect(overlay.ghost).toBeInstanceOf(LaneOverlayGhost);
   });
 
   test('goes on without a ghost when there is no replay, it does not fit, or the source fails', async () => {

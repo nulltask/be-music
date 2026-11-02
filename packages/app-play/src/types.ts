@@ -146,10 +146,17 @@ export interface PlayerGUIState extends PlayTempoSettings {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
-   * The replay ghost shown beside the play (`services/ghost.ts`): `'OFF'` (default), or `'OWN_BEST'` — the replay of the
-   * player's best on the chart, replayed as a second playfield on the built-in skins. Latched at song start.
+   * The replay ghost shown with the play (`services/ghost.ts`): `'OFF'` (default), or the replay it plays — `'OWN_BEST'`
+   * (the player's best on the chart), a replay slot, the Leaderboard's top run, or a picked replay file. Latched at song
+   * start.
    */
-  ghost: import('./services/ghost.ts').GhostMode;
+  ghost: import('./services/ghost.ts').GhostSourceSetting;
+  /**
+   * How the ghost shows (`services/ghost.ts`): `'PLAYFIELD'` (default, a second playfield on the built-in skins),
+   * `'PACEMAKER'` (a pacemaker alone, on every family) or `'LANE_OVERLAY'` (the pacemaker with the recorded inputs over
+   * the player's own lanes, on the built-in skins). Latched at song start.
+   */
+  ghostMode: import('./services/ghost.ts').GhostModeSetting;
   /**
    * When true (off by default), the replay (`*.bmplay.json` input replay — see `@be-music/player-engine/replay`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
