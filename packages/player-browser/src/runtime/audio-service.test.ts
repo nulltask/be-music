@@ -376,4 +376,19 @@ describe('createAudioService', () => {
     await expect(service.playJingle({ bytes: new Uint8Array([1]) })).resolves.toBe(false);
     expect(service.skinSounds.play('x', 1)).toBe(false);
   });
+
+  it('keeps one chart sample cache and releases it on dispose', () => {
+    const { service } = createService();
+    const lease = service.chartSamples.claim({
+      source: {},
+      chartPath: 'a.bms',
+      pathPrefix: undefined,
+      sampleRate: 48_000,
+    });
+    lease.set('kick.wav', { buffer: {} as AudioBuffer });
+    expect(service.chartSamples.size).toBe(1);
+    service.dispose();
+    expect(service.chartSamples.size).toBe(0);
+    expect(service.chartSamples.key).toBeUndefined();
+  });
 });
