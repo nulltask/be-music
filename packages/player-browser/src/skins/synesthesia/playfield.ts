@@ -24,7 +24,10 @@ import {
   holdSparks,
   resolveLaneRuns,
   type BeMusicLaneFrame,
+  backSpinChevron,
+  hellChargeRungs,
   longNoteCentreLineAlpha,
+  resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
 import {
   type PixiBombsContext,
@@ -193,10 +196,14 @@ export function renderSynesthesiaLongNote({
   w,
   top,
   bottom,
+  nowMs,
   mode,
+  backSpinScratch,
+  state,
   releasedElapsedMs,
 }: PixiLongNoteContext): void {
   const light = LIGHTS[kind];
+  const marks = resolveLongNoteMarks({ mode, backSpinScratch });
   const bodyX = x;
   const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
@@ -206,10 +213,22 @@ export function renderSynesthesiaLongNote({
   // Let go early, the filament fades out with the hold.
   const line = longNoteCentreLineAlpha(releasedElapsedMs);
   if (line > 0) graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 * line });
+  if (marks.hellCharge) {
+    // A hell charge note: rungs of light across the beam, flowing into the line while it charges (held).
+    for (const y of hellChargeRungs(bodyTop, bodyTop + bodyH, { nowMs, flowing: state === 'held' })) {
+      graphics.rect(bodyX + 2, y - 1, bodyW - 4, 2).fill({ color: 0xffffff, alpha: 0.45 });
+    }
+  }
   drawNote(graphics, bodyX, bottom, bodyW, light);
   // An LN's tail is not judged, so it is drawn translucent: where to let go, not a note to hit. A CN / HCN tail is
   // judged on release and keeps the full cap.
-  drawNote(graphics, bodyX, top, bodyW, light, mode === 'ln' ? LN_TAIL_ALPHA : 1);
+  drawNote(graphics, bodyX, top, bodyW, light, marks.judgedTail ? 1 : LN_TAIL_ALPHA);
+  if (marks.backSpin) {
+    // A back-spin scratch: a dark-rimmed white chevron on the tail cap, pointing back up the lane — spin it back there.
+    const chevron = backSpinChevron(bodyX, bodyW, top, NOTE_HEIGHT);
+    graphics.poly(chevron).stroke({ color: 0x05010a, width: 2, alpha: 0.9 });
+    graphics.poly(chevron).fill(0xffffff);
+  }
 }
 
 /** How opaque an LN's tail cap is: clearly the end of the note, but quieter than a cap to hit. */

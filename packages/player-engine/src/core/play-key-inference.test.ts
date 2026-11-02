@@ -158,3 +158,60 @@ describe('createKeyStateInference', () => {
     expect(sent).toEqual(['hold 11 inferred', 'press 11 @0.99']);
   });
 });
+
+describe('createKeyStateInference: back-spin scratch', () => {
+  /** beatoraja, `#LNMODE 2`: a back-spin scratch on `16` from 1.0 s to 2.0 s. */
+  function createScratchCore(): JudgeCoreState {
+    const source = createEmptyJSON('bms');
+    source.metadata.bpm = 240;
+    source.metadata.rank = 2;
+    source.bms.lnObjs = ['AA'];
+    source.bms.lnMode = 2;
+    source.events = [
+      { measure: 1, channel: '16', position: [0, 1], value: '01' },
+      { measure: 2, channel: '16', position: [0, 1], value: 'AA' },
+    ];
+    const prepared = preparePlaybackChart(resolveChart(source));
+    const ruleset = resolveRuleset(rulesetChartFactsFromChart(source, prepared), 'beatoraja');
+    return createJudgeCoreState(
+      {
+        ruleset,
+        scorableNotes: prepared.scorableNotes,
+        landmineNotes: prepared.landmineNotes,
+        invisibleNotes: prepared.invisibleNotes,
+        laneSoundNotes: prepared.laneSoundNotes,
+        scratchChannels: new Set(['16']),
+        autoScratch: false,
+        judgeMsPerChartSecond: 1000,
+        endOnFailure: false,
+        wavResources: source.resources.wav,
+        idBase: resolveBMSBase(source),
+        sourceFormat: source.sourceFormat,
+      },
+      {
+        ...createInitialPlayerSummary(ruleset, ruleset.noteCount),
+        scoreTracker: createScoreTracker({ moneyScore: ruleset.moneyScore }),
+      },
+    );
+  }
+
+  test('the other scratch key is a press of its own while the first one repeats', () => {
+    const state = createScratchCore();
+    const inference = createKeyStateInference(state, (input) =>
+      runJudgeCoreStep(state, input, (effect) => inference.observe(effect)),
+    );
+    const scratch = new Set(['16']);
+    inference.press(scratch, ['shift-left'], 1.0, 1000, 'cw');
+    expect(state.activeLongNotes.get('16')?.headSpin).toBe('cw');
+    // Shift repeating keeps the lane down and judges nothing.
+    for (let index = 0; index < 12; index += 1) {
+      const seconds = 1.4 + index * 0.05;
+      inference.press(scratch, ['shift-left'], seconds, seconds * 1000, 'cw');
+    }
+    expect(state.activeLongNotes.has('16')).toBe(true);
+    // Ctrl spins it back: the tail is judged.
+    inference.press(scratch, ['ctrl-left'], 2.0, 2000, 'ccw');
+    expect(state.activeLongNotes.has('16')).toBe(false);
+    expect(state.summary.perfect).toBe(2);
+  });
+});

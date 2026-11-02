@@ -2,6 +2,7 @@ import type { ReplayOptionState } from '../replay/options.ts';
 import { signal } from 'alien-signals';
 import type { ReplayViewState } from '../replay/view.ts';
 import type { HighSpeedControlAction } from './high-speed-control.ts';
+import type { ScratchSpin } from './scratch-spin.ts';
 
 type WritableSignal<T> = {
   (): T;
@@ -38,6 +39,14 @@ export type PlayerInputCommand =
   | {
       kind: 'lane-input';
       tokens: string[];
+      /**
+       * The way a scratch press turned the turntable, from a controller that reports rotation (a turntable or an analog
+       * axis). Omitted for keys: the engine takes a key's spin from the odd-even rule over the scratch lane's keys
+       * (`createScratchSpinByToken`). `null` for input with no direction at all (a touch lane): the press has no spin,
+       * so a fresh press while a back-spin scratch is held turns it back (`isReverseScratchSpin`). A back-spin
+       * scratch's tail is judged on a press spinning the other way.
+       */
+      spin?: ScratchSpin | null;
       /**
        * Wall-clock-ms snapshot of the physical key press (`performance.timeOrigin + performance.now()`-style,
        * i.e. `Date.now()`-equivalent with sub-ms precision). The runtime adapter (web / node) sets this the

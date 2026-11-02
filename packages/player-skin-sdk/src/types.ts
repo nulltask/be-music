@@ -542,6 +542,12 @@ export interface BeMusicLongNote {
    */
   mode?: BeMusicLongNoteMode;
   /**
+   * True when the long note is a back-spin scratch (BSS): a charge note (`'cn'` / `'hcn'`) on a scratch lane, whose tail
+   * is judged on a spin the other way rather than on the release (`isBackSpinScratchLongNote`). The built-in skins mark
+   * its tail cap with a chevron (`backSpinChevron`); `resolveLongNoteMarks` gathers the marks of every kind.
+   */
+  backSpinScratch?: boolean;
+  /**
    * Where the long note is in its life: not yet reached, being held, dropped (missed at the head or let go early), or
    * completed. LR2 draws a dropped long note at half alpha until it goes; the built-in skins do the same.
    */

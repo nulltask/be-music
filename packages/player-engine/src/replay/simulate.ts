@@ -3,9 +3,11 @@ import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
 import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { BeMusicReplay, ReplayInputEvent, ReplayRulesetResult } from './format.ts';
+import { isReverseScratchSpin, type ScratchSpin } from '../core/scratch-spin.ts';
 import {
   classifyRulesetJudge,
   ignoresLateLongNoteHeadBad,
+  isBackSpinScratch,
   noteLateReachUs,
   addHCNPassing,
   judgeWindowLateReachUs,
@@ -217,6 +219,9 @@ interface ActiveHold {
    * pressed again first, which resumes the hold.
    */
   pendingRelease?: { atUs: number; judge: GaugeJudgeIndex; dmUs: number };
+  /** A back-spin scratch: its tail is judged on a press spinning the other way from {@link headSpin}, not on a release. */
+  backSpinScratch?: true;
+  headSpin?: ScratchSpin;
 }
 
 interface SimLane {
@@ -747,6 +752,8 @@ class ReplaySimulation {
       if (lane.hold === undefined) return true;
       if (lane.hold.pendingRelease !== undefined) {
         lane.hold.pendingRelease = undefined;
+      } else if (lane.hold.backSpinScratch === true && isReverseScratchSpin(lane.hold.headSpin, input.spin)) {
+        this.judgeBackSpinScratchTail(lane, lane.hold, timeUs);
       } else {
         this.applyPressDuringLongNote(lane, lane.hold, timeUs);
       }
@@ -774,7 +781,7 @@ class ReplaySimulation {
     const { note, lane, dmUs } = selected;
     this.judgingAt(timeUs, lane, note);
     if (note.isLong) {
-      this.startLongNote(lane, note, selected.judge, dmUs);
+      this.startLongNote(lane, note, selected.judge, dmUs, input.spin);
       this.startHCNPassing(lane, note, timeUs);
     } else {
       note.judged = true;
@@ -784,6 +791,34 @@ class ReplaySimulation {
       // Only scoreable judgments (PGREAT..BAD) consume a note, so the judge is a real window index here.
       this.applyLR2RejudgeChain(lane, timeUs, windows, note, selected.judge as RulesetJudgeIndex);
     }
+  }
+
+  /** A back-spin scratch's tail, judged on the reverse spin's timing against the long-scratch-end windows. */
+  private judgeBackSpinScratchTail(lane: SimLane, hold: ActiveHold, timeUs: number): void {
+    const note = hold.note;
+    const endWindows = selectJudgeWindowSet(this.config.windowsAt(timeUs), {
+      scratch: note.scratch,
+      longNoteEnd: true,
+    });
+    const dmUs = note.endTimeUs! - timeUs;
+    const endJudge = classifyJudge(dmUs, endWindows);
+    this.settleChargeTail(lane, note, timeUs, endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge, dmUs);
+  }
+
+  /** Settles a charge tail at `timeUs` with `judge`: a released CN / HCN, or a back-spin scratch spun back. */
+  private settleChargeTail(lane: SimLane, note: SimNote, timeUs: number, judge: GaugeJudgeIndex, dmUs: number): void {
+    lane.hold = undefined;
+    note.holding = false;
+    note.judged = true;
+    this.judgingAt(timeUs, lane, note);
+    this.applyJudge(judge, dmUs);
+    for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
+      if (passing.note === note && judge <= JUDGE_GOOD) {
+        // A Hell Charge tail released at GOOD or better keeps its lane gaining until the tail passes.
+        passing.tailGood = true;
+      }
+    }
+    this.setHCNGaining(lane, timeUs);
   }
 
   /** The ruleset's {@link RulesetConfig.pressDuringLongNote}: LR2 re-judges the LN head or charges an empty POOR. */
@@ -817,7 +852,8 @@ class ReplaySimulation {
         lane.downTokens.delete('');
       }
       const hold = lane.hold;
-      if (!hold) {
+      if (!hold || hold.backSpinScratch === true) {
+        // A back-spin scratch is not settled by a release: its tail waits for the reverse spin.
         this.setHCNGaining(lane, timeUs);
         continue;
       }
@@ -854,18 +890,7 @@ class ReplaySimulation {
         this.setHCNGaining(lane, timeUs);
         continue;
       }
-      lane.hold = undefined;
-      note.holding = false;
-      note.judged = true;
-      this.judgingAt(timeUs, lane, note);
-      this.applyJudge(released.judge, released.dmUs);
-      for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
-        if (passing.note === note && released.judge <= JUDGE_GOOD) {
-          // A Hell Charge tail released at GOOD or better keeps its lane gaining until the tail passes.
-          passing.tailGood = true;
-        }
-      }
-      this.setHCNGaining(lane, timeUs);
+      this.settleChargeTail(lane, note, timeUs, released.judge, released.dmUs);
     }
   }
 
@@ -932,7 +957,13 @@ class ReplaySimulation {
     return input.channels.filter((channel) => this.lanes.get(channel)?.auto !== true);
   }
 
-  private startLongNote(lane: SimLane, note: SimNote, judge: GaugeJudgeIndex, dmUs: number): void {
+  private startLongNote(
+    lane: SimLane,
+    note: SimNote,
+    judge: GaugeJudgeIndex,
+    dmUs: number,
+    spin: ScratchSpin | undefined,
+  ): void {
     const style = note.longStyle ?? 1;
     if (style === 1) {
       note.holding = true;
@@ -959,6 +990,9 @@ class ReplaySimulation {
     lane.hold = {
       note,
       tailMissDeadlineUs: note.endTimeUs! + judgeWindowLateReachUs(endWindows),
+      ...(isBackSpinScratch(style, lane.scratch)
+        ? { backSpinScratch: true as const, ...(spin !== undefined ? { headSpin: spin } : {}) }
+        : {}),
     };
   }
 

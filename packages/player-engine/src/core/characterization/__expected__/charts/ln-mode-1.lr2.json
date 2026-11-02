@@ -60,7 +60,7 @@
         {"seq":3,"timeUs":1310000,"action":"up","channels":["13"],"tokens":["x"]},
         {"seq":4,"timeUs":1500000,"action":"up","channels":["11"],"tokens":["z"]},
         {"seq":5,"timeUs":1600000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":6,"timeUs":2000000,"action":"down","channels":["16"],"tokens":["shift-left"]},
+        {"seq":6,"timeUs":2000000,"action":"down","channels":["16"],"tokens":["shift-left"],"spin":"cw"},
         {"seq":7,"timeUs":2540000,"action":"up","channels":["16"],"tokens":["shift-left"]},
         {"seq":8,"timeUs":3480000,"action":"down","channels":["15"],"tokens":["c"]},
         {"seq":9,"timeUs":3540000,"action":"up","channels":["15"],"tokens":["c"]}
@@ -107,13 +107,13 @@
       },
       "____": {
         "ruleset": "____/0",
-        "judge": {"pgreat":6,"great":1,"good":0,"bad":0,"poor":2,"emptyPoor":0},
+        "judge": {"pgreat":5,"great":1,"good":0,"bad":0,"poor":3,"emptyPoor":0},
         "fast": 1,
         "slow": 0,
-        "exScore": 13,
+        "exScore": 11,
         "noteCount": 10,
         "maxCombo": 4,
-        "djLevel": "B",
+        "djLevel": "C",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
       }
     },

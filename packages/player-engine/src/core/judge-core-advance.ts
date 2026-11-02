@@ -519,7 +519,7 @@ function applyExpiredScorableJudgements(
 
 // ---- long notes -----------------------------------------------------------------------------------------------
 
-function finalizeActiveLongNote(
+export function finalizeActiveLongNote(
   state: JudgeCoreState,
   channel: string,
   judge: TimedManualJudge,
@@ -721,7 +721,7 @@ export function advanceJudgeState(
     if (judgeUs > toJudgeUs(hold.endSeconds)) {
       if (
         isChargeLongNoteMode(hold.mode) &&
-        isHolding &&
+        (isHolding || hold.backSpinScratch === true) &&
         judgeUs <= resolveChargeTailDeadlineUs(state, channel, hold)
       ) {
         // Charge modes judge the tail on the RELEASE. Still holding past the tail is not yet a judgment — the player
@@ -751,7 +751,8 @@ export function advanceJudgeState(
         endSeconds: hold.endSeconds,
       });
       // A charge tail that was never let go is a missed POOR, whether the hold broke (HCN) or ran past the tail's late
-      // window: only a release is judged against the windows (beatoraja's `CN end poor`).
+      // window: only a release is judged against the windows (beatoraja's `CN end poor`). A back-spin scratch's tail
+      // that was never spun back is missed the same way, held or not.
       const finalJudge =
         isChargeLongNoteMode(hold.mode) && releaseSeconds === undefined
           ? resolveLongNoteTailJudge(hold, { kind: 'POOR', signedDeltaMs: (judgeSec - hold.endSeconds) * 1000 })
@@ -766,7 +767,8 @@ export function advanceJudgeState(
       continue;
     }
 
-    if (isChargeLongNoteMode(hold.mode) && !isHolding) {
+    // A back-spin scratch's tail waits for the reverse spin (`judgeBackSpinScratchTail`): letting go settles nothing.
+    if (isChargeLongNoteMode(hold.mode) && !isHolding && hold.backSpinScratch !== true) {
       if (!hold.audioStopped) {
         stopLongNoteSound(hold, channel, nowSec, 'release', emit);
       }
