@@ -22,7 +22,7 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
   id: 'synesthesia',
   label: 'Synesthesia',
   version: '1.0.0',
-  author: { name: 'be-music', url: 'https://github.com/nulltask/be-music' },
+  author: { name: 'Be-Music', url: 'https://github.com/nulltask/be-music' },
   description:
     'A cosmic particle world in ember and gold with electric blue and magenta accents, where the space flies, flocks, and bursts with the music.',
   homepage: 'https://github.com/nulltask/be-music',

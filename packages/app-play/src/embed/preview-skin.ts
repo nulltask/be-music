@@ -97,7 +97,7 @@ export function createPreviewSkin(chrome: PreviewChrome, options: PreviewSkinOpt
     description:
       'The embed preview: lanes on the left and the BGA on the right, or the BGA above the lanes on a tall screen, and video controls.',
     version: '1.0.0',
-    author: { name: 'be-music' },
+    author: { name: 'Be-Music' },
     license: 'MIT',
     fontLoads: [],
     context: '2d',

@@ -23,7 +23,7 @@ export const plainSkin: BeMusicSkin = defineBeMusicSkin({
   id: 'plain',
   label: 'Plain',
   version: '1.0.0',
-  author: { name: 'be-music', url: 'https://github.com/nulltask/be-music' },
+  author: { name: 'Be-Music', url: 'https://github.com/nulltask/be-music' },
   description: 'A minimal skin drawn with the Canvas 2D API — the skin SDK example.',
   homepage: 'https://github.com/nulltask/be-music',
   license: 'MIT',
