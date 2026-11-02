@@ -132,6 +132,14 @@ export function applySeek(session: PlaySession, judge: PlayJudge, seconds: numbe
       }
       uiSignals.pushCommand({ kind: 'long-note-start', channel: held.channel, beat: held.beat, mode: held.mode });
     }
+    for (const passing of rebuilt.hellChargeNotes ?? []) {
+      uiSignals.pushCommand({
+        kind: 'hell-charge',
+        channel: passing.channel,
+        beat: passing.beat,
+        state: passing.state,
+      });
+    }
     uiSignals.pushCommand({ kind: 'clear-poor-bga' });
   } else {
     writeRuntimeEventLog(session.writeOutput, 'seek', [
