@@ -86,6 +86,9 @@ describe('playViewEventFromMoment', () => {
     expect(
       lane({ kind: 'lane-command', command: { kind: 'long-note-end', channel: '12', outcome: 'dropped' } }),
     ).toEqual({ kind: 'long-note-end', channel: '12', outcome: 'dropped' });
+    expect(
+      lane({ kind: 'lane-command', command: { kind: 'hell-charge', channel: '12', beat: 4, state: 'draining' } }),
+    ).toEqual({ kind: 'hell-charge', channel: '12', beat: 4, state: 'draining' });
     expect(lane({ kind: 'lane-command', command: { kind: 'trigger-poor-bga', seconds: 3.5 } })).toEqual({
       kind: 'poor-bga',
       shown: true,

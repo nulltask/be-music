@@ -392,7 +392,7 @@ export function handleLanePress(
     if (longNoteMode !== undefined && isChargeLongNoteMode(longNoteMode)) {
       // Charge modes score the head right here — it is a judgment of its own, not half of a deferred one.
       applyResolvedManualJudge(state, channel, headJudge, nowSec, emit, true);
-      startHCNPassing(state, candidate, toJudgeUs(nowSec));
+      startHCNPassing(state, candidate, toJudgeUs(nowSec), emit);
       if (ruleset.headBadSkipsTail && (headJudge.kind === 'BAD' || headJudge.kind === 'POOR')) {
         // That-Which-Must-Not-Be-Named: a broken charge-note head cancels the tail; the note is finished with a single judgment.
         state.activeLongNotes.delete(channel);
