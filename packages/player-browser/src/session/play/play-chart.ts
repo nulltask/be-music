@@ -2,6 +2,7 @@ import {
   buildChartOptionTimeline,
   compileChartPlayOptions,
   type BGAOpacityTimelines,
+  type ChartOptionDiagnostic,
   type ChartPlayOptionProgram,
 } from '@be-music/chart-model';
 /**
@@ -40,6 +41,8 @@ import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import {
   applyChartPlayOptions,
   preparePlaybackChart,
+  resolveChartNotesPlayVariant,
+  resolveEffectiveChartPlayOptions,
   resolvePlayChart,
   type ChartPlaySelection,
   type PreparedPlaybackChartData,
@@ -183,10 +186,17 @@ export interface PlayChartContext {
   randomDraws: RandomDraws | undefined;
   randomSeeds?: { p1?: string; p2?: string };
   /**
-   * The chart's own gameplay options (#844): the program the play runs and records (a replay's recorded one), and the
-   * lane / mine selection after the chart's choices replaced the player's.
+   * The chart's own gameplay options (#844, #932): the program the play runs and records (a replay's recorded one, else
+   * the compiled one narrowed to what takes effect), the lane / mine selection after the chart's choices replaced the
+   * player's, and the declarations that lost their effect here (a NOTES COPY in a course).
    */
-  chartPlay: { program: ChartPlayOptionProgram | undefined; selection: ChartPlaySelection } | undefined;
+  chartPlay:
+    | {
+        program: ChartPlayOptionProgram | undefined;
+        selection: ChartPlaySelection;
+        diagnostics: readonly ChartOptionDiagnostic[];
+      }
+    | undefined;
   beatAtSeconds: ((seconds: number) => number) | undefined;
   scrollMapper: ScrollDistanceMapperLike | undefined;
   laneTimelineBeats: Float64Array;
@@ -343,10 +353,18 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     throw new RangeError('beatoraja CONVERGE and playable RANDOM/S-RANDOM are PMS arrangements.');
   // A chart's RANDOM and ADDMINE (#844) replace the player's lane and mine options, as the chart author's staging. A
   // replay's recorded notes already hold their result, so only its recorded program is kept (for the engine's judging).
-  const chartPlayProgram =
+  // Its NOTES conversion (#932) runs in the engine's chart preparation; COPY makes the chart double-play (outside a course,
+  // whose stages keep one key mode), so the arrangement maps onto the double-play lanes.
+  const chartPlayEffect =
     arrangement === undefined
-      ? compileChartPlayOptions(buildChartOptionTimeline(resolved))
-      : arrangement.chart.chartPlayOptions;
+      ? resolveEffectiveChartPlayOptions(compileChartPlayOptions(buildChartOptionTimeline(resolved)), {
+          playVariant,
+          course: ctx.options.course !== undefined,
+        })
+      : { program: arrangement.chart.chartPlayOptions, diagnostics: [] };
+  const chartPlayProgram = chartPlayEffect.program;
+  const chartNotes = chartPlayProgram?.options.notes;
+  const arrangedVariant = resolveChartNotesPlayVariant(playVariant, chartNotes);
   const chartArrangement = applyChartPlayOptions(
     {
       random1P: ctx.options.random1P,
@@ -358,10 +376,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       mineModifier: ctx.options.mineModifier,
     },
     arrangement === undefined ? chartPlayProgram : undefined,
-    { doublePlay: ['10', '14', '48'].includes(playVariant), hasScratch: playVariant !== '9' },
+    { doublePlay: ['10', '14', '48'].includes(arrangedVariant), hasScratch: arrangedVariant !== '9' },
   );
   const lanes = chartArrangement.selection;
-  ctx.chartPlay = { program: chartPlayProgram, selection: lanes };
+  ctx.chartPlay = { program: chartPlayProgram, selection: lanes, diagnostics: chartPlayEffect.diagnostics };
   let resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: playVariant,
@@ -378,8 +396,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       arrangement.play.scrollRate === undefined)
   )
     throw new RangeError('A recorded scroll ADD requires its effective timeline.');
+  // A recorded copy's 2P side (a duplicated BATTLE, a chart NOTES COPY) is rebuilt from the 1P side's placements.
   const modifierNotes =
-    arrangement !== undefined && isDuplicatedBattle(arrangement.play.battleMode ?? 'OFF')
+    arrangement !== undefined &&
+    (isDuplicatedBattle(arrangement.play.battleMode ?? 'OFF') || chartNotes === 'COPY' || chartNotes === 'DBLCOPY')
       ? arrangement.chart.notes.filter((note) => !(note.sourceChannel ?? note.channel).startsWith('2'))
       : arrangement?.chart.notes;
   const prepared = preparePlaybackChart(
@@ -436,6 +456,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
               })),
           }
         : {}),
+      chartNotes,
     },
     0,
     Math.random,
@@ -471,7 +492,9 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     // same visual lane after the flip.
     // A duplicated BATTLE chart has identical sides; its source applies no DP FLIP to it.
     const battleDuplicated = isDuplicatedBattle(prepared.battleMode ?? 'OFF');
-    if (ctx.options.dpFlip && !battleDuplicated && ['10', '14', '48'].includes(playVariant)) {
+    // A chart that copied itself onto the 2P side (#932) authored both sides, so DP FLIP leaves them too.
+    const chartCopied = prepared.chartNotes === 'COPY' || prepared.chartNotes === 'DBLCOPY';
+    if (ctx.options.dpFlip && !battleDuplicated && !chartCopied && ['10', '14', '48'].includes(playVariant)) {
       for (const note of ctx.notes) {
         note.channel = flipDPChannel(note.channel);
       }
@@ -545,7 +568,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: playVariant === '10' || playVariant === '14' || playVariant === '48',
         side: '1P',
-        flipped: ctx.options.dpFlip && !battleDuplicated && ['10', '14', '48'].includes(playVariant),
+        flipped: ctx.options.dpFlip && !battleDuplicated && !chartCopied && ['10', '14', '48'].includes(playVariant),
         playVariant: playVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,
@@ -570,7 +593,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: playVariant === '10' || playVariant === '14' || playVariant === '48',
         side: '2P',
-        flipped: ctx.options.dpFlip && !battleDuplicated && ['10', '14', '48'].includes(playVariant),
+        flipped: ctx.options.dpFlip && !battleDuplicated && !chartCopied && ['10', '14', '48'].includes(playVariant),
         playVariant: playVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,
