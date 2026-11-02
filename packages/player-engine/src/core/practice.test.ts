@@ -1,8 +1,8 @@
-import { expect, test } from 'vite-plus/test';
+import { describe, expect, test } from 'vite-plus/test';
 import { parseBMS } from '@be-music/chart-parser';
 import { resolveChart } from '@be-music/chart-model';
 import { preparePlaybackChart } from './bootstrap.ts';
-import { resolvePracticeRange } from './practice.ts';
+import { resolvePracticePlayWindow, resolvePracticeRange } from './practice.ts';
 import { resolveRuleset } from '../ruleset/definitions.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 
@@ -26,7 +26,9 @@ test('PracticeModifier moves every object outside the range to the background', 
     practiceEndSeconds: 6,
     practiceChangedObjectCount: 4,
     practiceSourceNotes: { normal: 4, long: { 1: 1, 2: 0, 3: 0 } },
-    totalSeconds: 7,
+    // 3 s lies in bar 1 and 6 s in bar 3: the play runs from the head of bar 0 to the head of bar 4 (#954).
+    practicePlayStartSeconds: 0,
+    totalSeconds: 8,
   });
   const background = prepared.resolvedChart.sampleTriggers.filter((trigger) => trigger.channel === '01');
   expect(background.map((trigger) => [trigger.sampleKey, trigger.seconds])).toEqual([
@@ -135,4 +137,43 @@ test('PRACTICE plays a single chart under every ruleset', () => {
     expect(() =>
       resolveRuleset(FACTS, ruleset, { practice: { sourceNotes, gauge, startGauge: 20 }, course: { kind: 'grade' } }),
     ).toThrow(/single chart/);
+});
+
+describe('resolvePracticePlayWindow (#954)', () => {
+  const windowOf = (lines: string[], range: { startMs: number; endMs?: number }) => {
+    const chart = resolveChart(parseBMS(['#BPM 120', ...lines, '#00911:01', ''].join('\n')), { playVariant: '7' });
+    const resolved = resolvePracticeRange({ ...range, gauge: 'NORMAL', startGauge: 20 }, 20_000);
+    return resolvePracticePlayWindow(chart, range, resolved);
+  };
+
+  test('starts a bar before the range’s bar and ends a bar after the bar its end lies in', () => {
+    // 120 BPM 4/4: bar n starts at 2n s.
+    expect(windowOf([], { startMs: 4500, endMs: 6500 })).toEqual({ startSeconds: 2, endSeconds: 8 });
+    // A range snapped to bar lines plays one whole bar on either side.
+    expect(windowOf([], { startMs: 4000, endMs: 8000 })).toEqual({ startSeconds: 2, endSeconds: 10 });
+    // A range in the first bar starts at the chart's start; one in the second starts there too.
+    expect(windowOf([], { startMs: 500, endMs: 1500 })).toEqual({ startSeconds: 0, endSeconds: 2 });
+    expect(windowOf([], { startMs: 2000, endMs: 3000 })).toEqual({ startSeconds: 0, endSeconds: 4 });
+  });
+
+  test('reads odd measure lengths', () => {
+    // Bar 1 is 3/4 (1.5 s) and bar 3 is 5/4 (2.5 s): heads at 0, 2, 3.5, 5.5, 8, 10.
+    const lines = ['#00102:0.75', '#00302:1.25'];
+    expect(windowOf(lines, { startMs: 4000, endMs: 6000 })).toEqual({ startSeconds: 2, endSeconds: 8 });
+    expect(windowOf(lines, { startMs: 3500, endMs: 5500 })).toEqual({ startSeconds: 2, endSeconds: 8 });
+  });
+
+  test('follows BPM changes and stops', () => {
+    // 240 BPM from bar 2: heads at 0, 2, 4, 5, 6, 7.
+    expect(windowOf(['#00203:F0'], { startMs: 5200, endMs: 6200 })).toEqual({ startSeconds: 4, endSeconds: 7 });
+    // A 1 s stop (96 / 192 of a measure) in the middle of bar 1 delays the later bars: heads at 0, 2, 5, 7, 9.
+    expect(windowOf(['#STOP01 96', '#00109:0001'], { startMs: 7500, endMs: 8500 })).toEqual({
+      startSeconds: 5,
+      endSeconds: 9,
+    });
+  });
+
+  test('without an END TIME, ends 1000 ms past the range’s end as before', () => {
+    expect(windowOf([], { startMs: 4500 })).toEqual({ startSeconds: 2, endSeconds: 22 });
+  });
 });
