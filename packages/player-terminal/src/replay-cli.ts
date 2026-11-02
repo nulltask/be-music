@@ -31,7 +31,7 @@ export interface ReplayCLIArgs {
 
 const USAGE = `Usage: bms-replay [options] <file.bmplay.json> [...more files]
 
-Re-derives LR2 / beatoraja / That-Which-Must-Not-Be-Named results from a recorded be-music replay.
+Re-derives LR2 / beatoraja / That-Which-Must-Not-Be-Named results from a recorded Be-Music replay.
 
 Options:
   --ruleset=<list>    Comma-separated rulesets to simulate: lr2, beatoraja, ____, all (default: all)

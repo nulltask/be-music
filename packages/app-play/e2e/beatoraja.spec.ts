@@ -82,7 +82,7 @@ test('beatoraja draws a landmine from the engine frame', async ({ player }, info
   await player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
   await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? -1) > 0.2, 'falling mine');
   await player.key('Space');
-  const canvas = player.page.locator('canvas[aria-label="be-music stage"]');
+  const canvas = player.page.locator('canvas[aria-label="Be-Music stage"]');
   const screenshot = await canvas.screenshot({ path: info.outputPath('beatoraja-landmine.png') });
   const minePixels = await player.page.evaluate(async (base64) => {
     const image = new Image();
@@ -133,7 +133,7 @@ test('beatoraja shows invisible objects only when enabled, with live toggling', 
   await player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
   await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? -1) > 0.2, 'invisible object');
   await player.key('Space');
-  const canvas = player.page.locator('canvas[aria-label="be-music stage"]');
+  const canvas = player.page.locator('canvas[aria-label="Be-Music stage"]');
   async function greenPixels() {
     const screenshot = await canvas.screenshot();
     return player.page.evaluate(async (base64) => {

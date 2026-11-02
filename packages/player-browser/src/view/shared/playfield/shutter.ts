@@ -11,7 +11,7 @@ import type { PlayfieldContext } from './context.ts';
  */
 export function renderShutter(ctx: PlayfieldContext): void {
   ctx.shutterLayer.clear();
-  // A be-music skin that draws its own covers reads them from `runtime.laneCovers` instead.
+  // A Be-Music Skin that draws its own covers reads them from `runtime.laneCovers` instead.
   if (ctx.skinBinding?.drawsLaneCover) return;
   if (ctx.play.laneX.size === 0) return;
   for (const cover of ctx.play.resolveLaneCovers()) {

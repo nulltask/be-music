@@ -81,7 +81,7 @@ export function renderDashboard(input: {
     hostname: input.hostname,
     origins: { play: links.play, leaderboard: links.leaderboard },
     navLabel: input.locale === 'ja' ? 'サービス' : 'Services',
-    siteHTML: `be-music${donate}`,
+    siteHTML: `Be-Music${donate}`,
     buildInfo: input.buildInfo,
     locale: input.locale,
   });
@@ -127,7 +127,7 @@ ${renderServiceHeader({
   requestURL: input.requestURL ?? '/',
 })}
 <main class="mx-auto max-w-5xl px-4 pt-8 pb-12" id="main">
-<div class="mb-6"><h1 class="text-2xl font-semibold tracking-tight">${input.locale === 'ja' ? 'ダッシュボード' : 'Dashboard'}</h1><p class="text-muted-foreground text-sm">${input.locale === 'ja' ? 'アカウントと、それぞれの be-music サービスへ。' : 'Your account and be-music services, in one place.'}</p></div>
+<div class="mb-6"><h1 class="text-2xl font-semibold tracking-tight">${input.locale === 'ja' ? 'ダッシュボード' : 'Dashboard'}</h1><p class="text-muted-foreground text-sm">${input.locale === 'ja' ? 'アカウントと、それぞれの Be-Music サービスへ。' : 'Your account and Be-Music services, in one place.'}</p></div>
 <section class="card mb-8" data-size="sm" aria-labelledby="account-heading"><header><h2 id="account-heading">${input.locale === 'ja' ? 'アカウント' : 'Account'}</h2></header>
 <section class="grid gap-4"><p class="text-muted-foreground text-sm" data-state="${input.account === undefined ? 'signed-out' : input.account.anonymous ? 'anonymous' : 'signed-in'}">${escapeHTML(status)}</p>
 <div class="flex flex-wrap gap-2"><a class="btn no-underline" data-size="sm" href="${accountHref}">${accountLabel}</a>${signOut}</div></section></section>

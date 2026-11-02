@@ -2,7 +2,7 @@ import type { ClearLamp } from '@be-music/player-engine/ruleset';
 import { LR2_BAR_LAMP_KINDS, LR2_OP } from '../ids/index.ts';
 import type { LR2BarLampKind } from '../skin.ts';
 
-/** LR2's six clear lamps (`#SRC_BAR_LAMP` kinds, ops 100-105) for each of be-music's lamps. */
+/** LR2's six clear lamps (`#SRC_BAR_LAMP` kinds, ops 100-105) for each of Be-Music's lamps. */
 const LR2_LAMP_KINDS: Readonly<Record<ClearLamp, LR2BarLampKind>> = {
   NO_PLAY: 'noplay',
   FAILED: 'failed',

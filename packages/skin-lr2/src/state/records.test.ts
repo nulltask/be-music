@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import { resolveLR2BarLamp, resolveLR2LampOp } from './records.ts';
 
 describe('resolveLR2BarLamp', () => {
-  it('folds be-music’s lamps onto LR2’s six', () => {
+  it('folds Be-Music’s lamps onto LR2’s six', () => {
     expect(resolveLR2BarLamp(undefined)).toBe('noplay');
     expect(resolveLR2BarLamp('NO_PLAY')).toBe('noplay');
     expect(resolveLR2BarLamp('FAILED')).toBe('failed');

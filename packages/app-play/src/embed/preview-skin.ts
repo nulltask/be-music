@@ -88,7 +88,7 @@ export interface PreviewSkinOptions {
   readonly stageTapPauses?: boolean;
 }
 
-/** The embed's be-music skin: a DOM playfield and preview HUD, no Canvas of its own. */
+/** The embed's Be-Music Skin: a DOM playfield and preview HUD, no Canvas of its own. */
 export function createPreviewSkin(chrome: PreviewChrome, options: PreviewSkinOptions = {}): BeMusicSkin {
   return defineBeMusicSkin({
     apiVersion: BE_MUSIC_SKIN_API_VERSION,

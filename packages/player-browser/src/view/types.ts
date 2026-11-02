@@ -114,7 +114,7 @@ export interface SceneViewTiming {
 export interface SelectRecords {
   chart(chart: LibraryChart): BeMusicChartBestRecord | undefined;
   course(course: LibraryCourse): BeMusicCourseBestRecord | undefined;
-  /** The player's dan rank per key mode (`frame.danRanks` of a be-music skin), when the host keeps them. */
+  /** The player's dan rank per key mode (`frame.danRanks` of a Be-Music Skin), when the host keeps them. */
   danRanks?(): readonly BeMusicDanRank[];
   /**
    * Which of a chart's or course's replay slots hold a replay (`REPLAY_SLOT_COUNT` of them), when the host keeps replay

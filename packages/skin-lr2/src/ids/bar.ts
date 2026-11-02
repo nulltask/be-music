@@ -20,7 +20,7 @@ export const LR2_BAR_BODY = {
   COURSE_CREATE: 7,
   /** A course. */
   COURSE: 8,
-  /** LR2's RANDOM MIX bar, which draws a course; be-music also draws a beatoraja random course with it. */
+  /** LR2's RANDOM MIX bar, which draws a course; Be-Music also draws a beatoraja random course with it. */
   RANDOM_COURSE: 9,
 } as const;
 
@@ -50,13 +50,13 @@ export const LR2_BAR_LAMP = {
   NO_PLAY: 0,
   /** FAILED. */
   FAILED: 1,
-  /** EASY CLEAR (be-music's ASSIST EASY and EASY). */
+  /** EASY CLEAR (Be-Music's ASSIST EASY and EASY). */
   EASY: 2,
-  /** CLEAR (be-music's NORMAL). */
+  /** CLEAR (Be-Music's NORMAL). */
   CLEAR: 3,
-  /** HARD CLEAR (be-music's HARD and EX HARD). */
+  /** HARD CLEAR (Be-Music's HARD and EX HARD). */
   HARD: 4,
-  /** FULL COMBO (be-music's FULL COMBO, PERFECT and MAX). */
+  /** FULL COMBO (Be-Music's FULL COMBO, PERFECT and MAX). */
   FULL_COMBO: 5,
 } as const;
 

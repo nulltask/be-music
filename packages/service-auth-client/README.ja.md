@@ -2,7 +2,7 @@
 
 # @be-music/service-auth-client
 
-be-music のアプリで使う、サーバー側の OIDC クライアントです。[サービス構成](../../docs/services.ja.md)と [ADR 0008](../../docs/adr/0008-accounts-oidc.ja.md)を参照してください。
+Be-Music のアプリで使う、サーバー側の OIDC クライアントです。[サービス構成](../../docs/services.ja.md)と [ADR 0008](../../docs/adr/0008-accounts-oidc.ja.md)を参照してください。
 
 `AUTH_ISSUER`・`PUBLIC_ORIGIN`・`OIDC_CLIENT_ID`・`API_AUDIENCE` と、32 文字以上のランダムな `SESSION_SECRET` を設定します。issuer とオリジンは HTTPS です。Accounts に `PUBLIC_ORIGIN/api/auth/callback` を完全一致で登録します。issuer は `/api/auth` を含みます。
 

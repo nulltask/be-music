@@ -51,7 +51,7 @@ export interface BeMusicCourseBestRecord extends BeMusicChartBestRecord {
 export interface BeMusicDanRank {
   /** The key mode the rank is held in (`7`, `5`, `14`, `10`, `9`, …). */
   keyMode: number;
-  /** The rank on be-music's dan ladder, `kyu-10` up to `overjoy`. */
+  /** The rank on Be-Music's dan ladder, `kyu-10` up to `overjoy`. */
   rank: DanRank;
   /** The rank as dan courses name it: `七段`, `発狂皆伝`, `Overjoy`. */
   label: string;

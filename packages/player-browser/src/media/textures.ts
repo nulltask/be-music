@@ -1129,7 +1129,7 @@ async function loadTextureFromImageData(
 
 /**
  * Decodes an image asset (PNG, BMP, JPG, TGA, registered formats, …) into an `ImageBitmap`, for consumers that draw
- * with the canvas APIs rather than Pixi (be-music skins' song images). No chroma key is applied. `undefined` when the
+ * with the canvas APIs rather than Pixi (Be-Music Skins' song images). No chroma key is applied. `undefined` when the
  * bytes don't decode; the caller owns the bitmap and `close()`s it when done.
  */
 export async function loadImageBitmapFromBytes(path: string, bytes: Uint8Array): Promise<ImageBitmap | undefined> {

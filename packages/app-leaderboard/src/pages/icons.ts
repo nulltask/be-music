@@ -16,7 +16,7 @@ export const ICON_LINKS = {
 /** The web app manifest of the Leaderboard pages. */
 export function webManifest() {
   return {
-    name: 'be-music Leaderboard',
+    name: 'Be-Music Leaderboard',
     short_name: 'Leaderboard',
     start_url: '/',
     scope: '/',

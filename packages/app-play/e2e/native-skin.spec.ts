@@ -31,7 +31,7 @@ test('native screens browse, search, play, show results and switch back to Canva
   await expect(hud.locator('be-music-play-settings')).not.toContainText('____');
   // Checked while paused, before the short chart ends. No stage-sized canvas: each part of the playfield, BGA
   // included, draws on a canvas of its own.
-  await expect(page.locator('canvas[aria-label="be-music stage"]')).toHaveCount(0);
+  await expect(page.locator('canvas[aria-label="Be-Music stage"]')).toHaveCount(0);
   for (const part of ['be-music-bga', 'be-music-lanes', 'be-music-notes', 'be-music-judge-line']) {
     await expect(hud.locator(`${part} canvas`)).toBeAttached();
   }

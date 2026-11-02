@@ -26,7 +26,7 @@ export type LR2RecordSlot = 'd-battle' | 'sp-to-dp' | 'extra';
 /** The record a play keeps under a ruleset: a chart's ordinary record, or one of LR2's separate lamps. */
 export type RecordSlot = 'main' | LR2RecordSlot;
 
-/** Where an option comes from: a judge ruleset's source game, or be-music itself (its debug judge-window override). */
+/** Where an option comes from: a judge ruleset's source game, or Be-Music itself (its debug judge-window override). */
 export type AssistSource = RulesetId | 'be-music';
 
 /** One assisted option a play used, with the source that classifies it. */

@@ -150,7 +150,7 @@ function clampUnit(value: number): number {
 
 /**
  * beatoraja's lane cover (`PlayConfig.lanecover`): the SUDDEN+ height as a fraction of the part of the lane above the
- * LIFT, kept while the cover is off. be-music keeps SUDDEN+ so too, except an absolute cover (the floating hi-speed's),
+ * LIFT, kept while the cover is off. Be-Music keeps SUDDEN+ so too, except an absolute cover (the floating hi-speed's),
  * a fraction of the whole lane: the same drawn height is `sudden / (1 - lift)` there.
  */
 function beatorajaLaneCover(cover: LaneCoverState): number {

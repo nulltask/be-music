@@ -7,7 +7,7 @@ import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The notes of the shared playfield: walks the chart's notes, mines and invisible notes from the playhead under LR2's
  * or beatoraja's drawing rules (`note-draw-window.ts`) and draws each tap note, long note, mine and invisible-note
- * overlay with the theme's cell, the be-music skin, or the default playfield's shape.
+ * overlay with the theme's cell, the Be-Music Skin, or the default playfield's shape.
  */
 
 import { findFirstIndexAtOrAfter } from '@be-music/shared-utils/core';
@@ -198,7 +198,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     );
     const noteAlpha = alpha * (headVisual?.alpha ?? 1);
     if (noteAlpha <= 0) continue;
-    // The LR2-spec lane index (LR2 `#SRC_NOTE,...,index`), for the lane kind a be-music skin draws and the labels.
+    // The LR2-spec lane index (LR2 `#SRC_NOTE,...,index`), for the lane kind a Be-Music Skin draws and the labels.
     const laneIndex = resolveLR2LaneIndex(note.channel, ctx.play.chartPlayVariant);
     // Long-note render: draw LN_BODY between start and end beats, capped with LN_START / LN_END sprites. Falls
     // through to single-note render if the chart has no long-note end-beat for this entry.
@@ -359,7 +359,7 @@ function renderSingleNote(
   scale = 1,
   /**
    * STAR / SPIN. A theme cell takes both, rotating about its centre; the default playfield's shape takes the colour; a
-   * be-music skin's note takes neither (its binding draws the note itself).
+   * Be-Music Skin's note takes neither (its binding draws the note itself).
    */
   style?: ChartNoteStyle,
 ): void {

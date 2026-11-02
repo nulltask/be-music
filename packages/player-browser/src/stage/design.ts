@@ -13,7 +13,7 @@ export const FALLBACK_INTRO_DELAY_MS = 3000;
 
 /**
  * Fallback lane-laser release fade duration in ms. Themes can author a per-lane span (the LR2 family derives it from the
- * skin's key-on keyframes); this constant kicks in when a key-on slot has no themed span (a be-music skin, or a slot
+ * skin's key-on keyframes); this constant kicks in when a key-on slot has no themed span (a Be-Music Skin, or a slot
  * the skin doesn't author). 120 ms matches the LR2 default skin's typical key-on keyframe span and is a perceptually
  * comfortable decay for auto-judge feedback.
  */
