@@ -223,11 +223,17 @@ export interface PlaySessionOptions {
   replay?: BeMusicReplay;
   /**
    * A replay ghost to show beside the play (`ghost/ghost.ts`): the source of the replay it plays, read while the play
-   * loads. The built-in family shows it as a second playfield on the 2P side of a 5 / 7 KEY single-play chart; it is
-   * left out of a replay, a course stage and a NONSTOP run, and wherever there is no room for it. It only draws: the
-   * play's judging, records, replay and Leaderboard submission are its own.
+   * loads, and shown as {@link ghostMode} says. It is left out of a replay, a course stage and a NONSTOP run, and
+   * wherever its mode has no room. It only draws: the play's judging, records, replay and Leaderboard submission are
+   * its own.
    */
   ghost?: import('./ghost/ghost.ts').GhostSource;
+  /**
+   * How the ghost shows (`ghost/ghost.ts`): `'side-playfield'` (the default) as a second playfield, `'pacemaker'` as a
+   * pacemaker alone (the score graph's target and the target score numbers, on every family), or `'lane-overlay'` as
+   * the pacemaker with the recorded inputs over the play's own lanes (drawn on the built-in family).
+   */
+  ghostMode?: import('./ghost/ghost.ts').GhostPresentationMode;
   /** Reuse the resolved chart layout while playing fresh input and recording a new replay. */
   fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
   /**

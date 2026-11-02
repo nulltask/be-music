@@ -25,7 +25,6 @@ import type { InlineSearch } from '../../inline-search.ts';
 import type { CourseMakerService } from '../../services/course-maker.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
-import { resolveGhostUnavailableReason } from '../../services/ghost.ts';
 import { copyPlayOptionsToGUI, type GUIPlayOptions, type PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { ReplaySlotService } from '../../services/replay-slot-service.ts';
@@ -90,7 +89,7 @@ export interface SelectRouteDeps {
    * The replay slots: which slots a bar has, and the card that lists them on the skins without a replay-slot UI of
    * their own (every family but beatoraja).
    */
-  readonly replaySlots: Pick<ReplaySlotService, 'exists'>;
+  readonly replaySlots: Pick<ReplaySlotService, 'exists' | 'targetOf'>;
   readonly replaySlotsPanel: Pick<ReplaySlotsPanel, 'showSelect'>;
   /** Plays a bar's replay slot (`ReplayRoute.startReplayFromSlot`); returns whether a play starts. */
   readonly startReplayFromSlot: (entry: Exclude<LibraryEntry, { kind: 'folder' }>, slot: number) => boolean;
@@ -244,17 +243,22 @@ export class SelectRoute {
         // The card lists the bar's replays where the skin has no replay-slot UI (a beatoraja skin draws its own).
         focus: (entry) => {
           if (kit.family !== 'beatoraja') this.replaySlotsPanel.showSelect(entry);
-          // "Ghost" is enabled only where a play of the bar would show one.
+          // "Ghost status" says whether a play of the bar would show the picked ghost.
           const chart = entry?.kind === 'chart' ? entry : undefined;
           const playFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'gameplay', chart?.chart);
+          const target = chart !== undefined ? this.replaySlots.targetOf(chart) : undefined;
+          // No bar, or a folder: nothing to say.
           this.debugMenu.setGhostAvailability(
-            resolveGhostUnavailableReason({
-              family: playFamily === 'default' ? 'built-in' : playFamily,
-              ...(chart !== undefined ? { playVariant: resolveLibraryChartPlayVariant(chart.chart) } : {}),
-              course: entry?.kind === 'course',
-              battle: this.playOptions.current.battleMode !== 'OFF',
-              hasBestReplay: chart !== undefined && this.replaySlots.exists(chart).some(Boolean),
-            }),
+            entry === undefined || entry.kind === 'folder'
+              ? undefined
+              : {
+                  family: playFamily === 'default' ? 'built-in' : playFamily,
+                  ...(chart !== undefined ? { playVariant: resolveLibraryChartPlayVariant(chart.chart) } : {}),
+                  course: entry.kind === 'course',
+                  battle: this.playOptions.current.battleMode !== 'OFF',
+                  ...(target !== undefined ? { target } : {}),
+                  slotsKept: chart !== undefined ? this.replaySlots.exists(chart) : [],
+                },
           );
         },
         playOptions: (options) => {
