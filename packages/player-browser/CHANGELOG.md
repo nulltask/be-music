@@ -1,5 +1,22 @@
 # @be-music/player-browser
 
+## 0.15.0
+
+### Minor Changes
+
+- 7f4837f: A quick retry of the same chart no longer decodes its samples again: the audio service keeps the decoded samples of the chart played last (`AudioService.chartSamples`), and the play takes them from there. The cache holds one chart, keyed by its source, chart path, `#PATH_WAV` and the play context's sample rate; a play of another chart (or a SILENT play) releases it before decoding, `release()` frees it, and `dispose()` does too. Options that change a play (RANDOM, keep-pitch stretching, `#WAVCMD` / `#EXWAV`, peak gain) still apply afresh to each play, and the cached buffers are never changed in place.
+
+### Patch Changes
+
+- adcaa23: The stage canvas's accessible label reads "Be-Music stage", and the built-in skins (Plain, Synesthesia, Native) name their author "Be-Music", spelling the product name as the rest of the UI does.
+- 569eb54: The Synesthesia and Plain skins tell the long-note kinds apart by shape, not colour alone:
+  
+  - An HCN has a zigzag centre line (the other kinds keep it straight), and a back-spin scratch has a chevron on its tail cap; gameplay frames mark a back-spin scratch with `backSpinScratch`.
+  - A hell charge note shows how it stands: a violet HELL colour with a still zigzag before it is reached, a bright pulsing orange glow with the zigzag flowing into the judgement line while held, a dim red with the zigzag flowing back up the lane once let go, and the glow again when pressed back, ending at the tail. The play follows the engine's new `hell-charge` commands, so a released HCN reads as `'draining'` instead of dropped until its tail passes. LR2 skins still draw a released long note at half alpha.
+  - Touch lanes report no scratch spin, so a fresh tap on a held back-spin scratch turns it back.
+- 20771f3: A PRACTICE play loops its range inside the same play scene instead of finishing: it hands the engine the range with `loop: true`, and takes each restart as a seek, so the score, combo and gauge reset to the practice settings while the decoded samples, BGA and skin stay. ESC still leaves.
+- Updated dependencies: `@be-music/player-engine@0.14.0`, `@be-music/player-scene-model@0.6.0`, `@be-music/player-skin-sdk@0.8.0`, `@be-music/player-ui@0.6.1`, `@be-music/skin-beatoraja@0.6.1`, `@be-music/skin-lr2@0.6.1`
+
 ## 0.14.0
 
 ### Minor Changes

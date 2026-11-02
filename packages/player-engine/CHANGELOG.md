@@ -1,5 +1,20 @@
 # @be-music/player-engine
 
+## 0.14.0
+
+### Minor Changes
+
+- 8debf2d: A back-spin scratch (a CN / HCN on a scratch lane) under beatoraja and That-Which-Must-Not-Be-Named now has its tail judged on a reverse spin instead of the release, as beatoraja does: a release no longer settles it, and a tail never spun back is a missed POOR. LR2 keeps playing every long note as an LN.
+  
+  Each scratch press carries its spin (`'cw'` / `'ccw'`): the `lane-input` command takes a controller's reported direction, keys follow the odd-even rule over the scratch lane's keys (Shift, then Ctrl or Option / Alt), and replays record it as `spin`, so replays and the replay simulator reproduce the tail. Input with no direction (a touch lane sends `spin: null`, or an ANY KEY press from a non-scratch key) turns a BSS back with any fresh press, so touch players can clear BSS tails.
+  
+  New exports on `@be-music/player-engine/lanes`: `createScratchSpinByToken`, `resolveScratchSpin`, `isReverseScratchSpin`, `isScratchSpin` and the `ScratchSpin` type (also on `./signals`); `LaneBinding` gains `inputKeys`.
+- 4d00f4e: A hell charge note (an HCN, a hell-charge back-spin scratch included) now reports its gauge ticks to the UI: the judge core sends a `hell-charge` command (`channel`, the head's `beat`, `state`: `'gaining'` / `'draining'` / `'passed'`) each time the note switches between filling and emptying the gauge, and once its tail has passed. A replay sends the same commands as the play it records, and a replay seek announces the notes passing the judge line again. The `PlayerUIHellChargeState` type is exported from `./signals`.
+- c8ea89d: PRACTICE can loop its range in place, measured in bars:
+  
+  - With `practice.loop: true` (`PlayPractice.loop`) a practice play goes back to its start where it would end — once every note in the range is judged, or its gauge empties — instead of finishing, as a seek there does: the judge, score, combo and gauge return to the practice settings, the audio stops what still rings, and the host gets a `seek` UI command and a frame of the next generation. The play then ends only at an interrupt.
+  - The lead-in and the end are measured in bars instead of seconds, so they line up with the music: a practice play starts at the head of the bar before the one the range starts in (the chart's start in the first bar) and ends, or loops, at the head of the bar after the one its END TIME lies in, read from the resolved chart's bar lines through BPM changes, `#xxx02` measure lengths and stops (`resolvePracticePlayWindow`). The prepared chart reports the start as `practicePlayStartSeconds`. Without an END TIME the play still runs 1000 ms past the chart's end; beatoraja uses 1000 ms on both sides.
+
 ## 0.13.0
 
 ### Minor Changes
