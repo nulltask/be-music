@@ -1,4 +1,5 @@
 import type { ChartOptionTimeline } from './chart-options.ts';
+import { resolveChartLegacyOptionAlias } from './chart-option-legacy.ts';
 
 /**
  * Chart-authored gameplay options (#844): nanasigroove's `774:RANDOM_*` arrangement and the judgment-related
@@ -97,12 +98,14 @@ export function isChartPlayOptionDeclaration(declaration: string): boolean {
 
 /**
  * Compile the initial gameplay declarations in source order, later ones winning within a family. Timed (A6) uses are
- * the display compiler's to diagnose as `initial-only-option`; they never change this set.
+ * the display compiler's to diagnose as `initial-only-option` (`initial-only-alias` for a legacy ID); they never change
+ * this set.
  */
 export function compileChartPlayOptions(timeline: Pick<ChartOptionTimeline, 'initial'>): ChartPlayOptionProgram {
   let options: ChartPlayOptions = {};
   for (const declaration of timeline.initial) {
-    const patch = parseChartPlayOption(declaration);
+    // The legacy CRA-* judgment, note and NORMAL IDs stand for their modern IDs here (#931).
+    const patch = parseChartPlayOption(resolveChartLegacyOptionAlias(declaration) ?? declaration);
     if (patch !== undefined) options = patch(options);
   }
   return { version: CHART_PLAY_OPTION_PROGRAM_VERSION, options };

@@ -31,7 +31,11 @@ import {
 } from '@be-music/skin-beatoraja';
 import { withBeatorajaCourseStageOps } from '@be-music/skin-beatoraja/scene';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { createBeatAtSecondsResolverFromTimingResolver, type ChartPlayVariant } from '@be-music/chart-model';
+import {
+  createBeatAtSecondsResolverFromTimingResolver,
+  resolveChartPlayfieldVisual,
+  type ChartPlayVariant,
+} from '@be-music/chart-model';
 import type { PlayerGaugeSummary, PlayerUIFrameNote, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { ScoreSummary } from '@be-music/player-engine/ruleset';
 import type { CourseView, HiSpeedTransition, LibraryChart, PlayState } from '@be-music/player-scene-model';
@@ -506,6 +510,10 @@ export class BeatorajaPlayView implements PlayView {
       judgeTimingMs: frame.playOptions.judgeTimingMs,
       visualConstant: frame.playOptions.visualConstant,
       judgeTimingAutoAdjust: frame.playOptions.judgeTimingAutoAdjust,
+      chartPlayfield: resolveChartPlayfieldVisual(
+        play.engineFrame?.chartOptions,
+        play.engineFrame?.currentSeconds ?? frame.seconds,
+      ),
       nowMs: play.playClock(),
       hostNowMs: frame.clock.nowMs,
       state: frame.state,

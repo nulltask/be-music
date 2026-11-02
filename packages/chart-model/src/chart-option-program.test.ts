@@ -10,7 +10,7 @@ test('HI-SPEED accepts native bounds and hundredths without applying user speed 
 });
 test('initial declarations combine in order; invalid or unsupported declarations preserve accepted values', () => {
   const result = compileChartOptions({
-    initial: ['774:HI-SPEED_x2.00', '774:CRAZY_SPIN', '774:HI-SPEED_x0.77', '774:HI-SPEED_x200'],
+    initial: ['774:HI-SPEED_x2.00', '774:CRA-RHS1', '774:HI-SPEED_x0.77', '774:HI-SPEED_x200'],
     cues: [],
   });
   expect(result.program.initial).toEqual({ hiSpeed: 0.77 });
@@ -66,14 +66,14 @@ test('missing references and unrepresentable cue time are diagnosed without chan
 });
 // The documented support boundary (docs/research/chart-authored-options.md): every other family is diagnosed and has
 // no effect, initially or on A6, so a program never carries an operation the engine cannot reproduce.
-test.each(['774:CRAZY_SPIN', '774:HIDDEN_M-SUDDEN', '774:HID-HIDDEN1', 'charatbeatHDX:BGAMODE 1'])(
+test.each(['774:CRA-RHS1', '774:RND-MIRROR', '774:GTP-HARD', 'charatbeatHDX:BGAMODE 1'])(
   'diagnoses %s without changing the effective program',
   (declaration) => {
     const result = compileChartOptions({
       initial: ['774:HI-SPEED_x1.50', declaration],
       cues: [{ seconds: 1, key: '01', declaration }],
     });
-    expect(result.program).toEqual({ version: 2, initial: { hiSpeed: 1.5 }, cues: [] });
+    expect(result.program).toEqual({ version: 3, initial: { hiSpeed: 1.5 }, cues: [] });
     expect(result.diagnostics).toEqual([
       { code: 'unsupported-option', declaration },
       { code: 'unsupported-option', declaration, key: '01', seconds: 1 },
@@ -87,7 +87,7 @@ test('initial RANDOM and gameplay CRAZY belong to the play options; timed uses a
       initial: [declaration],
       cues: [{ seconds: 1, key: '01', declaration }],
     });
-    expect(result.program).toEqual({ version: 2, initial: {}, cues: [] });
+    expect(result.program).toEqual({ version: 3, initial: {}, cues: [] });
     expect(result.diagnostics).toEqual([{ code: 'initial-only-option', declaration, key: '01', seconds: 1 }]);
   }
 });
@@ -103,7 +103,7 @@ test('version 2 executes HIDDEN, CHANGE-HS and CRAZY size / wave declarations al
     ],
   });
   expect(diagnostics).toEqual([]);
-  expect(program.version).toBe(2);
+  expect(program.version).toBe(3);
   expect(program.initial).toEqual({
     hidden: 'SUDDEN',
     changeHS: 'ACCEL',
@@ -127,7 +127,7 @@ test('a later declaration of an exclusive family replaces the earlier one; other
 test('initial GAMELEVEL and EXTRA choose the gauge; timed uses are diagnosed initial-only', () => {
   for (const declaration of ['774:GAMELEVEL_HYPER', '774:EXTRA_HARD', '774:EXTRA_OFF']) {
     const result = compileChartOptions({ initial: [declaration], cues: [{ seconds: 1, key: '01', declaration }] });
-    expect(result.program).toEqual({ version: 2, initial: {}, cues: [] });
+    expect(result.program).toEqual({ version: 3, initial: {}, cues: [] });
     expect(result.diagnostics).toEqual([{ code: 'initial-only-option', declaration, key: '01', seconds: 1 }]);
   }
 });
@@ -139,4 +139,24 @@ test('CRAZY_OFF clears the visual CRAZY subfamilies as a display operation, init
   expect(result.diagnostics).toEqual([]);
   expect(result.program.initial).toEqual({ crazyWave: 'XWAVE' });
   expect(resolveChartOptionsAt(result.program, 1_000_000)).toEqual({});
+});
+
+test('version 3 executes M-SUDDEN and the skin-level CRAZY options; CRAZY_OFF clears every visual CRAZY field', () => {
+  const { program, diagnostics } = compileChartOptions({
+    initial: ['774:HIDDEN_M-SUDDEN', '774:CRAZY_REVERSE', '774:CRAZY_STAR', '774:CRAZY_3DWAVE'],
+    cues: [
+      { seconds: 1, key: '01', declaration: '774:CRAZY_HIDJUDGE' },
+      { seconds: 2, key: '02', declaration: '774:CRAZY_OFF' },
+    ],
+  });
+  expect(diagnostics).toEqual([]);
+  expect(program.version).toBe(3);
+  expect(program.initial).toEqual({
+    hidden: 'M-SUDDEN',
+    crazyReverse: 'REVERSE',
+    crazyColor: 'STAR',
+    crazyWave: '3DWAVE',
+  });
+  expect(resolveChartOptionsAt(program, 1_000_000).crazyJudge).toBe('HIDJUDGE');
+  expect(resolveChartOptionsAt(program, 2_000_000)).toEqual({ hidden: 'M-SUDDEN' });
 });

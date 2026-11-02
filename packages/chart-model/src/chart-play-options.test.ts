@@ -48,7 +48,7 @@ test('NOTES_OFF clears the note conversion; CRAZY_OFF does not', () => {
   });
 });
 
-test('ignores other families, legacy aliases and wrong case', () => {
+test('parses other families, legacy aliases and wrong case as none of its own', () => {
   for (const declaration of [
     '774:NOTES_TRIPLE',
     '774:CRA-HYPER',
@@ -63,7 +63,9 @@ test('ignores other families, legacy aliases and wrong case', () => {
     expect(parseChartPlayOption(declaration)).toBeUndefined();
     expect(isChartPlayOptionDeclaration(declaration)).toBe(false);
   }
-  expect(compileChartPlayOptions({ initial: ['774:CRA-HYPER'] }).options).toEqual({});
+  // The legacy aliases are not parsed here; the compiler maps them first (chart-option-legacy.ts).
+  expect(compileChartPlayOptions({ initial: ['774:CRA-HYPER'] }).options).toEqual({ notes: 'DOUBLE' });
+  expect(compileChartPlayOptions({ initial: ['774:CRA-CPDOUBLE'] }).options).toEqual({ notes: 'COPY' });
 });
 
 test('hasChartPlayOptions', () => {

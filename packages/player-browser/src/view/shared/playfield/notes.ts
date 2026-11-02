@@ -251,10 +251,22 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       continue;
     }
     const noteLane = applyChartLaneVisual(lane, headVisual);
-    if (noteAlpha === 1) renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, 1, headVisual?.scale);
+    const style = chartNoteStyle(headVisual);
+    // CLONE afterimages go first, so the note draws over them.
+    if (headVisual !== undefined && headVisual.clones.length > 0) {
+      for (const clone of headVisual.clones) {
+        if (clone.y < lane.top - overscan || clone.y > lane.bottom) continue;
+        const cloneAlpha = noteAlpha * clone.alpha;
+        const cloneLane = applyChartLaneVisual(lane, { scale: headVisual.scale, xOffset: clone.xOffset });
+        ctx.noteLayerPool.withAlpha(cloneAlpha, () =>
+          renderSingleNote(ctx, laneIndex, note.channel, cloneLane, clone.y, cloneAlpha, headVisual.scale, style),
+        );
+      }
+    }
+    if (noteAlpha === 1) renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, 1, headVisual?.scale, style);
     else
       ctx.noteLayerPool.withAlpha(noteAlpha, () =>
-        renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, noteAlpha, headVisual?.scale),
+        renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, noteAlpha, headVisual?.scale, style),
       );
   }
   // Landmine notes — same scroll math, separate sprite. Drawn after regular notes so a mine sitting at the same beat
@@ -316,10 +328,24 @@ function advanceNoteDrawCursor(
  * The lane rect a note draws in under CRAZY size and wave: scaled about the lane centre and shifted by the sway. The
  * lane itself when neither applies.
  */
-function applyChartLaneVisual(lane: PlayfieldLaneRect, visual: ChartNoteScreenVisual | undefined): PlayfieldLaneRect {
+function applyChartLaneVisual(
+  lane: PlayfieldLaneRect,
+  visual: Pick<ChartNoteScreenVisual, 'scale' | 'xOffset'> | undefined,
+): PlayfieldLaneRect {
   if (visual === undefined || (visual.scale === 1 && visual.xOffset === 0)) return lane;
   const w = lane.w * visual.scale;
   return { ...lane, x: lane.x + (lane.w - w) / 2 + visual.xOffset, w };
+}
+
+/** STAR's colour and SPIN's rotation for a tap note, or `undefined` when neither applies. */
+interface ChartNoteStyle {
+  readonly tint?: number;
+  readonly rotation: number;
+}
+
+function chartNoteStyle(visual: ChartNoteScreenVisual | undefined): ChartNoteStyle | undefined {
+  if (visual === undefined || (visual.tint === undefined && visual.rotation === 0)) return undefined;
+  return visual.tint !== undefined ? { tint: visual.tint, rotation: visual.rotation } : { rotation: visual.rotation };
 }
 
 function renderSingleNote(
@@ -331,6 +357,11 @@ function renderSingleNote(
   alpha = 1,
   /** CRAZY size: the cell's height follows the lane rect's width scale. */
   scale = 1,
+  /**
+   * STAR / SPIN. A theme cell takes both, rotating about its centre; the default playfield's shape takes the colour; a
+   * be-music skin's note takes neither (its binding draws the note itself).
+   */
+  style?: ChartNoteStyle,
 ): void {
   // `y` is where the chart timing intersects the judgement line for this note. We anchor the sprite by its **bottom
   // edge** so the just-timing moment lines up with the bottom edge of the visual note (LR2 / BMS convention) instead
@@ -344,6 +375,15 @@ function renderSingleNote(
     sprite.y = y - cell.height * scale;
     sprite.width = cell.width * scale;
     sprite.height = cell.height * scale;
+    if (style !== undefined) {
+      if (style.tint !== undefined) sprite.tint = style.tint;
+      if (style.rotation !== 0) {
+        sprite.anchor.set(0.5);
+        sprite.x += (cell.width * scale) / 2;
+        sprite.y += (cell.height * scale) / 2;
+        sprite.rotation = style.rotation;
+      }
+    }
     return;
   }
   const kind = resolveBeMusicLaneKind(channel, laneIndex, ctx.play.chartPlayVariant);
@@ -362,4 +402,5 @@ function renderSingleNote(
   const graphic = ctx.noteLayerPool.acquireGraphics();
   graphic.label = drawLabel(ctx, 'note-fallback', laneIndex, channel);
   renderDefaultNote({ graphics: graphic, kind, x: lane.x, w: lane.w, y, nowMs: ctx.play.playClock() });
+  if (style?.tint !== undefined) graphic.tint = style.tint;
 }

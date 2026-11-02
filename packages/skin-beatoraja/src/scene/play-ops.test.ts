@@ -91,6 +91,11 @@ describe('resolveBeatorajaJudgeDisplayOps', () => {
     for (const mode of ['OFF', 'BEATORAJA', 'LR2-ON', undefined])
       expect(resolveBeatorajaJudgeDisplayOps(mode)).toEqual([]);
   });
+
+  it("hides it while a chart's HIDJUDGE is in force", () => {
+    expect(resolveBeatorajaJudgeDisplayOps('OFF', true)).toEqual([BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN]);
+    expect(resolveBeatorajaJudgeDisplayOps('LR2-SILENT', true)).toEqual([BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN]);
+  });
 });
 
 describe('resolveBeatorajaCoverOps', () => {
