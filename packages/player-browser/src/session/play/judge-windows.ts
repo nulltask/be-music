@@ -23,7 +23,7 @@ function toJudgeWindowSet(set: JudgeWindowSetUs): BeMusicJudgeWindowSet {
 }
 
 /**
- * The engine's resolved window tables (µs) as the {@link BeMusicJudgeWindows} a be-music skin reads (ms). The
+ * The engine's resolved window tables (µs) as the {@link BeMusicJudgeWindows} a Be-Music Skin reads (ms). The
  * scratch lane's long-note end has its own table in the engine; the SDK carries one `longNoteEnd`, so the key lanes'
  * table stands for both.
  */

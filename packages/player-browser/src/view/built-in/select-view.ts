@@ -1,5 +1,5 @@
 /**
- * The built-in family's select view: a be-music skin's `select` screen (`BeMusicSelectBinding`), letterboxed into the
+ * The built-in family's select view: a Be-Music Skin's `select` screen (`BeMusicSelectBinding`), letterboxed into the
  * window, with the README overlay on top. It draws the select session's frames and turns the player's pointer input
  * (a tap or a click on a bar, a swipe and its glide, the wheel, the skin's PLAY / AUTO / search / play option / readme
  * hit areas) into intents.
@@ -47,7 +47,7 @@ export class BuiltInSelectView implements SelectView {
   private readonly designClipMask = new Graphics();
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
-  /** Where the be-music skin's back and front layers mount; the skin owns what is inside. */
+  /** Where the Be-Music Skin's back and front layers mount; the skin owns what is inside. */
   private readonly beMusicBackHolder: Container = new Container();
   private readonly beMusicFrontHolder: Container = new Container();
   private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay();
@@ -334,7 +334,7 @@ export class BuiltInSelectView implements SelectView {
     toggleReadme: (): void => this.emit?.({ type: 'readtext' }),
   };
 
-  /** The be-music skin's stage for the screen: its portrait stage while the screen is upright and it has one. */
+  /** The Be-Music Skin's stage for the screen: its portrait stage while the screen is upright and it has one. */
   private get beMusicDesignSize(): SelectDesignSize {
     const screen = this.host?.app.screen;
     const stage = resolveBeMusicSkinStage(

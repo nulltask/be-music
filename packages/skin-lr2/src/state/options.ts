@@ -155,7 +155,7 @@ function playStyleLabel(keyModeOp: number | undefined): string {
 
 /**
  * The option panel's labels (texts 60-85): each option's setting as the LR2 default skin names it, the play style from
- * the selected chart's key-mode op (`SINGLE` without one). The options be-music does not have read as their off
+ * the selected chart's key-mode op (`SINGLE` without one). The options Be-Music does not have read as their off
  * setting. `undefined` for any other text.
  */
 export function resolveLR2OptionText(

@@ -1,6 +1,6 @@
 import { selectBinding, paneOptions } from '../../pane-controls.ts';
 // The Debug Menu's Skin & display folder, and the controls in it that follow what is loaded: the Skin system picker,
-// the LR2 theme picker and the be-music skin's settings. They are built with the menu as `this` (`DebugMenu`).
+// the LR2 theme picker and the Be-Music Skin's settings. They are built with the menu as `this` (`DebugMenu`).
 import type { FolderApi } from 'tweakpane';
 import { resolveBeMusicSkinSettings } from '@be-music/player-skin-sdk';
 import { hasAnyLR2Skin } from '../../family-dispatch.ts';
@@ -13,7 +13,7 @@ import type { SkinFamilyOverride } from '../../types.ts';
 import { DEBUG_MENU_FOLDERS, type DebugMenuFolder } from './folders.ts';
 import type { DebugMenu } from './index.ts';
 import { AUTO_DETECT_RESOLUTION_LABEL } from './render-resolution.ts';
-/** How the skins look and lay out, the loaded themes' pickers, the be-music skin's settings, and adding skins. */
+/** How the skins look and lay out, the loaded themes' pickers, the Be-Music Skin's settings, and adding skins. */
 export function buildSkinFolder(
   this: DebugMenu,
   skin: FolderApi,
@@ -33,7 +33,7 @@ export function buildSkinFolder(
   ] as const) {
     this.skinControllers.push(page.addButton({ title }).on('click', () => this.deps.promptSkinDrop(family)));
   }
-  // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
+  // Built-in (Be-Music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
   // scene. Persisted so a reload keeps the pick.
   const skinOptions = () => Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id]));
   const skinPicker = selectBinding(builtIn, this.guiState, 'builtInSkin', 'Built-in skin', skinOptions()).on(
@@ -100,7 +100,7 @@ export function buildSkinFolder(
   // `beatorajaSkinOverridesByType`; the next mount picks it up via `pickBeatorajaSkinEntryWithOverride`.
   this.beatorajaSkinPickerFolder = addFolder(beatoraja, DEBUG_MENU_FOLDERS.beatorajaSkins);
   this.beatorajaSkinPickerFolder.hidden = true;
-  // The active be-music skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
+  // The active Be-Music Skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
   this.skinSettingsFolder = addFolder(builtIn, DEBUG_MENU_FOLDERS.skinSettings);
   this.rebuildSkinSettingsFolder();
   // LR2 theme picker — added once a drop discovers a theme (see `rebuildLR2ThemePicker`).
@@ -176,7 +176,7 @@ export function rebuildSkinFamilyPicker(this: DebugMenu): void {
   });
 }
 /**
- * Refills the "Skin settings" folder from the active be-music skin's `settings` schema — a dropdown per choice, a
+ * Refills the "Skin settings" folder from the active Be-Music Skin's `settings` schema — a dropdown per choice, a
  * slider per number, a checkbox per toggle — seeded with the stored values, and hides it when the skin declares none.
  * Every change is stored under the skin's id and reaches the scenes on screen at once.
  */

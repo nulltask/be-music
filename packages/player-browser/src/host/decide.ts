@@ -20,7 +20,7 @@ import type { DecideKit } from './family-kit.ts';
 const log = logger('decide');
 
 /**
- * The kits the decide scene takes: a be-music skin, an LR2 decide skin, or a beatoraja theme's decide entry
+ * The kits the decide scene takes: a Be-Music Skin, an LR2 decide skin, or a beatoraja theme's decide entry
  * (`{ family: 'beatoraja', kit }`, loaded with `loadBeatorajaSceneKit`).
  */
 export type DecideSceneKit = DecideKit;

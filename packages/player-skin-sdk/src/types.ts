@@ -22,8 +22,8 @@ import type {
 } from './chart.ts';
 
 /**
- * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
- * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a be-music skin draws screens
+ * Be-Music Skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
+ * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a Be-Music Skin draws screens
  * onto Canvas surfaces or mounts native DOM screens. Canvas drawing can use the Canvas 2D API, raw WebGL / WebGPU, or a
  * framework such as PixiJS or three.js that the skin brings along. The player owns input, timing, audio, judging, and
  * layout, and supplies plain frame data and semantic actions to the skin.

@@ -2,7 +2,7 @@
 
 # @be-music/player-scene-model
 
-What every screen of the be-music player shows and how it behaves, whatever skin family draws it. The built-in, LR2
+What every screen of the Be-Music player shows and how it behaves, whatever skin family draws it. The built-in, LR2
 and beatoraja families share these models and only draw them (see
 [ADR 0001](../../docs/adr/0001-skin-families-only-draw.md) and [ADR 0002](../../docs/adr/0002-scene-model-package.md));
 the terminal player and the skin packages can use them too.

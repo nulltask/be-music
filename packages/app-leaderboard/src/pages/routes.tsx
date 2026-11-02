@@ -80,7 +80,7 @@ export function mountPages(app: Hono<AppEnv>): void {
     '/api-reference',
     Scalar({
       url: '/api/v0/openapi.json',
-      pageTitle: 'be-music Leaderboard API',
+      pageTitle: 'Be-Music Leaderboard API',
       cdn: 'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.72.4',
       // A plain reference: no hosted AI agent and no developer toolbar.
       agent: { disabled: true },

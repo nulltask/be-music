@@ -30,7 +30,7 @@ import { renderShutter } from './playfield/shutter.ts';
 import { renderText } from './playfield/text.ts';
 import type { PlayfieldStage } from '../types.ts';
 
-/** How long the play screen takes to fade up from black as it appears on a be-music skin. */
+/** How long the play screen takes to fade up from black as it appears on a Be-Music Skin. */
 const BE_MUSIC_ENTER_FADE_MS = 400;
 
 /** The view's members the frame passes use: a play view's members of these names. */

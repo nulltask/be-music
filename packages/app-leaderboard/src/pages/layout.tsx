@@ -398,7 +398,7 @@ function SignUpDialog() {
   );
 }
 
-/** The be-music source repository. */
+/** The Be-Music source repository. */
 export const SOURCE_URL = 'https://github.com/nulltask/be-music';
 
 const FOOTER_LINK = 'hover:text-foreground inline-flex items-center gap-1 underline-offset-4 hover:underline';
@@ -672,7 +672,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         <meta name="description" content={props.meta.description} />
         {props.meta.noindex === true ? <meta name="robots" content="noindex" /> : null}
         <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="be-music Leaderboard" />
+        <meta property="og:site_name" content="Be-Music Leaderboard" />
         <meta property="og:title" content={fullTitle} />
         <meta property="og:description" content={props.meta.description} />
         <meta property="og:url" content={props.meta.url} />

@@ -19,7 +19,7 @@ import type { PixiSelectFrame, PixiSelectRenderer, PixiSkinDefinition } from './
 const DROPPED_LONG_NOTE_ALPHA = 0x80 / 0xff;
 
 /**
- * Turns a {@link PixiSkinDefinition} into a be-music skin. Each frame replays the player's plain frame data into the
+ * Turns a {@link PixiSkinDefinition} into a Be-Music Skin. Each frame replays the player's plain frame data into the
  * skin's Pixi renderer functions and renders the result. A player that renders with Pixi draws it with its own renderer
  * into a texture it shows (see {@link PIXI_HOST_RENDER}); anywhere else every surface gets its own Pixi `WebGLRenderer`
  * on the surface's WebGL 2 context and the frame is rendered into the canvas.

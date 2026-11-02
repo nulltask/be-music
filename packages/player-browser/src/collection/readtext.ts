@@ -1,5 +1,5 @@
 /**
- * The text file shipped next to a chart (an LR2 skin's READ TEXT button, a be-music skin's readme toggle): finding it
+ * The text file shipped next to a chart (an LR2 skin's READ TEXT button, a Be-Music Skin's readme toggle): finding it
  * among the chart's files and decoding it. BMS authors traditionally ship notes and changelogs this way.
  */
 

@@ -962,7 +962,7 @@ export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, em
   }
   if (outstandingPastReversal) {
     // LR2 sets HP = 0 when a play ends with notes unjudged (OpenLR2 `LR2f.cpp:12980-12982`, LR2body.exe 0x42c525), so
-    // a reversed run that leaves notes behind is always FAILED. be-music still ends the song at its precomputed end
+    // a reversed run that leaves notes behind is always FAILED. Be-Music still ends the song at its precomputed end
     // instead of waiting for ESC (documented deviation), but reports the same result.
     drainGaugeAtReversalEnd(state, totalSeconds, emit);
   }

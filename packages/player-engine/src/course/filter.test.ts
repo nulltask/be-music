@@ -229,11 +229,11 @@ describe('parseCourseChartFilter / evaluateCourseChartFilter', () => {
     expect(matches('information.density IS NULL')).toBe(true);
   });
 
-  test('columns be-music has no source for stay unknown', () => {
+  test('columns Be-Music has no source for stay unknown', () => {
     for (const column of ['score.epg', 'score.clearcount', 'score.date', 'information.distribution', 'song.favorite']) {
       expect(parseError(`${column} = 1`)).toBe(`unknown column '${column}'`);
     }
-    // Unqualified, `score` / `oldclear` are `scorelog` columns, which be-music does not keep.
+    // Unqualified, `score` / `oldclear` are `scorelog` columns, which Be-Music does not keep.
     expect(parseError('oldclear = 1')).toBe("unknown column 'oldclear'");
     expect(parseError('score > 1')).toBe("unknown column 'score'");
   });

@@ -3,7 +3,7 @@
  * family (`createSelectScene(kit, …)` and its siblings); only the kit says which family draws the scene and with what
  * (ADR 0001). A kit is loaded before the scene is made: the family view reads it, the scene session never does.
  *
- * - `built-in`: a be-music skin (`@be-music/player-skin-sdk`) with the player's settings for it.
+ * - `built-in`: a Be-Music Skin (`@be-music/player-skin-sdk`) with the player's settings for it.
  * - `lr2`: the LR2 skin for the screen.
  * - `beatoraja`: one entry of a beatoraja theme, loaded (skin, textures, fonts, the player's options, the theme files).
  */
@@ -18,7 +18,7 @@ export type { BeatorajaSceneKit };
 /** The screens of a play: select, decide, play and result. */
 export type SceneKind = 'select' | 'decide' | 'play' | 'result';
 
-/** The skin families: the built-in be-music skins, LR2 skins and beatoraja skins. */
+/** The skin families: the built-in Be-Music Skins, LR2 skins and beatoraja skins. */
 export type SceneFamily = 'built-in' | 'lr2' | 'beatoraja';
 
 /** Which screen a scene is and which family draws it; the host's router and test hook read it. */
@@ -27,7 +27,7 @@ export interface SceneIdentity {
   readonly family: SceneFamily;
 }
 
-/** A be-music skin, with the player's settings for it. */
+/** A Be-Music Skin, with the player's settings for it. */
 export interface BuiltInKit {
   readonly family: 'built-in';
   readonly skin: BeMusicSkin;

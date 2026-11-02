@@ -40,7 +40,7 @@ export interface RecordsServiceOptions {
 
 /** The best records, kept per chart and course and judge ruleset, and the chart-file hashes they are keyed by. */
 export class RecordsService {
-  /** Best record per chart ({@link chartBestRecordKey}), persisted in `localStorage` and shown to be-music select skins. */
+  /** Best record per chart ({@link chartBestRecordKey}), persisted in `localStorage` and shown to Be-Music select skins. */
   public readonly chartBestRecords: Map<string, BestRecord> = readStoredChartBestRecords();
   /** The highest dan cleared per judge ruleset and key mode (`danRankKey`), persisted in `localStorage`. */
   public readonly danRanks: Map<string, DanRank> = readStoredDanRanks();

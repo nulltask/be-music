@@ -11,7 +11,7 @@ import type { LibraryEntry, PlayResult } from '@be-music/player-scene-model';
 /** The contract's revision. */
 export const TEST_HOOK_VERSION = 1;
 
-/** The skin family drawing a scene: the built-in be-music skins, an LR2 theme or a beatoraja skin. */
+/** The skin family drawing a scene: the built-in Be-Music Skins, an LR2 theme or a beatoraja skin. */
 export type TestHookFamily = 'built-in' | 'lr2' | 'beatoraja';
 
 /** The screen on show. `none` between screens (a scene being torn down or prepared) and before the first one. */
