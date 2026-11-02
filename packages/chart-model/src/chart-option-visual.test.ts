@@ -19,12 +19,22 @@ const input = (
 test('parses exact-case modern IDs only, with OFF clearing its family', () => {
   expect(parseChartVisualOption('774:HIDDEN_HID-SUD2')).toEqual({ set: { hidden: 'HID-SUD2' }, clear: [] });
   expect(parseChartVisualOption('774:CHANGE-HS_OFF')).toEqual({ set: {}, clear: ['changeHS'] });
-  expect(parseChartVisualOption('774:CRAZY_OFF')).toEqual({ set: {}, clear: ['crazySize', 'crazyWave'] });
+  expect(parseChartVisualOption('774:CRAZY_OFF')?.clear).toEqual([
+    'crazySize',
+    'crazyWave',
+    'crazyColor',
+    'crazySpin',
+    'crazyClone',
+    'crazyLine',
+    'crazyJudge',
+    'crazyDark',
+    'crazyReverse',
+  ]);
   expect(parseChartVisualOption('774:CRAZY_XWAVE2')).toEqual({ set: { crazyWave: 'XWAVE2' }, clear: [] });
   for (const rejected of [
     '774:hidden_SUDDEN',
-    '774:HIDDEN_M-SUDDEN',
-    '774:CRAZY_SPIN',
+    '774:CRAZY_spin',
+    '774:CRAZY_GOOD2BAD',
     '774:HID-HIDDEN1',
     'HIDDEN_SUDDEN',
   ])
@@ -107,7 +117,14 @@ test('CRAZY size and X wave', () => {
 });
 
 test('resolveChartNoteVisual composes the families on the displayed progress', () => {
-  expect(resolveChartNoteVisual({}, input(0.5))).toEqual({ progress: 0.5, alpha: 1, scale: 1, xOffset: 0 });
+  expect(resolveChartNoteVisual({}, input(0.5))).toEqual({
+    progress: 0.5,
+    alpha: 1,
+    scale: 1,
+    xOffset: 0,
+    rotation: 0,
+    clones: [],
+  });
   // ACCEL moves 0.5 to 0.625, past SUDDEN3's 0.4 ceiling.
   expect(resolveChartNoteVisual({ changeHS: 'ACCEL', hidden: 'SUDDEN3' }, input(0.5)).alpha).toBe(0);
   for (const option of CHART_HIDDEN_OPTIONS) {

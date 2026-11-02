@@ -144,6 +144,58 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.resolveChartNoteVisual(visualState, visualInput);
     },
   });
+  const crazyNote = { channel: '11', beat: 12.5, seconds: 3.25 };
+  const playfieldState = { hidden: 'M-SUDDEN', crazyLine: 'LINEMOVE2', crazyDark: 'DARK2' } as const;
+  define('chart-model.chartVisualOptionFieldsOf', {
+    run: () => {
+      chartAPI.chartVisualOptionFieldsOf(2);
+    },
+  });
+  define('chart-model.resolveChartCrazyYProgress', {
+    run: () => {
+      chartAPI.resolveChartCrazyYProgress('YWAVE2', 0.5);
+    },
+  });
+  define('chart-model.resolveChartCrazyWaveScale', {
+    run: () => {
+      chartAPI.resolveChartCrazyWaveScale('3DWAVE2', 0.5);
+    },
+  });
+  define('chart-model.resolveChartCrazyTint', {
+    run: () => {
+      chartAPI.resolveChartCrazyTint('STAR', crazyNote);
+    },
+  });
+  define('chart-model.resolveChartCrazyRotation', {
+    run: () => {
+      chartAPI.resolveChartCrazyRotation('SPIN', crazyNote);
+    },
+  });
+  define('chart-model.resolveChartCrazyClones', {
+    run: () => {
+      chartAPI.resolveChartCrazyClones('S-CLONE', 0.5);
+    },
+  });
+  define('chart-model.resolveChartLineLift', {
+    run: () => {
+      chartAPI.resolveChartLineLift('LINEMOVE2', 3.25);
+    },
+  });
+  define('chart-model.resolveChartPlayfieldVisual', {
+    run: () => {
+      chartAPI.resolveChartPlayfieldVisual(playfieldState, 3.25);
+    },
+  });
+  define('chart-model.hasChartPlayfieldVisual', {
+    run: () => {
+      chartAPI.hasChartPlayfieldVisual(playfieldState);
+    },
+  });
+  define('chart-model.resolveChartLegacyOptionAlias', {
+    run: () => {
+      chartAPI.resolveChartLegacyOptionAlias('774:CRA-3DWAVE2');
+    },
+  });
   define('chart-model.buildChartOptionTimeline', {
     run: () => {
       chartAPI.buildChartOptionTimeline(BENCH_TEXT_CHART);
