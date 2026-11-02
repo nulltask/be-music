@@ -1156,10 +1156,43 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   });
   define('player-engine.ruleset.resolveGaugeEndOnFailure', {
     run() {
-      rulesetAPI.resolveGaugeEndOnFailure('CONTINUE', 'beatoraja');
-      rulesetAPI.resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'beatoraja');
-      rulesetAPI.resolveGaugeEndOnFailure('BEST_CLEAR', 'beatoraja');
-      rulesetAPI.resolveGaugeEndOnFailure('SELECT_TO_UNDER', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('CONTINUE');
+      rulesetAPI.resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE');
+      rulesetAPI.resolveGaugeEndOnFailure('BEST_CLEAR');
+      rulesetAPI.resolveGaugeEndOnFailure('SELECT_TO_UNDER');
+    },
+  });
+  define('player-engine.ruleset.resolveGaugeShiftLadder', {
+    run() {
+      rulesetAPI.resolveGaugeShiftLadder('lr2');
+      rulesetAPI.resolveGaugeShiftLadder('beatoraja', 'grade');
+      rulesetAPI.resolveGaugeShiftLadder('lr2', 'expert');
+    },
+  });
+  define('player-engine.ruleset.resolvePracticeGaugeTypes', {
+    run() {
+      rulesetAPI.resolvePracticeGaugeTypes('lr2');
+      rulesetAPI.resolvePracticeGaugeTypes('beatoraja');
+      rulesetAPI.resolvePracticeGaugeTypes('____');
+    },
+  });
+  define('player-engine.ruleset.resolveDefaultPracticeGauge', {
+    run() {
+      rulesetAPI.resolveDefaultPracticeGauge('lr2');
+      rulesetAPI.resolveDefaultPracticeGauge('____');
+    },
+  });
+  define('player-engine.ruleset.isPracticeGaugeType', {
+    run() {
+      rulesetAPI.isPracticeGaugeType('HAZARD');
+      rulesetAPI.isPracticeGaugeType('GROOVE', 'lr2');
+      rulesetAPI.isPracticeGaugeType('HAZARD', '____');
+    },
+  });
+  define('player-engine.ruleset.practiceReadsJudgeRankAndTotal', {
+    run() {
+      rulesetAPI.practiceReadsJudgeRankAndTotal('lr2');
+      rulesetAPI.practiceReadsJudgeRankAndTotal('____');
     },
   });
   define('player-engine.ruleset.resolveGaugeTypes', {

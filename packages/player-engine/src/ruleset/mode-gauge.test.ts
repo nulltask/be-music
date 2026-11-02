@@ -157,7 +157,7 @@ test.each(['5K', '7K', '9K', '24K', '14K'])('SURVIVAL TO GROOVE uses %s NORMAL T
   expect(config.gaugeFallback).toEqual(gauge(mode, 'NORMAL'));
 });
 
-test('SURVIVAL TO GROOVE excludes course class gauges and other rulesets', () => {
+test('SURVIVAL TO GROOVE excludes course class gauges and a gauge that is not a survival gauge', () => {
   const config = resolveRuleset(facts('7K'), 'beatoraja', {
     selectedGauge: 'HARD',
     gaugeAutoShift: 'SURVIVAL_TO_GROOVE',

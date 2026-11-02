@@ -32,26 +32,34 @@ export function isGaugeType(value: unknown): value is GaugeType {
   return typeof value === 'string' && (GAUGE_TYPES as readonly string[]).includes(value);
 }
 
-/** beatoraja 0.8.9 gauge auto-shift policies implemented by the player. */
+/**
+ * Gauge auto-shift policies, beatoraja 0.8.9's (`BMSPlayer`), usable under every ruleset (#933): each shifts along the
+ * judge ruleset's own gauge ladder (`resolveGaugeShiftLadder`).
+ */
 export type GaugeAutoShift = 'NONE' | 'CONTINUE' | 'SURVIVAL_TO_GROOVE' | 'BEST_CLEAR' | 'SELECT_TO_UNDER';
 
+/** Every gauge auto-shift policy, in beatoraja's button order. */
+export const GAUGE_AUTO_SHIFTS: readonly GaugeAutoShift[] = [
+  'NONE',
+  'CONTINUE',
+  'SURVIVAL_TO_GROOVE',
+  'BEST_CLEAR',
+  'SELECT_TO_UNDER',
+];
+
 /**
- * CONTINUE retains the selected dead gauge; SURVIVAL TO GROOVE uses the parallel NORMAL gauge.
- * BEST CLEAR / SELECT TO UNDER select among the parallel source family.
- * These policies keep judging; NONE stops the play.
- * An omitted policy preserves the older host-level endOnFailure contract.
+ * Whether a play ends when its survival gauge empties. NONE stops the play; every other policy keeps judging to the end:
+ * CONTINUE on the emptied gauge, SURVIVAL TO GROOVE on the ruleset's default recovery gauge, BEST CLEAR / SELECT TO
+ * UNDER on the parallel gauges of the ruleset's ladder. An omitted policy keeps the host-level `endOnFailure` contract.
  */
-export function resolveGaugeEndOnFailure(
-  policy: GaugeAutoShift | undefined,
-  ruleset: 'lr2' | 'beatoraja' | '____',
-  fallback = true,
-): boolean {
+export function resolveGaugeEndOnFailure(policy: GaugeAutoShift | undefined, fallback = true): boolean {
   if (policy === undefined) return fallback;
-  if (policy === 'NONE') return true;
-  if (!['CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER'].includes(policy) || ruleset !== 'beatoraja')
-    throw new RangeError('Gauge auto-shift is available only for beatoraja.');
-  return false;
+  if (!GAUGE_AUTO_SHIFTS.includes(policy)) throw new RangeError(`Unknown gauge auto-shift policy: ${String(policy)}`);
+  return policy === 'NONE';
 }
 
-/** Source lower-bound choices, in ASSIST EASY / EASY / NORMAL order. */
+/**
+ * The lowest gauge BEST CLEAR / SELECT TO UNDER shift to, in ASSIST EASY / EASY / NORMAL order (beatoraja's), spelled in
+ * LR2's names like {@link GaugeType}; each ruleset reads it on its own ladder (`resolveGaugeShiftBottomIndex`).
+ */
 export type GaugeShiftBottom = 'ASSIST-EASY' | 'EASY' | 'GROOVE';

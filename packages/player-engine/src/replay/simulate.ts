@@ -123,12 +123,7 @@ export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOpt
   }
   const config = resolveRulesetConfig(replay, options.ruleset, options);
   const endOnFailure =
-    options.endOnFailure ??
-    resolveGaugeEndOnFailure(
-      options.ruleset === 'beatoraja' ? replay.play.gaugeAutoShift : undefined,
-      options.ruleset,
-      replay.play.endOnFailure === true,
-    );
+    options.endOnFailure ?? resolveGaugeEndOnFailure(replay.play.gaugeAutoShift, replay.play.endOnFailure === true);
   return new ReplaySimulation(replay, config, endOnFailure, options.onJudgment, options.onFailure).run();
 }
 

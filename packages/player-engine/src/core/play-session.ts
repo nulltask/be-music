@@ -405,7 +405,7 @@ export async function createPlaySession(
     },
   );
   reportResolvedRuleset(options, ruleset);
-  const endOnFailure = resolveGaugeEndOnFailure(options.gaugeAutoShift, ruleset.rulesetId, options.endOnFailure);
+  const endOnFailure = resolveGaugeEndOnFailure(options.gaugeAutoShift, options.endOnFailure);
 
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
   const { score, summary, resetScore: resetPrimaryScore } = createPlayerScore(ruleset, courseCarry);
@@ -885,6 +885,10 @@ function createSecondPlayer(
     {
       bmsonTotalMode: options.bmsonTotalMode,
       ...(gauge !== undefined ? { selectedGauge: gauge } : {}),
+      // Gauge auto-shift is the play's, so the second player's gauge shifts as the first's does (and as a replay of
+      // either side re-simulates it).
+      ...(options.bottomShiftableGauge !== undefined ? { bottomShiftableGauge: options.bottomShiftableGauge } : {}),
+      ...(options.gaugeAutoShift !== undefined ? { gaugeAutoShift: options.gaugeAutoShift } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
       ...chartJudge,
     },
@@ -895,14 +899,16 @@ function createSecondPlayer(
     score,
     summary,
     resetScore,
-    endOnFailure: resolveGaugeEndOnFailure(undefined, ruleset.rulesetId, options.endOnFailure),
+    endOnFailure: resolveGaugeEndOnFailure(options.gaugeAutoShift, options.endOnFailure),
     ...(gauge !== undefined ? { gauge } : {}),
   };
 }
 
-/** PRACTICE is a beatoraja single play without chart modifiers (they apply only in PLAY / AUTOPLAY). */
+/**
+ * PRACTICE is a single play without chart modifiers, under every ruleset (#933): beatoraja applies them only in PLAY /
+ * AUTOPLAY.
+ */
 function assertPracticeOptions(options: Readonly<PlayerOptions>): void {
-  if (options.judgeRuleset !== 'beatoraja') throw new RangeError('PRACTICE is available only for beatoraja.');
   if (options.course !== undefined) throw new RangeError('PRACTICE plays a single chart.');
   if (
     (options.battleMode ?? 'OFF') !== 'OFF' ||

@@ -182,6 +182,14 @@ describe('classifyReplayAssists', () => {
       'beatoraja',
       'no-save',
     ],
+    [
+      'PRACTICE under LR2 rules (#933)',
+      { options: { practice: true }, judgeRuleset: 'lr2' },
+      {},
+      'practice',
+      'beatoraja',
+      'no-save',
+    ],
   ])('classifies %s', (_name, play, chart, option, source, assistClass) => {
     expect(classifyReplayAssists(replay(play, chart))).toContainEqual(
       expect.objectContaining({ option, source, assistClass }),
