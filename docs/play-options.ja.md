@@ -259,7 +259,7 @@ PRACTICE は beatoraja のモードで、設定は判定ルールが読みます
 
 ルールを切り替えたとき、選んでいたゲージがほかのルールのものなら、そのルールの既定のゲージ（NORMAL、LR2 では GROOVE）に戻します。
 
-beatoraja の `PracticeModifier` と同様に、範囲外の判定対象はすべて背景に移すため、そのキー音は鳴り続けます。どちらかの端が範囲外のロングノートも背景に移します。範囲の終わりは開始から少なくとも 1000 ms 後で、プレイは範囲の 1000 ms 前から始まり、終わりの 1000 ms 後まで続きます。beatoraja のルールでは TOTAL を範囲で切り出す前のノート数を基準に換算します。プレイテンポとレーンのオプションは通常どおり適用しますが、beatoraja が譜面の変換を PLAY と AUTOPLAY でだけ適用するのに合わせ、BATTLE、ロングノート・地雷・スクロールの変換、EXTRA、LR2 の EXTRA MODE はオフにします。範囲が終わると ESC を押すまですぐに繰り返します。練習のプレイはどのルールでもリプレイを記録せず、記録も更新せず、Leaderboard にも送りません。
+beatoraja の `PracticeModifier` と同様に、範囲外の判定対象はすべて背景に移すため、そのキー音は鳴り続けます。どちらかの端が範囲外のロングノートも背景に移します。範囲の終わりは開始から少なくとも 1000 ms 後で、プレイは範囲の 1000 ms 前から始まり、終わりの 1000 ms 後まで続きます。beatoraja のルールでは TOTAL を範囲で切り出す前のノート数を基準に換算します。プレイテンポとレーンのオプションは通常どおり適用しますが、beatoraja が譜面の変換を PLAY と AUTOPLAY でだけ適用するのに合わせ、BATTLE、ロングノート・地雷・スクロールの変換、EXTRA、LR2 の EXTRA MODE はオフにします。プレイが範囲の終わりの 1000 ms 後に達してすべてのノートを判定し終えるか、ゲージが空になると、同じプレイ画面のまま読み込み直さずに、すぐ範囲の 1000 ms 前へ戻ります。スコア・コンボ・ゲージは練習の設定に戻り、鳴り残っている音は止め、デコード済みのサンプル・BGA・スキンはそのまま使います（[#949](https://github.com/nulltask/be-music/issues/949)）。ESC を押すまで繰り返します。練習のプレイはどのルールでもリプレイを記録せず、記録も更新せず、Leaderboard にも送りません。
 
 参照元：beatoraja 0.8.9 の [`PracticeConfiguration`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/PracticeConfiguration.java) と [`PracticeModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/PracticeModifier.java)。対応 Issue は [#749](https://github.com/nulltask/be-music/issues/749) です。
 

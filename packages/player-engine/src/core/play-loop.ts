@@ -19,7 +19,7 @@ import {
 import { emitPlayerLog, writeRuntimeEventLog } from './engine-trace.ts';
 import type { PlayerInterruptReason } from './engine-types.ts';
 import type { PlayControls } from './play-controls.ts';
-import { applySeek, clampSeekSeconds } from './play-seek.ts';
+import { applySeek, clampSeekSeconds, isPracticeLoopDue, restartPractice } from './play-seek.ts';
 import type { PlaySession } from './play-session.ts';
 import type { PlayJudge, PlayTick } from './play-strategy.ts';
 
@@ -29,7 +29,9 @@ import type { PlayJudge, PlayTick } from './play-strategy.ts';
  * commands, a seek (the last one asked for, `play-seek.ts`), realtime audio against the audio write head, the judge, a
  * UI frame. It ends at an interrupt, when judging
  * closes on a failed gauge, once the chart is over and judged, or at its horizon — held open past it while the host
- * holds the play (`holdAfterChart`) — and always closes the audio session, the input runtime and the UI runtime.
+ * holds the play (`holdAfterChart`) — and always closes the audio session, the input runtime and the UI runtime. A
+ * looping PRACTICE play (`PlayPractice.loop`) ends only at an interrupt: where another play would end, it goes back to
+ * its start (`restartPractice`) and plays its range again.
  */
 
 /** How a play's loop ended. */
@@ -124,6 +126,8 @@ async function playChart(
   const horizonMs = (): number => tempoClock.clockMsAt(totalSeconds) + widestReachMs + 1000;
   // Without audio to play out a play ends as soon as its chart is over and judged — unless the host holds it open.
   const endsWithChart = session.audioSession === undefined && hold === undefined;
+  // A looping PRACTICE play (`PlayPractice.loop`) never reaches its horizon: it goes back to its start before it.
+  const loopsPractice = options.practice?.loop === true && judge.seek !== undefined;
   // A replay of an ESC-aborted log stops where the play was aborted, as the replay simulators do.
   const replayStopSeconds =
     session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;
@@ -141,7 +145,7 @@ async function playChart(
   let failed = false;
   // The chart second of the last frame the loop published: the closing frame never shows an earlier one.
   let lastFrameSeconds: number | undefined;
-  while (!pastHorizon()) {
+  while (loopsPractice || !pastHorizon()) {
     controls.consume();
     if (controls.interruptedReason !== undefined) {
       return false;
@@ -180,6 +184,23 @@ async function playChart(
     judge.judge(tick);
     publishUIFrame(tick.nowSec, beatAtSeconds(tick.nowSec));
     lastFrameSeconds = tick.nowSec;
+
+    // A looping PRACTICE play goes back to its start instead of ending (#949): on its next tick it plays the range again.
+    if (
+      loopsPractice &&
+      isPracticeLoopDue({
+        nowSec: tick.nowSec,
+        totalSeconds,
+        settled: judge.isSettled(),
+        closed: judge.isClosed(),
+        pastHorizon: clock.nowMs() >= horizonMs(),
+      })
+    ) {
+      const restarted = restartPractice(session, judge, tick.nowMs);
+      if (restarted !== undefined) lastFrameSeconds = restarted;
+      await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, wakeUp);
+      continue;
+    }
 
     // A play that ends on failure stops the moment its gauge empties.
     if (judge.isClosed()) {

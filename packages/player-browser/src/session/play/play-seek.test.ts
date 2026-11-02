@@ -12,6 +12,7 @@ import { runEngineDriver, type EngineDriverOptions } from '../../runtime/engine-
 import { launchSharedEngine } from './play-engine.ts';
 import { handleSharedEngineExitKey } from './play-input.ts';
 import { canSeekPlay } from './play-seek.ts';
+import type { PlaySessionOptions } from './play-options.ts';
 import { PlaySession } from './play-session.ts';
 
 vi.mock('../../runtime/engine-driver.ts', () => ({ runEngineDriver: vi.fn() }));
@@ -80,7 +81,12 @@ interface FakeContext {
 
 /** An AUTO play on a fake audio clock and a fake engine; every launched run is kept in `runs`. */
 function createSeekablePlay(
-  setup: { startRequested?: boolean; paused?: boolean; practice?: boolean } = {},
+  setup: {
+    startRequested?: boolean;
+    paused?: boolean;
+    practice?: boolean;
+    practiceRange?: PlaySessionOptions['practiceRange'];
+  } = {},
 ): FakeContext {
   const audioContext = { currentTime: 100, resume: async () => {}, suspend: async () => {} };
   const engine = { paused: false };
@@ -157,7 +163,11 @@ function createSeekablePlay(
     runs.push(run);
     return promise as ReturnType<typeof runEngineDriver>;
   });
-  const play = new PlaySession({ autoPlay: true, practice: setup.practice });
+  const play = new PlaySession(
+    setup.practiceRange !== undefined
+      ? { practice: true, practiceRange: setup.practiceRange }
+      : { autoPlay: true, practice: setup.practice },
+  );
   Object.assign(play, {
     chart: CHART,
     engineStartRequested: setup.startRequested ?? false,
@@ -417,4 +427,33 @@ test('seeking an AUTO course stage also makes its result practice', async () => 
   context.runs[0]!.tick();
   await waiting;
   expect(context.play.getResultData()?.practice).toBe(true);
+});
+
+describe('PRACTICE loop (#949)', () => {
+  const practiceRange = { startMs: 2000, endMs: 4000, gauge: 'NORMAL', startGauge: 20 } as const;
+
+  test('asks the engine to loop the range in place', () => {
+    const context = createSeekablePlay({ practiceRange });
+    expect(context.runs[0]!.options.engineOptions?.practice).toEqual({ ...practiceRange, loop: true });
+  });
+
+  test('takes the engine going back to the start as a seek: same run, the practice score, and no finish', () => {
+    const context = createSeekablePlay({ practiceRange });
+    const onChartFinished = vi.fn();
+    const onExit = vi.fn();
+    Object.assign(context.play.options, { onChartFinished, onExit });
+    playFirstThreeSeconds(context);
+    expect(context.play.score.perfect).toBe(6);
+    // The engine's own restart (`restartPractice`): a seek back to the play's start, 1000 ms before the range.
+    context.runs[0]!.inputSignals.pushCommand({ kind: 'seek', seconds: 1 });
+    context.runs[0]!.tick();
+    expect(context.runs).toHaveLength(1);
+    expect(context.play.seekGeneration).toBe(1);
+    expect(context.play.currentSeconds()).toBeCloseTo(1, 6);
+    expect(context.play.score.perfect).toBe(2);
+    expect(context.play.chartEnded).toBe(false);
+    expect(context.play.exiting).toBe(false);
+    expect(onChartFinished).not.toHaveBeenCalled();
+    expect(onExit).not.toHaveBeenCalled();
+  });
 });
