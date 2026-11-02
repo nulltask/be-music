@@ -9,6 +9,7 @@ export * from './format.ts';
 export * from './judgment-timeline.ts';
 export * from './nonstop.ts';
 export * from './recorder.ts';
+export * from './rejudge.ts';
 export * from './result-lamp.ts';
 export * from './simulate.ts';
 export * from './view.ts';

@@ -102,7 +102,6 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     this.trackPlayOption(controller);
     if (side === '1P') this.randomSeed1PController = controller;
     else this.randomSeed2PController = controller;
-    this.randomSeedControllers.push(controller);
   }
   this.sevenToNinePatternController = selectBinding(folder, this.guiState, 'sevenToNinePattern', '7-to-9 (beatoraja)', {
     OFF: 0,
@@ -141,7 +140,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     this.refreshPlayOptionControllers();
     this.setStatus('A new arrangement will be drawn for the next play.');
   });
-  // Every ruleset reuses its own previous arrangement (#774); only the seeds stay beatoraja's.
+  // Every ruleset reuses its own previous arrangement (#774) and seeds its lane randoms (#933).
   for (const controller of [reuse, fresh]) this.trackPlayOption(controller);
   trackPlayOption(
     selectBinding(folder, this.guiState, 'bmsonTotalMode', 'bmson TOTAL 0', {

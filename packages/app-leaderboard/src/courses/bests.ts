@@ -103,6 +103,8 @@ export async function rebuildCourseBestScores(
         inArray(courseScore.courseFingerprint, [...courseFingerprints]),
         eq(courseScore.hidden, false),
         isNull(courseScore.unranked),
+        // A truncated result moves no course best (ADR 0019).
+        isNull(courseScoreResult.outcome),
       ),
     )
     .orderBy(asc(courseScore.createdAt), asc(courseScore.id));
