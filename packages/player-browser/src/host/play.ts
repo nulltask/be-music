@@ -5,9 +5,11 @@
 
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
+import type { RulesetId } from '@be-music/player-engine/ruleset';
 import {
   DEFAULT_PLAY_OPTIONS,
   resolvePlayOptions,
+  resolvePracticeSelection,
   type CourseView,
   type LibraryChart,
   type PlayOptions,
@@ -741,26 +743,19 @@ const BEATORAJA_PLAY_SETTINGS: Pick<PlaySessionOptions, 'coverKeys'> = {
 };
 
 /**
- * beatoraja PRACTICE for a single fresh play: the range and rules (`practiceRange`), a practice play saving nothing,
- * and no chart modifier, as the source applies them only in PLAY / AUTOPLAY.
+ * PRACTICE for a single fresh play, under every judge ruleset (#933): the range and the rules read under the ruleset
+ * (`resolvePracticeSelection`), a practice play saving nothing, and no chart modifier, as beatoraja applies them only in
+ * PLAY / AUTOPLAY.
  */
 function resolvePracticeSessionOptions(
   playOptions: Readonly<PlayOptions>,
-  ruleset: string | undefined,
+  ruleset: RulesetId | undefined,
   single: boolean,
 ): Partial<PlaySessionOptions> {
-  if (!playOptions.practice || ruleset !== 'beatoraja' || !single) return {};
+  if (!playOptions.practice || !single) return {};
   return {
     practice: true,
-    practiceRange: {
-      startMs: playOptions.practiceStartMs,
-      ...(playOptions.practiceEndMs > 0 ? { endMs: playOptions.practiceEndMs } : {}),
-      gauge: playOptions.practiceGauge,
-      ...(playOptions.practiceGaugeCategory !== 'MODE' ? { gaugeCategory: playOptions.practiceGaugeCategory } : {}),
-      startGauge: playOptions.practiceStartGauge,
-      ...(playOptions.practiceJudgeRank > 0 ? { judgeRank: playOptions.practiceJudgeRank } : {}),
-      ...(playOptions.practiceTotal > 0 ? { total: playOptions.practiceTotal } : {}),
-    },
+    practiceRange: resolvePracticeSelection(playOptions, ruleset ?? 'lr2'),
     battleMode: 'OFF',
     longNoteModifier: 'OFF',
     mineModifier: 'OFF',

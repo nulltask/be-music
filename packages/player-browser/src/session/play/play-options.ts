@@ -166,7 +166,7 @@ export interface PlaySessionOptions {
   sevenToNineType?: import('@be-music/player-engine/lanes').SevenToNineType;
   battleMode?: BattleMode;
   dBattleScratch?: boolean;
-  /** beatoraja PRACTICE range and rules (`PlayerOptions.practice`); set with `practice` so nothing is saved. */
+  /** PRACTICE range and rules (`PlayerOptions.practice`), under every ruleset; set with `practice` so nothing is saved. */
   practiceRange?: import('@be-music/player-engine').PlayerOptions['practice'];
   /** beatoraja LN MODE for charts whose long-note mode is undefined. */
   longNoteMode?: 'LN' | 'CN' | 'HCN';

@@ -8,13 +8,23 @@ import type { TunableCompressor } from '@be-music/player-browser/audio';
 import { getBrowserWorkerCount } from '@be-music/player-browser/compute';
 import type { PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-browser/host';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
-import { formatGaugeLabel, isDuplicatedBattleChoice, type PlayOptions } from '@be-music/player-scene-model';
+import {
+  formatGaugeLabel,
+  isDuplicatedBattleChoice,
+  keepPracticeGauge,
+  type PlayOptions,
+} from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 // Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
 import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
 import { playerFullscreenElement } from '../../fullscreen.ts';
 import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
-import { migrateOptionValue, resolveGaugeTypes, type GaugeType } from '@be-music/player-engine/ruleset';
+import {
+  migrateOptionValue,
+  practiceReadsJudgeRankAndTotal,
+  resolveGaugeTypes,
+  type GaugeType,
+} from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
 import { readStoredCourseTableURLs } from '../../course-table-import.ts';
 import { captureDebugMenuSettings } from '../../debug-menu-settings.ts';
@@ -48,7 +58,12 @@ import { buildDeveloperFolder } from './developer.ts';
 import { DEBUG_MENU_FOLDERS, readFolderOpenStates, rememberFolderOpenStates, type DebugMenuFolder } from './folders.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
-import { battleModeItems, laneOptionItems } from './play-option-items.ts';
+import {
+  battleModeItems,
+  bottomShiftableGaugeItems,
+  laneOptionItems,
+  practiceGaugeItems,
+} from './play-option-items.ts';
 import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
 import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './render-resolution.ts';
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
@@ -233,6 +248,12 @@ export class DebugMenu {
   public customJudgeController: PaneBinding | undefined;
   /** PRACTICE toggle first, then its settings. */
   public practiceControllers: PaneBinding[] = [];
+  /** PRACTICE's GAUGE TYPE: the judge ruleset's own gauges. */
+  public practiceGaugeController: ListInputBindingApi<PlayOptions['practiceGauge']> | undefined;
+  /** PRACTICE's GAUGE CATEGORY, which only beatoraja has. */
+  public practiceGaugeCategoryController: PaneBinding | undefined;
+  /** PRACTICE's JUDGERANK and TOTAL, which That-Which-Must-Not-Be-Named does not read. */
+  public practiceJudgeRankAndTotalControllers: PaneBinding[] = [];
   public longNoteModeController: ListInputBindingApi<PlayOptions['longNoteMode']> | undefined;
   public customJudgeRateControllers: PaneBinding[] = [];
   public extraNoteScratchController: PaneBinding | undefined;
@@ -554,13 +575,24 @@ export class DebugMenu {
       this.setPlayOptions({ longNoteMode: 'LN' });
     }
     if (this.longNoteModeController) this.longNoteModeController.hidden = !beatoraja;
-    if (!beatoraja && this.guiState.practice) {
-      this.guiState.practice = false;
-      this.setPlayOptions({ practice: false });
-    }
+    // PRACTICE is offered under every ruleset (#933): its gauge list is the judge ruleset's own gauges, GAUGE CATEGORY
+    // is beatoraja's alone, and AC reads neither JUDGERANK nor TOTAL.
+    const practice = this.guiState.practice;
     this.practiceControllers.forEach((controller, index) => {
-      controller.hidden = !beatoraja || (index > 0 && !this.guiState.practice);
+      controller.hidden = index > 0 && !practice;
     });
+    const practiceGauge = keepPracticeGauge(this.guiState.practiceGauge, ruleset);
+    if (practiceGauge !== this.guiState.practiceGauge) {
+      this.guiState.practiceGauge = practiceGauge;
+      this.setPlayOptions({ practiceGauge });
+    }
+    if (this.practiceGaugeController) {
+      this.practiceGaugeController.options = practiceGaugeItems(ruleset);
+      this.practiceGaugeController.refresh();
+    }
+    if (this.practiceGaugeCategoryController) this.practiceGaugeCategoryController.hidden = !practice || !beatoraja;
+    for (const controller of this.practiceJudgeRankAndTotalControllers)
+      controller.hidden = !practice || !practiceReadsJudgeRankAndTotal(ruleset);
     if (!beatoraja && this.guiState.customJudge) {
       this.guiState.customJudge = false;
       this.setPlayOptions({ customJudge: false });
@@ -575,12 +607,17 @@ export class DebugMenu {
       const controller = side === '1P' ? this.randomSeed1PController : this.randomSeed2PController;
       if (controller) controller.hidden = this.guiState[`random${side}`] === 'RANDOM_PLAYABLE';
     }
-    if (!beatoraja && this.guiState.gaugeAutoShift !== 'NONE') {
-      this.guiState.gaugeAutoShift = 'NONE';
-      this.setPlayOptions({ gaugeAutoShift: 'NONE' });
+    // Gauge auto-shift is offered under every ruleset, along its own gauge ladder (#933). LR2 has no ASSIST EASY, so
+    // its lowest auto-shift gauge starts at EASY.
+    const bottomChoices = bottomShiftableGaugeItems(ruleset);
+    if (!bottomChoices.some((item) => item.value === this.guiState.bottomShiftableGauge)) {
+      this.guiState.bottomShiftableGauge = bottomChoices[0]!.value;
+      this.setPlayOptions({ bottomShiftableGauge: this.guiState.bottomShiftableGauge });
     }
-    if (this.gaugeAutoShiftController) this.gaugeAutoShiftController.hidden = !beatoraja;
-    if (this.bottomShiftableGaugeController) this.bottomShiftableGaugeController.hidden = !beatoraja;
+    if (this.bottomShiftableGaugeController) {
+      this.bottomShiftableGaugeController.options = bottomChoices;
+      this.bottomShiftableGaugeController.refresh();
+    }
     if (this.scrollSectionController) this.scrollSectionController.hidden = this.guiState.scrollModifier !== 'ADD';
     if (this.scrollRateController) this.scrollRateController.hidden = this.guiState.scrollModifier !== 'ADD';
     if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {

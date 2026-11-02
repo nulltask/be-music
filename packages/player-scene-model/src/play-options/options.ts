@@ -158,9 +158,11 @@ export interface PlayOptions {
   longNoteMode: 'LN' | 'CN' | 'HCN';
   customJudge: boolean;
   /**
-   * beatoraja PRACTICE (`PracticeProperty`): play only `practiceStartMs`..`practiceEndMs` (0 = the chart's end) and
-   * play the range again when it ends. A 0 judgerank or TOTAL keeps the chart's; `MODE` keeps the play mode's gauge
-   * category.
+   * PRACTICE (beatoraja's `PracticeProperty`, under every judge ruleset): play only `practiceStartMs`..`practiceEndMs`
+   * (0 = the chart's end) and play the range again when it ends. `practiceGauge` is one of the judge ruleset's own
+   * gauges (`resolvePracticeGaugeTypes`). A 0 judgerank or TOTAL keeps the chart's; both are read on the judge ruleset's
+   * own tables and do nothing under That-Which-Must-Not-Be-Named. `MODE` keeps the play mode's gauge category, which
+   * only beatoraja has.
    */
   practice: boolean;
   practiceStartMs: number;
@@ -185,7 +187,7 @@ export interface PlayOptions {
   /** beatoraja ADD: change every 1..1024 section lines (default 4), with width 0..1 (default 0.5). */
   scrollSection: number;
   scrollRate: number;
-  /** beatoraja: continue judging with the selected dead gauge, or stop on failure. */
+  /** Gauge auto-shift (beatoraja's policies), along the judge ruleset's own gauge ladder. */
   gaugeAutoShift: GaugeAutoShift;
   bottomShiftableGauge: import('@be-music/player-engine/ruleset').GaugeShiftBottom;
   /**
@@ -276,9 +278,8 @@ export type RandomMode =
   | 'SYNCHRONIZE-RANDOM'
   | 'SYMMETRY-RANDOM';
 
-/** Allowed values for {@link PlayOptions.practiceGauge}: beatoraja PRACTICE's GAUGE TYPE. */
-export type PracticeGaugeType =
-  (typeof import('@be-music/player-engine/ruleset').BEATORAJA_PRACTICE_GAUGE_TYPES)[number];
+/** Allowed values for {@link PlayOptions.practiceGauge}: PRACTICE's GAUGE TYPE of any judge ruleset. */
+export type PracticeGaugeType = import('@be-music/player-engine/ruleset').PracticeGaugeType;
 
 /** Allowed values for {@link PlayOptions.practiceGaugeCategory}: `MODE` or a beatoraja GAUGE CATEGORY. */
 export type PracticeGaugeCategory = 'MODE' | import('@be-music/player-engine/ruleset').BeatorajaGaugeCategory;

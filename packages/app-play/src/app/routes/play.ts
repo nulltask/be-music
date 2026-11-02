@@ -363,13 +363,10 @@ export class PlayRoute {
           : undefined,
       beatorajaPlay,
     };
-    // beatoraja PRACTICE plays a single chart's range over and over, saving nothing (the host's `practiceRange`).
+    // PRACTICE (beatoraja's, under every ruleset since #933) plays a single chart's range over and over, saving nothing
+    // (the host's `practiceRange`).
     const practicing =
-      this.playOptions.current.practice &&
-      judgeRuleset === 'beatoraja' &&
-      replay === undefined &&
-      courseStage === undefined &&
-      nonstop === undefined;
+      this.playOptions.current.practice && replay === undefined && courseStage === undefined && nonstop === undefined;
     const callbacks = {
       // In-play hi-speed changes come back to be remembered for the next play.
       onHiSpeedChange: (hiSpeed: number, normalLevel?: number, floating?: boolean) => {
@@ -448,7 +445,7 @@ export class PlayRoute {
       },
       onChartFinished: (result: PlayResult) => {
         if (practicing) {
-          // beatoraja returns a finished PRACTICE play to its practice setup, where START plays the range again.
+          // As beatoraja does, a finished PRACTICE play returns to its practice setup, where START plays the range again.
           void this.playChart(chartEntry, playAgainOverrides({ autoPlay, replay }));
           return;
         }

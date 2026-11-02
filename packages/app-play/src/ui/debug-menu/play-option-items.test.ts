@@ -1,6 +1,51 @@
 import { expect, test } from 'vite-plus/test';
 import { resolveRandomModes } from '@be-music/player-scene-model';
-import { battleModeItems, laneOptionItems, laneOptionSource } from './play-option-items.ts';
+import {
+  battleModeItems,
+  bottomShiftableGaugeItems,
+  laneOptionItems,
+  laneOptionSource,
+  practiceGaugeItems,
+} from './play-option-items.ts';
+
+test('PRACTICE lists the judge ruleset’s own gauges, named as it names them (#933)', () => {
+  expect(practiceGaugeItems('lr2').map((item) => item.text)).toEqual([
+    'GROOVE',
+    'HARD',
+    'HAZARD',
+    'EASY',
+    'P.ATTACK',
+    'G.ATTACK',
+  ]);
+  expect(practiceGaugeItems('lr2')[2]).toEqual({ text: 'HAZARD', value: 'DEATH' });
+  expect(practiceGaugeItems('beatoraja').map((item) => item.text)).toEqual([
+    'ASSIST EASY',
+    'EASY',
+    'NORMAL',
+    'HARD',
+    'EX-HARD',
+    'HAZARD',
+    'GRADE',
+    'EX GRADE',
+    'EXHARD GRADE',
+  ]);
+  expect(practiceGaugeItems('____').map((item) => item.text)).toEqual([
+    'ASSISTED EASY',
+    'EASY',
+    'NORMAL',
+    'HARD',
+    'EX-HARD',
+  ]);
+});
+
+test('the lowest auto-shift gauge reads as the ruleset’s own gauges; LR2 starts at EASY (#933)', () => {
+  expect(bottomShiftableGaugeItems('lr2')).toEqual([
+    { text: 'EASY', value: 'EASY' },
+    { text: 'GROOVE', value: 'GROOVE' },
+  ]);
+  expect(bottomShiftableGaugeItems('beatoraja').map((item) => item.text)).toEqual(['ASSIST EASY', 'EASY', 'NORMAL']);
+  expect(bottomShiftableGaugeItems('____')[0]).toEqual({ text: 'ASSISTED EASY', value: 'ASSIST-EASY' });
+});
 
 test('lane options are grouped by source, the judge ruleset own first, and name their source', () => {
   const items = laneOptionItems('beatoraja');
