@@ -20,6 +20,7 @@ import type { PlayJudgeSideState } from '../play-presentation.ts';
 import type { GhostPresentation } from './ghost.ts';
 import { toGhostChannel, type GhostSide } from './ghost-side.ts';
 import { findGhostStepAt, type GhostTimeline } from './ghost-timeline.ts';
+import { PresentedPlayfield } from './presented-playfield.ts';
 
 /** How long a judgment plate stays up, in chart seconds (as the live play's). */
 const PLATE_SECONDS = 0.6;
@@ -156,11 +157,9 @@ export function mergeByBeat<T extends { readonly beat: number }>(left: readonly 
   return merged;
 }
 
-/** The members of the live play a presented playfield answers in its place. */
-type Overrides = Partial<Record<keyof PlayfieldRuntime, unknown>>;
-
 /** The second playfield. See the module comment. */
 export class SidePlayfieldGhost implements GhostPresentation {
+  public readonly drawsOnPlayfield = true;
   private readonly timeline: GhostTimeline;
   private readonly side: GhostSide;
   private readonly field: GhostField;
@@ -172,8 +171,7 @@ export class SidePlayfieldGhost implements GhostPresentation {
   private secondPlayer: { score: ScoreSummary; playState: PlayState } | undefined;
   private merged: { notes: RuntimeNote[]; liveNotes: readonly RuntimeNote[] } | undefined;
   private mergedMines: { mines: RuntimeMineNote[]; liveMines: readonly RuntimeMineNote[] } | undefined;
-  /** The playfield last presented over the play, kept so the view's per-play caches hold across frames. */
-  private presented: { play: PlayfieldRuntime; overrides: Overrides; runtime: PlayfieldRuntime } | undefined;
+  private readonly presented = new PresentedPlayfield();
 
   public constructor(timeline: GhostTimeline, side: GhostSide, field: GhostField, target: SidePlayfieldGhostTarget) {
     this.timeline = timeline;
@@ -233,17 +231,13 @@ export class SidePlayfieldGhost implements GhostPresentation {
       this.merged = { notes: mergeByBeat(play.notes, this.field.notes), liveNotes: play.notes };
     if (this.mergedMines?.liveMines !== play.mineNotes)
       this.mergedMines = { mines: mergeByBeat(play.mineNotes, this.field.mines), liveMines: play.mineNotes };
-    if (this.presented?.play !== play) {
-      const overrides: Overrides = {};
-      this.presented = { play, overrides, runtime: presentWith(play, overrides) };
-    }
-    const { overrides } = this.presented;
-    overrides.laneChannels = this.side.laneChannels;
-    overrides.chartPlayVariant = this.side.playVariant;
-    overrides.notes = this.merged.notes;
-    overrides.mineNotes = this.mergedMines.mines;
-    overrides.secondPlayer = this.secondPlayer;
-    return this.presented.runtime;
+    return this.presented.present(play, {
+      laneChannels: this.side.laneChannels,
+      chartPlayVariant: this.side.playVariant,
+      notes: this.merged.notes,
+      mineNotes: this.mergedMines.mines,
+      secondPlayer: this.secondPlayer,
+    });
   }
 
   /** Back to the chart's start: no note settled, no effect of the ghost's left on its lanes. */
@@ -291,28 +285,4 @@ export class SidePlayfieldGhost implements GhostPresentation {
     };
     return { score, playState };
   }
-}
-
-/**
- * `play` with `overrides` in place of its members of those names. Everything else is the live play's own, methods
- * bound to it, so the view's writes (its lanes, its BGA videos) still land on the play.
- */
-function presentWith(play: PlayfieldRuntime, overrides: Overrides): PlayfieldRuntime {
-  const bound = new Map<PropertyKey, unknown>();
-  return new Proxy(play, {
-    get(target, key) {
-      if (Object.hasOwn(overrides, key)) return overrides[key as keyof PlayfieldRuntime];
-      const value: unknown = Reflect.get(target, key, target);
-      if (typeof value !== 'function') return value;
-      let method = bound.get(key);
-      if (method === undefined) {
-        method = (value as (...args: unknown[]) => unknown).bind(target);
-        bound.set(key, method);
-      }
-      return method;
-    },
-    set(target, key, value) {
-      return Reflect.set(target, key, value, target);
-    },
-  });
 }
