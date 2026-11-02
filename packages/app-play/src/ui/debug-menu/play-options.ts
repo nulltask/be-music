@@ -15,6 +15,7 @@ import {
   PLAY_OPTION_CHOICES,
   SORT_CYCLE,
 } from '@be-music/player-scene-model';
+import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { DebugMenu } from './index.ts';
 import { laneOptionItems } from './play-option-items.ts';
@@ -620,11 +621,40 @@ export function buildReplayViewFolder(this: DebugMenu, folder: FolderApi): void 
       folder.addBinding(this.guiState.replayView, key, { label: labels[key] }).on('change', remember),
     );
   }
-  // The ghost beside the play (`services/ghost.ts`): the player's own best replayed as a second playfield on the
-  // built-in skins. Disabled during a play like the other options, and where the chart under the cursor shows none.
+  // The ghost with the play (`services/ghost.ts`): which replay it plays and how it shows. Disabled during a play like
+  // the other options, and on a course bar; "Ghost status" says whether the bar under the cursor would show it.
+  const refresh = () => this.refreshGhostAvailability();
   this.ghostController = selectBinding(folder, this.guiState, 'ghost', 'Ghost', {
     OFF: 'OFF',
     'OWN BEST': 'OWN_BEST',
+    'REPLAY SLOT 1': 'REPLAY_SLOT_1',
+    'REPLAY SLOT 2': 'REPLAY_SLOT_2',
+    'REPLAY SLOT 3': 'REPLAY_SLOT_3',
+    'REPLAY SLOT 4': 'REPLAY_SLOT_4',
+    'LEADERBOARD TOP': 'LEADERBOARD_TOP',
+    'REPLAY FILE': 'REPLAY_FILE',
+  });
+  this.ghostController.on('change', refresh);
+  this.ghostModeController = selectBinding(folder, this.guiState, 'ghostMode', 'Ghost mode', {
+    'SECOND PLAYFIELD': 'PLAYFIELD',
+    PACEMAKER: 'PACEMAKER',
+    'PACEMAKER + LANES': 'LANE_OVERLAY',
+  });
+  this.ghostModeController.on('change', refresh);
+  this.ghostStatusController = folder.addBinding(this.ghostStatus, 'text', { label: 'Ghost status', readonly: true });
+  const fileButton = folder.addButton({ title: 'Ghost replay file…' });
+  fileButton.on('click', () => {
+    void pickReplayFile().then(async (file) => {
+      if (file === undefined) return;
+      try {
+        this.deps.ghostReplayFile.set(parseReplay(await file.text()), file.name);
+        fileButton.title = `Ghost file: ${file.name}`;
+        this.setStatus(`Ghost replay file: ${file.name}`);
+      } catch (error) {
+        this.setStatus(`Ghost replay file could not be read: ${(error as Error).message}`);
+      }
+      refresh();
+    });
   });
   const menu = this;
   this.trackPlayOption({
@@ -635,6 +665,19 @@ export function buildReplayViewFolder(this: DebugMenu, folder: FolderApi): void 
       menu.ghostLocked = locked;
       menu.refreshGhostAvailability();
     },
+  });
+  refresh();
+}
+
+/** Asks the player for one replay file (`*.bmplay.json`); `undefined` when none is picked. */
+function pickReplayFile(): Promise<File | undefined> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.addEventListener('change', () => resolve(input.files?.[0]), { once: true });
+    input.addEventListener('cancel', () => resolve(undefined), { once: true });
+    input.click();
   });
 }
 

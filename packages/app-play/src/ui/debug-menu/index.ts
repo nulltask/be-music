@@ -22,7 +22,13 @@ import { debugMenuSettingsSync } from '../../debug-menu-settings-sync.ts';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import type { CourseMakerService } from '../../services/course-maker.ts';
-import type { GhostMode, GhostUnavailableReason } from '../../services/ghost.ts';
+import {
+  resolveGhostStatus,
+  type GhostBarFacts,
+  type GhostModeSetting,
+  type GhostReplayFile,
+  type GhostSourceSetting,
+} from '../../services/ghost.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { SilentModeSetting } from '../../services/silent-mode.ts';
@@ -55,6 +61,8 @@ import { buildTempoFolder } from './tempo.ts';
 export interface DebugMenuDeps {
   /** The settings the controllers read and write (`createPlayerGUIState`), read by the app as each play starts. */
   readonly settings: PlayerGUIState;
+  /** The replay file "Ghost replay file…" picks as a ghost. */
+  readonly ghostReplayFile: GhostReplayFile;
   /** The scene host: "Render resolution" sets its resolution, and the Developer folder reads its frame rate. */
   readonly sceneHost: PixiSceneHost;
   /** "Play in silent mode": the Audio folder's checkbox and the start card's option drive it. */
@@ -234,12 +242,18 @@ export class DebugMenu {
   public scrollSectionController: PaneBinding | undefined;
   public scrollRateController: PaneBinding | undefined;
   public judgeAlgorithmController: ListInputBindingApi<PlayOptions['judgeAlgorithm']> | undefined;
-  /** "Ghost" (Replay / ghost): disabled during a play, and where the play would show none ({@link setGhostAvailability}). */
-  public ghostController: ListInputBindingApi<GhostMode> | undefined;
+  /** "Ghost" (Replay / ghost): which replay a ghost plays. Disabled during a play, and on a course bar. */
+  public ghostController: ListInputBindingApi<GhostSourceSetting> | undefined;
+  /** "Ghost mode": how the ghost shows. Disabled with "Ghost". */
+  public ghostModeController: ListInputBindingApi<GhostModeSetting> | undefined;
+  /** "Ghost status": whether the bar under the cursor would show the picked ghost, or why not. */
+  public ghostStatusController: PaneBinding | undefined;
+  /** What "Ghost status" shows. */
+  public readonly ghostStatus = { text: '-' };
   /** Whether a play runs, which disables "Ghost" with the other play options. */
   public ghostLocked = false;
-  /** Why the chart under the cursor would show no ghost; `undefined` when it would. */
-  private ghostUnavailable: GhostUnavailableReason | undefined;
+  /** What the select screen knows of the bar under the cursor ({@link setGhostAvailability}). */
+  private ghostBar: GhostBarFacts | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
   /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
@@ -415,16 +429,25 @@ export class DebugMenu {
     return controller;
   }
   /**
-   * Says whether the chart under the cursor could show a ghost (`resolveGhostUnavailableReason`): "Ghost" is disabled
-   * where it would do nothing, its choice kept for the charts that can.
+   * Tells the menu about the bar under the cursor: "Ghost status" says whether a play of it would show the picked ghost
+   * (`resolveGhostStatus`), and a course bar disables "Ghost" and "Ghost mode", their choices kept for the charts.
    */
-  public setGhostAvailability(reason: GhostUnavailableReason | undefined): void {
-    this.ghostUnavailable = reason;
+  public setGhostAvailability(facts: GhostBarFacts | undefined): void {
+    this.ghostBar = facts;
     this.refreshGhostAvailability();
   }
-  /** Repaints whether "Ghost" is enabled: not during a play, nor where the chart shows none. */
+  /** Repaints "Ghost", "Ghost mode" and "Ghost status": disabled during a play and on a course bar. */
   public refreshGhostAvailability(): void {
-    if (this.ghostController) this.ghostController.disabled = this.ghostLocked || this.ghostUnavailable !== undefined;
+    const disabled = this.ghostLocked || this.ghostBar?.course === true;
+    if (this.ghostController) this.ghostController.disabled = disabled;
+    if (this.ghostModeController) this.ghostModeController.disabled = disabled;
+    this.ghostStatus.text = resolveGhostStatus(
+      this.guiState.ghost,
+      this.guiState.ghostMode,
+      this.ghostBar,
+      this.deps.ghostReplayFile,
+    );
+    this.ghostStatusController?.refresh();
   }
   /** Repaints the status row with the status line just set. */
   public refreshStatus(): void {

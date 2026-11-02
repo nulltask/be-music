@@ -31,7 +31,7 @@ import {
   serializePlayInSilentMode,
 } from './silent-mode-playback.ts';
 import { REPLAY_AUTO_SAVE_RULES, type ReplayAutoSaveRule } from './services/replay-slots.ts';
-import { GHOST_MODES } from './services/ghost.ts';
+import { GHOST_MODES, GHOST_SOURCES } from './services/ghost.ts';
 import type { PlayerGUIState, SkinFamilyOverride } from './types.ts';
 import { DEBUG_MENU_FOLDERS_STORAGE_KEY, parseFolderOpenStates, type FolderOpenStates } from './debug-menu-storage.ts';
 import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
@@ -64,6 +64,7 @@ export interface DebugMenuSettings {
   showInvisibleNotes: boolean;
   judgedNoteDisplay: PlayerGUIState['judgedNoteDisplay'];
   ghost: PlayerGUIState['ghost'];
+  ghostMode: PlayerGUIState['ghostMode'];
   autoSaveReplay: boolean;
   replaySlotAutoSave1: ReplayAutoSaveRule;
   replaySlotAutoSave2: ReplayAutoSaveRule;
@@ -373,7 +374,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'tempoEnabled', booleanOf(raw.tempoEnabled));
   assign(settings, 'bgaUseWebCodecs', booleanOf(raw.bgaUseWebCodecs));
   assign(settings, 'judgedNoteDisplay', oneOf(raw.judgedNoteDisplay, ['KEEP_SCROLLING', 'HIDE'] as const));
-  assign(settings, 'ghost', oneOf(raw.ghost, GHOST_MODES));
+  assign(settings, 'ghost', oneOf(raw.ghost, GHOST_SOURCES));
+  assign(settings, 'ghostMode', oneOf(raw.ghostMode, GHOST_MODES));
   assign(settings, 'nonstopPlacement', oneOf(raw.nonstopPlacement, ['intended', 'lr2'] as const));
   assign(settings, 'judgeRuleset', isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : undefined);
   assign(settings, 'gauge', isGaugeType(raw.gauge) ? raw.gauge : undefined);
@@ -550,6 +552,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('showInvisibleNotes');
   assignState('judgedNoteDisplay');
   assignState('ghost');
+  assignState('ghostMode');
   assignState('autoSaveReplay');
   assignState('replaySlotAutoSave1');
   assignState('replaySlotAutoSave2');
@@ -678,6 +681,7 @@ export function captureDebugMenuSettings(
     showInvisibleNotes: state.showInvisibleNotes,
     judgedNoteDisplay: state.judgedNoteDisplay,
     ghost: state.ghost,
+    ghostMode: state.ghostMode,
     autoSaveReplay: state.autoSaveReplay,
     replaySlotAutoSave1: state.replaySlotAutoSave1,
     replaySlotAutoSave2: state.replaySlotAutoSave2,
