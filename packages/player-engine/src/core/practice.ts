@@ -26,6 +26,13 @@ export interface PlayPractice {
   judgeRank?: number;
   /** `TOTAL`; absent keeps the chart's. */
   total?: number;
+  /**
+   * Plays the range again in place each time it ends, until the play is interrupted (#949): once the play's end
+   * (`END TIME` + 1000 ms) is reached and judged, or its gauge empties, the play goes back to its start (1000 ms before
+   * the range) with the score, combo and gauge of the practice settings, as a seek there does (`restartPractice`).
+   * Absent, the play ends there as any other does.
+   */
+  loop?: boolean;
 }
 
 /** The range `PracticeModifier` keeps, in milliseconds, after the source's limits on the two times. */
