@@ -982,6 +982,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.resolveCourseRunDanRank({ kind: 'grade', name: '七段', lamp: 'NORMAL' });
     },
   });
+  define('player-engine.ruleset.resolveChartGaugeType', {
+    run() {
+      rulesetAPI.resolveChartGaugeType({ gameLevel: 'DANGER', extra: 'HARD' }, '____');
+    },
+  });
   define('player-engine.ruleset.isQualifiedOptionName', {
     run() {
       rulesetAPI.isQualifiedOptionName('S-RANDOM');

@@ -1,4 +1,5 @@
 import { BmsonBGAController } from './bmson-bga.ts';
+import { resolveChartGaugeType } from '../ruleset/chart-gauge.ts';
 import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
 import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
@@ -13,6 +14,7 @@ import {
   buildBmsonBGAEventTimeline,
   buildChartTextTimeline,
   buildChartOptionTimeline,
+  compileChartGaugeOptions,
   compileChartOptions,
   compileChartPlayOptions,
   resolveChartOptionsAt,
@@ -322,7 +324,16 @@ export async function createPlaySession(
 
   // The gauge the play runs on and the replay records: one value, so a re-simulation runs the same gauge. A host that
   // only declared it for the log (`recordReplay.gauge`) gets it played too.
-  const selectedGauge = options.gauge ?? options.recordReplay?.gauge;
+  // A chart's GAMELEVEL / EXTRA (#845) wins over the player's gauge pick, outside a course (which keeps its course gauge),
+  // PRACTICE (which sets its own) and a replay (whose recorded gauge already is the one played).
+  const chartGauge =
+    options.course === undefined && options.practice === undefined && !replay
+      ? resolveChartGaugeType(
+          compileChartGaugeOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing)),
+          options.judgeRuleset ?? 'lr2',
+        )
+      : undefined;
+  const selectedGauge = chartGauge ?? options.gauge ?? options.recordReplay?.gauge;
   if (
     options.judgeAlgorithm !== undefined &&
     options.judgeAlgorithm !== 'combo' &&
@@ -372,7 +383,7 @@ export async function createPlaySession(
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
   const { score, summary, resetScore: resetPrimaryScore } = createPlayerScore(ruleset, courseCarry);
   const secondPlayer = twoPlayer
-    ? createSecondPlayer(resolvedJSON, playbackChart, judgeRankChanges, options, selectedGauge, chartJudge)
+    ? createSecondPlayer(resolvedJSON, playbackChart, judgeRankChanges, options, selectedGauge, chartGauge, chartJudge)
     : undefined;
   if (secondPlayer !== undefined) summary.secondPlayer = secondPlayer.summary;
   const resetScore = (): void => {
@@ -837,9 +848,10 @@ function createSecondPlayer(
   judgeRankChanges: ResolvedChart['judgeRank']['changes'],
   options: PlayerOptions,
   selectedGauge: string | undefined,
+  chartGauge: string | undefined,
   chartJudge: ReturnType<typeof resolveChartJudgeOption>,
 ): SecondPlayer {
-  const gauge = options.gauge2P ?? selectedGauge;
+  const gauge = chartGauge ?? options.gauge2P ?? selectedGauge;
   const ruleset = resolveRuleset(
     rulesetChartFactsFromChart(resolvedJSON, selectPlaybackChartSide(playbackChart, 2), judgeRankChanges),
     options.judgeRuleset ?? 'lr2',
@@ -857,6 +869,7 @@ function createSecondPlayer(
     summary,
     resetScore,
     endOnFailure: resolveGaugeEndOnFailure(undefined, ruleset.rulesetId, options.endOnFailure),
+    ...(gauge !== undefined ? { gauge } : {}),
   };
 }
 
