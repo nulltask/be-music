@@ -48,7 +48,10 @@ export function finishPlay(
               secondPlayer: {
                 summary: session.secondPlayer.summary,
                 maxCombo: session.secondPlayer.score.scoreTracker.maxCombo,
-                gauge: (session.options.gauge2P ?? session.options.gauge ?? 'GROOVE') as GaugeType,
+                gauge: (session.secondPlayer.gauge ??
+                  session.options.gauge2P ??
+                  session.options.gauge ??
+                  'GROOVE') as GaugeType,
               },
             }
           : {}),

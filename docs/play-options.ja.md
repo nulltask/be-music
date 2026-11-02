@@ -136,6 +136,10 @@ beatoraja ルールでは Debug Menu の **Gauge → ASSIST EASY**、???? ルー
 
 参照元：beatoraja 0.8.9 の [`GaugeProperty`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GaugeProperty.java)、AC 34 の [ASSISTED EASY](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#725](https://github.com/nulltask/be-music/issues/725) です。
 
+## 譜面が選ぶゲージ
+
+`#OPTION` で nanasigroove の `774:GAMELEVEL_*` か `774:EXTRA_*` を指定した譜面は、プレイヤーの **Gauge** の選択の代わりに自らゲージを選びます（2 人プレイでは両プレイヤーの選択を置き換えます）。各 ruleset は組み合わせに最も近いゲージで遊びます。たとえば HYPER は HARD、NORMAL と EXTRA VERYHARD は EX-HARD（LR2 では HARD）、DANGER は DEATH（???? では EX-HARD）です。コースのステージはコースのゲージを、beatoraja PRACTICE は自身のゲージを保ち、ゲージオートシフトは引き続き働きます。リプレイには遊んだゲージを記録し、ランプはそのゲージのものになります。対応表全体は [ADR 0034](./adr/0034-chart-authored-gauge-options.ja.md) にあります。
+
 ## 判定アルゴリズム
 
 beatoraja ルールでは Debug Menu の **Judge algorithm** で **Combo**、**Duration**、**Lowest** を選びます。既定は **Combo** です。アルゴリズムは、押下の届く範囲に複数のノートがあるとき、どのノートで判定するかを決めます。beatoraja の既定である Combo は、手前のノートが GOOD 窓の遅い側の端を過ぎ、後ろのノートが自身の窓に入っている場合に限り後ろのノートへ移ります。Duration は時間的に最も近いノート、Lowest は届く範囲で常に最も手前のノートを選びます。beatoraja 内部の Score は選択肢にしません。LR2 と AC は常に最も手前のノートで判定するため、これらのルールでは **Source default** だけを表示し、エンジンはそれ以外の選択をエラーにします。
