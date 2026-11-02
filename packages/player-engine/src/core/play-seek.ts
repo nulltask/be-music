@@ -151,3 +151,38 @@ export function applySeek(session: PlaySession, judge: PlayJudge, seconds: numbe
   session.publishUIFrame(target, session.beatAtSeconds(target));
   return target;
 }
+
+/** What the play loop knows on a tick when it asks whether a looping PRACTICE play goes back to its start. */
+export interface PracticeLoopTick {
+  /** The chart second of the tick. */
+  nowSec: number;
+  /** The play's end: a practice play's is its range's end + 1000 ms (`PreparedPlaybackChartData.totalSeconds`). */
+  totalSeconds: number;
+  /** Nothing is left to judge ({@link PlayJudge.isSettled}). */
+  settled: boolean;
+  /** Judging closed on an emptied survival gauge ({@link PlayJudge.isClosed}). */
+  closed: boolean;
+  /** The play clock passed the play's horizon (its end, the widest BAD reach and a second of grace). */
+  pastHorizon: boolean;
+}
+
+/**
+ * Whether a looping PRACTICE play (`PlayPractice.loop`, #949) goes back to its start on this tick: when its gauge
+ * emptied, or once the play's end is reached with every note judged — or at the horizon at the latest, where a play
+ * that did not loop would end.
+ */
+export function isPracticeLoopDue(tick: Readonly<PracticeLoopTick>): boolean {
+  if (tick.closed || tick.pastHorizon) return true;
+  return tick.settled && tick.nowSec >= tick.totalSeconds;
+}
+
+/**
+ * PRACTICE's loop (#949): moves the play back to where it started (`PlaySession.startAtSeconds`, 1000 ms before the
+ * range) at play-clock time `nowMs`, as a seek there does (`applySeek`): the audio stops what still rings, the judge,
+ * the score, the combo and the gauge go back to the practice settings, the notes are judged again, and the host gets a
+ * `seek` UI command and a frame of the next generation, keeping the samples, the BGA and the skin it loaded. Returns
+ * the second it went to, or `undefined` when the judge cannot seek.
+ */
+export function restartPractice(session: PlaySession, judge: PlayJudge, nowMs: number): number | undefined {
+  return applySeek(session, judge, session.startAtSeconds, nowMs);
+}
