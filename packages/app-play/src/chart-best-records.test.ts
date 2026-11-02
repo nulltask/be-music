@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
+import { parseBMS } from '@be-music/chart-parser';
+import type { LibraryChart } from '@be-music/player-scene-model';
 import {
+  chartCopiesItself,
   courseStageRecordKey,
   parseChartBestRecords,
   playRecordKey,
@@ -115,5 +118,22 @@ describe('course stage records', () => {
     expect(courseStageRecordKey(chartEntry, 'abc', { ...played, autoPlay: true })).toBeUndefined();
     expect(courseStageRecordKey(chartEntry, 'abc', { ...played, replay: true })).toBeUndefined();
     expect(courseStageRecordKey(chartEntry, 'abc', { ...played, tempo: 0.9 })).toBeUndefined();
+  });
+});
+
+describe('chartCopiesItself', () => {
+  const entry = (header: string, chartPath = 'song/chart.bms') =>
+    ({ chartPath, chart: parseBMS(`#BPM 120\n${header}\n#00111:01\n#00116:01\n`) }) as LibraryChart;
+
+  it('is true for a single-play chart whose NOTES COPY / DBLCOPY makes it double play (#932)', () => {
+    expect(chartCopiesItself(entry('#OPTION 774:NOTES_COPY'))).toBe(true);
+    expect(chartCopiesItself(entry('#OPTION 774:NOTES_DBLCOPY'))).toBe(true);
+  });
+
+  it('is false without a copy, or where a copy does nothing', () => {
+    expect(chartCopiesItself(entry(''))).toBe(false);
+    expect(chartCopiesItself(entry('#OPTION 774:NOTES_DOUBLE'))).toBe(false);
+    expect(chartCopiesItself(entry('#OPTION 774:NOTES_COPY\n#OPTION 774:NOTES_OFF'))).toBe(false);
+    expect(chartCopiesItself(entry('#OPTION 774:NOTES_COPY', 'song/chart.pms'))).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
-[日本語](./0034-chart-authored-skin-level-options.ja.md)
+[日本語](./0036-chart-authored-skin-level-options.ja.md)
 
-# 0034: Execute chart-authored M-SUDDEN, the skin-level CRAZY options and the legacy aliases at the playfield level
+# 0036: Execute chart-authored M-SUDDEN, the skin-level CRAZY options and the legacy aliases at the playfield level
 
 ## Context
 
@@ -12,7 +12,7 @@ Several of these options restyle parts that Be-Music's four browser families and
 
 **Program profile version 3.** `CHART_OPTION_PROGRAM_VERSION` becomes 3. `hidden` gains `M-SUDDEN`; the CRAZY wave subfamily gains `YWAVE`, `YWAVE2`, `XYWAVE`, `XYWAVE2`, `3DWAVE` and `3DWAVE2`; and the states gain seven exclusive CRAZY fields: `crazyColor` (`STAR`), `crazySpin` (`SPIN`), `crazyClone` (`CLONE`, `CLONE2`, `S-CLONE`), `crazyLine` (`LINEMOVE`, `LINEMOVE2`), `crazyJudge` (`HIDJUDGE`), `crazyDark` (`DARK`, `DARK2`) and `crazyReverse` (`REVERSE`). `CRAZY_OFF` clears every visual CRAZY field (and, as before, the gameplay CRAZY options of [ADR 0033](./0033-chart-authored-gameplay-options.md)). Replay parsing accepts versions 1, 2 and 3 and rejects a field or a value of a later version than the recording's own, so a version-1 or version-2 replay can never activate a version-3 option.
 
-**Legacy aliases.** The legacy IDs map to their modern IDs from hitkey's catalog (`HID-HIDDEN1` → `HIDDEN_HIDDEN`, `HID-HIDJUDGE` → `CRAZY_HIDJUDGE`, `CRA-NORMAL` → `CRAZY_OFF`, `CRA-ACCEL` → `CHANGE-HS_ACCEL`, `CRA-HARD1` → `CRAZY_GOOD2BAD`, ...; `resolveChartLegacyOptionAlias`). Like the legacy HSP values they are accepted initially only: A6 disregards old IDs, so a timed one is diagnosed `initial-only-alias`. The gameplay aliases (`CRA-HARD1`, `CRA-HARD2`, `CRA-ULTHARD`, `CRA-2JUDGE`) join the initial play options. `CRA-RHS1/2/3` (a playback-rate change), `CRA-HYPER` and `CRA-CPDOUBLE` (they stand for the unsupported `NOTES_DOUBLE` / `NOTES_COPY`) stay `unsupported-option`.
+**Legacy aliases.** The legacy IDs map to their modern IDs from hitkey's catalog (`HID-HIDDEN1` → `HIDDEN_HIDDEN`, `HID-HIDJUDGE` → `CRAZY_HIDJUDGE`, `CRA-NORMAL` → `CRAZY_OFF`, `CRA-ACCEL` → `CHANGE-HS_ACCEL`, `CRA-HARD1` → `CRAZY_GOOD2BAD`, ...; `resolveChartLegacyOptionAlias`). Like the legacy HSP values they are accepted initially only: A6 disregards old IDs, so a timed one is diagnosed `initial-only-alias`. The gameplay aliases (`CRA-HARD1`, `CRA-HARD2`, `CRA-ULTHARD`, `CRA-2JUDGE`, and `CRA-HYPER` / `CRA-CPDOUBLE`, which stand for `NOTES_DOUBLE` / `NOTES_COPY` of [ADR 0035](./0035-chart-authored-notes-options.md)) join the initial play options through the same mapping. `CRA-RHS1/2/3` (a playback-rate change) stays `unsupported-option`; the other legacy families (`RND-*`, `GTP-*`, `GLV-*`) are not mapped.
 
 **Formulas.** All are pure, deterministic functions in `@be-music/chart-model` (`resolveChartNoteVisual`, `resolveChartPlayfieldVisual`). `p` is the displayed approach progress after CHANGE-HS (0 on the judgement line, 1 at the lane top), `t` the engine's display chart clock in seconds and `hash(note)` the stable hash of ADR 0032.
 
@@ -55,4 +55,4 @@ STAR, SPIN and CLONE apply to tap notes; a long note keeps its lane geometry (th
 
 ## Consequences
 
-Every display option nanasigroove lists, and the legacy display IDs, now play with a defined, reproducible picture, and older replays keep theirs. The numbers and the element lists (what DARK hides, what HIDJUDGE hides) are Be-Music's; a later change to one would need a new profile version. On LR2 and beatoraja skins REVERSE moves only the note stream, so the skin's judgement line stays at the bottom, and LINEMOVE does nothing on LR2 skins: making these complete would need skin-level support that LR2 and beatoraja skins do not define. Only `NOTES_*`, `GAMELEVEL_*`, `EXTRA_*`, `CRA-RHS*` and the HDX BGAMODE remain diagnosed ([support boundary](../research/chart-authored-options.md#support-boundary-decision)).
+Every display option nanasigroove lists, and the legacy display IDs, now play with a defined, reproducible picture, and older replays keep theirs. The numbers and the element lists (what DARK hides, what HIDJUDGE hides) are Be-Music's; a later change to one would need a new profile version. On LR2 and beatoraja skins REVERSE moves only the note stream, so the skin's judgement line stays at the bottom, and LINEMOVE does nothing on LR2 skins: making these complete would need skin-level support that LR2 and beatoraja skins do not define. Of the nanasigroove IDs, only `CRA-RHS*` and the unmapped legacy `RND-*` / `GTP-*` / `GLV-*` families remain diagnosed, besides the HDX BGAMODE ([support boundary](../research/chart-authored-options.md#support-boundary-decision)).

@@ -1,6 +1,6 @@
-[English](./0034-chart-authored-skin-level-options.md)
+[English](./0036-chart-authored-skin-level-options.md)
 
-# 0034: 譜面指定の M-SUDDEN・スキン水準の CRAZY・旧別名をプレイフィールドの水準で実行する
+# 0036: 譜面指定の M-SUDDEN・スキン水準の CRAZY・旧別名をプレイフィールドの水準で実行する
 
 ## 背景
 
@@ -12,7 +12,7 @@
 
 **プログラムのプロファイル version 3。** `CHART_OPTION_PROGRAM_VERSION` を 3 にします。`hidden` に `M-SUDDEN` を加え、CRAZY の揺れの系列に `YWAVE`・`YWAVE2`・`XYWAVE`・`XYWAVE2`・`3DWAVE`・`3DWAVE2` を加え、状態に排他的な CRAZY の項目を 7 つ加えます。`crazyColor`（`STAR`）、`crazySpin`（`SPIN`）、`crazyClone`（`CLONE`・`CLONE2`・`S-CLONE`）、`crazyLine`（`LINEMOVE`・`LINEMOVE2`）、`crazyJudge`（`HIDJUDGE`）、`crazyDark`（`DARK`・`DARK2`）、`crazyReverse`（`REVERSE`）です。`CRAZY_OFF` は表示系 CRAZY の項目をすべて解除します（これまでどおり [ADR 0033](./0033-chart-authored-gameplay-options.ja.md) の判定系 CRAZY も解除します）。リプレイの解析は version 1・2・3 を受け付け、記録自身より後の版の項目や値を拒否します。そのため version 1・2 のリプレイで version 3 のオプションが有効になることはありません。
 
-**旧別名。** 旧 ID は hitkey のカタログに従って現行 ID に対応させます（`HID-HIDDEN1` → `HIDDEN_HIDDEN`、`HID-HIDJUDGE` → `CRAZY_HIDJUDGE`、`CRA-NORMAL` → `CRAZY_OFF`、`CRA-ACCEL` → `CHANGE-HS_ACCEL`、`CRA-HARD1` → `CRAZY_GOOD2BAD` など。`resolveChartLegacyOptionAlias`）。旧 HSP の値と同じく初期宣言でだけ受け付けます。A6 は旧 ID を無視するため、時刻付きの旧 ID は `initial-only-alias` と診断します。判定系の別名（`CRA-HARD1`・`CRA-HARD2`・`CRA-ULTHARD`・`CRA-2JUDGE`）は初期のプレイオプションに加わります。`CRA-RHS1/2/3`（再生速度の変更）と `CRA-HYPER`・`CRA-CPDOUBLE`（未対応の `NOTES_DOUBLE`・`NOTES_COPY` に当たる）は `unsupported-option` のままです。
+**旧別名。** 旧 ID は hitkey のカタログに従って現行 ID に対応させます（`HID-HIDDEN1` → `HIDDEN_HIDDEN`、`HID-HIDJUDGE` → `CRAZY_HIDJUDGE`、`CRA-NORMAL` → `CRAZY_OFF`、`CRA-ACCEL` → `CHANGE-HS_ACCEL`、`CRA-HARD1` → `CRAZY_GOOD2BAD` など。`resolveChartLegacyOptionAlias`）。旧 HSP の値と同じく初期宣言でだけ受け付けます。A6 は旧 ID を無視するため、時刻付きの旧 ID は `initial-only-alias` と診断します。判定系とノート系の別名（`CRA-HARD1`・`CRA-HARD2`・`CRA-ULTHARD`・`CRA-2JUDGE`、および [ADR 0035](./0035-chart-authored-notes-options.ja.md) の `NOTES_DOUBLE`・`NOTES_COPY` に当たる `CRA-HYPER`・`CRA-CPDOUBLE`）も同じ対応で初期のプレイオプションに加わります。`CRA-RHS1/2/3`（再生速度の変更）は `unsupported-option` のままです。その他の旧系列（`RND-*`・`GTP-*`・`GLV-*`）は対応させません。
 
 **式。** すべて `@be-music/chart-model` の純粋で決定的な関数です（`resolveChartNoteVisual`・`resolveChartPlayfieldVisual`）。`p` は CHANGE-HS 後の表示上の接近度（判定ラインで 0、レーン上端で 1）、`t` はエンジンの表示用譜面時刻（秒）、`hash(note)` は ADR 0032 の安定したハッシュです。
 
@@ -55,4 +55,4 @@ STAR・SPIN・CLONE は通常ノートに適用します。ロングノートは
 
 ## 結果
 
-nanasigroove が挙げる表示オプションと旧 ID の表示系はすべて、定義済みで再現可能な表示で動き、古いリプレイは元の表示を保ちます。数値と要素の一覧（DARK や HIDJUDGE が隠すもの）は Be-Music のもので、変えるには新しいプロファイルバージョンが必要です。LR2・beatoraja のスキンでは REVERSE がノートの流れだけを動かすため、スキンの判定ラインは下に残ります。LINEMOVE は LR2 スキンでは効果がありません。これらを完全にするには、LR2・beatoraja のスキンが定義していないスキン側の対応が必要です。診断のままなのは `NOTES_*`・`GAMELEVEL_*`・`EXTRA_*`・`CRA-RHS*` と HDX の BGAMODE だけです（[対応範囲](../research/chart-authored-options.ja.md#対応範囲決定)）。
+nanasigroove が挙げる表示オプションと旧 ID の表示系はすべて、定義済みで再現可能な表示で動き、古いリプレイは元の表示を保ちます。数値と要素の一覧（DARK や HIDJUDGE が隠すもの）は Be-Music のもので、変えるには新しいプロファイルバージョンが必要です。LR2・beatoraja のスキンでは REVERSE がノートの流れだけを動かすため、スキンの判定ラインは下に残ります。LINEMOVE は LR2 スキンでは効果がありません。これらを完全にするには、LR2・beatoraja のスキンが定義していないスキン側の対応が必要です。nanasigroove の ID で診断のままなのは、`CRA-RHS*` と対応させない旧 `RND-*`・`GTP-*`・`GLV-*` だけです（ほかに HDX の BGAMODE）（[対応範囲](../research/chart-authored-options.ja.md#対応範囲決定)）。

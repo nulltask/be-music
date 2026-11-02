@@ -1,5 +1,6 @@
 import {
   CHART_JUDGE_MODIFIERS,
+  CHART_NOTES_OPTIONS,
   CHART_RANDOM_OPTIONS,
   chartVisualOptionFieldsOf,
   isChartVisualOptionValue,
@@ -101,6 +102,8 @@ export function parseChartPlayOptionProgram(raw: unknown): ChartPlayOptionProgra
       parsed.judge = value as ChartPlayOptions['judge'];
     else if (key === 'hellJudge' && value === true) parsed.hellJudge = true;
     else if (key === 'addMine' && value === true) parsed.addMine = true;
+    else if (key === 'notes' && (CHART_NOTES_OPTIONS as readonly unknown[]).includes(value))
+      parsed.notes = value as ChartPlayOptions['notes'];
     else throw new ReplayParseError(`chart.chartPlayOptions.options.${key}: unsupported value`);
   }
   return { version: 1, options: parsed };

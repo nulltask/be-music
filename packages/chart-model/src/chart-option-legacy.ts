@@ -4,9 +4,11 @@
  * accepted in initial `#OPTION` declarations only: `#CHANGEOPTION` / channel A6 disregards old IDs, so a timed one is
  * diagnosed `initial-only-alias`.
  *
- * Not listed, and so still diagnosed `unsupported-option`: `CRA-RHS1/2/3` (a playback-rate change, which Be-Music keeps
- * apart from display options), and `CRA-HYPER` / `CRA-CPDOUBLE` (they stand for `NOTES_DOUBLE` / `NOTES_COPY`, which
- * are unsupported). The catalog lists `CRA-2JUDGE` as `CRAZY_HELLJUDGE` like `CRA-ULTHARD`; Be-Music follows it.
+ * The judgment and note aliases (`CRA-HARD1/2`, `CRA-ULTHARD`, `CRA-2JUDGE`, `CRA-HYPER` → `NOTES_DOUBLE`,
+ * `CRA-CPDOUBLE` → `NOTES_COPY`) feed `compileChartPlayOptions`. The catalog lists `CRA-2JUDGE` as `CRAZY_HELLJUDGE`
+ * like `CRA-ULTHARD`; Be-Music follows it. Not listed, and so still diagnosed `unsupported-option`: `CRA-RHS1/2/3` (a
+ * playback-rate change, which Be-Music keeps apart from display options). The legacy `HSP-*` values are the display
+ * compiler's own; the other legacy families (`RND-*`, `GTP-*`, `GLV-*`) are not mapped.
  */
 const LEGACY_OPTION_ALIASES: ReadonlyMap<string, string> = new Map(
   Object.entries({
@@ -40,6 +42,8 @@ const LEGACY_OPTION_ALIASES: ReadonlyMap<string, string> = new Map(
     'CRA-DARK': 'CRAZY_DARK',
     'CRA-ACCEL': 'CHANGE-HS_ACCEL',
     'CRA-BRAKE': 'CHANGE-HS_BRAKE',
+    'CRA-HYPER': 'NOTES_DOUBLE',
+    'CRA-CPDOUBLE': 'NOTES_COPY',
   }),
 );
 

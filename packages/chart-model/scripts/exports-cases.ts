@@ -79,7 +79,9 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   });
   define('chart-model.compileChartPlayOptions', {
     run: () => {
-      chartAPI.compileChartPlayOptions({ initial: ['774:RANDOM_ALL+', '774:CRAZY_GREAT2BAD', '774:CRAZY_ADDMINE'] });
+      chartAPI.compileChartPlayOptions({
+        initial: ['774:RANDOM_ALL+', '774:CRAZY_GREAT2BAD', '774:CRAZY_ADDMINE', '774:NOTES_DBLCOPY'],
+      });
     },
   });
   define('chart-model.parseChartPlayOption', {
@@ -194,6 +196,21 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.resolveChartLegacyOptionAlias', {
     run: () => {
       chartAPI.resolveChartLegacyOptionAlias('774:CRA-3DWAVE2');
+    },
+  });
+  define('chart-model.compileChartGaugeOptions', {
+    run: () => {
+      chartAPI.compileChartGaugeOptions({ initial: ['774:GAMELEVEL_HYPER', '774:EXTRA_VERYHARD'] });
+    },
+  });
+  define('chart-model.parseChartGaugeOption', {
+    run: () => {
+      chartAPI.parseChartGaugeOption('774:EXTRA_EASY');
+    },
+  });
+  define('chart-model.isChartGaugeOptionDeclaration', {
+    run: () => {
+      chartAPI.isChartGaugeOptionDeclaration('774:GAMELEVEL_DANGER');
     },
   });
   define('chart-model.buildChartOptionTimeline', {

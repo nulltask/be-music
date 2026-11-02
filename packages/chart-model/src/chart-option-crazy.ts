@@ -2,7 +2,7 @@
  * The chart-authored CRAZY options of program profile version 3 (#931): the per-note STAR, SPIN, CLONE and Y / XY / 3D
  * wave effects, and the playfield-level LINEMOVE, HIDJUDGE, DARK and REVERSE (with HIDDEN's interactive M-SUDDEN
  * cover). nanasigroove names them and describes each in a sentence, but gives no period, amplitude, colour or layout,
- * so every number here is Be-Music's own documented formula (docs/adr/0034-chart-authored-skin-level-options.md), not
+ * so every number here is Be-Music's own documented formula (docs/adr/0036-chart-authored-skin-level-options.md), not
  * a native parity claim.
  *
  * Runtime-neutral and deterministic: per-note variety comes from a stable hash of the note's lane and beat, and

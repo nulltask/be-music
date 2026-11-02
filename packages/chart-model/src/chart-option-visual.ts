@@ -2,7 +2,7 @@
  * Chart-authored display families beyond HI-SPEED (#843, #931): HIDDEN, CHANGE-HS and the visual CRAZY subfamilies.
  * The nanasigroove sources name these options but give no thresholds, curves, periods or distributions, so every number
  * here is Be-Music's own documented formula (docs/adr/0032-chart-authored-visual-families.md and
- * docs/adr/0034-chart-authored-skin-level-options.md), not a native parity claim.
+ * docs/adr/0036-chart-authored-skin-level-options.md), not a native parity claim.
  *
  * Runtime-neutral and deterministic: "random" values come from a stable hash of the lane channel, the note's beat and
  * the chart clock, never from `Math.random`, so a seek, a replay and every host draw the same picture.

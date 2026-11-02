@@ -13,11 +13,13 @@ test.each([
   ['774:CRA-HARD2', '774:CRAZY_GREAT2BAD'],
   ['774:CRA-2JUDGE', '774:CRAZY_HELLJUDGE'],
   ['774:CRA-ACCEL', '774:CHANGE-HS_ACCEL'],
+  ['774:CRA-HYPER', '774:NOTES_DOUBLE'],
+  ['774:CRA-CPDOUBLE', '774:NOTES_COPY'],
 ])('maps the legacy %s to %s', (legacy, modern) => {
   expect(resolveChartLegacyOptionAlias(legacy)).toBe(modern);
 });
 
-test.each(['774:CRA-RHS1', '774:CRA-HYPER', '774:CRA-CPDOUBLE', '774:hid-hidden1', 'HID-HIDDEN1', '774:constructor'])(
+test.each(['774:CRA-RHS1', '774:RND-MIRROR', '774:hid-hidden1', 'HID-HIDDEN1', '774:constructor'])(
   'leaves %s unmapped',
   (declaration) => {
     expect(resolveChartLegacyOptionAlias(declaration)).toBeUndefined();
