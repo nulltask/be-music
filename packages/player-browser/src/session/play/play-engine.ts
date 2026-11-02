@@ -1083,6 +1083,9 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
     case 'long-note-end':
       ctx.longNotes.end(command.channel, command.outcome, ctx.playClock());
       break;
+    case 'hell-charge':
+      ctx.longNotes.hellCharge(command.channel, command.beat, command.state);
+      break;
   }
   ctx.theme.moment({ kind: 'lane-command', command });
 }

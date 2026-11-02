@@ -192,6 +192,44 @@ describe('playfield painters', () => {
     expect(bss.filter((call) => call.startsWith('lineTo'))).toHaveLength(5);
   });
 
+  it('shows how a hell charge note stands by colour, glow and rung motion together', () => {
+    const paint = (state: 'pending' | 'held' | 'draining' | 'done', nowMs = 0): string[] => {
+      const ctx = recorder();
+      paintNotes(ctx, {
+        measureLines: [],
+        notes: [],
+        mines: [],
+        longNotes: [{ kind: 'white', x: 0, w: 40, top: 20, bottom: 100, mode: 'hcn', state }],
+        nowMs,
+      });
+      return ctx.calls;
+    };
+    const rungs = (calls: string[]): string[] =>
+      calls.filter((call) => call.startsWith('fillRect 2,') && call.includes(',36,2 '));
+    const rungAt = (calls: string[], y: number): boolean =>
+      rungs(calls).some((call) => call.startsWith(`fillRect 2,${y},`));
+    const halo = (calls: string[]): string[] => calls.filter((call) => call.startsWith('fillRect -3,'));
+    // Before it is reached: the HELL colour, a low steady glow and still rungs.
+    const standby = paint('pending');
+    expect(standby.some((call) => call.startsWith('fillRect 0,14,40,80 #a65cff 0.29'))).toBe(true);
+    expect(rungs(paint('pending', 100))).toEqual(rungs(standby));
+    // Held: an orange glow, brighter than on standby, and rungs flowing down into the line.
+    const held = paint('held');
+    expect(held.some((call) => call.includes('#ff9a1f'))).toBe(true);
+    expect(rungs(held)[0]).toMatch(/ #ffffff /);
+    expect(Number(halo(held)[0]!.split(' ').at(-1))).toBeGreaterThan(Number(halo(standby)[0]!.split(' ').at(-1)));
+    // 50 ms at 60 px/s is 3 px: the rung at 34 moves down to 37.
+    expect(rungAt(standby, 34)).toBe(true);
+    expect(rungAt(paint('held', 50), 37)).toBe(true);
+    // Let go: a dim red, dimmer than on standby, with rungs flowing back up the lane.
+    const draining = paint('draining');
+    expect(draining.some((call) => call.includes('#ff2e3e'))).toBe(true);
+    expect(Number(halo(draining)[0]!.split(' ').at(-1))).toBeLessThan(Number(halo(standby)[0]!.split(' ').at(-1)));
+    expect(rungAt(paint('draining', 50), 31)).toBe(true);
+    // Over: the glow is gone.
+    expect(halo(paint('done'))).toEqual([]);
+  });
+
   it('lights a pressed lane with its beam and marks a held long note', () => {
     const ctx = recorder();
     paintLanes(ctx, {

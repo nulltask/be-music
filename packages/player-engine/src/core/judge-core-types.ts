@@ -95,6 +95,8 @@ export interface HCNPassingState {
   counter: HCNTickCounter;
   /** The tail was released at GOOD or better: the lane gains until the tail passes, held or not. */
   tailGood: boolean;
+  /** The gaining state last sent to the UI (`hell-charge` command), so only a switch is sent. */
+  reported?: 'gaining' | 'draining';
   /** The lane's next Hell Charge note, judged before this one has passed: it ticks once this one's tail passes. */
   next?: HCNPassingState;
 }

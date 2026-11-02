@@ -233,6 +233,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.resolveLongNoteMarks({ mode: 'hcn', backSpinScratch: true });
     },
   });
+  define('player-skin-sdk.resolveHellChargeLook', {
+    run: () => {
+      skinSdkAPI.resolveHellChargeLook('draining', 12_345);
+    },
+  });
   define('player-skin-sdk.hellChargeRungs', {
     run: () => {
       skinSdkAPI.hellChargeRungs(0, 600, { flowing: true, nowMs: 12_345 });

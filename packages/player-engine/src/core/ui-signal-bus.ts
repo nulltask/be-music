@@ -188,6 +188,13 @@ export type PlayerUILongNoteMode = 'ln' | 'cn' | 'hcn';
  */
 export type PlayerUILongNoteOutcome = 'complete' | 'dropped';
 
+/**
+ * Where a hell charge note passing the judgement line stands: `'gaining'` while it fills the gauge (a key on its lane is
+ * down, or its tail was released at GOOD or better), `'draining'` while it empties it (the lane is up: let go, or its
+ * head was missed, and a press makes it gain again), `'passed'` once its tail has crossed the line and it does neither.
+ */
+export type PlayerUIHellChargeState = 'gaining' | 'draining' | 'passed';
+
 export type PlayerUICommand =
   | { kind: 'judge-timing'; value: number }
   | { kind: 'flash-lane'; channel: string }
@@ -203,6 +210,12 @@ export type PlayerUICommand =
   | { kind: 'long-note-start'; channel: string; beat: number; mode: PlayerUILongNoteMode }
   /** The long note held on `channel` (announced by the last `long-note-start` there) finished. */
   | { kind: 'long-note-end'; channel: string; outcome: PlayerUILongNoteOutcome }
+  /**
+   * A hell charge note on `channel` (its head at `beat`) switched between gaining and draining the gauge, or finished
+   * passing the judgement line. Sent by the judge core from its head's judgment (pressed or missed) until its tail, once
+   * per switch, so a live play and its replay send the same ones. An AUTO lane sends none: its notes always gain.
+   */
+  | { kind: 'hell-charge'; channel: string; beat: number; state: PlayerUIHellChargeState }
   /**
    * The play sought to chart second `seconds` (`generation` is the frames' from now on): what a host showed of the play
    * before it is void — lane beams, bombs, held long notes, judgment plates, the POOR image — and the judge state is

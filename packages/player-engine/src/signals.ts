@@ -20,6 +20,7 @@ export {
   type PlayerUIFrameNote,
   type PlayerUIFramePayload,
   type PlayerUIFrameSummary,
+  type PlayerUIHellChargeState,
   type PlayerUILongNoteMode,
   type PlayerUILongNoteOutcome,
   type PlayerUISeekJudgment,

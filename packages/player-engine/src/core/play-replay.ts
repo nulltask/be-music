@@ -63,6 +63,14 @@ function createReplayJudge(session: PlaySession): PlayJudge {
             mode: toUILongNoteMode(resolveRulesetLongNoteMode(session.ruleset.longNoteStyle, note) ?? 2),
           })),
         ],
+        hellChargeNotes: [...judgeCore.hcnPassing.values()].flatMap((first) => {
+          const notes: Array<{ channel: string; beat: number; state: 'gaining' | 'draining' }> = [];
+          for (let passing: typeof first | undefined = first; passing !== undefined; passing = passing.next) {
+            if (passing.reported !== undefined)
+              notes.push({ channel: passing.note.channel, beat: passing.note.beat, state: passing.reported });
+          }
+          return notes;
+        }),
       };
     },
     beforeAudio: (tick) => {
