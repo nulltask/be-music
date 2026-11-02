@@ -2,7 +2,7 @@
 
 # @be-music/app-leaderboard
 
-be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリで、D1 と R2 を使います。設計は
+Be-Music の Leaderboard API です。Cloudflare Workers 上の Hono アプリで、D1 と R2 を使います。設計は
 [docs/leaderboard.ja.md](../../docs/leaderboard.ja.md) にあり、この README は動かし方とデプロイ方法を扱います。
 
 ## 実装済みのもの
@@ -52,7 +52,7 @@ Worker は Vite+ で `dist/worker.js` にバンドルします（`build:worker`�
 pnpm --filter @be-music/app-leaderboard run build:worker
 ```
 
-リソースは be-music のアカウントに作成済みです（D1 と R2 を APAC に、環境ごとに 1 つずつ）。D1 の id は
+リソースは Be-Music のアカウントに作成済みです（D1 と R2 を APAC に、環境ごとに 1 つずつ）。D1 の id は
 `cloudflare.config.ts` とマイグレーションのスクリプトに書いてあります。新しい環境では作成して id を記録します。
 
 ```bash

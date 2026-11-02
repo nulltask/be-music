@@ -2,7 +2,7 @@ import type { CourseKind } from '../course/definition.ts';
 import type { ClearLamp } from '../ruleset/clear-lamp.ts';
 
 /**
- * be-music's dan ladder, lowest first: the kyu (級) ranks from 10th up to 1st, the dan (段) ranks from 1st (初段) up to
+ * Be-Music's dan ladder, lowest first: the kyu (級) ranks from 10th up to 1st, the dan (段) ranks from 1st (初段) up to
  * 10th, 中伝 and 皆伝, then the insane (発狂) dan ranks from 1st up to 10th, 発狂皆伝 and Overjoy. Neither LR2 nor beatoraja
  * defines a ladder (see `docs/research/dan-rank.md`); this one follows the course names of the common dan certification
  * sets, which a course is matched against by {@link resolveCourseDanRank}.
@@ -103,7 +103,7 @@ function matchLevel(name: string, pattern: RegExp, english: RegExp): number | un
  * The dan rank a course certifies, read from its name, or `undefined` for a name that names none. The name is
  * NFKC-normalised first (full-width digits and letters), then read as, in this order: Overjoy; 発狂 (or `insane`) with
  * 皆伝 or a dan; 皆伝 (`kaiden`); 中伝 (`chuden`); a dan (`七段`, `初段`, `7段`, `7th dan`); a kyu (`十級`, `1st kyu`).
- * 段位 (as in 段位認定) is not a dan. This is be-music's own reading: LR2 and beatoraja keep no dan rank of their own.
+ * 段位 (as in 段位認定) is not a dan. This is Be-Music's own reading: LR2 and beatoraja keep no dan rank of their own.
  */
 export function resolveCourseDanRank(courseName: string): DanRank | undefined {
   const name = courseName.normalize('NFKC');

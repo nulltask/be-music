@@ -2,7 +2,7 @@ import { resolveConstantVisibility, resolveConstantAlpha } from '@be-music/playe
 import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The measure lines of the shared playfield: the chart's bar lines from the playhead, drawn with the skin's lines, by the
- * be-music skin, or as a thin bar across each run of adjacent lanes.
+ * Be-Music Skin, or as a thin bar across each run of adjacent lanes.
  */
 
 import { resolveChart } from '@be-music/chart-model';

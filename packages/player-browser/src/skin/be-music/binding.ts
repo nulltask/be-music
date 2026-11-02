@@ -35,7 +35,7 @@ import type {
 } from './types.ts';
 
 /**
- * The player's side of a be-music skin: each screen gets a canvas sized to the screen pixels the stage covers, the skin
+ * The player's side of a Be-Music Skin: each screen gets a canvas sized to the screen pixels the stage covers, the skin
  * draws it with whatever it likes, and the canvas is shown in the Pixi scene as one texture. Skins never see Pixi —
  * except Pixi-kit skins, which draw through the player's own renderer into the texture (see `PIXI_HOST_RENDER`),
  * so the frame stays on the GPU.

@@ -70,7 +70,7 @@ This document maps current code vocabulary to domain concepts and separates diff
 | Concept                                 | Current code                                            | Meaning and distinction                                                                                  |
 | --------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | identity / 認証上の同一性               | `Identity.issuer`, `Identity.sub`, `userId`             | OIDC issuer plus subject identifies an external identity; the local user ID is its service-side mapping. |
-| linked login account / 外部ログイン連携 | `account`, `accountId`, `providerId` in Accounts schema | Provider association; not another be-music user or a Cloudflare account.                                 |
+| linked login account / 外部ログイン連携 | `account`, `accountId`, `providerId` in Accounts schema | Provider association; not another Be-Music user or a Cloudflare account.                                 |
 | profile / プロフィール                  | `profile`, `handle`, `displayName`, `avatarKey`         | Public presentation owned by a user; profile changes do not change identity.                             |
 | authentication session / 認証セッション | `LoginSession`, Better Auth session                     | App login state differs from Accounts state, scene sessions and audio sessions.                          |
 | guest / ゲスト                          | `isAnonymous`, `Identity.anonymous`, `linkedGuests`     | Credential-free identity and its migration links; do not infer missing user identity.                    |

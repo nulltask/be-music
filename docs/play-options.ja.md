@@ -51,7 +51,7 @@ flowchart LR
 | ADD CN、ADD HCN、ADD ALL                                                                     | beatoraja | `assist`  | CN か HCN を追加した                                                 | `LongNoteModifier` L41-L69                                |
 | EXTRA ノート変換                                                                             | beatoraja | `assist`  | ノートを変換した                                                     | `ExtraNoteModifier`                                       |
 | CUSTOM JUDGE                                                                                 | beatoraja | `assist`  | 100 % を超える倍率がある                                             | `BMSPlayer` L208-L213                                     |
-| デバッグ用の判定幅上書き                                                                     | be-music  | `assist`  | CUSTOM JUDGE と同じく判定幅を広げる                                  |                                                           |
+| デバッグ用の判定幅上書き                                                                     | Be-Music  | `assist`  | CUSTOM JUDGE と同じく判定幅を広げる                                  |                                                           |
 | BATTLE                                                                                       | AC 34     | `no-save` | `____:BATTLE`、または `____` のルールでの参照元のない BATTLE         | AC 34 のプレイオプション「スコアデータは保存されません」  |
 | PRACTICE                                                                                     | beatoraja | `no-save` | どのルールでも                                                       | beatoraja の PRACTICE は何も保存しない                    |
 | ANY KEY                                                                                      | PC        | `no-save` | すべてのルール                                                       | PC 版：ANY KEY のプレイは NO PLAY                         |
@@ -188,8 +188,8 @@ Debug Menu の **Judge timing (ms)** で、beatoraja と LR2 のどちらにも�
 どのルールでも、**Auto judge timing** で手動プレイ時にタイミングを自動で動かす方式を選びます。**OFF**（既定）、**beatoraja**、**LR2 ON**、**LR2 SILENT** のいずれかです。オートプレイとリプレイでは調整しません。
 
 - **beatoraja:** ±150 ms 以内の PGREAT・GREAT・GOOD のたびに、その判定のずれを 30 で割った値（ミリ秒単位、ゼロから遠い側へ丸め）だけタイミングを動かします。この更新は ±500 ms の範囲に制限しません。
-- **LR2 ON**（LR2 の `autojudge` 1）: 通常ノートを PGREAT・GREAT・GOOD・BAD で叩くたびに、そのずれ（ミリ秒単位の整数、遅いほうが正）を合計に足します。見逃し、空 POOR、ロングノートは数えず、ダブルプレイでは両サイドを数えます。判定の 1 パスごとに、数えた打鍵が 9 を超えていれば、合計が傾いた側へタイミングを 1 ms 動かし（遅い打鍵が多ければ増やします）、合計が 0 なら動かさず、数と合計を最初からやり直します。平均も丸めも範囲の制限もありません。LR2 の ±99 ms の範囲は選曲画面のボタンだけのものです。LR2 と同じく、2 人プレイの BATTLE では調整しません。LR2 がプレイ開始時に合計を空にするかは未確定で、be-music はどのプレイも空の状態から始めます。
-- **LR2 SILENT**（`autojudge` 2）: LR2 ON と同じく調整し、さらに LR2 と同じく譜面のキー音・BGM・BGA を読み込まずに遊び、どのプレイ画面でも判定とコンボを表示しません（組み込み、LR2、beatoraja スキンの `judge[]` 表示）。LR2 はゴースト表示もオフにしますが、be-music にはゴースト表示がありません。スコアは通常どおり数えます。
+- **LR2 ON**（LR2 の `autojudge` 1）: 通常ノートを PGREAT・GREAT・GOOD・BAD で叩くたびに、そのずれ（ミリ秒単位の整数、遅いほうが正）を合計に足します。見逃し、空 POOR、ロングノートは数えず、ダブルプレイでは両サイドを数えます。判定の 1 パスごとに、数えた打鍵が 9 を超えていれば、合計が傾いた側へタイミングを 1 ms 動かし（遅い打鍵が多ければ増やします）、合計が 0 なら動かさず、数と合計を最初からやり直します。平均も丸めも範囲の制限もありません。LR2 の ±99 ms の範囲は選曲画面のボタンだけのものです。LR2 と同じく、2 人プレイの BATTLE では調整しません。LR2 がプレイ開始時に合計を空にするかは未確定で、Be-Music はどのプレイも空の状態から始めます。
+- **LR2 SILENT**（`autojudge` 2）: LR2 ON と同じく調整し、さらに LR2 と同じく譜面のキー音・BGM・BGA を読み込まずに遊び、どのプレイ画面でも判定とコンボを表示しません（組み込み、LR2、beatoraja スキンの `judge[]` 表示）。LR2 はゴースト表示もオフにしますが、Be-Music にはゴースト表示がありません。スコアは通常どおり数えます。
 
 ```mermaid
 flowchart TD
@@ -238,7 +238,7 @@ LIFT を描くのは beatoraja スキンと内蔵の Plain・Native・Synesthesi
 
 beatoraja ルールでは Debug Menu の **CUSTOM JUDGE (beatoraja)** をオンにし、beatoraja の判定ごとの窓の倍率を設定します。項目は **Key PGREAT %**、**Key GREAT %**、**Key GOOD %**、**Scratch PGREAT %**、**Scratch GREAT %**、**Scratch GOOD %**、**LN margin %** です。既定は鍵盤・スクラッチとも 400・400・100、マージンは 100 です。`PlayerConfig.validate` に従い、PGREAT は 25〜400、それ以外は 0〜400 を受け付けます。beatoraja と同様に、各倍率は判定ランクを適用した後の窓に掛け、BAD より広い窓にはせず、内側の窓より狭くなった窓は内側に合わせて広げます。ノートの始点は鍵盤またはスクラッチの倍率、鍵盤とスクラッチのロングノート終点はどちらも鍵盤の倍率を使います。マージンの倍率は鍵盤のロングノートの離しマージンに掛かり、このマージンは PMS モードでだけ 0 以外になります。
 
-ほかのルールではスイッチを表示せず、エンジンもエラーにします。リプレイには倍率を `play.customJudge`（オフの間は省略）とオプションの値一式に記録し、リプレイのシミュレーションでも適用します。beatoraja はいずれかの倍率が 100 % を超えるとプレイを ASSIST とします。be-music も同じく ASSIST として扱います（[アシストと記録の方針](#アシストと記録の方針)）。
+ほかのルールではスイッチを表示せず、エンジンもエラーにします。リプレイには倍率を `play.customJudge`（オフの間は省略）とオプションの値一式に記録し、リプレイのシミュレーションでも適用します。beatoraja はいずれかの倍率が 100 % を超えるとプレイを ASSIST とします。Be-Music も同じく ASSIST として扱います（[アシストと記録の方針](#アシストと記録の方針)）。
 
 参照元：beatoraja 0.8.9 の [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)、[`JudgeManager`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java)、[`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java)。対応 Issue は [#744](https://github.com/nulltask/be-music/issues/744) です。
 
@@ -313,13 +313,13 @@ beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシ�
 
 どのルールでも **Random 1P / Random 2P → RANDOM_PLAYABLE** または **S_RANDOM_PLAYABLE** を選択します。どちらも beatoraja 0.8.9 の `Random.OPTION_PMS` にある PMS 用の配置で、他の譜面では明示的にエラーにします。RANDOM_PLAYABLE（`LanePlayableRandomShuffleModifier`）は、どの同時押しも参照元の 10 種類の無理な 3 鍵の形にならない並べ替えから、元の並びと MIRROR を除いて 9 鍵の譜面全体の並べ替えを等確率で 1 つ選びます。7 鍵以上の同時押しがある場合や条件を満たす並べ替えがない場合は、元の並びか MIRROR をランダムに使います。参照元の処理は変換のシードを使わないため、RANDOM_PLAYABLE ではその側の Seed を Debug Menu に表示しません。
 
-S_RANDOM_PLAYABLE（`NoMurioshiRandomizer`）はタイムラインごとにノートを配置し、押しているロングノートを含めて 3〜6 個のノートがあるタイムラインでは、押しているレーンを含む参照元の 10 種類の 6 鍵の押せる形のいずれかに、H-RANDOM のしきい値とあわせて収めます。しきい値を過ぎたレーンが足りる形がない場合、固定した版の参照元は例外を投げます。be-music は独自の代替処理を作らず、プレイを明示的にエラーにします。抽選にその側のシードを使います。beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。リプレイは選択を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録します。
+S_RANDOM_PLAYABLE（`NoMurioshiRandomizer`）はタイムラインごとにノートを配置し、押しているロングノートを含めて 3〜6 個のノートがあるタイムラインでは、押しているレーンを含む参照元の 10 種類の 6 鍵の押せる形のいずれかに、H-RANDOM のしきい値とあわせて収めます。しきい値を過ぎたレーンが足りる形がない場合、固定した版の参照元は例外を投げます。Be-Music は独自の代替処理を作らず、プレイを明示的にエラーにします。抽選にその側のシードを使います。beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。リプレイは選択を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録します。
 
 参照元：beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java)、[`LaneShuffleModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LaneShuffleModifier.java)、[`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#702](https://github.com/nulltask/be-music/issues/702) と [#703](https://github.com/nulltask/be-music/issues/703) です。
 
 ## 参照元のシードと前回の配置
 
-Debug Menu はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示します。シードは 0〜9223372036854775807 の Java の long 値で、LR2 と AC のものも含めてすべてのレーンオプションを、beatoraja 0.8.9 の変換と同様に `java.util.Random` で抽選します。そのため判定ルールに関係なく、同じ譜面・レーンオプション・シードでは同じ配置になります。-1 はプレイごとに 16,777,216 未満の新しいシードを抽選します。リプレイは各側で実際に使ったシードを `play.options.randomSeed1P` / `randomSeed2P` に記録します。LR2 と AC には入力できる独自のシードがないため、それらのアルゴリズムも同じ Java の `Random` の乱数列を使います。シードで配置を再現できるのは be-music の中だけで、LR2 では再現しません。譜面自身の ALL / ALL+ の並べ替えは 1P のシードで抽選します。RANDOM_PLAYABLE は参照元と同様にシードを使わず、beatoraja の地雷の ADD RANDOM とロングノートの追加もシードを使いません。[#933](https://github.com/nulltask/be-music/issues/933) で追跡しています。
+Debug Menu はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示します。シードは 0〜9223372036854775807 の Java の long 値で、LR2 と AC のものも含めてすべてのレーンオプションを、beatoraja 0.8.9 の変換と同様に `java.util.Random` で抽選します。そのため判定ルールに関係なく、同じ譜面・レーンオプション・シードでは同じ配置になります。-1 はプレイごとに 16,777,216 未満の新しいシードを抽選します。リプレイは各側で実際に使ったシードを `play.options.randomSeed1P` / `randomSeed2P` に記録します。LR2 と AC には入力できる独自のシードがないため、それらのアルゴリズムも同じ Java の `Random` の乱数列を使います。シードで配置を再現できるのは Be-Music の中だけで、LR2 では再現しません。譜面自身の ALL / ALL+ の並べ替えは 1P のシードで抽選します。RANDOM_PLAYABLE は参照元と同様にシードを使わず、beatoraja の地雷の ADD RANDOM とロングノートの追加もシードを使いません。[#933](https://github.com/nulltask/be-music/issues/933) で追跡しています。
 
 **Reuse previous arrangement** と **New arrangement** ボタンはどのルールでも表示します。Reuse は、リプレイ・コース・NONSTOP を除く直前のプレイを対象に、そのレーンオプション（Random 1P / 2P、シード、Fixed key、DP flip、H-RANDOM のしきい値、Long notes）を選択します。次に同じ譜面をプレイすると、beatoraja の譜面オプションの再現が譜面のレーンオプション・シード・分岐を復元するのと同様に、記録したレーンと `#RANDOM` の結果をそのまま使い、入力は通常どおり受け付けて新しいリプレイを記録します。これらのオプションを変更するか **New arrangement** を押すと再利用を解除し、New arrangement は両側のシードも -1 に戻します。別の譜面のプレイには影響しません。再利用には直前のプレイと同じ判定ルールが必要です。ほかのルールでは何も選択せず、ほかのルールで再利用の配置をプレイした場合は「The previous arrangement was played under other judgment rules.」というエラーにします。譜面のハッシュが異なる配置を再利用した場合も明示的にエラーにします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 

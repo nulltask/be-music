@@ -1,7 +1,7 @@
 {
   "name": "@be-music/chart-editor",
   "version": "0.4.3",
-  "description": "Chart editing library and CLI for importing, modifying, and exporting BMS, bmson, and be-music JSON charts",
+  "description": "Chart editing library and CLI for importing, modifying, and exporting BMS, bmson, and Be-Music JSON charts",
   "license": "MIT",
   "bin": {
     "bms-editor": "dist/cli.js"

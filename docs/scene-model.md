@@ -190,7 +190,7 @@ FLIP, note arrangement and gauge type per side. `@be-music/player-skin-sdk` expo
 - `DEFAULT_PLAY_OPTIONS` are the values a player starts with (hi-speed 2.0, BGA on and extended, the score graph on).
 - `PLAY_OPTION_CHOICES` lists each enum or on-off option's choices in its LR2 button cycle order (`BGA_CYCLE`,
   `SORT_CYCLE`, `HIDDEN_SUDDEN_CYCLE`, …); `nextChoice` and `cyclePlayOptionValue` step through them either way.
-- `resolvePlayOptionValue` validates a value set from untyped input (a be-music skin, stored settings): a value outside
+- `resolvePlayOptionValue` validates a value set from untyped input (a Be-Music Skin, stored settings): a value outside
   the option's choices is dropped, a number is clamped (`clampHiSpeed`, `clampShutter`). `resolvePlayOptions` makes
   stored options whole and valid.
 - `isListPlayOption` names the options that change the bar list.

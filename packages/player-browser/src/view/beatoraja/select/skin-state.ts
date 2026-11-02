@@ -94,7 +94,7 @@ export class BeatorajaSelectSkinState {
   computeActiveOps(): ReadonlySet<number> {
     const base = this.baseOps();
     // The player's CONSTANT setting lights `OPTION_CONSTANT` on every bar: beatoraja reads the selected bar's play
-    // config, and be-music keeps one for every key mode.
+    // config, and Be-Music keeps one for every key mode.
     const constantOps = resolveBeatorajaConstantOps(this.ctx.playOptions?.visualConstant);
     // Fast path: no active entry → just the base set (includes `skin_config.option` picks).
     const entry = this.ctx.entries[this.ctx.currentIndex];

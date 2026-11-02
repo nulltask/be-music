@@ -65,7 +65,7 @@ document.addEventListener('click', (event) => {
           await auth.$fetch('/oauth2/continue', { method: 'POST', body: { selected: true, oauth_query: query } }),
         );
       case 'add-passkey':
-        return done(await auth.passkey.addPasskey({ name: 'be-music' }));
+        return done(await auth.passkey.addPasskey({ name: 'Be-Music' }));
       case 'sign-out':
         await auth.signOut();
         location.assign('/login');

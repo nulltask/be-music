@@ -46,7 +46,7 @@ const notFound = (what: string) => json(`${what} does not exist.`, errorResponse
 export const OPENAPI_DOCUMENTATION = {
   openapi: '3.1.0',
   info: {
-    title: 'be-music Leaderboard API',
+    title: 'Be-Music Leaderboard API',
     version: '0',
     description:
       'Version 0 is a Public Beta: it may still change incompatibly (docs/leaderboard.md section 8). Data may be ' +

@@ -17,7 +17,7 @@ import type {
 import type { ChildPool } from './pools.ts';
 
 /**
- * A be-music skin written with PixiJS display objects. {@link definePixiSkin} runs it on its own Pixi renderer over the
+ * A Be-Music Skin written with PixiJS display objects. {@link definePixiSkin} runs it on its own Pixi renderer over the
  * canvas the player hands the skin, so the player never sees Pixi: the gameplay frame is replayed into the renderer
  * functions below (chrome, lanes, each note, hit effects), the select screen into a retained renderer, and the result
  * into a layer rebuilt every frame.

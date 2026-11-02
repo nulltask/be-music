@@ -11,8 +11,8 @@ import type { PlayfieldContext, RuntimeNote } from './context.ts';
 /**
  * Renders a long note as a vertical band: LN_BODY tiled (or stretched) between LN_START (lower) and LN_END (upper).
  * The body / caps come from the skin by channel when it draws them (`PlayfieldSkin.noteCell`); otherwise the
- * body falls back to the be-music skin's long-note drawing. A long note missed at the head or let go early draws at
- * half alpha until it goes, as in LR2 ({@link resolveLongNoteAlpha}); a be-music skin gets its `state` and dims it
+ * body falls back to the Be-Music Skin's long-note drawing. A long note missed at the head or let go early draws at
+ * half alpha until it goes, as in LR2 ({@link resolveLongNoteAlpha}); a Be-Music Skin gets its `state` and dims it
  * itself.
  */
 export function renderLongNote(

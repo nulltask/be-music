@@ -22,7 +22,7 @@ export interface SelectEmptyHintContext {
 /**
  * Renders a centered hint over the skin layer when no songs are loaded so the user understands the empty bar list
  * isn't a bug. Drawn straight onto `skinLayer` — same coordinate space as the static frame — so it scales with the
- * rest of the skin. Themes call this from {@link renderTheme}; the be-music path leaves the empty-library callout to
+ * rest of the skin. Themes call this from {@link renderTheme}; the Be-Music path leaves the empty-library callout to
  * the host's drop overlay.
  */
 export function renderEmptyStateHint(ctx: SelectEmptyHintContext, designWidth: number, designHeight: number): void {

@@ -1,4 +1,4 @@
-// The player's values for be-music skins' `settings`: persistence per skin id across reloads, and the Debug Menu
+// The player's values for Be-Music Skins' `settings`: persistence per skin id across reloads, and the Debug Menu
 // controllers built from a skin's settings schema.
 
 import type { BeMusicSkinSetting } from '@be-music/player-skin-sdk';

@@ -9,7 +9,7 @@ import type { SkinFamily } from '../family.ts';
  *   `play_7.lr2skin` — the LR2 path takes over, but at the gameplay scene it falls back to this family's chrome).
  *
  * Its select, decide, play and result screens are `createSelectScene`, `createDecideScene`, `createPlayScene` and
- * `createResultScene` with a built-in kit. A be-music skin without a decide screen skips the splash and hands straight
+ * `createResultScene` with a built-in kit. A Be-Music Skin without a decide screen skips the splash and hands straight
  * off to gameplay.
  */
 export const defaultSkinFamily: SkinFamily = {

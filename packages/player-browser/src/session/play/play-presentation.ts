@@ -67,7 +67,7 @@ export class PlayPresentation {
   fullComboFired = false;
   lastJudge = '';
   lastJudgeUntil = 0;
-  /** Play-clock time of the last judgement / key impulse, for the be-music skin's reactive visuals. */
+  /** Play-clock time of the last judgement / key impulse, for the Be-Music Skin's reactive visuals. */
   lastJudgeAt: number | undefined;
   lastImpulseAt: number | undefined;
   lastImpulseKind: BeMusicLaneKind | undefined;

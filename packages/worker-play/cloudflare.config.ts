@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
   const preview = mode === 'preview';
   const suffix = preview ? '-preview' : '';
   return {
-    // The be-music Cloudflare account. Pinned, so a session signed in to another account cannot deploy here.
+    // The Be-Music Cloudflare account. Pinned, so a session signed in to another account cannot deploy here.
     accountId: '80d4b5fd75f07e61a637b6bb9774186e',
     worker: {
       name: `play${suffix}`,

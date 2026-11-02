@@ -1,5 +1,5 @@
 import { drawLabel } from '../../../stage/draw-label.ts';
-/** The mines of the shared playfield: one mine with the skin's cell, the be-music skin, or a caution-striped bar. */
+/** The mines of the shared playfield: one mine with the skin's cell, the Be-Music Skin, or a caution-striped bar. */
 
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import { drawCautionMine } from '../../../skins/pixi-kit/mine.ts';
@@ -8,7 +8,7 @@ import type { PlayfieldContext } from './context.ts';
 
 /**
  * Renders one landmine sprite. Tries the skin's mine cell first (e.g. the LR2 skin's `#SRC_NOTE` `mine` slot,
- * animated per its `divX/divY/cycle`), then hands it to a be-music skin that draws mines itself; otherwise falls back
+ * animated per its `divX/divY/cycle`), then hands it to a Be-Music Skin that draws mines itself; otherwise falls back
  * to the caution-striped bar ({@link drawCautionMine}) so the hazard still reads distinctly from playable notes.
  */
 export function renderMineNote(

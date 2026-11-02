@@ -65,7 +65,7 @@ export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
  */
 export interface PlayerGUIState extends PlayTempoSettings {
   autoPlay: boolean;
-  /** Id of the be-music skin the default (no-theme) family renders with. Persisted in `localStorage`. */
+  /** Id of the Be-Music Skin the default (no-theme) family renders with. Persisted in `localStorage`. */
   builtInSkin: string;
   /** Showmanship level for the built-in skins. Persisted in `localStorage`. */
   skinEffects: 'full' | 'reduced' | 'off';

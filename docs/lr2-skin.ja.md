@@ -96,7 +96,7 @@ LR2 はシーンが始まるたびにスキンを読み込むので、`#IF` ブ�
 
 [#430](https://github.com/nulltask/be-music/issues/430) で確度が低いとした番号も、同じソースと `SaveResult`、`ProcI_Result` で確かめました。
 
-- op 1 はフォルダのバー（LR2 のフォルダ、レベルフォルダ、カスタムフォルダ）で立ちます。op 34 は GHOST がオフのときで、判定が自動のときも立ちます。be-music にはゴーストがないので、常に立ちます。op 400-402 はキーコンフィグ画面のページ（7 / 14、9、5 / 10 KEYS）で、その後の画面でもそのまま残ります。op 999 は 900-998 と同じ `#CUSTOMOPTION` の op です。
+- op 1 はフォルダのバー（LR2 のフォルダ、レベルフォルダ、カスタムフォルダ）で立ちます。op 34 は GHOST がオフのときで、判定が自動のときも立ちます。Be-Music にはゴーストがないので、常に立ちます。op 400-402 はキーコンフィグ画面のページ（7 / 14、9、5 / 10 KEYS）で、その後の画面でもそのまま残ります。op 999 は 900-998 と同じ `#CUSTOMOPTION` の op です。
 - op 200-207 は、判定済みのノーツに対する EX スコアのランク（`exscore × 9 / (判定済みノーツ × 2)`）で、最初のノーツが判定されるまではどれも立ちません。
 - 数値 38-41 はプレイをまたいだプレイヤーの連続コンボ、その最長、LR2 のトライアルレベル（プレイのミッションの段階）とその一つ下です。92-94 はインターネットランキングの順位、人数、クリア率です。150-153 は、プレイのこの時点での自己ベストとターゲットの EX スコア（LR2 のペースメーカー）と、EX スコアとそれぞれとの差です。
 - 数値 109 と 154 は次の DJ ランクまでの差です。EX スコアから、全ノーツに対する次のランクの境界 `floor(ノーツ × 2 × (ランク + 1) / 9)` を引きます。境界に届くまでは負の値で、F は E まで、AAA は満点までを数えます。
@@ -172,7 +172,7 @@ LR2 のプレイビュー（`@be-music/player-browser` の `view/lr2/play-view.t
 
 バトル系のオプションは、セットアップ（`options.battleMode`、`lr2ExtraMode`、`gauge2P`、レーンの `battleSourceVariant`）と、2 人プレイの BATTLE ではフレームの `secondPlayer`（2P の `PlayState` の表示とスコア）からプレイの状態に届きます。2P は数値 120-136（2P のスコアで読む 1P の 100-116。108 / 128 はそれぞれ相手との EX スコア差）、ランク 210-217、ゲージ範囲 250-260、2P のグルーヴゲージ（インデックス 1。2P がいるときだけ描画）で読みます。op 10-13 は LR2 と同じくキーフィルタとバトルモードで点き（10 は DP 系フィルタか D-BATTLE / SP TO DP、11 と 13 は BATTLE、12 はそのどちらか）、EXTRA MODE は 52 の代わりに 53 を点けます。キーモードの op 160-164 は変換後のレーンではなく元の譜面に従います。7KEY 譜面の BATTLE は 7 KEYS を、5/7KEY 譜面の D-BATTLE と SP TO DP はそれに加えて 10 / 14 KEYS を点けます（`resolveLR2PlayKeyModeOps`）。選曲画面ではボタン 56 が BATTLE を OFF・BATTLE・D-BATTLE・SP TO DP の順に切り替え（`LR2_BATTLE_CYCLE`）、テキスト 69 は LR2 の `optionstr.csv` と同じ表記を出します（DP 譜面では COUPLE、そこでの SP TO DP は DP TO SP / 9 TO 7、適用されない場合は DISABLE）。ボタン 42 / 43 は 1P / 2P のレーンオプションを、LR2 自身の 6 つの値 OFF・MIRROR・RANDOM・S-RANDOM・SCATTER・CONVERGE の順に、クリックした側の半分で切り替えます（`stepLR2LaneOption`、[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。ほかの参照元の RANDOM・S-RANDOM・CONVERGE はその名前のセルから次へ進み、それ以外の値は OFF になります。
 
-判定タイミングの自動調整（[プレイオプション](play-options.ja.md#判定タイミングと自動調整)を参照）は LR2 の選曲画面のパネルに従います。ボタン 74 が判定タイミングを 1 ms ずつ、`plusOnly` かクリックした側の半分で上下させ、±99 ms で止めます（`stepLR2JudgeTiming`。自動調整でこの範囲を越えた値は、範囲に戻る向きにだけ動きます）。ボタン 75 が OFF・ON・SILENT を順に切り替え（`LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE`。beatoraja の方式からは OFF に戻ります）、テキスト 80 が OFF・ON・SILENT と表示し（beatoraja の方式は OFF）、数値 12 が判定タイミングをミリ秒で、選曲画面と、自動調整で動くプレイ中に（フレームの `judgeTimingMs`）表示します。SILENT ではプレイ画面に LR2 と同じく NOWJUDGE / NOWCOMBO を描きません。LR2 が SILENT でも点ける GHOST の op 34 は、be-music にゴーストがないため常に点いています。
+判定タイミングの自動調整（[プレイオプション](play-options.ja.md#判定タイミングと自動調整)を参照）は LR2 の選曲画面のパネルに従います。ボタン 74 が判定タイミングを 1 ms ずつ、`plusOnly` かクリックした側の半分で上下させ、±99 ms で止めます（`stepLR2JudgeTiming`。自動調整でこの範囲を越えた値は、範囲に戻る向きにだけ動きます）。ボタン 75 が OFF・ON・SILENT を順に切り替え（`LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE`。beatoraja の方式からは OFF に戻ります）、テキスト 80 が OFF・ON・SILENT と表示し（beatoraja の方式は OFF）、数値 12 が判定タイミングをミリ秒で、選曲画面と、自動調整で動くプレイ中に（フレームの `judgeTimingMs`）表示します。SILENT ではプレイ画面に LR2 と同じく NOWJUDGE / NOWCOMBO を描きません。LR2 が SILENT でも点ける GHOST の op 34 は、Be-Music にゴーストがないため常に点いています。
 
 ## 解析済み directive
 
@@ -244,7 +244,7 @@ parser は意図的に permissive です。
 - `#CUSTOMOPTION` と `#CUSTOMFILE` は parse して公開しますが、user-facing な option persistence は host application の責務です。
 - system font rendering は browser renderer 側の責務です。`@be-music/skin-lr2` は宣言された font metadata だけを保持します。
 - PixiJS texture upload、video BGA playback、WebAudio system sound、DOM text input overlay など renderer 固有の挙動はこの package の外にあります。
-- シーンの状態が LR2（OpenLR2）とまだ違うところ。どれも be-music にまだないデータや画面が要ります。
+- シーンの状態が LR2（OpenLR2）とまだ違うところ。どれも Be-Music にまだないデータや画面が要ります。
   - プレイヤーの累計（数値 30-41）は 0 です。プレイの履歴を保っていません。
   - インターネットランキングは何も読みません。数値 92-94 と、リザルト画面のテキスト 20 のメッセージです。
   - ペースメーカーは 0 です。数値 150 / 151 は 0、152 / 153 は EX スコアを読みます。自己ベストのゴーストもターゲットもプレイに届いていません。

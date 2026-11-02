@@ -25,7 +25,7 @@ export const LR2_TEXT = {
   SUBARTIST: 15,
   /**
    * The chart's tag: a field of LR2's own song database, which a player edits (OpenLR2 `ProcS_Select` sets text 16
-   * from `cur.tag`). be-music keeps no tags, so it reads empty. beatoraja draws the artist and subartist here
+   * from `cur.tag`). Be-Music keeps no tags, so it reads empty. beatoraja draws the artist and subartist here
    * (`fullartist`).
    */
   TAG: 16,
@@ -59,7 +59,7 @@ export const LR2_TEXT = {
   DIFFICULTY_ALT: 28,
   /**
    * LR2's ex level: a level a player sets in LR2's song database, which LR2 draws in the INSANE bar-level digits
-   * (OpenLR2 `exlevel`). be-music keeps none and reads an INSANE chart's play level here.
+   * (OpenLR2 `exlevel`). Be-Music keeps none and reads an INSANE chart's play level here.
    */
   INSANE_LEVEL: 29,
 
