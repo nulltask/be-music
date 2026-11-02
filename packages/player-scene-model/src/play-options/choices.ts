@@ -7,8 +7,9 @@ import { clampJudgeTimingMs } from './judge-timing.ts';
 import { JUDGE_TIMING_AUTO_ADJUST_MODES } from '@be-music/player-engine/display';
 import { clamp } from '@be-music/shared-utils/core';
 import {
-  BEATORAJA_PRACTICE_GAUGE_TYPES,
+  GAUGE_AUTO_SHIFTS,
   LR2_GAUGE_TYPES,
+  PRACTICE_GAUGE_TYPES,
   clampCustomJudgeRate,
   isGaugeType,
   isQualifiedOptionName,
@@ -259,7 +260,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   longNoteModifier: ['OFF', 'LEGACY', 'REMOVE', 'ADD_LN', 'ADD_CN', 'ADD_HCN', 'ADD_ALL'],
   mineModifier: ['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'],
   scrollModifier: ['OFF', 'REMOVE', 'ADD'],
-  gaugeAutoShift: ['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER'],
+  gaugeAutoShift: GAUGE_AUTO_SHIFTS,
   bmsonTotalMode: ['beatoraja', 'spec'],
   bottomShiftableGauge: ['ASSIST-EASY', 'EASY', 'GROOVE'],
   classicHiSpeed: BOOLEAN_CYCLE,
@@ -289,7 +290,8 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   longNoteMode: ['LN', 'CN', 'HCN'],
   customJudge: BOOLEAN_CYCLE,
   practice: BOOLEAN_CYCLE,
-  practiceGauge: [...BEATORAJA_PRACTICE_GAUGE_TYPES],
+  // Every ruleset's PRACTICE gauges; a menu offers the judge ruleset's own (`resolvePracticeGaugeTypes`).
+  practiceGauge: PRACTICE_GAUGE_TYPES,
   practiceGaugeCategory: ['MODE', 'FIVEKEYS', 'SEVENKEYS', 'PMS', 'KEYBOARD', 'LR2'],
   lr2ExtraMode: BOOLEAN_CYCLE,
   lr2ExtraLevel: [0, 1, 2],

@@ -18,7 +18,7 @@ import {
 import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { DebugMenu } from './index.ts';
-import { laneOptionItems } from './play-option-items.ts';
+import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
@@ -149,19 +149,13 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       'No recovery (bmson spec)': 'spec',
     }).on('change', ({ value }) => this.setPlayOptions({ bmsonTotalMode: value })),
   );
-  this.gaugeAutoShiftController = selectBinding(
-    folder,
-    this.guiState,
-    'gaugeAutoShift',
-    'Gauge auto-shift (beatoraja)',
-    {
-      NONE: 'NONE',
-      CONTINUE: 'CONTINUE',
-      'SURVIVAL TO GROOVE': 'SURVIVAL_TO_GROOVE',
-      'BEST CLEAR': 'BEST_CLEAR',
-      'SELECT TO UNDER': 'SELECT_TO_UNDER',
-    },
-  );
+  this.gaugeAutoShiftController = selectBinding(folder, this.guiState, 'gaugeAutoShift', 'Gauge auto-shift', {
+    NONE: 'NONE',
+    CONTINUE: 'CONTINUE',
+    'SURVIVAL TO GROOVE': 'SURVIVAL_TO_GROOVE',
+    'BEST CLEAR': 'BEST_CLEAR',
+    'SELECT TO UNDER': 'SELECT_TO_UNDER',
+  });
   trackPlayOption(
     this.gaugeAutoShiftController.on('change', ({ value }) => this.setPlayOptions({ gaugeAutoShift: value })),
   );
@@ -170,11 +164,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     this.guiState,
     'bottomShiftableGauge',
     'Lowest auto-shift gauge',
-    {
-      'ASSIST EASY': 'ASSIST-EASY',
-      EASY: 'EASY',
-      NORMAL: 'GROOVE',
-    },
+    bottomShiftableGaugeItems(this.guiState.judgeRuleset).map((item) => item.value),
   );
   trackPlayOption(
     this.bottomShiftableGaugeController.on('change', ({ value }) =>
@@ -323,10 +313,11 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
   );
-  // beatoraja PRACTICE (PracticeConfiguration): a 0 END TIME is the chart's end, a 0 JUDGERANK / TOTAL the chart's.
+  // PRACTICE (beatoraja's PracticeConfiguration), under every ruleset (#933): a 0 END TIME is the chart's end, a 0
+  // JUDGERANK / TOTAL the chart's.
   this.practiceControllers = [
     trackPlayOption(
-      folder.addBinding(this.guiState, 'practice', { label: 'PRACTICE (beatoraja)' }).on('change', ({ value }) => {
+      folder.addBinding(this.guiState, 'practice', { label: 'PRACTICE' }).on('change', ({ value }) => {
         this.setPlayOptions({ practice: value });
         this.refreshRulesetChoices();
       }),
@@ -347,17 +338,15 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       ),
     ),
   ];
-  const practiceGauge = selectBinding(folder, this.guiState, 'practiceGauge', 'GAUGE TYPE', {
-    'ASSIST EASY': 'ASSIST-EASY',
-    EASY: 'EASY',
-    NORMAL: 'NORMAL',
-    HARD: 'HARD',
-    'EX-HARD': 'EX-HARD',
-    HAZARD: 'HAZARD',
-    GRADE: 'CLASS',
-    'EX GRADE': 'EXCLASS',
-    'EXHARD GRADE': 'EXHARDCLASS',
-  });
+  // The judge ruleset's own gauges; refreshRulesetChoices relists them when the ruleset changes.
+  const practiceGauge = selectBinding(
+    folder,
+    this.guiState,
+    'practiceGauge',
+    'GAUGE TYPE',
+    practiceGaugeItems(this.guiState.judgeRuleset).map((item) => item.value),
+  );
+  this.practiceGaugeController = practiceGauge;
   trackPlayOption(practiceGauge.on('change', ({ value }) => this.setPlayOptions({ practiceGauge: value })));
   const practiceCategory = selectBinding(folder, this.guiState, 'practiceGaugeCategory', 'GAUGE CATEGORY', {
     'Play mode': 'MODE',
@@ -368,7 +357,10 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     LR2: 'LR2',
   });
   trackPlayOption(practiceCategory.on('change', ({ value }) => this.setPlayOptions({ practiceGaugeCategory: value })));
-  this.practiceControllers.push(practiceGauge, practiceCategory);
+  this.practiceGaugeCategoryController = practiceCategory;
+  // JUDGERANK and TOTAL, after START TIME, END TIME and GAUGE VALUE.
+  this.practiceJudgeRankAndTotalControllers = this.practiceControllers.slice(4, 6);
+  this.practiceControllers.push(practiceGauge);
   this.extraNoteDepthController = trackPlayOption(
     folder
       .addBinding(this.guiState, 'extraNoteDepth', { label: 'EXTRA depth (beatoraja)', min: 0, max: 100, step: 1 })
