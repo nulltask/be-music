@@ -66,7 +66,7 @@ test('missing references and unrepresentable cue time are diagnosed without chan
 });
 // The documented support boundary (docs/research/chart-authored-options.md): every other family is diagnosed and has
 // no effect, initially or on A6, so a program never carries an operation the engine cannot reproduce.
-test.each(['774:CRAZY_SPIN', '774:HIDDEN_M-SUDDEN', '774:HID-HIDDEN1', '774:NOTES_DOUBLE', 'charatbeatHDX:BGAMODE 1'])(
+test.each(['774:CRAZY_SPIN', '774:HIDDEN_M-SUDDEN', '774:HID-HIDDEN1', 'charatbeatHDX:BGAMODE 1'])(
   'diagnoses %s without changing the effective program',
   (declaration) => {
     const result = compileChartOptions({
@@ -82,7 +82,7 @@ test.each(['774:CRAZY_SPIN', '774:HIDDEN_M-SUDDEN', '774:HID-HIDDEN1', '774:NOTE
 );
 
 test('initial RANDOM and gameplay CRAZY belong to the play options; timed uses are diagnosed initial-only', () => {
-  for (const declaration of ['774:RANDOM_MIRROR', '774:CRAZY_HELLJUDGE', '774:CRAZY_ADDMINE']) {
+  for (const declaration of ['774:RANDOM_MIRROR', '774:CRAZY_HELLJUDGE', '774:CRAZY_ADDMINE', '774:NOTES_COPY']) {
     const result = compileChartOptions({
       initial: [declaration],
       cues: [{ seconds: 1, key: '01', declaration }],

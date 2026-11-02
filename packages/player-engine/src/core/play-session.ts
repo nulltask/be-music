@@ -4,6 +4,8 @@ import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
 import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
+import { chartNotesCopies, resolveEffectiveChartPlayOptions } from './chart-notes-options.ts';
+import { arrangeChartPlayLanes } from './chart-play-lanes.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { buildAutoKeyBoundBGAInputs, KeyBoundBGAController } from './key-bound-bga.ts';
@@ -206,6 +208,20 @@ export async function createPlaySession(
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
   let resolvedChart = options.preparedChart?.resolvedChart ?? resolveEngineChart(resolvedJSON, options);
+  // The chart's gameplay program (#844, #932): the host's (a replay's recorded one), or compiled here and narrowed to what
+  // takes effect in this play (`resolveEffectiveChartPlayOptions`).
+  const chartPlay =
+    options.chartPlayOptionProgram !== undefined
+      ? { program: structuredClone(options.chartPlayOptionProgram), diagnostics: [] }
+      : resolveEffectiveChartPlayOptions(
+          compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing)),
+          { playVariant: resolvedChart.playVariant, course: options.course !== undefined },
+        );
+  const chartPlayOptions = chartPlay.program;
+  // Without a host-prepared chart (the terminal) the engine applies the chart's ADDMINE and arrangement itself, in place
+  // of the player's options, as the browser host does (#932). A replay's recorded notes already hold them.
+  const preparesChartPlayOptions = options.preparedChart === undefined && !replay;
+  if (preparesChartPlayOptions && chartPlayOptions.options.addMine === true) options.mineModifier = 'ADD_RANDOM';
   // Dynamic `#EXRANKxx` changes are a chart fact, recorded whatever the ruleset: LR2 applies them, while beatoraja and
   // That-Which-Must-Not-Be-Named keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
   // be re-simulated under LR2 with the windows LR2 would have used.
@@ -248,20 +264,31 @@ export async function createPlaySession(
         scrollSection: options.scrollSection,
         scrollRate: options.scrollRate,
         scrollModifierTimeline: options.scrollModifierTimeline,
+        chartNotes: chartPlayOptions.options.notes,
       },
       realtimeAudioEndSeconds,
+      Math.random,
+    );
+  if (preparesChartPlayOptions && chartPlayOptions.options.random !== undefined)
+    arrangeChartPlayLanes(
+      [playbackChart.notes, playbackChart.landmineNotes, playbackChart.invisibleNotes],
+      chartPlayOptions.options.random,
+      playbackChart.resolvedChart.playVariant,
       Math.random,
     );
   resolvedChart = playbackChart.resolvedChart;
   backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
   const battleRequested = options.battleMode ?? playbackChart.battleMode ?? 'OFF';
-  const expectedBattle = resolveEffectiveBattleMode(
-    battleRequested,
-    options.judgeRuleset ?? 'lr2',
-    playbackChart.battleSourceVariant ?? resolvedChart.playVariant,
-    options.course !== undefined,
-    resolvedChart.sourceFormat === 'bms' ? resolvedChart.source.bms.player : undefined,
-  );
+  // A chart that copies itself onto the 2P side replaced the player's battle conversion (#932).
+  const expectedBattle = chartNotesCopies(playbackChart.chartNotes)
+    ? 'OFF'
+    : resolveEffectiveBattleMode(
+        battleRequested,
+        options.judgeRuleset ?? 'lr2',
+        playbackChart.battleSourceVariant ?? resolvedChart.playVariant,
+        options.course !== undefined,
+        resolvedChart.sourceFormat === 'bms' ? resolvedChart.source.bms.player : undefined,
+      );
   if ((playbackChart.battleMode ?? 'OFF') !== expectedBattle)
     throw new RangeError('The shared prepared chart must include the selected battle mode.');
   const lr2ExtraRequested = options.lr2ExtraMode ?? playbackChart.lr2ExtraMode ?? false;
@@ -286,12 +313,12 @@ export async function createPlaySession(
       ? compileChartOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing))
       : { program: structuredClone(options.chartOptionProgram), diagnostics: [] };
   const chartOptions = compiledOptions.program;
-  const chartPlayOptions =
-    options.chartPlayOptionProgram !== undefined
-      ? structuredClone(options.chartPlayOptionProgram)
-      : compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing));
   const chartJudge = resolveChartJudgeOption(chartPlayOptions);
-  for (const diagnostic of [...compiledOptions.diagnostics, ...(options.chartOptionDiagnostics ?? [])])
+  for (const diagnostic of [
+    ...compiledOptions.diagnostics,
+    ...chartPlay.diagnostics,
+    ...(options.chartOptionDiagnostics ?? []),
+  ])
     emitPlayerLog(options, 'warn', 'chart.option', { ...diagnostic });
   const extraDepth = clampExtraNoteDepth(options.extraNoteDepth ?? playbackChart.extraNoteDepth ?? 0);
   const extraScratch = options.extraNoteScratch ?? playbackChart.extraNoteScratch ?? false;
