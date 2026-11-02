@@ -72,7 +72,7 @@ describe('resolveLR2ChartText', () => {
     const hyper = makeChartWith({ difficulty: 3 });
     expect(resolveLR2ChartText(LR2_TEXT.DIFFICULTY, hyper)).toBe('3');
     expect(resolveLR2ChartText(LR2_TEXT.DIFFICULTY_ALT, hyper)).toBe('3');
-    // LR2's song database tag, not the file name: be-music keeps no tags.
+    // LR2's song database tag, not the file name: Be-Music keeps no tags.
     expect(resolveLR2ChartText(LR2_TEXT.TAG, chart)).toBe('');
     expect(resolveLR2ChartText(LR2_TEXT.TAG_ALT, chart)).toBe('');
     expect(resolveLR2ChartText(LR2_TEXT.SEARCH_WORD, chart)).toBeUndefined();

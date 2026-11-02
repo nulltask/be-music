@@ -4,7 +4,7 @@
 
 この仕様は `packages/app-leaderboard/src/` の実装を基準にします。運用手順は[パッケージ README](../packages/app-leaderboard/README.ja.md)、API の契約は[生成した OpenAPI](../packages/app-leaderboard/openapi.json)を参照してください。
 
-Leaderboard は be-music のオンラインのスコアランキングで、LR2 や beatoraja が「IR」（Internet Ranking）と呼ぶ
+Leaderboard は Be-Music のオンラインのスコアランキングで、LR2 や beatoraja が「IR」（Internet Ranking）と呼ぶ
 ものにあたります。このリポジトリでは「IR」を JSON の中間表現（`@be-music/chart-source`）の意味で使っているので、
 ランキングはコード・ドキュメント・UI のどこでも **Leaderboard** と呼びます。外部のものの名前（LR2IR、beatoraja
 スキンの IR 系 op）はそのままの表記を使います。

@@ -2,7 +2,7 @@
 
 # @be-music/app-leaderboard
 
-The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. The design is in
+The Be-Music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. The design is in
 [docs/leaderboard.md](../../docs/leaderboard.md); this README covers running and deploying it.
 
 ## What is implemented
@@ -55,7 +55,7 @@ that condition; it only re-reads the finished bundle. `dev` and the deploys run 
 pnpm --filter @be-music/app-leaderboard run build:worker
 ```
 
-The resources already exist in the be-music account (D1 and R2 in APAC, one of each per environment); their D1 ids
+The resources already exist in the Be-Music account (D1 and R2 in APAC, one of each per environment); their D1 ids
 are in `cloudflare.config.ts` and the migrate scripts. For a new environment, create them and record the new id:
 
 ```bash

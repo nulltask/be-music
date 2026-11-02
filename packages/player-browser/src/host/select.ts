@@ -21,7 +21,7 @@ import type { SelectKit } from './family-kit.ts';
 const log = logger('select');
 
 /**
- * The kits the select scene takes: a be-music skin, an LR2 select skin (the theme's, with its bar list), or a beatoraja
+ * The kits the select scene takes: a Be-Music Skin, an LR2 select skin (the theme's, with its bar list), or a beatoraja
  * theme's select entry, loaded with `loadBeatorajaSceneKit`.
  */
 export type SelectSceneKit = SelectKit;
@@ -101,7 +101,7 @@ export interface SelectScene extends SessionScene<SelectFrame, SelectIntent> {
   /** Takes the theme's new sounds; a BGM playing changes to the new one. */
   setSounds(sounds: SystemSoundSet): void;
   /**
-   * Takes a new kit of the scene's family: the player's new settings for a be-music skin (the scene keeps its skin),
+   * Takes a new kit of the scene's family: the player's new settings for a Be-Music Skin (the scene keeps its skin),
    * another LR2 select skin (a theme dropped), or a beatoraja select entry loaded again (the player's options for it,
    * or another entry). The next frame draws with it. A kit of another family is ignored.
    */

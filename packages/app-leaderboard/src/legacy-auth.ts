@@ -142,7 +142,7 @@ function buildAuth(env: Env, origin: string) {
           await reassignScores(db, anonymousUser.user.id, newUser.user.id);
         },
       }),
-      passkey({ rpID: settings.rpID, rpName: 'be-music', origin: settings.trustedOrigins }),
+      passkey({ rpID: settings.rpID, rpName: 'Be-Music', origin: settings.trustedOrigins }),
     ],
     databaseHooks: {
       user: {

@@ -156,7 +156,7 @@ export class DecideRoute {
    * Mounts the decide-screen splash and routes the user into gameplay when it dismisses (auto-advance OR Enter / Space
    * / Escape input). Without a decide skin, falls straight through to `playChart` so themes that don't ship a Decide
    * directory still play the chart immediately. Every family's splash is `createDecideScene`'s: on the beatoraja family
-   * the theme's decide entry, on the LR2 family the theme's decide skin, on the default family the be-music skin's own
+   * the theme's decide entry, on the LR2 family the theme's decide skin, on the default family the Be-Music Skin's own
    * decide screen, shown only when the skin declares one.
    *
    * The select screen's decide jingle, started as the chart was picked, plays on through the splash, which visually
@@ -176,7 +176,7 @@ export class DecideRoute {
     const playsOnBeatoraja = this.familyKits.playsOnBeatoraja(chartEntry);
     const kit = await this.familyKits.decideKitFor(decideFamily, chartEntry, playsOnBeatoraja);
     if (kit === undefined) {
-      // No decide splash: a be-music skin without one, an LR2-only setup that didn't ship a decide skin, or a beatoraja
+      // No decide splash: a Be-Music Skin without one, an LR2-only setup that didn't ship a decide skin, or a beatoraja
       // theme without a decide skin (or one that failed to load). The select screen's decide jingle still plays.
       await start();
       then?.shown?.();

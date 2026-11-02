@@ -32,7 +32,7 @@ export interface ChartImageCacheOptions {
 }
 
 /**
- * Decoded song images for be-music skins, behind the synchronous {@link lookup} the frames hand out as `chartImage`. A
+ * Decoded song images for Be-Music Skins, behind the synchronous {@link lookup} the frames hand out as `chartImage`. A
  * miss starts loading the image and answers `undefined`; once it decodes, `onLoaded` fires and later lookups return it.
  * Images that are missing or fail to decode are remembered so they aren't retried every frame. At most `capacity`
  * bitmaps are kept: the least recently looked-up one is `close()`d to make room, and {@link dispose} closes the rest.

@@ -45,7 +45,7 @@ export interface LR2JudgeTimingSamples {
   sumMs: number;
 }
 
-/** An empty window, as a play starts with (LR2 leaves the reset at play start undetermined; be-music resets). */
+/** An empty window, as a play starts with (LR2 leaves the reset at play start undetermined; Be-Music resets). */
 export function createLR2JudgeTimingSamples(): LR2JudgeTimingSamples {
   return { count: 0, sumMs: 0 };
 }

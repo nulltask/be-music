@@ -1,6 +1,6 @@
 /**
  * The layers of the play screen a play view draws into: the scene graph under `root` and its per-frame pools, the
- * be-music skin binding, and the shared playfield's per-frame caches, with the running play as `play`. The shared
+ * Be-Music Skin binding, and the shared playfield's per-frame caches, with the running play as `play`. The shared
  * playfield and frame passes (`view/shared/*`) take a view with these members as their context.
  */
 import { Container, Graphics, Text, TextStyle, type Texture } from 'pixi.js';
@@ -41,7 +41,7 @@ export class PlayLayers {
    * a different aspect ratio.
    */
   readonly designClipMask: Graphics = new Graphics();
-  /** Layout last handed to the be-music chrome, keyed by the lane set it was built for. */
+  /** Layout last handed to the Be-Music chrome, keyed by the lane set it was built for. */
   beMusicLayout:
     | {
         channels: readonly string[];
@@ -53,7 +53,7 @@ export class PlayLayers {
   /** Design size the clip mask and design background were last drawn at (the stage can change with the screen). */
   stampedDesignWidth = -1;
   stampedDesignHeight = -1;
-  /** BGA target for the be-music stage, rebuilt only when the rect moves (see {@link collectBGATargets}). */
+  /** BGA target for the Be-Music stage, rebuilt only when the rect moves (see {@link collectBGATargets}). */
   stageBGATarget: PlayfieldBGATarget | undefined;
   /**
    * Cached screen / design dimensions baked into the static graphics (`viewportBackground`, `background`,
@@ -142,7 +142,7 @@ export class PlayLayers {
    * `globalThis.__BE_MUSIC_PERF__ = true`). When disabled the wrapper adds no measurable overhead.
    */
   readonly perf: PerfTracker = new PerfTracker('gameplay');
-  /** `performance.now()` of the first rendered frame, for the be-music entrance fade. */
+  /** `performance.now()` of the first rendered frame, for the Be-Music entrance fade. */
   enteredAt: number | undefined;
   laneGeometryCache:
     | {
@@ -155,7 +155,7 @@ export class PlayLayers {
       }
     | undefined;
   skinBindingInstance: BeMusicGameplayBinding | undefined;
-  /** Song images handed to the be-music skin (`frame.chartImage`), from the playing song's asset source. */
+  /** Song images handed to the Be-Music Skin (`frame.chartImage`), from the playing song's asset source. */
   chartImages: ChartImageCache | undefined;
   /**
    * Cropped copies of the `#BGAxx` sub-region textures, for a skin that composites the BGA itself (a canvas image can't

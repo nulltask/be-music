@@ -1,6 +1,6 @@
 [English version](./README.md)
 
-# be-music
+# Be-Music
 
 [パッケージの責務](./docs/packages.ja.md)
 
@@ -43,7 +43,7 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 ### オンラインサービス
 
 - プレイヤーと一体で作られた Leaderboard があります。送信はオプトインで、何を表示するかは Leaderboard が決めます。譜面のスコアとコースランにはシェアカードが付きます。
-- be-music 独自の OIDC プロバイダで、プレイヤー・Leaderboard・ダッシュボードを 1 つのアカウントでつなぎます。サービスは Cloudflare Workers 上で動いています。
+- Be-Music 独自の OIDC プロバイダで、プレイヤー・Leaderboard・ダッシュボードを 1 つのアカウントでつなぎます。サービスは Cloudflare Workers 上で動いています。
 
 ### オープンでモジュール式
 
@@ -65,7 +65,7 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 - `@be-music/player-scene-model`: ライブラリの項目・一覧・プレイオプション・プレイ状態と結果・コース・効果音など、スキンの種類によらず共有する実行環境非依存のシーンモデル
 - `@be-music/skin-lr2`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
 - `@be-music/skin-beatoraja`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
-- `@be-music/player-skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
+- `@be-music/player-skin-sdk`: browser player 向け Be-Music Skin を書くための描画フレームワーク非依存の SDK
 - `@be-music/player-ui`, `@be-music/player-ui-react`, `@be-music/player-ui-vue`: [再利用可能な Lit 製 Web Components と、型付き React・Vue ラッパー](./packages/player-ui/README.ja.md)
 - `@be-music/player-browser`: browser の PixiJS ランタイム。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音声サービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
 - `@be-music/app-play`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite プレイヤー
@@ -174,7 +174,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [シーンモデル（`@be-music/player-scene-model`）](docs/scene-model.ja.md)
 - [リプレイ（プレイ履歴）仕様](docs/replay.ja.md)
 - [コースと段位認定](docs/course.ja.md)
-- [be-music スキンの作り方](docs/be-music-skin.ja.md)
+- [Be-Music Skin の作り方](docs/be-music-skin.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](docs/beatoraja-skin.ja.md)
 - [BMS/bmson 中間表現 (`@be-music/chart-source`) 実装仕様](docs/json-spec.ja.md)
@@ -272,12 +272,12 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - `property[]`、`filepath[]`、category group、custom offset、wildcard source path、case-insensitive asset を解決
 - image、imageset、value、float-value、text、slider、note、judge、gauge、graph、BPM graph、timing graph、song-list、custom event、destination、PM character element を normalize
 
-### be-music skin SDK (`@be-music/player-skin-sdk`)
+### Be-Music Skin SDK (`@be-music/player-skin-sdk`)
 
 - browser プレイヤーの built-in family 向けスキンの契約。スキンは表示用データから Canvas と任意の DOM 画面を組み合わせる
 - 描画フレームワークを import しない。フレームワークはスキンが持ち込む（Canvas 2D、WebGL / WebGPU、PixiJS、three.js など）
 - stage、lane layout、touch / portrait layout、moment、判定表示、loading、audio drive、曲情報、result track、skin settings、motion の helper
-- [be-music スキンの作り方](docs/be-music-skin.ja.md) を参照
+- [Be-Music Skin の作り方](docs/be-music-skin.ja.md) を参照
 
 ### 再利用可能なプレイヤー UI
 
@@ -287,7 +287,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 - dropped folder、ZIP、song / LR2 / beatoraja theme 混在 drop を扱う browser song library
 - 大きな audio / video file を lazy に扱い、case-insensitive に path lookup
-- select、gameplay、result（スキンが宣言していれば decide も）を描く built-in be-music skin（既定の Synesthesia、Plain、Native（DOM + Canvas））
+- select、gameplay、result（スキンが宣言していれば decide も）を描く built-in Be-Music Skin（既定の Synesthesia、Plain、Native（DOM + Canvas））
 - タッチ主体の端末でのタッチ操作とタッチ用 gameplay layout、縦向きステージを持つスキンの縦画面表示、スキンごとの設定
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
 - beatoraja の select / decide / gameplay / result skin を parse して PixiJS で描画

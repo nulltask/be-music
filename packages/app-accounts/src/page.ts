@@ -15,7 +15,7 @@ const TEXT = {
     signIn: 'Sign in',
     yourAccount: 'Your account',
     signedIn: (name: string, guest: boolean) => `Signed in as ${name}${guest ? ' (guest)' : ''}.`,
-    lead: 'One account for all be-music services.',
+    lead: 'One account for all Be-Music services.',
     continue: 'Continue with this account',
     passkey: 'Sign in with a passkey',
     signInWith: (label: string) => `Sign in with ${label}`,
@@ -35,7 +35,7 @@ const TEXT = {
     donate: 'Donate',
     footnote:
       'Signing out here ends the Accounts session. Existing app sessions expire within 10 minutes; each app also has its own sign-out.',
-    noticeLinked: 'That account is already linked to another be-music account.',
+    noticeLinked: 'That account is already linked to another Be-Music account.',
     noticeCancelled: 'Linking was cancelled.',
     noticeFailed: 'Could not link that account.',
   },
@@ -46,7 +46,7 @@ const TEXT = {
     yourAccount: 'アカウント',
     signedIn: (name: string, guest: boolean) =>
       guest ? `${name}（ゲスト）でログイン中です。` : `${name} でログイン中です。`,
-    lead: 'be-music の各サービスで共通のアカウントです。',
+    lead: 'Be-Music の各サービスで共通のアカウントです。',
     continue: 'このアカウントで続ける',
     passkey: 'パスキーでログイン',
     signInWith: (label: string) => `${label} でログイン`,
@@ -66,7 +66,7 @@ const TEXT = {
     donate: '寄付',
     footnote:
       'ここでログアウトすると Accounts のセッションが終わります。各アプリのセッションは 10 分以内に切れます。アプリごとのログアウトもあります。',
-    noticeLinked: 'そのアカウントは別の be-music アカウントにすでに連携されています。',
+    noticeLinked: 'そのアカウントは別の Be-Music アカウントにすでに連携されています。',
     noticeCancelled: '連携を取り消しました。',
     noticeFailed: 'アカウントを連携できませんでした。',
   },

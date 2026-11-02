@@ -20,7 +20,7 @@ import type { ResultKit } from './family-kit.ts';
 const log = logger('result');
 
 /**
- * The kits the result scene takes: a be-music skin, an LR2 result skin (the course-result skin for a course run), or a
+ * The kits the result scene takes: a Be-Music Skin, an LR2 result skin (the course-result skin for a course run), or a
  * beatoraja theme's result entry (its course-result entry for a course run), loaded with `loadBeatorajaSceneKit`.
  */
 export type ResultSceneKit = ResultKit;

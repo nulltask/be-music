@@ -52,7 +52,7 @@ const PULL_SETTLE_EPSILON = 0.3;
 export interface SelectPointerContext {
   /** Whether the select is the scene showing; the pointer is ignored while it is off stage. */
   readonly visible: boolean;
-  /** When a launch whose be-music outro is still playing started, else `undefined`; the pointer waits for it. */
+  /** When a launch whose Be-Music outro is still playing started, else `undefined`; the pointer waits for it. */
   readonly launchAt: number | undefined;
   /** The canvas, in CSS pixels: the host's `app.screen`. */
   readonly screen: Application['screen'];

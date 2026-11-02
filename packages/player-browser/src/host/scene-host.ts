@@ -127,7 +127,7 @@ export class PixiSceneHost {
   /** The currently-active scene, or `undefined` between transitions. */
   private current: PixiScene | undefined;
   /**
-   * Orientation of the design stage the active scene is drawing on: `'portrait'` while a be-music skin draws on its
+   * Orientation of the design stage the active scene is drawing on: `'portrait'` while a Be-Music Skin draws on its
    * portrait stage, `'landscape'` otherwise (and for themes). Scenes report it every frame via
    * {@link setStageOrientation}; hosts read it to decide whether to ask a phone held upright to rotate.
    */
@@ -210,7 +210,7 @@ export class PixiSceneHost {
       actual: rendererTypeLabel(this.app.renderer.type),
     });
     this.app.canvas.tabIndex = 0;
-    this.app.canvas.setAttribute('aria-label', 'be-music stage');
+    this.app.canvas.setAttribute('aria-label', 'Be-Music stage');
     // Compositor isolation. `contain: content` (= `layout paint style`) tells the browser the canvas's visual
     // contents can't affect — and aren't affected by — anything outside its box. The compositor can then skip
     // walking siblings / ancestors when the canvas repaints (= every frame), trimming a few hundred μs of

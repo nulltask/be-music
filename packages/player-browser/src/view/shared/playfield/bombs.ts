@@ -1,7 +1,7 @@
 import { drawLabel } from '../../../stage/draw-label.ts';
 /**
  * The bombs (hit explosions) of the shared playfield: retires each bomb once its effect has played out, and draws the
- * live ones with the skin's cells, or by default through the be-music skin (or the default playfield's).
+ * live ones with the skin's cells, or by default through the Be-Music Skin (or the default playfield's).
  */
 
 import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
@@ -12,7 +12,7 @@ import type { PlayfieldContext } from './context.ts';
 
 /**
  * One-shot bomb cleanup. Runs every frame so each bomb stops once its effect has played out
- * (`PlayfieldSkin.bombDurationMs`: the be-music skin's effect length, or a skin-authored span). A retired bomb is told
+ * (`PlayfieldSkin.bombDurationMs`: the Be-Music Skin's effect length, or a skin-authored span). A retired bomb is told
  * to the view's chrome (`bombRetired`) so a skin can stop its own per-lane bomb timer; without this retirement a skin's
  * "play once and clamp" explosion would keep displaying its last frame forever.
  */
@@ -50,7 +50,7 @@ export function renderBombs(ctx: PlayfieldContext): void {
 
 /**
  * The bombs on lanes the skin leaves to the playfield: each with the skin's cell (`PlayfieldSkin.bombCell`) when it has
- * one, centred on the lane's judgement line; the rest through the be-music skin, or the default playfield's.
+ * one, centred on the lane's judgement line; the rest through the Be-Music Skin, or the default playfield's.
  */
 function renderBombEffects(ctx: PlayfieldContext): void {
   const now = ctx.play.playClock();

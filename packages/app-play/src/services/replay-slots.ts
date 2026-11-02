@@ -184,7 +184,7 @@ export type ReplayAutoSaveRule = (typeof REPLAY_AUTO_SAVE_RULES)[number];
 /**
  * The four slots' rules until the player picks others, so every slot keeps something by itself: the best EX score
  * (slot 1), the best clear lamp (slot 2), the fewest BP (slot 3) and the latest play (slot 4). beatoraja ships them all
- * as NOTHING; be-music saves by default, with beatoraja's own rules.
+ * as NOTHING; Be-Music saves by default, with beatoraja's own rules.
  */
 export const DEFAULT_REPLAY_AUTO_SAVE_RULES: readonly ReplayAutoSaveRule[] = [
   'score-update',

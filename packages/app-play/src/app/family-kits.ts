@@ -30,7 +30,7 @@ export interface FamilyKitsOptions {
     BeatorajaThemeService,
     'beatorajaTheme' | 'loadBeatorajaPlayKit' | 'loadBeatorajaDecideKit' | 'selectSoundSet'
   >;
-  /** The be-music skin the built-in family draws with. */
+  /** The Be-Music Skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'beMusicSkin' | 'builtInKit'>;
   /** The Debug Menu's "Skin system" pick (`skinFamilyOverride`) and the battle mode, which picks the LR2 play skin. */
   readonly guiState: Pick<PlayerGUIState, 'skinFamilyOverride' | 'battleMode'> &
@@ -85,7 +85,7 @@ export class FamilyKits {
 
   /**
    * The kit the decide splash of `family` is drawn with, or `undefined` for no splash: the beatoraja theme's decide
-   * entry, the LR2 theme's decide skin, or the be-music skin's decide screen. A be-music skin's decide screen hands over
+   * entry, the LR2 theme's decide skin, or the Be-Music Skin's decide screen. A Be-Music Skin's decide screen hands over
    * to the LR2 / default gameplay preloaded behind it, so it is skipped when the play itself runs on a beatoraja theme.
    */
   public async decideKitFor(
@@ -111,7 +111,7 @@ export class FamilyKits {
    * - **LR2** with a play skin for the chart's key mode → an LR2 kit with that skin (parsed again with the course's ops
    *   for a course stage or a NONSTOP run), and the theme's 9-keys skin, whose Pop'n green wide note at index 3 is drawn
    *   over each invisible note when {@link PlayerGUIState.showInvisibleNotes} is on.
-   * - otherwise → the built-in kit with the active be-music skin.
+   * - otherwise → the built-in kit with the active Be-Music Skin.
    *
    * Nothing is put in force here: the play may load behind a decide screen that is backed out of.
    */

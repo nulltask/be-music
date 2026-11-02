@@ -1068,7 +1068,7 @@ describe('chart-writer', () => {
       expect(JSON.parse(stringifyBmson(bare)).info).not.toHaveProperty('judge_rank');
     });
 
-    describe("be-music's judge windows for the BMS and its bmson conversion", () => {
+    describe("Be-Music's judge windows for the BMS and its bmson conversion", () => {
       const chart = { scorableNotes: [], laneDisplayMode: '7 KEY SP' };
       const windowsOf = (json: ReturnType<typeof parseChart>, ruleset: RulesetId): JudgeWindowSetUs =>
         resolveRuleset(rulesetChartFactsFromChart(json, chart), ruleset).windows.note;

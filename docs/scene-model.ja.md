@@ -186,7 +186,7 @@ export します。
 - `DEFAULT_PLAY_OPTIONS` はプレイヤーの初期値です（ハイスピード 2.0、BGA はオンで拡大、スコアグラフはオン）。
 - `PLAY_OPTION_CHOICES` は列挙またはオンオフのオプションの選択肢を、LR2 のボタンの巡回順に並べます（`BGA_CYCLE`・
   `SORT_CYCLE`・`HIDDEN_SUDDEN_CYCLE` など）。`nextChoice` と `cyclePlayOptionValue` はそれを両方向にたどります。
-- `resolvePlayOptionValue` は型のない入力（be-music スキン、保存した設定）から設定された値を検証します。選択肢に
+- `resolvePlayOptionValue` は型のない入力（Be-Music Skin、保存した設定）から設定された値を検証します。選択肢に
   ない値は捨て、数値は範囲に収めます（`clampHiSpeed`・`clampShutter`）。`resolvePlayOptions` は保存されたオプション
   を欠けのない正しい値にします。
 - `isListPlayOption` は一覧を変えるオプションを示します。

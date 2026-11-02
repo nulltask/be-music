@@ -1,5 +1,5 @@
 /**
- * The playfield the built-in family draws when a be-music skin leaves the lanes, notes, long notes or bombs to the host
+ * The playfield the built-in family draws when a Be-Music Skin leaves the lanes, notes, long notes or bombs to the host
  * (`notes.ts`, `long-notes.ts`, `lanes.ts`, `bombs.ts`), and an LR2 theme falls back to where it has no cell of its own.
  */
 import { Color, FillGradient, type Graphics } from 'pixi.js';
