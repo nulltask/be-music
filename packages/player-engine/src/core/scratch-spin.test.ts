@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createLaneBindings } from './lane-layout.ts';
-import { createScratchSpinByToken, isReverseScratchSpin, isScratchSpin, resolveScratchSpin } from './scratch-spin.ts';
+import {
+  createScratchSpinByToken,
+  isReverseScratchSpin,
+  isScratchSpin,
+  resolvePressSpin,
+  resolveScratchSpin,
+} from './scratch-spin.ts';
 
 describe('scratch spin', () => {
   test('isScratchSpin accepts the two directions only', () => {
@@ -10,12 +16,15 @@ describe('scratch spin', () => {
     expect(isScratchSpin(undefined)).toBe(false);
   });
 
-  test('a reverse spin needs both spins known and different', () => {
+  test('every press reverses but one known to spin the same way as the head', () => {
     expect(isReverseScratchSpin('cw', 'ccw')).toBe(true);
     expect(isReverseScratchSpin('ccw', 'cw')).toBe(true);
     expect(isReverseScratchSpin('cw', 'cw')).toBe(false);
-    expect(isReverseScratchSpin(undefined, 'ccw')).toBe(false);
-    expect(isReverseScratchSpin('cw', undefined)).toBe(false);
+    expect(isReverseScratchSpin('ccw', 'ccw')).toBe(false);
+    // Input without a spin (a touch lane) turns it back with any fresh press.
+    expect(isReverseScratchSpin('cw', undefined)).toBe(true);
+    expect(isReverseScratchSpin(undefined, 'cw')).toBe(true);
+    expect(isReverseScratchSpin(undefined, undefined)).toBe(true);
   });
 
   test('odd-even: a scratch lane’s keys alternate, and key aliases share their key’s spin', () => {
@@ -40,6 +49,14 @@ describe('scratch spin', () => {
     expect(resolveScratchSpin(['ctrl-left', 'ctrl'], spins)).toBe('ccw');
     expect(resolveScratchSpin(['SHIFT-LEFT', 'shift'], spins)).toBe('cw');
     expect(resolveScratchSpin(['z'], spins)).toBeUndefined();
+  });
+
+  test('a lane-input press takes its reported spin, none for null, else its keys’ spin', () => {
+    const spins = new Map([['shift-left', 'cw' as const]]);
+    expect(resolvePressSpin('ccw', ['shift-left'], spins)).toBe('ccw');
+    expect(resolvePressSpin(null, ['shift-left'], spins)).toBeUndefined();
+    expect(resolvePressSpin(undefined, ['shift-left'], spins)).toBe('cw');
+    expect(resolvePressSpin(undefined, ['z'], spins)).toBeUndefined();
   });
 
   test.each([

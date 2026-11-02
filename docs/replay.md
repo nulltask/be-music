@@ -38,7 +38,8 @@ A replay is deliberately **not** a list of judgments. Its canonical payload is:
    kitty keyboard protocol): the instant it took the key as let go. `inferred` is diagnostic only; replays and
    simulators read such an `up` like any other. A scratch press carries `spin: 'cw' | 'ccw'`, the way it turned the
    turntable (a controller's reported direction, or the keyboard's odd-even key): a back-spin scratch's tail is judged
-   on a press spinning the other way from the one that hit its head, so simulators read it (see
+   on a press spinning the other way from the one that hit its head (a press without `spin`, such as a touch tap,
+   counts as one), so simulators read it (see
    [`player-spec.md`](./player-spec.md#scratch-spin)). Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always
    `(timeUs, seq)` — `seq` disambiguates same-microsecond events.

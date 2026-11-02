@@ -780,7 +780,10 @@ input's `spin`), so the judge core, a replay and the replay simulator all read a
 - A keyboard uses odd-even: a scratch lane's keys alternate as the two directions (`LaneBinding.inputKeys`,
   `createScratchSpinByToken`). Each scratch has two keys by default — Shift (`'cw'`) and Ctrl, or Option / Alt in a
   macOS terminal (`'ccw'`) — so pressing the scratch key other than the one that hit a BSS head spins it back.
-- A press with no spin (a touch lane) never reverses a BSS.
+- Input with no direction reports no spin: a touch lane (its `lane-input` carries `spin: null`) and an ANY KEY press
+  from a non-scratch key. Every press counts as the reverse spin except one known to spin the same way as the head, so
+  a fresh press without a spin while a BSS is held turns it back, and after a head hit without a spin any later press
+  does (`isReverseScratchSpin`).
 
 See [ADR 0037](./adr/0037-scratch-spin-input.md) for the trade-off.
 

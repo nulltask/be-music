@@ -15,7 +15,7 @@ import {
 import { resolveJudgeNowMsFromPressedAt } from './engine-clock.ts';
 import { formatJudgeWindowSet, printLaneMap, writeRuntimeEventLog } from './engine-trace.ts';
 import { createKeyStateInference } from './play-key-inference.ts';
-import { createScratchSpinByToken, resolveScratchSpin } from './scratch-spin.ts';
+import { createScratchSpinByToken, resolvePressSpin } from './scratch-spin.ts';
 import type { PlaySession } from './play-session.ts';
 import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
 
@@ -263,7 +263,7 @@ function createManualJudge(session: PlaySession): PlayJudge {
         return;
       }
       const nowMs = tempoClock.initialTempoMsAt(pressedAtMs);
-      const spin = command.spin ?? resolveScratchSpin(command.tokens, scratchSpinByToken);
+      const spin = resolvePressSpin(command.spin, command.tokens, scratchSpinByToken);
       if (!inputReportsReleases) {
         keyState.press(candidateChannels, command.tokens, nowSec, nowMs, spin);
         return;

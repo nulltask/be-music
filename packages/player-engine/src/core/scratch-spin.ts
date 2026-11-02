@@ -7,6 +7,8 @@
  * - A controller that reports rotation (a turntable or an analog axis) sends the direction it actually turned.
  * - A keyboard uses odd-even: a scratch lane's keys alternate as the two directions, so its first key spins
  *   clockwise, its second counterclockwise, its third clockwise again, and so on ({@link createScratchSpinByToken}).
+ * - Input with no direction (a touch lane) sends none: any fresh press then turns a BSS back
+ *   ({@link isReverseScratchSpin}).
  */
 export type ScratchSpin = 'cw' | 'ccw';
 
@@ -16,11 +18,13 @@ export function isScratchSpin(value: unknown): value is ScratchSpin {
 }
 
 /**
- * True when a press spinning `press` reverses a back-spin scratch whose head was hit spinning `head`: both are known
- * and they differ. A press with no spin (input that reports none, such as a touch lane) never reverses one.
+ * True when a press spinning `press` reverses a back-spin scratch whose head was hit spinning `head`: every press
+ * except one known to spin the same way as the head. Input that reports no spin (a touch lane, or an ANY KEY press from
+ * a non-scratch key) has no other way to express the turn-back than a fresh press while the BSS is held, so a press
+ * without a spin reverses it, and so does any press after a head hit without one.
  */
 export function isReverseScratchSpin(head: ScratchSpin | undefined, press: ScratchSpin | undefined): boolean {
-  return head !== undefined && press !== undefined && head !== press;
+  return head === undefined || press === undefined || head !== press;
 }
 
 /** The part of a lane binding the odd-even rule reads (`LaneBinding` in `lane-layout.ts`). */
@@ -62,4 +66,17 @@ export function resolveScratchSpin(
     if (spin !== undefined) return spin;
   }
   return undefined;
+}
+
+/**
+ * The spin of a `lane-input` press: the one the input reported, none when it reported `null` (input with no direction,
+ * such as a touch lane, whatever key token it names), or else the keyboard's odd-even spin of its tokens.
+ */
+export function resolvePressSpin(
+  reported: ScratchSpin | null | undefined,
+  tokens: readonly string[],
+  spinByToken: ReadonlyMap<string, ScratchSpin>,
+): ScratchSpin | undefined {
+  if (reported === null) return undefined;
+  return reported ?? resolveScratchSpin(tokens, spinByToken);
 }

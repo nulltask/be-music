@@ -753,7 +753,10 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
 - キーボードは odd-even を使います。スクラッチレーンのキーを交互に 2 方向として扱います（`LaneBinding.inputKeys`、
   `createScratchSpinByToken`）。既定では各スクラッチに 2 つのキー、Shift（`'cw'`）と Ctrl（macOS の端末では Option / Alt、
   `'ccw'`）があり、BSS の始点を叩いたのと別のスクラッチキーを押すと逆回転になります。
-- 回転方向のない押下（タッチレーン）は BSS を逆回転させません。
+- 向きのない入力は回転方向を報告しません。タッチレーン（その `lane-input` は `spin: null` を持つ）と、非スクラッチキー
+  からの ANY KEY の押下です。始点と同じ向きと分かっている押下を除くすべての押下が逆回転になるので、BSS を押している間の
+  回転方向のない新たな押下は BSS を逆回転させ、回転方向のない押下で始点を叩いた後は以降のどの押下も逆回転になります
+  （`isReverseScratchSpin`）。
 
 トレードオフは [ADR 0037](./adr/0037-scratch-spin-input.ja.md) を参照してください。
 

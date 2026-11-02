@@ -42,9 +42,11 @@ export type PlayerInputCommand =
       /**
        * The way a scratch press turned the turntable, from a controller that reports rotation (a turntable or an analog
        * axis). Omitted for keys: the engine takes a key's spin from the odd-even rule over the scratch lane's keys
-       * (`createScratchSpinByToken`). A back-spin scratch's tail is judged on a press spinning the other way.
+       * (`createScratchSpinByToken`). `null` for input with no direction at all (a touch lane): the press has no spin,
+       * so a fresh press while a back-spin scratch is held turns it back (`isReverseScratchSpin`). A back-spin
+       * scratch's tail is judged on a press spinning the other way.
        */
-      spin?: ScratchSpin;
+      spin?: ScratchSpin | null;
       /**
        * Wall-clock-ms snapshot of the physical key press (`performance.timeOrigin + performance.now()`-style,
        * i.e. `Date.now()`-equivalent with sub-ms precision). The runtime adapter (web / node) sets this the
