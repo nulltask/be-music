@@ -1,5 +1,11 @@
 # @be-music/chart-audio-renderer
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`
+
 ## 0.5.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @be-music/player-node-audio
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-engine@0.13.0`, `@be-music/chart-audio-renderer@0.5.1`
+
 ## 0.2.1
 
 ### Patch Changes

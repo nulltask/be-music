@@ -1,5 +1,23 @@
 # @be-music/player-skin-sdk
 
+## 0.7.0
+
+### Minor Changes
+
+- 6624b34: New `BeMusicGameplayRuntime.targetPaceEXScore`: the pacemaker's EX score at this point of the play when the host knows it (a replay ghost). `resolveScorePace` takes it in place of the target held to the share of notes judged, so a score graph paces against where the ghost really stood.
+- 9a8b50c: Add the cabinet play layout:
+  
+  - `cabinetStage`, `resolveCabinetBGARect` and `resolveCabinetLayout` place the keys, gauge, score, hi-speed, score graph, stage band, players, judgement panel, BPM and tempo around the standard lanes, and centre a double-play field on the stage with the chart and judgement panel in a left column.
+  - A stage's playfield bounds take `doublePlayCenterX` to centre double-play lanes, and `resolveBGARect` receives the playfield's left edge.
+  - `resolveScorePace` and `formatScoreDiff` drive a score graph against a pacemaker and the best record, `resolveStageLabel` names the stage, and `resolveDifficultyName` reads `#DIFFICULTY`.
+  - The gameplay runtime gains `bestEXScore`, `targetEXScore`, `targetLabel`, `course`, `playerName`, `tempo` and `random1P`, and the DOM gameplay frame's layout gains `mode` and `lanes`.
+- fcfc355: The select frame gains `danRanks`, the player's dan rank in each key mode (`BeMusicDanRank`), and `describeDanRanks` puts them on one line (`7K 七段 · 14K 初段`).
+
+### Patch Changes
+
+- 20b8f86: `DEFAULT_TEXT_FONT` is the system sans-serif, so a skin that names no face draws without web fonts; a skin that wants one names it and lists it in `fontLoads`.
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-engine@0.13.0`, `@be-music/player-scene-model@0.5.0`
+
 ## 0.6.0
 
 ### Minor Changes

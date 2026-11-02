@@ -1,5 +1,28 @@
 # @be-music/app-leaderboard
 
+## 0.5.0
+
+### Minor Changes
+
+- 647c240: A play or course run that one ruleset cannot judge (a gauge it does not define, or CUSTOM JUDGE outside beatoraja) is no longer refused or judged with the option dropped: that ruleset stores no figures, and the submission answers it in `notSimulated` with the reason. A play that used gauge auto-shift is judged under every ruleset along that ruleset's own gauge ladder. A run that ended where its gauge emptied is judged under another ruleset only up to that point; when that ruleset's gauge would have survived, its figures are stored as `outcome: 'truncated'`, move no personal best and stay out of the rankings and lists (ADR 0019, migration `0019`).
+
+### Patch Changes
+
+- c1d8b7e: The About page described anonymous auto-submit, Google and Discord as coming soon, ESC plays as unrecorded, report-based moderation, and every play ranking. It now says:
+  
+  - Submitting a play requires sign-in. A guest without a passkey stays anonymous in that browser, and rankings include anonymous plays only when anonymous players are turned on. Accounts can be created with a passkey, Google, or Discord.
+  - Only plays that rank appear on all three rule rankings. A separate tempo, a single course stage, a bmson TOTAL 0 play with no recovery, and an unpublished course are stored but not ranked.
+  - Auto play is not recorded. A failed play and an ESC quit are recorded, and an ESC quit ranks as a failed play. The leaderboard does not check for mechanical input.
+- cf0df8c: Assisted plays are now classified by their options' sources rather than by AUTO SCRATCH and the judge-window override alone, and each ruleset's lamp follows that ruleset's assist rule. A `no-save` play (BATTLE under That-Which-Must-Not-Be-Named rules) is stored unranked as `no-save`, and a course run with an assisted stage is stored unranked as `assist`. LIGHT ASSIST EASY is stored as lamp rank 10 and shown between ASSIST EASY and EASY in bests, previous bests and lamp spreads. Results stored before this change are not recomputed.
+- 9604a26: Submissions check a replay's chart-authored gameplay options:
+  
+  - A replay's `chart.chartPlayOptions` must match the gameplay options in the chart's play document, narrowed to the play (a course stage without NOTES COPY, none in a NONSTOP run); a mismatch is rejected with `chart-play-options-mismatch`, so a replay can no longer strip or add the chart's program.
+  - A grade course run no longer fails its lane-lock check when a stage's chart forced its own arrangement, since the chart's option wins over the course lock.
+- f3c4ac4: Google and Discord on the Leaderboard were disabled and labelled coming soon, so those buttons now start Accounts sign-in, and signing up with either provider returns to Settings.
+- 9300c75: The Leaderboard header shows a Beta badge beside Be-Music Leaderboard, and the footer and About page say Public Beta and that data may be deleted without notice, in English and Japanese.
+- 40f0575: Chart documents stored in R2 are gzip-compressed, the same way replays already are, and score cards gunzip them before reading the excerpt, still accepting plain JSON written earlier.
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/player-engine@0.13.0`, `@be-music/service-auth-client@0.2.0`, `@be-music/service-web-theme@0.3.1`
+
 ## 0.4.0
 
 ### Minor Changes

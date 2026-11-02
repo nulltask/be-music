@@ -1,5 +1,18 @@
 # @be-music/skin-lr2
 
+## 0.6.0
+
+### Minor Changes
+
+- d323615: Add LR2's course IR flag to the select state: text 183 reads the selected course's flag (`ON` / `OFF`, `OFF` on any other bar) and button 253 draws cell 1 once the course is flagged. New `LR2_BUTTON.COURSE_IR`, `LR2_TEXT.COURSE_IR`, `resolveLR2CourseIRText` and `resolveLR2CourseIRButtonState`, and `resolveLR2CourseMakerAction` maps button 253 to `{ kind: 'ir' }`.
+- cbc1cf4: `LR2PlayFrame.target` (an `LR2PlayTarget`: the target's EX score now and over the chart) feeds number 151 (TARGET_SCORE), number 153 (the EX score less it) and bar graphs 14 / 15 (the target now and final over the chart's highest EX score). Without a target they read as before.
+- 2c453cc: LR2's RANDOM buttons (42 / 43) step only through LR2's own six lane options: `@be-music/skin-lr2/state` adds `stepLR2LaneOption`, which moves to the next of OFF, MIRROR, RANDOM, S-RANDOM, SCATTER and CONVERGE, stepping on from another source's RANDOM, S-RANDOM or CONVERGE by its name and moving any other value to OFF (ADR 0019). The buttons draw SCATTER and CONVERGE on cells 4 and 5, and the buttons and labels read a source-qualified value by its bare name, so `beatoraja:S-RANDOM` draws the S-RANDOM cell and label and another source's one-player BATTLE reads as BATTLE.
+
+### Patch Changes
+
+- cf0df8c: The new LIGHT ASSIST EASY lamp reads as LR2's EASY bar lamp, as ASSIST EASY does.
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-engine@0.13.0`, `@be-music/player-scene-model@0.5.0`
+
 ## 0.5.0
 
 ### Minor Changes

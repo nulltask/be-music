@@ -1,5 +1,18 @@
 # @be-music/player-scene-model
 
+## 0.5.0
+
+### Minor Changes
+
+- 23bbd4e: The new `applyChartLaneCovers` returns the lane covers to draw under a chart's M-SUDDEN and LINEMOVE. M-SUDDEN shows the player's SUDDEN+ cover at its own height, and LINEMOVE adds to the LIFT up to `CHART_LINE_LIFT_MAX`. The player's covers themselves are left unchanged.
+- 7ba64b0: PRACTICE options work under every judge ruleset (#933): `practiceGauge` accepts every ruleset's PRACTICE gauges, and the new `resolvePracticeSelection` and `keepPracticeGauge` turn the stored options into the PRACTICE a play under a ruleset runs (its own gauge, GAUGE CATEGORY under beatoraja only, JUDGERANK and TOTAL except under AC).
+- ac69832: The lane options offer RANDOM, S-RANDOM and CONVERGE once per source under every judge ruleset (`lr2:RANDOM`, `beatoraja:RANDOM`, `____:RANDOM`, ...), with the ruleset's own first, and BATTLE as `beatoraja:BATTLE` and `____:BATTLE` (ADR 0019). `RANDOM_CYCLE` holds LR2's six own lane options (OFF, MIRROR, `lr2:RANDOM`, `lr2:S-RANDOM`, SCATTER, `lr2:CONVERGE`), so an LR2 skin's RANDOM button draws each on its own cell. The new `isRandomModeChoice` accepts these and the bare names older settings hold, which `resolvePlayOptionValue` and `resolvePlayOptions` keep as the ruleset's own.
+
+### Patch Changes
+
+- cf0df8c: A single play's result lamp now follows the judge ruleset's assist rule. An assisted clear shows LIGHT ASSIST EASY or ASSIST EASY under beatoraja rules, at most EASY under LR2's and ASSIST EASY under That-Which-Must-Not-Be-Named's. Before, it showed the gauge's lamp.
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-engine@0.13.0`
+
 ## 0.4.0
 
 ### Minor Changes
