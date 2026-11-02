@@ -19,6 +19,8 @@ export interface SecondPlayer {
   readonly summary: PlayerSummary;
   readonly endOnFailure: boolean;
   readonly resetScore: () => void;
+  /** The gauge the 2P player runs on: a chart's GAMELEVEL / EXTRA (#845), else its own pick, else 1P's. */
+  readonly gauge?: string;
 }
 
 /** A side owns its lane channels (`1x` / `2x`), including its mines and invisible objects. */

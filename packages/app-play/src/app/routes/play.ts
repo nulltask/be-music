@@ -46,7 +46,7 @@ import type { PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
 import { libraryChartReplaySlotTarget, type ReplaySlotStore } from '../../services/replay-slots.ts';
 import type { BeatorajaPlayEntry, BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
-import { courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
+import { chartCopiesItself, courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
 import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
@@ -341,6 +341,8 @@ export class PlayRoute {
               replay: replay !== undefined,
               tempo,
               judgeRuleset,
+              // The stage plays without the chart's NOTES COPY, so its record (of the double-play chart) stays (#932).
+              chartCopyLeftOut: chartCopiesItself(chartEntry),
             })
           : undefined,
       beatorajaPlay,
