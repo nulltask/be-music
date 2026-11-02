@@ -1,5 +1,15 @@
 # @be-music/chart-parser
 
+## 0.7.0
+
+### Minor Changes
+
+- e8cd9c2: Read pomu `#SONGxx`, the obsolete name of `#TEXTxx`, into `bms.songText`, including inside `#RANDOM` / `#SWITCH` branches and with base-62 keys. Older Be-Music JSON that kept `#SONGxx` in `metadata.extras` is moved into it on load.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-source@0.7.0`
+
 ## 0.6.0
 
 ### Minor Changes

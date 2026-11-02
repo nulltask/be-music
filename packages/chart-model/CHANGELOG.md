@@ -1,5 +1,28 @@
 # @be-music/chart-model
 
+## 0.9.0
+
+### Minor Changes
+
+- 9604a26: Charts can now use nanasigroove's chart-authored gameplay options; before, they were diagnosed as unsupported:
+  
+  - Initial `774:RANDOM_*`, the judgment-related `774:CRAZY_*` options (`GOOD2BAD`, `GREAT2BAD`, `HELLJUDGE`, `ADDMINE`) and `774:NOTES_DOUBLE` / `NOTES_COPY` / `NOTES_DBLCOPY` compile with the new `compileChartPlayOptions` into a versioned `ChartPlayOptionProgram` (`NOTES_OFF` clears `notes`, `CRAZY_OFF` does not), with `parseChartPlayOption`, `isChartPlayOptionDeclaration`, `hasChartPlayOptions`, `CHART_NOTES_OPTIONS` and the other ID lists. The legacy aliases `CRA-HYPER` and `CRA-CPDOUBLE` read as `NOTES_DOUBLE` and `NOTES_COPY`.
+  - Initial `774:GAMELEVEL_*` and `774:EXTRA_*` compile with the new `compileChartGaugeOptions`, with `parseChartGaugeOption`, `isChartGaugeOptionDeclaration` and their ID lists.
+  - `compileChartOptions` diagnoses their A6 use as `initial-only-option`.
+  - The fingerprint documents carry a chart's compiled gameplay options as `playOptions` (also inside `#RANDOM` branches), so charts that differ only in these options get different fingerprints; a chart without them keeps its fingerprint.
+- 7188106: Charts can now use nanasigroove's chart-authored display options from `#OPTION` and channel `A6`; before, they were diagnosed as `unsupported-option` without effect:
+  
+  - `774:HIDDEN_*` (including `M-SUDDEN`), `774:CHANGE-HS_*` and every visual CRAZY option (`SMALL`, `BIG`, `FADEIN`, `FADEOUT`, `RD-SIZE`, the X / Y / XY / 3D waves, `STAR`, `SPIN`, `CLONE`, `CLONE2`, `S-CLONE`, `LINEMOVE`, `LINEMOVE2`, `HIDJUDGE`, `DARK`, `DARK2`, `REVERSE`).
+  - The legacy `774:HID-*` / `774:CRA-*` IDs, in initial declarations only (`initial-only-alias` on A6), with `resolveChartLegacyOptionAlias`.
+  - `compileChartOptions` emits effective-program version 3 (`CHART_OPTION_PROGRAM_VERSION`) with the new `hidden`, `changeHS`, `crazySize`, `crazyWave`, `crazyColor`, `crazySpin`, `crazyClone`, `crazyLine`, `crazyJudge`, `crazyDark` and `crazyReverse` fields.
+  - The sources give no thresholds, curves or periods, so `resolveChartNoteVisual` (with `tint`, `rotation` and `clones`) and its parts implement documented Be-Music formulas deterministically: `resolveChartHiddenAlpha`, `resolveChartChangeHSProgress`, `resolveChartCrazyScale`, `resolveChartCrazyXOffset`, `resolveChartCrazyYProgress`, `resolveChartCrazyWaveScale`, `resolveChartCrazyTint`, `resolveChartCrazyRotation`, `resolveChartCrazyClones`, `resolveChartLineLift`, `resolveChartPlayfieldVisual`, plus `parseChartVisualOption`, `isChartVisualOptionValue`, `hasChartVisualOptions`, `hasChartPlayfieldVisual`, `chartVisualOptionFieldsOf` and `chartVisualHash01`.
+- 9dfa8d2: Add `resolveReferencedBmsWAVResources`: the effective WAV resources that some sample event of the chart names, leaving out slots only declared, named only by landmines, or only tweaked by `#WAVCMD` / `#EXWAV`.
+
+### Patch Changes
+
+- e8cd9c2: Chart text (channel `99`) shows pomu `#SONGxx` text for an index `#TEXTxx` leaves undefined, whichever line comes first; the miss text stays nanasigroove's `#TEXT00`.
+- Updated dependencies: `@be-music/chart-source@0.7.0`
+
 ## 0.8.0
 
 ### Minor Changes
