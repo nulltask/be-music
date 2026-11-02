@@ -376,7 +376,9 @@ function pushTouchLaneChange(
   }
   const pressTokens = resolveTouchTokens(ctx, change.pressed);
   if (pressTokens.length === 0) return;
-  for (const token of pressTokens) signals.pushCommand({ kind: 'lane-input', tokens: [token], pressedAt });
+  // A finger has no turning direction: `spin: null` keeps the engine from reading one off the lane's key token, so a
+  // fresh tap on a held back-spin scratch turns it back.
+  for (const token of pressTokens) signals.pushCommand({ kind: 'lane-input', tokens: [token], pressedAt, spin: null });
   signals.pushCommand({ kind: 'kitty-state', pressTokens, repeatTokens: [], releaseTokens: [], pressedAt });
 }
 

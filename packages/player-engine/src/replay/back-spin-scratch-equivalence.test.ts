@@ -112,6 +112,46 @@ describe.concurrent('back-spin scratch: engine / simulator equivalence', () => {
     },
   );
 
+  // Touch lanes (and ANY KEY presses from a non-scratch key) report no spin: a fresh press while the BSS is held turns
+  // it back, and a head hit without a spin lets any later press do so.
+  test.each(['beatoraja', '____'] as const)('%s: touch presses with no spin finish a BSS', async (ruleset) => {
+    const { judges, replay } = await judge(ruleset, 2, [
+      [1_000_000, 'down'],
+      [1_300_000, 'up'],
+      [2_000_000, 'down'],
+      [2_050_000, 'up'],
+    ]);
+    expect(judges).toEqual([2, 0, 0, 0, 1]);
+    expect(replay.inputs.every((input) => input.spin === undefined)).toBe(true);
+  });
+
+  test.each(['beatoraja', '____'] as const)(
+    '%s: a second touch while the first is held finishes a BSS',
+    async (ruleset) => {
+      const { judges } = await judge(ruleset, 3, [
+        [1_000_000, 'down'],
+        [2_000_000, 'down'],
+        [2_050_000, 'up'],
+      ]);
+      expect(judges).toEqual([2, 0, 0, 0, 1]);
+    },
+  );
+
+  test.each([
+    ['beatoraja', 'cw', undefined],
+    ['beatoraja', undefined, 'cw'],
+    ['____', 'cw', undefined],
+    ['____', undefined, 'ccw'],
+  ] as const)('%s: a %s head and a %s tail press count as a reverse spin', async (ruleset, head, tail) => {
+    const { judges } = await judge(ruleset, 2, [
+      [1_000_000, 'down', head],
+      [1_300_000, 'up'],
+      [2_000_000, 'down', tail],
+      [2_050_000, 'up'],
+    ]);
+    expect(judges).toEqual([2, 0, 0, 0, 1]);
+  });
+
   test('lr2: a scratch long note is an LN, settled by its release', async () => {
     const { judges } = await judge('lr2', 2, [
       [1_000_000, 'down', 'cw'],
