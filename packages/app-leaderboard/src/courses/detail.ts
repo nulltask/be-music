@@ -96,6 +96,7 @@ export async function loadCourseScoreDetail(db: Database, id: string, viewerId: 
         gaugeFinal: row.gaugeFinal,
         judges: row.judges,
         stages: row.stages ?? null,
+        outcome: row.outcome,
       }))
       .sort(byRulesetOrder),
   };

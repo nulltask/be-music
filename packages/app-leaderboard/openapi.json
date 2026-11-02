@@ -637,6 +637,13 @@
                               "missCount"
                             ],
                             "description": "Which personal bests this play improved."
+                          },
+                          "outcome": {
+                            "enum": [
+                              "truncated"
+                            ],
+                            "type": "string",
+                            "description": "The play stopped where its played gauge emptied, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a play simulated in full."
                           }
                         },
                         "required": [
@@ -651,7 +658,38 @@
                           "improved"
                         ]
                       },
-                      "description": "The play under every ruleset."
+                      "description": "The play under every ruleset that could judge it."
+                    },
+                    "notSimulated": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "____"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "reason": {
+                            "enum": [
+                              "gauge",
+                              "custom-judge",
+                              "gauge-auto-shift"
+                            ],
+                            "type": "string",
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE or gauge auto-shift has no reading under it yet."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "reason"
+                        ]
+                      },
+                      "description": "The rulesets the play cannot be judged under, with no figures (ADR 0019); absent when every ruleset judged it."
                     },
                     "unranked": {
                       "enum": [
@@ -746,6 +784,13 @@
                               "missCount"
                             ],
                             "description": "Which personal bests this play improved."
+                          },
+                          "outcome": {
+                            "enum": [
+                              "truncated"
+                            ],
+                            "type": "string",
+                            "description": "The play stopped where its played gauge emptied, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a play simulated in full."
                           }
                         },
                         "required": [
@@ -760,7 +805,38 @@
                           "improved"
                         ]
                       },
-                      "description": "The play under every ruleset."
+                      "description": "The play under every ruleset that could judge it."
+                    },
+                    "notSimulated": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "____"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "reason": {
+                            "enum": [
+                              "gauge",
+                              "custom-judge",
+                              "gauge-auto-shift"
+                            ],
+                            "type": "string",
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE or gauge auto-shift has no reading under it yet."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "reason"
+                        ]
+                      },
+                      "description": "The rulesets the play cannot be judged under, with no figures (ADR 0019); absent when every ruleset judged it."
                     },
                     "unranked": {
                       "enum": [
@@ -1117,6 +1193,20 @@
                               "type": "number"
                             },
                             "description": "Judgment counts."
+                          },
+                          "outcome": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "truncated"
+                                ],
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "`truncated` for figures judged only up to where the play stopped (ADR 0019); null for a full simulation."
                           }
                         },
                         "required": [
@@ -1129,7 +1219,8 @@
                           "maxCombo",
                           "gaugeType",
                           "gaugeFinal",
-                          "judges"
+                          "judges",
+                          "outcome"
                         ]
                       }
                     }
@@ -2196,6 +2287,13 @@
                               "trophy"
                             ],
                             "description": "Which personal bests on the course this run improved."
+                          },
+                          "outcome": {
+                            "enum": [
+                              "truncated"
+                            ],
+                            "type": "string",
+                            "description": "The run stopped at a failed stage, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a run simulated in full."
                           }
                         },
                         "required": [
@@ -2213,7 +2311,38 @@
                           "improved"
                         ]
                       },
-                      "description": "The run under every ruleset."
+                      "description": "The run under every ruleset that could judge it."
+                    },
+                    "notSimulated": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "____"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "reason": {
+                            "enum": [
+                              "gauge",
+                              "custom-judge",
+                              "gauge-auto-shift"
+                            ],
+                            "type": "string",
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE or gauge auto-shift has no reading under it yet."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "reason"
+                        ]
+                      },
+                      "description": "The rulesets the play cannot be judged under, with no figures (ADR 0019); absent when every ruleset judged it."
                     },
                     "unranked": {
                       "enum": [
@@ -2332,6 +2461,13 @@
                               "trophy"
                             ],
                             "description": "Which personal bests on the course this run improved."
+                          },
+                          "outcome": {
+                            "enum": [
+                              "truncated"
+                            ],
+                            "type": "string",
+                            "description": "The run stopped at a failed stage, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a run simulated in full."
                           }
                         },
                         "required": [
@@ -2349,7 +2485,38 @@
                           "improved"
                         ]
                       },
-                      "description": "The run under every ruleset."
+                      "description": "The run under every ruleset that could judge it."
+                    },
+                    "notSimulated": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "____"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "reason": {
+                            "enum": [
+                              "gauge",
+                              "custom-judge",
+                              "gauge-auto-shift"
+                            ],
+                            "type": "string",
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE or gauge auto-shift has no reading under it yet."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "reason"
+                        ]
+                      },
+                      "description": "The rulesets the play cannot be judged under, with no figures (ADR 0019); absent when every ruleset judged it."
                     },
                     "unranked": {
                       "enum": [
@@ -3008,6 +3175,20 @@
                               }
                             ],
                             "description": "Each reached stage’s own figures, in order; null for runs stored before they were kept."
+                          },
+                          "outcome": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "truncated"
+                                ],
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "`truncated` for figures judged only up to where the run stopped (ADR 0019); null for a full simulation."
                           }
                         },
                         "required": [
@@ -3024,7 +3205,8 @@
                           "gaugeType",
                           "gaugeFinal",
                           "judges",
-                          "stages"
+                          "stages",
+                          "outcome"
                         ]
                       }
                     }

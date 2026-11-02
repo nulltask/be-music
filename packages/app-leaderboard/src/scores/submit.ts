@@ -2,11 +2,13 @@ import { eq } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import {
   checkReplayEligibility,
+  findReplayNotSimulatedReason,
+  rejudgeReplay,
   REPLAY_ENGINE_VERSION,
   resolveRulesetResultLamp,
   resolveRulesetResultMissCount,
-  simulateReplay,
   type BeMusicReplay,
+  type ReplayNotSimulatedReason,
   type RulesetId,
   type ReplayRulesetResult,
   type ReplayUnrankedReason,
@@ -53,6 +55,17 @@ export interface RulesetOutcome {
   rank: number;
   players: number;
   improved: { exScore: boolean; lamp: boolean; missCount: boolean };
+  /**
+   * `truncated` when the play stopped where its played gauge emptied and this ruleset's would have carried on: its
+   * figures go only up to that point, unranked (ADR 0019). Absent for a play simulated in full.
+   */
+  outcome?: 'truncated';
+}
+
+/** A ruleset a play cannot be judged under, with the reason (ADR 0019): it has no figures. */
+export interface NotSimulatedOutcome {
+  ruleset: RulesetId;
+  reason: ReplayNotSimulatedReason;
 }
 
 export type SubmissionOutcome =
@@ -61,6 +74,8 @@ export type SubmissionOutcome =
       scoreId: string;
       chartFingerprint: string;
       results: RulesetOutcome[];
+      /** The rulesets the play cannot be judged under; absent when it is judged under every one. */
+      notSimulated?: NotSimulatedOutcome[];
       /** Why the play was stored without ranking it; its results then carry rank and players 0. */
       unranked?: ReplayUnrankedReason;
     }
@@ -94,6 +109,12 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
       scoreId: existing.id,
       chartFingerprint: existing.chartFingerprint,
       results: await loadOutcomes(db, existing.id, existing.chartFingerprint, existing.assisted, existing.unranked),
+      ...notSimulatedOf(
+        RULESET_IDS.flatMap((ruleset) => {
+          const reason = findReplayNotSimulatedReason(input.replay, ruleset);
+          return reason === undefined ? [] : [{ ruleset, reason }];
+        }),
+      ),
       ...(existing.unranked !== null ? { unranked: existing.unranked } : {}),
     };
   }
@@ -112,9 +133,23 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   // A play given up with ESC did not clear, whatever its gauge stood at: it is ranked as a failed play, as LR2 and
   // beatoraja save one, its BP counting the notes it never reached.
   const givenUp = input.replay.play.aborted === true;
-  const simulated = RULESET_IDS.map((ruleset) => {
-    const result = simulateReplay(input.replay, { ruleset });
-    return { ruleset, result: givenUp ? { ...result, gauge: { ...result.gauge, cleared: false } } : result };
+  // Each ruleset re-judges the play by ADR 0019's rules: one that cannot read it stores nothing, and one under which a
+  // run that ended on failure would have survived stores its truncated figures, unranked.
+  const notSimulated: NotSimulatedOutcome[] = [];
+  const simulated = RULESET_IDS.flatMap((ruleset) => {
+    const outcome = rejudgeReplay(input.replay, { ruleset });
+    if (outcome.status === 'not-simulated') {
+      notSimulated.push({ ruleset, reason: outcome.reason });
+      return [];
+    }
+    const { result } = outcome;
+    return [
+      {
+        ruleset,
+        truncated: outcome.status === 'truncated',
+        result: givenUp ? { ...result, gauge: { ...result.gauge, cleared: false } } : result,
+      },
+    ];
   });
 
   const now = deps.now();
@@ -132,7 +167,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
     putChartDocument(blobs, played),
   ]);
   const playedRuleset = input.replay.play.judgeRuleset ?? 'lr2';
-  const figures = simulated.map(({ ruleset, result }) => {
+  const figures = simulated.map(({ ruleset, truncated, result }) => {
     // The lamp each ruleset gives the play, limited by its assisted options under that ruleset's rules (#602).
     const lamp = clearLampRank(
       applyRecordPolicyLamp(
@@ -144,8 +179,10 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
     const current = currentBests.get(ruleset);
     const update = mergeBestScores(current, { scoreId, playedAt: now, exScore: result.exScore, lamp, missCount });
     const playedHere = (current?.playedHere ?? false) || playedRuleset === ruleset;
-    return { ruleset, result, lamp, missCount, update, playedHere };
+    return { ruleset, truncated, result, lamp, missCount, update, playedHere };
   });
+  // A truncated result moves no personal best and takes no place in a ranking.
+  const ranked = figures.filter(({ truncated }) => !truncated);
 
   const statements: BatchItem<'sqlite'>[] = [
     ...playedChartStatements(db, input.replay, played, now),
@@ -169,11 +206,11 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
       createdAt: new Date(now),
       updatedAt: new Date(now),
     }),
-    ...figures.map(({ ruleset, result, lamp, missCount }) =>
-      db.insert(scoreResult).values(toScoreResultRow(scoreId, ruleset, result, lamp, missCount)),
+    ...figures.map(({ ruleset, truncated, result, lamp, missCount }) =>
+      db.insert(scoreResult).values(toScoreResultRow(scoreId, ruleset, result, lamp, missCount, truncated)),
     ),
     // An unranked play moves no personal best.
-    ...(unranked !== undefined ? [] : figures).map(({ ruleset, update, playedHere }) => {
+    ...(unranked !== undefined ? [] : ranked).map(({ ruleset, update, playedHere }) => {
       const row = toBestScoreRow(
         { userId: input.userId, chartFingerprint, ruleset, assisted },
         update.next,
@@ -190,18 +227,28 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
     }),
   ];
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+  // The results that take no place in a ranking: every one of an unranked play, and the truncated ones.
+  const unrankedOutcomes = figures.flatMap(({ ruleset, truncated, result, lamp, missCount }) =>
+    truncated || unranked !== undefined
+      ? [{ ...unrankedOutcome(ruleset, result.ruleset, result, lamp, missCount), ...outcomeOf(truncated) }]
+      : [],
+  );
   if (unranked !== undefined) {
-    const results = figures.map(({ ruleset, result, lamp, missCount }) =>
-      unrankedOutcome(ruleset, result.ruleset, result, lamp, missCount),
-    );
-    return { status: 'accepted', scoreId, chartFingerprint, results, unranked };
+    return {
+      status: 'accepted',
+      scoreId,
+      chartFingerprint,
+      results: unrankedOutcomes,
+      ...notSimulatedOf(notSimulated),
+      unranked,
+    };
   }
 
   // The listing and each ruleset's rank and player count read the rows just written and not each other: asked at once.
-  const [, results] = await Promise.all([
+  const [, rankedOutcomes] = await Promise.all([
     refreshChartListing(db, chartFingerprint),
     Promise.all(
-      figures.map(async ({ ruleset, result, lamp, missCount, update }): Promise<RulesetOutcome> => {
+      ranked.map(async ({ ruleset, result, lamp, missCount, update }): Promise<RulesetOutcome> => {
         const filter = { chartFingerprint, ruleset, assisted, includeAnonymous: true, playedHereOnly: false };
         const [rank, players] = await Promise.all([
           rankOfExScore(db, filter, update.next.bestEx),
@@ -221,7 +268,18 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
       }),
     ),
   ]);
-  return { status: 'accepted', scoreId, chartFingerprint, results };
+  const results = [...rankedOutcomes, ...unrankedOutcomes].sort(byRulesetOrder);
+  return { status: 'accepted', scoreId, chartFingerprint, results, ...notSimulatedOf(notSimulated) };
+}
+
+/** The `notSimulated` field of an outcome: absent when every ruleset judged the play. */
+function notSimulatedOf(notSimulated: NotSimulatedOutcome[]): { notSimulated?: NotSimulatedOutcome[] } {
+  return notSimulated.length > 0 ? { notSimulated } : {};
+}
+
+/** The `outcome` field of a result: absent for a play simulated in full. */
+function outcomeOf(truncated: boolean): { outcome?: 'truncated' } {
+  return truncated ? { outcome: 'truncated' } : {};
 }
 
 /** The outcome of an unranked play under one ruleset: its figures, with no rank, players or best moved. */
@@ -262,6 +320,7 @@ function toScoreResultRow(
   result: ReplayRulesetResult,
   lamp: number,
   missCount: number,
+  truncated: boolean,
 ): typeof scoreResult.$inferInsert {
   return {
     scoreId,
@@ -275,6 +334,7 @@ function toScoreResultRow(
     gaugeType: result.gauge.type,
     gaugeFinal: result.gauge.final,
     judges: { ...result.judge, fast: result.fast, slow: result.slow },
+    outcome: truncated ? 'truncated' : null,
   };
 }
 
@@ -289,8 +349,11 @@ async function loadOutcomes(
   const rows = await db.select().from(scoreResult).where(eq(scoreResult.scoreId, scoreId));
   const outcomes = await Promise.all(
     rows.map(async (row): Promise<RulesetOutcome> => {
-      if (unranked !== null) {
-        return unrankedOutcome(row.ruleset, row.rulesetRevision, row, row.clearLamp, row.missCount);
+      if (unranked !== null || row.outcome !== null) {
+        return {
+          ...unrankedOutcome(row.ruleset, row.rulesetRevision, row, row.clearLamp, row.missCount),
+          ...outcomeOf(row.outcome === 'truncated'),
+        };
       }
       const filter = {
         chartFingerprint,
