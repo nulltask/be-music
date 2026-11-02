@@ -69,6 +69,8 @@ export interface BeMusicNotesData {
   readonly longNotes: readonly BeMusicLongNote[];
   readonly mines: readonly BeMusicMine[];
   readonly measureLines: readonly BeMusicMeasureLine[];
+  /** Play time of the frame, for the marks that move (a held hell charge note's flowing rungs). */
+  readonly nowMs?: number;
 }
 /** One play side's lane area with its SUDDEN (top) and HIDDEN (bottom) cover fractions. */
 export interface BeMusicLaneCoverArea {
