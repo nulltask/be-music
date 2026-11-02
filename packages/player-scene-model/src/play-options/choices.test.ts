@@ -168,7 +168,7 @@ test('offers the three confirmed beatoraja launcher algorithms only', () => {
 
 test('R-RANDOM is offered under every ruleset without changing LR2 button indices', () => {
   // An LR2 button cycles LR2's own RANDOM and S-RANDOM (ADR 0019).
-  expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'lr2:RANDOM', 'lr2:S-RANDOM']);
+  expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'lr2:RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE']);
   expect(resolveRandomModes('lr2')).toContain('R-RANDOM');
   for (const source of ['beatoraja', '____'] as const) expect(resolveRandomModes(source)).toContain('R-RANDOM');
   expect(resolvePlayOptions({ random1P: 'R-RANDOM', random2P: 'R-RANDOM' })).toMatchObject({

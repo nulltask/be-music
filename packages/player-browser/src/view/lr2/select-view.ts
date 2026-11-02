@@ -30,6 +30,7 @@ import {
   LR2_BATTLE_CYCLE,
   LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
   stepLR2JudgeTiming,
+  stepLR2LaneOption,
   resolveLR2SelectButton,
   resolveLR2SelectState,
   resolveLR2SelectTimers,
@@ -721,6 +722,15 @@ export class LR2SelectView implements SelectView {
               this.frame?.playOptions.judgeTimingAutoAdjust ?? 'OFF',
               direction,
             ),
+          });
+          return;
+        }
+        if (action.option === 'random1P' || action.option === 'random2P') {
+          // LR2's RANDOM buttons step LR2's own lane options only (ADR 0019); the Debug Menu offers every source's.
+          emit({
+            type: 'set-play-option',
+            key: action.option,
+            value: stepLR2LaneOption(this.frame?.playOptions[action.option], direction),
           });
           return;
         }

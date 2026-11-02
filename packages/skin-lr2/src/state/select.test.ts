@@ -10,7 +10,12 @@ import {
   resolveLR2SelectState,
   resolveLR2SelectTimers,
 } from './select.ts';
-import { LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE, resolveLR2OptionText, stepLR2JudgeTiming } from './options.ts';
+import {
+  LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
+  resolveLR2OptionText,
+  stepLR2JudgeTiming,
+  stepLR2LaneOption,
+} from './options.ts';
 import { makeChart, makeChartWith, makeCourse } from './test-support.ts';
 
 const CLOCK = { year: 2026, month: 10, day: 16, hour: 9, minute: 5, second: 30 };
@@ -365,13 +370,28 @@ describe('resolveLR2SelectState sliders and buttons', () => {
       ['beatoraja:RANDOM', 'RANDOM', 2],
       ['____:S-RANDOM', 'S-RANDOM', 3],
       ['S-RANDOM', 'S-RANDOM', 3],
-      ['beatoraja:CONVERGE', 'CONVERGE', 0],
+      ['beatoraja:CONVERGE', 'CONVERGE', 5],
+      ['SCATTER', 'SCATTER', 4],
+      ['SPIRAL', 'SPIRAL', 0],
     ] as const) {
       expect(state(mode).text(LR2_TEXT.OPTION_RANDOM_1P)).toBe(label);
       expect(state(mode).text(LR2_TEXT.OPTION_RANDOM_2P)).toBe(label);
       expect(state(mode).button(LR2_BUTTON.RANDOM_1P)).toBe(cell);
       expect(state(mode).button(LR2_BUTTON.RANDOM_2P)).toBe(cell);
     }
+  });
+
+  it('steps LR2’s RANDOM buttons through LR2’s own lane options (ADR 0019)', () => {
+    const cycle = ['OFF', 'MIRROR', 'lr2:RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE'] as const;
+    for (const [index, mode] of cycle.entries()) {
+      expect(stepLR2LaneOption(mode, 1)).toBe(cycle[(index + 1) % cycle.length]);
+      expect(stepLR2LaneOption(mode, -1)).toBe(cycle[(index + cycle.length - 1) % cycle.length]);
+    }
+    expect(stepLR2LaneOption('____:S-RANDOM', 1)).toBe('SCATTER');
+    expect(stepLR2LaneOption('S-RANDOM', -1)).toBe('lr2:RANDOM');
+    expect(stepLR2LaneOption('beatoraja:CONVERGE', 1)).toBe('OFF');
+    expect(stepLR2LaneOption('H-RANDOM', -1)).toBe('OFF');
+    expect(stepLR2LaneOption(undefined, 1)).toBe('MIRROR');
   });
 
   it('draws the course maker’s connection buttons', () => {

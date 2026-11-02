@@ -226,6 +226,13 @@ export function registerLR2SkinStateExportsCases(define: DefineBenchmarkCase): v
       lr2StateAPI.stepLR2JudgeTiming(-99, -1);
     },
   });
+  define('skin-lr2.state.stepLR2LaneOption', {
+    run: () => {
+      lr2StateAPI.stepLR2LaneOption('lr2:S-RANDOM', 1);
+      lr2StateAPI.stepLR2LaneOption('beatoraja:RANDOM', -1);
+      lr2StateAPI.stepLR2LaneOption('SPIRAL', 1);
+    },
+  });
   define('skin-lr2.state.resolveLR2SelectState', {
     run: () => {
       const state = lr2StateAPI.resolveLR2SelectState({

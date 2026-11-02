@@ -101,6 +101,23 @@ describe('LR2SelectView buttons', () => {
     expect(step('BEATORAJA', 1)).toEqual([{ type: 'set-play-option', key: 'judgeTimingAutoAdjust', value: 'OFF' }]);
   });
 
+  it('steps the RANDOM buttons (42 / 43) through LR2’s own lane options only, by the half clicked', () => {
+    const step = (random1P: string, type: number, direction: 1 | -1) => {
+      const { view, intents } = createView({
+        playOptions: { random1P, random2P: random1P } as SelectFrame['playOptions'],
+      });
+      view.dispatchButtonClick({ type }, direction);
+      return intents;
+    };
+    expect(step('lr2:S-RANDOM', 42, 1)).toEqual([{ type: 'set-play-option', key: 'random1P', value: 'SCATTER' }]);
+    expect(step('OFF', 43, -1)).toEqual([{ type: 'set-play-option', key: 'random2P', value: 'lr2:CONVERGE' }]);
+    // Another source's RANDOM steps from LR2's RANDOM cell; a value LR2 lacks starts over at OFF (ADR 0019).
+    expect(step('beatoraja:RANDOM', 42, 1)).toEqual([
+      { type: 'set-play-option', key: 'random1P', value: 'lr2:S-RANDOM' },
+    ]);
+    expect(step('SPIRAL', 42, 1)).toEqual([{ type: 'set-play-option', key: 'random1P', value: 'OFF' }]);
+  });
+
   it('runs the course maker’s buttons only while the player makes courses, stepping by the half clicked', () => {
     const { view, intents } = createView({ courseMaker: { defaultConnection: 'FADE' as never } });
     view.dispatchButtonClick({ type: 230 }, 1);
