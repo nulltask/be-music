@@ -105,6 +105,13 @@ describe('resolveBeatorajaJudgeEffect', () => {
     });
   });
 
+  it("leaves the bomb timer out under a chart's DARK2", () => {
+    expect(
+      resolveBeatorajaJudgeEffect({ judge: 'PERFECT', combo: 10, deltaMs: -4 }, key2, 100, { bombs: false }).timers
+        .start,
+    ).toEqual([TIMER_JUDGE_1P, TIMER_COMBO_1P, TIMER_GAUGE_INCREASE_1P]);
+  });
+
   it('keeps the combo timer for GOOD but no bomb or sparkle, and starts only the judge timer on a break', () => {
     expect(resolveBeatorajaJudgeEffect({ judge: 'GOOD', combo: 11, deltaMs: 30 }, key2, 100).timers.start).toEqual([
       TIMER_JUDGE_1P,

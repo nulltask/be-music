@@ -7,7 +7,8 @@
  */
 
 import type { PlayerTempoChange } from '@be-music/player-engine';
-import type { PlayerInputSignalBus } from '@be-music/player-engine/signals';
+import type { PlayerInputSignalBus, PlayerUIFramePayload } from '@be-music/player-engine/signals';
+import { resolveChartPlayfieldVisual } from '@be-music/chart-model';
 import {
   createReplayViewCoalescer,
   DEFAULT_REPLAY_PLAYBACK_OPTIONS,
@@ -19,6 +20,7 @@ import {
 } from '@be-music/player-engine/replay';
 import {
   AC32_HI_SPEED_BASE,
+  applyChartLaneCovers,
   BE_MUSIC_HI_SPEED_SCALE,
   resolveHiSpeedForWhiteNumber,
   resolveLaneCover,
@@ -50,7 +52,11 @@ export interface PlayViewSettingsContext extends PlayStateContext {
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
   readonly laneX: Map<string, PlayfieldLaneRect>;
   readonly chartBPMRange: PlayTempoRange | undefined;
-  drawnLaneCovers: { covers: readonly LaneCoverState[]; drawn: LaneCover[] } | undefined;
+  drawnLaneCovers:
+    | { covers: readonly LaneCoverState[]; manualSudden: boolean; lineLift: number; drawn: LaneCover[] }
+    | undefined;
+  /** The engine's latest frame: a chart's M-SUDDEN and LINEMOVE (#931) change the covers as drawn. */
+  readonly engineFrame?: Pick<PlayerUIFramePayload, 'chartOptions' | 'currentSeconds'>;
   replayViewCoalescer: ReplayViewCoalescer | undefined;
   readonly replayViewCursor: ReplayViewCursor | undefined;
   readonly sharedEngineInputSignals: PlayerInputSignalBus | undefined;
@@ -138,16 +144,48 @@ export function followTempoChange(ctx: PlayViewSettingsContext, change: PlayerTe
 /**
  * The lane covers of each play side with lanes as drawn ({@link renderShutter} draws them; a skin that sets
  * `drawsLaneCover` reads them to draw its own): the play state's covers through `resolveLaneCover`, a replay's
- * included. The array is kept until the covers change.
+ * included, under a chart's M-SUDDEN and LINEMOVE (`resolveChartCovers`). The array is kept until they change.
  */
 export function resolveLaneCovers(ctx: PlayViewSettingsContext): readonly BeMusicLaneCover[] {
   const covers = ctx.playState.view.covers;
+  const effect = resolveChartPlayfieldVisual(ctx.engineFrame?.chartOptions, ctx.engineFrame?.currentSeconds ?? 0);
   let cache = ctx.drawnLaneCovers;
-  if (cache === undefined || cache.covers !== covers) {
-    cache = { covers, drawn: covers.map(resolveLaneCover) };
+  if (
+    cache === undefined ||
+    cache.covers !== covers ||
+    cache.manualSudden !== effect.manualSudden ||
+    cache.lineLift !== effect.lineLift
+  ) {
+    cache = {
+      covers,
+      manualSudden: effect.manualSudden,
+      lineLift: effect.lineLift,
+      drawn: applyChartLaneCovers(covers, effect).map(resolveLaneCover),
+    };
     ctx.drawnLaneCovers = cache;
   }
   return cache.drawn;
+}
+
+/**
+ * HIDDEN_M-SUDDEN's cover keys (#931): F3 lowers the player's SUDDEN+ cover (more of the lane covered) and F4 raises
+ * it, by 1 % of the lane (5 % with Shift), as nanasigroove's F3 / F4. F5 stays the restart key, so there is no reset
+ * key. The step moves the cover's height only, keeping whether the player has it switched on, and is taken while a
+ * course locks the covers: the chart asked for the cover. Returns whether `event` was such a key.
+ */
+export function handleChartManualSuddenKey(
+  ctx: PlayViewSettingsContext,
+  event: Pick<KeyboardEvent, 'code' | 'shiftKey'>,
+): boolean {
+  if (event.code !== 'F3' && event.code !== 'F4') return false;
+  if (!resolveChartPlayfieldVisual(ctx.engineFrame?.chartOptions, 0).manualSudden) return false;
+  const delta = (event.code === 'F3' ? 1 : -1) * (event.shiftKey ? 0.05 : 0.01);
+  const covers = ctx.playState.view.covers.map((cover) => ({
+    side: cover.side,
+    sudden: Math.min(1, Math.max(0, Math.round((cover.sudden + delta) * 10_000) / 10_000)),
+  }));
+  changePlayView(ctx, { type: 'cover-set', covers });
+  return true;
 }
 
 /** The scale the replay reads the view's hi-speed on, and the main BPM it takes the visible time at. */

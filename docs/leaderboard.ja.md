@@ -84,7 +84,7 @@ Accounts はゲスト、パスキー、設定済みの Discord / Google を提�
 
 - L1: 入力から結果を再計算し、リプレイの結果キャッシュは使いません。
 - L2: AUTO を拒否し、アシストを分類します。テンポ変更と単独のコースステージはランキング対象外として保存し、ESC 中断は失敗として順位付けします。
-- L3: play document と、登録時の chart document が申告した fingerprint と一致するか確認します。
+- L3: play document と、登録時の chart document が申告した fingerprint と一致するか確認します。続けて play document でリプレイの譜面指定ゲームプレイプログラムも確認します。`chart.chartPlayOptions` は、文書の `playOptions` をそのプレイに合わせて絞ったもの（コースのステージは NOTES COPY を外し、NONSTOP は何も適用しない）でなければならず、違えば `chart-play-options-mismatch` で拒否します（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、`src/scores/chart-play-options.ts`）。
 - L4: chart と play の fingerprint が同一、または検証済みの play fingerprint と一致する場合に成立します。新しい制御構文の分岐結果の合成は未実装です。
 
 L5（リプレイのノーツと play document の時刻の同値性）と、入力の異常検知は未実装です。実装は `src/scores/played-chart.ts` を参照してください。
@@ -98,6 +98,12 @@ L5（リプレイのノーツと play document の時刻の同値性）と、入
 - **3 つのルールセット。** すべてのプレイを `lr2`、`beatoraja`、`____` で計算し直し、3 つのランキングすべてに
   載せます。実際にプレイしたルールセット（`play.judgeRuleset`）を保存して印として表示し、「このルールセットで
   プレイしたもの」だけに絞り込めるようにします。
+- **再判定の結果**（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)、[リプレイ](./replay.ja.md#ほかのルールセットでの再判定)の
+  `rejudgeReplay`）: プレイを読めないルールセット（定義していないゲージ、beatoraja 以外での CUSTOM JUDGE や
+  ゲージオートシフト）は数値を保存せず、理由とともに `notSimulated` で返します。ゲージが空になった所で終わった
+  プレイは、ほかのルールセットではその時点までだけ判定します。そのルールセットのゲージなら生き残る場合は、
+  数値を `outcome: 'truncated'` として保存し、順位が付かないプレイと同じく自己ベストを更新せず、ランキングと
+  一覧にも出しません。コースも同じ規則に従います。
 - **ゲージ**はリプレイと同じ規則でルールセット間を対応させます（`GROOVE` は beatoraja の `NORMAL`、`DEATH` は
   `HAZARD`、など）。
 - **アシスト**はオプションの参照元で区分し（`classifyReplayAssists`、[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)）、フラグを付けて保存します。
@@ -216,7 +222,7 @@ sequenceDiagram
     A->>A: checkCourseReplayEligibility<br/>(オート、中断、フィンガープリント、1 回のプレイか)
     A->>D: 送信 ID は保存済みか
     loop 遊んだステージごと
-        A->>A: プレイドキュメントが playFingerprint になるか (L3)
+        A->>A: プレイドキュメントが playFingerprint になるか (L3)<br/>chart.chartPlayOptions と合うか
         A->>D: 譜面は既知か。未知なら 409 chart_document_required
     end
     loop 到達しなかったステージごと

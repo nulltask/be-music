@@ -183,19 +183,21 @@ export function beatorajaJudgeIndex(judge: string): number {
  * What one judgment changes on a play skin (beatoraja `JudgeManager.notifyJudge`), on the lane it was on (`placement`;
  * absent for one without a lane): the plate's judgment op and, when timed, its FAST / SLOW op; the plate's judge timer;
  * its combo timer while the combo keeps going; on a clean hit the lane's bomb timer and the side's gauge sparkle; and
- * once the combo reaches every note (`total`), the side's full-combo timer, once.
+ * once the combo reaches every note (`total`), the side's full-combo timer, once. `options.bombs: false` (a chart's
+ * `774:CRAZY_DARK2`, #931) leaves the bomb timer out.
  */
 export function resolveBeatorajaJudgeEffect(
   judge: BeatorajaJudgeInput,
   placement: BeatorajaLanePlacement | undefined,
   total: number,
+  options: { readonly bombs?: boolean } = {},
 ): BeatorajaJudgeEffect {
   const plate = placement?.plate ?? 1;
   const side = placement?.side ?? 1;
   const start: number[] = [judgeTimerId(plate)];
   if (isBeatorajaComboJudge(judge.judge)) start.push(comboTimerId(plate));
   if (isBeatorajaCleanHit(judge.judge)) {
-    if (placement !== undefined) start.push(...laneTimer(bombTimerId, placement));
+    if (placement !== undefined && options.bombs !== false) start.push(...laneTimer(bombTimerId, placement));
     start.push(side === 2 ? TIMER_GAUGE_INCREASE_2P : TIMER_GAUGE_INCREASE_1P);
   }
   const startOnce =

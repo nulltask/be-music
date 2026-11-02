@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { DEFAULT_PLAY_OPTIONS } from '../play-options/choices.ts';
-import { laneCoversFromPlayOptions, reduceLaneCovers, resolveLaneCover, type LaneCoverState } from './lane-cover.ts';
+import {
+  applyChartLaneCovers,
+  CHART_LINE_LIFT_MAX,
+  laneCoversFromPlayOptions,
+  reduceLaneCovers,
+  resolveLaneCover,
+  type LaneCoverState,
+} from './lane-cover.ts';
 
 const cover = (overrides: Partial<LaneCoverState> = {}): LaneCoverState => ({
   side: '1P',
@@ -129,5 +136,38 @@ describe('reduceLaneCovers', () => {
     expect(reduceLaneCovers([cover({ lift: 0 })], { type: 'cover-adjust', part: 'lift', delta: -0.1 })[0]!.lift).toBe(
       0,
     );
+  });
+});
+
+describe('applyChartLaneCovers', () => {
+  test('changes nothing without a chart effect', () => {
+    const covers = [cover()];
+    expect(applyChartLaneCovers(covers, { manualSudden: false, lineLift: 0 })).toBe(covers);
+    expect(applyChartLaneCovers(covers, { manualSudden: false, lineLift: Number.NaN })).toBe(covers);
+  });
+
+  test('M-SUDDEN shows the player SUDDEN+ at its own height; the player cover is not changed', () => {
+    const covers = [cover({ sudden: 0.4 })];
+    const drawn = applyChartLaneCovers(covers, { manualSudden: true, lineLift: 0 });
+    expect(resolveLaneCover(drawn[0]!).sudden).toBeCloseTo(0.4);
+    expect(covers[0]!.suddenOn).toBe(false);
+  });
+
+  test('LINEMOVE adds to the player LIFT, switched on, up to the cap', () => {
+    expect(
+      resolveLaneCover(applyChartLaneCovers([cover()], { manualSudden: false, lineLift: 0.15 })[0]!).lift,
+    ).toBeCloseTo(0.15);
+    expect(
+      resolveLaneCover(
+        applyChartLaneCovers([cover({ lift: 0.2, liftOn: true })], { manualSudden: false, lineLift: 0.1 })[0]!,
+      ).lift,
+    ).toBeCloseTo(0.3);
+    expect(
+      applyChartLaneCovers([cover({ lift: 0.8, liftOn: true })], { manualSudden: false, lineLift: 0.35 })[0]!.lift,
+    ).toBe(CHART_LINE_LIFT_MAX);
+    // A switched-off LIFT does not count.
+    expect(
+      applyChartLaneCovers([cover({ lift: 0.5, liftOn: false })], { manualSudden: false, lineLift: 0.1 })[0]!.lift,
+    ).toBeCloseTo(0.1);
   });
 });

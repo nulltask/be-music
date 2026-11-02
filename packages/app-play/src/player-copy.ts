@@ -182,6 +182,8 @@ const en = {
       `Leaderboard course ${ruleset}: #${rank} / ${players} · EX ${exScore}${best}${again}`,
     already: ' (already submitted)',
     newBest: (parts: string) => ` · new best ${parts}`,
+    notSimulated: (rulesets: string) => ` · not simulated under ${rulesets}`,
+    truncated: (rulesets: string) => ` · judged only up to the failure under ${rulesets}`,
     lamp: 'lamp',
     unranked: {
       'bmson-total': 'bmson TOTAL 0 used no recovery',
@@ -460,6 +462,8 @@ const ja: typeof en = {
       `Leaderboard コース ${ruleset}: #${rank} / ${players} · EX ${exScore}${best}${again}`,
     already: '（送信済み）',
     newBest: (parts) => ` · 自己ベスト更新 ${parts}`,
+    notSimulated: (rulesets) => ` · ${rulesets} では判定できません`,
+    truncated: (rulesets) => ` · ${rulesets} では失敗した所までを判定`,
     lamp: 'ランプ',
     unranked: {
       'bmson-total': 'bmson の TOTAL 0 で回復なし',

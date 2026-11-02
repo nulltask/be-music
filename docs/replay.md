@@ -407,6 +407,36 @@ long-note semantics, empty-POOR behavior, and gauge tables — the constants are
 EX-SCORE is PGREAT × 2 + GREAT × 1 everywhere; DJ LEVEL uses the That-Which-Must-Not-Be-Named ninths table. Charge-note rulesets count a
 long note's head and tail as two judgment notes (`result.noteCount` reports each ruleset's denominator).
 
+### Re-judging under another ruleset
+
+`simulateReplay` judges whatever it is given. `rejudgeReplay(replay, { ruleset })` (`rejudgeReplayRulesets` for
+several rulesets, `rejudgeCourseReplay` for a course replay) applies [ADR 0019](./adr/0019-source-qualified-option-values.md)'s rules
+first and answers one of three outcomes; the Leaderboard and `bms-replay` use it.
+
+```mermaid
+flowchart TD
+  replay["Replay, target ruleset"] --> readable{"Target reads it?"}
+  readable -->|no| skipped["not-simulated + reason"]
+  readable -->|yes| failed{"Played run ended on failure?"}
+  failed -->|no| full["simulated"]
+  failed -->|yes| cut["Judge up to the failure"]
+  cut --> survives{"Target gauge survives?"}
+  survives -->|no| full
+  survives -->|yes| truncated["truncated"]
+```
+
+- **not-simulated**, with a reason (`findReplayNotSimulatedReason`): `gauge` when the bare gauge is not one the target
+  defines (`P-ATTACK` under beatoraja, `EX-HARD` or `ASSIST-EASY` under LR2, `DEATH` under ???? outside a course); it is
+  never mapped to a lookalike. `custom-judge` and `gauge-auto-shift` when the replay used CUSTOM JUDGE or gauge
+  auto-shift, whose reading outside beatoraja is not defined yet. The played ruleset always simulates its own gauge.
+- **truncated**: the play ended where its survival gauge emptied (`play.endOnFailure`), and the target's gauge would have
+  survived that point. The run is judged only up to it (`stoppedAtUs`, where the played ruleset's gauge emptied): no input
+  is synthesized and no later note is missed. A course is truncated the same way when its played run stopped at a failed
+  stage the target's gauge survives. A truncated result is not ranked.
+- **simulated**: everything else, including a target whose gauge empties by the same point.
+
+`SimulateReplayOptions.onFailure` hears the chart time of the judgment that first empties a survival gauge. Tracked in [#933](https://github.com/nulltask/be-music/issues/933).
+
 ### Fidelity notes
 
 - The LR2 ruleset follows lr2oraja, cross-checked against the OpenLR2 transcription; where the two disagree on the
@@ -537,9 +567,9 @@ replays the old ones, so its numbers can change. The cache is never authoritativ
 
 ## Effective chart display options
 
-Optional `chart.chartOptions` records the effective display program accepted during the original play. Version 1 has `{ version: 1, initial: { hiSpeed? }, cues: [{ timeUs, state: { hiSpeed? } }] }`. Each cue is a complete authored state, and an empty state releases compulsory speed to the saved user view. Times are nondecreasing nonnegative safe integer microseconds. HI-SPEED must be finite and within 0.25–100; unknown profile versions or state fields are rejected. Version 2 adds the optional state fields `hidden`, `changeHS`, `crazySize` and `crazyWave`, each one of the IDs listed in [ADR 0032](./adr/0032-chart-authored-visual-families.md) (for example `{ hidden: 'SUDDEN', changeHS: 'ACCEL' }`). A version-1 program carrying any of them is rejected, so an older recording never activates a family implemented later. New recordings write version 2.
+Optional `chart.chartOptions` records the effective display program accepted during the original play. Version 1 has `{ version: 1, initial: { hiSpeed? }, cues: [{ timeUs, state: { hiSpeed? } }] }`. Each cue is a complete authored state, and an empty state releases compulsory speed to the saved user view. Times are nondecreasing nonnegative safe integer microseconds. HI-SPEED must be finite and within 0.25–100; unknown profile versions or state fields are rejected. Version 2 adds the optional state fields `hidden`, `changeHS`, `crazySize` and `crazyWave`, each one of the IDs listed in [ADR 0032](./adr/0032-chart-authored-visual-families.md) (for example `{ hidden: 'SUDDEN', changeHS: 'ACCEL' }`). A version-1 program carrying any of them is rejected, so an older recording never activates a family implemented later. Version 3 adds `hidden: 'M-SUDDEN'`, the `crazyWave` values `YWAVE`, `YWAVE2`, `XYWAVE`, `XYWAVE2`, `3DWAVE` and `3DWAVE2`, and the fields `crazyColor`, `crazySpin`, `crazyClone`, `crazyLine`, `crazyJudge`, `crazyDark` and `crazyReverse` ([ADR 0036](./adr/0036-chart-authored-skin-level-options.md)); a version-2 program carrying any of them is rejected the same way. New recordings write version 3. The height of the SUDDEN+ cover the player moves under M-SUDDEN is recorded in `play.view` like any cover change.
 
-Optional `chart.chartPlayOptions` records the chart-authored gameplay options the play ran with: `{ version: 1, options: { random?, judge?, hellJudge?, addMine? } }`, with `random` one of `MIRROR`, `RANDOM`, `RANDOM+`, `ALL`, `ALL+` and `judge` `GOOD2BAD` or `GREAT2BAD`. The arranged and mined notes are already in `chart.notes`; simulations apply the recorded judge modifiers and never recompile the source, so a replay without the field keeps its original judgments. Unknown versions, fields or values are rejected. See [ADR 0033](./adr/0033-chart-authored-gameplay-options.md).
+Optional `chart.chartPlayOptions` records the chart-authored gameplay options the play ran with: `{ version: 1, options: { random?, judge?, hellJudge?, addMine?, notes? } }`, with `random` one of `MIRROR`, `RANDOM`, `RANDOM+`, `ALL`, `ALL+`, `judge` `GOOD2BAD` or `GREAT2BAD`, and `notes` `DOUBLE`, `COPY` or `DBLCOPY`. It holds only what took effect: a course stage leaves out a NOTES COPY, so its program has no `notes` (or `DOUBLE` for a DBLCOPY). A copied chart's `chart.laneMode` is its double-play mode, and playback converts the notes again with the recorded `notes` ([ADR 0035](./adr/0035-chart-authored-notes-options.md)). The arranged and mined notes are already in `chart.notes`; simulations apply the recorded judge modifiers and never recompile the source, so a replay without the field keeps its original judgments. Unknown versions, fields or values are rejected. See [ADR 0033](./adr/0033-chart-authored-gameplay-options.md).
 
 Hosts pass this program as `PlayerOptions.chartOptionProgram` when replaying. Browser replay supplies an empty program for older records without this field, preserving their original behavior. Source declarations are not recompiled into an existing effective profile. `play.options`, `play.view` and their changes retain the underlying user speed, while the chart profile reproduces the compulsory display override. This avoids writing authored values into saved user preferences and restores the exact user view when the override clears. Simulations ignore these visual operations; score, input replay, fingerprints and eligibility are unchanged. See [ADR 0026](./adr/0026-chart-authored-display-options.md). NONSTOP records the stitched effective program; a cut-out stage log retains only its ownership window, rebased by its stage offset without applying FIT a second time. It seeds the played start and clears at a finite stage end. The trimmed unplayed prefix has no invented authored state.
 

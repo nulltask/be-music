@@ -305,6 +305,12 @@ export const scoreResult = sqliteTable(
     /** Gauge at the end of the play, in percent. Null for plays stored before it was recorded. */
     gaugeFinal: real('gauge_final'),
     judges: text('judges', { mode: 'json' }).$type<Record<string, number>>().notNull(),
+    /**
+     * `truncated` when the play stopped where its played gauge emptied and this ruleset's gauge would have carried on: its
+     * figures go only up to that point, and it moves no personal best (ADR 0019). Null for a play simulated in full. A
+     * ruleset the play cannot be judged under ("not simulated") has no row.
+     */
+    outcome: text('outcome', { enum: ['truncated'] }),
   },
   (table) => [primaryKey({ columns: [table.scoreId, table.ruleset] })],
 );
@@ -435,6 +441,8 @@ export const courseScoreResult = sqliteTable(
     gaugeType: text('gauge_type').notNull(),
     gaugeFinal: real('gauge_final').notNull(),
     judges: text('judges', { mode: 'json' }).$type<Record<string, number>>().notNull(),
+    /** `truncated` when the run stopped at a failed stage this ruleset's gauge would have survived, as for a play. */
+    outcome: text('outcome', { enum: ['truncated'] }),
   },
   (table) => [primaryKey({ columns: [table.courseScoreId, table.ruleset] })],
 );

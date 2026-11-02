@@ -82,11 +82,18 @@ export function formatGaugeLabel(id: string | undefined): string | undefined {
 }
 
 /**
- * Cycle order for {@link PlayOptions.random1P} / `random2P`. LR2 button cells 0..3 on `#SRC_BUTTON,type=42 / 43`: off /
- * mirror / random / s-random. An LR2 button cycles LR2's own RANDOM and S-RANDOM (ADR 0019); its label reads the bare
- * name of any value. Additional source choices are returned by resolveRandomModes.
+ * LR2's own lane options, in its RANDOM button order: cells 0..5 on `#SRC_BUTTON,type=42 / 43` (OpenLR2 `random` 0-5):
+ * off / mirror / random / s-random / scatter / converge. An LR2 button steps only these, LR2's own RANDOM, S-RANDOM and
+ * CONVERGE (ADR 0019); its label reads the bare name of any value. Every source's choices are in resolveRandomModes.
  */
-export const RANDOM_CYCLE: readonly RandomMode[] = ['OFF', 'MIRROR', 'lr2:RANDOM', 'lr2:S-RANDOM'];
+export const RANDOM_CYCLE: readonly RandomMode[] = [
+  'OFF',
+  'MIRROR',
+  'lr2:RANDOM',
+  'lr2:S-RANDOM',
+  'SCATTER',
+  'lr2:CONVERGE',
+];
 
 /** The sources of each colliding lane option, the judge ruleset's own first. */
 function sourcesFirst<Name extends 'RANDOM' | 'S-RANDOM' | 'CONVERGE'>(

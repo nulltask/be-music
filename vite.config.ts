@@ -84,6 +84,7 @@ const deterministicJudgeSources = [
   'packages/player-engine/src/ruleset/**/*.ts',
   'packages/player-engine/src/replay/simulate.ts',
   'packages/player-engine/src/replay/judgment-timeline.ts',
+  'packages/player-engine/src/replay/rejudge.ts',
   'packages/player-scene-model/src/**/*.ts',
 ];
 const nodeBuiltinMessage = 'Runtime-neutral code must not import Node built-ins; use a runtime adapter.';

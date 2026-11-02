@@ -1,4 +1,11 @@
-import { getPlayModeLayouts } from '@be-music/chart-model';
+import { getPlayModeLayouts, type ChartNotesOption } from '@be-music/chart-model';
+import {
+  chartNotesCopies,
+  chartNotesDoubles,
+  copyChartNotes,
+  doubleChartNotes,
+  resolveChartNotesOption,
+} from './chart-notes-options.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
 import { duplicateBattleChart } from './battle-chart.ts';
 import { applyPracticeRange, resolvePracticeRange } from './practice.ts';
@@ -85,6 +92,9 @@ export interface PreparedPlaybackChartData {
   battleAssist2P?: boolean;
   battleChangedObjectCount?: number;
   battleDroppedObjectCount?: number;
+  /** The chart's NOTES conversion that took effect (#932), and the objects it added. */
+  chartNotes?: ChartNotesOption;
+  chartNotesChangedObjectCount?: number;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
@@ -254,7 +264,13 @@ export function preparePlaybackChart(
     | 'scrollSection'
     | 'scrollRate'
     | 'scrollModifierTimeline'
-  > = {},
+  > & {
+    /**
+     * The chart's NOTES conversion (#932), from its gameplay program (a replay's recorded one). It replaces the player's
+     * battle conversion when it copies the chart, and is narrowed to what can take effect (`resolveChartNotesOption`).
+     */
+    chartNotes?: ChartNotesOption;
+  } = {},
   auxiliaryPlaybackEndSeconds = 0,
   random?: () => number,
 ): PreparedPlaybackChartData {
@@ -264,13 +280,20 @@ export function preparePlaybackChart(
     : undefined;
   resolved = lr2Extra?.chart ?? resolved;
   const battleSourceVariant = resolved.playVariant;
-  const battleMode = resolveEffectiveBattleMode(
-    options.battleMode ?? 'OFF',
-    options.judgeRuleset ?? 'lr2',
-    battleSourceVariant,
-    options.course !== undefined,
-    resolved.sourceFormat === 'bms' ? resolved.source.bms.player : undefined,
-  );
+  const chartNotes = resolveChartNotesOption(options.chartNotes, {
+    playVariant: battleSourceVariant,
+    course: options.course !== undefined,
+  });
+  // A chart that copies itself onto the 2P side decides the double-play chart, in place of the player's conversion.
+  const battleMode = chartNotesCopies(chartNotes)
+    ? 'OFF'
+    : resolveEffectiveBattleMode(
+        options.battleMode ?? 'OFF',
+        options.judgeRuleset ?? 'lr2',
+        battleSourceVariant,
+        options.course !== undefined,
+        resolved.sourceFormat === 'bms' ? resolved.source.bms.player : undefined,
+      );
   if (battleMode === 'COUPLE' && (resolved.playVariant === '5' || resolved.playVariant === '7')) {
     const playVariant = resolved.playVariant === '5' ? '10' : '14';
     resolved = withChartOverrides(resolved, { playVariant, layouts: getPlayModeLayouts(playVariant) });
@@ -326,6 +349,16 @@ export function preparePlaybackChart(
   });
   resolved = extraResult.chart;
   const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
+  // The chart's NOTES conversion, after the note and mine modifiers (so a doubled partner avoids an added mine) and
+  // before the battle conversion it replaces.
+  let chartNotesChangedObjectCount = chartNotesDoubles(chartNotes)
+    ? doubleChartNotes(notes, landmineNotes, resolved.playVariant)
+    : 0;
+  if (chartNotesCopies(chartNotes)) {
+    const copied = copyChartNotes(resolved, notes, landmineNotes, invisibleNotes);
+    resolved = copied.chart;
+    chartNotesChangedObjectCount += copied.changedObjectCount;
+  }
   const dBattleScratch = battleMode === 'D-BATTLE' && options.dBattleScratch === true;
   const duplicateBattle = isDuplicatedBattleMode(battleMode, battleSourceVariant)
     ? duplicateBattleChart(resolved, notes, landmineNotes, invisibleNotes, {
@@ -375,6 +408,7 @@ export function preparePlaybackChart(
   const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
 
   return {
+    ...(chartNotes !== undefined ? { chartNotes, chartNotesChangedObjectCount } : {}),
     ...(options.battleMode !== undefined
       ? {
           battleMode,

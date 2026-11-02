@@ -79,7 +79,9 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   });
   define('chart-model.compileChartPlayOptions', {
     run: () => {
-      chartAPI.compileChartPlayOptions({ initial: ['774:RANDOM_ALL+', '774:CRAZY_GREAT2BAD', '774:CRAZY_ADDMINE'] });
+      chartAPI.compileChartPlayOptions({
+        initial: ['774:RANDOM_ALL+', '774:CRAZY_GREAT2BAD', '774:CRAZY_ADDMINE', '774:NOTES_DBLCOPY'],
+      });
     },
   });
   define('chart-model.parseChartPlayOption', {
@@ -142,6 +144,73 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.resolveChartNoteVisual', {
     run: () => {
       chartAPI.resolveChartNoteVisual(visualState, visualInput);
+    },
+  });
+  const crazyNote = { channel: '11', beat: 12.5, seconds: 3.25 };
+  const playfieldState = { hidden: 'M-SUDDEN', crazyLine: 'LINEMOVE2', crazyDark: 'DARK2' } as const;
+  define('chart-model.chartVisualOptionFieldsOf', {
+    run: () => {
+      chartAPI.chartVisualOptionFieldsOf(2);
+    },
+  });
+  define('chart-model.resolveChartCrazyYProgress', {
+    run: () => {
+      chartAPI.resolveChartCrazyYProgress('YWAVE2', 0.5);
+    },
+  });
+  define('chart-model.resolveChartCrazyWaveScale', {
+    run: () => {
+      chartAPI.resolveChartCrazyWaveScale('3DWAVE2', 0.5);
+    },
+  });
+  define('chart-model.resolveChartCrazyTint', {
+    run: () => {
+      chartAPI.resolveChartCrazyTint('STAR', crazyNote);
+    },
+  });
+  define('chart-model.resolveChartCrazyRotation', {
+    run: () => {
+      chartAPI.resolveChartCrazyRotation('SPIN', crazyNote);
+    },
+  });
+  define('chart-model.resolveChartCrazyClones', {
+    run: () => {
+      chartAPI.resolveChartCrazyClones('S-CLONE', 0.5);
+    },
+  });
+  define('chart-model.resolveChartLineLift', {
+    run: () => {
+      chartAPI.resolveChartLineLift('LINEMOVE2', 3.25);
+    },
+  });
+  define('chart-model.resolveChartPlayfieldVisual', {
+    run: () => {
+      chartAPI.resolveChartPlayfieldVisual(playfieldState, 3.25);
+    },
+  });
+  define('chart-model.hasChartPlayfieldVisual', {
+    run: () => {
+      chartAPI.hasChartPlayfieldVisual(playfieldState);
+    },
+  });
+  define('chart-model.resolveChartLegacyOptionAlias', {
+    run: () => {
+      chartAPI.resolveChartLegacyOptionAlias('774:CRA-3DWAVE2');
+    },
+  });
+  define('chart-model.compileChartGaugeOptions', {
+    run: () => {
+      chartAPI.compileChartGaugeOptions({ initial: ['774:GAMELEVEL_HYPER', '774:EXTRA_VERYHARD'] });
+    },
+  });
+  define('chart-model.parseChartGaugeOption', {
+    run: () => {
+      chartAPI.parseChartGaugeOption('774:EXTRA_EASY');
+    },
+  });
+  define('chart-model.isChartGaugeOptionDeclaration', {
+    run: () => {
+      chartAPI.isChartGaugeOptionDeclaration('774:GAMELEVEL_DANGER');
     },
   });
   define('chart-model.buildChartOptionTimeline', {

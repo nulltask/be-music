@@ -43,7 +43,7 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay?.chart.chartOptions).toEqual({
-      version: 2,
+      version: 3,
       initial: { hiSpeed: 0.77 },
       cues: [
         { timeUs: 2000000, state: { hiSpeed: 100 } },

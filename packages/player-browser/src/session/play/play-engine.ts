@@ -277,9 +277,11 @@ function releaseKeyBeam(ctx: PlayEngineContext, channel: string): void {
 
 /**
  * Starts a bomb (hit explosion) on `channel`. The core scene draws it from `bombStartedAt`; themes react through the
- * `bomb` event (the LR2 family stamps its per-lane bomb timer at the same instant).
+ * `bomb` event (the LR2 family stamps its per-lane bomb timer at the same instant). A chart's `774:CRAZY_DARK2` (#931)
+ * draws no bombs; the beatoraja family leaves its bomb timers out the same way.
  */
 function triggerBomb(ctx: PlayEngineContext, channel: string, judge?: BeMusicJudgmentKind): void {
+  if (ctx.engineFrame?.chartOptions?.crazyDark === 'DARK2') return;
   const now = ctx.playClock();
   ctx.bombStartedAt.set(channel, now);
   if (judge) ctx.bombJudge.set(channel, judge);
@@ -756,7 +758,10 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
           }
         : {
             chartOptionProgram: ctx.options.nonstop?.chartOptions,
-            chartOptionDiagnostics: ctx.options.nonstop?.chartOptionDiagnostics,
+            chartOptionDiagnostics: [
+              ...(ctx.options.nonstop?.chartOptionDiagnostics ?? []),
+              ...(ctx.chartPlay?.diagnostics ?? []),
+            ],
           }),
       chartTextStages: ctx.options.nonstop?.chartText,
       // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).

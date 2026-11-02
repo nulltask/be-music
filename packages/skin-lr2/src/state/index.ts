@@ -22,6 +22,7 @@ export {
   LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE,
   LR2_JUDGE_TIMING_LIMIT_MS,
   stepLR2JudgeTiming,
+  stepLR2LaneOption,
 } from './options.ts';
 export {
   resolveLR2DecideState,
