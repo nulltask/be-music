@@ -85,6 +85,7 @@ export function expandChartFingerprintDocument(
       player3: document.lanes.player3,
       modeHint: document.lanes.modeHint ?? null,
       barLines: true,
+      playOptions: { ...document.playOptions },
     },
   };
   let combos: Array<{ probability: Rational; deltas: ItemDelta[] }> = [{ probability: { n: 1n, d: 1n }, deltas: [] }];

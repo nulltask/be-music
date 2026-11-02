@@ -48,6 +48,7 @@ const CONTENT_LINES: ReadonlyArray<(pick: (n: number) => number) => string> = [
   () => '#LNOBJ ZZ',
   (pick) => `#LNTYPE ${[1, 2][pick(2)]}`,
   (pick) => `#STP 00${pick(3) + 1}.500 ${[100, 250][pick(2)]}`,
+  (pick) => `#OPTION 774:${['RANDOM_MIRROR', 'NOTES_COPY', 'NOTES_OFF', 'CRAZY_ADDMINE', 'CRAZY_OFF'][pick(5)]}`,
 ];
 
 /** A random chart with nested (and sometimes malformed) control flow. */
