@@ -18,7 +18,7 @@ import { mountDecide, mountResult } from './result.ts';
 export const nativeSkin: BeMusicSkin = defineBeMusicSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
   version: '1.0.0',
-  author: { name: 'be-music' },
+  author: { name: 'Be-Music' },
   license: 'MIT',
   fontLoads: [],
   context: '2d',
