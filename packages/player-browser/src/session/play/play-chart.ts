@@ -482,15 +482,13 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         invisible.channel = flipDPChannel(invisible.channel);
       }
     }
+    // Every lane random draws from the side's seed through Java's `Random`, as beatoraja's modifiers do, whatever the
+    // judge rules and the option's source (#933): the seed reproduces the arrangement and is recorded with the play.
     const laneRandom = (side: '1P' | '2P'): (() => number) => {
-      if (
-        ctx.options.judgeRuleset !== 'beatoraja' ||
-        resolveLaneOptionChannels(side, playVariant, prepared.laneBindings).length === 0
-      )
-        return Math.random;
+      if (resolveLaneOptionChannels(side, playVariant, prepared.laneBindings).length === 0) return Math.random;
       const picked = side === '1P' ? ctx.options.randomSeed1P : ctx.options.randomSeed2P;
       const seed = parseLaneRandomSeed(picked ?? '-1');
-      if (seed === undefined) throw new RangeError('Invalid beatoraja lane random seed.');
+      if (seed === undefined) throw new RangeError('Invalid lane random seed.');
       const resolvedSeed = seed === '-1' ? String(Math.floor(Math.random() * 16777216)) : seed;
       ctx.randomSeeds![side === '1P' ? 'p1' : 'p2'] = resolvedSeed;
       // The upstream chart-wide PMS playable randomizer ignores its modifier seed.
@@ -589,7 +587,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
           ...resolveLaneOptionChannels('2P', playVariant, prepared.laneBindings),
         ],
         chartArrangement.crossSide.scratch ? 'RANDOM-EX' : 'RANDOM',
-        Math.random,
+        laneRandom('1P'),
         { ruleset: 'lr2', scratchLanes },
         ctx.mineNotes as Array<{ channel: string }>,
         ctx.invisibleNotes as Array<{ channel: string }>,

@@ -834,7 +834,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Fixed key 1P / 2P (LR2; 0=default)</dt>
                 <dd>The lane LR2 CONVERGE gathers notes on. 0 picks the mode default.</dd>
                 <dt>Seed 1P / 2P (-1=random)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Fixes the seed of the lane random; -1 draws a new one each play.</dd>
+                <dd>Fixes the seed of the lane random under every ruleset; -1 draws a new one each play. Hidden for RANDOM_PLAYABLE, which ignores it.</dd>
                 <dt>7-to-9 (beatoraja)</dt>
                 <dd>Plays a 7KEY chart on nine lanes, in the chosen layout.</dd>
                 <dt>7-to-9 scratch</dt>
@@ -1105,7 +1105,7 @@ export const PLAYER_APP_HTML = `
                 <dt>Fixed key 1P / 2P (LR2; 0=default)</dt>
                 <dd>LR2 の CONVERGE でノーツを集めるレーン。0 はモードの既定。</dd>
                 <dt>Seed 1P / 2P (-1=random)</dt>
-                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> レーンのランダムのシード。-1 ならプレイごとに新しく決めます。</dd>
+                <dd>どのルールでも使うレーンのランダムのシード。-1 ならプレイごとに新しく決めます。シードを使わない RANDOM_PLAYABLE では隠れます。</dd>
                 <dt>7-to-9 (beatoraja)</dt>
                 <dd>7 鍵の譜面を、選んだ配置で 9 レーンで遊びます。</dd>
                 <dt>7-to-9 scratch</dt>
