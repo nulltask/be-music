@@ -20,6 +20,7 @@ import { applyRecordPolicyLamp, resolveReplayRecordPolicy } from '@be-music/play
 import { clearLampRank } from '@be-music/player-engine/ruleset';
 import { sha256HexAsync as sha256Hex } from '@be-music/shared-utils/hash';
 import { playedFileOf } from './played-file.ts';
+import { checkChartPlayOptions } from './chart-play-options.ts';
 import { checkPlayedChart, gzipText, playedChartStatements, putChartDocument } from './played-chart.ts';
 import { byRulesetOrder, RULESET_IDS } from '../rulesets.ts';
 import { loadBestScores, toBestScoreRow } from './bests.ts';
@@ -106,6 +107,11 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   });
   if (!played.ok) {
     return { status: 'rejected', httpStatus: played.httpStatus, reason: played.reason };
+  }
+  // The chart's own gameplay options are part of the chart: the replay must record the ones its chart runs.
+  const chartOptions = checkChartPlayOptions(input.replay, input.playDocument);
+  if (!chartOptions.ok) {
+    return { status: 'rejected', httpStatus: 422, reason: chartOptions.reason };
   }
   const { verification } = played;
 

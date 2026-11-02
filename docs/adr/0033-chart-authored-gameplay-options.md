@@ -32,3 +32,5 @@ nanasigroove lets a chart's initial `#OPTION` force `774:RANDOM_*` (MIRROR, RAND
 ## Consequences
 
 Charts that force these options play as their author staged them, deterministically on replay and on the server. Lamps and rankings of such a chart compare plays under the same compulsory options. Two limits remain. A Leaderboard that cannot read the chart trusts the recorded program, so a log could strip or add it. And `NOTES_*`, NONSTOP application and terminal arrangements are not implemented.
+
+[ADR 0035](./0035-chart-authored-notes-options.md) later implemented `NOTES_*` and the terminal's arrangement and ADDMINE, and the Leaderboard now checks the recorded program against the chart's fingerprint documents.

@@ -28,6 +28,7 @@ import {
   resolveChartPlayVariant,
   type ChartPlayVariant,
 } from './index.ts';
+import { compileChartPlayOptions, type ChartPlayOptions } from './chart-play-options.ts';
 import { resolveGenericBmsonKeyCount } from './generic-bmson.ts';
 import { resolveKeyboardModeHint, type KeyboardModeHint } from './keyboard-mode-hint.ts';
 import { collectExRankChanges, resolveJudgeRankFacts, resolveTotalFacts } from './resolved-chart.ts';
@@ -117,6 +118,11 @@ export interface HeaderItems {
   modeHint: KeyboardModeHint | `generic-${number}keys` | null;
   /** `false` only for a bmson chart with an explicit `lines: []` (no bar lines drawn). */
   barLines: boolean;
+  /**
+   * The chart-authored gameplay options its initial `#OPTION` declarations compile to (`compileChartPlayOptions`): they
+   * change notes and judging, so they are part of the chart (#932). Empty for a chart without any.
+   */
+  playOptions: ChartPlayOptions;
 }
 
 export interface ChartItems {
@@ -858,6 +864,9 @@ function computeHeader(json: BeMusicJSON): HeaderItems {
         ? `generic-${genericKeys}keys`
         : (resolveKeyboardModeHint(json.bmson?.info?.modeHint) ?? null),
     barLines: json.bmson.barlinesSuppressed !== true,
+    playOptions: compileChartPlayOptions({
+      initial: json.bms.options ?? (json.bms.option ? [json.bms.option] : []),
+    }).options,
   };
 }
 
