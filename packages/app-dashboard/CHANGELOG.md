@@ -1,5 +1,13 @@
 # @be-music/app-dashboard
 
+## 0.1.3
+
+### Patch Changes
+
+- c69a154: The dashboard’s play card writes bmson in lowercase, matching the format name.
+- 9300c75: The Dashboard header shows a Beta badge beside Be-Music Dashboard, and the footer says Public Beta and that data may be deleted without notice, in the language of the page.
+- Updated dependencies: `@be-music/service-auth-client@0.2.0`, `@be-music/service-web-theme@0.3.1`
+
 ## 0.1.2
 
 ### Patch Changes

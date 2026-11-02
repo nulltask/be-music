@@ -1,5 +1,12 @@
 # @be-music/chart-editor
 
+## 0.4.3
+
+### Patch Changes
+
+- e8cd9c2: The fast clone path requires `bms.songText`, so a chart from before it is normalized on the slow path.
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`, `@be-music/chart-writer@0.6.1`
+
 ## 0.4.2
 
 ### Patch Changes

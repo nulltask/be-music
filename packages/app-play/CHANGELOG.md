@@ -1,5 +1,47 @@
 # @be-music/app-play
 
+## 0.10.0
+
+### Minor Changes
+
+- 556af54: New play option Debug Menu → Play options → **ANY KEY (PC)** (off by default, shown with the ???? judge rules only): whichever key you press takes the nearest note on any lane, the scratch included, and a long note stays held until that key is released. As on the PC edition, a play with it saves no record and is stored unranked on the Leaderboard. It is disabled during a play, and a replay plays back with the switch it recorded.
+- fcfc355: The player now keeps a dan rank: clearing a GRADE course named after a dan (`七段`, `発狂皆伝`, …) keeps the highest dan per judge ruleset and key mode, and the select screen of a be-music skin shows it. Only runs played from now on count; earlier course records are not read back.
+- fc53ca7: New replay ghost in Debug Menu → Play options → Replay / ghost (off by default):
+  
+  - **Ghost** picks the replay: OFF, OWN BEST (the chart's replay slot with the highest EX score), REPLAY SLOT 1-4, LEADERBOARD TOP (the replay of the chart's top run under your ruleset) or REPLAY FILE, chosen with **Ghost replay file…**.
+  - **Ghost mode** picks how it shows: SECOND PLAYFIELD (beside the play on the built-in skins, for 5 / 7 KEY single play), PACEMAKER (the ghost's EX score at the notes you have judged, as the score graph's pacemaker and the target numbers on every skin family), or PACEMAKER + LANES (the pacemaker with the ghost's key presses and judgments over your own lanes on the built-in skins).
+  - **Ghost status** says whether the chart under the cursor can show the pick and why not.
+  
+  The ghost never touches your records, replays or Leaderboard submission. Its controls are disabled during a play and on a course.
+
+### Patch Changes
+
+- 6e6aeeb: The embed preview's ← / → seek five seconds only during AUTO play, as the main play does, and no longer seek while the viewer plays (`mode=play`). Help says the arrows seek in AUTO play.
+- cf0df8c: Assisted plays no longer raise local best scores. Each play is recorded by its judge ruleset's assist rule: an assisted play moves only its limited lamp and its play count, LR2's D-BATTLE, SP TO DP and EXTRA MODE keep a lamp of their own, a `no-save` play (That-Which-Must-Not-Be-Named's BATTLE) keeps nothing, and an assisted course stage or run leaves the records alone. A play given up with ESC is recorded once its replay is ready, so the same rule applies to it. Records stored before this change keep their values.
+- 603bc4c: The built-in play screen shows the signed-in Leaderboard account's name.
+- 8c3eaf8: A GRADE / EXPERT course stage no longer updates the record of a chart whose NOTES COPY makes it a double-play chart outside the course, because the stage plays it single.
+- 814de2b: Courses you made can be registered for IR, from an LR2 skin's button 253 or the My courses dialog (after a confirmation), so their runs are ranked; a registered course's connections and constraints can no longer be changed. Courses saved without the flag now read back unregistered rather than ranked, so no course turns read-only without being registered.
+- 63334f3: The collapsed Debug Menu keeps its normal width on phones instead of a separate 116px width. During play it still shrinks to the corner tab so it does not cover Pause.
+- 7a71f0e: Dragging a chart onto the player no longer lights a frame around the stage. The drop card is the only reaction.
+- 8a78676: The Help dialog no longer jumps and recenters when the open-source license list replaces the loading line.
+- c69a154: The player shell, sign-in, loading, course maker, replay prompts and embed preview follow the browser language, in Japanese and English.
+- 51dd4c6: Old local saves are ignored: replay slots, made courses, skin settings, chart best records, and debug menu settings are written as version 0, and any other version is treated as absent.
+- 9300c75: The player shows a Beta badge beside its title and in the corner of the embed preview, and the start screen and Help say Public Beta and that data may be deleted without notice, in English and Japanese.
+- a5e2b64: The Debug Menu offers play options under every judge ruleset instead of only their source's:
+  
+  - Every lane and battle option, grouped by source with the ruleset's own first: RANDOM, S-RANDOM and CONVERGE once per source (RANDOM (LR2), RANDOM (beatoraja), ...), BATTLE (LR2) two-player play also under beatoraja rules, and BATTLE (beatoraja) and BATTLE (????) apart. Saved settings with a bare RANDOM, S-RANDOM, CONVERGE or BATTLE are read as the qualified value of the ruleset they were saved with.
+  - ADD LN / CN / HCN / ALL and their add rate.
+  - Seed 1P / 2P, since every lane option is now seeded.
+  - PRACTICE: GAUGE TYPE lists the ruleset's own gauges, GAUGE CATEGORY shows under beatoraja only, and JUDGERANK and TOTAL hide under AC.
+  - Gauge auto-shift, whose lowest gauge reads as the ruleset's gauges (EASY or GROOVE under LR2).
+  
+  The Leaderboard status line names the rulesets that judged a play only up to its failure or could not judge it at all.
+- fe5cf63: The player uses the shared site header and stays dark. The play header spans the viewport, with the brand at the left edge and the actions at the right. Settings sits where other sites put Play and toggles the Debug Menu, and a fullscreen button sits beside it. Fullscreen covers the play surface with the Debug Menu inside it, which fullscreen used to hide, and leaves the site header and footer outside it.
+- c0cf68e: Dropping charts hashed every chart in the library again to match courses, even with no course to match. It now hashes them only when a course with fixed stages needs them, which took about 17% off loading a 34-track folder.
+- 6e6aeeb: Google and Discord in the player's sign-in and sign-up dialogs were disabled and labelled coming soon, so they now start Accounts the same way a passkey does. Each button shows its provider's mark (a Google G, the Discord logo, a passkey) beside the label, and the Google and Discord buttons no longer sit flush against each other.
+- 996c83c: The player loads only the web fonts a skin draws with (Orbitron and M PLUS 1p for Synesthesia), no longer Anton, Azeret Mono, Dela Gothic One, Inter, LINE Seed JP or Michroma, and the page uses the system faces in place of Geist.
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-browser@0.14.0`, `@be-music/player-engine@0.13.0`, `@be-music/player-scene-model@0.5.0`, `@be-music/player-skin-sdk@0.7.0`, `@be-music/service-web-theme@0.3.1`, `@be-music/skin-beatoraja@0.6.0`, `@be-music/skin-lr2@0.6.0`
+
 ## 0.9.0
 
 ### Minor Changes
