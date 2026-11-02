@@ -148,8 +148,8 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
   )
     add({ option: 'bpm-guide', source: 'beatoraja', assistClass: 'light' });
   if (usedHSFixConstant(play)) add({ option: 'hs-fix-constant', source: 'lr2', assistClass: 'light' });
-  if (play.options?.practice === true && playedRuleset === 'beatoraja')
-    add({ option: 'practice', source: 'beatoraja', assistClass: 'no-save' });
+  // PRACTICE is beatoraja's mode, offered under every ruleset (#933); it saves nothing whatever the ruleset.
+  if (play.options?.practice === true) add({ option: 'practice', source: 'beatoraja', assistClass: 'no-save' });
 
   // A lane arrangement the chart forced (#844) is nanasigroove's, which has no assist class, and every play of the chart
   // gets it: it is not the player's assist, whatever lane value the host recorded for it.

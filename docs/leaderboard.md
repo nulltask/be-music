@@ -100,7 +100,7 @@ A manual play that seeks is practice (`PlayResult.practice`). Its first seek dis
   can be filtered to "played under this ruleset" only.
 - **Re-judging outcomes** ([ADR 0019](./adr/0019-source-qualified-option-values.md), `rejudgeReplay` in
   [Replays](./replay.md#re-judging-under-another-ruleset)): a ruleset that cannot read the play (a gauge it does not
-  define, or CUSTOM JUDGE or gauge auto-shift outside beatoraja) stores no figures and is answered in `notSimulated`
+  define, or CUSTOM JUDGE outside beatoraja) stores no figures and is answered in `notSimulated`
   with the reason. A play that ended where its gauge emptied is judged under another ruleset only up to that point; if
   that ruleset's gauge would have survived, its figures are stored with `outcome: 'truncated'` and, like an unranked
   play, move no personal best and stay out of the rankings and lists. Courses follow the same rules.

@@ -677,11 +677,10 @@
                           "reason": {
                             "enum": [
                               "gauge",
-                              "custom-judge",
-                              "gauge-auto-shift"
+                              "custom-judge"
                             ],
                             "type": "string",
-                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE or gauge auto-shift has no reading under it yet."
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE (beatoraja only) has no reading under it."
                           }
                         },
                         "required": [
@@ -824,11 +823,10 @@
                           "reason": {
                             "enum": [
                               "gauge",
-                              "custom-judge",
-                              "gauge-auto-shift"
+                              "custom-judge"
                             ],
                             "type": "string",
-                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE or gauge auto-shift has no reading under it yet."
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE (beatoraja only) has no reading under it."
                           }
                         },
                         "required": [
@@ -2331,11 +2329,10 @@
                           "reason": {
                             "enum": [
                               "gauge",
-                              "custom-judge",
-                              "gauge-auto-shift"
+                              "custom-judge"
                             ],
                             "type": "string",
-                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE or gauge auto-shift has no reading under it yet."
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE (beatoraja only) has no reading under it."
                           }
                         },
                         "required": [
@@ -2505,11 +2502,10 @@
                           "reason": {
                             "enum": [
                               "gauge",
-                              "custom-judge",
-                              "gauge-auto-shift"
+                              "custom-judge"
                             ],
                             "type": "string",
-                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE or gauge auto-shift has no reading under it yet."
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE (beatoraja only) has no reading under it."
                           }
                         },
                         "required": [

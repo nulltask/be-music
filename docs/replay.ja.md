@@ -365,8 +365,9 @@ flowchart TD
 
 - **not-simulated** と理由（`findReplayNotSimulatedReason`）: 参照元のないゲージが対象に定義されていない場合は
   `gauge` です（beatoraja での `P-ATTACK`、LR2 での `EX-HARD` と `ASSIST-EASY`、コース以外の ???? での
-  `DEATH`）。似たゲージには読み替えません。CUSTOM JUDGE やゲージオートシフトを使ったリプレイは、beatoraja
-  以外での読み方がまだ決まっていないため `custom-judge` と `gauge-auto-shift` です。プレイしたルールセットは
+  `DEATH`）。似たゲージには読み替えません。CUSTOM JUDGE を使ったリプレイは、CUSTOM JUDGE が
+  beatoraja だけのものなので `custom-judge` です。ゲージオートシフトは理由にならず、対象のゲージの並びで持ち越します
+  （[プレイオプション](./play-options.ja.md#ゲージオートシフト)）。プレイしたルールセットは
   常に自分のゲージで判定します。
 - **truncated**: サバイバルゲージが空になった所でプレイが終わり（`play.endOnFailure`）、対象のゲージならそこを
   生き残る場合です。判定はその時点（`stoppedAtUs`、プレイしたルールセットのゲージが空になった時刻）までで、

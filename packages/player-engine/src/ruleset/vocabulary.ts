@@ -14,8 +14,9 @@ export {
   isCustomJudgeAssist,
   type BeatorajaCustomJudge,
 } from './custom-judge.ts';
+export * from './practice-gauge.ts';
+export { resolveGaugeShiftLadder } from './gauge-shift.ts';
 export {
-  BEATORAJA_PRACTICE_GAUGE_TYPES,
   isRulesetId,
   RULESET_IDS,
   type BeatorajaGaugeCategory,

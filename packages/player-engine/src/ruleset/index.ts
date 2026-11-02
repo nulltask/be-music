@@ -12,6 +12,8 @@ export * from './course.ts';
 export * from './definitions.ts';
 export * from './gauge.ts';
 export * from './gauge-type.ts';
+export * from './gauge-shift.ts';
+export * from './practice-gauge.ts';
 export * from './judge.ts';
 export * from './selection.ts';
 export * from './chart-facts.ts';

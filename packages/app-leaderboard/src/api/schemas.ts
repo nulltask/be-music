@@ -154,8 +154,8 @@ const notSimulated = described(
     v.object({
       ruleset: rulesetSchema,
       reason: described(
-        v.picklist(['gauge', 'custom-judge', 'gauge-auto-shift']),
-        'Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE or gauge auto-shift has no reading under it yet.',
+        v.picklist(['gauge', 'custom-judge']),
+        'Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE (beatoraja only) has no reading under it.',
       ),
     }),
   ),

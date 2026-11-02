@@ -331,7 +331,7 @@ export interface ReplayCourseStage {
 
 /** The state carried from one course stage into the next. */
 export interface ReplayCourseCarry {
-  /** Independent raw CLASS / EXCLASS / EXHARDCLASS values under gauge auto-shift. */
+  /** Every course gauge of the ruleset's ladder (raw values), carried independently under gauge auto-shift. */
   gauges?: Record<string, number>;
   /** Gauge value in percent. */
   gauge: number;

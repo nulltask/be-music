@@ -843,10 +843,10 @@ export const PLAYER_APP_HTML = `
                 <dd>Plays the same chart again with the last play's exact lanes, when that play had the same judge rules.</dd>
                 <dt>New arrangement</dt>
                 <dd>Drops the reused arrangement and resets both seeds to -1.</dd>
-                <dt>Gauge auto-shift (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> What happens when the gauge would fail: NONE, CONTINUE, SURVIVAL TO GROOVE, BEST CLEAR or SELECT TO UNDER.</dd>
+                <dt>Gauge auto-shift</dt>
+                <dd>What happens when the gauge would fail: NONE, CONTINUE, SURVIVAL TO GROOVE, BEST CLEAR or SELECT TO UNDER (beatoraja's policies). Each ruleset shifts along its own gauges, for example LR2 from HAZARD to HARD, GROOVE and EASY.</dd>
                 <dt>Lowest auto-shift gauge</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to.</dd>
+                <dd>The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to. LR2 has no ASSIST EASY, so its lowest is EASY.</dd>
                 <dt>Scroll (beatoraja)</dt>
                 <dd>REMOVE draws the chart without its BPM and scroll changes; ADD adds random scroll changes. Judgment is unchanged.</dd>
                 <dt>Scroll section lines / Scroll rate</dt>
@@ -877,14 +877,14 @@ export const PLAYER_APP_HTML = `
                 <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Scales the judgment windows with the rates below.</dd>
                 <dt>Key / Scratch PGREAT, GREAT, GOOD % · LN margin %</dt>
                 <dd><em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of each window for keys and scratches, and the long-note release margin.</dd>
-                <dt>PRACTICE (beatoraja)</dt>
-                <dd><em class="help-menu-when">Shown with beatoraja rules.</em> Plays a range of the chart again and again until Esc. A practice play saves no replay and no record.</dd>
+                <dt>PRACTICE</dt>
+                <dd>beatoraja's PRACTICE, under every ruleset: plays a range of the chart again and again until Esc. A practice play saves no replay and no record, and is never sent to the Leaderboard.</dd>
                 <dt>START TIME ms / END TIME ms</dt>
                 <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The range to practise, in chart milliseconds; 0 as the end means the chart's end.</dd>
                 <dt>GAUGE TYPE / GAUGE CATEGORY / GAUGE VALUE</dt>
-                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The gauge, its category and its starting value.</dd>
+                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The gauge, one of the rules' own gauges; its category (beatoraja rules only); and its starting value.</dd>
                 <dt>JUDGERANK / TOTAL</dt>
-                <dd><em class="help-menu-when">Shown with PRACTICE on.</em> The judge rank and TOTAL to practise with; 0 keeps the chart's.</dd>
+                <dd><em class="help-menu-when">Shown with PRACTICE on, except under ???? rules.</em> The judge rank and TOTAL to practise with; 0 keeps the chart's. Under LR2 rules JUDGERANK reads on LR2's #RANK table (25, 50, 75 and 100 are VERY HARD to EASY) and TOTAL is used as is.</dd>
                 <dt>EXTRA depth (beatoraja) / EXTRA scratch</dt>
                 <dd>beatoraja EXTRA: how many background keysounds per row become notes (0 is off), and whether scratch lanes get them.</dd>
                 <dt>Long-note add rate (beatoraja)</dt>
@@ -1116,10 +1116,10 @@ export const PLAYER_APP_HTML = `
                 <dd>前回のプレイ (同じルールで遊んだもの) とまったく同じ配置で、同じ譜面をもう一度遊びます。</dd>
                 <dt>New arrangement</dt>
                 <dd>再利用している配置をやめ、シードを両方 -1 に戻します。</dd>
-                <dt>Gauge auto-shift (beatoraja)</dt>
-                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> ゲージが尽きたときの扱い。NONE、CONTINUE、SURVIVAL TO GROOVE、BEST CLEAR、SELECT TO UNDER。</dd>
+                <dt>Gauge auto-shift</dt>
+                <dd>ゲージが尽きたときの扱い。NONE、CONTINUE、SURVIVAL TO GROOVE、BEST CLEAR、SELECT TO UNDER (beatoraja の方式)。ルールごとに自分のゲージの並びで切り替えます。たとえば LR2 では HAZARD から HARD、GROOVE、EASY の順です。</dd>
                 <dt>Lowest auto-shift gauge</dt>
-                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> BEST CLEAR と SELECT TO UNDER で下げてよい一番下のゲージ。</dd>
+                <dd>BEST CLEAR と SELECT TO UNDER で下げてよい一番下のゲージ。LR2 には ASSIST EASY がないので、一番下は EASY です。</dd>
                 <dt>Scroll (beatoraja)</dt>
                 <dd>REMOVE は BPM やスクロールの変化をなくして描き、ADD はランダムなスクロールの変化を加えます。判定は変わりません。</dd>
                 <dt>Scroll section lines / Scroll rate</dt>
@@ -1150,14 +1150,14 @@ export const PLAYER_APP_HTML = `
                 <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 下の倍率で判定の幅を変えます。</dd>
                 <dt>Key / Scratch PGREAT, GREAT, GOOD % · LN margin %</dt>
                 <dd><em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> 鍵盤とスクラッチの判定ごとの幅と、ロングノートを離すときの余裕。</dd>
-                <dt>PRACTICE (beatoraja)</dt>
-                <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 譜面の一部の範囲を Esc を押すまで繰り返します。練習のプレイはリプレイも記録も残しません。</dd>
+                <dt>PRACTICE</dt>
+                <dd>beatoraja の PRACTICE を、どのルールでも使えます。譜面の一部の範囲を Esc を押すまで繰り返します。練習のプレイはリプレイも記録も残さず、Leaderboard にも送りません。</dd>
                 <dt>START TIME ms / END TIME ms</dt>
                 <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習する範囲 (譜面のミリ秒)。終わりの 0 は譜面の最後。</dd>
                 <dt>GAUGE TYPE / GAUGE CATEGORY / GAUGE VALUE</dt>
-                <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> ゲージの種類、カテゴリ、開始時の値。</dd>
+                <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> ゲージの種類 (そのルールのゲージ)、カテゴリ (beatoraja のルールのときだけ)、開始時の値。</dd>
                 <dt>JUDGERANK / TOTAL</dt>
-                <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習で使う判定ランクと TOTAL。0 なら譜面の値。</dd>
+                <dd><em class="help-menu-when">PRACTICE がオンのときに表示 (???? のルールでは表示しません)。</em> 練習で使う判定ランクと TOTAL。0 なら譜面の値。LR2 のルールでは JUDGERANK を LR2 の #RANK の表で読み (25・50・75・100 が VERY HARD〜EASY)、TOTAL はそのまま使います。</dd>
                 <dt>EXTRA depth (beatoraja) / EXTRA scratch</dt>
                 <dd>beatoraja の EXTRA。1 行あたり何個の BGM のキー音をノーツにするか (0 でオフ) と、スクラッチにも置くか。</dd>
                 <dt>Long-note add rate (beatoraja)</dt>
