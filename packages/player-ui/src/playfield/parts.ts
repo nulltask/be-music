@@ -83,7 +83,13 @@ export function resolvePlayfieldParts(
     // Notes may scroll below the judge line under a negative `#SCROLL`, down to the stage's bottom edge.
     notes: {
       rect: rect(left, playfield.top, width, stage.height - playfield.top),
-      data: { notes: frame.notes, longNotes: frame.longNotes, mines: frame.mines, measureLines: frame.measureLines },
+      data: {
+        notes: frame.notes,
+        longNotes: frame.longNotes,
+        mines: frame.mines,
+        measureLines: frame.measureLines,
+        nowMs: frame.nowMs,
+      },
     },
     laneCovers: {
       rect: rect(left, laneRect.y, width, Math.max(bottom, playfield.judgementY) - laneRect.y),

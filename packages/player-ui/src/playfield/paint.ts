@@ -1,6 +1,9 @@
 import {
+  backSpinChevron,
+  hellChargeRungs,
   layoutTabularRun,
   longNoteCentreLineAlpha,
+  resolveLongNoteMarks,
   type BeMusicLaneKind,
   type BeMusicRect,
 } from '@be-music/player-skin-sdk';
@@ -28,6 +31,10 @@ export type BeMusicPlayfieldPaintContext = Pick<
   | 'fillText'
   | 'measureText'
   | 'beginPath'
+  | 'moveTo'
+  | 'lineTo'
+  | 'closePath'
+  | 'fill'
   | 'arc'
   | 'rect'
   | 'stroke'
@@ -165,11 +172,34 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
     ctx.globalAlpha =
       (note.state === 'dropped' ? 0.3 : 0.6) * (note.alpha ?? 1) * longNoteCentreLineAlpha(note.releasedElapsedMs);
     ctx.fillRect(note.x + note.w / 2 - 1, note.top - NOTE_HEIGHT, 2, Math.max(1, note.bottom - note.top));
+    // The kinds apart by shape (`resolveLongNoteMarks`): an HCN's rungs flow while held, a BSS's tail carries a chevron.
+    const marks = resolveLongNoteMarks(note);
+    const capAlpha = (note.state === 'dropped' ? 0.5 : 1) * (note.alpha ?? 1);
+    if (marks.hellCharge) {
+      ctx.globalAlpha = 0.5 * capAlpha;
+      const bodyTop = note.top - NOTE_HEIGHT;
+      for (const y of hellChargeRungs(bodyTop, bodyTop + Math.max(1, note.bottom - note.top), {
+        nowMs: data.nowMs,
+        flowing: note.state === 'held',
+      })) {
+        ctx.fillRect(note.x + 2, y - 1, note.w - 4, 2);
+      }
+    }
     ctx.fillStyle = NOTE_COLORS[note.kind];
-    ctx.globalAlpha = (note.state === 'dropped' ? 0.5 : 1) * (note.alpha ?? 1);
+    ctx.globalAlpha = capAlpha;
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
-    if (note.mode === 'ln') ctx.globalAlpha *= 0.4;
+    if (!marks.judgedTail) ctx.globalAlpha *= 0.4;
     ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    if (marks.backSpin) {
+      ctx.globalAlpha = capAlpha;
+      ctx.fillStyle = '#ffffff';
+      const points = backSpinChevron(note.x, note.w, note.top, NOTE_HEIGHT);
+      ctx.beginPath();
+      ctx.moveTo(points[0]!, points[1]!);
+      for (let index = 2; index < points.length; index += 2) ctx.lineTo(points[index]!, points[index + 1]!);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
   }
   for (const note of data.notes) {
