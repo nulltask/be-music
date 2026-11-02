@@ -388,8 +388,17 @@ export interface PlayFrame {
   readonly state: PlayState;
   /** The 2P player of a two-player play (LR2 BATTLE): its gauge, score, combo and judgments. */
   readonly state2P?: PlayState;
-  /** Optional personal best and target EX scores for skin comparison animations; missing values mean zero. */
-  readonly scoreTargets?: { readonly bestEXScore?: number; readonly targetEXScore?: number };
+  /**
+   * Optional personal best and target EX scores for skin comparison animations; missing values mean zero. A ghost
+   * shown as a pacemaker (`session/play/ghost/`) is the target: its EX score over the chart, its EX score at the notes
+   * the play has judged (`targetPaceEXScore`, in place of a share of the whole), and its name.
+   */
+  readonly scoreTargets?: {
+    readonly bestEXScore?: number;
+    readonly targetEXScore?: number;
+    readonly targetPaceEXScore?: number;
+    readonly targetLabel?: string;
+  };
   /** The signed-in player's name, when the host has one. */
   readonly playerName?: string;
   readonly stage: PlayStage;
