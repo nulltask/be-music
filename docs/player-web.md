@@ -189,6 +189,35 @@ An arrow points from a module to one it makes or uses. The app also makes the sc
 
 **Debug Menu.** The [Debug Menu](#debug-menu) is `ui/debug-menu/`: `DebugMenu` (`index.ts`) builds it, each folder in a module of its own, and reaches the app only through `DebugMenuDeps`, which the app fills with the settings, the library, records and course-maker services, readers of the app's state and the app's actions. The folder titles and their remembered open states are `folders.ts`, and the locks a play puts on the options it latched and on the skin controls are `play-lock.ts`. The beatoraja skin-options panel is `ui/beatoraja-skin-options.ts`.
 
+## Installing the player
+
+The player is an installable web app: Chrome and Edge (desktop and Android) offer to install it, and iOS / iPadOS Safari's Add to Home Screen gets its icon and title. Installed, it opens in its own window, and once it has been opened online it starts without a network. Charts and themes come from dropped files, so an offline start plays them as usual; what needs the network (sign-in, the Leaderboard, `?music=` / `?skin=` links, BMS Search) does not work offline.
+
+- **Manifest:** `public/manifest.webmanifest`, linked from the player page with the iOS `apple-touch-icon` and `apple-mobile-web-app-*` tags. It names the app "Be-Music Play" (short name "Be-Music"), uses the player's background colour, and opens `standalone`, or `fullscreen` where the browser reads `display_override` (Chromium; on Android it hides the system bars). `orientation` is `any`: a phone held upright still shows the rotate prompt. The embed page links no manifest.
+- **Icons:** the Leaderboard's playfield art (`public/favicon.svg`), rendered into `public/icons/` by `pnpm --filter @be-music/app-play run build:icons`: 180 px for iOS, 192 / 512 px for the manifest, and 192 / 512 px maskable versions from `scripts/icons/maskable.svg`, the same art padded into the safe zone.
+- **Service worker:** `src/service-worker/service-worker.ts`, served as `/sw.js` with the scope `/`. The build bundles it as one more entry and writes its precache manifest into it (`scripts/service-worker-plugin.ts`); its rules are the pure `src/service-worker/routes.ts`. A production build registers it once the page has loaded (`src/service-worker/register.ts`); the dev server and runs under the test hook (`?e2e=1`) do not.
+
+What the worker does with a request:
+
+```mermaid
+flowchart TD
+  request[Request] --> dynamic{"Not a GET, a range,<br/>/api/*, /__url-load-proxy,<br/>/embed/ or /sw.js?"}
+  dynamic -- yes --> network[Network only]
+  dynamic -- no --> page{Page load?}
+  page -- yes --> shell["Network first;<br/>cached shell offline or after 5 s"]
+  page -- no --> kind{What is it?}
+  kind -- "/assets/*, precached file" --> cacheFirst[Cache first]
+  kind -- "/ffmpeg-core/*" --> ffmpeg["Cache first,<br/>cached on first use"]
+  kind -- "Google Fonts" --> fonts[Fonts cache]
+  kind -- "anything else" --> network
+```
+
+- **Precached on install:** the player page (cached as `/`), every chunk, stylesheet and worker it loads, the Help's `acknowledgements.json`, and the public files (icons, manifest), about 5 MB. Files only the embed page loads are left out.
+- **Cached on use:** the Google Fonts stylesheet (served from the cache and refreshed behind it) and its font files, and the ffmpeg.wasm core under `/ffmpeg-core/` (about 31 MB). The core only runs for BGA videos the browser cannot play ([BGA video transcode](#bga-video-transcode)), so precaching it would make every install download 31 MB that most players never use. It is cached the first time a transcode loads it, and a transcode works offline after that. Its cache is named by the `@ffmpeg/core` version, so a version bump fetches the new core.
+- **Never cached:** the Worker's routes (`/api/*` with sign-in, accounts, player settings and the Leaderboard API; `/__url-load-proxy`), the embed page, `POST` and other writes, range requests, and every other cross-origin request (the archives a `?music=` / `?skin=` link loads, course tables, BMS Search).
+
+**Updates.** Page loads go to the network first, so an online start always gets the latest deploy. A deploy changes the precached bytes, and with them the manifest's version in `sw.js`; the browser installs that worker in the background, precaching the new shell into a cache of its own. It takes over at the next start, once every tab or window of the player has closed, and then deletes the earlier deploys' caches. There is no reload prompt: a reload in the middle of a play would cost the play, and the open page keeps working from the network meanwhile. The player Worker serves `/sw.js` with `Cache-Control: no-cache`, and registration uses `updateViaCache: 'none'`, so the HTTP cache never answers an update check.
+
 ## Browser loading model
 
 - Dropped paths are normalized with the shared `@be-music/shared-utils/core` path helpers.

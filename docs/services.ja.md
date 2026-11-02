@@ -177,6 +177,8 @@ Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切�
 `devel` をプレビューにデプロイします。どれも Be-Music の Cloudflare アカウントで動いていて、このアカウントの請求は
 Be-Music の分だけです。`workers.dev` のサブドメインは `be-music.workers.dev` です。
 
+Player は Service Worker を持つインストール可能な Web アプリです（[player-web.ja.md](./player-web.ja.md#プレイヤーのインストール)）。`play` Worker は Static Assets の既定にかかわらず、Service Worker（`/sw.js`）を `Cache-Control: no-cache` で、Web アプリマニフェスト（`/manifest.webmanifest`）を `application/manifest+json` で配信します（`packages/worker-play/src/pwa-assets.ts`）。Service Worker は Worker 自身のルート（`/api/*`、`/__url-load-proxy`）を一切キャッシュしないので、サインイン、プレイヤー設定、Leaderboard API は常に Worker に届きます。R2 の ffmpeg core は、transcode が一度読み込んだあとは Service Worker が保持します。
+
 ## データの管理先
 
 公開プロフィールとアバターの正本は Accounts に置き、編集もそこで行います。Leaderboard はランキング用のコピー、プレイヤー ID の対応、スコアを保持します。同期と移行順は [ADR 0009](./adr/0009-accounts-profiles.ja.md) を参照してください。
