@@ -234,6 +234,8 @@ class GameplayScreen {
         bottom: note.bottom,
         nowMs,
         mode: note.mode,
+        backSpinScratch: note.backSpinScratch,
+        state: note.state,
         releasedElapsedMs: note.releasedElapsedMs,
       });
     }

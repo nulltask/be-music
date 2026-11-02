@@ -9,7 +9,10 @@ import {
   type BeMusicGameplayFrame,
   type BeMusicGameplayRuntime,
   type BeMusicSurface,
+  backSpinChevron,
+  hellChargeRungs,
   longNoteCentreLineAlpha,
+  resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
 import {
   ACCENT,
@@ -123,6 +126,15 @@ function drawWheelArrow(ctx: CanvasRenderingContext2D, x: number, y: number, siz
   ctx.fill();
 }
 
+/** Fills a closed polygon given as `[x0, y0, x1, y1, …]`. */
+function fillPolygon(ctx: CanvasRenderingContext2D, points: readonly number[]): void {
+  ctx.beginPath();
+  ctx.moveTo(points[0]!, points[1]!);
+  for (let index = 2; index < points.length; index += 2) ctx.lineTo(points[index]!, points[index + 1]!);
+  ctx.closePath();
+  ctx.fill();
+}
+
 const BEAM_GRADIENTS = new WeakMap<
   CanvasRenderingContext2D,
   { top: number; bottom: number; gradient: CanvasGradient }
@@ -141,8 +153,9 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
 
 /**
  * Tap notes as flat bars. Long notes: a translucent body with a white centre line between the head and tail bars; an
- * LN's tail (not judged) is translucent, a CN / HCN tail (judged on release) solid. A long note missed at the head or let go early draws at
- * LR2's half alpha.
+ * LN's tail (not judged) is translucent, a CN / HCN tail (judged on release) solid. An HCN's body carries rungs that
+ * flow while it is held, a back-spin scratch's tail a chevron pointing back up the lane. A long note missed at the head
+ * or let go early draws at LR2's half alpha.
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
@@ -156,12 +169,26 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.fillStyle = '#ffffff';
     ctx.globalAlpha = 0.6 * alpha * longNoteCentreLineAlpha(note.releasedElapsedMs);
     ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
+    const marks = resolveLongNoteMarks(note);
+    if (marks.hellCharge) {
+      ctx.globalAlpha = 0.5 * alpha;
+      const rungs = hellChargeRungs(bodyTop, bodyTop + bodyHeight, {
+        nowMs: frame.nowMs,
+        flowing: note.state === 'held',
+      });
+      for (const y of rungs) ctx.fillRect(note.x + 2, y - 1, note.w - 4, 2);
+    }
     ctx.globalAlpha = alpha;
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
     // An LN's tail is not judged: drawn translucent, where to let go. A CN / HCN tail is judged and stays solid.
-    if (note.mode === 'ln') ctx.globalAlpha = alpha * LN_TAIL_ALPHA;
+    if (!marks.judgedTail) ctx.globalAlpha = alpha * LN_TAIL_ALPHA;
     ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    if (marks.backSpin) {
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffffff';
+      fillPolygon(ctx, backSpinChevron(note.x, note.w, note.top, NOTE_HEIGHT));
+    }
     ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {

@@ -1,3 +1,4 @@
+import { isBackSpinScratchLongNote } from '@be-music/player-skin-sdk';
 import { drawLabel } from '../../../stage/draw-label.ts';
 /** The long notes of the shared playfield: one long note's body and caps. */
 
@@ -56,6 +57,7 @@ export function renderLongNote(
     const kind = resolveBeMusicLaneKind(channel, laneIndex, ctx.play.chartPlayVariant);
     const binding = ctx.skinBinding;
     if (binding) {
+      const mode = ctx.play.resolveLongNoteMode(note);
       binding.addLongNote({
         ...(visibilityAlpha !== 1 ? { alpha: visibilityAlpha } : {}),
         kind,
@@ -63,7 +65,8 @@ export function renderLongNote(
         w: lane.w,
         top,
         bottom,
-        mode: ctx.play.resolveLongNoteMode(note),
+        mode,
+        ...(isBackSpinScratchLongNote(kind, mode) ? { backSpinScratch: true } : {}),
         state,
         ...(releasedElapsedMs !== undefined ? { releasedElapsedMs } : {}),
         autoplay: ctx.play.isAutoplayedChannel(channel),

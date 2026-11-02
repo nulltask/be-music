@@ -161,7 +161,7 @@ async function buildResolvedExpected(
   const { replay } = await replayEngine(json, { randomDraws, inputs: [], speed: ENGINE_REPLAY_SPEED });
   const notes = replay.chart.notes;
   const play: Record<string, unknown> = {};
-  for (const [id, inputs] of Object.entries(buildScenarios(notes))) {
+  for (const [id, inputs] of Object.entries(buildScenarios(replay.chart))) {
     const simulated = simulateReplayRulesets({ ...replay, inputs });
     const replays = await replayEngineRulesets(json, { randomDraws, inputs, speed: ENGINE_REPLAY_SPEED });
     for (const { ruleset, replay } of replays) {

@@ -7,6 +7,7 @@ import type {
   BeMusicGameplayRuntime,
   BeMusicLaneFrame,
   BeMusicLaneKind,
+  BeMusicLongNoteState,
   BeMusicResultFrame,
   BeMusicSelectFrame,
   BeMusicSelectLayout,
@@ -100,6 +101,10 @@ export interface PixiLongNoteContext {
    * `'hcn'` judge the release too. Lets a skin draw an LN's tail apart from a tail that is judged.
    */
   mode?: 'ln' | 'cn' | 'hcn';
+  /** A back-spin scratch, whose tail is judged on a reverse spin (`BeMusicLongNote.backSpinScratch`). */
+  backSpinScratch?: boolean;
+  /** Where the long note is in its life (`BeMusicLongNote.state`): a held hell charge note is charging. */
+  state?: BeMusicLongNoteState;
   /** Milliseconds since the player let go early and the note was judged dropped (`BeMusicLongNote.releasedElapsedMs`). */
   releasedElapsedMs?: number;
 }

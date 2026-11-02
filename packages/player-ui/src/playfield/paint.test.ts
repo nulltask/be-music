@@ -25,6 +25,10 @@ function recorder(): BeMusicPlayfieldPaintContext & { calls: string[] } {
     fillText: (text: string, x: number, y: number) => calls.push(`fillText ${text} ${x},${y} ${String(ctx.fillStyle)}`),
     measureText: (text: string) => ({ width: text === '1' ? 4 : 10 }) as TextMetrics,
     beginPath: () => calls.push('beginPath'),
+    moveTo: (x: number, y: number) => calls.push(`moveTo ${x},${y}`),
+    lineTo: (x: number, y: number) => calls.push(`lineTo ${x},${y}`),
+    closePath: () => calls.push('closePath'),
+    fill: () => calls.push(`fill ${String(ctx.fillStyle)} ${ctx.globalAlpha}`),
     arc: (x: number, y: number, r: number) => calls.push(`arc ${x},${y},${r} ${ctx.globalAlpha}`),
     rect: (x: number, y: number, w: number, h: number) => calls.push(`rect ${x},${y},${w},${h}`),
     stroke: () => calls.push('stroke'),
@@ -165,6 +169,27 @@ describe('playfield painters', () => {
       'fillRect 32,76,16,2 #10151f 0.25',
     ]);
     expect(ctx.globalAlpha).toBe(1);
+  });
+
+  it('tells the long-note kinds apart by shape: HCN rungs and a BSS chevron', () => {
+    const paint = (longNote: Parameters<typeof paintNotes>[1]['longNotes'][number]): string[] => {
+      const ctx = recorder();
+      paintNotes(ctx, { measureLines: [], notes: [], mines: [], longNotes: [longNote], nowMs: 0 });
+      return ctx.calls;
+    };
+    const base = { kind: 'scratch' as const, x: 0, w: 40, top: 20, bottom: 100 };
+    const cn = paint({ ...base, mode: 'cn' });
+    const hcn = paint({ ...base, mode: 'hcn' });
+    const bss = paint({ ...base, mode: 'cn', backSpinScratch: true });
+    // CN: body, centre line, head and tail caps only.
+    expect(cn).toHaveLength(4);
+    // HCN: rungs across the body on top of the CN shape.
+    expect(hcn.length).toBeGreaterThan(cn.length);
+    expect(hcn.filter((call) => call.startsWith('fillRect 2,') && call.includes(',36,2 '))).not.toHaveLength(0);
+    // BSS: a filled chevron polygon after the caps.
+    expect(bss.slice(0, 4)).toEqual(cn);
+    expect(bss.slice(4)).toEqual(expect.arrayContaining(['beginPath', 'closePath', 'fill #ffffff 1']));
+    expect(bss.filter((call) => call.startsWith('lineTo'))).toHaveLength(5);
   });
 
   it('lights a pressed lane with its beam and marks a held long note', () => {

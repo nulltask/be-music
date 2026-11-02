@@ -214,10 +214,16 @@ describe("the view's touch lanes, as lane intents", () => {
     const { play, session, commands } = createTouchPlay();
     session.dispatch({ type: 'lane', channel: '11', pressed: true, atMs: 120 });
     expect(commands).toEqual([
-      { kind: 'lane-input', tokens: ['z'], pressedAt: at(120) },
+      { kind: 'lane-input', tokens: ['z'], pressedAt: at(120), spin: null },
       { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [], pressedAt: at(120) },
     ]);
     expect([...play.touchLanesHeld]).toEqual(['11']);
+  });
+
+  test('a scratch tap reports no spin, so the engine does not read one off the Shift token', () => {
+    const { session, commands } = createTouchPlay();
+    session.dispatch({ type: 'lane', channel: '16', pressed: true, atMs: 10 });
+    expect(commands[0]).toEqual({ kind: 'lane-input', tokens: ['shift-left'], pressedAt: at(10), spin: null });
   });
 
   test("a release lets the lane's key go, with the binding's first key", () => {

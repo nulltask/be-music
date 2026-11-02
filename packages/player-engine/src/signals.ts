@@ -10,6 +10,7 @@ export {
   type PlayerInputCommand,
   type PlayerInputSignalBus,
 } from './core/input-signal-bus.ts';
+export type { ScratchSpin } from './core/scratch-spin.ts';
 export {
   createPlayerUISignalBus,
   type PlayerGaugeSummary,

@@ -7,6 +7,7 @@ import type { HCNTickCounter } from '../ruleset/long-note.ts';
 import type { GrooveGaugeJudgmentKind } from './groove-gauge.ts';
 import type { AnyKeyRoutes } from './any-key.ts';
 import type { LaneHoldHistory } from './lane-hold.ts';
+import type { ScratchSpin } from './scratch-spin.ts';
 import { type PendingAutoLongNoteState, type TimedManualJudge } from './judge-rules.ts';
 import { type ScoreSummary, type ScoreTracker } from './scoring.ts';
 import type { PlayerGaugeSummary, PlayerUICommand } from './ui-signal-bus.ts';
@@ -110,6 +111,13 @@ export interface ActiveLongNoteState {
    * tail then stands alone; LN mode instead defers, and resolves head and tail into one combined judgment.
    */
   headScored: boolean;
+  /**
+   * A back-spin scratch (`isBackSpinScratch`): its tail is judged on a press spinning the other way from
+   * {@link headSpin}, and a release settles nothing.
+   */
+  backSpinScratch?: true;
+  /** The spin of the press that hit a back-spin scratch's head (`undefined` when the input reported none). */
+  headSpin?: ScratchSpin;
 }
 
 /** The judge state of one manual play. Owned by the core: drivers read it, only {@link runJudgeCoreStep} writes it. */
@@ -165,8 +173,18 @@ export interface JudgeCoreState {
 export type JudgeCoreInput =
   /** Time passes: long-note holds and tails, HCN ticks, auto-scratch, misses, mines and invisible notes resolve. */
   | { kind: 'advance'; nowSec: number; nowMs: number }
-  /** A lane press on `channels` (already mapped from key tokens; `tokens` are only recorded). */
-  | { kind: 'press'; channels: ReadonlySet<string>; tokens: readonly string[]; nowSec: number; nowMs: number }
+  /**
+   * A lane press on `channels` (already mapped from key tokens; `tokens` are only recorded). `spin` is the way a
+   * scratch press turned the turntable: a back-spin scratch's tail is judged on a press spinning the other way.
+   */
+  | {
+      kind: 'press';
+      channels: ReadonlySet<string>;
+      tokens: readonly string[];
+      nowSec: number;
+      nowMs: number;
+      spin?: ScratchSpin;
+    }
   /**
    * Keys went down and stay down (key-state input): the lanes count as held until released. `inferred`: the driver
    * inferred it from input without releases, so no lane cue shows it. `tokens` name the keys, which ANY KEY routes by.
@@ -210,6 +228,8 @@ export type JudgeCoreEffect =
       tokens: readonly string[];
       channels: ReadonlySet<string>;
       inferred?: boolean;
+      /** The scratch spin of a press (`ReplayInputEvent.spin`). */
+      spin?: ScratchSpin;
     }
   /** Count an empty POOR in the replay's native result. */
   | { kind: 'record-empty-poor' }

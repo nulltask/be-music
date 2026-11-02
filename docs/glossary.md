@@ -70,6 +70,9 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - **long note (LN)**: Note with a start and end point. Hold, release, and end judgment depend on `LNMODE`.
 - **LNOBJ**: BMS long-note terminator object declared by `#LNOBJ`.
 - **LNMODE**: BMS long-note judgment rule. `1`, `2`, and `3` change end judgment and hold-break behavior.
+- **charge note (CN) / hell charge note (HCN)**: Long notes whose tail is judged too (`#LNMODE 2` / `3` as the ruleset plays them). An HCN also drains the gauge while it is not held. An **LN** in the narrow sense (`#LNMODE 1`) judges only its head.
+- **back-spin scratch (BSS)**: A charge note (CN / HCN) on a scratch lane. Its tail is judged on a **reverse spin**, a scratch press spinning the other way from the press that hit its head, not on the release. Only the rulesets that judge a long note's tail have one (beatoraja's CN / HCN and every That-Which-Must-Not-Be-Named long note); LR2 plays it as an LN. Code: `isBackSpinScratch`, `backSpinScratch`.
+- **scratch spin**: The way a scratch press turned the turntable, `'cw'` or `'ccw'` (`ScratchSpin`, the replay's `spin`). A controller that reports rotation sends the direction it turned; a keyboard uses **odd-even**: a scratch lane's keys alternate as the two directions.
 - **mine**: Damage note. Following LR2, a mine explodes when its lane is held as it crosses the judge line or pressed within the `PGREAT` window; the explosion only drains the gauge by the chart-defined damage and is not a judgment.
 - **judgment**: A note evaluation such as `PERFECT`, `GREAT`, `GOOD`, `BAD`, or `POOR`. Use judgment for the result and judge for the verb; use `JudgmentKind` for a kind and `JudgmentTiming` for a timed result. Verb-led engine names and format fields such as `judge` and `judgeRuleset` retain their roles.
 - **FAST/SLOW**: Timing-direction display for early or late hits. The current implementation aggregates only `GREAT` and `GOOD`.
