@@ -1,5 +1,15 @@
 # @be-music/player-scene-model
 
+## 0.6.0
+
+### Minor Changes
+
+- 9c88d33: Add the PRACTICE range picker's helpers (#948): `resolvePracticeRangeChart` reads a resolved chart's measure starts, length and judged note times, and `binPracticeNoteDensity`, `practiceTimeToX` / `practiceXToTime`, `findPracticeMeasureAt`, `resolveShownPracticeRange`, `pickPracticeRangeHandle`, `dragPracticeRangeHandle` (snapping to measure starts while keeping a range of at least `PRACTICE_MIN_RANGE_MS`, END 0 = to the end) and `formatPracticeTime` (`m:ss.s`) draw and drag the range.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-engine@0.14.0`
+
 ## 0.5.0
 
 ### Minor Changes

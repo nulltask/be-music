@@ -1,5 +1,11 @@
 # @be-music/app-accounts
 
+## 0.1.5
+
+### Patch Changes
+
+- adcaa23: Accounts spells the product name Be-Music in its copy ("One account for all Be-Music services.", EN and JA), in the passkey prompt and in the name a new passkey is saved under.
+
 ## 0.1.4
 
 ### Patch Changes
