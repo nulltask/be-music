@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { formatJudgeComboDisplay, PlayerTUI } from './tui.ts';
 import type { TUINoteHeight } from '@be-music/player-engine/display';
+import type { ChartOptionState } from '@be-music/chart-model';
 
 function stripANSI(value: string): string {
   // eslint-disable-next-line no-control-regex
@@ -14,7 +15,7 @@ function renderOutputRaw(
   notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
   options: {
     chartText?: string;
-    chartOptions?: { hiSpeed?: number };
+    chartOptions?: ChartOptionState;
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
@@ -102,7 +103,7 @@ function renderOutput(
   notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
   options: {
     chartText?: string;
-    chartOptions?: { hiSpeed?: number };
+    chartOptions?: ChartOptionState;
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
@@ -618,4 +619,20 @@ test('long chart text is cut to the terminal width by display columns and never 
   expect(rows).toEqual([`TEXT  ${'譜'.repeat(17)}`]);
   // The text row replaces one lane row instead of adding a wrapped one.
   expect(lines.length).toBe(renderOutputRaw([], { chartText: 'short' }).length);
+});
+
+test('REVERSE flips the grid so a note near the line draws near the top', () => {
+  const notes = [{ channel: '11', beat: 1, seconds: 0.5 }];
+  const rowOf = (lines: string[]) => lines.findIndex((line) => line.includes('███'));
+  const plain = renderOutput(notes);
+  const reversed = renderOutput(notes, { chartOptions: { crazyReverse: 'REVERSE' } });
+  expect(rowOf(reversed)).toBeGreaterThanOrEqual(0);
+  expect(rowOf(plain)).toBeGreaterThan(rowOf(reversed));
+  expect(reversed.length).toBe(plain.length);
+});
+
+test('DARK keeps the lane block and HIDJUDGE keeps the layout', () => {
+  expect(renderOutput([], { chartOptions: { crazyDark: 'DARK2', crazyJudge: 'HIDJUDGE' } }).length).toBe(
+    renderOutput([]).length,
+  );
 });

@@ -85,8 +85,8 @@ import {
 export { resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTUIGrid } from './high-speed.ts';
 export { formatMeasureSignature } from './timeline.ts';
 export { formatJudgeComboDisplay } from './hud.ts';
-import type { ChartOptionState } from '@be-music/chart-model';
-import { placeTUIChartNote } from './chart-note-visual.ts';
+import { resolveChartPlayfieldVisual, type ChartOptionState } from '@be-music/chart-model';
+import { placeTUIChartNote, resolveTUIReversedRow } from './chart-note-visual.ts';
 
 interface TUIOptions {
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
@@ -526,7 +526,7 @@ export class PlayerTUI {
     }
 
     const nextVisibleNoteRows = new Map<string, number>();
-    // Chart-authored HIDDEN / CHANGE-HS (#843) on the grid: a note's distance after CHANGE-HS, and whether it shows.
+    // Chart-authored HIDDEN / CHANGE-HS / Y wave (#843, #931) on the grid: a note's distance, and whether it shows.
     const combo = Math.max(this.leftJudgeComboDisplay.combo, this.rightJudgeComboDisplay.combo);
     const placeChartNote = (distance: number, note: TUINote, keyPrefix: string) =>
       keyPrefix === 'invisible'
@@ -844,9 +844,13 @@ export class PlayerTUI {
         ),
       );
     }
+    // Chart-authored playfield options (#931): REVERSE flips the grid (the judge row on top), HIDJUDGE blanks the judge
+    // line and DARK hides the BGA. LINEMOVE, M-SUDDEN and the per-note sprite effects have no grid meaning.
+    const chartPlayfield = resolveChartPlayfieldVisual(frame.chartOptions, frame.currentSeconds);
     const judgeRowIndex = Math.max(0, grid.length - 1);
     const playfieldIndicatorStartIndex = laneLines.length;
-    for (let rowIndex = 0; rowIndex < grid.length; rowIndex += 1) {
+    for (let displayRow = 0; displayRow < grid.length; displayRow += 1) {
+      const rowIndex = resolveTUIReversedRow(displayRow, grid.length, chartPlayfield.reverse);
       const row = grid[rowIndex]!;
       if (rowIndex === judgeRowIndex) {
         laneLines.push(
@@ -890,7 +894,9 @@ export class PlayerTUI {
     }
     const playfieldIndicatorEndIndex = Math.max(playfieldIndicatorStartIndex, laneLines.length - 1);
 
-    const judgeComboLabels = this.resolveJudgeComboLabels(now);
+    const judgeComboLabels = chartPlayfield.hideJudge
+      ? { single: '', left: '', right: '' }
+      : this.resolveJudgeComboLabels(now);
     laneLines.push(renderJudgeComboLine(judgeComboLabels, this.laneWidths, this.options.splitAfterIndex));
 
     const [blackKeyRow, whiteAndScratchKeyRow] = renderInputKeyRows(
@@ -919,7 +925,7 @@ export class PlayerTUI {
           image: BGAKittyImage;
         }
       | undefined;
-    if (this.terminalImageProtocol === 'kitty' && frame.bgaKittyImage) {
+    if (this.terminalImageProtocol === 'kitty' && frame.bgaKittyImage && !chartPlayfield.hideBGA) {
       const renderedKittyBGA = renderLaneBlockWithKittyPadding(laneLinesWithProgress, frame.bgaKittyImage.cellWidth);
       lines.push(...renderedKittyBGA.lines);
       kittyBGAPlacement = {
@@ -928,7 +934,9 @@ export class PlayerTUI {
         image: frame.bgaKittyImage,
       };
     } else {
-      lines.push(...renderLaneBlockWithBGA(laneLinesWithProgress, frame.bgaANSILines));
+      lines.push(
+        ...renderLaneBlockWithBGA(laneLinesWithProgress, chartPlayfield.hideBGA ? undefined : frame.bgaANSILines),
+      );
     }
     lines.push('');
     lines.push(
