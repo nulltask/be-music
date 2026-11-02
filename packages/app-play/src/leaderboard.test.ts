@@ -184,6 +184,22 @@ describe('describeLeaderboardResult', () => {
       'Leaderboard: not submitted (rate-limited)',
     );
   });
+  test('names the rulesets that judged the play only in part or not at all (ADR 0019)', () => {
+    const truncated = { ...result, ruleset: 'beatoraja' as const, rank: 0, players: 0, outcome: 'truncated' as const };
+    expect(
+      describeLeaderboardResult(
+        {
+          status: 'accepted',
+          scoreId: 's',
+          results: [result, truncated],
+          notSimulated: [{ ruleset: '____', reason: 'gauge' }],
+        },
+        'lr2',
+      ),
+    ).toBe(
+      'Leaderboard lr2: #4 / 20 · EX 1234 · new best EX / lamp · judged only up to the failure under beatoraja · not simulated under ____',
+    );
+  });
 });
 
 describe('describeSkippedSubmission', () => {

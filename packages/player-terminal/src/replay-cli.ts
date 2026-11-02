@@ -2,8 +2,10 @@ import { isCLIEntryPoint } from '@be-music/shared-utils/cli';
 import { readFile } from 'node:fs/promises';
 import {
   parseReplay,
+  rejudgeReplay,
   simulateReplay,
   REPLAY_SIMULATOR_RULESETS,
+  type ReplayRejudgeOutcome,
   type BeMusicReplay,
   type BeatorajaJudgeAlgorithm,
   type RulesetId,
@@ -97,7 +99,11 @@ function formatRate(exScore: number, noteCount: number): string {
 
 interface ReportRow {
   label: string;
-  result: ReplayRulesetResult;
+  /** Absent for a ruleset the replay is not simulated under (ADR 0019); {@link note} says why. */
+  result?: ReplayRulesetResult;
+  /** `truncated` for a result judged only up to where the play stopped on failure. */
+  outcome?: 'truncated';
+  note?: string;
 }
 
 /** Builds the human-readable comparison table for one replay. */
@@ -129,13 +135,18 @@ export function buildReplayReport(fileLabel: string, replay: BeMusicReplay, rows
     'GAUGE',
   ].join(' ');
   lines.push(header);
-  for (const { label, result } of rows) {
+  for (const { label, result, outcome, note } of rows) {
+    const shownLabel = pad(label.replace(/^____(?=\/|$)/, '????'), 14);
+    if (result === undefined) {
+      lines.push(`${shownLabel} not simulated${note !== undefined ? ` (${note})` : ''}`);
+      continue;
+    }
     const gauge = `${result.gauge.final.toFixed(1)}% ${result.gauge.type} ${
       result.gauge.cleared ? 'CLEAR' : result.gauge.failedMidPlay === true ? 'FAILED(0%)' : 'FAILED'
-    }`;
+    }${outcome === 'truncated' ? ' TRUNCATED' : ''}`;
     lines.push(
       [
-        pad(label.replace(/^____(?=\/|$)/, '????'), 14),
+        shownLabel,
         pad(String(result.exScore), 6),
         pad(formatRate(result.exScore, result.noteCount), 8),
         pad(result.djLevel ?? '-', 4),
@@ -189,15 +200,27 @@ export async function runReplayCLI(argv: readonly string[] = process.argv.slice(
     if (native) {
       rows.push({ label: native.ruleset, result: native });
     }
-    const results: Record<string, ReplayRulesetResult> = {};
+    const results: Record<string, ReplayRejudgeOutcome> = {};
     for (const ruleset of args.rulesets) {
-      const result = simulateReplay(replay, {
+      const options = {
         ruleset,
-        ...(args.gauge !== undefined ? { gauge: args.gauge } : {}),
         ...(args.judgeAlgorithm !== undefined ? { judgeAlgorithm: args.judgeAlgorithm } : {}),
-      });
-      results[ruleset] = result;
-      rows.push({ label: result.ruleset, result });
+      };
+      // A gauge override is a developer's explicit pick: simulated as asked, with no re-judging rules.
+      const outcome: ReplayRejudgeOutcome =
+        args.gauge !== undefined
+          ? { status: 'simulated', result: simulateReplay(replay, { ...options, gauge: args.gauge }) }
+          : rejudgeReplay(replay, options);
+      results[ruleset] = outcome;
+      rows.push(
+        outcome.status === 'not-simulated'
+          ? { label: ruleset, note: outcome.reason }
+          : {
+              label: outcome.result.ruleset,
+              result: outcome.result,
+              ...(outcome.status === 'truncated' ? { outcome: 'truncated' as const } : {}),
+            },
+      );
     }
     if (args.json) {
       jsonOutput.push({ file, chart: replay.chart.title, play: replay.play, native, results });

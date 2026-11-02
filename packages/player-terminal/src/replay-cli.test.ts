@@ -119,6 +119,16 @@ describe('replay-cli', () => {
     expect(____Line).toContain(' - ');
   });
 
+  test('buildReplayReport: marks truncated results and rulesets the replay is not simulated under', () => {
+    const report = buildReplayReport('file.bmplay.json', makeReplay(), [
+      { label: 'lr2/0', result: makeResult(), outcome: 'truncated' },
+      { label: 'beatoraja', note: 'gauge' },
+    ]);
+    const lines = report.split('\n');
+    expect(lines.find((line) => line.startsWith('lr2/0'))).toContain('84.0% GROOVE CLEAR TRUNCATED');
+    expect(lines.find((line) => line.startsWith('beatoraja'))).toMatch(/^beatoraja\s+not simulated \(gauge\)$/);
+  });
+
   test('buildReplayReport: marks aborted plays and auto scratch in the header', () => {
     const replay = makeReplay();
     replay.play.autoScratch = true;

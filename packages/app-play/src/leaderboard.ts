@@ -87,6 +87,14 @@ export interface LeaderboardRulesetResult {
   rank: number;
   players: number;
   improved: { exScore: boolean; lamp: boolean; missCount: boolean };
+  /** `truncated`: judged only up to where the play stopped on failure, unranked (ADR 0019). */
+  outcome?: 'truncated';
+}
+
+/** A ruleset the Leaderboard cannot judge the play under (`NotSimulatedOutcome` in `@be-music/app-leaderboard`). */
+export interface LeaderboardNotSimulated {
+  ruleset: RulesetId;
+  reason: string;
 }
 
 export type LeaderboardSubmitResult =
@@ -94,6 +102,8 @@ export type LeaderboardSubmitResult =
       status: 'accepted' | 'duplicate';
       scoreId: string;
       results: LeaderboardRulesetResult[];
+      /** The rulesets the Leaderboard cannot judge the play under. */
+      notSimulated?: LeaderboardNotSimulated[];
       /** Why the Leaderboard stored the play without ranking it (`tempo`, `course-stage`, ...). */
       unranked?: string;
     }
@@ -121,7 +131,12 @@ export async function submitToLeaderboard(
   }));
   if (!(response instanceof Response)) return response;
   if (response.status === 201 || response.status === 200) {
-    const body = (await response.json()) as { scoreId: string; results: LeaderboardRulesetResult[]; unranked?: string };
+    const body = (await response.json()) as {
+      scoreId: string;
+      results: LeaderboardRulesetResult[];
+      notSimulated?: LeaderboardNotSimulated[];
+      unranked?: string;
+    };
     return { status: response.status === 201 ? 'accepted' : 'duplicate', ...body };
   }
   return { status: 'failed', httpStatus: response.status, error: (await readError(response)) ?? 'unknown' };
@@ -247,6 +262,8 @@ export type CourseLeaderboardSubmitResult =
       status: 'accepted' | 'duplicate';
       courseScoreId: string;
       results: CourseLeaderboardRulesetResult[];
+      /** The rulesets the Leaderboard cannot judge the run under. */
+      notSimulated?: LeaderboardNotSimulated[];
       /** Why the Leaderboard stored the run without ranking it (`tempo`, `unreleased`). */
       unranked?: string;
     }
@@ -274,6 +291,7 @@ export async function submitCourseToLeaderboard(
     const body = (await response.json()) as {
       courseScoreId: string;
       results: CourseLeaderboardRulesetResult[];
+      notSimulated?: LeaderboardNotSimulated[];
       unranked?: string;
     };
     return { status: response.status === 201 ? 'accepted' : 'duplicate', ...body };
@@ -300,6 +318,7 @@ function describeRankedResult(
   result: {
     status: 'accepted' | 'duplicate';
     results: readonly LeaderboardRulesetResult[];
+    notSimulated?: readonly LeaderboardNotSimulated[];
     unranked?: string;
   },
   playedRuleset: string,
@@ -308,7 +327,9 @@ function describeRankedResult(
   const copy = playerText().lb;
   const again = result.status === 'duplicate' ? copy.already : '';
   if (result.unranked !== undefined) return copy.stored(describeUnranked(result.unranked), again);
-  const mine = result.results.find((entry) => entry.ruleset === playedRuleset) ?? result.results[0];
+  const mine =
+    result.results.find((entry) => entry.ruleset === playedRuleset) ??
+    result.results.find((entry) => entry.outcome === undefined);
   if (mine === undefined) return copy.submitted;
   const improved = [
     mine.improved.exScore ? 'EX' : undefined,
@@ -316,8 +337,14 @@ function describeRankedResult(
     mine.improved.missCount ? 'BP' : undefined,
   ].filter((part) => part !== undefined);
   const best = result.status === 'accepted' && improved.length > 0 ? copy.newBest(improved.join(' / ')) : '';
+  // The other rulesets that could not judge the play in full (ADR 0019): a skipped judgment must never pass silently.
+  const truncated = result.results.filter((entry) => entry.outcome === 'truncated').map((entry) => entry.ruleset);
+  const notSimulated = (result.notSimulated ?? []).map((entry) => entry.ruleset);
+  const others =
+    (truncated.length > 0 ? copy.truncated(truncated.join(', ')) : '') +
+    (notSimulated.length > 0 ? copy.notSimulated(notSimulated.join(', ')) : '');
   const line = course ? copy.courseRanked : copy.ranked;
-  return line(mine.ruleset, mine.rank, mine.players, mine.exScore, best, again);
+  return line(mine.ruleset, mine.rank, mine.players, mine.exScore, best + others, again);
 }
 
 /** Why the Leaderboard stored a play without ranking it, for the status line. */
