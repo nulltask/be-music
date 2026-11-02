@@ -1,4 +1,5 @@
 import { parseHDXLongNoteMode } from './hdx-long-note-mode.ts';
+import { isChartPlayOptionDeclaration } from './chart-play-options.ts';
 /**
  * Deltas of the chart fingerprint (`docs/fingerprint-spec.md`, section 3.6.2): what the lines one `#RANDOM` / `#SWITCH`
  * outcome applies change in the content outside control flow, and how deltas are applied, formatted and read back.
@@ -68,8 +69,8 @@ interface DeltaLists {
   lengths: Array<Keyed<[number, Rational]>>;
 }
 
-type HeaderField = 'bpm' | 'baseBPM' | 'judge' | 'total' | 'player3';
-export const HEADER_FIELDS: ReadonlyArray<HeaderField> = ['bpm', 'baseBPM', 'judge', 'total', 'player3'];
+type HeaderField = 'bpm' | 'baseBPM' | 'judge' | 'total' | 'player3' | 'playOptions';
+export const HEADER_FIELDS: ReadonlyArray<HeaderField> = ['bpm', 'baseBPM', 'judge', 'total', 'player3', 'playOptions'];
 
 export interface ItemDelta {
   add: DeltaLists;
@@ -137,6 +138,8 @@ function formatHeaderField(header: Partial<HeaderItems>, field: HeaderField): un
       return header.total === undefined ? undefined : formatTotal(header.total);
     case 'player3':
       return header.player3;
+    case 'playOptions':
+      return header.playOptions === undefined ? undefined : { ...header.playOptions };
     default:
       return undefined;
   }
@@ -479,14 +482,17 @@ function applyFingerprintHeader(
         touched.add(ALL_LANES);
       }
       return;
-    case 'OPTION':
-      if (parseHDXLongNoteMode(value) !== undefined) {
+    case 'OPTION': {
+      const longNoteMode = parseHDXLongNoteMode(value) !== undefined;
+      if (longNoteMode || isChartPlayOptionDeclaration(value)) {
         const declarations = (json.bms.options ??= json.bms.option ? [json.bms.option] : []);
         declarations.push(value);
         json.bms.option = value;
-        touched.add(ALL_LANES);
+        // An HDX LONGMODE changes the long notes; a gameplay option, the header's `playOptions`.
+        touched.add(longNoteMode ? ALL_LANES : HEADER_BUCKET);
       }
       return;
+    }
     case 'LNMODE':
       if (Number.isFinite(numeric) && numeric > 0) {
         json.bms.lnMode = Math.floor(numeric);
@@ -725,6 +731,9 @@ export function parseDelta(branch: FingerprintBranch): ItemDelta {
   }
   if (change.player3 !== undefined) {
     header.player3 = change.player3;
+  }
+  if (change.playOptions !== undefined) {
+    header.playOptions = { ...change.playOptions };
   }
   return { add: parseDeltaLists(branch.add), remove: parseDeltaLists(branch.remove), header };
 }
