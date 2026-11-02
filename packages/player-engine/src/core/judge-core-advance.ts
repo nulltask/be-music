@@ -467,7 +467,7 @@ function applyExpiredScorableJudgements(
     if (!markScorableJudged(state, note)) {
       continue;
     }
-    startHCNPassing(state, note, atUs);
+    startHCNPassing(state, note, atUs, emit);
     if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
       note.visibleUntilBeat = note.endBeat;
     }
@@ -569,7 +569,12 @@ function isGoodOrBetter(kind: TimedManualJudge['kind']): boolean {
  * deadline): they run from the later of the head and that instant until the tail passes. AUTO SCRATCH lanes have
  * none.
  */
-export function startHCNPassing(state: JudgeCoreState, note: TimedPlayableNote, judgedUs: number): void {
+export function startHCNPassing(
+  state: JudgeCoreState,
+  note: TimedPlayableNote,
+  judgedUs: number,
+  emit: JudgeCoreEffectSink,
+): void {
   const { config } = state;
   const endSeconds = resolveLongNoteEndSeconds(note);
   if (endSeconds === undefined || resolveRulesetLongNoteMode(config.ruleset.longNoteStyle, note) !== 3) {
@@ -585,22 +590,39 @@ export function startHCNPassing(state: JudgeCoreState, note: TimedPlayableNote, 
   }
   const startUs = Math.max(toJudgeUs(note.seconds), judgedUs);
   const counter = new HCNTickCounter(startUs);
-  counter.setGaining(isLaneDown(state, note.channel), startUs, () => undefined);
+  const gaining = isLaneDown(state, note.channel);
+  counter.setGaining(gaining, startUs, () => undefined);
   const passing: HCNPassingState = { note, endUs: toJudgeUs(endSeconds), counter, tailGood: false };
   const chain = addHCNPassing(state.hcnPassing.get(note.channel), passing, startUs);
   if (chain !== undefined) {
     state.hcnPassing.set(note.channel, chain);
   }
+  reportHCNGaining(passing, gaining, emit);
+}
+
+/**
+ * Tells the UI that a passing Hell Charge note switched between gaining and draining (`hell-charge` command), once per
+ * switch. The judge core alone sends it, from its own state, so a replay sends what the play did.
+ */
+function reportHCNGaining(passing: HCNPassingState, gaining: boolean, emit: JudgeCoreEffectSink): void {
+  const reported = gaining ? 'gaining' : 'draining';
+  if (passing.reported === reported) return;
+  passing.reported = reported;
+  emit({
+    kind: 'ui',
+    command: { kind: 'hell-charge', channel: passing.note.channel, beat: passing.note.beat, state: reported },
+  });
 }
 
 /** Re-reads whether a lane with a passing Hell Charge note gains (a key on it is down, or its tail went well). */
 export function setHCNGaining(state: JudgeCoreState, channel: string, atUs: number, emit: JudgeCoreEffectSink): void {
   for (let passing = state.hcnPassing.get(channel); passing !== undefined; passing = passing.next) {
-    passing.counter.setGaining(
-      passing.tailGood || isLaneDown(state, channel),
-      Math.min(atUs, passing.endUs),
-      (gain, tickUs) => applyHCNGaugeTick(state, tickUs / 1e6, gain, emit),
+    const gaining = passing.tailGood || isLaneDown(state, channel);
+    passing.counter.setGaining(gaining, Math.min(atUs, passing.endUs), (gain, tickUs) =>
+      applyHCNGaugeTick(state, tickUs / 1e6, gain, emit),
     );
+    // Past its tail a note no longer gains or drains: the next advance reports it passed.
+    if (atUs < passing.endUs) reportHCNGaining(passing, gaining, emit);
   }
 }
 
@@ -620,6 +642,7 @@ function advanceHCNPassing(state: JudgeCoreState, nowUs: number, emit: JudgeCore
         state.hcnPassing.set(channel, passing);
         break;
       }
+      emit({ kind: 'ui', command: { kind: 'hell-charge', channel, beat: passing.note.beat, state: 'passed' } });
       if (passing.next === undefined) {
         state.hcnPassing.delete(channel);
       }

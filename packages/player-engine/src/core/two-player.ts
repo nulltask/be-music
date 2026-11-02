@@ -103,6 +103,7 @@ export function createTwoPlayerJudge(strategy: JudgeStrategy, session: PlaySessi
                 .sort((a, b) => a.seconds - b.seconds),
               judgments: rebuilt.flatMap((part) => part.judgments).sort((a, b) => a.seconds - b.seconds),
               heldLongNotes: rebuilt.flatMap((part) => part.heldLongNotes),
+              hellChargeNotes: rebuilt.flatMap((part) => part.hellChargeNotes ?? []),
             };
           },
         }
