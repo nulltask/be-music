@@ -51,7 +51,7 @@ jobs:
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
-            # Include unmeasured intermediaries too; the scope selector follows their benchmarked dependents.
+            # Every package; the scope selector measures the changed ones only (scripts/bench/affected-packages.ts).
             bench:
               - 'packages/**'
               - 'scripts/bench/**'
