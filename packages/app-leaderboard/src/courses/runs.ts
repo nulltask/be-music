@@ -99,7 +99,12 @@ export async function loadRecentCourseRuns(db: Database, filter: RecentCourseRun
     .innerJoin(courseScore, eq(courseScore.id, page.id))
     .innerJoin(
       courseScoreResult,
-      and(eq(courseScoreResult.courseScoreId, courseScore.id), eq(courseScoreResult.ruleset, filter.ruleset)),
+      // A truncated result stays out of the lists, as an unranked run does (ADR 0019).
+      and(
+        eq(courseScoreResult.courseScoreId, courseScore.id),
+        eq(courseScoreResult.ruleset, filter.ruleset),
+        isNull(courseScoreResult.outcome),
+      ),
     )
     .innerJoin(course, eq(course.courseFingerprint, courseScore.courseFingerprint))
     .innerJoin(user, eq(user.id, courseScore.userId))

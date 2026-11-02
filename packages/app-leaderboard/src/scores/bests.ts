@@ -102,6 +102,8 @@ export async function rebuildBestScores(
           inArray(score.chartFingerprint, charts),
           eq(score.hidden, false),
           isNull(score.unranked),
+          // A truncated result moves no personal best (ADR 0019).
+          isNull(scoreResult.outcome),
         ),
       )
       .orderBy(asc(score.createdAt), asc(score.id)),

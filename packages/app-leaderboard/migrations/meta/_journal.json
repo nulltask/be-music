@@ -127,6 +127,13 @@
       "when": 1793077294122,
       "tag": "0018_course_score_cards",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1793578541557,
+      "tag": "0019_rejudge_outcomes",
+      "breakpoints": true
     }
   ]
 }

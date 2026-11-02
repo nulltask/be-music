@@ -141,12 +141,32 @@ const rulesetOutcome = v.object({
     v.object({ exScore: v.boolean(), lamp: v.boolean(), missCount: v.boolean() }),
     'Which personal bests this play improved.',
   ),
+  outcome: v.optional(
+    described(
+      v.picklist(['truncated']),
+      'The play stopped where its played gauge emptied, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a play simulated in full.',
+    ),
+  ),
 });
+
+const notSimulated = described(
+  v.array(
+    v.object({
+      ruleset: rulesetSchema,
+      reason: described(
+        v.picklist(['gauge', 'custom-judge', 'gauge-auto-shift']),
+        'Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE or gauge auto-shift has no reading under it yet.',
+      ),
+    }),
+  ),
+  'The rulesets the play cannot be judged under, with no figures (ADR 0019); absent when every ruleset judged it.',
+);
 
 export const submissionResponse = v.object({
   scoreId: v.string(),
   chartFingerprint: described(v.string(), 'Chart fingerprint (`bmfp0:…`), the ranking key.'),
-  results: described(v.array(rulesetOutcome), 'The play under every ruleset.'),
+  results: described(v.array(rulesetOutcome), 'The play under every ruleset that could judge it.'),
+  notSimulated: v.optional(notSimulated),
   unranked: v.optional(
     described(
       v.picklist(['tempo', 'course-stage', 'bmson-total', 'no-save']),
@@ -190,6 +210,10 @@ export const scoreResponse = v.object({
       gaugeType: v.string(),
       gaugeFinal: described(v.nullable(v.number()), 'Gauge at the end of the play, in percent.'),
       judges: described(v.record(v.string(), v.number()), 'Judgment counts.'),
+      outcome: described(
+        v.nullable(v.picklist(['truncated'])),
+        '`truncated` for figures judged only up to where the play stopped (ADR 0019); null for a full simulation.',
+      ),
     }),
   ),
 });
@@ -245,12 +269,19 @@ const courseRulesetOutcome = v.object({
     v.object({ exScore: v.boolean(), lamp: v.boolean(), missCount: v.boolean(), trophy: v.boolean() }),
     'Which personal bests on the course this run improved.',
   ),
+  outcome: v.optional(
+    described(
+      v.picklist(['truncated']),
+      'The run stopped at a failed stage, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a run simulated in full.',
+    ),
+  ),
 });
 
 export const courseSubmissionResponse = v.object({
   courseScoreId: v.string(),
   courseFingerprint: described(v.string(), 'Course fingerprint (`bmcourse0:…`), the ranking key.'),
-  results: described(v.array(courseRulesetOutcome), 'The run under every ruleset.'),
+  results: described(v.array(courseRulesetOutcome), 'The run under every ruleset that could judge it.'),
+  notSimulated: v.optional(notSimulated),
   unranked: v.optional(
     described(
       v.picklist(['tempo', 'unreleased', 'bmson-total', 'assist']),
@@ -321,6 +352,10 @@ export const courseScoreResponse = v.object({
       stages: described(
         v.nullable(v.array(courseStageFigures)),
         'Each reached stage’s own figures, in order; null for runs stored before they were kept.',
+      ),
+      outcome: described(
+        v.nullable(v.picklist(['truncated'])),
+        '`truncated` for figures judged only up to where the run stopped (ADR 0019); null for a full simulation.',
       ),
     }),
   ),

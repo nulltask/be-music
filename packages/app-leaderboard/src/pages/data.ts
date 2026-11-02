@@ -141,7 +141,11 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
     })
     .from(page)
     .innerJoin(score, eq(score.id, page.id))
-    .innerJoin(scoreResult, and(eq(scoreResult.scoreId, score.id), eq(scoreResult.ruleset, filter.ruleset)))
+    // A truncated result stays out of the lists, as an unranked play does (ADR 0019).
+    .innerJoin(
+      scoreResult,
+      and(eq(scoreResult.scoreId, score.id), eq(scoreResult.ruleset, filter.ruleset), isNull(scoreResult.outcome)),
+    )
     .innerJoin(chart, eq(chart.chartFingerprint, score.chartFingerprint))
     .innerJoin(user, eq(user.id, score.userId))
     .innerJoin(profile, eq(profile.userId, score.userId))

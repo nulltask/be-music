@@ -98,6 +98,12 @@ A manual play that seeks is practice (`PlayResult.practice`). Its first seek dis
 - **Three rulesets.** Every play is re-simulated under `lr2`, `beatoraja` and `____`, and appears in all three
   rankings. The ruleset the player actually played (`play.judgeRuleset`) is stored and shown as a mark, and a ranking
   can be filtered to "played under this ruleset" only.
+- **Re-judging outcomes** ([ADR 0019](./adr/0019-source-qualified-option-values.md), `rejudgeReplay` in
+  [Replays](./replay.md#re-judging-under-another-ruleset)): a ruleset that cannot read the play (a gauge it does not
+  define, or CUSTOM JUDGE or gauge auto-shift outside beatoraja) stores no figures and is answered in `notSimulated`
+  with the reason. A play that ended where its gauge emptied is judged under another ruleset only up to that point; if
+  that ruleset's gauge would have survived, its figures are stored with `outcome: 'truncated'` and, like an unranked
+  play, move no personal best and stay out of the rankings and lists. Courses follow the same rules.
 - **Gauges** map across rulesets as the replay already does (`GROOVE` is beatoraja's `NORMAL`, `DEATH` its
   `HAZARD`, and so on).
 - **Assists** are classified by their option's source (`classifyReplayAssists`, [Assist and record policy](./play-options.md#assist-and-record-policy)) and stored with their flags.
