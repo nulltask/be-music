@@ -11,7 +11,8 @@
     "cf:r2:create": "wrangler r2 bucket create play && wrangler r2 bucket create play-preview",
     "cf:r2:push": "pnpm run build:cf && node scripts/sync-ffmpeg-core.mjs --force",
     "cf:r2:push:preview": "pnpm run build:cf && node scripts/sync-ffmpeg-core.mjs --force --preview",
-    "clean": "rimraf dist node_modules/.vite"
+    "clean": "rimraf dist node_modules/.vite",
+    "build:icons": "node scripts/build-icons.ts"
   },
   "dependencies": {
     "@be-music/chart-model": "workspace:*",

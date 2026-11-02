@@ -19,6 +19,7 @@ import { readDeviceSignals, resolveDeviceProfile } from './device-profile.ts';
 import { waitForDefaultUIFonts } from './services/built-in-skins.ts';
 import { isTestHookEnabled, TestHookRecorder } from './test-hook.ts';
 import { liveTestHookState } from './services/test-hook.ts';
+import { registerServiceWorker, shouldRegisterServiceWorker } from './service-worker/register.ts';
 import './styles.css';
 
 let workerStorage: Storage | undefined;
@@ -67,6 +68,17 @@ if (header !== null) {
   bindPlayerHeader({ selectLanguage: applyPlayerLanguage });
 }
 wireHelpModal();
+
+// The installable app's offline shell (`service-worker/`): production builds only, and never under the test hook.
+if (
+  shouldRegisterServiceWorker({
+    production: import.meta.env.PROD,
+    testHook: isTestHookEnabled(window.location.href, import.meta.env.DEV),
+    supported: 'serviceWorker' in navigator,
+  })
+) {
+  registerServiceWorker(navigator.serviceWorker);
+}
 
 void waitForDefaultUIFonts()
   .then(() => debugMenuSettingsSync.reconcile())

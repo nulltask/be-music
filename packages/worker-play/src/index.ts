@@ -18,6 +18,7 @@
 import { handleAuth, readSession, type OIDCEnv } from '@be-music/service-auth-client';
 import { isLeaderboardPath } from './leaderboard-paths.ts';
 import { handlePlayerSettings, PLAYER_SETTINGS_PATH } from './player-settings.ts';
+import { withPWAAssetHeaders } from './pwa-assets.ts';
 import { serveURLLoadProxy } from './url-load-proxy.ts';
 
 interface Env extends OIDCEnv {
@@ -102,6 +103,7 @@ export default {
       return env.LEADERBOARD.fetch(new Request(url, new Request(request, { headers })));
     }
     // Everything else: static assets, with `not_found_handling: single-page-application` serving index.html on a miss.
-    return env.ASSETS.fetch(request);
+    // The service worker and the web app manifest get their own headers (`pwa-assets.ts`).
+    return withPWAAssetHeaders(pathname, await env.ASSETS.fetch(request));
   },
 } satisfies ExportedHandler<Env>;
