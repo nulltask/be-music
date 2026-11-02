@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   backSpinChevron,
-  hellChargeRungs,
+  hellChargeZigzag,
   isBackSpinScratchLongNote,
   resolveHellChargeLook,
   resolveLongNoteMarks,
@@ -33,29 +33,59 @@ describe('long-note marks', () => {
     expect(resolveLongNoteMarks(note)).toEqual(marks);
   });
 
-  test('rungs are spaced evenly inside the body and stand still unless flowing', () => {
-    expect(hellChargeRungs(0, 70, { spacing: 14 })).toEqual([7, 21, 35, 49]);
-    expect(hellChargeRungs(0, 70, { spacing: 14, nowMs: 5000 })).toEqual([7, 21, 35, 49]);
-    expect(hellChargeRungs(0, 10, { spacing: 14 })).toEqual([]);
-    expect(hellChargeRungs(0, 70, { spacing: 0 })).toEqual([]);
+  /** The zigzag as `[x, y]` pairs, rounded to µpx so float noise does not matter. */
+  const pairs = (points: number[]): Array<[number, number]> => {
+    const out: Array<[number, number]> = [];
+    for (let index = 0; index < points.length; index += 2)
+      out.push([Math.round(points[index]! * 1e6) / 1e6, Math.round(points[index + 1]! * 1e6) / 1e6]);
+    return out;
+  };
+
+  test('the zigzag runs from the tail to the head about the centre, a corner every half wavelength', () => {
+    expect(pairs(hellChargeZigzag(0, 20, 0, 28, { amplitude: 4, wavelength: 14 }))).toEqual([
+      [6, 0],
+      [14, 7],
+      [6, 14],
+      [14, 21],
+      [6, 28],
+    ]);
+    // A span that does not end on a corner ends part way along the swing.
+    expect(pairs(hellChargeZigzag(0, 20, 0, 10, { amplitude: 4, wavelength: 14 }))).toEqual([
+      [6, 0],
+      [14, 7],
+      [10.571429, 10],
+    ]);
+    expect(hellChargeZigzag(0, 20, 0, 0)).toEqual([]);
+    expect(hellChargeZigzag(0, 20, 0, 70, { wavelength: 0 })).toEqual([]);
   });
 
-  test('flowing rungs move down and wrap', () => {
-    // 60 px/s for 0.1 s moves them 6 px; 14 px later they are back where they started.
-    expect(hellChargeRungs(0, 70, { spacing: 14, flowing: true, nowMs: 100 })).toEqual([13, 27, 41, 55]);
-    expect(hellChargeRungs(0, 70, { spacing: 14, flowing: true, nowMs: 0 })).toEqual([7, 21, 35, 49]);
-    const wrapped = hellChargeRungs(0, 70, { spacing: 14, flowing: true, nowMs: 1000 * (14 / 60) });
-    expect(wrapped.map((y) => Math.round(y * 1e6) / 1e6)).toEqual([7, 21, 35, 49]);
+  test('the zigzag stands still unless it flows, and flows down or back up the lane', () => {
+    const still = pairs(hellChargeZigzag(0, 20, 0, 28, { amplitude: 4, wavelength: 14 }));
+    expect(pairs(hellChargeZigzag(0, 20, 0, 28, { amplitude: 4, wavelength: 14, nowMs: 5000 }))).toEqual(still);
+    expect(pairs(hellChargeZigzag(0, 20, 0, 28, { amplitude: 4, wavelength: 14, flow: 0, nowMs: 100 }))).toEqual(still);
+    // 60 px/s for 0.1 s moves it 6 px: the corner at 7 goes down to 13, or up to 1.
+    const down = pairs(hellChargeZigzag(0, 20, 0, 28, { amplitude: 4, wavelength: 14, flow: 1, nowMs: 100 }));
+    expect(down.slice(1, 3)).toEqual([
+      [6, 6],
+      [14, 13],
+    ]);
+    const up = pairs(hellChargeZigzag(0, 20, 0, 28, { amplitude: 4, wavelength: 14, flow: -1, nowMs: 100 }));
+    expect(up.slice(1, 3)).toEqual([
+      [14, 1],
+      [6, 8],
+    ]);
+    // A whole wavelength later it is back where it started.
+    const wrapped = pairs(
+      hellChargeZigzag(0, 20, 0, 28, { amplitude: 4, wavelength: 14, flow: 1, nowMs: 1000 * (14 / 60) }),
+    );
+    expect(wrapped).toEqual(still);
+    // Every corner stays inside the swing, and the line spans the body.
+    for (const [x] of down) expect(Math.abs(x - 10)).toBeLessThanOrEqual(4 + 1e-9);
+    expect(down[0]![1]).toBe(0);
+    expect(down.at(-1)![1]).toBe(28);
   });
 
-  test('flow -1 moves the rungs back up the lane, flow 0 holds them still', () => {
-    // Moved 6 px up: 21 → 15, and the rung at 7 leaves the inset body.
-    expect(hellChargeRungs(0, 70, { spacing: 14, flow: -1, nowMs: 100 })).toEqual([15, 29, 43, 57]);
-    expect(hellChargeRungs(0, 70, { spacing: 14, flow: 0, flowing: true, nowMs: 100 })).toEqual([7, 21, 35, 49]);
-    expect(hellChargeRungs(0, 70, { spacing: 14, flow: 1, nowMs: 100 })).toEqual([13, 27, 41, 55]);
-  });
-
-  test('each hell charge phase differs in colour, glow and rung motion together', () => {
+  test('each hell charge phase differs in colour, glow and zigzag motion together', () => {
     const standby = resolveHellChargeLook('pending', 0);
     const charging = resolveHellChargeLook('held', 0);
     const draining = resolveHellChargeLook('draining', 0);
@@ -64,6 +94,7 @@ describe('long-note marks', () => {
     expect(charging).toMatchObject({ phase: 'charging', flow: 1 });
     expect(draining).toMatchObject({ phase: 'draining', flow: -1 });
     expect(new Set([standby.color, charging.color, draining.color]).size).toBe(3);
+    expect(new Set([standby.lineColor, charging.lineColor, draining.lineColor]).size).toBe(3);
     // Without colour, the glow still sets them apart: charging brightest, draining dimmest.
     for (const nowMs of [0, 125, 250, 400, 777]) {
       const bright = resolveHellChargeLook('held', nowMs).glow;
@@ -74,7 +105,13 @@ describe('long-note marks', () => {
       expect(dim).toBeLessThan(standby.glow + 1e-9);
     }
     for (const state of ['done', 'dropped'] as const) {
-      expect(resolveHellChargeLook(state, 100)).toEqual({ phase: 'spent', color: standby.color, glow: 0, flow: 0 });
+      expect(resolveHellChargeLook(state, 100)).toEqual({
+        phase: 'spent',
+        color: standby.color,
+        lineColor: standby.lineColor,
+        glow: 0,
+        flow: 0,
+      });
     }
   });
 
