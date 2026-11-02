@@ -1,4 +1,4 @@
-// The built-in be-music skins the default family draws with, and the fonts the page waits for before the app starts.
+// The built-in Be-Music Skins the default family draws with, and the fonts the page waits for before the app starts.
 
 import {
   BUILT_IN_BE_MUSIC_SKINS,
@@ -8,12 +8,12 @@ import {
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 
 /**
- * "Add skin" (a be-music skin module from a URL) is on hold: the code stays, and turning this on brings it back. LR2 themes
+ * "Add skin" (a Be-Music Skin module from a URL) is on hold: the code stays, and turning this on brings it back. LR2 themes
  * and beatoraja skins are not affected: they load from a drop, `?skin=` or the skin ZIP URL as before.
  */
 export const ADD_SKIN_ENABLED: boolean = false;
 
-/** Built-in be-music skins the default family can render with; the Debug Menu's "Built-in skin" picks one. */
+/** Built-in Be-Music Skins the default family can render with; the Debug Menu's "Built-in skin" picks one. */
 export const BE_MUSIC_SKINS: BeMusicSkinRegistry = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
 
 /** Loads an added skin's faces in the background, so its first frame doesn't rasterize with a fallback font. */

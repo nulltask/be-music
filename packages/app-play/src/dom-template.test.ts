@@ -50,7 +50,7 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   expect(PLAYER_APP_HTML).not.toContain('id="account-chip"');
   expect(PLAYER_APP_HTML).not.toContain('player-brand');
   expect(PLAYER_APP_HTML).toContain(
-    '<h2 class="help-modal-title" id="help-modal-title"><span>be-music player</span><span class="badge" data-variant="outline">Beta</span></h2>',
+    '<h2 class="help-modal-title" id="help-modal-title"><span>Be-Music Play</span><span class="badge" data-variant="outline">Beta</span></h2>',
   );
   expect(PLAYER_APP_HTML.match(/<span class="badge"/g)).toHaveLength(2);
 });

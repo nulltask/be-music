@@ -271,7 +271,7 @@ export interface JudgedDrawObject {
  * only marks it processed — so a note judged early keeps scrolling down to the line and goes at its own beat, and one
  * the player has not hit sits on the line until it is judged a miss (the ruleset's late window, through `judged`). On
  * an auto lane (`autoplayed`) the object goes once the playhead reaches its beat or end, judged or not
- * (0x407cd1-0x407d45). LR2 also draws the object once more on the frame it goes; be-music drops it on that frame.
+ * (0x407cd1-0x407d45). LR2 also draws the object once more on the frame it goes; Be-Music drops it on that frame.
  *
  * beatoraja's rules leave it to the time ({@link isDrawnAtTime}, {@link isLongNoteDrawnAtTime}).
  */

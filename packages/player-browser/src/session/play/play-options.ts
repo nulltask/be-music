@@ -29,10 +29,10 @@ import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
 export interface PlaySessionOptions {
   /** Selected source options to preserve in the replay, independently of score handling. */
   recordingOptionState?: import('@be-music/player-engine/replay').ReplayOptionState;
-  /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
+  /** Showmanship level for the Be-Music Skin (count-ins, shakes, particles). Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
   /**
-   * Gameplay layout for the be-music skins. `'touch'` (for touch screens) spreads the lanes across most of the stage
+   * Gameplay layout for the Be-Music Skins. `'touch'` (for touch screens) spreads the lanes across most of the stage
    * with a low judgement line and (on a landscape stage) no BGA; the 24 / 48 KEY modes and LR2 skins keep the standard
    * layout regardless. On a portrait screen a skin with a portrait stage
    * plays 5 / 7 / 9 KEY charts on it, in either mode. Defaults to `'standard'`.

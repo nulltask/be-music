@@ -884,7 +884,7 @@ describe('parser', () => {
       }),
     );
 
-    // beatoraja would turn x 12 into BGM; be-music keeps the chart playable.
+    // beatoraja would turn x 12 into BGM; Be-Music keeps the chart playable.
     expect(sortEventsByTime(json.events)).toEqual(['11', '12', '13']);
   });
 

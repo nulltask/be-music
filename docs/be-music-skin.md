@@ -1,10 +1,10 @@
 [Japanese version](./be-music-skin.ja.md)
 
-# Writing a be-music skin
+# Writing a Be-Music Skin
 
 Skins for the browser player's built-in family use the `@be-music/player-skin-sdk` contract. Synesthesia and Plain use Canvas; Native combines DOM screens with a playfield of canvas components, each drawing on a canvas the size of its part of the stage. Native's presentation components are also available independently from `@be-music/player-ui`.
 
-A be-music skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a be-music skin draws every screen itself. The player keeps ownership of everything else:
+A Be-Music Skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a Be-Music Skin draws every screen itself. The player keeps ownership of everything else:
 
 - input, timing, audio, and judging;
 - the lane layout and note positions;
@@ -226,7 +226,7 @@ Every skin declares these fields. `defineBeMusicSkin` checks the rules it can te
 | `decide`                                 | no       | The decide screen between select and play; see [Decide](#decide).                                                                     |
 | `settings`                               | no       | Options the player can tune for the skin; see [Skin settings](#skin-settings).                                                        |
 
-`validateBeMusicSkin(skin)` returns the same problems as a list of messages without throwing, also for a skin written in plain JavaScript that leaves a required field out. A host checks an added skin with it (the be-music skin registry does), so a skin module without `fontLoads`, say, is refused with the reason instead of breaking the page.
+`validateBeMusicSkin(skin)` returns the same problems as a list of messages without throwing, also for a skin written in plain JavaScript that leaves a required field out. A host checks an added skin with it (the Be-Music Skin registry does), so a skin module without `fontLoads`, say, is refused with the reason instead of breaking the page.
 
 ## Stage and layout
 
@@ -287,7 +287,7 @@ export default defineBeMusicSkin({
 
 ## Screens
 
-A host shows the screens in this order; the decide screen only when the skin has one. [Browser player — Scene lifecycle](./player-web.md#scene-lifecycle) covers how the be-music player hands one screen over to the next.
+A host shows the screens in this order; the decide screen only when the skin has one. [Browser player — Scene lifecycle](./player-web.md#scene-lifecycle) covers how the Be-Music player hands one screen over to the next.
 
 ```mermaid
 flowchart LR
@@ -399,7 +399,7 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 A skin may add a decide screen, shown between picking a chart and the play. Hosts mount it only when `skin.decide` exists and go straight to the play otherwise.
 
 - **`decide.durationMs`:** how long the screen shows (default 2000). The player can skip ahead with Enter, Space, or a click, or go back to select with Escape.
-- **`decide.draw(surface, frame)`** receives a `BeMusicDecideFrame`: `song`, `playOptions`, `elapsedMs` since the screen mounted, `nowMs`, `effects`, `audio`, `settings`, and `chartImage`. The be-music player currently passes `audio` as `undefined` on this screen.
+- **`decide.draw(surface, frame)`** receives a `BeMusicDecideFrame`: `song`, `playOptions`, `elapsedMs` since the screen mounted, `nowMs`, `effects`, `audio`, `settings`, and `chartImage`. The Be-Music player currently passes `audio` as `undefined` on this screen.
 
 ## Judgement timing
 
@@ -435,7 +435,7 @@ settings: [
 - **Validation:** `validateBeMusicSkin` checks the schema. Ids must be unique, labels must not be empty, and every `default` must be one of the options or lie in its range. Choice option values must be unique, a number's `step` must be positive, and its `unit` must be one of the three above.
 - **Values:** every frame carries `settings`, the player's values keyed by id. Hosts persist the values per skin and resolve them with `resolveBeMusicSkinSettings(skin, stored)`, which falls back to the default for anything missing, stale, or mistyped, clamps numbers into their range, and drops ids the skin no longer declares. You can rely on every declared id being present with the right type.
 - **Live changes:** the player may change a value while a screen is showing; the next frame carries it, and on select `revision` moves too. Read `frame.settings` every frame (or key anything you derive from it on `revision`) rather than caching it from the first frame.
-- **In the be-music player:** hosts pass the stored values in the built-in kit (`{ family: 'built-in', skin, settings }`) and hand a showing scene a new kit with `scene.updateKit(kit)` when they change. The player builds a "Skin settings" folder in its Debug Menu from the schema (a dropdown per `choice`, a slider per `number` with the unit in its name, a checkbox per `toggle`), hides it for a skin that declares none, and saves the values per skin id in the browser.
+- **In the Be-Music player:** hosts pass the stored values in the built-in kit (`{ family: 'built-in', skin, settings }`) and hand a showing scene a new kit with `scene.updateKit(kit)` when they change. The player builds a "Skin settings" folder in its Debug Menu from the schema (a dropdown per `choice`, a slider per `number` with the unit in its name, a checkbox per `toggle`), hides it for a skin that declares none, and saves the values per skin id in the browser.
 
 ## Song images
 

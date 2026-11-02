@@ -1,10 +1,10 @@
 [English version](./be-music-skin.md)
 
-# be-music スキンの作り方
+# Be-Music Skin の作り方
 
 ブラウザープレイヤーの組み込みファミリー向けスキンは、`@be-music/player-skin-sdk` の契約に沿って作ります。Synesthesia・Plain は Canvas を使い、Native は DOM 画面と、canvas を持つ component で組んだプレイフィールドを組み合わせます。各 component はステージ上の自分の範囲と同じ大きさの canvas に描画します。Native の表示部品は `@be-music/player-ui` から独立して再利用できます。
 
-be-music スキンはデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、be-music スキンはすべての画面を自分で描きます。それ以外はすべてプレイヤーの担当です。
+Be-Music Skin はデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、Be-Music Skin はすべての画面を自分で描きます。それ以外はすべてプレイヤーの担当です。
 
 - 入力、タイミング、オーディオ、判定
 - レーンのレイアウトとノーツの位置
@@ -226,7 +226,7 @@ export default defineBeMusicSkin({
 | `decide`                                 | —    | 選曲とプレイの間の決定画面。[決定画面](#決定画面)を参照。                                                      |
 | `settings`                               | —    | プレイヤーが調整できるスキンのオプション。[スキン設定](#スキン設定)を参照。                                    |
 
-`validateBeMusicSkin(skin)` は、例外を投げずに同じ問題をメッセージの配列で返します。必須のフィールドを書き忘れた素の JavaScript のスキンでも同じです。ホストは追加されたスキンをこれで確かめる（be-music スキンのレジストリが確かめます）ので、たとえば `fontLoads` のないスキンのモジュールは、ページを壊さずに理由を添えて拒否されます。
+`validateBeMusicSkin(skin)` は、例外を投げずに同じ問題をメッセージの配列で返します。必須のフィールドを書き忘れた素の JavaScript のスキンでも同じです。ホストは追加されたスキンをこれで確かめる（Be-Music Skin のレジストリが確かめます）ので、たとえば `fontLoads` のないスキンのモジュールは、ページを壊さずに理由を添えて拒否されます。
 
 ## ステージとレイアウト
 
@@ -287,7 +287,7 @@ export default defineBeMusicSkin({
 
 ## 画面
 
-ホストは画面を次の順に表示します。決定画面はスキンが持つ場合だけです。be-music player が画面を次へ引き継ぐ方法は [ブラウザプレイヤー — Scene lifecycle](./player-web.ja.md#scene-lifecycle) にあります。
+ホストは画面を次の順に表示します。決定画面はスキンが持つ場合だけです。Be-Music player が画面を次へ引き継ぐ方法は [ブラウザプレイヤー — Scene lifecycle](./player-web.ja.md#scene-lifecycle) にあります。
 
 ```mermaid
 flowchart LR
@@ -399,7 +399,7 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 スキンは、譜面を選んでからプレイが始まるまでの決定画面を追加できます。ホストは `skin.decide` があるときだけこれを表示し、なければそのままプレイに進みます。
 
 - **`decide.durationMs`:** 画面を表示する時間（既定 2000）。プレイヤーは Enter、Space、クリックで先に進み、Escape で選曲に戻れます。
-- **`decide.draw(surface, frame)`** は `BeMusicDecideFrame` を受け取ります: `song`、`playOptions`、画面表示からの `elapsedMs`、`nowMs`、`effects`、`audio`、`settings`、`chartImage`。be-music player は現在、この画面の `audio` を `undefined` で渡します。
+- **`decide.draw(surface, frame)`** は `BeMusicDecideFrame` を受け取ります: `song`、`playOptions`、画面表示からの `elapsedMs`、`nowMs`、`effects`、`audio`、`settings`、`chartImage`。Be-Music player は現在、この画面の `audio` を `undefined` で渡します。
 
 ## 判定タイミング
 
@@ -435,7 +435,7 @@ settings: [
 - **検査:** `validateBeMusicSkin` がスキーマを検査します。id は重複不可、ラベルは空不可で、`default` は選択肢のいずれか、または範囲内でなければなりません。choice の option 値は重複不可、number の `step` は正の値、`unit` は上の 3 つのいずれかでなければなりません。
 - **値:** すべてのフレームが `settings`（id をキーにしたプレイヤーの値）を持ちます。ホストは値をスキンごとに保存し、`resolveBeMusicSkinSettings(skin, stored)` で解決します。欠けている値、古い値、型の違う値は既定値に戻り、数値は範囲内に収められ、スキンが宣言しなくなった id は捨てられます。宣言した id はすべて正しい型で揃っていると考えて構いません。
 - **その場での変更:** 画面の表示中にプレイヤーが値を変えることがあります。変更は次のフレームから反映され、選曲画面では `revision` も進みます。最初のフレームの値をキャッシュせず、`frame.settings` を毎フレーム読んでください（そこから導いた値をキャッシュするなら `revision` をキーにします）。
-- **be-music プレイヤーでは:** ホストは保存した値を built-in のキット（`{ family: 'built-in', skin, settings }`）で渡し、値が変わったら表示中のシーンに `scene.updateKit(kit)` で新しいキットを渡します。プレイヤーは Debug Menu にスキーマから「Skin settings」フォルダを作り（`choice` はドロップダウン、`number` は単位を名前に添えたスライダー、`toggle` はチェックボックス）、設定を宣言しないスキンでは隠し、値をスキン id ごとにブラウザへ保存します。
+- **Be-Music プレイヤーでは:** ホストは保存した値を built-in のキット（`{ family: 'built-in', skin, settings }`）で渡し、値が変わったら表示中のシーンに `scene.updateKit(kit)` で新しいキットを渡します。プレイヤーは Debug Menu にスキーマから「Skin settings」フォルダを作り（`choice` はドロップダウン、`number` は単位を名前に添えたスライダー、`toggle` はチェックボックス）、設定を宣言しないスキンでは隠し、値をスキン id ごとにブラウザへ保存します。
 
 ## 曲の画像
 

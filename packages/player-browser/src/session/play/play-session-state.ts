@@ -191,7 +191,7 @@ export class PlaySessionState extends PlayPresentation {
    * See `audio-bus.ts` for the architecture and per-mode topology.
    */
   audioBus: AudioBusHandle | undefined;
-  /** Analyser tapped off the bus output; feeds audio-reactive be-music skins. */
+  /** Analyser tapped off the bus output; feeds audio-reactive Be-Music Skins. */
   audioAnalyzer: AudioAnalyzer | undefined;
   /** The play's graph as the host's audio service opened it (`options.audio`); undefined when the play made its own. */
   playAudio: PlayAudioHandle | undefined;

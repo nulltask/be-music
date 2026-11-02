@@ -2,7 +2,7 @@
 
 # コースと段位認定
 
-**コース**は、複数の譜面を 1 回のプレイにつなげたものです。代表的なのが**段位認定**で、共通の段位ゲージのまま各ステージを続けて遊び、全体に 1 つの結果が付きます。LR2 と beatoraja はそれぞれ独自の形式でコースを定義し、難易度表は表のヘッダーにコースを載せています。be-music はこの 3 つを `@be-music/player-engine/course` の `CourseDefinition` という 1 つのモデルに読み込むので、後段はコースの取得元を気にする必要がありません。
+**コース**は、複数の譜面を 1 回のプレイにつなげたものです。代表的なのが**段位認定**で、共通の段位ゲージのまま各ステージを続けて遊び、全体に 1 つの結果が付きます。LR2 と beatoraja はそれぞれ独自の形式でコースを定義し、難易度表は表のヘッダーにコースを載せています。Be-Music はこの 3 つを `@be-music/player-engine/course` の `CourseDefinition` という 1 つのモデルに読み込むので、後段はコースの取得元を気にする必要がありません。
 
 本書はコースのモデル、形式ごとの対応、プレイ規則、記録、リプレイを定義します。ブラウザーの画面遷移は[ブラウザープレイヤー仕様](./player-web.ja.md#コースと段位認定)を参照してください。
 
@@ -46,7 +46,7 @@ flowchart LR
 
 ### LR2 の `.lr2crs`
 
-XML の `<courselist>` に、`title`、`line`（キーモード）、`type`、`hash` を持つ `<course>` 要素を並べたものです。LR2 はフィールド名の大文字小文字を区別して読み、be-music も同じです。
+XML の `<courselist>` に、`title`、`line`（キーモード）、`type`、`hash` を持つ `<course>` 要素を並べたものです。LR2 はフィールド名の大文字小文字を区別して読み、Be-Music も同じです。
 
 - **文字コード**：BOM、XML 宣言の `encoding`、厳密な UTF-8、Shift_JIS の順に判定します（`decodeCourseText`）。
 - **`hash`**：32 文字のヘッダーに続き、ステージごとに 32 文字の譜面 MD5 が並びます。コースのバーには 10 ステージまで並びますが、LR2 は EXPERT・GRADE も含めどのコースも先頭の 5 ステージだけを遊びます（譜面の読み込み処理がプレイのたびにステージ数を 1〜5 に収める。`LR2body.exe` 0x4b0b0f）。そのためコースはその 5 ステージとして読みます。読まなかったステージの数は `countLR2UnplayedStages(course)` で数えられ、Web プレイヤーはファイルを読み込んだときに知らせます。ヘッダーの 10 文字目がコースの種類です。
@@ -104,23 +104,23 @@ flowchart LR
   def --> play["通常のコースとして遊ぶ"]
 ```
 
-- **フィルタ。** be-music には楽曲データベースがないので、`parseCourseChartFilter` / `evaluateCourseChartFilter` が句を読み、各譜面（`CourseChartRecord`）を SQLite の比較規則で判定します。対応するのは、比較、`AND` / `OR` / `NOT`、`IN`、`LIKE`、`BETWEEN`、`IS NULL`、四則演算で、使える列は[フィルタの列](#フィルタの列)にまとめています。beatoraja は `song` にプレイヤーの `score` と `scorelog`、それに `information` を結合するため、複数の表にある列は表名で修飾する必要があります。修飾しない `sha256`、`mode`、`notes`、`date`、`clear`、`combo`、`minbp`、`avgjudge` は SQLite にとって曖昧で、フィルタは拒否されます（`mode = 7` ではなく `song.mode = 7` と書きます）。1 つの表にしかない列は修飾なしで書けます（`playcount`、`density`）。末尾の `ORDER BY`（式または `RANDOM()`、`ASC` / `DESC`、`NULLS FIRST` / `LAST`）と `LIMIT n [OFFSET m]` / `LIMIT m, n` は抽選の前に候補を絞ります。beatoraja 自身の `folder/default.json` も MY BEST でこう書いています（`playcount > 0 ORDER BY playcount DESC LIMIT 10`）。これを適用するのは `selectCourseCharts` で、同順位は候補の順を保ち、`RANDOM()` は外から渡した `random` を使います。それ以外（未知の列、be-music に出どころのない列、関数、サブクエリ）は解析エラーとし、そのステージはどの譜面も選びません。beatoraja でも失敗したクエリは何も返しません。選曲画面の検索も同じフィルタを使います。`?` で始まる検索がそれです（[scene-model.ja.md](scene-model.ja.md#一覧ブラウズ)）。
+- **フィルタ。** Be-Music には楽曲データベースがないので、`parseCourseChartFilter` / `evaluateCourseChartFilter` が句を読み、各譜面（`CourseChartRecord`）を SQLite の比較規則で判定します。対応するのは、比較、`AND` / `OR` / `NOT`、`IN`、`LIKE`、`BETWEEN`、`IS NULL`、四則演算で、使える列は[フィルタの列](#フィルタの列)にまとめています。beatoraja は `song` にプレイヤーの `score` と `scorelog`、それに `information` を結合するため、複数の表にある列は表名で修飾する必要があります。修飾しない `sha256`、`mode`、`notes`、`date`、`clear`、`combo`、`minbp`、`avgjudge` は SQLite にとって曖昧で、フィルタは拒否されます（`mode = 7` ではなく `song.mode = 7` と書きます）。1 つの表にしかない列は修飾なしで書けます（`playcount`、`density`）。末尾の `ORDER BY`（式または `RANDOM()`、`ASC` / `DESC`、`NULLS FIRST` / `LAST`）と `LIMIT n [OFFSET m]` / `LIMIT m, n` は抽選の前に候補を絞ります。beatoraja 自身の `folder/default.json` も MY BEST でこう書いています（`playcount > 0 ORDER BY playcount DESC LIMIT 10`）。これを適用するのは `selectCourseCharts` で、同順位は候補の順を保ち、`RANDOM()` は外から渡した `random` を使います。それ以外（未知の列、Be-Music に出どころのない列、関数、サブクエリ）は解析エラーとし、そのステージはどの譜面も選びません。beatoraja でも失敗したクエリは何も返しません。選曲画面の検索も同じフィルタを使います。`?` で始まる検索がそれです（[scene-model.ja.md](scene-model.ja.md#一覧ブラウズ)）。
 - **抽選。** `drawRandomCourse(definition, candidates, random)` は `RandomCourseData.lotterySongDatas` に従います。各ステージは、フィルタが選んだ譜面（`ORDER BY` / `LIMIT` の適用後）から一様に 1 曲引きます。フィルタのないステージは、前のステージの候補から引きます（最初のステージなら全譜面から）。`distinct` があれば、引き済みの譜面は引き直します。ただし候補がすべて引き済みなら重複を許します。結果は固定のコースで、レーンオプションの制約があれば `grade`、なければ `expert` です。`random` は外から渡すので、抽選を再現できます。
 - **失敗。** フィルタを解析できないステージ、または何も選ばないステージで抽選は止まり、その旨を返します（`RandomCourseDrawFailure`）。
 - **抽選済みコース。** 開始画面の表示に成功した後（開始画面がない場合はプレイの読み込み後）、Web ホストは固定された抽選結果を元のフォルダー末尾に追加します。名前はローカル時刻の `<name> yyyyMMdd_HHmmss`、`release` は `false` です。PLAY と AUTO のどちらでも保持します。カーソルは新しいバーに戻り、再度開始すると再抽選せず同じステージを遊べます。全フォルダー合計で最大100件を古い順に保持し、超過時は最古のものを削除します。この履歴はセッション中のみ保持します。記録とリプレイには引き続きステージから決まるコースの識別子を使います。
 
 ### フィルタの列
 
-フィルタは beatoraja の 3 つの表を読みます（`SQLiteSongDatabaseAccessor.getSongDatas`、[beatoraja 83574048](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/song/SQLiteSongDatabaseAccessor.java#L344-L367)）。各列は be-music が譜面について知っていることから埋めます。出どころのない列は、値をこしらえずに未知の列として拒否します。
+フィルタは beatoraja の 3 つの表を読みます（`SQLiteSongDatabaseAccessor.getSongDatas`、[beatoraja 83574048](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/song/SQLiteSongDatabaseAccessor.java#L344-L367)）。各列は Be-Music が譜面について知っていることから埋めます。出どころのない列は、値をこしらえずに未知の列として拒否します。
 
 - **`song`** は譜面そのものです：`md5`、`sha256`、`title`、`subtitle`、`artist`、`subartist`、`genre`、`tag`、`path`、`level`、`difficulty`、`mode`、`notes`、`minbpm`、`maxbpm`、`length`、`judge`、`feature`、`content`。ない文字列の列は `''`、ない数値は 0 と読みます。beatoraja の `SongData` が保存する値と同じです。
 - **`score`** は、有効な判定ルールセット（Developer → Judgment windows）での、その譜面のプレイヤーのベストレコードです。選曲画面に出る記録と同じものです（`createCourseChartScore`）。beatoraja はこれを `LEFT OUTER JOIN` で結合するので、未プレイの譜面は `score` の列がすべて NULL です。`score.clear < 5` はそれを除き、`score.clear IS NULL OR score.clear < 5` は含めます。
 - **`information`** は譜面の楽曲情報（`SongInformation`）で、フィルタが初めて読んだときに譜面から求めます。
 
-| 列                                                 | be-music での出どころ                                                                                                                                                                                                  |
+| 列                                                 | Be-Music での出どころ                                                                                                                                                                                                  |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `score.clear`                                      | ベストランプを beatoraja の `ClearType` で表した値（`beatorajaClearType`）：NO PLAY 0、FAILED 1、ASSIST EASY 3（beatoraja の LIGHT ASSIST EASY）、EASY 4、NORMAL 5、HARD 6、EX HARD 7、FULL COMBO 8、PERFECT 9、MAX 10 |
-| `score.exscore`                                    | ベスト EX スコア。be-music 独自の列です（beatoraja は判定数を持ちます）                                                                                                                                                |
+| `score.exscore`                                    | ベスト EX スコア。Be-Music 独自の列です（beatoraja は判定数を持ちます）                                                                                                                                                |
 | `score.combo`                                      | ベストの最大コンボ                                                                                                                                                                                                     |
 | `score.minbp`                                      | 最小 BP                                                                                                                                                                                                                |
 | `score.playcount`                                  | 記録が数えたプレイ回数                                                                                                                                                                                                 |
@@ -133,7 +133,7 @@ flowchart LR
 | `information.mainbpm`                              | 判定ノーツが最も多く置かれた BPM（`resolveChartMainBPM`）                                                                                                                                                              |
 | `information.sha256`                               | 譜面の SHA-256                                                                                                                                                                                                         |
 
-出どころがないため拒否する列：`song.folder`、`stagefile`、`banner`、`backbmp`、`preview`、`parent`、`date`、`favorite`、`adddate`、`charthash`。`score.mode`、判定数（`epg`、`lpg`、`egr`、`lgr`、`egd`、`lgd`、`ebd`、`lbd`、`epr`、`lpr`、`ems`、`lms`）、`avgjudge`、`clearcount`、`trophy`、`ghost`、`option`、`seed`、`random`、`date`、`state`、`scorehash`。`information.distribution`、`speedchange`、`lanenotes`。そして `scorelog` の列すべて（be-music は記録更新の履歴を持ちません）。選曲画面の検索は譜面をハッシュしないので、そこでは `md5` と `sha256` は `''` と読みます。
+出どころがないため拒否する列：`song.folder`、`stagefile`、`banner`、`backbmp`、`preview`、`parent`、`date`、`favorite`、`adddate`、`charthash`。`score.mode`、判定数（`epg`、`lpg`、`egr`、`lgr`、`egd`、`lgd`、`ebd`、`lbd`、`epr`、`lpr`、`ems`、`lms`）、`avgjudge`、`clearcount`、`trophy`、`ghost`、`option`、`seed`、`random`、`date`、`state`、`scorehash`。`information.distribution`、`speedchange`、`lanenotes`。そして `scorelog` の列すべて（Be-Music は記録更新の履歴を持ちません）。選曲画面の検索は譜面をハッシュしないので、そこでは `md5` と `sha256` は `''` と読みます。
 
 ## NONSTOP コース
 
@@ -222,7 +222,7 @@ stateDiagram-v2
 - **ハッシュ。** `buildLR2CourseHash` は、LR2 の 32 文字のヘッダー（ステージ 1-10 それぞれの後のつなぎ方を `0`-`5` で、10 文字目に種類、残りは 0）と各ステージの MD5 を書きます。LR2 は 28-31 文字目にプレイヤーのパスワードの MD5 の先頭 4 文字を入れますが、ブラウザにはパスワードがないので `0` のままです。
 - **編集。** `withNonstopConnection` は、あるステージの後のつなぎ方を変えます（LR2 のボタン 240-248。`stepLR2NonstopConnection` の順に、右半分で +1、左半分で -1 進みます）。LR2 はコースの長さにかかわらず、ステージ 1-9 のつなぎ方を持ちます。
 - **縛り。** LR2 のコース作成には縛りを設定する手段がありません（オプション禁止のボタンは実装されませんでした）。そのため、作ったコースは `defaultCourseMakerConstraints` の縛りになります（GRADE は LR2 の段位としてレーンオプションなし・LR2 ゲージ、ほかは縛りなし）。ホストが beatoraja のコースエディタのように縛りを設定することもできます。作成中は `CourseDraft.constraints`、作った後は `withCourseConstraints` で、グループごとに 1 つに正規化します。
-- **IR フラグ。** LR2 はコースを IR 対象にするかどうかを `.lr2crs` ではなく、コースのテーブルの `ir` 列に持ちます（[L19281-L19283](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L19281-L19283)）。`LR2.exe` は取り込むコースをすべて `ir = 1` で登録し、ゲーム内で作ったコースは `ir = 0` で始まります。be-music ではこのフラグをコースの `release`（beatoraja の「公開するかどうか」。コースリザルトを IR に送るかどうかだけを決めます）とするので、登録したコースのプレイは、ほかの `release` のコースと同じく Leaderboard に送られます。
+- **IR フラグ。** LR2 はコースを IR 対象にするかどうかを `.lr2crs` ではなく、コースのテーブルの `ir` 列に持ちます（[L19281-L19283](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L19281-L19283)）。`LR2.exe` は取り込むコースをすべて `ir = 1` で登録し、ゲーム内で作ったコースは `ir = 0` で始まります。Be-Music ではこのフラグをコースの `release`（beatoraja の「公開するかどうか」。コースリザルトを IR に送るかどうかだけを決めます）とするので、登録したコースのプレイは、ほかの `release` のコースと同じく Leaderboard に送られます。
   - テキスト 183 は選んだバーのフラグを `ON` か `OFF` で表します（`optionstr.csv` の `#COURSE_IR,OFF,ON`、[L8406](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L8406)）。LR2 はどのバーでも設定するので、曲バー、フォルダバー、NEW COURSE、RANDOM MIX では `OFF` です。`resolveLR2CourseIRText`（`@be-music/skin-lr2/state`）。
   - ボタン 253 は選んだコースを登録します。未登録のコースではクリックでフラグを立てて `option_change` を鳴らし、登録済みのコースではセル 1 を描いて何もしません（[L11141-L11153](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11141-L11153)）。LR2 と同じく一方向で、一度立てたフラグは戻せません。セルは `resolveLR2CourseIRButtonState`、登録は `CourseMaker.releaseCourse` で、プレイヤー自身のコースだけが対象です（ファイルや表から読んだコースは対象外です）。
   - 登録したコースは読み取り専用になります。LR2 は `ir = 1` を `courseReadOnly` として読み（[L18078-L18080](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L18078-L18080)）、`WriteCourse` はすぐに戻り（[L17580-L17584](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L17580-L17584)）、ボタン 240-248 はロックされます（[L11126-L11129](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11126-L11129)）。`CourseMaker.isReadOnly` がそれを表し、`stepConnection` と `setCourseConstraints` はそのコースを拒むので、ランキングのキー（コースのフィンガープリント）になるステージ・つなぎ方・縛りは変わりません。名前の変更（テキスト 170）と削除（ボタン 233）は、LR2 の `ChangeCourseTitle` と `DeleteCourse` と同じくできます。名前はフィンガープリントに含まれません。登録した RANDOM MIX はプレイヤーのコースになり、次の抽選でも残ります。
@@ -258,17 +258,17 @@ flowchart TD
   | 266    | `stageCount`                 | 0-5              | 5    | 196      | `RANDOM`   | `n STAGE` |
 
 - **抽選。** 最小レベルが最大レベルより大きい、または最小 BPM が最大 BPM より大きいときは、両方が設定されていれば先に入れ替え、入れ替えたまま残します（`resolveLR2RandomMixSettings`。LR2 も設定に書き戻します）。1 曲目は、そのキーモードでレベルの制限内、最小・最大 BPM が BPM の制限内の譜面です。BPM の範囲を設定しているときは、BPM が変わらない譜面に限ります。2 曲目以降は、レベルの制限内で、1 曲目の最大 BPM から範囲の幅（BPM の制限と重なる部分）に入る譜面を 1 つの乱順で並べて選びます。それまでのステージと同じ曲フォルダの譜面は飛ばすので、コースが指定より短くなることがあります。好みのレベルがあると、選んだ譜面を、同じフォルダ・キーモードでレベルの制限内にあり、そのレベルに最も近い譜面に置き換えます。その譜面の BPM は確かめ直しません。1 曲目が見つからなければ何も抽選しません。
-- **コース。** 抽選したコースは、プレイヤーが作ったコースと同じ形で、名前は `RANDOM MIX`、キーモードは 1 曲目のもの、ランキング対象外（`release: false`。LR2 の `ir = 0`）です。NONSTOP では、すべてのステージの後に既定のつなぎ方（ボタン 268）が入ります。`CourseMaker.drawRandomMix` はそれをフォルダのいちばん新しいコースとし、そのフォルダの前回の抽選と置き換えます。LR2 が `RANDOM MIX` の行を消して入れ直すのと同じで、次に抽選するまで自分の記録とリプレイを持ちます。LR2 は前回の抽選を名前で探すので、プレイヤーが「RANDOM MIX」と名付けたコースも消してしまいます。be-music はどのコースが抽選したものかを覚えておき、名前を変えた抽選はプレイヤーのコースとして次の抽選でも残します。
+- **コース。** 抽選したコースは、プレイヤーが作ったコースと同じ形で、名前は `RANDOM MIX`、キーモードは 1 曲目のもの、ランキング対象外（`release: false`。LR2 の `ir = 0`）です。NONSTOP では、すべてのステージの後に既定のつなぎ方（ボタン 268）が入ります。`CourseMaker.drawRandomMix` はそれをフォルダのいちばん新しいコースとし、そのフォルダの前回の抽選と置き換えます。LR2 が `RANDOM MIX` の行を消して入れ直すのと同じで、次に抽選するまで自分の記録とリプレイを持ちます。LR2 は前回の抽選を名前で探すので、プレイヤーが「RANDOM MIX」と名付けたコースも消してしまいます。Be-Music はどのコースが抽選したものかを覚えておき、名前を変えた抽選はプレイヤーのコースとして次の抽選でも残します。
 - **キーモード。** 選曲画面のキーフィルタのキーモードで抽選します（`resolveLR2RandomMixKeyMode`）。ALL では LR2 の `CreateRandomCourse` と同じく 7 です。
 
-LR2 の動作で分からないところと、be-music の読み方：
+LR2 の動作で分からないところと、Be-Music の読み方：
 
 - LR2 は SQLite の `random()`（曲の順）と DxLib の `GetRand`（ランダムなステージ数）で抽選します。`random` はその両方の代わりです。抽選では、ステージ数（ランダムのとき）、1 曲目の順、2 曲目以降の順の順に使います。好みのレベルが同じ譜面の間では、SQLite の行の順の代わりにライブラリの譜面の順を使います。
 - 2 曲目以降もキーモードで絞ります。LR2 の 2 つ目のクエリも同じ `mode` の条件を読むためです。
-- LR2 は好みのレベルをキーモードごと（`optimumlevel_5/7/9/10/14`）に持ちますが、どのキーモードでも 7 鍵のものしか読みません。be-music は値を 1 つだけ持ち、すべてのキーモードで使います。
-- LR2 は `defaultgauge`（テキスト 199）をコースの書き込みに渡しますが、どこにも書きません。be-music の抽選には既定のゲージがありません。
+- LR2 は好みのレベルをキーモードごと（`optimumlevel_5/7/9/10/14`）に持ちますが、どのキーモードでも 7 鍵のものしか読みません。Be-Music は値を 1 つだけ持ち、すべてのキーモードで使います。
+- LR2 は `defaultgauge`（テキスト 199）をコースの書き込みに渡しますが、どこにも書きません。Be-Music の抽選には既定のゲージがありません。
 - LR2 はコースのハッシュにプレイヤーのパスワードの MD5 の先頭 4 文字を入れます。ブラウザにはパスワードがないので、ここで作るほかのコースと同じく `0` のままです。
-- LR2 はすぐにプレイを始めます。be-music はほかのコースと同じく先に決定画面を出し、1 曲目が見つからないときはステータス行に知らせます（LR2 は何もしません）。
+- LR2 はすぐにプレイを始めます。Be-Music はほかのコースと同じく先に決定画面を出し、1 曲目が見つからないときはステータス行に知らせます（LR2 は何もしません）。
 
 ## コースのステージを遊ぶ
 
@@ -306,7 +306,7 @@ flowchart LR
 
 **`beatoraja`** は、どのコースも段位ゲージで遊びます（`GrooveGauge.create`）。GROOVE と EASY は `CLASS`、HARD は `EXCLASS`、DEATH は `EXHARDCLASS` に対応します。ゲージの表の組はコースの `gauge_*` 制約で決まり、なければプレイモードで決まります（5 / 10 鍵は `5k`、PMS は `9k`、24 / 48 鍵は `24k`、それ以外は `7k`）。どれも 100 から始まり、TOTAL による補正はありません。**`____`** には公表された段位ゲージがないので、beatoraja のものを使います。
 
-lr2oraja と LR2oraja Endless Dream は、beatoraja の `GAUGE_LR2` の段位ゲージに LR2 の死亡ラインと被ダメージ軽減の境目を加えてコースを遊びます。これらの規則との比較と、be-music が従わない理由は [lr2oraja のコース](./research/lr2oraja-courses.ja.md)にまとめています。
+lr2oraja と LR2oraja Endless Dream は、beatoraja の `GAUGE_LR2` の段位ゲージに LR2 の死亡ラインと被ダメージ軽減の境目を加えてコースを遊びます。これらの規則との比較と、Be-Music が従わない理由は [lr2oraja のコース](./research/lr2oraja-courses.ja.md)にまとめています。
 
 ### 判定の制約
 
@@ -321,7 +321,7 @@ lr2oraja と LR2oraja Endless Dream は、beatoraja の `GAUGE_LR2` の段位ゲ
 
 サバイバル系のゲージが尽きるとその場でプレイを終える（`PlayerOptions.endOnFailure`、既定は `true`）ので、コースのステージもゲージが尽きた時点で終わり、コースは不合格になります。ゲージを尽きさせた判定が、最後に数える判定です。
 
-ESC で投げたステージも、コースを落ちたプレイとして終えます。これは意図的に LR2 と変えています。`LR2body.exe` は、投げたステージの結果を FAILED として表示し、ゲージが 2 % 以上残っていて次のステージがあれば次へ進みます（遊ばなかったステージがあるので、コースのランプは最後に FAILED になります）。GOOD 以上の判定が 1 つもなければ、保存せずに選曲画面へ戻ります。be-music では、ESC はコースを投げる操作として扱います。
+ESC で投げたステージも、コースを落ちたプレイとして終えます。これは意図的に LR2 と変えています。`LR2body.exe` は、投げたステージの結果を FAILED として表示し、ゲージが 2 % 以上残っていて次のステージがあれば次へ進みます（遊ばなかったステージがあるので、コースのランプは最後に FAILED になります）。GOOD 以上の判定が 1 つもなければ、保存せずに選曲画面へ戻ります。Be-Music では、ESC はコースを投げる操作として扱います。
 
 コースのステージは単曲のプレイとしてランキングに載せられません。`checkReplayEligibility` は `course-stage` として `unranked` の印を付け、Leaderboard はそのプレイを順位付けせずに保存します。
 
@@ -359,7 +359,7 @@ stitch バージョン3は CN・HCN を含む BMS だけのコースも内部 bm
 
 ## プレイヤーの段位
 
-be-music はプレイヤーの **段位** を保持します。GRADE コースをクリアした最高の段位で、判定ルールセットとキーモードごとに 1 つです。LR2 もキーモードごとに段位を 1 つ持ちます（`grade_7` … `grade_9`）が、LR2 も beatoraja もコースのクリアから段位を設定せず、スキンにも出しません。そのため、コースと段位の対応は be-music 独自です。根拠は[調査 — プレイヤーの段位](./research/dan-rank.ja.md)を参照してください。
+Be-Music はプレイヤーの **段位** を保持します。GRADE コースをクリアした最高の段位で、判定ルールセットとキーモードごとに 1 つです。LR2 もキーモードごとに段位を 1 つ持ちます（`grade_7` … `grade_9`）が、LR2 も beatoraja もコースのクリアから段位を設定せず、スキンにも出しません。そのため、コースと段位の対応は Be-Music 独自です。根拠は[調査 — プレイヤーの段位](./research/dan-rank.ja.md)を参照してください。
 
 ```mermaid
 flowchart TD
@@ -380,4 +380,4 @@ flowchart TD
 - **キーモード。** コースが指定するもの（LR2 の `line`、表の `mode`）、なければ全ステージの譜面に共通するもの（`resolveDanCourseKeyMode`）。ステージごとに違うコースは段位を残しません。
 - **新しいプレイだけ。** 段位はこれから遊ぶ実行から決まります。以前に残したコースの記録から段位を導き直すことはしません。
 
-Web プレイヤーは段位を `localStorage`（`be-music.dan-ranks`、キーは `<ruleset>:<keyMode>`）に保存します。保存がないか読めないときは段位なしとして読みます。be-music スキンは選曲画面で `frame.danRanks` として受け取り、組み込みの Plain スキンはヘッダに出します（`7K 七段 · 14K 初段`）。段位を出す LR2 の op も beatoraja のプロパティもないので、LR2 と beatoraja のテーマは出しません。
+Web プレイヤーは段位を `localStorage`（`be-music.dan-ranks`、キーは `<ruleset>:<keyMode>`）に保存します。保存がないか読めないときは段位なしとして読みます。Be-Music Skin は選曲画面で `frame.danRanks` として受け取り、組み込みの Plain スキンはヘッダに出します（`7K 七段 · 14K 初段`）。段位を出す LR2 の op も beatoraja のプロパティもないので、LR2 と beatoraja のテーマは出しません。

@@ -90,7 +90,7 @@ export interface DebugMenuDeps {
   readonly records: Pick<RecordsService, 'chartBestRecords'>;
   /** The course-maker service, whose card "My courses…" opens. */
   readonly courseMaker: Pick<CourseMakerService, 'panel'>;
-  /** Each be-music skin's stored settings by skin id, which the "Skin settings" folder edits. */
+  /** Each Be-Music Skin's stored settings by skin id, which the "Skin settings" folder edits. */
   readonly skinSettings: StoredSkinSettings;
   /** The beatoraja skin entry picked for each scene type (`SkinType`), which the "Beatoraja skins" pickers write. */
   readonly beatorajaSkinOverridesByType: Map<number, string>;
@@ -113,7 +113,7 @@ export interface DebugMenuDeps {
   availableLR2Themes(): ReadonlyArray<LR2DiscoveredTheme<File>>;
   /** The name of the LR2 theme mounted. */
   activeLR2ThemeName(): string | undefined;
-  /** The be-music skin the built-in scenes draw with. */
+  /** The Be-Music Skin the built-in scenes draw with. */
   beMusicSkin(): BeMusicSkin;
   /** The beatoraja play entry the play on the stage is drawn with, when it plays on a beatoraja theme. */
   activeBeatorajaPlay(): ActiveBeatorajaPlay | undefined;
@@ -134,13 +134,13 @@ export interface DebugMenuDeps {
   refreshSelectRecords(): void;
   /** Switches the scenes to another skin system (or the same one with other effects), making the select screen again. */
   handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void;
-  /** Switches the built-in scenes to another be-music skin. */
+  /** Switches the built-in scenes to another Be-Music Skin. */
   handleBuiltInSkinChange(id: string): void;
-  /** Adds a be-music skin and switches to it. */
+  /** Adds a Be-Music Skin and switches to it. */
   addBeMusicSkin(skin: BeMusicSkin): void;
-  /** Imports a be-music skin module from a URL and adds it. */
+  /** Imports a Be-Music Skin module from a URL and adds it. */
   addBeMusicSkinFromURL(url: string): Promise<void>;
-  /** Hands the be-music skin's settings, as stored, to the scenes drawing with it. */
+  /** Hands the Be-Music Skin's settings, as stored, to the scenes drawing with it. */
   applyBeMusicSkinSettings(): void;
   /** Mounts another of the discovered LR2 themes. */
   applyLR2ThemeByName(name: string): Promise<void>;
@@ -276,7 +276,7 @@ export class DebugMenu {
   private ghostBar: GhostBarFacts | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
-  /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
+  /** Debug Menu folder holding the active Be-Music Skin's settings; hidden for a skin that declares none. */
   public skinSettingsFolder: FolderApi | undefined;
   /** The Debug Menu's "Skin & display" folder, with the common family and display controls. */
   public skinFolder: FolderApi | undefined;
@@ -317,7 +317,7 @@ export class DebugMenu {
   public readonly resolveCompressorParamOverrides = resolveCompressorParamOverrides;
   /** Rebuilds the Skin system picker's options: on every theme load. */
   public readonly rebuildSkinFamilyPicker = rebuildSkinFamilyPicker;
-  /** Refills the "Skin settings" folder: when the be-music skin changes. */
+  /** Refills the "Skin settings" folder: when the Be-Music Skin changes. */
   public readonly rebuildSkinSettingsFolder = rebuildSkinSettingsFolder;
   /** Rebuilds the LR2 theme picker: on every LR2 theme load. */
   public readonly rebuildLR2ThemePicker = rebuildLR2ThemePicker;

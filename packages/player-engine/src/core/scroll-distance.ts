@@ -272,7 +272,7 @@ function normalizeScrollPoints(timeline?: ReadonlyArray<ScrollTimelinePoint>): S
 /**
  * `#SPEEDxx` keyframes behind a beat-0 head of `1`, so the speed ramps linearly from 1 at beat 0 to the first keyframe,
  * as beatoraja's `LaneRenderer.getCurrentSpeed` ramps from 1.0 at time 0 (a keyframe on beat 0 applies at once).
- * be-music interpolates in beats where beatoraja interpolates in time; see docs/format-compat.md §2.10.
+ * Be-Music interpolates in beats where beatoraja interpolates in time; see docs/format-compat.md §2.10.
  */
 function normalizeSpeedPoints(timeline?: ReadonlyArray<SpeedTimelinePoint>): SpeedTimelinePoint[] {
   return normalizeTimelinePoints(timeline, {

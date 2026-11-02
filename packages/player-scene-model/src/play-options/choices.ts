@@ -354,7 +354,7 @@ const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: 
 };
 
 /**
- * Validates a value set for a play option from untyped input (a be-music skin's `setPlayOption`, stored settings).
+ * Validates a value set for a play option from untyped input (a Be-Music Skin's `setPlayOption`, stored settings).
  * Returns the value to store — clamped for the numeric options (`hiSpeed`, `shutter`) — or `undefined` when the change
  * must be ignored: an unknown key, a value outside the option's choices, or a non-finite / non-numeric value for a
  * numeric option.

@@ -360,7 +360,7 @@ function sortEventsInPlace(events: BeMusicEvent[]): void {
 // ---------------------------------------------------------------------------------------------------------------------
 //
 // The items are read with the resolvers the Resolved layer (`resolveChart`) is built from, so the fingerprint follows
-// be-music's interpretation instead of repeating it: judged notes, long-note pairing, FREE ZONE and one note per lane
+// Be-Music's interpretation instead of repeating it: judged notes, long-note pairing, FREE ZONE and one note per lane
 // and position (`resolved-notes.ts`), mine damage (`note-rules.ts`), BPM / STOP / `#STP` (`timing.ts`), SCROLL / SPEED
 // (`timelines.ts`), and the judge-rank / TOTAL facts (`resolved-chart.ts`). Only the coordinates are the
 // fingerprint's own: positions are read exactly from the source events instead of as beats.
@@ -372,7 +372,7 @@ const STOP_UNITS_PER_BEAT: Rational = { n: 48n, d: 1n };
 interface ItemContext {
   json: BeMusicJSON;
   base: 36 | 62;
-  /** `#LNTYPE` as be-music resolves it for the whole chart (explicit, else inferred from the `5x` / `6x` objects). */
+  /** `#LNTYPE` as Be-Music resolves it for the whole chart (explicit, else inferred from the `5x` / `6x` objects). */
   lnType: 1 | 2;
   bmson?: BmsonGeometry;
 }
@@ -526,7 +526,7 @@ export function usesInferredLongNoteType(json: BeMusicJSON): boolean {
   return json.bms.lnType !== 1 && json.bms.lnType !== 2;
 }
 
-/** The chart's `#LNTYPE`: its own, else what be-music infers from every lane's `5x` / `6x` objects. */
+/** The chart's `#LNTYPE`: its own, else what Be-Music infers from every lane's `5x` / `6x` objects. */
 function resolveChartLongNoteType(json: BeMusicJSON, bucketed: Map<string, BeMusicEvent[]>): 1 | 2 {
   if (!usesInferredLongNoteType(json)) {
     return json.bms.lnType as 1 | 2;
@@ -724,7 +724,7 @@ function computeTimeline(context: ItemContext, type: FingerprintTimelineType, ev
   }
 }
 
-/** Changes of one type in chart order; of several at one time the last one is the one be-music applies. */
+/** Changes of one type in chart order; of several at one time the last one is the one Be-Music applies. */
 function lastChangePerTime(
   type: FingerprintTimelineType,
   changes: ReadonlyArray<{ event: BeMusicEvent; value: number | Rational | undefined }>,

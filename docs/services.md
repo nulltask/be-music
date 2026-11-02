@@ -6,8 +6,8 @@
 
 ## 1. Services
 
-be-music is split into one Worker per service, each on its own subdomain. Every service signs in with the same
-be-music account.
+Be-Music is split into one Worker per service, each on its own subdomain. Every service signs in with the same
+Be-Music account.
 
 | Service     | Production host            | What it does                                                                                               |
 | ----------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -162,7 +162,7 @@ configuration:
   printing the values.
 - D1 database IDs, Worker names and Service Binding targets come from deploy configuration, not from source.
 - Calls to outside services (such as BMS Search) can be turned off.
-- Donations, the donation site and the be-music name and logo belong to the official instance; links to them in the
+- Donations, the donation site and the Be-Music name and logo belong to the official instance; links to them in the
   player are configurable.
 
 ## 6. Deployment
@@ -176,7 +176,7 @@ configuration:
 | Donate      | `donate` / `donate-preview`, OIDC login and public financial data                      |
 
 The monorepo Workers deploy with `cf` from `cloudflare.config.ts`; Donate uses Wrangler in its private content repository. `.github/workflows/deploy.yml` deploys `main` to
-production and `devel` to the preview. All of them run in the be-music Cloudflare account, which bills only be-music.
+production and `devel` to the preview. All of them run in the Be-Music Cloudflare account, which bills only Be-Music.
 Its `workers.dev` subdomain is `be-music.workers.dev`.
 
 ## Storage ownership

@@ -1,11 +1,11 @@
 /**
  * Barrel for the `@be-music/player-browser/skin` entry: the skin families and their loading. The cross-family
  * `SkinFamily` registry, the LR2 and beatoraja theme loaders (with their audio, fonts, textures and the beatoraja scene
- * kit), the default family with the be-music skin registry, and the built-in be-music skins. Pixi-bound texture / font /
+ * kit), the default family with the Be-Music Skin registry, and the built-in Be-Music Skins. Pixi-bound texture / font /
  * rendering helpers under `skin/lr2/*` are mostly package-internal (they back the family views); the only one exported
  * here is `loadTextureFromBytes`, which the player needs to decode per-song STAGEFILE / BACKBMP / BANNER bitmaps.
  *
- * The be-music skin contract itself (`BeMusicSkin`, its frames and settings) is `@be-music/player-skin-sdk`'s, and isn't
+ * The Be-Music Skin contract itself (`BeMusicSkin`, its frames and settings) is `@be-music/player-skin-sdk`'s, and isn't
  * re-exported here.
  */
 export * from './family.ts';
@@ -38,11 +38,11 @@ export {
 export * from './beatoraja/textures.ts';
 export * from './beatoraja/theme.ts';
 
-// Default family registration entry + the registry of the be-music skins it draws with.
+// Default family registration entry + the registry of the Be-Music Skins it draws with.
 export * from './default/family.ts';
 export * from './be-music/index.ts';
 
-// The built-in be-music skins, drawn when neither an LR2 nor a beatoraja theme is loaded, or when a loaded theme doesn't
+// The built-in Be-Music Skins, drawn when neither an LR2 nor a beatoraja theme is loaded, or when a loaded theme doesn't
 // cover the scene or the chart's variant. `BUILT_IN_BE_MUSIC_SKINS` is the default set, in picker order.
 export { BUILT_IN_BE_MUSIC_SKINS } from '../skins/built-in.ts';
 export { plainSkin } from '../skins/plain/index.ts';

@@ -3,7 +3,7 @@ import { canDrawBGAPixelsOnGPU, drawBGAPixelsOnGPU } from '../../media/bga-gpu-p
 import { isColorKeyVideoCanvas } from '../../media/color-key-video.ts';
 /**
  * The chart's BGA on the built-in and LR2 play screens: composites the base, layer and POOR
- * images (or a stitched NONSTOP chart's per-stage stacks) into the skin's BGA rects, or hands them to a be-music skin
+ * images (or a stitched NONSTOP chart's per-stage stacks) into the skin's BGA rects, or hands them to a Be-Music Skin
  * that composites the BGA itself, and keeps the BGA videos playing in step with their cues.
  *
  * The functions read and write the scene's state through {@link BGARendererContext}; the play view passes itself.

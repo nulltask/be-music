@@ -473,7 +473,7 @@ export function drawCardHeading(
   ctx.textAlign = 'right';
   ctx.fillText(' Leaderboard', RIGHT, siteBaseline);
   pen.set(700, 26, TEXT);
-  ctx.fillText('be-music', RIGHT - siteWidth, siteBaseline);
+  ctx.fillText('Be-Music', RIGHT - siteWidth, siteBaseline);
   ctx.textAlign = 'left';
   const titleSize = fitFontSize(
     (text, size) => {

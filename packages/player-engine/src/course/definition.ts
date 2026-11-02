@@ -1,5 +1,5 @@
 /**
- * One course model for every source be-music reads: LR2 `.lr2crs` files, beatoraja `course/*.json` files and the
+ * One course model for every source Be-Music reads: LR2 `.lr2crs` files, beatoraja `course/*.json` files and the
  * `course` / `grade` lists of difficulty-table headers. Parsers normalise into it; nothing downstream needs to know
  * which format a course came from.
  */

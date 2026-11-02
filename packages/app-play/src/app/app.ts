@@ -73,7 +73,7 @@ export class PlayerWebApp {
   private readonly lr2: LR2ThemeService;
   /** The beatoraja theme: its bundle, BGM and system sounds, and its entries loaded as scene kits. */
   private readonly beatoraja: BeatorajaThemeService;
-  /** The be-music skin the built-in family draws with, the player's values for its settings, and the skins added. */
+  /** The Be-Music Skin the built-in family draws with, the player's values for its settings, and the skins added. */
   private readonly builtIn: BuiltInThemeService;
   /** The family each screen is drawn by, and the kit it is drawn with, from the theme services and "Skin system". */
   private readonly familyKits: FamilyKits;
@@ -729,7 +729,7 @@ export class PlayerWebApp {
   }
 
   /**
-   * Hands the active be-music skin's settings to the scenes on screen (and to the select scene and a play loading off
+   * Hands the active Be-Music Skin's settings to the scenes on screen (and to the select scene and a play loading off
    * it), which draw with them from their next frame.
    */
   private applyBeMusicSkinSettings(): void {

@@ -22,7 +22,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [Services and environments](./services.md)
 - [LR2 skin implementation notes](./lr2-skin.md)
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
-- [Writing a be-music skin](./be-music-skin.md)
+- [Writing a Be-Music Skin](./be-music-skin.md)
 - [BMS/bmson intermediate representation (`@be-music/chart-source`) implementation specification](./json-spec.md)
 - [Package names and responsibilities](./packages.md)
 - [Shared utilities](./shared-utils.md)
