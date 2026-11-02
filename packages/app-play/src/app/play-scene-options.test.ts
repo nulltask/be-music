@@ -240,6 +240,23 @@ describe('resolvePlaySceneOptions: a single play', () => {
   });
 });
 
+describe('resolvePlaySceneOptions: ANY KEY', () => {
+  test('passes ANY KEY on with the ____ judge rules only, and a replay plays with its own recorded switch', () => {
+    expect(
+      resolvePlaySceneOptions(input({ guiState: gui({ anyKey: true, judgeRuleset: '____' }) })).settings.anyKey,
+    ).toBe(true);
+    expect(
+      resolvePlaySceneOptions(input({ guiState: gui({ anyKey: true, judgeRuleset: 'lr2' }) })).settings.anyKey,
+    ).toBe(false);
+    const recorded = rereplay();
+    expect(resolvePlaySceneOptions(input({ replay: recorded, guiState: gui({ anyKey: true }) })).settings.anyKey).toBe(
+      false,
+    );
+    recorded.play.anyKey = true;
+    expect(resolvePlaySceneOptions(input({ replay: recorded })).settings.anyKey).toBe(true);
+  });
+});
+
 describe('resolvePlaySceneOptions: a replay', () => {
   test('plays the recorded setup: no lane transforms, the log’s auto scratch and gauge, no judge of its own', () => {
     const { settings } = resolvePlaySceneOptions(input({ replay: rereplay() }));

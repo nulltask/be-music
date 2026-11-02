@@ -1,4 +1,4 @@
-import type { ChartOptionProgram } from '@be-music/chart-model';
+import { hasChartPlayOptions, type ChartOptionProgram, type ChartPlayOptionProgram } from '@be-music/chart-model';
 import type { BeatorajaCustomJudge } from '../ruleset/custom-judge.ts';
 import type { EffectiveBattleMode } from '../core/battle-mode.ts';
 import type { ChartPlayVariant } from '@be-music/chart-model';
@@ -104,6 +104,8 @@ export interface ReplayRecorderPlaySettings {
   mineModifierChangeCount?: number;
   autoScratch1P?: boolean;
   autoScratch2P?: boolean;
+  /** ANY KEY routed the play's presses (`PlayerOptions.anyKey`). */
+  anyKey?: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
   gauge?: GaugeType;
   randomLane?: { p1?: string; p2?: string };
@@ -148,6 +150,8 @@ export type ReplayRecordingOptions = Pick<
 
 export interface ReplayRecorderOptions {
   chartOptions?: ChartOptionProgram;
+  /** The chart-authored gameplay options the play ran with; recorded when it forces anything. */
+  chartPlayOptions?: ChartPlayOptionProgram;
   /** Resolved chart JSON (post `#RANDOM` control flow) — metadata source. */
   json: BeMusicJSON;
   chart: ReplayRecorderChartData;
@@ -361,6 +365,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.longNoteModifier !== undefined) play.longNoteModifier = options.play.longNoteModifier;
       if (options.play.autoScratch1P !== undefined) play.autoScratch1P = options.play.autoScratch1P;
       if (options.play.autoScratch2P !== undefined) play.autoScratch2P = options.play.autoScratch2P;
+      if (options.play.anyKey === true) play.anyKey = true;
       if (initialOptions !== undefined) play.options = { ...initialOptions };
       if (optionChanges.length > 0) play.optionChanges = structuredClone(optionChanges);
       if (viewChanges.length > 0) play.viewChanges = structuredClone(viewChanges);
@@ -523,9 +528,11 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
   }
   if (
     options.chartOptions &&
-    (options.chartOptions.initial.hiSpeed !== undefined || options.chartOptions.cues.length > 0)
+    (Object.keys(options.chartOptions.initial).length > 0 || options.chartOptions.cues.length > 0)
   )
     result.chartOptions = structuredClone(options.chartOptions);
+  if (hasChartPlayOptions(options.chartPlayOptions))
+    result.chartPlayOptions = structuredClone(options.chartPlayOptions);
   return result;
 }
 

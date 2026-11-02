@@ -1,20 +1,42 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { handlePlayerSettings, type PlayerSettingsBucket } from './player-settings.ts';
 
-function bucket(): PlayerSettingsBucket & { values: Map<string, string> } {
-  const values = new Map<string, string>();
+interface Stored {
+  bytes: Uint8Array;
+  etag: string;
+  contentEncoding?: string;
+}
+
+function bucket(): PlayerSettingsBucket & {
+  values: Map<string, Stored>;
+  seed(key: string, text: string): void;
+} {
+  const values = new Map<string, Stored>();
+  let serial = 0;
   return {
     values,
+    seed(key, text) {
+      serial += 1;
+      values.set(key, { bytes: new TextEncoder().encode(text), etag: `seed-${serial}` });
+    },
     get: async (key) => {
-      const text = values.get(key);
-      return text === undefined ? null : { etag: text, text: async () => text };
+      const stored = values.get(key);
+      if (stored === undefined) return null;
+      return {
+        etag: stored.etag,
+        httpMetadata: stored.contentEncoding === undefined ? undefined : { contentEncoding: stored.contentEncoding },
+        arrayBuffer: async () => stored.bytes.slice().buffer,
+      };
     },
     put: async (key, value, options) => {
       const current = values.get(key);
-      if (options?.onlyIf.etagMatches !== undefined && current !== options.onlyIf.etagMatches) return null;
+      if (options?.onlyIf.etagMatches !== undefined && current?.etag !== options.onlyIf.etagMatches) return null;
       if (options?.onlyIf.etagDoesNotMatch === '*' && current !== undefined) return null;
-      values.set(key, value);
-      return { etag: value };
+      const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value);
+      serial += 1;
+      const etag = `etag-${serial}`;
+      values.set(key, { bytes, etag, contentEncoding: options?.httpMetadata?.contentEncoding });
+      return { etag };
     },
     delete: async (key) => {
       values.delete(key);
@@ -22,8 +44,18 @@ function bucket(): PlayerSettingsBucket & { values: Map<string, string> } {
   };
 }
 
+async function storedJSON(stored: Stored): Promise<unknown> {
+  const buffer = new ArrayBuffer(stored.bytes.byteLength);
+  new Uint8Array(buffer).set(stored.bytes);
+  const text =
+    stored.contentEncoding === 'gzip'
+      ? await new Response(new Blob([buffer]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
+      : new TextDecoder().decode(buffer);
+  return JSON.parse(text);
+}
+
 const document = {
-  version: 1,
+  version: 0,
   updatedAt: 20,
   settings: { gauge: 'HARD', peakGain: true },
 };
@@ -107,7 +139,7 @@ test('does not replace client edit ordering with a faster server clock', async (
     new Request('https://play.be-music.app/api/player-settings', {
       method: 'PUT',
       headers: { origin: 'https://play.be-music.app', cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ version: 1, updatedAt, settings: { gauge } }),
+      body: JSON.stringify({ version: 0, updatedAt, settings: { gauge } }),
     });
   await handlePlayerSettings(request(20, 'HARD'), store, undefined, 10000);
   const response = await handlePlayerSettings(request(21, 'EASY'), store, undefined, 10001);
@@ -119,12 +151,12 @@ test('reading settings never writes an older snapshot back to the bucket', async
   const cookie = `__Host-be-music.device=${'a'.repeat(32)}`;
   const deviceKey = `player-settings/device/${'a'.repeat(32)}`;
   const accountKey = 'player-settings/account/user';
-  store.values.set(accountKey, JSON.stringify(document));
+  store.seed(accountKey, JSON.stringify(document));
   const putSpy: string[] = [];
   const putOriginal = store.put;
-  store.put = async (key, value) => {
+  store.put = async (key, value, options) => {
     putSpy.push(key);
-    return putOriginal(key, value);
+    return putOriginal(key, value, options);
   };
   await handlePlayerSettings(
     new Request('https://play.be-music.app/api/player-settings', { headers: { cookie } }),
@@ -140,19 +172,52 @@ test('retries a concurrent write without overwriting its newer version', async (
   const store = bucket();
   const id = 'a'.repeat(32);
   const key = `player-settings/device/${id}`;
-  store.values.set(key, JSON.stringify(document));
+  store.seed(key, JSON.stringify(document));
   const originalPut = store.put;
   let race = true;
   store.put = async (path, value, options) => {
     if (race) {
       race = false;
-      store.values.set(path, JSON.stringify({ ...document, updatedAt: 100, settings: { gauge: 'EASY' } }));
+      store.seed(path, JSON.stringify({ ...document, updatedAt: 100, settings: { gauge: 'EASY' } }));
     }
     return originalPut(path, value, options);
   };
   const response = await put(store, { ...document, updatedAt: 30 }, `__Host-be-music.device=${id}`);
   expect(await response.json()).toMatchObject({ updatedAt: 100, settings: { gauge: 'EASY' } });
-  expect(JSON.parse(store.values.get(key)!)).toMatchObject({ updatedAt: 100 });
+  expect(await storedJSON(store.values.get(key)!)).toMatchObject({ updatedAt: 100 });
+});
+
+test('reads a plain JSON object written before compression', async () => {
+  const store = bucket();
+  const id = 'b'.repeat(32);
+  const key = `player-settings/device/${id}`;
+  store.seed(key, JSON.stringify({ version: 0, updatedAt: 40, settings: { gauge: 'EASY' } }));
+  const read = await handlePlayerSettings(
+    new Request('https://play.be-music.app/api/player-settings', {
+      headers: { cookie: `__Host-be-music.device=${id}` },
+    }),
+    store,
+    undefined,
+  );
+  expect(await read.json()).toMatchObject({ version: 0, updatedAt: 40, settings: { gauge: 'EASY' } });
+  expect(store.values.get(key)?.contentEncoding).toBeUndefined();
+});
+
+test('treats a document stamped with an older version as absent', async () => {
+  const store = bucket();
+  expect((await put(store, { ...document, version: 1 })).status).toBe(400);
+  const id = 'c'.repeat(32);
+  const key = `player-settings/device/${id}`;
+  store.seed(key, JSON.stringify({ version: 1, updatedAt: 40, settings: { gauge: 'EASY' } }));
+  const read = await handlePlayerSettings(
+    new Request('https://play.be-music.app/api/player-settings', {
+      headers: { cookie: `__Host-be-music.device=${id}` },
+    }),
+    store,
+    undefined,
+  );
+  expect(read.status).toBe(204);
+  expect(store.values.get(key)?.contentEncoding).toBeUndefined();
 });
 
 test('reset retains no setting values and rejects delayed pre-reset saves', async () => {
@@ -171,9 +236,14 @@ test('reset retains no setting values and rejects delayed pre-reset saves', asyn
     99999,
   );
   const deleted = await reset.json();
-  expect(deleted).toEqual({ version: 1, updatedAt: 21, settings: {}, deleted: true });
+  expect(deleted).toEqual({ version: 0, updatedAt: 21, settings: {}, deleted: true });
   expect(await (await put(store, document, cookie)).json()).toEqual(deleted);
-  for (const value of store.values.values()) expect(JSON.parse(value)).toEqual(deleted);
+  for (const value of store.values.values()) {
+    expect(value.contentEncoding).toBe('gzip');
+    expect(value.bytes[0]).toBe(0x1f);
+    expect(value.bytes[1]).toBe(0x8b);
+    expect(await storedJSON(value)).toEqual(deleted);
+  }
   const read = await handlePlayerSettings(
     new Request('https://play.be-music.app/api/player-settings', { headers: { cookie } }),
     store,
@@ -189,7 +259,7 @@ test('repeated reset retries keep the same empty revision barrier', async () => 
     new Request('https://play.be-music.app/api/player-settings', {
       method: 'DELETE',
       headers: { origin: 'https://play.be-music.app', cookie },
-      body: JSON.stringify({ version: 1, updatedAt: 30, settings: {}, deleted: true }),
+      body: JSON.stringify({ version: 0, updatedAt: 30, settings: {}, deleted: true }),
     });
   const first = await (await handlePlayerSettings(request(), store, undefined)).json();
   expect(await (await handlePlayerSettings(request(), store, undefined)).json()).toEqual(first);

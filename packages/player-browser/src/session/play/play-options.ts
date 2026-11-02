@@ -166,7 +166,7 @@ export interface PlaySessionOptions {
   sevenToNineType?: import('@be-music/player-engine/lanes').SevenToNineType;
   battleMode?: BattleMode;
   dBattleScratch?: boolean;
-  /** beatoraja PRACTICE range and rules (`PlayerOptions.practice`); set with `practice` so nothing is saved. */
+  /** PRACTICE range and rules (`PlayerOptions.practice`), under every ruleset; set with `practice` so nothing is saved. */
   practiceRange?: import('@be-music/player-engine').PlayerOptions['practice'];
   /** beatoraja LN MODE for charts whose long-note mode is undefined. */
   longNoteMode?: 'LN' | 'CN' | 'HCN';
@@ -188,6 +188,11 @@ export interface PlaySessionOptions {
   autoScratch1P?: boolean;
   /** 2P side auto-scratch (channel 26). */
   autoScratch2P?: boolean;
+  /**
+   * ANY KEY (That-Which-Must-Not-Be-Named PC, #751): each press takes the nearest unjudged note in reach on any lane and
+   * holds that lane until its key comes up. A replay plays with its own recorded switch instead.
+   */
+  anyKey?: boolean;
   /**
    * DP FLIP — when true, swaps every note's 1P / 2P channel at chart-prepare time. Only DP charts have notes on both
    * sides so SP charts are unaffected. Mirrors LR2's `#SRC_BUTTON,type=54`.
@@ -216,6 +221,19 @@ export interface PlaySessionOptions {
    * different chart file).
    */
   replay?: BeMusicReplay;
+  /**
+   * A replay ghost to show beside the play (`ghost/ghost.ts`): the source of the replay it plays, read while the play
+   * loads, and shown as {@link ghostMode} says. It is left out of a replay, a course stage and a NONSTOP run, and
+   * wherever its mode has no room. It only draws: the play's judging, records, replay and Leaderboard submission are
+   * its own.
+   */
+  ghost?: import('./ghost/ghost.ts').GhostSource;
+  /**
+   * How the ghost shows (`ghost/ghost.ts`): `'side-playfield'` (the default) as a second playfield, `'pacemaker'` as a
+   * pacemaker alone (the score graph's target and the target score numbers, on every family), or `'lane-overlay'` as
+   * the pacemaker with the recorded inputs over the play's own lanes (drawn on the built-in family).
+   */
+  ghostMode?: import('./ghost/ghost.ts').GhostPresentationMode;
   /** Reuse the resolved chart layout while playing fresh input and recording a new replay. */
   fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
   /**

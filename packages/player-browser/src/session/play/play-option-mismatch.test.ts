@@ -31,6 +31,16 @@ describe('describeChartConvertingOptions', () => {
     ).toEqual([]);
     expect(describeChartConvertingOptions({})).toEqual([]);
   });
+
+  test('names the source of a source-qualified value (ADR 0019)', () => {
+    expect(
+      describeChartConvertingOptions({
+        random1P: 'beatoraja:CONVERGE',
+        random2P: 'lr2:S-RANDOM',
+        battleMode: '____:BATTLE',
+      }),
+    ).toEqual(['Random 1P: CONVERGE (beatoraja)', 'Random 2P: S-RANDOM (LR2)', 'Battle: BATTLE (????)']);
+  });
 });
 
 describe('toPlayOptionMismatch', () => {

@@ -28,10 +28,13 @@ function prepare(options: ConstructorParameters<typeof PlaySession>[0]) {
 test.each(['SCATTER', 'SCATTER-CORRECTED'] as const)(
   '%s retains exact PMS arrangement, source identity and LN endpoints through serialized replay',
   (mode) => {
-    const random = vi.spyOn(Math, 'random').mockReturnValue(0.999);
+    // Every lane random is seeded (#933): these seeds send the first note to LR2 beta3's tenth destination ('26') and
+    // to the corrected nine-key one ('25').
+    const randomSeed1P = mode === 'SCATTER' ? '9' : '4';
+    const random = vi.spyOn(Math, 'random');
     try {
       const source = structuredClone(entry.chart);
-      const original = prepare({ judgeRuleset: 'lr2', random1P: mode });
+      const original = prepare({ judgeRuleset: 'lr2', random1P: mode, randomSeed1P });
       expect(original.notes[0]!.channel).toBe(mode === 'SCATTER' ? '26' : '25');
       expect(original.preparedChart!.laneBindings).toHaveLength(9);
       expect(original.preparedChart!.laneBindings.some((binding) => binding.channel === '26')).toBe(false);
@@ -62,6 +65,7 @@ test.each(['SCATTER', 'SCATTER-CORRECTED'] as const)(
         hidden: play.invisibleNotes.map((note) => [note.channel, note.seconds, note.event.value]),
       });
       random.mockReturnValue(0);
+      expect(original.randomSeeds).toEqual({ p1: randomSeed1P });
       const restored = prepare({ judgeRuleset: 'lr2', replay });
       expect(population(restored)).toEqual(population(original));
       expect(restored.laneChannels).toEqual(original.laneChannels);

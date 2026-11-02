@@ -84,7 +84,7 @@ Resubmitting the same play from its owner returns the stored result; submission 
 
 - L1 re-simulates inputs instead of trusting the replay’s result cache.
 - L2 rejects AUTO and classifies assists. Tempo changes and standalone course stages are stored as unranked; ESC aborts are ranked as failed plays.
-- L3 checks that the play document and, on registration, chart document hash to the claimed fingerprints.
+- L3 checks that the play document and, on registration, chart document hash to the claimed fingerprints. The play document then also checks the replay's chart gameplay program: `chart.chartPlayOptions` must be the document's `playOptions` narrowed to the play (a course stage leaves out NOTES COPY; a NONSTOP run applies none), or the play is rejected with `chart-play-options-mismatch` ([ADR 0035](./adr/0035-chart-authored-notes-options.md), `src/scores/chart-play-options.ts`).
 - L4 holds when chart and play fingerprints are identical or the play fingerprint is already verified for the chart. Composing new control-flow outcomes is not implemented.
 
 L5 (equivalence of replay notes and play-document timings) and input anomaly detection are not implemented. See `src/scores/played-chart.ts` for document verification.
@@ -98,10 +98,19 @@ A manual play that seeks is practice (`PlayResult.practice`). Its first seek dis
 - **Three rulesets.** Every play is re-simulated under `lr2`, `beatoraja` and `____`, and appears in all three
   rankings. The ruleset the player actually played (`play.judgeRuleset`) is stored and shown as a mark, and a ranking
   can be filtered to "played under this ruleset" only.
+- **Re-judging outcomes** ([ADR 0019](./adr/0019-source-qualified-option-values.md), `rejudgeReplay` in
+  [Replays](./replay.md#re-judging-under-another-ruleset)): a ruleset that cannot read the play (a gauge it does not
+  define, or CUSTOM JUDGE outside beatoraja) stores no figures and is answered in `notSimulated`
+  with the reason. A play that ended where its gauge emptied is judged under another ruleset only up to that point; if
+  that ruleset's gauge would have survived, its figures are stored with `outcome: 'truncated'` and, like an unranked
+  play, move no personal best and stay out of the rankings and lists. Courses follow the same rules.
 - **Gauges** map across rulesets as the replay already does (`GROOVE` is beatoraja's `NORMAL`, `DEATH` its
   `HAZARD`, and so on).
-- **Assists** (auto scratch, a debug judge-window override, ...) are stored with flags and ranked separately from
-  unassisted plays.
+- **Assists** are classified by their option's source (`classifyReplayAssists`, [Assist and record policy](./play-options.md#assist-and-record-policy)) and stored with their flags.
+  A `light` or `assist` play is ranked separately from unassisted plays. Under each ruleset its lamp is limited by
+  that ruleset's rule: EASY at most under `lr2`, LIGHT ASSIST EASY or ASSIST EASY under `beatoraja`, ASSIST EASY under
+  `____`. A `no-save` play (BATTLE under `____` rules, beatoraja PRACTICE) is stored unranked as `no-save`. Lamps are
+  stored by their append-only rank (LIGHT ASSIST EASY is 10) and ordered by the lamp order, not the number.
 - **Unranked plays** are stored, simulated under every ruleset and answered with their figures (rank and players 0,
   `unranked` naming why), but they move no personal best and stay out of the rankings, the figures and every list;
   their own page still opens and says why (`score.unranked`). A **course stage** sent on its own is one
@@ -167,6 +176,8 @@ with its own rankings per ruleset, and never as single-chart plays.
 - **Unreleased courses are not ranked.** A course with beatoraja's `release: false`, which a drawn random course and a
   course made in the course maker also have, is recorded so in the course log (`course.release: false`), and its runs
   are stored unranked as `unreleased`, as beatoraja keeps them off IR.
+- **Assisted runs are not ranked.** A run with any assisted stage (any assist class but `none`) is stored unranked as
+  `assist`: LR2 saves no stage with an assist on, and beatoraja saves no assisted course.
 - **NONSTOP runs.** A NONSTOP course is played as one stitched chart, and that play (`nonstop.replay`) is what is
   judged and ranked. The server rebuilds the stitched chart from the stage charts exactly as the client built it: both
   take the same deterministic pipeline (`prepareNonstopCourse` in `@be-music/player-engine/course`, see
@@ -210,7 +221,7 @@ sequenceDiagram
     A->>A: checkCourseReplayEligibility<br/>(auto, aborted, fingerprints, one run)
     A->>D: submission id already stored?
     loop each played stage
-        A->>A: play document hashes to playFingerprint (L3)
+        A->>A: play document hashes to playFingerprint (L3)<br/>and matches chart.chartPlayOptions
         A->>D: chart known? else 409 chart_document_required
     end
     loop each unreached stage
@@ -259,7 +270,7 @@ The D1 source of truth is [`src/db/schema.ts`](../packages/app-leaderboard/src/d
     after their last check and linked charts a month after theirs, since a link may be added or changed.
   - A chart BMS Search does not know, or has not linked, stays on its own. Calls identify the Leaderboard in their
     `User-Agent`.
-- R2 stores single and course replays, canonical chart documents, and score share images. Download authorization is enforced by the replay routes; ghost storage and APIs are not implemented.
+- R2 stores single and course replays and canonical chart documents as gzip-compressed JSON (`Content-Encoding: gzip`). Score share images stay uncompressed. Download authorization is enforced by the replay routes; ghost storage and APIs are not implemented.
 
 ## 8. API (`/api/v0`)
 

@@ -3,7 +3,10 @@ import {
   betterClearLamp,
   CLEAR_LAMPS,
   clearLampAtRank,
+  clearLampOrder,
   clearLampRank,
+  compareClearLampRanks,
+  compareClearLamps,
   isClearLamp,
   isFullCombo,
   resolveClearLamp,
@@ -16,18 +19,35 @@ import {
 const score = (perfect: number, great: number, good: number, total = 100) => ({ total, perfect, great, good });
 
 describe('clear lamp ranks', () => {
-  it('ranks lamps from NO_PLAY up to MAX, as the Leaderboard stores them', () => {
-    expect(CLEAR_LAMPS.map(clearLampRank)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  it('keeps the stored ranks of the lamps that predate LIGHT ASSIST EASY, which is appended as 10', () => {
+    expect(CLEAR_LAMPS.map(clearLampRank)).toEqual([0, 1, 2, 10, 3, 4, 5, 6, 7, 8, 9]);
     expect(clearLampRank('FAILED')).toBe(1);
+    expect(clearLampRank('ASSIST_EASY')).toBe(2);
+    expect(clearLampRank('EASY')).toBe(3);
     expect(clearLampRank('MAX')).toBe(9);
+    expect(clearLampRank('LIGHT_ASSIST_EASY')).toBe(10);
     expect(clearLampRank('SUPER' as never)).toBe(0);
   });
 
   it('reads a rank back as its lamp', () => {
     expect(CLEAR_LAMPS.every((lamp) => clearLampAtRank(clearLampRank(lamp)) === lamp)).toBe(true);
-    expect(clearLampAtRank(10)).toBeUndefined();
+    expect(clearLampAtRank(10)).toBe('LIGHT_ASSIST_EASY');
+    expect(clearLampAtRank(11)).toBeUndefined();
     expect(clearLampAtRank(-1)).toBeUndefined();
     expect(clearLampAtRank(1.5)).toBeUndefined();
+  });
+
+  it('orders LIGHT ASSIST EASY between ASSIST EASY and EASY, by lamp and by stored rank', () => {
+    expect(CLEAR_LAMPS.map(clearLampOrder)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(compareClearLamps('LIGHT_ASSIST_EASY', 'ASSIST_EASY')).toBeGreaterThan(0);
+    expect(compareClearLamps('LIGHT_ASSIST_EASY', 'EASY')).toBeLessThan(0);
+    expect(compareClearLamps('HARD', 'HARD')).toBe(0);
+    expect(compareClearLampRanks(10, 9)).toBeLessThan(0);
+    expect(compareClearLampRanks(10, 2)).toBeGreaterThan(0);
+    expect(compareClearLampRanks(10, 3)).toBeLessThan(0);
+    expect(compareClearLampRanks(99, 0)).toBe(0);
+    expect(betterClearLamp('LIGHT_ASSIST_EASY', 'EASY')).toBe('EASY');
+    expect(betterClearLamp('LIGHT_ASSIST_EASY', 'ASSIST_EASY')).toBe('LIGHT_ASSIST_EASY');
   });
 
   it('knows the lamp names', () => {
@@ -83,7 +103,8 @@ describe('resolveClearLamp', () => {
       ['GROOVE', 'NORMAL'],
       ['NORMAL', 'NORMAL'],
       ['EASY', 'EASY'],
-      ['ASSIST-EASY', 'ASSIST_EASY'],
+      // beatoraja's ASSIST EASY gauge clears on LightAssistEasy; That-Which-Must-Not-Be-Named's ASSISTED EASY on its ASSIST CLEAR.
+      ['ASSIST-EASY', 'LIGHT_ASSIST_EASY'],
       ['ASSISTED-EASY', 'ASSIST_EASY'],
       ['HARD', 'HARD'],
       ['EX-HARD', 'EX_HARD'],

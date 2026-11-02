@@ -1,6 +1,6 @@
 import { expect, test } from './support.ts';
 
-type Probe = { duration: number; rate: number; leftPeak: number; rightPeak: number; cycles: number };
+type Probe = { duration: number; rate: number; leftPeak: number; rightPeak: number; frequency: number };
 
 for (const mode of ['pitch', 'keep-pitch'] as const) {
   test(`WAVCMD and EXWAV prepare independent slot PCM before ${mode} tempo playback`, async ({ player }) => {
@@ -14,19 +14,38 @@ for (const mode of ['pitch', 'keep-pitch'] as const) {
           const left = this.buffer.getChannelData(0);
           const right = this.buffer.getChannelData(this.buffer.numberOfChannels > 1 ? 1 : 0);
           let leftPeak = 0,
-            rightPeak = 0,
-            cycles = 0;
+            rightPeak = 0;
           for (let index = 0; index < left.length; index++) {
             leftPeak = Math.max(leftPeak, Math.abs(left[index]!));
             rightPeak = Math.max(rightPeak, Math.abs(right[index]!));
-            if (index > 0 && right[index - 1]! <= 0 && right[index]! > 0) cycles++;
           }
+          // The right channel's pitch by autocorrelation over its middle half. Counting zero crossings across the whole
+          // buffer drops cycles at the time-stretch splices, by an amount that depends on the context's sample rate
+          // (#878).
+          const rate = this.buffer.sampleRate;
+          const from = Math.floor(right.length / 4),
+            to = Math.floor((right.length * 3) / 4);
+          const correlation = (lag: number): number => {
+            let sum = 0;
+            for (let index = from; index < to - lag; index++) sum += right[index]! * right[index + lag]!;
+            return sum / Math.max(1, to - lag - from);
+          };
+          let bestLag = 0,
+            best = -Infinity;
+          for (let lag = Math.floor(rate / 3000); lag <= Math.ceil(rate / 1000); lag++) {
+            const value = correlation(lag);
+            if (value > best) [best, bestLag] = [value, lag];
+          }
+          const [before, after] = [correlation(bestLag - 1), correlation(bestLag + 1)];
+          const curvature = before - 2 * best + after;
+          const lag = bestLag + (curvature < 0 ? (0.5 * (before - after)) / curvature : 0);
+          const frequency = lag > 0 ? rate / lag : 0;
           target.wavEffectProbes.push({
             duration: this.buffer.duration,
             rate: this.playbackRate.value,
             leftPeak,
             rightPeak,
-            cycles,
+            frequency,
           });
         }
         Reflect.apply(original, this, args);
@@ -104,8 +123,8 @@ for (const mode of ['pitch', 'keep-pitch'] as const) {
     expect(effected).toHaveLength(2);
     for (const probe of effected) {
       expect(probe.rate).toBeCloseTo(mode === 'pitch' ? 1.2 : 1, 5);
-      expect(probe.cycles / probe.duration).toBeGreaterThan(1650);
-      expect(probe.cycles / probe.duration).toBeLessThan(1850);
+      expect(probe.frequency).toBeGreaterThan(1650);
+      expect(probe.frequency).toBeLessThan(1850);
     }
     expect(
       probes.some(

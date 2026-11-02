@@ -3,7 +3,7 @@
 // and the next visit still restores it (`debug-menu-settings-sync.ts`).
 
 import type { TunableCompressor } from '@be-music/player-browser/audio';
-import { isGaugeType, isRulesetId } from '@be-music/player-engine/ruleset';
+import { isGaugeType, isRulesetId, migrateOptionValue, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
@@ -31,14 +31,20 @@ import {
   serializePlayInSilentMode,
 } from './silent-mode-playback.ts';
 import { REPLAY_AUTO_SAVE_RULES, type ReplayAutoSaveRule } from './services/replay-slots.ts';
+import { GHOST_MODES, GHOST_SOURCES } from './services/ghost.ts';
 import type { PlayerGUIState, SkinFamilyOverride } from './types.ts';
 import { DEBUG_MENU_FOLDERS_STORAGE_KEY, parseFolderOpenStates, type FolderOpenStates } from './debug-menu-storage.ts';
 import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
 
 /** `localStorage` key of the whole Debug Menu document. Reset deletes it with the other `be-music.*` settings. */
 export const DEBUG_MENU_SETTINGS_STORAGE_KEY = 'be-music.debug-menu-settings';
-/** Bumped when the stored shape changes; another version is ignored. */
-const DOCUMENT_VERSION = 1;
+/**
+ * The stored document's revision. `0` while the shape is still being defined: it may change incompatibly without the
+ * number moving. Any other stamp is unreadable. The worker copy uses the same number. Values are migrated as they are
+ * read instead (`pickSettings`): a bare RANDOM, S-RANDOM, CONVERGE or BATTLE becomes the stored ruleset's qualified one
+ * (ADR 0019).
+ */
+const DOCUMENT_VERSION = 0;
 
 type RandomMode = PlayerGUIState['random1P'];
 type SkinEffects = PlayerGUIState['skinEffects'];
@@ -57,6 +63,8 @@ export interface DebugMenuSettings {
   bgaUseWebCodecs: boolean;
   showInvisibleNotes: boolean;
   judgedNoteDisplay: PlayerGUIState['judgedNoteDisplay'];
+  ghost: PlayerGUIState['ghost'];
+  ghostMode: PlayerGUIState['ghostMode'];
   autoSaveReplay: boolean;
   replaySlotAutoSave1: ReplayAutoSaveRule;
   replaySlotAutoSave2: ReplayAutoSaveRule;
@@ -130,6 +138,7 @@ export interface DebugMenuSettings {
   bmsonTotalMode: PlayerGUIState['bmsonTotalMode'];
   autoScratch1P: boolean;
   autoScratch2P: boolean;
+  anyKey: boolean;
   sort: BrowseSort;
   keysFilter: KeysFilter;
   difficultyFilter: DifficultyFilter;
@@ -165,7 +174,7 @@ export interface DebugMenuSettings {
 
 /** The document in `localStorage` and on the player origin. `settings` holds only the fields that were saved. */
 export interface DebugMenuSettingsDocument {
-  version: 1;
+  version: 0;
   updatedAt: number;
   settings: Partial<DebugMenuSettings>;
   /** Reset barrier kept remotely without retaining any settings values. */
@@ -174,7 +183,6 @@ export interface DebugMenuSettingsDocument {
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 
-const RANDOM_MODES: readonly RandomMode[] = [...PLAY_OPTION_CHOICES.random1P!, 'SCATTER'];
 const SKIN_FAMILIES: readonly SkinFamilyOverride[] = ['auto', 'default', 'lr2', 'beatoraja'];
 const SKIN_EFFECTS: readonly SkinEffects[] = ['full', 'reduced', 'off'];
 const PLAY_LAYOUTS: readonly PlayLayout[] = ['auto', 'standard', 'touch'];
@@ -248,8 +256,26 @@ export function debugMenuSettingsDocument(value: unknown): DebugMenuSettingsDocu
   return { version: DOCUMENT_VERSION, updatedAt, settings: pickSettings(settings as Record<string, unknown>) };
 }
 
+/**
+ * A stored lane option or battle mode, valid and source-qualified: a bare colliding value (RANDOM, S-RANDOM, CONVERGE,
+ * BATTLE) from before ADR 0019 is the ruleset the document was saved with, as it meant then. The migration runs once in
+ * effect: the qualified value is what the next save writes.
+ */
+function migrateStoredOption<K extends 'random1P' | 'random2P' | 'battleMode'>(
+  key: K,
+  value: unknown,
+  ruleset: RulesetId,
+): DebugMenuSettings[K] | undefined {
+  const valid = resolvePlayOptionValue(key, value);
+  if (valid === undefined) return undefined;
+  const migrated = migrateOptionValue(valid, ruleset);
+  return (resolvePlayOptionValue(key, migrated) ?? valid) as DebugMenuSettings[K];
+}
+
 function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> {
   const settings: Partial<DebugMenuSettings> = {};
+  // The settings this document was saved with default to LR2 rules, as a fresh visit does.
+  const storedRuleset: RulesetId = isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : 'lr2';
   assign(settings, 'autoPlay', booleanOf(raw.autoPlay));
   assign(settings, 'autoPauseOnBlur', booleanOf(raw.autoPauseOnBlur));
   assign(settings, 'peakGain', booleanOf(raw.peakGain));
@@ -292,7 +318,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
   assign(settings, 'sevenToNinePattern', resolvePlayOptionValue('sevenToNinePattern', raw.sevenToNinePattern));
   assign(settings, 'sevenToNineType', resolvePlayOptionValue('sevenToNineType', raw.sevenToNineType));
-  assign(settings, 'battleMode', resolvePlayOptionValue('battleMode', raw.battleMode));
+  assign(settings, 'battleMode', migrateStoredOption('battleMode', raw.battleMode, storedRuleset));
   assign(settings, 'dBattleScratch', resolvePlayOptionValue('dBattleScratch', raw.dBattleScratch));
   assign(settings, 'gauge2P', resolvePlayOptionValue('gauge2P', raw.gauge2P));
   assign(settings, 'mRan1P', resolvePlayOptionValue('mRan1P', raw.mRan1P));
@@ -342,19 +368,22 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   assign(settings, 'longNoteModifier', resolvePlayOptionValue('longNoteModifier', raw.longNoteModifier));
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
   assign(settings, 'autoScratch2P', booleanOf(raw.autoScratch2P));
+  assign(settings, 'anyKey', booleanOf(raw.anyKey));
   assign(settings, 'playInSilentMode', booleanOf(raw.playInSilentMode));
   assign(settings, 'muted', booleanOf(raw.muted));
   assign(settings, 'tempoEnabled', booleanOf(raw.tempoEnabled));
   assign(settings, 'bgaUseWebCodecs', booleanOf(raw.bgaUseWebCodecs));
   assign(settings, 'judgedNoteDisplay', oneOf(raw.judgedNoteDisplay, ['KEEP_SCROLLING', 'HIDE'] as const));
+  assign(settings, 'ghost', oneOf(raw.ghost, GHOST_SOURCES));
+  assign(settings, 'ghostMode', oneOf(raw.ghostMode, GHOST_MODES));
   assign(settings, 'nonstopPlacement', oneOf(raw.nonstopPlacement, ['intended', 'lr2'] as const));
   assign(settings, 'judgeRuleset', isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : undefined);
   assign(settings, 'gauge', isGaugeType(raw.gauge) ? raw.gauge : undefined);
   assign(settings, 'hRandomThresholdBPM', resolvePlayOptionValue('hRandomThresholdBPM', raw.hRandomThresholdBPM));
   for (const key of ['randomFixedLane1P', 'randomFixedLane2P', 'randomSeed1P', 'randomSeed2P'] as const)
     assign(settings, key, resolvePlayOptionValue(key, raw[key]));
-  assign(settings, 'random1P', oneOf(raw.random1P, RANDOM_MODES));
-  assign(settings, 'random2P', oneOf(raw.random2P, RANDOM_MODES));
+  assign(settings, 'random1P', migrateStoredOption('random1P', raw.random1P, storedRuleset));
+  assign(settings, 'random2P', migrateStoredOption('random2P', raw.random2P, storedRuleset));
   assign(settings, 'sort', oneOf(raw.sort, SORT_CYCLE));
   assign(settings, 'keysFilter', oneOf(raw.keysFilter, KEYS_FILTER_CYCLE));
   assign(settings, 'difficultyFilter', oneOf(raw.difficultyFilter, DIFFICULTY_FILTER_CYCLE));
@@ -413,7 +442,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
   }
   if (typeof raw.skinSettings === 'object' && raw.skinSettings !== null && !Array.isArray(raw.skinSettings)) {
     settings.skinSettings = Object.fromEntries(
-      parseStoredSkinSettings(JSON.stringify({ version: 1, skins: raw.skinSettings })),
+      parseStoredSkinSettings(JSON.stringify({ version: 0, skins: raw.skinSettings })),
     );
   }
   if (Array.isArray(raw.courseTableURLs)) {
@@ -522,6 +551,8 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('bgaUseWebCodecs');
   assignState('showInvisibleNotes');
   assignState('judgedNoteDisplay');
+  assignState('ghost');
+  assignState('ghostMode');
   assignState('autoSaveReplay');
   assignState('replaySlotAutoSave1');
   assignState('replaySlotAutoSave2');
@@ -596,6 +627,7 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('bottomShiftableGauge');
   assignState('autoScratch1P');
   assignState('autoScratch2P');
+  assignState('anyKey');
   assignState('sort');
   assignState('keysFilter');
   assignState('difficultyFilter');
@@ -648,6 +680,8 @@ export function captureDebugMenuSettings(
     bgaUseWebCodecs: state.bgaUseWebCodecs,
     showInvisibleNotes: state.showInvisibleNotes,
     judgedNoteDisplay: state.judgedNoteDisplay,
+    ghost: state.ghost,
+    ghostMode: state.ghostMode,
     autoSaveReplay: state.autoSaveReplay,
     replaySlotAutoSave1: state.replaySlotAutoSave1,
     replaySlotAutoSave2: state.replaySlotAutoSave2,
@@ -722,6 +756,7 @@ export function captureDebugMenuSettings(
     bottomShiftableGauge: state.bottomShiftableGauge,
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
+    anyKey: state.anyKey,
     sort: state.sort,
     keysFilter: state.keysFilter,
     difficultyFilter: state.difficultyFilter,

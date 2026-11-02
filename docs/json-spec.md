@@ -155,6 +155,9 @@ A full example:
     "changeOption": {
       "01": "MIRROR"
     },
+    "songText": {
+      "01": "\"Old title\""
+    },
     "wavCmd": "legacy",
     "wavCmds": ["01 01 64"],
     "exWAV": {
@@ -318,6 +321,7 @@ A full example:
 - `options`: optional ordered array of whole `#OPTION` payloads, including vendor arguments with spaces; when present it owns the declarations and an empty array clears the legacy alias
 - `optionHeadersInControlFlow`: optional `true` when `controlFlow` includes every `#OPTION` in whole-file order, including unconditional lines; branch resolution rebuilds `options` from the active program once and removes this marker
 - `changeOption`: Map of `#CHANGEOPTIONxx`
+- `songText`: Map of pomu `#SONGxx`, the obsolete name of `#TEXTxx`. Chart text reads an entry only where `resources.text` leaves the index undefined, and the BMS writer emits it back as `#SONGxx`. Older JSON that kept `#SONGxx` in `metadata.extras` is moved here on load
 - `wavCmd`: first value of `#WAVCMD`, kept for legacy compatibility
 - `wavCmds`: all `#WAVCMD` lines as raw post-directive text in declaration order
 - `exWAV`: Map of `#EXWAVxx`

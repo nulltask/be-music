@@ -1,6 +1,6 @@
 import type { BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
-import type { BrowseSnapshot, LibraryCourse } from '@be-music/player-scene-model';
+import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { COURSE_TABLE_URLS_STORAGE_KEY } from '../course-table-import.ts';
 import { LibraryService, type LibraryServiceOptions } from './library.ts';
@@ -302,6 +302,31 @@ describe('LibraryService made courses', () => {
       'MY DAN',
     ]);
     expect(view.restore).toHaveBeenCalledWith(navigation);
+  });
+});
+
+describe('LibraryService chart hashing for courses', () => {
+  const chart = { id: 'a', chartPath: 'a.bms' } as unknown as LibraryChart;
+
+  test('hashes no chart while no course has fixed stages', async () => {
+    const resolveChartHashes = vi.fn(async () => undefined);
+    const { library } = harness({ resolveChartHashes });
+    library.collection = { ...library.collection, charts: [chart] };
+    await library.refreshMadeCourses();
+    expect(resolveChartHashes).not.toHaveBeenCalled();
+  });
+
+  test('hashes every chart once a made course needs to find its stages', async () => {
+    const resolveChartHashes = vi.fn(async () => undefined);
+    const course = {
+      title: 'Mine',
+      kind: 'course',
+      stages: [],
+    } as unknown as LibraryServiceOptions['courseMaker']['courses'][number];
+    const { library } = harness({ resolveChartHashes, courseMaker: { courses: [course] } });
+    library.collection = { ...library.collection, charts: [chart] };
+    await library.refreshMadeCourses();
+    expect(resolveChartHashes).toHaveBeenCalledWith(chart);
   });
 });
 

@@ -84,7 +84,7 @@ Accounts はゲスト、パスキー、設定済みの Discord / Google を提�
 
 - L1: 入力から結果を再計算し、リプレイの結果キャッシュは使いません。
 - L2: AUTO を拒否し、アシストを分類します。テンポ変更と単独のコースステージはランキング対象外として保存し、ESC 中断は失敗として順位付けします。
-- L3: play document と、登録時の chart document が申告した fingerprint と一致するか確認します。
+- L3: play document と、登録時の chart document が申告した fingerprint と一致するか確認します。続けて play document でリプレイの譜面指定ゲームプレイプログラムも確認します。`chart.chartPlayOptions` は、文書の `playOptions` をそのプレイに合わせて絞ったもの（コースのステージは NOTES COPY を外し、NONSTOP は何も適用しない）でなければならず、違えば `chart-play-options-mismatch` で拒否します（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、`src/scores/chart-play-options.ts`）。
 - L4: chart と play の fingerprint が同一、または検証済みの play fingerprint と一致する場合に成立します。新しい制御構文の分岐結果の合成は未実装です。
 
 L5（リプレイのノーツと play document の時刻の同値性）と、入力の異常検知は未実装です。実装は `src/scores/played-chart.ts` を参照してください。
@@ -98,10 +98,19 @@ L5（リプレイのノーツと play document の時刻の同値性）と、入
 - **3 つのルールセット。** すべてのプレイを `lr2`、`beatoraja`、`____` で計算し直し、3 つのランキングすべてに
   載せます。実際にプレイしたルールセット（`play.judgeRuleset`）を保存して印として表示し、「このルールセットで
   プレイしたもの」だけに絞り込めるようにします。
+- **再判定の結果**（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)、[リプレイ](./replay.ja.md#ほかのルールセットでの再判定)の
+  `rejudgeReplay`）: プレイを読めないルールセット（定義していないゲージ、beatoraja 以外での CUSTOM JUDGE）は
+  数値を保存せず、理由とともに `notSimulated` で返します。ゲージが空になった所で終わった
+  プレイは、ほかのルールセットではその時点までだけ判定します。そのルールセットのゲージなら生き残る場合は、
+  数値を `outcome: 'truncated'` として保存し、順位が付かないプレイと同じく自己ベストを更新せず、ランキングと
+  一覧にも出しません。コースも同じ規則に従います。
 - **ゲージ**はリプレイと同じ規則でルールセット間を対応させます（`GROOVE` は beatoraja の `NORMAL`、`DEATH` は
   `HAZARD`、など）。
-- **アシスト**（オートスクラッチ、デバッグ用の判定幅の上書きなど）はフラグを付けて保存し、アシストなしのプレイとは
-  別に順位付けします。
+- **アシスト**はオプションの参照元で区分し（`classifyReplayAssists`、[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)）、フラグを付けて保存します。
+  `light` と `assist` のプレイはアシストなしのプレイとは別に順位付けします。各ルールセットでは、そのルールの規則で
+  ランプを制限します（`lr2` は EASY まで、`beatoraja` は LIGHT ASSIST EASY か ASSIST EASY、`____` は ASSIST EASY）。
+  `no-save` のプレイ（`____` ルールの BATTLE、beatoraja の PRACTICE）は `no-save` としてランキング対象外で保存します。
+  ランプは追加専用の番号で保存し（LIGHT ASSIST EASY は 10）、番号ではなくランプの順序で比べます。
 - **ランキング対象外のプレイ**は保存し、すべてのルールセットで計算し直して数値を返します（順位とプレイヤー数は 0、
   理由は `unranked`）。ただし自己ベストは動かさず、ランキング・集計・すべてのリストから外れます。プレイのページは
   開け、理由を表示します（`score.unranked`）。単独で送った**コースのステージ**はこれに当たります（`course-stage`）。
@@ -168,6 +177,9 @@ L5（リプレイのノーツと play document の時刻の同値性）と、入
 - **公開されていないコースは順位付けしません。** beatoraja の `release: false` のコース（抽選したランダムコースと
   コースメーカーで作ったコースもこれに当たります）は、コースのログにそのことを記録し（`course.release: false`）、beatoraja が IR に送らないのと
   同じく `unreleased` としてランキング対象外で保存します。
+- **アシストを使ったプレイは順位付けしません。** アシストを受けたステージ（`none` 以外の区分）があるプレイは
+  `assist` としてランキング対象外で保存します。LR2 はアシストを使ったステージを保存せず、beatoraja はアシストを
+  使ったコースを保存しません。
 - **NONSTOP のプレイ。** NONSTOP コースはつないだ 1 本の譜面として遊び、判定して順位を付けるのはそのプレイ
   （`nonstop.replay`）です。サーバーはステージの譜面から、クライアントとまったく同じようにつないだ譜面を作り直し
   ます。両者は同じ決定的な処理（`@be-music/player-engine/course` の `prepareNonstopCourse`。
@@ -210,7 +222,7 @@ sequenceDiagram
     A->>A: checkCourseReplayEligibility<br/>(オート、中断、フィンガープリント、1 回のプレイか)
     A->>D: 送信 ID は保存済みか
     loop 遊んだステージごと
-        A->>A: プレイドキュメントが playFingerprint になるか (L3)
+        A->>A: プレイドキュメントが playFingerprint になるか (L3)<br/>chart.chartPlayOptions と合うか
         A->>D: 譜面は既知か。未知なら 409 chart_document_required
     end
     loop 到達しなかったステージごと
@@ -254,7 +266,7 @@ D1 の正本は [`src/db/schema.ts`](../packages/app-leaderboard/src/db/schema.t
   - 初めて見た譜面は、送信の直後に問い合わせます（`waitUntil`）。
   - 1 時間ごとの Cron Trigger で、最大 20 譜面を問い合わせます。未確認の譜面を先に、次に紐付けのない譜面を前回から 1 週間後、紐付け済みの譜面を 1 か月後に確認し直します。紐付けは後から追加・変更されることがあるためです。
   - BMS Search が知らない譜面や、まだ紐付けのない譜面は単独のままです。問い合わせの `User-Agent` で Leaderboard からのアクセスだと分かるようにしています。
-- R2 は単曲・コースのリプレイ、正規化した譜面ドキュメント、スコア共有画像を保存します。リプレイのダウンロード時はルートで権限を確認します。ゴーストの保存と API は未実装です。
+- R2 は単曲・コースのリプレイと正規化した譜面ドキュメントを gzip した JSON（`Content-Encoding: gzip`）で保存します。スコア共有画像は圧縮しません。リプレイのダウンロード時はルートで権限を確認します。ゴーストの保存と API は未実装です。
 
 ## 8. API（`/api/v0`）
 

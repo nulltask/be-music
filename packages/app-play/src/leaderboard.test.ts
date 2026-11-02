@@ -1,13 +1,14 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { computeChartFingerprint, computePlayFingerprint, drawRandomOutcomes } from '@be-music/chart-model';
 import { parseBMS, resolveBMSControlFlowWithDraws } from '@be-music/chart-parser';
-import type { BeMusicCourseReplay, BeMusicReplay } from '@be-music/player-engine/replay';
+import { serializeReplay, type BeMusicCourseReplay, type BeMusicReplay } from '@be-music/player-engine/replay';
 import {
   courseStageChartFingerprint,
   describeCourseLeaderboardResult,
   describeLeaderboardResult,
   describeSkippedCourseSubmission,
   describeSkippedSubmission,
+  fetchLeaderboardTopReplay,
   prepareCourseLeaderboardSubmission,
   prepareLeaderboardSubmission,
   submitCourseToLeaderboard,
@@ -158,6 +159,44 @@ describe('submitToLeaderboard', () => {
   });
 });
 
+describe('fetchLeaderboardTopReplay', () => {
+  function routes(table: Record<string, () => Response>) {
+    const urls: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      const route = Object.entries(table).find(([prefix]) => url.startsWith(prefix));
+      return route === undefined ? new Response('', { status: 404 }) : route[1]();
+    }) as typeof fetch;
+    return { urls, fetchImpl };
+  }
+
+  test('reads the ranking’s first run, then its replay', async () => {
+    const replay = recordedReplay();
+    const { urls, fetchImpl } = routes({
+      '/api/v0/charts/': () => Response.json({ entries: [{ exScoreId: 'score 1' }], players: 1, offset: 0, limit: 1 }),
+      '/api/v0/scores/': () => new Response(serializeReplay(replay)),
+    });
+    const fetched = await fetchLeaderboardTopReplay('bmfp0:chart', 'lr2', { fetch: fetchImpl });
+    expect(fetched?.chart.chartFingerprint).toBe(replay.chart.chartFingerprint);
+    expect(urls).toEqual([
+      '/api/v0/charts/bmfp0%3Achart/leaderboard?ruleset=lr2&limit=1',
+      '/api/v0/scores/score%201/replay',
+    ]);
+  });
+
+  test('has none for an unranked chart or a replay that cannot be read', async () => {
+    const empty = routes({ '/api/v0/charts/': () => Response.json({ entries: [] }) });
+    await expect(fetchLeaderboardTopReplay('bmfp0:chart', 'lr2', { fetch: empty.fetchImpl })).resolves.toBeUndefined();
+    const missing = routes({ '/api/v0/charts/': () => Response.json({ entries: [{ exScoreId: 's' }] }) });
+    await expect(
+      fetchLeaderboardTopReplay('bmfp0:chart', 'lr2', { fetch: missing.fetchImpl }),
+    ).resolves.toBeUndefined();
+    const down = routes({});
+    await expect(fetchLeaderboardTopReplay('bmfp0:chart', 'lr2', { fetch: down.fetchImpl })).resolves.toBeUndefined();
+  });
+});
+
 describe('describeLeaderboardResult', () => {
   const result = {
     ruleset: 'lr2' as const,
@@ -182,6 +221,22 @@ describe('describeLeaderboardResult', () => {
     ).toBe('Leaderboard: stored, not ranked (a play at another tempo is practice)');
     expect(describeLeaderboardResult({ status: 'failed', httpStatus: 429, error: 'rate-limited' }, 'lr2')).toBe(
       'Leaderboard: not submitted (rate-limited)',
+    );
+  });
+  test('names the rulesets that judged the play only in part or not at all (ADR 0019)', () => {
+    const truncated = { ...result, ruleset: 'beatoraja' as const, rank: 0, players: 0, outcome: 'truncated' as const };
+    expect(
+      describeLeaderboardResult(
+        {
+          status: 'accepted',
+          scoreId: 's',
+          results: [result, truncated],
+          notSimulated: [{ ruleset: '____', reason: 'gauge' }],
+        },
+        'lr2',
+      ),
+    ).toBe(
+      'Leaderboard lr2: #4 / 20 · EX 1234 · new best EX / lamp · judged only up to the failure under beatoraja · not simulated under ____',
     );
   });
 });
@@ -305,7 +360,7 @@ describe('course submissions', () => {
       'Leaderboard course beatoraja: #3 / 7 · EX 8 · new best EX',
     );
     expect(describeCourseLeaderboardResult({ ...result, unranked: 'unreleased' } as typeof result, 'lr2')).toBe(
-      'Leaderboard: stored, not ranked (made and random courses are not ranked)',
+      'Leaderboard: stored, not ranked (a made course is ranked only once flagged for IR, and a random course never is)',
     );
     expect(describeCourseLeaderboardResult({ status: 'failed', httpStatus: 422, error: 'aborted' }, 'lr2')).toBe(
       'Leaderboard: course not submitted (aborted)',

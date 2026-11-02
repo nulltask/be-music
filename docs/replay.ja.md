@@ -76,7 +76,7 @@ LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザル�
 
 `results.*.fullCombo` は、beatoraja FIVEKEYS/PMS の空 POOR 後の終了時のフルコンボ可否を必要な場合に記録します。全ノート GOOD 以上も引き続き必要です。エンジンとシミュレータが現在のコンボから確定するため、最初のノートより前の空 POOR は、その後のフルコンボを妨げません。このフィールドのない旧キャッシュは判定数による互換動作を保つので、修正後のモード規則を適用するには再シミュレーションします。コース結果も可否を保持し、コース全体のコンボ条件と合わせて判定します。
 
-**実際に効いたプレイオプション。** 選択時のスナップショット（`play.options`、[プレイヤーが見ていたもの](#プレイヤーが見ていたもの) を参照）とは別に、`play` は判定と譜面を決める型付きフィールドを持ち、オプションが OFF の間はそれぞれ省略されます。`judgeAlgorithm` と `customJudge`（beatoraja の判定アルゴリズムと CUSTOM JUDGE の倍率）、`gaugeAutoShift` と `bottomShiftableGauge`、`autoScratch1P` / `autoScratch2P`、変更内容を伴う譜面変更オプション — `longNoteModifier`・`longNoteRate`・`longNoteModifierChangeCount`、`mineModifier`・`mineModifierChangeCount`、`scrollModifier`・`scrollSection`・`scrollRate`・`scrollModifierTimeline`・`scrollModifierChanged`、`extraNoteDepth`・`extraNoteScratch`・`extraNoteChangeCount`、LR2 EXTRA MODE の `lr2ExtraMode`・`lr2ExtraLevel`・`lr2ExtraEffectiveLevel`・`lr2ExtraConvertedObjectCount`・`lr2ExtraTempo`、7 TO 9 の `sevenToNinePattern`・`sevenToNineType`・`sevenToNineThresholdBPM`・`sevenToNineApplied` — そしてバトル・変換モードの `battleMode`、元譜面の `battleSourceVariant`、`battleTempo`、`battleAssist1P` / `battleAssist2P`、`battleChangedObjectCount`、`battleDroppedObjectCount`、LR2 D-BATTLE の `dBattleScratch` です。`chart.notes` はこれらすべてを適用した後の譜面なので、リプレイやシミュレーションが再抽選することはありません。生成された LN の始点は `generatedLongNote: true`、生成された地雷は `silent: true` と解決済みの `damage`、移動したノートは `sourceChannel` を持ちます。`chart.headerBPM` と `chart.bpmRange` は、テンポで譜面を分類するオプションが読むヘッダ BPM と BPM の最小・最大を保持します。
+**実際に効いたプレイオプション。** 選択時のスナップショット（`play.options`、[プレイヤーが見ていたもの](#プレイヤーが見ていたもの) を参照）とは別に、`play` は判定と譜面を決める型付きフィールドを持ち、オプションが OFF の間はそれぞれ省略されます。`judgeAlgorithm` と `customJudge`（beatoraja の判定アルゴリズムと CUSTOM JUDGE の倍率）、`gaugeAutoShift` と `bottomShiftableGauge`、`autoScratch1P` / `autoScratch2P`、`anyKey`（ANY KEY。`inputs` は各キー自身のレーンを残し、リプレイで割り当て直します）、変更内容を伴う譜面変更オプション — `longNoteModifier`・`longNoteRate`・`longNoteModifierChangeCount`、`mineModifier`・`mineModifierChangeCount`、`scrollModifier`・`scrollSection`・`scrollRate`・`scrollModifierTimeline`・`scrollModifierChanged`、`extraNoteDepth`・`extraNoteScratch`・`extraNoteChangeCount`、LR2 EXTRA MODE の `lr2ExtraMode`・`lr2ExtraLevel`・`lr2ExtraEffectiveLevel`・`lr2ExtraConvertedObjectCount`・`lr2ExtraTempo`、7 TO 9 の `sevenToNinePattern`・`sevenToNineType`・`sevenToNineThresholdBPM`・`sevenToNineApplied` — そしてバトル・変換モードの `battleMode`、元譜面の `battleSourceVariant`、`battleTempo`、`battleAssist1P` / `battleAssist2P`、`battleChangedObjectCount`、`battleDroppedObjectCount`、LR2 D-BATTLE の `dBattleScratch` です。`chart.notes` はこれらすべてを適用した後の譜面なので、リプレイやシミュレーションが再抽選することはありません。生成された LN の始点は `generatedLongNote: true`、生成された地雷は `silent: true` と解決済みの `damage`、移動したノートは `sourceChannel` を持ちます。`chart.headerBPM` と `chart.bpmRange` は、テンポで譜面を分類するオプションが読むヘッダ BPM と BPM の最小・最大を保持します。
 
 **2 人プレイ。** 2 人プレイ（`play.battleMode: "TWO-PLAYER"`：LR2 の BATTLE、または名前を言ってはいけないあのゲームの 2 人プレイ）は、両プレイヤーの押下を 1 本の `inputs` に記録し、それぞれ自分の側のチャンネル（`1x` / `2x`）に載せます。`results.native` は 1P、`results.secondPlayer` は 2P の結果で、形は同じです。`play.gauge2P` は 2P のゲージです。ログの再シミュレーションは、ライブのプレイと同じく各サイドを個別に判定します。
 
@@ -235,6 +235,53 @@ flowchart LR
 - **再生。** beatoraja の選曲スキンでは、カーソルがバーに乗るとリプレイのある最初のスロットを選びます（beatoraja の `RESET_REPLAY`）。4 か 6 番目のレーンキー（F）で次のスロットに移り（`NEXT_REPLAY`）、7 番目のレーンキー（V）で再生します（`REPLAY`。リプレイのあるスロットがなければ通常どおり遊びます）。スキンのリプレイボタンはそれぞれのスロットを再生します。ほかの種類では、リプレイスロットのカードがバーのリプレイを Replay、Download、Delete とともに一覧します。
 - **音。** LR2 にも beatoraja にもリプレイを保存したときの音はないので、保存しても何も鳴らしません。beatoraja のテーマの `resultclose` / `course_close` は、リザルトがフェードアウトを始めるときに鳴ります（[player-web.ja.md](./player-web.ja.md#リザルト画面)）。
 
+## ゴースト
+
+ゴーストは、記録されたプレイを今のプレイの横に見せるものです。ブラウザーのプレイヤーは、1 つを選ぶ前に比べられるよう、いくつかの形を並べて作っています（[#418](https://github.com/nulltask/be-music/issues/418)、[#934](https://github.com/nulltask/be-music/issues/934)）。それぞれは **ソース**（どのリプレイを再生するか）と **見せ方**（どう見せるか）の組で、別々に選べます。
+
+```mermaid
+flowchart LR
+  subgraph sources[ソース]
+    best[(自己ベスト)]
+    slot[(リプレイスロット)]
+    top[(Leaderboard の 1 位)]
+    file[(リプレイファイル)]
+  end
+  sources --> timeline["判定タイムライン<br/>（再シミュレーション）"]
+  timeline --> field[2 つ目のプレイフィールド]
+  timeline --> pace[ペースメーカー]
+  pace --> overlay[レーンへの重ね表示]
+  field --> builtin[組み込みのビュー]
+  overlay --> builtin
+  pace --> skins[すべてのビュー]
+```
+
+- **オプション。** Debug Menu → Play options → **Replay / ghost**:
+  - **Ghost** でソースを選びます。OFF（既定）、OWN BEST、REPLAY SLOT 1-4、LEADERBOARD TOP、REPLAY FILE です。
+  - **Ghost mode** で見せ方を選びます。SECOND PLAYFIELD（既定）、PACEMAKER、PACEMAKER + LANES です。
+  - **Ghost status** は、カーソルのバーで選んだゴーストを見せられるか、見せられない理由を示します。見せ方が組み込みスキン専用、譜面に 2 つ目のプレイフィールドの余地がない、ソースにその譜面のリプレイがない、のいずれかです。
+  - **Ghost replay file…** で REPLAY FILE 用の `*.bmplay.json` を選びます。この訪問の間だけ保持し、記録された譜面のゴーストにだけなります。
+
+  どれも曲の開始時に確定し、プレイ中は無効です。Ghost と Ghost mode はコースのバーでも無効です。リプレイ、コースのステージ、NONSTOP のランではゴーストを見せません。
+
+- **ソース。**
+  - OWN BEST は、その譜面のリプレイスロットのうち EX スコアが最も高いもの（同点なら新しい保存）です。スロット 1 の既定の条件がこれを更新し続けます。
+  - REPLAY SLOT n は、その譜面のそのスロットです。
+  - LEADERBOARD TOP は、プレイを判定するルールセットでの、その譜面の Leaderboard ランキング（アシストなし）の 1 位のリプレイです。`GET /api/v0/charts/:chartFingerprint/leaderboard?limit=1` の後に `GET /api/v0/scores/:id/replay` で取ります。Leaderboard にない譜面や、読めないリプレイではゴーストなしで遊びます。
+  - REPLAY FILE は、選んだファイルがその譜面で記録されたものならそれです。
+
+  プレイは読み込み中にソースを読み、譜面は BGA と同じくそれを待ちます。
+
+- **タイムライン。** リプレイを、記録されたルールセットでリプレイシミュレーターにかけ直します（`@be-music/player-engine/replay` の `resolveReplayJudgmentTimeline`）。判定を付けた順に、レーン、ノート、時刻、その時点のコンボ、EX スコア、ゲージを並べます。時計も乱数も読まないので、同じリプレイからはいつも同じゴーストになります。
+- **2 つ目のプレイフィールド**（SECOND PLAYFIELD、組み込みスキンのみ）。シングルプレイ譜面では、今のフィールドとゴーストのフィールドを、ダブルプレイ譜面の 2 つの側のように並べます。7 KEY は 14 KEY、5 KEY は 10 KEY として配置し、ゴーストは 2P のレーンに置きます。ゴーストのノートはリプレイ自身のもの（そのレーンオプション）で、シミュレーションが決着させた秒に消えます。今のプレイのハイスピードで流れるので、ゴーストのノートと対応する今のノートは同時に判定ラインに届きます。キービームとボムは記録された押下と判定に従い、判定は 2P 側に表示し、スコア、コンボ、ゲージは 2 人目の HUD に表示します。後ろへシークすると巻き戻り、前へ飛ぶと途中の演出を再生せずに追いつきます。余地があるのは、バトルモードなしの 5 / 7 KEY のシングルプレイ譜面だけです。
+- **ペースメーカー**（PACEMAKER、すべての種類、どの譜面でも）。ゴーストは自分のフィールドを持ちません。今のプレイが判定したのと同じ数のノートを判定した時点（空 POOR は数えません）のリプレイの位置に立ちます。LR2 や beatoraja のゴーストと同じ進め方なので、今のプレイヤーのハイスピード、カバー、タイミングに左右されません。プレイのターゲットになります。
+  - 組み込みスキンのスコアグラフでは、ソースにちなんだ名前（MY GHOST、SLOT n、TOP、FILE）のペースメーカーのバーになり、TARGET の差はこれに対して数えます。
+  - LR2 スキンでは、数値 151（今のターゲット EX）と 153（EX との差）、バーグラフ 14 / 15（今と譜面全体のターゲット）として読みます。
+  - beatoraja スキンでは、数値 121-123（譜面全体のターゲット EX とそのレート）として読みます。
+- **レーンへの重ね表示**（PACEMAKER + LANES、組み込みスキンのみ、どの譜面でも）。ペースメーカーに加えて、リプレイに記録された押下を自分のレーンの上に中抜きの紫のビームで、判定を判定ラインのすぐ上に判定の色の短いバーで描きます。輪郭とバーだけでレーンを塗りつぶさないので、自分のビーム、ボム、ノートは読みやすいままです。リプレイのレーンはリプレイ自身のものなので、別の RANDOM で記録されたゴーストは今のノートとは別のレーンを押します。
+- **しないこと。** ゴーストは音を鳴らさず、入力も受けません（そのレーンへのタッチはどこにも届きません）。今のプレイの判定、ベスト記録、リプレイの記録、リプレイスロット、Leaderboard への送信はゴーストを見ません。エンジンには今のノートだけを渡します。
+- **残る点。** ゴーストは見る人のルールセットではなく、リプレイに記録されたルールセットで再シミュレーションします。2 つ目のプレイフィールドは記録されたハイスピードとカバーを使わず、ロングノートの押しっぱなしも見せません。タッチモードでは 2 つ目のプレイフィールドがダブルプレイのレーン分割になります。ペースメーカーとレーンへの重ね表示はタッチ用の配置のままです。
+
 ## プレイヤーが見ていたもの
 
 `play.view` と `play.viewChanges` は判定とは別に、どのシーンでも共通の単位で表示設定を記録します。
@@ -273,7 +320,7 @@ flowchart TD
   visible -->|いいえ| recorded
 ```
 
-同じスケール（または `hiSpeedScale` のないログ）なら、記録されたハイスピードを HS-FIX 込みで描かれたとおりに使い、見る人の HS-FIX は重ねません。スケールが違うと同じ数値でも速さが違うため、記録された表示時間になるハイスピードを、自分のレーンと表示している SUDDEN+ から求めます（`resolveHiSpeedForWhiteNumber`。組み込みと LR2 では配置したレーン、beatoraja では 4 拍のレーン）。リプレイはどの種類のプレイ画面でも再生されます。beatoraja の画面は LIFT を描くので記録された LIFT を見せます（HIDDEN+ はその上のレーンに対して設定し、カバーは記録されたレーンの割合で描かれます）。組み込みと LR2 の画面は LIFT を描かないので、`lift` の切り替えはそこでは何も変えません。`tempo` の切り替えは記録されたテンポ（`play.tempo`、`play.tempoChanges`）を扱います。ブラウザプレイヤーにはまだゴースト表示がありません。ゴーストも同じように表示設定を読みます。
+同じスケール（または `hiSpeedScale` のないログ）なら、記録されたハイスピードを HS-FIX 込みで描かれたとおりに使い、見る人の HS-FIX は重ねません。スケールが違うと同じ数値でも速さが違うため、記録された表示時間になるハイスピードを、自分のレーンと表示している SUDDEN+ から求めます（`resolveHiSpeedForWhiteNumber`。組み込みと LR2 では配置したレーン、beatoraja では 4 拍のレーン）。リプレイはどの種類のプレイ画面でも再生されます。beatoraja の画面は LIFT を描くので記録された LIFT を見せます（HIDDEN+ はその上のレーンに対して設定し、カバーは記録されたレーンの割合で描かれます）。組み込みと LR2 の画面は LIFT を描かないので、`lift` の切り替えはそこでは何も変えません。`tempo` の切り替えは記録されたテンポ（`play.tempo`、`play.tempoChanges`）を扱います。[ゴースト](#ゴースト)は記録された表示設定を読みません。そのフィールドは今のプレイのハイスピードで流れます。
 
 ## LR2 / beatoraja / 名前を言ってはいけないあのゲーム リザルトの再現
 
@@ -297,6 +344,40 @@ flowchart TD
 EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は 名前を言ってはいけないあのゲームの 9 分率です。チャージノート系の
 ルールセットはロングノートの始点・終端を 2 判定ノートとして数えます（各ルールセットの分母は
 `result.noteCount` が報告します）。
+
+### ほかのルールセットでの再判定
+
+`simulateReplay` は与えられたものをそのまま判定します。`rejudgeReplay(replay, { ruleset })`（複数のルールセットには
+`rejudgeReplayRulesets`、コースリプレイには `rejudgeCourseReplay`）は先に [ADR 0019](./adr/0019-source-qualified-option-values.ja.md)
+の規則を適用し、3 つの結果のどれかを返します。Leaderboard と `bms-replay` はこれを使います。
+
+```mermaid
+flowchart TD
+  replay["リプレイと対象ルールセット"] --> readable{"対象が読める?"}
+  readable -->|いいえ| skipped["not-simulated と理由"]
+  readable -->|はい| failed{"プレイは失敗で終了?"}
+  failed -->|いいえ| full["simulated"]
+  failed -->|はい| cut["失敗した所まで判定"]
+  cut --> survives{"対象のゲージは残る?"}
+  survives -->|いいえ| full
+  survives -->|はい| truncated["truncated"]
+```
+
+- **not-simulated** と理由（`findReplayNotSimulatedReason`）: 参照元のないゲージが対象に定義されていない場合は
+  `gauge` です（beatoraja での `P-ATTACK`、LR2 での `EX-HARD` と `ASSIST-EASY`、コース以外の ???? での
+  `DEATH`）。似たゲージには読み替えません。CUSTOM JUDGE を使ったリプレイは、CUSTOM JUDGE が
+  beatoraja だけのものなので `custom-judge` です。ゲージオートシフトは理由にならず、対象のゲージの並びで持ち越します
+  （[プレイオプション](./play-options.ja.md#ゲージオートシフト)）。プレイしたルールセットは
+  常に自分のゲージで判定します。
+- **truncated**: サバイバルゲージが空になった所でプレイが終わり（`play.endOnFailure`）、対象のゲージならそこを
+  生き残る場合です。判定はその時点（`stoppedAtUs`、プレイしたルールセットのゲージが空になった時刻）までで、
+  入力を補ったり、その後のノートを見逃しにしたりしません。コースも、プレイしたルールセットで失敗した
+  ステージで止まり、対象のゲージならそこを生き残る場合に同じく truncated になります。truncated の結果は
+  順位が付きません。
+- **simulated**: それ以外です。同じ時点までに対象のゲージも空になる場合を含みます。
+
+`SimulateReplayOptions.onFailure` は、サバイバルゲージを最初に空にした判定の譜面上の時刻を受け取ります。
+[#933](https://github.com/nulltask/be-music/issues/933) で追跡しています。
 
 ### 再現度に関する注意
 
@@ -428,7 +509,9 @@ beatoraja/0    1174   82.68%   AA   ...
 
 ## 譜面の実効表示オプション
 
-省略可能な `chart.chartOptions` は、元のプレイで受理した実効表示プログラムを記録します。version 1 の形は `{ version: 1, initial: { hiSpeed? }, cues: [{ timeUs, state: { hiSpeed? } }] }` です。各命令は完全な譜面側の状態であり、空の状態は強制速度を解除して保存されたユーザーの view へ戻します。時刻は非負の安全な整数マイクロ秒で、非減少順です。HI-SPEED は 0.25–100 の有限数とし、未知のプロファイルバージョンや状態フィールドを拒否します。
+省略可能な `chart.chartOptions` は、元のプレイで受理した実効表示プログラムを記録します。version 1 の形は `{ version: 1, initial: { hiSpeed? }, cues: [{ timeUs, state: { hiSpeed? } }] }` です。各命令は完全な譜面側の状態であり、空の状態は強制速度を解除して保存されたユーザーの view へ戻します。時刻は非負の安全な整数マイクロ秒で、非減少順です。HI-SPEED は 0.25–100 の有限数とし、未知のプロファイルバージョンや状態フィールドを拒否します。version 2 は省略可能な状態フィールド `hidden`・`changeHS`・`crazySize`・`crazyWave` を加えます。値はそれぞれ [ADR 0032](./adr/0032-chart-authored-visual-families.ja.md) に挙げた ID です（例：`{ hidden: 'SUDDEN', changeHS: 'ACCEL' }`）。これらを持つ version 1 のプログラムは拒否するため、古い記録が後から実装した系列を有効にすることはありません。version 3 は `hidden: 'M-SUDDEN'`、`crazyWave` の値 `YWAVE`・`YWAVE2`・`XYWAVE`・`XYWAVE2`・`3DWAVE`・`3DWAVE2`、フィールド `crazyColor`・`crazySpin`・`crazyClone`・`crazyLine`・`crazyJudge`・`crazyDark`・`crazyReverse` を加えます（[ADR 0036](./adr/0036-chart-authored-skin-level-options.ja.md)）。これらを持つ version 2 のプログラムも同じく拒否します。新しい記録は version 3 で書きます。M-SUDDEN の間にプレイヤーが動かした SUDDEN+ カバーの高さは、ほかのカバーの変更と同じく `play.view` に記録します。
+
+省略可能な `chart.chartPlayOptions` は、プレイで使った譜面指定のゲームプレイオプションを記録します。形は `{ version: 1, options: { random?, judge?, hellJudge?, addMine?, notes? } }` で、`random` は `MIRROR`・`RANDOM`・`RANDOM+`・`ALL`・`ALL+`、`judge` は `GOOD2BAD` か `GREAT2BAD`、`notes` は `DOUBLE`・`COPY`・`DBLCOPY` です。効いたものだけを持ちます。コースのステージは NOTES COPY を外すため、プログラムに `notes` はありません（DBLCOPY なら `DOUBLE`）。写した譜面の `chart.laneMode` はダブルプレイのモードで、再生は記録した `notes` でノーツを再び変換します（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)）。配置と地雷の結果はすでに `chart.notes` にあります。シミュレーションは記録した判定変更を適用し、ソースを再コンパイルしないため、このフィールドのないリプレイは元の判定を保ちます。未知のバージョン・フィールド・値は拒否します。[ADR 0033](./adr/0033-chart-authored-gameplay-options.ja.md)を参照してください。
 
 ホストは再生時に `PlayerOptions.chartOptionProgram` として渡します。browser はフィールドのない古い記録には空のプログラムを明示し、元の動作を維持します。既存の実効プロファイルへソース宣言を再解釈して追加しません。`play.options`・`play.view` とその変更には元のユーザー速度を保持し、強制表示は譜面プロファイルで再現します。譜面の値を永続的なユーザー設定へ書き込まず、解除時に正確なユーザー view を復元できます。シミュレーションは表示操作を無視し、スコア・入力 replay・fingerprint・記録可否は変えません。[ADR 0026](./adr/0026-chart-authored-display-options.ja.md)を参照してください。NONSTOP は合成した実効プログラムを記録します。切り出したステージの記録には所有する範囲だけを残し、ステージ offset を引きます。FIT を二重に適用せず、遊んだ先頭の状態を復元し、有限のステージ終了で解除します。切り詰めた未プレイの前方区間には、未観測の強制状態を作りません。
 

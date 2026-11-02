@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "be-music Leaderboard API",
-    "description": "Version 0 is the beta: it may still change incompatibly (docs/leaderboard.md section 8). Requests are authenticated with a host-only OIDC app session or a resource-bound Accounts access token; reads are public.",
+    "description": "Version 0 is a Public Beta: it may still change incompatibly (docs/leaderboard.md section 8). Data may be deleted without notice. Requests are authenticated with a host-only OIDC app session or a resource-bound Accounts access token; reads are public.",
     "version": "0"
   },
   "servers": [
@@ -605,7 +605,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer",
@@ -637,6 +637,13 @@
                               "missCount"
                             ],
                             "description": "Which personal bests this play improved."
+                          },
+                          "outcome": {
+                            "enum": [
+                              "truncated"
+                            ],
+                            "type": "string",
+                            "description": "The play stopped where its played gauge emptied, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a play simulated in full."
                           }
                         },
                         "required": [
@@ -651,16 +658,47 @@
                           "improved"
                         ]
                       },
-                      "description": "The play under every ruleset."
+                      "description": "The play under every ruleset that could judge it."
+                    },
+                    "notSimulated": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "____"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "reason": {
+                            "enum": [
+                              "gauge",
+                              "custom-judge"
+                            ],
+                            "type": "string",
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE (beatoraja only) has no reading under it."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "reason"
+                        ]
+                      },
+                      "description": "The rulesets the play cannot be judged under, with no figures (ADR 0019); absent when every ruleset judged it."
                     },
                     "unranked": {
                       "enum": [
                         "tempo",
                         "course-stage",
-                        "bmson-total"
+                        "bmson-total",
+                        "no-save"
                       ],
                       "type": "string",
-                      "description": "Why the play was stored without ranking it: another tempo, a standalone course stage, or bmson zero-total no recovery. It moves no personal best and stays out of the rankings and lists."
+                      "description": "Why the play was stored without ranking it: another tempo, a standalone course stage, bmson zero-total no recovery, or an option whose source saves no data from the play (no-save). It moves no personal best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -713,7 +751,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer",
@@ -745,6 +783,13 @@
                               "missCount"
                             ],
                             "description": "Which personal bests this play improved."
+                          },
+                          "outcome": {
+                            "enum": [
+                              "truncated"
+                            ],
+                            "type": "string",
+                            "description": "The play stopped where its played gauge emptied, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a play simulated in full."
                           }
                         },
                         "required": [
@@ -759,16 +804,47 @@
                           "improved"
                         ]
                       },
-                      "description": "The play under every ruleset."
+                      "description": "The play under every ruleset that could judge it."
+                    },
+                    "notSimulated": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "____"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "reason": {
+                            "enum": [
+                              "gauge",
+                              "custom-judge"
+                            ],
+                            "type": "string",
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE (beatoraja only) has no reading under it."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "reason"
+                        ]
+                      },
+                      "description": "The rulesets the play cannot be judged under, with no figures (ADR 0019); absent when every ruleset judged it."
                     },
                     "unranked": {
                       "enum": [
                         "tempo",
                         "course-stage",
-                        "bmson-total"
+                        "bmson-total",
+                        "no-save"
                       ],
                       "type": "string",
-                      "description": "Why the play was stored without ranking it: another tempo, a standalone course stage, or bmson zero-total no recovery. It moves no personal best and stays out of the rankings and lists."
+                      "description": "Why the play was stored without ranking it: another tempo, a standalone course stage, bmson zero-total no recovery, or an option whose source saves no data from the play (no-save). It moves no personal best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -916,7 +992,7 @@
             }
           },
           "422": {
-            "description": "The play cannot be stored: an auto play, a malformed replay, a replay without fingerprints, or a fingerprint document that does not hash to the replay’s fingerprint.",
+            "description": "The play cannot be stored: an auto play, a malformed replay, a replay without fingerprints, a fingerprint document that does not hash to the replay’s fingerprint, or a replay whose chart gameplay options are not the ones its chart runs.",
             "content": {
               "application/json": {
                 "schema": {
@@ -931,7 +1007,8 @@
                         "play-document-not-a-document",
                         "play-document-fingerprint-mismatch",
                         "chart-document-not-a-document",
-                        "chart-document-fingerprint-mismatch"
+                        "chart-document-fingerprint-mismatch",
+                        "chart-play-options-mismatch"
                       ],
                       "type": "string",
                       "description": "Error code."
@@ -1084,7 +1161,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer"
@@ -1115,6 +1192,20 @@
                               "type": "number"
                             },
                             "description": "Judgment counts."
+                          },
+                          "outcome": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "truncated"
+                                ],
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "`truncated` for figures judged only up to where the play stopped (ADR 0019); null for a full simulation."
                           }
                         },
                         "required": [
@@ -1127,7 +1218,8 @@
                           "maxCombo",
                           "gaugeType",
                           "gaugeFinal",
-                          "judges"
+                          "judges",
+                          "outcome"
                         ]
                       }
                     }
@@ -1676,7 +1768,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer"
@@ -2139,7 +2231,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer",
@@ -2194,6 +2286,13 @@
                               "trophy"
                             ],
                             "description": "Which personal bests on the course this run improved."
+                          },
+                          "outcome": {
+                            "enum": [
+                              "truncated"
+                            ],
+                            "type": "string",
+                            "description": "The run stopped at a failed stage, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a run simulated in full."
                           }
                         },
                         "required": [
@@ -2211,16 +2310,47 @@
                           "improved"
                         ]
                       },
-                      "description": "The run under every ruleset."
+                      "description": "The run under every ruleset that could judge it."
+                    },
+                    "notSimulated": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "____"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "reason": {
+                            "enum": [
+                              "gauge",
+                              "custom-judge"
+                            ],
+                            "type": "string",
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE (beatoraja only) has no reading under it."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "reason"
+                        ]
+                      },
+                      "description": "The rulesets the play cannot be judged under, with no figures (ADR 0019); absent when every ruleset judged it."
                     },
                     "unranked": {
                       "enum": [
                         "tempo",
                         "unreleased",
-                        "bmson-total"
+                        "bmson-total",
+                        "assist"
                       ],
                       "type": "string",
-                      "description": "Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, or a course that is not released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists."
+                      "description": "Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, a course that is not released (a made or a drawn random course), or a stage played with an assist option (assist). It moves no course best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -2274,7 +2404,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer",
@@ -2329,6 +2459,13 @@
                               "trophy"
                             ],
                             "description": "Which personal bests on the course this run improved."
+                          },
+                          "outcome": {
+                            "enum": [
+                              "truncated"
+                            ],
+                            "type": "string",
+                            "description": "The run stopped at a failed stage, and this ruleset’s gauge would have carried on: the figures go only up to that point, and it is not ranked (ADR 0019). Absent for a run simulated in full."
                           }
                         },
                         "required": [
@@ -2346,16 +2483,47 @@
                           "improved"
                         ]
                       },
-                      "description": "The run under every ruleset."
+                      "description": "The run under every ruleset that could judge it."
+                    },
+                    "notSimulated": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ruleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "____"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "reason": {
+                            "enum": [
+                              "gauge",
+                              "custom-judge"
+                            ],
+                            "type": "string",
+                            "description": "Why: the gauge is not one the ruleset defines, or CUSTOM JUDGE (beatoraja only) has no reading under it."
+                          }
+                        },
+                        "required": [
+                          "ruleset",
+                          "reason"
+                        ]
+                      },
+                      "description": "The rulesets the play cannot be judged under, with no figures (ADR 0019); absent when every ruleset judged it."
                     },
                     "unranked": {
                       "enum": [
                         "tempo",
                         "unreleased",
-                        "bmson-total"
+                        "bmson-total",
+                        "assist"
                       ],
                       "type": "string",
-                      "description": "Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, or a course that is not released (a made or a drawn random course). It moves no course best and stays out of the rankings and lists."
+                      "description": "Why the run was stored without ranking it (including bmson zero-total no recovery): a stage played at another tempo, a course that is not released (a made or a drawn random course), or a stage played with an assist option (assist). It moves no course best and stays out of the rankings and lists."
                     }
                   },
                   "required": [
@@ -2521,6 +2689,7 @@
                         "play-document-fingerprint-mismatch",
                         "chart-document-not-a-document",
                         "chart-document-fingerprint-mismatch",
+                        "chart-play-options-mismatch",
                         "course-ruleset-mismatch",
                         "stage-chart-required",
                         "stage-chart-invalid",
@@ -2657,7 +2826,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer"
@@ -2904,7 +3073,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer"
@@ -3004,6 +3173,20 @@
                               }
                             ],
                             "description": "Each reached stage’s own figures, in order; null for runs stored before they were kept."
+                          },
+                          "outcome": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "truncated"
+                                ],
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "`truncated` for figures judged only up to where the run stopped (ADR 0019); null for a full simulation."
                           }
                         },
                         "required": [
@@ -3020,7 +3203,8 @@
                           "gaugeType",
                           "gaugeFinal",
                           "judges",
-                          "stages"
+                          "stages",
+                          "outcome"
                         ]
                       }
                     }
@@ -3724,7 +3908,7 @@
                           "clearLamp": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                            "description": "Clear lamp, by its stored rank: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX, 10 LIGHT ASSIST EASY. Ranks are append-only, not an order: LIGHT ASSIST EASY sits between ASSIST EASY and EASY."
                           },
                           "missCount": {
                             "type": "integer"

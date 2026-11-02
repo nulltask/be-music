@@ -5,7 +5,7 @@ import { replaySlotKey, type ReplaySlotRecord } from './replay-slots.ts';
 function record(slot: number, overrides: Partial<ReplaySlotRecord> = {}): ReplaySlotRecord {
   const target = { kind: 'chart', id: 'bmfp0:abc' } as const;
   return {
-    version: 1,
+    version: 0,
     key: replaySlotKey(target, slot),
     target,
     slot,
@@ -55,7 +55,7 @@ describe('replay slot storage revision', () => {
 
   test('from revision 1 on, migrates step by step from the stored revision', () => {
     const migrations = {
-      1: (value: unknown) => ({ ...(value as object), version: 1 }),
+      1: (value: unknown) => ({ ...(value as object), version: 0 }),
       2: (value: unknown) => ({ ...(value as object), title: `${(value as { title: string }).title} (2)` }),
     };
     const old = { ...good, version: 0 };
@@ -93,13 +93,13 @@ describe('replay slot storage revision', () => {
   });
 
   test('without a step for a revision, or from a newer revision, clears what does not read', () => {
-    const old = { ...good, version: 0 };
+    const unread = { ...good, version: 9 as ReplaySlotRecord['version'] };
     expect(
       planReplaySlotRevision({
         storedRevision: 0,
         currentRevision: 2,
         records: [
-          { key: good.key, value: old },
+          { key: good.key, value: unread },
           { key: other.key, value: other },
         ],
         dataKeys: [good.key, other.key],
@@ -111,7 +111,7 @@ describe('replay slot storage revision', () => {
         storedRevision: 3,
         currentRevision: 1,
         records: [
-          { key: good.key, value: old },
+          { key: good.key, value: unread },
           { key: other.key, value: other },
         ],
         dataKeys: [good.key, other.key],

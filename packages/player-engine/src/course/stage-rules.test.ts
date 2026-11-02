@@ -214,3 +214,11 @@ test('LR2 grade courses reset G.ATTACK to GROOVE and expert courses retain it', 
   expect(resolveLR2GradeCoursePlaySettings(definition, settings).gauge).toBe('GROOVE');
   expect(resolveLR2GradeCoursePlaySettings({ ...definition, kind: 'expert' }, settings).gauge).toBe('G-ATTACK');
 });
+
+test('grade_random keeps a source-qualified RANDOM or S-RANDOM and drops a qualified CONVERGE', () => {
+  const picked = { random1P: 'lr2:RANDOM', random2P: 'beatoraja:S-RANDOM', dpFlip: false } as const;
+  expect(resolveCourseLaneOptions(['grade_random'], picked)).toEqual(picked);
+  expect(
+    resolveCourseLaneOptions(['grade_random'], { random1P: 'beatoraja:CONVERGE', random2P: 'OFF', dpFlip: false }),
+  ).toEqual({ random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+});

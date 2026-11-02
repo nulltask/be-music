@@ -57,6 +57,8 @@ export interface BeatorajaPlayNumberInput extends BeatorajaScoreNumberInput {
   readonly lastJudgeDeltaMs?: number;
   /** The combo each judge plate showed at its latest judgment: 1P, 2P and POPN 9 KEY's third plate. */
   readonly plateCombos?: readonly [number, number, number];
+  /** The target the play paces against (a replay ghost): its EX score over the whole chart, numbers 121-123. */
+  readonly targetEXScore?: number;
   readonly wallClock?: BeatorajaWallClock;
   /** How long the player has been running, in ms (numbers 27-29). */
   readonly operatingMs?: number;
@@ -296,10 +298,16 @@ export function resolveBeatorajaPlayNumber(id: number, input: BeatorajaPlayNumbe
     case BEATORAJA_NUM.BEST_BAD:
     case BEATORAJA_NUM.BEST_POOR:
     case BEATORAJA_NUM.DIFF_EXSCORE:
-    case BEATORAJA_NUM.TARGET_SCORE:
-    case BEATORAJA_NUM.TARGET_SCORE_RATE:
-    case BEATORAJA_NUM.TARGET_SCORE_RATE_AFTERDOT:
       return 0;
+    // The target's EX score over the whole chart and its rate (beatoraja `ScoreDataProperty.rivalscore` / `rivalrate`).
+    case BEATORAJA_NUM.TARGET_SCORE:
+      return input.targetEXScore ?? 0;
+    case BEATORAJA_NUM.TARGET_SCORE_RATE:
+    case BEATORAJA_NUM.TARGET_SCORE_RATE_AFTERDOT: {
+      if (input.targetEXScore === undefined || input.score === undefined) return 0;
+      const rate = beatorajaScoreRate(input.targetEXScore, input.score.total);
+      return id === BEATORAJA_NUM.TARGET_SCORE_RATE ? rate.whole : rate.afterDot;
+    }
     case BEATORAJA_NUM.BEST_MAXCOMBO:
       return input.maxCombo;
 

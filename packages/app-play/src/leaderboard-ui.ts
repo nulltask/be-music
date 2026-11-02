@@ -12,9 +12,11 @@ import {
   loadLeaderboardAccount,
   signInWithLeaderboardPasskey,
   signOutOfLeaderboard,
-  START_ACCOUNT_ACTION_LABELS,
+  startAccountActionLabels,
   type AccountActionResult,
 } from './account.ts';
+import { onPlayerLangChange, playerText } from './player-copy.ts';
+import { setPlayerHeaderAccount } from './player-header.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
 import { leaderboardLink } from './service-links.ts';
 import type { BeMusicCourseReplay } from '@be-music/player-engine/replay';
@@ -44,14 +46,12 @@ export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'eng
 }
 /**
  * Everything the player shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
- * sign-up buttons), the Debug Menu folder (the same toggle, account row and passkey buttons), the account chip in the
- * corner, and submitting a finished play. An account starts anonymous (the first
+ * sign-up buttons), the Debug Menu folder (the same toggle, account row and passkey buttons), the shared header's
+ * account control, and submitting a finished play. An account starts anonymous (the first
  * submission signs in anonymously); creating a passkey keeps it, and "Sign in with passkey" brings it to another device,
  * moving that device's anonymous plays into it.
  */
 export class LeaderboardPanel {
-  private folder: FolderApi | undefined;
-  private openPane: () => void = () => undefined;
   private submitController: PaneBinding | undefined;
   private accountController: PaneBinding | undefined;
   private readonly accountState = { status: 'Not signed in' };
@@ -63,22 +63,28 @@ export class LeaderboardPanel {
   });
   /** The account state last shown, so signing in (or arriving signed in) can be told from a refresh. */
   private shownState: 'signed-in' | 'anonymous' | 'signed-out' | undefined;
+  /** The account last painted, so a Help language switch can paint it again. */
+  private shownAccount: Awaited<ReturnType<typeof loadLeaderboardAccount>> | undefined;
+  private accountReady = false;
+  private signedInName: string | undefined;
+  /** The name of the account kept with a passkey, which a play shows; `undefined` signed out or anonymous. */
+  get playerName(): string | undefined {
+    return this.signedInName;
+  }
   /** The toggle as it was when the current play started: a play is sent only if it was on at song start. */
   private submitThisPlay = false;
   private readonly host: LeaderboardPanelHost;
   constructor(host: LeaderboardPanelHost) {
     this.host = host;
-  }
-  /** Fills the Debug Menu's Leaderboard folder and wires the account chip. */
-  buildFolder(folder: FolderApi, openPane: () => void = () => undefined): void {
-    this.folder = folder;
-    this.openPane = openPane;
-    // Signed out, the account chip has no page to open: it opens this folder instead.
-    document.querySelector<HTMLAnchorElement>('#account-chip')?.addEventListener('click', (event) => {
-      if (event.currentTarget instanceof HTMLElement && event.currentTarget.dataset.state !== 'signed-out') return;
-      event.preventDefault();
-      this.openFolder();
+    onPlayerLangChange(() => {
+      if (!this.accountReady) return;
+      this.accountState.status = describeLeaderboardAccount(this.shownAccount);
+      this.accountController?.refresh();
+      this.renderStartAccount(this.shownAccount);
     });
+  }
+  /** Fills the Debug Menu's Leaderboard folder. */
+  buildFolder(folder: FolderApi): void {
     // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
     // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
     const settings = this.host.settings();
@@ -166,7 +172,7 @@ export class LeaderboardPanel {
       })
       .catch((error: unknown) => {
         this.host.warn('leaderboard submission failed', error);
-        this.host.setStatus('Leaderboard: not submitted (network error)');
+        this.host.setStatus(playerText().lb.network);
       });
   }
   /**
@@ -196,12 +202,15 @@ export class LeaderboardPanel {
       })
       .catch((error: unknown) => {
         this.host.warn('leaderboard course submission failed', error);
-        this.host.setStatus('Leaderboard: course not submitted (network error)');
+        this.host.setStatus(playerText().lb.courseNetwork);
       });
   }
-  /** Re-reads the account into the Debug Menu's "Account" row and the account chip. */
+  /** Re-reads the account into the Debug Menu's "Account" row and the shared header. */
   async refreshAccount(): Promise<void> {
     const account = await loadLeaderboardAccount();
+    this.shownAccount = account;
+    this.accountReady = true;
+    this.signedInName = account !== undefined && !account.anonymous ? account.displayName : undefined;
     const state = describeAccountChip(account).state;
     // A player who is signed in takes part: submitting turns on when they arrive signed in or sign in, not on every
     // refresh, so unticking it during a session sticks.
@@ -210,15 +219,15 @@ export class LeaderboardPanel {
     this.accountState.status = describeLeaderboardAccount(account);
     this.accountController?.refresh();
     this.renderStartAccount(account);
-    const chip = document.querySelector<HTMLAnchorElement>('#account-chip');
-    if (chip === null) return;
-    const view = describeAccountChip(account);
-    chip.dataset.state = view.state;
-    chip.title = view.title;
-    chip.href = leaderboardLink(view.href ?? '/', location.hostname);
-    chip.setAttribute('aria-label', `Leaderboard account: ${view.label}`);
-    const label = chip.querySelector('#account-chip-label');
-    if (label !== null) label.textContent = view.label;
+    setPlayerHeaderAccount(
+      account === undefined
+        ? undefined
+        : { handle: account.handle, displayName: account.displayName, anonymous: account.anonymous },
+    );
+  }
+  /** Opens the sign-in dialog. The header's Sign in control calls this. */
+  public openSignIn(): void {
+    this.openDialog('sign-in');
   }
   /** Fills the start card's account row: who the plays go to, a link to their page, and the actions that fit. */
   private renderStartAccount(account: Awaited<ReturnType<typeof loadLeaderboardAccount>>): void {
@@ -235,12 +244,15 @@ export class LeaderboardPanel {
       link.href = leaderboardLink(view.href, location.hostname);
       link.target = '_blank';
       link.rel = 'noopener';
-      link.title = 'Your Leaderboard page (opens in a new tab)';
+      link.title = playerText().shell.yourPage;
       link.textContent = view.label;
       label.replaceChildren(link);
     } else {
       label.textContent = view.label;
     }
+    // The template's `data-i18n` is the "checking" placeholder. Leaving it would put that string back on the next
+    // language switch, over the account this row is actually showing.
+    label.removeAttribute('data-i18n');
     actions.replaceChildren(
       ...view.actions.map((action) => {
         const button = document.createElement('button');
@@ -249,12 +261,15 @@ export class LeaderboardPanel {
         button.className = 'btn';
         button.dataset.size = 'sm';
         if (action !== 'sign-up' && action !== 'keep') button.dataset.variant = 'outline';
-        button.textContent = START_ACCOUNT_ACTION_LABELS[action];
+        button.textContent = startAccountActionLabels()[action];
         button.addEventListener('click', () => {
-          // Signing out needs nothing more; the rest open the dialogs the Leaderboard's own pages use.
-          if (action === 'sign-out') void this.runAccountAction('Sign out', signOutOfLeaderboard);
-          else if (action === 'keep') void this.runAccountAction('Manage account', createLeaderboardPasskey);
-          else void this.runAccountAction('Sign in', signInWithLeaderboardPasskey);
+          const copy = playerText();
+          // Signing out needs nothing more. Keeping an anonymous account enrolls a passkey on Accounts.
+          // Sign in and Sign up open the dialogs, where a passkey, Google, or Discord each start Accounts.
+          if (action === 'sign-out') void this.runAccountAction(copy.account.signOut, signOutOfLeaderboard);
+          else if (action === 'keep') void this.runAccountAction(copy.account.manage, createLeaderboardPasskey);
+          else if (action === 'sign-up') this.openDialog('sign-up');
+          else this.openDialog('sign-in');
         });
         return button;
       }),
@@ -265,13 +280,5 @@ export class LeaderboardPanel {
     const checkbox = document.querySelector<HTMLInputElement>('#start-submit');
     if (checkbox) checkbox.checked = value;
     this.submitController?.refresh();
-  }
-  /** Opens the Debug Menu with the Leaderboard folder unfolded. */
-  private openFolder(): void {
-    const folder = this.folder;
-    if (folder === undefined) return;
-    folder.expanded = true;
-    this.openPane();
-    folder.element.scrollIntoView({ block: 'nearest' });
   }
 }

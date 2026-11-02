@@ -4,7 +4,7 @@ import { selectBinding, paneOptions } from '../../pane-controls.ts';
 import type { FolderApi } from 'tweakpane';
 import { resolveBeMusicSkinSettings } from '@be-music/player-skin-sdk';
 import { hasAnyLR2Skin } from '../../family-dispatch.ts';
-import { toggleFullscreen } from '../../fullscreen.ts';
+import { playerFullscreenElement, toggleFullscreen } from '../../fullscreen.ts';
 import { renderResolutionLabel, renderResolutionSteps, storeRenderResolution } from '../../render-resolution.ts';
 import { ADD_SKIN_ENABLED, BE_MUSIC_SKINS } from '../../services/built-in-skins.ts';
 import { storePlayLayout, storeSkinEffects } from '../../services/settings.ts';
@@ -92,7 +92,9 @@ export function buildSkinFolder(
     this.gameplayView?.setJudgedNoteDisplay(value);
   });
   // The same toggle as double-clicking the playfield, for pointers where a double click is awkward.
-  skin.addButton({ title: 'Toggle fullscreen' }).on('click', () => void toggleFullscreen(this.deps.shell));
+  skin
+    .addButton({ title: 'Toggle fullscreen' })
+    .on('click', () => void toggleFullscreen(playerFullscreenElement(document)));
   // Per-scene beatoraja skin picker, hidden until a beatoraja theme is dropped — `rebuildBeatorajaSkinPickers()`
   // re-populates it on each load. Selecting a non-default entry for a scene records it on
   // `beatorajaSkinOverridesByType`; the next mount picks it up via `pickBeatorajaSkinEntryWithOverride`.

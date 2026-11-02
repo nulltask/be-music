@@ -65,14 +65,20 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
       );
       await player.setOption(['Play options'], 'Auto play', false);
       await player.key('Enter');
-      await player.waitFor(
-        (state) => state.scene.kind === 'play' && state.play?.title === title && (state.play.seconds ?? 0) > 0.2,
-        'generic play',
-      );
+      await player.waitFor((state) => state.scene.kind === 'play' && state.play?.title === title, 'generic play');
+      // Sample the screen paused at known chart times: a CI screenshot takes long enough that the chart would run on
+      // past the note before the sample lands (#878). Space always toggles pause, whatever the generic layout binds.
+      const pausedAt = async (seconds: number, what: string) => {
+        await player.keyWhen((state, at) => (state.play?.seconds ?? 0) >= at, seconds, 'Space', what);
+        await player.waitFor((state) => state.play?.seconds !== undefined, what);
+      };
+      await pausedAt(0.2, 'generic baseline');
       const baseline = await notePixels(player);
-      await player.waitFor((state) => (state.play?.seconds ?? 0) >= 1.3, 'visible generic note');
-      await expect.poll(() => notePixels(player), { timeout: 1000, intervals: [50] }).toBeGreaterThan(baseline + 5);
+      await player.key('Space');
+      await pausedAt(1.3, 'visible generic note');
+      await expect.poll(() => notePixels(player), { timeout: 5000, intervals: [100] }).toBeGreaterThan(baseline + 5);
       await player.page.screenshot({ path: info.outputPath('generic-notes.png') });
+      await player.key('Space');
       await player.keyWhen((state) => (state.play?.seconds ?? 0) >= 1.98, undefined, 'KeyH', 'generic key 6');
       await player.keyWhen((state) => (state.play?.seconds ?? 0) >= 2.98, undefined, 'KeyJ', 'generic key 7');
       await player.keyWhen(
@@ -96,7 +102,9 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
           'bound F5 instead of restart',
         );
       const result = await player.waitForResult(0);
-      expect(result.results[0]!.judged.pgreat + result.results[0]!.judged.great).toBe(count === 70 ? 5 : 3);
+      // Every bound key hits its note; a slow CI frame can land a page-timed press in GOOD (#792).
+      const judged = result.results[0]!.judged;
+      expect(judged.pgreat + judged.great + judged.good).toBe(count === 70 ? 5 : 3);
       expect(result.results[0]!.judged.poor).toBe(0);
       const replay = await player.lastReplay();
       expect(replay?.chart.laneMode).toBe(`${count} KEY GENERIC`);

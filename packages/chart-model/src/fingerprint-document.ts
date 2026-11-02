@@ -19,6 +19,7 @@ import {
   type LaneModeExtension,
 } from './fingerprint-items.ts';
 import type { KeyboardModeHint } from './keyboard-mode-hint.ts';
+import type { ChartPlayOptions } from './chart-play-options.ts';
 
 export const FINGERPRINT_VERSION = 'bmfp0';
 
@@ -45,6 +46,12 @@ export interface FingerprintMeasures {
   barLines?: false;
 }
 
+/**
+ * The chart-authored gameplay options of a document (spec 2): the compiled `ChartPlayOptions`, string values and `true`
+ * flags. Omitted from a document when the chart declares none.
+ */
+export type FingerprintPlayOptions = ChartPlayOptions;
+
 /** Document of a chart with one outcome: the play fingerprint, and the chart fingerprint of a chart without `#RANDOM`. */
 export interface BeMusicPlayFingerprintDocument {
   v: typeof FINGERPRINT_VERSION;
@@ -57,6 +64,7 @@ export interface BeMusicPlayFingerprintDocument {
   notes: FingerprintNote[];
   mines: FingerprintMine[];
   timeline: FingerprintTimelineEvent[];
+  playOptions?: FingerprintPlayOptions;
 }
 
 export interface FingerprintLaneModeInputs {
@@ -80,6 +88,8 @@ export interface FingerprintHeaderChange {
   judge?: FingerprintJudge;
   total?: FingerprintTotal;
   player3?: boolean;
+  /** The outcome's gameplay options in full; `{}` when the outcome has none. */
+  playOptions?: FingerprintPlayOptions;
 }
 
 export interface FingerprintBranch {
@@ -117,6 +127,8 @@ export interface BeMusicChartFingerprintDocument {
   mines: FingerprintMine[];
   timeline: FingerprintTimelineEvent[];
   random: FingerprintControlFlowNode[];
+  /** The gameplay options outside control flow; omitted when there are none. */
+  playOptions?: FingerprintPlayOptions;
 }
 
 export type BeMusicFingerprintDocument = BeMusicPlayFingerprintDocument | BeMusicChartFingerprintDocument;
@@ -231,5 +243,11 @@ export function assemblePlayDocument(items: FlatItems, extension: LaneModeExtens
     notes: lists.notes,
     mines: lists.mines,
     timeline: lists.timeline,
+    ...formatPlayOptionsField(header.playOptions),
   };
+}
+
+/** The `playOptions` field of a document: omitted when the chart declares no gameplay options. */
+export function formatPlayOptionsField(options: FingerprintPlayOptions): { playOptions?: FingerprintPlayOptions } {
+  return Object.keys(options).length > 0 ? { playOptions: { ...options } } : {};
 }

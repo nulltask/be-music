@@ -1,5 +1,18 @@
 # @be-music/skin-beatoraja
 
+## 0.6.0
+
+### Minor Changes
+
+- f6d805d: A play skin's judgment and combo display can now be hidden: every `judge[]` image and combo digit is gated on a new synthetic op, `BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN`, which `resolveBeatorajaJudgeDisplayOps` lights while the play runs LR2 SILENT automatic judge timing (LR2 shows no NOWJUDGE / NOWCOMBO there) and, with its new optional `chartHidesJudge` flag, for a chart's HIDJUDGE. `resolveBeatorajaJudgeEffect` takes an optional `{ bombs: false }` that leaves out the bomb timers for a chart's DARK2.
+- be1a397: `BeatorajaPlayNumberInput.targetEXScore` feeds numbers 121-123 (target score, its rate and the digits after the dot over the chart's notes), which read 0 without one.
+
+### Patch Changes
+
+- cf0df8c: LIGHT ASSIST EASY lights clear-lamp op 1101 and reads clear index 3, and ASSIST EASY lights op 1100 and reads index 2, as beatoraja's `ClearType` numbers them. Before, the ASSIST EASY gauge's clear lit op 1100.
+- 2c453cc: The lane option buttons (42 / 43) step beatoraja's own RANDOM, S-RANDOM and CONVERGE and `optiondp` (54) its own BATTLE, and another source's value shows on the slot of its bare name (ADR 0019).
+- Updated dependencies: `@be-music/player-engine@0.13.0`, `@be-music/player-scene-model@0.5.0`, `@be-music/skin-lr2@0.6.0`
+
 ## 0.5.1
 
 ### Patch Changes

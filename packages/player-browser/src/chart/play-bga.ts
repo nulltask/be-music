@@ -17,9 +17,9 @@ import {
   type BmsonBGAEventCue,
 } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { loadAssetBytes, resolveChartBGAAsset } from '../collection/collection.ts';
+import { loadAssetBytes, loadAssetFile, resolveChartBGAAsset } from '../collection/collection.ts';
 import type { BrowserAssetSource } from '../collection/types.ts';
-import { loadTextureFromBytes, loadVideoTextureFromBytes, type VideoTranscodeOptions } from '../media/textures.ts';
+import { loadTextureFromBytes, loadVideoTexture, type VideoTranscodeOptions } from '../media/textures.ts';
 import { collectBGATextureLoadKeys, isVideoExtension, type BGACue } from './bga-timeline.ts';
 import { logger } from '../logger.ts';
 import { collectBGASubRegions } from './bga-subregions.ts';
@@ -206,10 +206,11 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
   await runWithConcurrency([...paths], BGA_DECODE_CONCURRENCY, async ([key, path]) => {
     if (isCancelled()) return;
     const resolved = resolveChartBGAAsset(source, chartPath, path);
-    const bytes = await loadAssetBytes(resolved?.entry);
-    if (!bytes || isCancelled()) return;
     try {
       if (isVideoExtension(resolved?.path ?? path)) {
+        // A video plays (and transcodes) from its file, which is not read into memory.
+        const file = await loadAssetFile(resolved?.entry);
+        if (!file || isCancelled()) return;
         // Reused video BMPs need an independent playhead on each track.
         // NUL-prefixed keys are internal and cannot collide with an external asset path.
         const videoKeys = [key];
@@ -218,9 +219,9 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
           videoKeys.push(String.fromCharCode(0) + 'layer2:' + key);
         if (poor.has(key) && baseOnly.has(key)) videoKeys.push(String.fromCharCode(0) + 'poor:' + key);
         for (const videoKey of videoKeys) {
-          const handle = await loadVideoTextureFromBytes(
+          const handle = await loadVideoTexture(
             resolved?.path ?? path,
-            bytes,
+            file,
             aliasSources.has(key) ? { ...options.transcode, maxLongEdgePx: 0 } : options.transcode,
           );
           if (!handle) continue;
@@ -262,6 +263,8 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
         }
         return;
       }
+      const bytes = await loadAssetBytes(resolved?.entry);
+      if (!bytes || isCancelled()) return;
       const bmsColorKey = resolveBMSExBMPColorKey(chart, key);
       if (base.has(key)) {
         const texture = bmsColorKey

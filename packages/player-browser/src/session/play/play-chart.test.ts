@@ -69,6 +69,44 @@ describe('applyRandomMode', () => {
     expect(channelsOf(notes)).toEqual([expected]);
   });
 
+  // A qualified RANDOM, S-RANDOM or CONVERGE runs its source's algorithm under every judge ruleset; a bare one runs the
+  // ruleset's own (ADR 0019).
+  test.each([
+    ['RANDOM', 'lr2'],
+    ['RANDOM', 'beatoraja'],
+    ['S-RANDOM', 'lr2'],
+    ['S-RANDOM', 'beatoraja'],
+  ] as const)('%s (%s) runs its source algorithm under every ruleset', (name, source) => {
+    const chord = () => [
+      ...notesOn(KEYS_7, 0),
+      ...notesOn(['11', '13'], 0.01).map((note) => ({ ...note, seconds: 0.01 })),
+    ];
+    const expected = chord();
+    applyRandomMode(expected, KEYS_1P, name, seededRandom(7), { ruleset: source });
+    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+      const notes = chord();
+      applyRandomMode(notes, KEYS_1P, `${source}:${name}`, seededRandom(7), { ruleset });
+      expect(channelsOf(notes)).toEqual(channelsOf(expected));
+    }
+  });
+
+  test('LR2 RANDOM and beatoraja RANDOM draw different arrangements from the same random source', () => {
+    const lr2 = notesOn(KEYS_7);
+    const beatoraja = notesOn(KEYS_7);
+    applyRandomMode(lr2, KEYS_1P, 'lr2:RANDOM', seededRandom(3), { ruleset: 'beatoraja', fixedLane: 1 });
+    applyRandomMode(beatoraja, KEYS_1P, 'beatoraja:RANDOM', seededRandom(3), { ruleset: 'lr2', fixedLane: 1 });
+    expect(channelsOf(lr2)).not.toEqual(channelsOf(beatoraja));
+  });
+
+  test('beatoraja CONVERGE stays a PMS arrangement under every ruleset', () => {
+    expect(() =>
+      applyRandomMode(notesOn(KEYS_7), KEYS_1P, 'beatoraja:CONVERGE', seededRandom(1), {
+        ruleset: 'lr2',
+        playVariant: '7',
+      }),
+    ).toThrow(/PMS arrangement/);
+  });
+
   test('MIRROR reverses the keys and leaves the scratch', () => {
     const notes = notesOn([...KEYS_7, '16']);
     applyRandomMode(notes, KEYS_1P, 'MIRROR', seededRandom(1));

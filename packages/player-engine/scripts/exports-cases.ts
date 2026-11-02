@@ -78,6 +78,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.resolvePlayChart(fixtures.controlFlowJSON, { random: () => 0.42 });
     },
   });
+  define('player-engine.lanes.isOnePlayerBattleMode', {
+    run() {
+      lanesAPI.isOnePlayerBattleMode('beatoraja:BATTLE');
+    },
+  });
   define('player-engine.lanes.resolveEffectiveBattleMode', {
     run: () => {
       lanesAPI.resolveEffectiveBattleMode('AUTO', 'lr2', '14', false, 2);
@@ -737,9 +742,30 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.simulateReplay(BENCH_COUPLE_REPLAY, { ruleset: 'lr2', player: 2 });
     },
   });
+  define('player-engine.replay.resolveReplayJudgmentTimeline', {
+    run: () => {
+      replayAPI.resolveReplayJudgmentTimeline(BENCH_REPLAY, { ruleset: 'lr2' });
+    },
+  });
   define('player-engine.replay.simulateReplayRulesets', {
     run: () => {
       replayAPI.simulateReplayRulesets(BENCH_REPLAY);
+    },
+  });
+  define('player-engine.replay.findReplayNotSimulatedReason', {
+    run: () => {
+      replayAPI.findReplayNotSimulatedReason(BENCH_REPLAY, 'beatoraja');
+      replayAPI.findReplayNotSimulatedReason(BENCH_COUPLE_REPLAY, '____', 2);
+    },
+  });
+  define('player-engine.replay.rejudgeReplay', {
+    run: () => {
+      replayAPI.rejudgeReplay(BENCH_REPLAY, { ruleset: 'beatoraja' });
+    },
+  });
+  define('player-engine.replay.rejudgeReplayRulesets', {
+    run: () => {
+      replayAPI.rejudgeReplayRulesets(BENCH_REPLAY, ['lr2', 'beatoraja', '____']);
     },
   });
   const benchCourseInfo = {
@@ -885,6 +911,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.courseStageKeepsRecord(benchRecordKind);
     },
   });
+  define('player-engine.records.chartProgramCopiesChart', {
+    run: () => {
+      recordsAPI.chartProgramCopiesChart({ version: 1, options: { notes: 'DBLCOPY' } }, '7');
+    },
+  });
   define('player-engine.records.isCourseRunAtAnotherTempo', {
     run: () => {
       recordsAPI.isCourseRunAtAnotherTempo(benchCourseLog);
@@ -898,6 +929,140 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.records.courseRunKeepsRecord', {
     run: () => {
       recordsAPI.courseRunKeepsRecord(benchCourseLog);
+    },
+  });
+  define('player-engine.records.resolveCourseRunAssistClass', {
+    run: () => {
+      recordsAPI.resolveCourseRunAssistClass(benchCourseLog);
+    },
+  });
+  const benchAssistedReplay = {
+    ...BENCH_REPLAY,
+    play: { ...BENCH_REPLAY.play, randomLane: { p1: 'H-RANDOM' }, autoScratch1P: true },
+  };
+  const benchAssistFindings = recordsAPI.classifyReplayAssists(benchAssistedReplay);
+  const benchRecordPolicy = recordsAPI.resolveRecordPolicy(benchAssistFindings, 'beatoraja');
+  define('player-engine.records.classifyReplayAssists', {
+    run: () => {
+      recordsAPI.classifyReplayAssists(benchAssistedReplay);
+    },
+  });
+  define('player-engine.records.resolveAssistClass', {
+    run: () => {
+      recordsAPI.resolveAssistClass(benchAssistFindings);
+    },
+  });
+  define('player-engine.records.resolveRecordPolicy', {
+    run: () => {
+      recordsAPI.resolveRecordPolicy(benchAssistFindings, 'lr2');
+      recordsAPI.resolveRecordPolicy(benchAssistFindings, 'beatoraja');
+    },
+  });
+  define('player-engine.records.resolveReplayRecordPolicy', {
+    run: () => {
+      recordsAPI.resolveReplayRecordPolicy(benchAssistedReplay);
+    },
+  });
+  define('player-engine.records.applyRecordPolicyLamp', {
+    run: () => {
+      recordsAPI.applyRecordPolicyLamp('HARD', benchRecordPolicy);
+    },
+  });
+  define('player-engine.records.isDanRank', {
+    run: () => {
+      recordsAPI.isDanRank('dan-7');
+    },
+  });
+  define('player-engine.records.danRankOrder', {
+    run: () => {
+      recordsAPI.danRankOrder('insane-3');
+    },
+  });
+  define('player-engine.records.higherDanRank', {
+    run: () => {
+      recordsAPI.higherDanRank('dan-7', 'insane-1');
+    },
+  });
+  define('player-engine.records.resolveCourseDanRank', {
+    run: () => {
+      recordsAPI.resolveCourseDanRank('GENOCIDE 2018 発狂八段');
+    },
+  });
+  define('player-engine.records.formatDanRank', {
+    run: () => {
+      recordsAPI.formatDanRank('insane-8');
+    },
+  });
+  define('player-engine.records.resolveDanCourseKeyMode', {
+    run: () => {
+      recordsAPI.resolveDanCourseKeyMode(undefined, [7, 7, 7, 7]);
+    },
+  });
+  define('player-engine.records.resolveCourseRunDanRank', {
+    run: () => {
+      recordsAPI.resolveCourseRunDanRank({ kind: 'grade', name: '七段', lamp: 'NORMAL' });
+    },
+  });
+  define('player-engine.ruleset.resolveChartGaugeType', {
+    run() {
+      rulesetAPI.resolveChartGaugeType({ gameLevel: 'DANGER', extra: 'HARD' }, '____');
+    },
+  });
+  define('player-engine.ruleset.isQualifiedOptionName', {
+    run() {
+      rulesetAPI.isQualifiedOptionName('S-RANDOM');
+    },
+  });
+  define('player-engine.ruleset.splitOptionSource', {
+    run() {
+      rulesetAPI.splitOptionSource('beatoraja:S-RANDOM');
+    },
+  });
+  define('player-engine.ruleset.optionValueName', {
+    run() {
+      rulesetAPI.optionValueName('lr2:RANDOM');
+    },
+  });
+  define('player-engine.ruleset.resolveOptionSource', {
+    run() {
+      rulesetAPI.resolveOptionSource('RANDOM', 'beatoraja');
+    },
+  });
+  define('player-engine.ruleset.qualifyOptionValue', {
+    run() {
+      rulesetAPI.qualifyOptionValue('lr2', 'CONVERGE');
+    },
+  });
+  define('player-engine.ruleset.migrateOptionValue', {
+    run() {
+      rulesetAPI.migrateOptionValue('BATTLE', 'beatoraja');
+    },
+  });
+  define('player-engine.ruleset.isKnownOptionSource', {
+    run() {
+      rulesetAPI.isKnownOptionSource('____:CONVERGE');
+    },
+  });
+  define('player-engine.applyChartPlayOptions', {
+    run() {
+      playerAPI.applyChartPlayOptions(
+        { random1P: 'S-RANDOM', random2P: 'OFF', mineModifier: 'OFF' },
+        { version: 1, options: { random: 'ALL+', addMine: true } },
+        { doublePlay: true, hasScratch: true },
+      );
+    },
+  });
+  define('player-engine.resolveEffectiveChartPlayOptions', {
+    run() {
+      playerAPI.resolveEffectiveChartPlayOptions(
+        { version: 1, options: { random: 'MIRROR', notes: 'DBLCOPY' } },
+        { playVariant: '7', course: true },
+      );
+    },
+  });
+  define('player-engine.resolveChartNotesPlayVariant', {
+    run() {
+      playerAPI.resolveChartNotesPlayVariant('7', 'COPY');
     },
   });
   define('player-engine.ruleset.clampCustomJudgeRate', {
@@ -928,6 +1093,21 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.clearLampAtRank', {
     run: () => {
       rulesetAPI.clearLampAtRank(7);
+    },
+  });
+  define('player-engine.ruleset.clearLampOrder', {
+    run: () => {
+      rulesetAPI.clearLampOrder('LIGHT_ASSIST_EASY');
+    },
+  });
+  define('player-engine.ruleset.compareClearLamps', {
+    run: () => {
+      rulesetAPI.compareClearLamps('LIGHT_ASSIST_EASY', 'EASY');
+    },
+  });
+  define('player-engine.ruleset.compareClearLampRanks', {
+    run: () => {
+      rulesetAPI.compareClearLampRanks(10, 3);
     },
   });
   define('player-engine.ruleset.betterClearLamp', {
@@ -976,10 +1156,43 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   });
   define('player-engine.ruleset.resolveGaugeEndOnFailure', {
     run() {
-      rulesetAPI.resolveGaugeEndOnFailure('CONTINUE', 'beatoraja');
-      rulesetAPI.resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE', 'beatoraja');
-      rulesetAPI.resolveGaugeEndOnFailure('BEST_CLEAR', 'beatoraja');
-      rulesetAPI.resolveGaugeEndOnFailure('SELECT_TO_UNDER', 'beatoraja');
+      rulesetAPI.resolveGaugeEndOnFailure('CONTINUE');
+      rulesetAPI.resolveGaugeEndOnFailure('SURVIVAL_TO_GROOVE');
+      rulesetAPI.resolveGaugeEndOnFailure('BEST_CLEAR');
+      rulesetAPI.resolveGaugeEndOnFailure('SELECT_TO_UNDER');
+    },
+  });
+  define('player-engine.ruleset.resolveGaugeShiftLadder', {
+    run() {
+      rulesetAPI.resolveGaugeShiftLadder('lr2');
+      rulesetAPI.resolveGaugeShiftLadder('beatoraja', 'grade');
+      rulesetAPI.resolveGaugeShiftLadder('lr2', 'expert');
+    },
+  });
+  define('player-engine.ruleset.resolvePracticeGaugeTypes', {
+    run() {
+      rulesetAPI.resolvePracticeGaugeTypes('lr2');
+      rulesetAPI.resolvePracticeGaugeTypes('beatoraja');
+      rulesetAPI.resolvePracticeGaugeTypes('____');
+    },
+  });
+  define('player-engine.ruleset.resolveDefaultPracticeGauge', {
+    run() {
+      rulesetAPI.resolveDefaultPracticeGauge('lr2');
+      rulesetAPI.resolveDefaultPracticeGauge('____');
+    },
+  });
+  define('player-engine.ruleset.isPracticeGaugeType', {
+    run() {
+      rulesetAPI.isPracticeGaugeType('HAZARD');
+      rulesetAPI.isPracticeGaugeType('GROOVE', 'lr2');
+      rulesetAPI.isPracticeGaugeType('HAZARD', '____');
+    },
+  });
+  define('player-engine.ruleset.practiceReadsJudgeRankAndTotal', {
+    run() {
+      rulesetAPI.practiceReadsJudgeRankAndTotal('lr2');
+      rulesetAPI.practiceReadsJudgeRankAndTotal('____');
     },
   });
   define('player-engine.ruleset.resolveGaugeTypes', {
@@ -1069,6 +1282,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.simulateCourseReplay', {
     run: () => {
       replayAPI.simulateCourseReplay(benchCourseLog, { ruleset: 'lr2' });
+    },
+  });
+  define('player-engine.replay.rejudgeCourseReplay', {
+    run: () => {
+      replayAPI.rejudgeCourseReplay(benchCourseLog, { ruleset: 'beatoraja' });
     },
   });
   const benchKeyedCourseLog = replayAPI.createCourseReplay({

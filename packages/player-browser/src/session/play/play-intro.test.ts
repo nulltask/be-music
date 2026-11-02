@@ -37,7 +37,7 @@ describe('play intro stages', () => {
   test('waits the complete READY interval after slow media loading', async () => {
     const { play, moments, advance } = setup({ ...base, inputStartOffsetMs: 200, playStartAfterLoadEndMs: 1000 });
     let loaded!: () => void;
-    play.bgaReadyPromise = new Promise<void>((resolve) => {
+    play.assetsReadyPromise = new Promise<void>((resolve) => {
       loaded = resolve;
     });
     play.start();
@@ -97,7 +97,7 @@ describe('play intro stages', () => {
   test('does not schedule a new READY delay after disposal while media is loading', async () => {
     const { play, moments, advance } = setup({ ...base, playStartAfterLoadEndMs: 1000 });
     let loaded!: () => void;
-    play.bgaReadyPromise = new Promise<void>((resolve) => {
+    play.assetsReadyPromise = new Promise<void>((resolve) => {
       loaded = resolve;
     });
     play.start();

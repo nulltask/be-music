@@ -1,5 +1,17 @@
 # @be-music/player-ui
 
+## 0.6.0
+
+### Minor Changes
+
+- cafe76b: Add a `cabinet` property to `be-music-gameplay-hud`: a landscape play in the standard layout is arranged as the skin SDK's cabinet layout, with the score graph, stage band, players, judgement panel, BPM and tempo, and the play information behind an Info button.
+
+### Patch Changes
+
+- 7ba64b0: The play settings panel names the lowest auto-shift gauge as LR2 does under LR2 rules (GROOVE, and EASY for ASSIST EASY), since gauge auto-shift now works under every ruleset (#933).
+- 2ee74d2: The Basecoat theme names the system faces instead of Geist, which no host loaded, so text no longer depends on a locally installed font.
+- Updated dependencies: `@be-music/player-skin-sdk@0.7.0`
+
 ## 0.5.0
 
 ### Minor Changes

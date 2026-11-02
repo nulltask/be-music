@@ -25,6 +25,8 @@ test('native screens browse, search, play, show results and switch back to Canva
   await expect(hud.getByRole('meter', { name: 'HARD' }).first()).toBeVisible();
   await hud.getByRole('button', { name: 'Pause', exact: true }).click();
   await expect(hud.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+  // The landscape HUD is the cabinet arrangement: the play information opens from its Info button.
+  await hud.getByRole('button', { name: 'Info', exact: true }).click();
   await expect(hud.locator('be-music-play-settings')).toContainText('????');
   await expect(hud.locator('be-music-play-settings')).not.toContainText('____');
   // Checked while paused, before the short chart ends. No stage-sized canvas: each part of the playfield, BGA

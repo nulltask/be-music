@@ -52,6 +52,7 @@
         "01": "MIRROR",
         "02": "RANDOM"
       },
+      "songText": {},
       "exWAV": {
         "01": "pvf 1024 -200 48000 sample.wav",
         "02": "vp -600 -500 branch.wav",

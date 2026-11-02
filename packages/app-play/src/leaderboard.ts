@@ -1,3 +1,4 @@
+import { playerText } from './player-copy.ts';
 import {
   computeChartFingerprint,
   computeFingerprintOfDocument,
@@ -14,6 +15,7 @@ import {
   resolveCourseStageChartFingerprints,
   type BeMusicCourseReplay,
   type BeMusicReplay,
+  parseReplay,
   type CourseReplayIneligibleReason,
   type RulesetId,
 } from '@be-music/player-engine/replay';
@@ -86,6 +88,14 @@ export interface LeaderboardRulesetResult {
   rank: number;
   players: number;
   improved: { exScore: boolean; lamp: boolean; missCount: boolean };
+  /** `truncated`: judged only up to where the play stopped on failure, unranked (ADR 0019). */
+  outcome?: 'truncated';
+}
+
+/** A ruleset the Leaderboard cannot judge the play under (`NotSimulatedOutcome` in `@be-music/app-leaderboard`). */
+export interface LeaderboardNotSimulated {
+  ruleset: RulesetId;
+  reason: string;
 }
 
 export type LeaderboardSubmitResult =
@@ -93,6 +103,8 @@ export type LeaderboardSubmitResult =
       status: 'accepted' | 'duplicate';
       scoreId: string;
       results: LeaderboardRulesetResult[];
+      /** The rulesets the Leaderboard cannot judge the play under. */
+      notSimulated?: LeaderboardNotSimulated[];
       /** Why the Leaderboard stored the play without ranking it (`tempo`, `course-stage`, ...). */
       unranked?: string;
     }
@@ -120,10 +132,41 @@ export async function submitToLeaderboard(
   }));
   if (!(response instanceof Response)) return response;
   if (response.status === 201 || response.status === 200) {
-    const body = (await response.json()) as { scoreId: string; results: LeaderboardRulesetResult[]; unranked?: string };
+    const body = (await response.json()) as {
+      scoreId: string;
+      results: LeaderboardRulesetResult[];
+      notSimulated?: LeaderboardNotSimulated[];
+      unranked?: string;
+    };
     return { status: response.status === 201 ? 'accepted' : 'duplicate', ...body };
   }
   return { status: 'failed', httpStatus: response.status, error: (await readError(response)) ?? 'unknown' };
+}
+
+/**
+ * Fetches the replay of the top run on a chart's Leaderboard ranking under `ruleset` (unassisted plays): the ranking's
+ * first entry (`GET /api/v0/charts/:chartFingerprint/leaderboard?limit=1`), then the replay of the score that set it
+ * (`GET /api/v0/scores/:id/replay`, gzip-compressed on the wire). `undefined` when the chart has no ranked run or its
+ * replay cannot be read; a replay ghost then plays without one. No session is needed for a public replay.
+ */
+export async function fetchLeaderboardTopReplay(
+  chartFingerprint: string,
+  ruleset: RulesetId,
+  options: Pick<LeaderboardClientOptions, 'fetch'> = {},
+): Promise<BeMusicReplay | undefined> {
+  const doFetch = options.fetch ?? fetch.bind(globalThis);
+  const query = new URLSearchParams({ ruleset, limit: '1' });
+  const ranking = await doFetch(`/api/v0/charts/${encodeURIComponent(chartFingerprint)}/leaderboard?${query}`, {
+    credentials: 'same-origin',
+  });
+  if (!ranking.ok) return undefined;
+  const body = (await ranking.json().catch(() => undefined)) as { entries?: { exScoreId?: unknown }[] } | undefined;
+  const scoreId = body?.entries?.[0]?.exScoreId;
+  if (typeof scoreId !== 'string' || scoreId.length === 0) return undefined;
+  const replay = await doFetch(`/api/v0/scores/${encodeURIComponent(scoreId)}/replay`, { credentials: 'same-origin' });
+  if (!replay.ok) return undefined;
+  // The browser undoes the `content-encoding: gzip` the replay is served with.
+  return parseReplay(await replay.text());
 }
 
 /**
@@ -246,6 +289,8 @@ export type CourseLeaderboardSubmitResult =
       status: 'accepted' | 'duplicate';
       courseScoreId: string;
       results: CourseLeaderboardRulesetResult[];
+      /** The rulesets the Leaderboard cannot judge the run under. */
+      notSimulated?: LeaderboardNotSimulated[];
       /** Why the Leaderboard stored the run without ranking it (`tempo`, `unreleased`). */
       unranked?: string;
     }
@@ -273,6 +318,7 @@ export async function submitCourseToLeaderboard(
     const body = (await response.json()) as {
       courseScoreId: string;
       results: CourseLeaderboardRulesetResult[];
+      notSimulated?: LeaderboardNotSimulated[];
       unranked?: string;
     };
     return { status: response.status === 201 ? 'accepted' : 'duplicate', ...body };
@@ -282,17 +328,8 @@ export async function submitCourseToLeaderboard(
 
 /** {@link describeLeaderboardResult} for a course run: the course rank under the ruleset the run was played with. */
 export function describeCourseLeaderboardResult(result: CourseLeaderboardSubmitResult, playedRuleset: string): string {
-  if (result.status === 'failed') return `Leaderboard: course not submitted (${result.error})`;
-  const summary = describeLeaderboardResult(
-    {
-      status: result.status,
-      scoreId: result.courseScoreId,
-      results: result.results,
-      ...(result.unranked !== undefined ? { unranked: result.unranked } : {}),
-    },
-    playedRuleset,
-  );
-  return summary.replace(/^Leaderboard /, 'Leaderboard course ');
+  if (result.status === 'failed') return playerText().lb.courseNotSubmitted(result.error);
+  return describeRankedResult(result, playedRuleset, true);
 }
 
 /**
@@ -300,71 +337,59 @@ export function describeCourseLeaderboardResult(result: CourseLeaderboardSubmitR
  * which personal bests it improved.
  */
 export function describeLeaderboardResult(result: LeaderboardSubmitResult, playedRuleset: string): string {
-  if (result.status === 'failed') {
-    return `Leaderboard: not submitted (${result.error})`;
-  }
-  const again = result.status === 'duplicate' ? ' (already submitted)' : '';
-  if (result.unranked !== undefined)
-    return `Leaderboard: stored, not ranked (${describeUnranked(result.unranked)})${again}`;
-  const mine = result.results.find((entry) => entry.ruleset === playedRuleset) ?? result.results[0];
-  if (mine === undefined) return 'Leaderboard: submitted';
+  if (result.status === 'failed') return playerText().lb.notSubmitted(result.error);
+  return describeRankedResult(result, playedRuleset, false);
+}
+
+function describeRankedResult(
+  result: {
+    status: 'accepted' | 'duplicate';
+    results: readonly LeaderboardRulesetResult[];
+    notSimulated?: readonly LeaderboardNotSimulated[];
+    unranked?: string;
+  },
+  playedRuleset: string,
+  course: boolean,
+): string {
+  const copy = playerText().lb;
+  const again = result.status === 'duplicate' ? copy.already : '';
+  if (result.unranked !== undefined) return copy.stored(describeUnranked(result.unranked), again);
+  const mine =
+    result.results.find((entry) => entry.ruleset === playedRuleset) ??
+    result.results.find((entry) => entry.outcome === undefined);
+  if (mine === undefined) return copy.submitted;
   const improved = [
     mine.improved.exScore ? 'EX' : undefined,
-    mine.improved.lamp ? 'lamp' : undefined,
+    mine.improved.lamp ? copy.lamp : undefined,
     mine.improved.missCount ? 'BP' : undefined,
   ].filter((part) => part !== undefined);
-  const best = result.status === 'accepted' && improved.length > 0 ? ` · new best ${improved.join(' / ')}` : '';
-  return `Leaderboard ${mine.ruleset}: #${mine.rank} / ${mine.players} · EX ${mine.exScore}${best}${again}`;
+  const best = result.status === 'accepted' && improved.length > 0 ? copy.newBest(improved.join(' / ')) : '';
+  // The other rulesets that could not judge the play in full (ADR 0019): a skipped judgment must never pass silently.
+  const truncated = result.results.filter((entry) => entry.outcome === 'truncated').map((entry) => entry.ruleset);
+  const notSimulated = (result.notSimulated ?? []).map((entry) => entry.ruleset);
+  const others =
+    (truncated.length > 0 ? copy.truncated(truncated.join(', ')) : '') +
+    (notSimulated.length > 0 ? copy.notSimulated(notSimulated.join(', ')) : '');
+  const line = course ? copy.courseRanked : copy.ranked;
+  return line(mine.ruleset, mine.rank, mine.players, mine.exScore, best + others, again);
 }
 
 /** Why the Leaderboard stored a play without ranking it, for the status line. */
 function describeUnranked(reason: string): string {
-  switch (reason) {
-    case 'bmson-total':
-      return 'bmson TOTAL 0 used no recovery';
-    case 'tempo':
-      return 'a play at another tempo is practice';
-    case 'course-stage':
-      return 'a course stage ranks with its course';
-    case 'unreleased':
-      return 'made and random courses are not ranked';
-    default:
-      return reason;
-  }
+  const reasons = playerText().lb.unranked;
+  return reason in reasons ? reasons[reason as keyof typeof reasons] : reason;
 }
 
 /** Why a play was not sent, for the status line (a skipped play must never pass silently). */
 export function describeSkippedSubmission(reason: Exclude<SubmissionPreparation, { ok: true }>['reason']): string {
-  switch (reason) {
-    case 'two-player':
-      return 'Leaderboard: not submitted (two-player plays have no single-player ranking)';
-    case 'auto-play':
-      return 'Leaderboard: not submitted (an auto play is not sent)';
-    case 'missing-fingerprint':
-      return 'Leaderboard: not submitted (this replay has no chart fingerprint)';
-    case 'fingerprint-mismatch':
-      return 'Leaderboard: not submitted (the chart does not match the recorded play)';
-  }
+  return playerText().lb.skipped[reason];
 }
 
 /** Why a course run was not sent, for the status line. */
 export function describeSkippedCourseSubmission(
   reason: Exclude<CourseSubmissionPreparation, { ok: true }>['reason'],
 ): string {
-  switch (reason) {
-    case 'two-player':
-      return 'Leaderboard: course not submitted (two-player plays have no single-player ranking)';
-    case 'auto-play':
-      return 'Leaderboard: course not submitted (an auto play is not sent)';
-    case 'aborted':
-      return 'Leaderboard: course not submitted (a stage before the last was given up)';
-    case 'not-a-course-run':
-      return 'Leaderboard: course not submitted (the stages do not make one run)';
-    case 'missing-fingerprint':
-      return 'Leaderboard: course not submitted (a stage chart has no fingerprint)';
-    case 'fingerprint-mismatch':
-      return 'Leaderboard: course not submitted (a stage chart does not match the recorded play)';
-  }
+  return playerText().lb.courseSkipped[reason];
 }
 
 async function gzipJSON(value: unknown): Promise<Blob> {

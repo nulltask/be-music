@@ -11,19 +11,25 @@ import {
 import {
   mergeBestRecord,
   mergeCourseStageRecord,
+  resolveReplayRecordPolicy,
+  type AssistReplay,
   type BestRecord,
+  type DanRank,
   type RecordPlay,
 } from '@be-music/player-engine/records';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
 import type { LibraryChart } from '@be-music/player-scene-model';
-import type { BeMusicChartBestRecord } from '@be-music/player-skin-sdk';
+import type { BeMusicChartBestRecord, BeMusicDanRank } from '@be-music/player-skin-sdk';
 import {
   readStoredChartBestRecords,
+  recordKeyRuleset,
   rulesetRecordKey,
+  slotRecordKey,
   rulesetRecords,
   chartBestRecordKey,
   storeChartBestRecords,
 } from '../chart-best-records.ts';
+import { listDanRanks, mergeDanRank, readStoredDanRanks, storeDanRanks } from '../dan-ranks.ts';
 
 export interface RecordsServiceOptions {
   /** The library the charts are hashed from: the sources their files are in. */
@@ -36,6 +42,10 @@ export interface RecordsServiceOptions {
 export class RecordsService {
   /** Best record per chart ({@link chartBestRecordKey}), persisted in `localStorage` and shown to be-music select skins. */
   public readonly chartBestRecords: Map<string, BestRecord> = readStoredChartBestRecords();
+  /** The highest dan cleared per judge ruleset and key mode (`danRankKey`), persisted in `localStorage`. */
+  public readonly danRanks: Map<string, DanRank> = readStoredDanRanks();
+  /** {@link currentDanRanks}'s answer, kept until a rank changes or the judge ruleset does. */
+  private danRankList: { ruleset: RulesetId; list: readonly BeMusicDanRank[] } | undefined;
   /**
    * Record key of the play in flight when it counts towards the chart's best record, latched at song start. `undefined`
    * for autoplay and replay plays, which never touch the records.
@@ -127,27 +137,51 @@ export class RecordsService {
    * Records the running play's result under its chart, when the play counts ({@link playRecordKey}). Returns the record
    * as it was before the play (`previous`, absent for a first play), or `undefined` when the play did not count.
    */
-  public recordActivePlay(play: RecordPlay): { previous: BestRecord | undefined } | undefined {
+  public recordActivePlay(play: RecordPlay, replay?: AssistReplay): { previous: BestRecord | undefined } | undefined {
     const key = this.activePlayRecordKey;
-    if (key === undefined) return undefined;
-    const previous = this.chartBestRecords.get(key);
-    this.recordSongResult(key, play);
     this.activePlayRecordKey = undefined;
+    return key === undefined ? undefined : this.recordPlayUnder(key, play, replay);
+  }
+
+  /**
+   * Takes the record key of the play in flight, for a play whose replay comes later (one given up with ESC): pass it to
+   * {@link recordPlayUnder} once the replay is there.
+   */
+  public takeActivePlayRecordKey(): string | undefined {
+    const key = this.activePlayRecordKey;
+    this.activePlayRecordKey = undefined;
+    return key;
+  }
+
+  /**
+   * Records a play under `key` by its record policy (`resolveReplayRecordPolicy`, #602): a play whose options' source
+   * saves nothing keeps no record, an LR2 separate-lamp play keeps its own slot ({@link slotRecordKey}), and an assisted
+   * play moves only its limited lamp and its play count. Without a replay the play counts as unassisted.
+   */
+  public recordPlayUnder(
+    key: string,
+    play: RecordPlay,
+    replay?: AssistReplay,
+  ): { previous: BestRecord | undefined } | undefined {
+    const policy = replay === undefined ? undefined : resolveReplayRecordPolicy(replay, recordKeyRuleset(key));
+    if (policy !== undefined && !policy.keepsRecord) return undefined;
+    const slotKey = slotRecordKey(key, policy?.recordSlot ?? 'main');
+    const previous = this.chartBestRecords.get(slotKey);
+    this.chartBestRecords.set(slotKey, mergeBestRecord(previous, play, policy));
+    storeChartBestRecords(this.chartBestRecords);
     return { previous };
   }
 
-  /** Folds the running course stage into its chart's record ({@link mergeCourseStageRecord}), when the stage counts. */
-  public recordActiveCourseStage(play: RecordPlay): void {
+  /**
+   * Folds the running course stage into its chart's record ({@link mergeCourseStageRecord}), when the stage counts: an
+   * assisted stage (`RecordPolicy.keepsCourseRecord`) writes nothing, as LR2 saves none (`CheckScoreSaveConditon`).
+   */
+  public recordActiveCourseStage(play: RecordPlay, replay?: AssistReplay): void {
     const key = this.activeStageRecordKey;
     this.activeStageRecordKey = undefined;
     if (key === undefined) return;
+    if (replay !== undefined && !resolveReplayRecordPolicy(replay, recordKeyRuleset(key)).keepsCourseRecord) return;
     this.chartBestRecords.set(key, mergeCourseStageRecord(this.chartBestRecords.get(key), play));
-    storeChartBestRecords(this.chartBestRecords);
-  }
-
-  /** Folds a finished play into its chart's best record and persists the records. */
-  private recordSongResult(key: string, play: RecordPlay): void {
-    this.chartBestRecords.set(key, mergeBestRecord(this.chartBestRecords.get(key), play));
     storeChartBestRecords(this.chartBestRecords);
   }
 
@@ -164,5 +198,28 @@ export class RecordsService {
     this.chartBestRecords.set(update.key, mergeBestRecord(previous, update.play));
     storeChartBestRecords(this.chartBestRecords);
     return { previous };
+  }
+
+  /**
+   * Keeps the dan rank a GRADE course run certified (`resolveDanRankUpdate`), when it is higher than the one held in its
+   * key mode. Returns the rank as it was before, or `undefined` when the run certified none.
+   */
+  public recordDanRank(
+    update: { key: string; rank: DanRank } | undefined,
+  ): { previous: DanRank | undefined } | undefined {
+    if (update === undefined) return undefined;
+    const kept = mergeDanRank(this.danRanks, update);
+    this.danRankList = undefined;
+    storeDanRanks(this.danRanks);
+    return kept;
+  }
+
+  /** The dan ranks of the current judge ruleset, by key mode: the ones the select screen shows. */
+  public currentDanRanks(): readonly BeMusicDanRank[] {
+    const ruleset = this.judgeRuleset();
+    if (this.danRankList?.ruleset !== ruleset) {
+      this.danRankList = { ruleset, list: listDanRanks(this.danRanks, ruleset) };
+    }
+    return this.danRankList.list;
   }
 }

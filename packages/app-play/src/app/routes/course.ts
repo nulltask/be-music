@@ -11,6 +11,7 @@ import {
   type CourseMaker,
 } from '@be-music/player-browser/collection';
 import { LR2_RANDOM_MIX_NAME } from '@be-music/player-engine/course';
+import { playerText } from '../../player-copy.ts';
 import type {
   BeMusicCourseReplay,
   BeMusicReplay,
@@ -35,6 +36,7 @@ import {
   nextCourseStagePlay,
   planCourseStart,
   resolveCourseBestRecordUpdate,
+  resolveCourseDanRankUpdate,
   type CourseStagePlay,
 } from '../../course-flow.ts';
 import { buildCourseResultData, courseBestRecordKey, joinCourseStageHistories } from '../../course-result.ts';
@@ -60,7 +62,10 @@ export interface CourseRouteDeps {
   /** The library: the charts a random course draws its stages from. */
   readonly library: Pick<LibraryService, 'collection' | 'prepareDrawnCourse'>;
   /** The chart hashes a random course's stage filters match, and the course's best record. */
-  readonly records: Pick<RecordsService, 'resolveChartHashes' | 'peekChartBestRecord' | 'recordCourseResult'>;
+  readonly records: Pick<
+    RecordsService,
+    'resolveChartHashes' | 'peekChartBestRecord' | 'recordCourseResult' | 'recordDanRank'
+  >;
   /** The course maker, which a NEW COURSE bar starts and a RANDOM MIX bar draws a course with. */
   readonly courseMaker: { readonly maker: Pick<CourseMaker, 'start' | 'drawRandomMix'> };
   /** The select screen's key filter, whose key mode a RANDOM MIX draws. */
@@ -168,7 +173,7 @@ export class CourseRoute {
     // A NEW COURSE bar starts making a course of its folder's kind; songs decided from now on join it.
     if (plan.action === 'make') {
       this.courseMaker.maker.start(plan.kind);
-      this.setStatus('Making a course: decide songs to add them, then save');
+      this.setStatus(playerText().course.making);
       return;
     }
     if (plan.action === 'unplayable') {
@@ -355,6 +360,8 @@ export class CourseRoute {
     if (courseLog !== undefined && !replay) {
       const update = resolveCourseBestRecordUpdate(courseLog, result, courseBestRecordKey(course));
       const kept = this.records.recordCourseResult(update);
+      // A cleared GRADE course named after a dan raises the player's dan rank in its key mode.
+      this.records.recordDanRank(resolveCourseDanRankUpdate(course, courseLog, result));
       // The run saves into its course's replay slots only when it kept a record, as beatoraja's `CourseResult` does.
       replaySlots = this.courseReplaySlots(
         courseLog,

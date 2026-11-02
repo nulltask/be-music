@@ -49,16 +49,17 @@ export const OPENAPI_DOCUMENTATION = {
     title: 'be-music Leaderboard API',
     version: '0',
     description:
-      'Version 0 is the beta: it may still change incompatibly (docs/leaderboard.md section 8). Requests are ' +
-      'authenticated with a host-only OIDC app session or a resource-bound Accounts access token; reads are public.',
+      'Version 0 is a Public Beta: it may still change incompatibly (docs/leaderboard.md section 8). Data may be ' +
+      'deleted without notice. Requests are authenticated with a host-only OIDC app session or a resource-bound ' +
+      'Accounts access token; reads are public.',
   },
   servers: [{ url: '/api/v0' }],
 };
 
 /**
- * Version 0 of the Leaderboard API, mounted at `/api/v0` (docs/leaderboard.md section 8). Version 0 is the beta: it may
- * still change incompatibly. Once stable it becomes `/api/v1`, and breaking changes after that go into a new version
- * mounted next to the old one.
+ * Version 0 of the Leaderboard API, mounted at `/api/v0` (docs/leaderboard.md section 8). Version 0 is a Public Beta:
+ * it may still change incompatibly, and data may be deleted without notice. Once stable it becomes `/api/v1`, and
+ * breaking changes after that go into a new version mounted next to the old one.
  */
 export function createV0API(options: { now: () => number; newId: () => string; chartsetLookup: ChartsetLookup }) {
   const { now, newId, chartsetLookup } = options;
@@ -223,8 +224,9 @@ export function createV0API(options: { now: () => number; newId: () => string; c
         413: json('The body is too large.', errorResponse(['body-too-large'])),
         415: json('Not gzip-compressed JSON.', errorResponse(['expected-json', 'unsupported-encoding'])),
         422: json(
-          'The play cannot be stored: an auto play, a malformed replay, a replay without fingerprints, or a ' +
-            'fingerprint document that does not hash to the replay’s fingerprint.',
+          'The play cannot be stored: an auto play, a malformed replay, a replay without fingerprints, a ' +
+            'fingerprint document that does not hash to the replay’s fingerprint, or a replay whose chart gameplay ' +
+            'options are not the ones its chart runs.',
           errorResponse([
             'invalid-replay',
             'auto-play',
@@ -234,6 +236,7 @@ export function createV0API(options: { now: () => number; newId: () => string; c
             'play-document-fingerprint-mismatch',
             'chart-document-not-a-document',
             'chart-document-fingerprint-mismatch',
+            'chart-play-options-mismatch',
           ]),
         ),
         429: json('Too many submissions; retry after `Retry-After` seconds.', errorResponse(['rate-limited'])),

@@ -49,3 +49,15 @@
 - [0026: 譜面の実効表示操作をユーザー設定と分けて記録する](./0026-chart-authored-display-options.ja.md)
 
 - [0030: bmson の TOTAL 0 を明示的なプレイ設定で扱う](./0030-bmson-zero-total.ja.md)
+
+- [0031: アシストはオプションの参照元で区分し、結果は判定ルールで決め、ランプは追加専用にする](./0031-assist-record-policy.ja.md)
+
+- [0032: 譜面指定の HIDDEN・CHANGE-HS・CRAZY のサイズ / 揺れを Be-Music の式で実行する](./0032-chart-authored-visual-families.ja.md)
+
+- [0033: 譜面指定の RANDOM と判定系 CRAZY はプレイヤーの設定を置き換え、アシストとしない](./0033-chart-authored-gameplay-options.ja.md)
+
+- [0034: 譜面指定の GAMELEVEL と EXTRA を各 ruleset のゲージに対応させる](./0034-chart-authored-gauge-options.ja.md)
+
+- [0035: 譜面指定の NOTES オプションはエンジンで譜面を変換し、フィンガープリントがゲームプレイオプションを持つ](./0035-chart-authored-notes-options.ja.md)
+
+- [0036: 譜面指定の M-SUDDEN・スキン水準の CRAZY・旧別名をプレイフィールドの水準で実行する](./0036-chart-authored-skin-level-options.ja.md)

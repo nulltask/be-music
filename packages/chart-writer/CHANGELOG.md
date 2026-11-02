@@ -1,5 +1,13 @@
 # @be-music/chart-writer
 
+## 0.6.1
+
+### Patch Changes
+
+- 6cab49e: Converting a BMS chart to bmson rounded every object to a fixed 240 pulses per beat, so off-grid notes, BPM changes and BGA cues moved, by up to 400 ms on extreme-BPM gimmick charts. Without a `resolution` option, `stringifyBmson` now picks the least multiple of 240 at which every position and measure boundary lands on a whole pulse, capped at 61,440 (positions past the cap round to it, under 0.5 / 61,440 beat). A bmson source and an explicit `resolution` keep their resolution.
+- e8cd9c2: BMS output writes pomu `#SONGxx` definitions back as `#SONGxx`, and `areBMSChartsEquivalent` compares them.
+- Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`
+
 ## 0.6.0
 
 ### Minor Changes

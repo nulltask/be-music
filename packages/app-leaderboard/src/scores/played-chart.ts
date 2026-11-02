@@ -62,11 +62,12 @@ export function chartDocumentKey(chartFingerprint: string): string {
   return `charts/${chartFingerprint}.json`;
 }
 
-/** Stores a new chart's document in R2 (a no-op for a known chart). */
+/** Stores a new chart's document in R2, gzip-compressed (a no-op for a known chart). */
 export async function putChartDocument(blobs: R2Bucket, played: PlayedChart): Promise<void> {
   if (played.registration === undefined) return;
-  await blobs.put(chartDocumentKey(played.chartFingerprint), JSON.stringify(played.registration.document), {
-    httpMetadata: { contentType: 'application/json' },
+  const document = await gzipText(JSON.stringify(played.registration.document));
+  await blobs.put(chartDocumentKey(played.chartFingerprint), document, {
+    httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
   });
 }
 
@@ -144,7 +145,7 @@ function chartJudgeRank(judgeRank: { percent: number; sourceRank?: number; sourc
   };
 }
 
-/** gzip of a text, for the replays stored in R2. */
+/** gzip of text stored in R2 (replays and chart documents). */
 export async function gzipText(text: string): Promise<ArrayBuffer> {
   const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
   return await new Response(stream).arrayBuffer();

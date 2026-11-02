@@ -306,6 +306,7 @@ export class BuiltInSelectView implements SelectView {
     this.renderer = new BeMusicSelectBinding(this.kit.skin, {
       resolveChartBestRecord: (chartEntry) => this.frame?.records.chart(chartEntry),
       resolveCourseBestRecord: (course) => this.frame?.records.course(course),
+      resolveDanRanks: () => this.frame?.records.danRanks?.() ?? [],
       chartImage: chartImages.lookup,
       settings: this.kit.settings,
       renderer: this.host?.app.renderer,

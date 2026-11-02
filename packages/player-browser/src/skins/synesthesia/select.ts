@@ -68,13 +68,13 @@ import {
 } from '@be-music/player-skin-sdk';
 import {
   addHitArea,
-  addSkinText,
   type PixiSelectFrame,
   type PixiSelectRenderer,
   type PixiSelectSkin,
   type SkinTextOptions,
   fadeChildrenFrom,
 } from '../pixi-kit/index.ts';
+import { addSynesthesiaText } from './figures.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
 /**
@@ -275,7 +275,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     for (const child of layer.children) child.alpha *= away;
     const form = easeOutCubic(Math.min(1, t / 0.4));
     const alpha = Math.min(1, t * 4) * (1 - dark);
-    const title = addSkinText(layer, chartEntry?.title ?? '', cx, cy - 6, {
+    const title = addSynesthesiaText(layer, chartEntry?.title ?? '', cx, cy - 6, {
       size: 26,
       weight: '500',
       fill: SYN_WHITE,
@@ -288,7 +288,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       dropShadow: { color: SYN_EMBER, distance: 0, blur: 16, alpha: 1 },
     });
     if (chartEntry?.artist) {
-      addSkinText(layer, chartEntry.artist, cx, cy + 24, {
+      addSynesthesiaText(layer, chartEntry.artist, cx, cy + 24, {
         size: 11,
         fill: SYN_MIST,
         fontFamily: SYN_TEXT_FONT,
@@ -608,7 +608,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const hue = sceneHue(frame.nowMs / 1000);
     const accent = hsvToHex(hue, 0.6, 1);
     const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
-      addSkinText(layer, text, x, y, options);
+      addSynesthesiaText(layer, text, x, y, options);
 
     // A focused course takes the song's place: its name, then its kind and stage count.
     const course =
@@ -805,7 +805,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     chrome.label = 'synesthesia-select/chrome';
     const accent = hsvToHex(sceneHue(frame.nowMs / 1000), 0.6, 1);
     const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
-      addSkinText(layer, text, x, y, options);
+      addSynesthesiaText(layer, text, x, y, options);
     const label = (fill: number = SYN_DIM): SkinTextOptions => ({ ...labelStyle(fill), size: 10 });
 
     const course =
@@ -1045,7 +1045,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const orbColor = chartEntry ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
     row.circle(rowX + 18, midY, 12).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
     frame.layer.addChild(row);
-    addSkinText(frame.layer, level, rowX + 18, midY, {
+    addSynesthesiaText(frame.layer, level, rowX + 18, midY, {
       size: 10,
       fill: SYN_WHITE,
       fontFamily: SYN_DISPLAY_FONT,
@@ -1069,18 +1069,24 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       marquee: active,
     });
     if (facts) {
-      addSkinText(frame.layer, `${facts.bpm} BPM`, factsRight, midY - 7, factStyle(active ? SYN_WHITE : SYN_MIST));
-      addSkinText(frame.layer, `${facts.notes} NOTES`, factsRight, midY + 8, factStyle(SYN_DIM));
+      addSynesthesiaText(
+        frame.layer,
+        `${facts.bpm} BPM`,
+        factsRight,
+        midY - 7,
+        factStyle(active ? SYN_WHITE : SYN_MIST),
+      );
+      addSynesthesiaText(frame.layer, `${facts.notes} NOTES`, factsRight, midY + 8, factStyle(SYN_DIM));
     } else {
       // A folder or course count takes what it needs (`4 stages · 1 missing`), up to ROW_COUNT_MAX_W.
       const count = browseEntryCount(entry) ?? '';
-      const countNode = addSkinText(frame.layer, count, factsRight, midY, factStyle(SYN_MIST, ROW_COUNT_MAX_W));
+      const countNode = addSynesthesiaText(frame.layer, count, factsRight, midY, factStyle(SYN_MIST, ROW_COUNT_MAX_W));
       factsW = count ? Math.max(factsW, Math.min(ROW_COUNT_MAX_W, countNode.width)) : factsW;
     }
     const textX = rowX + 38;
     const textW = Math.max(24, factsRight - factsW - 10 - textX);
     const artist = chartEntry?.artist?.trim();
-    const title = addSkinText(frame.layer, browseEntryTitle(entry), textX, artist ? midY - 7 : midY, {
+    const title = addSynesthesiaText(frame.layer, browseEntryTitle(entry), textX, artist ? midY - 7 : midY, {
       size: 12,
       weight: active ? '500' : '300',
       fill: SYN_WHITE,
@@ -1093,7 +1099,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     });
     title.label = `fallback-title[idx=${entryIndex}]`;
     if (artist) {
-      addSkinText(frame.layer, artist, textX, midY + 8, {
+      addSynesthesiaText(frame.layer, artist, textX, midY + 8, {
         size: 10,
         weight: '300',
         fill: active ? SYN_MIST : SYN_DIM,
@@ -1146,7 +1152,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     row.circle(rowX + 16, y + (rowHeight - 4) / 2, 9).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
     frame.layer.addChild(row);
     const midY = y + (rowHeight - 4) / 2;
-    addSkinText(frame.layer, level, rowX + 16, midY, {
+    addSynesthesiaText(frame.layer, level, rowX + 16, midY, {
       size: level.length > 2 ? 7 : 9,
       fill: SYN_WHITE,
       fontFamily: SYN_DISPLAY_FONT,
@@ -1159,7 +1165,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // fixed columns so they line up down the list. Folders show their size instead.
     const facts = chartEntry ? resolveChartRowFacts(chartEntry) : undefined;
     const meta = facts ? `${facts.bpm} BPM` : (browseEntryCount(entry) ?? '');
-    const metaNode = addSkinText(frame.layer, meta, rowX + rowW - 14, midY, {
+    const metaNode = addSynesthesiaText(frame.layer, meta, rowX + rowW - 14, midY, {
       size: 9,
       fill: active ? SYN_WHITE : SYN_DIM,
       fontFamily: SYN_DISPLAY_FONT,
@@ -1183,10 +1189,13 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         alpha,
       });
       const ink = active ? SYN_WHITE : SYN_MIST;
-      addSkinText(frame.layer, facts.length, factsLeft, midY, { ...factStyle(ink), maxWidth: ROW_LENGTH_W });
+      addSynesthesiaText(frame.layer, facts.length, factsLeft, midY, { ...factStyle(ink), maxWidth: ROW_LENGTH_W });
       factsLeft -= ROW_LENGTH_W + 12;
-      addSkinText(frame.layer, 'NOTES', factsLeft, midY, { ...factStyle(SYN_DIM), size: 7 });
-      addSkinText(frame.layer, facts.notes, factsLeft - 46, midY, { ...factStyle(ink), maxWidth: ROW_NOTES_W - 48 });
+      addSynesthesiaText(frame.layer, 'NOTES', factsLeft, midY, { ...factStyle(SYN_DIM), size: 7 });
+      addSynesthesiaText(frame.layer, facts.notes, factsLeft - 46, midY, {
+        ...factStyle(ink),
+        maxWidth: ROW_NOTES_W - 48,
+      });
       factsLeft -= ROW_NOTES_W + 8;
       // Gimmick tags glow as small outlined capsules in the accent light.
       for (let index = facts.tags.length - 1; index >= 0; index -= 1) {
@@ -1196,7 +1205,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         row
           .roundRect(factsLeft, midY - 6, chipW, 12, 6)
           .stroke({ color: active ? SYN_FLARE : accent, width: 1, alpha: 0.7 });
-        addSkinText(frame.layer, tag, factsLeft + chipW / 2, midY, {
+        addSynesthesiaText(frame.layer, tag, factsLeft + chipW / 2, midY, {
           size: 7,
           fill: active ? SYN_WHITE : SYN_MIST,
           fontFamily: SYN_DISPLAY_FONT,
@@ -1210,7 +1219,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       }
       factsLeft -= 6;
     }
-    const title = addSkinText(frame.layer, browseEntryTitle(entry), rowX + 34, midY, {
+    const title = addSynesthesiaText(frame.layer, browseEntryTitle(entry), rowX + 34, midY, {
       size: 11,
       weight: active ? '500' : '300',
       fill: SYN_WHITE,
@@ -1227,7 +1236,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const artist = chartEntry?.artist?.trim();
     const artistX = rowX + 34 + title.width + 10;
     if (artist && factsLeft - artistX >= 40) {
-      addSkinText(frame.layer, artist, artistX, midY, {
+      addSynesthesiaText(frame.layer, artist, artistX, midY, {
         size: 9,
         weight: '300',
         fill: active ? SYN_MIST : SYN_DIM,

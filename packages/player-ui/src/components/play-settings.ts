@@ -64,9 +64,14 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
           [
             'Lowest shift gauge',
             o.gaugeAutoShift === 'BEST_CLEAR' || o.gaugeAutoShift === 'SELECT_TO_UNDER'
-              ? o.bottomShiftableGauge === 'GROOVE'
-                ? 'NORMAL'
-                : o.bottomShiftableGauge
+              ? r.rulesetLabel === 'lr2'
+                ? // LR2 has no ASSIST EASY: its lowest shift gauge is EASY.
+                  o.bottomShiftableGauge === 'ASSIST-EASY'
+                  ? 'EASY'
+                  : o.bottomShiftableGauge
+                : o.bottomShiftableGauge === 'GROOVE'
+                  ? 'NORMAL'
+                  : o.bottomShiftableGauge
               : '—',
           ],
           ['Gauge 1P / 2P', `${o.gauge1P} / ${o.gauge2P}`],

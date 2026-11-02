@@ -53,7 +53,7 @@ export const en = {
   },
   dialogs: {
     signInTitle: 'Sign in',
-    signInLead: 'Use the passkey of your Leaderboard account.',
+    signInLead: 'Sign in with a passkey, Google, or Discord.',
     signInWithPasskey: 'Sign in with a passkey',
     or: 'or',
     orWithPasskey: 'or with a passkey',
@@ -67,10 +67,8 @@ export const en = {
     name: 'Display name',
     nameHint: 'Up to 32 characters, in any script. The rankings show it.',
     createPasskey: 'Create passkey',
-    inDevelopment: 'Coming soon',
     signInWith: (provider: string) => `Sign in with ${provider}`,
     signUpWith: (provider: string) => `Sign up with ${provider}`,
-    providerTitle: (action: string) => `${action} is coming soon`,
   },
   footer: {
     label: 'About the Leaderboard',
@@ -80,7 +78,7 @@ export const en = {
     apiTitle: 'Opens in a new tab',
     github: 'GitHub',
     githubTitle: 'Opens GitHub',
-    beta: 'Beta — rankings may be reset while scoring rules settle.',
+    beta: 'Rankings may be reset while scoring rules settle.',
     copyright: '© 2026 nulltask · MIT License',
   },
   help: {
@@ -212,6 +210,8 @@ export const en = {
         'A stage was played at another tempo, which is practice. The run is kept, but out of the course rankings, the personal bests and every list.',
       unreleased:
         'The course is not released (a made or a random course). The run is kept, but out of the course rankings, the personal bests and every list.',
+      assist:
+        'A stage was played with an assist option, and neither LR2 nor beatoraja saves an assisted course. The run is kept, but out of the course rankings, the personal bests and every list.',
     },
     notPublicTitle: 'This run is not public',
     visibility: 'Visibility',
@@ -390,6 +390,8 @@ export const en = {
         'It was played at another tempo, which is practice. It is kept, but out of the rankings, the personal bests and every list.',
       'course-stage':
         'It is a course stage, which ranks with its course. It is kept, but out of the rankings, the personal bests and every list.',
+      'no-save':
+        'It used an option whose original game saves no data from the play (such as BATTLE under That-Which-Must-Not-Be-Named rules, or PRACTICE). It is kept, but out of the rankings, the personal bests and every list.',
     },
     visibility: 'Visibility',
     visibilityShownLead:
@@ -429,7 +431,8 @@ export const en = {
   },
   lampMeanings: {
     1: 'Did not clear.',
-    2: 'Cleared on the ASSIST EASY gauge.',
+    2: 'Cleared with an ASSIST option (beatoraja) or on the ASSISTED EASY gauge (That-Which-Must-Not-Be-Named), or before #603 on the ASSIST EASY gauge.',
+    10: 'Cleared on the ASSIST EASY gauge, or with a LIGHT ASSIST option (beatoraja).',
     3: 'Cleared on the EASY gauge.',
     4: 'Cleared on the normal gauge (GROOVE / NORMAL).',
     5: 'Cleared on the HARD gauge.',

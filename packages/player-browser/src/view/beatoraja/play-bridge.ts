@@ -49,6 +49,7 @@ import {
   beatorajaWallClockOf,
   createBeatorajaJudgeStateGraph,
   resolveBeatorajaConstantOps,
+  resolveBeatorajaJudgeDisplayOps,
   resolveBeatorajaCoverOps,
   resolveBeatorajaFrameTimers,
   resolveBeatorajaSeekTimers,
@@ -79,10 +80,11 @@ import {
   type BeatorajaScoreInput,
   type BeatorajaTimerChanges,
 } from '@be-music/skin-beatoraja/scene';
-import type { ChartPlayVariant } from '@be-music/chart-model';
+import { CHART_PLAYFIELD_IDENTITY, type ChartPlayfieldVisual, type ChartPlayVariant } from '@be-music/chart-model';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/display';
 import { resolveSideKeySlot } from '@be-music/player-engine/lanes';
 import {
+  applyChartLaneCovers,
   recentJudgeTimings,
   type CourseView,
   type JudgmentTiming,
@@ -162,6 +164,8 @@ export interface BeatorajaPlayBridgeFrame {
   readonly judgeTimingMs?: number;
   /** The player's Visual CONSTANT setting, which lights `OPTION_CONSTANT` (400) even where a course stops it drawing. */
   readonly visualConstant?: boolean;
+  /** The play's automatic judge timing mode: LR2's SILENT (`'LR2-SILENT'`) hides the skin's judgment display. */
+  readonly judgeTimingAutoAdjust?: string;
   readonly exiting?: boolean;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
   /** The host's clock, in ms, for the frame rate; the play clock without it. */
@@ -176,6 +180,11 @@ export interface BeatorajaPlayBridgeFrame {
    * started; absent before. The timing visualizer's bands show the key lanes' ones.
    */
   readonly judgeWindows?: BeMusicJudgeWindows;
+  /**
+   * The chart-authored playfield options in force (#931, `resolveChartPlayfieldVisual`): HIDJUDGE hides the judgment
+   * display, DARK2 the bombs, and M-SUDDEN / LINEMOVE change the cover the skin draws.
+   */
+  readonly chartPlayfield?: ChartPlayfieldVisual;
 }
 
 /** A judge plate's latest judgment and FAST / SLOW ops, which the next judgment on the plate replaces. */
@@ -296,6 +305,8 @@ export class BeatorajaPlayBridge {
   private pending: PendingLaneEnd[] = [];
   /** The covers of the last frame, to tell when the player moved one. */
   private lastCovers: readonly LaneCoverState[] | undefined;
+  /** The chart-authored playfield options of the frame being applied (#931). */
+  private chartPlayfield: ChartPlayfieldVisual = CHART_PLAYFIELD_IDENTITY;
   /** When the player last moved a cover (play clock): `LANECOVER1_CHANGING` stays lit for a moment after. */
   private coverLastChangedAtMs: number | undefined;
   /** Offsets the host set by id (sliders); a live offset the play sets wins over them. */
@@ -423,6 +434,7 @@ export class BeatorajaPlayBridge {
       }
     }
     this.startScene(sceneStartAt);
+    this.chartPlayfield = frame.chartPlayfield ?? CHART_PLAYFIELD_IDENTITY;
     this.endDueLanes(frame.nowMs);
     if (frame.engine !== undefined) this.applyEngine(frame.engine, frame.hostNowMs ?? frame.nowMs);
     for (const event of frame.events) this.handle(event);
@@ -433,8 +445,15 @@ export class BeatorajaPlayBridge {
     this.applyAnimationTimers(frame);
     this.applyState(frame.state);
     this.play.judgeTimingMs = frame.judgeTimingMs ?? 0;
+    // A replay ghost paced as the target: numbers 121-123.
+    const targetEXScore = frame.scoreTargets?.targetEXScore;
+    if (targetEXScore !== undefined && targetEXScore > 0) this.play.targetEXScore = targetEXScore;
+    else delete this.play.targetEXScore;
     this.activeOps.delete(BEATORAJA_OP.CONSTANT);
     for (const op of resolveBeatorajaConstantOps(frame.visualConstant)) this.activeOps.add(op);
+    this.activeOps.delete(BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN);
+    for (const op of resolveBeatorajaJudgeDisplayOps(frame.judgeTimingAutoAdjust, this.chartPlayfield.hideJudge))
+      this.activeOps.add(op);
     this.judgeWindows = frame.judgeWindows;
     return this.renderContextAt(frame.nowMs);
   }
@@ -682,7 +701,9 @@ export class BeatorajaPlayBridge {
     const covers = state.view.covers;
     if (this.lastCovers !== undefined && covers !== this.lastCovers) this.coverLastChangedAtMs = this.nowMs;
     this.lastCovers = covers;
-    play.cover = covers.find((cover) => cover.side === '1P') ?? covers[0] ?? NO_COVER;
+    // A chart's M-SUDDEN and LINEMOVE change the cover the skin draws, not the player's (which "changing" follows).
+    const drawnCovers = applyChartLaneCovers(covers, this.chartPlayfield);
+    play.cover = drawnCovers.find((cover) => cover.side === '1P') ?? drawnCovers[0] ?? NO_COVER;
   }
 
   private placementOf(channel: string): BeatorajaLanePlacement {
@@ -755,7 +776,9 @@ export class BeatorajaPlayBridge {
       combo,
       ...(event.deltaMs !== undefined ? { deltaMs: event.deltaMs } : {}),
     };
-    const effect = resolveBeatorajaJudgeEffect(judge, placement, this.engine?.summary.total ?? 0);
+    const effect = resolveBeatorajaJudgeEffect(judge, placement, this.engine?.summary.total ?? 0, {
+      bombs: !this.chartPlayfield.hideBombs,
+    });
     const plate = placement?.plate ?? 1;
     const plateOps = this.plates[plate];
     if (plateOps.lastJudgeOp !== undefined && plateOps.lastJudgeOp !== effect.judgeOp) {

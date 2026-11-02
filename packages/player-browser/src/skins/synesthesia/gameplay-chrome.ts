@@ -8,6 +8,7 @@ import {
   drawGauges,
   drawSecondPlayerFigures,
 } from './player-hud.ts';
+import { cabinetWellBottom, drawSynesthesiaCabinet } from './cabinet.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
 import { ChargeCloud } from './charge-cloud.ts';
 import { KICK_REST, stepKick, type KickState } from './kick.ts';
@@ -325,8 +326,9 @@ export function renderSynesthesiaChrome({
   panels.blendMode = 'normal';
   // Landscape: the well runs from the stage's top to just under the judgement line. Portrait: from the top of the lanes
   // down to the stage's bottom — the band under the line is where the thumbs rest.
+  const cabinet = !portrait && layout.mode === 'standard';
   const wellTop = portrait ? layout.playfield.top - 2 : 0;
-  const wellBottom = portrait ? layout.stage.height : PLAYFIELD_FRAME_BOTTOM;
+  const wellBottom = portrait ? layout.stage.height : cabinet ? cabinetWellBottom(layout) : PLAYFIELD_FRAME_BOTTOM;
   drawPlayfieldWell(panels, playfieldLeft, playfieldRight, wellTop, wellBottom, runtime.progressRatio, accent);
   // The monitor shrinks to fit beside a double-play field; only a page-wide keyboard field leaves no room for it.
   if (BGA.w > 0) {
@@ -340,6 +342,8 @@ export function renderSynesthesiaChrome({
   if (portrait) {
     drawPortraitHUD(panels, layer, runtime, layout, accent, layerPool);
     drawPortraitHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
+  } else if (cabinet) {
+    drawSynesthesiaCabinet({ graphics: panels, layer, pool: layerPool, accent, pulse }, runtime, layout);
   } else {
     drawGauges(panels, layer, runtime, accent, layerPool);
     drawChartPlate(panels, layer, runtime, accent, layerPool);
@@ -827,9 +831,9 @@ function drawBGAFrame(
     clip: { x: BGA.x, y: BGA.y, w: BGA.w, h: BGA.h - 22 },
   });
   state.lastSeconds = seconds;
-  if (at.visible) {
-    // Lock-on reticle tracking it.
-    const lock = scale * 0.55 + 5 * pulse;
+  // Lock-on reticle tracking it, while it stays inside the monitor.
+  const lock = scale * 0.55 + 5 * pulse;
+  if (at.visible && insideBGA(at.x - lock, at.y - lock) && insideBGA(at.x + lock, at.y + lock)) {
     drawReticle(light, at.x - lock, at.y - lock, lock * 2, lock * 2, SYN_FLARE, 0.5, { arm: 8, cross: true });
   }
   // A dark slip under the label, so the monitor's floor horizon never runs through the type.

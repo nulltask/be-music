@@ -34,8 +34,8 @@ import type {
 export interface BeatorajaSkinOptionsGUIOptions {
   /**
    * Parent element the panel attaches to. The pane is positioned `absolute` inside this element at
-   * `bottom: 0; left: 50% (translateX -50%);` — the host typically passes the player's `.shell` so
-   * the panel sits over the canvas (and not, say, over the page header).
+   * `bottom: 0; left: 50% (translateX -50%);` — the host passes the play surface (`#main`) so
+   * the panel sits over the canvas, inside fullscreen, and not over the page header.
    */
   container: HTMLElement;
 }

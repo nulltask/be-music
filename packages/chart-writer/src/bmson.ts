@@ -33,12 +33,13 @@ import { areBmsonChartsEquivalent } from './equivalence.ts';
 import { convertBmsBGAToBmson, type ChartExportDiagnosticHandler } from './bga-export.ts';
 import type { BmsonStringifyOptions } from './options.ts';
 import { intrinsicWAVGains } from './wav-gain.ts';
+import { DEFAULT_BMSON_RESOLUTION, resolveExactBmsonResolution } from './bmson-output-resolution.ts';
 
 export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions = {}): string {
   if (intrinsicWAVGains(json).length)
     throw new RangeError('Intrinsic WAV gain cannot be represented by bmson; export Be-Music JSON.');
   const resolution = resolveBmsonResolutionForOutput(json, options);
-  const sourceResolution = resolveBmsonResolutionForOutput(json, {});
+  const sourceResolution = resolveBmsonSourceResolution(json);
   const indent = options.indent ?? 2;
   const skipValidation = options.skipPreservationValidation === true;
   const preservedDocument =
@@ -426,17 +427,26 @@ function mapBmsonSoundChannelForOutput(channel: BmsonSoundChannelEntry): {
   };
 }
 
+/**
+ * The output pulses per beat: the caller's `resolution`, else a bmson source's own, else for a BMS chart the least
+ * multiple of 240 that keeps every position exact (`resolveExactBmsonResolution`).
+ */
 function resolveBmsonResolutionForOutput(json: BeMusicJSON, options: BmsonStringifyOptions): number {
   if (typeof options.resolution === 'number' && Number.isFinite(options.resolution) && options.resolution >= 1) {
     return Math.floor(options.resolution);
   }
+  if (hasBmsonSourceResolution(json) || json.sourceFormat === 'bmson') return resolveBmsonSourceResolution(json);
+  return resolveExactBmsonResolution(json);
+}
 
+function hasBmsonSourceResolution(json: BeMusicJSON): boolean {
   const irResolution = json.bmson.info.resolution;
-  if (typeof irResolution === 'number' && Number.isFinite(irResolution) && irResolution >= 1) {
-    return Math.floor(irResolution);
-  }
+  return typeof irResolution === 'number' && Number.isFinite(irResolution) && irResolution >= 1;
+}
 
-  return 240;
+/** The pulses per beat native bmson data in the IR is written at: its `info.resolution`, 240 when absent. */
+function resolveBmsonSourceResolution(json: BeMusicJSON): number {
+  return hasBmsonSourceResolution(json) ? Math.floor(json.bmson.info.resolution as number) : DEFAULT_BMSON_RESOLUTION;
 }
 
 function resolveBmsonVersionForOutput(json: BeMusicJSON): string {
@@ -597,7 +607,7 @@ function createBmsonBGAForOutput(
       name: entry.name,
     });
   }
-  const scale = resolution / resolveBmsonResolutionForOutput(json, {});
+  const scale = resolution / resolveBmsonSourceResolution(json);
   const events = normalizeBmsonBGAEventEntries(json.bmson.bga.events ?? [], scale);
   const layerEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.layerEvents ?? [], scale);
   const poorEvents = normalizeBmsonBGAEventEntries(json.bmson.bga.poorEvents ?? [], scale);
@@ -659,7 +669,7 @@ function resolveBmsonLinesForOutput(json: BeMusicJSON, resolution: number): numb
   if (json.bmson.barlinesSuppressed === true) return [];
   if (json.preservation.bmson.lines.length > 0) {
     return normalizeBmsonLines(
-      rescaleBmsonLines(json.preservation.bmson.lines, resolveBmsonResolutionForOutput(json, {}), resolution),
+      rescaleBmsonLines(json.preservation.bmson.lines, resolveBmsonSourceResolution(json), resolution),
     );
   }
   return createDefaultBmsonLines(json, resolution);
