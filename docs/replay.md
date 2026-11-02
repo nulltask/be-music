@@ -427,8 +427,9 @@ flowchart TD
 
 - **not-simulated**, with a reason (`findReplayNotSimulatedReason`): `gauge` when the bare gauge is not one the target
   defines (`P-ATTACK` under beatoraja, `EX-HARD` or `ASSIST-EASY` under LR2, `DEATH` under ???? outside a course); it is
-  never mapped to a lookalike. `custom-judge` and `gauge-auto-shift` when the replay used CUSTOM JUDGE or gauge
-  auto-shift, whose reading outside beatoraja is not defined yet. The played ruleset always simulates its own gauge.
+  never mapped to a lookalike. `custom-judge` when the replay used CUSTOM JUDGE, which stays beatoraja's. Gauge
+  auto-shift is no reason: it is carried, along the target's own gauge ladder ([Play options](./play-options.md#gauge-auto-shift)).
+  The played ruleset always simulates its own gauge.
 - **truncated**: the play ended where its survival gauge emptied (`play.endOnFailure`), and the target's gauge would have
   survived that point. The run is judged only up to it (`stoppedAtUs`, where the played ruleset's gauge emptied): no input
   is synthesized and no later note is missed. A course is truncated the same way when its played run stopped at a failed
