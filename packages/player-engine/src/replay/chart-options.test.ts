@@ -20,13 +20,35 @@ test('version 2 programs keep HIDDEN, CHANGE-HS and CRAZY fields and cut stages 
   expect(parsed).toEqual(raw);
   expect(shiftChartOptionProgram(parsed, { windowStartUs: 0, offsetUs: 0 }).version).toBe(2);
 });
+test('version 3 programs keep M-SUDDEN and the skin-level CRAZY fields', () => {
+  const raw = {
+    version: 3,
+    initial: {
+      hidden: 'M-SUDDEN',
+      crazyWave: '3DWAVE2',
+      crazyColor: 'STAR',
+      crazySpin: 'SPIN',
+      crazyClone: 'S-CLONE',
+      crazyLine: 'LINEMOVE',
+      crazyJudge: 'HIDJUDGE',
+      crazyDark: 'DARK2',
+      crazyReverse: 'REVERSE',
+    },
+    cues: [{ timeUs: 4, state: {} }],
+  };
+  expect(parseChartOptionProgram(raw)).toEqual(raw);
+  expect(shiftChartOptionProgram(parseChartOptionProgram(raw), { windowStartUs: 0, offsetUs: 0 }).version).toBe(3);
+});
 test.each([
   { ...program(), unknown: 1 },
   { ...program(), cues: [{ timeUs: 1, state: {}, unknown: 1 }] },
-  { ...program(), version: 3 },
+  { ...program(), version: 4 },
   // A version-1 recording cannot carry a family implemented in version 2.
   { ...program(), initial: { hidden: 'STEALTH' } },
   { ...program(), version: 2, initial: { hidden: 'M-SUDDEN' } },
+  { ...program(), version: 2, initial: { crazyWave: 'YWAVE' } },
+  { ...program(), version: 2, initial: { crazySpin: 'SPIN' } },
+  { ...program(), version: 3, initial: { crazyDark: 'DARK3' } },
   { ...program(), version: 2, initial: { changeHS: 'accel' } },
   { ...program(), version: 2, initial: { crazySize: 1 } },
   { ...program(), initial: { unknown: 1 } },

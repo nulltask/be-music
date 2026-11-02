@@ -47,7 +47,7 @@ test('authored display changes reach engine frames exactly and preserve judging,
   expect(checkReplayEligibility(result.replay!)).toEqual(checkReplayEligibility(baseline.replay!));
   const saved = parseReplay(serializeReplay(result.replay!));
   expect(saved.chart.chartOptions).toEqual({
-    version: 2,
+    version: 3,
     initial: { hiSpeed: 0.77 },
     cues: [
       { timeUs: 2000000, state: { hiSpeed: 100 } },

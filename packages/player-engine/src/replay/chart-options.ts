@@ -1,7 +1,7 @@
 import {
   CHART_JUDGE_MODIFIERS,
   CHART_RANDOM_OPTIONS,
-  CHART_VISUAL_OPTION_FIELDS,
+  chartVisualOptionFieldsOf,
   isChartVisualOptionValue,
   resolveChartOptionsAt,
 } from '@be-music/chart-model';
@@ -15,17 +15,19 @@ import { expectRecord, ReplayParseError } from './parse.ts';
 
 /**
  * Parse only supported effective profile fields, independently of current source-command compilation. Version 1 holds
- * HI-SPEED only; version 2 adds the HIDDEN, CHANGE-HS and CRAZY size / wave fields. A version-1 recording that carries a
- * version-2 field is rejected, so an old replay can never activate a family implemented after it.
+ * HI-SPEED only; version 2 adds the HIDDEN, CHANGE-HS and CRAZY size / X-wave fields; version 3 adds M-SUDDEN, the
+ * Y / XY / 3D waves and the other visual CRAZY fields. A recording that carries a field or value of a later version
+ * than its own is rejected, so an old replay can never activate a family implemented after it.
  */
 export function parseChartOptionProgram(raw: unknown): ChartOptionProgram {
   const program = expectRecord(raw, 'chart.chartOptions');
   if (Object.keys(program).some((key) => !['version', 'initial', 'cues'].includes(key)))
     throw new ReplayParseError('chart.chartOptions: unknown program field');
-  if (program.version !== 1 && program.version !== 2)
-    throw new ReplayParseError('chart.chartOptions.version: expected 1 or 2');
+  if (program.version !== 1 && program.version !== 2 && program.version !== 3)
+    throw new ReplayParseError('chart.chartOptions.version: expected 1, 2 or 3');
   const version = program.version;
-  const fields: readonly string[] = version === 1 ? ['hiSpeed'] : ['hiSpeed', ...CHART_VISUAL_OPTION_FIELDS];
+  const visualFields = chartVisualOptionFieldsOf(version);
+  const fields: readonly string[] = ['hiSpeed', ...visualFields];
   const state = (rawState: unknown): ChartOptionState => {
     const value = expectRecord(rawState, 'chart.chartOptions state');
     if (Object.keys(value).some((key) => !fields.includes(key)))
@@ -41,10 +43,10 @@ export function parseChartOptionProgram(raw: unknown): ChartOptionProgram {
         throw new ReplayParseError('chart.chartOptions.hiSpeed: expected 0.25..100');
       parsed.hiSpeed = value.hiSpeed;
     }
-    for (const field of CHART_VISUAL_OPTION_FIELDS) {
+    for (const field of visualFields) {
       const fieldValue = value[field];
       if (fieldValue === undefined) continue;
-      if (!isChartVisualOptionValue(field, fieldValue))
+      if (version === 1 || !isChartVisualOptionValue(field, fieldValue, version))
         throw new ReplayParseError(`chart.chartOptions.${field}: unknown value`);
       (parsed as Record<string, unknown>)[field] = fieldValue;
     }
