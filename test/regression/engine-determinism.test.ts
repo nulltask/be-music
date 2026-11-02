@@ -63,7 +63,7 @@ describe('engine replay determinism', async () => {
         const { replay } = await replayEngine(json, { randomDraws, inputs: [], speed: DETERMINISM_SPEED });
         const pinnedPlay = expected.variants[variant.id]!.play;
 
-        for (const [scenario, inputs] of Object.entries(buildScenarios(replay.chart.notes))) {
+        for (const [scenario, inputs] of Object.entries(buildScenarios(replay.chart))) {
           const replays = await replayEngineRulesets(json, { randomDraws, inputs, speed: DETERMINISM_SPEED });
           for (const { ruleset, replay } of replays) {
             const where = `${variant.id} / ${scenario} / ${ruleset}`;

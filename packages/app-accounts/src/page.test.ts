@@ -102,10 +102,10 @@ describe('Accounts page', () => {
 
 test('explains a failed provider link without echoing the query', () => {
   expect(accountNotice(null)).toBe('');
-  expect(accountNotice('account_already_linked_to_different_user')).toContain('another be-music account');
+  expect(accountNotice('account_already_linked_to_different_user')).toContain('another Be-Music account');
   expect(accountNotice('<script>')).toBe('Could not link that account.');
   expect(accountNotice('access_denied', 'ja')).toBe('連携を取り消しました。');
-  expect(accountNotice('account_already_linked_to_different_user', 'ja')).toContain('別の be-music アカウント');
+  expect(accountNotice('account_already_linked_to_different_user', 'ja')).toContain('別の Be-Music アカウント');
 });
 
 test('renders the sign-in page in Japanese when the locale is ja', () => {

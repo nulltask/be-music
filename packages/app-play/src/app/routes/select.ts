@@ -63,7 +63,7 @@ export interface SelectRouteDeps {
     BeatorajaThemeService,
     'loadBeatorajaSelectKit' | 'beatorajaSelectKit' | 'beatorajaKitCaches' | 'applyBeatorajaSelectSkinConfig'
   >;
-  /** The be-music skin the built-in family draws with. */
+  /** The Be-Music Skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'builtInKit'>;
   /** The play options in force: every select screen starts from them, and its own edits go back to them. */
   readonly playOptions: Pick<PlayOptionsService, 'current' | 'update'>;
@@ -181,7 +181,7 @@ export class SelectRoute {
     // Family dispatch. The Debug Menu's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default). The
     // beatoraja family draws the theme's select entry when the library has charts (an empty library shows the built-in
     // screen's drop hint); the LR2 family draws the loaded LR2 select skin when it has a bar list; otherwise the built-in
-    // family draws the be-music skin.
+    // family draws the Be-Music Skin.
     const activeFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'select');
     const beatorajaKit =
       activeFamily === 'beatoraja' && this.library.collection.charts.length > 0
@@ -245,6 +245,8 @@ export class SelectRoute {
           if (kit.family !== 'beatoraja') this.replaySlotsPanel.showSelect(entry);
           // "Ghost status" says whether a play of the bar would show the picked ghost.
           const chart = entry?.kind === 'chart' ? entry : undefined;
+          // The PRACTICE range picker draws the chart under the cursor.
+          this.debugMenu.setPracticeChart(chart?.chart);
           const playFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'gameplay', chart?.chart);
           const target = chart !== undefined ? this.replaySlots.targetOf(chart) : undefined;
           // No bar, or a folder: nothing to say.

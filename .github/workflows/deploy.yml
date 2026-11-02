@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     environment: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
     env:
-      # An API token for the be-music account that can edit Workers, their custom domains and D1.
+      # An API token for the Be-Music account that can edit Workers, their custom domains and D1.
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: <CLOUDFLARE_ACCOUNT_ID>
       # `deploy` scripts for production, `deploy:preview` for the preview. Test for the preview: `''` is falsy, so

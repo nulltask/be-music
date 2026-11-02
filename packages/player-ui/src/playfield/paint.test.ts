@@ -25,6 +25,10 @@ function recorder(): BeMusicPlayfieldPaintContext & { calls: string[] } {
     fillText: (text: string, x: number, y: number) => calls.push(`fillText ${text} ${x},${y} ${String(ctx.fillStyle)}`),
     measureText: (text: string) => ({ width: text === '1' ? 4 : 10 }) as TextMetrics,
     beginPath: () => calls.push('beginPath'),
+    moveTo: (x: number, y: number) => calls.push(`moveTo ${x},${y}`),
+    lineTo: (x: number, y: number) => calls.push(`lineTo ${x},${y}`),
+    closePath: () => calls.push('closePath'),
+    fill: () => calls.push(`fill ${String(ctx.fillStyle)} ${ctx.globalAlpha}`),
     arc: (x: number, y: number, r: number) => calls.push(`arc ${x},${y},${r} ${ctx.globalAlpha}`),
     rect: (x: number, y: number, w: number, h: number) => calls.push(`rect ${x},${y},${w},${h}`),
     stroke: () => calls.push('stroke'),
@@ -165,6 +169,65 @@ describe('playfield painters', () => {
       'fillRect 32,76,16,2 #10151f 0.25',
     ]);
     expect(ctx.globalAlpha).toBe(1);
+  });
+
+  it('tells the long-note kinds apart by shape: an HCN zigzag and a BSS chevron', () => {
+    const paint = (longNote: Parameters<typeof paintNotes>[1]['longNotes'][number]): string[] => {
+      const ctx = recorder();
+      paintNotes(ctx, { measureLines: [], notes: [], mines: [], longNotes: [longNote], nowMs: 0 });
+      return ctx.calls;
+    };
+    const base = { kind: 'scratch' as const, x: 0, w: 40, top: 20, bottom: 100 };
+    const cn = paint({ ...base, mode: 'cn' });
+    const hcn = paint({ ...base, mode: 'hcn' });
+    const bss = paint({ ...base, mode: 'cn', backSpinScratch: true });
+    // CN: body, centre line, head and tail caps only.
+    expect(cn).toHaveLength(4);
+    // HCN: its centre line zigzags instead of running straight, with no rungs across the body.
+    expect(cn.some((call) => call.startsWith('fillRect 19,14,2,80 '))).toBe(true);
+    expect(hcn.some((call) => call.startsWith('fillRect 19,'))).toBe(false);
+    expect(hcn).toContain('stroke');
+    expect(hcn.filter((call) => call.startsWith('lineTo')).length).toBeGreaterThan(5);
+    expect(hcn.some((call) => call.startsWith('fillRect 2,'))).toBe(false);
+    // BSS: a filled chevron polygon after the caps.
+    expect(bss.slice(0, 4)).toEqual(cn);
+    expect(bss.slice(4)).toEqual(expect.arrayContaining(['beginPath', 'closePath', 'fill #ffffff 1']));
+    expect(bss.filter((call) => call.startsWith('lineTo'))).toHaveLength(5);
+  });
+
+  it('shows how a hell charge note stands by colour, glow and zigzag motion together', () => {
+    const paint = (state: 'pending' | 'held' | 'draining' | 'done', nowMs = 0): string[] => {
+      const ctx = recorder();
+      paintNotes(ctx, {
+        measureLines: [],
+        notes: [],
+        mines: [],
+        longNotes: [{ kind: 'white', x: 0, w: 40, top: 20, bottom: 100, mode: 'hcn', state }],
+        nowMs,
+      });
+      return ctx.calls;
+    };
+    const zigzag = (calls: string[]): string[] => calls.filter((call) => call.startsWith('lineTo'));
+    const halo = (calls: string[]): string[] => calls.filter((call) => call.startsWith('fillRect -3,'));
+    // Before it is reached: the HELL colour, a low steady glow and a still zigzag (swinging 6 px about x = 20, a corner
+    // every 14 px from the tail at 14).
+    const standby = paint('pending');
+    expect(standby.some((call) => call.startsWith('fillRect 0,14,40,80 #a65cff 0.29'))).toBe(true);
+    expect(zigzag(standby)).toContain('lineTo 26,28');
+    expect(zigzag(paint('pending', 100))).toEqual(zigzag(standby));
+    // Held: an orange glow, brighter than on standby, and the zigzag flowing down into the line (50 ms at 60 px/s is
+    // 3 px: the corner at 14 moves down to 17).
+    const held = paint('held');
+    expect(held.some((call) => call.includes('#ff9a1f'))).toBe(true);
+    expect(Number(halo(held)[0]!.split(' ').at(-1))).toBeGreaterThan(Number(halo(standby)[0]!.split(' ').at(-1)));
+    expect(zigzag(paint('held', 50))).toContain('lineTo 14,17');
+    // Let go: a dim red, dimmer than on standby, with the zigzag flowing back up the lane (the corner at 28 up to 25).
+    const draining = paint('draining');
+    expect(draining.some((call) => call.includes('#ff2e3e'))).toBe(true);
+    expect(Number(halo(draining)[0]!.split(' ').at(-1))).toBeLessThan(Number(halo(standby)[0]!.split(' ').at(-1)));
+    expect(zigzag(paint('draining', 50))).toContain('lineTo 26,25');
+    // Over: the glow is gone.
+    expect(halo(paint('done'))).toEqual([]);
   });
 
   it('lights a pressed lane with its beam and marks a held long note', () => {

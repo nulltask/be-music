@@ -6,8 +6,8 @@
 
 ## 1. サービス
 
-be-music は、サービスごとに 1 つの Worker に分け、それぞれ専用のサブドメインに置きます。どのサービスも、同じ
-be-music のアカウントでログインします。
+Be-Music は、サービスごとに 1 つの Worker に分け、それぞれ専用のサブドメインに置きます。どのサービスも、同じ
+Be-Music のアカウントでログインします。
 
 | サービス    | 本番のホスト               | 役割                                                                                                                 |
 | ----------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -158,7 +158,7 @@ Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切�
   `pnpm --filter @be-music/app-accounts run secrets:preview` と `secrets:production` で値を表示せずに設定します。
 - D1 のデータベース ID、Worker の名前、Service Binding の接続先は、ソースではなくデプロイの設定から読みます。
 - 外部サービス（BMS Search など）への問い合わせは、オフにできます。
-- 寄付、寄付サイト、be-music という名前とロゴは公式のインスタンスのものです。プレイヤーからのそれらへのリンクは設定で
+- 寄付、寄付サイト、Be-Music という名前とロゴは公式のインスタンスのものです。プレイヤーからのそれらへのリンクは設定で
   変えられます。
 
 実装済みの追加設定は、`SESSION_SECRET`（アプリ・環境ごとに異なる 32 文字以上の秘密値）、`API_AUDIENCE`（API リソースの完全な URI）、`OIDC_CLIENTS`（Accounts が持つクライアント ID とオリジンの JSON 対応表）です。`AUTH_ISSUER` はオリジンだけでなく `/api/auth` を含む完全な issuer を指定します。クライアントは公開 PKCE 方式なのでシークレットは不要です。
@@ -174,8 +174,8 @@ Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切�
 | Donate      | `donate` / `donate-preview`。OIDC ログインと公開の収支データ                           |
 
 モノレポの Worker は `cloudflare.config.ts` から `cf` でデプロイします。Donate は非公開のコンテンツリポジトリで Wrangler を使います。`.github/workflows/deploy.yml` が `main` を本番に、
-`devel` をプレビューにデプロイします。どれも be-music の Cloudflare アカウントで動いていて、このアカウントの請求は
-be-music の分だけです。`workers.dev` のサブドメインは `be-music.workers.dev` です。
+`devel` をプレビューにデプロイします。どれも Be-Music の Cloudflare アカウントで動いていて、このアカウントの請求は
+Be-Music の分だけです。`workers.dev` のサブドメインは `be-music.workers.dev` です。
 
 ## データの管理先
 

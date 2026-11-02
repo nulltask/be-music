@@ -1,5 +1,6 @@
 import { hasPressCandidate, type JudgeCoreEffect, type JudgeCoreInput, type JudgeCoreState } from './judge-core.ts';
 import { compareJudgeChannels } from './judge-core-score.ts';
+import { isReverseScratchSpin, type ScratchSpin } from './scratch-spin.ts';
 
 /** How long the press that hits a long note's head keeps its lane down with no further key event (a repeat delay). */
 export const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
@@ -29,8 +30,14 @@ export const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
  * Every step goes to the judge core in chart order, so it judges exactly what the replay records.
  */
 export interface KeyStateInference {
-  /** A press from the input, at chart second `nowSec` and judge millisecond `nowMs`. */
-  press(channels: ReadonlySet<string>, tokens: readonly string[], nowSec: number, nowMs: number): void;
+  /** A press from the input, at chart second `nowSec` and judge millisecond `nowMs`, spinning a scratch `spin`. */
+  press(
+    channels: ReadonlySet<string>,
+    tokens: readonly string[],
+    nowSec: number,
+    nowMs: number,
+    spin?: ScratchSpin,
+  ): void;
   /** Releases the keys whose grace lapsed before chart second `nowSec`; the judge advances to `nowSec` next. */
   releaseBefore(nowSec: number): void;
   /** An effect the judge core produced: a long-note head a press hit starts that lane's long-note key repeats. */
@@ -117,7 +124,7 @@ export function createKeyStateInference(
   const releaseLapsedBefore = (nowSec: number): void => releaseDue((hold) => hold.untilSec < nowSec);
 
   return {
-    press: (channels, tokens, pressSec, pressMs) => {
+    press: (channels, tokens, pressSec, pressMs, spin) => {
       const nowSec = Math.max(pressSec, releasedThroughSec);
       const nowMs = Math.max(pressMs, releasedThroughMs);
       releaseLapsedBefore(nowSec);
@@ -125,7 +132,13 @@ export function createKeyStateInference(
       for (const channel of channels) {
         const hold = holds.get(channel);
         const keyRepeat = isLongNoteKeyRepeat(channel, nowSec);
-        if (hold !== undefined && (state.activeLongNotes.has(channel) || keyRepeat)) {
+        const activeLongNote = state.activeLongNotes.get(channel);
+        if (activeLongNote?.backSpinScratch === true && isReverseScratchSpin(activeLongNote.headSpin, spin)) {
+          // The other scratch key spins a back-spin scratch back: a press of its own, not the held key repeating.
+          pressed.add(channel);
+          continue;
+        }
+        if (hold !== undefined && (activeLongNote !== undefined || keyRepeat)) {
           // The held key repeating: the lane stays down and the press judges nothing.
           for (const token of tokens) hold.tokens.add(token);
           extend(hold, nowSec, nowMs, LONG_NOTE_REPEAT_HOLD_GRACE_MS);
@@ -140,7 +153,7 @@ export function createKeyStateInference(
       if (pressed.size === 0) return;
       const heldBefore = new Set([...pressed].filter((channel) => state.activeLongNotes.has(channel)));
       step({ kind: 'hold', channels: pressed, inferred: true });
-      step({ kind: 'press', channels: pressed, tokens, nowSec, nowMs });
+      step({ kind: 'press', channels: pressed, tokens, nowSec, nowMs, ...(spin !== undefined ? { spin } : {}) });
       for (const channel of pressed) {
         // A press that hits a long note's head holds it through the terminal's repeat delay.
         const graceMs =

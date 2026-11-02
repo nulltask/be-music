@@ -257,7 +257,7 @@ const LR2_CONNECTION_ORDER = Object.keys(LR2_CONNECTION_LABELS) as NonstopConnec
 
 /**
  * LR2 text 183: the selected course's IR flag, `ON` or `OFF` as `optionstr.csv` row 24 (`#COURSE_IR,OFF,ON`) writes it
- * (OpenLR2 L8406). be-music's flag is the course's `release`. LR2 sets the text for every bar, so a bar that is not a
+ * (OpenLR2 L8406). Be-Music's flag is the course's `release`. LR2 sets the text for every bar, so a bar that is not a
  * course (`release` undefined) reads `OFF`. `undefined` for other text ids.
  */
 export function resolveLR2CourseIRText(st: number, release: boolean | undefined): string | undefined {

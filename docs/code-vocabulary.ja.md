@@ -70,7 +70,7 @@
 | 概念                                    | 現行のコード名                                          | 意味・区別                                                                               |
 | --------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | identity / 認証上の同一性               | `Identity.issuer`, `Identity.sub`, `userId`             | OIDC の issuer と subject の組と、サービス内の対応先ユーザー ID を区別する。             |
-| linked login account / 外部ログイン連携 | `account`, `accountId`, `providerId` in Accounts schema | プロバイダーとの対応。be-music の別ユーザーや Cloudflare アカウントとは別。              |
+| linked login account / 外部ログイン連携 | `account`, `accountId`, `providerId` in Accounts schema | プロバイダーとの対応。Be-Music の別ユーザーや Cloudflare アカウントとは別。              |
 | profile / プロフィール                  | `profile`, `handle`, `displayName`, `avatarKey`         | ユーザーの公開上の見せ方。変更しても同一性は変わらない。                                 |
 | authentication session / 認証セッション | `LoginSession`, Better Auth session                     | アプリ・Accounts の認証状態と、画面・音声のセッションを区別する。                        |
 | guest / ゲスト                          | `isAnonymous`, `Identity.anonymous`, `linkedGuests`     | 永続資格情報のないユーザーと、その引き継ぎ先との対応。ユーザーが存在しない意味ではない。 |

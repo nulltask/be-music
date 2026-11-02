@@ -20,6 +20,13 @@ export interface LaneBinding {
   inputTokens: string[];
   side: '1P' | '2P' | 'OTHER';
   isScratch: boolean;
+  /**
+   * A scratch lane's physical keys in order, each as the tokens it arrives as: the main key (Shift), then the second
+   * key (Ctrl, or Option / Alt on macOS terminals). Under the odd-even rule they spin the turntable in turn, so the
+   * second key reverses a back-spin scratch the first one started (`createScratchSpinByToken` in `scratch-spin.ts`).
+   * Absent on a lane with a single key.
+   */
+  inputKeys?: readonly (readonly string[])[];
 }
 
 export interface KeyboardCodeLike {
@@ -408,13 +415,15 @@ export function createLaneBindings(channels: string[], options: LaneModeOptions 
   const definedChannels = new Set(modeBindings.map((definition) => definition.channel));
 
   for (const definition of modeBindings) {
-    const inputTokens = [...definition.inputTokens, ...(scratchReverseTokensByChannel.get(definition.channel) ?? [])];
+    const reverseTokens = scratchReverseTokensByChannel.get(definition.channel);
+    const inputTokens = [...definition.inputTokens, ...(reverseTokens ?? [])];
     bindings.push({
       channel: definition.channel,
       keyLabel: definition.keyLabel,
       inputTokens,
       side: definition.side,
       isScratch: definition.isScratch ?? false,
+      ...(reverseTokens !== undefined ? { inputKeys: [definition.inputTokens, reverseTokens] } : {}),
     });
     inputTokens.forEach((token) => usedTokens.add(token));
   }
@@ -513,6 +522,11 @@ function resolveLaneLayout(existing: ReadonlySet<string>, options: LaneModeOptio
   return resolvePMS9KeyLayout(existing, options.chartExtension);
 }
 
+/**
+ * The second key of each scratch lane, as the tokens it arrives as: Left / Right Ctrl, or Option (Alt) on macOS
+ * terminals. It plays the lane like the Shift key does, and under the odd-even rule it is the reverse spin of a
+ * back-spin scratch (`LaneBinding.inputKeys`).
+ */
 function createScratchReverseTokensByChannel(
   bindings: readonly FixedLaneDefinition[],
   platform: NodeJS.Platform = resolveDefaultPlatform(),

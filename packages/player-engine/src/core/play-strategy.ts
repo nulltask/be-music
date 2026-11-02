@@ -61,6 +61,8 @@ export interface PlayJudgeSeek {
   judgments: PlayerUISeekJudgment[];
   /** The long notes held across the second sought: their lane, head beat, end beat and the mode they play in. */
   heldLongNotes: Array<{ channel: string; beat: number; endBeat: number | undefined; mode: PlayerUILongNoteMode }>;
+  /** The hell charge notes passing the judgement line at the second sought, and whether each gains or drains there. */
+  hellChargeNotes?: Array<{ channel: string; beat: number; state: 'gaining' | 'draining' }>;
 }
 
 /** How a play is judged: manual play from live input, a replay of a recorded input stream, or AUTO play. */

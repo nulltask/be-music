@@ -60,6 +60,8 @@ export function playViewEventFromMoment(event: PlayMoment): PlayViewEvent | unde
           return { kind: 'long-note-start', channel: command.channel, beat: command.beat, mode: command.mode };
         case 'long-note-end':
           return { kind: 'long-note-end', channel: command.channel, outcome: command.outcome };
+        case 'hell-charge':
+          return { kind: 'hell-charge', channel: command.channel, beat: command.beat, state: command.state };
         case 'trigger-poor-bga':
           return { kind: 'poor-bga', shown: true, seconds: command.seconds };
         case 'clear-poor-bga':

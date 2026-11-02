@@ -60,7 +60,7 @@
         {"seq":3,"timeUs":1560000,"action":"up","channels":["11"],"tokens":["z"]},
         {"seq":4,"timeUs":2000000,"action":"down","channels":["12"],"tokens":["s"]},
         {"seq":5,"timeUs":2060000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":6,"timeUs":2400000,"action":"down","channels":["16"],"tokens":["shift-left"]},
+        {"seq":6,"timeUs":2400000,"action":"down","channels":["16"],"tokens":["shift-left"],"spin":"cw"},
         {"seq":7,"timeUs":2600000,"action":"up","channels":["16"],"tokens":["shift-left"]}
       ],
       "play": {

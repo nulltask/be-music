@@ -88,7 +88,7 @@ function lnModeRows(t: Messages): Array<[Child, Child]> {
 
 const en: HelpContent = {
   title: 'Help',
-  description: 'What the figures and marks on the be-music Leaderboard mean.',
+  description: 'What the figures and marks on the Be-Music Leaderboard mean.',
   // One span: the header's line is a flex row, which would set the full stop apart from the link.
   lead: (
     <span>
@@ -237,7 +237,7 @@ const en: HelpContent = {
 
 const ja: HelpContent = {
   title: 'ヘルプ',
-  description: 'be-music Leaderboard の数字や記号の意味。',
+  description: 'Be-Music Leaderboard の数字や記号の意味。',
   lead: (
     <span>
       このサイトの数字や記号の意味です。プレイの採点方法は

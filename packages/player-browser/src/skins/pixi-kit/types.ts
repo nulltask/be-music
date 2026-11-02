@@ -7,6 +7,7 @@ import type {
   BeMusicGameplayRuntime,
   BeMusicLaneFrame,
   BeMusicLaneKind,
+  BeMusicLongNoteState,
   BeMusicResultFrame,
   BeMusicSelectFrame,
   BeMusicSelectLayout,
@@ -16,7 +17,7 @@ import type {
 import type { ChildPool } from './pools.ts';
 
 /**
- * A be-music skin written with PixiJS display objects. {@link definePixiSkin} runs it on its own Pixi renderer over the
+ * A Be-Music Skin written with PixiJS display objects. {@link definePixiSkin} runs it on its own Pixi renderer over the
  * canvas the player hands the skin, so the player never sees Pixi: the gameplay frame is replayed into the renderer
  * functions below (chrome, lanes, each note, hit effects), the select screen into a retained renderer, and the result
  * into a layer rebuilt every frame.
@@ -100,6 +101,10 @@ export interface PixiLongNoteContext {
    * `'hcn'` judge the release too. Lets a skin draw an LN's tail apart from a tail that is judged.
    */
   mode?: 'ln' | 'cn' | 'hcn';
+  /** A back-spin scratch, whose tail is judged on a reverse spin (`BeMusicLongNote.backSpinScratch`). */
+  backSpinScratch?: boolean;
+  /** Where the long note is in its life (`BeMusicLongNote.state`): a held hell charge note is charging. */
+  state?: BeMusicLongNoteState;
   /** Milliseconds since the player let go early and the note was judged dropped (`BeMusicLongNote.releasedElapsedMs`). */
   releasedElapsedMs?: number;
 }

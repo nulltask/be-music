@@ -22,7 +22,7 @@ export const SERVICE_FOOTER_NAV_CLASS = 'flex flex-wrap items-center gap-x-4 gap
 
 export const SERVICE_FOOTER_LINK_CLASS = 'underline underline-offset-4 hover:text-foreground';
 
-/** Holder and licence of the be-music repository (LICENSE), as on the Leaderboard. */
+/** Holder and licence of the Be-Music repository (LICENSE), as on the Leaderboard. */
 export const SERVICE_COPYRIGHT = '© 2026 nulltask · MIT License';
 
 const SERVICE_PREFIXES = ['accounts', 'play', 'leaderboard', 'donate'] as const;

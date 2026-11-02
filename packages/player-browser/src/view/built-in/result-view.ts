@@ -1,5 +1,5 @@
 /**
- * The built-in family's result screen: a be-music skin's `result` drawn on its stage, letterboxed into the window. It
+ * The built-in family's result screen: a Be-Music Skin's `result` drawn on its stage, letterboxed into the window. It
  * draws the result session's frames and turns a click into a `continue` intent (a press on, as Enter); the session
  * plays the jingle and steps the screen.
  */

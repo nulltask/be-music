@@ -2,7 +2,7 @@
 
 # Replay (play history) specification
 
-This document describes the be-music replay ("replay") — the play-history file recorded during gameplay — and
+This document describes the Be-Music replay ("replay") — the play-history file recorded during gameplay — and
 the tools that re-derive LR2 / beatoraja / That-Which-Must-Not-Be-Named results from it.
 
 ## Design principle: an input replay, not a result log
@@ -36,7 +36,11 @@ A replay is deliberately **not** a list of judgments. Its canonical payload is:
    `{ seq, timeUs, action: 'down' | 'up', channels }`, with the key `tokens` when the host named them and
    `inferred: true` on an `up` the engine inferred because the input reported no releases (a terminal without the
    kitty keyboard protocol): the instant it took the key as let go. `inferred` is diagnostic only; replays and
-   simulators read such an `up` like any other. Inputs are never converted into judgments, never assigned
+   simulators read such an `up` like any other. A scratch press carries `spin: 'cw' | 'ccw'`, the way it turned the
+   turntable (a controller's reported direction, or the keyboard's odd-even key): a back-spin scratch's tail is judged
+   on a press spinning the other way from the one that hit its head (a press without `spin`, such as a touch tap,
+   counts as one), so simulators read it (see
+   [`player-spec.md`](./player-spec.md#scratch-spin)). Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always
    `(timeUs, seq)` — `seq` disambiguates same-microsecond events.
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
@@ -253,7 +257,7 @@ flowchart LR
   opens against the best record as it was before the play (beatoraja's `ReplayAutoSaveConstraint`): never, a better (or
   equal) EX score, fewer (or as few) BP, a better (or equal) max combo, a better (or equal) clear lamp, any of these
   better, or always. A first play counts as an update of each kind, as beatoraja reads an empty score. beatoraja ships
-  every slot as never; be-music saves by default so every slot keeps something by itself: slot 1 on a better EX score,
+  every slot as never; Be-Music saves by default so every slot keeps something by itself: slot 1 on a better EX score,
   slot 2 on a better clear lamp, slot 3 on fewer BP and slot 4 always (the latest play). The "Auto-save play history"
   download is separate and unchanged.
 - **Size limit.** Every slot shares a budget of 500 MB of compressed replays. A save past it removes the replays with
@@ -522,7 +526,7 @@ flowchart TD
 - **The stages play in order**, each from its own replay with the state it carried in (`play.course.carryIn`), through the live course flow: the course's decide screen, then each stage's result, then the course result. LR2 skips a stage result only for AUTO (`Main.cpp` M1280-M1310, M1376-M1379), not for a replay, and beatoraja shows each stage's `MusicResult` (179-212) before its `CourseResult`. An AUTO-played stage's result is skipped as a live AUTO run skips it.
 - **The run stops where the recorded run stopped** (`planCourseReplayPlayback`): after the first stage given up (`play.aborted`, which goes straight on to the course result as the live run did) or failed (its recorded gauge, by `isCourseStageFailed`), else after the last stage played. The course result is the recorded one (`results.native`).
 - **A NONSTOP run plays as one chart**, as LR2 replays a NONSTOP course (`LR2f.cpp` L18116-L18117, `Main.cpp` M806): the course is stitched again as recorded (`nonstop.placement`, `nonstop.stitch` and each stage's `randomDraws`) and `nonstop.replay` plays on it.
-- **Nothing is kept.** A course replay updates no stage or course best, lamp, trophy or play count, saves no replay and submits nothing to the Leaderboard, as LR2's course-result save returns early for a replay (`LR2f.cpp` L9599). beatoraja's `CourseResult.updateScoreDatabase` writes with no mode guard, so a course replay there bumps play and clear counts; be-music does not follow it.
+- **Nothing is kept.** A course replay updates no stage or course best, lamp, trophy or play count, saves no replay and submits nothing to the Leaderboard, as LR2's course-result save returns early for a replay (`LR2f.cpp` L9599). beatoraja's `CourseResult.updateScoreDatabase` writes with no mode guard, so a course replay there bumps play and clear counts; Be-Music does not follow it.
 - **The results say they are a replay.** A replay's play and every result it leads to (each stage's, the course's or the NONSTOP run's) carry `PlayResult.fromReplay`, and the LR2 skin lights REPLAY PLAYING (op 84) instead of REPLAY OFF (op 82) on the play and result screens, as LR2 keeps op 84 on for the whole replay (`LR2f.cpp` L4740-L4741).
 - ESC during the playback stops it and goes back to the select screen, as ESC stops a dropped replay; F5 or R on a NONSTOP replay plays it again.
 

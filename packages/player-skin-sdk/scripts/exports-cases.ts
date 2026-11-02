@@ -223,6 +223,31 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.longNoteCentreLineAlpha(150);
     },
   });
+  define('player-skin-sdk.isBackSpinScratchLongNote', {
+    run: () => {
+      skinSdkAPI.isBackSpinScratchLongNote('scratch', 'cn');
+    },
+  });
+  define('player-skin-sdk.resolveLongNoteMarks', {
+    run: () => {
+      skinSdkAPI.resolveLongNoteMarks({ mode: 'hcn', backSpinScratch: true });
+    },
+  });
+  define('player-skin-sdk.resolveHellChargeLook', {
+    run: () => {
+      skinSdkAPI.resolveHellChargeLook('draining', 12_345);
+    },
+  });
+  define('player-skin-sdk.hellChargeZigzag', {
+    run: () => {
+      skinSdkAPI.hellChargeZigzag(120, 40, 0, 600, { flow: 1, nowMs: 12_345 });
+    },
+  });
+  define('player-skin-sdk.backSpinChevron', {
+    run: () => {
+      skinSdkAPI.backSpinChevron(100, 48, 200, 12);
+    },
+  });
   define('player-skin-sdk.holdSeed', {
     run: () => {
       skinSdkAPI.holdSeed('11', 123_456);

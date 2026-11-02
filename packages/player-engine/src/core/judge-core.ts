@@ -112,7 +112,7 @@ export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, e
         pressAnyKey(state, input, emit);
         return;
       }
-      handleLanePress(state, input.channels, input.tokens, input.nowMs, input.nowSec, emit);
+      handleLanePress(state, input.channels, input.tokens, input.nowMs, input.nowSec, emit, input.channels, input.spin);
       return;
     case 'hold':
       holdLanes(
@@ -172,7 +172,7 @@ function pressAnyKey(
   const lanes = resolveAnyKeyPressChannels(state, input.channels, input.nowSec);
   state.anyKeyRoutes.route(anyKeyRouteKeys(input.tokens, input.channels), lanes);
   holdLanes(state, lanes, false, emit);
-  handleLanePress(state, lanes, input.tokens, input.nowMs, input.nowSec, emit, input.channels);
+  handleLanePress(state, lanes, input.tokens, input.nowMs, input.nowSec, emit, input.channels, input.spin);
 }
 
 /** {@link runJudgeCoreStep} collecting the effects into an array — `step(state, input) → effects`. */
@@ -279,7 +279,14 @@ function processReplayEventsUntil(
       emit({ kind: 'input-time', seconds: eventSec });
       runJudgeCoreStep(
         state,
-        { kind: 'press', channels, tokens: event.tokens ?? [], nowSec: eventSec, nowMs: eventMs },
+        {
+          kind: 'press',
+          channels,
+          tokens: event.tokens ?? [],
+          nowSec: eventSec,
+          nowMs: eventMs,
+          ...(event.spin !== undefined ? { spin: event.spin } : {}),
+        },
         emit,
       );
     } else {

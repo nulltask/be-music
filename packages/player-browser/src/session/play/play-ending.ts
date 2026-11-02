@@ -38,7 +38,7 @@ import { resolvePostChartResultDelayMs } from './result-delay.ts';
  */
 
 /**
- * How long a failed play holds before its result shows on a theme with no close time of its own (be-music's choice:
+ * How long a failed play holds before its result shows on a theme with no close time of its own (Be-Music's choice:
  * LR2 and beatoraja wait for the skin's close time, 1500 ms on beatoraja's default skins).
  */
 export const FAILED_CLOSE_MS = 1500;

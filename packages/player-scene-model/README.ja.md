@@ -2,7 +2,7 @@
 
 # @be-music/player-scene-model
 
-be-music プレイヤーの各画面が何を表示し、どう振る舞うかを、どのスキンの種類が描くかに関係なく表すモデルです。
+Be-Music プレイヤーの各画面が何を表示し、どう振る舞うかを、どのスキンの種類が描くかに関係なく表すモデルです。
 標準・LR2・beatoraja の各スキンの種類はこれらのモデルを共有し、描画だけを受け持ちます
 （[ADR 0001](../../docs/adr/0001-skin-families-only-draw.ja.md)、[ADR 0002](../../docs/adr/0002-scene-model-package.ja.md)）。
 ターミナルプレイヤーやスキンパッケージからも使えます。

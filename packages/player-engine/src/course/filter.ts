@@ -2,7 +2,7 @@
  * The SQL `WHERE` subset beatoraja random-course stages are written in, parsed and evaluated against a neutral song
  * record. beatoraja runs each stage's clause against its song database (`SQLiteSongDatabaseAccessor.getSongDatas`),
  * appending it to `... WHERE ` over `song` joined with the player's `score` and `scorelog` (and `information` when song
- * information is on); be-music has no database, so the clause is evaluated per candidate with SQLite's comparison
+ * information is on); Be-Music has no database, so the clause is evaluated per candidate with SQLite's comparison
  * rules over the candidate's song columns, its best record (`score`) and its song information (`information`), and a
  * trailing `ORDER BY … LIMIT …` orders and cuts the selection ({@link selectCourseCharts}).
  *
@@ -12,7 +12,7 @@
  */
 
 /**
- * One chart as a random-course filter sees it: the `song` table columns of beatoraja's song database that be-music
+ * One chart as a random-course filter sees it: the `song` table columns of beatoraja's song database that Be-Music
  * can supply, and the rows beatoraja joins to it, `score` (the player's best record) and `information` (the chart's
  * song information). A missing text column reads as `''` and a missing integer column as `0`, the values beatoraja's
  * `SongData` stores for a chart that leaves them unset.
@@ -55,8 +55,8 @@ export interface CourseChartRecord {
 }
 
 /**
- * The `score` columns be-music keeps (beatoraja's `ScoreDatabaseAccessor` table). A field left out reads as NULL.
- * `exscore` is be-music's own: beatoraja keeps the judgment counts instead (`epg`, `lpg`, …), which be-music does not.
+ * The `score` columns Be-Music keeps (beatoraja's `ScoreDatabaseAccessor` table). A field left out reads as NULL.
+ * `exscore` is Be-Music's own: beatoraja keeps the judgment counts instead (`epg`, `lpg`, …), which Be-Music does not.
  */
 export interface CourseChartScore {
   /** The clear lamp as beatoraja's `ClearType.id`: 0 NO PLAY, 1 FAILED, 3 ASSIST EASY … 10 MAX. */
@@ -166,10 +166,10 @@ const COLUMN_TYPES: Readonly<Record<CourseChartTable, Readonly<Record<string, Co
 
 /**
  * Every column of the tables beatoraja joins (`SQLiteSongDatabaseAccessor`, `ScoreDatabaseAccessor`,
- * `ScoreLogDatabaseAccessor`, `SongInformationAccessor` at beatoraja 83574048), whether be-music supplies it or not,
- * plus be-music's `score.exscore`. An unqualified column resolves to the one table that has it, as SQLite does; one
+ * `ScoreLogDatabaseAccessor`, `SongInformationAccessor` at beatoraja 83574048), whether Be-Music supplies it or not,
+ * plus Be-Music's `score.exscore`. An unqualified column resolves to the one table that has it, as SQLite does; one
  * that more than one table has is refused (`ambiguous column name`), so the stage selects nothing as in beatoraja:
- * write `song.mode`, not `mode`. A column be-music has no source for (`song.date`, `score.epg`, every `scorelog`
+ * write `song.mode`, not `mode`. A column Be-Music has no source for (`song.date`, `score.epg`, every `scorelog`
  * column, …) is an unknown column rather than a made-up value.
  */
 const BEATORAJA_COLUMNS: Readonly<Record<CourseChartTable | 'scorelog', readonly string[]>> = {
@@ -703,7 +703,7 @@ class Parser {
 
 /**
  * The column `table.name` (or `name` alone) names, resolved as SQLite resolves it over beatoraja's joined tables:
- * unqualified, it must belong to exactly one of them. A column be-music has no source for is an unknown column.
+ * unqualified, it must belong to exactly one of them. A column Be-Music has no source for is an unknown column.
  */
 function resolveColumn(table: string | undefined, name: string): CourseChartFilterExpr {
   const column = name.toLowerCase();
@@ -731,7 +731,7 @@ function describe(token: Token): string {
  * `[NOT] IN (…)`, `[NOT] LIKE … [ESCAPE …]`, `[NOT] BETWEEN … AND …`, `IS [NOT] NULL`, `+ - * / %`, `& |` and `||`,
  * then an optional `ORDER BY expr | RANDOM() [ASC | DESC] [NULLS FIRST | LAST], …` and `LIMIT n [OFFSET m]` /
  * `LIMIT m, n`. Anything else — an unknown column, an unqualified column beatoraja's joined tables share (`mode`,
- * `notes`, `sha256`, …), a column be-music has no source for (`scorelog.*`, `score.epg`, …), a function, a sub-query — gives `{ ok: false }` with the reason.
+ * `notes`, `sha256`, …), a column Be-Music has no source for (`scorelog.*`, `score.epg`, …), a function, a sub-query — gives `{ ok: false }` with the reason.
  */
 export function parseCourseChartFilter(sql: string): CourseChartFilterParseResult {
   try {

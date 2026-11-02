@@ -2,7 +2,7 @@
 
 # 0021: A skin's stage may be fluid
 
-A be-music skin draws on a fixed design canvas: the landscape `wideStage` (854×480) or the portrait `tallStage` (480×854). The player picks one by the screen's orientation and scales it to fit, so any screen that is not 16:9 or 9:16 (4:3, an ultrawide, a phone held sideways) shows black bars. The embed preview (`/embed/`) lays out only lanes, a BGA square and a HUD, and could use the whole window at any aspect ratio; the built-in, LR2 and beatoraja skins place their chrome at fixed design coordinates and cannot.
+A Be-Music Skin draws on a fixed design canvas: the landscape `wideStage` (854×480) or the portrait `tallStage` (480×854). The player picks one by the screen's orientation and scales it to fit, so any screen that is not 16:9 or 9:16 (4:3, an ultrawide, a phone held sideways) shows black bars. The embed preview (`/embed/`) lays out only lanes, a BGA square and a HUD, and could use the whole window at any aspect ratio; the built-in, LR2 and beatoraja skins place their chrome at fixed design coordinates and cannot.
 
 ## Decision
 

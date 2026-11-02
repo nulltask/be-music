@@ -37,7 +37,7 @@ HIDDEN と CRAZY は CHANGE-HS 適用後の表示接近度を読むため、画�
 
 **優先順位。** 同じ項目では譜面の状態がプレイヤー自身の設定に優先します。これらの系列に対応する Be-Music のユーザー設定はレーンカバーだけです。ユーザーの SUDDEN+・HIDDEN+・LIFT は上に描いたまま残し、譜面の HIDDEN はユーザーの visual CONSTANT の不透明度に掛け合わせます。HI-SPEED と同じく、コースの速度ロックでは抑止しません。
 
-**ホスト。** engine は状態を譜面時計上の `PlayerUIFramePayload.chartOptions` で配信します。ポーズ中は保持し、シークでは状態を持たずに検索し、LR2 の逆再生では凍結します。LR2 / 組み込みのプレイフィールド（be-music スキンのバインディングも兼ねる）と beatoraja のノートレイヤーは、すべてのノートを `placeChartNoteVisual` で配置します。ターミナルは CHANGE-HS をグリッドの行に適用し、HIDDEN の不透明度が 0.5 以上のノートだけを表示します。セル未満のサイズやオフセットはないため、CRAZY のサイズ・揺れは描きません。NONSTOP は HI-SPEED と同じく、各ステージの排他的な区間にこれらの状態を配置します。
+**ホスト。** engine は状態を譜面時計上の `PlayerUIFramePayload.chartOptions` で配信します。ポーズ中は保持し、シークでは状態を持たずに検索し、LR2 の逆再生では凍結します。LR2 / 組み込みのプレイフィールド（Be-Music Skin のバインディングも兼ねる）と beatoraja のノートレイヤーは、すべてのノートを `placeChartNoteVisual` で配置します。ターミナルは CHANGE-HS をグリッドの行に適用し、HIDDEN の不透明度が 0.5 以上のノートだけを表示します。セル未満のサイズやオフセットはないため、CRAZY のサイズ・揺れは描きません。NONSTOP は HI-SPEED と同じく、各ステージの排他的な区間にこれらの状態を配置します。
 
 **記録。** 表示専用です。ノート・判定・ゲージ・スコア・フィンガープリント・リプレイ入力を変えません。[ADR 0031](./0031-assist-record-policy.ja.md) ではアシストでも判定の変更でもないため、記録の対象可否を変えません。実効プログラムは `chart.chartOptions` に記録し、再シミュレーションでは無視します。
 

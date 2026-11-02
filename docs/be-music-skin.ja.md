@@ -1,10 +1,10 @@
 [English version](./be-music-skin.md)
 
-# be-music スキンの作り方
+# Be-Music Skin の作り方
 
 ブラウザープレイヤーの組み込みファミリー向けスキンは、`@be-music/player-skin-sdk` の契約に沿って作ります。Synesthesia・Plain は Canvas を使い、Native は DOM 画面と、canvas を持つ component で組んだプレイフィールドを組み合わせます。各 component はステージ上の自分の範囲と同じ大きさの canvas に描画します。Native の表示部品は `@be-music/player-ui` から独立して再利用できます。
 
-be-music スキンはデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、be-music スキンはすべての画面を自分で描きます。それ以外はすべてプレイヤーの担当です。
+Be-Music Skin はデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、Be-Music Skin はすべての画面を自分で描きます。それ以外はすべてプレイヤーの担当です。
 
 - 入力、タイミング、オーディオ、判定
 - レーンのレイアウトとノーツの位置
@@ -226,7 +226,7 @@ export default defineBeMusicSkin({
 | `decide`                                 | —    | 選曲とプレイの間の決定画面。[決定画面](#決定画面)を参照。                                                      |
 | `settings`                               | —    | プレイヤーが調整できるスキンのオプション。[スキン設定](#スキン設定)を参照。                                    |
 
-`validateBeMusicSkin(skin)` は、例外を投げずに同じ問題をメッセージの配列で返します。必須のフィールドを書き忘れた素の JavaScript のスキンでも同じです。ホストは追加されたスキンをこれで確かめる（be-music スキンのレジストリが確かめます）ので、たとえば `fontLoads` のないスキンのモジュールは、ページを壊さずに理由を添えて拒否されます。
+`validateBeMusicSkin(skin)` は、例外を投げずに同じ問題をメッセージの配列で返します。必須のフィールドを書き忘れた素の JavaScript のスキンでも同じです。ホストは追加されたスキンをこれで確かめる（Be-Music Skin のレジストリが確かめます）ので、たとえば `fontLoads` のないスキンのモジュールは、ページを壊さずに理由を添えて拒否されます。
 
 ## ステージとレイアウト
 
@@ -287,7 +287,7 @@ export default defineBeMusicSkin({
 
 ## 画面
 
-ホストは画面を次の順に表示します。決定画面はスキンが持つ場合だけです。be-music player が画面を次へ引き継ぐ方法は [ブラウザプレイヤー — Scene lifecycle](./player-web.ja.md#scene-lifecycle) にあります。
+ホストは画面を次の順に表示します。決定画面はスキンが持つ場合だけです。Be-Music player が画面を次へ引き継ぐ方法は [ブラウザプレイヤー — Scene lifecycle](./player-web.ja.md#scene-lifecycle) にあります。
 
 ```mermaid
 flowchart LR
@@ -306,7 +306,7 @@ flowchart LR
 - `layout`: [ステージとレイアウト](#ステージとレイアウト)を参照。
 - `lanes`: 各レーンの矩形（`x`、`w`、`top`、判定ライン位置の `bottom`）、`kind`、`beam`（キービーム強度。押下中は 1、離すと減衰）。`pressedAtMs` / `releasedAtMs` はそのレーンを最後に押した・離したプレイクロック時刻、`holding` と `holdStartedAtMs` はそのレーンでロングノーツを押し続けているかと、その開始時刻です。
 - `notes`: タップノーツ `{ kind, x, w, y }`。`y` はノーツの下端です。オートプレイやオートスクラッチが叩くノーツには `autoplay` が付きます。LR2 と同じく、まだ打っていないノーツは見逃しと判定されるまで判定ライン上（`y` がレーンの `bottom`）で待ち、早く打ったノーツもその時刻までは渡されます。
-- `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、始端の時刻を過ぎると判定ラインに張り付きます。`mode`（`'ln'` / `'cn'` / `'hcn'`）は判定方式、`state`（`'pending'` / `'held'` / `'dropped'` / `'done'`）は進行状態、`autoplay` はオートプレイが処理するかを表します。LR2 と組み込みスキンは、`'dropped'`（始端を見逃した、または早く離した）のロングノーツを消えるまで半透明で描きます。
+- `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、始端の時刻を過ぎると判定ラインに張り付きます。`mode`（`'ln'` / `'cn'` / `'hcn'`）は判定方式、`backSpinScratch` はバックスピンスクラッチ（スクラッチレーン上のチャージノートで、終端を逆回転で判定する）であること、`state`（`'pending'` / `'held'` / `'draining'` / `'dropped'` / `'done'`）は進行状態、`autoplay` はオートプレイが処理するかを表します。ヘルチャージノートはゲージを増やしている間 `'held'`、減らしている間（早く離した、または始端を見逃した）`'draining'` になります。レーンを押し直すと `'held'` に戻り、終端が過ぎて初めて `'dropped'` か `'done'` になります。ほかのロングノーツが `'draining'` になることはありません。LR2 と組み込みスキンは、`'dropped'`（始端を見逃した、または早く離した）のロングノーツを消えるまで半透明で描きます。組み込みスキンは種類を色ではなく形で描き分けます。LN の終端キャップは薄く、CN は通常のキャップ、HCN は中心線がジグザグになり（ほかの種類はまっすぐ）、BSS は終端にレーンを戻る向きの山形の印が付きます（`resolveLongNoteMarks`、`hellChargeZigzag`、`backSpinChevron`）。HCN（ヘルチャージの BSS も含む）は状態も表し、色・光の強さ・ジグザグの動きを同時に変えるので、どの状態も色だけには頼りません（`resolveHellChargeLook`）。到達前は紫の HELL カラーで弱く光りジグザグは止まり、押している間はオレンジで明るく脈打ちジグザグが判定ラインへ流れ、減らしている間は赤で暗く明滅しジグザグがレーンを戻る向きに流れ、終わると光が消えます。
 - `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。レーンを押したまま判定ラインを通過するか、LR2 ruleset では PGREAT 窓内で押しても地雷が爆発してゲージが減ります（判定にはなりません）。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
 - `bombs`: 生きているヒットエフェクト。`elapsedMs`、固定の `seed`、発生させた判定 `judge` を持ちます。
 - `measureLines`: 小節線 `{ side, x, w, y }`。横切るレーンランごとに 1 本です。スキンが `gameplay.drawsMeasureLines` を設定したときだけ中身が入ります。
@@ -399,7 +399,7 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 スキンは、譜面を選んでからプレイが始まるまでの決定画面を追加できます。ホストは `skin.decide` があるときだけこれを表示し、なければそのままプレイに進みます。
 
 - **`decide.durationMs`:** 画面を表示する時間（既定 2000）。プレイヤーは Enter、Space、クリックで先に進み、Escape で選曲に戻れます。
-- **`decide.draw(surface, frame)`** は `BeMusicDecideFrame` を受け取ります: `song`、`playOptions`、画面表示からの `elapsedMs`、`nowMs`、`effects`、`audio`、`settings`、`chartImage`。be-music player は現在、この画面の `audio` を `undefined` で渡します。
+- **`decide.draw(surface, frame)`** は `BeMusicDecideFrame` を受け取ります: `song`、`playOptions`、画面表示からの `elapsedMs`、`nowMs`、`effects`、`audio`、`settings`、`chartImage`。Be-Music player は現在、この画面の `audio` を `undefined` で渡します。
 
 ## 判定タイミング
 
@@ -435,7 +435,7 @@ settings: [
 - **検査:** `validateBeMusicSkin` がスキーマを検査します。id は重複不可、ラベルは空不可で、`default` は選択肢のいずれか、または範囲内でなければなりません。choice の option 値は重複不可、number の `step` は正の値、`unit` は上の 3 つのいずれかでなければなりません。
 - **値:** すべてのフレームが `settings`（id をキーにしたプレイヤーの値）を持ちます。ホストは値をスキンごとに保存し、`resolveBeMusicSkinSettings(skin, stored)` で解決します。欠けている値、古い値、型の違う値は既定値に戻り、数値は範囲内に収められ、スキンが宣言しなくなった id は捨てられます。宣言した id はすべて正しい型で揃っていると考えて構いません。
 - **その場での変更:** 画面の表示中にプレイヤーが値を変えることがあります。変更は次のフレームから反映され、選曲画面では `revision` も進みます。最初のフレームの値をキャッシュせず、`frame.settings` を毎フレーム読んでください（そこから導いた値をキャッシュするなら `revision` をキーにします）。
-- **be-music プレイヤーでは:** ホストは保存した値を built-in のキット（`{ family: 'built-in', skin, settings }`）で渡し、値が変わったら表示中のシーンに `scene.updateKit(kit)` で新しいキットを渡します。プレイヤーは Debug Menu にスキーマから「Skin settings」フォルダを作り（`choice` はドロップダウン、`number` は単位を名前に添えたスライダー、`toggle` はチェックボックス）、設定を宣言しないスキンでは隠し、値をスキン id ごとにブラウザへ保存します。
+- **Be-Music プレイヤーでは:** ホストは保存した値を built-in のキット（`{ family: 'built-in', skin, settings }`）で渡し、値が変わったら表示中のシーンに `scene.updateKit(kit)` で新しいキットを渡します。プレイヤーは Debug Menu にスキーマから「Skin settings」フォルダを作り（`choice` はドロップダウン、`number` は単位を名前に添えたスライダー、`toggle` はチェックボックス）、設定を宣言しないスキンでは隠し、値をスキン id ごとにブラウザへ保存します。
 
 ## 曲の画像
 
@@ -455,7 +455,7 @@ settings: [
 | レイアウト   | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`（高さ 480 px のステージを前提にしているため横向きステージ専用）、`MILESTONE_MIN_WIDTH`、`PLAYFIELD`、`resolveGameplayLaneGeometry`、`resolveTouchLaneLayout`、`supportsTouchLayout`、`TOUCH_PLAYFIELD`、`resolvePortraitLaneLayout`、`supportsPortraitLayout`、`PORTRAIT_PLAYFIELD`、`resolveBeMusicSelectLayout` |
 | 判定         | `judgeDisplayWord`（PERFECT は GREAT と表示）、`isFlashingGreat`、`flashingGreatColor`、`FLASHING_GREAT_STEP_MS`                                                                                                                                                                                                                                                                     |
 | 演出         | `trackMoments` / `createMomentState` + `updateMoments`（100 コンボごと、クリアライン、フルコンボ、コンボ切れ。カウントインは `runtime.chartMs` が負かどうかで判定）、`COMBO_MILESTONE`、`COMBO_BREAK_MIN`、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile`                                                                                                   |
-| ホールド演出 | `holdSparks`、`holdSeed`（押し続けているロングノートの火花）                                                                                                                                                                                                                                                                                                                         |
+| ホールド演出 | `holdSparks`、`holdSeed`（押し続けているロングノートの火花）、`resolveLongNoteMarks`、`isBackSpinScratchLongNote`、`hellChargeZigzag`、`backSpinChevron`（形によるロングノートの種類）、`resolveHellChargeLook`（ヘルチャージノートの状態）                                                                                                                                          |
 | ロード中     | `LOADING_WORD`、`loadingDots(nowMs)`、`LOADING_DOT_MS`                                                                                                                                                                                                                                                                                                                               |
 | 選曲リスト   | `selectListRows`、`browseEntryTitle`、`browseEntryCount`、`browseEntryBadge`、`describeCourseCard`                                                                                                                                                                                                                                                                                   |
 | サウンド     | `audioDrive`、`bandAt`、`bandLevel`、`AUDIO_BAND_COUNT`、`SILENT_AUDIO`。[音楽に反応させる](#音楽に反応させる)を参照                                                                                                                                                                                                                                                                 |

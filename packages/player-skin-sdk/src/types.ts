@@ -22,8 +22,8 @@ import type {
 } from './chart.ts';
 
 /**
- * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
- * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a be-music skin draws screens
+ * Be-Music Skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
+ * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a Be-Music Skin draws screens
  * onto Canvas surfaces or mounts native DOM screens. Canvas drawing can use the Canvas 2D API, raw WebGL / WebGPU, or a
  * framework such as PixiJS or three.js that the skin brings along. The player owns input, timing, audio, judging, and
  * layout, and supplies plain frame data and semantic actions to the skin.
@@ -542,8 +542,15 @@ export interface BeMusicLongNote {
    */
   mode?: BeMusicLongNoteMode;
   /**
-   * Where the long note is in its life: not yet reached, being held, dropped (missed at the head or let go early), or
-   * completed. LR2 draws a dropped long note at half alpha until it goes; the built-in skins do the same.
+   * True when the long note is a back-spin scratch (BSS): a charge note (`'cn'` / `'hcn'`) on a scratch lane, whose tail
+   * is judged on a spin the other way rather than on the release (`isBackSpinScratchLongNote`). The built-in skins mark
+   * its tail cap with a chevron (`backSpinChevron`); `resolveLongNoteMarks` gathers the marks of every kind.
+   */
+  backSpinScratch?: boolean;
+  /**
+   * Where the long note is in its life (see {@link BeMusicLongNoteState}). LR2 draws a dropped long note at half alpha
+   * until it goes; the built-in skins do the same. A hell charge note reads `'held'` while it fills the gauge and
+   * `'draining'` while it empties it; `resolveHellChargeLook` turns that into a look.
    */
   state?: BeMusicLongNoteState;
   /**
@@ -557,7 +564,19 @@ export interface BeMusicLongNote {
 
 export type BeMusicLongNoteMode = 'ln' | 'cn' | 'hcn';
 
-export type BeMusicLongNoteState = 'pending' | 'held' | 'dropped' | 'done';
+/**
+ * Where a long note is in its life:
+ *
+ * - `'pending'`: not reached yet.
+ * - `'held'`: being held. A hell charge note reads `'held'` while it fills the gauge: held, or its tail released at
+ *   GOOD or better until the tail passes.
+ * - `'draining'`: a hell charge note whose lane is up while it passes the judgement line (let go early, or missed at
+ *   the head), so it empties the gauge. It is not lost: pressing the lane makes it fill the gauge again (`'held'`).
+ *   Only a hell charge note (`mode: 'hcn'`, a hell-charge back-spin scratch included) reads `'draining'`.
+ * - `'dropped'`: missed at the head or let go early, for good (a hell charge note once its tail has passed).
+ * - `'done'`: completed.
+ */
+export type BeMusicLongNoteState = 'pending' | 'held' | 'draining' | 'dropped' | 'done';
 
 export interface BeMusicBomb {
   channel: string;

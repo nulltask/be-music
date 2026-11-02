@@ -4,7 +4,7 @@
 
 This specification follows `packages/app-leaderboard/src/`. See the [package README](../packages/app-leaderboard/README.md) for operations and the [generated OpenAPI document](../packages/app-leaderboard/openapi.json) for the API contract.
 
-The Leaderboard is be-music's online score ranking — what LR2 and beatoraja call an "IR" (Internet Ranking). This
+The Leaderboard is Be-Music's online score ranking — what LR2 and beatoraja call an "IR" (Internet Ranking). This
 repository uses "IR" for the JSON intermediate representation (`@be-music/chart-source`), so the ranking is called the
 **Leaderboard** everywhere: in code, in docs, and in the UI. Third-party names keep their own spelling (LR2IR, the
 beatoraja skin's IR ops).

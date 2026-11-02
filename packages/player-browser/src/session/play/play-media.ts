@@ -154,8 +154,11 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
   const pitchMode = ctx.options.tempoPitchMode ?? 'pitch';
   // Keep pitch: the samples are stretched to the play tempo (times a NONSTOP FIT stage's rate) once, here, and then
   // play at their own pitch. LR2's SILENT loads none: the play runs without its keysounds and BGM.
+  const silent = isSilentJudgeTimingPlay(ctx.options);
+  // A SILENT play decodes nothing, so it keeps no other chart's samples either.
+  if (silent) ctx.options.audio?.chartSamples.release();
   const stretched =
-    !isSilentJudgeTimingPlay(ctx.options) &&
+    !silent &&
     (await loadPlaySamples({
       audioContext: ctx.audioContext,
       chart,
@@ -168,6 +171,8 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
       ...(ctx.options.nonstop !== undefined ? { nonstop: ctx.options.nonstop } : {}),
       isCancelled: () => ctx.disposed,
       ...(ctx.options.peakGain === true ? { peakGain: true } : {}),
+      // The chart played last keeps its decodes in the audio service, so a quick retry skips decoding them.
+      ...(ctx.options.audio !== undefined ? { sampleCache: ctx.options.audio.chartSamples } : {}),
     }));
   // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
   if (stretched && ctx.bmsonSlicePlayback !== undefined) {

@@ -114,7 +114,7 @@ export interface SceneViewTiming {
 export interface SelectRecords {
   chart(chart: LibraryChart): BeMusicChartBestRecord | undefined;
   course(course: LibraryCourse): BeMusicCourseBestRecord | undefined;
-  /** The player's dan rank per key mode (`frame.danRanks` of a be-music skin), when the host keeps them. */
+  /** The player's dan rank per key mode (`frame.danRanks` of a Be-Music Skin), when the host keeps them. */
   danRanks?(): readonly BeMusicDanRank[];
   /**
    * Which of a chart's or course's replay slots hold a replay (`REPLAY_SLOT_COUNT` of them), when the host keeps replay
@@ -348,6 +348,13 @@ export type PlayViewEvent =
       readonly mode: 'ln' | 'cn' | 'hcn';
     }
   | { readonly kind: 'long-note-end'; readonly channel: string; readonly outcome: 'complete' | 'dropped' }
+  /** A hell charge note (its head at `beat`) started gaining or draining the gauge, or passed the judgement line. */
+  | {
+      readonly kind: 'hell-charge';
+      readonly channel: string;
+      readonly beat: number;
+      readonly state: 'gaining' | 'draining' | 'passed';
+    }
   /** The POOR image shows (a miss at chart time `seconds`) or clears. */
   | { readonly kind: 'poor-bga'; readonly shown: boolean; readonly seconds?: number }
   /** The player's keys changed a view setting (the hi-speed, a lane cover): the frame's state has the new value. */

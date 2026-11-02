@@ -9,8 +9,8 @@ const plural = (count: number, one: string, many: string): string => `${count} $
 export const en = {
   locale: 'en',
   site: {
-    name: 'be-music Leaderboard',
-    previewAlt: 'be-music Leaderboard: rankings, replays and rivals for BMS players',
+    name: 'Be-Music Leaderboard',
+    previewAlt: 'Be-Music Leaderboard: rankings, replays and rivals for BMS players',
   },
   nav: {
     label: 'Leaderboard',
@@ -39,7 +39,7 @@ export const en = {
       ____: 'That-Which-Must-Not-Be-Named’s, with charge notes',
     },
     meaning:
-      'Every play is scored under each ruleset: the judgment windows, gauges and clear lamps of LR2, beatoraja or That-Which-Must-Not-Be-Named, applied by the be-music engine to the replay. It is how the score is counted, not the software the play came from.',
+      'Every play is scored under each ruleset: the judgment windows, gauges and clear lamps of LR2, beatoraja or That-Which-Must-Not-Be-Named, applied by the Be-Music engine to the replay. It is how the score is counted, not the software the play came from.',
     playedWith: (name: string) => `played with ${name}`,
     playedWithTitle: 'The scoring rules the player played under',
   },
@@ -94,7 +94,7 @@ export const en = {
   },
   latest: {
     title: 'Latest',
-    description: 'The latest plays on the be-music Leaderboard.',
+    description: 'The latest plays on the Be-Music Leaderboard.',
     lead: (rules: string) => `The latest plays, scored under ${rules}.`,
     rowsLabel: 'a play row',
     rowsHelp:
@@ -285,7 +285,7 @@ export const en = {
     recordedWith: 'Recorded with',
     sentFrom: 'Sent from',
     scoredBy: 'Scored by',
-    engine: (version: string) => `be-music engine ${version}`,
+    engine: (version: string) => `Be-Music engine ${version}`,
     unknown: 'unknown',
     unknownApp: 'unknown app',
     verification: {
@@ -305,7 +305,7 @@ export const en = {
     page: 'This page',
   },
   player: {
-    description: (name: string, handle: string) => `${name} (@${handle}) on the be-music Leaderboard.`,
+    description: (name: string, handle: string) => `${name} (@${handle}) on the Be-Music Leaderboard.`,
     stats: {
       plays: 'Plays',
       charts: 'Charts',
@@ -337,7 +337,7 @@ export const en = {
   },
   chartset: {
     description: (title: string, charts: number) =>
-      `${title} — ${plural(charts, 'chart', 'charts')} on the be-music Leaderboard.`,
+      `${title} — ${plural(charts, 'chart', 'charts')} on the Be-Music Leaderboard.`,
     charts: (count: number) => plural(count, 'chart', 'charts'),
     grouping: 'Charts are grouped as BMS Search files them, by hand; a chart it has not filed yet stays on its own.',
     listLabel: 'Charts',
@@ -402,7 +402,7 @@ export const en = {
   },
   settings: {
     title: 'Settings',
-    description: 'Your be-music Leaderboard profile.',
+    description: 'Your Be-Music Leaderboard profile.',
     signedOutLead: 'Sign in to change your handle, display name and avatar.',
     signIn: 'Sign in',
     signInLead: 'Use the passkey of your Leaderboard account.',

@@ -1,7 +1,7 @@
 /**
  * `@be-music/player-engine/lanes`: the lanes of a play mode — which channels a chart plays on and how they lay out (slots,
- * the LR2 lane order, scratch and wheel lanes), the keyboard bindings with FREE ZONE input, and the lanes the lane
- * options permute. `ChartPlayVariant` comes from `@be-music/chart-model`.
+ * the LR2 lane order, scratch and wheel lanes), the keyboard bindings with FREE ZONE input, the scratch spin a press
+ * gives (the odd-even rule over a scratch lane's keys), and the lanes the lane options permute. `ChartPlayVariant` comes from `@be-music/chart-model`.
  */
 export {
   appendFreeZoneInputChannels,
@@ -23,6 +23,15 @@ export {
   type LaneBinding,
   type LaneModeOptions,
 } from './core/lane-layout.ts';
+
+export {
+  createScratchSpinByToken,
+  isReverseScratchSpin,
+  isScratchSpin,
+  resolveScratchSpin,
+  type ScratchSpin,
+  type ScratchSpinBinding,
+} from './core/scratch-spin.ts';
 
 export {
   randomizeHRandomNotes,

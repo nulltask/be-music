@@ -416,7 +416,7 @@ export const LR2_OP = {
   KEY_CONFIG_5_10: 402,
 
   // ─── Select: making a course (OpenLR2 L5779-L5808) ──────────────────────────────────────────────────────────────
-  /** A course is being made. (`LR2body.exe` falls through to 572, so it lights either way; be-music does not.) */
+  /** A course is being made. (`LR2body.exe` falls through to 572, so it lights either way; Be-Music does not.) */
   COURSE_MAKING: 571,
   /** No course is being made. */
   COURSE_NOT_MAKING: 572,
