@@ -1,5 +1,19 @@
 # @be-music/app-play
 
+## 0.10.1
+
+### Patch Changes
+
+- adcaa23: The page title and the Help dialog's title read "Be-Music Play" (they were "be-music web player" and "be-music player"), and the preview embed's label and skin author spell the product name Be-Music, matching the site header.
+- 3f2778d: The replay slots and course maker cards no longer cover the Debug Menu: overlays now stack with the site header on top, then the Debug Menu, then every other card and panel.
+- 2e4e246: PRACTICE is quicker to set up and to repeat:
+  
+  - Debug Menu's PRACTICE folder shows the note-density graph of the chart under the cursor with a start and an end handle to drag (mouse or touch), so aiming at a passage no longer means guessing millisecond numbers. The handles snap to measure starts, the caption shows the range's times (m:ss.s) and measure numbers, and START TIME / END TIME follow the handles and the other way round. The picker shows only while PRACTICE is on and is disabled during a play like the other PRACTICE settings.
+  - The play starts one bar before the bar the range starts in and loops one bar after the bar it ends in, instead of 1000 ms on either side, so each loop comes back in time with the music.
+  - Loops no longer show NOW LOADING: when the range ends, it plays again at once in the same play screen, without decoding the chart's samples again, until ESC.
+- 9440d77: Quick retry (F5, and R on the result screen) of a chart with many samples reaches its first note much sooner: its decoded samples are kept from the play before, so NOW LOADING no longer waits for them to decode again. The retry is still a fresh play with a new replay and RANDOM draw. The kept samples are freed on going back to the select screen, on starting another chart and when the page is left (`pagehide`).
+- Updated dependencies: `@be-music/player-browser@0.15.0`, `@be-music/player-engine@0.14.0`, `@be-music/player-scene-model@0.6.0`, `@be-music/player-skin-sdk@0.8.0`, `@be-music/skin-beatoraja@0.6.1`, `@be-music/skin-lr2@0.6.1`
+
 ## 0.10.0
 
 ### Minor Changes

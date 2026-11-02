@@ -1,5 +1,11 @@
 # @be-music/app-dashboard
 
+## 0.1.4
+
+### Patch Changes
+
+- adcaa23: The dashboard footer spells the product name Be-Music.
+
 ## 0.1.3
 
 ### Patch Changes

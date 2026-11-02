@@ -73,7 +73,7 @@ export class PlayerWebApp {
   private readonly lr2: LR2ThemeService;
   /** The beatoraja theme: its bundle, BGM and system sounds, and its entries loaded as scene kits. */
   private readonly beatoraja: BeatorajaThemeService;
-  /** The be-music skin the built-in family draws with, the player's values for its settings, and the skins added. */
+  /** The Be-Music Skin the built-in family draws with, the player's values for its settings, and the skins added. */
   private readonly builtIn: BuiltInThemeService;
   /** The family each screen is drawn by, and the kit it is drawn with, from the theme services and "Skin system". */
   private readonly familyKits: FamilyKits;
@@ -638,6 +638,8 @@ export class PlayerWebApp {
     // The first scene shown mounts the Pixi host (`mountStage`). Keep its promise so URL auto-load (below) drives its own
     // `showSelect` only once the first select screen is up.
     const initialSelectReady = this.showSelect();
+    // A page put away (closed, or into the back/forward cache) keeps no decoded samples for a retry.
+    window.addEventListener('pagehide', () => this.audio.chartSamples.release());
 
     // The Debug Menu's file pickers, and files dragged onto the page.
     this.dropTarget.wire();
@@ -729,7 +731,7 @@ export class PlayerWebApp {
   }
 
   /**
-   * Hands the active be-music skin's settings to the scenes on screen (and to the select scene and a play loading off
+   * Hands the active Be-Music Skin's settings to the scenes on screen (and to the select scene and a play loading off
    * it), which draw with them from their next frame.
    */
   private applyBeMusicSkinSettings(): void {
@@ -761,8 +763,13 @@ export class PlayerWebApp {
     else this.beatorajaSkinOptions.clear();
   }
 
-  /** Shows the select screen (`SelectRoute.showSelect`): at start-up, and on every way back to it. */
+  /**
+   * Shows the select screen (`SelectRoute.showSelect`): at start-up, and on every way back to it. The decoded samples
+   * kept for a quick retry go: the next play is most likely another chart, and they would sit through the select
+   * screen.
+   */
   private showSelect(): Promise<void> {
+    this.audio.chartSamples.release();
     return this.selectRoute.showSelect();
   }
 

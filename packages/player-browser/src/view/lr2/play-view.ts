@@ -201,12 +201,12 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     return this.options.course?.kind;
   }
 
-  /** An LR2 skin paints its own chrome: no be-music entrance fade. */
+  /** An LR2 skin paints its own chrome: no Be-Music entrance fade. */
   get paintsThroughBeMusicSkin(): boolean {
     return false;
   }
 
-  /** No be-music stage: the lanes the skin does not place fall back to the built-in layout on LR2's canvas. */
+  /** No Be-Music stage: the lanes the skin does not place fall back to the built-in layout on LR2's canvas. */
   get beMusicStage(): undefined {
     return undefined;
   }
@@ -220,7 +220,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     return NOTE_OVERSCAN * (this.skin.height / DESIGN_HEIGHT);
   }
 
-  /** No be-music skin: the playfield draws nothing of its own as data. */
+  /** No Be-Music Skin: the playfield draws nothing of its own as data. */
   get skinBinding(): undefined {
     return undefined;
   }

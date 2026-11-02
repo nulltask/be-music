@@ -194,7 +194,7 @@ flowchart TD
   1. `mode_hint` が空または未指定なら `beat-7k`（bmson 1.0.0 の既定値）として扱う
   2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`、`keyboard-24k`、`keyboard-24k-double` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ。キーボードの表は後述）。bmson 仕様の正式な一覧や beatoraja と同じく、`beat-5k` もスクラッチを `x` 8 に置いて `x` 6 / 7 にはレーンを割り当てず、`beat-10k` は 2P の鍵を `x` 9〜13、2P のスクラッチを `x` 16 に置く。表は `@be-music/chart-model` の `BMSON_MODE_HINT_LAYOUTS` で、プレイモード表から作る（[Player 仕様 — プレイモード表](./player-spec.ja.md#プレイモード表) を参照）
   3. `generic-Nkeys` は整数の 1〜70 キーに対応し、`x = 1..N` を左から順に `11..1Z`、続いて `21..2Z` へ写像する。ゼロ・上限超過・形式が不正な `generic-` の hint は、丸めも拒否もせず未知の hint として扱う。beatoraja が未対応の `mode_hint` を警告して読むのと同じく、レーンが収まれば `beat-7k` として読む（下記の手順 4）。単数形の `generic-Nkey` も引き続き受け付ける。`16`・`17`・`26`・`27` を含め、すべてを 1 つのキーボードの通常キーとして扱う。ほとんどの列が空でも、宣言したキー数から `generic-N` を選ぶ。
-  4. それ以外の hint は未知の hint とする。`sound_channels`・`key_channels`・`mine_channels` の正の `x` がすべて `beat-7k` の表（1〜8）に収まれば、beatoraja（警告つき）、Qwilight、Bemuse と同じく `beat-7k` として読む。収まらなければ正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番する。beatoraja では `x` 8 より先のレーンが BGM になるが、残すのが作者の意図だからである（be-music の判断）
+  4. それ以外の hint は未知の hint とする。`sound_channels`・`key_channels`・`mine_channels` の正の `x` がすべて `beat-7k` の表（1〜8）に収まれば、beatoraja（警告つき）、Qwilight、Bemuse と同じく `beat-7k` として読む。収まらなければ正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番する。beatoraja では `x` 8 より先のレーンが BGM になるが、残すのが作者の意図だからである（Be-Music の判断）
 - `x` が未指定、または `x <= 0` のノートは BGM (`01`)
 - キーボード系 hint（beatoraja が読む Keyboardmania 風の 24 鍵 + ホイール）はすべての `x` に固定のレーンを与えるため、使わない鍵がある譜面でも別の鍵へずれない
 
@@ -219,12 +219,12 @@ flowchart TD
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
 - `stop_events` の元配列は `preservation.bmson.stopEvents` に保持
 - beatoraja 拡張の `scroll_events` は `bms.scroll`（`#SCROLLxx` の表。異なる `rate` ごとに 1 キー）+ チャンネル `SC` へ変換し、BMS の SCROLL の仕組み（スクロールのタイムライン、レーン上の距離、緑数字）でそのまま再生する。速度は `#SCROLL` と同じく次のスクロールイベントまで続く。同じ `y` に複数あれば、beatoraja と同じくリストの最後のものが勝つ。有限の `rate` は 0 や負の値も含めて保持し、`y` か `rate` が有限数でない要素は読み飛ばす。元配列は `preservation.bmson.scrollEvents` に保持する（ない場合は省く）
-- beatoraja の bmson デコーダーは、後のオブジェクトのために作るタイムラインのスクロールを現在の速度ではなく 1.0 にする（`BMSONDecoder.getTimeLine`、L588-606）。そのため beatoraja では、次のスクロールイベントより前の次のノートで速度が 1.0 に戻ることがある。be-music は BMS 譜面と拡張の意図に合わせ、次のスクロールイベントまで速度を保つ。確認したギミック譜面（safe_state）では、2 つの解釈で描画に違いはなかった
+- beatoraja の bmson デコーダーは、後のオブジェクトのために作るタイムラインのスクロールを現在の速度ではなく 1.0 にする（`BMSONDecoder.getTimeLine`、L588-606）。そのため beatoraja では、次のスクロールイベントより前の次のノートで速度が 1.0 に戻ることがある。Be-Music は BMS 譜面と拡張の意図に合わせ、次のスクロールイベントまで速度を保つ。確認したギミック譜面（safe_state）では、2 つの解釈で描画に違いはなかった
 - `sound_channels` の元配列は `preservation.bmson.soundChannels` に保持
 - beatoraja 拡張は jbms-parser（beatoraja）と同じく読む。どちらも `sound_channels` と同じ `mode_hint` lane map を通り、`x` に対応するレーンがないノートは捨てる。WAV は `sound_channels` の後に `key_channels`、`mine_channels` の順で登録する
   - `key_channels` は隠しノート: 各ノートは BMS 不可視オブジェクト（`3x` / `4x`。拡張の `3A`〜`3Q` / `4A`〜`4Q` を含む）になり、チャンネルのサンプルをそのレーンの keysound として鳴らし、判定はしない。読むのは `x` と `y` だけ
   - `mine_channels` は地雷: 各ノートは BMS 地雷（`Dx` / `Ex`）になり、`damage` を `events[].bmson.damage` に保持。event の値は mine channel 用に登録した WAV スロットなので player はダメージとして読まず、`damage` のない地雷は既定の `4`（%）を与える（不正な BMS 地雷値と同じフォールバック）
-  - beatoraja はロングノート内やノートのある位置の地雷を捨てるが、be-music は LR2 が BMS のそうした地雷を残すのと同じく残す（[BMS / bmson 互換性ノート §2.6](./format-compat.ja.md#26-地雷) を参照）
+  - beatoraja はロングノート内やノートのある位置の地雷を捨てるが、Be-Music は LR2 が BMS のそうした地雷を残すのと同じく残す（[BMS / bmson 互換性ノート §2.6](./format-compat.ja.md#26-地雷) を参照）
 - `bga` は `bmson.bga` へ保持
 
 ## BMS/bmson 中間表現 -> bmson 変換 (chart-writer)
@@ -234,7 +234,7 @@ flowchart TD
 - `bmson.info.resolution` を `info.resolution` に出力。値を持たない BMS 譜面には、下記 `stringifyBmson` の正確な分解能を使う
 - `bmson.info` の拡張項目 (`subartists`, `chart_name`, `judge_rank`, `total`, 画像/プレビュー系など) を出力
 - `info.total` は `bmson.info.total`、bmson ソースなら `metadata.total` から出力する。BMS / JSON 譜面の `metadata.total` はゲージの絶対 TOTAL であり、bmson の `total` はプレイヤー既定 TOTAL（ノーツ数とルールセットに依存）に対する百分率なので出力せず、bmson 既定値 `100` に委ねる
-- `info.judge_rank` は `bmson.info.judge_rank`、bmson ソースなら `metadata.rank` から出力する。BMS / JSON 譜面では、bmson の `judge_rank` が `#DEFEXRANK` と同じ単位（`100` = NORMAL）なので正の `#DEFEXRANK` をそのまま出力し、なければ整数の `#RANK 0`〜`4`（`metadata.rank`、ランク番号）を `33` / `67` / `100` / `133` / `167`（そのランクと同じ判定幅になる `#DEFEXRANK` 値。VERY EASY は beatoraja の judgerank `125` に合わせる。LR2 は NORMAL 扱い）へ変換する。それ以外の `#RANK`（範囲外や小数）は NORMAL 判定なので出力せず、bmson 既定値 `100` に委ねる。be-music の ruleset では、名前を言ってはいけないあのゲームの判定幅は一致し、LR2 は NORMAL と `#DEFEXRANK` で一致（`#RANK 0`・`1`・`3` は `0.4ms` 以内、`#RANK 4` は広くなる）、beatoraja は bmson の `judge_rank` を `#DEFEXRANK` のように換算せず judgerank として直接使うため、どのランクも約 4/3 倍広くなる
+- `info.judge_rank` は `bmson.info.judge_rank`、bmson ソースなら `metadata.rank` から出力する。BMS / JSON 譜面では、bmson の `judge_rank` が `#DEFEXRANK` と同じ単位（`100` = NORMAL）なので正の `#DEFEXRANK` をそのまま出力し、なければ整数の `#RANK 0`〜`4`（`metadata.rank`、ランク番号）を `33` / `67` / `100` / `133` / `167`（そのランクと同じ判定幅になる `#DEFEXRANK` 値。VERY EASY は beatoraja の judgerank `125` に合わせる。LR2 は NORMAL 扱い）へ変換する。それ以外の `#RANK`（範囲外や小数）は NORMAL 判定なので出力せず、bmson 既定値 `100` に委ねる。Be-Music の ruleset では、名前を言ってはいけないあのゲームの判定幅は一致し、LR2 は NORMAL と `#DEFEXRANK` で一致（`#RANK 0`・`1`・`3` は `0.4ms` 以内、`#RANK 4` は広くなる）、beatoraja は bmson の `judge_rank` を `#DEFEXRANK` のように換算せず judgerank として直接使うため、どのランクも約 4/3 倍広くなる
 - `preservation.bmson.lines` があれば `lines[].y` として出力
 - `preservation.bmson.lines` がない場合は IR の小節長から `lines` を自動生成
 - `bmson.barlinesSuppressed` が `true` の場合は `lines: []` を出力
@@ -260,7 +260,7 @@ flowchart TD
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `l > 0` のノート     | `5x` / `6x` 上の `#LNTYPE 1` のペア（ノート自身の WAV を持つ始点と終点）。`#LNTYPE` がなければ `#LNTYPE 1` を出力。`#LNOBJ` は使わない: すべてのロングノートで共有する終端オブジェクトのスロットが必要で、終端をそのレーンの直前のノートと組にしてしまうが、`5x` / `6x` のペアは自分自身としか組にならない |
 | `t` / `info.ln_type` | ロングノートの種別（`t`、なければ `info.ln_type`）がすべて同じならそれを、そうでなければ `info.ln_type` を `#LNMODE` に出力。それと異なるノート単位の種別は BMS で表せず失われる                                                                                                                           |
-| 地雷の `damage`      | 地雷のオブジェクト値（base36）。整数に丸め、`01`〜`ZZ` に収める（`00` はオブジェクトなしなので `0` は `01` = 1 %、`1295` 超は `ZZ`）。`damage` のない地雷は be-music の既定値 `04`。`#WAV00` がなければ最初の地雷のサンプルを爆発音 `#WAV00` にする                                                        |
+| 地雷の `damage`      | 地雷のオブジェクト値（base36）。整数に丸め、`01`〜`ZZ` に収める（`00` はオブジェクトなしなので `0` は `01` = 1 %、`1295` 超は `ZZ`）。`damage` のない地雷は Be-Music の既定値 `04`。`#WAV00` がなければ最初の地雷のサンプルを爆発音 `#WAV00` にする                                                        |
 | `judge_rank`         | 正の値なら同じ値の `#DEFEXRANK`（単位が同じで `100` = NORMAL）。`#RANK` は出力しない                                                                                                                                                                                                                       |
 | `total`              | 出力しない。bmson の `total` はプレイヤー既定 TOTAL（ノーツ数とプレイヤーに依存）に対する百分率で、正確な絶対値の `#TOTAL` はないため。BMS の既定値が適用され、これは bmson の既定値 `100` の意味と同じ                                                                                                    |
 | `scroll_events`      | `#SCROLLxx`（異なる速度ごとに 1 つ）と `SC` オブジェクト                                                                                                                                                                                                                                                   |
@@ -274,16 +274,16 @@ bmson 仕様は `judge_rank` の判定幅をプレイヤーに委ねています
 
 | `judge_rank: 100` の解釈          | プレイヤー                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| NORMAL（`#RANK 2`）               | [Bemuse](https://github.com/bemusic/bemuse/blob/4bf3e7d98a44841b323741cc403ecb7b41618ade/packages/bemuse-notechart/src/loader/BmsonNotechartLoader.ts#L35-L43)、[Qwilight](https://github.com/thenist/Qwilight/blob/6d3887f6688a1f97c1fbe2bffd28feaedc9920b6/Qwilight/Compiler/BMSONCompiler.cs#L375)、[raindrop](https://github.com/zardoru/raindrop/blob/662dd11f05994f6f36493575b04ecb64b04dcd7b/src/NoteLoaderBMSON.cpp#L200-L215)、be-music の LR2 / 名前を言ってはいけないあのゲーム ルールセット |
-| EASY（`#RANK 3`。NORMAL は `75`） | [beatoraja](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayerRule.java#L59-L66)（`judge_rank` を judgerank の割合としてそのまま使う。`#DEFEXRANK` は 0.7.3 から `100` = NORMAL になるよう換算している）、LR2oraja、bmz-player、be-music の beatoraja ルールセット                                                                                                                                                            |
+| NORMAL（`#RANK 2`）               | [Bemuse](https://github.com/bemusic/bemuse/blob/4bf3e7d98a44841b323741cc403ecb7b41618ade/packages/bemuse-notechart/src/loader/BmsonNotechartLoader.ts#L35-L43)、[Qwilight](https://github.com/thenist/Qwilight/blob/6d3887f6688a1f97c1fbe2bffd28feaedc9920b6/Qwilight/Compiler/BMSONCompiler.cs#L375)、[raindrop](https://github.com/zardoru/raindrop/blob/662dd11f05994f6f36493575b04ecb64b04dcd7b/src/NoteLoaderBMSON.cpp#L200-L215)、Be-Music の LR2 / 名前を言ってはいけないあのゲーム ルールセット |
+| EASY（`#RANK 3`。NORMAL は `75`） | [beatoraja](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayerRule.java#L59-L66)（`judge_rank` を judgerank の割合としてそのまま使う。`#DEFEXRANK` は 0.7.3 から `100` = NORMAL になるよう換算している）、LR2oraja、bmz-player、Be-Music の beatoraja ルールセット                                                                                                                                                            |
 
 | 変換ツール（BMS → bmson）                                                                                                                  | `#RANK 0`〜`4` の書き出し                                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
 | [BmsONE](https://github.com/excln/BmsONE/blob/bb3406eeb8f45d79350241f09bb897dd229ce3af/src/document/DocumentInfo.cpp#L119-L135)            | `40` / `60` / `80` / `100` / `120`（`#DEFEXRANK` は読まない） |
 | [bms2bmson-python](https://github.com/bemusicscript/bms2bmson-python/blob/c83df681b6cd9d28f5dfccc9ee302e389e417b7b/bmx2bmson.py#L108-L122) | 書き出さない（既定値 `100`）                                  |
-| be-music（`stringifyBmson`）                                                                                                               | `33` / `67` / `100` / `133` / `167`。`#DEFEXRANK` はそのまま  |
+| Be-Music（`stringifyBmson`）                                                                                                               | `33` / `67` / `100` / `133` / `167`。`#DEFEXRANK` はそのまま  |
 
-be-music は NORMAL の解釈（`100` = NORMAL）に従います。仕様の説明例と多くのプレイヤーに沿い、be-music で bmson に変換して読み直したときに判定幅が保たれるためです。その代わり、変換した譜面は beatoraja では約 4/3 倍広い判定になります。配布されている bmson 譜面は、ほぼすべて既定値 `100` のままです。
+Be-Music は NORMAL の解釈（`100` = NORMAL）に従います。仕様の説明例と多くのプレイヤーに沿い、Be-Music で bmson に変換して読み直したときに判定幅が保たれるためです。その代わり、変換した譜面は beatoraja では約 4/3 倍広い判定になります。配布されている bmson 譜面は、ほぼすべて既定値 `100` のままです。
 
 ## 互換性と保持の方針
 

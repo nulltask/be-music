@@ -9,7 +9,11 @@ import {
   type BeMusicGameplayFrame,
   type BeMusicGameplayRuntime,
   type BeMusicSurface,
+  backSpinChevron,
+  hellChargeZigzag,
   longNoteCentreLineAlpha,
+  resolveHellChargeLook,
+  resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
 import {
   ACCENT,
@@ -123,6 +127,24 @@ function drawWheelArrow(ctx: CanvasRenderingContext2D, x: number, y: number, siz
   ctx.fill();
 }
 
+/** Strokes an open polyline given as `[x0, y0, x1, y1, …]`. */
+function strokePolyline(ctx: CanvasRenderingContext2D, points: readonly number[]): void {
+  if (points.length < 4) return;
+  ctx.beginPath();
+  ctx.moveTo(points[0]!, points[1]!);
+  for (let index = 2; index < points.length; index += 2) ctx.lineTo(points[index]!, points[index + 1]!);
+  ctx.stroke();
+}
+
+/** Fills a closed polygon given as `[x0, y0, x1, y1, …]`. */
+function fillPolygon(ctx: CanvasRenderingContext2D, points: readonly number[]): void {
+  ctx.beginPath();
+  ctx.moveTo(points[0]!, points[1]!);
+  for (let index = 2; index < points.length; index += 2) ctx.lineTo(points[index]!, points[index + 1]!);
+  ctx.closePath();
+  ctx.fill();
+}
+
 const BEAM_GRADIENTS = new WeakMap<
   CanvasRenderingContext2D,
   { top: number; bottom: number; gradient: CanvasGradient }
@@ -141,27 +163,61 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
 
 /**
  * Tap notes as flat bars. Long notes: a translucent body with a white centre line between the head and tail bars; an
- * LN's tail (not judged) is translucent, a CN / HCN tail (judged on release) solid. A long note missed at the head or let go early draws at
- * LR2's half alpha.
+ * LN's tail (not judged) is translucent, a CN / HCN tail (judged on release) solid. An HCN's centre line zigzags and it
+ * shows how it stands (HELL violet before it is reached, an orange glow while held, a dim red while let go), a back-spin
+ * scratch's tail a chevron pointing back up the lane. A long note missed at the head or let go early draws at LR2's half
+ * alpha.
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
     const alpha = (note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1) * (note.alpha ?? 1);
     const bodyTop = note.top - NOTE_HEIGHT;
     const bodyHeight = Math.max(1, note.bottom - note.top);
-    ctx.fillStyle = NOTE_FILL[note.kind];
-    ctx.globalAlpha = 0.25 * alpha;
-    ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
+    const marks = resolveLongNoteMarks(note);
+    // A hell charge note shows how it stands: colour, glow and zigzag motion change together (`resolveHellChargeLook`).
+    const look = marks.hellCharge ? resolveHellChargeLook(note.state, frame.nowMs) : undefined;
+    if (look) {
+      ctx.fillStyle = css(look.color);
+      if (look.glow > 0) {
+        ctx.globalAlpha = 0.3 * look.glow * alpha;
+        ctx.fillRect(note.x - 3, bodyTop, note.w + 6, bodyHeight);
+        ctx.fillRect(note.x - 3, note.bottom - NOTE_HEIGHT - 3, note.w + 6, NOTE_HEIGHT + 6);
+      }
+      ctx.globalAlpha = (0.2 + 0.3 * look.glow) * alpha;
+      ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
+    } else {
+      ctx.fillStyle = NOTE_FILL[note.kind];
+      ctx.globalAlpha = 0.25 * alpha;
+      ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
+    }
     // Let go early, the centre line fades out with the hold.
-    ctx.fillStyle = '#ffffff';
-    ctx.globalAlpha = 0.6 * alpha * longNoteCentreLineAlpha(note.releasedElapsedMs);
-    ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
+    const line = longNoteCentreLineAlpha(note.releasedElapsedMs);
+    if (look) {
+      // A hell charge note's centre line zigzags: flowing into the judgement line while it charges, back up while it
+      // drains, still otherwise.
+      ctx.strokeStyle = css(look.lineColor);
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = (0.55 + 0.45 * look.glow) * alpha * line;
+      strokePolyline(
+        ctx,
+        hellChargeZigzag(note.x, note.w, bodyTop, bodyTop + bodyHeight, { nowMs: frame.nowMs, flow: look.flow }),
+      );
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.6 * alpha * line;
+      ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
+    }
     ctx.globalAlpha = alpha;
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
     // An LN's tail is not judged: drawn translucent, where to let go. A CN / HCN tail is judged and stays solid.
-    if (note.mode === 'ln') ctx.globalAlpha = alpha * LN_TAIL_ALPHA;
+    if (!marks.judgedTail) ctx.globalAlpha = alpha * LN_TAIL_ALPHA;
     ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    if (marks.backSpin) {
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffffff';
+      fillPolygon(ctx, backSpinChevron(note.x, note.w, note.top, NOTE_HEIGHT));
+    }
     ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {

@@ -76,7 +76,7 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | `#xxx0B`–`#xxx0E`                                                     | Replace the opacity of the BGA base / layer / layer2 / POOR plane.                                                                                                                                                                                                            |
 | `#xxx11-19`, `#xxx21-29`                                              | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY / 24KEY, and normal note for 9KEY / 24KEY.                                                                                                                             |
 | `#xxx1A-1O`, `#xxx2A-2O`                                              | Treated as visible performance notes — lanes 10..24 of the 24-key (Keyboardmania) bank. A single one of these channels classifies the chart as `24 KEY SP` / `48 KEY DP`.                                                                                                     |
-| `#xxx1P`, `#xxx1Q`, `#xxx2P`, `#xxx2Q`                                | Treated as visible performance notes on the 24 / 48 KEY wheel: `1P` / `2P` turn it up, `1Q` / `2Q` down (be-music's BMS convention for the bmson `keyboard-24k` wheel, `x` = 25 / 26). They classify the chart as `24 KEY SP` / `48 KEY DP` like the other extended channels. |
+| `#xxx1P`, `#xxx1Q`, `#xxx2P`, `#xxx2Q`                                | Treated as visible performance notes on the 24 / 48 KEY wheel: `1P` / `2P` turn it up, `1Q` / `2Q` down (Be-Music's BMS convention for the bmson `keyboard-24k` wheel, `x` = 25 / 26). They classify the chart as `24 KEY SP` / `48 KEY DP` like the other extended channels. |
 | `#xxx31-39`, `#xxx41-49` (and the extended `#xxx3A-3O` / `#xxx4A-4O`) | Treated as invisible notes. They update the corresponding lane's manual keysound state like visible notes, and may be used for display aids, but are not included in `summary.total`. `AUTO` does not produce a sound.                                                        |
 | `#xxx51-59`, `#xxx61-69` (and the extended `#xxx5A-5O` / `#xxx6A-6O`) | Treated as BMS legacy long note.                                                                                                                                                                                                                                              |
 | `#xxx97`, `#xxx98`                                                    | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that.                                                                                                                                                             |
@@ -321,7 +321,7 @@ it is not FREE ZONE, and the lane options (MIRROR / RANDOM / S-RANDOM) move the 
 place, as they do the scratch. The 24 SP keys take the fallback key layout in order
 (`a s d f g h j k l ; q w e r u i o p z x c v b n`); the wheel has its own keys on the keyboard's edges, off that pool
 and off the arrow keys the web player uses for hi-speed: `Tab` / left `Shift` turn the 1P wheel up / down, `Enter` /
-right `Shift` the 2P wheel. (beatoraja plays the wheel from a MIDI controller's pitch bend; be-music has no MIDI input.)
+right `Shift` the 2P wheel. (beatoraja plays the wheel from a MIDI controller's pitch bend; Be-Music has no MIDI input.)
 A 48-key DP chart runs past the printable-key pool and the tail of its keys lands on function keys, which is a
 deliberate trade — 48 keys are an AUTO PLAY / rendering target, not a hand-playable one.
 
@@ -748,6 +748,13 @@ The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's
   keep running after an early release, so pressing the lane again before the end point gains once more. Only the note
   crossing the judge line ticks (`JudgeManager` L235-L242): one judged early waits until the one ahead of it on the
   lane has passed, and a head missed only after its end point passed has no ticks. AUTO SCRATCH lanes have none.
+- Back-spin scratch (BSS): a mode `2` / `3` long note on a scratch lane (`isBackSpinScratch`) has its tail judged on a
+  reverse spin instead of the release, as beatoraja does ("BSS終端処理"). The press that hits the head records its
+  scratch spin (`'cw'` / `'ccw'`); a later press on the lane spinning the other way judges the tail at once, its timing
+  against the long-scratch-end windows (`POOR` outside them, no release margin), and plays the tail's keysound. Letting
+  go settles nothing — the gauge ticks of a hell-charge BSS still follow whether the lane is down — and a press spinning
+  the same way is a re-press. A tail never spun back is a missed `POOR` once its late window closes, held or not. LR2
+  plays every long note as an LN, so it has no BSS. Where the spin comes from is in [Scratch spin](#scratch-spin).
 
 A release is settled at its own instant. The one exception is the ruleset's long-note release margin
 (`longNoteReleaseMarginUs`, beatoraja's `longnoteMargin` / `longscratchMargin`): under beatoraja's PMS rule a release
@@ -758,10 +765,27 @@ keyboard protocol) the engine infers the release: 120 ms after the key's last re
 hit the long note's head when no repeat followed.
 
 A press on a lane whose long note is held (a second key bound to the lane, such as the turntable's other direction)
-never judges another note on that lane: the lane's current note is the long note. What it does instead is the
-ruleset's (`pressDuringLongNote`): `lr2` judges the LN's head again when the press falls within its `BAD` window and
-charges an empty `POOR` otherwise (OpenLR2 `ProcLongnote`); `beatoraja` ignores it as a re-press (`JudgeManager`
-L355-377), and `____` does the same.
+never judges another note on that lane: the lane's current note is the long note. A reverse spin on a back-spin scratch
+judges its tail (above). What any other press does is the ruleset's (`pressDuringLongNote`): `lr2` judges the LN's head
+again when the press falls within its `BAD` window and charges an empty `POOR` otherwise (OpenLR2 `ProcLongnote`);
+`beatoraja` ignores it as a re-press (`JudgeManager` L355-377), and `____` does the same.
+
+#### Scratch spin
+
+Each scratch press carries the way it turned the turntable, `'cw'` or `'ccw'` (`ScratchSpin`, recorded as the replay
+input's `spin`), so the judge core, a replay and the replay simulator all read a reverse spin from the input:
+
+- A controller that reports rotation (a turntable or an analog axis) sends the direction it actually turned, as the
+  `spin` of its `lane-input` command.
+- A keyboard uses odd-even: a scratch lane's keys alternate as the two directions (`LaneBinding.inputKeys`,
+  `createScratchSpinByToken`). Each scratch has two keys by default — Shift (`'cw'`) and Ctrl, or Option / Alt in a
+  macOS terminal (`'ccw'`) — so pressing the scratch key other than the one that hit a BSS head spins it back.
+- Input with no direction reports no spin: a touch lane (its `lane-input` carries `spin: null`) and an ANY KEY press
+  from a non-scratch key. Every press counts as the reverse spin except one known to spin the same way as the head, so
+  a fresh press without a spin while a BSS is held turns it back, and after a head hit without a spin any later press
+  does (`isReverseScratchSpin`).
+
+See [ADR 0037](./adr/0037-scratch-spin-input.md) for the trade-off.
 
 A long note the player never touched owes one `POOR` for the head, plus a second for the tail under charge modes —
 except under That-Which-Must-Not-Be-Named, where the cancelled tail owes nothing.
@@ -785,6 +809,7 @@ stateDiagram-v2
   Held --> Done: LN let go early
   Held --> Done: LN reaches its tail
   Held --> Done: CN / HCN released
+  Held --> Done: BSS spun back
   Held --> Done: CN / HCN tail window closes
   Missed --> [*]
   Done --> [*]
@@ -927,6 +952,7 @@ With `LNMODE=3`, the gauge continues to decrease even during hold break.
 The player body is independent of the UI implementation and notifies the state through `stateSignals` and `uiSignals`.
 Judgment/combo, frame information, POOR BGA, lane flash, and lane hold indication are communicated via this signal.
 The UI command queue also carries long-note lifecycle commands: `long-note-start` (with `mode`: `ln` / `cn` / `hcn`, the mode the active ruleset actually plays the note in, which can differ from the chart's `#LNMODE`) when a hold begins, and `long-note-end` (with `outcome`: `complete` / `dropped`) when it finishes.
+A hell charge note (an HCN, a hell-charge back-spin scratch included) also sends `hell-charge` (with its `channel`, the head's `beat` and `state`) from the judge core each time its gauge ticks switch: `gaining` while the lane gains, `draining` while it does not (let go early, or the head missed: a press makes it gain again), and `passed` once its end point has passed. Only a switch is sent, and a replay sends the same commands as the play it records; a seek sends the state of each hell charge note passing the judge line after the held long notes. AUTO and AUTO SCRATCH lanes send none, since their notes always gain.
 A seek pushes `seek` (with its `generation`, the `seconds` sought and a `snapshot`: the summary, the combo, the max combo and every judgment before the target) after dropping the commands and judge cues still queued.
 Every frame carries its seek `generation` (0 until the first seek) and the `clock` its chart time holds at (`outputSeconds` of the audio session's output clock, `tempo`, `paused`), and the summary carries `combo` and `maxCombo`.
 

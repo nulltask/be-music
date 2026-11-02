@@ -1,5 +1,5 @@
 /**
- * `@be-music/player-skin-sdk` — everything a be-music skin is written against, and nothing that draws. A skin gets
+ * `@be-music/player-skin-sdk` — everything a Be-Music Skin is written against, and nothing that draws. A skin gets
  * Canvas surfaces and plain frame data from the player, and can also mount native DOM screens. Canvas rendering can use the Canvas 2D API, raw WebGL /
  * WebGPU, or a framework such as PixiJS or three.js. The SDK itself imports no rendering framework.
  *
@@ -40,6 +40,7 @@ export * from './portrait.ts';
 export * from './fonts.ts';
 export * from './motion.ts';
 export * from './hold.ts';
+export * from './long-note-marks.ts';
 export * from './tabular.ts';
 export * from './judge-word.ts';
 export * from './moments.ts';

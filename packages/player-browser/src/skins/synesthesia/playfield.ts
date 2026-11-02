@@ -24,7 +24,11 @@ import {
   holdSparks,
   resolveLaneRuns,
   type BeMusicLaneFrame,
+  backSpinChevron,
+  hellChargeZigzag,
   longNoteCentreLineAlpha,
+  resolveHellChargeLook,
+  resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
 import {
   type PixiBombsContext,
@@ -193,23 +197,64 @@ export function renderSynesthesiaLongNote({
   w,
   top,
   bottom,
+  nowMs,
   mode,
+  backSpinScratch,
+  state,
   releasedElapsedMs,
 }: PixiLongNoteContext): void {
   const light = LIGHTS[kind];
+  const marks = resolveLongNoteMarks({ mode, backSpinScratch });
   const bodyX = x;
   const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
-  // A beam of light between head and tail: a translucent core with a bright centre filament.
-  graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
+  // A hell charge note shows how it stands (`resolveHellChargeLook`): its colour, its glow and its zigzag filament's
+  // motion change together — HELL violet with a still zigzag before it is reached, a bright orange glow with the zigzag
+  // flowing into the line while it charges, a dim red with the zigzag flowing back up while it drains.
+  const look = marks.hellCharge ? resolveHellChargeLook(state, nowMs) : undefined;
+  if (look) {
+    if (look.glow > 0)
+      graphics.rect(bodyX - 3, bodyTop, bodyW + 6, bodyH).fill({ color: look.color, alpha: 0.3 * look.glow });
+    graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: look.color, alpha: 0.16 + 0.3 * look.glow });
+  } else {
+    // A beam of light between head and tail: a translucent core with a bright centre filament.
+    graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
+  }
   // Let go early, the filament fades out with the hold.
   const line = longNoteCentreLineAlpha(releasedElapsedMs);
-  if (line > 0) graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 * line });
+  if (!look && line > 0) {
+    graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 * line });
+  }
+  if (look) {
+    // A hell charge note's filament zigzags: white-hot while it charges, a light tint of its colour otherwise.
+    const zigzag = hellChargeZigzag(bodyX, bodyW, bodyTop, bodyTop + bodyH, { nowMs, flow: look.flow });
+    if (line > 0 && zigzag.length >= 4) {
+      graphics.moveTo(zigzag[0]!, zigzag[1]!);
+      for (let index = 2; index < zigzag.length; index += 2) graphics.lineTo(zigzag[index]!, zigzag[index + 1]!);
+      graphics.stroke({
+        color: look.lineColor,
+        width: 2,
+        alpha: (0.55 + 0.45 * look.glow) * line,
+      });
+    }
+    // The head on the judgement line glows with the note: brightest while charging, gone once it is over.
+    if (look.glow > 0) {
+      graphics
+        .rect(bodyX - 4, bottom - NOTE_HEIGHT - 4, bodyW + 8, NOTE_HEIGHT + 8)
+        .fill({ color: look.color, alpha: 0.45 * look.glow });
+    }
+  }
   drawNote(graphics, bodyX, bottom, bodyW, light);
   // An LN's tail is not judged, so it is drawn translucent: where to let go, not a note to hit. A CN / HCN tail is
   // judged on release and keeps the full cap.
-  drawNote(graphics, bodyX, top, bodyW, light, mode === 'ln' ? LN_TAIL_ALPHA : 1);
+  drawNote(graphics, bodyX, top, bodyW, light, marks.judgedTail ? 1 : LN_TAIL_ALPHA);
+  if (marks.backSpin) {
+    // A back-spin scratch: a dark-rimmed white chevron on the tail cap, pointing back up the lane — spin it back there.
+    const chevron = backSpinChevron(bodyX, bodyW, top, NOTE_HEIGHT);
+    graphics.poly(chevron).stroke({ color: 0x05010a, width: 2, alpha: 0.9 });
+    graphics.poly(chevron).fill(0xffffff);
+  }
 }
 
 /** How opaque an LN's tail cap is: clearly the end of the note, but quieter than a cap to hit. */

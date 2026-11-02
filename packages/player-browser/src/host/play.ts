@@ -39,7 +39,7 @@ import type { BeatorajaKit, BuiltInKit, LR2PlayKit } from './family-kit.ts';
 const log = logger('gameplay');
 
 /**
- * The kits the play scene takes: a be-music skin, an LR2 play skin (with the 9-keys skin for invisible notes), or a
+ * The kits the play scene takes: a Be-Music Skin, an LR2 play skin (with the 9-keys skin for invisible notes), or a
  * beatoraja theme's play entry.
  */
 export type PlaySceneKit = BuiltInKit | LR2PlayKit | BeatorajaKit;

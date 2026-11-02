@@ -38,7 +38,7 @@
   <rect x="560" width="300" height="630" fill="url(#fade)"/>
 
   <g font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" fill="#ffffff">
-    <text x="80" y="250" font-size="96" font-weight="700" letter-spacing="-2">be-music</text>
+    <text x="80" y="250" font-size="96" font-weight="700" letter-spacing="-2">Be-Music</text>
     <text x="84" y="330" font-size="56" font-weight="400" fill="#9aa4bf">Leaderboard</text>
     <text x="86" y="430" font-size="30" font-weight="400" fill="#c7cde0">Rankings, replays and rivals</text>
     <text x="86" y="472" font-size="30" font-weight="400" fill="#c7cde0">for BMS players</text>

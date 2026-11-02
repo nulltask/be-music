@@ -3,6 +3,7 @@ import {
   addHCNPassing,
   ignoresLateLongNoteHeadBad,
   noteLateReachUs,
+  isBackSpinScratch,
   isChargeLongNoteMode,
   isMultiBadCollectorTarget,
   longNoteOwesTailMiss,
@@ -174,5 +175,24 @@ describe('ruleset long-note rules', () => {
       expect(run(counter, HCN_TICK_US + 1)).toEqual([]);
       expect(run(counter, HCN_TICK_US + 2)).toEqual([[true, HCN_TICK_US + 1]]);
     });
+  });
+});
+
+describe('isBackSpinScratch', () => {
+  test('a charge note on a scratch lane is a back-spin scratch', () => {
+    expect(isBackSpinScratch(2, true)).toBe(true);
+    expect(isBackSpinScratch(3, true)).toBe(true);
+  });
+
+  test('an LN, a key lane or a tap is not', () => {
+    expect(isBackSpinScratch(1, true)).toBe(false);
+    expect(isBackSpinScratch(2, false)).toBe(false);
+    expect(isBackSpinScratch(undefined, true)).toBe(false);
+  });
+
+  test('the played mode decides it: LR2 plays every long note as an LN', () => {
+    expect(isBackSpinScratch(resolveEffectiveLongNoteMode('ln', 2), true)).toBe(false);
+    expect(isBackSpinScratch(resolveEffectiveLongNoteMode('charge', 1), true)).toBe(true);
+    expect(isBackSpinScratch(resolveEffectiveLongNoteMode('per-note', 3), true)).toBe(true);
   });
 });

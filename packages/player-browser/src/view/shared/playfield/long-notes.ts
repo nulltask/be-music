@@ -1,3 +1,4 @@
+import { isBackSpinScratchLongNote } from '@be-music/player-skin-sdk';
 import { drawLabel } from '../../../stage/draw-label.ts';
 /** The long notes of the shared playfield: one long note's body and caps. */
 
@@ -10,8 +11,8 @@ import type { PlayfieldContext, RuntimeNote } from './context.ts';
 /**
  * Renders a long note as a vertical band: LN_BODY tiled (or stretched) between LN_START (lower) and LN_END (upper).
  * The body / caps come from the skin by channel when it draws them (`PlayfieldSkin.noteCell`); otherwise the
- * body falls back to the be-music skin's long-note drawing. A long note missed at the head or let go early draws at
- * half alpha until it goes, as in LR2 ({@link resolveLongNoteAlpha}); a be-music skin gets its `state` and dims it
+ * body falls back to the Be-Music Skin's long-note drawing. A long note missed at the head or let go early draws at
+ * half alpha until it goes, as in LR2 ({@link resolveLongNoteAlpha}); a Be-Music Skin gets its `state` and dims it
  * itself.
  */
 export function renderLongNote(
@@ -26,7 +27,8 @@ export function renderLongNote(
 ): void {
   const channel = note.channel;
   const state = ctx.play.longNotes.stateOf(channel, note.beat, note.judged);
-  const alpha = resolveLongNoteAlpha(state);
+  // LR2 has no draining hell charge note: a note let go stays at half alpha whatever its gauge does after.
+  const alpha = resolveLongNoteAlpha(ctx.play.longNotes.holdStateOf(channel, note.beat, note.judged));
   const releasedAtMs = state === 'dropped' ? ctx.play.longNotes.releasedAtMs(channel, note.beat) : undefined;
   const releasedElapsedMs = releasedAtMs === undefined ? undefined : Math.max(0, ctx.play.playClock() - releasedAtMs);
   // `yStart` / `yEnd` are the chart-time intersections with the judgement line. With the bottom-edge anchor
@@ -56,6 +58,7 @@ export function renderLongNote(
     const kind = resolveBeMusicLaneKind(channel, laneIndex, ctx.play.chartPlayVariant);
     const binding = ctx.skinBinding;
     if (binding) {
+      const mode = ctx.play.resolveLongNoteMode(note);
       binding.addLongNote({
         ...(visibilityAlpha !== 1 ? { alpha: visibilityAlpha } : {}),
         kind,
@@ -63,7 +66,8 @@ export function renderLongNote(
         w: lane.w,
         top,
         bottom,
-        mode: ctx.play.resolveLongNoteMode(note),
+        mode,
+        ...(isBackSpinScratchLongNote(kind, mode) ? { backSpinScratch: true } : {}),
         state,
         ...(releasedElapsedMs !== undefined ? { releasedElapsedMs } : {}),
         autoplay: ctx.play.isAutoplayedChannel(channel),

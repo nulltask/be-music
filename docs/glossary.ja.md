@@ -18,18 +18,20 @@
 
 ドキュメント・ソースコメント・画面の文言では、次の表記を使います。コードの識別子は[命名規則](../AGENTS.md)に従います。BMS・bmson・外部サービスが要求する名前は維持します。プロジェクト独自の名前はこの用語に揃えます。
 
-| 概念                             | 英語                 | 日本語                | コード                                           |
-| -------------------------------- | -------------------- | --------------------- | ------------------------------------------------ |
-| 時刻を持つノートなどの演奏用配置 | chart                | 譜面                  | `chart`                                          |
-| 複数の譜面が共有する音楽作品     | track                | 楽曲                  | `track`                                          |
-| JSON ベースの譜面形式            | bmson                | bmson                 | `bmson` / `Bmson`。既存の `BMSON_*` 定数は維持   |
-| ノートを評価した結果             | judgment             | 判定                  | 既存 API の `judge` は維持                       |
-| 入力を記録したリプレイ           | replay               | リプレイ              | `replay` / `Replay`                              |
-| プロフィール画像                 | avatar               | アバター              | `avatar`                                         |
-| 一意な公開ユーザー名             | handle               | ユーザー名            | `handle`                                         |
-| アバターの横に表示する名前       | display name         | 表示名                | `displayName`                                    |
-| 認証済みセッションの開始・終了   | sign in / sign out   | ログイン / ログアウト | `signIn` / `signOut`。認証ライブラリの契約は維持 |
-| デプロイ先の環境                 | production / preview | 本番 / プレビュー     | `production` / `preview`                         |
+| 概念                                 | 英語                 | 日本語                | コード                                                    |
+| ------------------------------------ | -------------------- | --------------------- | --------------------------------------------------------- |
+| 時刻を持つノートなどの演奏用配置     | chart                | 譜面                  | `chart`                                                   |
+| 複数の譜面が共有する音楽作品         | track                | 楽曲                  | `track`                                                   |
+| JSON ベースの譜面形式                | bmson                | bmson                 | `bmson` / `Bmson`。既存の `BMSON_*` 定数は維持            |
+| ノートを評価した結果                 | judgment             | 判定                  | 既存 API の `judge` は維持                                |
+| 入力を記録したリプレイ               | replay               | リプレイ              | `replay` / `Replay`                                       |
+| プロフィール画像                     | avatar               | アバター              | `avatar`                                                  |
+| 一意な公開ユーザー名                 | handle               | ユーザー名            | `handle`                                                  |
+| アバターの横に表示する名前           | display name         | 表示名                | `displayName`                                             |
+| 認証済みセッションの開始・終了       | sign in / sign out   | ログイン / ログアウト | `signIn` / `signOut`。認証ライブラリの契約は維持          |
+| デプロイ先の環境                     | production / preview | 本番 / プレビュー     | `production` / `preview`                                  |
+| プロダクト名                         | Be-Music             | Be-Music              | `be-music` は識別子だけ。コード名は `BeMusic` / `beMusic` |
+| コードで書く browser player のスキン | Be-Music Skin        | Be-Music Skin         | `BeMusicSkin`。family id は `built-in`                    |
 
 **プレイ履歴（play history）** はプレイの集合や一覧、**リプレイ（replay）** は 1 回分の入力リプレイを指し、区別します。英語では修飾語・名詞に **sign-in / sign-out**、動詞に **sign in / sign out** を使います。UI の操作や対象を表す記号は **アイコン（icon）**、ユーザーのプロフィール画像は **アバター（avatar）** です。
 
@@ -38,6 +40,8 @@
 譜面を指すコード名は chart、楽曲は track に揃えます。beatoraja の `song` テーブルや `BMSONDecoder` などの外部名は原文を維持します。
 
 ソースの識別子と本プロジェクトの出力値には `____`、画面上のゲーム名には `????`、ゲーム自体の説明には日本語では「**名前を言ってはいけないあのゲーム**」、英語では **That-Which-Must-Not-Be-Named** を使います。旧識別子の互換読み込み・移行は行いません。
+
+プロダクト名は、文章と画面の文言（ドキュメント、README、ソースコメント、UI の文言、ページのメタデータ、パッケージの説明）ではすべて **Be-Music** と書きます。サービス名（**Be-Music Play**、**Be-Music Leaderboard**、**Be-Music Accounts**、**Be-Music Dashboard**）と、この名前を使う用語も同じです。コードで書くスキンは英語でも日本語でも **Be-Music Skin**（複数形は **Be-Music Skins**）と、S を大文字で書きます。小文字の `be-music` は、識別子や機械が読む値にだけ残します。パッケージ名（`@be-music/*`）、コード表記のリポジトリ名、ドメインと URL（`be-music.app`）、ファイル・形式・MIME の名前（`be-music-playlog`、`.bmplay`）、カスタム要素と CSS の名前（`be-music-*`）、OAuth のスコープとクライアント ID（`be-music:api`）、パスキーの `rpID`、ストレージのキー、データベースの値、ログのパス（`~/.be-music/...`）など、保存したりコードが比較したりするものです。既存の CHANGELOG の記述はそのままにします。
 
 ## 譜面とリソース
 
@@ -70,6 +74,9 @@
 - **ロングノート (long note / LN)**: 始点と終点を持つノートです。保持、離し、終点到達の扱いは `LNMODE` に依存します。
 - **LNOBJ**: BMS の `#LNOBJ` で宣言する long note 終端オブジェクトです。
 - **LNMODE**: BMS long note の判定確定ルールです。`1`、`2`、`3` で終点判定や hold break 時の扱いが変わります。
+- **チャージノート (CN) / ヘルチャージノート (HCN)**: 終点も判定するロングノートです（ルールセットが演奏する `#LNMODE 2` / `3`）。HCN は押していない間ゲージが減ります。判定ラインを通過している間、HCN は **gaining**（レーンのキーが押されている、または終点を GOOD 以上で離した）か **draining**（レーンが離されている。押せば再び増える）のどちらかです。コード: `hell-charge` UI コマンド、ロングノートの状態 `'draining'`。狭義の **LN**（`#LNMODE 1`）は始点だけを判定します。
+- **バックスピンスクラッチ (back-spin scratch / BSS)**: スクラッチレーン上のチャージノート（CN / HCN）です。終点は離しではなく、始点を取った押下と逆向きに回すスクラッチ押下（**逆回転**）で判定します。ロングノートの終点を判定するルールセット（beatoraja の CN / HCN と、名前を言ってはいけないあのゲームのすべてのロングノート）にだけあり、LR2 では LN として演奏します。コード: `isBackSpinScratch`、`backSpinScratch`。
+- **スクラッチの回転方向 (scratch spin)**: スクラッチ押下がターンテーブルを回した向きで、`'cw'` か `'ccw'` です（`ScratchSpin`、リプレイの `spin`）。回転を報告するコントローラーは実際に回した向きを送り、キーボードは **odd-even**（スクラッチレーンのキーを交互に 2 方向として扱う）を使います。
 - **地雷 (mine)**: 押すとダメージを受けるノートです。LR2 に合わせ、レーンを押したまま判定線を通過するか、`PGREAT` 窓内で押すと爆発します。爆発は譜面値ベースの gauge damage を与えるだけで、判定にはなりません。
 - **判定（judgment）**: `PERFECT`・`GREAT`・`GOOD`・`BAD`・`POOR` など、ノートに対する評価です。結果は judgment、判定する動作は judge と呼びます。種類は `JudgmentKind`、時刻付きの結果は `JudgmentTiming` です。エンジンの動作名やフォーマットのフィールドである `judge`・`judgeRuleset` は役割を区別して扱います。
 - **FAST / SLOW**: 判定タイミングの早押し/遅押しの補助表示です。現行実装では `GREAT` と `GOOD` のみ集計します。
@@ -88,10 +95,10 @@
 - **Node 音声アダプター**: `@be-music/player-node-audio` が提供する Node 用の音声実装です。ホストが `createAudioSession: createNodeAudioSession` としてエンジンに渡します。エンジンは音声契約を所有し、アダプターがデコードと出力を担当します。
 - **terminal player**: `@be-music/player-terminal` の CLI / TUI frontend です。core engine の上に Music Select、terminal gameplay、terminal BGA、loading screen、SEA build を提供します。
 - **browser player**: `@be-music/player-browser` の PixiJS/WebAudio runtime と `@be-music/app-play` の Vite host です。runtime はホスト向けの API から、どの画面もファミリービューが描くシーンセッションとして作り、ライブラリとスキンの読み込みとプレイの録画も持ちます。player は browser drop、theme、Debug Menu、シーンルーターを扱います。
-- **skin family**: browser プレイヤーの scene を描くスキンの種類です。`built-in`（be-music skin）、`lr2`、`beatoraja` があります（`SceneFamily`）。host は読み込んだ theme とプレイヤーの選択から選びます。
-- **built-in family（default skin family）**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う skin family です。select、play、result（スキンが宣言していれば decide も）を be-music skin で描きます。play view は LR2 と同じく共通のプレイフィールドを描き、そのまわりの chrome はスキンが描きます。
-- **be-music skin**: `@be-music/player-skin-sdk` に沿って書くコードベースのスキンです。表示用フレームを受け取り、Canvas 描画と任意の DOM 画面を組み合わせます。DOM は選曲・決定・リザルトを置き換え、ゲームプレイでは Canvas のプレイフィールドに HUD を追加します。`gameplay.drawsOnDOM` を設定したスキンはプレイフィールドも DOM で描きます。
-- **built-in skins**: browser player に同梱する be-music skin です。既定の Synesthesia、Plain、Native（DOM + Canvas）があります。Native は `@be-music/player-ui` の再利用可能な部品を使います。
+- **skin family**: browser プレイヤーの scene を描くスキンの種類です。`built-in`（Be-Music Skin）、`lr2`、`beatoraja` があります（`SceneFamily`）。host は読み込んだ theme とプレイヤーの選択から選びます。
+- **built-in family（default skin family）**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う skin family です。select、play、result（スキンが宣言していれば decide も）を Be-Music Skin で描きます。play view は LR2 と同じく共通のプレイフィールドを描き、そのまわりの chrome はスキンが描きます。
+- **Be-Music Skin**: `@be-music/player-skin-sdk` に沿って書くコードベースのスキンです。表示用フレームを受け取り、Canvas 描画と任意の DOM 画面を組み合わせます。DOM は選曲・決定・リザルトを置き換え、ゲームプレイでは Canvas のプレイフィールドに HUD を追加します。`gameplay.drawsOnDOM` を設定したスキンはプレイフィールドも DOM で描きます。
+- **built-in skins**: browser player に同梱する Be-Music Skin です。既定の Synesthesia、Plain、Native（DOM + Canvas）があります。Native は `@be-music/player-ui` の再利用可能な部品を使います。
 - **touch layout / portrait stage**: タッチ主体の端末向けの gameplay layout です。touch layout は等幅のレーンをステージいっぱいに並べます。`portraitStage` を持つスキンは縦向き（9:16）のステージでも表示できます。
 - **LR2 skin**: `@be-music/skin-lr2` が扱う Lunatic Rave 2 CSV skin format です。この package は PixiJS に依存せず、skin file の parse と theme asset 解決を行います。
 - **beatoraja skin**: `@be-music/skin-beatoraja` が扱う beatoraja JSON / Lua skin format です。この package は PixiJS に依存せず、header / full skin の parse、option / asset 解決、element normalization を行います。
@@ -113,7 +120,7 @@
 ## ユーザーとプロフィール
 
 - **ユーザー（user）**: サービスをまたいでプレイやデータを所有する主体です。所有権は安定したユーザー ID（OIDC の境界では issuer と subject の組）で識別し、ユーザー名・表示名・アバターとは区別します。
-- **アカウント（account）**: 認証によってユーザーにアクセスするための、利用者向けの概念です。外部プロバイダーとの対応は **外部ログイン連携（linked login account）** と明示します。Better Auth の `account` テーブルは別の be-music ユーザーではなく、この対応を保持します。
+- **アカウント（account）**: 認証によってユーザーにアクセスするための、利用者向けの概念です。外部プロバイダーとの対応は **外部ログイン連携（linked login account）** と明示します。Better Auth の `account` テーブルは別の Be-Music ユーザーではなく、この対応を保持します。
 - **ゲスト／匿名ユーザー（guest / anonymous user）**: 永続的なログイン資格情報を登録せずに作られたユーザーです。guest は画面での呼び方、anonymous は保存された認証状態を指します。ユーザー ID を持ち、プレイを所有できます。
 - **プロフィール（profile）**: ユーザー名・表示名・アバターからなる公開上の見せ方です。変更してもユーザーの同一性は変わりません。
 - **認証セッション（session）**: 有効期間を持つ認証状態です。Accounts と各アプリのローカルセッションは、同じユーザーを指していても別の状態です。エンジンのプレイセッションやシーンセッションとは区別します。
@@ -177,7 +184,7 @@
 - **効果音セット（system sound set）**: テーマの効果音とジングルをスロットごとに持つもの（カーソル、決定、フォルダ、オプションパネル、選曲の BGM、クリア / 失敗のジングルなど）。それぞれバイト列かテーマ内のパスに解決済みです（`SystemSoundSet`）。
 - **シーンセッション（scene session）**: 画面の振る舞いの唯一の実装で、すべてのスキンの種類が共有します（`@be-music/player-browser` の `session/`）。一覧の操作、譜面の準備、エンジン、入力、音、終了処理です。毎ティック、シーンモデルの上に作ったフレームをファミリービューに渡し、インテントを受け取ります。[ADR 0001](./adr/0001-skin-families-only-draw.ja.md) を参照。
 - **ファミリービュー（family view）**: 1 つのスキンの種類が、シーンモデルをどう描くか（`view/built-in/`、`view/lr2/`、`view/beatoraja/`）。セッションのフレームを描き、プレイヤーの操作をインテントとして返します。エンジンは動かしません。
-- **ファミリーキット（family kit）**: ホストが画面を描かせるために渡すもので、スキンの種類ごとに違います。be-music skin とそのプレイヤーの設定（`built-in`）、LR2 skin（`lr2`）、読み込んだ beatoraja のテーマの項目（`beatoraja`）です（`SelectKit`、`DecideKit`、`PlayKit`、`ResultKit`）。
+- **ファミリーキット（family kit）**: ホストが画面を描かせるために渡すもので、スキンの種類ごとに違います。Be-Music Skin とそのプレイヤーの設定（`built-in`）、LR2 skin（`lr2`）、読み込んだ beatoraja のテーマの項目（`beatoraja`）です（`SelectKit`、`DecideKit`、`PlayKit`、`ResultKit`）。
 - **ホスト向けの API（host API）**: `@be-music/player-browser/host`。一度に 1 つの画面を表示する `PixiSceneHost` と、各画面をファミリーキットから `SessionScene` として作る `createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` です。
 - **画面のライフサイクル（scene lifecycle）**: どの画面も実装する唯一の契約（`PixiScene`）。`root`、`identity`（`{ kind, family }`）、`enter`、`exit`、`dispose` です。ホストは `setScene` でだけ画面を切り替えます。
 - **インテント（intent）**: ビューへの操作が画面にとって何を意味するか。フォルダを開く、コースを始める、ゲージを切り替える、など。
@@ -200,7 +207,7 @@
 - [シーンモデル](./scene-model.ja.md)
 - [アーキテクチャ](./architecture.ja.md)
 - [リプレイ（プレイ履歴）仕様](./replay.ja.md)
-- [be-music スキンの作り方](./be-music-skin.ja.md)
+- [Be-Music Skin の作り方](./be-music-skin.ja.md)
 - [LR2 skin 実装メモ](./lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](./beatoraja-skin.ja.md)
 - [BMS/bmson 中間表現 (`@be-music/chart-source`) 実装仕様](./json-spec.ja.md)

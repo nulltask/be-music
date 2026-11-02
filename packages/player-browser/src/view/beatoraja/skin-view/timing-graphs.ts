@@ -374,7 +374,7 @@ export interface TimingVisualizerBandLayout {
 /**
  * A judgment's timing offset in beatoraja's sign: note time minus press time, so > 0 is early (`JudgeManager`'s
  * `dmtime = judgenote.getMicroTime() - pmtime`, which `updateMicro` stores as `recentJudges` and the note's play time),
- * where be-music's `deltaMs` is > 0 late. beatoraja's timing visualizer and timing distribution graph both draw offset
+ * where Be-Music's `deltaMs` is > 0 late. beatoraja's timing visualizer and timing distribution graph both draw offset
  * `x` at `centre + x` (`SkinTimingVisualizer.java:145`, `SkinTimingDistributionGraph.java:129`), so early judgments
  * sit right of the centre and late ones left.
  */

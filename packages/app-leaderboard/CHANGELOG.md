@@ -1,5 +1,12 @@
 # @be-music/app-leaderboard
 
+## 0.5.1
+
+### Patch Changes
+
+- adcaa23: The Leaderboard spells the product name Be-Music everywhere: page descriptions, the about and help copy (EN and JA), `og:site_name`, the PWA manifest name, the score card image and the API reference title ("Be-Music Leaderboard API"). The passkey prompt also shows "Be-Music".
+- Updated dependencies: `@be-music/player-engine@0.14.0`
+
 ## 0.5.0
 
 ### Minor Changes

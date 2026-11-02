@@ -114,7 +114,7 @@ function buildAuth(env: Env) {
             .where(eq(schema.identityLink.toUserId, anonymousUser.user.id));
         },
       }),
-      passkey({ rpID: env.PASSKEY_RP_ID, rpName: 'be-music', origin: env.AUTH_ORIGIN }),
+      passkey({ rpID: env.PASSKEY_RP_ID, rpName: 'Be-Music', origin: env.AUTH_ORIGIN }),
       jwt({ jwt: { issuer: `${env.AUTH_ORIGIN}/api/auth` }, jwks: { keyPairConfig: { alg: 'RS256' } } }),
       oauthProvider({
         loginPage: '/login',
@@ -151,7 +151,7 @@ export async function provisionClients(env: Env): Promise<void> {
     .values({
       id: resourceId,
       identifier: env.API_AUDIENCE,
-      name: 'be-music API',
+      name: 'Be-Music API',
       allowedScopes: ['openid', 'profile', 'be-music:api'],
       accessTokenTtl: 900,
     })

@@ -1,4 +1,4 @@
-import type { RandomDraws } from '@be-music/chart-model';
+import { PLAY_MODE_LAYOUTS, type RandomDraws } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { manualPlay, type PlayerSummary } from '@be-music/player-engine';
 import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
@@ -35,21 +35,35 @@ const OFFSET_SCENARIO_SKIP_EVERY = 7;
 /** How long a tap is held, capped so it never runs into the lane's next press. */
 const TAP_HOLD_US = 40_000;
 
-/** The three input streams the corpus pins: no input, every note on time, and presses cycled across every window. */
-export function buildScenarios(notes: readonly ReplayNote[]): Record<string, ReplayInputEvent[]> {
+/**
+ * The three input streams the corpus pins: no input, every note on time, and presses cycled across every window.
+ * `chart` is the replay's chart: its notes, and its lane mode for the scratch lanes.
+ */
+export function buildScenarios(
+  chart: Pick<BeMusicReplay['chart'], 'notes' | 'laneMode'>,
+): Record<string, ReplayInputEvent[]> {
+  const scratchChannels = resolveScenarioScratchChannels(chart.laneMode);
   return {
     missed: [],
     perfect: buildInputs(
-      notes,
+      chart.notes,
+      scratchChannels,
       () => 0,
       () => false,
     ),
     offset: buildInputs(
-      notes,
+      chart.notes,
+      scratchChannels,
       (index) => OFFSET_SCENARIO_US[index % OFFSET_SCENARIO_US.length]!,
       (index) => index % OFFSET_SCENARIO_SKIP_EVERY === OFFSET_SCENARIO_SKIP_EVERY - 1,
     ),
   };
+}
+
+/** The scratch lanes of the play mode a replay's `laneMode` label names (none for a label no layout has). */
+function resolveScenarioScratchChannels(laneMode: string): ReadonlySet<string> {
+  const layout = Object.values(PLAY_MODE_LAYOUTS).find((candidate) => candidate.label === laneMode);
+  return new Set(layout?.lanes.filter((lane) => lane.kind === 'scratch').map((lane) => lane.channel) ?? []);
 }
 
 export interface EngineReplayOptions {
@@ -166,9 +180,14 @@ function roundGauge(gauge: PlayerGaugeSummary): PlayerGaugeSummary {
  * (and, for long notes, its release) and `skip` leaves a note unpressed; both are keyed by the note's index among
  * the pressable notes so the stream is deterministic. Presses on one lane never overlap: a press waits for the
  * lane's previous release, and a tap is released before the lane's next press.
+ *
+ * A scratch press spins clockwise. A long note on a scratch lane ends the way a keyboard player ends a back-spin
+ * scratch under the odd-even rule: the key is let go and the other scratch key goes down at the tail (a reverse spin,
+ * which judges a back-spin scratch's tail), to be released a tap later.
  */
 function buildInputs(
   notes: readonly ReplayNote[],
+  scratchChannels: ReadonlySet<string>,
   offsetUs: (index: number) => number,
   skip: (index: number) => boolean,
 ): ReplayInputEvent[] {
@@ -193,9 +212,18 @@ function buildInputs(
       const nextDownUs = next === undefined ? Number.POSITIVE_INFINITY : next.note.timeUs + offsetUs(next.index);
       const naturalUpUs = note.endTimeUs === undefined ? downUs + TAP_HOLD_US : note.endTimeUs + offset;
       const upUs = Math.max(downUs + 1, Math.min(naturalUpUs, nextDownUs - 1));
-      events.push({ timeUs: downUs, action: 'down', channels: [channel] });
+      const scratch = scratchChannels.has(channel);
+      events.push({ timeUs: downUs, action: 'down', channels: [channel], ...(scratch ? { spin: 'cw' as const } : {}) });
       events.push({ timeUs: upUs, action: 'up', channels: [channel] });
       lastUpUs = upUs;
+      if (scratch && note.endTimeUs !== undefined && upUs + 2 < nextDownUs - 1) {
+        // The reverse spin, a microsecond after the release.
+        const reverseDownUs = upUs + 1;
+        const reverseUpUs = Math.max(reverseDownUs + 1, Math.min(reverseDownUs + TAP_HOLD_US, nextDownUs - 1));
+        events.push({ timeUs: reverseDownUs, action: 'down', channels: [channel], spin: 'ccw' });
+        events.push({ timeUs: reverseUpUs, action: 'up', channels: [channel] });
+        lastUpUs = reverseUpUs;
+      }
     });
   }
 

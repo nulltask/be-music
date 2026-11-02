@@ -1,6 +1,6 @@
 /**
  * The lanes of the shared playfield: lays out each lane's rect (the skin's, else the built-in layout's) into `laneX`,
- * and draws the lane backgrounds and key beams through the be-music skin (or the default playfield's) unless the skin owns them.
+ * and draws the lane backgrounds and key beams through the Be-Music Skin (or the default playfield's) unless the skin owns them.
  */
 
 import { resolveLiftedLane } from '@be-music/player-scene-model';

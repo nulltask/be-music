@@ -2,7 +2,7 @@ import { resolveChart } from '@be-music/chart-model';
 import { parseChart } from '@be-music/chart-parser';
 import { describe, expect, test } from 'vite-plus/test';
 import { preparePlaybackChart } from './bootstrap.ts';
-import { createSeekRebuildSink, resetPlayNotes } from './play-seek.ts';
+import { createSeekRebuildSink, isPracticeLoopDue, resetPlayNotes } from './play-seek.ts';
 import type { PlayerUIFrameSummary } from './ui-signal-bus.ts';
 
 const SUMMARY: PlayerUIFrameSummary = {
@@ -71,4 +71,17 @@ test('seek rebuild retains exact BGA triggers even when a mine emits no judge-co
     { seconds: 1.2, condition: 'miss' },
   ]);
   expect(sink.judgments).toEqual([]);
+});
+
+describe('isPracticeLoopDue', () => {
+  const tick = { nowSec: 4.2, totalSeconds: 4.2, settled: true, closed: false, pastHorizon: false };
+  test('loops once the play is over and judged', () => {
+    expect(isPracticeLoopDue(tick)).toBe(true);
+    expect(isPracticeLoopDue({ ...tick, nowSec: 4.19 })).toBe(false);
+    expect(isPracticeLoopDue({ ...tick, settled: false })).toBe(false);
+  });
+  test('loops at once when the gauge empties, and at the horizon at the latest', () => {
+    expect(isPracticeLoopDue({ ...tick, nowSec: 2, settled: false, closed: true })).toBe(true);
+    expect(isPracticeLoopDue({ ...tick, nowSec: 6, settled: false, pastHorizon: true })).toBe(true);
+  });
 });

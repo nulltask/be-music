@@ -1,10 +1,10 @@
 [Japanese version](./be-music-skin.ja.md)
 
-# Writing a be-music skin
+# Writing a Be-Music Skin
 
 Skins for the browser player's built-in family use the `@be-music/player-skin-sdk` contract. Synesthesia and Plain use Canvas; Native combines DOM screens with a playfield of canvas components, each drawing on a canvas the size of its part of the stage. Native's presentation components are also available independently from `@be-music/player-ui`.
 
-A be-music skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a be-music skin draws every screen itself. The player keeps ownership of everything else:
+A Be-Music Skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a Be-Music Skin draws every screen itself. The player keeps ownership of everything else:
 
 - input, timing, audio, and judging;
 - the lane layout and note positions;
@@ -226,7 +226,7 @@ Every skin declares these fields. `defineBeMusicSkin` checks the rules it can te
 | `decide`                                 | no       | The decide screen between select and play; see [Decide](#decide).                                                                     |
 | `settings`                               | no       | Options the player can tune for the skin; see [Skin settings](#skin-settings).                                                        |
 
-`validateBeMusicSkin(skin)` returns the same problems as a list of messages without throwing, also for a skin written in plain JavaScript that leaves a required field out. A host checks an added skin with it (the be-music skin registry does), so a skin module without `fontLoads`, say, is refused with the reason instead of breaking the page.
+`validateBeMusicSkin(skin)` returns the same problems as a list of messages without throwing, also for a skin written in plain JavaScript that leaves a required field out. A host checks an added skin with it (the Be-Music Skin registry does), so a skin module without `fontLoads`, say, is refused with the reason instead of breaking the page.
 
 ## Stage and layout
 
@@ -287,7 +287,7 @@ export default defineBeMusicSkin({
 
 ## Screens
 
-A host shows the screens in this order; the decide screen only when the skin has one. [Browser player — Scene lifecycle](./player-web.md#scene-lifecycle) covers how the be-music player hands one screen over to the next.
+A host shows the screens in this order; the decide screen only when the skin has one. [Browser player — Scene lifecycle](./player-web.md#scene-lifecycle) covers how the Be-Music player hands one screen over to the next.
 
 ```mermaid
 flowchart LR
@@ -306,7 +306,7 @@ flowchart LR
 - `layout`: see [Stage and layout](#stage-and-layout).
 - `lanes`: each lane's rect (`x`, `w`, `top`, `bottom` at the judgement line), `kind`, and `beam`, the key-beam intensity (1 while held, then decaying). `pressedAtMs` / `releasedAtMs` are the play-clock times of the lane's last press and release; `holding` and `holdStartedAtMs` tell whether a long note in the lane is being held, and since when.
 - `notes`: tap notes as `{ kind, x, w, y }`, where `y` is the note's bottom edge. `autoplay` is set on notes autoplay or auto-scratch will hit. As in LR2, a note the player has not hit yet waits on the judgement line (`y` at the lane's `bottom`) until it is judged a miss, and a note hit early is still handed over until its time.
-- `longNotes`: long notes as `{ kind, x, w, top, bottom }`. `top` is the tail; `bottom` is the head, held on the judgement line once its time has passed. `mode` (`'ln'` / `'cn'` / `'hcn'`) says how the note judges, `state` (`'pending'` / `'held'` / `'dropped'` / `'done'`) where it is in its life, and `autoplay` whether autoplay plays it. LR2 and the built-in skins draw a `'dropped'` long note (missed at the head or let go early) at half alpha until it goes.
+- `longNotes`: long notes as `{ kind, x, w, top, bottom }`. `top` is the tail; `bottom` is the head, held on the judgement line once its time has passed. `mode` (`'ln'` / `'cn'` / `'hcn'`) says how the note judges, `backSpinScratch` marks a back-spin scratch (a charge note on a scratch lane, whose tail is judged on a reverse spin), `state` (`'pending'` / `'held'` / `'draining'` / `'dropped'` / `'done'`) where it is in its life, and `autoplay` whether autoplay plays it. A hell charge note reads `'held'` while it fills the gauge and `'draining'` while it empties it (let go early or missed at the head); pressing the lane again brings it back to `'held'`, and only once its tail has passed does it read `'dropped'` or `'done'`. No other long note reads `'draining'`. LR2 and the built-in skins draw a `'dropped'` long note (missed at the head or let go early) at half alpha until it goes. The built-in skins tell the kinds apart by shape, not colour: an LN's tail cap is faint, a CN's is full, an HCN's centre line zigzags where the other kinds keep it straight, and a BSS's tail carries a chevron pointing back up the lane (`resolveLongNoteMarks`, `hellChargeZigzag`, `backSpinChevron`). An HCN (a hell-charge BSS included) also shows how it stands, changing colour, glow and the zigzag's motion together so that no state rests on colour alone (`resolveHellChargeLook`): before it is reached, a violet HELL colour with a low glow and a still zigzag; while held, a bright pulsing orange glow with the zigzag flowing into the judgement line; while draining, a dim throbbing red with the zigzag flowing back up the lane; once over, no glow.
 - `mines`: mine notes as `{ kind, x, w, y }`, where `y` is the bottom edge. A mine that explodes (its lane held as it crosses the judgement line, or under the LR2 ruleset also pressed within the PGREAT window) drains the gauge; it is not a judgement. Empty unless the skin sets `gameplay.drawsMines` (below).
 - `bombs`: live hit effects with `elapsedMs`, a stable `seed`, and the `judge` that set them off.
 - `measureLines`: measure lines as `{ side, x, w, y }`, one per lane run they cross. Empty unless the skin sets `gameplay.drawsMeasureLines`.
@@ -399,7 +399,7 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 A skin may add a decide screen, shown between picking a chart and the play. Hosts mount it only when `skin.decide` exists and go straight to the play otherwise.
 
 - **`decide.durationMs`:** how long the screen shows (default 2000). The player can skip ahead with Enter, Space, or a click, or go back to select with Escape.
-- **`decide.draw(surface, frame)`** receives a `BeMusicDecideFrame`: `song`, `playOptions`, `elapsedMs` since the screen mounted, `nowMs`, `effects`, `audio`, `settings`, and `chartImage`. The be-music player currently passes `audio` as `undefined` on this screen.
+- **`decide.draw(surface, frame)`** receives a `BeMusicDecideFrame`: `song`, `playOptions`, `elapsedMs` since the screen mounted, `nowMs`, `effects`, `audio`, `settings`, and `chartImage`. The Be-Music player currently passes `audio` as `undefined` on this screen.
 
 ## Judgement timing
 
@@ -435,7 +435,7 @@ settings: [
 - **Validation:** `validateBeMusicSkin` checks the schema. Ids must be unique, labels must not be empty, and every `default` must be one of the options or lie in its range. Choice option values must be unique, a number's `step` must be positive, and its `unit` must be one of the three above.
 - **Values:** every frame carries `settings`, the player's values keyed by id. Hosts persist the values per skin and resolve them with `resolveBeMusicSkinSettings(skin, stored)`, which falls back to the default for anything missing, stale, or mistyped, clamps numbers into their range, and drops ids the skin no longer declares. You can rely on every declared id being present with the right type.
 - **Live changes:** the player may change a value while a screen is showing; the next frame carries it, and on select `revision` moves too. Read `frame.settings` every frame (or key anything you derive from it on `revision`) rather than caching it from the first frame.
-- **In the be-music player:** hosts pass the stored values in the built-in kit (`{ family: 'built-in', skin, settings }`) and hand a showing scene a new kit with `scene.updateKit(kit)` when they change. The player builds a "Skin settings" folder in its Debug Menu from the schema (a dropdown per `choice`, a slider per `number` with the unit in its name, a checkbox per `toggle`), hides it for a skin that declares none, and saves the values per skin id in the browser.
+- **In the Be-Music player:** hosts pass the stored values in the built-in kit (`{ family: 'built-in', skin, settings }`) and hand a showing scene a new kit with `scene.updateKit(kit)` when they change. The player builds a "Skin settings" folder in its Debug Menu from the schema (a dropdown per `choice`, a slider per `number` with the unit in its name, a checkbox per `toggle`), hides it for a skin that declares none, and saves the values per skin id in the browser.
 
 ## Song images
 
@@ -455,7 +455,7 @@ settings: [
 | Layout        | `resolveGameplayLayout`, `resolveLaneRuns`, `resolveMilestoneArea` (landscape stages only: it assumes a 480 px tall stage), `MILESTONE_MIN_WIDTH`, `PLAYFIELD`, `resolveGameplayLaneGeometry`, `resolveTouchLaneLayout`, `supportsTouchLayout`, `TOUCH_PLAYFIELD`, `resolvePortraitLaneLayout`, `supportsPortraitLayout`, `PORTRAIT_PLAYFIELD`, `resolveBeMusicSelectLayout` |
 | Judgements    | `judgeDisplayWord` (a PERFECT prints as GREAT), `isFlashingGreat`, `flashingGreatColor`, `FLASHING_GREAT_STEP_MS`                                                                                                                                                                                                                                                            |
 | Moments       | `trackMoments` / `createMomentState` + `updateMoments` (every 100 combo, clear line, full combo, combo break; for the count-in, check whether `runtime.chartMs` is negative), `COMBO_MILESTONE`, `COMBO_BREAK_MIN`, `comboTier`, `momentProgress`, `impulse`, `punchScale`, `effectProfile`                                                                                  |
-| Hold effects  | `holdSparks`, `holdSeed` (the sparks of a held long note)                                                                                                                                                                                                                                                                                                                    |
+| Hold effects  | `holdSparks`, `holdSeed` (the sparks of a held long note); `resolveLongNoteMarks`, `isBackSpinScratchLongNote`, `hellChargeZigzag`, `backSpinChevron` (long-note kinds by shape); `resolveHellChargeLook` (how a hell charge note stands)                                                                                                                                    |
 | Loading       | `LOADING_WORD`, `loadingDots(nowMs)`, `LOADING_DOT_MS`                                                                                                                                                                                                                                                                                                                       |
 | Select list   | `selectListRows`, `browseEntryTitle`, `browseEntryCount`, `browseEntryBadge`, `describeCourseCard`                                                                                                                                                                                                                                                                           |
 | Sound         | `audioDrive`, `bandAt`, `bandLevel`, `AUDIO_BAND_COUNT`, `SILENT_AUDIO`; see [Reacting to the music](#reacting-to-the-music)                                                                                                                                                                                                                                                 |

@@ -1,4 +1,4 @@
-// The be-music skin the built-in family draws with: the one the Debug Menu picked (`guiState.builtInSkin`), the
+// The Be-Music Skin the built-in family draws with: the one the Debug Menu picked (`guiState.builtInSkin`), the
 // player's values for its settings, and the skins added while the page is open.
 
 import type { BuiltInKit } from '@be-music/player-browser/host';
@@ -15,9 +15,9 @@ export interface BuiltInThemeServiceOptions {
   readonly handleBuiltInSkinChange: (id: string) => void;
 }
 
-/** The be-music skin the built-in screens draw with, the player's settings for each skin, and adding skins. */
+/** The Be-Music Skin the built-in screens draw with, the player's settings for each skin, and adding skins. */
 export class BuiltInThemeService {
-  /** Each be-music skin's `settings` values by skin id, persisted in `localStorage` and handed to its scenes. */
+  /** Each Be-Music Skin's `settings` values by skin id, persisted in `localStorage` and handed to its scenes. */
   public readonly skinSettings: StoredSkinSettings = readStoredSkinSettings();
   private readonly guiState: BuiltInThemeServiceOptions['guiState'];
   private readonly setStatus: BuiltInThemeServiceOptions['setStatus'];
@@ -29,7 +29,7 @@ export class BuiltInThemeService {
     this.handleBuiltInSkinChange = options.handleBuiltInSkinChange;
   }
 
-  /** The be-music skin the default-family scenes render with. */
+  /** The Be-Music Skin the default-family scenes render with. */
   public get beMusicSkin(): BeMusicSkin {
     return BE_MUSIC_SKINS.resolve(this.guiState.builtInSkin);
   }
@@ -75,12 +75,12 @@ export class BuiltInThemeService {
     }
   }
 
-  /** The stored values for the active be-music skin's settings, as handed to its scenes (`beMusicSkinSettings`). */
+  /** The stored values for the active Be-Music Skin's settings, as handed to its scenes (`beMusicSkinSettings`). */
   public get beMusicSkinSettings(): Readonly<Record<string, unknown>> | undefined {
     return this.skinSettings.get(this.beMusicSkin.id);
   }
 
-  /** The kit the built-in scenes draw with: the active be-music skin, its stored settings and the effect level. */
+  /** The kit the built-in scenes draw with: the active Be-Music Skin, its stored settings and the effect level. */
   public get builtInKit(): BuiltInKit {
     return {
       family: 'built-in',

@@ -14,7 +14,7 @@ import type { GaugeType } from '@be-music/player-engine/ruleset';
 /**
  * Per-session gameplay tweaks the player picks on the select screen (`PlayOptions` of `@be-music/player-scene-model`):
  * hi-speed, autoplay, note arrangement, gauge type, HIDDEN / SUDDEN and the lane cover, BGA display, and the list's
- * sort and filters. The host owns the live values and hands them to every play it launches; be-music skins read them
+ * sort and filters. The host owns the live values and hands them to every play it launches; Be-Music Skins read them
  * from `BeMusicSelectFrame.playOptions` / `BeMusicDecideFrame.playOptions` and change them through
  * `BeMusicSelectActions.setPlayOption` / `cyclePlayOption`.
  */

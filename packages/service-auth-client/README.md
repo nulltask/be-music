@@ -2,7 +2,7 @@
 
 # @be-music/service-auth-client
 
-Server-side OIDC relying-party code shared by the be-music apps. See [Services](../../docs/services.md) and [ADR 0008](../../docs/adr/0008-accounts-oidc.md).
+Server-side OIDC relying-party code shared by the Be-Music apps. See [Services](../../docs/services.md) and [ADR 0008](../../docs/adr/0008-accounts-oidc.md).
 
 Configure `AUTH_ISSUER`, `PUBLIC_ORIGIN`, `OIDC_CLIENT_ID`, `API_AUDIENCE` and a separate `SESSION_SECRET` of at least 32 random characters. Origins and issuers must use HTTPS. Register exactly `PUBLIC_ORIGIN/api/auth/callback` at Accounts. The issuer includes `/api/auth`.
 

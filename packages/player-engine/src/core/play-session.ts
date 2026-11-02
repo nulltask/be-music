@@ -82,6 +82,7 @@ import type {
 } from './engine-types.ts';
 import { createRealtimeAudioCursor, type RealtimeAudioCursor } from './play-audio-cursor.ts';
 import type { JudgeStrategy } from './play-strategy.ts';
+import { resolvePracticePlayWindow } from './practice.ts';
 
 /** A chart sound the realtime audio fires at its time. */
 type TimedChartSound = { readonly event: BeMusicEvent; readonly seconds: number };
@@ -199,12 +200,6 @@ export async function createPlaySession(
   const speed = options.speed ?? 1;
   const tempoClock = createTempoClock(speed);
   const leadInMs = options.leadInMs ?? 1500;
-  // PRACTICE starts 1000 ms before its range (`starttimeoffset`).
-  const requestedStartAtSeconds =
-    options.startAtSeconds ??
-    (options.practice !== undefined ? Math.max(0, Math.trunc(options.practice.startMs) - 1000) / 1000 : 0);
-  const startAtSeconds =
-    Number.isFinite(requestedStartAtSeconds) && requestedStartAtSeconds > 0 ? requestedStartAtSeconds : 0;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
   let resolvedChart = options.preparedChart?.resolvedChart ?? resolveEngineChart(resolvedJSON, options);
@@ -277,6 +272,18 @@ export async function createPlaySession(
       Math.random,
     );
   resolvedChart = playbackChart.resolvedChart;
+  // PRACTICE starts at the head of the bar before its range's (#954; beatoraja's `starttimeoffset` is 1000 ms).
+  const requestedStartAtSeconds =
+    options.startAtSeconds ??
+    (options.practice !== undefined
+      ? (playbackChart.practicePlayStartSeconds ??
+        resolvePracticePlayWindow(resolvedChart, options.practice, {
+          startMs: Math.max(0, Math.trunc(options.practice.startMs)),
+          endMs: Math.max(0, Math.trunc(options.practice.startMs)) + 1000,
+        }).startSeconds)
+      : 0);
+  const startAtSeconds =
+    Number.isFinite(requestedStartAtSeconds) && requestedStartAtSeconds > 0 ? requestedStartAtSeconds : 0;
   backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
   const battleRequested = options.battleMode ?? playbackChart.battleMode ?? 'OFF';
   // A chart that copies itself onto the 2P side replaced the player's battle conversion (#932).

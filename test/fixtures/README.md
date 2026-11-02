@@ -2,7 +2,7 @@
 
 [日本語版はこちら](./README.ja.md)
 
-Shared chart and audio fixtures for the be-music test suite. Every chart here targets one coherent feature cluster, and
+Shared chart and audio fixtures for the Be-Music test suite. Every chart here targets one coherent feature cluster, and
 every chart is read by at least one test — a fixture no test reads goes stale without anyone noticing, which is how the
 problems fixed in this directory got in.
 

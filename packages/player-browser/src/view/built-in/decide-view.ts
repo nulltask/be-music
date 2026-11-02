@@ -1,5 +1,5 @@
 /**
- * The built-in family's decide screen: a be-music skin's `decide` drawn on its stage, letterboxed into the window.
+ * The built-in family's decide screen: a Be-Music Skin's `decide` drawn on its stage, letterboxed into the window.
  * It draws the decide session's frames and turns a click into a `continue` intent; the session times the screen.
  */
 
@@ -33,7 +33,7 @@ export interface BuiltInDecideViewOptions {
 }
 
 /**
- * The skin's timing on the decide screen: input opens at once (a be-music skin has no input delay), and the screen
+ * The skin's timing on the decide screen: input opens at once (a Be-Music Skin has no input delay), and the screen
  * moves on after the skin's `decide.durationMs`, at once for a skin without a decide screen. No fade-out: the skin's
  * own drawing covers it.
  */

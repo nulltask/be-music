@@ -18,18 +18,20 @@ The definitions follow general BMS/bmson terminology where possible, but priorit
 
 Use these terms in documentation, source comments, and user-facing text. Code identifiers follow [the naming rules](../AGENTS.md); preserve names required by BMS, bmson and external services while aligning project-owned names with this vocabulary.
 
-| Concept                               | English              | Japanese              | Code                                                             |
-| ------------------------------------- | -------------------- | --------------------- | ---------------------------------------------------------------- |
-| Playable arrangement                  | chart                | 譜面                  | `chart`                                                          |
-| Musical work shared by charts         | track                | 楽曲                  | `track`                                                          |
-| JSON-based chart format               | bmson                | bmson                 | `bmson` / `Bmson`; existing `BMSON_*` constants remain unchanged |
-| Judgment result                       | judgment             | 判定                  | `judge` in existing APIs                                         |
-| Recorded input replay                 | replay               | リプレイ              | `replay` / `Replay`                                              |
-| Profile image                         | avatar               | アバター              | `avatar`                                                         |
-| Unique public user name               | handle               | ユーザー名            | `handle`                                                         |
-| Name shown beside an avatar           | display name         | 表示名                | `displayName`                                                    |
-| Enter or end an authenticated session | sign in / sign out   | ログイン / ログアウト | `signIn` / `signOut`; preserve authentication library contracts  |
-| Deployment environments               | production / preview | 本番 / プレビュー     | `production` / `preview`                                         |
+| Concept                               | English              | Japanese              | Code                                                                |
+| ------------------------------------- | -------------------- | --------------------- | ------------------------------------------------------------------- |
+| Playable arrangement                  | chart                | 譜面                  | `chart`                                                             |
+| Musical work shared by charts         | track                | 楽曲                  | `track`                                                             |
+| JSON-based chart format               | bmson                | bmson                 | `bmson` / `Bmson`; existing `BMSON_*` constants remain unchanged    |
+| Judgment result                       | judgment             | 判定                  | `judge` in existing APIs                                            |
+| Recorded input replay                 | replay               | リプレイ              | `replay` / `Replay`                                                 |
+| Profile image                         | avatar               | アバター              | `avatar`                                                            |
+| Unique public user name               | handle               | ユーザー名            | `handle`                                                            |
+| Name shown beside an avatar           | display name         | 表示名                | `displayName`                                                       |
+| Enter or end an authenticated session | sign in / sign out   | ログイン / ログアウト | `signIn` / `signOut`; preserve authentication library contracts     |
+| Deployment environments               | production / preview | 本番 / プレビュー     | `production` / `preview`                                            |
+| Product name                          | Be-Music             | Be-Music              | `be-music` only in identifiers; `BeMusic` / `beMusic` in code names |
+| Code-based browser-player skin        | Be-Music Skin        | Be-Music Skin         | `BeMusicSkin`; family id `built-in`                                 |
 
 Use **play history** for a collection or list of plays, and **replay** for one recorded replay; these are different concepts. Use **sign-in** and **sign-out** as modifiers or nouns, and **sign in** and **sign out** as verbs. A UI **icon** is a symbol for an action or entity; a user's profile image is an **avatar**.
 
@@ -38,6 +40,8 @@ Use **replay** for recorded playback data: `BeMusicReplay` for its type, `replay
 Use **chart** in code names for playable arrangements and **track** for musical works. Keep external names such as beatoraja’s `song` table and `BMSONDecoder` unchanged.
 
 Use `____` in source identifiers and project-owned serialized values, `????` for the displayed game name, and **That-Which-Must-Not-Be-Named** in English or **名前を言ってはいけないあのゲーム** in Japanese when describing the game. Previous identifiers are not supported or migrated.
+
+Write the product name **Be-Music** in all prose and user-facing text: documentation, READMEs, source comments, UI copy, page metadata and package descriptions. Service names follow it (**Be-Music Play**, **Be-Music Leaderboard**, **Be-Music Accounts**, **Be-Music Dashboard**), and so do glossary terms built on it: a code-based skin is a **Be-Music Skin** (plural **Be-Music Skins**), capital S, in English and Japanese alike. Keep lowercase `be-music` only where it is an identifier or machine-read: package names (`@be-music/*`), the repository name in code formatting, domains and URLs (`be-music.app`), file, format and MIME names (`be-music-playlog`, `.bmplay`), custom element and CSS names (`be-music-*`), OAuth scopes and client ids (`be-music:api`), the passkey `rpID`, storage keys, database values, log paths (`~/.be-music/...`) and anything else persisted or compared by code. Existing CHANGELOG entries stay as written.
 
 ## Score And Resources
 
@@ -70,6 +74,9 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - **long note (LN)**: Note with a start and end point. Hold, release, and end judgment depend on `LNMODE`.
 - **LNOBJ**: BMS long-note terminator object declared by `#LNOBJ`.
 - **LNMODE**: BMS long-note judgment rule. `1`, `2`, and `3` change end judgment and hold-break behavior.
+- **charge note (CN) / hell charge note (HCN)**: Long notes whose tail is judged too (`#LNMODE 2` / `3` as the ruleset plays them). An HCN also drains the gauge while it is not held: while it passes the judgement line it is **gaining** (a key on its lane is down, or its tail was released at GOOD or better) or **draining** (the lane is up; pressing it gains again). Code: the `hell-charge` UI command, the `'draining'` long-note state. An **LN** in the narrow sense (`#LNMODE 1`) judges only its head.
+- **back-spin scratch (BSS)**: A charge note (CN / HCN) on a scratch lane. Its tail is judged on a **reverse spin**, a scratch press spinning the other way from the press that hit its head, not on the release. Only the rulesets that judge a long note's tail have one (beatoraja's CN / HCN and every That-Which-Must-Not-Be-Named long note); LR2 plays it as an LN. Code: `isBackSpinScratch`, `backSpinScratch`.
+- **scratch spin**: The way a scratch press turned the turntable, `'cw'` or `'ccw'` (`ScratchSpin`, the replay's `spin`). A controller that reports rotation sends the direction it turned; a keyboard uses **odd-even**: a scratch lane's keys alternate as the two directions.
 - **mine**: Damage note. Following LR2, a mine explodes when its lane is held as it crosses the judge line or pressed within the `PGREAT` window; the explosion only drains the gauge by the chart-defined damage and is not a judgment.
 - **judgment**: A note evaluation such as `PERFECT`, `GREAT`, `GOOD`, `BAD`, or `POOR`. Use judgment for the result and judge for the verb; use `JudgmentKind` for a kind and `JudgmentTiming` for a timed result. Verb-led engine names and format fields such as `judge` and `judgeRuleset` retain their roles.
 - **FAST/SLOW**: Timing-direction display for early or late hits. The current implementation aggregates only `GREAT` and `GOOD`.
@@ -88,10 +95,10 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - **Node audio adapter**: The Node audio implementation in `@be-music/player-node-audio`. Hosts pass `createAudioSession: createNodeAudioSession` to the engine. The engine owns the audio contract; the adapter owns decoding and output.
 - **terminal player**: The `@be-music/player-terminal` CLI and TUI frontend. It provides Music Select, terminal gameplay, terminal BGA, loading screens, and SEA builds on top of the core engine.
 - **browser player**: The `@be-music/player-browser` PixiJS/WebAudio runtime and the `@be-music/app-play` Vite host. The runtime makes every screen as a scene session drawn by a family view, behind its host API, and loads the library and the skins and records plays; the player handles browser drops, themes, the Debug Menu and the scene router.
-- **skin family**: The kind of skin that draws a browser-player scene: `built-in` (be-music skins), `lr2` or `beatoraja` (`SceneFamily`). The host picks it from the loaded themes and the player's choice.
-- **built-in family (default skin family)**: The skin family used when no external theme is active or when the host explicitly selects it. It draws select, play and result (and decide, when the skin declares one) through a be-music skin; its play view draws the shared playfield, as the LR2 one does, and the skin draws the chrome around it.
-- **be-music skin**: Code-based skin written against `@be-music/player-skin-sdk`. It receives presentation frames and combines Canvas drawing with optional DOM screens. DOM replaces select, decide and result drawing, and adds a HUD beside the Canvas playfield during gameplay; a skin that sets `gameplay.drawsOnDOM` draws the playfield on DOM too.
-- **built-in skins**: The be-music skins bundled with the browser player: Synesthesia (the default), Plain, and Native (DOM + Canvas). Native uses reusable components from `@be-music/player-ui`.
+- **skin family**: The kind of skin that draws a browser-player scene: `built-in` (Be-Music Skins), `lr2` or `beatoraja` (`SceneFamily`). The host picks it from the loaded themes and the player's choice.
+- **built-in family (default skin family)**: The skin family used when no external theme is active or when the host explicitly selects it. It draws select, play and result (and decide, when the skin declares one) through a Be-Music Skin; its play view draws the shared playfield, as the LR2 one does, and the skin draws the chrome around it.
+- **Be-Music Skin**: Code-based skin written against `@be-music/player-skin-sdk`. It receives presentation frames and combines Canvas drawing with optional DOM screens. DOM replaces select, decide and result drawing, and adds a HUD beside the Canvas playfield during gameplay; a skin that sets `gameplay.drawsOnDOM` draws the playfield on DOM too.
+- **built-in skins**: The Be-Music Skins bundled with the browser player: Synesthesia (the default), Plain, and Native (DOM + Canvas). Native uses reusable components from `@be-music/player-ui`.
 - **touch layout / portrait stage**: Gameplay layouts for touch-first devices. The touch layout spreads equal-width lanes across the stage; a skin with a `portraitStage` can also be shown on a portrait (9:16) stage.
 - **LR2 skin**: Lunatic Rave 2 CSV skin format handled by `@be-music/skin-lr2`. The package parses skin files and resolves theme assets independently from PixiJS.
 - **beatoraja skin**: beatoraja JSON or Lua skin format handled by `@be-music/skin-beatoraja`. The package parses headers and full skins, resolves options and assets, and normalizes elements independently from PixiJS.
@@ -113,7 +120,7 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 ## Identity And Profiles
 
 - **user**: The identity that owns plays and data across services. Use its stable user ID to establish ownership (and the issuer with the subject at OIDC boundaries); a handle, display name, or avatar is not that identity.
-- **account**: The user-facing means of accessing a user identity through authentication. Qualify **linked login account** for an external provider association: Better Auth's `account` table stores those associations, not separate be-music users.
+- **account**: The user-facing means of accessing a user identity through authentication. Qualify **linked login account** for an external provider association: Better Auth's `account` table stores those associations, not separate Be-Music users.
 - **guest / anonymous user**: A user identity created without a permanent sign-in credential. Guest describes the UI experience; anonymous describes the stored authentication state. It still has a user ID and can own plays.
 - **profile**: A user's public presentation: handle, display name, and avatar. Editing it does not create a new user identity.
 - **session**: Authentication state with a lifetime. An Accounts session and each app's local session are distinct even when they identify the same user; an engine play session or scene session is not an authentication session.
@@ -177,7 +184,7 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - **system sound set**: A theme's cues and jingles by slot (cursor, decide, folders, option panels, select BGM, clear / fail jingles, …), each resolved to bytes or to a path in the theme (`SystemSoundSet`).
 - **scene session**: The one implementation of a screen's behaviour, shared by every skin family (`session/` in `@be-music/player-browser`): browsing, chart preparation, the engine, input, sound and endings. Each tick it hands its family view a frame built over the scene models and takes back intents. See [ADR 0001](./adr/0001-skin-families-only-draw.md).
 - **family view**: How one skin family draws a scene model (`view/built-in/`, `view/lr2/`, `view/beatoraja/`); it draws the session's frames, returns the player's actions as intents and never runs the engine.
-- **family kit**: What a host hands a scene to draw it with, per skin family: a be-music skin with the player's settings for it (`built-in`), an LR2 skin (`lr2`) or a loaded beatoraja theme entry (`beatoraja`) (`SelectKit`, `DecideKit`, `PlayKit`, `ResultKit`).
+- **family kit**: What a host hands a scene to draw it with, per skin family: a Be-Music Skin with the player's settings for it (`built-in`), an LR2 skin (`lr2`) or a loaded beatoraja theme entry (`beatoraja`) (`SelectKit`, `DecideKit`, `PlayKit`, `ResultKit`).
 - **host API**: `@be-music/player-browser/host`: `PixiSceneHost`, which shows one scene at a time, and `createSelectScene`, `createDecideScene`, `createPlayScene` and `createResultScene`, which make each screen from a family kit as a `SessionScene`.
 - **scene lifecycle**: The one contract every scene implements (`PixiScene`): `root`, `identity` (`{ kind, family }`), `enter`, `exit` and `dispose`. A host changes scenes only with `setScene`.
 - **intent**: What a player's action on a view means for the scene: open a folder, start a course, cycle the gauge.
@@ -200,7 +207,7 @@ Use `____` in source identifiers and project-owned serialized values, `????` for
 - [Scene models](./scene-model.md)
 - [Architecture](./architecture.md)
 - [Replay (play history) specification](./replay.md)
-- [Writing a be-music skin](./be-music-skin.md)
+- [Writing a Be-Music Skin](./be-music-skin.md)
 - [LR2 skin implementation notes](./lr2-skin.md)
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
 - [BMS/bmson intermediate representation (`@be-music/chart-source`) implementation specification](./json-spec.md)

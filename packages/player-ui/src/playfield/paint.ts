@@ -1,6 +1,10 @@
 import {
+  backSpinChevron,
+  hellChargeZigzag,
   layoutTabularRun,
   longNoteCentreLineAlpha,
+  resolveHellChargeLook,
+  resolveLongNoteMarks,
   type BeMusicLaneKind,
   type BeMusicRect,
 } from '@be-music/player-skin-sdk';
@@ -28,6 +32,10 @@ export type BeMusicPlayfieldPaintContext = Pick<
   | 'fillText'
   | 'measureText'
   | 'beginPath'
+  | 'moveTo'
+  | 'lineTo'
+  | 'closePath'
+  | 'fill'
   | 'arc'
   | 'rect'
   | 'stroke'
@@ -157,19 +165,65 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
   }
   ctx.globalAlpha = 1;
   for (const note of data.longNotes) {
-    ctx.fillStyle = NOTE_COLORS[note.kind];
-    ctx.globalAlpha = (note.state === 'dropped' ? 0.15 : 0.35) * (note.alpha ?? 1);
-    ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, Math.max(1, note.bottom - note.top));
-    // A white centre line down the body, the long-note shape every built-in skin shares; let go early, it fades out.
-    ctx.fillStyle = '#ffffff';
-    ctx.globalAlpha =
+    const bodyTop = note.top - NOTE_HEIGHT;
+    const bodyHeight = Math.max(1, note.bottom - note.top);
+    // The kinds apart by shape (`resolveLongNoteMarks`): an HCN's centre line zigzags, a BSS's tail carries a chevron.
+    const marks = resolveLongNoteMarks(note);
+    const capAlpha = (note.state === 'dropped' ? 0.5 : 1) * (note.alpha ?? 1);
+    // A hell charge note shows how it stands: colour, glow and zigzag motion change together (`resolveHellChargeLook`).
+    const look = marks.hellCharge ? resolveHellChargeLook(note.state, data.nowMs) : undefined;
+    if (look) {
+      ctx.fillStyle = hexColor(look.color);
+      if (look.glow > 0) {
+        ctx.globalAlpha = 0.3 * look.glow * capAlpha;
+        ctx.fillRect(note.x - 3, bodyTop, note.w + 6, bodyHeight);
+        ctx.fillRect(note.x - 3, note.bottom - NOTE_HEIGHT - 3, note.w + 6, NOTE_HEIGHT + 6);
+      }
+      ctx.globalAlpha = (0.2 + 0.3 * look.glow) * capAlpha;
+      ctx.fillRect(note.x, bodyTop, note.w, bodyHeight);
+    } else {
+      ctx.fillStyle = NOTE_COLORS[note.kind];
+      ctx.globalAlpha = (note.state === 'dropped' ? 0.15 : 0.35) * (note.alpha ?? 1);
+      ctx.fillRect(note.x, bodyTop, note.w, bodyHeight);
+    }
+    // A centre line down the body, the long-note shape every built-in skin shares; let go early, it fades out. An HCN's
+    // zigzags, flowing into the judgement line while it charges, back up while it drains, and still otherwise.
+    const line =
       (note.state === 'dropped' ? 0.3 : 0.6) * (note.alpha ?? 1) * longNoteCentreLineAlpha(note.releasedElapsedMs);
-    ctx.fillRect(note.x + note.w / 2 - 1, note.top - NOTE_HEIGHT, 2, Math.max(1, note.bottom - note.top));
+    if (look) {
+      const points = hellChargeZigzag(note.x, note.w, bodyTop, bodyTop + bodyHeight, {
+        nowMs: data.nowMs,
+        flow: look.flow,
+      });
+      if (points.length >= 4) {
+        ctx.strokeStyle = hexColor(look.lineColor);
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = line * (0.9 + 0.75 * look.glow);
+        ctx.beginPath();
+        ctx.moveTo(points[0]!, points[1]!);
+        for (let index = 2; index < points.length; index += 2) ctx.lineTo(points[index]!, points[index + 1]!);
+        ctx.stroke();
+      }
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = line;
+      ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
+    }
     ctx.fillStyle = NOTE_COLORS[note.kind];
-    ctx.globalAlpha = (note.state === 'dropped' ? 0.5 : 1) * (note.alpha ?? 1);
+    ctx.globalAlpha = capAlpha;
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
-    if (note.mode === 'ln') ctx.globalAlpha *= 0.4;
+    if (!marks.judgedTail) ctx.globalAlpha *= 0.4;
     ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    if (marks.backSpin) {
+      ctx.globalAlpha = capAlpha;
+      ctx.fillStyle = '#ffffff';
+      const points = backSpinChevron(note.x, note.w, note.top, NOTE_HEIGHT);
+      ctx.beginPath();
+      ctx.moveTo(points[0]!, points[1]!);
+      for (let index = 2; index < points.length; index += 2) ctx.lineTo(points[index]!, points[index + 1]!);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
   }
   for (const note of data.notes) {
@@ -278,4 +332,9 @@ function clipped(ctx: BeMusicPlayfieldPaintContext, rect: BeMusicRect, paint: ()
   ctx.clip();
   paint();
   ctx.restore();
+}
+
+/** `0xrrggbb` → `#rrggbb`, for colours the skin SDK hands out as numbers. */
+function hexColor(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
 }

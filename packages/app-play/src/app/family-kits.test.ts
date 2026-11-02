@@ -122,14 +122,14 @@ describe('FamilyKits.selectSoundSet', () => {
 });
 
 describe('FamilyKits.decideKitFor', () => {
-  test("each family's splash: the beatoraja entry, the LR2 decide skin, or the be-music skin's own", async () => {
+  test("each family's splash: the beatoraja entry, the LR2 decide skin, or the Be-Music Skin's own", async () => {
     const decide = skin('decide');
     const { kits, beatoraja, builtIn } = fakes({ decideSkin: decide });
     const chartEntry = chart();
     expect(await kits.decideKitFor('beatoraja', chartEntry, true)).toBe(BEATORAJA_KIT);
     expect(beatoraja.loadBeatorajaDecideKit).toHaveBeenCalledWith(chartEntry);
     expect(await kits.decideKitFor('lr2', chartEntry, false)).toEqual({ family: 'lr2', skin: decide });
-    // A be-music skin without a decide screen shows no splash.
+    // A Be-Music Skin without a decide screen shows no splash.
     expect(await kits.decideKitFor('default', chartEntry, false)).toBeUndefined();
     builtIn.beMusicSkin = { ...BUILT_IN_KIT.skin, decide: {} } as BeMusicSkin;
     expect(await kits.decideKitFor('default', chartEntry, false)).toBe(BUILT_IN_KIT);

@@ -63,7 +63,7 @@ describe('bmson scroll_events (beatoraja extension)', () => {
     expect(json.preservation.bmson.scrollEvents).toEqual([{ y: 480, rate: 3 }]);
   });
 
-  test('are kept in preservation.bmson.scrollEvents and survive a be-music JSON round trip', () => {
+  test('are kept in preservation.bmson.scrollEvents and survive a Be-Music JSON round trip', () => {
     const json = parse({ scroll_events: [{ y: 240, rate: 0.25 }] });
     expect(json.preservation.bmson.scrollEvents).toEqual([{ y: 240, rate: 0.25 }]);
 

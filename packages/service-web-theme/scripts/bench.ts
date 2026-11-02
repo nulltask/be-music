@@ -8,7 +8,7 @@ console.log(
 );
 const footerStarted = performance.now();
 for (let index = 0; index < 10000; index++)
-  renderServiceFooter({ current: 'dashboard', hostname: 'be-music.app', buildInfo: info, siteHTML: 'be-music' });
+  renderServiceFooter({ current: 'dashboard', hostname: 'be-music.app', buildInfo: info, siteHTML: 'Be-Music' });
 console.log(
   JSON.stringify({ name: 'renderServiceFooter', iterations: 10000, durationMs: performance.now() - footerStarted }),
 );

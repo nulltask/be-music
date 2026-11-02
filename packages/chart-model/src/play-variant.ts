@@ -86,7 +86,7 @@ const _____SIX_SEVEN_KEY_CHANNELS: readonly string[] = laneChannelsOf('14').filt
  *      to `.bme` for table-friendly tooling) without requiring an explicit `.pms` extension.
  *   5. **That-Which-Must-Not-Be-Named fallback** — classify by `2X` presence (`usesPlayer2`) and `18/19/28/29` (`uses6or7`) as That-Which-Must-Not-Be-Named
  *      `5/7/10/14`. The lanes in use decide, whatever the extension: a `.bme` chart without a 6 / 7 key column is
- *      `5` / `10` like beatoraja reads it (be-music decision, see docs/format-compat.md §5).
+ *      `5` / `10` like beatoraja reads it (Be-Music decision, see docs/format-compat.md §5).
  */
 export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlayVariant {
   const genericKeys = resolveGenericBmsonKeyCount(chart.bmson?.info?.modeHint);
