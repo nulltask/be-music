@@ -58,6 +58,17 @@ export const PLAYER_HELP_TEMPLATE = html`
           <button
             type="button"
             role="tab"
+            id="help-tab-keyboard"
+            aria-controls="help-pane-keyboard"
+            aria-selected="false"
+            tabindex="-1"
+            data-pane="keyboard"
+          >
+            ${localized('keyboard')}
+          </button>
+          <button
+            type="button"
+            role="tab"
             id="help-tab-oss"
             aria-controls="help-pane-oss"
             aria-selected="false"
@@ -451,6 +462,14 @@ export const PLAYER_HELP_TEMPLATE = html`
             </ul>
           </div>
         </div>
+        <div
+          role="tabpanel"
+          id="help-pane-keyboard"
+          aria-labelledby="help-tab-keyboard"
+          tabindex="-1"
+          aria-selected="false"
+          hidden
+        ></div>
         <div
           role="tabpanel"
           id="help-pane-oss"
