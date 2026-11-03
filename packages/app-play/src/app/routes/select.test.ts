@@ -141,6 +141,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
   const deps = {
     router,
     controls: () => ({}),
+    showExitMenu: vi.fn(),
     elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: {
       collection: { sources: [], charts: options.charts ?? [chartEntry('a')], errors: [] } as BrowserChartCollection,
@@ -548,13 +549,25 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.deps.rememberHiSpeed).toHaveBeenCalledWith(3.5, 'select');
   });
 
-  test('Escape at the root of a beatoraja screen leaves it for the drop screen: the screen and the cursor go', async () => {
+  test('Escape at the root asks first, and staying keeps the screen', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const scene = lastMade(h);
+    scene.options.on.exitMenu!();
+    expect(h.deps.showExitMenu).toHaveBeenCalledOnce();
+    vi.mocked(h.deps.showExitMenu).mock.calls[0]![0]('cancel');
+    expect(h.classes.has('empty')).toBe(false);
+    expect(h.router.select).toBe(scene);
+  });
+
+  test('leaving from the exit menu goes to the drop screen: the screen and the cursor go', async () => {
     const h = harness();
     h.setFamily('beatoraja');
     await h.route.showSelect();
     const scene = lastMade(h);
     h.route.lastSelectNavigation = AT_FOLDER;
-    scene.options.on.exit!();
+    scene.options.on.exitMenu!();
+    vi.mocked(h.deps.showExitMenu).mock.calls[0]![0]('leave');
     expect(h.classes.has('empty')).toBe(true);
     expect(h.route.lastSelectNavigation).toBeUndefined();
     expect(h.deps.beatorajaSkinOptions.clear).toHaveBeenCalledOnce();
