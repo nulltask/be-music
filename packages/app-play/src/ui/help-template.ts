@@ -157,8 +157,9 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li>
                 Lane keys as in LR2: the white keys start, the black keys go back, key 6 starts in AUTO, → opens a
                 folder, and SELECT, <kbd>1</kbd> or → on a chart moves to the track's next difficulty. beatoraja skins
-                as in beatoraja: key 1 plays, key 5 is AUTO, keys 2 / 4 close the folder. <kbd>2</kbd> sorts,
-                <kbd>0</kbd> searches. Every key can be moved under Options → Keys → Screens.
+                as in beatoraja: key 1 plays, key 5 is AUTO, keys 2 / 4 close the folder, and START, SELECT and
+                <kbd>5</kbd> open its option panels 1–3. <kbd>2</kbd> sorts, <kbd>0</kbd> searches. Every key can be
+                moved under Options → Keys → Screens.
               </li>
               <li>
                 START (<kbd>Q</kbd>), <kbd>Space</kbd> or <kbd>Tab</kbd> opens the <strong>PLAY OPTION</strong> panel
@@ -330,8 +331,9 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li>
                 鍵盤は LR2 と同じく、白鍵で開始、黒鍵で戻る、鍵盤 6 で AUTO、→ でフォルダを開き、譜面の上で
                 SELECT・<kbd>1</kbd>・→ を押すと同じ曲の次の難易度へ移ります。beatoraja スキンでは beatoraja
-                と同じく、鍵盤 1 でプレイ、鍵盤 5 で AUTO、鍵盤 2 / 4 でフォルダを閉じます。
-                <kbd>2</kbd> でソート、<kbd>0</kbd> で検索。どのキーも Options → Keys → Screens で変えられます。
+                と同じく、鍵盤 1 でプレイ、鍵盤 5 で AUTO、鍵盤 2 / 4 でフォルダを閉じ、START・SELECT・<kbd>5</kbd>
+                でオプションパネル 1〜3 を開きます。 <kbd>2</kbd> でソート、<kbd>0</kbd> で検索。どのキーも Options →
+                Keys → Screens で変えられます。
               </li>
               <li>
                 START (<kbd>Q</kbd>)・<kbd>Space</kbd>・<kbd>Tab</kbd> で <strong>PLAY OPTION</strong> パネルを開きます

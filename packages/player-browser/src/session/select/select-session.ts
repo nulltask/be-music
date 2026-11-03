@@ -65,6 +65,7 @@ import { resolveSelectKeyAction } from './select-keys.ts';
 import { nextDifficultyIndex } from './select-difficulty.ts';
 import { DEFAULT_CONTROL_ACTIONS, type ControlActionMap } from '../controls/control-actions.ts';
 import { controlButtonsOfKey, DEFAULT_CONTROL_BUTTONS } from '../controls/control-buttons.ts';
+import { createControlButtonTracker, isStartAndSelectDown } from '../controls/button-tracker.ts';
 import { openLibrary, restoreSelectBrowse, SELECT_POLICIES, type SelectPolicy } from './select-policy.ts';
 import { findReadtextForChart } from '../../collection/readtext.ts';
 
@@ -200,6 +201,8 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private records: SelectRecords;
   private sounds: SystemSoundSet;
   private panel: number | undefined;
+  /** The control buttons held, for beatoraja's START + SELECT. */
+  private readonly buttonsHeld = createControlButtonTracker();
   /** When the panel key that opened the panel went down, while it is still held. */
   private panelPressedAtMs: number | undefined;
   private searchEditing = false;
@@ -384,6 +387,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
 
   public handleKey(event: SessionKeyEvent): boolean {
     if (!this.entered) return false;
+    this.buttonsHeld.handle({
+      ...event,
+      buttons: event.buttons ?? controlButtonsOfKey(event, DEFAULT_CONTROL_BUTTONS),
+    });
     if (event.type === 'up') return this.releasePanelKey(event);
     // A key is a gesture: the browser lets the BGM start once one came.
     this.options.audio.resume();
@@ -422,11 +429,14 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       case 'back':
         // Backing out of nothing leaves the key to the page.
         return this.back(atMs, action.inFolder === true);
-      case 'panel':
+      case 'panel': {
         if (event.repeat) return true;
-        this.panelPressedAtMs = this.panel === undefined ? atMs : undefined;
-        this.togglePanel(action.panel, atMs);
+        // beatoraja's START and SELECT held together open its panel 3.
+        const panel = this.policy.keys === 'beatoraja' && isStartAndSelectDown(this.buttonsHeld) ? 3 : action.panel;
+        this.panelPressedAtMs = this.panel === undefined || this.panel !== panel ? atMs : undefined;
+        this.togglePanel(panel, atMs);
         return true;
+      }
       case 'open-folder':
         // LR2's → opens a folder, and on a chart changes the difficulty.
         if (this.focused()?.kind === 'folder') {
@@ -759,7 +769,11 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     if (pressedAtMs === undefined || this.panel === undefined) return false;
     const actions = this.options.actions ?? DEFAULT_CONTROL_ACTIONS[this.policy.keys];
     const buttons = event.buttons ?? controlButtonsOfKey(event, DEFAULT_CONTROL_BUTTONS);
-    if (!actions.is('select.option-panel', { ...event, buttons })) return false;
+    const keyEvent = { ...event, buttons };
+    const panelKey = (['select.option-panel', 'select.option-panel-2', 'select.option-panel-3'] as const).some((id) =>
+      actions.is(id, keyEvent),
+    );
+    if (!panelKey) return false;
     this.panelPressedAtMs = undefined;
     if (event.timeStamp - pressedAtMs >= PANEL_HOLD_MS) this.togglePanel(this.panel, event.timeStamp);
     return true;
@@ -806,6 +820,11 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
 
   /** Steps a play option through its choices, or the hi-speed by its step. */
   private stepPlayOption(key: keyof PlayOptions, step: number): void {
+    // beatoraja's panel 3 steps the visible time and the judge timing by 1 ms.
+    if (key === 'noteDurationMs' || key === 'judgeTimingMs') {
+      this.setPlayOption(key, resolvePlayOptionValue(key, this.playOptions[key] + step));
+      return;
+    }
     if (key === 'hiSpeed') {
       const value = this.playOptions.classicHiSpeed
         ? stepClassicHiSpeed(this.playOptions.hiSpeed, step)

@@ -890,3 +890,16 @@ describe('SelectSession difficulty change', () => {
     expect(session.focused()).toEqual(first);
   });
 });
+
+describe('SelectSession beatoraja option panels', () => {
+  it('opens panel 3 on START and SELECT together, and steps the judge timing there by 1 ms', () => {
+    const { key, advance } = createSession({ policy: SELECT_POLICIES.beatoraja });
+    key('KeyQ', 'q');
+    expect(advance(10).panel).toBe(1);
+    key('KeyW', 'w');
+    expect(advance(10).panel).toBe(3);
+    const before = advance(0).playOptions.judgeTimingMs;
+    key('KeyV', 'v');
+    expect(advance(10).playOptions.judgeTimingMs).toBe(before + 1);
+  });
+});

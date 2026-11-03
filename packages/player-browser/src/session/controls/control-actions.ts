@@ -123,8 +123,22 @@ export const CONTROL_ACTIONS = [
     id: 'select.option-panel',
     screen: 'select',
     label: 'PLAY OPTION panel',
-    // LR2's START and Space, and That-Which-Must-Not-Be-Named PC's Tab.
-    defaults: { lr2: [code('Space'), code('Tab'), button('1P-start')] },
+    // LR2's START and Space, and That-Which-Must-Not-Be-Named PC's Tab; beatoraja's START (its panel 1).
+    defaults: { lr2: [code('Space'), code('Tab'), button('1P-start')], beatoraja: [button('1P-start')] },
+  },
+  {
+    id: 'select.option-panel-2',
+    screen: 'select',
+    label: 'Option panel 2',
+    // beatoraja's SELECT; START and SELECT together, or 5, open panel 3.
+    defaults: { beatoraja: [button('1P-select')] },
+  },
+  {
+    id: 'select.option-panel-3',
+    screen: 'select',
+    label: 'Option panel 3',
+    defaults: { beatoraja: [code('Digit5')] },
+    bare: true,
   },
   { id: 'select.sort', screen: 'select', label: 'Sort', defaults: both([code('Digit2')]), bare: true },
   {
