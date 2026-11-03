@@ -33,7 +33,9 @@ LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザル�
    スコア対象ノートを未判定のまま残したプレイはゲージ 0 で終えます（[`bms-spec.ja.md`](./bms-spec.ja.md)「負の BPM」
    を参照）。
 2. **`inputs`** — プレイアブルレーンに届いた全ての生のキー押下・解放
-   （`{ seq, timeUs, action: 'down' | 'up', channels }`。ホストがキーを名付けたときは `tokens`、入力が解放を
+   （`{ seq, timeUs, action: 'down' | 'up', channels }`。ホストがキーを名付けたときは `tokens`、物理的な入力が
+   分かるときは `code`（キーボードの `KeyboardEvent.code`。`'KeyZ'` や `'ShiftLeft'` など。タッチレーンは `'touch'` で、
+   その `tokens` はレーンのキーボードのキーです。`tokens` と同じく診断用）、入力が解放を
    伝えないため（kitty キーボードプロトコルのない端末）エンジンが推定した `up` には `inferred: true` が付きます。
    これはエンジンがキーを離したとみなした瞬間です。`inferred` は診断用で、リプレイとシミュレータは他の `up` と
    同じに読みます）。スクラッチの押下には、ターンテーブルを回した向き `spin: 'cw' | 'ccw'`（コントローラーが報告した

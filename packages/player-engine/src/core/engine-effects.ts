@@ -102,6 +102,7 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeEffectHand
           effect.channels,
           effect.inferred,
           effect.spin,
+          effect.code,
         );
         return;
       case 'record-empty-poor':

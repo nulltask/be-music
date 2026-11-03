@@ -33,7 +33,9 @@ A replay is deliberately **not** a list of judgments. Its canonical payload is:
    sweeps misses past R, and ends a run that leaves scorable notes unjudged with the gauge at 0, exactly as the
    engine did (see [`bms-spec.md`](./bms-spec.md) "Negative BPM").
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
-   `{ seq, timeUs, action: 'down' | 'up', channels }`, with the key `tokens` when the host named them and
+   `{ seq, timeUs, action: 'down' | 'up', channels }`, with the key `tokens` when the host named them, the physical
+   input in `code` when the host had one (a keyboard's `KeyboardEvent.code` such as `'KeyZ'` or `'ShiftLeft'`, or
+   `'touch'` for a touch lane, whose `tokens` are its lane's keyboard key; diagnostic only, like `tokens`), and
    `inferred: true` on an `up` the engine inferred because the input reported no releases (a terminal without the
    kitty keyboard protocol): the instant it took the key as let go. `inferred` is diagnostic only; replays and
    simulators read such an `up` like any other. A scratch press carries `spin: 'cw' | 'ccw'`, the way it turned the

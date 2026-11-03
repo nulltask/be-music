@@ -186,6 +186,8 @@ export type JudgeCoreInput =
       nowSec: number;
       nowMs: number;
       spin?: ScratchSpin;
+      /** The physical input, only recorded (`ReplayInputEvent.code`). */
+      code?: string;
     }
   /**
    * Keys went down and stay down (key-state input): the lanes count as held until released. `inferred`: the driver
@@ -204,6 +206,8 @@ export type JudgeCoreInput =
       nowMs: number;
       recordSec: number;
       inferred?: boolean;
+      /** The physical input, only recorded (`ReplayInputEvent.code`). */
+      code?: string;
     }
   /**
    * The play ended: anything still unjudged is charged as POOR at `totalSeconds` — except, past an LR2 negative-BPM
@@ -232,6 +236,8 @@ export type JudgeCoreEffect =
       inferred?: boolean;
       /** The scratch spin of a press (`ReplayInputEvent.spin`). */
       spin?: ScratchSpin;
+      /** The physical input (`ReplayInputEvent.code`). */
+      code?: string;
     }
   /** Count an empty POOR in the replay's native result. */
   | { kind: 'record-empty-poor' }

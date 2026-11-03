@@ -120,6 +120,12 @@ export interface ReplayInputEvent {
   /** Raw input tokens (`'z'`, `'shift-left'`, ...) — diagnostic only; simulators use `channels`. */
   tokens?: string[];
   /**
+   * The physical input the player pressed or let go: a keyboard's `KeyboardEvent.code` (`'KeyZ'`, `'ShiftLeft'`), or
+   * `'touch'` for a touch lane. Diagnostic only, like `tokens`; absent when the host named none (a terminal, an
+   * inferred release).
+   */
+  code?: string;
+  /**
    * The way a scratch press turned the turntable (`'cw'` / `'ccw'`): the direction a controller reported, or the
    * keyboard's odd-even key. A back-spin scratch's tail is judged on a press spinning the other way from the press
    * that hit its head, so simulators read it. Only on a `down`; absent when the press reported no spin.
@@ -699,6 +705,12 @@ function parseInputs(value: unknown): ReplayInputEvent[] {
         throw new ReplayParseError(`inputs[${index}].tokens: expected string[]`);
       }
       event.tokens = record.tokens as string[];
+    }
+    if (record.code !== undefined) {
+      if (typeof record.code !== 'string' || record.code.length === 0) {
+        throw new ReplayParseError(`inputs[${index}].code: expected a non-empty string`);
+      }
+      event.code = record.code;
     }
     if (record.spin !== undefined) {
       if (!isScratchSpin(record.spin) || action !== 'down') {

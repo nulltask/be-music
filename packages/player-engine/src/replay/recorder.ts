@@ -204,7 +204,7 @@ export interface ReplayRecorder {
   discard(): void;
   /**
    * Records a press or release; `inferred` marks a release the engine inferred from input without releases, `spin` the
-   * way a scratch press turned the turntable.
+   * way a scratch press turned the turntable, `code` the physical input (`ReplayInputEvent.code`).
    */
   recordInput(
     action: ReplayInputAction,
@@ -213,6 +213,7 @@ export interface ReplayRecorder {
     channels: Iterable<string>,
     inferred?: boolean,
     spin?: ScratchSpin,
+    code?: string,
   ): void;
   /** Counts an LR2-style empty POOR — cached into the native result for diagnostics. */
   recordEmptyPoor(): void;
@@ -247,7 +248,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       tempoChanges.length = 0;
       emptyPoorCount = 0;
     },
-    recordInput: (action, timeSeconds, tokens, channels, inferred, spin): void => {
+    recordInput: (action, timeSeconds, tokens, channels, inferred, spin, code): void => {
       if (discarded) return;
       const channelList = [...channels];
       if (channelList.length === 0) {
@@ -261,6 +262,9 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       };
       if (tokens.length > 0) {
         event.tokens = [...tokens];
+      }
+      if (code !== undefined && code.length > 0) {
+        event.code = code;
       }
       if (inferred === true && action === 'up') {
         event.inferred = true;

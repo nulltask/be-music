@@ -93,6 +93,8 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
     options.inputSignals.pushCommand({
       kind: 'lane-input',
       tokens,
+      // The physical key, for the replay (`ReplayInputEvent.code`): the tokens are normalised from it.
+      code: keyEvent.code,
       pressedAt,
     });
     // ALSO emit a kitty-state press: it is what holds the lane down in the engine's judge (key-state input — a lane
@@ -106,6 +108,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
       pressTokens: tokens,
       repeatTokens: [],
       releaseTokens: [],
+      code: keyEvent.code,
       pressedAt,
     });
   };
@@ -125,6 +128,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
       pressTokens: [],
       repeatTokens: [],
       releaseTokens: tokens,
+      code: keyEvent.code,
       pressedAt: performance.timeOrigin + keyEvent.timeStamp,
     });
   };

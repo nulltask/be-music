@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { basicChart, longNoteChart, mineChart } from './characterization/charts.ts';
 import { observePlay, type PlayObservation, type ScriptStep } from './characterization/harness.ts';
+import type { PlayerInputCommand } from './input-signal-bus.ts';
 
 /** A replay's inputs as `action lanes @us`, with `inferred` on an inferred release. */
 const loggedInputs = (observation: PlayObservation): string[] =>
@@ -115,5 +116,43 @@ describe('manual play: a tap whose release is drained right after its press', ()
     for (let index = 1; index < inputs.length; index += 1) {
       expect(inputs[index]!.timeUs).toBeGreaterThanOrEqual(inputs[index - 1]!.timeUs);
     }
+  });
+});
+
+describe('manual play: the physical input behind a key', () => {
+  test('the replay records the code each key command carries, and a replay of it keeps them', async () => {
+    // A key and a touch on 11 (the basic chart binds `z` to it), as the web runtime and the touch lanes send them.
+    const key = (code: string): PlayerInputCommand[] => [
+      { kind: 'lane-input', tokens: ['z'], code },
+      { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [], code },
+    ];
+    const release = (code: string): PlayerInputCommand => ({
+      kind: 'kitty-state',
+      pressTokens: [],
+      repeatTokens: [],
+      releaseTokens: ['z'],
+      code,
+    });
+    const live = await observePlay({
+      driver: 'manual',
+      chart: basicChart(),
+      reportsKeyReleases: true,
+      script: [
+        { atMs: 500, commands: key('KeyZ') },
+        { atMs: 560, command: release('KeyZ') },
+        { atMs: 900, commands: key('touch') },
+        { atMs: 960, command: release('touch') },
+      ],
+    });
+    const inputs = live.replay!.inputs;
+    expect(inputs.map((input) => `${input.action} ${input.code}`)).toEqual([
+      'down KeyZ',
+      'up KeyZ',
+      'down touch',
+      'up touch',
+    ]);
+
+    const replayed = await observePlay({ driver: 'manual', chart: basicChart(), options: { replayInputs: inputs } });
+    expect(replayed.replay?.inputs).toEqual(inputs);
   });
 });

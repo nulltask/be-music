@@ -239,7 +239,7 @@ export function hasPressCandidate(state: JudgeCoreState, channels: ReadonlySet<s
 /**
  * A press on `candidateChannels`. `recordedChannels` are the lanes the replay records for it: the keys' own lanes, which
  * differ from the lanes judged only when ANY KEY routed the press. `spin` is the way a scratch press turned the
- * turntable (`scratch-spin.ts`).
+ * turntable (`scratch-spin.ts`), and `code` the physical input the replay records.
  */
 export function handleLanePress(
   state: JudgeCoreState,
@@ -250,6 +250,7 @@ export function handleLanePress(
   emit: JudgeCoreEffectSink,
   recordedChannels: ReadonlySet<string> = candidateChannels,
   spin?: ScratchSpin,
+  code?: string,
 ): void {
   const { config } = state;
   const { ruleset } = config;
@@ -261,6 +262,7 @@ export function handleLanePress(
     tokens,
     channels: recordedChannels,
     ...(spin !== undefined ? { spin } : {}),
+    ...(code !== undefined ? { code } : {}),
   });
 
   for (const mappedChannel of candidateChannels) {
@@ -555,6 +557,7 @@ export function handleLaneRelease(
       tokens: input.tokens,
       channels: recordedChannels,
       ...(input.inferred === true ? { inferred: true } : {}),
+      ...(input.code !== undefined ? { code: input.code } : {}),
     });
   }
   // The release's own instant (a live driver drains it later than it happened; the replay records the instant).
