@@ -55,7 +55,11 @@ export function renderGameplayCabinet({
     w: gauge.w,
     h: gauge.y + gauge.h - cabinet.gaugeLabelY + 8,
   };
-  const split = second ? gaugeBox.x + (gaugeBox.w + 12) / 2 : gaugeBox.x + gaugeBox.w;
+  const split = second && !cabinet.secondSide ? gaugeBox.x + (gaugeBox.w + 12) / 2 : gaugeBox.x + gaugeBox.w;
+  const secondGaugeBox = cabinet.secondSide
+    ? { ...gaugeBox, x: cabinet.secondSide.gauge.x, w: cabinet.secondSide.gauge.w }
+    : { ...gaugeBox, x: split, w: gaugeBox.x + gaugeBox.w - split };
+  const remaining = Math.max(0, Math.ceil(((r.songLengthMs ?? 0) - (r.songElapsedMs ?? 0)) / 1000));
   const hiSpeed = (r.hiSpeed ?? 0).toFixed(r.floatingHiSpeed ? 2 : 1);
   const difficulty = resolveDifficultyName(f.chart);
   const level = f.chart?.playLevel;
@@ -75,6 +79,7 @@ export function renderGameplayCabinet({
     class="gameplay cabinet"
     data-orientation="landscape"
     ?data-double-play=${cabinet.doublePlay}
+    ?data-two-player=${!!cabinet.secondSide}
     style=${`--stage-ratio:${stage.width / stage.height};--stage-height:${stage.height};--playfield-center:${(f.layout.playfield.centerX / stage.width) * 100}%`}
   >
     <div class="cab play-frame" part="play" style=${place(cabinet.play)}></div>
@@ -106,7 +111,7 @@ export function renderGameplayCabinet({
       class="cab"
       compact
       exportparts="meter:gauge-meter"
-      style=${place(second ? { ...gaugeBox, w: split - 6 - gaugeBox.x } : gaugeBox)}
+      style=${place(second && !cabinet.secondSide ? { ...gaugeBox, w: split - 6 - gaugeBox.x } : gaugeBox)}
       .data=${panels.gauge}
     ></be-music-gauge-panel>
     ${
@@ -115,7 +120,7 @@ export function renderGameplayCabinet({
             class="cab"
             compact
             exportparts="meter:gauge-meter"
-            style=${place({ ...gaugeBox, x: split, w: gaugeBox.x + gaugeBox.w - split })}
+            style=${place(secondGaugeBox)}
             .data=${second.gauge}
           ></be-music-gauge-panel>`
         : nothing
@@ -128,11 +133,32 @@ export function renderGameplayCabinet({
         : nothing
     }
     <div class="cab panel figure" part="score" style=${place(cabinet.score)}>
-      <span class="eyebrow">Score</span><strong>${r.score ?? 0}</strong>
+      <span class="eyebrow">${cabinet.secondSide ? '1P EX Score' : 'Score'}</span
+      ><strong>${(cabinet.secondSide ? r.exScore : r.score) ?? 0}</strong>
     </div>
     <div class="cab panel figure" part="hi-speed" style=${place(cabinet.hiSpeed)}>
       <span class="eyebrow">${r.floatingHiSpeed ? 'FHS' : 'Hi-speed'}</span><strong>${hiSpeed}</strong>
     </div>
+    ${
+      cabinet.secondSide && r.secondPlayer
+        ? html` <div class="cab panel figure" part="second-score" style=${place(cabinet.secondSide.score)}>
+              <span class="eyebrow">2P EX Score</span><strong>${r.secondPlayer.exScore ?? 0}</strong>
+            </div>
+            <div class="cab panel figure" part="max-combo" style=${place(cabinet.maxCombo!)}>
+              <span class="eyebrow">1P Max combo</span><strong>${r.maxCombo ?? 0}</strong>
+            </div>
+            <div class="cab panel figure" part="second-max-combo" style=${place(cabinet.secondSide.maxCombo)}>
+              <span class="eyebrow">2P Max combo</span><strong>${r.secondPlayer.maxCombo ?? 0}</strong>
+            </div>
+            <div class="cab panel figure" part="second-hi-speed" style=${place(cabinet.secondSide.hiSpeed)}>
+              <span class="eyebrow">${r.floatingHiSpeed ? 'FHS' : 'Hi-speed'}</span><strong>${hiSpeed}</strong>
+            </div>
+            <div class="cab panel figure" part="time-limit" style=${place(cabinet.time!)}>
+              <span class="eyebrow">Time limit</span
+              ><strong>${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}</strong>
+            </div>`
+        : nothing
+    }
     ${cabinet.graph ? renderGraph(cabinet.graph, pace, r.random1P, place) : nothing}
     <div class="cab panel stage-band" part="stage" style=${place(cabinet.stage)}>
       ${mode}
@@ -146,40 +172,51 @@ export function renderGameplayCabinet({
           </div>`
         : nothing
     }
-    <div class="cab panel players" part="players" style=${place(cabinet.players)}>
-      <div class="plate">
-        <span class="eyebrow">${r.playerName ?? 'Player 1P'}</span>
-        ${difficulty ? html`<span class="difficulty" part="difficulty">${difficulty}</span>` : nothing}
-        <strong>Lv.${level ?? '-'}</strong>
-      </div>
-      <div class="chart-title">
-        <h2 title=${panels.title}>${panels.title}</h2>
-        <p class="muted">${f.chart?.artist ?? ''}</p>
-      </div>
-      ${
-        second
-          ? html`<div class="plate" part="second-player" aria-label="2P">
-              <span class="eyebrow">Player 2P</span><strong>EX ${second.score.exScore}</strong>
+    ${
+      cabinet.secondSide
+        ? html`<div class="cab panel side-chart" style=${place(cabinet.players)}>
+              ${difficulty ?? ''} Lv.${level ?? '-'}
+            </div>
+            <div class="cab panel side-chart" style=${place(cabinet.judge)}>
+              ${difficulty ?? ''} Lv.${level ?? '-'}
             </div>`
-          : nothing
-      }
-    </div>
-    <div class="cab panel judge" part="judge" style=${place(cabinet.judge)}>
-      <dl class="counts">
-        ${counts.map(
-          ([label, value]) =>
-            html`<dt>${label}</dt>
-              <dd>${value}</dd>`,
-        )}
-      </dl>
-      <dl class="fast-slow">
-        <dt class="fast">FAST</dt>
-        <dd>${panels.judgments.fast}</dd>
-        <dt class="slow">SLOW</dt>
-        <dd>${panels.judgments.slow}</dd>
-      </dl>
-      ${renderTiming(r.lastJudgeDeltaMs, r.judgeWindows?.note.great.lateMs ?? 40)}
-    </div>
+        : html`
+            <div class="cab panel players" part="players" style=${place(cabinet.players)}>
+              <div class="plate">
+                <span class="eyebrow">${r.playerName ?? 'Player 1P'}</span>
+                ${difficulty ? html`<span class="difficulty" part="difficulty">${difficulty}</span>` : nothing}
+                <strong>Lv.${level ?? '-'}</strong>
+              </div>
+              <div class="chart-title">
+                <h2 title=${panels.title}>${panels.title}</h2>
+                <p class="muted">${f.chart?.artist ?? ''}</p>
+              </div>
+              ${
+                second
+                  ? html`<div class="plate" part="second-player" aria-label="2P">
+                      <span class="eyebrow">Player 2P</span><strong>EX ${second.score.exScore}</strong>
+                    </div>`
+                  : nothing
+              }
+            </div>
+            <div class="cab panel judge" part="judge" style=${place(cabinet.judge)}>
+              <dl class="counts">
+                ${counts.map(
+                  ([label, value]) =>
+                    html`<dt>${label}</dt>
+                      <dd>${value}</dd>`,
+                )}
+              </dl>
+              <dl class="fast-slow">
+                <dt class="fast">FAST</dt>
+                <dd>${panels.judgments.fast}</dd>
+                <dt class="slow">SLOW</dt>
+                <dd>${panels.judgments.slow}</dd>
+              </dl>
+              ${renderTiming(r.lastJudgeDeltaMs, r.judgeWindows?.note.great.lateMs ?? 40)}
+            </div>
+          `
+    }
     <div class="cab panel bpm" part="bpm" style=${place(cabinet.bpm)}>
       <strong>${Math.round(f.bpm ?? r.bpm ?? 0)}</strong>
       <div class="bpm-range">
@@ -196,7 +233,7 @@ export function renderGameplayCabinet({
         ? nothing
         : html`<div
             class="cab cabinet-details"
-            style=${place({ x: cabinet.players.x, y: cabinet.bga.y, w: cabinet.players.w, h: cabinet.bga.h })}
+            style=${place({ x: cabinet.bga.x, y: cabinet.bga.y, w: cabinet.bga.w, h: cabinet.bga.h })}
           >
             ${details}
           </div>`

@@ -203,6 +203,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     const ghost = play.ghost;
     const running = ghost !== undefined && (shows || !ghost.drawsOnPlayfield) ? ghost : undefined;
     running?.update(seconds, play.playClock());
+    const playfield = running !== undefined && shows ? running.present(play) : play;
     const scoreTargets = resolveFrameScoreTargets(this.facts.scoreTargets, running, play.score);
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
@@ -212,7 +213,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       ...(scoreTargets !== undefined ? { scoreTargets } : {}),
       ...(this.facts.playerName !== undefined ? { playerName: this.facts.playerName } : {}),
       state: play.playState,
-      ...(play.secondPlayer !== undefined ? { state2P: play.secondPlayer.playState } : {}),
+      ...(playfield.secondPlayer !== undefined ? { state2P: playfield.secondPlayer.playState } : {}),
       stage,
       ...(stage === 'loading' && this.loadProgress !== undefined ? { progress: this.loadProgress } : {}),
       seconds,
@@ -227,7 +228,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       events,
       audio: play.audioAnalyzer?.sample(play.playClock()) ?? SILENT_AUDIO,
       shown: play.shown,
-      playfield: running !== undefined && shows ? running.present(play) : play,
+      playfield,
     };
   }
 }

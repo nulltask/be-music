@@ -54,7 +54,7 @@ const KEY_FLASH_MS = 120;
 /**
  * Where the well under the lanes ends on the cabinet layout: under the keys, so the keys sit in it.
  */
-export function cabinetWellBottom(layout: Pick<BeMusicGameplayLayout, 'playfield'>): number {
+export function cabinetWellBottom(layout: Pick<BeMusicGameplayLayout, 'playfield' | 'twoPlayer'>): number {
   const { keys } = resolveCabinetLayout(layout);
   return keys.y + keys.h + 4;
 }
@@ -69,7 +69,12 @@ export function drawSynesthesiaCabinet(draw: CabinetDraw, runtime: Runtime, layo
   drawKeys(draw, cabinet.keys, layout, runtime);
   drawGauge(draw, cabinet, runtime);
   if (cabinet.center) drawCenter(draw, cabinet.center, runtime);
-  drawFigure(draw, cabinet.score, 'SCORE', String(Math.max(0, runtime.score ?? 0)));
+  drawFigure(
+    draw,
+    cabinet.score,
+    cabinet.secondSide ? '1P EX SCORE' : 'SCORE',
+    String(Math.max(0, (cabinet.secondSide ? runtime.exScore : runtime.score) ?? 0)),
+  );
   drawFigure(
     draw,
     cabinet.hiSpeed,
@@ -78,10 +83,34 @@ export function drawSynesthesiaCabinet(draw: CabinetDraw, runtime: Runtime, layo
   );
   const pace = resolveScorePace(runtime);
   if (cabinet.graph) drawGraph(draw, cabinet.graph, pace, runtime);
-  drawStage(draw, cabinet.stage, runtime, cabinet.controls);
-  if (cabinet.doublePlay) drawChartStack(draw, cabinet.players, runtime);
+  drawStage(draw, cabinet.stage, runtime, cabinet.controls, cabinet.secondSide !== undefined);
+  if (cabinet.secondSide) {
+    for (const rect of [cabinet.players, cabinet.judge]) {
+      frame(draw, rect);
+      addHUDText(
+        draw.layer,
+        `${resolveDifficultyName(runtime.chart) ?? ''} Lv.${runtime.chart?.playLevel ?? '-'}`,
+        rect.x + 8,
+        rect.y + 10,
+        { ...labelStyle(), maxWidth: rect.w - 16 },
+        draw.pool,
+      );
+    }
+  } else if (cabinet.doublePlay) drawChartStack(draw, cabinet.players, runtime);
   else drawPlayers(draw, cabinet.players, runtime);
-  drawJudge(draw, cabinet.judge, runtime);
+  if (cabinet.secondSide && runtime.secondPlayer) {
+    drawFigure(draw, cabinet.secondSide.score, '2P EX SCORE', String(runtime.secondPlayer.exScore ?? 0));
+    drawFigure(draw, cabinet.maxCombo!, '1P MAX COMBO', String(runtime.maxCombo ?? 0));
+    drawFigure(draw, cabinet.secondSide.maxCombo, '2P MAX COMBO', String(runtime.secondPlayer.maxCombo ?? 0));
+    drawFigure(draw, cabinet.secondSide.hiSpeed, 'HI-SPEED', (runtime.hiSpeed ?? 0).toFixed(1));
+    const remaining = Math.max(0, Math.ceil(((runtime.songLengthMs ?? 0) - (runtime.songElapsedMs ?? 0)) / 1000));
+    drawFigure(
+      draw,
+      cabinet.time!,
+      'TIME LIMIT',
+      `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`,
+    );
+  } else drawJudge(draw, cabinet.judge, runtime);
   drawBPM(draw, cabinet.bpm, runtime);
   drawTempo(draw, cabinet.tempo, runtime.tempo ?? 1);
 }
@@ -149,6 +178,11 @@ function drawGauge(draw: CabinetDraw, cabinet: CabinetLayout, runtime: Runtime):
     }
     drawGaugeCells(draw.graphics, state, rect, rect.h);
   };
+  if (cabinet.secondSide && second) {
+    one(runtime, gauge, '1P ');
+    one(second, cabinet.secondSide.gauge, '2P ');
+    return;
+  }
   one(runtime, { ...gauge, w: split - 6 - gauge.x + (second ? 0 : 6) }, second ? '1P ' : '');
   if (second) {
     one(
@@ -293,9 +327,26 @@ function drawGraph(
  * The stage name, centred in its band; the play-mode light and the ruleset on its ends, or in `controls` (the double-play
  * band beside the menu corner) when the stage band is too narrow for them.
  */
-function drawStage(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime, controls?: BeMusicRect): void {
+function drawStage(
+  draw: CabinetDraw,
+  rect: BeMusicRect,
+  runtime: Runtime,
+  controls?: BeMusicRect,
+  compact = false,
+): void {
   const { graphics, layer, pool, accent, pulse } = draw;
   frame(draw, rect);
+  if (compact) {
+    addHUDText(
+      layer,
+      resolveStageLabel(runtime.course),
+      rect.x + rect.w / 2,
+      rect.y + 8,
+      { ...displayStyle(11, SYN_WHITE), anchorX: 0.5, maxWidth: rect.w - 20 },
+      pool,
+    );
+    return;
+  }
   const ends = controls ?? rect;
   if (controls) frame(draw, controls);
   const autoplay = runtime.autoplay === true;

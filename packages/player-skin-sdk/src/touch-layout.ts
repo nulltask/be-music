@@ -33,6 +33,8 @@ export const TOUCH_PLAYFIELD = {
 
 /** Lane geometry of a playfield in either layout mode. */
 export interface GameplayLaneGeometry {
+  /** True when a stage separates independent players around its monitor. */
+  twoPlayer?: boolean;
   /** The layout actually used: `'touch'` falls back to `'standard'` for play modes the touch layout does not cover. */
   mode: GameplayLayoutMode;
   /** The orientation of the stage the geometry was laid out for. */
@@ -92,7 +94,7 @@ export function resolveTouchLaneLayout(
  * standard layout ({@link resolveSkinlessLaneLayout} under the LR2 7K judgement line), or the touch layout when asked
  * for and the play mode supports it ({@link supportsTouchLayout}). On a portrait stage: the portrait playfield in either
  * mode ({@link resolvePortraitLaneLayout}); hosts only put charts that fit one (`supportsPortraitLayout`) on a portrait
- * stage.
+ * stage. `twoPlayer` selects separated banks on stages with `twoPlayerSideInset`; a DP chart keeps its joint field.
  */
 export function resolveGameplayLaneGeometry(
   channels: readonly string[] | undefined,
@@ -100,6 +102,7 @@ export function resolveGameplayLaneGeometry(
   playVariant: ChartPlayVariant | undefined,
   mode: GameplayLayoutMode = 'standard',
   stage?: Pick<BeMusicStage, 'width' | 'height' | 'playfield'>,
+  twoPlayer = false,
 ): GameplayLaneGeometry {
   let geometry: GameplayLaneGeometry;
   if (stage && resolveStageOrientation(stage) === 'portrait') {
@@ -127,6 +130,28 @@ export function resolveGameplayLaneGeometry(
   }
   const bounds = stage?.playfield?.[geometry.mode];
   if (!bounds) return geometry;
+  if (
+    twoPlayer &&
+    (playVariant === '10' || playVariant === '14') &&
+    bounds.twoPlayerSideInset !== undefined &&
+    stage &&
+    geometry.lanes.some((lane) => lane.side === '1P') &&
+    geometry.lanes.some((lane) => lane.side === '2P')
+  ) {
+    const inset = bounds.twoPlayerSideInset;
+    const bankRight = Math.max(...geometry.lanes.filter((lane) => lane.side === '2P').map((lane) => lane.x + lane.w));
+    const shift1P = inset - geometry.left;
+    const shift2P = stage.width - inset - bankRight;
+    return {
+      ...geometry,
+      twoPlayer: true,
+      top: bounds.top,
+      judgementY: bounds.judgementY,
+      left: inset,
+      right: stage.width - inset,
+      lanes: geometry.lanes.map((lane) => ({ ...lane, x: lane.x + (lane.side === '1P' ? shift1P : shift2P) })),
+    };
+  }
   const right = bounds.maxRight === undefined ? geometry.right : Math.min(geometry.right, bounds.maxRight);
   const scale = (right - geometry.left) / (geometry.right - geometry.left || 1);
   const doublePlay = supportsTouchLayout(playVariant) && geometry.lanes.some((lane) => lane.side === '2P');

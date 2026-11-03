@@ -1,16 +1,16 @@
 /**
  * Where a ghost's playfield goes beside a single-play chart: on the 2P side, as the second field of the matching
- * double-play variant (5 KEY → 10 KEY, 7 KEY → 14 KEY), so the built-in skins lay the two fields out as they lay out a
- * double-play chart's two sides. The ghost's lanes are the live lanes moved to the 2P channels (`11`..`19` → `21`..`29`).
+ * double-play variant (5 KEY → 10 KEY, 7 KEY → 14 KEY), to share its lane ordering. The independent second player selects the two-player cabinet
+ * layout, with the monitor between the banks. The ghost's lanes are the live lanes moved to the 2P channels (`11`..`19` → `21`..`29`).
  * A chart with no 2P side to borrow (a double-play chart, 9 KEY, the keyboard modes) has no room for one.
  */
 
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import { resolvePlayVariantLaneChannels } from '@be-music/player-engine/lanes';
 
-/** A ghost field's side: the double-play layout the two fields take, and how a live lane maps onto the ghost's. */
+/** A ghost field's side: its combined lane model and how a live lane maps onto the ghost's. */
 export interface GhostSide {
-  /** The double-play variant the two fields are laid out as. */
+  /** The double-play variant used for lane ordering. */
   readonly playVariant: Extract<ChartPlayVariant, '10' | '14'>;
   /** The live lanes and the ghost's, in the double-play variant's lane order. */
   readonly laneChannels: readonly string[];

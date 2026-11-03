@@ -6,7 +6,7 @@
 import { Container, Graphics, Text, TextStyle, type Texture } from 'pixi.js';
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import type { TimedLandmineNote } from '@be-music/player-engine/display';
-import { resolveGameplayLaneGeometry } from '@be-music/player-skin-sdk';
+import { resolveGameplayLaneGeometry, type GameplayLayoutMode } from '@be-music/player-skin-sdk';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
 import { GoneDrawObjects } from '../../chart/note-draw-window.ts';
@@ -44,6 +44,8 @@ export class PlayLayers {
   /** Layout last handed to the Be-Music chrome, keyed by the lane set it was built for. */
   beMusicLayout:
     | {
+        twoPlayer: boolean;
+        layoutMode: GameplayLayoutMode;
         channels: readonly string[];
         variant: ChartPlayVariant | undefined;
         stage: BeMusicStage;
@@ -148,6 +150,7 @@ export class PlayLayers {
     | {
         laneChannels: readonly string[];
         laneCount: number;
+        twoPlayer: boolean;
         playVariant: unknown;
         layoutMode: unknown;
         stage: BeMusicStage | undefined;
