@@ -27,6 +27,7 @@ import {
   backSpinChevron,
   hellChargeZigzag,
   longNoteCentreLineAlpha,
+  noteHeightForLane,
   resolveHellChargeLook,
   resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
@@ -63,7 +64,6 @@ const LIGHTS: Record<BeMusicLaneKind, LaneLight> = {
   'wheel-down': SCRATCH_LIGHT,
 };
 
-const NOTE_HEIGHT = 8;
 export const SYNESTHESIA_BOMB_DURATION_MS = 620;
 
 export function renderSynesthesiaLanes({
@@ -173,20 +173,23 @@ export function mineFilamentLit(laneX: number, segment: number, nowMs: number): 
  */
 export function renderSynesthesiaMine({ graphics, x, w, y, nowMs }: PixiNoteContext): void {
   const bodyW = Math.max(4, w);
+  const noteHeight = noteHeightForLane(bodyW);
   // A red halo that throbs like a warning light (twice a second), so the mine stands out of the lane at a glance.
   const alarm = 0.5 + 0.5 * Math.sin((nowMs / 1000) * Math.PI * 4);
   graphics
-    .rect(x - 4, y - NOTE_HEIGHT - 4, bodyW + 8, NOTE_HEIGHT + 8)
+    .rect(x - 4, y - noteHeight - 4, bodyW + 8, noteHeight + 8)
     .fill({ color: 0xff2030, alpha: 0.18 + 0.22 * alarm });
-  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, bodyW + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 });
-  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).fill(0xc4142c);
-  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).stroke({ color: 0xff6070, width: 1, alignment: 1 });
-  graphics.rect(x, y - NOTE_HEIGHT, bodyW, 2).fill({ color: 0xff8a94, alpha: 0.9 });
+  graphics.rect(x - 1, y - noteHeight - 1, bodyW + 2, noteHeight + 2).fill({ color: 0x05010a, alpha: 0.9 });
+  graphics.rect(x, y - noteHeight, bodyW, noteHeight).fill(0xc4142c);
+  graphics.rect(x, y - noteHeight, bodyW, noteHeight).stroke({ color: 0xff6070, width: 1, alignment: 1 });
+  graphics.rect(x, y - noteHeight, bodyW, 2).fill({ color: 0xff8a94, alpha: 0.9 });
   // The broken filament burns white-hot where a note's runs clean.
   for (let segment = 0; segment * MINE_SEGMENT < bodyW; segment += 1) {
     if (!mineFilamentLit(x, segment, nowMs)) continue;
     const left = segment * MINE_SEGMENT;
-    graphics.rect(x + left, y - 5, Math.min(MINE_SEGMENT - 2, bodyW - left), 2).fill(0xffe0e0);
+    graphics
+      .rect(x + left, y - Math.round(noteHeight / 2) - 1, Math.min(MINE_SEGMENT - 2, bodyW - left), 2)
+      .fill(0xffe0e0);
   }
 }
 
@@ -207,7 +210,9 @@ export function renderSynesthesiaLongNote({
   const marks = resolveLongNoteMarks({ mode, backSpinScratch });
   const bodyX = x;
   const bodyW = Math.max(4, w);
-  const bodyTop = top - NOTE_HEIGHT;
+  // A note is as tall as a share of its lane's width, standing on its bottom edge.
+  const noteHeight = noteHeightForLane(bodyW);
+  const bodyTop = top - noteHeight;
   const bodyH = Math.max(1, bottom - top);
   // A hell charge note shows how it stands (`resolveHellChargeLook`): its colour, its glow and its zigzag filament's
   // motion change together — HELL violet with a still zigzag before it is reached, a bright orange glow with the zigzag
@@ -241,7 +246,7 @@ export function renderSynesthesiaLongNote({
     // The head on the judgement line glows with the note: brightest while charging, gone once it is over.
     if (look.glow > 0) {
       graphics
-        .rect(bodyX - 4, bottom - NOTE_HEIGHT - 4, bodyW + 8, NOTE_HEIGHT + 8)
+        .rect(bodyX - 4, bottom - noteHeight - 4, bodyW + 8, noteHeight + 8)
         .fill({ color: look.color, alpha: 0.45 * look.glow });
     }
   }
@@ -251,7 +256,7 @@ export function renderSynesthesiaLongNote({
   drawNote(graphics, bodyX, top, bodyW, light, marks.judgedTail ? 1 : LN_TAIL_ALPHA);
   if (marks.backSpin) {
     // A back-spin scratch: a dark-rimmed white chevron on the tail cap, pointing back up the lane — spin it back there.
-    const chevron = backSpinChevron(bodyX, bodyW, top, NOTE_HEIGHT);
+    const chevron = backSpinChevron(bodyX, bodyW, top, noteHeight);
     graphics.poly(chevron).stroke({ color: 0x05010a, width: 2, alpha: 0.9 });
     graphics.poly(chevron).fill(0xffffff);
   }
@@ -262,10 +267,11 @@ const LN_TAIL_ALPHA = 0.4;
 
 /** A flat bar with a white filament on top and a dark rim — a plain rectangle that reads at a glance. */
 function drawNote(graphics: Graphics, x: number, y: number, w: number, light: LaneLight, alpha = 1): void {
+  const noteHeight = noteHeightForLane(w);
   // A dark rim lifts the bar off the lit lane and the beam behind it.
-  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, w + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 * alpha });
-  graphics.rect(x, y - NOTE_HEIGHT, w, NOTE_HEIGHT).fill({ color: light.body, alpha });
-  graphics.rect(x, y - NOTE_HEIGHT, w, 2).fill({ color: 0xffffff, alpha: 0.6 * alpha });
+  graphics.rect(x - 1, y - noteHeight - 1, w + 2, noteHeight + 2).fill({ color: 0x05010a, alpha: 0.9 * alpha });
+  graphics.rect(x, y - noteHeight, w, noteHeight).fill({ color: light.body, alpha });
+  graphics.rect(x, y - noteHeight, w, 2).fill({ color: 0xffffff, alpha: 0.6 * alpha });
 }
 
 /** Sparks per hit at combo tier 0; each tier adds {@link BURST_PARTICLES_PER_TIER}. */

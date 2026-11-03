@@ -12,6 +12,7 @@ import {
   backSpinChevron,
   hellChargeZigzag,
   longNoteCentreLineAlpha,
+  noteHeightForLane,
   resolveHellChargeLook,
   resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
@@ -33,7 +34,6 @@ import {
 import { drawCabinetHUD } from './cabinet.ts';
 import { resolvePortraitGameplayHUD } from './layout.ts';
 
-const NOTE_HEIGHT = 6;
 /** LR2's opacity for a long note missed at the head or let go early (`0x80` of `0xff`). */
 const DROPPED_LONG_NOTE_ALPHA = 0x80 / 0xff;
 /** How opaque an LN's tail cap is: clearly the end of the note, but quieter than a cap to hit. */
@@ -171,7 +171,9 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
     const alpha = (note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1) * (note.alpha ?? 1);
-    const bodyTop = note.top - NOTE_HEIGHT;
+    // A note is as tall as a share of its lane's width, standing on its bottom edge.
+    const noteHeight = noteHeightForLane(note.w);
+    const bodyTop = note.top - noteHeight;
     const bodyHeight = Math.max(1, note.bottom - note.top);
     const marks = resolveLongNoteMarks(note);
     // A hell charge note shows how it stands: colour, glow and zigzag motion change together (`resolveHellChargeLook`).
@@ -181,7 +183,7 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
       if (look.glow > 0) {
         ctx.globalAlpha = 0.3 * look.glow * alpha;
         ctx.fillRect(note.x - 3, bodyTop, note.w + 6, bodyHeight);
-        ctx.fillRect(note.x - 3, note.bottom - NOTE_HEIGHT - 3, note.w + 6, NOTE_HEIGHT + 6);
+        ctx.fillRect(note.x - 3, note.bottom - noteHeight - 3, note.w + 6, noteHeight + 6);
       }
       ctx.globalAlpha = (0.2 + 0.3 * look.glow) * alpha;
       ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
@@ -209,21 +211,22 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     }
     ctx.globalAlpha = alpha;
     ctx.fillStyle = NOTE_FILL[note.kind];
-    ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.fillRect(note.x, note.bottom - noteHeight, note.w, noteHeight);
     // An LN's tail is not judged: drawn translucent, where to let go. A CN / HCN tail is judged and stays solid.
     if (!marks.judgedTail) ctx.globalAlpha = alpha * LN_TAIL_ALPHA;
-    ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.fillRect(note.x, note.top - noteHeight, note.w, noteHeight);
     if (marks.backSpin) {
       ctx.globalAlpha = alpha;
       ctx.fillStyle = '#ffffff';
-      fillPolygon(ctx, backSpinChevron(note.x, note.w, note.top, NOTE_HEIGHT));
+      fillPolygon(ctx, backSpinChevron(note.x, note.w, note.top, noteHeight));
     }
     ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {
+    const noteHeight = noteHeightForLane(note.w);
     ctx.globalAlpha = note.alpha ?? 1;
     ctx.fillStyle = NOTE_FILL[note.kind];
-    ctx.fillRect(note.x, note.y - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.fillRect(note.x, note.y - noteHeight, note.w, noteHeight);
     ctx.globalAlpha = 1;
   }
 }
