@@ -1,7 +1,7 @@
 // Imports are split across `@be-music/player-browser`'s entries (`./host`, `./skin`, `./collection`, `./audio`,
 // `./recording`) so the dependency surface of this player is explicit at the file top. The main `@be-music/player-browser`
 // entry is reserved for symbols that don't belong to any single entry (`logger`, `Rectangle`).
-import { PixiSceneHost, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
+import { PixiSceneHost, resolveControlActions, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
 import type { BrowseSnapshot, PlayOptions } from '@be-music/player-scene-model';
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-browser/audio';
@@ -11,7 +11,7 @@ import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from '.
 import { LeaderboardPanel } from '../leaderboard-ui.ts';
 import { fetchLeaderboardTopReplay } from '../leaderboard.ts';
 import { GhostReplayFile } from '../services/ghost.ts';
-import { playerFullscreenElement } from '../fullscreen.ts';
+import { playerFullscreenElement, toggleFullscreen } from '../fullscreen.ts';
 import { bindPlayerHeader, setPlayerHeaderSettingsOpen } from '../player-header.ts';
 import { SceneRouter } from './scene-router.ts';
 import { DropTarget } from './drop-target.ts';
@@ -659,6 +659,24 @@ export class PlayerWebApp {
       }
       event.preventDefault();
       this.search.open();
+    });
+
+    // The keys every screen takes, as LR2 and beatoraja do: F4 switches full screen and F6 takes a screenshot (the
+    // player's own keys for them when set, `global.*` in the key config).
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      // A 24 / 48 KEY chart can play F-keys: a lane's key is the lane's.
+      if (this.router.current?.identity.kind === 'play' && this.router.play?.takesKey(event) === true) return;
+      const actions = resolveControlActions('lr2', this.guiState.actionKeys);
+      if (actions.is('global.fullscreen', event)) {
+        event.preventDefault();
+        void toggleFullscreen(playerFullscreenElement(document));
+      } else if (actions.is('global.screenshot', event)) {
+        event.preventDefault();
+        void captureScreenshot(this.recording.deps());
+      }
     });
 
     // `?music=<url.zip>` / `?skin=<url.zip>` auto-load, then the difficulty tables imported in an earlier visit, once the

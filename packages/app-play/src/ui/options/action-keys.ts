@@ -18,6 +18,7 @@ import type { OptionsDialog } from './index.ts';
 
 /** Each screen's heading on the page. */
 export const ACTION_SCREEN_TITLES: Readonly<Record<ControlScreen, string>> = {
+  global: 'Every screen',
   select: 'Select screen',
   decide: 'Decide screen',
   play: 'Play',
@@ -26,6 +27,17 @@ export const ACTION_SCREEN_TITLES: Readonly<Record<ControlScreen, string>> = {
 
 /** The Japanese of each operation's name and of the screens' headings, for `labels.ts`. */
 export const ACTION_LABELS_JA: Readonly<Record<string, string>> = {
+  'Full screen': 'フルスクリーン',
+  Screenshot: 'スクリーンショット',
+  'Open folder': 'フォルダを開く',
+  'AUTO play': 'AUTO プレイ',
+  Sort: 'ソート',
+  'Key mode filter': '鍵盤数の絞り込み',
+  'LN mode': 'LN モード',
+  Search: '検索',
+  'Favorite song': 'お気に入りの曲',
+  'Favorite chart': 'お気に入りの譜面',
+  'Every screen': 'すべての画面',
   'Next bar': '次のバー',
   'Previous bar': '前のバー',
   'Ten bars down': '10 バー下へ',
@@ -95,14 +107,14 @@ export function keyCodeLabel(code: string): string {
   return code;
 }
 
-/** How an operation's key reads: a code, or a button (`1P START`, `1P key 6`). */
+/** How an operation's key reads: a code, or a button (`1P START`, `1P key 6`, `1P scratch ↺` for its second key). */
 export function actionKeyLabel(key: ControlActionKey): string {
   if ('code' in key) return keyCodeLabel(key.code);
   const [side, ...rest] = key.button.split('-');
   const name = rest.join('-');
   if (name === 'start' || name === 'select') return `${side} ${name.toUpperCase()}`;
   if (name.startsWith('key')) return `${side} key ${name.slice(3)}`;
-  return `${side} scratch`;
+  return `${side} scratch ${name === 'scratch-ccw' ? '↺' : '↻'}`;
 }
 
 const PROMPTS = {

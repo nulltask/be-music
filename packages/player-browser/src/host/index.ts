@@ -73,6 +73,8 @@ export {
 export {
   CONTROL_ACTIONS,
   controlActionKeys,
+  resolveControlActions,
+  type ControlActionMap,
   type ControlActionDefinition,
   type ControlActionId,
   type ControlActionKey,

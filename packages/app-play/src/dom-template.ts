@@ -542,12 +542,17 @@ export const PLAYER_APP_HTML = `
             <h3 class="help-section-title">Chart select</h3>
             <ul class="help-list">
               <li>
-                <kbd>↑</kbd> / <kbd>↓</kbd> move the cursor, <kbd>Enter</kbd> opens a folder or starts the chart, and
+                <kbd>↑</kbd> / <kbd>↓</kbd> or the turntable move the cursor, <kbd>Enter</kbd> opens a folder or starts the chart, and
                 <kbd>Esc</kbd> / <kbd>Backspace</kbd> go back. Click a chart row, or the active skin's <em>PLAY</em>
                 button, to start.
               </li>
               <li>
-                START (<kbd>Q</kbd>) or <kbd>Space</kbd> opens the <strong>PLAY OPTION</strong> panel (built-in and LR2 skins); beatoraja skins
+                Lane keys as in LR2: the white keys start, the black keys go back, key 6 starts in AUTO and → opens a
+                folder. beatoraja skins as in beatoraja: key 1 plays, key 5 is AUTO, keys 2 / 4 close the folder.
+                <kbd>2</kbd> sorts, <kbd>0</kbd> searches. Every key can be moved under Options → Keys → Screens.
+              </li>
+              <li>
+                START (<kbd>Q</kbd>), <kbd>Space</kbd> or <kbd>Tab</kbd> opens the <strong>PLAY OPTION</strong> panel (built-in and LR2 skins): tap to keep it open, hold to show it while held; beatoraja skins
                 also take <kbd>PageUp</kbd> / <kbd>PageDown</kbd>, <kbd>Home</kbd> / <kbd>End</kbd> and <kbd>R</kbd>
                 (a random chart).
               </li>
@@ -588,6 +593,7 @@ export const PLAYER_APP_HTML = `
               <li>In AUTO play, <kbd>←</kbd> / <kbd>→</kbd> seek 5 s back / forward.</li>
               <li><kbd>Pause</kbd> or <kbd>Tab</kbd> pauses / resumes.</li>
               <li><kbd>F5</kbd> restarts the current chart.</li>
+              <li>On every screen, <kbd>F4</kbd> switches full screen and <kbd>F6</kbd> takes a screenshot.</li>
               <li><kbd>Esc</kbd> exits to the result screen (or back to chart select).</li>
               <li>Hold <kbd>Backspace</kbd> for 0.5 s to quit the play the same way (works in fullscreen on every browser).</li>
               <li>Double-click the playfield to enter or leave fullscreen. <kbd>Esc</kbd> leaves fullscreen first, then repeats the usual scene action. On Chrome / Edge, <kbd>Esc</kbd> keeps its usual scene action in fullscreen; hold <kbd>Esc</kbd> to leave fullscreen.</li>
@@ -662,10 +668,14 @@ export const PLAYER_APP_HTML = `
             <ul class="help-list">
               <li>
                 <kbd>↑</kbd> / <kbd>↓</kbd> でカーソル移動、<kbd>Enter</kbd> でフォルダを開くか譜面を開始、<kbd>Esc</kbd> / <kbd>Backspace</kbd> で戻ります。
-                譜面の行をクリック、または現在のスキンの <em>PLAY</em> ボタンでも開始できます。
+                譜面の行をクリック、または現在のスキンの <em>PLAY</em> ボタンでも開始できます。皿でもカーソルを動かせます。
               </li>
               <li>
-                START (<kbd>Q</kbd>) か <kbd>Space</kbd> で <strong>PLAY OPTION</strong> パネルを開きます (内蔵スキンと LR2 スキン)。beatoraja スキンでは <kbd>PageUp</kbd> / <kbd>PageDown</kbd>、<kbd>Home</kbd> / <kbd>End</kbd>、<kbd>R</kbd> (ランダムに譜面を選ぶ) も使えます。
+                鍵盤は LR2 と同じく、白鍵で開始、黒鍵で戻る、鍵盤 6 で AUTO、→ でフォルダを開きます。beatoraja スキンでは beatoraja と同じく、鍵盤 1 でプレイ、鍵盤 5 で AUTO、鍵盤 2 / 4 でフォルダを閉じます。
+                <kbd>2</kbd> でソート、<kbd>0</kbd> で検索。どのキーも Options → Keys → Screens で変えられます。
+              </li>
+              <li>
+                START (<kbd>Q</kbd>)・<kbd>Space</kbd>・<kbd>Tab</kbd> で <strong>PLAY OPTION</strong> パネルを開きます (内蔵スキンと LR2 スキン)。短く押すと開いたまま、押し続けると押している間だけ表示します。beatoraja スキンでは <kbd>PageUp</kbd> / <kbd>PageDown</kbd>、<kbd>Home</kbd> / <kbd>End</kbd>、<kbd>R</kbd> (ランダムに譜面を選ぶ) も使えます。
               </li>
               <li><kbd>/</kbd> で検索入力にフォーカス。タイトル / アーティスト / ジャンルで絞り込めます。</li>
               <li><kbd>Esc</kbd> で検索条件をクリア。</li>
@@ -699,6 +709,7 @@ export const PLAYER_APP_HTML = `
               <li>AUTO プレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
               <li><kbd>Pause</kbd> か <kbd>Tab</kbd> でポーズ / 再開。</li>
               <li><kbd>F5</kbd> で現在の譜面をリスタート。</li>
+              <li>どの画面でも <kbd>F4</kbd> でフルスクリーンを切り替え、<kbd>F6</kbd> でスクリーンショットを撮ります。</li>
               <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
               <li><kbd>Backspace</kbd> を 0.5 秒長押しでも同じようにプレイを中断します (どのブラウザでもフルスクリーン中に使えます)。</li>
               <li>プレイフィールドをダブルクリックするとフルスクリーンに入り / 解除します。<kbd>Esc</kbd> は先にフルスクリーンを解除し、もう一度押すと通常のシーン操作になります。Chrome / Edge ではフルスクリーン中も <kbd>Esc</kbd> は通常のシーン操作のままで、<kbd>Esc</kbd> 長押しでフルスクリーンを解除します。</li>

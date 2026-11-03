@@ -1016,6 +1016,13 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.controlActionKeys('select.back', 'lr2', { 'select.activate': ['KeyE'] });
     },
   });
+  define('player-browser.resolveControlActions', {
+    run: () => {
+      playerWebCoreAPI.resolveControlActions('beatoraja', { 'select.activate': ['KeyE'] }).is('select.activate', {
+        code: 'KeyE',
+      });
+    },
+  });
   define('player-browser.resolveRendererPreference', {
     run: () => {
       playerWebCoreAPI.resolveRendererPreference('?renderer=webgl');

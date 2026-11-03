@@ -56,6 +56,7 @@ describe('screen key config labels', () => {
     );
     expect(actionKeyLabel({ button: '1P-start' })).toBe('1P START');
     expect(actionKeyLabel({ button: '1P-key6' })).toBe('1P key 6');
+    expect(actionKeyLabel({ button: '1P-scratch-ccw' })).toBe('1P scratch ↺');
     expect(['KeyR', 'Digit4', 'ArrowDown', 'Numpad0', 'Escape', 'F5'].map(keyCodeLabel)).toEqual([
       'R',
       '4',

@@ -12,7 +12,7 @@ import { SILENT_AUDIO } from '../../runtime/audio-analysis.ts';
 import type { SelectFrame, SelectIntent, SelectRecords } from '../../view/types.ts';
 import type { SessionKeyEvent } from '../session-scene.ts';
 import { SELECT_POLICIES } from './select-policy.ts';
-import { SelectSession, type SelectSessionEvents, type SelectSessionOptions } from './select-session.ts';
+import { PANEL_HOLD_MS, SelectSession, type SelectSessionEvents, type SelectSessionOptions } from './select-session.ts';
 import { makeChart, makeCollection, makeCourse, makeCourseFolder } from './test-support.ts';
 
 const SLOTS: readonly SystemSoundSlot[] = [
@@ -428,6 +428,25 @@ describe('SelectSession panels', () => {
     expect(cues()).toEqual(['optionOpen', 'optionChange', 'optionChange', 'optionClose']);
   });
 
+  it('keeps a tapped START panel open, and closes one held open as START comes up', () => {
+    const { session, key, advance } = createSession();
+    const up = (code: string, timeStamp: number) =>
+      session.handleKey({ ...keyEvent(code, code, timeStamp), type: 'up' });
+    // A tap: open until the next press.
+    key('KeyQ', 'q');
+    advance(100);
+    up('KeyQ', 100);
+    expect(advance(10).panel).toBe(1);
+    key('KeyQ', 'q');
+    up('KeyQ', 150);
+    expect(advance(10).panel).toBeUndefined();
+    // Held past PANEL_HOLD_MS: shown while held.
+    key('KeyQ', 'q');
+    expect(advance(PANEL_HOLD_MS).panel).toBe(1);
+    up('KeyQ', 120 + PANEL_HOLD_MS + 10);
+    expect(advance(10).panel).toBeUndefined();
+  });
+
   it('swaps one panel for another', () => {
     const { intent, advance } = createSession();
     intent({ type: 'panel', panel: 1 });
@@ -780,7 +799,7 @@ describe('SelectSession replay slots', () => {
 
   it('keeps the LR2 keys free of the replay keys, and frames no slots without the host keeping them', () => {
     const lr2 = createSlotSession({ a: [true, false, false, false] }, SELECT_POLICIES.lr2);
-    expect(lr2.key('KeyV', 'v')).toBe(false);
+    expect(lr2.key('Digit4', '4')).toBe(false);
     expect(lr2.frame().replaySlots?.selected).toBe(0);
     const none = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
     expect(none.frame()).not.toHaveProperty('replaySlots');
@@ -797,5 +816,46 @@ describe('SelectSession replay slots', () => {
     session.enter(100);
     session.frame(100);
     expect(focus).toEqual(['a', 'b', 'b']);
+  });
+});
+
+describe('SelectSession lane and number keys', () => {
+  it('opens a folder on →, and starts nothing from a chart with it', () => {
+    const { key, advance, started } = createSession();
+    expect(key('ArrowRight')).toBe(true);
+    expect(advance(10).browse.path).toHaveLength(1);
+    expect(key('ArrowRight')).toBe(false);
+    expect(started).toEqual([]);
+  });
+
+  it('starts a chart in AUTO on LR2’s key 6, and opens a folder with it', () => {
+    const { key, advance, started } = createSession();
+    key('KeyF', 'f');
+    expect(advance(10).browse.path).toHaveLength(1);
+    key('KeyF', 'f');
+    advance(5000);
+    expect(started).toEqual([{ entry: expect.any(String), autoPlay: true }]);
+  });
+
+  it('steps the sort and the key mode filter where the family keeps them', () => {
+    const lr2 = createSession();
+    lr2.key('Digit2', '2');
+    expect(lr2.advance(10).playOptions.sort).toBe('LEVEL');
+    lr2.key('Digit3', '3');
+    expect(lr2.advance(10).playOptions.keysFilter).toBe('KEYS_5');
+    const beatoraja = createSession({
+      policy: { ...SELECT_POLICIES.beatoraja, listCycles: { sort: ['OFF', 'TITLE'], keysFilter: ['ALL', 'KEYS_7'] } },
+    });
+    beatoraja.key('Digit2', '2');
+    expect(beatoraja.advance(10).browse.list.sort).toBe('TITLE');
+    beatoraja.key('Digit1', '1');
+    expect(beatoraja.advance(10).browse.list.keysFilter).toBe('KEYS_7');
+  });
+
+  it('opens the search on 0', () => {
+    const search = vi.fn();
+    const { key } = createSession({ on: { search } });
+    expect(key('Digit0', '0')).toBe(true);
+    expect(search).toHaveBeenCalledOnce();
   });
 });
