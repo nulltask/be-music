@@ -162,15 +162,54 @@ export const CONTROL_ACTIONS = [
     bare: true,
   },
   // The decide screen.
-  { id: 'decide.continue', screen: 'decide', label: 'Continue', defaults: both([code('Enter'), code('Space')]) },
+  {
+    id: 'decide.continue',
+    screen: 'decide',
+    label: 'Continue',
+    // LR2 skips the screen on any key, beatoraja on its keys 1, 3, 5 and 7.
+    defaults: {
+      lr2: [
+        code('Enter'),
+        code('Space'),
+        button('1P-key1'),
+        button('1P-key2'),
+        button('1P-key3'),
+        button('1P-key4'),
+        button('1P-key5'),
+        button('1P-key6'),
+        button('1P-key7'),
+      ],
+      beatoraja: [
+        code('Enter'),
+        code('Space'),
+        button('1P-key1'),
+        button('1P-key3'),
+        button('1P-key5'),
+        button('1P-key7'),
+      ],
+    },
+  },
   { id: 'decide.cancel', screen: 'decide', label: 'Back to select', defaults: both([code('Escape')]) },
   // The play.
   { id: 'play.quit', screen: 'play', label: 'Quit', defaults: both([code('Escape')]) },
   { id: 'play.quit-hold', screen: 'play', label: 'Quit (hold)', defaults: both([code('Backspace')]) },
   { id: 'play.restart', screen: 'play', label: 'Restart', defaults: both([code('F5')]) },
   { id: 'play.pause', screen: 'play', label: 'Pause', defaults: both([code('Pause'), code('Tab')]) },
-  { id: 'play.hi-speed-up', screen: 'play', label: 'Hi-speed up', defaults: both([code('ArrowUp')]) },
-  { id: 'play.hi-speed-down', screen: 'play', label: 'Hi-speed down', defaults: both([code('ArrowDown')]) },
+  // ↑ / ↓ step the hi-speed in LR2 and move the lane cover in beatoraja.
+  { id: 'play.hi-speed-up', screen: 'play', label: 'Hi-speed up', defaults: { lr2: [code('ArrowUp')] } },
+  { id: 'play.hi-speed-down', screen: 'play', label: 'Hi-speed down', defaults: { lr2: [code('ArrowDown')] } },
+  {
+    id: 'play.cover-less',
+    screen: 'play',
+    label: 'Lane cover up',
+    defaults: { lr2: [code('ArrowLeft')], beatoraja: [code('ArrowUp')] },
+  },
+  {
+    id: 'play.cover-more',
+    screen: 'play',
+    label: 'Lane cover down',
+    defaults: { lr2: [code('ArrowRight')], beatoraja: [code('ArrowDown')] },
+  },
   {
     id: 'play.floating-hi-speed',
     screen: 'play',
@@ -195,7 +234,33 @@ export const CONTROL_ACTIONS = [
   { id: 'play.m-sudden-down', screen: 'play', label: 'M-SUDDEN down', defaults: both([code('F3')]) },
   { id: 'play.m-sudden-up', screen: 'play', label: 'M-SUDDEN up', defaults: both([code('F4')]) },
   // The result screen.
-  { id: 'result.continue', screen: 'result', label: 'Next', defaults: both([code('Enter'), code('Space')]) },
+  {
+    id: 'result.continue',
+    screen: 'result',
+    label: 'Next',
+    // LR2 moves on with any key, beatoraja with its keys 1 to 4.
+    defaults: {
+      lr2: [
+        code('Enter'),
+        code('Space'),
+        button('1P-key1'),
+        button('1P-key2'),
+        button('1P-key3'),
+        button('1P-key4'),
+        button('1P-key5'),
+        button('1P-key6'),
+        button('1P-key7'),
+      ],
+      beatoraja: [
+        code('Enter'),
+        code('Space'),
+        button('1P-key1'),
+        button('1P-key2'),
+        button('1P-key3'),
+        button('1P-key4'),
+      ],
+    },
+  },
   { id: 'result.leave', screen: 'result', label: 'Leave', defaults: both([code('Escape')]) },
   {
     id: 'result.retry',

@@ -57,6 +57,8 @@ export const ACTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Quit (hold)': '中断 (長押し)',
   Restart: 'リスタート',
   Pause: 'ポーズ',
+  'Lane cover up': 'レーンカバーを上げる',
+  'Lane cover down': 'レーンカバーを下げる',
   'Hi-speed up': 'ハイスピードを上げる',
   'Hi-speed down': 'ハイスピードを下げる',
   'FLOATING HI-SPEED': 'FLOATING HI-SPEED',

@@ -23,15 +23,24 @@ import {
   resolveControlButtons,
   type ControlButton,
   type ControlButtonMap,
+  type ControlScheme,
+  type ControlSide,
+  type ControlSideButton,
 } from '../controls/control-buttons.ts';
 import { resolveControlActions, type ControlActionMap } from '../controls/control-actions.ts';
+import {
+  createControlButtonTracker,
+  isStartAndSelectDown,
+  type ControlButtonChange,
+  type ControlButtonTracker,
+} from '../controls/button-tracker.ts';
 
 const log = logger('gameplay');
 
 /** The scene's members the input reads and writes: the play session's members of these names. */
 export interface PlayInputContext extends PlayEngineContext {
   readonly options: PlayEngineContext['options'] &
-    Readonly<Pick<PlaySessionOptions, 'coverKeys' | 'laneKeys' | 'controlKeys' | 'actionKeys'>>;
+    Readonly<Pick<PlaySessionOptions, 'coverKeys' | 'laneKeys' | 'controlKeys' | 'actionKeys' | 'controlScheme'>>;
   readonly host: PixiSceneHost | undefined;
   readonly quitHold: QuitHoldController;
   readonly sharedEngineInputSignals: PlayerInputSignalBus | undefined;
@@ -232,6 +241,8 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     (event.altKey || event.ctrlKey || event.metaKey || event.isComposing)
   )
     return;
+  // START and SELECT, alone or with a key: a lane key goes on to the lane as well.
+  if (handleStartSelect(ctx, trackPlayKey(ctx, 'down', event))) return;
   // A key one of the chart's lanes takes is the lane's, whatever the play's keys say.
   const laneTokens = resolveLaneInputTokens(ctx.preparedChart?.laneBindings);
   if (keyboardEventToTokens(event).some((token) => laneTokens.has(token))) return;
@@ -312,6 +323,12 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     event.preventDefault();
     void ctx.seek(ctx.currentSeconds() + (seekBack ? -5 : 5));
     return;
+  }
+  // LR2's ← / → and beatoraja's ↑ / ↓ move the lane cover, on every play screen.
+  const coverLess = actions.is('play.cover-less', event);
+  if (coverLess || actions.is('play.cover-more', event)) {
+    event.preventDefault();
+    moveSuddenCover(ctx, (coverLess ? -1 : 1) * (event.shiftKey ? 0.05 : 0.01));
   }
 }
 
@@ -445,11 +462,155 @@ function resolveTouchTokens(ctx: PlayInputContext, channels: readonly string[]):
 /** The play's operations by the player's keys, resolved once per play. */
 const controlActionsByPlay = new WeakMap<PlayInputContext, ControlActionMap>();
 
+/** The control buttons each play holds, for START + a key. */
+const controlButtonsHeldByPlay = new WeakMap<PlayInputContext, ControlButtonTracker>();
+
+/** When each play's quit key (Escape) went down, while it is down: held through the fade-out, it retries. */
+const quitKeyDownAtByPlay = new WeakMap<PlayInputContext, number>();
+
+/** How long START+SELECT are held to quit, as beatoraja's `exitPressDuration` (LR2 quits on the hold too). */
+export const START_SELECT_QUIT_MS = 1000;
+
+/** How long the quit key is held through the fade-out for a quick retry (That-Which-Must-Not-Be-Named PC's). */
+export const QUICK_RETRY_HOLD_MS = 500;
+
+/** The window START is pressed twice in to switch the lane cover: LR2's 250 ms, beatoraja's 500 ms. */
+const START_DOUBLE_PRESS_MS: Readonly<Record<ControlScheme, number>> = { lr2: 250, beatoraja: 500 };
+
+/** The control buttons `ctx`'s play holds. */
+function controlButtonsHeld(ctx: PlayInputContext): ControlButtonTracker {
+  let tracker = controlButtonsHeldByPlay.get(ctx);
+  if (tracker === undefined) {
+    tracker = createControlButtonTracker();
+    controlButtonsHeldByPlay.set(ctx, tracker);
+  }
+  return tracker;
+}
+
+/** The control buttons a key is in `ctx`'s play. */
+function controlButtonsOfPlayKey(ctx: PlayInputContext, event: KeyboardEvent): ControlButton[] {
+  let map = controlButtonsByPlay.get(ctx);
+  if (map === undefined) {
+    map = resolveControlButtons({
+      ...(ctx.options.laneKeys !== undefined ? { laneKeys: ctx.options.laneKeys } : {}),
+      ...(ctx.options.controlKeys !== undefined ? { controlKeys: ctx.options.controlKeys } : {}),
+    });
+    controlButtonsByPlay.set(ctx, map);
+  }
+  return controlButtonsOfKey(event, map);
+}
+
+/** Takes a key going down or up into the buttons the play holds and the quit key's hold; returns the buttons' changes. */
+export function trackPlayKey(ctx: PlayInputContext, type: 'down' | 'up', event: KeyboardEvent): ControlButtonChange[] {
+  if (playControlActions(ctx).is('play.quit', event) && !event.repeat) {
+    if (type === 'down') quitKeyDownAtByPlay.set(ctx, event.timeStamp);
+    else quitKeyDownAtByPlay.delete(ctx);
+  }
+  return controlButtonsHeld(ctx).handle({
+    type,
+    code: event.code,
+    repeat: event.repeat,
+    timeStamp: event.timeStamp,
+    buttons: controlButtonsOfPlayKey(ctx, event),
+  });
+}
+
+/** Lets the play's buttons and quit key go (the page lost focus, the play left). */
+export function releasePlayKeys(ctx: PlayInputContext): void {
+  controlButtonsHeldByPlay.get(ctx)?.reset();
+  quitKeyDownAtByPlay.delete(ctx);
+}
+
+/** Whether the quit key is still held, for {@link QUICK_RETRY_HOLD_MS} or longer, at `nowMs` (the fade-out's end). */
+export function isQuickRetryHeld(ctx: PlayInputContext, nowMs: number): boolean {
+  const downAt = quitKeyDownAtByPlay.get(ctx);
+  return downAt !== undefined && nowMs - downAt >= QUICK_RETRY_HOLD_MS;
+}
+
+/** Moves SUDDEN+ by `delta` (of the lane) the way a cover key does, unless a course locks the covers. */
+function moveSuddenCover(ctx: PlayInputContext, delta: number): void {
+  if (ctx.playState.view.hiSpeed.locked) return;
+  changePlayView(ctx, { type: 'cover-adjust', part: 'sudden', delta });
+  ctx.theme.moment({ kind: 'view-setting', setting: 'sudden', at: ctx.playClock() });
+}
+
+/** Steps the hi-speed by `steps` steps, unless a course locks it. */
+function stepPlayHiSpeed(ctx: PlayInputContext, steps: 1 | -1): void {
+  if (adjustHiSpeed(ctx, steps * HISPEED_STEP, false)) {
+    ctx.theme.moment({ kind: 'view-setting', setting: 'hi-speed', at: ctx.playClock() });
+  }
+}
+
+/**
+ * What START and SELECT do in a play, as LR2 and beatoraja take them (`ctx.options.controlScheme`):
+ *
+ * - START (LR2: or SELECT) + a key steps the hi-speed: keys 1 / 3 / 5 (and 7 in beatoraja) down, 2 / 4 (and 6) up. In
+ *   LR2 keys 6 / 7 move the lane cover while it shows (and step the hi-speed up / down while it does not); in
+ *   beatoraja START + the turntable moves the cover.
+ * - START (LR2: or SELECT) pressed twice switches the lane cover.
+ * - START and SELECT held for {@link START_SELECT_QUIT_MS} quit; after the last note either one alone ends the play.
+ *
+ * Returns whether the key was START or SELECT (a lane key goes on to the lane either way).
+ */
+function handleStartSelect(ctx: PlayInputContext, changes: readonly ControlButtonChange[]): boolean {
+  const scheme = ctx.options.controlScheme ?? 'lr2';
+  const tracker = controlButtonsHeld(ctx);
+  let control = false;
+  for (const change of changes) {
+    if (change.type !== 'down') continue;
+    const [side, button] = splitControlButton(change.button);
+    const modifierDown = tracker.isDown(`${side}-start`) || (scheme === 'lr2' && tracker.isDown(`${side}-select`));
+    if (button === 'start' || button === 'select') {
+      control = true;
+      if (isStartAndSelectDown(tracker)) {
+        setTimeout(() => {
+          if (isStartAndSelectDown(tracker)) ctx.requestExit();
+        }, START_SELECT_QUIT_MS);
+        continue;
+      }
+      if (ctx.playMoments.allNotesDoneAtMs !== undefined) {
+        ctx.requestExit();
+        continue;
+      }
+      const switches = button === 'start' || scheme === 'lr2';
+      const previous = change.previousDownAt;
+      if (switches && previous !== undefined && change.timeStamp - previous <= START_DOUBLE_PRESS_MS[scheme]) {
+        if (!ctx.playState.view.hiSpeed.locked) {
+          changePlayView(ctx, { type: 'cover-toggle', part: 'sudden' });
+          ctx.theme.moment({ kind: 'view-setting', setting: 'sudden', at: ctx.playClock() });
+        }
+      }
+      continue;
+    }
+    if (!modifierDown) continue;
+    if (button === 'scratch-cw' || button === 'scratch-ccw') {
+      if (scheme === 'beatoraja') moveSuddenCover(ctx, button === 'scratch-cw' ? -0.01 : 0.01);
+      continue;
+    }
+    const key = Number(button.slice(3));
+    if (scheme === 'lr2' && (key === 6 || key === 7)) {
+      const cover = ctx.playState.view.covers[0];
+      if (cover?.suddenOn === true) moveSuddenCover(ctx, key === 6 ? -0.01 : 0.01);
+      else stepPlayHiSpeed(ctx, key === 6 ? 1 : -1);
+      continue;
+    }
+    stepPlayHiSpeed(ctx, key % 2 === 1 ? -1 : 1);
+  }
+  return control;
+}
+
+/** A control button's side and the button. */
+function splitControlButton(button: ControlButton): [ControlSide, ControlSideButton] {
+  const index = button.indexOf('-');
+  return [button.slice(0, index) as ControlSide, button.slice(index + 1) as ControlSideButton];
+}
+
 /** The play's operations by the player's keys (`PlaySessionOptions.actionKeys`). */
 export function playControlActions(ctx: PlayInputContext): ControlActionMap {
+  const scheme = ctx.options.controlScheme ?? 'lr2';
   let actions = controlActionsByPlay.get(ctx);
-  if (actions === undefined) {
-    actions = resolveControlActions('lr2', ctx.options.actionKeys);
+  if (actions === undefined || actions.scheme !== scheme) {
+    actions = resolveControlActions(scheme, ctx.options.actionKeys);
     controlActionsByPlay.set(ctx, actions);
   }
   return actions;
@@ -471,15 +632,7 @@ export function recordControlKey(ctx: PlayInputContext, action: 'down' | 'up', e
   if (signals === undefined || event.repeat) return;
   const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
   if (target?.isContentEditable === true || /^(INPUT|SELECT|TEXTAREA)$/u.test(target?.tagName ?? '')) return;
-  let map = controlButtonsByPlay.get(ctx);
-  if (map === undefined) {
-    map = resolveControlButtons({
-      ...(ctx.options.laneKeys !== undefined ? { laneKeys: ctx.options.laneKeys } : {}),
-      ...(ctx.options.controlKeys !== undefined ? { controlKeys: ctx.options.controlKeys } : {}),
-    });
-    controlButtonsByPlay.set(ctx, map);
-  }
-  const buttons = controlButtonsOfKey(event, map).filter(isStartOrSelect);
+  const buttons = controlButtonsOfPlayKey(ctx, event).filter(isStartOrSelect);
   if (buttons.length === 0) return;
   const laneTokens = resolveLaneInputTokens(ctx.preparedChart?.laneBindings);
   if (keyboardEventToTokens(event).some((token) => laneTokens.has(token))) return;

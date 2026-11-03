@@ -60,8 +60,11 @@ import {
   handleVisibilityChange,
   handleWindowBlur,
   handleWindowFocus,
+  isQuickRetryHeld,
   playControlActions,
   recordControlKey,
+  releasePlayKeys,
+  trackPlayKey,
   togglePause,
 } from './play-input.ts';
 import { decodePlayAudio, disposeBGAVideos, disposePlayAudio, openPlayAudio, prepareBGA } from './play-media.ts';
@@ -386,6 +389,13 @@ export class PlaySession extends PlaySessionState {
   /** Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. */
   public requestExit(): void {
     beginExitSequence(this, () => {
+      // The quit key held through the fade-out plays the chart again (That-Which-Must-Not-Be-Named PC's quick retry).
+      if (isQuickRetryHeld(this, performance.now())) {
+        interruptSharedEngine(this, 'restart');
+        this.sharedEngineAbortController?.abort();
+        this.options.onRestart?.();
+        return;
+      }
       interruptSharedEngine(this, 'escape');
       this.sharedEngineAbortController?.abort();
       this.options.onExit?.();
@@ -782,10 +792,12 @@ export class PlaySession extends PlaySessionState {
   readonly handleQuitHoldKeyUp = (event: KeyboardEvent): void => {
     this.quitHold.handleKeyUp(event);
     recordControlKey(this, 'up', event);
+    trackPlayKey(this, 'up', event);
   };
 
   readonly cancelQuitHold = (): void => {
     this.quitHold.cancel();
+    releasePlayKeys(this);
   };
 
   public lastStartTapMs: number | undefined;

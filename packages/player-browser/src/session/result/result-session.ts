@@ -35,7 +35,9 @@ import type { AudioService } from '../../runtime/audio-service.ts';
 import type { ResultFrame, ResultIntent, ResultViewTiming, SceneLeaving } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { resolveResultKeyAction } from './result-keys.ts';
-import type { ControlActionMap } from '../controls/control-actions.ts';
+import { DEFAULT_CONTROL_ACTIONS, type ControlActionMap } from '../controls/control-actions.ts';
+import { controlButtonsOfKey, DEFAULT_CONTROL_BUTTONS, type ControlButton } from '../controls/control-buttons.ts';
+import { createControlButtonTracker } from '../controls/button-tracker.ts';
 
 /** How long the result's graphs take to draw once input opens (LR2's default result skin draws for about 3 s). */
 export const RESULT_GRAPH_DRAW_MS = 3000;
@@ -44,6 +46,9 @@ export const RESULT_GRAPH_DRAW_MS = 3000;
 export type ResultAudio = Pick<AudioService, 'playJingle' | 'stopOwned'>;
 
 /** Where the result screen leads. */
+/** How long the leave key is held through the screen's leaving for a quick retry (That-Which-Must-Not-Be-Named PC's). */
+export const QUICK_RETRY_HOLD_MS = 500;
+
 export interface ResultSessionEvents {
   /** The player is done with the result. Fired once per entry. */
   continue(): void;
@@ -84,6 +89,14 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
   public readonly presentation: ResultPresentation;
   private readonly options: ResultSessionOptions;
   private entered = false;
+  /** The control buttons held, for a retry asked by keys held as the screen leaves. */
+  private readonly buttons = createControlButtonTracker();
+  /** When the leave key (Escape) went down, while it is down. */
+  private leaveKeyDownAtMs: number | undefined;
+
+  private get actions(): ControlActionMap {
+    return this.options.actions ?? DEFAULT_CONTROL_ACTIONS.lr2;
+  }
   private disposed = false;
   private enteredAtMs = 0;
   private nowMs = 0;
@@ -140,6 +153,8 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
   public exit(): void {
     if (!this.entered) return;
     this.entered = false;
+    this.buttons.reset();
+    this.leaveKeyDownAtMs = undefined;
     this.options.audio.stopOwned(this);
   }
 
@@ -150,8 +165,14 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
   }
 
   public handleKey(event: SessionKeyEvent): boolean {
-    if (!this.entered || event.type !== 'down') return false;
-    const action = resolveResultKeyAction(event, this.retryOffered, this.options.actions);
+    if (!this.entered) return false;
+    const buttons = event.buttons ?? controlButtonsOfKey(event, DEFAULT_CONTROL_BUTTONS);
+    this.buttons.handle({ ...event, buttons });
+    if (this.actions.is('result.leave', event) && !event.repeat) {
+      this.leaveKeyDownAtMs = event.type === 'down' ? event.timeStamp : undefined;
+    }
+    if (event.type !== 'down') return false;
+    const action = resolveResultKeyAction({ ...event, buttons }, this.retryOffered, this.actions);
     switch (action?.type) {
       case 'retry':
         this.retry(event.timeStamp);
@@ -274,7 +295,19 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     if (leaving === undefined || this.completed) return;
     if (nowMs - leaving.atMs < Math.max(0, this.options.timing.fadeOutMs)) return;
     this.completed = true;
-    if (leaving.to === 'retry') this.options.on.retry?.();
+    if (leaving.to === 'retry' || (this.retryOffered && this.retryHeld(nowMs))) this.options.on.retry?.();
     else this.options.on.continue();
+  }
+
+  /**
+   * Whether the keys still held as the screen finishes leaving ask for the chart again: LR2's white and black key held
+   * together, beatoraja's key 5 or key 7, or That-Which-Must-Not-Be-Named PC's leave key (Escape) held through.
+   */
+  private retryHeld(nowMs: number): boolean {
+    const leaveKey = this.leaveKeyDownAtMs;
+    if (leaveKey !== undefined && nowMs - leaveKey > QUICK_RETRY_HOLD_MS) return true;
+    const down = (keys: readonly number[]) => keys.some((key) => this.buttons.isDown(`1P-key${key}` as ControlButton));
+    if (this.actions.scheme === 'beatoraja') return down([5, 7]);
+    return down([1, 3, 5, 7]) && down([2, 4, 6]);
   }
 }

@@ -26,6 +26,7 @@ export type PlaySceneGUIState = Pick<
   | 'laneKeys'
   | 'controlKeys'
   | 'actionKeys'
+  | 'builtInControlScheme'
   | 'replayView'
   | 'tempoEnabled'
   | 'tempoPercent'
@@ -186,6 +187,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     laneKeys: guiState.laneKeys,
     controlKeys: guiState.controlKeys,
     actionKeys: guiState.actionKeys,
+    builtInControlScheme: guiState.builtInControlScheme,
     dpFlip: replay !== undefined ? false : lanes.dpFlip,
     random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
     random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,

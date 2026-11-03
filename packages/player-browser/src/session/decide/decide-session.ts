@@ -29,6 +29,8 @@ import {
   type ControlActionKeyEvent,
   type ControlActionMap,
 } from '../controls/control-actions.ts';
+import { controlButtonsOfKey, DEFAULT_CONTROL_BUTTONS } from '../controls/control-buttons.ts';
+import { createControlButtonTracker, isStartAndSelectDown } from '../controls/button-tracker.ts';
 
 /** What a key press does on the decide screen. */
 export type DecideKeyAction = 'continue' | 'cancel';
@@ -102,6 +104,8 @@ export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
   private readonly options: DecideSessionOptions;
   private readonly playOptions: PlayOptions;
   private entered = false;
+  /** The control buttons held, for START + SELECT. */
+  private readonly buttons = createControlButtonTracker();
   private disposed = false;
   private enteredAtMs = 0;
   private nowMs = 0;
@@ -139,6 +143,7 @@ export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
   public exit(): void {
     if (!this.entered) return;
     this.entered = false;
+    this.buttons.reset();
     this.options.audio.stopOwned(this);
   }
 
@@ -149,8 +154,16 @@ export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
   }
 
   public handleKey(event: SessionKeyEvent): boolean {
-    if (!this.entered || event.type !== 'down') return false;
-    const action = resolveDecideKeyAction(event, this.options.actions);
+    if (!this.entered) return false;
+    const buttons = event.buttons ?? controlButtonsOfKey(event, DEFAULT_CONTROL_BUTTONS);
+    const changes = this.buttons.handle({ ...event, buttons });
+    if (event.type !== 'down') return false;
+    // START and SELECT held together back out, as LR2's and beatoraja's decide screens take them.
+    if (changes.some((change) => change.type === 'down') && isStartAndSelectDown(this.buttons)) {
+      this.request('cancel', event.timeStamp);
+      return true;
+    }
+    const action = resolveDecideKeyAction({ ...event, buttons }, this.options.actions);
     if (action === undefined) return false;
     this.request(action, event.timeStamp);
     return true;
