@@ -34,7 +34,8 @@ import {
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { ResultFrame, ResultIntent, ResultViewTiming, SceneLeaving } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
-import { isResultRetryKey, resultReplaySlotKey } from './result-keys.ts';
+import { resolveResultKeyAction } from './result-keys.ts';
+import type { ControlActionMap } from '../controls/control-actions.ts';
 
 /** How long the result's graphs take to draw once input opens (LR2's default result skin draws for about 3 s). */
 export const RESULT_GRAPH_DRAW_MS = 3000;
@@ -68,6 +69,8 @@ export interface ResultSessionOptions {
   readonly timing: ResultViewTiming;
   /** Each replay slot's state for the frame, read every frame (the host saves asynchronously). */
   readonly replaySlots?: () => readonly ReplaySlotState[];
+  /** The player's keys for the screen's operations. Defaults to the default keys. */
+  readonly actions?: ControlActionMap;
   readonly on: ResultSessionEvents;
 }
 
@@ -148,24 +151,24 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
 
   public handleKey(event: SessionKeyEvent): boolean {
     if (!this.entered || event.type !== 'down') return false;
-    if (this.retryOffered && isResultRetryKey(event)) {
-      this.retry(event.timeStamp);
-      return true;
+    const action = resolveResultKeyAction(event, this.retryOffered, this.options.actions);
+    switch (action?.type) {
+      case 'retry':
+        this.retry(event.timeStamp);
+        return true;
+      case 'leave':
+        this.escape(event.timeStamp);
+        return true;
+      case 'continue':
+        this.step(event.timeStamp);
+        return true;
+      case 'save-replay':
+        if (this.options.on.saveReplay === undefined) return false;
+        this.saveReplay(action.slot, event.timeStamp);
+        return true;
+      default:
+        return false;
     }
-    if (event.key === 'Escape') {
-      this.escape(event.timeStamp);
-      return true;
-    }
-    if (event.key === 'Enter' || event.key === ' ') {
-      this.step(event.timeStamp);
-      return true;
-    }
-    const slot = resultReplaySlotKey(event);
-    if (slot !== undefined && this.options.on.saveReplay !== undefined) {
-      this.saveReplay(slot, event.timeStamp);
-      return true;
-    }
-    return false;
   }
 
   public dispatch(intent: ResultIntent): void {

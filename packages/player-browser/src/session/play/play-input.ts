@@ -24,13 +24,14 @@ import {
   type ControlButton,
   type ControlButtonMap,
 } from '../controls/control-buttons.ts';
+import { resolveControlActions, type ControlActionMap } from '../controls/control-actions.ts';
 
 const log = logger('gameplay');
 
 /** The scene's members the input reads and writes: the play session's members of these names. */
 export interface PlayInputContext extends PlayEngineContext {
   readonly options: PlayEngineContext['options'] &
-    Readonly<Pick<PlaySessionOptions, 'coverKeys' | 'laneKeys' | 'controlKeys'>>;
+    Readonly<Pick<PlaySessionOptions, 'coverKeys' | 'laneKeys' | 'controlKeys' | 'actionKeys'>>;
   readonly host: PixiSceneHost | undefined;
   readonly quitHold: QuitHoldController;
   readonly sharedEngineInputSignals: PlayerInputSignalBus | undefined;
@@ -223,19 +224,20 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     (/^(BUTTON|A|SUMMARY)$/u.test(tag) && (event.code === 'Enter' || event.code === 'Space'))
   )
     return;
+  const actions = playControlActions(ctx);
   if (
     (ctx.playState.view.hiSpeed.floating ||
-      event.code === 'Numpad0' ||
-      (ctx.playState.view.fixedDisplayArea && event.code === 'Enter')) &&
+      actions.is('play.floating-hi-speed', event) ||
+      (ctx.playState.view.fixedDisplayArea && actions.is('play.restore-green', event))) &&
     (event.altKey || event.ctrlKey || event.metaKey || event.isComposing)
   )
     return;
+  // A key one of the chart's lanes takes is the lane's, whatever the play's keys say.
+  const laneTokens = resolveLaneInputTokens(ctx.preparedChart?.laneBindings);
+  if (keyboardEventToTokens(event).some((token) => laneTokens.has(token))) return;
   // A held cover key keeps moving its cover, so the cover keys come before the repeat filter. A chart's M-SUDDEN takes F3
-  // / F4 on every play screen (#931), unless a lane is bound to the key.
-  if (
-    !resolveLaneInputTokens(ctx.preparedChart?.laneBindings).has(event.code.toLowerCase()) &&
-    handleChartManualSuddenKey(ctx, event)
-  ) {
+  // / F4 on every play screen (#931).
+  if (handleChartManualSuddenKey(ctx, event, actions)) {
     event.preventDefault();
     ctx.theme.moment({ kind: 'view-setting', setting: 'sudden', at: ctx.playClock() });
     return;
@@ -246,15 +248,16 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
   if (['PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) return;
   // Hi-speed belongs to the view. Like cover adjustments, it follows keyboard auto-repeat;
   // one-shot actions (pause, restart, mode switches and seek) still use the repeat filter below.
-  if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
+  const hiSpeedUp = actions.is('play.hi-speed-up', event);
+  if (hiSpeedUp || actions.is('play.hi-speed-down', event)) {
     event.preventDefault();
-    if (adjustHiSpeed(ctx, event.code === 'ArrowUp' ? HISPEED_STEP : -HISPEED_STEP, event.shiftKey)) {
+    if (adjustHiSpeed(ctx, hiSpeedUp ? HISPEED_STEP : -HISPEED_STEP, event.shiftKey)) {
       ctx.theme.moment({ kind: 'view-setting', setting: 'hi-speed', at: ctx.playClock() });
     }
     return;
   }
   if (event.repeat) return;
-  if (event.code === 'Enter' && ctx.playState.view.fixedDisplayArea) {
+  if (ctx.playState.view.fixedDisplayArea && actions.is('play.restore-green', event)) {
     event.preventDefault();
     const previous = ctx.lastStartTapMs;
     ctx.lastStartTapMs = event.timeStamp;
@@ -266,7 +269,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     return;
   }
   // Numpad 0 switches FLOATING HI-SPEED, whatever the judge rules (#774).
-  if (event.code === 'Numpad0') {
+  if (actions.is('play.floating-hi-speed', event)) {
     event.preventDefault();
     changePlayView(ctx, {
       type: 'floating-speed-mode',
@@ -276,28 +279,25 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     });
     return;
   }
-  if (event.code === 'Escape') {
+  if (actions.is('play.quit', event)) {
     event.preventDefault();
     ctx.requestExit();
     return;
   }
-  if (event.code === 'F5' && resolveLaneInputTokens(ctx.preparedChart?.laneBindings).has('f5')) return;
-  if (event.code === 'F5') {
+  if (actions.is('play.restart', event)) {
     event.preventDefault();
     ctx.requestRestart();
     return;
   }
   // Pause, and Tab unless a lane takes it (the 24 / 48 KEY wheels do), pause and resume the play.
-  if (
-    event.code === 'Pause' ||
-    (event.code === 'Tab' && !resolveLaneInputTokens(ctx.preparedChart?.laneBindings).has('tab'))
-  ) {
+  if (actions.is('play.pause', event)) {
     event.preventDefault();
     togglePause(ctx);
     return;
   }
   // ← / → move five seconds only while AUTO play is on. A replay or a practice play does not.
-  if ((event.code === 'ArrowLeft' || event.code === 'ArrowRight') && ctx.options.autoPlay === true) {
+  const seekBack = actions.is('play.seek-back', event);
+  if ((seekBack || actions.is('play.seek-forward', event)) && ctx.options.autoPlay === true) {
     const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
     if (
       event.defaultPrevented ||
@@ -310,7 +310,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     )
       return;
     event.preventDefault();
-    void ctx.seek(ctx.currentSeconds() + (event.code === 'ArrowLeft' ? -5 : 5));
+    void ctx.seek(ctx.currentSeconds() + (seekBack ? -5 : 5));
     return;
   }
 }
@@ -321,7 +321,11 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
  * lane. Returns whether `event` was a cover key.
  */
 function handleCoverKey(ctx: PlayInputContext, event: KeyboardEvent): boolean {
-  const key = resolvePlayCoverKey(event, resolveLaneInputTokens(ctx.preparedChart?.laneBindings));
+  const key = resolvePlayCoverKey(
+    event,
+    resolveLaneInputTokens(ctx.preparedChart?.laneBindings),
+    playControlActions(ctx),
+  );
   if (key === undefined) return false;
   event.preventDefault();
   if (event.repeat && key.command.type === 'cover-toggle') return true;
@@ -436,6 +440,19 @@ function resolveTouchTokens(ctx: PlayInputContext, channels: readonly string[]):
     if (token !== undefined) resolved.push(token);
   }
   return resolved;
+}
+
+/** The play's operations by the player's keys, resolved once per play. */
+const controlActionsByPlay = new WeakMap<PlayInputContext, ControlActionMap>();
+
+/** The play's operations by the player's keys (`PlaySessionOptions.actionKeys`). */
+export function playControlActions(ctx: PlayInputContext): ControlActionMap {
+  let actions = controlActionsByPlay.get(ctx);
+  if (actions === undefined) {
+    actions = resolveControlActions('lr2', ctx.options.actionKeys);
+    controlActionsByPlay.set(ctx, actions);
+  }
+  return actions;
 }
 
 /** The control buttons of each play's keys, resolved once per play. */

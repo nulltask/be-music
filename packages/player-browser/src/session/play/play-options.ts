@@ -19,6 +19,7 @@ import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { ControlKeyOverrides } from '../controls/control-buttons.ts';
+import type { ControlActionOverrides } from '../controls/control-actions.ts';
 import type { TempoPitchMode, TimeStretchAlgorithm } from '../../runtime/play-tempo.ts';
 import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
 
@@ -198,6 +199,8 @@ export interface PlaySessionOptions {
   laneKeys?: LaneKeyOverrides;
   /** The player's own START / SELECT keys over the defaults; the play records their presses in the replay. */
   controlKeys?: ControlKeyOverrides;
+  /** The player's own keys for the play's operations (`control-actions.ts`), over their defaults. */
+  actionKeys?: ControlActionOverrides;
   /**
    * DP FLIP — when true, swaps every note's 1P / 2P channel at chart-prepare time. Only DP charts have notes on both
    * sides so SP charts are unaffected. Mirrors LR2's `#SRC_BUTTON,type=54`.

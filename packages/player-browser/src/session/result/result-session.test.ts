@@ -59,10 +59,18 @@ function createAudio() {
   } satisfies ResultAudio;
 }
 
+/** The physical key a typed key is on a US layout (`' '` is Space, `r` KeyR, `1` Digit1). */
+function codeOf(key: string): string {
+  if (key === ' ') return 'Space';
+  if (/^[a-z]$/iu.test(key)) return `Key${key.toUpperCase()}`;
+  if (/^\d$/u.test(key)) return `Digit${key}`;
+  return key;
+}
+
 function key(key: string, timeStamp: number, overrides: Partial<SessionKeyEvent> = {}): SessionKeyEvent {
   return {
     type: 'down',
-    code: key,
+    code: codeOf(key),
     key,
     repeat: false,
     timeStamp,

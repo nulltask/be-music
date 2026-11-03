@@ -60,6 +60,7 @@ import {
   handleVisibilityChange,
   handleWindowBlur,
   handleWindowFocus,
+  playControlActions,
   recordControlKey,
   togglePause,
 } from './play-input.ts';
@@ -775,6 +776,7 @@ export class PlaySession extends PlaySessionState {
   readonly quitHold: QuitHoldController = new QuitHoldController({
     onComplete: () => this.requestExit(),
     now: () => performance.now(),
+    isQuitKey: (event) => playControlActions(this).is('play.quit-hold', event),
   });
 
   readonly handleQuitHoldKeyUp = (event: KeyboardEvent): void => {

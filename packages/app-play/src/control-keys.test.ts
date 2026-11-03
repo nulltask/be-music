@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { assignControlKey, parseControlKeys } from './control-keys.ts';
+import { assignControlKey, parseActionKeys, parseControlKeys } from './control-keys.ts';
 
 describe('parseControlKeys', () => {
   test('keeps the known START / SELECT ids with keys, and drops the rest', () => {
@@ -26,5 +26,19 @@ describe('assignControlKey', () => {
   test('an unknown id or an empty key changes nothing', () => {
     expect(assignControlKey({}, 'bogus' as '1P-start', 'tab')).toEqual({});
     expect(assignControlKey({ '1P-start': ['tab'] }, '1P-start', '')).toEqual({ '1P-start': ['tab'] });
+  });
+});
+
+describe('parseActionKeys', () => {
+  test('keeps the known operations with key codes, and drops the rest', () => {
+    expect(
+      parseActionKeys({
+        'select.activate': ['KeyE', 3, ''],
+        'play.pause': [],
+        'bogus.op': ['KeyX'],
+        'play.quit': 'F2',
+      }),
+    ).toEqual({ 'select.activate': ['KeyE'] });
+    expect(parseActionKeys(undefined)).toEqual({});
   });
 });

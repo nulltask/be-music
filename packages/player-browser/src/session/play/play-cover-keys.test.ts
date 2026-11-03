@@ -2,14 +2,25 @@ import { createLaneBindings } from '@be-music/player-engine/lanes';
 import { createPlayState, reducePlayState, type LaneCoverState } from '@be-music/player-scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
+import { resolveControlActions } from '../controls/control-actions.ts';
 
 const OFF: LaneCoverState = { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 };
+
+/** The physical key a typed key is on a US layout (`h` is KeyH). */
+function codeOf(key: string): string {
+  return /^[a-z]$/iu.test(key) ? `Key${key.toUpperCase()}` : key;
+}
+
+/** A cover key press of `key`, on its US-layout physical key. */
+function cover(key: string, shiftKey = false) {
+  return resolvePlayCoverKey({ key, code: codeOf(key), shiftKey });
+}
 
 /** The 1P cover after pressing `keys` in turn from no cover. */
 function press(...keys: Array<{ key: string; shiftKey?: boolean }>): LaneCoverState {
   let state = createPlayState({ view: { covers: [OFF] } });
   for (const { key, shiftKey } of keys) {
-    const cover = resolvePlayCoverKey({ key, shiftKey: shiftKey === true });
+    const cover = resolvePlayCoverKey({ key, code: codeOf(key), shiftKey: shiftKey === true });
     if (cover !== undefined) state = reducePlayState(state, cover.command);
   }
   return state.view.covers[0]!;
@@ -22,30 +33,30 @@ describe('resolvePlayCoverKey', () => {
     expect(press({ key: 'PageDown', shiftKey: true }, { key: 'PageUp' })).toMatchObject({ sudden: 0.04 });
     // Raised back to nothing, it goes off.
     expect(press({ key: 'PageDown' }, { key: 'PageUp' })).toMatchObject({ sudden: 0, suddenOn: false });
-    expect(resolvePlayCoverKey({ key: 'PageUp', shiftKey: false })?.setting).toBe('sudden');
+    expect(cover('PageUp')?.setting).toBe('sudden');
   });
 
   test('End raises the LIFT and Home lowers it, within the lane', () => {
     expect(press({ key: 'End' }, { key: 'End', shiftKey: true })).toMatchObject({ lift: 0.06 });
     expect(press({ key: 'Home' })).toMatchObject({ lift: 0 });
-    expect(resolvePlayCoverKey({ key: 'End', shiftKey: false })?.setting).toBe('lift');
+    expect(cover('End')?.setting).toBe('lift');
   });
 
   test('H switches HIDDEN+ on at a quarter of the lane and off again, keeping its height', () => {
     expect(press({ key: 'h' })).toMatchObject({ hidden: 0.25, hiddenOn: true });
     expect(press({ key: 'H' }, { key: 'h' })).toMatchObject({ hidden: 0.25, hiddenOn: false });
-    expect(resolvePlayCoverKey({ key: 'h', shiftKey: false })?.setting).toBe('hidden-toggle');
+    expect(cover('h')?.setting).toBe('hidden-toggle');
   });
 
   test('K raises HIDDEN+ (switching it on) and J lowers it', () => {
     expect(press({ key: 'k' })).toMatchObject({ hidden: 0.01, hiddenOn: true });
     expect(press({ key: 'K', shiftKey: true }, { key: 'j' })).toMatchObject({ hidden: 0.04, hiddenOn: true });
-    expect(resolvePlayCoverKey({ key: 'J', shiftKey: false })?.setting).toBe('hidden');
+    expect(cover('J')?.setting).toBe('hidden');
   });
 
   test('leaves every other key alone', () => {
     for (const key of ['ArrowUp', 'Escape', 'z', 'l', 'Enter']) {
-      expect(resolvePlayCoverKey({ key, shiftKey: false })).toBeUndefined();
+      expect(cover(key)).toBeUndefined();
     }
   });
 
@@ -86,7 +97,16 @@ describe('resolvePlayCoverKey', () => {
     }
     expect(key('PageDown', 'PageDown', dp)?.setting).toBe('sudden');
     expect(key('End', 'End', dp)?.setting).toBe('lift');
-    // The lane input reads the key's position (its `code`), so the lane's key is the one it takes.
-    expect(key('h', 'KeyQ', dp)?.setting).toBe('hidden-toggle');
+    // The keys are physical (`code`), as the lane input reads them: H's position is HIDDEN+ whatever the layout prints.
+    expect(key('q', 'KeyH', sp)?.setting).toBe('hidden-toggle');
+    expect(key('h', 'KeyQ', sp)).toBeUndefined();
   });
+});
+
+test('resolvePlayCoverKey reads the player’s keys for the cover operations', () => {
+  const actions = resolveControlActions('lr2', { 'play.hidden-toggle': ['KeyG'] });
+  expect(resolvePlayCoverKey({ key: 'g', code: 'KeyG', shiftKey: false }, undefined, actions)?.setting).toBe(
+    'hidden-toggle',
+  );
+  expect(resolvePlayCoverKey({ key: 'h', code: 'KeyH', shiftKey: false }, undefined, actions)).toBeUndefined();
 });

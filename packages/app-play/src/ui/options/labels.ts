@@ -3,6 +3,9 @@
 // this table's text when the player's language is Japanese (`relabelOptions`). The terms the sources print in capitals
 // (HS-FIX, GAUGE TYPE, M-RAN, …) and the format names stay as they are, as LR2 and beatoraja show them.
 
+import { CONTROL_ACTIONS } from '@be-music/player-browser/host';
+import { ACTION_LABELS_JA, actionKeyConfigLabel } from './action-keys.ts';
+
 /** Japanese for each English label, title and tab of the Options dialog. */
 export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   // Tabs
@@ -149,6 +152,12 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
     ]),
   ]),
   'Built-in skin controls': '内蔵スキンの操作',
+  Screens: '画面の操作',
+  'Reset screen keys to defaults': '画面の操作を既定に戻す',
+  ...ACTION_LABELS_JA,
+  ...Object.fromEntries(
+    CONTROL_ACTIONS.map((action) => [actionKeyConfigLabel(action), actionKeyConfigLabel(action, 'ja')]),
+  ),
   'Reset keys to defaults': 'キーを既定に戻す',
   // Tempo & course
   Enabled: '有効',

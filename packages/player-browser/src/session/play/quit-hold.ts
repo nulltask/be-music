@@ -64,6 +64,8 @@ export interface QuitHoldControllerOptions {
   schedule?: (callback: () => void, delayMs: number) => unknown;
   cancelScheduled?: (handle: unknown) => void;
   thresholdMs?: number;
+  /** Whether a key is the hold-to-quit key: Backspace ({@link QUIT_HOLD_KEY_CODE}) unless the player gave it another. */
+  isQuitKey?: (event: Pick<KeyboardEvent, 'code'>) => boolean;
 }
 
 /** True for a focused text field, where Backspace edits text instead of quitting. */
@@ -97,7 +99,7 @@ export class QuitHoldController {
    * does not navigate back), `false` for every other key and for a quit key typed into a text field.
    */
   handleKeyDown(event: QuitHoldKeyEvent): boolean {
-    if (event.code !== QUIT_HOLD_KEY_CODE || isEditableTarget(event.target)) return false;
+    if (!this.isQuitKey(event) || isEditableTarget(event.target)) return false;
     event.preventDefault();
     const wasHolding = this.isHolding();
     this.state = pressQuitHold(this.state, this.options.now(), event.repeat);
@@ -107,7 +109,7 @@ export class QuitHoldController {
 
   /** Handles a `keyup`. Returns `true` when the event is the quit key. Releasing before the threshold cancels. */
   handleKeyUp(event: Pick<KeyboardEvent, 'code'>): boolean {
-    if (event.code !== QUIT_HOLD_KEY_CODE) return false;
+    if (!this.isQuitKey(event)) return false;
     this.cancel();
     return true;
   }
@@ -116,6 +118,10 @@ export class QuitHoldController {
   cancel(): void {
     this.state = releaseQuitHold();
     this.clearTimer();
+  }
+
+  private isQuitKey(event: Pick<KeyboardEvent, 'code'>): boolean {
+    return this.options.isQuitKey?.(event) ?? event.code === QUIT_HOLD_KEY_CODE;
   }
 
   private arm(): void {

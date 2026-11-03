@@ -18,6 +18,7 @@ import { LR2SelectView } from '../view/lr2/select-view.ts';
 import type { SelectFrame, SelectIntent, SelectRecords, SelectView } from '../view/types.ts';
 import type { SelectKit } from './family-kit.ts';
 import { resolveControlScheme } from '../session/controls/control-buttons.ts';
+import { resolveFamilyControlActions } from '../session/controls/control-actions.ts';
 
 const log = logger('select');
 
@@ -239,6 +240,7 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
 export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptions): SelectScene {
   // The session asks the view for its skin's launch outro, and a beatoraja view's skin sounds belong to the session.
   let familyView: FamilySelectView | undefined;
+  const scheme = resolveControlScheme(kit.family, options.controls?.builtInScheme);
   const session = new SelectSession({
     library: options.library,
     ...(options.browse !== undefined ? { browse: options.browse } : {}),
@@ -247,10 +249,8 @@ export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptio
     sounds: options.sounds,
     audio: options.audio,
     ...(options.courseMaker !== undefined ? { courseMaker: options.courseMaker } : {}),
-    policy: {
-      ...SELECT_POLICIES[kit.family],
-      keys: resolveControlScheme(kit.family, options.controls?.builtInScheme),
-    },
+    policy: { ...SELECT_POLICIES[kit.family], keys: scheme },
+    actions: resolveFamilyControlActions(kit.family, options.controls),
     launchOutroMs: () => familyView?.view.launchOutroMs ?? 0,
     ...(options.now !== undefined ? { now: options.now } : {}),
     on: options.on,

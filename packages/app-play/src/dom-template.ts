@@ -6,6 +6,8 @@ import {
   renderServiceFooter,
 } from '@be-music/service-web-theme';
 import { playerServiceHeaderHTML } from './player-header.ts';
+import { CONTROL_ACTIONS } from '@be-music/player-browser/host';
+import { actionKeyConfigLabel } from './ui/options/action-keys.ts';
 
 function playBuildInfo(): { builtAt: string; revision: string } | undefined {
   return typeof __BE_MUSIC_BUILD_TIME__ === 'string'
@@ -34,6 +36,9 @@ function playHostname(): string {
  *  - `#start-silent-mode` — `silent-mode-playback.ts` (`mountStartSilentModeOption`), from `services/silent-mode.ts`
  *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — looked up in `main.ts` as `PlayerWebElements`
  */
+/** The Screens page's rows, for its Help entry. */
+const SCREEN_KEY_LABELS = CONTROL_ACTIONS.map((action) => actionKeyConfigLabel(action)).join('|');
+
 export const PLAYER_APP_HTML = `
   <div class="shell empty">
     <div id="player-service-header" class="player-service-header">${playerServiceHeaderHTML({
@@ -882,6 +887,10 @@ export const PLAYER_APP_HTML = `
                 <dd>On the 5 / 7 / 10 / 14 KEY page: each side's START and SELECT, Q / W and O / P by default as in LR2. The screens read them with the lane keys, and a lane cannot share a key with them.</dd>
                 <dt>Built-in skin controls</dt>
                 <dd>Whose keys the built-in skins' screens read: LR2's or beatoraja's. An LR2 or beatoraja skin always reads its own.</dd>
+                <dt data-for="${SCREEN_KEY_LABELS}">Screens</dt>
+                <dd>The keys of each screen's operations: select, decide, play and result. Click an operation's keys, then press the key to give it in place of its defaults; Esc cancels, and a key another operation of that screen has is refused. An operation only LR2 or beatoraja has says so; the others show the keys of the map the built-in skins read. Keys set to START, SELECT or a lane key move with them.</dd>
+                <dt>Reset screen keys to defaults</dt>
+                <dd>Puts every operation back on its default keys.</dd>
                 <dt>Reset keys to defaults</dt>
                 <dd>Puts the page's lanes back on their default keys.</dd>
               </dl>
@@ -1179,6 +1188,10 @@ export const PLAYER_APP_HTML = `
                 <dd>5 / 7 / 10 / 14 KEY のページにある、各サイドの START と SELECT。既定は LR2 と同じ Q / W と O / P です。各画面はレーンのキーと合わせて読むので、レーンと同じキーにはできません。</dd>
                 <dt>Built-in skin controls</dt>
                 <dd>内蔵スキンの画面がどちらのキー操作に従うか: LR2 か beatoraja。LR2 スキンと beatoraja スキンは常にそれぞれのキー操作に従います。</dd>
+                <dt data-for="${SCREEN_KEY_LABELS}">Screens</dt>
+                <dd>選曲・決定・プレイ・リザルトの各画面の操作に割り当てるキー。操作のキーをクリックしてから割り当てたいキーを押すと、既定のキーの代わりにそのキーになります。Esc で取り消し。同じ画面のほかの操作が使っているキーは使えません。LR2 か beatoraja にしかない操作にはそう書いてあり、それ以外は内蔵スキンが従うキー操作のキーを表示します。START・SELECT・レーンのキーが既定の操作は、それらのキーを変えると一緒に変わります。</dd>
+                <dt>Reset screen keys to defaults</dt>
+                <dd>すべての操作を既定のキーに戻します。</dd>
                 <dt>Reset keys to defaults</dt>
                 <dd>このページのレーンを既定のキーに戻します。</dd>
               </dl>

@@ -437,7 +437,13 @@ describe('createPlayScene with a beatoraja kit', () => {
     return { scene, on, play };
   }
 
-  const keydown = (key: string) => ({ key, code: key, shiftKey: false, repeat: false, preventDefault: vi.fn() });
+  const keydown = (key: string) => ({
+    key,
+    code: key.length === 1 ? `Key${key.toUpperCase()}` : key,
+    shiftKey: false,
+    repeat: false,
+    preventDefault: vi.fn(),
+  });
 
   it('is the beatoraja play screen, timed by the skin', () => {
     const { scene } = createBeatoraja();

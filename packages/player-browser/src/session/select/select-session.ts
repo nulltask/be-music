@@ -60,6 +60,7 @@ import type {
 } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { resolveSelectKeyAction } from './select-keys.ts';
+import { DEFAULT_CONTROL_ACTIONS, type ControlActionMap } from '../controls/control-actions.ts';
 import { openLibrary, restoreSelectBrowse, SELECT_POLICIES, type SelectPolicy } from './select-policy.ts';
 import { findReadtextForChart } from '../../collection/readtext.ts';
 
@@ -115,6 +116,8 @@ export interface SelectSessionOptions {
   readonly audio: SelectAudio;
   /** What the browse model leaves to the screen. Defaults to LR2's (the built-in and LR2 families). */
   readonly policy?: SelectPolicy;
+  /** The player's keys for the screen's operations, on the policy's key map. Defaults to the map's default keys. */
+  readonly actions?: ControlActionMap;
   /** How long the skin's launch outro plays before a started chart is handed on (`SelectView.launchOutroMs`). */
   readonly launchOutroMs?: () => number;
   /** The clock events are stamped with when no key timestamp is at hand. Defaults to `performance.now()`. */
@@ -375,6 +378,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       event,
       { panel: this.panel, readTextOpen: this.readText !== undefined },
       this.policy.keys,
+      this.options.actions ?? DEFAULT_CONTROL_ACTIONS[this.policy.keys],
     );
     if (action === undefined) return false;
     const atMs = event.timeStamp;

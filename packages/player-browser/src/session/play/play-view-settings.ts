@@ -41,6 +41,7 @@ import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import type { PlayReplayViewScale, PlaySessionTheme } from './play-session-theme.ts';
 import { applyPlayEvent, type PlayStateContext } from './play-state.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
+import { DEFAULT_CONTROL_ACTIONS, type ControlActionMap } from '../controls/control-actions.ts';
 
 /** The scene's members the view settings read and write: the play session's members of these names. */
 export interface PlayViewSettingsContext extends PlayStateContext {
@@ -171,15 +172,18 @@ export function resolveLaneCovers(ctx: PlayViewSettingsContext): readonly BeMusi
  * HIDDEN_M-SUDDEN's cover keys (#931): F3 lowers the player's SUDDEN+ cover (more of the lane covered) and F4 raises
  * it, by 1 % of the lane (5 % with Shift), as nanasigroove's F3 / F4. F5 stays the restart key, so there is no reset
  * key. The step moves the cover's height only, keeping whether the player has it switched on, and is taken while a
- * course locks the covers: the chart asked for the cover. Returns whether `event` was such a key.
+ * course locks the covers: the chart asked for the cover. The keys are the player's (`actions`: `play.m-sudden-down` and
+ * `play.m-sudden-up`), F3 / F4 by default. Returns whether `event` was such a key.
  */
 export function handleChartManualSuddenKey(
   ctx: PlayViewSettingsContext,
   event: Pick<KeyboardEvent, 'code' | 'shiftKey'>,
+  actions: ControlActionMap = DEFAULT_CONTROL_ACTIONS.lr2,
 ): boolean {
-  if (event.code !== 'F3' && event.code !== 'F4') return false;
+  const down = actions.is('play.m-sudden-down', event);
+  if (!down && !actions.is('play.m-sudden-up', event)) return false;
   if (!resolveChartPlayfieldVisual(ctx.engineFrame?.chartOptions, 0).manualSudden) return false;
-  const delta = (event.code === 'F3' ? 1 : -1) * (event.shiftKey ? 0.05 : 0.01);
+  const delta = (down ? 1 : -1) * (event.shiftKey ? 0.05 : 0.01);
   const covers = ctx.playState.view.covers.map((cover) => ({
     side: cover.side,
     sudden: Math.min(1, Math.max(0, Math.round((cover.sudden + delta) * 10_000) / 10_000)),
