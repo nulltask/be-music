@@ -134,13 +134,13 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await sample('combined');
     await player.page.screenshot({ path: info.outputPath('combined.png') });
     await player.releaseKey('KeyZ');
-    await player.key('Space');
+    await player.key('Pause');
     await expect.poll(() => correctPixels(player, 'base'), { timeout: 3000 }).toBe(true);
     // A fresh press starts again from the first frame.
     pressed = await player.pressPaused('KeyZ');
     await sample('first');
     await player.releaseKey('KeyZ');
-    await player.key('Space');
+    await player.key('Pause');
     // The finite binding from measure 4 outlives its release, then expires 1 s after the press.
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 8.2, 'finite SWBGA binding');
     pressed = await player.pressPaused('KeyS');
@@ -151,7 +151,7 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await player.resumeUntil(pressed + 1.3, 'expired finite binding');
     await sample('base');
     await player.page.screenshot({ path: info.outputPath('expired.png') });
-    await player.key('Space');
+    await player.key('Pause');
   });
 }
 
