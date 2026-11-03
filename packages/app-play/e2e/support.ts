@@ -300,11 +300,11 @@ export class Player {
   ): Promise<{ value: boolean | number | string; enabled: boolean }> {
     return this.page.evaluate(
       ({ folder, name, action }) => {
-        const root = document.querySelector<HTMLElement>('[data-pane="options"]');
+        const root = document.querySelector<HTMLElement>('#options-modal');
         if (root === null) throw new Error('no Options dialog');
         // The folder a section, folder or row sits in: the nearest one around it, or the dialog. Tabs are transparent.
         const folderOf = (node: Element): Element =>
-          node.parentElement?.closest('[data-options-folder], [data-pane="options"]') ?? root;
+          node.parentElement?.closest('[data-options-folder], #options-modal') ?? root;
         const titleOf = (node: Element): string | undefined =>
           node
             .querySelector(':scope > summary .options-folder-title, :scope > h3 .options-folder-title')
