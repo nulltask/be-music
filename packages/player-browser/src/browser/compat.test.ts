@@ -8,20 +8,25 @@ describe('checkBrowserCompat', () => {
     // dismissals or theme overrides keyed off the IDs.
     const ids = report.items.map((item) => item.id).sort();
     expect(ids).toEqual([
+      'audio-worklet',
+      'compression-streams',
+      'cross-origin-isolation',
       'file-api',
+      'gpu',
+      'indexed-db',
       'media-recorder',
       'offscreen-canvas',
+      'service-worker',
       'web-audio',
+      'web-crypto',
       'webassembly',
       'webcodecs',
-      'webgl2',
       'webgpu',
       'worker',
     ]);
+    // Only what the player cannot start without is required; a feature that switches one thing off is optional.
     const required = report.items.filter((item) => item.required).map((item) => item.id);
-    expect(required).toContain('webgl2');
-    expect(required).toContain('web-audio');
-    expect(required).toContain('file-api');
+    expect(required.sort()).toEqual(['file-api', 'gpu', 'web-audio']);
   });
 
   test('every item carries a non-empty human-readable label and note', () => {
