@@ -16,7 +16,7 @@ import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
 import type { PlayEngineContext } from './play-engine.ts';
-import { adjustHiSpeed, changePlayView, handleChartManualSuddenKey } from './play-view-settings.ts';
+import { adjustHiSpeed, adjustWhiteNumber, changePlayView, handleChartManualSuddenKey } from './play-view-settings.ts';
 import { keyboardEventToTokens } from '../../runtime/web-input-runtime.ts';
 import {
   controlButtonsOfKey,
@@ -582,9 +582,19 @@ function handleStartSelect(ctx: PlayInputContext, changes: readonly ControlButto
       }
       continue;
     }
+    // beatoraja's SELECT + a key changes the visible time instead: odd keys and the turntable's second key shorten it by
+    // 1 ms, even keys and its first key lengthen it.
+    if (scheme === 'beatoraja' && !tracker.isDown(`${side}-start`) && tracker.isDown(`${side}-select`)) {
+      const longer = button === 'scratch-cw' || (button.startsWith('key') && Number(button.slice(3)) % 2 === 0);
+      if (adjustWhiteNumber(ctx, longer ? 1 : -1)) {
+        ctx.theme.moment({ kind: 'view-setting', setting: 'hi-speed', at: ctx.playClock() });
+      }
+      continue;
+    }
     if (!modifierDown) continue;
     if (button === 'scratch-cw' || button === 'scratch-ccw') {
-      if (scheme === 'beatoraja') moveSuddenCover(ctx, button === 'scratch-cw' ? -0.01 : 0.01);
+      // beatoraja's START + the turntable's first key covers more of the lane, its second key less.
+      if (scheme === 'beatoraja') moveSuddenCover(ctx, button === 'scratch-cw' ? 0.01 : -0.01);
       continue;
     }
     const key = Number(button.slice(3));

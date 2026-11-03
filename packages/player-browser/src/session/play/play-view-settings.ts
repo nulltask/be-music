@@ -192,6 +192,28 @@ export function handleChartManualSuddenKey(
   return true;
 }
 
+/**
+ * Lengthens (or shortens) how long a note stays visible by `deltaMs` (beatoraja's duration, the white number), the way
+ * beatoraja's SELECT + a key does: the hi-speed is scaled so that the white number at the current BPM, below the
+ * covers, moves by `deltaMs` (to 1 ms at least). Returns whether it changed; nothing changes while a course locks the
+ * hi-speed, before the lanes are laid out, or while the BPM is unknown.
+ */
+export function adjustWhiteNumber(ctx: PlayViewSettingsContext, deltaMs: number): boolean {
+  if (ctx.playState.view.hiSpeed.locked) return false;
+  const bpm = ctx.timingResolver?.bpmAtBeat(ctx.currentBeat?.(ctx.currentSeconds()) ?? 0);
+  if (bpm === undefined || !(bpm > 0)) return false;
+  const cover = ctx.playState.view.covers[0];
+  const hidden = (cover?.suddenOn ? cover.sudden : 0) + ((cover?.liftOn ?? false) ? (cover?.lift ?? 0) : 0);
+  const white = resolveWhiteNumber({
+    laneBeats: resolveLaneBeats(ctx),
+    hiSpeed: ctx.playState.view.hiSpeed.drawn,
+    sudden: Math.min(1, hidden),
+    bpm,
+  });
+  if (!(white > 0)) return false;
+  return changePlayView(ctx, { type: 'hi-speed-scale', multiplier: white / Math.max(1, white + deltaMs) });
+}
+
 /** The scale the replay reads the view's hi-speed on, and the main BPM it takes the visible time at. */
 interface ReplayScale extends PlayReplayViewScale {
   readonly mainBPM?: number;
