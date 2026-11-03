@@ -58,7 +58,8 @@ const SCRATCH_LIGHT: LaneLight = { body: 0xff2b8a, glow: 0xff3d9e, hue: 0.92 };
 // The 24 / 48 KEY wheel stands where the scratch would, and burns the same magenta.
 const LIGHTS: Record<BeMusicLaneKind, LaneLight> = {
   white: { body: 0xffffff, glow: 0xff7a1e, hue: 0.07 },
-  black: { body: 0x2f6dff, glow: 0x3fb4ff, hue: 0.57 },
+  // Lighter than a pure blue: a dark body melts into the note's dark rim and reads thinner than a white note.
+  black: { body: 0x4a86ff, glow: 0x3fb4ff, hue: 0.57 },
   scratch: SCRATCH_LIGHT,
   'wheel-up': SCRATCH_LIGHT,
   'wheel-down': SCRATCH_LIGHT,
@@ -277,10 +278,14 @@ function drawNote(
   light: LaneLight,
   alpha = 1,
 ): void {
-  // A dark rim lifts the bar off the lit lane and the beam behind it.
+  // A dark rim lifts the bar off the lit lane and the beam behind it. It sits outside the body: the body's bottom edge is
+  // the judgement position.
   graphics.rect(x - 1, y - noteHeight - 1, w + 2, noteHeight + 2).fill({ color: 0x05010a, alpha: 0.9 * alpha });
   graphics.rect(x, y - noteHeight, w, noteHeight).fill({ color: light.body, alpha });
+  // A bright filament on top and a fainter one along the bottom: both edges of a coloured note stay distinct from the
+  // rim, so a blue or magenta note reads as tall as a white one (whose body is already as bright as its edges).
   graphics.rect(x, y - noteHeight, w, 2).fill({ color: 0xffffff, alpha: 0.6 * alpha });
+  graphics.rect(x, y - 1, w, 1).fill({ color: 0xffffff, alpha: 0.35 * alpha });
 }
 
 /** Sparks per hit at combo tier 0; each tier adds {@link BURST_PARTICLES_PER_TIER}. */
