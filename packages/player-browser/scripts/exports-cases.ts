@@ -1023,6 +1023,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       });
     },
   });
+  define('player-browser.resolveControlScheme', {
+    run: () => {
+      playerWebCoreAPI.resolveControlScheme('built-in', 'beatoraja');
+    },
+  });
   define('player-browser.resolveRendererPreference', {
     run: () => {
       playerWebCoreAPI.resolveRendererPreference('?renderer=webgl');

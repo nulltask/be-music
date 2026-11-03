@@ -62,6 +62,7 @@ export {
   CONTROL_KEY_CONFIG,
   effectiveControlKey,
   resolveControlButtons,
+  resolveControlScheme,
   type ControlButton,
   type ControlButtonMap,
   type ControlKeyConfigEntry,

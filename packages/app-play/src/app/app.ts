@@ -1,7 +1,13 @@
 // Imports are split across `@be-music/player-browser`'s entries (`./host`, `./skin`, `./collection`, `./audio`,
 // `./recording`) so the dependency surface of this player is explicit at the file top. The main `@be-music/player-browser`
 // entry is reserved for symbols that don't belong to any single entry (`logger`, `Rectangle`).
-import { PixiSceneHost, resolveControlActions, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
+import {
+  PixiSceneHost,
+  resolveControlActions,
+  resolveControlScheme,
+  type PlayScene,
+  type SelectScene,
+} from '@be-music/player-browser/host';
 import type { BrowseSnapshot, PlayOptions } from '@be-music/player-scene-model';
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-browser/audio';
@@ -52,6 +58,7 @@ import { LR2ThemeService } from '../services/themes/lr2.ts';
 import { FamilyKits } from './family-kits.ts';
 import { controlSettingsOf } from '../control-keys.ts';
 import { showExitMenu } from '../ui/exit-menu.ts';
+import { createFpsOverlay } from '../ui/fps-overlay.ts';
 import type { TestHookRecorder } from '../test-hook.ts';
 import { nameResultJingle, type LiveTestHookDeps } from '../services/test-hook.ts';
 
@@ -84,6 +91,10 @@ export class PlayerWebApp {
    * `PixiSceneHost` instead of constructing a separate Pixi `Application` per view.
    */
   private readonly sceneHost = new PixiSceneHost();
+  /** The frame rate readout the frame rate key switches (`ui/fps-overlay.ts`). */
+  private readonly fpsOverlay = createFpsOverlay(
+    document.querySelector<HTMLElement>('#fps-overlay') ?? document.createElement('div'),
+  );
   /** Mounting {@link sceneHost} on the page, started as the first scene shows (`mountStage`). */
   private stageMount: Promise<void> | undefined;
   /**
@@ -671,8 +682,14 @@ export class PlayerWebApp {
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
       // A 24 / 48 KEY chart can play F-keys: a lane's key is the lane's.
       if (this.router.current?.identity.kind === 'play' && this.router.play?.takesKey(event) === true) return;
-      const actions = resolveControlActions('lr2', this.guiState.actionKeys);
-      if (actions.is('global.fullscreen', event)) {
+      // The skin's family's keys (F1 is beatoraja's frame rate and LR2's help).
+      const family = this.router.current?.identity.family ?? 'built-in';
+      const scheme = resolveControlScheme(family, this.guiState.builtInControlScheme);
+      const actions = resolveControlActions(scheme, this.guiState.actionKeys);
+      if (actions.is('global.fps', event)) {
+        event.preventDefault();
+        this.fpsOverlay.toggle();
+      } else if (actions.is('global.fullscreen', event)) {
         event.preventDefault();
         void toggleFullscreen(playerFullscreenElement(document));
       } else if (actions.is('global.screenshot', event)) {
