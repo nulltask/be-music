@@ -60,11 +60,11 @@ describe('Linking providers onto the signed-in account', () => {
     const userId = ((await signIn.json()) as { user: { id: string } }).user.id;
     const accountPage = await worker.fetch(new Request(`${env.AUTH_ORIGIN}/account`, { headers: { cookie } }), env);
     const html = await accountPage.text();
-    expect(html).toContain('data-action="link-discord"');
-    expect(html).toContain('data-action="link-google"');
-    expect(html).toContain('data-action="add-passkey"');
-    expect(html).not.toContain('data-action="discord"');
-    expect(html).not.toContain('data-action="google"');
+    expect(html).toContain('data-auth-action="link-discord"');
+    expect(html).toContain('data-auth-action="link-google"');
+    expect(html).toContain('data-auth-action="add-passkey"');
+    expect(html).not.toContain('data-auth-action="discord"');
+    expect(html).not.toContain('data-auth-action="google"');
 
     const link = await worker.fetch(
       new Request(`${env.AUTH_ORIGIN}/api/auth/link-social`, {
@@ -87,8 +87,8 @@ describe('Linking providers onto the signed-in account', () => {
     const linkedPage = await worker.fetch(new Request(`${env.AUTH_ORIGIN}/account`, { headers: { cookie } }), env);
     const linked = await linkedPage.text();
     expect(linked).toContain('Discord is linked.');
-    expect(linked).not.toContain('data-action="link-discord"');
-    expect(linked).toContain('data-action="link-google"');
-    expect(linked).toContain('data-action="add-passkey"');
+    expect(linked).not.toContain('data-auth-action="link-discord"');
+    expect(linked).toContain('data-auth-action="link-google"');
+    expect(linked).toContain('data-auth-action="add-passkey"');
   });
 });
