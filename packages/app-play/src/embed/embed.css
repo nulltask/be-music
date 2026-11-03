@@ -10,6 +10,10 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
+#preview-app {
+  height: 100%;
+}
+
 .preview {
   position: relative;
   width: 100%;

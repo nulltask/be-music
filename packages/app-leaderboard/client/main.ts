@@ -1,3 +1,5 @@
+import './local-time.ts';
+import { defineServiceUI, type BeMusicStatusElement } from '@be-music/service-web-theme/client';
 /**
  * The Leaderboard pages' client script, bundled by scripts/build-client.ts into src/pages/client.generated.ts. It wires
  * what needs the browser: passkey sign-in and sign-out in the header, the settings page (profile form, icon upload,
@@ -14,6 +16,8 @@ import { clientMessages } from './messages.ts';
 import { centerSquare, describeAccountError } from './profile.ts';
 import { CARD_HEIGHT, CARD_WIDTH, drawScoreCard } from './score-card.ts';
 
+defineServiceUI();
+
 const AVATAR_SIZE = 256;
 /** Messages in the page's language. */
 const t = clientMessages(document.documentElement.lang);
@@ -22,9 +26,9 @@ const CARD_UPLOAD_LIMIT = 512 * 1024;
 
 /** Shows a message in the element `selector` names (the header status line by default), or clears it. */
 function say(message: string | undefined, selector = '[data-account-status]'): void {
-  const target = document.querySelector<HTMLElement>(selector);
+  const target = document.querySelector<BeMusicStatusElement>(selector);
   if (target === null) return;
-  target.textContent = message ?? '';
+  target.message = message;
   target.hidden = message === undefined;
 }
 

@@ -1,3 +1,6 @@
+import { localized } from './ui/localized.ts';
+import type { BeMusicStatusElement } from '@be-music/service-web-theme/client';
+import { html, nothing, render } from 'lit';
 import { setDisabled, type PaneBinding } from './pane-controls.ts';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import type { LibraryChart } from '@be-music/player-scene-model';
@@ -76,6 +79,8 @@ export class LeaderboardPanel {
   private readonly host: LeaderboardPanelHost;
   constructor(host: LeaderboardPanelHost) {
     this.host = host;
+    const label = document.querySelector<HTMLElement>('#start-account-label');
+    if (label !== null) render(localized('checkingAccount'), label);
     onPlayerLangChange(() => {
       if (!this.accountReady) return;
       this.accountState.status = describeLeaderboardAccount(this.shownAccount);
@@ -126,10 +131,10 @@ export class LeaderboardPanel {
     action: () => Promise<AccountActionResult>,
     onSuccess?: () => void,
   ): Promise<void> {
-    const status = document.querySelector<HTMLElement>('#start-account-status');
+    const status = document.querySelector<BeMusicStatusElement>('#start-account-status');
     const say = (text: string) => {
       this.host.setStatus(text);
-      if (status !== null) status.textContent = text;
+      if (status !== null) status.message = text;
     };
     say(`${label}…`);
     try {
@@ -238,41 +243,40 @@ export class LeaderboardPanel {
     const view = describeStartAccount(account);
     row.dataset.state = view.state;
     const hint = document.querySelector<HTMLElement>('#start-account-hint');
-    if (hint !== null) hint.textContent = view.hint ?? '';
-    if (view.href !== undefined) {
-      const link = document.createElement('a');
-      link.href = leaderboardLink(view.href, location.hostname);
-      link.target = '_blank';
-      link.rel = 'noopener';
-      link.title = playerText().shell.yourPage;
-      link.textContent = view.label;
-      label.replaceChildren(link);
-    } else {
-      label.textContent = view.label;
-    }
-    // The template's `data-i18n` is the "checking" placeholder. Leaving it would put that string back on the next
-    // language switch, over the account this row is actually showing.
-    label.removeAttribute('data-i18n');
-    actions.replaceChildren(
-      ...view.actions.map((action) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        // Making an account is the step the card leads to; the other actions stay quiet.
-        button.className = 'btn';
-        button.dataset.size = 'sm';
-        if (action !== 'sign-up' && action !== 'keep') button.dataset.variant = 'outline';
-        button.textContent = startAccountActionLabels()[action];
-        button.addEventListener('click', () => {
-          const copy = playerText();
-          // Signing out needs nothing more. Keeping an anonymous account enrolls a passkey on Accounts.
-          // Sign in and Sign up open the dialogs, where a passkey, Google, or Discord each start Accounts.
-          if (action === 'sign-out') void this.runAccountAction(copy.account.signOut, signOutOfLeaderboard);
-          else if (action === 'keep') void this.runAccountAction(copy.account.manage, createLeaderboardPasskey);
-          else if (action === 'sign-up') this.openDialog('sign-up');
-          else this.openDialog('sign-in');
-        });
-        return button;
-      }),
+    if (hint !== null) render(view.hint ?? '', hint);
+    render(
+      view.href !== undefined
+        ? html`<a
+            href=${leaderboardLink(view.href, location.hostname)}
+            target="_blank"
+            rel="noopener"
+            title=${playerText().shell.yourPage}
+            >${view.label}</a
+          >`
+        : view.label,
+      label,
+    );
+    // Localization must not restore the boot's "checking" placeholder over the current account.
+    render(
+      view.actions.map(
+        (action) =>
+          html`<button
+            class="btn"
+            type="button"
+            data-size="sm"
+            data-variant=${action !== 'sign-up' && action !== 'keep' ? 'outline' : nothing}
+            @click=${() => {
+              const copy = playerText();
+              if (action === 'sign-out') void this.runAccountAction(copy.account.signOut, signOutOfLeaderboard);
+              else if (action === 'keep') void this.runAccountAction(copy.account.manage, createLeaderboardPasskey);
+              else if (action === 'sign-up') this.openDialog('sign-up');
+              else this.openDialog('sign-in');
+            }}
+          >
+            ${startAccountActionLabels()[action]}
+          </button>`,
+      ),
+      actions,
     );
   }
   private setSubmitting(value: boolean): void {
