@@ -5,6 +5,7 @@ import {
   bottomShiftableGaugeItems,
   laneOptionItems,
   laneOptionSource,
+  menuLaneCovers,
   practiceGaugeItems,
 } from './play-option-items.ts';
 
@@ -96,4 +97,20 @@ test('battle modes carry their source and two-player play is offered under every
     { text: '2P PLAY (????)', value: 'TWO-PLAYER' },
   ]);
   expect(ac.filter((item) => item.value === 'TWO-PLAYER')).toHaveLength(1);
+});
+
+test('turns the menu covers into a cover-set that leaves the LIFT alone', () => {
+  expect(
+    menuLaneCovers({ hiddenSudden1P: 'SUDDEN', hiddenSudden2P: 'HID+SUD', shutter: 0.4, laneCover: true }),
+  ).toEqual([
+    { side: '1P', sudden: 0.4, suddenOn: true, hidden: 0.4, hiddenOn: false },
+    { side: '2P', sudden: 0.4, suddenOn: true, hidden: 0.4, hiddenOn: true },
+  ]);
+  const hidden = menuLaneCovers({ hiddenSudden1P: 'HIDDEN', hiddenSudden2P: 'OFF', shutter: 0.25, laneCover: false });
+  expect(hidden.map((cover) => [cover.suddenOn, cover.hiddenOn])).toEqual([
+    [false, false],
+    [false, false],
+  ]);
+  expect(hidden[0]).not.toHaveProperty('lift');
+  expect(hidden[0]).not.toHaveProperty('liftOn');
 });

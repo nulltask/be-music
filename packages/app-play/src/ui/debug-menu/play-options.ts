@@ -14,19 +14,21 @@ import {
   KEYS_FILTER_CYCLE,
   PLAY_OPTION_CHOICES,
   SORT_CYCLE,
+  type PlayOptions,
 } from '@be-music/player-scene-model';
 import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { DebugMenu } from './index.ts';
-import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
+import { bottomShiftableGaugeItems, laneOptionItems, menuLaneCovers, practiceGaugeItems } from './play-option-items.ts';
 import { buildPracticeRangePicker } from './practice-range.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
  * Play options — the playMode / chartOptions / assists / judge / gauge settings that get recorded into the replay.
  * Two-way synced with the LR2 select scene's PLAY OPTION panel where a counterpart exists (the panel pushes user
- * edits back through `onPlayOptionsChange`; these controllers push through `setPlayOptions`). All of them are latched
- * at song start and DISABLED during a play — mid-song changes never apply.
+ * edits back through `onPlayOptionsChange`; these controllers push through `setPlayOptions`). Most are latched at
+ * song start and DISABLED during a play. The ones a play takes live (hi-speed, the covers and LIFT, the judge timing
+ * and CONSTANT visibility) and the select screen's sort and filters, which a play does not read, stay enabled.
  */
 export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void {
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
@@ -407,27 +409,18 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
     }),
   );
   // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
-  // the bar under the cursor.
-  trackPlayOption(
-    selectBinding(folder, this.guiState, 'sort', 'Sort', [...SORT_CYCLE]).on('change', ({ value }) => {
-      this.setPlayOptions({ sort: value });
-    }),
-  );
-  trackPlayOption(
-    selectBinding(folder, this.guiState, 'keysFilter', 'Key filter', [...KEYS_FILTER_CYCLE]).on(
-      'change',
-      ({ value }) => {
-        this.setPlayOptions({ keysFilter: value });
-      },
-    ),
-  );
-  trackPlayOption(
-    selectBinding(folder, this.guiState, 'difficultyFilter', 'Difficulty filter', [...DIFFICULTY_FILTER_CYCLE]).on(
-      'change',
-      ({ value }) => {
-        this.setPlayOptions({ difficultyFilter: value });
-      },
-    ),
+  // the bar under the cursor. A play does not read them, so they stay enabled during one.
+  selectBinding(folder, this.guiState, 'sort', 'Sort', [...SORT_CYCLE]).on('change', ({ value }) => {
+    this.setPlayOptions({ sort: value });
+  });
+  selectBinding(folder, this.guiState, 'keysFilter', 'Key filter', [...KEYS_FILTER_CYCLE]).on('change', ({ value }) => {
+    this.setPlayOptions({ keysFilter: value });
+  });
+  selectBinding(folder, this.guiState, 'difficultyFilter', 'Difficulty filter', [...DIFFICULTY_FILTER_CYCLE]).on(
+    'change',
+    ({ value }) => {
+      this.setPlayOptions({ difficultyFilter: value });
+    },
   );
   this.hsFixController = selectBinding(folder, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!);
   trackPlayOption(this.hsFixController.on('change', ({ value }) => this.setPlayOptions({ hsFix: value })));
@@ -441,27 +434,29 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
       this.setPlayOptions({ displayAreaInfo: value });
     }),
   );
+  // SUDDEN+ / HIDDEN+, the switch and the height stay enabled during a play and move its covers live, as LIFT does.
+  const setCovers = (changes: Partial<PlayOptions>): void => {
+    this.setPlayOptions(changes);
+    this.gameplayView?.controller.dispatch({
+      type: 'cover',
+      command: { type: 'cover-set', covers: menuLaneCovers(this.guiState) },
+    });
+  };
   for (const key of ['hiddenSudden1P', 'hiddenSudden2P'] as const) {
-    trackPlayOption(
-      selectBinding(
-        folder,
-        this.guiState,
-        key,
-        key === 'hiddenSudden1P' ? 'Effect 1P' : 'Effect 2P',
-        PLAY_OPTION_CHOICES[key]!,
-      ).on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
-    );
+    selectBinding(
+      folder,
+      this.guiState,
+      key,
+      key === 'hiddenSudden1P' ? 'Effect 1P' : 'Effect 2P',
+      PLAY_OPTION_CHOICES[key]!,
+    ).on('change', ({ value }) => setCovers({ [key]: value }));
   }
-  trackPlayOption(
-    folder
-      .addBinding(this.guiState, 'laneCover', { label: 'Lane cover' })
-      .on('change', ({ value }) => this.setPlayOptions({ laneCover: value })),
-  );
-  trackPlayOption(
-    folder
-      .addBinding(this.guiState, 'shutter', { label: 'Cover height', min: 0, max: 1, step: 0.01 })
-      .on('change', ({ value }) => this.setPlayOptions({ shutter: value })),
-  );
+  folder
+    .addBinding(this.guiState, 'laneCover', { label: 'Lane cover' })
+    .on('change', ({ value }) => setCovers({ laneCover: value }));
+  folder
+    .addBinding(this.guiState, 'shutter', { label: 'Cover height', min: 0, max: 1, step: 0.01 })
+    .on('change', ({ value }) => setCovers({ shutter: value }));
   trackPlayOption(
     folder
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
