@@ -156,3 +156,21 @@ describe('manual play: the physical input behind a key', () => {
     expect(replayed.replay?.inputs).toEqual(inputs);
   });
 });
+
+describe('manual play: the control buttons pressed during it', () => {
+  test('the replay records START / SELECT as the host sends them', async () => {
+    const live = await observePlay({
+      driver: 'manual',
+      chart: basicChart(),
+      reportsKeyReleases: true,
+      script: [
+        { atMs: 400, command: { kind: 'control-input', button: '1P-start', action: 'down', code: 'KeyQ' } },
+        { atMs: 450, command: { kind: 'control-input', button: '1P-start', action: 'up', code: 'KeyQ' } },
+      ],
+    });
+    expect(live.replay!.play.controlInputs?.map((input) => `${input.action} ${input.button} ${input.code}`)).toEqual([
+      'down 1P-start KeyQ',
+      'up 1P-start KeyQ',
+    ]);
+  });
+});

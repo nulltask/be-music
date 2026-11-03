@@ -139,6 +139,22 @@ export interface ReplayInputEvent {
   inferred?: true;
 }
 
+/**
+ * A press or release of a control button that is not a lane: START / SELECT (`'1P-start'`, `'2P-select'`, as the host
+ * names them), on the chart clock of `inputs`. Diagnostic only: what the button did shows in `viewChanges` and the
+ * rest, and simulators don't read it.
+ */
+export interface ReplayControlInputEvent {
+  /** Monotonic sequence number, shared with nothing else — the order of control inputs at one `timeUs`. */
+  seq: number;
+  timeUs: number;
+  action: ReplayInputAction;
+  /** The logical button. */
+  button: string;
+  /** The physical input (`ReplayInputEvent.code`). */
+  code?: string;
+}
+
 export interface ReplayJudgeRank {
   /**
    * Initial judgerank on the internal LR2 percent axis (VERY HARD = 25 / HARD = 50 / NORMAL = 75 / EASY = 100),
@@ -322,6 +338,8 @@ export interface ReplayPlay {
   view?: ReplayViewState;
   /** Changes to {@link view} during the play, in chart-time order. */
   viewChanges?: ReplayViewChange[];
+  /** The control buttons (START / SELECT) pressed and let go during the play, in chart-time order. */
+  controlInputs?: ReplayControlInputEvent[];
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
   native?: Record<string, string | number | boolean | null>;
 }
@@ -728,6 +746,32 @@ function parseInputs(value: unknown): ReplayInputEvent[] {
   });
 }
 
+function parseControlInputs(value: unknown): ReplayControlInputEvent[] {
+  if (!Array.isArray(value)) throw new ReplayParseError('play.controlInputs: expected an array');
+  return value.map((entry, index) => {
+    const path = `play.controlInputs[${index}]`;
+    const record = expectRecord(entry, path);
+    const action = record.action;
+    if (action !== 'down' && action !== 'up') throw new ReplayParseError(`${path}.action: expected 'down' | 'up'`);
+    if (typeof record.button !== 'string' || record.button.length === 0) {
+      throw new ReplayParseError(`${path}.button: expected a non-empty string`);
+    }
+    const event: ReplayControlInputEvent = {
+      seq: expectFiniteNumber(record.seq, `${path}.seq`),
+      timeUs: expectFiniteNumber(record.timeUs, `${path}.timeUs`),
+      action,
+      button: record.button,
+    };
+    if (record.code !== undefined) {
+      if (typeof record.code !== 'string' || record.code.length === 0) {
+        throw new ReplayParseError(`${path}.code: expected a non-empty string`);
+      }
+      event.code = record.code;
+    }
+    return event;
+  });
+}
+
 function parsePlay(play: Record<string, unknown>): ReplayPlay {
   const mode = play.mode;
   if (mode !== 'manual' && mode !== 'auto') {
@@ -805,6 +849,10 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.viewChanges !== undefined) {
     const changes = parseReplayViewChanges(play.viewChanges, 'play.viewChanges');
     if (changes.length > 0) parsed.viewChanges = changes;
+  }
+  if (play.controlInputs !== undefined) {
+    const inputs = parseControlInputs(play.controlInputs);
+    if (inputs.length > 0) parsed.controlInputs = inputs;
   }
   if (play.judgeAlgorithm !== undefined) {
     if (!['combo', 'duration', 'lowest'].includes(play.judgeAlgorithm as string)) {

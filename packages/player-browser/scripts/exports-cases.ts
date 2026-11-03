@@ -1001,6 +1001,16 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.keyboardEventToTokens({ code: 'ShiftLeft' });
     },
   });
+  define('player-browser.effectiveControlKey', {
+    run: () => {
+      playerWebCoreAPI.effectiveControlKey({ '1P-start': ['tab'] }, '1P-start');
+    },
+  });
+  define('player-browser.resolveControlButtons', {
+    run: () => {
+      playerWebCoreAPI.resolveControlButtons({ laneKeys: { beat: { '11': ['a'] } } });
+    },
+  });
   define('player-browser.resolveRendererPreference', {
     run: () => {
       playerWebCoreAPI.resolveRendererPreference('?renderer=webgl');

@@ -163,6 +163,7 @@ export function createResultScene(kit: ResultSceneKit, options: ResultSceneOptio
   });
   return new FamilyResultScene(session, createResultView(kit, session, options), {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
+    ...(options.controls !== undefined ? { controls: options.controls } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
 }

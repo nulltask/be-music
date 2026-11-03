@@ -63,3 +63,5 @@
 - [0036: 譜面指定の M-SUDDEN・スキン水準の CRAZY・旧別名をプレイフィールドの水準で実行する](./0036-chart-authored-skin-level-options.ja.md)
 
 - [0037: バックスピンスクラッチの終点を、記録したスクラッチの回転方向で判定する](./0037-scratch-spin-input.ja.md)
+
+- [0038: 各画面は操作ボタンを、スキン系統のキー操作で読む](./0038-control-buttons-follow-skin-family.ja.md)

@@ -7,7 +7,13 @@ function keyEvent(code: string, target?: { tagName?: string; isContentEditable?:
 
 describe('PLAY_SCENE_KEY_CODES', () => {
   test('lists the keys the play scene handles itself', () => {
-    expect([...PLAY_SCENE_KEY_CODES].sort()).toEqual(['ArrowDown', 'ArrowUp', 'Backspace', 'Escape', 'F5', 'Space']);
+    expect([...PLAY_SCENE_KEY_CODES].sort()).toEqual(['ArrowDown', 'ArrowUp', 'Backspace', 'Escape', 'F5', 'Pause']);
+  });
+
+  test('Tab is the play’s pause key unless a lane takes it, and Space is a lane (the 1P turntable)', () => {
+    expect(shouldSkipPlayKey(keyEvent('Tab'))).toBe(true);
+    expect(shouldSkipPlayKey(keyEvent('Tab'), new Set(['tab']))).toBe(false);
+    expect(shouldSkipPlayKey(keyEvent('Space'))).toBe(false);
   });
 });
 

@@ -60,6 +60,7 @@ import {
   handleVisibilityChange,
   handleWindowBlur,
   handleWindowFocus,
+  recordControlKey,
   togglePause,
 } from './play-input.ts';
 import { decodePlayAudio, disposeBGAVideos, disposePlayAudio, openPlayAudio, prepareBGA } from './play-media.ts';
@@ -778,6 +779,7 @@ export class PlaySession extends PlaySessionState {
 
   readonly handleQuitHoldKeyUp = (event: KeyboardEvent): void => {
     this.quitHold.handleKeyUp(event);
+    recordControlKey(this, 'up', event);
   };
 
   readonly cancelQuitHold = (): void => {

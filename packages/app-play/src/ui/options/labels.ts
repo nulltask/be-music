@@ -143,7 +143,12 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
       [`2P key ${key}`, `2P 鍵盤 ${key}`],
     ]),
     ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((key) => [`Key ${key}`, `ボタン ${key}`]),
+    ...['1P', '2P'].flatMap((side) => [
+      [`${side} START`, `${side} START`],
+      [`${side} SELECT`, `${side} SELECT`],
+    ]),
   ]),
+  'Built-in skin controls': '内蔵スキンの操作',
   'Reset keys to defaults': 'キーを既定に戻す',
   // Tempo & course
   Enabled: '有効',

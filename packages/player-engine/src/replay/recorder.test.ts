@@ -222,6 +222,21 @@ describe('replay recorder', () => {
     ]);
   });
 
+  test('records the control buttons pressed during the play, with their physical keys', () => {
+    const recorder = createReplayRecorder(makeRecorderOptions());
+    recorder.recordControlInput('down', 1.25, '1P-start', 'KeyQ');
+    recorder.recordControlInput('up', 1.5, '1P-start', '');
+    recorder.recordControlInput('down', 2, '', 'KeyW');
+    const replay = recorder.finalize({ summary: makeSummary() });
+    expect(replay.play.controlInputs).toEqual([
+      { seq: 0, timeUs: 1_250_000, action: 'down', button: '1P-start', code: 'KeyQ' },
+      { seq: 1, timeUs: 1_500_000, action: 'up', button: '1P-start' },
+    ]);
+    expect(createReplayRecorder(makeRecorderOptions()).finalize({ summary: makeSummary() }).play.controlInputs).toBe(
+      undefined,
+    );
+  });
+
   test('finalize caches the native result with judge counts, empty POORs, maxCombo, and gauge', () => {
     const recorder = createReplayRecorder(
       makeRecorderOptions({

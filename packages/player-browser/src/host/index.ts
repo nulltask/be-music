@@ -58,3 +58,15 @@ export { SceneController, createSelectController, type SceneStore } from './cont
 // What a key config reads: a key press as the lane tokens it gives, and the keys a play keeps for itself.
 export { keyboardEventToTokens } from '../runtime/web-input-runtime.ts';
 export { PLAY_SCENE_KEY_CODES } from '../session/play/play-keys.ts';
+export {
+  CONTROL_KEY_CONFIG,
+  effectiveControlKey,
+  resolveControlButtons,
+  type ControlButton,
+  type ControlButtonMap,
+  type ControlKeyConfigEntry,
+  type ControlKeyId,
+  type ControlKeyOverrides,
+  type ControlScheme,
+  type ControlSettings,
+} from '../session/controls/control-buttons.ts';

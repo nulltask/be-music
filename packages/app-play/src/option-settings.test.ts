@@ -190,6 +190,8 @@ describe('captureOptionSettings', () => {
       autoScratch2P: true,
       anyKey: true,
       laneKeys: { beat: { '11': ['a'] } },
+      controlKeys: { '1P-start': ['tab'] },
+      builtInControlScheme: 'beatoraja',
       sort: 'OFF',
       keysFilter: 'ALL',
       difficultyFilter: 'ALL',

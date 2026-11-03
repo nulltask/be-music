@@ -1,6 +1,7 @@
 import { createHiSpeedState, createPlayState } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { handleSharedEngineExitKey } from './play-input.ts';
+import { createPlayerInputSignalBus } from '@be-music/player-engine/signals';
+import { handleSharedEngineExitKey, recordControlKey } from './play-input.ts';
 import { PlaySession } from './play-session.ts';
 
 function key(key: string, overrides: Partial<KeyboardEvent> = {}): KeyboardEvent {
@@ -127,7 +128,7 @@ describe('play adjustment keys', () => {
   test('held one-shot keys do not pause, restart or switch floating mode', () => {
     const play = new PlaySession();
     const restart = vi.spyOn(play, 'requestRestart');
-    for (const name of ['Space', 'F5', 'Numpad0']) {
+    for (const name of ['Pause', 'Tab', 'F5', 'Numpad0']) {
       handleSharedEngineExitKey(play, key(name, { repeat: true }));
     }
     expect(play.paused).toBe(false);
@@ -143,5 +144,35 @@ describe('play adjustment keys', () => {
     handleSharedEngineExitKey(play, key('PageDown', { repeat: true }));
     expect(play.getHiSpeed()).toBeLessThan(once);
     expect(play.playState.view.covers[0]?.suddenOn).not.toBe(true);
+  });
+});
+
+describe('play pause and control keys', () => {
+  test('Pause and Tab pause and resume the play, and Space is no longer the pause key', () => {
+    const play = new PlaySession();
+    handleSharedEngineExitKey(play, key('Space'));
+    expect(play.paused).toBe(false);
+    handleSharedEngineExitKey(play, key('Pause'));
+    expect(play.paused).toBe(true);
+    handleSharedEngineExitKey(play, key('Tab'));
+    expect(play.paused).toBe(false);
+  });
+
+  test('START and SELECT go to the engine for the replay, with the physical key; a key the chart’s lanes take does not', () => {
+    const inputSignals = createPlayerInputSignalBus();
+    const play = new PlaySession({ controlKeys: { '1P-select': ['z'] } });
+    play.sharedEngineInputSignals = inputSignals;
+    handleSharedEngineExitKey(play, key('KeyQ'));
+    recordControlKey(play, 'up', key('KeyQ'));
+    // Auto-repeats record nothing.
+    handleSharedEngineExitKey(play, key('KeyQ', { repeat: true }));
+    expect(inputSignals.drainCommands()).toEqual([
+      { kind: 'control-input', button: '1P-start', action: 'down', code: 'KeyQ' },
+      { kind: 'control-input', button: '1P-start', action: 'up', code: 'KeyQ' },
+    ]);
+    // SELECT moved to Z, which the chart's 1P key 1 takes: it is the lane.
+    play.preparedChart = { laneBindings: [{ inputTokens: ['z'] }] } as unknown as typeof play.preparedChart;
+    recordControlKey(play, 'down', key('KeyZ'));
+    expect(inputSignals.drainCommands()).toEqual([]);
   });
 });

@@ -12,6 +12,7 @@ import {
   type PlayScene,
   type ResultSceneKit,
   type SelectScene,
+  type ControlSettings,
 } from '@be-music/player-browser/host';
 import {
   computeCourseReplayFingerprint,
@@ -65,6 +66,8 @@ import type { LastPlay } from './play.ts';
 export const disposeKeepingAudioTail: PlayDispose<PlayScene> = (play) => play.dispose({ preserveAudioTail: true });
 
 export interface ResultRouteDeps {
+  /** The player's keys the screen reads its control buttons by (`ControlSettings`), as it opens. */
+  readonly controls: () => ControlSettings;
   /** The scene router: the result takes the stage from the play, and leaves it before the next stage or a retry. */
   readonly router: Pick<SceneRouter<PlayerScene, PlayScene, SelectScene>, 'show' | 'leave'>;
   /** The library: the chart's asset source. */
@@ -131,6 +134,7 @@ export class ResultRoute {
    */
   public lastBeatorajaChart: { resolved: ResolvedPlayChart; chartPath: string } | undefined;
   private readonly router: ResultRouteDeps['router'];
+  private readonly controls: ResultRouteDeps['controls'];
   private readonly library: ResultRouteDeps['library'];
   private readonly records: ResultRouteDeps['records'];
   private readonly courses: ResultRouteDeps['courses'];
@@ -156,6 +160,7 @@ export class ResultRoute {
     this.replaySlots = deps.replaySlots;
     this.setStatus = deps.setStatus;
     this.router = deps.router;
+    this.controls = deps.controls;
     this.library = deps.library;
     this.records = deps.records;
     this.courses = deps.courses;
@@ -364,6 +369,7 @@ export class ResultRoute {
             });
           };
     const resultScene = createResultScene(kit, {
+      controls: this.controls(),
       result,
       run,
       source: resolveChartSource(this.library.collection, chartEntry),
@@ -502,6 +508,7 @@ export class ResultRoute {
     const kit: ResultSceneKit =
       lr2ResultSkin !== undefined ? { family: 'lr2', skin: lr2ResultSkin } : this.builtIn.builtInKit;
     const resultScene = createResultScene(kit, {
+      controls: this.controls(),
       // The LR2 skin shows the course of the result (`result.course`): the stage's course, or the course run.
       result: lr2ResultSkin !== undefined && courseInfo !== undefined ? { ...data, course: courseInfo } : data,
       run,
