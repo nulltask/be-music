@@ -67,6 +67,8 @@ export class ChildPool {
   private graphicsCursor = 0;
   private readonly texts: Text[] = [];
   private textCursor = 0;
+  /** How many texts the previous pass claimed: the ones past it showed nothing and can take any string. */
+  private lastTextCount = 0;
   /**
    * Per-bucket count of consecutive frames where the bucket's high-water mark exceeded its actual usage by more than
    * {@link CHILD_POOL_TRIM_SLACK}. When the count crosses {@link CHILD_POOL_TRIM_AFTER_FRAMES} we shrink the bucket
@@ -149,8 +151,15 @@ export class ChildPool {
    * Returns a parented `Text` ready to receive `text` (and optionally `style`) updates. Text objects are reused
    * verbatim — re-assigning the same `style` triggers Pixi's paragraph rebuild, so callers should update `style`
    * only when something actually changed.
+   *
+   * Pass the `content` (and `style`) the caller is about to set, and the pool hands back a node that showed exactly that
+   * last frame when one is still unclaimed, so a label keeps its rasterized texture: handed out by position alone, a
+   * node whose neighbours shifted gets another string, and Pixi drops the texture of the string it held and rasterizes
+   * it again for whichever node takes it next. The node moves into this draw's slot, child order included, so the
+   * texts still stack in the order they were acquired.
    */
-  public acquireText(): Text {
+  public acquireText(content?: string, style?: unknown): Text {
+    if (content !== undefined) this.claimMatchingText(content, style);
     let text = this.texts[this.textCursor];
     if (!text) {
       text = new Text();
@@ -165,6 +174,58 @@ export class ChildPool {
     text.label = '';
     this.textCursor += 1;
     return text;
+  }
+
+  /**
+   * Puts the right node at the cursor for `content`: the unclaimed text that showed it last frame (in `style`, when one
+   * does), else one that showed nothing last frame, else a fresh node — never a node that showed another string last
+   * frame, which a later draw of this pass may still want back. The node moves in the bucket and in the text host's
+   * child order together, so the texts stack in the order they were acquired.
+   */
+  private claimMatchingText(content: string, style: unknown): void {
+    const cursor = this.textCursor;
+    const texts = this.texts;
+    const current = texts[cursor];
+    // Past the end of the bucket a fresh node is made anyway.
+    if (current === undefined) return;
+    const sameStyle = (node: Text): boolean => style === undefined || node.style === style;
+    if (current.text === content && sameStyle(current)) return;
+    let found = -1;
+    for (let index = cursor + 1; index < texts.length; index += 1) {
+      const node = texts[index]!;
+      if (node.text !== content) continue;
+      if (sameStyle(node)) {
+        found = index;
+        break;
+      }
+      if (found === -1) found = index;
+    }
+    if (found !== -1) {
+      // The node at the cursor already holds the string; one elsewhere matching only the string is no better.
+      if (current.text === content && !sameStyle(texts[found]!)) return;
+      this.moveTextToCursor(found);
+      return;
+    }
+    if (current.text === content || cursor >= this.lastTextCount) return;
+    // No node shows this string: a spare that showed nothing last frame, or a new node, takes it.
+    const spare = Math.max(cursor + 1, this.lastTextCount);
+    if (spare < texts.length) {
+      this.moveTextToCursor(spare);
+      return;
+    }
+    const fresh = new Text();
+    this.textHost.addChildAt(fresh, this.textHost.getChildIndex(current));
+    texts.splice(cursor, 0, fresh);
+  }
+
+  /** Swaps the text at `index` with the one at the cursor, in the bucket and in the text host. */
+  private moveTextToCursor(index: number): void {
+    const texts = this.texts;
+    const current = texts[this.textCursor]!;
+    const node = texts[index]!;
+    texts[index] = current;
+    texts[this.textCursor] = node;
+    this.textHost.swapChildren(current, node);
   }
 
   /** Multiply the opacity of only the objects acquired by this draw, preserving their authored alpha. */
@@ -207,6 +268,7 @@ export class ChildPool {
     for (let i = this.textCursor; i < this.texts.length; i++) {
       this.texts[i]!.visible = false;
     }
+    this.lastTextCount = this.textCursor;
     this.idleFramesSprites = trimIdleBucket(this.sprites, this.spriteCursor, this.idleFramesSprites);
     this.idleFramesGraphics = trimIdleBucket(this.graphics, this.graphicsCursor, this.idleFramesGraphics);
     this.idleFramesTexts = trimIdleBucket(this.texts, this.textCursor, this.idleFramesTexts);
