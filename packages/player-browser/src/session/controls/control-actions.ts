@@ -56,6 +56,7 @@ export const CONTROL_ACTION_IDS = [
   'select.random',
   'select.activate',
   'select.open-folder',
+  'select.difficulty',
   'select.auto',
   'select.back',
   'select.close-folder',
