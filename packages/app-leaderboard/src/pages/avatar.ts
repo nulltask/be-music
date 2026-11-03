@@ -3,7 +3,7 @@ import { generatedAvatarSVG } from '../avatars.ts';
 import { openDatabase } from '../db/client.ts';
 import { profile } from '../db/schema.ts';
 import { resolveFormerHandle } from '../profiles.ts';
-import type { PageContext } from './page.tsx';
+import type { PageContext } from './page.ts';
 
 /** Icons change rarely and their URLs carry a version, so caches keep them a day. */
 const AVATAR_CACHE = 'public, max-age=86400';

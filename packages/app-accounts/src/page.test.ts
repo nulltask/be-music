@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { accountNotice, renderAccountPage } from './page.ts';
+import { accountNotice, renderAccountPage as renderPage } from './page.ts';
+
+// Ignore template source indentation while preserving the existing markup/content assertions.
+function renderAccountPage(input: Parameters<typeof renderPage>[0]): string {
+  return renderPage(input)
+    .replace(/\s+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+>/g, '>')
+    .replace(/>\s+([^<]*?)\s+</g, '>$1<');
+}
 
 function buttonHTML(page: string, action: string): string {
   const button = page.match(new RegExp(`<button[^>]*data-action="${action}"[^>]*>[\\s\\S]*?</button>`));

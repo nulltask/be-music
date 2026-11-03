@@ -608,39 +608,9 @@ export function detectPlayerLang(): PlayerLang {
   return typeof navigator === 'undefined' ? 'en' : resolvePlayerLang(navigator.language);
 }
 
-/**
- * Remembers `next` and writes it onto the shell. Elements opt in with `data-i18n`, `data-i18n-aria`,
- * `data-i18n-placeholder` or `data-i18n-title`, whose value is a key of `shell`.
- */
-export function setPlayerLang(next: PlayerLang, root?: ParentNode): void {
+/** Selects the document language and notifies the bindings that own localized content. */
+export function setPlayerLang(next: PlayerLang): void {
   lang = next;
   if (typeof document !== 'undefined') document.documentElement.lang = next;
-  const scope = root ?? (typeof document === 'undefined' ? undefined : document);
-  if (scope !== undefined) applyPlayerCopy(scope);
   for (const listener of langListeners) listener();
-}
-
-export function applyPlayerCopy(root: ParentNode): void {
-  const shell = playerText().shell;
-  const write = (selector: string, assign: (element: HTMLElement, value: string) => void): void => {
-    for (const element of root.querySelectorAll<HTMLElement>(selector)) {
-      const key = element.getAttribute(selector.slice(1, -1));
-      if (key === null || !(key in shell)) continue;
-      const value = shell[key as keyof typeof shell];
-      if (typeof value === 'string') assign(element, value);
-    }
-  };
-  write('[data-i18n]', (element, value) => {
-    element.textContent = value;
-  });
-  write('[data-i18n-aria]', (element, value) => {
-    element.setAttribute('aria-label', value);
-  });
-  write('[data-i18n-placeholder]', (element, value) => {
-    element.setAttribute('placeholder', value);
-  });
-  write('[data-i18n-title]', (element, value) => {
-    element.setAttribute('title', value);
-  });
-  root.querySelector('footer.service-page-footer nav')?.setAttribute('aria-label', shell.services);
 }

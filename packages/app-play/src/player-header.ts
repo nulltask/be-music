@@ -1,4 +1,6 @@
-import { renderServiceHeader, serviceSkipLink, type ServiceHeaderAccount } from '@be-music/service-web-theme';
+import { html, render, type TemplateResult } from 'lit';
+import { type ServiceHeaderAccount } from '@be-music/service-web-theme';
+import { serviceHeaderTemplate, serviceSkipLinkTemplate } from '@be-music/service-web-theme/client';
 import {
   enterTouchFullscreen,
   getFullscreenElement,
@@ -87,7 +89,7 @@ export async function togglePlayerHeaderFullscreen(
  * The shared header for Play: it spans the viewport, Settings sits where other services put the Play link, and
  * fullscreen sits beside Settings.
  */
-export function playerServiceHeaderHTML(input: {
+export function playerServiceHeaderTemplate(input: {
   locale: PlayerLang;
   hostname: string;
   requestURL: string;
@@ -98,7 +100,7 @@ export function playerServiceHeaderHTML(input: {
   settingsOpen?: boolean;
   /** The player can be installed, so Install shows. */
   installable?: boolean;
-}): string {
+}): TemplateResult {
   const signedIn: ServiceHeaderAccount | undefined =
     input.account === undefined
       ? undefined
@@ -111,7 +113,7 @@ export function playerServiceHeaderHTML(input: {
     input.account === undefined
       ? '#sign-in'
       : leaderboardLink(`/players/${encodeURIComponent(input.account.handle)}`, input.hostname);
-  const html = `${serviceSkipLink(input.locale)}${renderServiceHeader({
+  return html`${serviceSkipLinkTemplate(input.locale)}${serviceHeaderTemplate({
     locale: input.locale,
     title: 'Be-Music Play',
     homeHref: '/',
@@ -124,14 +126,9 @@ export function playerServiceHeaderHTML(input: {
     spanViewport: true,
     accountHref,
     account: signedIn,
+    accountNewTab: true,
     requestURL: input.requestURL,
   })}`;
-  // A signed-in account opens its Leaderboard page in a new tab, so the loaded library stays.
-  if (input.account === undefined) return html;
-  return html.replace(
-    'data-service-header="account" href="',
-    'data-service-header="account" target="_blank" rel="noopener" href="',
-  );
 }
 
 /** What a click in the header should do. `sign-in` only while signed out. */
@@ -212,6 +209,12 @@ export function bindPlayerHeader(next: PlayerHeaderActions): void {
 
 /** Paints the header and keeps it on the player's language. Clicks stay on this element across repaints. */
 export function mountPlayerHeader(root: HTMLElement): void {
+  if (host === root) {
+    paint();
+    return;
+  }
+  // Adopt any server fallback once; subsequent updates belong to this render root.
+  root.replaceChildren();
   host = root;
   root.addEventListener('click', onClick);
   onPlayerLangChange(() => paint());
@@ -225,15 +228,18 @@ function paint(): void {
   if (root === undefined) return;
   const hostname = typeof location === 'undefined' ? 'localhost' : location.hostname;
   const requestURL = typeof location === 'undefined' ? '/' : `${location.pathname}${location.search}`;
-  root.innerHTML = playerServiceHeaderHTML({
-    locale: playerLang(),
-    hostname,
-    requestURL,
-    account,
-    fullscreenActive: getFullscreenElement(document) !== null,
-    settingsOpen,
-    installable,
-  });
+  render(
+    playerServiceHeaderTemplate({
+      locale: playerLang(),
+      hostname,
+      requestURL,
+      account,
+      fullscreenActive: getFullscreenElement(document) !== null,
+      settingsOpen,
+      installable,
+    }),
+    root,
+  );
 }
 
 function onClick(event: Event): void {
@@ -250,6 +256,10 @@ function onClick(event: Event): void {
   );
   if (kind === undefined) return;
   event.preventDefault();
+  if (kind === 'en' || kind === 'ja') {
+    const menu = host?.querySelector<HTMLElement>('#language-menu');
+    if (menu?.matches(':popover-open')) menu.hidePopover();
+  }
   runPlayerHeaderAction(kind);
 }
 
