@@ -47,6 +47,10 @@ test('renders the shared header with Settings where Play would be', () => {
   expect(html).toContain('lucide-maximize');
   expect(html.indexOf('data-service-header="settings"')).toBeLessThan(html.indexOf('data-service-header="fullscreen"'));
   expect(html).toContain('data-service-header="help" aria-haspopup="dialog" aria-controls="help-modal"');
+  expect(html).not.toContain('data-service-header="install"');
+  expect(
+    playerServiceHeaderHTML({ locale: 'en', hostname: 'localhost', requestURL: '/', installable: true }),
+  ).toContain('data-service-header="install"');
   expect(html.indexOf('data-service-header="help"')).toBeLessThan(html.indexOf('data-service-header="settings"'));
   expect(html).toContain('>Sign in</a>');
   expect(html).toContain('href="#main"');
@@ -75,6 +79,7 @@ test('Settings toggles the Options dialog and a signed-out account opens sign-in
     closest: (query: string) =>
       query === selector ? { lang: selector === '#language-menu a' ? 'ja' : undefined } : null,
   });
+  expect(classifyPlayerHeaderClick(hit('[data-service-header="install"]'), true)).toBe('install');
   expect(classifyPlayerHeaderClick(hit('[data-service-header="help"]'), true)).toBe('help');
   expect(classifyPlayerHeaderClick(hit('[data-service-header="settings"]'), true)).toBe('settings');
   expect(classifyPlayerHeaderClick(hit('[data-service-header="fullscreen"]'), true)).toBe('fullscreen');

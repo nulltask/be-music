@@ -22,6 +22,8 @@ export interface PlayerHeaderActions {
   toggleOptions?: (() => void) | null;
   /** Opens the Help dialog. `null` clears a binding. */
   openHelp?: (() => void) | null;
+  /** Installs the player, or explains how; the button shows only while {@link setPlayerHeaderInstallable} says so. */
+  install?: (() => void) | null;
   /** Opens the player's sign-in dialog. `null` clears a binding. */
   openSignIn?: (() => void) | null;
   /** Switches the player language in place, the same path as Help. */
@@ -31,6 +33,7 @@ export interface PlayerHeaderActions {
 const actions: {
   toggleOptions?: () => void;
   openHelp?: () => void;
+  install?: () => void;
   openSignIn?: () => void;
   selectLanguage: (lang: PlayerLang) => void;
 } = {
@@ -45,6 +48,8 @@ let pendingSignIn = false;
 let pendingHelp = false;
 /** Whether the Options dialog is open. The gear's `aria-expanded` follows it. */
 let settingsOpen = false;
+/** Whether the player can be installed here, so the header shows Install. */
+let installable = false;
 
 /** The document the header's fullscreen button reads. Fullscreen covers the play surface (`#main`) on every device. */
 export interface PlayerHeaderFullscreenDocument extends FullscreenDocumentLike {
@@ -91,6 +96,8 @@ export function playerServiceHeaderHTML(input: {
   fullscreenActive?: boolean;
   /** The Options dialog is open, so the gear is expanded. */
   settingsOpen?: boolean;
+  /** The player can be installed, so Install shows. */
+  installable?: boolean;
 }): string {
   const signedIn: ServiceHeaderAccount | undefined =
     input.account === undefined
@@ -108,6 +115,7 @@ export function playerServiceHeaderHTML(input: {
     locale: input.locale,
     title: 'Be-Music Play',
     homeHref: '/',
+    install: input.installable === true,
     help: true,
     settings: true,
     settingsOpen: input.settingsOpen === true,
@@ -130,7 +138,8 @@ export function playerServiceHeaderHTML(input: {
 export function classifyPlayerHeaderClick(
   target: { closest(selector: string): { lang?: string } | null },
   signedOut: boolean,
-): 'help' | 'settings' | 'fullscreen' | 'sign-in' | PlayerLang | undefined {
+): 'install' | 'help' | 'settings' | 'fullscreen' | 'sign-in' | PlayerLang | undefined {
+  if (target.closest('[data-service-header="install"]') !== null) return 'install';
   if (target.closest('[data-service-header="help"]') !== null) return 'help';
   if (target.closest('[data-service-header="fullscreen"]') !== null) return 'fullscreen';
   if (target.closest('[data-service-header="settings"]') !== null) return 'settings';
@@ -143,6 +152,13 @@ export function classifyPlayerHeaderClick(
 /** Remembers who is signed in and repaints the header. */
 export function setPlayerHeaderAccount(next: PlayerHeaderAccount | undefined): void {
   account = next;
+  paint();
+}
+
+/** Shows Install while the player can be installed here, and hides it once it is installed. */
+export function setPlayerHeaderInstallable(next: boolean): void {
+  if (installable === next) return;
+  installable = next;
   paint();
 }
 
@@ -179,6 +195,8 @@ export function bindPlayerHeader(next: PlayerHeaderActions): void {
       next.openHelp();
     }
   }
+  if (next.install === null) actions.install = undefined;
+  else if (next.install !== undefined) actions.install = next.install;
   if (next.openSignIn === null) {
     actions.openSignIn = undefined;
     pendingSignIn = false;
@@ -214,6 +232,7 @@ function paint(): void {
     account,
     fullscreenActive: getFullscreenElement(document) !== null,
     settingsOpen,
+    installable,
   });
 }
 
@@ -234,7 +253,13 @@ function onClick(event: Event): void {
   runPlayerHeaderAction(kind);
 }
 
-export function runPlayerHeaderAction(kind: 'help' | 'settings' | 'fullscreen' | 'sign-in' | PlayerLang): void {
+export function runPlayerHeaderAction(
+  kind: 'install' | 'help' | 'settings' | 'fullscreen' | 'sign-in' | PlayerLang,
+): void {
+  if (kind === 'install') {
+    actions.install?.();
+    return;
+  }
   if (kind === 'help') {
     if (actions.openHelp !== undefined) actions.openHelp();
     else pendingHelp = true;

@@ -12,6 +12,7 @@ import { optionSettingsSync } from './option-settings-sync.ts';
 import { checkBrowserCompat } from '@be-music/player-browser/collection';
 import { PlayerWebApp } from './app/app.ts';
 import { wireHelpModal, applyPlayerLanguage } from './help-modal.ts';
+import { wireInstallButton } from './install-button.ts';
 import { bindPlayerHeader, mountPlayerHeader } from './player-header.ts';
 import { PLAYER_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
@@ -68,6 +69,7 @@ if (header !== null) {
   bindPlayerHeader({ selectLanguage: applyPlayerLanguage });
 }
 wireHelpModal();
+wireInstallButton();
 
 // The installable app's offline shell (`service-worker/`): production builds only, and never under the test hook.
 if (

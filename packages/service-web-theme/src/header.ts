@@ -16,6 +16,8 @@ const SETTINGS_ICON =
   '<svg class="lucide lucide-settings" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>';
 const HELP_ICON =
   '<svg class="lucide lucide-circle-help" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>';
+const INSTALL_ICON =
+  '<svg class="lucide lucide-download" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>';
 const MAXIMIZE_ICON =
   '<svg class="lucide lucide-maximize" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
 const MINIMIZE_ICON =
@@ -38,6 +40,7 @@ const TEXT = {
     play: 'Play',
     playTitle: 'Play in the browser',
     help: 'Help',
+    install: 'Install',
     settings: 'Settings',
     fullscreen: 'Full screen',
     fullscreenExit: 'Exit full screen',
@@ -51,6 +54,7 @@ const TEXT = {
     play: 'プレイ',
     playTitle: 'ブラウザでプレイ',
     help: 'ヘルプ',
+    install: 'インストール',
     settings: '設定',
     fullscreen: 'フルスクリーン',
     fullscreenExit: 'フルスクリーン解除',
@@ -90,10 +94,11 @@ export function serviceSkipLink(locale: Locale): string {
  * click. Play's button opens its Options dialog, and `settingsOpen` sets `aria-expanded`. The two are never both shown.
  * `fullscreen` adds a button beside Settings (`data-service-header="fullscreen"`). Only Play sets it; the page toggles
  * fullscreen from the click. `help` adds a Help button in front of Settings (`data-service-header="help"`) that opens
- * the page's Help dialog (`#help-modal`); only Play sets it. Help, Settings and fullscreen are icon buttons that name
- * themselves in a tooltip on hover. `spanViewport` drops the centered `max-w-5xl` column so
- * the brand and the actions sit on the viewport edges, and hides the Beta badge below `sm`. Only Play sets it. The row
- * still has `px-4`, the header's own inset. The other services keep the centered column.
+ * the page's Help dialog (`#help-modal`); only Play sets it. `install` adds an Install button in front of Help
+ * (`data-service-header="install"`) while the page can be installed; only Play sets it. Install, Help, Settings and
+ * fullscreen are icon buttons that name themselves in a tooltip on hover. `spanViewport` drops the centered
+ * `max-w-5xl` column so the brand and the actions sit on the viewport edges, and hides the Beta badge below `sm`. Only
+ * Play sets it. The row still has `px-4`, the header's own inset. The other services keep the centered column.
  */
 export function renderServiceHeader(input: {
   locale: Locale;
@@ -102,6 +107,8 @@ export function renderServiceHeader(input: {
   playHref?: string;
   /** Help button in front of the Play slot. The page opens its `#help-modal` from the click. */
   help?: boolean;
+  /** Install button in front of Help, while the page can be installed. The page handles the click. */
+  install?: boolean;
   /** Settings button in the Play slot. `playHref` is ignored. */
   settings?: boolean;
   /** The Settings button's menu is open. */
@@ -123,6 +130,10 @@ export function renderServiceHeader(input: {
       : input.playHref === undefined
         ? ''
         : `<a class="btn" data-size="sm" href="${escapeHTML(input.playHref)}" title="${escapeHTML(t.playTitle)}" aria-label="${escapeHTML(t.play)}">${headerIcon(PLAY_ICON)}<span class="hidden md:inline">${t.play}</span></a>`;
+  const install =
+    input.install === true
+      ? `<button type="button" class="btn" data-size="icon-sm" data-service-header="install" data-tooltip="${escapeHTML(t.install)}" data-side="bottom" aria-label="${escapeHTML(t.install)}">${headerIcon(INSTALL_ICON)}</button>`
+      : '';
   const help =
     input.help === true
       ? `<button type="button" class="btn" data-size="icon-sm" data-service-header="help" aria-haspopup="dialog" aria-controls="help-modal" data-tooltip="${escapeHTML(t.help)}" data-side="bottom" aria-label="${escapeHTML(t.help)}">${headerIcon(HELP_ICON)}</button>`
@@ -140,7 +151,7 @@ export function renderServiceHeader(input: {
       : 'mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6';
   // Play's row also carries Help, Settings and fullscreen, so its badge steps aside on a phone to keep the row on screen.
   const badgeClass = input.spanViewport === true ? 'badge max-sm:hidden' : 'badge';
-  return `<header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur"><div class="${rowClass}"><div class="flex shrink-0 items-center gap-1"><a class="font-semibold tracking-tight whitespace-nowrap no-underline" href="${escapeHTML(input.homeHref)}">${escapeHTML(input.title)}</a><span class="${badgeClass}" data-variant="outline">Beta</span></div><nav class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2" aria-label="${t.nav}">${account}${help}${play}${fullscreen}${languageMenu}</nav></div></header>`;
+  return `<header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur"><div class="${rowClass}"><div class="flex shrink-0 items-center gap-1"><a class="font-semibold tracking-tight whitespace-nowrap no-underline" href="${escapeHTML(input.homeHref)}">${escapeHTML(input.title)}</a><span class="${badgeClass}" data-variant="outline">Beta</span></div><nav class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2" aria-label="${t.nav}">${account}${install}${help}${play}${fullscreen}${languageMenu}</nav></div></header>`;
 }
 
 function renderFullscreenButton(t: (typeof TEXT)[Locale], active: boolean): string {

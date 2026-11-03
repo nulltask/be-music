@@ -55,6 +55,18 @@ textarea {
 .shell.in-gameplay .player-service-header {
   display: none;
 }
+/* On a phone the row carries Install, Help, Settings and fullscreen too, so its gaps and the Sign in padding tighten. */
+@media (max-width: 639.98px) {
+  .player-service-header header > div {
+    column-gap: 0.5rem;
+  }
+  .player-service-header header nav {
+    gap: 2px;
+  }
+  .player-service-header [data-service-header='account'] {
+    padding-inline: 0.5rem;
+  }
+}
 
 /*
  * Installed, the window's title bar already names the app, so the header keeps only the Beta badge. With the window
@@ -669,10 +681,13 @@ textarea {
  * `.drop` ignores the pointer (drops land on the stage), so the
  * interactive parts take it back.
  */
+/* Basecoat pads a card's sections; these line up with the rest of the card instead. */
 .start-leaderboard,
 .start-audio,
 .compat-panel {
-  width: min(360px, calc(100vw - 96px));
+  align-self: stretch;
+  width: auto;
+  padding-inline: 0;
   pointer-events: auto;
   text-align: left;
 }
@@ -686,9 +701,15 @@ textarea {
 .start-leaderboard {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+}
+
+.start-leaderboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  padding-top: 16px;
-  border-top: 1px solid rgb(255 255 255 / 0.08);
+  flex-wrap: wrap;
 }
 
 .start-check {
@@ -701,30 +722,22 @@ textarea {
 }
 
 .start-account {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+  margin: 0;
   padding-left: 26px;
-  font-size: 12px;
-  color: #aab4c2;
-}
-
-.start-account-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(170 180 194 / 0.85);
 }
 
 /* The same state dot as the account chip: green signed in, amber anonymous, grey signed out. */
 .start-account-label::before {
   content: '';
-  flex-shrink: 0;
-  width: 7px;
-  height: 7px;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
   border-radius: 50%;
+  vertical-align: 1px;
   background: #6b7280;
 }
 .start-account[data-state='signed-in'] .start-account-label::before {
@@ -737,29 +750,22 @@ textarea {
 .start-account-label a {
   color: #f8fafc;
   text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .start-account-label a:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
+/* At the end of the row, and still at the end when a long label pushes it onto a line of its own. */
 .start-account-actions {
   display: flex;
   gap: 6px;
+  margin-left: auto;
 }
 
-.start-account-hint {
-  margin: 0;
-  padding-left: 26px;
-  font-size: 11px;
-  line-height: 1.5;
-  color: rgb(170 180 194 / 0.85);
-}
-.start-account-hint:empty {
-  display: none;
+/* The hint runs on from the account in the same note. */
+.start-account-hint:not(:empty)::before {
+  content: ' · ';
 }
 
 /*
@@ -770,8 +776,6 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-top: 16px;
-  border-top: 1px solid rgb(255 255 255 / 0.08);
 }
 .start-audio[hidden] {
   display: none;
@@ -814,8 +818,6 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-top: 14px;
-  border-top: 1px solid rgb(255 255 255 / 0.08);
 }
 
 .compat-panel-header {
@@ -928,9 +930,21 @@ textarea {
   color: #ffd6dc;
 }
 
-.compat-panel--fail {
-  /* The divider turns red too: when the player cannot run, the check should not look quiet. */
-  border-top-color: rgb(251 113 133 / 0.55);
+/* A passing check is one quiet line; a failing one keeps its "System check" label and opens by itself. */
+.compat-panel--ok .compat-panel-eyebrow {
+  display: none;
+}
+.compat-panel--ok .compat-panel-status {
+  font-size: 11px;
+  font-weight: 500;
+}
+.compat-panel--ok .compat-panel-badge {
+  width: 16px;
+  height: 16px;
+}
+.compat-panel--ok .compat-panel-badge-icon {
+  width: 12px;
+  height: 12px;
 }
 
 .compat-panel-sections {
@@ -1362,6 +1376,14 @@ textarea {
   text-overflow: ellipsis;
   line-height: 18px;
   height: 18px;
+}
+
+/* The install steps for Safari, numbered. */
+.install-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style: decimal;
+  line-height: 1.8;
 }
 
 /*
