@@ -123,11 +123,12 @@ textarea {
   min-height: 0;
   flex: 1 1 auto;
 }
+/* The tabs wrap onto a second line rather than scroll sideways when they do not fit the dialog. */
 .options-tabs > [role='tablist'] {
   max-width: 100%;
-  overflow-x: auto;
+  height: auto;
+  flex-wrap: wrap;
   justify-content: flex-start;
-  scrollbar-width: none;
 }
 .options-tabs > [role='tablist'] > [role='tab'] {
   flex: 0 0 auto;
@@ -341,6 +342,12 @@ textarea {
 }
 .options-button-row > .options-button {
   width: 100%;
+}
+/* Beside a help button, the button takes what is left of the row, so the help button stays inside the dialog. */
+.options-button-row:has(> .options-help) > .options-button {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 0;
 }
 .options-row.recording .options-button {
   background: var(--destructive);
