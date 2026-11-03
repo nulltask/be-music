@@ -1,7 +1,13 @@
 // Imports are split across `@be-music/player-browser`'s entries (`./host`, `./skin`, `./collection`, `./audio`,
 // `./recording`) so the dependency surface of this player is explicit at the file top. The main `@be-music/player-browser`
 // entry is reserved for symbols that don't belong to any single entry (`logger`, `Rectangle`).
-import { PixiSceneHost, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
+import {
+  PixiSceneHost,
+  resolveControlActions,
+  resolveControlScheme,
+  type PlayScene,
+  type SelectScene,
+} from '@be-music/player-browser/host';
 import type { BrowseSnapshot, PlayOptions } from '@be-music/player-scene-model';
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-browser/audio';
@@ -11,7 +17,7 @@ import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from '.
 import { LeaderboardPanel } from '../leaderboard-ui.ts';
 import { fetchLeaderboardTopReplay } from '../leaderboard.ts';
 import { GhostReplayFile } from '../services/ghost.ts';
-import { playerFullscreenElement } from '../fullscreen.ts';
+import { playerFullscreenElement, toggleFullscreen } from '../fullscreen.ts';
 import { bindPlayerHeader, setPlayerHeaderSettingsOpen } from '../player-header.ts';
 import { SceneRouter } from './scene-router.ts';
 import { DropTarget } from './drop-target.ts';
@@ -50,6 +56,10 @@ import { BeatorajaThemeService } from '../services/themes/beatoraja.ts';
 import { BuiltInThemeService } from '../services/themes/built-in.ts';
 import { LR2ThemeService } from '../services/themes/lr2.ts';
 import { FamilyKits } from './family-kits.ts';
+import { controlSettingsOf } from '../control-keys.ts';
+import { showExitMenu } from '../ui/exit-menu.ts';
+import { createFpsOverlay } from '../ui/fps-overlay.ts';
+import { openHelpModal } from '../help-modal.ts';
 import type { TestHookRecorder } from '../test-hook.ts';
 import { nameResultJingle, type LiveTestHookDeps } from '../services/test-hook.ts';
 
@@ -82,6 +92,10 @@ export class PlayerWebApp {
    * `PixiSceneHost` instead of constructing a separate Pixi `Application` per view.
    */
   private readonly sceneHost = new PixiSceneHost();
+  /** The frame rate readout the frame rate key switches (`ui/fps-overlay.ts`). */
+  private readonly fpsOverlay = createFpsOverlay(
+    document.querySelector<HTMLElement>('#fps-overlay') ?? document.createElement('div'),
+  );
   /** Mounting {@link sceneHost} on the page, started as the first scene shows (`mountStage`). */
   private stageMount: Promise<void> | undefined;
   /**
@@ -403,6 +417,8 @@ export class PlayerWebApp {
     this.optionsDialog = new OptionsDialog(this.optionsDialogDeps());
     this.beatorajaSkinOptions = new BeatorajaSkinOptionsPanel(this.beatorajaSkinOptionsDeps());
     this.selectRoute = new SelectRoute({
+      controls: () => controlSettingsOf(this.guiState),
+      showExitMenu,
       router: this.router,
       elements,
       library: this.library,
@@ -430,6 +446,7 @@ export class PlayerWebApp {
       startReplayFromSlot: (entry, slot) => this.replayRoute.startReplayFromSlot(entry, slot),
     });
     this.decideRoute = new DecideRoute({
+      controls: () => controlSettingsOf(this.guiState),
       router: this.router,
       selectRoute: this.selectRoute,
       elements,
@@ -453,6 +470,7 @@ export class PlayerWebApp {
       latchPlay: (view) => this.playRoute.latchPlay(view),
     });
     this.resultRoute = new ResultRoute({
+      controls: () => controlSettingsOf(this.guiState),
       router: this.router,
       library: this.library,
       records: this.records,
@@ -655,6 +673,33 @@ export class PlayerWebApp {
       }
       event.preventDefault();
       this.search.open();
+    });
+
+    // The keys every screen takes, as LR2 and beatoraja do: F4 switches full screen and F6 takes a screenshot (the
+    // player's own keys for them when set, `global.*` in the key config).
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      // A 24 / 48 KEY chart can play F-keys: a lane's key is the lane's.
+      if (this.router.current?.identity.kind === 'play' && this.router.play?.takesKey(event) === true) return;
+      // The skin's family's keys (F1 is beatoraja's frame rate and LR2's help).
+      const family = this.router.current?.identity.family ?? 'built-in';
+      const scheme = resolveControlScheme(family, this.guiState.builtInControlScheme);
+      const actions = resolveControlActions(scheme, this.guiState.actionKeys);
+      if (actions.is('global.help', event)) {
+        event.preventDefault();
+        openHelpModal();
+      } else if (actions.is('global.fps', event)) {
+        event.preventDefault();
+        this.fpsOverlay.toggle();
+      } else if (actions.is('global.fullscreen', event)) {
+        event.preventDefault();
+        void toggleFullscreen(playerFullscreenElement(document));
+      } else if (actions.is('global.screenshot', event)) {
+        event.preventDefault();
+        void captureScreenshot(this.recording.deps());
+      }
     });
 
     // `?music=<url.zip>` / `?skin=<url.zip>` auto-load, then the difficulty tables imported in an earlier visit, once the

@@ -1,4 +1,5 @@
 import type { SceneKind } from '../host/family-kit.ts';
+import type { ControlButton } from './controls/control-buttons.ts';
 
 /** A key going down or up, as plain data so a session reads it without the DOM. */
 export interface SessionKeyEvent {
@@ -15,6 +16,11 @@ export interface SessionKeyEvent {
   readonly ctrlKey: boolean;
   readonly altKey: boolean;
   readonly metaKey: boolean;
+  /**
+   * The control buttons the key is under the player's keys (`controls/control-buttons.ts`): a lane key, a turntable
+   * key, START or SELECT. Absent from an event built without them; a screen then reads the default keys.
+   */
+  readonly buttons?: readonly ControlButton[];
 }
 
 /** A screen's behaviour, whatever family draws it: it reads keys and intents and answers each tick with a frame. */

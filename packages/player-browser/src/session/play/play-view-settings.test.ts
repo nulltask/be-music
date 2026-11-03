@@ -15,6 +15,7 @@ import type { PlayTempoRange } from './tempo-range.ts';
 import {
   resolveLaneCovers,
   changePlayView,
+  adjustWhiteNumber,
   handleChartManualSuddenKey,
   resolveVisibleMs,
   startReplayView,
@@ -264,5 +265,18 @@ describe('chart-authored M-SUDDEN and LINEMOVE (#931)', () => {
     expect(handleChartManualSuddenKey(view, { code: 'F5', shiftKey: false })).toBe(false);
     const plain = withChart({});
     expect(handleChartManualSuddenKey(plain, { code: 'F3', shiftKey: false })).toBe(false);
+  });
+});
+
+describe('adjustWhiteNumber', () => {
+  test('scales the hi-speed so the visible time moves by the step, and does nothing without a BPM', () => {
+    const view = createView();
+    expect(adjustWhiteNumber(view, 1)).toBe(false);
+    Object.assign(view, { timingResolver: { bpmAtBeat: () => 120 }, currentBeat: () => 0 });
+    // 8 beats / 2 × (1 - 0.25) at 120 BPM: 1500 ms, to 1501 ms.
+    expect(adjustWhiteNumber(view, 1)).toBe(true);
+    expect(view.playState.view.hiSpeed.player).toBeCloseTo((2 * 1500) / 1501);
+    expect(adjustWhiteNumber(view, -1)).toBe(true);
+    expect(view.playState.view.hiSpeed.player).toBeCloseTo(2);
   });
 });

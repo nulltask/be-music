@@ -9,6 +9,7 @@ import type { CourseView, LibraryChart, PlayOptions, SystemSoundSet } from '@be-
 import type { BrowserAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { DecideSession, type DecideSessionEvents } from '../session/decide/decide-session.ts';
+import { resolveFamilyControlActions } from '../session/controls/control-actions.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { logger } from '../logger.ts';
 import { BeatorajaDecideView, resolveBeatorajaDecideTiming } from '../view/beatoraja/decide-view.ts';
@@ -149,6 +150,7 @@ class FamilyDecideScene extends SessionScene<DecideFrame, DecideIntent> implemen
 export function createDecideScene(kit: DecideSceneKit, options: DecideSceneOptions): DecideScene {
   const session = new DecideSession({
     chart: options.chart,
+    actions: resolveFamilyControlActions(kit.family, options.controls),
     ...(options.course !== undefined ? { course: options.course } : {}),
     ...(options.playOptions !== undefined ? { playOptions: options.playOptions } : {}),
     sounds: options.sounds,
@@ -160,6 +162,7 @@ export function createDecideScene(kit: DecideSceneKit, options: DecideSceneOptio
   });
   return new FamilyDecideScene(session, createDecideView(kit, session, options), {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
+    ...(options.controls !== undefined ? { controls: options.controls } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
 }

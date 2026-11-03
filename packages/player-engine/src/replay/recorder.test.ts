@@ -199,6 +199,9 @@ describe('replay recorder', () => {
     // A release the engine inferred is marked; the mark means nothing on a press.
     recorder.recordInput('down', 1.4, ['x'], ['13'], true);
     recorder.recordInput('up', 1.52, ['x'], ['13'], true);
+    // The physical input is kept as given; an empty one is dropped.
+    recorder.recordInput('down', 1.6, ['shift-left', 'shift'], ['16'], undefined, 'cw', 'ShiftLeft');
+    recorder.recordInput('up', 1.7, ['shift-left', 'shift'], ['16'], undefined, undefined, '');
 
     const replay = recorder.finalize({ summary: makeSummary() });
     expect(replay.inputs).toEqual([
@@ -206,7 +209,32 @@ describe('replay recorder', () => {
       { seq: 1, timeUs: 1_300_000, action: 'up', channels: ['11', '12'] },
       { seq: 2, timeUs: 1_400_000, action: 'down', channels: ['13'], tokens: ['x'] },
       { seq: 3, timeUs: 1_520_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
+      {
+        seq: 4,
+        timeUs: 1_600_000,
+        action: 'down',
+        channels: ['16'],
+        tokens: ['shift-left', 'shift'],
+        code: 'ShiftLeft',
+        spin: 'cw',
+      },
+      { seq: 5, timeUs: 1_700_000, action: 'up', channels: ['16'], tokens: ['shift-left', 'shift'] },
     ]);
+  });
+
+  test('records the control buttons pressed during the play, with their physical keys', () => {
+    const recorder = createReplayRecorder(makeRecorderOptions());
+    recorder.recordControlInput('down', 1.25, '1P-start', 'KeyQ');
+    recorder.recordControlInput('up', 1.5, '1P-start', '');
+    recorder.recordControlInput('down', 2, '', 'KeyW');
+    const replay = recorder.finalize({ summary: makeSummary() });
+    expect(replay.play.controlInputs).toEqual([
+      { seq: 0, timeUs: 1_250_000, action: 'down', button: '1P-start', code: 'KeyQ' },
+      { seq: 1, timeUs: 1_500_000, action: 'up', button: '1P-start' },
+    ]);
+    expect(createReplayRecorder(makeRecorderOptions()).finalize({ summary: makeSummary() }).play.controlInputs).toBe(
+      undefined,
+    );
   });
 
   test('finalize caches the native result with judge counts, empty POORs, maxCombo, and gauge', () => {

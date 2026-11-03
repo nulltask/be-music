@@ -3,6 +3,8 @@ import { OPTION_FOLDERS, OPTIONS_TABS, PLAY_OPTION_PAGES } from './folders.ts';
 import { OPTION_LABELS_JA, optionLabel } from './labels.ts';
 import { LANE_KEY_CONFIG } from '@be-music/player-engine/lanes';
 import { laneKeyConfigLabel } from './keys.ts';
+import { CONTROL_ACTIONS } from '@be-music/player-browser/host';
+import { actionKeyConfigLabel, actionKeyLabel, keyCodeLabel } from './action-keys.ts';
 
 describe('optionLabel', () => {
   test('shows the Japanese label in Japanese and the English one otherwise', () => {
@@ -40,5 +42,28 @@ describe('key config labels', () => {
       '1P key 2',
     ]);
     expect(laneKeyConfigLabel('popn', LANE_KEY_CONFIG.popn[8]!)).toBe('Key 9');
+  });
+});
+
+describe('screen key config labels', () => {
+  test('names every operation in Japanese too, with the key map an operation only one has', () => {
+    for (const action of CONTROL_ACTIONS) {
+      const label = actionKeyConfigLabel(action);
+      expect(OPTION_LABELS_JA, label).toHaveProperty([label]);
+    }
+    expect(actionKeyConfigLabel(CONTROL_ACTIONS.find((action) => action.id === 'select.page-down')!)).toBe(
+      'Ten bars down (beatoraja)',
+    );
+    expect(actionKeyLabel({ button: '1P-start' })).toBe('1P START');
+    expect(actionKeyLabel({ button: '1P-key6' })).toBe('1P key 6');
+    expect(actionKeyLabel({ button: '1P-scratch-ccw' })).toBe('1P scratch ↺');
+    expect(['KeyR', 'Digit4', 'ArrowDown', 'Numpad0', 'Escape', 'F5'].map(keyCodeLabel)).toEqual([
+      'R',
+      '4',
+      '↓',
+      'Num 0',
+      'Esc',
+      'F5',
+    ]);
   });
 });

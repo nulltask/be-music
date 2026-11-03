@@ -12,7 +12,13 @@ import { SILENT_AUDIO } from '../../runtime/audio-analysis.ts';
 import type { SelectFrame, SelectIntent, SelectRecords } from '../../view/types.ts';
 import type { SessionKeyEvent } from '../session-scene.ts';
 import { SELECT_POLICIES } from './select-policy.ts';
-import { SelectSession, type SelectSessionEvents, type SelectSessionOptions } from './select-session.ts';
+import {
+  PANEL_HOLD_MS,
+  RANKING_HOLD_MS,
+  SelectSession,
+  type SelectSessionEvents,
+  type SelectSessionOptions,
+} from './select-session.ts';
 import { makeChart, makeCollection, makeCourse, makeCourseFolder } from './test-support.ts';
 
 const SLOTS: readonly SystemSoundSlot[] = [
@@ -428,6 +434,25 @@ describe('SelectSession panels', () => {
     expect(cues()).toEqual(['optionOpen', 'optionChange', 'optionChange', 'optionClose']);
   });
 
+  it('keeps a tapped START panel open, and closes one held open as START comes up', () => {
+    const { session, key, advance } = createSession();
+    const up = (code: string, timeStamp: number) =>
+      session.handleKey({ ...keyEvent(code, code, timeStamp), type: 'up' });
+    // A tap: open until the next press.
+    key('KeyQ', 'q');
+    advance(100);
+    up('KeyQ', 100);
+    expect(advance(10).panel).toBe(1);
+    key('KeyQ', 'q');
+    up('KeyQ', 150);
+    expect(advance(10).panel).toBeUndefined();
+    // Held past PANEL_HOLD_MS: shown while held.
+    key('KeyQ', 'q');
+    expect(advance(PANEL_HOLD_MS).panel).toBe(1);
+    up('KeyQ', 120 + PANEL_HOLD_MS + 10);
+    expect(advance(10).panel).toBeUndefined();
+  });
+
   it('swaps one panel for another', () => {
     const { intent, advance } = createSession();
     intent({ type: 'panel', panel: 1 });
@@ -780,7 +805,7 @@ describe('SelectSession replay slots', () => {
 
   it('keeps the LR2 keys free of the replay keys, and frames no slots without the host keeping them', () => {
     const lr2 = createSlotSession({ a: [true, false, false, false] }, SELECT_POLICIES.lr2);
-    expect(lr2.key('KeyV', 'v')).toBe(false);
+    expect(lr2.key('Digit4', '4')).toBe(false);
     expect(lr2.frame().replaySlots?.selected).toBe(0);
     const none = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
     expect(none.frame()).not.toHaveProperty('replaySlots');
@@ -797,5 +822,215 @@ describe('SelectSession replay slots', () => {
     session.enter(100);
     session.frame(100);
     expect(focus).toEqual(['a', 'b', 'b']);
+  });
+});
+
+describe('SelectSession lane and number keys', () => {
+  it('opens a folder on →, and starts nothing from a chart with it', () => {
+    const { key, advance, started } = createSession();
+    expect(key('ArrowRight')).toBe(true);
+    expect(advance(10).browse.path).toHaveLength(1);
+    expect(key('ArrowRight')).toBe(false);
+    expect(started).toEqual([]);
+  });
+
+  it('starts a chart in AUTO as LR2’s key 6 comes up, and opens a folder with it', () => {
+    const { session, key, advance, started } = createSession();
+    key('KeyF', 'f');
+    expect(advance(10).browse.path).toHaveLength(1);
+    key('KeyF', 'f');
+    expect(started).toEqual([]);
+    session.handleKey({ ...keyEvent('KeyF', 'f', 100), type: 'up' });
+    advance(5000);
+    expect(started).toEqual([{ entry: expect.any(String), autoPlay: true }]);
+  });
+
+  it('steps the sort and the key mode filter where the family keeps them', () => {
+    const lr2 = createSession();
+    lr2.key('Digit2', '2');
+    expect(lr2.advance(10).playOptions.sort).toBe('LEVEL');
+    lr2.key('Digit3', '3');
+    expect(lr2.advance(10).playOptions.keysFilter).toBe('KEYS_5');
+    const beatoraja = createSession({
+      policy: { ...SELECT_POLICIES.beatoraja, listCycles: { sort: ['OFF', 'TITLE'], keysFilter: ['ALL', 'KEYS_7'] } },
+    });
+    beatoraja.key('Digit2', '2');
+    expect(beatoraja.advance(10).browse.list.sort).toBe('TITLE');
+    beatoraja.key('Digit1', '1');
+    expect(beatoraja.advance(10).browse.list.keysFilter).toBe('KEYS_7');
+  });
+
+  it('opens the search on 0', () => {
+    const search = vi.fn();
+    const { key } = createSession({ on: { search } });
+    expect(key('Digit0', '0')).toBe(true);
+    expect(search).toHaveBeenCalledOnce();
+  });
+});
+
+describe('SelectSession exit menu', () => {
+  it('asks the host at the root instead of leaving or staying, on every policy', () => {
+    for (const policy of [SELECT_POLICIES.lr2, SELECT_POLICIES.beatoraja]) {
+      const exit = vi.fn();
+      const exitMenu = vi.fn();
+      const { key } = createSession({ policy, on: { exit, exitMenu } });
+      expect(key('Escape')).toBe(true);
+      expect(exitMenu).toHaveBeenCalledOnce();
+      expect(exit).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe('SelectSession difficulty change', () => {
+  it('moves to the next chart of the track on LR2’s 1, SELECT and → on a chart', () => {
+    // In `pack`, where a, b and c are charts of one track (one directory).
+    const { key, advance, session } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
+    const first = session.focused();
+    expect(key('Digit1', '1')).toBe(true);
+    advance(10);
+    const second = session.focused();
+    expect(second).not.toEqual(first);
+    expect(key('KeyW', 'w')).toBe(true);
+    advance(10);
+    expect(key('ArrowRight')).toBe(true);
+    advance(10);
+    // Three charts round: back where it started.
+    expect(session.focused()).toEqual(first);
+  });
+});
+
+describe('SelectSession beatoraja option panels', () => {
+  it('opens panel 3 on START and SELECT together, and steps the judge timing there by 1 ms', () => {
+    const { key, advance } = createSession({ policy: SELECT_POLICIES.beatoraja });
+    key('KeyQ', 'q');
+    expect(advance(10).panel).toBe(1);
+    key('KeyW', 'w');
+    expect(advance(10).panel).toBe(3);
+    const before = advance(0).playOptions.judgeTimingMs;
+    key('KeyV', 'v');
+    expect(advance(10).playOptions.judgeTimingMs).toBe(before + 1);
+  });
+});
+
+describe('SelectSession folder reload', () => {
+  it('asks the host to reload on LR2’s F8 and beatoraja’s F2, and leaves the key alone without a host that can', () => {
+    const reload = vi.fn();
+    expect(createSession({ on: { reload } }).key('F8')).toBe(true);
+    expect(createSession({ policy: SELECT_POLICIES.beatoraja, on: { reload } }).key('F2')).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(2);
+    expect(createSession().key('F8')).toBe(false);
+  });
+});
+
+describe('SelectSession LR2 held keys', () => {
+  const up = (session: SelectSession, code: string, timeStamp: number) =>
+    session.handleKey({ ...keyEvent(code, code, timeStamp), type: 'up' });
+
+  it('backs out on a tap of key 4, and opens the chart’s ranking when it is held', () => {
+    const ranking = vi.fn();
+    const inPack = { browse: { folderPath: ['pack'], cursors: [1, 0] }, on: { ranking } };
+    const tapped = createSession(inPack);
+    tapped.key('KeyD', 'd');
+    up(tapped.session, 'KeyD', 50);
+    expect(tapped.advance(10).browse.path).toHaveLength(0);
+    const held = createSession(inPack);
+    held.key('KeyD', 'd');
+    held.advance(RANKING_HOLD_MS);
+    expect(ranking).toHaveBeenCalledOnce();
+    up(held.session, 'KeyD', RANKING_HOLD_MS + 10);
+    expect(held.advance(10).browse.path).toHaveLength(1);
+  });
+
+  it('steps the chart’s difficulty and level with F3 held and the arrows, and the arrows move the cursor again after', () => {
+    const levelEdit = vi.fn();
+    const { session, key, advance } = createSession({
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      on: { levelEdit },
+    });
+    const focused = session.focused();
+    key('F3');
+    key('ArrowUp');
+    key('ArrowLeft');
+    expect(levelEdit.mock.calls.map(([, part, step]) => `${part} ${step}`)).toEqual(['difficulty 1', 'level -1']);
+    expect(session.focused()).toEqual(focused);
+    up(session, 'F3', 10);
+    key('ArrowDown');
+    advance(10);
+    expect(session.focused()).not.toEqual(focused);
+  });
+});
+
+describe('SelectSession beatoraja extra keys', () => {
+  const BEATORAJA = SELECT_POLICIES.beatoraja;
+  const withModifiers = (code: string, ctrlKey: boolean, shiftKey: boolean): SessionKeyEvent => ({
+    ...keyEvent(code, code, 0),
+    ctrlKey,
+    shiftKey,
+  });
+
+  it('asks the host to copy the focused chart’s MD5 on Ctrl+F3 and its SHA-256 on Ctrl+Shift+F3', () => {
+    const copyChartHash = vi.fn();
+    const { session } = createSession({
+      policy: BEATORAJA,
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      on: { copyChartHash },
+    });
+    expect(session.handleKey(withModifiers('F3', true, false))).toBe(true);
+    expect(session.handleKey(withModifiers('F3', true, true))).toBe(true);
+    expect(copyChartHash.mock.calls).toEqual([
+      [expect.objectContaining({ id: 'a' }), 'md5'],
+      [expect.objectContaining({ id: 'a' }), 'sha256'],
+    ]);
+    // Not on F3 alone, nor on a folder bar.
+    expect(session.handleKey(withModifiers('F3', false, false))).toBe(false);
+    const root = createSession({ policy: BEATORAJA, on: { copyChartHash } });
+    expect(root.session.handleKey(withModifiers('F3', true, false))).toBe(false);
+  });
+
+  it('hands the host the charts of the focused folder, or of the list shown, on F10', () => {
+    const autoplayFolder = vi.fn();
+    const atRoot = createSession({
+      policy: BEATORAJA,
+      browse: { folderPath: [], cursors: [1] },
+      on: { autoplayFolder },
+    });
+    expect(atRoot.key('F10')).toBe(true);
+    const inFolder = createSession({
+      policy: BEATORAJA,
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      on: { autoplayFolder },
+    });
+    inFolder.key('F10');
+    const ids = autoplayFolder.mock.calls.map(([charts]) => (charts as LibraryChart[]).map((chart) => chart.id).sort());
+    expect(ids).toEqual([
+      ['a', 'b', 'c'],
+      ['a', 'b', 'c'],
+    ]);
+    // Without a host that plays them, the key is left alone.
+    expect(createSession({ policy: BEATORAJA }).key('F10')).toBe(false);
+  });
+
+  it('opens the folder the focused chart is in out of a search on 8', () => {
+    const { session, key, advance, cues } = createSession({ policy: BEATORAJA });
+    session.setSearch('?level >= 2');
+    expect(titles(advance(10))).toEqual(['a', 'c']);
+    key('ArrowDown', 'ArrowDown');
+    expect(focusedTitle(advance(10))).toBe('c');
+    key('Digit8', '8');
+    const frame = advance(10);
+    expect(titles(frame)).toEqual(['a', 'b', 'c']);
+    expect(focusedTitle(frame)).toBe('c');
+    expect(cues()).toContain('folderOpen');
+  });
+
+  it('opens the focused chart’s text file on 9', () => {
+    const readtext = vi.fn();
+    const { key } = createSession({
+      policy: BEATORAJA,
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      on: { readtext },
+    });
+    expect(key('Digit9', '9')).toBe(true);
+    expect(readtext).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
   });
 });

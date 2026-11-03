@@ -8,7 +8,12 @@ import { logger } from '@be-music/player-browser';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { AudioService } from '@be-music/player-browser/audio';
 import { resolveChartSource, type ChartFileHashes } from '@be-music/player-browser/collection';
-import { createDecideScene, type PlayScene, type SelectScene } from '@be-music/player-browser/host';
+import {
+  createDecideScene,
+  type ControlSettings,
+  type PlayScene,
+  type SelectScene,
+} from '@be-music/player-browser/host';
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import { systemSoundSetFromBeatoraja, type LibraryChart } from '@be-music/player-scene-model';
 import { sanitizeFilenameStem } from '../../player-utils.ts';
@@ -48,6 +53,8 @@ export function playingFamily(view: PlayScene): { family?: 'beatoraja' } {
 }
 
 export interface DecideRouteDeps {
+  /** The player's keys the screen reads its control buttons by (`ControlSettings`), as it opens. */
+  readonly controls: () => ControlSettings;
   /** The scene router: the select scene it keeps, and the navigation the screen, the play and its load share. */
   readonly router: Pick<
     SceneRouter<PlayerScene, PlayScene, SelectScene>,
@@ -102,6 +109,7 @@ export interface DecideRouteDeps {
 /** A start's decide screen, and the play it hands the stage to. */
 export class DecideRoute {
   private readonly router: DecideRouteDeps['router'];
+  private readonly controls: DecideRouteDeps['controls'];
   private readonly selectRoute: DecideRouteDeps['selectRoute'];
   private readonly elements: DecideRouteDeps['elements'];
   private readonly library: DecideRouteDeps['library'];
@@ -125,6 +133,7 @@ export class DecideRoute {
 
   public constructor(deps: DecideRouteDeps) {
     this.router = deps.router;
+    this.controls = deps.controls;
     this.selectRoute = deps.selectRoute;
     this.elements = deps.elements;
     this.library = deps.library;
@@ -222,6 +231,7 @@ export class DecideRoute {
         }),
     };
     const decide = createDecideScene(kit, {
+      controls: this.controls(),
       chart: chartEntry,
       playOptions: { ...this.playOptions.current, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay },
       source: resolveChartSource(this.library.collection, chartEntry),

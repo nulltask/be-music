@@ -253,7 +253,8 @@ describe('PlaySession.seek (a play-loop command)', () => {
     handleSharedEngineExitKey(context.play, replayArrow);
     context.runs[0]!.tick();
     expect(context.runs[0]!.seeks).toEqual([-2]);
-    expect(replayArrow.preventDefault).not.toHaveBeenCalled();
+    // Outside AUTO play, LR2's ← / → move the lane cover instead.
+    expect(replayArrow.preventDefault).toHaveBeenCalledOnce();
 
     Object.assign(context.play.options, { replay: undefined, allowSeek: 'practice' });
     expect(canSeekPlay(context.play)).toBe(true);
@@ -261,7 +262,7 @@ describe('PlaySession.seek (a play-loop command)', () => {
     handleSharedEngineExitKey(context.play, practiceArrow);
     context.runs[0]!.tick();
     expect(context.runs[0]!.seeks).toEqual([-2]);
-    expect(practiceArrow.preventDefault).not.toHaveBeenCalled();
+    expect(practiceArrow.preventDefault).toHaveBeenCalledOnce();
   });
 
   test.each([

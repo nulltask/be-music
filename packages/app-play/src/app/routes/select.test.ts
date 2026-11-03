@@ -13,7 +13,7 @@ import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
 import type { BeatorajaSkinConfig } from '@be-music/skin-beatoraja';
 import { parseBeatorajaCourseData } from '@be-music/player-engine/course';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse, PlayOptions } from '@be-music/player-scene-model';
-import { describe, expect, test, vi } from 'vite-plus/test';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
@@ -140,14 +140,21 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
   const lr2: { selectSkin: LR2Skin | undefined } = { selectSkin: undefined };
   const deps = {
     router,
+    controls: () => ({}),
+    showExitMenu: vi.fn(),
     elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: {
       collection: { sources: [], charts: options.charts ?? [chartEntry('a')], errors: [] } as BrowserChartCollection,
+      reloadCharts: vi.fn(async () => {}),
     },
     records: {
       lookupChartBestRecord: vi.fn<SelectRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
       currentRulesetRecords: vi.fn<SelectRouteDeps['records']['currentRulesetRecords']>(() => new Map()),
       currentDanRanks: vi.fn<SelectRouteDeps['records']['currentDanRanks']>(() => []),
+      resolveChartHashes: vi.fn<SelectRouteDeps['records']['resolveChartHashes']>(async () => ({
+        md5: 'm',
+        sha256: 's',
+      })),
     },
     courses,
     courseRoute: { startCourse: vi.fn<SelectRouteDeps['courseRoute']['startCourse']>(async () => {}) },
@@ -547,13 +554,25 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.deps.rememberHiSpeed).toHaveBeenCalledWith(3.5, 'select');
   });
 
-  test('Escape at the root of a beatoraja screen leaves it for the drop screen: the screen and the cursor go', async () => {
+  test('Escape at the root asks first, and staying keeps the screen', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const scene = lastMade(h);
+    scene.options.on.exitMenu!();
+    expect(h.deps.showExitMenu).toHaveBeenCalledOnce();
+    vi.mocked(h.deps.showExitMenu).mock.calls[0]![0]('cancel');
+    expect(h.classes.has('empty')).toBe(false);
+    expect(h.router.select).toBe(scene);
+  });
+
+  test('leaving from the exit menu goes to the drop screen: the screen and the cursor go', async () => {
     const h = harness();
     h.setFamily('beatoraja');
     await h.route.showSelect();
     const scene = lastMade(h);
     h.route.lastSelectNavigation = AT_FOLDER;
-    scene.options.on.exit!();
+    scene.options.on.exitMenu!();
+    vi.mocked(h.deps.showExitMenu).mock.calls[0]![0]('leave');
     expect(h.classes.has('empty')).toBe(true);
     expect(h.route.lastSelectNavigation).toBeUndefined();
     expect(h.deps.beatorajaSkinOptions.clear).toHaveBeenCalledOnce();
@@ -595,5 +614,77 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.deps.records.currentDanRanks).toHaveBeenCalled();
     on.search!();
     expect(h.deps.search.openFromPointer).toHaveBeenCalledOnce();
+  });
+});
+
+describe('the folder reload', () => {
+  test('the select screen’s reload key reads the library again', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    lastMade(h).options.on.reload!();
+    expect(h.deps.library.reloadCharts).toHaveBeenCalledOnce();
+  });
+});
+
+describe('LR2’s held keys on the select screen', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test('key 4 held opens the chart’s ranking on the Leaderboard', async () => {
+    const open = vi.fn();
+    vi.stubGlobal('window', { open });
+    vi.stubGlobal('location', { hostname: 'play.be-music.app' });
+    const h = harness();
+    await h.route.showSelect();
+    lastMade(h).options.on.ranking!(chartEntry('a'));
+    expect(open).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/leaderboard\.be-music\.app\/charts\//u),
+      '_blank',
+      'noopener',
+    );
+  });
+
+  test('F3 + an arrow keeps the chart’s own level and gives the screen the library again', async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+    });
+    const chart = chartEntry('a');
+    const h = harness({ charts: [chart] });
+    await h.route.showSelect();
+    const scene = lastMade(h);
+    scene.options.on.levelEdit!(chart, 'level', 1);
+    expect(chart.playLevel).toBe(Number(String(chartEntry('a').playLevel ?? 0).match(/\d+/u)?.[0] ?? 0) + 1);
+    expect(values.size).toBe(1);
+    expect(scene.setLibrary).toHaveBeenCalledWith(h.deps.library.collection);
+  });
+});
+
+describe('beatoraja’s extra keys on the select screen', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test('Ctrl+F3 copies the chart’s MD5 and Ctrl+Shift+F3 its SHA-256', async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const h = harness();
+    await h.route.showSelect();
+    const { on } = lastMade(h).options;
+    on.copyChartHash!(chartEntry('a'), 'md5');
+    on.copyChartHash!(chartEntry('a'), 'sha256');
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    expect(writeText.mock.calls).toEqual([['m'], ['s']]);
+  });
+
+  test('F10 plays the folder’s charts in AUTO, one on each return, until a play is given up', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const [a, b, c] = [chartEntry('a'), chartEntry('b'), chartEntry('c')];
+    lastMade(h).options.on.autoplayFolder!([a, b, c]);
+    expect(h.deps.showDecide).toHaveBeenLastCalledWith(a, { autoPlay: true });
+    await h.route.showSelect();
+    expect(h.deps.showDecide).toHaveBeenLastCalledWith(b, { autoPlay: true });
+    h.route.endAutoPlaylist();
+    await h.route.showSelect();
+    expect(h.deps.showDecide).toHaveBeenCalledTimes(2);
   });
 });

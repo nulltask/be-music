@@ -91,12 +91,13 @@ describe('createWebInputRuntime', () => {
     dispatch('keydown', makeKeyEvent('KeyZ'));
     const commands = inputSignals.drainCommands();
     expect(commands).toEqual([
-      { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
+      { kind: 'lane-input', tokens: ['z'], code: 'KeyZ', pressedAt: expect.any(Number) },
       {
         kind: 'kitty-state',
         pressTokens: ['z'],
         repeatTokens: [],
         releaseTokens: [],
+        code: 'KeyZ',
         pressedAt: expect.any(Number),
       },
     ]);
@@ -114,12 +115,13 @@ describe('createWebInputRuntime', () => {
     runtime.start();
     dispatch('keydown', makeKeyEvent('KeyZ', { timeStamp: 12_345.6 }));
     expect(inputSignals.drainCommands()).toEqual([
-      { kind: 'lane-input', tokens: ['z'], pressedAt: performance.timeOrigin + 12_345.6 },
+      { kind: 'lane-input', tokens: ['z'], code: 'KeyZ', pressedAt: performance.timeOrigin + 12_345.6 },
       {
         kind: 'kitty-state',
         pressTokens: ['z'],
         repeatTokens: [],
         releaseTokens: [],
+        code: 'KeyZ',
         pressedAt: performance.timeOrigin + 12_345.6,
       },
     ]);
@@ -137,8 +139,23 @@ describe('createWebInputRuntime', () => {
         pressTokens: [],
         repeatTokens: [],
         releaseTokens: ['z'],
+        code: 'KeyZ',
         pressedAt: performance.timeOrigin + 9_999,
       },
+    ]);
+  });
+
+  test('lane key commands carry the physical KeyboardEvent.code the replay records', () => {
+    const inputSignals = createPlayerInputSignalBus();
+    const { target, dispatch } = makeMockTarget();
+    const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map(), target });
+    runtime.start();
+    dispatch('keydown', makeKeyEvent('ShiftLeft'));
+    dispatch('keyup', makeKeyEvent('ShiftLeft'));
+    expect(inputSignals.drainCommands().map((command) => ('code' in command ? command.code : undefined))).toEqual([
+      'ShiftLeft',
+      'ShiftLeft',
+      'ShiftLeft',
     ]);
   });
 
@@ -151,12 +168,12 @@ describe('createWebInputRuntime', () => {
     expect(inputSignals.drainCommands()).toEqual([{ kind: 'interrupt', reason: 'escape' }]);
   });
 
-  test('Space pushes toggle-pause', () => {
+  test('Pause pushes toggle-pause', () => {
     const inputSignals = createPlayerInputSignalBus();
     const { target, dispatch } = makeMockTarget();
     const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map(), target });
     runtime.start();
-    dispatch('keydown', makeKeyEvent('Space'));
+    dispatch('keydown', makeKeyEvent('Pause'));
     expect(inputSignals.drainCommands()).toEqual([{ kind: 'toggle-pause' }]);
   });
 
@@ -182,12 +199,13 @@ describe('createWebInputRuntime', () => {
     // Only the first (un-repeated) keydown produces commands; both `lane-input` and `kitty-state` press are
     // emitted as a pair so the engine has the timing judge AND the held-state tracking for LN sustain.
     expect(inputSignals.drainCommands()).toEqual([
-      { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
+      { kind: 'lane-input', tokens: ['z'], code: 'KeyZ', pressedAt: expect.any(Number) },
       {
         kind: 'kitty-state',
         pressTokens: ['z'],
         repeatTokens: [],
         releaseTokens: [],
+        code: 'KeyZ',
         pressedAt: expect.any(Number),
       },
     ]);
@@ -205,6 +223,7 @@ describe('createWebInputRuntime', () => {
         pressTokens: [],
         repeatTokens: [],
         releaseTokens: ['z'],
+        code: 'KeyZ',
         pressedAt: expect.any(Number),
       },
     ]);
@@ -272,9 +291,23 @@ test('a bound F5 sends lane press/release commands without restarting', () => {
   dispatch('keydown', makeKeyEvent('F5'));
   dispatch('keyup', makeKeyEvent('F5'));
   expect(inputSignals.drainCommands()).toEqual([
-    { kind: 'lane-input', tokens: ['f5'], pressedAt: expect.any(Number) },
-    { kind: 'kitty-state', pressTokens: ['f5'], repeatTokens: [], releaseTokens: [], pressedAt: expect.any(Number) },
-    { kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens: ['f5'], pressedAt: expect.any(Number) },
+    { kind: 'lane-input', tokens: ['f5'], code: 'F5', pressedAt: expect.any(Number) },
+    {
+      kind: 'kitty-state',
+      pressTokens: ['f5'],
+      repeatTokens: [],
+      releaseTokens: [],
+      code: 'F5',
+      pressedAt: expect.any(Number),
+    },
+    {
+      kind: 'kitty-state',
+      pressTokens: [],
+      repeatTokens: [],
+      releaseTokens: ['f5'],
+      code: 'F5',
+      pressedAt: expect.any(Number),
+    },
   ]);
   runtime.stop();
 });

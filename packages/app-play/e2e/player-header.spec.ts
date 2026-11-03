@@ -14,10 +14,10 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await player.setOption(['Play options'], 'Auto play', true);
     await player.key('Enter');
     await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.6, 'COUPLE play');
-    await player.key('Space');
+    await player.key('Pause');
     await player.page.screenshot({ path: info.outputPath('authored-couple.png') });
     if (family === 'native') await expect(player.page.locator('[part~="second-player"]').first()).toBeAttached();
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay?.play).toMatchObject({ battleMode: 'COUPLE', gauge2P: 'HARD' });

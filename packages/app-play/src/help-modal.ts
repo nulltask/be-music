@@ -5,6 +5,14 @@ import { bindPlayerHeader } from './player-header.ts';
 import { detectPlayerLang, playerText, setPlayerLang, type PlayerLang } from './player-copy.ts';
 import { releaseFocusOnClose } from './ui/dialog-focus.ts';
 
+/** Opens Help once it is wired (LR2's F1); nothing before. */
+let openHelp: (() => void) | undefined;
+
+/** Opens the Help dialog on its Usage tab, as the header's Help button does. */
+export function openHelpModal(): void {
+  openHelp?.();
+}
+
 export function wireHelpModal(): void {
   const dialog = document.querySelector<HTMLDialogElement>('#help-modal');
   const closeButton = document.querySelector<HTMLButtonElement>('#help-modal-close');
@@ -44,6 +52,7 @@ export function wireHelpModal(): void {
   releaseFocusOnClose(dialog);
 
   bindPlayerHeader({ openHelp: open });
+  openHelp = open;
   closeButton.addEventListener('click', close);
   // A click on the backdrop lands on the dialog itself.
   dialog.addEventListener('click', (event) => {

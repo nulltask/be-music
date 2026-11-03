@@ -1,3 +1,5 @@
+import type { LibraryChart } from '@be-music/player-scene-model';
+import { leaderboardLink } from './service-links.ts';
 import { playerText } from './player-copy.ts';
 import {
   computeChartFingerprint,
@@ -404,4 +406,10 @@ async function readError(response: Response): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/** The Leaderboard page of `chart`'s ranking (`/charts/:chartFingerprint`), LR2's IR page for it. */
+export function chartRankingURL(chart: Pick<LibraryChart, 'chart' | 'chartPath'>, hostname: string): string {
+  const fingerprint = computeChartFingerprint(chart.chart, { chartPath: chart.chartPath });
+  return leaderboardLink(`/charts/${encodeURIComponent(fingerprint)}`, hostname);
 }

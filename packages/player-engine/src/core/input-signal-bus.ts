@@ -48,6 +48,11 @@ export type PlayerInputCommand =
        */
       spin?: ScratchSpin | null;
       /**
+       * The physical input behind the press, recorded in the replay (`ReplayInputEvent.code`): a keyboard's
+       * `KeyboardEvent.code`, or `'touch'`. Omitted by hosts that have none (a terminal).
+       */
+      code?: string;
+      /**
        * Wall-clock-ms snapshot of the physical key press (`performance.timeOrigin + performance.now()`-style,
        * i.e. `Date.now()`-equivalent with sub-ms precision). The runtime adapter (web / node) sets this the
        * moment the OS-level event handler fires; the engine subtracts the wall-clock delta against this when
@@ -65,11 +70,19 @@ export type PlayerInputCommand =
        */
       pressedAt?: number;
     }
+  /**
+   * A control button that is not a lane (START / SELECT) went down or up. The engine only records it in the replay
+   * (`ReplayPlay.controlInputs`) at the chart time it drains it; what the host does with the button arrives as its own
+   * commands (`view`, `interrupt`, ...).
+   */
+  | { kind: 'control-input'; button: string; action: 'down' | 'up'; code?: string }
   | {
       kind: 'kitty-state';
       pressTokens: string[];
       repeatTokens: string[];
       releaseTokens: string[];
+      /** The physical input behind the event (`lane-input.code`); the replay records it on the release. */
+      code?: string;
       /** Wall-clock-ms snapshot of the underlying physical event. Same domain as `lane-input.pressedAt`. */
       pressedAt?: number;
     };

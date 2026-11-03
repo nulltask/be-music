@@ -614,8 +614,9 @@ function resolveLaneLayout(existing: ReadonlySet<string>, options: LaneModeOptio
 
 /**
  * The second key of each scratch lane, as the tokens it arrives as: Left / Right Ctrl, or Option (Alt) on macOS
- * terminals. It plays the lane like the Shift key does, and under the odd-even rule it is the reverse spin of a
- * back-spin scratch (`LaneBinding.inputKeys`).
+ * terminals, and Space with the 1P one (LR2's default key config turns the 1P turntable down with Left Ctrl or Space).
+ * It plays the lane like the Shift key does, and under the odd-even rule it is the reverse spin of a back-spin scratch
+ * (`LaneBinding.inputKeys`).
  */
 function createScratchReverseTokensByChannel(
   bindings: readonly FixedLaneDefinition[],
@@ -625,7 +626,10 @@ function createScratchReverseTokensByChannel(
   const tokenMap = new Map<string, readonly string[]>();
 
   if (scratchChannels.includes('16')) {
-    tokenMap.set('16', platform === 'darwin' ? ['option-left', 'alt-left'] : ['ctrl-left', 'control-left']);
+    tokenMap.set(
+      '16',
+      platform === 'darwin' ? ['option-left', 'alt-left', 'space'] : ['ctrl-left', 'control-left', 'space'],
+    );
   }
   if (scratchChannels.includes('26')) {
     tokenMap.set('26', platform === 'darwin' ? ['option-right', 'alt-right'] : ['ctrl-right', 'control-right']);

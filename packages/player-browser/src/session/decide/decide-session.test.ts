@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vite-plus/test';
 import type { SceneViewTiming } from '../../view/types.ts';
 import type { SessionKeyEvent } from '../session-scene.ts';
 import { DecideSession, resolveDecideKeyAction, type DecideAudio } from './decide-session.ts';
+import { resolveControlActions } from '../controls/control-actions.ts';
 
 const CHART: LibraryChart = {
   id: 'chart',
@@ -61,19 +62,24 @@ function createSession(
 
 describe('resolveDecideKeyAction', () => {
   it('continues on Enter and Space', () => {
-    expect(resolveDecideKeyAction({ key: 'Enter', repeat: false })).toBe('continue');
-    expect(resolveDecideKeyAction({ key: ' ', repeat: false })).toBe('continue');
-    expect(resolveDecideKeyAction({ key: 'Spacebar', repeat: false })).toBe('continue');
+    expect(resolveDecideKeyAction({ code: 'Enter', repeat: false })).toBe('continue');
+    expect(resolveDecideKeyAction({ code: 'Space', repeat: false })).toBe('continue');
   });
 
   it('cancels on Escape', () => {
-    expect(resolveDecideKeyAction({ key: 'Escape', repeat: false })).toBe('cancel');
+    expect(resolveDecideKeyAction({ code: 'Escape', repeat: false })).toBe('cancel');
+  });
+
+  it('reads the player’s keys for them', () => {
+    const actions = resolveControlActions('lr2', { 'decide.continue': ['KeyQ'] });
+    expect(resolveDecideKeyAction({ code: 'KeyQ', repeat: false }, actions)).toBe('continue');
+    expect(resolveDecideKeyAction({ code: 'Enter', repeat: false }, actions)).toBeUndefined();
   });
 
   it('ignores other keys and auto-repeats', () => {
-    expect(resolveDecideKeyAction({ key: 'a', repeat: false })).toBeUndefined();
-    expect(resolveDecideKeyAction({ key: 'Enter', repeat: true })).toBeUndefined();
-    expect(resolveDecideKeyAction({ key: 'Escape', repeat: true })).toBeUndefined();
+    expect(resolveDecideKeyAction({ code: 'KeyA', repeat: false })).toBeUndefined();
+    expect(resolveDecideKeyAction({ code: 'Enter', repeat: true })).toBeUndefined();
+    expect(resolveDecideKeyAction({ code: 'Escape', repeat: true })).toBeUndefined();
   });
 });
 
@@ -132,7 +138,7 @@ describe('DecideSession', () => {
     session.frame(1500);
     session.dispatch({ type: 'continue' });
     expect(on.continue).toHaveBeenCalledTimes(1);
-    expect(session.handleKey(key(' ', { timeStamp: 1600 }))).toBe(true);
+    expect(session.handleKey(key('Space', { timeStamp: 1600 }))).toBe(true);
     expect(on.continue).toHaveBeenCalledTimes(1);
   });
 
@@ -283,5 +289,22 @@ describe('DecideSession', () => {
       expect(session.frame(100).playChart).toBe(session.resolved.chart);
       expect(random).toHaveBeenCalledTimes(1);
     }
+  });
+});
+
+describe('the decide screen’s lane keys and START + SELECT', () => {
+  it('continues on LR2’s any key and beatoraja’s keys 1 / 3 / 5 / 7', () => {
+    expect(resolveDecideKeyAction({ code: 'KeyS', buttons: ['1P-key2'], repeat: false })).toBe('continue');
+    const beatoraja = resolveControlActions('beatoraja');
+    expect(resolveDecideKeyAction({ code: 'KeyX', buttons: ['1P-key3'], repeat: false }, beatoraja)).toBe('continue');
+    expect(resolveDecideKeyAction({ code: 'KeyS', buttons: ['1P-key2'], repeat: false }, beatoraja)).toBeUndefined();
+  });
+
+  it('backs out on START and SELECT held together', () => {
+    const { session, on } = createSession();
+    session.enter(0);
+    expect(session.handleKey(key('KeyQ', { timeStamp: 10 }))).toBe(false);
+    expect(session.handleKey(key('KeyW', { timeStamp: 20 }))).toBe(true);
+    expect(on.cancel).toHaveBeenCalledTimes(1);
   });
 });

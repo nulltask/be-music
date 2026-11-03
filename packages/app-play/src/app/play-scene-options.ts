@@ -24,6 +24,9 @@ export type PlaySceneGUIState = Pick<
   | 'autoScratch2P'
   | 'anyKey'
   | 'laneKeys'
+  | 'controlKeys'
+  | 'actionKeys'
+  | 'builtInControlScheme'
   | 'replayView'
   | 'tempoEnabled'
   | 'tempoPercent'
@@ -182,6 +185,9 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     anyKey: replay !== undefined ? replay.play.anyKey === true : guiState.anyKey && guiState.judgeRuleset === '____',
     // The player's own keys; a replay plays its recorded lanes, which no key reaches.
     laneKeys: guiState.laneKeys,
+    controlKeys: guiState.controlKeys,
+    actionKeys: guiState.actionKeys,
+    builtInControlScheme: guiState.builtInControlScheme,
     dpFlip: replay !== undefined ? false : lanes.dpFlip,
     random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
     random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,
