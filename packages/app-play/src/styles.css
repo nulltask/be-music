@@ -1121,110 +1121,30 @@ textarea {
 }
 
 /*
- * Acknowledgements modal. Lives at the page level so it
- * overlaps every scene; the backdrop blocks pointer events to
- * the canvas underneath while open. Hidden by default — the
- * `.visible` class fades both backdrop and card in.
+ * Help: a Basecoat dialog with Basecoat tabs. It is wider than Basecoat's default and of a fixed height, so the Open
+ * source list arriving does not resize and recenter it; the selected panel scrolls inside.
  */
-.help-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  pointer-events: none;
-  opacity: 0;
-  /*
-   * The shell's `.empty` class (no charts yet) is also Basecoat's
-   * empty-state component, which centers text and balance-wraps it.
-   * Help is not a `.dialog` — those already reset alignment — so the
-   * overlay keeps the same start alignment as after a chart loads.
-   * The build line below sets its own centering.
-   */
+.help-dialog > div {
+  height: min(80vh, 720px);
+}
+@media (min-width: 40rem) {
+  .help-dialog > div {
+    max-width: 720px;
+  }
+}
+.help-tabs {
+  min-height: 0;
+}
+.help-tabs > [role='tabpanel'] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+/* The shell's `.empty` is also Basecoat's empty state, which centers text; Help reads from the start. */
+.help-dialog {
   text-align: start;
   text-wrap: wrap;
-  transition: opacity 200ms ease-out;
-}
-
-.help-modal.visible {
-  pointer-events: auto;
-  opacity: 1;
-}
-
-.help-modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgb(4 6 10 / 0.65);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-}
-
-.help-modal-card {
-  position: relative;
-  width: min(720px, 100%);
-  /*
-   * Fixed height, not a max-height cap. The Open source pane
-   * is only the intro plus "Loading…" until the license list
-   * arrives. A content-sized card shrinks and recenters for
-   * that moment, then jumps back when the cards land. The
-   * pane scrolls inside this height, so the list shows up
-   * without moving the dialog.
-   */
-  height: min(80vh, 720px);
-  /*
-   * Slide-in entry that reads as "the dialog rose into focus"
-   * rather than "popped instantly". Matches the drop card's
-   * entry animation cadence so the player's overlay vocabulary
-   * stays consistent.
-   */
-  transform: translateY(8px) scale(0.98);
-  opacity: 0;
-  transition:
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 220ms ease-out;
-}
-
-.help-modal.visible .help-modal-card {
-  transform: translateY(0) scale(1);
-  opacity: 1;
-}
-
-.help-modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.help-modal-eyebrow {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: rgb(151 163 179 / 0.85);
-}
-
-.help-modal-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 4px 0 0;
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: #f8fafc;
-}
-
-.help-modal-title .badge {
-  letter-spacing: 0;
-}
-
-.help-modal-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
 }
 
 .help-pane-intro {
@@ -1232,57 +1152,6 @@ textarea {
   font-size: 13px;
   line-height: 1.55;
   color: #aab4c2;
-}
-
-/*
- * Tab strip — segmented-control look. The two tabs ("Usage"
- * / "Open source") swap which pane is active inside the
- * modal card. Active tab gets the accent underline; inactive
- * stays neutral so the active pane reads as the focused
- * surface.
- */
-.help-modal-tabs {
-  display: flex;
-  gap: 6px;
-  border-bottom: 1px solid rgb(255 255 255 / 0.06);
-  padding-bottom: 8px;
-}
-
-.help-modal-tab.is-active {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-/*
- * Tab panes. Inactive panes use `[hidden]` to drop out of
- * layout and the a11y tree entirely; the active pane fills
- * the remaining height and scrolls when content overflows.
- */
-.help-modal-pane {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px 8px 4px 0;
-  /*
-   * Same accent scrollbar as the OSS list — dim by default
-   * and lights up on hover. Keeps the modal's chrome
-   * coherent across both panes.
-   */
-  scrollbar-color: color-mix(in oklch, var(--primary) 40%, transparent) transparent;
-  scrollbar-width: thin;
-}
-
-.help-modal-pane::-webkit-scrollbar {
-  width: 6px;
-}
-
-.help-modal-pane::-webkit-scrollbar-thumb {
-  background: color-mix(in oklch, var(--primary) 35%, transparent);
-  border-radius: 999px;
-}
-
-.help-modal-pane::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in oklch, var(--primary) 60%, transparent);
 }
 
 .help-section-title {
@@ -1454,33 +1323,14 @@ textarea {
   margin-top: 4px;
 }
 
-/*
- * Language switcher inside the Usage pane. Right-aligned so
- * the primary content (section titles + lists) keeps its
- * left visual rhythm. The toggle group looks like the tab
- * strip but uses a stronger pressed-state to read as a
- * binary segment selector.
- */
+/* The language switch (a Basecoat button group) sits at the end of the row, so the text keeps its left edge. */
 .help-lang-switch {
-  display: inline-flex;
   align-self: flex-end;
-  gap: 4px;
   margin-bottom: 12px;
 }
 
-.help-lang-toggle.is-active {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-/*
- * The toggle row sits *outside* the flex flow that arranges
- * `.help-section-title` / `.help-list` — `.help-modal-pane`
- * is a plain block, so use a small flex wrapper just on the
- * switch + content. Keeps the alignment without disturbing
- * the rest.
- */
-.help-modal-pane#help-pane-usage {
+/* The language switch heads the Usage and Options panels; the panel lays it out over the text. */
+.help-tabs > [role='tabpanel']:not([hidden]):has(> .help-lang-switch) {
   display: flex;
   flex-direction: column;
 }
@@ -1643,7 +1493,7 @@ textarea {
   margin: 0;
   padding: 0;
   /*
-   * Scroll handling moved to the parent `.help-modal-pane`
+   * Scroll handling moved to the parent tab panel
    * — the pane already scrolls when the dialog overflows,
    * so a nested scroller here would create double-scroll
    * confusion and an inner scrollbar that competes with the
@@ -1822,14 +1672,6 @@ textarea {
   text-align: center;
   color: rgb(151 163 179 / 0.7);
   font-size: 13px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .help-modal,
-  .help-modal-card,
-  .help-modal-close {
-    transition: none;
-  }
 }
 
 /*
@@ -2226,14 +2068,6 @@ html.touch-first .search-input.search-inline:focus {
   cursor: default;
 }
 
-/* The help overlay keeps its build line at the bottom of the overlay, under the dialog card. */
-.help-modal .service-build-footer {
-  position: absolute;
-  right: 0;
-  bottom: 16px;
-  left: 0;
-  z-index: 1;
-}
 .service-build-footer {
   color: #94a3b8;
   text-align: center;

@@ -4,26 +4,26 @@ import { bindPlayerHeader } from './player-header.ts';
 import { detectPlayerLang, playerText, setPlayerLang, type PlayerLang } from './player-copy.ts';
 
 export function wireHelpModal(): void {
-  const modal = document.querySelector<HTMLDivElement>('#help-modal');
-  const backdrop = document.querySelector<HTMLDivElement>('#help-modal-backdrop');
+  const dialog = document.querySelector<HTMLDialogElement>('#help-modal');
   const closeButton = document.querySelector<HTMLButtonElement>('#help-modal-close');
-  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.help-modal-tab'));
-  const panes = Array.from(document.querySelectorAll<HTMLElement>('.help-modal-pane'));
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('#help-modal [role="tab"]'));
+  const panes = Array.from(document.querySelectorAll<HTMLElement>('#help-modal [role="tabpanel"]'));
   const ossList = document.querySelector<HTMLOListElement>('#help-oss-list');
-  if (!modal || !backdrop || !closeButton || tabs.length === 0 || panes.length === 0 || !ossList) {
+  if (!dialog || !closeButton || tabs.length === 0 || panes.length === 0 || !ossList) {
     return;
   }
 
   let ossPopulated = false;
+  // Basecoat's tabs: the selected tab and panel carry `aria-selected`, the others are hidden and out of the tab order.
   const activatePane = (paneId: string): void => {
     for (const tab of tabs) {
       const matches = tab.dataset.pane === paneId;
-      tab.classList.toggle('is-active', matches);
       tab.setAttribute('aria-selected', matches ? 'true' : 'false');
+      tab.tabIndex = matches ? 0 : -1;
     }
     for (const pane of panes) {
       const matches = pane.id === `help-pane-${paneId}`;
-      pane.classList.toggle('is-active', matches);
+      pane.setAttribute('aria-selected', matches ? 'true' : 'false');
       pane.toggleAttribute('hidden', !matches);
     }
     if (paneId === 'oss' && !ossPopulated) {
@@ -32,33 +32,39 @@ export function wireHelpModal(): void {
     }
   };
 
+  // A native modal dialog, which Escape closes too.
   const open = (): void => {
     activatePane('usage');
-    modal.classList.add('visible');
-    modal.setAttribute('aria-hidden', 'false');
-    closeButton.focus();
+    if (!dialog.open) dialog.showModal();
   };
-  const close = (): void => {
-    modal.classList.remove('visible');
-    modal.setAttribute('aria-hidden', 'true');
-    // The header repaints its buttons, so find Help again rather than keeping the one that was clicked.
+  const close = (): void => dialog.close();
+  // The header repaints its buttons (a language switch in Help does), so focus the Help button there now rather than
+  // the one that opened the dialog.
+  dialog.addEventListener('close', () => {
     document.querySelector<HTMLButtonElement>('[data-service-header="help"]')?.focus();
-  };
+  });
 
   bindPlayerHeader({ openHelp: open });
   closeButton.addEventListener('click', close);
-  backdrop.addEventListener('click', close);
-  for (const tab of tabs) {
+  // A click on the backdrop lands on the dialog itself.
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) close();
+  });
+  // Keys stay in the dialog, so the play behind it does not take them.
+  dialog.addEventListener('keydown', (event) => event.stopPropagation());
+  tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => {
       const pane = tab.dataset.pane;
       if (pane) activatePane(pane);
     });
-  }
-  document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    if (!modal.classList.contains('visible')) return;
-    event.preventDefault();
-    close();
+    tab.addEventListener('keydown', (event) => {
+      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      if (step === 0) return;
+      event.preventDefault();
+      const next = tabs[(index + step + tabs.length) % tabs.length]!;
+      next.focus();
+      next.click();
+    });
   });
 
   wireUsageLanguageSwitch();
@@ -92,7 +98,7 @@ function activate(lang: PlayerLang): void {
   const blocks = Array.from(document.querySelectorAll<HTMLElement>('.help-lang'));
   for (const toggle of toggles) {
     const matches = toggle.dataset.lang === lang;
-    toggle.classList.toggle('is-active', matches);
+    toggle.dataset.variant = matches ? 'secondary' : 'outline';
     toggle.setAttribute('aria-pressed', matches ? 'true' : 'false');
   }
   for (const block of blocks) {
