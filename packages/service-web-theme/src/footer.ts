@@ -23,6 +23,13 @@ export const SERVICE_FOOTER_NAV_CLASS = 'flex flex-wrap items-center gap-x-4 gap
 export const SERVICE_FOOTER_LINK_CLASS = 'underline underline-offset-4 hover:text-foreground';
 
 /** Holder and licence of the Be-Music repository (LICENSE), as on the Leaderboard. */
+/**
+ * The full-width, three-column footer: build line on the left, service links in the centre, copyright on the right.
+ * Stacks centred on a narrow screen.
+ */
+export const SERVICE_FOOTER_COLUMNS_CLASS =
+  'text-muted-foreground grid w-full grid-cols-1 items-center justify-items-center gap-x-4 gap-y-1 border-t px-4 py-3 text-xs sm:grid-cols-[1fr_auto_1fr]';
+
 export const SERVICE_COPYRIGHT = '© 2026 nulltask · MIT License';
 
 const SERVICE_PREFIXES = ['accounts', 'play', 'leaderboard', 'donate'] as const;
@@ -50,6 +57,13 @@ export interface ServiceFooterInput {
    * page. Omitted means English.
    */
   locale?: Locale | 'both';
+  /**
+   * `columns` lays the footer out in one full-width row: the build line, the service links, then this site's content
+   * and the copyright. Omitted means the stacked footer.
+   */
+  layout?: 'stacked' | 'columns';
+  /** False leaves the Public Beta line out, for a site that states it elsewhere on the page. */
+  publicBeta?: boolean;
 }
 
 function escapeHTML(value: string): string {
@@ -97,7 +111,8 @@ function footerOrigins(input: ServiceFooterInput): Record<ServiceName, string> {
 
 /**
  * The shared service footer, in order: the Public Beta line, links to the other services (the current one is text),
- * this site's own content, the copyright line, then the build timestamp and source revision.
+ * this site's own content, the copyright line, then the build timestamp and source revision. The `columns` layout keeps
+ * the Public Beta line above the row, across all three columns.
  */
 export function renderServiceFooter(input: ServiceFooterInput = {}): string {
   const origins = footerOrigins(input);
@@ -106,12 +121,20 @@ export function renderServiceFooter(input: ServiceFooterInput = {}): string {
     if (name === input.current) return `<span aria-current="page">${label}</span>`;
     return `<a class="${SERVICE_FOOTER_LINK_CLASS}" data-service="${name}" href="${escapeHTML(origins[name])}">${label}</a>`;
   }).join('');
-  const site =
-    input.siteHTML !== undefined && input.siteHTML !== '' ? `<div class="space-y-2">${input.siteHTML}</div>` : '';
+  const columns = input.layout === 'columns';
+  const baseClass = columns ? SERVICE_FOOTER_COLUMNS_CLASS : SERVICE_FOOTER_CLASS;
   const footerClass =
-    input.className === undefined || input.className === ''
-      ? SERVICE_FOOTER_CLASS
-      : `${SERVICE_FOOTER_CLASS} ${escapeHTML(input.className)}`;
-  const notice = renderPublicBetaNotice(input.locale ?? 'en');
-  return `<footer class="${footerClass}">${notice}<nav class="${SERVICE_FOOTER_NAV_CLASS}" aria-label="${escapeHTML(input.navLabel ?? 'Services')}">${links}</nav>${site}<p>${escapeHTML(input.copyright ?? SERVICE_COPYRIGHT)}</p>${renderBuildInfo(input.buildInfo)}</footer>`;
+    input.className === undefined || input.className === '' ? baseClass : `${baseClass} ${escapeHTML(input.className)}`;
+  const notice = input.publicBeta === false ? '' : renderPublicBetaNotice(input.locale ?? 'en');
+  const nav = `<nav class="${SERVICE_FOOTER_NAV_CLASS}" aria-label="${escapeHTML(input.navLabel ?? 'Services')}">${links}</nav>`;
+  const hasSite = input.siteHTML !== undefined && input.siteHTML !== '';
+  const copyright = escapeHTML(input.copyright ?? SERVICE_COPYRIGHT);
+  const buildInfo = renderBuildInfo(input.buildInfo);
+  if (columns) {
+    const site = hasSite ? `${input.siteHTML} · ` : '';
+    const banner = notice === '' ? '' : `<div class="sm:col-span-3">${notice}</div>`;
+    return `<footer class="${footerClass}">${banner}<div class="sm:justify-self-start">${buildInfo}</div>${nav}<p class="sm:justify-self-end">${site}${copyright}</p></footer>`;
+  }
+  const site = hasSite ? `<div class="space-y-2">${input.siteHTML}</div>` : '';
+  return `<footer class="${footerClass}">${notice}${nav}${site}<p>${copyright}</p>${buildInfo}</footer>`;
 }

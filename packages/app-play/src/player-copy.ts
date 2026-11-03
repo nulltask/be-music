@@ -71,7 +71,6 @@ const en = {
     optionUnavailableHint:
       'The selected play options cannot be used with this chart. Change them and start the chart again.',
     loading: 'Loading…',
-    help: 'Help',
     helpAbout: 'Help & About',
     close: 'Close',
     usage: 'Usage',
@@ -356,7 +355,6 @@ const ja: typeof en = {
     optionUnavailableHint:
       '選んだプレイオプションはこの譜面では使えません。変更してから、もう一度譜面を始めてください。',
     loading: '読み込み中…',
-    help: 'ヘルプ',
     helpAbout: 'ヘルプとこのプレイヤーについて',
     close: '閉じる',
     usage: '使い方',

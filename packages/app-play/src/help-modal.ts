@@ -1,16 +1,16 @@
 // Virtual module produced by the `be-music:acknowledgements` Vite plugin (see `vite.config.ts`).
 import loadAcknowledgements, { type Acknowledgement } from 'virtual:acknowledgements';
+import { bindPlayerHeader } from './player-header.ts';
 import { detectPlayerLang, playerText, setPlayerLang, type PlayerLang } from './player-copy.ts';
 
 export function wireHelpModal(): void {
-  const button = document.querySelector<HTMLButtonElement>('#help-button');
   const modal = document.querySelector<HTMLDivElement>('#help-modal');
   const backdrop = document.querySelector<HTMLDivElement>('#help-modal-backdrop');
   const closeButton = document.querySelector<HTMLButtonElement>('#help-modal-close');
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.help-modal-tab'));
   const panes = Array.from(document.querySelectorAll<HTMLElement>('.help-modal-pane'));
   const ossList = document.querySelector<HTMLOListElement>('#help-oss-list');
-  if (!button || !modal || !backdrop || !closeButton || tabs.length === 0 || panes.length === 0 || !ossList) {
+  if (!modal || !backdrop || !closeButton || tabs.length === 0 || panes.length === 0 || !ossList) {
     return;
   }
 
@@ -41,10 +41,11 @@ export function wireHelpModal(): void {
   const close = (): void => {
     modal.classList.remove('visible');
     modal.setAttribute('aria-hidden', 'true');
-    button.focus();
+    // The header repaints its buttons, so find Help again rather than keeping the one that was clicked.
+    document.querySelector<HTMLButtonElement>('[data-service-header="help"]')?.focus();
   };
 
-  button.addEventListener('click', open);
+  bindPlayerHeader({ openHelp: open });
   closeButton.addEventListener('click', close);
   backdrop.addEventListener('click', close);
   for (const tab of tabs) {

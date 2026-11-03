@@ -20,6 +20,8 @@ export interface PlayerHeaderAccount {
 export interface PlayerHeaderActions {
   /** Opens the existing Debug Menu when it is closed, and closes it when it is open. `null` clears a binding. */
   toggleDebugMenu?: (() => void) | null;
+  /** Opens the Help dialog. `null` clears a binding. */
+  openHelp?: (() => void) | null;
   /** Opens the player's sign-in dialog. `null` clears a binding. */
   openSignIn?: (() => void) | null;
   /** Switches the player language in place, the same path as Help. */
@@ -28,6 +30,7 @@ export interface PlayerHeaderActions {
 
 const actions: {
   toggleDebugMenu?: () => void;
+  openHelp?: () => void;
   openSignIn?: () => void;
   selectLanguage: (lang: PlayerLang) => void;
 } = {
@@ -39,6 +42,7 @@ let host: HTMLElement | undefined;
 /** An odd number of Settings clicks arrived before the menu existed, so the first bind should open it. */
 let pendingMenu = false;
 let pendingSignIn = false;
+let pendingHelp = false;
 /** Whether the Debug Menu pane is expanded. The gear's `aria-expanded` follows it. */
 let settingsOpen = false;
 
@@ -104,6 +108,7 @@ export function playerServiceHeaderHTML(input: {
     locale: input.locale,
     title: 'Be-Music Play',
     homeHref: '/',
+    help: true,
     settings: true,
     settingsOpen: input.settingsOpen === true,
     fullscreen: true,
@@ -125,7 +130,8 @@ export function playerServiceHeaderHTML(input: {
 export function classifyPlayerHeaderClick(
   target: { closest(selector: string): { lang?: string } | null },
   signedOut: boolean,
-): 'settings' | 'fullscreen' | 'sign-in' | PlayerLang | undefined {
+): 'help' | 'settings' | 'fullscreen' | 'sign-in' | PlayerLang | undefined {
+  if (target.closest('[data-service-header="help"]') !== null) return 'help';
   if (target.closest('[data-service-header="fullscreen"]') !== null) return 'fullscreen';
   if (target.closest('[data-service-header="settings"]') !== null) return 'settings';
   const language = target.closest('#language-menu a');
@@ -148,7 +154,7 @@ export function setPlayerHeaderSettingsOpen(open: boolean): void {
 }
 
 /**
- * Wires Settings, Sign in and the language menu. Settings and Sign in can arrive after the menu and the dialogs exist;
+ * Wires Help, Settings, Sign in and the language menu. Help, Settings and Sign in can arrive after the menu and the dialogs exist;
  * a click before that waits. A second Settings click before the menu exists cancels the first. Fullscreen calls
  * {@link togglePlayerHeaderFullscreen} itself.
  */
@@ -161,6 +167,16 @@ export function bindPlayerHeader(next: PlayerHeaderActions): void {
     if (pendingMenu) {
       pendingMenu = false;
       next.toggleDebugMenu();
+    }
+  }
+  if (next.openHelp === null) {
+    actions.openHelp = undefined;
+    pendingHelp = false;
+  } else if (next.openHelp !== undefined) {
+    actions.openHelp = next.openHelp;
+    if (pendingHelp) {
+      pendingHelp = false;
+      next.openHelp();
     }
   }
   if (next.openSignIn === null) {
@@ -218,7 +234,12 @@ function onClick(event: Event): void {
   runPlayerHeaderAction(kind);
 }
 
-export function runPlayerHeaderAction(kind: 'settings' | 'fullscreen' | 'sign-in' | PlayerLang): void {
+export function runPlayerHeaderAction(kind: 'help' | 'settings' | 'fullscreen' | 'sign-in' | PlayerLang): void {
+  if (kind === 'help') {
+    if (actions.openHelp !== undefined) actions.openHelp();
+    else pendingHelp = true;
+    return;
+  }
   if (kind === 'fullscreen') {
     if (typeof document !== 'undefined') void togglePlayerHeaderFullscreen(document);
     return;

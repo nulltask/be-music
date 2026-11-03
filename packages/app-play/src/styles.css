@@ -541,6 +541,16 @@ textarea {
   color: rgb(170 180 194 / 0.85);
 }
 
+/* The Public Beta line closes the start card, under the system check. */
+.start-beta-notice {
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(170 180 194 / 0.85);
+}
+.start-beta-notice p {
+  margin: 0;
+}
+
 .start-account-status {
   padding-left: 26px;
   font-size: 11px;
@@ -1108,51 +1118,6 @@ textarea {
   text-overflow: ellipsis;
   line-height: 18px;
   height: 18px;
-}
-
-/*
- * Bottom-right Acknowledgements button. Pinned outside any
- * scene-specific UI so the open-source attribution stays
- * reachable from select / gameplay / result views without the
- * scenes having to carry it themselves. Sits above the canvas
- * (z-index 8) but BELOW the modal it spawns (z-index 30) so
- * the modal cleanly overlaps the button when open.
- */
-.help-button {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  z-index: 8;
-}
-
-.help-button-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.help-button-label {
-  /*
-   * Letter-spacing shrinks slightly on the dragging tier so
-   * the button doesn't compete with the call-to-action; the
-   * default rest tier keeps the spaced-uppercase look.
-   */
-  white-space: nowrap;
-}
-
-@media (max-width: 480px) {
-  /*
-   * On very narrow viewports the spacing-heavy label can
-   * overlap the search input. Hide the text and keep the
-   * icon — the `aria-label`-equivalent comes from the
-   * modal's title once opened.
-   */
-  .help-button-label {
-    display: none;
-  }
-  .help-button {
-    padding: 8px;
-  }
 }
 
 /*
@@ -1862,15 +1827,14 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .help-modal,
   .help-modal-card,
-  .help-button,
   .help-modal-close {
     transition: none;
   }
 }
 
 /*
- * During play the select-screen overlays step aside so they never cover the skin's track plate; the Help button stays
- * reachable by hovering where it sits. The search field shows on the select screen only (`off-select` elsewhere).
+ * During play the select-screen overlays step aside so they never cover the skin's track plate. The search field shows
+ * on the select screen only (`off-select` elsewhere).
  */
 .shell.in-gameplay .search-input,
 .shell.off-select .search-input,
@@ -1879,22 +1843,13 @@ textarea {
   visibility: hidden;
 }
 
-.shell.in-gameplay .help-button {
-  opacity: 0;
-}
-
-.shell.in-gameplay .help-button:hover,
-.shell.in-gameplay .help-button:focus-visible {
-  opacity: 1;
-}
-
 /*
  * Phones and tablets. `main.ts` marks the root `touch-first` (and `phone` for phone-sized screens) from
  * `device-profile.ts`; nothing here applies on a desktop.
  *
  * The page chrome steps off the stage: the stage is fitted to the screen's height on a landscape phone, so any overlay
  * sits on top of the skin's own text. The search box only shows while it is being typed in (the skins' search area
- * focuses it), and the Help button shrinks to an icon in the corner. The Debug Menu keeps its usual size.
+ * focuses it). The Debug Menu keeps its usual size.
  */
 @supports (height: 100dvh) {
   html.touch-first body,
@@ -1917,26 +1872,7 @@ html.touch-first .search-input:focus {
   font-size: 16px; /* 16px keeps iOS Safari from zooming the page on focus */
 }
 
-html.phone .help-button {
-  left: max(8px, env(safe-area-inset-left, 0px));
-  bottom: max(8px, env(safe-area-inset-bottom, 0px));
-  transform: none;
-  padding: 7px;
-}
-
-html.phone .help-button:hover,
-html.phone .help-button:focus-visible {
-  transform: none;
-}
-
-html.phone .help-button-label {
-  display: none;
-}
-
-/* Keep help and a collapsed pane out of touch lanes. */
-html.touch-first .shell.in-gameplay .help-button {
-  visibility: hidden;
-}
+/* Keep a collapsed pane out of touch lanes. */
 html.touch-first:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) {
   opacity: 0.35;
 }
@@ -2308,6 +2244,40 @@ html.touch-first .search-input.search-inline:focus {
   font: inherit;
 }
 
+/*
+ * The header's icon buttons name themselves in a black tooltip that opens just below the button and points at it.
+ */
+#player-service-header [data-tooltip]::before {
+  margin-top: 10px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: #000;
+  color: #fff;
+}
+/* The point on top of the bubble, aimed at the button. */
+#player-service-header [data-tooltip]::after {
+  content: '';
+  position: absolute;
+  z-index: 61;
+  top: 100%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-top: 1px solid rgb(255 255 255 / 0.16);
+  border-left: 1px solid rgb(255 255 255 / 0.16);
+  background: #000;
+  translate: -50% 0;
+  rotate: 45deg;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+}
+#player-service-header [data-tooltip]:hover::after {
+  visibility: visible;
+  opacity: 1;
+}
+
 /* The page footer is the start screen only, so it stays off the skin's playfield. */
 .service-page-footer {
   position: absolute;
@@ -2317,14 +2287,15 @@ html.touch-first .search-input.search-inline:focus {
   left: 0;
   background: color-mix(in oklch, var(--background) 92%, transparent);
 }
+/* Basecoat's `.empty` caps a direct footer at the small container; this one spans the page. */
+.shell > .service-page-footer {
+  max-width: none;
+}
 .shell:not(.empty) .service-page-footer {
   display: none;
 }
 .shell.empty .drop {
-  padding-bottom: 13rem;
-}
-.shell.empty .help-button {
-  bottom: calc(13rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 3rem;
 }
 
 /* A DOM skin owns a real search input; remove the Canvas overlay from focus and accessibility as well. */
