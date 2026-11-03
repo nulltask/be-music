@@ -31,6 +31,8 @@ export const PLAYER_APP_TEMPLATE = html`
   <div class="shell empty">
     <div id="player-service-header" class="player-service-header"></div>
     <main id="main" class="player-main">
+      <!-- The frame rate readout (beatoraja's F1, LR2's F7), inside the full-screen area. \`ui/fps-overlay.ts\`. -->
+      <div id="fps-overlay" class="fps-overlay" aria-live="off" hidden></div>
       <!--
       Hidden file input — triggered by the Options dialog's
       "Open folder" button, which forwards a synthetic click to

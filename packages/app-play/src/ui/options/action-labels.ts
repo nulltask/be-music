@@ -20,6 +20,7 @@ export const ACTION_SCREEN_TITLES: Readonly<Record<ControlScreen, string>> = {
 export const ACTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Full screen': 'フルスクリーン',
   Screenshot: 'スクリーンショット',
+  'Frame rate': 'フレームレート',
   'Open folder': 'フォルダを開く',
   'Option panel 2': 'オプションパネル 2',
   'Option panel 3': 'オプションパネル 3',

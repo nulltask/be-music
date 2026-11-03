@@ -48,6 +48,12 @@ export const CONTROL_ACTIONS = [
   // Every screen.
   { id: 'global.fullscreen', screen: 'global', label: 'Full screen', defaults: both([code('F4')]) },
   { id: 'global.screenshot', screen: 'global', label: 'Screenshot', defaults: both([code('F6')]) },
+  {
+    id: 'global.fps',
+    screen: 'global',
+    label: 'Frame rate',
+    defaults: { lr2: [code('F7')], beatoraja: [code('F1')] },
+  },
   // The select screen. The turntable scrolls the list: LR2 turns it down (the second key) to the next bar, beatoraja up.
   {
     id: 'select.down',

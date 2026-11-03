@@ -96,6 +96,20 @@ textarea {
   min-height: 0;
 }
 
+/* The frame rate readout: a small label in the stage's top-right corner, over the canvas. */
+.fps-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 20;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 60%);
+  color: #9f9;
+  font: 12px / 1.4 var(--font-mono);
+  pointer-events: none;
+}
+
 /* Native buttons activate hidden directory/file inputs. */
 .hidden-file-input {
   display: none;
