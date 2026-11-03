@@ -2,6 +2,7 @@ import type { BeMusicJSON } from '@be-music/chart-source';
 import { createEmptyJSON } from '@be-music/chart-source';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import {
+  CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS,
   CHART_PREVIEW_STOP_FADE_OUT_SECONDS,
   ChartPreviewEngine,
   type ChartPreviewTarget,
@@ -10,6 +11,7 @@ import {
   findFirstAudibleOffsetSeconds,
   LR2_PREVIEW_FOCUS_DELAY_MS,
   resolveChartPreviewPath,
+  resolvePreviewFallbackFade,
 } from './preview.ts';
 
 const collectionMocks = vi.hoisted(() => ({
@@ -305,7 +307,48 @@ describe('ChartPreviewEngine', () => {
     expect(sources[0]!.start).toHaveBeenCalledWith(0, 0);
     expect(sources[0]!.stop).toHaveBeenCalledWith(1);
     expect(sources[1]!.start).toHaveBeenCalledWith(1, 0);
-    expect(sources[1]!.stop).not.toHaveBeenCalled();
+    // The later one only stops with the window.
+    expect(sources[1]!.stop.mock.calls).toEqual([[3]]);
+  });
+
+  test('fades the fallback out over the window’s last seconds and stops every source at its end', async () => {
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = Array.from({ length: 6 }, (_, index) => ({ index, length: 1 }));
+    // A long BGM sample from the start, and a keysound inside the fade.
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: 'AA' },
+      { measure: 4, channel: '11', position: [0, 1], value: 'BB' },
+    ];
+    chart.resources.wav = { AA: 'bgm.wav', BB: 'key.wav' };
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0, fallbackDurationSeconds: 10 });
+
+    engine.focus(makePreviewTarget(chart));
+
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    const gains = vi
+      .mocked(audioContext.createGain)
+      .mock.results.map(
+        (result) => (result.value as GainNode).gain as unknown as Record<string, ReturnType<typeof vi.fn>>,
+      );
+    for (const [index, source] of sources.entries()) {
+      expect(source.stop).toHaveBeenCalledWith(10);
+      expect(gains[index]!.setValueAtTime).toHaveBeenCalledWith(1, 10 - CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS);
+      expect(gains[index]!.linearRampToValueAtTime).toHaveBeenCalledWith(0, 10);
+    }
+  });
+});
+
+describe('resolvePreviewFallbackFade', () => {
+  test('fades over the window’s last seconds', () => {
+    expect(resolvePreviewFallbackFade(5, 30, 3)).toEqual({ fadeStartAt: 32, endAt: 35 });
+  });
+
+  test('fades over the whole window when it is shorter than the fade, and never runs backwards', () => {
+    expect(resolvePreviewFallbackFade(0, 2, 3)).toEqual({ fadeStartAt: 0, endAt: 2 });
+    expect(resolvePreviewFallbackFade(1, -4, 3)).toEqual({ fadeStartAt: 1, endAt: 1 });
+    expect(resolvePreviewFallbackFade(1, Number.NaN, 3)).toEqual({ fadeStartAt: 1, endAt: 1 });
   });
 });
 

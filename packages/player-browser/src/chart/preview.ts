@@ -42,6 +42,12 @@ export const DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS = 30;
  */
 export const CHART_PREVIEW_STOP_FADE_OUT_SECONDS: number = 0.25;
 
+/**
+ * How long the in-place fallback (no `#PREVIEW`) fades out at the end of its window, so the preview closes like a
+ * preview file instead of the chart stopping mid-phrase while its long samples ring on.
+ */
+export const CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS: number = 3;
+
 export interface ChartPreviewTarget {
   chart: LibraryChart;
   source: BrowserAssetSource;
@@ -290,6 +296,18 @@ export class ChartPreviewEngine {
     );
   }
 
+  /** Fades `handle` out over the fallback window's last seconds and stops it at the window's end. */
+  private fadeOutAtWindowEnd(handle: PreviewSourceHandle, fadeStartAt: number, endAt: number): void {
+    try {
+      const gain = handle.gain.gain;
+      gain.setValueAtTime(1, fadeStartAt);
+      gain.linearRampToValueAtTime(0, endAt);
+      handle.source.stop(endAt);
+    } catch {
+      // A context that refuses the automation keeps the source as it was: it ends with its sample.
+    }
+  }
+
   private stopSourceImmediately(handle: PreviewSourceHandle): void {
     handle.stopping = true;
     try {
@@ -459,6 +477,11 @@ export class ChartPreviewEngine {
       }
     }
     const startAt = this.audioContext.currentTime;
+    const { fadeStartAt, endAt } = resolvePreviewFallbackFade(
+      startAt,
+      this.fallbackDurationSeconds - leadOffsetSeconds,
+      CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS,
+    );
     let scheduledCount = 0;
     const activeBySlot = new Map<string, PreviewSourceHandle>();
     for (const trigger of triggers) {
@@ -497,6 +520,7 @@ export class ChartPreviewEngine {
         } else {
           source.start(when, offset);
         }
+        this.fadeOutAtWindowEnd(handle, fadeStartAt, endAt);
         scheduledCount += 1;
         activeBySlot.set(trigger.sampleKey, handle);
       } catch {
@@ -534,6 +558,22 @@ export function collectChartPreviewTriggers(chart: BeMusicJSON, cutoffSeconds: n
         firesBeforeTempoReversal(reversal, trigger.seconds, trigger.channel),
     )
     .sort((left, right) => left.seconds - right.seconds);
+}
+
+/**
+ * Pure helper: when the in-place fallback starts fading and when it ends, in context time. The window is
+ * `windowSeconds` long from `startAt` (the cutoff less the trimmed lead-in); the fade takes its last `fadeSeconds`, or
+ * the whole window when that is shorter.
+ */
+export function resolvePreviewFallbackFade(
+  startAt: number,
+  windowSeconds: number,
+  fadeSeconds: number,
+): { fadeStartAt: number; endAt: number } {
+  const span = Number.isFinite(windowSeconds) ? Math.max(0, windowSeconds) : 0;
+  const fade = Number.isFinite(fadeSeconds) ? Math.min(Math.max(0, fadeSeconds), span) : 0;
+  const endAt = startAt + span;
+  return { fadeStartAt: endAt - fade, endAt };
 }
 
 function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | undefined): boolean {
