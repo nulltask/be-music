@@ -4,6 +4,7 @@
 import { resolveInstallOffer, type InstallOffer } from './install-offer.ts';
 import { bindPlayerHeader, setPlayerHeaderInstallable } from './player-header.ts';
 import { requestPersistentStorage } from './storage-persistence.ts';
+import { releaseFocusOnClose } from './ui/dialog-focus.ts';
 
 /** Chromium's `beforeinstallprompt` event, which the DOM typings leave out. */
 interface BeforeInstallPromptEvent extends Event {
@@ -53,8 +54,9 @@ export function wireInstallButton(): void {
     dialog.addEventListener('click', (event) => {
       if (event.target === dialog) dialog.close();
     });
-    // Keys stay in the dialog, so the select screen behind it does not take them.
+    // Keys stay in the dialog, so the select screen behind it does not take them; closed, they go back to it.
     dialog.addEventListener('keydown', (event) => event.stopPropagation());
+    releaseFocusOnClose(dialog);
   }
 
   bindPlayerHeader({
