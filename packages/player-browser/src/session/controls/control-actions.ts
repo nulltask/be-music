@@ -47,6 +47,7 @@ const button = (value: ControlButton): ControlActionKey => ({ button: value });
 export const CONTROL_ACTION_IDS = [
   'global.fullscreen',
   'global.screenshot',
+  'global.fps',
   'select.down',
   'select.up',
   'select.page-down',
