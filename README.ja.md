@@ -4,7 +4,7 @@
 
 [パッケージの責務](./docs/packages.ja.md)
 
-TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンです。
+Be-Music は、BMS・bmson 譜面を遊び、扱うためのオープンソースプロジェクトです。ブラウザ版・ターミナル版のプレイヤー、オンラインランキング、譜面処理・プレイエンジン・スキン・UI のための再利用可能な TypeScript パッケージを提供します。
 
 ## 特徴
 
