@@ -1,6 +1,7 @@
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { createEmptyJSON } from '@be-music/chart-source';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
+import { MIXER_HEADROOM_GAIN_LINEAR } from '../runtime/audio-bus.ts';
 import {
   CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS,
   CHART_PREVIEW_STOP_FADE_OUT_SECONDS,
@@ -10,6 +11,7 @@ import {
   DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS,
   findFirstAudibleOffsetSeconds,
   LR2_PREVIEW_FOCUS_DELAY_MS,
+  resolveChartPreviewLevel,
   resolveChartPreviewPath,
   resolvePreviewFallbackFade,
 } from './preview.ts';
@@ -334,9 +336,41 @@ describe('ChartPreviewEngine', () => {
       );
     for (const [index, source] of sources.entries()) {
       expect(source.stop).toHaveBeenCalledWith(10);
-      expect(gains[index]!.setValueAtTime).toHaveBeenCalledWith(1, 10 - CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS);
+      expect(gains[index]!.setValueAtTime).toHaveBeenCalledWith(
+        resolveChartPreviewLevel(chart),
+        10 - CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS,
+      );
       expect(gains[index]!.linearRampToValueAtTime).toHaveBeenCalledWith(0, 10);
     }
+  });
+});
+
+describe('resolveChartPreviewLevel', () => {
+  test('plays at the play’s mixer headroom, scaled by #VOLWAV as a play is', () => {
+    const chart = createEmptyJSON('bms');
+    expect(resolveChartPreviewLevel(chart)).toBe(MIXER_HEADROOM_GAIN_LINEAR);
+    chart.bms.volWAV = 80;
+    expect(resolveChartPreviewLevel(chart)).toBeCloseTo(MIXER_HEADROOM_GAIN_LINEAR * 0.8);
+    // Out of beatoraja's range, #VOLWAV is ignored as in a play.
+    chart.bms.volWAV = 250;
+    expect(resolveChartPreviewLevel(chart)).toBe(MIXER_HEADROOM_GAIN_LINEAR);
+  });
+
+  test('starts every preview source at that level', async () => {
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [{ index: 0, length: 1 }];
+    chart.events = [{ measure: 0, channel: '01', position: [0, 1], value: 'AA' }];
+    chart.resources.wav = { AA: 'bgm.wav' };
+    chart.bms.volWAV = 50;
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0, fallbackDurationSeconds: 3 });
+
+    engine.focus(makePreviewTarget(chart));
+
+    await vi.waitFor(() => expect(sources).toHaveLength(1));
+    const gain = vi.mocked(audioContext.createGain).mock.results[0]!.value as GainNode;
+    expect(gain.gain.value).toBeCloseTo(MIXER_HEADROOM_GAIN_LINEAR * 0.5);
   });
 });
 
