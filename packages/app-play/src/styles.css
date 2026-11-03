@@ -2245,11 +2245,10 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /*
- * The header's icon buttons name themselves in a black, pointed tooltip that opens below the header's bottom border,
- * so it never straddles the line.
+ * The header's icon buttons name themselves in a black tooltip that opens just below the button and points at it.
  */
 #player-service-header [data-tooltip]::before {
-  margin-top: 22px;
+  margin-top: 10px;
   border: 1px solid rgb(255 255 255 / 0.16);
   background: #000;
   color: #fff;
@@ -2263,7 +2262,7 @@ html.touch-first .search-input.search-inline:focus {
   left: 50%;
   width: 10px;
   height: 10px;
-  margin-top: 17px;
+  margin-top: 5px;
   border-top: 1px solid rgb(255 255 255 / 0.16);
   border-left: 1px solid rgb(255 255 255 / 0.16);
   background: #000;
