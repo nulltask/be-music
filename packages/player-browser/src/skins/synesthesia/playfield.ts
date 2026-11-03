@@ -27,7 +27,7 @@ import {
   backSpinChevron,
   hellChargeZigzag,
   longNoteCentreLineAlpha,
-  noteHeightForLane,
+  resolveNoteHeight,
   resolveHellChargeLook,
   resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
@@ -149,8 +149,9 @@ export function renderSynesthesiaLanes({
   }
 }
 
-export function renderSynesthesiaNote({ graphics, kind, x, w, y }: PixiNoteContext): void {
-  drawNote(graphics, x, y, Math.max(4, w), LIGHTS[kind]);
+export function renderSynesthesiaNote({ graphics, kind, x, w, y, whiteLaneWidth }: PixiNoteContext): void {
+  const bodyW = Math.max(4, w);
+  drawNote(graphics, x, y, bodyW, resolveNoteHeight(kind, bodyW, whiteLaneWidth), LIGHTS[kind]);
 }
 
 /** Width (px) of one segment of a mine's broken filament, gap included. */
@@ -171,9 +172,9 @@ export function mineFilamentLit(laneX: number, segment: number, nowMs: number): 
  * A mine: shaped like a note so it reads in the same rhythm, but bright crimson in a throbbing red halo, with a broken,
  * flickering filament where a note carries its clean white one — a note that has gone wrong, to be left alone.
  */
-export function renderSynesthesiaMine({ graphics, x, w, y, nowMs }: PixiNoteContext): void {
+export function renderSynesthesiaMine({ graphics, kind, x, w, y, nowMs, whiteLaneWidth }: PixiNoteContext): void {
   const bodyW = Math.max(4, w);
-  const noteHeight = noteHeightForLane(bodyW);
+  const noteHeight = resolveNoteHeight(kind, bodyW, whiteLaneWidth);
   // A red halo that throbs like a warning light (twice a second), so the mine stands out of the lane at a glance.
   const alarm = 0.5 + 0.5 * Math.sin((nowMs / 1000) * Math.PI * 4);
   graphics
@@ -205,13 +206,14 @@ export function renderSynesthesiaLongNote({
   backSpinScratch,
   state,
   releasedElapsedMs,
+  whiteLaneWidth,
 }: PixiLongNoteContext): void {
   const light = LIGHTS[kind];
   const marks = resolveLongNoteMarks({ mode, backSpinScratch });
   const bodyX = x;
   const bodyW = Math.max(4, w);
-  // A note is as tall as a share of its lane's width, standing on its bottom edge.
-  const noteHeight = noteHeightForLane(bodyW);
+  // A note is as tall as a share of its lane's width (a scratch note as a white key's), standing on its bottom edge.
+  const noteHeight = resolveNoteHeight(kind, bodyW, whiteLaneWidth);
   const bodyTop = top - noteHeight;
   const bodyH = Math.max(1, bottom - top);
   // A hell charge note shows how it stands (`resolveHellChargeLook`): its colour, its glow and its zigzag filament's
@@ -250,10 +252,10 @@ export function renderSynesthesiaLongNote({
         .fill({ color: look.color, alpha: 0.45 * look.glow });
     }
   }
-  drawNote(graphics, bodyX, bottom, bodyW, light);
+  drawNote(graphics, bodyX, bottom, bodyW, noteHeight, light);
   // An LN's tail is not judged, so it is drawn translucent: where to let go, not a note to hit. A CN / HCN tail is
   // judged on release and keeps the full cap.
-  drawNote(graphics, bodyX, top, bodyW, light, marks.judgedTail ? 1 : LN_TAIL_ALPHA);
+  drawNote(graphics, bodyX, top, bodyW, noteHeight, light, marks.judgedTail ? 1 : LN_TAIL_ALPHA);
   if (marks.backSpin) {
     // A back-spin scratch: a dark-rimmed white chevron on the tail cap, pointing back up the lane — spin it back there.
     const chevron = backSpinChevron(bodyX, bodyW, top, noteHeight);
@@ -266,8 +268,15 @@ export function renderSynesthesiaLongNote({
 const LN_TAIL_ALPHA = 0.4;
 
 /** A flat bar with a white filament on top and a dark rim — a plain rectangle that reads at a glance. */
-function drawNote(graphics: Graphics, x: number, y: number, w: number, light: LaneLight, alpha = 1): void {
-  const noteHeight = noteHeightForLane(w);
+function drawNote(
+  graphics: Graphics,
+  x: number,
+  y: number,
+  w: number,
+  noteHeight: number,
+  light: LaneLight,
+  alpha = 1,
+): void {
   // A dark rim lifts the bar off the lit lane and the beam behind it.
   graphics.rect(x - 1, y - noteHeight - 1, w + 2, noteHeight + 2).fill({ color: 0x05010a, alpha: 0.9 * alpha });
   graphics.rect(x, y - noteHeight, w, noteHeight).fill({ color: light.body, alpha });

@@ -3,8 +3,10 @@ import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
 import { describe, expect, it, test } from 'vite-plus/test';
 import {
   _____DP_SIDE_GAP,
+  findWhiteLaneWidth,
   isScratchLaneForVariant,
   noteHeightForLane,
+  resolveNoteHeight,
   resolveBeMusicLaneKind,
   resolveFallbackLaneLayout,
   resolveFallbackPlayfieldSpan,
@@ -354,4 +356,19 @@ test('draws a note as tall as a share of its lane’s width, as the arcade cabin
   expect(noteHeightForLane(4)).toBe(2);
   expect(noteHeightForLane(0)).toBe(2);
   expect(noteHeightForLane(Number.NaN)).toBe(2);
+});
+
+test('draws a scratch note as tall as a white key’s, not by its own wider lane', () => {
+  const lanes = [
+    { kind: 'scratch' as const, w: 41 },
+    { kind: 'white' as const, w: 24 },
+    { kind: 'black' as const, w: 19 },
+  ];
+  expect(findWhiteLaneWidth(lanes)).toBe(24);
+  expect(findWhiteLaneWidth([{ kind: 'scratch', w: 41 }])).toBeUndefined();
+  expect(resolveNoteHeight('scratch', 41, 24)).toBe(noteHeightForLane(24));
+  expect(resolveNoteHeight('wheel-up', 41, 24)).toBe(noteHeightForLane(24));
+  // Keys keep their own lane's share; without a white lane a scratch note falls back to its own.
+  expect(resolveNoteHeight('black', 19, 24)).toBe(noteHeightForLane(19));
+  expect(resolveNoteHeight('scratch', 41)).toBe(noteHeightForLane(41));
 });

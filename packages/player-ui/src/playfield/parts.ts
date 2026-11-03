@@ -1,4 +1,5 @@
 import {
+  findWhiteLaneWidth,
   flashingGreatColor,
   isFlashingGreat,
   judgeDisplayWord,
@@ -89,6 +90,7 @@ export function resolvePlayfieldParts(
         mines: frame.mines,
         measureLines: frame.measureLines,
         nowMs: frame.nowMs,
+        whiteLaneWidth: findWhiteLaneWidth(frame.lanes),
       },
     },
     laneCovers: {
