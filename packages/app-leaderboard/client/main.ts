@@ -151,14 +151,19 @@ async function setScoreHidden(button: HTMLButtonElement, hidden: boolean): Promi
 
 document.addEventListener('click', (event) => {
   const button =
-    event.target instanceof Element ? event.target.closest<HTMLButtonElement>('[data-account-action]') : null;
-  const action = button?.dataset.accountAction;
+    event.target instanceof Element
+      ? event.target.closest<HTMLButtonElement>('[data-account-action], [data-auth-action]')
+      : null;
+  const intent = button?.dataset.authAction ?? button?.dataset.accountAction;
+  const action = intent === 'close' ? 'close-dialogs' : intent;
   if (button === null || button === undefined || action === undefined || actions[action] === undefined) return;
   event.preventDefault();
-  say(undefined);
+  const dialog = button.closest('dialog');
+  const statusSelector = dialog === null ? undefined : `#${dialog.id} [data-auth-status]`;
+  say(undefined, statusSelector);
   button.disabled = true;
   actions[action](button)
-    .catch((error: unknown) => say(error instanceof Error ? error.message : String(error)))
+    .catch((error: unknown) => say(error instanceof Error ? error.message : String(error), statusSelector))
     .finally(() => {
       button.disabled = false;
     });

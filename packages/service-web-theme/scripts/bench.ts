@@ -61,3 +61,41 @@ for (const [name, run] of [
   for (let index = 0; index < 10000; index++) run();
   console.log(JSON.stringify({ name, iterations: 10000, durationMs: performance.now() - started }));
 }
+
+const { authButtonTemplate, authPanelTemplate } = await import('../src/auth-template.ts');
+const { resolveAccountIdentity } = await import('../src/account-model.ts');
+const { accountIdentityTemplate, avatarTemplate } = await import('../src/account-identity-template.ts');
+const { popoverTemplate, languageMenuTemplate, languageLinksTemplate } = await import('../src/popover-template.ts');
+const { popoverTemplate: serverPopoverTemplate } = await import('../src/server.ts');
+const identity = { handle: 'alice', displayName: 'Alice', anonymous: false, avatarURL: '/avatar' };
+const choices = [
+  { locale: 'en', href: '/?lang=en', current: true },
+  { locale: 'ja', href: '/?lang=ja', current: false },
+] as const;
+for (const [name, run] of [
+  [
+    'authButtonTemplate',
+    () => authButtonTemplate({ action: 'google', method: 'google', label: 'Sign in with Google' }),
+  ],
+  ['authPanelTemplate', () => authPanelTemplate({ id: 'signup', mode: 'sign-up', locale: 'en' })],
+  ['resolveAccountIdentity', () => resolveAccountIdentity(identity, 'en')],
+  ['accountIdentityTemplate', () => accountIdentityTemplate({ account: identity, locale: 'en' })],
+  ['avatarTemplate', () => avatarTemplate({ src: '/avatar', size: 24 })],
+  ['popoverTemplate', () => popoverTemplate({ id: 'menu', label: 'Menu', trigger: 'Open', content: 'Choices' })],
+  ['languageMenuTemplate', () => languageMenuTemplate({ label: 'Language', choices })],
+  ['languageLinksTemplate', () => languageLinksTemplate(choices)],
+  [
+    'popoverTemplate:server',
+    () =>
+      serverPopoverTemplate({
+        id: 'menu',
+        label: 'Menu',
+        trigger: html`<span>Open</span>`,
+        content: html`<p>Choices</p>`,
+      }),
+  ],
+] as const) {
+  const started = performance.now();
+  for (let index = 0; index < 10000; index++) run();
+  console.log(JSON.stringify({ name, iterations: 10000, durationMs: performance.now() - started }));
+}
