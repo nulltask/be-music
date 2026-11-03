@@ -13,7 +13,7 @@ import { HISPEED_STEP } from '@be-music/player-scene-model';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { QuitHoldController } from './quit-hold.ts';
 import { logger } from '../../logger.ts';
-import type { PlaySessionOptions } from './play-options.ts';
+import type { PlaySessionOptions, SkinAdjust } from './play-options.ts';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
 import type { PlayEngineContext } from './play-engine.ts';
 import { adjustHiSpeed, adjustWhiteNumber, changePlayView, handleChartManualSuddenKey } from './play-view-settings.ts';
@@ -66,6 +66,10 @@ export interface PlayInputContext extends PlayEngineContext {
   readonly handleWindowBlur: () => void;
   readonly handleWindowFocus: () => void;
   seek(seconds: number): Promise<void>;
+  getTempo(): number;
+  setTempo(tempo: number): boolean;
+  readonly skinAdjust: SkinAdjust;
+  setSkinAdjust(adjust: SkinAdjust): void;
   requestExit(): void;
   requestRestart(): void;
   pauseAllBGAVideos(): void;
@@ -257,6 +261,15 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
   // Fn + arrows can report an arrow `code` with a navigation `key` on compact keyboards.
   // A disabled cover shortcut must not fall through to hi-speed or seek.
   if (['PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) return;
+  // LR2: a number key held with an arrow moves the skin (1), scales it (2), or lifts the 1P / 2P lanes (6 / 7).
+  if ((ctx.options.controlScheme ?? 'lr2') === 'lr2' && event.code.startsWith('Arrow')) {
+    const digit = ['Digit1', 'Digit2', 'Digit6', 'Digit7'].find((code) => digitsHeldByPlay.get(ctx)?.has(code));
+    if (digit !== undefined) {
+      event.preventDefault();
+      adjustLR2Skin(ctx, digit, event.code, event.shiftKey);
+      return;
+    }
+  }
   // Hi-speed belongs to the view. Like cover adjustments, it follows keyboard auto-repeat;
   // one-shot actions (pause, restart, mode switches and seek) still use the repeat filter below.
   const hiSpeedUp = actions.is('play.hi-speed-up', event);
@@ -278,6 +291,16 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
       changePlayView(ctx, { type: 'floating-speed-restore', bpm: 120, visibleFraction: 1 });
     }
     return;
+  }
+  // beatoraja's AUTO play runs ×0.25 / ×0.5 / ×2 / ×3 while 1 / 2 / 3 / 4 is held (the web player's tempo range bounds it).
+  if (ctx.options.autoPlay === true) {
+    const speed = ([1, 2, 3, 4] as const).find((key) => actions.is(`play.speed-${key}`, event));
+    if (speed !== undefined) {
+      event.preventDefault();
+      const before = tempoBeforeSpeedKeyByPlay.get(ctx) ?? ctx.getTempo();
+      if (ctx.setTempo(before * AUTO_SPEEDS[speed - 1])) tempoBeforeSpeedKeyByPlay.set(ctx, before);
+      return;
+    }
   }
   // Numpad 0 switches FLOATING HI-SPEED, whatever the judge rules (#774).
   if (actions.is('play.floating-hi-speed', event)) {
@@ -465,6 +488,15 @@ const controlActionsByPlay = new WeakMap<PlayInputContext, ControlActionMap>();
 /** The control buttons each play holds, for START + a key. */
 const controlButtonsHeldByPlay = new WeakMap<PlayInputContext, ControlButtonTracker>();
 
+/** The number keys each play holds (`Digit1`…), for LR2's skin moves and beatoraja's AUTO speeds. */
+const digitsHeldByPlay = new WeakMap<PlayInputContext, Set<string>>();
+
+/** The tempo an AUTO play ran at before beatoraja's speed keys changed it, while one is held. */
+const tempoBeforeSpeedKeyByPlay = new WeakMap<PlayInputContext, number>();
+
+/** beatoraja's AUTO play speeds on keys 1-4 (×0.25, ×0.5, ×2, ×3), clamped to the tempo the web player can play. */
+const AUTO_SPEEDS = [0.25, 0.5, 2, 3] as const;
+
 /** When each play's quit key (Escape) went down, while it is down: held through the fade-out, it retries. */
 const quitKeyDownAtByPlay = new WeakMap<PlayInputContext, number>();
 
@@ -502,6 +534,27 @@ function controlButtonsOfPlayKey(ctx: PlayInputContext, event: KeyboardEvent): C
 
 /** Takes a key going down or up into the buttons the play holds and the quit key's hold; returns the buttons' changes. */
 export function trackPlayKey(ctx: PlayInputContext, type: 'down' | 'up', event: KeyboardEvent): ControlButtonChange[] {
+  if (/^Digit\d$/u.test(event.code) && !event.repeat) {
+    let digits = digitsHeldByPlay.get(ctx);
+    if (digits === undefined) {
+      digits = new Set();
+      digitsHeldByPlay.set(ctx, digits);
+    }
+    if (type === 'down') digits.add(event.code);
+    else digits.delete(event.code);
+  }
+  // beatoraja's speed keys hold the AUTO play's speed: letting the last one go brings back the tempo before.
+  const before = tempoBeforeSpeedKeyByPlay.get(ctx);
+  if (type === 'up' && before !== undefined) {
+    const actions = playControlActions(ctx);
+    const speedKeyHeld = [...(digitsHeldByPlay.get(ctx) ?? [])].some((code) =>
+      ([1, 2, 3, 4] as const).some((key) => actions.is(`play.speed-${key}`, { code })),
+    );
+    if (!speedKeyHeld) {
+      tempoBeforeSpeedKeyByPlay.delete(ctx);
+      ctx.setTempo(before);
+    }
+  }
   if (playControlActions(ctx).is('play.quit', event) && !event.repeat) {
     if (type === 'down') quitKeyDownAtByPlay.set(ctx, event.timeStamp);
     else quitKeyDownAtByPlay.delete(ctx);
@@ -518,6 +571,12 @@ export function trackPlayKey(ctx: PlayInputContext, type: 'down' | 'up', event: 
 /** Lets the play's buttons and quit key go (the page lost focus, the play left). */
 export function releasePlayKeys(ctx: PlayInputContext): void {
   controlButtonsHeldByPlay.get(ctx)?.reset();
+  digitsHeldByPlay.get(ctx)?.clear();
+  const before = tempoBeforeSpeedKeyByPlay.get(ctx);
+  if (before !== undefined) {
+    tempoBeforeSpeedKeyByPlay.delete(ctx);
+    ctx.setTempo(before);
+  }
   quitKeyDownAtByPlay.delete(ctx);
 }
 
@@ -607,6 +666,34 @@ function handleStartSelect(ctx: PlayInputContext, changes: readonly ControlButto
     stepPlayHiSpeed(ctx, key % 2 === 1 ? -1 : 1);
   }
   return control;
+}
+
+/**
+ * LR2's skin moves (number key + an arrow): 1 moves the skin a design pixel (10 with Shift), 2 scales it by 1 % (between
+ * half and double), 6 / 7 raise or lower the 1P / 2P lanes (their LIFT) by 1 % of the lane.
+ */
+function adjustLR2Skin(ctx: PlayInputContext, digit: string, arrow: string, shiftKey: boolean): void {
+  const step = shiftKey ? 10 : 1;
+  const dx = arrow === 'ArrowLeft' ? -1 : arrow === 'ArrowRight' ? 1 : 0;
+  const dy = arrow === 'ArrowUp' ? -1 : arrow === 'ArrowDown' ? 1 : 0;
+  const adjust = ctx.skinAdjust;
+  if (digit === 'Digit1') {
+    ctx.setSkinAdjust({ ...adjust, x: adjust.x + dx * step, y: adjust.y + dy * step });
+    return;
+  }
+  if (digit === 'Digit2') {
+    const scale = Math.min(2, Math.max(0.5, Math.round((adjust.scale + (dx - dy) * 0.01 * step) * 100) / 100));
+    ctx.setSkinAdjust({ ...adjust, scale });
+    return;
+  }
+  if (ctx.playState.view.hiSpeed.locked) return;
+  changePlayView(ctx, {
+    type: 'cover-adjust',
+    part: 'lift',
+    delta: -dy * 0.01 * step,
+    side: digit === 'Digit6' ? '1P' : '2P',
+  });
+  ctx.theme.moment({ kind: 'view-setting', setting: 'lift', at: ctx.playClock() });
 }
 
 /** A control button's side and the button. */

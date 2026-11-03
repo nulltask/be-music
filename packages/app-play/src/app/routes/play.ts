@@ -19,6 +19,7 @@ import {
   type PlaySceneKit,
   type PlaySceneSettings,
   type SelectScene,
+  type SkinAdjust,
 } from '@be-music/player-browser/host';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import { abortedRecordPlayFromResult, courseStageRecordPlayFromResult } from '@be-music/player-engine/records';
@@ -172,6 +173,8 @@ export class PlayRoute {
   public lastPlay: LastPlay | undefined;
   /** What each play made and not yet on the stage puts in force once it takes it ({@link latchPlay}). */
   private readonly latches = new WeakMap<PlayScene, PlayLatches>();
+  /** The player's move and scale of the play skin (LR2's 1 / 2 + the arrows), kept from play to play. */
+  private skinAdjust: SkinAdjust | undefined;
   /**
    * The chart the latest play was made for, and the course it belongs to, so a family change during that play can
    * resolve the same chart's kit without starting the play again.
@@ -529,10 +532,15 @@ export class PlayRoute {
         kit.family === 'built-in'
           ? {
               ...settings,
+              skinAdjust: this.skinAdjust,
               layoutMode: resolvePlayLayoutMode(this.guiState.playLayout, this.deviceProfile),
               ...this.resolveGhost(chartEntry, kit.family, { replay, courseStage, nonstop }),
             }
-          : { ...settings, ...this.resolveGhost(chartEntry, kit.family, { replay, courseStage, nonstop }) },
+          : {
+              ...settings,
+              skinAdjust: this.skinAdjust,
+              ...this.resolveGhost(chartEntry, kit.family, { replay, courseStage, nonstop }),
+            },
       ...(course !== undefined
         ? { course: { ...course, ...(this.activeCourse?.run.practice === true ? { practice: true } : {}) } }
         : {}),
@@ -556,6 +564,10 @@ export class PlayRoute {
           this.optionsDialog.scheduleSettingsSave?.();
         },
         tempo: onTempoChange,
+        // LR2's skin moves carry over to the next play.
+        skinAdjust: (adjust) => {
+          this.skinAdjust = adjust;
+        },
       },
     });
     this.latches.set(view, latches);

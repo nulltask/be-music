@@ -38,6 +38,7 @@ export {
   type PlaySceneSettings,
 } from './play.ts';
 export { PlayOptionMismatchError } from '../session/play/play-option-mismatch.ts';
+export type { SkinAdjust } from '../session/play/play-options.ts';
 export type {
   GhostPresentation,
   GhostPresentationMode,

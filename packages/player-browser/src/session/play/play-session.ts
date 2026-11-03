@@ -36,7 +36,7 @@ import {
   supportsLiveTempoChange,
   type ReplayTempo,
 } from '../../runtime/play-tempo.ts';
-import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
+import { NO_SKIN_ADJUST, type PlayDisposeOptions, type PlaySessionOptions, type SkinAdjust } from './play-options.ts';
 import { resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { FALLBACK_INTRO_DELAY_MS, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
@@ -801,6 +801,20 @@ export class PlaySession extends PlaySessionState {
   };
 
   public lastStartTapMs: number | undefined;
+
+  /** The player's move and scale of the play skin this play (LR2's 1 / 2 + the arrows), over the one it started with. */
+  private skinAdjustValue: SkinAdjust | undefined;
+
+  /** Where the play skin is moved and how far it is scaled (the frame draws it so). */
+  public get skinAdjust(): SkinAdjust {
+    return this.skinAdjustValue ?? this.options.skinAdjust ?? NO_SKIN_ADJUST;
+  }
+
+  /** Moves or scales the play skin, and tells the host for the next play. */
+  public setSkinAdjust(adjust: SkinAdjust): void {
+    this.skinAdjustValue = adjust;
+    this.options.onSkinAdjustChange?.(adjust);
+  }
   readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => handleSharedEngineExitKey(this, event);
 
   /**
