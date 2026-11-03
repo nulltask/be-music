@@ -58,6 +58,10 @@ const en = {
     useBeatoraja: 'Use beatoraja skin',
     chartsMissing: 'Charts missing',
     ok: 'OK',
+    exitMenuTitle: 'Leave the select screen?',
+    exitMenuHint: 'Go back to the drop screen to load other charts or a skin. Cancel stays here.',
+    exitMenuLeave: 'Go to the drop screen',
+    exitMenuCancel: 'Cancel',
     optionUnavailable: 'Option not available',
     optionUnavailableHint:
       'The selected play options cannot be used with this chart. Change them and start the chart again.',
@@ -336,6 +340,10 @@ const ja: typeof en = {
     useBeatoraja: 'beatoraja スキンを使う',
     chartsMissing: '譜面がありません',
     ok: 'OK',
+    exitMenuTitle: '選曲画面を終了しますか？',
+    exitMenuHint: 'ドロップ画面に戻り、ほかの譜面やスキンを読み込めます。キャンセルするとこの画面のままです。',
+    exitMenuLeave: 'ドロップ画面へ',
+    exitMenuCancel: 'キャンセル',
     optionUnavailable: '使えないオプション',
     optionUnavailableHint:
       '選んだプレイオプションはこの譜面では使えません。変更してから、もう一度譜面を始めてください。',

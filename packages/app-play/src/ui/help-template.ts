@@ -148,14 +148,28 @@ export const PLAYER_HELP_TEMPLATE = html`
             <h3 class="help-section-title">Chart select</h3>
             <ul class="help-list">
               <li>
-                <kbd>↑</kbd> / <kbd>↓</kbd> move the cursor, <kbd>Enter</kbd> opens a folder or starts the chart, and
-                <kbd>Esc</kbd> / <kbd>Backspace</kbd> go back. Click a chart row, or the active skin's
+                <kbd>↑</kbd> / <kbd>↓</kbd> or the turntable move the cursor, <kbd>Enter</kbd> opens a folder or starts
+                the chart, and <kbd>Esc</kbd> / <kbd>Backspace</kbd> go back; at the top level <kbd>Esc</kbd> asks
+                whether to leave for the drop screen. Click a chart row, or the active skin's
                 <em>PLAY</em>
                 button, to start.
               </li>
               <li>
-                <kbd>Space</kbd> opens the <strong>PLAY OPTION</strong> panel (built-in and LR2 skins); beatoraja skins
-                also take <kbd>PageUp</kbd> / <kbd>PageDown</kbd>, <kbd>Home</kbd> / <kbd>End</kbd> and
+                Lane keys as in LR2: the white keys start, the black keys go back, key 6 starts in AUTO (held 2 s, the
+                saved replay), key 4 held opens the chart's Leaderboard ranking, <kbd>F3</kbd> held with the arrows
+                edits its difficulty and level, <kbd>F1</kbd> opens Help, → opens a folder, and SELECT, <kbd>1</kbd> or
+                → on a chart moves to the track's next difficulty. beatoraja skins as in beatoraja: key 1 plays, key 5
+                is AUTO, keys 2 / 4 close the folder, and START, SELECT and <kbd>5</kbd> open its option panels 1–3.
+                <kbd>2</kbd> sorts, <kbd>0</kbd> searches, <kbd>F8</kbd> (<kbd>F2</kbd> on beatoraja skins) reads the
+                dropped folders again. beatoraja skins also take <kbd>Ctrl</kbd>+<kbd>F3</kbd> /
+                <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F3</kbd> to copy the chart's MD5 / SHA-256, <kbd>F10</kbd> to play
+                the folder in AUTO, <kbd>8</kbd> to open the chart's folder and <kbd>9</kbd> for its text file. Every
+                key can be moved under Options → Keys → Screens.
+              </li>
+              <li>
+                START (<kbd>Q</kbd>), <kbd>Space</kbd> or <kbd>Tab</kbd> opens the <strong>PLAY OPTION</strong> panel
+                (built-in and LR2 skins): tap to keep it open, hold to show it while held; beatoraja skins also take
+                <kbd>PageUp</kbd> / <kbd>PageDown</kbd>, <kbd>Home</kbd> / <kbd>End</kbd> and
                 <kbd>R</kbd>
                 (a random chart).
               </li>
@@ -181,11 +195,22 @@ export const PLAYER_HELP_TEMPLATE = html`
                 </span>
               </div>
               <div class="help-keymap-note">
-                Left Shift = 1P scratch · Right Shift = 2P scratch · 9-button (PMS) charts use Z S X D C F V G B.
+                Left Shift (Left Ctrl, Space) = 1P scratch · Right Shift (Right Ctrl) = 2P scratch · START / SELECT = Q
+                / W (2P: O / P) · 9-button (PMS) charts use Z S X D C F V G B.
               </div>
             </div>
             <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed; hold to keep adjusting.</li>
+              <li>
+                <kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed; hold to keep adjusting. On beatoraja skins they move the
+                lane cover instead, and on the others <kbd>←</kbd> / <kbd>→</kbd> do (outside AUTO play).
+              </li>
+              <li>
+                START (<kbd>Q</kbd>) + a key steps the hi-speed (odd keys down, even keys up; on LR2 skins SELECT does
+                too, and keys 6 / 7 move the lane cover while it shows); START + the turntable moves the cover on
+                beatoraja skins, and SELECT + a key changes the visible time (green number) by 1 ms. START twice
+                switches the lane cover. START + SELECT held for a second quits, and after the last note either one ends
+                the play.
+              </li>
               <li>
                 Lane covers (Plain, Native, Synesthesia and beatoraja skins): <kbd>PageUp</kbd> /
                 <kbd>PageDown</kbd> move SUDDEN+, <kbd>Home</kbd> / <kbd>End</kbd> the LIFT, <kbd>H</kbd> switches
@@ -195,8 +220,17 @@ export const PLAYER_HELP_TEMPLATE = html`
                 off.
               </li>
               <li>In AUTO play, <kbd>←</kbd> / <kbd>→</kbd> seek 5 s back / forward.</li>
-              <li><kbd>Space</kbd> pauses / resumes.</li>
+              <li><kbd>Pause</kbd> or <kbd>Tab</kbd> pauses / resumes.</li>
               <li><kbd>F5</kbd> restarts the current chart.</li>
+              <li>
+                LR2 skins: hold <kbd>1</kbd> / <kbd>2</kbd> with an arrow to move / scale the play skin, or
+                <kbd>6</kbd> / <kbd>7</kbd> to raise the 1P / 2P lanes. beatoraja skins: in AUTO play, hold
+                <kbd>1</kbd>–<kbd>4</kbd> to play slower or faster.
+              </li>
+              <li>
+                On every screen, <kbd>F4</kbd> switches full screen and <kbd>F6</kbd> takes a screenshot;
+                <kbd>F7</kbd> (<kbd>F1</kbd> on beatoraja skins) shows the frame rate.
+              </li>
               <li><kbd>Esc</kbd> exits to the result screen (or back to chart select).</li>
               <li>
                 Hold <kbd>Backspace</kbd> for 0.5 s to quit the play the same way (works in fullscreen on every
@@ -211,7 +245,14 @@ export const PLAYER_HELP_TEMPLATE = html`
 
             <h3 class="help-section-title">Result</h3>
             <ul class="help-list">
-              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> returns to chart select.</li>
+              <li>
+                <kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> returns to chart select; so do the lane keys (LR2
+                skins: any, beatoraja skins: keys 1–4).
+              </li>
+              <li>
+                Keys held as the screen leaves retry the chart: a white and a black key (LR2 skins), key 5 or 7
+                (beatoraja skins), or <kbd>Esc</kbd> held half a second.
+              </li>
               <li><kbd>R</kbd> plays the same chart again right away with the same options.</li>
             </ul>
           </div>
@@ -296,11 +337,25 @@ export const PLAYER_HELP_TEMPLATE = html`
                 <kbd>↑</kbd> / <kbd>↓</kbd> でカーソル移動、<kbd>Enter</kbd> でフォルダを開くか譜面を開始、<kbd
                   >Esc</kbd
                 >
-                / <kbd>Backspace</kbd> で戻ります。 譜面の行をクリック、または現在のスキンの
-                <em>PLAY</em> ボタンでも開始できます。
+                / <kbd>Backspace</kbd> で戻ります。最上位で <kbd>Esc</kbd> を押すと、ドロップ画面へ戻るか確認します。
+                譜面の行をクリック、または現在のスキンの
+                <em>PLAY</em> ボタンでも開始できます。皿でもカーソルを動かせます。
               </li>
               <li>
-                <kbd>Space</kbd> で <strong>PLAY OPTION</strong> パネルを開きます (内蔵スキンと LR2 スキン)。beatoraja
+                鍵盤は LR2 と同じく、白鍵で開始、黒鍵で戻る、鍵盤 6 で AUTO (2 秒押し続けると保存したリプレイ)、鍵盤 4
+                の長押しで Leaderboard のランキング、<kbd>F3</kbd> を押しながら矢印で難易度とレベルを編集、<kbd>F1</kbd>
+                でヘルプ、→ でフォルダを開き、譜面の上で SELECT・<kbd>1</kbd>・→
+                を押すと同じ曲の次の難易度へ移ります。beatoraja スキンでは beatoraja と同じく、鍵盤 1 でプレイ、鍵盤 5
+                で AUTO、鍵盤 2 / 4 でフォルダを閉じ、START・SELECT・<kbd>5</kbd> でオプションパネル 1〜3 を開きます。
+                <kbd>2</kbd> でソート、<kbd>0</kbd> で検索、<kbd>F8</kbd> (beatoraja スキンでは <kbd>F2</kbd>)
+                でドロップしたフォルダを読み直します。beatoraja スキンでは <kbd>Ctrl</kbd>+<kbd>F3</kbd> /
+                <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F3</kbd> で譜面の MD5 / SHA-256 をコピー、<kbd>F10</kbd>
+                でフォルダを AUTO で通しプレイ、<kbd>8</kbd> で譜面のフォルダを開き、<kbd>9</kbd>
+                でテキストファイルを開きます。どのキーも Options → Keys → Screens で変えられます。
+              </li>
+              <li>
+                START (<kbd>Q</kbd>)・<kbd>Space</kbd>・<kbd>Tab</kbd> で <strong>PLAY OPTION</strong> パネルを開きます
+                (内蔵スキンと LR2 スキン)。短く押すと開いたまま、押し続けると押している間だけ表示します。beatoraja
                 スキンでは <kbd>PageUp</kbd> / <kbd>PageDown</kbd>、<kbd>Home</kbd> / <kbd>End</kbd>、<kbd>R</kbd>
                 (ランダムに譜面を選ぶ) も使えます。
               </li>
@@ -326,11 +381,23 @@ export const PLAYER_HELP_TEMPLATE = html`
                 </span>
               </div>
               <div class="help-keymap-note">
-                左 Shift = 1P スクラッチ · 右 Shift = 2P スクラッチ · 9 ボタン (PMS) の譜面は Z S X D C F V G B。
+                左 Shift (左 Ctrl、Space) = 1P スクラッチ · 右 Shift (右 Ctrl) = 2P スクラッチ · START / SELECT = Q / W
+                (2P は O / P) · 9 ボタン (PMS) の譜面は Z S X D C F V G B。
               </div>
             </div>
             <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。長押しで連続調整できます。</li>
+              <li>
+                <kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。長押しで連続調整できます。beatoraja
+                スキンでは代わりにレーンカバーを動かし、それ以外のスキンでは <kbd>←</kbd> / <kbd>→</kbd>
+                でレーンカバーを動かします (AUTO プレイ以外)。
+              </li>
+              <li>
+                START (<kbd>Q</kbd>) + 鍵盤でハイスピード調整 (奇数鍵で下げ、偶数鍵で上げ。LR2 スキンでは SELECT
+                でも同じで、レーンカバー表示中は鍵盤 6 / 7 でカバーを動かします)。beatoraja スキンでは START +
+                皿でカバーを動かし、SELECT + 鍵盤で表示時間 (緑数字) を 1 ms ずつ変えます。START 2
+                回押しでレーンカバーの ON / OFF。START + SELECT を 1
+                秒押し続けると中断し、最後のノーツの後はどちらか一方だけでプレイを終えます。
+              </li>
               <li>
                 レーンカバー (Plain / Native / Synesthesia と beatoraja スキン): <kbd>PageUp</kbd> /
                 <kbd>PageDown</kbd> で SUDDEN+、<kbd>Home</kbd> / <kbd>End</kbd> で LIFT を動かし、<kbd>H</kbd> で
@@ -340,8 +407,23 @@ export const PLAYER_HELP_TEMPLATE = html`
                 では、SUDDEN+ と LIFT が両方 OFF のとき、PageUp / PageDown でハイスピードを微調整します。
               </li>
               <li>AUTO プレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
-              <li><kbd>Space</kbd> でポーズ / 再開。</li>
+              <li><kbd>Pause</kbd> か <kbd>Tab</kbd> でポーズ / 再開。</li>
               <li><kbd>F5</kbd> で現在の譜面をリスタート。</li>
+              <li>
+                LR2 スキン: <kbd>1</kbd> / <kbd>2</kbd> を押しながら矢印でプレイのスキンを動かす / 拡大縮小、<kbd
+                  >6</kbd
+                >
+                / <kbd>7</kbd> で 1P / 2P のレーンを上げ下げ。beatoraja スキン: AUTO プレイ中に <kbd>1</kbd>〜<kbd
+                  >4</kbd
+                >
+                を押している間だけ遅く / 速く再生します。
+              </li>
+              <li>
+                どの画面でも <kbd>F4</kbd> でフルスクリーンを切り替え、<kbd>F6</kbd> でスクリーンショットを撮り、<kbd
+                  >F7</kbd
+                >
+                (beatoraja スキンでは <kbd>F1</kbd>) でフレームレートを表示します。
+              </li>
               <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
               <li>
                 <kbd>Backspace</kbd> を 0.5 秒長押しでも同じようにプレイを中断します
@@ -357,7 +439,14 @@ export const PLAYER_HELP_TEMPLATE = html`
 
             <h3 class="help-section-title">リザルト</h3>
             <ul class="help-list">
-              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> で選曲画面へ戻ります。</li>
+              <li>
+                <kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> で選曲画面へ戻ります。鍵盤でも戻れます (LR2
+                スキンはどの鍵盤でも、beatoraja スキンは鍵盤 1〜4)。
+              </li>
+              <li>
+                画面を抜けるときにキーを押したままだと、もう一度プレイします: 白鍵と黒鍵 (LR2 スキン)、鍵盤 5 か 7
+                (beatoraja スキン)、または <kbd>Esc</kbd> を 0.5 秒押し続ける。
+              </li>
               <li><kbd>R</kbd> で同じオプションのまま同じ譜面をすぐにもう一度プレイします。</li>
             </ul>
           </div>

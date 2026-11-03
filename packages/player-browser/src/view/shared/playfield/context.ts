@@ -55,6 +55,8 @@ export type RuntimeMineNote = TimedLandmineNote;
  * (`PlaySession`) is one; the view reads it and writes only the lanes it lays out and the BGA videos it plays.
  */
 export interface PlayfieldRuntime {
+  /** Where the play skin is moved and how far it is scaled (LR2's 1 / 2 + the arrows); where it is drawn without one. */
+  readonly skinAdjust?: { readonly x: number; readonly y: number; readonly scale: number };
   readonly chart: LibraryChart | undefined;
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly resolvedPlayChart: ResolvedChart | undefined;

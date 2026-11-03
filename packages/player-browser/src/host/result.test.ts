@@ -288,7 +288,7 @@ describe('createResultScene with a beatoraja kit', () => {
     const press = (key: string, timeStamp: number) => {
       const event = {
         key,
-        code: key,
+        code: key === 'r' ? 'KeyR' : key,
         repeat: false,
         timeStamp,
         target: null,

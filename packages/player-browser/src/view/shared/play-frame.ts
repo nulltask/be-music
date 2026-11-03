@@ -203,8 +203,13 @@ export function render(
     ctx.cachedScreenWidth = screenWidth;
     ctx.cachedScreenHeight = screenHeight;
   }
-  ctx.designRoot.position.set(viewport.x, viewport.y);
-  ctx.designRoot.scale.set(viewport.scale);
+  // The player's own move and scale of the skin (LR2's 1 / 2 + the arrows), in design pixels.
+  const adjust = ctx.play.skinAdjust;
+  ctx.designRoot.position.set(
+    viewport.x + (adjust?.x ?? 0) * viewport.scale,
+    viewport.y + (adjust?.y ?? 0) * viewport.scale,
+  );
+  ctx.designRoot.scale.set(viewport.scale * (adjust?.scale ?? 1));
   stampDesignRect(ctx, stage);
   ctx.host?.setStageOrientation(resolveStageOrientation(stage));
   applyExitFadeAlpha(ctx);

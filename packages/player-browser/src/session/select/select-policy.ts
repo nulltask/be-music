@@ -21,7 +21,9 @@ import {
   type BrowseListOptions,
   type BrowseRestore,
   type BrowseSnapshot,
+  type BrowseSort,
   type BrowseState,
+  type KeysFilter,
   type Library,
 } from '@be-music/player-scene-model';
 import type { SceneFamily } from '../../host/family-kit.ts';
@@ -45,6 +47,11 @@ export interface SelectPolicy {
   readonly keys: SelectKeyMap;
   /** Whether opening or closing a folder plays the cursor cue as well as the folder's. */
   readonly folderCursorCue: boolean;
+  /**
+   * The order the sort and the key mode filter keys step through, where the browse position keeps them
+   * (`listOptions: 'browse'`): the skin's own (beatoraja's MODE and SORT). Defaults to LR2's.
+   */
+  readonly listCycles?: { readonly sort: readonly BrowseSort[]; readonly keysFilter: readonly KeysFilter[] };
 }
 
 const LR2_SELECT_POLICY: SelectPolicy = {

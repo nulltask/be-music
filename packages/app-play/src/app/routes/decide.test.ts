@@ -150,6 +150,7 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
   };
   const deps = {
     router,
+    controls: () => ({}),
     selectRoute,
     elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },

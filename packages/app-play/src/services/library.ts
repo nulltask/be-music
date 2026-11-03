@@ -11,6 +11,7 @@ import {
   materializeDroppedFiles,
   readCourseFile,
   resolveCourseFolders,
+  readDropEntries,
   resolveCourseMakerFolders,
   splitDroppedChartAndThemeFiles,
   type BrowserDroppedFile,
@@ -19,6 +20,7 @@ import {
   type CourseDefinitionGroup,
   type CourseMaker,
 } from '@be-music/player-browser/collection';
+import { applyChartLevelEdits, readChartLevelEdits } from '../chart-level-edits.ts';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
 import {
   skinFamilyRegistry,
@@ -97,6 +99,11 @@ export class LibraryService {
    * redraw of the same one (`setLibrary`).
    */
   public collection: BrowserChartCollection = { sources: [], charts: [], errors: [] };
+  /** Every load of charts, for the folder reload (`reloadCharts`): a drop's entries, or the files themselves. */
+  private readonly chartLoads: {
+    readonly entries?: readonly FileSystemEntry[];
+    readonly files: BrowserDroppedFile[];
+  }[] = [];
   private readonly collectionStore = new BrowserChartCollectionStore();
   /**
    * Course files dropped so far (`.lr2crs`, beatoraja `course/*.json`) and courses imported from difficulty-table URLs,
@@ -225,7 +232,10 @@ export class LibraryService {
    * pressed twice with two different folders) and every drop's charts stay uniquely addressable through the collection
    * per-source prefixing.
    */
-  public async processIncomingFiles(files: BrowserDroppedFile[]): Promise<void> {
+  public async processIncomingFiles(
+    files: BrowserDroppedFile[],
+    origin: { readonly entries?: readonly FileSystemEntry[] } = {},
+  ): Promise<void> {
     if (files.length === 0) {
       return;
     }
@@ -318,7 +328,7 @@ export class LibraryService {
       tasks.push(this.loadBeatorajaTheme(themeFiles));
     }
     if (chartFiles.length > 0) {
-      tasks.push(this.loadCharts(chartFiles));
+      tasks.push(this.loadCharts(chartFiles, origin.entries));
     }
     const playContinues = this.showing() === 'play';
     if (tasks.length === 0) {
@@ -526,7 +536,53 @@ export class LibraryService {
     }
   }
 
-  private async loadCharts(files: BrowserDroppedFile[]): Promise<void> {
+  /**
+   * Reads the library's charts again, as LR2's and beatoraja's folder reload does: a dropped folder is walked again, so
+   * charts added, changed or removed on disk since show up; picked files and archives are read again as they were. The
+   * select screen then shows the new library. Without a load to read again it only says so.
+   */
+  public async reloadCharts(): Promise<void> {
+    if (this.chartLoads.length === 0) {
+      this.setStatus('No folders to reload');
+      return;
+    }
+    this.setStatus('Reloading charts...');
+    const loads = [...this.chartLoads];
+    const groups: BrowserDroppedFile[][] = [];
+    for (const load of loads) {
+      if (load.entries === undefined) {
+        groups.push(load.files);
+        continue;
+      }
+      const files = (await readDropEntries(load.entries)).filter((file) => {
+        const name = file.name.toLowerCase();
+        const path = file.webkitRelativePath || file.name;
+        return (
+          !isDroppedArchive(file) &&
+          !name.endsWith(REPLAY_FILE_SUFFIX) &&
+          !name.endsWith(COURSE_REPLAY_FILE_SUFFIX) &&
+          !isCourseFilePath(path) &&
+          !isTableHeaderFilePath(file.name)
+        );
+      });
+      groups.push(splitDroppedChartAndThemeFiles(files).chartFiles);
+    }
+    this.collection = await this.collectionStore.loadFromFiles([]);
+    for (const files of groups) {
+      if (files.length === 0) continue;
+      this.collection = await this.collectionStore.appendFromFiles(files, {
+        onProgress: (progress) => applyLoadProgress(this.elements, progress),
+      });
+    }
+    applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
+    if (this.courseGroups.length > 0) await this.refreshCourseFolders();
+    await this.showSelect();
+    this.setStatus(describeChartCollection(this.collection));
+  }
+
+  private async loadCharts(files: BrowserDroppedFile[], entries?: readonly FileSystemEntry[]): Promise<void> {
+    // Kept for the folder reload: the drop's entries walk its folders again, other files are read again as they are.
+    this.chartLoads.push(entries !== undefined ? { entries, files } : { files });
     this.setStatus('Loading charts...');
     // Append rather than replace so a second / third folder drop adds to the existing collection instead of wiping the
     // previous pack. The store re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The
@@ -535,6 +591,8 @@ export class LibraryService {
     this.collection = await this.collectionStore.appendFromFiles(files, {
       onProgress: (progress) => applyLoadProgress(this.elements, progress),
     });
+    // The player's own difficulties and levels (LR2's F3 level edit) go over the charts' own.
+    applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
     // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
     // text is set by `processIncomingFiles` once both theme + songs land, so a mid-flight transient is plenty.
     if (this.collection.charts.length > 0) {

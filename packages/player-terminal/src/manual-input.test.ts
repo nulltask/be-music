@@ -16,7 +16,7 @@ describe('manual input', () => {
     expect(bindings.map((binding) => binding.channel)).toEqual(['16', '11', '12', '13', '14', '15']);
     expect(bindings.find((binding) => binding.channel === '16')).toMatchObject({
       keyLabel: 'LShift',
-      inputTokens: ['shift-left', 'ctrl-left', 'control-left'],
+      inputTokens: ['shift-left', 'ctrl-left', 'control-left', 'space'],
       isScratch: true,
     });
   });
@@ -97,6 +97,7 @@ describe('manual input', () => {
       'shift-left',
       'option-left',
       'alt-left',
+      'space',
     ]);
     expect(bindings.find((binding) => binding.channel === '26')?.inputTokens).toEqual([
       'shift-right',

@@ -31,6 +31,8 @@ export const PLAYER_APP_TEMPLATE = html`
   <div class="shell empty">
     <div id="player-service-header" class="player-service-header"></div>
     <main id="main" class="player-main">
+      <!-- The frame rate readout (beatoraja's F1, LR2's F7), inside the full-screen area. \`ui/fps-overlay.ts\`. -->
+      <div id="fps-overlay" class="fps-overlay" aria-live="off" hidden></div>
       <!--
       Hidden file input — triggered by the Options dialog's
       "Open folder" button, which forwards a synthetic click to
@@ -292,6 +294,29 @@ export const PLAYER_APP_TEMPLATE = html`
           <ul class="replay-missing-list" data-replay-missing-list></ul>
           <footer>
             <button type="submit" class="btn" autofocus>${localized('ok')}</button>
+          </footer>
+        </form>
+      </dialog>
+      <!--
+      The exit menu: Escape at the root of the select screen asks whether to leave it for the drop screen, as
+      That-Which-Must-Not-Be-Named PC's exit menu asks before it leaves. Opened by \`showExitMenu\` (ui/exit-menu.ts).
+    -->
+      <dialog
+        class="dialog account-dialog"
+        id="exit-menu"
+        aria-labelledby="exit-menu-title"
+        aria-describedby="exit-menu-hint"
+      >
+        <form method="dialog" class="account-dialog-body">
+          <header>
+            <h2 id="exit-menu-title">${localized('exitMenuTitle')}</h2>
+            <p id="exit-menu-hint">${localized('exitMenuHint')}</p>
+          </header>
+          <footer>
+            <button type="submit" class="btn" data-variant="outline" value="cancel">
+              ${localized('exitMenuCancel')}
+            </button>
+            <button type="submit" class="btn" value="leave" autofocus>${localized('exitMenuLeave')}</button>
           </footer>
         </form>
       </dialog>

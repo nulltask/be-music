@@ -16,6 +16,7 @@
  * button steps the skin's timing offset and hands the options to the host.
  */
 
+import { LR2_OP, LR2_TIMER } from '@be-music/skin-lr2/ids';
 import {
   BEATORAJA_BUTTON,
   parseBeatorajaSongList,
@@ -125,6 +126,8 @@ export class BeatorajaSelectView implements SelectView {
   private disposed = false;
   /** The frame being drawn, or the last one: what the parts, the clicks and the buttons read. */
   private frame: SelectFrame | undefined;
+  /** The option panel shown, for its timers and ops. */
+  private shownPanel: number | undefined;
   /** When the scene was last entered, on the host clock: the scene timers count from it. */
   private enteredAtMs = Number.NaN;
   private lastDrawMs: number | undefined;
@@ -220,6 +223,7 @@ export class BeatorajaSelectView implements SelectView {
     this.stage.fitTo(host);
     if (frame.clock.enteredAtMs !== this.enteredAtMs) this.startScene(frame);
     this.followList(frame);
+    this.followPanel(frame);
     this.frame = frame;
     this.listAsked = undefined;
     for (const event of frame.events) {
@@ -240,7 +244,7 @@ export class BeatorajaSelectView implements SelectView {
     this.readText.render(view.width, view.height);
     const skinSounds = this.options.skinSounds;
     view.update({
-      activeOps: this.skinState.computeActiveOps(),
+      activeOps: this.withPanelOps(this.skinState.computeActiveOps()),
       // A timer that has not started reads `undefined`, which hides what is gated on it (the fade-out's black cover).
       getTimerStart: (timerId) => this.timerStartedAt.get(timerId),
       nowMs: beatorajaSceneNowMs(frame.clock),
@@ -297,6 +301,7 @@ export class BeatorajaSelectView implements SelectView {
     this.timerStartedAt.clear();
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
     this.timerStartedAt.set(TIMER_SONGBAR_CHANGE, 0);
+    this.shownPanel = undefined;
     this.scrollPosition = frame.cursor;
     this.shownEntries = frame.entries;
     this.focusedTarget = barTarget(frame.entries[frame.cursor]);
@@ -337,6 +342,33 @@ export class BeatorajaSelectView implements SelectView {
     } else {
       this.scrollPosition += gap * (1 - Math.pow(1 - SCROLL_TWEEN_RATE, steps));
     }
+  }
+
+  /**
+   * The option panel the session has open (START, SELECT, or both, held), as beatoraja's `MusicSelector` shows it: the
+   * panel's open timer (21-23) starts as it opens and its close timer (31-33) as it closes, which the skin's panel
+   * images animate on.
+   */
+  private followPanel(frame: SelectFrame): void {
+    if (frame.panel === this.shownPanel) return;
+    const nowMs = beatorajaSceneNowMs(frame.clock);
+    const previous = this.shownPanel;
+    if (previous !== undefined) {
+      this.timerStartedAt.delete(LR2_TIMER.PANEL1_OPEN + previous - 1);
+      this.timerStartedAt.set(LR2_TIMER.PANEL1_CLOSE + previous - 1, nowMs);
+    }
+    if (frame.panel !== undefined) {
+      this.timerStartedAt.delete(LR2_TIMER.PANEL1_CLOSE + frame.panel - 1);
+      this.timerStartedAt.set(LR2_TIMER.PANEL1_OPEN + frame.panel - 1, nowMs);
+    }
+    this.shownPanel = frame.panel;
+  }
+
+  /** The skin's ops with the open panel's (`OPTION_PANEL1`-`3`), or no panel's (20). */
+  private withPanelOps(ops: ReadonlySet<number>): ReadonlySet<number> {
+    const withPanel = new Set(ops);
+    withPanel.add(this.shownPanel === undefined ? LR2_OP.NO_PANEL : LR2_OP.PANEL1 + this.shownPanel - 1);
+    return withPanel;
   }
 
   // ---------------------------------------------------------------------------------------------------------------------

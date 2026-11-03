@@ -35,6 +35,8 @@ import { GHOST_MODES, GHOST_SOURCES } from './services/ghost.ts';
 import type { PlayerGUIState, SkinFamilyOverride } from './types.ts';
 import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
 import { parseLaneKeys } from './lane-keys.ts';
+import { CONTROL_SCHEMES, parseActionKeys, parseControlKeys } from './control-keys.ts';
+import type { ControlActionOverrides, ControlKeyOverrides, ControlScheme } from '@be-music/player-browser/host';
 import type { LaneKeyOverrides } from '@be-music/player-engine/lanes';
 
 /** `localStorage` key of the whole Options dialog document. Reset deletes it with the other `be-music.*` settings. */
@@ -141,6 +143,9 @@ export interface OptionSettings {
   autoScratch2P: boolean;
   anyKey: boolean;
   laneKeys: LaneKeyOverrides;
+  controlKeys: ControlKeyOverrides;
+  builtInControlScheme: ControlScheme;
+  actionKeys: ControlActionOverrides;
   sort: BrowseSort;
   keysFilter: KeysFilter;
   difficultyFilter: DifficultyFilter;
@@ -370,6 +375,9 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'autoScratch2P', booleanOf(raw.autoScratch2P));
   assign(settings, 'anyKey', booleanOf(raw.anyKey));
   if (raw.laneKeys !== undefined) settings.laneKeys = parseLaneKeys(raw.laneKeys);
+  if (raw.controlKeys !== undefined) settings.controlKeys = parseControlKeys(raw.controlKeys);
+  assign(settings, 'builtInControlScheme', oneOf(raw.builtInControlScheme, CONTROL_SCHEMES));
+  if (raw.actionKeys !== undefined) settings.actionKeys = parseActionKeys(raw.actionKeys);
   assign(settings, 'playInSilentMode', booleanOf(raw.playInSilentMode));
   assign(settings, 'muted', booleanOf(raw.muted));
   assign(settings, 'tempoEnabled', booleanOf(raw.tempoEnabled));
@@ -624,6 +632,9 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('autoScratch2P');
   assignState('anyKey');
   assignState('laneKeys');
+  assignState('controlKeys');
+  assignState('builtInControlScheme');
+  assignState('actionKeys');
   assignState('sort');
   assignState('keysFilter');
   assignState('difficultyFilter');
@@ -753,6 +764,9 @@ export function captureOptionSettings(
     autoScratch2P: state.autoScratch2P,
     anyKey: state.anyKey,
     laneKeys: state.laneKeys,
+    controlKeys: state.controlKeys,
+    builtInControlScheme: state.builtInControlScheme,
+    actionKeys: state.actionKeys,
     sort: state.sort,
     keysFilter: state.keysFilter,
     difficultyFilter: state.difficultyFilter,
