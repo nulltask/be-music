@@ -109,36 +109,23 @@ export function clearPlayerSettings(storage: PlayerStorage | undefined = default
   return removed;
 }
 
-/**
- * Keys the player has renamed, former → current: the Options dialog's document and folder states were the Debug
- * Menu's. The current document key is `OPTION_SETTINGS_STORAGE_KEY` (`option-settings.ts`, which imports this module).
- */
-export const RENAMED_PLAYER_STORAGE_KEYS: Readonly<Record<string, string>> = {
-  [`${PLAYER_STORAGE_PREFIX}debug-menu-settings`]: `${PLAYER_STORAGE_PREFIX}option-settings`,
-  [`${PLAYER_STORAGE_PREFIX}debug-menu-folders`]: OPTION_FOLDERS_STORAGE_KEY,
-};
-
-/**
- * Moves the former player namespace, then the renamed keys, once each: a newer value under the current key is kept, and
- * an old key is removed only after it is copied.
- */
+/** Moves the former player namespace once, keeping newer values and removing an old key only after copying it. */
 export function migratePlayerStorage(storage: PlayerStorage | undefined = defaultStorage()): void {
   if (!storage) return;
   const previousPrefix = 'be-music-demo.';
-  const move = (key: string, target: string): void => {
-    const value = storage.getItem(key);
-    if (value === null) return;
-    if (storage.getItem(target) === null) storage.setItem(target, value);
-    storage.removeItem(key);
-  };
   try {
     const keys: string[] = [];
     for (let index = 0; index < storage.length; index++) {
       const key = storage.key(index);
       if (key?.startsWith(previousPrefix)) keys.push(key);
     }
-    for (const key of keys) move(key, `${PLAYER_STORAGE_PREFIX}${key.slice(previousPrefix.length)}`);
-    for (const [key, target] of Object.entries(RENAMED_PLAYER_STORAGE_KEYS)) move(key, target);
+    for (const key of keys) {
+      const target = `${PLAYER_STORAGE_PREFIX}${key.slice(previousPrefix.length)}`;
+      const value = storage.getItem(key);
+      if (value === null) continue;
+      if (storage.getItem(target) === null) storage.setItem(target, value);
+      storage.removeItem(key);
+    }
   } catch {
     // Leave uncopied data in place when storage is blocked or full; retry on the next visit.
   }

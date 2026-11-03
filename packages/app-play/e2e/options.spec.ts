@@ -108,7 +108,7 @@ for (const hasCurrentCourses of [false, true]) {
       await write('be-music-demo', oldCourses);
       if (hasCurrent) await write('be-music', currentCourses);
       localStorage.setItem(
-        'be-music-demo.debug-menu-settings',
+        'be-music-demo.option-settings',
         JSON.stringify({ version: 0, updatedAt: Date.now(), settings: { autoPlay: true } }),
       );
       localStorage.setItem('be-music-demo.chart-best-records', 'saved records');
@@ -119,9 +119,7 @@ for (const hasCurrentCourses of [false, true]) {
     expect(await player.readOption(['Play options'], 'Auto play')).toBe(true);
     expect(await player.page.evaluate(() => localStorage.getItem('be-music.chart-best-records'))).toBe('saved records');
     expect(
-      await player.page.evaluate(() =>
-        Object.keys(localStorage).filter((key) => key.startsWith('be-music-demo.') || key.includes('debug-menu')),
-      ),
+      await player.page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('be-music-demo.'))),
     ).toEqual([]);
     const readCourses = () =>
       player.page.evaluate(async () => {
