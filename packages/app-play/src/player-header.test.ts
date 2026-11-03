@@ -17,7 +17,7 @@ afterEach(() => {
   setPlayerHeaderAccount(undefined);
   setPlayerHeaderSettingsOpen(false);
   bindPlayerHeader({
-    toggleDebugMenu: null,
+    toggleOptions: null,
     openSignIn: null,
     selectLanguage: setPlayerLang,
   });
@@ -70,7 +70,7 @@ test('renders the shared header with Settings where Play would be', () => {
   );
 });
 
-test('Settings toggles the Debug Menu and a signed-out account opens sign-in', () => {
+test('Settings toggles the Options dialog and a signed-out account opens sign-in', () => {
   const hit = (selector: string) => ({
     closest: (query: string) =>
       query === selector ? { lang: selector === '#language-menu a' ? 'ja' : undefined } : null,
@@ -93,7 +93,7 @@ test('Settings toggles the Debug Menu and a signed-out account opens sign-in', (
   runPlayerHeaderAction('settings');
   runPlayerHeaderAction('sign-in');
   bindPlayerHeader({
-    toggleDebugMenu: () => {
+    toggleOptions: () => {
       opened.toggles += 1;
       opened.open = !opened.open;
     },
@@ -108,14 +108,14 @@ test('Settings toggles the Debug Menu and a signed-out account opens sign-in', (
   runPlayerHeaderAction('settings');
   expect(opened.open).toBe(true);
   bindPlayerHeader({
-    toggleDebugMenu: null,
+    toggleOptions: null,
     openSignIn: null,
     selectLanguage: setPlayerLang,
   });
   runPlayerHeaderAction('settings');
   runPlayerHeaderAction('settings');
   bindPlayerHeader({
-    toggleDebugMenu: () => {
+    toggleOptions: () => {
       opened.toggles += 1;
     },
     selectLanguage: setPlayerLang,

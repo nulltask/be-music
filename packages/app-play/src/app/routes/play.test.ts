@@ -26,7 +26,7 @@ import { PlayOptionsService } from '../../services/play-options.ts';
 import type { BeatorajaPlayEntry } from '../../services/themes/beatoraja.ts';
 import { courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
 import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
-import type { DebugMenu } from '../../ui/debug-menu/index.ts';
+import type { OptionsDialog } from '../../ui/options/index.ts';
 import type { ResolvedPlayKit } from '../family-kits.ts';
 import { SceneRouter } from '../scene-router.ts';
 import type { NonstopPlay } from './nonstop.ts';
@@ -243,7 +243,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       courseAutoAdvance: false,
       playLayout: 'auto',
     } as PlayRouteDeps['guiState'],
-    debugMenu: {
+    optionsDialog: {
       resolveCompressorParamOverrides: vi.fn(() => ({})),
       refreshHiSpeed: vi.fn(),
     },
@@ -262,7 +262,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
     showPlayOptionMismatch: vi.fn<PlayRouteDeps['showPlayOptionMismatch']>(),
     setPlayOptions: vi.fn<PlayRouteDeps['setPlayOptions']>(),
   };
-  const route = new PlayRoute({ ...deps, debugMenu: deps.debugMenu as unknown as DebugMenu });
+  const route = new PlayRoute({ ...deps, optionsDialog: deps.optionsDialog as unknown as OptionsDialog });
   return { route, router, deps, select, plays, stage, classes, onInterrupt, recording };
 }
 
@@ -530,7 +530,7 @@ describe('PlayRoute.playChart: a chart played at once', () => {
 
   test('"Ghost" hands a built-in play the picked source in its mode, and a replay or another family none', async () => {
     const replays = { slots: vi.fn(() => []), read: vi.fn(async () => undefined) };
-    /** A harness whose Debug Menu asks for a ghost. */
+    /** A harness whose Options dialog asks for a ghost. */
     async function withGhost(
       family: Family = 'built-in',
       ghost: Pick<PlayerGUIState, 'ghost' | 'ghostMode'> = { ghost: 'OWN_BEST', ghostMode: 'PLAYFIELD' },
@@ -540,7 +540,7 @@ describe('PlayRoute.playChart: a chart played at once', () => {
         ...h.deps,
         guiState: { ...h.deps.guiState, ...ghost },
         ghostSources: { replays },
-        debugMenu: h.deps.debugMenu as unknown as DebugMenu,
+        optionsDialog: h.deps.optionsDialog as unknown as OptionsDialog,
       });
       return { ...h, route };
     }
@@ -564,7 +564,7 @@ describe('PlayRoute.playChart: a chart played at once', () => {
         ...h.deps,
         guiState: { ...h.deps.guiState, ghost, ghostMode: 'PACEMAKER' },
         ghostSources: { replays },
-        debugMenu: h.deps.debugMenu as unknown as DebugMenu,
+        optionsDialog: h.deps.optionsDialog as unknown as OptionsDialog,
       });
       return { ...h, route };
     }
@@ -888,7 +888,7 @@ describe('PlayRoute: the hi-speed and the tempo', () => {
     play.options.on.hiSpeed?.(3.25);
     expect(h.deps.guiState.hiSpeed).toBe(3.25);
     expect(storeHiSpeed).toHaveBeenLastCalledWith(3.25);
-    expect(h.deps.debugMenu.refreshHiSpeed).toHaveBeenCalledOnce();
+    expect(h.deps.optionsDialog.refreshHiSpeed).toHaveBeenCalledOnce();
     expect(h.deps.setPlayOptions).toHaveBeenCalledWith({ hiSpeed: 3.25 });
     // The play took it already.
     expect(play.setHiSpeed).not.toHaveBeenCalled();
@@ -899,12 +899,12 @@ describe('PlayRoute: the hi-speed and the tempo', () => {
     const play = await started(h, chartEntry('a'));
     h.route.rememberHiSpeed(2.5, 'menu');
     expect(play.setHiSpeed).toHaveBeenCalledWith(2.5);
-    expect(h.deps.debugMenu.refreshHiSpeed).not.toHaveBeenCalled();
+    expect(h.deps.optionsDialog.refreshHiSpeed).not.toHaveBeenCalled();
     expect(h.deps.setPlayOptions).toHaveBeenCalledWith({ hiSpeed: 2.5 });
 
     h.route.rememberHiSpeed(4, 'select');
     expect(h.deps.guiState.hiSpeed).toBe(4);
-    expect(h.deps.debugMenu.refreshHiSpeed).toHaveBeenCalledOnce();
+    expect(h.deps.optionsDialog.refreshHiSpeed).toHaveBeenCalledOnce();
     expect(h.deps.setPlayOptions).toHaveBeenCalledOnce();
     expect(play.setHiSpeed).toHaveBeenCalledOnce();
 

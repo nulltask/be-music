@@ -18,7 +18,7 @@ import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
 import type { PlayerScene, PlayerWebElements } from '../../types.ts';
-import type { DebugMenu } from '../../ui/debug-menu/index.ts';
+import type { OptionsDialog } from '../../ui/options/index.ts';
 import { SceneRouter } from '../scene-router.ts';
 import { SelectRoute, type SelectRouteDeps } from './select.ts';
 
@@ -185,7 +185,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     },
     audio: {} as AudioService,
     search: { openFromPointer: vi.fn() },
-    debugMenu: {
+    optionsDialog: {
       refreshPlayOptionControllers: vi.fn(),
       scheduleFirstRunResolutionDetect: vi.fn(),
       setGhostAvailability: vi.fn(),
@@ -206,7 +206,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     // The fakes stand in for the services' types.
     beatoraja: deps.beatoraja as unknown as SelectRouteDeps['beatoraja'],
     guiState: deps.guiState as SelectRouteDeps['guiState'],
-    debugMenu: deps.debugMenu as unknown as DebugMenu,
+    optionsDialog: deps.optionsDialog as unknown as OptionsDialog,
     builtIn: deps.builtIn as unknown as SelectRouteDeps['builtIn'],
     familyKits: deps.familyKits as unknown as SelectRouteDeps['familyKits'],
   });
@@ -242,7 +242,7 @@ describe('SelectRoute: the first select screen', () => {
     expect(h.router.current).toBe(scene);
     expect(h.router.select).toBe(scene);
     expect(h.stage).toEqual([scene]);
-    expect(h.deps.debugMenu.scheduleFirstRunResolutionDetect).toHaveBeenCalledOnce();
+    expect(h.deps.optionsDialog.scheduleFirstRunResolutionDetect).toHaveBeenCalledOnce();
     expect(h.deps.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions).not.toHaveBeenCalled();
     expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();
     expect([...h.classes]).toEqual([]);
@@ -282,7 +282,7 @@ describe('SelectRoute: the first select screen', () => {
     expect(lastMade(h).dispose).toHaveBeenCalledOnce();
     expect(h.router.select).toBeUndefined();
     expect(h.stage).toEqual([]);
-    expect(h.deps.debugMenu.scheduleFirstRunResolutionDetect).not.toHaveBeenCalled();
+    expect(h.deps.optionsDialog.scheduleFirstRunResolutionDetect).not.toHaveBeenCalled();
   });
 });
 
@@ -311,7 +311,7 @@ describe('SelectRoute: coming back to the select screen', () => {
       ...[scene.updateKit, scene.setSounds, scene.setLibrary].map((fn) => fn.mock.invocationCallOrder[0]!),
     );
     expect(takes).toBeLessThan(scene.restore.mock.invocationCallOrder[0]!);
-    expect(h.deps.debugMenu.scheduleFirstRunResolutionDetect).toHaveBeenCalledOnce();
+    expect(h.deps.optionsDialog.scheduleFirstRunResolutionDetect).toHaveBeenCalledOnce();
   });
 
   test('the built-in screen keeps its own kit on a return', async () => {
@@ -469,7 +469,7 @@ describe('SelectRoute: dropping the screen for another skin system or LR2 theme'
     h.route.lastSelectNavigation = AT_FOLDER;
     await h.router.leave();
     await h.route.showSelect();
-    // The player browses on, then picks another skin system in the Debug Menu.
+    // The player browses on, then picks another skin system in the Options dialog.
     builtIn.snapshot.mockReturnValue(AT_FIXTURE);
     await h.route.dropSelect();
     expect(builtIn.dispose).toHaveBeenCalledOnce();
@@ -531,7 +531,7 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.deps.showDecide).not.toHaveBeenCalled();
   });
 
-  test('its play option edits go to the play options in force and the Debug Menu; a new hi-speed is remembered', async () => {
+  test('its play option edits go to the play options in force and the Options dialog; a new hi-speed is remembered', async () => {
     const h = harness();
     await h.route.showSelect();
     const edit = (changes: Partial<PlayOptions>): void =>
@@ -541,7 +541,7 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.playOptions.current).toMatchObject({ autoPlay: true, hsFix: 'MAXBPM' });
     expect(h.deps.guiState.autoPlay).toBe(true);
     expect(h.deps.rememberHiSpeed).not.toHaveBeenCalled();
-    expect(h.deps.debugMenu.refreshPlayOptionControllers).toHaveBeenCalledOnce();
+    expect(h.deps.optionsDialog.refreshPlayOptionControllers).toHaveBeenCalledOnce();
 
     edit({ hiSpeed: 3.5 });
     expect(h.deps.rememberHiSpeed).toHaveBeenCalledWith(3.5, 'select');

@@ -18,7 +18,7 @@ import {
   type PracticeRangeChart,
   type PracticeRangeHandle,
 } from '@be-music/player-scene-model';
-import type { DebugMenu } from './index.ts';
+import type { OptionsDialog } from './index.ts';
 
 const GRAPH_HEIGHT = 56;
 /** Each density column is this many CSS pixels wide. */
@@ -219,11 +219,11 @@ export class PracticeRangePicker {
 }
 
 /**
- * Adds the PRACTICE range picker to the Play options folder (with the menu as `this`). It shows only while PRACTICE is
+ * Adds the PRACTICE range picker to the Play options folder (with the dialog as `this`). It shows only while PRACTICE is
  * on (`refreshRulesetChoices`), is disabled during a play with the other play options, and follows the chart under the
  * select screen's cursor (`setPracticeChart`).
  */
-export function buildPracticeRangePicker(this: DebugMenu, folder: OptionContainer): void {
+export function buildPracticeRangePicker(this: OptionsDialog, folder: OptionContainer): void {
   const picker = new PracticeRangePicker(
     () => ({ startMs: this.guiState.practiceStartMs, endMs: this.guiState.practiceEndMs }),
     ({ startMs, endMs }) => {

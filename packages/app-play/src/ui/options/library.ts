@@ -1,12 +1,12 @@
 import { selectBinding } from '../../pane-controls.ts';
-// The Debug Menu's Library & records folder. It is built with the menu as `this` (`DebugMenu`).
+// The Options dialog's Library & records folder. It is built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
 import { storeChartBestRecords } from '../../chart-best-records.ts';
 import { LocalDataPanel } from '../../local-data-panel.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
 import type { ReplayAutoSaveRule } from '../../services/replay-slots.ts';
-import { DEBUG_MENU_FOLDERS, type DebugMenuFolder } from './folders.ts';
-import type { DebugMenu } from './index.ts';
+import { OPTION_FOLDERS, type OptionFolderSpec } from './folders.ts';
+import type { OptionsDialog } from './index.ts';
 /** Each replay slot auto-save rule, as beatoraja's launcher names it. */
 const REPLAY_AUTO_SAVE_LABELS: Record<string, ReplayAutoSaveRule> = {
   'Never (save by hand)': 'never',
@@ -27,9 +27,9 @@ const REPLAY_AUTO_SAVE_LABELS: Record<string, ReplayAutoSaveRule> = {
  * and the BGA transcode settings that apply while charts load.
  */
 export function buildLibraryFolder(
-  this: DebugMenu,
+  this: OptionsDialog,
   library: OptionContainer,
-  addFolder: (parent: OptionContainer, folder: DebugMenuFolder) => OptionContainer,
+  addFolder: (parent: OptionContainer, folder: OptionFolderSpec) => OptionContainer,
 ): void {
   const urlParams = parseURLMediaParams(window.location.href);
   const urls = {
@@ -61,7 +61,7 @@ export function buildLibraryFolder(
   // The replay slots' auto-save rules (beatoraja's `autosavereplay`): a result saves into each slot whose rule its play
   // meets against the best record before it (by default the best EX score, lamp and BP, and the latest play). Saving by
   // hand (keys 1-4, the replay-slot card) works whatever they say.
-  const slots = addFolder(library, DEBUG_MENU_FOLDERS.replaySlots);
+  const slots = addFolder(library, OPTION_FOLDERS.replaySlots);
   for (const slot of [1, 2, 3, 4] as const) {
     selectBinding(slots, this.guiState, `replaySlotAutoSave${slot}`, `Slot ${slot} auto-save`, REPLAY_AUTO_SAVE_LABELS);
   }
@@ -95,7 +95,7 @@ export function buildLibraryFolder(
   // the consumer treats anything `≤ 0` as "preserve resolution". Earlier iterations split resize into a checkbox +
   // size pair, but users would change the size without realizing they also had to flip the checkbox — the resize was
   // silently a no-op. Folding both into one control with an explicit `Off` row removes that footgun.
-  const transcode = addFolder(library, DEBUG_MENU_FOLDERS.bgaTranscode);
+  const transcode = addFolder(library, OPTION_FOLDERS.bgaTranscode);
   // WebCodecs `VideoEncoder` is a browser feature; gate the checkbox on its existence so the user can't toggle a
   // state the runtime can't honor. On unsupported browsers (Safari < 17, older Firefox builds) the controller is
   // disabled and the seed value stays at `false`.

@@ -34,7 +34,7 @@ function listShows(player: Player, key: ListKey, value: string): Promise<TestHoo
   );
 }
 
-/** The Debug Menu's control for each list option (Play options). */
+/** The Options dialog's control for each list option (Play options). */
 const MENU_LABELS: Readonly<Record<ListKey, string>> = {
   sort: 'Sort',
   keysFilter: 'Key filter',

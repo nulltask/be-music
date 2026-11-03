@@ -27,7 +27,7 @@ function playHostname(): string {
  * stays self-documenting.
  *
  * Sub-elements wired up elsewhere:
- *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings opens the Options dialog (`#options-modal`, `ui/debug-menu/`). Fullscreen covers `#main`, so this header and the site footer stay on the page.
+ *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings opens the Options dialog (`#options-modal`, `ui/options/`). Fullscreen covers `#main`, so this header and the site footer stay on the page.
  *  - `#help-modal` — `help-modal.ts` (`wireHelpModal`), opened from the header's Help button
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
@@ -1255,7 +1255,7 @@ export const PLAYER_APP_HTML = `
     </dialog>
     <!--
       Options: every player setting, a Basecoat dialog with one tab per
-      area. ui/debug-menu/ (DebugMenu.buildGUI) fills #options-modal-body;
+      area. ui/options/ (OptionsDialog.buildGUI) fills #options-modal-body;
       the header's Settings button opens it, and so does #options-open
       while the play surface is fullscreen and the header is not shown.
     -->

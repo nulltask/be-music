@@ -44,7 +44,7 @@ export function resolveDefaultSkinEffects(stored: string | null | undefined, sig
   return 'full';
 }
 
-/** The Debug Menu's play-layout pick: follow the device, or force the desktop (standard) or touch layout. */
+/** The Options dialog's play-layout pick: follow the device, or force the desktop (standard) or touch layout. */
 export type PlayLayoutChoice = 'auto' | 'standard' | 'touch';
 
 /** The gameplay layout to ask the play scene for: an explicit pick wins, `'auto'` is touch on phones and tablets. */

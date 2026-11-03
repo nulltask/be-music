@@ -213,7 +213,7 @@ export class LibraryService {
   }
 
   /**
-   * Shared post-enumeration pipeline for both drag-drop and the Debug Menu's "Open folder" / "Open files" pickers. Routes the incoming
+   * Shared post-enumeration pipeline for both drag-drop and the Options dialog's "Open folder" / "Open files" pickers. Routes the incoming
    * file list through {@link splitDroppedChartAndThemeFiles}, dispatches theme + song loaders in parallel, then mounts
    * the freshly populated select view.
    *
@@ -363,7 +363,7 @@ export class LibraryService {
   }
 
   /**
-   * Loads what the Debug Menu's "Open files" picker returned, as a drop of the same files: a chart archive (`.zip`) goes
+   * Loads what the Options dialog's "Open files" picker returned, as a drop of the same files: a chart archive (`.zip`) goes
    * to the song collection whole, another archive is expanded, and replays start once the archives are listed.
    */
   public async loadPickedFiles(files: File[]): Promise<void> {

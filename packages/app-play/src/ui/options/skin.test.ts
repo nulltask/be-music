@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vite-plus/test';
 import { rebuildSkinSettingsFolder } from './skin.ts';
-import type { DebugMenu } from './index.ts';
+import type { OptionsDialog } from './index.ts';
 
 test('skin reset captures the cleared overrides in the unified settings document', () => {
   let reset: (() => void) | undefined;
@@ -28,7 +28,7 @@ test('skin reset captures the cleared overrides in the unified settings document
     scheduleSettingsSave: () => captured.push(Object.fromEntries(skinSettings)),
     rebuildSkinSettingsFolder: vi.fn(),
   };
-  rebuildSkinSettingsFolder.call(menu as unknown as DebugMenu);
+  rebuildSkinSettingsFolder.call(menu as unknown as OptionsDialog);
   expect(reset).toBeDefined();
   reset!();
   expect(captured).toEqual([{ other: { glow: false } }]);

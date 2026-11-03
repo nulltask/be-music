@@ -1,10 +1,10 @@
-// Storage data shared by settings services and the Debug Menu; no UI dependencies.
+// Storage data shared by settings services and the Options dialog; no UI dependencies.
 
 /** Prefix every `localStorage` key the player writes starts with. */
 export const PLAYER_STORAGE_PREFIX = 'be-music.';
 
-/** Where the open / closed state of each Debug Menu folder is remembered. */
-export const DEBUG_MENU_FOLDERS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}debug-menu-folders`;
+/** Where the open / closed state of each Options dialog folder is remembered. */
+export const OPTION_FOLDERS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}option-folders`;
 
 /**
  * Stored keys "Reset settings" leaves alone: the best records are play data, not settings, and have their own
@@ -16,7 +16,7 @@ export const PLAYER_STORAGE_KEYS_KEPT_ON_RESET: readonly string[] = [`${PLAYER_S
 export type FolderOpenStates = Record<string, boolean>;
 
 /** Minimal storage surface, so tests can hand in a stub and blocked storage can throw. */
-export interface DebugMenuStorage {
+export interface PlayerStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
@@ -24,7 +24,7 @@ export interface DebugMenuStorage {
   key(index: number): string | null;
 }
 
-export function defaultStorage(): DebugMenuStorage | undefined {
+export function defaultStorage(): PlayerStorage | undefined {
   try {
     return globalThis.localStorage;
   } catch {
@@ -60,9 +60,9 @@ export function serializeFolderOpenStates(states: FolderOpenStates): string {
   return JSON.stringify(states);
 }
 
-export function readFolderOpenStates(storage: DebugMenuStorage | undefined = defaultStorage()): FolderOpenStates {
+export function readFolderOpenStates(storage: PlayerStorage | undefined = defaultStorage()): FolderOpenStates {
   try {
-    return parseFolderOpenStates(storage?.getItem(DEBUG_MENU_FOLDERS_STORAGE_KEY));
+    return parseFolderOpenStates(storage?.getItem(OPTION_FOLDERS_STORAGE_KEY));
   } catch {
     return {};
   }
@@ -70,17 +70,17 @@ export function readFolderOpenStates(storage: DebugMenuStorage | undefined = def
 
 export function storeFolderOpenStates(
   states: FolderOpenStates,
-  storage: DebugMenuStorage | undefined = defaultStorage(),
+  storage: PlayerStorage | undefined = defaultStorage(),
 ): void {
   try {
-    storage?.setItem(DEBUG_MENU_FOLDERS_STORAGE_KEY, serializeFolderOpenStates(states));
+    storage?.setItem(OPTION_FOLDERS_STORAGE_KEY, serializeFolderOpenStates(states));
   } catch {
     // Private windows / blocked storage: folders still open and close, just not remembered.
   }
 }
 
 /** The player's stored keys a settings reset removes: every `be-music.*` key except the kept ones. */
-export function playerSettingKeys(storage: DebugMenuStorage | undefined = defaultStorage()): string[] {
+export function playerSettingKeys(storage: PlayerStorage | undefined = defaultStorage()): string[] {
   const keys: string[] = [];
   try {
     if (!storage) return keys;
@@ -95,7 +95,7 @@ export function playerSettingKeys(storage: DebugMenuStorage | undefined = defaul
 }
 
 /** Removes every player setting (see {@link playerSettingKeys}); returns how many keys were removed. */
-export function clearPlayerSettings(storage: DebugMenuStorage | undefined = defaultStorage()): number {
+export function clearPlayerSettings(storage: PlayerStorage | undefined = defaultStorage()): number {
   const keys = playerSettingKeys(storage);
   let removed = 0;
   for (const key of keys) {
@@ -109,23 +109,36 @@ export function clearPlayerSettings(storage: DebugMenuStorage | undefined = defa
   return removed;
 }
 
-/** Moves the former player namespace once, keeping newer values and removing an old key only after copying it. */
-export function migratePlayerStorage(storage: DebugMenuStorage | undefined = defaultStorage()): void {
+/**
+ * Keys the player has renamed, former → current: the Options dialog's document and folder states were the Debug
+ * Menu's. The current document key is `OPTION_SETTINGS_STORAGE_KEY` (`option-settings.ts`, which imports this module).
+ */
+export const RENAMED_PLAYER_STORAGE_KEYS: Readonly<Record<string, string>> = {
+  [`${PLAYER_STORAGE_PREFIX}debug-menu-settings`]: `${PLAYER_STORAGE_PREFIX}option-settings`,
+  [`${PLAYER_STORAGE_PREFIX}debug-menu-folders`]: OPTION_FOLDERS_STORAGE_KEY,
+};
+
+/**
+ * Moves the former player namespace, then the renamed keys, once each: a newer value under the current key is kept, and
+ * an old key is removed only after it is copied.
+ */
+export function migratePlayerStorage(storage: PlayerStorage | undefined = defaultStorage()): void {
   if (!storage) return;
   const previousPrefix = 'be-music-demo.';
+  const move = (key: string, target: string): void => {
+    const value = storage.getItem(key);
+    if (value === null) return;
+    if (storage.getItem(target) === null) storage.setItem(target, value);
+    storage.removeItem(key);
+  };
   try {
     const keys: string[] = [];
     for (let index = 0; index < storage.length; index++) {
       const key = storage.key(index);
       if (key?.startsWith(previousPrefix)) keys.push(key);
     }
-    for (const key of keys) {
-      const target = `${PLAYER_STORAGE_PREFIX}${key.slice(previousPrefix.length)}`;
-      const value = storage.getItem(key);
-      if (value === null) continue;
-      if (storage.getItem(target) === null) storage.setItem(target, value);
-      storage.removeItem(key);
-    }
+    for (const key of keys) move(key, `${PLAYER_STORAGE_PREFIX}${key.slice(previousPrefix.length)}`);
+    for (const [key, target] of Object.entries(RENAMED_PLAYER_STORAGE_KEYS)) move(key, target);
   } catch {
     // Leave uncopied data in place when storage is blocked or full; retry on the next visit.
   }

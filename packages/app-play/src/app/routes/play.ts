@@ -55,7 +55,7 @@ import type { BeatorajaPlayEntry, BeatorajaThemeService } from '../../services/t
 import { chartCopiesItself, courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
 import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
-import type { DebugMenu } from '../../ui/debug-menu/index.ts';
+import type { OptionsDialog } from '../../ui/options/index.ts';
 import type { FamilyKits, ResolvedPlayKit } from '../family-kits.ts';
 import { resolvePlaySceneOptions, type PlaySceneGUIState } from '../play-scene-options.ts';
 import type { SceneRouter } from '../scene-router.ts';
@@ -110,7 +110,7 @@ export interface PlayRouteDeps {
   readonly leaderboard: Pick<LeaderboardPanel, 'maybeSubmit'> & Partial<Pick<LeaderboardPanel, 'playerName'>>;
   /** The kit the play is drawn with. */
   readonly familyKits: Pick<FamilyKits, 'resolvePlayKit' | 'selectSoundSet'>;
-  /** The beatoraja play entry in force, which the Debug Menu's skin pickers and the skin-options panel apply to. */
+  /** The beatoraja play entry in force, which the Options dialog's skin pickers and the skin-options panel apply to. */
   readonly beatoraja: Pick<BeatorajaThemeService, 'activeBeatorajaPlay'>;
   /** The course run in progress: a stage's lane limits, and giving the course up. */
   readonly courses: Pick<CourseRunService, 'active' | 'giveUp' | 'abandonRun'>;
@@ -123,7 +123,7 @@ export interface PlayRouteDeps {
   /** The play options in force: the covers, HS-FIX, BGA and score graph the play is made with. */
   readonly playOptions: Pick<PlayOptionsService, 'current'> &
     Partial<Pick<PlayOptionsService, 'arrangementFor' | 'rememberArrangement'>>;
-  /** The Debug Menu's state: the lane, gauge, tempo, audio and debug options the play is made with. */
+  /** The Options dialog's state: the lane, gauge, tempo, audio and debug options the play is made with. */
   readonly guiState: PlaySceneGUIState &
     Pick<PlayerGUIState, 'courseAutoAdvance' | 'playLayout' | 'ghost' | 'ghostMode'>;
   /**
@@ -131,8 +131,8 @@ export interface PlayRouteDeps {
    * reader for shows no ghost.
    */
   readonly ghostSources?: GhostSourceDeps;
-  /** The Debug Menu: the compressor's tuned parameters, and the hi-speed slider. */
-  readonly debugMenu: DebugMenu;
+  /** The Options dialog: the compressor's tuned parameters, and the hi-speed slider. */
+  readonly optionsDialog: OptionsDialog;
   /** The compressor architecture every play mounts with (`?compressor=`). */
   readonly compressorMode: 'split' | 'legacy';
   /** The device: the built-in play's layout follows it. */
@@ -200,7 +200,7 @@ export class PlayRoute {
   private readonly playOptions: PlayRouteDeps['playOptions'];
   private readonly guiState: PlayRouteDeps['guiState'];
   private readonly ghostSources: PlayRouteDeps['ghostSources'];
-  private readonly debugMenu: PlayRouteDeps['debugMenu'];
+  private readonly optionsDialog: PlayRouteDeps['optionsDialog'];
   private readonly compressorMode: PlayRouteDeps['compressorMode'];
   private readonly deviceProfile: PlayRouteDeps['deviceProfile'];
   private readonly audio: PlayRouteDeps['audio'];
@@ -232,7 +232,7 @@ export class PlayRoute {
     this.playOptions = deps.playOptions;
     this.guiState = deps.guiState;
     this.ghostSources = deps.ghostSources;
-    this.debugMenu = deps.debugMenu;
+    this.optionsDialog = deps.optionsDialog;
     this.compressorMode = deps.compressorMode;
     this.deviceProfile = deps.deviceProfile;
     this.audio = deps.audio;
@@ -313,7 +313,7 @@ export class PlayRoute {
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
     const nonstop = overrides.nonstop;
-    // The Debug Menu's picks and the play options in force, with a course's lane limits, a replay's recorded setup and
+    // The Options dialog's picks and the play options in force, with a course's lane limits, a replay's recorded setup and
     // the tempo chosen (`play-scene-options.ts`).
     const { autoPlay, tempo, settings, course } = resolvePlaySceneOptions({
       guiState: this.guiState,
@@ -331,7 +331,7 @@ export class PlayRoute {
       courseStage,
       activeCourse: this.activeCourse,
       nonstop,
-      audioCompressorParams: this.debugMenu.resolveCompressorParamOverrides(),
+      audioCompressorParams: this.optionsDialog.resolveCompressorParamOverrides(),
       audioCompressorMode: this.compressorMode,
       replayRecorder: this.replayRecorder,
     });
@@ -551,9 +551,9 @@ export class PlayRoute {
         hiSpeed: onHiSpeedChange,
         judgeTiming: (value) => {
           this.guiState.judgeTimingMs = value;
-          this.debugMenu.refreshJudgeTiming?.();
+          this.optionsDialog.refreshJudgeTiming?.();
           this.setPlayOptions({ judgeTimingMs: value });
-          this.debugMenu.scheduleSettingsSave?.();
+          this.optionsDialog.scheduleSettingsSave?.();
         },
         tempo: onTempoChange,
       },
@@ -569,7 +569,7 @@ export class PlayRoute {
    * behind a decide screen that is backed out of, leaves them as they were. Once per play.
    */
   /**
-   * Draws `view` with the family the Debug Menu just picked, for the chart it is already playing. The play is not
+   * Draws `view` with the family the Options dialog just picked, for the chart it is already playing. The play is not
    * started again. Nothing happens when `view` is not the play in flight.
    */
   public async switchPlayFamily(view: PlayScene): Promise<void> {
@@ -621,7 +621,7 @@ export class PlayRoute {
     // Refresh the recording filename base for the upcoming play — each session writes to a unique file in the user's
     // downloads folder rather than overwriting the previous one.
     this.setRecordingFilenameBase(sanitizeFilenameStem(chartEntry.title) || `gameplay-${Date.now()}`);
-    // The kit for the gameplay family the Debug Menu's "Skin family" pick (or the auto chain, beatoraja → LR2 →
+    // The kit for the gameplay family the Options dialog's "Skin family" pick (or the auto chain, beatoraja → LR2 →
     // default) gives the chart, a replay and a NONSTOP run included (`playsOnBeatoraja`). `preloadGameplay` asks the
     // same.
     if (this.playOptions.current.battleMode === 'AUTO' && !overrides.replay && !overrides.preResolved)
@@ -701,7 +701,7 @@ export class PlayRoute {
   }
 
   /**
-   * Takes a new hi-speed from one surface — the Debug Menu slider, the LR2 select panel, or the running play's keys —
+   * Takes a new hi-speed from one surface — the Options dialog slider, the LR2 select panel, or the running play's keys —
    * remembers it for the next play and mirrors it onto the others: the slider, the select panel, and (for a menu
    * change) the running play.
    */
@@ -716,8 +716,8 @@ export class PlayRoute {
     if (hiSpeed === undefined) return;
     this.guiState.hiSpeed = hiSpeed;
     storeHiSpeed(hiSpeed);
-    this.debugMenu.scheduleSettingsSave?.();
-    if (source !== 'menu') this.debugMenu.refreshHiSpeed();
+    this.optionsDialog.scheduleSettingsSave?.();
+    if (source !== 'menu') this.optionsDialog.refreshHiSpeed();
     if (source !== 'select') this.setPlayOptions({ hiSpeed });
     if (source === 'menu') {
       this.gameplayView?.setHiSpeed(hiSpeed);

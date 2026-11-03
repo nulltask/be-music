@@ -167,7 +167,7 @@ export class CourseRoute {
    * stage filter against the songs and their chart hashes); a stage that finds no chart leaves it unstarted.
    */
   public async startCourse(entry: LibraryCourse, options: { autoPlay?: boolean } = {}): Promise<void> {
-    // AUTO on a course bar plays every stage itself; PLAY follows the Debug Menu's auto play.
+    // AUTO on a course bar plays every stage itself; PLAY follows the Options dialog's auto play.
     this.courses.start(options.autoPlay);
     const plan = planCourseStart(entry);
     // A NEW COURSE bar starts making a course of its folder's kind; songs decided from now on join it.

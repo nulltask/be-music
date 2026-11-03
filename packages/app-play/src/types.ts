@@ -22,7 +22,7 @@ export interface PlayerWebElements {
    */
   chartInput: HTMLInputElement;
   /**
-   * Hidden `<input type="file" multiple>` behind the Debug Menu's "Open files" button: ZIP archives and replays, which
+   * Hidden `<input type="file" multiple>` behind the Options dialog's "Open files" button: ZIP archives and replays, which
    * the folder picker (`chartInput`) can't select.
    */
   filesInput: HTMLInputElement;
@@ -97,7 +97,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   playInSilentMode: boolean;
   /**
    * When true, the next play scales every decoded sample by one gain so the loudest peak sits near −3 dBFS. Off by
-   * default. Remembered with the other Debug Menu settings. Takes the next play, not the one already loaded.
+   * default. Remembered with the other Options dialog settings. Takes the next play, not the one already loaded.
    */
   peakGain: boolean;
   compressor: boolean;
@@ -160,7 +160,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   /**
    * When true (off by default), the replay (`*.bmplay.json` input replay — see `@be-music/player-engine/replay`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
-   * beatoraja result paths. Toggled from the Debug Menu's "Auto-save replays" checkbox.
+   * beatoraja result paths. Toggled from the Options dialog's "Auto-save replays" checkbox.
    */
   autoSaveReplay: boolean;
   /**
@@ -184,14 +184,14 @@ export interface PlayerGUIState extends PlayTempoSettings {
   nonstopPlacement: 'intended' | 'lr2';
   /**
    * Which of what a replay recorded the player seeing a replay or ghost reproduces (tempo, hi-speed, SUDDEN+ /
-   * HIDDEN+, LIFT), the rest staying the viewer's own: the Debug Menu's "Play options / Replay / ghost" toggles, all on
+   * HIDDEN+, LIFT), the rest staying the viewer's own: the Options dialog's "Play options / Replay / ghost" toggles, all on
    * by default, remembered across visits and latched at song start.
    */
   replayView: ReplayPlaybackOptions;
   /** `tempoEnabled` / `tempoPercent` / `tempoPitchMode` / `tempoStretchAlgorithm`: see {@link PlayTempoSettings}. */
   /**
    * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing
-   * in anonymously the first time (docs/leaderboard.md). Toggled from the Debug Menu's "Submit to Leaderboard"
+   * in anonymously the first time (docs/leaderboard.md). Toggled from the Options dialog's "Submit to Leaderboard"
    * checkbox and latched at song start like the auto-save.
    */
   submitToLeaderboard: boolean;
@@ -296,7 +296,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   keysFilter: KeysFilter;
   difficultyFilter: DifficultyFilter;
   /**
-   * Explicit skin-family override picked from the Debug Menu dropdown. `'auto'` (default) keeps the legacy
+   * Explicit skin-family override picked from the Options dialog dropdown. `'auto'` (default) keeps the legacy
    * priority — beatoraja if a beatoraja theme is loaded and covers the chart, otherwise LR2 (which itself falls
    * back to the default family per-scene when the corresponding LR2 skin isn't loaded). Any other value forces
    * that family on every scene; unavailable scenes for the chosen family fall through to the default family

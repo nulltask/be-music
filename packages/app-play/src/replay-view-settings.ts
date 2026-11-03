@@ -1,7 +1,7 @@
 import { DEFAULT_REPLAY_PLAYBACK_OPTIONS, type ReplayPlaybackOptions } from '@be-music/player-engine/replay';
 
 /**
- * The Debug Menu's "Replay / ghost" settings: which of what a replay recorded the player seeing (tempo, hi-speed,
+ * The Options dialog's "Replay / ghost" settings: which of what a replay recorded the player seeing (tempo, hi-speed,
  * SUDDEN+ / HIDDEN+, LIFT) a replay or ghost reproduces, the rest staying the viewer's own. All on by default;
  * remembered in `localStorage` and read once per play, at its start.
  */

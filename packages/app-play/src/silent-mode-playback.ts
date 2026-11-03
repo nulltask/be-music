@@ -1,7 +1,7 @@
 // The player's "Play in silent mode" setting: whether the page asks the platform audio session (`navigator.audioSession`,
 // Safari / iOS) for `'playback'`, so sound plays with the Ring / Silent switch on — at the cost of pausing music
 // playing in other apps. On by default (a rhythm game with no sound is unplayable); turned off it restores the
-// browser's own `'auto'`. Offered on the start card and in the Debug Menu. Also the one-time hint pointing iPhone /
+// browser's own `'auto'`. Offered on the start card and in the Options dialog. Also the one-time hint pointing iPhone /
 // iPad users at the setting when sound starts with it off.
 
 import { applySilentModePlayback, type SystemAudioSessionHost } from '@be-music/player-browser/audio';
@@ -175,7 +175,7 @@ export interface StartSilentModeOptionOptions {
   readonly onChange: (checked: boolean) => void;
 }
 
-/** The start card's "Play in silent mode" checkbox, kept in step with the Debug Menu's. */
+/** The start card's "Play in silent mode" checkbox, kept in step with the Options dialog's. */
 export interface StartSilentModeOption {
   setChecked(checked: boolean): void;
 }

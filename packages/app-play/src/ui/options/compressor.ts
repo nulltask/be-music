@@ -1,5 +1,5 @@
-// The Debug Menu's compressor controls: every compressor's tuning, remembered across visits and handed to each play,
-// and the per-stage folder, shown only where it applies. They run with the menu as `this` (`DebugMenu`).
+// The Options dialog's compressor controls: every compressor's tuning, remembered across visits and handed to each play,
+// and the per-stage folder, shown only where it applies. They run with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
 import {
   DEFAULT_COMPRESSOR_PARAMS,
@@ -12,9 +12,9 @@ import {
   paramsFromTuning,
   storeCompressorTunings,
 } from '../../compressor-tuning.ts';
-import type { DebugMenu } from './index.ts';
-/** Bus `CompressorParams` for every compressor, from the Debug Menu's tuning. */
-export function resolveCompressorParamOverrides(this: DebugMenu): Record<TunableCompressor, CompressorParams> {
+import type { OptionsDialog } from './index.ts';
+/** Bus `CompressorParams` for every compressor, from the Options dialog's tuning. */
+export function resolveCompressorParamOverrides(this: OptionsDialog): Record<TunableCompressor, CompressorParams> {
   return Object.fromEntries(
     TUNABLE_COMPRESSORS.map((compressor) => [
       compressor,
@@ -30,7 +30,7 @@ export function resolveCompressorParamOverrides(this: DebugMenu): Record<Tunable
  *
  * The native `hidden` property removes inapplicable stages from the pane.
  */
-export function refreshCompressorStageVisibility(this: DebugMenu): void {
+export function refreshCompressorStageVisibility(this: OptionsDialog): void {
   const visible = this.guiState.compressor && this.compressorMode === 'split';
   if (this.compressorStageFolder) this.compressorStageFolder.hidden = !visible;
 }
@@ -39,7 +39,7 @@ export function refreshCompressorStageVisibility(this: DebugMenu): void {
  * `?compressor=legacy` architecture is active) with threshold, knee, ratio, attack, and release sliders and a reset.
  * Changes retune a running chart live and are remembered for the next visit.
  */
-export function buildCompressorTuningGUI(this: DebugMenu, parent: OptionContainer): void {
+export function buildCompressorTuningGUI(this: OptionsDialog, parent: OptionContainer): void {
   const labels: Record<TunableCompressor, string> = {
     key: 'Key compressor',
     bgm: 'BGM compressor',

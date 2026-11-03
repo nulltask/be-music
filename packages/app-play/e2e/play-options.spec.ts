@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import { expect, openWithLibrary, SONGS, test } from './support.ts';
 
-test('START BPM is selectable in Debug Menu, remembered and recorded in a play', async ({ player }) => {
+test('START BPM is selectable in Options dialog, remembered and recorded in a play', async ({ player }) => {
   await openWithLibrary(player);
   await player.setOption(['Play options'], 'HS-FIX', 'STARTBPM');
   expect(await player.readOption(['Play options'], 'HS-FIX')).toBe('STARTBPM');
   expect(
-    await player.page.evaluate(() => JSON.parse(localStorage.getItem('be-music.debug-menu-settings')!).settings.hsFix),
+    await player.page.evaluate(() => JSON.parse(localStorage.getItem('be-music.option-settings')!).settings.hsFix),
   ).toBe('STARTBPM');
   await player.setOption(['Play options'], 'Auto play', true);
   await player.browseTo(SONGS, 'Fixture A');
@@ -232,7 +232,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.pressOption(['Play options'], 'New arrangement');
     expect(
       await player.page.evaluate(
-        () => JSON.parse(localStorage.getItem('be-music.debug-menu-settings')!).settings.randomSeed1P,
+        () => JSON.parse(localStorage.getItem('be-music.option-settings')!).settings.randomSeed1P,
       ),
     ).toBe('-1');
   });
@@ -493,7 +493,7 @@ test('LR2 automatic judge timing steps 1 ms after ten late hits, is recorded and
   await player.setOption(['Play options'], 'Judge timing (ms)', 100);
   expect(
     await player.page.evaluate(
-      () => JSON.parse(localStorage.getItem('be-music.debug-menu-settings')!).settings.judgeTimingAutoAdjust,
+      () => JSON.parse(localStorage.getItem('be-music.option-settings')!).settings.judgeTimingAutoAdjust,
     ),
   ).toBe('LR2-ON');
   await player.cursorTo((bar) => bar.title === 'LR2 auto timing', 'LR2 auto-timing chart');
@@ -718,9 +718,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.setOption(['Play options'], 'Gauge', 'P.ATTACK');
     await player.setOption(['Play options'], 'Auto play', true);
     expect(
-      await player.page.evaluate(
-        () => JSON.parse(localStorage.getItem('be-music.debug-menu-settings')!).settings.gauge,
-      ),
+      await player.page.evaluate(() => JSON.parse(localStorage.getItem('be-music.option-settings')!).settings.gauge),
     ).toBe('P-ATTACK');
     await player.cursorTo((bar) => bar.title === 'Perfect attack', 'P.ATTACK chart');
     await player.key('Enter');
@@ -757,9 +755,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.setOption(['Play options'], 'Gauge', 'G.ATTACK');
     await player.setOption(['Play options'], 'Auto play', true);
     expect(
-      await player.page.evaluate(
-        () => JSON.parse(localStorage.getItem('be-music.debug-menu-settings')!).settings.gauge,
-      ),
+      await player.page.evaluate(() => JSON.parse(localStorage.getItem('be-music.option-settings')!).settings.gauge),
     ).toBe('G-ATTACK');
     await player.cursorTo((bar) => bar.title === 'Good attack', 'G.ATTACK chart');
     await player.key('Enter');

@@ -67,7 +67,7 @@ export interface DecideRouteDeps {
   readonly beatoraja: Pick<BeatorajaThemeService, 'beatorajaThemeBGM'>;
   /** The play options in force, which the screen shows. */
   readonly playOptions: Pick<PlayOptionsService, 'current'>;
-  /** The Debug Menu's auto play, and the tempo the status line shows. */
+  /** The Options dialog's auto play, and the tempo the status line shows. */
   readonly guiState: Pick<PlayerGUIState, 'autoPlay' | 'tempoEnabled' | 'tempoPercent' | 'tempoPitchMode'>;
   readonly audio: AudioService;
   /** The skin-options panel of the beatoraja play showing. */

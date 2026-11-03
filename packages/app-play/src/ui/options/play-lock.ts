@@ -1,4 +1,4 @@
-// The locks a play puts on the Debug Menu: the options it latched as it started stay disabled until it ends, and so do
+// The locks a play puts on the Options dialog: the options it latched as it started stay disabled until it ends, and so do
 // the skin controls, which would make the select screen again and end it. A play whose tempo changes live keeps the
 // tempo slider. It works on the controls it is handed, so it is tested against the native disabled-state contract.
 
@@ -7,11 +7,11 @@ export interface LockableControl {
   disabled: boolean;
 }
 
-/** The Debug Menu's controls a play locks, as they are when it locks or unlocks (a picker can be made again meanwhile). */
+/** The Options dialog's controls a play locks, as they are when it locks or unlocks (a picker can be made again meanwhile). */
 export interface PlayLockControls {
   /** "Auto-save replays", latched as a play starts. */
   readonly replaySave: LockableControl | undefined;
-  /** Every option read as a play starts (`DebugMenu.trackPlayOption`). */
+  /** Every option read as a play starts (`OptionsDialog.trackPlayOption`). */
   readonly playOptions: readonly LockableControl[];
   /** "Tempo (%)": one of the play options, which a play whose tempo changes live keeps enabled. */
   readonly tempo: LockableControl | undefined;
@@ -22,7 +22,7 @@ export interface PlayLockControls {
   readonly skin: readonly (LockableControl | undefined)[];
 }
 
-/** Whether a play runs, and the Debug Menu controls it disables meanwhile. */
+/** Whether a play runs, and the Options dialog controls it disables meanwhile. */
 export class PlayLock {
   private skinLocked = false;
   private liveTempo = false;
@@ -71,7 +71,7 @@ export class PlayLock {
   }
 
   /**
-   * Disables the Debug Menu's skin controls for a play, or enables them again: Built-in skin, Skin effects, the LR2
+   * Disables the Options dialog's skin controls for a play, or enables them again: Built-in skin, Skin effects, the LR2
    * theme picker and the Add skin buttons make the select screen again, which would end the play. Skin system is not
    * among them. A drop that opens the select screen still can, and the router then ends the course run
    * (`CourseRunService.endRun`). A skin dropped on its own switches the play's family instead.

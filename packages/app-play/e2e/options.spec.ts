@@ -4,7 +4,7 @@ test('the header opens the Options dialog, its monitors stay read-only and folde
   player,
 }, info) => {
   await openWithLibrary(player, {
-    'be-music.debug-menu-folders': JSON.stringify({
+    'be-music.option-folders': JSON.stringify({
       'Audio / Compressor': true,
       'Library & records / Replay slots': false,
     }),
@@ -31,7 +31,7 @@ test('the header opens the Options dialog, its monitors stay read-only and folde
   const graph = dialog.locator('.options-graph polyline');
   await expect(graph).toHaveAttribute('points', /\d/);
   expect(await graph.getAttribute('points')).not.toContain('NaN');
-  const remembered = await page.evaluate(() => JSON.parse(localStorage.getItem('be-music.debug-menu-folders')!));
+  const remembered = await page.evaluate(() => JSON.parse(localStorage.getItem('be-music.option-folders')!));
   expect(remembered['Library & records / Replay slots']).toBe(true);
   expect(remembered['Audio / Compressor']).toBe(true);
   expect(remembered.Options).toBeUndefined();
@@ -59,9 +59,7 @@ test('Options save immediately across reloads and reset cancels pending publicat
   await player.waitFor((state) => state.scene.kind === 'select', 'initial select');
   await player.setOption(['Play options'], 'Auto play', true);
   expect(
-    await player.page.evaluate(
-      () => JSON.parse(localStorage.getItem('be-music.debug-menu-settings')!).settings.autoPlay,
-    ),
+    await player.page.evaluate(() => JSON.parse(localStorage.getItem('be-music.option-settings')!).settings.autoPlay),
   ).toBe(true);
   await player.page.reload();
   await player.waitFor((state) => state.scene.kind === 'select', 'select after reload');
@@ -71,7 +69,7 @@ test('Options save immediately across reloads and reset cancels pending publicat
   player.page.once('dialog', (dialog) => void dialog.accept());
   await Promise.all([player.page.waitForEvent('load'), player.pressOption(['Developer'], 'Reset settings and reload')]);
   await player.waitFor((state) => state.scene.kind === 'select', 'select after reset');
-  await expect.poll(() => player.page.evaluate(() => localStorage.getItem('be-music.debug-menu-settings'))).toBeNull();
+  await expect.poll(() => player.page.evaluate(() => localStorage.getItem('be-music.option-settings'))).toBeNull();
   expect(await player.readOption(['Play options'], 'Auto play')).toBe(false);
   expect(await player.page.evaluate(() => localStorage.getItem('be-music.chart-best-records'))).toBe('keep');
   expect(methods).toContain('DELETE');
@@ -121,7 +119,9 @@ for (const hasCurrentCourses of [false, true]) {
     expect(await player.readOption(['Play options'], 'Auto play')).toBe(true);
     expect(await player.page.evaluate(() => localStorage.getItem('be-music.chart-best-records'))).toBe('saved records');
     expect(
-      await player.page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('be-music-demo.'))),
+      await player.page.evaluate(() =>
+        Object.keys(localStorage).filter((key) => key.startsWith('be-music-demo.') || key.includes('debug-menu')),
+      ),
     ).toEqual([]);
     const readCourses = () =>
       player.page.evaluate(async () => {
