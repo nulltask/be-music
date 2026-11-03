@@ -69,6 +69,7 @@ export function buildCompressorTuningGUI(this: OptionsDialog, parent: OptionCont
       Object.assign(tuning, defaultCompressorTunings()[compressor]);
       for (const controller of controllers) controller.refresh();
       apply();
+      this.scheduleSettingsSave();
     });
   }
 }
