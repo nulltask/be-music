@@ -72,6 +72,7 @@ export {
   type ControlSettings,
 } from '../session/controls/control-buttons.ts';
 export {
+  CONTROL_ACTION_IDS,
   CONTROL_ACTIONS,
   controlActionKeys,
   resolveControlActions,
