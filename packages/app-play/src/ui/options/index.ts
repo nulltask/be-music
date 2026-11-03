@@ -401,7 +401,7 @@ export class OptionsDialog {
     gui.on('fold', (event) => {
       if (event.expanded) {
         help.attach();
-        relabelOptions(dialog, playerLang());
+        relabelOptions(gui, playerLang());
       }
       this.reportExpanded?.(event.expanded);
     });
@@ -450,8 +450,8 @@ export class OptionsDialog {
     gui.on('change', () => this.scheduleSettingsSave());
     help.attach();
     // The labels in the player's language, and again when it changes (Help's language switch, the header's menu).
-    relabelOptions(dialog, playerLang());
-    onPlayerLangChange(() => relabelOptions(dialog, playerLang()));
+    relabelOptions(gui, playerLang());
+    onPlayerLangChange(() => relabelOptions(gui, playerLang()));
   }
   /**
    * Writes every Options dialog setting locally immediately; remote publishing is debounced for slider changes.

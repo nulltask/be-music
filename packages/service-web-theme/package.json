@@ -5,16 +5,32 @@
   "description": "Shared Basecoat styles and build metadata presentation for Be-Music services",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./server": {
+      "types": "./src/server.ts",
+      "workerd": "./src/server.generated.ts",
+      "worker": "./src/server.generated.ts",
+      "browser": null,
+      "node": "./src/server.ts",
+      "default": "./src/server.generated.ts"
+    }
   },
   "scripts": {
-    "prepare": "node --experimental-strip-types scripts/build-css.ts",
+    "prepare": "node --experimental-strip-types scripts/build-css.ts && node scripts/build-server.ts",
     "build:css": "node --experimental-strip-types scripts/build-css.ts",
-    "bench": "node scripts/bench.ts"
+    "bench": "node scripts/bench.ts",
+    "build:server": "node scripts/build-server.ts"
+  },
+  "dependencies": {
+    "lit": "^3.3.3"
   },
   "devDependencies": {
+    "@lit-labs/ssr": "^4.1.0",
     "@tailwindcss/cli": "^4.3.3",
     "basecoat-css": "^1.0.2",
+    "esbuild": "0.28.2",
+    "miniflare": "5.20261006.1-alpha",
     "tailwindcss": "^4.3.3"
   }
 }

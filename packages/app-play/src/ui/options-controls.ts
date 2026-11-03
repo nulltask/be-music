@@ -1,3 +1,8 @@
+import { repeat } from 'lit/directives/repeat.js';
+import { optionLabel } from './options/labels.ts';
+import { html, nothing, render, type TemplateResult } from 'lit';
+import { live } from 'lit/directives/live.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 // The controls of the player's Options dialog and the beatoraja Skin Config panel, drawn with Basecoat: a switch for a
 // boolean, a select for a choice list, a slider with a number field for a number with a range, a text field, read-only
 // monitors (text, a text area, an FPS graph), buttons, collapsible folders and tabs. A control binds `object[key]`: an
@@ -47,29 +52,36 @@ function uniqueId(prefix: string): string {
   return `${prefix}-${lastId}`;
 }
 
-function element<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string,
-): HTMLElementTagNameMap[K] {
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   if (className !== undefined) node.className = className;
-  if (text !== undefined) node.textContent = text;
   return node;
 }
 
-const CHEVRON_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+const CHEVRON_ICON = html`<svg
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+>
+  <path d="m6 9 6 6 6-6" />
+</svg>`;
 
 /** One thing in the options: a control row, a button, a folder or a set of tabs. */
 export class OptionRow {
   public readonly element: HTMLElement;
   protected parent: OptionContainer | undefined;
+  protected language = 'en';
+  private readonly localize: ((language: string) => void) | undefined;
   private disabledState = false;
 
-  public constructor(element: HTMLElement, parent: OptionContainer | undefined) {
+  public constructor(element: HTMLElement, parent: OptionContainer | undefined, localize?: (language: string) => void) {
     this.element = element;
     this.parent = parent;
+    this.localize = localize;
   }
 
   public get hidden(): boolean {
@@ -95,6 +107,12 @@ export class OptionRow {
     }
   }
 
+  /** Update the view's labels without mutating another renderer's children. */
+  public relabel(language: string): void {
+    this.language = language;
+    this.localize?.(language);
+  }
+
   /** Shows the bound values again. */
   public refresh(): void {}
 
@@ -116,16 +134,14 @@ export class OptionBinding<T = unknown> extends OptionRow {
   private readonly object: Record<PropertyKey, unknown>;
   private readonly key: PropertyKey;
   private readonly params: OptionBindingParams<T>;
-  private readonly labelElement: HTMLElement;
+  private labelText: string;
+  private readonly id = uniqueId('option');
+  private readonly kind: 'select' | 'toggle' | 'number' | 'text' | 'monitor';
   /** The change handlers, typed loosely so a binding of any value type stores as `OptionBinding<unknown>`. */
   private readonly handlers: ((event: { value: unknown }) => void)[] = [];
   private choices: OptionChoice<T>[];
-  private select: HTMLSelectElement | undefined;
-  private toggle: HTMLInputElement | undefined;
-  private range: HTMLInputElement | undefined;
+  private readonly samples: number[] = [];
   private field: HTMLInputElement | undefined;
-  private monitor: HTMLElement | HTMLTextAreaElement | undefined;
-  private graph: { line: SVGPolylineElement; value: HTMLElement; samples: number[] } | undefined;
   private timer: number | undefined;
 
   public constructor(
@@ -140,40 +156,65 @@ export class OptionBinding<T = unknown> extends OptionRow {
     this.key = key;
     this.params = params;
     this.choices = [...(params.options ?? [])];
-    const id = uniqueId('option');
-    this.labelElement = element('label', 'label options-label', params.label ?? String(key));
-    // The label it was made with, which names it for its help (`options/help.ts`) whatever it later reads.
+    this.labelText = params.label ?? String(key);
+    // The original label names the row's help and remembered settings, independently of localization.
     row.dataset.optionLabel = params.label ?? String(key);
-    this.labelElement.setAttribute('for', id);
     const value = object[key];
-    if (params.readonly === true) this.buildMonitor(row, id);
-    else if (params.options !== undefined) this.buildSelect(row, id);
-    else if (typeof value === 'boolean') this.buildToggle(row, id);
-    else if (typeof value === 'number') this.buildNumber(row, id);
-    else this.buildText(row, id);
+    this.kind =
+      params.readonly === true
+        ? 'monitor'
+        : params.options !== undefined
+          ? 'select'
+          : typeof value === 'boolean'
+            ? 'toggle'
+            : typeof value === 'number'
+              ? 'number'
+              : 'text';
+    const slider = this.kind === 'number' && params.min !== undefined && params.max !== undefined;
+    row.classList.toggle('options-toggle-row', this.kind === 'toggle');
+    row.classList.toggle('options-slider-row', slider);
+    row.classList.toggle('options-monitor-row', this.kind === 'monitor');
+    if (!slider && !(this.kind === 'monitor' && (params.view === 'graph' || params.multiline === true)))
+      row.dataset.orientation = 'horizontal';
     this.refresh();
+    if (this.kind === 'monitor') {
+      // A hidden monitor does no sampling or rendering.
+      this.timer = window.setInterval(() => {
+        if (this.element.isConnected && this.element.offsetParent !== null) this.refresh();
+      }, params.interval ?? 200);
+    }
   }
 
-  /** The label beside the control. */
   public get label(): string {
-    return this.labelElement.textContent ?? '';
+    return optionLabel(this.labelText, this.language);
   }
   public set label(value: string) {
-    this.labelElement.textContent = value;
+    this.labelText = value;
     this.element.dataset.optionLabel = value;
+    this.render(false);
   }
 
-  /** A select's choices; setting them keeps the select and its handlers. */
+  public override relabel(language: string): void {
+    super.relabel(language);
+    this.render(false);
+  }
+
+  private labelTemplate(): TemplateResult {
+    return html`<span class="options-label-wrap"
+      ><label class="label options-label" id=${`${this.id}-label`} for=${this.id}>${this.label}</label
+      ><span data-option-help-host></span
+    ></span>`;
+  }
+
+  /** Replacing choices keeps the select, its focus and its event handlers. */
   public get options(): OptionChoice<T>[] {
     return this.choices;
   }
   public set options(choices: OptionChoice<T>[]) {
     this.choices = [...choices];
-    if (this.select !== undefined) this.fillSelect(this.select);
     this.refresh();
   }
 
-  /** Runs `handler` after each edit, with the value written. */
   public on(_event: 'change', handler: (event: { value: T }) => void): this {
     this.handlers.push(handler as (event: { value: unknown }) => void);
     return this;
@@ -183,48 +224,13 @@ export class OptionBinding<T = unknown> extends OptionRow {
     this.render(false);
   }
 
-  /** Shows the bound value; a number or text field being typed in keeps its text unless `force`. */
-  private render(force: boolean): void {
-    const value = this.object[this.key];
-    const typing = !force && this.field !== undefined && document.activeElement === this.field;
-    if (this.select !== undefined) this.select.selectedIndex = choiceIndex(this.choices, value);
-    if (this.toggle !== undefined) this.toggle.checked = value === true;
-    if (typeof value === 'number') {
-      if (this.range !== undefined) {
-        this.range.value = String(value);
-        this.range.style.setProperty('--slider-value', sliderFill(value, this.params.min ?? 0, this.params.max ?? 0));
-      }
-      if (this.field !== undefined && !typing) {
-        this.field.value = formatNumber(value, this.params.step);
-      }
-    } else if (this.field !== undefined && !typing) {
-      this.field.value = displayText(value);
-    }
-    if (this.graph !== undefined) {
-      const sample = typeof value === 'number' ? value : Number.NaN;
-      const { samples } = this.graph;
-      samples.push(sample);
-      const size = this.params.bufferSize ?? 60;
-      if (samples.length > size) samples.splice(0, samples.length - size);
-      this.graph.line.setAttribute(
-        'points',
-        graphPoints(samples, { min: this.params.min ?? 0, max: this.params.max ?? 100, width: 100, height: 32 }, size),
-      );
-      this.graph.value.textContent = Number.isFinite(sample) ? sample.toFixed(1) : '-';
-    } else if (this.monitor !== undefined) {
-      const text = displayText(value);
-      if (this.monitor instanceof HTMLTextAreaElement) this.monitor.value = text;
-      else this.monitor.textContent = text;
-    }
-  }
-
   public override dispose(): void {
     if (this.timer !== undefined) window.clearInterval(this.timer);
     this.timer = undefined;
+    render(nothing, this.element);
     super.dispose();
   }
 
-  /** Writes an edit, runs the handlers, tells the folders above, and shows the value as it now reads. */
   private commit(value: T): void {
     this.object[this.key] = value;
     for (const handler of this.handlers) handler({ value });
@@ -232,162 +238,185 @@ export class OptionBinding<T = unknown> extends OptionRow {
     this.render(true);
   }
 
-  private buildSelect(row: HTMLElement, id: string): void {
-    row.dataset.orientation = 'horizontal';
-    const select = element('select', 'select options-select');
-    select.id = id;
-    this.fillSelect(select);
-    select.addEventListener('change', () => {
-      const choice = this.choices[select.selectedIndex];
-      if (choice !== undefined) this.commit(choice.value);
-    });
-    this.select = select;
-    row.append(this.labelElement, select);
+  /** Updating a field being typed in preserves its unfinished text until the edit is committed. */
+  private render(force: boolean): void {
+    const value = this.object[this.key];
+    const typing = !force && this.field !== undefined && document.activeElement === this.field;
+    render(this.control(value, typing), this.element);
+    this.field = this.element.querySelector<HTMLInputElement>('.options-number, .options-text') ?? undefined;
+    // A select whose bound value has no choice must have no selection, including after choices change.
+    const select = this.element.querySelector('select');
+    if (select !== null) select.selectedIndex = choiceIndex(this.choices, value);
   }
 
-  private fillSelect(select: HTMLSelectElement): void {
-    select.replaceChildren(
-      ...this.choices.map((choice, index) => {
-        const option = element('option', undefined, choice.text);
-        option.value = String(index);
-        return option;
-      }),
-    );
-  }
-
-  private buildToggle(row: HTMLElement, id: string): void {
-    row.dataset.orientation = 'horizontal';
-    row.classList.add('options-toggle-row');
-    const input = element('input', 'input');
-    input.type = 'checkbox';
-    input.setAttribute('role', 'switch');
-    input.id = id;
-    input.addEventListener('change', () => this.commit(input.checked as T));
-    this.toggle = input;
-    row.append(this.labelElement, input);
-  }
-
-  private buildNumber(row: HTMLElement, id: string): void {
+  private control(value: unknown, typing: boolean): TemplateResult {
+    if (this.kind === 'monitor') return this.monitor(value);
+    if (this.kind === 'select')
+      return html`${this.labelTemplate()}
+        <select
+          class="select options-select"
+          id=${this.id}
+          @change=${(event: Event) => {
+            const choice = this.choices[(event.currentTarget as HTMLSelectElement).selectedIndex];
+            if (choice !== undefined) this.commit(choice.value);
+          }}
+        >
+          ${this.choices.map((choice, index) => html`<option value=${index}>${choice.text}</option>`)}
+        </select>`;
+    if (this.kind === 'toggle')
+      return html`${this.labelTemplate()}
+        <input
+          class="input"
+          id=${this.id}
+          type="checkbox"
+          role="switch"
+          .checked=${live(value === true)}
+          @change=${(event: Event) => this.commit((event.currentTarget as HTMLInputElement).checked as T)}
+        />`;
+    const text = typing
+      ? this.field!.value
+      : this.kind === 'number' && typeof value === 'number'
+        ? formatNumber(value, this.params.step)
+        : displayText(value);
+    if (this.kind === 'text')
+      return html`${this.labelTemplate()}
+        <input
+          class="input options-text"
+          id=${this.id}
+          type="text"
+          .spellcheck=${false}
+          .value=${live(text)}
+          @change=${(event: Event) => this.commit((event.currentTarget as HTMLInputElement).value as T)}
+        />`;
     const { min, max, step } = this.params;
-    const field = element('input', 'input options-number');
-    field.type = 'number';
-    field.id = id;
-    field.inputMode = step !== undefined && Number.isInteger(step) && (min ?? 0) >= 0 ? 'numeric' : 'decimal';
-    if (min !== undefined) field.min = String(min);
-    if (max !== undefined) field.max = String(max);
-    field.step = step === undefined ? 'any' : String(step);
-    field.addEventListener('change', () => {
-      const value = constrainNumber(Number(field.value), this.params);
-      if (value === undefined || field.value.trim() === '') this.refresh();
-      else this.commit(value as T);
-    });
-    field.addEventListener('blur', () => this.refresh());
-    this.field = field;
-    if (min === undefined || max === undefined) {
-      row.dataset.orientation = 'horizontal';
-      row.append(this.labelElement, field);
-      return;
-    }
-    // A slider for the range, with the number beside its label for an exact value.
-    row.classList.add('options-slider-row');
-    const range = element('input', 'input options-range');
-    range.type = 'range';
-    range.min = String(min);
-    range.max = String(max);
-    range.step = step === undefined ? 'any' : String(step);
-    range.setAttribute('aria-labelledby', uniqueLabel(this.labelElement));
-    range.addEventListener('input', () => {
-      const value = constrainNumber(Number(range.value), this.params);
-      if (value !== undefined) this.commit(value as T);
-    });
-    this.range = range;
-    const head = element('div', 'options-slider-head');
-    head.append(this.labelElement, field);
-    row.append(head, range);
+    const field = html`<input
+      class="input options-number"
+      type="number"
+      id=${this.id}
+      inputmode=${step !== undefined && Number.isInteger(step) && (min ?? 0) >= 0 ? 'numeric' : 'decimal'}
+      min=${ifDefined(min)}
+      max=${ifDefined(max)}
+      step=${step ?? 'any'}
+      .value=${live(text)}
+      @change=${(event: Event) => {
+        const field = event.currentTarget as HTMLInputElement;
+        const next = constrainNumber(Number(field.value), this.params);
+        if (next === undefined || field.value.trim() === '') this.refresh();
+        else this.commit(next as T);
+      }}
+      @blur=${() => this.refresh()}
+    />`;
+    if (min === undefined || max === undefined) return html`${this.labelTemplate()}${field}`;
+    return html`<div class="options-slider-head">${this.labelTemplate()}${field}</div>
+      <input
+        class="input options-range"
+        type="range"
+        min=${min}
+        max=${max}
+        step=${step ?? 'any'}
+        aria-labelledby=${`${this.id}-label`}
+        .value=${live(String(value))}
+        style=${`--slider-value: ${sliderFill(typeof value === 'number' ? value : min, min, max)}`}
+        @input=${(event: Event) => {
+          const next = constrainNumber(Number((event.currentTarget as HTMLInputElement).value), this.params);
+          if (next !== undefined) this.commit(next as T);
+        }}
+      />`;
   }
 
-  private buildText(row: HTMLElement, id: string): void {
-    row.dataset.orientation = 'horizontal';
-    const field = element('input', 'input options-text');
-    field.type = 'text';
-    field.id = id;
-    field.spellcheck = false;
-    field.addEventListener('change', () => this.commit(field.value as T));
-    this.field = field;
-    row.append(this.labelElement, field);
-  }
-
-  private buildMonitor(row: HTMLElement, id: string): void {
-    row.classList.add('options-monitor-row');
+  private monitor(value: unknown): TemplateResult {
     if (this.params.view === 'graph') {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', '0 0 100 32');
-      svg.setAttribute('preserveAspectRatio', 'none');
-      svg.setAttribute('class', 'options-graph');
-      svg.setAttribute('aria-hidden', 'true');
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-      line.setAttribute('vector-effect', 'non-scaling-stroke');
-      svg.append(line);
-      const output = element('output', 'options-monitor-value');
-      output.id = id;
-      const head = element('div', 'options-slider-head');
-      head.append(this.labelElement, output);
-      row.append(head, svg);
-      this.graph = { line, value: output, samples: [] };
-    } else if (this.params.multiline === true) {
-      const area = element('textarea', 'textarea options-monitor');
-      area.id = id;
-      area.readOnly = true;
-      area.dataset.readonly = '';
-      area.rows = this.params.rows ?? 3;
-      row.append(this.labelElement, area);
-      this.monitor = area;
-    } else {
-      row.dataset.orientation = 'horizontal';
-      const output = element('output', 'options-monitor-value');
-      output.id = id;
-      row.append(this.labelElement, output);
-      this.monitor = output;
+      const sample = typeof value === 'number' ? value : Number.NaN;
+      const size = this.params.bufferSize ?? 60;
+      this.samples.push(sample);
+      if (this.samples.length > size) this.samples.splice(0, this.samples.length - size);
+      return html`<div class="options-slider-head">
+          ${this.labelTemplate()}
+          <output class="options-monitor-value" id=${this.id}
+            >${Number.isFinite(sample) ? sample.toFixed(1) : '-'}</output
+          >
+        </div>
+        <svg viewBox="0 0 100 32" preserveAspectRatio="none" class="options-graph" aria-hidden="true">
+          <polyline
+            vector-effect="non-scaling-stroke"
+            points=${graphPoints(
+              this.samples,
+              { min: this.params.min ?? 0, max: this.params.max ?? 100, width: 100, height: 32 },
+              size,
+            )}
+          ></polyline>
+        </svg>`;
     }
-    // A monitor follows its value while it is on screen; hidden, it costs nothing.
-    this.timer = window.setInterval(() => {
-      if (this.element.isConnected && this.element.offsetParent !== null) this.refresh();
-    }, this.params.interval ?? 200);
+    if (this.params.multiline === true)
+      return html`${this.labelTemplate()}
+        <textarea
+          class="textarea options-monitor"
+          id=${this.id}
+          readonly
+          data-readonly
+          rows=${this.params.rows ?? 3}
+          .value=${live(displayText(value))}
+        ></textarea>`;
+    return html`${this.labelTemplate()}<output class="options-monitor-value" id=${this.id}
+        >${displayText(value)}</output
+      >`;
   }
 }
 
-/** The label's id, given one if it has none, for a control it does not wrap. */
-function uniqueLabel(label: HTMLElement): string {
-  if (label.id === '') label.id = uniqueId('option-label');
-  return label.id;
-}
-
-/** A button. */
+/** A button whose title may be replaced by a live action status. */
 export class OptionButton extends OptionRow {
   public readonly button: HTMLButtonElement;
+  private titleText: string;
+  private readonly originalTitle: string;
+  private readonly handlers: (() => void)[] = [];
 
   public constructor(parent: OptionContainer, params: { title: string }) {
     const row = element('div', 'options-row options-button-row');
     super(row, parent);
-    this.button = element('button', 'btn options-button', params.title);
+    this.titleText = params.title;
+    this.originalTitle = params.title;
     row.dataset.optionLabel = params.title;
-    this.button.type = 'button';
-    this.button.dataset.variant = 'outline';
-    this.button.dataset.size = 'sm';
-    row.append(this.button);
+    this.paint();
+    this.button = row.querySelector('button')!;
   }
 
-  /** The button's text. */
   public get title(): string {
     return this.button.textContent ?? '';
   }
   public set title(value: string) {
-    this.button.textContent = value;
+    this.titleText = value;
+    this.paint();
   }
 
   public on(_event: 'click', handler: () => void): this {
-    this.button.addEventListener('click', () => handler());
+    this.handlers.push(handler);
     return this;
+  }
+
+  public override relabel(language: string): void {
+    super.relabel(language);
+    this.paint();
+  }
+
+  private paint(): void {
+    const title =
+      this.titleText === this.originalTitle || this.titleText === optionLabel(this.originalTitle, 'ja')
+        ? optionLabel(this.originalTitle, this.language)
+        : this.titleText;
+    render(
+      html`<button
+          class="btn options-button"
+          type="button"
+          data-variant="outline"
+          data-size="sm"
+          @click=${() => {
+            for (const handler of this.handlers) handler();
+          }}
+        >
+          ${title}</button
+        ><span data-option-help-host></span>`,
+      this.element,
+    );
   }
 }
 
@@ -421,10 +450,10 @@ export abstract class OptionContainer extends OptionRow {
   }
 
   /** A row holding `content`, laid out, hidden and disabled like the others. */
-  public addElement(content: HTMLElement): OptionRow {
+  public addElement(content: HTMLElement, localize?: (language: string) => void): OptionRow {
     const row = element('div', 'options-row options-element-row');
-    row.append(content);
-    return this.add(new OptionRow(row, this));
+    render(content, row);
+    return this.add(new OptionRow(row, this, localize));
   }
 
   /** Runs `listener` after an edit of any control in it. */
@@ -452,7 +481,26 @@ export abstract class OptionContainer extends OptionRow {
 
   public removeChild(child: OptionRow): void {
     const index = this.children.indexOf(child);
-    if (index >= 0) this.children.splice(index, 1);
+    if (index >= 0) {
+      this.children.splice(index, 1);
+      this.paintChildren();
+    }
+  }
+
+  public override relabel(language: string): void {
+    super.relabel(language);
+    for (const child of this.children) child.relabel(language);
+  }
+
+  private paintChildren(): void {
+    render(
+      repeat(
+        this.children,
+        (child) => child,
+        (child) => child.element,
+      ),
+      this.content,
+    );
   }
 
   /** Reports its opening and closing; a container that does neither never calls `listener`. */
@@ -460,7 +508,8 @@ export abstract class OptionContainer extends OptionRow {
 
   private add<R extends OptionRow>(row: R): R {
     this.children.push(row);
-    this.content.append(row.element);
+    row.relabel(this.language);
+    this.paintChildren();
     return row;
   }
 }
@@ -472,7 +521,7 @@ type FolderKind = 'details' | 'section' | 'dialog';
 export class OptionFolder extends OptionContainer {
   protected readonly content: HTMLElement;
   private readonly kind: FolderKind;
-  private readonly titleElement: HTMLElement;
+  private readonly titleText: string;
   private readonly foldListeners: ((event: { expanded: boolean }) => void)[] = [];
   /** The open state last reported, so a programmatic change is not reported as the user's. */
   private reportedOpen: boolean;
@@ -491,7 +540,7 @@ export class OptionFolder extends OptionContainer {
           : element('section', 'options-section');
     super(root, parent);
     this.kind = params.kind;
-    this.titleElement = element('span', 'options-folder-title', params.title);
+    this.titleText = params.title;
     if (params.kind === 'dialog') {
       this.content = params.content;
       root.addEventListener('close', () => this.reportFold(false));
@@ -500,10 +549,7 @@ export class OptionFolder extends OptionContainer {
       // The English title, which names the folder whatever language it shows in (`options/labels.ts`).
       root.dataset.optionTitle = params.title;
       this.content = element('div', 'options-folder-content');
-      const summary = element('summary', 'options-folder-summary');
-      summary.append(this.titleElement);
-      summary.insertAdjacentHTML('beforeend', CHEVRON_SVG);
-      root.append(summary, this.content);
+      this.paintHeading();
       root.open = params.expanded;
       root.addEventListener('toggle', () => this.reportFold(root.open));
     } else {
@@ -511,9 +557,7 @@ export class OptionFolder extends OptionContainer {
       // The English title, which names the folder whatever language it shows in (`options/labels.ts`).
       root.dataset.optionTitle = params.title;
       this.content = element('div', 'options-folder-content');
-      const heading = element('h3', 'options-section-heading');
-      heading.append(this.titleElement);
-      root.append(heading, this.content);
+      this.paintHeading();
     }
     this.reportedOpen = this.expanded;
   }
@@ -535,7 +579,25 @@ export class OptionFolder extends OptionContainer {
   }
 
   public get title(): string {
-    return this.titleElement.textContent ?? '';
+    return optionLabel(this.titleText, this.language);
+  }
+
+  public override relabel(language: string): void {
+    super.relabel(language);
+    this.paintHeading();
+  }
+
+  private paintHeading(): void {
+    if (this.kind === 'dialog') return;
+    const title = html`<span class="options-folder-title">${this.title}</span><span data-option-help-host></span>`;
+    render(
+      this.kind === 'details'
+        ? html`<summary class="options-folder-summary">${title}${CHEVRON_ICON}</summary>
+            ${this.content}`
+        : html`<h3 class="options-section-heading">${title}</h3>
+            ${this.content}`,
+      this.element,
+    );
   }
 
   /** Whether it is open: a section always is. */
@@ -571,63 +633,78 @@ export class OptionFolder extends OptionContainer {
 /** Basecoat tabs: one page per title, the first selected. */
 export class OptionTabs extends OptionRow {
   public readonly pages: OptionPage[];
-  private readonly buttons: HTMLButtonElement[];
+  private readonly tabIds: string[];
+  private selected = 0;
 
   public constructor(parent: OptionContainer, pages: readonly { title: string }[]) {
-    const root = element('section', 'tabs options-tabs');
-    super(root, parent);
-    const list = element('nav');
-    list.setAttribute('role', 'tablist');
-    list.setAttribute('aria-orientation', 'horizontal');
-    root.append(list);
-    this.buttons = [];
+    super(element('section', 'tabs options-tabs'), parent);
+    this.tabIds = pages.map(() => uniqueId('options-tab'));
     this.pages = pages.map(({ title }, index) => {
-      const tabId = uniqueId('options-tab');
       const panel = element('div', 'options-tab-panel');
       panel.id = uniqueId('options-panel');
       panel.setAttribute('role', 'tabpanel');
-      panel.setAttribute('aria-labelledby', tabId);
+      panel.setAttribute('aria-labelledby', this.tabIds[index]!);
       panel.tabIndex = -1;
-      const button = element('button', undefined, title);
-      button.type = 'button';
-      button.id = tabId;
-      button.setAttribute('role', 'tab');
-      button.dataset.optionTitle = title;
-      button.setAttribute('aria-controls', panel.id);
-      button.addEventListener('click', () => {
-        this.select(index);
-      });
-      button.addEventListener('keydown', (event) => {
-        const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
-        if (step === 0) return;
-        event.preventDefault();
-        const next = (index + step + pages.length) % pages.length;
-        this.buttons[next]?.focus();
-        this.buttons[next]?.click();
-      });
-      this.buttons.push(button);
-      list.append(button);
-      root.append(panel);
       return new OptionPage(this, title, panel);
     });
     this.select(0);
   }
 
-  /** Shows page `index` and hides the others. */
   public select(index: number): void {
-    this.buttons.forEach((button, at) => {
-      const selected = at === index;
-      button.setAttribute('aria-selected', selected ? 'true' : 'false');
-      button.tabIndex = selected ? 0 : -1;
-      const panel = this.pages[at]?.element;
-      if (panel === undefined) return;
-      panel.hidden = !selected;
-      panel.setAttribute('aria-selected', selected ? 'true' : 'false');
+    this.selected = index;
+    this.paint();
+    this.pages.forEach((page, at) => {
+      page.element.hidden = at !== index;
+      page.element.setAttribute('aria-selected', String(at === index));
     });
   }
 
   public override refresh(): void {
     for (const page of this.pages) page.refresh();
+  }
+
+  public override relabel(language: string): void {
+    super.relabel(language);
+    this.paint();
+    for (const page of this.pages) page.relabel(language);
+  }
+
+  public override dispose(): void {
+    for (const page of this.pages) page.dispose();
+    render(nothing, this.element);
+    super.dispose();
+  }
+
+  private paint(): void {
+    render(
+      html`<nav role="tablist" aria-orientation="horizontal">
+          ${this.pages.map(
+            (page, index) =>
+              html` <button
+                type="button"
+                role="tab"
+                id=${this.tabIds[index]}
+                data-option-title=${page.title}
+                aria-controls=${page.element.id}
+                aria-selected=${String(this.selected === index)}
+                tabindex=${this.selected === index ? 0 : -1}
+                @click=${() => this.select(index)}
+                @keydown=${(event: KeyboardEvent) => {
+                  const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+                  if (step === 0) return;
+                  event.preventDefault();
+                  const next = (index + step + this.pages.length) % this.pages.length;
+                  this.select(next);
+                  this.element.querySelector<HTMLButtonElement>(`#${this.tabIds[next]}`)?.focus();
+                }}
+              >
+                ${optionLabel(page.title, this.language)}
+              </button>`,
+          )}
+        </nav>
+        ${this.pages.map((page) => page.element)}`,
+      this.element,
+    );
   }
 }
 

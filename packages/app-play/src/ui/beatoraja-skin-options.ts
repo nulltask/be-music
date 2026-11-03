@@ -86,7 +86,7 @@ export class BeatorajaSkinOptionsPanel {
 
   /**
    * Lazily instantiate the skin-options panel. Deferred from the constructor because the player shell
-   * (the parent the panel attaches to) doesn't exist until `app.innerHTML` materializes.
+   * (the parent the panel attaches to) exists only after the shell's Lit template has been rendered.
    */
   private ensureBeatorajaSkinOptionsGUI(): BeatorajaSkinOptionsGUI {
     if (this.beatorajaSkinOptionsGUI === undefined) {
