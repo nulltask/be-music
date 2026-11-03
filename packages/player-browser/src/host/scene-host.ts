@@ -11,6 +11,7 @@ import type { SceneIdentity } from './family-kit.ts';
 import { logger } from '../logger.ts';
 import { createMaxLimitsGPU } from './webgpu-limits.ts';
 import { disableTransientAttachments } from './webgpu-transient.ts';
+import { retainReleasedTextTextures } from '../stage/text-texture-retention.ts';
 
 const log = logger('scene-host');
 
@@ -208,6 +209,9 @@ export class PixiSceneHost {
     });
     // Safari's WebGPU crashes on the transient MSAA textures Pixi makes on Apple GPUs (see `webgpu-transient.ts`).
     if (this.app.renderer instanceof WebGPURenderer) disableTransientAttachments(this.app.renderer);
+    // A HUD's changing digits come back to strings rasterized moments ago; keep those textures instead of rasterizing
+    // them again (slow on Safari above all). The renderer's teardown returns them with the rest.
+    retainReleasedTextTextures((this.app.renderer as unknown as { canvasText?: object }).canvasText);
     // Surface the actual renderer type — the `preference` field is a *hint*, and the real backend may differ if WebGPU
     // init failed silently or if the override flag was used.
     log.info('renderer ready', {

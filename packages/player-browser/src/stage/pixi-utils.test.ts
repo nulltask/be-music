@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import {
   ChildPool,
@@ -245,6 +245,48 @@ describe('ChildPool', () => {
     expect(text.parent).toBe(textHost);
     // The outer layer's children are still the three hosts only — no leaked direct children.
     expect(layer.children.length).toBe(3);
+  });
+
+  test('hands a string back to the text that showed it last frame, keeping the acquisition order in the host', () => {
+    const layer = new Container();
+    const pool = new ChildPool(layer);
+    const textHost = layer.children[2]!;
+    const draw = (strings: readonly string[]): Text[] =>
+      strings.map((content) => {
+        const node = pool.acquireText(content);
+        node.text = content;
+        return node;
+      });
+    pool.begin();
+    const [free, play, title] = draw(['FREE PLAY', '1', 'Dense']);
+    pool.end();
+    // A new label in front shifts the rest: each string still lands on the node that showed it.
+    pool.begin();
+    const next = draw(['2', 'FREE PLAY', '1', 'Dense']);
+    pool.end();
+    expect(next[1]).toBe(free);
+    expect(next[2]).toBe(play);
+    expect(next[3]).toBe(title);
+    // The host keeps the draw order, so the texts stack as they were acquired.
+    expect(textHost.children.slice(0, 4)).toEqual(next);
+  });
+
+  test('prefers a text in the same style when the same string shows in two styles', () => {
+    const pool = new ChildPool(new Container());
+    const big = new TextStyle({ fontSize: 30 });
+    const small = new TextStyle({ fontSize: 10 });
+    pool.begin();
+    const a = pool.acquireText('7', small);
+    a.text = '7';
+    a.style = small;
+    const b = pool.acquireText('7', big);
+    b.text = '7';
+    b.style = big;
+    pool.end();
+    pool.begin();
+    expect(pool.acquireText('7', big)).toBe(b);
+    expect(pool.acquireText('7', small)).toBe(a);
+    pool.end();
   });
 
   test('reuses the same instance for repeated acquires across begin() cycles', () => {

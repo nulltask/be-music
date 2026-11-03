@@ -42,16 +42,17 @@ export function addHUDText(
   opts: HUDTextOptions = {},
   pool?: ChildPool,
 ): Text {
-  const node = pool?.acquireText() ?? new Text();
+  // A plain fill (no stroke or shadow to keep their own colours) rasterizes white and takes its colour from the tint, so
+  // a colour change — a flashing judgement, a combo turning gold — reuses the glyph texture instead of re-rendering it.
+  const tintable = isTintable(opts);
+  const style = resolveTextStyle(opts, tintable);
+  // The pool hands back the node that showed this string last frame, so it keeps its rasterized texture.
+  const node = pool?.acquireText(text, style) ?? new Text();
   // Rasterize at the final device density so text stays crisp after the viewport magnifies the design canvas.
   const resolution = textResolution();
   if (node.resolution !== resolution) {
     node.resolution = resolution;
   }
-  // A plain fill (no stroke or shadow to keep their own colours) rasterizes white and takes its colour from the tint, so
-  // a colour change — a flashing judgement, a combo turning gold — reuses the glyph texture instead of re-rendering it.
-  const tintable = isTintable(opts);
-  const style = resolveTextStyle(opts, tintable);
   node.text = text;
   if (node.style !== style) {
     node.style = style;
@@ -141,9 +142,28 @@ function isTintable(opts: HUDTextOptions): boolean {
   return opts.stroke === undefined && opts.dropShadow === undefined;
 }
 
+/**
+ * A glow or outline colour rounded to 16 levels per channel. A skin that animates the colour (Synesthesia's accent drifts
+ * with every beat) would otherwise give the text a new style, and so a new rasterized texture, every frame; rounded, the
+ * style changes only when the colour crosses a step, and a blurred glow or thin outline looks the same.
+ */
+export function quantizeTextEffectColor(color: number): number {
+  const channel = (shift: number): number => Math.round(((color >> shift) & 0xff) / 17) * 17;
+  return (channel(16) << 16) | (channel(8) << 8) | channel(0);
+}
+
+/** A glow's opacity rounded to steps of 0.05, for the same reason as {@link quantizeTextEffectColor}. */
+export function quantizeTextEffectAlpha(alpha: number): number {
+  return Math.round(alpha * 20) / 20;
+}
+
 function resolveTextStyle(opts: HUDTextOptions, whiteFill = false): TextStyle {
-  const stroke = opts.stroke;
-  const shadow = opts.dropShadow;
+  const stroke = opts.stroke && { ...opts.stroke, color: quantizeTextEffectColor(opts.stroke.color) };
+  const shadow = opts.dropShadow && {
+    ...opts.dropShadow,
+    color: quantizeTextEffectColor(opts.dropShadow.color),
+    alpha: quantizeTextEffectAlpha(opts.dropShadow.alpha),
+  };
   const fill = whiteFill ? 0xffffff : (opts.fill ?? 0xffffff);
   const key = [
     fill,
@@ -169,7 +189,7 @@ function resolveTextStyle(opts: HUDTextOptions, whiteFill = false): TextStyle {
       fontWeight: opts.weight ?? '500',
       fontFamily: opts.fontFamily ?? DEFAULT_TEXT_FONT,
       letterSpacing: opts.letterSpacing ?? 0,
-      stroke: opts.stroke,
+      stroke,
       // Room for the blurred glow; without it the shadow is clipped to the glyph box and shows as a hard rectangle.
       padding: shadow ? Math.ceil(shadow.blur * 2 + shadow.distance) : 0,
       ...(shadow
