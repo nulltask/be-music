@@ -114,6 +114,10 @@ export const PLAYER_APP_HTML = `
           <div class="drop-title" data-i18n="dropTitle">Drop to load</div>
           <div class="drop-subtitle">
             <span data-i18n="dropFolder">BMS folder</span>
+            <span class="drop-subtitle-sep" aria-hidden="true">·</span>
+            <span data-i18n="dropLR2Skin">LR2 skin</span>
+            <span class="drop-subtitle-sep" aria-hidden="true">·</span>
+            <span data-i18n="dropBeatorajaSkin">beatoraja skin</span>
           </div>
           <!--
             Leaderboard: whether this browser's plays are sent, and the
@@ -122,16 +126,18 @@ export const PLAYER_APP_HTML = `
             the Debug Menu's "Submit to Leaderboard" setting.
           -->
           <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard" data-i18n-aria="leaderboard">
-            <label class="start-check">
-              <input class="input" type="checkbox" id="start-submit" />
-              <span data-i18n="submitPlays">Submit my plays to the Leaderboard</span>
-            </label>
-            <!-- \`loading\` until the account has been read, so a signed-in player never sees "Not signed in". -->
-            <div class="start-account" id="start-account" data-state="loading">
-              <span class="start-account-label" id="start-account-label" data-i18n="checkingAccount">Checking account…</span>
+            <!-- One row: the checkbox, then the account's actions. Under it, one note: who the plays go to, and why. -->
+            <div class="start-leaderboard-row">
+              <label class="start-check">
+                <input class="input" type="checkbox" id="start-submit" />
+                <span data-i18n="submitPlays">Submit my plays to the Leaderboard</span>
+              </label>
               <div class="start-account-actions" id="start-account-actions"></div>
             </div>
-            <p class="start-account-hint" id="start-account-hint"></p>
+            <!-- \`loading\` until the account has been read, so a signed-in player never sees "Not signed in". -->
+            <p class="start-account" id="start-account" data-state="loading">
+              <span class="start-account-label" id="start-account-label" data-i18n="checkingAccount">Checking account…</span><span class="start-account-hint" id="start-account-hint"></span>
+            </p>
             <div class="start-account-status" id="start-account-status" role="status" aria-live="polite"></div>
           </section>
           <!--
