@@ -18,10 +18,19 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   expect(footer).toContain('href="https://accounts.be-music.app/">Accounts</a>');
   expect(footer).toContain('href="https://leaderboard.be-music.app/">Leaderboard</a>');
   expect(footer).toContain('© 2026 nulltask · MIT License');
-  expect(footer).toContain(
+  // Build line on the left, service links in the centre, copyright on the right.
+  expect(footer.indexOf('class="build-info"')).toBeLessThan(footer.indexOf('<nav'));
+  expect(footer.indexOf('<nav')).toBeLessThan(footer.indexOf('© 2026 nulltask'));
+  // Public Beta sits in the drop card, not the footer.
+  expect(footer).not.toContain('data-public-beta-notice');
+  const dropCard = PLAYER_APP_HTML.slice(
+    PLAYER_APP_HTML.indexOf('class="card drop-card'),
+    PLAYER_APP_HTML.indexOf('id="leaderboard-sign-in"'),
+  );
+  expect(dropCard).toContain(
     '<p data-public-beta-notice="en" lang="en">Public Beta. Data may be deleted without notice.</p>',
   );
-  expect(footer).toContain(
+  expect(dropCard).toContain(
     '<p data-public-beta-notice="ja" lang="ja" hidden>パブリックベータのためデータは予告なく削除されることがあります。</p>',
   );
   expect(footer).not.toContain('>beta</span>');
@@ -41,7 +50,9 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   expect(header).toContain('class="flex items-center gap-x-3 px-4 py-2.5 sm:gap-x-6"');
   expect(header).not.toContain('max-w-5xl');
   expect(header).not.toContain('mx-auto');
-  expect(PLAYER_APP_HTML).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
+  expect(PLAYER_APP_HTML).toContain(
+    '>Be-Music Play</a><span class="badge max-sm:hidden" data-variant="outline">Beta</span>',
+  );
   expect(PLAYER_APP_HTML).toContain('data-service-header="settings"');
   expect(PLAYER_APP_HTML).toContain('aria-label="Settings"');
   expect(PLAYER_APP_HTML).toContain('data-service-header="fullscreen"');
@@ -52,7 +63,7 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   expect(PLAYER_APP_HTML).toContain(
     '<h2 class="help-modal-title" id="help-modal-title"><span>Be-Music Play</span><span class="badge" data-variant="outline">Beta</span></h2>',
   );
-  expect(PLAYER_APP_HTML.match(/<span class="badge"/g)).toHaveLength(2);
+  expect(PLAYER_APP_HTML.match(/<span class="badge/g)).toHaveLength(2);
 });
 
 test('uses chart and replay vocabulary in bilingual help', async () => {
