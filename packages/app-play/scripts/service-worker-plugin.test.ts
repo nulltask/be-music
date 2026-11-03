@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   MANIFEST_PLACEHOLDER,
+  findFontStylesheets,
   injectManifest,
   isNeverPrecached,
   precacheURL,
@@ -91,12 +92,12 @@ describe('precacheVersion', () => {
 
 describe('injectManifest', () => {
   test('writes the manifest in place of the placeholder', () => {
-    const manifest = { version: 'abc', urls: ['/'], ffmpegCoreVersion: '0.12.10' };
+    const manifest = { version: 'abc', urls: ['/'], ffmpegCoreVersion: '0.12.10', fontStylesheets: [] };
     expect(injectManifest(`var m=${MANIFEST_PLACEHOLDER};`, manifest)).toBe(`var m=${JSON.stringify(manifest)};`);
   });
 
   test('refuses a worker without exactly one placeholder', () => {
-    const manifest = { version: 'abc', urls: [], ffmpegCoreVersion: '0' };
+    const manifest = { version: 'abc', urls: [], ffmpegCoreVersion: '0', fontStylesheets: [] };
     expect(() => injectManifest('var m=1;', manifest)).toThrow(/found 0/);
     expect(() => injectManifest(`${MANIFEST_PLACEHOLDER}${MANIFEST_PLACEHOLDER}`, manifest)).toThrow(/found 2/);
   });
@@ -134,5 +135,22 @@ describe('the web app manifest', () => {
     for (const icon of manifest.icons) {
       expect(() => readFileSync(resolve(publicDir, icon.src.slice(1)))).not.toThrow();
     }
+  });
+});
+
+describe('findFontStylesheets', () => {
+  test('finds the Google Fonts stylesheets a page links to, each once, unescaped', () => {
+    const html = `<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500&amp;display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500&amp;display=swap" />`;
+    expect(findFontStylesheets(html)).toEqual([
+      'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500&display=swap',
+    ]);
+  });
+
+  test('finds the stylesheet the player shell links to', () => {
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
+    expect(findFontStylesheets(html)).toHaveLength(1);
+    expect(findFontStylesheets(html)[0]).toContain('family=Orbitron');
   });
 });

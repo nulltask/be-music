@@ -1,7 +1,7 @@
 // The player's service worker rules (docs/player-web.md, "Installing the player"): which request it answers and how,
 // and the caches it keeps. Pure, so the rules are tested in Node; `service-worker.ts` applies them.
 //
-// The worker only touches what makes the app shell start offline. Everything dynamic goes straight to the network and
+// The worker only touches what makes the app shell start offline (with the ffmpeg core and the UI fonts). Everything dynamic goes straight to the network and
 // is never cached: the Worker's own routes (`/api/*` with sign-in, accounts, player settings and the Leaderboard API,
 // `/__url-load-proxy`), the embed page (`/embed/`), the archives a `?music=` / `?skin=` link loads (through the proxy or
 // cross-origin), every request that is not a GET, range requests, and cross-origin requests other than the UI fonts.
@@ -14,6 +14,8 @@ export interface PrecacheManifest {
   urls: readonly string[];
   /** The `@ffmpeg/core` version the build serves under `/ffmpeg-core/`; names the ffmpeg core's cache. */
   ffmpegCoreVersion: string;
+  /** The Google Fonts stylesheets the shell links to, cached on install with the font files they name. */
+  fontStylesheets: readonly string[];
 }
 
 /** How the service worker answers a request. */
@@ -24,7 +26,7 @@ export type RequestRoute =
   | 'precached'
   /** A content-hashed build asset under `/assets/`: the cache, else the network, kept for later. */
   | 'hashed-asset'
-  /** The ffmpeg.wasm core: cached on first use, by the core's version. */
+  /** The ffmpeg.wasm core: cached on install (or on first use if that failed), by the core's version. */
   | 'ffmpeg-core'
   /** The Google Fonts stylesheet: the cache at once, refreshed from the network behind it. */
   | 'font-stylesheet'
@@ -51,6 +53,8 @@ export const CACHE_PREFIX = 'be-music-play-';
 export const FONT_CACHE_NAME = `${CACHE_PREFIX}fonts`;
 /** The cache key of the app shell's HTML. */
 export const SHELL_URL = '/';
+/** The ffmpeg.wasm core the player loads (`FFMPEG_CORE_URL` / `FFMPEG_WASM_URL` in player-browser), cached on install. */
+export const FFMPEG_CORE_URLS: readonly string[] = ['/ffmpeg-core/ffmpeg-core.js', '/ffmpeg-core/ffmpeg-core.wasm'];
 /** How long a page load waits for the network before it serves the cached shell. */
 export const NAVIGATION_TIMEOUT_MS = 5000;
 
@@ -128,4 +132,16 @@ export function isCacheableResponse(response: { status: number; type: string }, 
   return (
     response.status === 200 && (response.type === 'basic' || response.type === 'cors' || response.type === 'default')
   );
+}
+
+/**
+ * The font files a Google Fonts stylesheet names (`url(https://fonts.gstatic.com/…)`), each once, in order. Install
+ * caches them so the UI fonts show offline from the first start.
+ */
+export function extractFontFileURLs(css: string): string[] {
+  const urls = new Set<string>();
+  for (const match of css.matchAll(/url\((['"]?)(https:\/\/fonts\.gstatic\.com\/[^'")\s]+)\1\)/g)) {
+    urls.add(match[2]!);
+  }
+  return [...urls];
 }
