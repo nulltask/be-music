@@ -48,7 +48,7 @@ import {
 } from '../loading-overlay.ts';
 import type { PlayerWebElements } from '../types.ts';
 import { expandZipToFiles, fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
-import { isZipArchiveName, sortDroppedArchives } from './drop-archives.ts';
+import { isDroppedArchive, sortDroppedArchives } from './drop-archives.ts';
 
 const dropLog = logger('drop');
 
@@ -230,10 +230,11 @@ export class LibraryService {
       return;
     }
     // Dropped ZIP archives: one that holds a chart goes to the collection whole, as the Open files picker sends it;
-    // any other (a skin, replays, course files) is expanded and joins the drop, as a `?skin=` archive does.
-    const archives = files.filter((file) => isZipArchiveName(file.name));
+    // any other (a skin, replays, course files) is expanded and joins the drop, as a `?skin=` archive does. A ZIP inside
+    // a dropped folder is neither: it stays a plain file of the folder.
+    const archives = files.filter(isDroppedArchive);
     if (archives.length > 0) {
-      files = files.filter((file) => !isZipArchiveName(file.name));
+      files = files.filter((file) => !isDroppedArchive(file));
       const sorted = await sortDroppedArchives(
         await materializeDroppedFiles(archives, {
           onError: (file, error) => dropLog.warn(`skipped (open failed): ${file.webkitRelativePath}`, error),
