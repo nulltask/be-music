@@ -217,7 +217,10 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li>In AUTO play, <kbd>←</kbd> / <kbd>→</kbd> seek 5 s back / forward.</li>
               <li><kbd>Pause</kbd> or <kbd>Tab</kbd> pauses / resumes.</li>
               <li><kbd>F5</kbd> restarts the current chart.</li>
-              <li>On every screen, <kbd>F4</kbd> switches full screen and <kbd>F6</kbd> takes a screenshot.</li>
+              <li>
+                On every screen, <kbd>F4</kbd> switches full screen and <kbd>F6</kbd> takes a screenshot;
+                <kbd>F7</kbd> (<kbd>F1</kbd> on beatoraja skins) shows the frame rate.
+              </li>
               <li><kbd>Esc</kbd> exits to the result screen (or back to chart select).</li>
               <li>
                 Hold <kbd>Backspace</kbd> for 0.5 s to quit the play the same way (works in fullscreen on every
@@ -392,7 +395,10 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li><kbd>Pause</kbd> か <kbd>Tab</kbd> でポーズ / 再開。</li>
               <li><kbd>F5</kbd> で現在の譜面をリスタート。</li>
               <li>
-                どの画面でも <kbd>F4</kbd> でフルスクリーンを切り替え、<kbd>F6</kbd> でスクリーンショットを撮ります。
+                どの画面でも <kbd>F4</kbd> でフルスクリーンを切り替え、<kbd>F6</kbd> でスクリーンショットを撮り、<kbd
+                  >F7</kbd
+                >
+                (beatoraja スキンでは <kbd>F1</kbd>) でフレームレートを表示します。
               </li>
               <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
               <li>
