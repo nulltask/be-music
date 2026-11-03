@@ -219,7 +219,6 @@ describe('captureOptionSettings', () => {
       compressorTuning: defaultCompressorTunings(),
       skinSettings: { test: { glow: false, offset: 5, theme: 'light' } },
       courseTableURLs: ['https://example.com/courses.json'],
-      folders: { Audio: false, 'Skin & display': true },
       replaySlotAutoSave1: 'always',
       replaySlotAutoSave2: 'never',
       replaySlotAutoSave3: 'score-update',
@@ -240,7 +239,7 @@ describe('captureOptionSettings', () => {
       if (key in restored) expect(restored[key as keyof PlayerGUIState], key).toEqual(expected[key]);
     }
     const legacy = optionSettingsFromLegacy(storage, 43).settings;
-    for (const key of ['workerCount', 'compressorTuning', 'skinSettings', 'courseTableURLs', 'folders'] as const) {
+    for (const key of ['workerCount', 'compressorTuning', 'skinSettings', 'courseTableURLs'] as const) {
       expect(legacy[key], key).toEqual(expected[key]);
     }
   });

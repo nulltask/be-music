@@ -3,17 +3,11 @@
 /** Prefix every `localStorage` key the player writes starts with. */
 export const PLAYER_STORAGE_PREFIX = 'be-music.';
 
-/** Where the open / closed state of each Options dialog folder is remembered. */
-export const OPTION_FOLDERS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}option-folders`;
-
 /**
  * Stored keys "Reset settings" leaves alone: the best records are play data, not settings, and have their own
  * "Clear best records" button.
  */
 export const PLAYER_STORAGE_KEYS_KEPT_ON_RESET: readonly string[] = [`${PLAYER_STORAGE_PREFIX}chart-best-records`];
-
-/** Folder path → open, for the folders the user has opened or closed. */
-export type FolderOpenStates = Record<string, boolean>;
 
 /** Minimal storage surface, so tests can hand in a stub and blocked storage can throw. */
 export interface PlayerStorage {
@@ -29,53 +23,6 @@ export function defaultStorage(): PlayerStorage | undefined {
     return globalThis.localStorage;
   } catch {
     return undefined;
-  }
-}
-
-/**
- * Identifies a folder by its titles from the top-level folder down (the root panel excluded), e.g.
- * `Audio / Compressor`. Titles are unique among siblings, so the path is unique in the menu.
- */
-export function folderPath(titles: readonly string[]): string {
-  return titles.join(' / ');
-}
-
-/** Stored folder states, keeping only well-formed `path → boolean` entries. */
-export function parseFolderOpenStates(raw: string | null | undefined): FolderOpenStates {
-  if (!raw) return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
-    const states: FolderOpenStates = {};
-    for (const [path, open] of Object.entries(parsed)) {
-      if (typeof open === 'boolean') states[path] = open;
-    }
-    return states;
-  } catch {
-    return {};
-  }
-}
-
-export function serializeFolderOpenStates(states: FolderOpenStates): string {
-  return JSON.stringify(states);
-}
-
-export function readFolderOpenStates(storage: PlayerStorage | undefined = defaultStorage()): FolderOpenStates {
-  try {
-    return parseFolderOpenStates(storage?.getItem(OPTION_FOLDERS_STORAGE_KEY));
-  } catch {
-    return {};
-  }
-}
-
-export function storeFolderOpenStates(
-  states: FolderOpenStates,
-  storage: PlayerStorage | undefined = defaultStorage(),
-): void {
-  try {
-    storage?.setItem(OPTION_FOLDERS_STORAGE_KEY, serializeFolderOpenStates(states));
-  } catch {
-    // Private windows / blocked storage: folders still open and close, just not remembered.
   }
 }
 

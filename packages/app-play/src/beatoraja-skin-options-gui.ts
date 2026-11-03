@@ -211,7 +211,7 @@ export class BeatorajaSkinOptionsGUI {
       const label = labels.get(property.category ?? '') ?? 'Options';
       let folder = propertyFolders.get(label);
       if (!folder) {
-        folder = page('Options').addFolder({ title: label, expanded: true });
+        folder = page('Options').addFolder({ title: label });
         propertyFolders.set(label, folder);
       }
       const initial = this.state.option[property.name];
@@ -230,7 +230,7 @@ export class BeatorajaSkinOptionsGUI {
       const label = labels.get(file.category ?? '') ?? 'Files';
       let folder = fileFolders.get(label);
       if (!folder) {
-        folder = page('Files').addFolder({ title: label, expanded: true });
+        folder = page('Files').addFolder({ title: label });
         fileFolders.set(label, folder);
       }
       this.state.file[file.name] ??= '';
@@ -250,12 +250,12 @@ export class BeatorajaSkinOptionsGUI {
       .on('change', emit);
     const customOffsets = options.header.offset ?? [];
     if (customOffsets.length) {
-      const offsets = timing.addFolder({ title: 'Custom offsets', expanded: true });
+      const offsets = timing.addFolder({ title: 'Custom offsets' });
       for (const slot of customOffsets) {
         const axes = (['x', 'y', 'w', 'h', 'r', 'a'] as const).filter((axis) => slot[axis]);
         const state = this.state.customOffset[slot.name];
         if (!state || !axes.length) continue;
-        const folder = axes.length > 1 ? offsets.addFolder({ title: slot.name, expanded: true }) : offsets;
+        const folder = axes.length > 1 ? offsets.addFolder({ title: slot.name }) : offsets;
         for (const axis of axes) {
           const limit = axis === 'r' ? 360 : axis === 'a' ? 255 : 400;
           folder

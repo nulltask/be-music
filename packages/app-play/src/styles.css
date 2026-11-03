@@ -91,7 +91,8 @@ textarea {
 
 /*
  * The Options dialog (ui/options/, controls in ui/options-controls.ts): one tab per area, each holding its folders as
- * sections, with collapsible folders inside. The tab bar scrolls sideways on a narrow screen, and the panel scrolls.
+ * sections, with the folders inside them as sections of their own. The tab bar scrolls sideways on a narrow screen,
+ * and the panel scrolls.
  */
 .options-dialog > div {
   height: min(85dvh, 760px);
@@ -139,9 +140,22 @@ textarea {
   margin-top: 8px;
 }
 .options-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin: 0 0 10px;
   font-size: 0.875rem;
   font-weight: 600;
+}
+/* A section inside a section: set off by a rule, with a quieter heading. */
+.options-section .options-section {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.options-section .options-section > .options-section-heading {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
 }
 .options-folder {
   border: 1px solid var(--border);
@@ -175,9 +189,66 @@ textarea {
 .options-row {
   gap: 12px;
 }
-.options-row[data-orientation='horizontal'] > .options-label {
+.options-row[data-orientation='horizontal'] > :is(.options-label, .options-label-wrap),
+.options-slider-head > .options-label-wrap {
   min-width: 0;
   flex: 1 1 auto;
+}
+/* A label with its help button beside it (ui/options/help.ts). */
+.options-label-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.options-help {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 2px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  cursor: help;
+}
+.options-help:hover,
+.options-help:focus-visible,
+.options-help[aria-describedby] {
+  color: var(--foreground);
+  background: var(--accent);
+}
+.options-help > svg {
+  width: 14px;
+  height: 14px;
+}
+.options-button-row:has(> .options-help) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.options-help-tip {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 0.5rem);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.35);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  pointer-events: none;
+}
+.options-help-tip code {
+  font-size: 0.75rem;
+}
+.options-help-tip .help-menu-when {
+  display: block;
+  color: var(--muted-foreground);
 }
 .options-label {
   font-size: 0.8125rem;

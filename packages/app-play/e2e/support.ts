@@ -331,14 +331,14 @@ export class Player {
         const controller = [...current.querySelectorAll('.options-row')].find((candidate) => {
           if (folderOf(candidate) !== current) return false;
           const label = candidate.querySelector('.options-label')?.textContent?.trim();
-          return (label || candidate.querySelector('button')?.textContent?.trim()) === name;
+          return (label || candidate.querySelector('button:not(.options-help)')?.textContent?.trim()) === name;
         });
         if (controller === undefined) throw new Error(`no Options control ${[...folder, name].join(' / ')}`);
         revealTab(controller);
         const select = controller.querySelector('select');
         // A slider row has its number field first, which takes an exact value.
         const input = controller.querySelector<HTMLInputElement>('input:not([type="range"])');
-        const button = controller.querySelector('button');
+        const button = controller.querySelector<HTMLButtonElement>('button:not(.options-help)');
         const value = action.set;
         if (action.press === true) {
           if (button === null) throw new Error(`${name} is not a button`);

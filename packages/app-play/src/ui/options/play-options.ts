@@ -1,6 +1,7 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 import { resolveGaugeTypes } from '@be-music/player-engine/ruleset';
-// The Options dialog's Play options folder and the Replay / ghost folder inside it. They are built with the dialog as `this`
+// The Options dialog's Play options folder, split into pages, and the Replay / ghost folder on its last page. They are
+// built with the dialog as `this`
 // (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
 import {
@@ -19,6 +20,7 @@ import {
 import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
+import { PLAY_OPTION_PAGES } from './folders.ts';
 import { bottomShiftableGaugeItems, laneOptionItems, menuLaneCovers, practiceGaugeItems } from './play-option-items.ts';
 import { buildPracticeRangePicker } from './practice-range.ts';
 /**
@@ -29,16 +31,23 @@ import { buildPracticeRangePicker } from './practice-range.ts';
  * edits back through `onPlayOptionsChange`; these controllers push through `setPlayOptions`). Most are latched at
  * song start and DISABLED during a play. The ones a play takes live (hi-speed, the covers and LIFT, the judge timing
  * and CONSTANT visibility) and the select screen's sort and filters, which a play does not read, stay enabled.
+ *
+ * The options are many, so the folder splits them into pages (`PLAY_OPTION_PAGES`); returns the last, Replay / ghost,
+ * for its folder.
  */
-export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContainer): void {
+export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContainer): OptionContainer {
+  const [judge, lanes, notes, view, practice, select, replay] = folder.addTab({
+    pages: PLAY_OPTION_PAGES.map((title) => ({ title })),
+  }).pages;
+  if (!judge || !lanes || !notes || !view || !practice || !select || !replay) return folder;
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
   trackPlayOption(
-    folder.addBinding(this.guiState, 'autoPlay', { label: 'Auto play' }).on('change', ({ value }) => {
+    judge.addBinding(this.guiState, 'autoPlay', { label: 'Auto play' }).on('change', ({ value }) => {
       this.setPlayOptions({ autoPlay: value });
     }),
   );
   this.gaugeController = selectBinding(
-    folder,
+    judge,
     this.guiState,
     'gauge',
     'Gauge',
@@ -49,7 +58,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       this.setPlayOptions({ gauge1P: value });
     }),
   );
-  this.judgeAlgorithmController = selectBinding(folder, this.guiState, 'judgeAlgorithm', 'Judge algorithm', {
+  this.judgeAlgorithmController = selectBinding(judge, this.guiState, 'judgeAlgorithm', 'Judge algorithm', {
     Combo: 'combo',
     Duration: 'duration',
     Lowest: 'lowest',
@@ -60,7 +69,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   for (const side of ['1P', '2P'] as const) {
     const key = `random${side}` as const;
     const controller = selectBinding(
-      folder,
+      lanes,
       this.guiState,
       key,
       `Random ${side}`,
@@ -76,7 +85,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     );
   }
   trackPlayOption(
-    folder
+    lanes
       .addBinding(this.guiState, 'hRandomThresholdBPM', {
         label: 'H-RANDOM threshold BPM (beatoraja)',
         min: 1,
@@ -88,7 +97,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   for (const side of ['1P', '2P'] as const) {
     const key = `randomFixedLane${side}` as const;
     trackPlayOption(
-      folder
+      lanes
         .addBinding(this.guiState, key, {
           label: `Fixed key ${side} (LR2; 0=default)`,
           min: 0,
@@ -100,14 +109,14 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   }
   for (const side of ['1P', '2P'] as const) {
     const key = `randomSeed${side}` as const;
-    const controller = folder
+    const controller = lanes
       .addBinding(this.guiState, key, { label: `Seed ${side} (-1=random)` })
       .on('change', ({ value }) => this.setPlayOptions({ [key]: value }));
     this.trackPlayOption(controller);
     if (side === '1P') this.randomSeed1PController = controller;
     else this.randomSeed2PController = controller;
   }
-  this.sevenToNinePatternController = selectBinding(folder, this.guiState, 'sevenToNinePattern', '7-to-9 (beatoraja)', {
+  this.sevenToNinePatternController = selectBinding(lanes, this.guiState, 'sevenToNinePattern', '7-to-9 (beatoraja)', {
     OFF: 0,
     'SC1 KEY2–8': 1,
     'SC1 KEY3–9': 2,
@@ -119,7 +128,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   trackPlayOption(
     this.sevenToNinePatternController.on('change', ({ value }) => this.setPlayOptions({ sevenToNinePattern: value })),
   );
-  this.sevenToNineTypeController = selectBinding(folder, this.guiState, 'sevenToNineType', '7-to-9 scratch', {
+  this.sevenToNineTypeController = selectBinding(lanes, this.guiState, 'sevenToNineType', '7-to-9 scratch', {
     Fixed: 0,
     'Avoid repeated hits': 1,
     Alternate: 2,
@@ -127,7 +136,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   trackPlayOption(
     this.sevenToNineTypeController.on('change', ({ value }) => this.setPlayOptions({ sevenToNineType: value })),
   );
-  const reuse = folder.addButton({ title: 'Reuse previous arrangement' }).on('click', () => {
+  const reuse = lanes.addButton({ title: 'Reuse previous arrangement' }).on('click', () => {
     const changes = this.deps.reusePreviousArrangement?.();
     if (changes) {
       this.setPlayOptions(changes);
@@ -135,7 +144,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       this.setStatus('Previous arrangement selected for the same chart. Live input remains enabled.');
     } else this.setStatus('Play a chart with the current judgment rules first to retain its arrangement.');
   });
-  const fresh = folder.addButton({ title: 'New arrangement' }).on('click', () => {
+  const fresh = lanes.addButton({ title: 'New arrangement' }).on('click', () => {
     this.deps.clearArrangement?.();
     // The menu's seeds too, which the saved settings keep.
     this.guiState.randomSeed1P = '-1';
@@ -147,12 +156,12 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   // Every ruleset reuses its own previous arrangement (#774) and seeds its lane randoms (#933).
   for (const controller of [reuse, fresh]) this.trackPlayOption(controller);
   trackPlayOption(
-    selectBinding(folder, this.guiState, 'bmsonTotalMode', 'bmson TOTAL 0', {
+    selectBinding(judge, this.guiState, 'bmsonTotalMode', 'bmson TOTAL 0', {
       'Native compatibility': 'beatoraja',
       'No recovery (bmson spec)': 'spec',
     }).on('change', ({ value }) => this.setPlayOptions({ bmsonTotalMode: value })),
   );
-  this.gaugeAutoShiftController = selectBinding(folder, this.guiState, 'gaugeAutoShift', 'Gauge auto-shift', {
+  this.gaugeAutoShiftController = selectBinding(judge, this.guiState, 'gaugeAutoShift', 'Gauge auto-shift', {
     NONE: 'NONE',
     CONTINUE: 'CONTINUE',
     'SURVIVAL TO GROOVE': 'SURVIVAL_TO_GROOVE',
@@ -163,7 +172,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     this.gaugeAutoShiftController.on('change', ({ value }) => this.setPlayOptions({ gaugeAutoShift: value })),
   );
   this.bottomShiftableGaugeController = selectBinding(
-    folder,
+    judge,
     this.guiState,
     'bottomShiftableGauge',
     'Lowest auto-shift gauge',
@@ -174,7 +183,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       this.setPlayOptions({ bottomShiftableGauge: value }),
     ),
   );
-  this.scrollModifierController = selectBinding(folder, this.guiState, 'scrollModifier', 'Scroll (beatoraja)', {
+  this.scrollModifierController = selectBinding(notes, this.guiState, 'scrollModifier', 'Scroll (beatoraja)', {
     OFF: 'OFF',
     REMOVE: 'REMOVE',
     ADD: 'ADD',
@@ -186,16 +195,16 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     }),
   );
   this.scrollSectionController = trackPlayOption(
-    folder
+    notes
       .addBinding(this.guiState, 'scrollSection', { label: 'Scroll section lines', min: 1, max: 1024, step: 1 })
       .on('change', ({ value }) => this.setPlayOptions({ scrollSection: value })),
   );
   this.scrollRateController = trackPlayOption(
-    folder
+    notes
       .addBinding(this.guiState, 'scrollRate', { label: 'Scroll rate', min: 0, max: 1, step: 0.01 })
       .on('change', ({ value }) => this.setPlayOptions({ scrollRate: value })),
   );
-  this.mineModifierController = selectBinding(folder, this.guiState, 'mineModifier', 'Mines (beatoraja)', {
+  this.mineModifierController = selectBinding(notes, this.guiState, 'mineModifier', 'Mines (beatoraja)', {
     OFF: 'OFF',
     REMOVE: 'REMOVE',
     'ADD RANDOM': 'ADD_RANDOM',
@@ -207,23 +216,23 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   );
   this.refreshRulesetChoices();
   trackPlayOption(
-    folder.addBinding(this.guiState, 'dpFlip', { label: 'DP flip' }).on('change', ({ value }) => {
+    lanes.addBinding(this.guiState, 'dpFlip', { label: 'DP flip' }).on('change', ({ value }) => {
       this.setPlayOptions({ dpFlip: value });
     }),
   );
   trackPlayOption(
-    folder.addBinding(this.guiState, 'autoScratch1P', { label: 'Auto scratch 1P' }).on('change', ({ value }) => {
+    lanes.addBinding(this.guiState, 'autoScratch1P', { label: 'Auto scratch 1P' }).on('change', ({ value }) => {
       this.setPlayOptions({ autoScratch1P: value });
     }),
   );
   trackPlayOption(
-    folder.addBinding(this.guiState, 'autoScratch2P', { label: 'Auto scratch 2P' }).on('change', ({ value }) => {
+    lanes.addBinding(this.guiState, 'autoScratch2P', { label: 'Auto scratch 2P' }).on('change', ({ value }) => {
       this.setPlayOptions({ autoScratch2P: value });
     }),
   );
   // The PC edition's ANY KEY (#751), offered with the `____` judge rules (`refreshRulesetChoices`); saves no record.
-  this.anyKeyController = trackPlayOption(folder.addBinding(this.guiState, 'anyKey', { label: 'ANY KEY (PC)' }));
-  this.longNoteModifierController = selectBinding(folder, this.guiState, 'longNoteModifier', 'Long notes', {
+  this.anyKeyController = trackPlayOption(notes.addBinding(this.guiState, 'anyKey', { label: 'ANY KEY (PC)' }));
+  this.longNoteModifierController = selectBinding(notes, this.guiState, 'longNoteModifier', 'Long notes', {
     OFF: 'OFF',
     'LEGACY NOTE (AC 34)': 'LEGACY',
     'LN REMOVE (beatoraja)': 'REMOVE',
@@ -238,7 +247,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       this.refreshRulesetChoices();
     }),
   );
-  this.battleModeController = selectBinding(folder, this.guiState, 'battleMode', 'Battle', {
+  this.battleModeController = selectBinding(lanes, this.guiState, 'battleMode', 'Battle', {
     OFF: 'OFF',
     'SP TO DP': 'SP-TO-DP',
   });
@@ -250,7 +259,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   );
   // Two-player play (LR2 BATTLE): the 2P player's gauge, and That-Which-Must-Not-Be-Named's M-RAN per player.
   this.gauge2PController = selectBinding(
-    folder,
+    lanes,
     this.guiState,
     'gauge2P',
     'Gauge 2P',
@@ -259,24 +268,24 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   trackPlayOption(this.gauge2PController.on('change', ({ value }) => this.setPlayOptions({ gauge2P: value })));
   this.mRanControllers = (['mRan1P', 'mRan2P'] as const).map((key) =>
     trackPlayOption(
-      folder
+      lanes
         .addBinding(this.guiState, key, { label: key === 'mRan1P' ? 'M-RAN 1P' : 'M-RAN 2P' })
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
   );
   // LR2 reads the scratch key held through the decide animation; the Options dialog has no decide animation.
   this.dBattleScratchController = trackPlayOption(
-    folder
+    lanes
       .addBinding(this.guiState, 'dBattleScratch', { label: 'D-BATTLE scratch (LR2)' })
       .on('change', ({ value }) => this.setPlayOptions({ dBattleScratch: value })),
   );
   this.lr2ExtraModeController = trackPlayOption(
-    folder.addBinding(this.guiState, 'lr2ExtraMode', { label: 'EXTRA MODE (LR2)' }).on('change', ({ value }) => {
+    notes.addBinding(this.guiState, 'lr2ExtraMode', { label: 'EXTRA MODE (LR2)' }).on('change', ({ value }) => {
       this.setPlayOptions({ lr2ExtraMode: value });
       this.refreshRulesetChoices();
     }),
   );
-  this.lr2ExtraLevelController = selectBinding(folder, this.guiState, 'lr2ExtraLevel', 'EXTRA minimum level (LR2)', {
+  this.lr2ExtraLevelController = selectBinding(notes, this.guiState, 'lr2ExtraLevel', 'EXTRA minimum level (LR2)', {
     'LEVEL 1': 0,
     'LEVEL 2': 1,
     'LEVEL 3': 2,
@@ -284,7 +293,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   trackPlayOption(
     this.lr2ExtraLevelController.on('change', ({ value }) => this.setPlayOptions({ lr2ExtraLevel: value })),
   );
-  this.longNoteModeController = selectBinding(folder, this.guiState, 'longNoteMode', 'LN MODE (beatoraja)', {
+  this.longNoteModeController = selectBinding(judge, this.guiState, 'longNoteMode', 'LN MODE (beatoraja)', {
     'LONG NOTE': 'LN',
     'CHARGE NOTE': 'CN',
     'HELL CHARGE NOTE': 'HCN',
@@ -293,7 +302,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     this.longNoteModeController.on('change', ({ value }) => this.setPlayOptions({ longNoteMode: value })),
   );
   this.customJudgeController = trackPlayOption(
-    folder.addBinding(this.guiState, 'customJudge', { label: 'CUSTOM JUDGE (beatoraja)' }).on('change', ({ value }) => {
+    judge.addBinding(this.guiState, 'customJudge', { label: 'CUSTOM JUDGE (beatoraja)' }).on('change', ({ value }) => {
       this.setPlayOptions({ customJudge: value });
       this.refreshRulesetChoices();
     }),
@@ -311,7 +320,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     ] as const
   ).map(([key, label, min]) =>
     trackPlayOption(
-      folder
+      judge
         .addBinding(this.guiState, key, { label, min, max: 400, step: 1 })
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
@@ -320,7 +329,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   // JUDGERANK / TOTAL the chart's.
   this.practiceControllers = [
     trackPlayOption(
-      folder.addBinding(this.guiState, 'practice', { label: 'PRACTICE' }).on('change', ({ value }) => {
+      practice.addBinding(this.guiState, 'practice', { label: 'PRACTICE' }).on('change', ({ value }) => {
         this.setPlayOptions({ practice: value });
         this.refreshRulesetChoices();
       }),
@@ -338,7 +347,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     for (const [key, label, min, max, step] of entries) {
       this.practiceControllers.push(
         trackPlayOption(
-          folder.addBinding(this.guiState, key, { label, min, max, step }).on('change', ({ value }) => {
+          practice.addBinding(this.guiState, key, { label, min, max, step }).on('change', ({ value }) => {
             this.setPlayOptions({ [key]: value });
             if (key === 'practiceStartMs' || key === 'practiceEndMs') this.practiceRangePicker?.refresh();
           }),
@@ -351,7 +360,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     ['practiceEndMs', 'END TIME ms (0 = end)', 0, 3_600_000, 100],
   ]);
   // The range picker under the two times (#948), which writes them as its handles move.
-  buildPracticeRangePicker.call(this, folder);
+  buildPracticeRangePicker.call(this, practice);
   addPracticeNumbers([
     ['practiceStartGauge', 'GAUGE VALUE', 1, 120, 1],
     ['practiceJudgeRank', 'JUDGERANK (0 = chart)', 0, 400, 1],
@@ -359,7 +368,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   ]);
   // The judge ruleset's own gauges; refreshRulesetChoices relists them when the ruleset changes.
   const practiceGauge = selectBinding(
-    folder,
+    practice,
     this.guiState,
     'practiceGauge',
     'GAUGE TYPE',
@@ -367,7 +376,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   );
   this.practiceGaugeController = practiceGauge;
   trackPlayOption(practiceGauge.on('change', ({ value }) => this.setPlayOptions({ practiceGauge: value })));
-  const practiceCategory = selectBinding(folder, this.guiState, 'practiceGaugeCategory', 'GAUGE CATEGORY', {
+  const practiceCategory = selectBinding(practice, this.guiState, 'practiceGaugeCategory', 'GAUGE CATEGORY', {
     'Play mode': 'MODE',
     FIVEKEYS: 'FIVEKEYS',
     SEVENKEYS: 'SEVENKEYS',
@@ -381,17 +390,17 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   this.practiceJudgeRankAndTotalControllers = this.practiceControllers.slice(4, 6);
   this.practiceControllers.push(practiceGauge);
   this.extraNoteDepthController = trackPlayOption(
-    folder
+    notes
       .addBinding(this.guiState, 'extraNoteDepth', { label: 'EXTRA depth (beatoraja)', min: 0, max: 100, step: 1 })
       .on('change', ({ value }) => this.setPlayOptions({ extraNoteDepth: value })),
   );
   this.extraNoteScratchController = trackPlayOption(
-    folder
+    notes
       .addBinding(this.guiState, 'extraNoteScratch', { label: 'EXTRA scratch (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ extraNoteScratch: value })),
   );
   this.longNoteRateController = trackPlayOption(
-    folder
+    notes
       .addBinding(this.guiState, 'longNoteRate', {
         label: 'Long-note add rate (beatoraja)',
         min: 0,
@@ -401,7 +410,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       .on('change', ({ value }) => this.setPlayOptions({ longNoteRate: value })),
   );
   this.trackPlayOption(
-    folder.addButton({ title: 'A-SCR & LEGACY NOTE (AC 34)' }).on('click', () => {
+    lanes.addButton({ title: 'A-SCR & LEGACY NOTE (AC 34)' }).on('click', () => {
       const changes = { autoScratch1P: true, autoScratch2P: true, longNoteModifier: 'LEGACY' } as const;
       Object.assign(this.guiState, changes);
       this.setPlayOptions(changes);
@@ -410,22 +419,22 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   );
   // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
   // the bar under the cursor. A play does not read them, so they stay enabled during one.
-  selectBinding(folder, this.guiState, 'sort', 'Sort', [...SORT_CYCLE]).on('change', ({ value }) => {
+  selectBinding(select, this.guiState, 'sort', 'Sort', [...SORT_CYCLE]).on('change', ({ value }) => {
     this.setPlayOptions({ sort: value });
   });
-  selectBinding(folder, this.guiState, 'keysFilter', 'Key filter', [...KEYS_FILTER_CYCLE]).on('change', ({ value }) => {
+  selectBinding(select, this.guiState, 'keysFilter', 'Key filter', [...KEYS_FILTER_CYCLE]).on('change', ({ value }) => {
     this.setPlayOptions({ keysFilter: value });
   });
-  selectBinding(folder, this.guiState, 'difficultyFilter', 'Difficulty filter', [...DIFFICULTY_FILTER_CYCLE]).on(
+  selectBinding(select, this.guiState, 'difficultyFilter', 'Difficulty filter', [...DIFFICULTY_FILTER_CYCLE]).on(
     'change',
     ({ value }) => {
       this.setPlayOptions({ difficultyFilter: value });
     },
   );
-  this.hsFixController = selectBinding(folder, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!);
+  this.hsFixController = selectBinding(view, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!);
   trackPlayOption(this.hsFixController.on('change', ({ value }) => this.setPlayOptions({ hsFix: value })));
   trackPlayOption(
-    selectBinding(folder, this.guiState, 'displayAreaInfo', 'Display area info', {
+    selectBinding(view, this.guiState, 'displayAreaInfo', 'Display area info', {
       OFF: 'OFF',
       ON: 'ON',
       'SUDDEN+ ONLY': 'SUDDEN_ONLY',
@@ -444,40 +453,40 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   };
   for (const key of ['hiddenSudden1P', 'hiddenSudden2P'] as const) {
     selectBinding(
-      folder,
+      view,
       this.guiState,
       key,
       key === 'hiddenSudden1P' ? 'Effect 1P' : 'Effect 2P',
       PLAY_OPTION_CHOICES[key]!,
     ).on('change', ({ value }) => setCovers({ [key]: value }));
   }
-  folder
+  view
     .addBinding(this.guiState, 'laneCover', { label: 'Lane cover' })
     .on('change', ({ value }) => setCovers({ laneCover: value }));
-  folder
+  view
     .addBinding(this.guiState, 'shutter', { label: 'Cover height', min: 0, max: 1, step: 0.01 })
     .on('change', ({ value }) => setCovers({ shutter: value }));
   trackPlayOption(
-    folder
+    view
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
   trackPlayOption(
-    folder
+    view
       .addBinding(this.guiState, 'bpmChangeWarning', { label: 'BPM change warning (AC)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmChangeWarning: value })),
   );
   for (const side of ['1P', '2P'] as const) {
     const heightKey = side === '1P' ? 'lift1P' : 'lift2P';
     const enabledKey = side === '1P' ? 'liftOn1P' : 'liftOn2P';
-    folder.addBinding(this.guiState, enabledKey, { label: `LIFT ${side} (beatoraja)` }).on('change', ({ value }) => {
+    view.addBinding(this.guiState, enabledKey, { label: `LIFT ${side} (beatoraja)` }).on('change', ({ value }) => {
       this.setPlayOptions({ [enabledKey]: value });
       this.gameplayView?.controller.dispatch({
         type: 'cover',
         command: { type: 'cover-set', covers: [{ side, liftOn: value, lift: this.guiState[heightKey] }], side },
       });
     });
-    folder
+    view
       .addBinding(this.guiState, heightKey, { label: `LIFT height ${side}`, min: 0, max: 1, step: 0.001 })
       .on('change', ({ value }) => {
         this.setPlayOptions({ [heightKey]: value });
@@ -488,31 +497,31 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       });
   }
   trackPlayOption(
-    folder
+    view
       .addBinding(this.guiState, 'visualConstant', { label: 'Visual CONSTANT (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ visualConstant: value })),
   );
-  folder
+  view
     .addBinding(this.guiState, 'noteDurationMs', { label: 'Note duration (ms)', min: 1, max: 10000, step: 1 })
     .on('change', ({ value }) => {
       this.setPlayOptions({ noteDurationMs: value });
       this.gameplayView?.controller.dispatch({ type: 'constant-visibility', durationMs: value });
     });
-  folder
+  view
     .addBinding(this.guiState, 'constantFadeMs', { label: 'CONSTANT fade (ms)', min: -1000, max: 1000, step: 1 })
     .on('change', ({ value }) => {
       this.setPlayOptions({ constantFadeMs: value });
       this.gameplayView?.controller.dispatch({ type: 'constant-visibility', fadeMs: value });
     });
   this.judgeTimingAutoAdjustController = trackPlayOption(
-    selectBinding(folder, this.guiState, 'judgeTimingAutoAdjust', 'Auto judge timing', {
+    selectBinding(judge, this.guiState, 'judgeTimingAutoAdjust', 'Auto judge timing', {
       OFF: 'OFF',
       beatoraja: 'BEATORAJA',
       'LR2 ON': 'LR2-ON',
       'LR2 SILENT': 'LR2-SILENT',
     }).on('change', ({ value }) => this.setPlayOptions({ judgeTimingAutoAdjust: value })),
   );
-  this.judgeTimingController = folder
+  this.judgeTimingController = judge
     .addBinding(this.guiState, 'judgeTimingMs', { label: 'Judge timing (ms)', min: -500, max: 500, step: 1 })
     .on('change', ({ value }) => {
       this.setPlayOptions({ judgeTimingMs: value });
@@ -534,7 +543,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     },
   };
   this.normalHiSpeedController = trackPlayOption(
-    folder.addBinding(normal, 'enabled', { label: 'Normal HI-SPEED (AC 32 measured)' }).on('change', ({ value }) => {
+    view.addBinding(normal, 'enabled', { label: 'Normal HI-SPEED (AC 32 measured)' }).on('change', ({ value }) => {
       if (value) {
         state.classicHiSpeed = false;
         state.hsFix = 'OFF';
@@ -549,7 +558,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   );
   this.normalHiSpeedLevelController = trackPlayOption(
     selectBinding(
-      folder,
+      view,
       normal,
       'level',
       'Normal HS level',
@@ -557,12 +566,12 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     ).on('change', ({ value }) => this.setPlayOptions({ normalHiSpeedLevel: value })),
   );
   this.fixedDisplayAreaController = trackPlayOption(
-    folder
+    view
       .addBinding(this.guiState, 'fixedDisplayArea', { label: 'Fixed display area (AC 34)' })
       .on('change', ({ value }) => this.setPlayOptions({ fixedDisplayArea: value })),
   );
   this.floatingHiSpeedController = trackPlayOption(
-    folder
+    view
       .addBinding(this.guiState, 'floatingHiSpeed', { label: 'FLOATING HI-SPEED (AC 32 measured)' })
       .on('change', ({ value }) => {
         this.setPlayOptions({ floatingHiSpeed: value, ...(value ? { hsFix: 'OFF' } : {}) });
@@ -571,13 +580,13 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       }),
   );
   const remember = (value: number): void => this.deps.rememberHiSpeed(value, 'menu');
-  this.floatingSpeedController = folder.addBinding(
+  this.floatingSpeedController = view.addBinding(
     hiSpeedControl(this.guiState, () => this.guiState.floatingHiSpeed, onGrid(0.01), remember),
     'hiSpeed',
     { label: 'Floating speed', min: 0.5, max: 10, step: 0.01 },
   );
   this.classicHiSpeedController = trackPlayOption(
-    folder.addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' }).on('change', ({ value }) => {
+    view.addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' }).on('change', ({ value }) => {
       this.setPlayOptions({ classicHiSpeed: value, ...(value ? { hsFix: 'OFF', normalHiSpeedLevel: 0 } : {}) });
       if (value) {
         this.guiState.hsFix = 'OFF';
@@ -589,7 +598,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     }),
   );
   this.classicSpeedController = selectBinding(
-    folder,
+    view,
     hiSpeedControl(
       this.guiState,
       () => this.guiState.classicHiSpeed,
@@ -604,12 +613,13 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   // visual only, so it stays enabled during a play and applies to it live.
   const regular = (): boolean =>
     !this.guiState.classicHiSpeed && !this.guiState.floatingHiSpeed && !(this.guiState.normalHiSpeedLevel > 0);
-  this.hiSpeedController = folder.addBinding(
+  this.hiSpeedController = view.addBinding(
     hiSpeedControl(this.guiState, regular, onGrid(HISPEED_STEP), remember),
     'hiSpeed',
     { label: 'Hi-speed', min: HISPEED_MIN, max: HISPEED_MAX, step: HISPEED_STEP },
   );
   this.refreshRulesetChoices();
+  return replay;
 }
 /**
  * Replay / ghost: which of what a replay recorded the player seeing a replay shows (the tempo, the hi-speed,

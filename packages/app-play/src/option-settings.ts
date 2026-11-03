@@ -33,7 +33,6 @@ import {
 import { REPLAY_AUTO_SAVE_RULES, type ReplayAutoSaveRule } from './services/replay-slots.ts';
 import { GHOST_MODES, GHOST_SOURCES } from './services/ghost.ts';
 import type { PlayerGUIState, SkinFamilyOverride } from './types.ts';
-import { OPTION_FOLDERS_STORAGE_KEY, parseFolderOpenStates, type FolderOpenStates } from './player-storage.ts';
 import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
 
 /** `localStorage` key of the whole Options dialog document. Reset deletes it with the other `be-music.*` settings. */
@@ -169,7 +168,6 @@ export interface OptionSettings {
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
   skinSettings: Record<string, Record<string, StoredSkinSettingValue>>;
   courseTableURLs: string[];
-  folders: FolderOpenStates;
 }
 
 /** The document in `localStorage` and on the player origin. `settings` holds only the fields that were saved. */
@@ -209,7 +207,6 @@ const LEGACY_KEYS = [
   COMPRESSOR_TUNING_KEY,
   SKIN_SETTINGS_KEY,
   COURSE_TABLE_URLS_STORAGE_KEY,
-  OPTION_FOLDERS_STORAGE_KEY,
 ] as const;
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
@@ -448,9 +445,6 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   if (Array.isArray(raw.courseTableURLs)) {
     settings.courseTableURLs = parseStoredCourseTableURLs(JSON.stringify(raw.courseTableURLs));
   }
-  if (typeof raw.folders === 'object' && raw.folders !== null) {
-    settings.folders = parseFolderOpenStates(JSON.stringify(raw.folders));
-  }
   return settings;
 }
 
@@ -517,9 +511,6 @@ export function optionSettingsFromLegacy(
   if (skinSettings.size > 0) settings.skinSettings = Object.fromEntries(skinSettings);
   if (storage?.getItem(COURSE_TABLE_URLS_STORAGE_KEY) != null) {
     settings.courseTableURLs = parseStoredCourseTableURLs(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
-  }
-  if (storage?.getItem(OPTION_FOLDERS_STORAGE_KEY) != null) {
-    settings.folders = parseFolderOpenStates(storage.getItem(OPTION_FOLDERS_STORAGE_KEY));
   }
   return { version: DOCUMENT_VERSION, updatedAt, settings };
 }
@@ -663,7 +654,6 @@ export function captureOptionSettings(
     compressorTuning: Record<TunableCompressor, CompressorTuning>;
     skinSettings: ReadonlyMap<string, Record<string, StoredSkinSettingValue>>;
     courseTableURLs: readonly string[];
-    folders: FolderOpenStates;
     workerCount: number;
     updatedAt?: number;
   },
@@ -787,7 +777,6 @@ export function captureOptionSettings(
     compressorTuning: extras.compressorTuning,
     skinSettings: Object.fromEntries(extras.skinSettings),
     courseTableURLs: [...extras.courseTableURLs],
-    folders: { ...extras.folders },
   };
   return { version: DOCUMENT_VERSION, updatedAt: extras.updatedAt ?? Date.now(), settings: pickSettings(settings) };
 }
@@ -833,7 +822,6 @@ export function writeOptionSettings(document: OptionSettingsDocument, storage: S
     }
     if (settings.courseTableURLs)
       storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(settings.courseTableURLs));
-    if (settings.folders) storage.setItem(OPTION_FOLDERS_STORAGE_KEY, JSON.stringify(settings.folders));
   } catch {
     // Blocked or full storage: the visit still has the values in memory.
   }
