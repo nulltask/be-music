@@ -4,7 +4,7 @@
 // The worker is one more entry of the player's own build, so it needs no second bundler run and no plugin dependency.
 // Once the bundle is complete, the precache list is read off it: every file the player's page can load (its HTML, the
 // chunks and stylesheets it imports, the workers it spawns, the Help's acknowledgements) and the public files (icons,
-// the web app manifest). Files only the embed page reaches, the ffmpeg core (cached on first use instead) and the
+// the web app manifest). Files only the embed page reaches, the ffmpeg core (its own cache, filled on install) and the
 // worker itself are left out. The manifest's version is a hash of the precached bytes, so each deploy that changes
 // one of them gets a fresh cache, and the changed `sw.js` is what makes browsers install it.
 
@@ -25,7 +25,7 @@ export interface PrecacheCandidate {
   references: readonly string[];
 }
 
-/** Files that are never precached: the worker itself, the ffmpeg core (cached on use), source maps, build metadata. */
+/** Files left out of the shell precache: the worker itself, the ffmpeg core (its own cache, filled on install), source maps, build metadata. */
 export function isNeverPrecached(fileName: string): boolean {
   return (
     fileName === SERVICE_WORKER_FILE ||
@@ -96,6 +96,15 @@ async function listFiles(dir: string): Promise<string[]> {
   }
 }
 
+/** The Google Fonts stylesheets an HTML page links to (`https://fonts.googleapis.com/css…`), each once. */
+export function findFontStylesheets(html: string): string[] {
+  const urls = new Set<string>();
+  for (const match of html.matchAll(/href="(https:\/\/fonts\.googleapis\.com\/css[^"]*)"/g)) {
+    urls.add(match[1]!.replaceAll('&amp;', '&'));
+  }
+  return [...urls];
+}
+
 export interface ServiceWorkerPluginOptions {
   /** The worker's source. */
   entry: string;
@@ -163,6 +172,7 @@ export function serviceWorkerPlugin(options: ServiceWorkerPluginOptions): Plugin
           version: precacheVersion(files.map((name) => [name, contents.get(name) ?? ''] as const)),
           urls: files.map(precacheURL),
           ffmpegCoreVersion: options.ffmpegCoreVersion,
+          fontStylesheets: findFontStylesheets(String(contents.get('index.html') ?? '')),
         };
         worker.code = injectManifest(worker.code, manifest);
       },

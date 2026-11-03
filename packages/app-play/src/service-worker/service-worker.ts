@@ -2,7 +2,9 @@
 // file on its own and writes the precache manifest into it (`scripts/service-worker-plugin.ts`); the rules it applies
 // are `routes.ts`.
 //
-// Install precaches the shell of this deploy into a cache of its own. The new worker then waits, as browsers do by
+// Install precaches the shell of this deploy into a cache of its own, and alongside it the ffmpeg core and the UI fonts,
+// so an installed player decodes legacy BGA video and shows its fonts offline from the start; those two are kept on a
+// best-effort basis and never fail the install. The new worker then waits, as browsers do by
 // default, until every tab of the player has closed, and takes over at the next start, when activation drops the
 // caches of earlier deploys. Page loads go to the network first, so an online start always gets the latest deploy even
 // before its worker takes over; only an offline (or very slow) start falls back to the cached shell.
@@ -10,9 +12,11 @@
 // It imports nothing outside this directory: the bundle has to be a single classic script.
 
 import {
+  FFMPEG_CORE_URLS,
   FONT_CACHE_NAME,
   NAVIGATION_TIMEOUT_MS,
   SHELL_URL,
+  extractFontFileURLs,
   ffmpegCoreCacheName,
   isCacheableResponse,
   routeRequest,
@@ -48,12 +52,45 @@ const origin = scope.location.origin;
 
 scope.addEventListener('install', (event) => {
   // `reload` skips the HTTP cache, so the shell is this deploy's bytes, not a copy the browser kept.
+  const shell = caches
+    .open(shellCache)
+    .then((cache) => cache.addAll(manifest.urls.map((url) => new Request(url, { cache: 'reload' }))));
   event.waitUntil(
-    caches
-      .open(shellCache)
-      .then((cache) => cache.addAll(manifest.urls.map((url) => new Request(url, { cache: 'reload' })))),
+    Promise.all([shell, precacheFFmpegCore().catch(() => undefined), precacheFonts().catch(() => undefined)]),
   );
 });
+
+/** Caches the ffmpeg core of this build's version, unless an earlier install already did. */
+async function precacheFFmpegCore(): Promise<void> {
+  const cache = await caches.open(ffmpegCoreCacheName(manifest.ffmpegCoreVersion));
+  const missing: string[] = [];
+  for (const url of FFMPEG_CORE_URLS) {
+    if ((await cache.match(url)) === undefined) missing.push(url);
+  }
+  if (missing.length > 0) await cache.addAll(missing);
+}
+
+/** Caches the shell's Google Fonts stylesheets and every font file they name, a few at a time. */
+async function precacheFonts(): Promise<void> {
+  const cache = await caches.open(FONT_CACHE_NAME);
+  for (const stylesheet of manifest.fontStylesheets) {
+    const response = await fetch(stylesheet, { mode: 'cors' });
+    if (!isCacheableResponse(response, 'font-stylesheet')) continue;
+    const css = await response.clone().text();
+    await cache.put(stylesheet, response);
+    const files = extractFontFileURLs(css);
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < files.length) {
+        const url = files[next++]!;
+        if ((await cache.match(url, { ignoreVary: true })) !== undefined) continue;
+        const file = await fetch(url, { mode: 'cors' }).catch(() => undefined);
+        if (file !== undefined && isCacheableResponse(file, 'font-file')) await cache.put(url, file);
+      }
+    };
+    await Promise.all(Array.from({ length: 6 }, worker));
+  }
+}
 
 scope.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -120,9 +157,17 @@ async function loadPage(request: Request): Promise<Response> {
   }
 }
 
+/**
+ * A font cached on install answers the page's own request for it: Google varies its responses on request headers that
+ * differ between the two, so font matches ignore `Vary`.
+ */
+function matchOptions(route: RequestRoute): CacheQueryOptions | undefined {
+  return route === 'font-stylesheet' || route === 'font-file' ? { ignoreVary: true } : undefined;
+}
+
 async function cacheFirst(request: Request, cacheName: string, route: RequestRoute): Promise<Response> {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
+  const cached = await cache.match(request, matchOptions(route));
   if (cached !== undefined) return cached;
   const response = await fetch(request);
   if (isCacheableResponse(response, route)) await cache.put(request, response.clone());
@@ -136,7 +181,7 @@ async function staleWhileRevalidate(
   event: ExtendableEventLike,
 ): Promise<Response> {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
+  const cached = await cache.match(request, matchOptions(route));
   const refresh = fetch(request).then(async (response) => {
     if (isCacheableResponse(response, route)) await cache.put(request, response.clone());
     return response;
