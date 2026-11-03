@@ -91,6 +91,13 @@ export function buildSkinFolder(
     this.guiState.judgedNoteDisplay = value;
     this.gameplayView?.setJudgedNoteDisplay(value);
   });
+  // Chart-authoring overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars in their
+  // playable lane. Live: the gameplay view always extracts the invisible notes and preloads the green sprite, so the
+  // flag flips the per-frame render branch on the very next paint.
+  skin.addBinding(this.guiState, 'showInvisibleNotes', { label: 'Show invisible notes' }).on('change', ({ value }) => {
+    this.guiState.showInvisibleNotes = value;
+    this.gameplayView?.setShowInvisibleNotes(value);
+  });
   // The same toggle as double-clicking the playfield, for pointers where a double click is awkward.
   skin
     .addButton({ title: 'Toggle fullscreen' })

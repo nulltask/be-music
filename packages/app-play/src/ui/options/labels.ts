@@ -76,7 +76,6 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'M-RAN 1P': 'M-RAN 1P',
   'M-RAN 2P': 'M-RAN 2P',
   'D-BATTLE scratch (LR2)': 'D-BATTLE のスクラッチ (LR2)',
-  'A-SCR & LEGACY NOTE (AC 34)': 'A-SCR と LEGACY NOTE (AC 34)',
   // Notes
   'Scroll (beatoraja)': 'スクロール (beatoraja)',
   'Scroll section lines': 'スクロール変化の小節数',
