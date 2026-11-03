@@ -109,9 +109,13 @@ test('builds Help as a Basecoat dialog with Basecoat tabs', async () => {
   expect(help).toContain('aria-labelledby="help-modal-title" aria-describedby="help-modal-description"');
   expect(help).toContain('<section class="tabs help-tabs">');
   expect(help).toContain('<nav role="tablist" aria-orientation="horizontal">');
-  expect(help.match(/role="tab" /g)).toHaveLength(2);
+  expect(help.match(/role="tab" /g)).toHaveLength(3);
   expect(help).toContain('id="help-tab-usage" aria-controls="help-pane-usage" aria-selected="true" tabindex="0"');
-  expect(help.match(/role="tabpanel"/g)).toHaveLength(2);
+  expect(help).toMatch(/id="help-tab-keyboard"[^>]*>\s*Keyboard\s*<\/button>/);
+  expect(help.match(/role="tabpanel"/g)).toHaveLength(3);
+  expect(help).toContain(
+    'id="help-pane-keyboard" aria-labelledby="help-tab-keyboard" tabindex="-1" aria-selected="false" hidden',
+  );
   expect(help).toContain(
     'id="help-pane-oss" aria-labelledby="help-tab-oss" tabindex="-1" aria-selected="false" hidden',
   );

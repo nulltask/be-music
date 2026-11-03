@@ -59,7 +59,7 @@ import { FamilyKits } from './family-kits.ts';
 import { controlSettingsOf } from '../control-keys.ts';
 import { showExitMenu } from '../ui/exit-menu.ts';
 import { createFpsOverlay } from '../ui/fps-overlay.ts';
-import { openHelpModal } from '../help-modal.ts';
+import { openHelpModal, setHelpKeyboardSource } from '../help-modal.ts';
 import type { TestHookRecorder } from '../test-hook.ts';
 import { nameResultJingle, type LiveTestHookDeps } from '../services/test-hook.ts';
 
@@ -674,6 +674,15 @@ export class PlayerWebApp {
       event.preventDefault();
       this.search.open();
     });
+
+    // Help's Keyboard tab draws the player's keys, on the key map of the screen shown.
+    setHelpKeyboardSource(() => ({
+      settings: controlSettingsOf(this.guiState),
+      scheme: resolveControlScheme(
+        this.router.current?.identity.family ?? 'built-in',
+        this.guiState.builtInControlScheme,
+      ),
+    }));
 
     // The keys every screen takes, as LR2 and beatoraja do: F4 switches full screen and F6 takes a screenshot (the
     // player's own keys for them when set, `global.*` in the key config).
