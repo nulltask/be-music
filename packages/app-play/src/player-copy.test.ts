@@ -10,13 +10,13 @@ afterEach(() => {
 test('rebuilds views that listen when the language changes', () => {
   let seen = '';
   const stop = onPlayerLangChange(() => {
-    seen = playerText().shell.help;
+    seen = playerText().shell.close;
   });
   setPlayerLang('ja');
-  expect(seen).toBe('ヘルプ');
+  expect(seen).toBe('閉じる');
   stop();
   setPlayerLang('en');
-  expect(seen).toBe('ヘルプ');
+  expect(seen).toBe('閉じる');
 });
 
 test('treats ja locales as Japanese and everything else as English', () => {
@@ -30,7 +30,7 @@ test('says the same facts in Japanese for the shell, account and a leaderboard r
   expect(playerText().replay.notLoaded('Twin')).toBe('Replay: chart not loaded (Twin)');
   setPlayerLang('ja');
   expect(playerText().shell.dropTitle).toBe('ドロップして読み込む');
-  expect(playerText().shell.help).toBe('ヘルプ');
+  expect(playerText().shell.close).toBe('閉じる');
   expect(playerText().phases.parsing).toContain('譜面');
   expect(playerText().replay.notLoaded('Twin')).toContain('譜面');
   expect(playerText().course.making).toContain('譜面');

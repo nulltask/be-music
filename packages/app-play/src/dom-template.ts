@@ -2,6 +2,7 @@ import {
   PUBLIC_BETA_DELETION,
   PUBLIC_BETA_LABEL,
   renderBuildInfo,
+  renderPublicBetaNotice,
   renderServiceFooter,
 } from '@be-music/service-web-theme';
 import { playerServiceHeaderHTML } from './player-header.ts';
@@ -27,7 +28,7 @@ function playHostname(): string {
  *
  * Sub-elements wired up elsewhere:
  *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings toggles the Debug Menu. Fullscreen covers `#main`, so this header and the site footer stay on the page.
- *  - `#help-button` / `#help-modal` — `help-modal.ts` (`wireHelpModal`)
+ *  - `#help-modal` — `help-modal.ts` (`wireHelpModal`), opened from the header's Help button
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
  *  - `#start-silent-mode` — `silent-mode-playback.ts` (`mountStartSilentModeOption`), from `services/silent-mode.ts`
@@ -193,6 +194,8 @@ export const PLAYER_APP_HTML = `
               </section>
             </div>
           </details>
+          <!-- Public Beta, in both languages; Help shows the one it picked (help-modal.ts). -->
+          <div class="start-beta-notice">${renderPublicBetaNotice('both')}</div>
         </div>
       </div>
     </div>
@@ -367,29 +370,6 @@ export const PLAYER_APP_HTML = `
         <div class="loading-counter" id="loading-counter"></div>
       </div>
     </div>
-    <!--
-      Bottom-right floating Help button. Pinned so it stays
-      reachable from every scene (select / gameplay / result)
-      without having to compete with Tweakpane (top-right) or the
-      search bar (bottom-left). Opens the unified Help dialog
-      that hosts both the usage guide and the third-party
-      attribution required by the libraries we ship.
-    -->
-    <button class="btn help-button" data-size="sm" data-variant="outline" id="help-button" type="button" aria-haspopup="dialog" aria-controls="help-modal">
-      <svg class="help-button-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8" />
-        <path
-          d="M9.4 9.5 a2.6 2.6 0 1 1 3.6 2.4 c-0.7 0.3 -1 0.9 -1 1.6 V14.5"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-        <circle cx="12" cy="17.2" r="1.1" fill="currentColor" />
-      </svg>
-      <span class="help-button-label" data-i18n="help">Help</span>
-    </button>
     <!--
       Touch play controls. Phones and tablets have no Space / Esc key, so
       during play a pause button sits in the top-left corner; while paused
@@ -1359,7 +1339,8 @@ export const PLAYER_APP_HTML = `
     hostname: playHostname(),
     className: 'service-page-footer',
     buildInfo: playBuildInfo(),
-    locale: 'both',
+    layout: 'columns',
+    publicBeta: false,
   })}
   </div>
 `;
