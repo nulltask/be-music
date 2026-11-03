@@ -47,6 +47,7 @@ const button = (value: ControlButton): ControlActionKey => ({ button: value });
 export const CONTROL_ACTION_IDS = [
   'global.fullscreen',
   'global.screenshot',
+  'global.help',
   'global.fps',
   'select.down',
   'select.up',
@@ -57,6 +58,8 @@ export const CONTROL_ACTION_IDS = [
   'select.random',
   'select.activate',
   'select.open-folder',
+  'select.ranking',
+  'select.level-edit',
   'select.difficulty',
   'select.auto',
   'select.back',
