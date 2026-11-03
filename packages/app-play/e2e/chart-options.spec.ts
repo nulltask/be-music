@@ -31,12 +31,12 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await player.page.screenshot({ path: info.outputPath('authored-077.png') });
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 2.1, 'authored 100');
     await expect.poll(async () => (await player.state()).play?.hiSpeed).toBe(100);
-    await player.key('Space');
+    await player.key('Pause');
     const paused = (await player.state()).play?.seconds;
     await player.page.waitForTimeout(200);
     expect((await player.state()).play?.seconds).toBeCloseTo(paused!, 2);
     expect((await player.state()).play?.hiSpeed).toBe(100);
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 4.1, 'authored 025');
     await expect.poll(async () => (await player.state()).play?.hiSpeed).toBe(0.25);
     await player.page.screenshot({ path: info.outputPath('authored-025.png') });
