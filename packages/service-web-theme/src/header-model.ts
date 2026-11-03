@@ -1,13 +1,8 @@
 import { LOCALE_NAMES, LOCALES, withLocale, type Locale } from './locale.ts';
 
-/** Who is signed in, when the page has a session. */
-export interface ServiceHeaderAccount {
-  handle: string;
-  displayName: string;
-  anonymous: boolean;
-  /** Absolute or same-origin URL of the profile image. */
-  avatarURL?: string;
-}
+import { resolveAccountIdentity, type ServiceAccountIdentity } from './account-model.ts';
+
+export type ServiceHeaderAccount = ServiceAccountIdentity;
 
 export interface ServiceHeaderInput {
   locale: Locale;
@@ -48,16 +43,9 @@ const MAXIMIZE_ICON =
   '<svg class="lucide lucide-maximize" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
 const MINIMIZE_ICON =
   '<svg class="lucide lucide-minimize" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>';
-const LANGUAGES_ICON =
-  '<svg class="lucide lucide-languages" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>';
-const CHECK_ICON =
-  '<svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
 const CHEVRON_ICON =
   '<svg class="lucide lucide-chevron-down" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
-
-/** The frame of the language menu. It sits in the header's row, so it turns wrapping back on. */
-const HEADER_MENU_CLASS =
-  'bg-popover text-popover-foreground max-w-[calc(100vw-2rem)] rounded-lg border p-1 text-sm whitespace-normal [word-break:auto-phrase] shadow-md';
 
 const TEXT = {
   en: {
@@ -70,9 +58,7 @@ const TEXT = {
     settings: 'Settings',
     fullscreen: 'Full screen',
     fullscreenExit: 'Exit full screen',
-    guest: 'guest',
     languageAria: (name: string) => `Language: ${name}`,
-    accountOf: (handle: string) => `Account of @${handle}`,
   },
   ja: {
     nav: 'サイト',
@@ -84,9 +70,7 @@ const TEXT = {
     settings: '設定',
     fullscreen: 'フルスクリーン',
     fullscreenExit: 'フルスクリーン解除',
-    guest: 'ゲスト',
     languageAria: (name: string) => `言語: ${name}`,
-    accountOf: (handle: string) => `@${handle} のアカウント`,
   },
 } as const;
 
@@ -124,6 +108,7 @@ export function resolveServiceHeader(input: ServiceHeaderInput) {
       pressed: input.fullscreenActive === true,
     });
   const account = input.account;
+  const identity = account === undefined ? undefined : resolveAccountIdentity(account, input.locale);
   return {
     title: input.title,
     homeHref: input.homeHref,
@@ -137,24 +122,15 @@ export function resolveServiceHeader(input: ServiceHeaderInput) {
       signedIn: account !== undefined,
       href: input.accountHref,
       newTab: account !== undefined && input.accountNewTab === true,
-      label: account === undefined ? t.signIn : account.handle === '' ? account.displayName : `@${account.handle}`,
-      ariaLabel:
-        account === undefined ? undefined : account.handle === '' ? account.displayName : t.accountOf(account.handle),
-      title:
-        account === undefined
-          ? undefined
-          : account.anonymous
-            ? `${account.displayName} (${t.guest})`
-            : account.displayName,
+      label: identity?.label ?? t.signIn,
+      ariaLabel: identity?.ariaLabel,
+      title: identity?.title,
       avatarURL: account?.avatarURL,
       iconHTML: CHEVRON_ICON,
     },
     actions,
     language: {
       label: t.languageAria(LOCALE_NAMES[input.locale]),
-      iconHTML: LANGUAGES_ICON,
-      checkIconHTML: CHECK_ICON,
-      menuClass: `${HEADER_MENU_CLASS} w-44`,
       choices: LOCALES.map((locale) => ({
         locale,
         label: LOCALE_NAMES[locale],

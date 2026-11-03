@@ -49,25 +49,7 @@ export const ja: Messages = {
     settings: '設定',
     signOut: 'ログアウト',
   },
-  dialogs: {
-    signInTitle: 'ログイン',
-    signInLead: 'パスキー、Google、または Discord でログインします。',
-    signInWithPasskey: 'パスキーでログイン',
-    or: 'または',
-    orWithPasskey: 'またはパスキーで',
-    noAccount: 'アカウントをお持ちでない場合は新規登録',
-    cancel: 'キャンセル',
-    signUpTitle: '新規登録',
-    signUpLead:
-      'ユーザー名と表示名を決めてください。続いて、ログインに使うパスキー（端末の指紋認証や PIN）を作成します。',
-    handle: 'ユーザー名',
-    handleHint: '英数字と _ で 3〜15 文字。あなたのページの URL になります。',
-    name: '表示名',
-    nameHint: '32 文字まで。ランキングに表示されます。',
-    createPasskey: 'パスキーを作成して登録',
-    signInWith: (provider) => `${provider} でログイン`,
-    signUpWith: (provider) => `${provider} で登録`,
-  },
+
   footer: {
     label: 'Leaderboard について',
     about: 'このサイトについて',

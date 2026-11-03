@@ -38,12 +38,13 @@ async function done(result: unknown): Promise<void> {
   } else location.assign('/account');
 }
 document.addEventListener('click', (event) => {
-  const button = (event.target as Element).closest<HTMLButtonElement>('button[data-action]');
+  const button = (event.target as Element).closest<HTMLButtonElement>('button[data-action], button[data-auth-action]');
   if (!button) return;
+  const action = button.dataset.authAction ?? button.dataset.action;
   button.disabled = true;
   status.message = '';
   void (async () => {
-    switch (button.dataset.action) {
+    switch (action) {
       case 'remove-avatar':
         return saveProfile('/api/profile/avatar', { method: 'DELETE' });
       case 'guest':
@@ -52,12 +53,12 @@ document.addEventListener('click', (event) => {
         return done(await auth.signIn.passkey());
       case 'discord':
       case 'google':
-        return done(await auth.signIn.social({ provider: button.dataset.action, callbackURL: '/account' }));
+        return done(await auth.signIn.social({ provider: action, callbackURL: '/account' }));
       case 'link-discord':
       case 'link-google':
         return done(
           await auth.linkSocial({
-            provider: button.dataset.action === 'link-discord' ? 'discord' : 'google',
+            provider: action === 'link-discord' ? 'discord' : 'google',
             callbackURL: '/account',
             errorCallbackURL: '/account',
           }),
@@ -86,11 +87,14 @@ document.documentElement.dataset.authReady = 'true';
 /** Starts Google or Discord when this login was opened from that button on another service. */
 function startRequestedProvider(): void {
   const requested = new URLSearchParams(location.search).get('sign_in_method');
+  const button = Array.from(document.querySelectorAll<HTMLButtonElement>('button[data-auth-action]')).find(
+    (candidate) => candidate.dataset.authAction === requested,
+  );
   const method = socialSignInToStart({
     pathname: location.pathname,
     search: location.search,
-    providerConfigured: document.querySelector(`button[data-action="${requested}"]`) !== null,
-    alreadyContinuing: document.querySelector('[data-action="continue"]') !== null,
+    providerConfigured: button !== undefined,
+    alreadyContinuing: document.querySelector('[data-auth-action="continue"]') !== null,
   });
   if (method === undefined) return;
   const guard = `be-music.sign-in.${method}`;
@@ -100,7 +104,7 @@ function startRequestedProvider(): void {
   } catch {
     // Private mode can reject storage. One attempt is still made.
   }
-  document.querySelector<HTMLButtonElement>(`button[data-action="${method}"]`)?.click();
+  button?.click();
 }
 startRequestedProvider();
 
