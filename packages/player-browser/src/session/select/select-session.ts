@@ -62,6 +62,7 @@ import type {
 } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { resolveSelectKeyAction } from './select-keys.ts';
+import { nextDifficultyIndex } from './select-difficulty.ts';
 import { DEFAULT_CONTROL_ACTIONS, type ControlActionMap } from '../controls/control-actions.ts';
 import { controlButtonsOfKey, DEFAULT_CONTROL_BUTTONS } from '../controls/control-buttons.ts';
 import { openLibrary, restoreSelectBrowse, SELECT_POLICIES, type SelectPolicy } from './select-policy.ts';
@@ -427,9 +428,14 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         this.togglePanel(action.panel, atMs);
         return true;
       case 'open-folder':
-        if (this.focused()?.kind !== 'folder') return false;
-        this.activate(atMs);
-        return true;
+        // LR2's → opens a folder, and on a chart changes the difficulty.
+        if (this.focused()?.kind === 'folder') {
+          this.activate(atMs);
+          return true;
+        }
+        return this.policy.keys === 'lr2' && this.switchDifficulty(atMs);
+      case 'difficulty':
+        return this.switchDifficulty(atMs);
       case 'auto':
         if (this.focused()?.kind === 'folder') this.activate(atMs);
         else this.start(true, atMs);
@@ -756,6 +762,14 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     if (!actions.is('select.option-panel', { ...event, buttons })) return false;
     this.panelPressedAtMs = undefined;
     if (event.timeStamp - pressedAtMs >= PANEL_HOLD_MS) this.togglePanel(this.panel, event.timeStamp);
+    return true;
+  }
+
+  /** Moves the cursor to the next chart of the focused chart's track (`select-difficulty.ts`); whether there was one. */
+  private switchDifficulty(atMs: number): boolean {
+    const index = nextDifficultyIndex(browseEntries(this.browseLibrary, this.browse), browseCursor(this.browse));
+    if (index === undefined) return false;
+    this.applyBrowse({ type: 'jump', index }, atMs);
     return true;
   }
 

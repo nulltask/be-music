@@ -872,3 +872,21 @@ describe('SelectSession exit menu', () => {
     }
   });
 });
+
+describe('SelectSession difficulty change', () => {
+  it('moves to the next chart of the track on LR2’s 1, SELECT and → on a chart', () => {
+    // In `pack`, where a, b and c are charts of one track (one directory).
+    const { key, advance, session } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
+    const first = session.focused();
+    expect(key('Digit1', '1')).toBe(true);
+    advance(10);
+    const second = session.focused();
+    expect(second).not.toEqual(first);
+    expect(key('KeyW', 'w')).toBe(true);
+    advance(10);
+    expect(key('ArrowRight')).toBe(true);
+    advance(10);
+    // Three charts round: back where it started.
+    expect(session.focused()).toEqual(first);
+  });
+});

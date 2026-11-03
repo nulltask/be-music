@@ -65,6 +65,8 @@ export type SelectKeyAction =
   | { readonly type: 'readtext-close' }
   /** Open the folder under the cursor, and do nothing on a chart (LR2's →). */
   | { readonly type: 'open-folder' }
+  /** Move the cursor to the next chart of the focused chart's track (LR2's difficulty change). */
+  | { readonly type: 'difficulty' }
   /** Start the chart under the cursor in AUTO play, or open the folder (LR2's key 6, beatoraja's AUTO). */
   | { readonly type: 'auto' }
   /** Step the sort, or the key mode filter, where the family keeps them (`SelectPolicy.listOptions`). */
@@ -157,6 +159,7 @@ export function resolveSelectKeyAction(
   if (is('select.last')) return { type: 'browse', command: { type: 'jump', index: Number.MAX_SAFE_INTEGER } };
   if (is('select.activate')) return { type: 'activate' };
   if (is('select.open-folder')) return { type: 'open-folder' };
+  if (is('select.difficulty')) return { type: 'difficulty' };
   if (is('select.auto')) return { type: 'auto' };
   if (is('select.back')) return { type: 'back' };
   if (is('select.close-folder')) return { type: 'back', inFolder: true };
