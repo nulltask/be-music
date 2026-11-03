@@ -23,7 +23,7 @@ async function playWithLiveChanges(player: Player): Promise<BeMusicReplay> {
   let state = await player.keyWhen(
     (current) => current.scene.kind === 'play' && (current.play?.judged?.pgreat ?? 0) >= 1,
     undefined,
-    'Space',
+    'Pause',
     'Fixture A under way',
   );
   expect(state.status).toBe('Playing: Fixture A');
@@ -34,7 +34,7 @@ async function playWithLiveChanges(player: Player): Promise<BeMusicReplay> {
   await player.key('ArrowUp');
   await player.key('ArrowUp');
   await player.waitFor((current) => (current.play?.hiSpeed ?? 0) > hiSpeed, 'the hi-speed to rise');
-  await player.key('Space');
+  await player.key('Pause');
   state = await player.waitForResult(0);
   expect(state.status).toBe('Result: Fixture A');
   const replay = await player.lastReplay();
@@ -90,7 +90,7 @@ test(
     state = await player.keyWhen(
       (current, hiSpeed) => current.play?.tempo === 1.2 && Math.abs((current.play.hiSpeed ?? 0) - hiSpeed) < 0.05,
       recordedHiSpeed,
-      'Space',
+      'Pause',
       'the replay to follow the recorded tempo and hi-speed',
     );
     await player.key('ArrowLeft');
@@ -110,7 +110,7 @@ test(
     state = await player.waitFor((current) => current.play?.seconds === 0, 'the replay sought back again');
     expect(state.play?.judged?.pgreat).toBe(0);
     expect(state.play?.tempo).toBe(1);
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitFor(
       (current) => (current.play?.judged?.pgreat ?? 0) >= 1,
       'the replay to judge again after resuming',
@@ -135,7 +135,7 @@ test(
     );
     expect(state.play?.tempo).toBe(0.9);
     expect(state.play?.hiSpeed).toBe(4);
-    await player.key('Space');
+    await player.key('Pause');
     await player.key('ArrowLeft');
     state = await player.waitFor(
       (current) => current.play?.seconds === 0,
@@ -162,7 +162,7 @@ test('the arrows do not seek a manual play, which keeps its judgments and record
     (state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 1.5,
     'manual play under way',
   );
-  await player.key('Space');
+  await player.key('Pause');
   const paused = await player.state();
   // ← / → seek five seconds only during AUTO play: a manual play stays where it was paused, judgments and all.
   await player.key('ArrowLeft');
@@ -171,7 +171,7 @@ test('the arrows do not seek a manual play, which keeps its judgments and record
   const after = await player.state();
   expect(after.play?.seconds).toBeCloseTo(paused.play!.seconds!, 2);
   expect(after.play?.judged).toEqual(paused.play?.judged);
-  await player.key('Space');
+  await player.key('Pause');
   await player.waitForResult(0);
   // Not sought, so not practice: the play keeps its replay.
   expect(await player.lastReplay()).toBeDefined();
