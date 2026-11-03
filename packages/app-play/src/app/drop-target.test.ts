@@ -2,6 +2,13 @@ import type { BrowserDroppedFile } from '@be-music/player-browser/collection';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { DropTarget, type DropTargetOptions } from './drop-target.ts';
 
+// These fixtures test synchronous drop reads and overlay lifecycle without a browser DOM.
+// Real Lit rendering is covered by the browser suites; retain the controller's other DOM effects here.
+vi.mock('lit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('lit')>()),
+  render: vi.fn(),
+}));
+
 function fakeElement(): HTMLDivElement & HTMLInputElement {
   const classes = new Set<string>();
   return {

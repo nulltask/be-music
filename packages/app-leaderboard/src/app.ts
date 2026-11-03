@@ -6,7 +6,7 @@ import { bmsSearchLookup, type ChartsetLookup } from './chartsets/refresh.ts';
 import { openDatabase, type Database } from './db/client.ts';
 import type { Env } from './env.ts';
 import { serverTiming } from './http/server-timing.ts';
-import { mountPages } from './pages/routes.tsx';
+import { mountPages } from './pages/routes.ts';
 import type { Viewer } from './pages/viewer.ts';
 
 interface Variables {

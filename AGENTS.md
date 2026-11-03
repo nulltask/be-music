@@ -81,6 +81,13 @@
 - Check that a diagram renders (e.g. in the GitHub preview or the Mermaid Live Editor) before committing it.
 - Keep the diagrams of an English `.md` and its Japanese `.ja.md` in sync: the same structure, with labels translated.
 
+# Web UI Rules
+
+- Use Lit for web application templates and state-driven UI. Render server pages through `@be-music/service-web-theme/server`; keep that entry out of browser bundles. Reuse `@be-music/player-ui` for player components and `@be-music/service-web-theme/client` for shared service components and header views.
+- Keep htmx for asynchronous requests, partial navigation, morphs and their fallbacks. Share presentation models where server responses and Lit client views render the same UI.
+- Give each renderer ownership of its children. Mount Lit into an empty root, or explicitly transfer a boot placeholder once; do not replace children or move labels out of an active Lit template. Isolate components from htmx with a supported boundary such as Shadow DOM.
+- Localize Lit-owned text and attributes through their bindings. Native DOM operations remain appropriate for host lifecycles, focus, dialogs, file pickers, downloads, canvas drawing, and runtime progress adapters.
+
 # Testing Rules
 
 - Add tests in the same change that introduces new exported functions, new parser directives, new pure-function helpers, or behavior changes to existing ones. Vitest lives at the workspace root (`pnpm test` runs `vp test run`, which executes the projects listed in the root `vite.config.ts`) and individual packages keep `*.test.ts` next to the source under test.

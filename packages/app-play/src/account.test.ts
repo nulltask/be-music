@@ -1,3 +1,4 @@
+import { collectResultSync } from '@lit-labs/ssr/lib/render-result.js';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   accountProviderFromAction,
@@ -10,7 +11,10 @@ import {
   shouldTurnOnSubmitting,
   loadLeaderboardAccount,
 } from './account.ts';
-import { PLAYER_APP_HTML } from './dom-template.ts';
+import { render } from '@lit-labs/ssr';
+import { PLAYER_APP_TEMPLATE } from './dom-template.ts';
+
+const PLAYER_APP_HTML = collectResultSync(render(PLAYER_APP_TEMPLATE));
 
 describe('describeLeaderboardAccount', () => {
   test('summarizes the session state', () => {

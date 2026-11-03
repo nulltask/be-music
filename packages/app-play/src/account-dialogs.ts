@@ -1,3 +1,6 @@
+import { localized } from './ui/localized.ts';
+import { render } from 'lit';
+import type { BeMusicStatusElement } from '@be-music/service-web-theme/client';
 import {
   accountProviderFromAction,
   signInWithAccountProvider,
@@ -39,11 +42,18 @@ export function wireAccountDialogs(handlers: AccountDialogHandlers): (dialog: Ac
     if (dialog === null) return;
     say(dialog, undefined);
     if (which !== 'sign-in') {
-      const copy = signUpCopy(which);
-      const title = dialog.querySelector('h2');
-      const lead = dialog.querySelector('[data-account-sign-up-lead]');
-      if (title !== null) title.textContent = copy.title;
-      if (lead !== null) lead.textContent = copy.lead;
+      const title = dialog.querySelector<HTMLElement>('h2');
+      const lead = dialog.querySelector<HTMLElement>('[data-account-sign-up-lead]');
+      if (title !== null)
+        render(
+          localized(() => signUpCopy(which).title),
+          title,
+        );
+      if (lead !== null)
+        render(
+          localized(() => signUpCopy(which).lead),
+          lead,
+        );
     }
     dialog.showModal();
   };
@@ -126,9 +136,9 @@ async function run(
 }
 
 function say(dialog: HTMLDialogElement | null, message: string | undefined): void {
-  const status = dialog?.querySelector<HTMLElement>('[data-account-dialog-status]');
+  const status = dialog?.querySelector<BeMusicStatusElement>('[data-account-dialog-status]');
   if (status === null || status === undefined) return;
-  status.textContent = message ?? '';
+  status.message = message ?? '';
   status.hidden = message === undefined;
 }
 

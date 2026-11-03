@@ -12,7 +12,8 @@
     "cf:r2:push": "pnpm run build:cf && node scripts/sync-ffmpeg-core.mjs --force",
     "cf:r2:push:preview": "pnpm run build:cf && node scripts/sync-ffmpeg-core.mjs --force --preview",
     "clean": "rimraf dist node_modules/.vite",
-    "build:icons": "node scripts/build-icons.ts"
+    "build:icons": "node scripts/build-icons.ts",
+    "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
     "@be-music/chart-model": "workspace:*",
@@ -26,9 +27,11 @@
     "@be-music/shared-utils": "workspace:*",
     "@be-music/skin-beatoraja": "workspace:*",
     "@be-music/skin-lr2": "workspace:*",
-    "fflate": "^0.8.3"
+    "fflate": "^0.8.3",
+    "lit": "^3.3.3"
   },
   "devDependencies": {
+    "@lit-labs/ssr": "^4.1.0",
     "@tailwindcss/vite": "^4.3.3",
     "basecoat-css": "^1.0.2",
     "tailwindcss": "^4.3.3",

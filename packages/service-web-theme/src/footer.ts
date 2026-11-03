@@ -1,6 +1,5 @@
-import { renderBuildInfo, type BuildInfo } from './build-info.ts';
+import type { BuildInfo } from './build-info.ts';
 import type { Locale } from './locale.ts';
-import { renderPublicBetaNotice } from './public-beta.ts';
 
 /** Dashboard, Accounts, Play, then Leaderboard. Donate is not in this row. */
 export const SERVICE_NAMES = ['dashboard', 'accounts', 'play', 'leaderboard'] as const;
@@ -66,15 +65,6 @@ export interface ServiceFooterInput {
   publicBeta?: boolean;
 }
 
-function escapeHTML(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
 /**
  * The environment site (`be-music.app` or `preview.be-music.app`) for a public host. Dashboard is that site. The other
  * services are one label in front of it. A branch Preview URL of the preview Player uses the preview site.
@@ -98,43 +88,4 @@ export function serviceOrigins(hostname: string): Record<ServiceName, string> {
     play: `https://play.${site}/`,
     leaderboard: `https://leaderboard.${site}/`,
   };
-}
-
-function footerOrigins(input: ServiceFooterInput): Record<ServiceName, string> {
-  const origins = serviceOrigins(input.hostname ?? '');
-  for (const name of SERVICE_NAMES) {
-    const override = input.origins?.[name];
-    if (override !== undefined && override !== '') origins[name] = override;
-  }
-  return origins;
-}
-
-/**
- * The shared service footer, in order: the Public Beta line, links to the other services (the current one is text),
- * this site's own content, the copyright line, then the build timestamp and source revision. The `columns` layout keeps
- * the Public Beta line above the row, across all three columns.
- */
-export function renderServiceFooter(input: ServiceFooterInput = {}): string {
-  const origins = footerOrigins(input);
-  const links = SERVICE_NAMES.map((name) => {
-    const label = escapeHTML(SERVICE_LABELS[name]);
-    if (name === input.current) return `<span aria-current="page">${label}</span>`;
-    return `<a class="${SERVICE_FOOTER_LINK_CLASS}" data-service="${name}" href="${escapeHTML(origins[name])}">${label}</a>`;
-  }).join('');
-  const columns = input.layout === 'columns';
-  const baseClass = columns ? SERVICE_FOOTER_COLUMNS_CLASS : SERVICE_FOOTER_CLASS;
-  const footerClass =
-    input.className === undefined || input.className === '' ? baseClass : `${baseClass} ${escapeHTML(input.className)}`;
-  const notice = input.publicBeta === false ? '' : renderPublicBetaNotice(input.locale ?? 'en');
-  const nav = `<nav class="${SERVICE_FOOTER_NAV_CLASS}" aria-label="${escapeHTML(input.navLabel ?? 'Services')}">${links}</nav>`;
-  const hasSite = input.siteHTML !== undefined && input.siteHTML !== '';
-  const copyright = escapeHTML(input.copyright ?? SERVICE_COPYRIGHT);
-  const buildInfo = renderBuildInfo(input.buildInfo);
-  if (columns) {
-    const site = hasSite ? `${input.siteHTML} · ` : '';
-    const banner = notice === '' ? '' : `<div class="sm:col-span-3">${notice}</div>`;
-    return `<footer class="${footerClass}">${banner}<div class="sm:justify-self-start">${buildInfo}</div>${nav}<p class="sm:justify-self-end">${site}${copyright}</p></footer>`;
-  }
-  const site = hasSite ? `<div class="space-y-2">${input.siteHTML}</div>` : '';
-  return `<footer class="${footerClass}">${notice}${nav}${site}<p>${copyright}</p>${buildInfo}</footer>`;
 }
