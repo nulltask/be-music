@@ -2245,14 +2245,38 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /*
- * The header's icon buttons name themselves in a black tooltip that opens below the header's bottom border, so it
- * never straddles the line.
+ * The header's icon buttons name themselves in a black, pointed tooltip that opens below the header's bottom border,
+ * so it never straddles the line.
  */
 #player-service-header [data-tooltip]::before {
-  margin-top: 18px;
+  margin-top: 22px;
   border: 1px solid rgb(255 255 255 / 0.16);
   background: #000;
   color: #fff;
+}
+/* The point on top of the bubble, aimed at the button. */
+#player-service-header [data-tooltip]::after {
+  content: '';
+  position: absolute;
+  z-index: 61;
+  top: 100%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: 17px;
+  border-top: 1px solid rgb(255 255 255 / 0.16);
+  border-left: 1px solid rgb(255 255 255 / 0.16);
+  background: #000;
+  translate: -50% 0;
+  rotate: 45deg;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+}
+#player-service-header [data-tooltip]:hover::after {
+  visibility: visible;
+  opacity: 1;
 }
 
 /* The page footer is the start screen only, so it stays off the skin's playfield. */
