@@ -41,6 +41,23 @@ export function noteHeightForLane(laneWidth: number): number {
   return Math.max(2, Math.round(laneWidth * NOTE_HEIGHT_LANE_RATIO));
 }
 
+/** The width of the playfield's first white-key lane, which a scratch note takes its height from; `undefined` without one. */
+export function findWhiteLaneWidth(
+  lanes: readonly { readonly kind: BeMusicLaneKind; readonly w: number }[],
+): number | undefined {
+  return lanes.find((lane) => lane.kind === 'white')?.w;
+}
+
+/**
+ * The height of a note of `kind` in a lane `laneWidth` wide ({@link noteHeightForLane}). A scratch (or wheel) note
+ * takes a white key's height instead of its own wider lane's, as on the arcade cabinet, when `whiteLaneWidth` is known
+ * ({@link findWhiteLaneWidth}).
+ */
+export function resolveNoteHeight(kind: BeMusicLaneKind, laneWidth: number, whiteLaneWidth?: number): number {
+  const scratch = kind === 'scratch' || kind === 'wheel-up' || kind === 'wheel-down';
+  return noteHeightForLane(scratch && whiteLaneWidth !== undefined ? whiteLaneWidth : laneWidth);
+}
+
 export interface FixedLaneWidths {
   scratch: number;
   /** Odd-numbered keys (1 / 3 / 5 / 7). */

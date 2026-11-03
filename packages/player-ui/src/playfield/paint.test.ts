@@ -258,6 +258,22 @@ describe('playfield painters', () => {
     ]);
   });
 
+  it('draws a scratch note as tall as a white key’s note, not by its wider lane', () => {
+    const ctx = recorder();
+    paintNotes(ctx, {
+      measureLines: [],
+      longNotes: [],
+      notes: [
+        { kind: 'scratch', x: 0, w: 41, y: 60 },
+        { kind: 'white', x: 41, w: 24, y: 60 },
+      ],
+      mines: [],
+      whiteLaneWidth: 24,
+    });
+    // Both 5 px (0.21 of the 24 px white lane), standing on y = 60.
+    expect(ctx.calls).toEqual(['fillRect 0,55,41,5 #ffa8b3 1', 'fillRect 41,55,24,5 #e5efff 1']);
+  });
+
   it('draws a white centre line down a long note body', () => {
     const ctx = recorder();
     paintNotes(ctx, {

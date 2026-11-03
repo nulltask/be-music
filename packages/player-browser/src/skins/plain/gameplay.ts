@@ -11,8 +11,9 @@ import {
   type BeMusicSurface,
   backSpinChevron,
   hellChargeZigzag,
+  findWhiteLaneWidth,
   longNoteCentreLineAlpha,
-  noteHeightForLane,
+  resolveNoteHeight,
   resolveHellChargeLook,
   resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
@@ -169,10 +170,11 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
  * alpha.
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
+  const whiteLaneWidth = findWhiteLaneWidth(frame.lanes);
   for (const note of frame.longNotes) {
     const alpha = (note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1) * (note.alpha ?? 1);
-    // A note is as tall as a share of its lane's width, standing on its bottom edge.
-    const noteHeight = noteHeightForLane(note.w);
+    // A note is as tall as a share of its lane's width (a scratch note as a white key's), standing on its bottom edge.
+    const noteHeight = resolveNoteHeight(note.kind, note.w, whiteLaneWidth);
     const bodyTop = note.top - noteHeight;
     const bodyHeight = Math.max(1, note.bottom - note.top);
     const marks = resolveLongNoteMarks(note);
@@ -223,7 +225,7 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {
-    const noteHeight = noteHeightForLane(note.w);
+    const noteHeight = resolveNoteHeight(note.kind, note.w, whiteLaneWidth);
     ctx.globalAlpha = note.alpha ?? 1;
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.fillRect(note.x, note.y - noteHeight, note.w, noteHeight);
