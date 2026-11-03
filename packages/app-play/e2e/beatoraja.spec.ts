@@ -129,7 +129,7 @@ test('beatoraja shows invisible objects only when enabled, with live toggling', 
   });
   await player.waitFor((state) => !state.loading && state.loads > 0, 'the invisible chart');
   await player.drop('skins/beatoraja');
-  await player.setOption(['Developer'], 'Show invisible notes', true);
+  await player.setOption(['Skin & display'], 'Show invisible notes', true);
   await player.cursorTo((bar) => bar.kind === 'chart' && bar.title === 'Invisible display', 'the invisible chart');
   await player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
   await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? -1) > 0.2, 'invisible object');
@@ -159,10 +159,10 @@ test('beatoraja shows invisible objects only when enabled, with live toggling', 
   }
   expect(await greenPixels()).toBeGreaterThan(30);
   await canvas.screenshot({ path: info.outputPath('beatoraja-invisible-on.png') });
-  await player.setOption(['Developer'], 'Show invisible notes', false);
+  await player.setOption(['Skin & display'], 'Show invisible notes', false);
   expect(await greenPixels()).toBe(0);
-  await player.setOption(['Developer'], 'Show invisible notes', true);
+  await player.setOption(['Skin & display'], 'Show invisible notes', true);
   expect(await greenPixels()).toBeGreaterThan(30);
-  await player.setOption(['Developer'], 'Show invisible notes', false);
+  await player.setOption(['Skin & display'], 'Show invisible notes', false);
   expect(await greenPixels()).toBe(0);
 });

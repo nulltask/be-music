@@ -1,4 +1,4 @@
-import { selectBinding, monitorFrameRate } from '../../pane-controls.ts';
+import { monitorFrameRate } from '../../pane-controls.ts';
 import { getBrowserWorkerCount, setBrowserWorkerCount } from '@be-music/player-browser/compute';
 import { storeWorkerCount } from '../../worker-settings.ts';
 // The Options dialog's Developer folder. It is built with the dialog as `this` (`OptionsDialog`).
@@ -22,33 +22,12 @@ export function buildDeveloperFolder(this: OptionsDialog, developer: OptionConta
         /* Storage can be disabled. */
       }
     });
-  // The judge ruleset — no in-skin counterpart; the Options dialog is its only surface. It switches every judge rule
-  // (windows, note selection, empty POOR, long notes, gauge, score — see docs/replay.md).
-  this.trackPlayOption(
-    selectBinding(developer, this.guiState, 'judgeRuleset', 'Judgment windows', {
-      LR2: 'lr2',
-      beatoraja: 'beatoraja',
-      '????': '____',
-    }).on('change', () => {
-      this.refreshRulesetChoices();
-      this.deps.refreshSelectRecords();
-    }),
-  );
   developer.addBinding(this.guiState, 'autoPauseOnBlur', { label: 'Auto pause on blur' }).on('change', ({ value }) => {
     this.guiState.autoPauseOnBlur = value;
     // Push live so a chart already in flight starts honoring the new policy on its next visibility / blur event,
     // without forcing the user to restart the song.
     this.gameplayView?.setAutoPauseOnBlur(value);
   });
-  // Chart-authoring debug overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars
-  // in their playable lane. Live-toggleable — the gameplay view always extracts the invisible-note array and preloads
-  // the green sprite, so flipping this flag flips the per-frame render branch on the very next paint.
-  developer
-    .addBinding(this.guiState, 'showInvisibleNotes', { label: 'Show invisible notes' })
-    .on('change', ({ value }) => {
-      this.guiState.showInvisibleNotes = value;
-      this.gameplayView?.setShowInvisibleNotes(value);
-    });
   // Native monitor samples the scene clock and keeps a bounded FPS history.
   const sceneHost = this.sceneHost;
   const stats = {

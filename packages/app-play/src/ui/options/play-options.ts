@@ -36,6 +36,18 @@ import { buildPracticeRangePicker } from './practice-range.ts';
  * for its folder.
  */
 export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContainer): OptionContainer {
+  // The judge ruleset, above the pages: every judge rule (windows, note selection, empty POOR, long notes, gauge, score —
+  // see docs/replay.md) and the choices of several options on the pages follow it. No skin has a counterpart.
+  this.trackPlayOption(
+    selectBinding(folder, this.guiState, 'judgeRuleset', 'Judgment windows', {
+      LR2: 'lr2',
+      beatoraja: 'beatoraja',
+      '????': '____',
+    }).on('change', () => {
+      this.refreshRulesetChoices();
+      this.deps.refreshSelectRecords();
+    }),
+  );
   const [judge, lanes, notes, view, practice, select, replay] = folder.addTab({
     pages: PLAY_OPTION_PAGES.map((title) => ({ title })),
   }).pages;
@@ -408,14 +420,6 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
         step: 0.01,
       })
       .on('change', ({ value }) => this.setPlayOptions({ longNoteRate: value })),
-  );
-  this.trackPlayOption(
-    lanes.addButton({ title: 'A-SCR & LEGACY NOTE (AC 34)' }).on('click', () => {
-      const changes = { autoScratch1P: true, autoScratch2P: true, longNoteModifier: 'LEGACY' } as const;
-      Object.assign(this.guiState, changes);
-      this.setPlayOptions(changes);
-      this.refreshPlayOptionControllers();
-    }),
   );
   // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
   // the bar under the cursor. A play does not read them, so they stay enabled during one.

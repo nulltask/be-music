@@ -109,10 +109,12 @@ for (const modifier of ['LEGACY NOTE (AC 34)', 'LN REMOVE (beatoraja)'] as const
   });
 }
 
-test('A-SCR & LEGACY NOTE applies and records both operations together', async ({ player }) => {
+test('AUTO SCRATCH with LEGACY NOTE (the AC 34 combination) records both operations together', async ({ player }) => {
   await player.open();
   await player.dropText('combined-assist.bme', '#TITLE Combined assist\n#BPM 240\n#LNMODE 2\n#00156:0101\n');
-  await player.pressOption(['Play options'], 'A-SCR & LEGACY NOTE (AC 34)');
+  await player.setOption(['Play options'], 'Auto scratch 1P', true);
+  await player.setOption(['Play options'], 'Auto scratch 2P', true);
+  await player.setOption(['Play options'], 'Long notes', 'LEGACY NOTE (AC 34)');
   expect(await player.readOption(['Play options'], 'Auto scratch 1P')).toBe(true);
   expect(await player.readOption(['Play options'], 'Long notes')).toBe('LEGACY NOTE (AC 34)');
   await player.cursorTo((bar) => bar.title === 'Combined assist', 'combined assist chart');
@@ -128,7 +130,7 @@ for (const ruleset of ['beatoraja', '????'] as const) {
   test(`EX-HARD is an independent recorded gauge with ${ruleset} rules`, async ({ player }) => {
     await player.open();
     await player.dropText('ex-hard.bme', '#TITLE EX-HARD gauge\n#BPM 240\n#00111:01\n');
-    await player.setOption(['Developer'], 'Judgment windows', ruleset);
+    await player.setOption(['Play options'], 'Judgment windows', ruleset);
     await player.setOption(['Play options'], 'Gauge', 'EX-HARD');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.cursorTo((bar) => bar.title === 'EX-HARD gauge', 'EX-HARD chart');
@@ -138,7 +140,7 @@ for (const ruleset of ['beatoraja', '????'] as const) {
     expect(replay?.play.gauge).toBe('EX-HARD');
     expect(replay?.results?.native?.gauge.type).toBe('EX-HARD');
     await player.leaveResult();
-    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     expect(await player.readOption(['Play options'], 'Gauge')).toBe('GROOVE');
   });
 }
@@ -150,7 +152,7 @@ for (const [ruleset, label, effectiveGauge] of [
   test(`${label} records its source gauge independently of input assists`, async ({ player }) => {
     await player.open();
     await player.dropText('assist-easy.bme', '#TITLE Assist easy gauge\n#BPM 240\n#00111:01\n');
-    await player.setOption(['Developer'], 'Judgment windows', ruleset);
+    await player.setOption(['Play options'], 'Judgment windows', ruleset);
     await player.setOption(['Play options'], 'Gauge', label);
     await player.setOption(['Play options'], 'Auto play', true);
     await player.cursorTo((bar) => bar.title === 'Assist easy gauge', 'ASSIST EASY chart');
@@ -166,7 +168,7 @@ for (const [ruleset, label, effectiveGauge] of [
 for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`R-RANDOM is selectable and recorded on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'Random 1P', 'R-RANDOM (beatoraja)');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.browseTo(SONGS, 'Fixture A');
@@ -177,7 +179,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     expect(replay?.play.options?.random1P).toBe('R-RANDOM');
     await player.leaveResult();
     // R-RANDOM is offered under every ruleset (#774), so LR2 rules keep the choice.
-    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     expect(await player.readOption(['Play options'], 'Random 1P')).toBe('R-RANDOM (beatoraja)');
   });
 }
@@ -186,7 +188,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`source-specific options play and record under other judge rules on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     // beatoraja's SPIRAL and scroll REMOVE under LR2 rules: options that only transform the chart or the view (#774).
-    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     await player.setOption(['Play options'], 'Random 1P', 'SPIRAL (beatoraja)');
     await player.setOption(['Play options'], 'Scroll (beatoraja)', 'REMOVE');
     await player.setOption(['Play options'], 'Auto play', true);
@@ -198,7 +200,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     expect(replay?.play).toMatchObject({ judgeRuleset: 'lr2', randomLane: { p1: 'SPIRAL' }, scrollModifier: 'REMOVE' });
     await player.leaveResult();
     // Switching rules keeps both choices.
-    await player.setOption(['Developer'], 'Judgment windows', '????');
+    await player.setOption(['Play options'], 'Judgment windows', '????');
     expect(await player.readOption(['Play options'], 'Random 1P')).toBe('SPIRAL (beatoraja)');
     expect(await player.readOption(['Play options'], 'Scroll (beatoraja)')).toBe('REMOVE');
   });
@@ -207,7 +209,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
 for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`source seeds and previous arrangements work for fresh input on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'Random 1P', 'RANDOM (beatoraja)');
     await player.setOption(['Play options'], 'Seed 1P (-1=random)', '9223372036854775807');
     await player.setOption(['Play options'], 'Auto play', true);
@@ -246,7 +248,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
         'mine-remove.bme',
         `#TITLE Mine remove\n#BPM 240\n${containsMine ? '#001D1:01\n' : ''}#00211:01\n`,
       );
-      await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+      await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
       await player.setOption(['Play options'], 'Mines (beatoraja)', 'REMOVE');
       await player.setOption(['Play options'], 'Auto play', true);
       await player.cursorTo((bar) => bar.title === 'Mine remove', 'mine modifier chart');
@@ -265,7 +267,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     test(`mine ${modifier} records and restores its generated population on ${skin}`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
       await player.dropText('mine-add.bme', `#TITLE Mine addition\n#BPM 240\n#00001:${'01'.repeat(32)}\n#00111:01\n`);
-      await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+      await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
       await player.setOption(['Play options'], 'Mines (beatoraja)', modifier);
       await player.setOption(['Play options'], 'Auto play', true);
       await player.cursorTo((bar) => bar.title === 'Mine addition', 'mine addition chart');
@@ -299,7 +301,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`CONTINUE keeps judging after HAZARD death and restores the policy on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('continue.bme', '#TITLE Continue gauge\n#BPM 240\n#00111:01\n#00212:01\n');
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'Gauge', 'HAZARD');
     await player.setOption(['Play options'], 'Gauge auto-shift', 'CONTINUE');
     await player.cursorTo((bar) => bar.title === 'Continue gauge', 'continue chart');
@@ -328,7 +330,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`measured FLOATING HI-SPEED couples cover edits and records mode switches on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('floating.bme', '#TITLE Floating speed\n#BPM 120\n#00103:F0\n#00811:01\n');
-    await player.setOption(['Developer'], 'Judgment windows', '????');
+    await player.setOption(['Play options'], 'Judgment windows', '????');
     await player.setOption(['Play options'], 'FLOATING HI-SPEED (AC 32 measured)', true);
     await player.setOption(['Play options'], 'Floating speed', 2.25);
     await player.setOption(['Play options'], 'Effect 1P', 'SUDDEN');
@@ -363,7 +365,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`fixed display area ignores cover keys and restores floating time on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('fixed-area.bme', '#TITLE Fixed display area\n#BPM 120\n#00103:F0\n#00811:01\n');
-    await player.setOption(['Developer'], 'Judgment windows', '????');
+    await player.setOption(['Play options'], 'Judgment windows', '????');
     await player.setOption(['Play options'], 'FLOATING HI-SPEED (AC 32 measured)', true);
     await player.setOption(['Play options'], 'Floating speed', 2);
     await player.setOption(['Play options'], 'Fixed display area (AC 34)', true);
@@ -408,7 +410,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     test(`${longNoteModifier} generates and reopens recorded long notes on ${skin}`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
       await player.dropText('add-ln.bme', '#TITLE Add long notes\n#BPM 240\n#00111:01\n#00101:0001\n#00212:01\n');
-      await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+      await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
       await player.setOption(['Play options'], 'Long notes', `${longNoteModifier.replaceAll('_', ' ')} (beatoraja)`);
       await player.setOption(['Play options'], 'Long-note add rate (beatoraja)', 1);
       await player.setOption(['Play options'], 'Auto play', true);
@@ -441,7 +443,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`beatoraja automatic display timing is recorded and replayed on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('auto-timing.bms', '#TITLE Auto timing\n#BPM 120\n#RANK 3\n#00111:01\n#00311:01\n');
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'Auto judge timing', 'beatoraja');
     await player.setOption(['Play options'], 'Judge timing (ms)', 100);
     await player.cursorTo((bar) => bar.title === 'Auto timing', 'calibration chart');
@@ -488,7 +490,7 @@ test('LR2 automatic judge timing steps 1 ms after ten late hits, is recorded and
     'lr2-auto-timing.bms',
     '#TITLE LR2 auto timing\n#BPM 120\n#RANK 3\n#00111:01010101\n#00211:01010101\n#00311:01010101\n',
   );
-  await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+  await player.setOption(['Play options'], 'Judgment windows', 'LR2');
   await player.setOption(['Play options'], 'Auto judge timing', 'LR2 ON');
   await player.setOption(['Play options'], 'Judge timing (ms)', 100);
   expect(
@@ -532,7 +534,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`SURVIVAL TO GROOVE switches to the parallel NORMAL gauge on ${skin}`, async ({ player }) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('survival-to-groove.bms', '#TITLE Survival to groove\n#BPM 240\n#00111:01\n#00212:01\n');
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'Gauge', 'HAZARD');
     await player.setOption(['Play options'], 'Gauge auto-shift', 'SURVIVAL TO GROOVE');
     await player.cursorTo((bar) => bar.title === 'Survival to groove', 'survival chart');
@@ -565,7 +567,7 @@ for (const [label, policy, effective] of [
         'gauge-selection.bms',
         '#TITLE Gauge selection\n#BPM 240\n#00111:01\n#00212:01\n#00318:01\n',
       );
-      await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+      await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
       await player.setOption(['Play options'], 'Gauge', 'NORMAL');
       await player.setOption(['Play options'], 'Gauge auto-shift', label);
       await player.setOption(['Play options'], 'Lowest auto-shift gauge', 'EASY');
@@ -593,7 +595,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       'lr2-constant.bme',
       '#TITLE LR2 constant\n#BPM 120\n#BPM01 240\n#STOP01 192\n#LNOBJ AA\n#00012:0001\n#00108:01\n#00109:01\n#00212:AA\n#00311:01\n',
     );
-    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     await player.setOption(['Play options'], 'HS-FIX', 'CONSTANT');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.cursorTo((bar) => bar.title === 'LR2 constant', 'constant chart');
@@ -624,7 +626,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     test(`${mode} is separately selectable and replayable on ${skin}`, async ({ player }) => {
       await player.open({ 'be-music.built-in-skin': skin });
       await player.dropText('scatter.pms', '#TITLE SCATTER PMS\n#BPM 240\n#00111:01\n#00222:01\n#00325:01\n');
-      await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+      await player.setOption(['Play options'], 'Judgment windows', 'LR2');
       await player.setOption(
         ['Play options'],
         'Random 1P',
@@ -657,7 +659,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       'scroll.bms',
       '#TITLE Scroll REMOVE\n#BPM 240\n#BPM01 480\n#STOP01 192\n#00111:01\n#00108:01\n#00209:01\n#00312:01',
     );
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'Scroll (beatoraja)', 'REMOVE');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.cursorTo((bar) => bar.title === 'Scroll REMOVE', 'scroll chart');
@@ -683,7 +685,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       'scroll-add.bms',
       '#TITLE Scroll ADD\n#BPM 240\n#BPM01 480\n#STOP01 192\n#00111:01\n#00108:01\n#00209:01\n#00312:01',
     );
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'Scroll (beatoraja)', 'ADD');
     await player.setOption(['Play options'], 'Scroll section lines', 1);
     await player.setOption(['Play options'], 'Scroll rate', 1);
@@ -714,7 +716,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`LR2 P.ATTACK is selectable, remembered and replayed on ${skin}`, async ({ player }, info) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('perfect-attack.bms', '#TITLE Perfect attack\n#BPM 240\n#00111:01\n#00212:01');
-    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     await player.setOption(['Play options'], 'Gauge', 'P.ATTACK');
     await player.setOption(['Play options'], 'Auto play', true);
     expect(
@@ -751,7 +753,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`LR2 G.ATTACK is selectable, remembered and replayed on ${skin}`, async ({ player }, info) => {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('good-attack.bms', '#TITLE Good attack\n#BPM 240\n#00111:01\n#00212:01');
-    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     await player.setOption(['Play options'], 'Gauge', 'G.ATTACK');
     await player.setOption(['Play options'], 'Auto play', true);
     expect(
@@ -792,7 +794,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const)
         'Attack courses.lr2crs',
         `<courselist><course><title>${title}</title><type>${gauge === 'G.ATTACK' ? 2 : 0}</type><hash>${'0'.repeat(32)}${hashes}</hash></course></courselist>`,
       );
-      await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+      await player.setOption(['Play options'], 'Judgment windows', 'LR2');
       await player.setOption(['Play options'], 'Gauge', gauge);
       await player.setOption(['Play options'], 'Auto play', true);
       await player.openFolder('Attack courses');
@@ -817,7 +819,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const)
 for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`EXTRA converts BGM, persists and records the effective population on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'EXTRA depth (beatoraja)', 2);
     await player.setOption(['Play options'], 'EXTRA scratch (beatoraja)', true);
     await player.setOption(['Play options'], 'Auto play', true);
@@ -847,7 +849,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       'lr2-extra.bme',
       '#TITLE LR2 Extra fixture\n#BPM 240\n#LNOBJ ZZ\n#00111:01\n#00211:ZZ\n#00201:02\n#00312:01',
     );
-    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     await player.setOption(['Play options'], 'EXTRA MODE (LR2)', true);
     await player.setOption(['Play options'], 'EXTRA minimum level (LR2)', 'LEVEL 2');
     await player.setOption(['Play options'], 'Auto play', true);
@@ -890,7 +892,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const)
         'sp-to-dp.bme',
         `#TITLE ${title}\n#BPM 240\n#LNOBJ ZZ\n#00111:01\n#00112:02\n#00212:ZZ\n#00311:01${sourceKeys === 7 ? '\n#00418:01' : ''}`,
       );
-      await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+      await player.setOption(['Play options'], 'Judgment windows', 'LR2');
       await player.setOption(['Play options'], 'Battle', 'SP TO DP (LR2)');
       await player.setOption(['Play options'], 'Auto play', true);
       await player.cursorTo((bar) => bar.title === title, 'SP TO DP source chart');
@@ -931,7 +933,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       'seven-to-nine.bme',
       '#TITLE Seven to nine\n#BPM 240\n#LNOBJ ZZ\n#00111:01\n#00116:0001\n#00218:01\n#00318:ZZ',
     );
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], '7-to-9 (beatoraja)', 'SC2 KEY3–9');
     await player.setOption(['Play options'], '7-to-9 scratch', 'Alternate');
     await player.setOption(['Play options'], 'Auto play', true);
@@ -968,7 +970,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.open({ 'be-music.built-in-skin': skin });
     const title = `Two players ${skin}`;
     await player.dropText('two-players.bme', `#TITLE ${title}\n#BPM 240\n#00111:01010101\n#00116:0001\n#00212:01`);
-    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     await player.setOption(['Play options'], 'Battle', 'BATTLE (LR2)');
     await player.setOption(['Play options'], 'Gauge 2P', 'HARD');
     await player.setOption(['Play options'], 'Auto play', true);
@@ -997,7 +999,7 @@ test('That-Which-Must-Not-Be-Named 2P PLAY with M-RAN mirrors one player of a sh
   await player.open({ 'be-music.built-in-skin': 'plain' });
   const title = 'M-RAN';
   await player.dropText('m-ran.bme', `#TITLE ${title}\n#BPM 240\n#00111:01\n#00112:0001\n#00113:000001`);
-  await player.setOption(['Developer'], 'Judgment windows', '????');
+  await player.setOption(['Play options'], 'Judgment windows', '????');
   await player.setOption(['Play options'], 'Battle', '2P PLAY (????)');
   await player.setOption(['Play options'], 'Random 1P', 'RANDOM (????)');
   await player.setOption(['Play options'], 'Random 2P', 'RANDOM (????)');
@@ -1023,7 +1025,7 @@ test('a lane option that does not fit the chart names itself in a dialog and goe
 }) => {
   await openWithLibrary(player);
   // beatoraja's CONVERGE is a PMS arrangement; Fixture A is a 7KEY chart.
-  await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+  await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
   await player.setOption(['Play options'], 'Random 1P', 'CONVERGE (beatoraja)');
   await player.browseTo(SONGS, 'Fixture A');
   await player.key('Enter');

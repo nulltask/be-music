@@ -754,12 +754,14 @@ export const PLAYER_APP_HTML = `
             </section>
             <section class="help-menu-folder">
               <h4 class="help-menu-folder-title">Play options</h4>
-              <p class="help-menu-note">Locked during a play unless noted. Options that only change the chart or the view (marked LR2, beatoraja or AC) work under every ruleset and run their source's algorithm; the judge rules come from Developer → Judgment windows. Items marked “Shown with …” say when they appear.</p>
+              <p class="help-menu-note">Locked during a play unless noted. Options that only change the chart or the view (marked LR2, beatoraja or AC) work under every ruleset and run their source's algorithm; the judge rules come from Play options → Judgment windows. Items marked “Shown with …” say when they appear.</p>
               <dl class="help-menu-items">
+                <dt>Judgment windows</dt>
+                <dd>The rules every play follows: LR2, beatoraja or ????. It decides the windows, gauges, options offered, and which best records the select screen shows.</dd>
                 <dt>Auto play</dt>
                 <dd>Plays the chart automatically. An AUTO play saves no record.</dd>
                 <dt>Gauge</dt>
-                <dd>The gauge you play on. The choices follow the rules picked in Developer → Judgment windows.</dd>
+                <dd>The gauge you play on. The choices follow the rules picked in Play options → Judgment windows.</dd>
                 <dt>Judge algorithm</dt>
                 <dd>With beatoraja rules, which note a press is judged against when several are in reach: Combo (default), Duration or Lowest.</dd>
                 <dt data-for="Random 1P|Random 2P">Random 1P / Random 2P</dt>
@@ -828,8 +830,6 @@ export const PLAYER_APP_HTML = `
                 <dd>beatoraja EXTRA: how many background keysounds per row become notes (0 is off), and whether scratch lanes get them.</dd>
                 <dt>Long-note add rate (beatoraja)</dt>
                 <dd><em class="help-menu-when">Shown with an ADD choice in Long notes.</em> How many of the notes become long notes, 0 to 1.</dd>
-                <dt>A-SCR &amp; LEGACY NOTE (AC 34)</dt>
-                <dd>One button for both Auto scratch sides and LEGACY NOTE.</dd>
                 <dt data-for="Sort|Key filter|Difficulty filter">Sort / Key filter / Difficulty filter</dt>
                 <dd>How the built-in and LR2 select screens order and filter the list.</dd>
                 <dt>HS-FIX</dt>
@@ -919,6 +919,8 @@ export const PLAYER_APP_HTML = `
                 <dd>Auto, Desktop or Touch (on-screen lanes and buttons).</dd>
                 <dt>Judged notes</dt>
                 <dd>Whether a judged note keeps scrolling until its time (as in LR2) or disappears.</dd>
+                <dt>Show invisible notes</dt>
+                <dd>Shows hidden keysound objects. Changes live; judgment is unchanged.</dd>
                 <dt>Toggle fullscreen</dt>
                 <dd>Enters or leaves fullscreen.</dd>
               </dl>
@@ -982,12 +984,8 @@ export const PLAYER_APP_HTML = `
               <dl class="help-menu-items">
                 <dt>CPU workers</dt>
                 <dd>How many workers load charts and stretch audio in parallel.</dd>
-                <dt>Judgment windows</dt>
-                <dd>The rules every play follows: LR2, beatoraja or ????. It decides the windows, gauges, options offered, and which best records the select screen shows.</dd>
                 <dt>Auto pause on blur</dt>
                 <dd>Pauses the play when the page loses focus.</dd>
-                <dt>Show invisible notes</dt>
-                <dd>Shows hidden keysound objects. Changes live; judgment is unchanged.</dd>
                 <dt>FPS</dt>
                 <dd>The frame rate graph.</dd>
                 <dt>Reset settings and reload</dt>
@@ -1000,7 +998,7 @@ export const PLAYER_APP_HTML = `
               <li>
                 <strong>Play options</strong> hold the lane options (RANDOM, S-RANDOM, SCATTER and more), gauges, battle
                 modes, chart modifiers, HS-FIX and lane covers, following LR2 or beatoraja as
-                <strong>Developer → Judgment windows</strong> picks. A replay records the options it was played with.
+                <strong>Play options → Judgment windows</strong> picks. A replay records the options it was played with.
               </li>
               <li>
                 Click <strong>Record gameplay video</strong> to capture the next play as a downloadable video (MP4 · H.264 unless <strong>Video format</strong> says otherwise) (requires
@@ -1039,12 +1037,14 @@ export const PLAYER_APP_HTML = `
             </section>
             <section class="help-menu-folder">
               <h4 class="help-menu-folder-title">Play options</h4>
-              <p class="help-menu-note">特に書かない限りプレイ中は変えられません。譜面や表示を変えるだけのオプション (LR2・beatoraja・AC と付いたもの) はどのルールでも使え、その出典のアルゴリズムで動きます。判定のルールは Developer → Judgment windows で決まります。「…のときに表示」とある項目は、その条件で表示されます。</p>
+              <p class="help-menu-note">特に書かない限りプレイ中は変えられません。譜面や表示を変えるだけのオプション (LR2・beatoraja・AC と付いたもの) はどのルールでも使え、その出典のアルゴリズムで動きます。判定のルールは Play options → Judgment windows で決まります。「…のときに表示」とある項目は、その条件で表示されます。</p>
               <dl class="help-menu-items">
+                <dt>Judgment windows</dt>
+                <dd>すべてのプレイが従うルール。LR2、beatoraja、????。判定の幅、ゲージ、選べるオプション、選曲画面に出すベスト記録が変わります。</dd>
                 <dt>Auto play</dt>
                 <dd>譜面を自動で演奏します。AUTO のプレイは記録に残りません。</dd>
                 <dt>Gauge</dt>
-                <dd>プレイに使うゲージ。選べる種類は Developer → Judgment windows のルールで変わります。</dd>
+                <dd>プレイに使うゲージ。選べる種類は Play options → Judgment windows のルールで変わります。</dd>
                 <dt>Judge algorithm</dt>
                 <dd>beatoraja のルールで、近くに複数のノーツがあるときにどれを判定するか。Combo (既定)、Duration、Lowest。</dd>
                 <dt data-for="Random 1P|Random 2P">Random 1P / Random 2P</dt>
@@ -1113,8 +1113,6 @@ export const PLAYER_APP_HTML = `
                 <dd>beatoraja の EXTRA。1 行あたり何個の BGM のキー音をノーツにするか (0 でオフ) と、スクラッチにも置くか。</dd>
                 <dt>Long-note add rate (beatoraja)</dt>
                 <dd><em class="help-menu-when">Long notes が ADD のどれかのときに表示。</em> ロングノートにする割合 (0〜1)。</dd>
-                <dt>A-SCR &amp; LEGACY NOTE (AC 34)</dt>
-                <dd>両サイドのオートスクラッチと LEGACY NOTE をまとめてオンにするボタン。</dd>
                 <dt data-for="Sort|Key filter|Difficulty filter">Sort / Key filter / Difficulty filter</dt>
                 <dd>内蔵スキンと LR2 スキンの選曲画面の並び順と絞り込み。</dd>
                 <dt>HS-FIX</dt>
@@ -1204,6 +1202,8 @@ export const PLAYER_APP_HTML = `
                 <dd>Auto、Desktop、Touch (画面のレーンとボタンで操作)。</dd>
                 <dt>Judged notes</dt>
                 <dd>判定したノーツを本来の時刻まで流す (LR2 と同じ) か、消すか。</dd>
+                <dt>Show invisible notes</dt>
+                <dd>不可視オブジェクトを表示します。プレイ中にも切り替えられ、判定は変わりません。</dd>
                 <dt>Toggle fullscreen</dt>
                 <dd>フルスクリーンに入る / 出る。</dd>
               </dl>
@@ -1267,12 +1267,8 @@ export const PLAYER_APP_HTML = `
               <dl class="help-menu-items">
                 <dt>CPU workers</dt>
                 <dd>譜面の読み込みや音の伸縮を並列で行うワーカーの数。</dd>
-                <dt>Judgment windows</dt>
-                <dd>すべてのプレイが従うルール。LR2、beatoraja、????。判定の幅、ゲージ、選べるオプション、選曲画面に出すベスト記録が変わります。</dd>
                 <dt>Auto pause on blur</dt>
                 <dd>ページからフォーカスが外れたらプレイを一時停止します。</dd>
-                <dt>Show invisible notes</dt>
-                <dd>不可視オブジェクトを表示します。プレイ中にも切り替えられ、判定は変わりません。</dd>
                 <dt>FPS</dt>
                 <dd>フレームレートのグラフ。</dd>
                 <dt>Reset settings and reload</dt>
@@ -1283,7 +1279,7 @@ export const PLAYER_APP_HTML = `
             <h3 class="help-section-title">オプションと録画</h3>
             <ul class="help-list">
               <li>
-                <strong>Play options</strong> には、レーンのオプション (RANDOM、S-RANDOM、SCATTER など)、ゲージ、バトル、譜面の変更、HS-FIX、レーンカバーがあります。<strong>Developer → Judgment windows</strong> で選んだ LR2 や beatoraja の仕様に従います。リプレイにはプレイしたときのオプションが記録されます。
+                <strong>Play options</strong> には、レーンのオプション (RANDOM、S-RANDOM、SCATTER など)、ゲージ、バトル、譜面の変更、HS-FIX、レーンカバーがあります。<strong>Play options → Judgment windows</strong> で選んだ LR2 や beatoraja の仕様に従います。リプレイにはプレイしたときのオプションが記録されます。
               </li>
               <li>
                 <strong>Record gameplay video</strong> ボタンを押すと、次の再生を動画（<strong>Video format</strong> で選んだ形式、既定は MP4 · H.264）として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。

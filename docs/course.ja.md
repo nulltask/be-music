@@ -114,7 +114,7 @@ flowchart LR
 フィルタは beatoraja の 3 つの表を読みます（`SQLiteSongDatabaseAccessor.getSongDatas`、[beatoraja 83574048](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/song/SQLiteSongDatabaseAccessor.java#L344-L367)）。各列は Be-Music が譜面について知っていることから埋めます。出どころのない列は、値をこしらえずに未知の列として拒否します。
 
 - **`song`** は譜面そのものです：`md5`、`sha256`、`title`、`subtitle`、`artist`、`subartist`、`genre`、`tag`、`path`、`level`、`difficulty`、`mode`、`notes`、`minbpm`、`maxbpm`、`length`、`judge`、`feature`、`content`。ない文字列の列は `''`、ない数値は 0 と読みます。beatoraja の `SongData` が保存する値と同じです。
-- **`score`** は、有効な判定ルールセット（Developer → Judgment windows）での、その譜面のプレイヤーのベストレコードです。選曲画面に出る記録と同じものです（`createCourseChartScore`）。beatoraja はこれを `LEFT OUTER JOIN` で結合するので、未プレイの譜面は `score` の列がすべて NULL です。`score.clear < 5` はそれを除き、`score.clear IS NULL OR score.clear < 5` は含めます。
+- **`score`** は、有効な判定ルールセット（Play options → Judgment windows）での、その譜面のプレイヤーのベストレコードです。選曲画面に出る記録と同じものです（`createCourseChartScore`）。beatoraja はこれを `LEFT OUTER JOIN` で結合するので、未プレイの譜面は `score` の列がすべて NULL です。`score.clear < 5` はそれを除き、`score.clear IS NULL OR score.clear < 5` は含めます。
 - **`information`** は譜面の楽曲情報（`SongInformation`）で、フィルタが初めて読んだときに譜面から求めます。
 
 | 列                                                 | Be-Music での出どころ                                                                                                                                                                                                  |
