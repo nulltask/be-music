@@ -596,8 +596,6 @@ export class OptionTabs extends OptionRow {
       button.setAttribute('aria-controls', panel.id);
       button.addEventListener('click', () => {
         this.select(index);
-        // A tab bar wider than the dialog scrolls; the picked tab comes into view.
-        button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       });
       button.addEventListener('keydown', (event) => {
         const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
