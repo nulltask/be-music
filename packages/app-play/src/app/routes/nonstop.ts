@@ -44,7 +44,7 @@ export interface NonstopRouteDeps {
   readonly library: Pick<LibraryService, 'collection'>;
   /** The stages' chart hashes, which their cut-out replays record, and the course's best record. */
   readonly records: Pick<RecordsService, 'resolveChartHashes' | 'recordCourseResult'>;
-  /** Debug Menu → Course → NONSTOP placement. */
+  /** Options dialog → Course → NONSTOP placement. */
   readonly guiState: Pick<PlayerGUIState, 'nonstopPlacement'>;
   /** The course replay's auto-save, by the setting latched at the play's start. */
   readonly replayAutoSave: Pick<ReplayAutoSave, 'saveCourse'>;

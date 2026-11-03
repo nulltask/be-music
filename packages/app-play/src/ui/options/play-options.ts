@@ -1,7 +1,7 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 import { resolveGaugeTypes } from '@be-music/player-engine/ruleset';
-// The Debug Menu's Play options folder and the Replay / ghost folder inside it. They are built with the menu as `this`
-// (`DebugMenu`).
+// The Options dialog's Play options folder and the Replay / ghost folder inside it. They are built with the dialog as `this`
+// (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
 import {
   DIFFICULTY_FILTER_CYCLE,
@@ -18,7 +18,7 @@ import {
 } from '@be-music/player-scene-model';
 import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
-import type { DebugMenu } from './index.ts';
+import type { OptionsDialog } from './index.ts';
 import { bottomShiftableGaugeItems, laneOptionItems, menuLaneCovers, practiceGaugeItems } from './play-option-items.ts';
 import { buildPracticeRangePicker } from './practice-range.ts';
 /**
@@ -30,7 +30,7 @@ import { buildPracticeRangePicker } from './practice-range.ts';
  * song start and DISABLED during a play. The ones a play takes live (hi-speed, the covers and LIFT, the judge timing
  * and CONSTANT visibility) and the select screen's sort and filters, which a play does not read, stay enabled.
  */
-export function buildPlayOptionsFolder(this: DebugMenu, folder: OptionContainer): void {
+export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContainer): void {
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
   trackPlayOption(
     folder.addBinding(this.guiState, 'autoPlay', { label: 'Auto play' }).on('change', ({ value }) => {
@@ -264,7 +264,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: OptionContainer)
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
   );
-  // LR2 reads the scratch key held through the decide animation; the Debug Menu has no decide animation.
+  // LR2 reads the scratch key held through the decide animation; the Options dialog has no decide animation.
   this.dBattleScratchController = trackPlayOption(
     folder
       .addBinding(this.guiState, 'dBattleScratch', { label: 'D-BATTLE scratch (LR2)' })
@@ -616,7 +616,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: OptionContainer)
  * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own; and the ghost shown beside a play. Read when a play
  * starts, so disabled during one.
  */
-export function buildReplayViewFolder(this: DebugMenu, folder: OptionContainer): void {
+export function buildReplayViewFolder(this: OptionsDialog, folder: OptionContainer): void {
   const remember = () => storeReplayView(this.guiState.replayView);
   const labels = { tempo: 'Tempo', hiSpeed: 'Hi-speed', covers: 'SUDDEN+ / HIDDEN+', lift: 'LIFT' } as const;
   for (const key of ['tempo', 'hiSpeed', 'covers', 'lift'] as const) {

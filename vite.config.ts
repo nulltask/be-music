@@ -187,7 +187,7 @@ const webAudioProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
 );
 /**
  * The web player's layers (docs/player-web.md, "How the player is built"): `main.ts` boots the app, `app/` composes it (the
- * scene router, the routes, the shell), `ui/` is the Debug Menu and the panels, and `services/` hold the state and rules
+ * scene router, the routes, the shell), `ui/` is the Options dialog and the panels, and `services/` hold the state and rules
  * the others share. A service knows neither the UI nor the wiring: it imports no Tweakpane, `ui/` or `app/` module, not
  * even a type, and reaches the app through the deps it is given.
  */

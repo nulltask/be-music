@@ -58,7 +58,7 @@ function course(
 
 const LR2CRS: CourseSource = { format: 'lr2crs', type: 0, header: '', hash: '' };
 
-/** The Debug Menu as a player left it: RANDOM on 1P, FLIP, auto scratch, the EASY gauge, a slower tempo. */
+/** The Options dialog as a player left it: RANDOM on 1P, FLIP, auto scratch, the EASY gauge, a slower tempo. */
 function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
   return {
     autoPlay: false,
@@ -124,7 +124,7 @@ function rereplay(tempo: number | null = 1.2): BeMusicReplay {
 }
 
 describe('resolvePlaySceneOptions: a single play', () => {
-  test('takes the Debug Menu’s picks, the play options in force and the slider’s tempo', () => {
+  test('takes the Options dialog’s picks, the play options in force and the slider’s tempo', () => {
     const { autoPlay, tempo, settings, course } = resolvePlaySceneOptions(input({ chartHashes: HASHES }));
     expect(autoPlay).toBe(false);
     expect(tempo).toBe(0.9);
@@ -205,7 +205,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
     });
   });
 
-  test('passes peak gain only when the Debug Menu turned it on', () => {
+  test('passes peak gain only when the Options dialog turned it on', () => {
     expect(resolvePlaySceneOptions(input()).settings.peakGain).toBeUndefined();
     expect(resolvePlaySceneOptions(input({ guiState: gui({ peakGain: true }) })).settings.peakGain).toBe(true);
   });
@@ -218,7 +218,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
     expect(resolvePlaySceneOptions(input({ guiState })).tempo).toBe(0.8);
   });
 
-  test('the start’s AUTO wins over the Debug Menu’s; without one the Debug Menu’s counts', () => {
+  test('the start’s AUTO wins over the Options dialog’s; without one the Options dialog’s counts', () => {
     expect(resolvePlaySceneOptions(input({ autoPlay: true })).autoPlay).toBe(true);
     expect(resolvePlaySceneOptions(input({ autoPlay: true })).settings.autoPlay).toBe(true);
     expect(resolvePlaySceneOptions(input({ autoPlay: false, guiState: gui({ autoPlay: true }) })).autoPlay).toBe(false);

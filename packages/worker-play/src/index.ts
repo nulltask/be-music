@@ -83,7 +83,7 @@ export default {
     if (pathname === URL_LOAD_PROXY_PATH) {
       return serveURLLoadProxy(request);
     }
-    // Debug Menu settings. Handled here, not forwarded: the Leaderboard does not keep them. The device cookie and
+    // Options dialog settings. Handled here, not forwarded: the Leaderboard does not keep them. The device cookie and
     // the R2 copy survive Safari deleting script-written storage.
     if (pathname === PLAYER_SETTINGS_PATH) {
       const session = await readSession(request, env);

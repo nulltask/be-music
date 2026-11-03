@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { migratePlayerStorage } from './debug-menu-storage.ts';
+import { migratePlayerStorage } from './player-storage.ts';
 
 function storage(entries: Record<string, string>) {
   const values = new Map(Object.entries(entries));
@@ -51,5 +51,18 @@ describe('migratePlayerStorage', () => {
     migratePlayerStorage(source);
     expect(source.getItem('be-music.chart-best-records')).toBe('records');
     expect(source.getItem('be-music-demo.chart-best-records')).toBeNull();
+  });
+
+  test('moves the Debug Menu keys to the Options keys, from either namespace, keeping newer values', () => {
+    const source = storage({
+      'be-music-demo.debug-menu-settings': 'document',
+      'be-music.debug-menu-folders': 'old folders',
+      'be-music.option-folders': 'new folders',
+    });
+    migratePlayerStorage(source);
+    expect(Object.fromEntries(source.values)).toEqual({
+      'be-music.option-settings': 'document',
+      'be-music.option-folders': 'new folders',
+    });
   });
 });

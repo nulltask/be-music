@@ -1,6 +1,6 @@
 import { selectBinding, paneOptions } from '../../pane-controls.ts';
-// The Debug Menu's Skin & display folder, and the controls in it that follow what is loaded: the Skin system picker,
-// the LR2 theme picker and the Be-Music Skin's settings. They are built with the menu as `this` (`DebugMenu`).
+// The Options dialog's Skin & display folder, and the controls in it that follow what is loaded: the Skin system picker,
+// the LR2 theme picker and the Be-Music Skin's settings. They are built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
 import { resolveBeMusicSkinSettings } from '@be-music/player-skin-sdk';
 import { hasAnyLR2Skin } from '../../family-dispatch.ts';
@@ -10,14 +10,14 @@ import { ADD_SKIN_ENABLED, BE_MUSIC_SKINS } from '../../services/built-in-skins.
 import { storePlayLayout, storeSkinEffects } from '../../services/settings.ts';
 import { describeSkinSettingControllers, setStoredSkinSetting, storeSkinSettings } from '../../skin-settings.ts';
 import type { SkinFamilyOverride } from '../../types.ts';
-import { DEBUG_MENU_FOLDERS, type DebugMenuFolder } from './folders.ts';
-import type { DebugMenu } from './index.ts';
+import { OPTION_FOLDERS, type OptionFolderSpec } from './folders.ts';
+import type { OptionsDialog } from './index.ts';
 import { AUTO_DETECT_RESOLUTION_LABEL } from './render-resolution.ts';
 /** How the skins look and lay out, the loaded themes' pickers, the Be-Music Skin's settings, and adding skins. */
 export function buildSkinFolder(
-  this: DebugMenu,
+  this: OptionsDialog,
   skin: OptionContainer,
-  addFolder: (parent: Pick<OptionContainer, 'addFolder'>, folder: DebugMenuFolder) => OptionContainer,
+  addFolder: (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec) => OptionContainer,
 ): void {
   this.skinFolder = skin;
   // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
@@ -98,16 +98,16 @@ export function buildSkinFolder(
   // Per-scene beatoraja skin picker, hidden until a beatoraja theme is dropped — `rebuildBeatorajaSkinPickers()`
   // re-populates it on each load. Selecting a non-default entry for a scene records it on
   // `beatorajaSkinOverridesByType`; the next mount picks it up via `pickBeatorajaSkinEntryWithOverride`.
-  this.beatorajaSkinPickerFolder = addFolder(beatoraja, DEBUG_MENU_FOLDERS.beatorajaSkins);
+  this.beatorajaSkinPickerFolder = addFolder(beatoraja, OPTION_FOLDERS.beatorajaSkins);
   this.beatorajaSkinPickerFolder.hidden = true;
   // The active Be-Music Skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
-  this.skinSettingsFolder = addFolder(builtIn, DEBUG_MENU_FOLDERS.skinSettings);
+  this.skinSettingsFolder = addFolder(builtIn, OPTION_FOLDERS.skinSettings);
   this.rebuildSkinSettingsFolder();
   // LR2 theme picker — added once a drop discovers a theme (see `rebuildLR2ThemePicker`).
   this.rebuildLR2ThemePicker();
   // Add skin: a skin module from a URL (its default export, built with the skin SDK).
   if (!ADD_SKIN_ENABLED) return;
-  const addSkins = addFolder(builtIn, DEBUG_MENU_FOLDERS.addSkin);
+  const addSkins = addFolder(builtIn, OPTION_FOLDERS.addSkin);
   const skinSource = {
     url: '',
     addFromURL: () => void this.deps.addBeMusicSkinFromURL(skinSource.url),
@@ -119,14 +119,14 @@ export function buildSkinFolder(
   );
 }
 /**
- * Rebuilds (or first-builds) the Debug Menu's "Skin family" dropdown. Called once during `buildGUI` and again
+ * Rebuilds (or first-builds) the Options dialog's "Skin family" dropdown. Called once during `buildGUI` and again
  * after every theme load / wipe so the available options track the loaded asset state. When the user's
  * previously-selected override becomes unavailable, silently resets to `'auto'` before swapping options in so
  * the dropdown never displays a value that wouldn't actually be honoured.
  *
  * The native list's mutable options preserve its position and previously attached change handler.
  */
-export function rebuildSkinFamilyPicker(this: DebugMenu): void {
+export function rebuildSkinFamilyPicker(this: OptionsDialog): void {
   const gui = this.gui;
   if (gui === undefined) return;
   const lr2Available = hasAnyLR2Skin(this.deps.familyDispatchState());
@@ -180,7 +180,7 @@ export function rebuildSkinFamilyPicker(this: DebugMenu): void {
  * slider per number, a checkbox per toggle — seeded with the stored values, and hides it when the skin declares none.
  * Every change is stored under the skin's id and reaches the scenes on screen at once.
  */
-export function rebuildSkinSettingsFolder(this: DebugMenu): void {
+export function rebuildSkinSettingsFolder(this: OptionsDialog): void {
   const folder = this.skinSettingsFolder;
   if (!folder) return;
   // Snapshot native children before disposing them; disposal removes them from the folder.
@@ -218,14 +218,14 @@ export function rebuildSkinSettingsFolder(this: DebugMenu): void {
   });
 }
 /**
- * Builds (or rebuilds in place) the Debug Menu's "LR2 theme" dropdown. Visible whenever at least one theme has
+ * Builds (or rebuilds in place) the Options dialog's "LR2 theme" dropdown. Visible whenever at least one theme has
  * been discovered from the dropped tree — a single-theme drop still gets the picker (with one option) so the
  * user can SEE which theme is active, and subsequent drops that add more themes flip it into a real switcher
  * without the picker disappearing and reappearing.
  *
  * Native mutable options keep the picker in place across theme discoveries.
  */
-export function rebuildLR2ThemePicker(this: DebugMenu): void {
+export function rebuildLR2ThemePicker(this: OptionsDialog): void {
   const folder = this.lr2SkinPage;
   if (folder === undefined) return;
   const themes = this.deps.availableLR2Themes();

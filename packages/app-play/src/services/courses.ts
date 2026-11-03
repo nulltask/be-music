@@ -31,7 +31,7 @@ export class CourseRunService {
 
   /**
    * The AUTO the course was started with, which its every play takes (each stage, and a NONSTOP run's every restitch):
-   * `true`, or `undefined` to follow the Debug Menu's auto play.
+   * `true`, or `undefined` to follow the Options dialog's auto play.
    */
   public get autoPlay(): boolean | undefined {
     return this.courseAutoPlay;

@@ -24,7 +24,7 @@ import { ResultRoute } from './routes/result.ts';
 import { ReplayRoute } from './routes/replay.ts';
 import { PlayerShell } from './shell.ts';
 import { InlineSearch } from '../inline-search.ts';
-import { DebugMenu, type DebugMenuDeps } from '../ui/debug-menu/index.ts';
+import { OptionsDialog, type OptionsDialogDeps } from '../ui/options/index.ts';
 import { confirmSkinDrop, promptSkinDrop } from '../ui/skin-drop-prompt.ts';
 import { showPlayOptionMismatch } from '../ui/play-option-mismatch.ts';
 import { showMissingReplayCharts } from '../ui/replay-missing.ts';
@@ -66,7 +66,7 @@ export interface PlayerWebAppOptions {
 
 /**
  * The player's composition root: it makes the services, the scene router and the routes, and wires them to each other,
- * the Debug Menu and the Leaderboard. `main.ts` makes it, installs the test hook over it and starts it.
+ * the Options dialog and the Leaderboard. `main.ts` makes it, installs the test hook over it and starts it.
  */
 export class PlayerWebApp {
   /** The LR2 theme: every theme the drops brought, the one mounted, and its skins, BGM and system sounds. */
@@ -111,7 +111,7 @@ export class PlayerWebApp {
   });
   /** The charts and courses the select screen lists, and the drops, file picks and URL loads that add to them. */
   private readonly library: LibraryService;
-  /** Files dragged onto the page or picked in the Debug Menu, read and handed to {@link library}. */
+  /** Files dragged onto the page or picked in the Options dialog, read and handed to {@link library}. */
   private readonly dropTarget: DropTarget;
   /** The course run in progress: the EXPERT / GRADE course between its stages, its AUTO and where it started from. */
   private readonly courses = new CourseRunService();
@@ -180,7 +180,7 @@ export class PlayerWebApp {
   private set lastSelectNavigation(navigation: BrowseSnapshot | undefined) {
     this.selectRoute.lastSelectNavigation = navigation;
   }
-  /** The status line: the Debug Menu's Status row, and whether it describes a play or result. */
+  /** The status line: the Options dialog's Status row, and whether it describes a play or result. */
   private readonly status: StatusLine;
   /** The skin system the "Drop a skin" prompt asked for, until a drop answers it or it is cancelled. */
   private pendingSkinSystem: 'lr2' | 'beatoraja' | undefined;
@@ -197,7 +197,7 @@ export class PlayerWebApp {
    * + `controller.updateDisplay()`.
    */
   private readonly guiState: PlayerGUIState;
-  /** The Leaderboard's Debug Menu folder, account chip and play submission. */
+  /** The Leaderboard's Options dialog folder, account chip and play submission. */
   private readonly leaderboard = new LeaderboardPanel({
     // Read on use: `guiState` is initialized after this field.
     settings: () => this.guiState,
@@ -206,7 +206,7 @@ export class PlayerWebApp {
     recorder: REPLAY_RECORDER,
   });
   /**
-   * The play options in force, the full set: fed by the select screen (`on.playOptions`) and the Debug Menu
+   * The play options in force, the full set: fed by the select screen (`on.playOptions`) and the Options dialog
    * ({@link setPlayOptions}); every select screen starts from them, and a decide screen and a play take them.
    */
   private readonly playOptions: PlayOptionsService;
@@ -233,7 +233,7 @@ export class PlayerWebApp {
     // Read on use: `guiState` is initialized after this field.
     nonstopPlacement: () => this.guiState.nonstopPlacement,
   });
-  /** The replay file picked as a ghost (Debug Menu → Replay / ghost → "Ghost replay file…"), for this visit. */
+  /** The replay file picked as a ghost (Options dialog → Replay / ghost → "Ghost replay file…"), for this visit. */
   private readonly ghostReplayFile = new GhostReplayFile();
   /** The replay slots' card, on the skins without a replay-slot UI of their own (`replay-slots-panel.ts`). */
   private readonly replaySlotsPanel = new ReplaySlotsPanel({
@@ -245,8 +245,8 @@ export class PlayerWebApp {
   private readonly recording: RecordingService;
   /** "Play in silent mode": the setting, its checkboxes and its hint. */
   private readonly silentMode: SilentModeSetting;
-  /** The Debug Menu (`ui/debug-menu/`), made once the settings and services it works with are. */
-  private readonly debugMenu: DebugMenu;
+  /** The Options dialog (`ui/options/`), made once the settings and services it works with are. */
+  private readonly optionsDialog: OptionsDialog;
   /** The skin-options panel for the beatoraja screen showing (`ui/beatoraja-skin-options.ts`). */
   private readonly beatorajaSkinOptions: BeatorajaSkinOptionsPanel;
   /** `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`). */
@@ -274,12 +274,12 @@ export class PlayerWebApp {
     });
     this.status = new StatusLine({
       settings: this.guiState,
-      refresh: () => this.debugMenu.refreshStatus(),
+      refresh: () => this.optionsDialog.refreshStatus(),
       record: (text) => this.testHook?.recordStatus(text),
     });
     this.recording = new RecordingService({
       sceneHost: this.sceneHost,
-      recordController: () => this.debugMenu.recordController,
+      recordController: () => this.optionsDialog.recordController,
       activeGameplay: () => this.gameplayView?.recording,
       settings: this.guiState,
       setStatus: (text) => this.status.set(text),
@@ -290,7 +290,7 @@ export class PlayerWebApp {
     this.silentMode = new SilentModeSetting({
       settings: this.guiState,
       touchFirst: deviceProfile.touchFirst,
-      onRemember: () => this.debugMenu.scheduleSettingsSave(),
+      onRemember: () => this.optionsDialog.scheduleSettingsSave(),
     });
     this.silentMode.install();
     // `?compressor=split|legacy|off` wins for this visit. With no flag, the remembered checkbox stays.
@@ -302,8 +302,8 @@ export class PlayerWebApp {
     this.lr2 = new LR2ThemeService({
       elements,
       setStatus: (text) => this.status.set(text),
-      rebuildSkinFamilyPicker: () => this.debugMenu.rebuildSkinFamilyPicker(),
-      rebuildLR2ThemePicker: () => this.debugMenu.rebuildLR2ThemePicker(),
+      rebuildSkinFamilyPicker: () => this.optionsDialog.rebuildSkinFamilyPicker(),
+      rebuildLR2ThemePicker: () => this.optionsDialog.rebuildLR2ThemePicker(),
     });
     this.beatoraja = new BeatorajaThemeService({
       elements,
@@ -311,8 +311,8 @@ export class PlayerWebApp {
       setStatus: (text) => this.status.set(text),
       selectView: () => this.selectView,
       gameplayView: () => this.gameplayView,
-      rebuildBeatorajaSkinPickers: () => this.debugMenu.rebuildBeatorajaSkinPickers(),
-      rebuildSkinFamilyPicker: () => this.debugMenu.rebuildSkinFamilyPicker(),
+      rebuildBeatorajaSkinPickers: () => this.optionsDialog.rebuildBeatorajaSkinPickers(),
+      rebuildSkinFamilyPicker: () => this.optionsDialog.rebuildSkinFamilyPicker(),
       refreshBeatorajaPlaySkinOptions: () => this.beatorajaSkinOptions.refreshBeatorajaPlaySkinOptions(),
       refreshBeatorajaSelectSkinOptions: () => this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions(),
     });
@@ -400,7 +400,7 @@ export class PlayerWebApp {
       courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
       unlockReplayOptions: () => this.unlockReplayOptions(),
     });
-    this.debugMenu = new DebugMenu(this.debugMenuDeps());
+    this.optionsDialog = new OptionsDialog(this.optionsDialogDeps());
     this.beatorajaSkinOptions = new BeatorajaSkinOptionsPanel(this.beatorajaSkinOptionsDeps());
     this.selectRoute = new SelectRoute({
       router: this.router,
@@ -418,7 +418,7 @@ export class PlayerWebApp {
       guiState: this.guiState,
       audio: this.audio,
       search: this.search,
-      debugMenu: this.debugMenu,
+      optionsDialog: this.optionsDialog,
       beatorajaSkinOptions: this.beatorajaSkinOptions,
       playStatusShown: () => this.status.playShown,
       setStatus: (text) => this.status.set(text),
@@ -506,7 +506,7 @@ export class PlayerWebApp {
         fetchLeaderboardTopReplay: (chartFingerprint) =>
           fetchLeaderboardTopReplay(chartFingerprint, this.guiState.judgeRuleset),
       },
-      debugMenu: this.debugMenu,
+      optionsDialog: this.optionsDialog,
       compressorMode: this.compressorMode,
       deviceProfile,
       audio: this.audio,
@@ -544,8 +544,8 @@ export class PlayerWebApp {
     });
   }
 
-  /** What the Debug Menu reaches of the app: the settings and services, readers of the app's state, and its actions. */
-  private debugMenuDeps(): DebugMenuDeps {
+  /** What the Options dialog reaches of the app: the settings and services, readers of the app's state, and its actions. */
+  private optionsDialogDeps(): OptionsDialogDeps {
     return {
       settings: this.guiState,
       ghostReplayFile: this.ghostReplayFile,
@@ -625,10 +625,10 @@ export class PlayerWebApp {
   }
 
   public start(): void {
-    this.debugMenu.watchExpanded((open) => setPlayerHeaderSettingsOpen(open));
-    this.debugMenu.buildGUI();
+    this.optionsDialog.watchExpanded((open) => setPlayerHeaderSettingsOpen(open));
+    this.optionsDialog.buildGUI();
     bindPlayerHeader({
-      toggleDebugMenu: () => this.debugMenu.toggle(),
+      toggleOptions: () => this.optionsDialog.toggle(),
       openSignIn: () => this.leaderboard.openSignIn(),
     });
     this.courseMaker.start();
@@ -641,7 +641,7 @@ export class PlayerWebApp {
     // A page put away (closed, or into the back/forward cache) keeps no decoded samples for a retry.
     window.addEventListener('pagehide', () => this.audio.chartSamples.release());
 
-    // The Debug Menu's file pickers, and files dragged onto the page.
+    // The Options dialog's file pickers, and files dragged onto the page.
     this.dropTarget.wire();
 
     // Global `/` shortcut focuses the search input. Standard editor convention — same as GitHub / Slack / Discord. We
@@ -693,7 +693,7 @@ export class PlayerWebApp {
   private async applyDroppedSkin(family: SkinFamilyId): Promise<void> {
     if (family !== 'lr2' && family !== 'beatoraja') return;
     this.guiState.skinFamilyOverride = family;
-    this.debugMenu.showSkinSystem(family);
+    this.optionsDialog.showSkinSystem(family);
     const play = this.gameplayView;
     if (play !== undefined && this.router.current === play) {
       await this.switchPlayFamily(play);
@@ -720,13 +720,13 @@ export class PlayerWebApp {
   }
 
   /**
-   * Apply a Debug Menu built-in skin change: persist it and rebuild the persistent select scene (the same dispose-and-
+   * Apply an Options dialog built-in skin change: persist it and rebuild the persistent select scene (the same dispose-and-
    * rebuild the skin-family override uses). Gameplay / result pick the skin up on their next mount.
    */
   private handleBuiltInSkinChange(id: string): void {
     this.guiState.builtInSkin = BE_MUSIC_SKINS.resolve(id).id;
     storeBuiltInSkinId(this.guiState.builtInSkin);
-    this.debugMenu.rebuildSkinSettingsFolder();
+    this.optionsDialog.rebuildSkinSettingsFolder();
     this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
   }
 
@@ -741,12 +741,12 @@ export class PlayerWebApp {
   }
 
   /**
-   * Apply a Debug Menu skin-family change. While a play is on the stage, that play draws with the new family and keeps
+   * Apply an Options dialog skin-family change. While a play is on the stage, that play draws with the new family and keeps
    * its chart. Otherwise the persistent select scene is made again for the family the pick gives.
    */
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
     this.guiState.skinFamilyOverride = value;
-    this.debugMenu.showSkinSystem(value);
+    this.optionsDialog.showSkinSystem(value);
     const play = this.gameplayView;
     if (play !== undefined && this.router.current === play) {
       void this.switchPlayFamily(play);
@@ -777,22 +777,22 @@ export class PlayerWebApp {
    * Latches the replay-related GUI options for the play that is about to start and disables their controllers.
    * Replay options are per-play: the value in effect at song start governs the whole play, and mid-song changes
    * are rejected by keeping the controls disabled until {@link unlockReplayOptions} runs (result mounted or back
-   * at select). The Debug Menu disables its skin controls with them (`DebugMenu.lockForPlay`).
+   * at select). The Options dialog disables its skin controls with them (`OptionsDialog.lockForPlay`).
    */
   private lockReplayOptionsForPlay(liveTempo = false): void {
     this.replayAutoSave.latch(this.guiState.autoSaveReplay);
     this.leaderboard.lockForPlay();
-    this.debugMenu.lockForPlay(liveTempo);
+    this.optionsDialog.lockForPlay(liveTempo);
   }
 
   /** Re-enables the replay option controllers, and the skin controls, once no play is in flight. */
   private unlockReplayOptions(): void {
     this.leaderboard.unlock();
-    this.debugMenu.unlockAfterPlay();
+    this.optionsDialog.unlockAfterPlay();
   }
 
   /**
-   * A play option set from the Debug Menu (or a hi-speed from the play): kept for every screen and play
+   * A play option set from the Options dialog (or a hi-speed from the play): kept for every screen and play
    * ({@link playOptions}), and pushed to the select screen, on the stage or off it.
    */
   private setPlayOptions(changes: Partial<PlayOptions>): void {

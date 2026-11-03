@@ -3,7 +3,7 @@ import { expect, openWithLibrary, SMOKE, SONGS, test, type Player } from './supp
 
 /**
  * Checklist item 12 on the built-in family: the status line around a play, the replay's live tempo and view
- * changes, and a replay of the log with the Debug Menu's Replay / ghost options on and off.
+ * changes, and a replay of the log with the Options dialog's Replay / ghost options on and off.
  */
 
 const TEMPO = ['Tempo'];

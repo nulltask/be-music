@@ -1,5 +1,5 @@
 // The beatoraja theme the beatoraja family draws with: the bundle the last drop brought, its BGM and system sounds, and
-// its entries loaded as scene kits, each by the entry the Debug Menu picked for its skin type and with the player's
+// its entries loaded as scene kits, each by the entry the Options dialog picked for its skin type and with the player's
 // options for it. One set of kit caches serves the whole session, since PixiJS textures are never destroyed.
 
 import { logger } from '@be-music/player-browser';
@@ -53,9 +53,9 @@ export interface BeatorajaThemeServiceOptions {
   readonly selectView: () => SelectScene | undefined;
   /** The play, loading behind a decide screen or on the stage. */
   readonly gameplayView: () => PlayScene | undefined;
-  /** Rebuilds the Debug Menu's skin pickers, one per skin type the theme ships. */
+  /** Rebuilds the Options dialog's skin pickers, one per skin type the theme ships. */
   readonly rebuildBeatorajaSkinPickers: () => void;
-  /** Rebuilds the Debug Menu's "Skin system" picker, which offers beatoraja once a theme is loaded. */
+  /** Rebuilds the Options dialog's "Skin system" picker, which offers beatoraja once a theme is loaded. */
   readonly rebuildSkinFamilyPicker: () => void;
   /** Shows the beatoraja play's entry in the skin-options panel. */
   readonly refreshBeatorajaPlaySkinOptions: () => void;
@@ -145,7 +145,7 @@ export class BeatorajaThemeService {
   public readonly beatorajaKitCaches: BeatorajaSceneKitCaches = createBeatorajaSceneKitCaches();
   /**
    * Per-`SkinType` user-picked entry override. Lets the user choose between multiple discovered
-   * skins for a given scene type from the Debug Menu. Keyed by the numeric `header.type` so
+   * skins for a given scene type from the Options dialog. Keyed by the numeric `header.type` so
    * each scene (`MUSIC_SELECT = 5`, `PLAY_7KEYS = 0`, etc.) tracks its own override.
    */
   public readonly beatorajaSkinOverridesByType: Map<number, string> = new Map<number, string>();
@@ -275,7 +275,7 @@ export class BeatorajaThemeService {
         `beatoraja gameplay: theme has no '${chartVariant}' skin — falling back to '${variant}' (lane chrome may not match chart key count)`,
       );
     }
-    // The entry for the variant, as the Debug Menu's skin picker overrides it.
+    // The entry for the variant, as the Options dialog's skin picker overrides it.
     const playTypeCode = playSkinTypeForVariant(variant);
     const playCandidates = bundle.theme.entries.filter((entry) => entry.header.type === playTypeCode);
     const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
@@ -322,7 +322,7 @@ export class BeatorajaThemeService {
   }
 
   /**
-   * Applies new skin options (or another play entry the Debug Menu picked) to the beatoraja play on the stage without
+   * Applies new skin options (or another play entry the Options dialog picked) to the beatoraja play on the stage without
    * restarting the chart: the entry is loaded again with them (its textures decoded again, as an option can change
    * `source[]`) and handed to the play (`PlayScene.updateKit`), which rebuilds its skin and keeps its state.
    */
@@ -348,7 +348,7 @@ export class BeatorajaThemeService {
 
   /**
    * The beatoraja theme's select entry as a select kit, or `undefined` when there is none to show: no select skin in the
-   * theme, or one that failed to load (the status says why). The player's pick in the Debug Menu wins over the
+   * theme, or one that failed to load (the status says why). The player's pick in the Options dialog wins over the
    * discovery's (`theme.selectSkin`). The entry is loaded with the player's options for it (`loadBeatorajaSceneKit`:
    * the header pass seeds them the first time), or the kit last loaded is taken again while the theme and the entry stay
    * the same.
@@ -405,7 +405,7 @@ export class BeatorajaThemeService {
     const bundle = this.beatorajaTheme;
     if (!bundle || this.selectView()?.identity.family !== 'beatoraja') return;
     // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an alternate skin from
-    // the Debug Menu's skin-picker dropdown. A font cache miss (fonts may differ between skins) loads them fresh.
+    // the Options dialog's skin-picker dropdown. A font cache miss (fonts may differ between skins) loads them fresh.
     const load = await loadBeatorajaSceneKit({
       files: bundle.files,
       entryPath,
@@ -425,7 +425,7 @@ export class BeatorajaThemeService {
 
   /**
    * The beatoraja theme's decide skin for `song`, loaded as a scene kit, or `undefined` when there is none to show: no
-   * beatoraja theme, no decide skin in it, or one that failed to load. The player's pick in the Debug Menu wins over the
+   * beatoraja theme, no decide skin in it, or one that failed to load. The player's pick in the Options dialog wins over the
    * discovery's (`theme.decideSkin`, not `decideCandidates[0]`, which is only the first in the file walk).
    */
   public async loadBeatorajaDecideKit(chartEntry: LibraryChart): Promise<DecideSceneKit | undefined> {
@@ -457,7 +457,7 @@ export class BeatorajaThemeService {
   /**
    * The beatoraja theme's result skin for `song`, loaded as a kit, or `undefined` when there is none to show: no
    * beatoraja theme, no result skin in it, or one that failed to load. A course run's result (`courseResult`) takes the
-   * theme's COURSE_RESULT skin, falling back to its result skin. The player's pick in the Debug Menu wins over the
+   * theme's COURSE_RESULT skin, falling back to its result skin. The player's pick in the Options dialog wins over the
    * discovery's.
    */
   public async loadBeatorajaResultKit(
@@ -468,7 +468,7 @@ export class BeatorajaThemeService {
     if (bundle === undefined) return undefined;
     // Same fix as decide — fall back to the discovery's `theme.resultSkin` rather than
     // `resultCandidates[0]` (= file-walk iteration order), so picking the discovery default
-    // in the Debug Menu (which clears the override) actually mounts the discovery default
+    // in the Options dialog (which clears the override) actually mounts the discovery default
     // instead of silently picking whatever theme happens to iterate first.
     const resultType =
       courseResult && bundle.theme.courseResultSkin !== undefined

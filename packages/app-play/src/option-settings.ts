@@ -1,6 +1,6 @@
-// One document for every Debug Menu setting. The browser copy lives in `localStorage`. A copy on the player origin
+// One document for every Options dialog setting. The browser copy lives in `localStorage`. A copy on the player origin
 // is addressed by a cookie the server sets, so Safari can delete this `localStorage` entry after seven days of use
-// and the next visit still restores it (`debug-menu-settings-sync.ts`).
+// and the next visit still restores it (`option-settings-sync.ts`).
 
 import type { TunableCompressor } from '@be-music/player-browser/audio';
 import { isGaugeType, isRulesetId, migrateOptionValue, type RulesetId } from '@be-music/player-engine/ruleset';
@@ -33,11 +33,11 @@ import {
 import { REPLAY_AUTO_SAVE_RULES, type ReplayAutoSaveRule } from './services/replay-slots.ts';
 import { GHOST_MODES, GHOST_SOURCES } from './services/ghost.ts';
 import type { PlayerGUIState, SkinFamilyOverride } from './types.ts';
-import { DEBUG_MENU_FOLDERS_STORAGE_KEY, parseFolderOpenStates, type FolderOpenStates } from './debug-menu-storage.ts';
+import { OPTION_FOLDERS_STORAGE_KEY, parseFolderOpenStates, type FolderOpenStates } from './player-storage.ts';
 import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
 
-/** `localStorage` key of the whole Debug Menu document. Reset deletes it with the other `be-music.*` settings. */
-export const DEBUG_MENU_SETTINGS_STORAGE_KEY = 'be-music.debug-menu-settings';
+/** `localStorage` key of the whole Options dialog document. Reset deletes it with the other `be-music.*` settings. */
+export const OPTION_SETTINGS_STORAGE_KEY = 'be-music.option-settings';
 /**
  * The stored document's revision. `0` while the shape is still being defined: it may change incompatibly without the
  * number moving. Any other stamp is unreadable. The worker copy uses the same number. Values are migrated as they are
@@ -50,8 +50,8 @@ type RandomMode = PlayerGUIState['random1P'];
 type SkinEffects = PlayerGUIState['skinEffects'];
 type PlayLayout = PlayerGUIState['playLayout'];
 
-/** Every Debug Menu value that survives a reload. Absent fields keep the visit's own default. */
-export interface DebugMenuSettings {
+/** Every Options dialog value that survives a reload. Absent fields keep the visit's own default. */
+export interface OptionSettings {
   autoPlay: boolean;
   autoPauseOnBlur: boolean;
   peakGain: boolean;
@@ -173,10 +173,10 @@ export interface DebugMenuSettings {
 }
 
 /** The document in `localStorage` and on the player origin. `settings` holds only the fields that were saved. */
-export interface DebugMenuSettingsDocument {
+export interface OptionSettingsDocument {
   version: 0;
   updatedAt: number;
-  settings: Partial<DebugMenuSettings>;
+  settings: Partial<OptionSettings>;
   /** Reset barrier kept remotely without retaining any settings values. */
   deleted?: true;
 }
@@ -209,7 +209,7 @@ const LEGACY_KEYS = [
   COMPRESSOR_TUNING_KEY,
   SKIN_SETTINGS_KEY,
   COURSE_TABLE_URLS_STORAGE_KEY,
-  DEBUG_MENU_FOLDERS_STORAGE_KEY,
+  OPTION_FOLDERS_STORAGE_KEY,
 ] as const;
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
@@ -224,16 +224,16 @@ function percentOf(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : undefined;
 }
 
-function assign<K extends keyof DebugMenuSettings>(
-  settings: Partial<DebugMenuSettings>,
+function assign<K extends keyof OptionSettings>(
+  settings: Partial<OptionSettings>,
   key: K,
-  value: DebugMenuSettings[K] | undefined,
+  value: OptionSettings[K] | undefined,
 ): void {
   if (value !== undefined) settings[key] = value;
 }
 
 /** Reads a stored document. An unknown version or unreadable text yields nothing. */
-export function parseDebugMenuSettingsDocument(raw: string | null | undefined): DebugMenuSettingsDocument | undefined {
+export function parseOptionSettingsDocument(raw: string | null | undefined): OptionSettingsDocument | undefined {
   if (!raw) return undefined;
   let parsed: unknown;
   try {
@@ -241,11 +241,11 @@ export function parseDebugMenuSettingsDocument(raw: string | null | undefined): 
   } catch {
     return undefined;
   }
-  return debugMenuSettingsDocument(parsed);
+  return optionSettingsDocument(parsed);
 }
 
 /** The same check for a response body. */
-export function debugMenuSettingsDocument(value: unknown): DebugMenuSettingsDocument | undefined {
+export function optionSettingsDocument(value: unknown): OptionSettingsDocument | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const { version, updatedAt, settings } = value as { version?: unknown; updatedAt?: unknown; settings?: unknown };
   if (version !== DOCUMENT_VERSION || typeof updatedAt !== 'number' || !Number.isFinite(updatedAt) || updatedAt < 0)
@@ -265,15 +265,15 @@ function migrateStoredOption<K extends 'random1P' | 'random2P' | 'battleMode'>(
   key: K,
   value: unknown,
   ruleset: RulesetId,
-): DebugMenuSettings[K] | undefined {
+): OptionSettings[K] | undefined {
   const valid = resolvePlayOptionValue(key, value);
   if (valid === undefined) return undefined;
   const migrated = migrateOptionValue(valid, ruleset);
-  return (resolvePlayOptionValue(key, migrated) ?? valid) as DebugMenuSettings[K];
+  return (resolvePlayOptionValue(key, migrated) ?? valid) as OptionSettings[K];
 }
 
-function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> {
-  const settings: Partial<DebugMenuSettings> = {};
+function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
+  const settings: Partial<OptionSettings> = {};
   // The settings this document was saved with default to LR2 rules, as a fresh visit does.
   const storedRuleset: RulesetId = isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : 'lr2';
   assign(settings, 'autoPlay', booleanOf(raw.autoPlay));
@@ -455,18 +455,18 @@ function pickSettings(raw: Record<string, unknown>): Partial<DebugMenuSettings> 
 }
 
 /** The saved document, or nothing when this browser has never written one. */
-export function readStoredDebugMenuSettings(
+export function readStoredOptionSettings(
   storage: Pick<Storage, 'getItem'> | undefined,
-): DebugMenuSettingsDocument | undefined {
+): OptionSettingsDocument | undefined {
   try {
-    return parseDebugMenuSettingsDocument(storage?.getItem(DEBUG_MENU_SETTINGS_STORAGE_KEY));
+    return parseOptionSettingsDocument(storage?.getItem(OPTION_SETTINGS_STORAGE_KEY));
   } catch {
     return undefined;
   }
 }
 
 /** Whether any of the older per-setting keys is present, so the first visit after this change can upload them. */
-export function hasLegacyDebugMenuSettings(storage: Pick<Storage, 'getItem'> | undefined): boolean {
+export function hasLegacyOptionSettings(storage: Pick<Storage, 'getItem'> | undefined): boolean {
   try {
     return LEGACY_KEYS.some((key) => storage?.getItem(key) != null);
   } catch {
@@ -475,11 +475,11 @@ export function hasLegacyDebugMenuSettings(storage: Pick<Storage, 'getItem'> | u
 }
 
 /** A document made from the keys this app used to write one by one. `updatedAt` is the moment of the migration. */
-export function debugMenuSettingsFromLegacy(
+export function optionSettingsFromLegacy(
   storage: Pick<Storage, 'getItem'> | undefined,
   updatedAt: number,
-): DebugMenuSettingsDocument {
-  const settings: Partial<DebugMenuSettings> = {};
+): OptionSettingsDocument {
+  const settings: Partial<OptionSettings> = {};
   const volumes = readJSON(storage, VOLUME_KEY);
   if (typeof volumes === 'object' && volumes !== null) {
     const raw = volumes as { masterVolume?: unknown; keyVolume?: unknown; bgmVolume?: unknown; muted?: unknown };
@@ -518,8 +518,8 @@ export function debugMenuSettingsFromLegacy(
   if (storage?.getItem(COURSE_TABLE_URLS_STORAGE_KEY) != null) {
     settings.courseTableURLs = parseStoredCourseTableURLs(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
   }
-  if (storage?.getItem(DEBUG_MENU_FOLDERS_STORAGE_KEY) != null) {
-    settings.folders = parseFolderOpenStates(storage.getItem(DEBUG_MENU_FOLDERS_STORAGE_KEY));
+  if (storage?.getItem(OPTION_FOLDERS_STORAGE_KEY) != null) {
+    settings.folders = parseFolderOpenStates(storage.getItem(OPTION_FOLDERS_STORAGE_KEY));
   }
   return { version: DOCUMENT_VERSION, updatedAt, settings };
 }
@@ -534,9 +534,9 @@ function readJSON(storage: Pick<Storage, 'getItem'> | undefined, key: string): u
   }
 }
 
-/** Copies saved fields onto the Debug Menu state. Fields the document leaves out stay as they are. */
-export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partial<DebugMenuSettings>): void {
-  const assignState = <K extends keyof PlayerGUIState & keyof DebugMenuSettings>(key: K): void => {
+/** Copies saved fields onto the Options dialog state. Fields the document leaves out stay as they are. */
+export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<OptionSettings>): void {
+  const assignState = <K extends keyof PlayerGUIState & keyof OptionSettings>(key: K): void => {
     const value = settings[key];
     if (value !== undefined) state[key] = value as PlayerGUIState[K];
   };
@@ -656,8 +656,8 @@ export function overlayDebugMenuSettings(state: PlayerGUIState, settings: Partia
   assignState('recordingFormat');
 }
 
-/** The live Debug Menu, plus the settings kept beside it, as one document. */
-export function captureDebugMenuSettings(
+/** The live Options dialog, plus the settings kept beside it, as one document. */
+export function captureOptionSettings(
   state: PlayerGUIState,
   extras: {
     compressorTuning: Record<TunableCompressor, CompressorTuning>;
@@ -667,8 +667,8 @@ export function captureDebugMenuSettings(
     workerCount: number;
     updatedAt?: number;
   },
-): DebugMenuSettingsDocument {
-  const settings: Partial<DebugMenuSettings> = {
+): OptionSettingsDocument {
+  const settings: Partial<OptionSettings> = {
     autoPlay: state.autoPlay,
     autoPauseOnBlur: state.autoPauseOnBlur,
     peakGain: state.peakGain,
@@ -793,11 +793,11 @@ export function captureDebugMenuSettings(
 }
 
 /** Writes the document and the older keys the rest of the app still reads at boot. */
-export function writeDebugMenuSettings(document: DebugMenuSettingsDocument, storage: StorageLike | undefined): void {
+export function writeOptionSettings(document: OptionSettingsDocument, storage: StorageLike | undefined): void {
   if (!storage) return;
   const { settings } = document;
   try {
-    storage.setItem(DEBUG_MENU_SETTINGS_STORAGE_KEY, JSON.stringify(document));
+    storage.setItem(OPTION_SETTINGS_STORAGE_KEY, JSON.stringify(document));
     writeVolumes(storage, settings);
     if (settings.playInSilentMode !== undefined) {
       storage.setItem(PLAY_IN_SILENT_MODE_STORAGE_KEY, serializePlayInSilentMode(settings.playInSilentMode));
@@ -833,13 +833,13 @@ export function writeDebugMenuSettings(document: DebugMenuSettingsDocument, stor
     }
     if (settings.courseTableURLs)
       storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(settings.courseTableURLs));
-    if (settings.folders) storage.setItem(DEBUG_MENU_FOLDERS_STORAGE_KEY, JSON.stringify(settings.folders));
+    if (settings.folders) storage.setItem(OPTION_FOLDERS_STORAGE_KEY, JSON.stringify(settings.folders));
   } catch {
     // Blocked or full storage: the visit still has the values in memory.
   }
 }
 
-function writeVolumes(storage: StorageLike, settings: Partial<DebugMenuSettings>): void {
+function writeVolumes(storage: StorageLike, settings: Partial<OptionSettings>): void {
   if (
     settings.masterVolume === undefined &&
     settings.keyVolume === undefined &&

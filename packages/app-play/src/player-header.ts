@@ -19,7 +19,7 @@ export interface PlayerHeaderAccount {
 
 export interface PlayerHeaderActions {
   /** Opens the Options dialog when it is closed, and closes it when it is open. `null` clears a binding. */
-  toggleDebugMenu?: (() => void) | null;
+  toggleOptions?: (() => void) | null;
   /** Opens the Help dialog. `null` clears a binding. */
   openHelp?: (() => void) | null;
   /** Opens the player's sign-in dialog. `null` clears a binding. */
@@ -29,7 +29,7 @@ export interface PlayerHeaderActions {
 }
 
 const actions: {
-  toggleDebugMenu?: () => void;
+  toggleOptions?: () => void;
   openHelp?: () => void;
   openSignIn?: () => void;
   selectLanguage: (lang: PlayerLang) => void;
@@ -159,14 +159,14 @@ export function setPlayerHeaderSettingsOpen(open: boolean): void {
  * {@link togglePlayerHeaderFullscreen} itself.
  */
 export function bindPlayerHeader(next: PlayerHeaderActions): void {
-  if (next.toggleDebugMenu === null) {
-    actions.toggleDebugMenu = undefined;
+  if (next.toggleOptions === null) {
+    actions.toggleOptions = undefined;
     pendingMenu = false;
-  } else if (next.toggleDebugMenu !== undefined) {
-    actions.toggleDebugMenu = next.toggleDebugMenu;
+  } else if (next.toggleOptions !== undefined) {
+    actions.toggleOptions = next.toggleOptions;
     if (pendingMenu) {
       pendingMenu = false;
-      next.toggleDebugMenu();
+      next.toggleOptions();
     }
   }
   if (next.openHelp === null) {
@@ -245,7 +245,7 @@ export function runPlayerHeaderAction(kind: 'help' | 'settings' | 'fullscreen' |
     return;
   }
   if (kind === 'settings') {
-    if (actions.toggleDebugMenu !== undefined) actions.toggleDebugMenu();
+    if (actions.toggleOptions !== undefined) actions.toggleOptions();
     else pendingMenu = !pendingMenu;
     return;
   }

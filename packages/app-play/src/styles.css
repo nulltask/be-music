@@ -90,7 +90,7 @@ textarea {
 }
 
 /*
- * The Options dialog (ui/debug-menu/, controls in ui/options-controls.ts): one tab per area, each holding its folders as
+ * The Options dialog (ui/options/, controls in ui/options-controls.ts): one tab per area, each holding its folders as
  * sections, with collapsible folders inside. The tab bar scrolls sideways on a narrow screen, and the panel scrolls.
  */
 .options-dialog > div {

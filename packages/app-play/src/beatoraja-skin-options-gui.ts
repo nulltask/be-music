@@ -7,9 +7,9 @@
 // decide / result, since each scene's skin authors a different `property[]` schema. Putting them in a
 // dedicated panel keeps the main pane stable and makes the relationship to the on-screen skin obvious.
 //
-// Skin selection itself lives in the Debug Menu, not here — this panel is purely the skin's authored
+// Skin selection itself lives in the Options dialog, not here — this panel is purely the skin's authored
 // `property[]` / `filepath[]` / `offset[]` schema mirror. Mixing the picker in created two competing
-// UIs for the same action (Debug Menu's switcher + this panel's dropdown), which left the player
+// UIs for the same action (Options dialog's switcher + this panel's dropdown), which left the player
 // guessing which one was canonical.
 //
 // Lifecycle:
@@ -173,7 +173,7 @@ export class BeatorajaSkinOptionsGUI {
     const filepaths: ReadonlyArray<BeatorajaSkinFilepath> = options.header.filepath ?? [];
     if (properties.length === 0 && filepaths.length === 0 && !options.header.offset?.length) {
       // Nothing to configure — leave the panel empty so the user isn't confused by a useless box.
-      // Skin selection itself lives in the Debug Menu, so a skin without authored
+      // Skin selection itself lives in the Options dialog, so a skin without authored
       // property[] / filepath[] schema simply has no controls to surface here.
       return;
     }

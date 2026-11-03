@@ -1,14 +1,14 @@
 // Local edits are synchronous. Remote operations run in order; resets retain a durable retry marker and the server
 // retains only a version barrier, so an older request cannot recreate settings that were reset.
 import {
-  debugMenuSettingsFromLegacy,
-  hasLegacyDebugMenuSettings,
-  parseDebugMenuSettingsDocument,
-  readStoredDebugMenuSettings,
-  writeDebugMenuSettings,
-  type DebugMenuSettingsDocument,
-} from './debug-menu-settings.ts';
-import { clearPlayerSettings, type DebugMenuStorage } from './debug-menu-storage.ts';
+  optionSettingsFromLegacy,
+  hasLegacyOptionSettings,
+  parseOptionSettingsDocument,
+  readStoredOptionSettings,
+  writeOptionSettings,
+  type OptionSettingsDocument,
+} from './option-settings.ts';
+import { clearPlayerSettings, type PlayerStorage } from './player-storage.ts';
 
 export const PLAYER_SETTINGS_PATH = '/api/player-settings';
 export const RESET_PENDING_KEY = 'be-music.settings-reset-pending';
@@ -22,36 +22,33 @@ function defaultStorage(): Storage | undefined {
   }
 }
 
-function sameDocument(
-  left: DebugMenuSettingsDocument | undefined,
-  right: DebugMenuSettingsDocument | undefined,
-): boolean {
+function sameDocument(left: OptionSettingsDocument | undefined, right: OptionSettingsDocument | undefined): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
 /** One owner for immediate browser persistence and ordered, debounced remote publication. */
-export class DebugMenuSettingsSync {
-  private readonly storage: DebugMenuStorage | undefined;
+export class OptionSettingsSync {
+  private readonly storage: PlayerStorage | undefined;
   private readonly doFetch: typeof fetch;
   private readonly now: () => number;
   private clock = 0;
   private generation = 0;
   private resetting = false;
-  private pending: DebugMenuSettingsDocument | undefined;
+  private pending: OptionSettingsDocument | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private queue: Promise<void> = Promise.resolve();
 
-  public constructor(options: { storage?: DebugMenuStorage; fetch?: typeof fetch; now?: () => number } = {}) {
+  public constructor(options: { storage?: PlayerStorage; fetch?: typeof fetch; now?: () => number } = {}) {
     this.storage = options.storage ?? defaultStorage();
     this.doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.now = options.now ?? Date.now;
   }
 
   /** Persists immediately, even when the page closes before the remote debounce expires. */
-  public save(document: DebugMenuSettingsDocument): void {
+  public save(document: OptionSettingsDocument): void {
     if (this.resetting) return;
     const saved = { ...document, updatedAt: this.nextTimestamp(document.updatedAt) };
-    writeDebugMenuSettings(saved, this.storage);
+    writeOptionSettings(saved, this.storage);
     this.pending = saved;
     if (this.timer !== undefined) clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.flush(), 300);
@@ -82,9 +79,9 @@ export class DebugMenuSettingsSync {
     await this.enqueue(async () => {
       if (this.resetting || !(await this.retryReset())) return;
       let local = this.local();
-      if (!local && hasLegacyDebugMenuSettings(this.storage)) {
-        local = debugMenuSettingsFromLegacy(this.storage, this.nextTimestamp(this.now()));
-        writeDebugMenuSettings(local, this.storage);
+      if (!local && hasLegacyOptionSettings(this.storage)) {
+        local = optionSettingsFromLegacy(this.storage, this.nextTimestamp(this.now()));
+        writeOptionSettings(local, this.storage);
       }
       const generation = this.generation;
       let response: Response;
@@ -94,7 +91,7 @@ export class DebugMenuSettingsSync {
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
         if (!response.ok) return;
-        const remote = response.status === 204 ? undefined : parseDebugMenuSettingsDocument(await response.text());
+        const remote = response.status === 204 ? undefined : parseOptionSettingsDocument(await response.text());
         if (remote) this.clock = Math.max(this.clock, remote.updatedAt);
         if (generation !== this.generation || this.resetting || !sameDocument(this.local(), local)) return;
         if (remote && (!local || remote.updatedAt > local.updatedAt)) this.apply(remote);
@@ -111,7 +108,7 @@ export class DebugMenuSettingsSync {
 
   /** Clears locally first, invalidates queued saves, then deletes remotely after any in-flight request finishes. */
   public async reset(): Promise<void> {
-    const reset: DebugMenuSettingsDocument = {
+    const reset: OptionSettingsDocument = {
       version: 0,
       updatedAt: this.nextTimestamp(this.now()),
       settings: {},
@@ -133,13 +130,13 @@ export class DebugMenuSettingsSync {
     });
   }
 
-  private local(): DebugMenuSettingsDocument | undefined {
-    return readStoredDebugMenuSettings(this.storage);
+  private local(): OptionSettingsDocument | undefined {
+    return readStoredOptionSettings(this.storage);
   }
 
-  private resetPending(): DebugMenuSettingsDocument | undefined {
+  private resetPending(): OptionSettingsDocument | undefined {
     try {
-      const document = parseDebugMenuSettingsDocument(this.storage?.getItem(RESET_PENDING_KEY));
+      const document = parseOptionSettingsDocument(this.storage?.getItem(RESET_PENDING_KEY));
       return document?.deleted ? document : undefined;
     } catch {
       return undefined;
@@ -163,10 +160,10 @@ export class DebugMenuSettingsSync {
     return this.queue;
   }
 
-  private apply(document: DebugMenuSettingsDocument): void {
+  private apply(document: OptionSettingsDocument): void {
     this.clock = Math.max(this.clock, document.updatedAt);
     if (document.deleted) clearPlayerSettings(this.storage);
-    else writeDebugMenuSettings(document, this.storage);
+    else writeOptionSettings(document, this.storage);
   }
 
   private async retryReset(document = this.resetPending()): Promise<boolean> {
@@ -176,7 +173,7 @@ export class DebugMenuSettingsSync {
     const local = this.local();
     if (local && local.updatedAt > document.updatedAt) {
       // Edits made after an offline reset must remain causally newer than the acknowledged remote reset.
-      writeDebugMenuSettings({ ...local, updatedAt: this.nextTimestamp(stored.updatedAt) }, this.storage);
+      writeOptionSettings({ ...local, updatedAt: this.nextTimestamp(stored.updatedAt) }, this.storage);
     }
     try {
       // A newer reset from another tab still needs its own acknowledgement.
@@ -189,8 +186,8 @@ export class DebugMenuSettingsSync {
 
   private async request(
     method: 'PUT' | 'DELETE',
-    document: DebugMenuSettingsDocument,
-  ): Promise<DebugMenuSettingsDocument | undefined> {
+    document: OptionSettingsDocument,
+  ): Promise<OptionSettingsDocument | undefined> {
     try {
       const response = await this.doFetch(PLAYER_SETTINGS_PATH, {
         method,
@@ -201,7 +198,7 @@ export class DebugMenuSettingsSync {
         keepalive: true,
       });
       if (!response.ok) return undefined;
-      const stored = parseDebugMenuSettingsDocument(await response.text());
+      const stored = parseOptionSettingsDocument(await response.text());
       if (stored) this.clock = Math.max(this.clock, stored.updatedAt);
       return stored;
     } catch {
@@ -210,4 +207,4 @@ export class DebugMenuSettingsSync {
   }
 }
 
-export const debugMenuSettingsSync = new DebugMenuSettingsSync();
+export const optionSettingsSync = new OptionSettingsSync();

@@ -1,11 +1,11 @@
 import { selectBinding, monitorFrameRate } from '../../pane-controls.ts';
 import { getBrowserWorkerCount, setBrowserWorkerCount } from '@be-music/player-browser/compute';
 import { storeWorkerCount } from '../../worker-settings.ts';
-// The Debug Menu's Developer folder. It is built with the menu as `this` (`DebugMenu`).
+// The Options dialog's Developer folder. It is built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
-import type { DebugMenu } from './index.ts';
+import type { OptionsDialog } from './index.ts';
 /** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
-export function buildDeveloperFolder(this: DebugMenu, developer: OptionContainer): void {
+export function buildDeveloperFolder(this: OptionsDialog, developer: OptionContainer): void {
   const compute = { workers: getBrowserWorkerCount() };
   developer
     .addBinding(compute, 'workers', {
@@ -22,7 +22,7 @@ export function buildDeveloperFolder(this: DebugMenu, developer: OptionContainer
         /* Storage can be disabled. */
       }
     });
-  // The judge ruleset — no in-skin counterpart; the Debug Menu is its only surface. It switches every judge rule
+  // The judge ruleset — no in-skin counterpart; the Options dialog is its only surface. It switches every judge rule
   // (windows, note selection, empty POOR, long notes, gauge, score — see docs/replay.md).
   this.trackPlayOption(
     selectBinding(developer, this.guiState, 'judgeRuleset', 'Judgment windows', {

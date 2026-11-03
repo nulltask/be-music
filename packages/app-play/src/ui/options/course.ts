@@ -1,14 +1,14 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
-// The Debug Menu's Course folder. It is built with the menu as `this` (`DebugMenu`).
+// The Options dialog's Course folder. It is built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
 import { normalizeCourseTableURL } from '../../course-table-import.ts';
 import type { PlayerGUIState } from '../../types.ts';
-import type { DebugMenu, DebugMenuDeps } from './index.ts';
+import type { OptionsDialog, OptionsDialogDeps } from './index.ts';
 /**
  * Courses: whether stage results show, the player's own courses, the NONSTOP placement, and importing a difficulty
  * table's courses from its URL (remembered and imported again on load).
  */
-export function buildCourseFolder(this: DebugMenu, folder: OptionContainer): void {
+export function buildCourseFolder(this: OptionsDialog, folder: OptionContainer): void {
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
   folder.addBinding(this.guiState, 'courseAutoAdvance', { label: 'Skip stage results' }).on('change', ({ value }) => {
     this.guiState.courseAutoAdvance = value;
@@ -41,7 +41,7 @@ export function buildCourseFolder(this: DebugMenu, folder: OptionContainer): voi
  * when told something changed.
  */
 export function applyNonstopPlacement(
-  deps: Pick<DebugMenuDeps, 'settings' | 'refreshSelectRecords'>,
+  deps: Pick<OptionsDialogDeps, 'settings' | 'refreshSelectRecords'>,
   value: PlayerGUIState['nonstopPlacement'],
 ): void {
   deps.settings.nonstopPlacement = value;

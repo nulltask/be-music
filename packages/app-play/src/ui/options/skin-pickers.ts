@@ -1,11 +1,11 @@
 import { selectBinding } from '../../pane-controls.ts';
-// The Debug Menu's "Beatoraja skins" pickers: one per scene type the loaded beatoraja theme ships, and the switch of
-// the screen showing to the entry picked. They run with the menu as `this` (`DebugMenu`).
+// The Options dialog's "Beatoraja skins" pickers: one per scene type the loaded beatoraja theme ships, and the switch of
+// the screen showing to the entry picked. They run with the dialog as `this` (`OptionsDialog`).
 import { BEATORAJA_SKIN_TYPE, type BeatorajaSkinEntry } from '@be-music/skin-beatoraja';
 import { playSkinTypeForVariant } from '../../player-utils.ts';
-import type { DebugMenu } from './index.ts';
+import type { OptionsDialog } from './index.ts';
 /**
- * Repopulate the "Beatoraja skins" debug-menu folder with one dropdown per scene type that the
+ * Repopulate the "Beatoraja skins" Options folder with one dropdown per scene type that the
  * loaded theme actually ships an entry for. Called from `loadBeatorajaTheme` after each drop,
  * so the dropdowns always reflect the live `beatorajaTheme.entries` list.
  *
@@ -19,7 +19,7 @@ import type { DebugMenu } from './index.ts';
  *     stays compact). Single-entry types still get a dropdown so the user can see at a glance
  *     which file is mounted.
  */
-export function rebuildBeatorajaSkinPickers(this: DebugMenu): void {
+export function rebuildBeatorajaSkinPickers(this: OptionsDialog): void {
   const folder = this.beatorajaSkinPickerFolder;
   if (folder === undefined) return;
   // The scene-type set can change with a drop, so rebuild these native bindings as a group.
@@ -77,7 +77,7 @@ export function rebuildBeatorajaSkinPickers(this: DebugMenu): void {
           this.beatorajaSkinOverridesByType.set(scene.typeCode, nextEntryPath);
         }
         // Live-apply: if the user's pick matches the currently-mounted scene type, re-mount it
-        // immediately against the new entry. Without this the Debug Menu only takes effect on
+        // immediately against the new entry. Without this the Options dialog only takes effect on
         // the NEXT scene transition, which felt broken to the user (drop a theme, pick a skin,
         // nothing visible until you ESC and re-enter the scene).
         this.applyBeatorajaSkinSwitchIfActive(scene.typeCode, nextEntryPath, candidates);
@@ -88,7 +88,7 @@ export function rebuildBeatorajaSkinPickers(this: DebugMenu): void {
 }
 /**
  * If the active scene's type-code matches `typeCode`, re-mount it against `entryPath`. Invoked
- * by the Debug Menu's skin-picker dropdown (the canonical surface for switching skins —
+ * by the Options dialog's skin-picker dropdown (the canonical surface for switching skins —
  * the bottom-centre `BeatorajaSkinOptionsGUI` only exposes the picked skin's authored
  * `property[]` / `filepath[]` schema, not the picker itself). No-op when no matching scene is
  * active (e.g., user picks a Decide skin while the Select scene is on screen — the override
@@ -99,7 +99,7 @@ export function rebuildBeatorajaSkinPickers(this: DebugMenu): void {
  * needed by `applyBeatoraja*SkinConfig` indirectly via the cached config map.
  */
 export function applyBeatorajaSkinSwitchIfActive(
-  this: DebugMenu,
+  this: OptionsDialog,
   typeCode: number,
   entryPath: string,
   candidates: ReadonlyArray<BeatorajaSkinEntry>,

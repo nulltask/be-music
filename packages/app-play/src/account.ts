@@ -124,7 +124,7 @@ export async function signOutOfLeaderboard(): Promise<AccountActionResult> {
 export function describeLeaderboardAccount(account: LeaderboardAccount | undefined): string {
   const copy = playerText().account;
   if (account === undefined) return copy.notSignedIn;
-  // Short enough for the Debug Menu row; the "Create passkey (keep this account)" button carries the hint.
+  // Short enough for the Options dialog row; the "Create passkey (keep this account)" button carries the hint.
   if (account.anonymous) return `${account.handle} (${copy.anonymous})`;
   return `${account.displayName} @${account.handle} · ${copy.passkey(account.passkeys)}`;
 }

@@ -19,7 +19,7 @@ export {
 
 /**
  * Whether a finished course stage goes straight on to the next stage without showing its result: always with stage
- * results skipped (the Debug Menu's **Skip stage results**), and, as LR2 does (OpenLR2 `Main.cpp` M1381-M1384), when the
+ * results skipped (the Options dialog's **Skip stage results**), and, as LR2 does (OpenLR2 `Main.cpp` M1381-M1384), when the
  * course plays itself and goes on after the stage. The last stage's result (or a failed one's) still shows then.
  */
 export function skipsCourseStageResult(options: {

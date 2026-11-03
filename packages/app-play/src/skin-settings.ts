@@ -1,4 +1,4 @@
-// The player's values for Be-Music Skins' `settings`: persistence per skin id across reloads, and the Debug Menu
+// The player's values for Be-Music Skins' `settings`: persistence per skin id across reloads, and the Options dialog
 // controllers built from a skin's settings schema.
 
 import type { BeMusicSkinSetting } from '@be-music/player-skin-sdk';
@@ -86,7 +86,7 @@ export function storeSkinSettings(settings: StoredSkinSettings): void {
   }
 }
 
-/** A Debug Menu controller for one skin setting. */
+/** An Options dialog controller for one skin setting. */
 export type SkinSettingController =
   | {
       kind: 'dropdown';
@@ -99,7 +99,7 @@ export type SkinSettingController =
   | { kind: 'checkbox'; id: string; name: string };
 
 /**
- * The Debug Menu controllers for a skin's `settings` schema, in declaration order: a choice becomes a dropdown, a
+ * The Options dialog controllers for a skin's `settings` schema, in declaration order: a choice becomes a dropdown, a
  * number a slider over `min..max` (with the unit in its name), a toggle a checkbox. Option labels that repeat get the
  * option value appended so every option stays pickable.
  */

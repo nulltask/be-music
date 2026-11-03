@@ -46,7 +46,7 @@ export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'eng
 }
 /**
  * Everything the player shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
- * sign-up buttons), the Debug Menu folder (the same toggle, account row and passkey buttons), the shared header's
+ * sign-up buttons), the Options dialog folder (the same toggle, account row and passkey buttons), the shared header's
  * account control, and submitting a finished play. An account starts anonymous (the first
  * submission signs in anonymously); creating a passkey keeps it, and "Sign in with passkey" brings it to another device,
  * moving that device's anonymous plays into it.
@@ -83,7 +83,7 @@ export class LeaderboardPanel {
       this.renderStartAccount(this.shownAccount);
     });
   }
-  /** Fills the Debug Menu's Leaderboard folder. */
+  /** Fills the Options dialog's Leaderboard folder. */
   buildFolder(folder: OptionContainer): void {
     // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
     // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
@@ -96,7 +96,7 @@ export class LeaderboardPanel {
         if (startCheckbox !== null) startCheckbox.checked = value;
       });
     // The start card's checkbox is the same setting: it goes through the controller, so it is remembered like any
-    // Debug Menu change.
+    // Options dialog change.
     if (startCheckbox !== null) {
       startCheckbox.checked = settings.submitToLeaderboard;
       startCheckbox.addEventListener('change', () => this.setSubmitting(startCheckbox.checked));
@@ -205,7 +205,7 @@ export class LeaderboardPanel {
         this.host.setStatus(playerText().lb.courseNetwork);
       });
   }
-  /** Re-reads the account into the Debug Menu's "Account" row and the shared header. */
+  /** Re-reads the account into the Options dialog's "Account" row and the shared header. */
   async refreshAccount(): Promise<void> {
     const account = await loadLeaderboardAccount();
     this.shownAccount = account;

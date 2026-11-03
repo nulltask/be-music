@@ -1,4 +1,4 @@
-// The local data viewer: a read-only dialog of what the player keeps in this browser (Debug Menu → Library & records →
+// The local data viewer: a read-only dialog of what the player keeps in this browser (Options dialog → Library & records →
 // Local data…). Each entry opens to show its value; values are drawn only when opened, so large stores stay cheap.
 
 import { decompressReplayText } from './services/replay-slots.ts';

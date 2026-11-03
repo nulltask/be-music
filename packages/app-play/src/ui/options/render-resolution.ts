@@ -1,6 +1,6 @@
 import { setDisabled, setButtonTitle } from '../../pane-controls.ts';
-// The Debug Menu's render resolution auto-detect: the first-run benchmark of the select screen and the "Auto-detect
-// resolution" button (`benchmarkRenderResolution`). They run with the menu as `this` (`DebugMenu`).
+// The Options dialog's render resolution auto-detect: the first-run benchmark of the select screen and the "Auto-detect
+// resolution" button (`benchmarkRenderResolution`). They run with the dialog as `this` (`OptionsDialog`).
 import { logger } from '@be-music/player-browser';
 import {
   benchmarkRenderResolution,
@@ -10,7 +10,7 @@ import {
   renderResolutionSteps,
   storeRenderResolution,
 } from '../../render-resolution.ts';
-import type { DebugMenu } from './index.ts';
+import type { OptionsDialog } from './index.ts';
 const resolutionLog = logger('render-resolution');
 export const AUTO_DETECT_RESOLUTION_LABEL = 'Auto-detect resolution';
 /** How long the select screen settles (song images, fonts, first BGM) before the first-run resolution benchmark. */
@@ -54,7 +54,7 @@ export function isResolutionDetectCancelled(state: {
  * once, after it settles, to pick one for this device. Skipped where there's nothing to choose (a 1× display) and
  * when `?resolution=` pins it.
  */
-export function scheduleFirstRunResolutionDetect(this: DebugMenu): void {
+export function scheduleFirstRunResolutionDetect(this: OptionsDialog): void {
   if (this.firstRunResolutionScheduled) return;
   this.firstRunResolutionScheduled = true;
   const visit = {
@@ -78,7 +78,7 @@ export function scheduleFirstRunResolutionDetect(this: DebugMenu): void {
  * longer the select screen; any run is dropped when the page is hidden, since a hidden page's frames are throttled.
  */
 export async function detectRenderResolution(
-  this: DebugMenu,
+  this: OptionsDialog,
   options: {
     whileShowing?: unknown;
   } = {},

@@ -726,7 +726,7 @@ export class LR2SelectView implements SelectView {
           return;
         }
         if (action.option === 'random1P' || action.option === 'random2P') {
-          // LR2's RANDOM buttons step LR2's own lane options only (ADR 0019); the Debug Menu offers every source's.
+          // LR2's RANDOM buttons step LR2's own lane options only (ADR 0019); the Options dialog offers every source's.
           emit({
             type: 'set-play-option',
             key: action.option,

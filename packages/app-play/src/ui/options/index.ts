@@ -1,7 +1,7 @@
-// The player's Options dialog (still `DebugMenu` in code and storage keys): its tabs and folders, the controllers the
-// app reaches after building them, and the locks a play puts on them. Each folder is built in a module of its own
-// (`play-options.ts`, `tempo.ts`, …) with the menu as `this`; the tabs, the folder titles and the remembered open states
-// are `folders.ts`'. The menu reaches the app only through `DebugMenuDeps`, which the app (`app/app.ts`) builds.
+// The player's Options dialog: its tabs and folders, the controllers the app reaches after building them, and the locks
+// a play puts on them. Each folder is built in a module of its own (`play-options.ts`, `tempo.ts`, …) with the dialog as
+// `this`; the tabs, the folder titles and the remembered open states are `folders.ts`'. The dialog reaches the app only
+// through `OptionsDialogDeps`, which the app (`app/app.ts`) builds.
 import type { BeatorajaSkinConfig, BeatorajaSkinHeader } from '@be-music/skin-beatoraja';
 import type { LR2DiscoveredTheme } from '@be-music/skin-lr2';
 import type { TunableCompressor } from '@be-music/player-browser/audio';
@@ -32,8 +32,8 @@ import {
 } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
 import { readStoredCourseTableURLs } from '../../course-table-import.ts';
-import { captureDebugMenuSettings } from '../../debug-menu-settings.ts';
-import { debugMenuSettingsSync } from '../../debug-menu-settings-sync.ts';
+import { captureOptionSettings } from '../../option-settings.ts';
+import { optionSettingsSync } from '../../option-settings-sync.ts';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import type { CourseMakerService } from '../../services/course-maker.ts';
@@ -61,11 +61,11 @@ import {
 import { buildCourseFolder } from './course.ts';
 import { buildDeveloperFolder } from './developer.ts';
 import {
-  DEBUG_MENU_FOLDERS,
+  OPTION_FOLDERS,
   OPTIONS_TABS,
   readFolderOpenStates,
   rememberFolderOpenStates,
-  type DebugMenuFolder,
+  type OptionFolderSpec,
 } from './folders.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
@@ -82,10 +82,10 @@ import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from '.
 import { buildSkinFolder, rebuildLR2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
 import { buildTempoFolder } from './tempo.ts';
 /**
- * What the Debug Menu needs from the app: the settings and stores its controllers change, readers of what the app has
+ * What the Options dialog needs from the app: the settings and stores its controllers change, readers of what the app has
  * loaded and shows, and the app's actions its controllers start. The actions keep the names of the app's methods.
  */
-export interface DebugMenuDeps {
+export interface OptionsDialogDeps {
   /** The settings the controllers read and write (`createPlayerGUIState`), read by the app as each play starts. */
   readonly settings: PlayerGUIState;
   /** The replay file "Ghost replay file…" picks as a ghost. */
@@ -168,13 +168,13 @@ export interface DebugMenuDeps {
  * through the methods it calls on a change of its own: a theme load rebuilds the pickers, a status line repaints the
  * status row, a play locks the options it latched ({@link lockForPlay}) and its end unlocks them ({@link unlockAfterPlay}).
  *
- * The folders are built by functions in modules of their own, which run with the menu as `this`, so the controllers
+ * The folders are built by functions in modules of their own, which run with the dialog as `this`, so the controllers
  * and helpers they reach are public members.
  */
-export class DebugMenu {
+export class OptionsDialog {
   /** What the menu reaches of the app. */
-  public readonly deps: DebugMenuDeps;
-  /** The settings the controllers read and write ({@link DebugMenuDeps.settings}). */
+  public readonly deps: OptionsDialogDeps;
+  /** The settings the controllers read and write ({@link OptionsDialogDeps.settings}). */
   public readonly guiState: PlayerGUIState;
   public readonly sceneHost: PixiSceneHost;
   public readonly silentMode: SilentModeSetting;
@@ -185,7 +185,7 @@ export class DebugMenu {
   public readonly beatorajaSkinOverridesByType: Map<number, string>;
   public readonly compressorMode: 'split' | 'legacy';
   /**
-   * Debug-menu folder hosting one dropdown per skin scene type (Play 5K / 7K / 9K / 10K / 14K /
+   * Options folder hosting one dropdown per skin scene type (Play 5K / 7K / 9K / 10K / 14K /
    * 24K / 24Kdp / Music Select / Decide / Result / etc.). Empty until a beatoraja theme is
    * dropped — `rebuildBeatorajaSkinPickers` (re-)populates it from `beatorajaTheme.entries`.
    */
@@ -198,7 +198,7 @@ export class DebugMenu {
   public readonly beatorajaSkinPickerControllers: Map<number, PaneBinding> = new Map();
   /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
   public activeSkinSystem: SkinFamilyOverride = 'auto';
-  /** The Debug Menu's "Render resolution" dropdown and "Auto-detect resolution" button. */
+  /** The Options dialog's "Render resolution" dropdown and "Auto-detect resolution" button. */
   public resolutionPicker: PaneBinding | undefined;
   public autoDetectResolutionControl: OptionButton | undefined;
   /** Whether a render resolution benchmark is running. */
@@ -292,9 +292,9 @@ export class DebugMenu {
   private ghostBar: GhostBarFacts | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
-  /** Debug Menu folder holding the active Be-Music Skin's settings; hidden for a skin that declares none. */
+  /** Options dialog folder holding the active Be-Music Skin's settings; hidden for a skin that declares none. */
   public skinSettingsFolder: OptionContainer | undefined;
-  /** The Debug Menu's "Skin & display" folder, with the common family and display controls. */
+  /** The Options dialog's "Skin & display" folder, with the common family and display controls. */
   public skinFolder: OptionContainer | undefined;
   /** LR2 tab holding the discovered theme picker. */
   public lr2SkinPage: Pick<OptionContainer, 'addBinding'> | undefined;
@@ -303,7 +303,7 @@ export class DebugMenu {
   /** Native theme list, refreshed as drops discover new themes. */
   public lr2ThemeController: OptionBinding<string> | undefined;
   /**
-   * The Debug Menu's skin controls that make the select screen again: Built-in skin, Skin effects, the Add skin
+   * The Options dialog's skin controls that make the select screen again: Built-in skin, Skin effects, the Add skin
    * buttons and the LR2 theme picker. They are disabled during a play ({@link playLock}), since going back to the
    * select screen would end it. Skin system stays enabled: it swaps the play's family without leaving the chart.
    */
@@ -317,7 +317,7 @@ export class DebugMenu {
   }));
   /** Read-only multiline monitor, refreshed immediately when the app posts status. */
   public statusController: PaneBinding | undefined;
-  // The folders and the controls that follow what is loaded, each built in its own module with the menu as `this`.
+  // The folders and the controls that follow what is loaded, each built in its own module with the dialog as `this`.
   private readonly buildCaptureFolder = buildCaptureFolder;
   private readonly buildPlayOptionsFolder = buildPlayOptionsFolder;
   private readonly buildReplayViewFolder = buildReplayViewFolder;
@@ -343,7 +343,7 @@ export class DebugMenu {
   /** Benchmarks the render resolution once, the first time the select screen shows. */
   public readonly scheduleFirstRunResolutionDetect = scheduleFirstRunResolutionDetect;
   public readonly detectRenderResolution = detectRenderResolution;
-  public constructor(deps: DebugMenuDeps) {
+  public constructor(deps: OptionsDialogDeps) {
     this.deps = deps;
     this.guiState = deps.settings;
     this.sceneHost = deps.sceneHost;
@@ -363,11 +363,11 @@ export class DebugMenu {
   public get selectView(): SelectScene | undefined {
     return this.deps.selectView();
   }
-  /** Shows a status line ({@link DebugMenuDeps.setStatus}). */
+  /** Shows a status line ({@link OptionsDialogDeps.setStatus}). */
   public setStatus(text: string): void {
     this.deps.setStatus(text);
   }
-  /** A play option set from the menu ({@link DebugMenuDeps.setPlayOptions}). */
+  /** A play option set from the menu ({@link OptionsDialogDeps.setPlayOptions}). */
   public setPlayOptions(changes: Partial<PlayOptions>): void {
     this.deps.setPlayOptions(changes);
   }
@@ -416,22 +416,22 @@ export class DebugMenu {
     });
     // Keys stay in the dialog, so the play behind it does not take them.
     dialog.addEventListener('keydown', (event) => event.stopPropagation());
-    const addSection = (parent: OptionContainer, folder: DebugMenuFolder): OptionFolder =>
+    const addSection = (parent: OptionContainer, folder: OptionFolderSpec): OptionFolder =>
       parent.addFolder({ title: folder.title, collapsible: false });
-    const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: DebugMenuFolder): OptionFolder =>
+    const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec): OptionFolder =>
       parent.addFolder({ title: folder.title, expanded: folder.open });
     const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
     const [play, tempo, skin, audio, library, leaderboard, developer] = tabs.pages;
     if (!play || !tempo || !skin || !audio || !library || !leaderboard || !developer) return;
     // Tabs in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
     // library and capturing a play, the Leaderboard, then the developer settings.
-    const playOptions = addSection(play, DEBUG_MENU_FOLDERS.playOptions);
+    const playOptions = addSection(play, OPTION_FOLDERS.playOptions);
     this.buildPlayOptionsFolder(playOptions);
-    this.buildReplayViewFolder(addFolder(playOptions, DEBUG_MENU_FOLDERS.replayView));
-    this.buildTempoFolder(addSection(tempo, DEBUG_MENU_FOLDERS.tempo));
-    this.buildCourseFolder(addSection(tempo, DEBUG_MENU_FOLDERS.course));
-    this.buildSkinFolder(addSection(skin, DEBUG_MENU_FOLDERS.skin), addFolder);
-    this.buildAudioFolder(addSection(audio, DEBUG_MENU_FOLDERS.audio), addFolder);
+    this.buildReplayViewFolder(addFolder(playOptions, OPTION_FOLDERS.replayView));
+    this.buildTempoFolder(addSection(tempo, OPTION_FOLDERS.tempo));
+    this.buildCourseFolder(addSection(tempo, OPTION_FOLDERS.course));
+    this.buildSkinFolder(addSection(skin, OPTION_FOLDERS.skin), addFolder);
+    this.buildAudioFolder(addSection(audio, OPTION_FOLDERS.audio), addFolder);
     // The status line shows long load and playback messages read-only; `setStatus` refreshes it at once.
     this.statusController = library.addBinding(this.guiState, 'status', {
       label: 'Status',
@@ -442,27 +442,27 @@ export class DebugMenu {
     this.statusController.element.classList.add('status-row');
     library.addButton({ title: 'Open folder' }).on('click', () => this.guiState['openFolder']());
     library.addButton({ title: 'Open files (ZIP / replay)' }).on('click', () => this.guiState['openFiles']());
-    this.buildLibraryFolder(addSection(library, DEBUG_MENU_FOLDERS.library), addFolder);
-    this.buildCaptureFolder(addSection(library, DEBUG_MENU_FOLDERS.capture));
-    this.deps.leaderboard.buildFolder(addSection(leaderboard, DEBUG_MENU_FOLDERS.leaderboard));
-    this.buildDeveloperFolder(addSection(developer, DEBUG_MENU_FOLDERS.developer));
+    this.buildLibraryFolder(addSection(library, OPTION_FOLDERS.library), addFolder);
+    this.buildCaptureFolder(addSection(library, OPTION_FOLDERS.capture));
+    this.deps.leaderboard.buildFolder(addSection(leaderboard, OPTION_FOLDERS.leaderboard));
+    this.buildDeveloperFolder(addSection(developer, OPTION_FOLDERS.developer));
     this.refreshCompressorStageVisibility();
     rememberFolderOpenStates(gui, undefined, () => this.scheduleSettingsSave());
     gui.on('change', () => this.scheduleSettingsSave());
   }
   /**
-   * Writes every Debug Menu setting locally immediately; remote publishing is debounced for slider changes.
+   * Writes every Options dialog setting locally immediately; remote publishing is debounced for slider changes.
    * Status and the FPS graph are not settings and do not come through here.
    */
   public scheduleSettingsSave(): void {
-    const document = captureDebugMenuSettings(this.guiState, {
+    const document = captureOptionSettings(this.guiState, {
       compressorTuning: this.compressorTunings,
       skinSettings: this.skinSettings,
       courseTableURLs: readStoredCourseTableURLs(),
       folders: readFolderOpenStates(),
       workerCount: getBrowserWorkerCount(),
     });
-    debugMenuSettingsSync.save(document);
+    optionSettingsSync.save(document);
   }
   /**
    * Options read when a play starts, which are disabled while one runs (`lockReplayOptionsForPlay`); returns the
@@ -535,12 +535,12 @@ export class DebugMenu {
   public async resetSettings(): Promise<void> {
     if (
       !window.confirm(
-        'Reset every Debug Menu setting to its default and reload? This includes the copy kept for this browser. Best records are kept.',
+        'Reset every Options dialog setting to its default and reload? This includes the copy kept for this browser. Best records are kept.',
       )
     ) {
       return;
     }
-    await debugMenuSettingsSync.reset();
+    await optionSettingsSync.reset();
     window.location.reload();
   }
   /**

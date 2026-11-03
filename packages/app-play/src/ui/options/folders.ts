@@ -1,4 +1,4 @@
-// Layout and persistence helpers for the player's Options dialog (`DebugMenu`). The tabs, the folder titles, their
+// Layout and persistence helpers for the player's Options dialog (`OptionsDialog`). The tabs, the folder titles, their
 // order, and which ones start open live here so the structure reads in one place and stays testable; `index.ts` binds
 // the controllers.
 
@@ -7,12 +7,12 @@ import {
   folderPath,
   readFolderOpenStates,
   storeFolderOpenStates,
-  type DebugMenuStorage,
-} from '../../debug-menu-storage.ts';
-export * from '../../debug-menu-storage.ts';
+  type PlayerStorage,
+} from '../../player-storage.ts';
+export * from '../../player-storage.ts';
 
-/** A Debug Menu folder: its title and whether it starts open before the user has opened or closed it. */
-export interface DebugMenuFolder {
+/** An Options dialog folder: its title and whether it starts open before the user has opened or closed it. */
+export interface OptionFolderSpec {
   readonly title: string;
   readonly open: boolean;
 }
@@ -21,7 +21,7 @@ export interface DebugMenuFolder {
  * Every folder of the Options dialog, top to bottom. A folder a tab holds (`OPTIONS_TABS`) is a section that is always
  * open; the folders inside those sections collapse, and start open or closed as `open` says.
  */
-export const DEBUG_MENU_FOLDERS = {
+export const OPTION_FOLDERS = {
   playOptions: { title: 'Play options', open: true },
   replayView: { title: 'Replay / ghost', open: false },
   tempo: { title: 'Tempo', open: true },
@@ -39,7 +39,7 @@ export const DEBUG_MENU_FOLDERS = {
   capture: { title: 'Capture', open: false },
   leaderboard: { title: 'Leaderboard', open: false },
   developer: { title: 'Developer', open: false },
-} as const satisfies Record<string, DebugMenuFolder>;
+} as const satisfies Record<string, OptionFolderSpec>;
 
 /**
  * The Options dialog's tabs, left to right: Play (Play options), Tempo & course, Skin & display, Audio, Library (the
@@ -85,7 +85,7 @@ export function folderEntries(root: FolderNode): { folder: FolderNode; titles: r
 /** Restore child folder states before subscribing; the root dialog always starts closed. */
 export function rememberFolderOpenStates(
   root: FolderNode,
-  storage: DebugMenuStorage | undefined = defaultStorage(),
+  storage: PlayerStorage | undefined = defaultStorage(),
   onFold?: () => void,
 ): void {
   const states = readFolderOpenStates(storage);

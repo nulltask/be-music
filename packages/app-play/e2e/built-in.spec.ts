@@ -5,7 +5,7 @@ courseFlowTests({
   name: 'built-in',
   family: 'built-in',
   open: (player) => openWithLibrary(player),
-  // A course started from its bar follows the Debug Menu's auto play.
+  // A course started from its bar follows the Options dialog's auto play.
   startAuto: async (player) => {
     await player.setOption(['Play options'], 'Auto play', true);
     await player.key('Enter');

@@ -2,7 +2,7 @@ import type { OptionContainer } from '../options-controls.ts';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import type { PlayerGUIState } from '../../types.ts';
 import { applyNonstopPlacement, buildCourseFolder } from './course.ts';
-import type { DebugMenu } from './index.ts';
+import type { OptionsDialog } from './index.ts';
 
 /** A stand-in for an Options control bound to `object[property]`. */
 class FakeController {
@@ -73,7 +73,7 @@ function buildFolder() {
     },
   };
   const folder = new FakeFolder();
-  buildCourseFolder.call(menu as unknown as DebugMenu, folder as unknown as OptionContainer);
+  buildCourseFolder.call(menu as unknown as OptionsDialog, folder as unknown as OptionContainer);
   return { settings, refreshSelectRecords, tracked, folder };
 }
 
