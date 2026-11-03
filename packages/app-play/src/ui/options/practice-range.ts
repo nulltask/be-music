@@ -1,3 +1,4 @@
+import { html, render } from 'lit';
 // The PRACTICE range picker (#948): the note-density graph of the chart under the cursor, with a start and an end
 // handle to drag. The handles snap to measure starts and write START TIME / END TIME, which the picker follows back.
 // The rules (snapping, the 1000 ms minimum, END 0 = to the end) are `practice-range.ts` in player-scene-model.
@@ -65,20 +66,24 @@ export class PracticeRangePicker {
     this.writeRange = writeRange;
     this.element = document.createElement('div');
     this.element.className = 'practice-range';
-    this.canvas = document.createElement('canvas');
-    this.canvas.className = 'practice-range-graph';
-    this.canvas.style.height = `${GRAPH_HEIGHT}px`;
-    this.canvas.setAttribute('role', 'img');
-    this.caption = document.createElement('div');
-    this.caption.className = 'practice-range-caption';
-    this.element.append(this.canvas, this.caption);
-    this.canvas.addEventListener('pointerdown', (event) => this.onPointerDown(event));
-    this.canvas.addEventListener('pointermove', (event) => this.onPointerMove(event));
     const endDrag = (event: PointerEvent): void => {
       if (this.dragging?.pointerId === event.pointerId) this.dragging = undefined;
     };
-    this.canvas.addEventListener('pointerup', endDrag);
-    this.canvas.addEventListener('pointercancel', endDrag);
+    render(
+      html`<canvas
+          class="practice-range-graph"
+          style=${`height: ${GRAPH_HEIGHT}px`}
+          role="img"
+          @pointerdown=${(event: PointerEvent) => this.onPointerDown(event)}
+          @pointermove=${(event: PointerEvent) => this.onPointerMove(event)}
+          @pointerup=${endDrag}
+          @pointercancel=${endDrag}
+        ></canvas>
+        <div class="practice-range-caption"></div>`,
+      this.element,
+    );
+    this.canvas = this.element.querySelector('canvas')!;
+    this.caption = this.element.querySelector('.practice-range-caption')!;
     // The graph takes the dialog's width, which is 0 until its tab first shows.
     if (typeof ResizeObserver === 'function') new ResizeObserver(() => this.refresh()).observe(this.canvas);
   }
@@ -122,8 +127,9 @@ export class PracticeRangePicker {
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, GRAPH_HEIGHT);
     if (chart === undefined) {
-      this.caption.textContent = this.libraryChart === undefined ? 'Move the cursor to a chart' : 'No timing to show';
-      this.canvas.setAttribute('aria-label', this.caption.textContent);
+      const caption = this.libraryChart === undefined ? 'Move the cursor to a chart' : 'No timing to show';
+      render(caption, this.caption);
+      this.canvas.setAttribute('aria-label', caption);
       return;
     }
     const colors = this.readColors();
@@ -164,8 +170,9 @@ export class PracticeRangePicker {
       stored.endMs > 0
         ? `${formatPracticeTime(range.endMs)}${formatMeasure(findPracticeMeasureAt(range.endMs, chart.measures)?.measure)}`
         : `end (${formatPracticeTime(chart.lengthMs)})`;
-    this.caption.textContent = `${formatPracticeTime(range.startMs)}${formatMeasure(startMeasure)} → ${endText}`;
-    this.canvas.setAttribute('aria-label', `PRACTICE range ${this.caption.textContent}`);
+    const caption = `${formatPracticeTime(range.startMs)}${formatMeasure(startMeasure)} → ${endText}`;
+    render(caption, this.caption);
+    this.canvas.setAttribute('aria-label', `PRACTICE range ${caption}`);
   }
 
   /** The theme's colors, read from the picker's CSS custom properties so the graph follows light and dark. */

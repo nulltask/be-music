@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlayInfo } from '../../play-info.ts';
 import { messagesFor } from '../i18n/index.ts';
-import { pickPlayInfoRows, PLAY_INFO_ROW_IDS, playInfoRows } from './play-info.tsx';
+import { pickPlayInfoRows, PLAY_INFO_ROW_IDS, playInfoRows } from './play-info.ts';
 
 const info: PlayInfo = {
   scoreId: 's1',
