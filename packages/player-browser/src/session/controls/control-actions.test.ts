@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  CONTROL_ACTION_IDS,
   CONTROL_ACTIONS,
   controlActionKeys,
   resolveControlActions,
@@ -10,6 +11,8 @@ describe('CONTROL_ACTIONS', () => {
   test('every operation has a unique id, a label and keys on at least one key map', () => {
     const ids = CONTROL_ACTIONS.map((action) => action.id);
     expect(new Set(ids).size).toBe(ids.length);
+    // The id list the type comes from names each operation once, in the table's order.
+    expect(ids).toEqual(CONTROL_ACTION_IDS);
     for (const action of CONTROL_ACTIONS) {
       expect(action.label).not.toBe('');
       expect(Object.keys(action.defaults).length).toBeGreaterThan(0);
