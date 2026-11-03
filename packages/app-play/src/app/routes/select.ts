@@ -7,6 +7,14 @@
 import type { AudioService } from '@be-music/player-browser/audio';
 import { describeChartCollection } from '@be-music/player-browser/collection';
 import {
+  applyChartLevelEdits,
+  chartLevelKey,
+  readChartLevelEdits,
+  stepChartLevel,
+  writeChartLevelEdits,
+} from '../../chart-level-edits.ts';
+import { chartRankingURL } from '../../leaderboard.ts';
+import {
   createSelectScene,
   type PlayScene,
   type SelectScene,
@@ -301,6 +309,19 @@ export class SelectRoute {
         // LR2's F8 and beatoraja's F2: the library's folders are read again, and the screen shows what they hold now.
         reload: () => {
           void this.library.reloadCharts();
+        },
+        // LR2's key 4 held: the chart's ranking on the Leaderboard (LR2's IR).
+        ranking: (chart) => {
+          window.open(chartRankingURL(chart, location.hostname), '_blank', 'noopener');
+        },
+        // LR2's F3 + the arrows: the player's own difficulty or level for the chart, kept for the next visit.
+        levelEdit: (chart, part, step) => {
+          const edit = stepChartLevel(chart, part, step);
+          const edits = { ...readChartLevelEdits(globalThis.localStorage), [chartLevelKey(chart)]: edit };
+          writeChartLevelEdits(globalThis.localStorage, edits);
+          applyChartLevelEdits([chart], edits);
+          this.library.collection = { ...this.library.collection, charts: [...this.library.collection.charts] };
+          this.selectView?.setLibrary(this.library.collection);
         },
         exitMenu: () => {
           this.showExitMenu((choice) => {

@@ -13,7 +13,7 @@ import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
 import type { BeatorajaSkinConfig } from '@be-music/skin-beatoraja';
 import { parseBeatorajaCourseData } from '@be-music/player-engine/course';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse, PlayOptions } from '@be-music/player-scene-model';
-import { describe, expect, test, vi } from 'vite-plus/test';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
@@ -619,5 +619,39 @@ describe('the folder reload', () => {
     await h.route.showSelect();
     lastMade(h).options.on.reload!();
     expect(h.deps.library.reloadCharts).toHaveBeenCalledOnce();
+  });
+});
+
+describe('LR2’s held keys on the select screen', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test('key 4 held opens the chart’s ranking on the Leaderboard', async () => {
+    const open = vi.fn();
+    vi.stubGlobal('window', { open });
+    vi.stubGlobal('location', { hostname: 'play.be-music.app' });
+    const h = harness();
+    await h.route.showSelect();
+    lastMade(h).options.on.ranking!(chartEntry('a'));
+    expect(open).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/leaderboard\.be-music\.app\/charts\//u),
+      '_blank',
+      'noopener',
+    );
+  });
+
+  test('F3 + an arrow keeps the chart’s own level and gives the screen the library again', async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+    });
+    const chart = chartEntry('a');
+    const h = harness({ charts: [chart] });
+    await h.route.showSelect();
+    const scene = lastMade(h);
+    scene.options.on.levelEdit!(chart, 'level', 1);
+    expect(chart.playLevel).toBe(Number(String(chartEntry('a').playLevel ?? 0).match(/\d+/u)?.[0] ?? 0) + 1);
+    expect(values.size).toBe(1);
+    expect(scene.setLibrary).toHaveBeenCalledWith(h.deps.library.collection);
   });
 });

@@ -20,6 +20,7 @@ import {
   type CourseDefinitionGroup,
   type CourseMaker,
 } from '@be-music/player-browser/collection';
+import { applyChartLevelEdits, readChartLevelEdits } from '../chart-level-edits.ts';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
 import {
   skinFamilyRegistry,
@@ -573,6 +574,7 @@ export class LibraryService {
         onProgress: (progress) => applyLoadProgress(this.elements, progress),
       });
     }
+    applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
     if (this.courseGroups.length > 0) await this.refreshCourseFolders();
     await this.showSelect();
     this.setStatus(describeChartCollection(this.collection));
@@ -589,6 +591,8 @@ export class LibraryService {
     this.collection = await this.collectionStore.appendFromFiles(files, {
       onProgress: (progress) => applyLoadProgress(this.elements, progress),
     });
+    // The player's own difficulties and levels (LR2's F3 level edit) go over the charts' own.
+    applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
     // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
     // text is set by `processIncomingFiles` once both theme + songs land, so a mid-flight transient is plenty.
     if (this.collection.charts.length > 0) {
