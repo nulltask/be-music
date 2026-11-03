@@ -55,6 +55,18 @@ textarea {
 .shell.in-gameplay .player-service-header {
   display: none;
 }
+/* On a phone the row carries Install, Help, Settings and fullscreen too, so its gaps and the Sign in padding tighten. */
+@media (max-width: 639.98px) {
+  .player-service-header header > div {
+    column-gap: 0.5rem;
+  }
+  .player-service-header header nav {
+    gap: 2px;
+  }
+  .player-service-header [data-service-header='account'] {
+    padding-inline: 0.5rem;
+  }
+}
 
 /*
  * Installed, the window's title bar already names the app, so the header keeps only the Beta badge. With the window
@@ -1143,6 +1155,14 @@ textarea {
   text-overflow: ellipsis;
   line-height: 18px;
   height: 18px;
+}
+
+/* The install steps for Safari, numbered. */
+.install-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style: decimal;
+  line-height: 1.8;
 }
 
 /*
