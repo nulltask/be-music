@@ -55,6 +55,29 @@ textarea {
 .shell.in-gameplay .player-service-header {
   display: none;
 }
+
+/*
+ * Installed, the window's title bar already names the app, so the header keeps only the Beta badge. With the window
+ * controls overlay (a desktop install, `display_override`) there is no title bar: the header takes its place, clear of
+ * the window's own buttons, and drags the window by its empty space.
+ */
+@media (display-mode: standalone) {
+  .player-service-header header a[href='/'] {
+    display: none;
+  }
+}
+@media (display-mode: window-controls-overlay) {
+  .player-service-header header {
+    padding-left: env(titlebar-area-x, 0px);
+    padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+  .player-service-header header :is(a, button, [popover]) {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+}
 .player-main {
   position: relative;
   flex: 1 1 auto;
