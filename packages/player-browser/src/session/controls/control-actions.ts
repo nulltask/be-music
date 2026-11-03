@@ -265,6 +265,14 @@ export const CONTROL_ACTIONS = [
   { id: 'play.hidden-toggle', screen: 'play', label: 'HIDDEN+ on / off', defaults: both([code('KeyH')]) },
   { id: 'play.hidden-up', screen: 'play', label: 'HIDDEN+ up', defaults: both([code('KeyK')]) },
   { id: 'play.hidden-down', screen: 'play', label: 'HIDDEN+ down', defaults: both([code('KeyJ')]) },
+  // beatoraja's AUTO play speed while 1-4 are held, and LR2's skin moves with 1 / 2 / 6 + the arrows.
+  ...([1, 2, 3, 4] as const).map((key) => ({
+    id: `play.speed-${key}` as const,
+    screen: 'play' as const,
+    label: `AUTO speed ${(['×0.25', '×0.5', '×2', '×3'] as const)[key - 1]}`,
+    defaults: { beatoraja: [code(`Digit${key}`)] },
+    bare: true,
+  })),
   { id: 'play.m-sudden-down', screen: 'play', label: 'M-SUDDEN down', defaults: both([code('F3')]) },
   { id: 'play.m-sudden-up', screen: 'play', label: 'M-SUDDEN up', defaults: both([code('F4')]) },
   // The result screen.

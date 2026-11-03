@@ -281,3 +281,41 @@ describe('START and SELECT in a play', () => {
     expect(play.getHiSpeed()).toBe(2);
   });
 });
+
+describe('number keys in a play', () => {
+  const up = (play: PlaySession, code: string) => trackPlayKey(play, 'up', key(code));
+
+  test('LR2: 1 + an arrow moves the skin, 2 + an arrow scales it, and the play tells the host', () => {
+    const onSkinAdjustChange = vi.fn();
+    const play = new PlaySession({ onSkinAdjustChange });
+    handleSharedEngineExitKey(play, key('Digit1'));
+    handleSharedEngineExitKey(play, key('ArrowRight'));
+    handleSharedEngineExitKey(play, key('ArrowUp', { shiftKey: true }));
+    up(play, 'Digit1');
+    expect(play.skinAdjust).toEqual({ x: 1, y: -10, scale: 1 });
+    handleSharedEngineExitKey(play, key('Digit2'));
+    handleSharedEngineExitKey(play, key('ArrowUp'));
+    expect(play.skinAdjust.scale).toBeCloseTo(1.01);
+    expect(onSkinAdjustChange).toHaveBeenLastCalledWith(play.skinAdjust);
+    // With no number key held, the arrows are the hi-speed's again.
+    up(play, 'Digit2');
+    const hiSpeed = play.getHiSpeed();
+    handleSharedEngineExitKey(play, key('ArrowUp'));
+    expect(play.getHiSpeed()).not.toBe(hiSpeed);
+  });
+
+  test('beatoraja: AUTO plays faster while 3 is held, and goes back as it comes up', () => {
+    const play = new PlaySession({ autoPlay: true, controlScheme: 'beatoraja' });
+    const setTempo = vi.spyOn(play, 'setTempo').mockReturnValue(true);
+    vi.spyOn(play, 'getTempo').mockReturnValue(1);
+    handleSharedEngineExitKey(play, key('Digit3'));
+    expect(setTempo).toHaveBeenLastCalledWith(2);
+    up(play, 'Digit3');
+    expect(setTempo).toHaveBeenLastCalledWith(1);
+    // Not outside AUTO play.
+    const manual = new PlaySession({ controlScheme: 'beatoraja' });
+    const manualTempo = vi.spyOn(manual, 'setTempo');
+    handleSharedEngineExitKey(manual, key('Digit3'));
+    expect(manualTempo).not.toHaveBeenCalled();
+  });
+});

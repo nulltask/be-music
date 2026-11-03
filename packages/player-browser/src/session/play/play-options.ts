@@ -20,6 +20,16 @@ import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bu
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { ControlKeyOverrides, ControlScheme } from '../controls/control-buttons.ts';
 import type { ControlActionOverrides } from '../controls/control-actions.ts';
+
+/** How far the play skin is moved (design pixels) and scaled, as LR2's number keys + the arrows move it. */
+export interface SkinAdjust {
+  readonly x: number;
+  readonly y: number;
+  readonly scale: number;
+}
+
+/** The play skin where it is drawn. */
+export const NO_SKIN_ADJUST: SkinAdjust = { x: 0, y: 0, scale: 1 };
 import type { TempoPitchMode, TimeStretchAlgorithm } from '../../runtime/play-tempo.ts';
 import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
 
@@ -81,6 +91,13 @@ export interface PlaySessionOptions {
    * with it. Not fired for `PlaySession.setHiSpeed` writes, which come from the host.
    */
   onHiSpeedChange?: (hiSpeed: number, normalLevel?: number, floating?: boolean) => void;
+  /**
+   * Where the play skin is moved to and how far it is scaled (LR2's 1 / 2 + the arrows), in design pixels: the play
+   * starts with it, and reports each change through {@link onSkinAdjustChange} for the next play.
+   */
+  skinAdjust?: SkinAdjust;
+  /** The player moved or scaled the play skin (LR2's 1 / 2 + the arrows). */
+  onSkinAdjustChange?: (adjust: SkinAdjust) => void;
   /**
    * BGA display mode picked from the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). Defaults to `'ON'` so charts that
    * ship a BGA render it by default. With `'OFF'` the BGA layer stays empty for the entire play; with `'AUTOPLAY_ONLY'`

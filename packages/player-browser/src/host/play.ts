@@ -22,7 +22,7 @@ import type { GameplayRecorderResult } from '../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../recording/recording-format.ts';
 import type { AudioBusChannel, CompressorParams, CompressorStage, TunableCompressor } from '../runtime/audio-bus.ts';
 import type { AudioOwner, AudioService } from '../runtime/audio-service.ts';
-import type { PlayDisposeOptions, PlaySessionOptions } from '../session/play/play-options.ts';
+import type { PlayDisposeOptions, PlaySessionOptions, SkinAdjust } from '../session/play/play-options.ts';
 import type { PixiSceneHost } from './scene-host.ts';
 import { PlaySceneSession } from '../session/play/play-scene-session.ts';
 import { PlaySession } from '../session/play/play-session.ts';
@@ -60,6 +60,7 @@ export type PlaySceneSettings = Omit<
   | 'onChartFinished'
   | 'onJudgeTimingChange'
   | 'onHiSpeedChange'
+  | 'onSkinAdjustChange'
   | 'onTempoChange'
   | 'replay'
   | 'preResolved'
@@ -91,6 +92,8 @@ export interface PlaySceneEvents {
   /** The play's tempo changed (a live change, or a replay following its log). */
   tempo?(tempo: number): void;
   judgeTiming?(judgeTimingMs: number): void;
+  /** The player moved or scaled the play skin (LR2's 1 / 2 + the arrows), to keep for the next play. */
+  skinAdjust?(adjust: SkinAdjust): void;
 }
 
 export interface PlaySceneOptions extends SessionSceneOptions {
@@ -708,6 +711,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
           }
         : {}),
       ...(on.tempo !== undefined ? { onTempoChange: (tempo: number) => on.tempo?.(tempo) } : {}),
+      ...(on.skinAdjust !== undefined ? { onSkinAdjustChange: (adjust: SkinAdjust) => on.skinAdjust?.(adjust) } : {}),
     },
     theme,
   );

@@ -221,6 +221,11 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li><kbd>Pause</kbd> or <kbd>Tab</kbd> pauses / resumes.</li>
               <li><kbd>F5</kbd> restarts the current chart.</li>
               <li>
+                LR2 skins: hold <kbd>1</kbd> / <kbd>2</kbd> with an arrow to move / scale the play skin, or
+                <kbd>6</kbd> / <kbd>7</kbd> to raise the 1P / 2P lanes. beatoraja skins: in AUTO play, hold
+                <kbd>1</kbd>–<kbd>4</kbd> to play slower or faster.
+              </li>
+              <li>
                 On every screen, <kbd>F4</kbd> switches full screen and <kbd>F6</kbd> takes a screenshot;
                 <kbd>F7</kbd> (<kbd>F1</kbd> on beatoraja skins) shows the frame rate.
               </li>
@@ -398,6 +403,15 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li>AUTO プレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
               <li><kbd>Pause</kbd> か <kbd>Tab</kbd> でポーズ / 再開。</li>
               <li><kbd>F5</kbd> で現在の譜面をリスタート。</li>
+              <li>
+                LR2 スキン: <kbd>1</kbd> / <kbd>2</kbd> を押しながら矢印でプレイのスキンを動かす / 拡大縮小、<kbd
+                  >6</kbd
+                >
+                / <kbd>7</kbd> で 1P / 2P のレーンを上げ下げ。beatoraja スキン: AUTO プレイ中に <kbd>1</kbd>〜<kbd
+                  >4</kbd
+                >
+                を押している間だけ遅く / 速く再生します。
+              </li>
               <li>
                 どの画面でも <kbd>F4</kbd> でフルスクリーンを切り替え、<kbd>F6</kbd> でスクリーンショットを撮り、<kbd
                   >F7</kbd
