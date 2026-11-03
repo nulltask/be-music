@@ -357,6 +357,12 @@ export function releaseAllTouchLanes(ctx: PlayInputContext): void {
 }
 
 /**
+ * The physical input a touch lane records in the replay (`ReplayInputEvent.code`): its tokens are the lane's keyboard
+ * key, so only this tells a tap from a key press.
+ */
+export const TOUCH_INPUT_CODE = 'touch';
+
+/**
  * Forwards touch presses / releases to the engine exactly as the keyboard runtime forwards keys: a release as a
  * `kitty-state` release, a press as one `lane-input` per lane (so two lanes tapped together judge two notes) plus a
  * `kitty-state` press that keeps the lane held for long notes and the key beam. `timeStamp` is the event's
@@ -372,14 +378,30 @@ function pushTouchLaneChange(
   const pressedAt = performance.timeOrigin + timeStamp;
   const releaseTokens = resolveTouchTokens(ctx, change.released);
   if (releaseTokens.length > 0) {
-    signals.pushCommand({ kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens, pressedAt });
+    signals.pushCommand({
+      kind: 'kitty-state',
+      pressTokens: [],
+      repeatTokens: [],
+      releaseTokens,
+      code: TOUCH_INPUT_CODE,
+      pressedAt,
+    });
   }
   const pressTokens = resolveTouchTokens(ctx, change.pressed);
   if (pressTokens.length === 0) return;
   // A finger has no turning direction: `spin: null` keeps the engine from reading one off the lane's key token, so a
   // fresh tap on a held back-spin scratch turns it back.
-  for (const token of pressTokens) signals.pushCommand({ kind: 'lane-input', tokens: [token], pressedAt, spin: null });
-  signals.pushCommand({ kind: 'kitty-state', pressTokens, repeatTokens: [], releaseTokens: [], pressedAt });
+  for (const token of pressTokens) {
+    signals.pushCommand({ kind: 'lane-input', tokens: [token], code: TOUCH_INPUT_CODE, pressedAt, spin: null });
+  }
+  signals.pushCommand({
+    kind: 'kitty-state',
+    pressTokens,
+    repeatTokens: [],
+    releaseTokens: [],
+    code: TOUCH_INPUT_CODE,
+    pressedAt,
+  });
 }
 
 /** The input tokens pressing `channels`: each lane binding's first token, the one its key on the keyboard sends. */

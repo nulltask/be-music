@@ -48,8 +48,8 @@ function makeReplay(): BeMusicReplay {
       ],
     },
     inputs: [
-      { seq: 0, timeUs: 499_000, action: 'down', channels: ['11'], tokens: ['z'] },
-      { seq: 1, timeUs: 520_000, action: 'up', channels: ['11', '12'] },
+      { seq: 0, timeUs: 499_000, action: 'down', channels: ['11'], tokens: ['z'], code: 'KeyZ' },
+      { seq: 1, timeUs: 520_000, action: 'up', channels: ['11', '12'], code: 'touch' },
       { seq: 3, timeUs: 600_000, action: 'down', channels: ['16'], tokens: ['ctrl-left'], spin: 'ccw' },
       { seq: 2, timeUs: 640_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
     ],
@@ -280,6 +280,20 @@ describe('replay format', () => {
         }),
       ),
     ).toThrow("inputs[0].inferred: expected true on an 'up'");
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.inputs[0].code = '';
+        }),
+      ),
+    ).toThrow('inputs[0].code: expected a non-empty string');
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.inputs[0].code = 90;
+        }),
+      ),
+    ).toThrow('inputs[0].code: expected a non-empty string');
     expect(() =>
       parseReplay(
         corrupt((value) => {

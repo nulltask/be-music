@@ -48,6 +48,11 @@ export type PlayerInputCommand =
        */
       spin?: ScratchSpin | null;
       /**
+       * The physical input behind the press, recorded in the replay (`ReplayInputEvent.code`): a keyboard's
+       * `KeyboardEvent.code`, or `'touch'`. Omitted by hosts that have none (a terminal).
+       */
+      code?: string;
+      /**
        * Wall-clock-ms snapshot of the physical key press (`performance.timeOrigin + performance.now()`-style,
        * i.e. `Date.now()`-equivalent with sub-ms precision). The runtime adapter (web / node) sets this the
        * moment the OS-level event handler fires; the engine subtracts the wall-clock delta against this when
@@ -70,6 +75,8 @@ export type PlayerInputCommand =
       pressTokens: string[];
       repeatTokens: string[];
       releaseTokens: string[];
+      /** The physical input behind the event (`lane-input.code`); the replay records it on the release. */
+      code?: string;
       /** Wall-clock-ms snapshot of the underlying physical event. Same domain as `lane-input.pressedAt`. */
       pressedAt?: number;
     };
