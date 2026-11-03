@@ -344,8 +344,8 @@ export function drawLR2FallbackJudge(ctx: LR2PlayElementsContext, seconds: numbe
   const play = ctx.play;
   if (hidesLR2Judge(ctx)) return;
   if (!play.lastJudge || seconds > play.lastJudgeUntil || hasSkinnedJudge(ctx.skin, play.lastJudge)) return;
-  const judge = ctx.textLayerPool.acquireText();
   const style = ctx.text.fallbackJudgeStyle();
+  const judge = ctx.textLayerPool.acquireText(play.lastJudge, style);
   if (judge.style !== style) judge.style = style;
   judge.text = play.lastJudge;
   judge.label = `fallback-judge[${play.lastJudge}]`;
@@ -448,8 +448,8 @@ function drawText(ctx: LR2PlayElementsContext, text: LR2TextElement): void {
   }
   const fontSize = Math.max(8, Math.min(64, h * 0.8));
   const tint = (interpolated.r << 16) | (interpolated.g << 8) | interpolated.b;
-  const node = ctx.skinLayerPool.acquireText();
   const style = ctx.text.textStyle(text.st, fontSize, tint);
+  const node = ctx.skinLayerPool.acquireText(value, style);
   if (node.style !== style) node.style = style;
   node.text = value;
   node.label = drawLabel(text, 'text', text.st);
