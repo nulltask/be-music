@@ -61,7 +61,7 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   expect(PLAYER_APP_HTML).not.toContain('id="account-chip"');
   expect(PLAYER_APP_HTML).not.toContain('player-brand');
   expect(PLAYER_APP_HTML).toContain(
-    '<h2 class="help-modal-title" id="help-modal-title"><span>Be-Music Play</span><span class="badge" data-variant="outline">Beta</span></h2>',
+    '<h2 class="flex items-center gap-2" id="help-modal-title"><span>Be-Music Play</span><span class="badge" data-variant="outline">Beta</span></h2>',
   );
   expect(PLAYER_APP_HTML.match(/<span class="badge/g)).toHaveLength(2);
 });
@@ -81,4 +81,24 @@ test('uses chart and replay vocabulary in bilingual help', async () => {
   );
   expect(PLAYER_APP_HTML).not.toContain('is a beta:');
   expect(PLAYER_APP_HTML).not.toContain('ベータ版');
+});
+
+test('builds Help as a Basecoat dialog with Basecoat tabs', async () => {
+  const { PLAYER_APP_HTML } = await import('./dom-template.ts');
+  const help = PLAYER_APP_HTML.slice(
+    PLAYER_APP_HTML.indexOf('<dialog class="dialog help-dialog" id="help-modal"'),
+    PLAYER_APP_HTML.indexOf('</dialog>', PLAYER_APP_HTML.indexOf('id="help-modal"')),
+  );
+  expect(help).toContain('aria-labelledby="help-modal-title" aria-describedby="help-modal-description"');
+  expect(help).toContain('<section class="tabs help-tabs">');
+  expect(help).toContain('<nav role="tablist" aria-orientation="horizontal">');
+  expect(help.match(/role="tab" /g)).toHaveLength(3);
+  expect(help).toContain('id="help-tab-usage" aria-controls="help-pane-usage" aria-selected="true" tabindex="0"');
+  expect(help.match(/role="tabpanel"/g)).toHaveLength(3);
+  expect(help).toContain(
+    'id="help-pane-oss" aria-labelledby="help-tab-oss" tabindex="-1" aria-selected="false" hidden',
+  );
+  expect(help.match(/class="button-group help-lang-switch"/g)).toHaveLength(2);
+  expect(help).toContain('<button type="button" id="help-modal-close" aria-label="Close"');
+  expect(help).not.toContain('help-modal-backdrop');
 });

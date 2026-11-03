@@ -405,74 +405,22 @@ export const PLAYER_APP_HTML = `
       - Open source: the acknowledgement list the build writes
         (one card per third-party package in the bundle, with
         its license text; scripts/acknowledgements.ts).
-      Hidden by default; toggled via the \`.visible\` class on
-      the overlay.
+      A Basecoat dialog and tabs; help-modal.ts opens it with
+      \`showModal()\` and switches the tabs.
     -->
-    <div class="help-modal" id="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-modal-title" aria-hidden="true">
-      <div class="help-modal-backdrop" id="help-modal-backdrop"></div>
-      <div class="card help-modal-card gap-4 overflow-hidden p-6">
-        <header class="help-modal-header">
-          <div>
-            <div class="help-modal-eyebrow" data-i18n="helpAbout">Help &amp; About</div>
-            <h2 class="help-modal-title" id="help-modal-title"><span>Be-Music Play</span><span class="badge" data-variant="outline">Beta</span></h2>
-          </div>
-          <button class="btn help-modal-close" data-size="icon-sm" data-variant="ghost" id="help-modal-close" type="button" aria-label="Close" data-i18n-aria="close">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M7 7 L17 17 M17 7 L7 17"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
+    <dialog class="dialog help-dialog" id="help-modal" aria-labelledby="help-modal-title" aria-describedby="help-modal-description">
+      <div>
+        <header>
+          <h2 class="flex items-center gap-2" id="help-modal-title"><span>Be-Music Play</span><span class="badge" data-variant="outline">Beta</span></h2>
+          <p id="help-modal-description" data-i18n="helpAbout">Help &amp; About</p>
         </header>
-        <div class="help-modal-tabs" role="tablist">
-          <button
-            class="btn help-modal-tab is-active" data-size="sm" data-variant="ghost"
-            id="help-tab-usage"
-            type="button"
-            role="tab"
-            aria-selected="true"
-            aria-controls="help-pane-usage"
-            data-pane="usage"
-            data-i18n="usage"
-          >
-            Usage
-          </button>
-          <button
-            class="btn help-modal-tab" data-size="sm" data-variant="ghost"
-            id="help-tab-options"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="help-pane-options"
-            data-pane="options"
-            data-i18n="options"
-          >
-            Options
-          </button>
-          <button
-            class="btn help-modal-tab" data-size="sm" data-variant="ghost"
-            id="help-tab-oss"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="help-pane-oss"
-            data-pane="oss"
-            data-i18n="openSource"
-          >
-            Open source
-          </button>
-        </div>
-        <section
-          class="help-modal-pane is-active"
-          id="help-pane-usage"
-          role="tabpanel"
-          aria-labelledby="help-tab-usage"
-          tabindex="0"
-        >
+        <section class="tabs help-tabs">
+          <nav role="tablist" aria-orientation="horizontal">
+            <button type="button" role="tab" id="help-tab-usage" aria-controls="help-pane-usage" aria-selected="true" tabindex="0" data-pane="usage" data-i18n="usage">Usage</button>
+            <button type="button" role="tab" id="help-tab-options" aria-controls="help-pane-options" aria-selected="false" tabindex="-1" data-pane="options" data-i18n="options">Options</button>
+            <button type="button" role="tab" id="help-tab-oss" aria-controls="help-pane-oss" aria-selected="false" tabindex="-1" data-pane="oss" data-i18n="openSource">Open source</button>
+          </nav>
+          <div role="tabpanel" id="help-pane-usage" aria-labelledby="help-tab-usage" tabindex="-1" aria-selected="true">
           <!--
             Language switcher. The two \`.help-lang\` blocks below
             carry parallel translations; only one is shown at a
@@ -480,18 +428,9 @@ export const PLAYER_APP_HTML = `
             at boot — \`ja-*\` users land on Japanese, everyone else
             on English.
           -->
-          <div class="help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
-            <button
-              class="btn help-lang-toggle is-active" data-size="sm" data-variant="ghost"
-              type="button"
-              data-lang="en"
-              aria-pressed="true"
-            >
-              English
-            </button>
-            <button class="btn help-lang-toggle" data-size="sm" data-variant="ghost" type="button" data-lang="ja" aria-pressed="false">
-              日本語
-            </button>
+          <div class="button-group help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
+            <button class="btn help-lang-toggle" data-size="sm" data-variant="secondary" type="button" data-lang="en" aria-pressed="true">English</button>
+            <button class="btn help-lang-toggle" data-size="sm" data-variant="outline" type="button" data-lang="ja" aria-pressed="false">日本語</button>
           </div>
           <div class="help-lang is-active" data-lang="en">
             <section class="help-about">
@@ -745,28 +684,12 @@ export const PLAYER_APP_HTML = `
             </ul>
 
           </div>
-        </section>
-        <section
-          class="help-modal-pane"
-          id="help-pane-options"
-          role="tabpanel"
-          aria-labelledby="help-tab-options"
-          tabindex="0"
-          hidden
-        >
+          </div>
+          <div role="tabpanel" id="help-pane-options" aria-labelledby="help-tab-options" tabindex="-1" aria-selected="false" hidden>
           <!-- The language switch follows the Usage one: every \`.help-lang-toggle\` and \`.help-lang\` share one state. -->
-          <div class="help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
-            <button
-              class="btn help-lang-toggle is-active" data-size="sm" data-variant="ghost"
-              type="button"
-              data-lang="en"
-              aria-pressed="true"
-            >
-              English
-            </button>
-            <button class="btn help-lang-toggle" data-size="sm" data-variant="ghost" type="button" data-lang="ja" aria-pressed="false">
-              日本語
-            </button>
+          <div class="button-group help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
+            <button class="btn help-lang-toggle" data-size="sm" data-variant="secondary" type="button" data-lang="en" aria-pressed="true">English</button>
+            <button class="btn help-lang-toggle" data-size="sm" data-variant="outline" type="button" data-lang="ja" aria-pressed="false">日本語</button>
           </div>
           <div class="help-lang is-active" data-lang="en">
             <h3 class="help-section-title">Debug Menu</h3>
@@ -1314,25 +1237,22 @@ export const PLAYER_APP_HTML = `
               </li>
             </ul>
           </div>
-        </section>
-        <section
-          class="help-modal-pane"
-          id="help-pane-oss"
-          role="tabpanel"
-          aria-labelledby="help-tab-oss"
-          tabindex="0"
-          hidden
-        >
+          </div>
+          <div role="tabpanel" id="help-pane-oss" aria-labelledby="help-tab-oss" tabindex="-1" aria-selected="false" hidden>
           <p class="help-pane-intro" data-i18n="ossIntro">
             This player is built on the open source libraries listed below: every third-party package
             this build includes. Each entry keeps the copyright / license text the package ships, or its
             upstream text where the package ships none; open it to read.
           </p>
           <ol class="help-oss-list" id="help-oss-list"></ol>
+          </div>
         </section>
+        <footer class="service-build-footer">${renderBuildInfo(playBuildInfo())}</footer>
+        <button type="button" id="help-modal-close" aria-label="Close" data-i18n-aria="close">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
       </div>
-      <footer class="service-build-footer">${renderBuildInfo(playBuildInfo())}</footer>
-    </div>
+    </dialog>
   </main>
   ${renderServiceFooter({
     current: 'play',
