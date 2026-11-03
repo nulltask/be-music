@@ -243,6 +243,24 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.hellChargeZigzag(120, 40, 0, 600, { flow: 1, nowMs: 12_345 });
     },
   });
+  define('player-skin-sdk.noteHeightForLane', {
+    run: () => {
+      skinSdkAPI.noteHeightForLane(41);
+    },
+  });
+  define('player-skin-sdk.findWhiteLaneWidth', {
+    run: () => {
+      skinSdkAPI.findWhiteLaneWidth([
+        { kind: 'scratch', w: 41 },
+        { kind: 'white', w: 24 },
+      ]);
+    },
+  });
+  define('player-skin-sdk.resolveNoteHeight', {
+    run: () => {
+      skinSdkAPI.resolveNoteHeight(41, 24);
+    },
+  });
   define('player-skin-sdk.backSpinChevron', {
     run: () => {
       skinSdkAPI.backSpinChevron(100, 48, 200, 12);
