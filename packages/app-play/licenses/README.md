@@ -2,7 +2,7 @@
 
 # License texts for packages that ship none
 
-The Help's **Open source** list shows each bundled package's own `LICENSE` file. These packages publish none to npm, so
+The Help's **Acknowledgements** list shows each bundled package's own `LICENSE` file. These packages publish none to npm, so
 their text is kept here, taken from their upstream repositories, and used in its place. A file is named after the
 package with `/` replaced by `__` (`@ffmpeg/core` → `@ffmpeg__core.txt`).
 

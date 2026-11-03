@@ -427,12 +427,10 @@ export const PLAYER_APP_HTML = `
       </div>
     </dialog>
     <!--
-      Help modal. Three tabs:
+      Help modal. Two tabs:
       - Usage: drag-drop instructions, keyboard shortcuts,
         gameplay keys and the result screen.
-      - Options: the Options dialog, every control in it, play
-        options and recording.
-      - Open source: the acknowledgement list the build writes
+      - Acknowledgements: the acknowledgement list the build writes
         (one card per third-party package in the bundle, with
         its license text; scripts/acknowledgements.ts).
       A Basecoat dialog and tabs; help-modal.ts opens it with
@@ -442,26 +440,20 @@ export const PLAYER_APP_HTML = `
       <div>
         <header>
           <h2 class="flex items-center gap-2" id="help-modal-title"><span>Be-Music Play</span><span class="badge" data-variant="outline">Beta</span></h2>
-          <p id="help-modal-description" data-i18n="helpAbout">Help &amp; About</p>
+          <div class="help-heading-row">
+            <p id="help-modal-description" data-i18n="helpAbout">Help &amp; About</p>
+            <div class="button-group help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
+              <button class="btn help-lang-toggle" data-size="sm" data-variant="secondary" type="button" data-lang="en" aria-pressed="true">English</button>
+              <button class="btn help-lang-toggle" data-size="sm" data-variant="outline" type="button" data-lang="ja" aria-pressed="false">日本語</button>
+            </div>
+          </div>
         </header>
         <section class="tabs help-tabs">
           <nav role="tablist" aria-orientation="horizontal">
             <button type="button" role="tab" id="help-tab-usage" aria-controls="help-pane-usage" aria-selected="true" tabindex="0" data-pane="usage" data-i18n="usage">Usage</button>
-            <button type="button" role="tab" id="help-tab-options" aria-controls="help-pane-options" aria-selected="false" tabindex="-1" data-pane="options" data-i18n="options">Options</button>
-            <button type="button" role="tab" id="help-tab-oss" aria-controls="help-pane-oss" aria-selected="false" tabindex="-1" data-pane="oss" data-i18n="openSource">Open source</button>
+            <button type="button" role="tab" id="help-tab-oss" aria-controls="help-pane-oss" aria-selected="false" tabindex="-1" data-pane="oss" data-i18n="acknowledgements">Acknowledgements</button>
           </nav>
           <div role="tabpanel" id="help-pane-usage" aria-labelledby="help-tab-usage" tabindex="-1" aria-selected="true">
-          <!--
-            Language switcher. The two \`.help-lang\` blocks below
-            carry parallel translations; only one is shown at a
-            time. Default selection comes from \`navigator.language\`
-            at boot — \`ja-*\` users land on Japanese, everyone else
-            on English.
-          -->
-          <div class="button-group help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
-            <button class="btn help-lang-toggle" data-size="sm" data-variant="secondary" type="button" data-lang="en" aria-pressed="true">English</button>
-            <button class="btn help-lang-toggle" data-size="sm" data-variant="outline" type="button" data-lang="ja" aria-pressed="false">日本語</button>
-          </div>
           <div class="help-lang is-active" data-lang="en">
             <section class="help-about">
               <p class="help-about-summary">
@@ -715,12 +707,18 @@ export const PLAYER_APP_HTML = `
 
           </div>
           </div>
-          <div role="tabpanel" id="help-pane-options" aria-labelledby="help-tab-options" tabindex="-1" aria-selected="false" hidden>
-          <!-- The language switch follows the Usage one: every \`.help-lang-toggle\` and \`.help-lang\` share one state. -->
-          <div class="button-group help-lang-switch" role="group" aria-label="Language" data-i18n-aria="language">
-            <button class="btn help-lang-toggle" data-size="sm" data-variant="secondary" type="button" data-lang="en" aria-pressed="true">English</button>
-            <button class="btn help-lang-toggle" data-size="sm" data-variant="outline" type="button" data-lang="ja" aria-pressed="false">日本語</button>
+          <div role="tabpanel" id="help-pane-oss" aria-labelledby="help-tab-oss" tabindex="-1" aria-selected="false" hidden>
+          <ol class="help-oss-list" id="help-oss-list"></ol>
           </div>
+        </section>
+        <footer class="service-build-footer">${renderBuildInfo(playBuildInfo())}</footer>
+        <button type="button" id="help-modal-close" aria-label="Close" data-i18n-aria="close">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+    </dialog>
+    <!-- Options tooltip descriptions, kept outside the Help dialog. -->
+    <div id="options-help-content" hidden>
           <div class="help-lang is-active" data-lang="en">
             <h3 class="help-section-title">Options</h3>
             <ul class="help-list">
@@ -1012,7 +1010,7 @@ export const PLAYER_APP_HTML = `
               </li>
               <li>
                 Click <strong>Record gameplay video</strong> to capture the next play as a downloadable video (MP4 · H.264 unless <strong>Video format</strong> says otherwise) (requires
-                MediaRecorder support — see Open source / browser checks).
+                MediaRecorder support — see Acknowledgements / browser checks).
               </li>
               <li>
                 The active skin's <strong>PLAY OPTION</strong> panel in chart select sets the same options (Random /
@@ -1302,7 +1300,7 @@ export const PLAYER_APP_HTML = `
                 <strong>Play options</strong> には、レーンのオプション (RANDOM、S-RANDOM、SCATTER など)、ゲージ、バトル、譜面の変更、HS-FIX、レーンカバーがあります。<strong>Play options → Judgment windows</strong> で選んだ LR2 や beatoraja の仕様に従います。リプレイにはプレイしたときのオプションが記録されます。
               </li>
               <li>
-                <strong>Record gameplay video</strong> ボタンを押すと、次の再生を動画（<strong>Video format</strong> で選んだ形式、既定は MP4 · H.264）として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
+                <strong>Record gameplay video</strong> ボタンを押すと、次の再生を動画（<strong>Video format</strong> で選んだ形式、既定は MP4 · H.264）として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Acknowledgements / Browser checks を参照)。
               </li>
               <li>
                 選曲画面で現在のスキンの <strong>PLAY OPTION</strong> パネルからも、同じオプション (Random / Mirror / Auto-scratch / ゲージ / hi-speed など) を設定できます。
@@ -1310,21 +1308,7 @@ export const PLAYER_APP_HTML = `
             </ul>
           </div>
           </div>
-          <div role="tabpanel" id="help-pane-oss" aria-labelledby="help-tab-oss" tabindex="-1" aria-selected="false" hidden>
-          <p class="help-pane-intro" data-i18n="ossIntro">
-            This player is built on the open source libraries listed below: every third-party package
-            this build includes. Each entry keeps the copyright / license text the package ships, or its
-            upstream text where the package ships none; open it to read.
-          </p>
-          <ol class="help-oss-list" id="help-oss-list"></ol>
-          </div>
-        </section>
-        <footer class="service-build-footer">${renderBuildInfo(playBuildInfo())}</footer>
-        <button type="button" id="help-modal-close" aria-label="Close" data-i18n-aria="close">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-        </button>
-      </div>
-    </dialog>
+
     <!--
       Options: every player setting, a Basecoat dialog with one tab per
       area. ui/options/ (OptionsDialog.buildGUI) fills #options-modal-body;
