@@ -114,14 +114,14 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await sample(['blue', 'blue']);
     await player.page.screenshot({ path: info.outputPath('held-at-boundary.png') });
     await player.releaseKey('KeyZ');
-    await player.key('Space');
+    await player.key('Pause');
     pressed = await player.pressPaused('KeyZ');
     await sample(['green', 'blue']);
     await player.resumeUntil(pressed + 0.6, 'aliased green frame');
     await sample(['blue', 'green']);
     await player.page.screenshot({ path: info.outputPath('second-stage.png') });
     await player.releaseKey('KeyZ');
-    await player.key('Space');
+    await player.key('Pause');
     await expect.poll(() => colors(player), { timeout: 3000 }).toEqual(['blue', 'blue']);
   });
 }

@@ -162,17 +162,17 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await sample('green');
     await player.resumeUntil(pressed + 1.6, 'end of the first sequence');
     await sample('blue');
-    await player.key('Space');
+    await player.key('Pause');
     pressed = await player.pressPaused('KeyZ', 5.98);
     await player.releaseKey('KeyZ');
     await sample('black');
     await player.resumeUntil(pressed + 1, 'end of the second sequence');
     await sample('blue');
-    await player.key('Space');
+    await player.key('Pause');
     const missed = await player.keyWhen(
       (state) => (state.play?.judged?.poor ?? 0) >= 1,
       undefined,
-      'Space',
+      'Pause',
       'sequence-backed MISS selection',
     );
     const missedAt = missed.play?.seconds ?? 0;
@@ -273,16 +273,16 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     const missed = await player.keyWhen(
       (state) => (state.play?.judged?.poor ?? 0) >= 1,
       undefined,
-      'Space',
+      'Pause',
       'first MISS frame',
     );
     await expect.poll(() => colors(player)).toEqual(['dark-red', 'dark-red', 'dark-red', 'dark-red']);
     const afterEnd = missed.play!.seconds! + 0.25;
-    await player.key('Space');
+    await player.key('Pause');
     await player.keyWhen(
       (state, target) => (state.play?.seconds ?? 0) >= target,
       afterEnd,
-      'Space',
+      'Pause',
       'past 200 ms end within the 500 ms miss window',
     );
     await expect.poll(() => colors(player)).toEqual(['blue', 'blue', 'blue', 'blue']);
