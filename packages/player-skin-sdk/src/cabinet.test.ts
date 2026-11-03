@@ -119,11 +119,70 @@ describe('resolveCabinetLayout for double play', () => {
     expect(cabinet.center!.x + cabinet.center!.w).toBeLessThanOrEqual(sides['2P']!.left);
   });
 
-  it('leaves the keyboard modes at the margin, in the single-play arrangement', () => {
+  it.each([false, true])('leaves keyboard modes at the margin (twoPlayer=%s)', (twoPlayer) => {
     const keys = Array.from({ length: 50 }, (_, index) => `${index < 25 ? '1' : '2'}${index.toString(36)}`);
-    const keyboard = resolveGameplayLayout({ laneChannels: keys, playVariant: '48' }, cabinetStage);
+    const keyboard = resolveGameplayLayout({ laneChannels: keys, playVariant: '48', twoPlayer }, cabinetStage);
     expect(keyboard.playfield.left).toBeLessThan(40);
     expect(resolveCabinetLayout(keyboard).doublePlay).toBe(false);
+  });
+});
+
+describe('two-player cabinet layout', () => {
+  it.each([
+    ['14', DP14],
+    ['10', ['16', '11', '12', '13', '14', '15', '21', '22', '23', '24', '25', '26']],
+  ] as const)('places %s banks on opposite edges with a central monitor', (playVariant, laneChannels) => {
+    const layout = resolveGameplayLayout({ laneChannels, playVariant, twoPlayer: true }, cabinetStage);
+    const cabinet = resolveCabinetLayout(layout);
+    const one = layout.playfield.sides['1P']!;
+    const two = layout.playfield.sides['2P']!;
+    expect(layout.twoPlayer).toBe(true);
+    expect(cabinet.doublePlay).toBe(false);
+    expect(one.left).toBe(33);
+    expect(two.right).toBe(cabinetStage.width - 33);
+    expect(layout.bga).toEqual(cabinet.bga);
+    expect(cabinet.bga.x).toBeGreaterThan(one.right);
+    expect(cabinet.bga.x + cabinet.bga.w).toBeLessThan(two.left);
+    expect(cabinet.bga.x + cabinet.bga.w / 2).toBe(cabinetStage.width / 2);
+    expect(cabinet.gauge.x).toBe(one.left);
+    expect(cabinet.gauge.w).toBe(one.right - one.left);
+    expect(cabinet.secondSide!.gauge.x).toBe(two.left);
+    expect(cabinet.secondSide!.gauge.w).toBe(two.right - two.left);
+    expect(cabinet.gauge.y).toBeGreaterThan(cabinet.keys.y + cabinet.keys.h);
+    expect(cabinet.center).toBeUndefined();
+    expect(cabinet.graph).toBeUndefined();
+    const panels = [
+      cabinet.time!,
+      cabinet.controls!,
+      cabinet.stage,
+      cabinet.score,
+      cabinet.secondSide!.score,
+      cabinet.maxCombo!,
+      cabinet.secondSide!.maxCombo,
+      cabinet.bga,
+      cabinet.gauge,
+      cabinet.secondSide!.gauge,
+      cabinet.hiSpeed,
+      cabinet.secondSide!.hiSpeed,
+      cabinet.players,
+      cabinet.judge,
+      cabinet.bpm,
+      cabinet.tempo,
+    ];
+    for (const [index, panel] of panels.entries()) {
+      expect(inside(panel, cabinetStage)).toBe(true);
+      expect(panel.w).toBeGreaterThan(0);
+      expect(panel.h).toBeGreaterThan(0);
+      for (const other of panels.slice(index + 1)) expect(overlaps(panel, other)).toBe(false);
+    }
+    // The scratch stays outside each bank, and keys retain their single-play widths.
+    const ordered = [...layout.lanes].sort((a, b) => a.x - b.x);
+    expect(ordered[0]!.channel).toBe('16');
+    expect(ordered.at(-1)!.channel).toBe('26');
+    expect(layout.lanes.find((lane) => lane.channel === '11')!.w).toBe(24);
+    const dp = resolveGameplayLayout({ laneChannels, playVariant }, cabinetStage);
+    expect(resolveCabinetLayout(dp).doublePlay).toBe(true);
+    expect(dp.playfield.right - dp.playfield.left).toBeLessThan(layout.playfield.right - layout.playfield.left);
   });
 });
 

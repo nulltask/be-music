@@ -34,6 +34,13 @@ export const cabinetStyles: CSSResult = css`
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .cabinet[data-two-player] .stage-band {
+    padding-inline: calc(var(--px) * 3);
+  }
+  .cabinet[data-two-player] .side-chart {
+    text-align: center;
+    font-weight: 700;
+  }
   .cabinet dl {
     gap: calc(var(--px) * 1) calc(var(--px) * 6);
     font-size: 1em;
@@ -92,6 +99,7 @@ export const cabinetStyles: CSSResult = css`
     font-size: 1.6em;
   }
   /* The double-play row under the keys is short, and the chart panel a narrow stack. */
+  .cabinet[data-two-player] .figure strong,
   .cabinet[data-double-play] .figure strong {
     font-size: 1.5em;
   }
@@ -139,27 +147,33 @@ export const cabinetStyles: CSSResult = css`
     width: auto;
   }
   /* The double-play BPM row is short: MIN, the BPM and MAX side by side. */
+  .cabinet[data-two-player] .bpm,
   .cabinet[data-double-play] .bpm {
     grid-template: 'min number max' auto 'min label max' auto / 1fr auto 1fr;
     align-items: center;
     padding-block: 0 !important;
   }
+  .cabinet[data-two-player] .bpm strong,
   .cabinet[data-double-play] .bpm strong {
     grid-area: number;
     font-size: 1.8em;
     line-height: 1;
   }
+  .cabinet[data-two-player] .bpm-range,
   .cabinet[data-double-play] .bpm-range {
     display: contents;
   }
+  .cabinet[data-two-player] .bpm-range > :first-child,
   .cabinet[data-double-play] .bpm-range > :first-child {
     grid-area: min;
     justify-self: start;
   }
+  .cabinet[data-two-player] .bpm-range > .eyebrow,
   .cabinet[data-double-play] .bpm-range > .eyebrow {
     grid-area: label;
     text-align: center;
   }
+  .cabinet[data-two-player] .bpm-range > :last-child,
   .cabinet[data-double-play] .bpm-range > :last-child {
     grid-area: max;
     justify-self: end;

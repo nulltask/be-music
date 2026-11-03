@@ -67,7 +67,8 @@ describe('PlaySceneSession', () => {
 
   test('a view that shows the ghost draws the playfield it presents, brought to the frame’s second', () => {
     const play = new PlaySession();
-    const presented = { presented: true } as never;
+    const secondState = { gauge: 80 };
+    const presented = { presented: true, secondPlayer: { playState: secondState } } as never;
     const ghost = { drawsOnPlayfield: true, update: vi.fn(), present: vi.fn(() => presented) };
     play.ghost = ghost;
     let shows = false;
@@ -80,7 +81,10 @@ describe('PlaySceneSession', () => {
     expect(session.frame(0).playfield).toBe(play);
     expect(ghost.update).not.toHaveBeenCalled();
     shows = true;
-    expect(session.frame(10).playfield).toBe(presented);
+    const frame = session.frame(10);
+    expect(frame.playfield).toBe(presented);
+    expect(frame.state2P).toBe(secondState);
+    expect(play.secondPlayer).toBeUndefined();
     expect(ghost.present).toHaveBeenCalledWith(play);
     expect(ghost.update).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
   });

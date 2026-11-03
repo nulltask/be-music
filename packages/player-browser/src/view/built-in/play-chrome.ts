@@ -78,6 +78,7 @@ export interface LaneGeometryContext {
     | {
         laneChannels: readonly string[];
         laneCount: number;
+        twoPlayer: boolean;
         playVariant: unknown;
         layoutMode: unknown;
         stage: BeMusicStage | undefined;
@@ -107,6 +108,7 @@ export function resolveLaneGeometry(ctx: LaneGeometryContext): ReturnType<typeof
     cached.laneCount === ctx.play.laneChannels.length &&
     cached.playVariant === ctx.play.chartPlayVariant &&
     cached.layoutMode === ctx.layoutMode &&
+    cached.twoPlayer === (ctx.play.secondPlayer !== undefined) &&
     cached.stage === stage
   ) {
     return cached.geometry;
@@ -117,10 +119,12 @@ export function resolveLaneGeometry(ctx: LaneGeometryContext): ReturnType<typeof
     ctx.play.chartPlayVariant,
     ctx.layoutMode,
     stage,
+    ctx.play.secondPlayer !== undefined,
   );
   ctx.laneGeometryCache = {
     laneChannels: ctx.play.laneChannels,
     laneCount: ctx.play.laneChannels.length,
+    twoPlayer: ctx.play.secondPlayer !== undefined,
     playVariant: ctx.play.chartPlayVariant,
     layoutMode: ctx.layoutMode,
     stage,
@@ -264,6 +268,8 @@ export interface BeMusicLayoutContext extends LaneGeometryContext {
   readonly drawsLift?: boolean;
   beMusicLayout:
     | {
+        twoPlayer: boolean;
+        layoutMode: GameplayLayoutMode;
         channels: readonly string[];
         variant: ChartPlayVariant | undefined;
         stage: BeMusicStage;
@@ -282,7 +288,7 @@ export function collectBGATargets(ctx: BGATargetsContext, out: PlayfieldBGATarge
   const geometry = resolveLaneGeometry(ctx);
   // The landscape touch layout gives the BGA's room to the lanes.
   if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return;
-  const rect = stage.resolveBGARect(geometry.right, geometry.left);
+  const rect = stage.resolveBGARect(geometry.right, geometry.left, geometry.twoPlayer);
   const cached = ctx.stageBGATarget;
   if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
     out.push(cached);
@@ -303,16 +309,30 @@ export function resolveBeMusicLayout(ctx: BeMusicLayoutContext): BeMusicGameplay
   if (
     cached &&
     cached.channels === ctx.play.laneChannels &&
+    cached.layoutMode === ctx.layoutMode &&
     cached.variant === ctx.play.chartPlayVariant &&
+    cached.twoPlayer === (ctx.play.secondPlayer !== undefined) &&
     cached.stage === stage
   ) {
     return withLiftLines(ctx, cached.layout);
   }
   const layout = resolveGameplayLayout(
-    { laneChannels: ctx.play.laneChannels, playVariant: ctx.play.chartPlayVariant, layoutMode: ctx.layoutMode },
+    {
+      laneChannels: ctx.play.laneChannels,
+      playVariant: ctx.play.chartPlayVariant,
+      layoutMode: ctx.layoutMode,
+      twoPlayer: ctx.play.secondPlayer !== undefined,
+    },
     stage,
   );
-  ctx.beMusicLayout = { channels: ctx.play.laneChannels, variant: ctx.play.chartPlayVariant, stage, layout };
+  ctx.beMusicLayout = {
+    twoPlayer: ctx.play.secondPlayer !== undefined,
+    layoutMode: ctx.layoutMode,
+    channels: ctx.play.laneChannels,
+    variant: ctx.play.chartPlayVariant,
+    stage,
+    layout,
+  };
   return withLiftLines(ctx, layout);
 }
 

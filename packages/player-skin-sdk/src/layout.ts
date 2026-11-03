@@ -6,6 +6,8 @@ import type { BeMusicGameplayLayout, BeMusicStage, GameplayLayoutMode } from './
 
 /** What {@link resolveGameplayLayout} needs to know about the chart: its lane channels and play variant. */
 export interface GameplayLayoutInput {
+  /** True when the second bank belongs to another player or a replay ghost. */
+  twoPlayer?: boolean;
   laneChannels?: readonly string[];
   laneCount?: number;
   playVariant?: ChartPlayVariant;
@@ -24,12 +26,13 @@ export interface GameplayLayoutInput {
 export function resolveGameplayLayout(input: GameplayLayoutInput, stage: BeMusicStage): BeMusicGameplayLayout {
   const channels = input.laneChannels;
   const variant = input.playVariant;
-  const { mode, orientation, lanes, left, right, top, judgementY } = resolveGameplayLaneGeometry(
+  const { mode, orientation, lanes, left, right, top, judgementY, twoPlayer } = resolveGameplayLaneGeometry(
     channels,
     input.laneCount ?? channels?.length,
     variant,
     input.layoutMode,
     stage,
+    input.twoPlayer,
   );
   const sides: BeMusicGameplayLayout['playfield']['sides'] = {};
   const layoutLanes = lanes.map((lane, index) => {
@@ -51,10 +54,12 @@ export function resolveGameplayLayout(input: GameplayLayoutInput, stage: BeMusic
     };
   });
   // The landscape touch layout gives the BGA's room to the lanes; a portrait stage keeps it above them.
-  const bga = mode === 'touch' && orientation === 'landscape' ? undefined : stage.resolveBGARect(right, left);
+  const bga =
+    mode === 'touch' && orientation === 'landscape' ? undefined : stage.resolveBGARect(right, left, twoPlayer);
   return {
     mode,
     orientation,
+    ...(twoPlayer ? { twoPlayer: true } : {}),
     stage: { width: stage.width, height: stage.height },
     lanes: layoutLanes,
     playfield: {
