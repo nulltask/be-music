@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  FFMPEG_CORE_URLS,
   FONT_CACHE_NAME,
   currentCacheNames,
+  extractFontFileURLs,
   ffmpegCoreCacheName,
   isCacheableResponse,
   routeRequest,
@@ -143,7 +145,7 @@ describe('isCacheableResponse', () => {
 });
 
 describe('cache names', () => {
-  const manifest: PrecacheManifest = { version: 'v2', urls: ['/'], ffmpegCoreVersion: '0.12.10' };
+  const manifest: PrecacheManifest = { version: 'v2', urls: ['/'], ffmpegCoreVersion: '0.12.10', fontStylesheets: [] };
 
   test('name the shell by deploy and the ffmpeg core by version', () => {
     expect(currentCacheNames(manifest)).toEqual([
@@ -165,4 +167,30 @@ describe('cache names', () => {
     ];
     expect(staleCacheNames(existing, manifest)).toEqual([shellCacheName('v1'), ffmpegCoreCacheName('0.12.9')]);
   });
+});
+
+test('lists the font files a Google Fonts stylesheet names, each once', () => {
+  const css = `
+@font-face { font-family: 'Orbitron'; src: url(https://fonts.gstatic.com/s/orbitron/v31/a.woff2) format('woff2'); }
+@font-face { font-family: 'M PLUS 1p'; src: url("https://fonts.gstatic.com/s/mplus1p/v28/b.woff2") format('woff2'); unicode-range: U+3000-30FF; }
+@font-face { font-family: 'M PLUS 1p'; src: url(https://fonts.gstatic.com/s/mplus1p/v28/b.woff2) format('woff2'); }
+@font-face { src: url(https://example.com/elsewhere.woff2); }`;
+  expect(extractFontFileURLs(css)).toEqual([
+    'https://fonts.gstatic.com/s/orbitron/v31/a.woff2',
+    'https://fonts.gstatic.com/s/mplus1p/v28/b.woff2',
+  ]);
+  expect(extractFontFileURLs('')).toEqual([]);
+});
+
+test('caches the ffmpeg core the player loads, which the ffmpeg route answers', () => {
+  const origin = 'https://play.be-music.app';
+  for (const path of FFMPEG_CORE_URLS) {
+    expect(
+      routeRequest(
+        { url: origin + path, method: 'GET', mode: 'cors', destination: '', hasRange: false },
+        origin,
+        new Set(),
+      ),
+    ).toBe('ffmpeg-core');
+  }
 });
