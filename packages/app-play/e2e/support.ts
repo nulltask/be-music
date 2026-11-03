@@ -226,7 +226,7 @@ export class Player {
    * Holds `code` down and pauses in the same task, on the first frame at or past chart `atSeconds`, so the play stops on
    * the press instant; returns the chart seconds it pressed at. Visuals that follow the chart clock (SWBGA, BGA
    * sequences) freeze there, so a slow CI screenshot samples the frame of the press rather than a later one (#878).
-   * Space always toggles pause.
+   * Pause always toggles pause.
    */
   async pressPaused(code: string, atSeconds = 0, timeoutMs = 90_000): Promise<number> {
     return this.page.evaluate(
@@ -241,8 +241,8 @@ export class Player {
             const seconds = window.__beMusicTest?.state().play?.seconds;
             if (seconds !== undefined && seconds >= atSeconds) {
               send('keydown', code, key);
-              send('keydown', 'Space', ' ');
-              send('keyup', 'Space', ' ');
+              send('keydown', 'Pause', ' ');
+              send('keyup', 'Pause', ' ');
               resolve(window.__beMusicTest?.state().play?.seconds ?? seconds);
             } else if (performance.now() > deadline) reject(new Error(`timed out waiting for ${atSeconds}s`));
             else requestAnimationFrame(step);
@@ -264,8 +264,8 @@ export class Player {
 
   /** Resumes a paused play and pauses again on the first frame at or past chart `seconds`. */
   async resumeUntil(seconds: number, what: string): Promise<void> {
-    await this.key('Space');
-    await this.keyWhen((state, at) => (state.play?.seconds ?? 0) >= at, seconds, 'Space', what);
+    await this.key('Pause');
+    await this.keyWhen((state, at) => (state.play?.seconds ?? 0) >= at, seconds, 'Pause', what);
   }
 
   /**
