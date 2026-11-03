@@ -51,25 +51,7 @@ export const en = {
     settings: 'Settings',
     signOut: 'Sign out',
   },
-  dialogs: {
-    signInTitle: 'Sign in',
-    signInLead: 'Sign in with a passkey, Google, or Discord.',
-    signInWithPasskey: 'Sign in with a passkey',
-    or: 'or',
-    orWithPasskey: 'or with a passkey',
-    noAccount: 'No account yet? Sign up',
-    cancel: 'Cancel',
-    signUpTitle: 'Create your account',
-    signUpLead:
-      'Pick a handle and a display name. Next, create the passkey you will sign in with (your device’s fingerprint, face or PIN).',
-    handle: 'Handle',
-    handleHint: '3 to 15 letters, digits or _. It names your page.',
-    name: 'Display name',
-    nameHint: 'Up to 32 characters, in any script. The rankings show it.',
-    createPasskey: 'Create passkey',
-    signInWith: (provider: string) => `Sign in with ${provider}`,
-    signUpWith: (provider: string) => `Sign up with ${provider}`,
-  },
+
   footer: {
     label: 'About the Leaderboard',
     about: 'About',

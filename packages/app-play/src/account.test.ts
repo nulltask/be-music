@@ -1,3 +1,4 @@
+import { authPanelTemplate } from '@be-music/service-web-theme/client';
 import { collectResultSync } from '@lit-labs/ssr/lib/render-result.js';
 import { describe, expect, test } from 'vite-plus/test';
 import {
@@ -158,11 +159,19 @@ describe('account sign-in', () => {
   });
 
   test('the sign-in dialog offers Google and Discord as actions', () => {
-    expect(PLAYER_APP_HTML).toContain('data-account-dialog-action="sign-in-google"');
-    expect(PLAYER_APP_HTML).toContain('data-account-dialog-action="sign-up-discord"');
-    expect(PLAYER_APP_HTML).toContain('Sign in with a passkey');
-    expect(PLAYER_APP_HTML).not.toContain('Coming soon');
-    expect(PLAYER_APP_HTML).not.toContain('coming soon');
+    expect(PLAYER_APP_HTML).toContain('id="leaderboard-sign-in"');
+    expect(PLAYER_APP_HTML).toContain('id="leaderboard-sign-up"');
+    const panels = collectResultSync(
+      render([
+        authPanelTemplate({ id: 'leaderboard-sign-in', locale: 'en', mode: 'sign-in' }),
+        authPanelTemplate({ id: 'leaderboard-sign-up', locale: 'en', mode: 'sign-up' }),
+      ]),
+    );
+    expect(panels).toContain('data-auth-action="sign-in-google"');
+    expect(panels).toContain('data-auth-action="sign-up-discord"');
+    expect(panels).toContain('Sign in with a passkey');
+    expect(PLAYER_APP_HTML + panels).not.toContain('Coming soon');
+    expect(PLAYER_APP_HTML + panels).not.toContain('coming soon');
   });
 });
 
