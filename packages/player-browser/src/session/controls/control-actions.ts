@@ -68,6 +68,7 @@ export const CONTROL_ACTION_IDS = [
   'select.keys-filter',
   'select.ln-mode',
   'select.search',
+  'select.reload',
   'select.favorite-song',
   'select.favorite-chart',
   'select.next-replay',
