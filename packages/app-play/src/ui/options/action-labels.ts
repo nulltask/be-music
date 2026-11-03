@@ -21,6 +21,8 @@ export const ACTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Full screen': 'フルスクリーン',
   Screenshot: 'スクリーンショット',
   'Open folder': 'フォルダを開く',
+  'Option panel 2': 'オプションパネル 2',
+  'Option panel 3': 'オプションパネル 3',
   'Next difficulty': '次の難易度',
   'AUTO play': 'AUTO プレイ',
   Sort: 'ソート',

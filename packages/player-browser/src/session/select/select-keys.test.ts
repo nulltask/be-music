@@ -186,11 +186,29 @@ describe('resolveSelectKeyAction on the beatoraja key map', () => {
     expect(resolve(down('F9'))).toEqual({ type: 'favorite', list: 'charts' });
   });
 
-  it('has no option panel, and gives the README overlay the keyboard while it is open', () => {
+  it('steps its option panels on the 1P keys, and gives the README overlay the keyboard while it is open', () => {
     // Space is the 1P turntable's second key, which scrolls up here.
     expect(resolve(down('Space', ' '))).toEqual({ type: 'step', direction: -1 });
-    // No panel steps its options: key 1 plays.
-    expect(resolve(down('KeyZ', 'z'), { panel: 1, readTextOpen: false })).toEqual({ type: 'activate' });
+    // START, SELECT and 5 open beatoraja's panels 1 to 3, whose 1P keys step their options.
+    expect(resolve(down('KeyQ', 'q'))).toEqual({ type: 'panel', panel: 1 });
+    expect(resolve(down('KeyW', 'w'))).toEqual({ type: 'panel', panel: 2 });
+    expect(resolve(down('Digit5', '5'))).toEqual({ type: 'panel', panel: 3 });
+    expect(resolve(down('KeyZ', 'z'), { panel: 1, readTextOpen: false })).toEqual({
+      type: 'play-option',
+      key: 'random1P',
+      step: 1,
+    });
+    expect(resolve(down('KeyS', 's'), { panel: 2, readTextOpen: false })).toEqual({
+      type: 'play-option',
+      key: 'visualConstant',
+      step: 1,
+    });
+    expect(resolve(down('KeyV', 'v'), { panel: 3, readTextOpen: false })).toEqual({
+      type: 'play-option',
+      key: 'judgeTimingMs',
+      step: 1,
+    });
+    expect(resolve(down('Escape'), { panel: 2, readTextOpen: false })).toEqual({ type: 'panel', panel: 2 });
     const open: SelectKeyState = { panel: undefined, readTextOpen: true };
     expect(resolve(down('Enter'), open)).toEqual({ type: 'readtext-close' });
     expect(resolve(down('PageDown'), open)).toEqual({ type: 'readtext-scroll', delta: READTEXT_PAGE_SCROLL });

@@ -103,6 +103,45 @@ const PANEL_KEYS: Partial<Readonly<Record<ControlButton, { key: keyof PlayOption
   '1P-key7': { key: 'hiSpeed', step: 1 },
 };
 
+/** One step of a beatoraja option panel's key: a play option stepped by `step`. */
+type PanelKey = { readonly key: keyof PlayOptions; readonly step: 1 | -1 };
+
+/**
+ * beatoraja's option panels' 1P keys (`MusicSelectKeyProperty.BEAT_7K`), as Be-Music has the options: panel 1 (START)
+ * steps RANDOM (keys 1 / 2), the gauge (3), the DP option (4), HS-FIX (5) and the 2P RANDOM (6 / 7); panel 2 (SELECT)
+ * switches CUSTOM JUDGE (1), CONSTANT (2), the judge area display (3), the LN mode (4), the BPM guide (6) and the mines
+ * (7); panel 3 (START + SELECT, or 5) steps the BGA (1), the gauge auto-shift (2), the judge timing auto-adjust (3), the
+ * visible time (4 / 6, by 1 ms) and the judge timing (5 / 7, by 1 ms).
+ */
+const BEATORAJA_PANEL_KEYS: Readonly<Record<number, Partial<Readonly<Record<ControlButton, PanelKey>>>>> = {
+  1: {
+    '1P-key1': { key: 'random1P', step: 1 },
+    '1P-key2': { key: 'random1P', step: -1 },
+    '1P-key3': { key: 'gauge1P', step: 1 },
+    '1P-key4': { key: 'dpFlip', step: 1 },
+    '1P-key5': { key: 'hsFix', step: 1 },
+    '1P-key6': { key: 'random2P', step: -1 },
+    '1P-key7': { key: 'random2P', step: 1 },
+  },
+  2: {
+    '1P-key1': { key: 'customJudge', step: 1 },
+    '1P-key2': { key: 'visualConstant', step: 1 },
+    '1P-key3': { key: 'displayAreaInfo', step: 1 },
+    '1P-key4': { key: 'longNoteMode', step: 1 },
+    '1P-key6': { key: 'bpmGuide', step: 1 },
+    '1P-key7': { key: 'mineModifier', step: 1 },
+  },
+  3: {
+    '1P-key1': { key: 'bga', step: 1 },
+    '1P-key2': { key: 'gaugeAutoShift', step: 1 },
+    '1P-key3': { key: 'judgeTimingAutoAdjust', step: 1 },
+    '1P-key4': { key: 'noteDurationMs', step: -1 },
+    '1P-key5': { key: 'judgeTimingMs', step: -1 },
+    '1P-key6': { key: 'noteDurationMs', step: 1 },
+    '1P-key7': { key: 'judgeTimingMs', step: 1 },
+  },
+};
+
 /** The control buttons a key is: the event's, or the default keys' for an event built without them. */
 function buttonsOf(event: SessionKeyEvent): readonly ControlButton[] {
   return event.buttons ?? controlButtonsOfKey(event, DEFAULT_CONTROL_BUTTONS);
@@ -132,12 +171,19 @@ export function resolveSelectKeyAction(
   if (event.type !== 'down') return undefined;
   const keyEvent = { ...event, buttons: buttonsOf(event) };
   const is = (id: ControlActionId): boolean => actions.is(id, keyEvent);
-  // LR2's START (and Space) toggles the play-options panel, even over the README; Enter already takes the bar.
+  // START (LR2's Space too) toggles the play-options panel, even over the README; Enter already takes the bar. beatoraja's
+  // SELECT opens its panel 2, and 5 its panel 3.
   if (is('select.option-panel')) return { type: 'panel', panel: 1 };
+  if (is('select.option-panel-2')) return { type: 'panel', panel: 2 };
+  if (is('select.option-panel-3')) return { type: 'panel', panel: 3 };
   if (state.readTextOpen) return resolveReadTextKey(event);
-  // LR2's panels: Escape closes an open one before it backs out of a folder, and panel 1 steps its options.
-  if (map === 'lr2' && event.key === 'Escape' && state.panel !== undefined) {
-    return { type: 'panel', panel: state.panel };
+  // An open panel: Escape closes it before it backs out of a folder, and the 1P keys step its options.
+  if (event.key === 'Escape' && state.panel !== undefined) return { type: 'panel', panel: state.panel };
+  if (map === 'beatoraja' && state.panel !== undefined) {
+    for (const button of keyEvent.buttons) {
+      const option = BEATORAJA_PANEL_KEYS[state.panel]?.[button];
+      if (option !== undefined) return { type: 'play-option', ...option };
+    }
   }
   if (map === 'lr2' && state.panel === 1) {
     for (const button of keyEvent.buttons) {
