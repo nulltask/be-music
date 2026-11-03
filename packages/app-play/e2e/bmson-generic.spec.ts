@@ -67,18 +67,18 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
       await player.key('Enter');
       await player.waitFor((state) => state.scene.kind === 'play' && state.play?.title === title, 'generic play');
       // Sample the screen paused at known chart times: a CI screenshot takes long enough that the chart would run on
-      // past the note before the sample lands (#878). Space always toggles pause, whatever the generic layout binds.
+      // past the note before the sample lands (#878). Pause always toggles pause, whatever the generic layout binds.
       const pausedAt = async (seconds: number, what: string) => {
-        await player.keyWhen((state, at) => (state.play?.seconds ?? 0) >= at, seconds, 'Space', what);
+        await player.keyWhen((state, at) => (state.play?.seconds ?? 0) >= at, seconds, 'Pause', what);
         await player.waitFor((state) => state.play?.seconds !== undefined, what);
       };
       await pausedAt(0.2, 'generic baseline');
       const baseline = await notePixels(player);
-      await player.key('Space');
+      await player.key('Pause');
       await pausedAt(1.3, 'visible generic note');
       await expect.poll(() => notePixels(player), { timeout: 5000, intervals: [100] }).toBeGreaterThan(baseline + 5);
       await player.page.screenshot({ path: info.outputPath('generic-notes.png') });
-      await player.key('Space');
+      await player.key('Pause');
       await player.keyWhen((state) => (state.play?.seconds ?? 0) >= 1.98, undefined, 'KeyH', 'generic key 6');
       await player.keyWhen((state) => (state.play?.seconds ?? 0) >= 2.98, undefined, 'KeyJ', 'generic key 7');
       await player.keyWhen(
