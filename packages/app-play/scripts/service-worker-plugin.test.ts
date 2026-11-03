@@ -109,6 +109,7 @@ describe('the web app manifest', () => {
     start_url: string;
     scope: string;
     display: string;
+    display_override?: string[];
     orientation?: string;
     icons: { src: string; sizes: string; purpose?: string }[];
   };
@@ -119,6 +120,10 @@ describe('the web app manifest', () => {
     expect(manifest.scope).toBe('/');
     expect(['standalone', 'fullscreen']).toContain(manifest.display);
     expect(manifest.orientation ?? 'any').not.toMatch(/^portrait/);
+  });
+
+  test('lets a desktop install put the header in the title bar, and a phone go fullscreen', () => {
+    expect(manifest.display_override).toEqual(['window-controls-overlay', 'fullscreen', 'standalone']);
   });
 
   test('lists 192 and 512 px icons, a maskable one among them, that all exist', () => {
