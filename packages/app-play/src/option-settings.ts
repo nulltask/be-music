@@ -34,6 +34,8 @@ import { REPLAY_AUTO_SAVE_RULES, type ReplayAutoSaveRule } from './services/repl
 import { GHOST_MODES, GHOST_SOURCES } from './services/ghost.ts';
 import type { PlayerGUIState, SkinFamilyOverride } from './types.ts';
 import { WORKER_COUNT_STORAGE_KEY } from './worker-settings.ts';
+import { parseLaneKeys } from './lane-keys.ts';
+import type { LaneKeyOverrides } from '@be-music/player-engine/lanes';
 
 /** `localStorage` key of the whole Options dialog document. Reset deletes it with the other `be-music.*` settings. */
 export const OPTION_SETTINGS_STORAGE_KEY = 'be-music.option-settings';
@@ -138,6 +140,7 @@ export interface OptionSettings {
   autoScratch1P: boolean;
   autoScratch2P: boolean;
   anyKey: boolean;
+  laneKeys: LaneKeyOverrides;
   sort: BrowseSort;
   keysFilter: KeysFilter;
   difficultyFilter: DifficultyFilter;
@@ -366,6 +369,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'autoScratch1P', booleanOf(raw.autoScratch1P));
   assign(settings, 'autoScratch2P', booleanOf(raw.autoScratch2P));
   assign(settings, 'anyKey', booleanOf(raw.anyKey));
+  if (raw.laneKeys !== undefined) settings.laneKeys = parseLaneKeys(raw.laneKeys);
   assign(settings, 'playInSilentMode', booleanOf(raw.playInSilentMode));
   assign(settings, 'muted', booleanOf(raw.muted));
   assign(settings, 'tempoEnabled', booleanOf(raw.tempoEnabled));
@@ -619,6 +623,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('autoScratch1P');
   assignState('autoScratch2P');
   assignState('anyKey');
+  assignState('laneKeys');
   assignState('sort');
   assignState('keysFilter');
   assignState('difficultyFilter');
@@ -747,6 +752,7 @@ export function captureOptionSettings(
     autoScratch1P: state.autoScratch1P,
     autoScratch2P: state.autoScratch2P,
     anyKey: state.anyKey,
+    laneKeys: state.laneKeys,
     sort: state.sort,
     keysFilter: state.keysFilter,
     difficultyFilter: state.difficultyFilter,

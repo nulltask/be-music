@@ -320,6 +320,25 @@ textarea {
   stroke: var(--primary);
   stroke-width: 1.5;
 }
+/* A key config lane (ui/options/keys.ts): its name, then the key it takes, which waits for a key press when clicked. */
+.options-key-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.options-key-row > .options-label,
+.options-key-row > .options-label-wrap {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.options-key-row > .options-key {
+  min-width: 7.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.options-key-row > .options-key[aria-pressed='true'] {
+  border-color: var(--primary);
+  color: var(--primary);
+}
 .options-button-row > .options-button {
   width: 100%;
 }

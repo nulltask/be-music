@@ -68,6 +68,7 @@ function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
     gauge: 'EASY',
     autoScratch1P: true,
     autoScratch2P: true,
+    laneKeys: {},
     replayView: { tempo: true, hiSpeed: true, covers: true, lift: true },
     tempoEnabled: true,
     tempoPercent: -10,
@@ -132,6 +133,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
     expect(settings).toEqual({
       autoPlay: false,
       autoPauseOnBlur: false,
+      laneKeys: {},
       initialHiSpeed: 2.5,
       bga: 'OFF',
       bgaSize: PLAY_OPTIONS.bgaSize,
@@ -255,6 +257,11 @@ describe('resolvePlaySceneOptions: ANY KEY', () => {
     recorded.play.anyKey = true;
     expect(resolvePlaySceneOptions(input({ replay: recorded })).settings.anyKey).toBe(true);
   });
+});
+
+test('resolvePlaySceneOptions passes the player’s own lane keys to the play', () => {
+  const laneKeys = { beat: { '11': ['s'] } };
+  expect(resolvePlaySceneOptions(input({ guiState: gui({ laneKeys }) })).settings.laneKeys).toEqual(laneKeys);
 });
 
 describe('resolvePlaySceneOptions: a replay', () => {

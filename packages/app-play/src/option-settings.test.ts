@@ -189,6 +189,7 @@ describe('captureOptionSettings', () => {
       autoScratch1P: true,
       autoScratch2P: true,
       anyKey: true,
+      laneKeys: { beat: { '11': ['a'] } },
       sort: 'OFF',
       keysFilter: 'ALL',
       difficultyFilter: 'ALL',

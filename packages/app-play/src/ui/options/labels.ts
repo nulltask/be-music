@@ -7,6 +7,7 @@
 export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   // Tabs
   Play: 'プレイ',
+  Keys: 'キー',
   'Tempo & course': 'テンポとコース',
   'Skin & display': 'スキンと表示',
   Audio: 'サウンド',
@@ -22,6 +23,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Replay / ghost': 'リプレイとゴースト',
   'Built-in': '内蔵',
   // Folder titles
+  'Key config': 'キーコンフィグ',
   'Play options': 'プレイオプション',
   Tempo: 'テンポ',
   Course: 'コース',
@@ -132,6 +134,17 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Ghost mode': 'ゴーストの表示',
   'Ghost status': 'ゴーストの状態',
   'Ghost replay file…': 'ゴーストのリプレイファイル…',
+  // Key config
+  ...Object.fromEntries([
+    ['1P scratch', '1P スクラッチ'],
+    ['2P scratch', '2P スクラッチ'],
+    ...[1, 2, 3, 4, 5, 6, 7].flatMap((key) => [
+      [`1P key ${key}`, `1P 鍵盤 ${key}`],
+      [`2P key ${key}`, `2P 鍵盤 ${key}`],
+    ]),
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((key) => [`Key ${key}`, `ボタン ${key}`]),
+  ]),
+  'Reset keys to defaults': 'キーを既定に戻す',
   // Tempo & course
   Enabled: '有効',
   'Tempo (%)': 'テンポ (%)',

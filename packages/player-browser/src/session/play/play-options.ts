@@ -1,4 +1,4 @@
-import type { BattleMode, LR2ExtraLevel } from '@be-music/player-engine/lanes';
+import type { BattleMode, LaneKeyOverrides, LR2ExtraLevel } from '@be-music/player-engine/lanes';
 /**
  * The options of a play session (`PlaySession`) and of its disposal: everything a host sets for a play, whichever family
  * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
@@ -193,6 +193,8 @@ export interface PlaySessionOptions {
    * holds that lane until its key comes up. A replay plays with its own recorded switch instead.
    */
   anyKey?: boolean;
+  /** The player's own lane keys over the defaults (`LaneModeOptions.laneKeys`); a replay plays its recorded channels. */
+  laneKeys?: LaneKeyOverrides;
   /**
    * DP FLIP — when true, swaps every note's 1P / 2P channel at chart-prepare time. Only DP charts have notes on both
    * sides so SP charts are unaffected. Mirrors LR2's `#SRC_BUTTON,type=54`.
