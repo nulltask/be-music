@@ -84,7 +84,7 @@ export interface PixiNoteContext {
   /** Just-timing y: the note's bottom edge. */
   y: number;
   nowMs: number;
-  /** The playfield's white-key lane width, which a scratch note takes its height from (`resolveNoteHeight`). */
+  /** The playfield's white-key lane width, which every note takes its height from (`resolveNoteHeight`). */
   whiteLaneWidth?: number;
 }
 
@@ -98,7 +98,7 @@ export interface PixiLongNoteContext {
   /** Head just-timing y (lower), held on the judgement line once passed. */
   bottom: number;
   nowMs: number;
-  /** The playfield's white-key lane width, which a scratch note takes its height from (`resolveNoteHeight`). */
+  /** The playfield's white-key lane width, which every note takes its height from (`resolveNoteHeight`). */
   whiteLaneWidth?: number;
   /**
    * How the long note is judged: `'ln'` judges only its head (LR2's LN; the tail just marks where to let go), `'cn'` /

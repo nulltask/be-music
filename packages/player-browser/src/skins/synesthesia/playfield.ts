@@ -151,7 +151,7 @@ export function renderSynesthesiaLanes({
 
 export function renderSynesthesiaNote({ graphics, kind, x, w, y, whiteLaneWidth }: PixiNoteContext): void {
   const bodyW = Math.max(4, w);
-  drawNote(graphics, x, y, bodyW, resolveNoteHeight(kind, bodyW, whiteLaneWidth), LIGHTS[kind]);
+  drawNote(graphics, x, y, bodyW, resolveNoteHeight(bodyW, whiteLaneWidth), LIGHTS[kind]);
 }
 
 /** Width (px) of one segment of a mine's broken filament, gap included. */
@@ -172,9 +172,9 @@ export function mineFilamentLit(laneX: number, segment: number, nowMs: number): 
  * A mine: shaped like a note so it reads in the same rhythm, but bright crimson in a throbbing red halo, with a broken,
  * flickering filament where a note carries its clean white one — a note that has gone wrong, to be left alone.
  */
-export function renderSynesthesiaMine({ graphics, kind, x, w, y, nowMs, whiteLaneWidth }: PixiNoteContext): void {
+export function renderSynesthesiaMine({ graphics, x, w, y, nowMs, whiteLaneWidth }: PixiNoteContext): void {
   const bodyW = Math.max(4, w);
-  const noteHeight = resolveNoteHeight(kind, bodyW, whiteLaneWidth);
+  const noteHeight = resolveNoteHeight(bodyW, whiteLaneWidth);
   // A red halo that throbs like a warning light (twice a second), so the mine stands out of the lane at a glance.
   const alarm = 0.5 + 0.5 * Math.sin((nowMs / 1000) * Math.PI * 4);
   graphics
@@ -212,8 +212,8 @@ export function renderSynesthesiaLongNote({
   const marks = resolveLongNoteMarks({ mode, backSpinScratch });
   const bodyX = x;
   const bodyW = Math.max(4, w);
-  // A note is as tall as a share of its lane's width (a scratch note as a white key's), standing on its bottom edge.
-  const noteHeight = resolveNoteHeight(kind, bodyW, whiteLaneWidth);
+  // A note is as tall as a share of its lane's width (every note as a white key's), standing on its bottom edge.
+  const noteHeight = resolveNoteHeight(bodyW, whiteLaneWidth);
   const bodyTop = top - noteHeight;
   const bodyH = Math.max(1, bottom - top);
   // A hell charge note shows how it stands (`resolveHellChargeLook`): its colour, its glow and its zigzag filament's

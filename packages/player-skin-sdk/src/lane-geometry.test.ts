@@ -358,7 +358,7 @@ test('draws a note as tall as a share of its lane’s width, as the arcade cabin
   expect(noteHeightForLane(Number.NaN)).toBe(2);
 });
 
-test('draws a scratch note as tall as a white key’s, not by its own wider lane', () => {
+test('draws every note as tall as a white key’s, whatever its own lane’s width', () => {
   const lanes = [
     { kind: 'scratch' as const, w: 41 },
     { kind: 'white' as const, w: 24 },
@@ -366,9 +366,9 @@ test('draws a scratch note as tall as a white key’s, not by its own wider lane
   ];
   expect(findWhiteLaneWidth(lanes)).toBe(24);
   expect(findWhiteLaneWidth([{ kind: 'scratch', w: 41 }])).toBeUndefined();
-  expect(resolveNoteHeight('scratch', 41, 24)).toBe(noteHeightForLane(24));
-  expect(resolveNoteHeight('wheel-up', 41, 24)).toBe(noteHeightForLane(24));
-  // Keys keep their own lane's share; without a white lane a scratch note falls back to its own.
-  expect(resolveNoteHeight('black', 19, 24)).toBe(noteHeightForLane(19));
-  expect(resolveNoteHeight('scratch', 41)).toBe(noteHeightForLane(41));
+  // The scratch's 41 px lane and a black key's 19 px lane both draw a white key's note.
+  expect(resolveNoteHeight(41, 24)).toBe(noteHeightForLane(24));
+  expect(resolveNoteHeight(19, 24)).toBe(noteHeightForLane(24));
+  // Without a white lane, a note takes its own lane's share.
+  expect(resolveNoteHeight(41)).toBe(noteHeightForLane(41));
 });

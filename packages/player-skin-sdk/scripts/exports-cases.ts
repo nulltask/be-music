@@ -258,7 +258,7 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   });
   define('player-skin-sdk.resolveNoteHeight', {
     run: () => {
-      skinSdkAPI.resolveNoteHeight('scratch', 41, 24);
+      skinSdkAPI.resolveNoteHeight(41, 24);
     },
   });
   define('player-skin-sdk.backSpinChevron', {
