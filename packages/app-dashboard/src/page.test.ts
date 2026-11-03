@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { escapeHTML, pickLocale, renderDashboard, serviceLinks } from './page.ts';
+import { escapeHTML, pickLocale, renderDashboard as renderPage, serviceLinks } from './page.ts';
+
+// Ignore template source indentation while preserving the existing markup/content assertions.
+function renderDashboard(input: Parameters<typeof renderPage>[0]): string {
+  return renderPage(input)
+    .replace(/\s+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+>/g, '>')
+    .replace(/>\s+([^<]*?)\s+</g, '>$1<');
+}
 
 describe('serviceLinks', () => {
   test('links the services of the same environment', () => {

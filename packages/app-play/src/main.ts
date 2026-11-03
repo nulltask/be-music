@@ -1,3 +1,7 @@
+import { localized } from './ui/localized.ts';
+import { onPlayerLangChange } from './player-copy.ts';
+import { defineServiceUI } from '@be-music/service-web-theme/client';
+import { render } from 'lit';
 import {
   configureBGAVideoWorkers,
   configureBrowserWorkers,
@@ -14,7 +18,7 @@ import { PlayerWebApp } from './app/app.ts';
 import { wireHelpModal, applyPlayerLanguage } from './help-modal.ts';
 import { wireInstallButton } from './install-button.ts';
 import { bindPlayerHeader, mountPlayerHeader } from './player-header.ts';
-import { PLAYER_APP_HTML } from './dom-template.ts';
+import { PLAYER_APP_TEMPLATE } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { readDeviceSignals, resolveDeviceProfile } from './device-profile.ts';
 import { waitForDefaultUIFonts } from './services/built-in-skins.ts';
@@ -47,12 +51,17 @@ if (!app) {
   throw new Error('missing #app');
 }
 
-app.innerHTML = PLAYER_APP_HTML;
+defineServiceUI();
+render(PLAYER_APP_TEMPLATE, app);
+const accountLabel = app.querySelector<HTMLElement>('#start-account-label');
+if (accountLabel !== null) render(localized('checkingAccount'), accountLabel);
 
 // Browser compatibility probe runs first so the drop card paints the readiness verdict immediately on first render. We
 // do this BEFORE constructing the player app so that even a hard-fail (Pixi `Application.init()` throwing on a no-WebGL2
 // browser) still leaves the user looking at the unsupported-browser message rather than a blank canvas.
-renderBrowserCompatPanel(checkBrowserCompat());
+const browserCompat = checkBrowserCompat();
+renderBrowserCompatPanel(browserCompat);
+onPlayerLangChange(() => renderBrowserCompatPanel(browserCompat));
 
 // Phones and tablets: lighter chrome over the stage, touch play controls, and a rotate prompt on phones held upright
 // (see the `html.touch-first` / `html.phone` rules in styles.css).

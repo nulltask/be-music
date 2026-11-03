@@ -1,3 +1,4 @@
+import { html, nothing, render, type TemplateResult } from 'lit';
 // Virtual module produced by the `be-music:acknowledgements` Vite plugin (see `vite.config.ts`).
 import loadAcknowledgements, { type Acknowledgement } from 'virtual:acknowledgements';
 import { bindPlayerHeader } from './player-header.ts';
@@ -116,10 +117,7 @@ function syncPublicBetaNotice(lang: PlayerLang): void {
 
 async function renderAcknowledgementsList(list: HTMLOListElement): Promise<void> {
   const message = (text: string): void => {
-    const item = document.createElement('li');
-    item.className = 'ack-empty';
-    item.textContent = text;
-    list.replaceChildren(item);
+    render(html`<li class="ack-empty">${text}</li>`, list);
   };
   message(playerText().shell.ackLoading);
   let acknowledgements: Acknowledgement[];
@@ -133,72 +131,35 @@ async function renderAcknowledgementsList(list: HTMLOListElement): Promise<void>
     message(playerText().shell.ackEmpty);
     return;
   }
-  list.replaceChildren(...acknowledgements.map(buildAcknowledgementCard));
+  render(acknowledgements.map(acknowledgementCard), list);
 }
 
-function buildAcknowledgementCard(entry: Acknowledgement): HTMLLIElement {
-  const card = document.createElement('li');
-  card.className = 'ack-card';
-
-  const heading = document.createElement('div');
-  heading.className = 'ack-card-heading';
-  const name = document.createElement('span');
-  name.className = 'ack-card-name';
-  name.textContent = entry.name;
-  heading.appendChild(name);
-  const version = document.createElement('span');
-  version.className = 'ack-card-version';
-  version.textContent = `v${entry.version}`;
-  heading.appendChild(version);
-  if (entry.license) {
-    const license = document.createElement('span');
-    license.className = 'ack-card-license';
-    license.textContent = entry.license;
-    heading.appendChild(license);
-  }
-  card.appendChild(heading);
-
-  const meta = document.createElement('div');
-  meta.className = 'ack-card-meta';
+function acknowledgementCard(entry: Acknowledgement): TemplateResult {
   const link = entry.homepage ?? cleanRepositoryURL(entry.repository);
-  if (link) {
-    const a = document.createElement('a');
-    a.href = link;
-    a.textContent = link.replace(/^https?:\/\//u, '');
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.className = 'ack-card-link';
-    meta.appendChild(a);
-  }
-  if (entry.author) {
-    const author = document.createElement('span');
-    author.className = 'ack-card-author';
-    author.textContent = entry.author;
-    meta.appendChild(author);
-  }
-  if (meta.childNodes.length > 0) {
-    card.appendChild(meta);
-  }
-
-  if (entry.licenseText) {
-    // The copyright notice and license text stay folded until asked for: the list reads as names and licenses.
-    const details = document.createElement('details');
-    details.className = 'ack-card-license-details';
-    const summary = document.createElement('summary');
-    summary.textContent = playerText().shell.ackLicense;
-    const pre = document.createElement('pre');
-    pre.className = 'ack-card-license-text';
-    pre.textContent = entry.licenseText;
-    details.append(summary, pre);
-    card.appendChild(details);
-  } else {
-    const note = document.createElement('div');
-    note.className = 'ack-card-license-missing';
-    note.textContent = playerText().shell.ackNoLicense;
-    card.appendChild(note);
-  }
-
-  return card;
+  const copy = playerText().shell;
+  return html`<li class="ack-card">
+    <div class="ack-card-heading">
+      <span class="ack-card-name">${entry.name}</span>
+      <span class="ack-card-version">v${entry.version}</span>
+      ${entry.license ? html`<span class="ack-card-license">${entry.license}</span>` : nothing}
+    </div>
+    ${
+      link || entry.author
+        ? html`<div class="ack-card-meta">
+            ${link ? html`<a class="ack-card-link" href=${link} target="_blank" rel="noopener noreferrer">${link.replace(/^https?:\/\//u, '')}</a>` : nothing}
+            ${entry.author ? html`<span class="ack-card-author">${entry.author}</span>` : nothing}
+          </div>`
+        : nothing
+    }
+    ${
+      entry.licenseText
+        ? html`<details class="ack-card-license-details">
+            <summary>${copy.ackLicense}</summary>
+            <pre class="ack-card-license-text">${entry.licenseText}</pre>
+          </details>`
+        : html`<div class="ack-card-license-missing">${copy.ackNoLicense}</div>`
+    }
+  </li>`;
 }
 
 function cleanRepositoryURL(raw: string | undefined): string | undefined {

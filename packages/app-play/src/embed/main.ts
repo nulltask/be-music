@@ -1,3 +1,5 @@
+import { render } from 'lit';
+import { EMBED_APP_TEMPLATE } from './template.ts';
 // The embed page's bootstrap (`/embed/?track=…`): the browser workers, then the preview player over the page.
 import {
   configureBGAVideoWorkers,
@@ -28,6 +30,8 @@ const element = (id: string): HTMLElement => {
   if (!found) throw new Error(`The embed page has no #${id}`);
   return found;
 };
+
+render(EMBED_APP_TEMPLATE, element('preview-app'));
 
 void new PreviewApp({ root: element('preview'), stage: element('stage'), overlay: element('overlay') }).open(
   parseEmbedTrack(window.location.href),

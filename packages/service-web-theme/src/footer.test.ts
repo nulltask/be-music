@@ -1,7 +1,7 @@
+import { renderServiceFooter as renderFooter } from './server.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import { SERVICE_CSS } from './index.ts';
 import {
-  renderServiceFooter,
   SERVICE_COPYRIGHT,
   SERVICE_FOOTER_CLASS,
   SERVICE_FOOTER_COLUMNS_CLASS,
@@ -9,6 +9,9 @@ import {
   serviceOrigins,
   serviceSite,
 } from './footer.ts';
+
+const renderServiceFooter = (input: Parameters<typeof renderFooter>[0] = {}) =>
+  renderFooter(input).replace(/\s+/g, ' ').replace(/>\s+</g, '><').replace(/\s+>/g, '>');
 
 describe('serviceSite', () => {
   test('keeps each environment with its own siblings', () => {

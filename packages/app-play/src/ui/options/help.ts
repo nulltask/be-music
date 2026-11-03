@@ -1,3 +1,5 @@
+import { html, render } from 'lit';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 // Hover help for the Options dialog: a "?" button beside each control and section Help describes, showing that entry.
 // The descriptions live in the hidden `#options-help-content` block, in the language Help shows. An entry
 // names the controls it covers by its text, or by `data-for` when it covers several ("Random 1P|Random 2P").
@@ -27,8 +29,19 @@ interface OptionHelpEntries {
 
 const entryKey = (section: string, label: string): string => `${section}\n${label}`;
 
-const CIRCLE_HELP_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>';
+const CIRCLE_HELP_ICON = html`<svg
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+>
+  <circle cx="12" cy="12" r="10" />
+  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+  <path d="M12 17h.01" />
+</svg>`;
 
 /** Reads the Options tooltip entries for `lang` from the page. */
 function readOptionHelp(lang: string): OptionHelpEntries {
@@ -96,21 +109,16 @@ export class OptionHelp {
       const label = row.dataset.optionLabel ?? '';
       const section = optionHelpSection(folderTitles(row, this.root), help.sections);
       if (!help.entries.has(entryKey(section, label))) continue;
-      const button = this.button(section, label);
-      const labelElement = row.querySelector<HTMLElement>('.options-label');
-      if (labelElement !== null) {
-        const wrap = document.createElement('span');
-        wrap.className = 'options-label-wrap';
-        labelElement.replaceWith(wrap);
-        wrap.append(labelElement, button);
-      } else row.append(button);
+      const host = row.querySelector<HTMLElement>('[data-option-help-host]');
+      if (host !== null) render(this.button(section, label), host);
     }
     for (const folder of this.root.querySelectorAll<HTMLElement>('[data-options-folder]')) {
       const heading = folder.querySelector<HTMLElement>(':scope > h3');
       if (heading === null || heading.querySelector('.options-help') !== null) continue;
       const title = folder.dataset.optionTitle ?? '';
       const section = optionHelpSection(folderTitles(folder, this.root), help.sections);
-      if (help.entries.has(entryKey(section, title))) heading.append(this.button(section, title));
+      const host = heading.querySelector<HTMLElement>('[data-option-help-host]');
+      if (host !== null && help.entries.has(entryKey(section, title))) render(this.button(section, title), host);
     }
   }
 
@@ -128,7 +136,7 @@ export class OptionHelp {
     button.type = 'button';
     button.className = 'options-help';
     button.setAttribute('aria-label', `Help: ${label}`);
-    button.innerHTML = CIRCLE_HELP_SVG;
+    render(CIRCLE_HELP_ICON, button);
     const show = (): void => this.show(button, section, label);
     button.addEventListener('pointerenter', (event) => {
       if (event.pointerType === 'mouse') show();
@@ -147,11 +155,11 @@ export class OptionHelp {
   }
 
   private show(button: HTMLButtonElement, section: string, label: string): void {
-    const html =
+    const description =
       this.entries(this.language()).entries.get(entryKey(section, label)) ??
       this.entries('en').entries.get(entryKey(section, label));
-    if (html === undefined) return;
-    this.tip.innerHTML = html;
+    if (description === undefined) return;
+    render(unsafeHTML(description), this.tip);
     if (!this.tip.matches(':popover-open')) this.tip.showPopover();
     this.shownFor?.removeAttribute('aria-describedby');
     this.shownFor = button;

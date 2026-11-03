@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { playerAppHref, playerHref } from './basics.tsx';
+import { playerAppHref, playerHref } from './basics.ts';
 
 describe('playerAppHref', () => {
   test('points at the player of the same environment', () => {
