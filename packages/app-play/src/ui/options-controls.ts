@@ -160,6 +160,7 @@ export class OptionBinding<T = unknown> extends OptionRow {
   }
   public set label(value: string) {
     this.labelElement.textContent = value;
+    this.element.dataset.optionLabel = value;
   }
 
   /** A select's choices; setting them keeps the select and its handlers. */
@@ -496,6 +497,8 @@ export class OptionFolder extends OptionContainer {
       root.addEventListener('close', () => this.reportFold(false));
     } else if (root instanceof HTMLDetailsElement && params.kind === 'details') {
       root.dataset.optionsFolder = '';
+      // The English title, which names the folder whatever language it shows in (`options/labels.ts`).
+      root.dataset.optionTitle = params.title;
       this.content = element('div', 'options-folder-content');
       const summary = element('summary', 'options-folder-summary');
       summary.append(this.titleElement);
@@ -505,6 +508,8 @@ export class OptionFolder extends OptionContainer {
       root.addEventListener('toggle', () => this.reportFold(root.open));
     } else {
       root.dataset.optionsFolder = '';
+      // The English title, which names the folder whatever language it shows in (`options/labels.ts`).
+      root.dataset.optionTitle = params.title;
       this.content = element('div', 'options-folder-content');
       const heading = element('h3', 'options-section-heading');
       heading.append(this.titleElement);
@@ -587,6 +592,7 @@ export class OptionTabs extends OptionRow {
       button.type = 'button';
       button.id = tabId;
       button.setAttribute('role', 'tab');
+      button.dataset.optionTitle = title;
       button.setAttribute('aria-controls', panel.id);
       button.addEventListener('click', () => {
         this.select(index);

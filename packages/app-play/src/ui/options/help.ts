@@ -53,11 +53,11 @@ function readOptionHelp(lang: string): OptionHelpEntries {
 function folderTitles(node: Element, root: Element): string[] {
   const titles: string[] = [];
   for (
-    let folder = node.parentElement?.closest('[data-options-folder]');
+    let folder = node.parentElement?.closest<HTMLElement>('[data-options-folder]');
     folder && root.contains(folder);
-    folder = folder.parentElement?.closest('[data-options-folder]')
+    folder = folder.parentElement?.closest<HTMLElement>('[data-options-folder]')
   ) {
-    titles.push(folder.querySelector(':scope > h3 .options-folder-title')?.textContent?.trim() ?? '');
+    titles.push(folder.dataset.optionTitle ?? '');
   }
   return titles;
 }
@@ -108,7 +108,7 @@ export class OptionHelp {
     for (const folder of this.root.querySelectorAll<HTMLElement>('[data-options-folder]')) {
       const heading = folder.querySelector<HTMLElement>(':scope > h3');
       if (heading === null || heading.querySelector('.options-help') !== null) continue;
-      const title = heading.querySelector('.options-folder-title')?.textContent?.trim() ?? '';
+      const title = folder.dataset.optionTitle ?? '';
       const section = optionHelpSection(folderTitles(folder, this.root), help.sections);
       if (help.entries.has(entryKey(section, title))) heading.append(this.button(section, title));
     }

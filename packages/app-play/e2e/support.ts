@@ -305,10 +305,8 @@ export class Player {
         // The folder a section, folder or row sits in: the nearest one around it, or the dialog. Tabs are transparent.
         const folderOf = (node: Element): Element =>
           node.parentElement?.closest('[data-options-folder], #options-modal') ?? root;
-        const titleOf = (node: Element): string | undefined =>
-          node
-            .querySelector(':scope > summary .options-folder-title, :scope > h3 .options-folder-title')
-            ?.textContent?.trim();
+        // Folders and rows go by their English title and label, whatever language the dialog shows.
+        const titleOf = (node: Element): string | undefined => (node as HTMLElement).dataset.optionTitle;
         // Selects every tab the node sits in, so a screenshot or a click finds it shown.
         const revealTab = (node: Element): void => {
           for (
@@ -330,7 +328,9 @@ export class Player {
         }
         const controller = [...current.querySelectorAll('.options-row')].find((candidate) => {
           if (folderOf(candidate) !== current) return false;
-          const label = candidate.querySelector('.options-label')?.textContent?.trim();
+          const label =
+            (candidate as HTMLElement).dataset.optionLabel ??
+            candidate.querySelector('.options-label')?.textContent?.trim();
           return (label || candidate.querySelector('button:not(.options-help)')?.textContent?.trim()) === name;
         });
         if (controller === undefined) throw new Error(`no Options control ${[...folder, name].join(' / ')}`);

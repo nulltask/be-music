@@ -29,7 +29,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Beatoraja skins': 'beatoraja スキン',
   'Add skin': 'スキンの追加',
   Compressor: 'コンプレッサー',
-  Stages: '段',
+  Stages: '段ごとのオン / オフ',
   'Key compressor': 'キー音のコンプレッサー',
   'BGM compressor': 'BGM のコンプレッサー',
   'Master compressor': '全体のコンプレッサー',
