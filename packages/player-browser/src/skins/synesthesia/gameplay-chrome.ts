@@ -329,7 +329,11 @@ export function renderSynesthesiaChrome({
   const cabinet = !portrait && layout.mode === 'standard';
   const wellTop = portrait ? layout.playfield.top - 2 : 0;
   const wellBottom = portrait ? layout.stage.height : cabinet ? cabinetWellBottom(layout) : PLAYFIELD_FRAME_BOTTOM;
-  drawPlayfieldWell(panels, playfieldLeft, playfieldRight, wellTop, wellBottom, accent);
+  if (layout.twoPlayer && cabinet) {
+    for (const side of Object.values(layout.playfield.sides)) {
+      if (side) drawPlayfieldWell(panels, side.left, side.right, wellTop, wellBottom, accent);
+    }
+  } else drawPlayfieldWell(panels, playfieldLeft, playfieldRight, wellTop, wellBottom, accent);
   // The monitor shrinks to fit beside a double-play field; only a page-wide keyboard field leaves no room for it.
   if (BGA.w > 0) {
     const standby = layerPool.acquireGraphics();
