@@ -22,7 +22,8 @@
     "build:icons": "node scripts/build-icons.ts",
     "build:fonts": "node scripts/build-fonts.ts",
     "build:client": "node scripts/build-client.ts",
-    "build:worker": "vp build --config vite.worker.config.ts"
+    "build:worker": "vp build --config vite.worker.config.ts",
+    "bench": "node scripts/bench.ts"
   },
   "dependencies": {
     "@be-music/chart-model": "workspace:*",
@@ -38,6 +39,7 @@
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.13",
     "hono-openapi": "^1.5.0",
+    "lit": "^3.3.3",
     "lucide-static": "1.61.0",
     "valibot": "^1.5.0"
   },

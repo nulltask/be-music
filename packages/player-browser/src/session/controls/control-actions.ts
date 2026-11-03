@@ -271,10 +271,7 @@ export interface ControlActionMap {
 const NAVIGATION_KEYS: ReadonlySet<string> = new Set(['PageUp', 'PageDown', 'Home', 'End']);
 
 /** The operations on `scheme`, with the player's own keys for them. */
-export function resolveControlActions(
-  scheme: ControlScheme,
-  overrides: ControlActionOverrides | undefined = undefined,
-): ControlActionMap {
+export function resolveControlActions(scheme: ControlScheme, overrides?: ControlActionOverrides): ControlActionMap {
   const keys = new Map<ControlActionId, readonly ControlActionKey[]>();
   const keysOf = (id: ControlActionId): readonly ControlActionKey[] => {
     let list = keys.get(id);

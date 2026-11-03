@@ -4,7 +4,7 @@
 // (HS-FIX, GAUGE TYPE, M-RAN, …) and the format names stay as they are, as LR2 and beatoraja show them.
 
 import { CONTROL_ACTIONS } from '@be-music/player-browser/host';
-import { ACTION_LABELS_JA, actionKeyConfigLabel } from './action-keys.ts';
+import { ACTION_LABELS_JA, actionKeyConfigLabel } from './action-labels.ts';
 
 /** Japanese for each English label, title and tab of the Options dialog. */
 export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
@@ -239,27 +239,7 @@ export function optionLabel(label: string, lang: string): string {
   return lang === 'ja' ? (OPTION_LABELS_JA[label] ?? label) : label;
 }
 
-/**
- * Shows the Options dialog's labels, folder titles and tabs in `lang`. Each keeps its English text in a data attribute
- * (`data-option-label`, `data-option-title`); a button whose text has moved on from its label (the record button while
- * recording, the resolution button with its pick) is left as it reads.
- */
-export function relabelOptions(root: ParentNode, lang: string): void {
-  for (const row of root.querySelectorAll<HTMLElement>('.options-row[data-option-label]')) {
-    const label = row.dataset.optionLabel ?? '';
-    const text = row.querySelector<HTMLElement>('.options-label');
-    if (text !== null) {
-      text.textContent = optionLabel(label, lang);
-      continue;
-    }
-    const button = row.querySelector<HTMLElement>('.options-button');
-    if (button !== null && (button.textContent === label || button.textContent === OPTION_LABELS_JA[label])) {
-      button.textContent = optionLabel(label, lang);
-    }
-  }
-  for (const titled of root.querySelectorAll<HTMLElement>('[data-option-title]')) {
-    const title = titled.dataset.optionTitle ?? '';
-    const text = titled.matches('[role="tab"]') ? titled : titled.querySelector<HTMLElement>('.options-folder-title');
-    if (text !== null) text.textContent = optionLabel(title, lang);
-  }
+/** Ask the owner of the options tree to render its labels in the chosen language. */
+export function relabelOptions(root: { relabel(language: string): void }, lang: string): void {
+  root.relabel(lang);
 }

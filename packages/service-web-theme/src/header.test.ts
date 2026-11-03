@@ -1,6 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vite-plus/test';
-import { renderServiceHeader } from './header.ts';
+import { renderServiceHeader as renderHeader } from './server.ts';
+
+// Source formatting is not part of the rendered header's contract.
+const renderServiceHeader = (input: Parameters<typeof renderHeader>[0]) =>
+  renderHeader(input)
+    .replace(/\s+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+>/g, '>')
+    .replace(/>\s*Sign in\s*<\/a>/g, '>Sign in</a>');
 
 describe('renderServiceHeader', () => {
   test('keeps the brand fixed and trails the Leaderboard: account, Play, then language', () => {
@@ -51,7 +59,7 @@ describe('renderServiceHeader', () => {
     expect(html).toContain('class="lucide lucide-languages"');
     expect(html).not.toContain('data-tooltip="言語"');
     expect(html).not.toContain('title="言語"');
-    expect(html).toContain('[&>svg]:size-4 text-muted-foreground');
+    expect(html).toContain('[&amp;&gt;svg]:size-4 text-muted-foreground');
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('href="/?lang=en"');
     expect(html).toContain('position-area:block-end span-inline-start');
