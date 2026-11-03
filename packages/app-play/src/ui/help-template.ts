@@ -149,7 +149,8 @@ export const PLAYER_HELP_TEMPLATE = html`
             <ul class="help-list">
               <li>
                 <kbd>↑</kbd> / <kbd>↓</kbd> or the turntable move the cursor, <kbd>Enter</kbd> opens a folder or starts
-                the chart, and <kbd>Esc</kbd> / <kbd>Backspace</kbd> go back. Click a chart row, or the active skin's
+                the chart, and <kbd>Esc</kbd> / <kbd>Backspace</kbd> go back; at the top level <kbd>Esc</kbd> asks
+                whether to leave for the drop screen. Click a chart row, or the active skin's
                 <em>PLAY</em>
                 button, to start.
               </li>
@@ -320,7 +321,8 @@ export const PLAYER_HELP_TEMPLATE = html`
                 <kbd>↑</kbd> / <kbd>↓</kbd> でカーソル移動、<kbd>Enter</kbd> でフォルダを開くか譜面を開始、<kbd
                   >Esc</kbd
                 >
-                / <kbd>Backspace</kbd> で戻ります。 譜面の行をクリック、または現在のスキンの
+                / <kbd>Backspace</kbd> で戻ります。最上位で <kbd>Esc</kbd> を押すと、ドロップ画面へ戻るか確認します。
+                譜面の行をクリック、または現在のスキンの
                 <em>PLAY</em> ボタンでも開始できます。皿でもカーソルを動かせます。
               </li>
               <li>

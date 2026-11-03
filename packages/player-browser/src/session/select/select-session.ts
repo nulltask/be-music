@@ -100,6 +100,11 @@ export interface SelectSessionEvents {
   skinConfig?(): void;
   /** The player left the screen (a back-out at the root, under a policy that leaves). */
   exit?(): void;
+  /**
+   * The player backed out at the root: the host asks whether to leave (That-Which-Must-Not-Be-Named PC's exit menu).
+   * With it, a back-out at the root does only this, whatever the policy says.
+   */
+  exitMenu?(): void;
 }
 
 /** The part of the audio service the select screen uses. */
@@ -564,7 +569,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private applyBrowse(command: BrowseCommand, atMs: number): BrowseEvent {
     const { state, event } = reduceBrowse(this.browseLibrary, this.browse, command);
     if (event.kind === 'at-root') {
-      if (this.policy.atRoot === 'exit') {
+      if (this.options.on.exitMenu !== undefined) {
+        this.options.on.exitMenu();
+      } else if (this.policy.atRoot === 'exit') {
         this.playCue('cancel');
         this.options.on.exit?.();
       }
@@ -678,7 +685,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private back(atMs: number, inFolder: boolean): boolean {
     if (inFolder && this.browse.path.length === 0) return false;
     const event = this.applyBrowse({ type: 'close' }, atMs);
-    return event.kind === 'folder-closed' || (event.kind === 'at-root' && this.policy.atRoot === 'exit');
+    return (
+      event.kind === 'folder-closed' ||
+      (event.kind === 'at-root' && (this.options.on.exitMenu !== undefined || this.policy.atRoot === 'exit'))
+    );
   }
 
   // ---------------------------------------------------------------------------------------------------------------------

@@ -296,6 +296,29 @@ export const PLAYER_APP_TEMPLATE = html`
         </form>
       </dialog>
       <!--
+      The exit menu: Escape at the root of the select screen asks whether to leave it for the drop screen, as
+      That-Which-Must-Not-Be-Named PC's exit menu asks before it leaves. Opened by \`showExitMenu\` (ui/exit-menu.ts).
+    -->
+      <dialog
+        class="dialog account-dialog"
+        id="exit-menu"
+        aria-labelledby="exit-menu-title"
+        aria-describedby="exit-menu-hint"
+      >
+        <form method="dialog" class="account-dialog-body">
+          <header>
+            <h2 id="exit-menu-title">${localized('exitMenuTitle')}</h2>
+            <p id="exit-menu-hint">${localized('exitMenuHint')}</p>
+          </header>
+          <footer>
+            <button type="submit" class="btn" data-variant="outline" value="cancel">
+              ${localized('exitMenuCancel')}
+            </button>
+            <button type="submit" class="btn" value="leave" autofocus>${localized('exitMenuLeave')}</button>
+          </footer>
+        </form>
+      </dialog>
+      <!--
       A play whose selected options do not fit its chart (beatoraja CONVERGE on a
       7KEY chart, LR2 SCATTER on a non-9KEY chart, ...): it names the options and
       the player goes back to the select screen when it closes. Filled by

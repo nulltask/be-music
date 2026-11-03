@@ -859,3 +859,16 @@ describe('SelectSession lane and number keys', () => {
     expect(search).toHaveBeenCalledOnce();
   });
 });
+
+describe('SelectSession exit menu', () => {
+  it('asks the host at the root instead of leaving or staying, on every policy', () => {
+    for (const policy of [SELECT_POLICIES.lr2, SELECT_POLICIES.beatoraja]) {
+      const exit = vi.fn();
+      const exitMenu = vi.fn();
+      const { key } = createSession({ policy, on: { exit, exitMenu } });
+      expect(key('Escape')).toBe(true);
+      expect(exitMenu).toHaveBeenCalledOnce();
+      expect(exit).not.toHaveBeenCalled();
+    }
+  });
+});

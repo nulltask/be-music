@@ -43,6 +43,8 @@ import type { CourseRoute } from './course.ts';
 export interface SelectRouteDeps {
   /** The player's keys the screen reads its control buttons by (`ControlSettings`), as it opens. */
   readonly controls: () => ControlSettings;
+  /** Asks whether to leave the select screen (the exit menu, `ui/exit-menu.ts`), then calls back with the answer. */
+  readonly showExitMenu: (onChoice: (choice: 'leave' | 'cancel') => void) => void;
   /** The scene router: the select scene it keeps, shown again on a return, or dropped when another family draws it. */
   readonly router: Pick<SceneRouter<PlayerScene, PlayScene, SelectScene>, 'select' | 'show' | 'dropSelect'>;
   /** The page: the shell's `playing` and `empty` classes. */
@@ -108,6 +110,7 @@ export class SelectRoute {
   public lastSelectNavigation: BrowseSnapshot | undefined;
   private readonly router: SelectRouteDeps['router'];
   private readonly controls: SelectRouteDeps['controls'];
+  private readonly showExitMenu: SelectRouteDeps['showExitMenu'];
   private readonly elements: SelectRouteDeps['elements'];
   private readonly library: SelectRouteDeps['library'];
   private readonly records: SelectRouteDeps['records'];
@@ -139,6 +142,7 @@ export class SelectRoute {
     this.startReplayFromSlot = deps.startReplayFromSlot;
     this.router = deps.router;
     this.controls = deps.controls;
+    this.showExitMenu = deps.showExitMenu;
     this.elements = deps.elements;
     this.library = deps.library;
     this.records = deps.records;
@@ -291,13 +295,13 @@ export class SelectRoute {
           this.beatoraja.beatorajaKitCaches.skinConfigs.set(entryPath, config);
           void this.beatoraja.applyBeatorajaSelectSkinConfig(entryPath, config);
         },
-        // Escape at the root of a beatoraja select screen leaves it for the drop screen, as beatoraja's leaves the
-        // player's select; coming back by a drop or a theme starts at the root.
-        exit: () => {
-          this.elements.shell.classList.add('empty');
-          void this.router.dropSelect();
-          this.lastSelectNavigation = undefined;
-          this.beatorajaSkinOptions.clear();
+        // Escape at the root of the select screen asks first (That-Which-Must-Not-Be-Named PC's exit menu), then leaves
+        // for the drop screen, as beatoraja's leaves the player's select; coming back by a drop or a theme starts at the
+        // root.
+        exitMenu: () => {
+          this.showExitMenu((choice) => {
+            if (choice === 'leave') this.leaveForDrop();
+          });
         },
       },
     });
@@ -330,5 +334,13 @@ export class SelectRoute {
     }
     void this.courseRoute.startCourse(entry.course, autoPlay ? { autoPlay: true } : {});
     return entry.course.playable;
+  }
+
+  /** Leaves the select screen for the drop screen; coming back by a drop or a theme starts at the root. */
+  private leaveForDrop(): void {
+    this.elements.shell.classList.add('empty');
+    void this.router.dropSelect();
+    this.lastSelectNavigation = undefined;
+    this.beatorajaSkinOptions.clear();
   }
 }
