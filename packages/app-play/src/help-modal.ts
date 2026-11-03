@@ -2,6 +2,7 @@
 import loadAcknowledgements, { type Acknowledgement } from 'virtual:acknowledgements';
 import { bindPlayerHeader } from './player-header.ts';
 import { detectPlayerLang, playerText, setPlayerLang, type PlayerLang } from './player-copy.ts';
+import { releaseFocusOnClose } from './ui/dialog-focus.ts';
 
 export function wireHelpModal(): void {
   const dialog = document.querySelector<HTMLDialogElement>('#help-modal');
@@ -38,11 +39,8 @@ export function wireHelpModal(): void {
     if (!dialog.open) dialog.showModal();
   };
   const close = (): void => dialog.close();
-  // The header repaints its buttons (a language switch in Help does), so focus the Help button there now rather than
-  // the one that opened the dialog.
-  dialog.addEventListener('close', () => {
-    document.querySelector<HTMLButtonElement>('[data-service-header="help"]')?.focus();
-  });
+  // Closed, the keys go back to the play: left on the Help button, Enter (meant to start the chart) would reopen it.
+  releaseFocusOnClose(dialog);
 
   bindPlayerHeader({ openHelp: open });
   closeButton.addEventListener('click', close);
