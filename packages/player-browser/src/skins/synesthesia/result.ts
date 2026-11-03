@@ -400,8 +400,12 @@ function glass(graphics: Graphics, x: number, y: number, w: number, h: number, r
   drawFrame(graphics, x, y, w, h, rim, { fill: 0.6, arm: 10 });
 }
 
-/** Polyline drawn up to `progress` of its horizontal span, stroked twice (bloom + filament) with a glowing head. */
-function filament(
+/**
+ * Polyline drawn up to `progress` of its horizontal span, stroked twice (bloom + filament) with a glowing head. The
+ * joins are round: a gauge that drops and climbs back within a few pixels turns the line by nearly 180°, and a miter
+ * join there juts far past the curve, most of all on the wide bloom.
+ */
+export function filament(
   graphics: Graphics,
   x: number,
   y: number,
@@ -429,8 +433,8 @@ function filament(
     previous = point;
   }
   if (path.length < 4) path.push(path[0]! + 0.5, path[1]!);
-  graphics.poly(path, false).stroke({ color, width: 5, alpha: 0.12 });
-  graphics.poly(path, false).stroke({ color, width: 1.5, alpha: 0.95 });
+  graphics.poly(path, false).stroke({ color, width: 5, alpha: 0.12, join: 'round' });
+  graphics.poly(path, false).stroke({ color, width: 1.5, alpha: 0.95, join: 'round' });
   const headX = path[path.length - 2]!;
   const headY = path[path.length - 1]!;
   graphics.circle(headX, headY, 6).fill({ color, alpha: 0.2 });
