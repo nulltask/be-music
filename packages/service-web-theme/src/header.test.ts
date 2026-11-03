@@ -119,6 +119,26 @@ describe('renderServiceHeader', () => {
     expect(html).not.toContain('data-service-header="fullscreen"');
   });
 
+  test('adds an Install button in front of Help only while asked', () => {
+    const base = {
+      locale: 'en',
+      title: 'Be-Music Play',
+      homeHref: '/',
+      help: true,
+      settings: true,
+      accountHref: '#sign-in',
+      requestURL: '/',
+    } as const;
+    expect(renderServiceHeader(base)).not.toContain('data-service-header="install"');
+    const html = renderServiceHeader({ ...base, install: true });
+    expect(html).toContain(
+      'data-service-header="install" data-tooltip="Install" data-side="bottom" aria-label="Install"',
+    );
+    expect(html).toContain('class="lucide lucide-download"');
+    expect(html.indexOf('data-service-header="install"')).toBeLessThan(html.indexOf('data-service-header="help"'));
+    expect(renderServiceHeader({ ...base, locale: 'ja', install: true })).toContain('aria-label="インストール"');
+  });
+
   test('adds a Help button in front of Settings only when asked', () => {
     const base = {
       locale: 'en',
