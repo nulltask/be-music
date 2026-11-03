@@ -4,6 +4,7 @@ import {
   renderServiceFooter,
   SERVICE_COPYRIGHT,
   SERVICE_FOOTER_CLASS,
+  SERVICE_FOOTER_COLUMNS_CLASS,
   SERVICE_FOOTER_LINK_CLASS,
   serviceOrigins,
   serviceSite,
@@ -73,6 +74,31 @@ describe('renderServiceFooter', () => {
       '<p data-public-beta-notice="ja" lang="ja" hidden>パブリックベータのためデータは予告なく削除されることがあります。</p>',
     );
     expect(both.indexOf('data-public-beta-notice="en"')).toBeLessThan(both.indexOf('data-public-beta-notice="ja"'));
+  });
+
+  test('lays out the build line, links, and copyright in one full-width row', () => {
+    const html = renderServiceFooter({
+      current: 'play',
+      layout: 'columns',
+      publicBeta: false,
+      buildInfo: { builtAt: '2026-11-02T18:28:10Z', revision: 'c1013c20aaaa' },
+    });
+    expect(html).toContain(`class="${SERVICE_FOOTER_COLUMNS_CLASS}"`);
+    expect(SERVICE_FOOTER_COLUMNS_CLASS).toContain('w-full');
+    expect(SERVICE_FOOTER_COLUMNS_CLASS).not.toContain('max-w-');
+    expect(html).not.toContain('Public Beta');
+    expect(html).toContain('<div class="sm:justify-self-start"><span class="build-info">Built ');
+    expect(html).toContain(`<p class="sm:justify-self-end">${SERVICE_COPYRIGHT}</p>`);
+    expect(html.indexOf('build-info')).toBeLessThan(html.indexOf('<nav'));
+    expect(html.indexOf('<nav')).toBeLessThan(html.indexOf(SERVICE_COPYRIGHT));
+  });
+
+  test('keeps the Public Beta line above the columns, across the row', () => {
+    const html = renderServiceFooter({ layout: 'columns', siteHTML: 'Be-Music' });
+    expect(html).toContain(
+      '<div class="sm:col-span-3"><p lang="en">Public Beta. Data may be deleted without notice.</p></div>',
+    );
+    expect(html).toContain(`<p class="sm:justify-self-end">Be-Music · ${SERVICE_COPYRIGHT}</p>`);
   });
 
   test('keeps a configured origin and escapes it', () => {
