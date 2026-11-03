@@ -21,6 +21,7 @@ export const ACTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Full screen': 'フルスクリーン',
   Screenshot: 'スクリーンショット',
   'Open folder': 'フォルダを開く',
+  'Next difficulty': '次の難易度',
   'AUTO play': 'AUTO プレイ',
   Sort: 'ソート',
   'Key mode filter': '鍵盤数の絞り込み',

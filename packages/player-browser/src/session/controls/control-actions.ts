@@ -90,6 +90,14 @@ export const CONTROL_ACTIONS = [
     defaults: { lr2: [code('ArrowRight')], beatoraja: [button('1P-key3')] },
   },
   {
+    id: 'select.difficulty',
+    screen: 'select',
+    label: 'Next difficulty',
+    // LR2's SELECT (and → on a chart), That-Which-Must-Not-Be-Named PC's 1.
+    defaults: { lr2: [code('Digit1'), button('1P-select'), button('2P-select')] },
+    bare: true,
+  },
+  {
     id: 'select.auto',
     screen: 'select',
     label: 'AUTO play',
