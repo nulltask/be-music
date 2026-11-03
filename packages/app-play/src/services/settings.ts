@@ -308,6 +308,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     autoScratch1P: false,
     autoScratch2P: false,
     anyKey: false,
+    laneKeys: {},
     sort: 'OFF',
     keysFilter: 'ALL',
     difficultyFilter: 'ALL',

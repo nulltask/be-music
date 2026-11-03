@@ -12,6 +12,7 @@ export interface OptionFolderSpec {
 export const OPTION_FOLDERS = {
   playOptions: { title: 'Play options' },
   replayView: { title: 'Replay / ghost' },
+  keys: { title: 'Key config' },
   tempo: { title: 'Tempo' },
   course: { title: 'Course' },
   skin: { title: 'Skin & display' },
@@ -35,6 +36,7 @@ export const OPTION_FOLDERS = {
  */
 export const OPTIONS_TABS = [
   'Play',
+  'Keys',
   'Tempo & course',
   'Skin & display',
   'Audio',

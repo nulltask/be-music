@@ -875,6 +875,16 @@ export const PLAYER_APP_HTML = `
               </dl>
             </section>
             <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Key config</h4>
+              <p class="help-menu-note">The Keys tab. Read as a play starts, so locked during one.</p>
+              <dl class="help-menu-items">
+                <dt data-for="1P scratch|1P key 1|1P key 2|1P key 3|1P key 4|1P key 5|1P key 6|1P key 7|2P key 1|2P key 2|2P key 3|2P key 4|2P key 5|2P key 6|2P key 7|2P scratch|Key 1|Key 2|Key 3|Key 4|Key 5|Key 6|Key 7|Key 8|Key 9">Lanes</dt>
+                <dd>The key each lane takes: 5 / 7 / 10 / 14 KEY share one set, 9 KEY has its own. Click a lane's key, then press the key to give it; a key another lane has moves to that lane's old key. Esc cancels. Esc, Space, F5, Backspace and the up / down arrows stay the play's.</dd>
+                <dt>Reset keys to defaults</dt>
+                <dd>Puts the page's lanes back on their default keys.</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
               <h4 class="help-menu-folder-title">Tempo</h4>
               <dl class="help-menu-items">
                 <dt>Enabled</dt>
@@ -1155,6 +1165,16 @@ export const PLAYER_APP_HTML = `
                 <dd>オンならリプレイは録画したプレイヤーの設定で、オフなら自分の設定で再生します。</dd>
                 <dt data-for="Ghost|Ghost mode|Ghost status|Ghost replay file…">Ghost · Ghost mode</dt>
                 <dd>記録されたプレイを自分のプレイと一緒に見せます。自己ベスト、リプレイスロット、Leaderboard の 1 位、リプレイファイルのどれかを、2 つ目のプレイフィールド、ペースメーカー、押下を自分のレーンに重ねるペースメーカーのどれかで見せます。Ghost status はカーソルの譜面で見せられるかを示します。</dd>
+              </dl>
+            </section>
+            <section class="help-menu-folder">
+              <h4 class="help-menu-folder-title">Key config</h4>
+              <p class="help-menu-note">Keys タブ。プレイの開始時に読むので、プレイ中は変えられません。</p>
+              <dl class="help-menu-items">
+                <dt data-for="1P scratch|1P key 1|1P key 2|1P key 3|1P key 4|1P key 5|1P key 6|1P key 7|2P key 1|2P key 2|2P key 3|2P key 4|2P key 5|2P key 6|2P key 7|2P scratch|Key 1|Key 2|Key 3|Key 4|Key 5|Key 6|Key 7|Key 8|Key 9">Lanes</dt>
+                <dd>各レーンに割り当てるキー。5 / 7 / 10 / 14 KEY は共通、9 KEY は別に設定します。レーンのキーをクリックしてから割り当てたいキーを押します。ほかのレーンが使っているキーなら、そのレーンには元のキーが入れ替わりで入ります。Esc で取り消し。Esc、Space、F5、Backspace、上下の矢印はプレイ用なので使えません。</dd>
+                <dt>Reset keys to defaults</dt>
+                <dd>このページのレーンを既定のキーに戻します。</dd>
               </dl>
             </section>
             <section class="help-menu-folder">

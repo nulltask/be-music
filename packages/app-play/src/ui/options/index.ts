@@ -75,6 +75,7 @@ import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './rend
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
 import { buildSkinFolder, rebuildLR2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
 import { OptionHelp } from './help.ts';
+import { buildKeyConfigFolder } from './keys.ts';
 import { relabelOptions } from './labels.ts';
 import { buildTempoFolder } from './tempo.ts';
 import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
@@ -318,6 +319,7 @@ export class OptionsDialog {
   private readonly buildCaptureFolder = buildCaptureFolder;
   private readonly buildPlayOptionsFolder = buildPlayOptionsFolder;
   private readonly buildReplayViewFolder = buildReplayViewFolder;
+  private readonly buildKeyConfigFolder = buildKeyConfigFolder;
   private readonly buildTempoFolder = buildTempoFolder;
   private readonly buildCourseFolder = buildCourseFolder;
   private readonly buildAudioFolder = buildAudioFolder;
@@ -426,12 +428,13 @@ export class OptionsDialog {
     const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec): OptionFolder =>
       parent.addFolder({ title: folder.title });
     const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
-    const [play, tempo, skin, audio, library, leaderboard, developer] = tabs.pages;
-    if (!play || !tempo || !skin || !audio || !library || !leaderboard || !developer) return;
+    const [play, keys, tempo, skin, audio, library, leaderboard, developer] = tabs.pages;
+    if (!play || !keys || !tempo || !skin || !audio || !library || !leaderboard || !developer) return;
     // Tabs in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
     // library and capturing a play, the Leaderboard, then the developer settings.
     const replayPage = this.buildPlayOptionsFolder(addSection(play, OPTION_FOLDERS.playOptions));
     this.buildReplayViewFolder(addFolder(replayPage, OPTION_FOLDERS.replayView));
+    this.buildKeyConfigFolder(addSection(keys, OPTION_FOLDERS.keys));
     this.buildTempoFolder(addSection(tempo, OPTION_FOLDERS.tempo));
     this.buildCourseFolder(addSection(tempo, OPTION_FOLDERS.course));
     this.buildSkinFolder(addSection(skin, OPTION_FOLDERS.skin), addFolder);

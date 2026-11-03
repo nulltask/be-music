@@ -23,6 +23,7 @@ export type PlaySceneGUIState = Pick<
   | 'autoScratch1P'
   | 'autoScratch2P'
   | 'anyKey'
+  | 'laneKeys'
   | 'replayView'
   | 'tempoEnabled'
   | 'tempoPercent'
@@ -179,6 +180,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     autoScratch2P: replay !== undefined ? (replay.play.autoScratch2P ?? replay.play.autoScratch) : lanes.autoScratch2P,
     // ANY KEY is the PC edition's assist, offered with the `____` judge rules only (#751).
     anyKey: replay !== undefined ? replay.play.anyKey === true : guiState.anyKey && guiState.judgeRuleset === '____',
+    // The player's own keys; a replay plays its recorded lanes, which no key reaches.
+    laneKeys: guiState.laneKeys,
     dpFlip: replay !== undefined ? false : lanes.dpFlip,
     random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
     random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,

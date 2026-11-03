@@ -2,6 +2,8 @@ import { PLAY_MODE_LAYOUTS } from '@be-music/chart-model';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   createLaneBindings,
+  LANE_KEY_CONFIG,
+  laneKeyLabel,
   resolveLaneChannels,
   resolvePlayVariantLaneChannels,
   resolveLaneDisplayMode,
@@ -447,5 +449,76 @@ describe('complete lane-option domains', () => {
       '25',
     ]);
     expect(resolveLaneOptionChannels('2P', '9', bindings)).toEqual([]);
+  });
+});
+
+describe('lane keys', () => {
+  const keyOf = (bindings: ReturnType<typeof createLaneBindings>, channel: string) =>
+    bindings.find((binding) => binding.channel === channel);
+
+  test("LANE_KEY_CONFIG lists each group's lanes with the defaults the layouts take", () => {
+    expect(LANE_KEY_CONFIG.beat.map((lane) => lane.id)).toEqual([
+      '16',
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '18',
+      '19',
+      '21',
+      '22',
+      '23',
+      '24',
+      '25',
+      '28',
+      '29',
+      '26',
+    ]);
+    expect(LANE_KEY_CONFIG.beat.filter((lane) => lane.scratch).map((lane) => lane.id)).toEqual(['16', '26']);
+    const sevenKey = createLaneBindings(['11', '12', '13', '14', '15', '16', '18', '19'], { playVariant: '7' });
+    for (const lane of LANE_KEY_CONFIG.beat.filter((entry) => entry.side === '1P')) {
+      expect(keyOf(sevenKey, lane.id)?.inputTokens[0], lane.id).toBe(lane.defaultToken);
+    }
+    expect(LANE_KEY_CONFIG.popn.map((lane) => lane.defaultToken).join('')).toBe('zsxdcfvgb');
+  });
+
+  test("a beat layout takes the player's keys by channel, in 5, 7, 10 and 14 KEY alike", () => {
+    const laneKeys = { beat: { '11': ['a'], '16': ['q'], '21': ['l'] } };
+    const seven = createLaneBindings(['11', '12', '16'], { playVariant: '7', laneKeys });
+    expect(keyOf(seven, '11')).toMatchObject({ inputTokens: ['a'], keyLabel: 'a' });
+    expect(keyOf(seven, '12')?.inputTokens).toEqual(['s']);
+    // A scratch keeps its reverse key (the odd-even rule) after the player's own one.
+    expect(keyOf(seven, '16')?.inputKeys?.[0]).toEqual(['q']);
+    expect(keyOf(seven, '16')?.inputTokens[0]).toBe('q');
+    const fourteen = createLaneBindings(['11', '21'], { playVariant: '14', laneKeys });
+    expect(keyOf(fourteen, '21')?.inputTokens).toEqual(['l']);
+  });
+
+  test("a 9 KEY layout takes the player's keys by key number, and other layouts keep their defaults", () => {
+    const laneKeys = { popn: { '1': ['a'], '9': ['shift-right'] } };
+    const pms = createLaneBindings(['11', '12', '13', '14', '15', '22', '23', '24', '25'], {
+      playVariant: '9',
+      laneKeys,
+    });
+    expect(pms[0]).toMatchObject({ inputTokens: ['a'] });
+    expect(pms.at(-1)).toMatchObject({ inputTokens: ['shift-right'], keyLabel: 'RShift' });
+    const seven = createLaneBindings(['11'], { playVariant: '7', laneKeys });
+    expect(keyOf(seven, '11')?.inputTokens).toEqual(['z']);
+    const keyboard = createLaneBindings(['11'], { playVariant: '24', laneKeys: { beat: { '11': ['q'] } } });
+    expect(keyOf(keyboard, '11')?.inputTokens).toEqual(['a']);
+  });
+
+  test('an empty key list leaves the lane on its default', () => {
+    const bindings = createLaneBindings(['11'], { playVariant: '7', laneKeys: { beat: { '11': [] } } });
+    expect(keyOf(bindings, '11')?.inputTokens).toEqual(['z']);
+  });
+
+  test('laneKeyLabel names modifier, named and function keys', () => {
+    expect(laneKeyLabel('shift-left')).toBe('LShift');
+    expect(laneKeyLabel('tab')).toBe('Tab');
+    expect(laneKeyLabel('f5')).toBe('F5');
+    expect(laneKeyLabel(',')).toBe(',');
+    expect(laneKeyLabel('z')).toBe('z');
   });
 });

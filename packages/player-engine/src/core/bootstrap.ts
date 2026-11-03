@@ -45,6 +45,7 @@ import {
   appendFreeZoneInputChannels,
   createInputTokenToChannelsMap,
   createLaneBindings,
+  type LaneKeyOverrides,
   resolveLaneDisplayMode,
   type LaneBinding,
 } from './lane-layout.ts';
@@ -272,6 +273,8 @@ export function preparePlaybackChart(
      * battle conversion when it copies the chart, and is narrowed to what can take effect (`resolveChartNotesOption`).
      */
     chartNotes?: ChartNotesOption;
+    /** The player's own lane keys (`LaneModeOptions.laneKeys`). */
+    laneKeys?: LaneKeyOverrides;
   } = {},
   auxiliaryPlaybackEndSeconds = 0,
   random?: () => number,
@@ -405,6 +408,7 @@ export function preparePlaybackChart(
     player: resolved.source.bms.player,
     chartExtension: options.laneModeExtension,
     playVariant,
+    laneKeys: options.laneKeys,
   };
   const laneBindings = createLaneBindings(channels, laneModeOptions);
   const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);

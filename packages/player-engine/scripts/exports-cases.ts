@@ -1534,6 +1534,11 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.resolveWheelLaneDirection('1P', '24');
     },
   });
+  define('player-engine.lanes.laneKeyLabel', {
+    run: () => {
+      lanesAPI.laneKeyLabel('shift-left');
+    },
+  });
   const benchScratchBindings = lanesAPI.createLaneBindings(['11', '16', '21', '26'], {
     platform: 'linux',
     playVariant: '14',

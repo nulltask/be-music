@@ -1,3 +1,4 @@
+import type { LaneKeyOverrides } from '@be-music/player-engine/lanes';
 import type { DecideScene, PlayScene, ResultScene, SelectScene } from '@be-music/player-browser/host';
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import type { ReplayPlaybackOptions } from '@be-music/player-engine/replay';
@@ -288,6 +289,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * Offered with the `____` judge rules only; a play with it saves no record.
    */
   anyKey: boolean;
+  /** The player's own lane keys over the defaults (Options → Keys, `lane-keys.ts`); read as each play starts. */
+  laneKeys: LaneKeyOverrides;
   /**
    * The built-in and LR2 select screens' sort, key filter and difficulty filter. Two-way synced with an LR2 select
    * skin's sort and filter buttons; the beatoraja select screen has its own MODE and SORT buttons.
