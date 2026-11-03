@@ -134,7 +134,7 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await player.page.screenshot({ path: info.outputPath('first-sequence.png') });
     await player.resumeUntil(pressed + 3.5, 'end of the first stage sequence');
     await sample(['blue', 'blue']);
-    await player.key('Space');
+    await player.key('Pause');
     pressed = await player.pressPaused('KeyZ', 8.02);
     await player.releaseKey('KeyZ');
     await sample(['green', 'blue']);

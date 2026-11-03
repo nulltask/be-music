@@ -47,13 +47,13 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 2.2, 'text selection');
     await expect.poll(() => textPixels(player), { timeout: 2000, intervals: [100] }).toBeGreaterThan(before + 500);
     const shown = await textPixels(player);
-    await player.key('Space');
+    await player.key('Pause');
     const paused = (await player.state()).play?.seconds;
     await player.page.screenshot({ path: info.outputPath('chart-text.png') });
     if (family === 'native') await expect(player.page.locator('[data-chart-text]')).toHaveText('W'.repeat(80));
     await player.page.waitForTimeout(250);
     expect((await player.state()).play?.seconds).toBeCloseTo(paused!, 2);
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 6.2, 'text clear');
     // Cleared: back nearer the empty count than the shown one (other HUD text keeps changing).
     await expect.poll(() => textPixels(player), { timeout: 2000, intervals: [100] }).toBeLessThan((before + shown) / 2);
