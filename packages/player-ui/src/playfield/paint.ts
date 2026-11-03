@@ -165,8 +165,8 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
   }
   ctx.globalAlpha = 1;
   for (const note of data.longNotes) {
-    // A note is as tall as a share of its lane's width (a scratch note as a white key's), standing on its bottom edge.
-    const noteHeight = resolveNoteHeight(note.kind, note.w, data.whiteLaneWidth);
+    // A note is as tall as a share of its lane's width (every note as a white key's), standing on its bottom edge.
+    const noteHeight = resolveNoteHeight(note.w, data.whiteLaneWidth);
     const bodyTop = note.top - noteHeight;
     const bodyHeight = Math.max(1, note.bottom - note.top);
     // The kinds apart by shape (`resolveLongNoteMarks`): an HCN's centre line zigzags, a BSS's tail carries a chevron.
@@ -229,14 +229,14 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
     ctx.globalAlpha = 1;
   }
   for (const note of data.notes) {
-    const noteHeight = resolveNoteHeight(note.kind, note.w, data.whiteLaneWidth);
+    const noteHeight = resolveNoteHeight(note.w, data.whiteLaneWidth);
     ctx.globalAlpha = note.alpha ?? 1;
     ctx.fillStyle = NOTE_COLORS[note.kind];
     ctx.fillRect(note.x, note.y - noteHeight, note.w, noteHeight);
   }
   // A mine reads as something to avoid: a red bar with a dark core, unlike any playable note.
   for (const mine of data.mines) {
-    const noteHeight = resolveNoteHeight(mine.kind, mine.w, data.whiteLaneWidth);
+    const noteHeight = resolveNoteHeight(mine.w, data.whiteLaneWidth);
     ctx.globalAlpha = mine.alpha ?? 1;
     ctx.fillStyle = '#ff5c6c';
     ctx.fillRect(mine.x, mine.y - noteHeight, mine.w, noteHeight);
