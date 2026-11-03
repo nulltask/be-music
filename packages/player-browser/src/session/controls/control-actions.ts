@@ -61,6 +61,8 @@ export const CONTROL_ACTION_IDS = [
   'select.back',
   'select.close-folder',
   'select.option-panel',
+  'select.option-panel-2',
+  'select.option-panel-3',
   'select.sort',
   'select.keys-filter',
   'select.ln-mode',
