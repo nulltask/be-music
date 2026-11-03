@@ -1,3 +1,5 @@
+import { html, render } from 'lit';
+import { optionLabel } from './labels.ts';
 // The Options dialog's key config (the Keys tab): the key map the built-in skins' screens read (LR2's or beatoraja's),
 // then one page per key config group (5 / 7 / 10 / 14 KEY, 9 KEY), a row per lane with the key it takes, and on the
 // 5 / 7 / 10 / 14 KEY page each side's START and SELECT. Clicking a row's key waits for the next key press and gives the
@@ -45,7 +47,7 @@ export function controlKeyConfigLabel(id: ControlKeyId): string {
   return `${side} ${button!.toUpperCase()}`;
 }
 
-/** A row of the key config waiting for its key: a lane of a group, or START / SELECT. */
+/** A row of the key config: a lane of a group, or START / SELECT. */
 type KeyConfigRow = { readonly group: LaneKeyGroup; readonly id: string } | { readonly control: ControlKeyId };
 
 function sameRow(left: KeyConfigRow | undefined, right: KeyConfigRow): boolean {
@@ -79,14 +81,13 @@ export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContaine
       }),
   );
   const groups = Object.keys(GROUP_TITLES) as LaneKeyGroup[];
-  const tabs = folder.addTab({
+  const pages = folder.addTab({
     pages: [...groups.map((group) => ({ title: GROUP_TITLES[group] })), { title: SCREENS_PAGE_TITLE }],
-  });
-  const pages = tabs.pages;
+  }).pages;
   const screensPage = pages[groups.length];
   if (screensPage !== undefined) repaintActionKeys = buildActionKeyPage.call(this, screensPage);
-  const rows: { readonly row: KeyConfigRow; readonly button: HTMLButtonElement }[] = [];
-  let waiting: KeyConfigRow | undefined;
+  const views: (() => void)[] = [];
+  let waiting: (KeyConfigRow & { refused?: boolean }) | undefined;
 
   const prompts = () => PROMPTS[playerLang() === 'ja' ? 'ja' : 'en'];
   const keyOf = (row: KeyConfigRow): string =>
@@ -94,11 +95,7 @@ export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContaine
       ? effectiveControlKey(this.guiState.controlKeys, row.control)
       : effectiveLaneKey(this.guiState.laneKeys, row.group, row.id);
   const paint = (): void => {
-    for (const { row, button } of rows) {
-      const active = sameRow(waiting, row);
-      button.textContent = active ? prompts().waiting : laneKeyLabel(keyOf(row));
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    }
+    for (const update of views) update();
   };
   const stop = (): void => {
     document.removeEventListener('keydown', onKey, true);
@@ -131,10 +128,10 @@ export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContaine
       return;
     }
     const token = keyboardEventToTokens(event)[0];
-    const button = rows.find(({ row }) => sameRow(waiting, row))?.button;
     // A play keeps Esc, Pause, F5, Backspace and the arrows for itself; a key with no token cannot be a row's.
     if (token === undefined || PLAY_SCENE_KEY_CODES.has(event.code) || takenByOtherKind(waiting, token)) {
-      if (button) button.textContent = prompts().refused;
+      waiting.refused = true;
+      paint();
       return;
     }
     if ('control' in waiting) {
@@ -153,28 +150,42 @@ export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContaine
   const addRow = (page: OptionContainer, label: string, row: KeyConfigRow): void => {
     const content = document.createElement('div');
     content.className = 'options-key-row';
-    const name = document.createElement('span');
-    name.className = 'label options-label';
-    name.textContent = label;
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'btn options-key';
-    button.dataset.variant = 'outline';
-    button.dataset.size = 'sm';
-    button.addEventListener('click', () => {
-      if (sameRow(waiting, row)) {
-        stop();
-        return;
-      }
-      if (waiting === undefined) document.addEventListener('keydown', onKey, true);
-      waiting = row;
-      paint();
+    let language = playerLang();
+    const update = (): void => {
+      const active = sameRow(waiting, row);
+      const text = active ? (waiting?.refused ? prompts().refused : prompts().waiting) : laneKeyLabel(keyOf(row));
+      render(
+        html`<span class="options-label-wrap"
+            ><span class="label options-label">${optionLabel(label, language)}</span><span data-option-help-host></span
+          ></span>
+          <button
+            type="button"
+            class="btn options-key"
+            data-variant="outline"
+            data-size="sm"
+            aria-pressed=${String(active)}
+            @click=${() => {
+              if (sameRow(waiting, row)) {
+                stop();
+                return;
+              }
+              if (waiting === undefined) document.addEventListener('keydown', onKey, true);
+              waiting = { ...row };
+              paint();
+            }}
+          >
+            ${text}
+          </button>`,
+        content,
+      );
+    };
+    const option = page.addElement(content, (nextLanguage) => {
+      language = nextLanguage === 'ja' ? 'ja' : 'en';
+      update();
     });
-    content.append(name, button);
-    const option = page.addElement(content);
     option.element.dataset.optionLabel = label;
     this.trackPlayOption(option);
-    rows.push({ row, button });
+    views.push(update);
   };
 
   groups.forEach((group, groupIndex) => {

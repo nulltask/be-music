@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { renderBuildInfo } from './build-info.ts';
+import { renderBuildInfo } from './server.ts';
 
 describe('build footer', () => {
   test('formats a fixed timestamp in UTC and abbreviates the revision', () => {
