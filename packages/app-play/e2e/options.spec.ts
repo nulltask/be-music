@@ -7,15 +7,19 @@ test('the header opens the Options dialog, with sections, Play options pages, ho
   const { page } = player;
   const dialog = page.locator('#options-modal');
   const settings = page.locator('[data-service-header="settings"]');
-  await expect(dialog).toBeHidden();
+  await expect(dialog).not.toHaveAttribute('open');
+  await expect(dialog.locator(':scope > div')).toBeHidden();
   await settings.click();
-  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute('open', '');
+  await expect(dialog.locator(':scope > div')).toBeVisible();
   await expect(settings).toHaveAttribute('aria-expanded', 'true');
   // Nothing in it folds: every folder is a section.
   await expect(dialog.locator('details')).toHaveCount(0);
   // Play options splits its options into pages; Hi-speed sits on Hi-speed & view.
   await dialog.getByRole('tab', { name: 'Hi-speed & view', exact: true }).click();
-  const hiSpeed = dialog.locator('.options-row[data-option-label="Hi-speed"]');
+  const hiSpeed = dialog
+    .locator('.options-row[data-option-label="Hi-speed"]')
+    .filter({ has: page.locator('input[type="number"]') });
   await expect(hiSpeed).toBeVisible();
   // Its help button shows Help's entry while hovered.
   await hiSpeed.locator('.options-help').hover();
@@ -31,7 +35,8 @@ test('the header opens the Options dialog, with sections, Play options pages, ho
   expect(await graph.getAttribute('points')).not.toContain('NaN');
   await dialog.locator(':scope > div').screenshot({ path: info.outputPath('options.png') });
   await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
+  await expect(dialog).not.toHaveAttribute('open');
+  await expect(dialog.locator(':scope > div')).toBeHidden();
   await expect(settings).toHaveAttribute('aria-expanded', 'false');
 });
 
@@ -143,3 +148,117 @@ for (const hasCurrentCourses of [false, true]) {
     expect(await readCourses()).toEqual({ current: result, previous: undefined });
   });
 }
+
+test('editing a number preserves its control and help while synchronizing the slider', async ({ player }) => {
+  await player.open();
+  const { page } = player;
+  await page.locator('[data-service-header="settings"]').click();
+  const dialog = page.locator('#options-modal');
+  await dialog.getByRole('tab', { name: 'Hi-speed & view', exact: true }).click();
+  const row = dialog
+    .locator('.options-row[data-option-label="Hi-speed"]')
+    .filter({ has: page.locator('input[type="number"]') });
+  const field = row.locator('input[type="number"]');
+  const original = await field.elementHandle();
+  await field.fill('3.14');
+  await field.dispatchEvent('change');
+  await expect(field).toHaveValue('3.1');
+  await expect(field).toBeFocused();
+  expect(await field.evaluate((current, previous) => current === previous, original)).toBe(true);
+  await expect(row.locator('input[type="range"]')).toHaveValue('3.1');
+  await expect(row.locator('.options-help')).toHaveCount(1);
+  // A slider edit updates the same number field, even while the field still has focus.
+  await row.locator('input[type="range"]').evaluate((range: HTMLInputElement) => {
+    range.value = '4.2';
+    range.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(field).toHaveValue('4.2');
+  await expect(field).toBeFocused();
+  await row.locator('.options-help').hover();
+  await expect(page.locator('#options-help-tip')).toBeVisible();
+});
+
+test('acknowledgements load on demand and render package metadata as text', async ({ player }) => {
+  let requests = 0;
+  await player.page.route('**/acknowledgements.json', async (route) => {
+    requests++;
+    await route.fulfill({
+      json: [{ name: '<img src=x onerror=alert(1)>', version: '1.0', license: 'MIT', licenseText: '<license>' }],
+    });
+  });
+  await player.open();
+  expect(requests).toBe(0);
+  await player.page.locator('[data-service-header="help"]').click();
+  await player.page.locator('#help-tab-oss').click();
+  const list = player.page.locator('#help-oss-list');
+  await expect(list.locator('.ack-card-name')).toHaveText('<img src=x onerror=alert(1)>');
+  await expect(list.locator('img')).toHaveCount(0);
+  await list.locator('summary').click();
+  await expect(list.locator('pre')).toHaveText('<license>');
+  await player.page.locator('#help-tab-usage').click();
+  await player.page.locator('#help-tab-oss').click();
+  expect(requests).toBe(1);
+  await expect(list.locator('details')).toHaveAttribute('open', '');
+});
+
+test('language changes preserve inputs, help controls and selected tabs', async ({ player }) => {
+  await player.open();
+  const { page } = player;
+  await page.locator('[data-service-header="settings"]').click();
+  const dialog = page.locator('#options-modal');
+  await dialog.getByRole('tab', { name: 'Hi-speed & view', exact: true }).click();
+  const row = dialog
+    .locator('.options-row[data-option-label="Hi-speed"]')
+    .filter({ has: page.locator('input[type="number"]') });
+  const field = row.locator('input[type="number"]');
+  const original = await field.elementHandle();
+  await field.fill('3.14');
+  // Simulate a preference update while an editor is focused, without moving focus to the header.
+  await page.evaluate(() => document.querySelector<HTMLAnchorElement>('#language-menu a[lang="ja"]')!.click());
+  await expect(dialog.getByRole('tab', { name: 'ハイスピードと表示', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(field).toHaveValue('3.14');
+  await expect(field).toBeFocused();
+  expect(await field.evaluate((current, previous) => current === previous, original)).toBe(true);
+  await expect(page.locator('.drop-title').first()).toHaveText('ドロップして読み込む');
+  await expect(page.locator('footer.service-page-footer nav')).toHaveAttribute('aria-label', 'サービス');
+  await expect(row.locator('.options-help')).toHaveCount(1);
+  await page.evaluate(() => document.querySelector<HTMLAnchorElement>('#language-menu a[lang="en"]')!.click());
+  await expect(dialog.getByRole('tab', { name: 'Hi-speed & view', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await field.dispatchEvent('change');
+  await expect(field).toHaveValue('3.1');
+  await row.locator('.options-help').hover();
+  await expect(page.locator('#options-help-tip')).toBeVisible();
+  await dialog.getByRole('tab', { name: 'Keys', exact: true }).click();
+  const lane = dialog.locator('.options-row[data-option-label="1P key 1"]');
+  await lane.locator('button.options-key').click();
+  await expect(lane.locator('button.options-key')).toContainText('Press a key');
+  await page.keyboard.press('Escape');
+  await expect(lane.locator('button.options-key')).not.toContainText('Press a key');
+  await expect(dialog).toHaveAttribute('open', '');
+});
+
+test('header updates retain the language popover and focused controls', async ({ player }) => {
+  await player.open();
+  const { page } = player;
+  const language = page.locator('[popovertarget="language-menu"]');
+  const original = await language.elementHandle();
+  await language.click();
+  await expect(page.locator('#language-menu')).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event('beforeinstallprompt', { cancelable: true })));
+  await expect(page.locator('[data-service-header="install"]')).toBeVisible();
+  expect(await language.evaluate((current, previous) => current === previous, original)).toBe(true);
+  await expect(page.locator('#language-menu')).toBeVisible();
+  await expect(language).toBeFocused();
+  await page.locator('#language-menu a[lang="ja"]').click();
+  await expect(language).toHaveAttribute('aria-label', '言語: 日本語');
+  await expect(page.locator('.drop-title').first()).toHaveText('ドロップして読み込む');
+  await expect(page.locator('footer.service-page-footer nav')).toHaveAttribute('aria-label', 'サービス');
+  await page.locator('[data-service-header="settings"]').click();
+  await expect(page.locator('#options-modal').getByRole('tab', { name: 'プレイ', exact: true })).toBeVisible();
+});

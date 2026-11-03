@@ -13,7 +13,7 @@ export const SPECULATION_ACTION: SpeculationAction = 'prefetch';
 
 /**
  * Paths under / that must never be fetched ahead:
- * - `ruleset/*` and `lang/*` are GETs that rewrite a cookie and redirect (routes.tsx), so a hover alone would switch the
+ * - `ruleset/*` and `lang/*` are GETs that rewrite a cookie and redirect (routes.ts), so a hover alone would switch the
  *   viewer's rules or language;
  * - `settings` depends on the signed-in session and holds the account forms;
  * - `assets/*`, the API reference and the share-card images are not pages to navigate to.

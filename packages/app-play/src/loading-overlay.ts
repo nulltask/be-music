@@ -1,3 +1,5 @@
+import { render } from 'lit';
+import { localized } from './ui/localized.ts';
 import type { LoadProgress } from '@be-music/player-browser/collection';
 import { playerText } from './player-copy.ts';
 
@@ -19,8 +21,8 @@ export interface LoadingOverlayElements {
 export function showLoadingOverlay(elements: LoadingOverlayElements): void {
   elements.loadingOverlay.classList.add('visible');
   elements.loadingOverlay.setAttribute('aria-hidden', 'false');
-  elements.loadingLabel.textContent = playerText().shell.loading;
-  elements.loadingCounter.textContent = '';
+  render(localized('loading'), elements.loadingLabel);
+  render('', elements.loadingCounter);
   // Reset to indeterminate (no inline width) until the first `applyLoadProgress` lands. The CSS animates the bar so
   // the user sees motion even before the first phase event fires.
   elements.loadingBarFill.classList.add('indeterminate');
@@ -44,7 +46,6 @@ export function hideLoadingOverlay(elements: LoadingOverlayElements): void {
  * filename / sub-task so the user can see which file is the current bottleneck.
  */
 export function applyLoadProgress(elements: LoadingOverlayElements, progress: LoadProgress): void {
-  const phaseLabel = playerText().phases[progress.phase];
   const counterFragments: string[] = [];
   if (progress.total > 0) {
     // Determinate phase — set explicit width and pin the counter to "X / N (P%)" so the user can eyeball ETA.
@@ -63,6 +64,9 @@ export function applyLoadProgress(elements: LoadingOverlayElements, progress: Lo
   if (progress.label) {
     counterFragments.push(progress.label);
   }
-  elements.loadingLabel.textContent = phaseLabel;
-  elements.loadingCounter.textContent = counterFragments.join(' · ');
+  render(
+    localized(() => playerText().phases[progress.phase]),
+    elements.loadingLabel,
+  );
+  render(counterFragments.join(' · '), elements.loadingCounter);
 }
