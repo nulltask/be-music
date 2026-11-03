@@ -1622,6 +1622,90 @@ textarea {
   margin-top: 4px;
 }
 
+/* Help's Keyboard tab: the screen and key map pickers, the keyboard, and the lists of what each key does. */
+.help-keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.help-keyboard-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+.help-keyboard be-music-keyboard-map {
+  padding: 10px;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 10px;
+  background: rgb(20 24 34 / 0.55);
+}
+.help-keyboard-legend,
+.help-keyboard-note,
+.help-keyboard-empty {
+  margin: 0;
+  font-size: 11px;
+  color: rgb(151 163 179 / 0.85);
+}
+.help-keyboard-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 12px 20px;
+  align-items: start;
+}
+.help-keyboard-list h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+.help-keyboard-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.help-keyboard-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: default;
+}
+.help-keyboard-list li:hover,
+.help-keyboard-list li:focus-visible,
+.help-keyboard-list li[data-active] {
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  outline: none;
+}
+.help-keyboard-name {
+  flex: 1 0 auto;
+}
+.help-keyboard-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px;
+}
+.help-keyboard-keys kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: rgb(20 24 34 / 0.9);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: #f8fafc;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 /* Keep the language switch at the right edge of the Help & About row. */
 .help-heading-row {
   display: flex;
