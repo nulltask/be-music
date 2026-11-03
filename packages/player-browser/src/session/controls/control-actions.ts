@@ -76,6 +76,8 @@ export const CONTROL_ACTION_IDS = [
   'play.pause',
   'play.hi-speed-up',
   'play.hi-speed-down',
+  'play.cover-less',
+  'play.cover-more',
   'play.floating-hi-speed',
   'play.restore-green',
   'play.seek-back',
