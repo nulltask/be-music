@@ -646,7 +646,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     });
 
     // Info panel.
-    framePanel(chrome, 14, 56, 290, 302, accent);
+    framePanel(chrome, 14, 56, 290, 264, accent);
     // The genre heads the card, in the accent light, where a fixed caption used to sit.
     const genre = chartEntry?.genre?.trim();
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
@@ -704,22 +704,24 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
     drawJudgeRank(addText, chartEntry, 30, 214);
 
+    // The file name and the list position share the row under the judge rank.
     if (chartEntry?.fileLabel) {
-      addText(chartEntry.fileLabel, 30, 251, {
+      addText(chartEntry.fileLabel, 30, 232, {
         size: 9,
         weight: '300',
         fill: SYN_DIM,
         fontFamily: SYN_TEXT_FONT,
-        maxWidth: 258,
+        // Clear of the list position at the row's end.
+        maxWidth: 200,
       });
     }
-    addText(position, 288, 270, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1 });
+    addText(position, 288, 232, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1 });
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
-    chrome.rect(26, 296, 170, 40).fill({ color: accent, alpha: 0.16 });
-    chrome.rect(30, 300, 162, 32).fill({ color: accent, alpha: 0.88 });
-    drawReticle(chrome, 26, 296, 170, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
-    addText('PLAY', 111, 316, {
+    chrome.rect(26, 258, 170, 40).fill({ color: accent, alpha: 0.16 });
+    chrome.rect(30, 262, 162, 32).fill({ color: accent, alpha: 0.88 });
+    drawReticle(chrome, 26, 258, 170, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
+    addText('PLAY', 111, 278, {
       size: 14,
       fill: SYN_VOID,
       fontFamily: SYN_DISPLAY_FONT,
@@ -728,9 +730,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorY: 0.5,
     });
     // AUTO's right edge sits on the content column's (288), like the LEVEL chip above it.
-    chrome.rect(202, 303, 86, 26).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
-    drawReticle(chrome, 202, 303, 86, 26, SYN_MIST, 0.8, { arm: 5, width: 1 });
-    addText('AUTO', 245, 316, {
+    chrome.rect(202, 265, 86, 26).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
+    drawReticle(chrome, 202, 265, 86, 26, SYN_MIST, 0.8, { arm: 5, width: 1 });
+    addText('AUTO', 245, 278, {
       size: 9,
       fill: SYN_MIST,
       fontFamily: SYN_DISPLAY_FONT,
@@ -738,15 +740,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorX: 0.5,
       anchorY: 0.5,
     });
-    addHitArea(26, 296, 172, 40, 'pointer', frame.actions.play);
-    addHitArea(200, 300, 90, 32, 'pointer', frame.actions.autoPlay);
+    addHitArea(26, 258, 172, 40, 'pointer', frame.actions.play);
+    addHitArea(200, 262, 90, 32, 'pointer', frame.actions.autoPlay);
 
     // Search and library.
-    framePanel(chrome, 14, 372, 290, 30, accent);
-    addText('SEARCH', 30, 387, { ...labelStyle(accent), anchorY: 0.5 });
+    framePanel(chrome, 14, 334, 290, 30, accent);
+    addText('SEARCH', 30, 349, { ...labelStyle(accent), anchorY: 0.5 });
     // While the player types in the host's field laid over the box, the field shows the text.
     if (!frame.searchEditing) {
-      addText(frame.searchQuery || 'Title / artist / genre', 116, 387, {
+      addText(frame.searchQuery || 'Title / artist / genre', 116, 349, {
         size: 10,
         anchorY: 0.5,
         weight: '300',
@@ -756,11 +758,11 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     }
     // The label and the text strip both start typing; the strip comes last, so the host lays its field over the text.
-    addHitArea(14, 372, 98, 30, 'text', frame.actions.activateSearch);
-    addHitArea(112, 372, 192, 30, 'text', frame.actions.activateSearch);
-    addText('LIBRARY', 30, 422, labelStyle());
+    addHitArea(14, 334, 98, 30, 'text', frame.actions.activateSearch);
+    addHitArea(112, 334, 192, 30, 'text', frame.actions.activateSearch);
+    addText('LIBRARY', 30, 384, labelStyle());
     // The count in the display face, like the LIBRARY label above it and the list position.
-    addText(`${entries.length} shown / ${frame.totalCharts} charts`, 30, 436, {
+    addText(`${entries.length} shown / ${frame.totalCharts} charts`, 30, 398, {
       size: 11,
       fill: SYN_MIST,
       fontFamily: SYN_DISPLAY_FONT,
@@ -886,16 +888,18 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
     drawJudgeRank(addText, chartEntry, left, card.y + 148);
 
-    // The list position, at the end of the row under the judge rank.
-    const positionY = card.y + 166;
-    addText(position, left + innerW, positionY, { ...label(SYN_MIST), anchorX: 1, anchorY: 0.5 });
+    // The file name and the list position share the row under the judge rank.
+    const fileRowY = card.y + 166;
+    addText(position, left + innerW, fileRowY, { ...label(SYN_MIST), anchorX: 1, anchorY: 0.5 });
     if (chartEntry?.fileLabel) {
-      addText(chartEntry.fileLabel, left, card.y + 178, {
+      addText(chartEntry.fileLabel, left, fileRowY, {
         size: 10,
         weight: '300',
         fill: SYN_DIM,
         fontFamily: SYN_TEXT_FONT,
-        maxWidth: innerW,
+        anchorY: 0.5,
+        // Clear of the list position at the row's end.
+        maxWidth: innerW - 64,
       });
     }
 
