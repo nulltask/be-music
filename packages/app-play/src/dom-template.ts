@@ -1259,7 +1259,7 @@ export const PLAYER_APP_HTML = `
       the header's Settings button opens it, and so does #options-open
       while the play surface is fullscreen and the header is not shown.
     -->
-    <dialog class="dialog options-dialog" id="options-modal" data-pane="options" aria-labelledby="options-modal-title">
+    <dialog class="dialog options-dialog" id="options-modal" aria-labelledby="options-modal-title">
       <div>
         <header>
           <h2 id="options-modal-title" data-i18n="options">Options</h2>

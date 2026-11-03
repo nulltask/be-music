@@ -10,7 +10,7 @@ test('the header opens the Options dialog, its monitors stay read-only and folde
     }),
   });
   const { page } = player;
-  const dialog = page.locator('[data-pane=options]');
+  const dialog = page.locator('#options-modal');
   const settings = page.locator('[data-service-header="settings"]');
   await expect(dialog).toBeHidden();
   await settings.click();
