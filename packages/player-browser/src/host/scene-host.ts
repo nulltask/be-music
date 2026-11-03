@@ -157,7 +157,7 @@ export class PixiSceneHost {
     // to be slower or buggier). Anything else falls through to the default. `?renderer=webgpu` is accepted as the
     // explicit form even though it's the default, useful for documenting the intent in deployed URLs.
     const preference = resolveRendererPreference();
-    // Raise the WebGPU device's texture and buffer limits to the adapter's maximum (see `webgpu-limits.ts`), on the
+    // Raise the WebGPU device's texture dimensions to the adapter's maximum (see `webgpu-limits.ts`), on the
     // devices Pixi creates itself so it can still recover the stage from a lost device.
     if (preference === 'webgpu') useMaxLimitsGPU();
     await this.app.init({

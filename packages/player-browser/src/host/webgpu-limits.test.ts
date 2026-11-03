@@ -5,12 +5,15 @@ const ADAPTER_LIMITS = {
   maxTextureDimension1D: 16384,
   maxTextureDimension2D: 16384,
   maxTextureDimension3D: 2048,
-  maxBufferSize: 2147483644,
 };
 
 describe('withAdapterMaxLimits', () => {
-  it("raises the texture and buffer limits to the adapter's maximum", () => {
-    expect(withAdapterMaxLimits(undefined, ADAPTER_LIMITS)).toEqual({ requiredLimits: ADAPTER_LIMITS });
+  it("raises the texture dimensions to the adapter's maximum and leaves the buffer size alone", () => {
+    expect(
+      withAdapterMaxLimits(undefined, { ...ADAPTER_LIMITS, maxBufferSize: 2147483644 } as typeof ADAPTER_LIMITS),
+    ).toEqual({
+      requiredLimits: ADAPTER_LIMITS,
+    });
   });
 
   it('keeps the rest of the descriptor and the limits it already asks for', () => {
@@ -25,7 +28,6 @@ describe('withAdapterMaxLimits', () => {
         maxTextureDimension1D: 16384,
         maxTextureDimension2D: 8192,
         maxTextureDimension3D: 2048,
-        maxBufferSize: 2147483644,
       },
     });
     expect(descriptor.requiredLimits).toEqual({ maxSamplersPerShaderStage: 16, maxTextureDimension2D: 8192 });
@@ -35,7 +37,7 @@ describe('withAdapterMaxLimits', () => {
     expect(
       withAdapterMaxLimits(undefined, {
         maxTextureDimension2D: 0,
-        maxBufferSize: Number.NaN,
+        maxTextureDimension3D: Number.NaN,
         maxTextureDimension1D: 4096,
       }),
     ).toEqual({ requiredLimits: { maxTextureDimension1D: 4096 } });

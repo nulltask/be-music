@@ -2,20 +2,16 @@
  * WebGPU device limits for the stage renderer.
  *
  * `requestDevice()` grants WebGPU's default limits (8192-px textures) unless larger ones are asked for, which is too
- * small for some authored beatoraja skins (GdbG_Skin's `fonts/bitmap/Title_*.png` is 8000×12000). Pixi creates its
- * device with only a couple of sampler limits, and handing it a device of our own (`app.init({ gpu })`) turns off its
+ * small for some authored beatoraja skins (GdbG_Skin's `fonts/bitmap/Title_*.png` is 8000×12000). Only the texture
+ * dimensions are raised: the stage's buffers stay far below the default `maxBufferSize` (256 MiB), so the adapter's
+ * maximum there (2 GiB in WebKit) is left unrequested. Pixi creates its device with only a couple of sampler limits, and handing it a device of our own (`app.init({ gpu })`) turns off its
  * device-loss recovery: a lost device (Safari drops one under memory pressure, on GPU process restarts and the like)
  * then keeps the stage blank for good. So instead Pixi gets a `navigator.gpu` whose adapters ask for the adapter's
- * maximum texture and buffer limits on every device they create, the first and any after a loss.
+ * maximum texture dimensions on every device they create, the first and any after a loss.
  */
 
 /** The limits raised to the adapter's maximum on every device the stage renderer requests. */
-export const MAX_LIMIT_NAMES = [
-  'maxTextureDimension1D',
-  'maxTextureDimension2D',
-  'maxTextureDimension3D',
-  'maxBufferSize',
-] as const;
+export const MAX_LIMIT_NAMES = ['maxTextureDimension1D', 'maxTextureDimension2D', 'maxTextureDimension3D'] as const;
 
 /**
  * `descriptor` with {@link MAX_LIMIT_NAMES} raised to what `adapterLimits` advertises. Limits the descriptor already
