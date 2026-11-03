@@ -32,31 +32,20 @@ const en = {
     missingRequiredItem: 'missing (required)',
     missingOptionalItem: 'missing (optional)',
     signIn: 'Sign in',
-    signInLead: 'Sign in with a passkey, Google, or Discord.',
-    signInPasskey: 'Sign in with a passkey',
-    or: 'or',
-    signInGoogle: 'Sign in with Google',
-    signInDiscord: 'Sign in with Discord',
+
     signInGoogleSoon: 'Sign in with Google is coming soon',
     signInDiscordSoon: 'Sign in with Discord is coming soon',
     comingSoon: 'Coming soon',
-    noAccount: 'No account yet? Sign up',
+
     cancel: 'Cancel',
-    signUpTitle: 'Create your account',
-    signUpLead: 'Pick a handle and a name. Your browser then makes a passkey for it.',
-    keepTitle: 'Keep this account',
-    keepLead:
-      'Give your anonymous account a handle and a name. Your browser then makes a passkey, so its plays join the rankings.',
-    signUpGoogle: 'Sign up with Google',
-    signUpDiscord: 'Sign up with Discord',
+
     signUpGoogleSoon: 'Sign up with Google is coming soon',
     signUpDiscordSoon: 'Sign up with Discord is coming soon',
-    orPasskey: 'or with a passkey',
+
     handle: 'Handle',
-    handleHint: '3 to 15 letters, digits or _. It names your page.',
+
     displayName: 'Name',
-    nameHint: 'Up to 32 characters, in any script. The rankings show it.',
-    createPasskey: 'Create passkey',
+
     skinDropLr2: 'Drop an LR2 skin',
     skinDropBeatoraja: 'Drop a beatoraja skin',
     skinDropHintLr2:
@@ -320,31 +309,20 @@ const ja: typeof en = {
     missingRequiredItem: '不足（必須）',
     missingOptionalItem: '不足（任意）',
     signIn: 'ログイン',
-    signInLead: 'パスキー、Google、または Discord でログインします。',
-    signInPasskey: 'パスキーでログイン',
-    or: 'または',
-    signInGoogle: 'Google でログイン',
-    signInDiscord: 'Discord でログイン',
+
     signInGoogleSoon: 'Google でのログインは準備中です',
     signInDiscordSoon: 'Discord でのログインは準備中です',
     comingSoon: '準備中',
-    noAccount: 'アカウントがまだない場合は登録',
+
     cancel: 'キャンセル',
-    signUpTitle: 'アカウントを作成',
-    signUpLead: 'ユーザー名と表示名を決めます。そのあと、ブラウザがパスキーを作ります。',
-    keepTitle: 'このアカウントを残す',
-    keepLead:
-      '匿名アカウントにユーザー名と表示名を付けます。ブラウザがパスキーを作ると、そのプレイがランキングに載ります。',
-    signUpGoogle: 'Google で登録',
-    signUpDiscord: 'Discord で登録',
+
     signUpGoogleSoon: 'Google での登録は準備中です',
     signUpDiscordSoon: 'Discord での登録は準備中です',
-    orPasskey: 'またはパスキーで',
+
     handle: 'ユーザー名',
-    handleHint: '英数字と _ で 3〜15 文字。ページの名前になります。',
+
     displayName: '表示名',
-    nameHint: 'どの文字でも 32 文字まで。ランキングに表示されます。',
-    createPasskey: 'パスキーを作成',
+
     skinDropLr2: 'LR2 スキンをドロップ',
     skinDropBeatoraja: 'beatoraja スキンをドロップ',
     skinDropHintLr2:

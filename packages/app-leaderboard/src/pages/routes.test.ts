@@ -103,6 +103,15 @@ describe('page language', () => {
     expect(await html('/?lang=en', { cookie: 'lb-lang=ja' })).toContain('<html lang="en"');
   });
 
+  test('shared language links preserve filters while removing a forced query language from their return path', async () => {
+    const output = await html('/?anonymous=1&lang=ja');
+    expect(output).toContain('href="/lang/en?next=%2F%3Fanonymous%3D1"');
+    expect(output).toContain('href="/lang/ja?next=%2F%3Fanonymous%3D1"');
+    expect(output).toMatch(/href="\/lang\/ja[^"]*"[^>]*aria-current="true"/);
+    expect(output).not.toMatch(/href="\/lang\/[^"]*next=[^"]*%26lang%3D/);
+    expect(output).toContain('href="/ruleset/lr2?next=%2F%3Fanonymous%3D1%26lang%3Dja"');
+  });
+
   test('the language switch keeps the pick in a cookie and goes back to the page', async () => {
     const response = await fetchApp(`/lang/ja?next=${encodeURIComponent('/?anonymous=1')}`);
     expect(response.status).toBe(303);
