@@ -1,4 +1,7 @@
+import { unsafeHTML as renderedFragment } from 'lit/directives/unsafe-html.js';
+import { popoverTemplate as sharedPopoverTemplate, type PopoverInput } from './popover-template.ts';
 import { render } from '@lit-labs/ssr';
+import type { TemplateResult } from 'lit';
 import { collectResultSync } from '@lit-labs/ssr/lib/render-result.js';
 import { serviceHeaderTemplate, serviceSkipLinkTemplate } from './header-template.ts';
 export { serviceHeaderTemplate, serviceSkipLinkTemplate };
@@ -55,4 +58,23 @@ export function renderServiceFooter(input: ServiceFooterInput = {}): string {
 
 export function serviceSkipLink(locale: Locale): string {
   return renderHTML(serviceSkipLinkTemplate(locale));
+}
+
+export { authButtonTemplate, authPanelTemplate, type AuthButtonInput } from './auth-template.ts';
+export { avatarTemplate, accountIdentityTemplate } from './account-identity-template.ts';
+export type { ServiceAccountIdentity } from './account-model.ts';
+export {
+  languageMenuTemplate,
+  languageLinksTemplate,
+  type PopoverInput,
+  type LanguageChoice,
+} from './popover-template.ts';
+
+/** Accept server-only content at the server seam while sharing the browser's complete popover markup. */
+export function popoverTemplate(input: PopoverInput): TemplateResult {
+  return sharedPopoverTemplate({
+    ...input,
+    trigger: renderedFragment(renderHTML(input.trigger)),
+    content: renderedFragment(renderHTML(input.content)),
+  });
 }

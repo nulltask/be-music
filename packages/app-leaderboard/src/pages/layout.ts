@@ -1,3 +1,10 @@
+import {
+  authPanelTemplate,
+  accountIdentityTemplate,
+  popoverTemplate,
+  languageMenuTemplate,
+  languageLinksTemplate,
+} from '@be-music/service-web-theme/server';
 import type { PageContent } from './template.ts';
 import { html, nothing, unsafeHTML, renderHTML } from '@be-music/service-web-theme/server';
 import { serviceFooterTemplate } from '@be-music/service-web-theme/server';
@@ -8,21 +15,10 @@ import { LOCALE_NAMES, LOCALES, messagesFor, type Locale, type Messages } from '
 import { helpHref } from './help-topics.ts';
 import { RULESET_IDS } from '../rulesets.ts';
 import { CLIENT_SCRIPT_PATH } from './client-script.ts';
-import { Avatar, playerAppHref, playerHref } from './components/basics.ts';
+import { playerAppHref, playerHref } from './components/basics.ts';
 import { EntityIcon, type EntityKind } from './components/entity-icon.ts';
 import { Icon } from './components/icon.ts';
-import {
-  Check,
-  ChevronDown,
-  ExternalLink,
-  KeyRound,
-  Languages,
-  LogOut,
-  Menu,
-  Play,
-  Scale,
-  UserPlus,
-} from 'lucide-static';
+import { Check, ChevronDown, ExternalLink, LogOut, Menu, Play, Scale, UserPlus } from 'lucide-static';
 import { CARD_HEIGHT, CARD_WIDTH } from '../cards.ts';
 import { ICON_LINKS } from './icons.ts';
 import { ICONS } from './icons.generated.ts';
@@ -161,21 +157,6 @@ export interface PageMeta {
 }
 
 /**
- * The frame of the header's menus. They sit in the header's no-wrap row, so they turn wrapping back on (Japanese at
- * phrase boundaries where the browser can), and they never grow wider than the screen less a margin on each side.
- */
-const HEADER_MENU_CLASS =
-  'bg-popover text-popover-foreground max-w-[calc(100vw-2rem)] rounded-lg border p-1 text-sm whitespace-normal [word-break:auto-phrase] shadow-md';
-
-/**
- * Below the button, right edges aligned; the other way round when that would run off the screen, and centred under the
- * button, a gutter in from the edges, when neither fits (`--header-menu-span` in app.css).
- */
-function headerMenuStyle(anchor: string): string {
-  return `position-anchor:${anchor};inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline,--header-menu-span`;
-}
-
-/**
  * The header's account area. Signed out: Sign in (a passkey, Google, or Discord) and Sign up. Signed in: the
  * player's icon, opening a menu with their page, Settings and Sign out. The buttons are wired by the client script
  * (client/main.ts); `data-account-status` shows what went wrong.
@@ -198,30 +179,21 @@ function AccountMenu(props: { viewer: Viewer | null }, messages: Messages) {
       >${SignInDialog(messages)}${SignUpDialog(messages)}
     </div>`;
   }
-  return html`<div class="relative">
-    <button
-      type="button"
-      class="btn"
-      data-size="sm"
-      data-variant="ghost"
-      popovertarget="account-menu"
-      aria-label=${t.account.accountOf(viewer.handle) ?? nothing}
-      style="anchor-name:--account-menu"
-    >
-      ${Avatar({ src: viewer.avatarUrl, size: 24 })}<span class="hidden max-w-[12ch] truncate sm:inline"
-        >@${viewer.handle}</span
-      >${Icon({ svg: ChevronDown, class: 'text-muted-foreground' })}
-    </button>
-    <div
-      id="account-menu"
-      popover="auto"
-      class=${`${HEADER_MENU_CLASS} w-56`}
-      style=${headerMenuStyle('--account-menu') ?? nothing}
-    >
-      <div class="border-b px-2 py-2">
-        <div class="truncate font-medium">${viewer.displayName}</div>
-        <div class="text-muted-foreground truncate text-xs">@${viewer.handle}</div>
-      </div>
+  const identity = {
+    handle: viewer.handle,
+    displayName: viewer.displayName,
+    anonymous: viewer.anonymous,
+    avatarURL: viewer.avatarUrl,
+  };
+  const locale = t.locale === 'ja' ? 'ja' : 'en';
+  return popoverTemplate({
+    id: 'account-menu',
+    label: t.account.accountOf(viewer.handle),
+    width: 'w-56',
+    className: 'relative',
+    trigger: html`${accountIdentityTemplate({ account: identity, locale, variant: 'compact' })}${Icon({ svg: ChevronDown, class: 'text-muted-foreground' })}`,
+    content: html`
+      <div class="border-b px-2 py-2">${accountIdentityTemplate({ account: identity, locale, showAvatar: false })}</div>
       <a
         class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5"
         href=${playerHref(viewer.handle) ?? nothing}
@@ -235,119 +207,24 @@ function AccountMenu(props: { viewer: Viewer | null }, messages: Messages) {
       >
         ${Icon({ svg: LogOut })}${t.account.signOut}
       </button>
-    </div>
-  </div>`;
+    `,
+  });
 }
 
 /** The frame of the account dialogs: a centred card over a dimmed page. */
 const DIALOG_CLASS =
   'bg-background text-foreground m-auto w-[min(24rem,calc(100vw-2rem))] rounded-xl border p-6 shadow-lg backdrop:bg-black/50';
 
-/** Google's "G", in its four colours. */
-const GOOGLE_LOGO = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg>`;
-
-/** Discord's mark, in its blurple. */
-const DISCORD_LOGO = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg>`;
-
-/**
- * Google and Discord. Each button starts Accounts sign-in for that provider (client/main.ts). The provider is
- * offered on the Accounts page only when its client id and secret are set.
- */
-function ProviderButtons(props: { action: 'sign-in' | 'sign-up' }, messages: Messages) {
-  const t = messages;
-  const label = (provider: string) =>
-    props.action === 'sign-in' ? t.dialogs.signInWith(provider) : t.dialogs.signUpWith(provider);
-  return html`<div class="grid gap-2">
-    ${[
-      { name: 'Google', method: 'google', logo: GOOGLE_LOGO },
-      { name: 'Discord', method: 'discord', logo: DISCORD_LOGO },
-    ].map(
-      (provider) =>
-        html`<button
-          type="button"
-          class="btn w-full justify-start"
-          data-variant="outline"
-          data-account-action=${`${props.action}-${provider.method}`}
-        >
-          <span class="inline-flex size-4 shrink-0 [&amp;&gt;svg]:size-4" aria-hidden="true"
-            >${unsafeHTML(provider.logo)}</span
-          >${label(provider.name)}
-        </button>`,
-    )}
-  </div>`;
-}
-
-/** A rule with a word in it, between the providers and the passkey. */
-function OrDivider(props: { label: string }) {
-  return html`<div class="text-muted-foreground flex items-center gap-3 text-xs" role="separator">
-    <span class="bg-border h-px flex-1"></span>${props.label}<span class="bg-border h-px flex-1"></span>
-  </div>`;
-}
-
-/** Sign-in with a passkey, Google, or Discord. Each button starts Accounts and returns here. */
+/** The same auth panel used by Play; this application's client handles its action intents. */
 function SignInDialog(messages: Messages) {
-  const t = messages;
-  return html`<dialog id="sign-in" aria-labelledby="sign-in-title" class=${DIALOG_CLASS ?? nothing}>
-    <div class="space-y-4">
-      <header class="space-y-1">
-        <h2 id="sign-in-title" class="text-lg font-semibold">${t.dialogs.signInTitle}</h2>
-        <p class="text-muted-foreground text-sm">${t.dialogs.signInLead}</p>
-      </header>
-      <button type="button" class="btn w-full" data-account-action="sign-in">
-        ${Icon({ svg: KeyRound })}${t.dialogs.signInWithPasskey}</button
-      >${OrDivider({ label: t.dialogs.or })}${ProviderButtons({ action: 'sign-in' }, messages)}
-      <p class="text-destructive text-sm" data-sign-in-status role="status" hidden></p>
-      <footer class="flex items-center justify-between gap-2">
-        <button type="button" class="btn px-0" data-size="sm" data-variant="link" data-account-action="open-sign-up">
-          ${t.dialogs.noAccount}</button
-        ><button type="button" class="btn" data-size="sm" data-variant="ghost" data-account-action="close-dialogs">
-          ${t.dialogs.cancel}
-        </button>
-      </footer>
-    </div>
+  return html`<dialog id="sign-in" aria-labelledby="sign-in-title" class=${DIALOG_CLASS}>
+    ${authPanelTemplate({ id: 'sign-in', locale: messages.locale === 'ja' ? 'ja' : 'en', mode: 'sign-in' })}
   </dialog>`;
 }
 
-/**
- * Sign-up: a handle and a display name. The client script signs in anonymously, saves them, then asks the browser for
- * a passkey, which claims the account (docs/leaderboard.md section 3).
- */
 function SignUpDialog(messages: Messages) {
-  const t = messages;
-  return html`<dialog id="sign-up" aria-labelledby="sign-up-title" class=${DIALOG_CLASS ?? nothing}>
-    <form class="space-y-4" data-sign-up-form method="dialog">
-      <header class="space-y-1">
-        <h2 id="sign-up-title" class="text-lg font-semibold">${t.dialogs.signUpTitle}</h2>
-        <p class="text-muted-foreground text-sm">${t.dialogs.signUpLead}</p>
-      </header>
-      ${ProviderButtons({ action: 'sign-up' }, messages)}${OrDivider({ label: t.dialogs.orWithPasskey })}
-      <div class="grid gap-2">
-        <label class="label" for="sign-up-handle">${t.dialogs.handle}</label
-        ><input
-          class="input"
-          id="sign-up-handle"
-          name="handle"
-          required
-          minlength=${3}
-          maxlength=${15}
-          pattern="[A-Za-z0-9_]{3,15}"
-          autocomplete="username webauthn"
-          spellcheck=${false}
-        />
-        <p class="text-muted-foreground text-xs">${t.dialogs.handleHint}</p>
-      </div>
-      <div class="grid gap-2">
-        <label class="label" for="sign-up-name">${t.dialogs.name}</label
-        ><input class="input" id="sign-up-name" name="displayName" required maxlength=${64} autocomplete="nickname" />
-        <p class="text-muted-foreground text-xs">${t.dialogs.nameHint}</p>
-      </div>
-      <p class="text-destructive text-sm" data-sign-up-status role="status" hidden></p>
-      <footer class="flex justify-end gap-2">
-        <button type="button" class="btn" data-variant="ghost" data-account-action="close-dialogs">
-          ${t.dialogs.cancel}</button
-        ><button type="submit" class="btn">${t.dialogs.createPasskey}</button>
-      </footer>
-    </form>
+  return html`<dialog id="sign-up" aria-labelledby="sign-up-title" class=${DIALOG_CLASS}>
+    ${authPanelTemplate({ id: 'sign-up', locale: messages.locale === 'ja' ? 'ja' : 'en', mode: 'sign-up' })}
   </dialog>`;
 }
 
@@ -385,29 +262,20 @@ function leaderboardSiteFooter(t: Messages) {
 function RulesetMenu(props: { current: RulesetId; path: string }, messages: Messages) {
   const t = messages;
   const name = (id: RulesetId) => t.rules.name(RULESET_LABELS[id] ?? id);
-  return html`<div class="relative">
-    <button
-      type="button"
-      class="btn"
-      data-size="sm"
-      data-variant="ghost"
-      popovertarget="ruleset-menu"
-      aria-label=${t.rules.menuAria(name(props.current)) ?? nothing}
-      title=${t.rules.menuTitle ?? nothing}
-      style="anchor-name:--ruleset-menu"
-    >
+  return popoverTemplate({
+    id: 'ruleset-menu',
+    label: t.rules.menuAria(name(props.current)),
+    title: t.rules.menuTitle,
+    width: 'w-72',
+    className: 'relative',
+    trigger: html`
       ${Icon({ svg: Scale, class: 'text-muted-foreground' })}<span>${RULESET_LABELS[props.current]}</span
       ><span class="hidden md:inline">${t.rules.word}</span>${Icon({
         svg: ChevronDown,
         class: 'text-muted-foreground',
       })}
-    </button>
-    <div
-      id="ruleset-menu"
-      popover="auto"
-      class=${`${HEADER_MENU_CLASS} w-72`}
-      style=${headerMenuStyle('--ruleset-menu') ?? nothing}
-    >
+    `,
+    content: html`
       <div class="text-muted-foreground px-2 pt-1.5 pb-1 text-xs">${t.rules.showUnder}</div>
       ${RULESET_IDS.map((id) => {
         const href = `/ruleset/${id}?next=${encodeURIComponent(props.path)}`;
@@ -438,53 +306,29 @@ function RulesetMenu(props: { current: RulesetId; path: string }, messages: Mess
           >${t.help.more}</a
         >
       </p>
-    </div>
-  </div>`;
+    `,
+  });
 }
 
 /**
  * The language menu next to the ruleset menu: the page's language on the button, the others in its popover. A choice is
  * kept in a cookie (`/lang/:locale`) and brings the viewer back to the page.
  */
-function LanguageMenu(props: { current: Locale; path: string }, messages: Messages) {
-  const t = messages;
-  return html`<div class="relative hidden sm:block">
-    <button
-      type="button"
-      class="btn"
-      data-size="sm"
-      data-variant="ghost"
-      popovertarget="language-menu"
-      aria-label=${t.language.menuAria(LOCALE_NAMES[props.current]) ?? nothing}
-      title=${t.language.menuTitle ?? nothing}
-      style="anchor-name:--language-menu"
-    >
-      ${Icon({ svg: Languages, class: 'text-muted-foreground' })}
-    </button>
-    <div
-      id="language-menu"
-      popover="auto"
-      class=${`${HEADER_MENU_CLASS} w-44`}
-      style=${headerMenuStyle('--language-menu') ?? nothing}
-    >
-      ${LanguageLinks({ current: props.current, path: props.path })}
-    </div>
-  </div>`;
+function languageChoices(props: { current: Locale; path: string }) {
+  return LOCALES.map((locale) => ({
+    locale,
+    current: locale === props.current,
+    href: `/lang/${locale}?next=${encodeURIComponent(withoutLang(props.path))}`,
+  }));
 }
 
-/** The languages to pick from, the page's own checked: the language menu's items, and the phone menu's last part. */
-function LanguageLinks(props: { current: Locale; path: string }) {
-  return html`${LOCALES.map(
-    (locale) =>
-      html`<a
-        class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5"
-        href=${`/lang/${locale}?next=${encodeURIComponent(withoutLang(props.path))}`}
-        aria-current=${(locale === props.current ? 'true' : undefined) ?? nothing}
-        lang=${locale ?? nothing}
-        ><span class=${locale === props.current ? '' : 'invisible'}>${Icon({ svg: Check })}</span
-        >${LOCALE_NAMES[locale]}</a
-      >`,
-  )}`;
+function LanguageMenu(props: { current: Locale; path: string }, messages: Messages) {
+  return languageMenuTemplate({
+    label: messages.language.menuAria(LOCALE_NAMES[props.current]),
+    title: messages.language.menuTitle,
+    choices: languageChoices(props),
+    className: 'relative hidden sm:block',
+  });
 }
 
 /**
@@ -495,25 +339,14 @@ function LanguageLinks(props: { current: Locale; path: string }) {
 function NavMenu(props: { current: Locale; path: string; signedIn: boolean }, messages: Messages) {
   const t = messages;
   const item = 'hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start';
-  return html`<div class="relative sm:hidden">
-    <button
-      type="button"
-      class="btn"
-      data-size="sm"
-      data-variant="ghost"
-      popovertarget="nav-menu"
-      aria-label=${t.nav.menu ?? nothing}
-      title=${t.nav.menu ?? nothing}
-      style="anchor-name:--nav-menu"
-    >
-      ${Icon({ svg: Menu })}
-    </button>
-    <div
-      id="nav-menu"
-      popover="auto"
-      class=${`${HEADER_MENU_CLASS} w-56`}
-      style=${headerMenuStyle('--nav-menu') ?? nothing}
-    >
+  return popoverTemplate({
+    id: 'nav-menu',
+    label: t.nav.menu,
+    title: t.nav.menu,
+    width: 'w-56',
+    className: 'relative sm:hidden',
+    trigger: html` ${Icon({ svg: Menu })} `,
+    content: html`
       <nav aria-label=${t.nav.label ?? nothing}>
         <a class=${item ?? nothing} href="/"
           >${EntityIcon({ kind: 'latest', size: 'md', class: 'text-current' })}${t.nav.latestTitle}</a
@@ -530,10 +363,10 @@ function NavMenu(props: { current: Locale; path: string; signedIn: boolean }, me
       }
       <div class="mt-1 border-t pt-1">
         <div class="text-muted-foreground px-2 pt-1.5 pb-1 text-xs">${t.language.menuTitle}</div>
-        ${LanguageLinks({ current: props.current, path: props.path })}
+        ${languageLinksTemplate(languageChoices({ current: props.current, path: props.path }))}
       </div>
-    </div>
-  </div>`;
+    `,
+  });
 }
 
 /** A page path without its `lang` query: once a language is picked, the link's own one should not override it. */
