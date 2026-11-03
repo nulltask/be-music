@@ -1439,13 +1439,6 @@ textarea {
   text-wrap: wrap;
 }
 
-.help-pane-intro {
-  margin: 0 0 12px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: #aab4c2;
-}
-
 .help-section-title {
   margin: 0 0 8px;
   font-size: 11px;
@@ -1615,16 +1608,20 @@ textarea {
   margin-top: 4px;
 }
 
-/* The language switch (a Basecoat button group) sits at the end of the row, so the text keeps its left edge. */
-.help-lang-switch {
-  align-self: flex-end;
-  margin-bottom: 12px;
-}
-
-/* The language switch heads the Usage and Options panels; the panel lays it out over the text. */
-.help-tabs > [role='tabpanel']:not([hidden]):has(> .help-lang-switch) {
+/* Keep the language switch at the right edge of the Help & About row. */
+.help-heading-row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.help-heading-row > p {
+  margin: 0;
+}
+.help-lang-switch {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .help-lang {
