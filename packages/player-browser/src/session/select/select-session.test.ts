@@ -903,3 +903,13 @@ describe('SelectSession beatoraja option panels', () => {
     expect(advance(10).playOptions.judgeTimingMs).toBe(before + 1);
   });
 });
+
+describe('SelectSession folder reload', () => {
+  it('asks the host to reload on LR2’s F8 and beatoraja’s F2, and leaves the key alone without a host that can', () => {
+    const reload = vi.fn();
+    expect(createSession({ on: { reload } }).key('F8')).toBe(true);
+    expect(createSession({ policy: SELECT_POLICIES.beatoraja, on: { reload } }).key('F2')).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(2);
+    expect(createSession().key('F8')).toBe(false);
+  });
+});

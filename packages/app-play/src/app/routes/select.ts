@@ -50,7 +50,7 @@ export interface SelectRouteDeps {
   /** The page: the shell's `playing` and `empty` classes. */
   readonly elements: Pick<PlayerWebElements, 'shell'>;
   /** The library the screen lists. */
-  readonly library: Pick<LibraryService, 'collection'>;
+  readonly library: Pick<LibraryService, 'collection' | 'reloadCharts'>;
   /** The best records the screen shows on its bars. */
   readonly records: Pick<RecordsService, 'lookupChartBestRecord' | 'currentRulesetRecords' | 'currentDanRanks'>;
   /** The course run: where the cursor goes back to once a course is over. */
@@ -298,6 +298,10 @@ export class SelectRoute {
         // Escape at the root of the select screen asks first (That-Which-Must-Not-Be-Named PC's exit menu), then leaves
         // for the drop screen, as beatoraja's leaves the player's select; coming back by a drop or a theme starts at the
         // root.
+        // LR2's F8 and beatoraja's F2: the library's folders are read again, and the screen shows what they hold now.
+        reload: () => {
+          void this.library.reloadCharts();
+        },
         exitMenu: () => {
           this.showExitMenu((choice) => {
             if (choice === 'leave') this.leaveForDrop();

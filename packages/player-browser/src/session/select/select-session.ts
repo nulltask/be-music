@@ -107,6 +107,8 @@ export interface SelectSessionEvents {
    * With it, a back-out at the root does only this, whatever the policy says.
    */
   exitMenu?(): void;
+  /** The player asked to read the library's folders again (LR2's F8, beatoraja's F2). Without it the key does nothing. */
+  reload?(): void;
 }
 
 /** The part of the audio service the select screen uses. */
@@ -458,6 +460,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         return true;
       case 'search':
         this.options.on.search?.();
+        return true;
+      case 'reload':
+        if (this.options.on.reload === undefined) return false;
+        this.options.on.reload();
         return true;
       case 'favorite':
         this.applyBrowse({ type: 'favorite', list: action.list }, atMs);

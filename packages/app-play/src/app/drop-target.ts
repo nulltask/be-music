@@ -1,7 +1,13 @@
 // The page as a drop target: files dragged onto the window, or picked with the Options dialog's "Open folder" / "Open files"
 // buttons, are read behind the loading overlay while the select screen is off the stage, then handed to the library.
 
-import { readDroppedFiles, type BrowserDroppedFile } from '@be-music/player-browser/collection';
+import {
+  dropEntries,
+  readDropEntries,
+  readDroppedFiles,
+  type BrowserDroppedFile,
+  type LoadProgress,
+} from '@be-music/player-browser/collection';
 import {
   applyLoadProgress,
   hideLoadingOverlay,
@@ -16,7 +22,10 @@ export interface DropTargetOptions {
   /** Takes the select screen off the stage while files load, when it is the one showing. */
   readonly leaveSelect: () => Promise<boolean>;
   /** Loads a drop's (or the folder picker's) files (`LibraryService`). */
-  readonly processIncomingFiles: (files: BrowserDroppedFile[]) => Promise<void>;
+  readonly processIncomingFiles: (
+    files: BrowserDroppedFile[],
+    origin?: { readonly entries?: readonly FileSystemEntry[] },
+  ) => Promise<void>;
   /** Loads the "Open files" picker's files (`LibraryService`). */
   readonly loadPickedFiles: (files: File[]) => Promise<void>;
   /** A drop or a file pick has finished loading (the test hook's `loads`). */
@@ -147,10 +156,12 @@ export class DropTarget {
     // Not awaited: the drop's items must be read before this handler yields.
     void this.leaveSelect();
     try {
-      const files = await readDroppedFiles(dataTransfer, {
-        onProgress: (progress) => applyLoadProgress(this.elements, progress),
-      });
-      await this.processIncomingFiles(files);
+      // The drop's entries are kept with its charts, so the folder reload can walk its folders again.
+      const entries = dropEntries(dataTransfer);
+      const progress = { onProgress: (value: LoadProgress) => applyLoadProgress(this.elements, value) };
+      const files =
+        entries.length > 0 ? await readDropEntries(entries, progress) : await readDroppedFiles(dataTransfer, progress);
+      await this.processIncomingFiles(files, entries.length > 0 ? { entries } : {});
     } finally {
       // Always tear the overlay down — even when one of the sub-loaders threw or `splitDroppedChartAndThemeFiles`
       // produced an empty bucket. Otherwise a failed drop would leave the UI permanently masked.

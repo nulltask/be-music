@@ -960,6 +960,16 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       void new playerWebCoreAPI.PlayOptionMismatchError(['Random 1P: CONVERGE'], undefined).options;
     },
   });
+  define('player-browser.dropEntries', {
+    run: () => {
+      playerWebCoreAPI.dropEntries({ items: [] } as unknown as DataTransfer);
+    },
+  });
+  define('player-browser.readDropEntries', {
+    run: async () => {
+      await playerWebCoreAPI.readDropEntries([]);
+    },
+  });
   define('player-browser.readDroppedFiles', {
     run: async () => {
       await playerWebCoreAPI.readDroppedFiles({ files: [BENCH_BMS_FILE] } as unknown as DataTransfer);
