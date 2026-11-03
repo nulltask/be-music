@@ -1,3 +1,5 @@
+import { render } from 'lit';
+
 /** A rectangle in CSS pixels. */
 export interface FieldRect {
   x: number;
@@ -144,7 +146,7 @@ export class InlineSearch {
     const message = this.host.searchError?.();
     input.setAttribute('aria-invalid', message === undefined ? 'false' : 'true');
     if (error === undefined) return;
-    error.textContent = message ?? '';
+    render(message ?? '', error);
     error.hidden = message === undefined;
     if (message !== undefined) this.placeError();
   }

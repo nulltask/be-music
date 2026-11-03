@@ -1,12 +1,13 @@
 import {
-  renderServiceFooter,
-  renderServiceHeader,
-  SERVICE_CSS,
-  SERVICE_FOOTER_LINK_CLASS,
-  serviceSkipLink,
-  type BuildInfo,
-  type Locale,
-} from '@be-music/service-web-theme';
+  html,
+  nothing,
+  unsafeHTML,
+  renderHTML,
+  serviceHeaderTemplate,
+  serviceFooterTemplate,
+  serviceSkipLinkTemplate,
+} from '@be-music/service-web-theme/server';
+import { SERVICE_CSS, SERVICE_FOOTER_LINK_CLASS, type BuildInfo, type Locale } from '@be-music/service-web-theme';
 
 const TEXT = {
   en: {
@@ -122,24 +123,24 @@ export function renderAccountPage(input: {
   showDonateLink?: boolean;
   buildInfo?: BuildInfo;
 }): string {
-  const name = input.name.replace(
-    /[&<>"']/g,
-    (s) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[s]!,
-  );
   const button = (action: string, label: string, primary = false) => {
     const icon = actionIcon(action);
-    const mark = icon === '' ? '' : `<span class="inline-flex size-4 shrink-0">${icon}</span>`;
-    return `<button class="btn w-full whitespace-normal" type="button" data-action="${action}"${primary ? '' : ' data-variant="outline"'}>${mark}${label}</button>`;
+    return html`<button
+      class="btn w-full whitespace-normal"
+      type="button"
+      data-action=${action}
+      data-variant=${primary ? nothing : 'outline'}
+    >
+      ${icon === '' ? nothing : html`<span class="inline-flex size-4 shrink-0">${unsafeHTML(icon)}</span>`}${label}
+    </button>`;
   };
-  const escape = (value: string) =>
-    value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
   const home = input.apps?.dashboard ?? '/account';
   const locale = input.locale ?? 'en';
   const t = TEXT[locale];
   const providerControl = (provider: 'discord' | 'google', label: string, configured: boolean, linked: boolean) => {
-    if (!configured) return '';
+    if (!configured) return nothing;
     if (!input.signedIn) return button(provider, t.signInWith(label));
-    if (linked) return `<p class="text-muted-foreground text-sm">${t.linked(label)}</p>`;
+    if (linked) return html`<p class="text-muted-foreground text-sm">${t.linked(label)}</p>`;
     return button(`link-${provider}`, t.link(label));
   };
   const account = input.signedIn
@@ -152,47 +153,119 @@ export function renderAccountPage(input: {
     : undefined;
   const profile =
     input.signedIn && !input.login && input.profile
-      ? `<section class="grid gap-4 border-t pt-4"><h2 class="text-sm font-medium">${t.profile}</h2><form id="profile-form" class="grid gap-4"><label class="grid gap-2 text-sm font-medium">${t.handle}<input class="input" name="handle" value="${escape(input.profile.handle)}" required minlength="3" maxlength="15" pattern="[A-Za-z0-9_]{3,15}" autocomplete="username"></label><label class="grid gap-2 text-sm font-medium">${t.displayName}<input class="input" name="displayName" value="${escape(input.profile.displayName)}" required maxlength="64" autocomplete="nickname"></label><button class="btn w-full whitespace-normal" type="submit">${t.saveProfile}</button></form><h2 class="text-sm font-medium">${t.avatar}</h2><img class="size-24 rounded-lg" src="${escape(input.profile.avatarURL)}" width="96" height="96" alt="${t.yourAvatar}"><label class="grid gap-2 text-sm font-medium">${t.uploadAvatar}<input class="input" type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp"></label><button class="btn w-full whitespace-normal" data-variant="outline" type="button" data-action="remove-avatar">${t.generatedAvatar}</button></section>`
-      : '';
+      ? html` <section class="grid gap-4 border-t pt-4">
+          <h2 class="text-sm font-medium">${t.profile}</h2>
+          <form id="profile-form" class="grid gap-4">
+            <label class="grid gap-2 text-sm font-medium"
+              >${t.handle}<input
+                class="input"
+                name="handle"
+                value=${input.profile.handle}
+                required
+                minlength="3"
+                maxlength="15"
+                pattern="[A-Za-z0-9_]{3,15}"
+                autocomplete="username"
+            /></label>
+            <label class="grid gap-2 text-sm font-medium"
+              >${t.displayName}<input
+                class="input"
+                name="displayName"
+                value=${input.profile.displayName}
+                required
+                maxlength="64"
+                autocomplete="nickname"
+            /></label>
+            <button class="btn w-full whitespace-normal" type="submit">${t.saveProfile}</button>
+          </form>
+          <h2 class="text-sm font-medium">${t.avatar}</h2>
+          <img class="size-24 rounded-lg" src=${input.profile.avatarURL} width="96" height="96" alt=${t.yourAvatar} />
+          <label class="grid gap-2 text-sm font-medium"
+            >${t.uploadAvatar}<input
+              class="input"
+              type="file"
+              id="avatar-input"
+              accept="image/png,image/jpeg,image/webp"
+          /></label>
+          <button class="btn w-full whitespace-normal" data-variant="outline" type="button" data-action="remove-avatar">
+            ${t.generatedAvatar}
+          </button>
+        </section>`
+      : nothing;
   const serviceEntries = Object.entries(input.apps ?? {}).filter(([serviceName]) => serviceName !== 'donate');
   const services =
     serviceEntries.length === 0
-      ? ''
-      : `<section class="grid gap-3 border-t pt-4"><h2 class="text-sm font-medium">${t.services}</h2><nav class="flex flex-wrap gap-3 text-sm" aria-label="${t.services}">${serviceEntries
-          .map(
-            ([serviceName, origin]) =>
-              `<a class="${LINK_CLASS}" href="${new URL('/api/auth/sign-in', origin).href.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">${serviceName.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</a>`,
-          )
-          .join('')}</nav></section>`;
+      ? nothing
+      : html` <section class="grid gap-3 border-t pt-4">
+          <h2 class="text-sm font-medium">${t.services}</h2>
+          <nav class="flex flex-wrap gap-3 text-sm" aria-label=${t.services}>
+            ${serviceEntries.map(([serviceName, origin]) => html`<a class=${LINK_CLASS} href=${new URL('/api/auth/sign-in', origin).href}>${serviceName}</a>`)}
+          </nav>
+        </section>`;
   const donate =
     input.showDonateLink && input.apps?.donate
-      ? `<a class="${LINK_CLASS}" href="${new URL('/api/auth/sign-in', input.apps.donate).href.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">${t.donate}</a>`
-      : '';
-  const footer = renderServiceFooter({
+      ? html`<a class=${LINK_CLASS} href=${new URL('/api/auth/sign-in', input.apps.donate).href}>${t.donate}</a>`
+      : nothing;
+  const footer = serviceFooterTemplate({
     current: 'accounts',
     hostname: requestHostname(input.requestURL),
     navLabel: t.services,
-    siteHTML: donate === '' ? undefined : donate,
+    siteHTML: input.showDonateLink && input.apps?.donate ? renderHTML(donate) : undefined,
     buildInfo: input.buildInfo,
     locale,
   });
-  return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Be-Music Accounts</title><style>${SERVICE_CSS}</style></head><body class="bg-background text-foreground min-h-svh antialiased">${serviceSkipLink(locale)}${renderServiceHeader(
-    {
-      locale,
-      title: 'Be-Music Accounts',
-      homeHref: home,
-      playHref: input.apps?.play,
-      accountHref: input.signedIn ? '/account' : '/login',
-      account,
-      requestURL: input.requestURL ?? (input.login ? '/login' : '/account'),
-    },
-  )}<main class="mx-auto w-full max-w-lg px-4 pt-12 pb-12" id="main"><section class="card" data-size="sm" aria-labelledby="account-title"><header><h1 class="text-lg font-semibold tracking-tight" id="account-title">${input.login ? t.signIn : t.yourAccount}</h1><p>${input.signedIn ? t.signedIn(name, input.anonymous) : t.lead}</p></header><section class="grid gap-3">${
-    input.login && input.signedIn ? button('continue', t.continue, true) : ''
-  }${
-    !input.signedIn || input.login ? button('passkey', t.passkey, !input.signedIn) : ''
-  }${providerControl('discord', 'Discord', input.discord, input.linkedDiscord === true)}${providerControl('google', 'Google', input.google, input.linkedGoogle === true)}${
-    !input.signedIn ? button('guest', t.guestStart) : ''
-  }${
-    input.signedIn ? button('add-passkey', t.addPasskey, !input.login) + button('sign-out', t.signOut) : ''
-  }</section>${profile}<section><p class="text-destructive min-h-6 text-sm" id="status" role="status" aria-live="polite">${escape(input.notice ?? '')}</p></section>${services}</section><p class="text-muted-foreground mt-6 text-xs">${t.footnote}</p></main>${footer}<script type="module" src="/assets/client.js"></script></body></html>`;
+  return renderHTML(
+    html`<!doctype html>
+      <html lang=${locale}>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width,initial-scale=1" />
+          <meta name="robots" content="noindex" />
+          <title>Be-Music Accounts</title>
+          ${unsafeHTML(`<style>${SERVICE_CSS}</style>`)}
+        </head>
+        <body class="bg-background text-foreground min-h-svh antialiased">
+          ${serviceSkipLinkTemplate(locale)}
+          ${serviceHeaderTemplate({
+            locale,
+            title: 'Be-Music Accounts',
+            homeHref: home,
+            playHref: input.apps?.play === undefined ? undefined : new URL('/api/auth/sign-in', input.apps.play).href,
+            accountHref: input.signedIn ? '/account' : '/login',
+            account,
+            requestURL: input.requestURL ?? (input.login ? '/login' : '/account'),
+          })}
+          <main class="mx-auto w-full max-w-lg px-4 pt-12 pb-12" id="main">
+            <section class="card" data-size="sm" aria-labelledby="accounts-title">
+              <header>
+                <h1 class="text-2xl font-semibold tracking-tight" id="accounts-title">
+                  ${input.login ? t.signIn : t.yourAccount}
+                </h1>
+                <p class="text-muted-foreground text-sm">
+                  ${input.signedIn ? t.signedIn(input.name || t.guest, input.anonymous) : t.lead}
+                </p>
+              </header>
+              <section class="grid gap-3">
+                ${input.login && input.signedIn ? button('continue', t.continue, true) : nothing}
+                ${!input.signedIn || input.login ? button('passkey', t.passkey, !input.signedIn) : nothing}
+                ${providerControl('discord', 'Discord', input.discord, input.linkedDiscord === true)}
+                ${providerControl('google', 'Google', input.google, input.linkedGoogle === true)}
+                ${!input.signedIn ? button('guest', t.guestStart) : nothing}
+                ${input.signedIn ? html`${button('add-passkey', t.addPasskey, !input.login)}${button('sign-out', t.signOut)}` : nothing}
+              </section>
+              ${profile}
+              <section>
+                <be-music-status class="text-destructive min-h-6 text-sm" id="status" role="status" aria-live="polite"
+                  >${input.notice ?? ''}</be-music-status
+                >
+              </section>
+              ${services}
+            </section>
+            <p class="text-muted-foreground mt-6 text-xs">${t.footnote}</p>
+          </main>
+          ${footer}
+          <script type="module" src="/assets/client.js"></script>
+        </body>
+      </html>`,
+  );
 }
