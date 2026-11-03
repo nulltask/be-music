@@ -1,7 +1,16 @@
-import { Application, type ApplicationOptions, Container, DOMAdapter, RendererType, UPDATE_PRIORITY } from 'pixi.js';
+import {
+  Application,
+  type ApplicationOptions,
+  Container,
+  DOMAdapter,
+  RendererType,
+  UPDATE_PRIORITY,
+  WebGPURenderer,
+} from 'pixi.js';
 import type { SceneIdentity } from './family-kit.ts';
 import { logger } from '../logger.ts';
 import { createMaxLimitsGPU } from './webgpu-limits.ts';
+import { disableTransientAttachments } from './webgpu-transient.ts';
 
 const log = logger('scene-host');
 
@@ -197,6 +206,8 @@ export class PixiSceneHost {
       gcFrequency: 60_000,
       ...options?.appOptions,
     });
+    // Safari's WebGPU crashes on the transient MSAA textures Pixi makes on Apple GPUs (see `webgpu-transient.ts`).
+    if (this.app.renderer instanceof WebGPURenderer) disableTransientAttachments(this.app.renderer);
     // Surface the actual renderer type — the `preference` field is a *hint*, and the real backend may differ if WebGPU
     // init failed silently or if the override flag was used.
     log.info('renderer ready', {
