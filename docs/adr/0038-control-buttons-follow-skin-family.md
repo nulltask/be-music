@@ -30,7 +30,7 @@ flowchart TD
   pick -->|beatoraja| bea
 ```
 
-A key the scheme leaves free takes the other families' meaning for it when none clashes. A key a chart's lane takes in a play is the lane. A lane and START or SELECT never share a key (the key config refuses it), so a screen never has to choose between them.
+Each screen's operations and their default keys on each key map are one table (`CONTROL_ACTIONS` in `session/controls/control-actions.ts`); a default is a physical key or a control button, and a key the player gives an operation takes the place of its defaults (`actionKeys`). A key the scheme leaves free takes the other families' meaning for it when none clashes. A key a chart's lane takes in a play is the lane. A lane and START or SELECT never share a key (the key config refuses it), so a screen never has to choose between them.
 
 A play sends START and SELECT to the engine as `control-input` commands, which the replay records with their physical keys (`ReplayPlay.controlInputs`); every lane input records its physical key too (`ReplayInputEvent.code`). Both are diagnostic: what a button did is recorded where it lands, and simulators read neither.
 

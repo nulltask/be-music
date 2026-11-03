@@ -20,9 +20,13 @@ import {
 } from '@be-music/player-engine/lanes';
 import { assignLaneKey, effectiveLaneKey, resetLaneKeys } from '../../lane-keys.ts';
 import { assignControlKey } from '../../control-keys.ts';
+import { buildActionKeyPage } from './action-keys.ts';
 import { playerLang } from '../../player-copy.ts';
 import type { OptionContainer } from '../options-controls.ts';
 import type { OptionsDialog } from './index.ts';
+
+/** The page of the screens' operations (`action-keys.ts`). */
+export const SCREENS_PAGE_TITLE = 'Screens';
 
 /** Each group's page title. */
 const GROUP_TITLES: Readonly<Record<LaneKeyGroup, string>> = { beat: '5 / 7 / 10 / 14 KEY', popn: '9 KEY' };
@@ -59,6 +63,7 @@ const PROMPTS = {
 
 /** Builds the key config into `folder`. */
 export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContainer): void {
+  let repaintActionKeys: (() => void) | undefined;
   this.trackPlayOption(
     folder
       .addBinding(this.guiState, 'builtInControlScheme', {
@@ -68,10 +73,18 @@ export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContaine
           { text: 'beatoraja', value: 'beatoraja' },
         ],
       })
-      .on('change', () => this.scheduleSettingsSave()),
+      .on('change', () => {
+        this.scheduleSettingsSave();
+        repaintActionKeys?.();
+      }),
   );
   const groups = Object.keys(GROUP_TITLES) as LaneKeyGroup[];
-  const pages = folder.addTab({ pages: groups.map((group) => ({ title: GROUP_TITLES[group] })) }).pages;
+  const tabs = folder.addTab({
+    pages: [...groups.map((group) => ({ title: GROUP_TITLES[group] })), { title: SCREENS_PAGE_TITLE }],
+  });
+  const pages = tabs.pages;
+  const screensPage = pages[groups.length];
+  if (screensPage !== undefined) repaintActionKeys = buildActionKeyPage.call(this, screensPage);
   const rows: { readonly row: KeyConfigRow; readonly button: HTMLButtonElement }[] = [];
   let waiting: KeyConfigRow | undefined;
 

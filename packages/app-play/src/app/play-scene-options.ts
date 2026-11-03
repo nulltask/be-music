@@ -25,6 +25,7 @@ export type PlaySceneGUIState = Pick<
   | 'anyKey'
   | 'laneKeys'
   | 'controlKeys'
+  | 'actionKeys'
   | 'replayView'
   | 'tempoEnabled'
   | 'tempoPercent'
@@ -184,6 +185,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     // The player's own keys; a replay plays its recorded lanes, which no key reaches.
     laneKeys: guiState.laneKeys,
     controlKeys: guiState.controlKeys,
+    actionKeys: guiState.actionKeys,
     dpFlip: replay !== undefined ? false : lanes.dpFlip,
     random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
     random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,

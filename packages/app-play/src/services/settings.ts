@@ -311,6 +311,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     laneKeys: {},
     controlKeys: {},
     builtInControlScheme: 'lr2',
+    actionKeys: {},
     sort: 'OFF',
     keysFilter: 'ALL',
     difficultyFilter: 'ALL',

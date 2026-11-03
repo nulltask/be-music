@@ -14,6 +14,7 @@
 import { createLaneBindings, LANE_KEY_CONFIG, type LaneKeyOverrides } from '@be-music/player-engine/lanes';
 import type { SceneFamily } from '../../host/family-kit.ts';
 import { keyboardEventToTokens } from '../../runtime/web-input-runtime.ts';
+import type { ControlActionOverrides } from './control-actions.ts';
 
 /** A side of the controller. */
 export type ControlSide = '1P' | '2P';
@@ -65,6 +66,8 @@ export interface ControlSettings {
   readonly controlKeys?: ControlKeyOverrides;
   /** The key map of the built-in skins: LR2's (the default) or beatoraja's. */
   readonly builtInScheme?: ControlScheme;
+  /** The player's own keys for the screens' operations (`control-actions.ts`). */
+  readonly actionKeys?: ControlActionOverrides;
 }
 
 /** Which buttons each input token is, lowercase (`keyboardEventToTokens`). */

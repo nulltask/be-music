@@ -70,3 +70,12 @@ export {
   type ControlScheme,
   type ControlSettings,
 } from '../session/controls/control-buttons.ts';
+export {
+  CONTROL_ACTIONS,
+  controlActionKeys,
+  type ControlActionDefinition,
+  type ControlActionId,
+  type ControlActionKey,
+  type ControlActionOverrides,
+  type ControlScreen,
+} from '../session/controls/control-actions.ts';

@@ -192,6 +192,7 @@ describe('captureOptionSettings', () => {
       laneKeys: { beat: { '11': ['a'] } },
       controlKeys: { '1P-start': ['tab'] },
       builtInControlScheme: 'beatoraja',
+      actionKeys: { 'select.activate': ['KeyE'] },
       sort: 'OFF',
       keysFilter: 'ALL',
       difficultyFilter: 'ALL',

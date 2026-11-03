@@ -17,6 +17,7 @@
 
 import type { BrowseCommand, PlayOptions } from '@be-music/player-scene-model';
 import type { SessionKeyEvent } from '../session-scene.ts';
+import { DEFAULT_CONTROL_ACTIONS, type ControlActionId, type ControlActionMap } from '../controls/control-actions.ts';
 import {
   controlButtonsOfKey,
   DEFAULT_CONTROL_BUTTONS,
@@ -103,16 +104,47 @@ const READTEXT_SCROLL_KEYS: Readonly<Record<string, number>> = {
 };
 
 /**
- * What a key going down asks of the select screen in `state`, on the family's key map (LR2's by default), or
- * `undefined` for nothing.
+ * What a key going down asks of the select screen in `state`, on the family's key map (LR2's by default) with the
+ * player's keys for its operations (`actions`), or `undefined` for nothing.
  */
 export function resolveSelectKeyAction(
   event: SessionKeyEvent,
   state: SelectKeyState,
   map: SelectKeyMap = 'lr2',
+  actions: ControlActionMap = DEFAULT_CONTROL_ACTIONS[map],
 ): SelectKeyAction | undefined {
   if (event.type !== 'down') return undefined;
-  return map === 'beatoraja' ? resolveBeatorajaKey(event, state) : resolveLR2Key(event, state);
+  const keyEvent = { ...event, buttons: buttonsOf(event) };
+  const is = (id: ControlActionId): boolean => actions.is(id, keyEvent);
+  // LR2's START (and Space) toggles the play-options panel, even over the README; Enter already takes the bar.
+  if (is('select.option-panel')) return { type: 'panel', panel: 1 };
+  if (state.readTextOpen) return resolveReadTextKey(event);
+  // LR2's panels: Escape closes an open one before it backs out of a folder, and panel 1 steps its options.
+  if (map === 'lr2' && event.key === 'Escape' && state.panel !== undefined) {
+    return { type: 'panel', panel: state.panel };
+  }
+  if (map === 'lr2' && state.panel === 1) {
+    for (const button of keyEvent.buttons) {
+      const option = PANEL_KEYS[button];
+      if (option !== undefined) return { type: 'play-option', ...option };
+    }
+  }
+  // beatoraja's replay keys are lane keys, ahead of the list's.
+  if (is('select.next-replay')) return { type: 'replay-slot', step: 1 };
+  if (is('select.replay')) return { type: 'replay' };
+  if (is('select.down')) return { type: 'step', direction: 1 };
+  if (is('select.up')) return { type: 'step', direction: -1 };
+  if (is('select.page-down')) return { type: 'browse', command: { type: 'move', delta: SELECT_PAGE_BARS } };
+  if (is('select.page-up')) return { type: 'browse', command: { type: 'move', delta: -SELECT_PAGE_BARS } };
+  if (is('select.first')) return { type: 'browse', command: { type: 'jump', index: 0 } };
+  // The jump is clamped to the list: the last bar.
+  if (is('select.last')) return { type: 'browse', command: { type: 'jump', index: Number.MAX_SAFE_INTEGER } };
+  if (is('select.activate')) return { type: 'activate' };
+  if (is('select.back')) return { type: 'back' };
+  if (is('select.close-folder')) return { type: 'back', inFolder: true };
+  // Not with a modifier: Ctrl / Cmd + R reloads the page.
+  if (is('select.random')) return { type: 'random' };
+  return undefined;
 }
 
 /**
@@ -123,68 +155,4 @@ function resolveReadTextKey(event: SessionKeyEvent): SelectKeyAction {
   if (event.key === 'Backspace' || event.key === 'Enter') return { type: 'readtext-close' };
   const delta = READTEXT_SCROLL_KEYS[event.key];
   return delta === undefined ? { type: 'swallow' } : { type: 'readtext-scroll', delta };
-}
-
-function resolveLR2Key(event: SessionKeyEvent, state: SelectKeyState): SelectKeyAction | undefined {
-  const buttons = buttonsOf(event);
-  // START or Space toggles the play-options panel (LR2's panel 1); Enter already takes the bar.
-  if (event.code === 'Space' || buttons.includes('1P-start')) return { type: 'panel', panel: 1 };
-  if (state.readTextOpen) return resolveReadTextKey(event);
-  // Escape closes an open panel before it backs out of a folder.
-  if (event.key === 'Escape' && state.panel !== undefined) return { type: 'panel', panel: state.panel };
-  if (state.panel === 1) {
-    for (const button of buttons) {
-      const option = PANEL_KEYS[button];
-      if (option !== undefined) return { type: 'play-option', ...option };
-    }
-  }
-  switch (event.key) {
-    case 'ArrowDown':
-      return { type: 'step', direction: 1 };
-    case 'ArrowUp':
-      return { type: 'step', direction: -1 };
-    case 'Enter':
-      return { type: 'activate' };
-    case 'Escape':
-    case 'Backspace':
-    case 'ArrowLeft':
-      return { type: 'back' };
-    default:
-      return undefined;
-  }
-}
-
-function resolveBeatorajaKey(event: SessionKeyEvent, state: SelectKeyState): SelectKeyAction | undefined {
-  if (state.readTextOpen) return resolveReadTextKey(event);
-  const modified = event.ctrlKey || event.metaKey || event.altKey;
-  const buttons = buttonsOf(event);
-  if (!modified && (buttons.includes('1P-key6') || event.key === '4')) return { type: 'replay-slot', step: 1 };
-  if (!modified && buttons.includes('1P-key7')) return { type: 'replay' };
-  switch (event.key) {
-    case 'ArrowDown':
-      return { type: 'step', direction: 1 };
-    case 'ArrowUp':
-      return { type: 'step', direction: -1 };
-    case 'PageDown':
-      return { type: 'browse', command: { type: 'move', delta: SELECT_PAGE_BARS } };
-    case 'PageUp':
-      return { type: 'browse', command: { type: 'move', delta: -SELECT_PAGE_BARS } };
-    case 'Home':
-      return { type: 'browse', command: { type: 'jump', index: 0 } };
-    case 'End':
-      // The jump is clamped to the list: the last bar.
-      return { type: 'browse', command: { type: 'jump', index: Number.MAX_SAFE_INTEGER } };
-    case 'Enter':
-      return { type: 'activate' };
-    case 'Escape':
-      return { type: 'back' };
-    case 'Backspace':
-      return { type: 'back', inFolder: true };
-    case 'r':
-    case 'R':
-      // Not with a modifier: Ctrl / Cmd + R reloads the page.
-      return event.ctrlKey || event.metaKey || event.altKey ? undefined : { type: 'random' };
-    default:
-      return undefined;
-  }
 }

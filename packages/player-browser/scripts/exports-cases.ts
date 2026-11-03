@@ -1011,6 +1011,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.resolveControlButtons({ laneKeys: { beat: { '11': ['a'] } } });
     },
   });
+  define('player-browser.controlActionKeys', {
+    run: () => {
+      playerWebCoreAPI.controlActionKeys('select.back', 'lr2', { 'select.activate': ['KeyE'] });
+    },
+  });
   define('player-browser.resolveRendererPreference', {
     run: () => {
       playerWebCoreAPI.resolveRendererPreference('?renderer=webgl');

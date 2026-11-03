@@ -8,6 +8,8 @@ import {
   type ControlKeyOverrides,
   type ControlScheme,
   type ControlSettings,
+  CONTROL_ACTIONS,
+  type ControlActionOverrides,
 } from '@be-music/player-browser/host';
 import type { LaneKeyOverrides } from '@be-music/player-engine/lanes';
 
@@ -19,8 +21,27 @@ export function controlSettingsOf(state: {
   readonly laneKeys: LaneKeyOverrides;
   readonly controlKeys: ControlKeyOverrides;
   readonly builtInControlScheme: ControlScheme;
+  readonly actionKeys: ControlActionOverrides;
 }): ControlSettings {
-  return { laneKeys: state.laneKeys, controlKeys: state.controlKeys, builtInScheme: state.builtInControlScheme };
+  return {
+    laneKeys: state.laneKeys,
+    controlKeys: state.controlKeys,
+    builtInScheme: state.builtInControlScheme,
+    actionKeys: state.actionKeys,
+  };
+}
+
+/** Stored keys for the screens' operations, keeping only known operations with a non-empty list of key codes. */
+export function parseActionKeys(raw: unknown): ControlActionOverrides {
+  const keys: Record<string, string[]> = {};
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return keys;
+  for (const { id } of CONTROL_ACTIONS) {
+    const codes = (raw as Record<string, unknown>)[id];
+    if (!Array.isArray(codes)) continue;
+    const valid = codes.filter((code): code is string => typeof code === 'string' && code !== '');
+    if (valid.length > 0) keys[id] = valid;
+  }
+  return keys as ControlActionOverrides;
 }
 
 /** Stored START / SELECT keys, keeping only known ids with a non-empty token list. */

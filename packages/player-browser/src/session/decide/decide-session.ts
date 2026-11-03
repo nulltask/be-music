@@ -24,18 +24,27 @@ import {
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { DecideFrame, DecideIntent, SceneLeaving, SceneViewTiming } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
+import {
+  DEFAULT_CONTROL_ACTIONS,
+  type ControlActionKeyEvent,
+  type ControlActionMap,
+} from '../controls/control-actions.ts';
 
 /** What a key press does on the decide screen. */
 export type DecideKeyAction = 'continue' | 'cancel';
 
 /**
- * Maps a key press to its decide-screen action: Enter / Space continue to the play, Escape goes back to select.
- * Auto-repeats are ignored, so the Enter still held from picking the chart doesn't skip the screen.
+ * Maps a key press to its decide-screen action by the player's keys (`actions`): Enter / Space continue to the play,
+ * Escape goes back to select, by default. Auto-repeats are ignored, so the Enter still held from picking the chart
+ * doesn't skip the screen.
  */
-export function resolveDecideKeyAction(event: { key: string; repeat: boolean }): DecideKeyAction | undefined {
+export function resolveDecideKeyAction(
+  event: ControlActionKeyEvent & { readonly repeat: boolean },
+  actions: ControlActionMap = DEFAULT_CONTROL_ACTIONS.lr2,
+): DecideKeyAction | undefined {
   if (event.repeat) return undefined;
-  if (event.key === 'Escape') return 'cancel';
-  if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') return 'continue';
+  if (actions.is('decide.cancel', event)) return 'cancel';
+  if (actions.is('decide.continue', event)) return 'continue';
   return undefined;
 }
 
@@ -69,6 +78,8 @@ export interface DecideSessionOptions {
   readonly progress?: () => number | undefined;
   /** The random source the chart's `#RANDOM` / `#SWITCH` branches are drawn with, in `[0, 1)`. Defaults to `Math.random`. */
   readonly random?: () => number;
+  /** The player's keys for the screen's operations. Defaults to the default keys. */
+  readonly actions?: ControlActionMap;
   readonly on: DecideSessionEvents;
 }
 
@@ -139,7 +150,7 @@ export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
 
   public handleKey(event: SessionKeyEvent): boolean {
     if (!this.entered || event.type !== 'down') return false;
-    const action = resolveDecideKeyAction(event);
+    const action = resolveDecideKeyAction(event, this.options.actions);
     if (action === undefined) return false;
     this.request(action, event.timeStamp);
     return true;
