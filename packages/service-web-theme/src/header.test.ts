@@ -49,7 +49,8 @@ describe('renderServiceHeader', () => {
 
     expect(html).toContain('class="relative"');
     expect(html).toContain('class="lucide lucide-languages"');
-    expect(html).toContain('data-tooltip="言語" data-side="bottom" data-align="end"');
+    expect(html).not.toContain('data-tooltip="言語"');
+    expect(html).not.toContain('title="言語"');
     expect(html).toContain('[&>svg]:size-4 text-muted-foreground');
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('href="/?lang=en"');
