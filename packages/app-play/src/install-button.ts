@@ -1,7 +1,9 @@
 // The header's Install button: Chromium's install prompt where the page has one, Safari's steps otherwise
-// (`resolveInstallOffer`). It shows only while the player can be installed here.
+// (`resolveInstallOffer`). It shows only while the player can be installed here. Once installed, the player asks for
+// persistent storage (`requestPersistentStorage`).
 import { resolveInstallOffer, type InstallOffer } from './install-offer.ts';
 import { bindPlayerHeader, setPlayerHeaderInstallable } from './player-header.ts';
+import { requestPersistentStorage } from './storage-persistence.ts';
 
 /** Chromium's `beforeinstallprompt` event, which the DOM typings leave out. */
 interface BeforeInstallPromptEvent extends Event {
@@ -38,7 +40,12 @@ export function wireInstallButton(): void {
   addEventListener('appinstalled', () => {
     deferred = undefined;
     refresh();
+    void requestPersistentStorage(navigator.storage);
   });
+  // An installed player keeps its records and offline caches when the browser runs short of space.
+  if (installed.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true) {
+    void requestPersistentStorage(navigator.storage);
+  }
   installed.addEventListener('change', refresh);
 
   if (dialog !== null) {
