@@ -51,6 +51,8 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 
 `paintPlayfieldParts(context, parts)` は、ステージ全体の surface しか持たない host 向けに、同じ部品を一つの Canvas 2D context に各範囲で clip して描きます。独自の部品は `BeMusicPlayfieldCanvasElement` を継承して `paint(context, data)` を実装します。BGA は BMS の慣例に従い、POOR の表示中はベースとレイヤーの代わりに POOR の画像を描き、256x256 の BGA キャンバスに収まる静止画はその大きさのまま置きます。`be-music-playfield` はステージを `--background`、周囲のレターボックスを `--be-music-letterbox-background` で塗ります。プレイフィールドは `stage`・`bga`・`lanes`・`notes`・`lane-covers`・`judge-line`・`bombs`・`judgment-display` の parts を、各要素は `canvas` part を公開します。
 
+ノーツ、ロングノートの端、地雷は `@be-music/player-skin-sdk` の `resolveNoteHeight` を使い、プレイフィールドの白鍵レーン幅の 0.21 倍の高さで描きます。`resolvePlayfieldParts(frame)` が `BeMusicNotesData.whiteLaneWidth` を渡します。ノートのデータを直接渡す場合も、この省略可能なフィールドを指定すると、皿・黒鍵・白鍵のノートを同じ高さにできます。省略すると各ノート自身のレーン幅を使います。`layout.twoPlayer` のあるゲームプレイの筐体フレームは、独立した 2 人プレイやゴーストを中央の BGA の両側に配置し、スコアとゲージを別々のパネルに表示します。
+
 ## プレビュー
 
 `be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、ドラッグ中と離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`images` にあればその絵（`#STAGEFILE`、なければ `#BANNER`）を出し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web.ja.md#埋め込みプレビュー)）。

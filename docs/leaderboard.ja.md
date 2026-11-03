@@ -298,8 +298,7 @@ Leaderboard のライバル、ターゲット、ゴースト API は未実装で
 
 ## 10. ページ（`leaderboard.be-music.app`）
 
-leaderboard Worker の中で Hono JSX によってサーバーレンダリングし、D1 を直接読みます。見た目は情報サイトとして、
-Tailwind CSS v4 と Basecoat（フレームワークのランタイムなしの shadcn/ui デザイン）で整え、OS の配色に従います。
+Leaderboard Worker の Hono のルートは D1 を直接読み、`@be-music/service-web-theme/server` を通して Lit テンプレートを描画します。Tailwind CSS v4 と Basecoat でページを整え、OS の配色に従います。共通のサービスビューはサーバーとクライアントで同じ表示モデルを使います。ブラウザーのコンポーネントは `@be-music/service-web-theme/client` を読み込み、htmx が非同期リクエストと部分遷移を担います。
 
 - `/` — 最新のスコアとコースのプレイ。匿名プレイヤーと未掲載譜面のフィルターを持ちます。
 - `/scores/:id` — スコア

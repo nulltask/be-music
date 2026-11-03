@@ -2,7 +2,9 @@
 
 # Service theme
 
-Private stylesheet for Accounts and Dashboard. `src/theme.css` imports Tailwind CSS v4 and [Basecoat](https://basecoatui.com) (the same components as the Leaderboard; shadcn/ui is not a dependency). `pnpm --filter @be-music/service-web-theme run build:css` writes `src/styles.generated.ts`, and `prepare` regenerates it on install. Pages use Basecoat classes (`btn`, `card`, `input`) and Tailwind utilities.
+Private styles and shared Lit views for Be-Music services. The root entry exposes compiled styles, locale helpers, service origins, and presentation types. Import server rendering functions and templates from `@be-music/service-web-theme/server`; import browser components and templates from `@be-music/service-web-theme/client`. The server entry is excluded from browser bundles. `defineServiceUI()` explicitly registers the shared status element; its Shadow DOM isolates Lit-owned messages from htmx morphs. Authentication panels, account identities and avatars, header popovers, and language pickers share their templates across services.
+
+`src/theme.css` imports Tailwind CSS v4 and [Basecoat](https://basecoatui.com). `pnpm --filter @be-music/service-web-theme run build:css` writes `src/styles.generated.ts`; `build:server` bundles the server entry for Workers. `prepare` regenerates both on install. Accounts and Dashboard use the compiled stylesheet; pages use Basecoat classes (`btn`, `card`, `input`) and Tailwind utilities.
 
 Dark colors follow the system color scheme. Leaderboard toggles a `.dark` class from a script; these pages cannot, because their content security policy blocks inline scripts. The build repeats Basecoat's dark tokens under `prefers-color-scheme`.
 
