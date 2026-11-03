@@ -2,11 +2,27 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 // Virtual module produced by the `be-music:acknowledgements` Vite plugin (see `vite.config.ts`).
 import loadAcknowledgements, { type Acknowledgement } from 'virtual:acknowledgements';
 import { bindPlayerHeader } from './player-header.ts';
-import { detectPlayerLang, playerText, setPlayerLang, type PlayerLang } from './player-copy.ts';
+import {
+  detectPlayerLang,
+  onPlayerLangChange,
+  playerLang,
+  playerText,
+  setPlayerLang,
+  type PlayerLang,
+} from './player-copy.ts';
+import { HelpKeyboard, type HelpKeyboardSource } from './ui/keyboard/help-keyboard.ts';
 import { releaseFocusOnClose } from './ui/dialog-focus.ts';
 
 /** Opens Help once it is wired (LR2's F1); nothing before. */
 let openHelp: (() => void) | undefined;
+
+/** The player's keys and the current screen's key map, for the Keyboard tab; LR2's default keys until the app sets it. */
+let keyboardSource: () => HelpKeyboardSource = () => ({ settings: {}, scheme: 'lr2' });
+
+/** Gives the Keyboard tab the player's keys and the key map of the screen shown. */
+export function setHelpKeyboardSource(source: () => HelpKeyboardSource): void {
+  keyboardSource = source;
+}
 
 /** Opens the Help dialog on its Usage tab, as the header's Help button does. */
 export function openHelpModal(): void {
@@ -24,6 +40,9 @@ export function wireHelpModal(): void {
   }
 
   let ossPopulated = false;
+  const keyboardPane = document.querySelector<HTMLElement>('#help-pane-keyboard');
+  const keyboard = keyboardPane === null ? undefined : new HelpKeyboard(keyboardPane, () => keyboardSource());
+  let keyboardShown = false;
   // Basecoat's tabs: the selected tab and panel carry `aria-selected`, the others are hidden and out of the tab order.
   const activatePane = (paneId: string): void => {
     for (const tab of tabs) {
@@ -36,6 +55,8 @@ export function wireHelpModal(): void {
       pane.setAttribute('aria-selected', matches ? 'true' : 'false');
       pane.toggleAttribute('hidden', !matches);
     }
+    keyboardShown = paneId === 'keyboard';
+    if (keyboardShown) keyboard?.show(playerLang());
     if (paneId === 'oss' && !ossPopulated) {
       ossPopulated = true;
       void renderAcknowledgementsList(ossList);
@@ -44,6 +65,8 @@ export function wireHelpModal(): void {
 
   // A native modal dialog, which Escape closes too.
   const open = (): void => {
+    // The Keyboard tab starts again on the key map the screen shown reads.
+    keyboard?.reset();
     activatePane('usage');
     if (!dialog.open) dialog.showModal();
   };
@@ -73,6 +96,11 @@ export function wireHelpModal(): void {
       next.focus();
       next.click();
     });
+  });
+
+  // The Keyboard tab follows the language switch.
+  onPlayerLangChange(() => {
+    if (keyboardShown) keyboard?.show(playerLang());
   });
 
   wireUsageLanguageSwitch();
