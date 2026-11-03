@@ -2,6 +2,7 @@ import { strToU8, zipSync } from 'fflate';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   isChartArchive,
+  isDroppedArchive,
   isZipArchiveName,
   locateZipCentralDirectory,
   readZipEntryNames,
@@ -23,6 +24,14 @@ describe('dropped ZIP archives', () => {
   test('names a ZIP archive by its extension', () => {
     expect(isZipArchiveName('Pack.ZIP')).toBe(true);
     expect(isZipArchiveName('song.bms')).toBe(false);
+  });
+
+  test('opens only a ZIP dropped as itself, not one inside a dropped folder', () => {
+    expect(isDroppedArchive({ name: 'pack.zip', webkitRelativePath: '' })).toBe(true);
+    expect(isDroppedArchive({ name: 'pack.zip', webkitRelativePath: 'pack.zip' })).toBe(true);
+    expect(isDroppedArchive({ name: 'pack.zip' })).toBe(true);
+    expect(isDroppedArchive({ name: 'pack.zip', webkitRelativePath: 'songs/pack.zip' })).toBe(false);
+    expect(isDroppedArchive({ name: 'song.bms', webkitRelativePath: '' })).toBe(false);
   });
 
   test('reads the entry paths from the central directory, past an archive comment', async () => {
