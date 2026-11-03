@@ -1,16 +1,26 @@
+import { render } from '@lit-labs/ssr';
+import { collectResultSync } from '@lit-labs/ssr/lib/render-result.js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { playerLang, setPlayerLang } from './player-copy.ts';
 import {
   bindPlayerHeader,
   classifyPlayerHeaderClick,
   playerHeaderFullscreenTarget,
-  playerServiceHeaderHTML,
+  playerServiceHeaderTemplate,
   runPlayerHeaderAction,
   setPlayerHeaderAccount,
   setPlayerHeaderSettingsOpen,
   togglePlayerHeaderFullscreen,
   type PlayerHeaderFullscreenDocument,
 } from './player-header.ts';
+
+function playerServiceHeaderHTML(input: Parameters<typeof playerServiceHeaderTemplate>[0]): string {
+  return collectResultSync(render(playerServiceHeaderTemplate(input)))
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+>/g, '>');
+}
 
 afterEach(() => {
   setPlayerLang('en');
@@ -52,7 +62,7 @@ test('renders the shared header with Settings where Play would be', () => {
     playerServiceHeaderHTML({ locale: 'en', hostname: 'localhost', requestURL: '/', installable: true }),
   ).toContain('data-service-header="install"');
   expect(html.indexOf('data-service-header="help"')).toBeLessThan(html.indexOf('data-service-header="settings"'));
-  expect(html).toContain('>Sign in</a>');
+  expect(html).toMatch(/>\s*Sign in\s*<\/a>/);
   expect(html).toContain('href="#main"');
   expect(html).not.toContain('aria-label="Play"');
   expect(html).not.toContain('lucide-play');
@@ -61,7 +71,7 @@ test('renders the shared header with Settings where Play would be', () => {
   expect(ja).toContain('aria-label="ヘルプ"');
   expect(ja).toContain('data-tooltip="設定"');
   expect(ja).toContain('aria-label="フルスクリーン" aria-pressed="false"');
-  expect(ja).toContain('>ログイン</a>');
+  expect(ja).toMatch(/>\s*ログイン\s*<\/a>/);
   expect(ja).toContain('href="/?chart=1&amp;lang=en"');
   const signedIn = playerServiceHeaderHTML({
     locale: 'en',
@@ -70,7 +80,7 @@ test('renders the shared header with Settings where Play would be', () => {
     account: { handle: 'alice', displayName: 'Alice', anonymous: false },
   });
   expect(signedIn).toContain(
-    'data-service-header="account" target="_blank" rel="noopener" href="https://leaderboard.be-music.app/players/alice"',
+    'data-service-header="account" href="https://leaderboard.be-music.app/players/alice" target="_blank" rel="noopener"',
   );
 });
 

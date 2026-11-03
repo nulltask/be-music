@@ -1,3 +1,4 @@
+import { html, render, type TemplateResult } from 'lit';
 import { summarizeBrowserCompat, type BrowserCompatReport } from '@be-music/player-browser/collection';
 import { playerText } from './player-copy.ts';
 
@@ -29,60 +30,30 @@ export function renderBrowserCompatPanel(report: BrowserCompatReport): void {
     // Distinguish "everything works" from "core works but you're missing some optional niceties" — the latter is still
     // a green verdict but the count tells power users at a glance whether Web­Codecs / WebGPU / etc. are reachable.
     const missingOptional = report.items.filter((item) => !item.required && !item.supported).length;
-    statusLabel.textContent = missingOptional > 0 ? shell.optionalMissing(missingOptional) : shell.browserReady;
+    render(missingOptional > 0 ? shell.optionalMissing(missingOptional) : shell.browserReady, statusLabel);
   } else {
     const summary = summarizeBrowserCompat(report);
     const missing = summary?.startsWith('Missing required: ') ? summary.slice('Missing required: '.length) : undefined;
-    statusLabel.textContent =
-      missing !== undefined ? shell.missingRequired(missing) : (summary ?? shell.browserUnsupported);
+    render(missing !== undefined ? shell.missingRequired(missing) : (summary ?? shell.browserUnsupported), statusLabel);
   }
 
-  requiredList.replaceChildren();
-  optionalList.replaceChildren();
-  for (const item of report.items) {
-    const target = item.required ? requiredList : optionalList;
-    target.appendChild(buildCompatRow(item));
-  }
+  render(report.items.filter((item) => item.required).map(compatRow), requiredList);
+  render(report.items.filter((item) => !item.required).map(compatRow), optionalList);
 }
 
 /**
- * Builds one feature row inside the compat panel. Status color is encoded both as a CSS modifier class (drives the
+ * Renders one feature row inside the compat panel. Status color is encoded both as a CSS modifier class (drives the
  * icon / background) and as a screen-reader-friendly text fallback so the verdict is accessible without color vision.
  */
-function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIElement {
-  const li = document.createElement('li');
-  // `ok` = supported, `warn` = optional & missing (the player still works), `fail` = required & missing (player won't
-  // function). Required-supported and optional-supported both map to `ok` — visual hierarchy comes from the section
-  // split (Required vs Optional) above, not from a distinction here.
+function compatRow(item: BrowserCompatReport['items'][number]): TemplateResult {
   const status = item.supported ? 'ok' : item.required ? 'fail' : 'warn';
-  li.className = `compat-row compat-row--${status}`;
-  const notes = playerText().compatNotes;
-  li.title = item.id in notes ? notes[item.id as keyof typeof notes] : item.note;
-
-  const icon = document.createElement('span');
-  icon.className = 'compat-row-icon';
-  icon.setAttribute('aria-hidden', 'true');
-  // Plain text glyphs over inline SVG — keeps the markup compact and lets us color the glyph via `color:
-  // currentColor`. The accessibility verdict is carried by the screen-reader text span below, not by the symbol.
-  icon.textContent = item.supported ? '✓' : item.required ? '✕' : '–';
-  li.appendChild(icon);
-
-  const label = document.createElement('span');
-  label.className = 'compat-row-label';
-  label.textContent = item.label;
-  li.appendChild(label);
-
-  const sr = document.createElement('span');
-  sr.className = 'compat-row-sr';
-  // Read-aloud text for assistive tech — `✓` / `✕` / `–` carry visual semantics but no name on their own. `aria-hidden`
-  // on the icon hands the verdict to this hidden label instead.
-  const shell = playerText().shell;
-  sr.textContent = item.supported
-    ? shell.supported
-    : item.required
-      ? shell.missingRequiredItem
-      : shell.missingOptionalItem;
-  li.appendChild(sr);
-
-  return li;
+  const { compatNotes: notes, shell } = playerText();
+  const note = item.id in notes ? notes[item.id as keyof typeof notes] : item.note;
+  return html`<li class=${`compat-row compat-row--${status}`} title=${note}>
+    <span class="compat-row-icon" aria-hidden="true">${item.supported ? '✓' : item.required ? '✕' : '–'}</span>
+    <span class="compat-row-label">${item.label}</span>
+    <span class="compat-row-sr"
+      >${item.supported ? shell.supported : item.required ? shell.missingRequiredItem : shell.missingOptionalItem}</span
+    >
+  </li>`;
 }

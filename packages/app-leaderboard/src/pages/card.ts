@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { openDatabase } from '../db/client.ts';
 import { courseScore, score } from '../db/schema.ts';
 import { ICONS } from './icons.generated.ts';
-import type { PageContext } from './page.tsx';
+import type { PageContext } from './page.ts';
 
 /** Card URLs carry a version, so caches keep them; a play without its own card falls back to the default one. */
 const CARD_CACHE = 'public, max-age=86400';

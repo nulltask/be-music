@@ -1,3 +1,4 @@
+import { defineServiceUI, type BeMusicStatusElement } from '@be-music/service-web-theme/client';
 import { clientMessages, describeClientError } from './client-messages.ts';
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
@@ -10,13 +11,14 @@ const auth = createAuthClient({
   plugins: [anonymousClient(), passkeyClient(), oauthProviderClient()],
 });
 const query = location.pathname === '/login' ? location.search.slice(1) : '';
-const status = document.querySelector<HTMLElement>('#status')!;
+defineServiceUI();
+const status = document.querySelector<BeMusicStatusElement>('#status')!;
 const messages = clientMessages(document.documentElement.lang);
 
 async function done(result: unknown): Promise<void> {
   const value = result as { error?: { message?: string }; data?: { url?: string; redirect?: boolean } } | undefined;
   if (value?.error) {
-    status.textContent = value.error.message ?? messages.requestFailed;
+    status.message = value.error.message ?? messages.requestFailed;
     return;
   }
   if (value?.data?.url) {
@@ -32,14 +34,14 @@ async function done(result: unknown): Promise<void> {
       location.assign(continued.data.url);
       return;
     }
-    status.textContent = continued.error?.message ?? messages.continueFailed;
+    status.message = continued.error?.message ?? messages.continueFailed;
   } else location.assign('/account');
 }
 document.addEventListener('click', (event) => {
   const button = (event.target as Element).closest<HTMLButtonElement>('button[data-action]');
   if (!button) return;
   button.disabled = true;
-  status.textContent = '';
+  status.message = '';
   void (async () => {
     switch (button.dataset.action) {
       case 'remove-avatar':
@@ -72,7 +74,7 @@ document.addEventListener('click', (event) => {
     }
   })()
     .catch(() => {
-      status.textContent = messages.tryAgain;
+      status.message = messages.tryAgain;
     })
     .finally(() => {
       button.disabled = false;
@@ -122,7 +124,7 @@ document.querySelector<HTMLFormElement>('#profile-form')?.addEventListener('subm
     body: JSON.stringify({ handle: data.get('handle'), displayName: data.get('displayName') }),
   })
     .catch((error: Error) => {
-      status.textContent = error.message;
+      status.message = error.message;
     })
     .finally(() => {
       button.disabled = false;
@@ -150,7 +152,7 @@ document.querySelector<HTMLInputElement>('#avatar-input')?.addEventListener('cha
     }
   })()
     .catch((error: Error) => {
-      status.textContent = error.message;
+      status.message = error.message;
     })
     .finally(() => {
       input.disabled = false;

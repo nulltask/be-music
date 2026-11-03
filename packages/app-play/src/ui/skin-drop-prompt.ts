@@ -1,3 +1,6 @@
+import { localized } from './localized.ts';
+import { render } from 'lit';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import { playerText } from '../player-copy.ts';
 
@@ -17,11 +20,20 @@ export function promptSkinDrop(family: SkinDropFamily, setPending: (family: Skin
   const dialog = document.querySelector<HTMLDialogElement>('#skin-drop');
   if (dialog === null) return;
   setPending(family);
-  const title = dialog.querySelector('h2');
-  const hint = dialog.querySelector('[data-skin-drop-hint]');
-  const shell = playerText().shell;
-  if (title !== null) title.textContent = family === 'lr2' ? shell.skinDropLr2 : shell.skinDropBeatoraja;
-  if (hint !== null) hint.innerHTML = family === 'lr2' ? shell.skinDropHintLr2 : shell.skinDropHintBeatoraja;
+  const title = dialog.querySelector<HTMLElement>('h2');
+  const hint = dialog.querySelector<HTMLElement>('[data-skin-drop-hint]');
+  if (title !== null)
+    render(
+      localized(() => (family === 'lr2' ? playerText().shell.skinDropLr2 : playerText().shell.skinDropBeatoraja)),
+      title,
+    );
+  if (hint !== null)
+    render(
+      localized(() =>
+        unsafeHTML(family === 'lr2' ? playerText().shell.skinDropHintLr2 : playerText().shell.skinDropHintBeatoraja),
+      ),
+      hint,
+    );
   // Cancel or Escape withdraws the request; a drop closes the prompt but keeps it, for the drop to answer.
   const withdraw = () => {
     setPending(undefined);

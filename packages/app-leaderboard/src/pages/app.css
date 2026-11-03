@@ -3,6 +3,7 @@
 @import 'tailwindcss' source(none);
 @source "./";
 @source "../../../service-web-theme/src/footer.ts";
+@source "../../../service-web-theme/src/footer-template.ts";
 @import 'basecoat-css';
 
 /* Figures line up everywhere: scores, counts, dates and percentages take tabular digits site-wide. */
@@ -14,7 +15,7 @@
   }
 }
 
-/* The last place a header menu tries (layout.tsx, headerMenuStyle): under its button across the whole width, kept a
+/* The last place a header menu tries (layout.ts, headerMenuStyle): under its button across the whole width, kept a
    page gutter in from either edge, for when neither side of the button has room (a narrow phone). */
 @position-try --header-menu-span {
   position-area: block-end span-all;
@@ -22,7 +23,7 @@
 }
 
 /* Moving between pages cross-fades instead of flashing (cross-document View Transitions). The header is its own
-   layer (layout.tsx) and is swapped without animation, so it stays still while the page below it fades. Off for
+   layer (layout.ts) and is swapped without animation, so it stays still while the page below it fades. Off for
    viewers who ask for reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
   @view-transition {
