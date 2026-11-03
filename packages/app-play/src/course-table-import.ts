@@ -1,9 +1,9 @@
 // Importing the courses a difficulty table publishes in its header (`header.json`), from the table's URL. The fetch,
-// the stored URL list and the group merge live here; the Debug Menu's Course folder only binds the controls, and the
+// the stored URL list and the group merge live here; the Options dialog's Course folder only binds the controls, and the
 // library service (`services/library.ts`) refreshes the course folders.
 import type { CourseDefinitionGroup } from '@be-music/player-browser/collection';
 import { fetchTableHeaderCourses, parseTableHeaderCourses, type TableFetchText } from '@be-music/player-engine/course';
-import { PLAYER_STORAGE_PREFIX } from './ui/debug-menu/folders.ts';
+import { PLAYER_STORAGE_PREFIX } from './ui/options/folders.ts';
 
 /** `localStorage` key of the difficulty-table URLs whose courses are imported again on load. */
 export const COURSE_TABLE_URLS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}course-table-urls`;

@@ -91,7 +91,7 @@ export function serviceSkipLink(locale: Locale): string {
  * button between Play's slot and the language menu. `title` is the fixed brand (`Be-Music Dashboard`), not translated,
  * with one Beta badge beside it. The account control links to `accountHref` (these pages have no account menu).
  * `settings` replaces the Play link with a Settings button (`data-service-header="settings"`); the page wires the
- * click. Play's button toggles its Debug Menu, and `settingsOpen` sets `aria-expanded`. The two are never both shown.
+ * click. Play's button opens its Options dialog, and `settingsOpen` sets `aria-expanded`. The two are never both shown.
  * `fullscreen` adds a button beside Settings (`data-service-header="fullscreen"`). Only Play sets it; the page toggles
  * fullscreen from the click. `help` adds a Help button in front of Settings (`data-service-header="help"`) that opens
  * the page's Help dialog (`#help-modal`); only Play sets it. `install` adds an Install button in front of Help

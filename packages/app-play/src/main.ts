@@ -4,9 +4,9 @@ import {
   setBrowserWorkerCount,
   disposeBrowserWorkers,
 } from '@be-music/player-browser/compute';
-import { migratePlayerStorage } from './debug-menu-storage.ts';
+import { migratePlayerStorage } from './player-storage.ts';
 import { readWorkerCount } from './worker-settings.ts';
-import { debugMenuSettingsSync } from './debug-menu-settings-sync.ts';
+import { optionSettingsSync } from './option-settings-sync.ts';
 // The player's bootstrap: the page's markup, the browser check, the device classes and the Help modal, then the app
 // (`app/app.ts`) once the UI fonts are ready, with the test hook installed over it before it starts.
 import { checkBrowserCompat } from '@be-music/player-browser/collection';
@@ -38,7 +38,7 @@ configureBGAVideoWorkers({
   createEncodeWorker: () => new Worker(new URL('./bga-encode-worker.ts', import.meta.url), { type: 'module' }),
 });
 window.addEventListener('pagehide', (event) => {
-  void debugMenuSettingsSync.flush();
+  void optionSettingsSync.flush();
   if (!event.persisted) disposeBrowserWorkers();
 });
 
@@ -83,7 +83,7 @@ if (
 }
 
 void waitForDefaultUIFonts()
-  .then(() => debugMenuSettingsSync.reconcile())
+  .then(() => optionSettingsSync.reconcile())
   .finally(() => {
     setBrowserWorkerCount(readWorkerCount(workerStorage, navigator.hardwareConcurrency));
     // `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`).

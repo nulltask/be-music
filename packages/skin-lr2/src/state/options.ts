@@ -70,7 +70,7 @@ function battleLabel(battle: PlayOptions['battleMode'], keyModeOp: number | unde
     case 'BATTLE':
     case 'beatoraja:BATTLE':
     case '____:BATTLE':
-      // beatoraja's and That-Which-Must-Not-Be-Named's one-player BATTLE, picked from the Debug Menu: the nearest LR2
+      // beatoraja's and That-Which-Must-Not-Be-Named's one-player BATTLE, picked from the Options dialog: the nearest LR2
       // label is its own BATTLE (ADR 0019).
       return double || nine ? 'DISABLE' : 'BATTLE';
     case 'SP-TO-DP':

@@ -3,7 +3,7 @@ import { COURSES, expect, openWithLibrary, SMOKE, SONGS, test } from './support.
 /**
  * A navigation the scenes did not ask for ends the run on stage (the scene router's `onInterrupt`, ADR 0006): files
  * dropped during a GRADE stage end the course, so the next single play is a single play and not the course's next
- * stage. A skin dropped during the play is not one: the play goes on in the new family, as the Debug Menu's Skin system
+ * stage. A skin dropped during the play is not one: the play goes on in the new family, as the Options dialog's Skin system
  * does, while its other skin controls are disabled since they would end it.
  */
 

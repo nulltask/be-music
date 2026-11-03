@@ -10,7 +10,7 @@ import { COURSES, expect, openWithLibrary, test, type Player } from './support.t
 
 const RECORDS_KEY = 'be-music.chart-best-records';
 
-/** Starts the course `title` from its bar: with the Debug Menu's auto play, or by hand. */
+/** Starts the course `title` from its bar: with the Options dialog's auto play, or by hand. */
 async function startCourse(player: Player, title: string, auto: boolean): Promise<void> {
   await player.setOption(['Play options'], 'Auto play', auto);
   await player.browseTo(COURSES, title);

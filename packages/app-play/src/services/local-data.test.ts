@@ -36,21 +36,21 @@ describe('local data viewer', () => {
       storage({
         'other.key': 'x',
         'be-music.hi-speed': '2.5',
-        'be-music.debug-menu-settings': '{"a":1}',
+        'be-music.option-settings': '{"a":1}',
         'be-music.unknown': '',
       }),
     );
     expect(entries.map((entry) => entry.key)).toEqual([
-      'be-music.debug-menu-settings',
       'be-music.hi-speed',
+      'be-music.option-settings',
       'be-music.unknown',
       'other.key',
     ]);
-    expect(entries[0]).toEqual({
-      key: 'be-music.debug-menu-settings',
+    expect(entries[1]).toEqual({
+      key: 'be-music.option-settings',
       value: '{"a":1}',
-      bytes: 28 + 7,
-      description: 'Every Debug Menu setting',
+      bytes: 24 + 7,
+      description: 'Every Options dialog setting',
     });
     expect(entries[2]).not.toHaveProperty('description');
     expect(describeLocalStorageKey('be-music.chart-best-records')).toBe(

@@ -1,4 +1,4 @@
-// The page as a drop target: files dragged onto the window, or picked with the Debug Menu's "Open folder" / "Open files"
+// The page as a drop target: files dragged onto the window, or picked with the Options dialog's "Open folder" / "Open files"
 // buttons, are read behind the loading overlay while the select screen is off the stage, then handed to the library.
 
 import { readDroppedFiles, type BrowserDroppedFile } from '@be-music/player-browser/collection';
@@ -11,7 +11,7 @@ import {
 import type { PlayerWebElements } from '../types.ts';
 
 export interface DropTargetOptions {
-  /** The loading overlay a load shows while it reads, and the Debug Menu's hidden file inputs. */
+  /** The loading overlay a load shows while it reads, and the Options dialog's hidden file inputs. */
   readonly elements: LoadingOverlayElements & Pick<PlayerWebElements, 'chartInput' | 'filesInput'>;
   /** Takes the select screen off the stage while files load, when it is the one showing. */
   readonly leaveSelect: () => Promise<boolean>;
@@ -23,7 +23,7 @@ export interface DropTargetOptions {
   readonly recordLoad: () => void;
 }
 
-/** Drags and drops on the window, and the Debug Menu's file pickers. */
+/** Drags and drops on the window, and the Options dialog's file pickers. */
 export class DropTarget {
   private readonly elements: DropTargetOptions['elements'];
   private readonly leaveSelect: DropTargetOptions['leaveSelect'];
@@ -39,7 +39,7 @@ export class DropTarget {
     this.recordLoad = options.recordLoad;
   }
 
-  /** Listens to the Debug Menu's file pickers, and to files dragged onto the window. */
+  /** Listens to the Options dialog's file pickers, and to files dragged onto the window. */
   public wire(): void {
     const onFilesPicked = (input: HTMLInputElement, load: (files: File[]) => Promise<void>) => {
       const files = input.files;

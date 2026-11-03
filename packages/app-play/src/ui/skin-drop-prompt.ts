@@ -1,13 +1,13 @@
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import { playerText } from '../player-copy.ts';
 
-// The "Drop a skin" prompt the Debug Menu's Skin system picker opens for a skin system with no skin loaded.
+// The "Drop a skin" prompt the Options dialog's Skin system picker opens for a skin system with no skin loaded.
 
 /** The skin systems the prompt asks a drop for. */
 export type SkinDropFamily = 'lr2' | 'beatoraja';
 
 /**
- * Asks for a drop of a skin of `family`, picked in the Debug Menu with none loaded: a drop-card-like prompt that any
+ * Asks for a drop of a skin of `family`, picked in the Options dialog with none loaded: a drop-card-like prompt that any
  * drop closes. The detected skin is confirmed separately before it is used.
  *
  * `setPending` keeps the request for the drop to answer: `family` as the prompt opens, `undefined` when it is

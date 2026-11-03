@@ -223,7 +223,7 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
     expect(h.deps.setStatus).not.toHaveBeenCalled();
   });
 
-  test('the Debug Menu’s auto play goes on the screen when the start set none', async () => {
+  test('the Options dialog’s auto play goes on the screen when the start set none', async () => {
     const h = await harness();
     h.deps.guiState.autoPlay = true;
     await h.route.showDecide(chartEntry('a'));

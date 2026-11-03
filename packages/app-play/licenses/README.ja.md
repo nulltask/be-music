@@ -10,6 +10,5 @@ Help の **Open source** の一覧は、バンドルした各パッケージ自�
 | `@ffmpeg/ffmpeg`、`@ffmpeg/util` | [ffmpegwasm/ffmpeg.wasm の `LICENSE`](https://github.com/ffmpegwasm/ffmpeg.wasm/blob/main/LICENSE)                                       |
 | `@pixi/colord`                   | [pixijs/colord の `LICENSE.md`](https://github.com/pixijs/colord/blob/master/LICENSE.md)                                                 |
 | `signalsmith-stretch`            | [Signalsmith-Audio/signalsmith-stretch の `LICENSE.txt`](https://github.com/Signalsmith-Audio/signalsmith-stretch/blob/main/LICENSE.txt) |
-| `tweakpane`                      | [cocopon/tweakpane の `LICENSE.txt`](https://github.com/cocopon/tweakpane/blob/main/LICENSE.txt)                                         |
 
 パッケージが自分で `LICENSE` を同梱するようになったら、そちらを使うので、ここの写しは消せます。

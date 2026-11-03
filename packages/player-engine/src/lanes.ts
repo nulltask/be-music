@@ -8,6 +8,8 @@ export {
   createInputTokenToChannelsMap,
   createLaneBindings,
   isPlayableInputChannel,
+  LANE_KEY_CONFIG,
+  laneKeyLabel,
   isScratch,
   resolveKeyChannel,
   resolveLaneChannels,
@@ -21,6 +23,9 @@ export {
   type ChannelLike,
   type KeyboardCodeLike,
   type LaneBinding,
+  type LaneKeyConfigLane,
+  type LaneKeyGroup,
+  type LaneKeyOverrides,
   type LaneModeOptions,
 } from './core/lane-layout.ts';
 

@@ -34,7 +34,7 @@ import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
 import type { LR2ThemeService } from '../../services/themes/lr2.ts';
 import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { BeatorajaSkinOptionsPanel } from '../../ui/beatoraja-skin-options.ts';
-import type { DebugMenu } from '../../ui/debug-menu/index.ts';
+import type { OptionsDialog } from '../../ui/options/index.ts';
 import type { FamilyKits } from '../family-kits.ts';
 import type { SceneRouter } from '../scene-router.ts';
 import type { CourseRoute } from './course.ts';
@@ -67,13 +67,13 @@ export interface SelectRouteDeps {
   readonly builtIn: Pick<BuiltInThemeService, 'builtInKit'>;
   /** The play options in force: every select screen starts from them, and its own edits go back to them. */
   readonly playOptions: Pick<PlayOptionsService, 'current' | 'update'>;
-  /** The Debug Menu's state: its play options, which mirror the screen's, and the NONSTOP placement. */
+  /** The Options dialog's state: its play options, which mirror the screen's, and the NONSTOP placement. */
   readonly guiState: GUIPlayOptions & Pick<PlayerGUIState, 'nonstopPlacement'>;
   readonly audio: AudioService;
   /** The search field, which a skin's search box opens. */
   readonly search: Pick<InlineSearch, 'openFromPointer'>;
-  /** The Debug Menu: its play option controllers, and the render-resolution check on the first select screen. */
-  readonly debugMenu: DebugMenu;
+  /** The Options dialog: its play option controllers, and the render-resolution check on the first select screen. */
+  readonly optionsDialog: OptionsDialog;
   /** The skin-options panel of the beatoraja screen showing. */
   readonly beatorajaSkinOptions: Pick<BeatorajaSkinOptionsPanel, 'refreshBeatorajaSelectSkinOptions' | 'clear'>;
   /** Whether the status line describes a play or result, which the select screen replaces with the library's. */
@@ -81,7 +81,7 @@ export interface SelectRouteDeps {
   readonly setStatus: (text: string) => void;
   /** Re-enables the options a play latched. */
   readonly unlockReplayOptions: () => void;
-  /** Remembers a hi-speed set on the screen for the next play, and mirrors it onto the Debug Menu. */
+  /** Remembers a hi-speed set on the screen for the next play, and mirrors it onto the Options dialog. */
   readonly rememberHiSpeed: (value: number, source: 'select') => void;
   /** Shows the decide screen for a chart started on the screen (`DecideRoute`). */
   readonly showDecide: (chartEntry: LibraryChart, overrides: { autoPlay?: boolean }) => Promise<void>;
@@ -118,7 +118,7 @@ export class SelectRoute {
   private readonly guiState: SelectRouteDeps['guiState'];
   private readonly audio: SelectRouteDeps['audio'];
   private readonly search: SelectRouteDeps['search'];
-  private readonly debugMenu: SelectRouteDeps['debugMenu'];
+  private readonly optionsDialog: SelectRouteDeps['optionsDialog'];
   private readonly beatorajaSkinOptions: SelectRouteDeps['beatorajaSkinOptions'];
   private readonly playStatusShown: SelectRouteDeps['playStatusShown'];
   private readonly setStatus: SelectRouteDeps['setStatus'];
@@ -148,7 +148,7 @@ export class SelectRoute {
     this.guiState = deps.guiState;
     this.audio = deps.audio;
     this.search = deps.search;
-    this.debugMenu = deps.debugMenu;
+    this.optionsDialog = deps.optionsDialog;
     this.beatorajaSkinOptions = deps.beatorajaSkinOptions;
     this.playStatusShown = deps.playStatusShown;
     this.setStatus = deps.setStatus;
@@ -178,7 +178,7 @@ export class SelectRoute {
     // and back on after a wipe / failed drop so the hint comes back instead of leaving the user staring at a blank
     // canvas.
     this.elements.shell.classList.toggle('empty', this.library.collection.charts.length === 0);
-    // Family dispatch. The Debug Menu's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default). The
+    // Family dispatch. The Options dialog's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default). The
     // beatoraja family draws the theme's select entry when the library has charts (an empty library shows the built-in
     // screen's drop hint); the LR2 family draws the loaded LR2 select skin when it has a bar list; otherwise the built-in
     // family draws the Be-Music Skin.
@@ -217,7 +217,7 @@ export class SelectRoute {
       return;
     }
     // The screen starts from the play options in force (two-way sync: the screen's own edits come back through
-    // `on.playOptions` below; Tweakpane edits push through `setPlayOptions`).
+    // `on.playOptions` below; the Options dialog's edits push through `setPlayOptions`).
     const playOptions = this.playOptions.current;
     // The select session plays through the audio service; its decide jingle plays out through the decide screen into
     // the play.
@@ -246,11 +246,11 @@ export class SelectRoute {
           // "Ghost status" says whether a play of the bar would show the picked ghost.
           const chart = entry?.kind === 'chart' ? entry : undefined;
           // The PRACTICE range picker draws the chart under the cursor.
-          this.debugMenu.setPracticeChart(chart?.chart);
+          this.optionsDialog.setPracticeChart(chart?.chart);
           const playFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'gameplay', chart?.chart);
           const target = chart !== undefined ? this.replaySlots.targetOf(chart) : undefined;
           // No bar, or a folder: nothing to say.
-          this.debugMenu.setGhostAvailability(
+          this.optionsDialog.setGhostAvailability(
             entry === undefined || entry.kind === 'folder'
               ? undefined
               : {
@@ -264,12 +264,12 @@ export class SelectRoute {
           );
         },
         playOptions: (options) => {
-          // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Debug Menu
-          // state so both surfaces always agree, then repaint the Tweakpane controllers.
+          // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Options dialog
+          // state so both surfaces always agree, then repaint the Options dialog's controls.
           this.playOptions.update(options);
           copyPlayOptionsToGUI(options, this.guiState);
           if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
-          this.debugMenu.refreshPlayOptionControllers();
+          this.optionsDialog.refreshPlayOptionControllers();
         },
         search: () => this.search.openFromPointer(),
         // An LR2 skin's course name (text 170) and delete button (233): the panel names the course or confirms first.
@@ -298,7 +298,7 @@ export class SelectRoute {
     if (!(await this.router.show(scene, { role: 'select' }))) return;
     this.lastSelectNavigation = undefined;
     if (kit.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
-    this.debugMenu.scheduleFirstRunResolutionDetect();
+    this.optionsDialog.scheduleFirstRunResolutionDetect();
   }
 
   /**
@@ -318,7 +318,7 @@ export class SelectRoute {
   private startFromSelect(entry: SelectStartEntry, autoPlay: boolean): boolean {
     if (entry.kind === 'chart') {
       if (this.courseMaker.addChartToCourseBeingMade(entry.chart)) return false;
-      // The skin's AUTOPLAY forces auto play for this play only; the Debug Menu's checkbox keeps its state.
+      // The skin's AUTOPLAY forces auto play for this play only; the Options dialog's checkbox keeps its state.
       void this.showDecide(entry.chart, autoPlay ? { autoPlay: true } : {});
       return true;
     }

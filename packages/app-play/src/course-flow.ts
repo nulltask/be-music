@@ -329,7 +329,7 @@ export function resolveGameplayRestart(play: CoursePlayKind): 'restitch' | 'aban
 }
 
 /**
- * The overrides a single chart plays again with (F5): the play's own AUTO and replay, not the Debug Menu's. Without
+ * The overrides a single chart plays again with (F5): the play's own AUTO and replay, not the Options dialog's. Without
  * them an AUTO play started from a skin's AUTO button would start again as a manual play, and a replay as a live play
  * that keeps a record.
  */

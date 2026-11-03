@@ -59,7 +59,7 @@ describe('Open source list', () => {
 
   test('names the stand-in license file after the package', () => {
     expect(licenseOverrideFileName('@ffmpeg/core')).toBe('@ffmpeg__core.txt');
-    expect(licenseOverrideFileName('tweakpane')).toBe('tweakpane.txt');
+    expect(licenseOverrideFileName('signalsmith-stretch')).toBe('signalsmith-stretch.txt');
   });
 
   test('tells type-only packages from ones with code', () => {

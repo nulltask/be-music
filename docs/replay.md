@@ -119,10 +119,10 @@ In the browser player:
 - Every play screen (`createPlayScene`) hands the recorded log to `on.finish(result, replay)`, and
   `waitForReplay()` waits for the log of a play that was left.
 - The player auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
-  the **Auto-save play history** checkbox in the Debug Menu's **Library & records** folder (OFF by default). Replay options are latched at chart start
+  the **Auto-save play history** checkbox in the Options dialog's **Library & records** folder (OFF by default). Replay options are latched at chart start
   and cannot change mid-play — the controls are disabled while a chart is playing, and the values in effect when
   the chart started govern that play.
-- The Debug Menu's **Play options** folder covers the recorded play settings: auto play, gauge, Random 1P/2P, DP
+- The Options dialog's **Play options** folder covers the recorded play settings: auto play, gauge, Random 1P/2P, DP
   flip, and auto scratch; the judge windows (LR2 / beatoraja / That-Which-Must-Not-Be-Named) are in its **Developer** folder. Where the LR2
   select screen's PLAY OPTION panel has a counterpart, the two surfaces two-way sync. Its **Replay / ghost** subfolder picks what a
   replay reproduces of the recorded view ([What the player saw](#what-the-player-saw)).
@@ -253,7 +253,7 @@ flowchart LR
 - **Saving by hand.** Keys 1-4 on the result screen (beatoraja's `ControlKeys.NUM1`-`NUM4`), a beatoraja result skin's
   replay buttons (19, 316-318) or the replay-slot card save into slot 1-4, once input is open and before the screen
   starts to leave. Each slot takes one save per result (beatoraja's `ReplayStatus.SAVED`).
-- **Auto-save rules.** Debug Menu → Library & records → **Replay slots** gives each slot a rule, applied as the result
+- **Auto-save rules.** Options → Library & records → **Replay slots** gives each slot a rule, applied as the result
   opens against the best record as it was before the play (beatoraja's `ReplayAutoSaveConstraint`): never, a better (or
   equal) EX score, fewer (or as few) BP, a better (or equal) max combo, a better (or equal) clear lamp, any of these
   better, or always. A first play counts as an update of each kind, as beatoraja reads an empty score. beatoraja ships
@@ -295,7 +295,7 @@ flowchart LR
   pace --> skins[Every view]
 ```
 
-- **Options.** Debug Menu → Play options → **Replay / ghost**:
+- **Options.** Options → Play options → **Replay / ghost**:
   - **Ghost** picks the source: OFF (default), OWN BEST, REPLAY SLOT 1-4, LEADERBOARD TOP or REPLAY FILE.
   - **Ghost mode** picks the presentation: SECOND PLAYFIELD (default), PACEMAKER, or PACEMAKER + LANES.
   - **Ghost status** says whether the bar under the cursor would show the pick, or why not: the mode needs the built-in

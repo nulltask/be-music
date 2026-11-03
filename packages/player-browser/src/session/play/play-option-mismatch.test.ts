@@ -7,7 +7,7 @@ import {
 } from './play-option-mismatch.ts';
 
 describe('describeChartConvertingOptions', () => {
-  test('labels every selected option that converts the chart, as the Debug Menu does', () => {
+  test('labels every selected option that converts the chart, as the Options dialog does', () => {
     expect(
       describeChartConvertingOptions({
         random1P: 'CONVERGE',

@@ -18,8 +18,8 @@ export interface PlayerHeaderAccount {
 }
 
 export interface PlayerHeaderActions {
-  /** Opens the existing Debug Menu when it is closed, and closes it when it is open. `null` clears a binding. */
-  toggleDebugMenu?: (() => void) | null;
+  /** Opens the Options dialog when it is closed, and closes it when it is open. `null` clears a binding. */
+  toggleOptions?: (() => void) | null;
   /** Opens the Help dialog. `null` clears a binding. */
   openHelp?: (() => void) | null;
   /** Installs the player, or explains how; the button shows only while {@link setPlayerHeaderInstallable} says so. */
@@ -31,7 +31,7 @@ export interface PlayerHeaderActions {
 }
 
 const actions: {
-  toggleDebugMenu?: () => void;
+  toggleOptions?: () => void;
   openHelp?: () => void;
   install?: () => void;
   openSignIn?: () => void;
@@ -46,7 +46,7 @@ let host: HTMLElement | undefined;
 let pendingMenu = false;
 let pendingSignIn = false;
 let pendingHelp = false;
-/** Whether the Debug Menu pane is expanded. The gear's `aria-expanded` follows it. */
+/** Whether the Options dialog is open. The gear's `aria-expanded` follows it. */
 let settingsOpen = false;
 /** Whether the player can be installed here, so the header shows Install. */
 let installable = false;
@@ -94,7 +94,7 @@ export function playerServiceHeaderHTML(input: {
   account?: PlayerHeaderAccount;
   /** The page is fullscreen, so the button offers to leave. */
   fullscreenActive?: boolean;
-  /** The Debug Menu is open, so the gear is expanded. */
+  /** The Options dialog is open, so the gear is expanded. */
   settingsOpen?: boolean;
   /** The player can be installed, so Install shows. */
   installable?: boolean;
@@ -162,7 +162,7 @@ export function setPlayerHeaderInstallable(next: boolean): void {
   paint();
 }
 
-/** The gear's `aria-expanded` follows the existing Debug Menu pane. */
+/** The gear's `aria-expanded` follows the Options dialog. */
 export function setPlayerHeaderSettingsOpen(open: boolean): void {
   if (settingsOpen === open) return;
   settingsOpen = open;
@@ -175,14 +175,14 @@ export function setPlayerHeaderSettingsOpen(open: boolean): void {
  * {@link togglePlayerHeaderFullscreen} itself.
  */
 export function bindPlayerHeader(next: PlayerHeaderActions): void {
-  if (next.toggleDebugMenu === null) {
-    actions.toggleDebugMenu = undefined;
+  if (next.toggleOptions === null) {
+    actions.toggleOptions = undefined;
     pendingMenu = false;
-  } else if (next.toggleDebugMenu !== undefined) {
-    actions.toggleDebugMenu = next.toggleDebugMenu;
+  } else if (next.toggleOptions !== undefined) {
+    actions.toggleOptions = next.toggleOptions;
     if (pendingMenu) {
       pendingMenu = false;
-      next.toggleDebugMenu();
+      next.toggleOptions();
     }
   }
   if (next.openHelp === null) {
@@ -270,7 +270,7 @@ export function runPlayerHeaderAction(
     return;
   }
   if (kind === 'settings') {
-    if (actions.toggleDebugMenu !== undefined) actions.toggleDebugMenu();
+    if (actions.toggleOptions !== undefined) actions.toggleOptions();
     else pendingMenu = !pendingMenu;
     return;
   }

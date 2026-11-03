@@ -1,3 +1,4 @@
+import type { LaneKeyOverrides } from '@be-music/player-engine/lanes';
 import type { DecideScene, PlayScene, ResultScene, SelectScene } from '@be-music/player-browser/host';
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import type { ReplayPlaybackOptions } from '@be-music/player-engine/replay';
@@ -17,12 +18,12 @@ export interface PlayerWebElements {
   stage: HTMLDivElement;
   shell: HTMLDivElement;
   /**
-   * Hidden `<input type="file" webkitdirectory>` triggered from a Tweakpane function controller. The DOM element survives
-   * across Tweakpane rebuilds (e.g. theme changes) so the underlying `change` listener stays bound through the session.
+   * Hidden `<input type="file" webkitdirectory>` the Options dialog's "Open folder" button clicks. The DOM element stays
+   * for the session, so its `change` listener stays bound however the dialog's controls are rebuilt (theme changes).
    */
   chartInput: HTMLInputElement;
   /**
-   * Hidden `<input type="file" multiple>` behind the Debug Menu's "Open files" button: ZIP archives and replays, which
+   * Hidden `<input type="file" multiple>` behind the Options dialog's "Open files" button: ZIP archives and replays, which
    * the folder picker (`chartInput`) can't select.
    */
   filesInput: HTMLInputElement;
@@ -58,10 +59,10 @@ export type SkinFamilyOverride = SkinFamilyId | 'auto';
 export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
 
 /**
- * Plain-data state object backing the Tweakpane controllers. Each key matches a controller; reads / writes go through the
+ * Plain-data state object backing the Options dialog's controls. Each key matches a control; reads / writes go through the
  * same `state.foo` reference so a programmatic update (e.g. `setAudioCompressor` triggered by a URL flag) can call
- * `controller.updateDisplay()` and the GUI reflects the new value. Function members are bound to the host so `this`
- * keeps its meaning when Tweakpane invokes them.
+ * `controller.refresh()` and the dialog reflects the new value. Function members are bound to the host so `this` keeps
+ * its meaning when a button invokes them.
  */
 export interface PlayerGUIState extends PlayTempoSettings {
   autoPlay: boolean;
@@ -97,7 +98,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   playInSilentMode: boolean;
   /**
    * When true, the next play scales every decoded sample by one gain so the loudest peak sits near −3 dBFS. Off by
-   * default. Remembered with the other Debug Menu settings. Takes the next play, not the one already loaded.
+   * default. Remembered with the other Options dialog settings. Takes the next play, not the one already loaded.
    */
   peakGain: boolean;
   compressor: boolean;
@@ -160,7 +161,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   /**
    * When true (off by default), the replay (`*.bmplay.json` input replay — see `@be-music/player-engine/replay`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
-   * beatoraja result paths. Toggled from the Debug Menu's "Auto-save replays" checkbox.
+   * beatoraja result paths. Toggled from the Options dialog's "Auto-save replays" checkbox.
    */
   autoSaveReplay: boolean;
   /**
@@ -184,14 +185,14 @@ export interface PlayerGUIState extends PlayTempoSettings {
   nonstopPlacement: 'intended' | 'lr2';
   /**
    * Which of what a replay recorded the player seeing a replay or ghost reproduces (tempo, hi-speed, SUDDEN+ /
-   * HIDDEN+, LIFT), the rest staying the viewer's own: the Debug Menu's "Play options / Replay / ghost" toggles, all on
+   * HIDDEN+, LIFT), the rest staying the viewer's own: the Options dialog's "Play options / Replay / ghost" toggles, all on
    * by default, remembered across visits and latched at song start.
    */
   replayView: ReplayPlaybackOptions;
   /** `tempoEnabled` / `tempoPercent` / `tempoPitchMode` / `tempoStretchAlgorithm`: see {@link PlayTempoSettings}. */
   /**
    * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing
-   * in anonymously the first time (docs/leaderboard.md). Toggled from the Debug Menu's "Submit to Leaderboard"
+   * in anonymously the first time (docs/leaderboard.md). Toggled from the Options dialog's "Submit to Leaderboard"
    * checkbox and latched at song start like the auto-save.
    */
   submitToLeaderboard: boolean;
@@ -288,6 +289,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * Offered with the `____` judge rules only; a play with it saves no record.
    */
   anyKey: boolean;
+  /** The player's own lane keys over the defaults (Options → Keys, `lane-keys.ts`); read as each play starts. */
+  laneKeys: LaneKeyOverrides;
   /**
    * The built-in and LR2 select screens' sort, key filter and difficulty filter. Two-way synced with an LR2 select
    * skin's sort and filter buttons; the beatoraja select screen has its own MODE and SORT buttons.
@@ -296,7 +299,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   keysFilter: KeysFilter;
   difficultyFilter: DifficultyFilter;
   /**
-   * Explicit skin-family override picked from the Debug Menu dropdown. `'auto'` (default) keeps the legacy
+   * Explicit skin-family override picked from the Options dialog dropdown. `'auto'` (default) keeps the legacy
    * priority — beatoraja if a beatoraja theme is loaded and covers the chart, otherwise LR2 (which itself falls
    * back to the default family per-scene when the corresponding LR2 skin isn't loaded). Any other value forces
    * that family on every scene; unavailable scenes for the chosen family fall through to the default family

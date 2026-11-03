@@ -6,10 +6,10 @@ import {
   recordingFileExtension,
   type RecordingFormat,
 } from '@be-music/player-browser/recording';
-import type { ButtonApi } from 'tweakpane';
+import type { OptionButton } from './ui/options-controls.ts';
 import { setDisabled, setButtonTitle } from './pane-controls.ts';
 
-/** The Debug Menu button that records the play screen (gameplay) as a video. */
+/** The Options dialog button that records the play screen (gameplay) as a video. */
 export const RECORD_LABEL = '● Record gameplay video';
 /** The same button while a recording runs. */
 export const STOP_RECORDING_LABEL = '■ Stop recording';
@@ -35,14 +35,14 @@ export interface GameplayRecorder {
  */
 export interface RecordingDeps {
   readonly sceneHost: PixiSceneHost;
-  readonly recordController: ButtonApi | undefined;
+  readonly recordController: OptionButton | undefined;
   /** Whichever gameplay view is mounted right now, or `undefined` when neither family is active. */
   getActiveGameplay(): GameplayRecorder | undefined;
   getAutoRecordArmed(): boolean;
   setAutoRecordArmed(value: boolean): void;
   /** Snapshot of the recording filename stem at call time; the player updates it per chart in `playChart`. */
   getRecordingFilenameBase(): string;
-  /** The Debug Menu's "Video format": the container and codec a new recording is written in. */
+  /** The Options dialog's "Video format": the container and codec a new recording is written in. */
   getRecordingFormat(): RecordingFormat;
   setStatus(text: string): void;
 }

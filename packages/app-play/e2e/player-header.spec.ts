@@ -8,7 +8,7 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
       'couple.bms',
       '#TITLE Authored COUPLE\n#SETRANDOM 1\n#IF 1\n#PLAYER 2\n#ENDIF\n#ENDRANDOM\n#BPM 240\n#00111:01\n#00121:01010101\n#00211:01',
     );
-    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     await player.setOption(['Play options'], 'Battle', 'CHART HEADER');
     await player.setOption(['Play options'], 'Gauge 2P', 'HARD');
     await player.setOption(['Play options'], 'Auto play', true);

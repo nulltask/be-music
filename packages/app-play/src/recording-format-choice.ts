@@ -5,7 +5,7 @@ import {
   type RecordingFormat,
 } from '@be-music/player-browser/recording';
 
-/** A recording format as one string, for the Debug Menu value and `localStorage`: `mp4/avc`, `webm/vp9`. */
+/** A recording format as one string, for the Options dialog value and `localStorage`: `mp4/avc`, `webm/vp9`. */
 export function recordingFormatKey(format: RecordingFormat): string {
   return `${format.container}/${format.videoCodec}`;
 }
@@ -15,7 +15,7 @@ export function parseRecordingFormatKey(key: string | null | undefined): Recordi
   return RECORDING_FORMATS.find((format) => recordingFormatKey(format) === key) ?? DEFAULT_RECORDING_FORMAT;
 }
 
-/** The Debug Menu's "Video format" choices: label → key, MP4 first. */
+/** The Options dialog's "Video format" choices: label → key, MP4 first. */
 export function recordingFormatOptions(): Record<string, string> {
   return Object.fromEntries(
     RECORDING_FORMATS.map((format) => [describeRecordingFormat(format), recordingFormatKey(format)]),

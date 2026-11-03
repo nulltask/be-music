@@ -111,6 +111,7 @@ export interface PlayEngineContext
       | 'autoScratch1P'
       | 'autoScratch2P'
       | 'anyKey'
+      | 'laneKeys'
       | 'chartMD5'
       | 'chartSHA256'
       | 'course'
