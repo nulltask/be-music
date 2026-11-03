@@ -397,6 +397,31 @@ export const PLAYER_APP_HTML = `
       </div>
     </div>
     <!--
+      Install, for Safari: it has no install prompt, so the header's
+      Install button opens these steps (install-button.ts).
+    -->
+    <dialog class="dialog" id="install-dialog" aria-labelledby="install-dialog-title" aria-describedby="install-dialog-description">
+      <div>
+        <header>
+          <h2 id="install-dialog-title" data-i18n="installTitle">Install Be-Music Play</h2>
+          <p id="install-dialog-description" data-i18n="installLead">Safari installs web apps from its own menu.</p>
+        </header>
+        <section>
+          <ol class="install-steps" data-install-steps="ios-safari" hidden>
+            <li data-i18n="installIOSShare">Tap the Share button.</li>
+            <li data-i18n="installIOSAdd">Choose “Add to Home Screen”.</li>
+          </ol>
+          <ol class="install-steps" data-install-steps="mac-safari" hidden>
+            <li data-i18n="installMacFile">Open the File menu.</li>
+            <li data-i18n="installMacAdd">Choose “Add to Dock”.</li>
+          </ol>
+        </section>
+        <footer>
+          <button type="button" class="btn" data-install-close data-i18n="close">Close</button>
+        </footer>
+      </div>
+    </dialog>
+    <!--
       Help modal. Three tabs:
       - Usage: drag-drop instructions, keyboard shortcuts,
         gameplay keys and the result screen.
