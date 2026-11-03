@@ -1,5 +1,7 @@
+import { accountIdentityTemplate } from './account-identity-template.ts';
+import { languageMenuTemplate } from './popover-template.ts';
 import type { Locale } from './locale.ts';
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -28,48 +30,13 @@ export function serviceHeaderTemplate(input: ServiceHeaderInput): TemplateResult
           aria-label=${ifDefined(account.ariaLabel)}
         >
           ${
-            account.signedIn
-              ? html`${account.avatarURL !== undefined ? html`<img class="bg-muted ring-foreground/10 inline-block shrink-0 rounded-full ring-1" src=${account.avatarURL} width="24" height="24" alt="" loading="lazy" decoding="async" />` : nothing}
-                  <span class="hidden max-w-[12ch] truncate sm:inline">${account.label}</span
-                  >${icon(account.iconHTML, 'text-muted-foreground')}`
+            input.account !== undefined
+              ? html`${accountIdentityTemplate({ account: input.account, locale: input.locale, variant: 'compact' })}${icon(account.iconHTML, 'text-muted-foreground')}`
               : account.label
           }
         </a>
         ${repeat(view.actions, (action) => action.key, actionTemplate)}
-        <div class="relative">
-          <button
-            type="button"
-            class="btn"
-            data-size="icon-sm"
-            data-variant="ghost"
-            popovertarget="language-menu"
-            aria-label=${language.label}
-            style="anchor-name:--language-menu"
-          >
-            ${icon(language.iconHTML, 'text-muted-foreground')}
-          </button>
-          <div
-            id="language-menu"
-            popover="auto"
-            class=${language.menuClass}
-            style="position-anchor:--language-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline,--header-menu-span"
-          >
-            ${language.choices.map(
-              (choice) =>
-                html`<a
-                  class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5"
-                  href=${choice.href}
-                  lang=${choice.locale}
-                  hreflang=${choice.locale}
-                  aria-current=${ifDefined(choice.current ? 'true' : undefined)}
-                >
-                  <span class=${ifDefined(choice.current ? undefined : 'invisible')}
-                    >${icon(language.checkIconHTML)}</span
-                  >${choice.label}
-                </a>`,
-            )}
-          </div>
-        </div>
+        ${languageMenuTemplate({ label: language.label, choices: language.choices, buttonSize: 'icon-sm' })}
       </nav>
     </div>
   </header>`;

@@ -4,6 +4,9 @@
 @source "./";
 @source "../../../service-web-theme/src/footer.ts";
 @source "../../../service-web-theme/src/footer-template.ts";
+@source '../../../service-web-theme/src/auth-template.ts';
+@source '../../../service-web-theme/src/popover-template.ts';
+@source '../../../service-web-theme/src/account-identity-template.ts';
 @import 'basecoat-css';
 
 /* Figures line up everywhere: scores, counts, dates and percentages take tabular digits site-wide. */
@@ -15,7 +18,7 @@
   }
 }
 
-/* The last place a header menu tries (layout.ts, headerMenuStyle): under its button across the whole width, kept a
+/* The last place a header menu tries (the shared popover template): under its button across the whole width, kept a
    page gutter in from either edge, for when neither side of the button has room (a narrow phone). */
 @position-try --header-menu-span {
   position-area: block-end span-all;
