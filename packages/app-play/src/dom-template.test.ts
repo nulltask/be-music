@@ -92,13 +92,21 @@ test('builds Help as a Basecoat dialog with Basecoat tabs', async () => {
   expect(help).toContain('aria-labelledby="help-modal-title" aria-describedby="help-modal-description"');
   expect(help).toContain('<section class="tabs help-tabs">');
   expect(help).toContain('<nav role="tablist" aria-orientation="horizontal">');
-  expect(help.match(/role="tab" /g)).toHaveLength(3);
+  expect(help.match(/role="tab" /g)).toHaveLength(2);
   expect(help).toContain('id="help-tab-usage" aria-controls="help-pane-usage" aria-selected="true" tabindex="0"');
-  expect(help.match(/role="tabpanel"/g)).toHaveLength(3);
+  expect(help.match(/role="tabpanel"/g)).toHaveLength(2);
   expect(help).toContain(
     'id="help-pane-oss" aria-labelledby="help-tab-oss" tabindex="-1" aria-selected="false" hidden',
   );
-  expect(help.match(/class="button-group help-lang-switch"/g)).toHaveLength(2);
+  expect(help.match(/class="button-group help-lang-switch"/g)).toHaveLength(1);
+  const header = help.slice(help.indexOf('<header>'), help.indexOf('</header>'));
+  expect(header).toContain('class="help-heading-row"');
+  expect(header).toContain('id="help-modal-description"');
+  expect(header).toContain('class="button-group help-lang-switch"');
+  expect(help).toContain('data-i18n="acknowledgements">Acknowledgements</button>');
+  expect(help).not.toContain('help-tab-options');
+  expect(help).not.toContain('options-help-content');
+  expect(PLAYER_APP_HTML).toContain('<div id="options-help-content" hidden>');
   expect(help).toContain('<button type="button" id="help-modal-close" aria-label="Close"');
   expect(help).not.toContain('help-modal-backdrop');
 });

@@ -184,7 +184,7 @@ export default defineConfig({
     tailwindcss(),
     ffmpegCorePlugin(ffmpegCoreESMDir),
     urlLoadProxyPlugin(),
-    // The Help's Open source list, from what the build bundles (`scripts/acknowledgements.ts`).
+    // The Help's Acknowledgements list, from what the build bundles (`scripts/acknowledgements.ts`).
     acknowledgements.main,
     // `/sw.js`, the installable player's offline shell, with the precache list of this build.
     serviceWorkerPlugin({

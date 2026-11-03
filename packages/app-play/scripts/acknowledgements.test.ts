@@ -14,7 +14,7 @@ import {
 
 const STORE = '/repo/node_modules/.pnpm';
 
-describe('Open source list', () => {
+describe('Acknowledgements list', () => {
   test('finds the npm package a module belongs to', () => {
     expect(packageRootOfModule(`${STORE}/pixi.js@8.22.0/node_modules/pixi.js/lib/index.mjs`)).toBe(
       `${STORE}/pixi.js@8.22.0/node_modules/pixi.js`,

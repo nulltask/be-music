@@ -1,5 +1,5 @@
 // Hover help for the Options dialog: a "?" button beside each control and section Help describes, showing that entry.
-// The text is Help's own (the Options tab of `#help-modal`, in the language Help shows), so one copy serves both. An entry
+// The descriptions live in the hidden `#options-help-content` block, in the language Help shows. An entry
 // names the controls it covers by its text, or by `data-for` when it covers several ("Random 1P|Random 2P").
 
 /** The control labels a Help entry describes: its `data-for` list, or its own text. */
@@ -30,11 +30,11 @@ const entryKey = (section: string, label: string): string => `${section}\n${labe
 const CIRCLE_HELP_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>';
 
-/** Reads Help's Options entries for `lang` from the page. */
+/** Reads the Options tooltip entries for `lang` from the page. */
 function readOptionHelp(lang: string): OptionHelpEntries {
   const sections = new Set<string>();
   const entries = new Map<string, string>();
-  const block = document.querySelector(`#help-pane-options .help-lang[data-lang="${lang}"]`);
+  const block = document.querySelector(`#options-help-content .help-lang[data-lang="${lang}"]`);
   for (const section of block?.querySelectorAll('.help-menu-folder') ?? []) {
     const title = section.querySelector('.help-menu-folder-title')?.textContent?.trim() ?? '';
     sections.add(title);
