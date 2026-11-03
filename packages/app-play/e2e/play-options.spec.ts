@@ -24,6 +24,24 @@ test('START BPM is selectable in Debug Menu, remembered and recorded in a play',
   expect(await player.readOption(['Play options'], 'HS-FIX')).toBe('STARTBPM');
 });
 
+test('a play leaves the covers and the select sort enabled and takes the covers live', async ({ player }) => {
+  await openWithLibrary(player);
+  await player.setOption(['Play options'], 'Auto play', true);
+  await player.browseTo(SONGS, 'Fixture A');
+  await player.key('Enter');
+  await player.waitFor((state) => (state.play?.seconds ?? 0) > 0.2, 'the chart to start');
+  expect(await player.optionEnabled(['Play options'], 'Auto play')).toBe(false);
+  for (const name of ['Effect 1P', 'Lane cover', 'Cover height', 'Sort', 'Key filter', 'Difficulty filter']) {
+    expect(await player.optionEnabled(['Play options'], name)).toBe(true);
+  }
+  await player.setOption(['Play options'], 'Effect 1P', 'SUDDEN');
+  await player.setOption(['Play options'], 'Lane cover', true);
+  await player.setOption(['Play options'], 'Cover height', 0.3);
+  await player.waitForResult(0);
+  const replay = await player.lastReplay();
+  expect(replay?.play.viewChanges?.some((change) => change.covers?.some((cover) => cover.sudden > 0))).toBe(true);
+});
+
 for (const skin of ['native', 'plain', 'lr2', 'beatoraja'] as const) {
   test(`persistent display-area information renders on ${skin}`, async ({ player }, info) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin === 'native' ? 'native' : 'plain' });

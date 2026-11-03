@@ -1,6 +1,8 @@
 import { resolvePracticeGaugeTypes, splitOptionSource, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
+  laneCoversFromPlayOptions,
   resolveRandomModes,
+  type LaneCoverState,
   type PlayOptions,
   type PracticeGaugeType,
   type RandomMode,
@@ -136,4 +138,20 @@ export function bottomShiftableGaugeItems(ruleset: RulesetId): PlayOptionItem<Pl
     { text: 'EASY', value: 'EASY' },
     { text: 'NORMAL', value: 'GROOVE' },
   ];
+}
+
+/**
+ * The SUDDEN+ and HIDDEN+ covers the menu's Effect, Lane cover and Cover height set, for a running play to take as a
+ * `cover-set`. The LIFT stays the play's own, so it is left out.
+ */
+export function menuLaneCovers(
+  options: Pick<PlayOptions, 'hiddenSudden1P' | 'hiddenSudden2P' | 'shutter' | 'laneCover'>,
+): Pick<LaneCoverState, 'side' | 'sudden' | 'suddenOn' | 'hidden' | 'hiddenOn'>[] {
+  return laneCoversFromPlayOptions(options, ['1P', '2P']).map(({ side, sudden, suddenOn, hidden, hiddenOn }) => ({
+    side,
+    sudden,
+    suddenOn,
+    hidden,
+    hiddenOn,
+  }));
 }
