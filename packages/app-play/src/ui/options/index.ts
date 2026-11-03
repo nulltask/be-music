@@ -75,8 +75,9 @@ import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './rend
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
 import { buildSkinFolder, rebuildLR2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
 import { OptionHelp } from './help.ts';
+import { relabelOptions } from './labels.ts';
 import { buildTempoFolder } from './tempo.ts';
-import { playerLang } from '../../player-copy.ts';
+import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
 /**
  * What the Options dialog needs from the app: the settings and stores its controllers change, readers of what the app has
  * loaded and shows, and the app's actions its controllers start. The actions keep the names of the app's methods.
@@ -395,7 +396,10 @@ export class OptionsDialog {
     // Help's own text for each control, beside it; rows made since the last opening (a theme's pickers) get theirs too.
     const help = new OptionHelp(dialog, playerLang);
     gui.on('fold', (event) => {
-      if (event.expanded) help.attach();
+      if (event.expanded) {
+        help.attach();
+        relabelOptions(dialog, playerLang());
+      }
       this.reportExpanded?.(event.expanded);
     });
     // The header repaints its gear as the dialog opens and closes, so focus goes back to the gear there now rather than
@@ -449,6 +453,9 @@ export class OptionsDialog {
     this.refreshCompressorStageVisibility();
     gui.on('change', () => this.scheduleSettingsSave());
     help.attach();
+    // The labels in the player's language, and again when it changes (Help's language switch, the header's menu).
+    relabelOptions(dialog, playerLang());
+    onPlayerLangChange(() => relabelOptions(dialog, playerLang()));
   }
   /**
    * Writes every Options dialog setting locally immediately; remote publishing is debounced for slider changes.
