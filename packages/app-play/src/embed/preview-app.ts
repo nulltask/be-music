@@ -371,8 +371,8 @@ export class PreviewApp {
   }
 
   /**
-   * The preview's shortcuts, ahead of the play's own keys: Space plays a play not started yet (a started one pauses
-   * through the play itself), ← / → seek five seconds during AUTO play, M mutes and F toggles full screen. While the
+   * The preview's shortcuts, ahead of the play's own keys: Space plays a play not started yet and pauses or resumes
+   * a started AUTO one, ← / → seek five seconds during AUTO play, M mutes and F toggles full screen. While the
    * viewer plays (`?mode=play`), M and F are lanes, so they go to the play, and the arrows do not seek.
    */
   private readonly handleKey = (event: KeyboardEvent): void => {
@@ -391,10 +391,17 @@ export class PreviewApp {
     };
     switch (event.code) {
       case 'Space':
-        if (scene !== undefined && current !== undefined && !current.started && !event.repeat) {
+        if (scene === undefined || current === undefined || event.repeat) return;
+        if (!current.started) {
           take();
           this.begin();
+          return;
         }
+        // Started, Space pauses or resumes, as a video player's does, unless the viewer plays the lanes: there it is
+        // the turntable's second key.
+        if (this.playsLanes(current)) return;
+        take();
+        scene.requestTogglePause();
         return;
       case 'ArrowLeft':
       case 'ArrowRight': {

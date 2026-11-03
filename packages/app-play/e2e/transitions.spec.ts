@@ -25,7 +25,7 @@ test(
         current.play?.course?.name === 'FIX GRADE' &&
         (current.play.judged?.pgreat ?? 0) >= 1,
       undefined,
-      'Space',
+      'Pause',
       'FIX GRADE stage 1 under way',
     );
     expect(state.play?.course).toMatchObject({ stage: 1, stageCount: 3 });
