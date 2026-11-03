@@ -27,10 +27,12 @@ import {
   focusedEntry,
   HISPEED_STEP,
   isListPlayOption,
+  KEYS_FILTER_CYCLE,
   reduceBrowse,
   resolvePlayOptions,
   resolvePlayOptionValue,
   sameBrowseListOptions,
+  SORT_CYCLE,
   startSystemSound,
   type BrowseCommand,
   type BrowseEvent,
@@ -61,6 +63,7 @@ import type {
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { resolveSelectKeyAction } from './select-keys.ts';
 import { DEFAULT_CONTROL_ACTIONS, type ControlActionMap } from '../controls/control-actions.ts';
+import { controlButtonsOfKey, DEFAULT_CONTROL_BUTTONS } from '../controls/control-buttons.ts';
 import { openLibrary, restoreSelectBrowse, SELECT_POLICIES, type SelectPolicy } from './select-policy.ts';
 import { findReadtextForChart } from '../../collection/readtext.ts';
 
@@ -68,6 +71,9 @@ import { findReadtextForChart } from '../../collection/readtext.ts';
 export type SelectStartEntry = Exclude<LibraryEntry, { kind: 'folder' }>;
 
 /** Where the select screen leads, and what it tells the host. */
+/** How long the panel key is held for the panel to show only while it is (LR2's), rather than stay open. */
+export const PANEL_HOLD_MS = 300;
+
 export interface SelectSessionEvents {
   /**
    * The player started a chart or a course (in AUTO with `autoPlay`). A course with a stage missing is handed over too,
@@ -188,6 +194,8 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private records: SelectRecords;
   private sounds: SystemSoundSet;
   private panel: number | undefined;
+  /** When the panel key that opened the panel went down, while it is still held. */
+  private panelPressedAtMs: number | undefined;
   private searchEditing = false;
   private readText: { readonly chart: LibraryChart; readonly text: string } | undefined;
   /** Bumped by each README lookup, so a lookup that lands after a newer one (or a close) is dropped. */
@@ -369,14 +377,19 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   }
 
   public handleKey(event: SessionKeyEvent): boolean {
-    if (!this.entered || event.type !== 'down') return false;
+    if (!this.entered) return false;
+    if (event.type === 'up') return this.releasePanelKey(event);
     // A key is a gesture: the browser lets the BGM start once one came.
     this.options.audio.resume();
     // The chart is chosen while a launch outro plays.
     if (this.launch !== undefined) return false;
     const action = resolveSelectKeyAction(
       event,
-      { panel: this.panel, readTextOpen: this.readText !== undefined },
+      {
+        panel: this.panel,
+        readTextOpen: this.readText !== undefined,
+        doublePlayFilter: this.playOptions.keysFilter === 'KEYS_10' || this.playOptions.keysFilter === 'KEYS_14',
+      },
       this.policy.keys,
       this.options.actions ?? DEFAULT_CONTROL_ACTIONS[this.policy.keys],
     );
@@ -404,7 +417,29 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         // Backing out of nothing leaves the key to the page.
         return this.back(atMs, action.inFolder === true);
       case 'panel':
+        if (event.repeat) return true;
+        this.panelPressedAtMs = this.panel === undefined ? atMs : undefined;
         this.togglePanel(action.panel, atMs);
+        return true;
+      case 'open-folder':
+        if (this.focused()?.kind !== 'folder') return false;
+        this.activate(atMs);
+        return true;
+      case 'auto':
+        if (this.focused()?.kind === 'folder') this.activate(atMs);
+        else this.start(true, atMs);
+        return true;
+      case 'list':
+        this.stepList(action.option);
+        return true;
+      case 'ln-mode':
+        this.stepPlayOption('longNoteMode', 1);
+        return true;
+      case 'search':
+        this.options.on.search?.();
+        return true;
+      case 'favorite':
+        this.applyBrowse({ type: 'favorite', list: action.list }, atMs);
         return true;
       case 'play-option':
         this.stepPlayOption(action.key, action.step);
@@ -699,6 +734,36 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   // ---------------------------------------------------------------------------------------------------------------------
 
   /** Opens `panel` (closing the one open), or closes it when it is the one open; `undefined` changes nothing. */
+  /**
+   * The panel key coming up: a panel it opened and held for {@link PANEL_HOLD_MS} or longer closes (it showed while
+   * held, as LR2's does), and one tapped open stays open until the next press (That-Which-Must-Not-Be-Named PC's).
+   */
+  private releasePanelKey(event: SessionKeyEvent): boolean {
+    const pressedAtMs = this.panelPressedAtMs;
+    if (pressedAtMs === undefined || this.panel === undefined) return false;
+    const actions = this.options.actions ?? DEFAULT_CONTROL_ACTIONS[this.policy.keys];
+    const buttons = event.buttons ?? controlButtonsOfKey(event, DEFAULT_CONTROL_BUTTONS);
+    if (!actions.is('select.option-panel', { ...event, buttons })) return false;
+    this.panelPressedAtMs = undefined;
+    if (event.timeStamp - pressedAtMs >= PANEL_HOLD_MS) this.togglePanel(this.panel, event.timeStamp);
+    return true;
+  }
+
+  /** Steps the sort or the key mode filter, in the play options or the browse position as the policy keeps them. */
+  private stepList(option: 'sort' | 'keysFilter'): void {
+    if (this.policy.listOptions === 'play-options') {
+      this.stepPlayOption(option, 1);
+      return;
+    }
+    const cycle: readonly string[] =
+      option === 'sort'
+        ? (this.policy.listCycles?.sort ?? SORT_CYCLE)
+        : (this.policy.listCycles?.keysFilter ?? KEYS_FILTER_CYCLE);
+    const current = this.browse.list[option];
+    const next = cycle[(cycle.indexOf(current) + 1) % cycle.length]!;
+    this.applyBrowse({ type: 'list', options: { [option]: next } }, this.now());
+  }
+
   private togglePanel(panel: number | undefined, atMs: number): void {
     if (panel === undefined || panel < 1 || panel > 9) return;
     const previous = this.panel;

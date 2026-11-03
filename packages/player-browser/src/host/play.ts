@@ -35,6 +35,8 @@ import { LR2PlayView } from '../view/lr2/play-view.ts';
 import { LR2TextureRetainer } from '../view/lr2/texture-retainer.ts';
 import type { PlayFrame, PlayIntent, PlayView, PlayfieldSkin } from '../view/types.ts';
 import type { BeatorajaKit, BuiltInKit, LR2PlayKit } from './family-kit.ts';
+import { resolveLaneInputTokens } from '../session/play/play-cover-keys.ts';
+import { keyboardEventToTokens } from '../runtime/web-input-runtime.ts';
 
 const log = logger('gameplay');
 
@@ -146,6 +148,8 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   /** Pauses or resumes the play, as Space does. */
   requestTogglePause(): void;
   isPaused(): boolean;
+  /** Whether a lane of the chart takes the key (`code`): a key every screen takes (F4, F6) is the lane's then. */
+  takesKey(event: { readonly code: string }): boolean;
   /**
    * Moves an AUTO play or replay to chart second `seconds` (clamped to the chart) and plays on from there, as a preview's seek bar
    * does; a paused play stays paused there. The running play seeks — it is not started again — and the promise resolves
@@ -419,6 +423,11 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
 
   public isPaused(): boolean {
     return this.play.isPaused();
+  }
+
+  public takesKey(event: { readonly code: string }): boolean {
+    const tokens = resolveLaneInputTokens(this.play.preparedChart?.laneBindings);
+    return keyboardEventToTokens(event).some((token) => tokens.has(token));
   }
 
   public seek(seconds: number): Promise<void> {

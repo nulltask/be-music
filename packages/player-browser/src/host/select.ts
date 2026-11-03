@@ -19,6 +19,7 @@ import type { SelectFrame, SelectIntent, SelectRecords, SelectView } from '../vi
 import type { SelectKit } from './family-kit.ts';
 import { resolveControlScheme } from '../session/controls/control-buttons.ts';
 import { resolveFamilyControlActions } from '../session/controls/control-actions.ts';
+import { BEATORAJA_KEYS_FILTERS, BEATORAJA_SORTS } from '@be-music/skin-beatoraja/scene';
 
 const log = logger('select');
 
@@ -249,7 +250,13 @@ export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptio
     sounds: options.sounds,
     audio: options.audio,
     ...(options.courseMaker !== undefined ? { courseMaker: options.courseMaker } : {}),
-    policy: { ...SELECT_POLICIES[kit.family], keys: scheme },
+    policy: {
+      ...SELECT_POLICIES[kit.family],
+      keys: scheme,
+      ...(kit.family === 'beatoraja'
+        ? { listCycles: { sort: BEATORAJA_SORTS, keysFilter: BEATORAJA_KEYS_FILTERS } }
+        : {}),
+    },
     actions: resolveFamilyControlActions(kit.family, options.controls),
     launchOutroMs: () => familyView?.view.launchOutroMs ?? 0,
     ...(options.now !== undefined ? { now: options.now } : {}),

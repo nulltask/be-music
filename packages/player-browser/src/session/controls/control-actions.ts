@@ -18,7 +18,7 @@ import {
 } from './control-buttons.ts';
 
 /** The screen an operation belongs to. */
-export type ControlScreen = 'select' | 'decide' | 'play' | 'result';
+export type ControlScreen = 'global' | 'select' | 'decide' | 'play' | 'result';
 
 /** A key an operation takes: a physical key, or a control button. */
 export type ControlActionKey = { readonly code: string } | { readonly button: ControlButton };
@@ -45,32 +45,107 @@ const button = (value: ControlButton): ControlActionKey => ({ button: value });
 
 /** Every operation a screen takes from a key, with its default keys. */
 export const CONTROL_ACTIONS = [
-  // The select screen.
-  { id: 'select.down', screen: 'select', label: 'Next bar', defaults: both([code('ArrowDown')]) },
-  { id: 'select.up', screen: 'select', label: 'Previous bar', defaults: both([code('ArrowUp')]) },
+  // Every screen.
+  { id: 'global.fullscreen', screen: 'global', label: 'Full screen', defaults: both([code('F4')]) },
+  { id: 'global.screenshot', screen: 'global', label: 'Screenshot', defaults: both([code('F6')]) },
+  // The select screen. The turntable scrolls the list: LR2 turns it down (the second key) to the next bar, beatoraja up.
+  {
+    id: 'select.down',
+    screen: 'select',
+    label: 'Next bar',
+    defaults: {
+      lr2: [code('ArrowDown'), button('1P-scratch-ccw'), button('2P-scratch-ccw')],
+      beatoraja: [code('ArrowDown'), button('1P-scratch-cw'), button('2P-scratch-cw')],
+    },
+  },
+  {
+    id: 'select.up',
+    screen: 'select',
+    label: 'Previous bar',
+    defaults: {
+      lr2: [code('ArrowUp'), button('1P-scratch-cw'), button('2P-scratch-cw')],
+      beatoraja: [code('ArrowUp'), button('1P-scratch-ccw'), button('2P-scratch-ccw')],
+    },
+  },
   { id: 'select.page-down', screen: 'select', label: 'Ten bars down', defaults: { beatoraja: [code('PageDown')] } },
   { id: 'select.page-up', screen: 'select', label: 'Ten bars up', defaults: { beatoraja: [code('PageUp')] } },
   { id: 'select.first', screen: 'select', label: 'First bar', defaults: { beatoraja: [code('Home')] } },
   { id: 'select.last', screen: 'select', label: 'Last bar', defaults: { beatoraja: [code('End')] } },
   { id: 'select.random', screen: 'select', label: 'Random bar', defaults: { beatoraja: [code('KeyR')] }, bare: true },
-  { id: 'select.activate', screen: 'select', label: 'Open / play', defaults: both([code('Enter')]) },
+  {
+    id: 'select.activate',
+    screen: 'select',
+    label: 'Open / play',
+    defaults: {
+      // LR2's and That-Which-Must-Not-Be-Named PC's white keys; beatoraja's key 1 (PLAY) and →.
+      lr2: [code('Enter'), button('1P-key1'), button('1P-key3'), button('1P-key5'), button('1P-key7')],
+      beatoraja: [code('Enter'), code('ArrowRight'), button('1P-key1')],
+    },
+  },
+  {
+    id: 'select.open-folder',
+    screen: 'select',
+    label: 'Open folder',
+    // LR2's → on a folder; beatoraja's key 3 (PRACTICE, which opens a folder).
+    defaults: { lr2: [code('ArrowRight')], beatoraja: [button('1P-key3')] },
+  },
+  {
+    id: 'select.auto',
+    screen: 'select',
+    label: 'AUTO play',
+    defaults: { lr2: [button('1P-key6')], beatoraja: [button('1P-key5')] },
+  },
   {
     id: 'select.back',
     screen: 'select',
     label: 'Back',
-    defaults: { lr2: [code('Escape'), code('Backspace'), code('ArrowLeft')], beatoraja: [code('Escape')] },
+    defaults: {
+      // LR2's key 2 and That-Which-Must-Not-Be-Named PC's black keys.
+      lr2: [code('Escape'), code('Backspace'), code('ArrowLeft'), button('1P-key2'), button('1P-key4')],
+      beatoraja: [code('Escape')],
+    },
   },
   {
     id: 'select.close-folder',
     screen: 'select',
     label: 'Close folder',
-    defaults: { beatoraja: [code('Backspace')] },
+    defaults: { beatoraja: [code('Backspace'), code('ArrowLeft'), button('1P-key2'), button('1P-key4')] },
   },
   {
     id: 'select.option-panel',
     screen: 'select',
     label: 'PLAY OPTION panel',
-    defaults: { lr2: [code('Space'), button('1P-start')] },
+    // LR2's START and Space, and That-Which-Must-Not-Be-Named PC's Tab.
+    defaults: { lr2: [code('Space'), code('Tab'), button('1P-start')] },
+  },
+  { id: 'select.sort', screen: 'select', label: 'Sort', defaults: both([code('Digit2')]), bare: true },
+  {
+    id: 'select.keys-filter',
+    screen: 'select',
+    label: 'Key mode filter',
+    // That-Which-Must-Not-Be-Named PC's 3 (SP / DP), beatoraja's 1 (MODE).
+    defaults: { lr2: [code('Digit3')], beatoraja: [code('Digit1')] },
+    bare: true,
+  },
+  {
+    id: 'select.ln-mode',
+    screen: 'select',
+    label: 'LN mode',
+    defaults: { beatoraja: [code('Digit3')] },
+    bare: true,
+  },
+  { id: 'select.search', screen: 'select', label: 'Search', defaults: both([code('Digit0')]), bare: true },
+  {
+    id: 'select.favorite-song',
+    screen: 'select',
+    label: 'Favorite song',
+    defaults: { beatoraja: [code('F8')] },
+  },
+  {
+    id: 'select.favorite-chart',
+    screen: 'select',
+    label: 'Favorite chart',
+    defaults: { beatoraja: [code('F9')] },
   },
   {
     id: 'select.next-replay',
