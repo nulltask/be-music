@@ -160,6 +160,7 @@ export function createDecideScene(kit: DecideSceneKit, options: DecideSceneOptio
   });
   return new FamilyDecideScene(session, createDecideView(kit, session, options), {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
+    ...(options.controls !== undefined ? { controls: options.controls } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
 }

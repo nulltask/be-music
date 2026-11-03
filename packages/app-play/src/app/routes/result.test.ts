@@ -165,6 +165,7 @@ async function harness(options: { family?: 'lr2' | 'beatoraja' | 'none'; lastPla
   const courses = new CourseRunService();
   const deps = {
     router,
+    controls: () => ({}),
     library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },
     records: {
       recordActivePlay: vi.fn<ResultRouteDeps['records']['recordActivePlay']>(),

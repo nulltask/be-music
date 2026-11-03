@@ -36,7 +36,7 @@ export interface WebInputRuntimeOptions {
  * Web-side adapter for the engine's `PlayerInputRuntime` contract. `start()` attaches the `keydown` / `keyup`
  * listeners; `stop()` detaches them. Pressing a key resolves to its lowercase token (matching the
  * {@link createLaneBindings} convention — `'z'`, `'shift-left'`, etc.) and pushes a `lane-input` command. Special
- * shortcuts (`Escape`, `F5` for restart, `Space` for pause) are routed through `interrupt` / `toggle-pause`
+ * shortcuts (`Escape`, `F5` for restart, `Pause` for pause) are routed through `interrupt` / `toggle-pause`
  * commands so the engine sees the same control surface the TUI exposes.
  *
  * A browser reports every key release (`keyup`), so the runtime declares `reportsKeyReleases`: the engine judges the
@@ -73,7 +73,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
       options.inputSignals.pushCommand({ kind: 'interrupt', reason: 'restart' });
       return;
     }
-    if (keyEvent.code === 'Space') {
+    if (keyEvent.code === 'Pause') {
       keyEvent.preventDefault();
       options.inputSignals.pushCommand({ kind: 'toggle-pause' });
       return;
@@ -238,7 +238,7 @@ export function keyboardEventToTokens(event: Pick<KeyboardEvent, 'code'>): strin
  * directly to `manualPlay` / `autoPlay`.
  *
  * `onReady` fires synchronously during runtime construction with the engine-side `inputSignals` bus the runtime
- * is wired into. Hosts that need to push their own input commands (`toggle-pause` from a Space-key handler the
+ * is wired into. Hosts that need to push their own input commands (`toggle-pause` from a pause-key handler the
  * host kept on the view side, etc.) capture the reference here.
  */
 export function createWebInputRuntimeFactory(

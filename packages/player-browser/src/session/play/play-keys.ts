@@ -6,14 +6,14 @@
 import { QUIT_HOLD_KEY_CODE } from './quit-hold.ts';
 
 /**
- * The keys the play scene handles itself (`handleSharedEngineExitKey` and the quit hold in `play-input.ts`): ESC, F5, Space,
- * Backspace and the hi-speed arrows. The engine's web input runtime skips them ({@link shouldSkipPlayKey}), so it
+ * The keys the play scene handles itself (`handleSharedEngineExitKey` and the quit hold in `play-input.ts`): ESC, F5,
+ * Pause, Backspace and the hi-speed arrows. Tab pauses too, but only when no lane takes it, so the runtime keeps it. The engine's web input runtime skips them ({@link shouldSkipPlayKey}), so it
  * pushes no `interrupt` / `toggle-pause` of its own.
  */
 export const PLAY_SCENE_KEY_CODES: ReadonlySet<string> = new Set([
   'Escape',
   'F5',
-  'Space',
+  'Pause',
   QUIT_HOLD_KEY_CODE,
   'ArrowUp',
   'ArrowDown',
@@ -34,10 +34,12 @@ export function shouldSkipPlayKey(event: KeyboardEvent, laneTokens: ReadonlySet<
   // ESC and F5 are handled by the view's own listener (set up in `enter`) so the LR2 `#FADEOUT` animation
   // runs to completion BEFORE the engine's `PlayerInterruptedError` flow disposes the audio session. If
   // we let the runtime push `interrupt(escape)` directly, the engine's `dispose()` would `node.stop()`
-  // every in-flight BufferSource immediately, killing the chart audio mid-fade. Same idea for Space:
+  // every in-flight BufferSource immediately, killing the chart audio mid-fade. Same idea for Pause and Tab:
   // routing the toggle through the view's `togglePause` keeps the view's `paused` flag, the audio bus's
   // suspend, the BGA video pause, and the engine's playback clock all on the same single entry-point.
   // Backspace is the view's hold-to-quit key (`QuitHoldController`), never a lane.
   if (event.code === 'F5' && laneTokens.has('f5')) return false;
+  // Tab is a lane on the 24 / 48 KEY wheels, and pauses the play everywhere else.
+  if (event.code === 'Tab') return !laneTokens.has('tab');
   return PLAY_SCENE_KEY_CODES.has(event.code);
 }

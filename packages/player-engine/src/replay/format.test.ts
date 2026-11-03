@@ -56,6 +56,10 @@ function makeReplay(): BeMusicReplay {
     play: {
       mode: 'manual',
       autoScratch: true,
+      controlInputs: [
+        { seq: 0, timeUs: 300_000, action: 'down', button: '1P-start', code: 'KeyQ' },
+        { seq: 1, timeUs: 350_000, action: 'up', button: '1P-start' },
+      ],
       gauge: 'HARD',
       randomLane: { p1: 'MIRROR', p2: 'RANDOM' },
       dpFlip: true,
@@ -294,6 +298,27 @@ describe('replay format', () => {
         }),
       ),
     ).toThrow('inputs[0].code: expected a non-empty string');
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.play.controlInputs[0].button = '';
+        }),
+      ),
+    ).toThrow('play.controlInputs[0].button: expected a non-empty string');
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.play.controlInputs[1].action = 'press';
+        }),
+      ),
+    ).toThrow("play.controlInputs[1].action: expected 'down' | 'up'");
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.play.controlInputs = {};
+        }),
+      ),
+    ).toThrow('play.controlInputs: expected an array');
     expect(() =>
       parseReplay(
         corrupt((value) => {

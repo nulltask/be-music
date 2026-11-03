@@ -168,12 +168,12 @@ describe('createWebInputRuntime', () => {
     expect(inputSignals.drainCommands()).toEqual([{ kind: 'interrupt', reason: 'escape' }]);
   });
 
-  test('Space pushes toggle-pause', () => {
+  test('Pause pushes toggle-pause', () => {
     const inputSignals = createPlayerInputSignalBus();
     const { target, dispatch } = makeMockTarget();
     const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map(), target });
     runtime.start();
-    dispatch('keydown', makeKeyEvent('Space'));
+    dispatch('keydown', makeKeyEvent('Pause'));
     expect(inputSignals.drainCommands()).toEqual([{ kind: 'toggle-pause' }]);
   });
 

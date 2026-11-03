@@ -60,8 +60,8 @@ describe('scratch spin', () => {
   });
 
   test.each([
-    ['linux', ['ctrl-left', 'control-left'], ['ctrl-right', 'control-right']],
-    ['darwin', ['option-left', 'alt-left'], ['option-right', 'alt-right']],
+    ['linux', ['ctrl-left', 'control-left', 'space'], ['ctrl-right', 'control-right']],
+    ['darwin', ['option-left', 'alt-left', 'space'], ['option-right', 'alt-right']],
   ] as const)(
     'the default keys of each scratch are Shift (cw) and a second key (ccw) on %s',
     (platform, left, right) => {
@@ -73,6 +73,8 @@ describe('scratch spin', () => {
       const spins = createScratchSpinByToken(bindings);
       expect(spins.get('shift-left')).toBe('cw');
       expect(spins.get(left[0])).toBe('ccw');
+      // Space turns the 1P turntable down with the second key, as LR2's default key config has it.
+      expect(spins.get('space')).toBe('ccw');
       expect(spins.get(right[1])).toBe('ccw');
       expect(spins.has('z')).toBe(false);
     },

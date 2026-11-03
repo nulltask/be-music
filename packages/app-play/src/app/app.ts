@@ -50,6 +50,7 @@ import { BeatorajaThemeService } from '../services/themes/beatoraja.ts';
 import { BuiltInThemeService } from '../services/themes/built-in.ts';
 import { LR2ThemeService } from '../services/themes/lr2.ts';
 import { FamilyKits } from './family-kits.ts';
+import { controlSettingsOf } from '../control-keys.ts';
 import type { TestHookRecorder } from '../test-hook.ts';
 import { nameResultJingle, type LiveTestHookDeps } from '../services/test-hook.ts';
 
@@ -403,6 +404,7 @@ export class PlayerWebApp {
     this.optionsDialog = new OptionsDialog(this.optionsDialogDeps());
     this.beatorajaSkinOptions = new BeatorajaSkinOptionsPanel(this.beatorajaSkinOptionsDeps());
     this.selectRoute = new SelectRoute({
+      controls: () => controlSettingsOf(this.guiState),
       router: this.router,
       elements,
       library: this.library,
@@ -430,6 +432,7 @@ export class PlayerWebApp {
       startReplayFromSlot: (entry, slot) => this.replayRoute.startReplayFromSlot(entry, slot),
     });
     this.decideRoute = new DecideRoute({
+      controls: () => controlSettingsOf(this.guiState),
       router: this.router,
       selectRoute: this.selectRoute,
       elements,
@@ -453,6 +456,7 @@ export class PlayerWebApp {
       latchPlay: (view) => this.playRoute.latchPlay(view),
     });
     this.resultRoute = new ResultRoute({
+      controls: () => controlSettingsOf(this.guiState),
       router: this.router,
       library: this.library,
       records: this.records,

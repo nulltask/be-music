@@ -19,6 +19,13 @@ import type { FamilyView, IntentSink } from '../view/types.ts';
 export type { SceneSession, SessionKeyEvent } from './contracts.ts';
 import type { SceneSession, SessionKeyEvent } from './contracts.ts';
 import { SceneController } from './controller.ts';
+import {
+  controlButtonsOfKey,
+  DEFAULT_CONTROL_BUTTONS,
+  resolveControlButtons,
+  type ControlButtonMap,
+  type ControlSettings,
+} from './controls/control-buttons.ts';
 
 /** Where the scene listens for keys: `window` in a browser. */
 export interface SessionKeyTarget {
@@ -31,6 +38,8 @@ export interface SessionSceneOptions {
   readonly keyTarget?: SessionKeyTarget;
   /** The clock frames are drawn on, in ms. Defaults to `performance.now()`. */
   readonly now?: () => number;
+  /** The player's keys the screen reads its control buttons by (`SessionKeyEvent.buttons`); the defaults without. */
+  readonly controls?: ControlSettings;
 }
 
 type SceneState = 'idle' | 'attaching' | 'entered' | 'disposed';
@@ -54,9 +63,14 @@ function isEditableKeyTarget(target: EventTarget | null): boolean {
 }
 
 /** The plain-data form of a DOM key event. */
-export function toSessionKeyEvent(type: SessionKeyEvent['type'], event: KeyboardEvent): SessionKeyEvent {
+export function toSessionKeyEvent(
+  type: SessionKeyEvent['type'],
+  event: KeyboardEvent,
+  buttons: ControlButtonMap = DEFAULT_CONTROL_BUTTONS,
+): SessionKeyEvent {
   return {
     type,
+    buttons: controlButtonsOfKey(event, buttons),
     code: event.code,
     key: event.key,
     repeat: event.repeat,
@@ -78,6 +92,7 @@ export class SessionScene<Frame, Intent> implements PixiScene {
   private readonly keyTarget: SessionKeyTarget | undefined;
   private readonly now: () => number;
   private state: SceneState = 'idle';
+  private readonly controlButtons: ControlButtonMap;
   /** Bumped by every `exit` / `dispose`, so an `enter` still waiting on the view's `attach` knows it was overtaken. */
   private generation = 0;
   private host: PixiSceneHost | undefined;
@@ -91,6 +106,8 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     this.view = view;
     this.keyTarget = options.keyTarget ?? defaultKeyTarget();
     this.now = options.now ?? defaultNow;
+    this.controlButtons =
+      options.controls === undefined ? DEFAULT_CONTROL_BUTTONS : resolveControlButtons(options.controls);
     this.sceneIdentity = { kind: session.kind, family: view.family };
     this.stageInfo = view.getStageInfo !== undefined ? () => view.getStageInfo!() : undefined;
   }
@@ -246,6 +263,6 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     // Native controls activate themselves on Enter/Space. Let their click generate exactly one intent.
     const tag = (target as { tagName?: string } | null)?.tagName;
     if ((tag === 'BUTTON' || tag === 'A') && (event.code === 'Enter' || event.code === 'Space')) return;
-    if (this.controller.handleKey(toSessionKeyEvent(type, event))) event.preventDefault();
+    if (this.controller.handleKey(toSessionKeyEvent(type, event, this.controlButtons))) event.preventDefault();
   }
 }

@@ -1,8 +1,9 @@
 /**
  * The input of a play on the built-in and LR2 play screens (`PlaySession`) that the scene handles itself rather
- * than the engine's web input runtime: ESC and F5 (after the theme's fade-out), Space (pause), hi-speed and seek arrows,
- * holding Backspace to quit, the auto-pause when the page loses focus, and the touch lanes the view sends as `lane`
- * intents (its fingers on the canvas). Lane keys go straight to the engine through its input runtime.
+ * than the engine's web input runtime: ESC and F5 (after the theme's fade-out), Pause and Tab (pause), hi-speed and seek
+ * arrows, holding Backspace to quit, the auto-pause when the page loses focus, START / SELECT (recorded in the replay),
+ * and the touch lanes the view sends as `lane` intents (its fingers on the canvas). Lane keys go straight to the engine
+ * through its input runtime.
  *
  * The functions read and write the scene's state through {@link PlayInputContext}; the play session passes itself.
  */
@@ -16,12 +17,20 @@ import type { PlaySessionOptions } from './play-options.ts';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
 import type { PlayEngineContext } from './play-engine.ts';
 import { adjustHiSpeed, changePlayView, handleChartManualSuddenKey } from './play-view-settings.ts';
+import { keyboardEventToTokens } from '../../runtime/web-input-runtime.ts';
+import {
+  controlButtonsOfKey,
+  resolveControlButtons,
+  type ControlButton,
+  type ControlButtonMap,
+} from '../controls/control-buttons.ts';
 
 const log = logger('gameplay');
 
 /** The scene's members the input reads and writes: the play session's members of these names. */
 export interface PlayInputContext extends PlayEngineContext {
-  readonly options: PlayEngineContext['options'] & Readonly<Pick<PlaySessionOptions, 'coverKeys'>>;
+  readonly options: PlayEngineContext['options'] &
+    Readonly<Pick<PlaySessionOptions, 'coverKeys' | 'laneKeys' | 'controlKeys'>>;
   readonly host: PixiSceneHost | undefined;
   readonly quitHold: QuitHoldController;
   readonly sharedEngineInputSignals: PlayerInputSignalBus | undefined;
@@ -202,6 +211,7 @@ export function handleWindowFocus(ctx: PlayInputContext): void {
 export function handleSharedEngineExitKey(ctx: PlayInputContext, event: KeyboardEvent): void {
   // Backspace first: its auto-repeat must still be `preventDefault`ed, which the repeat filter below would skip.
   if (ctx.quitHold.handleKeyDown(event)) return;
+  recordControlKey(ctx, 'down', event);
   // The play listens in the capture phase, so a key typed into a focused field, or Enter / Space on a focused button,
   // stays the control's. Whether the event's default was taken says nothing here: the lane input runtime takes it for
   // every key with a lane token.
@@ -277,7 +287,11 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     ctx.requestRestart();
     return;
   }
-  if (event.code === 'Space') {
+  // Pause, and Tab unless a lane takes it (the 24 / 48 KEY wheels do), pause and resume the play.
+  if (
+    event.code === 'Pause' ||
+    (event.code === 'Tab' && !resolveLaneInputTokens(ctx.preparedChart?.laneBindings).has('tab'))
+  ) {
     event.preventDefault();
     togglePause(ctx);
     return;
@@ -422,6 +436,37 @@ function resolveTouchTokens(ctx: PlayInputContext, channels: readonly string[]):
     if (token !== undefined) resolved.push(token);
   }
   return resolved;
+}
+
+/** The control buttons of each play's keys, resolved once per play. */
+const controlButtonsByPlay = new WeakMap<PlayInputContext, ControlButtonMap>();
+
+function isStartOrSelect(button: ControlButton): boolean {
+  return button.endsWith('-start') || button.endsWith('-select');
+}
+
+/**
+ * Records a START / SELECT key going down or up in the replay (`ReplayPlay.controlInputs`), with the physical key. A key
+ * the chart's lanes take is a lane, and a key typed into a field is the field's.
+ */
+export function recordControlKey(ctx: PlayInputContext, action: 'down' | 'up', event: KeyboardEvent): void {
+  const signals = ctx.sharedEngineInputSignals;
+  if (signals === undefined || event.repeat) return;
+  const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
+  if (target?.isContentEditable === true || /^(INPUT|SELECT|TEXTAREA)$/u.test(target?.tagName ?? '')) return;
+  let map = controlButtonsByPlay.get(ctx);
+  if (map === undefined) {
+    map = resolveControlButtons({
+      ...(ctx.options.laneKeys !== undefined ? { laneKeys: ctx.options.laneKeys } : {}),
+      ...(ctx.options.controlKeys !== undefined ? { controlKeys: ctx.options.controlKeys } : {}),
+    });
+    controlButtonsByPlay.set(ctx, map);
+  }
+  const buttons = controlButtonsOfKey(event, map).filter(isStartOrSelect);
+  if (buttons.length === 0) return;
+  const laneTokens = resolveLaneInputTokens(ctx.preparedChart?.laneBindings);
+  if (keyboardEventToTokens(event).some((token) => laneTokens.has(token))) return;
+  for (const button of buttons) signals.pushCommand({ kind: 'control-input', button, action, code: event.code });
 }
 
 export function togglePause(ctx: PlayInputContext): void {

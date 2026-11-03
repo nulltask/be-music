@@ -17,6 +17,7 @@ import { BuiltInSelectView } from '../view/built-in/select-view.ts';
 import { LR2SelectView } from '../view/lr2/select-view.ts';
 import type { SelectFrame, SelectIntent, SelectRecords, SelectView } from '../view/types.ts';
 import type { SelectKit } from './family-kit.ts';
+import { resolveControlScheme } from '../session/controls/control-buttons.ts';
 
 const log = logger('select');
 
@@ -246,7 +247,10 @@ export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptio
     sounds: options.sounds,
     audio: options.audio,
     ...(options.courseMaker !== undefined ? { courseMaker: options.courseMaker } : {}),
-    policy: SELECT_POLICIES[kit.family],
+    policy: {
+      ...SELECT_POLICIES[kit.family],
+      keys: resolveControlScheme(kit.family, options.controls?.builtInScheme),
+    },
     launchOutroMs: () => familyView?.view.launchOutroMs ?? 0,
     ...(options.now !== undefined ? { now: options.now } : {}),
     on: options.on,
@@ -254,6 +258,7 @@ export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptio
   familyView = createSelectView(kit, session, options);
   return new FamilySelectScene(session, familyView, {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
+    ...(options.controls !== undefined ? { controls: options.controls } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
 }

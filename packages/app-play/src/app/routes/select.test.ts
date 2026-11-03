@@ -140,6 +140,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
   const lr2: { selectSkin: LR2Skin | undefined } = { selectSkin: undefined };
   const deps = {
     router,
+    controls: () => ({}),
     elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: {
       collection: { sources: [], charts: options.charts ?? [chartEntry('a')], errors: [] } as BrowserChartCollection,

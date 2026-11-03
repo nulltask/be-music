@@ -70,6 +70,12 @@ export type PlayerInputCommand =
        */
       pressedAt?: number;
     }
+  /**
+   * A control button that is not a lane (START / SELECT) went down or up. The engine only records it in the replay
+   * (`ReplayPlay.controlInputs`) at the chart time it drains it; what the host does with the button arrives as its own
+   * commands (`view`, `interrupt`, ...).
+   */
+  | { kind: 'control-input'; button: string; action: 'down' | 'up'; code?: string }
   | {
       kind: 'kitty-state';
       pressTokens: string[];

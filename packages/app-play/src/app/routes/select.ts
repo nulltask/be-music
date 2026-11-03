@@ -12,6 +12,7 @@ import {
   type SelectScene,
   type SelectSceneKit,
   type SelectStartEntry,
+  type ControlSettings,
 } from '@be-music/player-browser/host';
 import {
   resolveLibraryChartPlayVariant,
@@ -40,6 +41,8 @@ import type { SceneRouter } from '../scene-router.ts';
 import type { CourseRoute } from './course.ts';
 
 export interface SelectRouteDeps {
+  /** The player's keys the screen reads its control buttons by (`ControlSettings`), as it opens. */
+  readonly controls: () => ControlSettings;
   /** The scene router: the select scene it keeps, shown again on a return, or dropped when another family draws it. */
   readonly router: Pick<SceneRouter<PlayerScene, PlayScene, SelectScene>, 'select' | 'show' | 'dropSelect'>;
   /** The page: the shell's `playing` and `empty` classes. */
@@ -104,6 +107,7 @@ export class SelectRoute {
    */
   public lastSelectNavigation: BrowseSnapshot | undefined;
   private readonly router: SelectRouteDeps['router'];
+  private readonly controls: SelectRouteDeps['controls'];
   private readonly elements: SelectRouteDeps['elements'];
   private readonly library: SelectRouteDeps['library'];
   private readonly records: SelectRouteDeps['records'];
@@ -134,6 +138,7 @@ export class SelectRoute {
     this.replaySlotsPanel = deps.replaySlotsPanel;
     this.startReplayFromSlot = deps.startReplayFromSlot;
     this.router = deps.router;
+    this.controls = deps.controls;
     this.elements = deps.elements;
     this.library = deps.library;
     this.records = deps.records;
@@ -222,6 +227,7 @@ export class SelectRoute {
     // The select session plays through the audio service; its decide jingle plays out through the decide screen into
     // the play.
     const scene = createSelectScene(kit, {
+      controls: this.controls(),
       library: this.library.collection,
       ...(this.lastSelectNavigation !== undefined ? { browse: this.lastSelectNavigation } : {}),
       playOptions,

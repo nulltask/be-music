@@ -83,6 +83,39 @@ describe('resolveSelectKeyAction', () => {
   });
 });
 
+describe('resolveSelectKeyAction on the player’s control buttons', () => {
+  const OPEN: SelectKeyState = { panel: 1, readTextOpen: false };
+
+  it('opens the panel on START, Q by default', () => {
+    expect(resolveSelectKeyAction(down('KeyQ', 'q'), LIST)).toEqual({ type: 'panel', panel: 1 });
+    expect(resolveSelectKeyAction({ ...down('Tab'), buttons: ['1P-start'] }, LIST)).toEqual({
+      type: 'panel',
+      panel: 1,
+    });
+  });
+
+  it('steps the panel options on the 1P keys wherever the player put them', () => {
+    expect(resolveSelectKeyAction({ ...down('KeyA', 'a'), buttons: ['1P-key2'] }, OPEN)).toEqual({
+      type: 'play-option',
+      key: 'random1P',
+      step: 1,
+    });
+    // Z moved off key 1, so it steps nothing.
+    expect(resolveSelectKeyAction({ ...down('KeyZ', 'z'), buttons: [] }, OPEN)).toBeUndefined();
+  });
+
+  it('takes beatoraja’s NEXT_REPLAY and REPLAY from the 1P keys 6 and 7', () => {
+    expect(resolveSelectKeyAction({ ...down('KeyJ', 'j'), buttons: ['1P-key6'] }, LIST, 'beatoraja')).toEqual({
+      type: 'replay-slot',
+      step: 1,
+    });
+    expect(resolveSelectKeyAction({ ...down('KeyK', 'k'), buttons: ['1P-key7'] }, LIST, 'beatoraja')).toEqual({
+      type: 'replay',
+    });
+    expect(resolveSelectKeyAction({ ...down('KeyV', 'v'), buttons: [] }, LIST, 'beatoraja')).toBeUndefined();
+  });
+});
+
 describe('resolveSelectKeyAction on the beatoraja key map', () => {
   const resolve = (event: SessionKeyEvent, state: SelectKeyState = LIST) =>
     resolveSelectKeyAction(event, state, 'beatoraja');

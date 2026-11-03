@@ -542,7 +542,7 @@ export const PLAYER_APP_HTML = `
                 button, to start.
               </li>
               <li>
-                <kbd>Space</kbd> opens the <strong>PLAY OPTION</strong> panel (built-in and LR2 skins); beatoraja skins
+                START (<kbd>Q</kbd>) or <kbd>Space</kbd> opens the <strong>PLAY OPTION</strong> panel (built-in and LR2 skins); beatoraja skins
                 also take <kbd>PageUp</kbd> / <kbd>PageDown</kbd>, <kbd>Home</kbd> / <kbd>End</kbd> and <kbd>R</kbd>
                 (a random chart).
               </li>
@@ -568,7 +568,7 @@ export const PLAYER_APP_HTML = `
                 </span>
               </div>
               <div class="help-keymap-note">
-                Left Shift = 1P scratch · Right Shift = 2P scratch · 9-button (PMS) charts use Z S X D C F V G B.
+                Left Shift (Left Ctrl, Space) = 1P scratch · Right Shift (Right Ctrl) = 2P scratch · START / SELECT = Q / W (2P: O / P) · 9-button (PMS) charts use Z S X D C F V G B.
               </div>
             </div>
             <ul class="help-list">
@@ -581,7 +581,7 @@ export const PLAYER_APP_HTML = `
                 With FLOATING HI-SPEED, PageUp / PageDown fine-adjust hi-speed when SUDDEN+ and LIFT are both off.
               </li>
               <li>In AUTO play, <kbd>←</kbd> / <kbd>→</kbd> seek 5 s back / forward.</li>
-              <li><kbd>Space</kbd> pauses / resumes.</li>
+              <li><kbd>Pause</kbd> or <kbd>Tab</kbd> pauses / resumes.</li>
               <li><kbd>F5</kbd> restarts the current chart.</li>
               <li><kbd>Esc</kbd> exits to the result screen (or back to chart select).</li>
               <li>Hold <kbd>Backspace</kbd> for 0.5 s to quit the play the same way (works in fullscreen on every browser).</li>
@@ -660,7 +660,7 @@ export const PLAYER_APP_HTML = `
                 譜面の行をクリック、または現在のスキンの <em>PLAY</em> ボタンでも開始できます。
               </li>
               <li>
-                <kbd>Space</kbd> で <strong>PLAY OPTION</strong> パネルを開きます (内蔵スキンと LR2 スキン)。beatoraja スキンでは <kbd>PageUp</kbd> / <kbd>PageDown</kbd>、<kbd>Home</kbd> / <kbd>End</kbd>、<kbd>R</kbd> (ランダムに譜面を選ぶ) も使えます。
+                START (<kbd>Q</kbd>) か <kbd>Space</kbd> で <strong>PLAY OPTION</strong> パネルを開きます (内蔵スキンと LR2 スキン)。beatoraja スキンでは <kbd>PageUp</kbd> / <kbd>PageDown</kbd>、<kbd>Home</kbd> / <kbd>End</kbd>、<kbd>R</kbd> (ランダムに譜面を選ぶ) も使えます。
               </li>
               <li><kbd>/</kbd> で検索入力にフォーカス。タイトル / アーティスト / ジャンルで絞り込めます。</li>
               <li><kbd>Esc</kbd> で検索条件をクリア。</li>
@@ -683,7 +683,7 @@ export const PLAYER_APP_HTML = `
                   <kbd>B</kbd> <kbd>H</kbd> <kbd>N</kbd> <kbd>J</kbd> <kbd>M</kbd> <kbd>K</kbd> <kbd>,</kbd>
                 </span>
               </div>
-              <div class="help-keymap-note">左 Shift = 1P スクラッチ · 右 Shift = 2P スクラッチ · 9 ボタン (PMS) の譜面は Z S X D C F V G B。</div>
+              <div class="help-keymap-note">左 Shift (左 Ctrl、Space) = 1P スクラッチ · 右 Shift (右 Ctrl) = 2P スクラッチ · START / SELECT = Q / W (2P は O / P) · 9 ボタン (PMS) の譜面は Z S X D C F V G B。</div>
             </div>
             <ul class="help-list">
               <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。長押しで連続調整できます。</li>
@@ -692,7 +692,7 @@ export const PLAYER_APP_HTML = `
                 調整キーは長押しで連続して動きます。H は押すたびに 1 回だけ切り替わります。FLOATING HI-SPEED では、SUDDEN+ と LIFT が両方 OFF のとき、PageUp / PageDown でハイスピードを微調整します。
               </li>
               <li>AUTO プレイでは <kbd>←</kbd> / <kbd>→</kbd> で 5 秒戻る / 進むことができます。</li>
-              <li><kbd>Space</kbd> でポーズ / 再開。</li>
+              <li><kbd>Pause</kbd> か <kbd>Tab</kbd> でポーズ / 再開。</li>
               <li><kbd>F5</kbd> で現在の譜面をリスタート。</li>
               <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
               <li><kbd>Backspace</kbd> を 0.5 秒長押しでも同じようにプレイを中断します (どのブラウザでもフルスクリーン中に使えます)。</li>
@@ -877,7 +877,11 @@ export const PLAYER_APP_HTML = `
               <p class="help-menu-note">The Keys tab. Read as a play starts, so locked during one.</p>
               <dl class="help-menu-items">
                 <dt data-for="1P scratch|1P key 1|1P key 2|1P key 3|1P key 4|1P key 5|1P key 6|1P key 7|2P key 1|2P key 2|2P key 3|2P key 4|2P key 5|2P key 6|2P key 7|2P scratch|Key 1|Key 2|Key 3|Key 4|Key 5|Key 6|Key 7|Key 8|Key 9">Lanes</dt>
-                <dd>The key each lane takes: 5 / 7 / 10 / 14 KEY share one set, 9 KEY has its own. Click a lane's key, then press the key to give it; a key another lane has moves to that lane's old key. Esc cancels. Esc, Space, F5, Backspace and the up / down arrows stay the play's.</dd>
+                <dd>The key each lane takes: 5 / 7 / 10 / 14 KEY share one set, 9 KEY has its own. Click a lane's key, then press the key to give it; a key another lane has moves to that lane's old key. Esc cancels. Esc, Pause, F5, Backspace and the up / down arrows stay the play's, and Ctrl and Space stay the turntables' second keys.</dd>
+                <dt data-for="1P START|1P SELECT|2P START|2P SELECT">START / SELECT</dt>
+                <dd>On the 5 / 7 / 10 / 14 KEY page: each side's START and SELECT, Q / W and O / P by default as in LR2. The screens read them with the lane keys, and a lane cannot share a key with them.</dd>
+                <dt>Built-in skin controls</dt>
+                <dd>Whose keys the built-in skins' screens read: LR2's or beatoraja's. An LR2 or beatoraja skin always reads its own.</dd>
                 <dt>Reset keys to defaults</dt>
                 <dd>Puts the page's lanes back on their default keys.</dd>
               </dl>
@@ -1170,7 +1174,11 @@ export const PLAYER_APP_HTML = `
               <p class="help-menu-note">Keys タブ。プレイの開始時に読むので、プレイ中は変えられません。</p>
               <dl class="help-menu-items">
                 <dt data-for="1P scratch|1P key 1|1P key 2|1P key 3|1P key 4|1P key 5|1P key 6|1P key 7|2P key 1|2P key 2|2P key 3|2P key 4|2P key 5|2P key 6|2P key 7|2P scratch|Key 1|Key 2|Key 3|Key 4|Key 5|Key 6|Key 7|Key 8|Key 9">Lanes</dt>
-                <dd>各レーンに割り当てるキー。5 / 7 / 10 / 14 KEY は共通、9 KEY は別に設定します。レーンのキーをクリックしてから割り当てたいキーを押します。ほかのレーンが使っているキーなら、そのレーンには元のキーが入れ替わりで入ります。Esc で取り消し。Esc、Space、F5、Backspace、上下の矢印はプレイ用なので使えません。</dd>
+                <dd>各レーンに割り当てるキー。5 / 7 / 10 / 14 KEY は共通、9 KEY は別に設定します。レーンのキーをクリックしてから割り当てたいキーを押します。ほかのレーンが使っているキーなら、そのレーンには元のキーが入れ替わりで入ります。Esc で取り消し。Esc、Pause、F5、Backspace、上下の矢印はプレイ用、Ctrl と Space は皿の 2 つ目のキーなので使えません。</dd>
+                <dt data-for="1P START|1P SELECT|2P START|2P SELECT">START / SELECT</dt>
+                <dd>5 / 7 / 10 / 14 KEY のページにある、各サイドの START と SELECT。既定は LR2 と同じ Q / W と O / P です。各画面はレーンのキーと合わせて読むので、レーンと同じキーにはできません。</dd>
+                <dt>Built-in skin controls</dt>
+                <dd>内蔵スキンの画面がどちらのキー操作に従うか: LR2 か beatoraja。LR2 スキンと beatoraja スキンは常にそれぞれのキー操作に従います。</dd>
                 <dt>Reset keys to defaults</dt>
                 <dd>このページのレーンを既定のキーに戻します。</dd>
               </dl>

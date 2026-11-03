@@ -1,20 +1,28 @@
 /**
  * The select screen's keyboard, as plain data: what a key going down asks of the screen, by the family's key map.
  *
- * - **LR2** (the built-in and LR2 screens). ↑ / ↓ move the cursor, Enter takes the bar under it, and Escape, Backspace
- *   or ← back out of a folder. Space opens and closes the play-options panel (LR2's panel 1; LR2's START key opens
- *   it); while it is open the 1P lane keys step its options, and Escape closes an open panel.
+ * - **LR2** (the LR2 screens, and the built-in ones unless the player picked beatoraja's). ↑ / ↓ move the cursor, Enter
+ *   takes the bar under it, and Escape, Backspace or ← back out of a folder. START or Space opens and closes the
+ *   play-options panel (LR2's panel 1); while it is open the 1P keys step its options, and Escape closes an open panel.
  * - **beatoraja**. ↑ / ↓ move the cursor, Page Up / Page Down ten bars, Home / End to the first and the last bar, R to a
  *   random bar (beatoraja's random select), Enter takes the bar under it, Escape backs out of a folder (and leaves the
  *   screen at the root, as the family's select policy says) and Backspace backs out of a folder only. As beatoraja's
- *   `MusicSelectInputProcessor` binds them, 4 and the 6th lane key (F) pick the next replay slot holding a replay
- *   (NEXT_REPLAY) and the 7th lane key (V) replays it (REPLAY). beatoraja has no option panel.
+ *   `MusicSelectInputProcessor` binds them, 4 and the 1P key 6 pick the next replay slot holding a replay
+ *   (NEXT_REPLAY) and the 1P key 7 replays it (REPLAY). beatoraja has no option panel.
+ *
+ * The keys and START are the player's (`SessionKeyEvent.buttons`).
  *
  * While the README overlay is open, the keys scroll or close it, on either map.
  */
 
 import type { BrowseCommand, PlayOptions } from '@be-music/player-scene-model';
 import type { SessionKeyEvent } from '../session-scene.ts';
+import {
+  controlButtonsOfKey,
+  DEFAULT_CONTROL_BUTTONS,
+  type ControlButton,
+  type ControlScheme,
+} from '../controls/control-buttons.ts';
 
 /** Pixel scroll of the README overlay per arrow key: about two lines of its 14 px / 18 px text. */
 export const READTEXT_LINE_SCROLL = 36;
@@ -24,8 +32,8 @@ export const READTEXT_PAGE_SCROLL = 360;
 /** How many bars Page Up / Page Down move the cursor on the beatoraja map. */
 export const SELECT_PAGE_BARS = 10;
 
-/** The families' key maps: the built-in and LR2 screens use LR2's. */
-export type SelectKeyMap = 'lr2' | 'beatoraja';
+/** The families' key maps (`ControlScheme`): the LR2 screens use LR2's, the built-in ones the one the player picked. */
+export type SelectKeyMap = ControlScheme;
 
 /** What a key asks of the select screen. */
 export type SelectKeyAction =
@@ -64,19 +72,24 @@ export interface SelectKeyState {
 }
 
 /**
- * The play options the 1P lane keys step while the play-options panel is open, in the panel's button order (LR2 binds
+ * The play options the 1P keys step while the play-options panel is open, in the panel's button order (LR2 binds
  * these "adjacent key" shortcuts for its option panels): 1 PLAY STYLE (DP flip), 2 RANDOM, 3 BATTLE (the 2P random), 4
  * GAUGE, 5 hi-speed down, 6 ASSIST (auto scratch), 7 hi-speed up.
  */
-const PANEL_KEYS: Readonly<Record<string, { key: keyof PlayOptions; step: 1 | -1 }>> = {
-  KeyZ: { key: 'dpFlip', step: 1 },
-  KeyS: { key: 'random1P', step: 1 },
-  KeyX: { key: 'random2P', step: 1 },
-  KeyD: { key: 'gauge1P', step: 1 },
-  KeyC: { key: 'hiSpeed', step: -1 },
-  KeyF: { key: 'autoScratch1P', step: 1 },
-  KeyV: { key: 'hiSpeed', step: 1 },
+const PANEL_KEYS: Partial<Readonly<Record<ControlButton, { key: keyof PlayOptions; step: 1 | -1 }>>> = {
+  '1P-key1': { key: 'dpFlip', step: 1 },
+  '1P-key2': { key: 'random1P', step: 1 },
+  '1P-key3': { key: 'random2P', step: 1 },
+  '1P-key4': { key: 'gauge1P', step: 1 },
+  '1P-key5': { key: 'hiSpeed', step: -1 },
+  '1P-key6': { key: 'autoScratch1P', step: 1 },
+  '1P-key7': { key: 'hiSpeed', step: 1 },
 };
+
+/** The control buttons a key is: the event's, or the default keys' for an event built without them. */
+function buttonsOf(event: SessionKeyEvent): readonly ControlButton[] {
+  return event.buttons ?? controlButtonsOfKey(event, DEFAULT_CONTROL_BUTTONS);
+}
 
 /** The README overlay's scroll keys and how far each one goes. */
 const READTEXT_SCROLL_KEYS: Readonly<Record<string, number>> = {
@@ -113,14 +126,17 @@ function resolveReadTextKey(event: SessionKeyEvent): SelectKeyAction {
 }
 
 function resolveLR2Key(event: SessionKeyEvent, state: SelectKeyState): SelectKeyAction | undefined {
-  // Space toggles the play-options panel (LR2's START key opens panel 1); Enter already takes the bar.
-  if (event.code === 'Space') return { type: 'panel', panel: 1 };
+  const buttons = buttonsOf(event);
+  // START or Space toggles the play-options panel (LR2's panel 1); Enter already takes the bar.
+  if (event.code === 'Space' || buttons.includes('1P-start')) return { type: 'panel', panel: 1 };
   if (state.readTextOpen) return resolveReadTextKey(event);
   // Escape closes an open panel before it backs out of a folder.
   if (event.key === 'Escape' && state.panel !== undefined) return { type: 'panel', panel: state.panel };
   if (state.panel === 1) {
-    const option = PANEL_KEYS[event.code];
-    if (option !== undefined) return { type: 'play-option', ...option };
+    for (const button of buttons) {
+      const option = PANEL_KEYS[button];
+      if (option !== undefined) return { type: 'play-option', ...option };
+    }
   }
   switch (event.key) {
     case 'ArrowDown':
@@ -141,8 +157,9 @@ function resolveLR2Key(event: SessionKeyEvent, state: SelectKeyState): SelectKey
 function resolveBeatorajaKey(event: SessionKeyEvent, state: SelectKeyState): SelectKeyAction | undefined {
   if (state.readTextOpen) return resolveReadTextKey(event);
   const modified = event.ctrlKey || event.metaKey || event.altKey;
-  if (!modified && (event.code === 'KeyF' || event.key === '4')) return { type: 'replay-slot', step: 1 };
-  if (!modified && event.code === 'KeyV') return { type: 'replay' };
+  const buttons = buttonsOf(event);
+  if (!modified && (buttons.includes('1P-key6') || event.key === '4')) return { type: 'replay-slot', step: 1 };
+  if (!modified && buttons.includes('1P-key7')) return { type: 'replay' };
   switch (event.key) {
     case 'ArrowDown':
       return { type: 'step', direction: 1 };
