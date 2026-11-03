@@ -9,7 +9,7 @@ test('defaults to WSOLA and bypasses a saved percentage until enabled', async ({
   expect(await player.readOption(TEMPO, 'Enabled')).toBe(false);
   expect(await player.readOption(TEMPO, 'Keep-pitch stretcher')).toBe('WSOLA');
   const algorithms = await player.page
-    .locator('[data-pane=debug] .tp-lblv')
+    .locator('[data-pane=options] .options-row')
     .filter({ hasText: 'Keep-pitch stretcher' })
     .locator('option')
     .allTextContents();

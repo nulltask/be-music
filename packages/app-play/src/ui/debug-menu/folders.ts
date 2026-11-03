@@ -1,5 +1,6 @@
-// Layout and persistence helpers for the player's Tweakpane "Debug Menu". The folder titles, their order, and which ones
-// start open live here so the structure reads in one place and stays testable; `index.ts` binds the controllers.
+// Layout and persistence helpers for the player's Options dialog (`DebugMenu`). The tabs, the folder titles, their
+// order, and which ones start open live here so the structure reads in one place and stays testable; `index.ts` binds
+// the controllers.
 
 import {
   defaultStorage,
@@ -17,9 +18,8 @@ export interface DebugMenuFolder {
 }
 
 /**
- * Every folder of the Debug Menu, top to bottom. Everyday folders (play options, tempo, course) start open; skin detail,
- * the library tools, capture,
- * the Leaderboard and the developer settings start closed. Nested folders sit under the folder named in their key.
+ * Every folder of the Options dialog, top to bottom. A folder a tab holds (`OPTIONS_TABS`) is a section that is always
+ * open; the folders inside those sections collapse, and start open or closed as `open` says.
  */
 export const DEBUG_MENU_FOLDERS = {
   playOptions: { title: 'Play options', open: true },
@@ -41,7 +41,21 @@ export const DEBUG_MENU_FOLDERS = {
   developer: { title: 'Developer', open: false },
 } as const satisfies Record<string, DebugMenuFolder>;
 
-/** Public folder state used by the pane persistence logic. */
+/**
+ * The Options dialog's tabs, left to right: Play (Play options), Tempo & course, Skin & display, Audio, Library (the
+ * status, opening files, Library & records and Capture), Leaderboard and Developer.
+ */
+export const OPTIONS_TABS = [
+  'Play',
+  'Tempo & course',
+  'Skin & display',
+  'Audio',
+  'Library',
+  'Leaderboard',
+  'Developer',
+] as const;
+
+/** Public folder state used by the dialog's persistence logic. */
 export interface FolderNode {
   readonly title: string | undefined;
   expanded: boolean;
@@ -49,7 +63,7 @@ export interface FolderNode {
   on(event: 'fold', callback: (event: { expanded: boolean }) => void): unknown;
 }
 
-/** Folder paths exclude the root pane and tab page titles, preserving earlier stored keys. */
+/** Folder paths exclude the root dialog and tab page titles, preserving earlier stored keys. */
 export function folderEntries(root: FolderNode): { folder: FolderNode; titles: readonly string[] }[] {
   const entries: { folder: FolderNode; titles: readonly string[] }[] = [];
   const walk = (node: unknown, titles: readonly string[]): void => {
@@ -68,7 +82,7 @@ export function folderEntries(root: FolderNode): { folder: FolderNode; titles: r
   return entries;
 }
 
-/** Restore child folder states before subscribing; the root pane always starts collapsed. */
+/** Restore child folder states before subscribing; the root dialog always starts closed. */
 export function rememberFolderOpenStates(
   root: FolderNode,
   storage: DebugMenuStorage | undefined = defaultStorage(),

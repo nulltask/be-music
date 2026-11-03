@@ -54,7 +54,7 @@ export function rebuildBeatorajaSkinPickers(this: DebugMenu): void {
   for (const scene of sceneTypes) {
     const candidates = theme.entries.filter((entry) => entry.header.type === scene.typeCode);
     if (candidates.length === 0) continue;
-    // Build a label → entryPath map. Tweakpane shows the keys in the dropdown and writes the
+    // Build a label → entryPath map. The select shows the keys and writes the
     // matching value to the proxy. Using entryPath as the value lets us look up the entry on
     // change without keeping a separate index.
     const options: Record<string, string> = {};

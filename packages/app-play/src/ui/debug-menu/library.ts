@@ -1,6 +1,6 @@
 import { selectBinding } from '../../pane-controls.ts';
 // The Debug Menu's Library & records folder. It is built with the menu as `this` (`DebugMenu`).
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from '../options-controls.ts';
 import { storeChartBestRecords } from '../../chart-best-records.ts';
 import { LocalDataPanel } from '../../local-data-panel.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
@@ -28,8 +28,8 @@ const REPLAY_AUTO_SAVE_LABELS: Record<string, ReplayAutoSaveRule> = {
  */
 export function buildLibraryFolder(
   this: DebugMenu,
-  library: FolderApi,
-  addFolder: (parent: FolderApi, folder: DebugMenuFolder) => FolderApi,
+  library: OptionContainer,
+  addFolder: (parent: OptionContainer, folder: DebugMenuFolder) => OptionContainer,
 ): void {
   const urlParams = parseURLMediaParams(window.location.href);
   const urls = {

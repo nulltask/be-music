@@ -44,7 +44,7 @@ textarea {
 
 /*
  * The shared header stays off the playfield. The stage fills whatever height is left. Stacking, top first: the header
- * (60), the Debug Menu (50), then every other overlay (40 and below).
+ * (60), the fullscreen Options button (50), then every other overlay (40 and below). The Options dialog is modal.
  */
 .player-service-header {
   position: relative;
@@ -89,61 +89,212 @@ textarea {
   display: none;
 }
 
-/* Tweakpane's public theme variables keep controls legible over the stage. */
-.debug-pane-container {
-  position: fixed;
-  top: calc(3rem + max(8px, env(safe-area-inset-top, 0px)));
-  right: max(8px, env(safe-area-inset-right, 0px));
-  width: 300px;
-  max-width: calc(100vw - 16px);
-  max-height: calc(100dvh - 3rem - 16px);
+/*
+ * The Options dialog (ui/debug-menu/, controls in ui/options-controls.ts): one tab per area, each holding its folders as
+ * sections, with collapsible folders inside. The tab bar scrolls sideways on a narrow screen, and the panel scrolls.
+ */
+.options-dialog > div {
+  height: min(85dvh, 760px);
+}
+@media (min-width: 40rem) {
+  .options-dialog > div {
+    max-width: 640px;
+  }
+}
+.options-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+.options-body > .options-tabs {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.options-tabs > [role='tablist'] {
+  max-width: 100%;
+  overflow-x: auto;
+  justify-content: flex-start;
+  scrollbar-width: none;
+}
+.options-tabs > [role='tablist'] > [role='tab'] {
+  flex: 0 0 auto;
+}
+.options-body > .options-tabs > [role='tabpanel'] {
+  min-height: 0;
   overflow-y: auto;
-  z-index: 50;
+  overscroll-behavior: contain;
+  padding-right: 8px;
 }
-.shell.in-gameplay .debug-pane-container,
-.player-main:fullscreen .debug-pane-container,
-.player-main:-webkit-full-screen .debug-pane-container {
-  top: max(8px, env(safe-area-inset-top, 0px));
-  max-height: calc(100dvh - 16px);
+.options-tab-panel,
+.options-folder-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.debug-pane,
-.skin-config-pane {
-  --tp-base-background-color: color-mix(in oklch, var(--popover) 92%, transparent);
-  --tp-base-shadow-color: rgb(0 0 0 / 0.3);
-  --tp-base-font-family: var(--font-sans), system-ui, sans-serif;
-  --tp-button-background-color: var(--secondary);
-  --tp-button-background-color-hover: var(--accent);
-  --tp-button-background-color-focus: var(--accent);
-  --tp-button-background-color-active: var(--accent);
-  --tp-button-foreground-color: var(--secondary-foreground);
-  --tp-container-background-color: color-mix(in oklch, var(--muted) 40%, transparent);
-  --tp-container-background-color-hover: var(--accent);
-  --tp-container-foreground-color: var(--foreground);
-  --tp-input-background-color: var(--input);
-  --tp-input-background-color-hover: var(--accent);
-  --tp-input-background-color-focus: var(--accent);
-  --tp-input-foreground-color: var(--foreground);
-  --tp-label-foreground-color: var(--muted-foreground);
-  --tp-monitor-background-color: color-mix(in oklch, var(--muted) 50%, transparent);
-  --tp-monitor-foreground-color: var(--foreground);
-  --tp-groove-foreground-color: rgb(255 255 255 / 0.12);
-  --tp-container-unit-size: 26px;
-  --tp-blade-value-width: 58%;
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  backdrop-filter: blur(10px) saturate(140%);
+.options-tab-panel {
+  padding-top: 12px;
 }
-.debug-pane .status-row {
-  --tp-blade-value-width: 78%;
+.options-section + .options-section,
+.options-tab-panel > .options-section:not(:first-child) {
+  margin-top: 8px;
 }
-.debug-pane .recording button {
+.options-section-heading {
+  margin: 0 0 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.options-folder {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 0.5rem);
+}
+.options-folder-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+.options-folder-summary > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--muted-foreground);
+  transition: rotate 150ms ease;
+}
+.options-folder[open] > .options-folder-summary > svg {
+  rotate: 180deg;
+}
+.options-folder > .options-folder-content {
+  padding: 2px 12px 12px;
+}
+/* A row: the label and its control side by side; a slider puts its number by the label and the track under them. */
+.options-row {
+  gap: 12px;
+}
+.options-row[data-orientation='horizontal'] > .options-label {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.options-label {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.options-row[data-disabled] .options-label {
+  opacity: 0.5;
+}
+.options-row > .options-select,
+.options-row > .options-text,
+.options-row[data-orientation='horizontal'] > .options-number {
+  width: min(55%, 260px);
+  flex: none;
+}
+.options-slider-row {
+  gap: 8px;
+}
+.options-slider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.options-slider-head > .options-number {
+  width: 6.5rem;
+  flex: none;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.options-range {
+  width: 100%;
+}
+.options-monitor {
+  min-height: 0;
+  resize: none;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.options-monitor-value {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.options-graph {
+  display: block;
+  width: 100%;
+  height: 32px;
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--muted) 50%, transparent);
+}
+.options-graph polyline {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 1.5;
+}
+.options-button-row > .options-button {
+  width: 100%;
+}
+.options-row.recording .options-button {
   background: var(--destructive);
   color: var(--background);
   animation: record-pulse 1.4s ease-in-out infinite;
 }
-.debug-pane .arming button {
+.options-row.arming .options-button {
   background: var(--primary);
   color: var(--primary-foreground);
   animation: record-arming 2s ease-in-out infinite;
+}
+/* Nested tabs (Skin & display's skin systems) sit inside a section. */
+.options-tab-panel .options-tabs > [role='tab'] {
+  font-size: 0.8125rem;
+}
+
+/* The surface's own Options button, for fullscreen, where the header is not shown. */
+.options-open {
+  display: none;
+}
+.player-main:fullscreen .options-open,
+.player-main:-webkit-full-screen .options-open {
+  display: inline-flex;
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  right: max(8px, env(safe-area-inset-right, 0px));
+  z-index: 50;
+  opacity: 0.6;
+}
+.player-main:fullscreen .options-open:hover,
+.player-main:-webkit-full-screen .options-open:hover {
+  opacity: 1;
+}
+
+/*
+ * The beatoraja Skin Config panel (beatoraja-skin-options-gui.ts): bottom-centre over the stage, flush with its bottom
+ * edge, clear of the play skins' readouts in the lower-right corner.
+ */
+.skin-config-pane {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 40;
+  width: min(320px, calc(100vw - 16px));
+  max-height: calc(100dvh - 12px);
+  overflow-y: auto;
+  transform: translateX(-50%);
+  border-radius: var(--radius-md, 0.5rem) var(--radius-md, 0.5rem) 0 0;
+  background: color-mix(in oklch, var(--popover) 92%, transparent);
+  color: var(--popover-foreground);
+  box-shadow: 0 -4px 16px rgb(0 0 0 / 0.3);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+}
+.skin-config-pane > .options-folder-content > .options-tabs > [role='tabpanel'] {
+  padding-top: 8px;
 }
 
 @keyframes record-arming {
@@ -260,10 +411,9 @@ textarea {
  * `resizeTo: #stage` still sees a 100%-of-viewport container after
  * the browser chrome disappears, and so the floating debug / help /
  * search overlays stay reachable. The site header and the site footer
- * sit outside `#main`, so fullscreen leaves them on the page. The Debug
- * Menu (`.debug-pane-container`) is mounted inside `#main` for that
- * reason; outside it, the browser would hide the menu while `#main`
- * is fullscreen. The background fill covers Safari's brief unstyled
+ * sit outside `#main`, so fullscreen leaves them on the page. The
+ * Options dialog and its fullscreen button (`.options-open`) sit inside
+ * `#main` for that reason. The background fill covers Safari's brief unstyled
  * flash as the element is promoted.
  */
 .player-main:fullscreen,
@@ -1714,7 +1864,7 @@ textarea {
  *
  * The page chrome steps off the stage: the stage is fitted to the screen's height on a landscape phone, so any overlay
  * sits on top of the skin's own text. The search box only shows while it is being typed in (the skins' search area
- * focuses it). The Debug Menu keeps its usual size.
+ * focuses it).
  */
 @supports (height: 100dvh) {
   html.touch-first body,
@@ -1737,22 +1887,6 @@ html.touch-first .search-input:focus {
   font-size: 16px; /* 16px keeps iOS Safari from zooming the page on focus */
 }
 
-/* Keep a collapsed pane out of touch lanes. */
-html.touch-first:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) {
-  opacity: 0.35;
-}
-/*
- * During play the collapsed Debug Menu is the corner tab the cabinet layout leaves open. A full-width title covers
- * the Pause button in that band.
- */
-html:has(.shell.in-gameplay) .debug-pane-container:has(> .debug-pane:not(.tp-rotv-expanded)) {
-  width: 40px;
-}
-html:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) > .tp-rotv_b .tp-rotv_t {
-  overflow: hidden;
-  white-space: nowrap;
-  color: transparent;
-}
 /* Touch play controls: a pause button during play; Resume / Quit while paused. */
 .touch-controls {
   position: absolute;
@@ -1832,8 +1966,9 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
 }
 
 /*
- * "No sound?" hint, shown once on an iPhone / iPad when sound first starts. Top-centre, clear of the Debug Menu
- * (top-right), the search box (bottom-left) and Help (bottom-right); it never blocks the stage and leaves by itself.
+ * "No sound?" hint, shown once on an iPhone / iPad when sound first starts. Top-centre, clear of the fullscreen
+ * Options button (top-right), the search box (bottom-left) and Help (bottom-right); it never blocks the stage and
+ * leaves by itself.
  */
 .silent-mode-hint {
   position: fixed;
@@ -2233,10 +2368,7 @@ html.touch-first .search-input.search-inline:focus {
   padding-top: 8px;
 }
 
-/* The PRACTICE range picker (#948): a density graph with two handles, in a separator row of the Debug Menu. */
-.debug-pane .practice-range-row {
-  padding: 2px var(--cnt-hp, 4px) 4px;
-}
+/* The PRACTICE range picker (#948): a density graph with two handles, in a row of its own in the Options dialog. */
 .practice-range {
   --practice-range-accent: var(--primary);
   --practice-range-muted: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
@@ -2249,12 +2381,12 @@ html.touch-first .search-input.search-inline:focus {
   display: block;
   width: 100%;
   border-radius: 4px;
-  background: var(--tp-input-background-color);
+  background: var(--input);
   cursor: ew-resize;
   touch-action: none;
 }
 .practice-range-caption {
-  color: var(--tp-label-foreground-color);
+  color: var(--muted-foreground);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: center;

@@ -1,6 +1,6 @@
 // The Debug Menu's compressor controls: every compressor's tuning, remembered across visits and handed to each play,
 // and the per-stage folder, shown only where it applies. They run with the menu as `this` (`DebugMenu`).
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from '../options-controls.ts';
 import {
   DEFAULT_COMPRESSOR_PARAMS,
   type CompressorParams,
@@ -39,7 +39,7 @@ export function refreshCompressorStageVisibility(this: DebugMenu): void {
  * `?compressor=legacy` architecture is active) with threshold, knee, ratio, attack, and release sliders and a reset.
  * Changes retune a running chart live and are remembered for the next visit.
  */
-export function buildCompressorTuningGUI(this: DebugMenu, parent: FolderApi): void {
+export function buildCompressorTuningGUI(this: DebugMenu, parent: OptionContainer): void {
   const labels: Record<TunableCompressor, string> = {
     key: 'Key compressor',
     bgm: 'BGM compressor',

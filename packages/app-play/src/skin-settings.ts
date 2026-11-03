@@ -92,7 +92,7 @@ export type SkinSettingController =
       kind: 'dropdown';
       id: string;
       name: string;
-      /** Shown label → option value, converted to native list items by the pane. */
+      /** Shown label → option value, converted to a select's choices by the dialog. */
       options: Record<string, string>;
     }
   | { kind: 'slider'; id: string; name: string; min: number; max: number; step: number | undefined }

@@ -1,7 +1,7 @@
 import { selectBinding, paneOptions } from '../../pane-controls.ts';
 // The Debug Menu's Skin & display folder, and the controls in it that follow what is loaded: the Skin system picker,
 // the LR2 theme picker and the Be-Music Skin's settings. They are built with the menu as `this` (`DebugMenu`).
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from '../options-controls.ts';
 import { resolveBeMusicSkinSettings } from '@be-music/player-skin-sdk';
 import { hasAnyLR2Skin } from '../../family-dispatch.ts';
 import { playerFullscreenElement, toggleFullscreen } from '../../fullscreen.ts';
@@ -16,8 +16,8 @@ import { AUTO_DETECT_RESOLUTION_LABEL } from './render-resolution.ts';
 /** How the skins look and lay out, the loaded themes' pickers, the Be-Music Skin's settings, and adding skins. */
 export function buildSkinFolder(
   this: DebugMenu,
-  skin: FolderApi,
-  addFolder: (parent: Pick<FolderApi, 'addFolder'>, folder: DebugMenuFolder) => FolderApi,
+  skin: OptionContainer,
+  addFolder: (parent: Pick<OptionContainer, 'addFolder'>, folder: DebugMenuFolder) => OptionContainer,
 ): void {
   this.skinFolder = skin;
   // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's

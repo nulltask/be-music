@@ -27,7 +27,7 @@ function playHostname(): string {
  * stays self-documenting.
  *
  * Sub-elements wired up elsewhere:
- *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings toggles the Debug Menu. Fullscreen covers `#main`, so this header and the site footer stay on the page.
+ *  - `#player-service-header` — `player-header.ts` (`mountPlayerHeader`): the shared site header. Settings opens the Options dialog (`#options-modal`, `ui/debug-menu/`). Fullscreen covers `#main`, so this header and the site footer stay on the page.
  *  - `#help-modal` — `help-modal.ts` (`wireHelpModal`), opened from the header's Help button
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
@@ -43,10 +43,9 @@ export const PLAYER_APP_HTML = `
     })}</div>
     <main id="main" class="player-main">
     <!--
-      Hidden file input — triggered by the GUI's "Open folder"
-      button. Tweakpane has no native file controller, so we
-      forward a synthetic click to this hidden input from the
-      function controller's handler. \`webkitdirectory\` makes the
+      Hidden file input — triggered by the Options dialog's
+      "Open folder" button, which forwards a synthetic click to
+      this hidden input. \`webkitdirectory\` makes the
       browser show a folder picker on Chromium / Safari. ZIPs and
       replays go through the "Open files" picker below.
     -->
@@ -119,7 +118,7 @@ export const PLAYER_APP_HTML = `
             Leaderboard: whether this browser's plays are sent, and the
             account they go to. Rendered by \`LeaderboardPanel\`
             (leaderboard-ui.ts) from the account state; the checkbox is
-            the Debug Menu's "Submit to Leaderboard" setting.
+            the Options dialog's "Submit to Leaderboard" setting.
           -->
           <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard" data-i18n-aria="leaderboard">
             <label class="start-check">
@@ -284,7 +283,7 @@ export const PLAYER_APP_HTML = `
       </form>
     </dialog>
     <!--
-      "Drop a skin" — shown when the Debug Menu's Skin system is set to LR2 or
+      "Drop a skin" — shown when the Options dialog's Skin system is set to LR2 or
       beatoraja with none of that system loaded. A drop anywhere closes it, and
       the detected skin is confirmed before it is used. Filled by
       \`promptSkinDrop\` (ui/skin-drop-prompt.ts).
@@ -400,7 +399,7 @@ export const PLAYER_APP_HTML = `
       Help modal. Three tabs:
       - Usage: drag-drop instructions, keyboard shortcuts,
         gameplay keys and the result screen.
-      - Options: the Debug Menu, every control in it, play
+      - Options: the Options dialog, every control in it, play
         options and recording.
       - Open source: the acknowledgement list the build writes
         (one card per third-party package in the bundle, with
@@ -437,7 +436,7 @@ export const PLAYER_APP_HTML = `
               <p class="help-about-summary">
                 A browser-based BMS player. Drop in a folder containing BMS / bmson charts and
                 play them straight from the page. It comes with three skins, Synesthesia, Plain and Native
-                (Debug Menu → Skin &amp; display → Built-in skin), and reads <strong>Lunatic Rave 2</strong> skins
+                (Options → Skin &amp; display → Built-in skin), and reads <strong>Lunatic Rave 2</strong> skins
                 (<code>.lr2skin</code>) and <strong>beatoraja</strong> skins
                 (<code>.json</code> / <code>.luaskin</code>) — drop your
                 <code>LR2files</code> folder, or your beatoraja <code>skin/</code> folder, onto
@@ -471,7 +470,7 @@ export const PLAYER_APP_HTML = `
                 <li>Some features are still missing or incomplete — expect rough edges.</li>
                 <li>
                   <strong>Best records stay in this browser.</strong> The Leaderboard (off by
-                  default, Debug Menu → Leaderboard) is a ${PUBLIC_BETA_LABEL.en}: its rankings may be reset.
+                  default, Options → Leaderboard) is a ${PUBLIC_BETA_LABEL.en}: its rankings may be reset.
                   ${PUBLIC_BETA_DELETION.en}
                 </li>
                 <li>
@@ -493,7 +492,7 @@ export const PLAYER_APP_HTML = `
                 (or their contents), to apply a skin theme.
               </li>
               <li>
-                Or click <strong>Open folder</strong> in the Debug Menu (top-right) to use the native
+                Or click <strong>Open folder</strong> in Options → Library to use the native
                 folder picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
                 theme and BMS charts loads both in one shot. Press the button again to add another folder.
                 <strong>Open files</strong> picks ZIP archives or a replay (<code>*.bmplay.json</code>, or a course's <code>*.bmcourse.json</code>) to replay.
@@ -502,7 +501,7 @@ export const PLAYER_APP_HTML = `
               <li>
                 Course files in a dropped folder (LR2 <code>.lr2crs</code>, beatoraja course <code>.json</code>) list
                 as course folders. Decide <strong>NEW COURSE</strong> in MY COURSES, MY DAN or MY NONSTOP to make your
-                own; <strong>Course → My courses…</strong> in the Debug Menu renames, deletes and exports them.
+                own; <strong>Course → My courses…</strong> in Options renames, deletes and exports them.
               </li>
               <li>
                 Or link straight to a pack: open the page with
@@ -577,7 +576,7 @@ export const PLAYER_APP_HTML = `
             <section class="help-about">
               <p class="help-about-summary">
                 ブラウザ上で動作する BMS プレイヤーです。BMS / bmson が入ったフォルダをドロップするだけでそのまま再生できます。
-                内蔵スキンはシナスタジア (Synesthesia)、プレーン (Plain)、ネイティブ (Native) の 3 種類です (Debug Menu → Skin &amp; display → Built-in skin)。
+                内蔵スキンはシナスタジア (Synesthesia)、プレーン (Plain)、ネイティブ (Native) の 3 種類です (Options → Skin &amp; display → Built-in skin)。
                 <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン (<code>.json</code> / <code>.luaskin</code>) も解釈するので、<code>LR2files</code> フォルダや beatoraja の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。
               </p>
               <ul class="help-about-meta">
@@ -605,7 +604,7 @@ export const PLAYER_APP_HTML = `
                 <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
                 <li>
                   <strong>ベスト記録はこのブラウザに保存されます。</strong>
-                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) は${PUBLIC_BETA_LABEL.ja}で、ランキングはリセットされることがあります。${PUBLIC_BETA_DELETION.ja}
+                  Leaderboard (初期状態はオフ、Options → Leaderboard) は${PUBLIC_BETA_LABEL.ja}で、ランキングはリセットされることがあります。${PUBLIC_BETA_DELETION.ja}
                 </li>
                 <li>
                   <strong>動作確認済みのスキン:</strong> Lunatic Rave 2 デフォルトスキンに加え、beatoraja デフォルトスキン (<code>skin/default</code>)、<code>ModernChic</code>、<code>GdbG Original Skin</code> の四種類です。
@@ -619,7 +618,7 @@ export const PLAYER_APP_HTML = `
               <li>BMS フォルダをページ上にドロップすると、その中の譜面が登録されます。</li>
               <li><code>LR2files</code> フォルダか beatoraja の <code>skin/</code> フォルダ (またはその中身) をドロップするとスキンが適用されます。</li>
               <li>
-                右上 Debug Menu の <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
+                Options の Library にある <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
                 ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマと譜面が同居したフォルダもまとめて読み込めます。
                 ボタンを押し直せば別フォルダを追加で読み込めます。
                 <strong>Open files</strong> では ZIP アーカイブやリプレイ (<code>*.bmplay.json</code>、コースは <code>*.bmcourse.json</code>) を選べます。
@@ -627,7 +626,7 @@ export const PLAYER_APP_HTML = `
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
               <li>
                 ドロップしたフォルダに含まれるコースファイル (LR2 の <code>.lr2crs</code>、beatoraja のコースの <code>.json</code>) はコースのフォルダとして並びます。
-                MY COURSES / MY DAN / MY NONSTOP の <strong>NEW COURSE</strong> を決定すると自分でコースを作れます。作ったコースの名前の変更・削除・書き出しは Debug Menu の <strong>Course → My courses…</strong> から行えます。
+                MY COURSES / MY DAN / MY NONSTOP の <strong>NEW COURSE</strong> を決定すると自分でコースを作れます。作ったコースの名前の変更・削除・書き出しは Options の <strong>Course → My courses…</strong> から行えます。
               </li>
             </ul>
 
@@ -692,11 +691,12 @@ export const PLAYER_APP_HTML = `
             <button class="btn help-lang-toggle" data-size="sm" data-variant="outline" type="button" data-lang="ja" aria-pressed="false">日本語</button>
           </div>
           <div class="help-lang is-active" data-lang="en">
-            <h3 class="help-section-title">Debug Menu</h3>
+            <h3 class="help-section-title">Options</h3>
             <ul class="help-list">
               <li>
-                Click <strong>Debug Menu</strong> at the top right to open the settings panel. Everyday folders start
-                open; rarely used ones start closed, and each remembers whether you left it open.
+                Click the <strong>Settings</strong> button (the gear) at the top right to open Options. Each tab
+                gathers one area: Play, Tempo &amp; course, Skin &amp; display, Audio, Library, Leaderboard and
+                Developer. Folders inside them remember whether you left them open.
               </li>
               <li>
                 Every setting is remembered in this browser and restored on your next visit.
@@ -969,10 +969,10 @@ export const PLAYER_APP_HTML = `
             </ul>
           </div>
           <div class="help-lang" data-lang="ja" hidden>
-            <h3 class="help-section-title">Debug Menu</h3>
+            <h3 class="help-section-title">Options</h3>
             <ul class="help-list">
               <li>
-                右上の <strong>Debug Menu</strong> をクリックすると設定パネルが開きます。よく使うフォルダは最初から開いていて、あまり使わないフォルダは閉じています。フォルダの開閉状態は記憶されます。
+                右上の <strong>Settings</strong> ボタン (歯車) で Options が開きます。タブごとに Play、Tempo &amp; course、Skin &amp; display、Audio、Library、Leaderboard、Developer の設定がまとまっています。タブの中のフォルダの開閉状態は記憶されます。
               </li>
               <li>
                 設定はすべてこのブラウザに記憶され、次に開いたときに元に戻ります。<strong>Developer → Reset settings and reload</strong> ですべて既定値に戻せます (ベスト記録は残ります)。
@@ -1253,6 +1253,26 @@ export const PLAYER_APP_HTML = `
         </button>
       </div>
     </dialog>
+    <!--
+      Options: every player setting, a Basecoat dialog with one tab per
+      area. ui/debug-menu/ (DebugMenu.buildGUI) fills #options-modal-body;
+      the header's Settings button opens it, and so does #options-open
+      while the play surface is fullscreen and the header is not shown.
+    -->
+    <dialog class="dialog options-dialog" id="options-modal" data-pane="options" aria-labelledby="options-modal-title">
+      <div>
+        <header>
+          <h2 id="options-modal-title" data-i18n="options">Options</h2>
+        </header>
+        <section id="options-modal-body" class="options-body"></section>
+        <button type="button" id="options-modal-close" aria-label="Close" data-i18n-aria="close">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+    </dialog>
+    <button type="button" id="options-open" class="btn options-open" data-variant="secondary" data-size="icon" aria-label="Options" data-i18n-aria="options">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
   </main>
   ${renderServiceFooter({
     current: 'play',

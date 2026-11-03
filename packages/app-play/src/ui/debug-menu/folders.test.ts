@@ -51,7 +51,7 @@ const BLOCKED_STORAGE: DebugMenuStorage = {
   },
 };
 
-/** A stand-in for Tweakpane's `GUI` with the same open / close bubbling. */
+/** A stand-in for the Options dialog's folders, with the same open / close reports. */
 class FakeFolder implements FolderNode {
   public readonly children: FakeFolder[] = [];
   public readonly title: string;

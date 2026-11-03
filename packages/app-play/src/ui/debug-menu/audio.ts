@@ -1,6 +1,6 @@
 // The Debug Menu's Audio folder: the volumes, "Play in silent mode", peak gain and the Compressor folder. It is built
 // with the menu as `this` (`DebugMenu`).
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from '../options-controls.ts';
 import { setMasterVolume, supportsSystemAudioSession } from '@be-music/player-browser/audio';
 import { storeVolumes } from '../../services/settings.ts';
 import {
@@ -17,8 +17,8 @@ import type { DebugMenu } from './index.ts';
  */
 export function buildAudioFolder(
   this: DebugMenu,
-  audio: FolderApi,
-  addFolder: (parent: FolderApi, folder: DebugMenuFolder) => FolderApi,
+  audio: OptionContainer,
+  addFolder: (parent: OptionContainer, folder: DebugMenuFolder) => OptionContainer,
 ): void {
   const rememberVolumes = () =>
     storeVolumes({
