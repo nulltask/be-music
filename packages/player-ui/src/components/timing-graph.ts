@@ -25,6 +25,7 @@ export class BeMusicTimingGraphElement extends DataElement<BeMusicTimingData> {
           fill="none"
           stroke="var(--be-music-timing-color,#ffa8b3)"
           stroke-width="1.5"
+          stroke-linejoin="round"
           points=${points}
         ></polyline>
       </svg>

@@ -400,8 +400,14 @@ function glass(graphics: Graphics, x: number, y: number, w: number, h: number, r
   drawFrame(graphics, x, y, w, h, rim, { fill: 0.6, arm: 10 });
 }
 
-/** Polyline drawn up to `progress` of its horizontal span, stroked twice (bloom + filament) with a glowing head. */
-function filament(
+/**
+ * Polyline drawn up to `progress` of its horizontal span, stroked twice (bloom + filament) with a glowing head. The
+ * graphs sample on every judgment, so samples a few milliseconds apart (a judgment and an empty POOR) sit within a
+ * fraction of a pixel: those are thinned out first, as a near-zero-length segment breaks the stroke's joins into stray
+ * fans on the bloom. The joins are round: a gauge that drops and climbs back within a few pixels turns the line by
+ * nearly 180°, and a miter join there juts far past the curve.
+ */
+export function filament(
   graphics: Graphics,
   x: number,
   y: number,
@@ -428,11 +434,30 @@ function filament(
     path.push(x + clamp(point.x) * w, y + (1 - clamp(point.y)) * h);
     previous = point;
   }
-  if (path.length < 4) path.push(path[0]! + 0.5, path[1]!);
-  graphics.poly(path, false).stroke({ color, width: 5, alpha: 0.12 });
-  graphics.poly(path, false).stroke({ color, width: 1.5, alpha: 0.95 });
-  const headX = path[path.length - 2]!;
-  const headY = path[path.length - 1]!;
+  const line = thinPolyline(path, 1);
+  if (line.length < 4) line.push(line[0]! + 0.5, line[1]!);
+  graphics.poly(line, false).stroke({ color, width: 5, alpha: 0.12, join: 'round' });
+  graphics.poly(line, false).stroke({ color, width: 1.5, alpha: 0.95, join: 'round' });
+  const headX = line[line.length - 2]!;
+  const headY = line[line.length - 1]!;
   graphics.circle(headX, headY, 6).fill({ color, alpha: 0.2 });
   graphics.circle(headX, headY, 2).fill({ color: SYN_WHITE, alpha: 1 });
+}
+
+/**
+ * The polyline `[x0, y0, x1, y1, …]` without the points closer than `minGap` to the last point kept. The first and last
+ * points stay: the last replaces a kept point too close to it, so the line still ends where it did.
+ */
+export function thinPolyline(path: readonly number[], minGap: number): number[] {
+  if (path.length <= 4) return [...path];
+  const line = [path[0]!, path[1]!];
+  const near = (x: number, y: number) => Math.hypot(x - line[line.length - 2]!, y - line[line.length - 1]!) < minGap;
+  for (let index = 2; index < path.length - 2; index += 2) {
+    if (!near(path[index]!, path[index + 1]!)) line.push(path[index]!, path[index + 1]!);
+  }
+  const lastX = path[path.length - 2]!;
+  const lastY = path[path.length - 1]!;
+  if (line.length > 2 && near(lastX, lastY)) line.length -= 2;
+  line.push(lastX, lastY);
+  return line;
 }
