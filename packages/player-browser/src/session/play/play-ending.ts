@@ -32,7 +32,8 @@ import { resolvePostChartResultDelayMs } from './result-delay.ts';
  *   result. Escape and F5 run the same fade-out.
  * - A play cut short by its gauge emptying (a course stage, a HARD gauge ending on failure) stops at once, as LR2 and
  *   beatoraja do: no lead-out and no fade-out timer; the failure moment (LR2 timer 3, beatoraja `TIMER_FAILED`) starts,
- *   the sound is cut, and the result shows after the skin's close time (LR2 `#CLOSE`, beatoraja `close`). A theme
+ *   the sound fades out over the close (Be-Music's choice: LR2 and beatoraja cut it), and the result shows after the
+ *   skin's close time (LR2 `#CLOSE`, beatoraja `close`). A theme
  *   without a close time (the built-in skins) holds for {@link FAILED_CLOSE_MS} instead, fading its picture. A gauge
  *   that emptied but played on to the end ends normally.
  */
@@ -154,8 +155,9 @@ export interface ExitSequenceOptions {
  *   L12686-L12697, L12915-L12925; the chart's end and ESC start timer 2 alone, L12976-L12978, L7732-L7741). A theme
  *   with no fade-out calls `callback` at once.
  * - **A failed play** (`failed`) stops at once, as LR2 (`procPhase = 3`) and beatoraja (`STATE_FAILED`) do: it raises
- *   `exit-close` (LR2 timer 3, beatoraja `TIMER_FAILED`), cuts the sound at once (the speakers, after the recording
- *   tap), and calls `callback` after the theme's close time (LR2 `#CLOSE`, beatoraja `close`; OpenLR2 L7748-L7752,
+ *   `exit-close` (LR2 timer 3, beatoraja `TIMER_FAILED`), fades the sound out over the close (the speakers, after the
+ *   recording tap; LR2 and beatoraja cut it at once, which jars against the skin's closing animation), and calls
+ *   `callback` after the theme's close time (LR2 `#CLOSE`, beatoraja `close`; OpenLR2 L7748-L7752,
  *   beatoraja `BMSPlayer` L693-L742) with no fade-out timer. A theme with no close time holds for
  *   {@link FAILED_CLOSE_MS}, fading its picture over it.
  */
@@ -174,8 +176,9 @@ export function beginExitSequence(
     const closeMs = ctx.theme.timing().closeMs;
     const holdMs = closeMs > 0 ? closeMs : FAILED_CLOSE_MS;
     ctx.theme.moment({ kind: 'exit-close', at });
-    // LR2 stops every keysound and beatoraja every sound at once; the post-tap gain keeps a recording's mix whole.
-    ctx.audioBus?.fadeOutAudibleTo(0, 0);
+    // LR2 stops every keysound and beatoraja every sound at once; here the sound fades with the close, as the picture
+    // does. The post-tap gain keeps a recording's mix whole.
+    ctx.audioBus?.fadeOutAudibleTo(0, holdMs);
     if (closeMs <= 0) {
       // No close time of its own: the picture fades over the hold (the built-in skins' look).
       ctx.exitFadeOutMs = holdMs;
