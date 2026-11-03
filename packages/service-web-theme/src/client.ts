@@ -29,3 +29,14 @@ export { serviceHeaderTemplate, serviceSkipLinkTemplate } from './header-templat
 export type { ServiceHeaderInput } from './header-model.ts';
 
 export { buildInfoTemplate, publicBetaNoticeTemplate, serviceFooterTemplate } from './footer-template.ts';
+
+export { authButtonTemplate, authPanelTemplate, type AuthButtonInput } from './auth-template.ts';
+export { avatarTemplate, accountIdentityTemplate } from './account-identity-template.ts';
+export type { ServiceAccountIdentity } from './account-model.ts';
+export {
+  popoverTemplate,
+  languageMenuTemplate,
+  languageLinksTemplate,
+  type PopoverInput,
+  type LanguageChoice,
+} from './popover-template.ts';

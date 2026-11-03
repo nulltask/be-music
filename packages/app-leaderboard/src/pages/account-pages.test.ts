@@ -22,16 +22,16 @@ afterAll(async () => {
 describe('signing in on the site', () => {
   test('signed out, the header offers the passkey sign-in, and the settings page asks for it', async () => {
     const top = await html('/');
-    expect(top).toContain('data-account-action="sign-in"');
+    expect(top).toContain('data-auth-action="sign-in"');
     expect(top).not.toContain('href="/settings"');
     // Sign in opens the dialog. Passkey, Google and Discord each start Accounts; none are marked coming soon.
     expect(top).toContain('data-account-action="open-sign-in"');
     expect(top).toContain('data-account-action="open-sign-up"');
-    expect(top).toContain('data-account-action="sign-in-google"');
-    expect(top).toContain('data-account-action="sign-up-discord"');
+    expect(top).toContain('data-auth-action="sign-in-google"');
+    expect(top).toContain('data-auth-action="sign-up-discord"');
     expect(top).not.toContain('Coming soon');
     expect(top).not.toContain('coming soon');
-    expect(top).not.toMatch(/data-account-action="sign-in-google"[^>]*disabled/);
+    expect(top).not.toMatch(/data-auth-action="sign-in-google"[^>]*disabled/);
     const settings = await html('/settings');
     expect(settings).toContain('Sign in with a passkey');
     expect(settings).not.toContain('data-profile-form');

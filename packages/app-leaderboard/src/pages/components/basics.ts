@@ -1,3 +1,4 @@
+import { avatarTemplate } from '@be-music/service-web-theme/server';
 import type { PageContent } from '../template.ts';
 import { html, nothing } from '@be-music/service-web-theme/server';
 /** Shared building blocks of the Leaderboard pages: links, tags, lamps, filter chips, table frames. */
@@ -159,15 +160,7 @@ export const chartsetHref = (id: string): string => `/chartsets/${encodeURICompo
 
 /** A player's icon, round; the name next to it says who it is, so it is decorative to screen readers. */
 export function Avatar(props: { src: string; size: number; class?: string }) {
-  return html`<img
-    src=${props.src ?? nothing}
-    width=${props.size ?? nothing}
-    height=${props.size ?? nothing}
-    alt=""
-    loading="lazy"
-    decoding="async"
-    class=${`bg-muted ring-foreground/10 inline-block shrink-0 rounded-full ring-1 ${props.class ?? ''}`}
-  />`;
+  return avatarTemplate({ src: props.src, size: props.size, className: props.class });
 }
 
 /** UTC fallback for no-script visitors; the Lit custom element owns the localized shadow content. */
