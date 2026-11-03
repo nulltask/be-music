@@ -20,6 +20,7 @@ import {
   browseSearchError,
   browseSystemSound,
   captureBrowse,
+  chartFolderLabel,
   clampHiSpeed,
   cyclePlayOptionValue,
   DEFAULT_PLAY_OPTIONS,
@@ -28,6 +29,7 @@ import {
   HISPEED_STEP,
   isListPlayOption,
   KEYS_FILTER_CYCLE,
+  libraryEntryKey,
   reduceBrowse,
   resolvePlayOptions,
   resolvePlayOptionValue,
@@ -122,6 +124,13 @@ export interface SelectSessionEvents {
    * host keeps the edit and gives the screen the library again.
    */
   levelEdit?(chart: LibraryChart, part: 'difficulty' | 'level', step: 1 | -1): void;
+  /** The player asked for the focused chart's MD5 or SHA-256 (beatoraja's Ctrl+F3 / Ctrl+Shift+F3): the host copies it. */
+  copyChartHash?(chart: LibraryChart, hash: 'md5' | 'sha256'): void;
+  /**
+   * The player asked to play the charts of the focused folder in AUTO one after the other (beatoraja's F10): the host
+   * plays them in this order. Without it the key does nothing.
+   */
+  autoplayFolder?(charts: readonly LibraryChart[]): void;
 }
 
 /** The part of the audio service the select screen uses. */
@@ -501,6 +510,20 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       case 'favorite':
         this.applyBrowse({ type: 'favorite', list: action.list }, atMs);
         return true;
+      case 'copy-hash': {
+        const chart = focusedChart(this.browseLibrary, this.browse);
+        if (chart === undefined || this.options.on.copyChartHash === undefined) return false;
+        this.options.on.copyChartHash(chart, action.hash);
+        return true;
+      }
+      case 'autoplay-folder':
+        return this.autoplayFolder();
+      case 'same-folder':
+        this.openChartFolder();
+        return true;
+      case 'readme':
+        this.toggleReadText();
+        return true;
       case 'play-option':
         this.stepPlayOption(action.key, action.step);
         return true;
@@ -836,6 +859,42 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     held.fired = true;
     const chart = this.focused();
     if (chart?.kind === 'chart') this.options.on.ranking?.(chart.chart);
+  }
+
+  /**
+   * beatoraja's F10: the charts of the focused folder, or of the list shown when the cursor is on a chart, played in AUTO
+   * one after the other by the host.
+   */
+  private autoplayFolder(): boolean {
+    if (this.options.on.autoplayFolder === undefined) return false;
+    const entry = this.focused();
+    const charts =
+      entry?.kind === 'folder'
+        ? entry.folder.charts
+        : browseEntries(this.browseLibrary, this.browse).flatMap((bar) => (bar.kind === 'chart' ? [bar.chart] : []));
+    if (charts.length === 0) return true;
+    this.options.on.autoplayFolder(charts);
+    return true;
+  }
+
+  /**
+   * beatoraja's 8: opens the root folder the focused chart is in, with the cursor on it, out of a search or a list the
+   * chart was found in. Already there, nothing happens.
+   */
+  private openChartFolder(): void {
+    const entry = this.focused();
+    if (entry?.kind !== 'chart') return;
+    const label = chartFolderLabel(entry.chart);
+    const path = this.browse.path;
+    if (path.length === 1 && path[0]?.label === label && this.browse.searchText === '') return;
+    this.restore({
+      ...captureBrowse(this.browseLibrary, this.browse),
+      folderPath: [label],
+      cursors: [0, 0],
+      focusKey: libraryEntryKey(entry),
+      searchText: '',
+    });
+    this.playCue('folderOpen');
   }
 
   /** Asks the host to step the focused chart's difficulty (↑ / ↓) or level (← / →). */

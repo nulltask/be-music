@@ -90,7 +90,7 @@ export interface PlayRouteDeps {
     'select' | 'play' | 'begin' | 'isCurrent' | 'leave' | 'show' | 'prepare'
   >;
   /** The select route: where its screen was, for its next showing to come back to. */
-  readonly selectRoute: Pick<SelectRoute, 'lastSelectNavigation'>;
+  readonly selectRoute: Pick<SelectRoute, 'lastSelectNavigation' | 'endAutoPlaylist'>;
   /** The page: the shell's `playing` class. */
   readonly elements: Pick<PlayerWebElements, 'shell'>;
   /** The library: the chart's asset source. */
@@ -444,6 +444,7 @@ export class PlayRoute {
             });
           }
         }
+        this.selectRoute.endAutoPlaylist();
         void this.showSelect();
       },
       onChartFinished: (result: PlayResult) => {

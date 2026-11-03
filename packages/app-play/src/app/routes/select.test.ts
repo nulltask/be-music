@@ -151,6 +151,10 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
       lookupChartBestRecord: vi.fn<SelectRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
       currentRulesetRecords: vi.fn<SelectRouteDeps['records']['currentRulesetRecords']>(() => new Map()),
       currentDanRanks: vi.fn<SelectRouteDeps['records']['currentDanRanks']>(() => []),
+      resolveChartHashes: vi.fn<SelectRouteDeps['records']['resolveChartHashes']>(async () => ({
+        md5: 'm',
+        sha256: 's',
+      })),
     },
     courses,
     courseRoute: { startCourse: vi.fn<SelectRouteDeps['courseRoute']['startCourse']>(async () => {}) },
@@ -653,5 +657,34 @@ describe('LR2’s held keys on the select screen', () => {
     expect(chart.playLevel).toBe(Number(String(chartEntry('a').playLevel ?? 0).match(/\d+/u)?.[0] ?? 0) + 1);
     expect(values.size).toBe(1);
     expect(scene.setLibrary).toHaveBeenCalledWith(h.deps.library.collection);
+  });
+});
+
+describe('beatoraja’s extra keys on the select screen', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test('Ctrl+F3 copies the chart’s MD5 and Ctrl+Shift+F3 its SHA-256', async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const h = harness();
+    await h.route.showSelect();
+    const { on } = lastMade(h).options;
+    on.copyChartHash!(chartEntry('a'), 'md5');
+    on.copyChartHash!(chartEntry('a'), 'sha256');
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    expect(writeText.mock.calls).toEqual([['m'], ['s']]);
+  });
+
+  test('F10 plays the folder’s charts in AUTO, one on each return, until a play is given up', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const [a, b, c] = [chartEntry('a'), chartEntry('b'), chartEntry('c')];
+    lastMade(h).options.on.autoplayFolder!([a, b, c]);
+    expect(h.deps.showDecide).toHaveBeenLastCalledWith(a, { autoPlay: true });
+    await h.route.showSelect();
+    expect(h.deps.showDecide).toHaveBeenLastCalledWith(b, { autoPlay: true });
+    h.route.endAutoPlaylist();
+    await h.route.showSelect();
+    expect(h.deps.showDecide).toHaveBeenCalledTimes(2);
   });
 });

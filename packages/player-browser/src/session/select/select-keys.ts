@@ -79,6 +79,14 @@ export type SelectKeyAction =
   | { readonly type: 'ranking' }
   /** LR2's F3: held, the arrows edit the chart's difficulty and level (`SelectSessionEvents.levelEdit`). */
   | { readonly type: 'level-edit' }
+  /** Copy the focused chart's MD5 or SHA-256 (beatoraja's Ctrl+F3 / Ctrl+Shift+F3). */
+  | { readonly type: 'copy-hash'; readonly hash: 'md5' | 'sha256' }
+  /** Play every chart of the focused folder in AUTO, one after the other (beatoraja's F10). */
+  | { readonly type: 'autoplay-folder' }
+  /** Open the folder the focused chart is in, on it (beatoraja's 8). */
+  | { readonly type: 'same-folder' }
+  /** Open or close the focused chart's text file (beatoraja's 9). */
+  | { readonly type: 'readme' }
   /** Read the library's folders again (LR2's F8, beatoraja's F2). */
   | { readonly type: 'reload' }
   /** Mark or unmark the focused chart as a favourite (beatoraja's F8 / F9). */
@@ -224,6 +232,11 @@ export function resolveSelectKeyAction(
   if (is('select.ln-mode')) return { type: 'ln-mode' };
   if (is('select.search')) return { type: 'search' };
   if (is('select.reload')) return { type: 'reload' };
+  if (is('select.copy-md5')) return { type: 'copy-hash', hash: 'md5' };
+  if (is('select.copy-sha256')) return { type: 'copy-hash', hash: 'sha256' };
+  if (is('select.autoplay-folder')) return { type: 'autoplay-folder' };
+  if (is('select.same-folder')) return { type: 'same-folder' };
+  if (is('select.readme')) return { type: 'readme' };
   if (is('select.favorite-song')) return { type: 'favorite', list: 'music' };
   if (is('select.favorite-chart')) return { type: 'favorite', list: 'charts' };
   return undefined;

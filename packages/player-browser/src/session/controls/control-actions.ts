@@ -37,6 +37,8 @@ export interface ControlActionDefinition {
    */
   readonly bare?: boolean;
   readonly bareShift?: boolean;
+  /** Taken only with exactly these of Ctrl (or ⌘) and Shift down (beatoraja's Ctrl+F3 and Ctrl+Shift+F3). */
+  readonly modifiers?: { readonly ctrl: boolean; readonly shift: boolean };
 }
 
 const both = (keys: readonly ControlActionKey[]) => ({ lr2: keys, beatoraja: keys });
@@ -183,6 +185,40 @@ export const CONTROL_ACTIONS = [
     screen: 'select',
     label: 'Reload folders',
     defaults: { lr2: [code('F8')], beatoraja: [code('F2')] },
+  },
+  {
+    id: 'select.copy-md5',
+    screen: 'select',
+    label: 'Copy MD5',
+    defaults: { beatoraja: [code('F3')] },
+    modifiers: { ctrl: true, shift: false },
+  },
+  {
+    id: 'select.copy-sha256',
+    screen: 'select',
+    label: 'Copy SHA-256',
+    defaults: { beatoraja: [code('F3')] },
+    modifiers: { ctrl: true, shift: true },
+  },
+  {
+    id: 'select.autoplay-folder',
+    screen: 'select',
+    label: 'AUTO play the folder',
+    defaults: { beatoraja: [code('F10')] },
+  },
+  {
+    id: 'select.same-folder',
+    screen: 'select',
+    label: 'Open its folder',
+    defaults: { beatoraja: [code('Digit8')] },
+    bare: true,
+  },
+  {
+    id: 'select.readme',
+    screen: 'select',
+    label: 'Text file',
+    defaults: { beatoraja: [code('Digit9')] },
+    bare: true,
   },
   {
     id: 'select.favorite-song',
@@ -411,6 +447,14 @@ export function resolveControlActions(scheme: ControlScheme, overrides?: Control
         return false;
       }
       if (definition.bareShift === true && event.shiftKey === true) return false;
+      const modifiers = definition.modifiers;
+      if (
+        modifiers !== undefined &&
+        (modifiers.ctrl !== (event.ctrlKey === true || event.metaKey === true) ||
+          modifiers.shift !== (event.shiftKey === true))
+      ) {
+        return false;
+      }
       const navigation = event.key !== undefined && NAVIGATION_KEYS.has(event.key) ? event.key : undefined;
       return keysOf(id).some((key) =>
         'code' in key ? key.code === event.code || key.code === navigation : (event.buttons ?? []).includes(key.button),

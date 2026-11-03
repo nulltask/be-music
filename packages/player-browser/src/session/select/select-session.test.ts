@@ -959,3 +959,78 @@ describe('SelectSession LR2 held keys', () => {
     expect(session.focused()).not.toEqual(focused);
   });
 });
+
+describe('SelectSession beatoraja extra keys', () => {
+  const BEATORAJA = SELECT_POLICIES.beatoraja;
+  const withModifiers = (code: string, ctrlKey: boolean, shiftKey: boolean): SessionKeyEvent => ({
+    ...keyEvent(code, code, 0),
+    ctrlKey,
+    shiftKey,
+  });
+
+  it('asks the host to copy the focused chart’s MD5 on Ctrl+F3 and its SHA-256 on Ctrl+Shift+F3', () => {
+    const copyChartHash = vi.fn();
+    const { session } = createSession({
+      policy: BEATORAJA,
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      on: { copyChartHash },
+    });
+    expect(session.handleKey(withModifiers('F3', true, false))).toBe(true);
+    expect(session.handleKey(withModifiers('F3', true, true))).toBe(true);
+    expect(copyChartHash.mock.calls).toEqual([
+      [expect.objectContaining({ id: 'a' }), 'md5'],
+      [expect.objectContaining({ id: 'a' }), 'sha256'],
+    ]);
+    // Not on F3 alone, nor on a folder bar.
+    expect(session.handleKey(withModifiers('F3', false, false))).toBe(false);
+    const root = createSession({ policy: BEATORAJA, on: { copyChartHash } });
+    expect(root.session.handleKey(withModifiers('F3', true, false))).toBe(false);
+  });
+
+  it('hands the host the charts of the focused folder, or of the list shown, on F10', () => {
+    const autoplayFolder = vi.fn();
+    const atRoot = createSession({
+      policy: BEATORAJA,
+      browse: { folderPath: [], cursors: [1] },
+      on: { autoplayFolder },
+    });
+    expect(atRoot.key('F10')).toBe(true);
+    const inFolder = createSession({
+      policy: BEATORAJA,
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      on: { autoplayFolder },
+    });
+    inFolder.key('F10');
+    const ids = autoplayFolder.mock.calls.map(([charts]) => (charts as LibraryChart[]).map((chart) => chart.id).sort());
+    expect(ids).toEqual([
+      ['a', 'b', 'c'],
+      ['a', 'b', 'c'],
+    ]);
+    // Without a host that plays them, the key is left alone.
+    expect(createSession({ policy: BEATORAJA }).key('F10')).toBe(false);
+  });
+
+  it('opens the folder the focused chart is in out of a search on 8', () => {
+    const { session, key, advance, cues } = createSession({ policy: BEATORAJA });
+    session.setSearch('?level >= 2');
+    expect(titles(advance(10))).toEqual(['a', 'c']);
+    key('ArrowDown', 'ArrowDown');
+    expect(focusedTitle(advance(10))).toBe('c');
+    key('Digit8', '8');
+    const frame = advance(10);
+    expect(titles(frame)).toEqual(['a', 'b', 'c']);
+    expect(focusedTitle(frame)).toBe('c');
+    expect(cues()).toContain('folderOpen');
+  });
+
+  it('opens the focused chart’s text file on 9', () => {
+    const readtext = vi.fn();
+    const { key } = createSession({
+      policy: BEATORAJA,
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      on: { readtext },
+    });
+    expect(key('Digit9', '9')).toBe(true);
+    expect(readtext).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+  });
+});
