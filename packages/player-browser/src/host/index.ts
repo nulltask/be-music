@@ -54,3 +54,7 @@ export {
 export type { SelectCourseMaker, SelectSessionEvents, SelectStartEntry } from '../session/select/select-session.ts';
 
 export { SceneController, createSelectController, type SceneStore } from './controllers.ts';
+
+// What a key config reads: a key press as the lane tokens it gives, and the keys a play keeps for itself.
+export { keyboardEventToTokens } from '../runtime/web-input-runtime.ts';
+export { PLAY_SCENE_KEY_CODES } from '../session/play/play-keys.ts';

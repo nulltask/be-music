@@ -996,6 +996,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.resolveDropFilePath(BENCH_BMS_FILE);
     },
   });
+  define('player-browser.keyboardEventToTokens', {
+    run: () => {
+      playerWebCoreAPI.keyboardEventToTokens({ code: 'ShiftLeft' });
+    },
+  });
   define('player-browser.resolveRendererPreference', {
     run: () => {
       playerWebCoreAPI.resolveRendererPreference('?renderer=webgl');

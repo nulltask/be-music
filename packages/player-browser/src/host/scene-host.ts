@@ -223,7 +223,7 @@ export class PixiSceneHost {
     // `strict` value would add — Pixi sets `<canvas>` width/height explicitly via `resizeTo`, but `contain: size`
     // ignores intrinsic content size during layout, which can interact poorly with the host's ResizeObserver
     // path on some browsers. `pointer-events` is intentionally left at `auto` so Pixi's hit-testing
-    // (song-select buttons, debug menu, result-screen actions) keeps working.
+    // (song-select buttons, Options dialog, result-screen actions) keeps working.
     this.app.canvas.style.contain = 'content';
     // `resizeTo` follows only the window's `resize` event. The container also changes size on its own (the page's
     // layout settles after the first chart is loaded, a side panel opens), and a canvas left at its old size draws the

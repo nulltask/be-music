@@ -1,9 +1,9 @@
-// The replay ghost's play options (the Debug Menu's Replay / ghost folder) and its sources. "Ghost" picks the replay a
+// The replay ghost's play options (the Options dialog's Replay / ghost folder) and its sources. "Ghost" picks the replay a
 // ghost plays: none (OFF), the player's own best on the chart (the replay slot keeping the highest EX score, which the
 // default auto-save rule of slot 1 keeps up to date), one replay slot, the Leaderboard's top run on the chart, or a
 // replay file the player picked. "Ghost mode" picks how it shows: a second playfield, a pacemaker alone, or a pacemaker
 // with the recorded inputs over the player's own lanes. Whether a play can show the pick is worked out here, so the
-// Debug Menu can say why not, and the play route asks for a ghost only where it shows.
+// Options dialog can say why not, and the play route asks for a ghost only where it shows.
 
 import type { GhostPresentationMode, GhostSource } from '@be-music/player-browser/host';
 import type { ChartPlayVariant } from '@be-music/chart-model';
@@ -91,7 +91,7 @@ export function resolveGhostUnavailableReason(input: GhostAvailabilityInput): Gh
   return undefined;
 }
 
-/** What the Debug Menu says of a ghost the bar under the cursor cannot show. */
+/** What the Options dialog says of a ghost the bar under the cursor cannot show. */
 export const GHOST_UNAVAILABLE_LABELS: Readonly<Record<GhostUnavailableReason, string>> = {
   family: 'Built-in skins only',
   replay: 'Not in a replay',
@@ -154,7 +154,7 @@ export function createLeaderboardGhostSource(fetchTopReplay: () => Promise<BeMus
 }
 
 /**
- * The replay file the player picked as a ghost (Debug Menu → Replay / ghost → "Ghost replay file…"), held for this
+ * The replay file the player picked as a ghost (Options dialog → Replay / ghost → "Ghost replay file…"), held for this
  * visit only. It is the ghost of the chart it was recorded on, wherever "Ghost" is REPLAY FILE.
  */
 export class GhostReplayFile {
@@ -241,7 +241,7 @@ export interface GhostBarFacts extends Omit<GhostAvailabilityInput, 'mode' | 'ha
 }
 
 /**
- * What the Debug Menu's "Ghost status" row says for the picked source and mode on the bar `facts` describe: `OFF`, why
+ * What the Options dialog's "Ghost status" row says for the picked source and mode on the bar `facts` describe: `OFF`, why
  * the bar would show no ghost, or `READY` (a Leaderboard run is only known once fetched, so it reads `READY` too).
  */
 export function resolveGhostStatus(

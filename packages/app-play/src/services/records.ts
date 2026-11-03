@@ -34,7 +34,7 @@ import { listDanRanks, mergeDanRank, readStoredDanRanks, storeDanRanks } from '.
 export interface RecordsServiceOptions {
   /** The library the charts are hashed from: the sources their files are in. */
   readonly collection: () => BrowserChartCollection;
-  /** The judge ruleset whose records the select screen shows (Debug Menu → Judgment windows). */
+  /** The judge ruleset whose records the select screen shows (Options dialog → Judgment windows). */
   readonly judgeRuleset: () => RulesetId;
 }
 

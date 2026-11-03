@@ -1,6 +1,6 @@
 import { expect, openWithLibrary, test } from './support.ts';
 
-/** Debug Menu → Library & records → Local data… lists what the player keeps in this browser, without changing it. */
+/** Options dialog → Library & records → Local data… lists what the player keeps in this browser, without changing it. */
 test('the local data viewer lists localStorage keys and IndexedDB databases, and opens a value', async ({ player }) => {
   const { page } = player;
   await openWithLibrary(player, { 'be-music.hi-speed': '3.25' });
@@ -25,7 +25,7 @@ test('the local data viewer lists localStorage keys and IndexedDB databases, and
   await expect(hiSpeed.locator('summary')).toContainText('The hi-speed the next play starts at');
   await hiSpeed.locator('summary').click();
   await expect(hiSpeed.locator('pre')).toHaveText('3.25');
-  await expect(dialog.locator('summary code', { hasText: /^be-music\.debug-menu-settings$/ })).toBeVisible();
+  await expect(dialog.locator('summary code', { hasText: /^be-music\.option-settings$/ })).toBeVisible();
 
   // The player's course database is listed with its store.
   const courses = dialog.locator('details[data-database="be-music"]');

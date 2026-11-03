@@ -4,7 +4,7 @@
 
 /** What each `localStorage` key of the player holds. */
 const LOCAL_STORAGE_KEYS: Readonly<Record<string, string>> = {
-  'be-music.debug-menu-settings': 'Every Debug Menu setting',
+  'be-music.option-settings': 'Every Options dialog setting',
   'be-music.settings-reset-pending': 'A settings reset still to send to the server',
   'be-music.chart-best-records': 'Best records of each chart, per judge ruleset',
   'be-music.hi-speed': 'The hi-speed the next play starts at',
@@ -18,7 +18,6 @@ const LOCAL_STORAGE_KEYS: Readonly<Record<string, string>> = {
   'be-music.skin-effects': 'Skin effects',
   'be-music.play-layout': 'Play layout',
   'be-music.recording-format': 'Recording format',
-  'be-music.debug-menu-folders': 'Which Debug Menu folders are open',
   'be-music.course-table-urls': 'Difficulty tables whose courses are imported on load',
   'be-music.play-in-silent-mode': 'Play sound with the device in silent mode',
   'be-music.silent-mode-hint-seen': 'The silent-mode hint was shown',

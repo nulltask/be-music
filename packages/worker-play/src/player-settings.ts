@@ -1,4 +1,4 @@
-// The Debug Menu document for one browser, and for the signed-in account when there is one.
+// The Options dialog document for one browser, and for the signed-in account when there is one.
 //
 // `__Host-be-music.device` is set with `Set-Cookie`, so it is not script-writable storage. Safari's seven-day cap
 // deletes `localStorage` and IndexedDB after seven days of Safari use without a visit; this cookie stays, and the
@@ -18,14 +18,14 @@ const KEY_PREFIX = 'player-settings';
  */
 const DOCUMENT_VERSION = 0;
 
-interface DebugMenuSettingsDocument {
+interface OptionSettingsDocument {
   version: 0;
   updatedAt: number;
   settings: Record<string, unknown>;
   deleted?: true;
 }
 
-function debugMenuSettingsDocument(value: unknown): DebugMenuSettingsDocument | undefined {
+function optionSettingsDocument(value: unknown): OptionSettingsDocument | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const { version, updatedAt, settings } = value as { version?: unknown; updatedAt?: unknown; settings?: unknown };
   if (version !== DOCUMENT_VERSION || typeof updatedAt !== 'number' || !Number.isFinite(updatedAt) || updatedAt < 0)
@@ -84,7 +84,7 @@ export async function handlePlayerSettings(
   } catch {
     return json({ error: 'json' }, 400, device.id);
   }
-  const incoming = debugMenuSettingsDocument(body);
+  const incoming = optionSettingsDocument(body);
   if (!incoming) return json({ error: 'document' }, 400, device.id);
   const deletion = request.method === 'DELETE';
   if (!deletion && incoming.deleted) return json({ error: 'document' }, 400, device.id);
@@ -96,7 +96,7 @@ export async function handlePlayerSettings(
 interface Snapshot {
   key: string;
   etag?: string;
-  document?: DebugMenuSettingsDocument;
+  document?: OptionSettingsDocument;
 }
 
 function keys(id: string, subject: string | undefined): string[] {
@@ -108,9 +108,9 @@ async function snapshots(bucket: PlayerSettingsBucket, paths: string[]): Promise
     paths.map(async (key) => {
       const object = await bucket.get(key);
       if (!object) return { key };
-      let document: DebugMenuSettingsDocument | undefined;
+      let document: OptionSettingsDocument | undefined;
       try {
-        document = debugMenuSettingsDocument(JSON.parse(await storedText(object)));
+        document = optionSettingsDocument(JSON.parse(await storedText(object)));
       } catch {
         /* Replace invalid data conditionally. */
       }
@@ -119,8 +119,8 @@ async function snapshots(bucket: PlayerSettingsBucket, paths: string[]): Promise
   );
 }
 
-function latest(documents: Array<DebugMenuSettingsDocument | undefined>): DebugMenuSettingsDocument | undefined {
-  return documents.reduce<DebugMenuSettingsDocument | undefined>(
+function latest(documents: Array<OptionSettingsDocument | undefined>): OptionSettingsDocument | undefined {
+  return documents.reduce<OptionSettingsDocument | undefined>(
     (best, item) =>
       item && (!best || item.updatedAt > best.updatedAt || (item.updatedAt === best.updatedAt && item.deleted))
         ? item
@@ -133,9 +133,9 @@ function latest(documents: Array<DebugMenuSettingsDocument | undefined>): DebugM
 async function storeNewer(
   bucket: PlayerSettingsBucket,
   paths: string[],
-  incoming: DebugMenuSettingsDocument,
+  incoming: OptionSettingsDocument,
   deletion: boolean,
-): Promise<DebugMenuSettingsDocument | undefined> {
+): Promise<OptionSettingsDocument | undefined> {
   // A reset retains its revision only, so delayed pre-reset writes cannot recreate deleted values.
   let candidate = incoming;
   for (let attempt = 0; attempt < 8; attempt++) {
