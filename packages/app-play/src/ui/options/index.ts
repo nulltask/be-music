@@ -79,6 +79,7 @@ import { buildKeyConfigFolder } from './keys.ts';
 import { relabelOptions } from './labels.ts';
 import { buildTempoFolder } from './tempo.ts';
 import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
+import { releaseFocusOnClose } from '../dialog-focus.ts';
 /**
  * What the Options dialog needs from the app: the settings and stores its controllers change, readers of what the app has
  * loaded and shows, and the app's actions its controllers start. The actions keep the names of the app's methods.
@@ -404,16 +405,8 @@ export class OptionsDialog {
       }
       this.reportExpanded?.(event.expanded);
     });
-    // The header repaints its gear as the dialog opens and closes, so focus goes back to the gear there now rather than
-    // to the one that opened the dialog; in fullscreen, to the surface's own button.
-    dialog.addEventListener('close', () => {
-      const opener = document.querySelector<HTMLButtonElement>('#options-open');
-      const target =
-        opener !== null && opener.offsetParent !== null
-          ? opener
-          : document.querySelector<HTMLButtonElement>('[data-service-header="settings"]');
-      target?.focus();
-    });
+    // Closed, the keys go back to the play: left on the gear, Enter (meant to start the chart) would open it again.
+    releaseFocusOnClose(dialog);
     dialog.querySelector('#options-modal-close')?.addEventListener('click', () => (gui.expanded = false));
     // Fullscreen covers the play surface and leaves the header out, so the surface has its own Options button then.
     document.querySelector('#options-open')?.addEventListener('click', () => (gui.expanded = true));
