@@ -3,6 +3,7 @@ import {
   hellChargeZigzag,
   layoutTabularRun,
   longNoteCentreLineAlpha,
+  noteHeightForLane,
   resolveHellChargeLook,
   resolveLongNoteMarks,
   type BeMusicLaneKind,
@@ -52,7 +53,6 @@ const NOTE_COLORS: Record<BeMusicLaneKind, string> = {
   'wheel-up': '#ffa8b3',
   'wheel-down': '#ffa8b3',
 };
-const NOTE_HEIGHT = 6;
 const BOMB_LIFETIME_MS = 300;
 
 /** The BMS BGA canvas the BGA rect stands for. */
@@ -165,7 +165,9 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
   }
   ctx.globalAlpha = 1;
   for (const note of data.longNotes) {
-    const bodyTop = note.top - NOTE_HEIGHT;
+    // A note is as tall as a share of its lane's width, standing on its bottom edge.
+    const noteHeight = noteHeightForLane(note.w);
+    const bodyTop = note.top - noteHeight;
     const bodyHeight = Math.max(1, note.bottom - note.top);
     // The kinds apart by shape (`resolveLongNoteMarks`): an HCN's centre line zigzags, a BSS's tail carries a chevron.
     const marks = resolveLongNoteMarks(note);
@@ -177,7 +179,7 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
       if (look.glow > 0) {
         ctx.globalAlpha = 0.3 * look.glow * capAlpha;
         ctx.fillRect(note.x - 3, bodyTop, note.w + 6, bodyHeight);
-        ctx.fillRect(note.x - 3, note.bottom - NOTE_HEIGHT - 3, note.w + 6, NOTE_HEIGHT + 6);
+        ctx.fillRect(note.x - 3, note.bottom - noteHeight - 3, note.w + 6, noteHeight + 6);
       }
       ctx.globalAlpha = (0.2 + 0.3 * look.glow) * capAlpha;
       ctx.fillRect(note.x, bodyTop, note.w, bodyHeight);
@@ -211,13 +213,13 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
     }
     ctx.fillStyle = NOTE_COLORS[note.kind];
     ctx.globalAlpha = capAlpha;
-    ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.fillRect(note.x, note.bottom - noteHeight, note.w, noteHeight);
     if (!marks.judgedTail) ctx.globalAlpha *= 0.4;
-    ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.fillRect(note.x, note.top - noteHeight, note.w, noteHeight);
     if (marks.backSpin) {
       ctx.globalAlpha = capAlpha;
       ctx.fillStyle = '#ffffff';
-      const points = backSpinChevron(note.x, note.w, note.top, NOTE_HEIGHT);
+      const points = backSpinChevron(note.x, note.w, note.top, noteHeight);
       ctx.beginPath();
       ctx.moveTo(points[0]!, points[1]!);
       for (let index = 2; index < points.length; index += 2) ctx.lineTo(points[index]!, points[index + 1]!);
@@ -227,17 +229,19 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
     ctx.globalAlpha = 1;
   }
   for (const note of data.notes) {
+    const noteHeight = noteHeightForLane(note.w);
     ctx.globalAlpha = note.alpha ?? 1;
     ctx.fillStyle = NOTE_COLORS[note.kind];
-    ctx.fillRect(note.x, note.y - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.fillRect(note.x, note.y - noteHeight, note.w, noteHeight);
   }
   // A mine reads as something to avoid: a red bar with a dark core, unlike any playable note.
   for (const mine of data.mines) {
+    const noteHeight = noteHeightForLane(mine.w);
     ctx.globalAlpha = mine.alpha ?? 1;
     ctx.fillStyle = '#ff5c6c';
-    ctx.fillRect(mine.x, mine.y - NOTE_HEIGHT, mine.w, NOTE_HEIGHT);
+    ctx.fillRect(mine.x, mine.y - noteHeight, mine.w, noteHeight);
     ctx.fillStyle = '#10151f';
-    ctx.fillRect(mine.x + 2, mine.y - NOTE_HEIGHT + 2, Math.max(0, mine.w - 4), NOTE_HEIGHT - 4);
+    ctx.fillRect(mine.x + 2, mine.y - noteHeight + 2, Math.max(0, mine.w - 4), Math.max(0, noteHeight - 4));
   }
   ctx.globalAlpha = 1;
 }

@@ -26,6 +26,21 @@ export const _____LANE_WIDTHS = { scratch: 41, white: 24, black: 19 } as const;
  */
 export const _____DP_SIDE_GAP = 60;
 
+/**
+ * A note's height as a share of its lane's width. On the arcade cabinet a white key's note is about 7 px tall in a 32 px
+ * lane, a black key's 5 px in 25 px: about 0.21 either way, so a wider lane draws a thicker note.
+ */
+export const NOTE_HEIGHT_LANE_RATIO = 0.21;
+
+/**
+ * The height to draw a note at in a lane `laneWidth` wide: {@link NOTE_HEIGHT_LANE_RATIO} of it, rounded to whole px
+ * and at least 2 px. The note still stands on its bottom edge, the judgement position.
+ */
+export function noteHeightForLane(laneWidth: number): number {
+  if (!Number.isFinite(laneWidth) || laneWidth <= 0) return 2;
+  return Math.max(2, Math.round(laneWidth * NOTE_HEIGHT_LANE_RATIO));
+}
+
 export interface FixedLaneWidths {
   scratch: number;
   /** Odd-numbered keys (1 / 3 / 5 / 7). */
