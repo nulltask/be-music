@@ -2,7 +2,7 @@ import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 import { resolveGaugeTypes } from '@be-music/player-engine/ruleset';
 // The Debug Menu's Play options folder and the Replay / ghost folder inside it. They are built with the menu as `this`
 // (`DebugMenu`).
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from '../options-controls.ts';
 import {
   DIFFICULTY_FILTER_CYCLE,
   CLASSIC_HI_SPEED_STEPS,
@@ -30,7 +30,7 @@ import { buildPracticeRangePicker } from './practice-range.ts';
  * song start and DISABLED during a play. The ones a play takes live (hi-speed, the covers and LIFT, the judge timing
  * and CONSTANT visibility) and the select screen's sort and filters, which a play does not read, stay enabled.
  */
-export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void {
+export function buildPlayOptionsFolder(this: DebugMenu, folder: OptionContainer): void {
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
   trackPlayOption(
     folder.addBinding(this.guiState, 'autoPlay', { label: 'Auto play' }).on('change', ({ value }) => {
@@ -616,7 +616,7 @@ export function buildPlayOptionsFolder(this: DebugMenu, folder: FolderApi): void
  * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own; and the ghost shown beside a play. Read when a play
  * starts, so disabled during one.
  */
-export function buildReplayViewFolder(this: DebugMenu, folder: FolderApi): void {
+export function buildReplayViewFolder(this: DebugMenu, folder: OptionContainer): void {
   const remember = () => storeReplayView(this.guiState.replayView);
   const labels = { tempo: 'Tempo', hiSpeed: 'Hi-speed', covers: 'SUDDEN+ / HIDDEN+', lift: 'LIFT' } as const;
   for (const key of ['tempo', 'hiSpeed', 'covers', 'lift'] as const) {

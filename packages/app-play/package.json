@@ -26,12 +26,10 @@
     "@be-music/shared-utils": "workspace:*",
     "@be-music/skin-beatoraja": "workspace:*",
     "@be-music/skin-lr2": "workspace:*",
-    "fflate": "^0.8.3",
-    "tweakpane": "^4.0.5"
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@tweakpane/core": "^2.0.5",
     "basecoat-css": "^1.0.2",
     "tailwindcss": "^4.3.3",
     "vite": "catalog:",

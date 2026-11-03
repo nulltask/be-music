@@ -18,7 +18,7 @@ export interface PlayerHeaderAccount {
 }
 
 export interface PlayerHeaderActions {
-  /** Opens the existing Debug Menu when it is closed, and closes it when it is open. `null` clears a binding. */
+  /** Opens the Options dialog when it is closed, and closes it when it is open. `null` clears a binding. */
   toggleDebugMenu?: (() => void) | null;
   /** Opens the Help dialog. `null` clears a binding. */
   openHelp?: (() => void) | null;
@@ -43,7 +43,7 @@ let host: HTMLElement | undefined;
 let pendingMenu = false;
 let pendingSignIn = false;
 let pendingHelp = false;
-/** Whether the Debug Menu pane is expanded. The gear's `aria-expanded` follows it. */
+/** Whether the Options dialog is open. The gear's `aria-expanded` follows it. */
 let settingsOpen = false;
 
 /** The document the header's fullscreen button reads. Fullscreen covers the play surface (`#main`) on every device. */
@@ -89,7 +89,7 @@ export function playerServiceHeaderHTML(input: {
   account?: PlayerHeaderAccount;
   /** The page is fullscreen, so the button offers to leave. */
   fullscreenActive?: boolean;
-  /** The Debug Menu is open, so the gear is expanded. */
+  /** The Options dialog is open, so the gear is expanded. */
   settingsOpen?: boolean;
 }): string {
   const signedIn: ServiceHeaderAccount | undefined =
@@ -146,7 +146,7 @@ export function setPlayerHeaderAccount(next: PlayerHeaderAccount | undefined): v
   paint();
 }
 
-/** The gear's `aria-expanded` follows the existing Debug Menu pane. */
+/** The gear's `aria-expanded` follows the Options dialog. */
 export function setPlayerHeaderSettingsOpen(open: boolean): void {
   if (settingsOpen === open) return;
   settingsOpen = open;

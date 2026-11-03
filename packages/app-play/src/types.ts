@@ -17,8 +17,8 @@ export interface PlayerWebElements {
   stage: HTMLDivElement;
   shell: HTMLDivElement;
   /**
-   * Hidden `<input type="file" webkitdirectory>` triggered from a Tweakpane function controller. The DOM element survives
-   * across Tweakpane rebuilds (e.g. theme changes) so the underlying `change` listener stays bound through the session.
+   * Hidden `<input type="file" webkitdirectory>` the Options dialog's "Open folder" button clicks. The DOM element stays
+   * for the session, so its `change` listener stays bound however the dialog's controls are rebuilt (theme changes).
    */
   chartInput: HTMLInputElement;
   /**
@@ -58,10 +58,10 @@ export type SkinFamilyOverride = SkinFamilyId | 'auto';
 export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
 
 /**
- * Plain-data state object backing the Tweakpane controllers. Each key matches a controller; reads / writes go through the
+ * Plain-data state object backing the Options dialog's controls. Each key matches a control; reads / writes go through the
  * same `state.foo` reference so a programmatic update (e.g. `setAudioCompressor` triggered by a URL flag) can call
- * `controller.updateDisplay()` and the GUI reflects the new value. Function members are bound to the host so `this`
- * keeps its meaning when Tweakpane invokes them.
+ * `controller.refresh()` and the dialog reflects the new value. Function members are bound to the host so `this` keeps
+ * its meaning when a button invokes them.
  */
 export interface PlayerGUIState extends PlayTempoSettings {
   autoPlay: boolean;

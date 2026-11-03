@@ -2,10 +2,10 @@ import { selectBinding, monitorFrameRate } from '../../pane-controls.ts';
 import { getBrowserWorkerCount, setBrowserWorkerCount } from '@be-music/player-browser/compute';
 import { storeWorkerCount } from '../../worker-settings.ts';
 // The Debug Menu's Developer folder. It is built with the menu as `this` (`DebugMenu`).
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from '../options-controls.ts';
 import type { DebugMenu } from './index.ts';
 /** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
-export function buildDeveloperFolder(this: DebugMenu, developer: FolderApi): void {
+export function buildDeveloperFolder(this: DebugMenu, developer: OptionContainer): void {
   const compute = { workers: getBrowserWorkerCount() };
   developer
     .addBinding(compute, 'workers', {

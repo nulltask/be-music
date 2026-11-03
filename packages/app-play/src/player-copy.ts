@@ -112,8 +112,7 @@ const en = {
     notSignedIn: 'Not signed in',
     anonymous: 'anonymous',
     passkey: (count: number) => `${count} passkey${count === 1 ? '' : 's'}`,
-    chipSignedOutTitle:
-      'Not signed in to the Leaderboard. Open the Debug Menu’s Leaderboard folder to sign in with a passkey.',
+    chipSignedOutTitle: 'Not signed in to the Leaderboard. Open Options → Leaderboard to sign in with a passkey.',
     chipAnonymousTitle:
       'Signed in anonymously: create a passkey to keep this account and show its plays on the Leaderboard.',
     chipSignedInTitle: (name: string, handle: string) =>
@@ -396,8 +395,7 @@ const ja: typeof en = {
     notSignedIn: 'ログインしていません',
     anonymous: '匿名',
     passkey: (count) => `パスキー ${count}`,
-    chipSignedOutTitle:
-      'Leaderboard にログインしていません。デバッグメニューの Leaderboard からパスキーでログインできます。',
+    chipSignedOutTitle: 'Leaderboard にログインしていません。Options の Leaderboard からパスキーでログインできます。',
     chipAnonymousTitle: '匿名でログイン中です。パスキーを作ると、このアカウントとプレイを Leaderboard に残せます。',
     chipSignedInTitle: (name, handle) => `${name}（@${handle}）でログイン中です。Leaderboard のページを開きます。`,
     startSignedOutHint: 'プレイを送る前に Accounts でログインしてください。ゲストアカウントから始められます。',

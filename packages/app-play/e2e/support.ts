@@ -7,7 +7,7 @@ import type { TestHookBar, TestHookState } from '../src/test-hook.ts';
 /**
  * The page helpers the specs share: opening the player with the test hook, dropping fixture folders the way a person
  * drops them (a synthetic `drop` of `File`s with `webkitRelativePath`, as `docs/player-web.md#browser-verification` describes), keys
- * with a `code`, the Debug Menu's controls, and waits on `window.__beMusicTest` state.
+ * with a `code`, the Options dialog's controls, and waits on `window.__beMusicTest` state.
  */
 
 /** Where the fixture files are served on the page's own origin (intercepted, never reaching the preview server). */
@@ -269,29 +269,30 @@ export class Player {
   }
 
   /**
-   * Sets a Debug Menu control: `folder` is the folder titles from the top (`['Play options']`), `name` the control's
-   * label. Checkboxes take a boolean, sliders a number, drop-downs the option's label.
+   * Sets an Options control: `folder` is the section and folder titles from the top (`['Play options']`; the tabs are
+   * left out), `name` the control's label. Switches take a boolean, sliders and number fields a number, selects the
+   * option's label. The dialog stays as it is: the control is set closed too.
    */
   async setOption(folder: readonly string[], name: string, value: boolean | number | string): Promise<void> {
     await this.control(folder, name, { set: value });
   }
 
-  /** A Debug Menu control's value: a checkbox's state, a slider's number, a drop-down's option label. */
+  /** An Options control's value: a switch's state, a slider's number, a select's option label. */
   async readOption(folder: readonly string[], name: string): Promise<boolean | number | string> {
     return (await this.control(folder, name, {})).value;
   }
 
-  /** Whether a Debug Menu control can be changed now. */
+  /** Whether an Options control can be changed now. */
   async optionEnabled(folder: readonly string[], name: string): Promise<boolean> {
     return (await this.control(folder, name, {})).enabled;
   }
 
-  /** Clicks a Debug Menu button. */
+  /** Clicks an Options button. */
   async pressOption(folder: readonly string[], name: string): Promise<void> {
     await this.control(folder, name, { press: true });
   }
 
-  /** Finds a Debug Menu control by its folder titles and label, optionally sets or presses it, and reads it back. */
+  /** Finds an Options control by its section and folder titles and its label, optionally sets or presses it, and reads it back. */
   private async control(
     folder: readonly string[],
     name: string,
@@ -299,47 +300,44 @@ export class Player {
   ): Promise<{ value: boolean | number | string; enabled: boolean }> {
     return this.page.evaluate(
       ({ folder, name, action }) => {
-        let gui = document.querySelector<HTMLElement>('[data-pane="debug"]');
-        if (gui === null) throw new Error('no Debug Menu');
-        // Tab pages are transparent to the existing folder paths.
-        const children = (content: Element | null): Element[] =>
-          [...(content?.children ?? [])].flatMap((child) =>
-            child.classList.contains('tp-tabv')
-              ? [...child.querySelectorAll(':scope > .tp-tabv_c > .tp-tbpv > .tp-tbpv_c')].flatMap(children)
-              : [child],
-          );
-        const revealTab = (element: Element): void => {
-          const page = element.closest('.tp-tbpv');
-          const tab = page?.parentElement?.closest('.tp-tabv');
-          if (!page || !tab) return;
-          const pages = [...tab.querySelectorAll(':scope > .tp-tabv_c > .tp-tbpv')];
-          tab
-            .querySelectorAll<HTMLButtonElement>(':scope > .tp-tabv_t > .tp-tbiv > button')
-            [pages.indexOf(page)]?.click();
+        const root = document.querySelector<HTMLElement>('[data-pane="options"]');
+        if (root === null) throw new Error('no Options dialog');
+        // The folder a section, folder or row sits in: the nearest one around it, or the dialog. Tabs are transparent.
+        const folderOf = (node: Element): Element =>
+          node.parentElement?.closest('[data-options-folder], [data-pane="options"]') ?? root;
+        const titleOf = (node: Element): string | undefined =>
+          node
+            .querySelector(':scope > summary .options-folder-title, :scope > h3 .options-folder-title')
+            ?.textContent?.trim();
+        // Selects every tab the node sits in, so a screenshot or a click finds it shown.
+        const revealTab = (node: Element): void => {
+          for (
+            let panel = node.closest('[role="tabpanel"]');
+            panel !== null;
+            panel = panel.parentElement?.closest('[role="tabpanel"]') ?? null
+          ) {
+            document.getElementById(panel.getAttribute('aria-labelledby') ?? '')?.click();
+          }
         };
+        let current: Element = root;
         for (const title of folder) {
-          const content: Element | null = gui.querySelector(':scope > .tp-rotv_c, :scope > .tp-fldv_c');
-          gui =
-            children(content)
-              .filter(
-                (candidate): candidate is HTMLElement =>
-                  candidate instanceof HTMLElement && candidate.classList.contains('tp-fldv'),
-              )
-              .find(
-                (candidate) => candidate.querySelector(':scope > .tp-fldv_b .tp-fldv_t')?.textContent?.trim() === title,
-              ) ?? null;
-          if (gui === null) throw new Error(`no Debug Menu folder ${title}`);
-          revealTab(gui);
+          const next = [...current.querySelectorAll('[data-options-folder]')].find(
+            (candidate) => folderOf(candidate) === current && titleOf(candidate) === title,
+          );
+          if (next === undefined) throw new Error(`no Options folder ${title}`);
+          revealTab(next);
+          current = next;
         }
-        const content = gui.querySelector(':scope > .tp-rotv_c, :scope > .tp-fldv_c');
-        const controller = children(content).find((candidate) => {
-          const label = candidate.querySelector('.tp-lblv_l')?.textContent?.trim();
+        const controller = [...current.querySelectorAll('.options-row')].find((candidate) => {
+          if (folderOf(candidate) !== current) return false;
+          const label = candidate.querySelector('.options-label')?.textContent?.trim();
           return (label || candidate.querySelector('button')?.textContent?.trim()) === name;
         });
-        if (controller === undefined) throw new Error(`no Debug Menu control ${[...folder, name].join(' / ')}`);
+        if (controller === undefined) throw new Error(`no Options control ${[...folder, name].join(' / ')}`);
         revealTab(controller);
         const select = controller.querySelector('select');
-        const input = controller.querySelector('input');
+        // A slider row has its number field first, which takes an exact value.
+        const input = controller.querySelector<HTMLInputElement>('input:not([type="range"])');
         const button = controller.querySelector('button');
         const value = action.set;
         if (action.press === true) {
@@ -365,7 +363,9 @@ export class Player {
             : input?.type === 'checkbox'
               ? input.checked
               : input !== null
-                ? Number(input.value)
+                ? input.type === 'number'
+                  ? Number(input.value)
+                  : input.value
                 : '';
         return { value: read, enabled: !(select?.disabled || input?.disabled || button?.disabled) };
       },

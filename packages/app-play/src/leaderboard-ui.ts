@@ -1,7 +1,7 @@
 import { setDisabled, type PaneBinding } from './pane-controls.ts';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import type { LibraryChart } from '@be-music/player-scene-model';
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from './ui/options-controls.ts';
 
 import {
   createLeaderboardPasskey,
@@ -84,7 +84,7 @@ export class LeaderboardPanel {
     });
   }
   /** Fills the Debug Menu's Leaderboard folder. */
-  buildFolder(folder: FolderApi): void {
+  buildFolder(folder: OptionContainer): void {
     // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
     // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
     const settings = this.host.settings();

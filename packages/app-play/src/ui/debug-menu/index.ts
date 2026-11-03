@@ -1,7 +1,7 @@
-// The player's Tweakpane "Debug Menu": its folders, the controllers the app reaches after building them, and the locks a
-// play puts on them. Each folder is built in a module of its own (`play-options.ts`, `tempo.ts`, …) with the menu as
-// `this`; the folder titles and the remembered open states are `folders.ts`'. The menu reaches the app only through
-// `DebugMenuDeps`, which the app (`app/app.ts`) builds.
+// The player's Options dialog (still `DebugMenu` in code and storage keys): its tabs and folders, the controllers the
+// app reaches after building them, and the locks a play puts on them. Each folder is built in a module of its own
+// (`play-options.ts`, `tempo.ts`, …) with the menu as `this`; the tabs, the folder titles and the remembered open states
+// are `folders.ts`'. The menu reaches the app only through `DebugMenuDeps`, which the app (`app/app.ts`) builds.
 import type { BeatorajaSkinConfig, BeatorajaSkinHeader } from '@be-music/skin-beatoraja';
 import type { LR2DiscoveredTheme } from '@be-music/skin-lr2';
 import type { TunableCompressor } from '@be-music/player-browser/audio';
@@ -16,9 +16,13 @@ import {
   type PlayOptions,
 } from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
-// Tweakpane injects its component stylesheet; the app themes it with public CSS variables.
-import { Pane, type FolderApi, type BladeApi, type ButtonApi, type ListInputBindingApi } from 'tweakpane';
-import { playerFullscreenElement } from '../../fullscreen.ts';
+import {
+  OptionFolder,
+  type OptionBinding,
+  type OptionButton,
+  type OptionContainer,
+  type OptionRow,
+} from '../options-controls.ts';
 import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
 import {
   migrateOptionValue,
@@ -56,7 +60,13 @@ import {
 } from './compressor.ts';
 import { buildCourseFolder } from './course.ts';
 import { buildDeveloperFolder } from './developer.ts';
-import { DEBUG_MENU_FOLDERS, readFolderOpenStates, rememberFolderOpenStates, type DebugMenuFolder } from './folders.ts';
+import {
+  DEBUG_MENU_FOLDERS,
+  OPTIONS_TABS,
+  readFolderOpenStates,
+  rememberFolderOpenStates,
+  type DebugMenuFolder,
+} from './folders.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
 import {
@@ -154,9 +164,9 @@ export interface DebugMenuDeps {
   applyBeatorajaPlaySkinConfig(entryPath: string, config: BeatorajaSkinConfig): Promise<void>;
 }
 /**
- * The Debug Menu (top-right, collapsed on arrival). {@link buildGUI} makes it; then the app reaches it through the
- * methods it calls on a change of its own: a theme load rebuilds the pickers, a status line repaints the status row, a
- * play locks the options it latched ({@link lockForPlay}) and its end unlocks them ({@link unlockAfterPlay}).
+ * The Options dialog, opened from the header's Settings button. {@link buildGUI} makes it; then the app reaches it
+ * through the methods it calls on a change of its own: a theme load rebuilds the pickers, a status line repaints the
+ * status row, a play locks the options it latched ({@link lockForPlay}) and its end unlocks them ({@link unlockAfterPlay}).
  *
  * The folders are built by functions in modules of their own, which run with the menu as `this`, so the controllers
  * and helpers they reach are public members.
@@ -179,7 +189,7 @@ export class DebugMenu {
    * 24K / 24Kdp / Music Select / Decide / Result / etc.). Empty until a beatoraja theme is
    * dropped — `rebuildBeatorajaSkinPickers` (re-)populates it from `beatorajaTheme.entries`.
    */
-  public beatorajaSkinPickerFolder: FolderApi | undefined;
+  public beatorajaSkinPickerFolder: OptionContainer | undefined;
   /**
    * Active controllers inside {@link beatorajaSkinPickerFolder}, keyed by scene type. Cleared
    * and rebuilt on each `rebuildBeatorajaSkinPickers` call so dropdown options stay in sync with
@@ -190,20 +200,20 @@ export class DebugMenu {
   public activeSkinSystem: SkinFamilyOverride = 'auto';
   /** The Debug Menu's "Render resolution" dropdown and "Auto-detect resolution" button. */
   public resolutionPicker: PaneBinding | undefined;
-  public autoDetectResolutionControl: ButtonApi | undefined;
+  public autoDetectResolutionControl: OptionButton | undefined;
   /** Whether a render resolution benchmark is running. */
   public detectingResolution = false;
   /** Whether this visit already scheduled the first-run benchmark. */
   public firstRunResolutionScheduled = false;
   /**
-   * Tweakpane handles for controllers we need to address by name after construction — toggling the per-stage folder
-   * visibility, renaming the record button, and reflecting URL-driven compressor changes in the pane.
+   * Handles for controllers we need to address by name after construction — toggling the per-stage folder
+   * visibility, renaming the record button, and reflecting URL-driven compressor changes in the dialog.
    */
-  public gui: Pane | undefined;
-  public compressorStageFolder: FolderApi | undefined;
+  public gui: OptionFolder | undefined;
+  public compressorStageFolder: OptionContainer | undefined;
   /** Compressor tuning in slider units, restored from the last visit; seeds every gameplay mount. */
   public readonly compressorTunings: Record<TunableCompressor, CompressorTuning> = readStoredCompressorTunings();
-  public recordController: ButtonApi | undefined;
+  public recordController: OptionButton | undefined;
   /**
    * "Auto-save replays" checkbox controller. Held so the play-start path sets `disabled` for the duration
    * of a play — the replay options are latched when a song starts and cannot change mid-song — and the result /
@@ -220,7 +230,7 @@ export class DebugMenu {
   public hiSpeedController: PaneBinding | undefined;
   public judgeTimingController: PaneBinding | undefined;
   public judgeTimingAutoAdjustController: PaneBinding | undefined;
-  public hsFixController: ListInputBindingApi<PlayOptions['hsFix']> | undefined;
+  public hsFixController: OptionBinding<PlayOptions['hsFix']> | undefined;
   public fixedDisplayAreaController: PaneBinding | undefined;
   public floatingHiSpeedController: PaneBinding | undefined;
   public floatingSpeedController: PaneBinding | undefined;
@@ -230,48 +240,48 @@ export class DebugMenu {
   public classicSpeedController: PaneBinding | undefined;
   public randomSeed1PController: PaneBinding | undefined;
   public randomSeed2PController: PaneBinding | undefined;
-  public random1PController: ListInputBindingApi<PlayOptions['random1P']> | undefined;
-  public random2PController: ListInputBindingApi<PlayOptions['random2P']> | undefined;
-  public gaugeController: ListInputBindingApi<GaugeType> | undefined;
-  public bottomShiftableGaugeController: ListInputBindingApi<PlayOptions['bottomShiftableGauge']> | undefined;
-  public gaugeAutoShiftController: ListInputBindingApi<PlayOptions['gaugeAutoShift']> | undefined;
-  public longNoteModifierController: ListInputBindingApi<PlayOptions['longNoteModifier']> | undefined;
+  public random1PController: OptionBinding<PlayOptions['random1P']> | undefined;
+  public random2PController: OptionBinding<PlayOptions['random2P']> | undefined;
+  public gaugeController: OptionBinding<GaugeType> | undefined;
+  public bottomShiftableGaugeController: OptionBinding<PlayOptions['bottomShiftableGauge']> | undefined;
+  public gaugeAutoShiftController: OptionBinding<PlayOptions['gaugeAutoShift']> | undefined;
+  public longNoteModifierController: OptionBinding<PlayOptions['longNoteModifier']> | undefined;
   public longNoteRateController: PaneBinding | undefined;
-  public sevenToNinePatternController: ListInputBindingApi<PlayOptions['sevenToNinePattern']> | undefined;
-  public sevenToNineTypeController: ListInputBindingApi<PlayOptions['sevenToNineType']> | undefined;
-  public battleModeController: ListInputBindingApi<PlayOptions['battleMode']> | undefined;
+  public sevenToNinePatternController: OptionBinding<PlayOptions['sevenToNinePattern']> | undefined;
+  public sevenToNineTypeController: OptionBinding<PlayOptions['sevenToNineType']> | undefined;
+  public battleModeController: OptionBinding<PlayOptions['battleMode']> | undefined;
   public dBattleScratchController: PaneBinding | undefined;
-  public gauge2PController: ListInputBindingApi<PlayOptions['gauge2P']> | undefined;
+  public gauge2PController: OptionBinding<PlayOptions['gauge2P']> | undefined;
   public mRanControllers: PaneBinding[] = [];
   public lr2ExtraModeController: PaneBinding | undefined;
   public anyKeyController: PaneBinding | undefined;
-  public lr2ExtraLevelController: ListInputBindingApi<PlayOptions['lr2ExtraLevel']> | undefined;
+  public lr2ExtraLevelController: OptionBinding<PlayOptions['lr2ExtraLevel']> | undefined;
   public extraNoteDepthController: PaneBinding | undefined;
   public customJudgeController: PaneBinding | undefined;
   /** PRACTICE toggle first, then its settings. */
   public practiceControllers: PaneBinding[] = [];
   /** The row carrying the PRACTICE range picker, shown while PRACTICE is on. */
-  public practiceRangeBlade: BladeApi | undefined;
+  public practiceRangeBlade: OptionRow | undefined;
   /** The PRACTICE range picker (#948), which follows the chart under the select screen's cursor. */
   public practiceRangePicker: PracticeRangePicker | undefined;
   /** PRACTICE's GAUGE TYPE: the judge ruleset's own gauges. */
-  public practiceGaugeController: ListInputBindingApi<PlayOptions['practiceGauge']> | undefined;
+  public practiceGaugeController: OptionBinding<PlayOptions['practiceGauge']> | undefined;
   /** PRACTICE's GAUGE CATEGORY, which only beatoraja has. */
   public practiceGaugeCategoryController: PaneBinding | undefined;
   /** PRACTICE's JUDGERANK and TOTAL, which That-Which-Must-Not-Be-Named does not read. */
   public practiceJudgeRankAndTotalControllers: PaneBinding[] = [];
-  public longNoteModeController: ListInputBindingApi<PlayOptions['longNoteMode']> | undefined;
+  public longNoteModeController: OptionBinding<PlayOptions['longNoteMode']> | undefined;
   public customJudgeRateControllers: PaneBinding[] = [];
   public extraNoteScratchController: PaneBinding | undefined;
-  public mineModifierController: ListInputBindingApi<PlayOptions['mineModifier']> | undefined;
-  public scrollModifierController: ListInputBindingApi<PlayOptions['scrollModifier']> | undefined;
+  public mineModifierController: OptionBinding<PlayOptions['mineModifier']> | undefined;
+  public scrollModifierController: OptionBinding<PlayOptions['scrollModifier']> | undefined;
   public scrollSectionController: PaneBinding | undefined;
   public scrollRateController: PaneBinding | undefined;
-  public judgeAlgorithmController: ListInputBindingApi<PlayOptions['judgeAlgorithm']> | undefined;
+  public judgeAlgorithmController: OptionBinding<PlayOptions['judgeAlgorithm']> | undefined;
   /** "Ghost" (Replay / ghost): which replay a ghost plays. Disabled during a play, and on a course bar. */
-  public ghostController: ListInputBindingApi<GhostSourceSetting> | undefined;
+  public ghostController: OptionBinding<GhostSourceSetting> | undefined;
   /** "Ghost mode": how the ghost shows. Disabled with "Ghost". */
-  public ghostModeController: ListInputBindingApi<GhostModeSetting> | undefined;
+  public ghostModeController: OptionBinding<GhostModeSetting> | undefined;
   /** "Ghost status": whether the bar under the cursor would show the picked ghost, or why not. */
   public ghostStatusController: PaneBinding | undefined;
   /** What "Ghost status" shows. */
@@ -283,21 +293,21 @@ export class DebugMenu {
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
   /** Debug Menu folder holding the active Be-Music Skin's settings; hidden for a skin that declares none. */
-  public skinSettingsFolder: FolderApi | undefined;
+  public skinSettingsFolder: OptionContainer | undefined;
   /** The Debug Menu's "Skin & display" folder, with the common family and display controls. */
-  public skinFolder: FolderApi | undefined;
+  public skinFolder: OptionContainer | undefined;
   /** LR2 tab holding the discovered theme picker. */
-  public lr2SkinPage: Pick<FolderApi, 'addBinding'> | undefined;
+  public lr2SkinPage: Pick<OptionContainer, 'addBinding'> | undefined;
   /** Native list whose options follow loaded theme families without replacing its event handlers. */
-  public skinFamilyController: ListInputBindingApi<SkinFamilyOverride> | undefined;
+  public skinFamilyController: OptionBinding<SkinFamilyOverride> | undefined;
   /** Native theme list, refreshed as drops discover new themes. */
-  public lr2ThemeController: ListInputBindingApi<string> | undefined;
+  public lr2ThemeController: OptionBinding<string> | undefined;
   /**
    * The Debug Menu's skin controls that make the select screen again: Built-in skin, Skin effects, the Add skin
    * buttons and the LR2 theme picker. They are disabled during a play ({@link playLock}), since going back to the
    * select screen would end it. Skin system stays enabled: it swaps the play's family without leaving the chart.
    */
-  public readonly skinControllers: BladeApi[] = [];
+  public readonly skinControllers: OptionRow[] = [];
   /** The locks a play puts on the options it latched and on the skin controls, and whether one runs. */
   public readonly playLock: PlayLock = new PlayLock(() => ({
     replaySave: this.replaySaveController,
@@ -361,76 +371,84 @@ export class DebugMenu {
   public setPlayOptions(changes: Partial<PlayOptions>): void {
     this.deps.setPlayOptions(changes);
   }
-  /** The header gear follows this pane, including a click on the pane's own title. */
+  /** The header gear follows the Options dialog: open, closed with its close button, Escape or a backdrop click. */
   private reportExpanded: ((open: boolean) => void) | undefined;
-  /** Reports when the existing pane opens or closes. */
+  /** Reports when the Options dialog opens or closes. */
   public watchExpanded(report: (open: boolean) => void): void {
     this.reportExpanded = report;
   }
-  /** Opens the existing Debug Menu when it is closed, and closes it when it is open. No second panel. */
+  /** Opens the Options dialog when it is closed, and closes it when it is open. */
   public toggle(): void {
     if (this.gui !== undefined) this.gui.expanded = !this.gui.expanded;
   }
   /**
-   * Builds the floating Tweakpane control panel and wires every controller to the gameplay / scene state. Centralizing
+   * Builds the Options dialog (`#options-modal`) and wires every controller to the gameplay / scene state. Centralizing
    * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageFolder`)
    * up-front, so runtime code can address them by name (renaming the record button when capture starts, hiding the
    * per-stage folder on compressor mode change) without re-querying the DOM.
    *
-   * Layout (folder titles and default open states live in `folders.ts`): the everyday controls sit at the top level
-   * — status, loading, skin pick, capture — followed by the Play options and Audio folders (open by default), then the
-   * skin detail, library, and developer folders (closed by default). Every folder remembers whether it was left open.
+   * Layout: one tab per area (`OPTIONS_TABS`), each holding its folders as sections; the folders inside those sections
+   * collapse, start open or closed as `folders.ts` says, and are remembered as they were left.
    */
   public buildGUI(): void {
-    // Start the panel itself collapsed so it doesn't cover the select-screen / gameplay canvas the moment a user lands
-    // on the player.
-    const container = document.createElement('div');
-    container.className = 'debug-pane-container';
-    // The play surface (`#main`) is the fullscreen element (double-click, the header button, and "Toggle fullscreen").
-    // A menu outside that element sits under the top layer, so the browser hides it until fullscreen ends. The surface
-    // does not create a fixed containing block, so the windowed top-right position is unchanged.
-    const surface = playerFullscreenElement(document);
-    if (surface instanceof HTMLElement) surface.append(container);
-    else this.deps.shell.append(container);
-    const gui = new Pane({ title: 'Debug Menu', container, expanded: false });
-    gui.element.classList.add('debug-pane');
-    gui.element.dataset.pane = 'debug';
-    gui.expanded = false;
+    const dialog = document.querySelector<HTMLDialogElement>('#options-modal');
+    const body = document.querySelector<HTMLElement>('#options-modal-body');
+    if (dialog === null || body === null) return;
+    const gui = OptionFolder.dialog(dialog, body, 'Options');
     this.gui = gui;
     gui.on('fold', (event) => this.reportExpanded?.(event.expanded));
-    const addFolder = (parent: Pick<FolderApi, 'addFolder'>, folder: DebugMenuFolder): FolderApi =>
+    // The header repaints its gear as the dialog opens and closes, so focus goes back to the gear there now rather than
+    // to the one that opened the dialog; in fullscreen, to the surface's own button.
+    dialog.addEventListener('close', () => {
+      const opener = document.querySelector<HTMLButtonElement>('#options-open');
+      const target =
+        opener !== null && opener.offsetParent !== null
+          ? opener
+          : document.querySelector<HTMLButtonElement>('[data-service-header="settings"]');
+      target?.focus();
+    });
+    dialog.querySelector('#options-modal-close')?.addEventListener('click', () => (gui.expanded = false));
+    // Fullscreen covers the play surface and leaves the header out, so the surface has its own Options button then.
+    document.querySelector('#options-open')?.addEventListener('click', () => (gui.expanded = true));
+    // A click on the backdrop lands on the dialog itself.
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) gui.expanded = false;
+    });
+    // Keys stay in the dialog, so the play behind it does not take them.
+    dialog.addEventListener('keydown', (event) => event.stopPropagation());
+    const addSection = (parent: OptionContainer, folder: DebugMenuFolder): OptionFolder =>
+      parent.addFolder({ title: folder.title, collapsible: false });
+    const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: DebugMenuFolder): OptionFolder =>
       parent.addFolder({ title: folder.title, expanded: folder.open });
-    // The native read-only monitor shows long load and playback messages without making them editable.
-    // Status changes also refresh it immediately through `setStatus`.
-    this.statusController = gui.addBinding(this.guiState, 'status', {
+    const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
+    const [play, tempo, skin, audio, library, leaderboard, developer] = tabs.pages;
+    if (!play || !tempo || !skin || !audio || !library || !leaderboard || !developer) return;
+    // Tabs in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
+    // library and capturing a play, the Leaderboard, then the developer settings.
+    const playOptions = addSection(play, DEBUG_MENU_FOLDERS.playOptions);
+    this.buildPlayOptionsFolder(playOptions);
+    this.buildReplayViewFolder(addFolder(playOptions, DEBUG_MENU_FOLDERS.replayView));
+    this.buildTempoFolder(addSection(tempo, DEBUG_MENU_FOLDERS.tempo));
+    this.buildCourseFolder(addSection(tempo, DEBUG_MENU_FOLDERS.course));
+    this.buildSkinFolder(addSection(skin, DEBUG_MENU_FOLDERS.skin), addFolder);
+    this.buildAudioFolder(addSection(audio, DEBUG_MENU_FOLDERS.audio), addFolder);
+    // The status line shows long load and playback messages read-only; `setStatus` refreshes it at once.
+    this.statusController = library.addBinding(this.guiState, 'status', {
       label: 'Status',
       readonly: true,
       multiline: true,
       rows: 3,
     });
     this.statusController.element.classList.add('status-row');
-    gui.addButton({ title: 'Open folder' }).on('click', () => this.guiState['openFolder']());
-    gui.addButton({ title: 'Open files (ZIP / replay)' }).on('click', () => this.guiState['openFiles']());
-    // Folders in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
-    // library, capturing a play, the Leaderboard, then the developer settings.
-    const playOptions = addFolder(gui, DEBUG_MENU_FOLDERS.playOptions);
-    this.buildPlayOptionsFolder(playOptions);
-    this.buildReplayViewFolder(addFolder(playOptions, DEBUG_MENU_FOLDERS.replayView));
-    this.buildTempoFolder(addFolder(gui, DEBUG_MENU_FOLDERS.tempo));
-    this.buildCourseFolder(addFolder(gui, DEBUG_MENU_FOLDERS.course));
-    this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
-    this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
-    this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
-    this.buildCaptureFolder(addFolder(gui, DEBUG_MENU_FOLDERS.capture));
-    this.deps.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
-    this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
+    library.addButton({ title: 'Open folder' }).on('click', () => this.guiState['openFolder']());
+    library.addButton({ title: 'Open files (ZIP / replay)' }).on('click', () => this.guiState['openFiles']());
+    this.buildLibraryFolder(addSection(library, DEBUG_MENU_FOLDERS.library), addFolder);
+    this.buildCaptureFolder(addSection(library, DEBUG_MENU_FOLDERS.capture));
+    this.deps.leaderboard.buildFolder(addSection(leaderboard, DEBUG_MENU_FOLDERS.leaderboard));
+    this.buildDeveloperFolder(addSection(developer, DEBUG_MENU_FOLDERS.developer));
     this.refreshCompressorStageVisibility();
     rememberFolderOpenStates(gui, undefined, () => this.scheduleSettingsSave());
-    gui.on('change', (event) => {
-      const key = 'key' in event.target ? event.target.key : undefined;
-      if (key === 'status' || key === 'fps') return;
-      this.scheduleSettingsSave();
-    });
+    gui.on('change', () => this.scheduleSettingsSave());
   }
   /**
    * Writes every Debug Menu setting locally immediately; remote publishing is debounced for slider changes.

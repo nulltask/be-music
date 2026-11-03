@@ -1,7 +1,7 @@
 import { expect, test } from 'vite-plus/test';
 import { DebugMenu } from './index.ts';
 
-test('the header gear toggles the existing Debug Menu pane', () => {
+test('the header gear opens and closes the Options dialog', () => {
   const pane = { expanded: false };
   const menu = Object.create(DebugMenu.prototype) as DebugMenu;
   menu.gui = pane as DebugMenu['gui'];

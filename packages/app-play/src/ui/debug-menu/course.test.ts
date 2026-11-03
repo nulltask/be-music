@@ -1,10 +1,10 @@
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from '../options-controls.ts';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import type { PlayerGUIState } from '../../types.ts';
 import { applyNonstopPlacement, buildCourseFolder } from './course.ts';
 import type { DebugMenu } from './index.ts';
 
-/** A stand-in for a Tweakpane controller bound to `object[property]`. */
+/** A stand-in for an Options control bound to `object[property]`. */
 class FakeController {
   public label = '';
   private readonly object: Record<string, unknown>;
@@ -20,14 +20,14 @@ class FakeController {
     this.changeHandler = (value) => handler({ value });
     return this;
   }
-  /** What Tweakpane does on a pick: writes the bound property, then calls the change handler. */
+  /** What the control does on a pick: writes the bound property, then calls the change handler. */
   public pick(value: unknown): void {
     this.object[this.property] = value;
     this.changeHandler?.(value);
   }
 }
 
-/** A stand-in for a Tweakpane folder that keeps the controllers added to it. */
+/** A stand-in for an Options folder that keeps the controllers added to it. */
 class FakeFolder {
   public readonly controllers: FakeController[] = [];
 
@@ -73,7 +73,7 @@ function buildFolder() {
     },
   };
   const folder = new FakeFolder();
-  buildCourseFolder.call(menu as unknown as DebugMenu, folder as unknown as FolderApi);
+  buildCourseFolder.call(menu as unknown as DebugMenu, folder as unknown as OptionContainer);
   return { settings, refreshSelectRecords, tracked, folder };
 }
 

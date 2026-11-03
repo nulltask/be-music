@@ -1,6 +1,6 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 // The Debug Menu's Tempo folder. It is built with the menu as `this` (`DebugMenu`).
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from '../options-controls.ts';
 import {
   storePlayTempoSettings,
   TEMPO_PERCENT_MAX,
@@ -11,7 +11,7 @@ import type { DebugMenu } from './index.ts';
 /**
  * The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
  */
-export function buildTempoFolder(this: DebugMenu, folder: FolderApi): void {
+export function buildTempoFolder(this: DebugMenu, folder: OptionContainer): void {
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
   // The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
   // Read when a play starts, so they are disabled during one; a play at another tempo is practice (not ranked, no

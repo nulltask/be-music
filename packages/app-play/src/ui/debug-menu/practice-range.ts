@@ -2,7 +2,7 @@
 // handle to drag. The handles snap to measure starts and write START TIME / END TIME, which the picker follows back.
 // The rules (snapping, the 1000 ms minimum, END 0 = to the end) are `practice-range.ts` in player-scene-model.
 import { resolveChart } from '@be-music/chart-model';
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from '../options-controls.ts';
 import {
   binPracticeNoteDensity,
   dragPracticeRangeHandle,
@@ -79,7 +79,7 @@ export class PracticeRangePicker {
     };
     this.canvas.addEventListener('pointerup', endDrag);
     this.canvas.addEventListener('pointercancel', endDrag);
-    // The graph takes the pane's width, which is 0 until its folder first opens.
+    // The graph takes the dialog's width, which is 0 until its tab first shows.
     if (typeof ResizeObserver === 'function') new ResizeObserver(() => this.refresh()).observe(this.canvas);
   }
 
@@ -223,7 +223,7 @@ export class PracticeRangePicker {
  * on (`refreshRulesetChoices`), is disabled during a play with the other play options, and follows the chart under the
  * select screen's cursor (`setPracticeChart`).
  */
-export function buildPracticeRangePicker(this: DebugMenu, folder: FolderApi): void {
+export function buildPracticeRangePicker(this: DebugMenu, folder: OptionContainer): void {
   const picker = new PracticeRangePicker(
     () => ({ startMs: this.guiState.practiceStartMs, endMs: this.guiState.practiceEndMs }),
     ({ startMs, endMs }) => {
@@ -235,10 +235,9 @@ export function buildPracticeRangePicker(this: DebugMenu, folder: FolderApi): vo
       this.scheduleSettingsSave();
     },
   );
-  // A separator blade carries the picker: Tweakpane lays it out and hides or disables it like any other row.
-  const blade = folder.addBlade({ view: 'separator' });
+  // A row of its own carries the picker, hidden and disabled like any other row.
+  const blade = folder.addElement(picker.element);
   blade.element.classList.add('practice-range-row');
-  blade.element.replaceChildren(picker.element);
   this.practiceRangeBlade = blade;
   this.practiceRangePicker = picker;
   this.trackPlayOption({
