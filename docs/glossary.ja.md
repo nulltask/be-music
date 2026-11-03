@@ -94,7 +94,7 @@
 - **player core**: `@be-music/player-engine` の共有の規則と engine です。パッケージのルートは engine（`manualPlay`、`autoPlay`）で、解決済みの譜面からプレイを準備して判定し、UI / audio / input の runtime 契約を持ちます。ほかのエントリポイントは規則（`./ruleset`、`./course`、`./records`、`./replay`）と、ホストがプレイと共有するもの（`./signals`、`./lanes`、`./display`）です。timing、ノートの解決、timeline は `@be-music/chart-model` にあります。
 - **Node 音声アダプター**: `@be-music/player-node-audio` が提供する Node 用の音声実装です。ホストが `createAudioSession: createNodeAudioSession` としてエンジンに渡します。エンジンは音声契約を所有し、アダプターがデコードと出力を担当します。
 - **terminal player**: `@be-music/player-terminal` の CLI / TUI frontend です。core engine の上に Music Select、terminal gameplay、terminal BGA、loading screen、SEA build を提供します。
-- **browser player**: `@be-music/player-browser` の PixiJS/WebAudio runtime と `@be-music/app-play` の Vite host です。runtime はホスト向けの API から、どの画面もファミリービューが描くシーンセッションとして作り、ライブラリとスキンの読み込みとプレイの録画も持ちます。player は browser drop、theme、Debug Menu、シーンルーターを扱います。
+- **browser player**: `@be-music/player-browser` の PixiJS/WebAudio runtime と `@be-music/app-play` の Vite host です。runtime はホスト向けの API から、どの画面もファミリービューが描くシーンセッションとして作り、ライブラリとスキンの読み込みとプレイの録画も持ちます。player は browser drop、theme、Options ダイアログ、シーンルーターを扱います。
 - **skin family**: browser プレイヤーの scene を描くスキンの種類です。`built-in`（Be-Music Skin）、`lr2`、`beatoraja` があります（`SceneFamily`）。host は読み込んだ theme とプレイヤーの選択から選びます。
 - **built-in family（default skin family）**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う skin family です。select、play、result（スキンが宣言していれば decide も）を Be-Music Skin で描きます。play view は LR2 と同じく共通のプレイフィールドを描き、そのまわりの chrome はスキンが描きます。
 - **Be-Music Skin**: `@be-music/player-skin-sdk` に沿って書くコードベースのスキンです。表示用フレームを受け取り、Canvas 描画と任意の DOM 画面を組み合わせます。DOM は選曲・決定・リザルトを置き換え、ゲームプレイでは Canvas のプレイフィールドに HUD を追加します。`gameplay.drawsOnDOM` を設定したスキンはプレイフィールドも DOM で描きます。

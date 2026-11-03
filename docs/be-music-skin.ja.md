@@ -435,7 +435,7 @@ settings: [
 - **検査:** `validateBeMusicSkin` がスキーマを検査します。id は重複不可、ラベルは空不可で、`default` は選択肢のいずれか、または範囲内でなければなりません。choice の option 値は重複不可、number の `step` は正の値、`unit` は上の 3 つのいずれかでなければなりません。
 - **値:** すべてのフレームが `settings`（id をキーにしたプレイヤーの値）を持ちます。ホストは値をスキンごとに保存し、`resolveBeMusicSkinSettings(skin, stored)` で解決します。欠けている値、古い値、型の違う値は既定値に戻り、数値は範囲内に収められ、スキンが宣言しなくなった id は捨てられます。宣言した id はすべて正しい型で揃っていると考えて構いません。
 - **その場での変更:** 画面の表示中にプレイヤーが値を変えることがあります。変更は次のフレームから反映され、選曲画面では `revision` も進みます。最初のフレームの値をキャッシュせず、`frame.settings` を毎フレーム読んでください（そこから導いた値をキャッシュするなら `revision` をキーにします）。
-- **Be-Music プレイヤーでは:** ホストは保存した値を built-in のキット（`{ family: 'built-in', skin, settings }`）で渡し、値が変わったら表示中のシーンに `scene.updateKit(kit)` で新しいキットを渡します。プレイヤーは Debug Menu にスキーマから「Skin settings」フォルダを作り（`choice` はドロップダウン、`number` は単位を名前に添えたスライダー、`toggle` はチェックボックス）、設定を宣言しないスキンでは隠し、値をスキン id ごとにブラウザへ保存します。
+- **Be-Music プレイヤーでは:** ホストは保存した値を built-in のキット（`{ family: 'built-in', skin, settings }`）で渡し、値が変わったら表示中のシーンに `scene.updateKit(kit)` で新しいキットを渡します。プレイヤーは Options ダイアログ にスキーマから「Skin settings」フォルダを作り（`choice` はドロップダウン、`number` は単位を名前に添えたスライダー、`toggle` はチェックボックス）、設定を宣言しないスキンでは隠し、値をスキン id ごとにブラウザへ保存します。
 
 ## 曲の画像
 
@@ -614,7 +614,7 @@ SDK は、フレームやヘルパーが使う型も export しています。�
   - 検査に通らないスキン（未対応の `apiVersion` など）は、ホストを壊さずに除外されます。
 
 - **組み込みスキン:** `BUILT_IN_BE_MUSIC_SKINS` には Synesthesia（既定）、Plain、Native が入っています。
-- **プレイヤー:** プレイヤーの Debug Menu から、モジュール URL でスキンを追加できます（_Skin & display_ → _Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、プレイヤーは先に確認を求めます。信頼できるスキンだけを読み込んでください。いまのプレイヤーは `ADD_SKIN_ENABLED` が off の間、_Add skin_ を隠しています（`services/built-in-skins.ts`）。
+- **プレイヤー:** プレイヤーの Options ダイアログ から、モジュール URL でスキンを追加できます（_Skin & display_ → _Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、プレイヤーは先に確認を求めます。信頼できるスキンだけを読み込んでください。いまのプレイヤーは `ADD_SKIN_ENABLED` が off の間、_Add skin_ を隠しています（`services/built-in-skins.ts`）。
 
 ## バージョニング
 
