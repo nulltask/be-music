@@ -43,8 +43,53 @@ const both = (keys: readonly ControlActionKey[]) => ({ lr2: keys, beatoraja: key
 const code = (value: string): ControlActionKey => ({ code: value });
 const button = (value: ControlButton): ControlActionKey => ({ button: value });
 
+/** Every operation a screen takes from a key, by id: `CONTROL_ACTIONS` lists each once, in this order. */
+export const CONTROL_ACTION_IDS = [
+  'select.down',
+  'select.up',
+  'select.page-down',
+  'select.page-up',
+  'select.first',
+  'select.last',
+  'select.random',
+  'select.activate',
+  'select.back',
+  'select.close-folder',
+  'select.option-panel',
+  'select.next-replay',
+  'select.replay',
+  'decide.continue',
+  'decide.cancel',
+  'play.quit',
+  'play.quit-hold',
+  'play.restart',
+  'play.pause',
+  'play.hi-speed-up',
+  'play.hi-speed-down',
+  'play.floating-hi-speed',
+  'play.restore-green',
+  'play.seek-back',
+  'play.seek-forward',
+  'play.sudden-up',
+  'play.sudden-down',
+  'play.lift-up',
+  'play.lift-down',
+  'play.hidden-toggle',
+  'play.hidden-up',
+  'play.hidden-down',
+  'play.m-sudden-down',
+  'play.m-sudden-up',
+  'result.continue',
+  'result.leave',
+  'result.retry',
+  'result.save-replay-1',
+  'result.save-replay-2',
+  'result.save-replay-3',
+  'result.save-replay-4',
+] as const;
+
 /** Every operation a screen takes from a key, with its default keys. */
-export const CONTROL_ACTIONS = [
+export const CONTROL_ACTIONS: readonly ControlActionDefinition[] = [
   // The select screen.
   { id: 'select.down', screen: 'select', label: 'Next bar', defaults: both([code('ArrowDown')]) },
   { id: 'select.up', screen: 'select', label: 'Previous bar', defaults: both([code('ArrowUp')]) },
@@ -138,16 +183,16 @@ export const CONTROL_ACTIONS = [
     bare: true,
     bareShift: true,
   })),
-] as const satisfies readonly (Omit<ControlActionDefinition, 'id'> & { readonly id: string })[];
+];
 
 /** An operation a screen takes from a key. */
-export type ControlActionId = (typeof CONTROL_ACTIONS)[number]['id'];
+export type ControlActionId = (typeof CONTROL_ACTION_IDS)[number];
 
 /** A player's own keys for operations: for each, the physical keys (`KeyboardEvent.code`) that take its defaults' place. */
 export type ControlActionOverrides = Partial<Record<ControlActionId, readonly string[]>>;
 
 const DEFINITIONS: ReadonlyMap<string, ControlActionDefinition> = new Map(
-  CONTROL_ACTIONS.map((definition) => [definition.id, definition as ControlActionDefinition]),
+  CONTROL_ACTIONS.map((definition) => [definition.id, definition]),
 );
 
 /** The definition of `id`. */
