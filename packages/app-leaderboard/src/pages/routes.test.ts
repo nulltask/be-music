@@ -51,9 +51,22 @@ async function userIdOf(cookie: string): Promise<string> {
   return ((await session.json()) as { user: { id: string } }).user.id;
 }
 
+// Ignore template-source line breaks while preserving inline text and every markup assertion.
+const markup = (html: string): string =>
+  html
+    .replace(/(<(?!\/)[^>]+>)\n\s*/g, '$1')
+    .replace(/\n\s*(<\/)/g, '$1')
+    .replace(/\n\s*/g, ' ')
+    .replace(/\s+>/g, '>')
+    .replace(/>\s+</g, '><');
+
 const page = async (path: string, cookie?: string) => {
   const response = await fetchApp(path, cookie !== undefined ? { headers: { cookie } } : undefined);
-  return { status: response.status, html: await response.text(), cacheControl: response.headers.get('cache-control') };
+  return {
+    status: response.status,
+    html: markup(await response.text()),
+    cacheControl: response.headers.get('cache-control'),
+  };
 };
 
 describe('session cookies', () => {
@@ -72,7 +85,8 @@ describe('session cookies', () => {
 });
 
 describe('page language', () => {
-  const html = async (path: string, headers: Record<string, string> = {}) => (await fetchApp(path, { headers })).text();
+  const html = async (path: string, headers: Record<string, string> = {}) =>
+    (await fetchApp(path, { headers })).text().then(markup);
 
   test('follows Accept-Language, a picked language, and ?lang=, in English otherwise', async () => {
     const english = await html('/');
@@ -107,7 +121,9 @@ describe('page language', () => {
     expect(about).toContain('プレイの採点');
     expect(about).toContain('パブリックベータ');
     expect(about).toContain('データは予告なく削除されることがあります。');
-    expect(about).toMatch(/Be-Music Leaderboard<\/a>\s*<span class="badge" data-variant="outline">\s*Beta\s*<\/span>/);
+    expect(about).toMatch(
+      /Be-Music Leaderboard\s*<\/a\s*>\s*<span class="badge" data-variant="outline">\s*Beta\s*<\/span\s*>/,
+    );
     expect(about).not.toContain('>beta</span>');
     expect(about).not.toContain('Public Beta');
     expect(about).not.toContain('ベータ版');
@@ -138,7 +154,7 @@ describe('about and help pages', () => {
     expect(about.html).toContain('Rankings may be reset while scoring rules settle.');
     expect(about.html).not.toContain('パブリックベータ');
     expect(about.html).toMatch(
-      /Be-Music Leaderboard<\/a>\s*<span class="badge" data-variant="outline">\s*Beta\s*<\/span>/,
+      /Be-Music Leaderboard\s*<\/a\s*>\s*<span class="badge" data-variant="outline">\s*Beta\s*<\/span\s*>/,
     );
     expect(about.html).not.toContain('>beta</span>');
     expect(about.html).toContain('href="https://github.com/nulltask/be-music"');
@@ -228,7 +244,9 @@ describe('Leaderboard pages', () => {
     expect(own.html).toContain('>not public<');
     expect(own.html).toContain('#1 / 1');
     // Its badge's help tip says why: the chart is not listed yet.
-    expect(own.html).toMatch(/Only you see this play in the rankings and lists\.<br\/>• Its chart is not listed yet/);
+    expect(own.html).toMatch(
+      /Only you see this play in the rankings and lists\.\s*<br\s*\/?>\s*• Its chart is not listed yet/,
+    );
 
     // A second such player lists the chart: both plays are public, ranked.
     await claimAccount(db, await userIdOf(bob));
@@ -358,7 +376,7 @@ describe('Leaderboard pages', () => {
     ).pathname;
 
     const anyone = await page(chartPath);
-    expect(anyone.html).toContain('<meta name="robots" content="noindex"/>');
+    expect(anyone.html).toMatch(/<meta name="robots" content="noindex"\s*\/?>/);
     expect(anyone.html).toContain('Not listed yet');
     expect(anyone.html).toContain('Sign in to see your own record.');
     expect(anyone.html).not.toContain(`/scores/${scoreId}`);
@@ -446,7 +464,7 @@ describe('Leaderboard pages', () => {
     expect(own.status).toBe(200);
     expect(own.html).toContain('This play is hidden');
     expect(own.html).toContain('data-account-action="show-score"');
-    expect(own.html).toContain('<meta name="robots" content="noindex"/>');
+    expect(own.html).toMatch(/<meta name="robots" content="noindex"\s*\/?>/);
     expect(
       (
         (await (await fetchApp(`/api/v0/scores/${high}`, { headers: { cookie: frank } })).json()) as {
@@ -546,7 +564,9 @@ describe('Leaderboard pages', () => {
     expect(top.html).toMatch(/hx-get="\/ruleset\/beatoraja\?next=%2F"/);
     expect(top.html).not.toMatch(/hx-get="\/ruleset\/[^"]*"[^>]*hx-push-url/);
     const score = await page(`/scores/${firstScore}`, cookie);
-    expect(score.html).toMatch(/aria-label="beatoraja rules" data-state="selected">.*?>selected<\/span>/);
+    expect(score.html).toMatch(
+      /aria-label="beatoraja rules"\s+data-state="selected"\s*>.*?>\s*selected\s*<\/span\s*>/s,
+    );
     expect(score.html).toContain('>played with</span>');
     // Without the cookie, LR2.
     expect((await page('/')).html).toContain('scored under LR2');
@@ -577,7 +597,7 @@ test('renders deployment metadata in the shared page footer', async () => {
   expect(response.status).toBe(200);
   expect(html.split('</main>')[1]).toContain('2026-10-20 08:00:00 UTC');
   expect(html).toContain('>01234567</code>');
-  const footer = html.slice(html.lastIndexOf('<footer'));
+  const footer = html.slice(html.lastIndexOf('<footer')).replace(/\s+>/g, '>');
   expect(footer).toContain('aria-current="page">Leaderboard</span>');
   expect(footer).not.toContain('>Leaderboard</a>');
   expect(footer).toContain('href="https://be-music.app/">Dashboard</a>');

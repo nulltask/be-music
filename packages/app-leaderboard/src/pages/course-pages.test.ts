@@ -26,9 +26,18 @@ afterAll(async () => {
   await dispose();
 });
 
+// Ignore template-source line breaks while preserving inline text and every markup assertion.
+const markup = (html: string): string =>
+  html
+    .replace(/(<(?!\/)[^>]+>)\n\s*/g, '$1')
+    .replace(/\n\s*(<\/)/g, '$1')
+    .replace(/\n\s*/g, ' ')
+    .replace(/\s+>/g, '>')
+    .replace(/>\s+</g, '><');
+
 const page = async (path: string, cookie?: string, headers: Record<string, string> = {}) => {
   const response = await fetchApp(path, { headers: { ...headers, ...(cookie !== undefined ? { cookie } : {}) } });
-  return { status: response.status, html: await response.text() };
+  return { status: response.status, html: markup(await response.text()) };
 };
 
 async function userIdOf(cookie: string): Promise<string> {
@@ -78,7 +87,7 @@ describe('course pages', () => {
       expect(course.html).toContain(`href="/charts/${encodeURIComponent(chart.chartFingerprint)}"`);
     }
     expect(course.html).toContain('gauge_lr2');
-    expect(course.html).not.toContain('<meta name="robots" content="noindex"/>');
+    expect(course.html).not.toMatch(/<meta name="robots" content="noindex"\s*\/?>/);
 
     const ja = await page(path, undefined, { 'accept-language': 'ja' });
     expect(ja.html).toContain('段位認定');
@@ -97,7 +106,7 @@ describe('course pages', () => {
       )
     ).json()) as CourseOutcome;
     const course = await page(`/courses/${encodeURIComponent(only.courseFingerprint)}`);
-    expect(course.html).toContain('<meta name="robots" content="noindex"/>');
+    expect(course.html).toMatch(/<meta name="robots" content="noindex"\s*\/?>/);
   });
 
   test('a run page breaks the run down by stage and offers its replay', async () => {
@@ -187,7 +196,7 @@ describe('course pages', () => {
     const own = await page(`/course-scores/${hidden.courseScoreId}`, erin);
     expect(own.html).toContain('This run is hidden');
     expect(own.html).toContain('data-account-action="show-score"');
-    expect(own.html).toContain('<meta name="robots" content="noindex"/>');
+    expect(own.html).toMatch(/<meta name="robots" content="noindex"\s*\/?>/);
 
     // The player page and the top page list the shown run to everyone, the hidden one only to its player.
     const player = await page(`/players/${handle}`);
