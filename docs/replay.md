@@ -325,7 +325,7 @@ flowchart LR
   scores them, with its lane, its note, the time and the running combo, EX score and gauge. Nothing reads the clock or
   draws a random number, so the same replay always gives the same ghost.
 - **Second playfield** (SECOND PLAYFIELD, built-in skins only). A single-play chart lays the live field and the ghost's
-  out like the two sides of a double-play chart: 7 KEY as 14 KEY and 5 KEY as 10 KEY, the ghost on the 2P lanes. The
+  out as independent players around a central BGA (`twoPlayer: true`). Lane ordering uses 14 KEY for 7 KEY charts and 10 KEY for 5 KEY charts, with the ghost on the 2P lanes; ordinary double-play charts keep their shared field. The
   ghost's notes are the replay's own (its lane options), and each goes at the second the simulation settled it. They
   scroll with the live play's hi-speed, so a ghost note and the live note it matches reach their judgment lines
   together. Its key beams and bombs follow its recorded presses and judgments, its judgment plate shows on the 2P side,
@@ -349,7 +349,7 @@ flowchart LR
   handed only the live notes.
 - **Open points.** The ghost is re-simulated under the replay's recorded ruleset, not the viewer's. The second playfield
   ignores the recorded hi-speed and covers and shows no hold state for long notes. In touch mode the second playfield
-  takes the double-play lane split; the pacemaker and the lane overlay keep the touch layout.
+  uses the combined 10 / 14 KEY lane model; on stages with `twoPlayerSideInset`, its independent banks remain separated around the BGA. The pacemaker and the lane overlay keep the live layout.
 
 ## What the player saw
 
