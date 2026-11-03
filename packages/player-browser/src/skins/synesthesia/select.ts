@@ -618,10 +618,6 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const chartTitle = chartEntry?.title ?? course?.title ?? 'No chart selected';
     const chartArtist = chartEntry?.artist || chartEntry?.subtitle || course?.detail || '';
     const playLevel = chartEntry?.playLevel !== undefined ? String(chartEntry.playLevel) : '-';
-    const playLevelNumber =
-      chartEntry?.playLevel !== undefined
-        ? Number.parseFloat(String(chartEntry.playLevel).replace(/^[^\d.]+/u, ''))
-        : NaN;
     const chartBPM = chartEntry?.bpm !== undefined ? String(Math.round(chartEntry.bpm)) : '-';
     const modeLabel = chartEntry ? formatPlayVariantLabel(chartEntry) : '- KEYS';
     const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
@@ -705,23 +701,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     }
 
-    // The judge rank (#RANK / #DEFEXRANK) between the stat chips and the level lights.
+    // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
     drawJudgeRank(addText, chartEntry, 30, 214);
 
-    // Level as a row of lights, from cool electric blue through magenta to hot ember.
-    const levelRatio = Number.isFinite(playLevelNumber) ? Math.max(0.04, Math.min(1, playLevelNumber / 12)) : 0;
-    const dots = 12;
-    for (let dot = 0; dot < dots; dot += 1) {
-      const lit = dot < Math.round(levelRatio * dots);
-      const x = 38 + dot * 22;
-      const color = levelColor(dot / dots);
-      if (lit) {
-        chrome.circle(x, 236, 7).fill({ color, alpha: 0.18 });
-        chrome.circle(x, 236, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
-      } else {
-        chrome.circle(x, 236, 2).fill({ color: SYN_DIM, alpha: 0.5 });
-      }
-    }
     if (chartEntry?.fileLabel) {
       addText(chartEntry.fileLabel, 30, 251, {
         size: 9,
@@ -777,11 +759,11 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     addHitArea(14, 372, 98, 30, 'text', frame.actions.activateSearch);
     addHitArea(112, 372, 192, 30, 'text', frame.actions.activateSearch);
     addText('LIBRARY', 30, 422, labelStyle());
+    // The count in the display face, like the LIBRARY label above it and the list position.
     addText(`${entries.length} shown / ${frame.totalCharts} charts`, 30, 436, {
       size: 11,
-      weight: '500',
       fill: SYN_MIST,
-      fontFamily: SYN_TEXT_FONT,
+      fontFamily: SYN_DISPLAY_FONT,
     });
     addText(
       frame.searchQuery ? 'SEARCH RESULTS' : frame.folderLabel ? 'CHARTS' : 'FOLDERS',
@@ -796,7 +778,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
   /**
    * Portrait select: the header, the focused song as a card across the top (genre, title, artist, the mode / tempo /
-   * level chips, the level lights, PLAY and AUTO), the search bar, and the library line at the foot; the list runs
+   * level chips, PLAY and AUTO), the search bar, and the library line at the foot; the list runs
    * full width between them. Nothing is set smaller than 10 design px.
    */
   private renderPortraitChrome(frame: PixiSelectFrame): boolean {
@@ -814,10 +796,6 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         : undefined;
     const chartArtist = chartEntry?.artist || chartEntry?.subtitle || course?.detail || '';
     const playLevel = chartEntry?.playLevel !== undefined ? String(chartEntry.playLevel) : '-';
-    const playLevelNumber =
-      chartEntry?.playLevel !== undefined
-        ? Number.parseFloat(String(chartEntry.playLevel).replace(/^[^\d.]+/u, ''))
-        : NaN;
     const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
     const position =
       entries.length > 0 ? `${Math.min(frame.selectedIndex + 1, entries.length)} / ${entries.length}` : '0 / 0';
@@ -905,25 +883,12 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     });
 
-    // The judge rank (#RANK / #DEFEXRANK) between the stat chips and the level lights.
+    // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
     drawJudgeRank(addText, chartEntry, left, card.y + 148);
 
-    // Level as a row of lights, with the list position at its end.
-    const levelRatio = Number.isFinite(playLevelNumber) ? Math.max(0.04, Math.min(1, playLevelNumber / 12)) : 0;
-    const dots = 12;
-    const dotsY = card.y + 166;
-    for (let dot = 0; dot < dots; dot += 1) {
-      const lit = dot < Math.round(levelRatio * dots);
-      const x = left + 8 + dot * 22;
-      const color = levelColor(dot / dots);
-      if (lit) {
-        chrome.circle(x, dotsY, 7).fill({ color, alpha: 0.18 });
-        chrome.circle(x, dotsY, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
-      } else {
-        chrome.circle(x, dotsY, 2).fill({ color: SYN_DIM, alpha: 0.5 });
-      }
-    }
-    addText(position, left + innerW, dotsY, { ...label(SYN_MIST), anchorX: 1, anchorY: 0.5 });
+    // The list position, at the end of the row under the judge rank.
+    const positionY = card.y + 166;
+    addText(position, left + innerW, positionY, { ...label(SYN_MIST), anchorX: 1, anchorY: 0.5 });
     if (chartEntry?.fileLabel) {
       addText(chartEntry.fileLabel, left, card.y + 178, {
         size: 10,
@@ -987,9 +952,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     chrome.rect(0, designHeight - 32, designWidth, 1).fill({ color: accent, alpha: 0.3 });
     addText(`${entries.length} shown / ${frame.totalCharts} charts`, 16, footY, {
       size: 11,
-      weight: '500',
       fill: SYN_MIST,
-      fontFamily: SYN_TEXT_FONT,
+      fontFamily: SYN_DISPLAY_FONT,
       anchorY: 0.5,
     });
     addText(frame.searchQuery ? 'SEARCH RESULTS' : frame.folderLabel ? 'CHARTS' : 'FOLDERS', designWidth - 16, footY, {
