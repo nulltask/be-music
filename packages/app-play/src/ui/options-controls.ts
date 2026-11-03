@@ -89,7 +89,8 @@ export class OptionRow {
     for (const control of this.element.querySelectorAll<
       HTMLInputElement | HTMLSelectElement | HTMLButtonElement | HTMLTextAreaElement
     >('input, select, button, textarea')) {
-      if (control.dataset.readonly !== undefined) continue;
+      // A monitor stays readable, and a help button (`options/help.ts`) stays usable.
+      if (control.dataset.readonly !== undefined || control.classList.contains('options-help')) continue;
       control.disabled = value;
     }
   }
@@ -141,6 +142,8 @@ export class OptionBinding<T = unknown> extends OptionRow {
     this.choices = [...(params.options ?? [])];
     const id = uniqueId('option');
     this.labelElement = element('label', 'label options-label', params.label ?? String(key));
+    // The label it was made with, which names it for its help (`options/help.ts`) whatever it later reads.
+    row.dataset.optionLabel = params.label ?? String(key);
     this.labelElement.setAttribute('for', id);
     const value = object[key];
     if (params.readonly === true) this.buildMonitor(row, id);
@@ -366,6 +369,7 @@ export class OptionButton extends OptionRow {
     const row = element('div', 'options-row options-button-row');
     super(row, parent);
     this.button = element('button', 'btn options-button', params.title);
+    row.dataset.optionLabel = params.title;
     this.button.type = 'button';
     this.button.dataset.variant = 'outline';
     this.button.dataset.size = 'sm';
@@ -405,18 +409,9 @@ export abstract class OptionContainer extends OptionRow {
     return this.add(new OptionButton(this, params));
   }
 
-  /**
-   * A folder: collapsible, open as `expanded` says, or (`collapsible: false`) a section with a heading that is always
-   * open.
-   */
-  public addFolder(params: { title: string; expanded?: boolean; collapsible?: boolean }): OptionFolder {
-    return this.add(
-      new OptionFolder(this, {
-        title: params.title,
-        expanded: params.expanded ?? true,
-        kind: params.collapsible === false ? 'section' : 'details',
-      }),
-    );
+  /** A folder: a section with a heading, which is always open. */
+  public addFolder(params: { title: string }): OptionFolder {
+    return this.add(new OptionFolder(this, { title: params.title, expanded: true, kind: 'section' }));
   }
 
   /** Tabs, one page per title; the first is selected. */

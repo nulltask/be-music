@@ -51,7 +51,7 @@ export function buildCompressorTuningGUI(this: OptionsDialog, parent: OptionCont
   );
   for (const compressor of compressors) {
     const tuning = this.compressorTunings[compressor];
-    const folder = parent.addFolder({ title: labels[compressor], expanded: false });
+    const folder = parent.addFolder({ title: labels[compressor] });
     const apply = () => {
       const params = paramsFromTuning(tuning, DEFAULT_COMPRESSOR_PARAMS[compressor]);
       this.gameplayView?.setAudioCompressorParams(compressor, params);

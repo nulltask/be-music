@@ -60,13 +60,7 @@ import {
 } from './compressor.ts';
 import { buildCourseFolder } from './course.ts';
 import { buildDeveloperFolder } from './developer.ts';
-import {
-  OPTION_FOLDERS,
-  OPTIONS_TABS,
-  readFolderOpenStates,
-  rememberFolderOpenStates,
-  type OptionFolderSpec,
-} from './folders.ts';
+import { OPTION_FOLDERS, OPTIONS_TABS, type OptionFolderSpec } from './folders.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
 import {
@@ -80,7 +74,9 @@ import type { PracticeRangePicker } from './practice-range.ts';
 import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './render-resolution.ts';
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
 import { buildSkinFolder, rebuildLR2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
+import { OptionHelp } from './help.ts';
 import { buildTempoFolder } from './tempo.ts';
+import { playerLang } from '../../player-copy.ts';
 /**
  * What the Options dialog needs from the app: the settings and stores its controllers change, readers of what the app has
  * loaded and shows, and the app's actions its controllers start. The actions keep the names of the app's methods.
@@ -387,8 +383,8 @@ export class OptionsDialog {
    * up-front, so runtime code can address them by name (renaming the record button when capture starts, hiding the
    * per-stage folder on compressor mode change) without re-querying the DOM.
    *
-   * Layout: one tab per area (`OPTIONS_TABS`), each holding its folders as sections; the folders inside those sections
-   * collapse, start open or closed as `folders.ts` says, and are remembered as they were left.
+   * Layout: one tab per area (`OPTIONS_TABS`), each holding its folders as sections, with the folders inside them as
+   * sections of their own (`folders.ts`).
    */
   public buildGUI(): void {
     const dialog = document.querySelector<HTMLDialogElement>('#options-modal');
@@ -396,7 +392,12 @@ export class OptionsDialog {
     if (dialog === null || body === null) return;
     const gui = OptionFolder.dialog(dialog, body, 'Options');
     this.gui = gui;
-    gui.on('fold', (event) => this.reportExpanded?.(event.expanded));
+    // Help's own text for each control, beside it; rows made since the last opening (a theme's pickers) get theirs too.
+    const help = new OptionHelp(dialog, playerLang);
+    gui.on('fold', (event) => {
+      if (event.expanded) help.attach();
+      this.reportExpanded?.(event.expanded);
+    });
     // The header repaints its gear as the dialog opens and closes, so focus goes back to the gear there now rather than
     // to the one that opened the dialog; in fullscreen, to the surface's own button.
     dialog.addEventListener('close', () => {
@@ -417,17 +418,16 @@ export class OptionsDialog {
     // Keys stay in the dialog, so the play behind it does not take them.
     dialog.addEventListener('keydown', (event) => event.stopPropagation());
     const addSection = (parent: OptionContainer, folder: OptionFolderSpec): OptionFolder =>
-      parent.addFolder({ title: folder.title, collapsible: false });
+      parent.addFolder({ title: folder.title });
     const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec): OptionFolder =>
-      parent.addFolder({ title: folder.title, expanded: folder.open });
+      parent.addFolder({ title: folder.title });
     const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
     const [play, tempo, skin, audio, library, leaderboard, developer] = tabs.pages;
     if (!play || !tempo || !skin || !audio || !library || !leaderboard || !developer) return;
     // Tabs in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
     // library and capturing a play, the Leaderboard, then the developer settings.
-    const playOptions = addSection(play, OPTION_FOLDERS.playOptions);
-    this.buildPlayOptionsFolder(playOptions);
-    this.buildReplayViewFolder(addFolder(playOptions, OPTION_FOLDERS.replayView));
+    const replayPage = this.buildPlayOptionsFolder(addSection(play, OPTION_FOLDERS.playOptions));
+    this.buildReplayViewFolder(addFolder(replayPage, OPTION_FOLDERS.replayView));
     this.buildTempoFolder(addSection(tempo, OPTION_FOLDERS.tempo));
     this.buildCourseFolder(addSection(tempo, OPTION_FOLDERS.course));
     this.buildSkinFolder(addSection(skin, OPTION_FOLDERS.skin), addFolder);
@@ -447,8 +447,8 @@ export class OptionsDialog {
     this.deps.leaderboard.buildFolder(addSection(leaderboard, OPTION_FOLDERS.leaderboard));
     this.buildDeveloperFolder(addSection(developer, OPTION_FOLDERS.developer));
     this.refreshCompressorStageVisibility();
-    rememberFolderOpenStates(gui, undefined, () => this.scheduleSettingsSave());
     gui.on('change', () => this.scheduleSettingsSave());
+    help.attach();
   }
   /**
    * Writes every Options dialog setting locally immediately; remote publishing is debounced for slider changes.
@@ -459,7 +459,6 @@ export class OptionsDialog {
       compressorTuning: this.compressorTunings,
       skinSettings: this.skinSettings,
       courseTableURLs: readStoredCourseTableURLs(),
-      folders: readFolderOpenStates(),
       workerCount: getBrowserWorkerCount(),
     });
     optionSettingsSync.save(document);

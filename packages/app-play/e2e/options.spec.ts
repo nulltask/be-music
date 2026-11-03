@@ -1,14 +1,9 @@
 import { expect, openWithLibrary, test } from './support.ts';
 
-test('the header opens the Options dialog, its monitors stay read-only and folders keep their stored keys', async ({
+test('the header opens the Options dialog, with sections, Play options pages, hover help and read-only monitors', async ({
   player,
 }, info) => {
-  await openWithLibrary(player, {
-    'be-music.option-folders': JSON.stringify({
-      'Audio / Compressor': true,
-      'Library & records / Replay slots': false,
-    }),
-  });
+  await openWithLibrary(player);
   const { page } = player;
   const dialog = page.locator('#options-modal');
   const settings = page.locator('[data-service-header="settings"]');
@@ -16,25 +11,24 @@ test('the header opens the Options dialog, its monitors stay read-only and folde
   await settings.click();
   await expect(dialog).toBeVisible();
   await expect(settings).toHaveAttribute('aria-expanded', 'true');
-  const folder = (title: string) =>
-    dialog.locator('details', { has: page.locator(':scope > summary', { hasText: title }) });
+  // Nothing in it folds: every folder is a section.
+  await expect(dialog.locator('details')).toHaveCount(0);
+  // Play options splits its options into pages; Hi-speed sits on Hi-speed & view.
+  await dialog.getByRole('tab', { name: 'Hi-speed & view', exact: true }).click();
+  const hiSpeed = dialog.locator('.options-row[data-option-label="Hi-speed"]');
+  await expect(hiSpeed).toBeVisible();
+  // Its help button shows Help's entry while hovered.
+  await hiSpeed.locator('.options-help').hover();
+  const tip = page.locator('#options-help-tip');
+  await expect(tip).toBeVisible();
+  await expect(tip).not.toBeEmpty();
   await dialog.getByRole('tab', { name: 'Library', exact: true }).click();
   const status = dialog.locator('.status-row textarea');
   expect(await status.evaluate((element: HTMLTextAreaElement) => element.readOnly)).toBe(true);
-  const replaySlots = folder('Replay slots');
-  await expect(replaySlots).not.toHaveAttribute('open');
-  await replaySlots.locator(':scope > summary').click();
-  await expect(replaySlots).toHaveAttribute('open', '');
-  await dialog.getByRole('tab', { name: 'Audio', exact: true }).click();
-  await expect(folder('Compressor')).toHaveAttribute('open', '');
   await dialog.getByRole('tab', { name: 'Developer', exact: true }).click();
   const graph = dialog.locator('.options-graph polyline');
   await expect(graph).toHaveAttribute('points', /\d/);
   expect(await graph.getAttribute('points')).not.toContain('NaN');
-  const remembered = await page.evaluate(() => JSON.parse(localStorage.getItem('be-music.option-folders')!));
-  expect(remembered['Library & records / Replay slots']).toBe(true);
-  expect(remembered['Audio / Compressor']).toBe(true);
-  expect(remembered.Options).toBeUndefined();
   await dialog.locator(':scope > div').screenshot({ path: info.outputPath('options.png') });
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();

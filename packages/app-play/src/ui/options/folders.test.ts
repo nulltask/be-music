@@ -1,19 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import {
-  OPTION_FOLDERS,
-  OPTION_FOLDERS_STORAGE_KEY,
-  clearPlayerSettings,
-  playerSettingKeys,
-  folderPath,
-  folderEntries,
-  parseFolderOpenStates,
-  readFolderOpenStates,
-  rememberFolderOpenStates,
-  serializeFolderOpenStates,
-  storeFolderOpenStates,
-  type PlayerStorage,
-  type FolderNode,
-} from './folders.ts';
+import { OPTION_FOLDERS, OPTIONS_TABS, clearPlayerSettings, playerSettingKeys, type PlayerStorage } from './folders.ts';
 
 function memoryStorage(initial: Record<string, string> = {}): PlayerStorage & { values: Map<string, string> } {
   const values = new Map(Object.entries(initial));
@@ -51,95 +37,14 @@ const BLOCKED_STORAGE: PlayerStorage = {
   },
 };
 
-/** A stand-in for the Options dialog's folders, with the same open / close reports. */
-class FakeFolder implements FolderNode {
-  public readonly children: FakeFolder[] = [];
-  public readonly title: string;
-  private openState: boolean;
-  private listener: ((event: { expanded: boolean }) => void) | undefined;
-  public constructor(title: string, parent?: FakeFolder, open = true) {
-    this.title = title;
-    this.openState = open;
-    parent?.children.push(this);
-  }
-  public get expanded(): boolean {
-    return this.openState;
-  }
-  public set expanded(value: boolean) {
-    this.openState = value;
-    this.listener?.({ expanded: value });
-  }
-  public on(_event: 'fold', callback: (event: { expanded: boolean }) => void): this {
-    this.listener = callback;
-    return this;
-  }
-}
-
 describe('Options dialog folder layout', () => {
   it('has unique folder titles', () => {
     const titles = Object.values(OPTION_FOLDERS).map((folder) => folder.title);
     expect(new Set(titles).size).toBe(titles.length);
   });
 
-  it('opens the everyday folders and closes the developer ones', () => {
-    expect(OPTION_FOLDERS.playOptions.open).toBe(true);
-    expect(OPTION_FOLDERS.audio.open).toBe(true);
-    expect(OPTION_FOLDERS.developer.open).toBe(false);
-    expect(OPTION_FOLDERS.library.open).toBe(false);
-  });
-});
-
-describe('folder open-state persistence', () => {
-  it('joins folder titles into a path', () => {
-    expect(folderPath(['Audio', 'Compressor'])).toBe('Audio / Compressor');
-  });
-
-  it('keeps only boolean entries from stored JSON', () => {
-    expect(parseFolderOpenStates('{"Audio":false,"Skin":"yes","Developer":true}')).toEqual({
-      Audio: false,
-      Developer: true,
-    });
-    expect(parseFolderOpenStates('[true]')).toEqual({});
-    expect(parseFolderOpenStates('not json')).toEqual({});
-    expect(parseFolderOpenStates(null)).toEqual({});
-  });
-
-  it('round-trips through storage', () => {
-    const storage = memoryStorage();
-    storeFolderOpenStates({ Audio: false }, storage);
-    expect(storage.values.get(OPTION_FOLDERS_STORAGE_KEY)).toBe(serializeFolderOpenStates({ Audio: false }));
-    expect(readFolderOpenStates(storage)).toEqual({ Audio: false });
-  });
-
-  it('survives blocked storage', () => {
-    expect(readFolderOpenStates(BLOCKED_STORAGE)).toEqual({});
-    expect(() => storeFolderOpenStates({ Audio: true }, BLOCKED_STORAGE)).not.toThrow();
-  });
-
-  it('names a folder by its titles below the root', () => {
-    const root = new FakeFolder('Options dialog');
-    const audio = new FakeFolder('Audio', root);
-    const compressor = new FakeFolder('Compressor', audio);
-    expect(folderEntries(root).find(({ folder }) => folder === compressor)?.titles).toEqual(['Audio', 'Compressor']);
-    expect(folderEntries(root)[0]?.titles).toEqual([]);
-  });
-
-  it('restores remembered folders and remembers later changes, but not the root panel', () => {
-    const storage = memoryStorage({
-      [OPTION_FOLDERS_STORAGE_KEY]: JSON.stringify({ Audio: false, 'Audio / Compressor': true }),
-    });
-    const root = new FakeFolder('Options dialog', undefined, false);
-    const audio = new FakeFolder('Audio', root, true);
-    const compressor = new FakeFolder('Compressor', audio, false);
-    const developer = new FakeFolder('Developer', root, false);
-    rememberFolderOpenStates(root, storage);
-    expect(!audio.expanded).toBe(true);
-    expect(!compressor.expanded).toBe(false);
-    expect(!developer.expanded).toBe(true);
-
-    developer.expanded = true;
-    root.expanded = true;
-    expect(readFolderOpenStates(storage)).toEqual({ Audio: false, 'Audio / Compressor': true, Developer: true });
+  it('has unique tab titles', () => {
+    expect(new Set(OPTIONS_TABS).size).toBe(OPTIONS_TABS.length);
   });
 });
 
@@ -147,11 +52,11 @@ describe('settings reset', () => {
   it('removes player settings but keeps best records and other sites’ keys', () => {
     const storage = memoryStorage({
       'be-music.volumes': '{}',
-      'be-music.option-folders': '{}',
+      'be-music.option-settings': '{}',
       'be-music.chart-best-records': '{}',
       'other-app.key': 'x',
     });
-    expect(playerSettingKeys(storage).sort()).toEqual(['be-music.option-folders', 'be-music.volumes']);
+    expect(playerSettingKeys(storage).sort()).toEqual(['be-music.option-settings', 'be-music.volumes']);
     expect(clearPlayerSettings(storage)).toBe(2);
     expect([...storage.values.keys()].sort()).toEqual(['be-music.chart-best-records', 'other-app.key']);
   });
@@ -160,16 +65,4 @@ describe('settings reset', () => {
     expect(playerSettingKeys(BLOCKED_STORAGE)).toEqual([]);
     expect(clearPlayerSettings(BLOCKED_STORAGE)).toBe(0);
   });
-});
-
-it('keeps stored folder keys stable under native tab pages and ignores value blades', () => {
-  const root = new FakeFolder('Options dialog');
-  const audio = new FakeFolder('Audio');
-  const wrapper = { pages: [{ title: 'Sound', children: [audio, { label: 'Master' }] }] };
-  (root.children as unknown[]).push(wrapper);
-  const storage = memoryStorage({ [OPTION_FOLDERS_STORAGE_KEY]: '{"Audio":false}' });
-  rememberFolderOpenStates(root, storage);
-  expect(audio.expanded).toBe(false);
-  audio.expanded = true;
-  expect(readFolderOpenStates(storage)).toEqual({ Audio: true });
 });
