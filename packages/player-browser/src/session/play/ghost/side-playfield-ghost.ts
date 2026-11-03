@@ -1,6 +1,6 @@
 /**
  * The ghost as a second playfield (the first {@link GhostPresentation}): the recorded play's notes scroll on the 2P side
- * of a single-play chart, laid out like the two sides of a double-play chart (`ghost-side.ts`), and go as its replay
+ * of a single-play chart, using the two-player layout and the combined lane model (`ghost-side.ts`), and go as its replay
  * settled them. Its key beams, bombs and judgment plate follow its recorded inputs and judgments, and its score, combo
  * and gauge show as the second player's HUD. Its notes scroll with the live play's hi-speed, so a note of the ghost
  * and the live note it matches cross their judgment lines together.

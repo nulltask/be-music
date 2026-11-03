@@ -1,7 +1,14 @@
+import { cabinetStage } from '@be-music/player-skin-sdk';
 import { Container } from 'pixi.js';
 import { expect, test, vi } from 'vite-plus/test';
 import {
   renderBuiltInChrome,
+  resolveLaneGeometry,
+  resolveBeMusicLayout,
+  collectBGATargets,
+  type LaneGeometryContext,
+  type BeMusicLayoutContext,
+  type BGATargetsContext,
   resolveSkinlessGameplayChromeRuntime,
   type BuiltInChromeContext,
   type PlayChromeContext,
@@ -88,4 +95,33 @@ test('forwards a draw-local runtime without resolving or mutating it again', () 
   ctx.skinLayer.destroy();
   ctx.overlayLayer.destroy();
   ctx.bgaLayer.destroy();
+});
+
+test('keeps rendered lanes, chrome and BGA aligned when switching between DP and two players', () => {
+  const ctx = {
+    play: {
+      laneChannels: ['16', '11', '12', '13', '14', '15', '18', '19', '21', '22', '23', '24', '25', '28', '29', '26'],
+      chartPlayVariant: '14',
+      secondPlayer: undefined,
+    },
+    beMusicStage: cabinetStage,
+    layoutMode: 'standard',
+  } as unknown as LaneGeometryContext & BeMusicLayoutContext & BGATargetsContext;
+  const dp = resolveLaneGeometry(ctx);
+  const dpLayout = resolveBeMusicLayout(ctx);
+  const play = ctx.play as unknown as { secondPlayer: unknown };
+  play.secondPlayer = {};
+  const battle = resolveLaneGeometry(ctx);
+  const battleLayout = resolveBeMusicLayout(ctx);
+  expect(battle).not.toBe(dp);
+  expect(battleLayout).not.toBe(dpLayout);
+  expect(resolveLaneGeometry(ctx)).toBe(battle);
+  expect(resolveBeMusicLayout(ctx)).toBe(battleLayout);
+  expect(battle.lanes.map(({ x, w }) => ({ x, w }))).toEqual(battleLayout.lanes.map(({ x, w }) => ({ x, w })));
+  const targets: Parameters<typeof collectBGATargets>[1] = [];
+  collectBGATargets(ctx, targets);
+  expect(targets[0]).toMatchObject(battleLayout.bga!);
+  play.secondPlayer = undefined;
+  expect(resolveLaneGeometry(ctx)).toEqual(dp);
+  expect(resolveBeMusicLayout(ctx)).toEqual(dpLayout);
 });

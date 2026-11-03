@@ -38,7 +38,12 @@ export function drawCabinetHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGame
   drawKeys(ctx, frame, cabinet.keys);
   drawGauges(ctx, runtime, cabinet);
   if (cabinet.center) drawCenter(ctx, cabinet.center, runtime);
-  drawFigure(ctx, cabinet.score, 'SCORE', String(runtime.score ?? 0));
+  drawFigure(
+    ctx,
+    cabinet.score,
+    cabinet.secondSide ? '1P EX SCORE' : 'SCORE',
+    String((cabinet.secondSide ? runtime.exScore : runtime.score) ?? 0),
+  );
   drawFigure(
     ctx,
     cabinet.hiSpeed,
@@ -48,9 +53,27 @@ export function drawCabinetHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGame
   const pace = resolveScorePace(runtime);
   if (cabinet.graph) drawGraph(ctx, cabinet.graph, pace, runtime);
   drawStage(ctx, cabinet.stage, resolveStageLabel(runtime.course), nowMs);
-  if (cabinet.doublePlay) drawChartStack(ctx, cabinet.players, runtime, nowMs);
+  if (cabinet.secondSide) {
+    const label = `${resolveDifficultyName(runtime.chart) ?? ''} Lv.${runtime.chart?.playLevel ?? '-'}`;
+    for (const rect of [cabinet.players, cabinet.judge]) {
+      panel(ctx, rect);
+      text(ctx, label, rect.x + rect.w / 2, rect.y + rect.h / 2, { size: 11, weight: 700, align: 'center' });
+    }
+  } else if (cabinet.doublePlay) drawChartStack(ctx, cabinet.players, runtime, nowMs);
   else drawPlayers(ctx, cabinet.players, runtime, nowMs);
-  drawJudge(ctx, cabinet.judge, runtime);
+  if (cabinet.secondSide && runtime.secondPlayer) {
+    drawFigure(ctx, cabinet.secondSide.score, '2P EX SCORE', String(runtime.secondPlayer.exScore ?? 0));
+    drawFigure(ctx, cabinet.maxCombo!, '1P MAX COMBO', String(runtime.maxCombo ?? 0));
+    drawFigure(ctx, cabinet.secondSide.maxCombo, '2P MAX COMBO', String(runtime.secondPlayer.maxCombo ?? 0));
+    drawFigure(ctx, cabinet.secondSide.hiSpeed, 'HI-SPEED', (runtime.hiSpeed ?? 0).toFixed(1));
+    const remaining = Math.max(0, Math.ceil(((runtime.songLengthMs ?? 0) - (runtime.songElapsedMs ?? 0)) / 1000));
+    drawFigure(
+      ctx,
+      cabinet.time!,
+      'TIME LIMIT',
+      `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`,
+    );
+  } else drawJudge(ctx, cabinet.judge, runtime);
   drawBPM(ctx, cabinet.bpm, runtime);
   drawTempo(ctx, cabinet.tempo, runtime.tempo ?? 1);
 }
@@ -109,6 +132,11 @@ function drawGauges(ctx: CanvasRenderingContext2D, runtime: BeMusicGameplayRunti
   const showValue = cabinet.center === undefined;
   if (!second) {
     drawGauge(ctx, runtime, gauge, gaugeLabelY, '', showValue);
+    return;
+  }
+  if (cabinet.secondSide) {
+    drawGauge(ctx, runtime, gauge, gaugeLabelY, '1P ', true);
+    drawGauge(ctx, second, cabinet.secondSide.gauge, gaugeLabelY, '2P ', true);
     return;
   }
   const half = (gauge.w - 12) / 2;

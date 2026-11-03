@@ -12,6 +12,10 @@ import type { BeMusicGameplayLayout, BeMusicGameplayRuntime, BeMusicRect, BeMusi
  * the graph.
  */
 export interface CabinetLayout {
+  /** Independent second player's panels, with the monitor between the lane banks. */
+  secondSide?: { gauge: BeMusicRect; score: BeMusicRect; hiSpeed: BeMusicRect; maxCombo: BeMusicRect };
+  maxCombo?: BeMusicRect;
+  time?: BeMusicRect;
   /** The play area's frame: the lanes down to the judgement line, the keys, the gauge, the score and the hi-speed. */
   play: BeMusicRect;
   /** The chart's progress, a thin bar left of the lanes; omitted when the lanes start at the stage's edge. */
@@ -102,9 +106,20 @@ function leftColumn(playfieldLeft: number): { x: number; w: number } {
 /**
  * The BGA square for lanes from `playfieldLeft` to `playfieldRight`: as large as the right-hand column's width and the
  * band between the players and the bottom panels allow, centred in the column; for a double-play field centred on the
- * stage, at the top of the left column under the chart. Too small a square gives an empty rect, so the play has no BGA.
+ * stage, at the top of the left column under the chart. Independent players use the square between their banks. Too small a square gives an empty rect, so the play has no BGA.
  */
-export function resolveCabinetBGARect(playfieldRight: number, playfieldLeft: number = STAGE_MARGIN): BeMusicRect {
+export function resolveCabinetBGARect(
+  playfieldRight: number,
+  playfieldLeft: number = STAGE_MARGIN,
+  twoPlayer = false,
+): BeMusicRect {
+  if (twoPlayer) {
+    const width = playfieldRight - playfieldLeft;
+    const bank = (STAGE_WIDTH - width) / 2;
+    // Reserve a full 7-key bank on each edge, including on narrower 5-key charts.
+    const size = Math.max(0, Math.min(256, STAGE_WIDTH - 2 * (bank + 194 + 16)));
+    return { x: (STAGE_WIDTH - size) / 2, y: 136, w: size, h: size };
+  }
   if (isCentred(playfieldLeft)) {
     const column = leftColumn(playfieldLeft);
     const top = DP_TOP + DP_CHART_H + 6;
@@ -127,13 +142,21 @@ export function resolveCabinetBGARect(playfieldRight: number, playfieldLeft: num
 export const cabinetStage: BeMusicStage = {
   width: STAGE_WIDTH,
   height: STAGE_HEIGHT,
-  playfield: { standard: { top: PLAYFIELD.y, judgementY: PLAYFIELD.judgementY, doublePlayCenterX: STAGE_WIDTH / 2 } },
+  playfield: {
+    standard: {
+      top: PLAYFIELD.y,
+      judgementY: PLAYFIELD.judgementY,
+      doublePlayCenterX: STAGE_WIDTH / 2,
+      twoPlayerSideInset: 33,
+    },
+  },
   resolveBGARect: resolveCabinetBGARect,
 };
 
 /** The {@link CabinetLayout} of a landscape gameplay `layout` on the {@link cabinetStage}. */
-export function resolveCabinetLayout(layout: Pick<BeMusicGameplayLayout, 'playfield'>): CabinetLayout {
+export function resolveCabinetLayout(layout: Pick<BeMusicGameplayLayout, 'playfield' | 'twoPlayer'>): CabinetLayout {
   const { playfield } = layout;
+  if (layout.twoPlayer && playfield.sides['1P'] && playfield.sides['2P']) return resolveTwoPlayerCabinet(playfield);
   if (isCentred(playfield.left)) return resolveDoublePlayCabinet(playfield);
   const right = playRight(playfield.right);
   const play = { x: STAGE_MARGIN, y: playfield.top, w: right - STAGE_MARGIN, h: STAGE_HEIGHT - 12 - playfield.top };
@@ -241,6 +264,44 @@ function resolveDoublePlayCabinet(playfield: BeMusicGameplayLayout['playfield'])
     ...(side1P && side2P && side2P.left - side1P.right >= 24
       ? { center: { x: side1P.right + 4, y: keys.y + 8, w: side2P.left - side1P.right - 8, h: keys.h - 8 } }
       : {}),
+  };
+}
+
+/** Two independent players, with their gauges under their own keys and shared information around the monitor. */
+function resolveTwoPlayerCabinet(playfield: BeMusicGameplayLayout['playfield']): CabinetLayout {
+  const one = playfield.sides['1P']!;
+  const two = playfield.sides['2P']!;
+  const x = one.right + 16;
+  const w = two.left - 16 - x;
+  const half = (w - 10) / 2;
+  const keysY = playfield.judgementY + 6;
+  const gaugeY = keysY + 40 + 20;
+  const score = { x, y: 48, w: half, h: 40 };
+  const maxCombo = { x, y: 92, w: half, h: 36 };
+  const hiSpeed = { x: one.left, y: gaugeY + 20, w: one.right - one.left, h: 32 };
+  return {
+    play: { x: one.left - 8, y: playfield.top, w: one.right - one.left + 16, h: 464 - playfield.top },
+    keys: { x: one.left, y: keysY, w: two.right - one.left, h: 40 },
+    gauge: { x: one.left, y: gaugeY, w: one.right - one.left, h: 12 },
+    gaugeLabelY: gaugeY - 10,
+    score,
+    maxCombo,
+    hiSpeed,
+    secondSide: {
+      gauge: { x: two.left, y: gaugeY, w: two.right - two.left, h: 12 },
+      score: { ...score, x: x + half + 10 },
+      maxCombo: { ...maxCombo, x: x + half + 10 },
+      hiSpeed: { ...hiSpeed, x: two.left, w: two.right - two.left },
+    },
+    controls: { x, y: 396, w, h: 20 },
+    time: { x, y: 8, w: half, h: 32 },
+    stage: { x: x + half + 10, y: 8, w: half, h: 32 },
+    players: { x: one.left, y: 444, w: one.right - one.left, h: 20 },
+    bga: resolveCabinetBGARect(playfield.right, playfield.left, true),
+    judge: { x: two.left, y: 444, w: two.right - two.left, h: 20 },
+    bpm: { x, y: 420, w: half, h: 44 },
+    tempo: { x: x + half + 10, y: 420, w: half, h: 44 },
+    doublePlay: false,
   };
 }
 
