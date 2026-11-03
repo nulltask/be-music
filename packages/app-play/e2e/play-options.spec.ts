@@ -60,7 +60,7 @@ for (const skin of ['native', 'plain', 'lr2', 'beatoraja'] as const) {
       (state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.1,
       'the chart to start',
     );
-    await player.key('Space');
+    await player.key('Pause');
     await player.page.evaluate(
       () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
     );
@@ -601,9 +601,9 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.cursorTo((bar) => bar.title === 'LR2 constant', 'constant chart');
     await player.key('Enter');
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 2.2, 'the STOP window');
-    await player.key('Space');
+    await player.key('Pause');
     await player.page.locator('#stage').screenshot({ path: info.outputPath(`constant-stop-${skin}.png`) });
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 3.4, 'the faster BPM after STOP');
     await player.key('ArrowUp');
     await player.page.locator('#stage').screenshot({ path: info.outputPath(`constant-after-stop-${skin}.png`) });
@@ -693,9 +693,9 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.cursorTo((bar) => bar.title === 'Scroll ADD', 'scroll ADD chart');
     await player.key('Enter');
     await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.2, 'scroll ADD play');
-    await player.key('Space');
+    await player.key('Pause');
     await player.page.locator('#stage').screenshot({ path: info.outputPath(`scroll-add-${skin}.png`) });
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay?.play).toMatchObject({ scrollModifier: 'ADD', scrollSection: 1, scrollRate: 1 });
@@ -725,9 +725,9 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.cursorTo((bar) => bar.title === 'Perfect attack', 'P.ATTACK chart');
     await player.key('Enter');
     await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.2, 'P.ATTACK play');
-    await player.key('Space');
+    await player.key('Pause');
     await player.page.locator('#stage').screenshot({ path: info.outputPath(`perfect-attack-${skin}.png`) });
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay?.play.gauge).toBe('P-ATTACK');
@@ -762,9 +762,9 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.cursorTo((bar) => bar.title === 'Good attack', 'G.ATTACK chart');
     await player.key('Enter');
     await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.2, 'G.ATTACK play');
-    await player.key('Space');
+    await player.key('Pause');
     await player.page.locator('#stage').screenshot({ path: info.outputPath(`good-attack-${skin}.png`) });
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay?.play.gauge).toBe('G-ATTACK');
@@ -898,9 +898,9 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const)
       await player.cursorTo((bar) => bar.title === title, 'SP TO DP source chart');
       await player.key('Enter');
       await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.2, 'DP play');
-      await player.key('Space');
+      await player.key('Pause');
       await player.page.locator('#stage').screenshot({ path: info.outputPath(`sp-to-dp-${sourceKeys}-${skin}.png`) });
-      await player.key('Space');
+      await player.key('Pause');
       await player.waitForResult(0);
       const replay = await player.lastReplay();
       expect(replay?.play).toMatchObject({
@@ -940,9 +940,9 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.cursorTo((bar) => bar.title === 'Seven to nine', '7-to-9 source');
     await player.key('Enter');
     await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.2, 'nine-key play');
-    await player.key('Space');
+    await player.key('Pause');
     await player.page.locator('#stage').screenshot({ path: info.outputPath(`seven-to-nine-${skin}.png`) });
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay?.play).toMatchObject({ sevenToNinePattern: 3, sevenToNineType: 2, sevenToNineApplied: true });
@@ -977,10 +977,10 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.cursorTo((bar) => bar.title === title, 'two-player chart');
     await player.key('Enter');
     await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.6, 'BATTLE play');
-    await player.key('Space');
+    await player.key('Pause');
     await player.page.locator('#stage').screenshot({ path: info.outputPath(`battle-${skin}.png`) });
     if (skin === 'native') await expect(player.page.locator('[part~="second-player"]').first()).toBeAttached();
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitForResult(0);
     await player.page.locator('#stage').screenshot({ path: info.outputPath(`battle-result-${skin}.png`) });
     const replay = await player.lastReplay();
