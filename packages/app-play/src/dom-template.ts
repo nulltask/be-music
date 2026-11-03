@@ -582,7 +582,13 @@ export const PLAYER_APP_HTML = `
               </div>
             </div>
             <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed; hold to keep adjusting.</li>
+              <li><kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed; hold to keep adjusting. On beatoraja skins they move the lane cover instead, and on the others <kbd>←</kbd> / <kbd>→</kbd> do (outside AUTO play).</li>
+              <li>
+                START (<kbd>Q</kbd>) + a key steps the hi-speed (odd keys down, even keys up; on LR2 skins SELECT does too,
+                and keys 6 / 7 move the lane cover while it shows); START + the turntable moves the cover on beatoraja skins.
+                START twice switches the lane cover. START + SELECT held for a second quits, and after the last note
+                either one ends the play.
+              </li>
               <li>
                 Lane covers (Plain, Native, Synesthesia and beatoraja skins): <kbd>PageUp</kbd> / <kbd>PageDown</kbd>
                 move SUDDEN+, <kbd>Home</kbd> / <kbd>End</kbd> the LIFT, <kbd>H</kbd> switches HIDDEN+ and
@@ -601,7 +607,8 @@ export const PLAYER_APP_HTML = `
 
             <h3 class="help-section-title">Result</h3>
             <ul class="help-list">
-              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> returns to chart select.</li>
+              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> returns to chart select; so do the lane keys (LR2 skins: any, beatoraja skins: keys 1–4).</li>
+              <li>Keys held as the screen leaves retry the chart: a white and a black key (LR2 skins), key 5 or 7 (beatoraja skins), or <kbd>Esc</kbd> held half a second.</li>
               <li><kbd>R</kbd> plays the same chart again right away with the same options.</li>
             </ul>
 
@@ -701,7 +708,11 @@ export const PLAYER_APP_HTML = `
               <div class="help-keymap-note">左 Shift (左 Ctrl、Space) = 1P スクラッチ · 右 Shift (右 Ctrl) = 2P スクラッチ · START / SELECT = Q / W (2P は O / P) · 9 ボタン (PMS) の譜面は Z S X D C F V G B。</div>
             </div>
             <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。長押しで連続調整できます。</li>
+              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。長押しで連続調整できます。beatoraja スキンでは代わりにレーンカバーを動かし、それ以外のスキンでは <kbd>←</kbd> / <kbd>→</kbd> でレーンカバーを動かします (AUTO プレイ以外)。</li>
+              <li>
+                START (<kbd>Q</kbd>) + 鍵盤でハイスピード調整 (奇数鍵で下げ、偶数鍵で上げ。LR2 スキンでは SELECT でも同じで、レーンカバー表示中は鍵盤 6 / 7 でカバーを動かします)。beatoraja スキンでは START + 皿でカバーを動かします。
+                START 2 回押しでレーンカバーの ON / OFF。START + SELECT を 1 秒押し続けると中断し、最後のノーツの後はどちらか一方だけでプレイを終えます。
+              </li>
               <li>
                 レーンカバー (Plain / Native / Synesthesia と beatoraja スキン): <kbd>PageUp</kbd> / <kbd>PageDown</kbd> で SUDDEN+、<kbd>Home</kbd> / <kbd>End</kbd> で LIFT を動かし、<kbd>H</kbd> で HIDDEN+ を切り替え、<kbd>J</kbd> / <kbd>K</kbd> で動かします。<kbd>Shift</kbd> を押しながらだと大きく動きます。譜面のレーンに使われているキーはレーンの入力になります。
                 調整キーは長押しで連続して動きます。H は押すたびに 1 回だけ切り替わります。FLOATING HI-SPEED では、SUDDEN+ と LIFT が両方 OFF のとき、PageUp / PageDown でハイスピードを微調整します。
@@ -717,7 +728,8 @@ export const PLAYER_APP_HTML = `
 
             <h3 class="help-section-title">リザルト</h3>
             <ul class="help-list">
-              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> で選曲画面へ戻ります。</li>
+              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> で選曲画面へ戻ります。鍵盤でも戻れます (LR2 スキンはどの鍵盤でも、beatoraja スキンは鍵盤 1〜4)。</li>
+              <li>画面を抜けるときにキーを押したままだと、もう一度プレイします: 白鍵と黒鍵 (LR2 スキン)、鍵盤 5 か 7 (beatoraja スキン)、または <kbd>Esc</kbd> を 0.5 秒押し続ける。</li>
               <li><kbd>R</kbd> で同じオプションのまま同じ譜面をすぐにもう一度プレイします。</li>
             </ul>
 

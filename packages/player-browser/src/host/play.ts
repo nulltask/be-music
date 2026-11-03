@@ -36,6 +36,7 @@ import { LR2TextureRetainer } from '../view/lr2/texture-retainer.ts';
 import type { PlayFrame, PlayIntent, PlayView, PlayfieldSkin } from '../view/types.ts';
 import type { BeatorajaKit, BuiltInKit, LR2PlayKit } from './family-kit.ts';
 import { resolveLaneInputTokens } from '../session/play/play-cover-keys.ts';
+import { resolveControlScheme } from '../session/controls/control-buttons.ts';
 import { keyboardEventToTokens } from '../runtime/web-input-runtime.ts';
 
 const log = logger('gameplay');
@@ -524,6 +525,7 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
     if (viewDrawsKit(current, kit)) {
       current.updateKit(kit);
       this.play.options.coverKeys = kit.family === 'beatoraja';
+      this.play.options.controlScheme = resolveControlScheme(kit.family, this.play.options.builtInControlScheme);
       return;
     }
     this.audio.stopOwned(this.soundOwner);
@@ -555,6 +557,7 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
       return;
     }
     this.play.options.coverKeys = kit.family === 'beatoraja';
+    this.play.options.controlScheme = resolveControlScheme(kit.family, this.play.options.builtInControlScheme);
     if (next.view instanceof LR2PlayView || next.view instanceof BeatorajaPlayView) next.view.joinRunningPlay();
     this.retire(current);
   }
@@ -623,6 +626,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     {
       ...settings,
       ...(kit.family === 'built-in' && LIFT_SKINS.has(kit.skin.id) ? { coverKeys: true } : {}),
+      controlScheme: resolveControlScheme(kit.family, settings.builtInControlScheme),
       judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
       ...(playOptions.customJudge && settings.judgeRuleset === 'beatoraja'
         ? {

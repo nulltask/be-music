@@ -291,3 +291,20 @@ describe('DecideSession', () => {
     }
   });
 });
+
+describe('the decide screen’s lane keys and START + SELECT', () => {
+  it('continues on LR2’s any key and beatoraja’s keys 1 / 3 / 5 / 7', () => {
+    expect(resolveDecideKeyAction({ code: 'KeyS', buttons: ['1P-key2'], repeat: false })).toBe('continue');
+    const beatoraja = resolveControlActions('beatoraja');
+    expect(resolveDecideKeyAction({ code: 'KeyX', buttons: ['1P-key3'], repeat: false }, beatoraja)).toBe('continue');
+    expect(resolveDecideKeyAction({ code: 'KeyS', buttons: ['1P-key2'], repeat: false }, beatoraja)).toBeUndefined();
+  });
+
+  it('backs out on START and SELECT held together', () => {
+    const { session, on } = createSession();
+    session.enter(0);
+    expect(session.handleKey(key('KeyQ', { timeStamp: 10 }))).toBe(false);
+    expect(session.handleKey(key('KeyW', { timeStamp: 20 }))).toBe(true);
+    expect(on.cancel).toHaveBeenCalledTimes(1);
+  });
+});

@@ -41,6 +41,14 @@ export interface ControlButtonTracker {
   reset(): void;
 }
 
+/** Whether a side's START and SELECT are both down (LR2's and beatoraja's back-out and quit). */
+export function isStartAndSelectDown(tracker: Pick<ControlButtonTracker, 'isDown'>): boolean {
+  return (
+    (tracker.isDown('1P-start') && tracker.isDown('1P-select')) ||
+    (tracker.isDown('2P-start') && tracker.isDown('2P-select'))
+  );
+}
+
 export function createControlButtonTracker(): ControlButtonTracker {
   /** The keys (codes) holding each button down, and when it went down. */
   const down = new Map<ControlButton, { readonly codes: Set<string>; readonly at: number }>();

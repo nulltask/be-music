@@ -1,7 +1,15 @@
 import { createHiSpeedState, createPlayState } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { createPlayerInputSignalBus } from '@be-music/player-engine/signals';
-import { handleSharedEngineExitKey, recordControlKey } from './play-input.ts';
+import {
+  handleSharedEngineExitKey,
+  isQuickRetryHeld,
+  QUICK_RETRY_HOLD_MS,
+  recordControlKey,
+  START_SELECT_QUIT_MS,
+  trackPlayKey,
+} from './play-input.ts';
+import { HISPEED_STEP } from '@be-music/player-scene-model';
 import { PlaySession } from './play-session.ts';
 
 function key(key: string, overrides: Partial<KeyboardEvent> = {}): KeyboardEvent {
@@ -84,8 +92,9 @@ describe('play adjustment keys', () => {
       handleSharedEngineExitKey(play, back);
       handleSharedEngineExitKey(play, forward);
       expect(blocked).not.toHaveBeenCalled();
-      expect(back.preventDefault).not.toHaveBeenCalled();
-      expect(forward.preventDefault).not.toHaveBeenCalled();
+      // LR2's ← / → move the lane cover instead.
+      expect(back.preventDefault).toHaveBeenCalledOnce();
+      expect(forward.preventDefault).toHaveBeenCalledOnce();
     }
   });
 
@@ -174,5 +183,87 @@ describe('play pause and control keys', () => {
     play.preparedChart = { laneBindings: [{ inputTokens: ['z'] }] } as unknown as typeof play.preparedChart;
     recordControlKey(play, 'down', key('KeyZ'));
     expect(inputSignals.drainCommands()).toEqual([]);
+  });
+});
+
+describe('START and SELECT in a play', () => {
+  const up = (code: string, overrides: Partial<KeyboardEvent> = {}) => ({ ...key(code, overrides) }) as KeyboardEvent;
+  const release = (play: PlaySession, code: string, timeStamp = 0) =>
+    trackPlayKey(play, 'up', up(code, { timeStamp } as Partial<KeyboardEvent>));
+
+  test('LR2: START or SELECT + keys 1 / 3 / 5 step the hi-speed down, 2 / 4 up', () => {
+    const play = new PlaySession({ initialHiSpeed: 2 });
+    handleSharedEngineExitKey(play, key('KeyQ'));
+    handleSharedEngineExitKey(play, key('KeyS'));
+    expect(play.getHiSpeed()).toBeCloseTo(2 + HISPEED_STEP);
+    handleSharedEngineExitKey(play, key('KeyZ'));
+    handleSharedEngineExitKey(play, key('KeyX'));
+    expect(play.getHiSpeed()).toBeCloseTo(2 - HISPEED_STEP);
+    release(play, 'KeyQ');
+    handleSharedEngineExitKey(play, key('KeyW'));
+    handleSharedEngineExitKey(play, key('KeyD'));
+    expect(play.getHiSpeed()).toBeCloseTo(2);
+    // Without START or SELECT, a lane key steps nothing.
+    release(play, 'KeyW');
+    handleSharedEngineExitKey(play, key('KeyS'));
+    expect(play.getHiSpeed()).toBeCloseTo(2);
+  });
+
+  test('beatoraja: START + odd keys down, even keys up, and START + the turntable moves the lane cover', () => {
+    const play = coveredPlay();
+    play.options.controlScheme = 'beatoraja';
+    handleSharedEngineExitKey(play, key('KeyQ'));
+    handleSharedEngineExitKey(play, key('KeyF'));
+    expect(play.getHiSpeed()).toBeCloseTo(2 + HISPEED_STEP);
+    handleSharedEngineExitKey(play, key('ControlLeft'));
+    expect(play.playState.view.covers[0]?.sudden).toBeCloseTo(0.01);
+  });
+
+  test('START pressed twice switches the lane cover', () => {
+    const play = coveredPlay();
+    handleSharedEngineExitKey(play, key('KeyQ', { timeStamp: 0 }));
+    release(play, 'KeyQ', 50);
+    handleSharedEngineExitKey(play, key('KeyQ', { timeStamp: 100 }));
+    expect(play.playState.view.covers[0]?.suddenOn).toBe(true);
+  });
+
+  test('START and SELECT held for START_SELECT_QUIT_MS quit; after the last note either one ends the play', () => {
+    vi.useFakeTimers();
+    try {
+      const play = new PlaySession();
+      const exit = vi.spyOn(play, 'requestExit').mockImplementation(() => {});
+      handleSharedEngineExitKey(play, key('KeyQ'));
+      handleSharedEngineExitKey(play, key('KeyW'));
+      vi.advanceTimersByTime(START_SELECT_QUIT_MS - 1);
+      expect(exit).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(exit).toHaveBeenCalledOnce();
+
+      const ended = new PlaySession();
+      const end = vi.spyOn(ended, 'requestExit').mockImplementation(() => {});
+      ended.playMoments.allNotesDoneAtMs = 1000;
+      handleSharedEngineExitKey(ended, key('KeyW'));
+      expect(end).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('the quit key held for QUICK_RETRY_HOLD_MS asks for a quick retry', () => {
+    const play = new PlaySession();
+    vi.spyOn(play, 'requestExit').mockImplementation(() => {});
+    handleSharedEngineExitKey(play, key('Escape', { timeStamp: 100 }));
+    expect(isQuickRetryHeld(play, 100 + QUICK_RETRY_HOLD_MS - 1)).toBe(false);
+    expect(isQuickRetryHeld(play, 100 + QUICK_RETRY_HOLD_MS)).toBe(true);
+    release(play, 'Escape', 200);
+    expect(isQuickRetryHeld(play, 100 + QUICK_RETRY_HOLD_MS)).toBe(false);
+  });
+
+  test('beatoraja’s ↑ / ↓ move the lane cover; LR2’s step the hi-speed', () => {
+    const play = coveredPlay();
+    play.options.controlScheme = 'beatoraja';
+    handleSharedEngineExitKey(play, key('ArrowDown'));
+    expect(play.playState.view.covers[0]?.sudden).toBeCloseTo(0.01);
+    expect(play.getHiSpeed()).toBe(2);
   });
 });
