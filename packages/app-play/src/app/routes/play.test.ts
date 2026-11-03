@@ -170,7 +170,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
   const recording = {} as RecordingDeps;
   const deps = {
     router,
-    selectRoute: { lastSelectNavigation: undefined as BrowseSnapshot | undefined },
+    selectRoute: { lastSelectNavigation: undefined as BrowseSnapshot | undefined, endAutoPlaylist: vi.fn() },
     elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: { collection: { sources: [], charts: [chartEntry('a')], errors: [] } as BrowserChartCollection },
     records: {

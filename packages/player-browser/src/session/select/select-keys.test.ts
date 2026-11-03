@@ -218,3 +218,19 @@ describe('resolveSelectKeyAction on the beatoraja key map', () => {
     expect(resolve(down('KeyR', 'r'), open)).toEqual({ type: 'swallow' });
   });
 });
+
+describe('resolveSelectKeyAction on beatoraja’s extra keys', () => {
+  const resolve = (event: SessionKeyEvent) => resolveSelectKeyAction(event, LIST, 'beatoraja');
+
+  it('copies a hash on Ctrl+F3 / Ctrl+Shift+F3 only, and takes F10, 8 and 9', () => {
+    expect(resolve({ ...down('F3'), ctrlKey: true })).toEqual({ type: 'copy-hash', hash: 'md5' });
+    expect(resolve({ ...down('F3'), metaKey: true })).toEqual({ type: 'copy-hash', hash: 'md5' });
+    expect(resolve({ ...down('F3'), ctrlKey: true, shiftKey: true })).toEqual({ type: 'copy-hash', hash: 'sha256' });
+    expect(resolve({ ...down('F3'), shiftKey: true })).toBeUndefined();
+    expect(resolve(down('F10'))).toEqual({ type: 'autoplay-folder' });
+    expect(resolve(down('Digit8', '8'))).toEqual({ type: 'same-folder' });
+    expect(resolve(down('Digit9', '9'))).toEqual({ type: 'readme' });
+    // LR2 has none of them.
+    expect(resolveSelectKeyAction(down('Digit8', '8'), LIST, 'lr2')).toBeUndefined();
+  });
+});

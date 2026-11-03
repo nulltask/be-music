@@ -60,7 +60,10 @@ export interface SelectRouteDeps {
   /** The library the screen lists. */
   readonly library: Pick<LibraryService, 'collection' | 'reloadCharts'>;
   /** The best records the screen shows on its bars. */
-  readonly records: Pick<RecordsService, 'lookupChartBestRecord' | 'currentRulesetRecords' | 'currentDanRanks'>;
+  readonly records: Pick<
+    RecordsService,
+    'lookupChartBestRecord' | 'currentRulesetRecords' | 'currentDanRanks' | 'resolveChartHashes'
+  >;
   /** The course run: where the cursor goes back to once a course is over. */
   readonly courses: Pick<CourseRunService, 'takeReturnNavigation'>;
   /** Starts a course bar's run. */
@@ -116,6 +119,8 @@ export class SelectRoute {
    * own cursor is the place, so a screen made again later for another family opens where the player has browsed since.
    */
   public lastSelectNavigation: BrowseSnapshot | undefined;
+  /** The charts beatoraja's F10 has still to play in AUTO: each return to the screen starts the next one. */
+  private autoPlaylist: LibraryChart[] = [];
   private readonly router: SelectRouteDeps['router'];
   private readonly controls: SelectRouteDeps['controls'];
   private readonly showExitMenu: SelectRouteDeps['showExitMenu'];
@@ -184,6 +189,13 @@ export class SelectRoute {
    * family draws it now. The cursor comes back where it was, or to the course bar a course was started from.
    */
   public async showSelect(): Promise<void> {
+    // beatoraja's F10: the folder's charts play in AUTO one after the other, each one's decide screen straight after the
+    // last one's result.
+    const next = this.autoPlaylist.shift();
+    if (next !== undefined) {
+      void this.showDecide(next, { autoPlay: true });
+      return;
+    }
     // Back from a play or a result: the status line describes the library again instead of the play just left.
     if (this.playStatusShown()) this.setStatus(describeChartCollection(this.library.collection));
     // Back from a course: the cursor returns to the course bar it was started from.
@@ -323,6 +335,16 @@ export class SelectRoute {
           this.library.collection = { ...this.library.collection, charts: [...this.library.collection.charts] };
           this.selectView?.setLibrary(this.library.collection);
         },
+        // beatoraja's Ctrl+F3 / Ctrl+Shift+F3: the chart's MD5 or SHA-256 on the clipboard.
+        copyChartHash: (chart, hash) => {
+          void this.copyChartHash(chart, hash);
+        },
+        // beatoraja's F10: every chart of the folder in AUTO, the first one now.
+        autoplayFolder: (charts) => {
+          this.lastSelectNavigation = this.selectView?.snapshot();
+          this.autoPlaylist = [...charts];
+          void this.showSelect();
+        },
         exitMenu: () => {
           this.showExitMenu((choice) => {
             if (choice === 'leave') this.leaveForDrop();
@@ -350,6 +372,25 @@ export class SelectRoute {
    * (as LR2 does); a course starts its run, or says why it cannot. Returns whether a play starts, so the screen plays
    * the decide jingle only then.
    */
+  /** Ends beatoraja's F10 run of AUTO plays: a play given up goes back to the select screen. */
+  public endAutoPlaylist(): void {
+    this.autoPlaylist = [];
+  }
+
+  private async copyChartHash(chart: LibraryChart, hash: 'md5' | 'sha256'): Promise<void> {
+    const value = (await this.records.resolveChartHashes(chart))?.[hash];
+    if (value === undefined) {
+      this.setStatus(`${chart.title}: no ${hash === 'md5' ? 'MD5' : 'SHA-256'} to copy`);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      this.setStatus(`Copied the ${hash === 'md5' ? 'MD5' : 'SHA-256'} of ${chart.title}`);
+    } catch {
+      this.setStatus(`${chart.title}: the clipboard is not available`);
+    }
+  }
+
   private startFromSelect(entry: SelectStartEntry, autoPlay: boolean): boolean {
     if (entry.kind === 'chart') {
       if (this.courseMaker.addChartToCourseBeingMade(entry.chart)) return false;
