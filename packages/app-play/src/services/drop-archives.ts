@@ -1,5 +1,6 @@
 // Dropped ZIP archives: a chart archive goes to the song collection whole (it expands it itself, as `?music=` and the
-// Open files picker do), any other archive (a skin, replays, course files) is expanded and joins the drop as files.
+// Open files picker do), any other archive (a skin, replays, course files) is expanded and joins the drop as files. Only
+// a ZIP dropped as itself counts: one inside a dropped folder stays a plain file of that folder.
 import { isChartFilePath } from '@be-music/player-browser/collection';
 
 const END_OF_CENTRAL_DIRECTORY = 0x06054b50;
@@ -11,6 +12,14 @@ const END_RECORD_SEARCH = END_RECORD_SIZE + 0xffff;
 /** Whether a dropped file is a ZIP archive, by its name. */
 export function isZipArchiveName(name: string): boolean {
   return name.toLowerCase().endsWith('.zip');
+}
+
+/**
+ * Whether a dropped file is a ZIP the player dropped as itself, which it opens: one inside a dropped folder (its path
+ * names the folder) is left as it is, as the song collection leaves it.
+ */
+export function isDroppedArchive(file: { readonly name: string; readonly webkitRelativePath?: string }): boolean {
+  return isZipArchiveName(file.name) && !(file.webkitRelativePath ?? '').includes('/');
 }
 
 interface CentralDirectory {
