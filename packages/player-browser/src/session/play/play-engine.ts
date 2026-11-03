@@ -1241,7 +1241,7 @@ function handleSharedEngineChartFinished(
         flushReplayView(ctx);
         ctx.chartEndHold?.abort();
       },
-      // A normal end lets its last keysounds ring through the fade-out; a failure cuts them.
+      // A normal end lets its last keysounds ring through the fade-out; a failure fades them over its close.
       { failed: ending.failed, fadeAudio: false },
     );
   };
