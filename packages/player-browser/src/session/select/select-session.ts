@@ -73,6 +73,12 @@ import { findReadtextForChart } from '../../collection/readtext.ts';
 export type SelectStartEntry = Exclude<LibraryEntry, { kind: 'folder' }>;
 
 /** Where the select screen leads, and what it tells the host. */
+/** How long LR2's key 6 is held for the saved replay instead of AUTO, as LR2 holds it (`> 2000`). */
+export const REPLAY_HOLD_MS = 2000;
+
+/** How long LR2's key 4 is held for the chart's ranking. */
+export const RANKING_HOLD_MS = 300;
+
 /** How long the panel key is held for the panel to show only while it is (LR2's), rather than stay open. */
 export const PANEL_HOLD_MS = 300;
 
@@ -109,6 +115,13 @@ export interface SelectSessionEvents {
   exitMenu?(): void;
   /** The player asked to read the library's folders again (LR2's F8, beatoraja's F2). Without it the key does nothing. */
   reload?(): void;
+  /** The player held LR2's key 4 on a chart: show its ranking (LR2's IR). */
+  ranking?(chart: LibraryChart): void;
+  /**
+   * The player stepped a chart's difficulty (`#DIFFICULTY`) or level (`#PLAYLEVEL`) with LR2's F3 + the arrows: the
+   * host keeps the edit and gives the screen the library again.
+   */
+  levelEdit?(chart: LibraryChart, part: 'difficulty' | 'level', step: 1 | -1): void;
 }
 
 /** The part of the audio service the select screen uses. */
@@ -205,6 +218,12 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private panel: number | undefined;
   /** The control buttons held, for beatoraja's START + SELECT. */
   private readonly buttonsHeld = createControlButtonTracker();
+  /** LR2's key 4 or 6 held: which, its key, when it went down, and whether its hold has acted. */
+  private heldKey:
+    | { readonly kind: 'auto' | 'ranking'; readonly code: string; readonly atMs: number; fired?: boolean }
+    | undefined;
+  /** Whether LR2's F3 is held, which turns the arrows to the level edit. */
+  private levelEditHeld = false;
   /** When the panel key that opened the panel went down, while it is still held. */
   private panelPressedAtMs: number | undefined;
   private searchEditing = false;
@@ -377,6 +396,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     this.entered = false;
     this.launch = undefined;
     this.reportedFocus = null;
+    this.heldKey = undefined;
+    this.levelEditHeld = false;
+    this.buttonsHeld.reset();
     this.options.audio.stopOwned(this);
   }
 
@@ -393,7 +415,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       ...event,
       buttons: event.buttons ?? controlButtonsOfKey(event, DEFAULT_CONTROL_BUTTONS),
     });
-    if (event.type === 'up') return this.releasePanelKey(event);
+    if (event.type === 'up') return this.releaseHeldKey(event) || this.releasePanelKey(event);
+    // LR2's F3 held: the arrows edit the chart's difficulty (↑ / ↓) and level (← / →).
+    if (this.levelEditHeld && event.code.startsWith('Arrow')) return this.editLevel(event.code);
     // A key is a gesture: the browser lets the BGM start once one came.
     this.options.audio.resume();
     // The chart is chosen while a launch outro plays.
@@ -450,7 +474,16 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         return this.switchDifficulty(atMs);
       case 'auto':
         if (this.focused()?.kind === 'folder') this.activate(atMs);
+        // LR2's key 6 waits for its release: let go, it starts in AUTO; held for REPLAY_HOLD_MS, the saved replay.
+        else if (this.policy.keys === 'lr2') this.heldKey ??= { kind: 'auto', code: event.code, atMs };
         else this.start(true, atMs);
+        return true;
+      case 'ranking':
+        // LR2's key 4: held, the chart's ranking opens (in `frame`); a tap backs out on its release.
+        this.heldKey ??= { kind: 'ranking', code: event.code, atMs };
+        return true;
+      case 'level-edit':
+        this.levelEditHeld = true;
         return true;
       case 'list':
         this.stepList(action.option);
@@ -540,6 +573,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     if (this.entered) {
       this.nowMs = Math.max(this.nowMs, nowMs);
       this.settleLaunch();
+      this.settleHeldKey();
       this.refreshPreview();
     }
     const events = this.events;
@@ -766,6 +800,55 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   // ---------------------------------------------------------------------------------------------------------------------
 
   /** Opens `panel` (closing the one open), or closes it when it is the one open; `undefined` changes nothing. */
+  /** A held key's release (LR2's keys 4 and 6, and F3): what it does depends on how long it was held. */
+  private releaseHeldKey(event: SessionKeyEvent): boolean {
+    if (this.levelEditHeld && event.code === this.levelEditCode(event)) {
+      this.levelEditHeld = false;
+      return true;
+    }
+    const held = this.heldKey;
+    if (held === undefined || held.code !== event.code) return false;
+    this.heldKey = undefined;
+    const heldMs = event.timeStamp - held.atMs;
+    if (held.kind === 'auto') {
+      if (heldMs >= REPLAY_HOLD_MS && (this.replaySlotsOf(this.focused())?.exists.some(Boolean) ?? false)) {
+        this.replay(undefined, event.timeStamp);
+      } else {
+        this.start(true, event.timeStamp);
+      }
+    } else if (held.fired !== true) {
+      this.back(event.timeStamp, false);
+    }
+    return true;
+  }
+
+  /** The F3 key that started the level edit, for its release (any key the operation takes). */
+  private levelEditCode(event: SessionKeyEvent): string | undefined {
+    const actions = this.options.actions ?? DEFAULT_CONTROL_ACTIONS[this.policy.keys];
+    const buttons = event.buttons ?? controlButtonsOfKey(event, DEFAULT_CONTROL_BUTTONS);
+    return actions.is('select.level-edit', { ...event, buttons }) ? event.code : undefined;
+  }
+
+  /** LR2's key 4 held for RANKING_HOLD_MS opens the focused chart's ranking, once. */
+  private settleHeldKey(): void {
+    const held = this.heldKey;
+    if (held?.kind !== 'ranking' || held.fired === true || this.nowMs - held.atMs < RANKING_HOLD_MS) return;
+    held.fired = true;
+    const chart = this.focused();
+    if (chart?.kind === 'chart') this.options.on.ranking?.(chart.chart);
+  }
+
+  /** Asks the host to step the focused chart's difficulty (↑ / ↓) or level (← / →). */
+  private editLevel(arrow: string): boolean {
+    const chart = this.focused();
+    if (chart?.kind !== 'chart' || this.options.on.levelEdit === undefined) return true;
+    const step = arrow === 'ArrowUp' || arrow === 'ArrowRight' ? 1 : -1;
+    const part = arrow === 'ArrowUp' || arrow === 'ArrowDown' ? 'difficulty' : 'level';
+    this.options.on.levelEdit(chart.chart, part, step);
+    this.playCue('optionChange');
+    return true;
+  }
+
   /**
    * The panel key coming up: a panel it opened and held for {@link PANEL_HOLD_MS} or longer closes (it showed while
    * held, as LR2's does), and one tapped open stays open until the next press (That-Which-Must-Not-Be-Named PC's).

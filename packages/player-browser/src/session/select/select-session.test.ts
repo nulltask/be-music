@@ -12,7 +12,13 @@ import { SILENT_AUDIO } from '../../runtime/audio-analysis.ts';
 import type { SelectFrame, SelectIntent, SelectRecords } from '../../view/types.ts';
 import type { SessionKeyEvent } from '../session-scene.ts';
 import { SELECT_POLICIES } from './select-policy.ts';
-import { PANEL_HOLD_MS, SelectSession, type SelectSessionEvents, type SelectSessionOptions } from './select-session.ts';
+import {
+  PANEL_HOLD_MS,
+  RANKING_HOLD_MS,
+  SelectSession,
+  type SelectSessionEvents,
+  type SelectSessionOptions,
+} from './select-session.ts';
 import { makeChart, makeCollection, makeCourse, makeCourseFolder } from './test-support.ts';
 
 const SLOTS: readonly SystemSoundSlot[] = [
@@ -828,11 +834,13 @@ describe('SelectSession lane and number keys', () => {
     expect(started).toEqual([]);
   });
 
-  it('starts a chart in AUTO on LR2’s key 6, and opens a folder with it', () => {
-    const { key, advance, started } = createSession();
+  it('starts a chart in AUTO as LR2’s key 6 comes up, and opens a folder with it', () => {
+    const { session, key, advance, started } = createSession();
     key('KeyF', 'f');
     expect(advance(10).browse.path).toHaveLength(1);
     key('KeyF', 'f');
+    expect(started).toEqual([]);
+    session.handleKey({ ...keyEvent('KeyF', 'f', 100), type: 'up' });
     advance(5000);
     expect(started).toEqual([{ entry: expect.any(String), autoPlay: true }]);
   });
@@ -911,5 +919,43 @@ describe('SelectSession folder reload', () => {
     expect(createSession({ policy: SELECT_POLICIES.beatoraja, on: { reload } }).key('F2')).toBe(true);
     expect(reload).toHaveBeenCalledTimes(2);
     expect(createSession().key('F8')).toBe(false);
+  });
+});
+
+describe('SelectSession LR2 held keys', () => {
+  const up = (session: SelectSession, code: string, timeStamp: number) =>
+    session.handleKey({ ...keyEvent(code, code, timeStamp), type: 'up' });
+
+  it('backs out on a tap of key 4, and opens the chart’s ranking when it is held', () => {
+    const ranking = vi.fn();
+    const inPack = { browse: { folderPath: ['pack'], cursors: [1, 0] }, on: { ranking } };
+    const tapped = createSession(inPack);
+    tapped.key('KeyD', 'd');
+    up(tapped.session, 'KeyD', 50);
+    expect(tapped.advance(10).browse.path).toHaveLength(0);
+    const held = createSession(inPack);
+    held.key('KeyD', 'd');
+    held.advance(RANKING_HOLD_MS);
+    expect(ranking).toHaveBeenCalledOnce();
+    up(held.session, 'KeyD', RANKING_HOLD_MS + 10);
+    expect(held.advance(10).browse.path).toHaveLength(1);
+  });
+
+  it('steps the chart’s difficulty and level with F3 held and the arrows, and the arrows move the cursor again after', () => {
+    const levelEdit = vi.fn();
+    const { session, key, advance } = createSession({
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      on: { levelEdit },
+    });
+    const focused = session.focused();
+    key('F3');
+    key('ArrowUp');
+    key('ArrowLeft');
+    expect(levelEdit.mock.calls.map(([, part, step]) => `${part} ${step}`)).toEqual(['difficulty 1', 'level -1']);
+    expect(session.focused()).toEqual(focused);
+    up(session, 'F3', 10);
+    key('ArrowDown');
+    advance(10);
+    expect(session.focused()).not.toEqual(focused);
   });
 });

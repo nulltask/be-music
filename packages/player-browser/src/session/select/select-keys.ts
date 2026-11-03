@@ -75,6 +75,10 @@ export type SelectKeyAction =
   | { readonly type: 'ln-mode' }
   /** Open the search field. */
   | { readonly type: 'search' }
+  /** LR2's key 4: back out on a tap, open the chart's ranking when held (`SelectSessionEvents.ranking`). */
+  | { readonly type: 'ranking' }
+  /** LR2's F3: held, the arrows edit the chart's difficulty and level (`SelectSessionEvents.levelEdit`). */
+  | { readonly type: 'level-edit' }
   /** Read the library's folders again (LR2's F8, beatoraja's F2). */
   | { readonly type: 'reload' }
   /** Mark or unmark the focused chart as a favourite (beatoraja's F8 / F9). */
@@ -208,6 +212,8 @@ export function resolveSelectKeyAction(
   if (is('select.activate')) return { type: 'activate' };
   if (is('select.open-folder')) return { type: 'open-folder' };
   if (is('select.difficulty')) return { type: 'difficulty' };
+  if (is('select.ranking')) return { type: 'ranking' };
+  if (is('select.level-edit')) return { type: 'level-edit' };
   if (is('select.auto')) return { type: 'auto' };
   if (is('select.back')) return { type: 'back' };
   if (is('select.close-folder')) return { type: 'back', inFolder: true };

@@ -48,6 +48,7 @@ export const CONTROL_ACTIONS = [
   // Every screen.
   { id: 'global.fullscreen', screen: 'global', label: 'Full screen', defaults: both([code('F4')]) },
   { id: 'global.screenshot', screen: 'global', label: 'Screenshot', defaults: both([code('F6')]) },
+  { id: 'global.help', screen: 'global', label: 'Help', defaults: { lr2: [code('F1')] } },
   {
     id: 'global.fps',
     screen: 'global',
@@ -96,6 +97,20 @@ export const CONTROL_ACTIONS = [
     defaults: { lr2: [code('ArrowRight')], beatoraja: [button('1P-key3')] },
   },
   {
+    id: 'select.ranking',
+    screen: 'select',
+    label: 'Ranking (hold)',
+    // LR2's key 4 held: the chart's ranking (IR); a tap backs out, as the black keys do.
+    defaults: { lr2: [button('1P-key4')] },
+  },
+  {
+    id: 'select.level-edit',
+    screen: 'select',
+    label: 'Edit level (hold)',
+    // LR2's F3 held with the arrows: ↑ / ↓ the chart's difficulty, ← / → its level.
+    defaults: { lr2: [code('F3')] },
+  },
+  {
     id: 'select.difficulty',
     screen: 'select',
     label: 'Next difficulty',
@@ -114,8 +129,8 @@ export const CONTROL_ACTIONS = [
     screen: 'select',
     label: 'Back',
     defaults: {
-      // LR2's key 2 and That-Which-Must-Not-Be-Named PC's black keys.
-      lr2: [code('Escape'), code('Backspace'), code('ArrowLeft'), button('1P-key2'), button('1P-key4')],
+      // LR2's key 2 and That-Which-Must-Not-Be-Named PC's black keys (key 4 is `select.ranking`'s, which backs out on a tap).
+      lr2: [code('Escape'), code('Backspace'), code('ArrowLeft'), button('1P-key2')],
       beatoraja: [code('Escape')],
     },
   },

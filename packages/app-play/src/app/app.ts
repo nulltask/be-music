@@ -59,6 +59,7 @@ import { FamilyKits } from './family-kits.ts';
 import { controlSettingsOf } from '../control-keys.ts';
 import { showExitMenu } from '../ui/exit-menu.ts';
 import { createFpsOverlay } from '../ui/fps-overlay.ts';
+import { openHelpModal } from '../help-modal.ts';
 import type { TestHookRecorder } from '../test-hook.ts';
 import { nameResultJingle, type LiveTestHookDeps } from '../services/test-hook.ts';
 
@@ -686,7 +687,10 @@ export class PlayerWebApp {
       const family = this.router.current?.identity.family ?? 'built-in';
       const scheme = resolveControlScheme(family, this.guiState.builtInControlScheme);
       const actions = resolveControlActions(scheme, this.guiState.actionKeys);
-      if (actions.is('global.fps', event)) {
+      if (actions.is('global.help', event)) {
+        event.preventDefault();
+        openHelpModal();
+      } else if (actions.is('global.fps', event)) {
         event.preventDefault();
         this.fpsOverlay.toggle();
       } else if (actions.is('global.fullscreen', event)) {

@@ -36,7 +36,10 @@ describe('resolveSelectKeyAction', () => {
     for (const code of ['KeyZ', 'KeyX', 'KeyC', 'KeyV']) {
       expect(resolveSelectKeyAction(down(code), LIST)).toEqual({ type: 'activate' });
     }
-    for (const code of ['KeyS', 'KeyD']) expect(resolveSelectKeyAction(down(code), LIST)).toEqual({ type: 'back' });
+    expect(resolveSelectKeyAction(down('KeyS'), LIST)).toEqual({ type: 'back' });
+    // Key 4 backs out on a tap and opens the ranking when held (the session times it), and F3 holds the level edit.
+    expect(resolveSelectKeyAction(down('KeyD'), LIST)).toEqual({ type: 'ranking' });
+    expect(resolveSelectKeyAction(down('F3'), LIST)).toEqual({ type: 'level-edit' });
     // The turntable scrolls: turned down (its second key) to the next bar.
     expect(resolveSelectKeyAction(down('ShiftLeft'), LIST)).toEqual({ type: 'step', direction: -1 });
     expect(resolveSelectKeyAction(down('ControlLeft'), LIST)).toEqual({ type: 'step', direction: 1 });
