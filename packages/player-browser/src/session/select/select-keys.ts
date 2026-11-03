@@ -75,6 +75,8 @@ export type SelectKeyAction =
   | { readonly type: 'ln-mode' }
   /** Open the search field. */
   | { readonly type: 'search' }
+  /** Read the library's folders again (LR2's F8, beatoraja's F2). */
+  | { readonly type: 'reload' }
   /** Mark or unmark the focused chart as a favourite (beatoraja's F8 / F9). */
   | { readonly type: 'favorite'; readonly list: 'music' | 'charts' }
   /** The key does nothing here, but no other handler may take it (the README overlay owns the keyboard). */
@@ -215,6 +217,7 @@ export function resolveSelectKeyAction(
   if (is('select.keys-filter')) return { type: 'list', option: 'keysFilter' };
   if (is('select.ln-mode')) return { type: 'ln-mode' };
   if (is('select.search')) return { type: 'search' };
+  if (is('select.reload')) return { type: 'reload' };
   if (is('select.favorite-song')) return { type: 'favorite', list: 'music' };
   if (is('select.favorite-chart')) return { type: 'favorite', list: 'charts' };
   return undefined;

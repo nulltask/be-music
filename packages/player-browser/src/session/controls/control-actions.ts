@@ -164,6 +164,12 @@ export const CONTROL_ACTIONS = [
   },
   { id: 'select.search', screen: 'select', label: 'Search', defaults: both([code('Digit0')]), bare: true },
   {
+    id: 'select.reload',
+    screen: 'select',
+    label: 'Reload folders',
+    defaults: { lr2: [code('F8')], beatoraja: [code('F2')] },
+  },
+  {
     id: 'select.favorite-song',
     screen: 'select',
     label: 'Favorite song',

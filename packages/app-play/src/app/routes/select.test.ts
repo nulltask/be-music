@@ -145,6 +145,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: {
       collection: { sources: [], charts: options.charts ?? [chartEntry('a')], errors: [] } as BrowserChartCollection,
+      reloadCharts: vi.fn(async () => {}),
     },
     records: {
       lookupChartBestRecord: vi.fn<SelectRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
@@ -609,5 +610,14 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.deps.records.currentDanRanks).toHaveBeenCalled();
     on.search!();
     expect(h.deps.search.openFromPointer).toHaveBeenCalledOnce();
+  });
+});
+
+describe('the folder reload', () => {
+  test('the select screen’s reload key reads the library again', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    lastMade(h).options.on.reload!();
+    expect(h.deps.library.reloadCharts).toHaveBeenCalledOnce();
   });
 });

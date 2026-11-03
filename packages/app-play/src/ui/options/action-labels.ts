@@ -30,6 +30,7 @@ export const ACTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Key mode filter': '鍵盤数の絞り込み',
   'LN mode': 'LN モード',
   Search: '検索',
+  'Reload folders': 'フォルダの再読み込み',
   'Favorite song': 'お気に入りの曲',
   'Favorite chart': 'お気に入りの譜面',
   'Every screen': 'すべての画面',
