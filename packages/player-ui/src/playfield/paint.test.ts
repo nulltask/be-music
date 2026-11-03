@@ -159,14 +159,14 @@ describe('playfield painters', () => {
     });
     expect(ctx.calls).toEqual([
       'fillRect 0,39,50,1 #e5efff 0.125',
-      'fillRect 0,14,10,40 #e5efff 0.075',
-      'fillRect 4,14,2,40 #ffffff 0.15',
-      'fillRect 0,54,10,6 #e5efff 0.25',
-      'fillRect 0,14,10,6 #e5efff 0.25',
-      'fillRect 10,54,20,6 #88b9ff 0.5',
-      'fillRect 10,64,20,6 #88b9ff 1',
-      'fillRect 30,74,20,6 #ff5c6c 0.25',
-      'fillRect 32,76,16,2 #10151f 0.25',
+      'fillRect 0,18,10,40 #e5efff 0.075',
+      'fillRect 4,18,2,40 #ffffff 0.15',
+      'fillRect 0,58,10,2 #e5efff 0.25',
+      'fillRect 0,18,10,2 #e5efff 0.25',
+      'fillRect 10,56,20,4 #88b9ff 0.5',
+      'fillRect 10,66,20,4 #88b9ff 1',
+      'fillRect 30,76,20,4 #ff5c6c 0.25',
+      'fillRect 32,78,16,0 #10151f 0.25',
     ]);
     expect(ctx.globalAlpha).toBe(1);
   });
@@ -184,7 +184,7 @@ describe('playfield painters', () => {
     // CN: body, centre line, head and tail caps only.
     expect(cn).toHaveLength(4);
     // HCN: its centre line zigzags instead of running straight, with no rungs across the body.
-    expect(cn.some((call) => call.startsWith('fillRect 19,14,2,80 '))).toBe(true);
+    expect(cn.some((call) => call.startsWith('fillRect 19,12,2,80 '))).toBe(true);
     expect(hcn.some((call) => call.startsWith('fillRect 19,'))).toBe(false);
     expect(hcn).toContain('stroke');
     expect(hcn.filter((call) => call.startsWith('lineTo')).length).toBeGreaterThan(5);
@@ -210,22 +210,22 @@ describe('playfield painters', () => {
     const zigzag = (calls: string[]): string[] => calls.filter((call) => call.startsWith('lineTo'));
     const halo = (calls: string[]): string[] => calls.filter((call) => call.startsWith('fillRect -3,'));
     // Before it is reached: the HELL colour, a low steady glow and a still zigzag (swinging 6 px about x = 20, a corner
-    // every 14 px from the tail at 14).
+    // every 14 px from the tail at 12, the 40 px lane's 8 px cap above the tail's position at 20).
     const standby = paint('pending');
-    expect(standby.some((call) => call.startsWith('fillRect 0,14,40,80 #a65cff 0.29'))).toBe(true);
-    expect(zigzag(standby)).toContain('lineTo 26,28');
+    expect(standby.some((call) => call.startsWith('fillRect 0,12,40,80 #a65cff 0.29'))).toBe(true);
+    expect(zigzag(standby)).toContain('lineTo 26,26');
     expect(zigzag(paint('pending', 100))).toEqual(zigzag(standby));
     // Held: an orange glow, brighter than on standby, and the zigzag flowing down into the line (50 ms at 60 px/s is
-    // 3 px: the corner at 14 moves down to 17).
+    // 3 px: the corner at 12 moves down to 15).
     const held = paint('held');
     expect(held.some((call) => call.includes('#ff9a1f'))).toBe(true);
     expect(Number(halo(held)[0]!.split(' ').at(-1))).toBeGreaterThan(Number(halo(standby)[0]!.split(' ').at(-1)));
-    expect(zigzag(paint('held', 50))).toContain('lineTo 14,17');
-    // Let go: a dim red, dimmer than on standby, with the zigzag flowing back up the lane (the corner at 28 up to 25).
+    expect(zigzag(paint('held', 50))).toContain('lineTo 14,15');
+    // Let go: a dim red, dimmer than on standby, with the zigzag flowing back up the lane (the corner at 26 up to 23).
     const draining = paint('draining');
     expect(draining.some((call) => call.includes('#ff2e3e'))).toBe(true);
     expect(Number(halo(draining)[0]!.split(' ').at(-1))).toBeLessThan(Number(halo(standby)[0]!.split(' ').at(-1)));
-    expect(zigzag(paint('draining', 50))).toContain('lineTo 26,25');
+    expect(zigzag(paint('draining', 50))).toContain('lineTo 26,23');
     // Over: the glow is gone.
     expect(halo(paint('done'))).toEqual([]);
   });
@@ -252,9 +252,30 @@ describe('playfield painters', () => {
     });
     expect(ctx.calls).toEqual([
       'fillRect 0,39,50,1 #e5efff 0.25',
-      'fillRect 10,54,20,6 #88b9ff 1',
-      'fillRect 30,74,20,6 #ff5c6c 1',
-      'fillRect 32,76,16,2 #10151f 1',
+      'fillRect 10,56,20,4 #88b9ff 1',
+      'fillRect 30,76,20,4 #ff5c6c 1',
+      'fillRect 32,78,16,0 #10151f 1',
+    ]);
+  });
+
+  it('draws every note as tall as a white key’s note, whatever its lane’s width', () => {
+    const ctx = recorder();
+    paintNotes(ctx, {
+      measureLines: [],
+      longNotes: [],
+      notes: [
+        { kind: 'scratch', x: 0, w: 41, y: 60 },
+        { kind: 'white', x: 41, w: 24, y: 60 },
+        { kind: 'black', x: 65, w: 19, y: 60 },
+      ],
+      mines: [],
+      whiteLaneWidth: 24,
+    });
+    // All 5 px (0.21 of the 24 px white lane), standing on y = 60.
+    expect(ctx.calls).toEqual([
+      'fillRect 0,55,41,5 #ffa8b3 1',
+      'fillRect 41,55,24,5 #e5efff 1',
+      'fillRect 65,55,19,5 #88b9ff 1',
     ]);
   });
 
@@ -267,10 +288,10 @@ describe('playfield painters', () => {
       mines: [],
     });
     expect(ctx.calls).toEqual([
-      'fillRect 0,14,10,40 #e5efff 0.35',
-      'fillRect 4,14,2,40 #ffffff 0.6',
-      'fillRect 0,54,10,6 #e5efff 1',
-      'fillRect 0,14,10,6 #e5efff 1',
+      'fillRect 0,18,10,40 #e5efff 0.35',
+      'fillRect 4,18,2,40 #ffffff 0.6',
+      'fillRect 0,58,10,2 #e5efff 1',
+      'fillRect 0,18,10,2 #e5efff 1',
     ]);
   });
 
@@ -282,7 +303,7 @@ describe('playfield painters', () => {
       notes: [],
       mines: [],
     });
-    expect(ctx.calls[1]).toBe('fillRect 4,14,2,40 #ffffff 0.15');
+    expect(ctx.calls[1]).toBe('fillRect 4,18,2,40 #ffffff 0.15');
   });
 
   it('dims a dropped long note', () => {
@@ -294,10 +315,10 @@ describe('playfield painters', () => {
       mines: [],
     });
     expect(ctx.calls).toEqual([
-      'fillRect 0,14,10,40 #e5efff 0.15',
-      'fillRect 4,14,2,40 #ffffff 0.3',
-      'fillRect 0,54,10,6 #e5efff 0.5',
-      'fillRect 0,14,10,6 #e5efff 0.5',
+      'fillRect 0,18,10,40 #e5efff 0.15',
+      'fillRect 4,18,2,40 #ffffff 0.3',
+      'fillRect 0,58,10,2 #e5efff 0.5',
+      'fillRect 0,18,10,2 #e5efff 0.5',
     ]);
   });
 

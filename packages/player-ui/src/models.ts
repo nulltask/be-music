@@ -71,6 +71,8 @@ export interface BeMusicNotesData {
   readonly measureLines: readonly BeMusicMeasureLine[];
   /** Play time of the frame, for the marks that move (a held hell charge note's flowing rungs). */
   readonly nowMs?: number;
+  /** The playfield's white-key lane width, which every note takes its height from (`resolveNoteHeight`). */
+  readonly whiteLaneWidth?: number;
 }
 /** One play side's lane area with its SUDDEN (top) and HIDDEN (bottom) cover fractions. */
 export interface BeMusicLaneCoverArea {

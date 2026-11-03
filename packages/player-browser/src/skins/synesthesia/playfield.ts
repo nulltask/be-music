@@ -27,6 +27,7 @@ import {
   backSpinChevron,
   hellChargeZigzag,
   longNoteCentreLineAlpha,
+  resolveNoteHeight,
   resolveHellChargeLook,
   resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
@@ -57,13 +58,13 @@ const SCRATCH_LIGHT: LaneLight = { body: 0xff2b8a, glow: 0xff3d9e, hue: 0.92 };
 // The 24 / 48 KEY wheel stands where the scratch would, and burns the same magenta.
 const LIGHTS: Record<BeMusicLaneKind, LaneLight> = {
   white: { body: 0xffffff, glow: 0xff7a1e, hue: 0.07 },
-  black: { body: 0x2f6dff, glow: 0x3fb4ff, hue: 0.57 },
+  // Lighter than a pure blue: a dark body melts into the note's dark rim and reads thinner than a white note.
+  black: { body: 0x4a86ff, glow: 0x3fb4ff, hue: 0.57 },
   scratch: SCRATCH_LIGHT,
   'wheel-up': SCRATCH_LIGHT,
   'wheel-down': SCRATCH_LIGHT,
 };
 
-const NOTE_HEIGHT = 8;
 export const SYNESTHESIA_BOMB_DURATION_MS = 620;
 
 export function renderSynesthesiaLanes({
@@ -149,8 +150,9 @@ export function renderSynesthesiaLanes({
   }
 }
 
-export function renderSynesthesiaNote({ graphics, kind, x, w, y }: PixiNoteContext): void {
-  drawNote(graphics, x, y, Math.max(4, w), LIGHTS[kind]);
+export function renderSynesthesiaNote({ graphics, kind, x, w, y, whiteLaneWidth }: PixiNoteContext): void {
+  const bodyW = Math.max(4, w);
+  drawNote(graphics, x, y, bodyW, resolveNoteHeight(bodyW, whiteLaneWidth), LIGHTS[kind]);
 }
 
 /** Width (px) of one segment of a mine's broken filament, gap included. */
@@ -171,22 +173,25 @@ export function mineFilamentLit(laneX: number, segment: number, nowMs: number): 
  * A mine: shaped like a note so it reads in the same rhythm, but bright crimson in a throbbing red halo, with a broken,
  * flickering filament where a note carries its clean white one — a note that has gone wrong, to be left alone.
  */
-export function renderSynesthesiaMine({ graphics, x, w, y, nowMs }: PixiNoteContext): void {
+export function renderSynesthesiaMine({ graphics, x, w, y, nowMs, whiteLaneWidth }: PixiNoteContext): void {
   const bodyW = Math.max(4, w);
+  const noteHeight = resolveNoteHeight(bodyW, whiteLaneWidth);
   // A red halo that throbs like a warning light (twice a second), so the mine stands out of the lane at a glance.
   const alarm = 0.5 + 0.5 * Math.sin((nowMs / 1000) * Math.PI * 4);
   graphics
-    .rect(x - 4, y - NOTE_HEIGHT - 4, bodyW + 8, NOTE_HEIGHT + 8)
+    .rect(x - 4, y - noteHeight - 4, bodyW + 8, noteHeight + 8)
     .fill({ color: 0xff2030, alpha: 0.18 + 0.22 * alarm });
-  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, bodyW + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 });
-  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).fill(0xc4142c);
-  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).stroke({ color: 0xff6070, width: 1, alignment: 1 });
-  graphics.rect(x, y - NOTE_HEIGHT, bodyW, 2).fill({ color: 0xff8a94, alpha: 0.9 });
+  graphics.rect(x - 1, y - noteHeight - 1, bodyW + 2, noteHeight + 2).fill({ color: 0x05010a, alpha: 0.9 });
+  graphics.rect(x, y - noteHeight, bodyW, noteHeight).fill(0xc4142c);
+  graphics.rect(x, y - noteHeight, bodyW, noteHeight).stroke({ color: 0xff6070, width: 1, alignment: 1 });
+  graphics.rect(x, y - noteHeight, bodyW, 2).fill({ color: 0xff8a94, alpha: 0.9 });
   // The broken filament burns white-hot where a note's runs clean.
   for (let segment = 0; segment * MINE_SEGMENT < bodyW; segment += 1) {
     if (!mineFilamentLit(x, segment, nowMs)) continue;
     const left = segment * MINE_SEGMENT;
-    graphics.rect(x + left, y - 5, Math.min(MINE_SEGMENT - 2, bodyW - left), 2).fill(0xffe0e0);
+    graphics
+      .rect(x + left, y - Math.round(noteHeight / 2) - 1, Math.min(MINE_SEGMENT - 2, bodyW - left), 2)
+      .fill(0xffe0e0);
   }
 }
 
@@ -202,12 +207,15 @@ export function renderSynesthesiaLongNote({
   backSpinScratch,
   state,
   releasedElapsedMs,
+  whiteLaneWidth,
 }: PixiLongNoteContext): void {
   const light = LIGHTS[kind];
   const marks = resolveLongNoteMarks({ mode, backSpinScratch });
   const bodyX = x;
   const bodyW = Math.max(4, w);
-  const bodyTop = top - NOTE_HEIGHT;
+  // A note is as tall as a share of its lane's width (every note as a white key's), standing on its bottom edge.
+  const noteHeight = resolveNoteHeight(bodyW, whiteLaneWidth);
+  const bodyTop = top - noteHeight;
   const bodyH = Math.max(1, bottom - top);
   // A hell charge note shows how it stands (`resolveHellChargeLook`): its colour, its glow and its zigzag filament's
   // motion change together — HELL violet with a still zigzag before it is reached, a bright orange glow with the zigzag
@@ -241,17 +249,17 @@ export function renderSynesthesiaLongNote({
     // The head on the judgement line glows with the note: brightest while charging, gone once it is over.
     if (look.glow > 0) {
       graphics
-        .rect(bodyX - 4, bottom - NOTE_HEIGHT - 4, bodyW + 8, NOTE_HEIGHT + 8)
+        .rect(bodyX - 4, bottom - noteHeight - 4, bodyW + 8, noteHeight + 8)
         .fill({ color: look.color, alpha: 0.45 * look.glow });
     }
   }
-  drawNote(graphics, bodyX, bottom, bodyW, light);
+  drawNote(graphics, bodyX, bottom, bodyW, noteHeight, light);
   // An LN's tail is not judged, so it is drawn translucent: where to let go, not a note to hit. A CN / HCN tail is
   // judged on release and keeps the full cap.
-  drawNote(graphics, bodyX, top, bodyW, light, marks.judgedTail ? 1 : LN_TAIL_ALPHA);
+  drawNote(graphics, bodyX, top, bodyW, noteHeight, light, marks.judgedTail ? 1 : LN_TAIL_ALPHA);
   if (marks.backSpin) {
     // A back-spin scratch: a dark-rimmed white chevron on the tail cap, pointing back up the lane — spin it back there.
-    const chevron = backSpinChevron(bodyX, bodyW, top, NOTE_HEIGHT);
+    const chevron = backSpinChevron(bodyX, bodyW, top, noteHeight);
     graphics.poly(chevron).stroke({ color: 0x05010a, width: 2, alpha: 0.9 });
     graphics.poly(chevron).fill(0xffffff);
   }
@@ -261,11 +269,23 @@ export function renderSynesthesiaLongNote({
 const LN_TAIL_ALPHA = 0.4;
 
 /** A flat bar with a white filament on top and a dark rim — a plain rectangle that reads at a glance. */
-function drawNote(graphics: Graphics, x: number, y: number, w: number, light: LaneLight, alpha = 1): void {
-  // A dark rim lifts the bar off the lit lane and the beam behind it.
-  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, w + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 * alpha });
-  graphics.rect(x, y - NOTE_HEIGHT, w, NOTE_HEIGHT).fill({ color: light.body, alpha });
-  graphics.rect(x, y - NOTE_HEIGHT, w, 2).fill({ color: 0xffffff, alpha: 0.6 * alpha });
+function drawNote(
+  graphics: Graphics,
+  x: number,
+  y: number,
+  w: number,
+  noteHeight: number,
+  light: LaneLight,
+  alpha = 1,
+): void {
+  // A dark rim lifts the bar off the lit lane and the beam behind it. It sits outside the body: the body's bottom edge is
+  // the judgement position.
+  graphics.rect(x - 1, y - noteHeight - 1, w + 2, noteHeight + 2).fill({ color: 0x05010a, alpha: 0.9 * alpha });
+  graphics.rect(x, y - noteHeight, w, noteHeight).fill({ color: light.body, alpha });
+  // A bright filament on top and a fainter one along the bottom: both edges of a coloured note stay distinct from the
+  // rim, so a blue or magenta note reads as tall as a white one (whose body is already as bright as its edges).
+  graphics.rect(x, y - noteHeight, w, 2).fill({ color: 0xffffff, alpha: 0.6 * alpha });
+  graphics.rect(x, y - 1, w, 1).fill({ color: 0xffffff, alpha: 0.35 * alpha });
 }
 
 /** Sparks per hit at combo tier 0; each tier adds {@link BURST_PARTICLES_PER_TIER}. */
