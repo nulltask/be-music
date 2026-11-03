@@ -2244,6 +2244,17 @@ html.touch-first .search-input.search-inline:focus {
   font: inherit;
 }
 
+/*
+ * The header's icon buttons name themselves in a black tooltip that opens below the header's bottom border, so it
+ * never straddles the line.
+ */
+#player-service-header [data-tooltip]::before {
+  margin-top: 18px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: #000;
+  color: #fff;
+}
+
 /* The page footer is the start screen only, so it stays off the skin's playfield. */
 .service-page-footer {
   position: absolute;

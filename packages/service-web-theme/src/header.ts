@@ -42,7 +42,6 @@ const TEXT = {
     fullscreen: 'Full screen',
     fullscreenExit: 'Exit full screen',
     guest: 'guest',
-    language: 'Language',
     languageAria: (name: string) => `Language: ${name}`,
     accountOf: (handle: string) => `Account of @${handle}`,
   },
@@ -56,7 +55,6 @@ const TEXT = {
     fullscreen: 'フルスクリーン',
     fullscreenExit: 'フルスクリーン解除',
     guest: 'ゲスト',
-    language: '言語',
     languageAria: (name: string) => `言語: ${name}`,
     accountOf: (handle: string) => `@${handle} のアカウント`,
   },
@@ -93,7 +91,7 @@ export function serviceSkipLink(locale: Locale): string {
  * `fullscreen` adds a button beside Settings (`data-service-header="fullscreen"`). Only Play sets it; the page toggles
  * fullscreen from the click. `help` adds a Help button in front of Settings (`data-service-header="help"`) that opens
  * the page's Help dialog (`#help-modal`); only Play sets it. Help, Settings and fullscreen are icon buttons that name
- * themselves in a tooltip on hover, as does the language menu. `spanViewport` drops the centered `max-w-5xl` column so
+ * themselves in a tooltip on hover. `spanViewport` drops the centered `max-w-5xl` column so
  * the brand and the actions sit on the viewport edges, and hides the Beta badge below `sm`. Only Play sets it. The row
  * still has `px-4`, the header's own inset. The other services keep the centered column.
  */
@@ -135,7 +133,7 @@ export function renderServiceHeader(input: {
     const current = locale === input.locale;
     return `<a class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5" href="${escapeHTML(withLocale(input.requestURL, locale))}" lang="${locale}" hreflang="${locale}"${current ? ' aria-current="true"' : ''}><span${current ? '' : ' class="invisible"'}>${headerIcon(CHECK_ICON)}</span>${LOCALE_NAMES[locale]}</a>`;
   }).join('');
-  const languageMenu = `<div class="relative"><button type="button" class="btn" data-size="icon-sm" data-variant="ghost" popovertarget="language-menu" aria-label="${escapeHTML(t.languageAria(LOCALE_NAMES[input.locale]))}" data-tooltip="${escapeHTML(t.language)}" data-side="bottom" data-align="end" style="anchor-name:--language-menu">${headerIcon(LANGUAGES_ICON, 'text-muted-foreground')}</button><div id="language-menu" popover="auto" class="${HEADER_MENU_CLASS} w-44" style="position-anchor:--language-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline,--header-menu-span">${languages}</div></div>`;
+  const languageMenu = `<div class="relative"><button type="button" class="btn" data-size="icon-sm" data-variant="ghost" popovertarget="language-menu" aria-label="${escapeHTML(t.languageAria(LOCALE_NAMES[input.locale]))}" style="anchor-name:--language-menu">${headerIcon(LANGUAGES_ICON, 'text-muted-foreground')}</button><div id="language-menu" popover="auto" class="${HEADER_MENU_CLASS} w-44" style="position-anchor:--language-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline,--header-menu-span">${languages}</div></div>`;
   const rowClass =
     input.spanViewport === true
       ? 'flex items-center gap-x-3 px-4 py-2.5 sm:gap-x-6'
