@@ -11,6 +11,7 @@ import {
 } from './play-input.ts';
 import { HISPEED_STEP } from '@be-music/player-scene-model';
 import { PlaySession } from './play-session.ts';
+import * as viewSettings from './play-view-settings.ts';
 
 function key(key: string, overrides: Partial<KeyboardEvent> = {}): KeyboardEvent {
   return {
@@ -215,8 +216,21 @@ describe('START and SELECT in a play', () => {
     handleSharedEngineExitKey(play, key('KeyQ'));
     handleSharedEngineExitKey(play, key('KeyF'));
     expect(play.getHiSpeed()).toBeCloseTo(2 + HISPEED_STEP);
-    handleSharedEngineExitKey(play, key('ControlLeft'));
+    // The turntable's first key covers more of the lane, as beatoraja's `changeCoverValue(…, true)`.
+    handleSharedEngineExitKey(play, key('ShiftLeft'));
     expect(play.playState.view.covers[0]?.sudden).toBeCloseTo(0.01);
+  });
+
+  test('beatoraja: SELECT + a key changes the visible time by 1 ms, odd keys shorter and even keys longer', () => {
+    const play = coveredPlay();
+    play.options.controlScheme = 'beatoraja';
+    const adjust = vi.spyOn(viewSettings, 'adjustWhiteNumber').mockReturnValue(true);
+    handleSharedEngineExitKey(play, key('KeyW'));
+    handleSharedEngineExitKey(play, key('KeyZ'));
+    handleSharedEngineExitKey(play, key('KeyS'));
+    expect(adjust.mock.calls.map(([, delta]) => delta)).toEqual([-1, 1]);
+    expect(play.getHiSpeed()).toBe(2);
+    adjust.mockRestore();
   });
 
   test('START pressed twice switches the lane cover', () => {

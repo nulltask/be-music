@@ -201,8 +201,9 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li>
                 START (<kbd>Q</kbd>) + a key steps the hi-speed (odd keys down, even keys up; on LR2 skins SELECT does
                 too, and keys 6 / 7 move the lane cover while it shows); START + the turntable moves the cover on
-                beatoraja skins. START twice switches the lane cover. START + SELECT held for a second quits, and after
-                the last note either one ends the play.
+                beatoraja skins, and SELECT + a key changes the visible time (green number) by 1 ms. START twice
+                switches the lane cover. START + SELECT held for a second quits, and after the last note either one ends
+                the play.
               </li>
               <li>
                 Lane covers (Plain, Native, Synesthesia and beatoraja skins): <kbd>PageUp</kbd> /
@@ -373,7 +374,8 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li>
                 START (<kbd>Q</kbd>) + 鍵盤でハイスピード調整 (奇数鍵で下げ、偶数鍵で上げ。LR2 スキンでは SELECT
                 でも同じで、レーンカバー表示中は鍵盤 6 / 7 でカバーを動かします)。beatoraja スキンでは START +
-                皿でカバーを動かします。START 2 回押しでレーンカバーの ON / OFF。START + SELECT を 1
+                皿でカバーを動かし、SELECT + 鍵盤で表示時間 (緑数字) を 1 ms ずつ変えます。START 2
+                回押しでレーンカバーの ON / OFF。START + SELECT を 1
                 秒押し続けると中断し、最後のノーツの後はどちらか一方だけでプレイを終えます。
               </li>
               <li>
