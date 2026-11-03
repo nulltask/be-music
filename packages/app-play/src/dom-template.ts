@@ -113,6 +113,10 @@ export const PLAYER_APP_HTML = `
           <div class="drop-title" data-i18n="dropTitle">Drop to load</div>
           <div class="drop-subtitle">
             <span data-i18n="dropFolder">BMS folder</span>
+            <span class="drop-subtitle-sep" aria-hidden="true">·</span>
+            <span data-i18n="dropLR2Skin">LR2 skin</span>
+            <span class="drop-subtitle-sep" aria-hidden="true">·</span>
+            <span data-i18n="dropBeatorajaSkin">beatoraja skin</span>
           </div>
           <!--
             Leaderboard: whether this browser's plays are sent, and the
@@ -121,16 +125,18 @@ export const PLAYER_APP_HTML = `
             the Options dialog's "Submit to Leaderboard" setting.
           -->
           <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard" data-i18n-aria="leaderboard">
-            <label class="start-check">
-              <input class="input" type="checkbox" id="start-submit" />
-              <span data-i18n="submitPlays">Submit my plays to the Leaderboard</span>
-            </label>
-            <!-- \`loading\` until the account has been read, so a signed-in player never sees "Not signed in". -->
-            <div class="start-account" id="start-account" data-state="loading">
-              <span class="start-account-label" id="start-account-label" data-i18n="checkingAccount">Checking account…</span>
+            <!-- One row: the checkbox, then the account's actions. Under it, one note: who the plays go to, and why. -->
+            <div class="start-leaderboard-row">
+              <label class="start-check">
+                <input class="input" type="checkbox" id="start-submit" />
+                <span data-i18n="submitPlays">Submit my plays to the Leaderboard</span>
+              </label>
               <div class="start-account-actions" id="start-account-actions"></div>
             </div>
-            <p class="start-account-hint" id="start-account-hint"></p>
+            <!-- \`loading\` until the account has been read, so a signed-in player never sees "Not signed in". -->
+            <p class="start-account" id="start-account" data-state="loading">
+              <span class="start-account-label" id="start-account-label" data-i18n="checkingAccount">Checking account…</span><span class="start-account-hint" id="start-account-hint"></span>
+            </p>
             <div class="start-account-status" id="start-account-status" role="status" aria-live="polite"></div>
           </section>
           <!--
@@ -395,6 +401,31 @@ export const PLAYER_APP_HTML = `
         <div class="rotate-hint-subtitle" data-i18n="rotateSubtitle">The player is laid out for landscape.</div>
       </div>
     </div>
+    <!--
+      Install, for Safari: it has no install prompt, so the header's
+      Install button opens these steps (install-button.ts).
+    -->
+    <dialog class="dialog" id="install-dialog" aria-labelledby="install-dialog-title" aria-describedby="install-dialog-description">
+      <div>
+        <header>
+          <h2 id="install-dialog-title" data-i18n="installTitle">Install Be-Music Play</h2>
+          <p id="install-dialog-description" data-i18n="installLead">Safari installs web apps from its own menu.</p>
+        </header>
+        <section>
+          <ol class="install-steps" data-install-steps="ios-safari" hidden>
+            <li data-i18n="installIOSShare">Tap the Share button.</li>
+            <li data-i18n="installIOSAdd">Choose “Add to Home Screen”.</li>
+          </ol>
+          <ol class="install-steps" data-install-steps="mac-safari" hidden>
+            <li data-i18n="installMacFile">Open the File menu.</li>
+            <li data-i18n="installMacAdd">Choose “Add to Dock”.</li>
+          </ol>
+        </section>
+        <footer>
+          <button type="button" class="btn" data-install-close data-i18n="close">Close</button>
+        </footer>
+      </div>
+    </dialog>
     <!--
       Help modal. Three tabs:
       - Usage: drag-drop instructions, keyboard shortcuts,

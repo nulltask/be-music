@@ -40,13 +40,16 @@ export interface BrowserCompatReport {
  * `getContext` on a locked-down canvas) can't crash the rest of the page.
  */
 export function checkBrowserCompat(): BrowserCompatReport {
+  const webgpu = detectWebGPU();
   const items: BrowserCompatItem[] = [
+    // What the player cannot start without: something to draw with, something to play the sound through, and a way to
+    // take a dropped folder.
     {
-      id: 'webgl2',
-      label: 'WebGL2',
+      id: 'gpu',
+      label: 'WebGPU / WebGL2',
       required: true,
-      supported: detectWebGL2(),
-      note: 'Pixi rendering pipeline (or WebGPU)',
+      supported: webgpu || detectWebGL2(),
+      note: 'Draws the player: WebGPU where there is one, WebGL2 otherwise',
     },
     {
       id: 'web-audio',
@@ -60,49 +63,92 @@ export function checkBrowserCompat(): BrowserCompatReport {
       label: 'Drag & Drop',
       required: true,
       supported: detectFileAPI(),
-      note: 'Loads BMS folders / LR2 themes from drag-drop',
+      note: 'Loads dropped BMS folders and skins',
     },
-    {
-      id: 'webassembly',
-      label: 'WebAssembly',
-      required: true,
-      supported: detectWebAssembly(),
-      note: 'BGA video transcode (ffmpeg.wasm)',
-    },
-    {
-      id: 'worker',
-      label: 'Workers',
-      required: true,
-      supported: detectWorker(),
-      note: 'Off-main-thread BGA transcoding',
-    },
+    // Each of these switches one feature off, or makes it slower, when it is missing.
     {
       id: 'webgpu',
       label: 'WebGPU',
       required: false,
-      supported: detectWebGPU(),
-      note: 'Preferred GPU path; auto-falls-back to WebGL2',
+      supported: webgpu,
+      note: 'Preferred renderer; WebGL2 draws without it',
+    },
+    {
+      id: 'worker',
+      label: 'Workers',
+      required: false,
+      supported: detectWorker(),
+      note: 'Parses charts and transcodes BGA off the page; charts still parse on the page without them',
+    },
+    {
+      id: 'webassembly',
+      label: 'WebAssembly',
+      required: false,
+      supported: detectWebAssembly(),
+      note: 'Legacy BGA video (ffmpeg.wasm) and tempo changes that keep the pitch',
+    },
+    {
+      id: 'audio-worklet',
+      label: 'AudioWorklet',
+      required: false,
+      supported: detectAudioWorklet(),
+      note: 'Tempo changes that keep the pitch, and the sound of a WebCodecs recording',
     },
     {
       id: 'webcodecs',
       label: 'WebCodecs',
       required: false,
       supported: detectWebCodecs(),
-      note: 'Hardware-accelerated BGA encode',
+      note: 'Hardware-accelerated BGA transcoding and gameplay recording',
     },
     {
       id: 'media-recorder',
       label: 'MediaRecorder',
       required: false,
       supported: detectMediaRecorder(),
-      note: 'Gameplay → WebM recording',
+      note: 'Gameplay recording where WebCodecs is missing',
     },
     {
       id: 'offscreen-canvas',
       label: 'OffscreenCanvas',
       required: false,
       supported: detectOffscreenCanvas(),
-      note: 'LR2 bitmap-font conversion',
+      note: 'Resizing beatoraja skin textures',
+    },
+    {
+      id: 'cross-origin-isolation',
+      label: 'Cross-origin isolation',
+      required: false,
+      supported: detectCrossOriginIsolation(),
+      note: 'Faster BGA transcoding (SharedArrayBuffer flow control)',
+    },
+    {
+      id: 'web-crypto',
+      label: 'Web Crypto',
+      required: false,
+      supported: detectWebCrypto(),
+      note: 'Chart hashes that key records, replays and the Leaderboard',
+    },
+    {
+      id: 'indexed-db',
+      label: 'IndexedDB',
+      required: false,
+      supported: detectIndexedDB(),
+      note: 'Saved courses and the local data viewer',
+    },
+    {
+      id: 'compression-streams',
+      label: 'Compression Streams',
+      required: false,
+      supported: detectCompressionStreams(),
+      note: 'Leaderboard uploads and replay slots',
+    },
+    {
+      id: 'service-worker',
+      label: 'Service Worker',
+      required: false,
+      supported: detectServiceWorker(),
+      note: 'Offline play and installing the player',
     },
   ];
   const ok = items.every((item) => !item.required || item.supported);
@@ -171,4 +217,28 @@ function detectMediaRecorder(): boolean {
 
 function detectOffscreenCanvas(): boolean {
   return typeof globalThis !== 'undefined' && 'OffscreenCanvas' in globalThis;
+}
+
+function detectAudioWorklet(): boolean {
+  return typeof globalThis !== 'undefined' && 'AudioWorkletNode' in globalThis;
+}
+
+function detectCrossOriginIsolation(): boolean {
+  return typeof SharedArrayBuffer !== 'undefined' && globalThis.crossOriginIsolated === true;
+}
+
+function detectWebCrypto(): boolean {
+  return typeof crypto !== 'undefined' && crypto.subtle !== undefined;
+}
+
+function detectIndexedDB(): boolean {
+  return typeof globalThis !== 'undefined' && 'indexedDB' in globalThis;
+}
+
+function detectCompressionStreams(): boolean {
+  return typeof globalThis !== 'undefined' && 'CompressionStream' in globalThis && 'DecompressionStream' in globalThis;
+}
+
+function detectServiceWorker(): boolean {
+  return typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
 }
