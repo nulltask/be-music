@@ -329,7 +329,7 @@ export function renderSynesthesiaChrome({
   const cabinet = !portrait && layout.mode === 'standard';
   const wellTop = portrait ? layout.playfield.top - 2 : 0;
   const wellBottom = portrait ? layout.stage.height : cabinet ? cabinetWellBottom(layout) : PLAYFIELD_FRAME_BOTTOM;
-  drawPlayfieldWell(panels, playfieldLeft, playfieldRight, wellTop, wellBottom, runtime.progressRatio, accent);
+  drawPlayfieldWell(panels, playfieldLeft, playfieldRight, wellTop, wellBottom, accent);
   // The monitor shrinks to fit beside a double-play field; only a page-wide keyboard field leaves no room for it.
   if (BGA.w > 0) {
     const standby = layerPool.acquireGraphics();
@@ -339,6 +339,7 @@ export function renderSynesthesiaChrome({
   }
   const front = overlayLayerPool.acquireGraphics();
   front.label = 'synesthesia-gameplay/header';
+  drawProgressLight(front, playfieldLeft, wellTop, layout.playfield.judgementY, runtime.progressRatio, accent);
   if (portrait) {
     drawPortraitHUD(panels, layer, runtime, layout, accent, layerPool);
     drawPortraitHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
@@ -703,7 +704,6 @@ function drawPlayfieldWell(
   right: number,
   top: number,
   bottom: number,
-  progressRatio: number | undefined,
   accent: number,
 ): void {
   const left = playfieldLeft - 4;
@@ -715,21 +715,34 @@ function drawPlayfieldWell(
     graphics.rect(x - 2, top, 5, h).fill({ color: accent, alpha: 0.06 });
     graphics.rect(x, top, 1, h).fill({ color: accent, alpha: 0.6 });
   }
-  // Song progress as a light rising along the left rail.
-  const ratio =
-    progressRatio !== undefined && Number.isFinite(progressRatio) ? Math.max(0, Math.min(1, progressRatio)) : 0;
-  const trackH = h - 12;
-  if (ratio > 0) {
-    const y = top + 6 + trackH * (1 - ratio);
-    graphics.rect(left - 3, y, 5, trackH * ratio).fill({ color: SYN_WHITE, alpha: 0.12 });
-    graphics.circle(left - 1, y, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
-    graphics.circle(left - 1, y, 7).fill({ color: accent, alpha: 0.25 });
-  }
   // The floor rule runs from the left rail's outer edge (left - 1) to the right rail's (right + 3), and no further; the
   // portrait well runs off the stage's bottom edge instead.
   if (bottom < VIEW.height) graphics.rect(left - 1, bottom, w, 1).fill({ color: accent, alpha: 0.7 });
   // The portrait well's top edge, under the gauge.
   if (top > 0) graphics.rect(left - 1, top, w, 1).fill({ color: accent, alpha: 0.5 });
+}
+
+/**
+ * Song progress as a light falling down the left rail, from the top of the well to the judgement line, where it ends.
+ * Drawn in front of the lanes, so the lanes never cover it.
+ */
+function drawProgressLight(
+  graphics: Graphics,
+  playfieldLeft: number,
+  top: number,
+  judgementY: number,
+  progressRatio: number | undefined,
+  accent: number,
+): void {
+  const ratio =
+    progressRatio !== undefined && Number.isFinite(progressRatio) ? Math.max(0, Math.min(1, progressRatio)) : 0;
+  if (ratio <= 0) return;
+  const x = playfieldLeft - 5;
+  const start = top + 6;
+  const y = start + (judgementY - start) * ratio;
+  graphics.rect(x - 2, start, 5, y - start).fill({ color: SYN_WHITE, alpha: 0.12 });
+  graphics.circle(x, y, 7).fill({ color: accent, alpha: 0.25 });
+  graphics.circle(x, y, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
 }
 
 /**
