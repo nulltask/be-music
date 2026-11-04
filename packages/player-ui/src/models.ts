@@ -97,6 +97,8 @@ export interface BeMusicBombsData {
 }
 /** One side's judgment word, centered on `x`. `combo` is the count under it when the judgment keeps the combo. */
 export interface BeMusicJudgmentWord {
+  /** Automated play caption, above the judgment even between hits. */
+  readonly mode?: string;
   /** Per-side text baseline when the sides use different LIFT heights. */
   readonly y?: number;
   readonly x: number;

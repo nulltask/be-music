@@ -8,6 +8,12 @@ import { type Player, expect, openWithLibrary, test } from './support.ts';
 const SELECT_SKIN = { width: 640, height: 480 };
 const AUTO_BUTTON = { x: 230, y: 430 };
 
+async function startBeatorajaAuto(player: Player): Promise<void> {
+  const pane = player.page.locator('[data-pane=skin-config]');
+  if ((await pane.getAttribute('open')) !== null) await pane.locator('summary').click();
+  await player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+}
+
 async function openBeatoraja(player: Player): Promise<void> {
   await openWithLibrary(player);
   await player.drop('skins/beatoraja');
@@ -21,7 +27,7 @@ courseFlowTests({
   name: 'beatoraja',
   family: 'beatoraja',
   open: openBeatoraja,
-  startAuto: (player) => player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height),
+  startAuto: startBeatorajaAuto,
   // beatoraja has no NONSTOP course of its own: the stitched play and its result show on the theme's play and result
   // skins, with the theme's clear / fail jingles.
   nonstop: { play: 'beatoraja', result: 'beatoraja' },
@@ -33,7 +39,7 @@ test('the Options helpers find their controls past the Skin Config panel of a be
   await openBeatoraja(player);
   // The theme's Skin Config panel is built from the same controls as the Options dialog.
   await expect(
-    player.page.locator('[data-pane=skin-config] > summary .options-folder-title', { hasText: 'Skin Config (Select)' }),
+    player.page.locator('[data-pane=skin-config] .options-folder-title', { hasText: 'Skin Config (Select)' }),
   ).toHaveCount(1);
   await player.setOption(['Play options'], 'Auto play', true);
   expect(await player.readOption(['Play options'], 'Auto play')).toBe(true);
@@ -45,7 +51,7 @@ test('skin configuration uses tabs and slider controls, with a working reset', a
   player.page.setDefaultTimeout(15_000);
   await openBeatoraja(player);
   const pane = player.page.locator('[data-pane=skin-config]');
-  await pane.locator(':scope > summary').click();
+  await expect(pane).toHaveAttribute('open', '');
   await pane.getByRole('tab', { name: 'Timing & offsets', exact: true }).click();
   const axis = (label: string) =>
     pane
@@ -80,7 +86,7 @@ test('beatoraja draws a landmine from the engine frame', async ({ player }, info
   await player.waitFor((state) => !state.loading && state.loads > 0, 'the mine chart');
   await player.drop('skins/beatoraja');
   await player.cursorTo((bar) => bar.kind === 'chart' && bar.title === 'Landmine display', 'the mine chart');
-  await player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+  await startBeatorajaAuto(player);
   await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? -1) > 0.2, 'falling mine');
   await player.key('Pause');
   const canvas = player.page.locator('canvas[aria-label="Be-Music stage"]');
@@ -131,7 +137,7 @@ test('beatoraja shows invisible objects only when enabled, with live toggling', 
   await player.drop('skins/beatoraja');
   await player.setOption(['Skin & display'], 'Show invisible notes', true);
   await player.cursorTo((bar) => bar.kind === 'chart' && bar.title === 'Invisible display', 'the invisible chart');
-  await player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+  await startBeatorajaAuto(player);
   await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? -1) > 0.2, 'invisible object');
   await player.key('Pause');
   const canvas = player.page.locator('canvas[aria-label="Be-Music stage"]');

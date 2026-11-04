@@ -13,6 +13,7 @@ import {
   JUDGE_LANE_REF_RANGE,
   OFFSET_HIDDEN_COVER,
   OFFSET_LIFT,
+  OFFSET_LANECOVER,
   SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_1P,
   SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_2P,
 } from '../runtime-ids.ts';
@@ -327,9 +328,9 @@ function setOffset(out: BeatorajaLiveOffset, x: number, y: number, a: number): t
  * Writes the offset the play sets on one of a play skin's live offset ids into `out` (x, y and alpha; the rest left as
  * they are) and returns `true`, or returns `false` for an id the play does not set:
  *
- * - `OFFSET_LIFT` (3): the LIFT raises the lane by its fraction of the lane height (Y up is negative); not set while
+ * - `OFFSET_LIFT` (3): the LIFT raises the lane by its fraction of the lane height (positive in skin Y-up coordinates); not set while
  *   there is no LIFT, so a skin's own offset applies.
- * - `OFFSET_HIDDEN_COVER` (5): HIDDEN+ hides the cover (alpha -255) while off, and lowers its edge by its fraction of
+ * - `OFFSET_HIDDEN_COVER` (5): HIDDEN+ hides the cover (alpha -255) while off, and raises its edge by its fraction of
  *   the lane above the LIFT (`LaneRenderer`).
  * - The judge popup's word shift (20001 / 20002, a judge with `shift`): left by half the combo digits' width
  *   (`SkinJudge`).
@@ -346,12 +347,15 @@ export function writeBeatorajaPlayOffset(
     return setOffset(out, -((width + space) * digits) / 2, 0, 0);
   }
   if (id === OFFSET_LIFT) {
-    const lift = input.cover?.lift ?? 0;
-    return lift !== 0 ? setOffset(out, 0, lift * -input.laneHeight, 0) : false;
+    const lift = input.cover ? resolveLaneCover(input.cover).lift : 0;
+    return lift !== 0 ? setOffset(out, 0, lift * input.laneHeight, 0) : false;
+  }
+  if (id === OFFSET_LANECOVER) {
+    return setOffset(out, 0, input.cover ? -resolveLaneCover(input.cover).sudden * input.laneHeight || 0 : 0, 0);
   }
   if (id === OFFSET_HIDDEN_COVER) {
     if (input.cover === undefined || !input.cover.hiddenOn) return setOffset(out, 0, 0, -255);
-    return setOffset(out, 0, resolveLaneCover(input.cover).hidden * -input.laneHeight, 0);
+    return setOffset(out, 0, resolveLaneCover(input.cover).hidden * input.laneHeight, 0);
   }
   return false;
 }

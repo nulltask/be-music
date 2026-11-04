@@ -17,7 +17,7 @@ import { PORTRAIT_SELECT_LAYOUT, resolvePortraitSelectCard } from './layout.ts';
 import { ACCENT, INK, LINE, MUTED, PANEL, TEXT, stat, text } from './theme.ts';
 
 /** Where the song list sits; the player uses the same numbers to tell which row was clicked. */
-export const SELECT_LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
+export const SELECT_LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 92, listBottomInset: 28, rowHeight: 28 };
 
 /** Fade to black after a chart is picked. */
 export const SELECT_OUTRO_MS = 300;
@@ -62,20 +62,21 @@ export function drawSelect(surface: BeMusicSurface<'2d'>, frame: BeMusicSelectFr
 
   // The search box, in the strip under the list (`listBottomInset` keeps it free). Clicking it starts typing there;
   // while the player types, the host's field sits over it and shows the text.
-  const searchY = portrait ? height - PORTRAIT_SELECT_LAYOUT.listBottomInset / 2 : height - 20;
-  const searchW = portrait ? width - MARGIN * 2 : PANEL_W;
+  const searchY = portrait ? PORTRAIT_SELECT_LAYOUT.listTop - 26 : 68;
+  const searchX = portrait ? MARGIN : SELECT_LAYOUT.listX;
+  const searchW = width - MARGIN - searchX;
   ctx.strokeStyle = LINE;
   ctx.lineWidth = 1;
-  ctx.strokeRect(MARGIN + 0.5, searchY - 9.5, searchW - 1, 19);
-  text(ctx, 'SEARCH', MARGIN + 8, searchY, { size: 9, weight: 800, color: MUTED });
+  ctx.strokeRect(searchX + 0.5, searchY - 17.5, searchW - 1, 35);
+  text(ctx, 'SEARCH', searchX + 8, searchY, { size: 9, weight: 800, color: MUTED });
   if (!frame.searchEditing) {
-    text(ctx, frame.searchQuery || 'Title / artist / genre', MARGIN + 60, searchY, {
+    text(ctx, frame.searchQuery || 'Title / artist / genre', searchX + 60, searchY, {
       size: 11,
       color: frame.searchQuery ? TEXT : MUTED,
       maxWidth: searchW - 68,
     });
   }
-  frame.hit(MARGIN + 56, searchY - 10, searchW - 56, 20, frame.actions.activateSearch, 'text');
+  frame.hit(searchX + 56, searchY - 18, searchW - 56, 36, frame.actions.activateSearch, 'text');
 
   // After a pick, darken the screen over the outro.
   if (frame.launchAt !== undefined) {

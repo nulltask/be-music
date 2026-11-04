@@ -1,7 +1,16 @@
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, openWithLibrary, SONGS, test } from './support.ts';
 
 for (const skin of ['plain', 'native', 'synesthesia']) {
   test(`${skin} places a replay ghost opposite the player with a central BGA`, async ({ player }, info) => {
+    const capture = process.env.BE_MUSIC_LAYOUT_CAPTURE;
+    if (capture) await mkdir(capture, { recursive: true });
+    const shot = (name: string) =>
+      player.page.screenshot({
+        path: capture ? join(capture, `${skin}-${name}.png`) : info.outputPath(`${skin}-${name}.png`),
+      });
+    await player.page.setViewportSize({ width: 1280, height: 720 });
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     await player.setOption(['Play options'], 'Auto play', true);
     await player.browseTo(SONGS, 'Fixture A');
@@ -11,6 +20,14 @@ for (const skin of ['plain', 'native', 'synesthesia']) {
         .getByRole('button', { name: 'Auto play', exact: true })
         .click();
     else await player.key('Enter');
+    await player.keyWhen(
+      (state) => state.scene.kind === 'play' && (state.play?.seconds ?? -1) >= 2,
+      undefined,
+      'Pause',
+      'the single-player play to start',
+    );
+    await player.key('Pause');
+    await shot('single');
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay).toBeDefined();
@@ -41,15 +58,34 @@ for (const skin of ['plain', 'native', 'synesthesia']) {
       'the ghost play to start',
     );
     if (skin === 'native') {
+      const labels = await player.page
+        .locator('be-music-judgment-display')
+        .evaluate((element) =>
+          (element as unknown as { data: { words: { mode?: string }[] } }).data.words.map((word) => word.mode),
+        );
+      expect(labels).toEqual(['AUTO PLAY', 'GHOST PLAY']);
       const hud = player.page.locator('be-music-gameplay-hud');
       await expect(hud.locator('[data-two-player]')).toHaveCount(1);
       await expect(hud.locator('[part="second-score"]')).toBeVisible();
+      for (const part of ['players', 'judge', 'graph-header', 'graph', 'graph-footer', 'progress']) {
+        await expect(hud.locator(`[part="${part}"]`)).toBeVisible();
+      }
+      await expect(hud.getByRole('heading', { name: 'Fixture A' })).toBeVisible();
+      await expect(hud.locator('[part="players"]')).toContainText('Player 1P');
+      await expect(hud.locator('[part="judge"]')).toContainText('FAST');
+      await expect(hud.locator('[part="judge"]')).toContainText('SLOW');
+      await expect(hud.locator('[part="graph-footer"]')).toContainText('Option');
+      await expect(hud.locator('[part="graph-footer"]')).toContainText('PACEMAKER');
+      await expect(hud.locator('[part="time-limit"], [part="max-combo"], [part="second-max-combo"]')).toHaveCount(0);
+      await expect(hud.locator('[part="score"] .eyebrow')).toHaveText('1P Score');
+      await expect(hud.locator('[part="second-score"] strong')).not.toHaveText('0');
       const left = await hud.locator('be-music-gauge-panel').nth(0).boundingBox();
       const right = await hud.locator('be-music-gauge-panel').nth(1).boundingBox();
       const bga = await player.page.locator('be-music-bga').boundingBox();
       expect(left!.x + left!.width).toBeLessThan(bga!.x);
       expect(right!.x).toBeGreaterThan(bga!.x + bga!.width);
     }
-    await player.page.screenshot({ path: info.outputPath(`${skin}-ghost.png`) });
+    await player.key('Pause');
+    await shot('ghost');
   });
 }

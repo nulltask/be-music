@@ -170,6 +170,17 @@ describe('TouchLaneFingers', () => {
   const press = (channel: string, atMs = 1000) => ({ type: 'lane', channel, pressed: true, atMs });
   const release = (channel: string, atMs = 1000) => ({ type: 'lane', channel, pressed: false, atMs });
 
+  test('hits an LR2 lane after its 4:3 coordinates are fitted to 16:9 output', () => {
+    const fingers = new TouchLaneFingers();
+    const wide = () => ({
+      ...LAYOUT,
+      stage: { ...LAYOUT.stage, displayAspectRatio: 16 / 9 },
+      screen: { width: 1280, height: 720 },
+    });
+    expect(fingers.handle(pointer('pointerdown', 1, 210, 450), wide, 0).intents).toEqual([press('11')]);
+    expect(fingers.handle(pointer('pointermove', 1, 250, 450), wide, 0).intents).toEqual([release('11'), press('12')]);
+  });
+
   test('a finger touching down presses the lane under it, at its time, and stops the browser default', () => {
     const fingers = new TouchLaneFingers();
     expect(fingers.handle(pointer('pointerdown', 1, 105, 300, 'touch', 1234), layout, 0)).toEqual({

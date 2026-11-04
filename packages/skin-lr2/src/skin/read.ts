@@ -191,6 +191,7 @@ export function readLR2Path(
       const b = clampColorByte(toNumber(row[3], 0));
       context.transparentColor = { r, g, b };
     } else if (
+      command === '#SCENETIME' ||
       command === '#STARTINPUT' ||
       command === '#FADEOUT' ||
       command === '#CLOSE' ||
@@ -202,6 +203,9 @@ export function readLR2Path(
       // Scene-timing directives — single ms argument. The renderer anchors timer 1/2/3/40/41 off these offsets.
       const ms = Math.max(0, Math.trunc(toNumber(row[1], 0)));
       switch (command) {
+        case '#SCENETIME':
+          context.timing.sceneTime = ms;
+          break;
         case '#STARTINPUT':
           context.timing.startInput = ms;
           break;

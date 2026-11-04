@@ -858,6 +858,15 @@ export class BeatorajaPlayBridge {
     return spanSec > 0 ? Math.round((this.fpsRingFilled - 1) / spanSec) : 0;
   }
 
+  public get laneCover(): LaneCoverState | undefined {
+    return this.play.cover;
+  }
+
+  /** Use the selected note destination's height, which may differ from a cover slider's range. */
+  public setLaneHeight(height: number): void {
+    if (Number.isFinite(height) && height > 0) this.play.laneHeight = height;
+  }
+
   /**
    * The shift of a `SkinProperty.OFFSET_*` id: the play's live value for the LIFT, HIDDEN+ and the judge word shift
    * ({@link writeBeatorajaPlayOffset}), else what the host set with {@link setOffset} (`undefined` reads as no shift).

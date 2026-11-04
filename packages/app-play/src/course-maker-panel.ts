@@ -1,3 +1,4 @@
+import './ui/collapsible-panel.ts';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -198,6 +199,7 @@ function connectionDelta(from: NonstopConnection, to: NonstopConnection): number
 
 export class CourseMakerPanel {
   private readonly card: HTMLElement;
+  private expanded = true;
   private readonly dialog: HTMLDialogElement;
 
   private readonly maker: CourseMaker;
@@ -209,7 +211,7 @@ export class CourseMakerPanel {
     this.maker = maker;
     this.onStatus = options.onStatus;
     this.card = document.createElement('aside');
-    this.card.className = 'card course-maker-card gap-3 px-4';
+    this.card.className = 'course-maker-card';
     this.card.hidden = true;
     this.card.setAttribute('aria-label', 'Course maker');
     this.dialog = document.createElement('dialog');
@@ -218,7 +220,8 @@ export class CourseMakerPanel {
     // The modal owns the keyboard: keys must not also drive the select scene behind it (Escape still closes it).
     for (const type of ['keydown', 'keyup'] as const)
       this.dialog.addEventListener(type, (event) => event.stopPropagation());
-    document.body.append(this.card, this.dialog);
+    document.querySelector('#auxiliary-panels')!.append(this.card);
+    document.body.append(this.dialog);
   }
 
   /** Redraws the card from the course being made (hidden when none is), and the dialog when it is open. */
@@ -230,6 +233,8 @@ export class CourseMakerPanel {
   /** Puts the cursor in the course name field (an LR2 skin's text 170 was clicked). */
   focusName(): void {
     if (this.maker.draft !== undefined) {
+      this.expanded = true;
+      this.renderCard();
       // The click arrives on pointerdown; focusing at once would lose to the canvas the mousedown then focuses.
       setTimeout(() => {
         const name = this.card.querySelector<HTMLInputElement>('.course-maker-name');
@@ -270,76 +275,89 @@ export class CourseMakerPanel {
   private renderCard(): void {
     const draft = this.maker.draft;
     this.card.hidden = draft === undefined;
-    if (draft === undefined) return;
+    if (draft === undefined) {
+      this.expanded = true;
+      return;
+    }
     const copy = playerText().course;
     const name = this.card.querySelector<HTMLInputElement>('.course-maker-name');
     render(
       html`
-        <header>
-          <h2>${copy.newCourse(KIND_LABELS[draft.kind])}</h2>
-          <p>${draft.stages.length === 0 ? copy.decideCharts : copy.chartCount(draft.stages.length)}</p>
-        </header>
-        <input
-          class="input course-maker-name"
-          maxlength="64"
-          placeholder=${COURSE_NAME_PROMPT}
-          aria-label=${copy.courseName}
-          .value=${live(document.activeElement === name ? name!.value : draft.name)}
-          @keydown=${isolateKeys}
-          @keyup=${isolateKeys}
-          @input=${(event: Event) => this.maker.rename((event.currentTarget as HTMLInputElement).value)}
-        />
-        <ol class="course-maker-stages">
-          ${draft.stages.map((stage) => html`<li>${stage.title ?? stage.md5} · ${stage.keyMode}K</li>`)}
-        </ol>
-        <div>
-          ${
-            draft.kind === 'nonstop'
-              ? html`<label class="course-maker-field"
-                  >${copy.connection}
-                  ${connectionSelect(this.maker.defaultConnection, (value) => this.maker.stepDefaultConnection(connectionDelta(this.maker.defaultConnection, value)))}
-                </label>`
-              : nothing
-          }
-        </div>
-        <div>
-          ${constraintEditor(draft.kind, draft.constraints ?? [], (constraints) => this.maker.setConstraints(constraints))}
-        </div>
-        <div class="course-maker-buttons">
-          <button
-            class="btn"
-            type="button"
-            data-size="sm"
-            data-variant="outline"
-            ?disabled=${draft.stages.length === 0}
-            @click=${() => this.maker.removeLast()}
-          >
-            ${copy.removeLast}
-          </button>
-          <button
-            class="btn"
-            type="button"
-            data-size="sm"
-            @click=${() => {
-              this.maker.cancel();
-              this.onStatus?.(playerText().course.stopped);
-            }}
-          >
-            ${playerText().shell.cancel}
-          </button>
-          <button
-            class="btn"
-            type="button"
-            data-size="sm"
-            ?disabled=${draft.stages.length === 0}
-            @click=${() => {
-              const saved = this.maker.finish();
-              if (saved !== undefined) this.onStatus?.(playerText().course.saved(saved.name));
-            }}
-          >
-            ${copy.save}
-          </button>
-        </div>
+        <be-music-collapsible-panel
+          position="inline"
+          .heading=${copy.newCourse(KIND_LABELS[draft.kind])}
+          .open=${this.expanded}
+          @panel-toggle=${(event: CustomEvent<{ open: boolean }>) => {
+            this.expanded = event.detail.open;
+          }}
+        >
+          <div class="auxiliary-panel-content">
+            <header>
+              <p>${draft.stages.length === 0 ? copy.decideCharts : copy.chartCount(draft.stages.length)}</p>
+            </header>
+            <input
+              class="input course-maker-name"
+              maxlength="64"
+              placeholder=${COURSE_NAME_PROMPT}
+              aria-label=${copy.courseName}
+              .value=${live(document.activeElement === name ? name!.value : draft.name)}
+              @keydown=${isolateKeys}
+              @keyup=${isolateKeys}
+              @input=${(event: Event) => this.maker.rename((event.currentTarget as HTMLInputElement).value)}
+            />
+            <ol class="course-maker-stages">
+              ${draft.stages.map((stage) => html`<li>${stage.title ?? stage.md5} · ${stage.keyMode}K</li>`)}
+            </ol>
+            <div>
+              ${
+                draft.kind === 'nonstop'
+                  ? html`<label class="course-maker-field"
+                      >${copy.connection}
+                      ${connectionSelect(this.maker.defaultConnection, (value) => this.maker.stepDefaultConnection(connectionDelta(this.maker.defaultConnection, value)))}
+                    </label>`
+                  : nothing
+              }
+            </div>
+            <div>
+              ${constraintEditor(draft.kind, draft.constraints ?? [], (constraints) => this.maker.setConstraints(constraints))}
+            </div>
+            <div class="course-maker-buttons">
+              <button
+                class="btn"
+                type="button"
+                data-size="sm"
+                data-variant="outline"
+                ?disabled=${draft.stages.length === 0}
+                @click=${() => this.maker.removeLast()}
+              >
+                ${copy.removeLast}
+              </button>
+              <button
+                class="btn"
+                type="button"
+                data-size="sm"
+                @click=${() => {
+                  this.maker.cancel();
+                  this.onStatus?.(playerText().course.stopped);
+                }}
+              >
+                ${playerText().shell.cancel}
+              </button>
+              <button
+                class="btn"
+                type="button"
+                data-size="sm"
+                ?disabled=${draft.stages.length === 0}
+                @click=${() => {
+                  const saved = this.maker.finish();
+                  if (saved !== undefined) this.onStatus?.(playerText().course.saved(saved.name));
+                }}
+              >
+                ${copy.save}
+              </button>
+            </div>
+          </div>
+        </be-music-collapsible-panel>
       `,
       this.card,
     );

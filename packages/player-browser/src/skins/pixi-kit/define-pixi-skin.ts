@@ -57,6 +57,7 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
         height: surface.height,
         resolution: surface.pixelRatio,
         backgroundAlpha: 0,
+        useBackBuffer: true,
         antialias: true,
         autoDensity: false,
       });
@@ -136,10 +137,15 @@ class PixiSurface {
       // renderer, and keep that.
       const roundPixels = renderer._roundPixels;
       renderer._roundPixels = 0;
+      // Backdrop filters capture this offscreen texture, without enabling a back buffer on the host's transparent canvas.
+      const backBuffer = renderer instanceof WebGLRenderer ? renderer.backBuffer : undefined;
+      const previousBackBuffer = backBuffer?.useBackBuffer;
+      if (backBuffer) backBuffer.useBackBuffer = true;
       try {
         renderer.render({ container: root, target: this.target, clear: true, clearColor: [0, 0, 0, 0] });
       } finally {
         renderer._roundPixels = roundPixels;
+        if (backBuffer) backBuffer.useBackBuffer = previousBackBuffer!;
       }
       return;
     }
@@ -254,7 +260,16 @@ class GameplayScreen {
 
     this.bombPool.begin();
     try {
-      skin.renderBombs({ pool: this.bombPool, bombs: frame.bombs, nowMs, combo, effects, audio, lanes: frame.lanes });
+      skin.renderBombs({
+        layer: this.bombs,
+        pool: this.bombPool,
+        bombs: frame.bombs,
+        nowMs,
+        combo,
+        effects,
+        audio,
+        lanes: frame.lanes,
+      });
     } finally {
       this.bombPool.end();
     }

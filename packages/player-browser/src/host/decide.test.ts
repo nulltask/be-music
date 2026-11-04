@@ -183,6 +183,17 @@ function lr2DecideSkin(timing: LR2Skin['timing'] = {}): LR2Skin {
 }
 
 describe('resolveLR2DecideTiming', () => {
+  it.each([0, 1200, 3000])('uses the authored #SCENETIME=%i independently of the input delay', (sceneTime) => {
+    expect(resolveLR2DecideTiming({ timing: { startInput: 1500, sceneTime, fadeOut: 200 } })).toEqual({
+      inputDelayMs: 1500,
+      autoAdvanceMs: sceneTime,
+      fadeOutMs: 200,
+    });
+  });
+  it('falls back when a host supplies a non-finite scene duration', () => {
+    expect(resolveLR2DecideTiming({ timing: { startInput: 300, sceneTime: Number.NaN } }).autoAdvanceMs).toBe(1500);
+  });
+
   it("opens input after the skin's #STARTINPUT and moves on 1200 ms later, with no fade-out without #FADEOUT", () => {
     expect(resolveLR2DecideTiming({ timing: { startInput: 300 } })).toEqual({
       inputDelayMs: 300,

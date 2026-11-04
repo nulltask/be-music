@@ -52,14 +52,16 @@ export const LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS = 1200;
 
 /**
  * The decide skin's timing: input opens after its `#STARTINPUT` (1500 ms without one), the screen moves on by itself
- * {@link LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS} later, and it fades out over its `#FADEOUT` as it leaves (at once
- * without one).
+ * at `#SCENETIME` when authored (zero skips the screen), otherwise {@link LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS}
+ * later. It fades out over `#FADEOUT` as it leaves (at once without one).
  */
 export function resolveLR2DecideTiming(skin: Pick<LR2Skin, 'timing'>): SceneViewTiming {
   const inputDelayMs = Math.max(0, skin.timing.startInput ?? LR2_DECIDE_DEFAULT_INPUT_DELAY_MS);
   return {
     inputDelayMs,
-    autoAdvanceMs: inputDelayMs + LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS,
+    autoAdvanceMs: Number.isFinite(skin.timing.sceneTime)
+      ? Math.max(0, skin.timing.sceneTime!)
+      : inputDelayMs + LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS,
     fadeOutMs: Math.max(0, skin.timing.fadeOut ?? 0),
   };
 }
@@ -173,7 +175,7 @@ export class LR2DecideView implements DecideView {
       this.cachedScreenHeight = screenHeight;
     }
     this.designRoot.position.set(viewport.x, viewport.y);
-    this.designRoot.scale.set(viewport.scale);
+    this.designRoot.scale.set(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale);
     if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
       this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
       this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);

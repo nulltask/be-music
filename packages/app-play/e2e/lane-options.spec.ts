@@ -42,8 +42,11 @@ interface FamilyCase {
   startAuto(player: Player): Promise<void>;
 }
 
-const clickAuto = (player: Player) =>
-  player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+async function clickAuto(player: Player): Promise<void> {
+  const pane = player.page.locator('[data-pane=skin-config][open]');
+  if (await pane.count()) await pane.locator('summary').first().click();
+  await player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+}
 
 const FAMILIES: readonly FamilyCase[] = [
   {

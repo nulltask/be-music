@@ -373,8 +373,15 @@ export class LR2SelectView implements SelectView {
     const screenWidth = app.screen.width || app.canvas.parentElement?.clientWidth || skin.width;
     const screenHeight = app.screen.height || app.canvas.parentElement?.clientHeight || skin.height;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, skin.width, skin.height);
-    setDesignTextResolution(resolveDesignTextResolution(viewport.scale, app.renderer.resolution));
-    setDesignPixelRatio(viewport.scale * app.renderer.resolution);
+    setDesignTextResolution(
+      resolveDesignTextResolution(
+        Math.max(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale),
+        app.renderer.resolution,
+      ),
+    );
+    setDesignPixelRatio(
+      Math.max(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale) * app.renderer.resolution,
+    );
     // The rects are drawn again only when their sizes change: a `Graphics` rebuild every frame is not free.
     if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
       this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
@@ -382,7 +389,7 @@ export class LR2SelectView implements SelectView {
       this.cachedScreenHeight = screenHeight;
     }
     this.designRoot.position.set(viewport.x, viewport.y);
-    this.designRoot.scale.set(viewport.scale);
+    this.designRoot.scale.set(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale);
     this.lastViewport = viewport;
     host.setStageOrientation('landscape');
     if (this.cachedDesignWidth !== skin.width || this.cachedDesignHeight !== skin.height) {
@@ -774,7 +781,10 @@ export class LR2SelectView implements SelectView {
   /** What the pointer input reads and drives: the last frame, the skin's canvas, and intents for what is asked. */
   private static createPointerContext(view: LR2SelectView): SelectPointerContext {
     const emit = (intent: SelectIntent): void => view.emit?.(intent);
-    const size = (): SelectDesignSize => ({ width: view.kit.skin.width, height: view.kit.skin.height });
+    const size = (): SelectDesignSize => ({
+      width: view.kit.skin.width,
+      height: view.kit.skin.height,
+    });
     return {
       get visible(): boolean {
         return view.attached;

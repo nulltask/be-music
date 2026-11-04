@@ -93,6 +93,12 @@ export const screenStyles: CSSResultGroup = [
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .select-filters > summary {
+      display: none;
+    }
+    .select-filters > be-music-play-options {
+      display: grid;
+    }
     be-music-play-options {
       margin-bottom: var(--be-music-gap, 8px);
     }
@@ -140,6 +146,14 @@ export const screenStyles: CSSResultGroup = [
     .player > be-music-gauge-panel::part(panel) {
       padding: var(--be-music-gap, 8px) 0 0;
     }
+    .result-verdict {
+      font-size: clamp(20px, 2.5cqi, 26px);
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .player .verdict {
+      gap: 8px;
+    }
     .stat {
       font-size: var(--be-music-stat-size, 2.25rem);
       font-variant-numeric: tabular-nums;
@@ -152,19 +166,32 @@ export const screenStyles: CSSResultGroup = [
     /* 40rem matches the previous 650px window breakpoint, measured on the screen itself. */
     @container be-music-screen (max-width: 40rem) {
       .columns {
-        flex: none;
         grid-template-columns: 1fr;
-        grid-template-rows: none;
+        grid-template-rows: minmax(12rem, 1fr) auto;
+        gap: 12px;
       }
       .search {
         flex-basis: 100%;
       }
+      .select-filters > summary {
+        display: block;
+        cursor: pointer;
+        padding: 8px 0;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .select-filters:not([open]) > be-music-play-options {
+        display: none;
+      }
       be-music-chart-list {
-        flex: none;
-        --be-music-list-height: 18rem;
+        flex: 1 1 auto;
+        --be-music-list-height: 100%;
       }
       be-music-chart-details {
-        overflow: visible;
+        overflow: auto;
+        max-height: 15rem;
+        --be-music-panel-padding: 12px;
+        --be-music-section-gap: 8px;
       }
     }
     /* A narrow player panel stacks its verdict over its figures. */

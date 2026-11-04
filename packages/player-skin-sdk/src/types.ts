@@ -334,6 +334,12 @@ export interface BeMusicGameplayRuntime {
   progressRatio?: number;
   /** Fractional beat position in [0, 1) — drives beat-synced pulses. */
   beatPhase?: number;
+  /** Absolute chart beat, including BPM changes and stops, for beat-synchronised motion. */
+  chartBeat?: number;
+  /** Input brightness by lane channel, 0 to 1, including the release fade. */
+  keyBeams?: Readonly<Record<string, number>>;
+  /** Side occupied by a replay ghost, when presented beside the live play. */
+  ghostSide?: BeMusicSide;
   /** Active compat ruleset id (`lr2` / `beatoraja` / `____`). */
   rulesetLabel?: string;
   /** Ruleset-scoped gauge id (`GROOVE` / `HARD` / `HAZARD` / ...) labelling the gauge. */
@@ -783,6 +789,8 @@ export interface BeMusicSelectFrame {
   focusedCourse?: LibraryCourse;
   /** Current folder label (or search label), `undefined` at the library root. */
   folderLabel: string | undefined;
+  /** Folder labels from the library root to the current folder. Older hosts may omit this. */
+  folderPath?: readonly string[];
   searchQuery: string;
   /**
    * True while the host's text field sits over the search box (the box the skin bound to `actions.activateSearch`):
