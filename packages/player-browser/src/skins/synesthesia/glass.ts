@@ -23,7 +23,7 @@ export function bindGlassSurface(foreground: Graphics, surface: Graphics): void 
           + glassSample(vTextureCoord + vec2(0.0, d.y)) + glassSample(vTextureCoord - vec2(0.0, d.y))) * 0.125;
         blurred += (glassSample(vTextureCoord + d) + glassSample(vTextureCoord - d)
           + glassSample(vTextureCoord + vec2(d.x, -d.y)) + glassSample(vTextureCoord + vec2(-d.x, d.y))) * 0.0625;
-        float coverage = clamp(front.a / 0.68, 0.0, 1.0);
+        float coverage = clamp(front.a / 0.4, 0.0, 1.0);
         finalColor = vec4(front.rgb + mix(back.rgb, blurred.rgb, coverage) * (1.0 - front.a), blendedAlpha);
       `,
     },
@@ -40,7 +40,7 @@ export function bindGlassSurface(foreground: Graphics, surface: Graphics): void 
           + glassSample(uv + vec2<f32>(0.0, d.y)) + glassSample(uv - vec2<f32>(0.0, d.y))) * 0.125;
         blurred += (glassSample(uv + d) + glassSample(uv - d)
           + glassSample(uv + vec2<f32>(d.x, -d.y)) + glassSample(uv + vec2<f32>(-d.x, d.y))) * 0.0625;
-        let coverage = clamp(front.a / 0.68, 0.0, 1.0);
+        let coverage = clamp(front.a / 0.4, 0.0, 1.0);
         out = vec4<f32>(front.rgb + mix(back.rgb, blurred.rgb, coverage) * (1.0 - front.a), blendedAlpha);
       `,
     },
@@ -54,5 +54,5 @@ export function bindGlassSurface(foreground: Graphics, surface: Graphics): void 
 /** Routes only panel fills into the blurred surface, leaving every foreground detail sharp. */
 export function drawGlassSurface(graphics: Graphics, x: number, y: number, w: number, h: number, opacity = 0.96): void {
   const surface = surfaces.get(graphics);
-  (surface ?? graphics).rect(x, y, w, h).fill({ color: SYN_GLASS, alpha: surface ? opacity * 0.72 : opacity });
+  (surface ?? graphics).rect(x, y, w, h).fill({ color: SYN_GLASS, alpha: surface ? opacity * 0.42 : opacity });
 }

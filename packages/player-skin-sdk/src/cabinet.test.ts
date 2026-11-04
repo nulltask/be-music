@@ -287,8 +287,9 @@ describe('resolveDifficultyName', () => {
   it('names #DIFFICULTY 1 to 5', () => {
     expect(resolveDifficultyName(chart(4))).toBe('ANOTHER');
     expect(resolveDifficultyName(chart(1))).toBe('BEGINNER');
-    expect(resolveDifficultyName(chart(6))).toBeUndefined();
-    expect(resolveDifficultyName(chart())).toBeUndefined();
+    expect(resolveDifficultyName(chart(6))).toBe('UNSPECIFIED');
+    expect(resolveDifficultyName(chart())).toBe('UNSPECIFIED');
+    expect(resolveDifficultyName(undefined)).toBeUndefined();
   });
 });
 
@@ -326,4 +327,10 @@ it('labels automated lane banks and distinguishes the ghost from live input', ()
   expect(resolveLanePlayLabel({ autoplay: true }, '2P')).toBe('AUTO PLAY');
   expect(resolveLanePlayLabel({ ghostSide: '2P' }, '1P')).toBeUndefined();
   expect(resolveLanePlayLabel({ autoplay: true, ghostSide: '2P' }, '2P')).toBe('GHOST PLAY');
+});
+
+it('scratch input moves clockwise or counterclockwise and preserves its initial angle', () => {
+  expect(resolveScratchAngle(0, { angle: 1, direction: 1, atMs: 100 }, 100)).toBeCloseTo(1);
+  expect(resolveScratchAngle(0, { angle: 1, direction: 1, atMs: 100 }, 220)).toBeGreaterThan(1);
+  expect(resolveScratchAngle(0, { angle: 1, direction: -1, atMs: 100 }, 160)).toBeLessThan(1);
 });

@@ -244,14 +244,28 @@ describe('LibraryService drops', () => {
     },
   );
 
-  test('canceling a skin-only drop restores select without replacing the current skin', async () => {
+  test('loads a skin while its confirmation remains unanswered', async () => {
+    let answer!: (family: undefined) => void;
+    const pending = new Promise<undefined>((resolve) => {
+      answer = resolve;
+    });
+    const { library, options } = harness({ confirmSkinDrop: () => pending });
+    const loading = library.processIncomingFiles([dropped('theme/select.lr2skin', '#INFORMATION,5,Example')]);
+    await vi.waitFor(() => expect(options.loadTheme).toHaveBeenCalledOnce());
+    expect(options.applyDroppedSkin).not.toHaveBeenCalled();
+    answer(undefined);
+    await loading;
+    expect(options.applyDroppedSkin).not.toHaveBeenCalled();
+  });
+
+  test('canceling a skin-only drop keeps it loaded without applying it', async () => {
     const confirmSkinDrop = vi.fn(async () => undefined);
     const { library, options, shown } = harness({ confirmSkinDrop });
     const before = library.collection;
     await library.processIncomingFiles([dropped('theme/select.lr2skin', '#INFORMATION,5,Example')]);
     expect(confirmSkinDrop).toHaveBeenCalledWith(new Set(['lr2']));
     expect(library.collection).toBe(before);
-    expect(options.loadTheme).not.toHaveBeenCalled();
+    expect(options.loadTheme).toHaveBeenCalledOnce();
     expect(options.loadBeatorajaTheme).not.toHaveBeenCalled();
     expect(options.applyDroppedSkin).not.toHaveBeenCalled();
     expect(shown).toEqual([before]);

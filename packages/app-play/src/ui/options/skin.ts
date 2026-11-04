@@ -136,8 +136,9 @@ export function buildSkinFolder(
 export function rebuildSkinFamilyPicker(this: OptionsDialog): void {
   const gui = this.gui;
   if (gui === undefined) return;
-  const lr2Available = hasAnyLR2Skin(this.deps.familyDispatchState());
-  const beatorajaAvailable = this.deps.beatorajaTheme() !== undefined;
+  const lr2Available = hasAnyLR2Skin(this.deps.familyDispatchState()) || this.deps.hasPendingSkin?.('lr2') === true;
+  const beatorajaAvailable =
+    this.deps.beatorajaTheme() !== undefined || this.deps.hasPendingSkin?.('beatoraja') === true;
   // Snap back to 'auto' BEFORE rebuilding options so the freshly-built controller initialises to a valid value.
   // Without this guard a user-picked LR2 / beatoraja override that became unavailable mid-session would render
   // as a phantom dropdown value the runtime silently ignored.
@@ -166,9 +167,9 @@ export function rebuildSkinFamilyPicker(this: OptionsDialog): void {
   ).on('change', ({ value }) => {
     const loaded =
       value === 'lr2'
-        ? hasAnyLR2Skin(this.deps.familyDispatchState())
+        ? hasAnyLR2Skin(this.deps.familyDispatchState()) || this.deps.hasPendingSkin?.('lr2') === true
         : value === 'beatoraja'
-          ? this.deps.beatorajaTheme() !== undefined
+          ? this.deps.beatorajaTheme() !== undefined || this.deps.hasPendingSkin?.('beatoraja') === true
           : true;
     if (!loaded) {
       // Nothing of that system is loaded: stay on the current one and ask for a drop of its skin.

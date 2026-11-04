@@ -882,3 +882,14 @@ describe('bmson LN end keysounds', () => {
     expect(stepJudgeCore(state, advance(3)).filter((effect) => effect.kind === 'sound')).toEqual([]);
   });
 });
+
+test.each(['cw', 'ccw'] as const)('publishes %s scratch direction separately from judgment', (spin) => {
+  const state = createCore(chart([]));
+  const effects: JudgeCoreEffect[] = [];
+  runJudgeCoreStep(
+    state,
+    { kind: 'press', channels: new Set(['16']), tokens: [], nowSec: 1, nowMs: 1000, spin },
+    (effect) => effects.push(effect),
+  );
+  expect(effects).toContainEqual({ kind: 'ui', command: { kind: 'scratch-spin', channels: ['16'], spin } });
+});

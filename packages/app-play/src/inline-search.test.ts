@@ -26,3 +26,23 @@ describe('positioningContainer', () => {
     expect(positioningContainer({ offsetParent: null }, shell)).toBe(shell);
   });
 });
+
+test('uses the skin’s placeholder size for typed search text', () => {
+  expect(
+    placeInlineField({ x: 0, y: 0, width: 400, height: 60, fontSize: 18 }, { left: 0, top: 0 }, { left: 0, top: 0 })
+      .fontSize,
+  ).toBe(18);
+});
+
+test('matches a small placeholder on touch without using a zoom-triggering input font', () => {
+  const placed = placeInlineField(
+    { x: 0, y: 0, width: 90, height: 30, fontSize: 9 },
+    { left: 0, top: 0 },
+    { left: 0, top: 0 },
+    true,
+  );
+  expect(placed.fontSize).toBe(16);
+  expect(placed.textScale).toBe(9 / 16);
+  expect(placed.width * placed.textScale!).toBe(90);
+  expect(placed.height * placed.textScale!).toBe(30);
+});

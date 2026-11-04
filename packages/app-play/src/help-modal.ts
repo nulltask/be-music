@@ -15,6 +15,11 @@ import { releaseFocusOnClose } from './ui/dialog-focus.ts';
 
 /** Opens Help once it is wired (LR2's F1); nothing before. */
 let openHelp: (() => void) | undefined;
+let reportExpanded: ((open: boolean) => void) | undefined;
+/** Reports every Help opening and dismissal, including Escape and backdrop clicks. */
+export function watchHelpExpanded(report: (open: boolean) => void): void {
+  reportExpanded = report;
+}
 
 /** The player's keys and the current screen's key map, for the Keyboard tab; LR2's default keys until the app sets it. */
 let keyboardSource: () => HelpKeyboardSource = () => ({ settings: {}, scheme: 'lr2' });
@@ -68,7 +73,10 @@ export function wireHelpModal(): void {
     // The Keyboard tab starts again on the key map the screen shown reads.
     keyboard?.reset();
     activatePane('usage');
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) {
+      reportExpanded?.(true);
+      dialog.showModal();
+    }
   };
   const close = (): void => dialog.close();
   // Closed, the keys go back to the play: left on the Help button, Enter (meant to start the chart) would reopen it.
@@ -77,6 +85,8 @@ export function wireHelpModal(): void {
   bindPlayerHeader({ openHelp: open });
   openHelp = open;
   closeButton.addEventListener('click', close);
+  document.querySelector('#help-open')?.addEventListener('click', open);
+  dialog.addEventListener('close', () => reportExpanded?.(false));
   // A click on the backdrop lands on the dialog itself.
   dialog.addEventListener('click', (event) => {
     if (event.target === dialog) close();

@@ -105,6 +105,7 @@ export interface PlayfieldRuntime {
   };
   readonly assetsLoading: boolean;
   readonly longNotes: LongNoteTracker;
+  readonly scratchInputs?: ReadonlyMap<string, { angle: number; direction: 1 | -1; atMs: number }>;
   readonly lanePressedAt: Map<string, number>;
   readonly laneReleasedAt: Map<string, number>;
   readonly pressedChannels: Set<string>;

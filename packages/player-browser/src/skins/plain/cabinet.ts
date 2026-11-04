@@ -108,7 +108,11 @@ function drawKeys(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, re
     ctx.fill();
     ctx.strokeStyle = LINE;
     ctx.stroke();
-    const angle = resolveScratchAngle(frame.runtime.chartBeat ?? 0);
+    const angle = resolveScratchAngle(
+      frame.runtime.chartBeat ?? 0,
+      frame.runtime.scratchInputs?.[lane.channel ?? ''],
+      frame.runtime.nowMs,
+    );
     const cx = lane.x + lane.w / 2;
     const cy = rect.y + rect.h / 2;
     ctx.beginPath();

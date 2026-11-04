@@ -118,6 +118,7 @@ export interface OptionsDialogDeps {
   selectView(): SelectScene | undefined;
   /** The loaded skins and the skin family pick, which say whether an LR2 skin is loaded. */
   familyDispatchState(): FamilyDispatchState;
+  hasPendingSkin?(family: 'lr2' | 'beatoraja'): boolean;
   /** The loaded beatoraja theme. */
   beatorajaTheme(): BeatorajaThemeBundle | undefined;
   /** The LR2 themes the drops so far discovered, by name. */

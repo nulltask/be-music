@@ -201,6 +201,7 @@
       "940.000 clear-poor-bga",
       "940.000 press-lane 13",
       "1000.000 release-lane 13",
+      "1870.000 scratch-spin channels=16 spin=cw",
       "1870.000 flash-lane 16",
       "1870.000 flash-lane 16",
       "1870.000 press-lane 16",

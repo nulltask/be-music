@@ -64,14 +64,13 @@ export function cabinetWellBottom(layout: Pick<BeMusicGameplayLayout, 'playfield
  */
 export function drawSynesthesiaCabinet(draw: CabinetDraw, runtime: Runtime, layout: BeMusicGameplayLayout): void {
   const cabinet = resolveCabinetLayout(layout);
-  draw.graphics
-    .rect(
-      layout.playfield.left - 8,
-      cabinet.keys.y,
-      layout.playfield.right - layout.playfield.left + 16,
-      cabinet.keys.h,
-    )
-    .fill({ color: SYN_VOID, alpha: 0.96 });
+  const banks = layout.twoPlayer ? Object.values(layout.playfield.sides) : [layout.playfield];
+  for (const bank of banks) {
+    if (bank)
+      draw.graphics
+        .rect(bank.left - 3, cabinet.keys.y, bank.right - bank.left + 4, cabinet.keys.h)
+        .fill({ color: SYN_VOID, alpha: 0.96 });
+  }
   drawKeys(draw, cabinet.keys, layout, runtime);
   drawGauge(draw, cabinet, runtime);
   if (cabinet.center) drawCenter(draw, cabinet.center, runtime);
@@ -130,7 +129,11 @@ function drawKeys(draw: CabinetDraw, rect: BeMusicRect, layout: BeMusicGameplayL
     const cy = top + height / 2;
     graphics.circle(cx, cy, radius).fill({ color: SYN_VOID, alpha: 0.85 });
     graphics.circle(cx, cy, radius).stroke({ color, width: 1, alpha: 0.45 + 0.5 * lit });
-    const angle = resolveScratchAngle(runtime.chartBeat ?? 0);
+    const angle = resolveScratchAngle(
+      runtime.chartBeat ?? 0,
+      runtime.scratchInputs?.[lane.channel ?? ''],
+      runtime.nowMs,
+    );
     graphics
       .moveTo(cx, cy)
       .lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius)

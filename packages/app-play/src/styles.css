@@ -403,21 +403,22 @@ textarea {
   font-size: 0.8125rem;
 }
 
-/* The surface's own Options button, for fullscreen, where the header is not shown. */
-.options-open {
+/* The fullscreen surface keeps Help, Settings and Exit full screen available in that order. */
+.fullscreen-actions {
   display: none;
 }
-.player-main:fullscreen .options-open,
-.player-main:-webkit-full-screen .options-open {
-  display: inline-flex;
+.player-main:fullscreen .fullscreen-actions,
+.player-main:-webkit-full-screen .fullscreen-actions {
+  display: flex;
+  gap: 8px;
   position: absolute;
   top: max(8px, env(safe-area-inset-top, 0px));
   right: max(8px, env(safe-area-inset-right, 0px));
   z-index: 50;
-  opacity: 0.6;
+  opacity: 0.8;
 }
-.player-main:fullscreen .options-open:hover,
-.player-main:-webkit-full-screen .options-open:hover {
+.fullscreen-actions:hover,
+.fullscreen-actions:focus-within {
   opacity: 1;
 }
 

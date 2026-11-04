@@ -1,3 +1,6 @@
+import { playerText } from '../player-copy.ts';
+import { requestPlayerWindowClose } from '../ui/close-window.ts';
+import { DialogPauseController } from '../ui/dialog-pause.ts';
 // Imports are split across `@be-music/player-browser`'s entries (`./host`, `./skin`, `./collection`, `./audio`,
 // `./recording`) so the dependency surface of this player is explicit at the file top. The main `@be-music/player-browser`
 // entry is reserved for symbols that don't belong to any single entry (`logger`, `Rectangle`).
@@ -18,7 +21,7 @@ import { LeaderboardPanel } from '../leaderboard-ui.ts';
 import { fetchLeaderboardTopReplay } from '../leaderboard.ts';
 import { GhostReplayFile } from '../services/ghost.ts';
 import { playerFullscreenElement, toggleFullscreen } from '../fullscreen.ts';
-import { bindPlayerHeader, setPlayerHeaderSettingsOpen } from '../player-header.ts';
+import { bindPlayerHeader, runPlayerHeaderAction, setPlayerHeaderSettingsOpen } from '../player-header.ts';
 import { SceneRouter } from './scene-router.ts';
 import { DropTarget } from './drop-target.ts';
 import { CourseRoute } from './routes/course.ts';
@@ -59,7 +62,7 @@ import { FamilyKits } from './family-kits.ts';
 import { controlSettingsOf } from '../control-keys.ts';
 import { showExitMenu } from '../ui/exit-menu.ts';
 import { createFpsOverlay } from '../ui/fps-overlay.ts';
-import { openHelpModal, setHelpKeyboardSource } from '../help-modal.ts';
+import { openHelpModal, setHelpKeyboardSource, watchHelpExpanded } from '../help-modal.ts';
 import type { TestHookRecorder } from '../test-hook.ts';
 import { nameResultJingle, type LiveTestHookDeps } from '../services/test-hook.ts';
 
@@ -354,8 +357,8 @@ export class PlayerWebApp {
         this.lastSelectNavigation = navigation;
       },
       startReplayReplayFromFile: (file) => this.replayRoute.startReplayReplayFromFile(file),
-      loadTheme: (files) => this.lr2.loadTheme(files),
-      loadBeatorajaTheme: (files) => this.beatoraja.loadBeatorajaTheme(files),
+      loadTheme: (files) => this.lr2.loadTheme(files, false),
+      loadBeatorajaTheme: (files) => this.beatoraja.loadBeatorajaTheme(files, false),
       playSkins: () => this.lr2.playSkins,
       selectSkin: () => this.lr2.selectSkin,
       resultSkin: () => this.lr2.resultSkin,
@@ -419,6 +422,7 @@ export class PlayerWebApp {
     this.selectRoute = new SelectRoute({
       controls: () => controlSettingsOf(this.guiState),
       showExitMenu,
+      closeWindow: () => requestPlayerWindowClose(window, () => this.status.set(playerText().shell.windowCloseBlocked)),
       router: this.router,
       elements,
       library: this.library,
@@ -580,6 +584,7 @@ export class PlayerWebApp {
       gameplayView: () => this.gameplayView,
       selectView: () => this.selectView,
       familyDispatchState: () => this.familyKits.familyDispatchState(),
+      hasPendingSkin: (family) => (family === 'lr2' ? this.lr2.hasPendingTheme() : this.beatoraja.hasPendingTheme()),
       beatorajaTheme: () => this.beatoraja.beatorajaTheme,
       availableLR2Themes: () => this.lr2.availableLR2Themes,
       activeLR2ThemeName: () => this.lr2.activeLR2ThemeName,
@@ -643,7 +648,16 @@ export class PlayerWebApp {
   }
 
   public start(): void {
-    this.optionsDialog.watchExpanded((open) => setPlayerHeaderSettingsOpen(open));
+    const modalPause = new DialogPauseController(() => {
+      const play = this.gameplayView;
+      return play !== undefined && this.router.current === play ? play : undefined;
+    });
+    watchHelpExpanded((open) => modalPause.setOpen('help', open));
+    this.optionsDialog.watchExpanded((open) => {
+      setPlayerHeaderSettingsOpen(open);
+      modalPause.setOpen('settings', open);
+    });
+    document.querySelector('#fullscreen-exit')?.addEventListener('click', () => runPlayerHeaderAction('fullscreen'));
     this.optionsDialog.buildGUI();
     bindPlayerHeader({
       toggleOptions: () => this.optionsDialog.toggle(),
@@ -746,6 +760,8 @@ export class PlayerWebApp {
    */
   private async applyDroppedSkin(family: SkinFamilyId): Promise<void> {
     if (family !== 'lr2' && family !== 'beatoraja') return;
+    if (family === 'lr2') this.lr2.activatePendingTheme();
+    else await this.beatoraja.activatePendingTheme();
     this.guiState.skinFamilyOverride = family;
     this.optionsDialog.showSkinSystem(family);
     const play = this.gameplayView;
@@ -781,7 +797,7 @@ export class PlayerWebApp {
     this.guiState.builtInSkin = BE_MUSIC_SKINS.resolve(id).id;
     storeBuiltInSkinId(this.guiState.builtInSkin);
     this.optionsDialog.rebuildSkinSettingsFolder();
-    this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
+    void this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
   }
 
   /**
@@ -798,7 +814,9 @@ export class PlayerWebApp {
    * Apply an Options dialog skin-family change. While a play is on the stage, that play draws with the new family and keeps
    * its chart. Otherwise the persistent select scene is made again for the family the pick gives.
    */
-  private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
+  private async handleSkinFamilyOverrideChange(value: SkinFamilyOverride): Promise<void> {
+    if (value === 'lr2') this.lr2.activatePendingTheme();
+    else if (value === 'beatoraja') await this.beatoraja.activatePendingTheme();
     this.guiState.skinFamilyOverride = value;
     this.optionsDialog.showSkinSystem(value);
     const play = this.gameplayView;
