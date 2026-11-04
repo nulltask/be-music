@@ -161,12 +161,11 @@ function drawGauge(
 ): void {
   const gauge = Math.max(0, Math.min(100, runtime.gauge ?? 0));
   const clear = runtime.gaugeSurvival ? 0 : (runtime.clearThreshold ?? 80);
-  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, rect.x + rect.w / 2, labelY, {
+  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, rect.x, labelY, {
     size: 9,
     color: MUTED,
     weight: 700,
-    align: 'center',
-    maxWidth: showValue ? rect.w - 80 : rect.w,
+    maxWidth: showValue ? rect.w - 48 : rect.w,
   });
   if (showValue) text(ctx, `${Math.floor(gauge)}%`, rect.x + rect.w, labelY, { size: 13, weight: 700, align: 'right' });
   const cells = Math.max(10, Math.min(GAUGE_CELLS, Math.floor(rect.w / 4)));

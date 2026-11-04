@@ -391,9 +391,8 @@ function drawGauge(
 ): void {
   const gauge = Math.max(0, Math.min(100, runtime.gauge ?? 0));
   const clear = runtime.clearThreshold ?? 80;
-  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, x + w / 2, y - 10, {
-    align: 'center',
-    maxWidth: w - 80,
+  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, x, y - 10, {
+    maxWidth: w - 48,
     size: labelSize,
     color: MUTED,
     weight: 700,

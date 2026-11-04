@@ -52,10 +52,12 @@ export function renderGameplayCabinet({
   const { keys, gauge } = cabinet;
   const gaugeBox = {
     x: gauge.x,
-    y: cabinet.gaugeLabelY - 8,
+    y: keys.y + keys.h,
     w: gauge.w,
-    h: gauge.y + gauge.h - cabinet.gaugeLabelY + 8,
+    h: gauge.y + gauge.h - keys.y - keys.h,
   };
+  const gaugeStyle = (rect: BeMusicRect): string =>
+    `${place(rect)};--gauge-caption-y:${((cabinet.gaugeLabelY - rect.y) / rect.h) * 100}%;--gauge-bar-y:${((gauge.y - rect.y) / rect.h) * 100}%;--gauge-bar-height:${(gauge.h / rect.h) * 100}%`;
   const split = second && !cabinet.secondSide ? gaugeBox.x + (gaugeBox.w + 12) / 2 : gaugeBox.x + gaugeBox.w;
   const secondGaugeBox = cabinet.secondSide
     ? { ...gaugeBox, x: cabinet.secondSide.gauge.x, w: cabinet.secondSide.gauge.w }
@@ -111,8 +113,9 @@ export function renderGameplayCabinet({
     <be-music-gauge-panel
       class="cab"
       compact
+      data-cabinet
       exportparts="meter:gauge-meter"
-      style=${place(second && !cabinet.secondSide ? { ...gaugeBox, w: split - 6 - gaugeBox.x } : gaugeBox)}
+      style=${gaugeStyle(second && !cabinet.secondSide ? { ...gaugeBox, w: split - 6 - gaugeBox.x } : gaugeBox)}
       .data=${panels.gauge}
     ></be-music-gauge-panel>
     ${
@@ -120,8 +123,9 @@ export function renderGameplayCabinet({
         ? html`<be-music-gauge-panel
             class="cab"
             compact
+            data-cabinet
             exportparts="meter:gauge-meter"
-            style=${place(secondGaugeBox)}
+            style=${gaugeStyle(secondGaugeBox)}
             .data=${second.gauge}
           ></be-music-gauge-panel>`
         : nothing

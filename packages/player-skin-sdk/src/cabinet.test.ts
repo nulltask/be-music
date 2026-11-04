@@ -307,20 +307,18 @@ it('rotates scratches once every four chart beats, wrapping count-in beats', () 
   expect(resolveScratchAngle(NaN)).toBe(0);
 });
 
-it.each([false, true])(
-  'keeps the keys close to extended lanes and reserves the gauge label band (twoPlayer=%s)',
-  (twoPlayer) => {
-    const layout = resolveGameplayLayout(
-      { laneChannels: twoPlayer ? DP14 : SP7, laneCount: twoPlayer ? 16 : 8, twoPlayer },
-      cabinetStage,
-    );
-    const cabinet = resolveCabinetLayout(layout);
-    expect(layout.playfield.judgementY).toBe(333);
-    expect(cabinet.keys.y - layout.playfield.judgementY).toBe(2);
-    expect(cabinet.gaugeLabelY).toBe((cabinet.keys.y + cabinet.keys.h + cabinet.gauge.y) / 2);
-    expect(cabinet.score.y - cabinet.keys.y - cabinet.keys.h).toBeGreaterThanOrEqual(10);
-  },
-);
+it.each([
+  { laneChannels: SP7, twoPlayer: false },
+  { laneChannels: DP14, twoPlayer: false },
+  { laneChannels: DP14, twoPlayer: true },
+])('keeps extended lanes close to keys and vertically centers the caption: %j', ({ laneChannels, twoPlayer }) => {
+  const layout = resolveGameplayLayout({ laneChannels, laneCount: laneChannels.length, twoPlayer }, cabinetStage);
+  const cabinet = resolveCabinetLayout(layout);
+  expect(layout.playfield.judgementY).toBe(333);
+  expect(cabinet.keys.y - layout.playfield.judgementY).toBe(2);
+  expect(cabinet.gaugeLabelY).toBe((cabinet.keys.y + cabinet.keys.h + cabinet.gauge.y) / 2);
+  expect(cabinet.score.y - cabinet.keys.y - cabinet.keys.h).toBeGreaterThanOrEqual(10);
+});
 
 it('labels automated lane banks and distinguishes the ghost from live input', () => {
   expect(resolveLanePlayLabel({}, '1P')).toBeUndefined();

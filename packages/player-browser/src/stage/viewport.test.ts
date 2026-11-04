@@ -15,7 +15,7 @@ describe('resolveScaledViewport', () => {
     });
   });
 
-  test('fits classic LR2 coordinates to widescreen output without a 4:3 pillarbox', () => {
+  test('applies an explicitly requested display aspect to authored coordinates', () => {
     const v = resolveScaledViewport(1280, 720, 640, 480, 16 / 9);
     expect(v.x).toBeCloseTo(0);
     expect(v.y).toBeCloseTo(0);

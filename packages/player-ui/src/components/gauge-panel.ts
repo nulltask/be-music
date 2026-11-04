@@ -18,11 +18,11 @@ export class BeMusicGaugePanelElement extends DataElement<BeMusicGaugeData> {
       .compact {
         display: block;
         position: relative;
-        text-align: center;
+        text-align: left;
       }
       .compact .name {
         display: block;
-        margin-inline: 3em;
+        margin-right: 3em;
         overflow: hidden;
         white-space: nowrap;
       }
@@ -35,6 +35,21 @@ export class BeMusicGaugePanelElement extends DataElement<BeMusicGaugeData> {
         display: block;
         width: 100%;
         margin-top: 4px;
+      }
+      :host([data-cabinet]) .compact {
+        height: 100%;
+      }
+      :host([data-cabinet]) .name,
+      :host([data-cabinet]) .value {
+        position: absolute;
+        top: var(--gauge-caption-y);
+        transform: translateY(-50%);
+      }
+      :host([data-cabinet]) .compact meter {
+        position: absolute;
+        top: var(--gauge-bar-y);
+        height: var(--gauge-bar-height);
+        margin-top: 0;
       }
       meter {
         flex: 1;

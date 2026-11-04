@@ -372,7 +372,7 @@ export class LR2SelectView implements SelectView {
     const skin = this.kit.skin;
     const screenWidth = app.screen.width || app.canvas.parentElement?.clientWidth || skin.width;
     const screenHeight = app.screen.height || app.canvas.parentElement?.clientHeight || skin.height;
-    const viewport = resolveScaledViewport(screenWidth, screenHeight, skin.width, skin.height, 16 / 9);
+    const viewport = resolveScaledViewport(screenWidth, screenHeight, skin.width, skin.height);
     setDesignTextResolution(
       resolveDesignTextResolution(
         Math.max(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale),
@@ -784,7 +784,6 @@ export class LR2SelectView implements SelectView {
     const size = (): SelectDesignSize => ({
       width: view.kit.skin.width,
       height: view.kit.skin.height,
-      displayAspectRatio: 16 / 9,
     });
     return {
       get visible(): boolean {

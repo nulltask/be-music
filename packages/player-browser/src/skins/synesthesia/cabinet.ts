@@ -151,9 +151,9 @@ function drawGauge(draw: CabinetDraw, cabinet: CabinetLayout, runtime: Runtime):
     addHUDText(
       draw.layer,
       `${prefix}${(state.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
-      rect.x + rect.w / 2,
+      rect.x,
       gaugeLabelY,
-      { ...labelStyle(), anchorX: 0.5, anchorY: 0.5, maxWidth: showValue ? rect.w - 80 : rect.w },
+      { ...labelStyle(), anchorY: 0.5, maxWidth: showValue ? rect.w - 48 : rect.w },
       draw.pool,
     );
     if (showValue) {
