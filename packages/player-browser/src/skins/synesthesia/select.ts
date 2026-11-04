@@ -1,4 +1,6 @@
+import { formatSelectBreadcrumb } from './layout.ts';
 import { Container, Graphics, Sprite } from 'pixi.js';
+import { bindGlassSurface, drawGlassSurface } from './glass.ts';
 import { createFlock, stepFlock } from './boids.ts';
 import { ChargeCloud } from './charge-cloud.ts';
 import { KICK_REST, stepKick, type KickState } from './kick.ts';
@@ -38,7 +40,6 @@ import {
   SYN_DISPLAY_FONT,
   SYN_EMBER,
   SYN_FLARE,
-  SYN_GLASS,
   SYN_MAGENTA,
   SYN_MIST,
   SYN_TEXT_FONT,
@@ -76,7 +77,7 @@ import {
 } from '../pixi-kit/index.ts';
 import { addSynesthesiaText } from './figures.ts';
 
-const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
+const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 92, listBottomInset: 28, rowHeight: 28 };
 /**
  * The portrait list: full width under the focused-song card and the search bar, with taller rows (two lines each, and
  * a thumb's height to tap).
@@ -172,7 +173,7 @@ function drawJudgeRank(
 }
 
 function framePanel(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {
-  graphics.rect(x, y, w, h).fill({ color: SYN_GLASS, alpha: 0.5 });
+  drawGlassSurface(graphics, x, y, w, h, 0.94);
   graphics.rect(x, y, w, h).stroke({ color: rim, width: 1, alpha: 0.28 });
   drawReticle(graphics, x - 1, y - 1, w + 2, h + 2, SYN_WHITE, 0.85, { arm: 10, width: 1.25 });
 }
@@ -185,6 +186,7 @@ function framePanel(graphics: Graphics, x: number, y: number, w: number, h: numb
 class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   public readonly backLayer = new Container();
   public readonly frontLayer = new Container();
+  private readonly glass = new Graphics();
   private readonly ground = new Graphics();
   /** Additive particle world: floor, pyramids, river, and the orb's tails. */
   private readonly world = new Graphics();
@@ -233,6 +235,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         : input;
     this.ensureBuilt(frame.designWidth, frame.designHeight);
     this.activeCard = undefined;
+    this.glass.clear();
     const portrait = frame.designHeight > frame.designWidth;
     let needsFrame = portrait ? this.renderPortraitChrome(frame) : this.renderChrome(frame);
     const layout = portrait ? PORTRAIT_LAYOUT : LAYOUT;
@@ -272,7 +275,11 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const dark = Math.max(0, (t - 0.72) / 0.28);
     // Fade the list and panels out of the way, leaving black space and the particles rushing past.
     const away = 1 - easeOutCubic(Math.min(1, t / 0.25));
-    for (const child of layer.children) child.alpha *= away;
+    for (const child of layer.children) {
+      child.alpha *= away;
+      if (child.label === 'synesthesia-select/header') child.y -= 38 * (1 - away);
+      if (child.label === 'synesthesia-select/footer') child.y += 32 * (1 - away);
+    }
     const form = easeOutCubic(Math.min(1, t / 0.4));
     const alpha = Math.min(1, t * 4) * (1 - dark);
     const title = addSynesthesiaText(layer, chartEntry?.title ?? '', cx, cy - 6, {
@@ -593,7 +600,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
     this.world.blendMode = 'add';
     this.trails.blendMode = 'add';
-    this.backLayer.addChild(this.ground, this.world, this.trails, starLayer, this.chargeCloud.view);
+    this.backLayer.addChild(this.ground, this.world, this.trails, starLayer, this.chargeCloud.view, this.glass);
 
     this.cursorGlow.texture = glow;
     this.cursorGlow.anchor.set(0.5);
@@ -604,11 +611,16 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private renderChrome(frame: PixiSelectFrame): boolean {
     const { layer, designWidth, designHeight, entries, focusedChart: chartEntry } = frame;
     const chrome = new Graphics();
+    bindGlassSurface(chrome, this.glass);
     chrome.label = 'synesthesia-select/chrome';
     const hue = sceneHue(frame.nowMs / 1000);
     const accent = hsvToHex(hue, 0.6, 1);
-    const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
-      addSynesthesiaText(layer, text, x, y, options);
+    const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) => {
+      const node = addSynesthesiaText(layer, text, x, y, options);
+      if (y < 38) node.label = 'synesthesia-select/header';
+      else if (y >= designHeight - 36) node.label = 'synesthesia-select/footer';
+      return node;
+    };
 
     // A focused course takes the song's place: its name, then its kind and stage count.
     const course =
@@ -620,13 +632,16 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const playLevel = chartEntry?.playLevel !== undefined ? String(chartEntry.playLevel) : '-';
     const chartBPM = chartEntry?.bpm !== undefined ? String(Math.round(chartEntry.bpm)) : '-';
     const modeLabel = chartEntry ? formatPlayVariantLabel(chartEntry) : '- KEYS';
-    const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
+    const categoryName = formatSelectBreadcrumb(frame.folderPath, frame.folderLabel, frame.searchQuery);
     const position =
       entries.length > 0 ? `${Math.min(frame.selectedIndex + 1, entries.length)} / ${entries.length}` : '0 / 0';
 
     // Header: title as light, a hairline, and the folder on the right.
-    chrome.rect(0, 0, designWidth, 38).fill({ color: SYN_VOID, alpha: 0.5 });
-    chrome.rect(0, 38, designWidth, 1).fill({ color: accent, alpha: 0.5 });
+    const header = new Graphics();
+    header.label = 'synesthesia-select/header';
+    layer.addChild(header);
+    header.rect(0, 0, designWidth, 38).fill({ color: SYN_VOID, alpha: 0.5 });
+    header.rect(0, 38, designWidth, 1).fill({ color: accent, alpha: 0.5 });
     const intro = easeOutCubic(stageProgress(frame.nowMs - frame.sceneStartedAt, 0, 900));
     addText('MUSIC SELECT', 18, 13, {
       size: 12,
@@ -642,7 +657,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       fill: SYN_MIST,
       fontFamily: SYN_TEXT_FONT,
       anchorX: 1,
-      maxWidth: 220,
+      maxWidth: designWidth - 300,
     });
 
     // Info panel.
@@ -744,35 +759,37 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     addHitArea(200, 262, 90, 32, 'pointer', frame.actions.autoPlay);
 
     // Search and library.
-    framePanel(chrome, 14, 334, 290, 30, accent);
-    addText('SEARCH', 30, 349, { ...labelStyle(accent), anchorY: 0.5 });
+    framePanel(chrome, 322, 54, designWidth - 336, 30, accent);
+    addText('SEARCH', 334, 69, { ...labelStyle(accent), anchorY: 0.5 });
     // While the player types in the host's field laid over the box, the field shows the text.
     if (!frame.searchEditing) {
-      addText(frame.searchQuery || 'Title / artist / genre', 116, 349, {
+      addText(frame.searchQuery || 'Title / artist / genre', 418, 69, {
         size: 10,
         anchorY: 0.5,
         weight: '300',
         fill: frame.searchQuery ? SYN_WHITE : SYN_DIM,
         fontFamily: SYN_TEXT_FONT,
-        maxWidth: 180,
+        maxWidth: designWidth - 436,
       });
     }
     // The label and the text strip both start typing; the strip comes last, so the host lays its field over the text.
-    addHitArea(14, 334, 98, 30, 'text', frame.actions.activateSearch);
-    addHitArea(112, 334, 192, 30, 'text', frame.actions.activateSearch);
-    addText('LIBRARY', 30, 384, labelStyle());
+    addHitArea(322, 54, 92, 30, 'text', frame.actions.activateSearch);
+    addHitArea(414, 54, designWidth - 428, 30, 'text', frame.actions.activateSearch);
+    const footY = designHeight - 17;
+    addText('LIBRARY', 30, footY, { ...labelStyle(), anchorY: 0.5 });
     // The count in the display face, like the LIBRARY label above it and the list position.
-    addText(`${entries.length} shown / ${frame.totalCharts} charts`, 30, 398, {
+    addText(`${entries.length} shown / ${frame.totalCharts} charts`, 110, footY, {
       size: 11,
       fill: SYN_MIST,
       fontFamily: SYN_DISPLAY_FONT,
+      anchorY: 0.5,
+      maxWidth: designWidth - 270,
     });
-    addText(
-      frame.searchQuery ? 'SEARCH RESULTS' : frame.folderLabel ? 'CHARTS' : 'FOLDERS',
-      designWidth - 14,
-      designHeight - 20,
-      { ...labelStyle(), anchorX: 1 },
-    );
+    addText(frame.searchQuery ? 'SEARCH RESULTS' : frame.folderLabel ? 'CHARTS' : 'FOLDERS', designWidth - 14, footY, {
+      ...labelStyle(),
+      anchorX: 1,
+      anchorY: 0.5,
+    });
 
     layer.addChildAt(chrome, 0);
     return slide > 0 || intro < 1;
@@ -786,10 +803,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private renderPortraitChrome(frame: PixiSelectFrame): boolean {
     const { layer, designWidth, designHeight, entries, focusedChart: chartEntry } = frame;
     const chrome = new Graphics();
+    bindGlassSurface(chrome, this.glass);
     chrome.label = 'synesthesia-select/chrome';
     const accent = hsvToHex(sceneHue(frame.nowMs / 1000), 0.6, 1);
-    const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
-      addSynesthesiaText(layer, text, x, y, options);
+    const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) => {
+      const node = addSynesthesiaText(layer, text, x, y, options);
+      if (y < 38) node.label = 'synesthesia-select/header';
+      else if (y >= designHeight - 36) node.label = 'synesthesia-select/footer';
+      return node;
+    };
     const label = (fill: number = SYN_DIM): SkinTextOptions => ({ ...labelStyle(fill), size: 10 });
 
     const course =
@@ -798,13 +820,16 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         : undefined;
     const chartArtist = chartEntry?.artist || chartEntry?.subtitle || course?.detail || '';
     const playLevel = chartEntry?.playLevel !== undefined ? String(chartEntry.playLevel) : '-';
-    const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
+    const categoryName = formatSelectBreadcrumb(frame.folderPath, frame.folderLabel, frame.searchQuery);
     const position =
       entries.length > 0 ? `${Math.min(frame.selectedIndex + 1, entries.length)} / ${entries.length}` : '0 / 0';
 
     // Header: title as light, a hairline, and the folder on the right.
-    chrome.rect(0, 0, designWidth, 40).fill({ color: SYN_VOID, alpha: 0.5 });
-    chrome.rect(0, 40, designWidth, 1).fill({ color: accent, alpha: 0.5 });
+    const header = new Graphics();
+    header.label = 'synesthesia-select/header';
+    layer.addChild(header);
+    header.rect(0, 0, designWidth, 40).fill({ color: SYN_VOID, alpha: 0.5 });
+    header.rect(0, 40, designWidth, 1).fill({ color: accent, alpha: 0.5 });
     const intro = easeOutCubic(stageProgress(frame.nowMs - frame.sceneStartedAt, 0, 900));
     addText('MUSIC SELECT', 16, 14, {
       size: 12,
@@ -953,7 +978,10 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     // Library line at the foot.
     const footY = designHeight - 17;
-    chrome.rect(0, designHeight - 32, designWidth, 1).fill({ color: accent, alpha: 0.3 });
+    const footer = new Graphics();
+    footer.label = 'synesthesia-select/footer';
+    layer.addChild(footer);
+    footer.rect(0, designHeight - 32, designWidth, 1).fill({ color: accent, alpha: 0.3 });
     addText(`${entries.length} shown / ${frame.totalCharts} charts`, 16, footY, {
       size: 11,
       fill: SYN_MIST,
@@ -998,14 +1026,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const rowW = listWidth + (active ? 4 : 0);
     const alpha = 1 - intro;
     const row = new Graphics();
+    bindGlassSurface(row, this.glass);
     row.alpha = alpha;
     row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
+    drawGlassSurface(row, rowX, y, rowW, rowH, 0.96 * alpha);
     if (active) {
       row.rect(rowX, y, rowW, rowH).fill({ color: accent, alpha: 0.24 });
       row.rect(rowX, y, rowW, rowH).stroke({ color: SYN_FLARE, width: 1, alpha: 0.6 });
       this.activeCard = { x: rowX, y, w: rowW, h: rowH };
     } else {
-      row.rect(rowX, y, rowW, rowH).fill({ color: SYN_GLASS, alpha: 0.55 });
       row.rect(rowX, y, rowW, rowH).stroke({ color: accent, width: 1, alpha: 0.16 });
     }
     const midY = y + rowH / 2;
@@ -1104,14 +1133,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const rowW = active ? listWidth + 8 : listWidth;
     const alpha = 1 - intro;
     const row = new Graphics();
+    bindGlassSurface(row, this.glass);
     row.alpha = alpha;
     row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
+    drawGlassSurface(row, rowX, y, rowW, rowHeight - 4, 0.96 * alpha);
     if (active) {
       row.rect(rowX, y, rowW, rowHeight - 4).fill({ color: accent, alpha: 0.24 });
       row.rect(rowX, y, rowW, rowHeight - 4).stroke({ color: SYN_FLARE, width: 1, alpha: 0.6 });
       this.activeCard = { x: rowX, y, w: rowW, h: rowHeight - 4 };
     } else {
-      row.rect(rowX, y, rowW, rowHeight - 4).fill({ color: SYN_GLASS, alpha: 0.55 });
       row.rect(rowX, y, rowW, rowHeight - 4).stroke({ color: accent, width: 1, alpha: 0.16 });
     }
     // Level as a glowing orb on the leading edge.

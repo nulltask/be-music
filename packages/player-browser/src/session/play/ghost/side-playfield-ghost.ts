@@ -12,7 +12,7 @@
 
 import type { TimingResolver } from '@be-music/chart-model';
 import type { TimedLandmineNote, TimedPlayableNote } from '@be-music/player-engine/display';
-import { createEmptyScore, type ScoreSummary } from '@be-music/player-engine/ruleset';
+import { resolveLR2MoneyScore, createEmptyScore, type ScoreSummary } from '@be-music/player-engine/ruleset';
 import { createPlayState, type PlayState } from '@be-music/player-scene-model';
 import type { BeMusicJudgmentKind } from '../../../skin/be-music/types.ts';
 import type { PlayfieldRuntime, RuntimeMineNote, RuntimeNote } from '../../../view/shared/playfield/context.ts';
@@ -275,6 +275,7 @@ export class SidePlayfieldGhost implements GhostPresentation {
         : {}),
       exScore: step?.exScore ?? 0,
     };
+    score.score = this.timeline.ruleset === 'lr2' ? resolveLR2MoneyScore(score) : score.exScore;
     const playState: PlayState = {
       ...createPlayState(),
       gaugeType: this.timeline.gaugeType,

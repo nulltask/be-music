@@ -30,8 +30,8 @@ export const nativeSkin: BeMusicSkin = defineBeMusicSkin({
   portraitStage: {
     ...tallStage,
     playfield: {
-      standard: { top: 116, judgementY: 838 },
-      touch: { top: 116, judgementY: 754 },
+      standard: { top: 224, judgementY: 838 },
+      touch: { top: 224, judgementY: 754 },
     },
     // Gameplay gets the height; BGA remains available in the right side of the compact header.
     resolveBGARect: () => ({ x: 378, y: 8, w: 96, h: 96 }),

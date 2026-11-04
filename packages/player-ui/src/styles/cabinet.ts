@@ -37,10 +37,6 @@ export const cabinetStyles: CSSResult = css`
   .cabinet[data-two-player] .stage-band {
     padding-inline: calc(var(--px) * 3);
   }
-  .cabinet[data-two-player] .side-chart {
-    text-align: center;
-    font-weight: 700;
-  }
   .cabinet dl {
     gap: calc(var(--px) * 1) calc(var(--px) * 6);
     font-size: 1em;
@@ -99,7 +95,6 @@ export const cabinetStyles: CSSResult = css`
     font-size: 1.6em;
   }
   /* The double-play row under the keys is short, and the chart panel a narrow stack. */
-  .cabinet[data-two-player] .figure strong,
   .cabinet[data-double-play] .figure strong {
     font-size: 1.5em;
   }
@@ -323,6 +318,18 @@ export const cabinetStyles: CSSResult = css`
     align-content: stretch !important;
     gap: calc(var(--px) * 8);
   }
+  .judge-owner {
+    position: absolute;
+    top: calc(var(--px) * 5);
+    left: calc(var(--px) * 8);
+  }
+  .cabinet[data-two-player] .judge {
+    padding-top: calc(var(--px) * 18);
+  }
+  .cabinet[data-two-player] .judge .counts {
+    font-size: 0.95em;
+    line-height: 1.1;
+  }
   .judge .counts {
     align-content: space-between;
   }
@@ -393,6 +400,11 @@ export const cabinetStyles: CSSResult = css`
     display: flex !important;
     align-items: center;
     justify-content: space-between;
+  }
+  .cabinet[data-two-player] .tempo {
+    flex-direction: column;
+    justify-content: center;
+    gap: calc(var(--px) * 4);
   }
   .tempo strong {
     font-size: 1.3em;

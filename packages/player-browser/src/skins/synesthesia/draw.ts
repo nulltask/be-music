@@ -1,4 +1,5 @@
 import type { Graphics } from 'pixi.js';
+import { drawGlassSurface } from './glass.ts';
 import type { Flock } from './boids.ts';
 import { createMantaShape, mantaShapeInto } from './manta.ts';
 import {
@@ -12,7 +13,7 @@ import {
   type Projected,
   type Vec3,
 } from './space.ts';
-import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE, synGlowTexture } from './style.ts';
+import { SYN_CYAN, SYN_MAGENTA, SYN_WHITE, synGlowTexture } from './style.ts';
 import { hash01 } from '@be-music/player-skin-sdk';
 import { pointLayerFor } from '../pixi-kit/index.ts';
 
@@ -342,11 +343,14 @@ export function drawFrame(
   w: number,
   h: number,
   rim: number,
-  options: { fill?: number; arm?: number } = {},
+  options: { fill?: number; arm?: number; emphasis?: boolean } = {},
 ): void {
-  graphics.rect(x, y, w, h).fill({ color: SYN_GLASS, alpha: options.fill ?? 0.55 });
-  graphics.rect(x, y, w, h).stroke({ color: rim, width: 1, alpha: 0.22 });
-  drawReticle(graphics, x - 1, y - 1, w + 2, h + 2, SYN_WHITE, 0.85, { arm: options.arm ?? 9, width: 1.25 });
+  drawGlassSurface(graphics, x, y, w, h, options.fill ?? 0.96);
+  graphics.rect(x, y, w, h).stroke({ color: rim, width: 1, alpha: options.emphasis ? 0.65 : 0.22 });
+  drawReticle(graphics, x - 1, y - 1, w + 2, h + 2, SYN_WHITE, options.emphasis ? 0.9 : 0.3, {
+    arm: options.arm ?? 9,
+    width: 1.25,
+  });
 }
 
 export interface CloudTransform {

@@ -59,13 +59,29 @@ describe('resolveCabinetLayout', () => {
     }
   });
 
-  it('keeps the top-right corner free for a host’s menu tab', () => {
-    expect(cabinet.stage.x + cabinet.stage.w).toBeLessThanOrEqual(cabinetStage.width - 52);
+  it('aligns the stage band with the chart panel', () => {
+    expect(cabinet.stage.x).toBe(cabinet.players.x);
+    expect(cabinet.stage.x + cabinet.stage.w).toBe(cabinet.players.x + cabinet.players.w);
   });
 
   it('places the BGA square the stage hands the player', () => {
     expect(layout.bga).toEqual(cabinet.bga);
-    expect(cabinet.bga).toEqual({ x: 483, y: 90, w: 260, h: 260 });
+    expect(cabinet.bga).toEqual({ x: 484, y: 98, w: 254, h: 254 });
+  });
+
+  it('keeps eight-pixel gaps through the information and graph columns', () => {
+    const graph = cabinet.graph!;
+    for (const column of [
+      [graph.header, graph.bars, graph.footer],
+      [cabinet.stage, cabinet.players, cabinet.bga, cabinet.judge],
+    ]) {
+      for (let index = 1; index < column.length; index += 1) {
+        const previous = column[index - 1]!;
+        expect(column[index]!.y - previous.y - previous.h).toBe(8);
+      }
+    }
+    expect(cabinet.tempo.y - cabinet.bpm.y - cabinet.bpm.h).toBe(8);
+    expect(cabinet.players.h).toBeGreaterThanOrEqual(52);
   });
 
   it('hides a BGA that would be a postage stamp', () => {
@@ -95,11 +111,23 @@ describe('resolveCabinetLayout for double play', () => {
     expect(cabinet.bga.w).toBeGreaterThan(0);
   });
 
-  it('keeps the graph clear of the menu tab’s corner, with a band for controls beside the corner', () => {
+  it('aligns the controls with the graph column', () => {
     const controls = cabinet.controls!;
     expect(cabinet.graph!.header.y).toBeGreaterThanOrEqual(controls.y + controls.h);
     expect(controls.x).toBeGreaterThan(layout.playfield.right);
-    expect(controls.x + controls.w).toBeLessThanOrEqual(cabinetStage.width - 52);
+    expect(controls.x).toBe(cabinet.graph!.header.x);
+    expect(controls.x + controls.w).toBe(cabinet.graph!.header.x + cabinet.graph!.header.w);
+  });
+
+  it('uses equal gaps between the panels in both side columns', () => {
+    const left = [cabinet.stage, cabinet.players, cabinet.bga, cabinet.judge];
+    const right = [cabinet.controls!, cabinet.graph!.header, cabinet.graph!.bars, cabinet.graph!.footer, cabinet.tempo];
+    for (const column of [left, right]) {
+      for (let index = 1; index < column.length; index += 1) {
+        const previous = column[index - 1]!;
+        expect(column[index]!.y - previous.y - previous.h).toBe(8);
+      }
+    }
   });
 
   it('lays the score, the shared gauge, the hi-speed and the BPM under the keys', () => {
@@ -143,22 +171,31 @@ describe('two-player cabinet layout', () => {
     expect(layout.bga).toEqual(cabinet.bga);
     expect(cabinet.bga.x).toBeGreaterThan(one.right);
     expect(cabinet.bga.x + cabinet.bga.w).toBeLessThan(two.left);
-    expect(cabinet.bga.x + cabinet.bga.w / 2).toBe(cabinetStage.width / 2);
+    expect(cabinet.bga.x).toBe(cabinet.judge.x);
+    expect(cabinet.bga.w).toBe(cabinet.judge.w);
+    expect(cabinet.bpm.x).toBe(cabinet.judge.x);
     expect(cabinet.gauge.x).toBe(one.left);
     expect(cabinet.gauge.w).toBe(one.right - one.left);
     expect(cabinet.secondSide!.gauge.x).toBe(two.left);
     expect(cabinet.secondSide!.gauge.w).toBe(two.right - two.left);
     expect(cabinet.gauge.y).toBeGreaterThan(cabinet.keys.y + cabinet.keys.h);
     expect(cabinet.center).toBeUndefined();
-    expect(cabinet.graph).toBeUndefined();
+    expect(cabinet.graph).toBeDefined();
+    expect(cabinet.progress).toBeDefined();
+    expect(cabinet).not.toHaveProperty('maxCombo');
+    expect(cabinet).not.toHaveProperty('time');
+    expect(cabinet.secondSide).not.toHaveProperty('maxCombo');
+    expect(cabinet.players.h).toBeGreaterThanOrEqual(46);
+    expect(cabinet.judge.h).toBeGreaterThanOrEqual(84);
     const panels = [
-      cabinet.time!,
       cabinet.controls!,
+      cabinet.graph!.header,
+      cabinet.graph!.bars,
+      cabinet.graph!.footer,
+      cabinet.progress!,
       cabinet.stage,
       cabinet.score,
       cabinet.secondSide!.score,
-      cabinet.maxCombo!,
-      cabinet.secondSide!.maxCombo,
       cabinet.bga,
       cabinet.gauge,
       cabinet.secondSide!.gauge,

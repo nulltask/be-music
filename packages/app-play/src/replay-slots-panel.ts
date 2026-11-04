@@ -1,3 +1,4 @@
+import './ui/collapsible-panel.ts';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 // The replay slots' DOM card, for the skins without a replay-slot UI of their own (the built-in, Native and LR2 ones; a
@@ -39,6 +40,7 @@ export function describeReplaySlotRecord(record: ReplaySlotRecord): string {
 export class ReplaySlotsPanel {
   private readonly card: HTMLElement;
   private readonly options: ReplaySlotsPanelOptions;
+  private expanded = true;
   private mode: PanelMode = { kind: 'hidden' };
   private readonly unsubscribe: () => void;
   private unsubscribeResult: (() => void) | undefined;
@@ -46,10 +48,10 @@ export class ReplaySlotsPanel {
   public constructor(options: ReplaySlotsPanelOptions) {
     this.options = options;
     this.card = document.createElement('aside');
-    this.card.className = 'card replay-slots-card gap-3 px-4';
+    this.card.className = 'replay-slots-card';
     this.card.hidden = true;
     this.card.setAttribute('aria-label', 'Replay slots');
-    document.body.append(this.card);
+    document.querySelector('#auxiliary-panels')!.append(this.card);
     this.unsubscribe = options.service.store.subscribe(() => this.render());
   }
 
@@ -84,6 +86,7 @@ export class ReplaySlotsPanel {
     this.unsubscribeResult?.();
     this.unsubscribeResult = undefined;
     this.mode = mode;
+    this.expanded = true;
     this.render();
   }
 
@@ -108,32 +111,46 @@ export class ReplaySlotsPanel {
     this.card.dataset.mode = 'result';
     render(
       html`
-        <header>
-          <h2>${copy.slotsTitle}</h2>
-          <p>${slots.saveable ? copy.saveHint : copy.cannotSave}</p>
-        </header>
-        <ol class="replay-slots-list">
-          ${Array.from({ length: REPLAY_SLOT_COUNT }, (_, slot) => {
-            const state = states[slot];
-            const record = records[slot];
-            return html`<li class="replay-slots-row">
-              <span class="replay-slots-name">${copy.slot(slot + 1)}</span>
-              <span class="replay-slots-detail"
-                >${state === 'saved' ? copy.savedNow : record !== undefined ? describeReplaySlotRecord(record) : copy.empty}</span
-              >
-              <button
-                class="btn"
-                type="button"
-                data-size="sm"
-                data-slot=${slot + 1}
-                ?disabled=${!slots.saveable || state === 'saved'}
-                @click=${() => void slots.save(slot)}
-              >
-                ${state === 'saved' ? copy.saved : copy.save}
-              </button>
-            </li>`;
-          })}
-        </ol>
+        <be-music-collapsible-panel
+          position="inline"
+          .heading=${copy.slotsTitle}
+          .open=${this.expanded}
+          @panel-toggle=${(event: CustomEvent<{ open: boolean }>) => {
+            this.expanded = event.detail.open;
+          }}
+        >
+          <div class="replay-slots-content">
+            <header>
+              <p>${slots.saveable ? copy.saveHint : copy.cannotSave}</p>
+            </header>
+            ${
+              slots.saveable
+                ? html`<ol class="replay-slots-list">
+                    ${Array.from({ length: REPLAY_SLOT_COUNT }, (_, slot) => {
+                      const state = states[slot];
+                      const record = records[slot];
+                      return html`<li class="replay-slots-row">
+                        <span class="replay-slots-name">${copy.slot(slot + 1)}</span>
+                        <span class="replay-slots-detail"
+                          >${state === 'saved' ? copy.savedNow : record !== undefined ? describeReplaySlotRecord(record) : copy.empty}</span
+                        >
+                        <button
+                          class="btn"
+                          type="button"
+                          data-size="sm"
+                          data-slot=${slot + 1}
+                          ?disabled=${!slots.saveable || state === 'saved'}
+                          @click=${() => void slots.save(slot)}
+                        >
+                          ${state === 'saved' ? copy.saved : copy.save}
+                        </button>
+                      </li>`;
+                    })}
+                  </ol>`
+                : nothing
+            }
+          </div>
+        </be-music-collapsible-panel>
       `,
       this.card,
     );
@@ -150,14 +167,24 @@ export class ReplaySlotsPanel {
     this.card.dataset.mode = 'select';
     render(
       html`
-        <header><h2>${playerText().replay.slotsTitle}</h2></header>
-        <ol class="replay-slots-list">
-          ${repeat(
-            records,
-            (record) => record.slot,
-            (record) => this.selectRow(target, record),
-          )}
-        </ol>
+        <be-music-collapsible-panel
+          position="inline"
+          .heading=${playerText().replay.slotsTitle}
+          .open=${this.expanded}
+          @panel-toggle=${(event: CustomEvent<{ open: boolean }>) => {
+            this.expanded = event.detail.open;
+          }}
+        >
+          <div class="replay-slots-content">
+            <ol class="replay-slots-list">
+              ${repeat(
+                records,
+                (record) => record.slot,
+                (record) => this.selectRow(target, record),
+              )}
+            </ol>
+          </div>
+        </be-music-collapsible-panel>
       `,
       this.card,
     );

@@ -1,3 +1,4 @@
+import { CollapsiblePanelElement } from './collapsible-panel.ts';
 import { repeat } from 'lit/directives/repeat.js';
 import { optionLabel } from './options/labels.ts';
 import { html, nothing, render, type TemplateResult } from 'lit';
@@ -515,7 +516,7 @@ export abstract class OptionContainer extends OptionRow {
 }
 
 /** How a folder shows: collapsible, a section that is always open, or the Options dialog itself. */
-type FolderKind = 'details' | 'section' | 'dialog';
+type FolderKind = 'details' | 'section' | 'dialog' | 'panel';
 
 /** A folder of rows. Its `title` and `expanded` are what `folders.ts` remembers. */
 export class OptionFolder extends OptionContainer {
@@ -529,21 +530,32 @@ export class OptionFolder extends OptionContainer {
   public constructor(
     parent: OptionContainer | undefined,
     params:
-      | { title: string; expanded: boolean; kind: 'details' | 'section' }
+      | { title: string; expanded: boolean; kind: 'details' | 'section' | 'panel' }
       | { title: string; kind: 'dialog'; dialog: HTMLDialogElement; content: HTMLElement },
   ) {
     const root =
       params.kind === 'dialog'
         ? params.dialog
-        : params.kind === 'details'
-          ? element('details', 'options-folder')
-          : element('section', 'options-section');
+        : params.kind === 'panel'
+          ? element('be-music-collapsible-panel', 'options-panel')
+          : params.kind === 'details'
+            ? element('details', 'options-folder')
+            : element('section', 'options-section');
     super(root, parent);
     this.kind = params.kind;
     this.titleText = params.title;
     if (params.kind === 'dialog') {
       this.content = params.content;
       root.addEventListener('close', () => this.reportFold(false));
+    } else if (root instanceof CollapsiblePanelElement && params.kind === 'panel') {
+      root.position = 'inline';
+      root.dataset.optionsFolder = '';
+      root.dataset.optionTitle = params.title;
+      this.content = element('div', 'options-folder-content');
+      root.append(this.content);
+      this.paintHeading();
+      root.open = params.expanded;
+      root.addEventListener('panel-toggle', () => this.reportFold(root.open));
     } else if (root instanceof HTMLDetailsElement && params.kind === 'details') {
       root.dataset.optionsFolder = '';
       // The English title, which names the folder whatever language it shows in (`options/labels.ts`).
@@ -572,7 +584,7 @@ export class OptionFolder extends OptionContainer {
 
   /** A floating collapsible panel in `container`, such as the beatoraja Skin Config panel. */
   public static panel(container: HTMLElement, params: { title: string; expanded: boolean }): OptionFolder {
-    const folder = new OptionFolder(undefined, { ...params, kind: 'details' });
+    const folder = new OptionFolder(undefined, { ...params, kind: 'panel' });
     folder.element.classList.add('options-panel');
     container.append(folder.element);
     return folder;
@@ -589,6 +601,10 @@ export class OptionFolder extends OptionContainer {
 
   private paintHeading(): void {
     if (this.kind === 'dialog') return;
+    if (this.element instanceof CollapsiblePanelElement) {
+      this.element.heading = this.title;
+      return;
+    }
     const title = html`<span class="options-folder-title">${this.title}</span><span data-option-help-host></span>`;
     render(
       this.kind === 'details'
@@ -603,13 +619,13 @@ export class OptionFolder extends OptionContainer {
   /** Whether it is open: a section always is. */
   public get expanded(): boolean {
     const root = this.element;
-    if (root instanceof HTMLDetailsElement) return root.open;
+    if (root instanceof HTMLDetailsElement || root instanceof CollapsiblePanelElement) return root.open;
     if (root instanceof HTMLDialogElement) return root.open;
     return true;
   }
   public set expanded(value: boolean) {
     const root = this.element;
-    if (root instanceof HTMLDetailsElement) {
+    if (root instanceof HTMLDetailsElement || root instanceof CollapsiblePanelElement) {
       this.reportedOpen = value;
       root.open = value;
     } else if (root instanceof HTMLDialogElement) {

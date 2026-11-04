@@ -273,6 +273,7 @@ export class BuiltInSelectView implements SelectView {
       focusedChart: focused?.kind === 'chart' ? focused.chart : undefined,
       focusedCourse: focused?.kind === 'course' ? focused.course : undefined,
       folderLabel: folder?.label,
+      folderPath: frame.browse.path.map((folder) => folder.label),
       searchQuery: normalizeSearchQuery(frame.browse.searchText),
       searchEditing: frame.searchEditing,
       totalCharts: frame.library.charts.length,

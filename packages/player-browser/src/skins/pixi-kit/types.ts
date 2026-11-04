@@ -114,6 +114,8 @@ export interface PixiLongNoteContext {
 }
 
 export interface PixiBombsContext {
+  /** Persistent effects layer, available for skin-specific clipping. */
+  layer?: Container;
   pool: ChildPool;
   bombs: readonly BeMusicBomb[];
   nowMs: number;

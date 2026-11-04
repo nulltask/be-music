@@ -128,12 +128,12 @@ describe('buildGhostField', () => {
 });
 
 describe('SidePlayfieldGhost', () => {
-  function makeGhost() {
+  function makeGhost(ruleset: GhostTimeline['ruleset'] = 'lr2') {
     const side = resolveGhostSide(SEVEN_KEY, '7')!;
     const live = { notes: [liveNote(1), liveNote(2), liveNote(3)], mineNotes: [], timingResolver: undefined };
     const field = buildGhostField(timeline(), live);
     const effects = target();
-    return { ghost: new SidePlayfieldGhost(timeline(), side, field, effects), field, effects, live };
+    return { ghost: new SidePlayfieldGhost(timeline({ ruleset }), side, field, effects), field, effects, live };
   }
 
   test('settles the notes, lights the lanes and shows the plate as the play reaches them', () => {
@@ -153,6 +153,15 @@ describe('SidePlayfieldGhost', () => {
     // A POOR sets off no bomb.
     expect(effects.bombStartedAt.has('23')).toBe(false);
     expect(effects.judgeSideState['2P'].judge).toBe('POOR');
+  });
+
+  test('uses EX score for a beatoraja ghost and restores zero after rewinding', () => {
+    const { ghost, live } = makeGhost('beatoraja');
+    const play = live as unknown as PlayfieldRuntime;
+    ghost.update(1.02, 0);
+    expect(ghost.present(play).secondPlayer?.score).toMatchObject({ exScore: 2, score: 2 });
+    ghost.update(0, 0);
+    expect(ghost.present(play).secondPlayer?.score).toMatchObject({ exScore: 0, score: 0 });
   });
 
   test('catches up a jump ahead without the effects on the way, and rewinds a jump back', () => {
@@ -186,11 +195,11 @@ describe('SidePlayfieldGhost', () => {
     expect(presented.laneX).toBe(laneX);
     // Methods run on the live play itself.
     expect(presented.currentSeconds()).toBe(42);
-    expect(presented.secondPlayer?.score).toMatchObject({ total: 3, exScore: 0 });
+    expect(presented.secondPlayer?.score).toMatchObject({ total: 3, exScore: 0, score: 0 });
     ghost.update(2.21, 0);
     const later = ghost.present(play);
     expect(later).toBe(presented);
-    expect(later.secondPlayer?.score).toMatchObject({ perfect: 1, poor: 1, exScore: 2 });
+    expect(later.secondPlayer?.score).toMatchObject({ perfect: 1, poor: 1, exScore: 2, score: 66666 });
     expect(later.secondPlayer?.playState).toMatchObject({ combo: 0, maxCombo: 1, gauge: 16, gaugeType: 'GROOVE' });
     // The live play's own arrays are untouched.
     expect(play.notes).toHaveLength(3);
