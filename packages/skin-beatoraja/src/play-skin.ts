@@ -69,7 +69,7 @@ export function discoverBeatorajaTheme(
   for (const [path, entry] of files) {
     const format = detectBeatorajaSkinFormat(path);
     if (format === undefined) continue;
-    if (!isBeatorajaSkinPath(path)) continue;
+    const conventionalPath = isBeatorajaSkinPath(path);
     const bytes = asLoadedBytes(entry);
     if (bytes === undefined) {
       // Deferred handles can't be parsed synchronously; theme discovery is best-effort. Skip and move on.
@@ -77,10 +77,25 @@ export function discoverBeatorajaTheme(
     }
     try {
       const header = readHeader(bytes, path, format, files);
+      // A theme folder may be dropped directly, losing the enclosing skin/ directory. Admit its JSON headers
+      // by shape while keeping unrelated player/practice JSON quiet in a whole-installation drop.
+      if (
+        !conventionalPath &&
+        !(
+          Number.isInteger(header.type) &&
+          header.type >= 0 &&
+          typeof header.name === 'string' &&
+          Number.isFinite(header.w) &&
+          header.w > 0 &&
+          Number.isFinite(header.h) &&
+          header.h > 0
+        )
+      )
+        continue;
       entries.push({ entryPath: normalizePath(path), header });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      warnings.push({ entryPath: normalizePath(path), message });
+      if (conventionalPath) warnings.push({ entryPath: normalizePath(path), message });
     }
   }
 
@@ -90,15 +105,9 @@ export function discoverBeatorajaTheme(
 
 /**
  * Decide whether `candidate` should replace `incumbent` for a given scene slot. We can't unconditionally take the
- * first hit because the bundled beatoraja folder ships TWO themes (`skin/default/`, `skin/GdbG_Skin/`, …) and
- * each one provides its own copy of every variant. Without a tiebreaker the default theme — the only one our
- * renderer can fully drive without engine-side `main_state` integration — gets shadowed by whichever theme is
- * encountered last during folder iteration.
- *
- * Tiebreakers (top wins):
- *   1. JSON entry beats Lua entry (parsed deterministically, no host-module stubs needed).
- *   2. Path containing `/default/` beats other themes (the only fully-renderable theme today).
- *   3. Lexicographically earlier path wins.
+ * first hit because a whole-installation drop can contain several themes for the same scene.
+ * Prefer JSON over Lua, the conventional skin/default path over other themes, then the lexicographically earlier
+ * path. Explicit user selections override this initial discovery order in the host.
  */
 function preferEntry(candidate: BeatorajaSkinEntry, incumbent: BeatorajaSkinEntry): boolean {
   const candIsJSON = candidate.entryPath.toLowerCase().endsWith('.json');
@@ -115,16 +124,11 @@ function isDefaultThemePath(path: string): boolean {
   return lower.includes('/skin/default/') || lower.startsWith('skin/default/');
 }
 
-/**
- * Restrict skin discovery to paths under a `skin/` segment. Beatoraja's user-data tree (`practice/<sha>.json`,
- * `player/<id>/config_player.json`, `score/...`, etc.) lives inside the same dropped folder but isn't a skin —
- * accepting them produces noisy parse-error warnings for files that were never meant to be skins. `.luaskin` is
- * unambiguously a skin entry, so we admit it from anywhere.
- */
+/** Conventional skin paths receive parse diagnostics; standalone JSON files are admitted by header shape. */
 function isBeatorajaSkinPath(path: string): boolean {
   const lower = path.toLowerCase();
   if (lower.endsWith('.luaskin')) return true;
-  // Skin JSON conventionally lives at `<bundle>/skin/<theme>/...`. Match a `/skin/` segment OR a leading `skin/`.
+  // Whole-installation JSON skins conventionally live at <bundle>/skin/<theme>/.
   return lower.includes('/skin/') || lower.startsWith('skin/');
 }
 

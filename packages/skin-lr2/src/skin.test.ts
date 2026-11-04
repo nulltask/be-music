@@ -1232,3 +1232,30 @@ describe('loadLR2SkinFromSourceFiles — #RESOLUTION-less canvas auto-detection'
     expect(skin?.height).toBe(480);
   });
 });
+
+describe('#SCENETIME', () => {
+  it.each([0, 1200, 3000])('preserves the authored %i ms decide duration', (sceneTime) => {
+    const skin = loadLR2SkinFromSourceFiles(
+      new Map([
+        [
+          'decide.lr2skin',
+          lines('#INFORMATION,6,Decide,Example', '#STARTINPUT,1500', `#SCENETIME,${sceneTime}`, '#FADEOUT,200'),
+        ],
+      ]),
+      { kind: 'decide' },
+    );
+    expect(skin?.timing).toMatchObject({ startInput: 1500, sceneTime, fadeOut: 200 });
+  });
+  it('follows parse-time conditions instead of taking an inactive duration', () => {
+    const skin = loadLR2SkinFromSourceFiles(
+      new Map([
+        [
+          'decide.lr2skin',
+          lines('#INFORMATION,6,Decide,Example', '#SCENETIME,3000', '#IF,9999', '#SCENETIME,10000', '#ENDIF'),
+        ],
+      ]),
+      { kind: 'decide' },
+    );
+    expect(skin?.timing.sceneTime).toBe(3000);
+  });
+});

@@ -165,30 +165,82 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(result.error.message).toMatch(/syntax|unexpected/i);
   });
 
-  it('returns an empty stub table for unknown require modules', () => {
-    const result = evaluateBeatorajaLuaSkin({
-      entry: enc(
-        ['local t = require("some_unknown_helper")', 'return { has_table = type(t) == "table", count = 0 }'].join('\n'),
-      ),
-      modules: [],
-    });
-    if (!result.ok) throw new Error(result.error.message);
-    expect(result.value).toEqual({ has_table: true, count: 0 });
+  it('reports a missing require module as a Lua error', () => {
+    const result = evaluateBeatorajaLuaSkin({ entry: enc('return require("some_unknown_helper")'), modules: [] });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected a missing module error');
+    expect(result.error.message).toContain("module 'some_unknown_helper' not found");
   });
 
-  it('returns the SAME stub table on repeated require() calls', () => {
+  it('lets optional module checks select the fallback on every missing require', () => {
     const result = evaluateBeatorajaLuaSkin({
       entry: enc(
-        [
-          'local a = require("some_unknown_helper")',
-          'local b = require("some_unknown_helper")',
-          'return { same = a == b }',
-        ].join('\n'),
+        'local a = pcall(require, "optional"); local b = pcall(require, "optional"); return {first = a, second = b, fallback = not a}',
       ),
       modules: [],
     });
     if (!result.ok) throw new Error(result.error.message);
-    expect(result.value).toEqual({ same: true });
+    expect(result.value).toEqual({ first: false, second: false, fallback: true });
+  });
+
+  it('loads a module without a return value once and caches true', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        'loads = 0; local a = require("side_effect"); local b = require("side_effect"); return {first = a, second = b, loads = loads}',
+      ),
+      modules: [{ name: 'side_effect', source: enc('loads = loads + 1') }],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ first: true, second: true, loads: 1 });
+  });
+
+  it('reloads modules that explicitly return false', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        'loads = 0; local a = require("disabled"); local b = require("disabled"); return {first = a, second = b, loads = loads}',
+      ),
+      modules: [{ name: 'disabled', source: enc('loads = loads + 1; return false') }],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ first: false, second: false, loads: 2 });
+  });
+
+  it('passes the requested module name and resolved filename to its chunk', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc('return require("Layout.Widget")'),
+      modules: [{ name: 'layout/widget', source: enc('local name, file = ...; return {name=name, file=file}') }],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ name: 'Layout.Widget', file: 'layout/widget.lua' });
+  });
+
+  it('does not mark a module loaded when its source fails to compile', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        'local a,first=pcall(require,"invalid"); local b,second=pcall(require,"invalid"); return {first=first,second=second}',
+      ),
+      modules: [{ name: 'invalid', source: enc('this is not valid lua') }],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    const value = result.value as Record<string, unknown>;
+    expect(String(value.first)).toContain("failed to load 'invalid'");
+    expect(String(value.second)).toContain("failed to load 'invalid'");
+    expect(String(value.second)).not.toContain('loop or previous error');
+  });
+
+  it('keeps failed module execution marked for subsequent requires', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        'local a, first = pcall(require, "broken"); local b, second = pcall(require, "broken"); return {first_ok = a, second_ok = b, first = first, second = second}',
+      ),
+      modules: [{ name: 'broken', source: enc('error("broken body")') }],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toMatchObject({ first_ok: false, second_ok: false });
+    expect(String((result.value as Record<string, unknown>).first)).toContain('broken body');
+    expect(String((result.value as Record<string, unknown>).second)).toContain(
+      "loop or previous error loading module 'broken'",
+    );
   });
 
   it('preserves runtime Lua functions and evaluates them with a main_state context', () => {
@@ -346,10 +398,7 @@ describe('evaluateBeatorajaLuaSkin', () => {
     });
   });
 
-  it('dofile loads + caches bundle files via the resolver', () => {
-    // First call hits the resolver; second call (same path) returns the cached value WITHOUT
-    // touching the resolver again — beatoraja's runtime caches similarly so themes can
-    // dofile the same helper from multiple entry points without paying repeated I/O.
+  it('dofile executes bundle files on every call and returns independent tables', () => {
     const calls: string[] = [];
     const result = evaluateBeatorajaLuaSkin({
       entry: enc(
@@ -364,13 +413,26 @@ describe('evaluateBeatorajaLuaSkin', () => {
       skinBaseDir: 'skin/test',
       dofileResolver: (path) => {
         calls.push(path);
-        if (path === 'util/helper.lua') return enc('return { value = 42 }');
+        if (path === 'util/helper.lua') return enc('runs = (runs or 0) + 1; return { value = runs }');
         return undefined;
       },
     });
     if (!result.ok) throw new Error(result.error.message);
-    expect(result.value).toEqual({ a: 42, b: 42, same: true });
-    expect(calls).toEqual(['util/helper.lua']); // resolver hit ONCE despite two dofile calls
+    expect(result.value).toEqual({ a: 1, b: 2, same: false });
+    expect(calls).toEqual(['util/helper.lua', 'util/helper.lua']);
+  });
+
+  it('dofile preserves multiple results and distinguishes no result from a nil result', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        'local a,b,c = dofile("values.lua"); return { a=a, b=b, c=c, empty=select("#",dofile("empty.lua")), nilCount=select("#",dofile("nil.lua")) }',
+      ),
+      modules: [],
+      dofileResolver: (path) =>
+        enc(path === 'values.lua' ? 'return 3, false, "third"' : path === 'nil.lua' ? 'return nil' : ''),
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ a: 3, b: false, c: 'third', empty: 0, nilCount: 1 });
   });
 
   it('keeps the console quiet while require() and dofile() resolve', () => {
@@ -734,35 +796,16 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(invoked).toBe(false);
   });
 
-  it('places a placeholder in the cache before running a module body so circular requires terminate (audit 3.11)', () => {
-    // Beatoraja's PackageLib stores a sentinel in `package.loaded[name]` before executing
-    // the module body so that re-entrant `require()` calls during execution see the sentinel
-    // (a placeholder table) rather than re-entering the loader and infinite-recursing. We
-    // mirror that contract: cache an empty table BEFORE running the chunk; the chunk's return
-    // value replaces the placeholder afterwards.
-    //
-    // a → require b → require a → see placeholder (empty {}) → return → continue a's body.
-    const moduleA = enc(['local a = {}', 'a.name = "a"', 'a.b = require("modb")', 'return a'].join('\n'));
-    const moduleB = enc(
-      [
-        'local b = {}',
-        'b.name = "b"',
-        // Cyclic require — receives the placeholder table for `moda` (empty at this point).
-        'b.a_ref = require("moda")',
-        'return b',
-      ].join('\n'),
-    );
+  it('reports circular imports with the same error as LuaJ', () => {
     const result = evaluateBeatorajaLuaSkin({
-      entry: enc(['local moda = require("moda")', 'return { aname = moda.name, bname = moda.b.name }'].join('\n')),
+      entry: enc('return require("moda")'),
       modules: [
-        { name: 'moda', source: moduleA },
-        { name: 'modb', source: moduleB },
+        { name: 'moda', source: enc('return { b = require("modb") }') },
+        { name: 'modb', source: enc('return { a = require("moda") }') },
       ],
     });
-    if (!result.ok) throw new Error(result.error.message);
-    // a runs first, b runs during a's body (sees placeholder for a), a finishes. By the time
-    // we read moda.name and moda.b.name they're populated; the cycle returned the placeholder
-    // (empty table at that moment) and didn't infinite-loop.
-    expect(result.value).toEqual({ aname: 'a', bname: 'b' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected a circular import error');
+    expect(result.error.message).toContain("loop or previous error loading module 'moda'");
   });
 });
