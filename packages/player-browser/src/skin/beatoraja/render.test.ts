@@ -5,6 +5,8 @@ import {
   evaluateBeatorajaLuaSkin,
   isBeatorajaLuaFunctionValue,
   normalizeBeatorajaDestinations,
+  normalizeBeatorajaJudges,
+  expandBeatorajaJudgeDestinations,
   type BeatorajaLuaFunctionValue,
 } from '@be-music/skin-beatoraja';
 import {
@@ -266,6 +268,55 @@ describe('destinationToSpriteProps', () => {
     );
     expect(props).toMatchObject({ visible: true, x: 50, y: 730, width: 40, height: 30, alpha: 1, angle: -0 });
   });
+
+  it.each([
+    ['disabled with a stored height', 0.1, false, 0],
+    ['enabled at zero', 0, true, 0],
+    ['enabled at a quarter', 0.25, true, 145],
+  ] as const)(
+    'keeps judge, relative combo and bombs together with LIFT %s while keys stay fixed',
+    (_name, lift, liftOn, expectedRise) => {
+      // GdbG-style judge: the combo inherits the word's LIFT through its parent position; the keys have no LIFT offset.
+      const judge = normalizeBeatorajaJudges([
+        {
+          id: 'judge',
+          index: 0,
+          images: [{ id: 'word', offsets: [3, 32], dst: [{ time: 0, x: 200, y: 430, w: 191, h: 61 }] }],
+          numbers: [{ id: 'combo', offsets: [32], dst: [{ time: 0, x: 224, y: 0, w: 50, h: 70 }] }],
+        },
+      ]);
+      const groups = normalizeBeatorajaDestinations([
+        ...expandBeatorajaJudgeDestinations(judge),
+        { id: 'bomb', offset: 3, dst: [{ time: 0, x: 100, y: 300, w: 100, h: 100 }] },
+        { id: 'keys', dst: [{ time: 0, x: 100, y: 200, w: 100, h: 100 }] },
+      ]);
+      const input = {
+        laneHeight: 580,
+        maxCombo: 16,
+        comboDigits: { 1: { width: 50, space: 0 }, 2: { width: 50, space: 0 } },
+        cover: { side: '1P' as const, sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift, liftOn },
+      };
+      const props = groups.map((group) =>
+        destinationToSpriteProps(
+          group,
+          {
+            ...ctx({ activeOps: new Set([241]) }),
+            resolveOffset: (id) => {
+              const out = { x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 };
+              return writeBeatorajaPlayOffset(id, input, out) ? out : undefined;
+            },
+          },
+          TEST_CANVAS_HEIGHT,
+        ),
+      );
+      const [word, combo, bomb, keys] = props;
+      expect(props.every((p) => p.visible)).toBe(true);
+      expect(word!.y + word!.height).toBe(570 - expectedRise);
+      expect(combo!.y + combo!.height).toBe(570 - expectedRise);
+      expect(bomb!.y).toBe(600 - expectedRise);
+      expect(keys!.y).toBe(700);
+    },
+  );
 
   it('raises authored LIFT chrome in the same direction as the judgement line', () => {
     const g = groupOf({ offset: 3, dst: [{ time: 0, x: 50, y: 100, w: 100, h: 50, a: 255 }] });
