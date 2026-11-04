@@ -152,6 +152,8 @@ export interface PixiSelectRenderer {
 }
 
 export interface PixiSelectSkin {
+  readonly searchTextSize?: number;
+  readonly portraitSearchTextSize?: number;
   readonly layout: BeMusicSelectLayout;
   /** The list's geometry on the skin's portrait stage (see `BeMusicSelectSkin.portraitLayout`). */
   readonly portraitLayout?: BeMusicSelectLayout;

@@ -58,6 +58,7 @@ export class PlayPresentation {
   /** Judgement that set off each lane's live bomb, by channel; absent for bombs without one (an autoplayed LN head). */
   readonly bombJudge: Map<string, BeMusicJudgmentKind> = new Map();
   /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
+  readonly scratchInputs = new Map<string, { angle: number; direction: 1 | -1; atMs: number }>();
   readonly lanePressedAt: Map<string, number> = new Map();
   readonly laneReleasedAt: Map<string, number> = new Map();
   /**
@@ -97,6 +98,7 @@ export class PlayPresentation {
     this.keyBeamFadeStartedAt.clear();
     this.bombStartedAt.clear();
     this.bombJudge.clear();
+    this.scratchInputs.clear();
     this.lanePressedAt.clear();
     this.laneReleasedAt.clear();
     this.fullComboFired = false;

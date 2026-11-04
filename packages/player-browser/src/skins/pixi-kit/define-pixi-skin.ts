@@ -82,6 +82,8 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
     },
     select: {
       layout: select.layout,
+      searchTextSize: select.searchTextSize,
+      portraitSearchTextSize: select.portraitSearchTextSize,
       portraitLayout: select.portraitLayout,
       outroMs: select.outroMs,
       draw(surface, frame) {
@@ -188,7 +190,7 @@ class GameplayScreen {
 
   constructor(definition: PixiSkinDefinition) {
     this.definition = definition;
-    this.root.addChild(this.layer, this.lanes, this.droppedLongNotes, this.notes, this.bombs, this.overlayLayer);
+    this.root.addChild(this.layer, this.lanes, this.droppedLongNotes, this.notes, this.overlayLayer, this.bombs);
   }
 
   build(frame: BeMusicGameplayFrame): Container {

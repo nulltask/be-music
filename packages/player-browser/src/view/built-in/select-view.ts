@@ -196,11 +196,14 @@ export class BuiltInSelectView implements SelectView {
    * Where the skin's search box is on the canvas, in CSS pixels from its top-left corner, or `undefined` when the skin
    * has none (or nothing is drawn yet).
    */
-  public searchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
+  public searchFieldRect(): { x: number; y: number; width: number; height: number; fontSize?: number } | undefined {
     const rect = this.renderer?.searchFieldRect;
     const viewport = this.lastViewport;
     if (rect === undefined || viewport === undefined) return undefined;
-    return designRectToCanvas(rect, viewport);
+    return {
+      ...designRectToCanvas(rect, viewport),
+      ...(rect.fontSize !== undefined ? { fontSize: rect.fontSize * (viewport.scaleY ?? viewport.scale) } : {}),
+    };
   }
 
   /** The skin's design canvas and its size, for screenshots. */

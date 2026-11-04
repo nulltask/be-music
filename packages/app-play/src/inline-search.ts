@@ -2,6 +2,7 @@ import { render } from 'lit';
 
 /** A rectangle in CSS pixels. */
 export interface FieldRect {
+  fontSize?: number;
   x: number;
   y: number;
   width: number;
@@ -10,6 +11,7 @@ export interface FieldRect {
 
 /** Where and how large the search field sits over a skin's search box, in its containing block's CSS pixels. */
 export interface InlineFieldPlacement {
+  textScale?: number;
   left: number;
   top: number;
   width: number;
@@ -28,13 +30,17 @@ export function placeInlineField(
   container: { left: number; top: number },
   touch = false,
 ): InlineFieldPlacement {
-  const fontSize = Math.max(touch ? 16 : 12, Math.round(field.height * 0.38));
+  const requested = field.fontSize ?? Math.round(field.height * 0.38);
+  const fontSize =
+    field.fontSize === undefined ? Math.max(touch ? 16 : 12, requested) : Math.max(touch ? 16 : 1, requested);
+  const textScale = field.fontSize !== undefined && touch ? Math.min(1, requested / fontSize) : 1;
   return {
     left: canvas.left - container.left + field.x,
     top: canvas.top - container.top + field.y,
-    width: field.width,
-    height: field.height,
+    width: field.width / textScale,
+    height: field.height / textScale,
     fontSize,
+    ...(textScale < 1 ? { textScale } : {}),
   };
 }
 
@@ -213,5 +219,7 @@ export class InlineSearch {
     style.width = `${placement.width}px`;
     style.height = `${placement.height}px`;
     style.fontSize = `${placement.fontSize}px`;
+    style.transformOrigin = 'top left';
+    style.transform = placement.textScale === undefined ? 'none' : `scale(${placement.textScale})`;
   }
 }

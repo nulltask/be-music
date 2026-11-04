@@ -246,7 +246,7 @@ export interface SelectView extends FamilyView<SelectFrame, SelectIntent> {
    * Where the skin's search box is on the canvas, in CSS pixels from its top-left corner, or `undefined` when it has
    * none (or nothing is drawn yet).
    */
-  searchFieldRect(): { x: number; y: number; width: number; height: number } | undefined;
+  searchFieldRect(): { x: number; y: number; width: number; height: number; fontSize?: number } | undefined;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -598,6 +598,7 @@ export interface PlayfieldMeasureLine {
 
 /** A rect the chart's BGA is composited into, in design pixels. */
 export interface PlayfieldBGATarget {
+  readonly preserveVideoAspect?: boolean;
   readonly x: number;
   readonly y: number;
   readonly w: number;

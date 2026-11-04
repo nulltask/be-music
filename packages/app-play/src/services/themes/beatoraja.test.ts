@@ -405,3 +405,21 @@ describe('BeatorajaThemeService skin options', () => {
     expect(service.beatorajaSkinConfig(SELECT.entryPath, header)).toBe(config);
   });
 });
+
+test('preloads without changing the active beatoraja theme or audio, then activates the cached bundle', async () => {
+  const { service, options } = harness();
+  const active = FULL();
+  await drop(service, active);
+  const replacement = bundle([SELECT], { selectSkin: SELECT });
+  loadTheme.mockResolvedValueOnce(replacement);
+  const audioCalls = vi.mocked(options.audio.setTheme).mock.calls.length;
+  await service.loadBeatorajaTheme([], false);
+  expect(service.beatorajaTheme).toBe(active);
+  expect(options.audio.setTheme).toHaveBeenCalledTimes(audioCalls);
+  expect(service.hasPendingTheme()).toBe(true);
+  const loads = loadTheme.mock.calls.length;
+  await service.activatePendingTheme();
+  expect(service.beatorajaTheme).toBe(replacement);
+  expect(service.hasPendingTheme()).toBe(false);
+  expect(loadTheme).toHaveBeenCalledTimes(loads);
+});

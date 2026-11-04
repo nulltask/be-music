@@ -1,3 +1,5 @@
+import { fitVideoBGARect } from './bga-layout.ts';
+import { pickActiveBGACue } from '../../chart/bga-timeline.ts';
 /**
  * The built-in play screen's chrome inputs (`BuiltInPlayView`): the lane geometry of the built-in playfield for the
  * loaded chart and the stage, and the runtime the skinless chrome (`skinlessChromeRenderer`, or a Be-Music Skin's
@@ -9,7 +11,12 @@
 
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import { resolve____RankLabel } from '@be-music/player-engine/ruleset';
-import { resolveGameplayLaneGeometry, resolveGameplayLayout, type GameplayLayoutMode } from '@be-music/player-skin-sdk';
+import {
+  resolveGameplayLaneGeometry,
+  resolveGameplayLayout,
+  resolveCabinetLayout,
+  type GameplayLayoutMode,
+} from '@be-music/player-skin-sdk';
 import { formatGaugeLabel, recentJudgeTimings, resolveGreenNumber } from '@be-music/player-scene-model';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
@@ -57,6 +64,7 @@ function createDefaultBGATarget(rect: { x: number; y: number; w: number; h: numb
     noBase: false,
     noLayer: false,
     noPoor: false,
+    preserveVideoAspect: true,
     applyToSprite: (sprite) => {
       sprite.alpha = 1;
       sprite.tint = 0xffffff;
@@ -210,6 +218,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     // The beat this frame already worked out for the same `seconds`.
     beatPhase: currentBeat - Math.floor(currentBeat),
     chartBeat: currentBeat,
+    scratchInputs: Object.fromEntries(ctx.play.scratchInputs ?? []),
     keyBeams: Object.fromEntries(
       ctx.play.laneChannels.map((channel) => [channel, resolveKeyBeamAlpha(ctx.play, channel, 120, nowMs)]),
     ),
@@ -254,6 +263,8 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
 
 /** Keep the base layout/BGA fixed and publish each side's actual line for the skin's chrome. */
 function withLiftLines(ctx: BeMusicLayoutContext, layout: BeMusicGameplayLayout): BeMusicGameplayLayout {
+  const bga = resolveVideoBGA(ctx, layout.bga, resolveLaneGeometry(ctx));
+  if (bga !== layout.bga) layout = { ...layout, bga };
   if (!ctx.drawsLift) return layout;
   const sides = { ...layout.playfield.sides };
   for (const cover of ctx.play.resolveLaneCovers()) {
@@ -285,6 +296,40 @@ export interface BeMusicLayoutContext extends LaneGeometryContext {
     | undefined;
 }
 
+/** Resizes only opted-in built-in monitors; external skins retain their authored rectangles. */
+function resolveVideoBGA(
+  ctx: LaneGeometryContext,
+  rect: BeMusicGameplayLayout['bga'],
+  geometry: ReturnType<typeof resolveLaneGeometry>,
+): BeMusicGameplayLayout['bga'] {
+  if (!rect || !ctx.beMusicStage?.fitBGAVideoAspect || !ctx.play.bgaVideos?.size) return rect;
+  const cues = ctx.play.bgaTimeline?.base ?? [];
+  const cue = pickActiveBGACue(cues, ctx.play.currentSeconds()) ?? cues[0];
+  const key = cue?.bmpKey;
+  const handle =
+    key === undefined
+      ? undefined
+      : (ctx.play.bgaVideos.get(String.fromCharCode(0) + 'base:' + key) ?? ctx.play.bgaVideos.get(key));
+  if (!handle) return rect;
+  let maxWidth = rect.w;
+  if (geometry.orientation === 'landscape' && geometry.mode === 'standard') {
+    const sides: BeMusicGameplayLayout['playfield']['sides'] = {};
+    for (const lane of geometry.lanes) {
+      const before = sides[lane.side];
+      sides[lane.side] = {
+        left: Math.min(before?.left ?? lane.x, lane.x),
+        right: Math.max(before?.right ?? lane.x + lane.w, lane.x + lane.w),
+      };
+    }
+    const cabinet = resolveCabinetLayout({
+      playfield: { ...geometry, sides, centerX: (geometry.left + geometry.right) / 2 },
+      twoPlayer: geometry.twoPlayer,
+    });
+    maxWidth = geometry.twoPlayer ? cabinet.judge.w : cabinet.players.w;
+  }
+  return fitVideoBGARect(rect, handle.video.videoWidth, handle.video.videoHeight, maxWidth);
+}
+
 /** The built-in BGA rect (`PlayfieldSkin.bgaTargets` of the built-in view). */
 export function collectBGATargets(ctx: BGATargetsContext, out: PlayfieldBGATarget[]): void {
   const stage = ctx.beMusicStage;
@@ -295,7 +340,7 @@ export function collectBGATargets(ctx: BGATargetsContext, out: PlayfieldBGATarge
   const geometry = resolveLaneGeometry(ctx);
   // The landscape touch layout gives the BGA's room to the lanes.
   if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return;
-  const rect = stage.resolveBGARect(geometry.right, geometry.left, geometry.twoPlayer);
+  const rect = resolveVideoBGA(ctx, stage.resolveBGARect(geometry.right, geometry.left, geometry.twoPlayer), geometry)!;
   const cached = ctx.stageBGATarget;
   if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
     out.push(cached);

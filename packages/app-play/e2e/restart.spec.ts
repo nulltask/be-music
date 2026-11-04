@@ -10,10 +10,10 @@ const PLAY_OPTIONS = ['Play options'];
 
 /**
  * The built-in Synesthesia skin's select screen, on its wide stage (854 × 480): the AUTO button of the focused-song
- * panel (`addHitArea(200, 262, 90, 32, …, frame.actions.autoPlay)`).
+ * panel (`addHitArea(200, 280, 90, 32, …, frame.actions.autoPlay)`).
  */
 const SELECT_STAGE = { width: 854, height: 480 };
-const AUTO_BUTTON = { x: 245, y: 278 };
+const AUTO_BUTTON = { x: 245, y: 296 };
 
 /** Waits for Fixture A to be under way (a note judged), so F5 reaches a running play. */
 function underWay(player: Player): Promise<TestHookState> {
