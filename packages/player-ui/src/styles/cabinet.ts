@@ -77,7 +77,9 @@ export const cabinetStyles: CSSResult = css`
     border-radius: 50%;
     aspect-ratio: 1;
     width: auto !important;
-    opacity: 0.35;
+    background-color: #2a2a32;
+    border: 1px solid currentColor;
+    opacity: 1;
   }
   .key[data-active] {
     background-color: var(--primary, #5b8cff);
