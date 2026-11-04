@@ -302,8 +302,7 @@ Leaderboard rival, target and ghost APIs are not implemented. Skin presentation 
 
 ## 10. Pages (`leaderboard.be-music.app`)
 
-Server-rendered with Hono JSX in the leaderboard Worker, reading D1 directly, and styled as an information site with
-Tailwind CSS v4 and Basecoat (the shadcn/ui design without a framework runtime), following the system colour scheme:
+The Leaderboard Worker's Hono routes read D1 directly and render Lit templates through `@be-music/service-web-theme/server`. Tailwind CSS v4 and Basecoat style the pages, following the system colour scheme. Shared service views use the same presentation models on the server and client; browser components import `@be-music/service-web-theme/client`, while htmx handles asynchronous requests and partial navigation.
 
 - `/` — recent scores and course runs, with anonymous-player and unlisted-chart filters.
 - `/scores/:id` — a score

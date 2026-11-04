@@ -27,7 +27,7 @@ Be-Music is an open-source project for playing and working with BMS and bmson ch
 
 ### Replays, records and courses
 
-- Every play records a replay that can be re-judged under any rule set; the judge is deterministic, so replays can verify scores.
+- Plays can be recorded as replays and re-judged under any rule set; the judge is deterministic, so replays can verify scores.
 - Replay slots and a viewer for everything the player keeps in the browser.
 - Chart fingerprints identify charts by their content rather than their file bytes, including charts with `#RANDOM`.
 - LR2 course files, beatoraja's SQL-filtered random courses and NONSTOP courses (one stitched play), with course replays.
@@ -48,7 +48,7 @@ Be-Music is an open-source project for playing and working with BMS and bmson ch
 ### Open and modular
 
 - Open source under the MIT License.
-- Built from reusable packages (`@be-music/*`): chart parsing and writing, chart models, the play engine, skins and UI each stand alone, and run in browsers and Node alike, so other applications can use them without the player.
+- Built from reusable packages (`@be-music/*`) for chart parsing and writing, chart models, gameplay, skins and UI. Runtime-neutral chart and engine packages run in browsers and Node; browser UI and Node audio are separate adapters, so applications can choose the parts they need.
 - Lit Web Components for player screens, with typed React and Vue wrappers, and a framework-free SDK for writing skins.
 
 ## Packages
@@ -70,9 +70,14 @@ Be-Music is an open-source project for playing and working with BMS and bmson ch
 - `@be-music/player-browser`: Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
 - `@be-music/app-play`: Private Vite player that wires folder/ZIP drops, LR2/beatoraja themes, the Options dialog and browser playback together, as services behind one scene router
 - `@be-music/app-leaderboard`: Private Leaderboard API on Cloudflare Workers: replay submission, verification by re-simulation, and rankings
+- `@be-music/app-accounts`: Private Accounts service and OIDC provider for sign-in, passkeys, and linked providers
+- `@be-music/app-dashboard`: Private service dashboard and shared-account entry point
+- `@be-music/worker-play`: Player delivery Worker for static assets, OIDC sessions, settings, Leaderboard forwarding, and URL/media proxies
+- `@be-music/service-auth-client`: Shared OIDC client, service sessions, and API token verification
+- `@be-music/service-web-theme`: Shared service styles and Lit views, with separate client and server entries
 - `@be-music/chart-editor`: CLI editor (import/edit/export)
 
-The packages build on each other in layers. An arrow points from a package to a package that depends on it; a dependency already reached through another arrow is not drawn again (`@be-music/shared-utils` sits under almost every package). [Architecture — Target architecture](./docs/architecture.md#target-architecture) shows the same layers inside the packages.
+The diagram shows the chart and player layers, including the Leaderboard's engine dependency. An arrow points from a package to a package that depends on it; a dependency already reached through another arrow is not drawn again (`@be-music/shared-utils` sits under almost every package). [Architecture — Target architecture](./docs/architecture.md#target-architecture) shows the same layers inside the packages.
 
 ```mermaid
 flowchart TD
@@ -416,7 +421,9 @@ pnpm run replay -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 
 See [Replay specification](./docs/replay.md) for the options.
 
-## Player Operations
+## Terminal player operations
+
+These controls apply to the terminal player. Browser controls follow the selected skin family and key configuration; see [Browser player controls](./docs/player-web.md#options-dialog).
 
 ### Song selection screen
 
