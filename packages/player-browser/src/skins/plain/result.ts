@@ -38,6 +38,14 @@ export function drawResult(surface: BeMusicSurface<'2d'>, frame: BeMusicResultFr
   text(ctx, frame.rankLabel, MARGIN + 100, 130, { size: 56, weight: 800, align: 'center' });
   text(ctx, `${frame.ratePercent.toFixed(2)}%`, MARGIN + 100, 196, { size: 14, color: MUTED, align: 'center' });
 
+  const lamp = resolveResultLamp(result);
+  text(ctx, lamp, MARGIN + 100, 80, {
+    size: 12,
+    weight: 800,
+    align: 'center',
+    color: lamp === 'FAILED' ? DANGER : ACCENT,
+  });
+
   // Score figures in two rows of three.
   scoreFigures(result).forEach(([label, value], index) => {
     stat(ctx, label, value, 240 + (index % 3) * 130, 76 + Math.floor(index / 3) * 56, { maxWidth: 120, nowMs });
@@ -64,10 +72,7 @@ export function drawResult(surface: BeMusicSurface<'2d'>, frame: BeMusicResultFr
     text(ctx, row.label, x + 14, y, { size: 10, color: MUTED, weight: 700 });
     text(ctx, row.value, x + 206, y, { size: 14, align: 'right', maxWidth: 120, nowMs });
   });
-  const lamp = resolveResultLamp(result);
-  text(ctx, lamp, x + 110, 360, { size: 18, weight: 800, align: 'center', color: lamp === 'FAILED' ? DANGER : ACCENT });
 
-  text(ctx, `TOTAL SCORE  ${result.score.score}`, MARGIN, height - 24, { size: 14, weight: 700 });
   // Between the 1P counts and the chart panel.
   if (result.secondPlayer) drawSecondPlayer(ctx, result.secondPlayer, 240, 236, width - MARGIN - 220 - 16 - 240, nowMs);
 }
@@ -165,6 +170,14 @@ function drawPortraitResult(
     align: 'center',
   });
 
+  const lamp = resolveResultLamp(result);
+  text(ctx, lamp, rank.x + rank.w / 2, grid.lampY, {
+    size: 14,
+    weight: 800,
+    align: 'center',
+    color: lamp === 'FAILED' ? DANGER : ACCENT,
+  });
+
   // Score figures, two columns of three beside the rank.
   scoreFigures(result).forEach(([label, value], index) => {
     const box = grid.figures[index]!;
@@ -199,13 +212,4 @@ function drawPortraitResult(
     text(ctx, row.label, left, y, { size: 10, color: MUTED, weight: 700 });
     text(ctx, row.value, right, y, { size: 14, align: 'right', maxWidth: textW - 120, nowMs });
   });
-  const lamp = resolveResultLamp(result);
-  text(ctx, lamp, track.x + track.w / 2, grid.lampY, {
-    size: 18,
-    weight: 800,
-    align: 'center',
-    color: lamp === 'FAILED' ? DANGER : ACCENT,
-  });
-
-  text(ctx, `TOTAL SCORE  ${result.score.score}`, grid.rank.x, grid.totalY, { size: 14, weight: 700 });
 }

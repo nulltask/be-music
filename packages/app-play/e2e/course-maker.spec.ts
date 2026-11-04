@@ -42,6 +42,13 @@ test('makes, saves, cancels, renames, deletes and exports courses', async ({ pla
 
   // EXPERT: five songs at most, all in the first song's key mode; deciding a sixth saves the course.
   await startMaking(player, 'MY COURSES', 'expert');
+  await expect(card.locator('details')).toHaveAttribute('open', '');
+  await card.locator('summary').click();
+  await expect(card.locator('input.course-maker-name')).toBeHidden();
+  await decide(player, 'Fixture A');
+  await expect(card.locator('details')).not.toHaveAttribute('open', '');
+  await card.locator('summary').click();
+  await card.getByRole('button', { name: 'Remove last', exact: true }).click();
   expect(await decide(player, 'Fixture A')).toBe('Added Fixture A to the course (1 / 5)');
   expect(await decide(player, 'Fixture 5KEY')).toBe(
     'Could not add Fixture 5KEY: its key mode differs from the first chart’s',

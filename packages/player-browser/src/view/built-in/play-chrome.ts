@@ -27,6 +27,7 @@ import type {
 import type { PlayFrame, PlayfieldBGATarget, PlayfieldStage } from '../types.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
 import { BGA } from '../shared/play-constants.ts';
+import { resolveKeyBeamAlpha } from '../shared/playfield/key-beam.ts';
 
 /** One side's recent judgement state for skinless chrome renderers (the Be-Music Skin type). */
 export type SkinlessGameplayJudgeState = BeMusicJudgmentState;
@@ -165,6 +166,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const target = frame?.scoreTargets?.targetEXScore;
   const targetPace = frame?.scoreTargets?.targetPaceEXScore;
   const targetLabel = frame?.scoreTargets?.targetLabel;
+  const nowMs = ctx.play.playClock();
   return {
     ...(best !== undefined && best > 0 ? { bestEXScore: best } : {}),
     ...(target !== undefined && target > 0 ? { targetEXScore: target } : {}),
@@ -203,10 +205,15 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     ...(ctx.play.secondPlayer !== undefined ? { secondPlayer: secondPlayerRuntime(ctx.play.secondPlayer) } : {}),
     autoplay: ctx.options.autoPlay === true,
     hasBGA: ctx.play.hasBGA,
-    nowMs: ctx.play.playClock(),
+    nowMs,
     progressRatio: chartLengthSeconds > 0 ? Math.max(0, Math.min(1, seconds / chartLengthSeconds)) : 0,
     // The beat this frame already worked out for the same `seconds`.
     beatPhase: currentBeat - Math.floor(currentBeat),
+    chartBeat: currentBeat,
+    keyBeams: Object.fromEntries(
+      ctx.play.laneChannels.map((channel) => [channel, resolveKeyBeamAlpha(ctx.play, channel, 120, nowMs)]),
+    ),
+    ...(ctx.play.ghostSide ? { ghostSide: ctx.play.ghostSide } : {}),
     rulesetLabel: ctx.play.resolveJudgeRuleset(),
     gaugeLabel: formatGaugeLabel(ctx.play.gaugeState.type) ?? 'GROOVE',
     gaugeSurvival: ctx.play.gaugeState.survival === true,

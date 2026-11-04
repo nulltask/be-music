@@ -79,6 +79,20 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
   }
 
   private renderActions(f: BeMusicDOMGameplayFrame, extra: TemplateResult | typeof nothing = nothing): TemplateResult {
+    if (f.layout.orientation === 'portrait')
+      return html`<div class="actions portrait-actions" part="actions">
+        <button class="btn" @click=${() => this.emit('pause-request', undefined)}>
+          ${f.stage === 'paused' ? 'Resume' : 'Pause'}
+        </button>
+        <details class="play-menu">
+          <summary class="btn">Menu</summary>
+          <div class="panel">
+            <button class="btn" @click=${() => this.emit('retry-request', undefined)}>Retry</button>
+            <button class="btn" @click=${() => this.emit('quit-request', undefined)}>Back</button>
+            <slot name="actions"></slot>
+          </div>
+        </details>
+      </div>`;
     return html`<div class="actions" part="actions">
       <button class="btn" data-size="sm" @click=${() => this.emit('pause-request', undefined)}>
         ${f.stage === 'paused' ? 'Resume' : 'Pause'}</button

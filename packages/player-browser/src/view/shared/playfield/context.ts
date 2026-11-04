@@ -127,6 +127,8 @@ export interface PlayfieldRuntime {
    * lane-overlay ghost presents over the play, never on the play itself.
    */
   readonly ghostLanes?: GhostLaneOverlay;
+  /** The replay ghost’s lane bank, when presented beside the live play. */
+  readonly ghostSide?: '2P';
   readonly hasBGA: boolean;
   readonly bgaTimeline: {
     base: BGACue[];

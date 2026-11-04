@@ -37,10 +37,6 @@ export const cabinetStyles: CSSResult = css`
   .cabinet[data-two-player] .stage-band {
     padding-inline: calc(var(--px) * 3);
   }
-  .cabinet[data-two-player] .side-chart {
-    text-align: center;
-    font-weight: 700;
-  }
   .cabinet dl {
     gap: calc(var(--px) * 1) calc(var(--px) * 6);
     font-size: 1em;
@@ -81,7 +77,26 @@ export const cabinetStyles: CSSResult = css`
     border-radius: 50%;
     aspect-ratio: 1;
     width: auto !important;
-    opacity: 0.35;
+    background-color: #2a2a32;
+    border: 1px solid currentColor;
+    opacity: 1;
+  }
+  .key[data-active] {
+    background-color: var(--primary, #5b8cff);
+    opacity: 1;
+  }
+  .key[data-kind='scratch']::after,
+  .key[data-kind='wheel-up']::after,
+  .key[data-kind='wheel-down']::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 50%;
+    height: 2px;
+    background: currentColor;
+    transform-origin: left center;
+    transform: rotate(var(--scratch-angle, 0rad));
   }
   .figure strong {
     position: absolute;
@@ -99,7 +114,6 @@ export const cabinetStyles: CSSResult = css`
     font-size: 1.6em;
   }
   /* The double-play row under the keys is short, and the chart panel a narrow stack. */
-  .cabinet[data-two-player] .figure strong,
   .cabinet[data-double-play] .figure strong {
     font-size: 1.5em;
   }
@@ -323,13 +337,24 @@ export const cabinetStyles: CSSResult = css`
     align-content: stretch !important;
     gap: calc(var(--px) * 8);
   }
+  .judge-owner {
+    position: absolute;
+    top: calc(var(--px) * 5);
+    left: calc(var(--px) * 8);
+  }
+  .cabinet[data-two-player] .judge {
+    padding-top: calc(var(--px) * 18);
+  }
+  .cabinet[data-two-player] .judge .counts {
+    font-size: 0.95em;
+    line-height: 1.1;
+  }
   .judge .counts {
     align-content: space-between;
   }
-  /* The gauge's label and meter sit in the middle of their box. */
+  /* The cabinet places the caption midway between the keys and the gauge bar. */
   be-music-gauge-panel.cab {
-    display: grid;
-    align-content: center;
+    display: block;
   }
   .sound-only {
     display: grid !important;
@@ -393,6 +418,11 @@ export const cabinetStyles: CSSResult = css`
     display: flex !important;
     align-items: center;
     justify-content: space-between;
+  }
+  .cabinet[data-two-player] .tempo {
+    flex-direction: column;
+    justify-content: center;
+    gap: calc(var(--px) * 4);
   }
   .tempo strong {
     font-size: 1.3em;

@@ -6,6 +6,24 @@ import { screenStyles } from '../styles/screen.ts';
 export class BeMusicSelectScreenElement extends FrameElement<BeMusicDOMSelectFrame> {
   static override styles: CSSResultGroup = screenStyles;
   private focusPending = false;
+  private narrow = false;
+  private filtersOpen = false;
+  private sizeObserver: ResizeObserver | undefined;
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.sizeObserver = new ResizeObserver(([entry]) => {
+      const narrow = entry!.contentRect.width <= 640;
+      if (this.narrow !== narrow) {
+        this.narrow = narrow;
+        this.requestUpdate();
+      }
+    });
+    this.sizeObserver.observe(this);
+  }
+  override disconnectedCallback(): void {
+    this.sizeObserver?.disconnect();
+    super.disconnectedCallback();
+  }
   public focusSearch(): void {
     const search = this.renderRoot.querySelector<HTMLInputElement>('input[type=search]');
     if (search) {
@@ -73,11 +91,20 @@ export class BeMusicSelectScreenElement extends FrameElement<BeMusicDOMSelectFra
             </button>
             <p class="muted">${f.folderLabel ?? 'All folders'}</p>
           </div>
-          <be-music-play-options
-            .options=${f.playOptions}
-            .choices=${f.playOptionChoices}
-            .disabled=${f.launching}
-          ></be-music-play-options>
+          <details
+            class="select-filters"
+            .open=${!this.narrow || this.filtersOpen}
+            @toggle=${(event: Event) => {
+              if (this.narrow) this.filtersOpen = (event.currentTarget as HTMLDetailsElement).open;
+            }}
+          >
+            <summary>Play settings &amp; filters</summary>
+            <be-music-play-options
+              .options=${f.playOptions}
+              .choices=${f.playOptionChoices}
+              .disabled=${f.launching}
+            ></be-music-play-options>
+          </details>
           <be-music-chart-list
             exportparts="list,row"
             .entries=${f.entries}

@@ -399,7 +399,11 @@ function foldChildDestIntoParent(
   // skin currently does this) keep their authored layout.
   if (!parentHadPositionedKf) return child;
   for (const kf of childPureKfs) out.push(kf);
-  return { ...child, dst: out };
+  // SkinNumber.prepare receives the already-offset judge word's position, then applies its own offsets.
+  // Keep the parent's ids separate: its dimensions, alpha and rotation do not belong to the child number.
+  const parentOffsets = Array.isArray(parent.offsets) ? [...parent.offsets] : [];
+  if (typeof parent.offset === 'number' && parent.offset !== 0) parentOffsets.push(parent.offset);
+  return { ...child, dst: out, ...(parentOffsets.length > 0 ? { parentOffsets } : {}) };
 }
 
 function numberOrZero(v: unknown): number {

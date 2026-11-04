@@ -555,6 +555,8 @@ export interface ResultView extends FamilyView<ResultFrame, ResultIntent> {
 export interface PlayfieldStage {
   readonly width: number;
   readonly height: number;
+  /** Output aspect, independent of source coordinates. Classic LR2 skins use 640×480 coordinates on widescreen output. */
+  readonly displayAspectRatio?: number;
 }
 
 /** A lane's rect on the stage. `bottom` is the judgement line a note's bottom edge lands on. */

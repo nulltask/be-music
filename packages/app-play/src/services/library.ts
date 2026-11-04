@@ -29,6 +29,7 @@ import {
   type SkinFamilyId,
 } from '@be-music/player-browser/skin';
 import { summarizeLR2PlaySkins, type LR2PlaySkinMap, type LR2Skin } from '@be-music/skin-lr2';
+import { discoverBeatorajaTheme } from '@be-music/skin-beatoraja';
 import { countLR2UnplayedStages, LR2_MAX_PLAYED_STAGES } from '@be-music/player-engine/course';
 import { COURSE_REPLAY_FILE_SUFFIX, REPLAY_FILE_SUFFIX } from '@be-music/player-engine/replay';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
@@ -309,6 +310,17 @@ export class LibraryService {
     const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
       themeFiles.map((file) => file.webkitRelativePath || file.name),
     );
+    // A standalone JSON theme has neither a .luaskin marker nor a skin/ ancestor. Probe its headers before
+    // offering the family switch, using the same content checks as theme discovery rather than filename guesses.
+    if (!themeFamilies.has('beatoraja')) {
+      const jsonFiles = themeFiles.filter((file) => file.name.toLowerCase().endsWith('.json'));
+      const entries = await Promise.all(
+        jsonFiles.map(
+          async (file) => [file.webkitRelativePath || file.name, new Uint8Array(await file.arrayBuffer())] as const,
+        ),
+      );
+      if (discoverBeatorajaTheme(new Map(entries)).theme.entries.length > 0) themeFamilies.add('beatoraja');
+    }
     const confirmedFamily = await this.confirmSkinDrop(themeFamilies);
     const carriesLR2Theme = confirmedFamily === 'lr2';
     const carriesBeatorajaTheme = confirmedFamily === 'beatoraja';

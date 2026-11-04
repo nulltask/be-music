@@ -1,6 +1,6 @@
 import {
   formatScoreDiff,
-  impulse,
+  resolveScratchAngle,
   resolveCabinetLayout,
   resolveDifficultyName,
   resolveScorePace,
@@ -48,8 +48,6 @@ const RANK_LINES = [
   ['AA', 7 / 9],
   ['A', 6 / 9],
 ] as const;
-/** A key flashes this long after a press. */
-const KEY_FLASH_MS = 120;
 
 /**
  * Where the well under the lanes ends on the cabinet layout: under the keys, so the keys sit in it.
@@ -66,15 +64,18 @@ export function cabinetWellBottom(layout: Pick<BeMusicGameplayLayout, 'playfield
  */
 export function drawSynesthesiaCabinet(draw: CabinetDraw, runtime: Runtime, layout: BeMusicGameplayLayout): void {
   const cabinet = resolveCabinetLayout(layout);
+  draw.graphics
+    .rect(
+      layout.playfield.left - 8,
+      cabinet.keys.y,
+      layout.playfield.right - layout.playfield.left + 16,
+      cabinet.keys.h,
+    )
+    .fill({ color: SYN_VOID, alpha: 0.96 });
   drawKeys(draw, cabinet.keys, layout, runtime);
   drawGauge(draw, cabinet, runtime);
   if (cabinet.center) drawCenter(draw, cabinet.center, runtime);
-  drawFigure(
-    draw,
-    cabinet.score,
-    cabinet.secondSide ? '1P EX SCORE' : 'SCORE',
-    String(Math.max(0, (cabinet.secondSide ? runtime.exScore : runtime.score) ?? 0)),
-  );
+  drawFigure(draw, cabinet.score, cabinet.secondSide ? '1P SCORE' : 'SCORE', String(Math.max(0, runtime.score ?? 0)));
   drawFigure(
     draw,
     cabinet.hiSpeed,
@@ -83,34 +84,19 @@ export function drawSynesthesiaCabinet(draw: CabinetDraw, runtime: Runtime, layo
   );
   const pace = resolveScorePace(runtime);
   if (cabinet.graph) drawGraph(draw, cabinet.graph, pace, runtime);
-  drawStage(draw, cabinet.stage, runtime, cabinet.controls, cabinet.secondSide !== undefined);
-  if (cabinet.secondSide) {
-    for (const rect of [cabinet.players, cabinet.judge]) {
-      frame(draw, rect);
-      addHUDText(
-        draw.layer,
-        `${resolveDifficultyName(runtime.chart) ?? ''} Lv.${runtime.chart?.playLevel ?? '-'}`,
-        rect.x + 8,
-        rect.y + 10,
-        { ...labelStyle(), maxWidth: rect.w - 16 },
-        draw.pool,
-      );
-    }
-  } else if (cabinet.doublePlay) drawChartStack(draw, cabinet.players, runtime);
+  drawStage(draw, cabinet.stage, runtime, cabinet.controls);
+  if (cabinet.doublePlay) drawChartStack(draw, cabinet.players, runtime);
   else drawPlayers(draw, cabinet.players, runtime);
   if (cabinet.secondSide && runtime.secondPlayer) {
-    drawFigure(draw, cabinet.secondSide.score, '2P EX SCORE', String(runtime.secondPlayer.exScore ?? 0));
-    drawFigure(draw, cabinet.maxCombo!, '1P MAX COMBO', String(runtime.maxCombo ?? 0));
-    drawFigure(draw, cabinet.secondSide.maxCombo, '2P MAX COMBO', String(runtime.secondPlayer.maxCombo ?? 0));
-    drawFigure(draw, cabinet.secondSide.hiSpeed, 'HI-SPEED', (runtime.hiSpeed ?? 0).toFixed(1));
-    const remaining = Math.max(0, Math.ceil(((runtime.songLengthMs ?? 0) - (runtime.songElapsedMs ?? 0)) / 1000));
+    drawFigure(draw, cabinet.secondSide.score, '2P SCORE', String(runtime.secondPlayer.score ?? 0));
     drawFigure(
       draw,
-      cabinet.time!,
-      'TIME LIMIT',
-      `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`,
+      cabinet.secondSide.hiSpeed,
+      runtime.floatingHiSpeed ? 'FHS' : 'HI-SPEED',
+      (runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1),
     );
-  } else drawJudge(draw, cabinet.judge, runtime);
+  }
+  drawJudge(draw, cabinet.judge, runtime);
   drawBPM(draw, cabinet.bpm, runtime);
   drawTempo(draw, cabinet.tempo, runtime.tempo ?? 1);
 }
@@ -121,29 +107,34 @@ function frame({ graphics, accent }: CabinetDraw, rect: BeMusicRect): void {
 
 /**
  * The keys and the turntable under the lanes' own caps (which light on a press): outlined key tops in each lane's
- * colour, the black keys set higher, and a disc under a scratch or wheel lane, pulsing with the last press of its kind.
+ * colour, the black keys set higher, and a disc under a scratch or wheel lane, rotating once every four chart beats.
  */
 function drawKeys(draw: CabinetDraw, rect: BeMusicRect, layout: BeMusicGameplayLayout, runtime: Runtime): void {
   const { graphics, pulse } = draw;
-  const top = rect.y + 12;
-  const height = rect.h - 12;
-  const pressed = impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, KEY_FLASH_MS);
+  const top = rect.y;
+  const height = rect.h;
   for (const lane of layout.lanes) {
+    const lit = runtime.keyBeams?.[lane.channel ?? ''] ?? 0;
     const color = lane.kind === 'white' ? SYN_EMBER : lane.kind === 'black' ? SYN_CYAN : SYN_MAGENTA;
     if (lane.kind === 'white' || lane.kind === 'black') {
       const inset = Math.min(2, lane.w / 6);
       const y = lane.kind === 'black' ? top : top + 6;
       const h = height - 6;
       graphics.rect(lane.x + inset, y, lane.w - 2 * inset, h).fill({ color: SYN_VOID, alpha: 0.85 });
-      graphics.rect(lane.x + inset, y, lane.w - 2 * inset, h).stroke({ color, width: 1, alpha: 0.45 });
+      if (lit > 0) graphics.rect(lane.x + inset, y, lane.w - 2 * inset, h).fill({ color, alpha: lit * 0.8 });
+      graphics.rect(lane.x + inset, y, lane.w - 2 * inset, h).stroke({ color, width: 1, alpha: 0.45 + lit * 0.5 });
       continue;
     }
-    const lit = runtime.impulseKind === lane.kind ? pressed : 0;
     const radius = Math.max(2, Math.min(lane.w / 2, height / 2) - 1);
     const cx = lane.x + lane.w / 2;
     const cy = top + height / 2;
     graphics.circle(cx, cy, radius).fill({ color: SYN_VOID, alpha: 0.85 });
     graphics.circle(cx, cy, radius).stroke({ color, width: 1, alpha: 0.45 + 0.5 * lit });
+    const angle = resolveScratchAngle(runtime.chartBeat ?? 0);
+    graphics
+      .moveTo(cx, cy)
+      .lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius)
+      .stroke({ color, width: 1.5, alpha: 0.9 });
     graphics.circle(cx, cy, radius * 0.3).fill({ color, alpha: 0.3 + 0.2 * pulse + 0.5 * lit });
   }
 }
@@ -161,8 +152,8 @@ function drawGauge(draw: CabinetDraw, cabinet: CabinetLayout, runtime: Runtime):
       draw.layer,
       `${prefix}${(state.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
       rect.x,
-      gaugeLabelY - 7,
-      { ...labelStyle(), maxWidth: rect.w - 48 },
+      gaugeLabelY,
+      { ...labelStyle(), anchorY: 0.5, maxWidth: showValue ? rect.w - 48 : rect.w },
       draw.pool,
     );
     if (showValue) {
@@ -171,8 +162,8 @@ function drawGauge(draw: CabinetDraw, cabinet: CabinetLayout, runtime: Runtime):
         `${Math.floor(value)}%`,
         // Short of the clear notch, which rises above the cells.
         rect.x + rect.w,
-        gaugeLabelY - 10,
-        { ...displayStyle(11, SYN_WHITE), anchorX: 1 },
+        gaugeLabelY,
+        { ...displayStyle(11, SYN_WHITE), anchorX: 1, anchorY: 0.5 },
         draw.pool,
       );
     }
@@ -200,10 +191,11 @@ function drawCenter(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): voi
     draw.layer,
     String(Math.floor(clampPercent(runtime.gauge ?? 0))),
     rect.x + rect.w / 2,
-    rect.y + rect.h / 2 - 7,
+    rect.y + rect.h / 2,
     {
       ...displayStyle(12, SYN_WHITE),
       anchorX: 0.5,
+      anchorY: 0.5,
       maxWidth: rect.w - 6,
       dropShadow: { color: draw.accent, alpha: 0.8, blur: 6, distance: 0 },
     },
@@ -242,7 +234,7 @@ function drawGraph(
   const { header, bars, footer } = graph;
   frame(draw, header);
   for (const [row, label, value] of [
-    [0, 'YOU', pace.exScore],
+    [0, runtime.secondPlayer ? '1P' : 'YOU', pace.exScore],
     [1, 'PACEMAKER', pace.target.exScore],
   ] as const) {
     const y = header.y + 8 + row * 24;
@@ -325,28 +317,11 @@ function drawGraph(
 /** The stage name, centred; the play-mode light on the left and the ruleset on the right. */
 /**
  * The stage name, centred in its band; the play-mode light and the ruleset on its ends, or in `controls` (the double-play
- * band beside the menu corner) when the stage band is too narrow for them.
+ * band above the graph) when the stage band is too narrow for them.
  */
-function drawStage(
-  draw: CabinetDraw,
-  rect: BeMusicRect,
-  runtime: Runtime,
-  controls?: BeMusicRect,
-  compact = false,
-): void {
+function drawStage(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime, controls?: BeMusicRect): void {
   const { graphics, layer, pool, accent, pulse } = draw;
   frame(draw, rect);
-  if (compact) {
-    addHUDText(
-      layer,
-      resolveStageLabel(runtime.course),
-      rect.x + rect.w / 2,
-      rect.y + 8,
-      { ...displayStyle(11, SYN_WHITE), anchorX: 0.5, maxWidth: rect.w - 20 },
-      pool,
-    );
-    return;
-  }
   const ends = controls ?? rect;
   if (controls) frame(draw, controls);
   const autoplay = runtime.autoplay === true;
@@ -392,7 +367,7 @@ function drawStage(
 function drawPlayers(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): void {
   const { graphics, layer, pool, accent } = draw;
   frame(draw, rect);
-  const plateW = 92;
+  const plateW = 116;
   const plateX = rect.x + 8;
   addHUDText(
     layer,
@@ -404,12 +379,12 @@ function drawPlayers(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): vo
   );
   const difficulty = resolveDifficultyName(runtime.chart);
   if (difficulty) {
-    graphics.rect(plateX, rect.y + 17, plateW - 12, 12).stroke({ color: SYN_AMBER, width: 1, alpha: 0.7 });
+    graphics.rect(plateX, rect.y + 28, 70, 14).stroke({ color: SYN_AMBER, width: 1, alpha: 0.7 });
     addHUDText(
       layer,
       difficulty,
-      plateX + (plateW - 12) / 2,
-      rect.y + 19,
+      plateX + 35,
+      rect.y + 31,
       { ...displayStyle(7, SYN_AMBER), anchorX: 0.5, letterSpacing: 1 },
       pool,
     );
@@ -419,9 +394,9 @@ function drawPlayers(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): vo
   addHUDText(
     layer,
     level === undefined ? 'Lv.-' : `Lv.${level}`,
-    plateX + (plateW - 12) / 2,
-    rect.y + 33,
-    { ...displayStyle(10, SYN_WHITE), anchorX: 0.5 },
+    plateX + 78,
+    rect.y + 30,
+    { ...displayStyle(9, SYN_WHITE), maxWidth: plateW - 86 },
     pool,
   );
   const second = runtime.secondPlayer;
@@ -431,7 +406,7 @@ function drawPlayers(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): vo
     layer,
     runtime.chartTitle?.trim() || 'Untitled chart',
     titleX + titleW / 2,
-    rect.y + 8,
+    rect.y + 10,
     {
       size: 14,
       weight: '500',
@@ -449,7 +424,7 @@ function drawPlayers(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): vo
       layer,
       artist,
       titleX + titleW / 2,
-      rect.y + 30,
+      rect.y + 33,
       { size: 9, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, anchorX: 0.5, maxWidth: titleW },
       pool,
     );
@@ -523,7 +498,7 @@ const COUNT_COLORS = [SYN_WHITE, SYN_AMBER, SYN_GREEN, SYN_CYAN, SYN_RED, SYN_MA
 function drawJudge(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): void {
   const { graphics, layer, pool } = draw;
   frame(draw, rect);
-  addHUDText(layer, 'JUDGE', rect.x + 10, rect.y + 6, labelStyle(), pool);
+  addHUDText(layer, runtime.secondPlayer ? '1P JUDGE' : 'JUDGE', rect.x + 10, rect.y + 6, labelStyle(), pool);
   const counts = [
     ['PG', runtime.perfect],
     ['GR', runtime.great],
@@ -584,6 +559,32 @@ function drawBPM(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): void {
   const { layer, pool, accent } = draw;
   frame(draw, rect);
   const bpm = Math.round(runtime.bpm ?? 0);
+  if (rect.h < 56) {
+    addHUDNumber(
+      layer,
+      String(bpm),
+      rect.x + rect.w / 2,
+      rect.y + 3,
+      { ...displayStyle(16, SYN_WHITE), anchorX: 0.5, maxWidth: rect.w / 3 },
+      pool,
+    );
+    addHUDText(layer, 'BPM', rect.x + rect.w / 2, rect.y + 24, { ...labelStyle(), anchorX: 0.5, size: 8 }, pool);
+    for (const [label, value, x, anchorX] of [
+      ['MIN', runtime.minBPM ?? bpm, rect.x + 8, 0],
+      ['MAX', runtime.maxBPM ?? bpm, rect.x + rect.w - 8, 1],
+    ] as const) {
+      addHUDText(layer, label, x, rect.y + 5, { ...labelStyle(), size: 8, anchorX }, pool);
+      addHUDNumber(
+        layer,
+        String(Math.round(value)),
+        x,
+        rect.y + 21,
+        { ...displayStyle(9, SYN_MIST), anchorX, maxWidth: rect.w / 3 - 10 },
+        pool,
+      );
+    }
+    return;
+  }
   addHUDNumber(
     layer,
     String(bpm),
@@ -610,13 +611,21 @@ function drawBPM(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): void {
 /** The play tempo where a cabinet shows its effector: `OFF` at the chart's own speed. */
 function drawTempo(draw: CabinetDraw, rect: BeMusicRect, tempo: number): void {
   frame(draw, rect);
-  addHUDText(draw.layer, 'TEMPO', rect.x + 10, rect.y + rect.h / 2 - 4, labelStyle(), draw.pool);
+  const stacked = rect.w < 100;
+  addHUDText(
+    draw.layer,
+    'TEMPO',
+    stacked ? rect.x + rect.w / 2 : rect.x + 10,
+    stacked ? rect.y + 5 : rect.y + rect.h / 2 - 4,
+    { ...labelStyle(), anchorX: stacked ? 0.5 : 0 },
+    draw.pool,
+  );
   addHUDNumber(
     draw.layer,
     tempo === 1 ? 'OFF' : `x${tempo.toFixed(2)}`,
-    rect.x + rect.w - 10,
-    rect.y + rect.h / 2 - 6,
-    { ...displayStyle(11, tempo === 1 ? SYN_WHITE : SYN_AMBER), anchorX: 1 },
+    stacked ? rect.x + rect.w / 2 : rect.x + rect.w - 10,
+    stacked ? rect.y + 20 : rect.y + rect.h / 2 - 6,
+    { ...displayStyle(11, tempo === 1 ? SYN_WHITE : SYN_AMBER), anchorX: stacked ? 0.5 : 1 },
     draw.pool,
   );
 }

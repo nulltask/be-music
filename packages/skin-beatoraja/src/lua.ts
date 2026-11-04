@@ -25,6 +25,7 @@ import { logLuaDofile, logLuaRequire } from './lua-diagnostics.ts';
 const { lauxlib, lua, lualib, to_luastring } = fengariWeb;
 const {
   LUA_OK,
+  LUA_MULTRET,
   LUA_REGISTRYINDEX,
   LUA_TBOOLEAN,
   LUA_TFUNCTION,
@@ -48,6 +49,7 @@ const {
   lua_pushnumber,
   lua_pushstring,
   lua_pushvalue,
+  lua_rawequal,
   lua_rawgeti,
   lua_rawlen,
   lua_rawseti,
@@ -373,7 +375,7 @@ export function evaluateBeatorajaLuaSkin(options: EvaluateBeatorajaLuaSkinOption
     openSkinSandbox(L);
     setupCustomRequire(L, options.modules, owner, options.skinConfig !== undefined);
     setupSkinConfig(L, options.skinConfig, options.skinBaseDir ?? '');
-    setupDofile(L, owner, options.dofileResolver);
+    setupDofile(L, options.dofileResolver);
     setupCompatStubs(L, owner);
 
     // Wire the host's runtime context (if any) so `main_state.option(...)` / `.number(...)` /
@@ -439,6 +441,7 @@ function openSkinSandbox(L: lua_State): void {
 }
 
 const REGISTRY_MODULE_CACHE = '__be_music_beatoraja_module_cache';
+const REGISTRY_MODULE_LOADING = '__be_music_beatoraja_module_loading';
 const REGISTRY_MODULE_SOURCES = '__be_music_beatoraja_module_sources';
 
 /**
@@ -613,6 +616,8 @@ function setupCustomRequire(
   // Module cache so `require("x")` returns the same table on subsequent calls.
   lua_createtable(L, 0, 0);
   lua_setfield(L, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
+  lua_createtable(L, 0, 0);
+  lua_setfield(L, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_LOADING));
 
   const requireFn: LuaCFunction = (state) => {
     if (lua_type(state, 1) !== LUA_TSTRING) {
@@ -632,7 +637,14 @@ function setupCustomRequire(
     // Cache hit?
     lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
     lua_getfield(state, -1, to_luastring(name));
-    if (lua_type(state, -1) !== LUA_TNIL) {
+    if (lua_toboolean(state, -1)) {
+      lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_LOADING));
+      const loading = lua_rawequal(state, -1, -2);
+      lua_pop(state, 1);
+      if (loading) {
+        luaL_error(state, to_luastring(`loop or previous error loading module '${rawName}'`));
+        return 0;
+      }
       // Stack: ..., cache, value. Drop the cache from beneath the value.
       lua_remove(state, -2);
       return 1;
@@ -655,39 +667,14 @@ function setupCustomRequire(
     lua_getfield(state, -1, to_luastring(name));
     if (lua_type(state, -1) !== LUA_TSTRING) {
       lua_pop(state, 2); // pop nil + sources table
-      // Unknown module — return an empty table stub. Rare in well-formed skins; mostly happens when an
-      // author imports an experimental utility that didn't ship in the bundle. Cache the stub so all
-      // `require()` calls for the same name return the same table. We log a warning so the host can
-      // surface "missing module" diagnostics without crashing the eval — beatoraja itself raises
-      // `module 'X' not found` (audit 3.12), but a hard throw breaks pcall'd discovery patterns
-      // (`if pcall(require, "optional") then ... end`) that some skins use to gate experimental
-      // features. The empty-stub-with-warning compromise keeps both paths working.
-      console.warn(`[beatoraja-lua] require("${name}") -> stub (module not found, returning empty table)`);
-      lua_createtable(state, 0, 0);
-      lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
-      lua_pushvalue(state, -2); // duplicate stub
-      lua_setfield(state, -2, to_luastring(name));
-      lua_pop(state, 1); // pop cache table; stub remains on top
-      logLuaRequire(name, 'stub');
-      return 1;
+      // LuaJ raises here, so pcall(require, optionalModule) can select the skin's fallback.
+      logLuaRequire(name, 'missing');
+      luaL_error(state, to_luastring(`module '${rawName}' not found`));
+      return 0;
     }
     const sourceBytes = readBytesFromTop(state);
     lua_pop(state, 2); // pop string + sources table
     logLuaRequire(name, 'module');
-
-    // Cycle-detection sentinel (audit 3.11). Beatoraja's PackageLib stores a placeholder in
-    // `package.loaded[name]` BEFORE running the module body so that re-entrant `require()`
-    // calls during execution see a value (the placeholder) rather than re-entering the loader
-    // and infinite-recursing. We do the same: cache an empty table at this name now; replace
-    // it with the real return value once the chunk runs. Cyclic skins observe the placeholder
-    // table on the second `require` — fields populated AFTER the cycle-back resolve too,
-    // matching beatoraja's circular-import semantics.
-    lua_createtable(state, 0, 0);
-    lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
-    lua_pushvalue(state, -2); // duplicate placeholder above cache table
-    lua_setfield(state, -2, to_luastring(name));
-    lua_pop(state, 1); // pop cache table; placeholder still on top under the byte source we'll load
-    lua_pop(state, 1); // pop the placeholder — we no longer need it on the stack
 
     const loadStatus = luaL_loadbufferx(
       state,
@@ -701,12 +688,22 @@ function setupCustomRequire(
       luaL_error(state, to_luastring(`failed to load '${name}': ${lua_tojsstring(state, -1)}`));
       return 0;
     }
-    lua_call(state, 0, 1);
+    // Match LuaJ PackageLib: recursive imports and retries after an execution error report the loading sentinel.
+    lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_LOADING));
+    lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
+    lua_pushvalue(state, -2);
+    lua_setfield(state, -2, to_luastring(name));
+    lua_pop(state, 2);
 
-    // Replace the placeholder cache entry with the real return value; leave a copy on top to
-    // return. If the chunk happens to return the placeholder table itself (e.g. modules that
-    // build up their export by mutating the table that re-entrant `require` calls observed),
-    // the assignment is a no-op.
+    lua_pushstring(state, to_luastring(rawName));
+    lua_pushstring(state, to_luastring(`${name}.lua`));
+    lua_call(state, 2, 1);
+
+    // A module without a return value loads once and exports true. A false export reloads on the next require.
+    if (lua_type(state, -1) === LUA_TNIL) {
+      lua_pop(state, 1);
+      lua_pushboolean(state, true);
+    }
     lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
     lua_pushvalue(state, -2); // duplicate result above cache table
     lua_setfield(state, -2, to_luastring(name));
@@ -719,53 +716,16 @@ function setupCustomRequire(
   lua_setglobal(L, to_luastring('require'));
 }
 
-const REGISTRY_DOFILE_CACHE = '__be_music_beatoraja_dofile_cache';
-
-/**
- * Wire `dofile(path)` against the bundle. Beatoraja's reference theme rarely uses `dofile` —
- * but elaborate community skins (ModernChic, etc.) split their layout into per-section
- * `.lua` files and load them at runtime via:
- *
- *     dofile(skin_config.get_path("Play/lua/sp/info.lua"))
- *
- * The resolver maps the requested path to bundle bytes; we then compile + execute the chunk
- * and cache the return value so subsequent `dofile(samePath)` calls are cheap. When no
- * resolver is supplied (or the resolver returns `undefined`) we surface a Lua error matching
- * the standard `dofile`'s "cannot open" diagnostic so skin authors can tell their require
- * failed.
- */
-function setupDofile(
-  L: lua_State,
-  owner: LuaRuntimeOwner,
-  resolver: ((path: string) => Uint8Array | undefined) | undefined,
-): void {
-  void owner; // Reserved for future Lua-function retention bookkeeping if dofile returns one.
-  // Per-evaluation cache keyed by path string.
-  lua_createtable(L, 0, 0);
-  lua_setfield(L, LUA_REGISTRYINDEX, to_luastring(REGISTRY_DOFILE_CACHE));
-
+/** Execute a bundled Lua file on every call, preserving all return values like LuaJ's BaseLib.dofile. */
+function setupDofile(L: lua_State, resolver: ((path: string) => Uint8Array | undefined) | undefined): void {
   const dofileFn: LuaCFunction = (state) => {
     if (lua_type(state, 1) !== LUA_TSTRING) {
       luaL_error(state, to_luastring("bad argument #1 to 'dofile' (string expected)"));
       return 0;
     }
     const rawPath = lua_tojsstring(state, 1);
-    // Normalize the cache key (audit 3.10) so `dofile("Play/x.lua")` and
-    // `dofile("./Play/x.lua")` hit the same cache entry. Without this, equivalent paths
-    // re-execute the chunk each time — module-level state (e.g. one-shot init flags) gets
-    // re-run, breaking module identity. Beatoraja's `dofile` keys against the resolved
-    // `Path` for the same reason; `normalizePath` produces the equivalent canonical form
-    // by collapsing `.` / `..` segments and converting `\` to `/`.
     const path = normalizePath(rawPath);
-
-    // Cache hit?
-    lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_DOFILE_CACHE));
-    lua_getfield(state, -1, to_luastring(path));
-    if (lua_type(state, -1) !== LUA_TNIL) {
-      lua_remove(state, -2); // drop cache table
-      return 1;
-    }
-    lua_pop(state, 2);
+    const argumentCount = lua_gettop(state);
 
     if (resolver === undefined) {
       // eslint-disable-next-line no-console
@@ -792,7 +752,7 @@ function setupDofile(
     // its own filename in the diagnostic, not the calling site's. Themes wrap their dofile
     // invocations in their own pcall (the ModernChic pattern) — without our pcall here the
     // runtime error message would be the OUTER chunk's prefix, which makes triage harder.
-    const callStatus = lua_pcall(state, 0, 1, 0);
+    const callStatus = lua_pcall(state, 0, LUA_MULTRET, 0);
     if (callStatus !== LUA_OK) {
       const msg = lua_tojsstring(state, -1);
       // eslint-disable-next-line no-console
@@ -801,13 +761,8 @@ function setupDofile(
       return 0;
     }
 
-    // Cache + return.
-    lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_DOFILE_CACHE));
-    lua_pushvalue(state, -2);
-    lua_setfield(state, -2, to_luastring(path));
-    lua_pop(state, 1);
     logLuaDofile(path, bytes.length);
-    return 1;
+    return lua_gettop(state) - argumentCount;
   };
   lua_pushjsfunction(L, dofileFn);
   lua_setglobal(L, to_luastring('dofile'));

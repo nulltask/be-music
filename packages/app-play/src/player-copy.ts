@@ -14,6 +14,8 @@ const en = {
   shell: {
     search: 'Search title / artist / genre... (? for a filter)',
     dropTitle: 'Drop to load',
+    openFolder: 'Open folder',
+    openZIP: 'Open ZIP',
     dropFolder: 'BMS folder',
     dropLR2Skin: 'LR2 skin',
     dropBeatorajaSkin: 'beatoraja skin',
@@ -296,6 +298,8 @@ const ja: typeof en = {
   shell: {
     search: 'タイトル / アーティスト / ジャンルを検索（? でフィルタ）',
     dropTitle: 'ドロップして読み込む',
+    openFolder: 'フォルダを開く',
+    openZIP: 'ZIP を開く',
     dropFolder: 'BMS フォルダ',
     dropLR2Skin: 'LR2 スキン',
     dropBeatorajaSkin: 'beatoraja スキン',

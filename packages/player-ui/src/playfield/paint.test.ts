@@ -341,11 +341,12 @@ describe('playfield painters', () => {
     paintJudgmentDisplay(ctx, {
       y: 100,
       words: [
-        { x: 40, text: 'GREAT', color: '#ffffff', combo: 12 },
+        { x: 40, text: 'GREAT', color: '#ffffff', combo: 12, mode: 'AUTO PLAY' },
         { x: 80, text: 'BAD', color: '#ff5c6c' },
       ],
     });
     expect(ctx.calls).toEqual([
+      'fillText AUTO PLAY 40,72 #e5efff',
       'fillText GREAT 40,100 #ffffff',
       // "1" is narrower than the other digits; both still sit in a 10px cell, centred on x 40.
       'fillText 1 35,124 #e5efff',

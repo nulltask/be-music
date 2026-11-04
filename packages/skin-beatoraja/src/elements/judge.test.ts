@@ -248,6 +248,20 @@ describe('expandBeatorajaJudgeDestinations', () => {
     expect(expanded[0]).toMatchObject({ id: 'pg-count-only', op: [241, HIDDEN] });
   });
 
+  it('keeps parent positional offsets on relative combo numbers separately from their own offsets', () => {
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2010,
+        index: 0,
+        images: [{ id: 'word', offsets: [3, 10], dst: [{ x: 70, y: 240, w: 180, h: 40 }] }],
+        numbers: [{ id: 'count', offset: 10, dst: [{ x: 200, y: 0, w: 40, h: 40 }] }],
+      },
+    ]);
+    const count = expandBeatorajaJudgeDestinations(judges)[1]!;
+    expect(count.parentOffsets).toEqual([3, 10]);
+    expect(count.offset).toBe(10);
+  });
+
   it('folds judge.numbers[i].dst into judge.images[i].dst per layout variant', () => {
     // Beatoraja's `SkinJudge.draw()` paints `numbers[i]` at `(parent.x + child.x, parent.y +
     // child.y)`. Default `play5.json` authors `judgef-pg.dst = {x:70, y:240}` (1P layout

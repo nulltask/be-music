@@ -7,6 +7,13 @@ export class BeMusicDecideScreenElement extends FrameElement<BeMusicDOMDecideFra
   static override styles: CSSResultGroup = [
     screenStyles,
     css`
+      .center {
+        max-width: 36rem;
+        gap: 24px;
+      }
+      .actions .btn {
+        min-height: 44px;
+      }
       .title-image {
         display: block;
         max-inline-size: 100%;
