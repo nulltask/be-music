@@ -321,9 +321,9 @@ export class LibraryService {
       );
       if (discoverBeatorajaTheme(new Map(entries)).theme.entries.length > 0) themeFamilies.add('beatoraja');
     }
-    const confirmedFamily = await this.confirmSkinDrop(themeFamilies);
-    const carriesLR2Theme = confirmedFamily === 'lr2';
-    const carriesBeatorajaTheme = confirmedFamily === 'beatoraja';
+    const confirmation = this.confirmSkinDrop(themeFamilies);
+    const carriesLR2Theme = themeFamilies.has('lr2');
+    const carriesBeatorajaTheme = themeFamilies.has('beatoraja');
     const themeMarkers = [...themeFamilies];
     dropLog.info(
       `received ${files.length} file(s) · theme=${themeFiles.length}${
@@ -372,12 +372,13 @@ export class LibraryService {
     } else if (this.selectSkin() || this.resultSkin() || Object.keys(this.playSkins()).length > 0) {
       this.setStatus('Theme loaded');
     }
-    await this.refreshCourseFolders();
+    if (chartFiles.length > 0 || courseFiles.length > 0) await this.refreshCourseFolders();
     // Open what was dropped: its folder, or the folder list when the drop carried several.
     const dropped = navigationAfterDrop(this.collection.charts, previousChartIds);
     if (dropped !== undefined) this.browseTo(dropped);
     // Commit the confirmed family before mounting the next select scene. A skin dropped onto a play swaps that play's
     // family (`applyDroppedSkin`) and leaves the chart running; the select screen takes the family when the play returns.
+    const confirmedFamily = await confirmation;
     if (confirmedFamily !== undefined) await this.applyDroppedSkin(confirmedFamily);
     if (!(playContinues && chartFiles.length === 0 && confirmedFamily !== undefined)) await this.showSelect();
     if (replayFiles.length > 0) {

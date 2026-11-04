@@ -311,7 +311,7 @@ export const PLAYER_APP_TEMPLATE = html`
         </form>
       </dialog>
       <!--
-      The exit menu: Escape at the root of the select screen asks whether to leave it for the drop screen, as
+      The exit menu: Escape at the root of the select screen confirms closing the window, as
       That-Which-Must-Not-Be-Named PC's exit menu asks before it leaves. Opened by \`showExitMenu\` (ui/exit-menu.ts).
     -->
       <dialog
@@ -502,32 +502,76 @@ export const PLAYER_APP_TEMPLATE = html`
           </button>
         </div>
       </dialog>
-      <button
-        type="button"
-        id="options-open"
-        class="btn options-open"
-        data-variant="secondary"
-        data-size="icon"
-        aria-label=${localized('options')}
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
+      <div class="fullscreen-actions" role="toolbar" aria-label=${localized('options')}>
+        <button
+          type="button"
+          id="help-open"
+          class="btn"
+          data-variant="secondary"
+          data-size="icon"
+          aria-label=${localized('helpAbout')}
         >
-          <path
-            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
-          />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-      </button>
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4" />
+            <path d="M12 16h.01" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          id="options-open"
+          class="btn options-open"
+          data-variant="secondary"
+          data-size="icon"
+          aria-label=${localized('options')}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+            />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          id="fullscreen-exit"
+          class="btn"
+          data-variant="secondary"
+          data-size="icon"
+          aria-label=${localized('fullscreenExit')}
+        >
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path d="M8 3v5H3m18 0h-5V3M3 16h5v5m8 0v-5h5" />
+          </svg>
+        </button>
+      </div>
     </main>
     ${localized(() =>
       serviceFooterTemplate({

@@ -256,7 +256,14 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       // video fills the rect, as LR2 and beatoraja do.
       const placed =
         ctx.play.bgaVideos.has(resolvedKey) && !ctx.play.bgaSubRegionOrigins.has(resolvedKey)
-          ? bga
+          ? bga.preserveVideoAspect
+            ? (() => {
+                const scale = Math.min(bga.w / texture.width, bga.h / texture.height);
+                const w = texture.width * scale;
+                const h = texture.height * scale;
+                return { x: bga.x + (bga.w - w) / 2, y: bga.y + (bga.h - h) / 2, w, h };
+              })()
+            : bga
           : resolveBGAImageRect(
               texture.frame.width,
               texture.frame.height,

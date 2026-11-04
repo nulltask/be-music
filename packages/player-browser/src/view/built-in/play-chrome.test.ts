@@ -143,3 +143,29 @@ test('passes the presented ghost side independently of autoplay options', () => 
   play.ghostSide = '2P';
   expect(resolveSkinlessGameplayChromeRuntime(ctx).ghostSide).toBe('2P');
 });
+
+test('a video changes the monitor and target width together while keeping their height', () => {
+  const video = { videoWidth: 1600, videoHeight: 900 };
+  const ctx = {
+    play: {
+      laneChannels: ['16', '11', '12', '13', '14', '15', '18', '19'],
+      chartPlayVariant: '7',
+      currentSeconds: () => 0,
+      bgaTimeline: { base: [{ seconds: 0, bmpKey: '01' }] },
+      bgaVideos: new Map([['01', { video }]]),
+    },
+    beMusicStage: cabinetStage,
+    layoutMode: 'standard',
+  } as unknown as LaneGeometryContext & BeMusicLayoutContext & BGATargetsContext;
+  const wide = resolveBeMusicLayout(ctx).bga!;
+  const targets: Parameters<typeof collectBGATargets>[1] = [];
+  collectBGATargets(ctx, targets);
+  expect(targets[0]).toMatchObject(wide);
+  expect(targets[0]?.preserveVideoAspect).toBe(true);
+  video.videoWidth = 900;
+  video.videoHeight = 1600;
+  const portrait = resolveBeMusicLayout(ctx).bga!;
+  expect(portrait.h).toBe(wide.h);
+  expect(portrait.w / portrait.h).toBeCloseTo(900 / 1600);
+  expect(portrait.x + portrait.w / 2).toBeCloseTo(wide.x + wide.w / 2);
+});

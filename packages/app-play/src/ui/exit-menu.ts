@@ -1,6 +1,4 @@
-// The exit menu (`#exit-menu`): Escape at the root of the select screen asks whether to leave it for the drop screen,
-// as That-Which-Must-Not-Be-Named PC's exit menu asks before it leaves, rather than leaving at once (beatoraja) or doing
-// nothing (LR2). The dialog's buttons answer it; Escape and Cancel stay on the select screen.
+// Escape at the root of select confirms closing the window. Cancel keeps the library and cursor.
 
 /** What the player picked in the exit menu. */
 export type ExitMenuChoice = 'leave' | 'cancel';

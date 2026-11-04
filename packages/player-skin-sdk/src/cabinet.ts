@@ -149,6 +149,7 @@ export const cabinetStage: BeMusicStage = {
     },
   },
   resolveBGARect: resolveCabinetBGARect,
+  fitBGAVideoAspect: true,
 };
 
 /** The {@link CabinetLayout} of a landscape gameplay `layout` on the {@link cabinetStage}. */
@@ -418,16 +419,27 @@ export function resolveStageLabel(
 
 const DIFFICULTY_NAMES = ['BEGINNER', 'NORMAL', 'HYPER', 'ANOTHER', 'INSANE'] as const;
 
-/** The chart's `#DIFFICULTY` (1–5) by name (`BEGINNER` … `INSANE`); `undefined` when it sets none. */
+/** The chart's `#DIFFICULTY` (1–5) by name (`BEGINNER` … `INSANE`); `UNSPECIFIED` when missing, or `undefined` without a chart. */
 export function resolveDifficultyName(chart: Pick<LibraryChart, 'chart'> | undefined): string | undefined {
   const value = chart?.chart.metadata.difficulty;
-  return typeof value === 'number' ? DIFFICULTY_NAMES[Math.trunc(value) - 1] : undefined;
+  return chart === undefined
+    ? undefined
+    : ((typeof value === 'number' ? DIFFICULTY_NAMES[Math.trunc(value) - 1] : undefined) ?? 'UNSPECIFIED');
 }
 
 /** Turntable angle in radians: one clockwise revolution per four chart beats. */
-export function resolveScratchAngle(chartBeat: number): number {
-  if (!Number.isFinite(chartBeat)) return 0;
-  return (((chartBeat % 4) + 4) % 4) * (Math.PI / 2);
+export function resolveScratchAngle(
+  chartBeat: number,
+  input?: { angle: number; direction: 1 | -1; atMs: number },
+  nowMs = 0,
+): number {
+  const beat = Number.isFinite(chartBeat) ? chartBeat : 0;
+  const offset =
+    input === undefined
+      ? 0
+      : input.angle + input.direction * (Math.PI / 2) * (1 - Math.exp(-Math.max(0, nowMs - input.atMs) / 120));
+  const angle = beat * (Math.PI / 2) + offset;
+  return ((angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 }
 
 /** Caption above a lane bank’s judgment; a replay ghost takes precedence over autoplay. */

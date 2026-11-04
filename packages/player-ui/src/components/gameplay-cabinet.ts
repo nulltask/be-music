@@ -99,7 +99,7 @@ export function renderGameplayCabinet({
             class="key"
             data-kind=${lane.kind}
             ?data-active=${(r.keyBeams?.[lane.channel ?? ''] ?? 0) > 0}
-            style=${`--scratch-angle:${resolveScratchAngle(r.chartBeat ?? 0)}rad;left:${((lane.x - keys.x) / keys.w) * 100}%;width:${(lane.w / keys.w) * 100}%`}
+            style=${`--scratch-angle:${resolveScratchAngle(r.chartBeat ?? 0, r.scratchInputs?.[lane.channel ?? ''], r.nowMs)}rad;left:${((lane.x - keys.x) / keys.w) * 100}%;width:${(lane.w / keys.w) * 100}%`}
           ></span>`,
       )}
     </div>

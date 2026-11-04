@@ -108,6 +108,8 @@ export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, e
       advanceJudgeState(state, input.nowSec, input.nowMs, emit);
       return;
     case 'press':
+      if (input.spin !== undefined)
+        emit({ kind: 'ui', command: { kind: 'scratch-spin', channels: [...input.channels], spin: input.spin } });
       if (state.config.anyKey === true) {
         pressAnyKey(state, input, emit);
         return;

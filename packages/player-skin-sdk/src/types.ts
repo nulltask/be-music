@@ -173,6 +173,8 @@ export interface BeMusicStage {
    * `playfieldLeft`. The scene composites the BGA here and the skin frames the same rect, so the BGA can make room for
    * wide (double play / keyboard) playfields. `twoPlayer` identifies independent banks placed around a central BGA.
    */
+  /** Keeps BGA videos at their source aspect; the monitor may widen while retaining its height. */
+  readonly fitBGAVideoAspect?: boolean;
   resolveBGARect(playfieldRight: number, playfieldLeft?: number, twoPlayer?: boolean): BeMusicRect;
 
   /**
@@ -336,6 +338,8 @@ export interface BeMusicGameplayRuntime {
   beatPhase?: number;
   /** Absolute chart beat, including BPM changes and stops, for beat-synchronised motion. */
   chartBeat?: number;
+  /** Directional turntable input, on the pause-aware play clock. */
+  scratchInputs?: Readonly<Record<string, { angle: number; direction: 1 | -1; atMs: number }>>;
   /** Input brightness by lane channel, 0 to 1, including the release fade. */
   keyBeams?: Readonly<Record<string, number>>;
   /** Side occupied by a replay ghost, when presented beside the live play. */
@@ -841,6 +845,9 @@ export interface BeMusicSelectSkin<K extends BeMusicSurfaceContextKind = BeMusic
    * `resolveBeMusicSelectLayout`.
    */
   readonly portraitLayout?: BeMusicSelectLayout;
+  /** Search text size in design pixels, shared by the drawn placeholder and the native editing field. */
+  readonly searchTextSize?: number;
+  readonly portraitSearchTextSize?: number;
   /** Length of the launch outro (ms) the select screen keeps drawing after a chart is picked. Default 0. */
   readonly outroMs?: number;
   /** Draws one select frame. Called every frame while the select screen is shown. */
