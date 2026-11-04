@@ -168,14 +168,14 @@ export class LR2DecideView implements DecideView {
     const screenHeight = host.app.screen.height || FALLBACK_SCREEN_HEIGHT;
     const designWidth = skin.width;
     const designHeight = skin.height;
-    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
+    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight, 16 / 9);
     if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
       this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
       this.cachedScreenWidth = screenWidth;
       this.cachedScreenHeight = screenHeight;
     }
     this.designRoot.position.set(viewport.x, viewport.y);
-    this.designRoot.scale.set(viewport.scale);
+    this.designRoot.scale.set(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale);
     if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
       this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
       this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
