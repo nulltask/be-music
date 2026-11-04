@@ -453,7 +453,7 @@ export class BeMusicSelectBinding {
    * Where the skin's search box was on the last drawn frame, in design pixels: the hit area it bound to
    * `actions.activateSearch`. Undefined when the skin has none. The host lays its text field over it.
    */
-  searchFieldRect: { x: number; y: number; width: number; height: number } | undefined;
+  searchFieldRect: { x: number; y: number; width: number; height: number; fontSize?: number } | undefined;
 
   /**
    * `resolveChartBestRecord` looks up the player's best record on a song for `frame.chartBestRecord`; without one every song
@@ -559,7 +559,13 @@ export class BeMusicSelectBinding {
         area.cursor = cursor;
         area.removeAllListeners('pointerdown');
         area.on('pointerdown', action);
-        if (action === base.actions.activateSearch) searchFieldRect = { x, y, width: w, height: h };
+        if (action === base.actions.activateSearch) {
+          const fontSize =
+            base.designHeight > base.designWidth
+              ? (this.skin.select.portraitSearchTextSize ?? this.skin.select.searchTextSize)
+              : this.skin.select.searchTextSize;
+          searchFieldRect = { x, y, width: w, height: h, ...(fontSize !== undefined ? { fontSize } : {}) };
+        }
         return pointer !== undefined && pointer.x >= x && pointer.x < x + w && pointer.y >= y && pointer.y < y + h;
       },
     };

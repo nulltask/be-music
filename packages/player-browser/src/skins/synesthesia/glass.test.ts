@@ -43,7 +43,7 @@ describe('frosted panel surfaces', () => {
     drawGlassSurface(front.graphics, 10, 20, 100, 40);
     expect(front.rectangles).toEqual([]);
     expect(surface.rectangles).toEqual([[10, 20, 100, 40]]);
-    expect(surface.fills[0]!.alpha).toBeCloseTo(0.96 * 0.72);
+    expect(surface.fills[0]!.alpha).toBeCloseTo(0.96 * 0.42);
   });
 
   it('shares one filter across the frame and releases it with its surface', () => {

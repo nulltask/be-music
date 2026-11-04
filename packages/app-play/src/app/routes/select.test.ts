@@ -142,6 +142,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     router,
     controls: () => ({}),
     showExitMenu: vi.fn(),
+    closeWindow: vi.fn(),
     elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: {
       collection: { sources: [], charts: options.charts ?? [chartEntry('a')], errors: [] } as BrowserChartCollection,
@@ -565,7 +566,7 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.router.select).toBe(scene);
   });
 
-  test('leaving from the exit menu goes to the drop screen: the screen and the cursor go', async () => {
+  test('confirming exit closes the window without returning to the drop screen', async () => {
     const h = harness();
     h.setFamily('beatoraja');
     await h.route.showSelect();
@@ -573,17 +574,13 @@ describe('SelectRoute: what the screen tells the app', () => {
     h.route.lastSelectNavigation = AT_FOLDER;
     scene.options.on.exitMenu!();
     vi.mocked(h.deps.showExitMenu).mock.calls[0]![0]('leave');
-    expect(h.classes.has('empty')).toBe(true);
-    expect(h.route.lastSelectNavigation).toBeUndefined();
-    expect(h.deps.beatorajaSkinOptions.clear).toHaveBeenCalledOnce();
-    await vi.waitFor(() => expect(scene.dispose).toHaveBeenCalledOnce());
-    expect(h.router.select).toBeUndefined();
-    expect(h.router.current).toBeUndefined();
-
-    // Coming back (a drop or a theme) starts at the root.
-    await h.route.showSelect();
-    expect(lastMade(h)).not.toBe(scene);
-    expect(lastMade(h).options.browse).toBeUndefined();
+    expect(h.deps.closeWindow).toHaveBeenCalledOnce();
+    expect(h.classes.has('empty')).toBe(false);
+    expect(h.route.lastSelectNavigation).toBe(AT_FOLDER);
+    expect(h.deps.beatorajaSkinOptions.clear).not.toHaveBeenCalled();
+    expect(scene.dispose).not.toHaveBeenCalled();
+    expect(h.router.select).toBe(scene);
+    expect(h.router.current).toBe(scene);
   });
 
   test('a beatoraja skin’s JUDGE TIMING keeps its options for the entry and loads it again with them', async () => {

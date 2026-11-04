@@ -1,5 +1,5 @@
 import { formatSelectBreadcrumb } from './layout.ts';
-import { Container, Graphics, Sprite } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { bindGlassSurface, drawGlassSurface } from './glass.ts';
 import { createFlock, stepFlock } from './boids.ts';
 import { ChargeCloud } from './charge-cloud.ts';
@@ -59,6 +59,7 @@ import {
   describeCourseCard,
   formatPlayVariantLabel,
   resolveChartStats,
+  resolveDifficultyName,
   hash01,
   resolveChartRowFacts,
   stageProgress,
@@ -82,9 +83,9 @@ const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 92, listBottomInset: 
  * The portrait list: full width under the focused-song card and the search bar, with taller rows (two lines each, and
  * a thumb's height to tap).
  */
-const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 356, listBottomInset: 34, rowHeight: 36 };
+const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 408, listBottomInset: 34, rowHeight: 36 };
 /** The focused-song card on the portrait stage. */
-const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 248 } as const;
+const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 300 } as const;
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 76;
 const ROW_LENGTH_W = 30;
@@ -143,6 +144,8 @@ const PYRAMIDS = [pointCloudPyramid(12, 900), pointCloudPyramid(4, 560), pointCl
 
 export const synesthesiaSelectSkin: PixiSelectSkin = {
   outroMs: OUTRO_MS,
+  searchTextSize: 10,
+  portraitSearchTextSize: 11,
   layout: LAYOUT,
   portraitLayout: PORTRAIT_LAYOUT,
   createRenderer: () => new SynesthesiaSelectRenderer(),
@@ -172,6 +175,22 @@ function drawJudgeRank(
   });
 }
 
+function drawDifficulty(
+  addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
+  chart: LibraryChart | undefined,
+  x: number,
+  y: number,
+): void {
+  addText('DIFFICULTY', x, y, { ...labelStyle(), size: 8, anchorY: 0.5 });
+  addText(resolveDifficultyName(chart) ?? '-', x + 80, y, {
+    ...labelStyle(),
+    size: 8,
+    fill: SYN_AMBER,
+    anchorY: 0.5,
+    maxWidth: 130,
+  });
+}
+
 function framePanel(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {
   drawGlassSurface(graphics, x, y, w, h, 0.94);
   graphics.rect(x, y, w, h).stroke({ color: rim, width: 1, alpha: 0.28 });
@@ -184,6 +203,21 @@ function framePanel(graphics: Graphics, x: number, y: number, w: number, h: numb
  * golden river of particles, and a roaming visualizer-style audio orb — redrawn cheaply in `tick`. The front layer snaps a lock-on reticle onto the focused card.
  */
 class SynesthesiaSelectRenderer implements PixiSelectRenderer {
+  private banner: { image: ImageBitmap; texture: Texture } | undefined;
+  private drawBanner(frame: PixiSelectFrame, x: number, y: number, maxWidth: number, maxHeight: number): void {
+    const image = frame.focusedChart ? frame.chartImage(frame.focusedChart, 'banner') : undefined;
+    if (this.banner?.image !== image) {
+      this.banner?.texture.destroy(true);
+      this.banner = image ? { image, texture: Texture.from(image) } : undefined;
+    }
+    if (!this.banner) return;
+    const scale = Math.min(maxWidth / image!.width, maxHeight / image!.height);
+    const sprite = new Sprite(this.banner.texture);
+    sprite.position.set(x, y);
+    sprite.width = image!.width * scale;
+    sprite.height = image!.height * scale;
+    frame.layer.addChild(sprite);
+  }
   public readonly backLayer = new Container();
   public readonly frontLayer = new Container();
   private readonly glass = new Graphics();
@@ -562,6 +596,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   }
 
   public dispose(): void {
+    this.banner?.texture.destroy(true);
+    this.banner = undefined;
     this.chargeCloud.destroy();
     this.backLayer.destroy({ children: true });
     this.frontLayer.destroy({ children: true });
@@ -661,7 +697,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     });
 
     // Info panel.
-    framePanel(chrome, 14, 56, 290, 264, accent);
+    const hasBanner = chartEntry ? frame.chartImage(chartEntry, 'banner') !== undefined : false;
+    framePanel(chrome, 14, 56, 290, hasBanner ? 350 : 282, accent);
     // The genre heads the card, in the accent light, where a fixed caption used to sit.
     const genre = chartEntry?.genre?.trim();
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
@@ -717,11 +754,12 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
 
     // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
-    drawJudgeRank(addText, chartEntry, 30, 214);
+    drawDifficulty(addText, chartEntry, 30, 214);
+    drawJudgeRank(addText, chartEntry, 30, 232);
 
     // The file name and the list position share the row under the judge rank.
     if (chartEntry?.fileLabel) {
-      addText(chartEntry.fileLabel, 30, 232, {
+      addText(chartEntry.fileLabel, 30, 250, {
         size: 9,
         weight: '300',
         fill: SYN_DIM,
@@ -730,13 +768,13 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         maxWidth: 200,
       });
     }
-    addText(position, 288, 232, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1 });
+    addText(position, 288, 250, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1 });
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
-    chrome.rect(26, 258, 170, 40).fill({ color: accent, alpha: 0.16 });
-    chrome.rect(30, 262, 162, 32).fill({ color: accent, alpha: 0.88 });
-    drawReticle(chrome, 26, 258, 170, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
-    addText('PLAY', 111, 278, {
+    chrome.rect(26, 276, 170, 40).fill({ color: accent, alpha: 0.16 });
+    chrome.rect(30, 280, 162, 32).fill({ color: accent, alpha: 0.88 });
+    drawReticle(chrome, 26, 276, 170, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
+    addText('PLAY', 111, 296, {
       size: 14,
       fill: SYN_VOID,
       fontFamily: SYN_DISPLAY_FONT,
@@ -745,9 +783,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorY: 0.5,
     });
     // AUTO's right edge sits on the content column's (288), like the LEVEL chip above it.
-    chrome.rect(202, 265, 86, 26).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
-    drawReticle(chrome, 202, 265, 86, 26, SYN_MIST, 0.8, { arm: 5, width: 1 });
-    addText('AUTO', 245, 278, {
+    chrome.rect(202, 283, 86, 26).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
+    drawReticle(chrome, 202, 283, 86, 26, SYN_MIST, 0.8, { arm: 5, width: 1 });
+    addText('AUTO', 245, 296, {
       size: 9,
       fill: SYN_MIST,
       fontFamily: SYN_DISPLAY_FONT,
@@ -755,8 +793,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorX: 0.5,
       anchorY: 0.5,
     });
-    addHitArea(26, 258, 172, 40, 'pointer', frame.actions.play);
-    addHitArea(200, 262, 90, 32, 'pointer', frame.actions.autoPlay);
+    addHitArea(26, 276, 172, 40, 'pointer', frame.actions.play);
+    addHitArea(200, 280, 90, 32, 'pointer', frame.actions.autoPlay);
+    this.drawBanner(frame, 30, 330, 258, 72);
 
     // Search and library.
     framePanel(chrome, 322, 54, designWidth - 336, 30, accent);
@@ -911,7 +950,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     });
 
     // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
-    drawJudgeRank(addText, chartEntry, left, card.y + 148);
+    drawDifficulty(addText, chartEntry, left, card.y + 148);
+    drawJudgeRank(addText, chartEntry, left + 238, card.y + 148);
 
     // The file name and the list position share the row under the judge rank.
     const fileRowY = card.y + 166;
@@ -956,6 +996,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     });
     addHitArea(left - 4, buttonY - 4, playW + 8, 44, 'pointer', frame.actions.play);
     addHitArea(autoX - 2, buttonY - 2, autoW + 4, 40, 'pointer', frame.actions.autoPlay);
+
+    this.drawBanner(frame, left, card.y + 246, innerW, 48);
 
     // Search.
     const searchY = card.y + card.h + 10;
