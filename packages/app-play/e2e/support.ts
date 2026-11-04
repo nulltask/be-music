@@ -459,10 +459,12 @@ export class Player {
   async clickSkin(x: number, y: number, width: number, height: number): Promise<void> {
     const box = await this.page.locator('#stage canvas').boundingBox();
     if (box === null) throw new Error('no canvas');
-    const scale = Math.min(box.width / width, box.height / height);
-    const left = box.x + (box.width - width * scale) / 2;
-    const top = box.y + (box.height - height * scale) / 2;
-    await this.page.mouse.click(left + x * scale, top + y * scale);
+    const outputWidth = (await this.state()).scene.family === 'lr2' ? (height * 16) / 9 : width;
+    const scaleY = Math.min(box.width / outputWidth, box.height / height);
+    const scaleX = (outputWidth * scaleY) / width;
+    const left = box.x + (box.width - outputWidth * scaleY) / 2;
+    const top = box.y + (box.height - height * scaleY) / 2;
+    await this.page.mouse.click(left + x * scaleX, top + y * scaleY);
   }
 }
 

@@ -15,6 +15,32 @@ describe('resolveScaledViewport', () => {
     });
   });
 
+  test('fits classic LR2 coordinates to widescreen output without a 4:3 pillarbox', () => {
+    const v = resolveScaledViewport(1280, 720, 640, 480, 16 / 9);
+    expect(v.x).toBeCloseTo(0);
+    expect(v.y).toBeCloseTo(0);
+    expect(v.scaleX).toBeCloseTo(2);
+    expect(v.scaleY).toBeCloseTo(1.5);
+    expect(designRectToCanvas({ x: 0, y: 0, width: 640, height: 480 }, v)).toEqual({
+      x: 0,
+      y: 0,
+      width: 1280,
+      height: 720,
+    });
+  });
+
+  test('letterboxes widescreen output inside a square window while preserving its per-axis scales', () => {
+    const v = resolveScaledViewport(640, 640, 640, 480, 16 / 9);
+    expect(v.x).toBe(0);
+    expect(v.y).toBeCloseTo(140);
+    expect(v.scaleX).toBe(1);
+    expect(v.scaleY).toBeCloseTo(0.75);
+  });
+
+  test.each([0, -1, Number.NaN, Infinity])('ignores an unusable display aspect %s', (ratio) => {
+    expect(resolveScaledViewport(1280, 720, 640, 480, ratio)).toEqual(resolveScaledViewport(1280, 720, 640, 480));
+  });
+
   test('falls back to scale 1 when the input is not usable', () => {
     expect(resolveScaledViewport(0, 480, 640, 480)).toEqual({
       x: -320,

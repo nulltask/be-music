@@ -167,7 +167,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     const skin = kit.skin;
     this.overlay.scale.set(skin.height / DESIGN_HEIGHT);
     this.playfieldSkin = {
-      stage: { width: skin.width, height: skin.height },
+      stage: { width: skin.width, height: skin.height, displayAspectRatio: 16 / 9 },
       pixelsPerBeat: PIXELS_PER_BEAT * (skin.height / DESIGN_HEIGHT),
       ownsLanes: true,
       laneRect: (channel, stage) => resolveLR2LaneRect(skin, this.laneIndex(channel), stage),

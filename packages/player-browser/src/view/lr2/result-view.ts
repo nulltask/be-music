@@ -173,16 +173,23 @@ export class LR2ResultView implements ResultView {
     const screenHeight = host.app.screen.height || FALLBACK_SCREEN_HEIGHT;
     const designWidth = skin.width;
     const designHeight = skin.height;
-    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
-    setDesignTextResolution(resolveDesignTextResolution(viewport.scale, host.app.renderer.resolution));
-    setDesignPixelRatio(viewport.scale * host.app.renderer.resolution);
+    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight, 16 / 9);
+    setDesignTextResolution(
+      resolveDesignTextResolution(
+        Math.max(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale),
+        host.app.renderer.resolution,
+      ),
+    );
+    setDesignPixelRatio(
+      Math.max(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale) * host.app.renderer.resolution,
+    );
     if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
       this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
       this.cachedScreenWidth = screenWidth;
       this.cachedScreenHeight = screenHeight;
     }
     this.designRoot.position.set(viewport.x, viewport.y);
-    this.designRoot.scale.set(viewport.scale);
+    this.designRoot.scale.set(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale);
     host.setStageOrientation('landscape');
     if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
       this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);

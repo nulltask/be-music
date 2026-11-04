@@ -3,24 +3,33 @@ export interface ScaledViewport {
   x: number;
   y: number;
   scale: number;
+  /** Per-axis scales when the output aspect differs from the authored coordinate canvas. */
+  scaleX?: number;
+  scaleY?: number;
 }
 
 /**
- * Uniform scale + centring offset that fits a `designWidth x designHeight` canvas inside the screen (letterboxed /
- * pillarboxed). Non-finite or non-positive scales fall back to 1.
+ * Scale + centring offset that fits a `designWidth x designHeight` canvas inside the screen (letterboxed /
+ * pillarboxed). An output aspect ratio stretches the authored coordinates into that output canvas. Non-finite or non-positive scales fall back to 1.
  */
 export function resolveScaledViewport(
   screenWidth: number,
   screenHeight: number,
   designWidth: number,
   designHeight: number,
+  displayAspectRatio?: number,
 ): ScaledViewport {
-  const scale = Math.min(screenWidth / designWidth, screenHeight / designHeight);
+  const outputWidth =
+    displayAspectRatio !== undefined && Number.isFinite(displayAspectRatio) && displayAspectRatio > 0
+      ? designHeight * displayAspectRatio
+      : designWidth;
+  const scale = Math.min(screenWidth / outputWidth, screenHeight / designHeight);
   const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
   return {
-    x: (screenWidth - designWidth * safeScale) / 2,
+    x: (screenWidth - outputWidth * safeScale) / 2,
     y: (screenHeight - designHeight * safeScale) / 2,
     scale: safeScale,
+    ...(outputWidth !== designWidth ? { scaleX: (outputWidth * safeScale) / designWidth, scaleY: safeScale } : {}),
   };
 }
 
@@ -30,10 +39,10 @@ export function designRectToCanvas(
   viewport: ScaledViewport,
 ): { x: number; y: number; width: number; height: number } {
   return {
-    x: viewport.x + rect.x * viewport.scale,
-    y: viewport.y + rect.y * viewport.scale,
-    width: rect.width * viewport.scale,
-    height: rect.height * viewport.scale,
+    x: viewport.x + rect.x * (viewport.scaleX ?? viewport.scale),
+    y: viewport.y + rect.y * (viewport.scaleY ?? viewport.scale),
+    width: rect.width * (viewport.scaleX ?? viewport.scale),
+    height: rect.height * (viewport.scaleY ?? viewport.scale),
   };
 }
 

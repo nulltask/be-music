@@ -192,9 +192,22 @@ export function render(
   const screenHeight = ctx.app.screen.height;
   const stage = ctx.playfieldSkin.stage;
   const { width: designWidth, height: designHeight } = stage;
-  const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
-  setDesignTextResolution(resolveDesignTextResolution(viewport.scale, ctx.app.renderer.resolution));
-  setDesignPixelRatio(viewport.scale * ctx.app.renderer.resolution);
+  const viewport = resolveScaledViewport(
+    screenWidth,
+    screenHeight,
+    designWidth,
+    designHeight,
+    stage.displayAspectRatio,
+  );
+  setDesignTextResolution(
+    resolveDesignTextResolution(
+      Math.max(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale),
+      ctx.app.renderer.resolution,
+    ),
+  );
+  setDesignPixelRatio(
+    Math.max(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale) * ctx.app.renderer.resolution,
+  );
   // Only rebuild the static rect graphics when their backing dimensions actually change. The previous unconditional
   // `.clear().rect().fill()` chain ran on every rAF tick and rebuilt the GraphicsContext for each — Pixi v8 has no
   // change-detection built in.
@@ -205,11 +218,10 @@ export function render(
   }
   // The player's own move and scale of the skin (LR2's 1 / 2 + the arrows), in design pixels.
   const adjust = ctx.play.skinAdjust;
-  ctx.designRoot.position.set(
-    viewport.x + (adjust?.x ?? 0) * viewport.scale,
-    viewport.y + (adjust?.y ?? 0) * viewport.scale,
-  );
-  ctx.designRoot.scale.set(viewport.scale * (adjust?.scale ?? 1));
+  const scaleX = viewport.scaleX ?? viewport.scale;
+  const scaleY = viewport.scaleY ?? viewport.scale;
+  ctx.designRoot.position.set(viewport.x + (adjust?.x ?? 0) * scaleX, viewport.y + (adjust?.y ?? 0) * scaleY);
+  ctx.designRoot.scale.set(scaleX * (adjust?.scale ?? 1), scaleY * (adjust?.scale ?? 1));
   stampDesignRect(ctx, stage);
   ctx.host?.setStageOrientation(resolveStageOrientation(stage));
   applyExitFadeAlpha(ctx);
