@@ -25,6 +25,13 @@ for (const skin of ['plain', 'native', 'synesthesia']) {
         window.dispatchEvent(new KeyboardEvent('keydown', { code, key, bubbles: true }));
     });
     if (skin === 'native') {
+      const strip = await player.page.locator('be-music-gameplay-hud [part="keys"]').boundingBox();
+      const panel = player.page.locator('be-music-gameplay-hud be-music-gauge-panel').first();
+      const meter = await panel.locator('meter').boundingBox();
+      for (const caption of ['.name', '.value']) {
+        const box = (await panel.locator(caption).boundingBox())!;
+        expect(Math.abs(box.y + box.height / 2 - (strip!.y + strip!.height + meter!.y) / 2)).toBeLessThan(1);
+      }
       const keys = player.page.locator('be-music-gameplay-hud .key[data-active]');
       await expect(keys).toHaveCount(2);
       const scratch = player.page.locator('be-music-gameplay-hud .key[data-kind="scratch"]').first();

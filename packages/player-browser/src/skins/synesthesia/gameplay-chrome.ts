@@ -1187,9 +1187,9 @@ function drawPortraitHUD(
   addHUDText(
     layer,
     `${formatRuleset(runtime.rulesetLabel)} · ${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
-    groove.x + groove.w / 2,
+    groove.x,
     groove.y - 16,
-    { ...portraitLabel(), anchorX: 0.5, maxWidth: groove.w - 100 },
+    { ...portraitLabel(), maxWidth: groove.w - 60 },
     pool,
   );
   addHUDNumber(

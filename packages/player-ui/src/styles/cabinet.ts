@@ -352,10 +352,9 @@ export const cabinetStyles: CSSResult = css`
   .judge .counts {
     align-content: space-between;
   }
-  /* The gauge's label and meter sit in the middle of their box. */
+  /* The cabinet places the caption midway between the keys and the gauge bar. */
   be-music-gauge-panel.cab {
-    display: grid;
-    align-content: center;
+    display: block;
   }
   .sound-only {
     display: grid !important;

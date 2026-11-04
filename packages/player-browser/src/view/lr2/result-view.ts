@@ -173,7 +173,7 @@ export class LR2ResultView implements ResultView {
     const screenHeight = host.app.screen.height || FALLBACK_SCREEN_HEIGHT;
     const designWidth = skin.width;
     const designHeight = skin.height;
-    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight, 16 / 9);
+    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(
       resolveDesignTextResolution(
         Math.max(viewport.scaleX ?? viewport.scale, viewport.scaleY ?? viewport.scale),

@@ -72,9 +72,9 @@ function drawGauge(
   addHUDText(
     layer,
     `${prefix}${(state.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
-    groove.x + groove.w / 2,
+    groove.x - 2,
     groove.y - 19,
-    { ...labelStyle(), anchorX: 0.5, maxWidth: groove.w - 100 },
+    { ...labelStyle(), maxWidth: groove.w - 56 },
     pool,
   );
   addHUDNumber(
