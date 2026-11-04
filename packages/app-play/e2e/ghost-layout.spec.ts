@@ -1,7 +1,15 @@
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, openWithLibrary, SONGS, test } from './support.ts';
 
 for (const skin of ['plain', 'native', 'synesthesia']) {
   test(`${skin} places a replay ghost opposite the player with a central BGA`, async ({ player }, info) => {
+    const capture = process.env.BE_MUSIC_LAYOUT_CAPTURE;
+    if (capture) await mkdir(capture, { recursive: true });
+    const shot = (name: string) =>
+      player.page.screenshot({
+        path: capture ? join(capture, `${skin}-${name}.png`) : info.outputPath(`${skin}-${name}.png`),
+      });
     await player.page.setViewportSize({ width: 1280, height: 720 });
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     await player.setOption(['Play options'], 'Auto play', true);
@@ -19,7 +27,7 @@ for (const skin of ['plain', 'native', 'synesthesia']) {
       'the single-player play to start',
     );
     await player.key('Pause');
-    await player.page.screenshot({ path: info.outputPath(`${skin}-single.png`) });
+    await shot('single');
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay).toBeDefined();
@@ -50,6 +58,12 @@ for (const skin of ['plain', 'native', 'synesthesia']) {
       'the ghost play to start',
     );
     if (skin === 'native') {
+      const labels = await player.page
+        .locator('be-music-judgment-display')
+        .evaluate((element) =>
+          (element as unknown as { data: { words: { mode?: string }[] } }).data.words.map((word) => word.mode),
+        );
+      expect(labels).toEqual(['AUTO PLAY', 'GHOST PLAY']);
       const hud = player.page.locator('be-music-gameplay-hud');
       await expect(hud.locator('[data-two-player]')).toHaveCount(1);
       await expect(hud.locator('[part="second-score"]')).toBeVisible();
@@ -72,6 +86,6 @@ for (const skin of ['plain', 'native', 'synesthesia']) {
       expect(right!.x).toBeGreaterThan(bga!.x + bga!.width);
     }
     await player.key('Pause');
-    await player.page.screenshot({ path: info.outputPath(`${skin}-ghost.png`) });
+    await shot('ghost');
   });
 }

@@ -72,11 +72,9 @@ function drawGauge(
   addHUDText(
     layer,
     `${prefix}${(state.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
-    groove.x - 2,
+    groove.x + groove.w / 2,
     groove.y - 19,
-    // The label runs from the groove's left edge up to a gap before the percentage readout (right-aligned at the
-    // frame's inner edge, up to `100%` wide), so a course gauge's long name (`COURSE-EASY GAUGE`) fits.
-    { ...labelStyle(), maxWidth: frame.w - 14 - 56 - (GROOVE_INSET - 2) },
+    { ...labelStyle(), anchorX: 0.5, maxWidth: groove.w - 100 },
     pool,
   );
   addHUDNumber(

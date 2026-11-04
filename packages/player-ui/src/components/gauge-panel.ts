@@ -15,6 +15,27 @@ export class BeMusicGaugePanelElement extends DataElement<BeMusicGaugeData> {
         gap: 6px;
         font-size: 0.85em;
       }
+      .compact {
+        display: block;
+        position: relative;
+        text-align: center;
+      }
+      .compact .name {
+        display: block;
+        margin-inline: 3em;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .compact .value {
+        position: absolute;
+        right: 0;
+        top: 0;
+      }
+      .compact meter {
+        display: block;
+        width: 100%;
+        margin-top: 4px;
+      }
       meter {
         flex: 1;
         min-width: 0;
@@ -31,7 +52,11 @@ export class BeMusicGaugePanelElement extends DataElement<BeMusicGaugeData> {
       ><span>${d.label ?? 'Gauge'} · ${value.toFixed(1)}%</span
       ><meter min="0" max="100" .value=${value} aria-label=${d.label ?? 'Gauge'}></meter
     ></label>`;
-    if (this.compact) return meter;
+    if (this.compact)
+      return html`<label class="compact" part="meter"
+        ><span class="name">${d.label ?? 'Gauge'}</span><span class="value">${value.toFixed(1)}%</span
+        ><meter min="0" max="100" .value=${value} aria-label=${d.label ?? 'Gauge'}></meter
+      ></label>`;
     const count = Math.min(96, d.history.length);
     const points = Array.from({ length: count }, (_, i) => {
       const sample = d.history[Math.round((i / Math.max(1, count - 1)) * (d.history.length - 1))]!;

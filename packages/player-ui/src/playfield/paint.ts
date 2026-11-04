@@ -293,6 +293,11 @@ export function paintJudgmentDisplay(
 ): void {
   ctx.textAlign = 'center';
   for (const word of words) {
+    if (word.mode) {
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillStyle = COMBO_COLOR;
+      ctx.fillText(word.mode, word.x, (word.y ?? y) - 28);
+    }
     ctx.font = JUDGMENT_FONT;
     ctx.fillStyle = word.color;
     ctx.fillText(word.text, word.x, word.y ?? y);

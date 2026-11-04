@@ -79,6 +79,23 @@ export const cabinetStyles: CSSResult = css`
     width: auto !important;
     opacity: 0.35;
   }
+  .key[data-active] {
+    background-color: var(--primary, #5b8cff);
+    opacity: 1;
+  }
+  .key[data-kind='scratch']::after,
+  .key[data-kind='wheel-up']::after,
+  .key[data-kind='wheel-down']::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 50%;
+    height: 2px;
+    background: currentColor;
+    transform-origin: left center;
+    transform: rotate(var(--scratch-angle, 0rad));
+  }
   .figure strong {
     position: absolute;
     right: calc(var(--px) * 8);

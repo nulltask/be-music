@@ -2,6 +2,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import {
   formatScoreDiff,
   resolveCabinetLayout,
+  resolveScratchAngle,
   resolveDifficultyName,
   resolveScorePace,
   resolveStageLabel,
@@ -95,7 +96,8 @@ export function renderGameplayCabinet({
           html`<span
             class="key"
             data-kind=${lane.kind}
-            style=${`left:${((lane.x - keys.x) / keys.w) * 100}%;width:${(lane.w / keys.w) * 100}%`}
+            ?data-active=${(r.keyBeams?.[lane.channel ?? ''] ?? 0) > 0}
+            style=${`--scratch-angle:${resolveScratchAngle(r.chartBeat ?? 0)}rad;left:${((lane.x - keys.x) / keys.w) * 100}%;width:${(lane.w / keys.w) * 100}%`}
           ></span>`,
       )}
     </div>

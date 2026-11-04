@@ -4,6 +4,7 @@ import {
   holdSparks,
   isFlashingGreat,
   judgeDisplayWord,
+  resolveLanePlayLabel,
   loadingDots,
   resolveLaneRuns,
   type BeMusicGameplayFrame,
@@ -278,6 +279,18 @@ function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFram
     text(ctx, `NOW LOADING${loadingDots(nowMs)}`, layout.playfield.left + 12, y, { size: 13, color: MUTED });
     return;
   }
+  for (const side of ['1P', '2P'] as const) {
+    const bounds = layout.playfield.sides[side];
+    const mode = resolveLanePlayLabel(runtime, side);
+    if (!bounds || !mode) continue;
+    text(
+      ctx,
+      mode,
+      (bounds.left + bounds.right) / 2,
+      y + ((bounds.judgementY ?? layout.playfield.judgementY) - layout.playfield.judgementY) - 28,
+      { size: 10, color: MUTED, align: 'center', maxWidth: bounds.right - bounds.left - 12 },
+    );
+  }
   for (const side of runtime.judgeSides ?? []) {
     if (!side.judge) continue;
     const bounds = layout.playfield.sides[side.side];
@@ -378,7 +391,9 @@ function drawGauge(
 ): void {
   const gauge = Math.max(0, Math.min(100, runtime.gauge ?? 0));
   const clear = runtime.clearThreshold ?? 80;
-  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, x, y - 10, {
+  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, x + w / 2, y - 10, {
+    align: 'center',
+    maxWidth: w - 80,
     size: labelSize,
     color: MUTED,
     weight: 700,

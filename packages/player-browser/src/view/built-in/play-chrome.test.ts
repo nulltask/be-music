@@ -23,6 +23,9 @@ function chromeContext(playFrame?: PlayChromeContext['playFrame']): PlayChromeCo
     resolveChartDurationSeconds: () => 60,
     chartPlayVariant: '7',
     laneChannels: ['11'],
+    pressedChannels: new Set(['11']),
+    keyBeamStartedAt: new Map(),
+    keyBeamFadeStartedAt: new Map(),
     judgeSideState: { '1P': { until: -1 } },
     currentBeat: () => 0,
     nowBPM: () => 150,
@@ -55,7 +58,15 @@ test('hands the frame’s best record, course, player and lane option to the ski
       playOptions: { random1P: 'MIRROR' } as never,
     }),
   );
-  expect(runtime).toMatchObject({ bestEXScore: 120, course, playerName: 'Taro', random1P: 'MIRROR', tempo: 1.25 });
+  expect(runtime).toMatchObject({
+    bestEXScore: 120,
+    course,
+    playerName: 'Taro',
+    random1P: 'MIRROR',
+    tempo: 1.25,
+    chartBeat: 0,
+    keyBeams: { '11': 1 },
+  });
   expect(runtime.targetEXScore).toBeUndefined();
 });
 
@@ -124,4 +135,11 @@ test('keeps rendered lanes, chrome and BGA aligned when switching between DP and
   play.secondPlayer = undefined;
   expect(resolveLaneGeometry(ctx)).toEqual(dp);
   expect(resolveBeMusicLayout(ctx)).toEqual(dpLayout);
+});
+
+test('passes the presented ghost side independently of autoplay options', () => {
+  const ctx = chromeContext();
+  const play = ctx.play as unknown as { ghostSide: '2P' };
+  play.ghostSide = '2P';
+  expect(resolveSkinlessGameplayChromeRuntime(ctx).ghostSide).toBe('2P');
 });

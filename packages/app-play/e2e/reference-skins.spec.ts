@@ -1,3 +1,5 @@
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, openWithLibrary, SONGS, test } from './support.ts';
 
 // Local third-party distributions stay external. Supply a JSON array of { name, family, path } to opt in.
@@ -14,6 +16,17 @@ for (const reference of references) {
   for (const variant of reference.variants ?? ['7']) {
     test(`reference skin: ${reference.name} ${variant} keys`, async ({ player }, info) => {
       test.setTimeout(180_000);
+      const capture = process.env.BE_MUSIC_LAYOUT_CAPTURE;
+      if (capture) await mkdir(capture, { recursive: true });
+      const shot = (name: string) =>
+        player.page.screenshot({
+          path: capture
+            ? join(
+                capture,
+                `reference-${reference.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${variant}-${name}.png`,
+              )
+            : info.outputPath(`${name}.png`),
+        });
       await player.page.setViewportSize({ width: 1280, height: 720 });
       await openWithLibrary(player);
       await player.setOption(['Play options'], 'Auto play', true);
@@ -76,7 +89,7 @@ for (const reference of references) {
       const skinConfig = player.page.locator('[data-pane="skin-config"][open]');
       if (await skinConfig.count()) await skinConfig.locator('summary').first().click();
       await player.page.waitForTimeout(1800);
-      await player.page.screenshot({ path: info.outputPath('select.png') });
+      await shot('select');
       await player.key('Enter');
       await player.keyWhen(
         (state) => state.scene.kind === 'play' && (state.play?.seconds ?? -1) >= 2,
@@ -94,7 +107,7 @@ for (const reference of references) {
       }
       await player.key('Pause');
       if (await skinConfig.count()) await skinConfig.locator('summary').first().click();
-      await player.page.screenshot({ path: info.outputPath('play.png') });
+      await shot('play');
       if (reference.resultFamily === 'none') {
         // Some beatoraja bundles ship play/select only; their documented route returns directly to select.
         await player.waitFor(
@@ -103,7 +116,7 @@ for (const reference of references) {
           90_000,
         );
         expect((await player.state()).results).toHaveLength(0);
-        await player.page.screenshot({ path: info.outputPath('after-play.png') });
+        await shot('after-play');
         return;
       }
       await player.waitForResult(0, 90_000);
@@ -113,7 +126,7 @@ for (const reference of references) {
       expect(result.judged.pgreat).toBe(lanes * 4);
       if (await skinConfig.count()) await skinConfig.locator('summary').first().click();
       await player.page.waitForTimeout(2200);
-      await player.page.screenshot({ path: info.outputPath('result.png') });
+      await shot('result');
     });
   }
 }

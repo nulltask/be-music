@@ -1,6 +1,7 @@
 import {
   formatScoreDiff,
   resolveCabinetLayout,
+  resolveScratchAngle,
   resolveDifficultyName,
   resolveScorePace,
   resolveStageLabel,
@@ -107,6 +108,14 @@ function drawKeys(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, re
     ctx.fill();
     ctx.strokeStyle = LINE;
     ctx.stroke();
+    const angle = resolveScratchAngle(frame.runtime.chartBeat ?? 0);
+    const cx = lane.x + lane.w / 2;
+    const cy = rect.y + rect.h / 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+    ctx.strokeStyle = TEXT;
+    ctx.stroke();
   }
 }
 
@@ -152,7 +161,13 @@ function drawGauge(
 ): void {
   const gauge = Math.max(0, Math.min(100, runtime.gauge ?? 0));
   const clear = runtime.gaugeSurvival ? 0 : (runtime.clearThreshold ?? 80);
-  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, rect.x, labelY, { size: 9, color: MUTED, weight: 700 });
+  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, rect.x + rect.w / 2, labelY, {
+    size: 9,
+    color: MUTED,
+    weight: 700,
+    align: 'center',
+    maxWidth: showValue ? rect.w - 80 : rect.w,
+  });
   if (showValue) text(ctx, `${Math.floor(gauge)}%`, rect.x + rect.w, labelY, { size: 13, weight: 700, align: 'right' });
   const cells = Math.max(10, Math.min(GAUGE_CELLS, Math.floor(rect.w / 4)));
   const pitch = rect.w / cells;
