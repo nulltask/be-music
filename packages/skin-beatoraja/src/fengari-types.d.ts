@@ -61,6 +61,7 @@ declare module 'fengari' {
     lua_next: (L: lua_State, idx: number) => number;
     lua_rawlen: (L: lua_State, idx: number) => number;
     lua_rawget: (L: lua_State, idx: number) => number;
+    lua_rawequal: (L: lua_State, idx1: number, idx2: number) => boolean;
     lua_rawgeti: (L: lua_State, idx: number, n: number) => number;
     lua_rawseti: (L: lua_State, idx: number, n: number) => void;
     lua_settable: (L: lua_State, idx: number) => void;

@@ -6,6 +6,7 @@ import {
   OFFSET_ALL,
   OFFSET_HIDDEN_COVER,
   OFFSET_LIFT,
+  OFFSET_LANECOVER,
   SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_1P,
   SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_2P,
 } from '../runtime-ids.ts';
@@ -216,21 +217,34 @@ describe('writeBeatorajaPlayOffset', () => {
   };
 
   it('raises the lane by the LIFT and leaves the offset to the skin without one', () => {
-    expect(write(OFFSET_LIFT, offsets({ cover: cover({ lift: 0.25 }) }))).toMatchObject({ x: 0, y: -145, a: 0 });
+    expect(write(OFFSET_LIFT, offsets({ cover: cover({ lift: 0.25 }) }))).toMatchObject({ x: 0, y: 145, a: 0 });
     expect(write(OFFSET_LIFT, offsets({ cover: cover({}) }))).toBeUndefined();
     expect(write(OFFSET_LIFT, offsets())).toBeUndefined();
   });
 
-  it('hides HIDDEN+ while off and lowers it within the lane above the LIFT', () => {
+  it('hides HIDDEN+ while off and raises its edge within the lane above the LIFT', () => {
     expect(write(OFFSET_HIDDEN_COVER, offsets({ cover: cover({ hidden: 0.5 }) }))).toMatchObject({ a: -255 });
     expect(write(OFFSET_HIDDEN_COVER, offsets())).toMatchObject({ a: -255 });
     expect(write(OFFSET_HIDDEN_COVER, offsets({ cover: cover({ hidden: 0.5, hiddenOn: true }) }))).toMatchObject({
-      y: -290,
+      y: 290,
       a: 0,
     });
     expect(
       write(OFFSET_HIDDEN_COVER, offsets({ cover: cover({ hidden: 0.5, hiddenOn: true, lift: 0.5 }) })),
-    ).toMatchObject({ y: -145, a: 0 });
+    ).toMatchObject({ y: 145, a: 0 });
+  });
+
+  it('moves cover readouts down by SUDDEN+ above the active LIFT and resets when off', () => {
+    expect(
+      write(OFFSET_LANECOVER, offsets({ cover: cover({ sudden: 0.5, suddenOn: true, lift: 0.25 }) })),
+    ).toMatchObject({ y: -217.5 });
+    expect(
+      write(OFFSET_LANECOVER, offsets({ cover: cover({ sudden: 0.5, suddenOn: false, lift: 0.25 }) })),
+    ).toMatchObject({ y: 0 });
+    expect(
+      write(OFFSET_LANECOVER, offsets({ cover: cover({ sudden: 0.5, suddenOn: true, lift: 0.25, liftOn: false }) })),
+    ).toMatchObject({ y: -290 });
+    expect(write(OFFSET_LIFT, offsets({ cover: cover({ lift: 0.25, liftOn: false }) }))).toBeUndefined();
   });
 
   it("shifts the judge word left by half its combo digits' width", () => {

@@ -222,6 +222,28 @@ describe('LibraryService drops', () => {
     expect(options.loadTheme).not.toHaveBeenCalled();
   });
 
+  test('offers a standalone JSON theme by its skin header instead of requiring a skin/ ancestor', async () => {
+    const confirmSkinDrop = vi.fn(async () => 'beatoraja' as const);
+    const { library, options } = harness({ confirmSkinDrop });
+    await library.processIncomingFiles([
+      dropped('My Theme/select.json', JSON.stringify({ type: 5, name: 'Theme', w: 1280, h: 720, destination: [] })),
+    ]);
+    expect(confirmSkinDrop).toHaveBeenCalledWith(new Set(['beatoraja']));
+    expect(options.loadBeatorajaTheme).toHaveBeenCalledOnce();
+    expect(options.applyDroppedSkin).toHaveBeenCalledWith('beatoraja');
+  });
+
+  test.each(['{"name":"pack metadata"}', '{broken', '{"type":0,"name":"settings","w":0,"h":720}'])(
+    'keeps unrelated standalone JSON out of skin detection: %s',
+    async (text) => {
+      const confirmSkinDrop = vi.fn(async () => undefined);
+      const { library, options } = harness({ confirmSkinDrop });
+      await library.processIncomingFiles([dropped('pack/info.json', text)]);
+      expect(confirmSkinDrop).toHaveBeenCalledWith(new Set());
+      expect(options.loadBeatorajaTheme).not.toHaveBeenCalled();
+    },
+  );
+
   test('canceling a skin-only drop restores select without replacing the current skin', async () => {
     const confirmSkinDrop = vi.fn(async () => undefined);
     const { library, options, shown } = harness({ confirmSkinDrop });

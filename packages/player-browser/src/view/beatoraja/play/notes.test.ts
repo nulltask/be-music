@@ -124,6 +124,29 @@ describe('BeatorajaNoteLayer lane geometry under a mutated activeOps Set', () =>
     ],
   });
 
+  it('raises the note judgement line while keeping its spawn edge fixed and restores the authored lane', () => {
+    const layer = new BeatorajaNoteLayer({
+      noteSection,
+      variant: '7',
+      images: new Map(),
+      textures,
+      canvasHeight: 1000,
+    });
+    const ops = new Set<number>();
+    layer.setLift(0.25);
+    expect(layer.getLaneBounds(ops)).toEqual({ topY: 300, bottomY: 675 });
+    expect(layer.getLaneBounds(ops, false)).toEqual({ topY: 300, bottomY: 800 });
+    ops.add(BEATORAJA_OP.LIFT1_ON);
+    expect(layer.getLaneBounds(ops)).toEqual({ topY: 200, bottomY: 575 });
+    layer.setLift(0);
+    expect(layer.getLaneBounds(ops)).toEqual({ topY: 200, bottomY: 700 });
+    layer.setLift(1);
+    expect(layer.getLaneBounds(ops)).toEqual({ topY: 200, bottomY: 200 });
+    layer.setLift(Number.NaN);
+    expect(layer.getLaneBounds(ops)).toEqual({ topY: 200, bottomY: 700 });
+    layer.dispose();
+  });
+
   it('switches lane bounds when a gating op toggles on the same Set, and back again', () => {
     const layer = new BeatorajaNoteLayer({
       noteSection,

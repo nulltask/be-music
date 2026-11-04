@@ -573,6 +573,8 @@ export interface LR2BarLayout {
  * `startInput` to gate timer-1 anchored elements; `fadeOut` / `close` would drive scene-exit transitions.
  */
 export interface LR2SkinTiming {
+  /** `#SCENETIME`: ms from scene entry until automatic fade-out; zero skips the scene. */
+  sceneTime?: number;
   /** ms after scene mount before timer 1 (input start) fires. */
   startInput?: number;
   /** ms duration of fade-out before scene exits (drives timer 2). */
