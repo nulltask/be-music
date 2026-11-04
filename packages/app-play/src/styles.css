@@ -52,8 +52,33 @@ textarea {
   flex: none;
   width: 100%;
 }
+.player-service-header {
+  transform: translateY(0);
+  opacity: 1;
+  transition:
+    transform 200ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 200ms ease-out,
+    visibility 0s;
+}
 .shell.in-gameplay .player-service-header {
-  display: none;
+  position: absolute;
+  top: 0;
+  transform: translateY(-100%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: 0s, 0s, 200ms;
+}
+.shell.in-gameplay .service-page-footer {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell .player-service-header,
+  .shell .service-page-footer {
+    transition: none;
+  }
 }
 /* On a phone the row carries Install, Help, Settings and fullscreen too, so its gaps and the Sign in padding tighten. */
 @media (max-width: 639.98px) {
@@ -397,24 +422,31 @@ textarea {
 }
 
 /*
- * The beatoraja Skin Config panel (beatoraja-skin-options-gui.ts): bottom-centre over the stage, flush with its bottom
- * edge, clear of the play skins' readouts in the lower-right corner.
+ * Auxiliary panels share the stage's bottom dock, including beatoraja Skin Config, replay slots and course creation.
+ * Each heading remains available when its content is collapsed.
  */
-.skin-config-pane {
+.auxiliary-panels {
   position: absolute;
-  left: 50%;
-  bottom: 0;
+  inset: auto 0 0;
   z-index: 40;
-  width: min(320px, calc(100vw - 16px));
-  max-height: calc(100dvh - 12px);
-  overflow-y: auto;
-  transform: translateX(-50%);
-  border-radius: var(--radius-md, 0.5rem) var(--radius-md, 0.5rem) 0 0;
-  background: color-mix(in oklch, var(--popover) 92%, transparent);
-  color: var(--popover-foreground);
-  box-shadow: 0 -4px 16px rgb(0 0 0 / 0.3);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  backdrop-filter: blur(10px) saturate(140%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  max-height: min(70%, calc(100dvh - 64px));
+  overflow: auto;
+  pointer-events: none;
+}
+.auxiliary-panels > * {
+  flex: 0 0 auto;
+  width: min(420px, calc(100% - 16px));
+  pointer-events: auto;
+  font-size: 13px;
+}
+.auxiliary-panel-content,
+.replay-slots-content {
+  display: grid;
+  gap: 12px;
 }
 .skin-config-pane > .options-folder-content > .options-tabs > [role='tabpanel'] {
   padding-top: 8px;
@@ -2286,14 +2318,6 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /* Course maker (course-maker-panel.ts): the card shown while a course is being made, and the saved-course dialog. */
-.course-maker-card {
-  position: fixed;
-  left: 16px;
-  bottom: 64px;
-  z-index: 40;
-  width: min(320px, calc(100vw - 32px));
-  font-size: 13px;
-}
 .course-maker-card[hidden] {
   display: none;
 }
@@ -2382,13 +2406,26 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /* Replay slots (replay-slots-panel.ts): a result's slots to save into, and the select bar's replays. */
-.replay-slots-card {
-  position: fixed;
-  right: 16px;
-  bottom: 64px;
-  z-index: 40;
-  width: min(360px, calc(100vw - 32px));
-  font-size: 13px;
+.start-account-actions .btn {
+  background: transparent;
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+}
+.start-load-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+.start-load-actions button {
+  min-height: 44px;
+}
+.shell:not(.empty) .start-load-actions {
+  display: none;
+}
+.start-leaderboard {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
 }
 .replay-slots-card[hidden] {
   display: none;
@@ -2486,6 +2523,11 @@ html.touch-first .search-input.search-inline:focus {
 
 /* The page footer is the start screen only, so it stays off the skin's playfield. */
 .service-page-footer {
+  transform: translateY(0);
+  opacity: 1;
+  transition:
+    transform 200ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 200ms ease-out;
   position: absolute;
   z-index: 4;
   right: 0;

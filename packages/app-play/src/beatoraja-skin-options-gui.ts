@@ -33,9 +33,8 @@ import type {
 } from '@be-music/skin-beatoraja';
 export interface BeatorajaSkinOptionsGUIOptions {
   /**
-   * Parent element the panel attaches to. The pane is positioned `absolute` inside this element at
-   * `bottom: 0; left: 50% (translateX -50%);` — the host passes the play surface (`#main`) so
-   * the panel sits over the canvas, inside fullscreen, and not over the page header.
+   * Play surface containing the shared bottom panel dock. Keeping the panel inside this surface also keeps it
+   * available in fullscreen. A standalone container can be supplied when no dock is present.
    */
   container: HTMLElement;
 }
@@ -69,7 +68,7 @@ export interface SetSkinOptions {
 }
 const AUTO_FILE_LABEL = '(auto)';
 /**
- * Bottom-right panel managing skin-config picks for the currently-loaded beatoraja skin.
+ * Bottom panel managing skin-config picks for the currently-loaded beatoraja skin.
  */
 export class BeatorajaSkinOptionsGUI {
   private readonly container: HTMLElement;
@@ -117,7 +116,7 @@ export class BeatorajaSkinOptionsGUI {
     customOffset: {},
   };
   constructor(options: BeatorajaSkinOptionsGUIOptions) {
-    this.container = options.container;
+    this.container = options.container.querySelector<HTMLElement>('#auxiliary-panels') ?? options.container;
   }
   /**
    * Build (or rebuild) the panel for `header`. Tears down the previous panel and
@@ -178,7 +177,7 @@ export class BeatorajaSkinOptionsGUI {
       return;
     }
     // Bottom-centre over the stage (`.skin-config-pane`), clear of the play skins' BPM / TIME / SPEED readouts.
-    const gui = OptionFolder.panel(this.container, { title: options.title, expanded: false });
+    const gui = OptionFolder.panel(this.container, { title: options.title, expanded: true });
     this.gui = gui;
     gui.element.classList.add('skin-config-pane');
     gui.element.dataset.pane = 'skin-config';

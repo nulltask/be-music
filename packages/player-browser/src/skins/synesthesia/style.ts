@@ -21,7 +21,7 @@ export const SYN_GREEN = 0x7dffb4;
 export const SYN_RED = 0xff4a4a;
 export const SYN_WHITE = 0xffffff;
 export const SYN_MIST = 0xf1dcc8;
-export const SYN_DIM = 0x9a7a66;
+export const SYN_DIM = 0xb4a28e;
 
 /** Orbitron has no Japanese: a Japanese label falls through to M PLUS 1p. */
 export const SYN_DISPLAY_FONT = 'Orbitron, M PLUS 1p, sans-serif';

@@ -13,9 +13,7 @@ import type { BeMusicGameplayLayout, BeMusicGameplayRuntime, BeMusicRect, BeMusi
  */
 export interface CabinetLayout {
   /** Independent second player's panels, with the monitor between the lane banks. */
-  secondSide?: { gauge: BeMusicRect; score: BeMusicRect; hiSpeed: BeMusicRect; maxCombo: BeMusicRect };
-  maxCombo?: BeMusicRect;
-  time?: BeMusicRect;
+  secondSide?: { gauge: BeMusicRect; score: BeMusicRect; hiSpeed: BeMusicRect };
   /** The play area's frame: the lanes down to the judgement line, the keys, the gauge, the score and the hi-speed. */
   play: BeMusicRect;
   /** The chart's progress, a thin bar left of the lanes; omitted when the lanes start at the stage's edge. */
@@ -30,7 +28,7 @@ export interface CabinetLayout {
   hiSpeed: BeMusicRect;
   /** The score graph: YOU and PACEMAKER over the bars, then the lane option and the pacemaker's name. */
   graph?: { header: BeMusicRect; bars: BeMusicRect; footer: BeMusicRect };
-  /** The stage name band across the top of the right-hand column, short of the top-right corner (a host's menu tab). */
+  /** The stage name band aligned with its information column. */
   stage: BeMusicRect;
   /** The players and the chart: 1P's plate on the left, the title in the middle, 2P's plate on the right. */
   players: BeMusicRect;
@@ -51,14 +49,14 @@ export interface CabinetLayout {
   /** The box between the two sides' keys, for the gauge they share; double play only. */
   center?: BeMusicRect;
   /**
-   * A free band at the top of the right column, short of the menu tab's corner, for what the narrow stage band has no
+   * A band aligned with the right column, for what the narrow stage band has no
    * room for (the play mode, a DOM skin's buttons); double play only.
    */
   controls?: BeMusicRect;
 }
 
 /** Gap between the panels. */
-const GAP = 10;
+const GAP = 8;
 /** Width of the score graph column. */
 const GRAPH_WIDTH = 132;
 /** The right-hand column is never narrower than this; a wider chart gives up the graph first. */
@@ -66,12 +64,10 @@ const MIN_INFO_WIDTH = 300;
 /** Narrowest the play area gets, so a 5 KEY chart still fits the score and the hi-speed under it. */
 const MIN_PLAY_WIDTH = 210;
 /** Top of the BGA area and of the bottom panels. */
-const BGA_TOP = 90;
+const BGA_TOP = 98;
 const PANELS_TOP = 360;
 /** Below this the BGA would be a postage stamp; it is hidden instead, as on {@link wideStage}. */
 const MIN_BGA_SIZE = 120;
-/** The stage band stops short of the top-right corner, which a host keeps for its menu tab. */
-const CORNER = 52;
 
 /** Right edge of the play area for lanes ending at `playfieldRight`. */
 function playRight(playfieldRight: number): number {
@@ -88,8 +84,10 @@ function infoColumn(playfieldRight: number): { left: number; graph: boolean } {
 
 /** Lanes starting this far right of the margin were centred for double play. */
 const CENTRED_LEFT = 120;
-/** Top of the double-play columns' panels under the stage band (left) or the menu tab's corner (right). */
-const DP_TOP = 36;
+/** Uniform gap between panels in the double-play side columns. */
+const DP_GAP = 8;
+/** Top of the panels below the 22 px top bands. */
+const DP_TOP = 8 + 22 + DP_GAP;
 /** Height of the double-play chart panel and of the row of score, gauge and hi-speed under the keys. */
 const DP_CHART_H = 64;
 const DP_ROW_H = 36;
@@ -114,15 +112,15 @@ export function resolveCabinetBGARect(
   twoPlayer = false,
 ): BeMusicRect {
   if (twoPlayer) {
-    const width = playfieldRight - playfieldLeft;
-    const bank = (STAGE_WIDTH - width) / 2;
-    // Reserve a full 7-key bank on each edge, including on narrower 5-key charts.
-    const size = Math.max(0, Math.min(256, STAGE_WIDTH - 2 * (bank + 194 + 16)));
-    return { x: (STAGE_WIDTH - size) / 2, y: 136, w: size, h: size };
+    // Keep the same monitor in 5-key and 7-key play; the adjacent graph and judge panel use the remaining centre.
+    const centerLeft = playfieldLeft + 194 + 16;
+    const centerRight = playfieldRight - 194 - 16;
+    const infoLeft = centerLeft + GRAPH_WIDTH + 16;
+    return { x: Math.round((infoLeft + centerRight - 220) / 2), y: 100, w: 220, h: 220 };
   }
   if (isCentred(playfieldLeft)) {
     const column = leftColumn(playfieldLeft);
-    const top = DP_TOP + DP_CHART_H + 6;
+    const top = DP_TOP + DP_CHART_H + DP_GAP;
     const size = Math.min(column.w, 190);
     return size >= MIN_BGA_SIZE
       ? { x: Math.round(column.x + (column.w - size) / 2), y: top, w: size, h: size }
@@ -187,13 +185,13 @@ export function resolveCabinetLayout(layout: Pick<BeMusicGameplayLayout, 'playfi
       ? {
           graph: {
             header: { x: graphX, y: 8, w: GRAPH_WIDTH, h: 54 },
-            bars: { x: graphX, y: 68, w: GRAPH_WIDTH, h: PANELS_TOP - GAP - 68 },
+            bars: { x: graphX, y: 62 + GAP, w: GRAPH_WIDTH, h: PANELS_TOP - GAP - (62 + GAP) },
             footer: { x: graphX, y: PANELS_TOP, w: GRAPH_WIDTH, h: STAGE_HEIGHT - 16 - PANELS_TOP },
           },
         }
       : {}),
-    stage: { x: left, y: 8, w: STAGE_WIDTH - CORNER - left, h: 22 },
-    players: { x: left, y: 36, w: infoW, h: BGA_TOP - 8 - 36 },
+    stage: { x: left, y: 8, w: infoW, h: 22 },
+    players: { x: left, y: 30 + GAP, w: infoW, h: BGA_TOP - GAP - (30 + GAP) },
     bga: resolveCabinetBGARect(playfield.right),
     judge: { x: left, y: PANELS_TOP, w: judgeW, h: STAGE_HEIGHT - 16 - PANELS_TOP },
     bpm: { x: left + judgeW + GAP, y: PANELS_TOP, w: sideW, h: 64 },
@@ -204,7 +202,7 @@ export function resolveCabinetLayout(layout: Pick<BeMusicGameplayLayout, 'playfi
 
 /**
  * The double-play arrangement around lanes centred on the stage: the left column holds the stage band, the chart, the
- * BGA and the judgement panel; the right column (under the menu tab's corner) the graph and the tempo; and under the
+ * BGA and the judgement panel; the right column the controls, graph and tempo; and under the
  * keys sit the score (under 1P), the gauge both sides share, the hi-speed (under 2P), and the BPM below them. The box
  * between the two banks of keys shows the shared gauge.
  */
@@ -228,7 +226,7 @@ function resolveDoublePlayCabinet(playfield: BeMusicGameplayLayout['playfield'])
   const gauge = { x: gaugeX, y: rowY + 20, w: hiSpeed.x - GAP - gaugeX, h: 12 };
   const bpmW = Math.min(200, play.w - 40);
   const bga = resolveCabinetBGARect(playfield.right, playfield.left);
-  const judgeY = bga.y + Math.max(bga.h, MIN_BGA_SIZE) + 8;
+  const judgeY = bga.y + Math.max(bga.h, MIN_BGA_SIZE) + DP_GAP;
   const side1P = playfield.sides['1P'];
   const side2P = playfield.sides['2P'];
   const footerH = 64;
@@ -245,7 +243,7 @@ function resolveDoublePlayCabinet(playfield: BeMusicGameplayLayout['playfield'])
     hiSpeed,
     graph: {
       header: { x: right.x, y: DP_TOP, w: right.w, h: 54 },
-      bars: { x: right.x, y: DP_TOP + 60, w: right.w, h: footerY - 8 - (DP_TOP + 60) },
+      bars: { x: right.x, y: DP_TOP + 54 + DP_GAP, w: right.w, h: footerY - 8 - (DP_TOP + 54 + DP_GAP) },
       footer: { x: right.x, y: footerY, w: right.w, h: footerH },
     },
     stage: { ...left, y: 8, h: 22 },
@@ -260,7 +258,7 @@ function resolveDoublePlayCabinet(playfield: BeMusicGameplayLayout['playfield'])
     },
     tempo: { ...right, y: tempoY, h: tempoH },
     doublePlay: true,
-    controls: { x: right.x, y: 8, w: STAGE_WIDTH - CORNER - right.x, h: 22 },
+    controls: { ...right, y: 8, h: 22 },
     ...(side1P && side2P && side2P.left - side1P.right >= 24
       ? { center: { x: side1P.right + 4, y: keys.y + 8, w: side2P.left - side1P.right - 8, h: keys.h - 8 } }
       : {}),
@@ -271,36 +269,42 @@ function resolveDoublePlayCabinet(playfield: BeMusicGameplayLayout['playfield'])
 function resolveTwoPlayerCabinet(playfield: BeMusicGameplayLayout['playfield']): CabinetLayout {
   const one = playfield.sides['1P']!;
   const two = playfield.sides['2P']!;
-  const x = one.right + 16;
-  const w = two.left - 16 - x;
-  const half = (w - 10) / 2;
+  const x = playfield.left + 194 + 16;
+  const w = playfield.right - 194 - 16 - x;
   const keysY = playfield.judgementY + 6;
   const gaugeY = keysY + 40 + 20;
-  const score = { x, y: 48, w: half, h: 40 };
-  const maxCombo = { x, y: 92, w: half, h: 36 };
-  const hiSpeed = { x: one.left, y: gaugeY + 20, w: one.right - one.left, h: 32 };
+  const sideWidth = one.right - one.left;
+  const scoreWidth = Math.round((sideWidth - GAP) * 0.62);
+  const score = { x: one.left, y: gaugeY + 20, w: scoreWidth, h: 464 - gaugeY - 20 };
+  const hiSpeed = { ...score, x: score.x + score.w + GAP, w: sideWidth - score.w - GAP };
+  const infoX = x + GRAPH_WIDTH + 16;
+  const infoW = x + w - infoX;
+  const bpmW = Math.min(132, infoW * 0.6);
   return {
-    play: { x: one.left - 8, y: playfield.top, w: one.right - one.left + 16, h: 464 - playfield.top },
+    play: { x: one.left - 8, y: playfield.top, w: sideWidth + 16, h: 464 - playfield.top },
+    progress: { x: one.left - 7, y: playfield.top + 4, w: 4, h: playfield.judgementY - playfield.top - 8 },
     keys: { x: one.left, y: keysY, w: two.right - one.left, h: 40 },
-    gauge: { x: one.left, y: gaugeY, w: one.right - one.left, h: 12 },
+    gauge: { x: one.left, y: gaugeY, w: sideWidth, h: 12 },
     gaugeLabelY: gaugeY - 10,
     score,
-    maxCombo,
     hiSpeed,
     secondSide: {
       gauge: { x: two.left, y: gaugeY, w: two.right - two.left, h: 12 },
-      score: { ...score, x: x + half + 10 },
-      maxCombo: { ...maxCombo, x: x + half + 10 },
-      hiSpeed: { ...hiSpeed, x: two.left, w: two.right - two.left },
+      score: { ...score, x: two.left },
+      hiSpeed: { ...hiSpeed, x: two.left + scoreWidth + GAP },
     },
-    controls: { x, y: 396, w, h: 20 },
-    time: { x, y: 8, w: half, h: 32 },
-    stage: { x: x + half + 10, y: 8, w: half, h: 32 },
-    players: { x: one.left, y: 444, w: one.right - one.left, h: 20 },
+    graph: {
+      header: { x, y: 100, w: GRAPH_WIDTH, h: 54 },
+      bars: { x, y: 160, w: GRAPH_WIDTH, h: 190 },
+      footer: { x, y: 360, w: GRAPH_WIDTH, h: 104 },
+    },
+    stage: { x, y: 8, w: w - 180, h: 22 },
+    controls: { x: x + w - 170, y: 8, w: 170, h: 22 },
+    players: { x, y: 36, w, h: 54 },
     bga: resolveCabinetBGARect(playfield.right, playfield.left, true),
-    judge: { x: two.left, y: 444, w: two.right - two.left, h: 20 },
-    bpm: { x, y: 420, w: half, h: 44 },
-    tempo: { x: x + half + 10, y: 420, w: half, h: 44 },
+    judge: { x: infoX, y: 328, w: infoW, h: 92 },
+    bpm: { x: infoX, y: 428, w: bpmW, h: 36 },
+    tempo: { x: infoX + bpmW + GAP, y: 428, w: infoW - bpmW - GAP, h: 36 },
     doublePlay: false,
   };
 }

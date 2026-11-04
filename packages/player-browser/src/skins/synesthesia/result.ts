@@ -166,7 +166,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const rankCy = rankBox.y + Math.round(rankBox.h / 2);
   const topRank = rankLabel === 'AAA' || rankLabel === 'AA';
   const rankColor = topRank ? SYN_AMBER : accent;
-  glass(rank.g, rankBox.x, rankBox.y, rankBox.w, rankBox.h, rankColor);
+  drawFrame(rank.g, rankBox.x, rankBox.y, rankBox.w, rankBox.h, rankColor, { emphasis: true });
   label('DJ LEVEL', rankBox.x + 14, rankBox.y + 12, rank.root, rankColor);
   const burstT = stageProgress(elapsed, RANK_DELAY_MS, 1100);
   if (burstT > 0 && burstT < 1) {
@@ -372,18 +372,6 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     dropShadow: { color: lampColor, distance: 0, blur: 12, alpha: 1 },
   });
   rise(track.root, 680);
-
-  // Total score.
-  const total = group('total');
-  total.g.rect(0, grid.totalY, designWidth, 1).fill({ color: accent, alpha: 0.4 });
-  label('TOTAL SCORE', margin, grid.totalY + 18, total.root, accent);
-  text(total.root, String(rollUpValue(result.score.score, roll)), 150, grid.totalY + 22, {
-    ...display(16, SYN_WHITE),
-    anchorY: 0.5,
-    letterSpacing: 2,
-    dropShadow: { color: accent, distance: 0, blur: 10, alpha: 0.9 },
-  });
-  rise(total.root, 440, 10);
 }
 
 /** The 2P player's rows of a two-player play (LR2 BATTLE): its EX score and gauge. */
@@ -397,7 +385,7 @@ function secondPlayerRows(result: BeMusicResultData): ResultTrackRow[] {
 }
 
 function glass(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {
-  drawFrame(graphics, x, y, w, h, rim, { fill: 0.6, arm: 10 });
+  drawFrame(graphics, x, y, w, h, rim, { fill: 0.96, arm: 10 });
 }
 
 /**

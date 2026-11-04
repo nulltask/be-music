@@ -1,3 +1,4 @@
+import { bindGlassSurface } from './glass.ts';
 import { Graphics, type Container } from 'pixi.js';
 import { resolveGrooveRect, resolvePortraitHUDColumn } from './layout.ts';
 import {
@@ -339,22 +340,29 @@ export function renderSynesthesiaChrome({
     const standby = layerPool.acquireGraphics();
     standby.label = 'synesthesia-gameplay/standby';
     standby.blendMode = 'add';
-    drawBGAFrame(panels, standby, layer, hasBGA, seconds, pulse, hue, camera, drive, layerPool);
+    drawBGAFrame(panels, standby, layer, hasBGA, seconds, pulse, hue, camera, drive, layerPool, cabinet ? 0 : 6);
   }
+  const glass = overlayLayerPool.acquireGraphics();
+  glass.label = 'synesthesia-gameplay/glass';
   const front = overlayLayerPool.acquireGraphics();
+  bindGlassSurface(front, glass);
   front.label = 'synesthesia-gameplay/header';
   drawProgressLight(front, playfieldLeft, wellTop, layout.playfield.judgementY, runtime.progressRatio, accent);
   if (portrait) {
-    drawPortraitHUD(panels, layer, runtime, layout, accent, layerPool);
+    drawPortraitHUD(front, overlayLayer, runtime, layout, accent, overlayLayerPool);
     drawPortraitHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
   } else if (cabinet) {
-    drawSynesthesiaCabinet({ graphics: panels, layer, pool: layerPool, accent, pulse }, runtime, layout);
+    drawSynesthesiaCabinet(
+      { graphics: front, layer: overlayLayer, pool: overlayLayerPool, accent, pulse },
+      runtime,
+      layout,
+    );
   } else {
-    drawGauges(panels, layer, runtime, accent, layerPool);
-    drawChartPlate(panels, layer, runtime, accent, layerPool);
-    drawScorePanel(panels, layer, runtime, accent, layerPool);
+    drawGauges(front, overlayLayer, runtime, accent, overlayLayerPool);
+    drawChartPlate(front, overlayLayer, runtime, accent, overlayLayerPool);
+    drawScorePanel(front, overlayLayer, runtime, accent, overlayLayerPool);
     // The judge tally owns the side column on the right edge.
-    drawJudgeTally(panels, layer, runtime, STAGE_SIDE_COLUMN.x, layerPool);
+    drawJudgeTally(front, overlayLayer, runtime, STAGE_SIDE_COLUMN.x, overlayLayerPool);
     drawHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
   }
   const judgeY = resolveJudgeWordY(layout);
@@ -765,9 +773,9 @@ function drawBGAFrame(
   camera: CameraPose,
   drive: AudioDrive,
   pool: ChildPool,
+  margin = 6,
 ): void {
   const color = hsvToHex(hue, 0.6, 1);
-  const margin = 6;
   const frameX = BGA.x - margin;
   const frameY = BGA.y - margin;
   const frameW = BGA.w + margin * 2;
@@ -1120,7 +1128,7 @@ function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, 
   }
 }
 
-/** Label and figure styles of the portrait HUD: nothing under 10 design px, which is ~8 CSS px on a phone. */
+/** Compact labels keep the portrait HUD beside the monitor, leaving more space for the lanes. */
 function portraitLabel(fill: number = SYN_DIM): HUDTextOptions {
   return { size: 10, fill, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 0.8 };
 }
@@ -1176,6 +1184,7 @@ function drawPortraitHUD(
 
   // Gauge strip.
   const groove = resolveGrooveRect(layout);
+  graphics.rect(groove.x - 4, groove.y - 24, groove.w + 8, groove.h + 28).fill(SYN_VOID);
   const gauge = clampPercent(runtime.gauge ?? 0);
   const clear = clampPercent(runtime.clearThreshold ?? 80);
   const cleared = runtime.gaugeSurvival === true || clear <= 0 ? gauge > 0 : gauge >= clear;

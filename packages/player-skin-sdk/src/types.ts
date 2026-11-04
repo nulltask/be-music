@@ -783,6 +783,8 @@ export interface BeMusicSelectFrame {
   focusedCourse?: LibraryCourse;
   /** Current folder label (or search label), `undefined` at the library root. */
   folderLabel: string | undefined;
+  /** Folder labels from the library root to the current folder. Older hosts may omit this. */
+  folderPath?: readonly string[];
   searchQuery: string;
   /**
    * True while the host's text field sits over the search box (the box the skin bound to `actions.activateSearch`):

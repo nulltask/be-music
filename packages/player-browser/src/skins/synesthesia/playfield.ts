@@ -1,4 +1,4 @@
-import { Color, FillGradient, type Graphics } from 'pixi.js';
+import { Color, FillGradient, Graphics, type Container } from 'pixi.js';
 import {
   burstParticlePositionInto,
   burstParticles,
@@ -100,7 +100,6 @@ export function renderSynesthesiaLanes({
     graphics
       .rect(x, top, w, laneHeight)
       .fill(lane.kind === 'white' ? { color: 0x180c06, alpha: 0.88 } : { color: 0x050201, alpha: 0.8 });
-    graphics.rect(x, top, 1, laneHeight).fill({ fill: resolveColumnGradient(light.glow), alpha: 0.5 });
 
     // Key beam: a column of the lane's light, near solid at the judgement line and easing out up the lane, so a press
     // reads clearly while the notes still on their way down keep their contrast.
@@ -108,12 +107,16 @@ export function renderSynesthesiaLanes({
       const beamHeight = Math.min(laneHeight, 250);
       const beamAlpha = lane.beam * lane.beam * (3 - 2 * lane.beam);
       graphics
-        .rect(x + 1, bottom - beamHeight, w - 2, beamHeight)
+        .rect(x, bottom - beamHeight, w, beamHeight)
         .fill({ fill: keyBeamGradient(light.glow), alpha: beamAlpha * 0.9 });
+      const coreHeight = Math.min(laneHeight, 26);
       graphics
-        .rect(x + 1, bottom - 26, w - 2, 26)
+        .rect(x, bottom - coreHeight, w, coreHeight)
         .fill({ fill: resolveColumnGradient(0xffffff), alpha: beamAlpha * 0.25 });
     }
+
+    // Fill the beam edge to edge, then redraw the rail so it remains a crisp boundary.
+    graphics.rect(x, top, 1, laneHeight).fill({ fill: resolveColumnGradient(light.glow), alpha: 0.5 });
 
     // Key caps: a glass sliver that lights up in the lane's colour on press.
     const pressed = lane.beam > 0.6;
@@ -321,6 +324,8 @@ function cachedBurst(seed: number, count = BURST_PARTICLES_MAX): BurstParticle[]
   return particles;
 }
 
+const bombMasks = new WeakMap<Container, Graphics>();
+
 /**
  * The Synesthesia hit: a 3D particle burst in perspective. Layered back to front —
  *
@@ -333,7 +338,23 @@ function cachedBurst(seed: number, count = BURST_PARTICLES_MAX): BurstParticle[]
  * The smaller sparks fly as square voxels rather than round glows, like shattering wireframes.
  * Everything is additive, so overlapping hits bloom into each other like light instead of stacking opaque shapes.
  */
-export function renderSynesthesiaBombs({ pool, bombs, combo, effects, lanes, nowMs }: PixiBombsContext): void {
+export function renderSynesthesiaBombs({ layer, pool, bombs, combo, effects, lanes, nowMs }: PixiBombsContext): void {
+  // Keep hit effects inside each playfield, clear of the score, gauge and central BGA.
+  if (layer && lanes?.length) {
+    let mask = bombMasks.get(layer);
+    if (!mask) {
+      mask = new Graphics();
+      layer.addChild(mask);
+      layer.mask = mask;
+      bombMasks.set(layer, mask);
+    }
+    const top = Math.min(...lanes.map((lane) => lane.top));
+    const bottom = Math.max(...lanes.map((lane) => lane.bottom)) + 48;
+    mask.clear();
+    for (const run of resolveLaneRuns(lanes)) {
+      mask.rect(run.left - 4, top, run.right - run.left + 8, bottom - top).fill(0xffffff);
+    }
+  }
   const profile = effectProfile(effects);
   renderSynesthesiaHolds(pool, lanes ?? [], nowMs, profile.enabled ? profile.amount : 0);
   if (!profile.enabled) {
@@ -463,7 +484,7 @@ function renderBomb(
   // 1. Light pillar.
   const pillarH = unit * 5.5 * (0.6 + 0.4 * fade);
   effects
-    .rect(bomb.x + 1, cy - pillarH, bomb.w - 2, pillarH)
+    .rect(bomb.x, cy - pillarH, bomb.w, pillarH)
     .fill({ fill: resolveColumnGradient(light.glow), alpha: 0.55 * fade * fade * crowd });
 
   // 2 + 3. Sparks: hairline trails and powder grains go through the shared batch (one fill per colour bucket instead of

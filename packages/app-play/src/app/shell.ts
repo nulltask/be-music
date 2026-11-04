@@ -99,6 +99,9 @@ export class PlayerShell {
     const { inGameplay, touchPlay, paused, portraitStage, searchInSkin, offSelect } = resolved;
     const { shell } = this.elements;
     shell.classList.toggle('in-gameplay', inGameplay);
+    for (const element of shell.querySelectorAll<HTMLElement>('.player-service-header, .service-page-footer')) {
+      element.inert = inGameplay;
+    }
     // A skin with its own search box hides the field at the foot of the screen; the box opens it in place.
     shell.classList.toggle('search-in-skin', searchInSkin);
     shell.classList.toggle('off-select', offSelect);

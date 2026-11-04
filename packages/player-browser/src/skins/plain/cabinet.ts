@@ -38,12 +38,7 @@ export function drawCabinetHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGame
   drawKeys(ctx, frame, cabinet.keys);
   drawGauges(ctx, runtime, cabinet);
   if (cabinet.center) drawCenter(ctx, cabinet.center, runtime);
-  drawFigure(
-    ctx,
-    cabinet.score,
-    cabinet.secondSide ? '1P EX SCORE' : 'SCORE',
-    String((cabinet.secondSide ? runtime.exScore : runtime.score) ?? 0),
-  );
+  drawFigure(ctx, cabinet.score, cabinet.secondSide ? '1P SCORE' : 'SCORE', String(runtime.score ?? 0));
   drawFigure(
     ctx,
     cabinet.hiSpeed,
@@ -53,27 +48,18 @@ export function drawCabinetHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGame
   const pace = resolveScorePace(runtime);
   if (cabinet.graph) drawGraph(ctx, cabinet.graph, pace, runtime);
   drawStage(ctx, cabinet.stage, resolveStageLabel(runtime.course), nowMs);
-  if (cabinet.secondSide) {
-    const label = `${resolveDifficultyName(runtime.chart) ?? ''} Lv.${runtime.chart?.playLevel ?? '-'}`;
-    for (const rect of [cabinet.players, cabinet.judge]) {
-      panel(ctx, rect);
-      text(ctx, label, rect.x + rect.w / 2, rect.y + rect.h / 2, { size: 11, weight: 700, align: 'center' });
-    }
-  } else if (cabinet.doublePlay) drawChartStack(ctx, cabinet.players, runtime, nowMs);
+  if (cabinet.doublePlay) drawChartStack(ctx, cabinet.players, runtime, nowMs);
   else drawPlayers(ctx, cabinet.players, runtime, nowMs);
   if (cabinet.secondSide && runtime.secondPlayer) {
-    drawFigure(ctx, cabinet.secondSide.score, '2P EX SCORE', String(runtime.secondPlayer.exScore ?? 0));
-    drawFigure(ctx, cabinet.maxCombo!, '1P MAX COMBO', String(runtime.maxCombo ?? 0));
-    drawFigure(ctx, cabinet.secondSide.maxCombo, '2P MAX COMBO', String(runtime.secondPlayer.maxCombo ?? 0));
-    drawFigure(ctx, cabinet.secondSide.hiSpeed, 'HI-SPEED', (runtime.hiSpeed ?? 0).toFixed(1));
-    const remaining = Math.max(0, Math.ceil(((runtime.songLengthMs ?? 0) - (runtime.songElapsedMs ?? 0)) / 1000));
+    drawFigure(ctx, cabinet.secondSide.score, '2P SCORE', String(runtime.secondPlayer.score ?? 0));
     drawFigure(
       ctx,
-      cabinet.time!,
-      'TIME LIMIT',
-      `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`,
+      cabinet.secondSide.hiSpeed,
+      runtime.floatingHiSpeed ? 'FHS' : 'HI-SPEED',
+      (runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1),
     );
-  } else drawJudge(ctx, cabinet.judge, runtime);
+  }
+  drawJudge(ctx, cabinet.judge, runtime);
   drawBPM(ctx, cabinet.bpm, runtime);
   drawTempo(ctx, cabinet.tempo, runtime.tempo ?? 1);
 }
@@ -202,7 +188,7 @@ function drawGraph(
   const { header, bars, footer } = graph;
   panel(ctx, header);
   const rows: Array<[string, number]> = [
-    ['YOU', pace.exScore],
+    [runtime.secondPlayer ? '1P' : 'YOU', pace.exScore],
     ['PACEMAKER', pace.target.exScore],
   ];
   rows.forEach(([label, value], index) => {
@@ -380,7 +366,7 @@ function drawChartStack(
 
 /** The counts, FAST / SLOW, and where the last timed press landed between EARLY and LATE. */
 function drawJudge(ctx: CanvasRenderingContext2D, rect: BeMusicRect, runtime: BeMusicGameplayRuntime): void {
-  panel(ctx, rect, 'JUDGE');
+  panel(ctx, rect, runtime.secondPlayer ? '1P JUDGE' : 'JUDGE');
   const counts: Array<[string, number]> = [
     ['PG', runtime.perfect ?? 0],
     ['GR', runtime.great ?? 0],
@@ -398,10 +384,28 @@ function drawJudge(ctx: CanvasRenderingContext2D, rect: BeMusicRect, runtime: Be
   });
 
   const middle = rect.x + countW + (rect.w - countW - 40) / 2 + 6;
-  text(ctx, 'FAST', middle, rect.y + 34, { size: 10, color: ACCENT, weight: 800, align: 'center' });
-  text(ctx, String(runtime.fast ?? 0), middle, rect.y + 50, { size: 13, weight: 700, align: 'center' });
-  text(ctx, 'SLOW', middle, rect.y + 70, { size: 10, color: DANGER, weight: 800, align: 'center' });
-  text(ctx, String(runtime.slow ?? 0), middle, rect.y + 86, { size: 13, weight: 700, align: 'center' });
+  text(ctx, 'FAST', middle, rect.y + (rect.h < 100 ? 28 : 34), {
+    size: 10,
+    color: ACCENT,
+    weight: 800,
+    align: 'center',
+  });
+  text(ctx, String(runtime.fast ?? 0), middle, rect.y + (rect.h < 100 ? 42 : 50), {
+    size: 13,
+    weight: 700,
+    align: 'center',
+  });
+  text(ctx, 'SLOW', middle, rect.y + (rect.h < 100 ? 58 : 70), {
+    size: 10,
+    color: DANGER,
+    weight: 800,
+    align: 'center',
+  });
+  text(ctx, String(runtime.slow ?? 0), middle, rect.y + (rect.h < 100 ? 72 : 86), {
+    size: 13,
+    weight: 700,
+    align: 'center',
+  });
 
   // LATE on top, EARLY below; the marker sits at the last timed press, on the GREAT window's scale.
   const meterX = rect.x + rect.w - 22;

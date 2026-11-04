@@ -127,7 +127,7 @@ export function drawGaugeCells(graphics: Graphics, state: GaugeState, groove: Be
   }
   if (!survival) {
     const x = groove.x + clearCell * stride - 1;
-    graphics.rect(x, barY - 5, 1.5, barH + 10).fill({ color: SYN_WHITE, alpha: 1 });
+    graphics.rect(x, barY, 1.5, barH).fill({ color: SYN_WHITE, alpha: 1 });
   }
 }
 

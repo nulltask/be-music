@@ -31,6 +31,7 @@ export const PLAYER_APP_TEMPLATE = html`
   <div class="shell empty">
     <div id="player-service-header" class="player-service-header"></div>
     <main id="main" class="player-main">
+      <div id="auxiliary-panels" class="auxiliary-panels"></div>
       <!-- The frame rate readout (beatoraja's F1, LR2's F7), inside the full-screen area. \`ui/fps-overlay.ts\`. -->
       <div id="fps-overlay" class="fps-overlay" aria-live="off" hidden></div>
       <!--
@@ -107,6 +108,18 @@ export const PLAYER_APP_TEMPLATE = html`
               <span>${localized('dropLR2Skin')}</span>
               <span class="drop-subtitle-sep" aria-hidden="true">·</span>
               <span>${localized('dropBeatorajaSkin')}</span>
+            </div>
+            <div class="start-load-actions">
+              <button class="btn" @click=${() => document.querySelector<HTMLInputElement>('#songs')?.click()}>
+                ${localized('openFolder')}
+              </button>
+              <button
+                class="btn"
+                data-variant="outline"
+                @click=${() => document.querySelector<HTMLInputElement>('#files')?.click()}
+              >
+                ${localized('openZIP')}
+              </button>
             </div>
             <!--
             Leaderboard: whether this browser's plays are sent, and the

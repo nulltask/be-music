@@ -431,14 +431,14 @@ function drawPortraitHUD(
   const { header, track, scores, counts, gauge } = hud;
 
   const headerY = header.height / 2;
-  text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', header.left, headerY, { size: 12, weight: 800, color: ACCENT });
+  text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', header.left, headerY, { size: 14, weight: 800, color: ACCENT });
   text(
     ctx,
     `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,
     header.right,
     headerY,
     {
-      size: 12,
+      size: 14,
       color: MUTED,
       align: 'right',
       maxWidth: header.right - header.left - 100,
@@ -449,11 +449,11 @@ function drawPortraitHUD(
   const lift = runtime.chartGenre ? 12 : 0;
   const textW = track.w;
   if (runtime.chartGenre) {
-    text(ctx, runtime.chartGenre, track.x, track.y + 8, { size: 10, color: MUTED, maxWidth: textW, nowMs });
+    text(ctx, runtime.chartGenre, track.x, track.y + 8, { size: 14, color: MUTED, maxWidth: textW, nowMs });
   }
-  text(ctx, runtime.chartTitle ?? '', track.x, track.y + 14 + lift, { size: 16, weight: 700, maxWidth: textW, nowMs });
+  text(ctx, runtime.chartTitle ?? '', track.x, track.y + 14 + lift, { size: 20, weight: 700, maxWidth: textW, nowMs });
   text(ctx, runtime.chartArtist ?? '', track.x, track.y + 34 + lift, {
-    size: 11,
+    size: 14,
     color: MUTED,
     maxWidth: textW,
     nowMs,
@@ -462,14 +462,15 @@ function drawPortraitHUD(
   // Score figures, two by two.
   scoreFigures(runtime).forEach(([label, value], index) => {
     const box = scores[index]!;
-    stat(ctx, label, value, box.x, box.y, { maxWidth: box.w - 8, nowMs, labelSize: 10 });
+    text(ctx, label, box.x, box.y, { size: 14, color: MUTED, weight: 700 });
+    text(ctx, value, box.x, box.y + 20, { size: 22, weight: 700, maxWidth: box.w - 8, nowMs });
   });
 
   // Judgement counts in one row: label over count.
   judgeCounts(runtime).forEach(([label, count], index) => {
     const box = counts[index]!;
-    text(ctx, label, box.x, box.y, { size: 10, color: MUTED, weight: 700 });
-    text(ctx, String(count ?? 0), box.x, box.y + 16, { size: 13, maxWidth: box.w - 6 });
+    text(ctx, label, box.x, box.y, { size: 14, color: MUTED, weight: 700 });
+    text(ctx, String(count ?? 0), box.x, box.y + 16, { size: 18, maxWidth: box.w - 6 });
   });
 
   const second = runtime.secondPlayer;
