@@ -3,6 +3,7 @@ import {
   flashingGreatColor,
   isFlashingGreat,
   judgeDisplayWord,
+  resolveLanePlayLabel,
   resolveLaneRuns,
   type BeMusicGameplayFrame,
   type BeMusicRect,
@@ -74,6 +75,22 @@ export function resolvePlayfieldParts(
       ...(keepsCombo(side.judge) && combo > 0 ? { combo } : {}),
     });
   }
+  for (const side of ['1P', '2P'] as const) {
+    const bounds = playfield.sides[side];
+    const mode = resolveLanePlayLabel(frame.runtime, side);
+    if (!bounds || !mode) continue;
+    const x = (bounds.left + bounds.right) / 2;
+    const word = words.find((word) => word.x === x);
+    if (word) words[words.indexOf(word)] = { ...word, mode };
+    else
+      words.push({
+        x,
+        y: (bounds.judgementY ?? playfield.judgementY) - JUDGMENT_OFFSET,
+        text: '',
+        color: JUDGMENT_COLOR,
+        mode,
+      });
+  }
   return {
     stage: { width: stage.width, height: stage.height },
     bga: {
@@ -108,9 +125,9 @@ export function resolvePlayfieldParts(
     judgmentDisplay: {
       rect: rect(
         left,
-        minLineY - JUDGMENT_OFFSET - JUDGMENT_ASCENT,
+        minLineY - JUDGMENT_OFFSET - JUDGMENT_ASCENT - 28,
         width,
-        maxLineY - minLineY + JUDGMENT_ASCENT + COMBO_OFFSET + COMBO_DESCENT,
+        maxLineY - minLineY + JUDGMENT_ASCENT + COMBO_OFFSET + COMBO_DESCENT + 28,
       ),
       data: { words, y: judgmentY },
     },

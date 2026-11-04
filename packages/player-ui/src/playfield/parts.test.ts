@@ -42,6 +42,16 @@ function frame(overrides: Partial<PartsInput> = {}): PartsInput {
 }
 
 describe('resolvePlayfieldParts', () => {
+  it('keeps automation captions above each side even between judgments', () => {
+    const input = frame({ runtime: { autoplay: true, ghostSide: '2P' } });
+    input.layout.playfield.sides['2P']!.judgementY = 350;
+    const parts = resolvePlayfieldParts(input);
+    expect(parts.judgmentDisplay.data.words).toMatchObject([
+      { x: 55, y: 374, text: '', mode: 'AUTO PLAY' },
+      { x: 320, y: 260, text: '', mode: 'GHOST PLAY' },
+    ]);
+    expect(parts.judgmentDisplay.rect.y).toBeLessThanOrEqual(260 - 28 - 10);
+  });
   it('places each side on its own raised line and leaves room for the cover below it', () => {
     const input = frame();
     input.layout.playfield.sides['1P'] = { left: 20, right: 90, judgementY: 350 };
@@ -82,7 +92,7 @@ describe('resolvePlayfieldParts', () => {
     expect(parts.laneCovers.rect).toEqual(parts.lanes.rect);
     expect(parts.judgeLine.rect).toEqual({ x: 20, y: 464, w: 320, h: 2 });
     expect(parts.bombs.rect).toEqual({ x: 20, y: 438, w: 320, h: 52 });
-    expect(parts.judgmentDisplay.rect).toEqual({ x: 20, y: 352, w: 320, h: 52 });
+    expect(parts.judgmentDisplay.rect).toEqual({ x: 20, y: 324, w: 320, h: 80 });
   });
 
   it('draws the judge line once per lane run', () => {

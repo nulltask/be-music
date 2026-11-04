@@ -190,6 +190,7 @@ describe('SidePlayfieldGhost', () => {
     } as unknown as PlayfieldRuntime;
     const presented = ghost.present(play);
     expect(presented.chartPlayVariant).toBe('14');
+    expect(presented.ghostSide).toBe('2P');
     expect(presented.laneChannels).toHaveLength(16);
     expect(presented.notes.map((note) => note.channel)).toEqual(['11', '21', '11', '23', '11', '22']);
     expect(presented.laneX).toBe(laneX);

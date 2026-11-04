@@ -237,6 +237,7 @@ export class SidePlayfieldGhost implements GhostPresentation {
       notes: this.merged.notes,
       mineNotes: this.mergedMines.mines,
       secondPlayer: this.secondPlayer,
+      ghostSide: '2P',
     });
   }
 

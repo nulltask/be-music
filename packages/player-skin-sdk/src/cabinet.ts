@@ -143,7 +143,7 @@ export const cabinetStage: BeMusicStage = {
   playfield: {
     standard: {
       top: PLAYFIELD.y,
-      judgementY: PLAYFIELD.judgementY,
+      judgementY: PLAYFIELD.judgementY + 12,
       doublePlayCenterX: STAGE_WIDTH / 2,
       twoPlayerSideInset: 33,
     },
@@ -158,9 +158,9 @@ export function resolveCabinetLayout(layout: Pick<BeMusicGameplayLayout, 'playfi
   if (isCentred(playfield.left)) return resolveDoublePlayCabinet(playfield);
   const right = playRight(playfield.right);
   const play = { x: STAGE_MARGIN, y: playfield.top, w: right - STAGE_MARGIN, h: STAGE_HEIGHT - 12 - playfield.top };
-  const keys = { x: playfield.left, y: playfield.judgementY + 6, w: playfield.right - playfield.left, h: 40 };
-  const gaugeLabelY = keys.y + keys.h + 14;
-  const gauge = { x: STAGE_MARGIN + 4, y: gaugeLabelY + 10, w: play.w - 8, h: 12 };
+  const keys = { x: playfield.left, y: playfield.judgementY + 2, w: playfield.right - playfield.left, h: 28 };
+  const gauge = { x: STAGE_MARGIN + 4, y: keys.y + keys.h + 28, w: play.w - 8, h: 12 };
+  const gaugeLabelY = (keys.y + keys.h + gauge.y) / 2;
   const scoreY = gauge.y + gauge.h + 8;
   // The score and the hi-speed sit inside the play area's frame, as the gauge does.
   const scoreH = play.y + play.h - 4 - scoreY;
@@ -217,8 +217,8 @@ function resolveDoublePlayCabinet(playfield: BeMusicGameplayLayout['playfield'])
     w: playfield.right - playfield.left + 16,
     h: STAGE_HEIGHT - 8,
   };
-  const keys = { x: playfield.left, y: playfield.judgementY + 6, w: playfield.right - playfield.left, h: 40 };
-  const rowY = keys.y + keys.h + 6;
+  const keys = { x: playfield.left, y: playfield.judgementY + 2, w: playfield.right - playfield.left, h: 28 };
+  const rowY = keys.y + keys.h + 10;
   const figureW = Math.min(120, Math.round(play.w * 0.24));
   const score = { x: playfield.left, y: rowY, w: figureW, h: DP_ROW_H };
   const hiSpeed = { x: playfield.right - figureW, y: rowY, w: figureW, h: DP_ROW_H };
@@ -238,7 +238,7 @@ function resolveDoublePlayCabinet(playfield: BeMusicGameplayLayout['playfield'])
     progress: { x: playfield.left - 7, y: playfield.top + 4, w: 4, h: playfield.judgementY - playfield.top - 8 },
     keys,
     gauge,
-    gaugeLabelY: rowY + 8,
+    gaugeLabelY: (keys.y + keys.h + gauge.y) / 2,
     score,
     hiSpeed,
     graph: {
@@ -260,7 +260,7 @@ function resolveDoublePlayCabinet(playfield: BeMusicGameplayLayout['playfield'])
     doublePlay: true,
     controls: { ...right, y: 8, h: 22 },
     ...(side1P && side2P && side2P.left - side1P.right >= 24
-      ? { center: { x: side1P.right + 4, y: keys.y + 8, w: side2P.left - side1P.right - 8, h: keys.h - 8 } }
+      ? { center: { x: side1P.right + 4, y: keys.y, w: side2P.left - side1P.right - 8, h: keys.h } }
       : {}),
   };
 }
@@ -271,8 +271,8 @@ function resolveTwoPlayerCabinet(playfield: BeMusicGameplayLayout['playfield']):
   const two = playfield.sides['2P']!;
   const x = playfield.left + 194 + 16;
   const w = playfield.right - 194 - 16 - x;
-  const keysY = playfield.judgementY + 6;
-  const gaugeY = keysY + 40 + 20;
+  const keysY = playfield.judgementY + 2;
+  const gaugeY = keysY + 28 + 24;
   const sideWidth = one.right - one.left;
   const scoreWidth = Math.round((sideWidth - GAP) * 0.62);
   const score = { x: one.left, y: gaugeY + 20, w: scoreWidth, h: 464 - gaugeY - 20 };
@@ -283,9 +283,9 @@ function resolveTwoPlayerCabinet(playfield: BeMusicGameplayLayout['playfield']):
   return {
     play: { x: one.left - 8, y: playfield.top, w: sideWidth + 16, h: 464 - playfield.top },
     progress: { x: one.left - 7, y: playfield.top + 4, w: 4, h: playfield.judgementY - playfield.top - 8 },
-    keys: { x: one.left, y: keysY, w: two.right - one.left, h: 40 },
+    keys: { x: one.left, y: keysY, w: two.right - one.left, h: 28 },
     gauge: { x: one.left, y: gaugeY, w: sideWidth, h: 12 },
-    gaugeLabelY: gaugeY - 10,
+    gaugeLabelY: (keysY + 28 + gaugeY) / 2,
     score,
     hiSpeed,
     secondSide: {
@@ -422,4 +422,18 @@ const DIFFICULTY_NAMES = ['BEGINNER', 'NORMAL', 'HYPER', 'ANOTHER', 'INSANE'] as
 export function resolveDifficultyName(chart: Pick<LibraryChart, 'chart'> | undefined): string | undefined {
   const value = chart?.chart.metadata.difficulty;
   return typeof value === 'number' ? DIFFICULTY_NAMES[Math.trunc(value) - 1] : undefined;
+}
+
+/** Turntable angle in radians: one clockwise revolution per four chart beats. */
+export function resolveScratchAngle(chartBeat: number): number {
+  if (!Number.isFinite(chartBeat)) return 0;
+  return (((chartBeat % 4) + 4) % 4) * (Math.PI / 2);
+}
+
+/** Caption above a lane bank’s judgment; a replay ghost takes precedence over autoplay. */
+export function resolveLanePlayLabel(
+  runtime: Pick<BeMusicGameplayRuntime, 'autoplay' | 'ghostSide'>,
+  side: '1P' | '2P',
+): string | undefined {
+  return runtime.ghostSide === side ? 'GHOST PLAY' : runtime.autoplay ? 'AUTO PLAY' : undefined;
 }

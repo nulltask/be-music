@@ -479,6 +479,16 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.resolveCabinetBGARect(227);
     },
   });
+  define('player-skin-sdk.resolveLanePlayLabel', {
+    run: () => {
+      skinSdkAPI.resolveLanePlayLabel({ autoplay: true }, '1P');
+    },
+  });
+  define('player-skin-sdk.resolveScratchAngle', {
+    run: () => {
+      skinSdkAPI.resolveScratchAngle(5.25);
+    },
+  });
   define('player-skin-sdk.resolveCabinetLayout', {
     run: () => {
       skinSdkAPI.resolveCabinetLayout(cabinetLayout);

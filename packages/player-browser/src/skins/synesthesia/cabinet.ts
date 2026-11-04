@@ -1,6 +1,6 @@
 import {
   formatScoreDiff,
-  impulse,
+  resolveScratchAngle,
   resolveCabinetLayout,
   resolveDifficultyName,
   resolveScorePace,
@@ -48,8 +48,6 @@ const RANK_LINES = [
   ['AA', 7 / 9],
   ['A', 6 / 9],
 ] as const;
-/** A key flashes this long after a press. */
-const KEY_FLASH_MS = 120;
 
 /**
  * Where the well under the lanes ends on the cabinet layout: under the keys, so the keys sit in it.
@@ -109,29 +107,34 @@ function frame({ graphics, accent }: CabinetDraw, rect: BeMusicRect): void {
 
 /**
  * The keys and the turntable under the lanes' own caps (which light on a press): outlined key tops in each lane's
- * colour, the black keys set higher, and a disc under a scratch or wheel lane, pulsing with the last press of its kind.
+ * colour, the black keys set higher, and a disc under a scratch or wheel lane, rotating once every four chart beats.
  */
 function drawKeys(draw: CabinetDraw, rect: BeMusicRect, layout: BeMusicGameplayLayout, runtime: Runtime): void {
   const { graphics, pulse } = draw;
-  const top = rect.y + 12;
-  const height = rect.h - 12;
-  const pressed = impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, KEY_FLASH_MS);
+  const top = rect.y;
+  const height = rect.h;
   for (const lane of layout.lanes) {
+    const lit = runtime.keyBeams?.[lane.channel ?? ''] ?? 0;
     const color = lane.kind === 'white' ? SYN_EMBER : lane.kind === 'black' ? SYN_CYAN : SYN_MAGENTA;
     if (lane.kind === 'white' || lane.kind === 'black') {
       const inset = Math.min(2, lane.w / 6);
       const y = lane.kind === 'black' ? top : top + 6;
       const h = height - 6;
       graphics.rect(lane.x + inset, y, lane.w - 2 * inset, h).fill({ color: SYN_VOID, alpha: 0.85 });
-      graphics.rect(lane.x + inset, y, lane.w - 2 * inset, h).stroke({ color, width: 1, alpha: 0.45 });
+      if (lit > 0) graphics.rect(lane.x + inset, y, lane.w - 2 * inset, h).fill({ color, alpha: lit * 0.8 });
+      graphics.rect(lane.x + inset, y, lane.w - 2 * inset, h).stroke({ color, width: 1, alpha: 0.45 + lit * 0.5 });
       continue;
     }
-    const lit = runtime.impulseKind === lane.kind ? pressed : 0;
     const radius = Math.max(2, Math.min(lane.w / 2, height / 2) - 1);
     const cx = lane.x + lane.w / 2;
     const cy = top + height / 2;
     graphics.circle(cx, cy, radius).fill({ color: SYN_VOID, alpha: 0.85 });
     graphics.circle(cx, cy, radius).stroke({ color, width: 1, alpha: 0.45 + 0.5 * lit });
+    const angle = resolveScratchAngle(runtime.chartBeat ?? 0);
+    graphics
+      .moveTo(cx, cy)
+      .lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius)
+      .stroke({ color, width: 1.5, alpha: 0.9 });
     graphics.circle(cx, cy, radius * 0.3).fill({ color, alpha: 0.3 + 0.2 * pulse + 0.5 * lit });
   }
 }
@@ -148,9 +151,9 @@ function drawGauge(draw: CabinetDraw, cabinet: CabinetLayout, runtime: Runtime):
     addHUDText(
       draw.layer,
       `${prefix}${(state.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
-      rect.x,
-      gaugeLabelY - 7,
-      { ...labelStyle(), maxWidth: rect.w - 48 },
+      rect.x + rect.w / 2,
+      gaugeLabelY,
+      { ...labelStyle(), anchorX: 0.5, anchorY: 0.5, maxWidth: showValue ? rect.w - 80 : rect.w },
       draw.pool,
     );
     if (showValue) {
@@ -159,8 +162,8 @@ function drawGauge(draw: CabinetDraw, cabinet: CabinetLayout, runtime: Runtime):
         `${Math.floor(value)}%`,
         // Short of the clear notch, which rises above the cells.
         rect.x + rect.w,
-        gaugeLabelY - 10,
-        { ...displayStyle(11, SYN_WHITE), anchorX: 1 },
+        gaugeLabelY,
+        { ...displayStyle(11, SYN_WHITE), anchorX: 1, anchorY: 0.5 },
         draw.pool,
       );
     }
@@ -188,10 +191,11 @@ function drawCenter(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): voi
     draw.layer,
     String(Math.floor(clampPercent(runtime.gauge ?? 0))),
     rect.x + rect.w / 2,
-    rect.y + rect.h / 2 - 7,
+    rect.y + rect.h / 2,
     {
       ...displayStyle(12, SYN_WHITE),
       anchorX: 0.5,
+      anchorY: 0.5,
       maxWidth: rect.w - 6,
       dropShadow: { color: draw.accent, alpha: 0.8, blur: 6, distance: 0 },
     },
@@ -555,6 +559,32 @@ function drawBPM(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): void {
   const { layer, pool, accent } = draw;
   frame(draw, rect);
   const bpm = Math.round(runtime.bpm ?? 0);
+  if (rect.h < 56) {
+    addHUDNumber(
+      layer,
+      String(bpm),
+      rect.x + rect.w / 2,
+      rect.y + 3,
+      { ...displayStyle(16, SYN_WHITE), anchorX: 0.5, maxWidth: rect.w / 3 },
+      pool,
+    );
+    addHUDText(layer, 'BPM', rect.x + rect.w / 2, rect.y + 24, { ...labelStyle(), anchorX: 0.5, size: 8 }, pool);
+    for (const [label, value, x, anchorX] of [
+      ['MIN', runtime.minBPM ?? bpm, rect.x + 8, 0],
+      ['MAX', runtime.maxBPM ?? bpm, rect.x + rect.w - 8, 1],
+    ] as const) {
+      addHUDText(layer, label, x, rect.y + 5, { ...labelStyle(), size: 8, anchorX }, pool);
+      addHUDNumber(
+        layer,
+        String(Math.round(value)),
+        x,
+        rect.y + 21,
+        { ...displayStyle(9, SYN_MIST), anchorX, maxWidth: rect.w / 3 - 10 },
+        pool,
+      );
+    }
+    return;
+  }
   addHUDNumber(
     layer,
     String(bpm),
@@ -581,13 +611,21 @@ function drawBPM(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): void {
 /** The play tempo where a cabinet shows its effector: `OFF` at the chart's own speed. */
 function drawTempo(draw: CabinetDraw, rect: BeMusicRect, tempo: number): void {
   frame(draw, rect);
-  addHUDText(draw.layer, 'TEMPO', rect.x + 10, rect.y + rect.h / 2 - 4, labelStyle(), draw.pool);
+  const stacked = rect.w < 100;
+  addHUDText(
+    draw.layer,
+    'TEMPO',
+    stacked ? rect.x + rect.w / 2 : rect.x + 10,
+    stacked ? rect.y + 5 : rect.y + rect.h / 2 - 4,
+    { ...labelStyle(), anchorX: stacked ? 0.5 : 0 },
+    draw.pool,
+  );
   addHUDNumber(
     draw.layer,
     tempo === 1 ? 'OFF' : `x${tempo.toFixed(2)}`,
-    rect.x + rect.w - 10,
-    rect.y + rect.h / 2 - 6,
-    { ...displayStyle(11, tempo === 1 ? SYN_WHITE : SYN_AMBER), anchorX: 1 },
+    stacked ? rect.x + rect.w / 2 : rect.x + rect.w - 10,
+    stacked ? rect.y + 20 : rect.y + rect.h / 2 - 6,
+    { ...displayStyle(11, tempo === 1 ? SYN_WHITE : SYN_AMBER), anchorX: stacked ? 0.5 : 1 },
     draw.pool,
   );
 }
