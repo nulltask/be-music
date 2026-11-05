@@ -10,6 +10,12 @@ import { hiSpeedControl, onGrid } from './play-options.ts';
 // dialog's, with the same effects; the ones a play reads as it starts are disabled during one, as in the dialog. Built
 // with the dialog as `this` (`OptionsDialog`).
 
+/**
+ * Whether the panel is built at all. Off for now: the panel is kept out of the page until its place on the stage is
+ * settled; turning this on brings it back as it is.
+ */
+export const QUICK_OPTIONS_ENABLED = false;
+
 /** The panel's heading, which `labels.ts` translates. */
 export const QUICK_OPTIONS_TITLE = 'Quick options';
 
