@@ -114,7 +114,7 @@ export interface OptionsDialogDeps {
    * the site header and the site footer stay outside fullscreen.
    */
   readonly shell: HTMLElement;
-  /** The camera the play can show in its BGA frame, which the BGA camera folder sets up. */
+  /** The camera the play can show in its BGA frame, which the Camera tab sets up. */
   readonly bgaCamera: BGACameraService;
   /** The play: loading behind a decide screen, or on the stage. */
   gameplayView(): PlayScene | undefined;
@@ -446,10 +446,10 @@ export class OptionsDialog {
     const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec): OptionFolder =>
       parent.addFolder({ title: folder.title });
     const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
-    const [play, view, keys, skin, audio, library, leaderboard, advanced] = tabs.pages;
-    if (!play || !view || !keys || !skin || !audio || !library || !leaderboard || !advanced) return;
+    const [play, view, keys, skin, audio, cameraTab, library, leaderboard, advanced] = tabs.pages;
+    if (!play || !view || !keys || !skin || !audio || !cameraTab || !library || !leaderboard || !advanced) return;
     // Tabs in the order a session uses them: how to play and what the lanes show, the keys, how it looks and sounds,
-    // the library (loading, records, the select screen's list, courses and capturing a play), the Leaderboard, then
+    // the camera in the BGA frame, the library (loading, records, the select screen's list, courses and capturing a play), the Leaderboard, then
     // the advanced settings. The sections are made first, top to bottom, since the Play options fill the View and
     // Select folders on other tabs.
     const playOptions = addSection(play, OPTION_FOLDERS.playOptions);
@@ -473,8 +473,8 @@ export class OptionsDialog {
     this.buildReplayViewFolder(addFolder(replay, OPTION_FOLDERS.replayView));
     this.buildKeyConfigFolder(addSection(keys, OPTION_FOLDERS.keys));
     this.buildSkinFolder(addSection(skin, OPTION_FOLDERS.skin), addFolder);
-    this.buildBGACameraFolder(addSection(skin, OPTION_FOLDERS.bgaCamera), this.deps.bgaCamera);
     this.buildAudioFolder(addSection(audio, OPTION_FOLDERS.audio), addFolder);
+    this.buildBGACameraFolder(addSection(cameraTab, OPTION_FOLDERS.bgaCamera), this.deps.bgaCamera);
     this.deps.leaderboard.buildFolder(addSection(leaderboard, OPTION_FOLDERS.leaderboard));
     this.buildDeveloperFolder(addSection(advanced, OPTION_FOLDERS.advanced));
     this.refreshCompressorStageVisibility();

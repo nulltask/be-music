@@ -273,7 +273,7 @@ export class PlayerWebApp {
     setStatus: (text) => this.status.set(text),
   });
   /**
-   * The camera a play can show in its BGA frame (Options → Skin → BGA camera). It opens only while a play is on the
+   * The camera a play can show in its BGA frame (Options → Camera). It opens only while a play is on the
    * stage with the setting on.
    */
   private readonly bgaCamera = new BGACameraService({
