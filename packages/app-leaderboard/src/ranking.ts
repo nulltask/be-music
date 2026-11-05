@@ -9,7 +9,7 @@ export interface RankingFilter {
   chartFingerprint: string;
   ruleset: RulesetId;
   assisted: boolean;
-  /** Include anonymous players (and accounts anonymized on deletion). Off by default. */
+  /** Include guests (`user.isAnonymous`). Off by default. */
   includeAnonymous: boolean;
   /** Only players who played the chart under this ruleset at least once. */
   playedHereOnly: boolean;

@@ -32,7 +32,7 @@ describe('Dashboard profile dependency', () => {
     );
     const response = await worker.fetch(new Request(env.PUBLIC_ORIGIN), { ...env, ACCOUNTS: { fetch: fetchProfile } });
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('Signed in anonymously as @central_user.');
+    expect(await response.text()).toContain('Signed in as a guest, @central_user.');
     const request = fetchProfile.mock.calls[0]?.[0] as Request;
     expect(request.url).toBe('https://accounts.example/api/profiles/central-user');
     expect(request.headers.get('authorization')).toBeNull();

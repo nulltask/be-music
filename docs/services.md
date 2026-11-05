@@ -154,7 +154,7 @@ configuration:
 | `USER_CONTENT_ORIGIN` | Registry only; where uploaded files are served from                    |
 
 - Accounts reads its list of clients and redirect URIs from configuration.
-- Discord and Google are optional: an instance can start with passkeys and anonymous sessions only. Discord sign-in
+- Discord and Google are optional: an instance can start with passkeys and guest sessions only. Discord sign-in
   reads `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` on the Accounts Worker. The official instance stores them in
   the `be-music` vault (`discord` for production, `discord-preview` for preview). Google sign-in reads
   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from the same vault (`google` for production, `google-preview` for

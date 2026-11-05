@@ -73,7 +73,7 @@ This document maps current code vocabulary to domain concepts and separates diff
 | linked login account / 外部ログイン連携 | `account`, `accountId`, `providerId` in Accounts schema | Provider association; not another Be-Music user or a Cloudflare account.                                 |
 | profile / プロフィール                  | `profile`, `handle`, `displayName`, `avatarKey`         | Public presentation owned by a user; profile changes do not change identity.                             |
 | authentication session / 認証セッション | `LoginSession`, Better Auth session                     | App login state differs from Accounts state, scene sessions and audio sessions.                          |
-| guest / ゲスト                          | `isAnonymous`, `Identity.anonymous`, `linkedGuests`     | Credential-free identity and its migration links; do not infer missing user identity.                    |
+| guest / ゲスト                          | `isAnonymous`, `Identity.anonymous`, `linkedGuests`     | Account with no passkey, Google or Discord yet, and its merge links; write "guest" in user-facing text.  |
 
 ## API naming
 
