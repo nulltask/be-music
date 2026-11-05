@@ -151,6 +151,16 @@ export const screenStyles: CSSResultGroup = [
       font-weight: 700;
       line-height: 1.2;
     }
+    .result-play-tag {
+      justify-self: start;
+      border: 2px solid currentColor;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      line-height: 1.3;
+    }
     .player .verdict {
       gap: 8px;
     }
