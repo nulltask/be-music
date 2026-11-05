@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
+import { createEmptyJSON } from '@be-music/chart-source';
 import {
   cabinetStage,
   formatScoreDiff,
@@ -6,6 +7,7 @@ import {
   resolveCabinetLayout,
   resolveScratchAngle,
   resolveLanePlayLabel,
+  resolveDifficulty,
   resolveDifficultyName,
   resolveScorePace,
   resolveStageLabel,
@@ -305,7 +307,11 @@ describe('resolveStageLabel', () => {
 });
 
 describe('resolveDifficultyName', () => {
-  const chart = (difficulty?: number) => ({ chart: { metadata: { difficulty } } }) as never;
+  const chart = (difficulty?: number, fileLabel = 'song.bms', totalNotes?: number) => {
+    const json = createEmptyJSON('bms');
+    if (difficulty !== undefined) json.metadata.difficulty = difficulty;
+    return { chart: json, fileLabel, ...(totalNotes !== undefined ? { totalNotes } : {}) };
+  };
 
   it('names #DIFFICULTY 1 to 5', () => {
     expect(resolveDifficultyName(chart(4))).toBe('ANOTHER');
@@ -313,6 +319,15 @@ describe('resolveDifficultyName', () => {
     expect(resolveDifficultyName(chart(6))).toBe('UNSPECIFIED');
     expect(resolveDifficultyName(chart())).toBe('UNSPECIFIED');
     expect(resolveDifficultyName(undefined)).toBeUndefined();
+  });
+
+  it('marks a difficulty estimated from the names with ?, and from the note count with ??', () => {
+    expect(resolveDifficultyName(chart(undefined, 'song_7h.bms', 1500))).toBe('HYPER?');
+    expect(resolveDifficulty(chart(undefined, 'song_7h.bms'))).toEqual({ name: 'HYPER', basis: 'names' });
+    expect(resolveDifficultyName(chart(undefined, 'song.bms', 1500))).toBe('ANOTHER??');
+    expect(resolveDifficulty(chart(undefined, 'song.bms', 1500))).toEqual({ name: 'ANOTHER', basis: 'notes' });
+    expect(resolveDifficultyName(chart(2, 'song_7h.bms', 1500))).toBe('NORMAL');
+    expect(resolveDifficulty(chart())).toEqual({ name: 'UNSPECIFIED' });
   });
 });
 

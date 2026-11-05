@@ -32,7 +32,12 @@ import {
   type BeatorajaSkinEntry,
   type BeatorajaSkinHeader,
 } from '@be-music/skin-beatoraja';
-import { systemSoundSetFromBeatoraja, type LibraryChart, type SystemSoundSet } from '@be-music/player-scene-model';
+import {
+  resolveLibraryChartDifficultyValue,
+  systemSoundSetFromBeatoraja,
+  type LibraryChart,
+  type SystemSoundSet,
+} from '@be-music/player-scene-model';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from '../../chart-shape.ts';
 import { playSkinTypeForVariant } from '../../player-utils.ts';
 import { applyLoadProgress, type LoadingOverlayElements } from '../../loading-overlay.ts';
@@ -561,7 +566,7 @@ export class BeatorajaThemeService {
    */
   private buildBeatorajaSkinLoadContext(chartEntry: LibraryChart, skinConfig: BeatorajaSkinConfig) {
     return createBeatorajaSkinLoadContext({
-      difficulty: chartEntry.chart.metadata.difficulty,
+      difficulty: resolveLibraryChartDifficultyValue(chartEntry),
       skinConfig,
       skinAudio: this.audio.skinSounds.owned(this.themeOwner),
     });

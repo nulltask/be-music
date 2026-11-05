@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJSON } from '../../chart-source/src/index.ts';
-import { resolveAltModifierLabel, resolveDisplayedDifficultyValue, resolveDisplayedPlayLevelValue } from './utils.ts';
+import {
+  resolveAltModifierLabel,
+  resolveDisplayedDifficulty,
+  resolveDisplayedDifficultyValue,
+  resolveDisplayedPlayLevelValue,
+} from './utils.ts';
 
 describe('player utils', () => {
   test('player-utils: uses Option label on macOS', () => {
@@ -44,5 +49,27 @@ describe('player utils', () => {
 
     json.metadata.difficulty = 6;
     expect(resolveDisplayedDifficultyValue(json)).toBeUndefined();
+  });
+
+  test('player-utils: shows the declared DIFFICULTY, else one estimated from the names, else from the notes', () => {
+    const json = createEmptyJSON('bms');
+    json.metadata.title = 'Song';
+    json.metadata.subtitle = '[ANOTHER]';
+    expect(resolveDisplayedDifficulty(json, { fileName: 'song.bms', noteCount: 300 })).toEqual({
+      value: 4,
+      basis: 'names',
+    });
+
+    json.metadata.difficulty = 3;
+    expect(resolveDisplayedDifficulty(json, { fileName: 'song.bms' })).toEqual({ value: 3, basis: 'chart' });
+
+    json.metadata.difficulty = 0;
+    json.metadata.subtitle = undefined;
+    expect(resolveDisplayedDifficulty(json, { fileName: 'song_7h.bms' })).toEqual({ value: 3, basis: 'names' });
+    expect(resolveDisplayedDifficulty(json, { fileName: 'song.bms', noteCount: 300 })).toEqual({
+      value: 2,
+      basis: 'notes',
+    });
+    expect(resolveDisplayedDifficulty(json, { fileName: 'song.bms' })).toBeUndefined();
   });
 });

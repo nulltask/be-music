@@ -319,9 +319,14 @@ describe('resolveLR2ResultState ops', () => {
       expect(ops.has(LR2_OP.DIFFICULTY_HYPER)).toBe(true);
     });
 
-    it('falls back to DIFFICULTY_NORMAL when difficulty is undefined', () => {
-      const ops = resultOps(makeResult({ difficulty: undefined }), makeSkin());
+    it('falls back to DIFFICULTY_NORMAL when no difficulty is named or estimated', () => {
+      const ops = resultOps(makeResult({ difficulty: undefined, total: 0 }), makeSkin());
       expect(ops.has(LR2_OP.DIFFICULTY_NORMAL)).toBe(true);
+    });
+
+    it('lights the difficulty estimated from the note count when the chart names none', () => {
+      const ops = resultOps(makeResult({ difficulty: undefined, total: 1500 }), makeSkin());
+      expect(ops.has(LR2_OP.DIFFICULTY_ANOTHER)).toBe(true);
     });
   });
 

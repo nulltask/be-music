@@ -1,4 +1,5 @@
 import { parseLR2NonstopConnections, type CourseKind, type NonstopConnection } from '@be-music/player-engine/course';
+import { resolveLibraryChartDifficultyValue } from '../library/difficulty.ts';
 import type { LibraryCourse } from '../library/entries.ts';
 
 /** One stage of a course, as a skin shows it: the stage chart's title, subtitle, play level and difficulty. */
@@ -37,7 +38,7 @@ export function resolveCourseView(course: LibraryCourse, stageIndex?: number): C
     stages: course.stages.map((stage): CourseStageView => {
       const chart = stage.chart;
       const level = typeof chart?.playLevel === 'string' ? Number.parseInt(chart.playLevel, 10) : chart?.playLevel;
-      const difficulty = chart?.chart.metadata.difficulty;
+      const difficulty = chart !== undefined ? resolveLibraryChartDifficultyValue(chart) : undefined;
       return {
         title: chart?.title ?? stage.title,
         ...(chart?.subtitle !== undefined ? { subtitle: chart.subtitle } : {}),
