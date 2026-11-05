@@ -599,17 +599,19 @@ export class OptionsDialog {
         'STARTBPM',
       ] as const);
     const floating = this.guiState.floatingHiSpeed;
-    if (this.floatingSpeedController) this.floatingSpeedController.hidden = !floating;
+    // A hi-speed mode's own controls stay in place while another mode is on, disabled rather than hidden.
+    if (this.floatingSpeedController) this.floatingSpeedController.unavailable = !floating;
     const normal = this.guiState.normalHiSpeedLevel > 0;
-    if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.hidden = !normal || floating;
-    if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
-    if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
+    if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.unavailable = !normal || floating;
+    if (this.hiSpeedController) this.hiSpeedController.unavailable = this.guiState.classicHiSpeed || normal || floating;
+    if (this.hsFixController) this.hsFixController.unavailable = this.guiState.classicHiSpeed || normal || floating;
     // The quick panel offers only the regular hi-speed and HS-FIX; a measured or classic mode is set in the dialog.
     if (this.quickHiSpeedController)
-      this.quickHiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
+      this.quickHiSpeedController.unavailable = this.guiState.classicHiSpeed || normal || floating;
     if (this.quickHsFixController)
-      this.quickHsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
-    if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
+      this.quickHsFixController.unavailable = this.guiState.classicHiSpeed || normal || floating;
+    if (this.classicSpeedController)
+      this.classicSpeedController.unavailable = !this.guiState.classicHiSpeed || floating;
     if (this.anyKeyController) this.anyKeyController.hidden = this.guiState.judgeRuleset !== '____';
     const ruleset = this.guiState.judgeRuleset;
     const beatoraja = ruleset === 'beatoraja';
@@ -634,7 +636,7 @@ export class OptionsDialog {
     const twoPlayer = ['TWO-PLAYER', 'COUPLE', 'AUTO'].includes(this.guiState.battleMode);
     if (this.gauge2PController) this.gauge2PController.hidden = !twoPlayer;
     for (const controller of this.mRanControllers) controller.hidden = !twoPlayer;
-    if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.hidden = !this.guiState.lr2ExtraMode;
+    if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.unavailable = !this.guiState.lr2ExtraMode;
     if (!beatoraja && this.guiState.longNoteMode !== 'LN') {
       this.guiState.longNoteMode = 'LN';
       this.setPlayOptions({ longNoteMode: 'LN' });
@@ -663,10 +665,13 @@ export class OptionsDialog {
       this.setPlayOptions({ customJudge: false });
     }
     if (this.customJudgeController) this.customJudgeController.hidden = !beatoraja;
-    for (const controller of this.customJudgeRateControllers)
-      controller.hidden = !beatoraja || !this.guiState.customJudge;
+    // The rates belong to beatoraja's rules; under them they stay in place, disabled while CUSTOM JUDGE is off.
+    for (const controller of this.customJudgeRateControllers) {
+      controller.hidden = !beatoraja;
+      controller.unavailable = !this.guiState.customJudge;
+    }
     if (this.longNoteRateController)
-      this.longNoteRateController.hidden = !this.guiState.longNoteModifier.startsWith('ADD_');
+      this.longNoteRateController.unavailable = !this.guiState.longNoteModifier.startsWith('ADD_');
     // Every ruleset seeds its lane randoms (#933); only the PMS playable randomizer ignores its seed, as in the source.
     for (const side of ['1P', '2P'] as const) {
       const controller = side === '1P' ? this.randomSeed1PController : this.randomSeed2PController;
@@ -683,8 +688,8 @@ export class OptionsDialog {
       this.bottomShiftableGaugeController.options = bottomChoices;
       this.bottomShiftableGaugeController.refresh();
     }
-    if (this.scrollSectionController) this.scrollSectionController.hidden = this.guiState.scrollModifier !== 'ADD';
-    if (this.scrollRateController) this.scrollRateController.hidden = this.guiState.scrollModifier !== 'ADD';
+    if (this.scrollSectionController) this.scrollSectionController.unavailable = this.guiState.scrollModifier !== 'ADD';
+    if (this.scrollRateController) this.scrollRateController.unavailable = this.guiState.scrollModifier !== 'ADD';
     if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {
       this.guiState.judgeAlgorithm = 'combo';
       this.setPlayOptions({ judgeAlgorithm: 'combo' });
