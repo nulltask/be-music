@@ -455,6 +455,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <dl class="help-menu-items">
           <dt>Submit to Leaderboard</dt>
           <dd>Sends each finished play to the Leaderboard (off by default).</dd>
+          <dt>Submit when</dt>
+          <dd>
+            Sends a play only when it beats your best EX-SCORE on the chart, its first play always (default), or every
+            play. Course runs are always sent.
+          </dd>
           <dt data-for="Account|Create passkey (keep this account)|Sign in with passkey|Sign out">
             Account · Create passkey · Sign in with passkey · Sign out
           </dt>
@@ -930,6 +935,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <dl class="help-menu-items">
           <dt>Submit to Leaderboard</dt>
           <dd>プレイが終わるたびに Leaderboard へ送ります (既定はオフ)。</dd>
+          <dt>Submit when</dt>
+          <dd>
+            その譜面の自己ベスト EX-SCORE を超えたプレイだけ (初回は必ず、既定)
+            か、毎回送るかを選びます。コースは常に送ります。
+          </dd>
           <dt data-for="Account|Create passkey (keep this account)|Sign in with passkey|Sign out">
             Account · Create passkey · Sign in with passkey · Sign out
           </dt>

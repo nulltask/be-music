@@ -289,7 +289,7 @@ export class ResultRoute {
     if (!mounted) await this.showSelect();
     // Auto-save fires even when the theme ships no result skin, so going back to select costs no replay file.
     if (!data.practice) this.replayAutoSave.savePlay(data.replay);
-    if (recorded) this.leaderboard.maybeSubmit(data.replay, data.chart);
+    if (recorded) this.leaderboard.maybeSubmit(data.replay, data.chart, data.score.exScore);
     this.unlockReplayOptions();
   }
 
@@ -555,7 +555,7 @@ export class ResultRoute {
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
     if (!data.practice && presentation.quickRetry && mode.nonstop === undefined) {
       this.replayAutoSave.savePlay(data.replay);
-      if (recorded) this.leaderboard.maybeSubmit(data.replay, data.chart);
+      if (recorded) this.leaderboard.maybeSubmit(data.replay, data.chart, data.score.exScore);
     }
     this.unlockReplayOptions();
   }

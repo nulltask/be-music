@@ -176,6 +176,7 @@ const en = {
     courseNotSubmitted: (error: string) => `Leaderboard: course not submitted (${error})`,
     network: 'Leaderboard: not submitted (network error)',
     courseNetwork: 'Leaderboard: course not submitted (network error)',
+    notImproved: 'Leaderboard: not submitted (EX-SCORE did not improve)',
     stored: (reason: string, again: string) => `Leaderboard: stored, not ranked (${reason})${again}`,
     submitted: 'Leaderboard: submitted',
     ranked: (ruleset: string, rank: number, players: number, exScore: number, best: string, again: string) =>
@@ -459,6 +460,7 @@ const ja: typeof en = {
     courseNotSubmitted: (error) => `Leaderboard: コースを送信しませんでした（${error}）`,
     network: 'Leaderboard: 送信しませんでした（ネットワークエラー）',
     courseNetwork: 'Leaderboard: コースを送信しませんでした（ネットワークエラー）',
+    notImproved: 'Leaderboard: 送信しませんでした（EX-SCORE の更新なし）',
     stored: (reason, again) => `Leaderboard: 保存しましたがランキング外です（${reason}）${again}`,
     submitted: 'Leaderboard: 送信しました',
     ranked: (ruleset, rank, players, exScore, best, again) =>

@@ -279,7 +279,7 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
       h.deps.setPlayStatus.mock.invocationCallOrder[0]!,
     );
     // Pitch follows tempo at the slider's tempo: the tempo slider stays live during the play.
-    expect(h.deps.lockReplayOptionsForPlay).toHaveBeenCalledWith(true);
+    expect(h.deps.lockReplayOptionsForPlay).toHaveBeenCalledWith(true, chartEntry('a'));
     // A recording armed on the select screen starts with the play.
     expect(startArmedRecording).toHaveBeenLastCalledWith(h.recording);
     expect(play.start.mock.invocationCallOrder[0]).toBeLessThan(
