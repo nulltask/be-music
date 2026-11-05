@@ -1,10 +1,12 @@
 // Help's Keyboard tab: a screen's keys drawn on a keyboard (`<be-music-keyboard-map>`) with the list of what each key
-// does, from the player's own keys. The player picks the screen and the key map (LR2's or beatoraja's, starting on the
-// one the current skin reads); pointing at a line of the list lights its keys.
+// does, from the player's own keys. The player picks the screen, the key map (LR2's or beatoraja's, starting on the one
+// the current skin reads) and the keyboard's size (full or laptop, starting on the one the device most likely has); a Mac
+// gets a Mac's keyboard, anything else a Windows PC's. Pointing at a line of the list lights its keys.
 import { html, nothing, render, type TemplateResult } from 'lit';
 import type { ControlScheme, ControlScreen, ControlSettings } from '@be-music/player-browser/host';
 import { defineKeyboardMapElement } from './keyboard-element.ts';
 import { buildKeyboardGuide, type KeyboardGuideLang, type KeyboardGuideRow } from './keyboard-guide.ts';
+import { guessKeyboard, KEYBOARD_FORMS, type KeyboardForm, type KeyboardPlatform } from './keyboard-layout.ts';
 
 /** Where the page reads the player's keys and the key map the current screen reads. */
 export interface HelpKeyboardSource {
@@ -19,6 +21,8 @@ const COPY = {
   en: {
     screen: 'Screen',
     keyMap: 'Key map',
+    form: 'Keyboard size',
+    forms: { full: 'Full', laptop: 'Laptop' },
     screens: { select: 'Select', decide: 'Decide', play: 'Play', result: 'Result', global: 'Every screen' },
     diagram: (screen: string) => `The keys of the ${screen} screen`,
     lanes: 'Lane keys',
@@ -30,6 +34,8 @@ const COPY = {
   ja: {
     screen: '画面',
     keyMap: 'キー操作',
+    form: 'キーボードの大きさ',
+    forms: { full: 'フル', laptop: 'ノート' },
     screens: { select: '選曲', decide: '決定', play: 'プレイ', result: 'リザルト', global: '全画面' },
     diagram: (screen: string) => `${screen}画面のキー`,
     lanes: 'レーンのキー',
@@ -46,6 +52,8 @@ const SCHEME_NAMES: Readonly<Record<ControlScheme, string>> = { lr2: 'LR2', beat
 export class HelpKeyboard {
   private screen: ControlScreen = 'play';
   private scheme: ControlScheme | undefined;
+  private readonly platform: KeyboardPlatform;
+  private form: KeyboardForm;
   private active: readonly string[] = [];
   private lang: KeyboardGuideLang = 'en';
   private readonly root: HTMLElement;
@@ -54,6 +62,7 @@ export class HelpKeyboard {
   public constructor(root: HTMLElement, source: () => HelpKeyboardSource) {
     this.root = root;
     this.source = source;
+    ({ platform: this.platform, form: this.form } = guessKeyboard(devicePlatform()));
     defineKeyboardMapElement();
   }
 
@@ -77,7 +86,7 @@ export class HelpKeyboard {
   private template(): TemplateResult {
     const copy = COPY[this.lang];
     const scheme = this.scheme ?? 'lr2';
-    const guide = buildKeyboardGuide(this.screen, scheme, this.source().settings, this.lang);
+    const guide = buildKeyboardGuide(this.screen, scheme, this.source().settings, this.lang, this.platform);
     const pick = <T>(value: T, current: T, label: string, set: () => void): TemplateResult =>
       html`<button
         type="button"
@@ -103,10 +112,15 @@ export class HelpKeyboard {
           <div class="button-group" role="group" aria-label=${copy.keyMap}>
             ${SCHEMES.map((value) => pick(value, scheme, SCHEME_NAMES[value], () => (this.scheme = value)))}
           </div>
+          <div class="button-group" role="group" aria-label=${copy.form}>
+            ${KEYBOARD_FORMS.map((value) => pick(value, this.form, copy.forms[value], () => (this.form = value)))}
+          </div>
         </div>
         <be-music-keyboard-map
           .marks=${guide.marks}
           .active=${this.active}
+          platform=${this.platform}
+          form=${this.form}
           label=${copy.diagram(copy.screens[this.screen])}
         ></be-music-keyboard-map>
       </div>
@@ -149,4 +163,11 @@ export class HelpKeyboard {
       }
     </section>`;
   }
+}
+
+/** The device's platform as the browser reports it (`macOS`, `Windows`, `MacIntel`, `Win32`), if it does. */
+function devicePlatform(): string | undefined {
+  if (typeof navigator === 'undefined') return undefined;
+  const hinted = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform;
+  return hinted !== undefined && hinted !== '' ? hinted : navigator.platform;
 }
