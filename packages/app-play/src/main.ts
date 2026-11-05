@@ -1,4 +1,3 @@
-import { localized } from './ui/localized.ts';
 import { onPlayerLangChange } from './player-copy.ts';
 import { defineServiceUI } from '@be-music/service-web-theme/client';
 import { render } from 'lit';
@@ -15,6 +14,7 @@ import { optionSettingsSync } from './option-settings-sync.ts';
 // (`app/app.ts`) once the UI fonts are ready, with the test hook installed over it before it starts.
 import { checkBrowserCompat } from '@be-music/player-browser/collection';
 import { PlayerWebApp } from './app/app.ts';
+import { renderStartAccountLoading } from './leaderboard-ui.ts';
 import { wireHelpModal, applyPlayerLanguage } from './help-modal.ts';
 import { wireInstallButton } from './install-button.ts';
 import { bindPlayerHeader, mountPlayerHeader } from './player-header.ts';
@@ -53,8 +53,7 @@ if (!app) {
 
 defineServiceUI();
 render(PLAYER_APP_TEMPLATE, app);
-const accountLabel = app.querySelector<HTMLElement>('#start-account-label');
-if (accountLabel !== null) render(localized('checkingAccount'), accountLabel);
+renderStartAccountLoading(app);
 
 // Browser compatibility probe runs first so the drop card paints the readiness verdict immediately on first render. We
 // do this BEFORE constructing the player app so that even a hard-fail (Pixi `Application.init()` throwing on a no-WebGL2

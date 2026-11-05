@@ -1,6 +1,5 @@
-import { localized } from './ui/localized.ts';
-import type { BeMusicStatusElement } from '@be-music/service-web-theme/client';
-import { html, nothing, render } from 'lit';
+import { skeletonGroupTemplate, skeletonTemplate, type BeMusicStatusElement } from '@be-music/service-web-theme/client';
+import { html, nothing, render, type TemplateResult } from 'lit';
 import { paneOptions, selectBinding, setDisabled, type PaneBinding } from './pane-controls.ts';
 import { optionLabel } from './ui/options/labels.ts';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
@@ -10,6 +9,11 @@ import type { OptionContainer } from './ui/options-controls.ts';
 import {
   keepLeaderboardAccount,
   describeAccountChip,
+  readLeaderboardAccount,
+  readStartAccountState,
+  rememberStartAccountState,
+  startAccountPlaceholder,
+  type AccountChip,
   describeLeaderboardAccount,
   describeStartAccount,
   shouldTurnOnSubmitting,
@@ -22,6 +26,7 @@ import {
 import { onPlayerLangChange, playerLang, playerText } from './player-copy.ts';
 import { setPlayerHeaderAccount } from './player-header.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
+import { defaultStorage } from './player-storage.ts';
 import { leaderboardLink } from './service-links.ts';
 import type { BeMusicCourseReplay } from '@be-music/player-engine/replay';
 import {
@@ -62,6 +67,46 @@ export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'eng
   return `${recorder.name}/${recorder.version}${recorder.build !== undefined ? ` (build ${recorder.build})` : ''}`;
 }
 /**
+ * The start card's account note, hint and actions while the account is read, shaped like the card the player saw last
+ * time ({@link startAccountPlaceholder}): a line where the account will be named, then the hint and each action button
+ * with their own text, shimmering and unreadable, so the card keeps its size when the account arrives.
+ */
+export function startAccountLoadingTemplates(state: AccountChip['state'] = readStartAccountState(defaultStorage())): {
+  label: TemplateResult;
+  hint: TemplateResult;
+  actions: TemplateResult;
+} {
+  const placeholder = startAccountPlaceholder(state);
+  const labels = startAccountActionLabels();
+  return {
+    label: skeletonGroupTemplate({
+      locale: playerLang(),
+      label: playerText().shell.checkingAccount,
+      content: skeletonTemplate({ shape: 'line', width: '18ch' }),
+    }),
+    hint:
+      placeholder.hint === undefined
+        ? html``
+        : html`<span class="be-music-skeleton-fill" aria-hidden="true">${placeholder.hint}</span>`,
+    actions: html`${placeholder.actions.map(
+      (action) =>
+        html`<span class="btn be-music-skeleton-fill" data-size="sm" aria-hidden="true">${labels[action]}</span>`,
+    )}`,
+  };
+}
+
+/** Puts {@link startAccountLoadingTemplates} into the start card, until the account has been read. */
+export function renderStartAccountLoading(root: ParentNode = document): void {
+  const label = root.querySelector<HTMLElement>('#start-account-label');
+  const hint = root.querySelector<HTMLElement>('#start-account-hint');
+  const actions = root.querySelector<HTMLElement>('#start-account-actions');
+  const view = startAccountLoadingTemplates();
+  if (label !== null) render(view.label, label);
+  if (hint !== null) render(view.hint, hint);
+  if (actions !== null) render(view.actions, actions);
+}
+
+/**
  * Everything the player shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
  * sign-up buttons), the Options dialog folder (the same toggle, account row and account buttons), the shared header's
  * account control, and submitting a finished play. Submitting needs an account; a guest one is enough. Keeping a guest
@@ -98,10 +143,12 @@ export class LeaderboardPanel {
   private readonly host: LeaderboardPanelHost;
   constructor(host: LeaderboardPanelHost) {
     this.host = host;
-    const label = document.querySelector<HTMLElement>('#start-account-label');
-    if (label !== null) render(localized('checkingAccount'), label);
+    renderStartAccountLoading();
     onPlayerLangChange(() => {
-      if (!this.accountReady) return;
+      if (!this.accountReady) {
+        renderStartAccountLoading();
+        return;
+      }
       this.accountState.status = describeLeaderboardAccount(this.shownAccount);
       this.accountController?.refresh();
       this.renderStartAccount(this.shownAccount);
@@ -145,6 +192,7 @@ export class LeaderboardPanel {
       readonly: true,
       multiline: true,
       rows: 2,
+      busy: () => !this.accountReady,
     });
     const run = (label: string, action: () => Promise<AccountActionResult>, onSuccess?: () => void) => () =>
       this.runAccountAction(label, action, onSuccess);
@@ -259,7 +307,7 @@ export class LeaderboardPanel {
   }
   /** Re-reads the account into the Options dialog's "Account" row and the shared header. */
   async refreshAccount(): Promise<void> {
-    const account = await loadLeaderboardAccount();
+    const { account, reached } = await readLeaderboardAccount();
     this.shownAccount = account;
     this.accountReady = true;
     this.signedInName = account !== undefined && !account.anonymous ? account.displayName : undefined;
@@ -268,6 +316,8 @@ export class LeaderboardPanel {
     // refresh, so unticking it during a session sticks.
     if (shouldTurnOnSubmitting(this.shownState, state)) this.setSubmitting(true);
     this.shownState = state;
+    // Only an answer shapes the next visit's placeholder: a failed request (offline, a reload mid-request) says nothing.
+    if (reached) rememberStartAccountState(state, defaultStorage());
     this.accountState.status = describeLeaderboardAccount(account);
     this.accountController?.refresh();
     this.renderStartAccount(account);
@@ -308,7 +358,7 @@ export class LeaderboardPanel {
         : view.label,
       label,
     );
-    // Localization must not restore the boot's "checking" placeholder over the current account.
+    // Localization must not restore the boot's loading placeholder over the current account.
     render(
       view.actions.map(
         (action) =>
