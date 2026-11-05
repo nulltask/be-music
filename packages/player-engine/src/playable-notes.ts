@@ -99,42 +99,67 @@ export function extractInvisiblePlayableNotes(json: BeMusicJSON): TimedPlayableN
   return resolveChart(json).invisibleNotes.map(toTimedInvisibleNote);
 }
 
-/** A fresh play note for a resolved judged (`tap` / `ln`) note. */
-export function toTimedPlayableNote(note: ResolvedNote): TimedPlayableNote {
+/**
+ * Every play note carries every field from creation, in one order, with `undefined` for an absent one: notes then share
+ * one V8 hidden class, so the judge loop's property reads stay monomorphic. Clear a field by assigning `undefined`, never
+ * `delete` (that drops the object into dictionary mode). JSON drops the `undefined` keys.
+ */
+function createTimedPlayableNote(
+  note: ResolvedNote,
+  invisible: true | undefined,
+  soundEvents: readonly BeMusicEvent[] | undefined,
+  endSoundEvent: BeMusicEvent | undefined,
+  endBeat: number | undefined,
+  endSeconds: number | undefined,
+  longNoteMode: LongNoteMode | undefined,
+): TimedPlayableNote {
   return {
     event: note.event,
-    ...(note.soundEvents ? { soundEvents: note.soundEvents } : {}),
+    soundEvents,
+    endSoundEvent,
     channel: note.channel,
     beat: note.beat,
-    endBeat: note.endBeat,
-    endSeconds: note.endSeconds,
-    longNoteMode: note.lnMode,
-    ...(note.endSoundEvent ? { endSoundEvent: note.endSoundEvent } : {}),
+    endBeat,
+    endSeconds,
+    longNoteMode,
+    generatedLongNote: undefined,
+    visibleUntilBeat: undefined,
     seconds: note.seconds,
     judged: false,
+    invisible,
   };
+}
+
+/** A fresh play note for a resolved judged (`tap` / `ln`) note. */
+export function toTimedPlayableNote(note: ResolvedNote): TimedPlayableNote {
+  return createTimedPlayableNote(
+    note,
+    undefined,
+    note.soundEvents,
+    note.endSoundEvent,
+    note.endBeat,
+    note.endSeconds,
+    note.lnMode,
+  );
 }
 
 /** A fresh play note for a resolved invisible object. */
 export function toTimedInvisibleNote(note: ResolvedNote): TimedPlayableNote {
-  return {
-    event: note.event,
-    channel: note.channel,
-    beat: note.beat,
-    seconds: note.seconds,
-    judged: false,
-    invisible: true,
-  };
+  return createTimedPlayableNote(note, true, undefined, undefined, undefined, undefined, undefined);
+}
+
+/** A fresh play mine, every field present in one order (see {@link createTimedPlayableNote}). */
+export function createTimedLandmineNote(
+  event: BeMusicEvent,
+  channel: string,
+  beat: number,
+  seconds: number,
+  silent: true | undefined,
+): TimedLandmineNote {
+  return { event, channel, beat, seconds, judged: false, mine: true, silent };
 }
 
 /** A fresh play note for a resolved mine. */
 export function toTimedLandmineNote(note: ResolvedNote): TimedLandmineNote {
-  return {
-    event: note.event,
-    channel: note.channel,
-    beat: note.beat,
-    seconds: note.seconds,
-    judged: false,
-    mine: true,
-  };
+  return createTimedLandmineNote(note.event, note.channel, note.beat, note.seconds, undefined);
 }

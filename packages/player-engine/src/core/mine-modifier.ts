@@ -1,6 +1,11 @@
 import type { ResolvedChart } from '@be-music/chart-model';
 import { resolveModifierLanes, collectModifierTimelines, type ModifierTimeline } from './chart-modifier-timelines.ts';
-import { toTimedLandmineNote, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
+import {
+  createTimedLandmineNote,
+  toTimedLandmineNote,
+  type TimedLandmineNote,
+  type TimedPlayableNote,
+} from '../playable-notes.ts';
 
 export type MineModifier = 'OFF' | 'REMOVE' | 'ADD_RANDOM' | 'ADD_NEAR' | 'ADD_BLANK';
 
@@ -112,19 +117,17 @@ function makeMine(
   silent: boolean,
   sourceChannel = channel,
 ): TimedLandmineNote {
-  return {
-    channel,
-    beat: row.beat,
-    seconds,
-    judged: false,
-    mine: true,
-    ...(silent ? { silent: true } : {}),
-    event: {
+  return createTimedLandmineNote(
+    {
       measure: row.event.measure,
       position: [...row.event.position],
       channel: `${sourceChannel[0] === '1' ? 'D' : 'E'}${sourceChannel[1]}`,
       value: '0A',
       bmson: { damage },
     },
-  };
+    channel,
+    row.beat,
+    seconds,
+    silent ? true : undefined,
+  );
 }
