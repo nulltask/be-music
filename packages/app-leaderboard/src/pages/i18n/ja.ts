@@ -398,7 +398,7 @@ export const ja: Messages = {
     useGenerated: '自動生成のアバターに戻す',
     passkeys: 'パスキー',
     passkeysAnonymous:
-      'いまはゲストとして記録しています。パスキーでアカウントを保存すると、ほかの端末からもログインできます。',
+      'いまはゲストとして記録しています。パスキー・Google・Discord のどれかでアカウントを保存すると、ほかの端末からもログインできます。',
     passkeysCount: (count) => `パスキー ${count} 個。どの端末からでもログインできます。`,
     keepAccount: 'パスキーでアカウントを保存',
     addPasskey: 'パスキーを追加',

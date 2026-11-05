@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { accountNotice, renderAccountPage as renderPage } from './page.ts';
+import { accountNotice, renderAccountPage as renderPage, renderWelcomePage } from './page.ts';
 
 // Ignore template source indentation while preserving the existing markup/content assertions.
 function renderAccountPage(input: Parameters<typeof renderPage>[0]): string {
@@ -156,4 +156,72 @@ test('includes stable build information in the account footer', () => {
   });
   expect(page.split('</main>')[1]).toContain('2026-10-20 08:00:00 UTC');
   expect(page).toContain('>01234567</code>');
+});
+
+describe('Sign-in page', () => {
+  test('offers starting a new account with a passkey when signed out, and not when signed in', () => {
+    const input = { signedIn: false, anonymous: false, name: '', login: true, discord: false, google: false };
+    expect(renderAccountPage(input)).toContain('data-auth-action="passkey-start"');
+    expect(renderAccountPage({ ...input, signedIn: true })).not.toContain('data-auth-action="passkey-start"');
+  });
+});
+
+describe('Welcome page', () => {
+  const welcome = (input: Partial<Parameters<typeof renderWelcomePage>[0]> = {}) =>
+    renderWelcomePage({
+      anonymous: false,
+      name: 'Player',
+      discord: true,
+      google: true,
+      next: '/account',
+      continuing: false,
+      step: 'profile',
+      profile: { handle: 'player_abcd1234', displayName: 'Player', avatarURL: '/profiles/player_abcd1234/avatar' },
+      apps: { dashboard: '/', play: 'https://play.example' },
+      ...input,
+    }).replace(/\s+/g, ' ');
+
+  test('shows the profile step first and leaves the placeholder name out of the field', () => {
+    const page = welcome();
+    expect(page).toMatch(/data-welcome-step="profile"(?! hidden)/u);
+    expect(page).toMatch(/name="displayName" value=""/u);
+    expect(page).toContain('value="player_abcd1234"');
+    expect(page).toContain('data-welcome-next="/account"');
+  });
+
+  test('keeps a name the player chose in the field', () => {
+    expect(welcome({ profile: { handle: 'taro', displayName: 'Taro', avatarURL: '/a' } })).toMatch(
+      /name="displayName" value="Taro"/u,
+    );
+  });
+
+  test('gives a guest the step that keeps the account, with the providers not yet linked', () => {
+    const page = welcome({ anonymous: true, linkedDiscord: true });
+    expect(page).toContain('data-welcome-step="keep"');
+    expect(page).toContain('data-auth-action="add-passkey"');
+    expect(page).toContain('data-auth-action="link-google"');
+    expect(page).not.toContain('data-auth-action="link-discord"');
+    expect(page).toContain('Step 1 of 3');
+    expect(page).toContain('data-next="keep"');
+  });
+
+  test('takes anyone else from the profile straight to the end', () => {
+    const page = welcome();
+    expect(page).not.toContain('data-welcome-step="keep"');
+    expect(page).toContain('Step 1 of 2');
+    expect(page).toContain('data-next="finish"');
+  });
+
+  test('opens on the last step after a provider is linked, and offers the services unless an app is waiting', () => {
+    const page = welcome({ step: 'finish' });
+    expect(page).toMatch(/data-welcome-step="profile" hidden/u);
+    expect(page).toMatch(/data-welcome-step="finish"(?! hidden)/u);
+    const playLink = 'data-variant="outline" href="https://play.example/api/auth/sign-in"';
+    expect(page).toContain(playLink);
+    expect(welcome({ step: 'finish', continuing: true })).not.toContain(playLink);
+  });
+
+  test('speaks Japanese', () => {
+    expect(welcome({ locale: 'ja', anonymous: true })).toContain('Be-Music へようこそ');
+  });
 });

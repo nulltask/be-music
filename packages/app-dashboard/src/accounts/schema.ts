@@ -232,6 +232,8 @@ export const profile = sqliteTable('profile', {
   displayName: text('display_name').notNull(),
   /** R2 key of the uploaded avatar (`avatars/{userId}/{sha256}.{ext}`); null shows the generated one. */
   avatarKey: text('avatar_key'),
+  /** When the player finished or skipped the welcome after signing up (`/welcome`); null shows it. */
+  onboardedAt: integer('onboarded_at', { mode: 'timestamp_ms' }),
   ...timestamps,
 });
 
