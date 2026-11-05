@@ -2,18 +2,23 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { resolveAccountIdentity, type ServiceAccountIdentity } from './account-model.ts';
 import type { Locale } from './locale.ts';
 
-/** A decorative avatar beside an identity; upload and image fallback URLs belong to the application. */
+/** The shared avatar style: square, cropped to cover, round, with a hairline ring that follows the circle. */
+const AVATAR_CLASS = 'bg-muted ring-foreground/10 inline-block aspect-square shrink-0 rounded-full object-cover ring-1';
+
+/**
+ * A user's avatar, always a circle: the one avatar style every service and the player share. A non-square image is
+ * cropped to the square (`object-cover`), never stretched. Upload and image fallback URLs belong to the application.
+ */
 export function avatarTemplate(input: {
   src?: string;
   size: number;
   className?: string;
   alt?: string;
-  shape?: 'circle' | 'rounded';
 }): TemplateResult {
   return input.src === undefined
     ? html``
     : html`<img
-        class=${`bg-muted ring-foreground/10 inline-block shrink-0 ${input.shape === 'rounded' ? 'rounded-lg' : 'rounded-full'} ring-1${input.className ? ` ${input.className}` : ''}`}
+        class=${`${AVATAR_CLASS}${input.className ? ` ${input.className}` : ''}`}
         src=${input.src}
         width=${input.size}
         height=${input.size}

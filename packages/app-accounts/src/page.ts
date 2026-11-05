@@ -170,7 +170,7 @@ export function renderAccountPage(input: {
             <button class="btn w-full whitespace-normal" type="submit">${t.saveProfile}</button>
           </form>
           <h2 class="text-sm font-medium">${t.avatar}</h2>
-          ${avatarTemplate({ src: input.profile.avatarURL, size: 96, className: 'size-24', shape: 'rounded', alt: t.yourAvatar })}
+          ${avatarTemplate({ src: input.profile.avatarURL, size: 96, className: 'size-24', alt: t.yourAvatar })}
           <label class="grid gap-2 text-sm font-medium"
             >${t.uploadAvatar}<input
               class="input"
