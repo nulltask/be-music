@@ -117,6 +117,16 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.chartMatchesDifficultyFilter(BENCH_CHARTS[0]!, 'HYPER');
     },
   });
+  define('player-scene-model.resolveLibraryChartDifficulty', {
+    run: () => {
+      sceneModelAPI.resolveLibraryChartDifficulty(BENCH_CHARTS[0]!);
+    },
+  });
+  define('player-scene-model.resolveLibraryChartDifficultyValue', {
+    run: () => {
+      sceneModelAPI.resolveLibraryChartDifficultyValue(BENCH_CHARTS[0]!);
+    },
+  });
   define('player-scene-model.chartMatchesKeysFilter', {
     run: () => {
       sceneModelAPI.chartMatchesKeysFilter(BENCH_CHARTS[0]!, 'KEYS_7');
