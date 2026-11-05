@@ -1,6 +1,12 @@
 import type { PixiScene, PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-browser/host';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { SceneRouter, type RoutedPlayScene, type RoutedScene, type SceneRouterHost } from './scene-router.ts';
+import {
+  SceneRouter,
+  type RoutedPlayScene,
+  type RoutedScene,
+  type SceneRole,
+  type SceneRouterHost,
+} from './scene-router.ts';
 
 interface Gate {
   readonly promise: Promise<void>;
@@ -66,14 +72,17 @@ class FakePlay extends FakeScene implements RoutedPlayScene {
 /** The stage as `PixiSceneHost` runs it: the scene showing exits, then the next enters. */
 class FakeHost implements SceneRouterHost<FakeScene> {
   current: FakeScene | undefined;
+  /** The role each scene was shown as, in order. */
+  readonly roles: (SceneRole | undefined)[] = [];
   private readonly log: string[];
 
   constructor(log: string[]) {
     this.log = log;
   }
 
-  async setScene(scene: FakeScene | undefined): Promise<void> {
+  async setScene(scene: FakeScene | undefined, role?: SceneRole): Promise<void> {
     this.log.push(`setScene:${scene?.name ?? 'none'}`);
+    this.roles.push(role);
     if (this.current === scene) return;
     const previous = this.current;
     this.current = scene;
@@ -110,6 +119,14 @@ function setup(
 const withTail = (play: FakePlay): void => play.dispose({ preserveAudioTail: true });
 
 describe('SceneRouter.show', () => {
+  test('tells the stage the role each scene is shown as', async () => {
+    const { router, host, scene, play } = setup();
+    await router.show(scene('select'), { role: 'select' });
+    await router.show(play('play'), { role: 'play' });
+    await router.show(scene('result'), { role: 'result' });
+    expect(host.roles).toEqual(['select', 'play', 'result']);
+  });
+
   test('finalizes the recording, hands the stage over in one setScene, then disposes the scene that went', async () => {
     const { router, log, host, scene, play } = setup();
     const select = scene('select');

@@ -21,11 +21,12 @@ export interface RoutedPlayScene extends RoutedScene {
 }
 
 /**
- * The stage: `setScene(next)` exits the scene showing, then enters `next` (`undefined` leaves the stage empty), and
- * resolves once `next` has entered. `PixiSceneHost` is one.
+ * The stage: `setScene(next, role)` exits the scene showing, then enters `next` (`undefined` leaves the stage empty),
+ * and resolves once `next` has entered. `role` is what `next` is shown as (`undefined` with an empty stage).
+ * `PixiSceneHost` is one.
  */
 export interface SceneRouterHost<S> {
-  setScene(scene: S | undefined): Promise<void>;
+  setScene(scene: S | undefined, role?: SceneRole): Promise<void>;
 }
 
 /** The video recording of a play: `finalize` stops and saves one in progress, and does nothing otherwise. */
@@ -197,7 +198,7 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
       const replacedSelect =
         options.role === 'select' && keep && this.selectScene !== scene ? this.selectScene : undefined;
       if (options.role === 'play') this.plays.add(scene);
-      await this.host.setScene(scene);
+      await this.host.setScene(scene, options.role);
       this.currentScene = scene;
       // The overloads take only a select scene as `role: 'select'`.
       if (options.role === 'select' && keep) this.selectScene = scene as Sel;

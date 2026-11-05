@@ -20,7 +20,7 @@ import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
 import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
-import { bottomShiftableGaugeItems, laneOptionItems, menuLaneCovers, practiceGaugeItems } from './play-option-items.ts';
+import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
 import { buildPracticeRangePicker } from './practice-range.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
@@ -457,13 +457,7 @@ export function buildPlayOptionsFolder(
     }),
   );
   // SUDDEN+ / HIDDEN+, the switch and the height stay enabled during a play and move its covers live, as LIFT does.
-  const setCovers = (changes: Partial<PlayOptions>): void => {
-    this.setPlayOptions(changes);
-    this.gameplayView?.controller.dispatch({
-      type: 'cover',
-      command: { type: 'cover-set', covers: menuLaneCovers(this.guiState) },
-    });
-  };
+  const setCovers = (changes: Partial<PlayOptions>): void => this.setCoverOptions(changes);
   for (const key of ['hiddenSudden1P', 'hiddenSudden2P'] as const) {
     selectBinding(
       covers,
@@ -741,7 +735,7 @@ function pickReplayFile(): Promise<File | undefined> {
  * while its mode is in use (`active`). A control left to write back its own rounding would undo the play's change — a
  * floating 2.2458 as 2.25 — or set another mode's hi-speed (a classic list's first step for a play's 2.1).
  */
-function hiSpeedControl(
+export function hiSpeedControl(
   guiState: { hiSpeed: number },
   active: () => boolean,
   show: (value: number) => number,
@@ -760,6 +754,6 @@ function hiSpeedControl(
 }
 
 /** A value on the grid of `step`, as a slider of that step shows it. */
-function onGrid(step: number): (value: number) => number {
+export function onGrid(step: number): (value: number) => number {
   return (value) => Math.round(Math.round(value / step) * step * 1000) / 1000;
 }
