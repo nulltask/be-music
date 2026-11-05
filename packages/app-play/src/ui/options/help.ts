@@ -21,6 +21,41 @@ export function optionHelpSection(folders: readonly string[], sections: Readonly
   return folders.find((title) => sections.has(title)) ?? 'Top';
 }
 
+/** Where the help bubble goes: its top-left corner, the side of the button it opens on, and where its point sits. */
+export interface OptionHelpTipPlacement {
+  readonly left: number;
+  readonly top: number;
+  readonly side: 'top' | 'bottom';
+  /** The point's centre, from the bubble's left edge. */
+  readonly arrowX: number;
+}
+
+/** Space between the button and the bubble, which the point spans, as under the header's tooltips. */
+const TIP_GAP = 10;
+/** The least space kept between the bubble and the viewport's edges. */
+const TIP_MARGIN = 8;
+/** The least space kept between the point's centre and the bubble's rounded corners. */
+const TIP_ARROW_INSET = 12;
+
+/**
+ * Places the help bubble of size `tip` for a button at `anchor` in a `viewport`: centred below the button, or above
+ * it when the viewport has no room below, kept {@link TIP_MARGIN} inside the viewport, with its point under the
+ * button's centre however far the bubble was pushed sideways.
+ */
+export function placeOptionHelpTip(
+  anchor: { readonly left: number; readonly top: number; readonly width: number; readonly height: number },
+  tip: { readonly width: number; readonly height: number },
+  viewport: { readonly width: number; readonly height: number },
+): OptionHelpTipPlacement {
+  const centre = anchor.left + anchor.width / 2;
+  const left = Math.max(TIP_MARGIN, Math.min(centre - tip.width / 2, viewport.width - tip.width - TIP_MARGIN));
+  const below = anchor.top + anchor.height + TIP_GAP;
+  const fitsBelow = below + tip.height + TIP_MARGIN <= viewport.height;
+  const top = fitsBelow ? below : Math.max(TIP_MARGIN, anchor.top - TIP_GAP - tip.height);
+  const arrowX = Math.max(TIP_ARROW_INSET, Math.min(centre - left, tip.width - TIP_ARROW_INSET));
+  return { left, top, side: fitsBelow ? 'bottom' : 'top', arrowX };
+}
+
 /** Help's Options entries in one language: the section titles, and each entry's HTML by section and label. */
 interface OptionHelpEntries {
   readonly sections: ReadonlySet<string>;
@@ -110,7 +145,10 @@ export class OptionHelp {
       const section = optionHelpSection(folderTitles(row, this.root), help.sections);
       if (!help.entries.has(entryKey(section, label))) continue;
       const host = row.querySelector<HTMLElement>('[data-option-help-host]');
-      if (host !== null) render(this.button(section, label), host);
+      if (host === null) continue;
+      // A button's help sits inside it, right of its label, so it cannot be a button of its own.
+      const owner = host.closest('button');
+      render(owner === null ? this.button(section, label) : this.inlineMark(owner, section, label), host);
     }
     for (const folder of this.root.querySelectorAll<HTMLElement>('[data-options-folder]')) {
       const heading = folder.querySelector<HTMLElement>(':scope > h3');
@@ -154,7 +192,33 @@ export class OptionHelp {
     return button;
   }
 
-  private show(button: HTMLButtonElement, section: string, label: string): void {
+  /**
+   * The "?" inside a button, right of its label: a mark rather than a button, since a button cannot hold one. Hovering
+   * it shows the help as the "?" buttons do, and a tap or click on it toggles the help instead of pressing `owner`.
+   */
+  private inlineMark(owner: HTMLButtonElement, section: string, label: string): HTMLElement {
+    const mark = document.createElement('span');
+    mark.className = 'options-help options-help-inline';
+    mark.setAttribute('aria-hidden', 'true');
+    render(CIRCLE_HELP_ICON, mark);
+    const show = (): void => this.show(owner, section, label, mark);
+    mark.addEventListener('pointerenter', (event) => {
+      if (event.pointerType === 'mouse') show();
+    });
+    mark.addEventListener('pointerleave', (event) => {
+      if (event.pointerType === 'mouse') this.hide();
+    });
+    mark.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this.shownFor === owner) this.hide();
+      else show();
+    });
+    return mark;
+  }
+
+  /** Shows the help of `label` for `button`, the bubble pointing at `anchor` (the button itself by default). */
+  private show(button: HTMLButtonElement, section: string, label: string, anchor: HTMLElement = button): void {
     const description =
       this.entries(this.language()).entries.get(entryKey(section, label)) ??
       this.entries('en').entries.get(entryKey(section, label));
@@ -164,7 +228,7 @@ export class OptionHelp {
     this.shownFor?.removeAttribute('aria-describedby');
     this.shownFor = button;
     button.setAttribute('aria-describedby', this.tip.id);
-    this.place(button);
+    this.place(anchor);
   }
 
   private hide(): void {
@@ -173,19 +237,16 @@ export class OptionHelp {
     if (this.tip.matches(':popover-open')) this.tip.hidePopover();
   }
 
-  /** Below the button, or above it when the viewport has no room below, kept 8 px inside the viewport. */
-  private place(button: HTMLButtonElement): void {
-    const anchor = button.getBoundingClientRect();
-    const tip = this.tip.getBoundingClientRect();
-    const gap = 6;
-    const margin = 8;
-    const left = Math.min(
-      Math.max(margin, anchor.left + anchor.width / 2 - tip.width / 2),
-      innerWidth - tip.width - margin,
+  /** Puts the bubble beside `anchor` (`placeOptionHelpTip`). */
+  private place(anchor: HTMLElement): void {
+    const { left, top, side, arrowX } = placeOptionHelpTip(
+      anchor.getBoundingClientRect(),
+      { width: this.tip.offsetWidth, height: this.tip.offsetHeight },
+      { width: innerWidth, height: innerHeight },
     );
-    const below = anchor.bottom + gap;
-    const top = below + tip.height + margin > innerHeight ? Math.max(margin, anchor.top - gap - tip.height) : below;
-    this.tip.style.left = `${Math.max(margin, left)}px`;
+    this.tip.dataset.side = side;
+    this.tip.style.left = `${left}px`;
     this.tip.style.top = `${top}px`;
+    this.tip.style.setProperty('--options-help-tip-arrow-x', `${arrowX}px`);
   }
 }

@@ -406,16 +406,16 @@ export class OptionButton extends OptionRow {
         : this.titleText;
     render(
       html`<button
-          class="btn options-button"
-          type="button"
-          data-variant="outline"
-          data-size="sm"
-          @click=${() => {
-            for (const handler of this.handlers) handler();
-          }}
-        >
-          ${title}</button
-        ><span data-option-help-host></span>`,
+        class="btn options-button"
+        type="button"
+        data-variant="outline"
+        data-size="sm"
+        @click=${() => {
+          for (const handler of this.handlers) handler();
+        }}
+      >
+        ${title}<span data-option-help-host></span>
+      </button>`,
       this.element,
     );
   }
