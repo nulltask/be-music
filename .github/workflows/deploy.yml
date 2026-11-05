@@ -54,16 +54,14 @@ jobs:
         run: pnpm --filter @be-music/app-leaderboard run "db:migrate:$DB_ENV"
 
       - name: Migrate Accounts
-        run: pnpm --filter @be-music/app-accounts run "db:migrate:$DB_ENV"
+        run: pnpm --filter @be-music/app-dashboard run "db:migrate:$DB_ENV"
 
-      - name: Deploy Accounts
-        run: pnpm --filter @be-music/app-accounts run "deploy$SUFFIX"
+      # The Dashboard runs Accounts and is the OIDC issuer, so it deploys before the services that sign in with it.
+      - name: Deploy the Dashboard
+        run: pnpm --filter @be-music/app-dashboard run "deploy$SUFFIX"
 
       - name: Deploy the Leaderboard
         run: pnpm --filter @be-music/app-leaderboard run "deploy$SUFFIX"
 
       - name: Deploy the Player
         run: pnpm --filter @be-music/worker-play run "deploy$SUFFIX"
-
-      - name: Deploy the Dashboard
-        run: pnpm --filter @be-music/app-dashboard run "deploy$SUFFIX"

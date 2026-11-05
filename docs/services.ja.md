@@ -2,7 +2,7 @@
 
 # サービスと環境
 
-> ステータス: Dashboard・Accounts・Player・Leaderboard・Donate に本番とプレビューがあります。認証は Accounts が所有し、OIDC を使います。アプリの Cookie はホスト専用です。Registry と Editor は未実装です。
+> ステータス: Dashboard・Accounts・Player・Leaderboard・Donate に本番とプレビューがあります。Accounts は Dashboard の Worker の中で Dashboard のホストに置き、認証を所有して OIDC を使います。アプリの Cookie はホスト専用です。Registry と Editor は未実装です。
 
 ## 1. サービス
 
@@ -12,7 +12,7 @@ Be-Music のアカウントでログインします。
 | サービス    | 本番のホスト               | 役割                                                                                                                 |
 | ----------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Dashboard   | `be-music.app`             | ログインしたユーザーのホーム。各サービスへ移動できる                                                                 |
-| Accounts    | `accounts.be-music.app`    | ログイン、アカウント、パスキー。ほかのすべてのサービスが使う OIDC プロバイダー                                       |
+| Accounts    | `be-music.app`             | ログイン、アカウント、パスキー。ほかのすべてのサービスが使う OIDC プロバイダー。Dashboard の Worker の一部           |
 | Player      | `play.be-music.app`        | ブラウザで動くプレイヤー（今は `be-music.app`）                                                                      |
 | Leaderboard | `leaderboard.be-music.app` | ランキング（今は `be-music.app/leaderboard`）                                                                        |
 | Registry    | `registry.be-music.app`    | ユーザーが譜面・楽曲・コース・段位認定を登録する。それぞれ公開・非公開・限定公開（リンクを知っている人だけ）を選べる |
@@ -22,14 +22,16 @@ Be-Music のアカウントでログインします。
 ```mermaid
 flowchart LR
   subgraph clients[OIDC クライアント]
-    H[Dashboard]
     P[Player]
     L[Leaderboard]
     R[Registry]
     E[Editor]
     D[Donate]
   end
-  A[Accounts]
+  subgraph worker[Dashboard の Worker]
+    H[Dashboard]
+    A[Accounts]
+  end
   clients -->|ログイン| A
   E -->|公開| R
   P -->|譜面を取得| R
@@ -49,7 +51,7 @@ flowchart LR
 | サービス    | 本番                       | プレビュー                         | Worker（本番 / プレビュー）           |
 | ----------- | -------------------------- | ---------------------------------- | ------------------------------------- |
 | Dashboard   | `be-music.app`             | `preview.be-music.app`             | `dashboard` / `dashboard-preview`     |
-| Accounts    | `accounts.be-music.app`    | `accounts.preview.be-music.app`    | `accounts` / `accounts-preview`       |
+| Accounts    | `be-music.app`             | `preview.be-music.app`             | `dashboard` / `dashboard-preview`     |
 | Player      | `play.be-music.app`        | `play.preview.be-music.app`        | `play` / `play-preview`               |
 | Leaderboard | `leaderboard.be-music.app` | `leaderboard.preview.be-music.app` | `leaderboard` / `leaderboard-preview` |
 | Registry    | `registry.be-music.app`    | `registry.preview.be-music.app`    | `registry` / `registry-preview`       |
@@ -71,10 +73,10 @@ flowchart LR
 
 - **外部サービス**は、プレビュー用の認証情報を別に持ちます。Discord と Google の OAuth アプリはプレビュー用を作り、
   `donate-preview` は Stripe のテストモードの鍵を使います。Discord のリダイレクト URI は、本番が
-  `https://accounts.be-music.app/api/auth/callback/discord`、プレビューが
-  `https://accounts.preview.be-music.app/api/auth/callback/discord` です。Google のリダイレクト URI は、本番が
-  `https://accounts.be-music.app/api/auth/callback/google`、プレビューが
-  `https://accounts.preview.be-music.app/api/auth/callback/google` です。
+  `https://be-music.app/api/auth/callback/discord`、プレビューが
+  `https://preview.be-music.app/api/auth/callback/discord` です。Google のリダイレクト URI は、本番が
+  `https://be-music.app/api/auth/callback/google`、プレビューが
+  `https://preview.be-music.app/api/auth/callback/google` です。
 - **公開範囲**: プレビューのホストは検索エンジンに載らないようにし、必要なら Cloudflare Access で保護します。
 - **証明書**: `play.preview.be-music.app` のように `be-music.app` の 2 階層下のホストは、ゾーンのユニバーサル証明書
   （`*.be-music.app`）の対象外です。Worker のカスタムドメインはホスト名ごとに証明書を発行するので、最初のプレビューの
@@ -82,7 +84,7 @@ flowchart LR
 
 ## 3. ログイン
 
-Accounts サービスは OpenID Connect のプロバイダー（Better Auth）です。ほかのサービスはすべてそのクライアントで、それ
+Accounts サービスは OpenID Connect のプロバイダー（Better Auth）で、issuer は `https://be-music.app/api/auth` です。Dashboard の Worker の中で動き、Dashboard はそのセッションを直接読みます（[ADR 0039](./adr/0039-accounts-in-dashboard.ja.md)）。ほかのサービスはすべてそのクライアントで、それ
 ぞれ自分のホストに自分のセッション Cookie を持ちます。サービス同士で Cookie を共有しないので、セルフホストのインスタンス
 がサービスを互いに無関係なドメインに置いても、同じコードで動きます（5 章）。
 
@@ -110,7 +112,7 @@ sequenceDiagram
   インスタンスのアカウントでログインできるようにする余地が残ります。
 - **ログイン方法**は Accounts だけが持ちます。設定済みの Discord・Google、パスキー、ゲストセッションに対応します。ターミナル向けのデバイス認可フローは今後の実装です。ログイン済みのアカウントは、アカウントページからパスキー、Discord、Google を後から紐付けられます。紐付けは同じアカウントのまま行われ、プロバイダのメールが違っていても足せます。
 - **パスキー**は、環境ごとに 1 つの relying party ID に結び付けます。本番は `be-music.app`、プレビューは
-  `preview.be-music.app` です。パスキーは Accounts のホストでしか使わないので、ほかのサービスがどこにあっても動きます。
+  `preview.be-music.app` です。パスキーは Accounts が動く Dashboard のホストでしか使わないので、ほかのサービスがどこにあっても動きます。
 - **サービス同士の呼び出し**はサーバーを通します。ブラウザは自分のサービスだけと通信し、そのサービスがユーザーのアクセス
   トークンを付けて、ほかのサービスの API を呼びます。呼ばれた側は Accounts の JWKS でトークンを検証するので、サービス
   同士でデータベースを共有せず、ログインが必要な呼び出しに CORS も要りません。誰でも読める読み取り専用の API は、CORS を
@@ -120,11 +122,11 @@ sequenceDiagram
 
 ### 3.1 ユーザーの所有と移行
 
-Accounts は専用の D1（`accounts`／`accounts-preview`）にユーザー、外部サービス連携、パスキー、セッション、署名鍵、OAuth クライアントの状態を持ちます。ログイン中に Leaderboard を呼びません。
+Accounts は専用の D1（`dashboard`／`dashboard-preview`）にユーザー、外部サービス連携、パスキー、セッション、署名鍵、OAuth クライアントの状態を持ちます。ログイン中に Leaderboard を呼びません。
 
 Leaderboard は公開プロフィールとスコアを所有し、`oidc_identity` で `(issuer, subject)` とローカルのプレイヤー ID を対応させます。検証済みトークンから初回アクセス時に必要な行を作り、メールでは紐付けません。既存の対応付けは元のプレイヤー ID とスコアの所有者を維持します。アカウント連携時は、署名されたゲスト連携情報からプレイを冪等に移し、Accounts にスコア DB へのアクセスを与えません。
 
-Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切り替え前に `packages/app-accounts/scripts/migrate-identities.ts` を実行します。既定はドライランです。`--preview --apply` はプレビューのユーザー・外部連携・パスキーをコピーし、対応付けを登録します。本番は `--preview` を外します。古いセッションとチャレンジはコピーせず、資格情報を出力しません。元の認証テーブルはロールバック用に残します。新しい OIDC ユーザーが作られた後は再実行しません。再ログインは必要ですが、移行したパスキーの RP ID は維持します。
+Accounts を Dashboard の Worker に移したとき、データベースは空で作り直し、一度きりのユーザー・プロフィール移行スクリプトは削除しました（[ADR 0039](./adr/0039-accounts-in-dashboard.ja.md)）。以前の issuer `https://accounts.be-music.app/api/auth` で作られた Leaderboard の対応付けは、どのアカウントにも一致しません。
 
 `legacy-auth.ts` は localhost のテスト・開発専用です。公開ホストでは OIDC 設定がなければ認証を拒否し、以前の共有 Cookie も受け付けません。
 
@@ -145,17 +147,19 @@ Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切�
 | 設定                  | 意味                                                        |
 | --------------------- | ----------------------------------------------------------- |
 | `PUBLIC_ORIGIN`       | そのサービス自身のオリジン。コールバック URL もここから作る |
-| `AUTH_ISSUER`         | Accounts のオリジン                                         |
+| `AUTH_ISSUER`         | Accounts の issuer（例: `https://example.com/api/auth`）    |
 | `OIDC_CLIENT_ID`      | Accounts に登録したそのサービスのクライアント情報           |
-| `PASSKEY_RP_ID`       | Accounts のみ。既定は Accounts のホスト                     |
+| `PASSKEY_RP_ID`       | Accounts のみ。relying party ID（例: Dashboard のホスト）   |
 | `USER_CONTENT_ORIGIN` | Registry のみ。アップロードされたファイルの配信元           |
 
 - Accounts は、クライアントとリダイレクト URI の一覧を設定から読みます。
-- Discord と Google は任意です。パスキーとゲストのセッションだけで始められます。Discord ログインは Accounts Worker の
+- Discord と Google は任意です。パスキーとゲストのセッションだけで始められます。Discord ログインは Accounts を動かす Dashboard Worker の
   `DISCORD_CLIENT_ID` と `DISCORD_CLIENT_SECRET` を読みます。公式インスタンスでは `be-music` Vault の `discord`
   （本番）と `discord-preview`（プレビュー）に置きます。Google ログインは `GOOGLE_CLIENT_ID` と
   `GOOGLE_CLIENT_SECRET` を読み、同じ Vault の `google`（本番）と `google-preview`（プレビュー）に置きます。
-  `pnpm --filter @be-music/app-accounts run secrets:preview` と `secrets:production` で値を表示せずに設定します。
+  Better Auth の `BETTER_AUTH_SECRET` も同じ Vault の `cloudflare-dashboard-better-auth`（本番）と
+  `cloudflare-dashboard-preview-better-auth`（プレビュー）に置きます。
+  `pnpm --filter @be-music/app-dashboard run secrets:preview` と `secrets:production` で値を表示せずに設定します。
 - D1 のデータベース ID、Worker の名前、Service Binding の接続先は、ソースではなくデプロイの設定から読みます。
 - 外部サービス（BMS Search など）への問い合わせは、オフにできます。
 - 寄付、寄付サイト、Be-Music という名前とロゴは公式のインスタンスのものです。プレイヤーからのそれらへのリンクは設定で
@@ -168,7 +172,7 @@ Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切�
 | サービス    | 今                                                                                     |
 | ----------- | -------------------------------------------------------------------------------------- |
 | Dashboard   | `dashboard` / `dashboard-preview`。セッションとリンクを表示する仮のページ              |
-| Accounts    | `accounts` / `accounts-preview`。専用 D1 を持つ独立した OIDC プロバイダー              |
+| Accounts    | `dashboard` / `dashboard-preview` の一部。OIDC プロバイダーとその D1                   |
 | Player      | `play` / `play-preview`（`packages/worker-play`。`@be-music/app-play` のビルドを配信） |
 | Leaderboard | `leaderboard` / `leaderboard-preview`。ページはホストのルートに置く                    |
 | Donate      | `donate` / `donate-preview`。OIDC ログインと公開の収支データ                           |
@@ -187,10 +191,9 @@ Player は Service Worker を持つインストール可能な Web アプリで�
 
 | Worker                                | D1            | R2                                                  |
 | ------------------------------------- | ------------- | --------------------------------------------------- |
-| `accounts` / `accounts-preview`       | Worker と同名 | Worker と同名：アバター                             |
 | `leaderboard` / `leaderboard-preview` | Worker と同名 | Worker と同名：リプレイ、譜面構造データ、共有カード |
 | `play` / `play-preview`               | なし          | Worker と同名：FFmpeg core                          |
-| `dashboard` / `dashboard-preview`     | なし          | なし                                                |
+| `dashboard` / `dashboard-preview`     | Worker と同名 | `accounts` / `accounts-preview`：アバター           |
 | `donate` / `donate-preview`           | なし          | なし。収支データはリポジトリで管理                  |
 
 公開の静的アセットは `assets` バケットを `assets.be-music.app` で配信します。FFmpeg のアップロード先は既定で `play` です。`pnpm --filter @be-music/app-play run cf:r2:push:preview` で `play-preview` を別に更新します。

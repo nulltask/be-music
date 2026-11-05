@@ -1,8 +1,8 @@
 // Sets a Worker's secrets from 1Password. Each line of secrets/<environment>.env.tpl names a secret and the 1Password
 // reference holding its value (`KEY={{ op://vault/item/field }}`); the value goes from `op read` straight into
 // `cf workers secrets update`, without a file, and is never printed.
-//   pnpm --filter @be-music/app-accounts run secrets:preview
-//   pnpm --filter @be-music/app-accounts run secrets:production
+//   pnpm --filter @be-music/app-dashboard run secrets:preview
+//   pnpm --filter @be-music/app-dashboard run secrets:production
 //
 // Only `cf` is used: Wrangler may be signed in to another Cloudflare account. Set OP_ACCOUNT to pick the 1Password
 // account (default my.1password.com).
@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { binEntry } from './bin-entry.ts';
 
-const WORKERS = { preview: 'accounts-preview', production: 'accounts' } as const;
+const WORKERS = { preview: 'dashboard-preview', production: 'dashboard' } as const;
 
 const environment = process.argv[2];
 if (environment !== 'preview' && environment !== 'production') {

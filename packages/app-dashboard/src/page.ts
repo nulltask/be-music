@@ -16,7 +16,7 @@ import {
   type Locale,
 } from '@be-music/service-web-theme';
 
-/** The Accounts public profile combined with the local OIDC session's anonymous status. */
+/** The public profile combined with the Accounts session's guest status. */
 export interface DashboardAccount {
   handle: string;
   displayName: string;
@@ -99,7 +99,7 @@ export function renderDashboard(input: {
       : input.account.anonymous
         ? t.anonymous(input.account.handle)
         : t.signedIn(input.account.displayName, input.account.handle);
-  const accountHref = input.account === undefined ? '/api/auth/sign-in' : '/api/auth/manage';
+  const accountHref = input.account === undefined ? '/login' : '/account';
   const accountLabel =
     input.account === undefined
       ? input.locale === 'ja'
@@ -159,7 +159,7 @@ export function renderDashboard(input: {
                 </p>
                 <div class="flex flex-wrap gap-2">
                   <a class="btn no-underline" data-size="sm" href=${accountHref}>${accountLabel}</a>
-                  ${input.account === undefined ? nothing : html`<form method="post" action="/api/auth/sign-out?returnTo=%2F"><button class="btn" data-size="sm" data-variant="outline" type="submit">${input.locale === 'ja' ? 'ログアウト' : 'Sign out'}</button></form>`}
+                  ${input.account === undefined ? nothing : html`<form method="post" action="/sign-out"><button class="btn" data-size="sm" data-variant="outline" type="submit">${input.locale === 'ja' ? 'ログアウト' : 'Sign out'}</button></form>`}
                 </div>
               </section>
             </section>
