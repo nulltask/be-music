@@ -147,7 +147,14 @@ describe('resolveBeatorajaResultOps', () => {
       BEATORAJA_OP.GOOD_EXIST,
       BEATORAJA_OP.POOR_EXIST,
       BEATORAJA_OP.MISS_EXIST,
+      BEATORAJA_OP.AUTOPLAY_OFF,
     ]);
+  });
+
+  it('lights AUTOPLAY_ON in place of AUTOPLAY_OFF for a full AUTO play', () => {
+    const ops = resolveBeatorajaResultOps(input({ result: facts({ autoPlay: true }) }));
+    expect(ops).toContain(BEATORAJA_OP.AUTOPLAY_ON);
+    expect(ops).not.toContain(BEATORAJA_OP.AUTOPLAY_OFF);
   });
 
   it('lights RESULT_FAIL, the zero rank, NO PLAY without a lamp, and the course stage ops', () => {

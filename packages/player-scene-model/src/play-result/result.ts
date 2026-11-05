@@ -53,6 +53,11 @@ export interface PlayResult {
    * Skins mark it (LR2 op 84, as LR2 keeps its replay status on through the results).
    */
   fromReplay?: boolean;
+  /**
+   * The play was a full AUTO play: every note played by itself, live or as an AUTO play's replay played back. Skins
+   * mark it (LR2 op 33, beatoraja's `OPTION_AUTOPLAYON`); read it through {@link isAutoPlayResult}.
+   */
+  autoPlay?: boolean;
   /** The clear lamp (FAILED, the gauge cleared on, FULL COMBO, …). */
   lamp?: ClearLamp;
   /** The gauge the play ran on, as the ruleset names it (`GROOVE`, `HARD`, `EX-HARD`, …). */
@@ -99,6 +104,14 @@ export function playResultRun(result: Pick<PlayResult, 'run'>): PlayRunKind {
   return result.run ?? 'single';
 }
 
+/**
+ * Whether a result is of a full AUTO play: its `autoPlay` flag, or the replay it recorded being an AUTO play's (the
+ * replay's `play.mode`, which also tells the Leaderboard to take no AUTO play).
+ */
+export function isAutoPlayResult(result: Pick<PlayResult, 'autoPlay' | 'replay'>): boolean {
+  return result.autoPlay === true || result.replay?.play.mode === 'auto';
+}
+
 /** How a result screen presents a run, as LR2 does. */
 export interface ResultPresentation {
   /** Shown on the course-result skin (falling back to the result skin). */
@@ -137,6 +150,8 @@ export interface PlayResultFacts {
   replay?: BeMusicReplay;
   /** The play was a replay played back ({@link PlayResult.fromReplay}). */
   fromReplay?: boolean;
+  /** The play was a full AUTO play ({@link PlayResult.autoPlay}). */
+  autoPlay?: boolean;
   run?: PlayRunKind;
   course?: CourseView;
 }
@@ -177,6 +192,7 @@ export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts
     scoreHistory: [...state.scoreHistory, { progress, exScore: state.exScore }],
     ...(facts.practice !== true && facts.replay !== undefined ? { replay: facts.replay } : {}),
     ...(facts.fromReplay === true ? { fromReplay: true } : {}),
+    ...(facts.autoPlay === true ? { autoPlay: true } : {}),
     lamp,
     ...(state.gaugeType !== undefined ? { gaugeType: state.gaugeType } : {}),
     ...(facts.run !== undefined ? { run: facts.run } : {}),

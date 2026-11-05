@@ -1,5 +1,5 @@
 import { resolveClearLamp, resolve____RankIndexFromScore } from '@be-music/player-engine/ruleset';
-import type { CourseView, PlayResult } from '@be-music/player-scene-model';
+import { isAutoPlayResult, type CourseView, type PlayResult } from '@be-music/player-scene-model';
 import { LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
 import { resolveLR2ChartText, resolveLR2DifficultyOp, resolveLR2KeyModeOp } from './chart.ts';
 import { resolveLR2CourseNumber, resolveLR2CourseOps, resolveLR2CourseText } from './course.ts';
@@ -26,11 +26,10 @@ export interface LR2ResultState extends LR2SceneState {
 }
 
 /**
- * Ops the result screen always lights: no AUTOPLAY, GHOST, score graph, live BGA, difficulty filter, internet ranking,
- * auto scratch or score saving; the normal gauges.
+ * Ops the result screen always lights: no GHOST, score graph, live BGA, difficulty filter, internet ranking, auto scratch
+ * or score saving; the normal gauges.
  */
 const RESULT_BASE_OPS: readonly number[] = [
-  LR2_OP.AUTOPLAY_OFF,
   LR2_OP.GHOST_OFF,
   LR2_OP.SCORE_GRAPH_OFF,
   LR2_OP.BGA_OFF,
@@ -70,6 +69,8 @@ function resultOps(input: LR2ResultInput): number[] {
   ops.push(result.cleared ? LR2_OP.RESULT_CLEAR : LR2_OP.RESULT_FAIL);
   // LR2 keeps its replay status through the results of a replay (a course replay's too, OpenLR2 L4740-L4741).
   ops.push(result.fromReplay === true ? LR2_OP.REPLAY_PLAYING : LR2_OP.REPLAY_OFF);
+  // AUTOPLAY is the play's mode, kept through its results as the replay status is.
+  ops.push(isAutoPlayResult(result) ? LR2_OP.AUTOPLAY_ON : LR2_OP.AUTOPLAY_OFF);
   // The result is always on a chart.
   ops.push(LR2_OP.SONG_BAR, LR2_OP.PLAYABLE_BAR);
   // The key mode in both ranges, as skins gate on either.

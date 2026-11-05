@@ -594,6 +594,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.playResultRun({ run: 'stage' });
     },
   });
+  define('player-scene-model.isAutoPlayResult', {
+    run: () => {
+      sceneModelAPI.isAutoPlayResult({ autoPlay: true });
+    },
+  });
   define('player-scene-model.resolveResultPresentation', {
     run: () => {
       sceneModelAPI.resolveResultPresentation('nonstop');

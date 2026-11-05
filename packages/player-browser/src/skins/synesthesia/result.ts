@@ -29,6 +29,7 @@ import {
   easeOutBack,
   easeOutCubic,
   resolveResultLamp,
+  resolveResultPlayTag,
   resolveResultTrackRows,
   rollUpValue,
   stageProgress,
@@ -157,6 +158,23 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     alpha: verdictT,
     dropShadow: { color: verdictColor, distance: 0, blur: 12, alpha: 1 },
   });
+  // AUTO PLAY / ASSIST: a framed tag at the right end of the verdict's line, fading in with it.
+  const playTag = resolveResultPlayTag(result);
+  if (playTag !== undefined) {
+    const tag = group('play-tag');
+    const tagColor = playTag === 'AUTO PLAY' ? SYN_CYAN : SYN_MAGENTA;
+    const tagRight = designWidth - margin;
+    const tagText = text(tag.root, playTag, tagRight - 12, 23, {
+      ...display(11, tagColor),
+      letterSpacing: 3,
+      anchorX: 1,
+      anchorY: 0.5,
+      dropShadow: { color: tagColor, distance: 0, blur: 8, alpha: 0.8 },
+    });
+    const tagW = Math.ceil(tagText.width) + 24;
+    drawFrame(tag.g, tagRight - tagW, 11, tagW, 24, tagColor, { fill: 0.6, arm: 6 });
+    tag.root.alpha = verdictT;
+  }
 
   // Rank: sparks burst outward as the letter ignites.
   const rank = group('rank');

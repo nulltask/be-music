@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeMusicResultData } from './result-data.ts';
-import { resolveResultLamp, resolveResultTrackRows, resolveResultVerdict } from './result-track.ts';
+import {
+  resolveResultLamp,
+  resolveResultPlayTag,
+  resolveResultTrackRows,
+  resolveResultVerdict,
+} from './result-track.ts';
 
 function score(partial: Partial<BeMusicResultData['score']>): BeMusicResultData['score'] {
   return { total: 100, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 0, score: 0, ...partial };
@@ -75,5 +80,30 @@ describe('resolveResultVerdict', () => {
   it('reads a course stage and a NONSTOP run as one play', () => {
     expect(resolveResultVerdict({ cleared: true, run: 'stage' })).toBe('STAGE CLEAR');
     expect(resolveResultVerdict({ cleared: false, run: 'nonstop' })).toBe('FAILED');
+  });
+});
+
+describe('resolveResultPlayTag', () => {
+  const replay = (
+    play: Partial<NonNullable<BeMusicResultData['replay']>['play']> = {},
+  ): NonNullable<BeMusicResultData['replay']> =>
+    ({
+      chart: { notes: [{ id: 0, channel: '11', type: 'normal', timeUs: 0 }] },
+      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...play },
+    }) as unknown as NonNullable<BeMusicResultData['replay']>;
+
+  it('tags a full AUTO play, by its flag or by the mode of the replay it recorded', () => {
+    expect(resolveResultPlayTag({ autoPlay: true })).toBe('AUTO PLAY');
+    expect(resolveResultPlayTag({ replay: replay({ mode: 'auto' }) })).toBe('AUTO PLAY');
+  });
+
+  it('tags a play whose replay used an assisted option', () => {
+    expect(resolveResultPlayTag({ replay: replay({ autoScratch: true }) })).toBe('ASSIST');
+    expect(resolveResultPlayTag({ replay: replay({ judgeWindowOverrideMs: 50 }) })).toBe('ASSIST');
+  });
+
+  it('leaves a plain play untagged, and a play without a replay that was not AUTO', () => {
+    expect(resolveResultPlayTag({ replay: replay() })).toBeUndefined();
+    expect(resolveResultPlayTag({})).toBeUndefined();
   });
 });
