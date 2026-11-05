@@ -49,8 +49,12 @@ export interface RequestFacts {
 
 /** Every cache this worker creates starts with this, so activation can drop the ones a deploy no longer uses. */
 export const CACHE_PREFIX = 'be-music-play-';
-/** The UI fonts' cache. Font URLs are versioned by Google, so it outlives deploys. */
-export const FONT_CACHE_NAME = `${CACHE_PREFIX}fonts`;
+/**
+ * The UI fonts' cache. Font URLs are versioned by Google, so it outlives deploys. `v2` drops the first cache, which could
+ * hold opaque answers: under the cross-origin isolation the player now runs with (COEP), reading one back throws, and
+ * the page lost the Google Fonts stylesheet and drew every skin with fallback faces.
+ */
+export const FONT_CACHE_NAME = `${CACHE_PREFIX}fonts-v2`;
 /** The cache key of the app shell's HTML. */
 export const SHELL_URL = '/';
 /** The ffmpeg.wasm core the player loads (`FFMPEG_CORE_URL` / `FFMPEG_WASM_URL` in player-browser), cached on install. */
@@ -126,13 +130,23 @@ export function routeRequest(request: RequestFacts, origin: string, precached: R
   return 'network';
 }
 
-/** Whether a network response may be stored: a complete, successful answer (an opaque one only for the fonts). */
-export function isCacheableResponse(response: { status: number; type: string }, route: RequestRoute): boolean {
-  if (response.type === 'opaque') return route === 'font-stylesheet' || route === 'font-file';
+/**
+ * Whether a network response may be stored: a complete, successful answer, never an opaque one. The worker fetches the
+ * fonts with CORS ({@link fontFetchInit}), because an opaque answer carries no `Cross-Origin-Resource-Policy` and a
+ * cross-origin isolated page (and this worker, served with the same COEP) cannot read it back from the cache.
+ */
+export function isCacheableResponse(response: { status: number; type: string }): boolean {
   return (
     response.status === 200 && (response.type === 'basic' || response.type === 'cors' || response.type === 'default')
   );
 }
+
+/**
+ * How the worker fetches a Google Fonts stylesheet or file: with CORS and no credentials, whatever mode the page asked
+ * in (a `<link rel="stylesheet">` asks `no-cors`). Google answers with `Access-Control-Allow-Origin: *`, so the answer
+ * is a readable `cors` one the cache can hand back under COEP.
+ */
+export const fontFetchInit: RequestInit = { mode: 'cors', credentials: 'omit' };
 
 /**
  * The font files a Google Fonts stylesheet names (`url(https://fonts.gstatic.com/…)`), each once, in order. Install
