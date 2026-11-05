@@ -120,6 +120,31 @@ sequenceDiagram
 - **Sessions and sign-out**: each app has a separate encrypted `__Host-be-music.session` cookie, valid for at most 10 minutes and never longer than its tokens. Tokens stay in HttpOnly cookies and server-side requests; browser session endpoints expose identity only. There are no refresh tokens. Once an app session expires, use Sign in again; Accounts normally completes the redirect without another credential prompt. App sign-out clears that app's cookie. Accounts sign-out ends SSO; existing app sessions can remain valid for up to 10 minutes. Immediate global logout is not implemented.
 - **Redirect URIs** are registered per client and matched exactly, including in preview. Clients use authorization code + S256 PKCE, `state`, `nonce`, issuer/audience checks and signed ID-token verification. Public first-party clients have no client secret and cannot register other clients. APIs accept resource-bound access tokens with the `be-music:api` scope, not ID tokens.
 
+### Welcome after sign-up
+
+A new account is welcomed once, on Accounts' `/welcome`, before it goes back to where the sign-up started. The welcome has three steps, and each can be left for later:
+
+1. **Profile**: the display name (the placeholder `Anonymous` / `Player` is left out of the field), the handle, checked as it is typed (`GET /api/profile/handle`), and the avatar.
+2. **Keep the account** (guests only): what a guest cannot do (sign in on other devices, appear in rankings), and a passkey, Google or Discord to keep it.
+3. **Done**: back to the app that asked for the sign-in, or on to Play, the Leaderboard or the Dashboard.
+
+```mermaid
+flowchart LR
+  signUp[Sign-up] --> check{welcomed?}
+  check -->|no| profile[Profile]
+  profile --> guest{guest?}
+  guest -->|yes| keep[Keep the account]
+  guest -->|no| finish[Done]
+  keep --> finish
+  finish --> back[Back to the app]
+  check -->|yes| back
+```
+
+- **Who sees it**: a profile whose `onboarded_at` is empty. Reaching the last step, or leaving it for later there, records the time (`POST /api/profile/onboarded`). Profiles that existed before the welcome count as welcomed (migration `0003`).
+- **Keeping a guest account** welcomes it again: the placeholder name `Anonymous` becomes `Player`, as the Leaderboard renames it, and `onboarded_at` is cleared so the player can name the account they now keep (`onAccountKept`).
+- **Where it comes in**: the sign-in page script sends a new account to `/welcome` before it continues the app's sign-in request (`oauth_query`), so the authorization code is made only afterwards; `/account` and the Dashboard's `/` redirect there too. `next` is a path on this host only.
+- **Start with a passkey** on the sign-in page makes a guest account and registers a passkey for it at once, so a passkey can start an account without a guest step the player sees.
+
 ### 3.1 Identity ownership and migration
 
 Accounts has its own D1 (`dashboard` / `dashboard-preview`) for users, provider links, passkeys, sessions, signing keys and OAuth client state. It never calls the Leaderboard during login.

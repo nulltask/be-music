@@ -73,8 +73,23 @@ describe('Dashboard host', () => {
     expect(response.headers.get('content-security-policy')).toContain("img-src 'self'");
   });
 
+  test('welcomes a new account before showing the Dashboard', async () => {
+    const cookie = cookies(await signInAsGuest());
+    const response = await worker.fetch(new Request(env.AUTH_ORIGIN, { headers: { cookie } }), env);
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/welcome?next=%2F');
+  });
+
   test('reads the Accounts session directly and shows the profile', async () => {
     const cookie = cookies(await signInAsGuest());
+    // Past the welcome a new account sees first.
+    await worker.fetch(
+      new Request(`${env.AUTH_ORIGIN}/api/profile/onboarded`, {
+        method: 'POST',
+        headers: { cookie, origin: env.AUTH_ORIGIN },
+      }),
+      env,
+    );
     const response = await worker.fetch(new Request(env.AUTH_ORIGIN, { headers: { cookie } }), env);
     const html = await response.text();
     expect(html).toContain('data-state="anonymous"');

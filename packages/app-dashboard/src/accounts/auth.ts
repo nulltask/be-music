@@ -6,7 +6,7 @@ import { passkey } from '@better-auth/passkey';
 import { oauthProvider } from '@better-auth/oauth-provider';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq, count, notInArray } from 'drizzle-orm';
-import { createProfile } from './profiles.ts';
+import { createProfile, onAccountKept } from './profiles.ts';
 import * as schema from './schema.ts';
 
 export interface Env {
@@ -94,7 +94,13 @@ function buildAuth(env: Env) {
         create: {
           after: async (created) => {
             if (created.providerId !== 'discord' && created.providerId !== 'google') return;
+            const [before] = await db
+              .select({ isAnonymous: schema.user.isAnonymous })
+              .from(schema.user)
+              .where(eq(schema.user.id, created.userId));
             await db.update(schema.user).set({ isAnonymous: false }).where(eq(schema.user.id, created.userId));
+            // A guest who keeps the account this way is welcomed again, to name the account they now keep.
+            if (before?.isAnonymous === true) await onAccountKept(db, created.userId);
           },
         },
       },

@@ -170,3 +170,60 @@ export async function resolveFormerHandle(db: Database, handle: string): Promise
     .where(eq(handleHistory.handle, handle.toLowerCase()));
   return row?.handle;
 }
+
+export type HandleAvailability = { ok: true; handle: string } | { ok: false; reason: 'format' | 'reserved' | 'taken' };
+
+/** Whether `userId` could take the handle the player is typing (the welcome checks it as they type). */
+export async function checkHandleAvailability(
+  db: Database,
+  userId: string,
+  input: string,
+): Promise<HandleAvailability> {
+  const checked = normalizeHandle(input);
+  if (!checked.ok) return checked;
+  if (await isHandleTaken(db, checked.handle, userId)) return { ok: false, reason: 'taken' };
+  return checked;
+}
+
+/** Whether the player has yet to see the welcome: a profile made after sign-up that was never onboarded. */
+export async function needsOnboarding(db: Database, userId: string): Promise<boolean> {
+  const found = await db.query.profile.findFirst({
+    where: eq(profile.userId, userId),
+    columns: { onboardedAt: true },
+  });
+  return found !== undefined && found.onboardedAt === null;
+}
+
+/** Records that the player finished or skipped the welcome. */
+export async function markOnboarded(db: Database, userId: string): Promise<void> {
+  await db.update(profile).set({ onboardedAt: new Date() }).where(eq(profile.userId, userId));
+}
+
+/** The display name a guest's placeholder becomes when the account is kept; a name the player chose stays. */
+export function keptDisplayName(displayName: string): string {
+  return displayName === 'Anonymous' ? 'Player' : displayName;
+}
+
+/**
+ * A guest kept the account (a passkey, Google or Discord): the placeholder name becomes `Player`, as the Leaderboard
+ * renames it, and the welcome shows again so the player can name the account they now keep.
+ */
+export async function onAccountKept(db: Database, userId: string): Promise<void> {
+  const found = await db.query.profile.findFirst({ where: eq(profile.userId, userId), columns: { displayName: true } });
+  if (found === undefined) return;
+  await db
+    .update(profile)
+    .set({ displayName: keptDisplayName(found.displayName), onboardedAt: null })
+    .where(eq(profile.userId, userId));
+}
+
+/**
+ * Where the welcome goes when it is done: a path on this host (`/account`, `/`), never another origin or a
+ * protocol-relative URL. Anything else goes to `/account`.
+ */
+export function welcomeNextPath(next: string | null | undefined): string {
+  if (typeof next !== 'string' || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) {
+    return '/account';
+  }
+  return next;
+}
