@@ -147,23 +147,32 @@ test.each(['#BGA02 03 0 0 256 256 0 0\n#BGA03 02 0 0 256 256 0 0', '#BGA02 missi
   },
 );
 
-test.each([false, true])('crops video using untrimmed coordinates in full/streaming mode (%s)', async (streaming) => {
-  const chart = parseBMS('#BPM 120\n#BMP01 bga-bordered.webm\n#BGA02 01 0 0 16 16 64 64\n#00004:02');
-  const renderer = (await createBgaANSIRenderer(chart, {
-    baseDir: resolve(import.meta.dirname, '../../../test/fixtures'),
-    width: 256,
-    height: 128,
-    imageResizeAlgorithm: 'nearest',
-    videoBGAStreaming: streaming,
-  }))!;
-  expect(pixelAt(renderer.getKittyImage(0), 65, 65)).toEqual([0, 0, 0]);
-  expect(pixelAt(renderer.getKittyImage(0), 76, 76)[0]).toBeGreaterThan(240);
-  renderer.startStreaming();
-  await vi.waitFor(() => {
-    expect(pixelAt(renderer.getKittyImage(0.75), 65, 65)).toEqual([0, 0, 0]);
-    expect(pixelAt(renderer.getKittyImage(0.75), 76, 76)[1]).toBeGreaterThan(240);
-  });
-});
+test.each([false, true])(
+  'crops video using untrimmed coordinates in full/streaming mode (%s)',
+  async (streaming) => {
+    const chart = parseBMS('#BPM 120\n#BMP01 bga-bordered.webm\n#BGA02 01 0 0 16 16 64 64\n#00004:02');
+    const renderer = (await createBgaANSIRenderer(chart, {
+      baseDir: resolve(import.meta.dirname, '../../../test/fixtures'),
+      width: 256,
+      height: 128,
+      imageResizeAlgorithm: 'nearest',
+      videoBGAStreaming: streaming,
+    }))!;
+    expect(pixelAt(renderer.getKittyImage(0), 65, 65)).toEqual([0, 0, 0]);
+    expect(pixelAt(renderer.getKittyImage(0), 76, 76)[0]).toBeGreaterThan(240);
+    renderer.startStreaming();
+    // The stream decodes in the background: on a busy CI runner the frame at 0.75 s takes well over `waitFor`'s default
+    // second to arrive (#935).
+    await vi.waitFor(
+      () => {
+        expect(pixelAt(renderer.getKittyImage(0.75), 65, 65)).toEqual([0, 0, 0]);
+        expect(pixelAt(renderer.getKittyImage(0.75), 76, 76)[1]).toBeGreaterThan(240);
+      },
+      { timeout: 15_000, interval: 25 },
+    );
+  },
+  30_000,
+);
 
 function pixelAt(image: BGAKittyImage, x: number, y: number): number[] {
   const offset =
