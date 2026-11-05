@@ -67,6 +67,21 @@ const LIGHTS: Record<BeMusicLaneKind, LaneLight> = {
 
 export const SYNESTHESIA_BOMB_DURATION_MS = 620;
 
+/** Share of the bomb's life (`t`) the lock-on's centre cross shows for. */
+const BOMB_CROSS_SPAN = 0.3;
+
+/**
+ * Angle in radians of the bomb's centre cross at bomb life `t` (0..1), in screen space where y points down, so the
+ * negative result turns it counter-clockwise on screen. It makes a quarter turn over the cross's span, quick at first
+ * and settling as the reticle locks, so it ends square again just before it vanishes. Below full effects
+ * (`amount < 1`) the cross holds still.
+ */
+export function synesthesiaBombCrossAngle(t: number, amount: number): number {
+  if (amount < 1) return 0;
+  const progress = Math.max(0, Math.min(1, t / BOMB_CROSS_SPAN));
+  return -(Math.PI / 2) * (1 - (1 - progress) ** 3);
+}
+
 export function renderSynesthesiaLanes({
   graphics,
   lanes,
@@ -610,7 +625,8 @@ function renderBomb(
     drawReticle(effects, cx - size / 2, cy - size / 2, size, size, 0xfff2dc, lockAlpha, {
       arm: size * 0.3,
       width: 1.25,
-      cross: t < 0.3,
+      cross: t < BOMB_CROSS_SPAN,
+      crossAngle: synesthesiaBombCrossAngle(t, amount),
     });
   }
   const streakAlpha = amount < 1 ? 0 : fade ** 2.5;
