@@ -254,13 +254,15 @@ flowchart LR
   score -->|press a bar| audition[Hear that bar]
   audition --> score
   score -->|Shift or drag| bars[Pick a run of bars]
-  bars -->|Start| loop[Loop the bars]
+  bars -->|Start practice| loop[Loop the bars]
+  score -->|Play without practice| play[Regular play]
   score -->|Cancel / Esc| select[Select screen]
 ```
 
 - **Hear a bar.** A press on a bar sounds that bar alone, as AUTO PLAY would play it there: every sample that starts in the bar, from its bar line, fading out just past the next one. A press on another bar cuts the one sounding short and sounds the new one from its start. The bar sounding is outlined.
 - **Pick bars.** A press picks one bar; Shift-press or a drag runs the pick from the bar pressed first, so one bar or several bars in a row. The arrow keys move between bars, Shift extends, and Space presses. The line under the score shows the bars by measure number and their chart times (`m:ss.s`). **Whole chart** drops the pick.
-- **Start** (or Enter) plays the bars picked in a loop, through the decide screen as any start does; with no bars picked the whole chart loops. **Cancel** or Esc goes back to the select screen.
+- **Settings.** Under the score are the PRACTICE settings of the Options dialog's Practice page: **GAUGE TYPE**, **GAUGE CATEGORY** (beatoraja rules), **GAUGE VALUE**, **JUDGERANK** and **TOTAL** (not under `????` rules). They are the same play options: a change in either place shows in the other and is saved with the settings, so the dialog opens on the values last set.
+- **Start practice** (or Enter) plays the bars picked in a loop, through the decide screen as any start does; with no bars picked the whole chart loops. **Play without practice** plays the chart as a regular play this time (a retry too), saving its result as usual, while PRACTICE stays on for the next start. **Cancel** or Esc goes back to the select screen.
 
 The bars become the PRACTICE range as chart milliseconds: from the first bar's line to the line closing the last, through the chart's BPM changes, `#xxx02` measure lengths and stops. The player keeps each chart's pick for the page's life: its score opens on it again, and a retry (F5, R) loops the same bars. The pick is not saved with the settings: the START TIME and END TIME the Options dialog used to have are gone, and settings saved with them read as before without them. The score reads the chart as the song list does, so on a chart with `#RANDOM` it shows the unconditional content.
 

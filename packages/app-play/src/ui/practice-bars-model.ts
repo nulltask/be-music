@@ -46,10 +46,23 @@ export interface PracticeBarsPick {
 
 /**
  * The bars each chart was last practised on, for the page's life: the picker opens on them again, and a play of the
- * chart (its retry included) loops them. A chart started with no bars picked loops whole.
+ * chart (its retry included) loops them. A chart started with no bars picked loops whole, and one started without
+ * practice plays as a regular play.
  */
 export class PracticeBarsMemory {
   private readonly picks = new Map<string, PracticeBarsPick>();
+  /** Charts last started with "Play without practice": they play as regular plays until started with practice again. */
+  private readonly skipped = new Set<string>();
+
+  /** Starts the chart without practice: its plays (a retry included) are regular plays, its pick kept for later. */
+  public skipPractice(chartId: string): void {
+    this.skipped.add(chartId);
+  }
+
+  /** Whether the chart was last started without practice. */
+  public skipsPractice(chartId: string): boolean {
+    return this.skipped.has(chartId);
+  }
 
   /** Keeps `bars` of `layout` as the chart's pick, or forgets it with no bars. Returns what is kept. */
   public remember(
@@ -57,6 +70,7 @@ export class PracticeBarsMemory {
     layout: Pick<ChartScoreLayout, 'bars'> | undefined,
     bars: ChartScoreBarRange | undefined,
   ): PracticeBarsPick | undefined {
+    this.skipped.delete(chartId);
     const range = layout !== undefined && bars !== undefined ? chartScoreRangeTimes(layout, bars) : undefined;
     if (bars === undefined || range === undefined) {
       this.picks.delete(chartId);

@@ -2,7 +2,13 @@ import { html, nothing, render } from 'lit';
 import { resolveChart } from '@be-music/chart-model';
 import type { AudioService } from '@be-music/player-browser/audio';
 import type { BrowserAssetSource } from '@be-music/player-browser/collection';
-import type { LibraryChart } from '@be-music/player-scene-model';
+import { practiceReadsJudgeRankAndTotal, type RulesetId } from '@be-music/player-engine/ruleset';
+import {
+  keepPracticeGauge,
+  type LibraryChart,
+  type PlayOptions,
+  type PracticeGaugeCategory,
+} from '@be-music/player-scene-model';
 import {
   defineBeMusicElements,
   layoutChartScore,
@@ -10,7 +16,9 @@ import {
   type ChartScoreBarRange,
   type ChartScoreLayout,
 } from '@be-music/player-ui';
-import { onPlayerLangChange, playerText } from '../player-copy.ts';
+import { onPlayerLangChange, playerLang, playerText } from '../player-copy.ts';
+import { optionLabel } from './options/labels.ts';
+import { practiceGaugeItems } from './options/play-option-items.ts';
 import { describePracticeBars, practiceBarWindow, type PracticeBarsMemory } from './practice-bars-model.ts';
 
 // The PRACTICE bar picker: started with PRACTICE on, a chart opens its score (`<be-music-chart-score>`) before it
@@ -18,10 +26,35 @@ import { describePracticeBars, practiceBarWindow, type PracticeBarsMemory } from
 // Start plays the run in a loop (the play's `practiceRange`), or the whole chart with no bars picked. beatoraja picks its
 // range in milliseconds on the play screen instead (`PracticeConfiguration`).
 
-/** What the picker needs of the page: the audio service the auditions play on, and the bars each chart was picked on. */
+/** The PRACTICE settings the picker sets, the same play options as the Options dialog's Practice page. */
+export type PracticeSettings = Pick<
+  PlayOptions,
+  'practiceGauge' | 'practiceGaugeCategory' | 'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal'
+>;
+
+/** GAUGE CATEGORY's choices, as the Options dialog lists them. */
+const GAUGE_CATEGORIES: readonly (readonly [string, PracticeGaugeCategory])[] = [
+  ['Play mode', 'MODE'],
+  ['FIVEKEYS', 'FIVEKEYS'],
+  ['SEVENKEYS', 'SEVENKEYS'],
+  ['PMS', 'PMS'],
+  ['KEYBOARD', 'KEYBOARD'],
+  ['LR2', 'LR2'],
+];
+
+/**
+ * What the picker needs of the page: the audio service the auditions play on, the bars each chart was picked on, and
+ * the play options it reads and sets (PRACTICE's settings, saved as the Options dialog saves them).
+ */
 export interface PracticeBarsDialogDeps {
   readonly audio: Pick<AudioService, 'preview' | 'stopOwned'>;
   readonly memory: PracticeBarsMemory;
+  /** The play options in force. */
+  readonly playOptions: () => Readonly<PlayOptions>;
+  /** The judge ruleset, whose gauges and tables PRACTICE reads. */
+  readonly ruleset: () => RulesetId;
+  /** Sets play options as the Options dialog does: kept, saved and shown on its controls. */
+  readonly setPlayOptions: (changes: Partial<PlayOptions>) => void;
 }
 
 /** The score of each chart, laid out once; `null` for a chart that could not be. */
@@ -46,6 +79,9 @@ export class PracticeBarsDialog {
   private readonly dialog: HTMLDialogElement;
   private readonly audio: PracticeBarsDialogDeps['audio'];
   private readonly memory: PracticeBarsMemory;
+  private readonly playOptions: PracticeBarsDialogDeps['playOptions'];
+  private readonly ruleset: PracticeBarsDialogDeps['ruleset'];
+  private readonly setPlayOptions: PracticeBarsDialogDeps['setPlayOptions'];
   private chart: LibraryChart | undefined;
   private source: BrowserAssetSource | undefined;
   private layout: ChartScoreLayout | undefined;
@@ -57,6 +93,9 @@ export class PracticeBarsDialog {
   constructor(deps: PracticeBarsDialogDeps) {
     this.audio = deps.audio;
     this.memory = deps.memory;
+    this.playOptions = deps.playOptions;
+    this.ruleset = deps.ruleset;
+    this.setPlayOptions = deps.setPlayOptions;
     defineBeMusicElements();
     this.dialog = document.createElement('dialog');
     this.dialog.className = 'dialog practice-bars-dialog';
@@ -66,8 +105,9 @@ export class PracticeBarsDialog {
       this.dialog.addEventListener(type, (event) => {
         event.stopPropagation();
         const target = event.composedPath()[0];
-        const onButton = target instanceof HTMLElement && target.tagName === 'BUTTON';
-        if (type === 'keydown' && event.key === 'Enter' && !onButton && !event.defaultPrevented) {
+        // A button or a field takes its own Enter.
+        const ownsEnter = target instanceof HTMLElement && ['BUTTON', 'INPUT', 'SELECT'].includes(target.tagName);
+        if (type === 'keydown' && event.key === 'Enter' && !ownsEnter && !event.defaultPrevented) {
           event.preventDefault();
           this.finish(true);
         }
@@ -80,8 +120,8 @@ export class PracticeBarsDialog {
   }
 
   /**
-   * Opens the score of `chart` on the bars it was last practised on, and resolves once the player starts (`true`, with
-   * the bars kept in the memory) or backs out (`false`).
+   * Opens the score of `chart` on the bars it was last practised on, and resolves once the player starts (`true`: the
+   * bars picked are kept in the memory, or the chart is marked to play without practice) or backs out (`false`).
    */
   public open(chart: LibraryChart, source: BrowserAssetSource | undefined): Promise<boolean> {
     this.finish(false);
@@ -113,6 +153,100 @@ export class PracticeBarsDialog {
     this.stopPreview();
     if (this.dialog.open) this.dialog.close();
     settle(start);
+  }
+
+  /** Plays the chart as a regular play this time; PRACTICE stays on for the next start. */
+  private playNormally(): void {
+    const settle = this.settle;
+    if (settle === undefined || this.chart === undefined) return;
+    this.settle = undefined;
+    this.memory.skipPractice(this.chart.id);
+    this.stopPreview();
+    if (this.dialog.open) this.dialog.close();
+    settle(true);
+  }
+
+  /** Sets one PRACTICE setting and shows it as the play options took it (clamped to its range). */
+  private setSetting<K extends keyof PracticeSettings>(key: K, value: PracticeSettings[K]): void {
+    this.setPlayOptions({ [key]: value } as Partial<PlayOptions>);
+    this.paint();
+  }
+
+  private renderSettings(): unknown {
+    const options = this.playOptions();
+    const ruleset = this.ruleset();
+    const lang = playerLang();
+    const label = (text: string) => optionLabel(text, lang);
+    const gauge = keepPracticeGauge(options.practiceGauge, ruleset);
+    const number = (
+      key: 'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal',
+      text: string,
+      min: number,
+      max: number,
+    ) =>
+      html`<label class="practice-bars-field">
+        <span>${label(text)}</span>
+        <input
+          class="input"
+          type="number"
+          inputmode="numeric"
+          min=${min}
+          max=${max}
+          step="1"
+          .value=${String(options[key])}
+          @change=${(event: Event) => {
+            const value = Number((event.target as HTMLInputElement).value);
+            if (Number.isFinite(value)) this.setSetting(key, value);
+            else this.paint();
+          }}
+        />
+      </label>`;
+    return html`<div class="practice-bars-settings">
+      <label class="practice-bars-field">
+        <span>${label('GAUGE TYPE')}</span>
+        <select
+          class="select"
+          @change=${(event: Event) =>
+            this.setSetting(
+              'practiceGauge',
+              (event.target as HTMLSelectElement).value as PracticeSettings['practiceGauge'],
+            )}
+        >
+          ${practiceGaugeItems(ruleset).map(
+            (item) => html`<option value=${item.value} ?selected=${item.value === gauge}>${item.text}</option>`,
+          )}
+        </select>
+      </label>
+      ${
+        ruleset === 'beatoraja'
+          ? html`<label class="practice-bars-field">
+              <span>${label('GAUGE CATEGORY')}</span>
+              <select
+                class="select"
+                @change=${(event: Event) =>
+                  this.setSetting(
+                    'practiceGaugeCategory',
+                    (event.target as HTMLSelectElement).value as PracticeGaugeCategory,
+                  )}
+              >
+                ${GAUGE_CATEGORIES.map(
+                  ([text, value]) =>
+                    html`<option value=${value} ?selected=${value === options.practiceGaugeCategory}>
+                      ${label(text)}
+                    </option>`,
+                )}
+              </select>
+            </label>`
+          : nothing
+      }
+      ${number('practiceStartGauge', 'GAUGE VALUE', 1, 120)}
+      ${
+        practiceReadsJudgeRankAndTotal(ruleset)
+          ? html`${number('practiceJudgeRank', 'JUDGERANK (0 = chart)', 0, 400)}
+            ${number('practiceTotal', 'TOTAL (0 = chart)', 0, 5000)}`
+          : nothing
+      }
+    </div>`;
   }
 
   private stopPreview(): void {
@@ -178,6 +312,7 @@ export class PracticeBarsDialog {
         <p class="practice-bars-caption" aria-live="polite">
           ${loading ? nothing : describePracticeBars(this.layout, this.selection, copy)}
         </p>
+        ${this.renderSettings()}
         <div class="practice-bars-buttons">
           <button
             class="btn"
@@ -194,6 +329,9 @@ export class PracticeBarsDialog {
           </button>
           <button class="btn" type="button" data-size="sm" data-variant="outline" @click=${() => this.finish(false)}>
             ${copy.cancel}
+          </button>
+          <button class="btn" type="button" data-size="sm" data-variant="outline" @click=${() => this.playNormally()}>
+            ${copy.playNormally}
           </button>
           <button class="btn" type="button" data-size="sm" ?disabled=${loading} @click=${() => this.finish(true)}>
             ${copy.start}
