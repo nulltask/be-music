@@ -4,7 +4,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 
 test('copies binary bytes and metadata, verifies retries, and refuses unauthenticated requests', async () => {
-  const source = await readFile(new URL('../scripts/storage-copy-worker.ts', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../../scripts/storage-copy-worker.ts', import.meta.url), 'utf8');
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       modules: true,

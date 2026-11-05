@@ -25,3 +25,5 @@ Preview has a separate issuer, database, keys and app secrets. Branch URLs are n
 The private donation content repository vendors the small relying-party module from a pinned monorepo commit until a separately distributable package is released. A sync script records its source and checksum; updates must run the shared auth tests and donation tests together.
 
 Public profiles and avatars move to Accounts under [ADR 0009](./0009-accounts-profiles.md); Leaderboard keeps a ranking projection.
+
+Accounts runs in the Dashboard Worker on the Dashboard host under [ADR 0039](./0039-accounts-in-dashboard.md).

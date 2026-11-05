@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => {
       },
       env: {
         ASSETS: bindings.assets(),
-        AUTH_ISSUER: bindings.text(`https://accounts.${preview ? 'preview.be-music.app' : 'be-music.app'}/api/auth`),
+        AUTH_ISSUER: bindings.text(`https://${preview ? 'preview.be-music.app' : 'be-music.app'}/api/auth`),
         PUBLIC_ORIGIN: bindings.text(`https://play.${preview ? 'preview.be-music.app' : 'be-music.app'}`),
         OIDC_CLIENT_ID: bindings.text('play'),
         API_AUDIENCE: bindings.text(`https://leaderboard.${preview ? 'preview.be-music.app' : 'be-music.app'}`),

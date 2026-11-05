@@ -18,7 +18,6 @@ const workspacePackages = [
   'player-ui',
   'chart-editor',
   'player-browser',
-  'app-accounts',
   'service-auth-client',
   'app-dashboard',
   'worker-play',
