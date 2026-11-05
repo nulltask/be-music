@@ -49,12 +49,18 @@ describe('playResultFromCourseRun', () => {
     trophy: 'goldmedal',
     stages: [],
   };
-  const courseLog = (judgeRuleset?: 'lr2' | 'beatoraja'): BeMusicCourseReplay => {
+  const courseLog = (judgeRuleset?: 'lr2' | 'beatoraja', mode: 'manual' | 'auto' = 'manual'): BeMusicCourseReplay => {
     const replay = {
-      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...(judgeRuleset ? { judgeRuleset } : {}) },
+      play: { mode, autoScratch: false, gauge: 'GROOVE', ...(judgeRuleset ? { judgeRuleset } : {}) },
     } as unknown as BeMusicReplay;
     return { stages: [{ played: true, replay }] } as unknown as BeMusicCourseReplay;
   };
+
+  test('marks a run whose stages played AUTO as an AUTO play, and leaves a manual run unmarked', () => {
+    expect(playResultFromCourseRun(course(), result, courseLog('lr2', 'auto')).autoPlay).toBe(true);
+    expect(playResultFromCourseRun(course(), result, courseLog('lr2'))).not.toHaveProperty('autoPlay');
+    expect(playResultFromCourseRun(course(), result, undefined)).not.toHaveProperty('autoPlay');
+  });
 
   test('shows an LR2 course on the stage results’ 200000 scale, with the stages’ play time, as a course run', () => {
     const data = playResultFromCourseRun(course(), result, courseLog(), undefined, { playSeconds: 241.5 });

@@ -1,5 +1,6 @@
 import {
   resolveResultLamp,
+  resolveResultPlayTag,
   resolveResultTrackRows,
   resolveStageOrientation,
   type BeMusicResultData,
@@ -31,6 +32,7 @@ export function drawResult(surface: BeMusicSurface<'2d'>, frame: BeMusicResultFr
     weight: 800,
     color: result.cleared ? ACCENT : DANGER,
   });
+  playTag(ctx, result, width - MARGIN, 28);
 
   // Rank and rate.
   ctx.fillStyle = PANEL;
@@ -75,6 +77,21 @@ export function drawResult(surface: BeMusicSurface<'2d'>, frame: BeMusicResultFr
 
   // Between the 1P counts and the chart panel.
   if (result.secondPlayer) drawSecondPlayer(ctx, result.secondPlayer, 240, 236, width - MARGIN - 220 - 16 - 240, nowMs);
+}
+
+/**
+ * The AUTO PLAY / ASSIST tag (`resolveResultPlayTag`) as an outlined badge, its right edge at `right` and its middle at
+ * `y`, on the verdict's line; nothing for a plain play.
+ */
+function playTag(ctx: CanvasRenderingContext2D, result: BeMusicResultData, right: number, y: number): void {
+  const tag = resolveResultPlayTag(result);
+  if (tag === undefined) return;
+  const color = tag === 'AUTO PLAY' ? DANGER : MUTED;
+  text(ctx, tag, right - 10, y, { size: 12, weight: 800, align: 'right', color });
+  const width = ctx.measureText(tag).width + 20;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(right - width + 1, y - 12, width - 2, 24);
 }
 
 /**
@@ -158,6 +175,7 @@ function drawPortraitResult(
     weight: 800,
     color: result.cleared ? ACCENT : DANGER,
   });
+  playTag(ctx, result, width - MARGIN, grid.verdictY);
 
   // Rank and rate.
   const { rank } = grid;

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createPlayState, reducePlayState, type PlayEvent, type PlayState } from '../play-state/state.ts';
 import { makeChart } from '../test-support/library.ts';
-import { playResultFromPlayState, playResultRun, resolveResultPresentation } from './result.ts';
+import { isAutoPlayResult, playResultFromPlayState, playResultRun, resolveResultPresentation } from './result.ts';
 
 const chartEntry = makeChart('song', 'Pack/x');
 const score = { total: 4, perfect: 3, great: 1, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 7, score: 7 };
@@ -99,6 +99,28 @@ describe('playResultFromPlayState', () => {
       course,
     });
     expect(result).toMatchObject({ run: 'stage', course, playSeconds: 125 });
+  });
+});
+
+describe('isAutoPlayResult', () => {
+  const replayOf = (mode: 'manual' | 'auto') =>
+    ({ play: { mode } }) as unknown as NonNullable<import('./result.ts').PlayResult['replay']>;
+
+  test('reads the AUTO flag the play carried, or the mode of the replay it recorded', () => {
+    expect(isAutoPlayResult({ autoPlay: true })).toBe(true);
+    expect(isAutoPlayResult({ replay: replayOf('auto') })).toBe(true);
+  });
+
+  test('reads a manual play, with or without a replay, as not AUTO', () => {
+    expect(isAutoPlayResult({})).toBe(false);
+    expect(isAutoPlayResult({ autoPlay: false, replay: replayOf('manual') })).toBe(false);
+  });
+
+  test('carries the AUTO flag from the facts onto the result, and leaves a manual play unflagged', () => {
+    const state = played();
+    const facts = { chart: chartEntry, score, seconds: 90 };
+    expect(playResultFromPlayState(state, { ...facts, autoPlay: true }).autoPlay).toBe(true);
+    expect(playResultFromPlayState(state, facts)).not.toHaveProperty('autoPlay');
   });
 });
 
