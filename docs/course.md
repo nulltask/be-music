@@ -278,8 +278,9 @@ LR2 draws its RANDOM MIX by the `config.course` values alone. Be-Music asks firs
 - **Narrow by:** a play level range (a min above the max is swapped; an empty end is no limit), or `#DIFFICULTY` (BEGINNER, NORMAL, HYPER, ANOTHER, INSANE; a chart with none never fits).
 - **Stages:** 1-99, or Infinity. A NONSTOP mix, one stitched chart, has at most five stages and no Infinity.
 - **Loops:** how many runs in a row, 1-99, or Infinity. Each run is a fresh draw by the same conditions.
+- **Draw settings:** LR2's favorite level, BPM range and max / min BPM (buttons 260, 263-265), which Options → Course → **My courses…** sets too, and for a NONSTOP mix the connection after every stage (button 268).
 
-The dialog opens on the conditions last confirmed (kept with the courses in IndexedDB, `normalizeRandomMixConditions`), offers only key modes the library has, says how many charts fit, and keeps OK off while none does. LR2's BPM limits, BPM range and favorite level still apply to the draw; its level limits and stage count are the dialog's now.
+The dialog opens on what it held when it last closed, OK or not (kept with the courses in IndexedDB, `normalizeRandomMixConditions`), offers only key modes the library has, says how many charts fit, and keeps OK off while none does. LR2's level limits and stage count (buttons 261, 262, 266) are the dialog's now: an LR2 skin still steps and shows them, but the draw does not read them, and My courses no longer lists them.
 
 ```mermaid
 flowchart TD

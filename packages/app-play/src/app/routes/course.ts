@@ -21,7 +21,7 @@ import {
   type RandomMixConditions,
 } from '@be-music/player-engine/course';
 import { RandomMixDraw, type RandomMixPoolChart } from '../../random-mix-draw.ts';
-import type { RandomMixDialogRequest } from '../../ui/random-mix-dialog.ts';
+import type { RandomMixDialogRequest, RandomMixDialogResult } from '../../ui/random-mix-dialog.ts';
 import type { RandomMixLoop } from '../../services/courses.ts';
 import { playerText } from '../../player-copy.ts';
 import type {
@@ -92,11 +92,13 @@ export interface CourseRouteDeps {
       | 'randomMixConditions'
       | 'setRandomMixConditions'
       | 'randomMixSettings'
+      | 'setRandomMixSettings'
       | 'defaultConnection'
+      | 'setDefaultConnection'
     >;
   };
-  /** Opens the RANDOM MIX dialog: the conditions confirmed, or `undefined` when it was cancelled. */
-  readonly promptRandomMix: (request: RandomMixDialogRequest) => Promise<RandomMixConditions | undefined>;
+  /** Opens the RANDOM MIX dialog: what it held when it closed and whether OK confirmed it. */
+  readonly promptRandomMix: (request: RandomMixDialogRequest) => Promise<RandomMixDialogResult | undefined>;
   /** The source of chance a RANDOM MIX draws with. Default `Math.random`. */
   readonly random?: () => number;
   /** The course replay's auto-save, by the setting latched at the last stage's start. */
@@ -274,20 +276,29 @@ export class CourseRoute {
 
   /**
    * A RANDOM MIX bar: the RANDOM MIX dialog asks which charts to draw from, how many stages and how many runs in a row,
-   * then the first run is drawn and played. Only the library's facts at hand are read to list the charts that fit; a
+   * then the first run is drawn and played. What the dialog held is kept for the next one, OK or not. Only the library's facts at hand are read to list the charts that fit; a
    * chart's BPMs are read once a draw walks it and its chart file hashed once it is drawn, so starting a mix costs the
    * same however large the library is.
    */
   private async startRandomMix(kind: 'expert' | 'nonstop'): Promise<void> {
     const pool = this.library.collection.charts.map(createRandomMixCandidate);
-    const conditions = await this.promptRandomMix({
+    const maker = this.courseMaker.maker;
+    const closed = await this.promptRandomMix({
       kind,
       keyModes: listRandomMixKeyModes(pool),
-      initial: this.courseMaker.maker.randomMixConditions,
+      initial: maker.randomMixConditions,
+      settings: maker.randomMixSettings,
+      defaultConnection: maker.defaultConnection,
       countMatches: (asked) => filterRandomMixCandidates(pool, asked).length,
     });
-    if (conditions === undefined) return;
-    this.courseMaker.maker.setRandomMixConditions(conditions);
+    if (closed === undefined) return;
+    // What the dialog held is kept for the next one, confirmed or not.
+    const { choice } = closed;
+    const { conditions } = choice;
+    maker.setRandomMixConditions(conditions);
+    maker.setRandomMixSettings(choice.settings);
+    if (kind === 'nonstop') maker.setDefaultConnection(choice.defaultConnection);
+    if (!closed.confirmed) return;
     this.courses.setRandomMixLoop({ kind, loop: 1, loops: conditions.loops });
     this.courses.leaveSelect(this.selectNavigation());
     await this.playRandomMix({ kind, loop: 1, loops: conditions.loops }, pool);

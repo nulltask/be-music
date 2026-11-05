@@ -55,6 +55,18 @@ function grade(ids: string[] = ['a', 'b'], overrides: Partial<LibraryCourse> = {
   };
 }
 
+/** What the dialog confirms: `conditions` with LR2's settings (no BPM range) and FADE. */
+function choice(conditions: RandomMixConditions, confirmed = true) {
+  return {
+    choice: {
+      conditions,
+      settings: { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, bpmRange: 0 },
+      defaultConnection: 'fade' as const,
+    },
+    confirmed,
+  };
+}
+
 /** RANDOM MIX conditions for the fixture songs, which read as 5 keys (they have no notes). */
 const MIX5: RandomMixConditions = { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyModes: [5] };
 
@@ -128,7 +140,9 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
       mix.conditions = conditions;
     }),
     randomMixSettings: { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, bpmRange: 0 },
+    setRandomMixSettings: vi.fn<CourseRouteDeps['courseMaker']['maker']['setRandomMixSettings']>(),
     defaultConnection: 'fade' as const,
+    setDefaultConnection: vi.fn<CourseRouteDeps['courseMaker']['maker']['setDefaultConnection']>(),
   };
   const deps = {
     courses,
@@ -226,25 +240,41 @@ describe('CourseRoute: starting a course', () => {
     expect(h.deps.showDecide).not.toHaveBeenCalled();
   });
 
-  test('a RANDOM MIX bar asks for its conditions first; cancelling starts nothing', async () => {
+  test('a RANDOM MIX bar asks for its conditions first; cancelling starts nothing but keeps the edits', async () => {
     const h = harness();
     await h.route.startCourse(randomMixBar('expert'));
     const [request] = h.deps.promptRandomMix.mock.calls[0]!;
-    expect(request).toMatchObject({ kind: 'expert', keyModes: [5], initial: DEFAULT_RANDOM_MIX_CONDITIONS });
+    expect(request).toMatchObject({
+      kind: 'expert',
+      keyModes: [5],
+      initial: DEFAULT_RANDOM_MIX_CONDITIONS,
+      settings: h.maker.randomMixSettings,
+      defaultConnection: 'fade',
+    });
     expect(request.countMatches(MIX5)).toBe(2);
     expect(request.countMatches({ ...MIX5, keyModes: [14] })).toBe(0);
     expect(h.deps.showDecide).not.toHaveBeenCalled();
     expect(h.maker.setRandomMixConditions).not.toHaveBeenCalled();
     // Nothing was hashed to open the dialog.
     expect(h.deps.records.resolveChartHashes).not.toHaveBeenCalled();
+    // A dialog cancelled after edits keeps them for the next one, and starts nothing.
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 7, loops: 'infinity' }, false));
+    await h.route.startCourse(randomMixBar('expert'));
+    expect(h.maker.randomMixConditions).toMatchObject({ count: 7, loops: 'infinity' });
+    expect(h.maker.setRandomMixSettings).toHaveBeenCalled();
+    expect(h.deps.showDecide).not.toHaveBeenCalled();
+    expect(h.courses.randomMixLoop).toBeUndefined();
   });
 
   test('confirmed conditions draw a kept course, hashing only the songs drawn, then play it', async () => {
     const h = harness();
     hashAll(h);
-    h.deps.promptRandomMix.mockResolvedValue({ ...MIX5, count: 1 });
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 1 }));
     await h.route.startCourse(randomMixBar('expert'), { autoPlay: true });
     expect(h.maker.setRandomMixConditions).toHaveBeenCalledWith(expect.objectContaining({ count: 1 }));
+    expect(h.maker.setRandomMixSettings).toHaveBeenCalledWith(expect.objectContaining({ bpmRange: 0 }));
+    // Only a NONSTOP mix sets the connection.
+    expect(h.maker.setDefaultConnection).not.toHaveBeenCalled();
     expect(h.deps.records.resolveChartHashes).toHaveBeenCalledTimes(1);
     const kept = h.maker.keepRandomMix.mock.calls[0]![0];
     expect(kept).toMatchObject({ name: 'RANDOM MIX', kind: 'expert', release: false });
@@ -260,7 +290,7 @@ describe('CourseRoute: starting a course', () => {
 
   test('says so when no song can be drawn', async () => {
     const h = harness();
-    h.deps.promptRandomMix.mockResolvedValue({ ...MIX5, count: 3 });
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 3 }));
     await h.route.startCourse(randomMixBar('expert'));
     expect(h.deps.setStatus).toHaveBeenLastCalledWith('RANDOM MIX: no chart matches the conditions');
     expect(h.deps.showSelect).toHaveBeenCalled();
@@ -270,7 +300,7 @@ describe('CourseRoute: starting a course', () => {
   test('an endless mix draws each stage as the run reaches it and keeps no course or record', async () => {
     const h = harness();
     hashAll(h);
-    h.deps.promptRandomMix.mockResolvedValue({ ...MIX5, count: 'infinity' });
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 'infinity' }));
     await h.route.startCourse(randomMixBar('expert'));
     const active = h.courses.active!;
     expect(active.unkept).toBe(true);
@@ -298,7 +328,7 @@ describe('CourseRoute: starting a course', () => {
   test('a loop draws its next run as the select screen would come back, and ends after its last', async () => {
     const h = harness();
     hashAll(h);
-    h.deps.promptRandomMix.mockResolvedValue({ ...MIX5, count: 1, loops: 2 });
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 1, loops: 2 }));
     await h.route.startCourse(randomMixBar('expert'));
     expect(h.courses.randomMixLoop).toEqual({ kind: 'expert', loop: 1, loops: 2 });
     await h.decided().start();
@@ -317,12 +347,13 @@ describe('CourseRoute: starting a course', () => {
   test('a NONSTOP mix goes to the NONSTOP route, at most five songs, and backing out ends its loop', async () => {
     const h = harness();
     hashAll(h);
-    h.deps.promptRandomMix.mockResolvedValue({ ...MIX5, count: 'infinity', loops: 'infinity' });
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 'infinity', loops: 'infinity' }));
     await h.route.startCourse(randomMixBar('nonstop'));
     const [course, options] = h.deps.startNonstopCourse.mock.calls[0]!;
     expect(course.definition.kind).toBe('nonstop');
     expect(course.stages).toHaveLength(2);
     expect(h.maker.keepRandomMix).toHaveBeenCalled();
+    expect(h.maker.setDefaultConnection).toHaveBeenCalledWith('fade');
     options.cancel!();
     expect(h.courses.randomMixLoop).toBeUndefined();
   });
