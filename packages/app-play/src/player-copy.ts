@@ -288,6 +288,8 @@ const en = {
     defaultCamera: 'Default camera',
     unnamed: (index: number) => `Camera ${index}`,
     missingChoice: (label: string) => `${label} (not connected)`,
+    previewLabel: 'Camera preview',
+    previewOff: 'Press “Preview camera” to see the camera here. The preview stops when you leave this tab.',
     status: {
       off: 'Off. The BGA frame shows the chart’s BGA.',
       standby: 'On. The camera opens when a play starts.',
@@ -595,6 +597,9 @@ const ja: typeof en = {
     defaultCamera: '既定のカメラ',
     unnamed: (index) => `カメラ ${index}`,
     missingChoice: (label) => `${label}（未接続）`,
+    previewLabel: 'カメラのプレビュー',
+    previewOff:
+      '「カメラをプレビュー」を押すと、ここにカメラの映像が出ます。このタブを離れるとプレビューは止まります。',
     status: {
       off: 'オフ。BGA の枠には譜面の BGA を映します。',
       standby: 'オン。プレイが始まるとカメラを起動します。',

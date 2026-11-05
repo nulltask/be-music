@@ -58,6 +58,11 @@ export class BGACameraService {
   private statusValue: BGACameraStatus;
   private target: BGACameraTarget | undefined;
   private stream: MediaStream | undefined;
+  /** The camera the Options dialog's preview opened while no play shows it. */
+  private previewOwnStream: MediaStream | undefined;
+  private previewWanted = false;
+  private previewProblemValue: BGACameraStatus | undefined;
+  private previewGeneration = 0;
   /** Moves on every open and close, so an open that settles after a newer one is dropped. */
   private generation = 0;
   private readonly listeners = new Set<() => void>();
@@ -81,6 +86,44 @@ export class BGACameraService {
 
   public get status(): BGACameraStatus {
     return this.statusValue;
+  }
+
+  /** Whether the Options dialog's preview is on. */
+  public get previewing(): boolean {
+    return this.previewWanted;
+  }
+
+  /**
+   * What the preview shows: the camera the play shows, or one opened for the preview alone. `undefined` while the
+   * preview is off or the camera is opening.
+   */
+  public get previewStream(): MediaStream | undefined {
+    return this.previewWanted ? (this.stream ?? this.previewOwnStream) : undefined;
+  }
+
+  /** Why the preview could not open (`denied`, `missing`, `busy`, `unsupported`), until it is tried again. */
+  public get previewProblem(): BGACameraStatus | undefined {
+    return this.previewProblemValue;
+  }
+
+  /**
+   * Shows the picked camera in the Options dialog, mirrored as the play would show it, whether the setting is on or not.
+   * It opens the camera unless a play already shows it, and the dialog stops it as the preview leaves the screen.
+   */
+  public async startPreview(): Promise<void> {
+    if (this.previewWanted) return;
+    this.previewWanted = true;
+    this.previewProblemValue = undefined;
+    this.emit();
+    await this.openPreview();
+  }
+
+  /** Stops the preview, and closes the camera unless a play shows it. */
+  public stopPreview(): void {
+    if (!this.previewWanted) return;
+    this.previewWanted = false;
+    this.closePreview();
+    this.emit();
   }
 
   /** Whether the browser has told the page the cameras' names (the player allowed the camera once). */
@@ -123,7 +166,7 @@ export class BGACameraService {
   public async requestAccess(): Promise<boolean> {
     const media = this.deps.mediaDevices;
     if (media === undefined) return false;
-    if (this.stream !== undefined) {
+    if (this.stream !== undefined || this.previewOwnStream !== undefined) {
       await this.refreshCameras();
       return true;
     }
@@ -157,6 +200,11 @@ export class BGACameraService {
     if (this.stream !== undefined || this.statusValue === 'missing' || this.statusValue === 'busy') {
       this.close(this.idleStatus());
       void this.open();
+    }
+    if (this.previewWanted && this.stream === undefined) {
+      this.closePreview();
+      this.previewProblemValue = undefined;
+      void this.openPreview();
     }
   }
 
@@ -209,6 +257,8 @@ export class BGACameraService {
       return;
     }
     this.stream = stream;
+    // The preview now shows the play's camera.
+    this.closePreview();
     for (const track of stream.getVideoTracks()) {
       track.addEventListener('ended', () => {
         if (this.stream === stream) this.lose('missing');
@@ -233,6 +283,53 @@ export class BGACameraService {
       for (const track of stream.getTracks()) track.stop();
     }
     this.setStatusValue(status);
+    // A preview that showed the play's camera opens one of its own.
+    if (stream !== undefined && this.previewWanted) void this.openPreview();
+  }
+
+  /** Opens the picked camera for the preview, unless a play shows it already. */
+  private async openPreview(): Promise<void> {
+    const media = this.deps.mediaDevices;
+    if (!this.previewWanted || this.stream !== undefined || this.previewOwnStream !== undefined) return;
+    const generation = ++this.previewGeneration;
+    const fail = (problem: BGACameraStatus): void => {
+      this.previewWanted = false;
+      this.previewProblemValue = problem;
+      this.emit();
+    };
+    if (media === undefined) return fail('unsupported');
+    if (isPickedCameraMissing(this.camerasValue, this.settingsValue)) return fail('missing');
+    let stream: MediaStream;
+    try {
+      stream = await media.getUserMedia(
+        cameraConstraints(this.settingsValue, pickCamera(this.camerasValue, this.settingsValue)),
+      );
+    } catch (error) {
+      if (generation === this.previewGeneration) fail(statusOfError(error));
+      return;
+    }
+    if (generation !== this.previewGeneration || !this.previewWanted || this.stream !== undefined) {
+      for (const track of stream.getTracks()) track.stop();
+      return;
+    }
+    this.previewOwnStream = stream;
+    for (const track of stream.getVideoTracks()) {
+      track.addEventListener('ended', () => {
+        if (this.previewOwnStream !== stream) return;
+        this.closePreview();
+        fail('missing');
+      });
+    }
+    this.emit();
+    // The cameras have names now.
+    await this.refreshCameras();
+  }
+
+  private closePreview(): void {
+    this.previewGeneration += 1;
+    const stream = this.previewOwnStream;
+    this.previewOwnStream = undefined;
+    if (stream !== undefined) for (const track of stream.getTracks()) track.stop();
   }
 
   /** The camera went away during a play: close it, show the BGA, and say so. */
@@ -252,6 +349,17 @@ export class BGACameraService {
     if (track !== undefined && deviceId !== undefined && this.namesKnown) {
       if (!this.camerasValue.some((camera) => camera.deviceId === deviceId)) this.lose('missing');
       return;
+    }
+    const previewId = this.previewOwnStream?.getVideoTracks()[0]?.getSettings().deviceId;
+    if (
+      previewId !== undefined &&
+      this.namesKnown &&
+      !this.camerasValue.some((camera) => camera.deviceId === previewId)
+    ) {
+      this.closePreview();
+      this.previewWanted = false;
+      this.previewProblemValue = 'missing';
+      this.emit();
     }
     // A camera plugged in while a play waits for it.
     if (this.stream === undefined && (this.statusValue === 'missing' || this.statusValue === 'busy')) {
