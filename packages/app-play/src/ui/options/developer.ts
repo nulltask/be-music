@@ -1,10 +1,15 @@
 import { monitorFrameRate } from '../../pane-controls.ts';
 import { getBrowserWorkerCount, setBrowserWorkerCount } from '@be-music/player-browser/compute';
 import { storeWorkerCount } from '../../worker-settings.ts';
-// The Options dialog's Developer folder. It is built with the dialog as `this` (`OptionsDialog`).
+// The Options dialog's Advanced folder. It is built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
+import { OPTION_FOLDERS } from './folders.ts';
 import type { OptionsDialog } from './index.ts';
-/** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
+import { buildBGATranscodeFolder } from './library.ts';
+/**
+ * Diagnostics, session behaviour and the BGA transcode, which most players never touch, plus the reset for every
+ * remembered setting.
+ */
 export function buildDeveloperFolder(this: OptionsDialog, developer: OptionContainer): void {
   const compute = { workers: getBrowserWorkerCount() };
   developer
@@ -44,6 +49,7 @@ export function buildDeveloperFolder(this: OptionsDialog, developer: OptionConta
     interval: 500,
     bufferSize: 60,
   });
+  buildBGATranscodeFolder.call(this, developer.addFolder(OPTION_FOLDERS.bgaTranscode));
   developer.addButton({ title: 'Reset settings and reload' }).on('click', () => {
     void this.resetSettings();
   });

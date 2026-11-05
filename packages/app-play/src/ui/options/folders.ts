@@ -12,6 +12,7 @@ export interface OptionFolderSpec {
 export const OPTION_FOLDERS = {
   playOptions: { title: 'Play options' },
   replayView: { title: 'Replay / ghost' },
+  view: { title: 'View' },
   keys: { title: 'Key config' },
   tempo: { title: 'Tempo' },
   course: { title: 'Course' },
@@ -24,37 +25,33 @@ export const OPTION_FOLDERS = {
   compressorStages: { title: 'Stages' },
   library: { title: 'Library & records' },
   replaySlots: { title: 'Replay slots' },
+  select: { title: 'Select' },
   bgaTranscode: { title: 'BGA video transcode' },
   capture: { title: 'Capture' },
   leaderboard: { title: 'Leaderboard' },
-  developer: { title: 'Developer' },
+  advanced: { title: 'Advanced' },
 } as const satisfies Record<string, OptionFolderSpec>;
 
 /**
- * The Options dialog's tabs, left to right: Play (Play options), Tempo & course, Skin & display, Audio, Library (the
- * status, opening files, Library & records and Capture), Leaderboard and Developer.
+ * The Options dialog's tabs, left to right: Play (Play options, with Tempo on its Practice page), View (the hi-speed,
+ * the covers and LIFT, and the effects), Keys, Skin (Skin & display), Audio, Library (the status, opening files,
+ * Library & records, Select, Course and Capture), Leaderboard, and Advanced (diagnostics, the BGA transcode and the
+ * reset).
  */
-export const OPTIONS_TABS = [
-  'Play',
-  'Keys',
-  'Tempo & course',
-  'Skin & display',
-  'Audio',
-  'Library',
-  'Leaderboard',
-  'Developer',
-] as const;
+export const OPTIONS_TABS = ['Play', 'View', 'Keys', 'Skin', 'Audio', 'Library', 'Leaderboard', 'Advanced'] as const;
 
 /**
- * The pages the Play options folder splits its many options into: how a play is judged and its gauge, the lane options,
- * the note modifiers, hi-speed and the view, PRACTICE, the select screen's list, and Replay / ghost.
+ * The pages the Play options folder splits its many options into: how a play is judged and its gauge, how the lanes
+ * are arranged, the chart modifiers, the assists, PRACTICE with the tempo, and Replay / ghost.
  */
 export const PLAY_OPTION_PAGES = [
   'Judge & gauge',
-  'Lanes',
-  'Notes',
-  'Hi-speed & view',
+  'Arrangement',
+  'Modifiers',
+  'Assist',
   'Practice',
-  'Select',
   'Replay / ghost',
 ] as const;
+
+/** The pages of the View folder: the hi-speed and its modes, the lane covers and LIFT, and the effects on the lanes. */
+export const VIEW_OPTION_PAGES = ['Hi-speed', 'Cover & LIFT', 'Effects'] as const;

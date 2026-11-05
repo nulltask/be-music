@@ -81,23 +81,6 @@ export function buildSkinFolder(
     Desktop: 'standard',
     Touch: 'touch',
   }).on('change', ({ value: choice }) => storePlayLayout(choice));
-  // Picks between LR2 / beatoraja's "a judged note stays until its time" and "a judged note goes the moment it is
-  // judged". Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint — the
-  // visibility check is a single per-frame branch with no backing state to rebuild.
-  selectBinding(skin, this.guiState, 'judgedNoteDisplay', 'Judged notes', {
-    'Keep until its time (LR2)': 'KEEP_SCROLLING',
-    'Hide on judge': 'HIDE',
-  }).on('change', ({ value }) => {
-    this.guiState.judgedNoteDisplay = value;
-    this.gameplayView?.setJudgedNoteDisplay(value);
-  });
-  // Chart-authoring overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars in their
-  // playable lane. Live: the gameplay view always extracts the invisible notes and preloads the green sprite, so the
-  // flag flips the per-frame render branch on the very next paint.
-  skin.addBinding(this.guiState, 'showInvisibleNotes', { label: 'Show invisible notes' }).on('change', ({ value }) => {
-    this.guiState.showInvisibleNotes = value;
-    this.gameplayView?.setShowInvisibleNotes(value);
-  });
   // The same toggle as double-clicking the playfield, for pointers where a double click is awkward.
   skin
     .addButton({ title: 'Toggle fullscreen' })

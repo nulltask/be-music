@@ -12,12 +12,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
       <ul class="help-list">
         <li>
           Click the <strong>Settings</strong> button (the gear) at the top right to open Options. Each tab gathers one
-          area: Play, Tempo &amp; course, Skin &amp; display, Audio, Library, Leaderboard and Developer; Play options
-          splits its many options into pages. The <strong>?</strong> beside an option shows what it does.
+          area: Play, View, Keys, Skin, Audio, Library, Leaderboard and Advanced; Play options and View split their many
+          options into pages. The <strong>?</strong> beside an option shows what it does.
         </li>
         <li>
           Every setting is remembered in this browser and restored on your next visit.
-          <strong>Developer → Reset settings and reload</strong> returns them all to their defaults (your best records
+          <strong>Advanced → Reset settings and reload</strong> returns them all to their defaults (your best records
           stay).
         </li>
         <li>
@@ -27,7 +27,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
       </ul>
       <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">Top</h4>
-        <p class="help-menu-note">Above the folders.</p>
+        <p class="help-menu-note">At the top of the Library tab.</p>
         <dl class="help-menu-items">
           <dt>Status</dt>
           <dd>What the player is doing now (read-only).</dd>
@@ -214,37 +214,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
             <em class="help-menu-when">Shown with an ADD choice in Long notes.</em> How many of the notes become long
             notes, 0 to 1.
           </dd>
-          <dt data-for="Sort|Key filter|Difficulty filter">Sort / Key filter / Difficulty filter</dt>
-          <dd>How the built-in and LR2 select screens order and filter the list.</dd>
-          <dt>HS-FIX</dt>
-          <dd>
-            <em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> Keeps the scroll
-            speed steady against a BPM: MAXBPM, MINBPM, AVERAGE, STARTBPM, or CONSTANT (LR2, offered under every
-            ruleset).
-          </dd>
-          <dt>Display area info</dt>
-          <dd>
-            Keeps showing the cover length and green number at the cover edges: OFF, ON, SUDDEN+ ONLY or HID+/LIFT ONLY.
-          </dd>
-          <dt data-for="Effect 1P|Effect 2P">Effect 1P / 2P</dt>
-          <dd>The lane covers for each side: OFF, HIDDEN, SUDDEN or HID+SUD.</dd>
-          <dt data-for="Lane cover|Cover height">Lane cover / Cover height</dt>
-          <dd>LR2's lane cover, and how much of the lane it covers.</dd>
-          <dt>BPM GUIDE (beatoraja)</dt>
-          <dd>Shows upcoming BPM changes on the lanes.</dd>
-          <dt>BPM change warning (AC)</dt>
-          <dd>
-            Shows <code>current » next</code> BPM in a box on the lanes for 2 seconds before each BPM change: blue when
-            it speeds up, red when it slows down.
-          </dd>
-          <dt data-for="LIFT 1P (beatoraja)|LIFT 2P (beatoraja)|LIFT height 1P|LIFT height 2P">
-            LIFT 1P / 2P (beatoraja) · LIFT height
-          </dt>
-          <dd>Raises that side's judge line, and by how much. Changes live.</dd>
-          <dt data-for="Visual CONSTANT (beatoraja)|Note duration (ms)|CONSTANT fade (ms)">
-            Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)
-          </dt>
-          <dd>Shows notes only for their last N ms before the judge line, with a fade at their edge.</dd>
           <dt>Auto judge timing</dt>
           <dd>
             Moves Judge timing by itself from your hits in a manual play: beatoraja's way after every hit, or LR2's by 1
@@ -252,32 +221,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Judge timing (ms)</dt>
           <dd>Shifts when the notes are drawn, −500 to 500 ms. Input, audio and judgment stay as they are.</dd>
-          <dt data-for="Normal HI-SPEED (AC 32 measured)|Normal HS level">
-            Normal HI-SPEED (AC 32 measured) · Normal HS level
-          </dt>
-          <dd>
-            <em class="help-menu-when">The level shows with Normal HI-SPEED on.</em> Picks the speed from twenty levels
-            measured on AC, instead of the Hi-speed slider.
-          </dd>
-          <dt data-for="CLASSIC HI-SPEED|Classic speed">CLASSIC HI-SPEED · Classic speed</dt>
-          <dd>
-            <em class="help-menu-when">The speed shows with CLASSIC HI-SPEED on.</em> Picks the speed from AC's eleven
-            CLASSIC steps, 1.0 to 4.0.
-          </dd>
-          <dt data-for="FLOATING HI-SPEED (AC 32 measured)|Floating speed">
-            FLOATING HI-SPEED (AC 32 measured) · Floating speed
-          </dt>
-          <dd>
-            <em class="help-menu-when">The speed shows with FLOATING HI-SPEED on.</em> Keeps the green number while the
-            covers move; Numpad 0 switches it during play.
-          </dd>
-          <dt>Fixed display area (AC 34)</dt>
-          <dd>Ignores cover and LIFT changes during play; Enter twice restores the floating green number.</dd>
-          <dt>Hi-speed</dt>
-          <dd>
-            <em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> The scroll speed.
-            Changes live, like ↑ / ↓ during play.
-          </dd>
         </dl>
       </section>
       <section class="help-menu-folder">
@@ -292,6 +235,71 @@ export const OPTIONS_HELP_TEMPLATE = html`
             second playfield, a pacemaker, or a pacemaker with its key presses over your lanes. Ghost status says
             whether the chart under the cursor shows it.
           </dd>
+        </dl>
+      </section>
+      <section class="help-menu-folder">
+        <h4 class="help-menu-folder-title">View</h4>
+        <p class="help-menu-note">The View tab: what the lanes show. Locked during a play unless noted.</p>
+        <dl class="help-menu-items">
+          <dt>HS-FIX</dt>
+          <dd>
+            <em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> Keeps the scroll
+            speed steady against a BPM: MAXBPM, MINBPM, AVERAGE, STARTBPM, or CONSTANT (LR2, offered under every
+            ruleset).
+          </dd>
+          <dt data-for="Normal HI-SPEED (AC 32 measured)|Normal HS level">
+            Normal HI-SPEED (AC 32 measured) · Normal HS level
+          </dt>
+          <dd>
+            <em class="help-menu-when">The level shows with Normal HI-SPEED on.</em> Picks the speed from twenty levels
+            measured on AC, instead of the Hi-speed slider.
+          </dd>
+          <dt>Fixed display area (AC 34)</dt>
+          <dd>Ignores cover and LIFT changes during play; Enter twice restores the floating green number.</dd>
+          <dt data-for="FLOATING HI-SPEED (AC 32 measured)|Floating speed">
+            FLOATING HI-SPEED (AC 32 measured) · Floating speed
+          </dt>
+          <dd>
+            <em class="help-menu-when">The speed shows with FLOATING HI-SPEED on.</em> Keeps the green number while the
+            covers move; Numpad 0 switches it during play.
+          </dd>
+          <dt data-for="CLASSIC HI-SPEED|Classic speed">CLASSIC HI-SPEED · Classic speed</dt>
+          <dd>
+            <em class="help-menu-when">The speed shows with CLASSIC HI-SPEED on.</em> Picks the speed from AC's eleven
+            CLASSIC steps, 1.0 to 4.0.
+          </dd>
+          <dt>Hi-speed</dt>
+          <dd>
+            <em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> The scroll speed.
+            Changes live, like ↑ / ↓ during play.
+          </dd>
+          <dt>Display area info</dt>
+          <dd>
+            Keeps showing the cover length and green number at the cover edges: OFF, ON, SUDDEN+ ONLY or HID+/LIFT ONLY.
+          </dd>
+          <dt data-for="Effect 1P|Effect 2P">Effect 1P / 2P</dt>
+          <dd>The lane covers for each side: OFF, HIDDEN, SUDDEN or HID+SUD.</dd>
+          <dt data-for="Lane cover|Cover height">Lane cover / Cover height</dt>
+          <dd>LR2's lane cover, and how much of the lane it covers.</dd>
+          <dt data-for="LIFT 1P (beatoraja)|LIFT 2P (beatoraja)|LIFT height 1P|LIFT height 2P">
+            LIFT 1P / 2P (beatoraja) · LIFT height
+          </dt>
+          <dd>Raises that side's judge line, and by how much. Changes live.</dd>
+          <dt>BPM GUIDE (beatoraja)</dt>
+          <dd>Shows upcoming BPM changes on the lanes.</dd>
+          <dt>BPM change warning (AC)</dt>
+          <dd>
+            Shows <code>current » next</code> BPM in a box on the lanes for 2 seconds before each BPM change: blue when
+            it speeds up, red when it slows down.
+          </dd>
+          <dt data-for="Visual CONSTANT (beatoraja)|Note duration (ms)|CONSTANT fade (ms)">
+            Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)
+          </dt>
+          <dd>Shows notes only for their last N ms before the judge line, with a fade at their edge.</dd>
+          <dt>Judged notes</dt>
+          <dd>Whether a judged note keeps scrolling until its time (as in LR2) or disappears.</dd>
+          <dt>Show invisible notes</dt>
+          <dd>Shows hidden keysound objects. Changes live; judgment is unchanged.</dd>
         </dl>
       </section>
       <section class="help-menu-folder">
@@ -377,10 +385,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>How sharply the canvas draws; lower it if the frame rate drops.</dd>
           <dt>Play layout</dt>
           <dd>Auto, Desktop or Touch (on-screen lanes and buttons).</dd>
-          <dt>Judged notes</dt>
-          <dd>Whether a judged note keeps scrolling until its time (as in LR2) or disappears.</dd>
-          <dt>Show invisible notes</dt>
-          <dd>Shows hidden keysound objects. Changes live; judgment is unchanged.</dd>
           <dt>Toggle fullscreen</dt>
           <dd>Enters or leaves fullscreen.</dd>
         </dl>
@@ -426,19 +430,22 @@ export const OPTIONS_HELP_TEMPLATE = html`
             Shows what the player keeps in this browser: its localStorage keys, its IndexedDB databases (your courses,
             the replay slots) and how much space they use. It only reads; clear data from its own controls.
           </dd>
-          <dt>BGA video transcode</dt>
-          <dd>Whether BGA videos are converted with WebCodecs, and the size they are reduced to.</dd>
           <dt data-for="Slot 1 auto-save|Slot 2 auto-save|Slot 3 auto-save|Slot 4 auto-save">Slot 1–4 auto-save</dt>
           <dd>
             (Replay slots) When a result saves its replay into each slot, by beatoraja's rules: a better (or equal) EX
             score, BP, max combo or clear lamp, any of them, always, or never. Saving by hand (keys 1–4) works whatever
             they say.
           </dd>
-          <dt data-for="Use WebCodecs encoder|Resize">Use WebCodecs encoder · Resize</dt>
-          <dd>
-            (BGA video transcode) Converts BGA videos with the browser's WebCodecs encoder where it has one, and shrinks
-            them to the chosen size (Off keeps it). Applies from the next chart.
-          </dd>
+        </dl>
+      </section>
+      <section class="help-menu-folder">
+        <h4 class="help-menu-folder-title">Select</h4>
+        <p class="help-menu-note">
+          In the Library tab. The select screen's list; a play does not read them, so they change any time.
+        </p>
+        <dl class="help-menu-items">
+          <dt data-for="Sort|Key filter|Difficulty filter">Sort / Key filter / Difficulty filter</dt>
+          <dd>How the built-in and LR2 select screens order and filter the list.</dd>
         </dl>
       </section>
       <section class="help-menu-folder">
@@ -467,7 +474,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
         </dl>
       </section>
       <section class="help-menu-folder">
-        <h4 class="help-menu-folder-title">Developer</h4>
+        <h4 class="help-menu-folder-title">Advanced</h4>
         <dl class="help-menu-items">
           <dt>CPU workers</dt>
           <dd>How many workers load charts and stretch audio in parallel.</dd>
@@ -475,6 +482,13 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Pauses the play when the page loses focus.</dd>
           <dt>FPS</dt>
           <dd>The frame rate graph.</dd>
+          <dt>BGA video transcode</dt>
+          <dd>Whether BGA videos are converted with WebCodecs, and the size they are reduced to.</dd>
+          <dt data-for="Use WebCodecs encoder|Resize">Use WebCodecs encoder · Resize</dt>
+          <dd>
+            (BGA video transcode) Converts BGA videos with the browser's WebCodecs encoder where it has one, and shrinks
+            them to the chosen size (Off keeps it). Applies from the next chart.
+          </dd>
           <dt>Reset settings and reload</dt>
           <dd>Returns every setting to its default and reloads; best records stay.</dd>
         </dl>
@@ -502,13 +516,13 @@ export const OPTIONS_HELP_TEMPLATE = html`
       <h3 class="help-section-title">Options</h3>
       <ul class="help-list">
         <li>
-          右上の <strong>Settings</strong> ボタン (歯車) で Options が開きます。タブごとに Play、Tempo &amp;
-          course、Skin &amp; display、Audio、Library、Leaderboard、Developer の設定がまとまっています。Play options
+          右上の <strong>Settings</strong> ボタン (歯車) で Options が開きます。タブごとに Play、View、Keys、Skin、
+          Audio、Library、Leaderboard、Advanced の設定がまとまっています。Play options と View
           は項目が多いのでページに分かれています。各項目の横の <strong>?</strong> にカーソルを合わせると説明が出ます。
         </li>
         <li>
           設定はすべてこのブラウザに記憶され、次に開いたときに元に戻ります。<strong
-            >Developer → Reset settings and reload</strong
+            >Advanced → Reset settings and reload</strong
           >
           ですべて既定値に戻せます (ベスト記録は残ります)。
         </li>
@@ -519,7 +533,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
       </ul>
       <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">最上部</h4>
-        <p class="help-menu-note">フォルダの上。</p>
+        <p class="help-menu-note">Library タブの最上部。</p>
         <dl class="help-menu-items">
           <dt>Status</dt>
           <dd>今の状態の表示 (読み取り専用)。</dd>
@@ -693,35 +707,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>
             <em class="help-menu-when">Long notes が ADD のどれかのときに表示。</em> ロングノートにする割合 (0〜1)。
           </dd>
-          <dt data-for="Sort|Key filter|Difficulty filter">Sort / Key filter / Difficulty filter</dt>
-          <dd>内蔵スキンと LR2 スキンの選曲画面の並び順と絞り込み。</dd>
-          <dt>HS-FIX</dt>
-          <dd>
-            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em> BPM
-            に合わせてスクロール速度を一定に保ちます。MAXBPM、MINBPM、AVERAGE、STARTBPM、CONSTANT
-            (LR2。どのルールでも選べます)。
-          </dd>
-          <dt>Display area info</dt>
-          <dd>カバーの長さと緑数字をカバーの端に表示し続けます。OFF、ON、SUDDEN+ ONLY、HID+/LIFT ONLY。</dd>
-          <dt data-for="Effect 1P|Effect 2P">Effect 1P / 2P</dt>
-          <dd>各サイドのレーンカバー。OFF、HIDDEN、SUDDEN、HID+SUD。</dd>
-          <dt data-for="Lane cover|Cover height">Lane cover / Cover height</dt>
-          <dd>LR2 のレーンカバーと、その高さ。</dd>
-          <dt>BPM GUIDE (beatoraja)</dt>
-          <dd>これから来る BPM の変化をレーン上に表示します。</dd>
-          <dt>BPM change warning (AC)</dt>
-          <dd>
-            BPM が変わる 2 秒前から、レーン上の箱に
-            <code>今の BPM » 次の BPM</code> を表示します。速くなるときは青、遅くなるときは赤です。
-          </dd>
-          <dt data-for="LIFT 1P (beatoraja)|LIFT 2P (beatoraja)|LIFT height 1P|LIFT height 2P">
-            LIFT 1P / 2P (beatoraja) · LIFT height
-          </dt>
-          <dd>そのサイドの判定ラインを上げます。高さはプレイ中にも変えられます。</dd>
-          <dt data-for="Visual CONSTANT (beatoraja)|Note duration (ms)|CONSTANT fade (ms)">
-            Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)
-          </dt>
-          <dd>ノーツを判定ラインに届く前の N ミリ秒だけ表示し、その境目をフェードさせます。</dd>
           <dt>Auto judge timing</dt>
           <dd>
             手で遊んだときの叩いたタイミングから、Judge timing を自動で調整します。beatoraja の方式は 1 打ごとに、LR2
@@ -729,32 +714,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Judge timing (ms)</dt>
           <dd>ノーツを描くタイミングをずらします (−500〜500 ミリ秒)。入力、音、判定はそのままです。</dd>
-          <dt data-for="Normal HI-SPEED (AC 32 measured)|Normal HS level">
-            Normal HI-SPEED (AC 32 measured) · Normal HS level
-          </dt>
-          <dd>
-            <em class="help-menu-when">レベルは Normal HI-SPEED がオンのときに表示。</em> Hi-speed
-            のスライダーの代わりに、AC で実測した 20 段階から速度を選びます。
-          </dd>
-          <dt data-for="CLASSIC HI-SPEED|Classic speed">CLASSIC HI-SPEED · Classic speed</dt>
-          <dd>
-            <em class="help-menu-when">速度は CLASSIC HI-SPEED がオンのときに表示。</em> AC の CLASSIC の 11 段階
-            (1.0〜4.0) から速度を選びます。
-          </dd>
-          <dt data-for="FLOATING HI-SPEED (AC 32 measured)|Floating speed">
-            FLOATING HI-SPEED (AC 32 measured) · Floating speed
-          </dt>
-          <dd>
-            <em class="help-menu-when">速度は FLOATING HI-SPEED がオンのときに表示。</em>
-            カバーを動かしても緑数字を保ちます。プレイ中はテンキーの 0 で切り替えます。
-          </dd>
-          <dt>Fixed display area (AC 34)</dt>
-          <dd>プレイ中のカバーと LIFT の変更を受け付けません。Enter 2 回でフローティングの緑数字に戻します。</dd>
-          <dt>Hi-speed</dt>
-          <dd>
-            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em>
-            スクロールの速さ。プレイ中の ↑ / ↓ と同じく、すぐ反映されます。
-          </dd>
         </dl>
       </section>
       <section class="help-menu-folder">
@@ -770,6 +729,69 @@ export const OPTIONS_HELP_TEMPLATE = html`
             つ目のプレイフィールド、ペースメーカー、押下を自分のレーンに重ねるペースメーカーのどれかで見せます。Ghost
             status はカーソルの譜面で見せられるかを示します。
           </dd>
+        </dl>
+      </section>
+      <section class="help-menu-folder">
+        <h4 class="help-menu-folder-title">View</h4>
+        <p class="help-menu-note">View タブ: レーンの見え方。特に書かない限りプレイ中は変えられません。</p>
+        <dl class="help-menu-items">
+          <dt>HS-FIX</dt>
+          <dd>
+            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em> BPM
+            に合わせてスクロール速度を一定に保ちます。MAXBPM、MINBPM、AVERAGE、STARTBPM、CONSTANT
+            (LR2。どのルールでも選べます)。
+          </dd>
+          <dt data-for="Normal HI-SPEED (AC 32 measured)|Normal HS level">
+            Normal HI-SPEED (AC 32 measured) · Normal HS level
+          </dt>
+          <dd>
+            <em class="help-menu-when">レベルは Normal HI-SPEED がオンのときに表示。</em> Hi-speed
+            のスライダーの代わりに、AC で実測した 20 段階から速度を選びます。
+          </dd>
+          <dt>Fixed display area (AC 34)</dt>
+          <dd>プレイ中のカバーと LIFT の変更を受け付けません。Enter 2 回でフローティングの緑数字に戻します。</dd>
+          <dt data-for="FLOATING HI-SPEED (AC 32 measured)|Floating speed">
+            FLOATING HI-SPEED (AC 32 measured) · Floating speed
+          </dt>
+          <dd>
+            <em class="help-menu-when">速度は FLOATING HI-SPEED がオンのときに表示。</em>
+            カバーを動かしても緑数字を保ちます。プレイ中はテンキーの 0 で切り替えます。
+          </dd>
+          <dt data-for="CLASSIC HI-SPEED|Classic speed">CLASSIC HI-SPEED · Classic speed</dt>
+          <dd>
+            <em class="help-menu-when">速度は CLASSIC HI-SPEED がオンのときに表示。</em> AC の CLASSIC の 11 段階
+            (1.0〜4.0) から速度を選びます。
+          </dd>
+          <dt>Hi-speed</dt>
+          <dd>
+            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em>
+            スクロールの速さ。プレイ中の ↑ / ↓ と同じく、すぐ反映されます。
+          </dd>
+          <dt>Display area info</dt>
+          <dd>カバーの長さと緑数字をカバーの端に表示し続けます。OFF、ON、SUDDEN+ ONLY、HID+/LIFT ONLY。</dd>
+          <dt data-for="Effect 1P|Effect 2P">Effect 1P / 2P</dt>
+          <dd>各サイドのレーンカバー。OFF、HIDDEN、SUDDEN、HID+SUD。</dd>
+          <dt data-for="Lane cover|Cover height">Lane cover / Cover height</dt>
+          <dd>LR2 のレーンカバーと、その高さ。</dd>
+          <dt data-for="LIFT 1P (beatoraja)|LIFT 2P (beatoraja)|LIFT height 1P|LIFT height 2P">
+            LIFT 1P / 2P (beatoraja) · LIFT height
+          </dt>
+          <dd>そのサイドの判定ラインを上げます。高さはプレイ中にも変えられます。</dd>
+          <dt>BPM GUIDE (beatoraja)</dt>
+          <dd>これから来る BPM の変化をレーン上に表示します。</dd>
+          <dt>BPM change warning (AC)</dt>
+          <dd>
+            BPM が変わる 2 秒前から、レーン上の箱に
+            <code>今の BPM » 次の BPM</code> を表示します。速くなるときは青、遅くなるときは赤です。
+          </dd>
+          <dt data-for="Visual CONSTANT (beatoraja)|Note duration (ms)|CONSTANT fade (ms)">
+            Visual CONSTANT (beatoraja) · Note duration (ms) · CONSTANT fade (ms)
+          </dt>
+          <dd>ノーツを判定ラインに届く前の N ミリ秒だけ表示し、その境目をフェードさせます。</dd>
+          <dt>Judged notes</dt>
+          <dd>判定したノーツを本来の時刻まで流す (LR2 と同じ) か、消すか。</dd>
+          <dt>Show invisible notes</dt>
+          <dd>不可視オブジェクトを表示します。プレイ中にも切り替えられ、判定は変わりません。</dd>
         </dl>
       </section>
       <section class="help-menu-folder">
@@ -855,10 +877,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>キャンバスを描く解像度。フレームレートが落ちるときは下げます。</dd>
           <dt>Play layout</dt>
           <dd>Auto、Desktop、Touch (画面のレーンとボタンで操作)。</dd>
-          <dt>Judged notes</dt>
-          <dd>判定したノーツを本来の時刻まで流す (LR2 と同じ) か、消すか。</dd>
-          <dt>Show invisible notes</dt>
-          <dd>不可視オブジェクトを表示します。プレイ中にも切り替えられ、判定は変わりません。</dd>
           <dt>Toggle fullscreen</dt>
           <dd>フルスクリーンに入る / 出る。</dd>
         </dl>
@@ -905,8 +923,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
             プレイヤーがこのブラウザに保存しているもの (localStorage のキー、自作コースやリプレイスロットの IndexedDB
             データベース、使っている容量) を表示します。読むだけなので、データは消すための各操作から消してください。
           </dd>
-          <dt>BGA video transcode</dt>
-          <dd>BGA の動画を WebCodecs で変換するかと、縮小するサイズ。</dd>
           <dt data-for="Slot 1 auto-save|Slot 2 auto-save|Slot 3 auto-save|Slot 4 auto-save">Slot 1–4 auto-save</dt>
           <dd>
             (Replay slots) リザルトで各スロットにリプレイを保存する条件 (beatoraja の規則)。EX
@@ -914,11 +930,16 @@ export const OPTIONS_HELP_TEMPLATE = html`
             (同じも含むかどうか)、いずれか、常に、保存しない、から選びます。キー 1–4
             での手動保存はこの設定によらず使えます。
           </dd>
-          <dt data-for="Use WebCodecs encoder|Resize">Use WebCodecs encoder · Resize</dt>
-          <dd>
-            (BGA video transcode) ブラウザに WebCodecs のエンコーダーがあれば BGA
-            の動画をそれで変換し、選んだサイズに縮小します (Off は縮小しません)。次の譜面から反映されます。
-          </dd>
+        </dl>
+      </section>
+      <section class="help-menu-folder">
+        <h4 class="help-menu-folder-title">Select</h4>
+        <p class="help-menu-note">
+          Library タブの中。選曲画面の一覧の設定です。プレイには使わないので、いつでも変えられます。
+        </p>
+        <dl class="help-menu-items">
+          <dt data-for="Sort|Key filter|Difficulty filter">Sort / Key filter / Difficulty filter</dt>
+          <dd>内蔵スキンと LR2 スキンの選曲画面の並び順と絞り込み。</dd>
         </dl>
       </section>
       <section class="help-menu-folder">
@@ -949,7 +970,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
         </dl>
       </section>
       <section class="help-menu-folder">
-        <h4 class="help-menu-folder-title">Developer</h4>
+        <h4 class="help-menu-folder-title">Advanced</h4>
         <dl class="help-menu-items">
           <dt>CPU workers</dt>
           <dd>譜面の読み込みや音の伸縮を並列で行うワーカーの数。</dd>
@@ -957,6 +978,13 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>ページからフォーカスが外れたらプレイを一時停止します。</dd>
           <dt>FPS</dt>
           <dd>フレームレートのグラフ。</dd>
+          <dt>BGA video transcode</dt>
+          <dd>BGA の動画を WebCodecs で変換するかと、縮小するサイズ。</dd>
+          <dt data-for="Use WebCodecs encoder|Resize">Use WebCodecs encoder · Resize</dt>
+          <dd>
+            (BGA video transcode) ブラウザに WebCodecs のエンコーダーがあれば BGA
+            の動画をそれで変換し、選んだサイズに縮小します (Off は縮小しません)。次の譜面から反映されます。
+          </dd>
           <dt>Reset settings and reload</dt>
           <dd>すべての設定を既定値に戻して再読み込みします。ベスト記録は残ります。</dd>
         </dl>

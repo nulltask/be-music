@@ -422,17 +422,14 @@ export class OptionsDialog {
     const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec): OptionFolder =>
       parent.addFolder({ title: folder.title });
     const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
-    const [play, keys, tempo, skin, audio, library, leaderboard, developer] = tabs.pages;
-    if (!play || !keys || !tempo || !skin || !audio || !library || !leaderboard || !developer) return;
-    // Tabs in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
-    // library and capturing a play, the Leaderboard, then the developer settings.
-    const replayPage = this.buildPlayOptionsFolder(addSection(play, OPTION_FOLDERS.playOptions));
-    this.buildReplayViewFolder(addFolder(replayPage, OPTION_FOLDERS.replayView));
-    this.buildKeyConfigFolder(addSection(keys, OPTION_FOLDERS.keys));
-    this.buildTempoFolder(addSection(tempo, OPTION_FOLDERS.tempo));
-    this.buildCourseFolder(addSection(tempo, OPTION_FOLDERS.course));
-    this.buildSkinFolder(addSection(skin, OPTION_FOLDERS.skin), addFolder);
-    this.buildAudioFolder(addSection(audio, OPTION_FOLDERS.audio), addFolder);
+    const [play, view, keys, skin, audio, library, leaderboard, advanced] = tabs.pages;
+    if (!play || !view || !keys || !skin || !audio || !library || !leaderboard || !advanced) return;
+    // Tabs in the order a session uses them: how to play and what the lanes show, the keys, how it looks and sounds,
+    // the library (loading, records, the select screen's list, courses and capturing a play), the Leaderboard, then
+    // the advanced settings. The sections are made first, top to bottom, since the Play options fill the View and
+    // Select folders on other tabs.
+    const playOptions = addSection(play, OPTION_FOLDERS.playOptions);
+    const viewFolder = addSection(view, OPTION_FOLDERS.view);
     // The status line shows long load and playback messages read-only; `setStatus` refreshes it at once.
     this.statusController = library.addBinding(this.guiState, 'status', {
       label: 'Status',
@@ -444,9 +441,17 @@ export class OptionsDialog {
     library.addButton({ title: 'Open folder' }).on('click', () => this.guiState['openFolder']());
     library.addButton({ title: 'Open files (ZIP / replay)' }).on('click', () => this.guiState['openFiles']());
     this.buildLibraryFolder(addSection(library, OPTION_FOLDERS.library), addFolder);
+    const select = addSection(library, OPTION_FOLDERS.select);
+    this.buildCourseFolder(addSection(library, OPTION_FOLDERS.course));
     this.buildCaptureFolder(addSection(library, OPTION_FOLDERS.capture));
+    const { practice, replay } = this.buildPlayOptionsFolder(playOptions, viewFolder, select);
+    this.buildTempoFolder(addFolder(practice, OPTION_FOLDERS.tempo));
+    this.buildReplayViewFolder(addFolder(replay, OPTION_FOLDERS.replayView));
+    this.buildKeyConfigFolder(addSection(keys, OPTION_FOLDERS.keys));
+    this.buildSkinFolder(addSection(skin, OPTION_FOLDERS.skin), addFolder);
+    this.buildAudioFolder(addSection(audio, OPTION_FOLDERS.audio), addFolder);
     this.deps.leaderboard.buildFolder(addSection(leaderboard, OPTION_FOLDERS.leaderboard));
-    this.buildDeveloperFolder(addSection(developer, OPTION_FOLDERS.developer));
+    this.buildDeveloperFolder(addSection(advanced, OPTION_FOLDERS.advanced));
     this.refreshCompressorStageVisibility();
     gui.on('change', () => this.scheduleSettingsSave());
     help.attach();

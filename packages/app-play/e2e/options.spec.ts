@@ -15,8 +15,8 @@ test('the header opens the Options dialog, with sections, Play options pages, ho
   await expect(settings).toHaveAttribute('aria-expanded', 'true');
   // Nothing in it folds: every folder is a section.
   await expect(dialog.locator('details')).toHaveCount(0);
-  // Play options splits its options into pages; Hi-speed sits on Hi-speed & view.
-  await dialog.getByRole('tab', { name: 'Hi-speed & view', exact: true }).click();
+  // Hi-speed sits on the View tab's first page, Hi-speed.
+  await dialog.getByRole('tab', { name: 'View', exact: true }).click();
   const hiSpeed = dialog
     .locator('.options-row[data-option-label="Hi-speed"]')
     .filter({ has: page.locator('input[type="number"]') });
@@ -29,7 +29,7 @@ test('the header opens the Options dialog, with sections, Play options pages, ho
   await dialog.getByRole('tab', { name: 'Library', exact: true }).click();
   const status = dialog.locator('.status-row textarea');
   expect(await status.evaluate((element: HTMLTextAreaElement) => element.readOnly)).toBe(true);
-  await dialog.getByRole('tab', { name: 'Developer', exact: true }).click();
+  await dialog.getByRole('tab', { name: 'Advanced', exact: true }).click();
   const graph = dialog.locator('.options-graph polyline');
   await expect(graph).toHaveAttribute('points', /\d/);
   expect(await graph.getAttribute('points')).not.toContain('NaN');
@@ -66,7 +66,7 @@ test('Options save immediately across reloads and reset cancels pending publicat
   await player.page.evaluate(() => localStorage.setItem('be-music.chart-best-records', 'keep'));
   await player.setOption(['Play options'], 'Auto play', false);
   player.page.once('dialog', (dialog) => void dialog.accept());
-  await Promise.all([player.page.waitForEvent('load'), player.pressOption(['Developer'], 'Reset settings and reload')]);
+  await Promise.all([player.page.waitForEvent('load'), player.pressOption(['Advanced'], 'Reset settings and reload')]);
   await player.waitFor((state) => state.scene.kind === 'select', 'select after reset');
   await expect.poll(() => player.page.evaluate(() => localStorage.getItem('be-music.option-settings'))).toBeNull();
   expect(await player.readOption(['Play options'], 'Auto play')).toBe(false);
@@ -154,7 +154,7 @@ test('editing a number preserves its control and help while synchronizing the sl
   const { page } = player;
   await page.locator('[data-service-header="settings"]').click();
   const dialog = page.locator('#options-modal');
-  await dialog.getByRole('tab', { name: 'Hi-speed & view', exact: true }).click();
+  await dialog.getByRole('tab', { name: 'View', exact: true }).click();
   const row = dialog
     .locator('.options-row[data-option-label="Hi-speed"]')
     .filter({ has: page.locator('input[type="number"]') });
@@ -206,7 +206,7 @@ test('language changes preserve inputs, help controls and selected tabs', async 
   const { page } = player;
   await page.locator('[data-service-header="settings"]').click();
   const dialog = page.locator('#options-modal');
-  await dialog.getByRole('tab', { name: 'Hi-speed & view', exact: true }).click();
+  await dialog.getByRole('tab', { name: 'View', exact: true }).click();
   const row = dialog
     .locator('.options-row[data-option-label="Hi-speed"]')
     .filter({ has: page.locator('input[type="number"]') });
@@ -215,10 +215,7 @@ test('language changes preserve inputs, help controls and selected tabs', async 
   await field.fill('3.14');
   // Simulate a preference update while an editor is focused, without moving focus to the header.
   await page.evaluate(() => document.querySelector<HTMLAnchorElement>('#language-menu a[lang="ja"]')!.click());
-  await expect(dialog.getByRole('tab', { name: 'ハイスピードと表示', exact: true })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expect(dialog.getByRole('tab', { name: '表示', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(field).toHaveValue('3.14');
   await expect(field).toBeFocused();
   expect(await field.evaluate((current, previous) => current === previous, original)).toBe(true);
@@ -226,10 +223,7 @@ test('language changes preserve inputs, help controls and selected tabs', async 
   await expect(page.locator('footer.service-page-footer nav')).toHaveAttribute('aria-label', 'サービス');
   await expect(row.locator('.options-help')).toHaveCount(1);
   await page.evaluate(() => document.querySelector<HTMLAnchorElement>('#language-menu a[lang="en"]')!.click());
-  await expect(dialog.getByRole('tab', { name: 'Hi-speed & view', exact: true })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expect(dialog.getByRole('tab', { name: 'View', exact: true })).toHaveAttribute('aria-selected', 'true');
   await field.dispatchEvent('change');
   await expect(field).toHaveValue('3.1');
   await row.locator('.options-help').hover();

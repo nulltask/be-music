@@ -30,9 +30,9 @@ test('uses real workers for chart loading and WSOLA; persists concurrency', asyn
       tempoStretchAlgorithm: 'wsola',
     }),
   });
-  expect(await player.readOption(['Developer'], 'CPU workers')).toBe(2);
+  expect(await player.readOption(['Advanced'], 'CPU workers')).toBe(2);
   expect(workers.filter((url) => url.includes('compute-worker')).length).toBeGreaterThan(0);
-  await player.setOption(['Developer'], 'CPU workers', 1);
+  await player.setOption(['Advanced'], 'CPU workers', 1);
   expect(await player.page.evaluate(() => localStorage.getItem('be-music.worker-count'))).toBe('1');
   await player.setOption(['Play options'], 'Auto play', true);
   await player.browseTo(SONGS, 'Fixture A');
