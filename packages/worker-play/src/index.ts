@@ -16,6 +16,7 @@
 // The core files only change when the pinned `@ffmpeg/core` version changes — upload them with the `cf:r2:push` script.
 
 import { handleAuth, readSession, type OIDCEnv } from '@be-music/service-auth-client';
+import { playAppShortName, playAppTitle, playEnvironmentOfOrigin, retitleManifest } from './app-title.ts';
 import { isLeaderboardPath } from './leaderboard-paths.ts';
 import { handlePlayerSettings, PLAYER_SETTINGS_PATH } from './player-settings.ts';
 import { withPWAAssetHeaders } from './pwa-assets.ts';
@@ -71,6 +72,35 @@ async function serveFFmpegCore(request: Request, env: Env, pathname: string): Pr
   return new Response(request.method === 'HEAD' ? null : object.body, { headers });
 }
 
+/**
+ * `response` retitled for the deployment this Worker serves (`app-title.ts`): the player page's title and the web app
+ * manifest's names. Production, other paths and misses pass through untouched. The embed page is not installable and
+ * keeps its own title.
+ */
+async function withEnvironmentTitle(pathname: string, response: Response, publicOrigin: string): Promise<Response> {
+  const environment = playEnvironmentOfOrigin(publicOrigin);
+  if (environment === 'production' || !response.ok) return response;
+  if (pathname === '/manifest.webmanifest') {
+    const served = new Response(retitleManifest(await response.text(), environment), response);
+    served.headers.delete('content-length');
+    return served;
+  }
+  const isPage = response.headers.get('content-type')?.startsWith('text/html') === true;
+  if (!isPage || pathname.startsWith('/embed/')) return response;
+  return new HTMLRewriter()
+    .on('title', {
+      element(element) {
+        element.setInnerContent(playAppTitle(environment));
+      },
+    })
+    .on('meta[name="apple-mobile-web-app-title"]', {
+      element(element) {
+        element.setAttribute('content', playAppShortName(environment));
+      },
+    })
+    .transform(response);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const auth = await handleAuth(request, env);
@@ -103,7 +133,9 @@ export default {
       return env.LEADERBOARD.fetch(new Request(url, new Request(request, { headers })));
     }
     // Everything else: static assets, with `not_found_handling: single-page-application` serving index.html on a miss.
-    // The service worker and the web app manifest get their own headers (`pwa-assets.ts`).
-    return withPWAAssetHeaders(pathname, await env.ASSETS.fetch(request));
+    // The service worker and the web app manifest get their own headers (`pwa-assets.ts`), and the page and the manifest
+    // the title of this deployment (`app-title.ts`).
+    const asset = await withEnvironmentTitle(pathname, await env.ASSETS.fetch(request), env.PUBLIC_ORIGIN);
+    return withPWAAssetHeaders(pathname, asset);
   },
 } satisfies ExportedHandler<Env>;
