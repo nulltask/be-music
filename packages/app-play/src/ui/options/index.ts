@@ -67,9 +67,11 @@ import {
   battleModeItems,
   bottomShiftableGaugeItems,
   laneOptionItems,
+  menuLaneCovers,
   practiceGaugeItems,
 } from './play-option-items.ts';
 import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
+import { buildQuickOptionsPanel, QUICK_OPTIONS_ENABLED } from './quick-options.ts';
 import type { PracticeRangePicker } from './practice-range.ts';
 import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './render-resolution.ts';
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
@@ -243,6 +245,12 @@ export class OptionsDialog {
   public random1PController: OptionBinding<PlayOptions['random1P']> | undefined;
   public random2PController: OptionBinding<PlayOptions['random2P']> | undefined;
   public gaugeController: OptionBinding<GaugeType> | undefined;
+  /** The quick options panel (`quick-options.ts`), and the controls on it whose choices or visibility follow others. */
+  public quickOptionsPanel: OptionFolder | undefined;
+  public quickRandom1PController: OptionBinding<PlayOptions['random1P']> | undefined;
+  public quickGaugeController: OptionBinding<GaugeType> | undefined;
+  public quickHsFixController: OptionBinding<PlayOptions['hsFix']> | undefined;
+  public quickHiSpeedController: PaneBinding | undefined;
   public bottomShiftableGaugeController: OptionBinding<PlayOptions['bottomShiftableGauge']> | undefined;
   public gaugeAutoShiftController: OptionBinding<PlayOptions['gaugeAutoShift']> | undefined;
   public longNoteModifierController: OptionBinding<PlayOptions['longNoteModifier']> | undefined;
@@ -368,6 +376,23 @@ export class OptionsDialog {
   public setStatus(text: string): void {
     this.deps.setStatus(text);
   }
+  /**
+   * SUDDEN+ / HIDDEN+ set from the menu (the Effect, Lane cover and Cover height of the View tab and the quick options
+   * panel): stored, and handed to a running play as its covers.
+   */
+  public setCoverOptions(changes: Partial<PlayOptions>): void {
+    this.setPlayOptions(changes);
+    this.gameplayView?.controller.dispatch({
+      type: 'cover',
+      command: { type: 'cover-set', covers: menuLaneCovers(this.guiState) },
+    });
+  }
+  /** Shows the quick options panel (on the select and play screens) or hides it. */
+  public setQuickOptionsShown(shown: boolean): void {
+    const dock = this.quickOptionsPanel?.element.parentElement;
+    if (dock) dock.hidden = !shown;
+    if (shown) this.quickOptionsPanel?.refresh();
+  }
   /** A play option set from the menu ({@link OptionsDialogDeps.setPlayOptions}). */
   public setPlayOptions(changes: Partial<PlayOptions>): void {
     this.deps.setPlayOptions(changes);
@@ -453,7 +478,15 @@ export class OptionsDialog {
     this.deps.leaderboard.buildFolder(addSection(leaderboard, OPTION_FOLDERS.leaderboard));
     this.buildDeveloperFolder(addSection(advanced, OPTION_FOLDERS.advanced));
     this.refreshCompressorStageVisibility();
-    gui.on('change', () => this.scheduleSettingsSave());
+    gui.on('change', () => {
+      this.scheduleSettingsSave();
+      // The quick options panel reads the same values.
+      this.quickOptionsPanel?.refresh();
+    });
+    const quickDock = document.querySelector<HTMLElement>('#quick-options');
+    if (quickDock !== null && QUICK_OPTIONS_ENABLED) {
+      this.quickOptionsPanel = buildQuickOptionsPanel.call(this, quickDock);
+    }
     help.attach();
     // The labels in the player's language, and again when it changes (Help's language switch, the header's menu).
     relabelOptions(gui, playerLang());
@@ -516,6 +549,7 @@ export class OptionsDialog {
 
   public refreshHiSpeed(): void {
     this.hiSpeedController?.refresh();
+    this.quickHiSpeedController?.refresh();
     this.floatingSpeedController?.refresh();
     this.floatingHiSpeedController?.refresh();
     this.refreshRulesetChoices();
@@ -580,6 +614,11 @@ export class OptionsDialog {
     if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.hidden = !normal || floating;
     if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
     if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
+    // The quick panel offers only the regular hi-speed and HS-FIX; a measured or classic mode is set in the dialog.
+    if (this.quickHiSpeedController)
+      this.quickHiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
+    if (this.quickHsFixController)
+      this.quickHsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
     if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
     if (this.anyKeyController) this.anyKeyController.hidden = this.guiState.judgeRuleset !== '____';
     const ruleset = this.guiState.judgeRuleset;
@@ -681,8 +720,10 @@ export class OptionsDialog {
         this.guiState[key] = mode;
         this.setPlayOptions({ [key]: mode });
       }
-      const controller = side === '1P' ? this.random1PController : this.random2PController;
-      if (controller) {
+      const controllers =
+        side === '1P' ? [this.random1PController, this.quickRandom1PController] : [this.random2PController];
+      for (const controller of controllers) {
+        if (!controller) continue;
         controller.options = items;
         controller.refresh();
       }
@@ -696,7 +737,7 @@ export class OptionsDialog {
       this.guiState.gauge2P = 'GROOVE';
       this.setPlayOptions({ gauge2P: 'GROOVE' });
     }
-    for (const controller of [this.gaugeController, this.gauge2PController]) {
+    for (const controller of [this.gaugeController, this.gauge2PController, this.quickGaugeController]) {
       if (!controller) continue;
       controller.options = paneOptions(choices).map((item) => ({
         ...item,
@@ -718,6 +759,7 @@ export class OptionsDialog {
     for (const controller of this.playOptionControllers) {
       controller.refresh?.();
     }
+    this.quickOptionsPanel?.refresh();
     this.scheduleSettingsSave();
   }
 }
