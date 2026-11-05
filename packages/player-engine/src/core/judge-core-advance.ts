@@ -155,7 +155,8 @@ export function processLandminePassage(
   const reversalSeconds = config.reversalSeconds;
   const pressDetonates = config.ruleset.mineTrigger === 'press-or-hold';
   const nowUs = toJudgeUs(nowSec);
-  const due: Array<{ atUs: number; landmine: TimedLandmineNote; phase: 1 | 2 | 3 }> = [];
+  // Allocated only once a check falls due: most frames have none.
+  let due: Array<{ atUs: number; landmine: TimedLandmineNote; phase: 1 | 2 | 3 }> | undefined;
   for (let index = state.landmineExpireCursor; index < landmineNotes.length; index += 1) {
     const landmine = landmineNotes[index]!;
     if (reversalSeconds !== undefined && landmine.seconds >= reversalSeconds) {
@@ -173,35 +174,37 @@ export function processLandminePassage(
     const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, landmine.seconds).note);
     const phase = state.landminePhases.get(landmine) ?? 0;
     if (pressDetonates && phase < 1 && mineUs - pgreatEarlyUs < nowUs) {
-      due.push({ atUs: mineUs - pgreatEarlyUs, landmine, phase: 1 });
+      (due ??= []).push({ atUs: mineUs - pgreatEarlyUs, landmine, phase: 1 });
     }
     if (phase < 2 && mineUs < nowUs) {
-      due.push({ atUs: mineUs, landmine, phase: 2 });
+      (due ??= []).push({ atUs: mineUs, landmine, phase: 2 });
     }
     // LR2beta3 and hold-only settle at crossing; only the provisional That-Which-Must-Not-Be-Named model keeps a late window.
     const settleUs = pressDetonates ? mineUs + pgreatLateUs : mineUs;
     if (settleUs < nowUs) {
-      due.push({ atUs: settleUs, landmine, phase: 3 });
+      (due ??= []).push({ atUs: settleUs, landmine, phase: 3 });
     }
   }
-  due.sort(
-    (left, right) =>
-      left.atUs - right.atUs ||
-      compareJudgeChannels(left.landmine.channel, right.landmine.channel) ||
-      left.phase - right.phase,
-  );
-  for (const check of due) {
-    if (check.landmine.judged) {
-      continue;
-    }
-    state.landminePhases.set(check.landmine, check.phase);
-    if (check.phase === 3) {
-      markLandmineJudged(state, check.landmine);
-      continue;
-    }
-    const atMs = nowMs - (nowSec - check.atUs / 1e6) * config.judgeMsPerChartSecond;
-    if (wasLaneDownAtMs(state, check.landmine.channel, atMs)) {
-      detonateLandmine(state, check.landmine, nowSec, emit);
+  if (due !== undefined) {
+    due.sort(
+      (left, right) =>
+        left.atUs - right.atUs ||
+        compareJudgeChannels(left.landmine.channel, right.landmine.channel) ||
+        left.phase - right.phase,
+    );
+    for (const check of due) {
+      if (check.landmine.judged) {
+        continue;
+      }
+      state.landminePhases.set(check.landmine, check.phase);
+      if (check.phase === 3) {
+        markLandmineJudged(state, check.landmine);
+        continue;
+      }
+      const atMs = nowMs - (nowSec - check.atUs / 1e6) * config.judgeMsPerChartSecond;
+      if (wasLaneDownAtMs(state, check.landmine.channel, atMs)) {
+        detonateLandmine(state, check.landmine, nowSec, emit);
+      }
     }
   }
   while (state.landmineExpireCursor < landmineNotes.length && landmineNotes[state.landmineExpireCursor]!.judged) {
@@ -274,6 +277,15 @@ function markExpiredInvisibleNotes(state: JudgeCoreState, referenceSeconds: numb
 
 // ---- auto scratch ---------------------------------------------------------------------------------------------
 
+/** An AUTO SCRATCH judgment due this step: a pending long-note tail (`order` 0) or a scratch note's head (`order` 1). */
+interface AutoScratchDue {
+  atUs: number;
+  channel: string;
+  order: 0 | 1;
+  pending: PendingAutoLongNoteState | undefined;
+  note: TimedPlayableNote | undefined;
+}
+
 /**
  * AUTO SCRATCH: the scratch notes whose time has passed, and the auto-played long notes whose tail has, in time order
  * (a tail before a head at the same instant, then channel order), each at its own microsecond.
@@ -282,15 +294,18 @@ function applyAutoScratchJudgements(state: JudgeCoreState, referenceSeconds: num
   const { config } = state;
   const nowUs = toJudgeUs(referenceSeconds);
   for (;;) {
-    const due: Array<{ atUs: number; channel: string; order: number; run: () => void }> = [];
+    // Plain records rather than closures, so a frame with nothing due allocates nothing (closures over this frame's
+    // arguments would make V8 allocate their context on every call).
+    let due: AutoScratchDue[] | undefined;
     for (const pending of state.pendingAutoScratchLongNotes) {
       const atUs = toJudgeUs(pending.endSeconds);
       if (atUs < nowUs) {
-        due.push({
+        (due ??= []).push({
           atUs,
           channel: pending.note.channel,
           order: 0,
-          run: () => completeAutoScratchLongNote(state, pending, referenceSeconds, emit),
+          pending,
+          note: undefined,
         });
       }
     }
@@ -305,15 +320,16 @@ function applyAutoScratchJudgements(state: JudgeCoreState, referenceSeconds: num
         if (note.judged) {
           continue;
         }
-        due.push({
+        (due ??= []).push({
           atUs,
           channel: note.channel,
           order: 1,
-          run: () => startAutoScratchNote(state, note, referenceSeconds, emit),
+          pending: undefined,
+          note,
         });
       }
     }
-    if (due.length === 0) {
+    if (due === undefined) {
       break;
     }
     due.sort(
@@ -321,7 +337,8 @@ function applyAutoScratchJudgements(state: JudgeCoreState, referenceSeconds: num
         left.atUs - right.atUs || left.order - right.order || compareJudgeChannels(left.channel, right.channel),
     );
     for (const entry of due) {
-      entry.run();
+      if (entry.pending !== undefined) completeAutoScratchLongNote(state, entry.pending, referenceSeconds, emit);
+      else startAutoScratchNote(state, entry.note!, referenceSeconds, emit);
     }
     while (
       state.autoScratchCursor < state.autoScratchNotes.length &&
@@ -448,7 +465,8 @@ function applyExpiredScorableJudgements(
   const nowUs = toJudgeUs(referenceSeconds);
   // Every note past its own deadline, whatever lane it is on (the deadlines differ by lane and by `#EXRANK`), missed in
   // time order and, at one instant, in channel order.
-  const due: Array<{ atUs: number; note: TimedPlayableNote }> = [];
+  // Allocated only once a note falls due: most frames miss nothing.
+  let due: Array<{ atUs: number; note: TimedPlayableNote }> | undefined;
   for (let index = state.scorableMissCursor; index < scorableNotes.length; index += 1) {
     const note = scorableNotes[index]!;
     if (toJudgeUs(note.seconds) >= nowUs) {
@@ -459,9 +477,25 @@ function applyExpiredScorableJudgements(
     }
     const deadlineUs = resolveMissDeadlineUs(config, note);
     if (deadlineUs < nowUs) {
-      due.push({ atUs: deadlineUs, note });
+      (due ??= []).push({ atUs: deadlineUs, note });
     }
   }
+  if (due !== undefined) {
+    applyMissedScorableNotes(state, due, referenceSeconds, emit);
+  }
+  while (state.scorableMissCursor < scorableNotes.length && scorableNotes[state.scorableMissCursor]!.judged) {
+    state.scorableMissCursor += 1;
+  }
+}
+
+/** Misses the notes past their deadline, in time order and, at one instant, in channel order. */
+function applyMissedScorableNotes(
+  state: JudgeCoreState,
+  due: Array<{ atUs: number; note: TimedPlayableNote }>,
+  referenceSeconds: number,
+  emit: JudgeCoreEffectSink,
+): void {
+  const { config } = state;
   due.sort((left, right) => left.atUs - right.atUs || compareJudgeChannels(left.note.channel, right.note.channel));
   for (const { atUs, note } of due) {
     if (!markScorableJudged(state, note)) {
@@ -511,9 +545,6 @@ function applyExpiredScorableJudgements(
         ],
       });
     }
-  }
-  while (state.scorableMissCursor < scorableNotes.length && scorableNotes[state.scorableMissCursor]!.judged) {
-    state.scorableMissCursor += 1;
   }
 }
 
@@ -632,6 +663,9 @@ function isLaneDown(state: JudgeCoreState, channel: string): boolean {
 
 /** Runs every passing Hell Charge note's ticks up to `nowUs` (channel order), and ends those whose tail has passed. */
 function advanceHCNPassing(state: JudgeCoreState, nowUs: number, emit: JudgeCoreEffectSink): void {
+  if (state.hcnPassing.size === 0) {
+    return;
+  }
   const passings = [...state.hcnPassing.entries()].sort(([left], [right]) => compareJudgeChannels(left, right));
   for (const [channel, first] of passings) {
     for (let passing: HCNPassingState | undefined = first; passing !== undefined; passing = passing.next) {
@@ -691,6 +725,8 @@ function stopLongNoteSound(
   hold.audioStopped = true;
 }
 
+const NO_ACTIVE_LONG_NOTES: readonly (readonly [string, ActiveLongNoteState])[] = [];
+
 /**
  * One judgment step at a single chart instant: long-note hold / tail resolution, auto-scratch, misses, mines and
  * invisible-note expiry.
@@ -710,7 +746,11 @@ export function advanceJudgeState(
   const judgeSec = toJudgeClock(config, nowSec);
   const judgeUs = toJudgeUs(judgeSec);
   // Tails reached at one instant settle in channel order, the tie-break the replay simulator uses.
-  const holds = [...state.activeLongNotes.entries()].sort(([left], [right]) => compareJudgeChannels(left, right));
+  // Snapshot only while a long note is held: most frames hold none.
+  const holds =
+    state.activeLongNotes.size === 0
+      ? NO_ACTIVE_LONG_NOTES
+      : [...state.activeLongNotes.entries()].sort(([left], [right]) => compareJudgeChannels(left, right));
   for (const [channel, hold] of holds) {
     // A long note is held while its lane is down, and while a let-go one waits out the ruleset's release margin.
     const settleMs = state.heldChannels.has(channel) ? undefined : state.longNoteSettleMs.get(channel);
