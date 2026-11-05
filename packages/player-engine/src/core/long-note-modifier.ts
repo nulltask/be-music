@@ -13,10 +13,11 @@ export function removeLongNoteTails(
   for (const note of notes) {
     if (note.endSeconds === undefined || note.endSeconds <= note.seconds) continue;
     if (mode === 'LEGACY' && (note.longNoteMode ?? chartLNMode) !== 2) continue;
-    delete note.endSeconds;
-    delete note.endBeat;
-    delete note.longNoteMode;
-    delete note.visibleUntilBeat;
+    // Assign rather than `delete`, which would drop the note into dictionary mode.
+    note.endSeconds = undefined;
+    note.endBeat = undefined;
+    note.longNoteMode = undefined;
+    note.visibleUntilBeat = undefined;
     changed += 1;
   }
   return changed;
