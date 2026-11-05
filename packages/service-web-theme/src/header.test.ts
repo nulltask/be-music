@@ -41,7 +41,7 @@ describe('renderServiceHeader', () => {
     expect(play).toBeLessThan(language);
 
     expect(html).toContain(
-      'class="bg-muted ring-foreground/10 inline-block shrink-0 rounded-full ring-1" src="https://accounts.be-music.app/profiles/alice/avatar?v=g"',
+      'class="bg-muted ring-foreground/10 inline-block aspect-square shrink-0 rounded-full object-cover ring-1" src="https://accounts.be-music.app/profiles/alice/avatar?v=g"',
     );
     expect(html).toContain('class="hidden max-w-[12ch] truncate sm:inline">@alice</span>');
     expect(html).toContain('class="lucide lucide-chevron-down"');

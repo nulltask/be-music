@@ -276,7 +276,12 @@ export class LeaderboardPanel {
     setPlayerHeaderAccount(
       account === undefined
         ? undefined
-        : { handle: account.handle, displayName: account.displayName, anonymous: account.anonymous },
+        : {
+            handle: account.handle,
+            displayName: account.displayName,
+            anonymous: account.anonymous,
+            avatarUrl: account.avatarUrl,
+          },
     );
   }
   /** Opens the sign-in dialog. The header's Sign in control calls this. */
