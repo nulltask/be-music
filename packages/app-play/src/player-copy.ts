@@ -276,12 +276,9 @@ const en = {
     },
     randomMix: {
       preferredLevel: 'Favorite level',
-      maxLevel: 'Max level',
-      minLevel: 'Min level',
       bpmRange: 'BPM range',
       maxBPM: 'Max BPM',
       minBPM: 'Min BPM',
-      stageCount: 'Stages',
     },
     randomMixDialog: {
       title: 'RANDOM MIX',
@@ -297,6 +294,8 @@ const en = {
       difficulty: 'Difficulty',
       count: 'Stages',
       loops: 'Loops',
+      settings: 'Draw settings',
+      defaultConnection: 'Connection',
       infinity: 'Infinity',
       nonstopLimit: (max: number) => `A NONSTOP mix has up to ${max} stages.`,
       matches: (count: number) => (count === 1 ? '1 chart matches.' : `${count} charts match.`),
@@ -584,12 +583,9 @@ const ja: typeof en = {
     },
     randomMix: {
       preferredLevel: '好みのレベル',
-      maxLevel: '最大レベル',
-      minLevel: '最小レベル',
       bpmRange: 'BPM の幅',
       maxBPM: '最大 BPM',
       minBPM: '最小 BPM',
-      stageCount: 'ステージ数',
     },
     randomMixDialog: {
       title: 'RANDOM MIX',
@@ -605,6 +601,8 @@ const ja: typeof en = {
       difficulty: '難易度',
       count: '曲数',
       loops: 'ループ回数',
+      settings: '抽選の設定',
+      defaultConnection: 'つなぎ方',
       infinity: '無限',
       nonstopLimit: (max) => `NONSTOP は ${max} ステージまでです。`,
       matches: (count) => `${count} 譜面が条件に合います。`,
