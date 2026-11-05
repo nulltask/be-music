@@ -71,21 +71,26 @@ export function judgeWindowsFor(
  */
 export function maxJudgeReachSeconds(config: Pick<JudgeCoreConfig, 'ruleset'>, seconds: number): number {
   const tables = config.ruleset.windowsAt(Math.round(seconds * 1e6));
-  let reachUs = 0;
-  for (const set of [tables.note, tables.scratch, tables.longNoteEnd, tables.longScratchEnd]) {
-    reachUs = Math.max(reachUs, judgeWindowLateReachUs(set), judgeWindowEarlyReachUs(set));
-  }
-  return reachUs / 1e6;
+  // Unrolled: a fresh array of the four sets on every press showed up in allocation profiles.
+  return (
+    Math.max(
+      judgeWindowLateReachUs(tables.note),
+      judgeWindowEarlyReachUs(tables.note),
+      judgeWindowLateReachUs(tables.scratch),
+      judgeWindowEarlyReachUs(tables.scratch),
+      judgeWindowLateReachUs(tables.longNoteEnd),
+      judgeWindowEarlyReachUs(tables.longNoteEnd),
+      judgeWindowLateReachUs(tables.longScratchEnd),
+      judgeWindowEarlyReachUs(tables.longScratchEnd),
+      0,
+    ) / 1e6
+  );
 }
 
 /** How far ahead of a note its judgable window opens — when the lane's fallback keysound becomes that note's. */
 export function maxJudgeEarlyReachSeconds(config: JudgeCoreConfig, seconds: number): number {
   const tables = windowTablesAt(config, seconds);
-  let reachUs = 0;
-  for (const set of [tables.note, tables.scratch]) {
-    reachUs = Math.max(reachUs, judgeWindowEarlyReachUs(set));
-  }
-  return reachUs / 1e6;
+  return Math.max(judgeWindowEarlyReachUs(tables.note), judgeWindowEarlyReachUs(tables.scratch), 0) / 1e6;
 }
 
 /** The BAD gate of the opening key windows, in seconds — the horizon invisible notes are retired after. */
