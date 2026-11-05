@@ -176,18 +176,21 @@ function drawJudgeRank(
 }
 
 function drawDifficulty(
+  graphics: Graphics,
   addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
   chart: LibraryChart | undefined,
   x: number,
   y: number,
 ): void {
   addText('DIFFICULTY', x, y, { ...labelStyle(), size: 8, anchorY: 0.5 });
-  addText(resolveDifficultyName(chart) ?? '-', x + 80, y, {
+  graphics.rect(x + 76, y - 7, 108, 14).stroke({ color: SYN_AMBER, width: 1, alpha: 0.7 });
+  addText(resolveDifficultyName(chart) ?? '-', x + 130, y, {
     ...labelStyle(),
     size: 8,
     fill: SYN_AMBER,
     anchorY: 0.5,
-    maxWidth: 130,
+    maxWidth: 98,
+    anchorX: 0.5,
   });
 }
 
@@ -697,8 +700,10 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     });
 
     // Info panel.
-    const hasBanner = chartEntry ? frame.chartImage(chartEntry, 'banner') !== undefined : false;
-    framePanel(chrome, 14, 56, 290, hasBanner ? 350 : 282, accent);
+    const banner = chartEntry ? frame.chartImage(chartEntry, 'banner') : undefined;
+    const bannerHeight = banner ? Math.min(72, (258 * banner.height) / banner.width) : 0;
+    // Match the 14 px gap above the banner, including short or unusually tall source images.
+    framePanel(chrome, 14, 56, 290, banner ? 288 + bannerHeight : 282, accent);
     // The genre heads the card, in the accent light, where a fixed caption used to sit.
     const genre = chartEntry?.genre?.trim();
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
@@ -754,7 +759,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
 
     // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
-    drawDifficulty(addText, chartEntry, 30, 214);
+    drawDifficulty(chrome, addText, chartEntry, 30, 214);
     drawJudgeRank(addText, chartEntry, 30, 232);
 
     // The file name and the list position share the row under the judge rank.
@@ -950,7 +955,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     });
 
     // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
-    drawDifficulty(addText, chartEntry, left, card.y + 148);
+    drawDifficulty(chrome, addText, chartEntry, left, card.y + 148);
     drawJudgeRank(addText, chartEntry, left + 238, card.y + 148);
 
     // The file name and the list position share the row under the judge rank.
@@ -997,7 +1002,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     addHitArea(left - 4, buttonY - 4, playW + 8, 44, 'pointer', frame.actions.play);
     addHitArea(autoX - 2, buttonY - 2, autoW + 4, 40, 'pointer', frame.actions.autoPlay);
 
-    this.drawBanner(frame, left, card.y + 246, innerW, 48);
+    const banner = chartEntry ? frame.chartImage(chartEntry, 'banner') : undefined;
+    const bannerHeight = banner ? Math.min(48, (innerW * banner.height) / banner.width) : 0;
+    this.drawBanner(frame, left, card.y + 238 + (card.h - 238 - bannerHeight) / 2, innerW, 48);
 
     // Search.
     const searchY = card.y + card.h + 10;
