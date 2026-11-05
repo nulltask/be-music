@@ -89,7 +89,7 @@ export interface DecideRouteDeps {
   /** Shows a status about the play, which the select screen replaces when it comes back. */
   readonly setPlayStatus: (text: string) => void;
   /** Latches the options a play takes for it, and disables their controls. */
-  readonly lockReplayOptionsForPlay: (liveTempo?: boolean) => void;
+  readonly lockReplayOptionsForPlay: (liveTempo?: boolean, chartEntry?: LibraryChart) => void;
   readonly showSelect: () => Promise<void>;
   /** Plays a chart with no decide screen: one with none, or a play made again after its load failed. */
   readonly playChart: (
@@ -315,6 +315,7 @@ export class DecideRoute {
         replay: this.lastPlay()?.overrides.replay !== undefined,
         tempo: view.getTempo(),
       }),
+      chartEntry,
     );
     view.start();
     startArmedRecording(this.recordingDeps());

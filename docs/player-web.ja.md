@@ -88,7 +88,7 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
 - **Audio**: Mute、Master / Key sound / BGM の音量 (%)、Play in silent mode（Audio Session API があるブラウザーのみ。後述）、Peak gain (next play)、**Compressor** フォルダー（Enabled、stage ごとの切り替え、各 compressor の threshold / knee / ratio / attack / release とリセット）。Mute はマスター音量を保持したまま、プレイヤーの音声をすべて消音します。Peak gain はオンにするまでオフで、ほかの設定と一緒に記憶されます。次のプレイで、デコードした全サンプルを一つのゲインで揃え、一番大きいピークを約 −3 dBFS にします。
 - **Library & records**: Music / Skin ZIP URL と Load from URLs（`?music=` / `?skin=` と同じ読み込みをその場で実行）、Auto-save play history、Clear best records、**Replay slots** フォルダー（スロットごとの自動保存の条件。[replay.ja.md](./replay.ja.md#リプレイスロット) を参照）、**BGA video transcode** フォルダー。
 - **Capture**: ● Record gameplay video、Video format（既定は MP4 · H.264。MP4 / WebM と H.264 / H.265 / AV1 / VP9 / VP8 から選択）、📸 Screenshot。
-- **Leaderboard**: Submit to Leaderboard、Account（ログイン中の handle、または「Not signed in」）、Create passkey (keep this account)、Sign in with passkey、Sign out。
+- **Leaderboard**: Submit to Leaderboard、Submit when、Account（ログイン中の handle、または「Not signed in」）、Create passkey (keep this account)、Sign in with passkey、Sign out。
 - **Developer**: Auto pause on blur、FPS（500 ms ごとに計測し、60 サンプルを保持するネイティブの履歴グラフ）、Reset settings and reload（ベストレコード以外の プレイヤーの保存設定をすべて消去して再読み込み）。
 
 **Skin & display → Show invisible notes** は既定で無効です。有効にすると、beatoraja を含むすべてのスキンで不可視のキーサウンドオブジェクトを表示します。プレイ中にも切り替えられます。この確認用マーカーは、キーサウンドの再生、判定、スコアには影響しません。
@@ -166,7 +166,7 @@ flowchart TD
 
 **起動処理。** `main.ts` はページのマークアップを書き、ブラウザーの互換性チェックを最初に行い（レンダラーを起動できないブラウザーでも理由を表示するためです）、スマートフォンとタブレットを判別して印を付け、Help のモーダルをつなぎます。UI のフォントの準備ができたらアプリを作り、その上に[テスト用フック](./player-web.ja.md#テスト用フック)を取り付けてから始めます。
 
-**構成の根。** `app/app.ts`（`PlayerWebApp`）はサービス、シーンルーター、ルートを作り、それらどうし、Options ダイアログ、Leaderboard をつなぎます。プレイ中のロックもここが持ちます。プレイが始まるときに Auto-save play history の設定を確定し、プレイが確定したオプション、Skin system 以外のスキンの操作、Submit to Leaderboard を無効にします。リザルトが出るか選曲画面に戻ると解除します。Skin system は譜面を続けたまま描画する family を切り替えます。`app/shell.ts` は、stage を載せたあと、stage のまわりのページをシーンに合わせます。シェルの `in-gameplay` の状態とそれで止めるピンチズーム、タッチ用の一時停止と Quit のボタン、キャンバスのダブルクリックでのフルスクリーンとその `Esc` の扱いです。
+**構成の根。** `app/app.ts`（`PlayerWebApp`）はサービス、シーンルーター、ルートを作り、それらどうし、Options ダイアログ、Leaderboard をつなぎます。プレイ中のロックもここが持ちます。プレイが始まるときに Auto-save play history の設定を確定し、プレイが確定したオプション、Skin system 以外のスキンの操作、Submit to Leaderboard と Submit when を無効にします。リザルトが出るか選曲画面に戻ると解除します。Skin system は譜面を続けたまま描画する family を切り替えます。`app/shell.ts` は、stage を載せたあと、stage のまわりのページをシーンに合わせます。シェルの `in-gameplay` の状態とそれで止めるピンチズーム、タッチ用の一時停止と Quit のボタン、キャンバスのダブルクリックでのフルスクリーンとその `Esc` の扱いです。
 
 **レイヤー。** サービスは状態と規則を持ち、アプリから必要なものは deps として受け取ります。`ui/`、`app/` のモジュールは、型でも import しません（[レイヤーの規則とサイズの上限](./architecture.ja.md#レイヤーの規則とサイズの上限)）。ルートと Options ダイアログ はサービスを通して働き、ルートが scene を stage に載せるのは、すべての切り替えを受け持つシーンルーターを通してだけです（[Scene lifecycle](#scene-lifecycle)、[ADR 0006](./adr/0006-scene-router.ja.md)）。
 
@@ -863,6 +863,7 @@ pnpm bench -- --packages player-browser
 - リプレイ再生を除く毎プレイでリプレイ（`*.bmplay.json` 入力リプレイ — 解決済み譜面、生の押下/解放列、プレイ設定。[replay.ja.md](./replay.ja.md) 参照）を記録します。player は result scene のマウント時に自動ダウンロードし、Options ダイアログ の「Library & records」フォルダにある「Auto-save play history」チェックボックス（デフォルト OFF。曲開始時にラッチされ、プレイ中は disabled）で制御します。`bms-replay` CLI がこのファイルから LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザルトを再現します。リプレイをページへドロップすると、対応する楽曲がロード済みの場合に記録されたランをリプレイ再生します（なければ読み込むべき譜面をダイアログで示します）。ESC で諦めたランは、再シミュレーションと同じく諦めた所（`play.abortedAtUs`）までをリプレイします。
 - どのプレイ画面も、プレイヤーが見ていたもの（`play.view`、`play.viewChanges`）を記録します。そのスケールでのハイスピード、HS-FIX、メイン BPM での表示時間、各サイドの SUDDEN+ / HIDDEN+ / LIFT で、変更は `{ kind: 'view' }` コマンドとして 100 ms に高々 1 回送ります。リプレイは、`replayView` オプションが求める範囲でその表示設定を再生位置に沿って表示します。同じスケール（LR2 / default の画面は共通、beatoraja のスキンは独自）で遊ばれたなら記録されたハイスピード、そうでなければ記録された表示時間になるハイスピードと、記録されたカバーです（リフトを描く beatoraja のプレイのスキンではリフトも。`PlaySessionTheme.drawsLift`）。単位と規則は [replay.ja.md](./replay.ja.md#プレイヤーが見ていたもの) を参照してください。
 - Options ダイアログ の Leaderboard フォルダにある「Submit to Leaderboard」（デフォルト OFF。自動保存と同じく曲開始時にラッチ）をオンにすると、終了した手動プレイを result scene のマウント時に Leaderboard（[leaderboard.ja.md](./leaderboard.ja.md)）へ送信します。player は初回に匿名でログインし、楽曲の譜面からプレイの fingerprint ドキュメントを作り直してログと照合してから送り、サーバーに求められたら chart document を付けて再送し、順位をステータス行に表示します。デプロイ先の Worker は `/api/*` と `/leaderboard/*` を Service Binding で Leaderboard の Worker に転送し、`pnpm player:web` はローカルの Leaderboard（`pnpm --filter @be-music/app-leaderboard run dev`、または `LEADERBOARD_DEV_ORIGIN`）にプロキシします。
+- 「Submit when」（Options → Leaderboard。「Submit to Leaderboard」と一緒に曲開始時にラッチ）で、どのプレイを送るかを選びます。「EX-SCORE improves (first play always)」（既定）はその譜面の自己ベスト EX-SCORE を超えたプレイだけを送り、「Always」は毎回送ります。自己ベストはローカルの記録（`be-music.chart-best-records`。そのときの判定ルールでの譜面の通常の記録）を、リザルトで更新される前のプレイ開始時に読みます。EX-SCORE の記録がない譜面は初回プレイとして送り、同点は更新とみなしません。送らなかったプレイはステータス行にそう表示します。このルール（`leaderboard-submit-rule.ts` の `shouldSubmitPlay`）は通信を減らすだけで、送ったプレイをどう表示するかは引き続き Leaderboard が決めます。コースはルールにかかわらず常に送ります。コースは EX-SCORE 以外でも順位が決まり、送信の回数も少ないためです。
 - アカウントは匿名で始まります（最初の送信で匿名ログインします）。「Create passkey (keep this account)」でそのアカウントに passkey を登録すると、プレイは匿名フィルタの陰ではなく handle で一覧に載るようになります。「Sign in with passkey」で別のブラウザーからそのアカウントにログインすると、そのブラウザーの匿名のプレイはこのアカウントに移ります。
 
 ### BGA 動画の transcode

@@ -152,7 +152,7 @@ export interface PlayRouteDeps {
   /** Shows a status about the play, which the select screen replaces when it comes back. */
   readonly setPlayStatus: (text: string) => void;
   /** Latches the options a play takes for it, and disables their controls. */
-  readonly lockReplayOptionsForPlay: (liveTempo?: boolean) => void;
+  readonly lockReplayOptionsForPlay: (liveTempo?: boolean, chartEntry?: LibraryChart) => void;
   /** Re-enables the options a play latched. */
   readonly unlockReplayOptions: () => void;
   readonly showSelect: () => Promise<void>;
@@ -440,7 +440,7 @@ export class PlayRoute {
           if (recordKey !== undefined || sends) {
             void view?.waitForReplay().then((abortedReplay) => {
               if (recordKey !== undefined) this.records.recordPlayUnder(recordKey, aborted, abortedReplay);
-              if (sends) this.leaderboard.maybeSubmit(abortedReplay, chartEntry);
+              if (sends) this.leaderboard.maybeSubmit(abortedReplay, chartEntry, aborted.exScore);
             });
           }
         }
@@ -667,6 +667,7 @@ export class PlayRoute {
     );
     this.lockReplayOptionsForPlay(
       allowsLiveTempo(this.guiState, { replay: overrides.replay !== undefined, tempo: view.getTempo() }),
+      chartEntry,
     );
     // No splash covers the load window here: the play shows first, so `prepare` draws the playfield in its loading
     // state while the chart's audio decodes, then the play starts.
