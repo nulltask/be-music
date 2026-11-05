@@ -23,6 +23,8 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
 
 import { Container, Sprite, Texture } from 'pixi.js';
 import { resolveBGAVideoResync } from '../../shared/bga-renderer.ts';
+import type { BGACameraFeed } from '../../../media/bga-camera.ts';
+import { fitBGACameraRect } from '../../../media/bga-camera-fit.ts';
 import { destinationToSpriteProps, type BeatorajaRenderContext } from '../../../skin/beatoraja/render.ts';
 import {
   normalizeBeatorajaDestinations,
@@ -97,6 +99,8 @@ export class BeatorajaBGALayer {
   readonly container: Container = new Container();
   private background: Sprite | undefined;
   private keyBoundSprite = new Sprite({ visible: false, label: 'bga/key-bound' });
+  /** The camera's picture, made the first time a camera shows. */
+  private cameraSprite: Sprite | undefined;
   /**
    * One sprite set per stack drawn (one, or a NONSTOP chart's stages at a seam), earlier stacks behind. Each set is a
    * black fill behind a base image smaller than the BGA canvas, which beatoraja leaves black around it, the base image
@@ -158,6 +162,8 @@ export class BeatorajaBGALayer {
       started?: boolean;
       keyBoundBGA?: KeyBoundBGAFrame;
       bmsonBGA?: BmsonBGAFrame;
+      /** The camera to show in place of the chart's BGA (`PlayScene.setBGACamera`). */
+      camera?: BGACameraFeed;
     } = {},
   ): void {
     if (this.disposed) return;
@@ -170,8 +176,13 @@ export class BeatorajaBGALayer {
       pair.layer2.visible = false;
       pair.poor.visible = false;
     }
+    if (this.cameraSprite !== undefined) this.cameraSprite.visible = false;
     if (this.group === undefined) return;
     const props = destinationToSpriteProps(this.group, context, this.canvasHeight);
+    if (playback.camera !== undefined) {
+      this.drawCamera(playback.camera, props);
+      return;
+    }
     // One stack, or a NONSTOP chart's stages at their crossfade opacity, earlier stages behind.
     const stacks = resolveBGAStacks({
       timeline: this.cues,
@@ -296,6 +307,51 @@ export class BeatorajaBGALayer {
   }
 
   /**
+   * Draws the camera on a black canvas in the BGA destination, fitted whole, in place of the chart's BGA; the chart's
+   * videos pause, and the next frame without the camera starts the active cues' videos again at chart time.
+   */
+  private drawCamera(camera: BGACameraFeed, props: BGADestinationProps): void {
+    for (const key of this.currentKeys.keys()) this.videoElements.get(key)?.pause();
+    this.currentKeys.clear();
+    if (!props.visible) return;
+    const shared = { alpha: props.alpha, angle: props.angle, blendMode: props.blendMode };
+    if (this.background === undefined) {
+      this.background = new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false, label: 'bga/background' });
+      this.container.addChildAt(this.background, 0);
+    }
+    Object.assign(this.background, {
+      visible: true,
+      x: props.x,
+      y: props.y,
+      width: props.width,
+      height: props.height,
+      ...shared,
+    });
+    const texture = camera.texture();
+    if (texture === undefined) return;
+    if (this.cameraSprite === undefined) {
+      this.cameraSprite = new Sprite({ visible: false, label: 'bga/camera' });
+      this.container.addChild(this.cameraSprite);
+    }
+    const placed = fitBGACameraRect(texture.width, texture.height, {
+      x: props.x,
+      y: props.y,
+      w: props.width,
+      h: props.height,
+    });
+    if (this.cameraSprite.texture !== texture) this.cameraSprite.texture = texture;
+    Object.assign(this.cameraSprite, {
+      visible: true,
+      x: placed.x,
+      y: placed.y,
+      width: placed.w,
+      height: placed.h,
+      tint: props.tint,
+      ...shared,
+    });
+  }
+
+  /**
    * Plays the current cues' videos again when they are paused: a paused play pauses every BGA video, and the layer only
    * starts one on a cue change.
    */
@@ -323,6 +379,8 @@ export class BeatorajaBGALayer {
         // Already paused / disposed.
       }
     }
+    // The camera's texture belongs to its feed, which the scene disposes.
+    if (this.cameraSprite !== undefined) this.cameraSprite.texture = Texture.EMPTY;
     if (!this.keyBoundSprite.destroyed) this.keyBoundSprite.destroy();
     if (!this.container.destroyed) {
       this.container.destroy({ children: true });

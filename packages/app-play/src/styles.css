@@ -250,6 +250,20 @@ textarea {
 .options-row {
   gap: 12px;
 }
+/* The BGA camera folder's state and privacy note (ui/options/bga-camera.ts). */
+.options-camera-note {
+  display: grid;
+  gap: 4px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+.options-camera-note > p {
+  margin: 0;
+}
+.options-camera-note > .options-camera-status {
+  color: var(--foreground);
+}
 .options-row[data-orientation='horizontal'] > :is(.options-label, .options-label-wrap),
 .options-slider-head > .options-label-wrap {
   min-width: 0;

@@ -46,12 +46,14 @@ import {
 } from '../../services/ghost.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { RecordsService } from '../../services/records.ts';
+import type { BGACameraService } from '../../services/bga-camera.ts';
 import type { SilentModeSetting } from '../../services/silent-mode.ts';
 import type { StoredSkinSettings } from '../../skin-settings.ts';
 import type { PlayerGUIState, SkinFamilyOverride } from '../../types.ts';
 import type { ActiveBeatorajaPlay } from '../beatoraja-skin-options.ts';
 import type { SkinDropFamily } from '../skin-drop-prompt.ts';
 import { buildAudioFolder } from './audio.ts';
+import { buildBGACameraFolder } from './bga-camera.ts';
 import { buildCaptureFolder } from './capture.ts';
 import {
   buildCompressorTuningGUI,
@@ -114,6 +116,8 @@ export interface OptionsDialogDeps {
    * the site header and the site footer stay outside fullscreen.
    */
   readonly shell: HTMLElement;
+  /** The camera the play can show in its BGA frame, which the BGA camera folder sets up. */
+  readonly bgaCamera: BGACameraService;
   /** The play: loading behind a decide screen, or on the stage. */
   gameplayView(): PlayScene | undefined;
   /** The select screen, on the stage or kept off it. */
@@ -327,6 +331,7 @@ export class OptionsDialog {
   public statusController: PaneBinding | undefined;
   // The folders and the controls that follow what is loaded, each built in its own module with the dialog as `this`.
   private readonly buildCaptureFolder = buildCaptureFolder;
+  private readonly buildBGACameraFolder = buildBGACameraFolder;
   private readonly buildPlayOptionsFolder = buildPlayOptionsFolder;
   private readonly buildReplayViewFolder = buildReplayViewFolder;
   private readonly buildKeyConfigFolder = buildKeyConfigFolder;
@@ -474,6 +479,7 @@ export class OptionsDialog {
     this.buildReplayViewFolder(addFolder(replay, OPTION_FOLDERS.replayView));
     this.buildKeyConfigFolder(addSection(keys, OPTION_FOLDERS.keys));
     this.buildSkinFolder(addSection(skin, OPTION_FOLDERS.skin), addFolder);
+    this.buildBGACameraFolder(addSection(skin, OPTION_FOLDERS.bgaCamera), this.deps.bgaCamera);
     this.buildAudioFolder(addSection(audio, OPTION_FOLDERS.audio), addFolder);
     this.deps.leaderboard.buildFolder(addSection(leaderboard, OPTION_FOLDERS.leaderboard));
     this.buildDeveloperFolder(addSection(advanced, OPTION_FOLDERS.advanced));
