@@ -93,20 +93,23 @@ export class HelpKeyboard {
       >
         ${label}
       </button>`;
+    // The pickers and the keyboard stay at the top of the panel while the lists scroll under them.
     return html`<div class="help-keyboard">
-      <div class="help-keyboard-controls">
-        <div class="button-group" role="group" aria-label=${copy.screen}>
-          ${SCREENS.map((screen) => pick(screen, this.screen, copy.screens[screen], () => (this.screen = screen)))}
+      <div class="help-keyboard-sticky">
+        <div class="help-keyboard-controls">
+          <div class="button-group" role="group" aria-label=${copy.screen}>
+            ${SCREENS.map((screen) => pick(screen, this.screen, copy.screens[screen], () => (this.screen = screen)))}
+          </div>
+          <div class="button-group" role="group" aria-label=${copy.keyMap}>
+            ${SCHEMES.map((value) => pick(value, scheme, SCHEME_NAMES[value], () => (this.scheme = value)))}
+          </div>
         </div>
-        <div class="button-group" role="group" aria-label=${copy.keyMap}>
-          ${SCHEMES.map((value) => pick(value, scheme, SCHEME_NAMES[value], () => (this.scheme = value)))}
-        </div>
+        <be-music-keyboard-map
+          .marks=${guide.marks}
+          .active=${this.active}
+          label=${copy.diagram(copy.screens[this.screen])}
+        ></be-music-keyboard-map>
       </div>
-      <be-music-keyboard-map
-        .marks=${guide.marks}
-        .active=${this.active}
-        label=${copy.diagram(copy.screens[this.screen])}
-      ></be-music-keyboard-map>
       <p class="help-keyboard-legend">${copy.legend}</p>
       <div class="help-keyboard-lists">
         ${this.list(copy.actions, guide.actions, copy.none)} ${this.list(copy.lanes, guide.lanes)}
