@@ -65,6 +65,7 @@ function createCore(
     judgeMsPerChartSecond?: number;
     endOnFailure?: boolean;
     practiceFromSeconds?: number;
+    omitTraceEffects?: boolean;
   } = {},
 ): JudgeCoreState {
   const source = structuredClone(json);
@@ -83,6 +84,7 @@ function createCore(
       ),
       autoScratch: options.autoScratch ?? false,
       judgeMsPerChartSecond: options.judgeMsPerChartSecond ?? 1000,
+      ...(options.omitTraceEffects ? { omitTraceEffects: true } : {}),
       endOnFailure: options.endOnFailure ?? false,
       practiceFromSeconds: options.practiceFromSeconds,
       wavResources: source.resources.wav,
@@ -187,6 +189,23 @@ describe('judge core', () => {
       name: 'judge',
       fields: expect.arrayContaining([['reason', 'miss']]),
     });
+  });
+
+  test('omitting trace effects drops only the traces', () => {
+    const inputs = [press(1, '11'), advance(1.5), press(2.2, '12'), advance(2.6), press(3.4, '13'), advance(4)];
+    const play = (omitTraceEffects: boolean) => {
+      const state = createCore(NOTES, 'lr2', { omitTraceEffects });
+      const effects = inputs.flatMap((input) => stepJudgeCore(state, input)).map(snapshot);
+      stepJudgeCore(state, { kind: 'finish', totalSeconds: 5 });
+      return { state, effects };
+    };
+    const traced = play(false);
+    const untraced = play(true);
+    const traces = traced.effects.filter((effect) => (effect as JudgeCoreEffect).kind === 'trace');
+    expect(traces.length).toBeGreaterThan(2);
+    expect(untraced.effects.some((effect) => (effect as JudgeCoreEffect).kind === 'trace')).toBe(false);
+    expect(untraced.effects).toEqual(traced.effects.filter((effect) => !traces.includes(effect)));
+    expect(untraced.state.summary).toEqual(traced.state.summary);
   });
 
   test('resetting the score removes mine-POOR state before rebuilding a seek', () => {

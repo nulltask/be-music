@@ -57,6 +57,8 @@ export function createPlayJudgeCore(
       ),
       ...(session.anyKey ? { anyKey: true } : {}),
       judgeMsPerChartSecond,
+      // Only the terminal log writes traces; with a UI they would be built and discarded on every judgment.
+      omitTraceEffects: session.uiEnabled,
       wavResources: session.wavResources,
       idBase: session.idBase,
       sourceFormat: resolvedJSON.sourceFormat,

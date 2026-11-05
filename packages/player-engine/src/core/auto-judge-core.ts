@@ -39,6 +39,8 @@ export interface AutoJudgeConfig {
   invisibleNotes: TimedPlayableNote[];
   /** Lane channel → key label, for the trace's `key` field. */
   keyLabels: ReadonlyMap<string, string>;
+  /** Skip building `trace` effects (see `JudgeCoreConfig.omitTraceEffects`). */
+  omitTraceEffects?: boolean;
   /**
    * Chart second of the LR2 negative-BPM reversal, when the chart has one (see `JudgeCoreConfig.reversalSeconds`).
    * AUTO play freezes there the same way: nothing at or past it is judged, and a play that ends with notes
@@ -118,15 +120,17 @@ export function runAutoJudgeStep(state: AutoJudgeState, input: AutoJudgeInput, e
         // LR2 zeroes HP when a play ends with notes outstanding (OpenLR2 `LR2f.cpp:12980-12982`), AUTO included: the
         // notes past a negative-BPM reversal were never reached, so the run is FAILED.
         state.drainGaugeToZero();
-        emit({
-          kind: 'trace',
-          name: 'gauge',
-          seconds: input.totalSeconds,
-          fields: [
-            ['value', 0],
-            ['reason', 'notes-outstanding-past-reversal'],
-          ],
-        });
+        if (!state.config.omitTraceEffects) {
+          emit({
+            kind: 'trace',
+            name: 'gauge',
+            seconds: input.totalSeconds,
+            fields: [
+              ['value', 0],
+              ['reason', 'notes-outstanding-past-reversal'],
+            ],
+          });
+        }
       }
       return;
     }
@@ -191,16 +195,18 @@ function applyAutoPerfect(
   });
   emit({ kind: 'combo', seconds, value: state.combo + 1, reason: 'judge', judge: 'PERFECT', channel: note.channel });
   state.combo += 1;
-  emit({
-    kind: 'trace',
-    name: 'auto-judge',
-    seconds,
-    fields: [
-      ['result', 'PERFECT'],
-      ['channel', note.channel],
-      ['key', resolveNoteKeyLabel(note.channel, state.config.keyLabels)],
-    ],
-  });
+  if (!state.config.omitTraceEffects) {
+    emit({
+      kind: 'trace',
+      name: 'auto-judge',
+      seconds,
+      fields: [
+        ['result', 'PERFECT'],
+        ['channel', note.channel],
+        ['key', resolveNoteKeyLabel(note.channel, state.config.keyLabels)],
+      ],
+    });
+  }
   emit({ kind: 'judge-combo', judge: 'PERFECT', combo: state.combo, channel: note.channel });
   if (publishFrame) emit({ kind: 'frame', seconds });
 }
