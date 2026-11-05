@@ -14,17 +14,15 @@ import {
   resolveControlButtons,
   type ControlKeyId,
 } from '@be-music/player-browser/host';
-import {
-  LANE_KEY_CONFIG,
-  laneKeyLabel,
-  type LaneKeyConfigLane,
-  type LaneKeyGroup,
-} from '@be-music/player-engine/lanes';
+import { LANE_KEY_CONFIG, laneKeyLabel, type LaneKeyGroup } from '@be-music/player-engine/lanes';
 import { assignLaneKey, effectiveLaneKey, resetLaneKeys } from '../../lane-keys.ts';
 import { assignControlKey } from '../../control-keys.ts';
 import { buildActionKeyPage } from './action-keys.ts';
+import { laneKeyConfigLabel } from './action-labels.ts';
+
+export { laneKeyConfigLabel };
 import { playerLang } from '../../player-copy.ts';
-import type { OptionContainer } from '../options-controls.ts';
+import { optionLabelContent, type OptionContainer } from '../options-controls.ts';
 import type { OptionsDialog } from './index.ts';
 
 /** The page of the screens' operations (`action-keys.ts`). */
@@ -32,14 +30,6 @@ export const SCREENS_PAGE_TITLE = 'Screens';
 
 /** Each group's page title. */
 const GROUP_TITLES: Readonly<Record<LaneKeyGroup, string>> = { beat: '5 / 7 / 10 / 14 KEY', popn: '9 KEY' };
-
-/** A lane's name in the key config (`1P scratch`, `2P key 3`, `Key 9`), which `labels.ts` translates. */
-export function laneKeyConfigLabel(group: LaneKeyGroup, lane: LaneKeyConfigLane): string {
-  if (group === 'popn') return `Key ${lane.id}`;
-  if (lane.scratch) return `${lane.side} scratch`;
-  const keys = LANE_KEY_CONFIG.beat.filter((entry) => entry.side === lane.side && !entry.scratch);
-  return `${lane.side} key ${keys.findIndex((entry) => entry.id === lane.id) + 1}`;
-}
 
 /** START's or SELECT's name in the key config (`1P START`), which `labels.ts` translates. */
 export function controlKeyConfigLabel(id: ControlKeyId): string {
@@ -156,7 +146,8 @@ export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContaine
       const text = active ? (waiting?.refused ? prompts().refused : prompts().waiting) : laneKeyLabel(keyOf(row));
       render(
         html`<span class="options-label-wrap"
-            ><span class="label options-label">${optionLabel(label, language)}</span><span data-option-help-host></span
+            ><span class="label options-label">${optionLabelContent(optionLabel(label, language))}</span
+            ><span data-option-help-host></span
           ></span>
           <button
             type="button"
@@ -191,10 +182,19 @@ export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContaine
   groups.forEach((group, groupIndex) => {
     const page = pages[groupIndex];
     if (page === undefined) return;
-    for (const lane of LANE_KEY_CONFIG[group]) addRow(page, laneKeyConfigLabel(group, lane), { group, id: lane.id });
-    // START and SELECT go with the 5 / 7 / 10 / 14 KEY lanes, whose keys the screens read them with.
     if (group === 'beat') {
-      for (const entry of CONTROL_KEY_CONFIG) addRow(page, controlKeyConfigLabel(entry.id), { control: entry.id });
+      // Two panes side by side, 1P and 2P, each with its side's lanes, then its START and SELECT, which go with the
+      // 5 / 7 / 10 / 14 KEY lanes whose keys the screens read them with.
+      page.element.classList.add('options-key-panes');
+      const panes = { '1P': page.addFolder({ title: '1P' }), '2P': page.addFolder({ title: '2P' }) } as const;
+      for (const lane of LANE_KEY_CONFIG.beat) {
+        addRow(panes[lane.side], laneKeyConfigLabel(group, lane), { group, id: lane.id });
+      }
+      for (const entry of CONTROL_KEY_CONFIG) {
+        addRow(panes[entry.side], controlKeyConfigLabel(entry.id), { control: entry.id });
+      }
+    } else {
+      for (const lane of LANE_KEY_CONFIG[group]) addRow(page, laneKeyConfigLabel(group, lane), { group, id: lane.id });
     }
     this.trackPlayOption(
       page.addButton({ title: 'Reset keys to defaults' }).on('click', () => {

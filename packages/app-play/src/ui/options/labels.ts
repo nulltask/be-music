@@ -245,6 +245,24 @@ export function optionLabel(label: string, lang: string): string {
   return lang === 'ja' ? (OPTION_LABELS_JA[label] ?? label) : label;
 }
 
+/** A label's text and the source it names in parentheses at its end, which the dialog shows as a badge. */
+export interface OptionLabelParts {
+  readonly text: string;
+  readonly source?: string;
+}
+
+const LABEL_SOURCE = /^(.*\S) \(((?:LR2|beatoraja|PC|AC)(?: [^();]*)?)\)$/u;
+
+/**
+ * Splits the source off the end of a label as the dialog shows it: `Scroll (beatoraja)` reads `Scroll` with a
+ * `beatoraja` badge, `Normal HI-SPEED (AC 32 measured)` `Normal HI-SPEED` with `AC 32 measured`. A note in parentheses
+ * that is not a source alone (`Fixed key 1P (LR2; 0=default)`, `Seed 1P (-1=random)`) stays in the text.
+ */
+export function splitOptionLabelSource(label: string): OptionLabelParts {
+  const match = LABEL_SOURCE.exec(label);
+  return match === null ? { text: label } : { text: match[1]!, source: match[2]! };
+}
+
 /** Ask the owner of the options tree to render its labels in the chosen language. */
 export function relabelOptions(root: { relabel(language: string): void }, lang: string): void {
   root.relabel(lang);
