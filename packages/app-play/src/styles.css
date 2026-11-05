@@ -1661,11 +1661,38 @@ textarea {
   flex-direction: column;
   gap: 12px;
 }
+/*
+ * The pickers and the keyboard stay at the top of the scrolling panel. The dialog's own background (Basecoat's `bg-popover`) makes them opaque, so
+ * the lists scroll out of sight under them, and their bottom padding stands in for the gap above the legend (the negative
+ * margin takes that gap back) so the rows disappear a gap below the keyboard rather than against it.
+ */
+.help-keyboard-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: -12px;
+  padding-bottom: 12px;
+  background: var(--popover);
+}
 .help-keyboard-controls {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
+}
+/*
+ * On a phone the five screens are wider than the panel: the row scrolls sideways itself, not the whole panel. The
+ * scrolling clips, so the row gets room for the buttons' focus ring and gives it back with a negative margin.
+ */
+.help-keyboard-controls > .button-group {
+  max-width: calc(100% + 6px);
+  margin: -3px;
+  padding: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 .help-keyboard be-music-keyboard-map {
   padding: 10px;
