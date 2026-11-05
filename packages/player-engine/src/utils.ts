@@ -1,5 +1,6 @@
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import type { BeMusicJSON, BeMusicPlayLevel } from '@be-music/chart-source';
+import { estimateDifficultyFromNames } from './difficulty-estimate.ts';
 
 const BMS_DEFAULT_DISPLAY_RANK = 2;
 const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
@@ -56,6 +57,7 @@ export function resolveDisplayedPlayLevelValue(chart: BeMusicJSON): BeMusicPlayL
   return undefined;
 }
 
+/** The chart's own `#DIFFICULTY` when it is 1–5 (truncated), else `undefined`. */
 export function resolveDisplayedDifficultyValue(chart: BeMusicJSON): number | undefined {
   const difficulty = chart.metadata.difficulty;
   const normalized =
@@ -64,6 +66,30 @@ export function resolveDisplayedDifficultyValue(chart: BeMusicJSON): number | un
     return normalized;
   }
   return undefined;
+}
+
+/** A difficulty a chart screen shows, and whether it was estimated from the chart's names rather than named by it. */
+export interface DisplayedDifficulty {
+  /** 1 BEGINNER … 5 INSANE. */
+  readonly value: number;
+  readonly estimated: boolean;
+}
+
+/**
+ * The difficulty a chart screen shows: the chart's own `#DIFFICULTY` (1–5), else the one its title, subtitle, bmson
+ * chart name and file name suggest (`estimateDifficultyFromNames`), marked `estimated`; `undefined` when neither gives
+ * one.
+ */
+export function resolveDisplayedDifficulty(chart: BeMusicJSON, fileName?: string): DisplayedDifficulty | undefined {
+  const declared = resolveDisplayedDifficultyValue(chart);
+  if (declared !== undefined) return { value: declared, estimated: false };
+  const estimated = estimateDifficultyFromNames({
+    title: chart.metadata.title,
+    subtitle: chart.metadata.subtitle,
+    chartName: chart.bmson.info.chartName,
+    fileName,
+  });
+  return estimated !== undefined ? { value: estimated, estimated: true } : undefined;
 }
 
 function formatDisplayedJudgeRankValue(value: number): string {

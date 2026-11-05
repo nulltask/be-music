@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJSON } from '../../chart-source/src/index.ts';
-import { resolveAltModifierLabel, resolveDisplayedDifficultyValue, resolveDisplayedPlayLevelValue } from './utils.ts';
+import {
+  resolveAltModifierLabel,
+  resolveDisplayedDifficulty,
+  resolveDisplayedDifficultyValue,
+  resolveDisplayedPlayLevelValue,
+} from './utils.ts';
 
 describe('player utils', () => {
   test('player-utils: uses Option label on macOS', () => {
@@ -44,5 +49,20 @@ describe('player utils', () => {
 
     json.metadata.difficulty = 6;
     expect(resolveDisplayedDifficultyValue(json)).toBeUndefined();
+  });
+
+  test('player-utils: shows the declared DIFFICULTY, else one estimated from the names', () => {
+    const json = createEmptyJSON('bms');
+    json.metadata.title = 'Song';
+    json.metadata.subtitle = '[ANOTHER]';
+    expect(resolveDisplayedDifficulty(json, 'song.bms')).toEqual({ value: 4, estimated: true });
+
+    json.metadata.difficulty = 3;
+    expect(resolveDisplayedDifficulty(json, 'song.bms')).toEqual({ value: 3, estimated: false });
+
+    json.metadata.difficulty = 0;
+    json.metadata.subtitle = undefined;
+    expect(resolveDisplayedDifficulty(json, 'song_7h.bms')).toEqual({ value: 3, estimated: true });
+    expect(resolveDisplayedDifficulty(json, 'song.bms')).toBeUndefined();
   });
 });
