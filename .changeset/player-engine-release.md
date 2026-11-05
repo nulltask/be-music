@@ -8,3 +8,4 @@ Add configurable lane bindings and physical-input replay metadata.
 - Include Space in the default 1P scratch input tokens alongside Left Ctrl; hosts retain ownership of pause shortcuts.
 - Accept an optional `code` on lane-input and key-state commands and preserve it on replay input events. Record START / SELECT through the new `control-input` command and `play.controlInputs`.
 - Keep physical-input metadata diagnostic: replay simulation and rejudging ignore it, and older replays without it remain readable.
+- Publish scratch direction through UI commands so hosts can animate turntable input without changing judgments.

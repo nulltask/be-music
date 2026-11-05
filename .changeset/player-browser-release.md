@@ -15,4 +15,11 @@ Add configurable screen controls and improve built-in skin rendering and playbac
 - Fix blank WebGPU stages on Safari by keeping multisampled render textures stored, avoiding oversized buffer limits, and preserving PixiJS device-loss recovery.
 - Match chart-preview volume to gameplay, including `#VOLWAV`. Fade fallback previews out at the end of their window and fade failed-play audio with the closing animation.
 - Require GPU rendering, Web Audio, and drag and drop in `checkBrowserCompat`; report WebAssembly, Workers, and other optional browser capabilities separately.
-- Simplify Synesthesia's select card and keep its gameplay progress indicator visible in front of the lanes.
+- Improve built-in panel alignment, result hierarchy, and compact portrait gameplay while keeping scores, judgments, progress, and independent-player information visible.
+- Show genre, chart difficulty, and chart banners on Synesthesia select; use `----` for an unspecified genre and `UNSPECIFIED` for an unspecified difficulty. Frame difficulty values, align detail typography and spacing, and balance banner padding.
+- Lighten frosted panel backgrounds, fill lane beams to their boundaries, align clear-line effects with gauges, and fit built-in video monitors to their source aspect ratio at a fixed height.
+- Extend cabinet lanes to the keys, keep backing fills inside their frame, fill held keys, and draw bombs above key controls. Vertically center gauge captions and percentages between the keys and gauge bars.
+- Rotate turntables once every four chart beats and respond to clockwise or counterclockwise scratch input. Show AUTO PLAY and GHOST PLAY above the appropriate lane-bank judgment.
+- Preserve each LR2 skin's authored aspect ratio across select, decide, play, and result, keeping standard canvases at 4:3 and HD/FHD canvases widescreen. Align pointer input, touch lanes, and search fields with that viewport.
+- Honor LR2 `#SCENETIME`, loop bundled skin images and movies including legacy video formats, and release media when scenes close.
+- Move beatoraja notes and measure lines with LIFT while keeping the lane top fixed. Derive cover offsets from active note geometry, and keep judgment words and combo numbers aligned through inherited offsets.
