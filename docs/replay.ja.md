@@ -85,7 +85,7 @@ LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザル�
 
 **2 人プレイ。** 2 人プレイ（`play.battleMode: "TWO-PLAYER"`：LR2 の BATTLE、または名前を言ってはいけないあのゲームの 2 人プレイ）は、両プレイヤーの押下を 1 本の `inputs` に記録し、それぞれ自分の側のチャンネル（`1x` / `2x`）に載せます。`results.native` は 1P、`results.secondPlayer` は 2P の結果で、形は同じです。`play.gauge2P` は 2P のゲージです。ログの再シミュレーションは、ライブのプレイと同じく各サイドを個別に判定します。
 
-時刻は譜面ゼロ基準の整数マイクロ秒です（エンジンのノート時刻と同じ t = 0）。
+時刻は譜面ゼロ基準の整数マイクロ秒です（エンジンのノート時刻と同じ t = 0）。記録した入力が実際にどこまで細かいかは、入力イベントの時刻の精度で決まります。ブラウザーはこの時刻を粗くしますが、デプロイ版の player のような cross-origin isolated なページでは粗くする度合いが小さくなります（Chromium では 5 µs、それ以外では 100 µs）。ただし多くの場合は、入力デバイスのポーリング（125 Hz で 8 ms、1000 Hz で 1 ms）が先に精度の上限になります。
 
 TypeScript 型・シリアライザ・防御的パーサは
 [`packages/player-engine/src/replay/format.ts`](../packages/player-engine/src/replay/format.ts)（`@be-music/player-engine/replay`）

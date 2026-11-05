@@ -890,7 +890,7 @@ flowchart LR
 
 - The decode worker boots the stock ffmpeg.wasm core and registers a character device as ffmpeg's output, so each piece of output reaches JavaScript while `exec` is still running. The output is scaled to even dimensions and resampled to a constant frame rate of at most 60 fps, which keeps a variable-rate source in time.
 - On a cross-origin isolated page, ffmpeg writes raw y4m frames that the encode worker encodes with WebCodecs (hardware first) and muxes with Mediabunny. The decoder waits on a `SharedArrayBuffer` counter (`Atomics.wait`) while it is more than a few frames ahead of the encoder, so no frame is dropped and raw frames don't pile up.
-- Elsewhere (the deployed player is not isolated), or with "Use WebCodecs encoder" off, or when the WebCodecs encoder fails, ffmpeg encodes with its own libx264 straight to fragmented MP4. Encoding on the decoding thread paces the decode by itself.
+- Elsewhere (a browser that cannot isolate the page, such as Safari, which does not support `Cross-Origin-Embedder-Policy: credentialless`), or with "Use WebCodecs encoder" off, or when the WebCodecs encoder fails, ffmpeg encodes with its own libx264 straight to fragmented MP4. Encoding on the decoding thread paces the decode by itself.
 - The media source declares a provisional duration until the stream ends, so a cue seeking past what has been transcoded waits there for the frames. The same bytes on several tracks share one transcode, two transcodes run at a time, and closing the last video using one cancels it.
 - Without the workers or MSE, or when the stream fails before its first frame, the whole file is transcoded before it plays (the earlier path).
 

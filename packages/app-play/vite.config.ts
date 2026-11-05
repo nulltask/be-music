@@ -270,17 +270,13 @@ export default defineConfig({
     fs: {
       allow: [repositoryDir],
     },
-    // Cross-origin isolation headers. The single-threaded ffmpeg.wasm build we ship (`@ffmpeg/core`) doesn't need these
-    // (no `SharedArrayBuffer`), but we keep them so someone re-introducing the multi-threaded core (or any other
-    // SAB-dependent feature) doesn't have to re-debug the policy from scratch.
-    //
-    // The player loads every chart asset / theme bundle from a user-side drag-drop (in-memory blobs, no external CDN), so
-    // `require-corp` doesn't break any runtime fetches. If a future feature pulls in a third-party CORS resource, that
-    // resource's response will need a `Cross-Origin-Resource-Policy: cross-origin` header to keep working under this
-    // policy.
+    // Cross-origin isolation headers, the same as the deployed `play` Worker sends
+    // (`worker-play/src/cross-origin-isolation.ts`): they give the page finer input timestamps and `SharedArrayBuffer`.
+    // `credentialless` lets cross-origin resources without a `Cross-Origin-Resource-Policy` header (Google Fonts,
+    // avatars on the providers' CDNs) load without cookies instead of being blocked.
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
     },
     // The deployed Worker forwards `/api/*` to the Leaderboard Worker; in development it goes to a
     // local one (`pnpm --filter @be-music/app-leaderboard run dev`, port 8787 unless LEADERBOARD_DEV_ORIGIN says
