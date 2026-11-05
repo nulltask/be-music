@@ -66,3 +66,16 @@ describe('PracticeBarsMemory', () => {
     expect(memory.rangeFor('a')).toBeUndefined();
   });
 });
+
+describe('PracticeBarsMemory without practice', () => {
+  it('plays a chart started without practice as a regular play until it is practised again, keeping its pick', () => {
+    const memory = new PracticeBarsMemory();
+    memory.remember('a', LAYOUT, { first: 1, last: 1 });
+    memory.skipPractice('a');
+    expect(memory.skipsPractice('a')).toBe(true);
+    expect(memory.skipsPractice('b')).toBe(false);
+    expect(memory.pickFor('a')?.bars).toEqual({ first: 1, last: 1 });
+    memory.remember('a', LAYOUT, { first: 2, last: 2 });
+    expect(memory.skipsPractice('a')).toBe(false);
+  });
+});
