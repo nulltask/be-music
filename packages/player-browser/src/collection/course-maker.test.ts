@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   CourseMaker,
   createDrawnRandomMixEntry,
+  createRandomMixCandidate,
   createRandomMixChart,
   resolveCourseMakerFolders,
   type CourseMakerChange,
@@ -241,5 +242,34 @@ describe('RANDOM MIX', () => {
     });
     expect(restored.randomMixSettings.stageCount).toBe(5);
     expect(restored.randomMixes).toEqual(courses.randomMixes);
+  });
+
+  test('reads a song as a RANDOM MIX candidate without its BPMs or hash', () => {
+    const song = chartEntry('h', '#DIFFICULTY 4\n#PLAYLEVEL 12\n#00111:01\n#00118:01');
+    expect(createRandomMixCandidate({ ...song, chartPath: 'pack/x/h.bms', playLevel: '12' })).toMatchObject({
+      folder: 'drop1/pack/x',
+      keyMode: 7,
+      level: 12,
+      difficulty: 4,
+    });
+    expect(createRandomMixCandidate(DOUBLE)).toMatchObject({ keyMode: 10, level: 0 });
+    expect(createRandomMixCandidate(DOUBLE).difficulty).toBeUndefined();
+  });
+
+  test('keeps a draw made elsewhere, and the dialog conditions across a restore', () => {
+    const changes: CourseMakerChange[] = [];
+    const courses = maker(changes);
+    const drawn = courses.drawRandomMix('expert', 7, charts, () => 0);
+    if (!drawn.ok) throw new Error('draw failed');
+    const replacement = { ...drawn.course, stages: drawn.course.stages.slice(0, 1) };
+    courses.keepRandomMix(replacement);
+    expect(courses.courses).toEqual([replacement]);
+    expect(courses.randomMixes).toEqual([replacement]);
+    courses.setRandomMixConditions({ ...courses.randomMixConditions, keyModes: [14, 7], count: 'infinity', loops: 3 });
+    expect(courses.randomMixConditions).toMatchObject({ keyModes: [7, 14], count: 'infinity', loops: 3 });
+    expect(changes.at(-1)).toBe('settings');
+    const restored = maker();
+    restored.restore({ courses: [], randomMixConditions: courses.randomMixConditions });
+    expect(restored.randomMixConditions).toEqual(courses.randomMixConditions);
   });
 });
