@@ -223,6 +223,27 @@ describe('two-player cabinet layout', () => {
     expect(resolveCabinetLayout(dp).doublePlay).toBe(true);
     expect(dp.playfield.right - dp.playfield.left).toBeLessThan(layout.playfield.right - layout.playfield.left);
   });
+
+  it('keeps the 7-key score and hi-speed boxes for 5-key banks', () => {
+    const DP10 = ['16', '11', '12', '13', '14', '15', '21', '22', '23', '24', '25', '26'];
+    const seven = resolveCabinetLayout(
+      resolveGameplayLayout({ laneChannels: DP14, playVariant: '14', twoPlayer: true }, cabinetStage),
+    );
+    const five = resolveCabinetLayout(
+      resolveGameplayLayout({ laneChannels: DP10, playVariant: '10', twoPlayer: true }, cabinetStage),
+    );
+    expect(seven.score).toEqual({ x: 33, y: 407, w: 115, h: 57 });
+    expect(seven.hiSpeed).toEqual({ x: 156, y: 407, w: 71, h: 57 });
+    expect(seven.secondSide!.score).toEqual({ x: 627, y: 407, w: 115, h: 57 });
+    expect(seven.secondSide!.hiSpeed).toEqual({ x: 750, y: 407, w: 71, h: 57 });
+    expect(five.score).toEqual(seven.score);
+    expect(five.hiSpeed).toEqual(seven.hiSpeed);
+    expect(five.secondSide!.score).toEqual(seven.secondSide!.score);
+    expect(five.secondSide!.hiSpeed).toEqual(seven.secondSide!.hiSpeed);
+    expect(five.play).toEqual(seven.play);
+    // The gauges still follow the narrower banks.
+    expect(five.gauge.w).toBeLessThan(seven.gauge.w);
+  });
 });
 
 describe('resolveScorePace', () => {

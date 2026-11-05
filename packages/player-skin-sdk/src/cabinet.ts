@@ -82,6 +82,12 @@ function infoColumn(playfieldRight: number): { left: number; graph: boolean } {
   return { left: right + GAP, graph: false };
 }
 
+/**
+ * Width of one independent player's lane bank in 7-key play. The monitor between the banks, and each side's score and
+ * hi-speed, keep this width when a 5-key bank is narrower, so the two key counts share one arrangement.
+ */
+const TWO_PLAYER_BANK_WIDTH = 194;
+
 /** Lanes starting this far right of the margin were centred for double play. */
 const CENTRED_LEFT = 120;
 /** Uniform gap between panels in the double-play side columns. */
@@ -113,8 +119,8 @@ export function resolveCabinetBGARect(
 ): BeMusicRect {
   if (twoPlayer) {
     // Keep the same monitor in 5-key and 7-key play; the adjacent graph and judge panel use the remaining centre.
-    const centerLeft = playfieldLeft + 194 + 16;
-    const centerRight = playfieldRight - 194 - 16;
+    const centerLeft = playfieldLeft + TWO_PLAYER_BANK_WIDTH + 16;
+    const centerRight = playfieldRight - TWO_PLAYER_BANK_WIDTH - 16;
     const infoLeft = centerLeft + GRAPH_WIDTH + 16;
     return { x: Math.round((infoLeft + centerRight - 220) / 2), y: 100, w: 220, h: 220 };
   }
@@ -266,23 +272,29 @@ function resolveDoublePlayCabinet(playfield: BeMusicGameplayLayout['playfield'])
   };
 }
 
-/** Two independent players, with their gauges under their own keys and shared information around the monitor. */
+/**
+ * Two independent players, with their gauges under their own keys and shared information around the monitor. Each
+ * side's score and hi-speed span at least a 7-key bank ({@link TWO_PLAYER_BANK_WIDTH}) from its outer edge, so a 5-key
+ * bank keeps the 7-key boxes.
+ */
 function resolveTwoPlayerCabinet(playfield: BeMusicGameplayLayout['playfield']): CabinetLayout {
   const one = playfield.sides['1P']!;
   const two = playfield.sides['2P']!;
-  const x = playfield.left + 194 + 16;
-  const w = playfield.right - 194 - 16 - x;
+  const x = playfield.left + TWO_PLAYER_BANK_WIDTH + 16;
+  const w = playfield.right - TWO_PLAYER_BANK_WIDTH - 16 - x;
   const keysY = playfield.judgementY + 2;
   const gaugeY = keysY + 28 + 24;
   const sideWidth = one.right - one.left;
-  const scoreWidth = Math.round((sideWidth - GAP) * 0.62);
+  const figuresWidth = Math.max(sideWidth, TWO_PLAYER_BANK_WIDTH);
+  const scoreWidth = Math.round((figuresWidth - GAP) * 0.62);
   const score = { x: one.left, y: gaugeY + 20, w: scoreWidth, h: 464 - gaugeY - 20 };
-  const hiSpeed = { ...score, x: score.x + score.w + GAP, w: sideWidth - score.w - GAP };
+  const hiSpeed = { ...score, x: score.x + score.w + GAP, w: figuresWidth - score.w - GAP };
+  const secondLeft = two.right - figuresWidth;
   const infoX = x + GRAPH_WIDTH + 16;
   const infoW = x + w - infoX;
   const bpmW = Math.min(132, infoW * 0.6);
   return {
-    play: { x: one.left - 8, y: playfield.top, w: sideWidth + 16, h: 464 - playfield.top },
+    play: { x: one.left - 8, y: playfield.top, w: figuresWidth + 16, h: 464 - playfield.top },
     progress: { x: one.left - 7, y: playfield.top + 4, w: 4, h: playfield.judgementY - playfield.top - 8 },
     keys: { x: one.left, y: keysY, w: two.right - one.left, h: 28 },
     gauge: { x: one.left, y: gaugeY, w: sideWidth, h: 12 },
@@ -291,8 +303,8 @@ function resolveTwoPlayerCabinet(playfield: BeMusicGameplayLayout['playfield']):
     hiSpeed,
     secondSide: {
       gauge: { x: two.left, y: gaugeY, w: two.right - two.left, h: 12 },
-      score: { ...score, x: two.left },
-      hiSpeed: { ...hiSpeed, x: two.left + scoreWidth + GAP },
+      score: { ...score, x: secondLeft },
+      hiSpeed: { ...hiSpeed, x: secondLeft + scoreWidth + GAP },
     },
     graph: {
       header: { x, y: 100, w: GRAPH_WIDTH, h: 54 },
