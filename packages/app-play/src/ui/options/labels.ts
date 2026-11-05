@@ -27,6 +27,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   Effects: '演出',
   'Skin & display': 'スキンと表示',
   Select: '選曲',
+  'Quick options': 'よく使うオプション',
   'Built-in': '内蔵',
   // Folder titles
   'Key config': 'キーコンフィグ',

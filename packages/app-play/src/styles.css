@@ -527,6 +527,21 @@ textarea {
   pointer-events: auto;
   font-size: 13px;
 }
+/* The quick options panel's dock (`ui/options/quick-options.ts`): the stage's bottom right, clear of the centred dock. */
+.quick-options-dock {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 41;
+  width: min(320px, calc(100% - 16px));
+  max-height: min(70%, calc(100dvh - 64px));
+  overflow: auto;
+}
+.quick-options-dock[hidden],
+/* The start screen, before any chart is loaded, keeps the page footer there instead. */
+.shell.empty .quick-options-dock {
+  display: none;
+}
 .auxiliary-panel-content,
 .replay-slots-content {
   display: grid;

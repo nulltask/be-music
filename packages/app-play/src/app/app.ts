@@ -109,9 +109,11 @@ export class PlayerWebApp {
    */
   private readonly router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
-      setScene: async (scene) => {
+      setScene: async (scene, role) => {
         await this.mountStage();
         await this.sceneHost.setScene(scene);
+        // The quick options belong to choosing a chart and playing it.
+        this.optionsDialog?.setQuickOptionsShown(role === 'select' || role === 'play');
         // The replay slots' card belongs to the screen that shows it: the select screen shows it again for its bar, the
         // result route for its run.
         this.replaySlotsPanel.hide();
