@@ -356,6 +356,17 @@ textarea {
   display: block;
   color: rgb(255 255 255 / 0.65);
 }
+/* The source a label names at its end (`optionLabelContent`): LR2, beatoraja, AC, PC. */
+.options-source {
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+  vertical-align: 1px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
 .options-label {
   font-size: 0.8125rem;
   font-weight: 400;
@@ -424,6 +435,30 @@ textarea {
 .options-key-row > .options-label-wrap {
   min-width: 0;
   flex: 1 1 auto;
+}
+/*
+ * The 5 / 7 / 10 / 14 KEY page lays its 1P and 2P keys side by side (`keys.ts`); the rows after the panes (the reset)
+ * span both. On a narrow screen the panes stack.
+ */
+.options-tab-panel.options-key-panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  column-gap: 24px;
+}
+.options-tab-panel.options-key-panes[hidden] {
+  display: none;
+}
+.options-tab-panel.options-key-panes > .options-section {
+  margin-top: 6px;
+}
+.options-key-panes > :not([data-options-folder]) {
+  grid-column: 1 / -1;
+}
+@media (max-width: 40rem) {
+  .options-tab-panel.options-key-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .options-key-row > .options-key {
   min-width: 7.5rem;

@@ -1,6 +1,6 @@
 import { CollapsiblePanelElement } from './collapsible-panel.ts';
 import { repeat } from 'lit/directives/repeat.js';
-import { optionLabel } from './options/labels.ts';
+import { optionLabel, splitOptionLabelSource } from './options/labels.ts';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -202,7 +202,8 @@ export class OptionBinding<T = unknown> extends OptionRow {
 
   private labelTemplate(): TemplateResult {
     return html`<span class="options-label-wrap"
-      ><label class="label options-label" id=${`${this.id}-label`} for=${this.id}>${this.label}</label
+      ><label class="label options-label" id=${`${this.id}-label`} for=${this.id}
+        >${optionLabelContent(this.label)}</label
       ><span data-option-help-host></span
     ></span>`;
   }
@@ -644,6 +645,14 @@ export class OptionFolder extends OptionContainer {
     this.reportedOpen = open;
     for (const listener of this.foldListeners) listener({ expanded: open });
   }
+}
+
+/** A label's text with the source at its end as a badge (`splitOptionLabelSource`). */
+export function optionLabelContent(label: string): TemplateResult {
+  const { text, source } = splitOptionLabelSource(label);
+  return source === undefined
+    ? html`${text}`
+    : html`${text}<span class="badge options-source" data-variant="outline">${source}</span>`;
 }
 
 /**
