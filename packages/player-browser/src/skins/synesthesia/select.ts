@@ -705,7 +705,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // Match the 14 px gap above the banner, including short or unusually tall source images.
     framePanel(chrome, 14, 56, 290, banner ? 312 + bannerHeight : 306, accent);
     // The genre heads the card, in the accent light, where a fixed caption used to sit.
-    const genre = chartEntry?.genre?.trim();
+    const genre = chartEntry?.genre?.trim() || (chartEntry ? '----' : undefined);
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
     addText(chartTitle, 30 + slide * 24, 86, {
       size: 18,
@@ -899,7 +899,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const left = card.x + 16;
     const innerW = card.w - 32;
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
-    const genre = chartEntry?.genre?.trim();
+    const genre = chartEntry?.genre?.trim() || (chartEntry ? '----' : undefined);
     if (genre) {
       addText(genre.toUpperCase(), left + slide * 16, card.y + 14, {
         size: 10,
