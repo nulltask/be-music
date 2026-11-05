@@ -1,6 +1,6 @@
 import { expect, openWithLibrary, SONGS, test } from './support.ts';
 
-const TEMPO = ['Tempo'];
+const TEMPO = ['Play options', 'Tempo'];
 
 test('defaults to WSOLA and bypasses a saved percentage until enabled', async ({ player }) => {
   await openWithLibrary(player, {

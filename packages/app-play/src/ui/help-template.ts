@@ -83,11 +83,11 @@ export const PLAYER_HELP_TEMPLATE = html`
             <section class="help-about">
               <p class="help-about-summary">
                 A browser-based BMS player. Drop in a folder containing BMS / bmson charts and play them straight from
-                the page. It comes with three skins, Synesthesia, Plain and Native (Options → Skin &amp; display →
-                Built-in skin), and reads <strong>Lunatic Rave 2</strong> skins (<code>.lr2skin</code>) and
-                <strong>beatoraja</strong> skins (<code>.json</code> / <code>.luaskin</code>) — drop your
-                <code>LR2files</code> folder, or your beatoraja <code>skin/</code> folder, onto the page (alongside or
-                before the chart drop) and the theme is applied automatically.
+                the page. It comes with three skins, Synesthesia, Plain and Native (Options → Skin → Built-in skin), and
+                reads <strong>Lunatic Rave 2</strong> skins (<code>.lr2skin</code>) and <strong>beatoraja</strong> skins
+                (<code>.json</code> / <code>.luaskin</code>) — drop your <code>LR2files</code> folder, or your beatoraja
+                <code>skin/</code> folder, onto the page (alongside or before the chart drop) and the theme is applied
+                automatically.
               </p>
               <ul class="help-about-meta">
                 <li>
@@ -272,8 +272,7 @@ export const PLAYER_HELP_TEMPLATE = html`
               <p class="help-about-summary">
                 ブラウザ上で動作する BMS プレイヤーです。BMS / bmson
                 が入ったフォルダをドロップするだけでそのまま再生できます。 内蔵スキンはシナスタジア
-                (Synesthesia)、プレーン (Plain)、ネイティブ (Native) の 3 種類です (Options → Skin &amp; display →
-                Built-in skin)。
+                (Synesthesia)、プレーン (Plain)、ネイティブ (Native) の 3 種類です (Options → Skin → Built-in skin)。
                 <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン
                 (<code>.json</code> / <code>.luaskin</code>) も解釈するので、<code>LR2files</code> フォルダや beatoraja
                 の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。

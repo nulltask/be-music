@@ -6,7 +6,7 @@ import { expect, openWithLibrary, SMOKE, SONGS, test, type Player } from './supp
  * changes, and a replay of the log with the Options dialog's Replay / ghost options on and off.
  */
 
-const TEMPO = ['Tempo'];
+const TEMPO = ['Play options', 'Tempo'];
 const REPLAY_VIEW = ['Play options', 'Replay / ghost'];
 
 /**
@@ -74,7 +74,7 @@ test(
     await player.leaveResult();
     // The viewer's own settings, which a replay keeps only with the Replay / ghost options off.
     await player.setOption(TEMPO, 'Tempo (%)', -10);
-    await player.setOption(['Play options'], 'Hi-speed', 4);
+    await player.setOption(['View'], 'Hi-speed', 4);
     const text = JSON.stringify(replay);
 
     // On (the default): the replay starts at the recorded tempo and follows its change and the recorded hi-speed.

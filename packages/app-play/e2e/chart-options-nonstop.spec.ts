@@ -22,7 +22,7 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     );
     await player.openFolder('Options');
     await player.setOption(['Play options'], 'Auto play', true);
-    await player.setOption(['Play options'], 'Hi-speed', 3);
+    await player.setOption(['View'], 'Hi-speed', 3);
     await player.key('Enter');
     await player.waitFor(
       (state) =>
@@ -43,7 +43,7 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
     await player.page.screenshot({ path: info.outputPath('fitted-authored-speed.png') });
     await player.waitFor((state) => (state.play?.seconds ?? 0) > 12.1, 'empty stage releases authored speed');
     await expect.poll(async () => (await player.state()).play?.hiSpeed).toBe(3);
-    expect(await player.readOption(['Play options'], 'Hi-speed')).toBe(3);
+    expect(await player.readOption(['View'], 'Hi-speed')).toBe(3);
     await player.page.screenshot({ path: info.outputPath('restored-user-speed.png') });
   });
 }
