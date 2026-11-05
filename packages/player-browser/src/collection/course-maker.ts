@@ -256,6 +256,18 @@ export class CourseMaker {
     this.emit('settings');
   }
 
+  /** Replaces the RANDOM MIX settings (each value snapped and clamped to its button's range). */
+  setRandomMixSettings(settings: LR2RandomMixSettings): void {
+    this.mixSettings = normalizeLR2RandomMixSettings(settings);
+    this.emit('settings');
+  }
+
+  /** Sets the connection a new NONSTOP course gets after each stage (LR2's button 268). */
+  setDefaultConnection(connection: NonstopConnection): void {
+    this.connection = connection;
+    this.emit('settings');
+  }
+
   /** Steps one RANDOM MIX setting (LR2's buttons 260-266), wrapping around at both ends. */
   stepRandomMixSetting(key: LR2RandomMixSetting, delta: number): void {
     this.mixSettings = stepLR2RandomMixSetting(this.mixSettings, key, delta);

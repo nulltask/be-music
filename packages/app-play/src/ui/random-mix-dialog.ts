@@ -5,14 +5,18 @@ import {
   RANDOM_MIX_MAX_LOOPS,
   RANDOM_MIX_NONSTOP_MAX_COUNT,
   resolveRandomMixCount,
+  type LR2RandomMixSettings,
+  type NonstopConnection,
   type RandomMixConditions,
   type RandomMixCount,
 } from '@be-music/player-engine/course';
+import { connectionSelect, RANDOM_MIX_FIELDS, randomMixSelect } from '../course-maker-panel.ts';
 import { playerText } from '../player-copy.ts';
 
 // The RANDOM MIX dialog: deciding a RANDOM MIX bar asks which charts to draw from (key modes, a level range or the
-// difficulties), how many stages (or endless) and how many draws in a row (or endless), then OK starts the mix. It opens
-// on the conditions last confirmed, and says how many charts match; OK is off while none does.
+// difficulties), how many stages (or endless) and how many draws in a row (or endless), with the draw settings the Options
+// dialog's My courses also sets (LR2's favorite level, BPM range and BPM limits, and a NONSTOP mix's connection), then
+// OK starts the mix. It opens on what was last confirmed, and says how many charts match; OK is off while none does.
 
 const DIFFICULTY_NAMES: Readonly<Record<number, string>> = {
   1: 'BEGINNER',
@@ -30,8 +34,19 @@ export interface RandomMixDialogRequest {
   keyModes: readonly number[];
   /** The conditions the dialog opens on (the last ones confirmed). */
   initial: RandomMixConditions;
+  /** LR2's RANDOM MIX settings, as the Options dialog's My courses last set them. */
+  settings: LR2RandomMixSettings;
+  /** The connection a NONSTOP draw gets after every stage (LR2's button 268). */
+  defaultConnection: NonstopConnection;
   /** How many charts fit `conditions`. */
   countMatches: (conditions: RandomMixConditions) => number;
+}
+
+/** What OK confirms: the conditions, LR2's RANDOM MIX settings and the NONSTOP connection. */
+export interface RandomMixDialogChoice {
+  conditions: RandomMixConditions;
+  settings: LR2RandomMixSettings;
+  defaultConnection: NonstopConnection;
 }
 
 /** Toggles `value` in a sorted set of numbers. */
@@ -47,7 +62,7 @@ export function toggleRandomMixValue(values: readonly number[], value: number, o
  * left), and a NONSTOP mix's count is capped.
  */
 export function resolveRandomMixDialogConditions(
-  request: Omit<RandomMixDialogRequest, 'countMatches'>,
+  request: Pick<RandomMixDialogRequest, 'kind' | 'keyModes' | 'initial'>,
 ): RandomMixConditions {
   const offered = request.initial.keyModes.filter((keyMode) => request.keyModes.includes(keyMode));
   return {
@@ -64,20 +79,30 @@ function readInteger(input: HTMLInputElement, min: number, max: number, fallback
   return Math.min(max, Math.max(min, value));
 }
 
+/** How the dialog closed: what it held then (kept as the next one's start, OK or not) and whether OK confirmed it. */
+export interface RandomMixDialogResult {
+  choice: RandomMixDialogChoice;
+  confirmed: boolean;
+}
+
 /**
- * Opens the RANDOM MIX dialog. Resolves the conditions confirmed with OK, or `undefined` when it was cancelled (Escape,
- * Cancel). A dialog already open is left as it is and resolves `undefined`.
+ * Opens the RANDOM MIX dialog. Resolves what it held when it closed and whether OK confirmed it (Escape and Cancel do
+ * not). A dialog already open is left as it is and resolves `undefined`.
  */
-export function promptRandomMixConditions(request: RandomMixDialogRequest): Promise<RandomMixConditions | undefined> {
+export function promptRandomMixConditions(request: RandomMixDialogRequest): Promise<RandomMixDialogResult | undefined> {
   const dialog = document.querySelector<HTMLDialogElement>('#random-mix-dialog');
   if (dialog === null || dialog.open) return Promise.resolve(undefined);
-  let conditions = resolveRandomMixDialogConditions(request);
-  const update = (next: Partial<RandomMixConditions>): void => {
-    conditions = { ...conditions, ...next };
+  let choice: RandomMixDialogChoice = {
+    conditions: resolveRandomMixDialogConditions(request),
+    settings: { ...request.settings },
+    defaultConnection: request.defaultConnection,
+  };
+  const update = (next: Partial<RandomMixDialogChoice>): void => {
+    choice = { ...choice, ...next };
     draw();
   };
   const draw = (): void => {
-    render(template(request, conditions, update), dialog);
+    render(template(request, choice, update), dialog);
   };
   draw();
   dialog.returnValue = '';
@@ -87,8 +112,7 @@ export function promptRandomMixConditions(request: RandomMixDialogRequest): Prom
     dialog.addEventListener(
       'close',
       () => {
-        const confirmed = dialog.returnValue === 'ok' && request.countMatches(conditions) > 0;
-        resolve(confirmed ? conditions : undefined);
+        resolve({ choice, confirmed: dialog.returnValue === 'ok' && request.countMatches(choice.conditions) > 0 });
       },
       { once: true },
     );
@@ -152,9 +176,11 @@ function countField(
 
 function template(
   request: RandomMixDialogRequest,
-  conditions: RandomMixConditions,
-  update: (next: Partial<RandomMixConditions>) => void,
+  choice: RandomMixDialogChoice,
+  set: (next: Partial<RandomMixDialogChoice>) => void,
 ): TemplateResult {
+  const { conditions, settings } = choice;
+  const update = (next: Partial<RandomMixConditions>): void => set({ conditions: { ...conditions, ...next } });
   const t = playerText().course.randomMixDialog;
   const matches = request.countMatches(conditions);
   const nonstop = request.kind === 'nonstop';
@@ -283,6 +309,27 @@ function template(
         update({ loops }),
       )}
     </div>
+    <fieldset class="random-mix-group">
+      <legend class="label">${t.settings}</legend>
+      <div class="random-mix-settings">
+        ${RANDOM_MIX_FIELDS.map(
+          ({ setting, label }) =>
+            html`<label class="random-mix-setting"
+              ><span class="label">${label()}</span> ${randomMixSelect(setting, settings[setting], (value) =>
+                set({ settings: { ...settings, [setting]: value } }),
+              )}</label
+            >`,
+        )}
+        ${
+          nonstop
+            ? html`<label class="random-mix-setting"
+                ><span class="label">${t.defaultConnection}</span>
+                ${connectionSelect(choice.defaultConnection, (defaultConnection) => set({ defaultConnection }))}</label
+              >`
+            : nothing
+        }
+      </div>
+    </fieldset>
     <p class="random-mix-matches" role="status" aria-live="polite" data-empty=${matches === 0}>
       ${matches > 0 ? t.matches(matches) : t.noMatch}
     </p>
