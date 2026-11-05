@@ -1,4 +1,4 @@
-import type { CourseView, LibraryChart } from '@be-music/player-scene-model';
+import { resolveLibraryChartDifficultyValue, type CourseView, type LibraryChart } from '@be-music/player-scene-model';
 import { LR2_OP, LR2_TIMER } from '../ids/index.ts';
 import { resolveLR2ChartText, resolveLR2DifficultyOp, resolveLR2KeyModeOp } from './chart.ts';
 import { resolveLR2CourseNumber, resolveLR2CourseOps, resolveLR2CourseText } from './course.ts';
@@ -26,7 +26,7 @@ export function resolveLR2DecideState(input: LR2DecideInput): LR2SceneState {
   const { chart, course } = input;
   const ops = new Set<number>(DECIDE_BASE_OPS);
   for (const op of input.customOps ?? []) ops.add(op);
-  ops.add(resolveLR2DifficultyOp(chart.chart.metadata.difficulty));
+  ops.add(resolveLR2DifficultyOp(resolveLibraryChartDifficultyValue(chart)));
   ops.add(resolveLR2KeyModeOp(chart));
   if (course !== undefined) for (const op of resolveLR2CourseOps(course)) ops.add(op);
   return {

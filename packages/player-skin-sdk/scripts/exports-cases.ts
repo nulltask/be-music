@@ -526,6 +526,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.resolveDifficultyName(BENCH_SONG);
     },
   });
+  define('player-skin-sdk.resolveDifficulty', {
+    run: () => {
+      skinSdkAPI.resolveDifficulty(BENCH_SONG);
+    },
+  });
   define('player-skin-sdk.rollUpValue', {
     run: () => {
       skinSdkAPI.rollUpValue(123_456, 0.4);

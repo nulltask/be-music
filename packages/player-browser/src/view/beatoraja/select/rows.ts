@@ -22,7 +22,7 @@ import {
 import { joinBeatorajaText } from '@be-music/skin-beatoraja/scene';
 import { resolveLR2ChartFeatures } from '@be-music/skin-lr2/state';
 import { type Container, type FederatedPointerEvent, Sprite, Text, Texture } from 'pixi.js';
-import type { LibraryEntry } from '@be-music/player-scene-model';
+import { resolveLibraryChartDifficultyValue, type LibraryEntry } from '@be-music/player-scene-model';
 import type { BeatorajaFontCache } from '../../../skin/beatoraja/fonts.ts';
 import { createCroppedBeatorajaTexture } from '../../../skin/beatoraja/render.ts';
 import type { BeatorajaSceneKit } from '../../../skin/beatoraja/scene-kit.ts';
@@ -479,9 +479,10 @@ export class BeatorajaSelectRows {
    * {@link BeatorajaSongListLayout.levelEntries}: each entry's id (e.g. `level-beginner`)
    * looks up the matching `value[]` declaration on the skin (`src = songbar.png`,
    * `(x, y)` cropping a difficulty-specific colour row from the level sprite strip).
-   * Per-row rendering picks the entry by `chart.metadata.difficulty`:
+   * Per-row rendering picks the entry by the chart's difficulty (`resolveLibraryChartDifficultyValue`: its
+   * `#DIFFICULTY`, else the one estimated from its names, as beatoraja's song database fills it):
    *
-   *   - 0 (no `#DIFFICULTY` authored) → `level-unknown`
+   *   - 0 (neither) → `level-unknown`
    *   - 1..5 → `level-beginner / normal / hyper / another / insane`
    *
    * Mirrors upstream `JSONSelectSkinObjectLoader.java:148-158` which builds an array of
@@ -692,7 +693,9 @@ export class BeatorajaSelectRows {
         // entry) when the chart's difficulty doesn't have a matching authored entry — keeps
         // skins with a partial level set or non-standard `#DIFFICULTY` values still
         // rendering some sprite digits.
-        const perDifficultyLevelValue = this.levelValueElementForDifficulty(chartEntry.chart.metadata.difficulty);
+        const perDifficultyLevelValue = this.levelValueElementForDifficulty(
+          resolveLibraryChartDifficultyValue(chartEntry),
+        );
         if (
           levelDigits !== undefined &&
           perDifficultyLevelValue !== undefined &&
@@ -1016,7 +1019,7 @@ function levelTintForDifficulty(level: number): number {
 
 /**
  * Parse a `songlist.level[].id` string (e.g. `"level-beginner"`) into the matching
- * difficulty index used by `chart.metadata.difficulty`. Returns `undefined` when the id
+ * difficulty index (`resolveLibraryChartDifficultyValue`). Returns `undefined` when the id
  * doesn't match the upstream `level-*` convention so the caller can skip it.
  *
  * Mapping mirrors upstream `JSONSelectSkinObjectLoader.java`'s level loop where each

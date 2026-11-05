@@ -3,6 +3,7 @@ import {
   formatScoreDiff,
   resolveCabinetLayout,
   resolveScratchAngle,
+  resolveDifficulty,
   resolveDifficultyName,
   resolveScorePace,
   resolveStageLabel,
@@ -64,6 +65,7 @@ export function renderGameplayCabinet({
     : { ...gaugeBox, x: split, w: gaugeBox.x + gaugeBox.w - split };
   const hiSpeed = (r.hiSpeed ?? 0).toFixed(r.floatingHiSpeed ? 2 : 1);
   const difficulty = resolveDifficultyName(f.chart);
+  const difficultyEstimated = resolveDifficulty(f.chart)?.estimated === true;
   const level = f.chart?.playLevel;
   const counts = [
     ['PG', panels.judgments.perfect],
@@ -171,7 +173,13 @@ export function renderGameplayCabinet({
     <div class="cab panel players" part="players" style=${place(cabinet.players)}>
       <div class="plate">
         <span class="eyebrow">${r.playerName ?? 'Player 1P'}</span>
-        ${difficulty ? html`<span class="difficulty" part="difficulty">${difficulty}</span>` : nothing}
+        ${
+          difficulty
+            ? html`<span class="difficulty" part="difficulty" ?data-estimated=${difficultyEstimated}
+                >${difficulty}</span
+              >`
+            : nothing
+        }
         <strong>Lv.${level ?? '-'}</strong>
       </div>
       <div class="chart-title">

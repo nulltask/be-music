@@ -1,5 +1,8 @@
-import type { CourseView } from '@be-music/player-scene-model';
-import type { LibraryChart } from './chart.ts';
+import {
+  resolveLibraryChartDifficulty,
+  type CourseView,
+  type LibraryChartDifficultySource,
+} from '@be-music/player-scene-model';
 import { PLAYFIELD } from './playfield.ts';
 import { STAGE_HEIGHT, STAGE_MARGIN, STAGE_WIDTH } from './stage.ts';
 import type { BeMusicGameplayLayout, BeMusicGameplayRuntime, BeMusicRect, BeMusicStage } from './types.ts';
@@ -431,12 +434,29 @@ export function resolveStageLabel(
 
 const DIFFICULTY_NAMES = ['BEGINNER', 'NORMAL', 'HYPER', 'ANOTHER', 'INSANE'] as const;
 
-/** The chart's `#DIFFICULTY` (1–5) by name (`BEGINNER` … `INSANE`); `UNSPECIFIED` when missing, or `undefined` without a chart. */
-export function resolveDifficultyName(chart: Pick<LibraryChart, 'chart'> | undefined): string | undefined {
-  const value = chart?.chart.metadata.difficulty;
-  return chart === undefined
-    ? undefined
-    : ((typeof value === 'number' ? DIFFICULTY_NAMES[Math.trunc(value) - 1] : undefined) ?? 'UNSPECIFIED');
+/** What a chart screen writes for an estimated difficulty: the name, then this mark (`HYPER?`). */
+export const ESTIMATED_DIFFICULTY_MARK = '?';
+
+/**
+ * The chart's difficulty by name (`BEGINNER` … `INSANE`) and whether it was estimated from the chart's names
+ * (`resolveLibraryChartDifficulty`); `UNSPECIFIED` when it has none, or `undefined` without a chart.
+ */
+export function resolveDifficulty(
+  chart: LibraryChartDifficultySource | undefined,
+): { name: string; estimated: boolean } | undefined {
+  if (chart === undefined) return undefined;
+  const difficulty = resolveLibraryChartDifficulty(chart);
+  const name = difficulty !== undefined ? DIFFICULTY_NAMES[difficulty.value - 1] : undefined;
+  return name !== undefined ? { name, estimated: difficulty!.estimated } : { name: 'UNSPECIFIED', estimated: false };
+}
+
+/**
+ * The chart's difficulty by name (`BEGINNER` … `INSANE`), followed by {@link ESTIMATED_DIFFICULTY_MARK} when it was
+ * estimated (`HYPER?`); `UNSPECIFIED` when it has none, or `undefined` without a chart.
+ */
+export function resolveDifficultyName(chart: LibraryChartDifficultySource | undefined): string | undefined {
+  const difficulty = resolveDifficulty(chart);
+  return difficulty && (difficulty.estimated ? `${difficulty.name}${ESTIMATED_DIFFICULTY_MARK}` : difficulty.name);
 }
 
 /** Turntable angle in radians: one clockwise revolution per four chart beats. */
