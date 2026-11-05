@@ -25,6 +25,11 @@ export interface ServiceHeaderInput {
   spanViewport?: boolean;
   accountHref: string;
   account?: ServiceHeaderAccount;
+  /**
+   * The page is still reading who is signed in. The account control is a placeholder in the signed-in control's box
+   * until then, never "Sign in" for a player who turns out to be signed in. `account` is ignored.
+   */
+  accountLoading?: boolean;
   requestURL: string;
   /** Open a signed-in account in another tab, preserving the current application. */
   accountNewTab?: boolean;
@@ -51,6 +56,7 @@ const TEXT = {
   en: {
     nav: 'Site',
     signIn: 'Sign in',
+    checkingAccount: 'Checking account…',
     play: 'Play',
     playTitle: 'Play in the browser',
     help: 'Help',
@@ -63,6 +69,7 @@ const TEXT = {
   ja: {
     nav: 'サイト',
     signIn: 'ログイン',
+    checkingAccount: 'アカウントを確認しています…',
     play: 'プレイ',
     playTitle: 'ブラウザでプレイ',
     help: 'ヘルプ',
@@ -107,7 +114,8 @@ export function resolveServiceHeader(input: ServiceHeaderInput) {
       iconHTML: input.fullscreenActive === true ? MINIMIZE_ICON : MAXIMIZE_ICON,
       pressed: input.fullscreenActive === true,
     });
-  const account = input.account;
+  const loading = input.accountLoading === true;
+  const account = loading ? undefined : input.account;
   const identity = account === undefined ? undefined : resolveAccountIdentity(account, input.locale);
   return {
     title: input.title,
@@ -119,6 +127,8 @@ export function resolveServiceHeader(input: ServiceHeaderInput) {
         : 'mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6',
     badgeClass: input.spanViewport === true ? 'badge max-sm:hidden' : 'badge',
     account: {
+      loading,
+      loadingLabel: t.checkingAccount,
       signedIn: account !== undefined,
       href: input.accountHref,
       newTab: account !== undefined && input.accountNewTab === true,

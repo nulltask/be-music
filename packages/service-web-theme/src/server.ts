@@ -63,6 +63,8 @@ export function serviceSkipLink(locale: Locale): string {
 export { authButtonTemplate, authPanelTemplate, type AuthButtonInput } from './auth-template.ts';
 export { avatarTemplate, accountIdentityTemplate } from './account-identity-template.ts';
 export type { ServiceAccountIdentity } from './account-model.ts';
+export { skeletonGroupTemplate, skeletonTemplate } from './skeleton-template.ts';
+export type { SkeletonInput, SkeletonLength, SkeletonShape } from './skeleton-model.ts';
 export {
   languageMenuTemplate,
   languageLinksTemplate,
