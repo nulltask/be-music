@@ -742,9 +742,9 @@ describe('BeatorajaPlayBridge — render context', () => {
 
   it('merges partial setOffset values with the previously set ones', () => {
     const { bridge } = createHarness();
-    bridge.setOffset(4, { x: 10, y: 20 });
-    bridge.setOffset(4, { y: 50 });
-    const lanecover = bridge.resolveOffset(4);
+    bridge.setOffset(40, { x: 10, y: 20 });
+    bridge.setOffset(40, { y: 50 });
+    const lanecover = bridge.resolveOffset(40);
     expect(lanecover?.x).toBe(10);
     expect(lanecover?.y).toBe(50);
   });
@@ -972,10 +972,10 @@ describe('BeatorajaPlayBridge — lift and HIDDEN+', () => {
     const harness = createHarness();
     expect(harness.bridge.resolveOffset(3)).toBeUndefined();
     expect(harness.bridge.resolveNumberValue(314)).toBe(0);
-    // LIFT at 50 %: OFFSET_LIFT.y = 0.5 × -580 (the default lane height).
+    // LIFT at 50 %: OFFSET_LIFT.y = 0.5 × 580 (the default lane height).
     harness.play(setCover({ lift: 0.5 }));
     const lift = harness.bridge.resolveOffset(3);
-    expect(lift?.y).toBeCloseTo(-290, 6);
+    expect(lift?.y).toBeCloseTo(290, 6);
     expect(lift?.x).toBe(0);
     expect(lift?.a).toBe(0);
     expect(harness.bridge.resolveNumberValue(314)).toBe(500);
@@ -996,22 +996,22 @@ describe('BeatorajaPlayBridge — lift and HIDDEN+', () => {
   });
 
   it('drives OFFSET_HIDDEN_COVER (id 5) per LaneRenderer formulas', () => {
-    // `LaneRenderer.java:282-296`: off → a = -255 (the cover hides); on → y = (1 - lift) × height × -laneHeight.
+    // `LaneRenderer.java:282-296`: off → a = -255 (the cover hides); on → y = (1 - lift) × height × laneHeight.
     const harness = createHarness({ laneHeight: 580 });
     expect(harness.bridge.resolveOffset(5)).toMatchObject({ a: -255, y: 0 });
     harness.play(setCover({ hidden: 0.5, hiddenOn: true }));
-    expect(harness.bridge.resolveOffset(5)).toMatchObject({ a: 0, y: -290 });
-    // With the LIFT at 0.4 the cover follows: 0.5 × (1 - 0.4) × -580.
+    expect(harness.bridge.resolveOffset(5)).toMatchObject({ a: 0, y: 290 });
+    // With the LIFT at 0.4 the cover follows: 0.5 × (1 - 0.4) × 580.
     harness.play(setCover({ lift: 0.4 }));
-    expect(harness.bridge.resolveOffset(5)?.y).toBeCloseTo(-174, 6);
+    expect(harness.bridge.resolveOffset(5)?.y).toBeCloseTo(174, 6);
     // Off hides it again; its height is kept, so on again it comes back where it was.
     harness.play({ type: 'cover-toggle', part: 'hidden' });
     expect(harness.bridge.resolveOffset(5)).toMatchObject({ a: -255 });
     harness.play({ type: 'cover-toggle', part: 'hidden' });
-    expect(harness.bridge.resolveOffset(5)?.y).toBeCloseTo(-174, 6);
+    expect(harness.bridge.resolveOffset(5)?.y).toBeCloseTo(174, 6);
     // Moves are clamped to the lane; moved down to nothing, HIDDEN+ goes off (the play state's rule).
     harness.play({ type: 'cover-adjust', part: 'hidden', delta: 2 });
-    expect(harness.bridge.resolveOffset(5)?.y).toBeCloseTo(-348, 6);
+    expect(harness.bridge.resolveOffset(5)?.y).toBeCloseTo(348, 6);
     harness.play({ type: 'cover-adjust', part: 'hidden', delta: -2 });
     expect(harness.bridge.resolveOffset(5)).toMatchObject({ a: -255 });
   });
@@ -1035,13 +1035,24 @@ describe('BeatorajaPlayBridge — lift and HIDDEN+', () => {
     harness.bridge.setOffset(3, { y: -100 });
     expect(harness.bridge.resolveOffset(3)?.y).toBe(-100);
     harness.play(setCover({ lift: 0.25 }));
-    expect(harness.bridge.resolveOffset(3)?.y).toBeCloseTo(-145, 6);
+    expect(harness.bridge.resolveOffset(3)?.y).toBeCloseTo(145, 6);
+  });
+
+  it('uses the active note geometry for LIFT, HIDDEN+ and lane cover readouts', () => {
+    const h = createHarness({ laneHeight: 580 });
+    h.play(setCover({ lift: 0.25, sudden: 0.5, suddenOn: true, hidden: 0.5, hiddenOn: true }));
+    h.bridge.setLaneHeight(840);
+    expect(h.bridge.resolveOffset(3)?.y).toBe(210);
+    expect(h.bridge.resolveOffset(4)?.y).toBe(-315);
+    expect(h.bridge.resolveOffset(5)?.y).toBe(315);
+    h.bridge.setLaneHeight(Number.NaN);
+    expect(h.bridge.resolveOffset(3)?.y).toBe(210);
   });
 
   it('honors a per-skin `laneHeight` option for the OFFSET_LIFT scale', () => {
     const harness = createHarness({ laneHeight: 720 });
     harness.play(setCover({ lift: 0.5 }));
-    expect(harness.bridge.resolveOffset(3)?.y).toBeCloseTo(-360, 6);
+    expect(harness.bridge.resolveOffset(3)?.y).toBeCloseTo(360, 6);
   });
 
   it('toggles `LANECOVER1_ON` / `LIFT1_ON` with the covers, and keeps `LANECOVER1_CHANGING` lit briefly after each move', () => {
@@ -1086,10 +1097,10 @@ describe('BeatorajaPlayBridge — lift and HIDDEN+', () => {
   it('falls back to the default lane height when the option is missing or non-positive', () => {
     const a = createHarness({ laneHeight: 0 });
     a.play(setCover({ lift: 1 }));
-    expect(a.bridge.resolveOffset(3)?.y).toBe(-580);
+    expect(a.bridge.resolveOffset(3)?.y).toBe(580);
     const b = createHarness({ laneHeight: Number.NaN });
     b.play(setCover({ lift: 1 }));
-    expect(b.bridge.resolveOffset(3)?.y).toBe(-580);
+    expect(b.bridge.resolveOffset(3)?.y).toBe(580);
   });
 });
 

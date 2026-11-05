@@ -1,6 +1,6 @@
 // "Play in silent mode": the platform audio session asks for `'playback'`, so sound plays with the iPhone / iPad silent
-// switch on (`silent-mode-playback.ts`). The setting is kept in the Debug Menu's state and remembered, shows on the
-// Debug Menu and the start card where the browser offers it, and a hint points at it the first time sound can start.
+// switch on (`silent-mode-playback.ts`). The setting is kept in the Options dialog's state and remembered, shows on the
+// Options dialog and the start card where the browser offers it, and a hint points at it the first time sound can start.
 
 import { applySilentModePlayback, supportsSystemAudioSession } from '@be-music/player-browser/audio';
 import {
@@ -16,17 +16,17 @@ import {
 } from '../silent-mode-playback.ts';
 
 export interface SilentModeSettingOptions {
-  /** The state the setting is kept in: the Debug Menu's, whose checkbox writes it. */
+  /** The state the setting is kept in: the Options dialog's, whose checkbox writes it. */
   readonly settings: { playInSilentMode: boolean };
   /** Whether the device is a phone or a tablet, where the hint shows. */
   readonly touchFirst: boolean;
-  /** Called after the setting is remembered, so the Debug Menu document stays with it. */
+  /** Called after the setting is remembered, so the Options dialog document stays with it. */
   readonly onRemember?: () => void;
 }
 
 /** The "Play in silent mode" setting, and the places it shows. */
 export class SilentModeSetting {
-  /** The Debug Menu's "Play in silent mode" checkbox, when the browser offers the setting. */
+  /** The Options dialog's "Play in silent mode" checkbox, when the browser offers the setting. */
   public controller: { refresh(): unknown } | undefined;
   /** The start card's "Play in silent mode" checkbox, when the browser offers the setting. */
   public startOption: Pick<StartSilentModeOption, 'setChecked'> | undefined;
@@ -53,7 +53,7 @@ export class SilentModeSetting {
     });
   }
 
-  /** Applies and remembers the "Play in silent mode" setting (Debug Menu checkbox or the hint's button). */
+  /** Applies and remembers the "Play in silent mode" setting (Options dialog checkbox or the hint's button). */
   public set(value: boolean): void {
     this.settings.playInSilentMode = value;
     storePlayInSilentMode(value);

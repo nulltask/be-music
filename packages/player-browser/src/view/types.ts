@@ -246,7 +246,7 @@ export interface SelectView extends FamilyView<SelectFrame, SelectIntent> {
    * Where the skin's search box is on the canvas, in CSS pixels from its top-left corner, or `undefined` when it has
    * none (or nothing is drawn yet).
    */
-  searchFieldRect(): { x: number; y: number; width: number; height: number } | undefined;
+  searchFieldRect(): { x: number; y: number; width: number; height: number; fontSize?: number } | undefined;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -555,6 +555,8 @@ export interface ResultView extends FamilyView<ResultFrame, ResultIntent> {
 export interface PlayfieldStage {
   readonly width: number;
   readonly height: number;
+  /** Output aspect, independent of source coordinates. Classic LR2 skins use 640×480 coordinates on widescreen output. */
+  readonly displayAspectRatio?: number;
 }
 
 /** A lane's rect on the stage. `bottom` is the judgement line a note's bottom edge lands on. */
@@ -596,6 +598,7 @@ export interface PlayfieldMeasureLine {
 
 /** A rect the chart's BGA is composited into, in design pixels. */
 export interface PlayfieldBGATarget {
+  readonly preserveVideoAspect?: boolean;
   readonly x: number;
   readonly y: number;
   readonly w: number;

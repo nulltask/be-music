@@ -139,11 +139,12 @@ describe('beginExitSequence', () => {
     expect(exit.moments).toEqual([]);
   });
 
-  test('a failed play stops at once: timer 3, the sound cut, the result after #CLOSE, no fade-out', () => {
+  test('a failed play stops at once: timer 3, the sound fading over #CLOSE, the result after it, no fade-out', () => {
     const exit = createExit(lr2);
     beginExitSequence(exit.ctx, exit.callback, { failed: true });
     expect(exit.moments).toEqual([{ kind: 'exit-close', at: 10_000 }]);
-    expect(exit.fadeOutAudibleTo).toHaveBeenCalledWith(0, 0);
+    // The sound fades with the skin's closing animation, over its close time.
+    expect(exit.fadeOutAudibleTo).toHaveBeenCalledWith(0, 2050);
     // The picture does not fade: the skin's timer-3 chrome is what shows.
     expect([exit.ctx.exitFadeStartedAt, exit.ctx.exitFadeOutMs]).toEqual([undefined, 0]);
     vi.advanceTimersByTime(2049);
@@ -157,7 +158,8 @@ describe('beginExitSequence', () => {
     const exit = createExit({ fadeOutMs: 450, closeMs: 0 });
     beginExitSequence(exit.ctx, exit.callback, { failed: true });
     expect(exit.moments).toEqual([{ kind: 'exit-close', at: 10_000 }]);
-    expect(exit.fadeOutAudibleTo).toHaveBeenCalledWith(0, 0);
+    // Picture and sound fade together over the hold.
+    expect(exit.fadeOutAudibleTo).toHaveBeenCalledWith(0, FAILED_CLOSE_MS);
     expect([exit.ctx.exitFadeStartedAt, exit.ctx.exitFadeOutMs]).toEqual([10_000, FAILED_CLOSE_MS]);
     vi.advanceTimersByTime(FAILED_CLOSE_MS - 1);
     expect(exit.callback).not.toHaveBeenCalled();

@@ -55,6 +55,8 @@ export type RuntimeMineNote = TimedLandmineNote;
  * (`PlaySession`) is one; the view reads it and writes only the lanes it lays out and the BGA videos it plays.
  */
 export interface PlayfieldRuntime {
+  /** Where the play skin is moved and how far it is scaled (LR2's 1 / 2 + the arrows); where it is drawn without one. */
+  readonly skinAdjust?: { readonly x: number; readonly y: number; readonly scale: number };
   readonly chart: LibraryChart | undefined;
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly resolvedPlayChart: ResolvedChart | undefined;
@@ -103,6 +105,7 @@ export interface PlayfieldRuntime {
   };
   readonly assetsLoading: boolean;
   readonly longNotes: LongNoteTracker;
+  readonly scratchInputs?: ReadonlyMap<string, { angle: number; direction: 1 | -1; atMs: number }>;
   readonly lanePressedAt: Map<string, number>;
   readonly laneReleasedAt: Map<string, number>;
   readonly pressedChannels: Set<string>;
@@ -125,6 +128,8 @@ export interface PlayfieldRuntime {
    * lane-overlay ghost presents over the play, never on the play itself.
    */
   readonly ghostLanes?: GhostLaneOverlay;
+  /** The replay ghost’s lane bank, when presented beside the live play. */
+  readonly ghostSide?: '2P';
   readonly hasBGA: boolean;
   readonly bgaTimeline: {
     base: BGACue[];

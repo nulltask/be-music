@@ -4,12 +4,14 @@ import {
   resolveBmsWAVResources,
   resolveChart,
   usesMonophonicWAVPlayback,
+  volWAVToLinearGain,
   type TimedSampleTrigger,
 } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import type { BrowserAssetEntry, BrowserAssetSource } from '../collection/types.ts';
+import { MIXER_HEADROOM_GAIN_LINEAR } from '../runtime/audio-bus.ts';
 
 /**
  * Sample-amplitude threshold below which we treat audio as silent for the leading-silence trim. Mirrors
@@ -42,6 +44,12 @@ export const DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS = 30;
  */
 export const CHART_PREVIEW_STOP_FADE_OUT_SECONDS: number = 0.25;
 
+/**
+ * How long the in-place fallback (no `#PREVIEW`) fades out at the end of its window, so the preview closes like a
+ * preview file instead of the chart stopping mid-phrase while its long samples ring on.
+ */
+export const CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS: number = 3;
+
 export interface ChartPreviewTarget {
   chart: LibraryChart;
   source: BrowserAssetSource;
@@ -50,6 +58,8 @@ export interface ChartPreviewTarget {
 interface PreviewSourceHandle {
   source: AudioBufferSourceNode;
   gain: GainNode;
+  /** The source's resting level ({@link resolveChartPreviewLevel}), which the window-end fade starts from. */
+  level: number;
   stopping: boolean;
 }
 
@@ -246,11 +256,11 @@ export class ChartPreviewEngine {
     }
   }
 
-  private attachSource(source: AudioBufferSourceNode): PreviewSourceHandle | undefined {
+  private attachSource(source: AudioBufferSourceNode, level: number): PreviewSourceHandle | undefined {
     let gain: GainNode;
     try {
       gain = this.audioContext.createGain();
-      gain.gain.value = 1;
+      gain.gain.value = level;
       source.connect(gain);
       gain.connect(this.output);
     } catch {
@@ -261,7 +271,7 @@ export class ChartPreviewEngine {
       }
       return undefined;
     }
-    const handle: PreviewSourceHandle = { source, gain, stopping: false };
+    const handle: PreviewSourceHandle = { source, gain, level, stopping: false };
     this.activeSources.add(handle);
     return handle;
   }
@@ -288,6 +298,18 @@ export class ChartPreviewEngine {
       },
       CHART_PREVIEW_STOP_FADE_OUT_SECONDS * 1000 + 50,
     );
+  }
+
+  /** Fades `handle` out over the fallback window's last seconds and stops it at the window's end. */
+  private fadeOutAtWindowEnd(handle: PreviewSourceHandle, fadeStartAt: number, endAt: number): void {
+    try {
+      const gain = handle.gain.gain;
+      gain.setValueAtTime(handle.level, fadeStartAt);
+      gain.linearRampToValueAtTime(0, endAt);
+      handle.source.stop(endAt);
+    } catch {
+      // A context that refuses the automation keeps the source as it was: it ends with its sample.
+    }
   }
 
   private stopSourceImmediately(handle: PreviewSourceHandle): void {
@@ -407,7 +429,7 @@ export class ChartPreviewEngine {
     } catch {
       return;
     }
-    const handle = this.attachSource(source);
+    const handle = this.attachSource(source, resolveChartPreviewLevel(target.chart.chart));
     if (!handle) return;
     source.onended = (): void => {
       this.finishSource(handle);
@@ -459,6 +481,12 @@ export class ChartPreviewEngine {
       }
     }
     const startAt = this.audioContext.currentTime;
+    const { fadeStartAt, endAt } = resolvePreviewFallbackFade(
+      startAt,
+      this.fallbackDurationSeconds - leadOffsetSeconds,
+      CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS,
+    );
+    const level = resolveChartPreviewLevel(chart);
     let scheduledCount = 0;
     const activeBySlot = new Map<string, PreviewSourceHandle>();
     for (const trigger of triggers) {
@@ -478,7 +506,7 @@ export class ChartPreviewEngine {
       } catch {
         continue;
       }
-      const handle = this.attachSource(source);
+      const handle = this.attachSource(source, level);
       if (!handle) continue;
       const offset = trigger.sampleOffsetSeconds ?? 0;
       const when = startAt + Math.max(0, trigger.seconds - leadOffsetSeconds);
@@ -497,6 +525,7 @@ export class ChartPreviewEngine {
         } else {
           source.start(when, offset);
         }
+        this.fadeOutAtWindowEnd(handle, fadeStartAt, endAt);
         scheduledCount += 1;
         activeBySlot.set(trigger.sampleKey, handle);
       } catch {
@@ -534,6 +563,31 @@ export function collectChartPreviewTriggers(chart: BeMusicJSON, cutoffSeconds: n
         firesBeforeTempoReversal(reversal, trigger.seconds, trigger.channel),
     )
     .sort((left, right) => left.seconds - right.seconds);
+}
+
+/**
+ * Pure helper: the level a preview plays at, so it sounds as loud as the play. A play sums its samples into mixers at
+ * {@link MIXER_HEADROOM_GAIN_LINEAR} (about −6 dB) and applies the chart's `#VOLWAV`; the preview takes both, where it
+ * used to sum at unity and sound louder than the chart itself.
+ */
+export function resolveChartPreviewLevel(chart: Pick<BeMusicJSON, 'bms'>): number {
+  return MIXER_HEADROOM_GAIN_LINEAR * volWAVToLinearGain(chart.bms.volWAV);
+}
+
+/**
+ * Pure helper: when the in-place fallback starts fading and when it ends, in context time. The window is
+ * `windowSeconds` long from `startAt` (the cutoff less the trimmed lead-in); the fade takes its last `fadeSeconds`, or
+ * the whole window when that is shorter.
+ */
+export function resolvePreviewFallbackFade(
+  startAt: number,
+  windowSeconds: number,
+  fadeSeconds: number,
+): { fadeStartAt: number; endAt: number } {
+  const span = Number.isFinite(windowSeconds) ? Math.max(0, windowSeconds) : 0;
+  const fade = Number.isFinite(fadeSeconds) ? Math.min(Math.max(0, fadeSeconds), span) : 0;
+  const endAt = startAt + span;
+  return { fadeStartAt: endAt - fade, endAt };
 }
 
 function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | undefined): boolean {

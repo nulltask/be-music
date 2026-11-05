@@ -63,7 +63,7 @@ describe('discoverBeatorajaTheme', () => {
     expect(theme.resultSkin?.header.name).toBe('lua-result');
   });
 
-  it('skips JSON files outside `skin/` (e.g. beatoraja `practice/<sha>.json`, `player/<id>/config_player.json`)', () => {
+  it('skips unrelated JSON files outside skin/ without warnings', () => {
     const files: Map<string, BeatorajaSkinFileEntry> = new Map([
       ['beatoraja/practice/abc.json', enc('not-a-skin-just-state-bytes')],
       ['beatoraja/player/player1/config_player.json', enc('{"foo": 1}')],
@@ -72,6 +72,24 @@ describe('discoverBeatorajaTheme', () => {
     const { theme, warnings } = discoverBeatorajaTheme(files);
     expect(warnings).toEqual([]);
     expect(theme.selectSkin?.entryPath).toBe('beatoraja/skin/default/select.json');
+  });
+
+  it('discovers JSON skins when their theme folder is dropped without a skin/ ancestor', () => {
+    const { theme, warnings } = discoverBeatorajaTheme(
+      new Map([
+        ['default/select.json', enc(jsonSkin(5))],
+        ['default/play5.json', enc(jsonSkin(1))],
+        ['default/play14.json', enc(jsonSkin(2))],
+        ['default/play24double.json', enc(jsonSkin(17))],
+        ['default/settings.json', enc('{"type":0,"name":"settings"}')],
+        ['default/metadata.json', enc('{"type":0,"name":"metadata","w":0,"h":720}')],
+        ['default/state.json', enc('{broken')],
+      ]),
+    );
+    expect(warnings).toEqual([]);
+    expect(theme.selectSkin?.entryPath).toBe('default/select.json');
+    expect(Object.keys(theme.playSkins)).toEqual(['5', '14', '24d']);
+    expect(theme.entries).toHaveLength(4);
   });
 
   it('records warnings for invalid skin entries without aborting', () => {

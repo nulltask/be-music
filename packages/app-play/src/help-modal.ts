@@ -1,63 +1,116 @@
+import { html, nothing, render, type TemplateResult } from 'lit';
 // Virtual module produced by the `be-music:acknowledgements` Vite plugin (see `vite.config.ts`).
 import loadAcknowledgements, { type Acknowledgement } from 'virtual:acknowledgements';
-import { detectPlayerLang, playerText, setPlayerLang, type PlayerLang } from './player-copy.ts';
+import { bindPlayerHeader } from './player-header.ts';
+import {
+  detectPlayerLang,
+  onPlayerLangChange,
+  playerLang,
+  playerText,
+  setPlayerLang,
+  type PlayerLang,
+} from './player-copy.ts';
+import { HelpKeyboard, type HelpKeyboardSource } from './ui/keyboard/help-keyboard.ts';
+import { releaseFocusOnClose } from './ui/dialog-focus.ts';
+
+/** Opens Help once it is wired (LR2's F1); nothing before. */
+let openHelp: (() => void) | undefined;
+let reportExpanded: ((open: boolean) => void) | undefined;
+/** Reports every Help opening and dismissal, including Escape and backdrop clicks. */
+export function watchHelpExpanded(report: (open: boolean) => void): void {
+  reportExpanded = report;
+}
+
+/** The player's keys and the current screen's key map, for the Keyboard tab; LR2's default keys until the app sets it. */
+let keyboardSource: () => HelpKeyboardSource = () => ({ settings: {}, scheme: 'lr2' });
+
+/** Gives the Keyboard tab the player's keys and the key map of the screen shown. */
+export function setHelpKeyboardSource(source: () => HelpKeyboardSource): void {
+  keyboardSource = source;
+}
+
+/** Opens the Help dialog on its Usage tab, as the header's Help button does. */
+export function openHelpModal(): void {
+  openHelp?.();
+}
 
 export function wireHelpModal(): void {
-  const button = document.querySelector<HTMLButtonElement>('#help-button');
-  const modal = document.querySelector<HTMLDivElement>('#help-modal');
-  const backdrop = document.querySelector<HTMLDivElement>('#help-modal-backdrop');
+  const dialog = document.querySelector<HTMLDialogElement>('#help-modal');
   const closeButton = document.querySelector<HTMLButtonElement>('#help-modal-close');
-  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.help-modal-tab'));
-  const panes = Array.from(document.querySelectorAll<HTMLElement>('.help-modal-pane'));
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('#help-modal [role="tab"]'));
+  const panes = Array.from(document.querySelectorAll<HTMLElement>('#help-modal [role="tabpanel"]'));
   const ossList = document.querySelector<HTMLOListElement>('#help-oss-list');
-  if (!button || !modal || !backdrop || !closeButton || tabs.length === 0 || panes.length === 0 || !ossList) {
+  if (!dialog || !closeButton || tabs.length === 0 || panes.length === 0 || !ossList) {
     return;
   }
 
   let ossPopulated = false;
+  const keyboardPane = document.querySelector<HTMLElement>('#help-pane-keyboard');
+  const keyboard = keyboardPane === null ? undefined : new HelpKeyboard(keyboardPane, () => keyboardSource());
+  let keyboardShown = false;
+  // Basecoat's tabs: the selected tab and panel carry `aria-selected`, the others are hidden and out of the tab order.
   const activatePane = (paneId: string): void => {
     for (const tab of tabs) {
       const matches = tab.dataset.pane === paneId;
-      tab.classList.toggle('is-active', matches);
       tab.setAttribute('aria-selected', matches ? 'true' : 'false');
+      tab.tabIndex = matches ? 0 : -1;
     }
     for (const pane of panes) {
       const matches = pane.id === `help-pane-${paneId}`;
-      pane.classList.toggle('is-active', matches);
+      pane.setAttribute('aria-selected', matches ? 'true' : 'false');
       pane.toggleAttribute('hidden', !matches);
     }
+    keyboardShown = paneId === 'keyboard';
+    if (keyboardShown) keyboard?.show(playerLang());
     if (paneId === 'oss' && !ossPopulated) {
       ossPopulated = true;
       void renderAcknowledgementsList(ossList);
     }
   };
 
+  // A native modal dialog, which Escape closes too.
   const open = (): void => {
+    // The Keyboard tab starts again on the key map the screen shown reads.
+    keyboard?.reset();
     activatePane('usage');
-    modal.classList.add('visible');
-    modal.setAttribute('aria-hidden', 'false');
-    closeButton.focus();
+    if (!dialog.open) {
+      reportExpanded?.(true);
+      dialog.showModal();
+    }
   };
-  const close = (): void => {
-    modal.classList.remove('visible');
-    modal.setAttribute('aria-hidden', 'true');
-    button.focus();
-  };
+  const close = (): void => dialog.close();
+  // Closed, the keys go back to the play: left on the Help button, Enter (meant to start the chart) would reopen it.
+  releaseFocusOnClose(dialog);
 
-  button.addEventListener('click', open);
+  bindPlayerHeader({ openHelp: open });
+  openHelp = open;
   closeButton.addEventListener('click', close);
-  backdrop.addEventListener('click', close);
-  for (const tab of tabs) {
+  document.querySelector('#help-open')?.addEventListener('click', open);
+  dialog.addEventListener('close', () => reportExpanded?.(false));
+  // A click on the backdrop lands on the dialog itself.
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) close();
+  });
+  // Keys stay in the dialog, so the play behind it does not take them.
+  dialog.addEventListener('keydown', (event) => event.stopPropagation());
+  tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => {
       const pane = tab.dataset.pane;
       if (pane) activatePane(pane);
     });
-  }
-  document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    if (!modal.classList.contains('visible')) return;
-    event.preventDefault();
-    close();
+    tab.addEventListener('keydown', (event) => {
+      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      if (step === 0) return;
+      event.preventDefault();
+      const next = tabs[(index + step + tabs.length) % tabs.length]!;
+      next.focus();
+      next.click();
+    });
+  });
+
+  // The Keyboard tab follows the language switch.
+  onPlayerLangChange(() => {
+    if (keyboardShown) keyboard?.show(playerLang());
   });
 
   wireUsageLanguageSwitch();
@@ -91,7 +144,7 @@ function activate(lang: PlayerLang): void {
   const blocks = Array.from(document.querySelectorAll<HTMLElement>('.help-lang'));
   for (const toggle of toggles) {
     const matches = toggle.dataset.lang === lang;
-    toggle.classList.toggle('is-active', matches);
+    toggle.dataset.variant = matches ? 'secondary' : 'outline';
     toggle.setAttribute('aria-pressed', matches ? 'true' : 'false');
   }
   for (const block of blocks) {
@@ -111,10 +164,7 @@ function syncPublicBetaNotice(lang: PlayerLang): void {
 
 async function renderAcknowledgementsList(list: HTMLOListElement): Promise<void> {
   const message = (text: string): void => {
-    const item = document.createElement('li');
-    item.className = 'ack-empty';
-    item.textContent = text;
-    list.replaceChildren(item);
+    render(html`<li class="ack-empty">${text}</li>`, list);
   };
   message(playerText().shell.ackLoading);
   let acknowledgements: Acknowledgement[];
@@ -128,72 +178,35 @@ async function renderAcknowledgementsList(list: HTMLOListElement): Promise<void>
     message(playerText().shell.ackEmpty);
     return;
   }
-  list.replaceChildren(...acknowledgements.map(buildAcknowledgementCard));
+  render(acknowledgements.map(acknowledgementCard), list);
 }
 
-function buildAcknowledgementCard(entry: Acknowledgement): HTMLLIElement {
-  const card = document.createElement('li');
-  card.className = 'ack-card';
-
-  const heading = document.createElement('div');
-  heading.className = 'ack-card-heading';
-  const name = document.createElement('span');
-  name.className = 'ack-card-name';
-  name.textContent = entry.name;
-  heading.appendChild(name);
-  const version = document.createElement('span');
-  version.className = 'ack-card-version';
-  version.textContent = `v${entry.version}`;
-  heading.appendChild(version);
-  if (entry.license) {
-    const license = document.createElement('span');
-    license.className = 'ack-card-license';
-    license.textContent = entry.license;
-    heading.appendChild(license);
-  }
-  card.appendChild(heading);
-
-  const meta = document.createElement('div');
-  meta.className = 'ack-card-meta';
+function acknowledgementCard(entry: Acknowledgement): TemplateResult {
   const link = entry.homepage ?? cleanRepositoryURL(entry.repository);
-  if (link) {
-    const a = document.createElement('a');
-    a.href = link;
-    a.textContent = link.replace(/^https?:\/\//u, '');
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.className = 'ack-card-link';
-    meta.appendChild(a);
-  }
-  if (entry.author) {
-    const author = document.createElement('span');
-    author.className = 'ack-card-author';
-    author.textContent = entry.author;
-    meta.appendChild(author);
-  }
-  if (meta.childNodes.length > 0) {
-    card.appendChild(meta);
-  }
-
-  if (entry.licenseText) {
-    // The copyright notice and license text stay folded until asked for: the list reads as names and licenses.
-    const details = document.createElement('details');
-    details.className = 'ack-card-license-details';
-    const summary = document.createElement('summary');
-    summary.textContent = playerText().shell.ackLicense;
-    const pre = document.createElement('pre');
-    pre.className = 'ack-card-license-text';
-    pre.textContent = entry.licenseText;
-    details.append(summary, pre);
-    card.appendChild(details);
-  } else {
-    const note = document.createElement('div');
-    note.className = 'ack-card-license-missing';
-    note.textContent = playerText().shell.ackNoLicense;
-    card.appendChild(note);
-  }
-
-  return card;
+  const copy = playerText().shell;
+  return html`<li class="ack-card">
+    <div class="ack-card-heading">
+      <span class="ack-card-name">${entry.name}</span>
+      <span class="ack-card-version">v${entry.version}</span>
+      ${entry.license ? html`<span class="ack-card-license">${entry.license}</span>` : nothing}
+    </div>
+    ${
+      link || entry.author
+        ? html`<div class="ack-card-meta">
+            ${link ? html`<a class="ack-card-link" href=${link} target="_blank" rel="noopener noreferrer">${link.replace(/^https?:\/\//u, '')}</a>` : nothing}
+            ${entry.author ? html`<span class="ack-card-author">${entry.author}</span>` : nothing}
+          </div>`
+        : nothing
+    }
+    ${
+      entry.licenseText
+        ? html`<details class="ack-card-license-details">
+            <summary>${copy.ackLicense}</summary>
+            <pre class="ack-card-license-text">${entry.licenseText}</pre>
+          </details>`
+        : html`<div class="ack-card-license-missing">${copy.ackNoLicense}</div>`
+    }
+  </li>`;
 }
 
 function cleanRepositoryURL(raw: string | undefined): string | undefined {

@@ -1,33 +1,37 @@
 import {
   STAGE_BGA_BAND,
   STAGE_SIDE_COLUMN,
+  resolveCabinetLayout,
   type BeMusicGameplayLayout,
   type BeMusicRect,
 } from '@be-music/player-skin-sdk';
 
 /** Synesthesia's own HUD geometry on the 16:9 stage, and on the 9:16 portrait stage. */
 
-/** The groove gauge's bar (its frame and labels are drawn around it). */
+/** The legacy landscape gauge slot (its cells are inset vertically). */
 export const GROOVE = { x: 44, y: 387, w: 200, h: 14 } as const;
 
 /** Side margin of the portrait HUD, and the gutter between its BGA monitor and HUD column. */
 export const PORTRAIT_MARGIN = 12;
 
 /**
- * The groove gauge's bar for `layout`: {@link GROOVE} on the landscape stage; on a portrait stage a full-width strip in
- * the band between the BGA monitor and the lanes, its label line above it.
+ * The actual gauge cells for `layout`: the cabinet geometry in standard landscape play, the inset legacy cells in
+ * touch play, and the full-width strip between the monitor and lanes in portrait play.
  */
 export function resolveGrooveRect(
-  layout: Pick<BeMusicGameplayLayout, 'orientation' | 'stage' | 'playfield'>,
+  layout: Pick<BeMusicGameplayLayout, 'orientation' | 'mode' | 'twoPlayer' | 'stage' | 'playfield'>,
 ): BeMusicRect {
-  if (layout.orientation !== 'portrait') return GROOVE;
+  if (layout.orientation !== 'portrait') {
+    if (layout.mode === 'standard') return resolveCabinetLayout(layout).gauge;
+    return { ...GROOVE, y: GROOVE.y + 2, h: GROOVE.h - 4 };
+  }
   const x = PORTRAIT_MARGIN + 4;
   return { x, y: layout.playfield.top - 18, w: layout.stage.width - 2 * x, h: 10 };
 }
 
 /**
  * The portrait HUD column right of the BGA monitor (`bga`, or a monitor-sized stand-in when the layout has none), from
- * the monitor's top to its bottom, split into the song plate, the score panel, and the judgement tally.
+ * the monitor's top to its bottom, split into the track and score panels, with the judgement tally at the foot of the same column.
  */
 export function resolvePortraitHUDColumn(
   stage: { width: number },
@@ -68,4 +72,14 @@ export function resolveMilestoneSpot(
     y: Math.round((top + STAGE_BGA_BAND.bottom) / 2) - 10,
     w: STAGE_SIDE_COLUMN.w,
   };
+}
+
+/** Human-readable ancestry, with the search scope retained rather than replacing the current location. */
+export function formatSelectBreadcrumb(
+  folderPath: readonly string[] | undefined,
+  folderLabel: string | undefined,
+  searchQuery: string,
+): string {
+  const path = folderPath ?? (folderLabel ? [folderLabel] : []);
+  return ['Library', ...path, ...(searchQuery ? [`Search: ${searchQuery}`] : [])].join(' › ');
 }

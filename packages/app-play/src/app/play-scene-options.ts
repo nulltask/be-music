@@ -1,4 +1,4 @@
-// What a play is made with, apart from its chart, its kit and where it leads (`createPlayScene`): the Debug Menu's
+// What a play is made with, apart from its chart, its kit and where it leads (`createPlayScene`): the Options dialog's
 // picks and the play options in force, with a course's lane limits, a replay's recorded setup and the tempo the play
 // runs at. Pure, so the rules are tested without a scene.
 
@@ -12,7 +12,7 @@ import { tempoFromPercent } from '../play-tempo-settings.ts';
 import type { PlayerGUIState } from '../types.ts';
 import type { NonstopPlay } from './routes/nonstop.ts';
 
-/** The Debug Menu's state a play is made with: its lane, gauge, tempo, audio and debug options. */
+/** The Options dialog's state a play is made with: its lane, gauge, tempo, audio and debug options. */
 export type PlaySceneGUIState = Pick<
   PlayerGUIState,
   | 'autoPlay'
@@ -23,6 +23,10 @@ export type PlaySceneGUIState = Pick<
   | 'autoScratch1P'
   | 'autoScratch2P'
   | 'anyKey'
+  | 'laneKeys'
+  | 'controlKeys'
+  | 'actionKeys'
+  | 'builtInControlScheme'
   | 'replayView'
   | 'tempoEnabled'
   | 'tempoPercent'
@@ -47,11 +51,11 @@ export type PlaySceneGUIState = Pick<
 >;
 
 export interface PlaySceneOptionsInput {
-  /** The Debug Menu's state. */
+  /** The Options dialog's state. */
   readonly guiState: PlaySceneGUIState;
   /** The play options in force (`PlayOptionsService.current`): the covers, HS-FIX, BGA and score graph. */
   readonly playOptions: PlayOptions;
-  /** The start's AUTO; the Debug Menu's when it set none. */
+  /** The start's AUTO; the Options dialog's when it set none. */
   readonly autoPlay?: boolean;
   /** A replay to play back instead of the player's input. */
   readonly replay?: BeMusicReplay;
@@ -64,7 +68,7 @@ export interface PlaySceneOptionsInput {
   readonly activeCourse?: Pick<ActiveCourse, 'run'>;
   /** The NONSTOP course whose stitched chart this play is. */
   readonly nonstop?: NonstopPlay;
-  /** The compressor's parameters as the Debug Menu tunes them. */
+  /** The compressor's parameters as the Options dialog tunes them. */
   readonly audioCompressorParams: PlaySceneSettings['audioCompressorParams'];
   /** The compressor architecture every play mounts with (`?compressor=`). */
   readonly audioCompressorMode: 'split' | 'legacy';
@@ -83,7 +87,7 @@ export interface PlaySceneOptions {
 }
 
 /**
- * The settings a play is made with: the Debug Menu's picks and the play options in force, the lane options limited to
+ * The settings a play is made with: the Options dialog's picks and the play options in force, the lane options limited to
  * what a course allows, a replay's recorded setup in place of the player's, and the tempo chosen.
  */
 export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlaySceneOptions {
@@ -119,7 +123,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
   const sharedOptions = {
     ...(input.fixedArrangement !== undefined ? { fixedArrangement: input.fixedArrangement } : {}),
     // The replay-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
-    // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
+    // `guiState` — the Options dialog's "Play options" folder and the LR2 select panel two-way sync into it, and it
     // is the surface that exists on every family (default / beatoraja selects have no LR2 PLAY OPTION panel).
     autoPlay,
     autoPauseOnBlur: guiState.autoPauseOnBlur,
@@ -179,6 +183,11 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     autoScratch2P: replay !== undefined ? (replay.play.autoScratch2P ?? replay.play.autoScratch) : lanes.autoScratch2P,
     // ANY KEY is the PC edition's assist, offered with the `____` judge rules only (#751).
     anyKey: replay !== undefined ? replay.play.anyKey === true : guiState.anyKey && guiState.judgeRuleset === '____',
+    // The player's own keys; a replay plays its recorded lanes, which no key reaches.
+    laneKeys: guiState.laneKeys,
+    controlKeys: guiState.controlKeys,
+    actionKeys: guiState.actionKeys,
+    builtInControlScheme: guiState.builtInControlScheme,
     dpFlip: replay !== undefined ? false : lanes.dpFlip,
     random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
     random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,
@@ -203,7 +212,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
       ? { chartSHA256: input.chartHashes.sha256, chartMD5: input.chartHashes.md5 }
       : {}),
     replayRecorder: input.replayRecorder,
-    // What the replay shows of the recorded view (the Debug Menu's "Replay / ghost" toggles, latched at song start).
+    // What the replay shows of the recorded view (the Options dialog's "Replay / ghost" toggles, latched at song start).
     replayView: { ...guiState.replayView },
     audioVolumes: { key: guiState.keyVolume / 100, bgm: guiState.bgmVolume / 100 },
     ...(guiState.peakGain ? { peakGain: true } : {}),

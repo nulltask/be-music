@@ -4,7 +4,7 @@
 
 [パッケージの責務](./docs/packages.ja.md)
 
-TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンです。
+Be-Music は、BMS・bmson 譜面を遊び、扱うためのオープンソースプロジェクトです。ブラウザ版・ターミナル版のプレイヤー、オンラインランキング、譜面処理・プレイエンジン・スキン・UI のための再利用可能な TypeScript パッケージを提供します。
 
 ## 特徴
 
@@ -27,7 +27,7 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 
 ### リプレイ・記録・コース
 
-- すべてのプレイがリプレイとして記録され、どのルールでも再判定できます。判定は決定的なので、スコアの検証に使えます。
+- プレイをリプレイとして記録し、どのルールでも再判定できます。判定は決定的なので、スコアの検証に使えます。
 - リプレイスロットと、ブラウザ内に保存されたデータのビューアがあります。
 - 譜面フィンガープリントは、ファイルのバイト列ではなく譜面の内容で譜面を識別します。`#RANDOM` を含む譜面にも対応しています。
 - LR2 のコースファイル、beatoraja の SQL フィルタによるランダムコース、NONSTOP コース (つないだ 1 本のプレイ) に対応し、コースのリプレイもあります。
@@ -48,7 +48,7 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 ### オープンでモジュール式
 
 - MIT ライセンスのオープンソースです。
-- 再利用できるパッケージ (`@be-music/*`) の組み合わせでできています。譜面の解析と書き出し、譜面モデル、プレイエンジン、スキン、UI がそれぞれ独立していて、ブラウザでも Node でも動くので、プレイヤー以外のアプリからも使えます。
+- 譜面の解析と書き出し、譜面モデル、プレイエンジン、スキン、UI を再利用できるパッケージ (`@be-music/*`) として提供します。実行環境に依存しない譜面処理とエンジンはブラウザでも Node でも動き、ブラウザ UI と Node 音声は別のアダプターなので、アプリに必要な部分を選べます。
 - プレイヤー画面用の Lit Web Components と、その型付きの React / Vue ラッパー、フレームワークに依存しないスキン SDK があります。
 
 ## パッケージ
@@ -68,11 +68,16 @@ TypeScript + pnpm workspaces で構成した BMS/bmson ツールチェーンで�
 - `@be-music/player-skin-sdk`: browser player 向け Be-Music Skin を書くための描画フレームワーク非依存の SDK
 - `@be-music/player-ui`, `@be-music/player-ui-react`, `@be-music/player-ui-vue`: [再利用可能な Lit 製 Web Components と、型付き React・Vue ラッパー](./packages/player-ui/README.ja.md)
 - `@be-music/player-browser`: browser の PixiJS ランタイム。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音声サービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
-- `@be-music/app-play`: folder / ZIP drop、LR2 / beatoraja theme、Debug Menu、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite プレイヤー
+- `@be-music/app-play`: folder / ZIP drop、LR2 / beatoraja theme、Options ダイアログ、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite プレイヤー
 - `@be-music/app-leaderboard`: Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
+- `@be-music/app-accounts`: ログイン、パスキー、連携プロバイダーを扱う非公開の Accounts サービスと OIDC プロバイダー
+- `@be-music/app-dashboard`: 非公開のサービスダッシュボードと共通アカウントの入口
+- `@be-music/worker-play`: 静的アセット、OIDC セッション、設定、Leaderboard 転送、URL・メディアプロキシを扱うプレイヤー配信用 Worker
+- `@be-music/service-auth-client`: 共通の OIDC クライアント、サービスセッション、API トークン検証
+- `@be-music/service-web-theme`: クライアントとサーバーのエントリーを分けた、サービス共通のスタイルと Lit ビュー
 - `@be-music/chart-editor`: CLI エディタ (インポート・編集・エクスポート)
 
-パッケージはレイヤーごとに積み重なっています。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/shared-utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じレイヤーは [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
+図は譜面処理とプレイヤーのレイヤー、および Leaderboard のエンジンへの依存を示します。矢印は、パッケージからそれに依存するパッケージへ向かいます。ほかの矢印を通じて既に届く依存は重ねて描いていません（`@be-music/shared-utils` はほぼすべてのパッケージの下にあります）。パッケージの内側の同じレイヤーは [アーキテクチャ — 目指す構造](./docs/architecture.ja.md#目指す構造) にあります。
 
 ```mermaid
 flowchart TD
@@ -416,7 +421,9 @@ pnpm run replay -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 
 オプションは [リプレイ仕様](docs/replay.ja.md) を参照してください。
 
-## player 操作
+## ターミナルプレイヤーの操作
+
+ここではターミナル版の操作を説明します。ブラウザ版の操作はスキンの種類とキー設定に従います。[ブラウザプレイヤーの操作](./docs/player-web.ja.md#options-ダイアログ)を参照してください。
 
 ### 選曲画面
 
@@ -596,7 +603,7 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - compare 出力: 任意の Markdown と summary JSON
 - GitHub Actions では、`devel` / `main` 向け PR で base/head 比較を PR comment として投稿します
 - GitHub Actions では、`devel` / `main` への push でも直前 revision 比較を実行し、対象 commit へ commit comment を投稿します
-- PR・push とも、変更されたパッケージと、そのパッケージに推移的に依存する測定対象だけを測定します。ドキュメントと `*.test.*` / `*.spec.*` の変更は除外し、測定対象に届かない変更はスキップします。共通ツール・ロックファイル・ルート設定・パッケージの依存関係定義の変更は全件を測定します。CI の各ケースの測定時間 50 ms・ウォームアップ 25 ms は維持します。
+- PR・push とも、ファイルが変更されたパッケージだけを測定し、そのパッケージに依存するパッケージは測定しません。ドキュメントと `*.test.*` / `*.spec.*` の変更は除外し、測定対象でないパッケージだけの変更はスキップします。共通ツール・ロックファイル・ルート設定の変更は全件を測定します。CI の各ケースの測定時間 50 ms・ウォームアップ 25 ms は維持します。
 - CI は base と head を同一 runner で交互に（head、base、head、base…）3 回ずつ計測し、ホスト間のノイズや一時的な遅さが両方に等しくかかるようにします
 - 速い関数は 1 回の計測サンプルの中で何度も呼び出し（1 サンプル約 50 µs）、ナノ秒単位のケースもタイマーの分解能に埋もれずに計測します。時間は 1 回の呼び出しあたりで表示します
 - 回帰・改善と判定するのは、中央値の変化がしきい値（CI では 8%）を超え、かつ base と head の各回の計測値が重ならないケースだけです。しきい値を超えても計測値が重なるものは「within noise」として別に表示します

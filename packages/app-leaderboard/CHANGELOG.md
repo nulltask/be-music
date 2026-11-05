@@ -1,5 +1,11 @@
 # @be-music/app-leaderboard
 
+## 0.5.2
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-engine@0.15.0`, `@be-music/service-web-theme@0.4.0`
+
 ## 0.5.1
 
 ### Patch Changes

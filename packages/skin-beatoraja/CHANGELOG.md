@@ -1,5 +1,19 @@
 # @be-music/skin-beatoraja
 
+## 0.7.0
+
+### Minor Changes
+
+- cbd8be0: Recognize JSON skins when a theme folder is opened directly without a `skin/` ancestor, while ignoring unrelated settings files. Match LuaJ module loading for missing, nil-returning, false-returning, and recursive modules, and execute `dofile` on every call with all of its return values so skin fallback logic and repeated layout scripts behave as authored.
+
+  Correct LIFT and HIDDEN+ offsets in skin coordinates and supply the lane-cover offset so decorations and cover readouts move in the direction authored by the skin. Respect the LIFT enable switch when computing those offsets.
+
+  Preserve parent positional offset IDs as `BeatorajaDestinationGroup.parentOffsets` when expanding relative judge combo numbers, so they follow the judge word during LIFT and judge-position changes.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-engine@0.15.0`, `@be-music/skin-lr2@0.7.0`, `@be-music/player-scene-model@0.6.1`
+
 ## 0.6.1
 
 ### Patch Changes

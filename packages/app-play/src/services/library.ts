@@ -11,6 +11,7 @@ import {
   materializeDroppedFiles,
   readCourseFile,
   resolveCourseFolders,
+  readDropEntries,
   resolveCourseMakerFolders,
   splitDroppedChartAndThemeFiles,
   type BrowserDroppedFile,
@@ -19,6 +20,7 @@ import {
   type CourseDefinitionGroup,
   type CourseMaker,
 } from '@be-music/player-browser/collection';
+import { applyChartLevelEdits, readChartLevelEdits } from '../chart-level-edits.ts';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
 import {
   skinFamilyRegistry,
@@ -27,6 +29,7 @@ import {
   type SkinFamilyId,
 } from '@be-music/player-browser/skin';
 import { summarizeLR2PlaySkins, type LR2PlaySkinMap, type LR2Skin } from '@be-music/skin-lr2';
+import { discoverBeatorajaTheme } from '@be-music/skin-beatoraja';
 import { countLR2UnplayedStages, LR2_MAX_PLAYED_STAGES } from '@be-music/player-engine/course';
 import { COURSE_REPLAY_FILE_SUFFIX, REPLAY_FILE_SUFFIX } from '@be-music/player-engine/replay';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
@@ -47,7 +50,8 @@ import {
   type LoadingOverlayElements,
 } from '../loading-overlay.ts';
 import type { PlayerWebElements } from '../types.ts';
-import { fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
+import { expandZipToFiles, fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
+import { isDroppedArchive, sortDroppedArchives } from './drop-archives.ts';
 
 const dropLog = logger('drop');
 
@@ -96,6 +100,11 @@ export class LibraryService {
    * redraw of the same one (`setLibrary`).
    */
   public collection: BrowserChartCollection = { sources: [], charts: [], errors: [] };
+  /** Every load of charts, for the folder reload (`reloadCharts`): a drop's entries, or the files themselves. */
+  private readonly chartLoads: {
+    readonly entries?: readonly FileSystemEntry[];
+    readonly files: BrowserDroppedFile[];
+  }[] = [];
   private readonly collectionStore = new BrowserChartCollectionStore();
   /**
    * Course files dropped so far (`.lr2crs`, beatoraja `course/*.json`) and courses imported from difficulty-table URLs,
@@ -212,7 +221,7 @@ export class LibraryService {
   }
 
   /**
-   * Shared post-enumeration pipeline for both drag-drop and the Debug Menu's "Open folder" / "Open files" pickers. Routes the incoming
+   * Shared post-enumeration pipeline for both drag-drop and the Options dialog's "Open folder" / "Open files" pickers. Routes the incoming
    * file list through {@link splitDroppedChartAndThemeFiles}, dispatches theme + song loaders in parallel, then mounts
    * the freshly populated select view.
    *
@@ -224,9 +233,35 @@ export class LibraryService {
    * pressed twice with two different folders) and every drop's charts stay uniquely addressable through the collection
    * per-source prefixing.
    */
-  public async processIncomingFiles(files: BrowserDroppedFile[]): Promise<void> {
+  public async processIncomingFiles(
+    files: BrowserDroppedFile[],
+    origin: { readonly entries?: readonly FileSystemEntry[] } = {},
+  ): Promise<void> {
     if (files.length === 0) {
       return;
+    }
+    // Dropped ZIP archives: one that holds a chart goes to the collection whole, as the Open files picker sends it;
+    // any other (a skin, replays, course files) is expanded and joins the drop, as a `?skin=` archive does. A ZIP inside
+    // a dropped folder is neither: it stays a plain file of the folder.
+    const archives = files.filter(isDroppedArchive);
+    if (archives.length > 0) {
+      files = files.filter((file) => !isDroppedArchive(file));
+      const sorted = await sortDroppedArchives(
+        await materializeDroppedFiles(archives, {
+          onError: (file, error) => dropLog.warn(`skipped (open failed): ${file.webkitRelativePath}`, error),
+        }),
+        expandZipToFiles,
+      );
+      files.push(...sorted.expandedFiles);
+      if (sorted.chartArchives.length > 0) {
+        await this.loadCharts(sorted.chartArchives);
+        if (files.length === 0) {
+          if (this.courseGroups.length > 0) await this.refreshCourseFolders();
+          await this.showSelect();
+          if (this.collection.charts.length > 0) this.setStatus(describeChartCollection(this.collection));
+          return;
+        }
+      }
     }
     // Replay files ride their own path: they are replay inputs, not chart / theme assets. They are peeled off
     // BEFORE the song/theme split so a stray `.bmplay.json` (or a course's `.bmcourse.json`) never classifies as a
@@ -275,9 +310,20 @@ export class LibraryService {
     const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
       themeFiles.map((file) => file.webkitRelativePath || file.name),
     );
-    const confirmedFamily = await this.confirmSkinDrop(themeFamilies);
-    const carriesLR2Theme = confirmedFamily === 'lr2';
-    const carriesBeatorajaTheme = confirmedFamily === 'beatoraja';
+    // A standalone JSON theme has neither a .luaskin marker nor a skin/ ancestor. Probe its headers before
+    // offering the family switch, using the same content checks as theme discovery rather than filename guesses.
+    if (!themeFamilies.has('beatoraja')) {
+      const jsonFiles = themeFiles.filter((file) => file.name.toLowerCase().endsWith('.json'));
+      const entries = await Promise.all(
+        jsonFiles.map(
+          async (file) => [file.webkitRelativePath || file.name, new Uint8Array(await file.arrayBuffer())] as const,
+        ),
+      );
+      if (discoverBeatorajaTheme(new Map(entries)).theme.entries.length > 0) themeFamilies.add('beatoraja');
+    }
+    const confirmation = this.confirmSkinDrop(themeFamilies);
+    const carriesLR2Theme = themeFamilies.has('lr2');
+    const carriesBeatorajaTheme = themeFamilies.has('beatoraja');
     const themeMarkers = [...themeFamilies];
     dropLog.info(
       `received ${files.length} file(s) · theme=${themeFiles.length}${
@@ -294,7 +340,7 @@ export class LibraryService {
       tasks.push(this.loadBeatorajaTheme(themeFiles));
     }
     if (chartFiles.length > 0) {
-      tasks.push(this.loadCharts(chartFiles));
+      tasks.push(this.loadCharts(chartFiles, origin.entries));
     }
     const playContinues = this.showing() === 'play';
     if (tasks.length === 0) {
@@ -326,12 +372,13 @@ export class LibraryService {
     } else if (this.selectSkin() || this.resultSkin() || Object.keys(this.playSkins()).length > 0) {
       this.setStatus('Theme loaded');
     }
-    await this.refreshCourseFolders();
+    if (chartFiles.length > 0 || courseFiles.length > 0) await this.refreshCourseFolders();
     // Open what was dropped: its folder, or the folder list when the drop carried several.
     const dropped = navigationAfterDrop(this.collection.charts, previousChartIds);
     if (dropped !== undefined) this.browseTo(dropped);
     // Commit the confirmed family before mounting the next select scene. A skin dropped onto a play swaps that play's
     // family (`applyDroppedSkin`) and leaves the chart running; the select screen takes the family when the play returns.
+    const confirmedFamily = await confirmation;
     if (confirmedFamily !== undefined) await this.applyDroppedSkin(confirmedFamily);
     if (!(playContinues && chartFiles.length === 0 && confirmedFamily !== undefined)) await this.showSelect();
     if (replayFiles.length > 0) {
@@ -340,24 +387,11 @@ export class LibraryService {
   }
 
   /**
-   * Loads what the Debug Menu's "Open files" picker returned: chart archives (`.zip`) go to the song collection whole,
-   * the way `?music=` archives do (the collection expands them itself), and anything else — replays — takes the
-   * drop pipeline, which starts the replay once the archives are listed.
+   * Loads what the Options dialog's "Open files" picker returned, as a drop of the same files: a chart archive (`.zip`) goes
+   * to the song collection whole, another archive is expanded, and replays start once the archives are listed.
    */
   public async loadPickedFiles(files: File[]): Promise<void> {
-    const isZip = (file: File) => file.name.toLowerCase().endsWith('.zip');
-    const archives = files.filter(isZip);
-    const others = files.filter((file) => !isZip(file));
-    if (archives.length > 0) {
-      await this.loadCharts(archives);
-      await this.showSelect();
-      if (this.collection.charts.length > 0) {
-        this.setStatus(describeChartCollection(this.collection));
-      }
-    }
-    if (others.length > 0) {
-      await this.processIncomingFiles(others);
-    }
+    await this.processIncomingFiles(files);
   }
 
   /** Reads dropped `header.json` files that are difficulty-table headers into `courseGroups`; returns the ones read. */
@@ -515,7 +549,53 @@ export class LibraryService {
     }
   }
 
-  private async loadCharts(files: BrowserDroppedFile[]): Promise<void> {
+  /**
+   * Reads the library's charts again, as LR2's and beatoraja's folder reload does: a dropped folder is walked again, so
+   * charts added, changed or removed on disk since show up; picked files and archives are read again as they were. The
+   * select screen then shows the new library. Without a load to read again it only says so.
+   */
+  public async reloadCharts(): Promise<void> {
+    if (this.chartLoads.length === 0) {
+      this.setStatus('No folders to reload');
+      return;
+    }
+    this.setStatus('Reloading charts...');
+    const loads = [...this.chartLoads];
+    const groups: BrowserDroppedFile[][] = [];
+    for (const load of loads) {
+      if (load.entries === undefined) {
+        groups.push(load.files);
+        continue;
+      }
+      const files = (await readDropEntries(load.entries)).filter((file) => {
+        const name = file.name.toLowerCase();
+        const path = file.webkitRelativePath || file.name;
+        return (
+          !isDroppedArchive(file) &&
+          !name.endsWith(REPLAY_FILE_SUFFIX) &&
+          !name.endsWith(COURSE_REPLAY_FILE_SUFFIX) &&
+          !isCourseFilePath(path) &&
+          !isTableHeaderFilePath(file.name)
+        );
+      });
+      groups.push(splitDroppedChartAndThemeFiles(files).chartFiles);
+    }
+    this.collection = await this.collectionStore.loadFromFiles([]);
+    for (const files of groups) {
+      if (files.length === 0) continue;
+      this.collection = await this.collectionStore.appendFromFiles(files, {
+        onProgress: (progress) => applyLoadProgress(this.elements, progress),
+      });
+    }
+    applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
+    if (this.courseGroups.length > 0) await this.refreshCourseFolders();
+    await this.showSelect();
+    this.setStatus(describeChartCollection(this.collection));
+  }
+
+  private async loadCharts(files: BrowserDroppedFile[], entries?: readonly FileSystemEntry[]): Promise<void> {
+    // Kept for the folder reload: the drop's entries walk its folders again, other files are read again as they are.
+    this.chartLoads.push(entries !== undefined ? { entries, files } : { files });
     this.setStatus('Loading charts...');
     // Append rather than replace so a second / third folder drop adds to the existing collection instead of wiping the
     // previous pack. The store re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The
@@ -524,6 +604,8 @@ export class LibraryService {
     this.collection = await this.collectionStore.appendFromFiles(files, {
       onProgress: (progress) => applyLoadProgress(this.elements, progress),
     });
+    // The player's own difficulties and levels (LR2's F3 level edit) go over the charts' own.
+    applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
     // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
     // text is set by `processIncomingFiles` once both theme + songs land, so a mid-flight transient is plenty.
     if (this.collection.charts.length > 0) {

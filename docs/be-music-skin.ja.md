@@ -231,13 +231,14 @@ export default defineBeMusicSkin({
 ## ステージとレイアウト
 
 - **ステージ:** スキンが描くデザインキャンバスです。`wideStage` は 16:9 のステージ（854×480）で、既定値でもあります。
-- **筐体レイアウト:** 組み込みスキンのプレイ画面は `cabinetStage` を使います。`wideStage` の BGA を右の列に置いたステージです。`resolveCabinetLayout(layout)` が標準のレーンのまわりに残りを配置します。レーンの下には鍵盤、ゲージ、スコア、ハイスピードが並びます。その横がスコアグラフです。右の列にはステージ名の帯、プレイヤーと譜面、BGA、判定パネル、BPM、テンポが入ります。パネルは `layout.playfield.right` に従うので、幅の広い譜面では右の列が狭まります。DP（10 / 14 KEY と 2 人対戦）は、ステージの `playfield.standard.doublePlayCenterX` でステージの中央に置きます。このときステージ名の帯、譜面、BGA、判定パネルは左の列に、グラフとテンポは右の列に入ります。スコア、共通のゲージ、ハイスピード、BPM はレーンの下に並び、`center`（左右の鍵盤の間）がゲージを示します。どちらの配置かは `doublePlay` でわかります。`controls` は、狭いステージ名の帯に入りきらないものを置く、メニューの角の横の帯です。ステージ名の帯は、ホストがメニューのタブを置く右上の角を空けます。横向きの標準レイアウトで使ってください。タッチレイアウトではレーンがステージを占めるので、軽い HUD のままにします。
+- **筐体レイアウト:** 組み込みスキンのプレイ画面は `cabinetStage` を使います。`wideStage` の BGA を右の列に置いたステージです。`resolveCabinetLayout(layout)` が標準のレーンのまわりに残りを配置します。レーンの下には鍵盤、ゲージ、スコア、ハイスピードが並びます。その横がスコアグラフです。右の列にはステージ名の帯、プレイヤーと譜面、BGA、判定パネル、BPM、テンポが入ります。パネルは `layout.playfield.right` に従うので、幅の広い譜面では右の列が狭まります。DP（10 / 14 KEY）は、ステージの `playfield.standard.doublePlayCenterX` でステージの中央に置きます。このときステージ名の帯、譜面、BGA、判定パネルは左の列に、グラフとテンポは右の列に入ります。スコア、共通のゲージ、ハイスピード、BPM はレーンの下に並び、`center`（左右の鍵盤の間）がゲージを示します。独立した 2 人プレイや 2 つ目のプレイフィールドのゴーストは `layout.twoPlayer` を設定します。`cabinetStage` は `twoPlayerSideInset` で中央の BGA を挟んでレーンを分け、`resolveCabinetLayout` は別々のゲージ、スコア、ハイスピードを持つ `secondSide` のパネルを返します。通常の DP は共通のプレイフィールドのままです。中央に寄せた DP の配置は `doublePlay` でわかります。`controls` は、狭いステージ名の帯に入りきらないものを置く、メニューの角の横の帯です。ステージ名の帯は、ホストがメニューのタブを置く右上の角を空けます。横向きの標準レイアウトで使ってください。タッチレイアウトではレーンがステージを占めるので、軽い HUD のままにします。
 - **縦向きステージ:** スキンは `portraitStage` も宣言できます。画面が横より縦に長いあいだ描くキャンバスです。組み込みの `tallStage` は 480×854（9:16）で、`wideStage` を横倒しにしたものなので文字の大きさは変わりません。スマートフォンのブラウザの表示領域（ツールバーを除くと 9:16〜9:19.5 程度）では上下にわずかな余白が、3:4 のタブレットでは左右に余白が出ます。ホストは `resolveBeMusicStage(skin, screen, chart?)` でフレームごとにステージを選びます。スキンが縦向きステージを持ち、画面が縦向きならそちらを、それ以外は `stage` を使います。縦向きのプレイフィールドに収まらない譜面のゲームプレイは `stage` のままです。縦向きにするのは 9 レーンまでの SP（5 / 7 KEY、9 KEY）だけで（`supportsPortraitLayout`）、DP（10 / 14 KEY）と鍵盤モード（24 / 48 KEY）は横向きステージを縮小して描きます（プレイヤーはスマートフォンに回転を促します）。`portraitStage` の無いスキンは常に `stage` で描かれます。
 - **可変ステージ:** ステージは `resize(size)` を宣言すると、画面に黒帯付きで収まる代わりに画面に追従します。`resolveBeMusicStage` は `resolveFluidStageSize` で寸法を決めます。短辺（組み込みステージなら 480 px）を保ち、長辺を画面の縦横比に合わせ（4:3 なら 640×480、21:9 なら 1138×480）、その寸法で `resize` が返したステージに描きます。配置は固定座標ではなく、そのステージ（`layout.stage`）から決めてください。画面と向きが逆のステージは寸法を変えません。組み込み・LR2・beatoraja のステージは固定で、埋め込みプレビューのステージが可変です。[ADR 0021](./adr/0021-fluid-stage.ja.md) を参照。
-- **BGA の配置:** `BeMusicStage.resolveBGARect(playfieldRight, playfieldLeft)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
+- **BGA の配置:** `BeMusicStage.resolveBGARect(playfieldRight, playfieldLeft, twoPlayer)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
 - **フレームごとのレイアウト:** ゲームプレイの各フレームには、ホストが解決した `layout`（`BeMusicGameplayLayout`）が付きます。
   - `mode`: `'standard'` または `'touch'`（省略可。無ければ `'standard'`）。下のタッチレイアウトを参照してください。
   - `orientation`: `'landscape'` または `'portrait'`（省略可。無ければ `'landscape'`）。下の縦向きレイアウトを参照してください。
+  - `twoPlayer`: 独立した 2 人プレイや、2 つ目のプレイフィールドのゴーストを示す省略可能なフラグです。レイアウトと BGA の解決に渡します。DP のレーンモデルだけでは 2 人プレイを意味しません。
   - `stage`: 幅と高さ。
   - `lanes`: 全レーン。チャンネル、種類（`white` / `black` / `scratch`、24 / 48 KEY で各サイドの外側に置くホイールレーンは `wheel-up` / `wheel-down`）、サイド、x、幅を持ちます。譜面のプレイバリアント（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）の全レーンが、譜面で使われないレーンも含めて常に並びます。
   - `playfield`: `left`、`right`、`centerX`、`top`、`judgementY`、`sides`（1P と、DP なら 2P の水平範囲）。
@@ -245,6 +246,7 @@ export default defineBeMusicSkin({
 - **クロームの配置:** ジオメトリをハードコードせず、これらの値から配置してください。DP、鍵盤モード、新しいアスペクト比などホスト側のレイアウト変更が、そのままスキンにも反映されます。
 - **DP の隙間:** 1P と 2P のバンクは、標準レイアウトでは 60 px（`_____DP_SIDE_GAP`）、タッチレイアウトでは 24 px（`TOUCH_PLAYFIELD.sideGap`）離れています。どちらの値もハードコードしないでください。`resolveLaneRuns(lanes)` は連続したバンクごとに `{ left, right }` を 1 つ返します。判定ラインやレーングリッドはラン単位で描き、隙間をまたがないようにします。
 - **レーン幅:** レーン幅はプレイヤーが決めます。スキンはレーンに色を付けますが、大きさや位置は変えません。
+- **ノートの高さ:** `NOTE_HEIGHT_LANE_RATIO` は 0.21 です。`noteHeightForLane(laneWidth)` はレーン幅から高さを決めます。組み込みのプレイフィールドは `resolveNoteHeight(laneWidth, findWhiteLaneWidth(lanes))` を使い、皿と黒鍵のノートも白鍵と同じ高さにします。ロングノートの端と地雷も同じ高さで、ノートは下端を基準に描きます。
 - **タッチレイアウト:** タッチ画面では、ホストが `layoutMode: 'touch'`（`resolveGameplayLayout` の入力）でレイアウトを解決することがあります。このときレーンはステージの左マージンから判定集計の列まで広がり（`TOUCH_PLAYFIELD`）、鍵盤はすべて同じ幅（最大 72 px）、スクラッチは鍵盤 1.4 本分、レーンはヘッダー帯の下の y 48 から下部 HUD 帯の上にある y 330 の判定ラインまでで、`bga` は `undefined` です。24 / 48 KEY は標準レイアウトのままです（`supportsTouchLayout`）。`layout` からクロームを配置しているスキンは変更不要です。`layout.mode` はタッチプレイ向けに見た目を変えたいときだけ読んでください。標準レイアウトでレーンの横に置くクローム（BGA の矩形から配置するもの）は、`bga` が `undefined` でも崩れないようにしてください。
 - **縦向きレイアウト:** 縦向きステージでは、どちらのモードでもレーンがステージの幅いっぱいに下側を占めます（`PORTRAIT_PLAYFIELD`。480×854 の `tallStage` を基準にステージの大きさへ拡縮）。レーンは y 300 から低い位置の判定ラインまでで、BGA と HUD はその上の帯に置きます（`tallStage` では BGA は 40 px のヘッダー帯の下、左上の 206 px 四方）。`'touch'` は左右 12 px のマージンの間に鍵盤をすべて同じ幅（スクラッチは鍵盤 1.4 本分）で並べ、判定ラインを y 740 に置いて、その下に親指を置く帯を残します。`'standard'` は筐体の鍵盤幅（7 KEY で幅 374 px）を保って中央に置き、判定ラインは y 786 です。`bga` はどちらのモードでも縦向きステージの `resolveBGARect` から来ます。縦向きステージのレーン矩形は `resolvePortraitLaneLayout` で得られます。
 
@@ -435,7 +437,7 @@ settings: [
 - **検査:** `validateBeMusicSkin` がスキーマを検査します。id は重複不可、ラベルは空不可で、`default` は選択肢のいずれか、または範囲内でなければなりません。choice の option 値は重複不可、number の `step` は正の値、`unit` は上の 3 つのいずれかでなければなりません。
 - **値:** すべてのフレームが `settings`（id をキーにしたプレイヤーの値）を持ちます。ホストは値をスキンごとに保存し、`resolveBeMusicSkinSettings(skin, stored)` で解決します。欠けている値、古い値、型の違う値は既定値に戻り、数値は範囲内に収められ、スキンが宣言しなくなった id は捨てられます。宣言した id はすべて正しい型で揃っていると考えて構いません。
 - **その場での変更:** 画面の表示中にプレイヤーが値を変えることがあります。変更は次のフレームから反映され、選曲画面では `revision` も進みます。最初のフレームの値をキャッシュせず、`frame.settings` を毎フレーム読んでください（そこから導いた値をキャッシュするなら `revision` をキーにします）。
-- **Be-Music プレイヤーでは:** ホストは保存した値を built-in のキット（`{ family: 'built-in', skin, settings }`）で渡し、値が変わったら表示中のシーンに `scene.updateKit(kit)` で新しいキットを渡します。プレイヤーは Debug Menu にスキーマから「Skin settings」フォルダを作り（`choice` はドロップダウン、`number` は単位を名前に添えたスライダー、`toggle` はチェックボックス）、設定を宣言しないスキンでは隠し、値をスキン id ごとにブラウザへ保存します。
+- **Be-Music プレイヤーでは:** ホストは保存した値を built-in のキット（`{ family: 'built-in', skin, settings }`）で渡し、値が変わったら表示中のシーンに `scene.updateKit(kit)` で新しいキットを渡します。プレイヤーは Options ダイアログ にスキーマから「Skin settings」フォルダを作り（`choice` はドロップダウン、`number` は単位を名前に添えたスライダー、`toggle` はチェックボックス）、設定を宣言しないスキンでは隠し、値をスキン id ごとにブラウザへ保存します。
 
 ## 曲の画像
 
@@ -614,7 +616,7 @@ SDK は、フレームやヘルパーが使う型も export しています。�
   - 検査に通らないスキン（未対応の `apiVersion` など）は、ホストを壊さずに除外されます。
 
 - **組み込みスキン:** `BUILT_IN_BE_MUSIC_SKINS` には Synesthesia（既定）、Plain、Native が入っています。
-- **プレイヤー:** プレイヤーの Debug Menu から、モジュール URL でスキンを追加できます（_Skin & display_ → _Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、プレイヤーは先に確認を求めます。信頼できるスキンだけを読み込んでください。いまのプレイヤーは `ADD_SKIN_ENABLED` が off の間、_Add skin_ を隠しています（`services/built-in-skins.ts`）。
+- **プレイヤー:** プレイヤーの Options ダイアログ から、モジュール URL でスキンを追加できます（_Skin & display_ → _Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、プレイヤーは先に確認を求めます。信頼できるスキンだけを読み込んでください。いまのプレイヤーは `ADD_SKIN_ENABLED` が off の間、_Add skin_ を隠しています（`services/built-in-skins.ts`）。
 
 ## バージョニング
 

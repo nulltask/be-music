@@ -15,7 +15,7 @@ import {
 } from '../render-resolution.ts';
 import { readStoredReplayView } from '../replay-view-settings.ts';
 import { DEFAULT_REPLAY_AUTO_SAVE_RULES } from './replay-slots.ts';
-import { overlayDebugMenuSettings, readStoredDebugMenuSettings } from '../debug-menu-settings.ts';
+import { overlayOptionSettings, readStoredOptionSettings } from '../option-settings.ts';
 import { readPlayInSilentMode } from '../silent-mode-playback.ts';
 import type { PlayerGUIState } from '../types.ts';
 import {
@@ -87,7 +87,7 @@ export function storeSkinEffects(
 
 export const PLAY_LAYOUT_STORAGE_KEY = 'be-music.play-layout';
 
-/** Stored Debug Menu play-layout pick, `'auto'` when none. */
+/** Stored Options dialog play-layout pick, `'auto'` when none. */
 export function readStoredPlayLayout(storage: SettingStorage | undefined = defaultSettingStorage()): PlayLayoutChoice {
   try {
     const stored = storage?.getItem(PLAY_LAYOUT_STORAGE_KEY);
@@ -138,7 +138,7 @@ export interface StoredVolumes {
   bgmVolume: number;
 }
 
-/** Master / keysound / BGM volumes in percent, as last set in the Debug Menu (all 100 when nothing is stored). */
+/** Master / keysound / BGM volumes in percent, as last set in the Options dialog (all 100 when nothing is stored). */
 export function readStoredVolumes(storage: SettingStorage | undefined = defaultSettingStorage()): StoredVolumes {
   const fallback = { masterVolume: 100, muted: false, keyVolume: 100, bgmVolume: 100 };
   try {
@@ -169,7 +169,7 @@ export function storeVolumes(
   }
 }
 
-/** What {@link createPlayerGUIState} reads besides the stored settings: the device, and the Debug Menu's buttons. */
+/** What {@link createPlayerGUIState} reads besides the stored settings: the device, and the Options dialog's buttons. */
 export interface PlayerGUIStateInputs {
   /** Where the remembered settings are read from; `localStorage` when left out. */
   readonly storage?: SettingStorage;
@@ -179,12 +179,12 @@ export interface PlayerGUIStateInputs {
   readonly devicePixelRatio: number;
   /** The built-in skin to start with for the remembered id (`undefined` when none is stored). */
   readonly builtInSkinId: (stored: string | undefined) => string;
-  /** The Debug Menu's buttons. */
+  /** The Options dialog's buttons. */
   readonly actions: Pick<PlayerGUIState, 'openFolder' | 'openFiles' | 'record' | 'screenshot'>;
 }
 
 /**
- * The state the Debug Menu's controllers read and write, as a visit starts: the remembered settings over the defaults.
+ * The state the Options dialog's controllers read and write, as a visit starts: the remembered settings over the defaults.
  */
 export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUIState {
   const storage = inputs.storage ?? defaultSettingStorage();
@@ -197,7 +197,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     // an unprocessed signal path can still flip it via `?compressor=off` or the GUI.
     ...readStoredVolumes(storage),
     playInSilentMode: readPlayInSilentMode(storage),
-    // Peak gain is off until the Debug Menu turns it on. The choice is remembered with the other Debug Menu settings.
+    // Peak gain is off until the Options dialog turns it on. The choice is remembered with the other Options dialog settings.
     peakGain: false,
     compressor: true,
     compressorKey: true,
@@ -222,7 +222,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     ghost: 'OFF',
     ghostMode: 'PLAYFIELD',
     // Play-history auto-save defaults OFF, so plays don't pile up downloaded files. Users who want every play's
-    // replay (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
+    // replay (`*.bmplay.json`) preserved turn it on from the Options dialog checkbox; it then downloads when the result
     // scene mounts.
     autoSaveReplay: false,
     // Every replay slot saves by itself until the player picks otherwise (`DEFAULT_REPLAY_AUTO_SAVE_RULES`): the best EX
@@ -241,7 +241,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     submitToLeaderboard: false,
     // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
     // select scene's PLAY OPTION panel where a counterpart exists; latched at song start and disabled during a
-    // play. The judge ruleset has no in-skin counterpart — the Debug Menu is its only surface.
+    // play. The judge ruleset has no in-skin counterpart — the Options dialog is its only surface.
     judgeRuleset: 'lr2',
     gauge: 'GROOVE',
     random1P: 'OFF',
@@ -308,6 +308,10 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     autoScratch1P: false,
     autoScratch2P: false,
     anyKey: false,
+    laneKeys: {},
+    controlKeys: {},
+    builtInControlScheme: 'lr2',
+    actionKeys: {},
     sort: 'OFF',
     keysFilter: 'ALL',
     difficultyFilter: 'ALL',
@@ -319,8 +323,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     laneCover: false,
     shutter: 0.25,
     // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
-    // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
-    // in the dropdown only when their theme is loaded (see `rebuildSkinFamilyPicker` in `ui/debug-menu/skin.ts`).
+    // The Options dialog's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
+    // in the dropdown only when their theme is loaded (see `rebuildSkinFamilyPicker` in `ui/options/skin.ts`).
     skinFamilyOverride: 'auto',
     builtInSkin: inputs.builtInSkinId(readStoredBuiltInSkinId(storage)),
     skinEffects: readStoredSkinEffects(storage, inputs.signals),
@@ -336,12 +340,12 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     record: inputs.actions.record,
     screenshot: inputs.actions.screenshot,
   };
-  const saved = readStoredDebugMenuSettings(storage);
-  if (saved) overlayDebugMenuSettings(state, saved.settings);
+  const saved = readStoredOptionSettings(storage);
+  if (saved) overlayOptionSettings(state, saved.settings);
   return state;
 }
 
-/** The compressor a visit starts with: its architecture, and whether it is on (the Debug Menu's "Enabled"). */
+/** The compressor a visit starts with: its architecture, and whether it is on (the Options dialog's "Enabled"). */
 export interface CompressorStart {
   readonly mode: 'split' | 'legacy';
   readonly enabled: boolean;
@@ -360,7 +364,7 @@ export function resolveCompressorMode(href: string): CompressorStart {
   return { mode: 'split', enabled: flag !== 'off' };
 }
 
-/** The `?compressor=` flag when the URL sets one. Absent, the remembered Debug Menu value stays. */
+/** The `?compressor=` flag when the URL sets one. Absent, the remembered Options dialog value stays. */
 export function readCompressorRequest(href: string): CompressorStart | undefined {
   const raw = new URL(href).searchParams.get('compressor');
   if (raw === null || raw.trim() === '') return undefined;

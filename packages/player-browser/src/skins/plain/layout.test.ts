@@ -30,7 +30,7 @@ describe('resolvePortraitSelectCard', () => {
     const { card, play, auto } = resolvePortraitSelectCard(W);
     expect(card.x).toBe(16);
     expect(card.x + card.w).toBe(W - 16);
-    expect(card.y + card.h).toBeLessThanOrEqual(PORTRAIT_SELECT_LAYOUT.listTop);
+    expect(card.y + card.h + 44).toBeLessThanOrEqual(PORTRAIT_SELECT_LAYOUT.listTop);
     for (const button of [play, auto]) {
       expect(button.y + button.h).toBeLessThanOrEqual(card.y + card.h);
       expect(button.h).toBeGreaterThanOrEqual(44);
@@ -48,10 +48,10 @@ describe('resolvePortraitSelectCard', () => {
     expect(factRows[1] + 16 + 8).toBeLessThan(play.y);
   });
 
-  it('leaves the list a dozen thumb-sized rows on the tall stage', () => {
+  it('leaves the list eleven thumb-sized rows below its search field', () => {
     const { listTop, listBottomInset, rowHeight } = PORTRAIT_SELECT_LAYOUT;
     expect(rowHeight).toBeGreaterThanOrEqual(36);
-    expect(Math.floor((H - listBottomInset - listTop) / rowHeight)).toBeGreaterThanOrEqual(12);
+    expect(Math.floor((H - listBottomInset - listTop) / rowHeight)).toBeGreaterThanOrEqual(11);
   });
 });
 
@@ -139,8 +139,9 @@ describe('resolvePortraitResult', () => {
       const grid = resolvePortraitResult(W, height);
       const lastRow = grid.trackRowsY + 3 * grid.rowPitch;
       expect(grid.trackRowsY).toBeGreaterThanOrEqual(grid.track.y + 70);
-      expect(grid.lampY).toBeGreaterThan(lastRow + 16);
-      expect(grid.lampY + 12).toBeLessThanOrEqual(grid.track.y + grid.track.h);
+      expect(lastRow + 16).toBeLessThanOrEqual(grid.track.y + grid.track.h);
+      expect(grid.lampY - 7).toBeGreaterThan(grid.rank.y);
+      expect(grid.lampY + 7).toBeLessThan(grid.rank.y + grid.rank.h);
       expect(grid.track.y + grid.track.h).toBeLessThan(grid.totalY - 10);
       expect(grid.totalY).toBe(height - 32);
     }

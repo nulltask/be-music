@@ -1,4 +1,4 @@
-// Bottom-centre Tweakpane panel that lets the user pick `skin_config.option` / `skin_config.file` values
+// Bottom-centre panel that lets the user pick `skin_config.option` / `skin_config.file` values
 // for the active beatoraja skin.
 //
 // Why a separate panel: the existing top-right `gui` mixes player-wide concerns (compressor / record /
@@ -7,9 +7,9 @@
 // decide / result, since each scene's skin authors a different `property[]` schema. Putting them in a
 // dedicated panel keeps the main pane stable and makes the relationship to the on-screen skin obvious.
 //
-// Skin selection itself lives in the Debug Menu, not here — this panel is purely the skin's authored
+// Skin selection itself lives in the Options dialog, not here — this panel is purely the skin's authored
 // `property[]` / `filepath[]` / `offset[]` schema mirror. Mixing the picker in created two competing
-// UIs for the same action (Debug Menu's switcher + this panel's dropdown), which left the player
+// UIs for the same action (Options dialog's switcher + this panel's dropdown), which left the player
 // guessing which one was canonical.
 //
 // Lifecycle:
@@ -22,8 +22,8 @@
 //     // …user drops a new theme; old controls go stale…
 //     skinGUI.clear();
 //
-// A different skin entry rebuilds the schema; edits to the same entry preserve native tab and folder state.
-import { Pane, type FolderApi } from 'tweakpane';
+// A different skin entry rebuilds the schema; edits to the same entry preserve the panel's tab and folder state.
+import { OptionFolder } from './ui/options-controls.ts';
 import { defaultOpForBeatorajaSkinProperty } from '@be-music/skin-beatoraja';
 import type {
   BeatorajaSkinConfig,
@@ -33,9 +33,8 @@ import type {
 } from '@be-music/skin-beatoraja';
 export interface BeatorajaSkinOptionsGUIOptions {
   /**
-   * Parent element the panel attaches to. The pane is positioned `absolute` inside this element at
-   * `bottom: 0; left: 50% (translateX -50%);` — the host passes the play surface (`#main`) so
-   * the panel sits over the canvas, inside fullscreen, and not over the page header.
+   * Play surface containing the shared bottom panel dock. Keeping the panel inside this surface also keeps it
+   * available in fullscreen. A standalone container can be supplied when no dock is present.
    */
   container: HTMLElement;
 }
@@ -45,7 +44,7 @@ export interface SetSkinOptions {
    * `entryPath` the pane is left intact (folder open/close state and scroll position survive); only
    * a different entry triggers a full rebuild against the new schema. Without this guard, every
    * config-change → `replaceSkin` → `refreshBeatorajaSkinOptionsGUI` round-trip would tear down
-   * and recreate the Tweakpane instance, snapping the panel back to its initial collapsed state on
+   * and recreate the panel, snapping the panel back to its initial collapsed state on
    * every controller tweak.
    */
   entryPath: string;
@@ -69,22 +68,22 @@ export interface SetSkinOptions {
 }
 const AUTO_FILE_LABEL = '(auto)';
 /**
- * Bottom-right panel managing skin-config picks for the currently-loaded beatoraja skin.
+ * Bottom panel managing skin-config picks for the currently-loaded beatoraja skin.
  */
 export class BeatorajaSkinOptionsGUI {
   private readonly container: HTMLElement;
-  private gui: Pane | undefined;
+  private gui: OptionFolder | undefined;
   /**
    * Identity of the currently-rendered skin entry. Compared against the next `setSkin`'s
    * `entryPath` so re-applying the SAME entry's config (the common case after a controller
    * onChange triggers `replaceSkin` → `refreshBeatorajaSkinOptionsGUI`) doesn't tear down and
-   * rebuild the Tweakpane instance. State is already mutated in place by the controllers — the
+   * rebuild the panel. State is already mutated in place by the controllers — the
    * subsequent `setSkin` is purely informational and should NOT reset folder open/close state
    * or scroll position. Cleared on `clear()` / `dispose()`.
    */
   private activeEntryPath: string | undefined;
   /**
-   * Deep-cloned mutable copy of the active config. Tweakpane binds controllers to live object fields,
+   * Deep-cloned mutable copy of the active config. The panel binds controls to live object fields,
    * so we maintain a target object the controllers mutate; `onChange` callbacks fire with a fresh
    * copy so the consumer never accidentally shares structure with our internal mutator state.
    */
@@ -95,7 +94,7 @@ export class BeatorajaSkinOptionsGUI {
     /**
      * Per-name custom-offset axes. Mirrors `BeatorajaSkinConfig.customOffset` —
      * `state.customOffset[<offsetName>][<axis>]` holds the user's authored delta for one of
-     * the `header.offset[]` slots. Tweakpane binds one controller per (name × axis) flagged in
+     * the `header.offset[]` slots. The panel binds one control per (name × axis) flagged in
      * the header schema; the controller mutates this nested record live, and `onChange`
      * forwards a deep-cloned snapshot to the host.
      */
@@ -117,10 +116,10 @@ export class BeatorajaSkinOptionsGUI {
     customOffset: {},
   };
   constructor(options: BeatorajaSkinOptionsGUIOptions) {
-    this.container = options.container;
+    this.container = options.container.querySelector<HTMLElement>('#auxiliary-panels') ?? options.container;
   }
   /**
-   * Build (or rebuild) the panel for `header`. Tears down the previous Tweakpane instance and
+   * Build (or rebuild) the panel for `header`. Tears down the previous panel and
    * constructs a fresh one bound to the new schema.
    *
    * Skipped entirely when `options.entryPath` matches {@link activeEntryPath} — the active pane
@@ -173,15 +172,15 @@ export class BeatorajaSkinOptionsGUI {
     const filepaths: ReadonlyArray<BeatorajaSkinFilepath> = options.header.filepath ?? [];
     if (properties.length === 0 && filepaths.length === 0 && !options.header.offset?.length) {
       // Nothing to configure — leave the panel empty so the user isn't confused by a useless box.
-      // Skin selection itself lives in the Debug Menu, so a skin without authored
+      // Skin selection itself lives in the Options dialog, so a skin without authored
       // property[] / filepath[] schema simply has no controls to surface here.
       return;
     }
-    const gui = new Pane({ title: options.title, container: this.container, expanded: false });
+    // Bottom-centre over the stage (`.skin-config-pane`), clear of the play skins' BPM / TIME / SPEED readouts.
+    const gui = OptionFolder.panel(this.container, { title: options.title, expanded: true });
     this.gui = gui;
     gui.element.classList.add('skin-config-pane');
     gui.element.dataset.pane = 'skin-config';
-    this.applyDOMStyles(gui.element);
     let refreshing = false;
     const emit = (): void => {
       if (refreshing) return;
@@ -205,13 +204,13 @@ export class BeatorajaSkinOptionsGUI {
     for (const category of options.header.category ?? []) {
       for (const id of category.item ?? []) labels.set(id, category.name);
     }
-    const propertyFolders = new Map<string, FolderApi>();
+    const propertyFolders = new Map<string, OptionFolder>();
     for (const property of properties) {
       if (!property.item.length) continue;
       const label = labels.get(property.category ?? '') ?? 'Options';
       let folder = propertyFolders.get(label);
       if (!folder) {
-        folder = page('Options').addFolder({ title: label, expanded: true });
+        folder = page('Options').addFolder({ title: label });
         propertyFolders.set(label, folder);
       }
       const initial = this.state.option[property.name];
@@ -225,12 +224,12 @@ export class BeatorajaSkinOptionsGUI {
         })
         .on('change', emit);
     }
-    const fileFolders = new Map<string, FolderApi>();
+    const fileFolders = new Map<string, OptionFolder>();
     for (const file of filepaths) {
       const label = labels.get(file.category ?? '') ?? 'Files';
       let folder = fileFolders.get(label);
       if (!folder) {
-        folder = page('Files').addFolder({ title: label, expanded: true });
+        folder = page('Files').addFolder({ title: label });
         fileFolders.set(label, folder);
       }
       this.state.file[file.name] ??= '';
@@ -250,36 +249,13 @@ export class BeatorajaSkinOptionsGUI {
       .on('change', emit);
     const customOffsets = options.header.offset ?? [];
     if (customOffsets.length) {
-      const offsets = timing.addFolder({ title: 'Custom offsets', expanded: true });
-      const syncPoints: (() => void)[] = [];
+      const offsets = timing.addFolder({ title: 'Custom offsets' });
       for (const slot of customOffsets) {
         const axes = (['x', 'y', 'w', 'h', 'r', 'a'] as const).filter((axis) => slot[axis]);
         const state = this.state.customOffset[slot.name];
         if (!state || !axes.length) continue;
-        const folder = axes.length > 1 ? offsets.addFolder({ title: slot.name, expanded: true }) : offsets;
-        if (slot.x && slot.y) {
-          const point = { position: { x: state.x, y: state.y } };
-          syncPoints.push(() => {
-            point.position.x = state.x;
-            point.position.y = state.y;
-          });
-          folder
-            .addBinding(point, 'position', {
-              label: 'Position',
-              view: 'point2d',
-              picker: 'inline',
-              expanded: true,
-              x: { min: -400, max: 400, step: 1 },
-              y: { min: -400, max: 400, step: 1, inverted: true },
-            })
-            .on('change', ({ value }) => {
-              state.x = value.x;
-              state.y = value.y;
-              emit();
-            });
-        }
+        const folder = axes.length > 1 ? offsets.addFolder({ title: slot.name }) : offsets;
         for (const axis of axes) {
-          if (slot.x && slot.y && (axis === 'x' || axis === 'y')) continue;
           const limit = axis === 'r' ? 360 : axis === 'a' ? 255 : 400;
           folder
             .addBinding(state, axis, {
@@ -299,7 +275,6 @@ export class BeatorajaSkinOptionsGUI {
             if (!state) continue;
             for (const axis of ['x', 'y', 'w', 'h', 'r', 'a'] as const) if (slot[axis]) state[axis] = 0;
           }
-          for (const sync of syncPoints) sync();
           gui.refresh();
         } finally {
           refreshing = false;
@@ -326,25 +301,5 @@ export class BeatorajaSkinOptionsGUI {
       this.gui = undefined;
     }
     this.activeEntryPath = undefined;
-  }
-  /**
-   * Position Tweakpane's root element at the bottom-centre of the player shell, flush against the
-   * bottom edge (no gap). Avoids Tweakpane's default fixed top-right positioning (which would
-   * overlap the existing main pane) and the previous bottom-right placement (which collided
-   * with the on-screen skin's BPM / TIME / SPEED readouts in the play scene's lower-right
-   * corner). Centring + edge-flush keeps the panel out of every authored skin's HUD zone
-   * regardless of which scene is mounted.
-   */
-  private applyDOMStyles(root: HTMLElement): void {
-    root.style.width = '320px';
-    root.style.position = 'absolute';
-    root.style.left = '50%';
-    root.style.bottom = '0';
-    root.style.top = 'auto';
-    root.style.right = 'auto';
-    root.style.transform = 'translateX(-50%)';
-    root.style.zIndex = '40';
-    root.style.maxHeight = 'calc(100vh - 12px)';
-    root.style.overflowY = 'auto';
   }
 }

@@ -1,7 +1,7 @@
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
 // The play options the player hands to every screen and play: the full `PlayOptions`, kept here rather than read back
-// from the select screen. The Debug Menu holds some of them itself (auto play, gauge, lane options, assists, sort and
+// from the select screen. The Options dialog holds some of them itself (auto play, gauge, lane options, assists, sort and
 // filters, hi-speed and covers); the rest (BGA, the score graph and the 2P gauge) are only
 // changed on a select screen, and live here between screens, so a select screen made again (another skin system or
 // theme) starts from them.
@@ -9,7 +9,7 @@ import type { RulesetId } from '@be-music/player-engine/ruleset';
 import { resolvePlayOptions, type PlayOptions } from '@be-music/player-scene-model';
 import type { PlayerGUIState } from '../types.ts';
 
-/** The play options the Debug Menu holds itself, under its own names (`gauge` is `gauge1P`). */
+/** The play options the Options dialog holds itself, under its own names (`gauge` is `gauge1P`). */
 export type GUIPlayOptions = Pick<
   PlayerGUIState,
   | 'autoPlay'
@@ -89,7 +89,7 @@ export type GUIPlayOptions = Pick<
   | 'shutter'
 >;
 
-/** The Debug Menu's play options as `PlayOptions` fields. */
+/** The Options dialog's play options as `PlayOptions` fields. */
 export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<PlayOptions> {
   return {
     autoPlay: state.autoPlay,
@@ -172,7 +172,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
 }
 
 /**
- * Mirrors a select screen's play options (an LR2 panel, a skin's buttons) into the Debug Menu's state, so both surfaces
+ * Mirrors a select screen's play options (an LR2 panel, a skin's buttons) into the Options dialog's state, so both surfaces
  * agree. The hi-speed is left to the caller, which also remembers it for the next visit.
  */
 export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIPlayOptions): void {
@@ -255,7 +255,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
 
 /**
  * The full play options in force, over `DEFAULT_PLAY_OPTIONS`. It takes every change from both surfaces: the select
- * screen's own (`on.playOptions`, its whole set) and the Debug Menu's (one option at a time). Each change is checked
+ * screen's own (`on.playOptions`, its whole set) and the Options dialog's (one option at a time). Each change is checked
  * as the select screen checks it (`resolvePlayOptions`), so the two never drift apart.
  */
 export class PlayOptionsService {

@@ -1,6 +1,6 @@
 {
   "name": "@be-music/app-accounts",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "Account management and OIDC identity provider for Be-Music services",
   "type": "module",

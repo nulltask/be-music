@@ -14,7 +14,7 @@ import {
 
 const STORE = '/repo/node_modules/.pnpm';
 
-describe('Open source list', () => {
+describe('Acknowledgements list', () => {
   test('finds the npm package a module belongs to', () => {
     expect(packageRootOfModule(`${STORE}/pixi.js@8.22.0/node_modules/pixi.js/lib/index.mjs`)).toBe(
       `${STORE}/pixi.js@8.22.0/node_modules/pixi.js`,
@@ -59,7 +59,7 @@ describe('Open source list', () => {
 
   test('names the stand-in license file after the package', () => {
     expect(licenseOverrideFileName('@ffmpeg/core')).toBe('@ffmpeg__core.txt');
-    expect(licenseOverrideFileName('tweakpane')).toBe('tweakpane.txt');
+    expect(licenseOverrideFileName('signalsmith-stretch')).toBe('signalsmith-stretch.txt');
   });
 
   test('tells type-only packages from ones with code', () => {

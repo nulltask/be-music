@@ -158,16 +158,16 @@ export const gameplayStyles: CSSResult = css`
     }
   }
   .gameplay[data-orientation='portrait'] .hud {
-    --be-music-score-size: 1.3em;
+    --be-music-score-size: 22px;
     display: block;
     top: 0.9%;
     left: 2.5%;
     right: auto;
     bottom: auto;
-    width: 75%;
+    width: 95%;
     height: auto;
     padding: 2px 4px;
-    font-size: clamp(9px, 2.5cqw, 14px);
+    font-size: 12px;
   }
   .gameplay[data-orientation='portrait'] .hud-heading {
     display: flex;
@@ -198,7 +198,9 @@ export const gameplayStyles: CSSResult = css`
   .gameplay[data-orientation='portrait'] .hud button {
     height: auto;
     min-height: 0;
-    padding: 2px 6px;
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 12px;
   }
   .gameplay[data-orientation='portrait'] .hud .actions {
     margin-top: 4px;
@@ -212,8 +214,11 @@ export const gameplayStyles: CSSResult = css`
     position: absolute;
     right: 4px;
     bottom: 2px;
-    max-width: 40%;
-    padding: 2px 6px;
+    max-width: 44%;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    padding: 8px;
     border: 1px solid transparent;
     line-height: var(--text-sm--line-height, calc(1.25 / 0.875));
   }
@@ -230,6 +235,43 @@ export const gameplayStyles: CSSResult = css`
     font-size: var(--be-music-hud-extra-font);
   }
 
+  .gameplay[data-orientation='portrait'][data-bga='on'] .hud-heading,
+  .gameplay[data-orientation='portrait'][data-bga='on'] .hud-primary {
+    padding-right: 24%;
+  }
+  .portrait-actions .play-menu {
+    position: relative;
+  }
+  .portrait-actions summary {
+    min-height: 40px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  .portrait-actions .play-menu:not([open]) > .panel {
+    display: none;
+  }
+  .portrait-actions summary.btn {
+    color: var(--foreground, #f2f2f2);
+    background: var(--background, #171717);
+    border: 1px solid var(--border, #444);
+  }
+  .gameplay[data-orientation='portrait'] .hud .eyebrow,
+  .gameplay[data-orientation='portrait'] .hud .muted {
+    font-size: 12px;
+  }
+  .portrait-actions .play-menu .panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 5;
+    display: grid;
+    gap: 8px;
+    min-width: 160px;
+    padding: 12px;
+  }
+  .gameplay[data-orientation='portrait'] .hud dl {
+    font-size: 12px;
+  }
   .hud-extra > * {
     min-width: 0;
   }

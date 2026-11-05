@@ -1,9 +1,12 @@
 import { Rectangle, Texture } from 'pixi.js';
+import { writeBeatorajaPlayOffset } from '@be-music/skin-beatoraja/scene';
 import { describe, expect, it } from 'vite-plus/test';
 import {
   evaluateBeatorajaLuaSkin,
   isBeatorajaLuaFunctionValue,
   normalizeBeatorajaDestinations,
+  normalizeBeatorajaJudges,
+  expandBeatorajaJudgeDestinations,
   type BeatorajaLuaFunctionValue,
 } from '@be-music/skin-beatoraja';
 import {
@@ -254,6 +257,86 @@ describe('destinationToSpriteProps', () => {
     // dst.y=100 + offset.y=-200 → -100 in Y-UP space; Pixi y = 1000 - (-100) - 50 = 1050.
     expect(props.y).toBe(1050);
     expect(props.x).toBe(50);
+  });
+
+  it('moves relative combo numbers with their parent offsets without inheriting its size, alpha or angle', () => {
+    const g = groupOf({ parentOffsets: [3], dst: [{ time: 0, x: 50, y: 100, w: 40, h: 30, a: 255 }] });
+    const props = destinationToSpriteProps(
+      g,
+      { ...ctx(), resolveOffset: (id) => (id === 3 ? { x: 10, y: 145, w: 20, h: 10, a: -255, r: 90 } : undefined) },
+      TEST_CANVAS_HEIGHT,
+    );
+    expect(props).toMatchObject({ visible: true, x: 50, y: 730, width: 40, height: 30, alpha: 1, angle: -0 });
+  });
+
+  it.each([
+    ['disabled with a stored height', 0.1, false, 0],
+    ['enabled at zero', 0, true, 0],
+    ['enabled at a quarter', 0.25, true, 145],
+  ] as const)(
+    'keeps judge, relative combo and bombs together with LIFT %s while keys stay fixed',
+    (_name, lift, liftOn, expectedRise) => {
+      // GdbG-style judge: the combo inherits the word's LIFT through its parent position; the keys have no LIFT offset.
+      const judge = normalizeBeatorajaJudges([
+        {
+          id: 'judge',
+          index: 0,
+          images: [{ id: 'word', offsets: [3, 32], dst: [{ time: 0, x: 200, y: 430, w: 191, h: 61 }] }],
+          numbers: [{ id: 'combo', offsets: [32], dst: [{ time: 0, x: 224, y: 0, w: 50, h: 70 }] }],
+        },
+      ]);
+      const groups = normalizeBeatorajaDestinations([
+        ...expandBeatorajaJudgeDestinations(judge),
+        { id: 'bomb', offset: 3, dst: [{ time: 0, x: 100, y: 300, w: 100, h: 100 }] },
+        { id: 'keys', dst: [{ time: 0, x: 100, y: 200, w: 100, h: 100 }] },
+      ]);
+      const input = {
+        laneHeight: 580,
+        maxCombo: 16,
+        comboDigits: { 1: { width: 50, space: 0 }, 2: { width: 50, space: 0 } },
+        cover: { side: '1P' as const, sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift, liftOn },
+      };
+      const props = groups.map((group) =>
+        destinationToSpriteProps(
+          group,
+          {
+            ...ctx({ activeOps: new Set([241]) }),
+            resolveOffset: (id) => {
+              const out = { x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 };
+              return writeBeatorajaPlayOffset(id, input, out) ? out : undefined;
+            },
+          },
+          TEST_CANVAS_HEIGHT,
+        ),
+      );
+      const [word, combo, bomb, keys] = props;
+      expect(props.every((p) => p.visible)).toBe(true);
+      expect(word!.y + word!.height).toBe(570 - expectedRise);
+      expect(combo!.y + combo!.height).toBe(570 - expectedRise);
+      expect(bomb!.y).toBe(600 - expectedRise);
+      expect(keys!.y).toBe(700);
+    },
+  );
+
+  it('raises authored LIFT chrome in the same direction as the judgement line', () => {
+    const g = groupOf({ offset: 3, dst: [{ time: 0, x: 50, y: 100, w: 100, h: 50, a: 255 }] });
+    const lift = { x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 };
+    writeBeatorajaPlayOffset(
+      3,
+      {
+        laneHeight: 580,
+        maxCombo: 0,
+        comboDigits: { 1: { width: 40, space: 0 }, 2: { width: 40, space: 0 } },
+        cover: { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0.25 },
+      },
+      lift,
+    );
+    const props = destinationToSpriteProps(
+      g,
+      { ...ctx(), resolveOffset: (id) => (id === 3 ? lift : undefined) },
+      TEST_CANVAS_HEIGHT,
+    );
+    expect(props.y).toBe(850 - 145);
   });
 
   it('handles ModernChic black-overlay pattern: keyframe.a=0 + offset.a=+192 → alpha 0.75', () => {

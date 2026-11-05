@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
     worker: {
       name: `dashboard${suffix}`,
       compatibilityDate: '2026-10-01',
-      compatibilityFlags: ['global_fetch_strictly_public'],
+      compatibilityFlags: ['nodejs_compat', 'global_fetch_strictly_public'],
       entrypoint: './src/index.ts',
       domains: [preview ? 'preview.be-music.app' : 'be-music.app'],
       workersDev: false,

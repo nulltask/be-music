@@ -40,6 +40,7 @@ import {
   type ReplayChart,
   type ReplayCourseStage,
   type ReplayInputAction,
+  type ReplayControlInputEvent,
   type ReplayInputEvent,
   type ReplayNote,
   type ReplayPlay,
@@ -204,7 +205,7 @@ export interface ReplayRecorder {
   discard(): void;
   /**
    * Records a press or release; `inferred` marks a release the engine inferred from input without releases, `spin` the
-   * way a scratch press turned the turntable.
+   * way a scratch press turned the turntable, `code` the physical input (`ReplayInputEvent.code`).
    */
   recordInput(
     action: ReplayInputAction,
@@ -213,9 +214,12 @@ export interface ReplayRecorder {
     channels: Iterable<string>,
     inferred?: boolean,
     spin?: ScratchSpin,
+    code?: string,
   ): void;
   /** Counts an LR2-style empty POOR — cached into the native result for diagnostics. */
   recordEmptyPoor(): void;
+  /** Records a press or release of a control button (`ReplayControlInputEvent`) at a chart time. */
+  recordControlInput(action: ReplayInputAction, timeSeconds: number, button: string, code?: string): void;
   /** Records a view change (hi-speed, covers, lift) at a chart time. An empty change is dropped. */
   recordViewChange(timeSeconds: number, change: ReplayViewState): void;
   /** Records selected options at the chart clock; repeated values are dropped. */
@@ -232,6 +236,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
   let seq = 0;
   let emptyPoorCount = 0;
   const viewChanges: ReplayViewChange[] = [];
+  const controlInputs: ReplayControlInputEvent[] = [];
   const initialOptions = options.play.options === undefined ? undefined : parseReplayOptionState(options.play.options);
   let currentOptions = { ...initialOptions };
   const optionChanges: ReplayOptionChange[] = [];
@@ -243,11 +248,12 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       discarded = true;
       inputs.length = 0;
       viewChanges.length = 0;
+      controlInputs.length = 0;
       optionChanges.length = 0;
       tempoChanges.length = 0;
       emptyPoorCount = 0;
     },
-    recordInput: (action, timeSeconds, tokens, channels, inferred, spin): void => {
+    recordInput: (action, timeSeconds, tokens, channels, inferred, spin, code): void => {
       if (discarded) return;
       const channelList = [...channels];
       if (channelList.length === 0) {
@@ -261,6 +267,9 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       };
       if (tokens.length > 0) {
         event.tokens = [...tokens];
+      }
+      if (code !== undefined && code.length > 0) {
+        event.code = code;
       }
       if (inferred === true && action === 'up') {
         event.inferred = true;
@@ -283,6 +292,17 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         throw new RangeError('Option changes must use nondecreasing chart times.');
       optionChanges.push({ timeUs, values: change });
       currentOptions = { ...currentOptions, ...change };
+    },
+    recordControlInput: (action, timeSeconds, button, code): void => {
+      if (discarded || button === '') return;
+      const event: ReplayControlInputEvent = {
+        seq: controlInputs.length,
+        timeUs: secondsToMicroseconds(timeSeconds),
+        action,
+        button,
+      };
+      if (code !== undefined && code.length > 0) event.code = code;
+      controlInputs.push(event);
     },
     recordViewChange: (timeSeconds, change): void => {
       if (discarded) return;
@@ -377,6 +397,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (initialOptions !== undefined) play.options = { ...initialOptions };
       if (optionChanges.length > 0) play.optionChanges = structuredClone(optionChanges);
       if (viewChanges.length > 0) play.viewChanges = structuredClone(viewChanges);
+      if (controlInputs.length > 0) play.controlInputs = controlInputs.map((input) => ({ ...input }));
       if (options.play.native !== undefined) play.native = options.play.native;
 
       const createdAt = (options.now?.() ?? new Date()).toISOString();

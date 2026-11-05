@@ -1,6 +1,6 @@
 {
   "name": "@be-music/app-dashboard",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "Web dashboard for accessing Be-Music services and managing account access",
   "type": "module",

@@ -106,12 +106,19 @@ function fileWithRelativePath(bytes: Uint8Array, name: string, relativePath: str
  * unchanged. Used for skin archives.
  */
 export async function fetchZipAsFiles(url: string): Promise<File[]> {
-  const bytes = await fetchBytes(url);
+  return expandZipToFiles(await fetchBytes(url), url);
+}
+
+/**
+ * Expands ZIP `bytes` into `File`s carrying their in-archive paths, as {@link fetchZipAsFiles} does; `label` names the
+ * archive in the size-limit error. Used for skin archives and for dropped archives that hold no chart.
+ */
+export async function expandZipToFiles(bytes: Uint8Array, label: string): Promise<File[]> {
   const input = {
     bytes,
     skin: true,
     limit: MAX_SKIN_UNZIP_BYTES,
-    limitMessage: `archive at ${url} expands beyond ${Math.round(MAX_SKIN_UNZIP_BYTES / (1024 * 1024))} MiB`,
+    limitMessage: `archive ${label} expands beyond ${Math.round(MAX_SKIN_UNZIP_BYTES / (1024 * 1024))} MiB`,
   };
   const entries = await runBrowserTask(
     'unzip',

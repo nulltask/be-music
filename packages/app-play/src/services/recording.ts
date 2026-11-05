@@ -1,4 +1,4 @@
-// The Debug Menu's Capture folder at work: what a video recording of a play and a screenshot of the stage
+// The Options dialog's Capture folder at work: what a video recording of a play and a screenshot of the stage
 // (`recording-controller.ts`) need of the app, and the state they keep between plays.
 
 import type { RecordingFormat } from '@be-music/player-browser/recording';
@@ -8,11 +8,11 @@ import { parseRecordingFormatKey } from '../recording-format-choice.ts';
 export interface RecordingServiceOptions {
   /** The scene host a screenshot is taken from. */
   readonly sceneHost: RecordingDeps['sceneHost'];
-  /** The Debug Menu's record button (`DebugMenu.recordController`), once the menu is built. */
+  /** The Options dialog's record button (`OptionsDialog.recordController`), once the menu is built. */
   readonly recordController: () => RecordingDeps['recordController'];
   /** The recorder of the play (`PlayScene.recording`), on the stage or loading behind a decide screen. */
   readonly activeGameplay: () => GameplayRecorder | undefined;
-  /** The state the Debug Menu's "Video format" is kept in. */
+  /** The state the Options dialog's "Video format" is kept in. */
   readonly settings: { readonly recordingFormat: string };
   readonly setStatus: (text: string) => void;
 }
@@ -55,7 +55,7 @@ export class RecordingService {
     this.recordingFilenameBase = base;
   }
 
-  /** The container and codec the Debug Menu's "Video format" asks recordings to be written in. */
+  /** The container and codec the Options dialog's "Video format" asks recordings to be written in. */
   private get recordingFormat(): RecordingFormat {
     return parseRecordingFormatKey(this.settings.recordingFormat);
   }

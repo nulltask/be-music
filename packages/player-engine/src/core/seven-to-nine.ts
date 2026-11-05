@@ -1,6 +1,11 @@
 import { getPlayModeLayouts } from '@be-music/chart-model';
 import type { PreparedPlaybackChartData } from './bootstrap.ts';
-import { createInputTokenToChannelsMap, createLaneBindings, resolveLaneDisplayMode } from './lane-layout.ts';
+import {
+  createInputTokenToChannelsMap,
+  createLaneBindings,
+  resolveLaneDisplayMode,
+  type LaneKeyOverrides,
+} from './lane-layout.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
 import type { TimedPlayableNote, TimedLandmineNote } from '../playable-notes.ts';
 
@@ -10,6 +15,8 @@ export interface SevenToNineOptions {
   sevenToNinePattern?: SevenToNinePattern;
   sevenToNineType?: SevenToNineType;
   hRandomThresholdBPM?: number;
+  /** The player's own lane keys, which the nine lanes take (`LaneModeOptions.laneKeys`). */
+  laneKeys?: LaneKeyOverrides;
 }
 
 const SOURCE_CHANNELS = ['11', '12', '13', '14', '15', '18', '19', '16'];
@@ -99,7 +106,10 @@ export function applySevenToNine(chart: PreparedPlaybackChartData, options: Seve
     }
   }
   chart.resolvedChart = withChartOverrides(chart.resolvedChart, { playVariant: '9', layouts: getPlayModeLayouts('9') });
-  chart.laneBindings = createLaneBindings(['11', '12', '13', '14', '15', '16', '17', '18', '19'], { playVariant: '9' });
+  chart.laneBindings = createLaneBindings(['11', '12', '13', '14', '15', '16', '17', '18', '19'], {
+    playVariant: '9',
+    laneKeys: options.laneKeys,
+  });
   chart.inputTokenToChannels = createInputTokenToChannelsMap(chart.laneBindings);
   chart.activeFreeZoneChannels = new Set();
   chart.scorableNotes = [...chart.notes];

@@ -1,6 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vite-plus/test';
-import { renderServiceHeader } from './header.ts';
+import { renderServiceHeader as renderHeader } from './server.ts';
+
+// Source formatting is not part of the rendered header's contract.
+const renderServiceHeader = (input: Parameters<typeof renderHeader>[0]) =>
+  renderHeader(input)
+    .replace(/\s+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+>/g, '>')
+    .replace(/>\s*Sign in\s*<\/a>/g, '>Sign in</a>');
 
 describe('renderServiceHeader', () => {
   test('keeps the brand fixed and trails the Leaderboard: account, Play, then language', () => {
@@ -49,7 +57,9 @@ describe('renderServiceHeader', () => {
 
     expect(html).toContain('class="relative"');
     expect(html).toContain('class="lucide lucide-languages"');
-    expect(html).toContain('[&>svg]:size-4 text-muted-foreground');
+    expect(html).not.toContain('data-tooltip="言語"');
+    expect(html).not.toContain('title="言語"');
+    expect(html).toContain('[&amp;&gt;svg]:size-4 text-muted-foreground');
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('href="/?lang=en"');
     expect(html).toContain('position-area:block-end span-inline-start');
@@ -101,10 +111,11 @@ describe('renderServiceHeader', () => {
     expect(html).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
     expect(html.match(/<span class="badge"/g)).toHaveLength(1);
     expect(html).toContain(
-      'data-service-header="settings" title="デバッグメニュー" aria-label="設定" aria-expanded="false"',
+      'data-service-header="settings" data-tooltip="設定" data-side="bottom" aria-label="設定" aria-expanded="false"',
     );
     expect(html).toContain('class="lucide lucide-settings"');
-    expect(html).toContain('<span class="hidden md:inline">設定</span>');
+    expect(html).not.toContain('<span class="hidden md:inline">設定</span>');
+    expect(html).not.toContain('title="デバッグメニュー"');
     expect(html).not.toContain('href="https://play.be-music.app/"');
     expect(html).not.toContain('aria-label="プレイ"');
     const account = html.indexOf('data-service-header="account"');
@@ -114,6 +125,47 @@ describe('renderServiceHeader', () => {
     expect(account).toBeLessThan(settings);
     expect(settings).toBeLessThan(language);
     expect(html).not.toContain('data-service-header="fullscreen"');
+  });
+
+  test('adds an Install button in front of Help only while asked', () => {
+    const base = {
+      locale: 'en',
+      title: 'Be-Music Play',
+      homeHref: '/',
+      help: true,
+      settings: true,
+      accountHref: '#sign-in',
+      requestURL: '/',
+    } as const;
+    expect(renderServiceHeader(base)).not.toContain('data-service-header="install"');
+    const html = renderServiceHeader({ ...base, install: true });
+    expect(html).toContain(
+      'data-service-header="install" data-tooltip="Install" data-side="bottom" aria-label="Install"',
+    );
+    expect(html).toContain('class="lucide lucide-download"');
+    expect(html.indexOf('data-service-header="install"')).toBeLessThan(html.indexOf('data-service-header="help"'));
+    expect(renderServiceHeader({ ...base, locale: 'ja', install: true })).toContain('aria-label="インストール"');
+  });
+
+  test('adds a Help button in front of Settings only when asked', () => {
+    const base = {
+      locale: 'en',
+      title: 'Be-Music Play',
+      homeHref: '/',
+      settings: true,
+      accountHref: '#sign-in',
+      requestURL: '/',
+    } as const;
+    expect(renderServiceHeader(base)).not.toContain('data-service-header="help"');
+    const html = renderServiceHeader({ ...base, help: true });
+    expect(html).toContain(
+      'data-service-header="help" aria-haspopup="dialog" aria-controls="help-modal" data-tooltip="Help" data-side="bottom" aria-label="Help"',
+    );
+    expect(html).toContain('class="lucide lucide-circle-help"');
+    expect(html).not.toContain('md:inline">Help');
+    expect(html.indexOf('data-service-header="account"')).toBeLessThan(html.indexOf('data-service-header="help"'));
+    expect(html.indexOf('data-service-header="help"')).toBeLessThan(html.indexOf('data-service-header="settings"'));
+    expect(renderServiceHeader({ ...base, locale: 'ja', help: true })).toContain('aria-label="ヘルプ"');
   });
 
   test('adds a fullscreen button beside Settings only when asked', () => {
@@ -127,10 +179,10 @@ describe('renderServiceHeader', () => {
       requestURL: '/',
     });
     expect(windowed).toContain(
-      'data-service-header="fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false"',
+      'data-service-header="fullscreen" data-tooltip="Full screen" data-side="bottom" aria-label="Full screen" aria-pressed="false"',
     );
     expect(windowed).toContain('class="lucide lucide-maximize"');
-    expect(windowed).toContain('<span class="hidden md:inline">Full screen</span>');
+    expect(windowed).not.toContain('md:inline">Full screen');
     expect(windowed).not.toContain('lucide-minimize');
     expect(windowed).not.toContain('aria-label="Play"');
     const settings = windowed.indexOf('data-service-header="settings"');
@@ -151,10 +203,10 @@ describe('renderServiceHeader', () => {
       requestURL: '/',
     });
     expect(active).toContain(
-      'data-service-header="fullscreen" title="フルスクリーン解除" aria-label="フルスクリーン解除" aria-pressed="true"',
+      'data-service-header="fullscreen" data-tooltip="フルスクリーン解除" data-side="bottom" aria-label="フルスクリーン解除" aria-pressed="true"',
     );
     expect(active).toContain('class="lucide lucide-minimize"');
-    expect(active).toContain('<span class="hidden md:inline">フルスクリーン解除</span>');
+    expect(active).not.toContain('md:inline">フルスクリーン解除');
     expect(active).not.toContain('lucide-maximize');
     expect(active).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
     expect(active.match(/<span class="badge"/g)).toHaveLength(1);

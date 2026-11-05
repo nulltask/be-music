@@ -4,6 +4,7 @@ import {
   holdSparks,
   isFlashingGreat,
   judgeDisplayWord,
+  resolveLanePlayLabel,
   loadingDots,
   resolveLaneRuns,
   type BeMusicGameplayFrame,
@@ -11,7 +12,9 @@ import {
   type BeMusicSurface,
   backSpinChevron,
   hellChargeZigzag,
+  findWhiteLaneWidth,
   longNoteCentreLineAlpha,
+  resolveNoteHeight,
   resolveHellChargeLook,
   resolveLongNoteMarks,
 } from '@be-music/player-skin-sdk';
@@ -33,7 +36,6 @@ import {
 import { drawCabinetHUD } from './cabinet.ts';
 import { resolvePortraitGameplayHUD } from './layout.ts';
 
-const NOTE_HEIGHT = 6;
 /** LR2's opacity for a long note missed at the head or let go early (`0x80` of `0xff`). */
 const DROPPED_LONG_NOTE_ALPHA = 0x80 / 0xff;
 /** How opaque an LN's tail cap is: clearly the end of the note, but quieter than a cap to hit. */
@@ -169,9 +171,12 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
  * alpha.
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
+  const whiteLaneWidth = findWhiteLaneWidth(frame.lanes);
   for (const note of frame.longNotes) {
     const alpha = (note.state === 'dropped' ? DROPPED_LONG_NOTE_ALPHA : 1) * (note.alpha ?? 1);
-    const bodyTop = note.top - NOTE_HEIGHT;
+    // A note is as tall as a share of its lane's width (every note as a white key's), standing on its bottom edge.
+    const noteHeight = resolveNoteHeight(note.w, whiteLaneWidth);
+    const bodyTop = note.top - noteHeight;
     const bodyHeight = Math.max(1, note.bottom - note.top);
     const marks = resolveLongNoteMarks(note);
     // A hell charge note shows how it stands: colour, glow and zigzag motion change together (`resolveHellChargeLook`).
@@ -181,7 +186,7 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
       if (look.glow > 0) {
         ctx.globalAlpha = 0.3 * look.glow * alpha;
         ctx.fillRect(note.x - 3, bodyTop, note.w + 6, bodyHeight);
-        ctx.fillRect(note.x - 3, note.bottom - NOTE_HEIGHT - 3, note.w + 6, NOTE_HEIGHT + 6);
+        ctx.fillRect(note.x - 3, note.bottom - noteHeight - 3, note.w + 6, noteHeight + 6);
       }
       ctx.globalAlpha = (0.2 + 0.3 * look.glow) * alpha;
       ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
@@ -209,21 +214,22 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     }
     ctx.globalAlpha = alpha;
     ctx.fillStyle = NOTE_FILL[note.kind];
-    ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.fillRect(note.x, note.bottom - noteHeight, note.w, noteHeight);
     // An LN's tail is not judged: drawn translucent, where to let go. A CN / HCN tail is judged and stays solid.
     if (!marks.judgedTail) ctx.globalAlpha = alpha * LN_TAIL_ALPHA;
-    ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.fillRect(note.x, note.top - noteHeight, note.w, noteHeight);
     if (marks.backSpin) {
       ctx.globalAlpha = alpha;
       ctx.fillStyle = '#ffffff';
-      fillPolygon(ctx, backSpinChevron(note.x, note.w, note.top, NOTE_HEIGHT));
+      fillPolygon(ctx, backSpinChevron(note.x, note.w, note.top, noteHeight));
     }
     ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {
+    const noteHeight = resolveNoteHeight(note.w, whiteLaneWidth);
     ctx.globalAlpha = note.alpha ?? 1;
     ctx.fillStyle = NOTE_FILL[note.kind];
-    ctx.fillRect(note.x, note.y - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    ctx.fillRect(note.x, note.y - noteHeight, note.w, noteHeight);
     ctx.globalAlpha = 1;
   }
 }
@@ -272,6 +278,18 @@ function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFram
   if (runtime.loading) {
     text(ctx, `NOW LOADING${loadingDots(nowMs)}`, layout.playfield.left + 12, y, { size: 13, color: MUTED });
     return;
+  }
+  for (const side of ['1P', '2P'] as const) {
+    const bounds = layout.playfield.sides[side];
+    const mode = resolveLanePlayLabel(runtime, side);
+    if (!bounds || !mode) continue;
+    text(
+      ctx,
+      mode,
+      (bounds.left + bounds.right) / 2,
+      y + ((bounds.judgementY ?? layout.playfield.judgementY) - layout.playfield.judgementY) - 28,
+      { size: 10, color: MUTED, align: 'center', maxWidth: bounds.right - bounds.left - 12 },
+    );
   }
   for (const side of runtime.judgeSides ?? []) {
     if (!side.judge) continue;
@@ -374,6 +392,7 @@ function drawGauge(
   const gauge = Math.max(0, Math.min(100, runtime.gauge ?? 0));
   const clear = runtime.clearThreshold ?? 80;
   text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, x, y - 10, {
+    maxWidth: w - 48,
     size: labelSize,
     color: MUTED,
     weight: 700,
@@ -426,14 +445,14 @@ function drawPortraitHUD(
   const { header, track, scores, counts, gauge } = hud;
 
   const headerY = header.height / 2;
-  text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', header.left, headerY, { size: 12, weight: 800, color: ACCENT });
+  text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', header.left, headerY, { size: 14, weight: 800, color: ACCENT });
   text(
     ctx,
     `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,
     header.right,
     headerY,
     {
-      size: 12,
+      size: 14,
       color: MUTED,
       align: 'right',
       maxWidth: header.right - header.left - 100,
@@ -444,11 +463,11 @@ function drawPortraitHUD(
   const lift = runtime.chartGenre ? 12 : 0;
   const textW = track.w;
   if (runtime.chartGenre) {
-    text(ctx, runtime.chartGenre, track.x, track.y + 8, { size: 10, color: MUTED, maxWidth: textW, nowMs });
+    text(ctx, runtime.chartGenre, track.x, track.y + 8, { size: 14, color: MUTED, maxWidth: textW, nowMs });
   }
-  text(ctx, runtime.chartTitle ?? '', track.x, track.y + 14 + lift, { size: 16, weight: 700, maxWidth: textW, nowMs });
+  text(ctx, runtime.chartTitle ?? '', track.x, track.y + 14 + lift, { size: 20, weight: 700, maxWidth: textW, nowMs });
   text(ctx, runtime.chartArtist ?? '', track.x, track.y + 34 + lift, {
-    size: 11,
+    size: 14,
     color: MUTED,
     maxWidth: textW,
     nowMs,
@@ -457,14 +476,15 @@ function drawPortraitHUD(
   // Score figures, two by two.
   scoreFigures(runtime).forEach(([label, value], index) => {
     const box = scores[index]!;
-    stat(ctx, label, value, box.x, box.y, { maxWidth: box.w - 8, nowMs, labelSize: 10 });
+    text(ctx, label, box.x, box.y, { size: 14, color: MUTED, weight: 700 });
+    text(ctx, value, box.x, box.y + 20, { size: 22, weight: 700, maxWidth: box.w - 8, nowMs });
   });
 
   // Judgement counts in one row: label over count.
   judgeCounts(runtime).forEach(([label, count], index) => {
     const box = counts[index]!;
-    text(ctx, label, box.x, box.y, { size: 10, color: MUTED, weight: 700 });
-    text(ctx, String(count ?? 0), box.x, box.y + 16, { size: 13, maxWidth: box.w - 6 });
+    text(ctx, label, box.x, box.y, { size: 14, color: MUTED, weight: 700 });
+    text(ctx, String(count ?? 0), box.x, box.y + 16, { size: 18, maxWidth: box.w - 6 });
   });
 
   const second = runtime.secondPlayer;

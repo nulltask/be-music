@@ -49,6 +49,7 @@ describe('designed entries', () => {
 
   it('@be-music/player-engine/lanes exports the lane layout and the key bindings', () => {
     expect(exportedValues(lanes)).toEqual([
+      'LANE_KEY_CONFIG',
       'addLongNotes',
       'appendFreeZoneInputChannels',
       'applySevenToNine',
@@ -67,6 +68,7 @@ describe('designed entries', () => {
       'isReverseScratchSpin',
       'isScratch',
       'isScratchSpin',
+      'laneKeyLabel',
       'parseLaneRandomSeed',
       'prepareMineModifier',
       'randomizeAllScratchNotes',

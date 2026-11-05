@@ -14,7 +14,7 @@ function optionLabel(value: string): string {
   return source === undefined ? value : `${name} (${source === 'lr2' ? 'LR2' : source === '____' ? '????' : source})`;
 }
 
-/** The play options that convert the chart, as the Debug Menu labels them. */
+/** The play options that convert the chart, as the Options dialog labels them. */
 export type PlayOptionMismatchSource = Pick<
   PlaySessionOptions,
   'random1P' | 'random2P' | 'battleMode' | 'lr2ExtraMode' | 'longNoteModifier'
@@ -32,7 +32,7 @@ export class PlayOptionMismatchError extends RangeError {
   }
 }
 
-/** The selected options that convert the chart, labelled as the Debug Menu shows them. */
+/** The selected options that convert the chart, labelled as the Options dialog shows them. */
 export function describeChartConvertingOptions(options: PlayOptionMismatchSource): string[] {
   const labels: string[] = [];
   if (options.random1P !== undefined && options.random1P !== 'OFF')

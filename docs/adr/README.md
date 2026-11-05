@@ -63,3 +63,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0036: Execute chart-authored M-SUDDEN, the skin-level CRAZY options and the legacy aliases at the playfield level](./0036-chart-authored-skin-level-options.md)
 
 - [0037: Judge a back-spin scratch's tail on a recorded scratch spin](./0037-scratch-spin-input.md)
+
+- [0038: Screens read control buttons, by the skin family's key map](./0038-control-buttons-follow-skin-family.md)

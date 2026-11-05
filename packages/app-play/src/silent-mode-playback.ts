@@ -1,7 +1,8 @@
+import { html, nothing, render } from 'lit';
 // The player's "Play in silent mode" setting: whether the page asks the platform audio session (`navigator.audioSession`,
 // Safari / iOS) for `'playback'`, so sound plays with the Ring / Silent switch on — at the cost of pausing music
 // playing in other apps. On by default (a rhythm game with no sound is unplayable); turned off it restores the
-// browser's own `'auto'`. Offered on the start card and in the Debug Menu. Also the one-time hint pointing iPhone /
+// browser's own `'auto'`. Offered on the start card and in the Options dialog. Also the one-time hint pointing iPhone /
 // iPad users at the setting when sound starts with it off.
 
 import { applySilentModePlayback, type SystemAudioSessionHost } from '@be-music/player-browser/audio';
@@ -175,7 +176,7 @@ export interface StartSilentModeOptionOptions {
   readonly onChange: (checked: boolean) => void;
 }
 
-/** The start card's "Play in silent mode" checkbox, kept in step with the Debug Menu's. */
+/** The start card's "Play in silent mode" checkbox, kept in step with the Options dialog's. */
 export interface StartSilentModeOption {
   setChecked(checked: boolean): void;
 }
@@ -190,8 +191,8 @@ export function mountStartSilentModeOption(options: StartSilentModeOptionOptions
   if (input === null) return undefined;
   const label = section.querySelector<HTMLElement>('[data-silent-mode-label]');
   const note = section.querySelector<HTMLElement>('[data-silent-mode-note]');
-  if (label !== null) label.textContent = strings.label;
-  if (note !== null) note.textContent = strings.note;
+  if (label !== null) render(strings.label, label);
+  if (note !== null) render(strings.note, note);
   input.checked = options.checked;
   input.addEventListener('change', () => options.onChange(input.checked));
   section.hidden = false;
@@ -221,34 +222,39 @@ export function mountSilentModeHint(options: SilentModeHintOptions): void {
   const card = document.createElement('div');
   card.className = 'card silent-mode-hint gap-2 px-3 py-2';
   card.setAttribute('role', 'status');
-  const text = document.createElement('span');
-  text.className = 'silent-mode-hint-text text-sm';
-  text.textContent = strings.hint;
-  const action = document.createElement('button');
-  action.type = 'button';
-  action.className = 'btn';
-  action.dataset.size = 'sm';
-  action.textContent = strings.hintAction;
-  const dismiss = document.createElement('button');
-  dismiss.type = 'button';
-  dismiss.className = 'btn';
-  dismiss.dataset.variant = 'ghost';
-  dismiss.dataset.size = 'icon-sm';
-  dismiss.setAttribute('aria-label', strings.hintDismiss);
-  dismiss.textContent = '×';
-  card.append(text, action, dismiss);
   let timer = 0;
   const close = () => {
     window.clearTimeout(timer);
+    render(nothing, card);
     card.remove();
   };
   // Taps on the card are not lane presses or scene clicks.
   card.addEventListener('pointerdown', (event) => event.stopPropagation());
-  action.addEventListener('click', () => {
-    options.onEnable();
-    close();
-  });
-  dismiss.addEventListener('click', close);
+  render(
+    html`<span class="silent-mode-hint-text text-sm">${strings.hint}</span>
+      <button
+        class="btn"
+        type="button"
+        data-size="sm"
+        @click=${() => {
+          options.onEnable();
+          close();
+        }}
+      >
+        ${strings.hintAction}
+      </button>
+      <button
+        class="btn"
+        type="button"
+        data-variant="ghost"
+        data-size="icon-sm"
+        aria-label=${strings.hintDismiss}
+        @click=${close}
+      >
+        ×
+      </button>`,
+    card,
+  );
   timer = window.setTimeout(close, SILENT_MODE_HINT_DURATION_MS);
   (options.parent ?? document.body).append(card);
 }

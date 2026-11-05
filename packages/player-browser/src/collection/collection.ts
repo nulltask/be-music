@@ -130,33 +130,47 @@ export async function readDroppedFiles(
   return collectFilesFromDataTransfer(dataTransfer, options.onProgress);
 }
 
+/**
+ * The top-level entries of a drop (its files and folders, `webkitGetAsEntry`), which can be walked again later with
+ * {@link readDropEntries} to read what the folders hold then. Empty where the browser gives no entries.
+ */
+export function dropEntries(dataTransfer: DataTransfer): FileSystemEntry[] {
+  const entries: FileSystemEntry[] = [];
+  const items = dataTransfer.items;
+  for (let index = 0; index < (items?.length ?? 0); index += 1) {
+    const entry = items[index]?.webkitGetAsEntry?.();
+    if (entry) entries.push(entry);
+  }
+  return entries;
+}
+
+/**
+ * Lists the files under a drop's entries, walking its folders as they are now: a drop walked again after the player
+ * changed its folders on disk reads the new and changed files (the folder reload). Like {@link readDroppedFiles}.
+ */
+export async function readDropEntries(
+  entries: readonly FileSystemEntry[],
+  options: LoadProgressOptions = {},
+): Promise<BrowserDroppedFile[]> {
+  const listed: ListedDropEntry[] = [];
+  // Total is unknown while we're still walking the FileSystem tree (the FileSystemEntry API doesn't expose a
+  // directory's file count up-front), so we report `total: -1` and let the host UI show an indeterminate
+  // "Collecting…" indicator.
+  options.onProgress?.({ phase: 'enumerating', current: 0, total: -1 });
+  for (const entry of entries) {
+    await listDropEntries(entry, '', listed, options.onProgress);
+  }
+  const files = await openListedDropEntries(listed);
+  options.onProgress?.({ phase: 'enumerating', current: files.length, total: files.length });
+  return files;
+}
+
 async function collectFilesFromDataTransfer(
   dataTransfer: DataTransfer,
   onProgress?: LoadProgressCallback,
 ): Promise<BrowserDroppedFile[]> {
-  const items = dataTransfer.items;
-  if (items && items.length > 0) {
-    const entries: FileSystemEntry[] = [];
-    for (let index = 0; index < items.length; index += 1) {
-      const entry = items[index]?.webkitGetAsEntry?.();
-      if (entry) {
-        entries.push(entry);
-      }
-    }
-    if (entries.length > 0) {
-      const listed: ListedDropEntry[] = [];
-      // Total is unknown while we're still walking the FileSystem tree (the FileSystemEntry API doesn't expose a
-      // directory's file count up-front), so we report `total: -1` and let the host UI show an indeterminate
-      // "Collecting…" indicator.
-      onProgress?.({ phase: 'enumerating', current: 0, total: -1 });
-      for (const entry of entries) {
-        await listDropEntries(entry, '', listed, onProgress);
-      }
-      const files = await openListedDropEntries(listed);
-      onProgress?.({ phase: 'enumerating', current: files.length, total: files.length });
-      return files;
-    }
-  }
+  const entries = dropEntries(dataTransfer);
+  if (entries.length > 0) return readDropEntries(entries, onProgress !== undefined ? { onProgress } : {});
   const fallback = dataTransfer.files ? [...dataTransfer.files] : [];
   if (fallback.length > 0) {
     onProgress?.({ phase: 'enumerating', current: fallback.length, total: fallback.length });

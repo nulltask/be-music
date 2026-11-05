@@ -13,7 +13,7 @@ import type { BeMusicSkin } from '@be-music/player-skin-sdk';
  */
 export const ADD_SKIN_ENABLED: boolean = false;
 
-/** Built-in Be-Music Skins the default family can render with; the Debug Menu's "Built-in skin" picks one. */
+/** Built-in Be-Music Skins the default family can render with; the Options dialog's "Built-in skin" picks one. */
 export const BE_MUSIC_SKINS: BeMusicSkinRegistry = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
 
 /** Loads an added skin's faces in the background, so its first frame doesn't rasterize with a fallback font. */

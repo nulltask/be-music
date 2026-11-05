@@ -73,6 +73,7 @@ function createPlay(options: {
     lastJudgeUntil: 0,
     lastJudgeAt: undefined,
     lastImpulseAt: undefined,
+    scratchInputs: new Map<string, { angle: number; direction: 1 | -1; atMs: number }>(),
     lastImpulseKind: undefined,
     lastPoorAt: 0,
     judgeSideState: { '1P': { judge: '', until: 0, combo: 0 }, '2P': { judge: '', until: 0, combo: 0 } },
@@ -502,4 +503,13 @@ test('engine calibration updates the display setting without moving the input or
   expect(onChange).toHaveBeenCalledWith(505);
   expect(play.ctx.currentSeconds()).toBe(2);
   expect(play.ctx.playState.judgeTimings).toHaveLength(0);
+});
+
+test('scratch input reverses its marker without jumping at the direction change', () => {
+  const play = createPlay({ total: 4 });
+  play.step(1, {}, [], [{ kind: 'scratch-spin', channels: ['16'], spin: 'cw' }]);
+  expect(play.ctx.scratchInputs.get('16')).toEqual({ angle: 0, direction: 1, atMs: 1000 });
+  play.step(1.12, {}, [], [{ kind: 'scratch-spin', channels: ['16'], spin: 'ccw' }]);
+  expect(play.ctx.scratchInputs.get('16')?.angle).toBeCloseTo((Math.PI / 2) * (1 - Math.exp(-1)));
+  expect(play.ctx.scratchInputs.get('16')?.direction).toBe(-1);
 });

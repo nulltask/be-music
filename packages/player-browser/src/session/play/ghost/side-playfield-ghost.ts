@@ -1,6 +1,6 @@
 /**
  * The ghost as a second playfield (the first {@link GhostPresentation}): the recorded play's notes scroll on the 2P side
- * of a single-play chart, laid out like the two sides of a double-play chart (`ghost-side.ts`), and go as its replay
+ * of a single-play chart, using the two-player layout and the combined lane model (`ghost-side.ts`), and go as its replay
  * settled them. Its key beams, bombs and judgment plate follow its recorded inputs and judgments, and its score, combo
  * and gauge show as the second player's HUD. Its notes scroll with the live play's hi-speed, so a note of the ghost
  * and the live note it matches cross their judgment lines together.
@@ -12,7 +12,7 @@
 
 import type { TimingResolver } from '@be-music/chart-model';
 import type { TimedLandmineNote, TimedPlayableNote } from '@be-music/player-engine/display';
-import { createEmptyScore, type ScoreSummary } from '@be-music/player-engine/ruleset';
+import { resolveLR2MoneyScore, createEmptyScore, type ScoreSummary } from '@be-music/player-engine/ruleset';
 import { createPlayState, type PlayState } from '@be-music/player-scene-model';
 import type { BeMusicJudgmentKind } from '../../../skin/be-music/types.ts';
 import type { PlayfieldRuntime, RuntimeMineNote, RuntimeNote } from '../../../view/shared/playfield/context.ts';
@@ -237,6 +237,7 @@ export class SidePlayfieldGhost implements GhostPresentation {
       notes: this.merged.notes,
       mineNotes: this.mergedMines.mines,
       secondPlayer: this.secondPlayer,
+      ghostSide: '2P',
     });
   }
 
@@ -275,6 +276,7 @@ export class SidePlayfieldGhost implements GhostPresentation {
         : {}),
       exScore: step?.exScore ?? 0,
     };
+    score.score = this.timeline.ruleset === 'lr2' ? resolveLR2MoneyScore(score) : score.exScore;
     const playState: PlayState = {
       ...createPlayState(),
       gaugeType: this.timeline.gaugeType,

@@ -3,7 +3,10 @@ import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
 import { describe, expect, it, test } from 'vite-plus/test';
 import {
   _____DP_SIDE_GAP,
+  findWhiteLaneWidth,
   isScratchLaneForVariant,
+  noteHeightForLane,
+  resolveNoteHeight,
   resolveBeMusicLaneKind,
   resolveFallbackLaneLayout,
   resolveFallbackPlayfieldSpan,
@@ -340,4 +343,32 @@ test.each([6, 8, 36, 70])('draws a %s-key generic keyboard as equal normal keys 
     if (index > 0) expect(rect.x).toBeCloseTo(geometry.lanes[index - 1]!.x + geometry.lanes[index - 1]!.w);
   }
   expect(geometry.lanes.at(-1)!.x + geometry.lanes.at(-1)!.w).toBeCloseTo(geometry.right);
+});
+
+test('draws a note as tall as a share of its lane’s width, as the arcade cabinet does', () => {
+  // The cabinet's white and black keys: 32 px and 25 px lanes, 7 px and 5 px notes.
+  expect(noteHeightForLane(32)).toBe(7);
+  expect(noteHeightForLane(25)).toBe(5);
+  // A wider lane, a thicker note.
+  expect(noteHeightForLane(64)).toBe(13);
+  expect(noteHeightForLane(41)).toBeGreaterThan(noteHeightForLane(24));
+  // Never thinner than 2 px, whatever it is given.
+  expect(noteHeightForLane(4)).toBe(2);
+  expect(noteHeightForLane(0)).toBe(2);
+  expect(noteHeightForLane(Number.NaN)).toBe(2);
+});
+
+test('draws every note as tall as a white key’s, whatever its own lane’s width', () => {
+  const lanes = [
+    { kind: 'scratch' as const, w: 41 },
+    { kind: 'white' as const, w: 24 },
+    { kind: 'black' as const, w: 19 },
+  ];
+  expect(findWhiteLaneWidth(lanes)).toBe(24);
+  expect(findWhiteLaneWidth([{ kind: 'scratch', w: 41 }])).toBeUndefined();
+  // The scratch's 41 px lane and a black key's 19 px lane both draw a white key's note.
+  expect(resolveNoteHeight(41, 24)).toBe(noteHeightForLane(24));
+  expect(resolveNoteHeight(19, 24)).toBe(noteHeightForLane(24));
+  // Without a white lane, a note takes its own lane's share.
+  expect(resolveNoteHeight(41)).toBe(noteHeightForLane(41));
 });

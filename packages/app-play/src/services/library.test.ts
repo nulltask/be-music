@@ -1,9 +1,15 @@
-import type { BrowserChartCollection } from '@be-music/player-browser/collection';
+import { readDropEntries, type BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { COURSE_TABLE_URLS_STORAGE_KEY } from '../course-table-import.ts';
 import { LibraryService, type LibraryServiceOptions } from './library.ts';
+
+// The loading overlay draws with Lit, which needs a DOM: a load here only reports its progress to it.
+vi.mock('../loading-overlay.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../loading-overlay.ts')>()),
+  applyLoadProgress: () => {},
+}));
 
 const MD5 = ['a', 'b', 'c', 'd', 'e', 'f', '1'].map((digit) => digit.repeat(32));
 
@@ -216,14 +222,50 @@ describe('LibraryService drops', () => {
     expect(options.loadTheme).not.toHaveBeenCalled();
   });
 
-  test('canceling a skin-only drop restores select without replacing the current skin', async () => {
+  test('offers a standalone JSON theme by its skin header instead of requiring a skin/ ancestor', async () => {
+    const confirmSkinDrop = vi.fn(async () => 'beatoraja' as const);
+    const { library, options } = harness({ confirmSkinDrop });
+    await library.processIncomingFiles([
+      dropped('My Theme/select.json', JSON.stringify({ type: 5, name: 'Theme', w: 1280, h: 720, destination: [] })),
+    ]);
+    expect(confirmSkinDrop).toHaveBeenCalledWith(new Set(['beatoraja']));
+    expect(options.loadBeatorajaTheme).toHaveBeenCalledOnce();
+    expect(options.applyDroppedSkin).toHaveBeenCalledWith('beatoraja');
+  });
+
+  test.each(['{"name":"pack metadata"}', '{broken', '{"type":0,"name":"settings","w":0,"h":720}'])(
+    'keeps unrelated standalone JSON out of skin detection: %s',
+    async (text) => {
+      const confirmSkinDrop = vi.fn(async () => undefined);
+      const { library, options } = harness({ confirmSkinDrop });
+      await library.processIncomingFiles([dropped('pack/info.json', text)]);
+      expect(confirmSkinDrop).toHaveBeenCalledWith(new Set());
+      expect(options.loadBeatorajaTheme).not.toHaveBeenCalled();
+    },
+  );
+
+  test('loads a skin while its confirmation remains unanswered', async () => {
+    let answer!: (family: undefined) => void;
+    const pending = new Promise<undefined>((resolve) => {
+      answer = resolve;
+    });
+    const { library, options } = harness({ confirmSkinDrop: () => pending });
+    const loading = library.processIncomingFiles([dropped('theme/select.lr2skin', '#INFORMATION,5,Example')]);
+    await vi.waitFor(() => expect(options.loadTheme).toHaveBeenCalledOnce());
+    expect(options.applyDroppedSkin).not.toHaveBeenCalled();
+    answer(undefined);
+    await loading;
+    expect(options.applyDroppedSkin).not.toHaveBeenCalled();
+  });
+
+  test('canceling a skin-only drop keeps it loaded without applying it', async () => {
     const confirmSkinDrop = vi.fn(async () => undefined);
     const { library, options, shown } = harness({ confirmSkinDrop });
     const before = library.collection;
     await library.processIncomingFiles([dropped('theme/select.lr2skin', '#INFORMATION,5,Example')]);
     expect(confirmSkinDrop).toHaveBeenCalledWith(new Set(['lr2']));
     expect(library.collection).toBe(before);
-    expect(options.loadTheme).not.toHaveBeenCalled();
+    expect(options.loadTheme).toHaveBeenCalledOnce();
     expect(options.loadBeatorajaTheme).not.toHaveBeenCalled();
     expect(options.applyDroppedSkin).not.toHaveBeenCalled();
     expect(shown).toEqual([before]);
@@ -411,5 +453,51 @@ describe('LibraryService kept random courses', () => {
       prepared.course,
     );
     expect(harness().library.collection.courseFolders).toBeUndefined();
+  });
+});
+
+describe('the folder reload', () => {
+  /** A dropped folder as `webkitGetAsEntry` gives it: its files are read from `files` each time it is walked. */
+  function folderEntry(name: string, files: Map<string, string>): FileSystemEntry {
+    const fileEntry = (fileName: string) =>
+      ({
+        isFile: true,
+        isDirectory: false,
+        name: fileName,
+        file: (resolve: (file: File) => void) => resolve(new File([files.get(fileName)!], fileName)),
+      }) as unknown as FileSystemEntry;
+    return {
+      isFile: false,
+      isDirectory: true,
+      name,
+      createReader: () => {
+        let read = false;
+        return {
+          readEntries: (resolve: (entries: FileSystemEntry[]) => void) => {
+            resolve(read ? [] : [...files.keys()].map(fileEntry));
+            read = true;
+          },
+        };
+      },
+    } as unknown as FileSystemEntry;
+  }
+  const bms = (title: string) => `#PLAYER 1\n#TITLE ${title}\n#BPM 120\n#00111:01\n`;
+
+  test('walks a dropped folder again, so charts added on disk since show up', async () => {
+    const { library, shown } = harness();
+    const files = new Map([['a.bms', bms('alpha')]]);
+    const entry = folderEntry('pack', files);
+    await library.processIncomingFiles(await readDropEntries([entry]), { entries: [entry] });
+    expect(library.collection.charts.map((chart) => chart.title)).toEqual(['alpha']);
+    files.set('b.bms', bms('beta'));
+    await library.reloadCharts();
+    expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
+    expect(shown.length).toBeGreaterThan(1);
+  });
+
+  test('says so when there is nothing to reload', async () => {
+    const { library, statuses } = harness();
+    await library.reloadCharts();
+    expect(statuses).toContain('No folders to reload');
   });
 });

@@ -1,9 +1,9 @@
-// The Help's Open source list: one entry per third-party package the player ships, with its license text.
+// The Help's Acknowledgements list: one entry per third-party package the player ships, with its license text.
 //
 // A build lists what it actually bundled: the npm packages of every module rendered into a chunk (the player, the embed
 // page and their workers), plus packages that reach the page without being modules (the stylesheet's frameworks, the
 // ffmpeg core the player serves as files). The list is written as `acknowledgements.json` next to the bundle and read
-// when the Open source tab opens. The dev server has no bundle, so it walks the runtime dependencies instead.
+// when the Acknowledgements tab opens. The dev server has no bundle, so it walks the runtime dependencies instead.
 //
 // A package that publishes no LICENSE file gets the upstream text kept in `licenses/` (see its README).
 

@@ -35,7 +35,7 @@ export interface LiveTestHookDeps {
   readonly router: TestHookScenes;
   /** The page: the loading overlay. */
   readonly elements: Pick<PlayerWebElements, 'loadingOverlay'>;
-  /** The Debug Menu's state: the status line, and the NONSTOP placement a course bar's record is read for. */
+  /** The Options dialog's state: the status line, and the NONSTOP placement a course bar's record is read for. */
   readonly guiState: Pick<PlayerGUIState, 'status' | 'nonstopPlacement'>;
   /** The library: its charts and course folders. */
   readonly library: Pick<LibraryService, 'collection'>;

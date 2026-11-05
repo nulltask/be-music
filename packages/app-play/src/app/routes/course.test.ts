@@ -171,7 +171,7 @@ describe('CourseRoute: starting a course', () => {
     expect(play.courseStage.courseInfo).toMatchObject({ title: 'Dan', stageIndex: 0 });
   });
 
-  test('PLAY on a course bar follows the Debug Menu’s auto play', async () => {
+  test('PLAY on a course bar follows the Options dialog’s auto play', async () => {
     const h = harness();
     await startFirstStage(h);
     expect(h.courses.autoPlay).toBeUndefined();

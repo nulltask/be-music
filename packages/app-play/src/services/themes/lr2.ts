@@ -1,4 +1,4 @@
-// The LR2 theme the LR2 family draws with: every theme the drops brought (the Debug Menu's "LR2 theme" picker lists
+// The LR2 theme the LR2 family draws with: every theme the drops brought (the Options dialog's "LR2 theme" picker lists
 // them), the one mounted, and its skins, BGM and system sounds.
 
 import {
@@ -19,14 +19,24 @@ export interface LR2ThemeServiceOptions {
   /** The loading overlay a theme load reports its progress on. */
   readonly elements: LoadingOverlayElements;
   readonly setStatus: (text: string) => void;
-  /** Rebuilds the Debug Menu's "Skin system" picker, which offers LR2 once a theme is mounted. */
+  /** Rebuilds the Options dialog's "Skin system" picker, which offers LR2 once a theme is mounted. */
   readonly rebuildSkinFamilyPicker: () => void;
-  /** Rebuilds the Debug Menu's "LR2 theme" picker from {@link LR2ThemeService.availableLR2Themes}. */
+  /** Rebuilds the Options dialog's "LR2 theme" picker from {@link LR2ThemeService.availableLR2Themes}. */
   readonly rebuildLR2ThemePicker: () => void;
 }
 
 /** The LR2 themes dropped so far and the one mounted: its skins for every screen, its BGM and its system sounds. */
 export class LR2ThemeService {
+  private pendingTheme: { theme: LR2ThemeSkins; name: string | undefined } | undefined;
+  public hasPendingTheme(): boolean {
+    return this.pendingTheme !== undefined;
+  }
+  public activatePendingTheme(): void {
+    const pending = this.pendingTheme;
+    if (!pending) return;
+    this.pendingTheme = undefined;
+    this.applyTheme(pending.theme, pending.name);
+  }
   /**
    * Per-variant play skins, keyed by `LR2PlayVariant`. Loaded once at theme-drop time so a DP chart can pick
    * `playSkins['14']` while a regular SP chart picks `playSkins['7']`.
@@ -34,7 +44,7 @@ export class LR2ThemeService {
   public readonly playSkins: LR2PlaySkinMap = {};
   /**
    * LR2 themes detected in the most recent drop, scoped to `LR2files/Theme/<name>/` subdirs that contain at least
-   * one `.lr2skin`. Populated by {@link loadTheme}; the Debug Menu's "LR2 theme" picker reads from here and lets
+   * one `.lr2skin`. Populated by {@link loadTheme}; the Options dialog's "LR2 theme" picker reads from here and lets
    * the user swap between themes without re-dropping. Empty when no LR2 theme is loaded.
    */
   public availableLR2Themes: ReadonlyArray<LR2DiscoveredTheme<File>> = [];
@@ -105,7 +115,7 @@ export class LR2ThemeService {
    * Loads a drop's LR2 theme files: every `LR2files/Theme/<name>/` it carries joins the themes dropped so far, and one
    * of them is mounted (see {@link mountLR2Theme}).
    */
-  public async loadTheme(files: File[]): Promise<void> {
+  public async loadTheme(files: File[], activate = true): Promise<void> {
     // Themes are discovered first so a multi-theme drop (e.g. `LR2files/Theme/{default,LITONE4}/...`) surfaces every
     // subtree to the picker. The picker UI then lets the user pick which one to mount; the rest of the dropped
     // files (BGM / Sound under `LR2files/`) stay accessible to the selected theme via the loader's shared file map.
@@ -115,7 +125,7 @@ export class LR2ThemeService {
       // without keeping the parent dirs). Fall back to "treat everything as one theme" so the legacy single-bundle
       // path keeps working — the picker stays empty in this case.
       this.availableLR2Themes = [];
-      await this.mountLR2Theme(files, undefined);
+      await this.mountLR2Theme(files, undefined, activate);
       return;
     }
     // Accumulate themes across drops — mirrors how the song collection store appends rather than replaces. Newer
@@ -156,20 +166,34 @@ export class LR2ThemeService {
       const afterLR2Files = lower.slice(idx + 'lr2files/'.length);
       return !afterLR2Files.startsWith('theme/');
     });
-    await this.mountLR2Theme([...next.files, ...otherLR2Files], next.name);
+    await this.mountLR2Theme([...next.files, ...otherLR2Files], next.name, activate);
   }
 
   /**
    * Loads a specific LR2 theme's files through the underlying `loadLR2ThemeSkinsFromFiles` and stamps the result
    * onto the host's skin / BGM / system-sound slots. Centralised so both the initial drop path
-   * ({@link loadTheme}) and the Debug Menu's theme-picker path go through the same wiring — without this split the
+   * ({@link loadTheme}) and the Options dialog's theme-picker path go through the same wiring — without this split the
    * picker would have to re-implement the slot assignment block.
    */
-  public async mountLR2Theme(files: ReadonlyArray<File>, themeName: string | undefined): Promise<void> {
+  public async mountLR2Theme(
+    files: ReadonlyArray<File>,
+    themeName: string | undefined,
+    activate = true,
+  ): Promise<void> {
     this.setStatus(themeName ? `Loading LR2 theme "${themeName}"...` : 'Loading LR2 theme...');
     const loadedTheme = await loadLR2ThemeSkinsFromFiles([...files], {
       onProgress: (progress) => applyLoadProgress(this.elements, progress),
     });
+    if (!activate) {
+      this.pendingTheme = { theme: loadedTheme, name: themeName };
+      this.rebuildSkinFamilyPicker();
+      this.rebuildLR2ThemePicker();
+      return;
+    }
+    this.applyTheme(loadedTheme, themeName);
+  }
+
+  private applyTheme(loadedTheme: LR2ThemeSkins, themeName: string | undefined): void {
     for (const variant of Object.keys(this.playSkins) as LR2PlayVariant[]) {
       delete this.playSkins[variant];
     }
@@ -205,7 +229,7 @@ export class LR2ThemeService {
     // moment the user enters song-select; spelling it out in the toolbar status panel was redundant and made the
     // toolbar wider than it needed to be. `handleDrop` writes a terse "Theme loaded" / "N charts loaded" once
     // everything lands.
-    // Refresh the Debug Menu's "Skin family" dropdown so the LR2 entry becomes selectable now that the theme has
+    // Refresh the Options dialog's "Skin family" dropdown so the LR2 entry becomes selectable now that the theme has
     // contributed at least one LR2 skin asset. Also rebuild the LR2 theme picker so it reflects the new options.
     this.rebuildSkinFamilyPicker();
     this.rebuildLR2ThemePicker();

@@ -1,10 +1,12 @@
+import { render } from '@lit-labs/ssr';
+import { collectResultSync } from '@lit-labs/ssr/lib/render-result.js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { playerLang, setPlayerLang } from './player-copy.ts';
 import {
   bindPlayerHeader,
   classifyPlayerHeaderClick,
   playerHeaderFullscreenTarget,
-  playerServiceHeaderHTML,
+  playerServiceHeaderTemplate,
   runPlayerHeaderAction,
   setPlayerHeaderAccount,
   setPlayerHeaderSettingsOpen,
@@ -12,12 +14,20 @@ import {
   type PlayerHeaderFullscreenDocument,
 } from './player-header.ts';
 
+function playerServiceHeaderHTML(input: Parameters<typeof playerServiceHeaderTemplate>[0]): string {
+  return collectResultSync(render(playerServiceHeaderTemplate(input)))
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+>/g, '>');
+}
+
 afterEach(() => {
   setPlayerLang('en');
   setPlayerHeaderAccount(undefined);
   setPlayerHeaderSettingsOpen(false);
   bindPlayerHeader({
-    toggleDebugMenu: null,
+    toggleOptions: null,
     openSignIn: null,
     selectLanguage: setPlayerLang,
   });
@@ -25,14 +35,14 @@ afterEach(() => {
 
 test('renders the shared header with Settings where Play would be', () => {
   const html = playerServiceHeaderHTML({ locale: 'en', hostname: 'localhost', requestURL: '/' });
-  expect(html).toContain('>Be-Music Play</a><span class="badge" data-variant="outline">Beta</span>');
+  expect(html).toContain('>Be-Music Play</a><span class="badge max-sm:hidden" data-variant="outline">Beta</span>');
   expect(html).toContain('class="flex items-center gap-x-3 px-4 py-2.5 sm:gap-x-6"');
   expect(html).not.toContain('max-w-5xl');
   expect(html).not.toContain('mx-auto');
-  expect(html.match(/<span class="badge"/g)).toHaveLength(1);
+  expect(html.match(/<span class="badge/g)).toHaveLength(1);
   expect(html).toContain('data-service-header="settings"');
   expect(html).toContain('aria-label="Settings" aria-expanded="false"');
-  expect(html).toContain('title="Debug Menu"');
+  expect(html).toContain('data-tooltip="Settings"');
   const open = playerServiceHeaderHTML({
     locale: 'en',
     hostname: 'localhost',
@@ -40,19 +50,28 @@ test('renders the shared header with Settings where Play would be', () => {
     settingsOpen: true,
   });
   expect(open).toContain('aria-label="Settings" aria-expanded="true"');
-  expect(html).toContain('data-service-header="fullscreen" title="Full screen" aria-label="Full screen"');
+  expect(html).toContain(
+    'data-service-header="fullscreen" data-tooltip="Full screen" data-side="bottom" aria-label="Full screen"',
+  );
   expect(html).toContain('aria-pressed="false"');
   expect(html).toContain('lucide-maximize');
   expect(html.indexOf('data-service-header="settings"')).toBeLessThan(html.indexOf('data-service-header="fullscreen"'));
-  expect(html).toContain('>Sign in</a>');
+  expect(html).toContain('data-service-header="help" aria-haspopup="dialog" aria-controls="help-modal"');
+  expect(html).not.toContain('data-service-header="install"');
+  expect(
+    playerServiceHeaderHTML({ locale: 'en', hostname: 'localhost', requestURL: '/', installable: true }),
+  ).toContain('data-service-header="install"');
+  expect(html.indexOf('data-service-header="help"')).toBeLessThan(html.indexOf('data-service-header="settings"'));
+  expect(html).toMatch(/>\s*Sign in\s*<\/a>/);
   expect(html).toContain('href="#main"');
   expect(html).not.toContain('aria-label="Play"');
   expect(html).not.toContain('lucide-play');
   const ja = playerServiceHeaderHTML({ locale: 'ja', hostname: 'play.be-music.app', requestURL: '/?chart=1' });
   expect(ja).toContain('aria-label="設定"');
-  expect(ja).toContain('title="デバッグメニュー"');
+  expect(ja).toContain('aria-label="ヘルプ"');
+  expect(ja).toContain('data-tooltip="設定"');
   expect(ja).toContain('aria-label="フルスクリーン" aria-pressed="false"');
-  expect(ja).toContain('>ログイン</a>');
+  expect(ja).toMatch(/>\s*ログイン\s*<\/a>/);
   expect(ja).toContain('href="/?chart=1&amp;lang=en"');
   const signedIn = playerServiceHeaderHTML({
     locale: 'en',
@@ -61,15 +80,17 @@ test('renders the shared header with Settings where Play would be', () => {
     account: { handle: 'alice', displayName: 'Alice', anonymous: false },
   });
   expect(signedIn).toContain(
-    'data-service-header="account" target="_blank" rel="noopener" href="https://leaderboard.be-music.app/players/alice"',
+    'data-service-header="account" href="https://leaderboard.be-music.app/players/alice" target="_blank" rel="noopener"',
   );
 });
 
-test('Settings toggles the Debug Menu and a signed-out account opens sign-in', () => {
+test('Settings toggles the Options dialog and a signed-out account opens sign-in', () => {
   const hit = (selector: string) => ({
     closest: (query: string) =>
       query === selector ? { lang: selector === '#language-menu a' ? 'ja' : undefined } : null,
   });
+  expect(classifyPlayerHeaderClick(hit('[data-service-header="install"]'), true)).toBe('install');
+  expect(classifyPlayerHeaderClick(hit('[data-service-header="help"]'), true)).toBe('help');
   expect(classifyPlayerHeaderClick(hit('[data-service-header="settings"]'), true)).toBe('settings');
   expect(classifyPlayerHeaderClick(hit('[data-service-header="fullscreen"]'), true)).toBe('fullscreen');
   expect(classifyPlayerHeaderClick(hit('[data-service-header="account"]'), true)).toBe('sign-in');
@@ -77,10 +98,17 @@ test('Settings toggles the Debug Menu and a signed-out account opens sign-in', (
   expect(classifyPlayerHeaderClick(hit('#language-menu a'), true)).toBe('ja');
 
   const opened = { open: false, toggles: 0, signIn: 0 };
+  let helpOpened = 0;
+  runPlayerHeaderAction('help');
+  bindPlayerHeader({ openHelp: () => (helpOpened += 1) });
+  expect(helpOpened).toBe(1);
+  runPlayerHeaderAction('help');
+  expect(helpOpened).toBe(2);
+  bindPlayerHeader({ openHelp: null });
   runPlayerHeaderAction('settings');
   runPlayerHeaderAction('sign-in');
   bindPlayerHeader({
-    toggleDebugMenu: () => {
+    toggleOptions: () => {
       opened.toggles += 1;
       opened.open = !opened.open;
     },
@@ -95,14 +123,14 @@ test('Settings toggles the Debug Menu and a signed-out account opens sign-in', (
   runPlayerHeaderAction('settings');
   expect(opened.open).toBe(true);
   bindPlayerHeader({
-    toggleDebugMenu: null,
+    toggleOptions: null,
     openSignIn: null,
     selectLanguage: setPlayerLang,
   });
   runPlayerHeaderAction('settings');
   runPlayerHeaderAction('settings');
   bindPlayerHeader({
-    toggleDebugMenu: () => {
+    toggleOptions: () => {
       opened.toggles += 1;
     },
     selectLanguage: setPlayerLang,

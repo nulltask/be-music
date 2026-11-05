@@ -162,6 +162,8 @@ export interface BeMusicStage {
          * sides of it. The keyboard modes (24 / 48 KEY) and single play keep their place.
          */
         readonly doublePlayCenterX?: number;
+        /** Places independent players at opposite edges, leaving the monitor between them. */
+        readonly twoPlayerSideInset?: number;
       }
     >
   >;
@@ -169,9 +171,11 @@ export interface BeMusicStage {
   /**
    * The gameplay BGA rect for a playfield whose rightmost lane ends at `playfieldRight` and leftmost starts at
    * `playfieldLeft`. The scene composites the BGA here and the skin frames the same rect, so the BGA can make room for
-   * wide (double play / keyboard) playfields.
+   * wide (double play / keyboard) playfields. `twoPlayer` identifies independent banks placed around a central BGA.
    */
-  resolveBGARect(playfieldRight: number, playfieldLeft?: number): BeMusicRect;
+  /** Keeps BGA videos at their source aspect; the monitor may widen while retaining its height. */
+  readonly fitBGAVideoAspect?: boolean;
+  resolveBGARect(playfieldRight: number, playfieldLeft?: number, twoPlayer?: boolean): BeMusicRect;
 
   /**
    * Makes the stage fluid: the host calls it with a design size of the screen's aspect ratio
@@ -229,6 +233,8 @@ export interface BeMusicLayoutLane {
 export type GameplayLayoutMode = 'standard' | 'touch';
 
 export interface BeMusicGameplayLayout {
+  /** Independent players (including a side-playfield ghost), rather than one double-play chart. */
+  twoPlayer?: boolean;
   /**
    * The layout mode the host resolved. Optional so a layout built by hand stays valid; absent means `'standard'`. In
    * `'touch'` the lanes and playfield bounds already describe the touch geometry and `bga` is `undefined` on a
@@ -330,6 +336,14 @@ export interface BeMusicGameplayRuntime {
   progressRatio?: number;
   /** Fractional beat position in [0, 1) — drives beat-synced pulses. */
   beatPhase?: number;
+  /** Absolute chart beat, including BPM changes and stops, for beat-synchronised motion. */
+  chartBeat?: number;
+  /** Directional turntable input, on the pause-aware play clock. */
+  scratchInputs?: Readonly<Record<string, { angle: number; direction: 1 | -1; atMs: number }>>;
+  /** Input brightness by lane channel, 0 to 1, including the release fade. */
+  keyBeams?: Readonly<Record<string, number>>;
+  /** Side occupied by a replay ghost, when presented beside the live play. */
+  ghostSide?: BeMusicSide;
   /** Active compat ruleset id (`lr2` / `beatoraja` / `____`). */
   rulesetLabel?: string;
   /** Ruleset-scoped gauge id (`GROOVE` / `HARD` / `HAZARD` / ...) labelling the gauge. */
@@ -779,6 +793,8 @@ export interface BeMusicSelectFrame {
   focusedCourse?: LibraryCourse;
   /** Current folder label (or search label), `undefined` at the library root. */
   folderLabel: string | undefined;
+  /** Folder labels from the library root to the current folder. Older hosts may omit this. */
+  folderPath?: readonly string[];
   searchQuery: string;
   /**
    * True while the host's text field sits over the search box (the box the skin bound to `actions.activateSearch`):
@@ -829,6 +845,9 @@ export interface BeMusicSelectSkin<K extends BeMusicSurfaceContextKind = BeMusic
    * `resolveBeMusicSelectLayout`.
    */
   readonly portraitLayout?: BeMusicSelectLayout;
+  /** Search text size in design pixels, shared by the drawn placeholder and the native editing field. */
+  readonly searchTextSize?: number;
+  readonly portraitSearchTextSize?: number;
   /** Length of the launch outro (ms) the select screen keeps drawing after a chart is picked. Default 0. */
   readonly outroMs?: number;
   /** Draws one select frame. Called every frame while the select screen is shown. */

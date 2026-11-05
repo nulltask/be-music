@@ -1,5 +1,15 @@
 # @be-music/skin-lr2
 
+## 0.7.0
+
+### Minor Changes
+
+- cbd8be0: Parse the LR2 `#SCENETIME` directive into `LR2SkinTiming.sceneTime` so hosts can preserve the authored scene duration, including zero-duration transitions.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-engine@0.15.0`, `@be-music/player-scene-model@0.6.1`
+
 ## 0.6.1
 
 ### Patch Changes

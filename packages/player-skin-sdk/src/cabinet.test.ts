@@ -4,6 +4,8 @@ import {
   formatScoreDiff,
   resolveCabinetBGARect,
   resolveCabinetLayout,
+  resolveScratchAngle,
+  resolveLanePlayLabel,
   resolveDifficultyName,
   resolveScorePace,
   resolveStageLabel,
@@ -59,13 +61,29 @@ describe('resolveCabinetLayout', () => {
     }
   });
 
-  it('keeps the top-right corner free for a host’s menu tab', () => {
-    expect(cabinet.stage.x + cabinet.stage.w).toBeLessThanOrEqual(cabinetStage.width - 52);
+  it('aligns the stage band with the chart panel', () => {
+    expect(cabinet.stage.x).toBe(cabinet.players.x);
+    expect(cabinet.stage.x + cabinet.stage.w).toBe(cabinet.players.x + cabinet.players.w);
   });
 
   it('places the BGA square the stage hands the player', () => {
     expect(layout.bga).toEqual(cabinet.bga);
-    expect(cabinet.bga).toEqual({ x: 483, y: 90, w: 260, h: 260 });
+    expect(cabinet.bga).toEqual({ x: 484, y: 98, w: 254, h: 254 });
+  });
+
+  it('keeps eight-pixel gaps through the information and graph columns', () => {
+    const graph = cabinet.graph!;
+    for (const column of [
+      [graph.header, graph.bars, graph.footer],
+      [cabinet.stage, cabinet.players, cabinet.bga, cabinet.judge],
+    ]) {
+      for (let index = 1; index < column.length; index += 1) {
+        const previous = column[index - 1]!;
+        expect(column[index]!.y - previous.y - previous.h).toBe(8);
+      }
+    }
+    expect(cabinet.tempo.y - cabinet.bpm.y - cabinet.bpm.h).toBe(8);
+    expect(cabinet.players.h).toBeGreaterThanOrEqual(52);
   });
 
   it('hides a BGA that would be a postage stamp', () => {
@@ -95,11 +113,23 @@ describe('resolveCabinetLayout for double play', () => {
     expect(cabinet.bga.w).toBeGreaterThan(0);
   });
 
-  it('keeps the graph clear of the menu tab’s corner, with a band for controls beside the corner', () => {
+  it('aligns the controls with the graph column', () => {
     const controls = cabinet.controls!;
     expect(cabinet.graph!.header.y).toBeGreaterThanOrEqual(controls.y + controls.h);
     expect(controls.x).toBeGreaterThan(layout.playfield.right);
-    expect(controls.x + controls.w).toBeLessThanOrEqual(cabinetStage.width - 52);
+    expect(controls.x).toBe(cabinet.graph!.header.x);
+    expect(controls.x + controls.w).toBe(cabinet.graph!.header.x + cabinet.graph!.header.w);
+  });
+
+  it('uses equal gaps between the panels in both side columns', () => {
+    const left = [cabinet.stage, cabinet.players, cabinet.bga, cabinet.judge];
+    const right = [cabinet.controls!, cabinet.graph!.header, cabinet.graph!.bars, cabinet.graph!.footer, cabinet.tempo];
+    for (const column of [left, right]) {
+      for (let index = 1; index < column.length; index += 1) {
+        const previous = column[index - 1]!;
+        expect(column[index]!.y - previous.y - previous.h).toBe(8);
+      }
+    }
   });
 
   it('lays the score, the shared gauge, the hi-speed and the BPM under the keys', () => {
@@ -119,11 +149,79 @@ describe('resolveCabinetLayout for double play', () => {
     expect(cabinet.center!.x + cabinet.center!.w).toBeLessThanOrEqual(sides['2P']!.left);
   });
 
-  it('leaves the keyboard modes at the margin, in the single-play arrangement', () => {
+  it.each([false, true])('leaves keyboard modes at the margin (twoPlayer=%s)', (twoPlayer) => {
     const keys = Array.from({ length: 50 }, (_, index) => `${index < 25 ? '1' : '2'}${index.toString(36)}`);
-    const keyboard = resolveGameplayLayout({ laneChannels: keys, playVariant: '48' }, cabinetStage);
+    const keyboard = resolveGameplayLayout({ laneChannels: keys, playVariant: '48', twoPlayer }, cabinetStage);
     expect(keyboard.playfield.left).toBeLessThan(40);
     expect(resolveCabinetLayout(keyboard).doublePlay).toBe(false);
+  });
+});
+
+describe('two-player cabinet layout', () => {
+  it.each([
+    ['14', DP14],
+    ['10', ['16', '11', '12', '13', '14', '15', '21', '22', '23', '24', '25', '26']],
+  ] as const)('places %s banks on opposite edges with a central monitor', (playVariant, laneChannels) => {
+    const layout = resolveGameplayLayout({ laneChannels, playVariant, twoPlayer: true }, cabinetStage);
+    const cabinet = resolveCabinetLayout(layout);
+    const one = layout.playfield.sides['1P']!;
+    const two = layout.playfield.sides['2P']!;
+    expect(layout.twoPlayer).toBe(true);
+    expect(cabinet.doublePlay).toBe(false);
+    expect(one.left).toBe(33);
+    expect(two.right).toBe(cabinetStage.width - 33);
+    expect(layout.bga).toEqual(cabinet.bga);
+    expect(cabinet.bga.x).toBeGreaterThan(one.right);
+    expect(cabinet.bga.x + cabinet.bga.w).toBeLessThan(two.left);
+    expect(cabinet.bga.x).toBe(cabinet.judge.x);
+    expect(cabinet.bga.w).toBe(cabinet.judge.w);
+    expect(cabinet.bpm.x).toBe(cabinet.judge.x);
+    expect(cabinet.gauge.x).toBe(one.left);
+    expect(cabinet.gauge.w).toBe(one.right - one.left);
+    expect(cabinet.secondSide!.gauge.x).toBe(two.left);
+    expect(cabinet.secondSide!.gauge.w).toBe(two.right - two.left);
+    expect(cabinet.gauge.y).toBeGreaterThan(cabinet.keys.y + cabinet.keys.h);
+    expect(cabinet.center).toBeUndefined();
+    expect(cabinet.graph).toBeDefined();
+    expect(cabinet.progress).toBeDefined();
+    expect(cabinet).not.toHaveProperty('maxCombo');
+    expect(cabinet).not.toHaveProperty('time');
+    expect(cabinet.secondSide).not.toHaveProperty('maxCombo');
+    expect(cabinet.players.h).toBeGreaterThanOrEqual(46);
+    expect(cabinet.judge.h).toBeGreaterThanOrEqual(84);
+    const panels = [
+      cabinet.controls!,
+      cabinet.graph!.header,
+      cabinet.graph!.bars,
+      cabinet.graph!.footer,
+      cabinet.progress!,
+      cabinet.stage,
+      cabinet.score,
+      cabinet.secondSide!.score,
+      cabinet.bga,
+      cabinet.gauge,
+      cabinet.secondSide!.gauge,
+      cabinet.hiSpeed,
+      cabinet.secondSide!.hiSpeed,
+      cabinet.players,
+      cabinet.judge,
+      cabinet.bpm,
+      cabinet.tempo,
+    ];
+    for (const [index, panel] of panels.entries()) {
+      expect(inside(panel, cabinetStage)).toBe(true);
+      expect(panel.w).toBeGreaterThan(0);
+      expect(panel.h).toBeGreaterThan(0);
+      for (const other of panels.slice(index + 1)) expect(overlaps(panel, other)).toBe(false);
+    }
+    // The scratch stays outside each bank, and keys retain their single-play widths.
+    const ordered = [...layout.lanes].sort((a, b) => a.x - b.x);
+    expect(ordered[0]!.channel).toBe('16');
+    expect(ordered.at(-1)!.channel).toBe('26');
+    expect(layout.lanes.find((lane) => lane.channel === '11')!.w).toBe(24);
+    const dp = resolveGameplayLayout({ laneChannels, playVariant }, cabinetStage);
+    expect(resolveCabinetLayout(dp).doublePlay).toBe(true);
+    expect(dp.playfield.right - dp.playfield.left).toBeLessThan(layout.playfield.right - layout.playfield.left);
   });
 });
 
@@ -189,7 +287,50 @@ describe('resolveDifficultyName', () => {
   it('names #DIFFICULTY 1 to 5', () => {
     expect(resolveDifficultyName(chart(4))).toBe('ANOTHER');
     expect(resolveDifficultyName(chart(1))).toBe('BEGINNER');
-    expect(resolveDifficultyName(chart(6))).toBeUndefined();
-    expect(resolveDifficultyName(chart())).toBeUndefined();
+    expect(resolveDifficultyName(chart(6))).toBe('UNSPECIFIED');
+    expect(resolveDifficultyName(chart())).toBe('UNSPECIFIED');
+    expect(resolveDifficultyName(undefined)).toBeUndefined();
   });
+});
+
+it('rotates scratches once every four chart beats, wrapping count-in beats', () => {
+  for (const [beat, angle] of [
+    [0, 0],
+    [1, Math.PI / 2],
+    [2, Math.PI],
+    [3, Math.PI * 1.5],
+    [4, 0],
+    [8, 0],
+    [-1, Math.PI * 1.5],
+  ] as const) {
+    expect(resolveScratchAngle(beat)).toBeCloseTo(angle);
+  }
+  expect(resolveScratchAngle(NaN)).toBe(0);
+});
+
+it.each([
+  { laneChannels: SP7, twoPlayer: false },
+  { laneChannels: DP14, twoPlayer: false },
+  { laneChannels: DP14, twoPlayer: true },
+])('keeps extended lanes close to keys and vertically centers the caption: %j', ({ laneChannels, twoPlayer }) => {
+  const layout = resolveGameplayLayout({ laneChannels, laneCount: laneChannels.length, twoPlayer }, cabinetStage);
+  const cabinet = resolveCabinetLayout(layout);
+  expect(layout.playfield.judgementY).toBe(333);
+  expect(cabinet.keys.y - layout.playfield.judgementY).toBe(2);
+  expect(cabinet.gaugeLabelY).toBe((cabinet.keys.y + cabinet.keys.h + cabinet.gauge.y) / 2);
+  expect(cabinet.score.y - cabinet.keys.y - cabinet.keys.h).toBeGreaterThanOrEqual(10);
+});
+
+it('labels automated lane banks and distinguishes the ghost from live input', () => {
+  expect(resolveLanePlayLabel({}, '1P')).toBeUndefined();
+  expect(resolveLanePlayLabel({ autoplay: true }, '1P')).toBe('AUTO PLAY');
+  expect(resolveLanePlayLabel({ autoplay: true }, '2P')).toBe('AUTO PLAY');
+  expect(resolveLanePlayLabel({ ghostSide: '2P' }, '1P')).toBeUndefined();
+  expect(resolveLanePlayLabel({ autoplay: true, ghostSide: '2P' }, '2P')).toBe('GHOST PLAY');
+});
+
+it('scratch input moves clockwise or counterclockwise and preserves its initial angle', () => {
+  expect(resolveScratchAngle(0, { angle: 1, direction: 1, atMs: 100 }, 100)).toBeCloseTo(1);
+  expect(resolveScratchAngle(0, { angle: 1, direction: 1, atMs: 100 }, 220)).toBeGreaterThan(1);
+  expect(resolveScratchAngle(0, { angle: 1, direction: -1, atMs: 100 }, 160)).toBeLessThan(1);
 });

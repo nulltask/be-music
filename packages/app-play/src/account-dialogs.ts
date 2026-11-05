@@ -1,3 +1,7 @@
+import { authPanelTemplate } from '@be-music/service-web-theme/client';
+import { localized } from './ui/localized.ts';
+import { render } from 'lit';
+import type { BeMusicStatusElement } from '@be-music/service-web-theme/client';
 import {
   accountProviderFromAction,
   signInWithAccountProvider,
@@ -5,20 +9,12 @@ import {
   signUpForLeaderboard,
   type AccountActionResult,
 } from './account.ts';
-import { playerText } from './player-copy.ts';
+import { playerLang, playerText } from './player-copy.ts';
 
 /** Which account dialog to open: sign-in, sign-up, or sign-up for the anonymous account already in this browser. */
 export type AccountDialog = 'sign-in' | 'sign-up' | 'keep';
 
 const DIALOG_IDS = { 'sign-in': '#leaderboard-sign-in', 'sign-up': '#leaderboard-sign-up' } as const;
-
-/** What the sign-up dialog says: a new account, or keeping the anonymous one this browser already has. */
-function signUpCopy(which: 'sign-up' | 'keep'): { title: string; lead: string } {
-  const shell = playerText().shell;
-  return which === 'keep'
-    ? { title: shell.keepTitle, lead: shell.keepLead }
-    : { title: shell.signUpTitle, lead: shell.signUpLead };
-}
 
 /** What the dialogs report back: any change to the account, and a sign-in or sign-up that went through. */
 export interface AccountDialogHandlers {
@@ -33,25 +29,36 @@ export interface AccountDialogHandlers {
  * function that opens one.
  */
 export function wireAccountDialogs(handlers: AccountDialogHandlers): (dialog: AccountDialog) => void {
+  let signUpMode: 'sign-up' | 'keep' = 'sign-up';
+  const draw = (kind: 'sign-in' | 'sign-up'): void => {
+    const dialog = document.querySelector<HTMLDialogElement>(DIALOG_IDS[kind]);
+    if (dialog !== null)
+      render(
+        localized(() =>
+          authPanelTemplate({ id: dialog.id, locale: playerLang(), mode: kind === 'sign-in' ? kind : signUpMode }),
+        ),
+        dialog,
+      );
+  };
+  draw('sign-in');
+  draw('sign-up');
   const open = (which: AccountDialog): void => {
     closeAll();
-    const dialog = document.querySelector<HTMLDialogElement>(DIALOG_IDS[which === 'keep' ? 'sign-up' : which]);
+    const kind = which === 'keep' ? 'sign-up' : which;
+    const dialog = document.querySelector<HTMLDialogElement>(DIALOG_IDS[kind]);
     if (dialog === null) return;
-    say(dialog, undefined);
     if (which !== 'sign-in') {
-      const copy = signUpCopy(which);
-      const title = dialog.querySelector('h2');
-      const lead = dialog.querySelector('[data-account-sign-up-lead]');
-      if (title !== null) title.textContent = copy.title;
-      if (lead !== null) lead.textContent = copy.lead;
+      signUpMode = which;
+      draw('sign-up');
     }
+    say(dialog, undefined);
     dialog.showModal();
   };
 
   document.addEventListener('click', (event) => {
-    const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-account-dialog-action]');
+    const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-auth-action]');
     if (button === null || button === undefined) return;
-    const action = button.dataset.accountDialogAction;
+    const action = button.dataset.authAction;
     if (action === 'close') closeAll();
     else if (action === 'open-sign-up') open('sign-up');
     else if (action === 'sign-in') {
@@ -74,7 +81,7 @@ export function wireAccountDialogs(handlers: AccountDialogHandlers): (dialog: Ac
 
   document.addEventListener('submit', (event) => {
     const form = event.target;
-    if (!(form instanceof HTMLFormElement) || !form.matches('[data-account-sign-up-form]')) return;
+    if (!(form instanceof HTMLFormElement) || !form.matches('[data-auth-sign-up-form]')) return;
     event.preventDefault();
     const data = new FormData(form);
     const text = (name: string) => {
@@ -126,9 +133,9 @@ async function run(
 }
 
 function say(dialog: HTMLDialogElement | null, message: string | undefined): void {
-  const status = dialog?.querySelector<HTMLElement>('[data-account-dialog-status]');
+  const status = dialog?.querySelector<BeMusicStatusElement>('[data-auth-status]');
   if (status === null || status === undefined) return;
-  status.textContent = message ?? '';
+  status.message = message ?? '';
   status.hidden = message === undefined;
 }
 

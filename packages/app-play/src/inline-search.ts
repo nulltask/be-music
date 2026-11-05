@@ -1,13 +1,17 @@
+import { render } from 'lit';
+
 /** A rectangle in CSS pixels. */
 export interface FieldRect {
+  fontSize?: number;
   x: number;
   y: number;
   width: number;
   height: number;
 }
 
-/** Where and how large the search field sits over a skin's search box, in the shell's CSS pixels. */
+/** Where and how large the search field sits over a skin's search box, in its containing block's CSS pixels. */
 export interface InlineFieldPlacement {
+  textScale?: number;
   left: number;
   top: number;
   width: number;
@@ -17,23 +21,35 @@ export interface InlineFieldPlacement {
 
 /**
  * Lays the search field over a skin's search box: `field` is the box on the canvas (from the select scene), `canvas`
- * and `shell` are the canvas's and the shell's page boxes. The text is sized to the box (a little over a third of its height, as the built-in skins set theirs; never
+ * and `container` are the page boxes of the canvas and of the element the field is positioned in. The text is sized to the box (a little over a third of its height, as the built-in skins set theirs; never
  * under 12 px so it stays readable, and never under 16 px on touch screens, where a smaller font makes iOS zoom in).
  */
 export function placeInlineField(
   field: FieldRect,
   canvas: { left: number; top: number },
-  shell: { left: number; top: number },
+  container: { left: number; top: number },
   touch = false,
 ): InlineFieldPlacement {
-  const fontSize = Math.max(touch ? 16 : 12, Math.round(field.height * 0.38));
+  const requested = field.fontSize ?? Math.round(field.height * 0.38);
+  const fontSize =
+    field.fontSize === undefined ? Math.max(touch ? 16 : 12, requested) : Math.max(touch ? 16 : 1, requested);
+  const textScale = field.fontSize !== undefined && touch ? Math.min(1, requested / fontSize) : 1;
   return {
-    left: canvas.left - shell.left + field.x,
-    top: canvas.top - shell.top + field.y,
-    width: field.width,
-    height: field.height,
+    left: canvas.left - container.left + field.x,
+    top: canvas.top - container.top + field.y,
+    width: field.width / textScale,
+    height: field.height / textScale,
     fontSize,
+    ...(textScale < 1 ? { textScale } : {}),
   };
+}
+
+/**
+ * The element `element`'s `left` / `top` are measured from: its offset parent (the player's main area, under the
+ * header), or `fallback` while it has none (hidden).
+ */
+export function positioningContainer<T>(element: { readonly offsetParent: unknown }, fallback: T): T {
+  return (element.offsetParent as T | null) ?? fallback;
 }
 
 /** What the inline search needs from the player. */
@@ -43,6 +59,7 @@ export interface InlineSearchHost {
   readonly input: HTMLInputElement;
   /** Where the field says why a chart filter expression (`?…`) does not parse; it sits just under the field. */
   readonly error?: HTMLElement;
+  /** Where the field and the error are positioned when they have no offset parent of their own. */
   readonly shell: HTMLElement;
   /** The canvas the select scene draws on. */
   canvas(): HTMLCanvasElement | undefined;
@@ -135,7 +152,7 @@ export class InlineSearch {
     const message = this.host.searchError?.();
     input.setAttribute('aria-invalid', message === undefined ? 'false' : 'true');
     if (error === undefined) return;
-    error.textContent = message ?? '';
+    render(message ?? '', error);
     error.hidden = message === undefined;
     if (message !== undefined) this.placeError();
   }
@@ -145,7 +162,7 @@ export class InlineSearch {
     const { input, error, shell } = this.host;
     if (error === undefined || error.hidden) return;
     const field = input.getBoundingClientRect();
-    const origin = shell.getBoundingClientRect();
+    const origin = positioningContainer<Element>(error, shell).getBoundingClientRect();
     error.style.left = `${field.left - origin.left}px`;
     error.style.top = `${field.bottom - origin.top + 4}px`;
   }
@@ -192,7 +209,8 @@ export class InlineSearch {
     const placement = placeInlineField(
       field,
       canvas.getBoundingClientRect(),
-      this.host.shell.getBoundingClientRect(),
+      // The header sits above the field's containing block, so the shell's box would put the field a header too low.
+      positioningContainer<Element>(this.host.input, this.host.shell).getBoundingClientRect(),
       this.host.touch(),
     );
     const { style } = this.host.input;
@@ -201,5 +219,7 @@ export class InlineSearch {
     style.width = `${placement.width}px`;
     style.height = `${placement.height}px`;
     style.fontSize = `${placement.fontSize}px`;
+    style.transformOrigin = 'top left';
+    style.transform = placement.textScale === undefined ? 'none' : `scale(${placement.textScale})`;
   }
 }

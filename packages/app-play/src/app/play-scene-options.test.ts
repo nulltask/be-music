@@ -58,7 +58,7 @@ function course(
 
 const LR2CRS: CourseSource = { format: 'lr2crs', type: 0, header: '', hash: '' };
 
-/** The Debug Menu as a player left it: RANDOM on 1P, FLIP, auto scratch, the EASY gauge, a slower tempo. */
+/** The Options dialog as a player left it: RANDOM on 1P, FLIP, auto scratch, the EASY gauge, a slower tempo. */
 function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
   return {
     autoPlay: false,
@@ -68,6 +68,7 @@ function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
     gauge: 'EASY',
     autoScratch1P: true,
     autoScratch2P: true,
+    laneKeys: {},
     replayView: { tempo: true, hiSpeed: true, covers: true, lift: true },
     tempoEnabled: true,
     tempoPercent: -10,
@@ -124,7 +125,7 @@ function rereplay(tempo: number | null = 1.2): BeMusicReplay {
 }
 
 describe('resolvePlaySceneOptions: a single play', () => {
-  test('takes the Debug Menu’s picks, the play options in force and the slider’s tempo', () => {
+  test('takes the Options dialog’s picks, the play options in force and the slider’s tempo', () => {
     const { autoPlay, tempo, settings, course } = resolvePlaySceneOptions(input({ chartHashes: HASHES }));
     expect(autoPlay).toBe(false);
     expect(tempo).toBe(0.9);
@@ -132,6 +133,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
     expect(settings).toEqual({
       autoPlay: false,
       autoPauseOnBlur: false,
+      laneKeys: {},
       initialHiSpeed: 2.5,
       bga: 'OFF',
       bgaSize: PLAY_OPTIONS.bgaSize,
@@ -205,7 +207,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
     });
   });
 
-  test('passes peak gain only when the Debug Menu turned it on', () => {
+  test('passes peak gain only when the Options dialog turned it on', () => {
     expect(resolvePlaySceneOptions(input()).settings.peakGain).toBeUndefined();
     expect(resolvePlaySceneOptions(input({ guiState: gui({ peakGain: true }) })).settings.peakGain).toBe(true);
   });
@@ -218,7 +220,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
     expect(resolvePlaySceneOptions(input({ guiState })).tempo).toBe(0.8);
   });
 
-  test('the start’s AUTO wins over the Debug Menu’s; without one the Debug Menu’s counts', () => {
+  test('the start’s AUTO wins over the Options dialog’s; without one the Options dialog’s counts', () => {
     expect(resolvePlaySceneOptions(input({ autoPlay: true })).autoPlay).toBe(true);
     expect(resolvePlaySceneOptions(input({ autoPlay: true })).settings.autoPlay).toBe(true);
     expect(resolvePlaySceneOptions(input({ autoPlay: false, guiState: gui({ autoPlay: true }) })).autoPlay).toBe(false);
@@ -255,6 +257,11 @@ describe('resolvePlaySceneOptions: ANY KEY', () => {
     recorded.play.anyKey = true;
     expect(resolvePlaySceneOptions(input({ replay: recorded })).settings.anyKey).toBe(true);
   });
+});
+
+test('resolvePlaySceneOptions passes the player’s own lane keys to the play', () => {
+  const laneKeys = { beat: { '11': ['s'] } };
+  expect(resolvePlaySceneOptions(input({ guiState: gui({ laneKeys }) })).settings.laneKeys).toEqual(laneKeys);
 });
 
 describe('resolvePlaySceneOptions: a replay', () => {

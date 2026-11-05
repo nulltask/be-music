@@ -108,11 +108,23 @@ export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, e
       advanceJudgeState(state, input.nowSec, input.nowMs, emit);
       return;
     case 'press':
+      if (input.spin !== undefined)
+        emit({ kind: 'ui', command: { kind: 'scratch-spin', channels: [...input.channels], spin: input.spin } });
       if (state.config.anyKey === true) {
         pressAnyKey(state, input, emit);
         return;
       }
-      handleLanePress(state, input.channels, input.tokens, input.nowMs, input.nowSec, emit, input.channels, input.spin);
+      handleLanePress(
+        state,
+        input.channels,
+        input.tokens,
+        input.nowMs,
+        input.nowSec,
+        emit,
+        input.channels,
+        input.spin,
+        input.code,
+      );
       return;
     case 'hold':
       holdLanes(
@@ -172,7 +184,7 @@ function pressAnyKey(
   const lanes = resolveAnyKeyPressChannels(state, input.channels, input.nowSec);
   state.anyKeyRoutes.route(anyKeyRouteKeys(input.tokens, input.channels), lanes);
   holdLanes(state, lanes, false, emit);
-  handleLanePress(state, lanes, input.tokens, input.nowMs, input.nowSec, emit, input.channels, input.spin);
+  handleLanePress(state, lanes, input.tokens, input.nowMs, input.nowSec, emit, input.channels, input.spin, input.code);
 }
 
 /** {@link runJudgeCoreStep} collecting the effects into an array — `step(state, input) → effects`. */
@@ -286,6 +298,7 @@ function processReplayEventsUntil(
           nowSec: eventSec,
           nowMs: eventMs,
           ...(event.spin !== undefined ? { spin: event.spin } : {}),
+          ...(event.code !== undefined ? { code: event.code } : {}),
         },
         emit,
       );
@@ -300,6 +313,7 @@ function processReplayEventsUntil(
           nowMs: eventMs,
           recordSec: eventSec,
           ...(event.inferred === true ? { inferred: true } : {}),
+          ...(event.code !== undefined ? { code: event.code } : {}),
         },
         emit,
       );

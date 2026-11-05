@@ -2,13 +2,13 @@
 
 # プレイオプション
 
-Debug Menu の **Play options** と選曲画面は、実際に使う設定を共有します。新しいプレイに適用するオプションはプレイ中に変更できず、保存した設定は次回の起動で復元します。リプレイには選択した値と途中の変更を、実効譜面・表示・テンポとともに保存します。プレイの記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。実装では [#755](https://github.com/nulltask/be-music/issues/755) からリンクした各 Issue の仕様とコメントを参照します。
+Options ダイアログ の **Play options** と選曲画面は、実際に使う設定を共有します。新しいプレイに適用するオプションはプレイ中に変更できず、保存した設定は次回の起動で復元します。リプレイには選択した値と途中の変更を、実効譜面・表示・テンポとともに保存します。プレイの記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。実装では [#755](https://github.com/nulltask/be-music/issues/755) からリンクした各 Issue の仕様とコメントを参照します。
 
 ## オプションと判定ルール
 
-Debug Menu の Developer にある **Judgment windows** は判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）を選びます。譜面または表示を変えるだけのオプションは、どのルールでも選べます。それぞれ判定ルールに関係なく参照元のアルゴリズムで動き、ルールを切り替えても維持し、参照元の譜面の種類の制限はそのまま残ります。対象は HS-FIX CONSTANT、CLASSIC と通常の HI-SPEED、FLOATING HI-SPEED と表示エリア固定、BPM 変化予告、判定タイミングの自動調整、レーンオプションの R-RANDOM・SPIRAL・H-RANDOM・ALL-SCR・RANDOM-EX・S-RANDOM-EX・RANDOM_PLAYABLE・S_RANDOM_PLAYABLE と 2 種類の SCATTER、SYNCHRONIZE RANDOM・SYMMETRY RANDOM・M-RAN、地雷とスクロールの変換、EXTRA と LR2 EXTRA MODE、ADD LN / CN / HCN / ALL、SP TO DP、7 TO 9、BATTLE AS、D-BATTLE、2 人プレイです。レーンオプションはどのルールでもその側のシードで抽選します（[参照元のシードと前回の配置](#参照元のシードと前回の配置)）。ロングノートの追加はブラウザの乱数で抽選します。
+Options ダイアログ の Play options の一番上にある **Judgment windows** は判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）を選びます。譜面または表示を変えるだけのオプションは、どのルールでも選べます。それぞれ判定ルールに関係なく参照元のアルゴリズムで動き、ルールを切り替えても維持し、参照元の譜面の種類の制限はそのまま残ります。対象は HS-FIX CONSTANT、CLASSIC と通常の HI-SPEED、FLOATING HI-SPEED と表示エリア固定、BPM 変化予告、判定タイミングの自動調整、レーンオプションの R-RANDOM・SPIRAL・H-RANDOM・ALL-SCR・RANDOM-EX・S-RANDOM-EX・RANDOM_PLAYABLE・S_RANDOM_PLAYABLE と 2 種類の SCATTER、SYNCHRONIZE RANDOM・SYMMETRY RANDOM・M-RAN、地雷とスクロールの変換、EXTRA と LR2 EXTRA MODE、ADD LN / CN / HCN / ALL、SP TO DP、7 TO 9、BATTLE AS、D-BATTLE、2 人プレイです。レーンオプションはどのルールでもその側のシードで抽選します（[参照元のシードと前回の配置](#参照元のシードと前回の配置)）。ロングノートの追加はブラウザの乱数で抽選します。
 
-**参照元つきの値。** RANDOM・S-RANDOM・CONVERGE と 1 人用の BATTLE は参照元ごとに別のアルゴリズムや規則を指すため、値に参照元を付けます（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。`lr2:RANDOM`・`beatoraja:RANDOM`・`____:RANDOM`（AC の RANDOM と S-RANDOM は当面 LR2 のアルゴリズムで動きます）、`lr2:CONVERGE`・`beatoraja:CONVERGE`、`beatoraja:BATTLE`・`____:BATTLE` です。どれもどのルールでも選べ、その参照元の動作をします。Debug Menu はレーンとバトルの選択肢を参照元ごとにまとめて判定ルール自身の参照元を先頭に並べ、ラベルに **RANDOM (LR2)**・**S-RANDOM (beatoraja)**・**BATTLE (????)** のように参照元を示します。古いリプレイや設定にある参照元のない値は、判定ルール自身のものとして読みます。保存した設定は読み込むときに移行し、参照元のない値を保存時のルールの参照元つきの値にします。リプレイは書き換えません。参照元のないリプレイは記録したルールのものとして読みます。
+**参照元つきの値。** RANDOM・S-RANDOM・CONVERGE と 1 人用の BATTLE は参照元ごとに別のアルゴリズムや規則を指すため、値に参照元を付けます（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。`lr2:RANDOM`・`beatoraja:RANDOM`・`____:RANDOM`（AC の RANDOM と S-RANDOM は当面 LR2 のアルゴリズムで動きます）、`lr2:CONVERGE`・`beatoraja:CONVERGE`、`beatoraja:BATTLE`・`____:BATTLE` です。どれもどのルールでも選べ、その参照元の動作をします。Options ダイアログ はレーンとバトルの選択肢を参照元ごとにまとめて判定ルール自身の参照元を先頭に並べ、ラベルに **RANDOM (LR2)**・**S-RANDOM (beatoraja)**・**BATTLE (????)** のように参照元を示します。古いリプレイや設定にある参照元のない値は、判定ルール自身のものとして読みます。保存した設定は読み込むときに移行し、参照元のない値を保存時のルールの参照元つきの値にします。リプレイは書き換えません。参照元のないリプレイは記録したルールのものとして読みます。
 
 ```mermaid
 flowchart LR
@@ -77,15 +77,15 @@ flowchart LR
 
 ## START BPM HS-FIX
 
-Debug Menu で **HS-FIX → STARTBPM** を選択します。既定は **OFF** のままです。START は MAX・MIN・MAIN とは別に、譜面のヘッダーにある開始 BPM をハイスピードの基準にします。`#BASEBPM` で基準速度を指定している場合の倍率は `基準 BPM / 開始 BPM` です。拍 0 の BPM 変更でヘッダーの開始 BPM を置き換えません。その後の BPM 変更ではスクロール速度も変化します。通常の表示速度オプションとして扱い、スコア・アシスト・コースの記録条件は変更しません。
+Options ダイアログ で **HS-FIX → STARTBPM** を選択します。既定は **OFF** のままです。START は MAX・MIN・MAIN とは別に、譜面のヘッダーにある開始 BPM をハイスピードの基準にします。`#BASEBPM` で基準速度を指定している場合の倍率は `基準 BPM / 開始 BPM` です。拍 0 の BPM 変更でヘッダーの開始 BPM を置き換えません。その後の BPM 変更ではスクロール速度も変化します。通常の表示速度オプションとして扱い、スコア・アシスト・コースの記録条件は変更しません。
 
-モードと実際の描画ハイスピードをリプレイの表示設定に記録します。beatoraja スキンには元の START のオプション番号 1 を渡します。LR2 スキンでは既存の 5 種類の HS-FIX ボタン画像と循環順を維持するため、START は Debug Menu から選びます。スキン側でも共通のプレイオプション API で選択できます。
+モードと実際の描画ハイスピードをリプレイの表示設定に記録します。beatoraja スキンには元の START のオプション番号 1 を渡します。LR2 スキンでは既存の 5 種類の HS-FIX ボタン画像と循環順を維持するため、START は Options ダイアログ から選びます。スキン側でも共通のプレイオプション API で選択できます。
 
 出典: beatoraja 0.8.9 の [`LaneRenderer.init`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/LaneRenderer.java) と [`PlayConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayConfig.java)。対応 Issue: [#736](https://github.com/nulltask/be-music/issues/736)。
 
 ## 表示エリア情報の常時表示
 
-Debug Menu の **Display area info** で **OFF**（既定）、**ON**、**SUDDEN+ ONLY**、**HID+/LIFT ONLY** を選びます。「名前を言ってはいけないあのゲーム」AC 34 の画面にある 4 種類です。選んだ側の有効なカバーに、0〜1000 の長さと緑数字を START を押さずに表示し続けます。DP は各側のカバーと表示時間を使います。無効なカバーにはラベルを追加しません。OFF でもスキン自身の既存の表示はそのまま使えます。
+Options ダイアログ の **Display area info** で **OFF**（既定）、**ON**、**SUDDEN+ ONLY**、**HID+/LIFT ONLY** を選びます。「名前を言ってはいけないあのゲーム」AC 34 の画面にある 4 種類です。選んだ側の有効なカバーに、0〜1000 の長さと緑数字を START を押さずに表示し続けます。DP は各側のカバーと表示時間を使います。無効なカバーにはラベルを追加しません。OFF でもスキン自身の既存の表示はそのまま使えます。
 
 同じフォルダーには既存の LR2 の **Effect 1P / 2P**、**Lane cover**、**Cover height** の設定もあり、スキンの種類を切り替えても設定を引き継ぎます。Native は DOM、Canvas・LR2・beatoraja は Canvas のラベルを使い、Canvas のキャプチャーにも含めます。表示の選択は保存する閲覧設定で、入力・判定・スクロール・リプレイの記録条件を変えません。この設定について、出典のページは追加の記録制限を示していません。
 
@@ -93,11 +93,11 @@ Debug Menu の **Display area info** で **OFF**（既定）、**ON**、**SUDDEN
 
 ## 左右別 AUTO SCRATCH
 
-Debug Menu の **Auto scratch 1P / 2P** は、各側のスクラッチノートを独立して自動化します。反対側はロングスクラッチを含めて手動のままです。[#708](https://github.com/nulltask/be-music/issues/708) の左右別 AUTO SCRATCH に従います。リプレイは選択した設定一式と実効的な左右のスイッチを保持します。全体のスイッチだけを持つ旧リプレイでは両側に適用します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+Options ダイアログ の **Auto scratch 1P / 2P** は、各側のスクラッチノートを独立して自動化します。反対側はロングスクラッチを含めて手動のままです。[#708](https://github.com/nulltask/be-music/issues/708) の左右別 AUTO SCRATCH に従います。リプレイは選択した設定一式と実効的な左右のスイッチを保持します。全体のスイッチだけを持つ旧リプレイでは両側に適用します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 ## ANY KEY
 
-Debug Menu の Developer で **Judgment windows → ????** を選び、**Play options → ANY KEY (PC)** をオンにします。既定はオフで、ほかの判定ルールでは表示しません。PC 版のアシストで、PC 版のページは名前を挙げるだけなので、Be-Music は次のように読みます（[#751](https://github.com/nulltask/be-music/issues/751)）。
+Options ダイアログ の Play options の一番上で **Judgment windows → ????** を選び、**Play options → ANY KEY (PC)** をオンにします。既定はオフで、ほかの判定ルールでは表示しません。PC 版のアシストで、PC 版のページは名前を挙げるだけなので、Be-Music は次のように読みます（[#751](https://github.com/nulltask/be-music/issues/751)）。
 
 - **1 回の押下で 1 ノート。** どのキーを押しても、判定幅の内にある未判定のノートのうち最も近いものを、スクラッチを含むどのレーンからでも取ります。同じ近さなら早いノート、次に小さいレーンを取ります。AUTO SCRATCH が演奏するレーンと、ロングノートを押し続けているレーンは除きます。届くノートがない押下は、そのキー自身のレーンのままです。
 - **同時押し**は、ノートの数だけ押して取ります。
@@ -108,7 +108,7 @@ Debug Menu の Developer で **Judgment windows → ????** を選び、**Play op
 
 ## LEGACY NOTE と LN REMOVE
 
-Debug Menu の **Long notes** は **OFF** が既定です。**LEGACY NOTE (AC 34)** はチャージノートとバックスピンスクラッチを始点だけにし、通常の LN は維持します。HCN はこの AC オプションの対象外として維持します。**LN REMOVE (beatoraja)** は、beatoraja 0.8.9 の REMOVE を除去率最大で適用した場合と同様に、スクラッチを含むすべての LN・CN・HCN を始点だけにします。始点のキー音と時刻を保持し、終点の判定と音声を除去します。該当するノートがない譜面は変化しません。
+Options ダイアログ の **Long notes** は **OFF** が既定です。**LEGACY NOTE (AC 34)** はチャージノートとバックスピンスクラッチを始点だけにし、通常の LN は維持します。HCN はこの AC オプションの対象外として維持します。**LN REMOVE (beatoraja)** は、beatoraja 0.8.9 の REMOVE を除去率最大で適用した場合と同様に、スクラッチを含むすべての LN・CN・HCN を始点だけにします。始点のキー音と時刻を保持し、終点の判定と音声を除去します。該当するノートがない譜面は変化しません。
 
 エンジンと描画は変換後のノートを共有します。リプレイには変換方式と変換後の始点だけのノートを記録し、元の譜面のフィンガープリントは読み込んだ譜面を識別する値として維持します。リプレイを開く際は記録された変換を適用してからレーン配置を復元します。参照元でもプレイ前に譜面を変換する設定のため、プレイ中の選択はロックします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -116,21 +116,21 @@ Debug Menu の **Long notes** は **OFF** が既定です。**LEGACY NOTE (AC 34
 
 ## A-SCR & LEGACY NOTE
 
-Debug Menu の **A-SCR & LEGACY NOTE (AC 34)** ボタンは、AC 34 の複合設定として両側の AUTO SCRATCH と LEGACY NOTE を一度に適用します。既存のスイッチと Long notes が実効設定を直ちに表示し、各操作の選択や解除もできます。除去するのは CN・BSS の終点、自動化するのはスクラッチだけです。両操作と変換後のノートを明示的に記録するため、リプレイで見た目のプリセット名からアシストを推測する必要はありません。プレイ中はボタンを無効にします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+AC 34 の複合設定 A-SCR & LEGACY NOTE は、**Auto scratch 1P / 2P** をオンにして **Long notes → LEGACY NOTE (AC 34)** を選んだものです。Options ダイアログに専用のボタンはありません。除去するのは CN・BSS の終点、自動化するのはスクラッチだけです。両操作と変換後のノートを明示的に記録するため、リプレイでプリセット名からアシストを推測する必要はありません。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：AC 34 の[アシストオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#711](https://github.com/nulltask/be-music/issues/711) です。
 
 ## EX-HARD
 
-Debug Menu の Developer で **Judgment windows → beatoraja / ????** を選び、**Play options → Gauge → EX-HARD** を選択します。EX-HARD は独立したサバイバルゲージで、AUTO SCRATCH などの入力アシストではありません。100 から始まり、HARD の低残量時のダメージ軽減を持たず、ゼロで失敗します。既存の参照元別テーブルに従い、beatoraja のモードごとの増減と AC の独自の増減を維持します。beatoraja の **HAZARD** は別の選択肢です（リプレイの既存キーは `DEATH`）。このキーを使う古い AC リプレイの解釈は維持します。
+Options ダイアログ の Play options の一番上で **Judgment windows → beatoraja / ????** を選び、**Play options → Gauge → EX-HARD** を選択します。EX-HARD は独立したサバイバルゲージで、AUTO SCRATCH などの入力アシストではありません。100 から始まり、HARD の低残量時のダメージ軽減を持たず、ゼロで失敗します。既存の参照元別テーブルに従い、beatoraja のモードごとの増減と AC の独自の増減を維持します。beatoraja の **HAZARD** は別の選択肢です（リプレイの既存キーは `DEATH`）。このキーを使う古い AC リプレイの解釈は維持します。
 
-LR2 beta3 に EX-HARD はありません。選択肢は GROOVE / HARD / DEATH / EASY（と P.ATTACK / G.ATTACK）を維持し、LR2 ルールで EX-HARD を直接指定した場合は明示的にエラーにします。選択したゲージに対応しないルールへ切り替えると通常ゲージに戻します。LR2 スキンのボタンは従来のセルと巡回順（GROOVE・HARD・DEATH・EASY・P.ATTACK・G.ATTACK）を維持します。別のルールの EX-HARD を LR2 スキンで表示する場合は赤いサバイバルゲージ表示を使用します。EX-HARD の選択には Debug Menu を使います。リプレイは `play.gauge: "EX-HARD"` と参照元の実効ゲージ名を記録し、beatoraja / AC のコースでは EXHARDCLASS に変換します。
+LR2 beta3 に EX-HARD はありません。選択肢は GROOVE / HARD / DEATH / EASY（と P.ATTACK / G.ATTACK）を維持し、LR2 ルールで EX-HARD を直接指定した場合は明示的にエラーにします。選択したゲージに対応しないルールへ切り替えると通常ゲージに戻します。LR2 スキンのボタンは従来のセルと巡回順（GROOVE・HARD・DEATH・EASY・P.ATTACK・G.ATTACK）を維持します。別のルールの EX-HARD を LR2 スキンで表示する場合は赤いサバイバルゲージ表示を使用します。EX-HARD の選択には Options ダイアログ を使います。リプレイは `play.gauge: "EX-HARD"` と参照元の実効ゲージ名を記録し、beatoraja / AC のコースでは EXHARDCLASS に変換します。
 
 参照元：beatoraja 0.8.9 の [`GaugeProperty`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GaugeProperty.java)、AC 34 の[ゲージオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#726](https://github.com/nulltask/be-music/issues/726) です。
 
 ## ASSIST EASY / ASSISTED EASY
 
-beatoraja ルールでは Debug Menu の **Gauge → ASSIST EASY**、???? ルールでは **ASSISTED EASY** を選べます。どちらも AUTO SCRATCH やロングノート変換から独立した、緩やかな回復ゲージです。リプレイの選択ゲージは `ASSIST-EASY`、実効的な結果のゲージ名は参照元に合わせて `ASSIST-EASY` または `ASSISTED-EASY` を保持します。ゲージ名から入力アシストのスイッチを推測しません。
+beatoraja ルールでは Options ダイアログ の **Gauge → ASSIST EASY**、???? ルールでは **ASSISTED EASY** を選べます。どちらも AUTO SCRATCH やロングノート変換から独立した、緩やかな回復ゲージです。リプレイの選択ゲージは `ASSIST-EASY`、実効的な結果のゲージ名は参照元に合わせて `ASSIST-EASY` または `ASSISTED-EASY` を保持します。ゲージ名から入力アシストのスイッチを推測しません。
 
 既存の beatoraja テーブルに従い、モードごとの回復量・ダメージ・クリア基準を維持します。7 鍵盤の基準は 60、5 鍵盤では 50 です。AC では独自の増減量とクリア基準 60 を使います。LR2 beta3 にこの選択肢はなく、直接指定した場合はエラーにします。beatoraja / AC のコースでは、参照元のコースゲージ変換に従い CLASS に変換します。LR2 スキンでは既存の EASY セルと通常ゲージ表示を使用し、テキストには選択した名前を保持します。
 
@@ -142,7 +142,7 @@ beatoraja ルールでは Debug Menu の **Gauge → ASSIST EASY**、???? ルー
 
 ## 判定アルゴリズム
 
-beatoraja ルールでは Debug Menu の **Judge algorithm** で **Combo**、**Duration**、**Lowest** を選びます。既定は **Combo** です。アルゴリズムは、押下の届く範囲に複数のノートがあるとき、どのノートで判定するかを決めます。beatoraja の既定である Combo は、手前のノートが GOOD 窓の遅い側の端を過ぎ、後ろのノートが自身の窓に入っている場合に限り後ろのノートへ移ります。Duration は時間的に最も近いノート、Lowest は届く範囲で常に最も手前のノートを選びます。beatoraja 内部の Score は選択肢にしません。LR2 と AC は常に最も手前のノートで判定するため、これらのルールでは **Source default** だけを表示し、エンジンはそれ以外の選択をエラーにします。
+beatoraja ルールでは Options ダイアログ の **Judge algorithm** で **Combo**、**Duration**、**Lowest** を選びます。既定は **Combo** です。アルゴリズムは、押下の届く範囲に複数のノートがあるとき、どのノートで判定するかを決めます。beatoraja の既定である Combo は、手前のノートが GOOD 窓の遅い側の端を過ぎ、後ろのノートが自身の窓に入っている場合に限り後ろのノートへ移ります。Duration は時間的に最も近いノート、Lowest は届く範囲で常に最も手前のノートを選びます。beatoraja 内部の Score は選択肢にしません。LR2 と AC は常に最も手前のノートで判定するため、これらのルールでは **Source default** だけを表示し、エンジンはそれ以外の選択をエラーにします。
 
 beatoraja のリプレイは実効アルゴリズムを `play.judgeAlgorithm` に記録し（他を選んでいなければ Combo）、リプレイのシミュレーションもこれで判定します。beatoraja の選曲スキンの判定アルゴリズムボタン（340）は 3 種類を巡回し、ラベル画像に表示します。この選択でアシストのフラグは立ちません。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -150,7 +150,7 @@ beatoraja のリプレイは実効アルゴリズムを `play.judgeAlgorithm` �
 
 ## CLASSIC HI-SPEED と通常 HI-SPEED
 
-どのルールでも Debug Menu に **CLASSIC HI-SPEED** と **Normal HI-SPEED (AC 32 measured)** が表示されます。どちらも既定はオフで、一方をオンにするともう一方はオフになります。どちらも HS-FIX を OFF にし、**Hi-speed** スライダーと **HS-FIX** の代わりに専用の操作を表示します。**Classic speed** では AC 34 の CLASSIC の 11 段階（1、1.5、2、2.25 … 3.75、4）から選びます。矢印キーと選曲画面のハイスピード操作も同じ表を進み、両端で止まります。
+どのルールでも Options ダイアログ に **CLASSIC HI-SPEED** と **Normal HI-SPEED (AC 32 measured)** が表示されます。どちらも既定はオフで、一方をオンにするともう一方はオフになります。どちらも HS-FIX を OFF にし、**Hi-speed** スライダーと **HS-FIX** の代わりに専用の操作を表示します。**Classic speed** では AC 34 の CLASSIC の 11 段階（1、1.5、2、2.25 … 3.75、4）から選びます。矢印キーと選曲画面のハイスピード操作も同じ表を進み、両端で止まります。
 
 **Normal HS level** では 20 段階から選びます。各段階は masaoblue 氏が AC 32 Lightning Model で計測した緑数字（2025-08-21 公開）に従い、レーン全体で 1200 から 260 までです。AC 34 での校正を主張するものではありません。倍率は譜面の開始 BPM で計算し、その後の BPM 変化でも維持します。矢印キー 1 回で 1 段階動き、その時点の BPM で計算し直します。どちらのモードも計測したレーンの尺度で描画するため、どのスキンでも緑数字が参照元と一致します。
 
@@ -160,7 +160,7 @@ beatoraja のリプレイは実効アルゴリズムを `play.judgeAlgorithm` �
 
 ## BPM GUIDE
 
-Debug Menu の **BPM GUIDE (beatoraja)** をオンにします。既定はオフです。オンにすると、beatoraja 0.8.9 の `LaneRenderer` と同様に、この先のテンポ変化をレーン上に表示します。実際に BPM が変わる位置には緑の `BPM<n>`（現在と同じ BPM の指定は省略）、正の STOP の位置には黄色の `STOP <n>ms` を表示し、どちらも整数に切り捨てます。ラベルは STOP や負のスクロールを含めてノートと同じようにスクロールし、判定線を過ぎると消えます。
+Options ダイアログ の **BPM GUIDE (beatoraja)** をオンにします。既定はオフです。オンにすると、beatoraja 0.8.9 の `LaneRenderer` と同様に、この先のテンポ変化をレーン上に表示します。実際に BPM が変わる位置には緑の `BPM<n>`（現在と同じ BPM の指定は省略）、正の STOP の位置には黄色の `STOP <n>ms` を表示し、どちらも整数に切り捨てます。ラベルは STOP や負のスクロールを含めてノートと同じようにスクロールし、判定線を過ぎると消えます。
 
 内蔵スキンと LR2 のプレイフィールドは、プレイサイドごとに線とラベルを 1 つ描きます。beatoraja スキンは自身の BPM・STOP のマーカー画像を描き、それをこのオプションがオンの間だけ表示して、上にラベルを加えます。リプレイには `play.options.bpmGuide` と、譜面のヘッダー BPM（`chart.headerBPM`）と解決後の BPM 範囲（`chart.bpmRange`）を記録します。これは beatoraja のライトアシストの規則が参照する情報で、その規則は BPM が変化する譜面にだけ適用されます。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -168,7 +168,7 @@ Debug Menu の **BPM GUIDE (beatoraja)** をオンにします。既定はオフ
 
 ## BPM 変化予告
 
-Debug Menu の **BPM change warning (AC)** をオンにします。既定はオフです。BPM が変わる前に、レーン上の枠付きの箱に `<今の BPM> » <次の BPM>` を表示し、変わるまで出し続けます。テンポが上がるときは青、下がるときは赤で、BPM は整数で表示します。変化の 2 秒前（譜面の時間）に現れるため、速い区間では遅い区間より多くの拍の前に出ます。
+Options ダイアログ の **BPM change warning (AC)** をオンにします。既定はオフです。BPM が変わる前に、レーン上の枠付きの箱に `<今の BPM> » <次の BPM>` を表示し、変わるまで出し続けます。テンポが上がるときは青、下がるときは赤で、BPM は整数で表示します。変化の 2 秒前（譜面の時間）に現れるため、速い区間では遅い区間より多くの拍の前に出ます。
 
 ```mermaid
 timeline
@@ -183,7 +183,7 @@ timeline
 
 ## 判定タイミングと自動調整
 
-Debug Menu の **Judge timing (ms)** で、beatoraja と LR2 のどちらにもある表示タイミングを設定します。−500〜500 ms の整数で、既定は 0 です。どちらとも同様に、ずらすのはノートを描く時計だけで、正の値ではその時計が先に進みます。入力・音声・判定の時刻は変わらないため、記録した入力がずれることはありません。すべてのスキンの種類で適用し、beatoraja スキンの BPM 表示も同じ調整後の時計を読みます。このスライダーはプレイ中も有効で、すぐに反映します。beatoraja の選曲スキンの JUDGE TIMING ボタン（74）は ±500 ms の範囲で、LR2 の選曲スキンのボタン（74）は LR2 と同じく ±99 ms の範囲で 1 ms ずつ変更し、beatoraja と LR2 のスキンの数値 12 がその値を表示します。
+Options ダイアログ の **Judge timing (ms)** で、beatoraja と LR2 のどちらにもある表示タイミングを設定します。−500〜500 ms の整数で、既定は 0 です。どちらとも同様に、ずらすのはノートを描く時計だけで、正の値ではその時計が先に進みます。入力・音声・判定の時刻は変わらないため、記録した入力がずれることはありません。すべてのスキンの種類で適用し、beatoraja スキンの BPM 表示も同じ調整後の時計を読みます。このスライダーはプレイ中も有効で、すぐに反映します。beatoraja の選曲スキンの JUDGE TIMING ボタン（74）は ±500 ms の範囲で、LR2 の選曲スキンのボタン（74）は LR2 と同じく ±99 ms の範囲で 1 ms ずつ変更し、beatoraja と LR2 のスキンの数値 12 がその値を表示します。
 
 どのルールでも、**Auto judge timing** で手動プレイ時にタイミングを自動で動かす方式を選びます。**OFF**（既定）、**beatoraja**、**LR2 ON**、**LR2 SILENT** のいずれかです。オートプレイとリプレイでは調整しません。
 
@@ -204,13 +204,13 @@ flowchart TD
   reset --> hit
 ```
 
-リプレイには `play.options.judgeTimingMs` と `judgeTimingAutoAdjust`（`"OFF"`、`"BEATORAJA"`、`"LR2-ON"`、`"LR2-SILENT"` のいずれか）を記録します。方式ができる前のリプレイは `true` か `false` を記録しており、それぞれ beatoraja と OFF として読みます。採用した自動更新（LR2 の 1 ms ごとの更新も含みます）とプレイ中の手動変更は、それぞれ譜面上の時刻とともに `play.optionChanges` に記録し、リプレイでは記録した値を表示します。LR2 自身はどちらも記録しません。LR2 SILENT のプレイのリプレイも、譜面の音と BGA なしで再生します。調整後の値は次のプレイに引き継ぎ、方式ができる前に保存した Debug Menu の設定は beatoraja のスイッチを **beatoraja** として引き継ぎます。beatoraja の選曲スキンの自動調整ボタン（75）は OFF と beatoraja を切り替えます（LR2 の方式は OFF として読みます）。LR2 の選曲スキンのボタン 75 は OFF・ON・SILENT を順に切り替え、テキスト 80 が設定を表示します（beatoraja の方式は OFF と表示します）。
+リプレイには `play.options.judgeTimingMs` と `judgeTimingAutoAdjust`（`"OFF"`、`"BEATORAJA"`、`"LR2-ON"`、`"LR2-SILENT"` のいずれか）を記録します。方式ができる前のリプレイは `true` か `false` を記録しており、それぞれ beatoraja と OFF として読みます。採用した自動更新（LR2 の 1 ms ごとの更新も含みます）とプレイ中の手動変更は、それぞれ譜面上の時刻とともに `play.optionChanges` に記録し、リプレイでは記録した値を表示します。LR2 自身はどちらも記録しません。LR2 SILENT のプレイのリプレイも、譜面の音と BGA なしで再生します。調整後の値は次のプレイに引き継ぎ、方式ができる前に保存した Options ダイアログ の設定は beatoraja のスイッチを **beatoraja** として引き継ぎます。beatoraja の選曲スキンの自動調整ボタン（75）は OFF と beatoraja を切り替えます（LR2 の方式は OFF として読みます）。LR2 の選曲スキンのボタン 75 は OFF・ON・SILENT を順に切り替え、テキスト 80 が設定を表示します（beatoraja の方式は OFF と表示します）。
 
 参照元：beatoraja 0.8.9 の [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)、[`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/LaneRenderer.java)、[`JudgeManager`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java)、OpenLR2 の[打鍵の集計](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L7463-L7535)、[1 ms の更新](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12620-L12647)、[SILENT の読み込み](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L24346-L24349)と[判定表示の非表示](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2510-L2515)、[選曲画面のボタン](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L10617-L10625)。対応 Issue は [#741](https://github.com/nulltask/be-music/issues/741)、[#742](https://github.com/nulltask/be-music/issues/742)、[#777](https://github.com/nulltask/be-music/issues/777)、[#917](https://github.com/nulltask/be-music/issues/917) です。
 
 ## 表示用 CONSTANT
 
-Debug Menu の **Visual CONSTANT (beatoraja)** をオンにします。既定はオフです。beatoraja の `PlayConfig.enableConstant` と同様に、ノート・地雷・小節線は判定線に届く前の **Note duration (ms)**（1〜10000、既定 500）の間だけ表示し、**CONSTANT fade (ms)**（−1000〜1000、既定 100）の間にフェードします。正のフェードはその時間より前から始まり、負のフェードはその時間の内側で終わります。オンの間は `#SPEED` によるスクロール変化を無視します。これは描画の設定で、譜面は書き換えず、判定も変わりません。LR2 の HS-FIX CONSTANT や scroll REMOVE とは別の機能です。
+Options ダイアログ の **Visual CONSTANT (beatoraja)** をオンにします。既定はオフです。beatoraja の `PlayConfig.enableConstant` と同様に、ノート・地雷・小節線は判定線に届く前の **Note duration (ms)**（1〜10000、既定 500）の間だけ表示し、**CONSTANT fade (ms)**（−1000〜1000、既定 100）の間にフェードします。正のフェードはその時間より前から始まり、負のフェードはその時間の内側で終わります。オンの間は `#SPEED` によるスクロール変化を無視します。これは描画の設定で、譜面は書き換えず、判定も変わりません。LR2 の HS-FIX CONSTANT や scroll REMOVE とは別の機能です。
 
 スイッチはプレイ中にロックし、表示時間とフェードはプレイ中も有効ですぐに反映します。内蔵スキン・LR2・beatoraja のプレイフィールドが描画します。beatoraja スキンでは beatoraja の `LaneRenderer` と同様に、フェードはタイムラインごとにかかり（ロングノートは始点とともにフェードします）、BPM 変化と STOP の線にもかかります。オンの間は op 400（CONSTANT）が点きます。`NO_SPEED` 制約のあるコースではその各ステージでオフになり、`#SPEED` によるスクロール変化が戻ります。beatoraja はプレイヤー自身の設定を読むので、op 400 は点いたままです。リプレイには `play.options.visualConstant`・`noteDurationMs`・`constantFadeMs` を記録し、プレイ中の変更は `play.optionChanges` に記録します。beatoraja 0.8.9 はこのオプションでアシストのフラグを立てません。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -218,7 +218,7 @@ Debug Menu の **Visual CONSTANT (beatoraja)** をオンにします。既定は
 
 ## 左右別 LIFT
 
-Debug Menu の **LIFT 1P (beatoraja)** / **LIFT 2P (beatoraja)** で各側の LIFT を独立して切り替え、**LIFT height 1P** / **2P** で高さをレーンに対する割合で設定します。beatoraja と同様に、LIFT はオフ・高さ 0.1 から始まり、オフの間も高さを保持します。これらの操作はプレイ中も有効で、すぐに反映します。LIFT は判定線とノートの到達位置を上げます。その上のレーンを圧縮するため、ノートが上げた判定線に届くまでの時間は変わらず、白数字と緑数字も変わりません。SUDDEN+ と HIDDEN+ は LIFT より上のレーンに対する割合です。ハイスピードを固定するコースでは、すべてのカバーと LIFT を 0 から始めます。
+Options ダイアログ の **LIFT 1P (beatoraja)** / **LIFT 2P (beatoraja)** で各側の LIFT を独立して切り替え、**LIFT height 1P** / **2P** で高さをレーンに対する割合で設定します。beatoraja と同様に、LIFT はオフ・高さ 0.1 から始まり、オフの間も高さを保持します。これらの操作はプレイ中も有効で、すぐに反映します。LIFT は判定線とノートの到達位置を上げます。その上のレーンを圧縮するため、ノートが上げた判定線に届くまでの時間は変わらず、白数字と緑数字も変わりません。SUDDEN+ と HIDDEN+ は LIFT より上のレーンに対する割合です。ハイスピードを固定するコースでは、すべてのカバーと LIFT を 0 から始めます。
 
 LIFT を描くのは beatoraja スキンと内蔵の Plain・Native・Synesthesia です。LR2 スキンは描きません。LR2 beta3 には LIFT のオプションがありません。これらの内蔵スキンでは beatoraja スキンと同様に、Home / End で LIFT を下げ / 上げ、PageUp / PageDown で SUDDEN+ を動かし、H で HIDDEN+ を切り替え、J / K で HIDDEN+ を動かします。1 回の変化量はレーンの 1 %（Shift で 5 %）です。リプレイには各側の LIFT を表示設定と `play.options.lift1P` / `lift2P` / `liftOn1P` / `liftOn2P` に記録し、プレイ中の変更は `play.optionChanges` に記録します。リプレイで記録した LIFT を表示するかどうかは Replay / ghost フォルダーの **LIFT** で選びます。これは表示の調整で、入力アシストではありません。
 
@@ -226,9 +226,9 @@ LIFT を描くのは beatoraja スキンと内蔵の Plain・Native・Synesthesi
 
 ## FLOATING HI-SPEED と表示エリア固定
 
-どのルールでも Debug Menu の **FLOATING HI-SPEED (AC 32 measured)** をオンにするか、プレイ中にテンキーの 0 を押して切り替えます。HS-FIX を OFF にし、速度の操作を 0.5〜10 の **Floating speed** に置き換えます。プレイ中は矢印キー 1 回で速度が 0.5 動き、Shift と矢印キーでは計測値の 1/300 ずつ動きます。カバーのキーを使うスキン（Plain・Native・Synesthesia・beatoraja スキン）では、SUDDEN+ の表示中に PageUp / PageDown で、計測した 723 ピクセルの AC のレーン上でカバーを 1 ピクセル（Shift で 10 ピクセル）動かし、FLOATING HI-SPEED をオンにした時点の緑数字を保つよう速度を計算し直します。LIFT だけを表示している場合は LIFT を動かし、どちらもない場合は 1/300 の微調整になります。オンにするとカバーをこのレーンに合わせ、SUDDEN+ は 30 ピクセル以上、LIFT は 600 ピクセル以下にします。オフにすると、CLASSIC HI-SPEED では最も近い CLASSIC の段階（同距離なら上側）、それ以外では最も近い通常の段階に丸めます。通常の段階と同じく、値は masaoblue 氏による AC 32 の計測に基づき、AC 34 での校正ではありません。
+どのルールでも Options ダイアログ の **FLOATING HI-SPEED (AC 32 measured)** をオンにするか、プレイ中にテンキーの 0 を押して切り替えます。HS-FIX を OFF にし、速度の操作を 0.5〜10 の **Floating speed** に置き換えます。プレイ中は矢印キー 1 回で速度が 0.5 動き、Shift と矢印キーでは計測値の 1/300 ずつ動きます。カバーのキーを使うスキン（Plain・Native・Synesthesia・beatoraja スキン）では、SUDDEN+ の表示中に PageUp / PageDown で、計測した 723 ピクセルの AC のレーン上でカバーを 1 ピクセル（Shift で 10 ピクセル）動かし、FLOATING HI-SPEED をオンにした時点の緑数字を保つよう速度を計算し直します。LIFT だけを表示している場合は LIFT を動かし、どちらもない場合は 1/300 の微調整になります。オンにするとカバーをこのレーンに合わせ、SUDDEN+ は 30 ピクセル以上、LIFT は 600 ピクセル以下にします。オフにすると、CLASSIC HI-SPEED では最も近い CLASSIC の段階（同距離なら上側）、それ以外では最も近い通常の段階に丸めます。通常の段階と同じく、値は masaoblue 氏による AC 32 の計測に基づき、AC 34 での校正ではありません。
 
-**Fixed display area (AC 34)** もどのルールでも表示され、既定はオフです。プレイ中のカバーと LIFT の変更を、Debug Menu からの変更も含めてすべて無視します。リプレイでは記録したカバーを表示します。FLOATING HI-SPEED と組み合わせると、START（Enter）を 500 ms 以内に 2 回押すことで、オンにした時点の緑数字をその時点の BPM で計算し直して復元し、カバーは動かしません。コースのハイスピード固定はこれとは独立して働きます。
+**Fixed display area (AC 34)** もどのルールでも表示され、既定はオフです。プレイ中のカバーと LIFT の変更を、Options ダイアログ からの変更も含めてすべて無視します。リプレイでは記録したカバーを表示します。FLOATING HI-SPEED と組み合わせると、START（Enter）を 500 ms 以内に 2 回押すことで、オンにした時点の緑数字をその時点の BPM で計算し直して復元し、カバーは動かしません。コースのハイスピード固定はこれとは独立して働きます。
 
 リプレイには `play.options.floatingHiSpeed` と `floatingHiSpeedProfile: "AC32-measured"`、`fixedDisplayArea`、ハイスピード、OFF の HS-FIX を記録します。プレイ中のモード切り替えと速度の変更は `play.optionChanges` に、カバーと実際の描画速度はリプレイの表示設定に記録します。内蔵の Plain と Synesthesia は速度のラベルを FHS と表示します。どちらも表示のオプションで、出典のページはアシストや記録の規則を示していません。
 
@@ -236,7 +236,7 @@ LIFT を描くのは beatoraja スキンと内蔵の Plain・Native・Synesthesi
 
 ## CUSTOM JUDGE
 
-beatoraja ルールでは Debug Menu の **CUSTOM JUDGE (beatoraja)** をオンにし、beatoraja の判定ごとの窓の倍率を設定します。項目は **Key PGREAT %**、**Key GREAT %**、**Key GOOD %**、**Scratch PGREAT %**、**Scratch GREAT %**、**Scratch GOOD %**、**LN margin %** です。既定は鍵盤・スクラッチとも 400・400・100、マージンは 100 です。`PlayerConfig.validate` に従い、PGREAT は 25〜400、それ以外は 0〜400 を受け付けます。beatoraja と同様に、各倍率は判定ランクを適用した後の窓に掛け、BAD より広い窓にはせず、内側の窓より狭くなった窓は内側に合わせて広げます。ノートの始点は鍵盤またはスクラッチの倍率、鍵盤とスクラッチのロングノート終点はどちらも鍵盤の倍率を使います。マージンの倍率は鍵盤のロングノートの離しマージンに掛かり、このマージンは PMS モードでだけ 0 以外になります。
+beatoraja ルールでは Options ダイアログ の **CUSTOM JUDGE (beatoraja)** をオンにし、beatoraja の判定ごとの窓の倍率を設定します。項目は **Key PGREAT %**、**Key GREAT %**、**Key GOOD %**、**Scratch PGREAT %**、**Scratch GREAT %**、**Scratch GOOD %**、**LN margin %** です。既定は鍵盤・スクラッチとも 400・400・100、マージンは 100 です。`PlayerConfig.validate` に従い、PGREAT は 25〜400、それ以外は 0〜400 を受け付けます。beatoraja と同様に、各倍率は判定ランクを適用した後の窓に掛け、BAD より広い窓にはせず、内側の窓より狭くなった窓は内側に合わせて広げます。ノートの始点は鍵盤またはスクラッチの倍率、鍵盤とスクラッチのロングノート終点はどちらも鍵盤の倍率を使います。マージンの倍率は鍵盤のロングノートの離しマージンに掛かり、このマージンは PMS モードでだけ 0 以外になります。
 
 ほかのルールではスイッチを表示せず、エンジンもエラーにします。リプレイには倍率を `play.customJudge`（オフの間は省略）とオプションの値一式に記録し、リプレイのシミュレーションでも適用します。beatoraja はいずれかの倍率が 100 % を超えるとプレイを ASSIST とします。Be-Music も同じく ASSIST として扱います（[アシストと記録の方針](#アシストと記録の方針)）。
 
@@ -244,7 +244,7 @@ beatoraja ルールでは Debug Menu の **CUSTOM JUDGE (beatoraja)** をオン�
 
 ## PRACTICE
 
-どのルールでも、Debug Menu の **PRACTICE** をオンにするか、beatoraja の選曲スキンの PRACTICE ボタン（315）を押します。PLAY ボタンは通常のモードで始めます。設定は beatoraja の `PracticeConfiguration` に従います。**START TIME ms** と **END TIME ms (0 = end)** は 100 ms 単位、**GAUGE TYPE**、**GAUGE CATEGORY**、**GAUGE VALUE** は 1〜120（既定 20、ゲージの範囲に収めます）、ほかに **JUDGERANK (0 = chart)** と **TOTAL (0 = chart)** があります。対象は単一の譜面で、コース・NONSTOP・リプレイには適用しません。
+どのルールでも、Options ダイアログ の **PRACTICE** をオンにするか、beatoraja の選曲スキンの PRACTICE ボタン（315）を押します。PLAY ボタンは通常のモードで始めます。設定は beatoraja の `PracticeConfiguration` に従います。**START TIME ms** と **END TIME ms (0 = end)** は 100 ms 単位、**GAUGE TYPE**、**GAUGE CATEGORY**、**GAUGE VALUE** は 1〜120（既定 20、ゲージの範囲に収めます）、ほかに **JUDGERANK (0 = chart)** と **TOTAL (0 = chart)** があります。対象は単一の譜面で、コース・NONSTOP・リプレイには適用しません。
 
 2 つの時間の下には範囲ピッカーがあり、選曲画面のカーソル位置の譜面のノーツ密度グラフ（譜面の始まりから最後の小節を閉じる小節線まで、譜面全体）を、開始と終了の 2 つのハンドルとともに描きます（[#948](https://github.com/nulltask/be-music/issues/948)）。マウスか指でドラッグします。押した位置に近いほうのハンドルをつかみ、範囲を 1000 ms 以上に保てる最も近い小節の頭に吸着します。終了のハンドルを最後の小節線に合わせると END TIME は 0（最後まで）になります。キャプションには範囲を `m:ss.s` と両端の BMS の小節番号（`#009`）で表示し、START TIME / END TIME はハンドルに追従し、入力した時間にはハンドルが追従します。ピッカーは PRACTICE がオンのときだけ表示し、ほかの PRACTICE の設定と同様にプレイ中は操作できません。選曲画面が解決済みの譜面（小節のタイムラインと判定対象のノーツ）を読むため、`#RANDOM` のある譜面では曲リストと同じく条件なしの内容を表示します。
 
@@ -265,9 +265,9 @@ beatoraja の `PracticeModifier` と同様に、範囲外の判定対象はす�
 
 ## R-RANDOM
 
-どのルールでも、Debug Menu の **Play options → Random 1P / Random 2P → R-RANDOM** を選択します。R-RANDOM は片側の鍵盤レーン全体を正順または逆順に回転させ、スクラッチは固定します。beatoraja 0.8.9 の `LaneRotateShuffleModifier` と同様に元の並びと MIRROR を除外し、残りの回転を等確率で選びます。どのルールでもこの回転の集合を使い、ルールを切り替えても選択を維持します。その側のシードで抽選します（「参照元のシードと前回の配置」を参照）。beatoraja は R-RANDOM をアシストなしのオプションとして扱い、`grade_random` 制約のコースでは beatoraja が先頭 6 種類のランダムを維持するのと同様に維持します。
+どのルールでも、Options ダイアログ の **Play options → Random 1P / Random 2P → R-RANDOM** を選択します。R-RANDOM は片側の鍵盤レーン全体を正順または逆順に回転させ、スクラッチは固定します。beatoraja 0.8.9 の `LaneRotateShuffleModifier` と同様に元の並びと MIRROR を除外し、残りの回転を等確率で選びます。どのルールでもこの回転の集合を使い、ルールを切り替えても選択を維持します。その側のシードで抽選します（「参照元のシードと前回の配置」を参照）。beatoraja は R-RANDOM をアシストなしのオプションとして扱い、`grade_random` 制約のコースでは beatoraja が先頭 6 種類のランダムを維持するのと同様に維持します。
 
-リプレイは選択を `play.randomLane` と `play.options.random1P` / `random2P` に、各ノートの最終的なレーンを元のレーン（`sourceChannel`）とともに記録します。そのためリプレイは再抽選せず、記録したレーンを適用します。内蔵の選曲画面の **Lanes** と共通のプレイオプション API はすべてのレーンオプション名を列挙し、実行中のルールにない選択でプレイを始めると明示的にエラーにします。LR2 スキンでは RANDOM のオプションテキストに選択した名前を参照元なしで表示し、RANDOM ボタン（42 / 43）は、ADR 0019 のとおりスキンが自分の参照元の値だけを切り替えるため、LR2 自身の 6 つのレーンオプション、OFF / MIRROR / RANDOM / S-RANDOM / SCATTER / CONVERGE のセル（`lr2:RANDOM`、`lr2:S-RANDOM`、`SCATTER`、`lr2:CONVERGE`）だけを切り替えます。ほかの参照元の RANDOM・S-RANDOM・CONVERGE はその名前のセルに表示し、そこから次へ進みます。それ以外の選択は最初のセルに表示し、クリックすると OFF になります。beatoraja スキンの RANDOM 1P / 2P ボタン（42 / 43）は、フォーカスした譜面のプレイモード（PMS かどうか）に応じた beatoraja 0.8.9 の 10 個のレーンオプション（RANDOM・S-RANDOM・CONVERGE は beatoraja 自身のもの）を切り替え、ラベルにはその枠を表示します。ほかの参照元の RANDOM と S-RANDOM はその名前の枠に表示します（[beatoraja スキン](./beatoraja-skin.ja.md)を参照）。それ以外の選択は Debug Menu で選びます。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+リプレイは選択を `play.randomLane` と `play.options.random1P` / `random2P` に、各ノートの最終的なレーンを元のレーン（`sourceChannel`）とともに記録します。そのためリプレイは再抽選せず、記録したレーンを適用します。内蔵の選曲画面の **Lanes** と共通のプレイオプション API はすべてのレーンオプション名を列挙し、実行中のルールにない選択でプレイを始めると明示的にエラーにします。LR2 スキンでは RANDOM のオプションテキストに選択した名前を参照元なしで表示し、RANDOM ボタン（42 / 43）は、ADR 0019 のとおりスキンが自分の参照元の値だけを切り替えるため、LR2 自身の 6 つのレーンオプション、OFF / MIRROR / RANDOM / S-RANDOM / SCATTER / CONVERGE のセル（`lr2:RANDOM`、`lr2:S-RANDOM`、`SCATTER`、`lr2:CONVERGE`）だけを切り替えます。ほかの参照元の RANDOM・S-RANDOM・CONVERGE はその名前のセルに表示し、そこから次へ進みます。それ以外の選択は最初のセルに表示し、クリックすると OFF になります。beatoraja スキンの RANDOM 1P / 2P ボタン（42 / 43）は、フォーカスした譜面のプレイモード（PMS かどうか）に応じた beatoraja 0.8.9 の 10 個のレーンオプション（RANDOM・S-RANDOM・CONVERGE は beatoraja 自身のもの）を切り替え、ラベルにはその枠を表示します。ほかの参照元の RANDOM と S-RANDOM はその名前の枠に表示します（[beatoraja スキン](./beatoraja-skin.ja.md)を参照）。それ以外の選択は Options ダイアログ で選びます。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java) と [`LaneShuffleModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LaneShuffleModifier.java)、AC 34 の[プレイオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#693](https://github.com/nulltask/be-music/issues/693) です。
 
@@ -313,7 +313,7 @@ beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシ�
 
 ## PMS 用の無理押しなし RANDOM と S-RANDOM
 
-どのルールでも **Random 1P / Random 2P → RANDOM_PLAYABLE** または **S_RANDOM_PLAYABLE** を選択します。どちらも beatoraja 0.8.9 の `Random.OPTION_PMS` にある PMS 用の配置で、他の譜面では明示的にエラーにします。RANDOM_PLAYABLE（`LanePlayableRandomShuffleModifier`）は、どの同時押しも参照元の 10 種類の無理な 3 鍵の形にならない並べ替えから、元の並びと MIRROR を除いて 9 鍵の譜面全体の並べ替えを等確率で 1 つ選びます。7 鍵以上の同時押しがある場合や条件を満たす並べ替えがない場合は、元の並びか MIRROR をランダムに使います。参照元の処理は変換のシードを使わないため、RANDOM_PLAYABLE ではその側の Seed を Debug Menu に表示しません。
+どのルールでも **Random 1P / Random 2P → RANDOM_PLAYABLE** または **S_RANDOM_PLAYABLE** を選択します。どちらも beatoraja 0.8.9 の `Random.OPTION_PMS` にある PMS 用の配置で、他の譜面では明示的にエラーにします。RANDOM_PLAYABLE（`LanePlayableRandomShuffleModifier`）は、どの同時押しも参照元の 10 種類の無理な 3 鍵の形にならない並べ替えから、元の並びと MIRROR を除いて 9 鍵の譜面全体の並べ替えを等確率で 1 つ選びます。7 鍵以上の同時押しがある場合や条件を満たす並べ替えがない場合は、元の並びか MIRROR をランダムに使います。参照元の処理は変換のシードを使わないため、RANDOM_PLAYABLE ではその側の Seed を Options ダイアログ に表示しません。
 
 S_RANDOM_PLAYABLE（`NoMurioshiRandomizer`）はタイムラインごとにノートを配置し、押しているロングノートを含めて 3〜6 個のノートがあるタイムラインでは、押しているレーンを含む参照元の 10 種類の 6 鍵の押せる形のいずれかに、H-RANDOM のしきい値とあわせて収めます。しきい値を過ぎたレーンが足りる形がない場合、固定した版の参照元は例外を投げます。Be-Music は独自の代替処理を作らず、プレイを明示的にエラーにします。抽選にその側のシードを使います。beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。リプレイは選択を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録します。
 
@@ -321,7 +321,7 @@ S_RANDOM_PLAYABLE（`NoMurioshiRandomizer`）はタイムラインごとにノ�
 
 ## 参照元のシードと前回の配置
 
-Debug Menu はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示します。シードは 0〜9223372036854775807 の Java の long 値で、LR2 と AC のものも含めてすべてのレーンオプションを、beatoraja 0.8.9 の変換と同様に `java.util.Random` で抽選します。そのため判定ルールに関係なく、同じ譜面・レーンオプション・シードでは同じ配置になります。-1 はプレイごとに 16,777,216 未満の新しいシードを抽選します。リプレイは各側で実際に使ったシードを `play.options.randomSeed1P` / `randomSeed2P` に記録します。LR2 と AC には入力できる独自のシードがないため、それらのアルゴリズムも同じ Java の `Random` の乱数列を使います。シードで配置を再現できるのは Be-Music の中だけで、LR2 では再現しません。譜面自身の ALL / ALL+ の並べ替えは 1P のシードで抽選します。RANDOM_PLAYABLE は参照元と同様にシードを使わず、beatoraja の地雷の ADD RANDOM とロングノートの追加もシードを使いません。[#933](https://github.com/nulltask/be-music/issues/933) で追跡しています。
+Options ダイアログ はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示します。シードは 0〜9223372036854775807 の Java の long 値で、LR2 と AC のものも含めてすべてのレーンオプションを、beatoraja 0.8.9 の変換と同様に `java.util.Random` で抽選します。そのため判定ルールに関係なく、同じ譜面・レーンオプション・シードでは同じ配置になります。-1 はプレイごとに 16,777,216 未満の新しいシードを抽選します。リプレイは各側で実際に使ったシードを `play.options.randomSeed1P` / `randomSeed2P` に記録します。LR2 と AC には入力できる独自のシードがないため、それらのアルゴリズムも同じ Java の `Random` の乱数列を使います。シードで配置を再現できるのは Be-Music の中だけで、LR2 では再現しません。譜面自身の ALL / ALL+ の並べ替えは 1P のシードで抽選します。RANDOM_PLAYABLE は参照元と同様にシードを使わず、beatoraja の地雷の ADD RANDOM とロングノートの追加もシードを使いません。[#933](https://github.com/nulltask/be-music/issues/933) で追跡しています。
 
 **Reuse previous arrangement** と **New arrangement** ボタンはどのルールでも表示します。Reuse は、リプレイ・コース・NONSTOP を除く直前のプレイを対象に、そのレーンオプション（Random 1P / 2P、シード、Fixed key、DP flip、H-RANDOM のしきい値、Long notes）を選択します。次に同じ譜面をプレイすると、beatoraja の譜面オプションの再現が譜面のレーンオプション・シード・分岐を復元するのと同様に、記録したレーンと `#RANDOM` の結果をそのまま使い、入力は通常どおり受け付けて新しいリプレイを記録します。これらのオプションを変更するか **New arrangement** を押すと再利用を解除し、New arrangement は両側のシードも -1 に戻します。別の譜面のプレイには影響しません。再利用には直前のプレイと同じ判定ルールが必要です。ほかのルールでは何も選択せず、ほかのルールで再利用の配置をプレイした場合は「The previous arrangement was played under other judgment rules.」というエラーにします。譜面のハッシュが異なる配置を再利用した場合も明示的にエラーにします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -345,7 +345,7 @@ Debug Menu はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示�
 
 ## M-RAN
 
-**Play options → Battle** で 2 人プレイ（どのルールでも選べる **BATTLE (LR2)**、???? ルールでの名前は **2P PLAY (????)**、または **COUPLE (LR2)**）を選ぶと、Debug Menu の **Gauge 2P** の隣に **M-RAN 1P** と **M-RAN 2P** を表示します。M-RAN は RANDOM 系の配置（どの参照元の RANDOM と S-RANDOM も、R-RANDOM も）のあと、そのプレイヤーの側に MIRROR を適用します。それ以外のレーンオプションでは何もしません。両側に複製した SP 譜面で 2 人が同じレーンオプションを選ぶと、2P 側は 1P の配置を引き継ぐため、片方の M-RAN でもう一方の譜面の鏡像になります。2 人プレイ以外では M-RAN を適用せず、Debug Menu にもスイッチを表示しません。
+**Play options → Battle** で 2 人プレイ（どのルールでも選べる **BATTLE (LR2)**、???? ルールでの名前は **2P PLAY (????)**、または **COUPLE (LR2)**）を選ぶと、Options ダイアログ の **Gauge 2P** の隣に **M-RAN 1P** と **M-RAN 2P** を表示します。M-RAN は RANDOM 系の配置（どの参照元の RANDOM と S-RANDOM も、R-RANDOM も）のあと、そのプレイヤーの側に MIRROR を適用します。それ以外のレーンオプションでは何もしません。両側に複製した SP 譜面で 2 人が同じレーンオプションを選ぶと、2P 側は 1P の配置を引き継ぐため、片方の M-RAN でもう一方の譜面の鏡像になります。2 人プレイ以外では M-RAN を適用せず、Options ダイアログ にもスイッチを表示しません。
 
 リプレイはスイッチを `play.options.mRan1P` / `mRan2P` に各ノートの最終的なレーンとともに記録するため、リプレイで再びミラーにしません。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -353,7 +353,7 @@ Debug Menu はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示�
 
 ## 地雷の REMOVE と ADD
 
-どのルールでも、Debug Menu の **Mines (beatoraja)** で **OFF**（既定）、**REMOVE**、**ADD RANDOM**、**ADD NEAR**、**ADD ALL**（beatoraja の `ADD_BLANK`）を選びます。REMOVE はすべての地雷を取り除くため、地雷の爆発もゲージの減少も起きません。ADD は beatoraja 0.8.9 の `MineNoteModifier` に従い、参照元のタイムラインの各行をスクラッチを含むレーン順に調べ、ノート・地雷・押下中のロングノートがないセルを対象にします。ADD RANDOM はセルごとに独立した 10 分の 1 の抽選で、ADD NEAR はその行の追加前に隣のレーンが埋まっていた場合に、ADD ALL は対象のすべてのセルに地雷を置きます。追加した地雷のダメージは 10 % で、爆発音を鳴らしません。譜面にもともとある地雷は元の値を維持します。この変換はレーンオプションより前に譜面を準備するため、追加した地雷もレーンと一緒に移動します。
+どのルールでも、Options ダイアログ の **Mines (beatoraja)** で **OFF**（既定）、**REMOVE**、**ADD RANDOM**、**ADD NEAR**、**ADD ALL**（beatoraja の `ADD_BLANK`）を選びます。REMOVE はすべての地雷を取り除くため、地雷の爆発もゲージの減少も起きません。ADD は beatoraja 0.8.9 の `MineNoteModifier` に従い、参照元のタイムラインの各行をスクラッチを含むレーン順に調べ、ノート・地雷・押下中のロングノートがないセルを対象にします。ADD RANDOM はセルごとに独立した 10 分の 1 の抽選で、ADD NEAR はその行の追加前に隣のレーンが埋まっていた場合に、ADD ALL は対象のすべてのセルに地雷を置きます。追加した地雷のダメージは 10 % で、爆発音を鳴らしません。譜面にもともとある地雷は元の値を維持します。この変換はレーンオプションより前に譜面を準備するため、追加した地雷もレーンと一緒に移動します。
 
 リプレイには `play.mineModifier` と、実際に除去・追加した地雷の数を示す `play.mineModifierChangeCount` を記録します。beatoraja は実際に除去した場合だけアシスト扱いにするため、この数で地雷のない譜面を REMOVE で遊んだ場合と、地雷を実際に除去した場合を区別できます。実効譜面のノートには追加した地雷をダメージと `silent` フラグ付きで含め、リプレイを開く際は再抽選せずに記録した位置へ地雷を置きます。beatoraja スキンの地雷モードボタン（351）は 5 つの選択肢を参照元の順で巡回し、ラベル画像に表示します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -361,15 +361,15 @@ Debug Menu はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示�
 
 ## ADD LN / ADD CN / ADD HCN / ADD ALL
 
-どのルールでも、Debug Menu の **Long notes** に **ADD LN (beatoraja)**、**ADD CN (beatoraja)**、**ADD HCN (beatoraja)**、**ADD ALL (beatoraja)** も表示します。いずれかを選んでいる間は **Long-note add rate (beatoraja)**（0〜1、既定 1）でノートごとの変換確率を設定します。beatoraja 0.8.9 の `LongNoteModifier` と同様に、通常ノートのレーンが譜面の次のタイムライン行で空いている場合、そのノートをその行で終わるロングノートに変えます。既存のロングノートは変えず、スクラッチも対象に含めます。ADD LN・ADD CN・ADD HCN は追加したノートをそれぞれのモードにし、ADD ALL はノートごとに LN・CN・HCN を抽選します。追加したノートは判定ルールのロングノートとして判定します。LR2 はすべてのロングノートを LN、???? はチャージノートとして判定するため、CN と HCN の区別が効くのは beatoraja ルールだけです。確率の抽選にはブラウザの乱数を使います。
+どのルールでも、Options ダイアログ の **Long notes** に **ADD LN (beatoraja)**、**ADD CN (beatoraja)**、**ADD HCN (beatoraja)**、**ADD ALL (beatoraja)** も表示します。いずれかを選んでいる間は **Long-note add rate (beatoraja)**（0〜1、既定 1）でノートごとの変換確率を設定します。beatoraja 0.8.9 の `LongNoteModifier` と同様に、通常ノートのレーンが譜面の次のタイムライン行で空いている場合、そのノートをその行で終わるロングノートに変えます。既存のロングノートは変えず、スクラッチも対象に含めます。ADD LN・ADD CN・ADD HCN は追加したノートをそれぞれのモードにし、ADD ALL はノートごとに LN・CN・HCN を抽選します。追加したノートは判定ルールのロングノートとして判定します。LR2 はすべてのロングノートを LN、???? はチャージノートとして判定するため、CN と HCN の区別が効くのは beatoraja ルールだけです。確率の抽選にはブラウザの乱数を使います。
 
-リプレイには `play.longNoteModifier`、`play.longNoteRate` と、変換したノート数を示す `play.longNoteModifierChangeCount` を記録します。実効譜面のノートでは、生成した始点ごとに `generatedLongNote`、終点の時刻、モードを保持し、リプレイを開く際は再抽選せずにその配置を復元します。beatoraja スキンのロングノートモードボタン（353）は OFF・REMOVE・ADD LN・ADD CN・ADD HCN・ADD ALL を巡回します。LEGACY NOTE は beatoraja のモードではないため Debug Menu で選びます。Native スキンのプレイ設定パネルには変換方式と変換確率を表示します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+リプレイには `play.longNoteModifier`、`play.longNoteRate` と、変換したノート数を示す `play.longNoteModifierChangeCount` を記録します。実効譜面のノートでは、生成した始点ごとに `generatedLongNote`、終点の時刻、モードを保持し、リプレイを開く際は再抽選せずにその配置を復元します。beatoraja スキンのロングノートモードボタン（353）は OFF・REMOVE・ADD LN・ADD CN・ADD HCN・ADD ALL を巡回します。LEGACY NOTE は beatoraja のモードではないため Options ダイアログ で選びます。Native スキンのプレイ設定パネルには変換方式と変換確率を表示します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：beatoraja 0.8.9 の [`LongNoteModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LongNoteModifier.java)。対応 Issue は [#712](https://github.com/nulltask/be-music/issues/712)、[#713](https://github.com/nulltask/be-music/issues/713)、[#714](https://github.com/nulltask/be-music/issues/714)、[#715](https://github.com/nulltask/be-music/issues/715) です。
 
 ## スクロールの REMOVE と ADD
 
-どのルールでも、Debug Menu の **Scroll (beatoraja)** で **OFF**（既定）、**REMOVE**、**ADD** を選びます。どちらも beatoraja 0.8.9 の `ScrollSpeedModifier` に従い、譜面の描画だけを変えます。判定時刻と音声は譜面のとおりです。REMOVE は各オブジェクトの時刻を維持したまま、BPM 変化・STOP・SCROLL 変化をなくし、最初の BPM と SCROLL で譜面を描画するため、ノートは一定の速度で流れます。ADD を選ぶと **Scroll section lines**（1〜1024、既定 4）と **Scroll rate**（0〜1、既定 0.5）を表示します。最初の小節線を 1 本目として N 本ごとの小節線で、SCROLL を最初の SCROLL の ±rate の範囲のランダムな値にし、譜面自身の SCROLL の値を置き換えます。
+どのルールでも、Options ダイアログ の **Scroll (beatoraja)** で **OFF**（既定）、**REMOVE**、**ADD** を選びます。どちらも beatoraja 0.8.9 の `ScrollSpeedModifier` に従い、譜面の描画だけを変えます。判定時刻と音声は譜面のとおりです。REMOVE は各オブジェクトの時刻を維持したまま、BPM 変化・STOP・SCROLL 変化をなくし、最初の BPM と SCROLL で譜面を描画するため、ノートは一定の速度で流れます。ADD を選ぶと **Scroll section lines**（1〜1024、既定 4）と **Scroll rate**（0〜1、既定 0.5）を表示します。最初の小節線を 1 本目として N 本ごとの小節線で、SCROLL を最初の SCROLL の ±rate の範囲のランダムな値にし、譜面自身の SCROLL の値を置き換えます。
 
 リプレイには `play.scrollModifier` と、譜面が実際に変化したかを示す `play.scrollModifierChanged` を記録します。beatoraja は除去する変化があった場合だけ REMOVE をアシスト扱いにし、ADD ではアシストのフラグを立てません。ADD では `play.scrollSection`、`play.scrollRate` と実効的な `play.scrollModifierTimeline` も記録し、リプレイを開く際は再抽選せずにこれを使います。beatoraja スキンのスクロールモードボタン（352）は OFF・REMOVE・ADD を巡回します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -377,7 +377,7 @@ Debug Menu はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示�
 
 ## ゲージオートシフト
 
-どのルールでも、Debug Menu の **Gauge auto-shift** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge** は後の 2 つに適用します。方式は beatoraja 0.8.9 の `BMSPlayer` に従い、各ルールは自分のゲージに、自分のゲージの並びに沿って適用します（[#933](https://github.com/nulltask/be-music/issues/933)）。
+どのルールでも、Options ダイアログ の **Gauge auto-shift** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge** は後の 2 つに適用します。方式は beatoraja 0.8.9 の `BMSPlayer` に従い、各ルールは自分のゲージに、自分のゲージの並びに沿って適用します（[#933](https://github.com/nulltask/be-music/issues/933)）。
 
 | ルール       | 単曲（緩い順）                                   | 段位コース                     | EXPERT / NONSTOP コース                        |
 | ------------ | ------------------------------------------------ | ------------------------------ | ---------------------------------------------- |
@@ -407,7 +407,7 @@ flowchart LR
 
 ## P.ATTACK / G.ATTACK
 
-LR2 ルールでは、Debug Menu の **Gauge** に GROOVE・HARD・DEATH・EASY に続いて **P.ATTACK** と **G.ATTACK** も表示します。LR2 beta3 のゲージオプションの順です。どちらも満タンから始まるサバイバルゲージで、LR2 の死亡境界 2 を使います。P.ATTACK（PERFECT ATTACK）は PGREAT で 0.1 回復し、GREAT で 1 減少し、GOOD 以下で失敗します。G.ATTACK（GOOD ATTACK）は GOOD で 0.1 回復し、GREAT で 1、BAD で 6 減少し、PGREAT と POOR では HARD の譜面依存のダメージ係数の 10 倍、空 POOR では 2 倍を減らします。どちらも残量 32 未満では BAD・POOR・空 POOR のダメージを LR2 の HARD と同様に 60 % にします。クリアすると HARD ランプです。beatoraja と AC のルールにこれらのゲージはなく、直接指定した場合はエラーにします。これらのルールへ切り替えると GROOVE に戻します。
+LR2 ルールでは、Options ダイアログ の **Gauge** に GROOVE・HARD・DEATH・EASY に続いて **P.ATTACK** と **G.ATTACK** も表示します。LR2 beta3 のゲージオプションの順です。どちらも満タンから始まるサバイバルゲージで、LR2 の死亡境界 2 を使います。P.ATTACK（PERFECT ATTACK）は PGREAT で 0.1 回復し、GREAT で 1 減少し、GOOD 以下で失敗します。G.ATTACK（GOOD ATTACK）は GOOD で 0.1 回復し、GREAT で 1、BAD で 6 減少し、PGREAT と POOR では HARD の譜面依存のダメージ係数の 10 倍、空 POOR では 2 倍を減らします。どちらも残量 32 未満では BAD・POOR・空 POOR のダメージを LR2 の HARD と同様に 60 % にします。クリアすると HARD ランプです。beatoraja と AC のルールにこれらのゲージはなく、直接指定した場合はエラーにします。これらのルールへ切り替えると GROOVE に戻します。
 
 LR2 スキンのゲージボタンは 6 セルを巡回し、P.ATTACK と G.ATTACK はセル 4 と 5 です。ゲージの表示は P.ATTACK と G.ATTACK と綴り、リプレイには `play.gauge: "P-ATTACK"` または `"G-ATTACK"` と同じ名前の結果ゲージを記録します。LR2 の GRADE コースでは、LR2 と同様にコース開始時に P.ATTACK を維持し、G.ATTACK は EASY と同じく GROOVE に戻します。戻したプレイのランプは NORMAL です。EXPERT と NONSTOP のコースは両方のゲージを維持し、どちらの攻撃ゲージでもコースをクリアすると HARD ランプです。LR2 のコースクリアには LR2 のコースクリア判定に従い、すべてのノートの判定も必要で、最終ゲージがちょうど 2 の場合はフルコンボのときだけクリアです。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -415,7 +415,7 @@ LR2 スキンのゲージボタンは 6 セルを巡回し、P.ATTACK と G.ATTA
 
 ## EXTRA ノート変換
 
-どのルールでも、Debug Menu の **EXTRA depth (beatoraja)**（0〜100、既定 0）と **EXTRA scratch (beatoraja)** を設定します。0 より大きい深さでは beatoraja 0.8.9 の `ExtraNoteModifier` に従い、背景のキー音がある各行で最大その数までのキー音を、その行で空いていてロングノートの押下中でもないレーンの通常ノートに変えます。レーンは同じキー音を最後に置いたレーンから探します。変換したキー音は背景では鳴らしません。スクラッチには EXTRA scratch がオンの場合だけノートを置きます。この変換は抽選を使わず、参照元の挙動を維持します。空きレーンは行ごとに一度だけ求めるため、後の変換が先の変換を上書きしてその音を失うことがあり、変換したノートはすべて通常ノートです。ロングノートと地雷の変換の後、レーンオプションの前に適用します。
+どのルールでも、Options ダイアログ の **EXTRA depth (beatoraja)**（0〜100、既定 0）と **EXTRA scratch (beatoraja)** を設定します。0 より大きい深さでは beatoraja 0.8.9 の `ExtraNoteModifier` に従い、背景のキー音がある各行で最大その数までのキー音を、その行で空いていてロングノートの押下中でもないレーンの通常ノートに変えます。レーンは同じキー音を最後に置いたレーンから探します。変換したキー音は背景では鳴らしません。スクラッチには EXTRA scratch がオンの場合だけノートを置きます。この変換は抽選を使わず、参照元の挙動を維持します。空きレーンは行ごとに一度だけ求めるため、後の変換が先の変換を上書きしてその音を失うことがあり、変換したノートはすべて通常ノートです。ロングノートと地雷の変換の後、レーンオプションの前に適用します。
 
 リプレイには `play.extraNoteDepth`、`play.extraNoteScratch` と、上書きされた分を含む実際の変換数 `play.extraNoteChangeCount` を記録し、実効譜面のノートに変換後のノートを含めます。beatoraja スキンの EXTRA 深さボタン（350）は、設定値は 100 まで持てますが、参照元と同様に 0〜3 を切り替えます。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -423,7 +423,7 @@ LR2 スキンのゲージボタンは 6 セルを巡回し、P.ATTACK と G.ATTA
 
 ## LR2 の EXTRA MODE
 
-どのルールでも、Debug Menu の **EXTRA MODE (LR2)** をオンにし、**EXTRA minimum level (LR2)** で **LEVEL 1**（既定）、**LEVEL 2**、**LEVEL 3** を選びます。変換は実行ファイルに基づいて LR2 beta3 の `MakeExtraChart` を再現します。背景のキー音を、同じ音が最も多く使われているレーン（同数なら最も小さいレーン）に、そこが埋まっていれば近くの空きレーンにノートとして置き、レベルと BPM で既存のノートとの最小間隔を決めます。譜面で一度もレーンに置かれない音は、同じファミリーの音がレーンに置かれていれば、直前の音番号のレーンを使います。LR2 は `#WAV` のファイル名の先頭 2 バイトで音をファミリーに分けるため、パーサーはそのバイトを保持します（UTF-16 の譜面にはありません）。譜面のオブジェクト数に応じてレベルを上げます。LEVEL 1 は 1,000 個から LEVEL 2、1,200 個から LEVEL 3 として、LEVEL 2 は 1,000 個から LEVEL 3 として遊びます。DP の譜面ではスクラッチのノートを背景音にします。変換はプレイのテンポに従い、36 進の BMS 譜面が必要で、bmson とキーボードモードは受け付けず、コースでは適用しません。
+どのルールでも、Options ダイアログ の **EXTRA MODE (LR2)** をオンにし、**EXTRA minimum level (LR2)** で **LEVEL 1**（既定）、**LEVEL 2**、**LEVEL 3** を選びます。変換は実行ファイルに基づいて LR2 beta3 の `MakeExtraChart` を再現します。背景のキー音を、同じ音が最も多く使われているレーン（同数なら最も小さいレーン）に、そこが埋まっていれば近くの空きレーンにノートとして置き、レベルと BPM で既存のノートとの最小間隔を決めます。譜面で一度もレーンに置かれない音は、同じファミリーの音がレーンに置かれていれば、直前の音番号のレーンを使います。LR2 は `#WAV` のファイル名の先頭 2 バイトで音をファミリーに分けるため、パーサーはそのバイトを保持します（UTF-16 の譜面にはありません）。譜面のオブジェクト数に応じてレベルを上げます。LEVEL 1 は 1,000 個から LEVEL 2、1,200 個から LEVEL 3 として、LEVEL 2 は 1,000 個から LEVEL 3 として遊びます。DP の譜面ではスクラッチのノートを背景音にします。変換はプレイのテンポに従い、36 進の BMS 譜面が必要で、bmson とキーボードモードは受け付けず、コースでは適用しません。
 
 リプレイには `play.lr2ExtraMode`、`play.lr2ExtraLevel`、`play.lr2ExtraEffectiveLevel`、`play.lr2ExtraConvertedObjectCount`、`play.lr2ExtraTempo` を記録し、実効譜面のノートに変換後のノートを含めます。LR2 のプレイスキンには op 52 の代わりに op 53（EXTRA MODE オン）を渡します。LR2 自身のスコア保存条件は EXTRA のプレイを除外します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -431,7 +431,7 @@ LR2 スキンのゲージボタンは 6 セルを巡回し、P.ATTACK と G.ATTA
 
 ## LN MODE
 
-beatoraja ルールでは、Debug Menu の **LN MODE (beatoraja)** で **LONG NOTE**（既定）、**CHARGE NOTE**、**HELL CHARGE NOTE** を選びます。beatoraja 0.8.9 の `lnmode` と同様に、ロングノートのモードを指定していない譜面（`#LNMODE` がない、または bmson の `ln_type` がないか 0）だけに適用し、譜面自身のモードとコースの `ln` / `cn` / `hcn` 制約を優先します。ロングノートの追加や除去はしません。LR2 と AC のルールではこうした譜面を LN として遊ぶため、項目を隠し、切り替えると LONG NOTE に戻し、CHARGE NOTE や HELL CHARGE NOTE を直接指定した場合はエラーにします。
+beatoraja ルールでは、Options ダイアログ の **LN MODE (beatoraja)** で **LONG NOTE**（既定）、**CHARGE NOTE**、**HELL CHARGE NOTE** を選びます。beatoraja 0.8.9 の `lnmode` と同様に、ロングノートのモードを指定していない譜面（`#LNMODE` がない、または bmson の `ln_type` がないか 0）だけに適用し、譜面自身のモードとコースの `ln` / `cn` / `hcn` 制約を優先します。ロングノートの追加や除去はしません。LR2 と AC のルールではこうした譜面を LN として遊ぶため、項目を隠し、切り替えると LONG NOTE に戻し、CHARGE NOTE や HELL CHARGE NOTE を直接指定した場合はエラーにします。
 
 リプレイには実効的なモードを `chart.lnMode` に記録し、リプレイを開く際は現在の選択ではなくそのモードを適用します。beatoraja スキンの LN MODE ボタン（308）は 3 つの選択肢を巡回します。LNMODE の画像は、選曲画面と決定画面ではプレイヤーの選択を、プレイ画面とリザルト画面では遊んだ譜面が自身のモードを指定していればそのモードを表示します。これは通常のプレイ設定で、LN REMOVE や ADD の変換とは別です。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -439,7 +439,7 @@ beatoraja ルールでは、Debug Menu の **LN MODE (beatoraja)** で **LONG NO
 
 ## SP TO DP・DP-TO-SP・9-TO-7
 
-どのルールでも、Debug Menu の **Play options → Battle → SP TO DP** を選択します。LR2 beta3 の SP TO DP（`battle` 3）で、LR2 と同様に譜面のキーモードによって動作が変わります。5KEY・7KEY の譜面は、ノートを複製せずに 10KEY・14KEY の両側へ振り分けます。小節ごとに各キー音のグループをどちらかの側に割り当て、同じ音が密集する小節は `#PLAYLEVEL` に応じて両側に分散し、スクラッチは左右交互に置きます。スクラッチから 200 ms 以内のキーのノートは反対の手に移します。ただし、その側の AUTO SCRATCH が有効な場合は移しません。
+どのルールでも、Options ダイアログ の **Play options → Battle → SP TO DP** を選択します。LR2 beta3 の SP TO DP（`battle` 3）で、LR2 と同様に譜面のキーモードによって動作が変わります。5KEY・7KEY の譜面は、ノートを複製せずに 10KEY・14KEY の両側へ振り分けます。小節ごとに各キー音のグループをどちらかの側に割り当て、同じ音が密集する小節は `#PLAYLEVEL` に応じて両側に分散し、スクラッチは左右交互に置きます。スクラッチから 200 ms 以内のキーのノートは反対の手に移します。ただし、その側の AUTO SCRATCH が有効な場合は移しません。
 
 10KEY・14KEY の譜面では同じ選択肢が DP-TO-SP になり、2P 側のノートをすべて 1P 側へ移します。移動先は元のレーンか、ほかのノートから半拍（125 ms 以上）離せる最も近いレーンです。9KEY の譜面では 9-TO-7 になり、小節ごとに 9 レーンを 7 鍵盤に畳みます。どちらも空きレーンのないノートは背景音にし、ロングノートの終点は移動した始点に合わせます。LR2 はコースで SP TO DP を適用せず、24/48KEY のモードもないため、これらのプレイは変化しません。LR2 と同様にプレイのテンポでノートの時刻を読むため、テンポも変換の入力です。
 
@@ -449,7 +449,7 @@ beatoraja ルールでは、Debug Menu の **LN MODE (beatoraja)** で **LONG NO
 
 ## 7 TO 9
 
-どのルールでも、Debug Menu の **Play options → 7-to-9 (beatoraja)** で **OFF**（既定）、**SC1 KEY2–8**、**SC1 KEY3–9**、**SC2 KEY3–9**、**SC8 KEY1–7**、**SC9 KEY1–7**、**SC9 KEY2–8** を選びます。各パターンは 7 つのキーを 9 鍵盤の連続したレーンに置き、スクラッチのレーンを指定します。残る 1 レーンが予備です。**7-to-9 scratch** は各スクラッチの行き先を決めます。**Fixed** は常にスクラッチのレーン、**Alternate** はスクラッチのレーンと予備のうち前回の打鍵が古いほう、**Avoid repeated hits** はスクラッチのレーンを **H-RANDOM threshold BPM** での 16 分音符以内に叩いていた場合に予備のレーンを使います。押下中のロングノートはそのレーンを維持します。
+どのルールでも、Options ダイアログ の **Play options → 7-to-9 (beatoraja)** で **OFF**（既定）、**SC1 KEY2–8**、**SC1 KEY3–9**、**SC2 KEY3–9**、**SC8 KEY1–7**、**SC9 KEY1–7**、**SC9 KEY2–8** を選びます。各パターンは 7 つのキーを 9 鍵盤の連続したレーンに置き、スクラッチのレーンを指定します。残る 1 レーンが予備です。**7-to-9 scratch** は各スクラッチの行き先を決めます。**Fixed** は常にスクラッチのレーン、**Alternate** はスクラッチのレーンと予備のうち前回の打鍵が古いほう、**Avoid repeated hits** はスクラッチのレーンを **H-RANDOM threshold BPM** での 16 分音符以内に叩いていた場合に予備のレーンを使います。押下中のロングノートはそのレーンを維持します。
 
 beatoraja 0.8.9 の `ModeModifier` に従い、7KEY の譜面にだけ、レーンのランダム配置の後で適用します。ほかの譜面は変化しません。FREE ZONE（`#17`）は beatoraja の 7 鍵盤モードにレーンがないため除去します。リプレイには `sevenToNinePattern`、`sevenToNineType`、`sevenToNineThresholdBPM` と変換の適用有無（`sevenToNineApplied`）を、変換後の 9 鍵盤のノートとともに記録します。リプレイを開く際は変換を適用してからレーン配置を復元します。beatoraja スキンではオプションボタン 360（`seventonine_pattern`）と 361（`seventonine_type`）で両方を切り替えられます。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
@@ -457,7 +457,7 @@ beatoraja 0.8.9 の `ModeModifier` に従い、7KEY の譜面にだけ、レー�
 
 ## BATTLE・BATTLE AS・D-BATTLE
 
-Debug Menu の **Play options → Battle** は、どのルールでもすべてのモードを参照元ごとにまとめ、判定ルール自身の参照元を先頭に並べます。**BATTLE (LR2)**（2 人プレイ。???? ルールでは **2P PLAY (????)**）、**D-BATTLE (LR2)**、**SP TO DP (LR2)**、**BATTLE (beatoraja)**、**BATTLE AS (beatoraja)**、**BATTLE (????)** で、**COUPLE (LR2)** は LR2 ルールだけです。BATTLE は LR2 では 2 人プレイ、beatoraja と AC では 1 人用の複製を指すため、1 人用の複製は参照元を付けて（`beatoraja:BATTLE`・`____:BATTLE`、ADR 0019）どのルールでもその参照元の譜面を作ります。古いリプレイや設定にある参照元のない `BATTLE` は判定ルール自身のものです。選択肢が対応しないキーモードの譜面は変化しません。
+Options ダイアログ の **Play options → Battle** は、どのルールでもすべてのモードを参照元ごとにまとめ、判定ルール自身の参照元を先頭に並べます。**BATTLE (LR2)**（2 人プレイ。???? ルールでは **2P PLAY (????)**）、**D-BATTLE (LR2)**、**SP TO DP (LR2)**、**BATTLE (beatoraja)**、**BATTLE AS (beatoraja)**、**BATTLE (????)** で、**COUPLE (LR2)** は LR2 ルールだけです。BATTLE は LR2 では 2 人プレイ、beatoraja と AC では 1 人用の複製を指すため、1 人用の複製は参照元を付けて（`beatoraja:BATTLE`・`____:BATTLE`、ADR 0019）どのルールでもその参照元の譜面を作ります。古いリプレイや設定にある参照元のない `BATTLE` は判定ルール自身のものです。選択肢が対応しないキーモードの譜面は変化しません。
 
 | 選択肢             | ルール                | 元の譜面               | プレイ                                  |
 | ------------------ | --------------------- | ---------------------- | --------------------------------------- |
@@ -469,7 +469,7 @@ Debug Menu の **Play options → Battle** は、どのルールでもすべて�
 | 2P PLAY (????)     | ????                  | 5 / 7KEY               | 2 人（後述）                            |
 | SP TO DP           | どれでも（LR2）       | 5 / 7 / 9 / 10 / 14KEY | 1 人、変換後の譜面（前述）              |
 
-beatoraja の BATTLE（`doubleoption` 2）と AC の BATTLE は、地雷を含む SP 譜面を 2P 側へ複製します。複製はスクロール・ロングノート・地雷・EXTRA の変換の後、レーンのランダム配置の前に行い、各複製は 2P のチャンネルを持つ別のノートになります。**BATTLE AS**（`doubleoption` 3）はさらに、beatoraja の `AutoplayModifier` と同様に両側のスクラッチのノート（24KEY ではホイール）を背景音にします。LR2 の **D-BATTLE**（`battle` 2）は 1x・3x・5x のセルだけを複製するため、地雷は 1P 側に残ります。また、**D-BATTLE scratch (LR2)** が無効ならスクラッチのノートを背景音にします。このスイッチは、Debug Menu にない決定アニメーション中にスクラッチのキーを押し続ける LR2 の操作の代わりで、D-BATTLE を選んだ間だけ表示します。複製した譜面に DP FLIP は適用しません。
+beatoraja の BATTLE（`doubleoption` 2）と AC の BATTLE は、地雷を含む SP 譜面を 2P 側へ複製します。複製はスクロール・ロングノート・地雷・EXTRA の変換の後、レーンのランダム配置の前に行い、各複製は 2P のチャンネルを持つ別のノートになります。**BATTLE AS**（`doubleoption` 3）はさらに、beatoraja の `AutoplayModifier` と同様に両側のスクラッチのノート（24KEY ではホイール）を背景音にします。LR2 の **D-BATTLE**（`battle` 2）は 1x・3x・5x のセルだけを複製するため、地雷は 1P 側に残ります。また、**D-BATTLE scratch (LR2)** が無効ならスクラッチのノートを背景音にします。このスイッチは、Options ダイアログ にない決定アニメーション中にスクラッチのキーを押し続ける LR2 の操作の代わりで、D-BATTLE を選んだ間だけ表示します。複製した譜面に DP FLIP は適用しません。
 
 リプレイには実効的な `play.battleMode`、`battleSourceVariant`、複製したオブジェクト数（`battleChangedObjectCount`）、D-BATTLE では `dBattleScratch` を記録します。リプレイの譜面には両側のノートを保存するため、リプレイでは各複製の配置を個別に復元します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 

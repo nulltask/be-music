@@ -1,24 +1,30 @@
+import { localized } from './ui/localized.ts';
+import { onPlayerLangChange } from './player-copy.ts';
+import { defineServiceUI } from '@be-music/service-web-theme/client';
+import { render } from 'lit';
 import {
   configureBGAVideoWorkers,
   configureBrowserWorkers,
   setBrowserWorkerCount,
   disposeBrowserWorkers,
 } from '@be-music/player-browser/compute';
-import { migratePlayerStorage } from './debug-menu-storage.ts';
+import { migratePlayerStorage } from './player-storage.ts';
 import { readWorkerCount } from './worker-settings.ts';
-import { debugMenuSettingsSync } from './debug-menu-settings-sync.ts';
+import { optionSettingsSync } from './option-settings-sync.ts';
 // The player's bootstrap: the page's markup, the browser check, the device classes and the Help modal, then the app
 // (`app/app.ts`) once the UI fonts are ready, with the test hook installed over it before it starts.
 import { checkBrowserCompat } from '@be-music/player-browser/collection';
 import { PlayerWebApp } from './app/app.ts';
 import { wireHelpModal, applyPlayerLanguage } from './help-modal.ts';
+import { wireInstallButton } from './install-button.ts';
 import { bindPlayerHeader, mountPlayerHeader } from './player-header.ts';
-import { PLAYER_APP_HTML } from './dom-template.ts';
+import { PLAYER_APP_TEMPLATE } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { readDeviceSignals, resolveDeviceProfile } from './device-profile.ts';
 import { waitForDefaultUIFonts } from './services/built-in-skins.ts';
 import { isTestHookEnabled, TestHookRecorder } from './test-hook.ts';
 import { liveTestHookState } from './services/test-hook.ts';
+import { registerServiceWorker, shouldRegisterServiceWorker } from './service-worker/register.ts';
 import './styles.css';
 
 let workerStorage: Storage | undefined;
@@ -36,7 +42,7 @@ configureBGAVideoWorkers({
   createEncodeWorker: () => new Worker(new URL('./bga-encode-worker.ts', import.meta.url), { type: 'module' }),
 });
 window.addEventListener('pagehide', (event) => {
-  void debugMenuSettingsSync.flush();
+  void optionSettingsSync.flush();
   if (!event.persisted) disposeBrowserWorkers();
 });
 
@@ -45,12 +51,17 @@ if (!app) {
   throw new Error('missing #app');
 }
 
-app.innerHTML = PLAYER_APP_HTML;
+defineServiceUI();
+render(PLAYER_APP_TEMPLATE, app);
+const accountLabel = app.querySelector<HTMLElement>('#start-account-label');
+if (accountLabel !== null) render(localized('checkingAccount'), accountLabel);
 
 // Browser compatibility probe runs first so the drop card paints the readiness verdict immediately on first render. We
 // do this BEFORE constructing the player app so that even a hard-fail (Pixi `Application.init()` throwing on a no-WebGL2
 // browser) still leaves the user looking at the unsupported-browser message rather than a blank canvas.
-renderBrowserCompatPanel(checkBrowserCompat());
+const browserCompat = checkBrowserCompat();
+renderBrowserCompatPanel(browserCompat);
+onPlayerLangChange(() => renderBrowserCompatPanel(browserCompat));
 
 // Phones and tablets: lighter chrome over the stage, touch play controls, and a rotate prompt on phones held upright
 // (see the `html.touch-first` / `html.phone` rules in styles.css).
@@ -67,9 +78,21 @@ if (header !== null) {
   bindPlayerHeader({ selectLanguage: applyPlayerLanguage });
 }
 wireHelpModal();
+wireInstallButton();
+
+// The installable app's offline shell (`service-worker/`): production builds only, and never under the test hook.
+if (
+  shouldRegisterServiceWorker({
+    production: import.meta.env.PROD,
+    testHook: isTestHookEnabled(window.location.href, import.meta.env.DEV),
+    supported: 'serviceWorker' in navigator,
+  })
+) {
+  registerServiceWorker(navigator.serviceWorker);
+}
 
 void waitForDefaultUIFonts()
-  .then(() => debugMenuSettingsSync.reconcile())
+  .then(() => optionSettingsSync.reconcile())
   .finally(() => {
     setBrowserWorkerCount(readWorkerCount(workerStorage, navigator.hardwareConcurrency));
     // `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`).

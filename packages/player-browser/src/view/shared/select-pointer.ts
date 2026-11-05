@@ -27,6 +27,7 @@ import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 
 /** A skin's design canvas, in design pixels. */
 export interface SelectDesignSize {
+  readonly displayAspectRatio?: number;
   readonly width: number;
   readonly height: number;
 }
@@ -135,10 +136,16 @@ export class SelectPointer {
    */
   readonly handlePointerMove = (event: PointerEvent): void => {
     if (!this.ctx.visible) return;
-    const { width: designWidth, height: designHeight } = this.ctx.resolveDesignSize();
-    const viewport = resolveScaledViewport(this.ctx.screen.width, this.ctx.screen.height, designWidth, designHeight);
-    this.ctx.mouseX = (event.offsetX - viewport.x) / viewport.scale;
-    this.ctx.mouseY = (event.offsetY - viewport.y) / viewport.scale;
+    const { width: designWidth, height: designHeight, displayAspectRatio } = this.ctx.resolveDesignSize();
+    const viewport = resolveScaledViewport(
+      this.ctx.screen.width,
+      this.ctx.screen.height,
+      designWidth,
+      designHeight,
+      displayAspectRatio,
+    );
+    this.ctx.mouseX = (event.offsetX - viewport.x) / (viewport.scaleX ?? viewport.scale);
+    this.ctx.mouseY = (event.offsetY - viewport.y) / (viewport.scaleY ?? viewport.scale);
     const gesture = this.touchGesture;
     if (gesture === undefined || gesture.pointerId !== event.pointerId) return;
     if (!gesture.dragging) {
@@ -269,8 +276,14 @@ export class SelectPointer {
     if (entries.length === 0) return;
     this.fling = undefined;
     if (!isWheelNotch(event)) {
-      const { width: designWidth, height: designHeight } = this.ctx.resolveDesignSize();
-      const viewport = resolveScaledViewport(this.ctx.screen.width, this.ctx.screen.height, designWidth, designHeight);
+      const { width: designWidth, height: designHeight, displayAspectRatio } = this.ctx.resolveDesignSize();
+      const viewport = resolveScaledViewport(
+        this.ctx.screen.width,
+        this.ctx.screen.height,
+        designWidth,
+        designHeight,
+        displayAspectRatio,
+      );
       const step = stepWheelScroll(this.listPull, event.deltaY / viewport.scale, this.resolveTouchScrollPitch());
       this.listPull = step.carry;
       this.lastPullInputAt = performance.now();
@@ -326,9 +339,15 @@ export class SelectPointer {
     // from any form input the user might already be typing into.
     const themeSize = this.ctx.themeDesignSize;
     const { width: designWidth, height: designHeight } = themeSize ?? this.ctx.beMusicDesignSize;
-    const viewport = resolveScaledViewport(this.ctx.screen.width, this.ctx.screen.height, designWidth, designHeight);
-    const virtualX = (offsetX - viewport.x) / viewport.scale;
-    const virtualY = (offsetY - viewport.y) / viewport.scale;
+    const viewport = resolveScaledViewport(
+      this.ctx.screen.width,
+      this.ctx.screen.height,
+      designWidth,
+      designHeight,
+      themeSize?.displayAspectRatio,
+    );
+    const virtualX = (offsetX - viewport.x) / (viewport.scaleX ?? viewport.scale);
+    const virtualY = (offsetY - viewport.y) / (viewport.scaleY ?? viewport.scale);
 
     if (themeSize) {
       this.ctx.handleThemePointerDown(virtualX, virtualY);

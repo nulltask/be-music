@@ -36,7 +36,7 @@ import {
   supportsLiveTempoChange,
   type ReplayTempo,
 } from '../../runtime/play-tempo.ts';
-import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
+import { NO_SKIN_ADJUST, type PlayDisposeOptions, type PlaySessionOptions, type SkinAdjust } from './play-options.ts';
 import { resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { FALLBACK_INTRO_DELAY_MS, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
@@ -60,6 +60,11 @@ import {
   handleVisibilityChange,
   handleWindowBlur,
   handleWindowFocus,
+  isQuickRetryHeld,
+  playControlActions,
+  recordControlKey,
+  releasePlayKeys,
+  trackPlayKey,
   togglePause,
 } from './play-input.ts';
 import { decodePlayAudio, disposeBGAVideos, disposePlayAudio, openPlayAudio, prepareBGA } from './play-media.ts';
@@ -384,6 +389,13 @@ export class PlaySession extends PlaySessionState {
   /** Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. */
   public requestExit(): void {
     beginExitSequence(this, () => {
+      // The quit key held through the fade-out plays the chart again (That-Which-Must-Not-Be-Named PC's quick retry).
+      if (isQuickRetryHeld(this, performance.now())) {
+        interruptSharedEngine(this, 'restart');
+        this.sharedEngineAbortController?.abort();
+        this.options.onRestart?.();
+        return;
+      }
       interruptSharedEngine(this, 'escape');
       this.sharedEngineAbortController?.abort();
       this.options.onExit?.();
@@ -774,17 +786,35 @@ export class PlaySession extends PlaySessionState {
   readonly quitHold: QuitHoldController = new QuitHoldController({
     onComplete: () => this.requestExit(),
     now: () => performance.now(),
+    isQuitKey: (event) => playControlActions(this).is('play.quit-hold', event),
   });
 
   readonly handleQuitHoldKeyUp = (event: KeyboardEvent): void => {
     this.quitHold.handleKeyUp(event);
+    recordControlKey(this, 'up', event);
+    trackPlayKey(this, 'up', event);
   };
 
   readonly cancelQuitHold = (): void => {
     this.quitHold.cancel();
+    releasePlayKeys(this);
   };
 
   public lastStartTapMs: number | undefined;
+
+  /** The player's move and scale of the play skin this play (LR2's 1 / 2 + the arrows), over the one it started with. */
+  private skinAdjustValue: SkinAdjust | undefined;
+
+  /** Where the play skin is moved and how far it is scaled (the frame draws it so). */
+  public get skinAdjust(): SkinAdjust {
+    return this.skinAdjustValue ?? this.options.skinAdjust ?? NO_SKIN_ADJUST;
+  }
+
+  /** Moves or scales the play skin, and tells the host for the next play. */
+  public setSkinAdjust(adjust: SkinAdjust): void {
+    this.skinAdjustValue = adjust;
+    this.options.onSkinAdjustChange?.(adjust);
+  }
   readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => handleSharedEngineExitKey(this, event);
 
   /**

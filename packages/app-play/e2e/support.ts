@@ -7,7 +7,7 @@ import type { TestHookBar, TestHookState } from '../src/test-hook.ts';
 /**
  * The page helpers the specs share: opening the player with the test hook, dropping fixture folders the way a person
  * drops them (a synthetic `drop` of `File`s with `webkitRelativePath`, as `docs/player-web.md#browser-verification` describes), keys
- * with a `code`, the Debug Menu's controls, and waits on `window.__beMusicTest` state.
+ * with a `code`, the Options dialog's controls, and waits on `window.__beMusicTest` state.
  */
 
 /** Where the fixture files are served on the page's own origin (intercepted, never reaching the preview server). */
@@ -226,7 +226,7 @@ export class Player {
    * Holds `code` down and pauses in the same task, on the first frame at or past chart `atSeconds`, so the play stops on
    * the press instant; returns the chart seconds it pressed at. Visuals that follow the chart clock (SWBGA, BGA
    * sequences) freeze there, so a slow CI screenshot samples the frame of the press rather than a later one (#878).
-   * Space always toggles pause.
+   * Pause always toggles pause.
    */
   async pressPaused(code: string, atSeconds = 0, timeoutMs = 90_000): Promise<number> {
     return this.page.evaluate(
@@ -241,8 +241,8 @@ export class Player {
             const seconds = window.__beMusicTest?.state().play?.seconds;
             if (seconds !== undefined && seconds >= atSeconds) {
               send('keydown', code, key);
-              send('keydown', 'Space', ' ');
-              send('keyup', 'Space', ' ');
+              send('keydown', 'Pause', ' ');
+              send('keyup', 'Pause', ' ');
               resolve(window.__beMusicTest?.state().play?.seconds ?? seconds);
             } else if (performance.now() > deadline) reject(new Error(`timed out waiting for ${atSeconds}s`));
             else requestAnimationFrame(step);
@@ -264,34 +264,35 @@ export class Player {
 
   /** Resumes a paused play and pauses again on the first frame at or past chart `seconds`. */
   async resumeUntil(seconds: number, what: string): Promise<void> {
-    await this.key('Space');
-    await this.keyWhen((state, at) => (state.play?.seconds ?? 0) >= at, seconds, 'Space', what);
+    await this.key('Pause');
+    await this.keyWhen((state, at) => (state.play?.seconds ?? 0) >= at, seconds, 'Pause', what);
   }
 
   /**
-   * Sets a Debug Menu control: `folder` is the folder titles from the top (`['Play options']`), `name` the control's
-   * label. Checkboxes take a boolean, sliders a number, drop-downs the option's label.
+   * Sets an Options control: `folder` is the section and folder titles from the top (`['Play options']`; the tabs are
+   * left out), `name` the control's label. Switches take a boolean, sliders and number fields a number, selects the
+   * option's label. The dialog stays as it is: the control is set closed too.
    */
   async setOption(folder: readonly string[], name: string, value: boolean | number | string): Promise<void> {
     await this.control(folder, name, { set: value });
   }
 
-  /** A Debug Menu control's value: a checkbox's state, a slider's number, a drop-down's option label. */
+  /** An Options control's value: a switch's state, a slider's number, a select's option label. */
   async readOption(folder: readonly string[], name: string): Promise<boolean | number | string> {
     return (await this.control(folder, name, {})).value;
   }
 
-  /** Whether a Debug Menu control can be changed now. */
+  /** Whether an Options control can be changed now. */
   async optionEnabled(folder: readonly string[], name: string): Promise<boolean> {
     return (await this.control(folder, name, {})).enabled;
   }
 
-  /** Clicks a Debug Menu button. */
+  /** Clicks an Options button. */
   async pressOption(folder: readonly string[], name: string): Promise<void> {
     await this.control(folder, name, { press: true });
   }
 
-  /** Finds a Debug Menu control by its folder titles and label, optionally sets or presses it, and reads it back. */
+  /** Finds an Options control by its section and folder titles and its label, optionally sets or presses it, and reads it back. */
   private async control(
     folder: readonly string[],
     name: string,
@@ -299,48 +300,45 @@ export class Player {
   ): Promise<{ value: boolean | number | string; enabled: boolean }> {
     return this.page.evaluate(
       ({ folder, name, action }) => {
-        let gui = document.querySelector<HTMLElement>('[data-pane="debug"]');
-        if (gui === null) throw new Error('no Debug Menu');
-        // Tab pages are transparent to the existing folder paths.
-        const children = (content: Element | null): Element[] =>
-          [...(content?.children ?? [])].flatMap((child) =>
-            child.classList.contains('tp-tabv')
-              ? [...child.querySelectorAll(':scope > .tp-tabv_c > .tp-tbpv > .tp-tbpv_c')].flatMap(children)
-              : [child],
-          );
-        const revealTab = (element: Element): void => {
-          const page = element.closest('.tp-tbpv');
-          const tab = page?.parentElement?.closest('.tp-tabv');
-          if (!page || !tab) return;
-          const pages = [...tab.querySelectorAll(':scope > .tp-tabv_c > .tp-tbpv')];
-          tab
-            .querySelectorAll<HTMLButtonElement>(':scope > .tp-tabv_t > .tp-tbiv > button')
-            [pages.indexOf(page)]?.click();
+        const root = document.querySelector<HTMLElement>('#options-modal');
+        if (root === null) throw new Error('no Options dialog');
+        // The folder a section, folder or row sits in: the nearest one around it, or the dialog. Tabs are transparent.
+        const folderOf = (node: Element): Element =>
+          node.parentElement?.closest('[data-options-folder], #options-modal') ?? root;
+        // Folders and rows go by their English title and label, whatever language the dialog shows.
+        const titleOf = (node: Element): string | undefined => (node as HTMLElement).dataset.optionTitle;
+        // Selects every tab the node sits in, so a screenshot or a click finds it shown.
+        const revealTab = (node: Element): void => {
+          for (
+            let panel = node.closest('[role="tabpanel"]');
+            panel !== null;
+            panel = panel.parentElement?.closest('[role="tabpanel"]') ?? null
+          ) {
+            document.getElementById(panel.getAttribute('aria-labelledby') ?? '')?.click();
+          }
         };
+        let current: Element = root;
         for (const title of folder) {
-          const content: Element | null = gui.querySelector(':scope > .tp-rotv_c, :scope > .tp-fldv_c');
-          gui =
-            children(content)
-              .filter(
-                (candidate): candidate is HTMLElement =>
-                  candidate instanceof HTMLElement && candidate.classList.contains('tp-fldv'),
-              )
-              .find(
-                (candidate) => candidate.querySelector(':scope > .tp-fldv_b .tp-fldv_t')?.textContent?.trim() === title,
-              ) ?? null;
-          if (gui === null) throw new Error(`no Debug Menu folder ${title}`);
-          revealTab(gui);
+          const next = [...current.querySelectorAll('[data-options-folder]')].find(
+            (candidate) => folderOf(candidate) === current && titleOf(candidate) === title,
+          );
+          if (next === undefined) throw new Error(`no Options folder ${title}`);
+          revealTab(next);
+          current = next;
         }
-        const content = gui.querySelector(':scope > .tp-rotv_c, :scope > .tp-fldv_c');
-        const controller = children(content).find((candidate) => {
-          const label = candidate.querySelector('.tp-lblv_l')?.textContent?.trim();
-          return (label || candidate.querySelector('button')?.textContent?.trim()) === name;
+        const controller = [...current.querySelectorAll('.options-row')].find((candidate) => {
+          if (folderOf(candidate) !== current) return false;
+          const label =
+            (candidate as HTMLElement).dataset.optionLabel ??
+            candidate.querySelector('.options-label')?.textContent?.trim();
+          return (label || candidate.querySelector('button:not(.options-help)')?.textContent?.trim()) === name;
         });
-        if (controller === undefined) throw new Error(`no Debug Menu control ${[...folder, name].join(' / ')}`);
+        if (controller === undefined) throw new Error(`no Options control ${[...folder, name].join(' / ')}`);
         revealTab(controller);
         const select = controller.querySelector('select');
-        const input = controller.querySelector('input');
-        const button = controller.querySelector('button');
+        // A slider row has its number field first, which takes an exact value.
+        const input = controller.querySelector<HTMLInputElement>('input:not([type="range"])');
+        const button = controller.querySelector<HTMLButtonElement>('button:not(.options-help)');
         const value = action.set;
         if (action.press === true) {
           if (button === null) throw new Error(`${name} is not a button`);
@@ -365,7 +363,9 @@ export class Player {
             : input?.type === 'checkbox'
               ? input.checked
               : input !== null
-                ? Number(input.value)
+                ? input.type === 'number'
+                  ? Number(input.value)
+                  : input.value
                 : '';
         return { value: read, enabled: !(select?.disabled || input?.disabled || button?.disabled) };
       },
@@ -459,10 +459,12 @@ export class Player {
   async clickSkin(x: number, y: number, width: number, height: number): Promise<void> {
     const box = await this.page.locator('#stage canvas').boundingBox();
     if (box === null) throw new Error('no canvas');
-    const scale = Math.min(box.width / width, box.height / height);
-    const left = box.x + (box.width - width * scale) / 2;
-    const top = box.y + (box.height - height * scale) / 2;
-    await this.page.mouse.click(left + x * scale, top + y * scale);
+    const outputWidth = width;
+    const scaleY = Math.min(box.width / outputWidth, box.height / height);
+    const scaleX = (outputWidth * scaleY) / width;
+    const left = box.x + (box.width - outputWidth * scaleY) / 2;
+    const top = box.y + (box.height - height * scaleY) / 2;
+    await this.page.mouse.click(left + x * scaleX, top + y * scaleY);
   }
 }
 

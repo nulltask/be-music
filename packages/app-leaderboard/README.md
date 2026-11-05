@@ -131,15 +131,11 @@ flowchart TD
 the same commands in this package. A new Worker has no secrets yet, so its first deploy passes them with
 `--secrets-file` (for example `cf deploy --secrets-file <(op inject -i secrets/production.env.tpl)`).
 
-The Worker serves its pages and API on its own host, and holds Better Auth for every service until Accounts is split
-out (docs/services.md section 3): the Accounts, Player and Dashboard Workers reach it through Service Bindings, and its
-session cookies are shared on the environment's parent domain.
+The Worker serves its pages and API on its own host. Accounts owns authentication and issues OIDC identities; the Leaderboard uses `@be-music/service-auth-client` and keeps its own host-only session cookie. The services do not share session cookies. See [Sign-in](../../docs/services.md#3-sign-in).
 
 ## Pages
 
-The pages are Hono JSX styled with Tailwind CSS v4 and [Basecoat](https://basecoatui.com) (the
-shadcn/ui design without a framework runtime). `src/pages/app.css` compiles into `src/pages/styles.generated.ts`,
-served from `/assets/app.<hash>.css`.
+The Hono routes render Lit templates through `@be-music/service-web-theme/server`, with Tailwind CSS v4 and [Basecoat](https://basecoatui.com) styles. Shared authentication, account identity, header, and language views come from the service theme; browser components use its `/client` entry. htmx handles requests and partial navigation, while Lit-owned status components use Shadow DOM to isolate their children from morphs. `src/pages/app.css` compiles into `src/pages/styles.generated.ts`, served from `/assets/app.<hash>.css`.
 
 The stylesheet, the icons, the share card's font and the client script (`src/pages/*.generated.ts`) are generated, not kept in git.
 `pnpm install`, `dev`, the deploys and the tests generate them; after changing the pages' classes, the icons or

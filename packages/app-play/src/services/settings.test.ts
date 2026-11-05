@@ -5,7 +5,7 @@ import { HI_SPEED_STORAGE_KEY } from '../hi-speed-storage.ts';
 import { PLAY_TEMPO_STORAGE_KEY } from '../play-tempo-settings.ts';
 import { RENDER_RESOLUTION_STORAGE_KEY } from '../render-resolution.ts';
 import { PLAY_IN_SILENT_MODE_STORAGE_KEY } from '../silent-mode-playback.ts';
-import { DEBUG_MENU_SETTINGS_STORAGE_KEY } from '../debug-menu-settings.ts';
+import { OPTION_SETTINGS_STORAGE_KEY } from '../option-settings.ts';
 import {
   BUILT_IN_SKIN_STORAGE_KEY,
   createPlayerGUIState,
@@ -262,10 +262,10 @@ describe('createPlayerGUIState', () => {
     expect(create(memoryStorage(), { signals: phone }).skinEffects).toBe('reduced');
   });
 
-  test('a saved Debug Menu document replaces the visit defaults', () => {
+  test('a saved Options dialog document replaces the visit defaults', () => {
     const state = create(
       memoryStorage({
-        [DEBUG_MENU_SETTINGS_STORAGE_KEY]: JSON.stringify({
+        [OPTION_SETTINGS_STORAGE_KEY]: JSON.stringify({
           version: 0,
           updatedAt: 1,
           settings: { gauge: 'HARD', autoPlay: true, peakGain: true, judgeRuleset: 'beatoraja' },

@@ -18,6 +18,7 @@
 import { handleAuth, readSession, type OIDCEnv } from '@be-music/service-auth-client';
 import { isLeaderboardPath } from './leaderboard-paths.ts';
 import { handlePlayerSettings, PLAYER_SETTINGS_PATH } from './player-settings.ts';
+import { withPWAAssetHeaders } from './pwa-assets.ts';
 import { serveURLLoadProxy } from './url-load-proxy.ts';
 
 interface Env extends OIDCEnv {
@@ -82,7 +83,7 @@ export default {
     if (pathname === URL_LOAD_PROXY_PATH) {
       return serveURLLoadProxy(request);
     }
-    // Debug Menu settings. Handled here, not forwarded: the Leaderboard does not keep them. The device cookie and
+    // Options dialog settings. Handled here, not forwarded: the Leaderboard does not keep them. The device cookie and
     // the R2 copy survive Safari deleting script-written storage.
     if (pathname === PLAYER_SETTINGS_PATH) {
       const session = await readSession(request, env);
@@ -102,6 +103,7 @@ export default {
       return env.LEADERBOARD.fetch(new Request(url, new Request(request, { headers })));
     }
     // Everything else: static assets, with `not_found_handling: single-page-application` serving index.html on a miss.
-    return env.ASSETS.fetch(request);
+    // The service worker and the web app manifest get their own headers (`pwa-assets.ts`).
+    return withPWAAssetHeaders(pathname, await env.ASSETS.fetch(request));
   },
 } satisfies ExportedHandler<Env>;

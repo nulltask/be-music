@@ -29,7 +29,7 @@ export class BeMusicResultScreenElement extends FrameElement<BeMusicDOMResultFra
             ([label, p]) =>
               html`<div class="panel player" part=${label ? `panel player-${label}` : 'panel'}>
                 <div class="verdict">
-                  <p class="muted">
+                  <p class="result-verdict">
                     ${label ? `${label} ` : ''}${formatEnumLabel(p.lamp ?? (p.cleared ? 'CLEARED' : 'FAILED'))}
                   </p>
                   <p class="stat" part="stat">${p.score.exScore} / ${p.score.total * 2}</p>

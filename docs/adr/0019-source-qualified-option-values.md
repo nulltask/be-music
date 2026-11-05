@@ -25,7 +25,7 @@ BATTLE is already apart at the value level: LR2's BATTLE is stored as `TWO-PLAYE
   - Saved settings (the [#692](https://github.com/nulltask/be-music/pull/692) settings document) migrate once to qualified values, with the ruleset selected at migration time as the source.
   - Replays are not rewritten. A reader resolves a bare value against the ruleset it judges under.
 - **The option timeline stays primitive** ([ADR 0018](./0018-replay-option-timeline.md)): a qualified value is a string. Typed engine fields (`play.gauge`, `play.randomLane`) take the same strings.
-- **Skins:** LR2 and beatoraja buttons cycle their own source's values, and their labels read the bare name. Another source's value shows on a skin as that skin's nearest label (for example `beatoraja:HARD` as HARD), and is selectable from the Debug Menu, which groups choices by source.
+- **Skins:** LR2 and beatoraja buttons cycle their own source's values, and their labels read the bare name. Another source's value shows on a skin as that skin's nearest label (for example `beatoraja:HARD` as HARD), and is selectable from the Options dialog, which groups choices by source.
 
 ```mermaid
 flowchart LR

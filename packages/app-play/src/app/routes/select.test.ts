@@ -13,12 +13,12 @@ import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
 import type { BeatorajaSkinConfig } from '@be-music/skin-beatoraja';
 import { parseBeatorajaCourseData } from '@be-music/player-engine/course';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse, PlayOptions } from '@be-music/player-scene-model';
-import { describe, expect, test, vi } from 'vite-plus/test';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
 import type { PlayerScene, PlayerWebElements } from '../../types.ts';
-import type { DebugMenu } from '../../ui/debug-menu/index.ts';
+import type { OptionsDialog } from '../../ui/options/index.ts';
 import { SceneRouter } from '../scene-router.ts';
 import { SelectRoute, type SelectRouteDeps } from './select.ts';
 
@@ -140,14 +140,22 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
   const lr2: { selectSkin: LR2Skin | undefined } = { selectSkin: undefined };
   const deps = {
     router,
+    controls: () => ({}),
+    showExitMenu: vi.fn(),
+    closeWindow: vi.fn(),
     elements: { shell } as Pick<PlayerWebElements, 'shell'>,
     library: {
       collection: { sources: [], charts: options.charts ?? [chartEntry('a')], errors: [] } as BrowserChartCollection,
+      reloadCharts: vi.fn(async () => {}),
     },
     records: {
       lookupChartBestRecord: vi.fn<SelectRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
       currentRulesetRecords: vi.fn<SelectRouteDeps['records']['currentRulesetRecords']>(() => new Map()),
       currentDanRanks: vi.fn<SelectRouteDeps['records']['currentDanRanks']>(() => []),
+      resolveChartHashes: vi.fn<SelectRouteDeps['records']['resolveChartHashes']>(async () => ({
+        md5: 'm',
+        sha256: 's',
+      })),
     },
     courses,
     courseRoute: { startCourse: vi.fn<SelectRouteDeps['courseRoute']['startCourse']>(async () => {}) },
@@ -185,7 +193,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     },
     audio: {} as AudioService,
     search: { openFromPointer: vi.fn() },
-    debugMenu: {
+    optionsDialog: {
       refreshPlayOptionControllers: vi.fn(),
       scheduleFirstRunResolutionDetect: vi.fn(),
       setGhostAvailability: vi.fn(),
@@ -206,7 +214,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     // The fakes stand in for the services' types.
     beatoraja: deps.beatoraja as unknown as SelectRouteDeps['beatoraja'],
     guiState: deps.guiState as SelectRouteDeps['guiState'],
-    debugMenu: deps.debugMenu as unknown as DebugMenu,
+    optionsDialog: deps.optionsDialog as unknown as OptionsDialog,
     builtIn: deps.builtIn as unknown as SelectRouteDeps['builtIn'],
     familyKits: deps.familyKits as unknown as SelectRouteDeps['familyKits'],
   });
@@ -242,7 +250,7 @@ describe('SelectRoute: the first select screen', () => {
     expect(h.router.current).toBe(scene);
     expect(h.router.select).toBe(scene);
     expect(h.stage).toEqual([scene]);
-    expect(h.deps.debugMenu.scheduleFirstRunResolutionDetect).toHaveBeenCalledOnce();
+    expect(h.deps.optionsDialog.scheduleFirstRunResolutionDetect).toHaveBeenCalledOnce();
     expect(h.deps.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions).not.toHaveBeenCalled();
     expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();
     expect([...h.classes]).toEqual([]);
@@ -282,7 +290,7 @@ describe('SelectRoute: the first select screen', () => {
     expect(lastMade(h).dispose).toHaveBeenCalledOnce();
     expect(h.router.select).toBeUndefined();
     expect(h.stage).toEqual([]);
-    expect(h.deps.debugMenu.scheduleFirstRunResolutionDetect).not.toHaveBeenCalled();
+    expect(h.deps.optionsDialog.scheduleFirstRunResolutionDetect).not.toHaveBeenCalled();
   });
 });
 
@@ -311,7 +319,7 @@ describe('SelectRoute: coming back to the select screen', () => {
       ...[scene.updateKit, scene.setSounds, scene.setLibrary].map((fn) => fn.mock.invocationCallOrder[0]!),
     );
     expect(takes).toBeLessThan(scene.restore.mock.invocationCallOrder[0]!);
-    expect(h.deps.debugMenu.scheduleFirstRunResolutionDetect).toHaveBeenCalledOnce();
+    expect(h.deps.optionsDialog.scheduleFirstRunResolutionDetect).toHaveBeenCalledOnce();
   });
 
   test('the built-in screen keeps its own kit on a return', async () => {
@@ -469,7 +477,7 @@ describe('SelectRoute: dropping the screen for another skin system or LR2 theme'
     h.route.lastSelectNavigation = AT_FOLDER;
     await h.router.leave();
     await h.route.showSelect();
-    // The player browses on, then picks another skin system in the Debug Menu.
+    // The player browses on, then picks another skin system in the Options dialog.
     builtIn.snapshot.mockReturnValue(AT_FIXTURE);
     await h.route.dropSelect();
     expect(builtIn.dispose).toHaveBeenCalledOnce();
@@ -531,7 +539,7 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.deps.showDecide).not.toHaveBeenCalled();
   });
 
-  test('its play option edits go to the play options in force and the Debug Menu; a new hi-speed is remembered', async () => {
+  test('its play option edits go to the play options in force and the Options dialog; a new hi-speed is remembered', async () => {
     const h = harness();
     await h.route.showSelect();
     const edit = (changes: Partial<PlayOptions>): void =>
@@ -541,30 +549,38 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.playOptions.current).toMatchObject({ autoPlay: true, hsFix: 'MAXBPM' });
     expect(h.deps.guiState.autoPlay).toBe(true);
     expect(h.deps.rememberHiSpeed).not.toHaveBeenCalled();
-    expect(h.deps.debugMenu.refreshPlayOptionControllers).toHaveBeenCalledOnce();
+    expect(h.deps.optionsDialog.refreshPlayOptionControllers).toHaveBeenCalledOnce();
 
     edit({ hiSpeed: 3.5 });
     expect(h.deps.rememberHiSpeed).toHaveBeenCalledWith(3.5, 'select');
   });
 
-  test('Escape at the root of a beatoraja screen leaves it for the drop screen: the screen and the cursor go', async () => {
+  test('Escape at the root asks first, and staying keeps the screen', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const scene = lastMade(h);
+    scene.options.on.exitMenu!();
+    expect(h.deps.showExitMenu).toHaveBeenCalledOnce();
+    vi.mocked(h.deps.showExitMenu).mock.calls[0]![0]('cancel');
+    expect(h.classes.has('empty')).toBe(false);
+    expect(h.router.select).toBe(scene);
+  });
+
+  test('confirming exit closes the window without returning to the drop screen', async () => {
     const h = harness();
     h.setFamily('beatoraja');
     await h.route.showSelect();
     const scene = lastMade(h);
     h.route.lastSelectNavigation = AT_FOLDER;
-    scene.options.on.exit!();
-    expect(h.classes.has('empty')).toBe(true);
-    expect(h.route.lastSelectNavigation).toBeUndefined();
-    expect(h.deps.beatorajaSkinOptions.clear).toHaveBeenCalledOnce();
-    await vi.waitFor(() => expect(scene.dispose).toHaveBeenCalledOnce());
-    expect(h.router.select).toBeUndefined();
-    expect(h.router.current).toBeUndefined();
-
-    // Coming back (a drop or a theme) starts at the root.
-    await h.route.showSelect();
-    expect(lastMade(h)).not.toBe(scene);
-    expect(lastMade(h).options.browse).toBeUndefined();
+    scene.options.on.exitMenu!();
+    vi.mocked(h.deps.showExitMenu).mock.calls[0]![0]('leave');
+    expect(h.deps.closeWindow).toHaveBeenCalledOnce();
+    expect(h.classes.has('empty')).toBe(false);
+    expect(h.route.lastSelectNavigation).toBe(AT_FOLDER);
+    expect(h.deps.beatorajaSkinOptions.clear).not.toHaveBeenCalled();
+    expect(scene.dispose).not.toHaveBeenCalled();
+    expect(h.router.select).toBe(scene);
+    expect(h.router.current).toBe(scene);
   });
 
   test('a beatoraja skin’s JUDGE TIMING keeps its options for the entry and loads it again with them', async () => {
@@ -595,5 +611,77 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.deps.records.currentDanRanks).toHaveBeenCalled();
     on.search!();
     expect(h.deps.search.openFromPointer).toHaveBeenCalledOnce();
+  });
+});
+
+describe('the folder reload', () => {
+  test('the select screen’s reload key reads the library again', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    lastMade(h).options.on.reload!();
+    expect(h.deps.library.reloadCharts).toHaveBeenCalledOnce();
+  });
+});
+
+describe('LR2’s held keys on the select screen', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test('key 4 held opens the chart’s ranking on the Leaderboard', async () => {
+    const open = vi.fn();
+    vi.stubGlobal('window', { open });
+    vi.stubGlobal('location', { hostname: 'play.be-music.app' });
+    const h = harness();
+    await h.route.showSelect();
+    lastMade(h).options.on.ranking!(chartEntry('a'));
+    expect(open).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/leaderboard\.be-music\.app\/charts\//u),
+      '_blank',
+      'noopener',
+    );
+  });
+
+  test('F3 + an arrow keeps the chart’s own level and gives the screen the library again', async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+    });
+    const chart = chartEntry('a');
+    const h = harness({ charts: [chart] });
+    await h.route.showSelect();
+    const scene = lastMade(h);
+    scene.options.on.levelEdit!(chart, 'level', 1);
+    expect(chart.playLevel).toBe(Number(String(chartEntry('a').playLevel ?? 0).match(/\d+/u)?.[0] ?? 0) + 1);
+    expect(values.size).toBe(1);
+    expect(scene.setLibrary).toHaveBeenCalledWith(h.deps.library.collection);
+  });
+});
+
+describe('beatoraja’s extra keys on the select screen', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test('Ctrl+F3 copies the chart’s MD5 and Ctrl+Shift+F3 its SHA-256', async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const h = harness();
+    await h.route.showSelect();
+    const { on } = lastMade(h).options;
+    on.copyChartHash!(chartEntry('a'), 'md5');
+    on.copyChartHash!(chartEntry('a'), 'sha256');
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    expect(writeText.mock.calls).toEqual([['m'], ['s']]);
+  });
+
+  test('F10 plays the folder’s charts in AUTO, one on each return, until a play is given up', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const [a, b, c] = [chartEntry('a'), chartEntry('b'), chartEntry('c')];
+    lastMade(h).options.on.autoplayFolder!([a, b, c]);
+    expect(h.deps.showDecide).toHaveBeenLastCalledWith(a, { autoPlay: true });
+    await h.route.showSelect();
+    expect(h.deps.showDecide).toHaveBeenLastCalledWith(b, { autoPlay: true });
+    h.route.endAutoPlaylist();
+    await h.route.showSelect();
+    expect(h.deps.showDecide).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,0 +1,333 @@
+import type { PageContent } from './template.ts';
+import { html, nothing } from '@be-music/service-web-theme/server';
+/** The About page's text, one version per page language. */
+import { PUBLIC_BETA_DELETION, PUBLIC_BETA_LABEL } from '@be-music/service-web-theme';
+import { PROSE_LINK, ProseSection as Section } from './components/prose.ts';
+import type { Locale } from './i18n/index.ts';
+import { SOURCE_URL } from './layout.ts';
+
+interface Point {
+  title: string;
+  text: string;
+  /** The section below that tells it in full. */
+  more: string;
+}
+
+export interface AboutContent {
+  title: string;
+  description: string;
+  lead: string;
+  apart: string;
+  moreBelow: string;
+  /** What the Leaderboard does that other Internet Rankings do not, for the top of the page. */
+  highlights: ReadonlyArray<Point>;
+  /** The rest of what it does differently, one line each under the highlights. */
+  also: ReadonlyArray<Point>;
+  /** The sections: scoring, charts, accounts, checks, bests, replays, the open parts and the beta state. */
+  body: () => PageContent;
+}
+
+const en: AboutContent = {
+  title: 'About',
+  description: 'What the Be-Music Leaderboard is and how it scores a play.',
+  lead: 'Rankings for BMS charts played in Be-Music.',
+  apart: 'What sets it apart',
+  moreBelow: 'More below',
+  highlights: [
+    {
+      title: 'The server counts the score',
+      text: 'The player sends the key presses, not a score. The server replays them on the Be-Music engine and counts the result itself, so an edited number never reaches a ranking.',
+      more: 'scoring',
+    },
+    {
+      title: 'One play, three sets of rules',
+      text: 'Every play is scored under LR2, beatoraja and That-Which-Must-Not-Be-Named rules at once, so plays from any of them meet in one ranking, measured the same way.',
+      more: 'scoring',
+    },
+    {
+      title: 'Charts known by what they are',
+      text: 'A chart is identified by its notes and timing, every #RANDOM branch included, not by its file: re-saved and re-encoded copies share one ranking.',
+      more: 'charts',
+    },
+  ],
+  also: [
+    {
+      title: 'Checked charts',
+      text: 'a new chart is listed once two players with an account have played it.',
+      more: 'checks',
+    },
+    { title: 'Every play a replay', text: 'download any replay and watch it judged again.', more: 'replays' },
+    {
+      title: 'No sign-up to start',
+      text: 'start as a guest, and create an account whenever you like.',
+      more: 'accounts',
+    },
+    {
+      title: 'Bests kept apart',
+      text: 'best EX-Score, lamp and fewest misses, each from its own play.',
+      more: 'bests',
+    },
+    {
+      title: 'In the browser, in the open',
+      text: 'play and send from the browser; the API and the source are open.',
+      more: 'open',
+    },
+  ],
+  body: () =>
+    html`${Section({
+      id: 'scoring',
+      title: 'How a play is scored',
+      children: html`<p>
+          When a play ends, the player sends its <strong>replay</strong>: the chart’s notes and every key press with its
+          time. The server does not take the score the player saw; it replays the log on the Be-Music engine and counts
+          the result itself.
+        </p>
+        <p>
+          It does so three times, under the <strong>LR2</strong>, <strong>beatoraja</strong> and${' '}<strong
+            >That-Which-Must-Not-Be-Named</strong
+          >
+          scoring rules: their judgment windows, gauges and clear lamps. A play that ranks is in all three rankings. A
+          play at another tempo, a course stage on its own, or a bmson play with TOTAL 0 and no recovery is kept but not
+          ranked, and so is a run of a course that is not released (a made or a random course). The rules a play was
+          <em>played with</em> are marked on it; the rules the pages show are yours to pick in the header. They are how
+          a play is counted, not the software it came from.
+        </p>`,
+    })}${Section({
+      id: 'charts',
+      title: 'Charts',
+      children: html`<p>
+          A chart is known by its <strong>fingerprint</strong>, taken from its notes and timing rather than its file, so
+          a re-saved or re-encoded copy shares one ranking. Each chart file is also known by its SHA-256 and MD5, which
+          link it to the LR2IR Archive, Mocha-Repository, MinIR and BMS Search, and let a ranking narrow to one file.
+        </p>
+        <p>
+          A new chart is <strong>listed</strong> once two players with an account have played it, so the rankings list
+          only charts that really exist.
+        </p>`,
+    })}${Section({
+      id: 'accounts',
+      title: 'Accounts',
+      children: html`<p>
+          Submitting a play needs a sign-in. A <strong>guest</strong> needs no passkey: those plays stay${' '}<strong
+            >anonymous</strong
+          >
+          in that browser. Rankings show anonymous plays when you turn them on.
+        </p>
+        <p>
+          <strong>Create an account</strong> with a passkey (your device’s fingerprint, face or PIN), Google or Discord,
+          and your plays so far come with you and join the rankings. You can then sign in on another device.
+        </p>`,
+    })}${Section({
+      id: 'checks',
+      title: 'What is checked',
+      children: html`<ul class="space-y-1">
+          <li>The score is always recounted from the inputs, never read from the log.</li>
+          <li>
+            Auto play is not recorded. A play that fails, and a play quit with ESC, are recorded; one quit with ESC
+            ranks as a failed play.
+          </li>
+          <li>Plays with an assist (auto scratch, a widened judgment window) are <strong>ranked apart</strong>.</li>
+          <li>
+            The chart in the log must match its fingerprint (<strong>L3</strong>), and the chart played must be known to
+            be this one (<strong>L4</strong>): no <code>#RANDOM</code>, or a branch seen before.
+          </li>
+        </ul>
+        <p>
+          Machine-generated inputs cannot always be told from a person’s, and the Leaderboard does not check for them.
+        </p>`,
+    })}${Section({
+      id: 'bests',
+      title: 'Personal bests',
+      children: html`<p>
+        Your best EX-Score, best clear lamp and fewest misses (BP) on a chart are kept apart, each from the play that
+        set it, so a best lamp from one play and a best score from another both count. Every play is kept.
+      </p>`,
+    })}${Section({
+      id: 'replays',
+      title: 'Replays',
+      children: html`<p>
+          Every play is kept with its <strong>replay</strong>, not just the best ones. Download it from the play’s page
+          and drop it on the player to watch it again: it replays the same key presses on the same engine, so it is
+          judged exactly as it was.
+        </p>
+        <p>
+          Each play’s page also has a <strong>share card</strong>, an image of the result your browser draws for links
+          on social sites.
+        </p>`,
+    })}${Section({
+      id: 'open',
+      title: 'In the browser, in the open',
+      children: html`<p>
+          Be-Music runs in the browser: play a BMS folder you drop on it, and send the play from there. Nothing to
+          install.
+        </p>
+        <p>
+          Be-Music is open source:${' '}<a
+            class=${PROSE_LINK ?? nothing}
+            href=${SOURCE_URL ?? nothing}
+            rel="noopener noreferrer"
+            target="_blank"
+            >nulltask/be-music on GitHub</a
+          >. The${' '}<a class=${PROSE_LINK ?? nothing} href="/api-reference">API</a>${' '}is open too.
+        </p>`,
+    })}${Section({
+      id: 'beta',
+      title: PUBLIC_BETA_LABEL.en,
+      children: html`<p>
+        The fingerprint (<code>bmfp0</code>) and the scoring rules are still version 0. While they settle, rankings may
+        be reset. ${PUBLIC_BETA_DELETION.en}
+      </p>`,
+    })}`,
+};
+
+const ja: AboutContent = {
+  title: 'このサイトについて',
+  description: 'Be-Music Leaderboard の特長と、プレイの採点方法。',
+  lead: 'Be-Music で遊んだ BMS 譜面のランキング。',
+  apart: 'ほかのランキングとの違い',
+  moreBelow: '詳しくは下へ',
+  highlights: [
+    {
+      title: 'スコアはサーバーが計算',
+      text: 'プレイヤーが送るのはスコアではなく打鍵の記録です。サーバーがそれを Be-Music エンジンで再生してスコアを計算し直すので、ランキングには正しく計算されたスコアだけが並びます。',
+      more: 'scoring',
+    },
+    {
+      title: '1 プレイを 3 つのルールで採点',
+      text: 'すべてのプレイを LR2・beatoraja・名前を言ってはいけないあのゲームのルールで同時に採点します。どのルールで遊んだプレイも、同じ基準で 1 つのランキングに並びます。',
+      more: 'scoring',
+    },
+    {
+      title: '譜面は中身で見分ける',
+      text: '譜面はファイルではなく、ノーツとタイミング（#RANDOM のすべての分岐を含む）で見分けます。保存し直したり再エンコードしたりしたファイルも、同じランキングにまとまります。',
+      more: 'charts',
+    },
+  ],
+  also: [
+    {
+      title: '譜面の確認',
+      text: '新しい譜面は、アカウントを持つプレイヤー 2 人が遊ぶと公開されます。',
+      more: 'checks',
+    },
+    {
+      title: 'すべてのプレイをリプレイで',
+      text: 'どのプレイもリプレイをダウンロードして、もう一度見られます。',
+      more: 'replays',
+    },
+    {
+      title: '登録なしで始められる',
+      text: 'ゲストとして始められて、あとからアカウントを作れます。',
+      more: 'accounts',
+    },
+    {
+      title: '自己ベストは項目ごと',
+      text: 'EX スコア・クリアランプ・最少ミスのベストを、それぞれ記録したプレイから取ります。',
+      more: 'bests',
+    },
+    {
+      title: 'ブラウザで、オープンに',
+      text: 'ブラウザで遊んでそのまま送信。API もソースコードも公開しています。',
+      more: 'open',
+    },
+  ],
+  body: () =>
+    html`${Section({
+      id: 'scoring',
+      title: 'プレイの採点',
+      children: html`<p>
+          プレイが終わると、プレイヤーは<strong>リプレイ</strong>（譜面のノーツと、すべての打鍵とその時刻）を送ります。サーバーはプレイヤーの画面に出たスコアを使わず、ログを
+          Be-Music エンジンで再生してスコアを計算し直します。
+        </p>
+        <p>
+          この計算を
+          <strong>LR2</strong
+          >・<strong>beatoraja</strong>・<strong>名前を言ってはいけないあのゲーム</strong>${' '}の採点ルール（判定幅・ゲージ・クリアランプ）でそれぞれ行います。順位が付くプレイは
+          3 つのランキングすべてに載ります。別のテンポで遊んだプレイ、単体で送られたコースのステージ、bmson の TOTAL 0
+          で回復しないプレイは保存されますがランキングには載りません。公開されていないコース（自作またはランダム）のプレイも同じです。プレイヤーが<em>実際に遊んだ</em>ルールはプレイごとに表示され、ページに表示するルールはヘッダーで切り替えられます。ルールはスコアの計算方法を表すもので、プレイしたソフトとは関係ありません。
+        </p>`,
+    })}${Section({
+      id: 'charts',
+      title: '譜面',
+      children: html`<p>
+          譜面はファイルではなく、ノーツとタイミングから求める<strong>譜面 ID</strong
+          >（フィンガープリント）で見分けます。保存し直したり再エンコードしたりしたファイルも、同じランキングにまとまります。譜面ファイルごとの
+          SHA-256 と MD5 も記録しており、LR2IR Archive・Mocha-Repository・MinIR・BMS Search へのリンクや、ランキングを 1
+          ファイルに絞り込むのに使います。
+        </p>
+        <p>
+          新しい譜面は、アカウントを持つプレイヤー 2
+          人が遊ぶと<strong>公開</strong>されます。実在する譜面だけがランキングに並ぶようにするためです。
+        </p>`,
+    })}${Section({
+      id: 'accounts',
+      title: 'アカウント',
+      children: html`<p>
+          プレイを送るにはログインが要ります。パスキーのない<strong>ゲスト</strong>として始めると、そのブラウザでは<strong>匿名</strong>のまま記録されます。ランキングは「匿名プレイヤー」をオンにしたときだけ、匿名のプレイを表示します。
+        </p>
+        <p>
+          パスキー（端末の指紋認証、顔認証、PIN）、Google、Discord
+          で<strong>アカウントを作る</strong>と、それまでのプレイも引き継いでランキングに載り、ほかの端末からもログインできます。
+        </p>`,
+    })}${Section({
+      id: 'checks',
+      title: '確認していること',
+      children: html`<ul class="space-y-1">
+          <li>スコアは常に打鍵の記録から計算し直し、ログに書かれた値は使いません。</li>
+          <li>
+            オートプレイは記録されません。FAILED のプレイと、ESC で途中終了したプレイは記録されます。ESC
+            で途中終了したプレイは FAILED として順位が付きます。
+          </li>
+          <li>
+            アシスト（オートスクラッチ、判定幅の拡大）を使ったプレイは<strong>別枠のランキング</strong>になります。
+          </li>
+          <li>
+            ログの譜面が譜面 ID
+            と一致すること（<strong>L3</strong>）と、遊んだ譜面がこの譜面だと確かめられること（<strong>L4</strong>:
+            <code>#RANDOM</code> がない、または既に確認済みの分岐）を確認します。
+          </li>
+        </ul>
+        <p>機械的に作られた打鍵を人の打鍵と確実に見分けることはできず、Leaderboard もそれを確かめません。</p>`,
+    })}${Section({
+      id: 'bests',
+      title: '自己ベスト',
+      children: html`<p>
+        譜面ごとの EX
+        スコア・クリアランプ・最少ミス（BP）のベストは、それぞれを記録したプレイから別々に取ります。あるプレイのベストランプと、別のプレイのベストスコアがどちらも有効です。プレイはすべて保存します。
+      </p>`,
+    })}${Section({
+      id: 'replays',
+      title: 'リプレイ',
+      children: html`<p>
+          ベストだけでなく、すべてのプレイを<strong>リプレイ</strong>付きで保存しています。プレイのページからダウンロードしてプレイヤーにドロップすると、もう一度見られます。同じエンジンで同じ打鍵を再生するので、判定もそのときと同じです。
+        </p>
+        <p>
+          各プレイのページには<strong>共有カード</strong>もあります。SNS
+          でリンクを共有したときに表示される結果の画像で、ブラウザが描画します。
+        </p>`,
+    })}${Section({
+      id: 'open',
+      title: 'ブラウザで、オープンに',
+      children: html`<p>
+          Be-Music はブラウザで動きます。BMS
+          のフォルダをドロップして遊び、そのままプレイを送信できます。インストールは要りません。
+        </p>
+        <p>
+          Be-Music はオープンソースです:${' '}<a
+            class=${PROSE_LINK ?? nothing}
+            href=${SOURCE_URL ?? nothing}
+            rel="noopener noreferrer"
+            target="_blank"
+            >GitHub の nulltask/be-music</a
+          >。<a class=${PROSE_LINK ?? nothing} href="/api-reference">API</a>${' '}も公開しています。
+        </p>`,
+    })}${Section({
+      id: 'beta',
+      title: PUBLIC_BETA_LABEL.ja,
+      children: html`<p>
+        譜面 ID（<code>bmfp0</code>）と採点ルールはまだバージョン 0
+        です。内容が固まるまでの間、ランキングがリセットされることがあります。${PUBLIC_BETA_DELETION.ja}
+      </p>`,
+    })}`,
+};
+
+export const ABOUT: Readonly<Record<Locale, AboutContent>> = { en, ja };

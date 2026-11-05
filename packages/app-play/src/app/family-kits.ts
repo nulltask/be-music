@@ -1,5 +1,5 @@
 import type { ResolvedPlayChart } from '@be-music/player-engine';
-// Which family draws each screen, and the kit it draws with: the Debug Menu's "Skin system" pick, or the auto chain
+// Which family draws each screen, and the kit it draws with: the Options dialog's "Skin system" pick, or the auto chain
 // (beatoraja → LR2 → built-in), over what the theme services have loaded (`family-dispatch.ts`).
 
 import type { DecideSceneKit, PlaySceneKit, SelectSceneKit } from '@be-music/player-browser/host';
@@ -32,7 +32,7 @@ export interface FamilyKitsOptions {
   >;
   /** The Be-Music Skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'beMusicSkin' | 'builtInKit'>;
-  /** The Debug Menu's "Skin system" pick (`skinFamilyOverride`) and the battle mode, which picks the LR2 play skin. */
+  /** The Options dialog's "Skin system" pick (`skinFamilyOverride`) and the battle mode, which picks the LR2 play skin. */
   readonly guiState: Pick<PlayerGUIState, 'skinFamilyOverride' | 'battleMode'> &
     Partial<Pick<PlayerGUIState, 'judgeRuleset'>>;
 }
@@ -104,7 +104,7 @@ export class FamilyKits {
   }
 
   /**
-   * The kit `song` plays with, for the gameplay family the Debug Menu's "Skin family" pick (or the auto chain) gives it:
+   * The kit `song` plays with, for the gameplay family the Options dialog's "Skin family" pick (or the auto chain) gives it:
    *
    * - **beatoraja** (`playsOnBeatoraja`, a replay and a stitched NONSTOP chart included) → the theme's play entry
    *   (`loadBeatorajaPlayKit`), with the entry; `undefined` when it cannot be loaded.
@@ -133,7 +133,7 @@ export class FamilyKits {
           }
         : undefined;
     }
-    // Picking `'default'` from the Debug Menu strips the LR2 skin even when one is loaded for this chart.
+    // Picking `'default'` from the Options dialog strips the LR2 skin even when one is loaded for this chart.
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', chartEntry);
     // A battle mode plays on the converted chart's skin (LR2's BATTLE play skin for two players); a replay on its own.
     const battle = {

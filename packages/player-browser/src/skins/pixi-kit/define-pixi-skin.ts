@@ -3,6 +3,7 @@ import { runGPUPasses } from './gpu-pass.ts';
 import { PIXI_HOST_RENDER, pixiHostTarget } from './host-render.ts';
 import {
   defineBeMusicSkin,
+  findWhiteLaneWidth,
   type BeMusicGameplayFrame,
   type BeMusicResultFrame,
   type BeMusicSelectFrame,
@@ -56,6 +57,7 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
         height: surface.height,
         resolution: surface.pixelRatio,
         backgroundAlpha: 0,
+        useBackBuffer: true,
         antialias: true,
         autoDensity: false,
       });
@@ -80,6 +82,8 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
     },
     select: {
       layout: select.layout,
+      searchTextSize: select.searchTextSize,
+      portraitSearchTextSize: select.portraitSearchTextSize,
       portraitLayout: select.portraitLayout,
       outroMs: select.outroMs,
       draw(surface, frame) {
@@ -135,10 +139,15 @@ class PixiSurface {
       // renderer, and keep that.
       const roundPixels = renderer._roundPixels;
       renderer._roundPixels = 0;
+      // Backdrop filters capture this offscreen texture, without enabling a back buffer on the host's transparent canvas.
+      const backBuffer = renderer instanceof WebGLRenderer ? renderer.backBuffer : undefined;
+      const previousBackBuffer = backBuffer?.useBackBuffer;
+      if (backBuffer) backBuffer.useBackBuffer = true;
       try {
         renderer.render({ container: root, target: this.target, clear: true, clearColor: [0, 0, 0, 0] });
       } finally {
         renderer._roundPixels = roundPixels;
+        if (backBuffer) backBuffer.useBackBuffer = previousBackBuffer!;
       }
       return;
     }
@@ -181,7 +190,7 @@ class GameplayScreen {
 
   constructor(definition: PixiSkinDefinition) {
     this.definition = definition;
-    this.root.addChild(this.layer, this.lanes, this.droppedLongNotes, this.notes, this.bombs, this.overlayLayer);
+    this.root.addChild(this.layer, this.lanes, this.droppedLongNotes, this.notes, this.overlayLayer, this.bombs);
   }
 
   build(frame: BeMusicGameplayFrame): Container {
@@ -223,6 +232,7 @@ class GameplayScreen {
 
     const notes = this.notes;
     notes.clear();
+    const whiteLaneWidth = findWhiteLaneWidth(frame.lanes);
     this.droppedLongNotes.clear();
     for (const note of frame.longNotes) {
       skin.renderLongNote({
@@ -233,6 +243,7 @@ class GameplayScreen {
         top: note.top,
         bottom: note.bottom,
         nowMs,
+        whiteLaneWidth,
         mode: note.mode,
         backSpinScratch: note.backSpinScratch,
         state: note.state,
@@ -240,18 +251,27 @@ class GameplayScreen {
       });
     }
     for (const note of frame.notes) {
-      skin.renderNote({ graphics: notes, kind: note.kind, x: note.x, w: note.w, y: note.y, nowMs });
+      skin.renderNote({ graphics: notes, kind: note.kind, x: note.x, w: note.w, y: note.y, nowMs, whiteLaneWidth });
     }
     // Mines after the notes, so a mine sharing a beat with a note paints on top.
     for (const mine of frame.mines) {
       if (skin.renderMine)
-        skin.renderMine({ graphics: notes, kind: mine.kind, x: mine.x, w: mine.w, y: mine.y, nowMs });
+        skin.renderMine({ graphics: notes, kind: mine.kind, x: mine.x, w: mine.w, y: mine.y, nowMs, whiteLaneWidth });
       else drawCautionMine(notes, mine.x, mine.w, mine.y);
     }
 
     this.bombPool.begin();
     try {
-      skin.renderBombs({ pool: this.bombPool, bombs: frame.bombs, nowMs, combo, effects, audio, lanes: frame.lanes });
+      skin.renderBombs({
+        layer: this.bombs,
+        pool: this.bombPool,
+        bombs: frame.bombs,
+        nowMs,
+        combo,
+        effects,
+        audio,
+        lanes: frame.lanes,
+      });
     } finally {
       this.bombPool.end();
     }

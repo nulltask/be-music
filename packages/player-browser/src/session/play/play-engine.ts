@@ -46,6 +46,7 @@ import {
   type LibraryChart,
   type PlayResult,
 } from '@be-music/player-scene-model';
+import { resolveScratchAngle } from '@be-music/player-skin-sdk';
 import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
@@ -111,6 +112,7 @@ export interface PlayEngineContext
       | 'autoScratch1P'
       | 'autoScratch2P'
       | 'anyKey'
+      | 'laneKeys'
       | 'chartMD5'
       | 'chartSHA256'
       | 'course'
@@ -1043,6 +1045,16 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUICommand): v
       noteImpulse(ctx, command.channel);
       flashKeyBeam(ctx, command.channel);
       break;
+    case 'scratch-spin': {
+      const atMs = ctx.playClock();
+      for (const channel of command.channels)
+        ctx.scratchInputs.set(channel, {
+          angle: resolveScratchAngle(0, ctx.scratchInputs.get(channel), atMs),
+          direction: command.spin === 'cw' ? 1 : -1,
+          atMs,
+        });
+      break;
+    }
     case 'press-lane':
       noteImpulse(ctx, command.channel);
       ctx.pressedChannels.add(command.channel);
@@ -1241,7 +1253,7 @@ function handleSharedEngineChartFinished(
         flushReplayView(ctx);
         ctx.chartEndHold?.abort();
       },
-      // A normal end lets its last keysounds ring through the fade-out; a failure cuts them.
+      // A normal end lets its last keysounds ring through the fade-out; a failure fades them over its close.
       { failed: ending.failed, fadeAudio: false },
     );
   };

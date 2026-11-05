@@ -263,6 +263,7 @@ export class BeatorajaNoteLayer {
   private readonly textures: BeatorajaTextureCache;
   private readonly canvasHeight: number;
   private readonly judgementYOverride?: number;
+  private lift = 0;
   private readonly scrollMapper?: ScrollDistanceMapperLike;
   private readonly timelineBeats?: ArrayLike<number>;
   private readonly autoplay: boolean;
@@ -326,6 +327,11 @@ export class BeatorajaNoteLayer {
     this.container.addChild(this.invisibleLayer);
     this.container.addChild(this.bodyLayer);
     this.container.addChild(this.noteLayer);
+  }
+
+  /** The active LIFT as a fraction of the authored lane height. The spawn edge stays fixed. */
+  setLift(value: number): void {
+    this.lift = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
   }
 
   update(
@@ -617,7 +623,7 @@ export class BeatorajaNoteLayer {
    * (marker layer, key-bomb layer, etc.) that need to scroll-align with notes. Returns
    * `undefined` when no lane block matched — the caller should fall back to skin-canvas defaults.
    */
-  getLaneBounds(activeOps: ReadonlySet<number>): { topY: number; bottomY: number } | undefined {
+  getLaneBounds(activeOps: ReadonlySet<number>, withLift = true): { topY: number; bottomY: number } | undefined {
     const rects = this.resolveLaneRects(activeOps);
     if (rects.length === 0) return undefined;
     let top = Number.POSITIVE_INFINITY;
@@ -627,7 +633,7 @@ export class BeatorajaNoteLayer {
       if (rect.y + rect.h > bottom) bottom = rect.y + rect.h;
     }
     if (!Number.isFinite(top)) return undefined;
-    return { topY: top, bottomY: this.judgementYOverride ?? bottom };
+    return { topY: top, bottomY: withLift ? this.resolveJudgementY(rects) : (this.judgementYOverride ?? bottom) };
   }
 
   /** The active lane rectangles used by notes, for information placed on their cover edges. */
@@ -672,10 +678,9 @@ export class BeatorajaNoteLayer {
   }
 
   private resolveJudgementY(rects: ReadonlyArray<BeatorajaNoteRect>): number {
-    if (this.judgementYOverride !== undefined) return this.judgementYOverride;
-    let bottom = 0;
-    for (const rect of rects) bottom = Math.max(bottom, rect.y + rect.h);
-    return bottom;
+    let bottom = this.judgementYOverride ?? 0;
+    if (this.judgementYOverride === undefined) for (const rect of rects) bottom = Math.max(bottom, rect.y + rect.h);
+    return bottom - Math.max(0, bottom - this.resolveLaneTopY(rects)) * this.lift;
   }
 
   /**
