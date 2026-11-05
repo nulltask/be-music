@@ -615,6 +615,75 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  const benchConditions = {
+    ...courseAPI.DEFAULT_RANDOM_MIX_CONDITIONS,
+    keyModes: [5, 7],
+    minLevel: 4,
+    maxLevel: 10,
+  };
+  const benchMixPool = courseAPI.filterRandomMixCandidates(benchMixCharts, benchConditions);
+  define('player-engine.course.normalizeRandomMixConditions', {
+    run: () => {
+      courseAPI.normalizeRandomMixConditions({
+        keyModes: [14, 7, 'x'],
+        by: 'difficulty',
+        count: 'infinity',
+        loops: 500,
+      });
+    },
+  });
+  define('player-engine.course.resolveRandomMixCount', {
+    run: () => {
+      courseAPI.resolveRandomMixCount('nonstop', 'infinity');
+      courseAPI.resolveRandomMixCount('expert', 40);
+    },
+  });
+  define('player-engine.course.isRandomMixKept', {
+    run: () => {
+      courseAPI.isRandomMixKept(5);
+      courseAPI.isRandomMixKept('infinity');
+    },
+  });
+  define('player-engine.course.matchesRandomMixConditions', {
+    run: () => {
+      for (const chart of benchMixCharts) courseAPI.matchesRandomMixConditions(chart, benchConditions);
+    },
+  });
+  define('player-engine.course.filterRandomMixCandidates', {
+    run: () => {
+      courseAPI.filterRandomMixCandidates(benchMixCharts, benchConditions);
+    },
+  });
+  define('player-engine.course.listRandomMixKeyModes', {
+    run: () => {
+      courseAPI.listRandomMixKeyModes(benchMixCharts);
+    },
+  });
+  define('player-engine.course.drawRandomMixStage', {
+    run: () => {
+      courseAPI.drawRandomMixStage(
+        benchMixPool,
+        {
+          settings: { ...benchMixSettings, preferredLevel: 6, bpmRange: 20 },
+          bpmOf: (chart) => ({ min: chart.minBPM, max: chart.maxBPM }),
+          first: benchMixPool[0]!,
+          usedFolders: new Set(['f1', 'f2']),
+        },
+        () => {
+          benchSeed = (benchSeed * 16807) % 2147483647;
+          return (benchSeed - 1) / 2147483646;
+        },
+      );
+    },
+  });
+  define('player-engine.course.createRandomMixCourse', {
+    run: () => {
+      courseAPI.createRandomMixCourse(
+        'nonstop',
+        benchMixCharts.slice(0, 5).map((chart) => ({ md5: chart.md5, keyMode: chart.keyMode })),
+      );
+    },
+  });
   define('player-engine.course.resolveTableModeKeys', {
     run: () => {
       courseAPI.resolveTableModeKeys('beat-7k');

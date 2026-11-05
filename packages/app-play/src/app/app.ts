@@ -1,3 +1,4 @@
+import { promptRandomMixConditions } from '../ui/random-mix-dialog.ts';
 import { playerText } from '../player-copy.ts';
 import { requestPlayerWindowClose } from '../ui/close-window.ts';
 import { DialogPauseController } from '../ui/dialog-pause.ts';
@@ -404,7 +405,7 @@ export class PlayerWebApp {
       library: this.library,
       records: this.records,
       courseMaker: this.courseMaker,
-      keysFilter: () => this.guiState.keysFilter,
+      promptRandomMix: (request) => promptRandomMixConditions(request),
       replayAutoSave: this.replayAutoSave,
       leaderboard: this.leaderboard,
       familyKits: this.familyKits,
