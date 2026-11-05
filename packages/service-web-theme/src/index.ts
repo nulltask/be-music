@@ -27,3 +27,11 @@ export {
 } from './locale.ts';
 /** Compiled Tailwind CSS v4 and Basecoat. `prepare` regenerates it; see scripts/build-css.ts. */
 export { SERVICE_CSS } from './styles.generated.ts';
+export {
+  resolveSkeleton,
+  skeletonLabel,
+  skeletonLength,
+  type SkeletonInput,
+  type SkeletonLength,
+  type SkeletonShape,
+} from './skeleton-model.ts';

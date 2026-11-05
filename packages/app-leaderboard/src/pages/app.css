@@ -8,6 +8,7 @@
 @source '../../../service-web-theme/src/popover-template.ts';
 @source '../../../service-web-theme/src/account-identity-template.ts';
 @import 'basecoat-css';
+@import '../../../service-web-theme/src/skeleton.css';
 
 /* Figures line up everywhere: scores, counts, dates and percentages take tabular digits site-wide. */
 @layer base {
