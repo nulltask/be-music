@@ -21,7 +21,7 @@ export const RANDOM_MIX_MAX_COUNT = 99;
  * The most stages a NONSTOP RANDOM MIX has: the five a course LR2 plays holds, so a NONSTOP draw, played as one stitched
  * chart, is always kept as its folder's newest course.
  */
-export const RANDOM_MIX_NONSTOP_MAX_COUNT = LR2_COURSE_MAKER_MAX_STAGES;
+export const RANDOM_MIX_NONSTOP_MAX_COUNT: number = LR2_COURSE_MAKER_MAX_STAGES;
 
 /** The stage count of a RANDOM MIX: a number of stages, or `infinity` for one that goes on until the gauge empties. */
 export type RandomMixCount = number | 'infinity';
