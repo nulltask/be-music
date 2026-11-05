@@ -294,16 +294,18 @@ export function applyResolvedManualJudge(
     applyFastSlow(summary, judge.kind, judge.signedDeltaMs);
     emit({ kind: 'poor-bga', action: 'clear', seconds: atSeconds });
     setCombo(state, atSeconds, state.combo + 1, 'judge', emit, judge.kind, channel);
-    emit({
-      kind: 'trace',
-      name: 'judge',
-      seconds: atSeconds,
-      fields: [
-        ['result', judge.kind],
-        ['channel', channel],
-        ['deltaMs', Math.round(deltaMs)],
-      ],
-    });
+    if (!state.config.omitTraceEffects) {
+      emit({
+        kind: 'trace',
+        name: 'judge',
+        seconds: atSeconds,
+        fields: [
+          ['result', judge.kind],
+          ['channel', channel],
+          ['deltaMs', Math.round(deltaMs)],
+        ],
+      });
+    }
     emit({
       kind: 'judge-combo',
       seconds: atSeconds,
@@ -318,16 +320,18 @@ export function applyResolvedManualJudge(
   }
   if (judge.kind === 'BAD') {
     setCombo(state, atSeconds, 0, 'judge', emit, 'BAD', channel);
-    emit({
-      kind: 'trace',
-      name: 'judge',
-      seconds: atSeconds,
-      fields: [
-        ['result', 'BAD'],
-        ['channel', channel],
-        ['deltaMs', Math.round(deltaMs)],
-      ],
-    });
+    if (!state.config.omitTraceEffects) {
+      emit({
+        kind: 'trace',
+        name: 'judge',
+        seconds: atSeconds,
+        fields: [
+          ['result', 'BAD'],
+          ['channel', channel],
+          ['deltaMs', Math.round(deltaMs)],
+        ],
+      });
+    }
     emit({
       kind: 'judge-combo',
       seconds: atSeconds,
@@ -342,16 +346,18 @@ export function applyResolvedManualJudge(
   emit({ kind: 'poor-bga', action: 'trigger', seconds: atSeconds });
   emit({ kind: 'poor-trace', action: 'trigger', seconds: atSeconds });
   setCombo(state, atSeconds, 0, 'judge', emit, 'POOR', channel);
-  emit({
-    kind: 'trace',
-    name: 'judge',
-    seconds: atSeconds,
-    fields: [
-      ['result', 'POOR'],
-      ['channel', channel],
-      ['deltaMs', Math.round(deltaMs)],
-    ],
-  });
+  if (!state.config.omitTraceEffects) {
+    emit({
+      kind: 'trace',
+      name: 'judge',
+      seconds: atSeconds,
+      fields: [
+        ['result', 'POOR'],
+        ['channel', channel],
+        ['deltaMs', Math.round(deltaMs)],
+      ],
+    });
+  }
   emit({
     kind: 'judge-combo',
     judge: 'POOR',
