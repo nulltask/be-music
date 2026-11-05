@@ -164,6 +164,8 @@ export interface PlayRouteDeps {
   readonly showSelect: () => Promise<void>;
   /** The bars a PRACTICE play of the chart loops, as picked on its score (`PracticeBarsMemory`); none loops it whole. */
   readonly practiceRange?: (chartEntry: LibraryChart) => PracticeRange | undefined;
+  /** Whether the chart was last started without practice on the PRACTICE bar picker, so it plays as a regular play. */
+  readonly practiceSkipped?: (chartEntry: LibraryChart) => boolean;
   /** Names the selected options a chart cannot be played with; `onClose` runs once the player dismisses it. */
   readonly showPlayOptionMismatch: (options: readonly string[], onClose: () => void) => void;
   /** Keeps a play option for every screen and play, and pushes it to the select screen. */
@@ -225,6 +227,7 @@ export class PlayRoute {
   private readonly unlockReplayOptions: PlayRouteDeps['unlockReplayOptions'];
   private readonly showSelect: PlayRouteDeps['showSelect'];
   private readonly practiceRange: PlayRouteDeps['practiceRange'];
+  private readonly practiceSkipped: PlayRouteDeps['practiceSkipped'];
   private readonly showPlayOptionMismatch: PlayRouteDeps['showPlayOptionMismatch'];
   private readonly setPlayOptions: PlayRouteDeps['setPlayOptions'];
 
@@ -258,6 +261,7 @@ export class PlayRoute {
     this.unlockReplayOptions = deps.unlockReplayOptions;
     this.showSelect = deps.showSelect;
     this.practiceRange = deps.practiceRange;
+    this.practiceSkipped = deps.practiceSkipped;
     this.showPlayOptionMismatch = deps.showPlayOptionMismatch;
     this.setPlayOptions = deps.setPlayOptions;
   }
@@ -322,7 +326,10 @@ export class PlayRoute {
       ...(overrides.courseStage !== undefined ? { courseStage: overrides.courseStage } : {}),
       ...(overrides.nonstop !== undefined ? { nonstop: overrides.nonstop } : {}),
     };
-    const playOptions = this.playOptions.current;
+    // "Play without practice" on the PRACTICE bar picker plays the chart as a regular play, leaving PRACTICE on.
+    const playOptions = this.practiceSkipped?.(chartEntry)
+      ? { ...this.playOptions.current, practice: false }
+      : this.playOptions.current;
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
     const nonstop = overrides.nonstop;
@@ -379,7 +386,7 @@ export class PlayRoute {
     // PRACTICE (beatoraja's, under every ruleset since #933) plays a single chart's range over and over, saving nothing
     // (the host's `practiceRange`).
     const practicing =
-      this.playOptions.current.practice && replay === undefined && courseStage === undefined && nonstop === undefined;
+      playOptions.practice && replay === undefined && courseStage === undefined && nonstop === undefined;
     const callbacks = {
       // In-play hi-speed changes come back to be remembered for the next play.
       onHiSpeedChange: (hiSpeed: number, normalLevel?: number, floating?: boolean) => {
