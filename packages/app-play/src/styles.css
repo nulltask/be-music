@@ -142,15 +142,15 @@ textarea {
 
 /*
  * The Options dialog (ui/options/, controls in ui/options-controls.ts): one tab per area, each holding its folders as
- * sections, with the folders inside them as sections of their own. The tab bar scrolls sideways on a narrow screen,
- * and the panel scrolls.
+ * sections, with the folders inside them as sections of their own. The panel scrolls.
  */
 .options-dialog > div {
   height: min(85dvh, 760px);
 }
+/* Wide enough for every tab bar on one line, in English and Japanese (the widest needs about 690 px). */
 @media (min-width: 40rem) {
   .options-dialog > div {
-    max-width: 640px;
+    max-width: 720px;
   }
 }
 .options-body {
@@ -162,12 +162,21 @@ textarea {
   min-height: 0;
   flex: 1 1 auto;
 }
-/* The tabs wrap onto a second line rather than scroll sideways when they do not fit the dialog. */
+/*
+ * The tabs stay on one line. Where the screen is too narrow for them, the tab bar alone scrolls sideways, never the
+ * dialog, and the selected tab is scrolled into view (`OptionTabs.select`).
+ */
 .options-tabs > [role='tablist'] {
   max-width: 100%;
   height: auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-start;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.options-tabs > [role='tablist']::-webkit-scrollbar {
+  display: none;
 }
 .options-tabs > [role='tablist'] > [role='tab'] {
   flex: 0 0 auto;
