@@ -14,12 +14,7 @@ import {
   resolveControlButtons,
   type ControlKeyId,
 } from '@be-music/player-browser/host';
-import {
-  LANE_KEY_CONFIG,
-  laneKeyLabel,
-  type LaneKeyConfigLane,
-  type LaneKeyGroup,
-} from '@be-music/player-engine/lanes';
+import { LANE_KEY_CONFIG, laneKeyLabel, type LaneKeyGroup } from '@be-music/player-engine/lanes';
 import { assignLaneKey, effectiveLaneKey, resetLaneKeys } from '../../lane-keys.ts';
 import { assignControlKey } from '../../control-keys.ts';
 import { buildActionKeyPage } from './action-keys.ts';
