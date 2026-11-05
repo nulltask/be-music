@@ -1,0 +1,81 @@
+/* Loading placeholders (skeleton-template.ts). Plain CSS, so it works without Tailwind scanning the template: Play,
+   Leaderboard and this package's theme import it. The colors mix the page's own foreground into transparency, so the
+   same rules read on light and dark themes and on any surface.
+   They sit in the components layer, so a utility on the same element (`hidden`, `sm:inline-block`) wins. */
+@layer components {
+  /* The fill's class is doubled to outweigh a component's own colors, such as Basecoat's `.btn:not([data-variant])`. */
+  .be-music-skeleton,
+  .be-music-skeleton-fill.be-music-skeleton-fill {
+    --be-music-skeleton-base: color-mix(in oklab, var(--foreground, currentColor) 10%, transparent);
+    --be-music-skeleton-highlight: color-mix(in oklab, var(--foreground, currentColor) 12%, transparent);
+    background-color: var(--be-music-skeleton-base);
+    background-image: linear-gradient(90deg, transparent 0%, var(--be-music-skeleton-highlight) 50%, transparent 100%);
+    background-repeat: no-repeat;
+    background-size: 200% 100%;
+    animation: be-music-skeleton-shimmer 1.6s ease-in-out infinite;
+  }
+  .be-music-skeleton {
+    display: inline-block;
+    flex-shrink: 0;
+    max-inline-size: 100%;
+    vertical-align: middle;
+    border-radius: 4px;
+  }
+  /* The shimmer on an element that keeps its own box and text, the text unreadable: a placeholder exactly the size of
+     a button or a sentence it stands in for. Its own radius wins, so a button stays a button's shape. */
+  :where(.be-music-skeleton-fill) {
+    border-radius: 4px;
+  }
+  .be-music-skeleton-fill.be-music-skeleton-fill {
+    color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    pointer-events: none;
+    user-select: none;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  .be-music-skeleton[data-shape='circle'] {
+    border-radius: 9999px;
+  }
+  .be-music-skeleton[data-shape='block'] {
+    border-radius: calc(var(--radius, 0.625rem) - 2px);
+  }
+
+  @keyframes be-music-skeleton-shimmer {
+    from {
+      background-position: 150% 0;
+    }
+    to {
+      background-position: -50% 0;
+    }
+  }
+
+  /* A still surface for viewers who ask for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    .be-music-skeleton,
+    .be-music-skeleton-fill.be-music-skeleton-fill {
+      animation: none;
+      background-image: none;
+    }
+  }
+
+  .be-music-skeleton-group {
+    display: inline-flex;
+    align-items: center;
+    gap: inherit;
+  }
+
+  /* Heard, not seen. */
+  .be-music-skeleton-label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+}

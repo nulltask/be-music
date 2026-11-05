@@ -4,6 +4,7 @@
 @source './';
 @source '../../app-dashboard/src';
 @import 'basecoat-css';
+@import './skeleton.css';
 
 /* Basecoat's dark variant matches `html.dark`. These pages cannot set that class, so it follows the system scheme.
    scripts/build-css.ts repeats the `.dark` token block under the same query. */

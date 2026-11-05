@@ -1,4 +1,5 @@
 import { accountIdentityTemplate } from './account-identity-template.ts';
+import { skeletonGroupTemplate, skeletonTemplate } from './skeleton-template.ts';
 import { languageMenuTemplate } from './popover-template.ts';
 import type { Locale } from './locale.ts';
 import { html, type TemplateResult } from 'lit';
@@ -18,28 +19,55 @@ export function serviceHeaderTemplate(input: ServiceHeaderInput): TemplateResult
         <span class=${view.badgeClass} data-variant="outline">Beta</span>
       </div>
       <nav class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2" aria-label=${view.navLabel}>
-        <a
-          class="btn"
-          data-size="sm"
-          data-variant="ghost"
-          data-service-header="account"
-          href=${account.href}
-          target=${ifDefined(account.newTab ? '_blank' : undefined)}
-          rel=${ifDefined(account.newTab ? 'noopener' : undefined)}
-          title=${ifDefined(account.title)}
-          aria-label=${ifDefined(account.ariaLabel)}
-        >
-          ${
-            input.account !== undefined
-              ? html`${accountIdentityTemplate({ account: input.account, locale: input.locale, variant: 'compact' })}${icon(account.iconHTML, 'text-muted-foreground')}`
-              : account.label
-          }
-        </a>
+        ${
+          account.loading
+            ? accountLoadingTemplate(input.locale, account.loadingLabel, account.iconHTML)
+            : html`<a
+                class="btn"
+                data-size="sm"
+                data-variant="ghost"
+                data-service-header="account"
+                href=${account.href}
+                target=${ifDefined(account.newTab ? '_blank' : undefined)}
+                rel=${ifDefined(account.newTab ? 'noopener' : undefined)}
+                title=${ifDefined(account.title)}
+                aria-label=${ifDefined(account.ariaLabel)}
+              >
+                ${
+                  input.account !== undefined
+                    ? html`${accountIdentityTemplate({ account: input.account, locale: input.locale, variant: 'compact' })}${icon(account.iconHTML, 'text-muted-foreground')}`
+                    : account.label
+                }
+              </a>`
+        }
         ${repeat(view.actions, (action) => action.key, actionTemplate)}
         ${languageMenuTemplate({ label: language.label, choices: language.choices, buttonSize: 'icon-sm' })}
       </nav>
     </div>
   </header>`;
+}
+
+/**
+ * The account control while the page reads who is signed in: the signed-in control's box (avatar, then the name from
+ * `sm` up at the label's 12ch cap, then the chevron), so the header does not move when the account arrives. It is not
+ * a link yet.
+ */
+function accountLoadingTemplate(locale: Locale, label: string, chevronHTML: string): TemplateResult {
+  return html`<span
+    class="btn pointer-events-none"
+    data-size="sm"
+    data-variant="ghost"
+    data-service-header="account-loading"
+    >${skeletonGroupTemplate({
+      locale,
+      label,
+      content: html`${skeletonTemplate({ shape: 'circle', width: 24 })}${skeletonTemplate({
+        shape: 'line',
+        width: '12ch',
+        className: 'hidden sm:inline-block',
+      })}`,
+    })}${icon(chevronHTML, 'text-muted-foreground')}</span
+  >`;
 }
 
 function icon(svg: string, className = ''): TemplateResult {

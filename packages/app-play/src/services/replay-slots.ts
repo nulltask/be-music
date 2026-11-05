@@ -357,6 +357,7 @@ export class ReplaySlotStore {
   private readonly now: () => Date;
   private readonly records = new Map<string, ReplaySlotRecord>();
   private loading: Promise<void> | undefined;
+  private settled = false;
   private queue: Promise<unknown> = Promise.resolve();
   private readonly listeners = new Set<() => void>();
 
@@ -374,11 +375,20 @@ export class ReplaySlotStore {
           const record = parseReplaySlotRecord(value);
           if (record !== undefined) this.records.set(record.key, record);
         }
+        this.settled = true;
         this.notify();
       },
-      () => undefined,
+      () => {
+        this.settled = true;
+        this.notify();
+      },
     );
     return this.loading;
+  }
+
+  /** Whether {@link load} has finished, so an empty slot is known to be empty rather than not read yet. */
+  public get loaded(): boolean {
+    return this.settled;
   }
 
   /** Calls `listener` whenever the slots change; returns the unsubscribe. */

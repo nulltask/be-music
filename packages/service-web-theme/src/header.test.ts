@@ -238,3 +238,36 @@ test('header account, Play and language controls do not sink when pressed', () =
   expect(rule?.[1]).toMatch(/translate:\s*none;/);
   expect(rule?.[1]).not.toMatch(/outline|box-shadow|scale|transform/);
 });
+
+test('a header still reading the account shows a placeholder in its box, never "Sign in" and never a link', () => {
+  const html = renderServiceHeader({
+    locale: 'en',
+    title: 'Be-Music Play',
+    homeHref: '/',
+    accountHref: '#sign-in',
+    account: { handle: 'alice', displayName: 'Alice', anonymous: false },
+    accountLoading: true,
+    requestURL: '/',
+  });
+  expect(html).not.toContain('Sign in');
+  expect(html).not.toContain('@alice');
+  expect(html).not.toContain('data-service-header="account"');
+  expect(html).toContain(
+    'class="btn pointer-events-none" data-size="sm" data-variant="ghost" data-service-header="account-loading"',
+  );
+  expect(html).toContain('role="status" aria-busy="true"');
+  expect(html).toContain('<span class="be-music-skeleton-label">Checking account…</span>');
+  expect(html).toContain('data-shape="circle" style="inline-size:24px;block-size:24px"');
+  expect(html).toContain('class="be-music-skeleton hidden sm:inline-block" data-shape="line"');
+  expect(html).toContain('class="lucide lucide-chevron-down"');
+  const ja = renderServiceHeader({
+    locale: 'ja',
+    title: 'Be-Music Play',
+    homeHref: '/',
+    accountHref: '#sign-in',
+    accountLoading: true,
+    requestURL: '/',
+  });
+  expect(ja).toContain('アカウントを確認しています…');
+  expect(ja).not.toContain('ログイン');
+});

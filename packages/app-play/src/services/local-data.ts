@@ -22,6 +22,7 @@ const LOCAL_STORAGE_KEYS: Readonly<Record<string, string>> = {
   'be-music.play-in-silent-mode': 'Play sound with the device in silent mode',
   'be-music.silent-mode-hint-seen': 'The silent-mode hint was shown',
   'be-music.worker-count': 'Background worker count',
+  'be-music.start-account-state': 'The account state the start card last showed, to shape its loading placeholder',
 };
 
 /** What each IndexedDB database and store of the player holds. */
