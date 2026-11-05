@@ -59,6 +59,20 @@ describe('buildKeyboardGuide', () => {
     expect(keyboardKeyName('ControlRight')).toBe('Right Ctrl');
   });
 
+  test('reads a laptop’s missing keys as their Fn combinations, lights them, and marks a key no combination gives', () => {
+    const windows = buildKeyboardGuide('play', 'lr2', {}, 'en', 'windows', 'laptop');
+    const lift = windows.actions.find((row) => row.keys.includes('Fn+→'));
+    expect(lift?.codes).toEqual(['Fn', 'ArrowRight']);
+    expect(rowOf(windows, 'play.pause')?.keys).toEqual(['Pause (no key)', 'Tab']);
+    const floating = windows.actions.find((row) => row.keys.includes('Fn+M'));
+    expect(floating?.codes).toEqual(['Fn', 'KeyM']);
+    const mac = buildKeyboardGuide('play', 'lr2', {}, 'ja', 'mac', 'laptop');
+    expect(mac.actions.some((row) => row.keys.includes('Num 0 (キーなし)'))).toBe(true);
+    expect(mac.actions.some((row) => row.keys.includes('fn+→'))).toBe(true);
+    // A full keyboard names the keys themselves.
+    expect(buildKeyboardGuide('play', 'lr2', {}).actions.some((row) => row.keys.includes('End'))).toBe(true);
+  });
+
   test('names the keys as a Mac labels them', () => {
     const guide = buildKeyboardGuide('select', 'beatoraja', {}, 'en', 'mac');
     expect(rowOf(guide, 'select.copy-sha256')?.keys).toEqual(['⌃⇧F3']);
