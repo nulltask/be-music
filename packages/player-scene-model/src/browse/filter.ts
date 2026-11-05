@@ -1,3 +1,4 @@
+import { resolveLibraryChartDifficultyValue } from '../library/difficulty.ts';
 import type { LibraryChart, LibraryCourse, LibraryEntry } from '../library/entries.ts';
 import { resolveLibraryChartKeyMode, type KeyMode } from '../library/key-mode.ts';
 import type { BrowseListOptions, DifficultyFilter, KeysFilter } from './list-options.ts';
@@ -36,14 +37,14 @@ export function resolveLR2RandomMixKeyMode(filter: KeysFilter): KeyMode {
 }
 
 /**
- * Whether a chart is listed under a difficulty filter: every chart under `ALL`, else the charts whose `#DIFFICULTY` is
- * the filter's. A chart that names no difficulty (none, or 0) has no bucket, so a filter other than `ALL` leaves it out.
+ * Whether a chart is listed under a difficulty filter: every chart under `ALL`, else the charts whose `#DIFFICULTY` (or
+ * the one estimated from their names, `resolveLibraryChartDifficulty`) is the filter's. A chart with neither has no
+ * bucket, so a filter other than `ALL` leaves it out.
  */
 export function chartMatchesDifficultyFilter(chart: LibraryChart, filter: DifficultyFilter): boolean {
   if (filter === 'ALL') return true;
-  const value = chart.chart.metadata.difficulty;
-  if (value === undefined || value === 0) return false;
-  return value === DIFFICULTY_LEVELS[filter];
+  const value = resolveLibraryChartDifficultyValue(chart);
+  return value !== undefined && value === DIFFICULTY_LEVELS[filter];
 }
 
 /** Whether a chart is listed under a key-mode filter: every chart under `ALL`, else its key mode is the filter's. */
