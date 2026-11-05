@@ -2042,6 +2042,20 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
       displayAPI.resolveDisplayedDifficultyValue(fixtures.sampleBmsJSON);
     },
   });
+  define('player-engine.display.resolveDisplayedDifficulty', {
+    run: (fixtures) => {
+      displayAPI.resolveDisplayedDifficulty(fixtures.sampleBmsJSON, 'sample_7a.bms');
+    },
+  });
+  define('player-engine.display.estimateDifficultyFromNames', {
+    run: () => {
+      displayAPI.estimateDifficultyFromNames({
+        title: 'Bench Song [7KEYS]',
+        subtitle: '-remix-',
+        fileName: 'bench_song_SPA.bms',
+      });
+    },
+  });
   define('player-engine.display.formatSeconds', {
     run: () => {
       displayAPI.formatSeconds(3725.37);
