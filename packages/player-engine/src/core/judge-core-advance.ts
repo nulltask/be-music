@@ -125,16 +125,18 @@ function detonateLandmine(
     state.summary.minePoor = (state.summary.minePoor ?? 0) + 1;
   }
   applyGaugeDelta(state, nowSec, landmineGaugeEffect.gaugeDelta, 'mine-hit', emit);
-  emit({
-    kind: 'trace',
-    name: 'mine-hit',
-    seconds: nowSec,
-    fields: [
-      ['channel', landmine.channel],
-      ['value', landmineGaugeEffect.objectValue],
-      ['damage', landmineGaugeEffect.damage],
-    ],
-  });
+  if (!state.config.omitTraceEffects) {
+    emit({
+      kind: 'trace',
+      name: 'mine-hit',
+      seconds: nowSec,
+      fields: [
+        ['channel', landmine.channel],
+        ['value', landmineGaugeEffect.objectValue],
+        ['damage', landmineGaugeEffect.damage],
+      ],
+    });
+  }
 }
 
 /** Upper bound (µs) on the scanned mine reach, so a mine scan can stop at mines too far ahead to matter. */
@@ -406,15 +408,17 @@ function applyAutoPerfect(state: JudgeCoreState, channel: string, seconds: numbe
   applyGaugeJudge(state, seconds, 'PERFECT', emit);
   emit({ kind: 'poor-bga', action: 'clear', seconds });
   setCombo(state, seconds, state.combo + 1, 'judge', emit, 'PERFECT', channel);
-  emit({
-    kind: 'trace',
-    name: 'auto-judge',
-    seconds,
-    fields: [
-      ['result', 'PERFECT'],
-      ['channel', channel],
-    ],
-  });
+  if (!state.config.omitTraceEffects) {
+    emit({
+      kind: 'trace',
+      name: 'auto-judge',
+      seconds,
+      fields: [
+        ['result', 'PERFECT'],
+        ['channel', channel],
+      ],
+    });
+  }
   emit({ kind: 'judge-combo', judge: 'PERFECT', combo: state.combo, channel });
 }
 
@@ -511,17 +515,19 @@ function applyMissedScorableNotes(
     applyJudgeToSummary(state.summary, 'POOR', state.scoreTracker);
     applyGaugeJudge(state, referenceSeconds, 'POOR', emit, 'miss');
     emit({ kind: 'poor-bga', action: 'trigger', seconds: referenceSeconds });
-    emit({
-      kind: 'trace',
-      name: 'judge',
-      seconds: referenceSeconds,
-      fields: [
-        ['result', 'POOR'],
-        ['channel', note.channel],
-        ['deltaMs', Math.round((referenceSeconds - note.seconds) * 1000)],
-        ['reason', 'miss'],
-      ],
-    });
+    if (!state.config.omitTraceEffects) {
+      emit({
+        kind: 'trace',
+        name: 'judge',
+        seconds: referenceSeconds,
+        fields: [
+          ['result', 'POOR'],
+          ['channel', note.channel],
+          ['deltaMs', Math.round((referenceSeconds - note.seconds) * 1000)],
+          ['reason', 'miss'],
+        ],
+      });
+    }
     emit({ kind: 'poor-trace', action: 'trigger', seconds: referenceSeconds });
     setCombo(state, referenceSeconds, 0, 'miss', emit, 'POOR', note.channel);
     // Miss-without-press: positive `signedDeltaMs` because the deadline passed without an input — the "late" band.
@@ -534,16 +540,18 @@ function applyMissedScorableNotes(
     });
     if (noteOwesTailMiss(config.ruleset, note)) {
       applyTailMissPoor(state, referenceSeconds, emit);
-      emit({
-        kind: 'trace',
-        name: 'judge',
-        seconds: referenceSeconds,
-        fields: [
-          ['result', 'POOR'],
-          ['channel', note.channel],
-          ['reason', 'charge-tail-miss'],
-        ],
-      });
+      if (!state.config.omitTraceEffects) {
+        emit({
+          kind: 'trace',
+          name: 'judge',
+          seconds: referenceSeconds,
+          fields: [
+            ['result', 'POOR'],
+            ['channel', note.channel],
+            ['reason', 'charge-tail-miss'],
+          ],
+        });
+      }
     }
   }
 }
@@ -1011,15 +1019,17 @@ export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, em
 /** Empties the gauge at the end of a reversed run with notes outstanding (see {@link finishJudgeState}). */
 function drainGaugeAtReversalEnd(state: JudgeCoreState, totalSeconds: number, emit: JudgeCoreEffectSink): void {
   state.drainGaugeToZero();
-  emit({
-    kind: 'trace',
-    name: 'gauge',
-    seconds: totalSeconds,
-    fields: [
-      ['value', 0],
-      ['reason', 'notes-outstanding-past-reversal'],
-    ],
-  });
+  if (!state.config.omitTraceEffects) {
+    emit({
+      kind: 'trace',
+      name: 'gauge',
+      seconds: totalSeconds,
+      fields: [
+        ['value', 0],
+        ['reason', 'notes-outstanding-past-reversal'],
+      ],
+    });
+  }
   emit({ kind: 'frame', seconds: totalSeconds });
 }
 
@@ -1034,16 +1044,18 @@ function chargeRemainingNotes(
     applyGaugeJudge(state, totalSeconds, 'POOR', emit, 'remaining-notes');
   }
   emit({ kind: 'poor-bga', action: 'trigger', seconds: totalSeconds });
-  emit({
-    kind: 'trace',
-    name: 'judge',
-    seconds: totalSeconds,
-    fields: [
-      ['result', 'POOR'],
-      ['reason', 'remaining-notes'],
-      ['count', missingCount],
-    ],
-  });
+  if (!state.config.omitTraceEffects) {
+    emit({
+      kind: 'trace',
+      name: 'judge',
+      seconds: totalSeconds,
+      fields: [
+        ['result', 'POOR'],
+        ['reason', 'remaining-notes'],
+        ['count', missingCount],
+      ],
+    });
+  }
   emit({ kind: 'poor-trace', action: 'trigger', seconds: totalSeconds });
   setCombo(state, totalSeconds, 0, 'remaining-notes', emit, 'POOR');
   emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo });

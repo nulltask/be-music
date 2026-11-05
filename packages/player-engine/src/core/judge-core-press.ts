@@ -529,15 +529,17 @@ function chargeEmptyPoor(state: JudgeCoreState, nowSec: number, emit: JudgeCoreE
   }
   emit({ kind: 'record-empty-poor' });
   emit({ kind: 'poor-bga', action: 'trigger', seconds: nowSec });
-  emit({
-    kind: 'trace',
-    name: 'judge',
-    seconds: nowSec,
-    fields: [
-      ['result', 'EMPTY_POOR'],
-      ['reason', 'empty-poor'],
-    ],
-  });
+  if (!state.config.omitTraceEffects) {
+    emit({
+      kind: 'trace',
+      name: 'judge',
+      seconds: nowSec,
+      fields: [
+        ['result', 'EMPTY_POOR'],
+        ['reason', 'empty-poor'],
+      ],
+    });
+  }
   // The UI maps this back to the LR2 `'poor'` skin slot (NOWJUDGE 0/1 share one kind in our model).
   emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo });
 }
