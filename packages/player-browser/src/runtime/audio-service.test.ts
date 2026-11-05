@@ -311,6 +311,16 @@ describe('createAudioService', () => {
     expect(engine.dispose).toHaveBeenCalled();
   });
 
+  it('sounds a window of a chart through the preview engine, owned until the owner stops', () => {
+    const engine: ChartPreviewPlayer = { focus: vi.fn(), playWindow: vi.fn(), stop: vi.fn(), dispose: vi.fn() };
+    const { service } = createService(undefined, { createPreviewEngine: () => engine });
+    const target = { chart: { id: 'a' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
+    service.preview.playWindow(target, { startSeconds: 2, endSeconds: 4 }, scene);
+    expect(engine.playWindow).toHaveBeenCalledWith(target, { startSeconds: 2, endSeconds: 4 });
+    service.stopOwned(scene);
+    expect(engine.focus).toHaveBeenLastCalledWith(undefined);
+  });
+
   it('analyses the music bus once the context exists', async () => {
     const { service } = createService();
     expect(service.analyzer.sample(0)).toBe(SILENT_AUDIO);

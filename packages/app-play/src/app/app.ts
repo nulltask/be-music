@@ -15,6 +15,7 @@ import type { BrowseSnapshot, LibraryChart, PlayOptions } from '@be-music/player
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-browser/audio';
 import { downloadBlob } from '@be-music/player-browser/recording';
+import { resolveChartSource } from '@be-music/player-browser/collection';
 import { logger } from '@be-music/player-browser';
 import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from '../ui/beatoraja-skin-options.ts';
 import { LeaderboardPanel } from '../leaderboard-ui.ts';
@@ -61,6 +62,8 @@ import { LR2ThemeService } from '../services/themes/lr2.ts';
 import { FamilyKits } from './family-kits.ts';
 import { controlSettingsOf } from '../control-keys.ts';
 import { showExitMenu } from '../ui/exit-menu.ts';
+import { PracticeBarsDialog } from '../ui/practice-bars.ts';
+import { PracticeBarsMemory } from '../ui/practice-bars-model.ts';
 import { createFpsOverlay } from '../ui/fps-overlay.ts';
 import { openHelpModal, setHelpKeyboardSource, watchHelpExpanded } from '../help-modal.ts';
 import type { TestHookRecorder } from '../test-hook.ts';
@@ -182,6 +185,10 @@ export class PlayerWebApp {
    * built-in decide and result screens so far. The other screens still play on contexts of their own.
    */
   private readonly audio: AudioService = createAudioService();
+  /** The bars each chart was last practised on (PRACTICE), which its plays loop. */
+  private readonly practiceBars = new PracticeBarsMemory();
+  /** The PRACTICE bar picker, made on its first use. */
+  private practiceBarsDialog: PracticeBarsDialog | undefined;
   /** The select screen, from its first showing to every return, and the starts made on it (`app/routes/select.ts`). */
   private readonly selectRoute: SelectRoute;
   /** A start's decide screen, and the play it hands the stage to (`app/routes/decide.ts`). */
@@ -448,6 +455,12 @@ export class PlayerWebApp {
       unlockReplayOptions: () => this.unlockReplayOptions(),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       showDecide: (chartEntry, overrides) => this.decideRoute.showDecide(chartEntry, overrides),
+      pickPracticeBars: (chartEntry) => {
+        this.practiceBarsDialog ??= new PracticeBarsDialog({ audio: this.audio, memory: this.practiceBars });
+        // The select screen's preview of the chart gives way to the bars' auditions.
+        this.audio.preview.stop();
+        return this.practiceBarsDialog.open(chartEntry, resolveChartSource(this.library.collection, chartEntry));
+      },
       replaySlots: this.replaySlots,
       replaySlotsPanel: this.replaySlotsPanel,
       startReplayFromSlot: (entry, slot) => this.replayRoute.startReplayFromSlot(entry, slot),
@@ -544,6 +557,7 @@ export class PlayerWebApp {
       lockReplayOptionsForPlay: (liveTempo, chartEntry) => this.lockReplayOptionsForPlay(liveTempo, chartEntry),
       unlockReplayOptions: () => this.unlockReplayOptions(),
       showSelect: () => this.showSelect(),
+      practiceRange: (chartEntry) => this.practiceBars.rangeFor(chartEntry.id),
       showPlayOptionMismatch,
       setPlayOptions: (changes) => this.setPlayOptions(changes),
     });

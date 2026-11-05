@@ -118,8 +118,6 @@ export interface OptionSettings {
   longNoteMode: PlayerGUIState['longNoteMode'];
   customJudge: boolean;
   practice: boolean;
-  practiceStartMs: number;
-  practiceEndMs: number;
   practiceGauge: PlayerGUIState['practiceGauge'];
   practiceGaugeCategory: PlayerGUIState['practiceGaugeCategory'];
   practiceStartGauge: number;
@@ -334,8 +332,6 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'longNoteMode', resolvePlayOptionValue('longNoteMode', raw.longNoteMode));
   assign(settings, 'customJudge', resolvePlayOptionValue('customJudge', raw.customJudge));
   assign(settings, 'practice', resolvePlayOptionValue('practice', raw.practice));
-  assign(settings, 'practiceStartMs', resolvePlayOptionValue('practiceStartMs', raw.practiceStartMs));
-  assign(settings, 'practiceEndMs', resolvePlayOptionValue('practiceEndMs', raw.practiceEndMs));
   assign(settings, 'practiceGauge', resolvePlayOptionValue('practiceGauge', raw.practiceGauge));
   assign(settings, 'practiceGaugeCategory', resolvePlayOptionValue('practiceGaugeCategory', raw.practiceGaugeCategory));
   assign(settings, 'practiceStartGauge', resolvePlayOptionValue('practiceStartGauge', raw.practiceStartGauge));
@@ -607,8 +603,6 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('longNoteMode');
   assignState('customJudge');
   assignState('practice');
-  assignState('practiceStartMs');
-  assignState('practiceEndMs');
   assignState('practiceGauge');
   assignState('practiceGaugeCategory');
   assignState('practiceStartGauge');
@@ -740,8 +734,6 @@ export function captureOptionSettings(
     longNoteMode: state.longNoteMode,
     customJudge: state.customJudge,
     practice: state.practice,
-    practiceStartMs: state.practiceStartMs,
-    practiceEndMs: state.practiceEndMs,
     practiceGauge: state.practiceGauge,
     practiceGaugeCategory: state.practiceGaugeCategory,
     practiceStartGauge: state.practiceStartGauge,

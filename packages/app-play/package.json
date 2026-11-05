@@ -23,6 +23,7 @@
     "@be-music/player-engine": "workspace:*",
     "@be-music/player-scene-model": "workspace:*",
     "@be-music/player-skin-sdk": "workspace:*",
+    "@be-music/player-ui": "workspace:*",
     "@be-music/service-web-theme": "workspace:*",
     "@be-music/shared-utils": "workspace:*",
     "@be-music/skin-beatoraja": "workspace:*",

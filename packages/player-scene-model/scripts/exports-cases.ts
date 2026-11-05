@@ -1,4 +1,3 @@
-import { resolveChart } from '@be-music/chart-model';
 import { parseChart } from '@be-music/chart-parser';
 import * as sceneModelAPI from '@be-music/player-scene-model';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
@@ -293,50 +292,10 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
   define('player-scene-model.resolvePracticeSelection', {
     run: () => {
       sceneModelAPI.resolvePracticeSelection(sceneModelAPI.DEFAULT_PLAY_OPTIONS, 'lr2');
-      sceneModelAPI.resolvePracticeSelection(sceneModelAPI.DEFAULT_PLAY_OPTIONS, '____');
-    },
-  });
-  const benchPracticeChart = sceneModelAPI.resolvePracticeRangeChart(resolveChart(BENCH_CHART));
-  const benchNoteTimes = Array.from({ length: 2000 }, (_, index) => index * 60);
-  define('player-scene-model.resolvePracticeRangeChart', {
-    run: () => {
-      sceneModelAPI.resolvePracticeRangeChart(resolveChart(BENCH_CHART));
-    },
-  });
-  define('player-scene-model.binPracticeNoteDensity', {
-    run: () => {
-      sceneModelAPI.binPracticeNoteDensity(benchNoteTimes, 120_000, 140);
-    },
-  });
-  define('player-scene-model.practiceTimeToX', {
-    run: () => {
-      sceneModelAPI.practiceTimeToX(30_000, 120_000, 280);
-    },
-  });
-  define('player-scene-model.practiceXToTime', {
-    run: () => {
-      sceneModelAPI.practiceXToTime(70, 120_000, 280);
-    },
-  });
-  define('player-scene-model.findPracticeMeasureAt', {
-    run: () => {
-      sceneModelAPI.findPracticeMeasureAt(1000, benchPracticeChart.measures);
-    },
-  });
-  define('player-scene-model.resolveShownPracticeRange', {
-    run: () => {
-      sceneModelAPI.resolveShownPracticeRange({ startMs: 0, endMs: 0 }, 120_000);
-    },
-  });
-  define('player-scene-model.pickPracticeRangeHandle', {
-    run: () => {
-      sceneModelAPI.pickPracticeRangeHandle(40, 20, 100);
-    },
-  });
-  define('player-scene-model.dragPracticeRangeHandle', {
-    run: () => {
-      sceneModelAPI.dragPracticeRangeHandle({ startMs: 0, endMs: 0 }, 'start', 1200, benchPracticeChart);
-      sceneModelAPI.dragPracticeRangeHandle({ startMs: 0, endMs: 0 }, 'end', 1200, benchPracticeChart);
+      sceneModelAPI.resolvePracticeSelection(sceneModelAPI.DEFAULT_PLAY_OPTIONS, '____', {
+        startMs: 2000,
+        endMs: 6000,
+      });
     },
   });
   define('player-scene-model.formatPracticeTime', {

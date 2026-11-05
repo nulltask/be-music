@@ -2783,32 +2783,39 @@ html.touch-first .search-input.search-inline:focus {
   padding-top: 8px;
 }
 
-/* The PRACTICE range picker (#948): a density graph with two handles, in a row of its own in the Options dialog. */
-.practice-range {
-  --practice-range-accent: var(--primary);
-  --practice-range-muted: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
-  --practice-range-tick: color-mix(in oklch, var(--foreground) 10%, transparent);
-  --practice-range-selection: color-mix(in oklch, var(--primary) 18%, transparent);
-  display: grid;
-  gap: 4px;
+/* The PRACTICE bar picker (`ui/practice-bars.ts`): the chart's score, opened as a chart starts with PRACTICE on. */
+.practice-bars-dialog > * {
+  width: min(1100px, calc(100% - 2rem));
+  max-width: none;
+  max-height: min(92vh, 900px);
 }
-.practice-range-graph {
-  display: block;
-  width: 100%;
-  border-radius: 4px;
-  background: var(--input);
-  cursor: ew-resize;
-  touch-action: none;
+.practice-bars-chart {
+  font-weight: 600;
 }
-.practice-range-caption {
+.practice-bars-chart > span {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-weight: 400;
+}
+.practice-bars-score {
+  --be-music-chart-score-accent: var(--primary);
+  min-height: 120px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #050608;
+}
+.practice-bars-note {
+  padding: 12px;
+  color: var(--muted-foreground);
+}
+.practice-bars-caption {
+  min-height: 1.4em;
+  color: var(--muted-foreground);
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
-  text-align: center;
 }
-.practice-range.disabled {
-  opacity: 0.5;
-}
-.practice-range.disabled .practice-range-graph {
-  cursor: default;
+.practice-bars-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }

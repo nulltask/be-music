@@ -164,8 +164,6 @@ describe('captureOptionSettings', () => {
       longNoteMode: 'LN',
       customJudge: false,
       practice: false,
-      practiceStartMs: 0,
-      practiceEndMs: 0,
       practiceGauge: 'NORMAL',
       practiceGaugeCategory: 'MODE',
       practiceStartGauge: 20,
@@ -360,6 +358,19 @@ test('persists the automatic judge-timing mode, migrating the earlier beatoraja 
   expect(read('SILENT')).not.toHaveProperty('judgeTimingAutoAdjust');
 });
 
+test('drops the START TIME and END TIME a PRACTICE range used to store, keeping the other PRACTICE settings', () => {
+  const settings = parseOptionSettingsDocument(
+    JSON.stringify({
+      version: 0,
+      updatedAt: 1,
+      settings: { practice: true, practiceStartMs: 3000, practiceEndMs: 9000, practiceStartGauge: 40 },
+    }),
+  )?.settings;
+  expect(settings).toMatchObject({ practice: true, practiceStartGauge: 40 });
+  expect(settings).not.toHaveProperty('practiceStartMs');
+  expect(settings).not.toHaveProperty('practiceEndMs');
+});
+
 test('persists the source SURVIVAL TO GROOVE policy', () => {
   expect(
     parseOptionSettingsDocument(
@@ -465,8 +476,6 @@ test('LR2 EXTRA selection and source minimum level survive settings round trips'
     longNoteMode: 'LN',
     customJudge: false,
     practice: false,
-    practiceStartMs: 0,
-    practiceEndMs: 0,
     practiceGauge: 'NORMAL',
     practiceGaugeCategory: 'MODE',
     practiceStartGauge: 20,
