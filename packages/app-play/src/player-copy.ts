@@ -114,16 +114,16 @@ const en = {
   },
   account: {
     notSignedIn: 'Not signed in',
-    anonymous: 'anonymous',
+    anonymous: 'guest',
     passkey: (count: number) => `${count} passkey${count === 1 ? '' : 's'}`,
-    chipSignedOutTitle: 'Not signed in to the Leaderboard. Open Options → Leaderboard to sign in with a passkey.',
+    chipSignedOutTitle: 'Not signed in to the Leaderboard. Open Options → Leaderboard to sign in.',
     chipAnonymousTitle:
-      'Signed in anonymously: create a passkey to keep this account and show its plays on the Leaderboard.',
+      'Signed in as a guest: keep this account with a passkey, Google or Discord to show its plays on the Leaderboard.',
     chipSignedInTitle: (name: string, handle: string) =>
       `Signed in as ${name} (@${handle}). Opens your Leaderboard page.`,
     startSignedOutHint: 'Sign in through Accounts before submitting plays. You can start with a guest account.',
     startAnonymousHint:
-      'This account lives only in this browser, and rankings leave it out. Keep it with a passkey to join them.',
+      'Rankings leave guest accounts out, and other devices cannot sign in to one. Keep it with a passkey, Google or Discord to join them.',
     signUp: 'Sign up',
     keep: 'Keep this account',
     signOut: 'Sign out',
@@ -403,15 +403,17 @@ const ja: typeof en = {
   },
   account: {
     notSignedIn: 'ログインしていません',
-    anonymous: '匿名',
+    anonymous: 'ゲスト',
     passkey: (count) => `パスキー ${count}`,
-    chipSignedOutTitle: 'Leaderboard にログインしていません。Options の Leaderboard からパスキーでログインできます。',
-    chipAnonymousTitle: '匿名でログイン中です。パスキーを作ると、このアカウントとプレイを Leaderboard に残せます。',
+    chipSignedOutTitle: 'Leaderboard にログインしていません。Options の Leaderboard からログインできます。',
+    chipAnonymousTitle:
+      'ゲストでログイン中です。パスキー・Google・Discord のどれかで保存すると、このアカウントとプレイを Leaderboard に残せます。',
     chipSignedInTitle: (name, handle) => `${name}（@${handle}）でログイン中です。Leaderboard のページを開きます。`,
     startSignedOutHint: 'プレイを送る前に Accounts でログインしてください。ゲストアカウントから始められます。',
-    startAnonymousHint: 'このアカウントはこのブラウザにだけあり、ランキングには出ません。パスキーで残すと載ります。',
+    startAnonymousHint:
+      'ゲストアカウントはランキングに出ず、ほかの端末からはログインできません。パスキー・Google・Discord のどれかで保存すると載ります。',
     signUp: '登録',
-    keep: 'このアカウントを残す',
+    keep: 'このアカウントを保存',
     signOut: 'ログアウト',
     manage: 'アカウント管理',
     signInFailed: 'ログインできませんでした',

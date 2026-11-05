@@ -58,7 +58,7 @@ describe('signing in on the site', () => {
     expect(settings).toContain('data-profile-form');
     expect(settings).toContain(`value="${me.handle}"`);
     // An anonymous player is offered a passkey to save the account; it has no upload to remove yet.
-    expect(settings).toContain('Create a passkey to save your account');
+    expect(settings).toContain('Keep this account with a passkey');
     expect(settings).not.toContain('data-account-action="remove-avatar"');
   });
 });

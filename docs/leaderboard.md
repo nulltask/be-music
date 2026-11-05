@@ -53,7 +53,7 @@ The official deployment uses **Workers Paid**. Self-hosted installations must st
 
 Accounts owns authentication, profiles and avatars. Leaderboard acts as an OIDC client and API resource server, mapping `(issuer, sub)` to a local player ID. Email does not link accounts. Public profiles are projected for ranking display. [Services](./services.md#3-sign-in) defines the authentication contract.
 
-Accounts supports guests, passkeys and configured Discord/Google providers. Sign-in is required before submission. Linking a guest to an existing account transfers scores idempotently on the next authenticated request using signed link claims. Former handles remain reserved for their owner and redirect to the current handle.
+Accounts supports guests, passkeys and configured Discord/Google providers. Sign-in is required before submission; a guest account is enough. A guest becomes a regular account once it registers a passkey or signs in with or links Discord/Google. Linking a guest to an existing account transfers scores idempotently on the next authenticated request using signed link claims. Former handles remain reserved for their owner and redirect to the current handle.
 
 ## 4. Chart identity
 
@@ -259,8 +259,8 @@ flowchart TD
 The D1 source of truth is [`src/db/schema.ts`](../packages/app-leaderboard/src/db/schema.ts). It stores charts, aliases and chartsets; scores and per-ruleset results; personal bests; courses and their results; and local user, public-profile and OIDC mappings. Accounts ownership follows [Services](./services.md).
 
 - Ranking queries use an index on `best_scores (chart_fp, ruleset, assisted, best_ex DESC)`.
-- A chart is **listed publicly** once two players who are not anonymous have played it (anonymous accounts cost
-  nothing, so they do not count), or once it appears in a difficulty table.
+- A chart is **listed publicly** once two players who are not guests have played it (guest accounts cost nothing,
+  so they do not count), or once it appears in a difficulty table.
 - **Chartsets** group the charts of one work: the original package's charts and the add-ons (差分). The grouping
   comes from BMS Search (https://bmssearch.net), whose maintainers file each chart, by its file SHA-256 or MD5, under a
   work by hand. `chartset.id` is BMS Search's id for the work; `chart.chartset_id` and `chart.pack_type` (original or
@@ -304,7 +304,7 @@ Leaderboard rival, target and ghost APIs are not implemented. Skin presentation 
 
 The Leaderboard Worker's Hono routes read D1 directly and render Lit templates through `@be-music/service-web-theme/server`. Tailwind CSS v4 and Basecoat style the pages, following the system colour scheme. Shared service views use the same presentation models on the server and client; browser components import `@be-music/service-web-theme/client`, while htmx handles asynchronous requests and partial navigation.
 
-- `/` — recent scores and course runs, with anonymous-player and unlisted-chart filters.
+- `/` — recent scores and course runs, with guest and unlisted-chart filters.
 - `/scores/:id` — a score
 - `/chartsets/:id` — the charts of one work (originals, then add-ons)
 - `/charts/:chartFp` — a chart's rankings, its play counts and lamp spread, and its details (mode, TOTAL,
@@ -312,7 +312,7 @@ The Leaderboard Worker's Hono routes read D1 directly and render Lit templates t
 - `/players/:handle` — a profile with the player's figures (plays, charts, average rate, and the lamp and DJ
   Rank spreads of their bests) and their latest plays and course runs
 - `/courses/:courseFp` — a course's ranking (each player's best EX score, lamp, BP and trophy, assisted runs
-  and anonymous players behind the chart page's switches), its stages linked to their chart pages, its run counts,
+  and guests behind the chart page's switches), its stages linked to their chart pages, its run counts,
   lamp spread and details (kind, constraints). A course no player with an account has run stays out of search engines.
 - `/course-scores/:id` — a course run under every ruleset (stages reached, trophy), broken down stage by
   stage under the display ruleset (judgments, BP, the gauge each stage handed on, the stages never reached), with its

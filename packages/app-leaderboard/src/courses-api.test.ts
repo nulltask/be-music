@@ -259,7 +259,7 @@ describe('course read endpoints', () => {
     });
     expect((await fetchApp('/api/v0/courses/bmcourse0:unknown')).status).toBe(404);
 
-    // Anonymous players are left out unless asked for.
+    // Guests are left out unless asked for.
     const hidden = (await (await fetchApp(`${path}/leaderboard?ruleset=beatoraja`)).json()) as { players: number };
     expect(hidden.players).toBe(0);
     const ranking = (await (await fetchApp(`${path}/leaderboard?ruleset=beatoraja&anonymous=1`)).json()) as {

@@ -151,7 +151,7 @@ Accounts のスキーマと Leaderboard の `0013` を適用し、認証の切�
 | `USER_CONTENT_ORIGIN` | Registry のみ。アップロードされたファイルの配信元           |
 
 - Accounts は、クライアントとリダイレクト URI の一覧を設定から読みます。
-- Discord と Google は任意です。パスキーと匿名セッションだけで始められます。Discord ログインは Accounts Worker の
+- Discord と Google は任意です。パスキーとゲストのセッションだけで始められます。Discord ログインは Accounts Worker の
   `DISCORD_CLIENT_ID` と `DISCORD_CLIENT_SECRET` を読みます。公式インスタンスでは `be-music` Vault の `discord`
   （本番）と `discord-preview`（プレビュー）に置きます。Google ログインは `GOOGLE_CLIENT_ID` と
   `GOOGLE_CLIENT_SECRET` を読み、同じ Vault の `google`（本番）と `google-preview`（プレビュー）に置きます。

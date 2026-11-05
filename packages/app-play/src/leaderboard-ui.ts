@@ -8,13 +8,13 @@ import type { LibraryChart } from '@be-music/player-scene-model';
 import type { OptionContainer } from './ui/options-controls.ts';
 
 import {
-  createLeaderboardPasskey,
+  keepLeaderboardAccount,
   describeAccountChip,
   describeLeaderboardAccount,
   describeStartAccount,
   shouldTurnOnSubmitting,
   loadLeaderboardAccount,
-  signInWithLeaderboardPasskey,
+  signInToLeaderboard,
   signOutOfLeaderboard,
   startAccountActionLabels,
   type AccountActionResult,
@@ -63,10 +63,10 @@ export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'eng
 }
 /**
  * Everything the player shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
- * sign-up buttons), the Options dialog folder (the same toggle, account row and passkey buttons), the shared header's
- * account control, and submitting a finished play. An account starts anonymous (the first
- * submission signs in anonymously); creating a passkey keeps it, and "Sign in with passkey" brings it to another device,
- * moving that device's anonymous plays into it.
+ * sign-up buttons), the Options dialog folder (the same toggle, account row and account buttons), the shared header's
+ * account control, and submitting a finished play. Submitting needs an account; a guest one is enough. Keeping a guest
+ * account with a passkey, Google or Discord makes it a regular one, and signing in to another account moves the guest's
+ * plays into it.
  */
 export class LeaderboardPanel {
   private submitController: PaneBinding | undefined;
@@ -85,7 +85,7 @@ export class LeaderboardPanel {
   private shownAccount: Awaited<ReturnType<typeof loadLeaderboardAccount>> | undefined;
   private accountReady = false;
   private signedInName: string | undefined;
-  /** The name of the account kept with a passkey, which a play shows; `undefined` signed out or anonymous. */
+  /** The name of a kept (non-guest) account, which a play shows; `undefined` signed out or as a guest. */
   get playerName(): string | undefined {
     return this.signedInName;
   }
@@ -148,14 +148,12 @@ export class LeaderboardPanel {
     });
     const run = (label: string, action: () => Promise<AccountActionResult>, onSuccess?: () => void) => () =>
       this.runAccountAction(label, action, onSuccess);
-    // Signing in, or keeping the account with a passkey, is choosing to take part: plays from now on are submitted.
+    // Signing in, or keeping the account, is choosing to take part: plays from now on are submitted.
     const takePart = () => this.setSubmitting(true);
     folder
-      .addButton({ title: 'Create passkey (keep this account)' })
-      .on('click', run('Create passkey', createLeaderboardPasskey, takePart));
-    folder
-      .addButton({ title: 'Sign in with passkey' })
-      .on('click', run('Sign in with passkey', signInWithLeaderboardPasskey, takePart));
+      .addButton({ title: 'Keep this account' })
+      .on('click', run('Keep this account', keepLeaderboardAccount, takePart));
+    folder.addButton({ title: 'Sign in' }).on('click', run('Sign in', signInToLeaderboard, takePart));
     folder.addButton({ title: 'Sign out' }).on('click', run('Sign out', signOutOfLeaderboard));
     void this.refreshAccount();
   }
@@ -220,7 +218,7 @@ export class LeaderboardPanel {
     void submitToLeaderboard(prepared.submission, { client: describeSubmittingClient(this.host.recorder) })
       .then((result) => {
         this.host.setStatus(describeLeaderboardResult(result, playedRuleset));
-        // The first submission signs in anonymously; show the account it created.
+        // Refresh the account row; the submission may have changed what it shows.
         void this.refreshAccount();
       })
       .catch((error: unknown) => {
@@ -322,7 +320,7 @@ export class LeaderboardPanel {
             @click=${() => {
               const copy = playerText();
               if (action === 'sign-out') void this.runAccountAction(copy.account.signOut, signOutOfLeaderboard);
-              else if (action === 'keep') void this.runAccountAction(copy.account.manage, createLeaderboardPasskey);
+              else if (action === 'keep') void this.runAccountAction(copy.account.manage, keepLeaderboardAccount);
               else if (action === 'sign-up') this.openDialog('sign-up');
               else this.openDialog('sign-in');
             }}
