@@ -142,15 +142,15 @@ textarea {
 
 /*
  * The Options dialog (ui/options/, controls in ui/options-controls.ts): one tab per area, each holding its folders as
- * sections, with the folders inside them as sections of their own. The tab bar scrolls sideways on a narrow screen,
- * and the panel scrolls.
+ * sections, with the folders inside them as sections of their own. The panel scrolls.
  */
 .options-dialog > div {
   height: min(85dvh, 760px);
 }
+/* Wide enough for every tab bar on one line, in English and Japanese (the widest needs about 690 px). */
 @media (min-width: 40rem) {
   .options-dialog > div {
-    max-width: 640px;
+    max-width: 720px;
   }
 }
 .options-body {
@@ -162,12 +162,21 @@ textarea {
   min-height: 0;
   flex: 1 1 auto;
 }
-/* The tabs wrap onto a second line rather than scroll sideways when they do not fit the dialog. */
+/*
+ * The tabs stay on one line. Where the screen is too narrow for them, the tab bar alone scrolls sideways, never the
+ * dialog, and the selected tab is scrolled into view (`OptionTabs.select`).
+ */
 .options-tabs > [role='tablist'] {
   max-width: 100%;
   height: auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-start;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.options-tabs > [role='tablist']::-webkit-scrollbar {
+  display: none;
 }
 .options-tabs > [role='tablist'] > [role='tab'] {
   flex: 0 0 auto;
@@ -274,33 +283,78 @@ textarea {
   width: 14px;
   height: 14px;
 }
-.options-button-row:has(> .options-help) {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+[data-option-help-host] {
+  display: inline-flex;
+  flex: none;
 }
+/* A button's "?" sits inside it, right of its label (`OptionHelp.inlineMark`). */
+.options-help-inline {
+  width: 18px;
+  height: 18px;
+  margin-right: -4px;
+  padding: 2px;
+}
+/*
+ * The help a "?" button shows (ui/options/help.ts): the header's tooltip (#player-service-header [data-tooltip]),
+ * a black bubble whose point aims at the button, wrapped over several lines for a longer description. It opens below
+ * the button (`data-side="bottom"`) or above it, and `--options-help-tip-arrow-x` puts the point under the button.
+ */
 .options-help-tip {
   position: fixed;
   inset: auto;
   margin: 0;
+  overflow: visible;
   width: max-content;
   max-width: min(320px, calc(100vw - 16px));
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md, 0.5rem);
-  background: var(--popover);
-  color: var(--popover-foreground);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.35);
-  font-size: 0.8125rem;
-  line-height: 1.45;
+  padding: 6px 12px;
+  border: 1px solid var(--player-tooltip-border);
+  border-radius: 8px;
+  background: var(--player-tooltip-background);
+  color: var(--player-tooltip-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
   pointer-events: none;
+  opacity: 1;
+  transition:
+    opacity 150ms ease-out,
+    overlay 150ms ease-out allow-discrete,
+    display 150ms ease-out allow-discrete;
+}
+.options-help-tip:not(:popover-open) {
+  opacity: 0;
+}
+@starting-style {
+  .options-help-tip:popover-open {
+    opacity: 0;
+  }
+}
+.options-help-tip::before {
+  content: '';
+  position: absolute;
+  left: var(--options-help-tip-arrow-x, 50%);
+  width: 10px;
+  height: 10px;
+  background: var(--player-tooltip-background);
+  translate: -50% 0;
+  rotate: 45deg;
+}
+.options-help-tip[data-side='bottom']::before {
+  top: -6px;
+  border-top: 1px solid var(--player-tooltip-border);
+  border-left: 1px solid var(--player-tooltip-border);
+}
+.options-help-tip[data-side='top']::before {
+  bottom: -6px;
+  border-right: 1px solid var(--player-tooltip-border);
+  border-bottom: 1px solid var(--player-tooltip-border);
 }
 .options-help-tip code {
-  font-size: 0.75rem;
+  font-size: 11px;
 }
 .options-help-tip .help-menu-when {
   display: block;
-  color: var(--muted-foreground);
+  color: rgb(255 255 255 / 0.65);
 }
 .options-label {
   font-size: 0.8125rem;
@@ -381,12 +435,6 @@ textarea {
 }
 .options-button-row > .options-button {
   width: 100%;
-}
-/* Beside a help button, the button takes what is left of the row, so the help button stays inside the dialog. */
-.options-button-row:has(> .options-help) > .options-button {
-  width: auto;
-  min-width: 0;
-  flex: 1 1 0;
 }
 .options-row.recording .options-button {
   background: var(--destructive);
@@ -2516,13 +2564,19 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /*
- * The header's icon buttons name themselves in a black tooltip that opens just below the button and points at it.
+ * The header's icon buttons name themselves in a black tooltip that opens just below the button and points at it. The
+ * Options dialog's help (`.options-help-tip`) draws the same bubble from these colours.
  */
+:root {
+  --player-tooltip-background: #000;
+  --player-tooltip-foreground: #fff;
+  --player-tooltip-border: rgb(255 255 255 / 0.16);
+}
 #player-service-header [data-tooltip]::before {
   margin-top: 10px;
-  border: 1px solid rgb(255 255 255 / 0.16);
-  background: #000;
-  color: #fff;
+  border: 1px solid var(--player-tooltip-border);
+  background: var(--player-tooltip-background);
+  color: var(--player-tooltip-foreground);
 }
 /* The point on top of the bubble, aimed at the button. */
 #player-service-header [data-tooltip]::after {
@@ -2534,9 +2588,9 @@ html.touch-first .search-input.search-inline:focus {
   width: 10px;
   height: 10px;
   margin-top: 5px;
-  border-top: 1px solid rgb(255 255 255 / 0.16);
-  border-left: 1px solid rgb(255 255 255 / 0.16);
-  background: #000;
+  border-top: 1px solid var(--player-tooltip-border);
+  border-left: 1px solid var(--player-tooltip-border);
+  background: var(--player-tooltip-background);
   translate: -50% 0;
   rotate: 45deg;
   visibility: hidden;
