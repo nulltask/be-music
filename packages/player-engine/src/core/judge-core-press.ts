@@ -120,7 +120,8 @@ function selectPressCandidate(
 ): { note: TimedPlayableNote; judge: RulesetJudgeIndex } | undefined {
   const { ruleset } = state.config;
   const inputTimeUs = Math.round(nowSec * 1e6);
-  let best: { note: TimedPlayableNote; selection: JudgeSelectionCandidate } | undefined;
+  let bestNote: TimedPlayableNote | undefined;
+  let bestSelection: JudgeSelectionCandidate | undefined;
   // `scorableNotes` is sorted by time, so the scan visits candidates in the ascending order the selection algorithms
   // assume (`lowest` keeps the first, the others may displace it).
   forEachReachableNote(
@@ -128,13 +129,18 @@ function selectPressCandidate(
     nowSec,
     (channel) => candidateChannels.has(channel),
     (note, selection) => {
-      if (best === undefined || preferJudgeCandidate(ruleset.selection, best.selection, selection, inputTimeUs)) {
-        best = { note, selection };
+      if (
+        bestSelection === undefined ||
+        preferJudgeCandidate(ruleset.selection, bestSelection, selection, inputTimeUs)
+      ) {
+        bestNote = note;
+        bestSelection = selection;
       }
     },
   );
-  const selected = best as { note: TimedPlayableNote; selection: JudgeSelectionCandidate } | undefined;
-  return selected === undefined ? undefined : { note: selected.note, judge: selected.selection.judge };
+  const note = bestNote as TimedPlayableNote | undefined;
+  const selection = bestSelection as JudgeSelectionCandidate | undefined;
+  return note === undefined || selection === undefined ? undefined : { note, judge: selection.judge };
 }
 
 /**
@@ -236,6 +242,8 @@ export function hasPressCandidate(state: JudgeCoreState, channels: ReadonlySet<s
   return selectPressCandidate(state, toJudgeClock(state.config, nowSec), channels) !== undefined;
 }
 
+const NO_CHANNELS: readonly string[] = [];
+
 /**
  * A press on `candidateChannels`. `recordedChannels` are the lanes the replay records for it: the keys' own lanes, which
  * differ from the lanes judged only when ANY KEY routed the press. `spin` is the way a scratch press turned the
@@ -273,14 +281,15 @@ export function handleLanePress(
   let pressesLongNote = false;
   // Lanes whose long note was let go and is waiting out the ruleset's release margin: pressing again resumes the hold,
   // so the press judges nothing else on them (beatoraja's re-press, `releasetime` reset).
-  const resumedChannels = new Set<string>();
+  // Allocated only on a re-press: most presses hold no long note.
+  let resumedChannels: Set<string> | undefined;
   for (const channel of candidateChannels) {
     if (!state.activeLongNotes.has(channel)) {
       continue;
     }
     if (state.longHoldReleaseSeconds.delete(channel)) {
       state.longNoteSettleMs.delete(channel);
-      resumedChannels.add(channel);
+      (resumedChannels ??= new Set<string>()).add(channel);
     }
     pressesLongNote = true;
   }
@@ -305,9 +314,11 @@ export function handleLanePress(
   const judgeSec = toJudgeClock(config, nowSec);
   // A lane whose long note is held is pressed again by another key bound to it: its current note is the long note, so
   // the press never judges another note there; the ruleset says what it does instead.
-  const heldLongNoteChannels = [...candidateChannels].filter(
-    (channel) => state.activeLongNotes.has(channel) && !resumedChannels.has(channel),
-  );
+  const heldLongNoteChannels = pressesLongNote
+    ? [...candidateChannels].filter(
+        (channel) => state.activeLongNotes.has(channel) && resumedChannels?.has(channel) !== true,
+      )
+    : NO_CHANNELS;
   for (const channel of heldLongNoteChannels) {
     const hold = state.activeLongNotes.get(channel)!;
     if (hold.backSpinScratch === true && isReverseScratchSpin(hold.headSpin, spin)) {
@@ -317,11 +328,11 @@ export function handleLanePress(
     }
   }
   const judgedChannels =
-    resumedChannels.size === 0 && heldLongNoteChannels.length === 0
+    resumedChannels === undefined && heldLongNoteChannels.length === 0
       ? candidateChannels
       : new Set(
           [...candidateChannels].filter(
-            (channel) => !resumedChannels.has(channel) && !heldLongNoteChannels.includes(channel),
+            (channel) => resumedChannels?.has(channel) !== true && !heldLongNoteChannels.includes(channel),
           ),
         );
   if (judgedChannels.size === 0) {
@@ -358,11 +369,6 @@ export function handleLanePress(
   }
   const channel = candidate.channel;
   const signedDeltaMs = (judgeSec - candidate.seconds) * 1000;
-  const rejudgeAfterBad = (): void => {
-    if (ruleset.multiBad) {
-      applyLR2RejudgeChain(state, judgeSec, candidate, selected.judge, nowSec, emit);
-    }
-  };
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel } });
   for (const event of candidate.soundEvents ?? [candidate.event])
     emit({ kind: 'sound', source: 'manual-note', event, seconds: nowSec, channel });
@@ -401,7 +407,7 @@ export function handleLanePress(
         state.longNoteSettleMs.delete(channel);
         emit({ kind: 'ui', command: { kind: 'long-note-end', channel, outcome: 'dropped' } });
         emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
-        rejudgeAfterBad();
+        if (ruleset.multiBad) applyLR2RejudgeChain(state, judgeSec, candidate, selected.judge, nowSec, emit);
         return;
       }
       state.activeLongNotes.set(channel, {
@@ -417,7 +423,7 @@ export function handleLanePress(
       });
       state.longNoteSettleMs.delete(channel);
       state.longHoldReleaseSeconds.delete(channel);
-      rejudgeAfterBad();
+      if (ruleset.multiBad) applyLR2RejudgeChain(state, judgeSec, candidate, selected.judge, nowSec, emit);
       return;
     }
     if (longNoteMode === 1) {
@@ -431,12 +437,12 @@ export function handleLanePress(
       });
       state.longNoteSettleMs.delete(channel);
       state.longHoldReleaseSeconds.delete(channel);
-      rejudgeAfterBad();
+      if (ruleset.multiBad) applyLR2RejudgeChain(state, judgeSec, candidate, selected.judge, nowSec, emit);
       return;
     }
     state.activeLongNotes.delete(channel);
     state.longNoteSettleMs.delete(channel);
-    rejudgeAfterBad();
+    if (ruleset.multiBad) applyLR2RejudgeChain(state, judgeSec, candidate, selected.judge, nowSec, emit);
     return;
   }
   state.activeLongNotes.delete(channel);
@@ -449,7 +455,7 @@ export function handleLanePress(
     nowSec,
     emit,
   );
-  rejudgeAfterBad();
+  if (ruleset.multiBad) applyLR2RejudgeChain(state, judgeSec, candidate, selected.judge, nowSec, emit);
 }
 
 /**
@@ -529,15 +535,17 @@ function chargeEmptyPoor(state: JudgeCoreState, nowSec: number, emit: JudgeCoreE
   }
   emit({ kind: 'record-empty-poor' });
   emit({ kind: 'poor-bga', action: 'trigger', seconds: nowSec });
-  emit({
-    kind: 'trace',
-    name: 'judge',
-    seconds: nowSec,
-    fields: [
-      ['result', 'EMPTY_POOR'],
-      ['reason', 'empty-poor'],
-    ],
-  });
+  if (!state.config.omitTraceEffects) {
+    emit({
+      kind: 'trace',
+      name: 'judge',
+      seconds: nowSec,
+      fields: [
+        ['result', 'EMPTY_POOR'],
+        ['reason', 'empty-poor'],
+      ],
+    });
+  }
   // The UI maps this back to the LR2 `'poor'` skin slot (NOWJUDGE 0/1 share one kind in our model).
   emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo });
 }

@@ -47,6 +47,11 @@ export interface JudgeCoreConfig {
    * (`1000`).
    */
   judgeMsPerChartSecond: number;
+  /**
+   * Skip building `trace` effects. Live play with a UI discards them (only the terminal log writes them), so it sets
+   * this to keep their objects off the judge path. Absent means they are emitted.
+   */
+  omitTraceEffects?: boolean;
   /** `#WAVxx` table, for the mine explosion sample. */
   wavResources: Readonly<Record<string, string>>;
   /** Object-id radix, for reading mine damage values. */
