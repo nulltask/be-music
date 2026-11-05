@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { Graphics } from 'pixi.js';
-import { mineFilamentLit, renderSynesthesiaLanes } from './playfield.ts';
+import { mineFilamentLit, renderSynesthesiaLanes, synesthesiaBombCrossAngle } from './playfield.ts';
 
 describe('mineFilamentLit', () => {
   it('lights about two segments in three', () => {
@@ -69,5 +69,25 @@ describe('lane beam fill', () => {
       [40, 310, 24, 10],
       [40, 310, 24, 10],
     ]);
+  });
+});
+
+describe('synesthesiaBombCrossAngle', () => {
+  it('starts upright and makes a counter-clockwise quarter turn (negative in y-down screen space)', () => {
+    expect(synesthesiaBombCrossAngle(0, 1)).toBeCloseTo(0);
+    expect(synesthesiaBombCrossAngle(0.3, 1)).toBeCloseTo(-Math.PI / 2);
+    expect(synesthesiaBombCrossAngle(0.9, 1)).toBeCloseTo(-Math.PI / 2);
+  });
+
+  it('turns fast at first and settles as the reticle locks', () => {
+    const samples = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3].map((t) => synesthesiaBombCrossAngle(t, 1));
+    const steps = samples.slice(1).map((angle, index) => samples[index]! - angle);
+    for (const step of steps) expect(step).toBeGreaterThan(0);
+    for (let index = 1; index < steps.length; index += 1) expect(steps[index]!).toBeLessThan(steps[index - 1]!);
+  });
+
+  it('holds the cross still under reduced or no effects', () => {
+    expect(synesthesiaBombCrossAngle(0.15, 0.5)).toBe(0);
+    expect(synesthesiaBombCrossAngle(0.15, 0)).toBe(0);
   });
 });
