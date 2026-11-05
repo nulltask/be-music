@@ -6,6 +6,7 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
  * shared playfield read and write it through their own context interfaces; the play views keep their layers apart
  * (`PlayLayers`).
  */
+import type { BGACameraFeed } from '../../media/bga-camera.ts';
 import type { Texture } from 'pixi.js';
 import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player-engine';
 import { createEmptyScore, type LongNoteStyle, type ScoreSummary } from '@be-music/player-engine/ruleset';
@@ -468,6 +469,11 @@ export class PlaySessionState extends PlayPresentation {
   poorBGAFallbackUntilSeconds: number = Number.POSITIVE_INFINITY;
   /** Whether the chart actually carries any BGA events (drives LR2 op 170/171). */
   hasBGA = false;
+  /**
+   * The camera the BGA frame shows in place of the chart's BGA, set by the scene (`PlayScene.setBGACamera`). The scene
+   * owns it and disposes it.
+   */
+  bgaCamera: BGACameraFeed | undefined = undefined;
   /** True iff we paused because the tab/window backgrounded itself. */
   autoPaused = false;
   /**

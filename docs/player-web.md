@@ -101,10 +101,11 @@ The **Options** dialog opens from the header's Settings button (and, while the p
 - **View** (the View tab): what the lanes show. **Hi-speed** holds [HS-FIX](./play-options.md#start-bpm-hs-fix), the Normal, FLOATING and CLASSIC hi-speeds, Fixed display area and Hi-speed; **Cover & LIFT** Display area info, Effect 1P / 2P, Lane cover, Cover height and LIFT; **Effects** BPM GUIDE, BPM change warning, Visual CONSTANT, Judged notes and Show invisible notes (see below). Hi-speed, the covers, LIFT, CONSTANT's note duration and fade, Judged notes and Show invisible notes apply live; the rest are latched at song start and disabled during a play.
 - **Course** (the Library tab): Skip stage results, My courses…, NONSTOP placement (latched at song start and disabled during a play), Table URL with Import table courses.
 - **Skin & display** (the Skin tab): Skin system selects the active family; choosing an unloaded family asks for a drop. The **Built-in** tab contains Built-in skin, Skin effects, **Skin settings**, and **Add skin**. The **LR2** tab contains Load LR2 skin and the discovered LR2 theme picker. The **beatoraja** tab contains Load beatoraja skin and per-scene pickers. Tabs only organize settings; opening one does not switch the active skin. Render resolution, Play layout and Toggle fullscreen are shared. A detected skin opens a confirmation dialog before replacing any theme assets. Cancel preserves the current skin and still imports charts in the same drop; a drop containing both LR2 and beatoraja lets you choose which to use.
+- **BGA camera** (the Skin tab): Show camera in BGA, Camera, Allow camera access and Mirror camera, with a line saying where the camera stands. They apply live, during a play too, and are kept in this browser only (`be-music.bga-camera`), not in the synced settings document, since the cameras belong to the device. See [BGA camera](#bga-camera).
 - **Audio**: Mute, Master / Key sound / BGM volume (%), Play in silent mode (only where the browser has the Audio Session API, see below), Peak gain (next play), then the **Compressor** folder (Enabled, per-stage toggles, and each compressor's threshold / knee / ratio / attack / release with a reset). Mute silences all player audio while preserving the master volume setting. Peak gain is off until turned on and is remembered with the other settings: the next play scales every decoded sample by one gain so the loudest peak sits near −3 dBFS.
 - **Library & records**: Music / Skin ZIP URL with Load from URLs (the `?music=` / `?skin=` path on demand), Auto-save play history, Clear best records, Local data… and the **Replay slots** folder (each slot's auto-save rule, see [replay.md](./replay.md#replay-slots)).
 - **Select** (the Library tab): Sort, Key filter, Difficulty filter. They shape the built-in and LR2 select screens' list, and an LR2 skin's sort and filter buttons change them too; the beatoraja select screen keeps its own MODE and SORT choices. A play does not read them, so they stay enabled during one.
-- **Capture**: ● Record gameplay video, Video format (MP4 · H.264 by default; MP4 or WebM with H.264 / H.265 / AV1 / VP9 / VP8), 📸 Screenshot.
+- **Capture**: ● Record gameplay video, Video format (MP4 · H.264 by default; MP4 or WebM with H.264 / H.265 / AV1 / VP9 / VP8), 📸 Screenshot. A camera shown in the BGA frame is recorded with it.
 - **Leaderboard**: Submit to Leaderboard, Submit when, Account (the signed-in handle, or "Not signed in"; a shimmering line while it is read), Keep this account, Sign in, and Sign out.
 - **Advanced** (the Advanced tab): CPU workers, Auto pause on blur, FPS (native history graph, sampled every 500 ms with 60 samples), the **BGA video transcode** folder, and Reset settings and reload, which clears every stored player setting except the best records.
 
@@ -908,6 +909,32 @@ flowchart LR
 - Elsewhere (a browser that cannot isolate the page, such as Safari, which does not support `Cross-Origin-Embedder-Policy: credentialless`), or with "Use WebCodecs encoder" off, or when the WebCodecs encoder fails, ffmpeg encodes with its own libx264 straight to fragmented MP4. Encoding on the decoding thread paces the decode by itself.
 - The media source declares a provisional duration until the stream ends, so a cue seeking past what has been transcoded waits there for the frames. The same bytes on several tracks share one transcode, two transcodes run at a time, and closing the last video using one cancels it.
 - Without the workers or MSE, or when the stream fails before its first frame, the whole file is transcoded before it plays (the earlier path).
+
+### BGA camera
+
+Options → Skin → **BGA camera** shows a camera in the play's BGA frame in place of the chart's BGA: a webcam on the hands to show the keys being played, or on the face for a stream. It works with every skin: the built-in Synesthesia, Plain and Native, LR2 skins and beatoraja skins.
+
+```mermaid
+stateDiagram-v2
+    [*] --> off
+    off --> standby: turned on
+    standby --> starting: a play shows
+    starting --> live: getUserMedia
+    starting --> denied: refused
+    starting --> missing: not connected
+    live --> standby: the play leaves
+    live --> missing: unplugged / track ended
+    missing --> starting: plugged in again
+    live --> off: turned off
+```
+
+- **One way in.** The app's `BGACameraService` (`services/bga-camera.ts`) opens the camera with `getUserMedia` and hands the `MediaStream` to the play through `PlayScene.setBGACamera({ stream, mirror })`. The scene wraps it in a `BGACameraFeed` (`media/bga-camera.ts`: a muted `<video>` and a Pixi `VideoSource`, as a chart's video BGA is) and puts it on the play session (`bgaCamera`). `renderBGA` (built-in and LR2 play screens) and the beatoraja BGA layer then draw the feed's texture in every BGA rect instead of the chart's BGA, fitted whole on black (`fitBGACameraRect`), and pause the chart's videos; a Be-Music Skin that composites the BGA itself (`drawsBGA`, the Native skin) gets a 256x256 canvas of it as `frame.bga.base`. It shows whatever the BGA setting and whether the chart has a BGA, and a built-in skin draws its BGA frame for it. Mirror flips the texture (`groupD8.MIRROR_HORIZONTAL`), so no sprite changes.
+- **When the camera is on.** Only while the setting is on and a play is on the stage: the scene router's `setScene` tells the service which scene shows, so the camera closes on the select, decide and result screens, and a retry takes the open camera over without opening it again. Turning the setting, the camera or the mirror changes applies from the next frame, during a play too.
+- **Choosing the camera.** The list comes from `enumerateDevices` and follows `devicechange`. Until the player allows the camera once, browsers list cameras without names, so the folder has an **Allow camera access** button that asks once and closes the camera again; it is disabled once the names are known. The pick is kept by `deviceId` and by name, so a camera whose id the browser changed is found again (`pickCamera` in `bga-camera-settings.ts`).
+- **Losing the camera.** A camera unplugged during a play, or whose permission is taken back, ends its track: the service closes it, the play shows the chart's BGA again from the next frame, and the status line says so. A picked camera that is not connected is waited for and opens when it is plugged in.
+- **Privacy.** The picture goes only to the play's canvas; nothing sends it anywhere. A Capture recording records the canvas, so it includes the camera in the BGA frame.
+- **Cross-origin isolation.** A `MediaStream` is not a cross-origin resource, so COEP `credentialless` does not affect it. Checked in Chromium with its fake camera (`--use-fake-device-for-media-stream`) with the page cross-origin isolated.
+- **Replays and ghosts.** A replay plays on the same play scene, so it can show the camera too; a ghost's playfield or pacemaker draws no BGA of its own and is not affected.
 
 ### Audio service
 
