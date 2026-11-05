@@ -614,7 +614,7 @@ test('renders deployment metadata in the shared page footer', async () => {
   expect(footer).toContain('aria-current="page">Leaderboard</span>');
   expect(footer).not.toContain('>Leaderboard</a>');
   expect(footer).toContain('href="https://be-music.app/">Dashboard</a>');
-  expect(footer).toContain('href="https://accounts.be-music.app/">Accounts</a>');
+  expect(footer).toContain('href="https://be-music.app/account">Accounts</a>');
   expect(footer).toContain('href="https://play.be-music.app/">Play</a>');
   expect(footer).toContain('href="/about"');
   expect(footer).toContain('© 2026 nulltask · MIT License');

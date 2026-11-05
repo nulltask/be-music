@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, test, vi } from 'vite-plus/test'
 import { readdir, readFile } from 'node:fs/promises';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { handleAuth, readSession, verifyAccess, type OIDCEnv } from '@be-music/service-auth-client';
-import worker from './index.ts';
+import { handleAccounts } from './handler.ts';
 import type { Env } from './auth.ts';
+
+const worker = { fetch: handleAccounts };
 
 let env: Env;
 let mf: Miniflare;
@@ -30,8 +32,8 @@ beforeAll(async () => {
     }),
   );
   const DB = (await mf.getD1Database('DB')) as unknown as D1Database;
-  for (const file of (await readdir(new URL('../migrations/', import.meta.url))).sort()) {
-    const sql = await readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8');
+  for (const file of (await readdir(new URL('../../migrations/', import.meta.url))).sort()) {
+    const sql = await readFile(new URL(`../../migrations/${file}`, import.meta.url), 'utf8');
     for (const statement of sql.split('--> statement-breakpoint'))
       if (statement.trim()) await DB.prepare(statement).run();
   }

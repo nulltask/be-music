@@ -125,7 +125,7 @@ export function renderAccountPage(input: {
               ? 'discord'
               : undefined,
     });
-  const home = input.apps?.dashboard ?? '/account';
+  const home = input.apps?.dashboard ?? '/';
   const locale = input.locale ?? 'en';
   const t = TEXT[locale];
   const providerControl = (provider: 'discord' | 'google', label: string, configured: boolean, linked: boolean) => {
@@ -190,7 +190,7 @@ export function renderAccountPage(input: {
       : html` <section class="grid gap-3 border-t pt-4">
           <h2 class="text-sm font-medium">${t.services}</h2>
           <nav class="flex flex-wrap gap-3 text-sm" aria-label=${t.services}>
-            ${serviceEntries.map(([serviceName, origin]) => html`<a class=${LINK_CLASS} href=${new URL('/api/auth/sign-in', origin).href}>${serviceName}</a>`)}
+            ${serviceEntries.map(([serviceName, origin]) => html`<a class=${LINK_CLASS} href=${serviceName === 'dashboard' ? origin : new URL('/api/auth/sign-in', origin).href}>${serviceName}</a>`)}
           </nav>
         </section>`;
   const donate =
