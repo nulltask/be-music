@@ -71,7 +71,7 @@ import {
   practiceGaugeItems,
 } from './play-option-items.ts';
 import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
-import { buildQuickOptionsPanel } from './quick-options.ts';
+import { buildQuickOptionsPanel, QUICK_OPTIONS_ENABLED } from './quick-options.ts';
 import type { PracticeRangePicker } from './practice-range.ts';
 import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './render-resolution.ts';
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
@@ -484,7 +484,9 @@ export class OptionsDialog {
       this.quickOptionsPanel?.refresh();
     });
     const quickDock = document.querySelector<HTMLElement>('#quick-options');
-    if (quickDock !== null) this.quickOptionsPanel = buildQuickOptionsPanel.call(this, quickDock);
+    if (quickDock !== null && QUICK_OPTIONS_ENABLED) {
+      this.quickOptionsPanel = buildQuickOptionsPanel.call(this, quickDock);
+    }
     help.attach();
     // The labels in the player's language, and again when it changes (Help's language switch, the header's menu).
     relabelOptions(gui, playerLang());
