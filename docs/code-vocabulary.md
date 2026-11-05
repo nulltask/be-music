@@ -99,6 +99,6 @@ There are no compatibility aliases for renamed APIs. Preserve names required by 
 - [packages/player-skin-sdk/src/chart.ts](../packages/player-skin-sdk/src/chart.ts)
 - [packages/player-skin-sdk/src/types.ts](../packages/player-skin-sdk/src/types.ts)
 - [packages/app-leaderboard/src/db/schema.ts](../packages/app-leaderboard/src/db/schema.ts)
-- [packages/app-accounts/src/schema.ts](../packages/app-accounts/src/schema.ts)
+- [packages/app-dashboard/src/accounts/schema.ts](../packages/app-dashboard/src/accounts/schema.ts)
 - [packages/service-auth-client/src/index.ts](../packages/service-auth-client/src/index.ts)
 - [packages/chart-model/src/play-modes.ts](../packages/chart-model/src/play-modes.ts)

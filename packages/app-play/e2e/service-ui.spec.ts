@@ -1,6 +1,6 @@
-import { renderAccountPage } from '../../app-accounts/src/page.ts';
+import { renderAccountPage } from '../../app-dashboard/src/accounts/page.ts';
 import { renderDashboard } from '../../app-dashboard/src/page.ts';
-import { CLIENT_JS as ACCOUNTS_CLIENT_JS } from '../../app-accounts/src/client.generated.ts';
+import { CLIENT_JS as ACCOUNTS_CLIENT_JS } from '../../app-dashboard/src/accounts/client.generated.ts';
 import { CLIENT_JS } from '../../app-leaderboard/src/pages/client.generated.ts';
 import { expect, test } from './support.ts';
 

@@ -36,7 +36,7 @@ describe('serviceOrigins', () => {
   test('links the four services of the same environment', () => {
     expect(serviceOrigins('play.be-music.app')).toEqual({
       dashboard: 'https://be-music.app/',
-      accounts: 'https://accounts.be-music.app/',
+      accounts: 'https://be-music.app/account',
       play: 'https://play.be-music.app/',
       leaderboard: 'https://leaderboard.be-music.app/',
     });

@@ -2,7 +2,6 @@
    scripts/build-css.ts compiles this into src/styles.generated.ts. */
 @import 'tailwindcss' source(none);
 @source './';
-@source '../../app-accounts/src';
 @source '../../app-dashboard/src';
 @import 'basecoat-css';
 

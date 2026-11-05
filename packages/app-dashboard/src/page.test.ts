@@ -40,7 +40,7 @@ describe('renderDashboard', () => {
     expect(html).toContain('Signed in as Alice (@alice).');
     expect(html).toContain('href="https://play.be-music.app/"');
     expect(html).toContain('href="https://leaderboard.be-music.app/"');
-    expect(html).toContain('<form method="post" action="/api/auth/sign-out?returnTo=%2F">');
+    expect(html).toContain('<form method="post" action="/sign-out">');
     expect(html).toContain('type="submit">Sign out</button>');
   });
 
@@ -55,7 +55,7 @@ describe('renderDashboard', () => {
     expect(anonymous).toContain('type="submit">ログアウト</button>');
     const signedOut = renderDashboard({ account: undefined, hostname: 'be-music.app', locale: 'en' });
     expect(signedOut).toContain('data-state="signed-out"');
-    expect(signedOut).not.toContain('/api/auth/sign-out');
+    expect(signedOut).not.toContain('/sign-out');
   });
 
   test('keeps the skip target and localized service navigation', () => {
@@ -71,13 +71,13 @@ describe('renderDashboard', () => {
     expect(html).toContain('href="https://donate.preview.be-music.app/"');
     expect(html.split('</main>')[0]).not.toContain('https://donate.');
     expect(html).toContain(
-      '<footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs"><p lang="ja">パブリックベータのためデータは予告なく削除されることがあります。</p><nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="サービス"><span aria-current="page">Dashboard</span><a class="underline underline-offset-4 hover:text-foreground" data-service="accounts" href="https://accounts.preview.be-music.app/">Accounts</a><a class="underline underline-offset-4 hover:text-foreground" data-service="play" href="https://play.preview.be-music.app/">Play</a><a class="underline underline-offset-4 hover:text-foreground" data-service="leaderboard" href="https://leaderboard.preview.be-music.app/">Leaderboard</a></nav><div class="space-y-2">Be-Music · <a class="underline underline-offset-4 hover:text-foreground" href="https://donate.preview.be-music.app/">寄付</a></div><p>© 2026 nulltask · MIT License</p></footer>',
+      '<footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs"><p lang="ja">パブリックベータのためデータは予告なく削除されることがあります。</p><nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="サービス"><span aria-current="page">Dashboard</span><a class="underline underline-offset-4 hover:text-foreground" data-service="accounts" href="https://preview.be-music.app/account">Accounts</a><a class="underline underline-offset-4 hover:text-foreground" data-service="play" href="https://play.preview.be-music.app/">Play</a><a class="underline underline-offset-4 hover:text-foreground" data-service="leaderboard" href="https://leaderboard.preview.be-music.app/">Leaderboard</a></nav><div class="space-y-2">Be-Music · <a class="underline underline-offset-4 hover:text-foreground" href="https://donate.preview.be-music.app/">寄付</a></div><p>© 2026 nulltask · MIT License</p></footer>',
     );
     expect(html).not.toContain('>Dashboard</a>');
     expect(html).toContain('>Be-Music Dashboard</a><span class="badge" data-variant="outline">Beta</span>');
     expect(html).not.toContain('>beta</span>');
     expect(html.slice(html.lastIndexOf('<footer'))).not.toContain('>Beta</span>');
-    expect(html).toContain('class="btn no-underline" data-size="sm" href="/api/auth/sign-in"');
+    expect(html).toContain('class="btn no-underline" data-size="sm" href="/login"');
   });
 
   test('hides Donate unless explicitly enabled', () => {
@@ -86,7 +86,7 @@ describe('renderDashboard', () => {
       expect(html).not.toContain('https://donate.');
       expect(html).toContain('>Be-Music Dashboard</a><span class="badge" data-variant="outline">Beta</span>');
       expect(html).toContain(
-        '<footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs"><p lang="en">Public Beta. Data may be deleted without notice.</p><nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Services"><span aria-current="page">Dashboard</span><a class="underline underline-offset-4 hover:text-foreground" data-service="accounts" href="https://accounts.be-music.app/">Accounts</a><a class="underline underline-offset-4 hover:text-foreground" data-service="play" href="https://play.be-music.app/">Play</a><a class="underline underline-offset-4 hover:text-foreground" data-service="leaderboard" href="https://leaderboard.be-music.app/">Leaderboard</a></nav><div class="space-y-2">Be-Music</div><p>© 2026 nulltask · MIT License</p></footer>',
+        '<footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs"><p lang="en">Public Beta. Data may be deleted without notice.</p><nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Services"><span aria-current="page">Dashboard</span><a class="underline underline-offset-4 hover:text-foreground" data-service="accounts" href="https://be-music.app/account">Accounts</a><a class="underline underline-offset-4 hover:text-foreground" data-service="play" href="https://play.be-music.app/">Play</a><a class="underline underline-offset-4 hover:text-foreground" data-service="leaderboard" href="https://leaderboard.be-music.app/">Leaderboard</a></nav><div class="space-y-2">Be-Music</div><p>© 2026 nulltask · MIT License</p></footer>',
       );
     }
   });
