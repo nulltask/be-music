@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { OPTION_FOLDERS, OPTIONS_TABS, PLAY_OPTION_PAGES } from './folders.ts';
+import { OPTION_FOLDERS, OPTIONS_TABS, PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
 import { OPTION_LABELS_JA, optionLabel } from './labels.ts';
 import { LANE_KEY_CONFIG } from '@be-music/player-engine/lanes';
 import { laneKeyConfigLabel } from './keys.ts';
@@ -22,8 +22,13 @@ describe('OPTION_LABELS_JA', () => {
     for (const [label, text] of Object.entries(OPTION_LABELS_JA)) expect(text.trim(), label).not.toBe('');
   });
 
-  test('covers every tab, Play options page and folder title', () => {
-    const titles = [...OPTIONS_TABS, ...PLAY_OPTION_PAGES, ...Object.values(OPTION_FOLDERS).map(({ title }) => title)];
+  test('covers every tab, Play options and View page and folder title', () => {
+    const titles = [
+      ...OPTIONS_TABS,
+      ...PLAY_OPTION_PAGES,
+      ...VIEW_OPTION_PAGES,
+      ...Object.values(OPTION_FOLDERS).map(({ title }) => title),
+    ];
     for (const title of titles) expect(OPTION_LABELS_JA, title).toHaveProperty([title]);
   });
 });

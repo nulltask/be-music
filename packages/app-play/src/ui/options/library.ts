@@ -23,8 +23,8 @@ const REPLAY_AUTO_SAVE_LABELS: Record<string, ReplayAutoSaveRule> = {
 };
 
 /**
- * Loading from URLs (the same path as the `?music=` / `?skin=` parameters), the play-history and best-record stores,
- * and the BGA transcode settings that apply while charts load.
+ * Loading from URLs (the same path as the `?music=` / `?skin=` parameters) and the play-history and best-record
+ * stores.
  */
 export function buildLibraryFolder(
   this: OptionsDialog,
@@ -84,6 +84,10 @@ export function buildLibraryFolder(
   // What the player keeps in this browser, read-only; built on first use.
   let localData: LocalDataPanel | undefined;
   library.addButton({ title: 'Local data…' }).on('click', () => (localData ??= new LocalDataPanel()).open());
+}
+
+/** The BGA transcode settings, which apply while charts load (the Advanced folder's BGA video transcode). */
+export function buildBGATranscodeFolder(this: OptionsDialog, transcode: OptionContainer): void {
   // BGA video transcode controls. Both settings are seeded into the next play scene's settings (see
   // `preloadGameplay` / `playChart` for the wiring), so changing them mid-session takes effect on the next chart mount
   // — no need to rebuild gameplay if the user is between songs. We don't push live into the running gameplay because
@@ -95,7 +99,6 @@ export function buildLibraryFolder(
   // the consumer treats anything `≤ 0` as "preserve resolution". Earlier iterations split resize into a checkbox +
   // size pair, but users would change the size without realizing they also had to flip the checkbox — the resize was
   // silently a no-op. Folding both into one control with an explicit `Off` row removes that footgun.
-  const transcode = addFolder(library, OPTION_FOLDERS.bgaTranscode);
   // WebCodecs `VideoEncoder` is a browser feature; gate the checkbox on its existence so the user can't toggle a
   // state the runtime can't honor. On unsupported browsers (Safari < 17, older Firefox builds) the controller is
   // disabled and the seed value stays at `false`.

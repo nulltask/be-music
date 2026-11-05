@@ -3,8 +3,8 @@ import { expect, openWithLibrary, SONGS, test } from './support.ts';
 
 test('START BPM is selectable in Options dialog, remembered and recorded in a play', async ({ player }) => {
   await openWithLibrary(player);
-  await player.setOption(['Play options'], 'HS-FIX', 'STARTBPM');
-  expect(await player.readOption(['Play options'], 'HS-FIX')).toBe('STARTBPM');
+  await player.setOption(['View'], 'HS-FIX', 'STARTBPM');
+  expect(await player.readOption(['View'], 'HS-FIX')).toBe('STARTBPM');
   expect(
     await player.page.evaluate(() => JSON.parse(localStorage.getItem('be-music.option-settings')!).settings.hsFix),
   ).toBe('STARTBPM');
@@ -21,7 +21,7 @@ test('START BPM is selectable in Options dialog, remembered and recorded in a pl
   expect(replay?.play.optionChanges?.some((change) => change.values.hiSpeed === 2.1)).toBe(true);
   await player.page.reload();
   await player.waitFor((state) => state.scene.kind === 'select', 'select after reload');
-  expect(await player.readOption(['Play options'], 'HS-FIX')).toBe('STARTBPM');
+  expect(await player.readOption(['View'], 'HS-FIX')).toBe('STARTBPM');
 });
 
 test('a play leaves the covers and the select sort enabled and takes the covers live', async ({ player }) => {
@@ -34,9 +34,9 @@ test('a play leaves the covers and the select sort enabled and takes the covers 
   for (const name of ['Effect 1P', 'Lane cover', 'Cover height', 'Sort', 'Key filter', 'Difficulty filter']) {
     expect(await player.optionEnabled(['Play options'], name)).toBe(true);
   }
-  await player.setOption(['Play options'], 'Effect 1P', 'SUDDEN');
-  await player.setOption(['Play options'], 'Lane cover', true);
-  await player.setOption(['Play options'], 'Cover height', 0.3);
+  await player.setOption(['View'], 'Effect 1P', 'SUDDEN');
+  await player.setOption(['View'], 'Lane cover', true);
+  await player.setOption(['View'], 'Cover height', 0.3);
   await player.waitForResult(0);
   const replay = await player.lastReplay();
   expect(replay?.play.viewChanges?.some((change) => change.covers?.some((cover) => cover.sudden > 0))).toBe(true);
@@ -49,10 +49,10 @@ for (const skin of ['native', 'plain', 'lr2', 'beatoraja'] as const) {
       await player.drop(`skins/${skin}`);
       await player.waitFor((state) => state.scene.kind === 'select' && state.scene.family === skin, `${skin} select`);
     }
-    await player.setOption(['Play options'], 'Display area info', 'ON');
-    await player.setOption(['Play options'], 'Effect 1P', 'SUDDEN');
-    await player.setOption(['Play options'], 'Lane cover', true);
-    await player.setOption(['Play options'], 'Cover height', 0.25);
+    await player.setOption(['View'], 'Display area info', 'ON');
+    await player.setOption(['View'], 'Effect 1P', 'SUDDEN');
+    await player.setOption(['View'], 'Lane cover', true);
+    await player.setOption(['View'], 'Cover height', 0.25);
     await player.setOption(['Play options'], 'Auto play', true);
     await player.browseTo(SONGS, 'Fixture A');
     await player.key('Enter');
@@ -331,11 +331,11 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('floating.bme', '#TITLE Floating speed\n#BPM 120\n#00103:F0\n#00811:01\n');
     await player.setOption(['Play options'], 'Judgment windows', '????');
-    await player.setOption(['Play options'], 'FLOATING HI-SPEED (AC 32 measured)', true);
-    await player.setOption(['Play options'], 'Floating speed', 2.25);
-    await player.setOption(['Play options'], 'Effect 1P', 'SUDDEN');
-    await player.setOption(['Play options'], 'Lane cover', true);
-    await player.setOption(['Play options'], 'Cover height', 0.25);
+    await player.setOption(['View'], 'FLOATING HI-SPEED (AC 32 measured)', true);
+    await player.setOption(['View'], 'Floating speed', 2.25);
+    await player.setOption(['View'], 'Effect 1P', 'SUDDEN');
+    await player.setOption(['View'], 'Lane cover', true);
+    await player.setOption(['View'], 'Cover height', 0.25);
     await player.setOption(['Play options'], 'Auto play', true);
     await player.cursorTo((bar) => bar.title === 'Floating speed', 'floating speed chart');
     await player.key('Enter');
@@ -354,7 +354,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     expect(replay?.play.optionChanges?.some((change) => change.values.floatingHiSpeed === true)).toBe(true);
     expect(replay?.play.viewChanges?.some((change) => change.covers !== undefined)).toBe(true);
     await player.leaveResult();
-    await player.setOption(['Play options'], 'FLOATING HI-SPEED (AC 32 measured)', false);
+    await player.setOption(['View'], 'FLOATING HI-SPEED (AC 32 measured)', false);
     await player.dropText('floating.bmplay.json', JSON.stringify(replay));
     await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'floating replay');
     await player.waitForResult(1);
@@ -366,12 +366,12 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.open({ 'be-music.built-in-skin': skin });
     await player.dropText('fixed-area.bme', '#TITLE Fixed display area\n#BPM 120\n#00103:F0\n#00811:01\n');
     await player.setOption(['Play options'], 'Judgment windows', '????');
-    await player.setOption(['Play options'], 'FLOATING HI-SPEED (AC 32 measured)', true);
-    await player.setOption(['Play options'], 'Floating speed', 2);
-    await player.setOption(['Play options'], 'Fixed display area (AC 34)', true);
-    await player.setOption(['Play options'], 'Effect 1P', 'SUDDEN');
-    await player.setOption(['Play options'], 'Lane cover', true);
-    await player.setOption(['Play options'], 'Cover height', 0.25);
+    await player.setOption(['View'], 'FLOATING HI-SPEED (AC 32 measured)', true);
+    await player.setOption(['View'], 'Floating speed', 2);
+    await player.setOption(['View'], 'Fixed display area (AC 34)', true);
+    await player.setOption(['View'], 'Effect 1P', 'SUDDEN');
+    await player.setOption(['View'], 'Lane cover', true);
+    await player.setOption(['View'], 'Cover height', 0.25);
     await player.setOption(['Play options'], 'Auto play', true);
     await player.cursorTo((bar) => bar.title === 'Fixed display area', 'fixed area chart');
     await player.key('Enter');
@@ -393,7 +393,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       ),
     ).toBe(true);
     await player.leaveResult();
-    await player.setOption(['Play options'], 'Fixed display area (AC 34)', false);
+    await player.setOption(['View'], 'Fixed display area (AC 34)', false);
     await player.dropText('fixed-area.bmplay.json', JSON.stringify(replay));
     await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'fixed-area replay');
     await player.waitForResult(1);
@@ -596,7 +596,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       '#TITLE LR2 constant\n#BPM 120\n#BPM01 240\n#STOP01 192\n#LNOBJ AA\n#00012:0001\n#00108:01\n#00109:01\n#00212:AA\n#00311:01\n',
     );
     await player.setOption(['Play options'], 'Judgment windows', 'LR2');
-    await player.setOption(['Play options'], 'HS-FIX', 'CONSTANT');
+    await player.setOption(['View'], 'HS-FIX', 'CONSTANT');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.cursorTo((bar) => bar.title === 'LR2 constant', 'constant chart');
     await player.key('Enter');
@@ -613,7 +613,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     expect(replay?.play.options?.hsFix).toBe('CONSTANT');
     expect(replay?.play.optionChanges?.some((change) => change.values.hiSpeed === 2.1)).toBe(true);
     await player.leaveResult();
-    await player.setOption(['Play options'], 'HS-FIX', 'OFF');
+    await player.setOption(['View'], 'HS-FIX', 'OFF');
     await player.dropText('lr2-constant.bmplay.json', JSON.stringify(replay));
     await player.waitForResult(1);
     const results = (await player.state()).results;
