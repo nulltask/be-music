@@ -157,6 +157,8 @@ Accounts を Dashboard の Worker に移したとき、データベースは空�
   `DISCORD_CLIENT_ID` と `DISCORD_CLIENT_SECRET` を読みます。公式インスタンスでは `be-music` Vault の `discord`
   （本番）と `discord-preview`（プレビュー）に置きます。Google ログインは `GOOGLE_CLIENT_ID` と
   `GOOGLE_CLIENT_SECRET` を読み、同じ Vault の `google`（本番）と `google-preview`（プレビュー）に置きます。
+  Better Auth の `BETTER_AUTH_SECRET` も同じ Vault の `cloudflare-dashboard-better-auth`（本番）と
+  `cloudflare-dashboard-preview-better-auth`（プレビュー）に置きます。
   `pnpm --filter @be-music/app-dashboard run secrets:preview` と `secrets:production` で値を表示せずに設定します。
 - D1 のデータベース ID、Worker の名前、Service Binding の接続先は、ソースではなくデプロイの設定から読みます。
 - 外部サービス（BMS Search など）への問い合わせは、オフにできます。

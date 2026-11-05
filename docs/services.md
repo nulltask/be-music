@@ -160,8 +160,9 @@ configuration:
   reads `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` on the Dashboard Worker, which runs Accounts. The official instance stores them in
   the `be-music` vault (`discord` for production, `discord-preview` for preview). Google sign-in reads
   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from the same vault (`google` for production, `google-preview` for
-  preview). `pnpm --filter @be-music/app-dashboard run secrets:preview` and `secrets:production` install them without
-  printing the values.
+  preview). Better Auth's `BETTER_AUTH_SECRET` is in the same vault (`cloudflare-dashboard-better-auth` for production,
+  `cloudflare-dashboard-preview-better-auth` for preview). `pnpm --filter @be-music/app-dashboard run secrets:preview`
+  and `secrets:production` install them without printing the values.
 - D1 database IDs, Worker names and Service Binding targets come from deploy configuration, not from source.
 - Calls to outside services (such as BMS Search) can be turned off.
 - Donations, the donation site and the Be-Music name and logo belong to the official instance; links to them in the
