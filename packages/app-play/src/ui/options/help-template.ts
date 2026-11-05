@@ -292,9 +292,10 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>PRACTICE</dt>
           <dd>
             beatoraja's PRACTICE, under every ruleset: a chart started with it on opens its score first. Press a bar to
-            hear it, Shift-press or drag to pick a run of bars, then Start: the bars play again and again until Esc (no
-            bars picked plays the whole chart). A practice play saves no replay and no record, and is never sent to the
-            Leaderboard.
+            hear it, Shift-press or drag to pick a run of bars, then Start practice: the bars play again and again until
+            Esc (no bars picked plays the whole chart). The dialog also sets the settings below, and Play without
+            practice plays the chart as a regular play this time. A practice play saves no replay and no record, and is
+            never sent to the Leaderboard.
           </dd>
           <dt>GAUGE TYPE</dt>
           <dd>
@@ -955,8 +956,9 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>
             beatoraja の PRACTICE を、どのルールでも使えます。オンにして選曲すると、まず譜面を表示します。小節を押すと
             その小節を試聴し、Shift
-            を押しながら押すかドラッグすると連続した小節を選べます。スタートを押すと、選んだ小節を Esc
-            を押すまで繰り返します (小節を選ばなければ譜面全体)。練習のプレイはリプレイも記録も残さず、Leaderboard
+            を押しながら押すかドラッグすると連続した小節を選べます。「練習を始める」を押すと、選んだ小節を Esc
+            を押すまで繰り返します
+            (小節を選ばなければ譜面全体)。下の設定もダイアログで変えられ、「練習せずに遊ぶ」では今回は通常のプレイになります。練習のプレイはリプレイも記録も残さず、Leaderboard
             にも送りません。
           </dd>
           <dt>GAUGE TYPE</dt>

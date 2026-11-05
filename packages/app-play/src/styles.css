@@ -2893,3 +2893,18 @@ html.touch-first .search-input.search-inline:focus {
   justify-content: flex-end;
   gap: 6px;
 }
+.practice-bars-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 12px;
+}
+.practice-bars-field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.practice-bars-field > .input,
+.practice-bars-field > .select {
+  width: 100%;
+}

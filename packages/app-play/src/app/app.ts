@@ -46,7 +46,7 @@ import type { PlayerGUIState, PlayerScene, PlayerWebElements, SkinFamilyOverride
 import { createPlayerGUIState, readCompressorRequest, storeBuiltInSkinId } from '../services/settings.ts';
 import { BE_MUSIC_SKINS } from '../services/built-in-skins.ts';
 import { SilentModeSetting } from '../services/silent-mode.ts';
-import { playOptionsFromGUI, PlayOptionsService } from '../services/play-options.ts';
+import { copyPlayOptionsToGUI, playOptionsFromGUI, PlayOptionsService } from '../services/play-options.ts';
 import { REPLAY_RECORDER, ReplayAutoSave } from '../services/replays.ts';
 import { ReplaySlotStore } from '../services/replay-slots.ts';
 import { createIndexedDBReplaySlotBackend } from '../services/replay-slot-database.ts';
@@ -469,7 +469,19 @@ export class PlayerWebApp {
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       showDecide: (chartEntry, overrides) => this.decideRoute.showDecide(chartEntry, overrides),
       pickPracticeBars: (chartEntry) => {
-        this.practiceBarsDialog ??= new PracticeBarsDialog({ audio: this.audio, memory: this.practiceBars });
+        this.practiceBarsDialog ??= new PracticeBarsDialog({
+          audio: this.audio,
+          memory: this.practiceBars,
+          playOptions: () => this.playOptions.current,
+          ruleset: () => this.guiState.judgeRuleset,
+          // As a select screen's edit: kept, mirrored into the Options dialog and saved.
+          setPlayOptions: (changes) => {
+            this.setPlayOptions(changes);
+            copyPlayOptionsToGUI(this.playOptions.current, this.guiState);
+            this.optionsDialog.refreshRulesetChoices();
+            this.optionsDialog.refreshPlayOptionControllers();
+          },
+        });
         // The select screen's preview of the chart gives way to the bars' auditions.
         this.audio.preview.stop();
         return this.practiceBarsDialog.open(chartEntry, resolveChartSource(this.library.collection, chartEntry));
@@ -571,6 +583,7 @@ export class PlayerWebApp {
       unlockReplayOptions: () => this.unlockReplayOptions(),
       showSelect: () => this.showSelect(),
       practiceRange: (chartEntry) => this.practiceBars.rangeFor(chartEntry.id),
+      practiceSkipped: (chartEntry) => this.practiceBars.skipsPractice(chartEntry.id),
       showPlayOptionMismatch,
       setPlayOptions: (changes) => this.setPlayOptions(changes),
     });

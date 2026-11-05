@@ -310,15 +310,16 @@ const en = {
   },
   practice: {
     title: 'PRACTICE',
-    lead: 'Press a bar to hear it. Shift-press or drag to pick a run of bars, then Start to loop them.',
+    lead: 'Press a bar to hear it. Shift-press or drag to pick a run of bars, then Start practice to loop them.',
     wholeChart: 'No bars picked: the whole chart loops',
     bars: (first: string, last: string, from: string, to: string) =>
       first === last ? `Bar ${first} · ${from} → ${to}` : `Bars ${first}–${last} · ${from} → ${to}`,
-    start: 'Start',
+    start: 'Start practice',
+    playNormally: 'Play without practice',
     clear: 'Whole chart',
     cancel: 'Cancel',
     loading: 'Reading the chart…',
-    unreadable: 'This chart has no bars to show; Start loops the whole chart.',
+    unreadable: 'This chart has no bars to show; Start practice loops the whole chart.',
   },
   camera: {
     defaultCamera: 'Default camera',
@@ -652,15 +653,16 @@ const ja: typeof en = {
   },
   practice: {
     title: 'PRACTICE',
-    lead: '小節を押すとその小節を試聴します。Shift を押しながら押すかドラッグすると連続した小節を選べます。スタートで選んだ小節をループします。',
+    lead: '小節を押すとその小節を試聴します。Shift を押しながら押すかドラッグすると連続した小節を選べます。「練習を始める」で選んだ小節をループします。',
     wholeChart: '小節を選んでいません。譜面全体をループします',
     bars: (first, last, from, to) =>
       first === last ? `小節 ${first} · ${from} → ${to}` : `小節 ${first}–${last} · ${from} → ${to}`,
-    start: 'スタート',
+    start: '練習を始める',
+    playNormally: '練習せずに遊ぶ',
     clear: '譜面全体',
     cancel: 'キャンセル',
     loading: '譜面を読んでいます…',
-    unreadable: 'この譜面には表示できる小節がありません。スタートで譜面全体をループします。',
+    unreadable: 'この譜面には表示できる小節がありません。「練習を始める」で譜面全体をループします。',
   },
   camera: {
     defaultCamera: '既定のカメラ',
