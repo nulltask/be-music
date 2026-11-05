@@ -1,6 +1,7 @@
 import { playerText } from './player-copy.ts';
 import {
   CourseRun,
+  createRandomMixCourse,
   type CourseConstraint,
   type CourseDefinition,
   type CourseRunStagePlan,
@@ -25,6 +26,8 @@ import {
   type LibraryCourse,
   type PlayResult,
 } from '@be-music/player-scene-model';
+import { createDrawnRandomMixEntry } from '@be-music/player-browser/collection';
+import type { RandomMixDrawnStage } from './random-mix-draw.ts';
 import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
 import type { NonstopPlayFailure } from './nonstop-course.ts';
 import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-music/player-engine/records';
@@ -68,6 +71,71 @@ export interface ActiveCourse {
   run: CourseRun<LibraryChart, CourseStageHistory>;
   /** Set when the run plays a course replay back: the log, and the stage replays it plays up to where it stopped. */
   replay?: ActiveCourseReplay;
+  /** Set on an endless RANDOM MIX: its stages are drawn as the run reaches them. */
+  endless?: EndlessRandomMix;
+  /**
+   * Set on a RANDOM MIX run too long to be kept as a course (more stages than a course file holds, or endless): no bar
+   * lists it, so its run keeps no course record and saves into no replay slot.
+   */
+  unkept?: true;
+}
+
+/** The draw an endless RANDOM MIX takes its stages from, and the stages drawn so far. */
+export interface EndlessRandomMix {
+  readonly next: () => Promise<RandomMixDrawnStage | undefined>;
+  /** The stages in the run, in order. */
+  readonly stages: RandomMixDrawnStage[];
+  /** The stage after the last one in the run, drawn ahead so the skins can show what comes next. */
+  lookahead?: Promise<RandomMixDrawnStage | undefined>;
+}
+
+/**
+ * Before an endless RANDOM MIX's next stage: once the run has played every stage it holds, the stage drawn ahead joins
+ * it (the course growing by that stage), and the stage after it is drawn ahead. Returns `false` when no chart is left
+ * to draw, so the run is over. A run with stages left, or not endless, is left as it is.
+ */
+export async function prepareEndlessStage(active: ActiveCourse): Promise<boolean> {
+  const endless = active.endless;
+  if (endless === undefined || active.run.finished) return true;
+  if (active.run.stagesPlayed < active.run.stageCount) return true;
+  const drawn = await (endless.lookahead ?? endless.next());
+  endless.lookahead = undefined;
+  if (drawn === undefined) return false;
+  endless.stages.push(drawn);
+  const definition = createRandomMixCourse(
+    'expert',
+    endless.stages.map((stage) => stage.stage),
+  )!;
+  active.run.appendStage(definition, drawn.chart);
+  endless.lookahead = endless.next();
+  const next = await endless.lookahead;
+  active.course = endlessRandomMixEntry(active.course.id, definition, endless.stages, next);
+  return true;
+}
+
+/**
+ * The course bar of an endless RANDOM MIX: the stages in the run and, after them, the one drawn ahead (`next`), which
+ * the skins list as the next stage, so no stage of an endless run reads as the final one.
+ */
+export function endlessRandomMixEntry(
+  id: string,
+  definition: CourseDefinition,
+  stages: readonly RandomMixDrawnStage[],
+  next?: RandomMixDrawnStage,
+): LibraryCourse {
+  // Not one of the player's saved courses: no course-maker edits.
+  const { editable: _editable, ...entry } = createDrawnRandomMixEntry(definition, stages);
+  return {
+    ...entry,
+    id,
+    ...(next !== undefined ? { stages: [...entry.stages, { title: next.chart.title, chart: next.chart }] } : {}),
+  };
+}
+
+/** An endless run's course bar as it was played: the stages in its run, none drawn ahead. */
+export function settleEndlessCourse(active: ActiveCourse): void {
+  if (active.endless === undefined) return;
+  active.course = endlessRandomMixEntry(active.course.id, active.run.definition, active.endless.stages);
 }
 
 /** A course replay being played back as a course run. */
@@ -87,13 +155,20 @@ export interface CourseStagePlay extends CourseRunStagePlan<LibraryChart> {
  * Starts a run of a course whose stages are all in the collection (`CourseRun` refuses one with a stage missing), or,
  * with `replay`, a run that plays that course replay back ({@link planCourseReplayPlayback}).
  */
-export function startCourseRun(course: LibraryCourse, replay?: BeMusicCourseReplay): ActiveCourse {
+export function startCourseRun(
+  course: LibraryCourse,
+  replay?: BeMusicCourseReplay,
+  options: { endless?: EndlessRandomMix; unkept?: boolean } = {},
+): ActiveCourse {
+  const { endless } = options;
+  // An endless run holds the stages drawn so far; the one drawn ahead is only listed on the bar.
+  const stages =
+    endless !== undefined ? endless.stages.map((stage) => stage.chart) : course.stages.map((stage) => stage.chart);
   return {
     course,
-    run: new CourseRun(
-      course.definition,
-      course.stages.map((stage) => stage.chart),
-    ),
+    run: new CourseRun(course.definition, stages, endless !== undefined ? { endless: true } : {}),
+    ...(endless !== undefined ? { endless } : {}),
+    ...(options.unkept === true ? { unkept: true as const } : {}),
     ...(replay !== undefined ? { replay: { log: replay, stages: planCourseReplayPlayback(replay) } } : {}),
   };
 }
