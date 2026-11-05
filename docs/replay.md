@@ -85,7 +85,7 @@ later fix to any ruleset re-scores every previously recorded play without re-rec
 
 **Two players.** A two-player play (`play.battleMode: "COUPLE"` or `"TWO-PLAYER"`: LR2 BATTLE, or That-Which-Must-Not-Be-Named two-player play) records both players' presses in one `inputs` stream, each on its own side's channels (`1x` / `2x`). `results.native` is the 1P player's result and `results.secondPlayer` the 2P player's, of the same shape; `play.gauge2P` is the 2P player's gauge. Re-simulating the log judges each side on its own, as the live play did.
 
-Timestamps are integer microseconds relative to chart zero (the same t = 0 the engine's note timing uses).
+Timestamps are integer microseconds relative to chart zero (the same t = 0 the engine's note timing uses). How fine a recorded input really is depends on the input event's timestamp: browsers coarsen it, less on a cross-origin isolated page such as the deployed player (Chromium: 5 µs, otherwise 100 µs), and the input device's polling (8 ms at 125 Hz, 1 ms at 1000 Hz) usually bounds it first.
 
 The TypeScript types, serializer, and defensive parser live in
 [`packages/player-engine/src/replay/format.ts`](../packages/player-engine/src/replay/format.ts) (`@be-music/player-engine/replay`).
