@@ -15,7 +15,7 @@ import {
 } from '@be-music/player-browser/host';
 import { ACTION_LABELS_JA } from '../options/action-labels.ts';
 import type { KeyboardMark, KeyboardMarkKind } from './keyboard-element.ts';
-import { keyboardKey, keyboardLayout } from './keyboard-layout.ts';
+import { KEYBOARD_CODES, keyboardKey, type KeyboardPlatform } from './keyboard-layout.ts';
 
 export type KeyboardGuideLang = 'en' | 'ja';
 
@@ -53,12 +53,9 @@ const COPY = {
   },
 } as const;
 
-/** Every key of the layout, number pad included: the keys a mark can land on. */
-const LAYOUT_CODES = keyboardLayout({ numpad: true }).keys.map((key) => key.code);
-
-/** How a key reads in the list (`Left Shift`, `F4`, `Num 0`). */
-export function keyboardKeyName(code: string): string {
-  return keyboardKey(code)?.name ?? code;
+/** How a key reads in the list on `platform`'s keyboard (`Left Shift`, `F4`, `Num 0`, a Mac's `Left Option`). */
+export function keyboardKeyName(code: string, platform: KeyboardPlatform = 'windows'): string {
+  return keyboardKey(code, platform)?.name ?? code;
 }
 
 /** How a control button reads (`1P key 3`, `1P turntable ↻`, its second key `↺`, `1P START`). */
@@ -74,7 +71,7 @@ export function controlButtonName(button: ControlButton, lang: KeyboardGuideLang
 function buttonsByCode(settings: ControlSettings): Map<string, ControlButton[]> {
   const map = resolveControlButtons(settings);
   const result = new Map<string, ControlButton[]>();
-  for (const code of LAYOUT_CODES) {
+  for (const code of KEYBOARD_CODES) {
     const buttons: ControlButton[] = [];
     for (const token of keyboardEventToTokens({ code })) {
       for (const button of map.get(token) ?? []) if (!buttons.includes(button)) buttons.push(button);
@@ -101,25 +98,34 @@ function actionName(definition: ControlActionDefinition, lang: KeyboardGuideLang
   return lang === 'ja' ? (ACTION_LABELS_JA[definition.label] ?? definition.label) : definition.label;
 }
 
-/** How an operation's key reads, with the modifiers it asks for (`Ctrl+Shift+F3`). */
-function actionKeyName(definition: ControlActionDefinition, key: ControlActionKey, lang: KeyboardGuideLang): string {
+/** How an operation's key reads, with the modifiers it asks for (`Ctrl+Shift+F3`, a Mac's `⌃⇧F3`). */
+function actionKeyName(
+  definition: ControlActionDefinition,
+  key: ControlActionKey,
+  lang: KeyboardGuideLang,
+  platform: KeyboardPlatform,
+): string {
   if ('button' in key) return controlButtonName(key.button, lang);
   const modifiers = definition.modifiers;
-  const prefix = modifiers === undefined ? '' : `${modifiers.ctrl ? 'Ctrl+' : ''}${modifiers.shift ? 'Shift+' : ''}`;
-  return `${prefix}${keyboardKeyName(key.code)}`;
+  const [ctrl, shift] = platform === 'mac' ? ['⌃', '⇧'] : ['Ctrl+', 'Shift+'];
+  const prefix = modifiers === undefined ? '' : `${modifiers.ctrl ? ctrl : ''}${modifiers.shift ? shift : ''}`;
+  return `${prefix}${keyboardKeyName(key.code, platform)}`;
 }
 
 /**
  * The keyboard page of `screen` on the `scheme` key map with the player's keys (`settings`): the lane keys and START /
  * SELECT marked by what they are, the keys of the screen's operations marked ●, the lanes listed first and the
- * operations after, each with its keys. An operation's lane-key default lights the lane keys that button is on.
+ * operations after, each with its keys. An operation's lane-key default lights the lane keys that button is on. Keys
+ * are named as `platform`'s keyboard labels them.
  */
 export function buildKeyboardGuide(
   screen: ControlScreen,
   scheme: ControlScheme,
   settings: ControlSettings,
   lang: KeyboardGuideLang = 'en',
+  platform: KeyboardPlatform = 'windows',
 ): KeyboardGuide {
+  const name = (code: string): string => keyboardKeyName(code, platform);
   const copy = COPY[lang];
   const buttons = buttonsByCode(settings);
   const codesOf = (button: ControlButton): string[] =>
@@ -134,21 +140,21 @@ export function buildKeyboardGuide(
     lanes.push({
       id: `${side}-keys`,
       name: copy.keys(side),
-      keys: keyCodes.map((codes) => codes.map(keyboardKeyName).join(' / ')),
+      keys: keyCodes.map((codes) => codes.map(name).join(' / ')),
       codes: keyCodes.flat(),
     });
     const scratch = [...codesOf(`${side}-scratch-cw`), ...codesOf(`${side}-scratch-ccw`)];
     lanes.push({
       id: `${side}-scratch`,
       name: copy.turntable(side),
-      keys: scratch.map(keyboardKeyName),
+      keys: scratch.map(name),
       codes: scratch,
     });
     const control = [...codesOf(`${side}-start`), ...codesOf(`${side}-select`)];
     lanes.push({
       id: `${side}-control`,
       name: copy.startSelect(side),
-      keys: control.map(keyboardKeyName),
+      keys: control.map(name),
       codes: control,
     });
   }
@@ -158,7 +164,7 @@ export function buildKeyboardGuide(
     if (definition.screen !== screen) continue;
     const keys = controlActionKeys(definition.id, scheme, settings.actionKeys);
     if (keys.length === 0) continue;
-    const name = actionName(definition, lang);
+    const label = actionName(definition, lang);
     const codes: string[] = [];
     for (const key of keys) {
       if ('button' in key) {
@@ -167,13 +173,13 @@ export function buildKeyboardGuide(
       }
       codes.push(key.code);
       const mark = marks.get(key.code);
-      if (mark === undefined) marks.set(key.code, { code: key.code, kind: 'action', title: name });
-      else if (mark.kind === 'action') marks.set(key.code, { ...mark, title: `${mark.title} · ${name}` });
+      if (mark === undefined) marks.set(key.code, { code: key.code, kind: 'action', title: label });
+      else if (mark.kind === 'action') marks.set(key.code, { ...mark, title: `${mark.title} · ${label}` });
     }
     actions.push({
       id: definition.id,
-      name,
-      keys: keys.map((key) => actionKeyName(definition, key, lang)),
+      name: label,
+      keys: keys.map((key) => actionKeyName(definition, key, lang, platform)),
       codes: [...new Set(codes)],
     });
   }
