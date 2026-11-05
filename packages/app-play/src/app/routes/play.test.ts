@@ -488,7 +488,7 @@ describe('PlayRoute.playChart: a chart played at once', () => {
     expect(h.deps.familyKits.resolvePlayKit).toHaveBeenCalledWith(chartEntry('a'), {});
     expect(h.deps.setPlayStatus).toHaveBeenCalledWith('Playing: a');
     // Pitch follows tempo at the slider's tempo: the tempo slider stays live during the play.
-    expect(h.deps.lockReplayOptionsForPlay).toHaveBeenCalledWith(true);
+    expect(h.deps.lockReplayOptionsForPlay).toHaveBeenCalledWith(true, chartEntry('a'));
     expect(play.kit).toEqual({ family: 'built-in' });
     expect(play.options).toMatchObject({
       chart: chartEntry('a'),
@@ -515,7 +515,7 @@ describe('PlayRoute.playChart: a chart played at once', () => {
     const play = await playing(h, chartEntry('a'), { autoPlay: true, replay: REPLAY });
     expect(h.deps.records.resolveChartHashes).not.toHaveBeenCalled();
     expect(h.deps.setPlayStatus).toHaveBeenCalledWith(describePlayingStatus('a', { tempoPercent: 20, replay: true }));
-    expect(h.deps.lockReplayOptionsForPlay).toHaveBeenCalledWith(false);
+    expect(h.deps.lockReplayOptionsForPlay).toHaveBeenCalledWith(false, chartEntry('a'));
     expect(play.options.replay).toBe(REPLAY);
     expect(play.options.settings).not.toHaveProperty('chartSHA256');
   });
@@ -720,7 +720,7 @@ describe('PlayRoute: where a play leads', () => {
         replay,
       ),
     );
-    await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
+    await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a'), 7));
   });
 
   test('Escape from a play at another tempo keeps no record but still sends it', async () => {
@@ -732,7 +732,7 @@ describe('PlayRoute: where a play leads', () => {
     // A live tempo change drops the record key (`followLiveTempo`).
     h.deps.records.activePlayRecordKey = undefined;
     play.options.on.exit();
-    await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a')));
+    await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('a'), 18));
     expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
     expect(h.deps.records.recordPlayUnder).not.toHaveBeenCalled();
   });
@@ -984,7 +984,7 @@ test('Escape from a zero-total spec play keeps no local best but still submits i
   const replay = { play: { mode: 'manual', aborted: true, bmsonTotalMode: 'spec' } } as unknown as BeMusicReplay;
   play.waitForReplay.mockResolvedValue(replay);
   play.options.on.exit();
-  await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('zero')));
+  await vi.waitFor(() => expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(replay, chartEntry('zero'), 18));
   expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
   expect(h.deps.records.recordPlayUnder).not.toHaveBeenCalled();
 });

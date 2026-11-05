@@ -1,7 +1,8 @@
 import { localized } from './ui/localized.ts';
 import type { BeMusicStatusElement } from '@be-music/service-web-theme/client';
 import { html, nothing, render } from 'lit';
-import { setDisabled, type PaneBinding } from './pane-controls.ts';
+import { paneOptions, selectBinding, setDisabled, type PaneBinding } from './pane-controls.ts';
+import { optionLabel } from './ui/options/labels.ts';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import type { OptionContainer } from './ui/options-controls.ts';
@@ -18,7 +19,7 @@ import {
   startAccountActionLabels,
   type AccountActionResult,
 } from './account.ts';
-import { onPlayerLangChange, playerText } from './player-copy.ts';
+import { onPlayerLangChange, playerLang, playerText } from './player-copy.ts';
 import { setPlayerHeaderAccount } from './player-header.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
 import { leaderboardLink } from './service-links.ts';
@@ -33,12 +34,25 @@ import {
   submitCourseToLeaderboard,
   submitToLeaderboard,
 } from './leaderboard.ts';
+import { shouldSubmitPlay, type LeaderboardSubmitRule } from './leaderboard-submit-rule.ts';
+/** The "Submit when" choices, by their English text (`OPTION_LABELS_JA` has their Japanese). */
+const SUBMIT_RULE_CHOICES: Record<string, LeaderboardSubmitRule> = {
+  'EX-SCORE improves (first play always)': 'improved',
+  Always: 'always',
+};
 /** What the panel needs from the player: the remembered toggle, the status line and the recorder it names as client. */
 export interface LeaderboardPanelHost {
   /** The remembered settings holding the "Submit to Leaderboard" toggle (`guiState`), read on use. */
   settings(): {
     submitToLeaderboard: boolean;
+    leaderboardSubmitRule: LeaderboardSubmitRule;
   };
+  /**
+   * The player's own best EX-SCORE on `chartEntry` under the judge ruleset in force, from the local best records
+   * (`be-music.chart-best-records`); `undefined` before its first recorded play. Read as a play starts, before its result
+   * updates the record.
+   */
+  bestEXScore(chartEntry: LibraryChart): number | undefined;
   setStatus(text: string): void;
   warn(message: string, error: unknown): void;
   recorder: Omit<ReplayRecorderInfo, 'engine'>;
@@ -56,6 +70,7 @@ export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'eng
  */
 export class LeaderboardPanel {
   private submitController: PaneBinding | undefined;
+  private submitRuleController: PaneBinding | undefined;
   private accountController: PaneBinding | undefined;
   private readonly accountState = { status: 'Not signed in' };
   /** Opens the sign-in / sign-up dialogs the start card's buttons lead to. */
@@ -76,6 +91,10 @@ export class LeaderboardPanel {
   }
   /** The toggle as it was when the current play started: a play is sent only if it was on at song start. */
   private submitThisPlay = false;
+  /** The "Submit when" rule as it was when the current play started. */
+  private submitRuleThisPlay: LeaderboardSubmitRule = 'improved';
+  /** The player's best EX-SCORE on the current play's chart as it started, before its result updates the record. */
+  private previousBestEXScore: number | undefined;
   private readonly host: LeaderboardPanelHost;
   constructor(host: LeaderboardPanelHost) {
     this.host = host;
@@ -102,6 +121,21 @@ export class LeaderboardPanel {
       });
     // The start card's checkbox is the same setting: it goes through the controller, so it is remembered like any
     // Options dialog change.
+    // When a play is sent: only when it beats the player's best EX-SCORE on the chart (its first play always), or always.
+    const submitRule = selectBinding(folder, settings, 'leaderboardSubmitRule', 'Submit when', SUBMIT_RULE_CHOICES);
+    submitRule.on('change', ({ value }) => {
+      settings.leaderboardSubmitRule = value;
+    });
+    // The dialog relabels its controls, not a select's choices: these follow the player's language here.
+    const relabelChoices = () => {
+      submitRule.options = paneOptions(SUBMIT_RULE_CHOICES).map((choice) => ({
+        ...choice,
+        text: optionLabel(choice.text, playerLang()),
+      }));
+    };
+    relabelChoices();
+    onPlayerLangChange(relabelChoices);
+    this.submitRuleController = submitRule;
     if (startCheckbox !== null) {
       startCheckbox.checked = settings.submitToLeaderboard;
       startCheckbox.addEventListener('change', () => this.setSubmitting(startCheckbox.checked));
@@ -149,20 +183,34 @@ export class LeaderboardPanel {
     }
     await this.refreshAccount();
   }
-  /** Latches the toggle for the play about to start and locks it until {@link unlock}. */
-  lockForPlay(): void {
-    this.submitThisPlay = this.host.settings().submitToLeaderboard;
+  /**
+   * Latches the toggle and the "Submit when" rule for the play about to start, with the player's best EX-SCORE on its
+   * chart (`chartEntry`, absent for a course stage or a replay), and locks both until {@link unlock}.
+   */
+  lockForPlay(chartEntry?: LibraryChart): void {
+    const settings = this.host.settings();
+    this.submitThisPlay = settings.submitToLeaderboard;
+    this.submitRuleThisPlay = settings.leaderboardSubmitRule;
+    this.previousBestEXScore = chartEntry !== undefined ? this.host.bestEXScore(chartEntry) : undefined;
     setDisabled(this.submitController, true);
+    setDisabled(this.submitRuleController, true);
   }
   unlock(): void {
     setDisabled(this.submitController, false);
+    setDisabled(this.submitRuleController, false);
   }
   /**
-   * Sends the play to the Leaderboard when "Submit to Leaderboard" was on at song start. Runs in the background: the
-   * result screen never waits for it, and its outcome (rank, or why it was not sent) goes to the status line.
+   * Sends the play to the Leaderboard when "Submit to Leaderboard" was on at song start and the "Submit when" rule
+   * latched with it lets the play through (`shouldSubmitPlay`, against `exScore`, the play's own EX-SCORE). Runs in the
+   * background: the result screen never waits for it, and its outcome (rank, or why it was not sent) goes to the status
+   * line.
    */
-  maybeSubmit(replay: BeMusicReplay | undefined, chartEntry: LibraryChart): void {
+  maybeSubmit(replay: BeMusicReplay | undefined, chartEntry: LibraryChart, exScore?: number): void {
     if (!this.submitThisPlay || replay === undefined) return;
+    if (!shouldSubmitPlay(this.submitRuleThisPlay, exScore, this.previousBestEXScore)) {
+      this.host.setStatus(playerText().lb.notImproved);
+      return;
+    }
     const prepared = prepareLeaderboardSubmission(replay, chartEntry.chart, chartEntry.chartPath);
     if (!prepared.ok) {
       this.host.setStatus(describeSkippedSubmission(prepared.reason));
@@ -181,7 +229,8 @@ export class LeaderboardPanel {
       });
   }
   /**
-   * Sends a finished course run to the Leaderboard when "Submit to Leaderboard" was on when its last stage started, as
+   * Sends a finished course run to the Leaderboard when "Submit to Leaderboard" was on when its last stage started,
+   * whatever the "Submit when" rule (a run is ranked by more than its EX-SCORE, and it is few requests), as
    * {@link maybeSubmit} does for one play. `stageSongs` are the course's stages as it played them, in order (their
    * charts rebuild each played stage's fingerprint documents, and go to the server for the stages it rebuilds: the
    * unreached ones, and all of a NONSTOP run). The course rank goes to the status line.
