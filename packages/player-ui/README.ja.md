@@ -16,32 +16,33 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 
 ## コンポーネント
 
-| 要素                         | property                                                          |
-| ---------------------------- | ----------------------------------------------------------------- |
-| `be-music-score-summary`     | `data: BeMusicScoreData`、任意の `compact`                        |
-| `be-music-judgment-table`    | `data: BeMusicJudgmentData`                                       |
-| `be-music-gauge-panel`       | `data: BeMusicGaugeData`、任意の `compact`                        |
-| `be-music-timing-graph`      | `data: BeMusicTimingData`                                         |
-| `be-music-play-settings`     | `data: BeMusicSettingsData`                                       |
-| `be-music-chart-list`        | `entries`・`selectedIndex`・`disabled`                            |
-| `be-music-chart-details`     | `entry`・`launching`・`readText`                                  |
-| `be-music-play-options`      | `options`・`choices`・`disabled`                                  |
-| `be-music-select-screen`     | `frame: BeMusicDOMSelectFrame`                                    |
-| `be-music-gameplay-hud`      | `frame: BeMusicDOMGameplayFrame`                                  |
-| `be-music-result-screen`     | `frame: BeMusicDOMResultFrame`                                    |
-| `be-music-decide-screen`     | `frame: BeMusicDOMDecideFrame`                                    |
-| `be-music-bga`               | `data: BeMusicBGAData`・`rect: BeMusicRect`                       |
-| `be-music-lanes`             | `data: BeMusicLanesData`・`rect: BeMusicRect`                     |
-| `be-music-notes`             | `data: BeMusicNotesData`・`rect: BeMusicRect`                     |
-| `be-music-lane-covers`       | `data: BeMusicLaneCoversData`・`rect: BeMusicRect`                |
-| `be-music-judge-line`        | `data: BeMusicJudgeLineData`・`rect: BeMusicRect`                 |
-| `be-music-bombs`             | `data: BeMusicBombsData`・`rect: BeMusicRect`                     |
-| `be-music-judgment-display`  | `data: BeMusicJudgmentDisplayData`・`rect: BeMusicRect`           |
-| `be-music-playfield`         | `frame: BeMusicGameplayFrame`                                     |
-| `be-music-playback-controls` | `data: BeMusicPlaybackData`                                       |
-| `be-music-preview-hud`       | `frame: BeMusicDOMGameplayFrame`・`volume`・`muted`・`fullscreen` |
-| `be-music-preview-select`    | `charts: readonly LibraryChart[]`・`heading`・任意の `images`     |
-| `be-music-preview-start`     | `mode: 'play' \| 'replay'`・`disabled`                            |
+| 要素                         | property                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------ |
+| `be-music-score-summary`     | `data: BeMusicScoreData`、任意の `compact`                                                       |
+| `be-music-judgment-table`    | `data: BeMusicJudgmentData`                                                                      |
+| `be-music-gauge-panel`       | `data: BeMusicGaugeData`、任意の `compact`                                                       |
+| `be-music-timing-graph`      | `data: BeMusicTimingData`                                                                        |
+| `be-music-play-settings`     | `data: BeMusicSettingsData`                                                                      |
+| `be-music-chart-list`        | `entries`・`selectedIndex`・`disabled`                                                           |
+| `be-music-chart-details`     | `entry`・`launching`・`readText`                                                                 |
+| `be-music-play-options`      | `options`・`choices`・`disabled`                                                                 |
+| `be-music-select-screen`     | `frame: BeMusicDOMSelectFrame`                                                                   |
+| `be-music-gameplay-hud`      | `frame: BeMusicDOMGameplayFrame`                                                                 |
+| `be-music-result-screen`     | `frame: BeMusicDOMResultFrame`                                                                   |
+| `be-music-decide-screen`     | `frame: BeMusicDOMDecideFrame`                                                                   |
+| `be-music-bga`               | `data: BeMusicBGAData`・`rect: BeMusicRect`                                                      |
+| `be-music-lanes`             | `data: BeMusicLanesData`・`rect: BeMusicRect`                                                    |
+| `be-music-notes`             | `data: BeMusicNotesData`・`rect: BeMusicRect`                                                    |
+| `be-music-lane-covers`       | `data: BeMusicLaneCoversData`・`rect: BeMusicRect`                                               |
+| `be-music-judge-line`        | `data: BeMusicJudgeLineData`・`rect: BeMusicRect`                                                |
+| `be-music-bombs`             | `data: BeMusicBombsData`・`rect: BeMusicRect`                                                    |
+| `be-music-judgment-display`  | `data: BeMusicJudgmentDisplayData`・`rect: BeMusicRect`                                          |
+| `be-music-playfield`         | `frame: BeMusicGameplayFrame`                                                                    |
+| `be-music-playback-controls` | `data: BeMusicPlaybackData`                                                                      |
+| `be-music-preview-hud`       | `frame: BeMusicDOMGameplayFrame`・`volume`・`muted`・`fullscreen`                                |
+| `be-music-preview-select`    | `charts: readonly LibraryChart[]`・`heading`・任意の `images`                                    |
+| `be-music-preview-start`     | `mode: 'play' \| 'replay'`・`disabled`                                                           |
+| `be-music-chart-score`       | `layout: ChartScoreLayout`・`selection`・`previewing`・`column-beats`・`beat-height`・`disabled` |
 
 各クラスを `BeMusic…Element` として export します。ラッパーは `BeMusicGameplayHUD`・`BeMusicJudgmentTable` のように `Element` を除いた名前です。個々の部品は自身に必要な表示データだけを受け取り、独立して配置できます。画面コンポーネントはそれらを組み合わせ、既存の DOM スキンフレームを受け取ります。
 
@@ -56,6 +57,12 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 ## プレビュー
 
 `be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、ドラッグ中と離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`images` にあればその絵（`#STAGEFILE`、なければ `#BANNER`）を出し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web.ja.md#埋め込みプレビュー)）。
+
+## 譜面表示
+
+`be-music-chart-score` は譜面を楽譜のように描きます。小節を下から上、左から右へ列に並べ、各小節に小節番号（`012`）、小節線と拍線、プレイモードのレーン上のノーツ・ロングノート・地雷（スクラッチはその側の外側、FREE ZONE のノーツはスクラッチ上）、横にテンポ変化と STOP を描きます。SP と DP の譜面（5 / 7 / 10 / 14 KEY）と 9 KEY（PMS-STD と BME 型のうちノーツが乗っている方）を扱います。解決済みの譜面（`@be-music/chart-model` の `resolveChart`）を `layoutChartScore(chart)` でレイアウトし、`layout` に渡します。各小節の長さはその小節の拍数（`#xxx02`、bmson の lines）で、譜面の BPM 変化と STOP を通した整数ミリ秒の `startMs` / `endMs` を持ちます。小節線をまたぐロングノートは小節ごとに区切って描きます。`column-beats`（既定 16）で 1 列の拍数、`beat-height`（既定 16）で 1 拍のピクセル数を決めます。
+
+小節は選択できます。押すとその小節を選び、Shift を押しながら押すかドラッグすると最初に押した小節から範囲を伸ばします。矢印キーで小節を移り、Shift で範囲を伸ばし、Space で押します。選ぶたびに `{ first, last, bar, extend }` 付きの `bar-selection-change` を送ります。`chartScoreRangeTimes(layout, range)` は選択を譜面のミリ秒に直し、`previewing` はホストが鳴らしている小節を枠で示します。色は `--be-music-chart-score-*` のカスタムプロパティ（`background`・`lane`・`bar-line`・`beat-line`・`white`・`black`・`scratch`・`mine`・`tempo`・`stop`・`text`・`accent`・`preview`）で変えられます。`packChartScoreColumns`・`selectChartScoreBars`・`resolveChartScoreLanes`・`resolveChartScoreColumn`・`chartScoreRowAt` はこれを支える純粋関数です。
 
 ## HTML・TypeScript
 

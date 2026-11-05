@@ -15,6 +15,7 @@ import { BeMusicPlaybackControlsElement } from './components/playback-controls.t
 import { BeMusicPreviewHUDElement } from './components/preview-hud.ts';
 import { BeMusicPreviewSelectElement } from './components/preview-select.ts';
 import { BeMusicPreviewStartElement } from './components/preview-start.ts';
+import { BeMusicChartScoreElement } from './components/chart-score.ts';
 import { BeMusicLanesElement } from './components/lanes.ts';
 import { BeMusicNotesElement } from './components/notes.ts';
 import { BeMusicLaneCoversElement } from './components/lane-covers.ts';
@@ -66,6 +67,7 @@ export function defineBeMusicElements(
     ['be-music-preview-hud', BeMusicPreviewHUDElement],
     ['be-music-preview-select', BeMusicPreviewSelectElement],
     ['be-music-preview-start', BeMusicPreviewStartElement],
+    ['be-music-chart-score', BeMusicChartScoreElement],
   ] as const) {
     const existing = registry.get(tag);
     if (existing && existing !== constructor)
@@ -100,5 +102,6 @@ declare global {
     'be-music-preview-hud': BeMusicPreviewHUDElement;
     'be-music-preview-select': BeMusicPreviewSelectElement;
     'be-music-preview-start': BeMusicPreviewStartElement;
+    'be-music-chart-score': BeMusicChartScoreElement;
   }
 }
