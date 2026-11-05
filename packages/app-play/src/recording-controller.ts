@@ -6,10 +6,10 @@ import {
   recordingFileExtension,
   type RecordingFormat,
 } from '@be-music/player-browser/recording';
-import type { ButtonApi } from 'tweakpane';
+import type { OptionButton } from './ui/options-controls.ts';
 import { setDisabled, setButtonTitle } from './pane-controls.ts';
 
-/** The Debug Menu button that records the play screen (gameplay) as a video. */
+/** The Options dialog button that records the play screen (gameplay) as a video. */
 export const RECORD_LABEL = '● Record gameplay video';
 /** The same button while a recording runs. */
 export const STOP_RECORDING_LABEL = '■ Stop recording';
@@ -35,14 +35,14 @@ export interface GameplayRecorder {
  */
 export interface RecordingDeps {
   readonly sceneHost: PixiSceneHost;
-  readonly recordController: ButtonApi | undefined;
+  readonly recordController: OptionButton | undefined;
   /** Whichever gameplay view is mounted right now, or `undefined` when neither family is active. */
   getActiveGameplay(): GameplayRecorder | undefined;
   getAutoRecordArmed(): boolean;
   setAutoRecordArmed(value: boolean): void;
   /** Snapshot of the recording filename stem at call time; the player updates it per chart in `playChart`. */
   getRecordingFilenameBase(): string;
-  /** The Debug Menu's "Video format": the container and codec a new recording is written in. */
+  /** The Options dialog's "Video format": the container and codec a new recording is written in. */
   getRecordingFormat(): RecordingFormat;
   setStatus(text: string): void;
 }
@@ -77,6 +77,11 @@ export async function captureScreenshot(deps: RecordingDeps): Promise<void> {
       const savedScaleY = container.scale.y;
       const savedX = container.x;
       const savedY = container.y;
+      // Remove viewport magnification while preserving the skin's output pixel aspect (classic LR2 coordinates
+      // may be stretched to widescreen). Resetting both axes to 1 would squeeze exported screenshots back to 4:3.
+      const pixelAspect = savedScaleX / savedScaleY;
+      const outputWidth =
+        Number.isFinite(pixelAspect) && pixelAspect > 0 ? Math.max(1, Math.round(width * pixelAspect)) : width;
       container.scale.set(1, 1);
       container.position.set(0, 0);
       try {
@@ -97,7 +102,19 @@ export async function captureScreenshot(deps: RecordingDeps): Promise<void> {
         container.scale.set(savedScaleX, savedScaleY);
         container.position.set(savedX, savedY);
       }
-      captureWidth = width;
+      // Pixi extraction ignores the target's root transform. Stretch the extracted source canvas instead of
+      // enlarging its frame, which would leave the extra columns transparent.
+      if (outputWidth !== width) {
+        const output = document.createElement('canvas');
+        output.width = outputWidth;
+        output.height = height;
+        const context = output.getContext('2d');
+        if (context === null) throw new Error('2D canvas unavailable');
+        context.imageSmoothingEnabled = false;
+        context.drawImage(canvas as unknown as CanvasImageSource, 0, 0, outputWidth, height);
+        canvas = output;
+      }
+      captureWidth = outputWidth;
       captureHeight = height;
     } else {
       // Fallback: capture the entire stage at the visible window size. Used when the

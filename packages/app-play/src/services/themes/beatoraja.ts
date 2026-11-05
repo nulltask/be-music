@@ -1,5 +1,5 @@
 // The beatoraja theme the beatoraja family draws with: the bundle the last drop brought, its BGM and system sounds, and
-// its entries loaded as scene kits, each by the entry the Debug Menu picked for its skin type and with the player's
+// its entries loaded as scene kits, each by the entry the Options dialog picked for its skin type and with the player's
 // options for it. One set of kit caches serves the whole session, since PixiJS textures are never destroyed.
 
 import { logger } from '@be-music/player-browser';
@@ -53,9 +53,9 @@ export interface BeatorajaThemeServiceOptions {
   readonly selectView: () => SelectScene | undefined;
   /** The play, loading behind a decide screen or on the stage. */
   readonly gameplayView: () => PlayScene | undefined;
-  /** Rebuilds the Debug Menu's skin pickers, one per skin type the theme ships. */
+  /** Rebuilds the Options dialog's skin pickers, one per skin type the theme ships. */
   readonly rebuildBeatorajaSkinPickers: () => void;
-  /** Rebuilds the Debug Menu's "Skin system" picker, which offers beatoraja once a theme is loaded. */
+  /** Rebuilds the Options dialog's "Skin system" picker, which offers beatoraja once a theme is loaded. */
   readonly rebuildSkinFamilyPicker: () => void;
   /** Shows the beatoraja play's entry in the skin-options panel. */
   readonly refreshBeatorajaPlaySkinOptions: () => void;
@@ -72,6 +72,16 @@ export interface BeatorajaPlayEntry {
 
 /** The beatoraja theme loaded, and its entries loaded as the kits the beatoraja screens are drawn with. */
 export class BeatorajaThemeService {
+  private pendingTheme: BeatorajaThemeBundle | undefined;
+  public hasPendingTheme(): boolean {
+    return this.pendingTheme !== undefined;
+  }
+  public async activatePendingTheme(): Promise<void> {
+    const pending = this.pendingTheme;
+    if (!pending) return;
+    this.pendingTheme = undefined;
+    await this.applyTheme(pending);
+  }
   /**
    * The beatoraja theme bundle the last beatoraja drop brought, held in parallel with the LR2 theme: its entries are
    * loaded as kits for the beatoraja scenes.
@@ -145,7 +155,7 @@ export class BeatorajaThemeService {
   public readonly beatorajaKitCaches: BeatorajaSceneKitCaches = createBeatorajaSceneKitCaches();
   /**
    * Per-`SkinType` user-picked entry override. Lets the user choose between multiple discovered
-   * skins for a given scene type from the Debug Menu. Keyed by the numeric `header.type` so
+   * skins for a given scene type from the Options dialog. Keyed by the numeric `header.type` so
    * each scene (`MUSIC_SELECT = 5`, `PLAY_7KEYS = 0`, etc.) tracks its own override.
    */
   public readonly beatorajaSkinOverridesByType: Map<number, string> = new Map<number, string>();
@@ -175,70 +185,79 @@ export class BeatorajaThemeService {
    * Load a beatoraja theme drop in parallel with the LR2 path. The beatoraja loader is independent of `loadTheme` —
    * both states coexist so the user can drop both formats and switch between them later.
    */
-  public async loadBeatorajaTheme(files: File[]): Promise<void> {
+  public async loadBeatorajaTheme(files: File[], activate = true): Promise<void> {
     this.setStatus('Loading beatoraja theme...');
     try {
       const bundle = await loadBeatorajaThemeFromFiles(files, {
         onProgress: (progress) => applyLoadProgress(this.elements, progress),
       });
-      // Drop the per-entry texture caches from the previous theme (we don't destroy individual
-      // beatoraja textures in this session — see `beatorajaKitCaches`'s field comment) and dispose its fonts.
-      // Clearing the map releases the only reference to the old theme's decoded bytes; the
-      // underlying Pixi textures stay allocated until page reload, but they're unreachable from
-      // the renderer once the new theme replaces `beatorajaTheme`.
-      releaseBeatorajaSceneKitAssets(this.beatorajaKitCaches);
-      // Stop the skin sounds the previous theme's skins started at load time (a loop would otherwise keep playing).
-      this.audio.stopOwned(this.themeOwner);
-      // Probe the bundle for navigation system sounds (cursor / decide / cancel / folder /
-      // option). The discovery walks well-known filenames inside the theme's `sound/` subdir
-      // (and an LR2-compatible `LR2files/Sound/lr2/*.wav` fallback) — slots without a match
-      // stay undefined and the select scene runs silent for those events. Beatoraja's own
-      // engine reads these paths from `config.json`; the web port uses convention-based
-      // probing instead since we don't load the user's beatoraja config.
-      this.beatorajaSystemSoundPaths = discoverBeatorajaSystemSoundPaths(bundle.files);
-      // Looping select BGM path. Probes the standard `BGM/select.*` locations plus an LR2-
-      // compatible fallback. Stays `undefined` for themes without a select BGM file (the
-      // scene runs silent in the background then).
-      this.beatorajaSelectBGMPath = discoverBeatorajaSelectBGMPath(bundle.files);
-      this.beatorajaTheme = bundle;
-      // The skin sounds (`main_state.audio_*`) play through the audio service, which reads them from the theme's files:
-      // those of the scenes made with `create*Scene` and those a skin starts at load time.
-      this.audio.setTheme({ files: bundle.files });
-      // Drop overrides from the previous theme — entryPaths from the old bundle will no longer
-      // resolve against the new entries. Without this `pickBeatorajaSkinEntryWithOverride`'s
-      // self-clearing fallback would still kick in, but the picker dropdowns would briefly show
-      // stale labels until the user opened a scene that hit that fallback. Clearing eagerly keeps
-      // the GUI honest.
-      this.beatorajaSkinOverridesByType.clear();
-      this.rebuildBeatorajaSkinPickers();
-      // The beatoraja entry just became selectable in the top-level "Skin family" dropdown.
-      this.rebuildSkinFamilyPicker();
-      // Scan the dropped bundle for decide / clear / fail / result BGM. Heuristic by basename —
-      // see `findBeatorajaThemeBGM` for the rules. Awaited because some entries are read lazily;
-      // the load is small (<1 MiB) and serialized so it doesn't add visible latency.
-      this.beatorajaThemeBGM = await findBeatorajaThemeBGM(bundle);
-      const summary = summarizeBeatorajaPlaySkins(bundle.theme.playSkins) || 'none';
-      const sceneSummary = [
-        bundle.theme.selectSkin ? 'select' : null,
-        bundle.theme.decideSkin ? 'decide' : null,
-        bundle.theme.resultSkin ? 'result' : null,
-        bundle.theme.courseResultSkin ? 'course-result' : null,
-      ]
-        .filter((s): s is string => s !== null)
-        .join('+');
-      dropLog.info(
-        `beatoraja theme loaded · files=${bundle.files.size} · play=${summary}${sceneSummary ? ` · scenes=${sceneSummary}` : ''}${
-          bundle.warnings.length > 0 ? ` · warnings=${bundle.warnings.length}` : ''
-        }`,
-      );
-      if (bundle.warnings.length > 0) {
-        for (const w of bundle.warnings) {
-          dropLog.warn(`beatoraja skin warning: ${w.entryPath}: ${w.message}`);
-        }
+      if (!activate) {
+        this.pendingTheme = bundle;
+        this.rebuildSkinFamilyPicker();
+        return;
       }
+      await this.applyTheme(bundle);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       dropLog.warn(`beatoraja theme load failed: ${message}`);
+    }
+  }
+
+  private async applyTheme(bundle: BeatorajaThemeBundle): Promise<void> {
+    // Drop the per-entry texture caches from the previous theme (we don't destroy individual
+    // beatoraja textures in this session — see `beatorajaKitCaches`'s field comment) and dispose its fonts.
+    // Clearing the map releases the only reference to the old theme's decoded bytes; the
+    // underlying Pixi textures stay allocated until page reload, but they're unreachable from
+    // the renderer once the new theme replaces `beatorajaTheme`.
+    releaseBeatorajaSceneKitAssets(this.beatorajaKitCaches);
+    // Stop the skin sounds the previous theme's skins started at load time (a loop would otherwise keep playing).
+    this.audio.stopOwned(this.themeOwner);
+    // Probe the bundle for navigation system sounds (cursor / decide / cancel / folder /
+    // option). The discovery walks well-known filenames inside the theme's `sound/` subdir
+    // (and an LR2-compatible `LR2files/Sound/lr2/*.wav` fallback) — slots without a match
+    // stay undefined and the select scene runs silent for those events. Beatoraja's own
+    // engine reads these paths from `config.json`; the web port uses convention-based
+    // probing instead since we don't load the user's beatoraja config.
+    this.beatorajaSystemSoundPaths = discoverBeatorajaSystemSoundPaths(bundle.files);
+    // Looping select BGM path. Probes the standard `BGM/select.*` locations plus an LR2-
+    // compatible fallback. Stays `undefined` for themes without a select BGM file (the
+    // scene runs silent in the background then).
+    this.beatorajaSelectBGMPath = discoverBeatorajaSelectBGMPath(bundle.files);
+    this.beatorajaTheme = bundle;
+    // The skin sounds (`main_state.audio_*`) play through the audio service, which reads them from the theme's files:
+    // those of the scenes made with `create*Scene` and those a skin starts at load time.
+    this.audio.setTheme({ files: bundle.files });
+    // Drop overrides from the previous theme — entryPaths from the old bundle will no longer
+    // resolve against the new entries. Without this `pickBeatorajaSkinEntryWithOverride`'s
+    // self-clearing fallback would still kick in, but the picker dropdowns would briefly show
+    // stale labels until the user opened a scene that hit that fallback. Clearing eagerly keeps
+    // the GUI honest.
+    this.beatorajaSkinOverridesByType.clear();
+    this.rebuildBeatorajaSkinPickers();
+    // The beatoraja entry just became selectable in the top-level "Skin family" dropdown.
+    this.rebuildSkinFamilyPicker();
+    // Scan the dropped bundle for decide / clear / fail / result BGM. Heuristic by basename —
+    // see `findBeatorajaThemeBGM` for the rules. Awaited because some entries are read lazily;
+    // the load is small (<1 MiB) and serialized so it doesn't add visible latency.
+    this.beatorajaThemeBGM = await findBeatorajaThemeBGM(bundle);
+    const summary = summarizeBeatorajaPlaySkins(bundle.theme.playSkins) || 'none';
+    const sceneSummary = [
+      bundle.theme.selectSkin ? 'select' : null,
+      bundle.theme.decideSkin ? 'decide' : null,
+      bundle.theme.resultSkin ? 'result' : null,
+      bundle.theme.courseResultSkin ? 'course-result' : null,
+    ]
+      .filter((s): s is string => s !== null)
+      .join('+');
+    dropLog.info(
+      `beatoraja theme loaded · files=${bundle.files.size} · play=${summary}${sceneSummary ? ` · scenes=${sceneSummary}` : ''}${
+        bundle.warnings.length > 0 ? ` · warnings=${bundle.warnings.length}` : ''
+      }`,
+    );
+    if (bundle.warnings.length > 0) {
+      for (const w of bundle.warnings) {
+        dropLog.warn(`beatoraja skin warning: ${w.entryPath}: ${w.message}`);
+      }
     }
   }
 
@@ -275,7 +294,7 @@ export class BeatorajaThemeService {
         `beatoraja gameplay: theme has no '${chartVariant}' skin — falling back to '${variant}' (lane chrome may not match chart key count)`,
       );
     }
-    // The entry for the variant, as the Debug Menu's skin picker overrides it.
+    // The entry for the variant, as the Options dialog's skin picker overrides it.
     const playTypeCode = playSkinTypeForVariant(variant);
     const playCandidates = bundle.theme.entries.filter((entry) => entry.header.type === playTypeCode);
     const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
@@ -322,7 +341,7 @@ export class BeatorajaThemeService {
   }
 
   /**
-   * Applies new skin options (or another play entry the Debug Menu picked) to the beatoraja play on the stage without
+   * Applies new skin options (or another play entry the Options dialog picked) to the beatoraja play on the stage without
    * restarting the chart: the entry is loaded again with them (its textures decoded again, as an option can change
    * `source[]`) and handed to the play (`PlayScene.updateKit`), which rebuilds its skin and keeps its state.
    */
@@ -348,7 +367,7 @@ export class BeatorajaThemeService {
 
   /**
    * The beatoraja theme's select entry as a select kit, or `undefined` when there is none to show: no select skin in the
-   * theme, or one that failed to load (the status says why). The player's pick in the Debug Menu wins over the
+   * theme, or one that failed to load (the status says why). The player's pick in the Options dialog wins over the
    * discovery's (`theme.selectSkin`). The entry is loaded with the player's options for it (`loadBeatorajaSceneKit`:
    * the header pass seeds them the first time), or the kit last loaded is taken again while the theme and the entry stay
    * the same.
@@ -405,7 +424,7 @@ export class BeatorajaThemeService {
     const bundle = this.beatorajaTheme;
     if (!bundle || this.selectView()?.identity.family !== 'beatoraja') return;
     // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an alternate skin from
-    // the Debug Menu's skin-picker dropdown. A font cache miss (fonts may differ between skins) loads them fresh.
+    // the Options dialog's skin-picker dropdown. A font cache miss (fonts may differ between skins) loads them fresh.
     const load = await loadBeatorajaSceneKit({
       files: bundle.files,
       entryPath,
@@ -425,7 +444,7 @@ export class BeatorajaThemeService {
 
   /**
    * The beatoraja theme's decide skin for `song`, loaded as a scene kit, or `undefined` when there is none to show: no
-   * beatoraja theme, no decide skin in it, or one that failed to load. The player's pick in the Debug Menu wins over the
+   * beatoraja theme, no decide skin in it, or one that failed to load. The player's pick in the Options dialog wins over the
    * discovery's (`theme.decideSkin`, not `decideCandidates[0]`, which is only the first in the file walk).
    */
   public async loadBeatorajaDecideKit(chartEntry: LibraryChart): Promise<DecideSceneKit | undefined> {
@@ -457,7 +476,7 @@ export class BeatorajaThemeService {
   /**
    * The beatoraja theme's result skin for `song`, loaded as a kit, or `undefined` when there is none to show: no
    * beatoraja theme, no result skin in it, or one that failed to load. A course run's result (`courseResult`) takes the
-   * theme's COURSE_RESULT skin, falling back to its result skin. The player's pick in the Debug Menu wins over the
+   * theme's COURSE_RESULT skin, falling back to its result skin. The player's pick in the Options dialog wins over the
    * discovery's.
    */
   public async loadBeatorajaResultKit(
@@ -468,7 +487,7 @@ export class BeatorajaThemeService {
     if (bundle === undefined) return undefined;
     // Same fix as decide — fall back to the discovery's `theme.resultSkin` rather than
     // `resultCandidates[0]` (= file-walk iteration order), so picking the discovery default
-    // in the Debug Menu (which clears the override) actually mounts the discovery default
+    // in the Options dialog (which clears the override) actually mounts the discovery default
     // instead of silently picking whatever theme happens to iterate first.
     const resultType =
       courseResult && bundle.theme.courseResultSkin !== undefined

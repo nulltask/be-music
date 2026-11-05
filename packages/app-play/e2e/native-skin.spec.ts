@@ -3,7 +3,7 @@ import { expect, openWithLibrary, SMOKE, test } from './support.ts';
 test('native screens browse, search, play, show results and switch back to Canvas', SMOKE, async ({ player }, info) => {
   await openWithLibrary(player, { 'be-music.built-in-skin': 'native' });
   const { page } = player;
-  await player.setOption(['Developer'], 'Judgment windows', '????');
+  await player.setOption(['Play options'], 'Judgment windows', '????');
   const select = page.locator('[data-be-music-screen="select"]');
   await expect(select.getByRole('heading', { name: 'Collection' })).toBeVisible();
   await expect(page.locator('#search')).toBeHidden();

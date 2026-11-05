@@ -44,7 +44,7 @@ textarea {
 
 /*
  * The shared header stays off the playfield. The stage fills whatever height is left. Stacking, top first: the header
- * (60), the Debug Menu (50), then every other overlay (40 and below).
+ * (60), the fullscreen Options button (50), then every other overlay (40 and below). The Options dialog is modal.
  */
 .player-service-header {
   position: relative;
@@ -52,8 +52,68 @@ textarea {
   flex: none;
   width: 100%;
 }
+.player-service-header {
+  transform: translateY(0);
+  opacity: 1;
+  transition:
+    transform 200ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 200ms ease-out,
+    visibility 0s;
+}
 .shell.in-gameplay .player-service-header {
-  display: none;
+  position: absolute;
+  top: 0;
+  transform: translateY(-100%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: 0s, 0s, 200ms;
+}
+.shell.in-gameplay .service-page-footer {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell .player-service-header,
+  .shell .service-page-footer {
+    transition: none;
+  }
+}
+/* On a phone the row carries Install, Help, Settings and fullscreen too, so its gaps and the Sign in padding tighten. */
+@media (max-width: 639.98px) {
+  .player-service-header header > div {
+    column-gap: 0.5rem;
+  }
+  .player-service-header header nav {
+    gap: 2px;
+  }
+  .player-service-header [data-service-header='account'] {
+    padding-inline: 0.5rem;
+  }
+}
+
+/*
+ * Installed, the window's title bar already names the app, so the header keeps only the Beta badge. With the window
+ * controls overlay (a desktop install, `display_override`) there is no title bar: the header takes its place, clear of
+ * the window's own buttons, and drags the window by its empty space.
+ */
+@media (display-mode: standalone) {
+  .player-service-header header a[href='/'] {
+    display: none;
+  }
+}
+@media (display-mode: window-controls-overlay) {
+  .player-service-header header {
+    padding-left: env(titlebar-area-x, 0px);
+    padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+  .player-service-header header :is(a, button, [popover]) {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
 }
 .player-main {
   position: relative;
@@ -61,66 +121,336 @@ textarea {
   min-height: 0;
 }
 
+/* The frame rate readout: a small label in the stage's top-right corner, over the canvas. */
+.fps-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 20;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 60%);
+  color: #9f9;
+  font: 12px / 1.4 var(--font-mono);
+  pointer-events: none;
+}
+
 /* Native buttons activate hidden directory/file inputs. */
 .hidden-file-input {
   display: none;
 }
 
-/* Tweakpane's public theme variables keep controls legible over the stage. */
-.debug-pane-container {
-  position: fixed;
-  top: calc(3rem + max(8px, env(safe-area-inset-top, 0px)));
-  right: max(8px, env(safe-area-inset-right, 0px));
-  width: 300px;
-  max-width: calc(100vw - 16px);
-  max-height: calc(100dvh - 3rem - 16px);
+/*
+ * The Options dialog (ui/options/, controls in ui/options-controls.ts): one tab per area, each holding its folders as
+ * sections, with the folders inside them as sections of their own. The tab bar scrolls sideways on a narrow screen,
+ * and the panel scrolls.
+ */
+.options-dialog > div {
+  height: min(85dvh, 760px);
+}
+@media (min-width: 40rem) {
+  .options-dialog > div {
+    max-width: 640px;
+  }
+}
+.options-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+.options-body > .options-tabs {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+/* The tabs wrap onto a second line rather than scroll sideways when they do not fit the dialog. */
+.options-tabs > [role='tablist'] {
+  max-width: 100%;
+  height: auto;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.options-tabs > [role='tablist'] > [role='tab'] {
+  flex: 0 0 auto;
+}
+.options-body > .options-tabs > [role='tabpanel'] {
+  min-height: 0;
   overflow-y: auto;
-  z-index: 50;
+  overscroll-behavior: contain;
+  padding-right: 8px;
 }
-.shell.in-gameplay .debug-pane-container,
-.player-main:fullscreen .debug-pane-container,
-.player-main:-webkit-full-screen .debug-pane-container {
-  top: max(8px, env(safe-area-inset-top, 0px));
-  max-height: calc(100dvh - 16px);
+.options-tab-panel,
+.options-folder-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.debug-pane,
-.skin-config-pane {
-  --tp-base-background-color: color-mix(in oklch, var(--popover) 92%, transparent);
-  --tp-base-shadow-color: rgb(0 0 0 / 0.3);
-  --tp-base-font-family: var(--font-sans), system-ui, sans-serif;
-  --tp-button-background-color: var(--secondary);
-  --tp-button-background-color-hover: var(--accent);
-  --tp-button-background-color-focus: var(--accent);
-  --tp-button-background-color-active: var(--accent);
-  --tp-button-foreground-color: var(--secondary-foreground);
-  --tp-container-background-color: color-mix(in oklch, var(--muted) 40%, transparent);
-  --tp-container-background-color-hover: var(--accent);
-  --tp-container-foreground-color: var(--foreground);
-  --tp-input-background-color: var(--input);
-  --tp-input-background-color-hover: var(--accent);
-  --tp-input-background-color-focus: var(--accent);
-  --tp-input-foreground-color: var(--foreground);
-  --tp-label-foreground-color: var(--muted-foreground);
-  --tp-monitor-background-color: color-mix(in oklch, var(--muted) 50%, transparent);
-  --tp-monitor-foreground-color: var(--foreground);
-  --tp-groove-foreground-color: rgb(255 255 255 / 0.12);
-  --tp-container-unit-size: 26px;
-  --tp-blade-value-width: 58%;
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  backdrop-filter: blur(10px) saturate(140%);
+.options-tab-panel {
+  padding-top: 12px;
 }
-.debug-pane .status-row {
-  --tp-blade-value-width: 78%;
+.options-section + .options-section,
+.options-tab-panel > .options-section:not(:first-child) {
+  margin-top: 8px;
 }
-.debug-pane .recording button {
+.options-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+/* A section inside a section: set off by a rule, with a quieter heading. */
+.options-section .options-section {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.options-section .options-section > .options-section-heading {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.options-folder {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 0.5rem);
+}
+.options-folder-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+.options-folder-summary > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--muted-foreground);
+  transition: rotate 150ms ease;
+}
+.options-folder[open] > .options-folder-summary > svg {
+  rotate: 180deg;
+}
+.options-folder > .options-folder-content {
+  padding: 2px 12px 12px;
+}
+/* A row: the label and its control side by side; a slider puts its number by the label and the track under them. */
+.options-row {
+  gap: 12px;
+}
+.options-row[data-orientation='horizontal'] > :is(.options-label, .options-label-wrap),
+.options-slider-head > .options-label-wrap {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+/* A label with its help button beside it (ui/options/help.ts). */
+.options-label-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.options-help {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 2px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  cursor: help;
+}
+.options-help:hover,
+.options-help:focus-visible,
+.options-help[aria-describedby] {
+  color: var(--foreground);
+  background: var(--accent);
+}
+.options-help > svg {
+  width: 14px;
+  height: 14px;
+}
+.options-button-row:has(> .options-help) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.options-help-tip {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 0.5rem);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.35);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  pointer-events: none;
+}
+.options-help-tip code {
+  font-size: 0.75rem;
+}
+.options-help-tip .help-menu-when {
+  display: block;
+  color: var(--muted-foreground);
+}
+.options-label {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.options-row[data-disabled] .options-label {
+  opacity: 0.5;
+}
+.options-row > .options-select,
+.options-row > .options-text,
+.options-row[data-orientation='horizontal'] > .options-number {
+  width: min(55%, 260px);
+  flex: none;
+}
+.options-slider-row {
+  gap: 8px;
+}
+.options-slider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.options-slider-head > .options-number {
+  width: 6.5rem;
+  flex: none;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.options-range {
+  width: 100%;
+}
+.options-monitor {
+  min-height: 0;
+  resize: none;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.options-monitor-value {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.options-graph {
+  display: block;
+  width: 100%;
+  height: 32px;
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--muted) 50%, transparent);
+}
+.options-graph polyline {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 1.5;
+}
+/* A key config lane (ui/options/keys.ts): its name, then the key it takes, which waits for a key press when clicked. */
+.options-key-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.options-key-row > .options-label,
+.options-key-row > .options-label-wrap {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.options-key-row > .options-key {
+  min-width: 7.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.options-key-row > .options-key[aria-pressed='true'] {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.options-button-row > .options-button {
+  width: 100%;
+}
+/* Beside a help button, the button takes what is left of the row, so the help button stays inside the dialog. */
+.options-button-row:has(> .options-help) > .options-button {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 0;
+}
+.options-row.recording .options-button {
   background: var(--destructive);
   color: var(--background);
   animation: record-pulse 1.4s ease-in-out infinite;
 }
-.debug-pane .arming button {
+.options-row.arming .options-button {
   background: var(--primary);
   color: var(--primary-foreground);
   animation: record-arming 2s ease-in-out infinite;
+}
+/* Nested tabs (Skin & display's skin systems) sit inside a section. */
+.options-tab-panel .options-tabs > [role='tab'] {
+  font-size: 0.8125rem;
+}
+
+/* The fullscreen surface keeps Help, Settings and Exit full screen available in that order. */
+.fullscreen-actions {
+  display: none;
+}
+.player-main:fullscreen .fullscreen-actions,
+.player-main:-webkit-full-screen .fullscreen-actions {
+  display: flex;
+  gap: 8px;
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  right: max(8px, env(safe-area-inset-right, 0px));
+  z-index: 50;
+  opacity: 0.8;
+}
+.fullscreen-actions:hover,
+.fullscreen-actions:focus-within {
+  opacity: 1;
+}
+
+/*
+ * Auxiliary panels share the stage's bottom dock, including beatoraja Skin Config, replay slots and course creation.
+ * Each heading remains available when its content is collapsed.
+ */
+.auxiliary-panels {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  max-height: min(70%, calc(100dvh - 64px));
+  overflow: auto;
+  pointer-events: none;
+}
+.auxiliary-panels > * {
+  flex: 0 0 auto;
+  width: min(420px, calc(100% - 16px));
+  pointer-events: auto;
+  font-size: 13px;
+}
+.auxiliary-panel-content,
+.replay-slots-content {
+  display: grid;
+  gap: 12px;
+}
+.skin-config-pane > .options-folder-content > .options-tabs > [role='tabpanel'] {
+  padding-top: 8px;
 }
 
 @keyframes record-arming {
@@ -237,10 +567,9 @@ textarea {
  * `resizeTo: #stage` still sees a 100%-of-viewport container after
  * the browser chrome disappears, and so the floating debug / help /
  * search overlays stay reachable. The site header and the site footer
- * sit outside `#main`, so fullscreen leaves them on the page. The Debug
- * Menu (`.debug-pane-container`) is mounted inside `#main` for that
- * reason; outside it, the browser would hide the menu while `#main`
- * is fullscreen. The background fill covers Safari's brief unstyled
+ * sit outside `#main`, so fullscreen leaves them on the page. The
+ * Options dialog and its fullscreen button (`.options-open`) sit inside
+ * `#main` for that reason. The background fill covers Safari's brief unstyled
  * flash as the element is promoted.
  */
 .player-main:fullscreen,
@@ -425,10 +754,13 @@ textarea {
  * `.drop` ignores the pointer (drops land on the stage), so the
  * interactive parts take it back.
  */
+/* Basecoat pads a card's sections; these line up with the rest of the card instead. */
 .start-leaderboard,
 .start-audio,
 .compat-panel {
-  width: min(360px, calc(100vw - 96px));
+  align-self: stretch;
+  width: auto;
+  padding-inline: 0;
   pointer-events: auto;
   text-align: left;
 }
@@ -442,9 +774,15 @@ textarea {
 .start-leaderboard {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+}
+
+.start-leaderboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  padding-top: 16px;
-  border-top: 1px solid rgb(255 255 255 / 0.08);
+  flex-wrap: wrap;
 }
 
 .start-check {
@@ -457,30 +795,22 @@ textarea {
 }
 
 .start-account {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+  margin: 0;
   padding-left: 26px;
-  font-size: 12px;
-  color: #aab4c2;
-}
-
-.start-account-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(170 180 194 / 0.85);
 }
 
 /* The same state dot as the account chip: green signed in, amber anonymous, grey signed out. */
 .start-account-label::before {
   content: '';
-  flex-shrink: 0;
-  width: 7px;
-  height: 7px;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
   border-radius: 50%;
+  vertical-align: 1px;
   background: #6b7280;
 }
 .start-account[data-state='signed-in'] .start-account-label::before {
@@ -493,29 +823,22 @@ textarea {
 .start-account-label a {
   color: #f8fafc;
   text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .start-account-label a:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
+/* At the end of the row, and still at the end when a long label pushes it onto a line of its own. */
 .start-account-actions {
   display: flex;
   gap: 6px;
+  margin-left: auto;
 }
 
-.start-account-hint {
-  margin: 0;
-  padding-left: 26px;
-  font-size: 11px;
-  line-height: 1.5;
-  color: rgb(170 180 194 / 0.85);
-}
-.start-account-hint:empty {
-  display: none;
+/* The hint runs on from the account in the same note. */
+.start-account-hint:not(:empty)::before {
+  content: ' · ';
 }
 
 /*
@@ -526,8 +849,6 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-top: 16px;
-  border-top: 1px solid rgb(255 255 255 / 0.08);
 }
 .start-audio[hidden] {
   display: none;
@@ -539,6 +860,16 @@ textarea {
   font-size: 11px;
   line-height: 1.5;
   color: rgb(170 180 194 / 0.85);
+}
+
+/* The Public Beta line closes the start card, under the system check. */
+.start-beta-notice {
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(170 180 194 / 0.85);
+}
+.start-beta-notice p {
+  margin: 0;
 }
 
 .start-account-status {
@@ -560,8 +891,6 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-top: 14px;
-  border-top: 1px solid rgb(255 255 255 / 0.08);
 }
 
 .compat-panel-header {
@@ -674,9 +1003,21 @@ textarea {
   color: #ffd6dc;
 }
 
-.compat-panel--fail {
-  /* The divider turns red too: when the player cannot run, the check should not look quiet. */
-  border-top-color: rgb(251 113 133 / 0.55);
+/* A passing check is one quiet line; a failing one keeps its "System check" label and opens by itself. */
+.compat-panel--ok .compat-panel-eyebrow {
+  display: none;
+}
+.compat-panel--ok .compat-panel-status {
+  font-size: 11px;
+  font-weight: 500;
+}
+.compat-panel--ok .compat-panel-badge {
+  width: 16px;
+  height: 16px;
+}
+.compat-panel--ok .compat-panel-badge-icon {
+  width: 12px;
+  height: 12px;
 }
 
 .compat-panel-sections {
@@ -1110,214 +1451,39 @@ textarea {
   height: 18px;
 }
 
-/*
- * Bottom-right Acknowledgements button. Pinned outside any
- * scene-specific UI so the open-source attribution stays
- * reachable from select / gameplay / result views without the
- * scenes having to carry it themselves. Sits above the canvas
- * (z-index 8) but BELOW the modal it spawns (z-index 30) so
- * the modal cleanly overlaps the button when open.
- */
-.help-button {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  z-index: 8;
-}
-
-.help-button-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.help-button-label {
-  /*
-   * Letter-spacing shrinks slightly on the dragging tier so
-   * the button doesn't compete with the call-to-action; the
-   * default rest tier keeps the spaced-uppercase look.
-   */
-  white-space: nowrap;
-}
-
-@media (max-width: 480px) {
-  /*
-   * On very narrow viewports the spacing-heavy label can
-   * overlap the search input. Hide the text and keep the
-   * icon — the `aria-label`-equivalent comes from the
-   * modal's title once opened.
-   */
-  .help-button-label {
-    display: none;
-  }
-  .help-button {
-    padding: 8px;
-  }
+/* The install steps for Safari, numbered. */
+.install-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style: decimal;
+  line-height: 1.8;
 }
 
 /*
- * Acknowledgements modal. Lives at the page level so it
- * overlaps every scene; the backdrop blocks pointer events to
- * the canvas underneath while open. Hidden by default — the
- * `.visible` class fades both backdrop and card in.
+ * Help: a Basecoat dialog with Basecoat tabs. It is wider than Basecoat's default and of a fixed height, so the Open
+ * source list arriving does not resize and recenter it; the selected panel scrolls inside.
  */
-.help-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  pointer-events: none;
-  opacity: 0;
-  /*
-   * The shell's `.empty` class (no charts yet) is also Basecoat's
-   * empty-state component, which centers text and balance-wraps it.
-   * Help is not a `.dialog` — those already reset alignment — so the
-   * overlay keeps the same start alignment as after a chart loads.
-   * The build line below sets its own centering.
-   */
-  text-align: start;
-  text-wrap: wrap;
-  transition: opacity 200ms ease-out;
-}
-
-.help-modal.visible {
-  pointer-events: auto;
-  opacity: 1;
-}
-
-.help-modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgb(4 6 10 / 0.65);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-}
-
-.help-modal-card {
-  position: relative;
-  width: min(720px, 100%);
-  /*
-   * Fixed height, not a max-height cap. The Open source pane
-   * is only the intro plus "Loading…" until the license list
-   * arrives. A content-sized card shrinks and recenters for
-   * that moment, then jumps back when the cards land. The
-   * pane scrolls inside this height, so the list shows up
-   * without moving the dialog.
-   */
+.help-dialog > div {
   height: min(80vh, 720px);
-  /*
-   * Slide-in entry that reads as "the dialog rose into focus"
-   * rather than "popped instantly". Matches the drop card's
-   * entry animation cadence so the player's overlay vocabulary
-   * stays consistent.
-   */
-  transform: translateY(8px) scale(0.98);
-  opacity: 0;
-  transition:
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 220ms ease-out;
 }
-
-.help-modal.visible .help-modal-card {
-  transform: translateY(0) scale(1);
-  opacity: 1;
+@media (min-width: 40rem) {
+  .help-dialog > div {
+    max-width: 720px;
+  }
 }
-
-.help-modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+.help-tabs {
+  min-height: 0;
 }
-
-.help-modal-eyebrow {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: rgb(151 163 179 / 0.85);
-}
-
-.help-modal-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 4px 0 0;
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: #f8fafc;
-}
-
-.help-modal-title .badge {
-  letter-spacing: 0;
-}
-
-.help-modal-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-}
-
-.help-pane-intro {
-  margin: 0 0 12px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: #aab4c2;
-}
-
-/*
- * Tab strip — segmented-control look. The two tabs ("Usage"
- * / "Open source") swap which pane is active inside the
- * modal card. Active tab gets the accent underline; inactive
- * stays neutral so the active pane reads as the focused
- * surface.
- */
-.help-modal-tabs {
-  display: flex;
-  gap: 6px;
-  border-bottom: 1px solid rgb(255 255 255 / 0.06);
-  padding-bottom: 8px;
-}
-
-.help-modal-tab.is-active {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-/*
- * Tab panes. Inactive panes use `[hidden]` to drop out of
- * layout and the a11y tree entirely; the active pane fills
- * the remaining height and scrolls when content overflows.
- */
-.help-modal-pane {
+.help-tabs > [role='tabpanel'] {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 8px 4px 0;
-  /*
-   * Same accent scrollbar as the OSS list — dim by default
-   * and lights up on hover. Keeps the modal's chrome
-   * coherent across both panes.
-   */
-  scrollbar-color: color-mix(in oklch, var(--primary) 40%, transparent) transparent;
-  scrollbar-width: thin;
+  padding-right: 8px;
 }
-
-.help-modal-pane::-webkit-scrollbar {
-  width: 6px;
-}
-
-.help-modal-pane::-webkit-scrollbar-thumb {
-  background: color-mix(in oklch, var(--primary) 35%, transparent);
-  border-radius: 999px;
-}
-
-.help-modal-pane::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in oklch, var(--primary) 60%, transparent);
+/* The shell's `.empty` is also Basecoat's empty state, which centers text; Help reads from the start. */
+.help-dialog {
+  text-align: start;
+  text-wrap: wrap;
 }
 
 .help-section-title {
@@ -1489,35 +1655,104 @@ textarea {
   margin-top: 4px;
 }
 
-/*
- * Language switcher inside the Usage pane. Right-aligned so
- * the primary content (section titles + lists) keeps its
- * left visual rhythm. The toggle group looks like the tab
- * strip but uses a stronger pressed-state to read as a
- * binary segment selector.
- */
-.help-lang-switch {
-  display: inline-flex;
-  align-self: flex-end;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.help-lang-toggle.is-active {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-/*
- * The toggle row sits *outside* the flex flow that arranges
- * `.help-section-title` / `.help-list` — `.help-modal-pane`
- * is a plain block, so use a small flex wrapper just on the
- * switch + content. Keeps the alignment without disturbing
- * the rest.
- */
-.help-modal-pane#help-pane-usage {
+/* Help's Keyboard tab: the screen and key map pickers, the keyboard, and the lists of what each key does. */
+.help-keyboard {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+.help-keyboard-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+.help-keyboard be-music-keyboard-map {
+  padding: 10px;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 10px;
+  background: rgb(20 24 34 / 0.55);
+}
+.help-keyboard-legend,
+.help-keyboard-note,
+.help-keyboard-empty {
+  margin: 0;
+  font-size: 11px;
+  color: rgb(151 163 179 / 0.85);
+}
+.help-keyboard-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 12px 20px;
+  align-items: start;
+}
+.help-keyboard-list h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+.help-keyboard-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.help-keyboard-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: default;
+}
+.help-keyboard-list li:hover,
+.help-keyboard-list li:focus-visible,
+.help-keyboard-list li[data-active] {
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  outline: none;
+}
+.help-keyboard-name {
+  flex: 1 0 auto;
+}
+.help-keyboard-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px;
+}
+.help-keyboard-keys kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: rgb(20 24 34 / 0.9);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: #f8fafc;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Keep the language switch at the right edge of the Help & About row. */
+.help-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.help-heading-row > p {
+  margin: 0;
+}
+.help-lang-switch {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .help-lang {
@@ -1678,7 +1913,7 @@ textarea {
   margin: 0;
   padding: 0;
   /*
-   * Scroll handling moved to the parent `.help-modal-pane`
+   * Scroll handling moved to the parent tab panel
    * — the pane already scrolls when the dialog overflows,
    * so a nested scroller here would create double-scroll
    * confusion and an inner scrollbar that competes with the
@@ -1859,18 +2094,9 @@ textarea {
   font-size: 13px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .help-modal,
-  .help-modal-card,
-  .help-button,
-  .help-modal-close {
-    transition: none;
-  }
-}
-
 /*
- * During play the select-screen overlays step aside so they never cover the skin's track plate; the Help button stays
- * reachable by hovering where it sits. The search field shows on the select screen only (`off-select` elsewhere).
+ * During play the select-screen overlays step aside so they never cover the skin's track plate. The search field shows
+ * on the select screen only (`off-select` elsewhere).
  */
 .shell.in-gameplay .search-input,
 .shell.off-select .search-input,
@@ -1879,22 +2105,13 @@ textarea {
   visibility: hidden;
 }
 
-.shell.in-gameplay .help-button {
-  opacity: 0;
-}
-
-.shell.in-gameplay .help-button:hover,
-.shell.in-gameplay .help-button:focus-visible {
-  opacity: 1;
-}
-
 /*
  * Phones and tablets. `main.ts` marks the root `touch-first` (and `phone` for phone-sized screens) from
  * `device-profile.ts`; nothing here applies on a desktop.
  *
  * The page chrome steps off the stage: the stage is fitted to the screen's height on a landscape phone, so any overlay
  * sits on top of the skin's own text. The search box only shows while it is being typed in (the skins' search area
- * focuses it), and the Help button shrinks to an icon in the corner. The Debug Menu keeps its usual size.
+ * focuses it).
  */
 @supports (height: 100dvh) {
   html.touch-first body,
@@ -1917,41 +2134,6 @@ html.touch-first .search-input:focus {
   font-size: 16px; /* 16px keeps iOS Safari from zooming the page on focus */
 }
 
-html.phone .help-button {
-  left: max(8px, env(safe-area-inset-left, 0px));
-  bottom: max(8px, env(safe-area-inset-bottom, 0px));
-  transform: none;
-  padding: 7px;
-}
-
-html.phone .help-button:hover,
-html.phone .help-button:focus-visible {
-  transform: none;
-}
-
-html.phone .help-button-label {
-  display: none;
-}
-
-/* Keep help and a collapsed pane out of touch lanes. */
-html.touch-first .shell.in-gameplay .help-button {
-  visibility: hidden;
-}
-html.touch-first:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) {
-  opacity: 0.35;
-}
-/*
- * During play the collapsed Debug Menu is the corner tab the cabinet layout leaves open. A full-width title covers
- * the Pause button in that band.
- */
-html:has(.shell.in-gameplay) .debug-pane-container:has(> .debug-pane:not(.tp-rotv-expanded)) {
-  width: 40px;
-}
-html:has(.shell.in-gameplay) .debug-pane:not(.tp-rotv-expanded) > .tp-rotv_b .tp-rotv_t {
-  overflow: hidden;
-  white-space: nowrap;
-  color: transparent;
-}
 /* Touch play controls: a pause button during play; Resume / Quit while paused. */
 .touch-controls {
   position: absolute;
@@ -2031,8 +2213,9 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
 }
 
 /*
- * "No sound?" hint, shown once on an iPhone / iPad when sound first starts. Top-centre, clear of the Debug Menu
- * (top-right), the search box (bottom-left) and Help (bottom-right); it never blocks the stage and leaves by itself.
+ * "No sound?" hint, shown once on an iPhone / iPad when sound first starts. Top-centre, clear of the fullscreen
+ * Options button (top-right), the search box (bottom-left) and Help (bottom-right); it never blocks the stage and
+ * leaves by itself.
  */
 .silent-mode-hint {
   position: fixed;
@@ -2136,14 +2319,6 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /* Course maker (course-maker-panel.ts): the card shown while a course is being made, and the saved-course dialog. */
-.course-maker-card {
-  position: fixed;
-  left: 16px;
-  bottom: 64px;
-  z-index: 40;
-  width: min(320px, calc(100vw - 32px));
-  font-size: 13px;
-}
 .course-maker-card[hidden] {
   display: none;
 }
@@ -2232,13 +2407,26 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /* Replay slots (replay-slots-panel.ts): a result's slots to save into, and the select bar's replays. */
-.replay-slots-card {
-  position: fixed;
-  right: 16px;
-  bottom: 64px;
-  z-index: 40;
-  width: min(360px, calc(100vw - 32px));
-  font-size: 13px;
+.start-account-actions .btn {
+  background: transparent;
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+}
+.start-load-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+.start-load-actions button {
+  min-height: 44px;
+}
+.shell:not(.empty) .start-load-actions {
+  display: none;
+}
+.start-leaderboard {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
 }
 .replay-slots-card[hidden] {
   display: none;
@@ -2290,14 +2478,6 @@ html.touch-first .search-input.search-inline:focus {
   cursor: default;
 }
 
-/* The help overlay keeps its build line at the bottom of the overlay, under the dialog card. */
-.help-modal .service-build-footer {
-  position: absolute;
-  right: 0;
-  bottom: 16px;
-  left: 0;
-  z-index: 1;
-}
 .service-build-footer {
   color: #94a3b8;
   text-align: center;
@@ -2308,8 +2488,47 @@ html.touch-first .search-input.search-inline:focus {
   font: inherit;
 }
 
+/*
+ * The header's icon buttons name themselves in a black tooltip that opens just below the button and points at it.
+ */
+#player-service-header [data-tooltip]::before {
+  margin-top: 10px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: #000;
+  color: #fff;
+}
+/* The point on top of the bubble, aimed at the button. */
+#player-service-header [data-tooltip]::after {
+  content: '';
+  position: absolute;
+  z-index: 61;
+  top: 100%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-top: 1px solid rgb(255 255 255 / 0.16);
+  border-left: 1px solid rgb(255 255 255 / 0.16);
+  background: #000;
+  translate: -50% 0;
+  rotate: 45deg;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+}
+#player-service-header [data-tooltip]:hover::after {
+  visibility: visible;
+  opacity: 1;
+}
+
 /* The page footer is the start screen only, so it stays off the skin's playfield. */
 .service-page-footer {
+  transform: translateY(0);
+  opacity: 1;
+  transition:
+    transform 200ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 200ms ease-out;
   position: absolute;
   z-index: 4;
   right: 0;
@@ -2317,14 +2536,15 @@ html.touch-first .search-input.search-inline:focus {
   left: 0;
   background: color-mix(in oklch, var(--background) 92%, transparent);
 }
+/* Basecoat's `.empty` caps a direct footer at the small container; this one spans the page. */
+.shell > .service-page-footer {
+  max-width: none;
+}
 .shell:not(.empty) .service-page-footer {
   display: none;
 }
 .shell.empty .drop {
-  padding-bottom: 13rem;
-}
-.shell.empty .help-button {
-  bottom: calc(13rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 3rem;
 }
 
 /* A DOM skin owns a real search input; remove the Canvas overlay from focus and accessibility as well. */
@@ -2405,10 +2625,7 @@ html.touch-first .search-input.search-inline:focus {
   padding-top: 8px;
 }
 
-/* The PRACTICE range picker (#948): a density graph with two handles, in a separator row of the Debug Menu. */
-.debug-pane .practice-range-row {
-  padding: 2px var(--cnt-hp, 4px) 4px;
-}
+/* The PRACTICE range picker (#948): a density graph with two handles, in a row of its own in the Options dialog. */
 .practice-range {
   --practice-range-accent: var(--primary);
   --practice-range-muted: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
@@ -2421,12 +2638,12 @@ html.touch-first .search-input.search-inline:focus {
   display: block;
   width: 100%;
   border-radius: 4px;
-  background: var(--tp-input-background-color);
+  background: var(--input);
   cursor: ew-resize;
   touch-action: none;
 }
 .practice-range-caption {
-  color: var(--tp-label-foreground-color);
+  color: var(--muted-foreground);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: center;

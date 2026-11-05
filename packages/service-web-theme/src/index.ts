@@ -1,10 +1,10 @@
-export { renderBuildInfo, type BuildInfo } from './build-info.ts';
+export type { BuildInfo } from './build-info.ts';
 export {
-  renderServiceFooter,
   serviceOrigins,
   serviceSite,
   SERVICE_COPYRIGHT,
   SERVICE_FOOTER_CLASS,
+  SERVICE_FOOTER_COLUMNS_CLASS,
   SERVICE_FOOTER_LINK_CLASS,
   SERVICE_FOOTER_NAV_CLASS,
   SERVICE_LABELS,
@@ -12,8 +12,8 @@ export {
   type ServiceFooterInput,
   type ServiceName,
 } from './footer.ts';
-export { renderServiceHeader, serviceSkipLink, type ServiceHeaderAccount } from './header.ts';
-export { PUBLIC_BETA_DELETION, PUBLIC_BETA_LABEL, publicBetaNotice, renderPublicBetaNotice } from './public-beta.ts';
+export type { ServiceHeaderAccount, ServiceHeaderInput } from './header-model.ts';
+export { PUBLIC_BETA_DELETION, PUBLIC_BETA_LABEL, publicBetaNotice } from './public-beta.ts';
 export {
   LOCALE_COOKIE,
   LOCALE_NAMES,

@@ -1,4 +1,4 @@
-import type { BattleMode, LR2ExtraLevel } from '@be-music/player-engine/lanes';
+import type { BattleMode, LaneKeyOverrides, LR2ExtraLevel } from '@be-music/player-engine/lanes';
 /**
  * The options of a play session (`PlaySession`) and of its disposal: everything a host sets for a play, whichever family
  * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
@@ -18,6 +18,18 @@ import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
+import type { ControlKeyOverrides, ControlScheme } from '../controls/control-buttons.ts';
+import type { ControlActionOverrides } from '../controls/control-actions.ts';
+
+/** How far the play skin is moved (design pixels) and scaled, as LR2's number keys + the arrows move it. */
+export interface SkinAdjust {
+  readonly x: number;
+  readonly y: number;
+  readonly scale: number;
+}
+
+/** The play skin where it is drawn. */
+export const NO_SKIN_ADJUST: SkinAdjust = { x: 0, y: 0, scale: 1 };
 import type { TempoPitchMode, TimeStretchAlgorithm } from '../../runtime/play-tempo.ts';
 import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
 
@@ -79,6 +91,13 @@ export interface PlaySessionOptions {
    * with it. Not fired for `PlaySession.setHiSpeed` writes, which come from the host.
    */
   onHiSpeedChange?: (hiSpeed: number, normalLevel?: number, floating?: boolean) => void;
+  /**
+   * Where the play skin is moved to and how far it is scaled (LR2's 1 / 2 + the arrows), in design pixels: the play
+   * starts with it, and reports each change through {@link onSkinAdjustChange} for the next play.
+   */
+  skinAdjust?: SkinAdjust;
+  /** The player moved or scaled the play skin (LR2's 1 / 2 + the arrows). */
+  onSkinAdjustChange?: (adjust: SkinAdjust) => void;
   /**
    * BGA display mode picked from the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). Defaults to `'ON'` so charts that
    * ship a BGA render it by default. With `'OFF'` the BGA layer stays empty for the entire play; with `'AUTOPLAY_ONLY'`
@@ -193,6 +212,16 @@ export interface PlaySessionOptions {
    * holds that lane until its key comes up. A replay plays with its own recorded switch instead.
    */
   anyKey?: boolean;
+  /** The player's own lane keys over the defaults (`LaneModeOptions.laneKeys`); a replay plays its recorded channels. */
+  laneKeys?: LaneKeyOverrides;
+  /** The player's own START / SELECT keys over the defaults; the play records their presses in the replay. */
+  controlKeys?: ControlKeyOverrides;
+  /** The player's own keys for the play's operations (`control-actions.ts`), over their defaults. */
+  actionKeys?: ControlActionOverrides;
+  /** The key map the play reads its keys by (the skin family's, `resolveControlScheme`). Defaults to LR2's. */
+  controlScheme?: ControlScheme;
+  /** The key map of the built-in skins, from which the host takes `controlScheme` on a built-in skin. */
+  builtInControlScheme?: ControlScheme;
   /**
    * DP FLIP — when true, swaps every note's 1P / 2P channel at chart-prepare time. Only DP charts have notes on both
    * sides so SP charts are unaffected. Mirrors LR2's `#SRC_BUTTON,type=54`.

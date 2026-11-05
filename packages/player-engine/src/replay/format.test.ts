@@ -48,14 +48,18 @@ function makeReplay(): BeMusicReplay {
       ],
     },
     inputs: [
-      { seq: 0, timeUs: 499_000, action: 'down', channels: ['11'], tokens: ['z'] },
-      { seq: 1, timeUs: 520_000, action: 'up', channels: ['11', '12'] },
+      { seq: 0, timeUs: 499_000, action: 'down', channels: ['11'], tokens: ['z'], code: 'KeyZ' },
+      { seq: 1, timeUs: 520_000, action: 'up', channels: ['11', '12'], code: 'touch' },
       { seq: 3, timeUs: 600_000, action: 'down', channels: ['16'], tokens: ['ctrl-left'], spin: 'ccw' },
       { seq: 2, timeUs: 640_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
     ],
     play: {
       mode: 'manual',
       autoScratch: true,
+      controlInputs: [
+        { seq: 0, timeUs: 300_000, action: 'down', button: '1P-start', code: 'KeyQ' },
+        { seq: 1, timeUs: 350_000, action: 'up', button: '1P-start' },
+      ],
       gauge: 'HARD',
       randomLane: { p1: 'MIRROR', p2: 'RANDOM' },
       dpFlip: true,
@@ -280,6 +284,41 @@ describe('replay format', () => {
         }),
       ),
     ).toThrow("inputs[0].inferred: expected true on an 'up'");
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.inputs[0].code = '';
+        }),
+      ),
+    ).toThrow('inputs[0].code: expected a non-empty string');
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.inputs[0].code = 90;
+        }),
+      ),
+    ).toThrow('inputs[0].code: expected a non-empty string');
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.play.controlInputs[0].button = '';
+        }),
+      ),
+    ).toThrow('play.controlInputs[0].button: expected a non-empty string');
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.play.controlInputs[1].action = 'press';
+        }),
+      ),
+    ).toThrow("play.controlInputs[1].action: expected 'down' | 'up'");
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.play.controlInputs = {};
+        }),
+      ),
+    ).toThrow('play.controlInputs: expected an array');
     expect(() =>
       parseReplay(
         corrupt((value) => {

@@ -1,4 +1,4 @@
-// The Be-Music Skin the built-in family draws with: the one the Debug Menu picked (`guiState.builtInSkin`), the
+// The Be-Music Skin the built-in family draws with: the one the Options dialog picked (`guiState.builtInSkin`), the
 // player's values for its settings, and the skins added while the page is open.
 
 import type { BuiltInKit } from '@be-music/player-browser/host';
@@ -8,7 +8,7 @@ import type { PlayerGUIState } from '../../types.ts';
 import { BE_MUSIC_SKINS, loadSkinFonts } from '../built-in-skins.ts';
 
 export interface BuiltInThemeServiceOptions {
-  /** The Debug Menu's state: the built-in skin picked (`builtInSkin`) and how much motion skins show (`skinEffects`). */
+  /** The Options dialog's state: the built-in skin picked (`builtInSkin`) and how much motion skins show (`skinEffects`). */
   readonly guiState: Pick<PlayerGUIState, 'builtInSkin' | 'skinEffects'>;
   readonly setStatus: (text: string) => void;
   /** Switches to the skin `id`: it is stored, and the select screen is made again with it. */

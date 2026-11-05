@@ -1,7 +1,14 @@
+import { cabinetStage } from '@be-music/player-skin-sdk';
 import { Container } from 'pixi.js';
 import { expect, test, vi } from 'vite-plus/test';
 import {
   renderBuiltInChrome,
+  resolveLaneGeometry,
+  resolveBeMusicLayout,
+  collectBGATargets,
+  type LaneGeometryContext,
+  type BeMusicLayoutContext,
+  type BGATargetsContext,
   resolveSkinlessGameplayChromeRuntime,
   type BuiltInChromeContext,
   type PlayChromeContext,
@@ -16,6 +23,9 @@ function chromeContext(playFrame?: PlayChromeContext['playFrame']): PlayChromeCo
     resolveChartDurationSeconds: () => 60,
     chartPlayVariant: '7',
     laneChannels: ['11'],
+    pressedChannels: new Set(['11']),
+    keyBeamStartedAt: new Map(),
+    keyBeamFadeStartedAt: new Map(),
     judgeSideState: { '1P': { until: -1 } },
     currentBeat: () => 0,
     nowBPM: () => 150,
@@ -48,7 +58,15 @@ test('hands the frame’s best record, course, player and lane option to the ski
       playOptions: { random1P: 'MIRROR' } as never,
     }),
   );
-  expect(runtime).toMatchObject({ bestEXScore: 120, course, playerName: 'Taro', random1P: 'MIRROR', tempo: 1.25 });
+  expect(runtime).toMatchObject({
+    bestEXScore: 120,
+    course,
+    playerName: 'Taro',
+    random1P: 'MIRROR',
+    tempo: 1.25,
+    chartBeat: 0,
+    keyBeams: { '11': 1 },
+  });
   expect(runtime.targetEXScore).toBeUndefined();
 });
 
@@ -88,4 +106,66 @@ test('forwards a draw-local runtime without resolving or mutating it again', () 
   ctx.skinLayer.destroy();
   ctx.overlayLayer.destroy();
   ctx.bgaLayer.destroy();
+});
+
+test('keeps rendered lanes, chrome and BGA aligned when switching between DP and two players', () => {
+  const ctx = {
+    play: {
+      laneChannels: ['16', '11', '12', '13', '14', '15', '18', '19', '21', '22', '23', '24', '25', '28', '29', '26'],
+      chartPlayVariant: '14',
+      secondPlayer: undefined,
+    },
+    beMusicStage: cabinetStage,
+    layoutMode: 'standard',
+  } as unknown as LaneGeometryContext & BeMusicLayoutContext & BGATargetsContext;
+  const dp = resolveLaneGeometry(ctx);
+  const dpLayout = resolveBeMusicLayout(ctx);
+  const play = ctx.play as unknown as { secondPlayer: unknown };
+  play.secondPlayer = {};
+  const battle = resolveLaneGeometry(ctx);
+  const battleLayout = resolveBeMusicLayout(ctx);
+  expect(battle).not.toBe(dp);
+  expect(battleLayout).not.toBe(dpLayout);
+  expect(resolveLaneGeometry(ctx)).toBe(battle);
+  expect(resolveBeMusicLayout(ctx)).toBe(battleLayout);
+  expect(battle.lanes.map(({ x, w }) => ({ x, w }))).toEqual(battleLayout.lanes.map(({ x, w }) => ({ x, w })));
+  const targets: Parameters<typeof collectBGATargets>[1] = [];
+  collectBGATargets(ctx, targets);
+  expect(targets[0]).toMatchObject(battleLayout.bga!);
+  play.secondPlayer = undefined;
+  expect(resolveLaneGeometry(ctx)).toEqual(dp);
+  expect(resolveBeMusicLayout(ctx)).toEqual(dpLayout);
+});
+
+test('passes the presented ghost side independently of autoplay options', () => {
+  const ctx = chromeContext();
+  const play = ctx.play as unknown as { ghostSide: '2P' };
+  play.ghostSide = '2P';
+  expect(resolveSkinlessGameplayChromeRuntime(ctx).ghostSide).toBe('2P');
+});
+
+test('a video changes the monitor and target width together while keeping their height', () => {
+  const video = { videoWidth: 1600, videoHeight: 900 };
+  const ctx = {
+    play: {
+      laneChannels: ['16', '11', '12', '13', '14', '15', '18', '19'],
+      chartPlayVariant: '7',
+      currentSeconds: () => 0,
+      bgaTimeline: { base: [{ seconds: 0, bmpKey: '01' }] },
+      bgaVideos: new Map([['01', { video }]]),
+    },
+    beMusicStage: cabinetStage,
+    layoutMode: 'standard',
+  } as unknown as LaneGeometryContext & BeMusicLayoutContext & BGATargetsContext;
+  const wide = resolveBeMusicLayout(ctx).bga!;
+  const targets: Parameters<typeof collectBGATargets>[1] = [];
+  collectBGATargets(ctx, targets);
+  expect(targets[0]).toMatchObject(wide);
+  expect(targets[0]?.preserveVideoAspect).toBe(true);
+  video.videoWidth = 900;
+  video.videoHeight = 1600;
+  const portrait = resolveBeMusicLayout(ctx).bga!;
+  expect(portrait.h).toBe(wide.h);
+  expect(portrait.w / portrait.h).toBeCloseTo(900 / 1600);
+  expect(portrait.x + portrait.w / 2).toBeCloseTo(wide.x + wide.w / 2);
 });

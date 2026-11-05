@@ -109,6 +109,8 @@ export interface BeatorajaDestinationGroup {
    * Empty when the author didn't author offsets on this destination. Defaults to `[]`.
    */
   offsets: ReadonlyArray<number>;
+  /** Positional offsets of an expanded judge word, inherited by its relative combo number without size or color. */
+  parentOffsets?: ReadonlyArray<number>;
   /** `if` codes from any wrapping conditional group, AND-merged with `op`. */
   ifCodes: ReadonlyArray<number>;
   /**
@@ -250,6 +252,7 @@ function normalizeOne(
     filter: numberField(f, 'filter', 0),
     center: clampCenter(numberField(f, 'center', 0)),
     offsets: normalizeOpArray(f.offsets),
+    ...(Array.isArray(f.parentOffsets) ? { parentOffsets: normalizeOpArray(f.parentOffsets) } : {}),
     ifCodes: entry.ifCodes,
     dst: keyframes,
     // Element-level easing: first non-zero acc across all keyframes wins (matches beatoraja's

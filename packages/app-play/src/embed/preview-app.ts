@@ -1,3 +1,5 @@
+import { html, nothing, render, type TemplateResult } from 'lit';
+import { ifDefined } from 'lit/directives/if-defined.js';
 // The embed's preview player: loads the `?track=` archive, lists its charts when it has several, and plays the one
 // picked from the preview skin, with video controls: in AUTO, or played by the viewer with `?mode=play` or the AUTO checkbox cleared. `?course=` selects an LR2 / beatoraja course file;
 // staged courses advance automatically, NONSTOP courses use the shared stitching pipeline. `?chart=` naming a chart
@@ -360,20 +362,17 @@ export class PreviewApp {
   }
 
   private showMessage(text: string): void {
-    const message = document.createElement('p');
-    message.className = 'preview-message text-muted-foreground text-sm';
-    message.textContent = text;
-    this.showOverlay(message);
+    this.showOverlay(html`<p class="preview-message text-muted-foreground text-sm">${text}</p>`);
   }
 
-  private showOverlay(content: HTMLElement | undefined): void {
-    this.elements.overlay.replaceChildren(...(content ? [content] : []));
+  private showOverlay(content: HTMLElement | TemplateResult | undefined): void {
+    render(content ?? nothing, this.elements.overlay);
     this.elements.overlay.hidden = content === undefined;
   }
 
   /**
-   * The preview's shortcuts, ahead of the play's own keys: Space plays a play not started yet (a started one pauses
-   * through the play itself), ← / → seek five seconds during AUTO play, M mutes and F toggles full screen. While the
+   * The preview's shortcuts, ahead of the play's own keys: Space plays a play not started yet and pauses or resumes
+   * a started AUTO one, ← / → seek five seconds during AUTO play, M mutes and F toggles full screen. While the
    * viewer plays (`?mode=play`), M and F are lanes, so they go to the play, and the arrows do not seek.
    */
   private readonly handleKey = (event: KeyboardEvent): void => {
@@ -392,10 +391,17 @@ export class PreviewApp {
     };
     switch (event.code) {
       case 'Space':
-        if (scene !== undefined && current !== undefined && !current.started && !event.repeat) {
+        if (scene === undefined || current === undefined || event.repeat) return;
+        if (!current.started) {
           take();
           this.begin();
+          return;
         }
+        // Started, Space pauses or resumes, as a video player's does, unless the viewer plays the lanes: there it is
+        // the turntable's second key.
+        if (this.playsLanes(current)) return;
+        take();
+        scene.requestTogglePause();
         return;
       case 'ArrowLeft':
       case 'ArrowRight': {
@@ -505,18 +511,10 @@ async function downloadTrack(url: string, onProgress: (loaded: number, total: nu
 /** The track's loading state over the stage: what is happening, and a bar that fills as it goes. */
 class LoadingProgress {
   public readonly element: HTMLElement;
-  private readonly label: HTMLElement;
-  private readonly bar: HTMLProgressElement;
 
   public constructor() {
     this.element = document.createElement('div');
     this.element.className = 'card preview-loading gap-2 p-4';
-    this.label = document.createElement('p');
-    this.label.className = 'text-muted-foreground text-sm';
-    this.bar = document.createElement('progress');
-    this.bar.className = 'progress';
-    this.bar.setAttribute('aria-label', playerText().embed.loadingTrack);
-    this.element.append(this.label, this.bar);
     this.downloading(0, 0);
   }
 
@@ -532,13 +530,16 @@ class LoadingProgress {
 
   /** An indeterminate bar while the total is unknown. */
   private show(text: string, value: number, max: number): void {
-    this.label.textContent = text;
-    if (max > 0) {
-      this.bar.max = max;
-      this.bar.value = Math.min(value, max);
-    } else {
-      this.bar.removeAttribute('value');
-    }
+    render(
+      html`<p class="text-muted-foreground text-sm">${text}</p>
+        <progress
+          class="progress"
+          aria-label=${playerText().embed.loadingTrack}
+          max=${max > 0 ? max : 1}
+          value=${ifDefined(max > 0 ? Math.min(value, max) : undefined)}
+        ></progress>`,
+      this.element,
+    );
   }
 }
 

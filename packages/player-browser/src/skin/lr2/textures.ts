@@ -1,6 +1,11 @@
 import type { Texture } from 'pixi.js';
 import { decodeDDSImageData, resolveLR2AssetBytes, type LR2Skin } from '@be-music/skin-lr2';
-import { loadTextureFromBytes, registerImageDecoder } from '../../media/textures.ts';
+import {
+  attachBlobURLToTexture,
+  loadVideoTexture,
+  loadTextureFromBytes,
+  registerImageDecoder,
+} from '../../media/textures.ts';
 
 // The generic image / video loaders live in `media/textures.ts`; re-export them so existing importers of this module
 // (and the `@be-music/player-browser/skin` barrel) keep resolving the same symbols.
@@ -28,6 +33,14 @@ export async function loadSkinAssetTexture(skin: LR2Skin, path: string): Promise
   const bytes = resolveLR2AssetBytes(skin, path);
   if (!bytes) {
     return undefined;
+  }
+  if (/\.(?:mp4|m4v|webm|ogv|mpg|mpeg|wmv|avi)$/i.test(path)) {
+    const handle = await loadVideoTexture(path, bytes);
+    if (!handle) return undefined;
+    attachBlobURLToTexture(handle.texture, handle.objectURL);
+    handle.video.loop = true;
+    void handle.video.play().catch(() => {});
+    return handle.texture;
   }
   return loadTextureFromBytes(path, bytes, skin.transparentColor);
 }

@@ -1,7 +1,10 @@
+import { localized } from './ui/localized.ts';
+import type { BeMusicStatusElement } from '@be-music/service-web-theme/client';
+import { html, nothing, render } from 'lit';
 import { setDisabled, type PaneBinding } from './pane-controls.ts';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import type { LibraryChart } from '@be-music/player-scene-model';
-import type { FolderApi } from 'tweakpane';
+import type { OptionContainer } from './ui/options-controls.ts';
 
 import {
   createLeaderboardPasskey,
@@ -46,7 +49,7 @@ export function describeSubmittingClient(recorder: Omit<ReplayRecorderInfo, 'eng
 }
 /**
  * Everything the player shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
- * sign-up buttons), the Debug Menu folder (the same toggle, account row and passkey buttons), the shared header's
+ * sign-up buttons), the Options dialog folder (the same toggle, account row and passkey buttons), the shared header's
  * account control, and submitting a finished play. An account starts anonymous (the first
  * submission signs in anonymously); creating a passkey keeps it, and "Sign in with passkey" brings it to another device,
  * moving that device's anonymous plays into it.
@@ -76,6 +79,8 @@ export class LeaderboardPanel {
   private readonly host: LeaderboardPanelHost;
   constructor(host: LeaderboardPanelHost) {
     this.host = host;
+    const label = document.querySelector<HTMLElement>('#start-account-label');
+    if (label !== null) render(localized('checkingAccount'), label);
     onPlayerLangChange(() => {
       if (!this.accountReady) return;
       this.accountState.status = describeLeaderboardAccount(this.shownAccount);
@@ -83,8 +88,8 @@ export class LeaderboardPanel {
       this.renderStartAccount(this.shownAccount);
     });
   }
-  /** Fills the Debug Menu's Leaderboard folder. */
-  buildFolder(folder: FolderApi): void {
+  /** Fills the Options dialog's Leaderboard folder. */
+  buildFolder(folder: OptionContainer): void {
     // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
     // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
     const settings = this.host.settings();
@@ -96,7 +101,7 @@ export class LeaderboardPanel {
         if (startCheckbox !== null) startCheckbox.checked = value;
       });
     // The start card's checkbox is the same setting: it goes through the controller, so it is remembered like any
-    // Debug Menu change.
+    // Options dialog change.
     if (startCheckbox !== null) {
       startCheckbox.checked = settings.submitToLeaderboard;
       startCheckbox.addEventListener('change', () => this.setSubmitting(startCheckbox.checked));
@@ -126,10 +131,10 @@ export class LeaderboardPanel {
     action: () => Promise<AccountActionResult>,
     onSuccess?: () => void,
   ): Promise<void> {
-    const status = document.querySelector<HTMLElement>('#start-account-status');
+    const status = document.querySelector<BeMusicStatusElement>('#start-account-status');
     const say = (text: string) => {
       this.host.setStatus(text);
-      if (status !== null) status.textContent = text;
+      if (status !== null) status.message = text;
     };
     say(`${label}…`);
     try {
@@ -205,7 +210,7 @@ export class LeaderboardPanel {
         this.host.setStatus(playerText().lb.courseNetwork);
       });
   }
-  /** Re-reads the account into the Debug Menu's "Account" row and the shared header. */
+  /** Re-reads the account into the Options dialog's "Account" row and the shared header. */
   async refreshAccount(): Promise<void> {
     const account = await loadLeaderboardAccount();
     this.shownAccount = account;
@@ -238,41 +243,40 @@ export class LeaderboardPanel {
     const view = describeStartAccount(account);
     row.dataset.state = view.state;
     const hint = document.querySelector<HTMLElement>('#start-account-hint');
-    if (hint !== null) hint.textContent = view.hint ?? '';
-    if (view.href !== undefined) {
-      const link = document.createElement('a');
-      link.href = leaderboardLink(view.href, location.hostname);
-      link.target = '_blank';
-      link.rel = 'noopener';
-      link.title = playerText().shell.yourPage;
-      link.textContent = view.label;
-      label.replaceChildren(link);
-    } else {
-      label.textContent = view.label;
-    }
-    // The template's `data-i18n` is the "checking" placeholder. Leaving it would put that string back on the next
-    // language switch, over the account this row is actually showing.
-    label.removeAttribute('data-i18n');
-    actions.replaceChildren(
-      ...view.actions.map((action) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        // Making an account is the step the card leads to; the other actions stay quiet.
-        button.className = 'btn';
-        button.dataset.size = 'sm';
-        if (action !== 'sign-up' && action !== 'keep') button.dataset.variant = 'outline';
-        button.textContent = startAccountActionLabels()[action];
-        button.addEventListener('click', () => {
-          const copy = playerText();
-          // Signing out needs nothing more. Keeping an anonymous account enrolls a passkey on Accounts.
-          // Sign in and Sign up open the dialogs, where a passkey, Google, or Discord each start Accounts.
-          if (action === 'sign-out') void this.runAccountAction(copy.account.signOut, signOutOfLeaderboard);
-          else if (action === 'keep') void this.runAccountAction(copy.account.manage, createLeaderboardPasskey);
-          else if (action === 'sign-up') this.openDialog('sign-up');
-          else this.openDialog('sign-in');
-        });
-        return button;
-      }),
+    if (hint !== null) render(view.hint ?? '', hint);
+    render(
+      view.href !== undefined
+        ? html`<a
+            href=${leaderboardLink(view.href, location.hostname)}
+            target="_blank"
+            rel="noopener"
+            title=${playerText().shell.yourPage}
+            >${view.label}</a
+          >`
+        : view.label,
+      label,
+    );
+    // Localization must not restore the boot's "checking" placeholder over the current account.
+    render(
+      view.actions.map(
+        (action) =>
+          html`<button
+            class="btn"
+            type="button"
+            data-size="sm"
+            data-variant=${action !== 'sign-up' && action !== 'keep' ? 'outline' : nothing}
+            @click=${() => {
+              const copy = playerText();
+              if (action === 'sign-out') void this.runAccountAction(copy.account.signOut, signOutOfLeaderboard);
+              else if (action === 'keep') void this.runAccountAction(copy.account.manage, createLeaderboardPasskey);
+              else if (action === 'sign-up') this.openDialog('sign-up');
+              else this.openDialog('sign-in');
+            }}
+          >
+            ${startAccountActionLabels()[action]}
+          </button>`,
+      ),
+      actions,
     );
   }
   private setSubmitting(value: boolean): void {

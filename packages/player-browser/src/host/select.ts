@@ -17,6 +17,9 @@ import { BuiltInSelectView } from '../view/built-in/select-view.ts';
 import { LR2SelectView } from '../view/lr2/select-view.ts';
 import type { SelectFrame, SelectIntent, SelectRecords, SelectView } from '../view/types.ts';
 import type { SelectKit } from './family-kit.ts';
+import { resolveControlScheme } from '../session/controls/control-buttons.ts';
+import { resolveFamilyControlActions } from '../session/controls/control-actions.ts';
+import { BEATORAJA_KEYS_FILTERS, BEATORAJA_SORTS } from '@be-music/skin-beatoraja/scene';
 
 const log = logger('select');
 
@@ -238,6 +241,7 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
 export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptions): SelectScene {
   // The session asks the view for its skin's launch outro, and a beatoraja view's skin sounds belong to the session.
   let familyView: FamilySelectView | undefined;
+  const scheme = resolveControlScheme(kit.family, options.controls?.builtInScheme);
   const session = new SelectSession({
     library: options.library,
     ...(options.browse !== undefined ? { browse: options.browse } : {}),
@@ -246,7 +250,14 @@ export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptio
     sounds: options.sounds,
     audio: options.audio,
     ...(options.courseMaker !== undefined ? { courseMaker: options.courseMaker } : {}),
-    policy: SELECT_POLICIES[kit.family],
+    policy: {
+      ...SELECT_POLICIES[kit.family],
+      keys: scheme,
+      ...(kit.family === 'beatoraja'
+        ? { listCycles: { sort: BEATORAJA_SORTS, keysFilter: BEATORAJA_KEYS_FILTERS } }
+        : {}),
+    },
+    actions: resolveFamilyControlActions(kit.family, options.controls),
     launchOutroMs: () => familyView?.view.launchOutroMs ?? 0,
     ...(options.now !== undefined ? { now: options.now } : {}),
     on: options.on,
@@ -254,6 +265,7 @@ export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptio
   familyView = createSelectView(kit, session, options);
   return new FamilySelectScene(session, familyView, {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
+    ...(options.controls !== undefined ? { controls: options.controls } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
 }

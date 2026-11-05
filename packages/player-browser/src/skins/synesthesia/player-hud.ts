@@ -74,9 +74,7 @@ function drawGauge(
     `${prefix}${(state.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
     groove.x - 2,
     groove.y - 19,
-    // The label runs from the groove's left edge up to a gap before the percentage readout (right-aligned at the
-    // frame's inner edge, up to `100%` wide), so a course gauge's long name (`COURSE-EASY GAUGE`) fits.
-    { ...labelStyle(), maxWidth: frame.w - 14 - 56 - (GROOVE_INSET - 2) },
+    { ...labelStyle(), maxWidth: groove.w - 56 },
     pool,
   );
   addHUDNumber(
@@ -127,7 +125,7 @@ export function drawGaugeCells(graphics: Graphics, state: GaugeState, groove: Be
   }
   if (!survival) {
     const x = groove.x + clearCell * stride - 1;
-    graphics.rect(x, barY - 5, 1.5, barH + 10).fill({ color: SYN_WHITE, alpha: 1 });
+    graphics.rect(x, barY, 1.5, barH).fill({ color: SYN_WHITE, alpha: 1 });
   }
 }
 

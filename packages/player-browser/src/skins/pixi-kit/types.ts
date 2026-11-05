@@ -84,6 +84,8 @@ export interface PixiNoteContext {
   /** Just-timing y: the note's bottom edge. */
   y: number;
   nowMs: number;
+  /** The playfield's white-key lane width, which every note takes its height from (`resolveNoteHeight`). */
+  whiteLaneWidth?: number;
 }
 
 export interface PixiLongNoteContext {
@@ -96,6 +98,8 @@ export interface PixiLongNoteContext {
   /** Head just-timing y (lower), held on the judgement line once passed. */
   bottom: number;
   nowMs: number;
+  /** The playfield's white-key lane width, which every note takes its height from (`resolveNoteHeight`). */
+  whiteLaneWidth?: number;
   /**
    * How the long note is judged: `'ln'` judges only its head (LR2's LN; the tail just marks where to let go), `'cn'` /
    * `'hcn'` judge the release too. Lets a skin draw an LN's tail apart from a tail that is judged.
@@ -110,6 +114,8 @@ export interface PixiLongNoteContext {
 }
 
 export interface PixiBombsContext {
+  /** Persistent effects layer, available for skin-specific clipping. */
+  layer?: Container;
   pool: ChildPool;
   bombs: readonly BeMusicBomb[];
   nowMs: number;
@@ -146,6 +152,8 @@ export interface PixiSelectRenderer {
 }
 
 export interface PixiSelectSkin {
+  readonly searchTextSize?: number;
+  readonly portraitSearchTextSize?: number;
   readonly layout: BeMusicSelectLayout;
   /** The list's geometry on the skin's portrait stage (see `BeMusicSelectSkin.portraitLayout`). */
   readonly portraitLayout?: BeMusicSelectLayout;

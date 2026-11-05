@@ -8,7 +8,7 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
       'hdx.bms',
       '#TITLE HDX HCN\n#BPM 120\n#OPTION charatbeatHDX:LONGMODE 1\n#LNTYPE 1\n#00051:0001\n#00151:0001\n#00211:01',
     );
-    await player.setOption(['Developer'], 'Judgment windows', 'beatoraja');
+    await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.key('Enter');
     await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 1.2, 'authored HCN');

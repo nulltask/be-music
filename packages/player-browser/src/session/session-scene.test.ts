@@ -10,6 +10,7 @@ import {
   type SessionKeyEvent,
   type SessionKeyTarget,
 } from './session-scene.ts';
+import { resolveControlButtons, type ControlSettings } from './controls/control-buttons.ts';
 
 type Frame = { readonly nowMs: number; readonly index: number };
 type Intent = { readonly type: 'start' } | { readonly type: 'exit' };
@@ -110,7 +111,9 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
-function createScene(options: { attach?: () => Promise<void>; stage?: boolean; family?: SceneFamily } = {}): {
+function createScene(
+  options: { attach?: () => Promise<void>; stage?: boolean; family?: SceneFamily; controls?: ControlSettings } = {},
+): {
   scene: SessionScene<Frame, Intent>;
   session: ReturnType<typeof createFakeSession>;
   view: ReturnType<typeof createFakeView>['view'];
@@ -122,7 +125,11 @@ function createScene(options: { attach?: () => Promise<void>; stage?: boolean; f
   const { view, emit } = createFakeView(options);
   const keys = createKeyTarget();
   const clock = { now: 100 };
-  const scene = new SessionScene(session, view, { keyTarget: keys, now: () => clock.now });
+  const scene = new SessionScene(session, view, {
+    keyTarget: keys,
+    now: () => clock.now,
+    ...(options.controls !== undefined ? { controls: options.controls } : {}),
+  });
   return { scene, session, view, emit, keys, clock };
 }
 
@@ -168,6 +175,7 @@ describe('SessionScene', () => {
     const escape = keys.fire('keydown', { code: 'Escape', key: 'Escape', shiftKey: true, timeStamp: 42 });
     expect(session.handleKey).toHaveBeenLastCalledWith({
       type: 'down',
+      buttons: [],
       code: 'Escape',
       key: 'Escape',
       repeat: false,
@@ -181,6 +189,15 @@ describe('SessionScene', () => {
     const other = keys.fire('keyup', { code: 'KeyZ', key: 'z' });
     expect(session.handleKey).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'up', code: 'KeyZ' }));
     expect(other.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('names the control buttons a key is by the player’s keys', async () => {
+    const { scene, session, keys } = createScene({ controls: { controlKeys: { '1P-start': ['tab'] } } });
+    await scene.enter(createFakeHost().host);
+    keys.fire('keydown', { code: 'Tab', key: 'Tab' });
+    expect(session.handleKey).toHaveBeenLastCalledWith(expect.objectContaining({ buttons: ['1P-start'] }));
+    keys.fire('keydown', { code: 'KeyQ', key: 'q' });
+    expect(session.handleKey).toHaveBeenLastCalledWith(expect.objectContaining({ buttons: [] }));
   });
 
   it('leaves keys typed into a text field to the field', async () => {
@@ -326,6 +343,7 @@ describe('toSessionKeyEvent', () => {
     } as unknown as KeyboardEvent;
     expect(toSessionKeyEvent('down', event)).toEqual({
       type: 'down',
+      buttons: [],
       code: 'ArrowUp',
       key: 'ArrowUp',
       repeat: true,
@@ -335,5 +353,14 @@ describe('toSessionKeyEvent', () => {
       altKey: false,
       metaKey: true,
     });
+    // The control buttons the key is, by the default keys or the player's.
+    expect(toSessionKeyEvent('down', { ...event, code: 'KeyQ' } as KeyboardEvent).buttons).toEqual(['1P-start']);
+    expect(
+      toSessionKeyEvent(
+        'down',
+        { ...event, code: 'KeyA' } as KeyboardEvent,
+        resolveControlButtons({ laneKeys: { beat: { '11': ['a'] } } }),
+      ).buttons,
+    ).toEqual(['1P-key1']);
   });
 });

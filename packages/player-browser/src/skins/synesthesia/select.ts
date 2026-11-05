@@ -1,4 +1,6 @@
-import { Container, Graphics, Sprite } from 'pixi.js';
+import { formatSelectBreadcrumb } from './layout.ts';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
+import { bindGlassSurface, drawGlassSurface } from './glass.ts';
 import { createFlock, stepFlock } from './boids.ts';
 import { ChargeCloud } from './charge-cloud.ts';
 import { KICK_REST, stepKick, type KickState } from './kick.ts';
@@ -38,7 +40,6 @@ import {
   SYN_DISPLAY_FONT,
   SYN_EMBER,
   SYN_FLARE,
-  SYN_GLASS,
   SYN_MAGENTA,
   SYN_MIST,
   SYN_TEXT_FONT,
@@ -58,6 +59,7 @@ import {
   describeCourseCard,
   formatPlayVariantLabel,
   resolveChartStats,
+  resolveDifficultyName,
   hash01,
   resolveChartRowFacts,
   stageProgress,
@@ -76,14 +78,14 @@ import {
 } from '../pixi-kit/index.ts';
 import { addSynesthesiaText } from './figures.ts';
 
-const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
+const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 92, listBottomInset: 28, rowHeight: 28 };
 /**
  * The portrait list: full width under the focused-song card and the search bar, with taller rows (two lines each, and
  * a thumb's height to tap).
  */
-const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 356, listBottomInset: 34, rowHeight: 36 };
+const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 422, listBottomInset: 34, rowHeight: 36 };
 /** The focused-song card on the portrait stage. */
-const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 248 } as const;
+const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 314 } as const;
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 76;
 const ROW_LENGTH_W = 30;
@@ -142,6 +144,8 @@ const PYRAMIDS = [pointCloudPyramid(12, 900), pointCloudPyramid(4, 560), pointCl
 
 export const synesthesiaSelectSkin: PixiSelectSkin = {
   outroMs: OUTRO_MS,
+  searchTextSize: 10,
+  portraitSearchTextSize: 11,
   layout: LAYOUT,
   portraitLayout: PORTRAIT_LAYOUT,
   createRenderer: () => new SynesthesiaSelectRenderer(),
@@ -161,9 +165,9 @@ function drawJudgeRank(
   left: number,
   centerY: number,
 ): void {
-  const label = addText('JUDGE', left, centerY, { ...labelStyle(), size: 10, anchorY: 0.5 });
+  const label = addText('JUDGE', left, centerY, { ...labelStyle(), anchorY: 0.5 });
   addText(chartEntry ? resolveChartStats(chartEntry).judgeRank : '-', left + label.width + 8, centerY, {
-    size: 10,
+    size: 9,
     fill: SYN_WHITE,
     fontFamily: SYN_DISPLAY_FONT,
     anchorY: 0.5,
@@ -171,8 +175,27 @@ function drawJudgeRank(
   });
 }
 
+function drawDifficulty(
+  graphics: Graphics,
+  addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
+  chart: LibraryChart | undefined,
+  x: number,
+  y: number,
+): void {
+  const label = addText('DIFFICULTY', x, y, { ...labelStyle(), anchorY: 0.5 });
+  const badgeX = x + label.width + 10;
+  graphics.rect(badgeX, y - 8, 108, 16).stroke({ color: SYN_AMBER, width: 1, alpha: 0.7 });
+  addText(resolveDifficultyName(chart) ?? '-', badgeX + 54, y, {
+    ...labelStyle(),
+    fill: SYN_AMBER,
+    anchorY: 0.5,
+    maxWidth: 98,
+    anchorX: 0.5,
+  });
+}
+
 function framePanel(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {
-  graphics.rect(x, y, w, h).fill({ color: SYN_GLASS, alpha: 0.5 });
+  drawGlassSurface(graphics, x, y, w, h, 0.94);
   graphics.rect(x, y, w, h).stroke({ color: rim, width: 1, alpha: 0.28 });
   drawReticle(graphics, x - 1, y - 1, w + 2, h + 2, SYN_WHITE, 0.85, { arm: 10, width: 1.25 });
 }
@@ -183,8 +206,24 @@ function framePanel(graphics: Graphics, x: number, y: number, w: number, h: numb
  * golden river of particles, and a roaming visualizer-style audio orb — redrawn cheaply in `tick`. The front layer snaps a lock-on reticle onto the focused card.
  */
 class SynesthesiaSelectRenderer implements PixiSelectRenderer {
+  private banner: { image: ImageBitmap; texture: Texture } | undefined;
+  private drawBanner(frame: PixiSelectFrame, x: number, y: number, maxWidth: number, maxHeight: number): void {
+    const image = frame.focusedChart ? frame.chartImage(frame.focusedChart, 'banner') : undefined;
+    if (this.banner?.image !== image) {
+      this.banner?.texture.destroy(true);
+      this.banner = image ? { image, texture: Texture.from(image) } : undefined;
+    }
+    if (!this.banner) return;
+    const scale = Math.min(maxWidth / image!.width, maxHeight / image!.height);
+    const sprite = new Sprite(this.banner.texture);
+    sprite.position.set(x, y);
+    sprite.width = image!.width * scale;
+    sprite.height = image!.height * scale;
+    frame.layer.addChild(sprite);
+  }
   public readonly backLayer = new Container();
   public readonly frontLayer = new Container();
+  private readonly glass = new Graphics();
   private readonly ground = new Graphics();
   /** Additive particle world: floor, pyramids, river, and the orb's tails. */
   private readonly world = new Graphics();
@@ -233,6 +272,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         : input;
     this.ensureBuilt(frame.designWidth, frame.designHeight);
     this.activeCard = undefined;
+    this.glass.clear();
     const portrait = frame.designHeight > frame.designWidth;
     let needsFrame = portrait ? this.renderPortraitChrome(frame) : this.renderChrome(frame);
     const layout = portrait ? PORTRAIT_LAYOUT : LAYOUT;
@@ -272,7 +312,11 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const dark = Math.max(0, (t - 0.72) / 0.28);
     // Fade the list and panels out of the way, leaving black space and the particles rushing past.
     const away = 1 - easeOutCubic(Math.min(1, t / 0.25));
-    for (const child of layer.children) child.alpha *= away;
+    for (const child of layer.children) {
+      child.alpha *= away;
+      if (child.label === 'synesthesia-select/header') child.y -= 38 * (1 - away);
+      if (child.label === 'synesthesia-select/footer') child.y += 32 * (1 - away);
+    }
     const form = easeOutCubic(Math.min(1, t / 0.4));
     const alpha = Math.min(1, t * 4) * (1 - dark);
     const title = addSynesthesiaText(layer, chartEntry?.title ?? '', cx, cy - 6, {
@@ -555,6 +599,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   }
 
   public dispose(): void {
+    this.banner?.texture.destroy(true);
+    this.banner = undefined;
     this.chargeCloud.destroy();
     this.backLayer.destroy({ children: true });
     this.frontLayer.destroy({ children: true });
@@ -593,7 +639,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
     this.world.blendMode = 'add';
     this.trails.blendMode = 'add';
-    this.backLayer.addChild(this.ground, this.world, this.trails, starLayer, this.chargeCloud.view);
+    this.backLayer.addChild(this.ground, this.world, this.trails, starLayer, this.chargeCloud.view, this.glass);
 
     this.cursorGlow.texture = glow;
     this.cursorGlow.anchor.set(0.5);
@@ -604,11 +650,16 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private renderChrome(frame: PixiSelectFrame): boolean {
     const { layer, designWidth, designHeight, entries, focusedChart: chartEntry } = frame;
     const chrome = new Graphics();
+    bindGlassSurface(chrome, this.glass);
     chrome.label = 'synesthesia-select/chrome';
     const hue = sceneHue(frame.nowMs / 1000);
     const accent = hsvToHex(hue, 0.6, 1);
-    const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
-      addSynesthesiaText(layer, text, x, y, options);
+    const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) => {
+      const node = addSynesthesiaText(layer, text, x, y, options);
+      if (y < 38) node.label = 'synesthesia-select/header';
+      else if (y >= designHeight - 36) node.label = 'synesthesia-select/footer';
+      return node;
+    };
 
     // A focused course takes the song's place: its name, then its kind and stage count.
     const course =
@@ -618,19 +669,18 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const chartTitle = chartEntry?.title ?? course?.title ?? 'No chart selected';
     const chartArtist = chartEntry?.artist || chartEntry?.subtitle || course?.detail || '';
     const playLevel = chartEntry?.playLevel !== undefined ? String(chartEntry.playLevel) : '-';
-    const playLevelNumber =
-      chartEntry?.playLevel !== undefined
-        ? Number.parseFloat(String(chartEntry.playLevel).replace(/^[^\d.]+/u, ''))
-        : NaN;
     const chartBPM = chartEntry?.bpm !== undefined ? String(Math.round(chartEntry.bpm)) : '-';
     const modeLabel = chartEntry ? formatPlayVariantLabel(chartEntry) : '- KEYS';
-    const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
+    const categoryName = formatSelectBreadcrumb(frame.folderPath, frame.folderLabel, frame.searchQuery);
     const position =
       entries.length > 0 ? `${Math.min(frame.selectedIndex + 1, entries.length)} / ${entries.length}` : '0 / 0';
 
     // Header: title as light, a hairline, and the folder on the right.
-    chrome.rect(0, 0, designWidth, 38).fill({ color: SYN_VOID, alpha: 0.5 });
-    chrome.rect(0, 38, designWidth, 1).fill({ color: accent, alpha: 0.5 });
+    const header = new Graphics();
+    header.label = 'synesthesia-select/header';
+    layer.addChild(header);
+    header.rect(0, 0, designWidth, 38).fill({ color: SYN_VOID, alpha: 0.5 });
+    header.rect(0, 38, designWidth, 1).fill({ color: accent, alpha: 0.5 });
     const intro = easeOutCubic(stageProgress(frame.nowMs - frame.sceneStartedAt, 0, 900));
     addText('MUSIC SELECT', 18, 13, {
       size: 12,
@@ -646,13 +696,16 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       fill: SYN_MIST,
       fontFamily: SYN_TEXT_FONT,
       anchorX: 1,
-      maxWidth: 220,
+      maxWidth: designWidth - 300,
     });
 
     // Info panel.
-    framePanel(chrome, 14, 56, 290, 302, accent);
+    const banner = chartEntry ? frame.chartImage(chartEntry, 'banner') : undefined;
+    const bannerHeight = banner ? Math.min(72, (258 * banner.height) / banner.width) : 0;
+    // Match the 14 px gap above the banner, including short or unusually tall source images.
+    framePanel(chrome, 14, 56, 290, banner ? 312 + bannerHeight : 306, accent);
     // The genre heads the card, in the accent light, where a fixed caption used to sit.
-    const genre = chartEntry?.genre?.trim();
+    const genre = chartEntry?.genre?.trim() || (chartEntry ? '----' : undefined);
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
     addText(chartTitle, 30 + slide * 24, 86, {
       size: 18,
@@ -705,39 +758,29 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     }
 
-    // The judge rank (#RANK / #DEFEXRANK) between the stat chips and the level lights.
-    drawJudgeRank(addText, chartEntry, 30, 214);
+    // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
+    drawDifficulty(chrome, addText, chartEntry, 30, 224);
+    drawJudgeRank(addText, chartEntry, 30, 250);
 
-    // Level as a row of lights, from cool electric blue through magenta to hot ember.
-    const levelRatio = Number.isFinite(playLevelNumber) ? Math.max(0.04, Math.min(1, playLevelNumber / 12)) : 0;
-    const dots = 12;
-    for (let dot = 0; dot < dots; dot += 1) {
-      const lit = dot < Math.round(levelRatio * dots);
-      const x = 38 + dot * 22;
-      const color = levelColor(dot / dots);
-      if (lit) {
-        chrome.circle(x, 236, 7).fill({ color, alpha: 0.18 });
-        chrome.circle(x, 236, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
-      } else {
-        chrome.circle(x, 236, 2).fill({ color: SYN_DIM, alpha: 0.5 });
-      }
-    }
+    // The file name and the list position share the row under the judge rank.
     if (chartEntry?.fileLabel) {
-      addText(chartEntry.fileLabel, 30, 251, {
+      addText(chartEntry.fileLabel, 30, 276, {
         size: 9,
         weight: '300',
         fill: SYN_DIM,
         fontFamily: SYN_TEXT_FONT,
-        maxWidth: 258,
+        anchorY: 0.5,
+        // Clear of the list position at the row's end.
+        maxWidth: 200,
       });
     }
-    addText(position, 288, 270, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1 });
+    addText(position, 288, 276, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1, anchorY: 0.5 });
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
-    chrome.rect(26, 296, 170, 40).fill({ color: accent, alpha: 0.16 });
-    chrome.rect(30, 300, 162, 32).fill({ color: accent, alpha: 0.88 });
-    drawReticle(chrome, 26, 296, 170, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
-    addText('PLAY', 111, 316, {
+    chrome.rect(26, 300, 170, 40).fill({ color: accent, alpha: 0.16 });
+    chrome.rect(30, 304, 162, 32).fill({ color: accent, alpha: 0.88 });
+    drawReticle(chrome, 26, 300, 170, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
+    addText('PLAY', 111, 320, {
       size: 14,
       fill: SYN_VOID,
       fontFamily: SYN_DISPLAY_FONT,
@@ -746,9 +789,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorY: 0.5,
     });
     // AUTO's right edge sits on the content column's (288), like the LEVEL chip above it.
-    chrome.rect(202, 303, 86, 26).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
-    drawReticle(chrome, 202, 303, 86, 26, SYN_MIST, 0.8, { arm: 5, width: 1 });
-    addText('AUTO', 245, 316, {
+    chrome.rect(202, 307, 86, 26).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
+    drawReticle(chrome, 202, 307, 86, 26, SYN_MIST, 0.8, { arm: 5, width: 1 });
+    addText('AUTO', 245, 320, {
       size: 9,
       fill: SYN_MIST,
       fontFamily: SYN_DISPLAY_FONT,
@@ -756,39 +799,42 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorX: 0.5,
       anchorY: 0.5,
     });
-    addHitArea(26, 296, 172, 40, 'pointer', frame.actions.play);
-    addHitArea(200, 300, 90, 32, 'pointer', frame.actions.autoPlay);
+    addHitArea(26, 300, 172, 40, 'pointer', frame.actions.play);
+    addHitArea(200, 304, 90, 32, 'pointer', frame.actions.autoPlay);
+    this.drawBanner(frame, 30, 354, 258, 72);
 
     // Search and library.
-    framePanel(chrome, 14, 372, 290, 30, accent);
-    addText('SEARCH', 30, 387, { ...labelStyle(accent), anchorY: 0.5 });
+    framePanel(chrome, 322, 54, designWidth - 336, 30, accent);
+    addText('SEARCH', 334, 69, { ...labelStyle(accent), anchorY: 0.5 });
     // While the player types in the host's field laid over the box, the field shows the text.
     if (!frame.searchEditing) {
-      addText(frame.searchQuery || 'Title / artist / genre', 116, 387, {
+      addText(frame.searchQuery || 'Title / artist / genre', 418, 69, {
         size: 10,
         anchorY: 0.5,
         weight: '300',
         fill: frame.searchQuery ? SYN_WHITE : SYN_DIM,
         fontFamily: SYN_TEXT_FONT,
-        maxWidth: 180,
+        maxWidth: designWidth - 436,
       });
     }
     // The label and the text strip both start typing; the strip comes last, so the host lays its field over the text.
-    addHitArea(14, 372, 98, 30, 'text', frame.actions.activateSearch);
-    addHitArea(112, 372, 192, 30, 'text', frame.actions.activateSearch);
-    addText('LIBRARY', 30, 422, labelStyle());
-    addText(`${entries.length} shown / ${frame.totalCharts} charts`, 30, 436, {
+    addHitArea(322, 54, 92, 30, 'text', frame.actions.activateSearch);
+    addHitArea(414, 54, designWidth - 428, 30, 'text', frame.actions.activateSearch);
+    const footY = designHeight - 17;
+    addText('LIBRARY', 30, footY, { ...labelStyle(), anchorY: 0.5 });
+    // The count in the display face, like the LIBRARY label above it and the list position.
+    addText(`${entries.length} shown / ${frame.totalCharts} charts`, 110, footY, {
       size: 11,
-      weight: '500',
       fill: SYN_MIST,
-      fontFamily: SYN_TEXT_FONT,
+      fontFamily: SYN_DISPLAY_FONT,
+      anchorY: 0.5,
+      maxWidth: designWidth - 270,
     });
-    addText(
-      frame.searchQuery ? 'SEARCH RESULTS' : frame.folderLabel ? 'CHARTS' : 'FOLDERS',
-      designWidth - 14,
-      designHeight - 20,
-      { ...labelStyle(), anchorX: 1 },
-    );
+    addText(frame.searchQuery ? 'SEARCH RESULTS' : frame.folderLabel ? 'CHARTS' : 'FOLDERS', designWidth - 14, footY, {
+      ...labelStyle(),
+      anchorX: 1,
+      anchorY: 0.5,
+    });
 
     layer.addChildAt(chrome, 0);
     return slide > 0 || intro < 1;
@@ -796,16 +842,21 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
   /**
    * Portrait select: the header, the focused song as a card across the top (genre, title, artist, the mode / tempo /
-   * level chips, the level lights, PLAY and AUTO), the search bar, and the library line at the foot; the list runs
+   * level chips, PLAY and AUTO), the search bar, and the library line at the foot; the list runs
    * full width between them. Nothing is set smaller than 10 design px.
    */
   private renderPortraitChrome(frame: PixiSelectFrame): boolean {
     const { layer, designWidth, designHeight, entries, focusedChart: chartEntry } = frame;
     const chrome = new Graphics();
+    bindGlassSurface(chrome, this.glass);
     chrome.label = 'synesthesia-select/chrome';
     const accent = hsvToHex(sceneHue(frame.nowMs / 1000), 0.6, 1);
-    const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
-      addSynesthesiaText(layer, text, x, y, options);
+    const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) => {
+      const node = addSynesthesiaText(layer, text, x, y, options);
+      if (y < 38) node.label = 'synesthesia-select/header';
+      else if (y >= designHeight - 36) node.label = 'synesthesia-select/footer';
+      return node;
+    };
     const label = (fill: number = SYN_DIM): SkinTextOptions => ({ ...labelStyle(fill), size: 10 });
 
     const course =
@@ -814,17 +865,16 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         : undefined;
     const chartArtist = chartEntry?.artist || chartEntry?.subtitle || course?.detail || '';
     const playLevel = chartEntry?.playLevel !== undefined ? String(chartEntry.playLevel) : '-';
-    const playLevelNumber =
-      chartEntry?.playLevel !== undefined
-        ? Number.parseFloat(String(chartEntry.playLevel).replace(/^[^\d.]+/u, ''))
-        : NaN;
-    const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
+    const categoryName = formatSelectBreadcrumb(frame.folderPath, frame.folderLabel, frame.searchQuery);
     const position =
       entries.length > 0 ? `${Math.min(frame.selectedIndex + 1, entries.length)} / ${entries.length}` : '0 / 0';
 
     // Header: title as light, a hairline, and the folder on the right.
-    chrome.rect(0, 0, designWidth, 40).fill({ color: SYN_VOID, alpha: 0.5 });
-    chrome.rect(0, 40, designWidth, 1).fill({ color: accent, alpha: 0.5 });
+    const header = new Graphics();
+    header.label = 'synesthesia-select/header';
+    layer.addChild(header);
+    header.rect(0, 0, designWidth, 40).fill({ color: SYN_VOID, alpha: 0.5 });
+    header.rect(0, 40, designWidth, 1).fill({ color: accent, alpha: 0.5 });
     const intro = easeOutCubic(stageProgress(frame.nowMs - frame.sceneStartedAt, 0, 900));
     addText('MUSIC SELECT', 16, 14, {
       size: 12,
@@ -849,7 +899,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const left = card.x + 16;
     const innerW = card.w - 32;
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
-    const genre = chartEntry?.genre?.trim();
+    const genre = chartEntry?.genre?.trim() || (chartEntry ? '----' : undefined);
     if (genre) {
       addText(genre.toUpperCase(), left + slide * 16, card.y + 14, {
         size: 10,
@@ -905,37 +955,27 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     });
 
-    // The judge rank (#RANK / #DEFEXRANK) between the stat chips and the level lights.
-    drawJudgeRank(addText, chartEntry, left, card.y + 148);
+    // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
+    drawDifficulty(chrome, addText, chartEntry, left, card.y + 154);
+    drawJudgeRank(addText, chartEntry, left + 238, card.y + 154);
 
-    // Level as a row of lights, with the list position at its end.
-    const levelRatio = Number.isFinite(playLevelNumber) ? Math.max(0.04, Math.min(1, playLevelNumber / 12)) : 0;
-    const dots = 12;
-    const dotsY = card.y + 166;
-    for (let dot = 0; dot < dots; dot += 1) {
-      const lit = dot < Math.round(levelRatio * dots);
-      const x = left + 8 + dot * 22;
-      const color = levelColor(dot / dots);
-      if (lit) {
-        chrome.circle(x, dotsY, 7).fill({ color, alpha: 0.18 });
-        chrome.circle(x, dotsY, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
-      } else {
-        chrome.circle(x, dotsY, 2).fill({ color: SYN_DIM, alpha: 0.5 });
-      }
-    }
-    addText(position, left + innerW, dotsY, { ...label(SYN_MIST), anchorX: 1, anchorY: 0.5 });
+    // The file name and the list position share the row under the judge rank.
+    const fileRowY = card.y + 180;
+    addText(position, left + innerW, fileRowY, { ...label(SYN_MIST), anchorX: 1, anchorY: 0.5 });
     if (chartEntry?.fileLabel) {
-      addText(chartEntry.fileLabel, left, card.y + 178, {
+      addText(chartEntry.fileLabel, left, fileRowY, {
         size: 10,
         weight: '300',
         fill: SYN_DIM,
         fontFamily: SYN_TEXT_FONT,
-        maxWidth: innerW,
+        anchorY: 0.5,
+        // Clear of the list position at the row's end.
+        maxWidth: innerW - 64,
       });
     }
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline), thumb-sized.
-    const buttonY = card.y + 198;
+    const buttonY = card.y + 212;
     const playW = Math.round(innerW * 0.62);
     chrome.rect(left - 4, buttonY - 4, playW + 8, 44).fill({ color: accent, alpha: 0.16 });
     chrome.rect(left, buttonY, playW, 36).fill({ color: accent, alpha: 0.88 });
@@ -963,6 +1003,10 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     addHitArea(left - 4, buttonY - 4, playW + 8, 44, 'pointer', frame.actions.play);
     addHitArea(autoX - 2, buttonY - 2, autoW + 4, 40, 'pointer', frame.actions.autoPlay);
 
+    const banner = chartEntry ? frame.chartImage(chartEntry, 'banner') : undefined;
+    const bannerHeight = banner ? Math.min(48, (innerW * banner.height) / banner.width) : 0;
+    this.drawBanner(frame, left, card.y + 252 + (card.h - 252 - bannerHeight) / 2, innerW, 48);
+
     // Search.
     const searchY = card.y + card.h + 10;
     framePanel(chrome, card.x, searchY, card.w, 32, accent);
@@ -984,12 +1028,14 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     // Library line at the foot.
     const footY = designHeight - 17;
-    chrome.rect(0, designHeight - 32, designWidth, 1).fill({ color: accent, alpha: 0.3 });
+    const footer = new Graphics();
+    footer.label = 'synesthesia-select/footer';
+    layer.addChild(footer);
+    footer.rect(0, designHeight - 32, designWidth, 1).fill({ color: accent, alpha: 0.3 });
     addText(`${entries.length} shown / ${frame.totalCharts} charts`, 16, footY, {
       size: 11,
-      weight: '500',
       fill: SYN_MIST,
-      fontFamily: SYN_TEXT_FONT,
+      fontFamily: SYN_DISPLAY_FONT,
       anchorY: 0.5,
     });
     addText(frame.searchQuery ? 'SEARCH RESULTS' : frame.folderLabel ? 'CHARTS' : 'FOLDERS', designWidth - 16, footY, {
@@ -1030,14 +1076,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const rowW = listWidth + (active ? 4 : 0);
     const alpha = 1 - intro;
     const row = new Graphics();
+    bindGlassSurface(row, this.glass);
     row.alpha = alpha;
     row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
+    drawGlassSurface(row, rowX, y, rowW, rowH, 0.96 * alpha);
     if (active) {
       row.rect(rowX, y, rowW, rowH).fill({ color: accent, alpha: 0.24 });
       row.rect(rowX, y, rowW, rowH).stroke({ color: SYN_FLARE, width: 1, alpha: 0.6 });
       this.activeCard = { x: rowX, y, w: rowW, h: rowH };
     } else {
-      row.rect(rowX, y, rowW, rowH).fill({ color: SYN_GLASS, alpha: 0.55 });
       row.rect(rowX, y, rowW, rowH).stroke({ color: accent, width: 1, alpha: 0.16 });
     }
     const midY = y + rowH / 2;
@@ -1136,14 +1183,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const rowW = active ? listWidth + 8 : listWidth;
     const alpha = 1 - intro;
     const row = new Graphics();
+    bindGlassSurface(row, this.glass);
     row.alpha = alpha;
     row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
+    drawGlassSurface(row, rowX, y, rowW, rowHeight - 4, 0.96 * alpha);
     if (active) {
       row.rect(rowX, y, rowW, rowHeight - 4).fill({ color: accent, alpha: 0.24 });
       row.rect(rowX, y, rowW, rowHeight - 4).stroke({ color: SYN_FLARE, width: 1, alpha: 0.6 });
       this.activeCard = { x: rowX, y, w: rowW, h: rowHeight - 4 };
     } else {
-      row.rect(rowX, y, rowW, rowHeight - 4).fill({ color: SYN_GLASS, alpha: 0.55 });
       row.rect(rowX, y, rowW, rowHeight - 4).stroke({ color: accent, width: 1, alpha: 0.16 });
     }
     // Level as a glowing orb on the leading edge.

@@ -7,11 +7,20 @@
 import type { AudioService } from '@be-music/player-browser/audio';
 import { describeChartCollection } from '@be-music/player-browser/collection';
 import {
+  applyChartLevelEdits,
+  chartLevelKey,
+  readChartLevelEdits,
+  stepChartLevel,
+  writeChartLevelEdits,
+} from '../../chart-level-edits.ts';
+import { chartRankingURL } from '../../leaderboard.ts';
+import {
   createSelectScene,
   type PlayScene,
   type SelectScene,
   type SelectSceneKit,
   type SelectStartEntry,
+  type ControlSettings,
 } from '@be-music/player-browser/host';
 import {
   resolveLibraryChartPlayVariant,
@@ -34,20 +43,28 @@ import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
 import type { LR2ThemeService } from '../../services/themes/lr2.ts';
 import type { PlayerGUIState, PlayerScene, PlayerWebElements } from '../../types.ts';
 import type { BeatorajaSkinOptionsPanel } from '../../ui/beatoraja-skin-options.ts';
-import type { DebugMenu } from '../../ui/debug-menu/index.ts';
+import type { OptionsDialog } from '../../ui/options/index.ts';
 import type { FamilyKits } from '../family-kits.ts';
 import type { SceneRouter } from '../scene-router.ts';
 import type { CourseRoute } from './course.ts';
 
 export interface SelectRouteDeps {
+  /** The player's keys the screen reads its control buttons by (`ControlSettings`), as it opens. */
+  readonly controls: () => ControlSettings;
+  /** Asks whether to leave the select screen (the exit menu, `ui/exit-menu.ts`), then calls back with the answer. */
+  readonly closeWindow: () => void;
+  readonly showExitMenu: (onChoice: (choice: 'leave' | 'cancel') => void) => void;
   /** The scene router: the select scene it keeps, shown again on a return, or dropped when another family draws it. */
   readonly router: Pick<SceneRouter<PlayerScene, PlayScene, SelectScene>, 'select' | 'show' | 'dropSelect'>;
   /** The page: the shell's `playing` and `empty` classes. */
   readonly elements: Pick<PlayerWebElements, 'shell'>;
   /** The library the screen lists. */
-  readonly library: Pick<LibraryService, 'collection'>;
+  readonly library: Pick<LibraryService, 'collection' | 'reloadCharts'>;
   /** The best records the screen shows on its bars. */
-  readonly records: Pick<RecordsService, 'lookupChartBestRecord' | 'currentRulesetRecords' | 'currentDanRanks'>;
+  readonly records: Pick<
+    RecordsService,
+    'lookupChartBestRecord' | 'currentRulesetRecords' | 'currentDanRanks' | 'resolveChartHashes'
+  >;
   /** The course run: where the cursor goes back to once a course is over. */
   readonly courses: Pick<CourseRunService, 'takeReturnNavigation'>;
   /** Starts a course bar's run. */
@@ -67,13 +84,13 @@ export interface SelectRouteDeps {
   readonly builtIn: Pick<BuiltInThemeService, 'builtInKit'>;
   /** The play options in force: every select screen starts from them, and its own edits go back to them. */
   readonly playOptions: Pick<PlayOptionsService, 'current' | 'update'>;
-  /** The Debug Menu's state: its play options, which mirror the screen's, and the NONSTOP placement. */
+  /** The Options dialog's state: its play options, which mirror the screen's, and the NONSTOP placement. */
   readonly guiState: GUIPlayOptions & Pick<PlayerGUIState, 'nonstopPlacement'>;
   readonly audio: AudioService;
   /** The search field, which a skin's search box opens. */
   readonly search: Pick<InlineSearch, 'openFromPointer'>;
-  /** The Debug Menu: its play option controllers, and the render-resolution check on the first select screen. */
-  readonly debugMenu: DebugMenu;
+  /** The Options dialog: its play option controllers, and the render-resolution check on the first select screen. */
+  readonly optionsDialog: OptionsDialog;
   /** The skin-options panel of the beatoraja screen showing. */
   readonly beatorajaSkinOptions: Pick<BeatorajaSkinOptionsPanel, 'refreshBeatorajaSelectSkinOptions' | 'clear'>;
   /** Whether the status line describes a play or result, which the select screen replaces with the library's. */
@@ -81,7 +98,7 @@ export interface SelectRouteDeps {
   readonly setStatus: (text: string) => void;
   /** Re-enables the options a play latched. */
   readonly unlockReplayOptions: () => void;
-  /** Remembers a hi-speed set on the screen for the next play, and mirrors it onto the Debug Menu. */
+  /** Remembers a hi-speed set on the screen for the next play, and mirrors it onto the Options dialog. */
   readonly rememberHiSpeed: (value: number, source: 'select') => void;
   /** Shows the decide screen for a chart started on the screen (`DecideRoute`). */
   readonly showDecide: (chartEntry: LibraryChart, overrides: { autoPlay?: boolean }) => Promise<void>;
@@ -103,7 +120,12 @@ export class SelectRoute {
    * own cursor is the place, so a screen made again later for another family opens where the player has browsed since.
    */
   public lastSelectNavigation: BrowseSnapshot | undefined;
+  /** The charts beatoraja's F10 has still to play in AUTO: each return to the screen starts the next one. */
+  private autoPlaylist: LibraryChart[] = [];
   private readonly router: SelectRouteDeps['router'];
+  private readonly controls: SelectRouteDeps['controls'];
+  private readonly showExitMenu: SelectRouteDeps['showExitMenu'];
+  private readonly closeWindow: SelectRouteDeps['closeWindow'];
   private readonly elements: SelectRouteDeps['elements'];
   private readonly library: SelectRouteDeps['library'];
   private readonly records: SelectRouteDeps['records'];
@@ -118,7 +140,7 @@ export class SelectRoute {
   private readonly guiState: SelectRouteDeps['guiState'];
   private readonly audio: SelectRouteDeps['audio'];
   private readonly search: SelectRouteDeps['search'];
-  private readonly debugMenu: SelectRouteDeps['debugMenu'];
+  private readonly optionsDialog: SelectRouteDeps['optionsDialog'];
   private readonly beatorajaSkinOptions: SelectRouteDeps['beatorajaSkinOptions'];
   private readonly playStatusShown: SelectRouteDeps['playStatusShown'];
   private readonly setStatus: SelectRouteDeps['setStatus'];
@@ -134,6 +156,9 @@ export class SelectRoute {
     this.replaySlotsPanel = deps.replaySlotsPanel;
     this.startReplayFromSlot = deps.startReplayFromSlot;
     this.router = deps.router;
+    this.controls = deps.controls;
+    this.showExitMenu = deps.showExitMenu;
+    this.closeWindow = deps.closeWindow;
     this.elements = deps.elements;
     this.library = deps.library;
     this.records = deps.records;
@@ -148,7 +173,7 @@ export class SelectRoute {
     this.guiState = deps.guiState;
     this.audio = deps.audio;
     this.search = deps.search;
-    this.debugMenu = deps.debugMenu;
+    this.optionsDialog = deps.optionsDialog;
     this.beatorajaSkinOptions = deps.beatorajaSkinOptions;
     this.playStatusShown = deps.playStatusShown;
     this.setStatus = deps.setStatus;
@@ -167,6 +192,13 @@ export class SelectRoute {
    * family draws it now. The cursor comes back where it was, or to the course bar a course was started from.
    */
   public async showSelect(): Promise<void> {
+    // beatoraja's F10: the folder's charts play in AUTO one after the other, each one's decide screen straight after the
+    // last one's result.
+    const next = this.autoPlaylist.shift();
+    if (next !== undefined) {
+      void this.showDecide(next, { autoPlay: true });
+      return;
+    }
     // Back from a play or a result: the status line describes the library again instead of the play just left.
     if (this.playStatusShown()) this.setStatus(describeChartCollection(this.library.collection));
     // Back from a course: the cursor returns to the course bar it was started from.
@@ -178,7 +210,7 @@ export class SelectRoute {
     // and back on after a wipe / failed drop so the hint comes back instead of leaving the user staring at a blank
     // canvas.
     this.elements.shell.classList.toggle('empty', this.library.collection.charts.length === 0);
-    // Family dispatch. The Debug Menu's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default). The
+    // Family dispatch. The Options dialog's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default). The
     // beatoraja family draws the theme's select entry when the library has charts (an empty library shows the built-in
     // screen's drop hint); the LR2 family draws the loaded LR2 select skin when it has a bar list; otherwise the built-in
     // family draws the Be-Music Skin.
@@ -217,11 +249,12 @@ export class SelectRoute {
       return;
     }
     // The screen starts from the play options in force (two-way sync: the screen's own edits come back through
-    // `on.playOptions` below; Tweakpane edits push through `setPlayOptions`).
+    // `on.playOptions` below; the Options dialog's edits push through `setPlayOptions`).
     const playOptions = this.playOptions.current;
     // The select session plays through the audio service; its decide jingle plays out through the decide screen into
     // the play.
     const scene = createSelectScene(kit, {
+      controls: this.controls(),
       library: this.library.collection,
       ...(this.lastSelectNavigation !== undefined ? { browse: this.lastSelectNavigation } : {}),
       playOptions,
@@ -246,11 +279,11 @@ export class SelectRoute {
           // "Ghost status" says whether a play of the bar would show the picked ghost.
           const chart = entry?.kind === 'chart' ? entry : undefined;
           // The PRACTICE range picker draws the chart under the cursor.
-          this.debugMenu.setPracticeChart(chart?.chart);
+          this.optionsDialog.setPracticeChart(chart?.chart);
           const playFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'gameplay', chart?.chart);
           const target = chart !== undefined ? this.replaySlots.targetOf(chart) : undefined;
           // No bar, or a folder: nothing to say.
-          this.debugMenu.setGhostAvailability(
+          this.optionsDialog.setGhostAvailability(
             entry === undefined || entry.kind === 'folder'
               ? undefined
               : {
@@ -264,12 +297,12 @@ export class SelectRoute {
           );
         },
         playOptions: (options) => {
-          // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Debug Menu
-          // state so both surfaces always agree, then repaint the Tweakpane controllers.
+          // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Options dialog
+          // state so both surfaces always agree, then repaint the Options dialog's controls.
           this.playOptions.update(options);
           copyPlayOptionsToGUI(options, this.guiState);
           if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
-          this.debugMenu.refreshPlayOptionControllers();
+          this.optionsDialog.refreshPlayOptionControllers();
         },
         search: () => this.search.openFromPointer(),
         // An LR2 skin's course name (text 170) and delete button (233): the panel names the course or confirms first.
@@ -285,20 +318,45 @@ export class SelectRoute {
           this.beatoraja.beatorajaKitCaches.skinConfigs.set(entryPath, config);
           void this.beatoraja.applyBeatorajaSelectSkinConfig(entryPath, config);
         },
-        // Escape at the root of a beatoraja select screen leaves it for the drop screen, as beatoraja's leaves the
-        // player's select; coming back by a drop or a theme starts at the root.
-        exit: () => {
-          this.elements.shell.classList.add('empty');
-          void this.router.dropSelect();
-          this.lastSelectNavigation = undefined;
-          this.beatorajaSkinOptions.clear();
+        // Escape at the root confirms closing the window. Cancel keeps the current library and cursor.
+        // LR2's F8 and beatoraja's F2: the library's folders are read again, and the screen shows what they hold now.
+        reload: () => {
+          void this.library.reloadCharts();
+        },
+        // LR2's key 4 held: the chart's ranking on the Leaderboard (LR2's IR).
+        ranking: (chart) => {
+          window.open(chartRankingURL(chart, location.hostname), '_blank', 'noopener');
+        },
+        // LR2's F3 + the arrows: the player's own difficulty or level for the chart, kept for the next visit.
+        levelEdit: (chart, part, step) => {
+          const edit = stepChartLevel(chart, part, step);
+          const edits = { ...readChartLevelEdits(globalThis.localStorage), [chartLevelKey(chart)]: edit };
+          writeChartLevelEdits(globalThis.localStorage, edits);
+          applyChartLevelEdits([chart], edits);
+          this.library.collection = { ...this.library.collection, charts: [...this.library.collection.charts] };
+          this.selectView?.setLibrary(this.library.collection);
+        },
+        // beatoraja's Ctrl+F3 / Ctrl+Shift+F3: the chart's MD5 or SHA-256 on the clipboard.
+        copyChartHash: (chart, hash) => {
+          void this.copyChartHash(chart, hash);
+        },
+        // beatoraja's F10: every chart of the folder in AUTO, the first one now.
+        autoplayFolder: (charts) => {
+          this.lastSelectNavigation = this.selectView?.snapshot();
+          this.autoPlaylist = [...charts];
+          void this.showSelect();
+        },
+        exitMenu: () => {
+          this.showExitMenu((choice) => {
+            if (choice === 'leave') this.closeWindow();
+          });
         },
       },
     });
     if (!(await this.router.show(scene, { role: 'select' }))) return;
     this.lastSelectNavigation = undefined;
     if (kit.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
-    this.debugMenu.scheduleFirstRunResolutionDetect();
+    this.optionsDialog.scheduleFirstRunResolutionDetect();
   }
 
   /**
@@ -315,10 +373,29 @@ export class SelectRoute {
    * (as LR2 does); a course starts its run, or says why it cannot. Returns whether a play starts, so the screen plays
    * the decide jingle only then.
    */
+  /** Ends beatoraja's F10 run of AUTO plays: a play given up goes back to the select screen. */
+  public endAutoPlaylist(): void {
+    this.autoPlaylist = [];
+  }
+
+  private async copyChartHash(chart: LibraryChart, hash: 'md5' | 'sha256'): Promise<void> {
+    const value = (await this.records.resolveChartHashes(chart))?.[hash];
+    if (value === undefined) {
+      this.setStatus(`${chart.title}: no ${hash === 'md5' ? 'MD5' : 'SHA-256'} to copy`);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      this.setStatus(`Copied the ${hash === 'md5' ? 'MD5' : 'SHA-256'} of ${chart.title}`);
+    } catch {
+      this.setStatus(`${chart.title}: the clipboard is not available`);
+    }
+  }
+
   private startFromSelect(entry: SelectStartEntry, autoPlay: boolean): boolean {
     if (entry.kind === 'chart') {
       if (this.courseMaker.addChartToCourseBeingMade(entry.chart)) return false;
-      // The skin's AUTOPLAY forces auto play for this play only; the Debug Menu's checkbox keeps its state.
+      // The skin's AUTOPLAY forces auto play for this play only; the Options dialog's checkbox keeps its state.
       void this.showDecide(entry.chart, autoPlay ? { autoPlay: true } : {});
       return true;
     }

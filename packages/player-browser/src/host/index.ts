@@ -38,6 +38,7 @@ export {
   type PlaySceneSettings,
 } from './play.ts';
 export { PlayOptionMismatchError } from '../session/play/play-option-mismatch.ts';
+export type { SkinAdjust } from '../session/play/play-options.ts';
 export type {
   GhostPresentation,
   GhostPresentationMode,
@@ -54,3 +55,32 @@ export {
 export type { SelectCourseMaker, SelectSessionEvents, SelectStartEntry } from '../session/select/select-session.ts';
 
 export { SceneController, createSelectController, type SceneStore } from './controllers.ts';
+
+// What a key config reads: a key press as the lane tokens it gives, and the keys a play keeps for itself.
+export { keyboardEventToTokens } from '../runtime/web-input-runtime.ts';
+export { PLAY_SCENE_KEY_CODES } from '../session/play/play-keys.ts';
+export {
+  CONTROL_KEY_CONFIG,
+  effectiveControlKey,
+  resolveControlButtons,
+  resolveControlScheme,
+  type ControlButton,
+  type ControlButtonMap,
+  type ControlKeyConfigEntry,
+  type ControlKeyId,
+  type ControlKeyOverrides,
+  type ControlScheme,
+  type ControlSettings,
+} from '../session/controls/control-buttons.ts';
+export {
+  CONTROL_ACTION_IDS,
+  CONTROL_ACTIONS,
+  controlActionKeys,
+  resolveControlActions,
+  type ControlActionMap,
+  type ControlActionDefinition,
+  type ControlActionId,
+  type ControlActionKey,
+  type ControlActionOverrides,
+  type ControlScreen,
+} from '../session/controls/control-actions.ts';

@@ -164,7 +164,11 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
         // Lane and key-state commands go to the judge; a strategy without live key input drops them.
         onUnhandledCommand: (command) => {
           if (command.kind === 'start') startRequested = true;
-          else if (command.kind === 'lane-input' || command.kind === 'kitty-state') handleLaneCommand?.(command);
+          else if (command.kind === 'control-input') {
+            if (!session.replay) {
+              replayRecorder?.recordControlInput(command.action, commandSeconds(), command.button, command.code);
+            }
+          } else if (command.kind === 'lane-input' || command.kind === 'kitty-state') handleLaneCommand?.(command);
         },
         logInterrupt: (reason) => traceInterrupt(reason, commandSeconds()),
       });

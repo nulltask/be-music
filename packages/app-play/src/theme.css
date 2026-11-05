@@ -3,7 +3,12 @@
 @import 'tailwindcss' source(none);
 @source './';
 @source '../../service-web-theme/src/footer.ts';
-@source '../../service-web-theme/src/header.ts';
+@source '../../service-web-theme/src/header-model.ts';
+@source '../../service-web-theme/src/header-template.ts';
+@source '../../service-web-theme/src/footer-template.ts';
+@source '../../service-web-theme/src/auth-template.ts';
+@source '../../service-web-theme/src/popover-template.ts';
+@source '../../service-web-theme/src/account-identity-template.ts';
 @import 'basecoat-css';
 
 /* The system faces: Basecoat names Geist, which the player does not load. */
@@ -19,7 +24,7 @@
   }
 }
 
-/* The last place a header menu tries (header.ts): under its button across the whole width, kept a page gutter in
+/* The last place a header menu tries (header-template.ts): under its button across the whole width, kept a page gutter in
    from either edge, for when neither side of the button has room. */
 @position-try --header-menu-span {
   position-area: block-end span-all;

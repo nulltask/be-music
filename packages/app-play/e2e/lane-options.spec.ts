@@ -3,7 +3,7 @@ import type { TestHookFamily } from '../src/test-hook.ts';
 import { expect, openWithLibrary, SMOKE, SONGS, test, type Player } from './support.ts';
 
 /**
- * The lane options apply on every family (ADR 0001): an AUTO play of Fixture A with the Debug Menu's Random 1P on
+ * The lane options apply on every family (ADR 0001): an AUTO play of Fixture A with the Options dialog's Random 1P on
  * MIRROR plays the chart's keys mirrored, and its replay records the option and the arrangement played.
  */
 
@@ -42,8 +42,11 @@ interface FamilyCase {
   startAuto(player: Player): Promise<void>;
 }
 
-const clickAuto = (player: Player) =>
-  player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+async function clickAuto(player: Player): Promise<void> {
+  const pane = player.page.locator('[data-pane=skin-config][open]');
+  if (await pane.count()) await pane.locator('summary').first().click();
+  await player.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height);
+}
 
 const FAMILIES: readonly FamilyCase[] = [
   {

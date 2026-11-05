@@ -1,4 +1,8 @@
-// The course maker's DOM surfaces, for every skin: a card shown while a course is being made (its name, songs and
+import './ui/collapsible-panel.ts';
+import { html, nothing, render, type TemplateResult } from 'lit';
+import { live } from 'lit/directives/live.js';
+import { repeat } from 'lit/directives/repeat.js';
+// The course maker's DOM surfaces, for every skin: a card shown while a course is being made (its name, charts and
 // finish / cancel, standing in for an LR2 skin's buttons 230 / 231 and texts 150-170), and a dialog that manages the
 // saved courses (rename, NONSTOP connections, delete, IR flag as LR2's button 253 / text 183, export as `.lr2crs`) and
 // the RANDOM MIX settings (LR2's buttons 260-266).
@@ -106,28 +110,27 @@ function constraintEditor(
   constraints: readonly CourseConstraint[],
   onChange: (constraints: CourseConstraint[]) => void,
   disabled = false,
-): HTMLElement {
+): TemplateResult {
   const fields = CONSTRAINT_FIELDS.filter((field) => kind !== 'nonstop' || field.group !== 'longNote');
-  return element(
-    'div',
-    { className: 'course-maker-constraints' },
-    fields.map((field) => {
+  return html`<div class="course-maker-constraints">
+    ${fields.map((field) => {
       const current = constraints.find((constraint) => courseConstraintGroup(constraint) === field.group) ?? '';
-      const select = element('select', { className: 'select course-maker-select' });
-      select.disabled = disabled;
-      for (const [value, label] of field.choices) {
-        const option = element('option', { text: label() });
-        option.value = value;
-        option.selected = value === current;
-        select.append(option);
-      }
-      select.addEventListener('change', () => {
-        const others = constraints.filter((constraint) => courseConstraintGroup(constraint) !== field.group);
-        onChange(select.value === '' ? others : [...others, select.value as CourseConstraint]);
-      });
-      return element('label', { className: 'course-maker-field', text: field.label() }, [select]);
-    }),
-  );
+      return html`<label class="course-maker-field"
+        >${field.label()}
+        <select
+          class="select course-maker-select"
+          ?disabled=${disabled}
+          @change=${(event: Event) => {
+            const value = (event.currentTarget as HTMLSelectElement).value;
+            const others = constraints.filter((constraint) => courseConstraintGroup(constraint) !== field.group);
+            onChange(value === '' ? others : [...others, value as CourseConstraint]);
+          }}
+        >
+          ${field.choices.map(([value, label]) => html`<option value=${value} .selected=${live(value === current)}>${label()}</option>`)}
+        </select>
+      </label>`;
+    })}
+  </div>`;
 }
 
 /** Offers `text` as a file download named `filename`. */
@@ -140,42 +143,18 @@ function download(filename: string, text: string, type = 'application/xml'): voi
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function element<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: { className?: string; text?: string } = {},
-  children: Node[] = [],
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (props.className !== undefined) node.className = props.className;
-  if (props.text !== undefined) node.textContent = props.text;
-  node.append(...children);
-  return node;
-}
-
-function button(label: string, className: string, onClick: () => void, variant?: 'outline'): HTMLButtonElement {
-  const node = element('button', { className, text: label });
-  node.type = 'button';
-  node.dataset.size = 'sm';
-  if (variant !== undefined) node.dataset.variant = variant;
-  node.addEventListener('click', onClick);
-  return node;
-}
-
 function connectionSelect(
   value: NonstopConnection,
   onChange: (value: NonstopConnection) => void,
   disabled = false,
-): HTMLSelectElement {
-  const select = element('select', { className: 'select course-maker-select' });
-  select.disabled = disabled;
-  for (const connection of LR2_NONSTOP_CONNECTIONS) {
-    const option = element('option', { text: CONNECTION_LABELS[connection] });
-    option.value = connection;
-    option.selected = connection === value;
-    select.append(option);
-  }
-  select.addEventListener('change', () => onChange(select.value as NonstopConnection));
-  return select;
+): TemplateResult {
+  return html`<select
+    class="select course-maker-select"
+    ?disabled=${disabled}
+    @change=${(event: Event) => onChange((event.currentTarget as HTMLSelectElement).value as NonstopConnection)}
+  >
+    ${LR2_NONSTOP_CONNECTIONS.map((connection) => html`<option value=${connection} .selected=${live(connection === value)}>${CONNECTION_LABELS[connection]}</option>`)}
+  </select>`;
 }
 
 /** The RANDOM MIX settings in LR2's button order (260-266), with what the dialog calls each. */
@@ -190,47 +169,38 @@ const RANDOM_MIX_FIELDS: readonly { readonly setting: LR2RandomMixSetting; reado
 ];
 
 /** A select of every value of a RANDOM MIX setting, written as LR2's texts 190-196 write them. */
-function randomMixSelect(setting: LR2RandomMixSetting, value: number, onChange: (value: number) => void) {
+function randomMixSelect(
+  setting: LR2RandomMixSetting,
+  value: number,
+  onChange: (value: number) => void,
+): TemplateResult {
   const { max, step } = LR2_RANDOM_MIX_SETTING_RANGES[setting];
-  const select = element('select', { className: 'select course-maker-select' });
-  for (let option = 0; option <= max; option += step) {
-    const item = element('option', { text: formatLR2RandomMixSetting(setting, option) });
-    item.value = String(option);
-    item.selected = option === value;
-    select.append(item);
-  }
-  select.addEventListener('change', () => onChange(Number(select.value)));
-  return select;
+  return html`<select
+    class="select course-maker-select"
+    @change=${(event: Event) => onChange(Number((event.currentTarget as HTMLSelectElement).value))}
+  >
+    ${Array.from({ length: Math.floor(max / step) + 1 }, (_, index) => {
+      const option = index * step;
+      return html`<option value=${option} .selected=${live(option === value)}>
+        ${formatLR2RandomMixSetting(setting, option)}
+      </option>`;
+    })}
+  </select>`;
 }
 
-/** Keeps keys typed into a field from reaching the select scene's window-level key handlers. */
-function isolateKeys(field: HTMLElement): void {
-  for (const type of ['keydown', 'keyup'] as const) {
-    field.addEventListener(type, (event) => {
-      if (event.key !== 'Escape') event.stopPropagation();
-    });
-  }
+/** Keeps field keys from reaching the select scene; Escape still cancels the draft. */
+function isolateKeys(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') event.stopPropagation();
 }
 
 function connectionDelta(from: NonstopConnection, to: NonstopConnection): number {
   return LR2_NONSTOP_CONNECTIONS.indexOf(to) - LR2_NONSTOP_CONNECTIONS.indexOf(from);
 }
 
-interface CardParts {
-  title: HTMLElement;
-  hint: HTMLElement;
-  name: HTMLInputElement;
-  stages: HTMLOListElement;
-  connection: HTMLElement;
-  constraints: HTMLElement;
-  removeLast: HTMLButtonElement;
-  save: HTMLButtonElement;
-}
-
 export class CourseMakerPanel {
   private readonly card: HTMLElement;
+  private expanded = true;
   private readonly dialog: HTMLDialogElement;
-  private cardParts: CardParts | undefined;
 
   private readonly maker: CourseMaker;
 
@@ -240,15 +210,18 @@ export class CourseMakerPanel {
   constructor(maker: CourseMaker, options: { onStatus?: (text: string) => void } = {}) {
     this.maker = maker;
     this.onStatus = options.onStatus;
-    this.card = element('aside', { className: 'card course-maker-card gap-3 px-4' });
+    this.card = document.createElement('aside');
+    this.card.className = 'course-maker-card';
     this.card.hidden = true;
     this.card.setAttribute('aria-label', 'Course maker');
-    this.dialog = element('dialog', { className: 'dialog course-maker-dialog' });
+    this.dialog = document.createElement('dialog');
+    this.dialog.className = 'dialog course-maker-dialog';
     this.dialog.setAttribute('aria-label', 'My courses');
     // The modal owns the keyboard: keys must not also drive the select scene behind it (Escape still closes it).
     for (const type of ['keydown', 'keyup'] as const)
       this.dialog.addEventListener(type, (event) => event.stopPropagation());
-    document.body.append(this.card, this.dialog);
+    document.querySelector('#auxiliary-panels')!.append(this.card);
+    document.body.append(this.dialog);
   }
 
   /** Redraws the card from the course being made (hidden when none is), and the dialog when it is open. */
@@ -260,10 +233,13 @@ export class CourseMakerPanel {
   /** Puts the cursor in the course name field (an LR2 skin's text 170 was clicked). */
   focusName(): void {
     if (this.maker.draft !== undefined) {
+      this.expanded = true;
+      this.renderCard();
       // The click arrives on pointerdown; focusing at once would lose to the canvas the mousedown then focuses.
       setTimeout(() => {
-        this.cardParts?.name.focus();
-        this.cardParts?.name.select();
+        const name = this.card.querySelector<HTMLInputElement>('.course-maker-name');
+        name?.focus();
+        name?.select();
       }, 0);
     } else {
       this.openManager();
@@ -290,6 +266,8 @@ export class CourseMakerPanel {
   }
 
   dispose(): void {
+    render(nothing, this.card);
+    render(nothing, this.dialog);
     this.card.remove();
     this.dialog.remove();
   }
@@ -297,180 +275,224 @@ export class CourseMakerPanel {
   private renderCard(): void {
     const draft = this.maker.draft;
     this.card.hidden = draft === undefined;
-    if (draft === undefined) return;
-    const parts = (this.cardParts ??= this.buildCard());
+    if (draft === undefined) {
+      this.expanded = true;
+      return;
+    }
     const copy = playerText().course;
-    parts.title.textContent = copy.newCourse(KIND_LABELS[draft.kind]);
-    parts.hint.textContent = draft.stages.length === 0 ? copy.decideCharts : copy.chartCount(draft.stages.length);
-    // The name field stays in place across redraws: moving it would drop its focus mid-typing.
-    if (document.activeElement !== parts.name) parts.name.value = draft.name;
-    parts.stages.replaceChildren(
-      ...draft.stages.map((stage) => element('li', { text: `${stage.title ?? stage.md5} · ${stage.keyMode}K` })),
+    const name = this.card.querySelector<HTMLInputElement>('.course-maker-name');
+    render(
+      html`
+        <be-music-collapsible-panel
+          position="inline"
+          .heading=${copy.newCourse(KIND_LABELS[draft.kind])}
+          .open=${this.expanded}
+          @panel-toggle=${(event: CustomEvent<{ open: boolean }>) => {
+            this.expanded = event.detail.open;
+          }}
+        >
+          <div class="auxiliary-panel-content">
+            <header>
+              <p>${draft.stages.length === 0 ? copy.decideCharts : copy.chartCount(draft.stages.length)}</p>
+            </header>
+            <input
+              class="input course-maker-name"
+              maxlength="64"
+              placeholder=${COURSE_NAME_PROMPT}
+              aria-label=${copy.courseName}
+              .value=${live(document.activeElement === name ? name!.value : draft.name)}
+              @keydown=${isolateKeys}
+              @keyup=${isolateKeys}
+              @input=${(event: Event) => this.maker.rename((event.currentTarget as HTMLInputElement).value)}
+            />
+            <ol class="course-maker-stages">
+              ${draft.stages.map((stage) => html`<li>${stage.title ?? stage.md5} · ${stage.keyMode}K</li>`)}
+            </ol>
+            <div>
+              ${
+                draft.kind === 'nonstop'
+                  ? html`<label class="course-maker-field"
+                      >${copy.connection}
+                      ${connectionSelect(this.maker.defaultConnection, (value) => this.maker.stepDefaultConnection(connectionDelta(this.maker.defaultConnection, value)))}
+                    </label>`
+                  : nothing
+              }
+            </div>
+            <div>
+              ${constraintEditor(draft.kind, draft.constraints ?? [], (constraints) => this.maker.setConstraints(constraints))}
+            </div>
+            <div class="course-maker-buttons">
+              <button
+                class="btn"
+                type="button"
+                data-size="sm"
+                data-variant="outline"
+                ?disabled=${draft.stages.length === 0}
+                @click=${() => this.maker.removeLast()}
+              >
+                ${copy.removeLast}
+              </button>
+              <button
+                class="btn"
+                type="button"
+                data-size="sm"
+                @click=${() => {
+                  this.maker.cancel();
+                  this.onStatus?.(playerText().course.stopped);
+                }}
+              >
+                ${playerText().shell.cancel}
+              </button>
+              <button
+                class="btn"
+                type="button"
+                data-size="sm"
+                ?disabled=${draft.stages.length === 0}
+                @click=${() => {
+                  const saved = this.maker.finish();
+                  if (saved !== undefined) this.onStatus?.(playerText().course.saved(saved.name));
+                }}
+              >
+                ${copy.save}
+              </button>
+            </div>
+          </div>
+        </be-music-collapsible-panel>
+      `,
+      this.card,
     );
-    parts.connection.replaceChildren(
-      ...(draft.kind === 'nonstop'
-        ? [
-            element('label', { className: 'course-maker-field', text: playerText().course.connection }, [
-              connectionSelect(this.maker.defaultConnection, (value) =>
-                this.maker.stepDefaultConnection(connectionDelta(this.maker.defaultConnection, value)),
-              ),
-            ]),
-          ]
-        : []),
-    );
-    parts.constraints.replaceChildren(
-      constraintEditor(draft.kind, draft.constraints ?? [], (constraints) => this.maker.setConstraints(constraints)),
-    );
-    parts.save.disabled = draft.stages.length === 0;
-    parts.removeLast.disabled = draft.stages.length === 0;
-  }
-
-  /** The card's elements, built once. */
-  private buildCard(): CardParts {
-    const name = element('input', { className: 'input course-maker-name' });
-    name.maxLength = 64;
-    name.placeholder = COURSE_NAME_PROMPT;
-    name.setAttribute('aria-label', playerText().course.courseName);
-    isolateKeys(name);
-    name.addEventListener('input', () => this.maker.rename(name.value));
-    const parts: CardParts = {
-      title: element('h2'),
-      hint: element('p'),
-      name,
-      stages: element('ol', { className: 'course-maker-stages' }),
-      connection: element('div'),
-      constraints: element('div'),
-      removeLast: button(playerText().course.removeLast, 'btn', () => this.maker.removeLast(), 'outline'),
-      save: button(playerText().course.save, 'btn', () => {
-        const saved = this.maker.finish();
-        if (saved !== undefined) this.onStatus?.(playerText().course.saved(saved.name));
-      }),
-    };
-    this.card.replaceChildren(
-      element('header', {}, [parts.title, parts.hint]),
-      parts.name,
-      parts.stages,
-      parts.connection,
-      parts.constraints,
-      element('div', { className: 'course-maker-buttons' }, [
-        parts.removeLast,
-        button(playerText().shell.cancel, 'btn', () => {
-          this.maker.cancel();
-          this.onStatus?.(playerText().course.stopped);
-        }),
-        parts.save,
-      ]),
-    );
-    return parts;
   }
 
   private renderDialog(): void {
     const courses = this.maker.courses;
-    const list = element(
-      'div',
-      { className: 'course-maker-list' },
-      courses.length === 0
-        ? [element('p', { text: playerText().course.empty })]
-        : courses.map((course) => this.renderCourse(course)),
-    );
-    const exportButton = button(
-      playerText().course.exportLr2,
-      'btn',
-      () => download('my-courses.lr2crs', serializeLR2CourseFile(this.maker.courses)),
-      'outline',
-    );
-    exportButton.disabled = courses.length === 0;
-    // beatoraja's course file keeps the constraints, which `.lr2crs` cannot hold; it has no NONSTOP courses.
-    const exportBeatoraja = button(
-      playerText().course.exportBeatoraja,
-      'btn',
-      () => download('my-courses.json', serializeBeatorajaCourseFile(this.maker.courses), 'application/json'),
-      'outline',
-    );
-    exportBeatoraja.disabled = !courses.some((course) => course.kind !== 'nonstop');
-    this.dialog.replaceChildren(
-      element('div', {}, [
-        element('header', {}, [
-          element('h2', { text: playerText().course.myCourses }),
-          element('p', { text: playerText().course.myCoursesLead }),
-        ]),
-        list,
-        this.renderRandomMixSettings(),
-        element('div', { className: 'course-maker-buttons' }, [
-          exportButton,
-          exportBeatoraja,
-          button(playerText().shell.close, 'btn', () => this.dialog.close()),
-        ]),
-      ]),
+    const copy = playerText().course;
+    render(
+      html`<div>
+        <header>
+          <h2>${copy.myCourses}</h2>
+          <p>${copy.myCoursesLead}</p>
+        </header>
+        <div class="course-maker-list">
+          ${
+            courses.length === 0
+              ? html`<p>${copy.empty}</p>`
+              : repeat(
+                  courses,
+                  (course) => course,
+                  (course) => this.renderCourse(course),
+                )
+          }
+        </div>
+        ${this.renderRandomMixSettings()}
+        <div class="course-maker-buttons">
+          <button
+            class="btn"
+            type="button"
+            data-size="sm"
+            data-variant="outline"
+            ?disabled=${courses.length === 0}
+            @click=${() => download('my-courses.lr2crs', serializeLR2CourseFile(this.maker.courses))}
+          >
+            ${copy.exportLr2}
+          </button>
+          <button
+            class="btn"
+            type="button"
+            data-size="sm"
+            data-variant="outline"
+            ?disabled=${!courses.some((course) => course.kind !== 'nonstop')}
+            @click=${() => download('my-courses.json', serializeBeatorajaCourseFile(this.maker.courses), 'application/json')}
+          >
+            ${copy.exportBeatoraja}
+          </button>
+          <button class="btn" type="button" data-size="sm" @click=${() => this.dialog.close()}>
+            ${playerText().shell.close}
+          </button>
+        </div>
+      </div>`,
+      this.dialog,
     );
   }
 
-  /** The RANDOM MIX settings, which the RANDOM MIX bar of MY COURSES and MY NONSTOP draws a course by. */
-  private renderRandomMixSettings(): HTMLElement {
+  /** The settings by which RANDOM MIX draws a course. */
+  private renderRandomMixSettings(): TemplateResult {
     const settings = this.maker.randomMixSettings;
-    return element('section', { className: 'card course-maker-course gap-2 px-3' }, [
-      element('h3', { text: 'RANDOM MIX' }),
-      element(
-        'div',
-        {},
-        RANDOM_MIX_FIELDS.map(({ setting, label }) =>
-          element('label', { className: 'course-maker-field', text: label() }, [
-            randomMixSelect(setting, settings[setting], (value) =>
-              this.maker.stepRandomMixSetting(
-                setting,
-                (value - settings[setting]) / LR2_RANDOM_MIX_SETTING_RANGES[setting].step,
-              ),
-            ),
-          ]),
-        ),
-      ),
-    ]);
+    return html`<section class="card course-maker-course gap-2 px-3">
+      <h3>RANDOM MIX</h3>
+      <div>
+        ${RANDOM_MIX_FIELDS.map(
+          ({ setting, label }) =>
+            html` <label class="course-maker-field"
+              >${label()}
+              ${randomMixSelect(setting, settings[setting], (value) =>
+                this.maker.stepRandomMixSetting(
+                  setting,
+                  (value - this.maker.randomMixSettings[setting]) / LR2_RANDOM_MIX_SETTING_RANGES[setting].step,
+                ),
+              )}
+            </label>`,
+        )}
+      </div>
+    </section>`;
   }
 
-  private renderCourse(course: CourseDefinition): HTMLElement {
-    const name = element('input', { className: 'input course-maker-name' });
-    name.value = course.name;
-    name.maxLength = 64;
-    name.setAttribute('aria-label', playerText().course.courseName);
-    isolateKeys(name);
-    name.addEventListener('change', () => this.maker.renameCourse(course, name.value));
-    // A course flagged for IR is read-only (its connections and constraints key its ranking); its name is not.
+  private renderCourse(course: CourseDefinition): TemplateResult {
+    const copy = playerText().course;
     const readOnly = this.maker.isReadOnly(course);
     const connections = madeCourseConnections(course);
-    const stages = element(
-      'ol',
-      { className: 'course-maker-stages' },
-      course.stages.map((stage, index) => {
-        const item = element('li', { text: stage.title ?? stage.md5 ?? '' });
-        const connection = connections[index];
-        if (connection !== undefined) {
-          item.append(
-            connectionSelect(
-              connection,
-              (value) => this.maker.stepConnection(course, index, connectionDelta(connection, value)),
-              readOnly,
-            ),
-          );
-        }
-        return item;
-      }),
-    );
-    return element('section', { className: 'card course-maker-course gap-2 px-3' }, [
-      element('div', { className: 'course-maker-course-head' }, [
-        name,
-        element('span', { className: 'course-maker-kind', text: KIND_LABELS[course.kind] }),
-        button(playerText().course.delete, 'btn', () => this.confirmDelete(course), 'outline'),
-      ]),
-      stages,
-      constraintEditor(
-        course.kind,
-        course.constraints,
-        (constraints) => this.maker.setCourseConstraints(course, constraints),
-        readOnly,
-      ),
-      readOnly
-        ? element('p', { className: 'course-maker-ir', text: playerText().course.irOn })
-        : button(playerText().course.registerIR, 'btn', () => this.confirmRelease(course), 'outline'),
-    ]);
+    return html`<section class="card course-maker-course gap-2 px-3">
+      <div class="course-maker-course-head">
+        <input
+          class="input course-maker-name"
+          maxlength="64"
+          aria-label=${copy.courseName}
+          .value=${live(course.name)}
+          @keydown=${isolateKeys}
+          @keyup=${isolateKeys}
+          @change=${(event: Event) => this.maker.renameCourse(course, (event.currentTarget as HTMLInputElement).value)}
+        />
+        <span class="course-maker-kind">${KIND_LABELS[course.kind]}</span>
+        <button
+          class="btn"
+          type="button"
+          data-size="sm"
+          data-variant="outline"
+          @click=${() => this.confirmDelete(course)}
+        >
+          ${copy.delete}
+        </button>
+      </div>
+      <ol class="course-maker-stages">
+        ${course.stages.map(
+          (stage, index) =>
+            html`<li>
+              ${stage.title ?? stage.md5 ?? ''}
+              ${
+                connections[index] !== undefined
+                  ? connectionSelect(
+                      connections[index],
+                      (value) => this.maker.stepConnection(course, index, connectionDelta(connections[index]!, value)),
+                      readOnly,
+                    )
+                  : nothing
+              }
+            </li>`,
+        )}
+      </ol>
+      ${constraintEditor(course.kind, course.constraints, (constraints) => this.maker.setCourseConstraints(course, constraints), readOnly)}
+      ${
+        readOnly
+          ? html`<p class="course-maker-ir">${copy.irOn}</p>`
+          : html`<button
+              class="btn"
+              type="button"
+              data-size="sm"
+              data-variant="outline"
+              @click=${() => this.confirmRelease(course)}
+            >
+              ${copy.registerIR}
+            </button>`
+      }
+    </section>`;
   }
 }

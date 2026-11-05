@@ -9,6 +9,7 @@ import type { PlayResult, PlayRunKind, ReplaySlotState, SystemSoundSet } from '@
 import type { BrowserAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { ResultSession, type ResultSessionEvents } from '../session/result/result-session.ts';
+import { resolveFamilyControlActions } from '../session/controls/control-actions.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { logger } from '../logger.ts';
 import { BeatorajaResultView, resolveBeatorajaResultTiming } from '../view/beatoraja/result-view.ts';
@@ -153,6 +154,7 @@ class FamilyResultScene extends SessionScene<ResultFrame, ResultIntent> implemen
 export function createResultScene(kit: ResultSceneKit, options: ResultSceneOptions): ResultScene {
   const session = new ResultSession({
     result: options.result,
+    actions: resolveFamilyControlActions(kit.family, options.controls),
     ...(options.run !== undefined ? { run: options.run } : {}),
     ...(options.playChart !== undefined ? { playChart: options.playChart } : {}),
     sounds: options.sounds,
@@ -163,6 +165,7 @@ export function createResultScene(kit: ResultSceneKit, options: ResultSceneOptio
   });
   return new FamilyResultScene(session, createResultView(kit, session, options), {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
+    ...(options.controls !== undefined ? { controls: options.controls } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
 }

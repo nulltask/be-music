@@ -315,8 +315,12 @@ export function destinationToSpriteProps(
   // rect). Concretely: after Y-flip, Pixi-y = canvasH - yLibgdxBottom - heightAbs.
   const centerShiftX = group.relative ? 0 : -offset.w / 2;
   const centerShiftY = group.relative ? 0 : -offset.h / 2;
-  const baseX = keyframe.x + offset.x + centerShiftX;
-  const baseY = keyframe.y + offset.y + centerShiftY;
+  const parentOffset =
+    group.parentOffsets && context.resolveOffset
+      ? combineBeatorajaOffsets(group.parentOffsets, context.resolveOffset)
+      : ZERO_BEATORAJA_OFFSET;
+  const baseX = keyframe.x + offset.x + centerShiftX + parentOffset.x - parentOffset.w / 2;
+  const baseY = keyframe.y + offset.y + centerShiftY + parentOffset.y - parentOffset.h / 2;
   const xLeft = mirrorX ? baseX + rawWidth : baseX;
   const yLibgdxBottom = mirrorY ? baseY + rawHeight : baseY;
   const y = canvasHeight - yLibgdxBottom - height;

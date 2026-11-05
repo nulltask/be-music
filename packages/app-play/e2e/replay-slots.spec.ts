@@ -31,6 +31,7 @@ test('a play saved to a slot on the built-in result replays from the card on the
   await playFixtureA(player);
   const card = player.page.locator('.replay-slots-card');
   await expect(card).toHaveAttribute('data-mode', 'result');
+  await expect(card.locator('details')).toHaveAttribute('open', '');
   // The default rules: a first play (failed, with no key pressed) updates the lamp and the BP (slots 2 and 3), and
   // slot 4 keeps every play; slot 1 waits for a better EX score.
   for (const slot of ['2', '3', '4']) await expect(card.locator(`button[data-slot="${slot}"]`)).toHaveText('Saved');
@@ -44,6 +45,7 @@ test('a play saved to a slot on the built-in result replays from the card on the
   await player.waitFor((state) => state.scene.kind === 'select', 'the select screen');
   await expect(card).toHaveAttribute('data-mode', 'select');
   await expect(card.locator('.replay-slots-row')).toHaveCount(4);
+  await expect(card.locator('details')).toHaveAttribute('open', '');
   await card.locator('button[data-slot="2"]').click();
   const state = await player.waitFor(
     (current) => current.scene.kind === 'play' && current.play?.replay === true,

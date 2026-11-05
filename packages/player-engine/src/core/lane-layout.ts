@@ -123,6 +123,25 @@ export interface LaneModeOptions {
    * `chartExtension`, and `player`.
    */
   playVariant?: ChartPlayVariant;
+  /** The player's own lane keys, over the defaults (`LANE_KEY_CONFIG`). */
+  laneKeys?: LaneKeyOverrides;
+}
+
+/**
+ * The lanes a player's own keys cover. The beatmania-style layouts (5 / 7 / 10 / 14 KEY) share their keys lane by lane
+ * (`beat`, by channel), and the 9 KEY layouts by key number (`popn`, `1`..`9`); the 24 / 48 KEY layouts keep theirs.
+ */
+export type LaneKeyGroup = 'beat' | 'popn';
+
+/** A player's own lane keys: for each group and lane (a channel, or a key number), the input tokens it takes. */
+export type LaneKeyOverrides = Partial<Record<LaneKeyGroup, Readonly<Record<string, readonly string[]>>>>;
+
+/** One lane of a key config: its id within its group, its side, whether it is a scratch, and its default token. */
+export interface LaneKeyConfigLane {
+  readonly id: string;
+  readonly side: '1P' | '2P';
+  readonly scratch: boolean;
+  readonly defaultToken: string;
 }
 
 export function resolveKeyChannel(event: KeyboardCodeLike, channels: ReadonlyArray<string>): string | undefined {
@@ -341,6 +360,51 @@ const _____DEFAULT_KEYS: Record<string, { keyLabel: string; token: string }> = {
 /** Default keys of the 9 KEY layouts, by key number: `z s x d c f v g b`. */
 const POPN_DEFAULT_KEYS = ['z', 's', 'x', 'd', 'c', 'f', 'v', 'g', 'b'];
 
+/** The lanes each group's key config lists, in the order a player reads them: 1P scratch, keys, then 2P keys, scratch. */
+export const LANE_KEY_CONFIG: Readonly<Record<LaneKeyGroup, readonly LaneKeyConfigLane[]>> = {
+  beat: ['16', '11', '12', '13', '14', '15', '18', '19', '21', '22', '23', '24', '25', '28', '29', '26'].map(
+    (channel) => ({
+      id: channel,
+      side: channel.startsWith('1') ? '1P' : '2P',
+      scratch: channel === '16' || channel === '26',
+      defaultToken: _____DEFAULT_KEYS[channel]!.token,
+    }),
+  ),
+  popn: POPN_DEFAULT_KEYS.map((token, index) => ({
+    id: String(index + 1),
+    side: '1P',
+    scratch: false,
+    defaultToken: token,
+  })),
+};
+
+/** The key config group a lane layout takes its keys from; the 24 / 48 KEY and generic layouts have none. */
+function laneKeyGroupOf(layoutId: PlayModeLayoutId): LaneKeyGroup | undefined {
+  if (layoutId === '9-pms' || layoutId === '9-bme') return 'popn';
+  return layoutId === '5' || layoutId === '7' || layoutId === '10' || layoutId === '14' ? 'beat' : undefined;
+}
+
+const KEY_LABELS: Readonly<Record<string, string>> = {
+  'shift-left': 'LShift',
+  'shift-right': 'RShift',
+  'ctrl-left': 'LCtrl',
+  'ctrl-right': 'RCtrl',
+  'alt-left': 'LAlt',
+  'alt-right': 'RAlt',
+  space: 'Space',
+  enter: 'Enter',
+  tab: 'Tab',
+  up: '↑',
+  down: '↓',
+  left: '←',
+  right: '→',
+};
+
+/** How a lane's key reads (`LShift`, `Tab`, `F5`, `z`), from its input token. */
+export function laneKeyLabel(token: string): string {
+  return KEY_LABELS[token] ?? (/^f\d+$/.test(token) ? token.toUpperCase() : token);
+}
+
 /**
  * Default wheel keys. They sit on the outer edges of the keyboard, off the 24 / 48-key pool (`KEY_LAYOUT`, then
  * `f1`…): Tab / Left Shift for the 1P wheel up / down, Enter / Right Shift for the 2P wheel. The arrow keys stay free
@@ -401,6 +465,28 @@ const FIXED_BINDINGS_BY_LAYOUT: Record<PlayModeLayoutId, FixedLaneDefinition[]> 
   '48': createFixedBindings(PLAY_MODE_LAYOUTS['48']),
 };
 
+/**
+ * A layout's lanes with the player's own keys (`laneKeys`) over their defaults: a lane its group lists takes the keys set
+ * for it. Each lane's definitions keep the table's order (`createFixedBindings` follows the layout's lanes).
+ */
+function applyLaneKeys(
+  definitions: FixedLaneDefinition[],
+  layoutId: PlayModeLayoutId,
+  laneKeys: LaneKeyOverrides | undefined,
+): FixedLaneDefinition[] {
+  const group = laneKeyGroupOf(layoutId);
+  const keys = group === undefined ? undefined : laneKeys?.[group];
+  if (keys === undefined) return definitions;
+  const lanes = PLAY_MODE_LAYOUTS[layoutId].lanes;
+  return definitions.map((definition, index) => {
+    const lane = lanes[index];
+    const id = group === 'popn' ? String(lane?.slot ?? -1) : definition.channel;
+    const tokens = keys[id]?.filter((token) => token !== '');
+    if (tokens === undefined || tokens.length === 0) return definition;
+    return { ...definition, keyLabel: laneKeyLabel(tokens[0]!), inputTokens: [...tokens] };
+  });
+}
+
 export function createLaneBindings(channels: string[], options: LaneModeOptions = {}): LaneBinding[] {
   const existing = new Set(channels.map((channel) => normalizeChannel(channel)));
   if (existing.size === 0 && !options.playVariant?.startsWith('generic-')) {
@@ -408,7 +494,11 @@ export function createLaneBindings(channels: string[], options: LaneModeOptions 
   }
 
   const layoutId = resolveLaneLayout(existing, options);
-  const modeBindings = FIXED_BINDINGS_BY_LAYOUT[layoutId] ?? createFixedBindings(PLAY_MODE_LAYOUTS[layoutId]);
+  const modeBindings = applyLaneKeys(
+    FIXED_BINDINGS_BY_LAYOUT[layoutId] ?? createFixedBindings(PLAY_MODE_LAYOUTS[layoutId]),
+    layoutId,
+    options.laneKeys,
+  );
   const scratchReverseTokensByChannel = createScratchReverseTokensByChannel(modeBindings, options.platform);
   const bindings: LaneBinding[] = [];
   const usedTokens = new Set<string>();
@@ -524,8 +614,9 @@ function resolveLaneLayout(existing: ReadonlySet<string>, options: LaneModeOptio
 
 /**
  * The second key of each scratch lane, as the tokens it arrives as: Left / Right Ctrl, or Option (Alt) on macOS
- * terminals. It plays the lane like the Shift key does, and under the odd-even rule it is the reverse spin of a
- * back-spin scratch (`LaneBinding.inputKeys`).
+ * terminals, and Space with the 1P one (LR2's default key config turns the 1P turntable down with Left Ctrl or Space).
+ * It plays the lane like the Shift key does, and under the odd-even rule it is the reverse spin of a back-spin scratch
+ * (`LaneBinding.inputKeys`).
  */
 function createScratchReverseTokensByChannel(
   bindings: readonly FixedLaneDefinition[],
@@ -535,7 +626,10 @@ function createScratchReverseTokensByChannel(
   const tokenMap = new Map<string, readonly string[]>();
 
   if (scratchChannels.includes('16')) {
-    tokenMap.set('16', platform === 'darwin' ? ['option-left', 'alt-left'] : ['ctrl-left', 'control-left']);
+    tokenMap.set(
+      '16',
+      platform === 'darwin' ? ['option-left', 'alt-left', 'space'] : ['ctrl-left', 'control-left', 'space'],
+    );
   }
   if (scratchChannels.includes('26')) {
     tokenMap.set('26', platform === 'darwin' ? ['option-right', 'alt-right'] : ['ctrl-right', 'control-right']);

@@ -8,16 +8,16 @@ for (const family of ['native', 'canvas', 'lr2', 'beatoraja'] as const) {
       'couple.bms',
       '#TITLE Authored COUPLE\n#SETRANDOM 1\n#IF 1\n#PLAYER 2\n#ENDIF\n#ENDRANDOM\n#BPM 240\n#00111:01\n#00121:01010101\n#00211:01',
     );
-    await player.setOption(['Developer'], 'Judgment windows', 'LR2');
+    await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     await player.setOption(['Play options'], 'Battle', 'CHART HEADER');
     await player.setOption(['Play options'], 'Gauge 2P', 'HARD');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.key('Enter');
     await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.6, 'COUPLE play');
-    await player.key('Space');
+    await player.key('Pause');
     await player.page.screenshot({ path: info.outputPath('authored-couple.png') });
     if (family === 'native') await expect(player.page.locator('[part~="second-player"]').first()).toBeAttached();
-    await player.key('Space');
+    await player.key('Pause');
     await player.waitForResult(0);
     const replay = await player.lastReplay();
     expect(replay?.play).toMatchObject({ battleMode: 'COUPLE', gauge2P: 'HARD' });

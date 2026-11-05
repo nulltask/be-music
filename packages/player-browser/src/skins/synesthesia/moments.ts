@@ -101,7 +101,7 @@ export function drawSynesthesiaMoments(
   }
   const clear = momentProgress(moments.clearAtMs, nowMs, CLEAR_MS);
   if (clear !== undefined) {
-    drawClear(graphics, layer, clear, resolveGrooveRect(layout), portrait, pool);
+    drawClear(graphics, layer, clear, resolveGrooveRect(layout), pool);
   }
   const fullCombo = momentProgress(moments.fullComboAtMs, nowMs, FULL_COMBO_MS);
   if (fullCombo !== undefined) {
@@ -243,35 +243,31 @@ function drawMilestone(
   label.alpha = alpha;
 }
 
-function drawClear(
-  graphics: Graphics,
-  layer: Container,
-  t: number,
-  groove: BeMusicRect,
-  portrait: boolean,
-  pool: ChildPool,
-): void {
+function drawClear(graphics: Graphics, layer: Container, t: number, groove: BeMusicRect, pool: ChildPool): void {
   const color = SYN_AMBER;
   const head = groove.x + groove.w * easeOutCubic(Math.min(1, t / 0.5));
   const fade = 1 - Math.max(0, (t - 0.55) / 0.45);
-  graphics.rect(groove.x, groove.y - 2, head - groove.x, groove.h + 4).fill({ color, alpha: 0.22 * fade });
-  graphics.rect(head - 3, groove.y - 8, 6, groove.h + 16).fill({ color: SYN_WHITE, alpha: 0.9 * fade });
-  graphics.circle(head, groove.y + groove.h / 2, 14).fill({ color, alpha: 0.3 * fade });
+  graphics.rect(groove.x, groove.y, head - groove.x, groove.h).fill({ color, alpha: 0.22 * fade });
+  graphics
+    .rect(Math.max(groove.x, Math.min(head - 2, groove.x + groove.w - 4)), groove.y, 4, groove.h)
+    .fill({ color: SYN_WHITE, alpha: 0.9 * fade });
+  graphics.circle(head, groove.y + groove.h / 2, Math.min(5, groove.h / 2)).fill({ color, alpha: 0.3 * fade });
   const text = addHUDText(
     layer,
     'CLEAR LINE',
-    // Landscape: between the playfield frame's bottom edge and the gauge panel, touching neither. Portrait: centred on
-    // the top of the lanes, just under the gauge strip.
-    portrait ? groove.x + groove.w / 2 : groove.x + groove.w - 8,
-    portrait ? groove.y + groove.h + 22 : groove.y - 34,
+    // The caption and sweep share the actual bar, regardless of the surrounding HUD arrangement.
+    groove.x + groove.w / 2,
+    groove.y + groove.h / 2,
     {
-      size: 12,
+      size: Math.min(12, groove.h),
       fill: SYN_WHITE,
       fontFamily: SYN_DISPLAY_FONT,
-      letterSpacing: 6,
-      anchorX: portrait ? 0.5 : 1,
+      letterSpacing: 3,
+      maxWidth: groove.w - 8,
+      anchorX: 0.5,
       anchorY: 0.5,
-      dropShadow: { color, alpha: 1, blur: 10, distance: 0 },
+      stroke: { color: 0x000000, width: 2 },
+      dropShadow: { color: 0x000000, alpha: 1, blur: 4, distance: 0 },
     },
     pool,
   );

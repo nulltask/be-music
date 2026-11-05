@@ -1,6 +1,12 @@
 import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
-import { resolveConstantAlpha, resolveNoteDisplaySeconds, type ConstantVisibility } from '@be-music/player-scene-model';
+import {
+  resolveConstantAlpha,
+  resolveNoteDisplaySeconds,
+  type ConstantVisibility,
+  resolveLaneCover,
+  type LaneCoverState,
+} from '@be-music/player-scene-model';
 /**
  * One beatoraja play skin on the stage: the skin's elements (`BeatorajaPlaySkinView`) with the play's layers spliced in
  * where the skin authored them — the lane markers under the notes at the skin's note anchor, and the BGA at its `bga`
@@ -214,7 +220,12 @@ export class BeatorajaPlayStage {
     context: BeatorajaRenderContext,
     clock: BeatorajaPlayLayerClock | undefined,
     hiSpeed: number,
-    lanes: { isLaneLNHeld(channel: string): boolean; isPoorBGAActive(seconds: number): boolean },
+    lanes: {
+      isLaneLNHeld(channel: string): boolean;
+      isPoorBGAActive(seconds: number): boolean;
+      readonly laneCover?: LaneCoverState;
+      setLaneHeight?(height: number): void;
+    },
     playback: {
       tempo?: number;
       paused?: boolean;
@@ -227,6 +238,9 @@ export class BeatorajaPlayStage {
     } = {},
   ): void {
     const view = this.stage.view;
+    const authored = this.noteLayer.getLaneBounds(context.activeOps, false);
+    if (authored) lanes.setLaneHeight?.(authored.bottomY - authored.topY);
+    this.noteLayer.setLift(lanes.laneCover ? resolveLaneCover(lanes.laneCover).lift : 0);
     view.update(context);
     this.guideLayer.visible = clock !== undefined && playback.bpmGuide === true && playback.started !== false;
     if (clock === undefined) return;

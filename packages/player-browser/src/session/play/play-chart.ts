@@ -172,6 +172,7 @@ export interface PlayChartContext {
       | 'tempo'
       | 'extraNoteDepth'
       | 'extraNoteScratch'
+      | 'laneKeys'
       | 'scrollSection'
       | 'scrollRate'
       | 'scrollModifier'
@@ -258,6 +259,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     sevenToNinePattern: arrangement ? (arrangement.play.sevenToNinePattern ?? 0) : ctx.options.sevenToNinePattern,
     sevenToNineType: arrangement ? (arrangement.play.sevenToNineType ?? 0) : ctx.options.sevenToNineType,
     hRandomThresholdBPM: arrangement ? arrangement.play.sevenToNineThresholdBPM : ctx.options.hRandomThresholdBPM,
+    laneKeys: ctx.options.laneKeys,
   };
   if (ctx.options.fixedArrangement !== undefined && ctx.options.replay === undefined) {
     if ((ctx.options.judgeRuleset ?? 'lr2') !== (ctx.options.fixedArrangement.play.judgeRuleset ?? 'lr2'))
@@ -406,6 +408,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     resolvedPlay,
     {
       laneModeExtension: extractChartExtension(ctx.chart?.chartPath),
+      laneKeys: ctx.options.laneKeys,
       longNoteModifier: arrangement?.play.longNoteModifier ?? ctx.options.longNoteModifier,
       longNoteRate: arrangement?.play.longNoteRate ?? ctx.options.longNoteRate,
       judgeRuleset: arrangement?.play.judgeRuleset ?? ctx.options.judgeRuleset,

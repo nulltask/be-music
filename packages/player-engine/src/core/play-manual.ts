@@ -240,6 +240,7 @@ function createManualJudge(session: PlaySession): PlayJudge {
             nowMs: tempoClock.initialTempoMsAt(releaseNowMs),
             // The replay records the release at the key event's own instant, like a press.
             recordSec: tempoClock.chartSecondsAt(stampMs(releaseNowMs, command.pressedAt)),
+            ...(command.code !== undefined ? { code: command.code } : {}),
           });
         }
         return;
@@ -275,6 +276,7 @@ function createManualJudge(session: PlaySession): PlayJudge {
         nowSec,
         nowMs,
         ...(spin !== undefined ? { spin } : {}),
+        ...(command.code !== undefined ? { code: command.code } : {}),
       });
     },
   };

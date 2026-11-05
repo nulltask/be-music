@@ -207,3 +207,19 @@ describe('LR2ThemeService.courseLR2Skin', () => {
     expect(service.courseLR2Skin(undefined, stage, { kind: 'result' })).toBeUndefined();
   });
 });
+
+test('preloads without replacing the active LR2 theme, then activates without parsing again', async () => {
+  const { service } = harness();
+  await service.loadTheme(ALPHA.map(dropped));
+  const active = service.selectSkin;
+  const replacement = themeSkins({ selectSkin: skin('replacement') });
+  loadThemeSkins.mockResolvedValueOnce(replacement);
+  await service.loadTheme(BETA.map(dropped), false);
+  expect(service.selectSkin).toBe(active);
+  expect(service.hasPendingTheme()).toBe(true);
+  const count = loadThemeSkins.mock.calls.length;
+  service.activatePendingTheme();
+  expect(service.selectSkin).toBe(replacement.selectSkin);
+  expect(service.hasPendingTheme()).toBe(false);
+  expect(loadThemeSkins).toHaveBeenCalledTimes(count);
+});

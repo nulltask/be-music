@@ -9,7 +9,7 @@ import type { BeMusicGameplayLayout, BeMusicRect, BeMusicSelectLayout } from '@b
  * Text on the portrait stage is never set below {@link PORTRAIT_MIN_TEXT} design px: a phone shows the 480 px wide
  * stage at about 0.8 CSS px per design px.
  */
-export const PORTRAIT_MIN_TEXT = 10;
+export const PORTRAIT_MIN_TEXT = 14;
 
 /** Page margin of the portrait select and result screens. */
 const MARGIN = 16;
@@ -23,7 +23,7 @@ const MARGIN = 16;
  */
 export const PORTRAIT_SELECT_LAYOUT: BeMusicSelectLayout = {
   listX: MARGIN,
-  listTop: 304,
+  listTop: 350,
   listBottomInset: 30,
   rowHeight: 40,
 };
@@ -47,7 +47,7 @@ export interface PortraitSelectCard {
  */
 export function resolvePortraitSelectCard(width: number): PortraitSelectCard {
   const top = 44;
-  const card = { x: MARGIN, y: top, w: width - 2 * MARGIN, h: PORTRAIT_SELECT_LAYOUT.listTop - 12 - top };
+  const card = { x: MARGIN, y: top, w: width - 2 * MARGIN, h: PORTRAIT_SELECT_LAYOUT.listTop - 56 - top };
   const inner = card.w - 32;
   const left = card.x + 16;
   const column = inner / 3;
@@ -118,7 +118,7 @@ export function resolvePortraitGameplayHUD(
   const x = bga && bga.w > 0 ? bga.x + bga.w + PLAY_MARGIN : PLAY_MARGIN;
   const w = stage.width - PLAY_MARGIN - x;
   // Stat rects are as tall as a label over its value (10 px label line, 16 px figure 16 px under it).
-  const statH = 26;
+  const statH = 32;
   const half = Math.floor(w / 2);
   const scoreTop = top + 70;
   const scores = [
@@ -158,7 +158,7 @@ export interface PortraitResult {
   /** The chart's panel: genre, title, artist, then its facts from `trackRowsY`, `rowPitch` apart, and the clear lamp. */
   track: BeMusicRect;
   trackRowsY: number;
-  /** Middle of the clear lamp, at the chart panel's foot. */
+  /** Middle of the clear lamp at the top of the rank panel. */
   lampY: number;
   /** Middle of the total-score line along the foot. */
   totalY: number;
@@ -196,7 +196,7 @@ export function resolvePortraitResult(width: number, height: number): PortraitRe
     rowPitch,
     track: { x: MARGIN, y: trackY, w: inner, h: trackH },
     trackRowsY: trackY + 84,
-    lampY: trackY + trackH - 26,
+    lampY: rank.y + 22,
     totalY,
   };
 }

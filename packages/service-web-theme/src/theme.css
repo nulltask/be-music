@@ -19,7 +19,7 @@
   }
 }
 
-/* The last place a header menu tries (header.ts): under its button across the whole width, kept a page gutter in
+/* The last place a header menu tries (header-template.ts): under its button across the whole width, kept a page gutter in
    from either edge, for when neither side of the button has room. */
 @position-try --header-menu-span {
   position-area: block-end span-all;

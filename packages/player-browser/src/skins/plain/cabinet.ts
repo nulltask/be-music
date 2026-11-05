@@ -1,6 +1,7 @@
 import {
   formatScoreDiff,
   resolveCabinetLayout,
+  resolveScratchAngle,
   resolveDifficultyName,
   resolveScorePace,
   resolveStageLabel,
@@ -38,7 +39,7 @@ export function drawCabinetHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGame
   drawKeys(ctx, frame, cabinet.keys);
   drawGauges(ctx, runtime, cabinet);
   if (cabinet.center) drawCenter(ctx, cabinet.center, runtime);
-  drawFigure(ctx, cabinet.score, 'SCORE', String(runtime.score ?? 0));
+  drawFigure(ctx, cabinet.score, cabinet.secondSide ? '1P SCORE' : 'SCORE', String(runtime.score ?? 0));
   drawFigure(
     ctx,
     cabinet.hiSpeed,
@@ -50,6 +51,15 @@ export function drawCabinetHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGame
   drawStage(ctx, cabinet.stage, resolveStageLabel(runtime.course), nowMs);
   if (cabinet.doublePlay) drawChartStack(ctx, cabinet.players, runtime, nowMs);
   else drawPlayers(ctx, cabinet.players, runtime, nowMs);
+  if (cabinet.secondSide && runtime.secondPlayer) {
+    drawFigure(ctx, cabinet.secondSide.score, '2P SCORE', String(runtime.secondPlayer.score ?? 0));
+    drawFigure(
+      ctx,
+      cabinet.secondSide.hiSpeed,
+      runtime.floatingHiSpeed ? 'FHS' : 'HI-SPEED',
+      (runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1),
+    );
+  }
   drawJudge(ctx, cabinet.judge, runtime);
   drawBPM(ctx, cabinet.bpm, runtime);
   drawTempo(ctx, cabinet.tempo, runtime.tempo ?? 1);
@@ -98,6 +108,18 @@ function drawKeys(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, re
     ctx.fill();
     ctx.strokeStyle = LINE;
     ctx.stroke();
+    const angle = resolveScratchAngle(
+      frame.runtime.chartBeat ?? 0,
+      frame.runtime.scratchInputs?.[lane.channel ?? ''],
+      frame.runtime.nowMs,
+    );
+    const cx = lane.x + lane.w / 2;
+    const cy = rect.y + rect.h / 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+    ctx.strokeStyle = TEXT;
+    ctx.stroke();
   }
 }
 
@@ -109,6 +131,11 @@ function drawGauges(ctx: CanvasRenderingContext2D, runtime: BeMusicGameplayRunti
   const showValue = cabinet.center === undefined;
   if (!second) {
     drawGauge(ctx, runtime, gauge, gaugeLabelY, '', showValue);
+    return;
+  }
+  if (cabinet.secondSide) {
+    drawGauge(ctx, runtime, gauge, gaugeLabelY, '1P ', true);
+    drawGauge(ctx, second, cabinet.secondSide.gauge, gaugeLabelY, '2P ', true);
     return;
   }
   const half = (gauge.w - 12) / 2;
@@ -138,7 +165,12 @@ function drawGauge(
 ): void {
   const gauge = Math.max(0, Math.min(100, runtime.gauge ?? 0));
   const clear = runtime.gaugeSurvival ? 0 : (runtime.clearThreshold ?? 80);
-  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, rect.x, labelY, { size: 9, color: MUTED, weight: 700 });
+  text(ctx, `${prefix}${runtime.gaugeLabel ?? 'GROOVE'} GAUGE`, rect.x, labelY, {
+    size: 9,
+    color: MUTED,
+    weight: 700,
+    maxWidth: showValue ? rect.w - 48 : rect.w,
+  });
   if (showValue) text(ctx, `${Math.floor(gauge)}%`, rect.x + rect.w, labelY, { size: 13, weight: 700, align: 'right' });
   const cells = Math.max(10, Math.min(GAUGE_CELLS, Math.floor(rect.w / 4)));
   const pitch = rect.w / cells;
@@ -174,7 +206,7 @@ function drawGraph(
   const { header, bars, footer } = graph;
   panel(ctx, header);
   const rows: Array<[string, number]> = [
-    ['YOU', pace.exScore],
+    [runtime.secondPlayer ? '1P' : 'YOU', pace.exScore],
     ['PACEMAKER', pace.target.exScore],
   ];
   rows.forEach(([label, value], index) => {
@@ -352,7 +384,7 @@ function drawChartStack(
 
 /** The counts, FAST / SLOW, and where the last timed press landed between EARLY and LATE. */
 function drawJudge(ctx: CanvasRenderingContext2D, rect: BeMusicRect, runtime: BeMusicGameplayRuntime): void {
-  panel(ctx, rect, 'JUDGE');
+  panel(ctx, rect, runtime.secondPlayer ? '1P JUDGE' : 'JUDGE');
   const counts: Array<[string, number]> = [
     ['PG', runtime.perfect ?? 0],
     ['GR', runtime.great ?? 0],
@@ -370,10 +402,28 @@ function drawJudge(ctx: CanvasRenderingContext2D, rect: BeMusicRect, runtime: Be
   });
 
   const middle = rect.x + countW + (rect.w - countW - 40) / 2 + 6;
-  text(ctx, 'FAST', middle, rect.y + 34, { size: 10, color: ACCENT, weight: 800, align: 'center' });
-  text(ctx, String(runtime.fast ?? 0), middle, rect.y + 50, { size: 13, weight: 700, align: 'center' });
-  text(ctx, 'SLOW', middle, rect.y + 70, { size: 10, color: DANGER, weight: 800, align: 'center' });
-  text(ctx, String(runtime.slow ?? 0), middle, rect.y + 86, { size: 13, weight: 700, align: 'center' });
+  text(ctx, 'FAST', middle, rect.y + (rect.h < 100 ? 28 : 34), {
+    size: 10,
+    color: ACCENT,
+    weight: 800,
+    align: 'center',
+  });
+  text(ctx, String(runtime.fast ?? 0), middle, rect.y + (rect.h < 100 ? 42 : 50), {
+    size: 13,
+    weight: 700,
+    align: 'center',
+  });
+  text(ctx, 'SLOW', middle, rect.y + (rect.h < 100 ? 58 : 70), {
+    size: 10,
+    color: DANGER,
+    weight: 800,
+    align: 'center',
+  });
+  text(ctx, String(runtime.slow ?? 0), middle, rect.y + (rect.h < 100 ? 72 : 86), {
+    size: 13,
+    weight: 700,
+    align: 'center',
+  });
 
   // LATE on top, EARLY below; the marker sits at the last timed press, on the GREAT window's scale.
   const meterX = rect.x + rect.w - 22;

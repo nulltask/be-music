@@ -1,6 +1,6 @@
 import { clamp } from '@be-music/shared-utils/core';
 /**
- * The Debug Menu's play tempo settings: the tempo slider (-50 % .. +50 %), how a tempo change sounds (also for NONSTOP
+ * The Options dialog's play tempo settings: the tempo slider (-50 % .. +50 %), how a tempo change sounds (also for NONSTOP
  * FIT stages) and the keep-pitch stretcher. Remembered in `localStorage` and read once per play, at its start; with the
  * pitch following the tempo, the slider also changes the running play's tempo ({@link allowsLiveTempo}).
  */

@@ -1,6 +1,5 @@
-import { renderBuildInfo, type BuildInfo } from './build-info.ts';
+import type { BuildInfo } from './build-info.ts';
 import type { Locale } from './locale.ts';
-import { renderPublicBetaNotice } from './public-beta.ts';
 
 /** Dashboard, Accounts, Play, then Leaderboard. Donate is not in this row. */
 export const SERVICE_NAMES = ['dashboard', 'accounts', 'play', 'leaderboard'] as const;
@@ -23,6 +22,13 @@ export const SERVICE_FOOTER_NAV_CLASS = 'flex flex-wrap items-center gap-x-4 gap
 export const SERVICE_FOOTER_LINK_CLASS = 'underline underline-offset-4 hover:text-foreground';
 
 /** Holder and licence of the Be-Music repository (LICENSE), as on the Leaderboard. */
+/**
+ * The full-width, three-column footer: build line on the left, service links in the centre, copyright on the right.
+ * Stacks centred on a narrow screen.
+ */
+export const SERVICE_FOOTER_COLUMNS_CLASS =
+  'text-muted-foreground grid w-full grid-cols-1 items-center justify-items-center gap-x-4 gap-y-1 border-t px-4 py-3 text-xs sm:grid-cols-[1fr_auto_1fr]';
+
 export const SERVICE_COPYRIGHT = '© 2026 nulltask · MIT License';
 
 const SERVICE_PREFIXES = ['accounts', 'play', 'leaderboard', 'donate'] as const;
@@ -50,15 +56,13 @@ export interface ServiceFooterInput {
    * page. Omitted means English.
    */
   locale?: Locale | 'both';
-}
-
-function escapeHTML(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+  /**
+   * `columns` lays the footer out in one full-width row: the build line, the service links, then this site's content
+   * and the copyright. Omitted means the stacked footer.
+   */
+  layout?: 'stacked' | 'columns';
+  /** False leaves the Public Beta line out, for a site that states it elsewhere on the page. */
+  publicBeta?: boolean;
 }
 
 /**
@@ -84,34 +88,4 @@ export function serviceOrigins(hostname: string): Record<ServiceName, string> {
     play: `https://play.${site}/`,
     leaderboard: `https://leaderboard.${site}/`,
   };
-}
-
-function footerOrigins(input: ServiceFooterInput): Record<ServiceName, string> {
-  const origins = serviceOrigins(input.hostname ?? '');
-  for (const name of SERVICE_NAMES) {
-    const override = input.origins?.[name];
-    if (override !== undefined && override !== '') origins[name] = override;
-  }
-  return origins;
-}
-
-/**
- * The shared service footer, in order: the Public Beta line, links to the other services (the current one is text),
- * this site's own content, the copyright line, then the build timestamp and source revision.
- */
-export function renderServiceFooter(input: ServiceFooterInput = {}): string {
-  const origins = footerOrigins(input);
-  const links = SERVICE_NAMES.map((name) => {
-    const label = escapeHTML(SERVICE_LABELS[name]);
-    if (name === input.current) return `<span aria-current="page">${label}</span>`;
-    return `<a class="${SERVICE_FOOTER_LINK_CLASS}" data-service="${name}" href="${escapeHTML(origins[name])}">${label}</a>`;
-  }).join('');
-  const site =
-    input.siteHTML !== undefined && input.siteHTML !== '' ? `<div class="space-y-2">${input.siteHTML}</div>` : '';
-  const footerClass =
-    input.className === undefined || input.className === ''
-      ? SERVICE_FOOTER_CLASS
-      : `${SERVICE_FOOTER_CLASS} ${escapeHTML(input.className)}`;
-  const notice = renderPublicBetaNotice(input.locale ?? 'en');
-  return `<footer class="${footerClass}">${notice}<nav class="${SERVICE_FOOTER_NAV_CLASS}" aria-label="${escapeHTML(input.navLabel ?? 'Services')}">${links}</nav>${site}<p>${escapeHTML(input.copyright ?? SERVICE_COPYRIGHT)}</p>${renderBuildInfo(input.buildInfo)}</footer>`;
 }

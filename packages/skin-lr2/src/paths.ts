@@ -29,7 +29,7 @@ export function isLR2BattlePlayVariant(variant: LR2PlayVariant | undefined): var
  * - 6    — Decide (pre-play splash).
  * - 7    — Result.
  * - 8    — Key config (out of scope — player config screen).
- * - 9    — Skin select (also out of scope — we replace this UI with the Debug Menu's theme picker).
+ * - 9    — Skin select (also out of scope — we replace this UI with the Options dialog's theme picker).
  * - 12, 13 — BATTLE play (7K / 5K); 14, the 9K BATTLE play skin, is out of scope (LR2 plays no 9KEY BATTLE).
  * - 15   — Course result (the result of a whole course; conventionally under `CourseResult/`).
  */

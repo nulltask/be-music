@@ -25,7 +25,7 @@ BATTLE は値の上ではすでに分かれています。LR2 の BATTLE は `TW
   - 保存済みの設定（[#692](https://github.com/nulltask/be-music/pull/692) の設定ドキュメント）は、移行時に選んでいる ruleset を参照元として、一度だけ参照元付きの値に移行します。
   - リプレイは書き換えません。読み込み側が、判定する ruleset に合わせて参照元のない値を解決します。
 - **オプションの時系列はプリミティブのままです**（[ADR 0018](./0018-replay-option-timeline.ja.md)）。参照元付きの値は文字列です。型付きのエンジン項目（`play.gauge`、`play.randomLane`）も同じ文字列を受け取ります。
-- **スキン:** LR2 と beatoraja のボタンはそれぞれの参照元の値を巡回し、表示名は参照元を除いた名前を読みます。別の参照元の値は、そのスキンで最も近い表示名で表示し（例: `beatoraja:HARD` は HARD）、選択は Debug Menu から行います。Debug Menu は選択肢を参照元ごとにまとめます。
+- **スキン:** LR2 と beatoraja のボタンはそれぞれの参照元の値を巡回し、表示名は参照元を除いた名前を読みます。別の参照元の値は、そのスキンで最も近い表示名で表示し（例: `beatoraja:HARD` は HARD）、選択は Options ダイアログ から行います。Options ダイアログ は選択肢を参照元ごとにまとめます。
 
 ```mermaid
 flowchart LR

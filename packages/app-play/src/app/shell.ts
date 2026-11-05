@@ -99,6 +99,9 @@ export class PlayerShell {
     const { inGameplay, touchPlay, paused, portraitStage, searchInSkin, offSelect } = resolved;
     const { shell } = this.elements;
     shell.classList.toggle('in-gameplay', inGameplay);
+    for (const element of shell.querySelectorAll<HTMLElement>('.player-service-header, .service-page-footer')) {
+      element.inert = inGameplay;
+    }
     // A skin with its own search box hides the field at the foot of the screen; the box opens it in place.
     shell.classList.toggle('search-in-skin', searchInSkin);
     shell.classList.toggle('off-select', offSelect);
@@ -140,7 +143,7 @@ export class PlayerShell {
       lastPointerType = event.pointerType;
       // A phone gives the stage the whole screen on the first tap: the browser bars eat a large share of a landscape
       // phone's height, and the stage is fitted to that height. The play surface (`#main`) goes fullscreen. It holds
-      // the Debug Menu, and the site header and the site footer sit outside it. Once only, so leaving fullscreen
+      // the Options dialog, and the site header and the site footer sit outside it. Once only, so leaving fullscreen
       // sticks. iPhone Safari has no element fullscreen and simply stays windowed.
       if (this.deviceProfile.phone && event.pointerType === 'touch' && !autoFullscreenTried) {
         autoFullscreenTried = true;
@@ -154,7 +157,7 @@ export class PlayerShell {
       if (lastPointerType !== 'mouse' && this.elements.shell.classList.contains('in-gameplay')) return;
       void toggleFullscreen(playerFullscreenElement(document));
     });
-    // Every way in or out of fullscreen (double-click, the Debug Menu toggle, the phone's first tap, the browser's own
+    // Every way in or out of fullscreen (double-click, the Options dialog toggle, the phone's first tap, the browser's own
     // exit) fires `fullscreenchange`, so the lock follows it from here.
     const escapeLock = new FullscreenEscapeLock(navigator as KeyboardLockNavigatorLike, (error) =>
       fullscreenLog.debug('Escape key lock refused', error),

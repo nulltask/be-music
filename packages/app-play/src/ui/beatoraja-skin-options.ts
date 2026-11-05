@@ -86,7 +86,7 @@ export class BeatorajaSkinOptionsPanel {
 
   /**
    * Lazily instantiate the skin-options panel. Deferred from the constructor because the player shell
-   * (the parent the panel attaches to) doesn't exist until `app.innerHTML` materializes.
+   * (the parent the panel attaches to) exists only after the shell's Lit template has been rendered.
    */
   private ensureBeatorajaSkinOptionsGUI(): BeatorajaSkinOptionsGUI {
     if (this.beatorajaSkinOptionsGUI === undefined) {
@@ -99,7 +99,7 @@ export class BeatorajaSkinOptionsPanel {
    * Update the bottom-centre skin-options panel for a freshly-mounted beatoraja scene. Subsequent
    * user changes flow back through `onChange` → cache update → scene re-mount.
    *
-   * Skin selection itself is handled by the Debug Menu, not this panel — its skin pickers record the override and
+   * Skin selection itself is handled by the Options dialog, not this panel — its skin pickers record the override and
    * apply it to the scene showing (`applyBeatorajaSkinSwitchIfActive`).
    */
   private refreshBeatorajaSkinOptionsGUI(args: {

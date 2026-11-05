@@ -9,7 +9,8 @@ import type {
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { ResultViewTiming } from '../../view/types.ts';
 import type { SessionKeyEvent } from '../session-scene.ts';
-import { RESULT_GRAPH_DRAW_MS, ResultSession, type ResultAudio } from './result-session.ts';
+import { QUICK_RETRY_HOLD_MS, RESULT_GRAPH_DRAW_MS, ResultSession, type ResultAudio } from './result-session.ts';
+import { resolveControlActions, type ControlActionMap } from '../controls/control-actions.ts';
 
 const CHART: LibraryChart = {
   id: 'chart',
@@ -59,10 +60,18 @@ function createAudio() {
   } satisfies ResultAudio;
 }
 
+/** The physical key a typed key is on a US layout (`' '` is Space, `r` KeyR, `1` Digit1). */
+function codeOf(key: string): string {
+  if (key === ' ') return 'Space';
+  if (/^[a-z]$/iu.test(key)) return `Key${key.toUpperCase()}`;
+  if (/^\d$/u.test(key)) return `Digit${key}`;
+  return key;
+}
+
 function key(key: string, timeStamp: number, overrides: Partial<SessionKeyEvent> = {}): SessionKeyEvent {
   return {
     type: 'down',
-    code: key,
+    code: codeOf(key),
     key,
     repeat: false,
     timeStamp,
@@ -83,6 +92,7 @@ function createSession(
     timing?: Partial<ResultViewTiming>;
     playChart?: ReturnType<typeof createEmptyJSON>;
     replaySlots?: () => readonly ReplaySlotState[];
+    actions?: ControlActionMap;
   } = {},
 ) {
   const audio = createAudio();
@@ -99,6 +109,7 @@ function createSession(
     audio,
     timing: { inputDelayMs: 1500, fadeOutMs: 0, ...options.timing },
     ...(options.replaySlots !== undefined ? { replaySlots: options.replaySlots } : {}),
+    ...(options.actions !== undefined ? { actions: options.actions } : {}),
     on: options.retry === false ? { continue: on.continue } : on,
   });
   return { session, audio, on };
@@ -382,5 +393,54 @@ describe('ResultSession', () => {
     session.handleKey(key('Escape', 10));
     expect(audio.stopOwned).not.toHaveBeenCalled();
     expect(audio.playJingle).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ResultSession: keys held as it leaves', () => {
+  const up = (code: string, timeStamp: number) => ({ ...key(code, timeStamp), type: 'up' as const });
+
+  it('moves on with LR2’s lane keys, and retries with a white and a black key held as it leaves', () => {
+    const { session, on } = createSession({ run: 'single', timing: { fadeOutMs: 300, skipsResultSteps: true } });
+    session.enter(0);
+    session.handleKey(key('s', 1500));
+    session.handleKey(key('z', 1510));
+    session.frame(1900);
+    expect(on.retry).toHaveBeenCalledTimes(1);
+    expect(on.continue).not.toHaveBeenCalled();
+  });
+
+  it('moves on without a retry once the keys are let go before it has left', () => {
+    const { session, on } = createSession({ run: 'single', timing: { fadeOutMs: 300, skipsResultSteps: true } });
+    session.enter(0);
+    session.handleKey(key('s', 1500));
+    session.handleKey(key('z', 1510));
+    session.handleKey(up('z', 1520));
+    session.frame(1900);
+    expect(on.continue).toHaveBeenCalledTimes(1);
+    expect(on.retry).not.toHaveBeenCalled();
+  });
+
+  it('retries on beatoraja’s key 5 or 7 held as it leaves', () => {
+    const { session, on } = createSession({
+      run: 'single',
+      actions: resolveControlActions('beatoraja'),
+      timing: { fadeOutMs: 300, skipsResultSteps: true },
+    });
+    session.enter(0);
+    session.handleKey(key('v', 1500));
+    session.handleKey(key('Enter', 1510));
+    session.frame(1900);
+    expect(on.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries on Escape held through the fade-out for QUICK_RETRY_HOLD_MS', () => {
+    const { session, on } = createSession({
+      run: 'single',
+      timing: { fadeOutMs: QUICK_RETRY_HOLD_MS + 100, skipsResultSteps: true },
+    });
+    session.enter(0);
+    session.handleKey(key('Escape', 1500));
+    session.frame(1500 + QUICK_RETRY_HOLD_MS + 100);
+    expect(on.retry).toHaveBeenCalledTimes(1);
   });
 });

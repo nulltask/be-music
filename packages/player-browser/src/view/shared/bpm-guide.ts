@@ -53,7 +53,7 @@ export function renderBPMGuide(input: {
       sides.add(key);
       if (input.drawLines !== false)
         input.pool.acquireGraphics().rect(lane.x, Math.round(y), lane.w, 1).fill({ color: colors[event.kind], alpha });
-      const text = input.pool.acquireText();
+      const text = input.pool.acquireText(event.text);
       text.label = `bpm-guide:${event.kind}:${event.beat}`;
       text.text = event.text;
       text.alpha = alpha;

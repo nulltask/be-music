@@ -66,7 +66,7 @@ export function availableFamiliesForScene(
 }
 
 /**
- * Pick the family that should actually render the given scene right now. Honours the user's Debug Menu pick
+ * Pick the family that should actually render the given scene right now. Honours the user's Options dialog pick
  * (`state.skinFamilyOverride`) when it's available for this scene; otherwise falls through to the auto
  * priority. Auto priority is:
  *

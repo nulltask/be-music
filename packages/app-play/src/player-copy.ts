@@ -14,7 +14,11 @@ const en = {
   shell: {
     search: 'Search title / artist / genre... (? for a filter)',
     dropTitle: 'Drop to load',
+    openFolder: 'Open folder',
+    openZIP: 'Open ZIP',
     dropFolder: 'BMS folder',
+    dropLR2Skin: 'LR2 skin',
+    dropBeatorajaSkin: 'beatoraja skin',
     submitPlays: 'Submit my plays to the Leaderboard',
     checkingAccount: 'Checking account…',
     leaderboard: 'Leaderboard',
@@ -30,31 +34,20 @@ const en = {
     missingRequiredItem: 'missing (required)',
     missingOptionalItem: 'missing (optional)',
     signIn: 'Sign in',
-    signInLead: 'Sign in with a passkey, Google, or Discord.',
-    signInPasskey: 'Sign in with a passkey',
-    or: 'or',
-    signInGoogle: 'Sign in with Google',
-    signInDiscord: 'Sign in with Discord',
+
     signInGoogleSoon: 'Sign in with Google is coming soon',
     signInDiscordSoon: 'Sign in with Discord is coming soon',
     comingSoon: 'Coming soon',
-    noAccount: 'No account yet? Sign up',
+
     cancel: 'Cancel',
-    signUpTitle: 'Create your account',
-    signUpLead: 'Pick a handle and a name. Your browser then makes a passkey for it.',
-    keepTitle: 'Keep this account',
-    keepLead:
-      'Give your anonymous account a handle and a name. Your browser then makes a passkey, so its plays join the rankings.',
-    signUpGoogle: 'Sign up with Google',
-    signUpDiscord: 'Sign up with Discord',
+
     signUpGoogleSoon: 'Sign up with Google is coming soon',
     signUpDiscordSoon: 'Sign up with Discord is coming soon',
-    orPasskey: 'or with a passkey',
+
     handle: 'Handle',
-    handleHint: '3 to 15 letters, digits or _. It names your page.',
+
     displayName: 'Name',
-    nameHint: 'Up to 32 characters, in any script. The rankings show it.',
-    createPasskey: 'Create passkey',
+
     skinDropLr2: 'Drop an LR2 skin',
     skinDropBeatoraja: 'Drop a beatoraja skin',
     skinDropHintLr2:
@@ -67,23 +60,33 @@ const en = {
     useBeatoraja: 'Use beatoraja skin',
     chartsMissing: 'Charts missing',
     ok: 'OK',
+    exitMenuTitle: 'Exit Be-Music Play?',
+    exitMenuHint: 'Close this window and exit. Cancel stays on the select screen.',
+    exitMenuLeave: 'Close window',
+    exitMenuCancel: 'Cancel',
+    windowCloseBlocked: 'Your browser kept this window open. Close this tab or window to exit.',
     optionUnavailable: 'Option not available',
     optionUnavailableHint:
       'The selected play options cannot be used with this chart. Change them and start the chart again.',
     loading: 'Loading…',
-    help: 'Help',
     helpAbout: 'Help & About',
+    fullscreenExit: 'Exit full screen',
+    installTitle: 'Install Be-Music Play',
+    installLead: 'Safari installs web apps from its own menu.',
+    installIOSShare: 'Tap the Share button.',
+    installIOSAdd: 'Choose “Add to Home Screen”.',
+    installMacFile: 'Open the File menu.',
+    installMacAdd: 'Choose “Add to Dock”.',
     close: 'Close',
     usage: 'Usage',
+    keyboard: 'Keyboard',
     options: 'Options',
-    openSource: 'Open source',
+    acknowledgements: 'Acknowledgements',
     language: 'Language',
     pause: 'Pause',
     quit: 'Quit',
     rotateTitle: 'Rotate your device',
     rotateSubtitle: 'The player is laid out for landscape.',
-    ossIntro:
-      'This player is built on the open source libraries listed below: every third-party package this build includes. Each entry keeps the copyright / license text the package ships, or its upstream text where the package ships none; open it to read.',
     services: 'Services',
     ackLoading: 'Loading…',
     ackFailed: 'Could not load the list.',
@@ -113,8 +116,7 @@ const en = {
     notSignedIn: 'Not signed in',
     anonymous: 'anonymous',
     passkey: (count: number) => `${count} passkey${count === 1 ? '' : 's'}`,
-    chipSignedOutTitle:
-      'Not signed in to the Leaderboard. Open the Debug Menu’s Leaderboard folder to sign in with a passkey.',
+    chipSignedOutTitle: 'Not signed in to the Leaderboard. Open Options → Leaderboard to sign in with a passkey.',
     chipAnonymousTitle:
       'Signed in anonymously: create a passkey to keep this account and show its plays on the Leaderboard.',
     chipSignedInTitle: (name: string, handle: string) =>
@@ -298,7 +300,11 @@ const ja: typeof en = {
   shell: {
     search: 'タイトル / アーティスト / ジャンルを検索（? でフィルタ）',
     dropTitle: 'ドロップして読み込む',
+    openFolder: 'フォルダを開く',
+    openZIP: 'ZIP を開く',
     dropFolder: 'BMS フォルダ',
+    dropLR2Skin: 'LR2 スキン',
+    dropBeatorajaSkin: 'beatoraja スキン',
     submitPlays: 'プレイを Leaderboard に送信する',
     checkingAccount: 'アカウントを確認しています…',
     leaderboard: 'Leaderboard',
@@ -314,31 +320,20 @@ const ja: typeof en = {
     missingRequiredItem: '不足（必須）',
     missingOptionalItem: '不足（任意）',
     signIn: 'ログイン',
-    signInLead: 'パスキー、Google、または Discord でログインします。',
-    signInPasskey: 'パスキーでログイン',
-    or: 'または',
-    signInGoogle: 'Google でログイン',
-    signInDiscord: 'Discord でログイン',
+
     signInGoogleSoon: 'Google でのログインは準備中です',
     signInDiscordSoon: 'Discord でのログインは準備中です',
     comingSoon: '準備中',
-    noAccount: 'アカウントがまだない場合は登録',
+
     cancel: 'キャンセル',
-    signUpTitle: 'アカウントを作成',
-    signUpLead: 'ユーザー名と表示名を決めます。そのあと、ブラウザがパスキーを作ります。',
-    keepTitle: 'このアカウントを残す',
-    keepLead:
-      '匿名アカウントにユーザー名と表示名を付けます。ブラウザがパスキーを作ると、そのプレイがランキングに載ります。',
-    signUpGoogle: 'Google で登録',
-    signUpDiscord: 'Discord で登録',
+
     signUpGoogleSoon: 'Google での登録は準備中です',
     signUpDiscordSoon: 'Discord での登録は準備中です',
-    orPasskey: 'またはパスキーで',
+
     handle: 'ユーザー名',
-    handleHint: '英数字と _ で 3〜15 文字。ページの名前になります。',
+
     displayName: '表示名',
-    nameHint: 'どの文字でも 32 文字まで。ランキングに表示されます。',
-    createPasskey: 'パスキーを作成',
+
     skinDropLr2: 'LR2 スキンをドロップ',
     skinDropBeatoraja: 'beatoraja スキンをドロップ',
     skinDropHintLr2:
@@ -352,23 +347,34 @@ const ja: typeof en = {
     useBeatoraja: 'beatoraja スキンを使う',
     chartsMissing: '譜面がありません',
     ok: 'OK',
+    exitMenuTitle: 'Be-Music Play を終了しますか？',
+    exitMenuHint: 'ウィンドウを閉じて終了します。キャンセルすると選曲画面に戻ります。',
+    exitMenuLeave: 'ウィンドウを閉じる',
+    exitMenuCancel: 'キャンセル',
+    windowCloseBlocked:
+      'ブラウザの制限でウィンドウを閉じられませんでした。このタブまたはウィンドウを閉じて終了してください。',
     optionUnavailable: '使えないオプション',
     optionUnavailableHint:
       '選んだプレイオプションはこの譜面では使えません。変更してから、もう一度譜面を始めてください。',
     loading: '読み込み中…',
-    help: 'ヘルプ',
+    fullscreenExit: 'フルスクリーンを解除',
     helpAbout: 'ヘルプとこのプレイヤーについて',
+    installTitle: 'Be-Music Play をインストール',
+    installLead: 'Safari では、Web アプリを Safari のメニューから追加します。',
+    installIOSShare: '共有ボタンをタップします。',
+    installIOSAdd: '「ホーム画面に追加」を選びます。',
+    installMacFile: 'メニューバーの「ファイル」を開きます。',
+    installMacAdd: '「Dock に追加」を選びます。',
     close: '閉じる',
     usage: '使い方',
+    keyboard: 'キーボード',
     options: 'オプション',
-    openSource: 'オープンソース',
+    acknowledgements: '謝辞',
     language: '言語',
     pause: '一時停止',
     quit: 'やめる',
     rotateTitle: '端末を横向きにしてください',
     rotateSubtitle: 'プレイヤーは横向きの画面向けです。',
-    ossIntro:
-      'このプレイヤーは、下に挙げるオープンソースのライブラリでできています。このビルドに含まれる第三者パッケージです。各項目には、パッケージに同梱の著作権・ライセンス文、同梱がないときは上流の文が入ります。開いて読んでください。',
     services: 'サービス',
     ackLoading: '読み込み中…',
     ackFailed: '一覧を読み込めませんでした。',
@@ -398,8 +404,7 @@ const ja: typeof en = {
     notSignedIn: 'ログインしていません',
     anonymous: '匿名',
     passkey: (count) => `パスキー ${count}`,
-    chipSignedOutTitle:
-      'Leaderboard にログインしていません。デバッグメニューの Leaderboard からパスキーでログインできます。',
+    chipSignedOutTitle: 'Leaderboard にログインしていません。Options の Leaderboard からパスキーでログインできます。',
     chipAnonymousTitle: '匿名でログイン中です。パスキーを作ると、このアカウントとプレイを Leaderboard に残せます。',
     chipSignedInTitle: (name, handle) => `${name}（@${handle}）でログイン中です。Leaderboard のページを開きます。`,
     startSignedOutHint: 'プレイを送る前に Accounts でログインしてください。ゲストアカウントから始められます。',
@@ -600,39 +605,9 @@ export function detectPlayerLang(): PlayerLang {
   return typeof navigator === 'undefined' ? 'en' : resolvePlayerLang(navigator.language);
 }
 
-/**
- * Remembers `next` and writes it onto the shell. Elements opt in with `data-i18n`, `data-i18n-aria`,
- * `data-i18n-placeholder` or `data-i18n-title`, whose value is a key of `shell`.
- */
-export function setPlayerLang(next: PlayerLang, root?: ParentNode): void {
+/** Selects the document language and notifies the bindings that own localized content. */
+export function setPlayerLang(next: PlayerLang): void {
   lang = next;
   if (typeof document !== 'undefined') document.documentElement.lang = next;
-  const scope = root ?? (typeof document === 'undefined' ? undefined : document);
-  if (scope !== undefined) applyPlayerCopy(scope);
   for (const listener of langListeners) listener();
-}
-
-export function applyPlayerCopy(root: ParentNode): void {
-  const shell = playerText().shell;
-  const write = (selector: string, assign: (element: HTMLElement, value: string) => void): void => {
-    for (const element of root.querySelectorAll<HTMLElement>(selector)) {
-      const key = element.getAttribute(selector.slice(1, -1));
-      if (key === null || !(key in shell)) continue;
-      const value = shell[key as keyof typeof shell];
-      if (typeof value === 'string') assign(element, value);
-    }
-  };
-  write('[data-i18n]', (element, value) => {
-    element.textContent = value;
-  });
-  write('[data-i18n-aria]', (element, value) => {
-    element.setAttribute('aria-label', value);
-  });
-  write('[data-i18n-placeholder]', (element, value) => {
-    element.setAttribute('placeholder', value);
-  });
-  write('[data-i18n-title]', (element, value) => {
-    element.setAttribute('title', value);
-  });
-  root.querySelector('footer.service-page-footer nav')?.setAttribute('aria-label', shell.services);
 }

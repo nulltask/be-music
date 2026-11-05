@@ -1,9 +1,7 @@
 {
   "extends": "../../tsconfig.typecheck.json",
   "compilerOptions": {
-    "types": ["@cloudflare/workers-types"],
-    "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
+    "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "cloudflare.config.ts", "drizzle.config.ts"]
+  "include": ["src/**/*.ts", "cloudflare.config.ts", "drizzle.config.ts"]
 }

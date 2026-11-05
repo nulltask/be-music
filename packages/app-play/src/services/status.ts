@@ -1,10 +1,10 @@
-// The status line: the Debug Menu's read-only Status row, which every load, play, result and failure writes to, and
+// The status line: the Options dialog's read-only Status row, which every load, play, result and failure writes to, and
 // which the test hook logs (`statusLog`).
 
 export interface StatusLineOptions {
-  /** The state the line is kept in: the Debug Menu's, whose Status row shows it. */
+  /** The state the line is kept in: the Options dialog's, whose Status row shows it. */
   readonly settings: { status: string };
-  /** Repaints the Status row (`DebugMenu.refreshStatus`). */
+  /** Repaints the Status row (`OptionsDialog.refreshStatus`). */
   readonly refresh: () => void;
   /** Hands the line to the test hook (`TestHookRecorder.recordStatus`), when it is installed. */
   readonly record: (text: string) => void;

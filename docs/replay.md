@@ -33,7 +33,9 @@ A replay is deliberately **not** a list of judgments. Its canonical payload is:
    sweeps misses past R, and ends a run that leaves scorable notes unjudged with the gauge at 0, exactly as the
    engine did (see [`bms-spec.md`](./bms-spec.md) "Negative BPM").
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
-   `{ seq, timeUs, action: 'down' | 'up', channels }`, with the key `tokens` when the host named them and
+   `{ seq, timeUs, action: 'down' | 'up', channels }`, with the key `tokens` when the host named them, the physical
+   input in `code` when the host had one (a keyboard's `KeyboardEvent.code` such as `'KeyZ'` or `'ShiftLeft'`, or
+   `'touch'` for a touch lane, whose `tokens` are its lane's keyboard key; diagnostic only, like `tokens`), and
    `inferred: true` on an `up` the engine inferred because the input reported no releases (a terminal without the
    kitty keyboard protocol): the instant it took the key as let go. `inferred` is diagnostic only; replays and
    simulators read such an `up` like any other. A scratch press carries `spin: 'cw' | 'ccw'`, the way it turned the
@@ -119,10 +121,10 @@ In the browser player:
 - Every play screen (`createPlayScene`) hands the recorded log to `on.finish(result, replay)`, and
   `waitForReplay()` waits for the log of a play that was left.
 - The player auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
-  the **Auto-save play history** checkbox in the Debug Menu's **Library & records** folder (OFF by default). Replay options are latched at chart start
+  the **Auto-save play history** checkbox in the Options dialog's **Library & records** folder (OFF by default). Replay options are latched at chart start
   and cannot change mid-play — the controls are disabled while a chart is playing, and the values in effect when
   the chart started govern that play.
-- The Debug Menu's **Play options** folder covers the recorded play settings: auto play, gauge, Random 1P/2P, DP
+- The Options dialog's **Play options** folder covers the recorded play settings: auto play, gauge, Random 1P/2P, DP
   flip, and auto scratch; the judge windows (LR2 / beatoraja / That-Which-Must-Not-Be-Named) are in its **Developer** folder. Where the LR2
   select screen's PLAY OPTION panel has a counterpart, the two surfaces two-way sync. Its **Replay / ghost** subfolder picks what a
   replay reproduces of the recorded view ([What the player saw](#what-the-player-saw)).
@@ -253,7 +255,7 @@ flowchart LR
 - **Saving by hand.** Keys 1-4 on the result screen (beatoraja's `ControlKeys.NUM1`-`NUM4`), a beatoraja result skin's
   replay buttons (19, 316-318) or the replay-slot card save into slot 1-4, once input is open and before the screen
   starts to leave. Each slot takes one save per result (beatoraja's `ReplayStatus.SAVED`).
-- **Auto-save rules.** Debug Menu → Library & records → **Replay slots** gives each slot a rule, applied as the result
+- **Auto-save rules.** Options → Library & records → **Replay slots** gives each slot a rule, applied as the result
   opens against the best record as it was before the play (beatoraja's `ReplayAutoSaveConstraint`): never, a better (or
   equal) EX score, fewer (or as few) BP, a better (or equal) max combo, a better (or equal) clear lamp, any of these
   better, or always. A first play counts as an update of each kind, as beatoraja reads an empty score. beatoraja ships
@@ -295,7 +297,7 @@ flowchart LR
   pace --> skins[Every view]
 ```
 
-- **Options.** Debug Menu → Play options → **Replay / ghost**:
+- **Options.** Options → Play options → **Replay / ghost**:
   - **Ghost** picks the source: OFF (default), OWN BEST, REPLAY SLOT 1-4, LEADERBOARD TOP or REPLAY FILE.
   - **Ghost mode** picks the presentation: SECOND PLAYFIELD (default), PACEMAKER, or PACEMAKER + LANES.
   - **Ghost status** says whether the bar under the cursor would show the pick, or why not: the mode needs the built-in
@@ -323,7 +325,7 @@ flowchart LR
   scores them, with its lane, its note, the time and the running combo, EX score and gauge. Nothing reads the clock or
   draws a random number, so the same replay always gives the same ghost.
 - **Second playfield** (SECOND PLAYFIELD, built-in skins only). A single-play chart lays the live field and the ghost's
-  out like the two sides of a double-play chart: 7 KEY as 14 KEY and 5 KEY as 10 KEY, the ghost on the 2P lanes. The
+  out as independent players around a central BGA (`twoPlayer: true`). Lane ordering uses 14 KEY for 7 KEY charts and 10 KEY for 5 KEY charts, with the ghost on the 2P lanes; ordinary double-play charts keep their shared field. The
   ghost's notes are the replay's own (its lane options), and each goes at the second the simulation settled it. They
   scroll with the live play's hi-speed, so a ghost note and the live note it matches reach their judgment lines
   together. Its key beams and bombs follow its recorded presses and judgments, its judgment plate shows on the 2P side,
@@ -347,7 +349,7 @@ flowchart LR
   handed only the live notes.
 - **Open points.** The ghost is re-simulated under the replay's recorded ruleset, not the viewer's. The second playfield
   ignores the recorded hi-speed and covers and shows no hold state for long notes. In touch mode the second playfield
-  takes the double-play lane split; the pacemaker and the lane overlay keep the touch layout.
+  uses the combined 10 / 14 KEY lane model; on stages with `twoPlayerSideInset`, its independent banks remain separated around the BGA. The pacemaker and the lane overlay keep the live layout.
 
 ## What the player saw
 
@@ -372,6 +374,8 @@ The beatoraja scene's HIDDEN cover is a ratio of the lane above the lift, so it 
 Scenes record the view at a fixed precision (`roundReplayView`): `hiSpeed` on a 1/1000 grid, `visibleMs` in whole ms and each cover part to 4 decimals, so float noise (`0.09999999999999999` for a cover of 0.1) neither lands in the log nor counts as a change.
 
 **Selected play options.** `play.options` records the complete selected source-option snapshot, with effective start restrictions applied (for example an AUTO start or a course that disables RANDOM). `play.optionChanges` holds `{ timeUs, values }` patches in chart microseconds; multiple edits at one timestamp keep their order. Primitive source values and unknown source-specific names round-trip without coercion. `resolveReplayOptionsAt` reconstructs the snapshot at the playhead, including after backward seeks. Browser replays restore the recorded options, and live hi-speed edits are recorded alongside the effective `viewChanges`. Dynamic view changes are retained on every changed frame. An option snapshot is not an instruction to execute arbitrary names: typed chart/engine fields and the view/tempo timelines remain authoritative for playback. Score acceptance, updates and ranking policy are separate Leaderboard concerns. The automatic judge timing's `judgeTimingAutoAdjust` is a mode (`"OFF"`, `"BEATORAJA"`, `"LR2-ON"`, `"LR2-SILENT"`); replays recorded before the modes hold a boolean, which readers take as `"BEATORAJA"` (`true`) or `"OFF"` (`resolveJudgeTimingAutoAdjust`), and its automatic steps sit in `play.optionChanges` as `judgeTimingMs` (see [Play options](play-options.md#judge-timing-and-automatic-adjustment)).
+
+**Control buttons.** `play.controlInputs` lists the presses and releases of the control buttons that are not lanes, START and SELECT, as `{ seq, timeUs, action: 'down' | 'up', button, code }` on the chart clock of `inputs`: `button` is the logical button as the host names it (`'1P-start'`, `'2P-select'`) and `code` the physical key (`KeyboardEvent.code`). It is diagnostic only: what a button did is recorded where it lands (`viewChanges`, the play's end), and simulators don't read it. A replay played back records none.
 
 **Recording.** Every play screen (built-in, LR2, beatoraja) passes the view at the start as `recordReplay.view` and samples the view every frame. `createReplayViewCoalescer` turns the samples into changes: only the fields that changed (`diffReplayView`, the full cover of a side whose cover changed), on every rendered frame where a value changed (`minIntervalMs: 0`), so rapid edits remain reproducible. The scene sends each change as a `{ kind: 'view', change }` input command, and the engine stamps it with the chart time it drains the command at. On the built-in and LR2 scenes the hi-speed changes during a play (the arrow keys, a host's `setHiSpeed`); the covers are fixed per play, and the first change carries `visibleMs` once the lanes are laid out. On the beatoraja scene the hi-speed, lane cover, lift and HIDDEN cover all change (the arrow keys, PageUp / PageDown, the wheel, Home / End, H / J / K where no lane of the chart takes them, and the skin's cover buttons 330-332), from the play options' covers at the start.
 

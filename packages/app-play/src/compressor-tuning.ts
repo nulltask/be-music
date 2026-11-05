@@ -1,4 +1,4 @@
-// Debug Menu state for the audio bus's compressor tuning: the Web Audio parameters in units that read well on a slider
+// Options dialog state for the audio bus's compressor tuning: the Web Audio parameters in units that read well on a slider
 // (dB and milliseconds), conversion to and from the bus's `CompressorParams`, and persistence across reloads.
 
 import {

@@ -1,5 +1,5 @@
 /**
- * The player's render resolution setting (canvas pixels per CSS pixel): the Debug Menu offers 1× up to the display's
+ * The player's render resolution setting (canvas pixels per CSS pixel): the Options dialog offers 1× up to the display's
  * `devicePixelRatio` in 0.5 steps, and the pick is remembered. Before any pick the player renders at 1.5× (full density
  * at 2× and above made tablets fill-rate bound: under 30 fps on iPad, 60 fps at 1.5×) and benchmarks the select screen
  * once to pick for the device.
@@ -33,7 +33,7 @@ export function nearestRenderResolution(steps: readonly number[], value: number)
   return best;
 }
 
-/** The label a step shows in the Debug Menu, e.g. `1.5×`. */
+/** The label a step shows in the Options dialog, e.g. `1.5×`. */
 export function renderResolutionLabel(value: number): string {
   return `${Number(value.toFixed(3))}×`;
 }

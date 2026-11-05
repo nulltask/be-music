@@ -1,8 +1,17 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { accountNotice, renderAccountPage } from './page.ts';
+import { accountNotice, renderAccountPage as renderPage } from './page.ts';
+
+// Ignore template source indentation while preserving the existing markup/content assertions.
+function renderAccountPage(input: Parameters<typeof renderPage>[0]): string {
+  return renderPage(input)
+    .replace(/\s+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+>/g, '>')
+    .replace(/>\s+([^<]*?)\s+</g, '>$1<');
+}
 
 function buttonHTML(page: string, action: string): string {
-  const button = page.match(new RegExp(`<button[^>]*data-action="${action}"[^>]*>[\\s\\S]*?</button>`));
+  const button = page.match(new RegExp(`<button[^>]*data-auth-action="${action}"[^>]*>[\\s\\S]*?</button>`));
   expect(button, action).not.toBeNull();
   return button![0];
 }
@@ -10,10 +19,10 @@ describe('Accounts page', () => {
   const input = { signedIn: false, anonymous: false, name: '', login: true, discord: false, google: false };
   test('only offers configured providers and a guest account when signed out', () => {
     const page = renderAccountPage(input);
-    expect(page).toContain('data-action="passkey"');
-    expect(page).toContain('data-action="guest"');
-    expect(page).not.toContain('data-action="discord"');
-    expect(renderAccountPage({ ...input, google: true })).toContain('data-action="google"');
+    expect(page).toContain('data-auth-action="passkey"');
+    expect(page).toContain('data-auth-action="guest"');
+    expect(page).not.toContain('data-auth-action="discord"');
+    expect(renderAccountPage({ ...input, google: true })).toContain('data-auth-action="google"');
   });
   test('escapes names and offers account management and return links when signed in', () => {
     const page = renderAccountPage({
@@ -24,9 +33,9 @@ describe('Accounts page', () => {
       apps: { play: 'https://play.example' },
     });
     expect(page).toContain('&lt;script&gt;bad&lt;/script&gt;');
-    expect(page).toContain('data-action="add-passkey"');
+    expect(page).toContain('data-auth-action="add-passkey"');
     expect(page).toContain('href="https://play.example/api/auth/sign-in"');
-    expect(page).not.toContain('data-action="guest"');
+    expect(page).not.toContain('data-auth-action="guest"');
   });
   test('keeps preview Donate only in the footer', () => {
     const page = renderAccountPage({
@@ -82,21 +91,21 @@ describe('Accounts page', () => {
       google: true,
       linkedDiscord: true,
     });
-    expect(linked).toContain('data-action="link-google"');
-    expect(linked).toContain('data-action="add-passkey"');
+    expect(linked).toContain('data-auth-action="link-google"');
+    expect(linked).toContain('data-auth-action="add-passkey"');
     expect(linked).toContain('Discord is linked.');
-    expect(linked).not.toContain('data-action="discord"');
-    expect(linked).not.toContain('data-action="link-discord"');
-    expect(linked).not.toContain('data-action="google"');
+    expect(linked).not.toContain('data-auth-action="discord"');
+    expect(linked).not.toContain('data-auth-action="link-discord"');
+    expect(linked).not.toContain('data-auth-action="google"');
   });
   test('keeps continuation and account actions available in the shared shell', () => {
     const page = renderAccountPage({ ...input, signedIn: true, anonymous: true, name: 'Guest' });
     expect(page).toContain('href="#main"');
     expect(page).toContain('id="main"');
-    expect(page).toContain('data-action="continue"');
-    expect(page).toContain('data-action="sign-out"');
+    expect(page).toContain('data-auth-action="continue"');
+    expect(page).toContain('data-auth-action="sign-out"');
     expect(page).toContain('aria-live="polite"');
-    expect(page).not.toContain('data-action="guest"');
+    expect(page).not.toContain('data-auth-action="guest"');
   });
 });
 

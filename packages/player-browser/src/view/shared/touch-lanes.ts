@@ -176,9 +176,18 @@ export function isTouchPlayPointer(pointerType: string): boolean {
 export function canvasPointToDesign(
   canvasX: number,
   canvasY: number,
-  viewport: { readonly x: number; readonly y: number; readonly scale: number },
+  viewport: {
+    readonly x: number;
+    readonly y: number;
+    readonly scale: number;
+    readonly scaleX?: number;
+    readonly scaleY?: number;
+  },
 ): { x: number; y: number } {
-  return { x: (canvasX - viewport.x) / viewport.scale, y: (canvasY - viewport.y) / viewport.scale };
+  return {
+    x: (canvasX - viewport.x) / (viewport.scaleX ?? viewport.scale),
+    y: (canvasY - viewport.y) / (viewport.scaleY ?? viewport.scale),
+  };
 }
 
 /** A touch lane's `lane` intent: a lane went down or up. */
@@ -247,7 +256,13 @@ export class TouchLaneFingers {
       return NO_POINTER_RESULT;
     }
     const { stage, screen, lanes } = layout();
-    const viewport = resolveScaledViewport(screen.width, screen.height, stage.width, stage.height);
+    const viewport = resolveScaledViewport(
+      screen.width,
+      screen.height,
+      stage.width,
+      stage.height,
+      stage.displayAspectRatio,
+    );
     const point = canvasPointToDesign(pointer.offsetX, pointer.offsetY, viewport);
     const channel = hitTestTouchLane(resolveTouchLaneZones(lanes, { stageHeight: stage.height }), point.x, point.y);
     const change = down ? this.tracker.down(pointer.pointerId, channel) : this.tracker.move(pointer.pointerId, channel);

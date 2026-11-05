@@ -61,7 +61,7 @@ export interface EngineDriverOptions {
   shouldSkipKey?: (event: KeyboardEvent) => boolean;
   /**
    * Fires synchronously when the engine constructs its input runtime, handing back the engine-side
-   * `inputSignals` bus. Hosts that keep their own keyboard listener for select keys (Space → toggle-pause, ESC
+   * `inputSignals` bus. Hosts that keep their own keyboard listener for select keys (Pause → toggle-pause, ESC
    * fade, etc.) push commands through this reference to drive the engine alongside their own view-side state.
    */
   onInputSignalsReady?: (signals: { inputSignals: PlayerInputSignalBus }) => void;

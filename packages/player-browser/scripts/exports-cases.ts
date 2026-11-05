@@ -960,6 +960,16 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       void new playerWebCoreAPI.PlayOptionMismatchError(['Random 1P: CONVERGE'], undefined).options;
     },
   });
+  define('player-browser.dropEntries', {
+    run: () => {
+      playerWebCoreAPI.dropEntries({ items: [] } as unknown as DataTransfer);
+    },
+  });
+  define('player-browser.readDropEntries', {
+    run: async () => {
+      await playerWebCoreAPI.readDropEntries([]);
+    },
+  });
   define('player-browser.readDroppedFiles', {
     run: async () => {
       await playerWebCoreAPI.readDroppedFiles({ files: [BENCH_BMS_FILE] } as unknown as DataTransfer);
@@ -994,6 +1004,38 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.resolveDropFilePath', {
     run: () => {
       playerWebCoreAPI.resolveDropFilePath(BENCH_BMS_FILE);
+    },
+  });
+  define('player-browser.keyboardEventToTokens', {
+    run: () => {
+      playerWebCoreAPI.keyboardEventToTokens({ code: 'ShiftLeft' });
+    },
+  });
+  define('player-browser.effectiveControlKey', {
+    run: () => {
+      playerWebCoreAPI.effectiveControlKey({ '1P-start': ['tab'] }, '1P-start');
+    },
+  });
+  define('player-browser.resolveControlButtons', {
+    run: () => {
+      playerWebCoreAPI.resolveControlButtons({ laneKeys: { beat: { '11': ['a'] } } });
+    },
+  });
+  define('player-browser.controlActionKeys', {
+    run: () => {
+      playerWebCoreAPI.controlActionKeys('select.back', 'lr2', { 'select.activate': ['KeyE'] });
+    },
+  });
+  define('player-browser.resolveControlActions', {
+    run: () => {
+      playerWebCoreAPI.resolveControlActions('beatoraja', { 'select.activate': ['KeyE'] }).is('select.activate', {
+        code: 'KeyE',
+      });
+    },
+  });
+  define('player-browser.resolveControlScheme', {
+    run: () => {
+      playerWebCoreAPI.resolveControlScheme('built-in', 'beatoraja');
     },
   });
   define('player-browser.resolveRendererPreference', {

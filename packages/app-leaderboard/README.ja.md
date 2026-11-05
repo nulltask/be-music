@@ -127,15 +127,11 @@ flowchart TD
 デプロイするときは、このパッケージで同じコマンドを実行します。新しい Worker にはまだ secret がないので、最初の
 デプロイでは `--secrets-file` で渡します（例: `cf deploy --secrets-file <(op inject -i secrets/production.env.tpl)`）。
 
-この Worker は、自分のホストでページと API を配信し、Accounts を切り出すまでは全サービスの Better Auth も受け持ちます
-（docs/services.ja.md 3 章）。Accounts、Player、Dashboard の Worker は Service Binding でこの Worker を呼び、セッション
-Cookie は環境の親ドメインで共有します。
+この Worker は、自分のホストでページと API を配信します。認証と OIDC の ID 発行は Accounts が受け持ち、Leaderboard は `@be-music/service-auth-client` を使い、自分のホストだけに有効なセッション Cookie を持ちます。サービス間でセッション Cookie は共有しません。[ログイン](../../docs/services.ja.md#3-ログイン)を参照してください。
 
 ## ページ
 
-ページは Hono JSX で、Tailwind CSS v4 と [Basecoat](https://basecoatui.com)（フレームワークの
-ランタイムなしの shadcn/ui デザイン）でスタイルを付けています。`src/pages/app.css` は `src/pages/styles.generated.ts`
-にコンパイルされ、`/assets/app.<hash>.css` から配信されます。
+Hono のルートは `@be-music/service-web-theme/server` を通して Lit テンプレートを描画し、Tailwind CSS v4 と [Basecoat](https://basecoatui.com) でスタイルを付けます。認証、アカウントの表示、ヘッダー、言語の共通ビューは service theme から使い、ブラウザーのコンポーネントは `/client` エントリーを使います。htmx がリクエストと部分遷移を担い、Lit が管理するステータスのコンポーネントは Shadow DOM で子要素をモーフィングから隔離します。`src/pages/app.css` は `src/pages/styles.generated.ts` にコンパイルされ、`/assets/app.<hash>.css` から配信されます。
 
 スタイルシート、アイコン、シェアカードのフォント、クライアントスクリプト（`src/pages/*.generated.ts`）は生成物で、git には入れません。
 `pnpm install`、`dev`、デプロイ、テストの前に生成されます。`cf dev` の実行中にページのクラス、アイコン、`client/`

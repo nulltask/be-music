@@ -1,3 +1,5 @@
+import { drawJudgements } from './judgements.ts';
+import { bindGlassSurface } from './glass.ts';
 import { Graphics, type Container } from 'pixi.js';
 import { resolveGrooveRect, resolvePortraitHUDColumn } from './layout.ts';
 import {
@@ -45,7 +47,6 @@ import {
 import {
   SYN_AMBER,
   SYN_CYAN,
-  SYN_GREEN,
   SYN_DIM,
   SYN_DISPLAY_FONT,
   SYN_EMBER,
@@ -67,11 +68,8 @@ import {
   type BeMusicRect,
   comboTier,
   effectProfile,
-  flashingGreatColor,
   hash01,
   impulse,
-  isFlashingGreat,
-  judgeDisplayWord,
   LOADING_WORD,
   loadingDots,
   type BeMusicGameplayLayout,
@@ -81,7 +79,6 @@ import {
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_SIDE_COLUMN,
   STAGE_WIDTH as DESIGN_WIDTH,
-  punchScale,
 } from '@be-music/player-skin-sdk';
 import {
   addHUDNumber,
@@ -329,27 +326,39 @@ export function renderSynesthesiaChrome({
   const cabinet = !portrait && layout.mode === 'standard';
   const wellTop = portrait ? layout.playfield.top - 2 : 0;
   const wellBottom = portrait ? layout.stage.height : cabinet ? cabinetWellBottom(layout) : PLAYFIELD_FRAME_BOTTOM;
-  drawPlayfieldWell(panels, playfieldLeft, playfieldRight, wellTop, wellBottom, runtime.progressRatio, accent);
+  if (layout.twoPlayer && cabinet) {
+    for (const side of Object.values(layout.playfield.sides)) {
+      if (side) drawPlayfieldWell(panels, side.left, side.right, wellTop, wellBottom, accent);
+    }
+  } else drawPlayfieldWell(panels, playfieldLeft, playfieldRight, wellTop, wellBottom, accent);
   // The monitor shrinks to fit beside a double-play field; only a page-wide keyboard field leaves no room for it.
   if (BGA.w > 0) {
     const standby = layerPool.acquireGraphics();
     standby.label = 'synesthesia-gameplay/standby';
     standby.blendMode = 'add';
-    drawBGAFrame(panels, standby, layer, hasBGA, seconds, pulse, hue, camera, drive, layerPool);
+    drawBGAFrame(panels, standby, layer, hasBGA, seconds, pulse, hue, camera, drive, layerPool, cabinet ? 0 : 6);
   }
+  const glass = overlayLayerPool.acquireGraphics();
+  glass.label = 'synesthesia-gameplay/glass';
   const front = overlayLayerPool.acquireGraphics();
+  bindGlassSurface(front, glass);
   front.label = 'synesthesia-gameplay/header';
+  drawProgressLight(front, playfieldLeft, wellTop, layout.playfield.judgementY, runtime.progressRatio, accent);
   if (portrait) {
-    drawPortraitHUD(panels, layer, runtime, layout, accent, layerPool);
+    drawPortraitHUD(front, overlayLayer, runtime, layout, accent, overlayLayerPool);
     drawPortraitHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
   } else if (cabinet) {
-    drawSynesthesiaCabinet({ graphics: panels, layer, pool: layerPool, accent, pulse }, runtime, layout);
+    drawSynesthesiaCabinet(
+      { graphics: front, layer: overlayLayer, pool: overlayLayerPool, accent, pulse },
+      runtime,
+      layout,
+    );
   } else {
-    drawGauges(panels, layer, runtime, accent, layerPool);
-    drawChartPlate(panels, layer, runtime, accent, layerPool);
-    drawScorePanel(panels, layer, runtime, accent, layerPool);
+    drawGauges(front, overlayLayer, runtime, accent, overlayLayerPool);
+    drawChartPlate(front, overlayLayer, runtime, accent, overlayLayerPool);
+    drawScorePanel(front, overlayLayer, runtime, accent, overlayLayerPool);
     // The judge tally owns the side column on the right edge.
-    drawJudgeTally(panels, layer, runtime, STAGE_SIDE_COLUMN.x, layerPool);
+    drawJudgeTally(front, overlayLayer, runtime, STAGE_SIDE_COLUMN.x, overlayLayerPool);
     drawHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
   }
   const judgeY = resolveJudgeWordY(layout);
@@ -703,7 +712,6 @@ function drawPlayfieldWell(
   right: number,
   top: number,
   bottom: number,
-  progressRatio: number | undefined,
   accent: number,
 ): void {
   const left = playfieldLeft - 4;
@@ -715,21 +723,34 @@ function drawPlayfieldWell(
     graphics.rect(x - 2, top, 5, h).fill({ color: accent, alpha: 0.06 });
     graphics.rect(x, top, 1, h).fill({ color: accent, alpha: 0.6 });
   }
-  // Song progress as a light rising along the left rail.
-  const ratio =
-    progressRatio !== undefined && Number.isFinite(progressRatio) ? Math.max(0, Math.min(1, progressRatio)) : 0;
-  const trackH = h - 12;
-  if (ratio > 0) {
-    const y = top + 6 + trackH * (1 - ratio);
-    graphics.rect(left - 3, y, 5, trackH * ratio).fill({ color: SYN_WHITE, alpha: 0.12 });
-    graphics.circle(left - 1, y, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
-    graphics.circle(left - 1, y, 7).fill({ color: accent, alpha: 0.25 });
-  }
   // The floor rule runs from the left rail's outer edge (left - 1) to the right rail's (right + 3), and no further; the
   // portrait well runs off the stage's bottom edge instead.
   if (bottom < VIEW.height) graphics.rect(left - 1, bottom, w, 1).fill({ color: accent, alpha: 0.7 });
   // The portrait well's top edge, under the gauge.
   if (top > 0) graphics.rect(left - 1, top, w, 1).fill({ color: accent, alpha: 0.5 });
+}
+
+/**
+ * Song progress as a light falling down the left rail, from the top of the well to the judgement line, where it ends.
+ * Drawn in front of the lanes, so the lanes never cover it.
+ */
+function drawProgressLight(
+  graphics: Graphics,
+  playfieldLeft: number,
+  top: number,
+  judgementY: number,
+  progressRatio: number | undefined,
+  accent: number,
+): void {
+  const ratio =
+    progressRatio !== undefined && Number.isFinite(progressRatio) ? Math.max(0, Math.min(1, progressRatio)) : 0;
+  if (ratio <= 0) return;
+  const x = playfieldLeft - 5;
+  const start = top + 6;
+  const y = start + (judgementY - start) * ratio;
+  graphics.rect(x - 2, start, 5, y - start).fill({ color: SYN_WHITE, alpha: 0.12 });
+  graphics.circle(x, y, 7).fill({ color: accent, alpha: 0.25 });
+  graphics.circle(x, y, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
 }
 
 /**
@@ -748,9 +769,9 @@ function drawBGAFrame(
   camera: CameraPose,
   drive: AudioDrive,
   pool: ChildPool,
+  margin = 6,
 ): void {
   const color = hsvToHex(hue, 0.6, 1);
-  const margin = 6;
   const frameX = BGA.x - margin;
   const frameY = BGA.y - margin;
   const frameW = BGA.w + margin * 2;
@@ -1103,7 +1124,7 @@ function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, 
   }
 }
 
-/** Label and figure styles of the portrait HUD: nothing under 10 design px, which is ~8 CSS px on a phone. */
+/** Compact labels keep the portrait HUD beside the monitor, leaving more space for the lanes. */
 function portraitLabel(fill: number = SYN_DIM): HUDTextOptions {
   return { size: 10, fill, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 0.8 };
 }
@@ -1159,6 +1180,7 @@ function drawPortraitHUD(
 
   // Gauge strip.
   const groove = resolveGrooveRect(layout);
+  graphics.rect(groove.x - 4, groove.y - 24, groove.w + 8, groove.h + 28).fill(SYN_VOID);
   const gauge = clampPercent(runtime.gauge ?? 0);
   const clear = clampPercent(runtime.clearThreshold ?? 80);
   const cleared = runtime.gaugeSurvival === true || clear <= 0 ? gauge > 0 : gauge >= clear;
@@ -1327,100 +1349,6 @@ const JUDGE_COLORS: Record<string, number> = {
   BAD: SYN_MAGENTA,
   POOR: SYN_RED,
 };
-
-/** Colours the PERFECT judgement's flashing GREAT cycles through. */
-const FLASHING_GREAT = [SYN_CYAN, SYN_WHITE, SYN_AMBER, SYN_MAGENTA, SYN_GREEN] as const;
-
-/**
- * Judgement word and combo as light: wide tracked type with a same-colour bloom. PERFECT prints as a GREAT that flashes
- * through the prism colours, so a clean run literally shimmers.
- */
-function drawJudgements(
-  layer: Container,
-  runtime: Runtime,
-  layout: BeMusicGameplayLayout,
-  wordY: number,
-  pool: ChildPool,
-): void {
-  const displays = resolveJudgeDisplays(runtime, layout);
-  const nowMs = runtime.nowMs ?? 0;
-  const amount = effectProfile(runtime.effects).amount;
-  for (const display of displays) {
-    const judgeScale = punchScale(runtime.judgeAtMs, nowMs, 120, 0.22 * amount);
-    const color = isFlashingGreat(display.judge)
-      ? flashingGreatColor(nowMs, FLASHING_GREAT)
-      : (JUDGE_COLORS[display.judge] ?? SYN_WHITE);
-    addHUDText(
-      layer,
-      judgeDisplayWord(display.judge),
-      display.x,
-      wordY + display.lift,
-      {
-        scale: judgeScale,
-        ...displayStyle(16, color),
-        letterSpacing: 4,
-        anchorX: 0.5,
-        anchorY: 0.5,
-        maxWidth: display.maxWidth,
-        dropShadow: { color, alpha: 0.95, blur: 10, distance: 0 },
-      },
-      pool,
-    );
-    const combo = resolveVisibleCombo(display.judge, display.combo);
-    if (combo > 0) {
-      addHUDNumber(
-        layer,
-        formatCount(combo),
-        display.x,
-        wordY + display.lift + 28,
-        {
-          scale: punchScale(runtime.judgeAtMs, nowMs, 150, (combo % 100 === 0 ? 0.45 : 0.14) * amount),
-          ...displayStyle(22, combo >= 200 ? SYN_AMBER : SYN_WHITE),
-          anchorX: 0.5,
-          anchorY: 0.5,
-          maxWidth: Math.max(60, display.maxWidth - 40),
-          dropShadow: { color: combo >= 200 ? SYN_AMBER : SYN_EMBER, alpha: 0.85, blur: 10, distance: 0 },
-        },
-        pool,
-      );
-    }
-  }
-}
-
-function resolveJudgeDisplays(
-  runtime: Runtime,
-  layout: BeMusicGameplayLayout,
-): Array<{ judge: string; combo: number | undefined; x: number; lift: number; maxWidth: number }> {
-  const centerOf = (side: '1P' | '2P'): number | undefined => {
-    const bounds = layout.playfield.sides[side];
-    return bounds ? (bounds.left + bounds.right) / 2 : undefined;
-  };
-  // A side's LIFT raises its judgement line, and its judgement word with it.
-  const liftOf = (side: '1P' | '2P'): number =>
-    (layout.playfield.sides[side]?.judgementY ?? layout.playfield.judgementY) - layout.playfield.judgementY;
-  const doublePlay = centerOf('2P') !== undefined;
-  const maxWidth = doublePlay ? 122 : 180;
-  const fallbackX = layout.playfield.centerX;
-  const sides = runtime.judgeSides?.filter((state) => typeof state.judge === 'string' && state.judge.length > 0);
-  if (sides?.length) {
-    return sides.map((state) => ({
-      judge: state.judge!,
-      combo: state.combo,
-      x: centerOf(state.side) ?? fallbackX,
-      lift: liftOf(state.side),
-      maxWidth,
-    }));
-  }
-  if (!runtime.lastJudge) return [];
-  return [
-    { judge: runtime.lastJudge, combo: runtime.combo, x: centerOf('1P') ?? fallbackX, lift: liftOf('1P'), maxWidth },
-  ];
-}
-
-function resolveVisibleCombo(judge: string, combo: number | undefined): number {
-  if (judge !== 'PERFECT' && judge !== 'GREAT' && judge !== 'GOOD') return 0;
-  return combo !== undefined && Number.isFinite(combo) ? Math.max(0, Math.floor(combo)) : 0;
-}
 
 function formatCount(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return '0';

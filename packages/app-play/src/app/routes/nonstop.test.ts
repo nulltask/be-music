@@ -156,7 +156,7 @@ describe('NonstopRoute: starting and restitching', () => {
     const course = nonstopCourse();
     h.courses.start(true);
     await h.route.startNonstopCourse(course, { decide: true });
-    // Stitched with each stage's hashes and the Debug Menu's placement.
+    // Stitched with each stage's hashes and the Options dialog's placement.
     const [stitchedCourse, stitchOptions] = vi.mocked(prepareNonstopPlay).mock.calls[0]!;
     expect(stitchedCourse).toBe(course);
     expect(stitchOptions.placement).toBe('lr2');
@@ -186,7 +186,7 @@ describe('NonstopRoute: starting and restitching', () => {
     expect(h.deps.library.collection.sources.map((source) => source.id)).toEqual(['drop1', 'nonstop:ns#0']);
   });
 
-  test('a NONSTOP course started with PLAY follows the Debug Menu’s auto play', async () => {
+  test('a NONSTOP course started with PLAY follows the Options dialog’s auto play', async () => {
     const h = harness();
     await h.route.startNonstopCourse(nonstopCourse());
     expect(h.deps.playChart.mock.calls[0]![1]).not.toHaveProperty('autoPlay');
@@ -292,7 +292,7 @@ describe('NonstopRoute: a NONSTOP course replay', () => {
     const log = recordedRun();
     await h.route.startNonstopCourse(nonstopCourse(), { decide: true, replay: log });
     const stitchOptions = vi.mocked(prepareNonstopPlay).mock.calls[0]![1];
-    // The run's placement, not the Debug Menu's, its stitching rules and each stage's draws.
+    // The run's placement, not the Options dialog's, its stitching rules and each stage's draws.
     expect(stitchOptions).toMatchObject({
       placement: 'intended',
       stitch: 1,

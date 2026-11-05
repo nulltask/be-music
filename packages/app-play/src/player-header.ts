@@ -1,4 +1,6 @@
-import { renderServiceHeader, serviceSkipLink, type ServiceHeaderAccount } from '@be-music/service-web-theme';
+import { html, render, type TemplateResult } from 'lit';
+import { type ServiceHeaderAccount } from '@be-music/service-web-theme';
+import { serviceHeaderTemplate, serviceSkipLinkTemplate } from '@be-music/service-web-theme/client';
 import {
   enterTouchFullscreen,
   getFullscreenElement,
@@ -18,8 +20,12 @@ export interface PlayerHeaderAccount {
 }
 
 export interface PlayerHeaderActions {
-  /** Opens the existing Debug Menu when it is closed, and closes it when it is open. `null` clears a binding. */
-  toggleDebugMenu?: (() => void) | null;
+  /** Opens the Options dialog when it is closed, and closes it when it is open. `null` clears a binding. */
+  toggleOptions?: (() => void) | null;
+  /** Opens the Help dialog. `null` clears a binding. */
+  openHelp?: (() => void) | null;
+  /** Installs the player, or explains how; the button shows only while {@link setPlayerHeaderInstallable} says so. */
+  install?: (() => void) | null;
   /** Opens the player's sign-in dialog. `null` clears a binding. */
   openSignIn?: (() => void) | null;
   /** Switches the player language in place, the same path as Help. */
@@ -27,7 +33,9 @@ export interface PlayerHeaderActions {
 }
 
 const actions: {
-  toggleDebugMenu?: () => void;
+  toggleOptions?: () => void;
+  openHelp?: () => void;
+  install?: () => void;
   openSignIn?: () => void;
   selectLanguage: (lang: PlayerLang) => void;
 } = {
@@ -39,8 +47,11 @@ let host: HTMLElement | undefined;
 /** An odd number of Settings clicks arrived before the menu existed, so the first bind should open it. */
 let pendingMenu = false;
 let pendingSignIn = false;
-/** Whether the Debug Menu pane is expanded. The gear's `aria-expanded` follows it. */
+let pendingHelp = false;
+/** Whether the Options dialog is open. The gear's `aria-expanded` follows it. */
 let settingsOpen = false;
+/** Whether the player can be installed here, so the header shows Install. */
+let installable = false;
 
 /** The document the header's fullscreen button reads. Fullscreen covers the play surface (`#main`) on every device. */
 export interface PlayerHeaderFullscreenDocument extends FullscreenDocumentLike {
@@ -78,16 +89,18 @@ export async function togglePlayerHeaderFullscreen(
  * The shared header for Play: it spans the viewport, Settings sits where other services put the Play link, and
  * fullscreen sits beside Settings.
  */
-export function playerServiceHeaderHTML(input: {
+export function playerServiceHeaderTemplate(input: {
   locale: PlayerLang;
   hostname: string;
   requestURL: string;
   account?: PlayerHeaderAccount;
   /** The page is fullscreen, so the button offers to leave. */
   fullscreenActive?: boolean;
-  /** The Debug Menu is open, so the gear is expanded. */
+  /** The Options dialog is open, so the gear is expanded. */
   settingsOpen?: boolean;
-}): string {
+  /** The player can be installed, so Install shows. */
+  installable?: boolean;
+}): TemplateResult {
   const signedIn: ServiceHeaderAccount | undefined =
     input.account === undefined
       ? undefined
@@ -100,10 +113,12 @@ export function playerServiceHeaderHTML(input: {
     input.account === undefined
       ? '#sign-in'
       : leaderboardLink(`/players/${encodeURIComponent(input.account.handle)}`, input.hostname);
-  const html = `${serviceSkipLink(input.locale)}${renderServiceHeader({
+  return html`${serviceSkipLinkTemplate(input.locale)}${serviceHeaderTemplate({
     locale: input.locale,
     title: 'Be-Music Play',
     homeHref: '/',
+    install: input.installable === true,
+    help: true,
     settings: true,
     settingsOpen: input.settingsOpen === true,
     fullscreen: true,
@@ -111,21 +126,18 @@ export function playerServiceHeaderHTML(input: {
     spanViewport: true,
     accountHref,
     account: signedIn,
+    accountNewTab: true,
     requestURL: input.requestURL,
   })}`;
-  // A signed-in account opens its Leaderboard page in a new tab, so the loaded library stays.
-  if (input.account === undefined) return html;
-  return html.replace(
-    'data-service-header="account" href="',
-    'data-service-header="account" target="_blank" rel="noopener" href="',
-  );
 }
 
 /** What a click in the header should do. `sign-in` only while signed out. */
 export function classifyPlayerHeaderClick(
   target: { closest(selector: string): { lang?: string } | null },
   signedOut: boolean,
-): 'settings' | 'fullscreen' | 'sign-in' | PlayerLang | undefined {
+): 'install' | 'help' | 'settings' | 'fullscreen' | 'sign-in' | PlayerLang | undefined {
+  if (target.closest('[data-service-header="install"]') !== null) return 'install';
+  if (target.closest('[data-service-header="help"]') !== null) return 'help';
   if (target.closest('[data-service-header="fullscreen"]') !== null) return 'fullscreen';
   if (target.closest('[data-service-header="settings"]') !== null) return 'settings';
   const language = target.closest('#language-menu a');
@@ -140,7 +152,14 @@ export function setPlayerHeaderAccount(next: PlayerHeaderAccount | undefined): v
   paint();
 }
 
-/** The gear's `aria-expanded` follows the existing Debug Menu pane. */
+/** Shows Install while the player can be installed here, and hides it once it is installed. */
+export function setPlayerHeaderInstallable(next: boolean): void {
+  if (installable === next) return;
+  installable = next;
+  paint();
+}
+
+/** The gear's `aria-expanded` follows the Options dialog. */
 export function setPlayerHeaderSettingsOpen(open: boolean): void {
   if (settingsOpen === open) return;
   settingsOpen = open;
@@ -148,21 +167,33 @@ export function setPlayerHeaderSettingsOpen(open: boolean): void {
 }
 
 /**
- * Wires Settings, Sign in and the language menu. Settings and Sign in can arrive after the menu and the dialogs exist;
+ * Wires Help, Settings, Sign in and the language menu. Help, Settings and Sign in can arrive after the menu and the dialogs exist;
  * a click before that waits. A second Settings click before the menu exists cancels the first. Fullscreen calls
  * {@link togglePlayerHeaderFullscreen} itself.
  */
 export function bindPlayerHeader(next: PlayerHeaderActions): void {
-  if (next.toggleDebugMenu === null) {
-    actions.toggleDebugMenu = undefined;
+  if (next.toggleOptions === null) {
+    actions.toggleOptions = undefined;
     pendingMenu = false;
-  } else if (next.toggleDebugMenu !== undefined) {
-    actions.toggleDebugMenu = next.toggleDebugMenu;
+  } else if (next.toggleOptions !== undefined) {
+    actions.toggleOptions = next.toggleOptions;
     if (pendingMenu) {
       pendingMenu = false;
-      next.toggleDebugMenu();
+      next.toggleOptions();
     }
   }
+  if (next.openHelp === null) {
+    actions.openHelp = undefined;
+    pendingHelp = false;
+  } else if (next.openHelp !== undefined) {
+    actions.openHelp = next.openHelp;
+    if (pendingHelp) {
+      pendingHelp = false;
+      next.openHelp();
+    }
+  }
+  if (next.install === null) actions.install = undefined;
+  else if (next.install !== undefined) actions.install = next.install;
   if (next.openSignIn === null) {
     actions.openSignIn = undefined;
     pendingSignIn = false;
@@ -178,6 +209,12 @@ export function bindPlayerHeader(next: PlayerHeaderActions): void {
 
 /** Paints the header and keeps it on the player's language. Clicks stay on this element across repaints. */
 export function mountPlayerHeader(root: HTMLElement): void {
+  if (host === root) {
+    paint();
+    return;
+  }
+  // Adopt any server fallback once; subsequent updates belong to this render root.
+  root.replaceChildren();
   host = root;
   root.addEventListener('click', onClick);
   onPlayerLangChange(() => paint());
@@ -191,14 +228,18 @@ function paint(): void {
   if (root === undefined) return;
   const hostname = typeof location === 'undefined' ? 'localhost' : location.hostname;
   const requestURL = typeof location === 'undefined' ? '/' : `${location.pathname}${location.search}`;
-  root.innerHTML = playerServiceHeaderHTML({
-    locale: playerLang(),
-    hostname,
-    requestURL,
-    account,
-    fullscreenActive: getFullscreenElement(document) !== null,
-    settingsOpen,
-  });
+  render(
+    playerServiceHeaderTemplate({
+      locale: playerLang(),
+      hostname,
+      requestURL,
+      account,
+      fullscreenActive: getFullscreenElement(document) !== null,
+      settingsOpen,
+      installable,
+    }),
+    root,
+  );
 }
 
 function onClick(event: Event): void {
@@ -215,16 +256,31 @@ function onClick(event: Event): void {
   );
   if (kind === undefined) return;
   event.preventDefault();
+  if (kind === 'en' || kind === 'ja') {
+    const menu = host?.querySelector<HTMLElement>('#language-menu');
+    if (menu?.matches(':popover-open')) menu.hidePopover();
+  }
   runPlayerHeaderAction(kind);
 }
 
-export function runPlayerHeaderAction(kind: 'settings' | 'fullscreen' | 'sign-in' | PlayerLang): void {
+export function runPlayerHeaderAction(
+  kind: 'install' | 'help' | 'settings' | 'fullscreen' | 'sign-in' | PlayerLang,
+): void {
+  if (kind === 'install') {
+    actions.install?.();
+    return;
+  }
+  if (kind === 'help') {
+    if (actions.openHelp !== undefined) actions.openHelp();
+    else pendingHelp = true;
+    return;
+  }
   if (kind === 'fullscreen') {
     if (typeof document !== 'undefined') void togglePlayerHeaderFullscreen(document);
     return;
   }
   if (kind === 'settings') {
-    if (actions.toggleDebugMenu !== undefined) actions.toggleDebugMenu();
+    if (actions.toggleOptions !== undefined) actions.toggleOptions();
     else pendingMenu = !pendingMenu;
     return;
   }

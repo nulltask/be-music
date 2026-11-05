@@ -28,6 +28,24 @@ export class BeMusicChartDetailsElement extends BeMusicElement {
       .kind {
         text-transform: capitalize;
       }
+      @container be-music-screen (max-width: 40rem) {
+        .panel {
+          gap: 8px;
+        }
+        .heading {
+          gap: 2px;
+        }
+        .kind,
+        .panel > p:last-of-type {
+          display: none;
+        }
+        h2 {
+          font-size: 18px;
+        }
+        .actions .btn {
+          min-height: 40px;
+        }
+      }
       pre {
         white-space: pre-wrap;
         overflow-wrap: anywhere;
