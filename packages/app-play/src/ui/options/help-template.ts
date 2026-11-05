@@ -551,27 +551,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
         </dl>
       </section>
       <section class="help-menu-folder">
-        <h4 class="help-menu-folder-title">BGA camera</h4>
-        <dl class="help-menu-items">
-          <dt>Show camera in BGA</dt>
-          <dd>
-            Shows a camera in the play's BGA frame instead of the chart's BGA, with any skin: to show your hands on the
-            keys, or your face when you stream. The camera opens only during a play with this on, and closes on every
-            other screen. You can turn it on or off during a play. The picture is not sent anywhere, but a video
-            recorded with Capture includes it, since it records the BGA frame.
-          </dd>
-          <dt>Camera</dt>
-          <dd>
-            Which camera to show; the default is the browser's default camera. The pick is remembered on this device. If
-            the camera is unplugged or its permission is taken back, the play shows the BGA again.
-          </dd>
-          <dt>Allow camera access</dt>
-          <dd>Asks the browser for the camera once, so the list shows the cameras by name. The camera closes again.</dd>
-          <dt>Mirror camera</dt>
-          <dd>Flips the picture left to right, as a mirror shows it; a camera filming your hands may need it.</dd>
-        </dl>
-      </section>
-      <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">Audio</h4>
         <dl class="help-menu-items">
           <dt>Mute</dt>
@@ -610,6 +589,32 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>(Compressor) How fast it lets the sound back up after a loud one.</dd>
           <dt>Reset to default</dt>
           <dd>(Compressor) Puts this compressor's settings back.</dd>
+        </dl>
+      </section>
+      <section class="help-menu-folder">
+        <h4 class="help-menu-folder-title">BGA camera</h4>
+        <dl class="help-menu-items">
+          <dt>Show camera in BGA</dt>
+          <dd>
+            Shows a camera in the play's BGA frame instead of the chart's BGA, with any skin: to show your hands on the
+            keys, or your face when you stream. The camera opens only during a play with this on, and closes on every
+            other screen. You can turn it on or off during a play. The picture is not sent anywhere, but a video
+            recorded with Capture includes it, since it records the BGA frame.
+          </dd>
+          <dt>Camera</dt>
+          <dd>
+            Which camera to show; the default is the browser's default camera. The pick is remembered on this device. If
+            the camera is unplugged or its permission is taken back, the play shows the BGA again.
+          </dd>
+          <dt>Allow camera access</dt>
+          <dd>Asks the browser for the camera once, so the list shows the cameras by name. The camera closes again.</dd>
+          <dt>Mirror camera</dt>
+          <dd>Flips the picture left to right, as a mirror shows it; a camera filming your hands may need it.</dd>
+          <dt>Preview camera</dt>
+          <dd>
+            Shows the picked camera here, as the BGA frame would show it, so you can frame it before a play. The camera
+            opens only for the preview, and stops when you press Stop preview, leave this tab or close Options.
+          </dd>
         </dl>
       </section>
       <section class="help-menu-folder">
@@ -1199,26 +1204,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
         </dl>
       </section>
       <section class="help-menu-folder">
-        <h4 class="help-menu-folder-title">BGA camera</h4>
-        <dl class="help-menu-items">
-          <dt>Show camera in BGA</dt>
-          <dd>
-            プレイ画面の BGA の枠に、譜面の BGA
-            の代わりにカメラの映像を映します。どのスキンでも使えます。手元を写して打鍵の様子を見せたり、配信で顔を出したりするときに使います。オンのときだけプレイ中にカメラを起動し、ほかの画面では止めます。プレイ中にも切り替えられます。映像はどこにも送りませんが、Capture
-            で録画すると BGA の枠ごと映像も記録されます。
-          </dd>
-          <dt>Camera</dt>
-          <dd>
-            映すカメラ。既定はブラウザの既定のカメラです。選んだカメラはこの端末に記憶します。カメラが抜かれたり、許可が取り消されたりすると、BGA
-            に戻ります。
-          </dd>
-          <dt>Allow camera access</dt>
-          <dd>一度だけブラウザにカメラの許可を求め、一覧にカメラの名前が出るようにします。カメラはすぐ止めます。</dd>
-          <dt>Mirror camera</dt>
-          <dd>映像を左右反転します。手元を写すときに必要になることがあります。</dd>
-        </dl>
-      </section>
-      <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">Audio</h4>
         <dl class="help-menu-items">
           <dt>Mute</dt>
@@ -1258,6 +1243,32 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>(Compressor) 大きな音のあと、どれだけ速く元に戻すか。</dd>
           <dt>Reset to default</dt>
           <dd>(Compressor) このコンプレッサーの設定を既定に戻します。</dd>
+        </dl>
+      </section>
+      <section class="help-menu-folder">
+        <h4 class="help-menu-folder-title">BGA camera</h4>
+        <dl class="help-menu-items">
+          <dt>Show camera in BGA</dt>
+          <dd>
+            プレイ画面の BGA の枠に、譜面の BGA
+            の代わりにカメラの映像を映します。どのスキンでも使えます。手元を写して打鍵の様子を見せたり、配信で顔を出したりするときに使います。オンのときだけプレイ中にカメラを起動し、ほかの画面では止めます。プレイ中にも切り替えられます。映像はどこにも送りませんが、Capture
+            で録画すると BGA の枠ごと映像も記録されます。
+          </dd>
+          <dt>Camera</dt>
+          <dd>
+            映すカメラ。既定はブラウザの既定のカメラです。選んだカメラはこの端末に記憶します。カメラが抜かれたり、許可が取り消されたりすると、BGA
+            に戻ります。
+          </dd>
+          <dt>Allow camera access</dt>
+          <dd>一度だけブラウザにカメラの許可を求め、一覧にカメラの名前が出るようにします。カメラはすぐ止めます。</dd>
+          <dt>Mirror camera</dt>
+          <dd>映像を左右反転します。手元を写すときに必要になることがあります。</dd>
+          <dt>Preview camera</dt>
+          <dd>
+            選んだカメラを、BGA
+            の枠と同じ向きでここに映します。プレイの前に画角を合わせるのに使います。カメラはプレビューの間だけ動き、Stop
+            preview を押す、このタブを離れる、Options を閉じる、のいずれかで止まります。
+          </dd>
         </dl>
       </section>
       <section class="help-menu-folder">

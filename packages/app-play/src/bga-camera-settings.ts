@@ -1,4 +1,4 @@
-// The BGA camera's settings (Options → Skin → BGA camera): whether the play shows a camera in the BGA frame, which
+// The BGA camera's settings (Options → Camera): whether the play shows a camera in the BGA frame, which
 // camera, and whether it is mirrored. They belong to this browser's cameras, so they stay in this browser's
 // `localStorage` and are not part of the synced Options document (`option-settings.ts`).
 
