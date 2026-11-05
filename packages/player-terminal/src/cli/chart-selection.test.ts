@@ -3,7 +3,7 @@ import { dirname, extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import { buildChartSelectionEntries, listChartFiles } from './chart-selection.ts';
+import { buildChartSelectionEntries, listChartFiles, resolveChartSummaryDifficulty } from './chart-selection.ts';
 
 const tempDirectories: string[] = [];
 const originalHome = process.env.HOME;
@@ -55,6 +55,33 @@ describe('chart selection', () => {
       title: 'Sample',
       artist: 'Be-Music Dev Team',
     });
+  });
+
+  test('resolveChartSummaryDifficulty: keeps #DIFFICULTY, else estimates one from the names, else the notes', () => {
+    expect(resolveChartSummaryDifficulty({ difficulty: 2, fileLabel: 'song_7a.bms' })).toEqual({
+      value: 2,
+      basis: 'chart',
+    });
+    expect(resolveChartSummaryDifficulty({ title: 'Song', subtitle: '[INSANE]', fileLabel: 'song.bms' })).toEqual({
+      value: 5,
+      basis: 'names',
+    });
+    expect(resolveChartSummaryDifficulty({ title: 'Song', fileLabel: 'song.bms', totalNotes: 700 })).toEqual({
+      value: 3,
+      basis: 'notes',
+    });
+    expect(resolveChartSummaryDifficulty({ title: 'Song', fileLabel: 'song.bms' })).toBeUndefined();
+  });
+
+  test('buildChartSelectionEntries: marks a difficulty estimated from the file name', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'be-music-chart-selection-'));
+    tempDirectories.push(directory);
+    const chartPath = join(directory, 'song_7h.bms');
+    await writeFile(chartPath, '#TITLE Song\n#00111:01\n');
+
+    const entries = await buildChartSelectionEntries(directory, [chartPath]);
+
+    expect(entries.find((entry) => entry.kind === 'chart')).toMatchObject({ difficulty: 3, difficultyBasis: 'names' });
   });
 
   test('listChartFiles: picks up every chart extension the test/fixtures corpus uses', async () => {

@@ -34,7 +34,7 @@ const SONG: LibraryChart = {
   playLevel: '9',
   bpm: 149.6,
   totalNotes: 777,
-  chart: { metadata: {} } as unknown as LibraryChart['chart'],
+  chart: { metadata: {}, bmson: { info: {} } } as unknown as LibraryChart['chart'],
 };
 
 const FACTS: BeatorajaSelectChartFacts = {
