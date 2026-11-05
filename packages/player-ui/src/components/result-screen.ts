@@ -1,9 +1,17 @@
 import { html, nothing, type CSSResultGroup, type TemplateResult } from 'lit';
-import type { BeMusicDOMResultFrame } from '@be-music/player-skin-sdk';
+import { resolveResultPlayTag, type BeMusicDOMResultFrame } from '@be-music/player-skin-sdk';
 import { FrameElement } from '../base.ts';
 import { screenStyles } from '../styles/screen.ts';
 import { formatEnumLabel } from '../labels.ts';
 import { stats } from '../templates.ts';
+
+/** The AUTO PLAY / ASSIST tag of a player's result (`resolveResultPlayTag`), under its verdict; nothing for a plain play. */
+function playTag(result: BeMusicDOMResultFrame['result']): TemplateResult | typeof nothing {
+  const tag = resolveResultPlayTag(result);
+  return tag === undefined
+    ? nothing
+    : html`<p class="result-play-tag" part="play-tag" data-tag=${tag === 'AUTO PLAY' ? 'auto' : 'assist'}>${tag}</p>`;
+}
 
 export class BeMusicResultScreenElement extends FrameElement<BeMusicDOMResultFrame> {
   static override styles: CSSResultGroup = screenStyles;
@@ -32,6 +40,7 @@ export class BeMusicResultScreenElement extends FrameElement<BeMusicDOMResultFra
                   <p class="result-verdict">
                     ${label ? `${label} ` : ''}${formatEnumLabel(p.lamp ?? (p.cleared ? 'CLEARED' : 'FAILED'))}
                   </p>
+                  ${playTag(p)}
                   <p class="stat" part="stat">${p.score.exScore} / ${p.score.total * 2}</p>
                   <p class="muted">EX SCORE</p>
                 </div>
