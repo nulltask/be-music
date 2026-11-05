@@ -83,8 +83,9 @@ describe('selection-format', () => {
     expect(formatDifficultyLabel(undefined)).toBe('-');
     expect(formatDifficultyLabel(6)).toBe('-');
     expect(formatDifficultyLabel(2.9)).toBe('2');
-    expect(formatDifficultyLabel(3, true)).toBe('3?');
-    expect(formatDifficultyLabel(undefined, true)).toBe('-');
+    expect(formatDifficultyLabel(3, 'names')).toBe('3?');
+    expect(formatDifficultyLabel(3, 'notes')).toBe('3??');
+    expect(formatDifficultyLabel(undefined, 'names')).toBe('-');
 
     expect(formatRankLabel(0)).toBe('VERY HARD');
     expect(formatRankLabel(2)).toBe('NORMAL');

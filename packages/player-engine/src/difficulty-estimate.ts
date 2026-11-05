@@ -3,8 +3,16 @@
  * without a difficulty; beatoraja fills one in from `#SUBTITLE` and `#TITLE` when it builds its song database
  * (`SQLiteSongDatabaseAccessor`), and Be-Music follows it as LR2 has no rule of its own. The rules here go further than
  * beatoraja's keyword match: they read the file name too, and were tuned against charts that do name their difficulty.
- * A difficulty read this way is an estimate, and a host marks it as one.
+ * When the names give none, beatoraja falls back to the note count (`estimateDifficultyFromNoteCount`), a far weaker
+ * guess. A difficulty read either way is an estimate, and a host marks it as one, the note-count one more strongly.
  */
+
+/**
+ * Where a difficulty a screen shows comes from: the chart's own `#DIFFICULTY`, its names, or its note count. On charts
+ * that do name their difficulty, the names agree with it 97% of the time and the note count 60% (nearly always within
+ * one step).
+ */
+export type DifficultyBasis = 'chart' | 'names' | 'notes';
 
 /** The names a chart's difficulty is read from. */
 export interface DifficultyNames {
@@ -162,4 +170,18 @@ export function estimateDifficultyFromNames(names: DifficultyNames): number | un
     matchStemSuffix(stem) ??
     matchAbbreviation(tags)
   );
+}
+
+/** beatoraja's note-count bounds: under 250 BEGINNER, 600 NORMAL, 1000 HYPER, 2000 ANOTHER, else INSANE. */
+const NOTE_COUNT_BOUNDS = [250, 600, 1000, 2000] as const;
+
+/**
+ * The difficulty (1–5) beatoraja gives a chart its names give none for, by its note count (`SQLiteSongDatabaseAccessor`):
+ * under 250 notes BEGINNER, 600 NORMAL, 1000 HYPER, 2000 ANOTHER, else INSANE. `undefined` for a chart without notes,
+ * which has nothing to rank.
+ */
+export function estimateDifficultyFromNoteCount(noteCount: number): number | undefined {
+  if (!Number.isFinite(noteCount) || noteCount <= 0) return undefined;
+  const index = NOTE_COUNT_BOUNDS.findIndex((bound) => noteCount < bound);
+  return index === -1 ? 5 : index + 1;
 }

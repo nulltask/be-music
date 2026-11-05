@@ -57,14 +57,18 @@ describe('chart selection', () => {
     });
   });
 
-  test('resolveChartSummaryDifficulty: keeps #DIFFICULTY, else estimates one from the names', () => {
+  test('resolveChartSummaryDifficulty: keeps #DIFFICULTY, else estimates one from the names, else the notes', () => {
     expect(resolveChartSummaryDifficulty({ difficulty: 2, fileLabel: 'song_7a.bms' })).toEqual({
       value: 2,
-      estimated: false,
+      basis: 'chart',
     });
     expect(resolveChartSummaryDifficulty({ title: 'Song', subtitle: '[INSANE]', fileLabel: 'song.bms' })).toEqual({
       value: 5,
-      estimated: true,
+      basis: 'names',
+    });
+    expect(resolveChartSummaryDifficulty({ title: 'Song', fileLabel: 'song.bms', totalNotes: 700 })).toEqual({
+      value: 3,
+      basis: 'notes',
     });
     expect(resolveChartSummaryDifficulty({ title: 'Song', fileLabel: 'song.bms' })).toBeUndefined();
   });
@@ -77,7 +81,7 @@ describe('chart selection', () => {
 
     const entries = await buildChartSelectionEntries(directory, [chartPath]);
 
-    expect(entries.find((entry) => entry.kind === 'chart')).toMatchObject({ difficulty: 3, difficultyEstimated: true });
+    expect(entries.find((entry) => entry.kind === 'chart')).toMatchObject({ difficulty: 3, difficultyBasis: 'names' });
   });
 
   test('listChartFiles: picks up every chart extension the test/fixtures corpus uses', async () => {

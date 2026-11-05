@@ -319,9 +319,12 @@ export const cabinetStyles: CSSResult = css`
     font-size: 0.85em;
     font-weight: 700;
   }
-  /* Estimated from the chart's names: the name carries a ? mark, and the plate is dimmed. */
-  .difficulty[data-estimated] {
+  /* An estimated difficulty: from the chart's names (HYPER?) dimmed, from its note count (HYPER??) dimmed further. */
+  .difficulty[data-estimated='names'] {
     opacity: 0.6;
+  }
+  .difficulty[data-estimated='notes'] {
+    opacity: 0.4;
   }
   .chart-title {
     min-width: 0;
