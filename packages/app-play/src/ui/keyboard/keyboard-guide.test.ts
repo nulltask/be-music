@@ -58,4 +58,11 @@ describe('buildKeyboardGuide', () => {
     expect(controlButtonName('2P-scratch-cw', 'ja')).toBe('2P 皿 ↻');
     expect(keyboardKeyName('ControlRight')).toBe('Right Ctrl');
   });
+
+  test('names the keys as a Mac labels them', () => {
+    const guide = buildKeyboardGuide('select', 'beatoraja', {}, 'en', 'mac');
+    expect(rowOf(guide, 'select.copy-sha256')?.keys).toEqual(['⌃⇧F3']);
+    expect(keyboardKeyName('AltLeft', 'mac')).toBe('Left Option');
+    expect(rowOf(buildKeyboardGuide('play', 'lr2', {}, 'en', 'mac'), '1P-scratch')?.keys).toContain('Left Control');
+  });
 });
