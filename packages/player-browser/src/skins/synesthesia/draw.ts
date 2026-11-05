@@ -287,7 +287,8 @@ function quantizeColor(color: number): number {
 
 /**
  * Lock-on reticle: four rounded corner brackets around `(x, y, w, h)` and an optional centre cross. `arm` is the
- * bracket length.
+ * bracket length. `crossAngle` turns the cross about the centre in radians, in screen space (y points down), so a
+ * positive angle turns it clockwise on screen and a negative one counter-clockwise.
  */
 export function drawReticle(
   graphics: Graphics,
@@ -297,7 +298,7 @@ export function drawReticle(
   h: number,
   color: number,
   alpha: number,
-  options: { arm?: number; width?: number; cross?: boolean } = {},
+  options: { arm?: number; width?: number; cross?: boolean; crossAngle?: number } = {},
 ): void {
   const arm = Math.min(options.arm ?? 10, w / 2, h / 2);
   const width = options.width ?? 1.5;
@@ -326,11 +327,15 @@ export function drawReticle(
     const cx = x + w / 2;
     const cy = y + h / 2;
     const size = Math.min(w, h) * 0.08 + 2;
+    const angle = options.crossAngle ?? 0;
+    // One arm runs along (dx, dy), the other along its perpendicular (-dy, dx).
+    const dx = size * Math.cos(angle);
+    const dy = size * Math.sin(angle);
     graphics
-      .moveTo(cx - size, cy)
-      .lineTo(cx + size, cy)
-      .moveTo(cx, cy - size)
-      .lineTo(cx, cy + size)
+      .moveTo(cx - dx, cy - dy)
+      .lineTo(cx + dx, cy + dy)
+      .moveTo(cx + dy, cy - dx)
+      .lineTo(cx - dy, cy + dx)
       .stroke({ color, width: 1, alpha });
   }
 }

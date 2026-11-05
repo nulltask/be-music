@@ -177,9 +177,9 @@ describe('two-player cabinet layout', () => {
     expect(cabinet.bga.w).toBe(cabinet.judge.w);
     expect(cabinet.bpm.x).toBe(cabinet.judge.x);
     expect(cabinet.gauge.x).toBe(one.left);
-    expect(cabinet.gauge.w).toBe(one.right - one.left);
-    expect(cabinet.secondSide!.gauge.x).toBe(two.left);
-    expect(cabinet.secondSide!.gauge.w).toBe(two.right - two.left);
+    expect(cabinet.gauge.w).toBe(Math.max(194, one.right - one.left));
+    expect(cabinet.secondSide!.gauge.x + cabinet.secondSide!.gauge.w).toBe(two.right);
+    expect(cabinet.secondSide!.gauge.w).toBe(Math.max(194, two.right - two.left));
     expect(cabinet.gauge.y).toBeGreaterThan(cabinet.keys.y + cabinet.keys.h);
     expect(cabinet.center).toBeUndefined();
     expect(cabinet.graph).toBeDefined();
@@ -222,6 +222,29 @@ describe('two-player cabinet layout', () => {
     const dp = resolveGameplayLayout({ laneChannels, playVariant }, cabinetStage);
     expect(resolveCabinetLayout(dp).doublePlay).toBe(true);
     expect(dp.playfield.right - dp.playfield.left).toBeLessThan(layout.playfield.right - layout.playfield.left);
+  });
+
+  it('keeps the 7-key gauge, score and hi-speed boxes for 5-key banks', () => {
+    const DP10 = ['16', '11', '12', '13', '14', '15', '21', '22', '23', '24', '25', '26'];
+    const seven = resolveCabinetLayout(
+      resolveGameplayLayout({ laneChannels: DP14, playVariant: '14', twoPlayer: true }, cabinetStage),
+    );
+    const five = resolveCabinetLayout(
+      resolveGameplayLayout({ laneChannels: DP10, playVariant: '10', twoPlayer: true }, cabinetStage),
+    );
+    expect(seven.score).toEqual({ x: 33, y: 407, w: 115, h: 57 });
+    expect(seven.hiSpeed).toEqual({ x: 156, y: 407, w: 71, h: 57 });
+    expect(seven.secondSide!.score).toEqual({ x: 627, y: 407, w: 115, h: 57 });
+    expect(seven.secondSide!.hiSpeed).toEqual({ x: 750, y: 407, w: 71, h: 57 });
+    expect(five.score).toEqual(seven.score);
+    expect(five.hiSpeed).toEqual(seven.hiSpeed);
+    expect(five.secondSide!.score).toEqual(seven.secondSide!.score);
+    expect(five.secondSide!.hiSpeed).toEqual(seven.secondSide!.hiSpeed);
+    expect(seven.gauge).toEqual({ x: 33, y: 387, w: 194, h: 12 });
+    expect(seven.secondSide!.gauge).toEqual({ x: 627, y: 387, w: 194, h: 12 });
+    expect(five.gauge).toEqual(seven.gauge);
+    expect(five.secondSide!.gauge).toEqual(seven.secondSide!.gauge);
+    expect(five.play).toEqual(seven.play);
   });
 });
 

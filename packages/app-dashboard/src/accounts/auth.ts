@@ -12,6 +12,7 @@ import * as schema from './schema.ts';
 export interface Env {
   DB: D1Database;
   BLOBS: R2Bucket;
+  /** The Dashboard host, which is also the issuer origin: the issuer is `${AUTH_ORIGIN}/api/auth`. */
   AUTH_ORIGIN: string;
   BUILD_TIMESTAMP?: string;
   BUILD_REVISION?: string;
@@ -74,7 +75,7 @@ function buildAuth(env: Env) {
     baseURL: env.AUTH_ORIGIN,
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
-    // Every ceremony takes place at Accounts. Never trust arbitrary subdomains or branch previews.
+    // Every ceremony takes place at the issuer origin. Never trust arbitrary subdomains or branch previews.
     trustedOrigins: [env.AUTH_ORIGIN],
     advanced: {
       cookiePrefix: 'be-music-accounts',

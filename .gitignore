@@ -27,6 +27,6 @@ tmp/*
 !tmp/.keep
 .vitest/
 
-packages/app-accounts/src/client.generated.ts
+packages/app-dashboard/src/accounts/client.generated.ts
 
 packages/service-web-theme/src/server.generated.ts

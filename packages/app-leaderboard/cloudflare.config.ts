@@ -39,12 +39,13 @@ export default defineConfig(({ mode }) => {
         BUILD_TIMESTAMP: bindings.text(buildInfo.builtAt),
         BUILD_REVISION: bindings.text(buildInfo.revision),
         DB: bindings.d1({ name: `leaderboard${suffix}`, id: databaseId }),
-        // Service-owned binary data; avatars are served by Accounts.
+        // Service-owned binary data; avatars are served by Accounts on the Dashboard host.
         BLOBS: bindings.r2({ name: `leaderboard${suffix}` }),
         SUBMIT_LIMITER: bindings.rateLimit({ namespace: preview ? '2001' : '1001', simple: { limit: 10, period: 60 } }),
         RIVAL_LIMIT: bindings.text('100'),
-        ACCOUNTS: bindings.worker({ worker: `accounts${suffix}` }),
-        AUTH_ISSUER: bindings.text(`https://accounts.${site}/api/auth`),
+        // Accounts runs in the Dashboard Worker (ADR 0039).
+        ACCOUNTS: bindings.worker({ worker: `dashboard${suffix}` }),
+        AUTH_ISSUER: bindings.text(`https://${site}/api/auth`),
         PUBLIC_ORIGIN: bindings.text(`https://leaderboard.${site}`),
         OIDC_CLIENT_ID: bindings.text('leaderboard'),
         API_AUDIENCE: bindings.text(`https://leaderboard.${site}`),

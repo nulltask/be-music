@@ -7,6 +7,7 @@ import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter, HSFix, PlayOptions } from '@be-music/player-scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 import type { ReplayAutoSaveRule } from './services/replay-slots.ts';
+import type { LeaderboardSubmitRule } from './leaderboard-submit-rule.ts';
 
 /** Every screen the player shows, each made by its `create*Scene`. */
 export type PlayerScene = SelectScene | DecideScene | PlayScene | ResultScene;
@@ -197,6 +198,12 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * checkbox and latched at song start like the auto-save.
    */
   submitToLeaderboard: boolean;
+  /**
+   * When a finished play is sent once {@link submitToLeaderboard} is on (`LeaderboardSubmitRule`): only when its EX-SCORE
+   * beats the player's own best on the chart, the chart's first play included (default), or always. Latched at song
+   * start with the toggle. Course runs are always sent.
+   */
+  leaderboardSubmitRule: LeaderboardSubmitRule;
   /**
    * The compat ruleset the shared engine judges under (`PlayerOptions.judgeRuleset`): LR2 (default) / beatoraja / That-Which-Must-Not-Be-Named.
    * It owns every judge rule: the windows, note selection, empty POOR, the long-note style, the gauge and the score.

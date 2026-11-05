@@ -32,11 +32,11 @@ for (const reference of references) {
       await player.setOption(['Play options'], 'Auto play', true);
       await player.browseTo(SONGS, 'Fixture A');
       if (reference.cover) {
-        await player.setOption(['Play options'], 'LIFT height 1P', reference.cover.lift);
-        await player.setOption(['Play options'], 'LIFT 1P (beatoraja)', reference.cover.enabled ?? true);
-        await player.setOption(['Play options'], 'Effect 1P', reference.cover.hidden ? 'HID+SUD' : 'SUDDEN');
-        await player.setOption(['Play options'], 'Lane cover', true);
-        await player.setOption(['Play options'], 'Cover height', reference.cover.sudden);
+        await player.setOption(['View'], 'LIFT height 1P', reference.cover.lift);
+        await player.setOption(['View'], 'LIFT 1P (beatoraja)', reference.cover.enabled ?? true);
+        await player.setOption(['View'], 'Effect 1P', reference.cover.hidden ? 'HID+SUD' : 'SUDDEN');
+        await player.setOption(['View'], 'Lane cover', true);
+        await player.setOption(['View'], 'Cover height', reference.cover.sudden);
       }
       const title = `Reference ${variant} keys`;
       const modes = {
@@ -102,8 +102,8 @@ for (const reference of references) {
       expect(playing.scene.family).toBe(reference.family);
       expect(playing.play?.title).toBe(title);
       if (reference.cover) {
-        await player.setOption(['Play options'], 'Cover height', Math.min(1, reference.cover.sudden + 0.01));
-        await player.setOption(['Play options'], 'Cover height', reference.cover.sudden);
+        await player.setOption(['View'], 'Cover height', Math.min(1, reference.cover.sudden + 0.01));
+        await player.setOption(['View'], 'Cover height', reference.cover.sudden);
       }
       await player.key('Pause');
       if (await skinConfig.count()) await skinConfig.locator('summary').first().click();

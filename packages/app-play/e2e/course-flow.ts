@@ -242,7 +242,7 @@ export function courseFlowTests(setup: FamilyCase): void {
 
     test('plays a NONSTOP course as one stitched chart, retries it with R, on both placements', async ({ player }) => {
       await setup.open(player);
-      await player.setOption(['Tempo'], 'Enabled', true);
+      await player.setOption(['Play options', 'Tempo'], 'Enabled', true);
       await startCourse(player, setup, 'FIX NONSTOP', true);
       let state = await player.waitFor(
         (current) => current.scene.kind === 'play' && current.play?.title === 'FIX NONSTOP',
@@ -251,9 +251,9 @@ export function courseFlowTests(setup: FamilyCase): void {
       expect(state.scene.family).toBe(setup.nonstop.play);
       expect(state.play?.course).toBeUndefined();
       // The pitch handling and the stretcher are locked during the play; the tempo slider stays live in pitch mode.
-      expect(await player.optionEnabled(['Tempo'], 'Pitch')).toBe(false);
-      expect(await player.optionEnabled(['Tempo'], 'Keep-pitch stretcher')).toBe(false);
-      expect(await player.optionEnabled(['Tempo'], 'Tempo (%)')).toBe(true);
+      expect(await player.optionEnabled(['Play options', 'Tempo'], 'Pitch')).toBe(false);
+      expect(await player.optionEnabled(['Play options', 'Tempo'], 'Keep-pitch stretcher')).toBe(false);
+      expect(await player.optionEnabled(['Play options', 'Tempo'], 'Tempo (%)')).toBe(true);
       state = await player.waitForResult(0);
       expect(state.results[0]).toMatchObject({
         run: 'nonstop',

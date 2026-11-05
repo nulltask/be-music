@@ -10,13 +10,15 @@ import {
   type FullscreenElementLike,
 } from './fullscreen.ts';
 import { onPlayerLangChange, playerLang, setPlayerLang, type PlayerLang } from './player-copy.ts';
-import { leaderboardLink } from './service-links.ts';
+import { leaderboardAvatarURL, leaderboardLink } from './service-links.ts';
 
-/** The signed-in account the header shows. There is no avatar on the player session. */
+/** The signed-in account the header shows. */
 export interface PlayerHeaderAccount {
   handle: string;
   displayName: string;
   anonymous: boolean;
+  /** The avatar as the Leaderboard API reports it (a Leaderboard path or an absolute URL). */
+  avatarUrl?: string;
 }
 
 export interface PlayerHeaderActions {
@@ -108,6 +110,10 @@ export function playerServiceHeaderTemplate(input: {
           handle: input.account.handle,
           displayName: input.account.displayName,
           anonymous: input.account.anonymous,
+          avatarURL:
+            input.account.avatarUrl === undefined
+              ? undefined
+              : leaderboardAvatarURL(input.account.avatarUrl, input.hostname),
         };
   const accountHref =
     input.account === undefined

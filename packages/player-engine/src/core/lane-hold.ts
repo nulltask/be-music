@@ -31,7 +31,12 @@ function prune(history: LaneHoldHistory, atMs: number): void {
     if (upMs === undefined || upMs >= horizonMs) break;
     spanCount += 1;
   }
-  if (spanCount > 0) history.spans.splice(0, spanCount);
+  if (spanCount > 0) {
+    // Shift in place: `splice` would allocate an array of the removed spans on every press.
+    const spans = history.spans;
+    for (let index = spanCount; index < spans.length; index += 1) spans[index - spanCount] = spans[index]!;
+    spans.length -= spanCount;
+  }
 }
 
 /** A press at `atMs` by `tokens` (none: an unnamed input). */

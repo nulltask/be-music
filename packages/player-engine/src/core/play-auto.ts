@@ -58,6 +58,8 @@ function createAutoJudge(session: PlaySession): PlayJudge {
     landmineNotes: playbackChart.landmineNotes,
     invisibleNotes: playbackChart.invisibleNotes,
     keyLabels: new Map(playbackChart.laneBindings.map((binding) => [binding.channel, binding.keyLabel])),
+    // Only the terminal log writes traces; with a UI they would be built and discarded on every judgment.
+    omitTraceEffects: uiEnabled,
     // LR2 negative-BPM reversal (#134): AUTO play freezes there like manual play — no judging and no audio past it
     // (the realtime streams are cut in `collectRealtimeAudioTriggers`), and a mirrored display clock.
     reversalSeconds: session.resolvedChart.reversal?.seconds,

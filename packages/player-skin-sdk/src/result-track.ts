@@ -1,4 +1,6 @@
+import { classifyReplayAssists, resolveAssistClass } from '@be-music/player-engine/records';
 import { resolveClearLamp } from '@be-music/player-engine/ruleset';
+import { isAutoPlayResult } from '@be-music/player-scene-model';
 import type { BeMusicResultData } from './result-data.ts';
 import { formatPlayVariantLabel } from './chart-stats.ts';
 
@@ -30,6 +32,35 @@ export type ResultVerdict = 'STAGE CLEAR' | 'FAILED' | 'COURSE CLEAR' | 'COURSE 
 export function resolveResultVerdict(result: Pick<BeMusicResultData, 'cleared' | 'run'>): ResultVerdict {
   if (result.run === 'course') return result.cleared ? 'COURSE CLEAR' : 'COURSE FAILED';
   return result.cleared ? 'STAGE CLEAR' : 'FAILED';
+}
+
+/**
+ * How a result was played, when not by the player's hands alone: `AUTO PLAY` for a full AUTO play, `ASSIST` for a play
+ * with assisted options (AUTO SCRATCH, a widened judge, …).
+ */
+export type ResultPlayTag = 'AUTO PLAY' | 'ASSIST';
+
+const ASSISTED_REPLAYS = new WeakMap<object, boolean>();
+
+/**
+ * The tag a result screen shows beside its verdict, so an AUTO or assisted play's result never reads as a plain one: `AUTO
+ * PLAY` for a full AUTO play (`isAutoPlayResult` of `@be-music/player-scene-model`, as LR2 keeps AUTOPLAY on through the
+ * result), else `ASSIST` when the replay the play recorded used an assisted option by the assist policy the clear lamp and
+ * the Leaderboard follow (`classifyReplayAssists`, #602), else none. A play without a recorded replay (a replay played
+ * back, a course run) reads only its AUTO flag.
+ */
+export function resolveResultPlayTag(
+  result: Pick<BeMusicResultData, 'autoPlay' | 'replay'>,
+): ResultPlayTag | undefined {
+  if (isAutoPlayResult(result)) return 'AUTO PLAY';
+  const { replay } = result;
+  if (replay === undefined) return undefined;
+  let assisted = ASSISTED_REPLAYS.get(replay);
+  if (assisted === undefined) {
+    assisted = resolveAssistClass(classifyReplayAssists(replay)) !== 'none';
+    ASSISTED_REPLAYS.set(replay, assisted);
+  }
+  return assisted ? 'ASSIST' : undefined;
 }
 
 /** One label / value line of the track column. */

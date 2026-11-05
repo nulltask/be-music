@@ -1,5 +1,15 @@
 # @be-music/player-scene-model
 
+## 0.7.0
+
+### Minor Changes
+
+- 16eee5d: An AUTO play's result was indistinguishable from a manual play's. `PlayResult` now carries `autoPlay` for a full AUTO play (a course run takes it from its stages' replays), and the new `isAutoPlayResult` reads it, falling back to the recorded replay's mode.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-engine@0.15.1`
+
 ## 0.6.1
 
 ### Patch Changes

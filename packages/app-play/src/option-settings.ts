@@ -30,6 +30,7 @@ import {
   PLAY_IN_SILENT_MODE_STORAGE_KEY,
   serializePlayInSilentMode,
 } from './silent-mode-playback.ts';
+import { LEADERBOARD_SUBMIT_RULES } from './leaderboard-submit-rule.ts';
 import { REPLAY_AUTO_SAVE_RULES, type ReplayAutoSaveRule } from './services/replay-slots.ts';
 import { GHOST_MODES, GHOST_SOURCES } from './services/ghost.ts';
 import type { PlayerGUIState, SkinFamilyOverride } from './types.ts';
@@ -76,6 +77,7 @@ export interface OptionSettings {
   courseAutoAdvance: boolean;
   nonstopPlacement: PlayerGUIState['nonstopPlacement'];
   submitToLeaderboard: boolean;
+  leaderboardSubmitRule: PlayerGUIState['leaderboardSubmitRule'];
   judgeRuleset: PlayerGUIState['judgeRuleset'];
   gauge: PlayerGUIState['gauge'];
   random1P: RandomMode;
@@ -296,6 +298,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'replaySlotAutoSave4', oneOf(raw.replaySlotAutoSave4, REPLAY_AUTO_SAVE_RULES));
   assign(settings, 'courseAutoAdvance', booleanOf(raw.courseAutoAdvance));
   assign(settings, 'submitToLeaderboard', booleanOf(raw.submitToLeaderboard));
+  assign(settings, 'leaderboardSubmitRule', oneOf(raw.leaderboardSubmitRule, LEADERBOARD_SUBMIT_RULES));
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
@@ -564,6 +567,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('courseAutoAdvance');
   assignState('nonstopPlacement');
   assignState('submitToLeaderboard');
+  assignState('leaderboardSubmitRule');
   assignState('judgeRuleset');
   assignState('gauge');
   assignState('random1P');
@@ -696,6 +700,7 @@ export function captureOptionSettings(
     courseAutoAdvance: state.courseAutoAdvance,
     nonstopPlacement: state.nonstopPlacement,
     submitToLeaderboard: state.submitToLeaderboard,
+    leaderboardSubmitRule: state.leaderboardSubmitRule,
     judgeRuleset: state.judgeRuleset,
     gauge: state.gauge,
     random1P: state.random1P,

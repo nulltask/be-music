@@ -2,6 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { getBuildInfo } from '../../scripts/release/build-info.ts';
 import { acknowledgementsPlugins } from './scripts/acknowledgements.ts';
 import { serviceWorkerPlugin } from './scripts/service-worker-plugin.ts';
+import { retitleHTML, retitleManifest } from '../worker-play/src/app-title.ts';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -112,6 +113,42 @@ function ffmpegCorePlugin(sourceDir: string): Plugin {
   };
 }
 
+/**
+ * Titles the dev server's player `Be-Music Play (Development)`: the page, and the web app manifest an installed dev
+ * player takes its window title from. A build keeps the production title; the preview Worker retitles it as it serves
+ * (`packages/worker-play/src/app-title.ts`).
+ */
+function developmentTitlePlugin(): Plugin {
+  const manifestPath = resolve(import.meta.dirname, 'public/manifest.webmanifest');
+  return {
+    name: 'be-music:development-title',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/manifest.webmanifest', (req, res, next) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          next();
+          return;
+        }
+        readFile(manifestPath, 'utf8').then(
+          (manifest) => {
+            res.setHeader('Content-Type', 'application/manifest+json');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.end(req.method === 'HEAD' ? undefined : retitleManifest(manifest, 'development'));
+          },
+          (error: unknown) => next(error),
+        );
+      });
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, context) {
+        // The embed page is not installable and keeps its own title.
+        return context.path.startsWith('/embed/') ? html : retitleHTML(html, 'development');
+      },
+    },
+  };
+}
+
 function resolveURLLoadProxyTarget(rawURL: string | null): URL {
   if (!rawURL) {
     throw new Error('missing url query parameter');
@@ -184,6 +221,7 @@ export default defineConfig({
     tailwindcss(),
     ffmpegCorePlugin(ffmpegCoreESMDir),
     urlLoadProxyPlugin(),
+    developmentTitlePlugin(),
     // The Help's Acknowledgements list, from what the build bundles (`scripts/acknowledgements.ts`).
     acknowledgements.main,
     // `/sw.js`, the installable player's offline shell, with the precache list of this build.
@@ -232,17 +270,13 @@ export default defineConfig({
     fs: {
       allow: [repositoryDir],
     },
-    // Cross-origin isolation headers. The single-threaded ffmpeg.wasm build we ship (`@ffmpeg/core`) doesn't need these
-    // (no `SharedArrayBuffer`), but we keep them so someone re-introducing the multi-threaded core (or any other
-    // SAB-dependent feature) doesn't have to re-debug the policy from scratch.
-    //
-    // The player loads every chart asset / theme bundle from a user-side drag-drop (in-memory blobs, no external CDN), so
-    // `require-corp` doesn't break any runtime fetches. If a future feature pulls in a third-party CORS resource, that
-    // resource's response will need a `Cross-Origin-Resource-Policy: cross-origin` header to keep working under this
-    // policy.
+    // Cross-origin isolation headers, the same as the deployed `play` Worker sends
+    // (`worker-play/src/cross-origin-isolation.ts`): they give the page finer input timestamps and `SharedArrayBuffer`.
+    // `credentialless` lets cross-origin resources without a `Cross-Origin-Resource-Policy` header (Google Fonts,
+    // avatars on the providers' CDNs) load without cookies instead of being blocked.
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
     },
     // The deployed Worker forwards `/api/*` to the Leaderboard Worker; in development it goes to a
     // local one (`pnpm --filter @be-music/app-leaderboard run dev`, port 8787 unless LEADERBOARD_DEV_ORIGIN says

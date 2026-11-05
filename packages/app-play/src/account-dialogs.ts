@@ -5,7 +5,7 @@ import type { BeMusicStatusElement } from '@be-music/service-web-theme/client';
 import {
   accountProviderFromAction,
   signInWithAccountProvider,
-  signInWithLeaderboardPasskey,
+  signInToLeaderboard,
   signUpForLeaderboard,
   type AccountActionResult,
 } from './account.ts';
@@ -63,7 +63,7 @@ export function wireAccountDialogs(handlers: AccountDialogHandlers): (dialog: Ac
     else if (action === 'open-sign-up') open('sign-up');
     else if (action === 'sign-in') {
       const dialog = button.closest('dialog');
-      void run(button, dialog, signInWithLeaderboardPasskey, () => playerText().account.signInFailed, handlers);
+      void run(button, dialog, signInToLeaderboard, () => playerText().account.signInFailed, handlers);
     } else {
       const provider = accountProviderFromAction(action);
       if (provider !== undefined) {

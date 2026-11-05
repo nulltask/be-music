@@ -32,6 +32,8 @@ export const PLAYER_APP_TEMPLATE = html`
     <div id="player-service-header" class="player-service-header"></div>
     <main id="main" class="player-main">
       <div id="auxiliary-panels" class="auxiliary-panels"></div>
+      <!-- The quick options panel, at the bottom right on the select and play screens. \`ui/options/quick-options.ts\`. -->
+      <div id="quick-options" class="quick-options-dock" hidden></div>
       <!-- The frame rate readout (beatoraja's F1, LR2's F7), inside the full-screen area. \`ui/fps-overlay.ts\`. -->
       <div id="fps-overlay" class="fps-overlay" aria-live="off" hidden></div>
       <!--

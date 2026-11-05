@@ -245,7 +245,7 @@ describe('ResultRoute.showResult: a single play', () => {
     expect(h.deps.testHook.recordResult).toHaveBeenCalledWith(resultFromData(data, 'single', 'built-in', 'jingle'));
     expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith(recordPlayFromResult(data), data.replay);
     expect(h.deps.replayAutoSave.savePlay).toHaveBeenCalledWith(data.replay);
-    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, chartEntry('a'));
+    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, chartEntry('a'), data.score.exScore);
     expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();
   });
 
@@ -428,7 +428,7 @@ describe('ResultRoute: the beatoraja result', () => {
     expect(h.deps.records.recordActivePlay).toHaveBeenCalledWith(recordPlayFromResult(data), data.replay);
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
     expect(h.deps.replayAutoSave.savePlay).toHaveBeenCalledWith(data.replay);
-    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, chartEntry('a'));
+    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, chartEntry('a'), data.score.exScore);
     expect(h.deps.unlockReplayOptions).toHaveBeenCalledOnce();
   });
 
@@ -492,6 +492,6 @@ for (const family of ['none', 'lr2', 'beatoraja'] as const) {
     else await h.route.showResult(data);
     expect(h.deps.records.recordActivePlay).not.toHaveBeenCalled();
     expect(h.deps.replayAutoSave.savePlay).toHaveBeenCalledWith(data.replay);
-    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, data.chart);
+    expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, data.chart, data.score.exScore);
   });
 }

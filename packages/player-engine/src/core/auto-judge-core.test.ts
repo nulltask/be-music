@@ -28,7 +28,7 @@ const CHART: BeMusicJSON = (() => {
   return json;
 })();
 
-function createAuto(ruleset: RulesetId, chart: BeMusicJSON = CHART): AutoJudgeState {
+function createAuto(ruleset: RulesetId, chart: BeMusicJSON = CHART, omitTraceEffects = false): AutoJudgeState {
   const source = structuredClone(chart);
   const resolved = resolveChart(source);
   const prepared = preparePlaybackChart(resolved);
@@ -45,6 +45,7 @@ function createAuto(ruleset: RulesetId, chart: BeMusicJSON = CHART): AutoJudgeSt
         ['16', 'shift'],
       ]),
       reversalSeconds: resolved.reversal?.seconds,
+      ...(omitTraceEffects ? { omitTraceEffects: true } : {}),
     },
     {
       ...createInitialPlayerSummary(config, config.noteCount),
@@ -53,8 +54,12 @@ function createAuto(ruleset: RulesetId, chart: BeMusicJSON = CHART): AutoJudgeSt
   );
 }
 
-function run(ruleset: RulesetId, ticks: readonly number[]): { state: AutoJudgeState; effects: JudgeCoreEffect[] } {
-  const state = createAuto(ruleset);
+function run(
+  ruleset: RulesetId,
+  ticks: readonly number[],
+  omitTraceEffects = false,
+): { state: AutoJudgeState; effects: JudgeCoreEffect[] } {
+  const state = createAuto(ruleset, CHART, omitTraceEffects);
   const effects: JudgeCoreEffect[] = [];
   for (const tick of ticks) {
     runAutoJudgeStep(state, { kind: 'advance', nowSec: tick }, (effect) => effects.push(effect));
@@ -64,6 +69,17 @@ function run(ruleset: RulesetId, ticks: readonly number[]): { state: AutoJudgeSt
 }
 
 describe('auto judge core', () => {
+  test('omitting trace effects drops only the traces', () => {
+    const ticks = [1, 1.5, 2.5, 3, 3.5];
+    const traced = run('lr2', ticks);
+    const untraced = run('lr2', ticks, true);
+    const traces = traced.effects.filter((effect) => effect.kind === 'trace');
+    expect(traces.length).toBeGreaterThan(1);
+    expect(untraced.effects.some((effect) => effect.kind === 'trace')).toBe(false);
+    expect(untraced.effects).toEqual(traced.effects.filter((effect) => effect.kind !== 'trace'));
+    expect(untraced.state.summary).toEqual(traced.state.summary);
+  });
+
   test('every note resolves PGREAT once chart time reaches it, and only then', () => {
     const state = createAuto('lr2');
     expect(stepAutoJudge(state, { kind: 'advance', nowSec: 0.99 })).toEqual([]);

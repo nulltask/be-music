@@ -14,7 +14,7 @@ flowchart TD
   data --> main[Main thread models and audio buffers]
 ```
 
-The default count is half of `navigator.hardwareConcurrency`, rounded down with a minimum of one. Missing or invalid hardware reports use one. The player exposes **Developer → CPU workers** and persists the override. Resizing retires idle workers, allows active jobs to finish, and schedules queued work under the new limit. The count bounds shared workers across task types, rather than allocating a separate pool for each feature. Workers are created only when needed and disposed when the page leaves without entering the back-forward cache.
+The default count is half of `navigator.hardwareConcurrency`, rounded down with a minimum of one. Missing or invalid hardware reports use one. The player exposes **Advanced → CPU workers** and persists the override. Resizing retires idle workers, allows active jobs to finish, and schedules queued work under the new limit. The count bounds shared workers across task types, rather than allocating a separate pool for each feature. Workers are created only when needed and disposed when the page leaves without entering the back-forward cache.
 
 Inputs are cloned so a worker crash can retry with intact data; output array buffers are transferred. Parsing returns packed event columns and a per-chart string table, restored as lazy events on the main thread. Import results preserve source/path ordering even when tasks finish out of order. ZIP compressed/uncompressed limits and filtering remain in force. Each WSOLA job keeps all channels of one sample together; playback audio buffers are rebuilt on the main thread. Signalsmith's existing AudioWorklet path remains unchanged.
 

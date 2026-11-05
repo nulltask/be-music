@@ -1,9 +1,10 @@
-// `<be-music-keyboard-map>`: a US keyboard (`keyboard-layout.ts`) with the keys in use marked, for Help's keyboard page.
+// `<be-music-keyboard-map>`: a US keyboard (`keyboard-layout.ts`, a Windows PC's or a Mac's, full-size or a laptop's)
+// with the keys in use marked, for Help's keyboard page.
 // A mark says what a key is: a lane's white or black key (its number on the cap), a turntable (◎), START / SELECT (ST /
 // SL), or a key an operation takes (●), so it reads without its colour. `active` lights the keys of the operation the
 // player points at in the list beside it.
-import { css, html, LitElement, nothing, type PropertyDeclarations, type TemplateResult } from 'lit';
-import { keyboardLayout, type KeyboardKey } from './keyboard-layout.ts';
+import { css, html, LitElement, nothing, unsafeCSS, type PropertyDeclarations, type TemplateResult } from 'lit';
+import { keyboardLayout, type KeyboardForm, type KeyboardKey, type KeyboardPlatform } from './keyboard-layout.ts';
 
 /** What a marked key is. */
 export type KeyboardMarkKind = 'white' | 'black' | 'scratch' | 'control' | 'action';
@@ -17,6 +18,9 @@ export interface KeyboardMark {
   /** What the key does, for its tooltip. */
   readonly title?: string;
 }
+
+/** The width, in key units, of a full keyboard without its number pad: no board draws its keys larger than its. */
+const MIN_BOARD_WIDTH = unsafeCSS(keyboardLayout().width);
 
 /** The tag a mark of `kind` shows without one of its own. */
 const DEFAULT_TAGS: Readonly<Record<KeyboardMarkKind, string>> = {
@@ -32,6 +36,8 @@ export class BeMusicKeyboardMapElement extends LitElement {
     marks: { attribute: false },
     active: { attribute: false },
     label: {},
+    platform: {},
+    form: {},
   };
 
   /** The keys in use. A key with no mark is drawn dimmed. */
@@ -40,12 +46,18 @@ export class BeMusicKeyboardMapElement extends LitElement {
   declare active: readonly string[];
   /** The diagram's accessible name; the list next to it says what each key does. */
   declare label: string;
+  /** Whose caps to draw: a Windows PC's or a Mac's. */
+  declare platform: KeyboardPlatform;
+  /** A full-size keyboard or a laptop's. */
+  declare form: KeyboardForm;
 
   constructor() {
     super();
     this.marks = [];
     this.active = [];
     this.label = '';
+    this.platform = 'windows';
+    this.form = 'full';
   }
 
   static override styles = css`
@@ -55,11 +67,16 @@ export class BeMusicKeyboardMapElement extends LitElement {
       --key-accent: var(--primary, #38bdf8);
     }
     .board {
-      /* Container units here measure the host, the container; on the host itself they would measure its parent. */
-      --key-unit: calc(100cqi / var(--keyboard-width));
+      /*
+       * Container units here measure the host, the container; on the host itself they would measure its parent. A
+       * board narrower than a full keyboard without its number pad (a laptop's) keeps that keyboard's key size and
+       * stands in the middle, rather than growing keys larger than a full keyboard's.
+       */
+      --key-unit: calc(100cqi / max(var(--keyboard-width), ${MIN_BOARD_WIDTH}));
       --key-gap: max(1px, calc(var(--key-unit) * 0.06));
       position: relative;
-      width: 100%;
+      width: calc(var(--key-unit) * var(--keyboard-width));
+      margin-inline: auto;
       height: calc(var(--key-unit) * var(--keyboard-height));
     }
     .key {
@@ -147,7 +164,7 @@ export class BeMusicKeyboardMapElement extends LitElement {
     const marks = new Map(this.marks.map((mark) => [mark.code, mark]));
     const active = new Set(this.active);
     const numpad = this.marks.some((mark) => mark.code.startsWith('Numpad') || mark.code === 'NumLock');
-    const layout = keyboardLayout({ numpad });
+    const layout = keyboardLayout({ platform: this.platform, form: this.form, numpad });
     return html`<div
       class="board"
       role="img"

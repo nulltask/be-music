@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { optionHelpLabels, optionHelpSection } from './help.ts';
+import { optionHelpLabels, optionHelpSection, placeOptionHelpTip } from './help.ts';
 
 describe('optionHelpLabels', () => {
   test('names the control its own text names', () => {
@@ -28,5 +28,37 @@ describe('optionHelpSection', () => {
   test('files a control outside every such folder under Top', () => {
     expect(optionHelpSection([], sections)).toBe('Top');
     expect(optionHelpSection(['Custom offsets'], sections)).toBe('Top');
+  });
+});
+
+describe('placeOptionHelpTip', () => {
+  const viewport = { width: 800, height: 600 };
+  const tip = { width: 200, height: 60 };
+
+  test('opens below the button, centred on it, with the point under its centre', () => {
+    expect(placeOptionHelpTip({ left: 390, top: 100, width: 20, height: 20 }, tip, viewport)).toEqual({
+      left: 300,
+      top: 130,
+      side: 'bottom',
+      arrowX: 100,
+    });
+  });
+
+  test('opens above the button when the viewport has no room below', () => {
+    expect(placeOptionHelpTip({ left: 390, top: 540, width: 20, height: 20 }, tip, viewport)).toMatchObject({
+      top: 470,
+      side: 'top',
+    });
+  });
+
+  test('stays inside the viewport and keeps the point on the button near an edge', () => {
+    expect(placeOptionHelpTip({ left: 770, top: 100, width: 20, height: 20 }, tip, viewport)).toMatchObject({
+      left: 592,
+      arrowX: 188,
+    });
+    expect(placeOptionHelpTip({ left: 0, top: 100, width: 20, height: 20 }, tip, viewport)).toMatchObject({
+      left: 8,
+      arrowX: 12,
+    });
   });
 });

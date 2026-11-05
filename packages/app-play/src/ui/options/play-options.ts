@@ -1,8 +1,7 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 import { resolveGaugeTypes } from '@be-music/player-engine/ruleset';
-// The Options dialog's Play options folder, split into pages, and the Replay / ghost folder on its last page. They are
-// built with the dialog as `this`
-// (`OptionsDialog`).
+// The Options dialog's Play options folder, split into pages, the Replay / ghost folder on its last page, the View
+// folder and the Select folder. They are built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
 import {
   DIFFICULTY_FILTER_CYCLE,
@@ -20,8 +19,8 @@ import {
 import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
-import { PLAY_OPTION_PAGES } from './folders.ts';
-import { bottomShiftableGaugeItems, laneOptionItems, menuLaneCovers, practiceGaugeItems } from './play-option-items.ts';
+import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
+import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
 import { buildPracticeRangePicker } from './practice-range.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
@@ -32,10 +31,17 @@ import { buildPracticeRangePicker } from './practice-range.ts';
  * song start and DISABLED during a play. The ones a play takes live (hi-speed, the covers and LIFT, the judge timing
  * and CONSTANT visibility) and the select screen's sort and filters, which a play does not read, stay enabled.
  *
- * The options are many, so the folder splits them into pages (`PLAY_OPTION_PAGES`); returns the last, Replay / ghost,
- * for its folder.
+ * The options are many, so the folder splits them into pages (`PLAY_OPTION_PAGES`). The ones that only change what the
+ * lanes show go to the View folder (`viewFolder`, split into `VIEW_OPTION_PAGES`), and the select screen's sort and
+ * filters to the Select folder (`select`). Returns the Practice and Replay / ghost pages, for the Tempo and Replay /
+ * ghost folders.
  */
-export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContainer): OptionContainer {
+export function buildPlayOptionsFolder(
+  this: OptionsDialog,
+  folder: OptionContainer,
+  viewFolder: OptionContainer,
+  select: OptionContainer,
+): { readonly practice: OptionContainer; readonly replay: OptionContainer } {
   // The judge ruleset, above the pages: every judge rule (windows, note selection, empty POOR, long notes, gauge, score —
   // see docs/replay.md) and the choices of several options on the pages follow it. No skin has a counterpart.
   this.trackPlayOption(
@@ -48,13 +54,16 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       this.deps.refreshSelectRecords();
     }),
   );
-  const [judge, lanes, notes, view, practice, select, replay] = folder.addTab({
+  // `lanes` is the Arrangement page and `notes` the Modifiers page.
+  const [judge, lanes, notes, assist, practice, replay] = folder.addTab({
     pages: PLAY_OPTION_PAGES.map((title) => ({ title })),
   }).pages;
-  if (!judge || !lanes || !notes || !view || !practice || !select || !replay) return folder;
+  const [hiSpeed, covers, effects] = viewFolder.addTab({ pages: VIEW_OPTION_PAGES.map((title) => ({ title })) }).pages;
+  if (!judge || !lanes || !notes || !assist || !practice || !replay || !hiSpeed || !covers || !effects)
+    return { practice: folder, replay: folder };
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
   trackPlayOption(
-    judge.addBinding(this.guiState, 'autoPlay', { label: 'Auto play' }).on('change', ({ value }) => {
+    assist.addBinding(this.guiState, 'autoPlay', { label: 'Auto play' }).on('change', ({ value }) => {
       this.setPlayOptions({ autoPlay: value });
     }),
   );
@@ -233,17 +242,17 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     }),
   );
   trackPlayOption(
-    lanes.addBinding(this.guiState, 'autoScratch1P', { label: 'Auto scratch 1P' }).on('change', ({ value }) => {
+    assist.addBinding(this.guiState, 'autoScratch1P', { label: 'Auto scratch 1P' }).on('change', ({ value }) => {
       this.setPlayOptions({ autoScratch1P: value });
     }),
   );
   trackPlayOption(
-    lanes.addBinding(this.guiState, 'autoScratch2P', { label: 'Auto scratch 2P' }).on('change', ({ value }) => {
+    assist.addBinding(this.guiState, 'autoScratch2P', { label: 'Auto scratch 2P' }).on('change', ({ value }) => {
       this.setPlayOptions({ autoScratch2P: value });
     }),
   );
   // The PC edition's ANY KEY (#751), offered with the `____` judge rules (`refreshRulesetChoices`); saves no record.
-  this.anyKeyController = trackPlayOption(notes.addBinding(this.guiState, 'anyKey', { label: 'ANY KEY (PC)' }));
+  this.anyKeyController = trackPlayOption(assist.addBinding(this.guiState, 'anyKey', { label: 'ANY KEY (PC)' }));
   this.longNoteModifierController = selectBinding(notes, this.guiState, 'longNoteModifier', 'Long notes', {
     OFF: 'OFF',
     'LEGACY NOTE (AC 34)': 'LEGACY',
@@ -435,10 +444,10 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       this.setPlayOptions({ difficultyFilter: value });
     },
   );
-  this.hsFixController = selectBinding(view, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!);
+  this.hsFixController = selectBinding(hiSpeed, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!);
   trackPlayOption(this.hsFixController.on('change', ({ value }) => this.setPlayOptions({ hsFix: value })));
   trackPlayOption(
-    selectBinding(view, this.guiState, 'displayAreaInfo', 'Display area info', {
+    selectBinding(covers, this.guiState, 'displayAreaInfo', 'Display area info', {
       OFF: 'OFF',
       ON: 'ON',
       'SUDDEN+ ONLY': 'SUDDEN_ONLY',
@@ -448,49 +457,43 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     }),
   );
   // SUDDEN+ / HIDDEN+, the switch and the height stay enabled during a play and move its covers live, as LIFT does.
-  const setCovers = (changes: Partial<PlayOptions>): void => {
-    this.setPlayOptions(changes);
-    this.gameplayView?.controller.dispatch({
-      type: 'cover',
-      command: { type: 'cover-set', covers: menuLaneCovers(this.guiState) },
-    });
-  };
+  const setCovers = (changes: Partial<PlayOptions>): void => this.setCoverOptions(changes);
   for (const key of ['hiddenSudden1P', 'hiddenSudden2P'] as const) {
     selectBinding(
-      view,
+      covers,
       this.guiState,
       key,
       key === 'hiddenSudden1P' ? 'Effect 1P' : 'Effect 2P',
       PLAY_OPTION_CHOICES[key]!,
     ).on('change', ({ value }) => setCovers({ [key]: value }));
   }
-  view
+  covers
     .addBinding(this.guiState, 'laneCover', { label: 'Lane cover' })
     .on('change', ({ value }) => setCovers({ laneCover: value }));
-  view
+  covers
     .addBinding(this.guiState, 'shutter', { label: 'Cover height', min: 0, max: 1, step: 0.01 })
     .on('change', ({ value }) => setCovers({ shutter: value }));
   trackPlayOption(
-    view
+    effects
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
   trackPlayOption(
-    view
+    effects
       .addBinding(this.guiState, 'bpmChangeWarning', { label: 'BPM change warning (AC)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmChangeWarning: value })),
   );
   for (const side of ['1P', '2P'] as const) {
     const heightKey = side === '1P' ? 'lift1P' : 'lift2P';
     const enabledKey = side === '1P' ? 'liftOn1P' : 'liftOn2P';
-    view.addBinding(this.guiState, enabledKey, { label: `LIFT ${side} (beatoraja)` }).on('change', ({ value }) => {
+    covers.addBinding(this.guiState, enabledKey, { label: `LIFT ${side} (beatoraja)` }).on('change', ({ value }) => {
       this.setPlayOptions({ [enabledKey]: value });
       this.gameplayView?.controller.dispatch({
         type: 'cover',
         command: { type: 'cover-set', covers: [{ side, liftOn: value, lift: this.guiState[heightKey] }], side },
       });
     });
-    view
+    covers
       .addBinding(this.guiState, heightKey, { label: `LIFT height ${side}`, min: 0, max: 1, step: 0.001 })
       .on('change', ({ value }) => {
         this.setPlayOptions({ [heightKey]: value });
@@ -501,17 +504,17 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       });
   }
   trackPlayOption(
-    view
+    effects
       .addBinding(this.guiState, 'visualConstant', { label: 'Visual CONSTANT (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ visualConstant: value })),
   );
-  view
+  effects
     .addBinding(this.guiState, 'noteDurationMs', { label: 'Note duration (ms)', min: 1, max: 10000, step: 1 })
     .on('change', ({ value }) => {
       this.setPlayOptions({ noteDurationMs: value });
       this.gameplayView?.controller.dispatch({ type: 'constant-visibility', durationMs: value });
     });
-  view
+  effects
     .addBinding(this.guiState, 'constantFadeMs', { label: 'CONSTANT fade (ms)', min: -1000, max: 1000, step: 1 })
     .on('change', ({ value }) => {
       this.setPlayOptions({ constantFadeMs: value });
@@ -547,7 +550,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     },
   };
   this.normalHiSpeedController = trackPlayOption(
-    view.addBinding(normal, 'enabled', { label: 'Normal HI-SPEED (AC 32 measured)' }).on('change', ({ value }) => {
+    hiSpeed.addBinding(normal, 'enabled', { label: 'Normal HI-SPEED (AC 32 measured)' }).on('change', ({ value }) => {
       if (value) {
         state.classicHiSpeed = false;
         state.hsFix = 'OFF';
@@ -562,7 +565,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   );
   this.normalHiSpeedLevelController = trackPlayOption(
     selectBinding(
-      view,
+      hiSpeed,
       normal,
       'level',
       'Normal HS level',
@@ -570,12 +573,12 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     ).on('change', ({ value }) => this.setPlayOptions({ normalHiSpeedLevel: value })),
   );
   this.fixedDisplayAreaController = trackPlayOption(
-    view
+    hiSpeed
       .addBinding(this.guiState, 'fixedDisplayArea', { label: 'Fixed display area (AC 34)' })
       .on('change', ({ value }) => this.setPlayOptions({ fixedDisplayArea: value })),
   );
   this.floatingHiSpeedController = trackPlayOption(
-    view
+    hiSpeed
       .addBinding(this.guiState, 'floatingHiSpeed', { label: 'FLOATING HI-SPEED (AC 32 measured)' })
       .on('change', ({ value }) => {
         this.setPlayOptions({ floatingHiSpeed: value, ...(value ? { hsFix: 'OFF' } : {}) });
@@ -584,13 +587,13 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
       }),
   );
   const remember = (value: number): void => this.deps.rememberHiSpeed(value, 'menu');
-  this.floatingSpeedController = view.addBinding(
+  this.floatingSpeedController = hiSpeed.addBinding(
     hiSpeedControl(this.guiState, () => this.guiState.floatingHiSpeed, onGrid(0.01), remember),
     'hiSpeed',
     { label: 'Floating speed', min: 0.5, max: 10, step: 0.01 },
   );
   this.classicHiSpeedController = trackPlayOption(
-    view.addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' }).on('change', ({ value }) => {
+    hiSpeed.addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' }).on('change', ({ value }) => {
       this.setPlayOptions({ classicHiSpeed: value, ...(value ? { hsFix: 'OFF', normalHiSpeedLevel: 0 } : {}) });
       if (value) {
         this.guiState.hsFix = 'OFF';
@@ -602,7 +605,7 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
     }),
   );
   this.classicSpeedController = selectBinding(
-    view,
+    hiSpeed,
     hiSpeedControl(
       this.guiState,
       () => this.guiState.classicHiSpeed,
@@ -617,13 +620,40 @@ export function buildPlayOptionsFolder(this: OptionsDialog, folder: OptionContai
   // visual only, so it stays enabled during a play and applies to it live.
   const regular = (): boolean =>
     !this.guiState.classicHiSpeed && !this.guiState.floatingHiSpeed && !(this.guiState.normalHiSpeedLevel > 0);
-  this.hiSpeedController = view.addBinding(
+  this.hiSpeedController = hiSpeed.addBinding(
     hiSpeedControl(this.guiState, regular, onGrid(HISPEED_STEP), remember),
     'hiSpeed',
     { label: 'Hi-speed', min: HISPEED_MIN, max: HISPEED_MAX, step: HISPEED_STEP },
   );
+  buildNoteDisplayRows.call(this, effects);
   this.refreshRulesetChoices();
-  return replay;
+  return { practice, replay };
+}
+
+/**
+ * The View folder's rows about which notes the lanes draw: judged notes kept or hidden, and the chart's invisible
+ * notes. Both apply to a running play live.
+ */
+function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): void {
+  // Picks between LR2 / beatoraja's "a judged note stays until its time" and "a judged note goes the moment it is
+  // judged". Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint — the
+  // visibility check is a single per-frame branch with no backing state to rebuild.
+  selectBinding(effects, this.guiState, 'judgedNoteDisplay', 'Judged notes', {
+    'Keep until its time (LR2)': 'KEEP_SCROLLING',
+    'Hide on judge': 'HIDE',
+  }).on('change', ({ value }) => {
+    this.guiState.judgedNoteDisplay = value;
+    this.gameplayView?.setJudgedNoteDisplay(value);
+  });
+  // Chart-authoring overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars in their
+  // playable lane. Live: the gameplay view always extracts the invisible notes and preloads the green sprite, so the
+  // flag flips the per-frame render branch on the very next paint.
+  effects
+    .addBinding(this.guiState, 'showInvisibleNotes', { label: 'Show invisible notes' })
+    .on('change', ({ value }) => {
+      this.guiState.showInvisibleNotes = value;
+      this.gameplayView?.setShowInvisibleNotes(value);
+    });
 }
 /**
  * Replay / ghost: which of what a replay recorded the player seeing a replay shows (the tempo, the hi-speed,
@@ -705,7 +735,7 @@ function pickReplayFile(): Promise<File | undefined> {
  * while its mode is in use (`active`). A control left to write back its own rounding would undo the play's change — a
  * floating 2.2458 as 2.25 — or set another mode's hi-speed (a classic list's first step for a play's 2.1).
  */
-function hiSpeedControl(
+export function hiSpeedControl(
   guiState: { hiSpeed: number },
   active: () => boolean,
   show: (value: number) => number,
@@ -724,6 +754,6 @@ function hiSpeedControl(
 }
 
 /** A value on the grid of `step`, as a slider of that step shows it. */
-function onGrid(step: number): (value: number) => number {
+export function onGrid(step: number): (value: number) => number {
   return (value) => Math.round(Math.round(value / step) * step * 1000) / 1000;
 }

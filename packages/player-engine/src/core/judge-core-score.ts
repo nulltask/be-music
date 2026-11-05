@@ -71,21 +71,26 @@ export function judgeWindowsFor(
  */
 export function maxJudgeReachSeconds(config: Pick<JudgeCoreConfig, 'ruleset'>, seconds: number): number {
   const tables = config.ruleset.windowsAt(Math.round(seconds * 1e6));
-  let reachUs = 0;
-  for (const set of [tables.note, tables.scratch, tables.longNoteEnd, tables.longScratchEnd]) {
-    reachUs = Math.max(reachUs, judgeWindowLateReachUs(set), judgeWindowEarlyReachUs(set));
-  }
-  return reachUs / 1e6;
+  // Unrolled: a fresh array of the four sets on every press showed up in allocation profiles.
+  return (
+    Math.max(
+      judgeWindowLateReachUs(tables.note),
+      judgeWindowEarlyReachUs(tables.note),
+      judgeWindowLateReachUs(tables.scratch),
+      judgeWindowEarlyReachUs(tables.scratch),
+      judgeWindowLateReachUs(tables.longNoteEnd),
+      judgeWindowEarlyReachUs(tables.longNoteEnd),
+      judgeWindowLateReachUs(tables.longScratchEnd),
+      judgeWindowEarlyReachUs(tables.longScratchEnd),
+      0,
+    ) / 1e6
+  );
 }
 
 /** How far ahead of a note its judgable window opens — when the lane's fallback keysound becomes that note's. */
 export function maxJudgeEarlyReachSeconds(config: JudgeCoreConfig, seconds: number): number {
   const tables = windowTablesAt(config, seconds);
-  let reachUs = 0;
-  for (const set of [tables.note, tables.scratch]) {
-    reachUs = Math.max(reachUs, judgeWindowEarlyReachUs(set));
-  }
-  return reachUs / 1e6;
+  return Math.max(judgeWindowEarlyReachUs(tables.note), judgeWindowEarlyReachUs(tables.scratch), 0) / 1e6;
 }
 
 /** The BAD gate of the opening key windows, in seconds — the horizon invisible notes are retired after. */
@@ -294,16 +299,18 @@ export function applyResolvedManualJudge(
     applyFastSlow(summary, judge.kind, judge.signedDeltaMs);
     emit({ kind: 'poor-bga', action: 'clear', seconds: atSeconds });
     setCombo(state, atSeconds, state.combo + 1, 'judge', emit, judge.kind, channel);
-    emit({
-      kind: 'trace',
-      name: 'judge',
-      seconds: atSeconds,
-      fields: [
-        ['result', judge.kind],
-        ['channel', channel],
-        ['deltaMs', Math.round(deltaMs)],
-      ],
-    });
+    if (!state.config.omitTraceEffects) {
+      emit({
+        kind: 'trace',
+        name: 'judge',
+        seconds: atSeconds,
+        fields: [
+          ['result', judge.kind],
+          ['channel', channel],
+          ['deltaMs', Math.round(deltaMs)],
+        ],
+      });
+    }
     emit({
       kind: 'judge-combo',
       seconds: atSeconds,
@@ -318,16 +325,18 @@ export function applyResolvedManualJudge(
   }
   if (judge.kind === 'BAD') {
     setCombo(state, atSeconds, 0, 'judge', emit, 'BAD', channel);
-    emit({
-      kind: 'trace',
-      name: 'judge',
-      seconds: atSeconds,
-      fields: [
-        ['result', 'BAD'],
-        ['channel', channel],
-        ['deltaMs', Math.round(deltaMs)],
-      ],
-    });
+    if (!state.config.omitTraceEffects) {
+      emit({
+        kind: 'trace',
+        name: 'judge',
+        seconds: atSeconds,
+        fields: [
+          ['result', 'BAD'],
+          ['channel', channel],
+          ['deltaMs', Math.round(deltaMs)],
+        ],
+      });
+    }
     emit({
       kind: 'judge-combo',
       seconds: atSeconds,
@@ -342,16 +351,18 @@ export function applyResolvedManualJudge(
   emit({ kind: 'poor-bga', action: 'trigger', seconds: atSeconds });
   emit({ kind: 'poor-trace', action: 'trigger', seconds: atSeconds });
   setCombo(state, atSeconds, 0, 'judge', emit, 'POOR', channel);
-  emit({
-    kind: 'trace',
-    name: 'judge',
-    seconds: atSeconds,
-    fields: [
-      ['result', 'POOR'],
-      ['channel', channel],
-      ['deltaMs', Math.round(deltaMs)],
-    ],
-  });
+  if (!state.config.omitTraceEffects) {
+    emit({
+      kind: 'trace',
+      name: 'judge',
+      seconds: atSeconds,
+      fields: [
+        ['result', 'POOR'],
+        ['channel', channel],
+        ['deltaMs', Math.round(deltaMs)],
+      ],
+    });
+  }
   emit({
     kind: 'judge-combo',
     judge: 'POOR',

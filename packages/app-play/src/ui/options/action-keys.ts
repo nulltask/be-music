@@ -22,7 +22,7 @@ import {
   keyCodeLabel,
   schemesOf,
 } from './action-labels.ts';
-import type { OptionContainer } from '../options-controls.ts';
+import { optionLabelContent, type OptionContainer } from '../options-controls.ts';
 import type { OptionsDialog } from './index.ts';
 
 export { ACTION_LABELS_JA, ACTION_SCREEN_TITLES, actionKeyConfigLabel, actionKeyLabel, keyCodeLabel };
@@ -91,20 +91,14 @@ export function buildActionKeyPage(this: OptionsDialog, page: OptionContainer): 
     if (waiting !== undefined) stop();
   });
 
+  // Each screen's operations sit in a section of their own, headed by the screen.
   let screen: ControlScreen | undefined;
+  let section: OptionContainer = page;
   for (const action of CONTROL_ACTIONS) {
     const definition = action as ControlActionDefinition;
     if (definition.screen !== screen) {
       screen = definition.screen;
-      const title = ACTION_SCREEN_TITLES[screen];
-      const heading = document.createElement('h5');
-      heading.className = 'options-key-heading';
-      const show = (language: string): void => {
-        render(html`${optionLabel(title, language)}`, heading);
-      };
-      show(playerLang());
-      const row = page.addElement(heading, show);
-      row.element.dataset.optionLabel = title;
+      section = page.addFolder({ title: ACTION_SCREEN_TITLES[screen] });
     }
     const label = actionKeyConfigLabel(definition);
     const content = document.createElement('div');
@@ -115,7 +109,8 @@ export function buildActionKeyPage(this: OptionsDialog, page: OptionContainer): 
       const text = active ? (waiting?.refused === true ? prompts().refused : prompts().waiting) : keysOf(definition.id);
       render(
         html`<span class="options-label-wrap"
-            ><span class="label options-label">${optionLabel(label, language)}</span><span data-option-help-host></span
+            ><span class="label options-label">${optionLabelContent(optionLabel(label, language))}</span
+            ><span data-option-help-host></span
           ></span>
           <button
             type="button"
@@ -138,7 +133,7 @@ export function buildActionKeyPage(this: OptionsDialog, page: OptionContainer): 
         content,
       );
     };
-    const row = page.addElement(content, (nextLanguage) => {
+    const row = section.addElement(content, (nextLanguage) => {
       language = nextLanguage === 'ja' ? 'ja' : 'en';
       update();
     });
