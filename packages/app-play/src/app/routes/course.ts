@@ -6,11 +6,23 @@
 import {
   createCourseChartRecord,
   createDrawnRandomMixEntry,
-  createRandomMixChart,
+  createRandomMixCandidate,
+  createRandomMixEntry,
   drawBrowserRandomCourse,
+  resolveRandomMixBPM,
   type CourseMaker,
 } from '@be-music/player-browser/collection';
-import { LR2_RANDOM_MIX_NAME } from '@be-music/player-engine/course';
+import {
+  createRandomMixCourse,
+  filterRandomMixCandidates,
+  isRandomMixKept,
+  listRandomMixKeyModes,
+  resolveRandomMixCount,
+  type RandomMixConditions,
+} from '@be-music/player-engine/course';
+import { RandomMixDraw, type RandomMixPoolChart } from '../../random-mix-draw.ts';
+import type { RandomMixDialogRequest } from '../../ui/random-mix-dialog.ts';
+import type { RandomMixLoop } from '../../services/courses.ts';
 import { playerText } from '../../player-copy.ts';
 import type {
   BeMusicCourseReplay,
@@ -20,10 +32,8 @@ import type {
 } from '@be-music/player-engine/replay';
 import {
   resolveCourseView,
-  resolveLR2RandomMixKeyMode,
   type BrowseSnapshot,
   type CourseView,
-  type KeysFilter,
   type LibraryChart,
   type LibraryCourse,
   type PlayResult,
@@ -32,12 +42,16 @@ import {
   courseDecideSong,
   courseStageHistories,
   describeRandomCourseDrawFailure,
+  endlessRandomMixEntry,
+  prepareEndlessStage,
+  settleEndlessCourse,
   describeUnplayableCourse,
   nextCourseStagePlay,
   planCourseStart,
   resolveCourseBestRecordUpdate,
   resolveCourseDanRankUpdate,
   type CourseStagePlay,
+  type EndlessRandomMix,
 } from '../../course-flow.ts';
 import { buildCourseResultData, courseBestRecordKey, joinCourseStageHistories } from '../../course-result.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
@@ -66,10 +80,25 @@ export interface CourseRouteDeps {
     RecordsService,
     'resolveChartHashes' | 'peekChartBestRecord' | 'recordCourseResult' | 'recordDanRank'
   >;
-  /** The course maker, which a NEW COURSE bar starts and a RANDOM MIX bar draws a course with. */
-  readonly courseMaker: { readonly maker: Pick<CourseMaker, 'start' | 'drawRandomMix'> };
-  /** The select screen's key filter, whose key mode a RANDOM MIX draws. */
-  readonly keysFilter: () => KeysFilter;
+  /**
+   * The course maker, which a NEW COURSE bar starts and which keeps a RANDOM MIX's conditions, LR2 settings and last
+   * draw.
+   */
+  readonly courseMaker: {
+    readonly maker: Pick<
+      CourseMaker,
+      | 'start'
+      | 'keepRandomMix'
+      | 'randomMixConditions'
+      | 'setRandomMixConditions'
+      | 'randomMixSettings'
+      | 'defaultConnection'
+    >;
+  };
+  /** Opens the RANDOM MIX dialog: the conditions confirmed, or `undefined` when it was cancelled. */
+  readonly promptRandomMix: (request: RandomMixDialogRequest) => Promise<RandomMixConditions | undefined>;
+  /** The source of chance a RANDOM MIX draws with. Default `Math.random`. */
+  readonly random?: () => number;
   /** The course replay's auto-save, by the setting latched at the last stage's start. */
   readonly replayAutoSave: Pick<ReplayAutoSave, 'saveCourse'>;
   /** Ranks the course run as one. */
@@ -82,7 +111,10 @@ export interface CourseRouteDeps {
   readonly selectNavigation: () => BrowseSnapshot | undefined;
   readonly setStatus: (text: string) => void;
   /** Starts a NONSTOP course (`NonstopRoute`), with its decide screen when the course bar starts it. */
-  readonly startNonstopCourse: (course: LibraryCourse, options: { decide?: boolean }) => Promise<void>;
+  readonly startNonstopCourse: (
+    course: LibraryCourse,
+    options: { decide?: boolean; cancel?: () => void },
+  ) => Promise<void>;
   readonly showSelect: () => Promise<void>;
   /** Shows the decide screen for `song`, which leads to `then.start` instead of playing `song`. */
   readonly showDecide: (
@@ -124,7 +156,8 @@ export class CourseRoute {
   private readonly library: CourseRouteDeps['library'];
   private readonly records: CourseRouteDeps['records'];
   private readonly courseMaker: CourseRouteDeps['courseMaker'];
-  private readonly keysFilter: CourseRouteDeps['keysFilter'];
+  private readonly promptRandomMix: CourseRouteDeps['promptRandomMix'];
+  private readonly random: () => number;
   private readonly replayAutoSave: CourseRouteDeps['replayAutoSave'];
   private readonly leaderboard: CourseRouteDeps['leaderboard'];
   private readonly familyKits: CourseRouteDeps['familyKits'];
@@ -145,7 +178,8 @@ export class CourseRoute {
     this.library = deps.library;
     this.records = deps.records;
     this.courseMaker = deps.courseMaker;
-    this.keysFilter = deps.keysFilter;
+    this.promptRandomMix = deps.promptRandomMix;
+    this.random = deps.random ?? Math.random;
     this.replayAutoSave = deps.replayAutoSave;
     this.leaderboard = deps.leaderboard;
     this.familyKits = deps.familyKits;
@@ -180,18 +214,13 @@ export class CourseRoute {
       this.setStatus(describeUnplayableCourse(entry));
       return;
     }
-    let course = entry;
     if (plan.action === 'random-mix') {
-      const drawn = await this.drawRandomMix(plan.kind);
-      if (drawn === undefined) return;
-      course = drawn;
+      await this.startRandomMix(plan.kind);
+      return;
     }
+    let course = entry;
     const navigation = this.selectNavigation();
-    this.courses.leaveSelect(
-      plan.action === 'random-mix' && navigation !== undefined
-        ? { ...navigation, focusKey: `course:${course.id}` }
-        : navigation,
-    );
+    this.courses.leaveSelect(navigation);
     let rememberDraw: (() => void) | undefined;
     if (plan.action === 'draw') {
       const candidates = await Promise.all(
@@ -244,30 +273,106 @@ export class CourseRoute {
   }
 
   /**
-   * Draws a RANDOM MIX of `kind` from the library in the key filter's key mode and keeps it as the folder's newest
-   * course, as LR2's `CreateRandomCourse` does; `undefined`, with a status, when no chart can be its first stage (LR2
-   * then does nothing). A song whose chart cannot be hashed is never drawn.
+   * A RANDOM MIX bar: the RANDOM MIX dialog asks which charts to draw from, how many stages and how many runs in a row,
+   * then the first run is drawn and played. Only the library's facts at hand are read to list the charts that fit; a
+   * chart's BPMs are read once a draw walks it and its chart file hashed once it is drawn, so starting a mix costs the
+   * same however large the library is.
    */
-  private async drawRandomMix(kind: 'expert' | 'nonstop'): Promise<LibraryCourse | undefined> {
-    const charts = (
-      await Promise.all(
-        this.library.collection.charts.map(async (chartEntry) => {
-          const md5 = (await this.records.resolveChartHashes(chartEntry))?.md5;
-          return md5 === undefined ? undefined : createRandomMixChart(chartEntry, md5);
-        }),
-      )
-    ).filter((chart) => chart !== undefined);
-    const drawn = this.courseMaker.maker.drawRandomMix(
+  private async startRandomMix(kind: 'expert' | 'nonstop'): Promise<void> {
+    const pool = this.library.collection.charts.map(createRandomMixCandidate);
+    const conditions = await this.promptRandomMix({
       kind,
-      resolveLR2RandomMixKeyMode(this.keysFilter()),
-      charts,
-      Math.random,
+      keyModes: listRandomMixKeyModes(pool),
+      initial: this.courseMaker.maker.randomMixConditions,
+      countMatches: (asked) => filterRandomMixCandidates(pool, asked).length,
+    });
+    if (conditions === undefined) return;
+    this.courseMaker.maker.setRandomMixConditions(conditions);
+    this.courses.setRandomMixLoop({ kind, loop: 1, loops: conditions.loops });
+    this.courses.leaveSelect(this.selectNavigation());
+    await this.playRandomMix({ kind, loop: 1, loops: conditions.loops }, pool);
+  }
+
+  /**
+   * The RANDOM MIX loop's next run, when one is due as the select screen would come back: drawn by the conditions last
+   * confirmed. Returns whether a run started (the select screen then stays away).
+   */
+  public continueRandomMixLoop(): boolean {
+    const loop = this.courses.takeNextRandomMixLoop();
+    if (loop === undefined) return false;
+    void this.playRandomMix(loop, this.library.collection.charts.map(createRandomMixCandidate));
+    return true;
+  }
+
+  /**
+   * Draws one RANDOM MIX run by the conditions last confirmed and plays it: a run of five stages or fewer is kept as its
+   * folder's newest course, as LR2 keeps its draw; a longer or endless one is played without being kept. An endless
+   * run draws each stage as it reaches it.
+   */
+  private async playRandomMix(loop: RandomMixLoop, pool: readonly RandomMixPoolChart[]): Promise<void> {
+    const maker = this.courseMaker.maker;
+    const conditions = maker.randomMixConditions;
+    const { kind } = loop;
+    const count = resolveRandomMixCount(kind, conditions.count);
+    const endless = count === 'infinity';
+    const draw = new RandomMixDraw(filterRandomMixCandidates(pool, conditions), {
+      settings: maker.randomMixSettings,
+      bpmOf: resolveRandomMixBPM,
+      md5Of: async (chartEntry) => (await this.records.resolveChartHashes(chartEntry))?.md5,
+      random: this.random,
+      endless,
+    });
+    const stages = await draw.take(endless ? 1 : count);
+    const course = createRandomMixCourse(
+      kind,
+      stages.map((drawn) => drawn.stage),
+      { defaultConnection: maker.defaultConnection },
     );
-    if (!drawn.ok) {
-      this.setStatus(`${LR2_RANDOM_MIX_NAME}: no chart matches the RANDOM MIX settings`);
-      return undefined;
+    if (course === undefined) {
+      this.courses.setRandomMixLoop(undefined);
+      this.setStatus(playerText().course.randomMixNoMatch);
+      await this.showSelect();
+      return;
     }
-    return createDrawnRandomMixEntry(drawn.course, drawn.charts);
+    if (loop.loops !== 1) this.setStatus(playerText().course.randomMixLoop(loop.loop, loop.loops));
+    const kept = isRandomMixKept(count);
+    if (kept) maker.keepRandomMix(course);
+    // A kept draw is its folder's newest course, where the cursor comes back; otherwise the RANDOM MIX bar.
+    const barId = kept ? `maker:${kind}#0` : createRandomMixEntry(kind).id;
+    const navigation = this.courses.takeReturnNavigation() ?? this.selectNavigation();
+    this.courses.leaveSelect(navigation !== undefined ? { ...navigation, focusKey: `course:${barId}` } : undefined);
+    if (kind === 'nonstop') {
+      await this.startNonstopCourse(createDrawnRandomMixEntry(course, stages), {
+        decide: true,
+        // Backing out of a run's decide screen ends the loop.
+        cancel: () => this.courses.setRandomMixLoop(undefined),
+      });
+      return;
+    }
+    const endlessMix: EndlessRandomMix | undefined = endless
+      ? { next: () => draw.next(), stages: [...stages] }
+      : undefined;
+    if (endlessMix !== undefined) endlessMix.lookahead = draw.next();
+    const entry =
+      endlessMix !== undefined
+        ? endlessRandomMixEntry(barId, course, stages, await endlessMix.lookahead)
+        : { ...createDrawnRandomMixEntry(course, stages), id: barId };
+    const active = this.courses.beginRun(entry, undefined, {
+      ...(endlessMix !== undefined ? { endless: endlessMix } : {}),
+      ...(kept ? {} : { unkept: true }),
+    });
+    await this.showDecide(
+      courseDecideSong(entry, stages[0]!.chart),
+      {},
+      {
+        start: () => this.playNextCourseStage(),
+        // Backing out of a run's decide screen ends the loop too.
+        cancel: () => {
+          this.courses.cancelRun(active);
+          this.courses.setRandomMixLoop(undefined);
+        },
+      },
+    );
   }
 
   /**
@@ -295,13 +400,20 @@ export class CourseRoute {
   /** Plays the running course's next stage, or shows the course result when it is over. */
   private async playNextCourseStage(): Promise<void> {
     const active = this.courses.active;
+    // An endless RANDOM MIX draws the stage it reaches now; no chart left to draw ends the run.
+    if (active?.endless !== undefined && !(await prepareEndlessStage(active))) {
+      if (this.courses.active === active) await this.showCourseResult();
+      return;
+    }
+    if (this.courses.active !== active) return;
     const stage = active !== undefined ? nextCourseStagePlay(active) : undefined;
     if (active === undefined || stage === undefined) {
       await this.showCourseResult();
       return;
     }
     const replaying = stage.replay !== undefined ? ' (replay)' : '';
-    this.setStatus(`${active.course.definition.name}: stage ${stage.index + 1} / ${stage.stageCount}${replaying}`);
+    const stageCount = active.endless !== undefined ? '∞' : stage.stageCount;
+    this.setStatus(`${active.course.definition.name}: stage ${stage.index + 1} / ${stageCount}${replaying}`);
     // A course replay's stage plays its recorded replay (an AUTO stage as AUTO), as a dropped replay plays.
     if (stage.replay !== undefined) {
       await this.playChart(stage.stage, {
@@ -337,6 +449,8 @@ export class CourseRoute {
       await this.showSelect();
       return;
     }
+    // An endless run's course is the stages it played, the one drawn ahead dropped.
+    settleEndlessCourse(active);
     const { course, run } = active;
     // A course replay shows the run it recorded, and keeps nothing.
     const replay = active.replay !== undefined && !run.practice;
@@ -357,7 +471,11 @@ export class CourseRoute {
       // A course replay shows its course's replay slots and saves into none, as a single replay does.
       replaySlots = this.courseReplaySlots(courseLog, result, undefined);
     }
-    if (courseLog !== undefined && !replay) {
+    if (courseLog !== undefined && !replay && active.unkept === true) {
+      // A RANDOM MIX run no bar lists keeps no course record and no replay slot; it is saved and ranked as any run.
+      this.replayAutoSave.saveCourse(courseLog);
+      this.leaderboard.maybeSubmitCourse(courseLog, run.stages);
+    } else if (courseLog !== undefined && !replay) {
       const update = resolveCourseBestRecordUpdate(courseLog, result, courseBestRecordKey(course));
       const kept = this.records.recordCourseResult(update);
       // A cleared GRADE course named after a dan raises the player's dan rank in its key mode.

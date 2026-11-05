@@ -62,7 +62,7 @@ export interface NonstopRouteDeps {
   readonly showDecide: (
     chartEntry: LibraryChart,
     overrides: { autoPlay?: boolean },
-    then: { start: () => Promise<void> },
+    then: { start: () => Promise<void>; cancel?: () => void },
   ) => Promise<void>;
   /** Plays the stitched chart, with the course's AUTO when it was started with one, or a run's recorded replay. */
   readonly playChart: (
@@ -144,7 +144,7 @@ export class NonstopRoute {
    */
   public async startNonstopCourse(
     course: LibraryCourse,
-    options: { decide?: boolean; replay?: BeMusicCourseReplay } = {},
+    options: { decide?: boolean; replay?: BeMusicCourseReplay; cancel?: () => void } = {},
   ): Promise<void> {
     const run = options.replay?.nonstop;
     if (options.replay !== undefined && run === undefined) {
@@ -193,7 +193,11 @@ export class NonstopRoute {
           });
     // The decide screen names the course (the stitched song's title); a quick retry skips it, as LR2's does.
     if (options.decide === true) {
-      await this.showDecide(prepared.prepared.chart, {}, { start: play });
+      await this.showDecide(
+        prepared.prepared.chart,
+        {},
+        { start: play, ...(options.cancel !== undefined ? { cancel: options.cancel } : {}) },
+      );
       return;
     }
     await play();
