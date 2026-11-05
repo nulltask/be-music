@@ -406,16 +406,16 @@ export class OptionButton extends OptionRow {
         : this.titleText;
     render(
       html`<button
-          class="btn options-button"
-          type="button"
-          data-variant="outline"
-          data-size="sm"
-          @click=${() => {
-            for (const handler of this.handlers) handler();
-          }}
-        >
-          ${title}</button
-        ><span data-option-help-host></span>`,
+        class="btn options-button"
+        type="button"
+        data-variant="outline"
+        data-size="sm"
+        @click=${() => {
+          for (const handler of this.handlers) handler();
+        }}
+      >
+        ${title}<span data-option-help-host></span>
+      </button>`,
       this.element,
     );
   }
@@ -646,6 +646,16 @@ export class OptionFolder extends OptionContainer {
   }
 }
 
+/**
+ * How far to scroll a tab bar sideways to show a tab whose edges are `left`..`right` in a bar showing `viewLeft`..
+ * `viewRight`: negative to the left, `0` when it is already in view. A tab wider than the bar shows from its start.
+ */
+export function tabRevealScroll(left: number, right: number, viewLeft: number, viewRight: number): number {
+  if (left < viewLeft || right - left > viewRight - viewLeft) return left - viewLeft;
+  if (right > viewRight) return right - viewRight;
+  return 0;
+}
+
 /** Basecoat tabs: one page per title, the first selected. */
 export class OptionTabs extends OptionRow {
   public readonly pages: OptionPage[];
@@ -673,6 +683,18 @@ export class OptionTabs extends OptionRow {
       page.element.hidden = at !== index;
       page.element.setAttribute('aria-selected', String(at === index));
     });
+    // On a screen too narrow for the tab bar, it scrolls sideways: keep the selected tab in view. Only the bar
+    // scrolls, so selecting a nested tab never moves the panel around it.
+    const tab = this.element.querySelector<HTMLElement>(`#${this.tabIds[index]}`);
+    const bar = tab?.parentElement;
+    if (tab && bar) {
+      // Layout offsets, not client rects: the dialog's open animation scales it, and `scrollLeft` is unscaled. The
+      // bar's padding is kept in view around the tab.
+      const padding = Number.parseFloat(getComputedStyle(bar).paddingLeft) || 0;
+      const left = tab.offsetLeft - bar.offsetLeft - padding;
+      const right = left + tab.offsetWidth + 2 * padding;
+      bar.scrollLeft += tabRevealScroll(left, right, bar.scrollLeft, bar.scrollLeft + bar.clientWidth);
+    }
   }
 
   public override refresh(): void {
