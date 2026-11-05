@@ -2,10 +2,25 @@ import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import { readdir, readFile } from 'node:fs/promises';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import worker from './index.ts';
-import type { Env } from './auth.ts';
+import { createAuth, type Env } from './auth.ts';
 
 let env: Env;
 let mf: Miniflare;
+const signInAsGuest = async () => {
+  const response = await worker.fetch(
+    new Request(`${env.AUTH_ORIGIN}/api/auth/sign-in/anonymous`, {
+      method: 'POST',
+      headers: { origin: env.AUTH_ORIGIN, 'content-type': 'application/json' },
+      body: '{}',
+    }),
+    env,
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  return ((await response.json()) as { user: { id: string } }).user.id;
+};
+const isGuest = async (userId: string) =>
+  (await env.DB.prepare('select is_anonymous from user where id = ?').bind(userId).first<{ is_anonymous: number }>())
+    ?.is_anonymous === 1;
 const cookies = (response: Response) =>
   response.headers
     .getSetCookie()
@@ -90,5 +105,13 @@ describe('Linking providers onto the signed-in account', () => {
     expect(linked).not.toContain('data-auth-action="link-discord"');
     expect(linked).toContain('data-auth-action="link-google"');
     expect(linked).toContain('data-auth-action="add-passkey"');
+  });
+
+  test.each(['google', 'discord'])('keeps a guest account once %s is linked, with no passkey', async (providerId) => {
+    const userId = await signInAsGuest();
+    expect(await isGuest(userId)).toBe(true);
+    const context = await createAuth(env).$context;
+    await context.internalAdapter.linkAccount({ userId, providerId, accountId: `${providerId}-user-${userId}` });
+    expect(await isGuest(userId)).toBe(false);
   });
 });

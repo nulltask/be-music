@@ -43,7 +43,7 @@ export function createApp(options: { now?: () => number; newId?: () => string; c
       return c.json({ error: 'oidc-not-configured' }, 503);
     const auth = createAuth(c.env, new URL(c.req.url).origin);
     const response = await auth.handler(c.req.raw);
-    // A registered passkey is a way back into the account, so it stops being anonymous (docs/leaderboard.md section 3).
+    // A registered passkey is a way back into the account, so it stops being a guest (docs/leaderboard.md section 3).
     if (c.req.path === '/api/auth/passkey/verify-registration' && response.ok) {
       const session = await auth.api.getSession({ headers: c.req.raw.headers });
       if (session !== null) await claimAccount(openDatabase(c.env.DB), session.user.id);

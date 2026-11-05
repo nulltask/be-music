@@ -225,8 +225,8 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'EX-SCORE improves (first play always)': 'EX-SCORE 更新時 (初回は必ず)',
   Always: '毎回',
   Account: 'アカウント',
-  'Create passkey (keep this account)': 'パスキーを作成 (このアカウントを残す)',
-  'Sign in with passkey': 'パスキーでログイン',
+  'Keep this account': 'このアカウントを保存',
+  'Sign in': 'ログイン',
   'Sign out': 'ログアウト',
   // Developer
   'CPU workers': 'CPU ワーカー数',
