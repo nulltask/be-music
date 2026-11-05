@@ -88,7 +88,7 @@ textarea {
   .player-service-header header nav {
     gap: 2px;
   }
-  .player-service-header [data-service-header='account'] {
+  .player-service-header :is([data-service-header='account'], [data-service-header='account-loading']) {
     padding-inline: 0.5rem;
   }
 }
@@ -405,6 +405,29 @@ textarea {
   resize: none;
   font-size: 0.8125rem;
   color: var(--muted-foreground);
+}
+/* A multiline monitor and, while its value is read, a shimmering line over it in the same cell, where its first line
+   of text will be. */
+.options-monitor-box {
+  display: grid;
+}
+.options-monitor-box > * {
+  grid-area: 1 / 1;
+}
+.options-monitor-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  pointer-events: none;
+  /* The text area's own border, padding and line box (Basecoat's `textarea`: px-2.5 py-2, text-sm leading), so each
+     line sits where its text will. */
+  border: 1px solid transparent;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: calc(1.25 / 0.875);
+}
+.options-monitor-skeleton > .be-music-skeleton {
+  margin-block: calc((1lh - 1em) / 2);
 }
 .options-monitor-value {
   font-size: 0.8125rem;
@@ -2532,10 +2555,14 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /* Replay slots (replay-slots-panel.ts): a result's slots to save into, and the select bar's replays. */
-.start-account-actions .btn {
+.start-account-actions .btn:not(.be-music-skeleton-fill) {
   background: transparent;
   color: var(--muted-foreground);
   border: 1px solid var(--border);
+}
+/* A placeholder button takes the real one's border box. */
+.start-account-actions .btn.be-music-skeleton-fill {
+  border: 1px solid transparent;
 }
 .start-load-actions {
   display: flex;

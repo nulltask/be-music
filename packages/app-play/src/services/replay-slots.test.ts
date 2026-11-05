@@ -242,6 +242,23 @@ describe('ReplaySlotStore', () => {
     expect(refused.slots(CHART)[0]?.title).toBe('Old');
   });
 
+  test('says when the slots have been read, even when the backend fails', async () => {
+    const store = new ReplaySlotStore({ backend: createMemoryReplaySlotBackend() });
+    expect(store.loaded).toBe(false);
+    await store.load();
+    expect(store.loaded).toBe(true);
+    const failing: ReplaySlotBackend = {
+      ...createMemoryReplaySlotBackend(),
+      listRecords: () => Promise.reject(new Error('blocked')),
+    };
+    const refused = new ReplaySlotStore({ backend: failing });
+    const changes: boolean[] = [];
+    refused.subscribe(() => changes.push(refused.loaded));
+    await refused.load();
+    expect(changes).toEqual([true]);
+    expect(refused.exists(CHART)).toEqual([false, false, false, false]);
+  });
+
   test('empties a slot', async () => {
     const store = new ReplaySlotStore({ backend: createMemoryReplaySlotBackend() });
     await store.save(CHART, 2, { kind: 'chart', replay: replay() }, score(10), 'A');

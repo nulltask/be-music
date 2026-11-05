@@ -72,6 +72,17 @@ chart file が存在しない場合、drop 全体を theme candidate として�
 Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` をロックします。`Esc` を短く押すと通常のシーン操作（プレイ中断を含む）になり、長押しでフルスクリーンを解除します。
 プレイ中に `Backspace` を 0.5 秒長押しすると `Esc` と同じようにプレイを中断します。短く押しただけでは何も起きません。Keyboard Lock の有無に関わらず、どのブラウザでもフルスクリーン中に使えます。
 
+### 読み込み中の表示
+
+Play はページが表示されてから Leaderboard のアカウントを読みます。そのため、アカウントを表示する部分は、置き換わる要素と同じ寸法の shimmer（`@be-music/service-web-theme` の `skeletonTemplate`）から始まります。応答の前に「Sign in」や「Not signed in」が出ることはなく、届いたときに何も動きません。
+
+- **ヘッダー:** アカウントの操作部は、アバターの円、ラベルの上限 12ch の名前の線（`sm` 幅以上）、シェブロンです（`accountLoading`）。アカウントが分かるまではリンクではないので、実はログインしているプレイヤーがクリックしてサインインが開くことはありません。
+- **スタート画面:** アカウントの注記は線で、注記の続きと操作ボタンは本物の文字のまま、読めない shimmer で描きます。このブラウザで前回アカウントを読んだときの形（`be-music.start-account-state`。初回や要求が失敗したときはサインアウトとみなします）を取るので、戻ってきたプレイヤーのカードは高さが変わりません。
+- **Options → Leaderboard → Account:** テキストエリアは 1 行のアカウントと同じ高さの空行を持ち、その上で線が shimmer し、アカウントが届くまで `aria-busy` です。
+- **リプレイスロットのカード:** IndexedDB からスロットを読み終えるまで、リザルトの空のスロットは「Empty」の代わりに線を出します。
+
+読み込み中の各領域は `role="status"` と `aria-busy` を持つグループで、隠れたテキストが何を読み込んでいるか（「アカウントを確認しています…」）を伝えます。`prefers-reduced-motion` のときは shimmer を止め、静止した面だけを出します。
+
 ### Options ダイアログ
 
 **Options** ダイアログはヘッダーの Settings ボタンから開きます（プレイ面が全画面でヘッダーが見えない間は、プレイ面右上の歯車ボタンからも開けます）。Basecoat のダイアログで、分野ごとにタブがあります。Play、View、Keys、Skin、Audio、Library（ステータス行、Open folder / Open files、Library & records、Select、Course、Capture）、Leaderboard、Advanced です。各タブはフォルダーをセクションとして並べます。Play options は項目が多いので、ページ（Judge & gauge、Arrangement、Modifiers、Assist、Practice、Replay / ghost）に分けています。View も Hi-speed、Cover & LIFT、Effects のページに分けています。タブのバーは 1 行に収め、収まらない狭い画面ではバーを横にスクロールします。各項目の横の **?** にカーソルを合わせるかフォーカスすると、Help のその項目の説明が出ます（`ui/options/help.ts` が Help の非表示の Options 説明（`#options-help-content`）から読むので、文章は共通です）。コントロールは `ui/options-controls.ts` にあり、スイッチ、セレクト、数値欄付きスライダー、テキスト欄、読み取り専用の表示、ボタンです。プレイ開始時に読む設定はプレイ中は無効になり、プレイ中に反映される設定（ハイスピード、カバーと LIFT、音量、判定タイミング、ライブで変えられるテンポ）は有効のままです。ここにある設定はすべて記憶されます（`localStorage` の `be-music.option-settings`）。ダイアログ自体は常に閉じた状態で始まります。同じ文書はプレイヤーのオリジンにも置かれ、サーバーが出す HttpOnly Cookie（`__Host-be-music.device`、400 日）で指します。Safari は、そのサイトを開かないまま Safari を 7 日使うと、スクリプトが書いた保存を消します。この Cookie はサーバーが書くので、次に開いたときに設定が戻ります。変更はローカルに即座に保存し、サーバーへの保存は短い待機時間でまとめ、ページを離れる際にも送信します。版番号はサーバーの時計を使わず、最後に確認した編集より進めます。条件付き書き込みにより古い要求が新しい設定を上書きすることを防ぎ、読み取りではどちらのコピーも書き換えません。Reset settings は設定値をすべて消し、遅れて届く保存を拒否するための版情報だけをサーバーに残します。削除が失敗した場合は、タブを閉じても残るローカルの再試行情報を使い、次回の設定復元前に削除を再試行します。スキン単位の Reset to defaults も保存文書に反映します。ベスト記録はこのブラウザーだけに残ります。起動時に旧 `be-music-demo.*` キーを `be-music.*` に移行し、自作コースも旧 IndexedDB データベースから `be-music` へ移します。新しい保存先に値がある場合は、そちらを優先します。
@@ -92,7 +103,7 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
 - **Library & records**: Music / Skin ZIP URL と Load from URLs（`?music=` / `?skin=` と同じ読み込みをその場で実行）、Auto-save play history、Clear best records、Local data…、**Replay slots** フォルダー（スロットごとの自動保存の条件。[replay.ja.md](./replay.ja.md#リプレイスロット) を参照）。
 - **Select**（Library タブ）: Sort、Key filter、Difficulty filter。標準と LR2 の選曲画面の一覧を決め、LR2 スキンのソートとフィルターのボタンでも変わります。beatoraja の選曲画面は MODE と SORT の選択を自分で持ちます。プレイでは読まないので、プレイ中も変えられます。
 - **Capture**: ● Record gameplay video、Video format（既定は MP4 · H.264。MP4 / WebM と H.264 / H.265 / AV1 / VP9 / VP8 から選択）、📸 Screenshot。
-- **Leaderboard**: Submit to Leaderboard、Submit when、Account（ログイン中の handle、または「Not signed in」）、Keep this account、Sign in、Sign out。
+- **Leaderboard**: Submit to Leaderboard、Submit when、Account（ログイン中の handle、または「Not signed in」。読み込み中は shimmer の線）、Keep this account、Sign in、Sign out。
 - **Advanced**（Advanced タブ）: CPU workers、Auto pause on blur、FPS（500 ms ごとに計測し、60 サンプルを保持するネイティブの履歴グラフ）、**BGA video transcode** フォルダー、Reset settings and reload（ベストレコード以外の プレイヤーの保存設定をすべて消去して再読み込み）。
 
 **View → Show invisible notes** は既定で無効です。有効にすると、beatoraja を含むすべてのスキンで不可視のキーサウンドオブジェクトを表示します。プレイ中にも切り替えられます。この確認用マーカーは、キーサウンドの再生、判定、スコアには影響しません。
