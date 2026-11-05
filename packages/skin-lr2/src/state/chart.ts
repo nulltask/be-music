@@ -1,5 +1,10 @@
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { resolveLibraryChartKeyMode, type KeyMode, type LibraryChart } from '@be-music/player-scene-model';
+import {
+  resolveLibraryChartDifficultyValue,
+  resolveLibraryChartKeyMode,
+  type KeyMode,
+  type LibraryChart,
+} from '@be-music/player-scene-model';
 import { LR2_OP, LR2_TEXT } from '../ids/index.ts';
 
 /** What a chart has that LR2's ops 170-179 report. */
@@ -130,11 +135,12 @@ export function resolveLR2ChartText(st: number, chart: LibraryChart): string | u
       return chart.playLevel?.toString() ?? '';
     case LR2_TEXT.DIFFICULTY:
     case LR2_TEXT.DIFFICULTY_ALT:
-      // The `#DIFFICULTY` number, as LR2 draws it; the difficulty ops (150-155) name it.
-      return chart.chart.metadata.difficulty?.toString() ?? '';
+      // The `#DIFFICULTY` number (or the one estimated from the names), as LR2 draws it; the difficulty ops (150-155)
+      // name it.
+      return resolveLibraryChartDifficultyValue(chart)?.toString() ?? '';
     case LR2_TEXT.INSANE_LEVEL:
       // No insane-table level of its own: an INSANE chart's play level.
-      return chart.chart.metadata.difficulty === 5 ? (chart.playLevel?.toString() ?? '') : '';
+      return resolveLibraryChartDifficultyValue(chart) === 5 ? (chart.playLevel?.toString() ?? '') : '';
     default:
       return undefined;
   }

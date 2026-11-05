@@ -8,7 +8,11 @@ import { resolveChartLongNoteMode } from '@be-music/chart-model';
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import type { BeatorajaChartTraits, BeatorajaSelectChartFacts } from '@be-music/skin-beatoraja/scene';
 import { resolveLR2ChartFeatures } from '@be-music/skin-lr2/state';
-import { resolveLibraryChartPlayVariant, type LibraryChart } from '@be-music/player-scene-model';
+import {
+  resolveLibraryChartDifficultyValue,
+  resolveLibraryChartPlayVariant,
+  type LibraryChart,
+} from '@be-music/player-scene-model';
 import { computeBeatorajaChartDensity, type ChartDensity } from '../../../chart/beatoraja/density.ts';
 import { computeBeatorajaChartTotalSeconds } from '../../../chart/beatoraja/duration.ts';
 import { extractChartSubartist } from '../../../chart/beatoraja/meta.ts';
@@ -115,6 +119,7 @@ export function selectChartFacts(chartEntry: LibraryChart): BeatorajaSelectChart
   let facts = SELECT_CHART_FACTS.get(chartEntry);
   if (facts === undefined) {
     const meta = chartEntry.chart.metadata;
+    const difficulty = resolveLibraryChartDifficultyValue(chartEntry);
     let traits: BeatorajaChartTraits | undefined;
     const playVariant = safeResolveChartVariant(chartEntry);
     facts = {
@@ -135,7 +140,7 @@ export function selectChartFacts(chartEntry: LibraryChart): BeatorajaSelectChart
         }
         return traits;
       },
-      ...(meta.difficulty !== undefined ? { difficulty: meta.difficulty } : {}),
+      ...(difficulty !== undefined ? { difficulty } : {}),
       ...(meta.rank !== undefined ? { judgeRank: meta.rank } : {}),
       ...(typeof meta.total === 'number' ? { total: meta.total } : {}),
       lnMode: resolveChartLongNoteMode(chartEntry.chart),

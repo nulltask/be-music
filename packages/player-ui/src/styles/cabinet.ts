@@ -319,6 +319,10 @@ export const cabinetStyles: CSSResult = css`
     font-size: 0.85em;
     font-weight: 700;
   }
+  /* Estimated from the chart's names: the name carries a ? mark, and the plate is dimmed. */
+  .difficulty[data-estimated] {
+    opacity: 0.6;
+  }
   .chart-title {
     min-width: 0;
     text-align: center;

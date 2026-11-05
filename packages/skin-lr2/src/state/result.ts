@@ -1,5 +1,10 @@
 import { resolveClearLamp, resolve____RankIndexFromScore } from '@be-music/player-engine/ruleset';
-import { isAutoPlayResult, type CourseView, type PlayResult } from '@be-music/player-scene-model';
+import {
+  isAutoPlayResult,
+  resolveLibraryChartDifficultyValue,
+  type CourseView,
+  type PlayResult,
+} from '@be-music/player-scene-model';
 import { LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
 import { resolveLR2ChartText, resolveLR2DifficultyOp, resolveLR2KeyModeOp } from './chart.ts';
 import { resolveLR2CourseNumber, resolveLR2CourseOps, resolveLR2CourseText } from './course.ts';
@@ -77,7 +82,7 @@ function resultOps(input: LR2ResultInput): number[] {
   const keyModeOp = resolveLR2KeyModeOp(result.chart);
   ops.push(keyModeOp, keyConfigOp(keyModeOp));
   // A chart without a difficulty reads NORMAL here: the stock skin ships per-difficulty panels for 152-155 only.
-  const difficultyOp = resolveLR2DifficultyOp(result.chart.chart.metadata.difficulty);
+  const difficultyOp = resolveLR2DifficultyOp(resolveLibraryChartDifficultyValue(result.chart));
   ops.push(difficultyOp === LR2_OP.DIFFICULTY_UNDEFINED ? LR2_OP.DIFFICULTY_NORMAL : difficultyOp);
   // The play's lamp, else the one clear-lamp rule over its result.
   const lamp =
