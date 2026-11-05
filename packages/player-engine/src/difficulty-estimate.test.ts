@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { estimateDifficultyFromNames } from './difficulty-estimate.ts';
+import { estimateDifficultyFromNames, estimateDifficultyFromNoteCount } from './difficulty-estimate.ts';
 
 describe('estimateDifficultyFromNames', () => {
   test('reads a difficulty word in the subtitle', () => {
@@ -68,5 +68,23 @@ describe('estimateDifficultyFromNames', () => {
     expect(estimateDifficultyFromNames({ title: 'Song [7KEYS]', fileName: 'song_7.bme' })).toBeUndefined();
     expect(estimateDifficultyFromNames({ title: 'Song (DP)', fileName: 'song_14.bme' })).toBeUndefined();
     expect(estimateDifficultyFromNames({})).toBeUndefined();
+  });
+});
+
+describe('estimateDifficultyFromNoteCount', () => {
+  test("follows beatoraja's note-count bounds", () => {
+    expect(estimateDifficultyFromNoteCount(1)).toBe(1);
+    expect(estimateDifficultyFromNoteCount(249)).toBe(1);
+    expect(estimateDifficultyFromNoteCount(250)).toBe(2);
+    expect(estimateDifficultyFromNoteCount(599)).toBe(2);
+    expect(estimateDifficultyFromNoteCount(600)).toBe(3);
+    expect(estimateDifficultyFromNoteCount(1000)).toBe(4);
+    expect(estimateDifficultyFromNoteCount(1999)).toBe(4);
+    expect(estimateDifficultyFromNoteCount(2000)).toBe(5);
+  });
+
+  test('gives none for a chart without notes', () => {
+    expect(estimateDifficultyFromNoteCount(0)).toBeUndefined();
+    expect(estimateDifficultyFromNoteCount(Number.NaN)).toBeUndefined();
   });
 });

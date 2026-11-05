@@ -113,6 +113,7 @@ describe('designed entries', () => {
       'createLR2ConstantScrollMapper',
       'createScrollDistanceMapper',
       'estimateDifficultyFromNames',
+      'estimateDifficultyFromNoteCount',
       'extractInvisiblePlayableNotes',
       'extractLandmineNotes',
       'extractPlayableNotes',

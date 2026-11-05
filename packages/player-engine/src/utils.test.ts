@@ -51,18 +51,25 @@ describe('player utils', () => {
     expect(resolveDisplayedDifficultyValue(json)).toBeUndefined();
   });
 
-  test('player-utils: shows the declared DIFFICULTY, else one estimated from the names', () => {
+  test('player-utils: shows the declared DIFFICULTY, else one estimated from the names, else from the notes', () => {
     const json = createEmptyJSON('bms');
     json.metadata.title = 'Song';
     json.metadata.subtitle = '[ANOTHER]';
-    expect(resolveDisplayedDifficulty(json, 'song.bms')).toEqual({ value: 4, estimated: true });
+    expect(resolveDisplayedDifficulty(json, { fileName: 'song.bms', noteCount: 300 })).toEqual({
+      value: 4,
+      basis: 'names',
+    });
 
     json.metadata.difficulty = 3;
-    expect(resolveDisplayedDifficulty(json, 'song.bms')).toEqual({ value: 3, estimated: false });
+    expect(resolveDisplayedDifficulty(json, { fileName: 'song.bms' })).toEqual({ value: 3, basis: 'chart' });
 
     json.metadata.difficulty = 0;
     json.metadata.subtitle = undefined;
-    expect(resolveDisplayedDifficulty(json, 'song_7h.bms')).toEqual({ value: 3, estimated: true });
-    expect(resolveDisplayedDifficulty(json, 'song.bms')).toBeUndefined();
+    expect(resolveDisplayedDifficulty(json, { fileName: 'song_7h.bms' })).toEqual({ value: 3, basis: 'names' });
+    expect(resolveDisplayedDifficulty(json, { fileName: 'song.bms', noteCount: 300 })).toEqual({
+      value: 2,
+      basis: 'notes',
+    });
+    expect(resolveDisplayedDifficulty(json, { fileName: 'song.bms' })).toBeUndefined();
   });
 });

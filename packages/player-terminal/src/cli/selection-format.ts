@@ -10,8 +10,8 @@ export interface SelectionDisplayEntry {
   totalNotes?: number;
   player?: number;
   difficulty?: number;
-  /** `difficulty` was estimated from the chart's names, not named by the chart. */
-  difficultyEstimated?: boolean;
+  /** Where an estimated `difficulty` comes from: the chart's names or its note count; absent for the chart's own. */
+  difficultyBasis?: 'names' | 'notes';
   rank?: number;
   rankLabel?: string;
   playLevel?: BeMusicPlayLevel;
@@ -45,10 +45,7 @@ export function createSelectionColumnLayout(
       continue;
     }
     playerWidth = Math.max(playerWidth, formatPlayerLabel(entry.player).length);
-    difficultyWidth = Math.max(
-      difficultyWidth,
-      formatDifficultyLabel(entry.difficulty, entry.difficultyEstimated).length,
-    );
+    difficultyWidth = Math.max(difficultyWidth, formatDifficultyLabel(entry.difficulty, entry.difficultyBasis).length);
     rankWidth = Math.max(rankWidth, formatRankCellValue(entry).length);
     playLevelWidth = Math.max(playLevelWidth, measureDisplayWidth(formatPlayLevelCellValue(entry.playLevel)));
     bpmWidth = Math.max(bpmWidth, formatBPMLabel(entry.bpmMin, entry.bpmInitial, entry.bpmMax).length);
@@ -100,7 +97,7 @@ export function formatSelectionEntryLabel(entry: SelectionDisplayEntry, layout: 
   const file = formatColumnCell(`  ${entry.fileLabel ?? ''}`, layout.fileWidth);
   const player = formatColumnCell(formatPlayerLabel(entry.player), layout.playerWidth, 'right');
   const difficulty = formatColumnCell(
-    formatDifficultyLabel(entry.difficulty, entry.difficultyEstimated),
+    formatDifficultyLabel(entry.difficulty, entry.difficultyBasis),
     layout.difficultyWidth,
     'right',
   );
@@ -147,8 +144,11 @@ export function formatPlayerLabel(value: number | undefined): string {
   return String(normalized);
 }
 
-/** A difficulty 1–5 as its number, followed by `?` when it was estimated from the chart's names (`3?`); `-` otherwise. */
-export function formatDifficultyLabel(value: number | undefined, estimated = false): string {
+/**
+ * A difficulty 1–5 as its number, followed by `?` when it was estimated from the chart's names (`3?`) and `??` when
+ * from its note count (`3??`); `-` otherwise.
+ */
+export function formatDifficultyLabel(value: number | undefined, basis?: 'names' | 'notes'): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return '-';
   }
@@ -156,7 +156,7 @@ export function formatDifficultyLabel(value: number | undefined, estimated = fal
   if (normalized < 1 || normalized > 5) {
     return '-';
   }
-  return estimated ? `${normalized}?` : String(normalized);
+  return basis === 'names' ? `${normalized}?` : basis === 'notes' ? `${normalized}??` : String(normalized);
 }
 
 export function formatRankLabel(value: number | undefined): string {

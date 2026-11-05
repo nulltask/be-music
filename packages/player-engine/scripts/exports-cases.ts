@@ -2044,7 +2044,7 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
   });
   define('player-engine.display.resolveDisplayedDifficulty', {
     run: (fixtures) => {
-      displayAPI.resolveDisplayedDifficulty(fixtures.sampleBmsJSON, 'sample_7a.bms');
+      displayAPI.resolveDisplayedDifficulty(fixtures.sampleBmsJSON, { fileName: 'sample_7a.bms', noteCount: 777 });
     },
   });
   define('player-engine.display.estimateDifficultyFromNames', {
@@ -2054,6 +2054,11 @@ function registerDisplayCases(define: DefineBenchmarkCase): void {
         subtitle: '-remix-',
         fileName: 'bench_song_SPA.bms',
       });
+    },
+  });
+  define('player-engine.display.estimateDifficultyFromNoteCount', {
+    run: () => {
+      displayAPI.estimateDifficultyFromNoteCount(1234);
     },
   });
   define('player-engine.display.formatSeconds', {

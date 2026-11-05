@@ -9,10 +9,12 @@ import { decodeBMSText, parseChart, resolveBMSControlFlow } from '@be-music/char
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import {
   estimateDifficultyFromNames,
+  estimateDifficultyFromNoteCount,
   resolveDisplayedDifficultyValue,
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
+  type DifficultyBasis,
   type DisplayedDifficulty,
 } from '@be-music/player-engine/display';
 import { resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
@@ -90,8 +92,8 @@ export type ChartSelectionEntry =
       totalNotes?: number;
       player?: number;
       difficulty?: number;
-      /** `difficulty` was estimated from the chart's names (`resolveChartSummaryDifficulty`). */
-      difficultyEstimated?: boolean;
+      /** Where an estimated `difficulty` comes from (`resolveChartSummaryDifficulty`); absent for the chart's own. */
+      difficultyBasis?: Exclude<DifficultyBasis, 'chart'>;
       rank?: number;
       rankLabel?: string;
       playLevel?: BeMusicPlayLevel;
@@ -391,7 +393,7 @@ function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartS
         totalNotes: chart.totalNotes,
         player: chart.player,
         difficulty: difficulty?.value,
-        ...(difficulty?.estimated === true ? { difficultyEstimated: true } : {}),
+        ...(difficulty !== undefined && difficulty.basis !== 'chart' ? { difficultyBasis: difficulty.basis } : {}),
         rank: chart.rank,
         rankLabel: chart.rankLabel,
         playLevel: chart.playLevel,
@@ -550,25 +552,31 @@ function decodeUTF8Buffer(buffer: Buffer): string {
 }
 
 /**
- * The difficulty a chart is listed, sorted and filtered under: its `#DIFFICULTY`, else the one its title, subtitle and
- * file name suggest (`estimateDifficultyFromNames`). The estimate is worked out here rather than kept in the persisted
- * summary, so a cached summary picks up changes to the estimate's rules.
+ * The difficulty a chart is listed, sorted and filtered under: its `#DIFFICULTY`; else the one its title, subtitle and
+ * file name suggest (`estimateDifficultyFromNames`); else the one its note count gives (`estimateDifficultyFromNoteCount`).
+ * The estimate is worked out here rather than kept in the persisted summary, so a cached summary picks up changes to
+ * the estimate's rules.
  */
 export function resolveChartSummaryDifficulty(chart: {
   difficulty?: number;
   title?: string;
   subtitle?: string;
   fileLabel: string;
+  totalNotes?: number;
 }): DisplayedDifficulty | undefined {
   if (chart.difficulty !== undefined) {
-    return { value: chart.difficulty, estimated: false };
+    return { value: chart.difficulty, basis: 'chart' };
   }
-  const estimated = estimateDifficultyFromNames({
+  const named = estimateDifficultyFromNames({
     title: chart.title,
     subtitle: chart.subtitle,
     fileName: chart.fileLabel,
   });
-  return estimated !== undefined ? { value: estimated, estimated: true } : undefined;
+  if (named !== undefined) {
+    return { value: named, basis: 'names' };
+  }
+  const counted = chart.totalNotes !== undefined ? estimateDifficultyFromNoteCount(chart.totalNotes) : undefined;
+  return counted !== undefined ? { value: counted, basis: 'notes' } : undefined;
 }
 
 function buildChartSelectionContentHash(sourceBuffer: Buffer): string {

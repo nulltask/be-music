@@ -38,7 +38,12 @@ export {
   resolveDisplayedPlayLevelValue,
   type DisplayedDifficulty,
 } from './utils.ts';
-export { estimateDifficultyFromNames, type DifficultyNames } from './difficulty-estimate.ts';
+export {
+  estimateDifficultyFromNames,
+  estimateDifficultyFromNoteCount,
+  type DifficultyBasis,
+  type DifficultyNames,
+} from './difficulty-estimate.ts';
 export {
   DEFAULT_TUI_NOTE_HEIGHT,
   MAX_TUI_NOTE_HEIGHT,

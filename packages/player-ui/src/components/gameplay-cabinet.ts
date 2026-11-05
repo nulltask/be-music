@@ -65,7 +65,8 @@ export function renderGameplayCabinet({
     : { ...gaugeBox, x: split, w: gaugeBox.x + gaugeBox.w - split };
   const hiSpeed = (r.hiSpeed ?? 0).toFixed(r.floatingHiSpeed ? 2 : 1);
   const difficulty = resolveDifficultyName(f.chart);
-  const difficultyEstimated = resolveDifficulty(f.chart)?.estimated === true;
+  const difficultyBasis = resolveDifficulty(f.chart)?.basis;
+  const difficultyEstimate = difficultyBasis === 'chart' ? undefined : difficultyBasis;
   const level = f.chart?.playLevel;
   const counts = [
     ['PG', panels.judgments.perfect],
@@ -175,7 +176,7 @@ export function renderGameplayCabinet({
         <span class="eyebrow">${r.playerName ?? 'Player 1P'}</span>
         ${
           difficulty
-            ? html`<span class="difficulty" part="difficulty" ?data-estimated=${difficultyEstimated}
+            ? html`<span class="difficulty" part="difficulty" data-estimated=${difficultyEstimate ?? nothing}
                 >${difficulty}</span
               >`
             : nothing
