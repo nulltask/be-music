@@ -42,7 +42,7 @@ const TEXT = {
     title: 'Be-Music Dashboard',
     signedIn: (name: string, handle: string) => `${name}（@${handle}）でログイン中です。`,
     anonymous: (handle: string) =>
-      `匿名アカウント @${handle} でログイン中です。パスキーを作ると、ほかの端末でも使えます。`,
+      `ゲストアカウント @${handle} でログイン中です。パスキー・Google・Discord で保存すると、ほかの端末でも使えます。`,
     signedOut: 'ログインしていません。',
     play: 'プレイする',
     leaderboard: 'ランキングを見る',
@@ -51,7 +51,8 @@ const TEXT = {
   en: {
     title: 'Be-Music Dashboard',
     signedIn: (name: string, handle: string) => `Signed in as ${name} (@${handle}).`,
-    anonymous: (handle: string) => `Signed in anonymously as @${handle}. Create a passkey to use it on other devices.`,
+    anonymous: (handle: string) =>
+      `Signed in as a guest, @${handle}. Keep the account with a passkey, Google or Discord to use it on other devices.`,
     signedOut: 'Not signed in.',
     play: 'Play',
     leaderboard: 'Leaderboard',

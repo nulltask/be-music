@@ -460,10 +460,10 @@ export const OPTIONS_HELP_TEMPLATE = html`
             Sends a play only when it beats your best EX-SCORE on the chart, its first play always (default), or every
             play. Course runs are always sent.
           </dd>
-          <dt data-for="Account|Create passkey (keep this account)|Sign in with passkey|Sign out">
-            Account · Create passkey · Sign in with passkey · Sign out
+          <dt data-for="Account|Keep this account|Sign in|Sign out">
+            Account · Keep this account · Sign in · Sign out
           </dt>
-          <dd>Shows who is signed in, keeps the account with a passkey, and signs in or out.</dd>
+          <dd>Shows who is signed in, keeps a guest account with a passkey, Google or Discord, and signs in or out.</dd>
         </dl>
       </section>
       <section class="help-menu-folder">
@@ -940,10 +940,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
             その譜面の自己ベスト EX-SCORE を超えたプレイだけ (初回は必ず、既定)
             か、毎回送るかを選びます。コースは常に送ります。
           </dd>
-          <dt data-for="Account|Create passkey (keep this account)|Sign in with passkey|Sign out">
-            Account · Create passkey · Sign in with passkey · Sign out
+          <dt data-for="Account|Keep this account|Sign in|Sign out">
+            Account · Keep this account · Sign in · Sign out
           </dt>
-          <dd>サインイン中のアカウントの表示、パスキーでのアカウントの保存、サインインとサインアウト。</dd>
+          <dd>
+            ログイン中のアカウントの表示、パスキー・Google・Discord でのゲストアカウントの保存、ログインとログアウト。
+          </dd>
         </dl>
       </section>
       <section class="help-menu-folder">

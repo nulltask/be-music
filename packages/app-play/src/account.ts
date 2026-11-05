@@ -25,8 +25,11 @@ export async function loadLeaderboardAccount(doFetch: typeof fetch = fetch): Pro
   }
 }
 
-/** Open Accounts to manage the shared account and enroll passkeys on the correct relying-party origin. */
-export async function createLeaderboardPasskey(): Promise<AccountActionResult> {
+/**
+ * Open Accounts to manage the shared account: keep a guest account there with a passkey (on the correct relying-party
+ * origin), Google or Discord.
+ */
+export async function keepLeaderboardAccount(): Promise<AccountActionResult> {
   location.assign('/api/auth/manage');
   return { ok: true };
 }
@@ -36,7 +39,7 @@ export type AccountProvider = 'google' | 'discord';
 
 /**
  * Accounts sign-in for this page. `method` asks Accounts to start Google or Discord; omitted, the
- * login page offers a passkey, as {@link signInWithLeaderboardPasskey} does.
+ * login page offers a passkey, as {@link signInToLeaderboard} does.
  */
 export function accountSignInPath(returnTo: string, method?: AccountProvider): string {
   const params = new URLSearchParams();
@@ -53,8 +56,8 @@ export function accountProviderFromAction(action: string | undefined): AccountPr
   return undefined;
 }
 
-/** Open Accounts to sign in; the OIDC callback returns to this player. */
-export async function signInWithLeaderboardPasskey(): Promise<AccountActionResult> {
+/** Open Accounts to sign in with any method it offers; the OIDC callback returns to this player. */
+export async function signInToLeaderboard(): Promise<AccountActionResult> {
   location.assign(accountSignInPath(`${location.pathname}${location.search}`));
   return { ok: true };
 }
@@ -124,8 +127,10 @@ export async function signOutOfLeaderboard(): Promise<AccountActionResult> {
 export function describeLeaderboardAccount(account: LeaderboardAccount | undefined): string {
   const copy = playerText().account;
   if (account === undefined) return copy.notSignedIn;
-  // Short enough for the Options dialog row; the "Create passkey (keep this account)" button carries the hint.
+  // Short enough for the Options dialog row; the "Keep this account" button carries the hint.
   if (account.anonymous) return `${account.handle} (${copy.anonymous})`;
+  // An account kept with Google or Discord alone has no passkey to count.
+  if (account.passkeys === 0) return `${account.displayName} @${account.handle}`;
   return `${account.displayName} @${account.handle} · ${copy.passkey(account.passkeys)}`;
 }
 
@@ -177,8 +182,8 @@ export interface StartAccountView {
   href: string | undefined;
   actions: StartAccountAction[];
   /**
-   * Where submitted plays go when that is not plain from the label: without an account, to an anonymous one this
-   * browser makes on the first submission, which the rankings leave out. Undefined when signed in.
+   * What the player needs to know about where plays go: signed out, that submitting needs an account (a guest one is
+   * enough); as a guest, that the rankings leave its plays out until it is kept. Undefined when signed in.
    */
   hint: string | undefined;
 }
@@ -196,9 +201,8 @@ export function startAccountActionLabels(): Readonly<Record<StartAccountAction, 
 }
 
 /**
- * The start card's account row. Signed out: sign in with a passkey, or sign up (an account kept by a new passkey).
- * Anonymous (the first submitted play made the account): keep it with a passkey, or sign in to another one, which takes
- * this browser's plays along. Signed in: the player's page and signing out.
+ * The start card's account row. Signed out: sign in, or sign up. Guest: keep it with a passkey, Google or Discord, or
+ * sign in to another account, which takes this browser's plays along. Signed in: the player's page and signing out.
  */
 export function describeStartAccount(account: LeaderboardAccount | undefined): StartAccountView {
   const copy = playerText().account;
