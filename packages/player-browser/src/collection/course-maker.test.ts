@@ -268,6 +268,10 @@ describe('RANDOM MIX', () => {
     courses.setRandomMixConditions({ ...courses.randomMixConditions, keyModes: [14, 7], count: 'infinity', loops: 3 });
     expect(courses.randomMixConditions).toMatchObject({ keyModes: [7, 14], count: 'infinity', loops: 3 });
     expect(changes.at(-1)).toBe('settings');
+    courses.setRandomMixSettings({ ...courses.randomMixSettings, maxBPM: 1234, bpmRange: 20 });
+    expect(courses.randomMixSettings).toMatchObject({ maxBPM: 990, bpmRange: 20 });
+    courses.setDefaultConnection('cut-fit');
+    expect(courses.defaultConnection).toBe('cut-fit');
     const restored = maker();
     restored.restore({ courses: [], randomMixConditions: courses.randomMixConditions });
     expect(restored.randomMixConditions).toEqual(courses.randomMixConditions);
