@@ -274,8 +274,8 @@ function resolveDoublePlayCabinet(playfield: BeMusicGameplayLayout['playfield'])
 
 /**
  * Two independent players, with their gauges under their own keys and shared information around the monitor. Each
- * side's score and hi-speed span at least a 7-key bank ({@link TWO_PLAYER_BANK_WIDTH}) from its outer edge, so a 5-key
- * bank keeps the 7-key boxes.
+ * side's gauge, score and hi-speed span at least a 7-key bank ({@link TWO_PLAYER_BANK_WIDTH}) from its outer edge, so a
+ * 5-key bank keeps the 7-key boxes.
  */
 function resolveTwoPlayerCabinet(playfield: BeMusicGameplayLayout['playfield']): CabinetLayout {
   const one = playfield.sides['1P']!;
@@ -297,12 +297,12 @@ function resolveTwoPlayerCabinet(playfield: BeMusicGameplayLayout['playfield']):
     play: { x: one.left - 8, y: playfield.top, w: figuresWidth + 16, h: 464 - playfield.top },
     progress: { x: one.left - 7, y: playfield.top + 4, w: 4, h: playfield.judgementY - playfield.top - 8 },
     keys: { x: one.left, y: keysY, w: two.right - one.left, h: 28 },
-    gauge: { x: one.left, y: gaugeY, w: sideWidth, h: 12 },
+    gauge: { x: one.left, y: gaugeY, w: figuresWidth, h: 12 },
     gaugeLabelY: (keysY + 28 + gaugeY) / 2,
     score,
     hiSpeed,
     secondSide: {
-      gauge: { x: two.left, y: gaugeY, w: two.right - two.left, h: 12 },
+      gauge: { x: secondLeft, y: gaugeY, w: figuresWidth, h: 12 },
       score: { ...score, x: secondLeft },
       hiSpeed: { ...hiSpeed, x: secondLeft + scoreWidth + GAP },
     },
