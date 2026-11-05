@@ -50,6 +50,12 @@ async function done(result: unknown): Promise<void> {
     return;
   }
   if (value?.data?.url) {
+    // Signing in for an app answers with the app's return URL at once. A new account is welcomed first; the welcome
+    // asks for a fresh return URL when it is done, and the one here goes unused.
+    if (query && (await needsWelcome())) {
+      location.assign(`/welcome?${new URLSearchParams({ oauth_query: query })}`);
+      return;
+    }
     location.assign(value.data.url);
     return;
   }
