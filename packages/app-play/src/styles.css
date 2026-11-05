@@ -250,6 +250,36 @@ textarea {
 .options-row {
   gap: 12px;
 }
+/* The Camera tab's preview (ui/options/bga-camera.ts): the camera as the BGA frame shows it, mirrored or not. */
+.options-camera-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 420px;
+  margin-inline: auto;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  background: #000;
+}
+.options-camera-preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.options-camera-preview-video[data-mirror] {
+  transform: scaleX(-1);
+}
+.options-camera-preview-message {
+  margin: 0;
+  padding: 0 16px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--muted-foreground);
+}
 /* The BGA camera folder's state and privacy note (ui/options/bga-camera.ts). */
 .options-camera-note {
   display: grid;

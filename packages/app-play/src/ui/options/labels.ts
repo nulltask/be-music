@@ -193,6 +193,8 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   Camera: 'カメラ',
   'Allow camera access': 'カメラへのアクセスを許可',
   'Mirror camera': 'カメラを左右反転',
+  'Preview camera': 'カメラをプレビュー',
+  'Stop preview': 'プレビューを止める',
   'Reset to defaults': '既定に戻す',
   // Audio
   Mute: 'ミュート',

@@ -214,6 +214,52 @@ describe('BGACameraService', () => {
     expect(service.namesKnown).toBe(true);
   });
 
+  test('previews the picked camera whether the setting is on or not, and closes it when stopped', async () => {
+    const { service, streams } = setup();
+    await service.watch();
+    service.setDevice('desk-id');
+    await service.startPreview();
+    expect(service.previewing).toBe(true);
+    expect(service.previewStream).toBe(streams[0] as unknown as MediaStream);
+    expect(streams[0]!.track.getSettings().deviceId).toBe('desk-id');
+    service.stopPreview();
+    expect(streams[0]!.track.stopped).toBe(true);
+    expect(service.previewStream).toBeUndefined();
+  });
+
+  test('shares the play camera with the preview, and opens its own once the play leaves', async () => {
+    const { service, media, scene, streams } = setup({
+      stored: '{"enabled":true,"deviceId":"","label":"","mirror":false}',
+    });
+    await service.startPreview();
+    expect(streams).toHaveLength(1);
+    service.follow(scene);
+    await settle();
+    // The play's camera replaces the preview's own.
+    expect(streams[0]!.track.stopped).toBe(true);
+    expect(service.previewStream).toBe(scene.camera!.stream);
+    service.follow(undefined);
+    await settle();
+    expect(media.getUserMedia).toHaveBeenCalledTimes(3);
+    expect(service.previewStream).toBe(streams[2] as unknown as MediaStream);
+    expect(streams[2]!.track.stopped).toBe(false);
+  });
+
+  test('says why the preview could not open', async () => {
+    const { service } = setup({ denied: true });
+    await service.startPreview();
+    expect(service.previewing).toBe(false);
+    expect(service.previewProblem).toBe('denied');
+  });
+
+  test('stops the preview when its camera ends', async () => {
+    const { service, streams } = setup();
+    await service.startPreview();
+    streams[0]!.track.end();
+    expect(service.previewing).toBe(false);
+    expect(service.previewProblem).toBe('missing');
+  });
+
   test('is unsupported where the page has no camera access', () => {
     const service = new BGACameraService({ mediaDevices: undefined, storage: undefined });
     expect(service.status).toBe('unsupported');
