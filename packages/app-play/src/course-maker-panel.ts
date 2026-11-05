@@ -143,7 +143,8 @@ function download(filename: string, text: string, type = 'application/xml'): voi
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function connectionSelect(
+/** A select of LR2's NONSTOP connections. */
+export function connectionSelect(
   value: NonstopConnection,
   onChange: (value: NonstopConnection) => void,
   disabled = false,
@@ -157,19 +158,19 @@ function connectionSelect(
   </select>`;
 }
 
-/** The RANDOM MIX settings in LR2's button order (260-266), with what the dialog calls each. */
-const RANDOM_MIX_FIELDS: readonly { readonly setting: LR2RandomMixSetting; readonly label: () => string }[] = [
+/**
+ * The RANDOM MIX settings a draw still reads, in LR2's button order (260, 263-265), with what the dialogs call each. The
+ * level limits and stage count (buttons 261, 262, 266) are the RANDOM MIX dialog's now.
+ */
+export const RANDOM_MIX_FIELDS: readonly { readonly setting: LR2RandomMixSetting; readonly label: () => string }[] = [
   { setting: 'preferredLevel', label: () => playerText().course.randomMix.preferredLevel },
-  { setting: 'maxLevel', label: () => playerText().course.randomMix.maxLevel },
-  { setting: 'minLevel', label: () => playerText().course.randomMix.minLevel },
   { setting: 'bpmRange', label: () => playerText().course.randomMix.bpmRange },
   { setting: 'maxBPM', label: () => playerText().course.randomMix.maxBPM },
   { setting: 'minBPM', label: () => playerText().course.randomMix.minBPM },
-  { setting: 'stageCount', label: () => playerText().course.randomMix.stageCount },
 ];
 
 /** A select of every value of a RANDOM MIX setting, written as LR2's texts 190-196 write them. */
-function randomMixSelect(
+export function randomMixSelect(
   setting: LR2RandomMixSetting,
   value: number,
   onChange: (value: number) => void,
