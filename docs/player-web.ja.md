@@ -99,10 +99,11 @@ Play はページが表示されてから Leaderboard のアカウントを読�
 - **View**（View タブ）: レーンの見え方。**Hi-speed** には [HS-FIX](./play-options.ja.md#start-bpm-hs-fix)、Normal・FLOATING・CLASSIC の各ハイスピード、Fixed display area、Hi-speed が、**Cover & LIFT** には Display area info、Effect 1P / 2P、Lane cover、Cover height、LIFT が、**Effects** には BPM GUIDE、BPM change warning、Visual CONSTANT、Judged notes、Show invisible notes（後述）があります。ハイスピード、カバー、LIFT、CONSTANT のノーツの表示時間とフェード、Judged notes、Show invisible notes はその場で反映します。それ以外は曲の開始時に確定し、プレイ中は無効になります。
 - **Course**（Library タブ）: Skip stage results、My courses…、NONSTOP placement（曲の開始時に確定し、プレイ中は無効）、Table URL と Import table courses。
 - **Skin & display**（Skin タブ）: Skin system で使用するファミリーを選び、未読み込みの場合はドロップを促します。**Built-in** タブには Built-in skin、Skin effects、**Skin settings**、**Add skin**、**LR2** タブには Load LR2 skin と検出したテーマの選択、**beatoraja** タブには Load beatoraja skin とシーンごとの選択を配置します。タブは設定の分類であり、開いただけでは使用中のスキンは切り替わりません。Render resolution、Play layout、Toggle fullscreen は共通です。スキンを検知すると、テーマのアセットを置き換える前に確認ダイアログを表示します。キャンセルすると現在のスキンを維持し、同じドロップに含まれる譜面は読み込みます。LR2 と beatoraja が両方含まれる場合は、どちらを使用するか選べます。
+- **BGA camera**（Skin タブ）: Show camera in BGA、Camera、Allow camera access、Mirror camera と、カメラの状態を示す一文。プレイ中にもすぐ反映されます。カメラは端末のものなので、同期する設定ドキュメントではなく、このブラウザだけに保存します（`be-music.bga-camera`）。[BGA カメラ](#bga-カメラ) を参照。
 - **Audio**: Mute、Master / Key sound / BGM の音量 (%)、Play in silent mode（Audio Session API があるブラウザーのみ。後述）、Peak gain (next play)、**Compressor** フォルダー（Enabled、stage ごとの切り替え、各 compressor の threshold / knee / ratio / attack / release とリセット）。Mute はマスター音量を保持したまま、プレイヤーの音声をすべて消音します。Peak gain はオンにするまでオフで、ほかの設定と一緒に記憶されます。次のプレイで、デコードした全サンプルを一つのゲインで揃え、一番大きいピークを約 −3 dBFS にします。
 - **Library & records**: Music / Skin ZIP URL と Load from URLs（`?music=` / `?skin=` と同じ読み込みをその場で実行）、Auto-save play history、Clear best records、Local data…、**Replay slots** フォルダー（スロットごとの自動保存の条件。[replay.ja.md](./replay.ja.md#リプレイスロット) を参照）。
 - **Select**（Library タブ）: Sort、Key filter、Difficulty filter。標準と LR2 の選曲画面の一覧を決め、LR2 スキンのソートとフィルターのボタンでも変わります。beatoraja の選曲画面は MODE と SORT の選択を自分で持ちます。プレイでは読まないので、プレイ中も変えられます。
-- **Capture**: ● Record gameplay video、Video format（既定は MP4 · H.264。MP4 / WebM と H.264 / H.265 / AV1 / VP9 / VP8 から選択）、📸 Screenshot。
+- **Capture**: ● Record gameplay video、Video format（既定は MP4 · H.264。MP4 / WebM と H.264 / H.265 / AV1 / VP9 / VP8 から選択）、📸 Screenshot。BGA の枠に映したカメラの映像も記録されます。
 - **Leaderboard**: Submit to Leaderboard、Submit when、Account（ログイン中の handle、または「Not signed in」。読み込み中は shimmer の線）、Keep this account、Sign in、Sign out。
 - **Advanced**（Advanced タブ）: CPU workers、Auto pause on blur、FPS（500 ms ごとに計測し、60 サンプルを保持するネイティブの履歴グラフ）、**BGA video transcode** フォルダー、Reset settings and reload（ベストレコード以外の プレイヤーの保存設定をすべて消去して再読み込み）。
 
@@ -904,6 +905,32 @@ flowchart LR
 - それ以外のページ（`Cross-Origin-Embedder-Policy: credentialless` に対応しない Safari など、ページを isolated にできないブラウザー）、「Use WebCodecs encoder」がオフのとき、WebCodecs のエンコーダが失敗したときは、ffmpeg 自身の libx264 で直接 fragmented MP4 を書きます。デコードと同じスレッドで符号化するので、デコードの速さは自然に抑えられます。
 - media source は stream が終わるまで仮の長さを宣言するため、まだ transcode されていない位置へシークした cue はそこでフレームを待ちます。複数のトラックで同じバイト列を使う動画は 1 つの transcode を共有し、transcode は同時に 2 本まで走り、それを使う最後の動画を閉じると取り消します。
 - Worker か MSE がないとき、または最初のフレームより前に stream が失敗したときは、従来どおりファイル全体を transcode してから再生します。
+
+### BGA カメラ
+
+Options → Skin → **BGA camera** で、プレイ画面の BGA の枠に、譜面の BGA の代わりにカメラの映像を映せます。ウェブカメラで手元を写して打鍵の様子を見せたり、配信で顔を出したりするときに使います。内蔵スキン（Synesthesia・Plain・Native）、LR2 スキン、beatoraja スキンのどれでも使えます。
+
+```mermaid
+stateDiagram-v2
+    [*] --> off
+    off --> standby: オンにする
+    standby --> starting: プレイを表示
+    starting --> live: getUserMedia
+    starting --> denied: 拒否
+    starting --> missing: 未接続
+    live --> standby: プレイを離れる
+    live --> missing: 抜線 / トラック終了
+    missing --> starting: 再接続
+    live --> off: オフにする
+```
+
+- **共通の入口。** アプリの `BGACameraService`（`services/bga-camera.ts`）が `getUserMedia` でカメラを開き、`MediaStream` を `PlayScene.setBGACamera({ stream, mirror })` でプレイに渡します。シーンはそれを `BGACameraFeed`（`media/bga-camera.ts`。譜面の動画 BGA と同じく、ミュートした `<video>` と Pixi の `VideoSource`）に包み、プレイセッションの `bgaCamera` に置きます。`renderBGA`（内蔵と LR2 のプレイ画面）と beatoraja の BGA 層は、譜面の BGA の代わりにその texture をすべての BGA の矩形に、黒地に全体が収まるように描き（`fitBGACameraRect`）、譜面の動画は止めます。BGA を自分で合成する Be-Music Skin（`drawsBGA`。Native スキン）には、256x256 の canvas を `frame.bga.base` として渡します。BGA の設定や譜面に BGA があるかどうかにかかわらず映し、内蔵スキンはそのために BGA の枠を描きます。左右反転は texture を反転する（`groupD8.MIRROR_HORIZONTAL`）ので、sprite は変えません。
+- **カメラが動くとき。** 設定がオンで、プレイがステージにあるときだけです。シーンルーターの `setScene` が表示中のシーンをサービスに伝えるので、選曲・決定・リザルト画面ではカメラを止めます。リトライでは開いているカメラをそのまま引き継ぎます。オン / オフ、カメラ、左右反転の変更は、プレイ中でも次のフレームから反映されます。
+- **カメラの選択。** 一覧は `enumerateDevices` から作り、`devicechange` で更新します。一度カメラを許可するまで、ブラウザはカメラの名前を教えないので、フォルダに **Allow camera access** ボタンを置き、一度だけ許可を求めてすぐカメラを止めます。名前が分かったあとは無効になります。選んだカメラは `deviceId` と名前の両方で覚えるので、ブラウザが id を変えても見つけ直せます（`bga-camera-settings.ts` の `pickCamera`）。
+- **カメラを失ったとき。** プレイ中にカメラが抜かれたり、許可が取り消されたりするとトラックが終わります。サービスはカメラを閉じ、プレイは次のフレームから譜面の BGA に戻り、ステータス行で知らせます。選んだカメラがつながっていなければ待ち、つながったときに開きます。
+- **プライバシー。** 映像はプレイの canvas にしか行かず、どこにも送りません。Capture の録画は canvas を記録するので、BGA の枠ごとカメラの映像も記録されます。
+- **cross-origin isolation。** `MediaStream` は cross-origin のリソースではないので、COEP `credentialless` の影響を受けません。cross-origin isolated の状態で、Chromium の偽カメラ（`--use-fake-device-for-media-stream`）を使って確かめました。
+- **リプレイとゴースト。** リプレイも同じプレイシーンで再生するので、カメラを映せます。ゴーストのプレイフィールドやペースメーカーは自分の BGA を描かないので、影響しません。
 
 ### オーディオサービス
 

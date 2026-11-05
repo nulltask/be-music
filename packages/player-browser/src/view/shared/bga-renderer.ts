@@ -1,6 +1,8 @@
 import { keyBoundBGAResourceKey } from '../../chart/key-bound-bga.ts';
 import { canDrawBGAPixelsOnGPU, drawBGAPixelsOnGPU } from '../../media/bga-gpu-pixels.ts';
 import { isColorKeyVideoCanvas } from '../../media/color-key-video.ts';
+import type { BGACameraFeed } from '../../media/bga-camera.ts';
+import { fitBGACameraRect } from '../../media/bga-camera-fit.ts';
 /**
  * The chart's BGA on the built-in and LR2 play screens: composites the base, layer and POOR
  * images (or a stitched NONSTOP chart's per-stage stacks) into the skin's BGA rects, or hands them to a Be-Music Skin
@@ -55,6 +57,11 @@ export interface BGARendererContext {
 export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: number = seconds): void {
   ctx.bgaLayerPool.begin();
   ctx.bgaTargetsScratch.length = 0;
+  const camera = ctx.play.bgaCamera;
+  if (camera !== undefined) {
+    renderCameraBGA(ctx, camera);
+    return;
+  }
   // Honor the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). - `'OFF'` → never render - `'AUTOPLAY_ONLY'` → render
   // only when autoplay is on - `'ON'` (default) → render whenever the chart has BGA
   const bgaMode = ctx.options.bga ?? 'ON';
@@ -350,6 +357,50 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         );
     }
     if (keyBoundKey && !bga.noLayer) drawLayer(keyBoundKey, ctx.play.bgaLayerTextures, 'layer2', 1, true);
+  }
+  ctx.bgaLayerPool.end();
+}
+
+/**
+ * Draws the camera in every BGA rect the skin reports, in place of the chart's BGA: fitted whole on a black canvas
+ * (`fitBGACameraRect`). It shows whatever the BGA setting and whether the chart has a BGA, since the player turned it
+ * on. The chart's videos pause; when the camera goes, the next frame starts the active cues' videos again at chart time.
+ */
+function renderCameraBGA(ctx: BGARendererContext, camera: BGACameraFeed): void {
+  for (const [slot, active] of Object.entries(ctx.play.bgaActiveVideos)) {
+    const video = active === undefined ? undefined : ctx.play.bgaVideos.get(active.key)?.video;
+    if (video !== undefined && !video.paused) video.pause();
+    delete ctx.play.bgaActiveVideos[slot];
+  }
+  const binding = ctx.skinBinding;
+  if (binding?.drawsBGA) {
+    const image = camera.image();
+    binding.setBGA(image !== undefined ? { base: image, poorActive: false } : { poorActive: false });
+    ctx.bgaLayerPool.end();
+    return;
+  }
+  const targets = ctx.bgaTargetsScratch;
+  ctx.playfieldSkin.bgaTargets(targets);
+  const texture = camera.texture();
+  for (const bga of targets) {
+    if (bga.w <= 0 || bga.h <= 0) continue;
+    const backdrop = ctx.bgaLayerPool.acquireSprite();
+    backdrop.texture = Texture.WHITE;
+    backdrop.label = 'bga/background';
+    backdrop.position.set(bga.x, bga.y);
+    backdrop.width = bga.w;
+    backdrop.height = bga.h;
+    bga.applyToSprite(backdrop);
+    backdrop.tint = 0x000000;
+    if (texture === undefined) continue;
+    const placed = fitBGACameraRect(texture.width, texture.height, bga);
+    const sprite = ctx.bgaLayerPool.acquireSprite();
+    sprite.texture = texture;
+    sprite.label = 'bga/camera';
+    sprite.position.set(placed.x, placed.y);
+    sprite.width = placed.w;
+    sprite.height = placed.h;
+    bga.applyToSprite(sprite);
   }
   ctx.bgaLayerPool.end();
 }

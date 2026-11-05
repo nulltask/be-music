@@ -3,6 +3,7 @@
  * family and returns the scene to load with `prepare`, show with `PixiSceneHost.setScene` and begin with `start`.
  */
 
+import { BGACameraFeed } from '../media/bga-camera.ts';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
@@ -206,8 +207,20 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   setAutoPauseOnBlur(enabled: boolean): void;
   setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void;
   setShowInvisibleNotes(enabled: boolean): void;
+  /**
+   * Shows `camera.stream` in the BGA frame in place of the chart's BGA, flipped left to right when `camera.mirror` is
+   * set, or the chart's BGA again with `undefined`. Takes effect from the next frame, during a play too. The scene only
+   * shows the stream: the caller opens it and stops its tracks.
+   */
+  setBGACamera(camera: BGACamera | undefined): void;
   /** Ends the scene; `preserveAudioTail` lets a play that ended ring out before its audio closes. */
   dispose(options?: PlayDisposeOptions): void;
+}
+
+/** A camera for the BGA frame ({@link PlayScene.setBGACamera}). */
+export interface BGACamera {
+  readonly stream: MediaStream;
+  readonly mirror: boolean;
 }
 
 /** A family's play view, and what the scene and the play session ask of it. */
@@ -521,8 +534,20 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
     this.familySlot.current.setShowInvisibleNotes(enabled);
   }
 
+  public setBGACamera(camera: BGACamera | undefined): void {
+    const current = this.play.bgaCamera;
+    if (camera !== undefined && current?.stream === camera.stream) {
+      current.mirror = camera.mirror;
+      return;
+    }
+    current?.dispose();
+    this.play.bgaCamera = camera !== undefined && !this.disposed ? new BGACameraFeed(camera.stream, camera) : undefined;
+  }
+
   public override dispose(options: PlayDisposeOptions = {}): void {
     this.playSession.disposeOptions = options;
+    this.play.bgaCamera?.dispose();
+    this.play.bgaCamera = undefined;
     super.dispose();
     this.textures.destroyAll(this.prepareHost ?? this.play.host);
   }

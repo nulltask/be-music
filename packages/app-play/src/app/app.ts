@@ -1,5 +1,6 @@
 import { promptRandomMixConditions } from '../ui/random-mix-dialog.ts';
 import { playerText } from '../player-copy.ts';
+import { BGACameraService } from '../services/bga-camera.ts';
 import { requestPlayerWindowClose } from '../ui/close-window.ts';
 import { DialogPauseController } from '../ui/dialog-pause.ts';
 // Imports are split across `@be-music/player-browser`'s entries (`./host`, `./skin`, `./collection`, `./audio`,
@@ -118,6 +119,8 @@ export class PlayerWebApp {
         await this.sceneHost.setScene(scene);
         // The quick options belong to choosing a chart and playing it.
         this.optionsDialog?.setQuickOptionsShown(role === 'select' || role === 'play');
+        // The BGA camera opens for a play on the stage and closes on every other screen.
+        this.bgaCamera.follow(role === 'play' ? (scene as PlayScene | undefined) : undefined);
         // The replay slots' card belongs to the screen that shows it: the select screen shows it again for its bar, the
         // result route for its run.
         this.replaySlotsPanel.hide();
@@ -267,6 +270,15 @@ export class PlayerWebApp {
   private readonly replaySlotsPanel = new ReplaySlotsPanel({
     service: this.replaySlots,
     replay: (slot) => this.selectView?.replay(slot),
+    setStatus: (text) => this.status.set(text),
+  });
+  /**
+   * The camera a play can show in its BGA frame (Options → Skin → BGA camera). It opens only while a play is on the
+   * stage with the setting on.
+   */
+  private readonly bgaCamera = new BGACameraService({
+    mediaDevices: navigator.mediaDevices,
+    permissions: navigator.permissions,
     setStatus: (text) => this.status.set(text),
   });
   /** The Capture folder's video recording and screenshots: the record armed, the next file name, the format. */
@@ -591,6 +603,7 @@ export class PlayerWebApp {
       ghostReplayFile: this.ghostReplayFile,
       sceneHost: this.sceneHost,
       silentMode: this.silentMode,
+      bgaCamera: this.bgaCamera,
       leaderboard: this.leaderboard,
       library: this.library,
       records: this.records,
