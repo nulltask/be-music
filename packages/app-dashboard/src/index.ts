@@ -3,7 +3,7 @@ import { isLocale, localeFromCookie, localeSetCookie, resolveLocale } from '@be-
 import { createAuth, provisionClients, type Env as AccountsEnv } from './accounts/auth.ts';
 import { handleAccounts } from './accounts/handler.ts';
 import { publicProfile } from './accounts/profile-http.ts';
-import { createProfile } from './accounts/profiles.ts';
+import { createProfile, needsOnboarding } from './accounts/profiles.ts';
 import { openDatabase } from './accounts/db/client.ts';
 import { renderDashboard, type DashboardAccount } from './page.ts';
 
@@ -23,7 +23,14 @@ async function dashboard(request: Request, env: Env): Promise<Response> {
   let account: DashboardAccount | undefined;
   if (session) {
     try {
-      await createProfile(openDatabase(env.DB), session.user.id, session.user.isAnonymous === true);
+      const db = openDatabase(env.DB);
+      await createProfile(db, session.user.id, session.user.isAnonymous === true);
+      // A new account is welcomed first, then comes back here.
+      if (await needsOnboarding(db, session.user.id))
+        return new Response(null, {
+          status: 302,
+          headers: { location: '/welcome?next=%2F', 'cache-control': 'no-store' },
+        });
       const profile = await publicProfile(env, session.user.id);
       if (!profile) throw new Error('Profile unavailable');
       account = {

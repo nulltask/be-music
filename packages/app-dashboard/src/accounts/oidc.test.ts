@@ -287,6 +287,8 @@ describe('Accounts-owned profiles and avatars', () => {
         }),
         profileEnv,
       );
+    // Past the welcome a new account sees first.
+    await call('/api/profile/onboarded', { method: 'POST' });
     const initial = await call('/api/profile');
     expect(initial.status).toBe(200);
     const updated = await call('/api/profile', {

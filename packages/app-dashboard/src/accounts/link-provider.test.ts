@@ -74,6 +74,14 @@ describe('Linking providers onto the signed-in account', () => {
     );
     expect(signIn.status, await signIn.clone().text()).toBe(200);
     const cookie = cookies(signIn);
+    // Past the welcome a new account sees first.
+    await worker.fetch(
+      new Request(`${env.AUTH_ORIGIN}/api/profile/onboarded`, {
+        method: 'POST',
+        headers: { cookie, origin: env.AUTH_ORIGIN },
+      }),
+      env,
+    );
     const userId = ((await signIn.json()) as { user: { id: string } }).user.id;
     const accountPage = await worker.fetch(new Request(`${env.AUTH_ORIGIN}/account`, { headers: { cookie } }), env);
     const html = await accountPage.text();
