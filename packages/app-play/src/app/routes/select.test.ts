@@ -200,7 +200,6 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
       refreshPlayOptionControllers: vi.fn(),
       scheduleFirstRunResolutionDetect: vi.fn(),
       setGhostAvailability: vi.fn(),
-      setPracticeChart: vi.fn(),
     },
     beatorajaSkinOptions: { refreshBeatorajaSelectSkinOptions: vi.fn(), clear: vi.fn() },
     playStatusShown: vi.fn(() => false),

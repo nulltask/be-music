@@ -123,8 +123,6 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Hi-speed': 'ハイスピード',
   // Practice
   PRACTICE: 'PRACTICE',
-  'START TIME ms': 'START TIME ms',
-  'END TIME ms (0 = end)': 'END TIME ms (0 = 最後まで)',
   'GAUGE VALUE': 'GAUGE VALUE',
   'JUDGERANK (0 = chart)': 'JUDGERANK (0 = 譜面の値)',
   'TOTAL (0 = chart)': 'TOTAL (0 = 譜面の値)',

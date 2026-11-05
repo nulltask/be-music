@@ -30,10 +30,12 @@
     "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
+    "@be-music/chart-model": "workspace:*",
     "@be-music/player-skin-sdk": "workspace:*",
     "lit": "^3.3.3"
   },
   "devDependencies": {
+    "@be-music/chart-parser": "workspace:*",
     "@tailwindcss/cli": "^4.3.3",
     "basecoat-css": "^1.0.2",
     "tailwindcss": "^4.3.3"

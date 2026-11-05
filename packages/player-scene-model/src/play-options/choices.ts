@@ -200,8 +200,6 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   longNoteMode: 'LN',
   customJudge: false,
   practice: false,
-  practiceStartMs: 0,
-  practiceEndMs: 0,
   practiceGauge: 'NORMAL',
   practiceGaugeCategory: 'MODE',
   practiceStartGauge: 20,
@@ -326,8 +324,6 @@ export function clampShutter(value: number): number {
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hRandomThresholdBPM: clampHRandomThresholdBPM,
   longNoteRate: clampLongNoteRate,
-  practiceStartMs: (value) => Math.max(0, Math.round(value / 100) * 100),
-  practiceEndMs: (value) => Math.max(0, Math.round(value / 100) * 100),
   practiceStartGauge: (value) => clamp(Math.trunc(value), 1, 120),
   practiceJudgeRank: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 1, 400)),
   practiceTotal: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 10, 5000)),

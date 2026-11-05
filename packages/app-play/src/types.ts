@@ -266,8 +266,6 @@ export interface PlayerGUIState extends PlayTempoSettings {
   longNoteMode: PlayOptions['longNoteMode'];
   customJudge: boolean;
   practice: boolean;
-  practiceStartMs: number;
-  practiceEndMs: number;
   practiceGauge: PlayOptions['practiceGauge'];
   practiceGaugeCategory: PlayOptions['practiceGaugeCategory'];
   practiceStartGauge: number;
