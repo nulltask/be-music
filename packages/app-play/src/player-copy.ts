@@ -284,6 +284,18 @@ const en = {
       stageCount: 'Stages',
     },
   },
+  practice: {
+    title: 'PRACTICE',
+    lead: 'Press a bar to hear it. Shift-press or drag to pick a run of bars, then Start to loop them.',
+    wholeChart: 'No bars picked: the whole chart loops',
+    bars: (first: string, last: string, from: string, to: string) =>
+      first === last ? `Bar ${first} · ${from} → ${to}` : `Bars ${first}–${last} · ${from} → ${to}`,
+    start: 'Start',
+    clear: 'Whole chart',
+    cancel: 'Cancel',
+    loading: 'Reading the chart…',
+    unreadable: 'This chart has no bars to show; Start loops the whole chart.',
+  },
   embed: {
     needTrack: 'Add ?track= with the URL of a chart archive (.zip) to preview it.',
     loadFailed: (message: string) => `Could not load the track: ${message}`,
@@ -567,6 +579,18 @@ const ja: typeof en = {
       minBPM: '最小 BPM',
       stageCount: 'ステージ数',
     },
+  },
+  practice: {
+    title: 'PRACTICE',
+    lead: '小節を押すとその小節を試聴します。Shift を押しながら押すかドラッグすると連続した小節を選べます。スタートで選んだ小節をループします。',
+    wholeChart: '小節を選んでいません。譜面全体をループします',
+    bars: (first, last, from, to) =>
+      first === last ? `小節 ${first} · ${from} → ${to}` : `小節 ${first}–${last} · ${from} → ${to}`,
+    start: 'スタート',
+    clear: '譜面全体',
+    cancel: 'キャンセル',
+    loading: '譜面を読んでいます…',
+    unreadable: 'この譜面には表示できる小節がありません。スタートで譜面全体をループします。',
   },
   embed: {
     needTrack: 'プレビューするには、譜面アーカイブ（.zip）の URL を ?track= に指定してください。',

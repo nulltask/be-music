@@ -21,7 +21,6 @@ import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
 import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
 import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
-import { buildPracticeRangePicker } from './practice-range.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
@@ -346,8 +345,8 @@ export function buildPlayOptionsFolder(
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
   );
-  // PRACTICE (beatoraja's PracticeConfiguration), under every ruleset (#933): a 0 END TIME is the chart's end, a 0
-  // JUDGERANK / TOTAL the chart's.
+  // PRACTICE (beatoraja's PracticeConfiguration), under every ruleset (#933): the bars to loop are picked on the chart's
+  // score as the chart starts (`practice-bars.ts`); a 0 JUDGERANK / TOTAL is the chart's.
   this.practiceControllers = [
     trackPlayOption(
       practice.addBinding(this.guiState, 'practice', { label: 'PRACTICE' }).on('change', ({ value }) => {
@@ -358,7 +357,7 @@ export function buildPlayOptionsFolder(
   ];
   const addPracticeNumbers = (
     entries: readonly (readonly [
-      'practiceStartMs' | 'practiceEndMs' | 'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal',
+      'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal',
       string,
       number,
       number,
@@ -368,20 +367,13 @@ export function buildPlayOptionsFolder(
     for (const [key, label, min, max, step] of entries) {
       this.practiceControllers.push(
         trackPlayOption(
-          practice.addBinding(this.guiState, key, { label, min, max, step }).on('change', ({ value }) => {
-            this.setPlayOptions({ [key]: value });
-            if (key === 'practiceStartMs' || key === 'practiceEndMs') this.practiceRangePicker?.refresh();
-          }),
+          practice
+            .addBinding(this.guiState, key, { label, min, max, step })
+            .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
         ),
       );
     }
   };
-  addPracticeNumbers([
-    ['practiceStartMs', 'START TIME ms', 0, 3_600_000, 100],
-    ['practiceEndMs', 'END TIME ms (0 = end)', 0, 3_600_000, 100],
-  ]);
-  // The range picker under the two times (#948), which writes them as its handles move.
-  buildPracticeRangePicker.call(this, practice);
   addPracticeNumbers([
     ['practiceStartGauge', 'GAUGE VALUE', 1, 120, 1],
     ['practiceJudgeRank', 'JUDGERANK (0 = chart)', 0, 400, 1],
@@ -407,8 +399,8 @@ export function buildPlayOptionsFolder(
   });
   trackPlayOption(practiceCategory.on('change', ({ value }) => this.setPlayOptions({ practiceGaugeCategory: value })));
   this.practiceGaugeCategoryController = practiceCategory;
-  // JUDGERANK and TOTAL, after START TIME, END TIME and GAUGE VALUE.
-  this.practiceJudgeRankAndTotalControllers = this.practiceControllers.slice(4, 6);
+  // JUDGERANK and TOTAL, after GAUGE VALUE.
+  this.practiceJudgeRankAndTotalControllers = this.practiceControllers.slice(2, 4);
   this.practiceControllers.push(practiceGauge);
   this.extraNoteDepthController = trackPlayOption(
     notes

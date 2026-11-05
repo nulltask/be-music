@@ -244,9 +244,25 @@ beatoraja ルールでは Options ダイアログ の **CUSTOM JUDGE (beatoraja)
 
 ## PRACTICE
 
-どのルールでも、Options ダイアログ の **PRACTICE** をオンにするか、beatoraja の選曲スキンの PRACTICE ボタン（315）を押します。PLAY ボタンは通常のモードで始めます。設定は beatoraja の `PracticeConfiguration` に従います。**START TIME ms** と **END TIME ms (0 = end)** は 100 ms 単位、**GAUGE TYPE**、**GAUGE CATEGORY**、**GAUGE VALUE** は 1〜120（既定 20、ゲージの範囲に収めます）、ほかに **JUDGERANK (0 = chart)** と **TOTAL (0 = chart)** があります。対象は単一の譜面で、コース・NONSTOP・リプレイには適用しません。
+どのルールでも、Options ダイアログ の **PRACTICE** をオンにするか、beatoraja の選曲スキンの PRACTICE ボタン（315）を押します。PLAY ボタンは通常のモードで始めます。設定は beatoraja の `PracticeConfiguration` に従い、**GAUGE TYPE**、**GAUGE CATEGORY**、**GAUGE VALUE** は 1〜120（既定 20、ゲージの範囲に収めます）、ほかに **JUDGERANK (0 = chart)** と **TOTAL (0 = chart)** があります。対象は単一の譜面で、コース・NONSTOP・リプレイには適用しません。
 
-2 つの時間の下には範囲ピッカーがあり、選曲画面のカーソル位置の譜面のノーツ密度グラフ（譜面の始まりから最後の小節を閉じる小節線まで、譜面全体）を、開始と終了の 2 つのハンドルとともに描きます（[#948](https://github.com/nulltask/be-music/issues/948)）。マウスか指でドラッグします。押した位置に近いほうのハンドルをつかみ、範囲を 1000 ms 以上に保てる最も近い小節の頭に吸着します。終了のハンドルを最後の小節線に合わせると END TIME は 0（最後まで）になります。キャプションには範囲を `m:ss.s` と両端の BMS の小節番号（`#009`）で表示し、START TIME / END TIME はハンドルに追従し、入力した時間にはハンドルが追従します。ピッカーは PRACTICE がオンのときだけ表示し、ほかの PRACTICE の設定と同様にプレイ中は操作できません。選曲画面が解決済みの譜面（小節のタイムラインと判定対象のノーツ）を読むため、`#RANDOM` のある譜面では曲リストと同じく条件なしの内容を表示します。
+範囲は譜面そのものの上で選びます。PRACTICE をオンにして譜面を選ぶと、決定画面の前にその譜面を表示します。小節を下から上へ列に並べ、各小節に小節番号、プレイモードのレーン上のノーツ・ロングノート・地雷、横にテンポ変化と STOP を描きます（`@be-music/player-ui` の `<be-music-chart-score>`）。SP と DP の譜面（5 / 7 / 10 / 14 KEY）と 9 KEY を表示します。
+
+```mermaid
+flowchart LR
+  start[譜面を選ぶ] --> score[譜面の表示]
+  score -->|小節を押す| audition[その小節を試聴]
+  audition --> score
+  score -->|Shift かドラッグ| bars[連続した小節を選ぶ]
+  bars -->|スタート| loop[小節をループ]
+  score -->|キャンセル / Esc| select[選曲画面]
+```
+
+- **小節を試聴する。** 小節を押すと、その小節だけを AUTO PLAY と同じように鳴らします。小節の中で始まるサンプルをすべて小節線から鳴らし、次の小節線を少し過ぎたところでフェードアウトします。別の小節を押すと、鳴っている小節を止め、新しい小節を頭から鳴らします。鳴っている小節は枠で示します。
+- **小節を選ぶ。** 押すとその小節を選び、Shift を押しながら押すかドラッグすると最初に押した小節から範囲を伸ばすので、1 小節でも連続した複数の小節でも選べます。矢印キーで小節を移り、Shift で範囲を伸ばし、Space で押します。譜面の下には選んだ小節を小節番号と譜面の時刻（`m:ss.s`）で表示します。**譜面全体** で選択を外します。
+- **スタート**（または Enter）で、ほかの開始と同じく決定画面を経て、選んだ小節をループで演奏します。小節を選んでいなければ譜面全体をループします。**キャンセル** か Esc で選曲画面に戻ります。
+
+選んだ小節は、譜面のミリ秒にした PRACTICE の範囲になります。最初の小節の小節線から最後の小節を閉じる小節線までで、BPM 変化・`#xxx02` の小節長・STOP を反映します。プレイヤーはページを開いている間、譜面ごとに選んだ小節を覚えておき、次にその譜面を表示するときにも選んだ状態で開き、リトライ（F5、R）でも同じ小節をループします。選んだ小節は設定には保存しません。以前の Options ダイアログにあった START TIME と END TIME はなくなり、それらを含む保存済みの設定もそれらを除いて従来どおり読み込みます。譜面の表示は曲リストと同じく譜面を読むため、`#RANDOM` のある譜面では条件なしの内容を表示します。
 
 PRACTICE は beatoraja のモードで、設定は判定ルールが読みます（[#933](https://github.com/nulltask/be-music/issues/933)）。
 
@@ -259,7 +275,7 @@ PRACTICE は beatoraja のモードで、設定は判定ルールが読みます
 
 ルールを切り替えたとき、選んでいたゲージがほかのルールのものなら、そのルールの既定のゲージ（NORMAL、LR2 では GROOVE）に戻します。
 
-beatoraja の `PracticeModifier` と同様に、範囲外の判定対象はすべて背景に移すため、そのキー音は鳴り続けます。どちらかの端が範囲外のロングノートも背景に移します。範囲の終わりは開始から少なくとも 1000 ms 後です。プレイは譜面の小節線から小節単位で測ります（BPM 変化・`#xxx02` の小節長・ストップを反映します。[#954](https://github.com/nulltask/be-music/issues/954)）。範囲が始まる小節の 1 小節前の頭から始まり（範囲が最初の小節で始まるときは譜面の先頭から）、END TIME がある小節の 1 小節後の頭まで続くので、小節線に合わせた範囲なら前後にちょうど 1 小節ずつ付きます。END TIME が 0 のときは譜面の終わりの 1000 ms 後まで続きます。beatoraja は範囲の 1000 ms 前から始まり、1000 ms 後で終わります。beatoraja のルールでは TOTAL を範囲で切り出す前のノート数を基準に換算します。プレイテンポとレーンのオプションは通常どおり適用しますが、beatoraja が譜面の変換を PLAY と AUTOPLAY でだけ適用するのに合わせ、BATTLE、ロングノート・地雷・スクロールの変換、EXTRA、LR2 の EXTRA MODE はオフにします。プレイがその終わりに達してすべてのノートを判定し終えるか、ゲージが空になると、同じプレイ画面のまま読み込み直さずに、すぐ開始位置へ戻ります。スコア・コンボ・ゲージは練習の設定に戻り、鳴り残っている音は止め、デコード済みのサンプル・BGA・スキンはそのまま使います（[#949](https://github.com/nulltask/be-music/issues/949)）。ESC を押すまで繰り返します（beatoraja は練習の設定画面に戻ります）。練習のプレイはどのルールでもリプレイを記録せず、記録も更新せず、Leaderboard にも送りません。
+beatoraja の `PracticeModifier` と同様に、範囲外の判定対象はすべて背景に移すため、そのキー音は鳴り続けます。どちらかの端が範囲外のロングノートも背景に移します。範囲の終わりは開始から少なくとも 1000 ms 後です。プレイは譜面の小節線から小節単位で測ります（BPM 変化・`#xxx02` の小節長・ストップを反映します。[#954](https://github.com/nulltask/be-music/issues/954)）。選んだ最初の小節の 1 小節前の頭から始まり（それが最初の小節のときは譜面の先頭から）、選んだ最後の小節の 1 小節後の頭まで続くので、選んだ小節の前後にちょうど 1 小節ずつ付きます。小節を選んでいないときは譜面の終わりの 1000 ms 後まで続きます。beatoraja は範囲の 1000 ms 前から始まり、1000 ms 後で終わります。beatoraja のルールでは TOTAL を範囲で切り出す前のノート数を基準に換算します。プレイテンポとレーンのオプションは通常どおり適用しますが、beatoraja が譜面の変換を PLAY と AUTOPLAY でだけ適用するのに合わせ、BATTLE、ロングノート・地雷・スクロールの変換、EXTRA、LR2 の EXTRA MODE はオフにします。プレイがその終わりに達してすべてのノートを判定し終えるか、ゲージが空になると、同じプレイ画面のまま読み込み直さずに、すぐ開始位置へ戻ります。スコア・コンボ・ゲージは練習の設定に戻り、鳴り残っている音は止め、デコード済みのサンプル・BGA・スキンはそのまま使います（[#949](https://github.com/nulltask/be-music/issues/949)）。ESC を押すまで繰り返します（beatoraja は練習の設定画面に戻ります）。練習のプレイはどのルールでもリプレイを記録せず、記録も更新せず、Leaderboard にも送りません。
 
 参照元：beatoraja 0.8.9 の [`PracticeConfiguration`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/PracticeConfiguration.java) と [`PracticeModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/PracticeModifier.java)。対応 Issue は [#749](https://github.com/nulltask/be-music/issues/749) です。
 
