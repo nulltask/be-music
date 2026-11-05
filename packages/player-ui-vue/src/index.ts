@@ -22,6 +22,8 @@ import type {
   BeMusicPlaybackData,
   LibraryChart,
   LibraryCourse,
+  ChartScoreLayout,
+  ChartScoreBarRange,
 } from '@be-music/player-ui';
 import { wrap, type BeMusicVueEventHandlers, type BeMusicVueElementRef } from './wrap.ts';
 export type { BeMusicVueEventHandlers, BeMusicVueElementRef } from './wrap.ts';
@@ -261,3 +263,28 @@ export const BeMusicPreviewStart: DefineComponent<BeMusicPreviewStartProps, BeMu
   { mode?: 'play' | 'replay'; disabled?: boolean },
   'play-request'
 >('BeMusicPreviewStart', 'be-music-preview-start', ['mode', 'disabled'], ['play-request']);
+
+export type BeMusicChartScoreProps = {
+  layout?: ChartScoreLayout;
+  selection?: ChartScoreBarRange;
+  previewing?: number;
+  columnBeats?: number;
+  beatHeight?: number;
+  disabled?: boolean;
+} & BeMusicVueEventHandlers<'bar-selection-change'>;
+export const BeMusicChartScore: DefineComponent<BeMusicChartScoreProps, BeMusicVueElementRef> = wrap<
+  {
+    layout?: ChartScoreLayout;
+    selection?: ChartScoreBarRange;
+    previewing?: number;
+    columnBeats?: number;
+    beatHeight?: number;
+    disabled?: boolean;
+  },
+  'bar-selection-change'
+>(
+  'BeMusicChartScore',
+  'be-music-chart-score',
+  ['layout', 'selection', 'previewing', 'columnBeats', 'beatHeight', 'disabled'],
+  ['bar-selection-change'],
+);
