@@ -372,3 +372,59 @@ export function guessKeyboard(platform: string | undefined): { platform: Keyboar
     ? { platform: 'mac', form: 'laptop' }
     : { platform: 'windows', form: 'full' };
 }
+
+/**
+ * The keys a laptop gives with Fn instead of a key of its own: Home, End, Page Up and Page Down on the arrows on both,
+ * Forward Delete on a Mac's delete, and the number pad a Windows laptop embeds in its letter keys (7 8 9 0 / U I O P /
+ * J K L ; / M . /). The firmware sends the missing key's own code, so the player reads it as that key.
+ */
+const LAPTOP_COMBOS: Readonly<Record<KeyboardPlatform, Readonly<Record<string, readonly string[]>>>> = {
+  windows: {
+    Home: ['Fn', 'ArrowLeft'],
+    End: ['Fn', 'ArrowRight'],
+    PageUp: ['Fn', 'ArrowUp'],
+    PageDown: ['Fn', 'ArrowDown'],
+    Numpad7: ['Fn', 'Digit7'],
+    Numpad8: ['Fn', 'Digit8'],
+    Numpad9: ['Fn', 'Digit9'],
+    NumpadMultiply: ['Fn', 'Digit0'],
+    Numpad4: ['Fn', 'KeyU'],
+    Numpad5: ['Fn', 'KeyI'],
+    Numpad6: ['Fn', 'KeyO'],
+    NumpadSubtract: ['Fn', 'KeyP'],
+    Numpad1: ['Fn', 'KeyJ'],
+    Numpad2: ['Fn', 'KeyK'],
+    Numpad3: ['Fn', 'KeyL'],
+    NumpadAdd: ['Fn', 'Semicolon'],
+    Numpad0: ['Fn', 'KeyM'],
+    NumpadDecimal: ['Fn', 'Period'],
+    NumpadDivide: ['Fn', 'Slash'],
+  },
+  mac: {
+    Home: ['Fn', 'ArrowLeft'],
+    End: ['Fn', 'ArrowRight'],
+    PageUp: ['Fn', 'ArrowUp'],
+    PageDown: ['Fn', 'ArrowDown'],
+    Delete: ['Fn', 'Backspace'],
+  },
+};
+
+/** How a key reaches the player on `platform`'s `form` keyboard: its own key, a combination, or not at all. */
+export type KeyboardReach =
+  | { readonly kind: 'key'; readonly key: KeyboardKey }
+  | { readonly kind: 'combo'; readonly keys: readonly KeyboardKey[] }
+  | { readonly kind: 'none' };
+
+/**
+ * Whether `code` has a key on `platform`'s `form` keyboard (a full keyboard with its number pad), else the keys a laptop
+ * presses for it with Fn, else none (a Mac has no Pause key, a Mac laptop no number pad).
+ */
+export function keyboardReach(code: string, platform: KeyboardPlatform, form: KeyboardForm): KeyboardReach {
+  const layout = LAYOUTS[platform][form === 'full' ? 0 : 1]!;
+  const key = layout.keys.find((candidate) => candidate.code === code);
+  if (key !== undefined) return { kind: 'key', key };
+  const combo = form === 'laptop' ? LAPTOP_COMBOS[platform][code] : undefined;
+  const keys = combo?.map((part) => layout.keys.find((candidate) => candidate.code === part));
+  if (keys !== undefined && keys.every((part) => part !== undefined)) return { kind: 'combo', keys };
+  return { kind: 'none' };
+}
