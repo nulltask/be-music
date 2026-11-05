@@ -1,5 +1,15 @@
 # @be-music/app-leaderboard
 
+## 0.5.3
+
+### Patch Changes
+
+- b74bb64: Sign in with Accounts on the Dashboard host, and call guests guests.
+  
+  - The Leaderboard signs in with the Accounts issuer on the Dashboard host (`https://be-music.app/api/auth`) and reads profiles through the Dashboard Worker, where Accounts now runs.
+  - Pages and help call guest accounts guests, and say that a passkey, Google or Discord keeps one.
+- Updated dependencies: `@be-music/player-engine@0.15.1`, `@be-music/service-web-theme@0.4.1`
+
 ## 0.5.2
 
 ### Patch Changes
