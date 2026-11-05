@@ -77,11 +77,22 @@ test('renders the shared header with Settings where Play would be', () => {
     locale: 'en',
     hostname: 'localhost',
     requestURL: '/',
-    account: { handle: 'alice', displayName: 'Alice', anonymous: false },
+    account: { handle: 'alice', displayName: 'Alice', anonymous: false, avatarUrl: '/players/alice/avatar?v=g' },
   });
   expect(signedIn).toContain(
     'data-service-header="account" href="https://leaderboard.be-music.app/players/alice" target="_blank" rel="noopener"',
   );
+  expect(signedIn).toContain(
+    'rounded-full object-cover ring-1" src="https://leaderboard.be-music.app/players/alice/avatar?v=g"',
+  );
+  expect(signedIn).toContain('width="24" height="24"');
+  const noAvatar = playerServiceHeaderHTML({
+    locale: 'en',
+    hostname: 'localhost',
+    requestURL: '/',
+    account: { handle: 'alice', displayName: 'Alice', anonymous: false },
+  });
+  expect(noAvatar).not.toContain('/avatar');
 });
 
 test('Settings toggles the Options dialog and a signed-out account opens sign-in', () => {
