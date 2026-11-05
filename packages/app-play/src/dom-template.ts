@@ -290,6 +290,17 @@ export const PLAYER_APP_TEMPLATE = html`
         </form>
       </dialog>
       <!--
+      The RANDOM MIX dialog: deciding a RANDOM MIX bar asks which charts to draw
+      from and how many songs and loops before the mix starts. Lit renders into
+      the empty dialog (\`promptRandomMixConditions\`, ui/random-mix-dialog.ts).
+    -->
+      <dialog
+        class="dialog account-dialog"
+        id="random-mix-dialog"
+        aria-labelledby="random-mix-dialog-title"
+        aria-describedby="random-mix-dialog-hint"
+      ></dialog>
+      <!--
       A dropped replay (\`*.bmplay.json\`) whose chart is not loaded, or a course
       replay (\`*.bmcourse.json\`) whose stage charts are not all loaded: it lists
       the missing charts and the replay does not start. Filled by

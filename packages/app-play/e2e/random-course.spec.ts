@@ -32,6 +32,11 @@ test('draws a RANDOM MIX from its bar, plays it and keeps it as the folder newes
   await player.cursorTo((bar) => bar.course?.randomMix === true, 'the RANDOM MIX bar');
   await player.setOption(['Play options'], 'Auto play', true);
   await player.key('Enter');
+  // The RANDOM MIX dialog asks for the conditions first; its defaults draw up to five stages, once.
+  const dialog = player.page.locator('#random-mix-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.random-mix-matches')).not.toHaveAttribute('data-empty', 'true');
+  await dialog.locator('button[value="ok"]').click();
   const play = await player.waitFor((s) => s.scene.kind === 'play', 'the drawn RANDOM MIX');
   expect(play.play?.course?.name).toBe('RANDOM MIX');
   const stageCount = play.play?.course?.stageCount ?? 0;

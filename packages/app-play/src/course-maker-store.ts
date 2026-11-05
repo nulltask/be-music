@@ -1,7 +1,7 @@
 // The player's own courses (made on the select screen) kept across reloads in IndexedDB, as LR2 keeps them in its
 // database: the courses as `.lr2crs` text plus what that format has no room for (the stage titles, the constraints,
 // whether each course is flagged for IR (`release`, LR2's `ir` column) and which are a folder's last RANDOM MIX), the default NONSTOP connection and the
-// RANDOM MIX settings (LR2's `config.xml` `<course>`).
+// RANDOM MIX settings (LR2's `config.xml` `<course>`) and the conditions the RANDOM MIX dialog last confirmed.
 
 import {
   LR2_NONSTOP_CONNECTIONS,
@@ -10,9 +10,11 @@ import {
   serializeLR2CourseFile,
   DEFAULT_LR2_RANDOM_MIX_SETTINGS,
   normalizeLR2RandomMixSettings,
+  normalizeRandomMixConditions,
   type CourseDefinition,
   type LR2RandomMixSettings,
   type NonstopConnection,
+  type RandomMixConditions,
 } from '@be-music/player-engine/course';
 
 /**
@@ -32,6 +34,8 @@ export interface MadeCourses {
   courses: CourseDefinition[];
   defaultConnection: NonstopConnection;
   randomMixSettings: LR2RandomMixSettings;
+  /** The conditions the RANDOM MIX dialog last confirmed (absent before it was ever confirmed). */
+  randomMixConditions?: RandomMixConditions;
   /** Those of `courses` that are their folder's last RANDOM MIX, which the next draw there replaces. */
   randomMixes: CourseDefinition[];
 }
@@ -54,6 +58,8 @@ interface StoredMadeCourses {
   defaultConnection: string;
   /** The RANDOM MIX settings (absent in records saved before RANDOM MIX: LR2's defaults). */
   randomMixSettings?: Record<string, unknown>;
+  /** The RANDOM MIX dialog's conditions (absent before the dialog was confirmed: the dialog's defaults). */
+  randomMixConditions?: Record<string, unknown>;
 }
 
 /** The stored record of `made`. */
@@ -67,6 +73,15 @@ export function serializeMadeCourses(made: MadeCourses): StoredMadeCourses {
     randomMix: made.courses.map((course) => made.randomMixes.includes(course)),
     defaultConnection: made.defaultConnection,
     randomMixSettings: { ...made.randomMixSettings },
+    ...(made.randomMixConditions !== undefined
+      ? {
+          randomMixConditions: {
+            ...made.randomMixConditions,
+            keyModes: [...made.randomMixConditions.keyModes],
+            difficulties: [...made.randomMixConditions.difficulties],
+          },
+        }
+      : {}),
   };
 }
 
@@ -110,6 +125,9 @@ export function parseMadeCourses(value: unknown): MadeCourses {
     courses,
     defaultConnection,
     randomMixSettings,
+    ...(typeof stored.randomMixConditions === 'object' && stored.randomMixConditions !== null
+      ? { randomMixConditions: normalizeRandomMixConditions(stored.randomMixConditions) }
+      : {}),
     randomMixes: courses.filter((_, index) => flags[index] === true),
   };
 }
