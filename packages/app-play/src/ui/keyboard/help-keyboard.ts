@@ -28,7 +28,7 @@ const COPY = {
     lanes: 'Lane keys',
     actions: 'Operations',
     legend: 'Numbers are the lane keys (white and black), ◎ the turntable, ST / SL START / SELECT, ● an operation.',
-    note: 'Point at a line to light its keys. Combinations and held keys are on the Usage tab; Options → Keys moves any key.',
+    note: 'Point at a line to light its keys. On a laptop, a key it lacks reads as the Fn combination that gives it (the number pad is the one built into the letter keys, where the laptop has one). Combinations and held keys are on the Usage tab; Options → Keys moves any key.',
     none: 'No operation on this key map.',
   },
   ja: {
@@ -41,7 +41,7 @@ const COPY = {
     lanes: 'レーンのキー',
     actions: '操作',
     legend: '数字はレーンの鍵盤 (白鍵・黒鍵)、◎ は皿、ST / SL は START / SELECT、● は操作のキーです。',
-    note: '行にカーソルを合わせるとそのキーが光ります。同時押しや長押しは「使い方」タブに、キーの変更は Options → Keys にあります。',
+    note: '行にカーソルを合わせるとそのキーが光ります。ノートにないキーは、それを入力する Fn との組み合わせで示します (テンキーは、文字キーに内蔵されたテンキーがあるノートでの組み合わせです)。同時押しや長押しは「使い方」タブに、キーの変更は Options → Keys にあります。',
     none: 'このキー操作にはありません。',
   },
 } as const;
@@ -86,7 +86,7 @@ export class HelpKeyboard {
   private template(): TemplateResult {
     const copy = COPY[this.lang];
     const scheme = this.scheme ?? 'lr2';
-    const guide = buildKeyboardGuide(this.screen, scheme, this.source().settings, this.lang, this.platform);
+    const guide = buildKeyboardGuide(this.screen, scheme, this.source().settings, this.lang, this.platform, this.form);
     const pick = <T>(value: T, current: T, label: string, set: () => void): TemplateResult =>
       html`<button
         type="button"

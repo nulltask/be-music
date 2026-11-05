@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   guessKeyboard,
+  keyboardReach,
   KEYBOARD_CODES,
   KEYBOARD_FORMS,
   KEYBOARD_PLATFORMS,
@@ -90,5 +91,29 @@ describe('guessKeyboard', () => {
     expect(guessKeyboard('Win32')).toEqual({ platform: 'windows', form: 'full' });
     expect(guessKeyboard('Linux x86_64')).toEqual({ platform: 'windows', form: 'full' });
     expect(guessKeyboard(undefined)).toEqual({ platform: 'windows', form: 'full' });
+  });
+});
+
+describe('keyboardReach', () => {
+  test('gives a laptop’s missing navigation and number pad keys as Fn combinations', () => {
+    const labels = (code: string, platform: 'windows' | 'mac') => {
+      const reach = keyboardReach(code, platform, 'laptop');
+      return reach.kind === 'combo' ? reach.keys.map((key) => key.label) : reach.kind;
+    };
+    expect(labels('Home', 'windows')).toEqual(['Fn', '←']);
+    expect(labels('PageDown', 'mac')).toEqual(['fn', '↓']);
+    expect(labels('Delete', 'mac')).toEqual(['fn', 'delete']);
+    expect(labels('Numpad0', 'windows')).toEqual(['Fn', 'M']);
+    expect(labels('NumpadAdd', 'windows')).toEqual(['Fn', ';']);
+    // A Mac laptop has no number pad, and a key the laptop has is its own.
+    expect(labels('Numpad0', 'mac')).toBe('none');
+    expect(labels('Delete', 'windows')).toBe('key');
+    expect(labels('Pause', 'windows')).toBe('none');
+  });
+
+  test('reads a full keyboard’s keys as their own, with no combination for a key it lacks', () => {
+    expect(keyboardReach('Home', 'windows', 'full')).toMatchObject({ kind: 'key', key: { code: 'Home' } });
+    expect(keyboardReach('Numpad0', 'mac', 'full').kind).toBe('key');
+    expect(keyboardReach('Pause', 'mac', 'full').kind).toBe('none');
   });
 });

@@ -15,7 +15,13 @@ import {
 } from '@be-music/player-browser/host';
 import { ACTION_LABELS_JA } from '../options/action-labels.ts';
 import type { KeyboardMark, KeyboardMarkKind } from './keyboard-element.ts';
-import { KEYBOARD_CODES, keyboardKey, type KeyboardPlatform } from './keyboard-layout.ts';
+import {
+  KEYBOARD_CODES,
+  keyboardKey,
+  keyboardReach,
+  type KeyboardForm,
+  type KeyboardPlatform,
+} from './keyboard-layout.ts';
 
 export type KeyboardGuideLang = 'en' | 'ja';
 
@@ -43,6 +49,7 @@ const COPY = {
     startSelect: (side: string) => `${side} START / SELECT`,
     key: (side: string, n: string) => `${side} key ${n}`,
     scratch: (side: string, second: boolean) => `${side} turntable ${second ? '↺' : '↻'}`,
+    noKey: (name: string) => `${name} (no key)`,
   },
   ja: {
     keys: (side: string) => `${side} 鍵盤 1〜7`,
@@ -50,6 +57,7 @@ const COPY = {
     startSelect: (side: string) => `${side} START / SELECT`,
     key: (side: string, n: string) => `${side} 鍵盤 ${n}`,
     scratch: (side: string, second: boolean) => `${side} 皿 ${second ? '↺' : '↻'}`,
+    noKey: (name: string) => `${name} (キーなし)`,
   },
 } as const;
 
@@ -98,25 +106,49 @@ function actionName(definition: ControlActionDefinition, lang: KeyboardGuideLang
   return lang === 'ja' ? (ACTION_LABELS_JA[definition.label] ?? definition.label) : definition.label;
 }
 
+/** The keyboard the page draws: whose caps, and full-size or a laptop's. */
+interface GuideKeyboard {
+  readonly platform: KeyboardPlatform;
+  readonly form: KeyboardForm;
+}
+
+/**
+ * How a key reads on `keyboard`: its name, the combination a laptop presses for it (`Fn+←` for Home, `Fn+M` for Num 0),
+ * or its name marked as a key the keyboard does not have.
+ */
+function guideKeyName(code: string, keyboard: GuideKeyboard, lang: KeyboardGuideLang): string {
+  const reach = keyboardReach(code, keyboard.platform, keyboard.form);
+  if (reach.kind === 'combo') return reach.keys.map((key) => key.label).join('+');
+  const name = keyboardKeyName(code, keyboard.platform);
+  return reach.kind === 'none' && keyboardKey(code) !== undefined ? COPY[lang].noKey(name) : name;
+}
+
+/** The keys to light for `code` on `keyboard`: its own, or the combination a laptop presses for it. */
+function guideKeyCodes(code: string, keyboard: GuideKeyboard): string[] {
+  const reach = keyboardReach(code, keyboard.platform, keyboard.form);
+  return reach.kind === 'combo' ? reach.keys.map((key) => key.code) : [code];
+}
+
 /** How an operation's key reads, with the modifiers it asks for (`Ctrl+Shift+F3`, a Mac's `⌃⇧F3`). */
 function actionKeyName(
   definition: ControlActionDefinition,
   key: ControlActionKey,
   lang: KeyboardGuideLang,
-  platform: KeyboardPlatform,
+  keyboard: GuideKeyboard,
 ): string {
   if ('button' in key) return controlButtonName(key.button, lang);
   const modifiers = definition.modifiers;
-  const [ctrl, shift] = platform === 'mac' ? ['⌃', '⇧'] : ['Ctrl+', 'Shift+'];
+  const [ctrl, shift] = keyboard.platform === 'mac' ? ['⌃', '⇧'] : ['Ctrl+', 'Shift+'];
   const prefix = modifiers === undefined ? '' : `${modifiers.ctrl ? ctrl : ''}${modifiers.shift ? shift : ''}`;
-  return `${prefix}${keyboardKeyName(key.code, platform)}`;
+  return `${prefix}${guideKeyName(key.code, keyboard, lang)}`;
 }
 
 /**
  * The keyboard page of `screen` on the `scheme` key map with the player's keys (`settings`): the lane keys and START /
  * SELECT marked by what they are, the keys of the screen's operations marked ●, the lanes listed first and the
  * operations after, each with its keys. An operation's lane-key default lights the lane keys that button is on. Keys
- * are named as `platform`'s keyboard labels them.
+ * are named as `platform`'s keyboard labels them; on a laptop (`form`), a key it has no key for reads as the Fn
+ * combination that gives it and lights that combination, and a key no combination gives is marked as missing.
  */
 export function buildKeyboardGuide(
   screen: ControlScreen,
@@ -124,8 +156,13 @@ export function buildKeyboardGuide(
   settings: ControlSettings,
   lang: KeyboardGuideLang = 'en',
   platform: KeyboardPlatform = 'windows',
+  form: KeyboardForm = 'full',
 ): KeyboardGuide {
-  const name = (code: string): string => keyboardKeyName(code, platform);
+  const keyboard: GuideKeyboard = { platform, form };
+  const name = (code: string): string => guideKeyName(code, keyboard, lang);
+  const light = (codes: readonly string[]): string[] => [
+    ...new Set(codes.flatMap((code) => guideKeyCodes(code, keyboard))),
+  ];
   const copy = COPY[lang];
   const buttons = buttonsByCode(settings);
   const codesOf = (button: ControlButton): string[] =>
@@ -141,21 +178,21 @@ export function buildKeyboardGuide(
       id: `${side}-keys`,
       name: copy.keys(side),
       keys: keyCodes.map((codes) => codes.map(name).join(' / ')),
-      codes: keyCodes.flat(),
+      codes: light(keyCodes.flat()),
     });
     const scratch = [...codesOf(`${side}-scratch-cw`), ...codesOf(`${side}-scratch-ccw`)];
     lanes.push({
       id: `${side}-scratch`,
       name: copy.turntable(side),
       keys: scratch.map(name),
-      codes: scratch,
+      codes: light(scratch),
     });
     const control = [...codesOf(`${side}-start`), ...codesOf(`${side}-select`)];
     lanes.push({
       id: `${side}-control`,
       name: copy.startSelect(side),
       keys: control.map(name),
-      codes: control,
+      codes: light(control),
     });
   }
 
@@ -179,8 +216,8 @@ export function buildKeyboardGuide(
     actions.push({
       id: definition.id,
       name: label,
-      keys: keys.map((key) => actionKeyName(definition, key, lang, platform)),
-      codes: [...new Set(codes)],
+      keys: keys.map((key) => actionKeyName(definition, key, lang, keyboard)),
+      codes: light(codes),
     });
   }
   return { marks: [...marks.values()], lanes, actions };
