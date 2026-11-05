@@ -886,7 +886,7 @@ flowchart LR
 
 - デコード Worker は無改造の ffmpeg.wasm コアを起動し、ffmpeg の出力先としてキャラクターデバイスを登録します。これで `exec` の実行中に出力が少しずつ JavaScript に届きます。出力は偶数の寸法に縮小し、最大 60 fps の固定フレームレートに揃えるため、可変フレームレートの素材も時刻がずれません。
 - cross-origin isolated なページでは、ffmpeg が y4m の生フレームを書き、エンコード Worker が WebCodecs（ハードウェア優先）で符号化して Mediabunny で多重化します。デコーダはエンコーダより数フレーム以上先行すると `SharedArrayBuffer` のカウンターで待つ（`Atomics.wait`）ため、フレームを捨てることも生フレームが溜まることもありません。
-- それ以外のページ（デプロイ版の player は isolated ではない）、「Use WebCodecs encoder」がオフのとき、WebCodecs のエンコーダが失敗したときは、ffmpeg 自身の libx264 で直接 fragmented MP4 を書きます。デコードと同じスレッドで符号化するので、デコードの速さは自然に抑えられます。
+- それ以外のページ（`Cross-Origin-Embedder-Policy: credentialless` に対応しない Safari など、ページを isolated にできないブラウザー）、「Use WebCodecs encoder」がオフのとき、WebCodecs のエンコーダが失敗したときは、ffmpeg 自身の libx264 で直接 fragmented MP4 を書きます。デコードと同じスレッドで符号化するので、デコードの速さは自然に抑えられます。
 - media source は stream が終わるまで仮の長さを宣言するため、まだ transcode されていない位置へシークした cue はそこでフレームを待ちます。複数のトラックで同じバイト列を使う動画は 1 つの transcode を共有し、transcode は同時に 2 本まで走り、それを使う最後の動画を閉じると取り消します。
 - Worker か MSE がないとき、または最初のフレームより前に stream が失敗したときは、従来どおりファイル全体を transcode してから再生します。
 

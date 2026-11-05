@@ -179,6 +179,8 @@ Be-Music の分だけです。`workers.dev` のサブドメインは `be-music.w
 
 Player は Service Worker を持つインストール可能な Web アプリです（[player-web.ja.md](./player-web.ja.md#プレイヤーのインストール)）。`play` Worker は Static Assets の既定にかかわらず、Service Worker（`/sw.js`）を `Cache-Control: no-cache` で、Web アプリマニフェスト（`/manifest.webmanifest`）を `application/manifest+json` で配信します（`packages/worker-play/src/pwa-assets.ts`）。Service Worker は Worker 自身のルート（`/api/*`、`/__url-load-proxy`）を一切キャッシュしないので、サインイン、プレイヤー設定、Leaderboard API は常に Worker に届きます。R2 の ffmpeg core は、transcode が一度読み込んだあとは Service Worker が保持します。
 
+`play` Worker はすべてのレスポンスに `Cross-Origin-Opener-Policy: same-origin` と `Cross-Origin-Embedder-Policy: credentialless` を付けます（`packages/worker-play/src/cross-origin-isolation.ts`。開発サーバーも同じヘッダーを送ります）。これで player は cross-origin isolated になります。isolated なページでは、ブラウザーが `performance.now()` と入力イベントの時刻を粗くする度合いが小さくなり（Chromium では 100 µs ではなく 5 µs）、キー入力をより細かく判定してリプレイに記録できます。BGA の transcode も `SharedArrayBuffer` を使えます。`require-corp` ではなく `credentialless` にしているのは、`Cross-Origin-Resource-Policy` を送らないクロスオリジンのリソース（Google Fonts、各プロバイダーの CDN にあるアバター）を、Cookie なしで読み込めるようにするためです。サインインはページ全体の遷移なので、`same-origin` の opener 分離の影響を受けません。`credentialless` に対応しないブラウザー（Safari）はこのヘッダーを無視し、これまでどおり isolated でないまま動きます。
+
 ## データの管理先
 
 公開プロフィールとアバターの正本は Accounts に置き、編集もそこで行います。Leaderboard はランキング用のコピー、プレイヤー ID の対応、スコアを保持します。同期と移行順は [ADR 0009](./adr/0009-accounts-profiles.ja.md) を参照してください。
