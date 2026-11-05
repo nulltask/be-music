@@ -291,17 +291,10 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>PRACTICE</dt>
           <dd>
-            beatoraja's PRACTICE, under every ruleset: plays a range of the chart again and again until Esc. A practice
-            play saves no replay and no record, and is never sent to the Leaderboard.
-          </dd>
-          <dt>START TIME ms</dt>
-          <dd>
-            <em class="help-menu-when">Shown with PRACTICE on.</em> Where the practice starts, in chart milliseconds.
-          </dd>
-          <dt>END TIME ms (0 = end)</dt>
-          <dd>
-            <em class="help-menu-when">Shown with PRACTICE on.</em> Where the practice ends, in chart milliseconds; 0
-            plays to the chart's end.
+            beatoraja's PRACTICE, under every ruleset: a chart started with it on opens its score first. Press a bar to
+            hear it, Shift-press or drag to pick a run of bars, then Start: the bars play again and again until Esc (no
+            bars picked plays the whole chart). A practice play saves no replay and no record, and is never sent to the
+            Leaderboard.
           </dd>
           <dt>GAUGE TYPE</dt>
           <dd>
@@ -939,15 +932,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>PRACTICE</dt>
           <dd>
-            beatoraja の PRACTICE を、どのルールでも使えます。譜面の一部の範囲を Esc
-            を押すまで繰り返します。練習のプレイはリプレイも記録も残さず、Leaderboard にも送りません。
-          </dd>
-          <dt>START TIME ms</dt>
-          <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習を始める位置 (譜面のミリ秒)。</dd>
-          <dt>END TIME ms (0 = end)</dt>
-          <dd>
-            <em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習を終える位置 (譜面のミリ秒)。0
-            なら譜面の最後まで。
+            beatoraja の PRACTICE を、どのルールでも使えます。オンにして選曲すると、まず譜面を表示します。小節を押すと
+            その小節を試聴し、Shift
+            を押しながら押すかドラッグすると連続した小節を選べます。スタートを押すと、選んだ小節を Esc
+            を押すまで繰り返します (小節を選ばなければ譜面全体)。練習のプレイはリプレイも記録も残さず、Leaderboard
+            にも送りません。
           </dd>
           <dt>GAUGE TYPE</dt>
           <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習で使うゲージ (そのルールのゲージ)。</dd>

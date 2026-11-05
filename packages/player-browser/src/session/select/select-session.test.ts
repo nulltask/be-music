@@ -54,7 +54,7 @@ function createAudio() {
     playJingle: vi.fn(async (..._args: unknown[]) => true),
     stopOwned: vi.fn(),
     resume: vi.fn(),
-    preview: { focus: vi.fn(), stop: vi.fn(), playing: false },
+    preview: { focus: vi.fn(), playWindow: vi.fn(), stop: vi.fn(), playing: false },
     analyzer: { sample: () => SILENT_AUDIO },
   };
 }

@@ -26,6 +26,31 @@ export { BeMusicPlaybackControlsElement } from './components/playback-controls.t
 export { BeMusicPreviewHUDElement } from './components/preview-hud.ts';
 export { BeMusicPreviewSelectElement } from './components/preview-select.ts';
 export { BeMusicPreviewStartElement } from './components/preview-start.ts';
+export { BeMusicChartScoreElement } from './components/chart-score.ts';
+export {
+  chartScoreRangeTimes,
+  layoutChartScore,
+  packChartScoreColumns,
+  selectChartScoreBars,
+  type ChartScoreBar,
+  type ChartScoreBarRange,
+  type ChartScoreLane,
+  type ChartScoreLayout,
+  type ChartScoreLongNote,
+  type ChartScoreNote,
+  type ChartScoreStop,
+  type ChartScoreTempo,
+} from './chart-score/layout.ts';
+export {
+  chartScoreRowAt,
+  DEFAULT_CHART_SCORE_METRICS,
+  resolveChartScoreColumn,
+  resolveChartScoreLanes,
+  type ChartScoreBarBox,
+  type ChartScoreLaneBox,
+  type ChartScoreLaneGeometry,
+  type ChartScoreMetrics,
+} from './chart-score/geometry.ts';
 export { formatPlaybackTime, resolveSeekTarget } from './playback.ts';
 export {
   PREVIEW_CONTROLS_CSS_HEIGHT,

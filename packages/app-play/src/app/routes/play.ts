@@ -23,7 +23,13 @@ import {
 } from '@be-music/player-browser/host';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import { abortedRecordPlayFromResult, courseStageRecordPlayFromResult } from '@be-music/player-engine/records';
-import { snapHiSpeed, type LibraryChart, type PlayOptions, type PlayResult } from '@be-music/player-scene-model';
+import {
+  snapHiSpeed,
+  type LibraryChart,
+  type PlayOptions,
+  type PlayResult,
+  type PracticeRange,
+} from '@be-music/player-scene-model';
 import {
   courseGoesOnAfter,
   courseReplayStageGivenUp,
@@ -156,6 +162,8 @@ export interface PlayRouteDeps {
   /** Re-enables the options a play latched. */
   readonly unlockReplayOptions: () => void;
   readonly showSelect: () => Promise<void>;
+  /** The bars a PRACTICE play of the chart loops, as picked on its score (`PracticeBarsMemory`); none loops it whole. */
+  readonly practiceRange?: (chartEntry: LibraryChart) => PracticeRange | undefined;
   /** Names the selected options a chart cannot be played with; `onClose` runs once the player dismisses it. */
   readonly showPlayOptionMismatch: (options: readonly string[], onClose: () => void) => void;
   /** Keeps a play option for every screen and play, and pushes it to the select screen. */
@@ -216,6 +224,7 @@ export class PlayRoute {
   private readonly lockReplayOptionsForPlay: PlayRouteDeps['lockReplayOptionsForPlay'];
   private readonly unlockReplayOptions: PlayRouteDeps['unlockReplayOptions'];
   private readonly showSelect: PlayRouteDeps['showSelect'];
+  private readonly practiceRange: PlayRouteDeps['practiceRange'];
   private readonly showPlayOptionMismatch: PlayRouteDeps['showPlayOptionMismatch'];
   private readonly setPlayOptions: PlayRouteDeps['setPlayOptions'];
 
@@ -248,6 +257,7 @@ export class PlayRoute {
     this.lockReplayOptionsForPlay = deps.lockReplayOptionsForPlay;
     this.unlockReplayOptions = deps.unlockReplayOptions;
     this.showSelect = deps.showSelect;
+    this.practiceRange = deps.practiceRange;
     this.showPlayOptionMismatch = deps.showPlayOptionMismatch;
     this.setPlayOptions = deps.setPlayOptions;
   }
@@ -525,9 +535,11 @@ export class PlayRoute {
     };
     const { onExit, onChartFinished, onRestart, onHiSpeedChange, onTempoChange } = callbacks;
     const source = resolveChartSource(this.library.collection, chartEntry);
+    const practiceRange = practicing ? this.practiceRange?.(chartEntry) : undefined;
     const view = createPlayScene(kit, {
       chart: chartEntry,
       allowSeek: 'practice',
+      ...(practiceRange !== undefined ? { practiceRange } : {}),
       ...(source !== undefined ? { source } : {}),
       settings:
         kit.family === 'built-in'

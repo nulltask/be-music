@@ -28,4 +28,5 @@ export {
   LR2_PREVIEW_FOCUS_DELAY_MS,
   type ChartPreviewEngineOptions,
   type ChartPreviewTarget,
+  type ChartPreviewWindow,
 } from '../chart/preview.ts';

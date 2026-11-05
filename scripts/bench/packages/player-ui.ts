@@ -1,3 +1,5 @@
+import { resolveChart } from '@be-music/chart-model';
+import { parseChart } from '@be-music/chart-parser';
 import * as ui from '@be-music/player-ui';
 import * as react from '@be-music/player-ui-react';
 import * as vue from '@be-music/player-ui-vue';
@@ -127,7 +129,35 @@ const NON_ELEMENT_EXPORTS = new Set([
   'resolvePreviewInfoBox',
   'resolvePreviewPortrait',
   'setBeMusicTheme',
+  'layoutChartScore',
+  'packChartScoreColumns',
+  'selectChartScoreBars',
+  'chartScoreRangeTimes',
+  'resolveChartScoreLanes',
+  'resolveChartScoreColumn',
+  'chartScoreRowAt',
 ]);
+// A 7 KEY chart of 64 bars with a note on every eighth, a long note across each bar line and a tempo change every bar.
+const scoreChart = resolveChart(
+  parseChart(
+    [
+      '#BPM 150',
+      '#WAV01 a.wav',
+      '#LNTYPE 1',
+      ...Array.from({ length: 64 }, (_, bar) => {
+        const measure = String(bar + 1).padStart(3, '0');
+        return [
+          `#${measure}11:0101010101010101`,
+          `#${measure}13:00010001`,
+          `#${measure}55:0000000100000000`,
+          `#${measure}03:96`,
+        ];
+      }).flat(),
+    ].join('\n'),
+    'bms',
+  ),
+);
+const scoreLayout = ui.layoutChartScore(scoreChart);
 export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
   module: ui,
   registerCases(define) {
@@ -179,6 +209,41 @@ export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
     define('player-ui.resolvePreviewInfoBox', {
       run: () => {
         ui.resolvePreviewInfoBox({ stage: previewStage, bga: previewBGA, playfield: { right: 184 } });
+      },
+    });
+    define('player-ui.layoutChartScore', {
+      run: () => {
+        ui.layoutChartScore(scoreChart);
+      },
+    });
+    define('player-ui.packChartScoreColumns', {
+      run: () => {
+        ui.packChartScoreColumns(scoreLayout.bars, 16);
+      },
+    });
+    define('player-ui.selectChartScoreBars', {
+      run: () => {
+        ui.selectChartScoreBars(3, 9, true);
+      },
+    });
+    define('player-ui.chartScoreRangeTimes', {
+      run: () => {
+        ui.chartScoreRangeTimes(scoreLayout, { first: 3, last: 9 });
+      },
+    });
+    define('player-ui.resolveChartScoreLanes', {
+      run: () => {
+        ui.resolveChartScoreLanes(scoreLayout.lanes);
+      },
+    });
+    define('player-ui.resolveChartScoreColumn', {
+      run: () => {
+        ui.resolveChartScoreColumn(scoreLayout.bars.slice(0, 4), 16);
+      },
+    });
+    define('player-ui.chartScoreRowAt', {
+      run: () => {
+        ui.chartScoreRowAt({ top: 192, bottom: 256 }, 0.375);
       },
     });
     for (const [name, value] of Object.entries(ui)) {

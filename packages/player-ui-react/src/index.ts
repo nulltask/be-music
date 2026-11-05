@@ -20,6 +20,7 @@ import {
   BeMusicPreviewHUDElement,
   BeMusicPreviewSelectElement,
   BeMusicPreviewStartElement,
+  BeMusicChartScoreElement,
   BeMusicLanesElement,
   BeMusicNotesElement,
   BeMusicLaneCoversElement,
@@ -251,3 +252,13 @@ export const BeMusicPreviewStart: ReactWebComponent<BeMusicPreviewStartElement, 
   eventsPreviewStart,
 );
 export type BeMusicPreviewStartProps = React.ComponentProps<typeof BeMusicPreviewStart>;
+
+const eventsChartScore = {
+  onBarSelectionChange: 'bar-selection-change' as EventName<BeMusicUIEvent<'bar-selection-change'>>,
+};
+export const BeMusicChartScore: ReactWebComponent<BeMusicChartScoreElement, typeof eventsChartScore> = wrap(
+  'be-music-chart-score',
+  BeMusicChartScoreElement,
+  eventsChartScore,
+);
+export type BeMusicChartScoreProps = React.ComponentProps<typeof BeMusicChartScore>;

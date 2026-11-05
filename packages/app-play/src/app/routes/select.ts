@@ -103,6 +103,11 @@ export interface SelectRouteDeps {
   /** Shows the decide screen for a chart started on the screen (`DecideRoute`). */
   readonly showDecide: (chartEntry: LibraryChart, overrides: { autoPlay?: boolean }) => Promise<void>;
   /**
+   * With PRACTICE on, opens the chart's score to pick the bars to loop (`PracticeBarsDialog`); resolves whether the
+   * player started (`true`) or backed out.
+   */
+  readonly pickPracticeBars?: (chartEntry: LibraryChart) => Promise<boolean>;
+  /**
    * The replay slots: which slots a bar has, and the card that lists them on the skins without a replay-slot UI of
    * their own (every family but beatoraja).
    */
@@ -147,6 +152,7 @@ export class SelectRoute {
   private readonly unlockReplayOptions: SelectRouteDeps['unlockReplayOptions'];
   private readonly rememberHiSpeed: SelectRouteDeps['rememberHiSpeed'];
   private readonly showDecide: SelectRouteDeps['showDecide'];
+  private readonly pickPracticeBars: SelectRouteDeps['pickPracticeBars'];
   private readonly replaySlots: SelectRouteDeps['replaySlots'];
   private readonly replaySlotsPanel: SelectRouteDeps['replaySlotsPanel'];
   private readonly startReplayFromSlot: SelectRouteDeps['startReplayFromSlot'];
@@ -180,6 +186,7 @@ export class SelectRoute {
     this.unlockReplayOptions = deps.unlockReplayOptions;
     this.rememberHiSpeed = deps.rememberHiSpeed;
     this.showDecide = deps.showDecide;
+    this.pickPracticeBars = deps.pickPracticeBars;
   }
 
   /** The select screen (`createSelectScene`), whichever family draws it, kept by the router across the other screens. */
@@ -280,8 +287,6 @@ export class SelectRoute {
           if (kit.family !== 'beatoraja') this.replaySlotsPanel.showSelect(entry);
           // "Ghost status" says whether a play of the bar would show the picked ghost.
           const chart = entry?.kind === 'chart' ? entry : undefined;
-          // The PRACTICE range picker draws the chart under the cursor.
-          this.optionsDialog.setPracticeChart(chart?.chart);
           const playFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'gameplay', chart?.chart);
           const target = chart !== undefined ? this.replaySlots.targetOf(chart) : undefined;
           // No bar, or a folder: nothing to say.
@@ -398,7 +403,16 @@ export class SelectRoute {
     if (entry.kind === 'chart') {
       if (this.courseMaker.addChartToCourseBeingMade(entry.chart)) return false;
       // The skin's AUTOPLAY forces auto play for this play only; the Options dialog's checkbox keeps its state.
-      void this.showDecide(entry.chart, autoPlay ? { autoPlay: true } : {});
+      const overrides = autoPlay ? { autoPlay: true } : {};
+      // PRACTICE first opens the chart's score to pick the bars to loop; the decide screen follows the start.
+      if (this.playOptions.current.practice && this.pickPracticeBars !== undefined) {
+        const chart = entry.chart;
+        void this.pickPracticeBars(chart).then((start) => {
+          if (start) void this.showDecide(chart, overrides);
+        });
+        return false;
+      }
+      void this.showDecide(entry.chart, overrides);
       return true;
     }
     void this.courseRoute.startCourse(entry.course, autoPlay ? { autoPlay: true } : {});

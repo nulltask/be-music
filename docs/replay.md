@@ -223,6 +223,8 @@ Browser replays can seek through `PlayScene.seek(seconds)` or ← / → (five se
 
 Manual seeking requires `PlaySceneOptions.allowSeek: 'practice'`. The first seek discards the replay recorder. Notes with heads before the target, including their long-note tails, are consumed without scoring; score, combo and gauge reset to their play-start values. A paused play stays paused. The result carries `practice: true` and cannot be saved as a best record, submitted to the Leaderboard or auto-saved as a replay. The player enables manual seeking for single charts and course stages. Course progression uses live stage outcomes independently of replay recording.
 
+A [PRACTICE](./play-options.md#practice) play records no replay either: the engine builds no log while `PlayerOptions.practice` is set, so it is never saved, auto-saved or sent. Its range still reaches the engine as chart times, `practice.startMs` and `practice.endMs` in milliseconds: the bars picked on the chart's score, from the first bar's line to the line closing the last (`chartScoreRangeTimes` in `@be-music/player-ui`), or the whole chart with no bars picked. Replays recorded before are unchanged: none of them holds a PRACTICE range.
+
 ## Replay slots
 
 The browser player keeps up to four replays per chart and four per course in the browser, as beatoraja keeps four

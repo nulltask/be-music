@@ -282,6 +282,9 @@ importers:
       '@be-music/player-skin-sdk':
         specifier: workspace:*
         version: link:../player-skin-sdk
+      '@be-music/player-ui':
+        specifier: workspace:*
+        version: link:../player-ui
       '@be-music/service-web-theme':
         specifier: workspace:*
         version: link:../service-web-theme
@@ -582,6 +585,9 @@ importers:
 
   packages/player-ui:
     dependencies:
+      '@be-music/chart-model':
+        specifier: workspace:*
+        version: link:../chart-model
       '@be-music/player-skin-sdk':
         specifier: workspace:*
         version: link:../player-skin-sdk
@@ -589,6 +595,9 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
     devDependencies:
+      '@be-music/chart-parser':
+        specifier: workspace:*
+        version: link:../chart-parser
       '@tailwindcss/cli':
         specifier: ^4.3.3
         version: 4.3.3

@@ -14,6 +14,7 @@ import {
   type LibraryChart,
   type PlayOptions,
   type PlayResult,
+  type PracticeRange,
   type SystemSoundSet,
 } from '@be-music/player-scene-model';
 import type { Texture } from 'pixi.js';
@@ -104,6 +105,11 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   readonly settings: PlaySceneSettings;
   /** Allow manual seeking; the first seek makes the play practice and disables saved results. */
   readonly allowSeek?: 'practice';
+  /**
+   * The bars a PRACTICE play loops, as chart milliseconds (`chartScoreRangeTimes` of the bars picked on the chart's
+   * score). Read only when the play options turn PRACTICE on for a single fresh play; without it the whole chart loops.
+   */
+  readonly practiceRange?: PracticeRange;
   /** The course stage this play is, if any. */
   readonly course?: PlaySceneCourse;
   /** A replay to play back instead of the player's input: its recorded setup, arrangement, tempo and view. */
@@ -698,6 +704,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
         playOptions,
         settings.judgeRuleset,
         course === undefined && options.replay === undefined,
+        options.practiceRange,
       ),
       audio: options.audio,
       onExit: () => on.exit(),
@@ -760,7 +767,7 @@ const BEATORAJA_PLAY_SETTINGS: Pick<PlaySessionOptions, 'coverKeys'> = {
 };
 
 /**
- * PRACTICE for a single fresh play, under every judge ruleset (#933): the range and the rules read under the ruleset
+ * PRACTICE for a single fresh play, under every judge ruleset (#933): the bars picked and the rules read under the ruleset
  * (`resolvePracticeSelection`), a practice play saving nothing, and no chart modifier, as beatoraja applies them only in
  * PLAY / AUTOPLAY.
  */
@@ -768,11 +775,12 @@ function resolvePracticeSessionOptions(
   playOptions: Readonly<PlayOptions>,
   ruleset: RulesetId | undefined,
   single: boolean,
+  range: PracticeRange | undefined,
 ): Partial<PlaySessionOptions> {
   if (!playOptions.practice || !single) return {};
   return {
     practice: true,
-    practiceRange: resolvePracticeSelection(playOptions, ruleset ?? 'lr2'),
+    practiceRange: resolvePracticeSelection(playOptions, ruleset ?? 'lr2', range),
     battleMode: 'OFF',
     longNoteModifier: 'OFF',
     mineModifier: 'OFF',

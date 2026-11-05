@@ -30,7 +30,6 @@ export * from './browse/snapshot.ts';
 export * from './play-options/options.ts';
 export * from './play-options/choices.ts';
 export * from './play-options/practice.ts';
-export * from './play-options/practice-range.ts';
 export * from './play-options/hi-speed.ts';
 export * from './play-options/normal-hi-speed.ts';
 export * from './play-options/floating-hi-speed.ts';

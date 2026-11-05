@@ -23,5 +23,7 @@ export interface BeMusicUIEventMap {
   'seek-request': { seconds: number };
   'volume-change': { volume: number; muted: boolean };
   'fullscreen-request': undefined;
+  /** `<be-music-chart-score>`: the bars selected (`first`..`last`), the bar pressed, and whether it extended the run. */
+  'bar-selection-change': { first: number; last: number; bar: number; extend: boolean };
 }
 export type BeMusicUIEvent<K extends keyof BeMusicUIEventMap> = CustomEvent<BeMusicUIEventMap[K]>;
