@@ -17,6 +17,7 @@ export const OPTION_FOLDERS = {
   tempo: { title: 'Tempo' },
   course: { title: 'Course' },
   skin: { title: 'Skin & display' },
+  bgaCamera: { title: 'BGA camera' },
   beatorajaSkins: { title: 'Beatoraja skins' },
   skinSettings: { title: 'Skin settings' },
   addSkin: { title: 'Add skin' },

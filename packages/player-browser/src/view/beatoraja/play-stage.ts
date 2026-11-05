@@ -1,4 +1,5 @@
 import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
+import type { BGACameraFeed } from '../../media/bga-camera.ts';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import {
   resolveConstantAlpha,
@@ -235,6 +236,8 @@ export class BeatorajaPlayStage {
       judgeTimingMs?: number;
       /** Visual CONSTANT: notes, mines, bar lines and BPM guide lines show only near their time. */
       constant?: ConstantVisibility;
+      /** The camera to show in the BGA frame in place of the chart's BGA. */
+      camera?: BGACameraFeed;
     } = {},
   ): void {
     const view = this.stage.view;
