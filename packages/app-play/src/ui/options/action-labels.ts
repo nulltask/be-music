@@ -1,11 +1,12 @@
-// The names the key config's Screens page gives the screens' operations and their keys (`action-keys.ts`), apart from
-// the page so `labels.ts` and the Help entry read them without the page.
+// The names the key config gives the lanes and the screens' operations and their keys (`keys.ts`, `action-keys.ts`),
+// apart from the pages so `labels.ts` and the Help entries read them without the pages.
 import {
   type ControlActionDefinition,
   type ControlActionKey,
   type ControlScheme,
   type ControlScreen,
 } from '@be-music/player-browser/host';
+import { LANE_KEY_CONFIG, type LaneKeyConfigLane, type LaneKeyGroup } from '@be-music/player-engine/lanes';
 
 /** Each screen's heading on the page. */
 export const ACTION_SCREEN_TITLES: Readonly<Record<ControlScreen, string>> = {
@@ -125,4 +126,12 @@ export function actionKeyLabel(key: ControlActionKey): string {
   if (name === 'start' || name === 'select') return `${side} ${name.toUpperCase()}`;
   if (name.startsWith('key')) return `${side} key ${name.slice(3)}`;
   return `${side} scratch ${name === 'scratch-ccw' ? '↺' : '↻'}`;
+}
+
+/** A lane's name in the key config (`1P scratch`, `2P key 3`, `Key 9`), which `labels.ts` translates. */
+export function laneKeyConfigLabel(group: LaneKeyGroup, lane: LaneKeyConfigLane): string {
+  if (group === 'popn') return `Key ${lane.id}`;
+  if (lane.scratch) return `${lane.side} scratch`;
+  const keys = LANE_KEY_CONFIG.beat.filter((entry) => entry.side === lane.side && !entry.scratch);
+  return `${lane.side} key ${keys.findIndex((entry) => entry.id === lane.id) + 1}`;
 }
