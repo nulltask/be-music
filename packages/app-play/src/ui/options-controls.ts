@@ -84,6 +84,7 @@ export class OptionRow {
   protected language = 'en';
   private readonly localize: ((language: string) => void) | undefined;
   private disabledState = false;
+  private unavailableState = false;
 
   public constructor(element: HTMLElement, parent: OptionContainer | undefined, localize?: (language: string) => void) {
     this.element = element;
@@ -98,12 +99,30 @@ export class OptionRow {
     this.element.hidden = value;
   }
 
-  /** Disables every input, select and button in it; a disabled row is dimmed. */
+  /** Disables every input, select and button in it; a disabled row is dimmed. A play's lock sets it. */
   public get disabled(): boolean {
     return this.disabledState;
   }
   public set disabled(value: boolean) {
     this.disabledState = value;
+    this.applyDisabled();
+  }
+
+  /**
+   * Whether the other options make it meaningless (a hi-speed mode's own speed while another mode is on): it stays in
+   * place, dimmed and disabled like a {@link disabled} row, so the options never move under the player. Apart from
+   * {@link disabled}, so a play's lock and this never undo each other.
+   */
+  public get unavailable(): boolean {
+    return this.unavailableState;
+  }
+  public set unavailable(value: boolean) {
+    this.unavailableState = value;
+    this.applyDisabled();
+  }
+
+  private applyDisabled(): void {
+    const value = this.disabledState || this.unavailableState;
     this.element.toggleAttribute('data-disabled', value);
     for (const control of this.element.querySelectorAll<
       HTMLInputElement | HTMLSelectElement | HTMLButtonElement | HTMLTextAreaElement

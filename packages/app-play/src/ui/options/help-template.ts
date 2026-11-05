@@ -106,7 +106,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <p class="help-menu-note">
           Locked during a play unless noted. Options that only change the chart or the view (marked LR2, beatoraja or
           AC) work under every ruleset and run their source's algorithm; the judge rules come from Play options →
-          Judgment windows. Items marked “Shown with …” say when they appear.
+          Judgment windows. Items marked “Shown with …” say when they appear, and “Used with …” when they can be set;
+          until then they stay in place, disabled.
         </p>
         <dl class="help-menu-items">
           <dt>Judgment windows</dt>
@@ -177,12 +178,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Scroll section lines</dt>
           <dd>
-            <em class="help-menu-when">Shown with Scroll set to ADD.</em> How many bar lines each scroll change lasts.
+            <em class="help-menu-when">Used with Scroll set to ADD.</em> How many bar lines each scroll change lasts.
           </dd>
           <dt>Scroll rate</dt>
           <dd>
-            <em class="help-menu-when">Shown with Scroll set to ADD.</em> How strong each scroll change is, from 0
-            (none) to 1.
+            <em class="help-menu-when">Used with Scroll set to ADD.</em> How strong each scroll change is, from 0 (none)
+            to 1.
           </dd>
           <dt>Mines (beatoraja)</dt>
           <dd>REMOVE takes the mines out; ADD RANDOM, ADD NEAR and ADD ALL add mines.</dd>
@@ -240,7 +241,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Turns background keysounds into extra notes, as LR2's EXTRA MODE does.</dd>
           <dt>EXTRA minimum level (LR2)</dt>
           <dd>
-            <em class="help-menu-when">Shown with EXTRA MODE (LR2) on.</em> How dense EXTRA MODE may get at least: LEVEL
+            <em class="help-menu-when">Used with EXTRA MODE (LR2) on.</em> How dense EXTRA MODE may get at least: LEVEL
             1 to 3.
           </dd>
           <dt>LN MODE (beatoraja)</dt>
@@ -255,37 +256,37 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Key PGREAT %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the PGREAT window for key notes, as
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the PGREAT window for key notes, as
             a percentage of the rules' own.
           </dd>
           <dt>Key GREAT %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the GREAT window for key notes, as
-            a percentage of the rules' own.
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the GREAT window for key notes, as a
+            percentage of the rules' own.
           </dd>
           <dt>Key GOOD %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the GOOD window for key notes, as a
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the GOOD window for key notes, as a
             percentage of the rules' own.
           </dd>
           <dt>Scratch PGREAT %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the PGREAT window for scratch
-            notes, as a percentage of the rules' own.
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the PGREAT window for scratch notes,
+            as a percentage of the rules' own.
           </dd>
           <dt>Scratch GREAT %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the GREAT window for scratch notes,
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the GREAT window for scratch notes,
             as a percentage of the rules' own.
           </dd>
           <dt>Scratch GOOD %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the GOOD window for scratch notes,
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the GOOD window for scratch notes,
             as a percentage of the rules' own.
           </dd>
           <dt>LN margin %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> How early a long note may be let go before its
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> How early a long note may be let go before its
             end and still count, as a percentage of the rules' own margin.
           </dd>
           <dt>PRACTICE</dt>
@@ -326,7 +327,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>beatoraja EXTRA: whether the scratch lanes get added notes too.</dd>
           <dt>Long-note add rate (beatoraja)</dt>
           <dd>
-            <em class="help-menu-when">Shown with an ADD choice in Long notes.</em> How many of the notes become long
+            <em class="help-menu-when">Used with an ADD choice in Long notes.</em> How many of the notes become long
             notes, 0 to 1.
           </dd>
           <dt>Auto judge timing</dt>
@@ -374,7 +375,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <dl class="help-menu-items">
           <dt>HS-FIX</dt>
           <dd>
-            <em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> Keeps the scroll
+            <em class="help-menu-when">Disabled while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> Keeps the scroll
             speed steady against a BPM: MAXBPM, MINBPM, AVERAGE, STARTBPM, or CONSTANT (LR2, offered under every
             ruleset).
           </dd>
@@ -382,7 +383,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Picks the speed from twenty levels measured on AC, instead of the Hi-speed slider.</dd>
           <dt>Normal HS level</dt>
           <dd>
-            <em class="help-menu-when">Shown with Normal HI-SPEED on.</em> The level, 1 to 20; each scrolls at the green
+            <em class="help-menu-when">Used with Normal HI-SPEED on.</em> The level, 1 to 20; each scrolls at the green
             number AC measured for it.
           </dd>
           <dt>Fixed display area (AC 34)</dt>
@@ -394,16 +395,16 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Floating speed</dt>
           <dd>
-            <em class="help-menu-when">Shown with FLOATING HI-SPEED on.</em> The hi-speed FLOATING starts from, in steps
+            <em class="help-menu-when">Used with FLOATING HI-SPEED on.</em> The hi-speed FLOATING starts from, in steps
             of 0.01.
           </dd>
           <dt>CLASSIC HI-SPEED</dt>
           <dd>Picks the speed from AC's eleven CLASSIC steps instead of the Hi-speed slider.</dd>
           <dt>Classic speed</dt>
-          <dd><em class="help-menu-when">Shown with CLASSIC HI-SPEED on.</em> The step, 1.0 to 4.0.</dd>
+          <dd><em class="help-menu-when">Used with CLASSIC HI-SPEED on.</em> The step, 1.0 to 4.0.</dd>
           <dt>Hi-speed</dt>
           <dd>
-            <em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> The scroll speed.
+            <em class="help-menu-when">Disabled while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> The scroll speed.
             Changes live, like ↑ / ↓ during play.
           </dd>
           <dt>Display area info</dt>
@@ -760,7 +761,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <p class="help-menu-note">
           特に書かない限りプレイ中は変えられません。譜面や表示を変えるだけのオプション (LR2・beatoraja・AC と付いたもの)
           はどのルールでも使え、その出典のアルゴリズムで動きます。判定のルールは Play options → Judgment windows
-          で決まります。「…のときに表示」とある項目は、その条件で表示されます。
+          で決まります。「…のときに表示」とある項目は、その条件で表示されます。「…のときに使います」とある項目は、その条件で設定できるようになり、それまでは同じ場所に無効のまま表示されます。
         </p>
         <dl class="help-menu-items">
           <dt>Judgment windows</dt>
@@ -827,9 +828,13 @@ export const OPTIONS_HELP_TEMPLATE = html`
             はランダムなスクロールの変化を加えます。判定は変わりません。
           </dd>
           <dt>Scroll section lines</dt>
-          <dd><em class="help-menu-when">Scroll が ADD のときに表示。</em> スクロールの変化 1 回が続く小節線の数。</dd>
+          <dd>
+            <em class="help-menu-when">Scroll が ADD のときに使います。</em> スクロールの変化 1 回が続く小節線の数。
+          </dd>
           <dt>Scroll rate</dt>
-          <dd><em class="help-menu-when">Scroll が ADD のときに表示。</em> スクロールの変化の強さ。0 (なし) 〜 1。</dd>
+          <dd>
+            <em class="help-menu-when">Scroll が ADD のときに使います。</em> スクロールの変化の強さ。0 (なし) 〜 1。
+          </dd>
           <dt>Mines (beatoraja)</dt>
           <dd>REMOVE は地雷を取り除き、ADD RANDOM、ADD NEAR、ADD ALL は地雷を加えます。</dd>
           <dt>ANY KEY (PC)</dt>
@@ -880,7 +885,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>LR2 の EXTRA MODE のように、BGM のキー音をノーツに変えて増やします。</dd>
           <dt>EXTRA minimum level (LR2)</dt>
           <dd>
-            <em class="help-menu-when">EXTRA MODE (LR2) がオンのときに表示。</em> EXTRA MODE の最低の密度。LEVEL 1〜3。
+            <em class="help-menu-when">EXTRA MODE (LR2) がオンのときに使います。</em> EXTRA MODE の最低の密度。LEVEL
+            1〜3。
           </dd>
           <dt>LN MODE (beatoraja)</dt>
           <dd>
@@ -891,37 +897,37 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 下の倍率で判定の幅を変えます。</dd>
           <dt>Key PGREAT %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> 鍵盤の PGREAT の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> 鍵盤の PGREAT の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>Key GREAT %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> 鍵盤の GREAT の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> 鍵盤の GREAT の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>Key GOOD %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> 鍵盤の GOOD の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> 鍵盤の GOOD の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>Scratch PGREAT %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> スクラッチの PGREAT の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> スクラッチの PGREAT の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>Scratch GREAT %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> スクラッチの GREAT の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> スクラッチの GREAT の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>Scratch GOOD %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> スクラッチの GOOD の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> スクラッチの GOOD の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>LN margin %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em>
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em>
             ロングノートを終わりより早く離しても成功とする余裕 (ルール本来の余裕に対する割合)。
           </dd>
           <dt>PRACTICE</dt>
@@ -958,7 +964,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>beatoraja の EXTRA。スクラッチのレーンにもノーツを足すか。</dd>
           <dt>Long-note add rate (beatoraja)</dt>
           <dd>
-            <em class="help-menu-when">Long notes が ADD のどれかのときに表示。</em> ロングノートにする割合 (0〜1)。
+            <em class="help-menu-when">Long notes が ADD のどれかのときに使います。</em> ロングノートにする割合 (0〜1)。
           </dd>
           <dt>Auto judge timing</dt>
           <dd>
@@ -1003,7 +1009,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <dl class="help-menu-items">
           <dt>HS-FIX</dt>
           <dd>
-            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em> BPM
+            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は無効。</em> BPM
             に合わせてスクロール速度を一定に保ちます。MAXBPM、MINBPM、AVERAGE、STARTBPM、CONSTANT
             (LR2。どのルールでも選べます)。
           </dd>
@@ -1011,7 +1017,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Hi-speed のスライダーの代わりに、AC で実測した 20 段階から速度を選びます。</dd>
           <dt>Normal HS level</dt>
           <dd>
-            <em class="help-menu-when">Normal HI-SPEED がオンのときに表示。</em> レベル (1〜20)。それぞれ AC
+            <em class="help-menu-when">Normal HI-SPEED がオンのときに使います。</em> レベル (1〜20)。それぞれ AC
             で実測した緑数字で流れます。
           </dd>
           <dt>Fixed display area (AC 34)</dt>
@@ -1022,16 +1028,16 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Floating speed</dt>
           <dd>
-            <em class="help-menu-when">FLOATING HI-SPEED がオンのときに表示。</em> FLOATING の起点のハイスピード (0.01
-            刻み)。
+            <em class="help-menu-when">FLOATING HI-SPEED がオンのときに使います。</em> FLOATING の起点のハイスピード
+            (0.01 刻み)。
           </dd>
           <dt>CLASSIC HI-SPEED</dt>
           <dd>Hi-speed のスライダーの代わりに、AC の CLASSIC の 11 段階から速度を選びます。</dd>
           <dt>Classic speed</dt>
-          <dd><em class="help-menu-when">CLASSIC HI-SPEED がオンのときに表示。</em> 段階 (1.0〜4.0)。</dd>
+          <dd><em class="help-menu-when">CLASSIC HI-SPEED がオンのときに使います。</em> 段階 (1.0〜4.0)。</dd>
           <dt>Hi-speed</dt>
           <dd>
-            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em>
+            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は無効。</em>
             スクロールの速さ。プレイ中の ↑ / ↓ と同じく、すぐ反映されます。
           </dd>
           <dt>Display area info</dt>
