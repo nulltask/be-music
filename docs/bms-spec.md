@@ -75,6 +75,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret meta header `#TOTAL`
 - [x] Interpret meta header `#DIFFICULTY`
 - [x] player: Use `#DIFFICULTY 1-5` to display, sort, and filter the song selection list
+- [x] player: Estimate a missing `#DIFFICULTY` from the chart's names (subtitle, bracketed title, file name) and mark it as estimated (`HYPER?`, `3?`)
 - [x] Interpret meta header `#BPM`
 - [x] When `#BPM` is not specified in BMS, the compatible default value `130` is applied (IR default value is also unified to `130`)
 - [x] Interpret resource header `#WAVxx`
